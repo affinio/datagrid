@@ -8,12 +8,17 @@ import {
   createTableViewportController,
   type RowPoolItem,
   type TableViewportImperativeCallbacks,
-  type TableViewportServerIntegration,
   type TableViewportState,
   type ViewportMetricsSnapshot,
   type TableViewportRuntimeOverrides,
   type ViewportSyncTargets,
 } from "@affino/datagrid-core/viewport/tableViewportController"
+import {
+  createDataGridColumnModel,
+  createClientRowModel,
+  createServerBackedRowModel,
+  type ServerBackedRowModel,
+} from "@affino/datagrid-core/models"
 import { resolvePinMode, resolveRowHeightModeValue } from "../core/virtualization/viewportConfig"
 import type { ColumnMetric } from "../core/virtualization/types"
 import type { ServerRowModel } from "./useServerRowModel"
@@ -31,6 +36,20 @@ export type {
 } from "@affino/datagrid-core/viewport/tableViewportController"
 
 type SignalRegistry = WeakMap<WritableSignal<unknown>, ShallowRef<unknown>>
+const warnedLegacyApis = new Set<string>()
+
+function warnVueLegacyServerIntegration(): void {
+  const key = "vue.useTableViewport.serverIntegration"
+  if (warnedLegacyApis.has(key)) {
+    return
+  }
+  warnedLegacyApis.add(key)
+  if (typeof console !== "undefined" && typeof console.warn === "function") {
+    console.warn(
+      "[DataGrid][deprecated] vue.useTableViewport.serverIntegration is deprecated and will be removed after 2026-08-31. Prefer rowModel-driven bridge in core adapter flow.",
+    )
+  }
+}
 
 function createVueWritableSignal<T>(registry: SignalRegistry, initial: T): WritableSignal<T> {
   const target = shallowRef(initial) as ShallowRef<T>
@@ -67,7 +86,7 @@ function resolveBaseRowHeight(source: UseTableViewportOptions["baseRowHeight"]):
 
 function resolveServerIntegration(
   integration: UseTableViewportOptions["serverIntegration"],
-): TableViewportServerIntegration | null {
+): { rowModel: ServerRowModel<unknown> | null; enabled: boolean } | null {
   if (!integration) {
     return null
   }
@@ -173,12 +192,14 @@ export interface UseTableViewportResult {
 
 export function useTableViewport(options: UseTableViewportOptions): UseTableViewportResult {
   const signalRegistry: SignalRegistry = new WeakMap()
+  const clientRowModel = createClientRowModel<unknown>({ rows: [] })
+  const clientColumnModel = createDataGridColumnModel({ columns: [] })
+  let serverBackedRowModel: ServerBackedRowModel<unknown> | null = null
+  let serverBackedSource: ServerRowModel<unknown> | null = null
 
   const visibleRowsRef = shallowRef<VisibleRow[]>([])
   const visibleRowsPoolRef = shallowRef<RowPoolItem[]>([])
   const rowPoolVersionRef = shallowRef(0)
-
-  const initialServerIntegration = resolveServerIntegration(options.serverIntegration)
 
   const composeImperativeCallbacks = (
     callbacks: TableViewportImperativeCallbacks | null | undefined,
@@ -212,11 +233,12 @@ export function useTableViewport(options: UseTableViewportOptions): UseTableView
   const controller = createTableViewportController({
     resolvePinMode,
     getColumnKey: column => column.key,
+    rowModel: clientRowModel,
+    columnModel: clientColumnModel,
     createSignal: initial => createVueWritableSignal(signalRegistry, initial),
     onAfterScroll: options.onAfterScroll,
     onNearBottom: options.onNearBottom,
     imperativeCallbacks: composeImperativeCallbacks(options.imperativeCallbacks),
-    serverIntegration: initialServerIntegration ?? undefined,
     hostEnvironment: createViewportHostEnvironment(),
     normalizeAndClampScroll: options.normalizeAndClampScroll,
     runtime: options.runtime,
@@ -232,7 +254,7 @@ export function useTableViewport(options: UseTableViewportOptions): UseTableView
   watch(
     options.processedRows,
     rows => {
-      controller.setProcessedRows(Array.isArray(rows) ? rows : [])
+      clientRowModel.setRows(Array.isArray(rows) ? rows : [])
     },
     { immediate: true },
   )
@@ -240,7 +262,7 @@ export function useTableViewport(options: UseTableViewportOptions): UseTableView
   watch(
     options.columns,
     value => {
-      controller.setColumns(Array.isArray(value) ? value : [])
+      clientColumnModel.setColumns(Array.isArray(value) ? value : [])
     },
     { immediate: true },
   )
@@ -314,15 +336,27 @@ export function useTableViewport(options: UseTableViewportOptions): UseTableView
   controller.setOnNearBottom(options.onNearBottom)
 
   if (options.serverIntegration) {
+    warnVueLegacyServerIntegration()
     watch(
       () => resolveServerIntegration(options.serverIntegration),
       value => {
-        controller.setServerIntegration(value)
+        if (value?.enabled && value.rowModel) {
+          if (!serverBackedRowModel || serverBackedSource !== value.rowModel) {
+            serverBackedRowModel?.dispose()
+            serverBackedSource = value.rowModel
+            serverBackedRowModel = createServerBackedRowModel({
+              source: value.rowModel,
+            })
+          }
+          controller.setRowModel(serverBackedRowModel)
+          return
+        }
+        controller.setRowModel(clientRowModel)
       },
       { immediate: true },
     )
   } else {
-    controller.setServerIntegration(null)
+    controller.setRowModel(clientRowModel)
   }
 
   watch(
@@ -340,6 +374,9 @@ export function useTableViewport(options: UseTableViewportOptions): UseTableView
   onBeforeUnmount(() => {
     controller.detach()
     controller.dispose()
+    serverBackedRowModel?.dispose()
+    clientRowModel.dispose()
+    clientColumnModel.dispose()
   })
 
   const useSignal = <T,>(signal: WritableSignal<T>): ShallowRef<T> => getSignalRef(signalRegistry, signal)

@@ -1,7 +1,8 @@
 import type { UiTableColumn, VisibleRow } from "../types"
 import type { ColumnVirtualizationSnapshot } from "../virtualization/columnSnapshot"
 import type { ColumnPinMode } from "../virtualization/types"
-import type { ServerRowModel } from "../serverRowModel/serverRowModel"
+import type { DataGridColumnModel } from "../models/columnModel"
+import type { DataGridRowModel } from "../models/rowModel"
 import type { RowPoolItem } from "./tableViewportSignals"
 import type { TableViewportHostEnvironment } from "./viewportHostEnvironment"
 import type { CreateWritableSignal } from "../runtime/signals"
@@ -72,11 +73,6 @@ export interface ViewportSyncState {
   pinnedOffsetRight: number
 }
 
-export interface TableViewportServerIntegration {
-  rowModel: ServerRowModel<unknown> | null
-  enabled: boolean
-}
-
 export interface TableViewportRuntimeOverrides {
   rafScheduler?: RafScheduler
   createRafScheduler?: () => RafScheduler
@@ -88,12 +84,13 @@ export interface TableViewportControllerOptions {
   resolvePinMode: (column: UiTableColumn) => ColumnPinMode
   getColumnKey?: (column: UiTableColumn) => string
   resolveColumnWidth?: (column: UiTableColumn, zoom: number) => number
+  rowModel?: DataGridRowModel<unknown> | null
+  columnModel?: DataGridColumnModel | null
   createSignal?: CreateWritableSignal<unknown>
   supportsCssZoom?: boolean
   onAfterScroll?: () => void
   onNearBottom?: () => void
   imperativeCallbacks?: TableViewportImperativeCallbacks
-  serverIntegration?: TableViewportServerIntegration
   hostEnvironment?: TableViewportHostEnvironment
   clock?: ViewportClock
   frameBudget?: ViewportFrameBudget

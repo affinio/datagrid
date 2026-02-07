@@ -10,6 +10,12 @@ import { flushMeasurements } from "../runtime/measurementQueue"
 import type { TableViewportResizeObserver } from "./viewportHostEnvironment"
 
 import type { UiTableColumn, VisibleRow } from "../types"
+import {
+	createClientRowModel,
+	createDataGridColumnModel,
+	type DataGridColumnModel,
+	type DataGridRowModel,
+} from "../models"
 import { BASE_ROW_HEIGHT, clamp } from "../utils/constants"
 import {
 	resolveColumnWidth as resolveColumnWidthDefault,
@@ -52,7 +58,6 @@ import type {
 	ViewportMetricsSnapshot,
 	LayoutMeasurementSnapshot,
 	TableViewportImperativeCallbacks,
-	TableViewportServerIntegration,
 	TableViewportControllerOptions,
 	ViewportSyncTargets,
 } from "./tableViewportTypes"
@@ -72,7 +77,6 @@ export type {
 	ImperativeRowUpdatePayload,
 	ImperativeScrollSyncPayload,
 	TableViewportImperativeCallbacks,
-	TableViewportServerIntegration,
 	TableViewportControllerOptions,
 	TableViewportRuntimeOverrides,
 	ViewportSyncTargets,
@@ -104,8 +108,8 @@ export type { TableViewportState, RowPoolItem } from "./tableViewportSignals"
 export interface TableViewportController extends TableViewportSignals {
 	attach(container: HTMLDivElement | null, header: HTMLElement | null): void
 	detach(): void
-	setProcessedRows(rows: VisibleRow[]): void
-	setColumns(columns: UiTableColumn[]): void
+	setRowModel(rowModel: DataGridRowModel<unknown> | null | undefined): void
+	setColumnModel(columnModel: DataGridColumnModel | null | undefined): void
 	setZoom(zoom: number): void
 	setVirtualizationEnabled(enabled: boolean): void
 	setRowHeightMode(mode: "fixed" | "auto"): void
@@ -115,7 +119,6 @@ export interface TableViewportController extends TableViewportSignals {
 	setImperativeCallbacks(callbacks: TableViewportImperativeCallbacks | null | undefined): void
 	setOnAfterScroll(callback: (() => void) | null | undefined): void
 	setOnNearBottom(callback: (() => void) | null | undefined): void
-	setServerIntegration(integration: TableViewportServerIntegration | null | undefined): void
 	setDebugMode(enabled: boolean): void
 	handleScroll(event: Event): void
 	updateViewportHeight(): void
@@ -312,20 +315,29 @@ export function createTableViewportController(
 		const columnSnapshot = createEmptyColumnSnapshot<UiTableColumn>()
 		// Cache layout metrics from observers so the heavy path never touches the DOM.
 		const layoutCache: LayoutMeasurementCache = createLayoutMeasurementCache()
+		const fallbackClientRowModel = createClientRowModel<unknown>({ rows: [] })
+		const ownedRowModels = new Set<DataGridRowModel<unknown>>([fallbackClientRowModel])
+		const fallbackColumnModel = createDataGridColumnModel({ columns: [] })
+		const ownedColumnModels = new Set<DataGridColumnModel>([fallbackColumnModel])
 		let container: HTMLDivElement | null = null
 		let header: HTMLElement | null = null
-		let processedRows: VisibleRow[] = []
-		let columns: UiTableColumn[] = []
+		let preferredRowModel: DataGridRowModel<unknown> | null = options.rowModel ?? null
+		let activeRowModel: DataGridRowModel<unknown> = options.rowModel ?? fallbackClientRowModel
+		let activeRowModelUnsubscribe: (() => void) | null = null
+		let rowModelRowsCache: VisibleRow[] = []
+		let rowModelCacheDirty = true
+		let rowModelCacheCount = -1
+		let preferredColumnModel: DataGridColumnModel | null = options.columnModel ?? null
+		let activeColumnModel: DataGridColumnModel = options.columnModel ?? fallbackColumnModel
+		let activeColumnModelUnsubscribe: (() => void) | null = null
+		let columnModelColumnsCache: UiTableColumn[] = []
+		let columnModelCacheDirty = true
 		let zoom = 1
 		let virtualizationFlag = true
 		let rowHeightMode: "fixed" | "auto" = "fixed"
 		let baseRowHeight = BASE_ROW_HEIGHT
 		let viewportMetrics: ViewportMetricsSnapshot | null = null
 		let loading = false
-		let serverIntegration: TableViewportServerIntegration = options.serverIntegration ?? {
-			rowModel: null,
-			enabled: false,
-		}
 		let imperativeCallbacks: TableViewportImperativeCallbacks = options.imperativeCallbacks ?? {}
 		let onAfterScroll = options.onAfterScroll ?? null
 		let onNearBottom = options.onNearBottom ?? null
@@ -688,14 +700,109 @@ export function createTableViewportController(
 				layoutMeasurement = null
 			}
 
-		function setProcessedRowsValue(rows: VisibleRow[]) {
-			processedRows = Array.isArray(rows) ? rows : []
+		function markRowModelCacheDirty() {
+			rowModelCacheDirty = true
+		}
+
+		function materializeRowsFromModel(): { rows: VisibleRow[]; rowCount: number } {
+			const rowCount = Math.max(0, activeRowModel.getRowCount())
+			if (!rowModelCacheDirty && rowModelCacheCount === rowCount) {
+				return { rows: rowModelRowsCache, rowCount }
+			}
+
+			const rows: VisibleRow[] = []
+			if (rowCount > 0) {
+				rows.length = rowCount
+			}
+			for (let index = 0; index < rowCount; index += 1) {
+				const row = activeRowModel.getRow(index)
+				if (row) {
+					rows[index] = row as VisibleRow
+				}
+			}
+
+			rowModelRowsCache = rows
+			rowModelCacheCount = rowCount
+			rowModelCacheDirty = false
+			return { rows: rowModelRowsCache, rowCount }
+		}
+
+		function bindRowModel(model: DataGridRowModel<unknown>) {
+			if (activeRowModel === model && activeRowModelUnsubscribe) {
+				markRowModelCacheDirty()
+				scheduleUpdate(true)
+				return
+			}
+
+			activeRowModelUnsubscribe?.()
+			activeRowModel = model
+			activeRowModelUnsubscribe = activeRowModel.subscribe(() => {
+				markRowModelCacheDirty()
+				scheduleUpdate(true)
+			})
+			markRowModelCacheDirty()
 			scheduleUpdate(true)
 		}
 
-		function setColumnsValue(next: UiTableColumn[]) {
-			columns = Array.isArray(next) ? next : []
+		function applyRowModelValue(model: DataGridRowModel<unknown> | null | undefined) {
+			const nextModel = model ?? fallbackClientRowModel
+			bindRowModel(nextModel)
+		}
+
+		function setRowModelValue(model: DataGridRowModel<unknown> | null | undefined) {
+			preferredRowModel = model ?? null
+			applyRowModelValue(preferredRowModel)
+		}
+
+		function markColumnModelCacheDirty() {
+			columnModelCacheDirty = true
+		}
+
+		function materializeColumnsFromModel(): UiTableColumn[] {
+			if (!columnModelCacheDirty) {
+				return columnModelColumnsCache
+			}
+			const snapshot = activeColumnModel.getSnapshot()
+			columnModelColumnsCache = snapshot.columns
+				.filter(column => column.visible)
+				.map(column => {
+					const nextWidth = column.width == null ? column.column.width : column.width
+					return {
+						...column.column,
+						key: column.key,
+						visible: column.visible,
+						pin: column.pin,
+						width: nextWidth,
+					}
+				})
+			columnModelCacheDirty = false
+			return columnModelColumnsCache
+		}
+
+		function bindColumnModel(model: DataGridColumnModel) {
+			if (activeColumnModel === model && activeColumnModelUnsubscribe) {
+				markColumnModelCacheDirty()
+				scheduleUpdate(true)
+				return
+			}
+			activeColumnModelUnsubscribe?.()
+			activeColumnModel = model
+			activeColumnModelUnsubscribe = activeColumnModel.subscribe(() => {
+				markColumnModelCacheDirty()
+				scheduleUpdate(true)
+			})
+			markColumnModelCacheDirty()
 			scheduleUpdate(true)
+		}
+
+		function applyColumnModelValue(model: DataGridColumnModel | null | undefined) {
+			const nextModel = model ?? fallbackColumnModel
+			bindColumnModel(nextModel)
+		}
+
+		function setColumnModelValue(model: DataGridColumnModel | null | undefined) {
+			preferredColumnModel = model ?? null
+			applyColumnModelValue(preferredColumnModel)
 		}
 
 		function setZoomValue(nextZoom: number) {
@@ -764,17 +871,6 @@ export function createTableViewportController(
 
 		function setOnNearBottomValue(callback: (() => void) | null | undefined) {
 			onNearBottom = callback ?? null
-		}
-
-		function setServerIntegrationValue(integration: TableViewportServerIntegration | null | undefined) {
-			if (!integration) {
-				serverIntegration = { rowModel: null, enabled: false }
-			} else {
-				serverIntegration = { ...integration }
-			}
-
-			virtualization.resetServerIntegration()
-			scheduleUpdate(true)
 		}
 
 		function setDebugModeValue(enabled: boolean) {
@@ -855,6 +951,18 @@ export function createTableViewportController(
 
 		function disposeValue() {
 			detach()
+			activeRowModelUnsubscribe?.()
+			activeRowModelUnsubscribe = null
+			activeColumnModelUnsubscribe?.()
+			activeColumnModelUnsubscribe = null
+			for (const model of ownedRowModels) {
+				model.dispose()
+			}
+			ownedRowModels.clear()
+			for (const model of ownedColumnModels) {
+				model.dispose()
+			}
+			ownedColumnModels.clear()
 			flushMeasurementQueue()
 			disposeDiagnostics()
 			if (ownsScheduler) {
@@ -1057,8 +1165,8 @@ export function createTableViewportController(
 						return
 					}
 
-					const rows = processedRows
-					totalRowCount.value = rows.length
+					const { rows, rowCount } = materializeRowsFromModel()
+					totalRowCount.value = rowCount
 
 					const virtualizationByProp = virtualizationFlag
 					const verticalVirtualizationEnabled = virtualizationByProp && rowHeightMode === "fixed"
@@ -1145,7 +1253,7 @@ export function createTableViewportController(
 
 					const virtualizationPrepared = virtualization.prepare({
 						rows,
-						totalRowCount: rows.length,
+						totalRowCount: rowCount,
 						viewportHeight: viewportHeightValue,
 						resolvedRowHeight,
 						zoomFactor,
@@ -1156,7 +1264,6 @@ export function createTableViewportController(
 						measuredScrollTopFromPending,
 						cachedNativeScrollHeight,
 						containerHeight,
-						serverIntegration,
 						imperativeCallbacks,
 					})
 
@@ -1172,6 +1279,7 @@ export function createTableViewportController(
 					let syncScrollTopValue: number | null = virtualizationPrepared.syncedScrollTop
 					let syncScrollLeftValue: number | null = null
 					const nowTs = virtualizationPrepared.timestamp
+					const columns = materializeColumnsFromModel()
 
 			const horizontalMetaResult = buildHorizontalMeta({
 				columns,
@@ -1274,9 +1382,16 @@ export function createTableViewportController(
 
 			const virtualizationResult = virtualization.applyPrepared(virtualizationPrepared, {
 				rows,
-				serverIntegration,
 				imperativeCallbacks,
 			})
+			const modelSnapshot = activeRowModel.getSnapshot()
+			const modelRange = modelSnapshot.viewportRange
+			if (
+				modelRange.start !== virtualizationResult.visibleRange.start ||
+				modelRange.end !== virtualizationResult.visibleRange.end
+			) {
+				activeRowModel.setViewportRange(virtualizationResult.visibleRange)
+			}
 			const pendingVerticalScrollWrite = virtualizationResult.pendingScrollWrite
 			const pendingHorizontalScrollWrite = horizontalPrepared.pendingScrollWrite
 
@@ -1332,14 +1447,17 @@ export function createTableViewportController(
 			}
 		}
 
+		setRowModelValue(preferredRowModel)
+		setColumnModelValue(preferredColumnModel)
+
 		return {
 			input,
 			core,
 			derived,
 			attach,
 			detach,
-			setProcessedRows: setProcessedRowsValue,
-			setColumns: setColumnsValue,
+			setRowModel: setRowModelValue,
+			setColumnModel: setColumnModelValue,
 			setZoom: setZoomValue,
 			setVirtualizationEnabled: setVirtualizationEnabledValue,
 			setRowHeightMode: setRowHeightModeValue,
@@ -1349,7 +1467,6 @@ export function createTableViewportController(
 			setImperativeCallbacks: setImperativeCallbacksValue,
 			setOnAfterScroll: setOnAfterScrollValue,
 			setOnNearBottom: setOnNearBottomValue,
-			setServerIntegration: setServerIntegrationValue,
 			setDebugMode: setDebugModeValue,
 			handleScroll,
 			updateViewportHeight: updateViewportHeightValue,

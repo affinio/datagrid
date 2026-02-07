@@ -25,12 +25,21 @@ export {
   type DataGridEventArgs,
 } from "./runtime/dataGridRuntime"
 export {
+  createDataGridCore,
+  type DataGridCore,
+  type DataGridCoreLifecycleState,
+  type DataGridCoreService,
+  type DataGridCoreServiceContext,
+  type DataGridCoreServiceName,
+  type DataGridCoreServiceRegistry,
+  type CreateDataGridCoreOptions,
+} from "./core/gridCore"
+export {
   createDataGridViewportController,
   type DataGridViewportController,
   type DataGridViewportControllerOptions,
   type DataGridViewportImperativeCallbacks,
   type DataGridViewportRuntimeOverrides,
-  type DataGridViewportServerIntegration,
   type DataGridViewportMetricsSnapshot,
   type DataGridViewportSyncTargets,
   type DataGridViewportSyncState,
@@ -40,3 +49,31 @@ export {
   type DataGridImperativeRowUpdatePayload,
   type DataGridImperativeScrollSyncPayload,
 } from "./viewport/dataGridViewportController"
+export {
+  createClientRowModel,
+  createServerBackedRowModel,
+  normalizeRowNode,
+  normalizeViewportRange,
+  type DataGridRowNode,
+  type DataGridRowNodeState,
+  type DataGridRowPinState,
+  type DataGridRowModel,
+  type DataGridRowModelKind,
+  type DataGridRowModelSnapshot,
+  type DataGridRowModelListener,
+  type DataGridRowModelRefreshReason,
+  type DataGridViewportRange,
+  type ClientRowModel,
+  type CreateClientRowModelOptions,
+  type ServerBackedRowModel,
+  type CreateServerBackedRowModelOptions,
+} from "./models"
+export {
+  createDataGridColumnModel,
+  type DataGridColumnModel,
+  type DataGridColumnModelSnapshot,
+  type DataGridColumnModelListener,
+  type DataGridColumnSnapshot,
+  type DataGridColumnPin,
+  type CreateDataGridColumnModelOptions,
+} from "./models"

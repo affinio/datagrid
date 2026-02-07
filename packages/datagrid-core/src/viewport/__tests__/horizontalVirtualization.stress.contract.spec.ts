@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { UiTableColumn, VisibleRow } from "../../types"
+import { createClientRowModel, createDataGridColumnModel } from "../../models"
 import { createTableViewportController } from "../tableViewportController"
 
 interface MutableElementMetrics {
@@ -85,6 +86,8 @@ describe("horizontal virtualization stress contract", () => {
 
     const controller = createTableViewportController({
       resolvePinMode: column => (column.isSystem ? "left" : column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+      rowModel: createClientRowModel({ rows }),
+      columnModel: createDataGridColumnModel({ columns }),
     })
 
     controller.attach(containerMetrics.element, headerMetrics.element)
@@ -93,8 +96,6 @@ describe("horizontal virtualization stress contract", () => {
       containerHeight: containerMetrics.state.clientHeight,
       headerHeight: headerMetrics.state.clientHeight,
     })
-    controller.setColumns(columns)
-    controller.setProcessedRows(rows)
     controller.refresh(true)
 
     expect(controller.core.totalRowCount.value).toBe(100_000)
@@ -127,6 +128,8 @@ describe("horizontal virtualization stress contract", () => {
 
     const controller = createTableViewportController({
       resolvePinMode: column => (column.isSystem ? "left" : column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+      rowModel: createClientRowModel({ rows }),
+      columnModel: createDataGridColumnModel({ columns }),
     })
 
     controller.attach(containerMetrics.element, headerMetrics.element)
@@ -135,8 +138,6 @@ describe("horizontal virtualization stress contract", () => {
       containerHeight: containerMetrics.state.clientHeight,
       headerHeight: headerMetrics.state.clientHeight,
     })
-    controller.setColumns(columns)
-    controller.setProcessedRows(rows)
     controller.refresh(true)
 
     containerMetrics.element.scrollLeft = 250_000

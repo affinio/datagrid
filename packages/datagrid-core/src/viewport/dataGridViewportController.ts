@@ -4,7 +4,6 @@ export {
   type TableViewportControllerOptions as DataGridViewportControllerOptions,
   type TableViewportImperativeCallbacks as DataGridViewportImperativeCallbacks,
   type TableViewportRuntimeOverrides as DataGridViewportRuntimeOverrides,
-  type TableViewportServerIntegration as DataGridViewportServerIntegration,
   type ViewportMetricsSnapshot as DataGridViewportMetricsSnapshot,
   type ViewportSyncTargets as DataGridViewportSyncTargets,
   type ViewportSyncState as DataGridViewportSyncState,

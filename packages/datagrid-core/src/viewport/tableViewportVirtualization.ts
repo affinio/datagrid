@@ -5,10 +5,7 @@ import { clampScrollOffset, computeVerticalScrollLimit } from "../virtualization
 import type { VisibleRow } from "../types"
 import type { TableViewportDiagnostics } from "./tableViewportDiagnostics"
 import type { RowPoolItem, TableViewportSignals } from "./tableViewportSignals"
-import type {
-  TableViewportImperativeCallbacks,
-  TableViewportServerIntegration,
-} from "./tableViewportTypes"
+import type { TableViewportImperativeCallbacks } from "./tableViewportTypes"
 import type { ViewportClock } from "./tableViewportConfig"
 import {
   FRAME_BUDGET_CONSTANTS,
@@ -43,7 +40,6 @@ export interface TableViewportVirtualizationUpdateArgs {
   measuredScrollTopFromPending: boolean
   cachedNativeScrollHeight: number
   containerHeight: number
-  serverIntegration: TableViewportServerIntegration
   imperativeCallbacks: TableViewportImperativeCallbacks
 }
 
@@ -70,14 +66,12 @@ export interface TableViewportVirtualizationPrepared {
 
 export interface TableViewportVirtualizationApplyArgs {
   rows: VisibleRow[]
-  serverIntegration: TableViewportServerIntegration
   imperativeCallbacks: TableViewportImperativeCallbacks
 }
 
 export interface TableViewportVirtualization {
   resetOverscan(timestamp: number): void
   resetScrollState(timestamp: number): void
-  resetServerIntegration(): void
   clampScrollTop(value: number): number
   prepare(args: TableViewportVirtualizationUpdateArgs): TableViewportVirtualizationPrepared | null
   applyPrepared(
@@ -126,7 +120,6 @@ export function createTableViewportVirtualization(
   const rowPool: RowPoolItem[] = []
   let activeBufferIndex = 0
   let rowPoolVersion = 0
-  let lastServerFetchIndex: number | null = null
   let lastKnownViewportHeight = 0
   let lastKnownRowHeight = 0
   let lastKnownTotalRows = 0
@@ -212,7 +205,6 @@ export function createTableViewportVirtualization(
 
   function resetScrollState(timestamp: number): void {
     verticalOverscanController.reset(timestamp)
-    lastServerFetchIndex = null
     lastKnownViewportHeight = 0
     lastKnownRowHeight = 0
     lastKnownTotalRows = 0
@@ -244,10 +236,6 @@ export function createTableViewportVirtualization(
     visibleRange.value = { start: 0, end: 0 }
   }
 
-  function resetServerIntegration(): void {
-    lastServerFetchIndex = null
-  }
-
   function clampScrollTop(value: number): number {
     if (!Number.isFinite(value)) return 0
     const nativeLimit = Math.max(0, lastKnownNativeLimit)
@@ -271,7 +259,7 @@ export function createTableViewportVirtualization(
     result: TableViewportVirtualizationPrepared,
     args: TableViewportVirtualizationApplyArgs,
   ): void {
-    const { rows, serverIntegration, imperativeCallbacks } = args
+    const { rows, imperativeCallbacks } = args
     const {
       state: virtualState,
       scrollTop: nextScrollTop,
@@ -300,14 +288,6 @@ export function createTableViewportVirtualization(
     poolSize.value = virtualState.poolSize
     overscanLeading.value = virtualState.overscanLeading
     overscanTrailing.value = virtualState.overscanTrailing
-
-    if (serverIntegration.enabled && serverIntegration.rowModel) {
-      const blockIndex = Math.floor(nextRange.start)
-      if (lastServerFetchIndex !== blockIndex) {
-        lastServerFetchIndex = blockIndex
-        void serverIntegration.rowModel.fetchBlock(blockIndex)
-      }
-    }
 
     if (typeof imperativeCallbacks.onRows === "function") {
       imperativeCallbacks.onRows({
@@ -510,7 +490,6 @@ export function createTableViewportVirtualization(
 
     return applyPrepared(prepared, {
       rows: args.rows,
-      serverIntegration: args.serverIntegration,
       imperativeCallbacks: args.imperativeCallbacks,
     })
   }
@@ -518,7 +497,6 @@ export function createTableViewportVirtualization(
   return {
     resetOverscan,
     resetScrollState,
-    resetServerIntegration,
     clampScrollTop,
     prepare,
     applyPrepared,
