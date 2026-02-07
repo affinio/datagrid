@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.core.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "declarationMap": true
+  },
+  "include": ["src", "plugins", "theme"],
+  "exclude": ["src/**/__tests__/**"]
+}

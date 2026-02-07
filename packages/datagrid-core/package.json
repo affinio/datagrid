@@ -1,0 +1,45 @@
+{
+  "name": "@affino/datagrid-core",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Framework-agnostic data grid engine core (bootstrap fork from .tmp/ui-table/core)",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.public.json",
+    "type-check": "tsc -p tsconfig.public.json --noEmit",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:integration": "vitest run --config vitest.config.ts --testNamePattern=\"contract|integration|property|stress\"",
+    "test:coverage": "vitest run --config vitest.config.ts --coverage",
+    "test": "npm run type-check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/affinio/affinio/tree/main/packages/datagrid-core"
+  },
+  "homepage": "https://affino.dev",
+  "license": "MIT",
+  "keywords": [
+    "datagrid",
+    "grid",
+    "table",
+    "engine",
+    "headless",
+    "core"
+  ],
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/src/index.js"
+}

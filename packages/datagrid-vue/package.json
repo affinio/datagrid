@@ -1,0 +1,55 @@
+{
+  "name": "@affino/datagrid-vue",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Vue adapter and UI layer for @affino/datagrid-core (bootstrap fork from .tmp/ui-table/vue)",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.public.json",
+    "type-check": "tsc -p tsconfig.public.json --noEmit",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:integration": "vitest run --config vitest.config.ts --testNamePattern=\"contract|integration|property|stress\"",
+    "test:coverage": "vitest run --config vitest.config.ts --coverage",
+    "test": "npm run type-check"
+  },
+  "peerDependencies": {
+    "pinia": "^2.1.0 || ^3.0.0",
+    "vue": "^3.3.0"
+  },
+  "dependencies": {
+    "@affino/datagrid-core": "workspace:*",
+    "@affino/dialog-vue": "workspace:^",
+    "@affino/listbox-core": "workspace:^",
+    "@affino/menu-vue": "workspace:^",
+    "@affino/popover-vue": "workspace:^"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/affinio/affinio/tree/main/packages/datagrid-vue"
+  },
+  "homepage": "https://affino.dev",
+  "license": "MIT",
+  "keywords": [
+    "datagrid",
+    "vue",
+    "adapter",
+    "headless",
+    "ui"
+  ],
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/index.js"
+}

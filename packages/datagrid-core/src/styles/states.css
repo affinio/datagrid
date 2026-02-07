@@ -1,0 +1,36 @@
+/* =========================================================
+ * TABLE STATES — INTERACTIVE FILL COLORS
+ * Hover, selection, validation overlays applied via classes.
+ * =======================================================*/
+
+.ui-table-state__active-cell {
+	background-color: var(--ui-table-selection-active-cell-background, rgba(219, 234, 254, 1));
+}
+
+.ui-table-state__row-selected {
+	background-color: var(--ui-table-selection-row-highlight-background, rgba(219, 234, 254, 0.4));
+}
+
+.ui-table-state__column-selected {
+	background-color: var(--ui-table-selection-column-highlight-background, rgba(239, 246, 255, 0.4));
+}
+
+.ui-table-state__range-selected {
+	background-color: var(--ui-table-selection-range-highlight-background, rgba(219, 234, 254, 0.3));
+}
+
+.ui-table-state__fill-preview {
+	background-color: var(--ui-table-selection-fill-preview-background, rgba(191, 219, 254, 0.3));
+}
+
+.ui-table-state__search-match {
+	background-color: var(--ui-table-selection-search-match-background, rgba(253, 230, 138, 0.6));
+}
+
+.ui-table-state__search-match-active {
+	background-color: var(--ui-table-selection-search-match-active-background, rgba(254, 243, 199, 0.7));
+}
+
+.ui-table-state__validation {
+	background-color: var(--ui-table-selection-validation-background, rgba(254, 242, 242, 1));
+}

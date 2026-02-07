@@ -1,0 +1,1 @@
+{"version":3,"file":"dataGridRuntime.d.ts","sourceRoot":"","sources":["dataGridRuntime.ts"],"names":[],"mappings":"AAAA,OAAO,EACL,mBAAmB,IAAI,4BAA4B,EACnD,kBAAkB,IAAI,qBAAqB,EAC3C,eAAe,IAAI,uBAAuB,EAC1C,KAAK,SAAS,IAAI,iBAAiB,EACnC,KAAK,aAAa,IAAI,qBAAqB,EAC3C,KAAK,YAAY,IAAI,eAAe,EACpC,KAAK,mBAAmB,IAAI,sBAAsB,GACnD,MAAM,gBAAgB,CAAA;AAGvB,cAAc,gBAAgB,CAAA"}

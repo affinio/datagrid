@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.adapter.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationDir": "dist",
+    "emitDeclarationOnly": false,
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@affino/datagrid-core": ["../datagrid-core/dist/src/index.d.ts"],
+      "@affino/datagrid-core/*": ["../datagrid-core/dist/src/*"]
+    }
+  },
+  "include": [
+    "src/index.ts",
+    "src/public.ts",
+    "src/piniaTableSettingsAdapter.ts",
+    "src/tableSettingsStore.ts",
+    "src/types/**/*.d.ts"
+  ],
+  "exclude": [
+    "src/**/__tests__/**",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
+  ]
+}
