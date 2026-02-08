@@ -24,6 +24,8 @@ function createScrollStateAdapter(): TestScrollStateAdapter {
   let scrollSyncTaskId: number | null = null
   let lastScrollTopSample = 0
   let lastScrollLeftSample = 0
+  let lastHeavyScrollTop = 0
+  let lastHeavyScrollLeft = 0
   let pendingHorizontalSettle = false
   let lastAppliedScrollTop = 0
   let lastAppliedScrollLeft = 0
@@ -47,6 +49,11 @@ function createScrollStateAdapter(): TestScrollStateAdapter {
     setLastAppliedScroll: (top, left) => {
       lastAppliedScrollTop = top
       lastAppliedScrollLeft = left
+    },
+    getLastHeavyScroll: () => ({ top: lastHeavyScrollTop, left: lastHeavyScrollLeft }),
+    setLastHeavyScroll: (top, left) => {
+      lastHeavyScrollTop = top
+      lastHeavyScrollLeft = left
     },
     isAttached: () => attached,
     setAttached: value => {
@@ -92,6 +99,8 @@ function createScrollStateAdapter(): TestScrollStateAdapter {
       lastScrollLeftSample = 0
       lastAppliedScrollTop = 0
       lastAppliedScrollLeft = 0
+      lastHeavyScrollTop = 0
+      lastHeavyScrollLeft = 0
       driftCorrectionPending = false
       syncState.scrollLeft = 0
       syncState.scrollTop = 0

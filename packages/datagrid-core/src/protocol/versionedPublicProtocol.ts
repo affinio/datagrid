@@ -50,10 +50,10 @@ export const DATAGRID_FORBIDDEN_DEEP_IMPORT_PATTERNS = [
 
 export const DATAGRID_SEMVER_RULES = [
   "Only package root entrypoints are semver-safe for consumers.",
-  "Advanced entrypoints are supported for power users and may evolve with tighter deprecation windows.",
+  "Advanced entrypoints are supported for power users and may evolve with tighter deprecation periods.",
   "Internal entrypoints are explicitly unsafe and are not covered by semver guarantees.",
   "Deep imports under /src and internal feature folders are unsupported for public integrations.",
-  "Deprecated APIs remain supported until removeIn version, then can be removed in the next minor/major window.",
+  "Deprecated APIs remain supported until removeIn version, then can be removed in the next minor/major period.",
   "All deprecations must provide a replacement and codemod command before removal-ready status.",
 ] as const
 
@@ -72,7 +72,7 @@ export const DATAGRID_DEPRECATION_WINDOWS: readonly DataGridDeprecationWindow[] 
     removeIn: "0.4.0",
     replacement: "rowModel-driven integration via @affino/datagrid-core model contracts",
     codemodCommand: "pnpm run codemod:datagrid:public-protocol -- --write <path>",
-    notes: "serverIntegration path is compatibility-only and will be removed after migration window.",
+    notes: "serverIntegration path is compatibility-only and will be removed after migration period.",
   },
 ] as const
 
@@ -105,12 +105,12 @@ export function compareDatagridSemver(left: string, right: string): number {
 
 export function resolveDatagridDeprecationStatus(
   packageVersion: string,
-  window: DataGridDeprecationWindow,
+  entry: DataGridDeprecationWindow,
 ): DataGridDeprecationStatus {
-  if (compareDatagridSemver(packageVersion, window.deprecatedIn) < 0) {
+  if (compareDatagridSemver(packageVersion, entry.deprecatedIn) < 0) {
     return "active"
   }
-  if (compareDatagridSemver(packageVersion, window.removeIn) < 0) {
+  if (compareDatagridSemver(packageVersion, entry.removeIn) < 0) {
     return "warning"
   }
   return "removal-ready"
@@ -127,9 +127,9 @@ export function getDataGridVersionedPublicProtocol(
     internalEntrypoints: DATAGRID_INTERNAL_ENTRYPOINTS,
     forbiddenDeepImportPatterns: DATAGRID_FORBIDDEN_DEEP_IMPORT_PATTERNS,
     semverRules: DATAGRID_SEMVER_RULES,
-    deprecations: DATAGRID_DEPRECATION_WINDOWS.map((window) => ({
-      ...window,
-      status: resolveDatagridDeprecationStatus(packageVersion, window),
+    deprecations: DATAGRID_DEPRECATION_WINDOWS.map((entry) => ({
+      ...entry,
+      status: resolveDatagridDeprecationStatus(packageVersion, entry),
     })),
   }
 }

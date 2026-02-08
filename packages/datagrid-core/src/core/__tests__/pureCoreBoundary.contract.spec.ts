@@ -3,7 +3,10 @@ import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
-const srcRoot = resolve(fileURLToPath(new URL("../../../", import.meta.url)))
+const metaUrl = new URL(import.meta.url)
+metaUrl.search = ""
+metaUrl.hash = ""
+const srcRoot = resolve(fileURLToPath(new URL("../../", metaUrl)))
 
 function collectTypeScriptFiles(directory: string): string[] {
   const entries = readdirSync(directory)

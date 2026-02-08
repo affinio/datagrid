@@ -108,9 +108,8 @@ export function createDataGridAdapterRuntime<
     initialPlugins: options.initialPlugins,
   })
 
-  return {
-    ...runtime,
+  return Object.assign(runtime, {
     kind: options.kind,
     mapHostEventName,
-  }
+  })
 }
