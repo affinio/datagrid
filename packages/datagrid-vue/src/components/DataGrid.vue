@@ -119,7 +119,7 @@ import { useTableZoom } from "../composables/useTableZoom"
 import { useTableFilters } from "../composables/useTableFilters"
 import type { FilterStateSnapshot } from "../composables/useTableFilters"
 import { useTableSorting, type SortState } from "../composables/useTableSorting"
-import { useTableViewport, type RowPoolItem } from "../composables/useTableViewport"
+import { useTableViewport, type ImperativeScrollSyncPayload, type RowPoolItem } from "../composables/useTableViewport"
 import type { ViewportSyncTargets } from "@affino/datagrid-core/viewport/tableViewportController"
 import { useVirtualDebug } from "../composables/useVirtualDebug"
 import { useTableHistory, type HistoryEntry } from "../composables/useTableHistory"
@@ -1348,6 +1348,10 @@ const { scheduleAutoColumnResize: scheduleAutoColumnResizeInternal, enableAutoCo
 scheduleAutoColumnResizeImpl.value = scheduleAutoColumnResizeInternal
 
 let handleViewportAfterScroll: (() => void) | null = null
+let handleViewportScrollSyncImpl: ((payload: ImperativeScrollSyncPayload) => void) | null = null
+const handleViewportScrollSync = (payload: ImperativeScrollSyncPayload) => {
+  handleViewportScrollSyncImpl?.(payload)
+}
 
 const viewport = useTableViewport({
   containerRef,
@@ -2820,7 +2824,7 @@ const { handleKeydown: handleTableKeydown, handleWheel, focusNextCell } = useTab
 
 const {
   handleViewportScrollEvent,
-  handleViewportScrollSync,
+  handleViewportScrollSync: bridgeHandleViewportScrollSync,
   cancelPendingViewportScroll,
 } = useDataGridViewportBridge({
   handleViewportScroll,
@@ -2828,6 +2832,7 @@ const {
   scrollTop,
   emitOverlayScrollSnapshot,
 })
+handleViewportScrollSyncImpl = bridgeHandleViewportScrollSync
 
 function handleKeydown(event: KeyboardEvent) {
   if (findReplace.isActive) return
