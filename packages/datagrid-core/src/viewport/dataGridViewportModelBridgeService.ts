@@ -30,7 +30,7 @@ function areSortModelsEqual(
   for (let index = 0; index < left.length; index += 1) {
     const leftEntry = left[index]
     const rightEntry = right[index]
-    if (!rightEntry) {
+    if (!leftEntry || !rightEntry) {
       return false
     }
     if (leftEntry.key !== rightEntry.key) {
@@ -152,7 +152,7 @@ function areFilterModelsEqual(
     for (let index = 0; index < leftClauses.length; index += 1) {
       const leftClause = leftClauses[index]
       const rightClause = rightClauses[index]
-      if (!rightClause) {
+      if (!leftClause || !rightClause) {
         return false
       }
       if (leftClause.operator !== rightClause.operator) {
@@ -414,6 +414,9 @@ export function createDataGridViewportModelBridgeService(
     const resolvedRows: VisibleRow[] = []
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index]
+      if (!row) {
+        continue
+      }
       const rowIndex = Number.isFinite(row.displayIndex)
         ? Math.trunc(row.displayIndex as number)
         : Math.trunc(row.originalIndex)
