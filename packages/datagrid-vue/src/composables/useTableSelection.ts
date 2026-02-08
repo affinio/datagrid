@@ -108,6 +108,16 @@ import {
   resolveRowHeaderClassValue,
   type SelectionOverlaySignature,
 } from "./selection/selectionGeometry"
+import {
+  hasMeaningfulFillPreview,
+  shouldProcessFillPreviewUpdate,
+  shouldProcessFillTargetUpdate,
+  shouldProcessSelectionDragUpdate,
+} from "./selection/selectionFillOrchestration"
+import {
+  resolveEdgeColumnIndex,
+  resolveTabColumnTarget,
+} from "./selection/selectionKeyboardNavigation"
 import { createSelectionControllerStateScheduler } from "./selection/selectionControllerStateScheduler"
 import { createSelectionOverlayUpdateScheduler } from "./selection/selectionOverlayUpdateScheduler"
 import { reconcileSelectionState, syncSelectionFromControllerState } from "./selection/selectionStateSync"
@@ -678,6 +688,19 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
       target: session.target ? cloneSelectionPoint(session.target) : null,
       axis: session.axis ?? null,
     }
+  }
+
+  let lastSelectionDragPoint: SelectionPoint | null = null
+  let lastFillPreviewTarget: SelectionPoint | null = null
+  let lastFillPreviewArea: SelectionArea | null = null
+
+  function resetSelectionDragDedupState() {
+    lastSelectionDragPoint = null
+  }
+
+  function resetFillDedupState() {
+    lastFillPreviewTarget = null
+    lastFillPreviewArea = null
   }
 
   function setFillSession(session: FillDragSession<RowKey> | null) {
@@ -1837,7 +1860,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
   function goToRowEdge(edge: "start" | "end", options?: { extend?: boolean }) {
     const active = getSelectionCursor()
     if (!active) return false
-    const targetCol = edge === "start" ? 0 : Math.max(0, localColumns.value.length - 1)
+    const targetCol = resolveEdgeColumnIndex(localColumns.value, edge)
     return focusCell(active.rowIndex, targetCol, options)
   }
 
@@ -1850,7 +1873,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
 
   function goToGridEdge(edge: "start" | "end", options?: { extend?: boolean }) {
     const targetRow = edge === "start" ? 0 : Math.max(0, totalRowCount.value - 1)
-    const targetCol = edge === "start" ? 0 : Math.max(0, localColumns.value.length - 1)
+    const targetCol = resolveEdgeColumnIndex(localColumns.value, edge)
     return focusCell(targetRow, targetCol, options)
   }
 
@@ -2652,6 +2675,8 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
       anchorPoint: anchor,
       context: getSelectionContext(),
     })
+    resetSelectionDragDedupState()
+    lastSelectionDragPoint = cloneSelectionPoint(anchor)
     reapplySelectionState({ dragAnchorPoint: anchor })
     const pointer = toSelectionPointerCoordinates(payload.event)
     lastPointer.value = pointer
@@ -2675,13 +2700,18 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
     extendSelectionDragToPoint(createSelectionPointByIndex(payload.rowIndex, payload.colIndex))
   }
 
-  function extendSelectionDragToPoint(point: SelectionPoint | null) {
-    if (!isDraggingSelection.value || !point) return
+  function extendSelectionDragToPoint(point: SelectionPoint | null): boolean {
+    if (!isDraggingSelection.value || !point) return false
+    if (!shouldProcessSelectionDragUpdate(lastSelectionDragPoint, point)) {
+      return false
+    }
+    lastSelectionDragPoint = cloneSelectionPoint(point)
     extendActiveRangeTo(point)
+    return true
   }
 
-  function updateSelectionDragFromPoint(clientX: number, clientY: number) {
-    if (!isDraggingSelection.value) return
+  function updateSelectionDragFromPoint(clientX: number, clientY: number): boolean {
+    if (!isDraggingSelection.value) return false
     const session = selectionDragSession.value
     if (session) {
       const point = updateSelectionDragSession(session, {
@@ -2690,10 +2720,9 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
         resolvePoint: getCellFromPoint,
         context: getSelectionContext(),
       })
-      extendSelectionDragToPoint(point)
-      return
+      return extendSelectionDragToPoint(point)
     }
-    extendSelectionDragToPoint(getCellFromPoint(clientX, clientY))
+    return extendSelectionDragToPoint(getCellFromPoint(clientX, clientY))
   }
 
   function onSelectionMouseMove(event: MouseEvent) {
@@ -2714,6 +2743,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
       endSelectionDragSession(selectionDragSession.value)
       selectionDragSession.value = null
     }
+    resetSelectionDragDedupState()
     haltAutoScroll()
     lastPointer.value = null
   }
@@ -2733,11 +2763,18 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
     return domAdapter.resolveRowIndexFromPoint(clientX, clientY)
   }
 
-  function updateRowSelectionFromPoint(clientX: number, clientY: number) {
+  function updateRowSelectionFromPoint(clientX: number, clientY: number): boolean {
     const targetRow = getRowIndexFromPoint(clientX, clientY)
-    if (targetRow === null) return
+    if (targetRow === null) return false
     const anchorRow = rowSelectionAnchor.value ?? targetRow
+    const previousRange = fullRowSelection.value
+    const nextStart = Math.min(anchorRow, targetRow)
+    const nextEnd = Math.max(anchorRow, targetRow)
+    if (previousRange && previousRange.start === nextStart && previousRange.end === nextEnd) {
+      return false
+    }
     setFullRowSelectionRange(anchorRow, targetRow, { focus: false, anchorRow })
+    return true
   }
 
   function onRowSelectionMouseMove(event: MouseEvent) {
@@ -2771,6 +2808,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
     })
     if (!session) return
     setFillSession(session)
+    resetFillDedupState()
     isFillDragging.value = true
     const pointer = toSelectionPointerCoordinates(event)
     lastPointer.value = pointer
@@ -2795,7 +2833,10 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
     window.removeEventListener("mouseup", onFillMouseUp)
     updateFillPreviewFromPoint(event.clientX, event.clientY)
     haltAutoScroll()
-    const shouldCommit = Boolean(fillPreviewRange.value)
+    const activeSession = fillSession.value
+    const shouldCommit = Boolean(
+      activeSession && hasMeaningfulFillPreview(activeSession.originArea, fillPreviewRange.value),
+    )
     if (shouldCommit) {
       applyFillOperation()
     }
@@ -2806,6 +2847,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
   function resetFillState() {
     haltAutoScroll()
     isFillDragging.value = false
+    resetFillDedupState()
     setFillSession(null)
     const controllerState = selectionControllerAdapter.state.value
     updateFillPreviewOverlayFromState(controllerState, undefined, {
@@ -2892,30 +2934,54 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
 
   function handleAutoScrollFrame() {
     const pointer = lastPointer.value
+    let didUpdateSelectionState = false
     if (isFillDragging.value && pointer) {
-      updateFillPreviewFromPoint(pointer.clientX, pointer.clientY)
+      didUpdateSelectionState = updateFillPreviewFromPoint(pointer.clientX, pointer.clientY)
     } else if (isDraggingSelection.value && pointer) {
-      updateSelectionDragFromPoint(pointer.clientX, pointer.clientY)
+      didUpdateSelectionState = updateSelectionDragFromPoint(pointer.clientX, pointer.clientY)
     } else if (isRowSelectionDragging.value && pointer) {
-      updateRowSelectionFromPoint(pointer.clientX, pointer.clientY)
+      didUpdateSelectionState = updateRowSelectionFromPoint(pointer.clientX, pointer.clientY)
     }
-    scheduleOverlayUpdate()
+    if (didUpdateSelectionState) {
+      scheduleOverlayUpdate()
+    }
   }
 
-  function updateFillPreviewFromPoint(clientX: number, clientY: number) {
-    if (!fillSession.value) return
+  function updateFillPreviewFromPoint(clientX: number, clientY: number): boolean {
+    if (!fillSession.value) return false
     const target = getCellFromPoint(clientX, clientY)
     const effectiveTarget = target ?? fillSession.value.target
-    updateFillPreviewForTarget(effectiveTarget ?? null)
+    return updateFillPreviewForTarget(effectiveTarget ?? null)
   }
 
-  function updateFillPreviewForTarget(target: SelectionPointLike | null) {
+  function updateFillPreviewForTarget(target: SelectionPointLike | null): boolean {
     const session = fillSession.value
-    if (!session) return
+    if (!session) return false
+    const previousPreview = session.preview ? cloneSelectionArea(session.preview) : null
+    const normalizedTarget = target ? clampPointToGrid(target) : null
+
+    if (
+      !shouldProcessFillTargetUpdate(lastFillPreviewTarget, normalizedTarget) &&
+      !shouldProcessFillPreviewUpdate(lastFillPreviewArea, previousPreview)
+    ) {
+      return false
+    }
+
     updateCoreFillDragSession(session, {
-      target,
+      target: normalizedTarget,
       context: getSelectionContext(),
     })
+
+    const nextTarget = session.target ? cloneSelectionPoint(session.target) : null
+    const nextPreview = session.preview ? cloneSelectionArea(session.preview) : null
+    const targetChanged = shouldProcessFillTargetUpdate(lastFillPreviewTarget, nextTarget)
+    const previewChanged = shouldProcessFillPreviewUpdate(lastFillPreviewArea, nextPreview)
+    if (!targetChanged && !previewChanged) {
+      return false
+    }
+
+    lastFillPreviewTarget = nextTarget
+    lastFillPreviewArea = nextPreview
     refreshFillSession(session)
     const controllerState = selectionControllerAdapter.state.value
     const resources = resolveOverlayComputationInputs(controllerState)
@@ -2924,6 +2990,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
       updateSignature: true,
     })
     updateCursorOverlayFromState(controllerState, resources)
+    return true
   }
 
   function getBoundsForRange(range: SelectionRange | null, fallbackToAll: boolean): SelectionArea | null {
@@ -3371,33 +3438,30 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
     if (!hasGridData()) return false
     const current = getSelectionCursor()
     if (!current) {
-      selectCell(0, localColumns.value[0].key, true, { colIndex: 0 })
+      const firstNavigableIndex = resolveEdgeColumnIndex(localColumns.value, "start")
+      setSingleCellSelection({ rowIndex: 0, colIndex: firstNavigableIndex })
+      focusContainer()
+      nextTick(() => scrollSelectionIntoView())
       return true
     }
 
     const rowCount = totalRowCount.value
-    const colCount = localColumns.value.length
-    let { rowIndex, colIndex } = current
+    const target = resolveTabColumnTarget({
+      columns: localColumns.value,
+      currentColumnIndex: current.colIndex,
+      forward,
+    })
+    if (!target) return false
 
-    if (forward) {
-      if (rowIndex === rowCount - 1 && colIndex === colCount - 1) {
-        return false
-      }
-      colIndex += 1
-      if (colIndex >= colCount) {
-        colIndex = 0
-        rowIndex = clamp(rowIndex + 1, 0, rowCount - 1)
-      }
-    } else {
-      if (rowIndex === 0 && colIndex === 0) {
-        return false
-      }
-      colIndex -= 1
-      if (colIndex < 0) {
-        colIndex = colCount - 1
-        rowIndex = clamp(rowIndex - 1, 0, rowCount - 1)
-      }
+    if (forward && current.rowIndex === rowCount - 1 && target.rowDelta > 0) {
+      return false
     }
+    if (!forward && current.rowIndex === 0 && target.rowDelta < 0) {
+      return false
+    }
+
+    const rowIndex = clamp(current.rowIndex + target.rowDelta, 0, rowCount - 1)
+    const colIndex = target.nextColumnIndex
 
     setSingleCellSelection({ rowIndex, colIndex })
     focusContainer()

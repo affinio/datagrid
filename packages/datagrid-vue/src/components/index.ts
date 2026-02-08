@@ -15,7 +15,11 @@ export { default as DataGridViewport } from "./DataGridViewport.vue"
 export { default as DataGridOverlayLayer } from "./DataGridOverlayLayer.vue"
 export { default as DataGridZoomControl } from "./UiTableZoomControl.vue"
 
-// Legacy aliases kept for migration window.
+// Legacy compatibility shims:
+// - deprecated: 2026-02-08
+// - supported-until: 2026-08-31
+// - removal-date: 2026-09-01
+// New integration must use DataGrid* exports from this file.
 export { default as UiTable } from "./UiTable.vue"
 export { default as UiTableCell } from "./UiTableCell.vue"
 export { default as UiTableColumnHeader } from "./UiTableColumnHeader.vue"

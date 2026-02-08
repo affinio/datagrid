@@ -2791,6 +2791,7 @@ const { handleKeydown: handleTableKeydown, handleWheel, focusNextCell } = useTab
     moveByTab,
     moveByPage,
     triggerEditForSelection,
+    clearSelection,
     clearSelectionValues,
     selectCell,
     scheduleOverlayUpdate,

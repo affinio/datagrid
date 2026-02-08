@@ -22,6 +22,7 @@ interface UseTableEventsOptions {
     moveByTab: (forward: boolean) => boolean
     moveByPage: (direction: number, options?: { extend?: boolean }) => boolean
     triggerEditForSelection: () => { rowIndex: number; columnKey: string } | null
+    clearSelection: () => void
     clearSelectionValues: () => boolean
     selectCell: (rowIndex: number, columnKey: string, focus?: boolean, options?: { colIndex?: number }) => void
     scheduleOverlayUpdate: () => void
@@ -85,10 +86,17 @@ export function useTableEvents({
     if (isEditingCell.value) return
 
     if (event.key === "Escape") {
+      let handled = false
       if (clipboard.cancelCutPreview) {
         event.preventDefault()
         clipboard.cancelCutPreview()
         selection.scheduleOverlayUpdate()
+        handled = true
+      }
+      selection.clearSelection()
+      selection.scheduleOverlayUpdate()
+      if (!handled) {
+        event.preventDefault()
       }
       return
     }
@@ -219,6 +227,10 @@ export function useTableEvents({
         break
       }
       case "Enter":
+        event.preventDefault()
+        selection.moveSelection(event.shiftKey ? -1 : 1, 0, { extend: false })
+        break
+      case "F2":
         event.preventDefault()
         {
           const target = selection.triggerEditForSelection()

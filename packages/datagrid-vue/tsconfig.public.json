@@ -16,6 +16,8 @@
   },
   "include": [
     "src/index.ts",
+    "src/stable.ts",
+    "src/advanced.ts",
     "src/public.ts",
     "src/piniaTableSettingsAdapter.ts",
     "src/tableSettingsStore.ts",

@@ -3,16 +3,16 @@
  * Component-level API will be exposed after contract hardening.
  */
 export {
-  createPiniaTableSettingsAdapter,
+  createPiniaTableSettingsAdapter as createDataGridSettingsAdapter,
 } from "./piniaTableSettingsAdapter"
 export {
-  useTableSettingsStore,
-  type TableSettingsStore,
+  useTableSettingsStore as useDataGridSettingsStore,
+  type TableSettingsStore as DataGridSettingsStore,
 } from "./tableSettingsStore"
 export {
-  buildSelectionOverlayTransform,
-  buildSelectionOverlayTransformFromSnapshot,
-  type SelectionOverlayViewportState,
+  buildSelectionOverlayTransform as buildDataGridOverlayTransform,
+  buildSelectionOverlayTransformFromSnapshot as buildDataGridOverlayTransformFromSnapshot,
+  type SelectionOverlayViewportState as DataGridOverlayViewportState,
 } from "./composables/selectionOverlayTransform"
 export {
   mapDataGridA11yGridAttributes,
@@ -21,5 +21,5 @@ export {
   type DataGridDomAttributeValue,
 } from "./adapters/a11yAttributesAdapter"
 export type {
-  UiTableOverlayTransformInput as DataGridOverlayTransformInput,
+  DataGridOverlayTransformInput,
 } from "./types/overlay"

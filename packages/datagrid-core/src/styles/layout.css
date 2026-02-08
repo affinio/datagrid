@@ -18,6 +18,10 @@
   width: 100%;
   --ui-table-pinned-left-width: 0px;
   --ui-table-pinned-right-width: 0px;
+  --ui-table-layer-hover: 30;
+  --ui-table-layer-overlay: 32;
+  --ui-table-layer-pinned: 35;
+  --ui-table-layer-header: 40;
 }
 
 .ui-table__viewport-wrapper {
@@ -109,7 +113,7 @@
 
 .ui-table__header-layer {
   flex: 0 0 auto;
-  z-index: 40;
+  z-index: var(--ui-table-layer-header);
   height: var(--ui-table-header-height, 40px);
 }
 
@@ -133,7 +137,7 @@
   position: relative;
   height: var(--ui-table-header-height, 40px);
   align-items: stretch;
-  z-index: 40;
+  z-index: var(--ui-table-layer-header);
 }
 
 .ui-table__body-layer {
@@ -189,7 +193,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 60;
+  z-index: var(--ui-table-layer-overlay);
   overflow: hidden;
   contain: layout paint;
 }
@@ -218,9 +222,31 @@
 .ui-table__pinned-left,
 .ui-table__pinned-right {
   position: relative;
-  z-index: 35;
+  z-index: var(--ui-table-layer-pinned);
   min-width: 0;
   overflow: hidden;
+}
+
+.ui-table__header-pinned-left,
+.ui-table__header-pinned-right {
+  background-color: var(
+    --ui-table-header-background-color,
+    var(--ui-table-background-color, transparent)
+  );
+}
+
+.ui-table__pinned-left {
+  background-color: var(
+    --ui-table-pinned-left-bg,
+    var(--ui-table-pinned-bg, var(--ui-table-row-background-color, var(--ui-table-background-color, transparent)))
+  );
+}
+
+.ui-table__pinned-right {
+  background-color: var(
+    --ui-table-pinned-right-bg,
+    var(--ui-table-pinned-bg, var(--ui-table-row-background-color, var(--ui-table-background-color, transparent)))
+  );
 }
 
 .ui-table__header-pinned-left:empty,
@@ -389,13 +415,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 40;
+  z-index: var(--ui-table-layer-header);
 }
 
 .ui-table__row-index {
   position: sticky;
   left: 0;
-  z-index: 35;
+  z-index: var(--ui-table-layer-pinned);
   display: flex;
   justify-content: flex-end;
   align-items: center;

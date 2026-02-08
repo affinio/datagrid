@@ -4,27 +4,55 @@ Vue adapter package for `@affino/datagrid-core`.
 
 ## Stable Public API
 
-Import only from the package root:
+Preferred import for common usage:
 
 ```ts
 import {
-  useTableSettingsStore,
-  createPiniaTableSettingsAdapter,
-  buildSelectionOverlayTransform,
-  buildSelectionOverlayTransformFromSnapshot,
+  useDataGridSettingsStore,
+  createDataGridSettingsAdapter,
+  buildDataGridOverlayTransform,
+  buildDataGridOverlayTransformFromSnapshot,
 } from "@affino/datagrid-vue"
+```
+
+Equivalent explicit stable entrypoint:
+
+```ts
+import {
+  useDataGridSettingsStore,
+  createDataGridSettingsAdapter,
+  buildDataGridOverlayTransform,
+  buildDataGridOverlayTransformFromSnapshot,
+} from "@affino/datagrid-vue/stable"
 ```
 
 Current stable contract is focused on:
 - settings persistence bridge
 - deterministic overlay transform helpers for pinned/scroll sync
 
+Legacy stable aliases (`useTableSettingsStore`, `createPiniaTableSettingsAdapter`) are no longer exported from root/stable surface.
+
+## Advanced Entrypoint
+
+Power-user hooks are exported only from explicit advanced entrypoint:
+
+```ts
+import {
+  useDataGridViewportBridge,
+  useDataGridHeaderOrchestration,
+  useDataGridRowSelectionFacade,
+  useDataGridFindReplaceFacade,
+} from "@affino/datagrid-vue/advanced"
+```
+
+These hooks are intentionally excluded from root/stable entrypoint to keep common-usage API small and semver-safe.
+
 ## Deterministic Overlay Contract
 
 Use public helpers instead of ad-hoc transform math in product integration:
 
 ```ts
-const transform = buildSelectionOverlayTransformFromSnapshot({
+const transform = buildDataGridOverlayTransformFromSnapshot({
   viewportWidth,
   viewportHeight,
   scrollLeft,
@@ -41,6 +69,7 @@ Component-level exports are intentionally held back until adapter hardening step
 
 Core component files now use the `DataGrid*` prefix (`DataGrid.vue`, `DataGridViewport.vue`, `DataGridOverlayLayer.vue`).
 Legacy `UiTable*` files are kept as compatibility shims during migration.
+Deprecation window: supported through `2026-08-31`, scheduled removal on `2026-09-01`.
 
 ## Pinning Contract (Adapter Normalization)
 

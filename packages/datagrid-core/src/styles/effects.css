@@ -57,7 +57,7 @@
   will-change: transform;
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.35);
   transition: none;
-  z-index: 30;
+  z-index: var(--ui-table-layer-hover, 30);
 }
 
 .dark .ui-table__hover-overlay {
