@@ -1,7 +1,16 @@
+import type { DataGridColumnModel, DataGridEditModel, DataGridRowModel, DataGridViewportRange } from "../models"
+import type { DataGridSelectionSnapshot } from "../selection/snapshot"
+import type {
+  DataGridTransactionInput,
+  DataGridTransactionSnapshot,
+} from "./transactionService"
+
 export type DataGridCoreServiceName =
   | "event"
   | "rowModel"
   | "columnModel"
+  | "edit"
+  | "transaction"
   | "selection"
   | "viewport"
 
@@ -12,11 +21,6 @@ export type DataGridCoreLifecycleState =
   | "stopped"
   | "disposed"
 
-export interface DataGridCoreServiceContext {
-  readonly state: DataGridCoreLifecycleState
-  getService(name: DataGridCoreServiceName): DataGridCoreService
-}
-
 export interface DataGridCoreService {
   readonly name: DataGridCoreServiceName
   init?(context: DataGridCoreServiceContext): void | Promise<void>
@@ -25,7 +29,67 @@ export interface DataGridCoreService {
   dispose?(context: DataGridCoreServiceContext): void | Promise<void>
 }
 
-export type DataGridCoreServiceRegistry = Record<DataGridCoreServiceName, DataGridCoreService>
+export interface DataGridCoreEventService extends DataGridCoreService {
+  readonly name: "event"
+}
+
+export interface DataGridCoreRowModelService<TRow = unknown> extends DataGridCoreService {
+  readonly name: "rowModel"
+  model?: DataGridRowModel<TRow>
+}
+
+export interface DataGridCoreColumnModelService extends DataGridCoreService {
+  readonly name: "columnModel"
+  model?: DataGridColumnModel
+}
+
+export interface DataGridCoreEditService extends DataGridCoreService {
+  readonly name: "edit"
+  model?: DataGridEditModel
+}
+
+export interface DataGridCoreTransactionService extends DataGridCoreService {
+  readonly name: "transaction"
+  getTransactionSnapshot?(): DataGridTransactionSnapshot
+  beginTransactionBatch?(label?: string): string
+  commitTransactionBatch?(batchId?: string): Promise<readonly string[]>
+  rollbackTransactionBatch?(batchId?: string): readonly string[]
+  applyTransaction?(transaction: DataGridTransactionInput): Promise<string>
+  canUndoTransaction?(): boolean
+  canRedoTransaction?(): boolean
+  undoTransaction?(): Promise<string | null>
+  redoTransaction?(): Promise<string | null>
+}
+
+export interface DataGridCoreSelectionService extends DataGridCoreService {
+  readonly name: "selection"
+  getSelectionSnapshot?(): DataGridSelectionSnapshot | null
+  setSelectionSnapshot?(snapshot: DataGridSelectionSnapshot): void
+  clearSelection?(): void
+}
+
+export interface DataGridCoreViewportService extends DataGridCoreService {
+  readonly name: "viewport"
+  getViewportRange?(): DataGridViewportRange
+  setViewportRange?(range: DataGridViewportRange): void
+}
+
+export interface DataGridCoreServiceByName {
+  event: DataGridCoreEventService
+  rowModel: DataGridCoreRowModelService
+  columnModel: DataGridCoreColumnModelService
+  edit: DataGridCoreEditService
+  transaction: DataGridCoreTransactionService
+  selection: DataGridCoreSelectionService
+  viewport: DataGridCoreViewportService
+}
+
+export type DataGridCoreServiceRegistry = DataGridCoreServiceByName
+
+export interface DataGridCoreServiceContext {
+  readonly state: DataGridCoreLifecycleState
+  getService<TName extends DataGridCoreServiceName>(name: TName): DataGridCoreServiceByName[TName]
+}
 
 export interface CreateDataGridCoreOptions {
   services?: Partial<DataGridCoreServiceRegistry>
@@ -42,19 +106,21 @@ export interface DataGridCore {
   start(): Promise<void>
   stop(): Promise<void>
   dispose(): Promise<void>
-  getService(name: DataGridCoreServiceName): DataGridCoreService
+  getService<TName extends DataGridCoreServiceName>(name: TName): DataGridCoreServiceByName[TName]
 }
 
 const CANONICAL_STARTUP_ORDER: readonly DataGridCoreServiceName[] = [
   "event",
   "rowModel",
   "columnModel",
+  "edit",
+  "transaction",
   "selection",
   "viewport",
 ]
 
-function createNoopService(name: DataGridCoreServiceName): DataGridCoreService {
-  return { name }
+function createNoopService<TName extends DataGridCoreServiceName>(name: TName): DataGridCoreServiceByName[TName] {
+  return { name } as DataGridCoreServiceByName[TName]
 }
 
 function resolveStartupOrder(order: readonly DataGridCoreServiceName[] | undefined): DataGridCoreServiceName[] {
@@ -84,7 +150,7 @@ function resolveStartupOrder(order: readonly DataGridCoreServiceName[] | undefin
 }
 
 function resolveServices(services: Partial<DataGridCoreServiceRegistry> | undefined): DataGridCoreServiceRegistry {
-  const resolved = {} as DataGridCoreServiceRegistry
+  const resolved = {} as Record<DataGridCoreServiceName, DataGridCoreService>
   for (const name of CANONICAL_STARTUP_ORDER) {
     const candidate = services?.[name]
     if (!candidate) {
@@ -94,9 +160,9 @@ function resolveServices(services: Partial<DataGridCoreServiceRegistry> | undefi
     if (candidate.name !== name) {
       throw new Error(`[DataGridCore] service key "${name}" must match service.name "${candidate.name}".`)
     }
-    resolved[name] = candidate
+    resolved[name] = candidate as DataGridCoreServiceByName[typeof name]
   }
-  return resolved
+  return resolved as DataGridCoreServiceRegistry
 }
 
 export function createDataGridCore(options: CreateDataGridCoreOptions = {}): DataGridCore {
@@ -108,7 +174,7 @@ export function createDataGridCore(options: CreateDataGridCoreOptions = {}): Dat
     get state() {
       return state
     },
-    getService(name: DataGridCoreServiceName): DataGridCoreService {
+    getService<TName extends DataGridCoreServiceName>(name: TName): DataGridCoreServiceByName[TName] {
       return services[name]
     },
   }
@@ -119,7 +185,7 @@ export function createDataGridCore(options: CreateDataGridCoreOptions = {}): Dat
   ): Promise<void> {
     for (const name of order) {
       const service = services[name]
-      const handler = service[method]
+      const handler = (service as DataGridCoreService)[method]
       if (!handler) {
         continue
       }
@@ -133,12 +199,52 @@ export function createDataGridCore(options: CreateDataGridCoreOptions = {}): Dat
   ): Promise<void> {
     for (let index = order.length - 1; index >= 0; index -= 1) {
       const service = services[order[index] as DataGridCoreServiceName]
-      const handler = service[method]
+      const handler = (service as DataGridCoreService)[method]
       if (!handler) {
         continue
       }
       await handler(context)
     }
+  }
+
+  async function initCore(): Promise<void> {
+    if (state === "disposed") {
+      throw new Error("[DataGridCore] cannot init disposed core.")
+    }
+    if (state === "initialized" || state === "started" || state === "stopped") {
+      return
+    }
+    await runInOrder("init", startupOrder)
+    state = "initialized"
+  }
+
+  async function startCore(): Promise<void> {
+    if (state === "disposed") {
+      throw new Error("[DataGridCore] cannot start disposed core.")
+    }
+    if (state === "started") {
+      return
+    }
+    await initCore()
+    await runInOrder("start", startupOrder)
+    state = "started"
+  }
+
+  async function stopCore(): Promise<void> {
+    if (state === "disposed" || state === "idle" || state === "stopped") {
+      return
+    }
+    await runInReverseOrder("stop", startupOrder)
+    state = "stopped"
+  }
+
+  async function disposeCore(): Promise<void> {
+    if (state === "disposed") {
+      return
+    }
+    await stopCore()
+    await runInReverseOrder("dispose", startupOrder)
+    state = "disposed"
   }
 
   return {
@@ -149,43 +255,11 @@ export function createDataGridCore(options: CreateDataGridCoreOptions = {}): Dat
       startupOrder,
     },
     services,
-    async init() {
-      if (state === "disposed") {
-        throw new Error("[DataGridCore] cannot init disposed core.")
-      }
-      if (state === "initialized" || state === "started" || state === "stopped") {
-        return
-      }
-      await runInOrder("init", startupOrder)
-      state = "initialized"
-    },
-    async start() {
-      if (state === "disposed") {
-        throw new Error("[DataGridCore] cannot start disposed core.")
-      }
-      if (state === "started") {
-        return
-      }
-      await this.init()
-      await runInOrder("start", startupOrder)
-      state = "started"
-    },
-    async stop() {
-      if (state === "disposed" || state === "idle" || state === "stopped") {
-        return
-      }
-      await runInReverseOrder("stop", startupOrder)
-      state = "stopped"
-    },
-    async dispose() {
-      if (state === "disposed") {
-        return
-      }
-      await this.stop()
-      await runInReverseOrder("dispose", startupOrder)
-      state = "disposed"
-    },
-    getService(name: DataGridCoreServiceName): DataGridCoreService {
+    init: initCore,
+    start: startCore,
+    stop: stopCore,
+    dispose: disposeCore,
+    getService<TName extends DataGridCoreServiceName>(name: TName): DataGridCoreServiceByName[TName] {
       return services[name]
     },
   }

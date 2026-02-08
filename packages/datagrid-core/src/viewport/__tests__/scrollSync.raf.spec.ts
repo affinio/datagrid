@@ -106,6 +106,7 @@ interface ScrollIoHarness {
   container: HTMLDivElement
   fakeRaf: ReturnType<typeof createFakeRafScheduler>
   queueHeavyUpdate: ReturnType<typeof vi.fn>
+  recordLayoutWrite: ReturnType<typeof vi.fn>
   recordSyncScroll: ReturnType<typeof vi.fn>
   state: TestScrollStateAdapter
 }
@@ -114,6 +115,7 @@ function createHarness(): ScrollIoHarness {
   const fakeRaf = createFakeRafScheduler()
   const queueHeavyUpdate = vi.fn()
   const recordSyncScroll = vi.fn()
+  const recordLayoutWrite = vi.fn()
   const state = createScrollStateAdapter()
   const container = document.createElement("div") as HTMLDivElement
   container.scrollLeft = 0
@@ -132,6 +134,7 @@ function createHarness(): ScrollIoHarness {
     hostEnvironment,
     scheduler: fakeRaf.scheduler,
     recordLayoutRead: vi.fn(),
+    recordLayoutWrite,
     recordSyncScroll,
     queueHeavyUpdate,
     flushSchedulers: vi.fn(),
@@ -145,6 +148,7 @@ function createHarness(): ScrollIoHarness {
     container,
     fakeRaf,
     queueHeavyUpdate,
+    recordLayoutWrite,
     recordSyncScroll,
     state,
   }
@@ -271,5 +275,21 @@ describe("ui-table rAF scroll sync", () => {
     const [, nextState] = applySpy.mock.calls[0] as [unknown, ViewportSyncState]
     expect(nextState.scrollTop).toBe(31)
     expect(nextState.scrollLeft).toBe(13)
+  })
+
+  it("applies programmatic scroll writes through IO boundary", () => {
+    const harness = createHarness()
+
+    harness.container.scrollTop = 10
+    harness.container.scrollLeft = 6
+
+    harness.scrollIo.applyProgrammaticScrollWrites({
+      scrollTop: 120,
+      scrollLeft: 84,
+    })
+
+    expect(harness.container.scrollTop).toBe(120)
+    expect(harness.container.scrollLeft).toBe(84)
+    expect(harness.recordLayoutWrite).toHaveBeenCalledTimes(2)
   })
 })

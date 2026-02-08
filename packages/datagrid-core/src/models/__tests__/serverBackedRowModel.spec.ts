@@ -54,6 +54,8 @@ describe("createServerBackedRowModel", () => {
     expect(fetchBlock).toHaveBeenCalledWith(10)
     expect(model.getSnapshot().viewportRange).toEqual({ start: 2, end: 10 })
     const node = model.getRow(2)
+    expect(node?.data.id).toBe(2)
+    expect(node?.row.id).toBe(2)
     expect(node?.rowKey).toBe(2)
     expect(node?.sourceIndex).toBe(2)
     expect(node?.displayIndex).toBe(2)
@@ -78,6 +80,91 @@ describe("createServerBackedRowModel", () => {
     const model = createServerBackedRowModel({ source })
     await model.refresh("reset")
     expect(reset).toHaveBeenCalledTimes(1)
+    model.dispose()
+  })
+
+  it("throws when server row identity is missing and resolver is not provided", () => {
+    const rows = [{ value: "a" }]
+    const source: ServerRowModel<{ value: string }> = {
+      rows: { value: rows },
+      loading: { value: false },
+      error: { value: null },
+      blocks: { value: new Map() },
+      total: { value: rows.length },
+      loadedRanges: { value: [] },
+      progress: { value: 1 },
+      blockErrors: { value: new Map() },
+      diagnostics: {
+        value: {
+          cacheBlocks: 0,
+          cachedRows: rows.length,
+          pendingBlocks: 0,
+          pendingRequests: 0,
+          abortedRequests: 0,
+          cacheHits: 0,
+          cacheMisses: 0,
+          effectivePreloadThreshold: 0.6,
+        },
+      },
+      getRowAt(index) {
+        return rows[index]
+      },
+      getRowCount() {
+        return rows.length
+      },
+      refreshBlock: vi.fn(async () => {}),
+      fetchBlock: vi.fn(async () => {}),
+      reset: vi.fn(),
+      abortAll: vi.fn(),
+      dispose: vi.fn(),
+    }
+
+    const model = createServerBackedRowModel({ source })
+    expect(() => model.getRow(0)).toThrowError(/Missing row identity/)
+    model.dispose()
+  })
+
+  it("uses explicit resolver for server row identity", () => {
+    const rows = [{ uuid: "r-1", value: "a" }]
+    const source: ServerRowModel<{ uuid: string; value: string }> = {
+      rows: { value: rows },
+      loading: { value: false },
+      error: { value: null },
+      blocks: { value: new Map() },
+      total: { value: rows.length },
+      loadedRanges: { value: [] },
+      progress: { value: 1 },
+      blockErrors: { value: new Map() },
+      diagnostics: {
+        value: {
+          cacheBlocks: 0,
+          cachedRows: rows.length,
+          pendingBlocks: 0,
+          pendingRequests: 0,
+          abortedRequests: 0,
+          cacheHits: 0,
+          cacheMisses: 0,
+          effectivePreloadThreshold: 0.6,
+        },
+      },
+      getRowAt(index) {
+        return rows[index]
+      },
+      getRowCount() {
+        return rows.length
+      },
+      refreshBlock: vi.fn(async () => {}),
+      fetchBlock: vi.fn(async () => {}),
+      reset: vi.fn(),
+      abortAll: vi.fn(),
+      dispose: vi.fn(),
+    }
+
+    const model = createServerBackedRowModel({
+      source,
+      resolveRowId: row => row.uuid,
+    })
+    expect(model.getRow(0)?.rowKey).toBe("r-1")
     model.dispose()
   })
 })

@@ -73,6 +73,28 @@ export interface ViewportSyncState {
   pinnedOffsetRight: number
 }
 
+export interface ViewportIntegrationSnapshot {
+  scrollTop: number
+  scrollLeft: number
+  viewportHeight: number
+  viewportWidth: number
+  visibleRowRange: {
+    start: number
+    end: number
+    total: number
+  }
+  visibleColumnRange: {
+    start: number
+    end: number
+    total: number
+  }
+  pinnedWidth: {
+    left: number
+    right: number
+  }
+  overlaySync: ViewportSyncState
+}
+
 export interface TableViewportRuntimeOverrides {
   rafScheduler?: RafScheduler
   createRafScheduler?: () => RafScheduler

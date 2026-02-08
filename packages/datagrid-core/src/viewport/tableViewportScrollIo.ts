@@ -54,6 +54,7 @@ export interface TableViewportScrollIoOptions {
 	hostEnvironment: TableViewportHostEnvironment
 	scheduler: RafScheduler
 	recordLayoutRead: (count?: number) => void
+	recordLayoutWrite?: (count?: number) => void
 	recordSyncScroll: () => void
 	queueHeavyUpdate: (force?: boolean) => void
 	resolveHeavyUpdateThresholds?: () => { vertical: number; horizontal: number }
@@ -67,7 +68,7 @@ export interface TableViewportScrollIoOptions {
 	clampScrollTop?: (value: number) => number
 	clampScrollLeft?: (value: number) => number
 	frameDurationMs: number
-	onResizeMetrics?: () => void
+	onResizeMetrics?: () => boolean | void
 	onScrollMetrics?: (metrics: { scrollTop: number; scrollLeft: number }) => void
 	onScrollSyncFrame?: (metrics: { scrollTop: number; scrollLeft: number }) => void
 }
@@ -76,6 +77,7 @@ export interface TableViewportScrollIo {
 	attach(container: HTMLDivElement | null, header: HTMLElement | null): void
 	detach(): void
 	handleScroll(event: Event): void
+	applyProgrammaticScrollWrites(pending: { scrollTop?: number | null; scrollLeft?: number | null }): void
 	scheduleAfterScroll(): void
 	cancelAfterScrollTask(): void
 	dispose(): void
@@ -88,6 +90,7 @@ export function createTableViewportScrollIo(
 		hostEnvironment,
 		scheduler,
 		recordLayoutRead,
+		recordLayoutWrite,
 		recordSyncScroll,
 		queueHeavyUpdate,
 		flushSchedulers,
@@ -378,7 +381,10 @@ export function createTableViewportScrollIo(
 
 		const resizeObserver = hostEnvironment.createResizeObserver
 			? createManagedResizeObserver(hostEnvironment, () => {
-				onResizeMetrics?.()
+				const shouldQueueHeavyUpdate = onResizeMetrics?.()
+				if (shouldQueueHeavyUpdate === false) {
+					return
+				}
 				queueHeavyUpdate(true)
 			})
 			: null
@@ -410,6 +416,25 @@ export function createTableViewportScrollIo(
 		state.setLastScrollSamples(measured.scrollTop, measured.scrollLeft)
 		onScrollMetrics?.({ scrollTop: measured.scrollTop, scrollLeft: measured.scrollLeft })
 		scheduleScrollSync()
+	}
+
+	function applyProgrammaticScrollWrites(pending: { scrollTop?: number | null; scrollLeft?: number | null }) {
+		const container = state.getContainer()
+		if (!container) {
+			return
+		}
+
+		const nextTop = pending.scrollTop
+		if (typeof nextTop === "number" && Number.isFinite(nextTop) && container.scrollTop !== nextTop) {
+			container.scrollTop = nextTop
+			recordLayoutWrite?.()
+		}
+
+		const nextLeft = pending.scrollLeft
+		if (typeof nextLeft === "number" && Number.isFinite(nextLeft) && container.scrollLeft !== nextLeft) {
+			container.scrollLeft = nextLeft
+			recordLayoutWrite?.()
+		}
 	}
 
 	function scheduleAfterScroll() {
@@ -445,6 +470,7 @@ export function createTableViewportScrollIo(
 		attach,
 		detach,
 		handleScroll,
+		applyProgrammaticScrollWrites,
 		scheduleAfterScroll,
 		cancelAfterScrollTask,
 		dispose,

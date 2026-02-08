@@ -1,13 +1,22 @@
-import type { UiTableColumn } from "../types"
-
 export type DataGridColumnPin = "left" | "right" | "none"
+
+export interface DataGridColumnDef {
+  key: string
+  label?: string
+  width?: number
+  minWidth?: number
+  maxWidth?: number
+  visible?: boolean
+  pin?: DataGridColumnPin
+  meta?: Record<string, unknown>
+}
 
 export interface DataGridColumnSnapshot {
   key: string
   visible: boolean
   pin: DataGridColumnPin
   width: number | null
-  column: UiTableColumn
+  column: DataGridColumnDef
 }
 
 export interface DataGridColumnModelSnapshot {
@@ -21,7 +30,7 @@ export type DataGridColumnModelListener = (snapshot: DataGridColumnModelSnapshot
 export interface DataGridColumnModel {
   getSnapshot(): DataGridColumnModelSnapshot
   getColumn(key: string): DataGridColumnSnapshot | undefined
-  setColumns(columns: readonly UiTableColumn[]): void
+  setColumns(columns: readonly DataGridColumnDef[]): void
   setColumnOrder(keys: readonly string[]): void
   setColumnVisibility(key: string, visible: boolean): void
   setColumnWidth(key: string, width: number | null): void
@@ -31,17 +40,17 @@ export interface DataGridColumnModel {
 }
 
 export interface CreateDataGridColumnModelOptions {
-  columns?: readonly UiTableColumn[]
+  columns?: readonly DataGridColumnDef[]
 }
 
 interface MutableColumnState {
-  column: UiTableColumn
+  column: DataGridColumnDef
   visible: boolean
   pin: DataGridColumnPin
   width: number | null
 }
 
-function normalizePin(pin: UiTableColumn["pin"] | DataGridColumnPin | undefined): DataGridColumnPin {
+function normalizePin(pin: DataGridColumnDef["pin"] | DataGridColumnPin | undefined): DataGridColumnPin {
   if (pin === "left" || pin === "right") {
     return pin
   }
@@ -103,7 +112,7 @@ export function createDataGridColumnModel(
     }
   }
 
-  function setColumnsValue(columns: readonly UiTableColumn[]) {
+  function setColumnsValue(columns: readonly DataGridColumnDef[]) {
     columnsByKey.clear()
     order = []
     for (const column of columns) {
@@ -140,7 +149,7 @@ export function createDataGridColumnModel(
         column: state.column,
       }
     },
-    setColumns(columns: readonly UiTableColumn[]) {
+    setColumns(columns: readonly DataGridColumnDef[]) {
       ensureActive()
       setColumnsValue(Array.isArray(columns) ? columns : [])
     },

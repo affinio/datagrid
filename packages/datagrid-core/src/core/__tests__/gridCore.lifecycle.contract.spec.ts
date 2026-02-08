@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest"
 import {
   createDataGridCore,
-  type DataGridCoreService,
+  type DataGridCoreServiceByName,
   type DataGridCoreServiceName,
 } from "../gridCore"
 
-function createTrackedService(name: DataGridCoreServiceName, log: string[]): DataGridCoreService {
+function createTrackedService<TName extends DataGridCoreServiceName>(
+  name: TName,
+  log: string[],
+): DataGridCoreServiceByName[TName] {
   return {
     name,
     init() {
@@ -20,7 +23,7 @@ function createTrackedService(name: DataGridCoreServiceName, log: string[]): Dat
     dispose() {
       log.push(`dispose:${name}`)
     },
-  }
+  } as DataGridCoreServiceByName[TName]
 }
 
 describe("data grid core service registry lifecycle", () => {
@@ -45,6 +48,8 @@ describe("data grid core service registry lifecycle", () => {
       "event",
       "rowModel",
       "columnModel",
+      "edit",
+      "transaction",
     ])
     expect(log).toEqual([
       "init:viewport",

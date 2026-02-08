@@ -15,6 +15,7 @@ import {
 	createDataGridColumnModel,
 	type DataGridColumnModel,
 	type DataGridRowModel,
+	type DataGridViewportRange,
 } from "../models"
 import { BASE_ROW_HEIGHT, clamp } from "../utils/constants"
 import {
@@ -59,9 +60,9 @@ import type {
 	LayoutMeasurementSnapshot,
 	TableViewportImperativeCallbacks,
 	TableViewportControllerOptions,
+	ViewportIntegrationSnapshot,
 	ViewportSyncTargets,
 } from "./tableViewportTypes"
-import { applyViewportSyncTransforms, resetViewportSyncTransforms } from "./scrollSync"
 import type { ViewportSyncState } from "./tableViewportTypes"
 import type { ColumnPinMode } from "../virtualization/types"
 import { resolveCanonicalPinMode } from "../columns/pinning"
@@ -79,6 +80,7 @@ export type {
 	TableViewportImperativeCallbacks,
 	TableViewportControllerOptions,
 	TableViewportRuntimeOverrides,
+	ViewportIntegrationSnapshot,
 	ViewportSyncTargets,
 	ViewportSyncState,
 } from "./tableViewportTypes"
@@ -102,6 +104,16 @@ import {
 	sampleHeaderHeight,
 	resolveDomStats,
 } from "./tableViewportEnvironment"
+import {
+	computePinnedWidth,
+	resolveHorizontalSizing,
+	resolvePendingScroll,
+	resolveViewportDimensions,
+	shouldNotifyNearBottom,
+	shouldUseFastPath,
+} from "./tableViewportMath"
+import { createTableViewportModelBridgeService } from "./tableViewportModelBridgeService"
+import { createTableViewportRenderSyncService } from "./tableViewportRenderSyncService"
 export type { TableViewportState, RowPoolItem } from "./tableViewportSignals"
 
 
@@ -127,8 +139,10 @@ export interface TableViewportController extends TableViewportSignals {
 	scrollToRow(index: number): void
 	scrollToColumn(key: string): void
 	isRowVisible(index: number): boolean
-		clampScrollTopValue(value: number): number
-		setViewportSyncTargets(targets: ViewportSyncTargets | null): void
+	clampScrollTopValue(value: number): number
+	setViewportSyncTargets(targets: ViewportSyncTargets | null): void
+	getViewportSyncState(): ViewportSyncState
+	getIntegrationSnapshot(): ViewportIntegrationSnapshot
 	refresh(force?: boolean): void
 	dispose(): void
 }
@@ -316,22 +330,9 @@ export function createTableViewportController(
 		// Cache layout metrics from observers so the heavy path never touches the DOM.
 		const layoutCache: LayoutMeasurementCache = createLayoutMeasurementCache()
 		const fallbackClientRowModel = createClientRowModel<unknown>({ rows: [] })
-		const ownedRowModels = new Set<DataGridRowModel<unknown>>([fallbackClientRowModel])
 		const fallbackColumnModel = createDataGridColumnModel({ columns: [] })
-		const ownedColumnModels = new Set<DataGridColumnModel>([fallbackColumnModel])
 		let container: HTMLDivElement | null = null
 		let header: HTMLElement | null = null
-		let preferredRowModel: DataGridRowModel<unknown> | null = options.rowModel ?? null
-		let activeRowModel: DataGridRowModel<unknown> = options.rowModel ?? fallbackClientRowModel
-		let activeRowModelUnsubscribe: (() => void) | null = null
-		let rowModelRowsCache: VisibleRow[] = []
-		let rowModelCacheDirty = true
-		let rowModelCacheCount = -1
-		let preferredColumnModel: DataGridColumnModel | null = options.columnModel ?? null
-		let activeColumnModel: DataGridColumnModel = options.columnModel ?? fallbackColumnModel
-		let activeColumnModelUnsubscribe: (() => void) | null = null
-		let columnModelColumnsCache: UiTableColumn[] = []
-		let columnModelCacheDirty = true
 		let zoom = 1
 		let virtualizationFlag = true
 		let rowHeightMode: "fixed" | "auto" = "fixed"
@@ -339,6 +340,8 @@ export function createTableViewportController(
 		let viewportMetrics: ViewportMetricsSnapshot | null = null
 		let loading = false
 		let imperativeCallbacks: TableViewportImperativeCallbacks = options.imperativeCallbacks ?? {}
+		let lastImperativeScrollSyncSignature = ""
+		let lastImperativeColumnSignature = ""
 		let onAfterScroll = options.onAfterScroll ?? null
 		let onNearBottom = options.onNearBottom ?? null
 
@@ -383,14 +386,21 @@ export function createTableViewportController(
 			nativeScrollLimit: 0,
 			virtualizationEnabled: true,
 		}
-		let scrollSyncTargets: ViewportSyncTargets | null = null
-		let latestViewportSyncTargets: ViewportSyncTargets | null = null
 		const scrollSyncState: ViewportSyncState = {
 			scrollLeft: 0,
 			scrollTop: 0,
 			pinnedOffsetLeft: 0,
 			pinnedOffsetRight: 0,
 		}
+		const modelBridge = createTableViewportModelBridgeService({
+			initialRowModel: options.rowModel ?? null,
+			initialColumnModel: options.columnModel ?? null,
+			fallbackRowModel: fallbackClientRowModel,
+			fallbackColumnModel,
+			onInvalidate: () => {
+				scheduleUpdate(true)
+			},
+		})
 
 		function measureLayout() {
 			if (!attached) {
@@ -400,11 +410,16 @@ export function createTableViewportController(
 			layoutMeasurement = layoutCache.snapshot()
 		}
 
-		function captureLayoutMetrics(label: "attach" | "resize" | "manual") {
+		function captureLayoutMetrics(label: "attach" | "resize" | "manual"): boolean {
 			// All DOM reads stay confined to observer-driven phases.
 			if (!container) {
-				return
+				return false
 			}
+			const previousContainerHeight = cachedContainerHeight
+			const previousContainerWidth = cachedContainerWidth
+			const previousHeaderHeight = cachedHeaderHeight
+			const previousNativeScrollHeight = cachedNativeScrollHeight
+			const previousNativeScrollWidth = cachedNativeScrollWidth
 			flushMeasurementQueue()
 			const containerMetrics = sampleContainerMetrics(hostEnvironment, recordLayoutRead, container)
 			const rect = sampleBoundingRect(hostEnvironment, recordLayoutRead, container)
@@ -426,6 +441,13 @@ export function createTableViewportController(
 			if (label !== "manual") {
 				measureLayout()
 			}
+			return (
+				Math.abs(cachedContainerHeight - previousContainerHeight) > 0.5 ||
+				Math.abs(cachedContainerWidth - previousContainerWidth) > 0.5 ||
+				Math.abs(cachedHeaderHeight - previousHeaderHeight) > 0.5 ||
+				Math.abs(cachedNativeScrollHeight - previousNativeScrollHeight) > 0.5 ||
+				Math.abs(cachedNativeScrollWidth - previousNativeScrollWidth) > 0.5
+			)
 		}
 
 		function cancelPendingHeavyUpdate() {
@@ -511,6 +533,11 @@ export function createTableViewportController(
 			if (typeof imperativeCallbacks.onScrollSync !== "function") {
 				return
 			}
+			const signature = `${Math.round(scrollTopValue * 1000)}|${Math.round(scrollLeftValue * 1000)}`
+			if (signature === lastImperativeScrollSyncSignature) {
+				return
+			}
+			lastImperativeScrollSyncSignature = signature
 			const resolvedTs = Number.isFinite(timestamp) ? (timestamp as number) : clock.now()
 			imperativeCallbacks.onScrollSync({
 				scrollTop: scrollTopValue,
@@ -530,9 +557,13 @@ export function createTableViewportController(
 			setHeader: value => {
 				header = value
 			},
-			getSyncTargets: () => scrollSyncTargets,
+			getSyncTargets: () => renderSync.getTargets(),
 			setSyncTargets: value => {
-				scrollSyncTargets = value
+				if (value === null) {
+					renderSync.clearCurrentTargets()
+					return
+				}
+				renderSync.setTargets(value)
 			},
 			getSyncState: () => scrollSyncState,
 			getLastAppliedScroll: () => ({ top: lastAppliedScrollTop, left: lastAppliedScrollLeft }),
@@ -613,36 +644,13 @@ export function createTableViewportController(
 				pinnedOffsetRight: overrides?.pinnedOffsetRight ?? scrollSyncState.pinnedOffsetRight,
 			}
 		}
+		const renderSync = createTableViewportRenderSyncService({
+			syncState: scrollSyncState,
+			resolveNextState: resolveViewportSyncNextState,
+		})
 
 		function setViewportSyncTargetsValue(targets: ViewportSyncTargets | null) {
-			latestViewportSyncTargets = targets
-			if (scrollSyncTargets === targets) {
-				if (targets) {
-					applyViewportSyncTransforms(targets, scrollSyncState, resolveViewportSyncNextState())
-				}
-				scrollState.setSyncTargets(targets)
-				return
-			}
-			scrollSyncTargets = targets
-			scrollState.setSyncTargets(targets)
-			if (!targets) {
-				resetViewportSyncTransforms(null, scrollSyncState)
-				return
-			}
-			alignOverlayRootWithScrollHost(targets)
-			applyViewportSyncTransforms(targets, scrollSyncState, resolveViewportSyncNextState())
-		}
-
-		function alignOverlayRootWithScrollHost(targets: ViewportSyncTargets | null) {
-			const host = targets?.scrollHost
-			const overlayRoot = targets?.overlayRoot
-			if (!host || !overlayRoot) {
-				return
-			}
-			if (overlayRoot.parentElement !== host && typeof host.appendChild === "function") {
-				// Deterministic sync-target contract: no DOM queries, only explicit refs from host adapter.
-				host.appendChild(overlayRoot)
-			}
+			renderSync.setTargets(targets)
 		}
 
 		const heavyIdleMs = Math.max(48, frameBudget.frameDurationMs * 4)
@@ -661,6 +669,7 @@ export function createTableViewportController(
 			hostEnvironment,
 			scheduler,
 			recordLayoutRead,
+			recordLayoutWrite,
 			recordSyncScroll,
 			queueHeavyUpdate: scheduleUpdate,
 			flushSchedulers,
@@ -686,123 +695,44 @@ export function createTableViewportController(
 				scrollIo.attach(containerRef, headerRef)
 				if (containerRef) {
 					captureLayoutMetrics("attach")
-					if (latestViewportSyncTargets) {
-						setViewportSyncTargetsValue(latestViewportSyncTargets)
+					if (renderSync.getLatestTargets()) {
+						renderSync.reapplyLatestTargets()
 					}
 				}
 			}
 
 			function detach() {
-				resetViewportSyncTransforms(scrollSyncTargets, scrollSyncState)
+				renderSync.clearCurrentTargets()
+				lastImperativeScrollSyncSignature = ""
+				lastImperativeColumnSignature = ""
 				scrollIo.detach()
 				cancelScrollRaf()
 				layoutCache.reset()
 				layoutMeasurement = null
 			}
 
-		function markRowModelCacheDirty() {
-			rowModelCacheDirty = true
+		function getRowCountFromModel(): number {
+			return modelBridge.getRowCount()
 		}
 
-		function materializeRowsFromModel(): { rows: VisibleRow[]; rowCount: number } {
-			const rowCount = Math.max(0, activeRowModel.getRowCount())
-			if (!rowModelCacheDirty && rowModelCacheCount === rowCount) {
-				return { rows: rowModelRowsCache, rowCount }
-			}
-
-			const rows: VisibleRow[] = []
-			if (rowCount > 0) {
-				rows.length = rowCount
-			}
-			for (let index = 0; index < rowCount; index += 1) {
-				const row = activeRowModel.getRow(index)
-				if (row) {
-					rows[index] = row as VisibleRow
-				}
-			}
-
-			rowModelRowsCache = rows
-			rowModelCacheCount = rowCount
-			rowModelCacheDirty = false
-			return { rows: rowModelRowsCache, rowCount }
+		function resolveRowFromModel(index: number): VisibleRow | undefined {
+			return modelBridge.getRow(index)
 		}
 
-		function bindRowModel(model: DataGridRowModel<unknown>) {
-			if (activeRowModel === model && activeRowModelUnsubscribe) {
-				markRowModelCacheDirty()
-				scheduleUpdate(true)
-				return
-			}
-
-			activeRowModelUnsubscribe?.()
-			activeRowModel = model
-			activeRowModelUnsubscribe = activeRowModel.subscribe(() => {
-				markRowModelCacheDirty()
-				scheduleUpdate(true)
-			})
-			markRowModelCacheDirty()
-			scheduleUpdate(true)
-		}
-
-		function applyRowModelValue(model: DataGridRowModel<unknown> | null | undefined) {
-			const nextModel = model ?? fallbackClientRowModel
-			bindRowModel(nextModel)
+		function resolveRowsInRangeFromModel(range: DataGridViewportRange): readonly VisibleRow[] {
+			return modelBridge.getRowsInRange(range)
 		}
 
 		function setRowModelValue(model: DataGridRowModel<unknown> | null | undefined) {
-			preferredRowModel = model ?? null
-			applyRowModelValue(preferredRowModel)
-		}
-
-		function markColumnModelCacheDirty() {
-			columnModelCacheDirty = true
+			modelBridge.setRowModel(model)
 		}
 
 		function materializeColumnsFromModel(): UiTableColumn[] {
-			if (!columnModelCacheDirty) {
-				return columnModelColumnsCache
-			}
-			const snapshot = activeColumnModel.getSnapshot()
-			columnModelColumnsCache = snapshot.columns
-				.filter(column => column.visible)
-				.map(column => {
-					const nextWidth = column.width == null ? column.column.width : column.width
-					return {
-						...column.column,
-						key: column.key,
-						visible: column.visible,
-						pin: column.pin,
-						width: nextWidth,
-					}
-				})
-			columnModelCacheDirty = false
-			return columnModelColumnsCache
-		}
-
-		function bindColumnModel(model: DataGridColumnModel) {
-			if (activeColumnModel === model && activeColumnModelUnsubscribe) {
-				markColumnModelCacheDirty()
-				scheduleUpdate(true)
-				return
-			}
-			activeColumnModelUnsubscribe?.()
-			activeColumnModel = model
-			activeColumnModelUnsubscribe = activeColumnModel.subscribe(() => {
-				markColumnModelCacheDirty()
-				scheduleUpdate(true)
-			})
-			markColumnModelCacheDirty()
-			scheduleUpdate(true)
-		}
-
-		function applyColumnModelValue(model: DataGridColumnModel | null | undefined) {
-			const nextModel = model ?? fallbackColumnModel
-			bindColumnModel(nextModel)
+			return modelBridge.materializeColumns()
 		}
 
 		function setColumnModelValue(model: DataGridColumnModel | null | undefined) {
-			preferredColumnModel = model ?? null
-			applyColumnModelValue(preferredColumnModel)
+			modelBridge.setColumnModel(model)
 		}
 
 		function setZoomValue(nextZoom: number) {
@@ -863,6 +793,8 @@ export function createTableViewportController(
 
 		function setImperativeCallbacksValue(callbacks: TableViewportImperativeCallbacks | null | undefined) {
 			imperativeCallbacks = callbacks ?? {}
+			lastImperativeScrollSyncSignature = ""
+			lastImperativeColumnSignature = ""
 		}
 
 		function setOnAfterScrollValue(callback: (() => void) | null | undefined) {
@@ -951,18 +883,10 @@ export function createTableViewportController(
 
 		function disposeValue() {
 			detach()
-			activeRowModelUnsubscribe?.()
-			activeRowModelUnsubscribe = null
-			activeColumnModelUnsubscribe?.()
-			activeColumnModelUnsubscribe = null
-			for (const model of ownedRowModels) {
-				model.dispose()
-			}
-			ownedRowModels.clear()
-			for (const model of ownedColumnModels) {
-				model.dispose()
-			}
-			ownedColumnModels.clear()
+			modelBridge.dispose()
+			fallbackClientRowModel.dispose()
+			fallbackColumnModel.dispose()
+			renderSync.dispose()
 			flushMeasurementQueue()
 			disposeDiagnostics()
 			if (ownsScheduler) {
@@ -976,27 +900,11 @@ export function createTableViewportController(
 			scrollIo.scheduleAfterScroll()
 		}
 
-		function updatePinnedOffsets(meta: TableViewportHorizontalMeta) {
-			const nextPinnedLeft = Math.max(0, Number.isFinite(meta.indexColumnWidth) ? meta.indexColumnWidth : 0)
-			const nextPinnedRight = Math.max(0, Number.isFinite(meta.pinnedRightWidth) ? meta.pinnedRightWidth : 0)
-			const pendingUpdate =
-				scrollSyncState.pinnedOffsetLeft !== nextPinnedLeft ||
-				scrollSyncState.pinnedOffsetRight !== nextPinnedRight
-
-			if (!pendingUpdate) {
-				return
-			}
-
-			if (scrollSyncTargets) {
-				const nextState = resolveViewportSyncNextState({
-					pinnedOffsetLeft: nextPinnedLeft,
-					pinnedOffsetRight: nextPinnedRight,
-				})
-				applyViewportSyncTransforms(scrollSyncTargets, scrollSyncState, nextState)
-			}
-
-			scrollSyncState.pinnedOffsetLeft = nextPinnedLeft
-			scrollSyncState.pinnedOffsetRight = nextPinnedRight
+		function updatePinnedOffsets() {
+			renderSync.updatePinnedOffsets({
+				left: 0,
+				right: 0,
+			})
 		}
 
 		function applyColumnSnapshot(
@@ -1065,11 +973,48 @@ export function createTableViewportController(
 			columnState.pinnedRightWidth = meta.pinnedRightWidth
 			columnVirtualState.value = { ...columnState }
 
-			updatePinnedOffsets(meta)
+			updatePinnedOffsets()
 		}
 
 		function clampScrollTopValue(value: number) {
 			return virtualization.clampScrollTop(value)
+		}
+
+		function getViewportSyncStateValue(): ViewportSyncState {
+			return {
+				scrollTop: scrollSyncState.scrollTop,
+				scrollLeft: scrollSyncState.scrollLeft,
+				pinnedOffsetLeft: scrollSyncState.pinnedOffsetLeft,
+				pinnedOffsetRight: scrollSyncState.pinnedOffsetRight,
+			}
+		}
+
+		function getIntegrationSnapshotValue(): ViewportIntegrationSnapshot {
+			const rowRange = derived.rows.visibleRange.value
+			const columnRange = scrollableRange.value
+			const pinnedLeftWidth = computePinnedWidth(pinnedLeftEntries.value)
+			const pinnedRightWidth = computePinnedWidth(pinnedRightEntries.value)
+			return {
+				scrollTop: scrollTop.value,
+				scrollLeft: scrollLeft.value,
+				viewportHeight: viewportHeight.value,
+				viewportWidth: viewportWidth.value,
+				visibleRowRange: {
+					start: rowRange.start,
+					end: rowRange.end,
+					total: totalRowCount.value,
+				},
+				visibleColumnRange: {
+					start: columnRange.start,
+					end: columnRange.end,
+					total: columnVirtualState.value.totalCount,
+				},
+				pinnedWidth: {
+					left: pinnedLeftWidth,
+					right: pinnedRightWidth,
+				},
+				overlaySync: getViewportSyncStateValue(),
+			}
 		}
 
 		function clampScrollLeftValue(value: number) {
@@ -1165,7 +1110,7 @@ export function createTableViewportController(
 						return
 					}
 
-					const { rows, rowCount } = materializeRowsFromModel()
+					const rowCount = getRowCountFromModel()
 					totalRowCount.value = rowCount
 
 					const virtualizationByProp = virtualizationFlag
@@ -1177,69 +1122,54 @@ export function createTableViewportController(
 					const resolvedRowHeight = baseRowHeight * layoutScale
 					effectiveRowHeight.value = resolvedRowHeight
 
-					const metrics = viewportMetrics
 					const measurements = layoutMeasurement
-					let containerHeight = cachedContainerHeight
-					let containerWidthValue = cachedContainerWidth
-					let headerHeightValue = cachedHeaderHeight
-
-					if (metrics) {
-						containerHeight = metrics.containerHeight
-						containerWidthValue = metrics.containerWidth
-						headerHeightValue = metrics.headerHeight
-					} else if (measurements) {
-						containerHeight = measurements.containerHeight
-						containerWidthValue = measurements.containerWidth
-						headerHeightValue = measurements.headerHeight
-					}
-
-					if (containerHeight <= 0) {
-						containerHeight = cachedContainerHeight > 0 ? cachedContainerHeight : resolvedRowHeight
-					}
-					if (containerWidthValue <= 0) {
-						containerWidthValue = cachedContainerWidth > 0 ? cachedContainerWidth : columnSnapshot.containerWidthForColumns
-					}
-					if (headerHeightValue < 0) {
-						headerHeightValue = cachedHeaderHeight > 0 ? cachedHeaderHeight : 0
-					}
-
-					const viewportHeightValue = Math.max(containerHeight - headerHeightValue, resolvedRowHeight)
-					const viewportWidthValue = containerWidthValue
+					const resolvedDimensions = resolveViewportDimensions({
+						viewportMetrics,
+						layoutMeasurement: measurements,
+						cachedContainerHeight,
+						cachedContainerWidth,
+						cachedHeaderHeight,
+						resolvedRowHeight,
+						fallbackColumnWidth: columnSnapshot.containerWidthForColumns,
+					})
+					const containerHeight = resolvedDimensions.containerHeight
+					const viewportHeightValue = resolvedDimensions.viewportHeight
+					const viewportWidthValue = resolvedDimensions.viewportWidth
 					viewportHeight.value = viewportHeightValue
 					viewportWidth.value = viewportWidthValue
 
 					const pendingScrollTopRequest = pendingScrollTop
 					const pendingScrollLeftRequest = pendingScrollLeft
-					const snapshotScrollTop = measurements?.scrollTop
-					const snapshotScrollLeft = measurements?.scrollLeft
-					const fallbackScrollTop = Number.isFinite(snapshotScrollTop) ? (snapshotScrollTop as number) : lastScrollTopSample
-					const fallbackScrollLeft = Number.isFinite(snapshotScrollLeft) ? (snapshotScrollLeft as number) : lastScrollLeftSample
-					const normalizedFallbackScrollTop = Number.isFinite(fallbackScrollTop) ? fallbackScrollTop : 0
-					const normalizedFallbackScrollLeft = Number.isFinite(fallbackScrollLeft) ? fallbackScrollLeft : 0
-					const pendingTop = typeof pendingScrollTopRequest === "number" && Number.isFinite(pendingScrollTopRequest)
-						? pendingScrollTopRequest
-						: normalizedFallbackScrollTop
-					const pendingLeft = typeof pendingScrollLeftRequest === "number" && Number.isFinite(pendingScrollLeftRequest)
-						? pendingScrollLeftRequest
-						: normalizedFallbackScrollLeft
-					const measuredScrollTopFromPending = typeof pendingScrollTopRequest === "number"
-					const measuredScrollLeftFromPending = typeof pendingScrollLeftRequest === "number"
+					const pendingScrollResolution = resolvePendingScroll({
+						pendingScrollTopRequest,
+						pendingScrollLeftRequest,
+						measuredScrollTop: measurements?.scrollTop,
+						measuredScrollLeft: measurements?.scrollLeft,
+						lastScrollTopSample,
+						lastScrollLeftSample,
+					})
+					const pendingTop = pendingScrollResolution.pendingTop
+					const pendingLeft = pendingScrollResolution.pendingLeft
+					const measuredScrollTopFromPending = pendingScrollResolution.measuredScrollTopFromPending
+					const measuredScrollLeftFromPending = pendingScrollResolution.measuredScrollLeftFromPending
+					const normalizedFallbackScrollLeft = pendingScrollResolution.fallbackScrollLeft
 					pendingScrollTop = null
 					pendingScrollLeft = null
 
-					const hadPendingScrollTop = pendingScrollTopRequest != null
-					const hadPendingScrollLeft = pendingScrollLeftRequest != null
 					const scrollTopDelta = Math.abs(pendingTop - lastScrollTopSample)
 					const scrollLeftDelta = Math.abs(pendingLeft - lastScrollLeftSample)
-					const shouldFastPath =
-						!force &&
-						!pendingHorizontalSettle &&
-						!measuredScrollTopFromPending &&
-						!measuredScrollLeftFromPending &&
-						!hadPendingScrollTop &&
-						!hadPendingScrollLeft &&
-						scrollTopDelta <= verticalScrollEpsilon &&
-						scrollLeftDelta <= horizontalScrollEpsilon
+					const shouldFastPath = shouldUseFastPath({
+						force,
+						pendingHorizontalSettle,
+						measuredScrollTopFromPending,
+						measuredScrollLeftFromPending,
+						hadPendingScrollTop: pendingScrollResolution.hadPendingScrollTop,
+						hadPendingScrollLeft: pendingScrollResolution.hadPendingScrollLeft,
+						scrollTopDelta,
+						scrollLeftDelta,
+						verticalScrollEpsilon,
+						horizontalScrollEpsilon,
+					})
 
 					if (shouldFastPath) {
 						scrollTop.value = lastScrollTopSample
@@ -1252,7 +1182,8 @@ export function createTableViewportController(
 					recordHeavyPass()
 
 					const virtualizationPrepared = virtualization.prepare({
-						rows,
+						resolveRow: resolveRowFromModel,
+						resolveRowsInRange: resolveRowsInRangeFromModel,
 						totalRowCount: rowCount,
 						viewportHeight: viewportHeightValue,
 						resolvedRowHeight,
@@ -1297,28 +1228,19 @@ export function createTableViewportController(
 			horizontalMetaVersion = horizontalMetaResult.version
 			lastHorizontalMetaSignature = horizontalMetaResult.signature
 			const columnMeta = horizontalMetaResult.meta
-			const totalPinnedWidth = columnMeta.pinnedLeftWidth + columnMeta.pinnedRightWidth + columnMeta.indexColumnWidth
-			const contentWidthEstimate = Math.max(columnMeta.metrics.totalWidth + totalPinnedWidth, viewportWidthValue)
-			const contentHeightEstimate = Math.max(totalRowCount.value * resolvedRowHeight, viewportHeightValue)
+			const horizontalSizing = resolveHorizontalSizing({
+				columnMeta,
+				viewportWidth: viewportWidthValue,
+				totalRowCount: totalRowCount.value,
+				resolvedRowHeight,
+				viewportHeight: viewportHeightValue,
+			})
+			const contentWidthEstimate = horizontalSizing.contentWidthEstimate
+			const contentHeightEstimate = horizontalSizing.contentHeightEstimate
 			layoutCache.updateContentDimensions(contentWidthEstimate, contentHeightEstimate)
-			const fallbackWidth =
-				columnMeta.metrics.widths[0] ??
-				columnMeta.pinnedLeft[0]?.width ??
-				columnMeta.pinnedRight[0]?.width ??
-				60
-			const averageColumnWidth = columnMeta.metrics.widths.length
-				? Math.max(1, columnMeta.metrics.totalWidth / Math.max(columnMeta.metrics.widths.length, 1))
-				: Math.max(1, fallbackWidth)
+			const averageColumnWidth = horizontalSizing.averageColumnWidth
 			lastAverageColumnWidth = averageColumnWidth
-			horizontalClampContext = {
-				totalScrollableWidth: columnMeta.metrics.totalWidth,
-				containerWidthForColumns: columnMeta.containerWidthForColumns,
-				pinnedLeftWidth: columnMeta.pinnedLeftWidth,
-				pinnedRightWidth: columnMeta.pinnedRightWidth,
-				averageColumnWidth,
-				nativeScrollLimit: columnMeta.nativeScrollLimit,
-				virtualizationEnabled: true,
-			}
+			horizontalClampContext = horizontalSizing.horizontalClampContext
 
 			const currentPendingLeft = Math.max(0, pendingLeft)
 			const rawDeltaLeft = currentPendingLeft - lastScrollLeftSample
@@ -1332,11 +1254,38 @@ export function createTableViewportController(
 
 			pendingHorizontalSettle = false
 
+			const imperativeOnColumns =
+				typeof imperativeCallbacks.onColumns === "function"
+					? imperativeCallbacks.onColumns
+					: null
+
 			const horizontalCallbacks = {
 				applyColumnSnapshot,
 				logHorizontalDebug,
-				onColumns: typeof imperativeCallbacks.onColumns === "function"
-					? imperativeCallbacks.onColumns
+				onColumns: imperativeOnColumns
+					? payload => {
+						const snapshot = payload.snapshot
+						const signature = [
+							Math.round(payload.scrollLeft * 1000),
+							Math.round(payload.viewportWidth * 1000),
+							Math.round(payload.zoom * 1000),
+							snapshot.scrollableStart,
+							snapshot.scrollableEnd,
+							snapshot.visibleStart,
+							snapshot.visibleEnd,
+							Math.round(snapshot.leftPadding * 1000),
+							Math.round(snapshot.rightPadding * 1000),
+							Math.round(snapshot.totalScrollableWidth * 1000),
+							Math.round(snapshot.visibleScrollableWidth * 1000),
+							Math.round(snapshot.pinnedLeftWidth * 1000),
+							Math.round(snapshot.pinnedRightWidth * 1000),
+						].join("|")
+						if (signature === lastImperativeColumnSignature) {
+							return
+						}
+						lastImperativeColumnSignature = signature
+						imperativeOnColumns(payload)
+					}
 					: undefined,
 			} satisfies HorizontalUpdateCallbacks
 
@@ -1381,9 +1330,11 @@ export function createTableViewportController(
 			lastAppliedHorizontalMetaVersion = horizontalPrepared.lastAppliedHorizontalMetaVersion
 
 			const virtualizationResult = virtualization.applyPrepared(virtualizationPrepared, {
-				rows,
+				resolveRow: resolveRowFromModel,
+				resolveRowsInRange: resolveRowsInRangeFromModel,
 				imperativeCallbacks,
 			})
+			const activeRowModel = modelBridge.getActiveRowModel()
 			const modelSnapshot = activeRowModel.getSnapshot()
 			const modelRange = modelSnapshot.viewportRange
 			if (
@@ -1399,24 +1350,10 @@ export function createTableViewportController(
 				callbacks: horizontalCallbacks,
 				prepared: horizontalPrepared,
 			})
-
-			const containerElement = containerRef
-			if (containerElement) {
-				if (
-					pendingVerticalScrollWrite != null &&
-					containerElement.scrollTop !== pendingVerticalScrollWrite
-				) {
-					containerElement.scrollTop = pendingVerticalScrollWrite
-					recordLayoutWrite()
-				}
-				if (
-					pendingHorizontalScrollWrite != null &&
-					containerElement.scrollLeft !== pendingHorizontalScrollWrite
-				) {
-					containerElement.scrollLeft = pendingHorizontalScrollWrite
-					recordLayoutWrite()
-				}
-			}
+			scrollIo.applyProgrammaticScrollWrites({
+				scrollTop: pendingVerticalScrollWrite,
+				scrollLeft: pendingHorizontalScrollWrite,
+			})
 			// Verified (A5): heavy path leaves pinned/header transforms to sync layer.
 			scrollLeft.value = horizontalScrollLeftValue
 			nextScrollTop = virtualizationResult.scrollTop
@@ -1432,11 +1369,17 @@ export function createTableViewportController(
 
 			emitImperativeScrollSync(resolvedScrollTop, resolvedScrollLeft, nowTs)
 
-				if (onNearBottom && viewportHeightValue > 0 && totalRowCount.value > 0) {
-					const threshold = Math.max(0, totalContentHeight.value - viewportHeightValue * 2)
-					if (nextScrollTop >= threshold && !loading) {
-						onNearBottom()
-					}
+				if (
+					onNearBottom &&
+					shouldNotifyNearBottom({
+						nextScrollTop,
+						totalContentHeight: totalContentHeight.value,
+						viewportHeight: viewportHeightValue,
+						totalRowCount: totalRowCount.value,
+						loading,
+					})
+				) {
+					onNearBottom()
 				}
 
 				lastScrollTopSample = nextScrollTop
@@ -1446,9 +1389,6 @@ export function createTableViewportController(
 				heavyFrameInProgress = false
 			}
 		}
-
-		setRowModelValue(preferredRowModel)
-		setColumnModelValue(preferredColumnModel)
 
 		return {
 			input,
@@ -1477,6 +1417,8 @@ export function createTableViewportController(
 			isRowVisible: isRowVisibleValue,
 			clampScrollTopValue,
 			setViewportSyncTargets: setViewportSyncTargetsValue,
+			getViewportSyncState: getViewportSyncStateValue,
+			getIntegrationSnapshot: getIntegrationSnapshotValue,
 			refresh: refreshValue,
 			dispose: disposeValue,
 		}

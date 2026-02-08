@@ -20,6 +20,9 @@ export interface GridSelectionSnapshot<TRowKey = unknown> {
   activeCell: GridSelectionPoint<TRowKey> | null
 }
 
+export type DataGridSelectionSnapshotRange<TRowKey = unknown> = GridSelectionSnapshotRange<TRowKey>
+export type DataGridSelectionSnapshot<TRowKey = unknown> = GridSelectionSnapshot<TRowKey>
+
 export interface CreateSelectionSnapshotOptions<TRowKey = unknown> {
   ranges: readonly GridSelectionRange<TRowKey>[]
   activeRangeIndex: number

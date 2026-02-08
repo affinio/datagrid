@@ -8,6 +8,14 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "import": "./dist/src/index.js"
+    },
+    "./advanced": {
+      "types": "./dist/src/advanced.d.ts",
+      "import": "./dist/src/advanced.js"
+    },
+    "./internal": {
+      "types": "./dist/src/internal.d.ts",
+      "import": "./dist/src/internal.js"
     }
   },
   "main": "dist/src/index.js",
@@ -20,6 +28,9 @@
     "build": "tsc -p tsconfig.public.json",
     "type-check": "tsc -p tsconfig.public.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts",
+    "test:contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract|lifecycle\"",
+    "test:regressions": "vitest run --config vitest.config.ts --testNamePattern=\"determinism|stress\"",
+    "test:strict-contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract|lifecycle|property|stress|determinism\"",
     "test:integration": "vitest run --config vitest.config.ts --testNamePattern=\"contract|integration|property|stress\"",
     "test:coverage": "vitest run --config vitest.config.ts --coverage",
     "test": "npm run type-check"

@@ -80,11 +80,20 @@ describe("table viewport row-model boundary", () => {
   it("syncs visible range into active row model", () => {
     const rows = buildRows(120)
     const clientModel = createClientRowModel({ rows })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "value", label: "Value", width: 180 }],
+    })
     const calls: Array<{ start: number; end: number }> = []
+    let rangeReads = 0
     const originalSetViewportRange = clientModel.setViewportRange
+    const originalGetRowsInRange = clientModel.getRowsInRange
     clientModel.setViewportRange = range => {
       calls.push({ ...range })
       originalSetViewportRange(range)
+    }
+    clientModel.getRowsInRange = range => {
+      rangeReads += 1
+      return originalGetRowsInRange(range)
     }
 
     const { container, header, cleanup } = mountLayoutNodes()
@@ -92,9 +101,7 @@ describe("table viewport row-model boundary", () => {
     const controller = createTableViewportController({
       resolvePinMode: () => "none",
       rowModel: clientModel,
-      columnModel: createDataGridColumnModel({
-        columns: [{ key: "value", label: "Value", width: 180 }],
-      }),
+      columnModel,
     })
 
     controller.setViewportMetrics({ containerWidth: 640, containerHeight: 360, headerHeight: 40 })
@@ -105,6 +112,7 @@ describe("table viewport row-model boundary", () => {
     const lastCall = calls[calls.length - 1]
     expect(lastCall?.start ?? -1).toBeGreaterThanOrEqual(0)
     expect(lastCall?.end ?? -1).toBeGreaterThanOrEqual(lastCall?.start ?? -1)
+    expect(rangeReads).toBeGreaterThan(0)
     const activeNode = clientModel.getRow(lastCall?.start ?? 0)
     expect(activeNode?.rowKey).toBe(activeNode?.rowId)
     expect(activeNode?.sourceIndex).toBeGreaterThanOrEqual(0)
@@ -113,6 +121,7 @@ describe("table viewport row-model boundary", () => {
 
     controller.detach()
     controller.dispose()
+    columnModel.dispose()
     clientModel.dispose()
     cleanup()
   })
@@ -120,6 +129,9 @@ describe("table viewport row-model boundary", () => {
   it("keeps client/server-backed visible range parity", () => {
     const rows = buildRows(150)
     const clientModel = createClientRowModel({ rows })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "value", label: "Value", width: 200 }],
+    })
     const { source, fetchBlock } = createServerModelStub(rows)
     const serverBackedModel = createServerBackedRowModel({ source })
 
@@ -128,9 +140,7 @@ describe("table viewport row-model boundary", () => {
     const controller = createTableViewportController({
       resolvePinMode: () => "none",
       rowModel: clientModel,
-      columnModel: createDataGridColumnModel({
-        columns: [{ key: "value", label: "Value", width: 200 }],
-      }),
+      columnModel,
     })
 
     controller.setViewportMetrics({ containerWidth: 640, containerHeight: 360, headerHeight: 40 })
@@ -148,6 +158,7 @@ describe("table viewport row-model boundary", () => {
 
     controller.detach()
     controller.dispose()
+    columnModel.dispose()
     serverBackedModel.dispose()
     clientModel.dispose()
     cleanup()
@@ -157,14 +168,15 @@ describe("table viewport row-model boundary", () => {
     const rows = buildRows(100)
     const { source, fetchBlock } = createServerModelStub(rows)
     const serverBackedModel = createServerBackedRowModel({ source })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "value", label: "Value", width: 180 }],
+    })
     const { container, header, cleanup } = mountLayoutNodes()
 
     const controller = createTableViewportController({
       resolvePinMode: () => "none",
       rowModel: serverBackedModel,
-      columnModel: createDataGridColumnModel({
-        columns: [{ key: "value", label: "Value", width: 180 }],
-      }),
+      columnModel,
     })
 
     controller.setViewportMetrics({ containerWidth: 640, containerHeight: 360, headerHeight: 40 })
@@ -178,6 +190,7 @@ describe("table viewport row-model boundary", () => {
 
     controller.detach()
     controller.dispose()
+    columnModel.dispose()
     serverBackedModel.dispose()
     cleanup()
   })

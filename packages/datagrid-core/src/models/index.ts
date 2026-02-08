@@ -1,34 +1,75 @@
 export type {
+  DataGridAdvancedFilter,
+  DataGridFilterClause,
+  DataGridFilterSnapshot,
+  DataGridLegacyVisibleRow,
   DataGridRowNode,
+  DataGridRowNodeInput,
   DataGridRowNodeState,
   DataGridRowPinState,
+  DataGridRowId,
+  DataGridRowIdResolver,
   DataGridRowModel,
   DataGridRowModelKind,
   DataGridRowModelListener,
   DataGridRowModelRefreshReason,
   DataGridRowModelSnapshot,
+  DataGridSortDirection,
+  DataGridSortState,
   DataGridViewportRange,
-} from "./rowModel"
-export { normalizeRowNode, normalizeViewportRange } from "./rowModel"
+} from "./rowModel.js"
+export { normalizeRowNode, normalizeViewportRange, withResolvedRowIdentity } from "./rowModel.js"
 
 export type {
   ClientRowModel,
   CreateClientRowModelOptions,
-} from "./clientRowModel"
-export { createClientRowModel } from "./clientRowModel"
+} from "./clientRowModel.js"
+export { createClientRowModel } from "./clientRowModel.js"
 
 export type {
   CreateServerBackedRowModelOptions,
   ServerBackedRowModel,
-} from "./serverBackedRowModel"
-export { createServerBackedRowModel } from "./serverBackedRowModel"
+} from "./serverBackedRowModel.js"
+export { createServerBackedRowModel } from "./serverBackedRowModel.js"
 
 export type {
+  DataGridColumnDef,
   DataGridColumnModel,
   DataGridColumnModelListener,
   DataGridColumnModelSnapshot,
   DataGridColumnPin,
   DataGridColumnSnapshot,
   CreateDataGridColumnModelOptions,
-} from "./columnModel"
-export { createDataGridColumnModel } from "./columnModel"
+} from "./columnModel.js"
+export { createDataGridColumnModel } from "./columnModel.js"
+
+export type {
+  CreateDataGridEditModelOptions,
+  DataGridEditModel,
+  DataGridEditModelListener,
+  DataGridEditModelSnapshot,
+  DataGridEditPatch,
+} from "./editModel.js"
+export { createDataGridEditModel } from "./editModel.js"
+
+export type {
+  DataGridDataSource,
+  DataGridDataSourceBackpressureDiagnostics,
+  DataGridDataSourceInvalidation,
+  DataGridDataSourcePullPriority,
+  DataGridDataSourcePullReason,
+  DataGridDataSourcePullRequest,
+  DataGridDataSourcePullResult,
+  DataGridDataSourcePushEvent,
+  DataGridDataSourcePushInvalidateEvent,
+  DataGridDataSourcePushListener,
+  DataGridDataSourcePushRemoveEvent,
+  DataGridDataSourcePushUpsertEvent,
+  DataGridDataSourceRowEntry,
+} from "./dataSourceProtocol.js"
+
+export type {
+  CreateDataSourceBackedRowModelOptions,
+  DataSourceBackedRowModel,
+} from "./dataSourceBackedRowModel.js"
+export { createDataSourceBackedRowModel } from "./dataSourceBackedRowModel.js"

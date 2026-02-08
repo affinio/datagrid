@@ -1,5 +1,4 @@
 import { COLUMN_VIRTUALIZATION_BUFFER } from "../dom/gridUtils"
-import { INDEX_COLUMN_WIDTH } from "../utils/constants"
 import type { UiTableColumn } from "../types"
 import {
 	computeColumnLayout,
@@ -62,8 +61,10 @@ export function buildHorizontalMeta({
 		resolvePinMode,
 	})
 
-	const indexColumnWidth = INDEX_COLUMN_WIDTH * layoutScale
-	const containerWidthForColumns = Math.max(0, viewportWidth - indexColumnWidth)
+	// Legacy compatibility field: index column width is no longer injected as a synthetic viewport inset.
+	// The viewport math is driven by real pinned column widths from column layout only.
+	const indexColumnWidth = 0
+	const containerWidthForColumns = Math.max(0, viewportWidth)
 
 	let nativeScrollLimit = 0
 	const measuredWidth = Number.isFinite(scrollWidth) ? (scrollWidth as number) : -1
@@ -74,7 +75,8 @@ export function buildHorizontalMeta({
 	}
 
 	const effectiveViewport = Math.max(0, containerWidthForColumns - layout.pinnedLeftWidth - layout.pinnedRightWidth)
-	const signature = `${layout.scrollableColumns.length}|${layout.scrollableMetrics.totalWidth}|${layout.zoom}|${containerWidthForColumns}|${layout.pinnedLeftWidth}|${layout.pinnedRightWidth}`
+	const stableNativeLimit = Math.round(nativeScrollLimit)
+	const signature = `${layout.scrollableColumns.length}|${layout.scrollableMetrics.totalWidth}|${layout.zoom}|${containerWidthForColumns}|${layout.pinnedLeftWidth}|${layout.pinnedRightWidth}|${stableNativeLimit}`
 	const nextVersion = signature === lastSignature ? version : version + 1
 
 	const meta: TableViewportHorizontalMeta = {

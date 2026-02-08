@@ -46,11 +46,17 @@ export function createHorizontalAxisStrategy<TColumn extends ColumnSizeLike>(): 
   let lastClampInput = Number.NaN
   let lastClampResult = 0
   let lastClampVersion = -1
+  let lastClampOverscanLeading = -1
+  let lastClampOverscanTrailing = -1
+  let lastClampVirtualizationEnabled = false
   let lastRangeOffset = Number.NaN
   let lastRangeStart = 0
   let lastRangeEnd = 0
   let lastRangePayload: HorizontalVirtualizerPayload | null = null
   let lastVersion = -1
+  let lastRangeOverscanLeading = -1
+  let lastRangeOverscanTrailing = -1
+  let lastRangeVirtualizationEnabled = false
 
   return {
     computeVisibleCount(context) {
@@ -81,6 +87,17 @@ export function createHorizontalAxisStrategy<TColumn extends ColumnSizeLike>(): 
       if (version !== lastClampVersion) {
         lastClampVersion = version
         lastClampInput = Number.NaN
+      }
+
+      if (
+        lastClampOverscanLeading !== context.overscanLeading ||
+        lastClampOverscanTrailing !== context.overscanTrailing ||
+        lastClampVirtualizationEnabled !== context.virtualizationEnabled
+      ) {
+        lastClampInput = Number.NaN
+        lastClampOverscanLeading = context.overscanLeading
+        lastClampOverscanTrailing = context.overscanTrailing
+        lastClampVirtualizationEnabled = context.virtualizationEnabled
       }
 
       if (!metrics.widths.length) return 0
@@ -165,6 +182,18 @@ export function createHorizontalAxisStrategy<TColumn extends ColumnSizeLike>(): 
         lastVersion = version
         lastRangeOffset = Number.NaN
         lastRangePayload = null
+      }
+
+      if (
+        lastRangeOverscanLeading !== context.overscanLeading ||
+        lastRangeOverscanTrailing !== context.overscanTrailing ||
+        lastRangeVirtualizationEnabled !== context.virtualizationEnabled
+      ) {
+        lastRangeOffset = Number.NaN
+        lastRangePayload = null
+        lastRangeOverscanLeading = context.overscanLeading
+        lastRangeOverscanTrailing = context.overscanTrailing
+        lastRangeVirtualizationEnabled = context.virtualizationEnabled
       }
 
       if (!scrollableColumns.length) {

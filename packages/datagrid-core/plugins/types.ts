@@ -1,28 +1,84 @@
 // src/ui-table/plugins/types.ts
-// Shared plugin interfaces for UiTable.
+// Shared plugin interfaces for UiTable/DataGrid with typed event maps.
 
-export type UiTablePluginEventHandler = (...args: any[]) => void
+export type DataGridEventMap = Record<string, readonly unknown[]>
+export type DataGridPluginCapability = (...args: readonly unknown[]) => unknown
+export type DataGridPluginCapabilityMap = Record<string, DataGridPluginCapability>
 
-export interface UiTablePluginSetupContext {
+export type DataGridEventName<TEventMap extends DataGridEventMap> = Extract<keyof TEventMap, string>
+export type DataGridPluginCapabilityName<TCapabilities extends DataGridPluginCapabilityMap> =
+  Extract<keyof TCapabilities, string>
+
+export type DataGridEventArgs<
+  TEventMap extends DataGridEventMap,
+  TEvent extends DataGridEventName<TEventMap>,
+> = TEventMap[TEvent] extends readonly unknown[] ? TEventMap[TEvent] : readonly unknown[]
+
+export type UiTablePluginEventHandler<TArgs extends readonly unknown[] = readonly unknown[]> = (
+  ...args: TArgs
+) => void
+
+export interface UiTablePluginSetupContext<
+  THostEvents extends DataGridEventMap = DataGridEventMap,
+  TPluginEvents extends DataGridEventMap = DataGridEventMap,
+  TCapabilities extends DataGridPluginCapabilityMap = DataGridPluginCapabilityMap,
+> {
   /** Unique identifier of the table instance installing the plugin. */
   tableId: string
   /** Returns the nearest theme/root element for DOM-based integrations. */
   getRootElement: () => HTMLElement | null
-  /** Provides access to the exposed public API of the table component. */
-  getHostExpose: () => Record<string, unknown>
+  /**
+   * Returns `true` if capability is both declared by plugin and provided by host.
+   * Plugins must never access host internals directly.
+   */
+  hasCapability: <TCapability extends DataGridPluginCapabilityName<TCapabilities>>(
+    capability: TCapability,
+  ) => boolean
+  /** Returns capability function if allowed/provided; otherwise `null`. */
+  requestCapability: <TCapability extends DataGridPluginCapabilityName<TCapabilities>>(
+    capability: TCapability,
+  ) => TCapabilities[TCapability] | null
+  /**
+   * Invokes allowed capability or throws on denied/missing access.
+   * Use for fail-fast plugin contracts.
+   */
+  invokeCapability: <TCapability extends DataGridPluginCapabilityName<TCapabilities>>(
+    capability: TCapability,
+    ...args: Parameters<TCapabilities[TCapability]>
+  ) => ReturnType<TCapabilities[TCapability]>
   /** Emits a host (component-level) event, mirroring `emit` + config handlers. */
-  emitHostEvent: (event: string, ...args: any[]) => void
+  emitHostEvent: <TEvent extends DataGridEventName<THostEvents>>(
+    event: TEvent,
+    ...args: DataGridEventArgs<THostEvents, TEvent>
+  ) => void
   /** Subscribes to plugin/local events. Returns an unsubscribe function. */
-  on: (event: string, handler: UiTablePluginEventHandler) => () => void
+  on: <TEvent extends DataGridEventName<TPluginEvents>>(
+    event: TEvent,
+    handler: UiTablePluginEventHandler<DataGridEventArgs<TPluginEvents, TEvent>>,
+  ) => () => void
   /** Emits a plugin/local event to other subscribers. */
-  emit: (event: string, ...args: any[]) => void
+  emit: <TEvent extends DataGridEventName<TPluginEvents>>(
+    event: TEvent,
+    ...args: DataGridEventArgs<TPluginEvents, TEvent>
+  ) => void
   /** Registers a cleanup hook that runs when the plugin is disposed. */
   registerCleanup: (cleanup: () => void) => void
 }
 
-export interface UiTablePlugin {
+export interface UiTablePlugin<
+  THostEvents extends DataGridEventMap = DataGridEventMap,
+  TPluginEvents extends DataGridEventMap = DataGridEventMap,
+  TCapabilities extends DataGridPluginCapabilityMap = DataGridPluginCapabilityMap,
+> {
   id: string
-  setup(context: UiTablePluginSetupContext): void | (() => void)
+  capabilities?: readonly DataGridPluginCapabilityName<TCapabilities>[]
+  setup(context: UiTablePluginSetupContext<THostEvents, TPluginEvents, TCapabilities>): void | (() => void)
 }
 
-export type UiTablePluginDefinition = UiTablePlugin | (() => UiTablePlugin)
+export type UiTablePluginDefinition<
+  THostEvents extends DataGridEventMap = DataGridEventMap,
+  TPluginEvents extends DataGridEventMap = DataGridEventMap,
+  TCapabilities extends DataGridPluginCapabilityMap = DataGridPluginCapabilityMap,
+> =
+  | UiTablePlugin<THostEvents, TPluginEvents, TCapabilities>
+  | (() => UiTablePlugin<THostEvents, TPluginEvents, TCapabilities>)

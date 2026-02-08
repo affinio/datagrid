@@ -38,4 +38,36 @@ describe("createDataGridColumnModel", () => {
     expect(model.getColumn("c")?.width).toBe(240)
     model.dispose()
   })
+
+  it("accepts headless column defs without UI-only fields", () => {
+    const model = createDataGridColumnModel({
+      columns: [
+        { key: "id" },
+        { key: "status", pin: "right", width: 120 },
+      ],
+    })
+
+    const snapshot = model.getSnapshot()
+    expect(snapshot.order).toEqual(["id", "status"])
+    expect(snapshot.columns[0]?.column.label).toBeUndefined()
+    expect(snapshot.columns[1]?.pin).toBe("right")
+    expect(snapshot.columns[1]?.width).toBe(120)
+    model.dispose()
+  })
+
+  it("keeps adapter metadata in a dedicated meta channel", () => {
+    const model = createDataGridColumnModel({
+      columns: [
+        { key: "name", label: "Name", meta: { isSystem: true, align: "left", formatter: "text" } },
+      ],
+    })
+
+    const column = model.getColumn("name")
+    expect(column?.column.meta).toEqual({
+      isSystem: true,
+      align: "left",
+      formatter: "text",
+    })
+    model.dispose()
+  })
 })

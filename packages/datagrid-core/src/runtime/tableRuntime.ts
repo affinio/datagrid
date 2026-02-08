@@ -1,4 +1,11 @@
-import { UiTablePluginManager, type UiTablePluginDefinition } from "../../plugins"
+import {
+  UiTablePluginManager,
+  type DataGridEventArgs as PluginEventArgs,
+  type DataGridEventMap,
+  type DataGridEventName,
+  type DataGridPluginCapabilityMap,
+  type UiTablePluginDefinition,
+} from "../../plugins"
 import type { UiTableEventHandlers } from "../types"
 
 export const HOST_EVENT_NAME_MAP = {
@@ -21,94 +28,232 @@ export const HOST_EVENT_NAME_MAP = {
   selectAllRequest: "select-all-request",
 } as const
 
-export type HostEventName = keyof typeof HOST_EVENT_NAME_MAP
+export type DataGridHostEventName = keyof typeof HOST_EVENT_NAME_MAP
 
-export type EventArgs<K extends HostEventName> = NonNullable<UiTableEventHandlers[K]> extends (
-  ...args: infer P
-) => any
-  ? P
-  : []
+export type DataGridHostEventArgs<K extends DataGridHostEventName> = NonNullable<
+  UiTableEventHandlers[K]
+> extends (...args: infer P) => any
+  ? Readonly<P>
+  : readonly []
 
-export function isHostEventName(value: string): value is HostEventName {
+export type DataGridHostEventMap = DataGridEventMap & {
+  [K in DataGridHostEventName]: DataGridHostEventArgs<K>
+}
+
+export type DataGridRuntimeBasePluginEventMap = DataGridEventMap & {
+  "runtime:initialized": readonly [{ tableId: string }]
+  "runtime:disposing": readonly [{ tableId: string }]
+}
+
+export type DataGridRuntimePluginEventMap<
+  TPluginEvents extends DataGridEventMap = Record<never, never>,
+> = DataGridHostEventMap & DataGridRuntimeBasePluginEventMap & TPluginEvents
+
+export interface DataGridRuntimeInternalEventMap {
+  "lifecycle:init": readonly [{ tableId: string }]
+  "lifecycle:dispose": readonly [{ tableId: string }]
+  "host:dispatched": readonly [{ name: DataGridHostEventName; args: readonly unknown[] }]
+  "plugin:host-unknown": readonly [{ event: string; args: readonly unknown[] }]
+  "plugin:capability-denied": readonly [
+    { pluginId: string; capability: string; reason: "not-declared" | "not-provided" },
+  ]
+}
+
+export type DataGridRuntimeInternalEventName = keyof DataGridRuntimeInternalEventMap
+
+// Legacy aliases kept for migration compatibility.
+export type HostEventName = DataGridHostEventName
+export type EventArgs<K extends HostEventName> = DataGridHostEventArgs<K>
+
+export function isHostEventName(value: string): value is DataGridHostEventName {
   return value in HOST_EVENT_NAME_MAP
 }
 
-export interface TableRuntimeOptions {
-  onHostEvent: (name: HostEventName, args: readonly unknown[]) => void
+export interface TableRuntimeOptions<
+  TPluginEvents extends DataGridEventMap = Record<never, never>,
+  TPluginCapabilities extends DataGridPluginCapabilityMap = Record<never, never>,
+> {
+  onHostEvent: <K extends DataGridHostEventName>(name: K, args: DataGridHostEventMap[K]) => void
+  onInternalEvent?: <K extends DataGridRuntimeInternalEventName>(
+    event: K,
+    args: DataGridRuntimeInternalEventMap[K],
+  ) => void
   onUnknownPluginEvent?: (event: string, args: readonly unknown[]) => void
   pluginContext: {
     getTableId: () => string
     getRootElement: () => HTMLElement | null
-    getHostExpose: () => Record<string, unknown>
+    getCapabilityMap: () => TPluginCapabilities
   }
   initialHandlers?: UiTableEventHandlers | undefined
-  initialPlugins?: UiTablePluginDefinition[] | undefined
+  initialPlugins?: UiTablePluginDefinition<
+    DataGridHostEventMap,
+    DataGridRuntimePluginEventMap<TPluginEvents>,
+    TPluginCapabilities
+  >[] | undefined
 }
 
-export interface TableRuntime {
-  emit<K extends HostEventName>(name: K, ...args: EventArgs<K>): void
+export interface TableRuntime<
+  TPluginEvents extends DataGridEventMap = Record<never, never>,
+  TPluginCapabilities extends DataGridPluginCapabilityMap = Record<never, never>,
+> {
+  emitHost<K extends DataGridHostEventName>(name: K, ...args: DataGridHostEventMap[K]): void
+  emit<K extends DataGridHostEventName>(name: K, ...args: DataGridHostEventMap[K]): void
+  emitPlugin<K extends DataGridEventName<DataGridRuntimePluginEventMap<TPluginEvents>>>(
+    event: K,
+    ...args: PluginEventArgs<DataGridRuntimePluginEventMap<TPluginEvents>, K>
+  ): void
+  onPlugin<K extends DataGridEventName<DataGridRuntimePluginEventMap<TPluginEvents>>>(
+    event: K,
+    handler: (
+      ...args: PluginEventArgs<DataGridRuntimePluginEventMap<TPluginEvents>, K>
+    ) => void,
+  ): () => void
   setHostHandlers(handlers: UiTableEventHandlers | undefined): void
-  setPlugins(plugins: UiTablePluginDefinition[] | undefined): void
+  setPlugins(
+    plugins:
+      | UiTablePluginDefinition<
+          DataGridHostEventMap,
+          DataGridRuntimePluginEventMap<TPluginEvents>,
+          TPluginCapabilities
+        >[]
+      | undefined,
+  ): void
   dispose(): void
 }
 
-class InternalTableRuntime implements TableRuntime {
+class InternalTableRuntime<
+  TPluginEvents extends DataGridEventMap = Record<never, never>,
+  TPluginCapabilities extends DataGridPluginCapabilityMap = Record<never, never>,
+> implements TableRuntime<TPluginEvents, TPluginCapabilities> {
   private handlers: UiTableEventHandlers
-  private readonly onHostEvent: (name: HostEventName, args: readonly unknown[]) => void
+  private readonly onHostEvent: TableRuntimeOptions<TPluginEvents, TPluginCapabilities>["onHostEvent"]
+  private readonly onInternalEvent?: TableRuntimeOptions<TPluginEvents, TPluginCapabilities>["onInternalEvent"]
   private readonly onUnknownPluginEvent?: (event: string, args: readonly unknown[]) => void
-  private readonly pluginManager: UiTablePluginManager
+  private readonly pluginManager: UiTablePluginManager<
+    DataGridHostEventMap,
+    DataGridRuntimePluginEventMap<TPluginEvents>,
+    TPluginCapabilities
+  >
+  private readonly getTableId: () => string
 
-  constructor(options: TableRuntimeOptions) {
+  constructor(options: TableRuntimeOptions<TPluginEvents, TPluginCapabilities>) {
     this.handlers = options.initialHandlers ?? {}
     this.onHostEvent = options.onHostEvent
+    this.onInternalEvent = options.onInternalEvent
     this.onUnknownPluginEvent = options.onUnknownPluginEvent
+    this.getTableId = options.pluginContext.getTableId
 
-    this.pluginManager = new UiTablePluginManager({
+    this.pluginManager = new UiTablePluginManager<
+      DataGridHostEventMap,
+      DataGridRuntimePluginEventMap<TPluginEvents>,
+      TPluginCapabilities
+    >({
       getTableId: options.pluginContext.getTableId,
       getRootElement: options.pluginContext.getRootElement,
-      getHostExpose: options.pluginContext.getHostExpose,
+      getCapabilityMap: options.pluginContext.getCapabilityMap,
+      onCapabilityDenied: (pluginId, capability, reason) => {
+        this.emitInternal("plugin:capability-denied", { pluginId, capability, reason })
+      },
       emitHostEvent: (event, ...args) => this.handlePluginHostEvent(event, args),
     })
 
     if (options.initialPlugins) {
       this.setPlugins(options.initialPlugins)
     }
+
+    const tableId = this.getTableId()
+    const runtimeInitArgs = [
+      { tableId },
+    ] as unknown as PluginEventArgs<DataGridRuntimePluginEventMap<TPluginEvents>, "runtime:initialized">
+    this.pluginManager.emit("runtime:initialized", ...runtimeInitArgs)
+    this.emitInternal("lifecycle:init", { tableId })
   }
 
-  emit<K extends HostEventName>(name: K, ...args: EventArgs<K>): void {
+  emitHost<K extends DataGridHostEventName>(name: K, ...args: DataGridHostEventMap[K]): void {
     this.invokeHandlers(name, args)
+  }
+
+  emit<K extends DataGridHostEventName>(name: K, ...args: DataGridHostEventMap[K]): void {
+    this.emitHost(name, ...args)
+  }
+
+  emitPlugin<K extends DataGridEventName<DataGridRuntimePluginEventMap<TPluginEvents>>>(
+    event: K,
+    ...args: PluginEventArgs<DataGridRuntimePluginEventMap<TPluginEvents>, K>
+  ): void {
+    this.pluginManager.emit(event, ...args)
+  }
+
+  onPlugin<K extends DataGridEventName<DataGridRuntimePluginEventMap<TPluginEvents>>>(
+    event: K,
+    handler: (
+      ...args: PluginEventArgs<DataGridRuntimePluginEventMap<TPluginEvents>, K>
+    ) => void,
+  ): () => void {
+    return this.pluginManager.on(event, handler)
   }
 
   setHostHandlers(handlers: UiTableEventHandlers | undefined): void {
     this.handlers = handlers ?? {}
   }
 
-  setPlugins(plugins: UiTablePluginDefinition[] | undefined): void {
+  setPlugins(
+    plugins:
+      | UiTablePluginDefinition<
+          DataGridHostEventMap,
+          DataGridRuntimePluginEventMap<TPluginEvents>,
+          TPluginCapabilities
+        >[]
+      | undefined,
+  ): void {
     this.pluginManager.setPlugins(Array.isArray(plugins) ? plugins : [])
   }
 
   dispose(): void {
+    const tableId = this.getTableId()
+    const runtimeDisposeArgs = [
+      { tableId },
+    ] as unknown as PluginEventArgs<DataGridRuntimePluginEventMap<TPluginEvents>, "runtime:disposing">
+    this.pluginManager.emit("runtime:disposing", ...runtimeDisposeArgs)
+    this.emitInternal("lifecycle:dispose", { tableId })
     this.pluginManager.destroy()
   }
 
-  private handlePluginHostEvent(event: string, args: unknown[]): void {
+  private emitInternal<K extends DataGridRuntimeInternalEventName>(
+    event: K,
+    ...args: DataGridRuntimeInternalEventMap[K]
+  ): void {
+    this.onInternalEvent?.(event, args)
+  }
+
+  private handlePluginHostEvent(event: string, args: readonly unknown[]): void {
     if (isHostEventName(event)) {
-      this.invokeHandlers(event, args)
+      this.invokeHandlers(event, args as DataGridHostEventMap[typeof event])
       return
     }
+    this.emitInternal("plugin:host-unknown", { event, args })
     this.onUnknownPluginEvent?.(event, args)
   }
 
-  private invokeHandlers(name: HostEventName, args: readonly unknown[]): void {
-    const handler = this.handlers?.[name]
+  private invokeHandlers<K extends DataGridHostEventName>(name: K, args: DataGridHostEventMap[K]): void {
+    const handler = this.handlers?.[name] as ((...params: DataGridHostEventMap[K]) => void) | undefined
     if (typeof handler === "function") {
-      ;(handler as (...params: readonly unknown[]) => void)(...args)
+      handler(...args)
     }
-    this.pluginManager.notify(String(name), ...(args as unknown[]))
+    this.pluginManager.notify(
+      name,
+      ...(args as PluginEventArgs<DataGridRuntimePluginEventMap<TPluginEvents>, typeof name>),
+    )
     this.onHostEvent(name, args)
+    this.emitInternal("host:dispatched", { name, args })
   }
 }
 
-export function createTableRuntime(options: TableRuntimeOptions): TableRuntime {
+export function createTableRuntime<
+  TPluginEvents extends DataGridEventMap = Record<never, never>,
+  TPluginCapabilities extends DataGridPluginCapabilityMap = Record<never, never>,
+>(
+  options: TableRuntimeOptions<TPluginEvents, TPluginCapabilities>,
+): TableRuntime<TPluginEvents, TPluginCapabilities> {
   return new InternalTableRuntime(options)
 }

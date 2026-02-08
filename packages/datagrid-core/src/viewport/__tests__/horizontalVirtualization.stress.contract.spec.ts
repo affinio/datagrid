@@ -71,6 +71,8 @@ describe("horizontal virtualization stress contract", () => {
   it("keeps bounded windows for 100k rows and 500+ columns with pinned mix", () => {
     const columns = createColumns(520)
     const rows = createRows(100_000)
+    const rowModel = createClientRowModel({ rows })
+    const columnModel = createDataGridColumnModel({ columns })
     const containerMetrics = createMeasuredElement({
       clientWidth: 1440,
       clientHeight: 820,
@@ -86,8 +88,8 @@ describe("horizontal virtualization stress contract", () => {
 
     const controller = createTableViewportController({
       resolvePinMode: column => (column.isSystem ? "left" : column.pin === "left" || column.pin === "right" ? column.pin : "none"),
-      rowModel: createClientRowModel({ rows }),
-      columnModel: createDataGridColumnModel({ columns }),
+      rowModel,
+      columnModel,
     })
 
     controller.attach(containerMetrics.element, headerMetrics.element)
@@ -108,11 +110,15 @@ describe("horizontal virtualization stress contract", () => {
     expect(controller.derived.columns.visibleScrollableEntries.value.length).toBeLessThan(220)
 
     controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
   })
 
   it("stays deterministic after teleport-like scroll and viewport resize", () => {
     const columns = createColumns(520)
     const rows = createRows(100_000)
+    const rowModel = createClientRowModel({ rows })
+    const columnModel = createDataGridColumnModel({ columns })
     const containerMetrics = createMeasuredElement({
       clientWidth: 1440,
       clientHeight: 820,
@@ -128,8 +134,8 @@ describe("horizontal virtualization stress contract", () => {
 
     const controller = createTableViewportController({
       resolvePinMode: column => (column.isSystem ? "left" : column.pin === "left" || column.pin === "right" ? column.pin : "none"),
-      rowModel: createClientRowModel({ rows }),
-      columnModel: createDataGridColumnModel({ columns }),
+      rowModel,
+      columnModel,
     })
 
     controller.attach(containerMetrics.element, headerMetrics.element)
@@ -201,5 +207,7 @@ describe("horizontal virtualization stress contract", () => {
     expect(afterResize.rangeEnd).toBeGreaterThan(afterResize.rangeStart)
 
     controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
   })
 })

@@ -66,10 +66,17 @@ export function computeHorizontalScrollLimit(input: HorizontalScrollLimitInput):
   if (nativeLimit == null || !Number.isFinite(nativeLimit) || nativeLimit <= 0) {
     return virtualizationLimit
   }
-  if (Math.abs(nativeLimit - virtualizationLimit) > tolerance) {
-    return nativeLimit
+  const delta = nativeLimit - virtualizationLimit
+  if (Math.abs(delta) <= tolerance) {
+    return Math.max(nativeLimit, virtualizationLimit)
   }
-  return Math.max(nativeLimit, virtualizationLimit)
+
+  // Deterministic envelope: when native limit drifts too far from virtualization math
+  // (resize storms, async scroll-width updates), cap max scroll around virtualization bounds.
+  if (delta > 0) {
+    return virtualizationLimit + tolerance
+  }
+  return Math.max(0, nativeLimit)
 }
 
 export interface ClampScrollInput {

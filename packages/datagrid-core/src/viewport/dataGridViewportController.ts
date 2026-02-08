@@ -5,6 +5,7 @@ export {
   type TableViewportImperativeCallbacks as DataGridViewportImperativeCallbacks,
   type TableViewportRuntimeOverrides as DataGridViewportRuntimeOverrides,
   type ViewportMetricsSnapshot as DataGridViewportMetricsSnapshot,
+  type ViewportIntegrationSnapshot as DataGridViewportIntegrationSnapshot,
   type ViewportSyncTargets as DataGridViewportSyncTargets,
   type ViewportSyncState as DataGridViewportSyncState,
   type TableViewportState as DataGridViewportState,

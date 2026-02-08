@@ -1,37 +1,39 @@
-import type {
-  UiTableFilterSnapshot,
-  UiTableSortState,
-  VisibleRow,
-} from "../types"
 import {
   normalizeRowNode,
   normalizeViewportRange,
+  withResolvedRowIdentity,
+  type DataGridFilterSnapshot,
+  type DataGridRowIdResolver,
   type DataGridRowNode,
+  type DataGridRowNodeInput,
   type DataGridRowModel,
   type DataGridRowModelListener,
   type DataGridRowModelRefreshReason,
   type DataGridRowModelSnapshot,
+  type DataGridSortState,
   type DataGridViewportRange,
-} from "./rowModel"
+} from "./rowModel.js"
 
 export interface CreateClientRowModelOptions<T> {
-  rows?: readonly VisibleRow<T>[]
-  initialSortModel?: readonly UiTableSortState[]
-  initialFilterModel?: UiTableFilterSnapshot | null
+  rows?: readonly DataGridRowNodeInput<T>[]
+  resolveRowId?: DataGridRowIdResolver<T>
+  initialSortModel?: readonly DataGridSortState[]
+  initialFilterModel?: DataGridFilterSnapshot | null
 }
 
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
-  setRows(rows: readonly VisibleRow<T>[]): void
+  setRows(rows: readonly DataGridRowNodeInput<T>[]): void
 }
 
 export function createClientRowModel<T>(
   options: CreateClientRowModelOptions<T> = {},
 ): ClientRowModel<T> {
+  const resolveRowId = options.resolveRowId
   let rows: DataGridRowNode<T>[] = Array.isArray(options.rows)
-    ? options.rows.map((row, index) => normalizeRowNode(row, index))
+    ? options.rows.map((row, index) => normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index))
     : []
-  let sortModel: readonly UiTableSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
-  let filterModel: UiTableFilterSnapshot | null = options.initialFilterModel ?? null
+  let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
+  let filterModel: DataGridFilterSnapshot | null = options.initialFilterModel ?? null
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rows.length)
   let disposed = false
   const listeners = new Set<DataGridRowModelListener<T>>()
@@ -84,10 +86,10 @@ export function createClientRowModel<T>(
       }
       return rows.slice(normalized.start, normalized.end + 1)
     },
-    setRows(nextRows: readonly VisibleRow<T>[]) {
+    setRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
       ensureActive()
       rows = Array.isArray(nextRows)
-        ? nextRows.map((row, index) => normalizeRowNode(row, index))
+        ? nextRows.map((row, index) => normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index))
         : []
       viewportRange = normalizeViewportRange(viewportRange, rows.length)
       emit()
@@ -101,12 +103,12 @@ export function createClientRowModel<T>(
       viewportRange = nextRange
       emit()
     },
-    setSortModel(nextSortModel: readonly UiTableSortState[]) {
+    setSortModel(nextSortModel: readonly DataGridSortState[]) {
       ensureActive()
       sortModel = Array.isArray(nextSortModel) ? [...nextSortModel] : []
       emit()
     },
-    setFilterModel(nextFilterModel: UiTableFilterSnapshot | null) {
+    setFilterModel(nextFilterModel: DataGridFilterSnapshot | null) {
       ensureActive()
       filterModel = nextFilterModel ?? null
       emit()

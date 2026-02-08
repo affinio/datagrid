@@ -1,23 +1,24 @@
 import type { ServerRowModel } from "../serverRowModel/serverRowModel"
-import type {
-  UiTableFilterSnapshot,
-  UiTableSortState,
-} from "../types"
 import {
   normalizeRowNode,
   normalizeViewportRange,
+  type DataGridRowId,
+  type DataGridRowIdResolver,
+  type DataGridFilterSnapshot,
   type DataGridRowNode,
   type DataGridRowModel,
   type DataGridRowModelListener,
   type DataGridRowModelRefreshReason,
   type DataGridRowModelSnapshot,
+  type DataGridSortState,
   type DataGridViewportRange,
-} from "./rowModel"
+} from "./rowModel.js"
 
 export interface CreateServerBackedRowModelOptions<T> {
   source: ServerRowModel<T>
-  initialSortModel?: readonly UiTableSortState[]
-  initialFilterModel?: UiTableFilterSnapshot | null
+  resolveRowId?: DataGridRowIdResolver<T>
+  initialSortModel?: readonly DataGridSortState[]
+  initialFilterModel?: DataGridFilterSnapshot | null
 }
 
 export interface ServerBackedRowModel<T> extends DataGridRowModel<T> {
@@ -29,8 +30,18 @@ export function createServerBackedRowModel<T>(
   options: CreateServerBackedRowModelOptions<T>,
 ): ServerBackedRowModel<T> {
   const { source } = options
-  let sortModel: readonly UiTableSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
-  let filterModel: UiTableFilterSnapshot | null = options.initialFilterModel ?? null
+  const resolveRowId: DataGridRowIdResolver<T> = options.resolveRowId ?? ((row, index) => {
+    const value = (row as { id?: unknown })?.id
+    if (typeof value === "string" || typeof value === "number") {
+      return value
+    }
+    throw new Error(
+      `[DataGrid] Missing row identity for server row at index ${index}. ` +
+      "Provide options.resolveRowId(row, index) or include row.id.",
+    )
+  })
+  let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
+  let filterModel: DataGridFilterSnapshot | null = options.initialFilterModel ?? null
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, source.getRowCount())
   let disposed = false
   const listeners = new Set<DataGridRowModelListener<T>>()
@@ -74,14 +85,18 @@ export function createServerBackedRowModel<T>(
     }
   }
 
-  function toVisibleRow(index: number): DataGridRowNode<T> | undefined {
+  function toRowNode(index: number): DataGridRowNode<T> | undefined {
     const row = source.getRowAt(index)
     if (typeof row === "undefined") {
       return undefined
     }
+    const rowId = resolveRowId(row, index) as DataGridRowId
+    if (typeof rowId !== "string" && typeof rowId !== "number") {
+      throw new Error(`[DataGrid] Invalid row identity returned for index ${index}. Expected string|number.`)
+    }
     return normalizeRowNode({
       row,
-      rowId: index,
+      rowId,
       originalIndex: index,
       displayIndex: index,
     }, index)
@@ -99,13 +114,13 @@ export function createServerBackedRowModel<T>(
         return undefined
       }
       const normalized = Math.max(0, Math.trunc(index))
-      return toVisibleRow(normalized)
+      return toRowNode(normalized)
     },
     getRowsInRange(range) {
       const normalized = normalizeViewportRange(range, source.getRowCount())
       const rows: DataGridRowNode<T>[] = []
       for (let index = normalized.start; index <= normalized.end; index += 1) {
-        const row = toVisibleRow(index)
+        const row = toRowNode(index)
         if (row) {
           rows.push(row)
         }

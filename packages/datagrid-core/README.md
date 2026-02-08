@@ -2,29 +2,65 @@
 
 Framework-agnostic data grid core.
 
-## Stable Public API
+## API Tiers
 
-Import only from the package root:
+### Tier 1: Stable (`@affino/datagrid-core`)
+
+Semver-safe surface for application integrations.
 
 ```ts
 import {
-  createInMemoryTableSettingsAdapter,
-  type UiTableSettingsAdapter,
-  type UiTableSortState,
-  type UiTableFilterSnapshot,
+  createDataGridApi,
+  createDataGridCore,
+  createClientRowModel,
+  createServerBackedRowModel,
 } from "@affino/datagrid-core"
 ```
 
-The root export is intentionally narrow while runtime internals are being hardened.
+### Tier 2: Advanced (`@affino/datagrid-core/advanced`)
+
+Power-user APIs (supported, but can evolve faster):
+
+```ts
+import {
+  createDataGridViewportController,
+  createDataGridA11yStateMachine,
+  createDataGridTransactionService,
+  createDataGridAdapterRuntime,
+} from "@affino/datagrid-core/advanced"
+```
+
+### Tier 3: Internal (`@affino/datagrid-core/internal`)
+
+Unsafe, no semver guarantees. Use only for local tooling and migrations.
 
 ## Naming Migration
 
-`DataGrid*` aliases are now available for key modules:
+`DataGrid*` aliases are available for key modules:
 - settings adapter (`createInMemoryDataGridSettingsAdapter`)
-- runtime (`createDataGridRuntime`)
-- viewport controller (`createDataGridViewportController`)
+- runtime (`createDataGridRuntime`, advanced tier)
+- viewport controller (`createDataGridViewportController`, advanced tier)
 
 Legacy `UiTable*` symbols remain available during migration.
+
+## Deterministic Integration Snapshot
+
+Viewport integration should read deterministic state from controller snapshot API instead of peeking into internal signals or DOM transforms:
+
+```ts
+import { createDataGridViewportController } from "@affino/datagrid-core/advanced"
+
+const viewport = createDataGridViewportController({ resolvePinMode })
+const snapshot = viewport.getIntegrationSnapshot()
+
+// stable integration fields:
+snapshot.visibleRowRange
+snapshot.visibleColumnRange
+snapshot.pinnedWidth
+snapshot.overlaySync
+```
+
+`getViewportSyncState()` is also available when only sync transform state is needed.
 
 ## Pinning Contract (Canonical)
 
@@ -70,4 +106,4 @@ Horizontal virtualization now uses a deterministic clamp/update path:
 ## Roadmap
 
 Execution and quality hardening are tracked in:
-`/Users/anton/Projects/affinio/docs/datagrid-engine-9.5-pipeline-checklist.md`.
+`/Users/anton/Projects/affinio/docs/datagrid-ag-architecture-9.5-pipeline-checklist.md`.

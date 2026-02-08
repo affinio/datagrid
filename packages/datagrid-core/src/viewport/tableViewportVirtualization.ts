@@ -28,7 +28,8 @@ export interface TableViewportVirtualizationOptions {
 }
 
 export interface TableViewportVirtualizationUpdateArgs {
-  rows: VisibleRow[]
+  resolveRow: (index: number) => VisibleRow | undefined
+  resolveRowsInRange?: (range: { start: number; end: number }) => readonly VisibleRow[]
   totalRowCount: number
   viewportHeight: number
   resolvedRowHeight: number
@@ -65,7 +66,8 @@ export interface TableViewportVirtualizationPrepared {
 }
 
 export interface TableViewportVirtualizationApplyArgs {
-  rows: VisibleRow[]
+  resolveRow: (index: number) => VisibleRow | undefined
+  resolveRowsInRange?: (range: { start: number; end: number }) => readonly VisibleRow[]
   imperativeCallbacks: TableViewportImperativeCallbacks
 }
 
@@ -117,14 +119,18 @@ export function createTableViewportVirtualization(
   })
 
   const visibleBuffers: VisibleRow[][] = [[], []]
+  const visibleSnapshotBuffers: VisibleRow[][] = [[], [], []]
   const rowPool: RowPoolItem[] = []
   let activeBufferIndex = 0
+  let activeSnapshotBufferIndex = 0
   let rowPoolVersion = 0
   let lastKnownViewportHeight = 0
   let lastKnownRowHeight = 0
   let lastKnownTotalRows = 0
   let lastKnownNativeLimit = 0
   let lastVirtualizationFlag = true
+  let lastVisibleRowsSnapshot = visibleSnapshotBuffers[activeSnapshotBufferIndex] ?? []
+  let lastRowsCallbackSignature = -1
 
   function ensureRowPoolSize(size: number): RowPoolItem[] {
     if (rowPool.length > size) {
@@ -141,13 +147,65 @@ export function createTableViewportVirtualization(
     return current === 0 ? 1 : 0
   }
 
+  function nextSnapshotBufferIndex(current: number): number {
+    return current >= visibleSnapshotBuffers.length - 1 ? 0 : current + 1
+  }
+
+  function copyToSnapshot(source: readonly VisibleRow[], size: number): VisibleRow[] {
+    const nextIndex = nextSnapshotBufferIndex(activeSnapshotBufferIndex)
+    const snapshot = visibleSnapshotBuffers[nextIndex] ?? (visibleSnapshotBuffers[nextIndex] = [])
+    for (let index = 0; index < size; index += 1) {
+      snapshot[index] = source[index] as VisibleRow
+    }
+    if (snapshot.length !== size) {
+      snapshot.length = size
+    }
+    activeSnapshotBufferIndex = nextIndex
+    return snapshot
+  }
+
+  function mixSignature(hash: number, value: number): number {
+    const normalized = Number.isFinite(value) ? Math.trunc(value) : 0
+    const mixed = (hash ^ normalized) * 16777619
+    return mixed >>> 0
+  }
+
+  function computeRowsCallbackSignature(params: {
+    poolVersion: number
+    startIndex: number
+    endIndex: number
+    visibleCount: number
+    visibleRowsLength: number
+    totalRowCount: number
+    rowHeight: number
+    scrollTop: number
+    viewportHeight: number
+    overscanLeading: number
+    overscanTrailing: number
+  }): number {
+    let hash = 2166136261
+    hash = mixSignature(hash, params.poolVersion)
+    hash = mixSignature(hash, params.startIndex)
+    hash = mixSignature(hash, params.endIndex)
+    hash = mixSignature(hash, params.visibleCount)
+    hash = mixSignature(hash, params.visibleRowsLength)
+    hash = mixSignature(hash, params.totalRowCount)
+    hash = mixSignature(hash, Math.round(params.rowHeight * 1000))
+    hash = mixSignature(hash, Math.round(params.scrollTop * 1000))
+    hash = mixSignature(hash, Math.round(params.viewportHeight * 1000))
+    hash = mixSignature(hash, params.overscanLeading)
+    hash = mixSignature(hash, params.overscanTrailing)
+    return hash
+  }
+
   function bumpRowPoolVersion(): number {
     rowPoolVersion = rowPoolVersion >= Number.MAX_SAFE_INTEGER ? 0 : rowPoolVersion + 1
     return rowPoolVersion
   }
 
   function updateVisibleRows(
-    rows: VisibleRow[],
+    resolveRow: (index: number) => VisibleRow | undefined,
+    resolveRowsInRange: ((range: { start: number; end: number }) => readonly VisibleRow[]) | undefined,
     poolSizeValue: number,
     startIndexValue: number,
   ): { pool: RowPoolItem[]; visibleRows: VisibleRow[]; version: number } {
@@ -158,34 +216,69 @@ export function createTableViewportVirtualization(
       if (emptyBuffer.length) {
         emptyBuffer.length = 0
       }
+      if (lastVisibleRowsSnapshot.length === 0) {
+        return { pool, visibleRows: lastVisibleRowsSnapshot, version: rowPoolVersion }
+      }
+      lastVisibleRowsSnapshot = copyToSnapshot(emptyBuffer, 0)
       const version = bumpRowPoolVersion()
-      return { pool, visibleRows: [], version }
+      return { pool, visibleRows: lastVisibleRowsSnapshot, version }
     }
 
     const nextIndex = nextBufferIndex(activeBufferIndex)
     const buffer = visibleBuffers[nextIndex] ?? (visibleBuffers[nextIndex] = [])
+    const rangeEnd = startIndexValue + Math.max(0, poolSizeValue - 1)
+    const rowsInRange =
+      typeof resolveRowsInRange === "function"
+        ? resolveRowsInRange({ start: startIndexValue, end: rangeEnd })
+        : null
+    const rowsByIndex = rowsInRange
+      ? new Map<number, VisibleRow>(
+          rowsInRange
+            .map(row => {
+              const displayIndex = Number.isFinite(row.displayIndex)
+                ? Math.trunc(row.displayIndex as number)
+                : Math.trunc(row.originalIndex)
+              return [displayIndex, row] as const
+            })
+            .filter(([index]) => index >= startIndexValue && index <= rangeEnd),
+        )
+      : null
     let filled = 0
+    let changed = false
 
     for (let poolIndexValue = 0; poolIndexValue < poolSizeValue; poolIndexValue += 1) {
       const rowIndexValue = startIndexValue + poolIndexValue
-      const entry = rows[rowIndexValue] ?? null
+      const entry = rowsByIndex ? (rowsByIndex.get(rowIndexValue) ?? null) : (resolveRow(rowIndexValue) ?? null)
       const item = pool[poolIndexValue]
       if (!item) {
         continue
       }
+      const previousEntry = item.entry
+      const previousRowIndex = item.rowIndex
+      const previousDisplayIndex = item.displayIndex
+
       item.poolIndex = poolIndexValue
       item.rowIndex = rowIndexValue
       item.entry = entry
 
+      let nextDisplayIndex = rowIndexValue
       if (entry) {
         if (entry.displayIndex !== rowIndexValue) {
           entry.displayIndex = rowIndexValue
         }
-        item.displayIndex = entry.displayIndex ?? rowIndexValue
+        nextDisplayIndex = entry.displayIndex ?? rowIndexValue
         buffer[filled] = entry
         filled += 1
-      } else {
-        item.displayIndex = rowIndexValue
+      }
+
+      item.displayIndex = nextDisplayIndex
+
+      if (
+        previousEntry !== item.entry ||
+        previousRowIndex !== item.rowIndex ||
+        previousDisplayIndex !== item.displayIndex
+      ) {
+        changed = true
       }
     }
 
@@ -194,9 +287,27 @@ export function createTableViewportVirtualization(
     }
 
     activeBufferIndex = nextIndex
-    const snapshot = buffer.slice(0, filled)
+    if (!changed) {
+      if (lastVisibleRowsSnapshot.length !== filled) {
+        changed = true
+      } else {
+        for (let index = 0; index < filled; index += 1) {
+          if (lastVisibleRowsSnapshot[index] !== buffer[index]) {
+            changed = true
+            break
+          }
+        }
+      }
+    }
+
+    if (!changed) {
+      return { pool, visibleRows: lastVisibleRowsSnapshot, version: rowPoolVersion }
+    }
+
+    const snapshot = copyToSnapshot(buffer, filled)
+    lastVisibleRowsSnapshot = snapshot
     const version = bumpRowPoolVersion()
-    return { pool, visibleRows: snapshot, version }
+    return { pool, visibleRows: lastVisibleRowsSnapshot, version }
   }
 
   function resetOverscan(timestamp: number): void {
@@ -231,8 +342,16 @@ export function createTableViewportVirtualization(
         buffer.length = 0
       }
     }
+    for (const buffer of visibleSnapshotBuffers) {
+      if (buffer.length) {
+        buffer.length = 0
+      }
+    }
+    activeSnapshotBufferIndex = 0
     rowPool.length = 0
     rowPoolVersion = 0
+    lastVisibleRowsSnapshot = visibleSnapshotBuffers[activeSnapshotBufferIndex] ?? []
+    lastRowsCallbackSignature = -1
     visibleRange.value = { start: 0, end: 0 }
   }
 
@@ -259,7 +378,7 @@ export function createTableViewportVirtualization(
     result: TableViewportVirtualizationPrepared,
     args: TableViewportVirtualizationApplyArgs,
   ): void {
-    const { rows, imperativeCallbacks } = args
+    const { resolveRow, resolveRowsInRange, imperativeCallbacks } = args
     const {
       state: virtualState,
       scrollTop: nextScrollTop,
@@ -275,7 +394,7 @@ export function createTableViewportVirtualization(
     totalContentHeight.value = totalRowCount.value * (effectiveRowHeight.value || 0)
 
     const { pool: poolSnapshot, visibleRows: visibleRowsSnapshot, version: poolVersion } =
-      updateVisibleRows(rows, virtualState.poolSize, virtualState.startIndex)
+      updateVisibleRows(resolveRow, resolveRowsInRange, virtualState.poolSize, virtualState.startIndex)
 
     const currentRange = visibleRange.value
     if (currentRange.start !== nextRange.start || currentRange.end !== nextRange.end) {
@@ -290,21 +409,38 @@ export function createTableViewportVirtualization(
     overscanTrailing.value = virtualState.overscanTrailing
 
     if (typeof imperativeCallbacks.onRows === "function") {
-      imperativeCallbacks.onRows({
-        pool: poolSnapshot,
-        visibleRows: visibleRowsSnapshot,
+      const rowsCallbackSignature = computeRowsCallbackSignature({
+        poolVersion,
         startIndex: virtualState.startIndex,
         endIndex: virtualState.endIndex,
         visibleCount: virtualState.visibleCount,
+        visibleRowsLength: visibleRowsSnapshot.length,
         totalRowCount: totalRowCount.value,
         rowHeight: effectiveRowHeight.value || 0,
         scrollTop: nextScrollTop,
         viewportHeight: lastKnownViewportHeight,
         overscanLeading: virtualState.overscanLeading,
         overscanTrailing: virtualState.overscanTrailing,
-        timestamp,
-        version: poolVersion,
       })
+
+      if (rowsCallbackSignature !== lastRowsCallbackSignature) {
+        lastRowsCallbackSignature = rowsCallbackSignature
+        imperativeCallbacks.onRows({
+          pool: poolSnapshot,
+          visibleRows: visibleRowsSnapshot,
+          startIndex: virtualState.startIndex,
+          endIndex: virtualState.endIndex,
+          visibleCount: virtualState.visibleCount,
+          totalRowCount: totalRowCount.value,
+          rowHeight: effectiveRowHeight.value || 0,
+          scrollTop: nextScrollTop,
+          viewportHeight: lastKnownViewportHeight,
+          overscanLeading: virtualState.overscanLeading,
+          overscanTrailing: virtualState.overscanTrailing,
+          timestamp,
+          version: poolVersion,
+        })
+      }
     }
   }
 
@@ -354,8 +490,16 @@ export function createTableViewportVirtualization(
           buffer.length = 0
         }
       }
+      for (const buffer of visibleSnapshotBuffers) {
+        if (buffer.length) {
+          buffer.length = 0
+        }
+      }
+      activeSnapshotBufferIndex = 0
       rowPool.length = 0
       rowPoolVersion = 0
+      lastVisibleRowsSnapshot = visibleSnapshotBuffers[activeSnapshotBufferIndex] ?? []
+      lastRowsCallbackSignature = -1
       visibleRange.value = { start: 0, end: 0 }
       scrollTop.value = 0
       const timestamp = clock.now()
@@ -489,7 +633,8 @@ export function createTableViewportVirtualization(
     }
 
     return applyPrepared(prepared, {
-      rows: args.rows,
+      resolveRow: args.resolveRow,
+      resolveRowsInRange: args.resolveRowsInRange,
       imperativeCallbacks: args.imperativeCallbacks,
     })
   }

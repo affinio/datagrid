@@ -12,6 +12,7 @@ import type {
 } from "../types"
 import type { UiTableColumnGroupDef } from "../types/column"
 import type { UiTablePluginDefinition } from "../../plugins"
+
 type RowData = Record<string, unknown>
 type RowKey = string | number
 
@@ -86,6 +87,52 @@ export interface UiTableProps {
   plugins?: UiTablePluginDefinition[]
 }
 
+export interface NormalizedTableDataSection {
+  rows: any[]
+  totalRows?: number
+  summaryRow: Record<string, any> | null
+  loading: boolean
+}
+
+export interface NormalizedTableModelSection {
+  tableId: string
+  columns: UiTableColumn[]
+  columnGroups: UiTableColumnGroupDef[]
+  selection: NormalizedSelectionState
+  selectionMetrics: UiTableSelectionMetricsConfig
+}
+
+export interface NormalizedTableViewSection {
+  rowHeightMode: "fixed" | "auto"
+  rowHeight: number
+  debugViewport: boolean
+  inlineControls: boolean
+  showRowIndexColumn: boolean
+  hoverable: boolean
+  styleConfig: UiTableStyleConfig | null
+  showZoomControl: boolean
+}
+
+export interface NormalizedTableInteractionSection {
+  hasMore?: boolean
+  pageSize: number
+  autoLoadOnScroll: boolean
+  loadOnMount: boolean
+  lazyLoader?: UiTableLazyLoader
+  serverSideModel: boolean
+  filterOptionLoader?: UiTableFilterOptionLoader
+  events: UiTableEventHandlers
+  plugins: UiTablePluginDefinition[]
+}
+
+export interface NormalizedTableConfigSections {
+  config: UiTableConfig
+  data: NormalizedTableDataSection
+  model: NormalizedTableModelSection
+  view: NormalizedTableViewSection
+  interaction: NormalizedTableInteractionSection
+}
+
 export const DEFAULT_LAZY_PAGE_SIZE = 200
 
 export const DEFAULT_SELECTION_METRIC_DEFINITIONS: ReadonlyArray<UiTableSelectionMetricDefinition> = [
@@ -111,15 +158,6 @@ const DEFAULT_SELECTION_METRICS_DISABLED: UiTableSelectionMetricsConfig = {
 
 type SelectionMetricLike = UiTableSelectionMetricDefinition | undefined | null
 
-function pickFirst<T>(...values: (T | null | undefined)[]): T | undefined {
-  for (const value of values) {
-    if (value !== undefined && value !== null) {
-      return value
-    }
-  }
-  return undefined
-}
-
 function normalizeSelectionMetricDefinition(
   definition: SelectionMetricLike,
 ): UiTableSelectionMetricDefinition | null {
@@ -143,6 +181,18 @@ function normalizeSelectionMetricDefinition(
     compute,
     formatter,
   }
+}
+
+function coerceArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? [...value] as T[] : []
+}
+
+function asFiniteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined
 }
 
 export function normalizeSelectionMetrics(
@@ -184,145 +234,207 @@ export function normalizeSelectionMetrics(
   }
 }
 
-export function normalizePlugins(input: UiTablePluginDefinition | UiTablePluginDefinition[] | null | undefined): UiTablePluginDefinition[] {
+export function normalizePlugins(
+  input: UiTablePluginDefinition | UiTablePluginDefinition[] | null | undefined,
+): UiTablePluginDefinition[] {
   if (!input) return []
   const list = Array.isArray(input) ? input : [input]
   return list.filter((entry): entry is UiTablePluginDefinition => Boolean(entry))
 }
 
-export function normalizeTableProps(raw: UiTableProps): NormalizedTableProps {
-  const config: UiTableConfig = raw.config ?? {}
-  const featureConfig = config.features ?? {}
-  const selectionOverride = config.selection ?? {}
-  const selectionFeature = featureConfig.selection ?? {}
-  const selectionConfig = {
-    ...selectionFeature,
-    ...selectionOverride,
+function cloneConfig(config: UiTableConfig | undefined): UiTableConfig {
+  return {
+    ...(config ?? {}),
+    data: { ...(config?.data ?? {}) },
+    columns: { ...(config?.columns ?? {}) },
+    features: { ...(config?.features ?? {}) },
+    appearance: { ...(config?.appearance ?? {}) },
+    load: { ...(config?.load ?? {}) },
+    debug: { ...(config?.debug ?? {}) },
+    state: { ...(config?.state ?? {}) },
+    selection: { ...(config?.selection ?? {}) },
   }
-  const appearanceConfig = config.appearance ?? {}
-  const loadConfig = config.load ?? {}
-  const debugConfig = config.debug ?? {}
+}
+
+function normalizeSelectedRows(source: unknown): Array<RowData | RowKey> | undefined {
+  if (!Array.isArray(source)) {
+    return undefined
+  }
+  const selected = source.filter((item): item is RowData | RowKey => item !== undefined && item !== null)
+  return selected
+}
+
+/**
+ * Migration adapter for legacy flat component props.
+ * Translates historical top-level props into canonical config sections.
+ */
+export function migrateLegacyUiTableConfig(raw: UiTableProps): UiTableConfig {
+  const config = cloneConfig(raw.config)
+
+  const data = config.data ?? {}
+  const columns = config.columns ?? {}
+  const features = config.features ?? {}
+  const appearance = config.appearance ?? {}
+  const load = config.load ?? {}
+  const debug = config.debug ?? {}
+  const state = config.state ?? {}
+  const selectionFromFeatures = features.selection ?? {}
+  const selection = {
+    ...selectionFromFeatures,
+    ...(config.selection ?? {}),
+  }
+
+  if (raw.tableId !== undefined) {
+    config.tableId = raw.tableId
+  }
+
+  if (raw.rows !== undefined) {
+    data.rows = coerceArray(raw.rows)
+  }
+  if (raw.totalRows !== undefined) {
+    data.totalRows = asFiniteNumber(raw.totalRows)
+  }
+  if (raw.summaryRow !== undefined) {
+    data.summaryRow = raw.summaryRow ?? null
+  }
+
+  if (raw.columns !== undefined) {
+    columns.definitions = coerceArray<UiTableColumn>(raw.columns)
+  }
+  if (raw.columnGroups !== undefined) {
+    columns.groups = coerceArray<UiTableColumnGroupDef>(raw.columnGroups)
+  }
+
+  if (raw.rowHeightMode !== undefined) {
+    appearance.rowHeightMode = raw.rowHeightMode
+  }
+  if (raw.rowHeight !== undefined) {
+    appearance.rowHeight = raw.rowHeight
+  }
+  if (raw.styleConfig !== undefined) {
+    appearance.styleConfig = raw.styleConfig
+  }
+
+  if (raw.inlineControls !== undefined) {
+    features.inlineControls = Boolean(raw.inlineControls)
+  }
+  if (raw.showRowIndexColumn !== undefined) {
+    features.rowIndexColumn = Boolean(raw.showRowIndexColumn)
+  }
+  if (raw.hoverable !== undefined) {
+    features.hoverable = Boolean(raw.hoverable)
+  }
+  if (raw.showZoom !== undefined) {
+    features.zoom = Boolean(raw.showZoom)
+  }
+  if (raw.selectionMetrics !== undefined) {
+    features.selectionMetrics = raw.selectionMetrics
+  }
+
+  if (raw.selectable !== undefined) {
+    selection.enabled = Boolean(raw.selectable)
+  }
+  if (raw.fullRowSelectionMode === true) {
+    selection.mode = "row"
+  }
+  if (raw.showSelectionColumn !== undefined) {
+    selection.showSelectionColumn = Boolean(raw.showSelectionColumn)
+  }
+  if (raw.selected !== undefined) {
+    const selected = normalizeSelectedRows(raw.selected) ?? []
+    selection.selected = selected
+    state.selected = selected
+  }
+
+  if (raw.hasMore !== undefined) {
+    load.hasMore = asBoolean(raw.hasMore)
+  }
+  if (raw.pageSize !== undefined) {
+    load.pageSize = asFiniteNumber(raw.pageSize)
+  }
+  if (raw.autoLoadOnScroll !== undefined) {
+    load.autoLoadOnScroll = Boolean(raw.autoLoadOnScroll)
+  }
+  if (raw.loadOnMount !== undefined) {
+    load.loadOnMount = Boolean(raw.loadOnMount)
+  }
+  if (raw.lazyLoader !== undefined) {
+    load.lazyLoader = raw.lazyLoader
+  }
+  if (raw.serverSideModel !== undefined) {
+    load.serverSideModel = Boolean(raw.serverSideModel)
+  }
+  if (raw.filterOptionLoader !== undefined) {
+    load.filterOptionLoader = raw.filterOptionLoader
+  }
+
+  if (raw.debugViewport !== undefined) {
+    debug.viewport = Boolean(raw.debugViewport)
+  }
+  if (raw.loading !== undefined) {
+    state.loading = Boolean(raw.loading)
+  }
+
+  if (raw.events !== undefined) {
+    config.events = {
+      ...(config.events ?? {}),
+      ...(raw.events ?? {}),
+    }
+  }
+
+  if (raw.plugins !== undefined) {
+    config.plugins = normalizePlugins(raw.plugins)
+  }
+
+  config.data = data
+  config.columns = columns
+  config.features = features
+  config.appearance = appearance
+  config.load = load
+  config.debug = debug
+  config.state = state
+  config.selection = selection
+
+  return config
+}
+
+export function normalizeTableDataSection(config: UiTableConfig): NormalizedTableDataSection {
   const dataConfig = config.data ?? {}
-  const columnConfig = config.columns ?? {}
   const stateConfig = config.state ?? {}
 
-  const rows = Array.isArray(raw.rows)
-    ? raw.rows
-    : Array.isArray(dataConfig.rows)
-      ? dataConfig.rows
-      : []
+  return {
+    rows: coerceArray(dataConfig.rows),
+    totalRows: asFiniteNumber(dataConfig.totalRows),
+    summaryRow: dataConfig.summaryRow ?? null,
+    loading: Boolean(stateConfig.loading ?? false),
+  }
+}
 
-  const columns = Array.isArray(raw.columns)
-    ? raw.columns
-    : Array.isArray(columnConfig.definitions)
-      ? columnConfig.definitions
-      : []
-
-  const columnGroups = Array.isArray(raw.columnGroups)
-    ? raw.columnGroups
-    : Array.isArray(columnConfig.groups)
-      ? columnConfig.groups
-      : []
-
-  const rowHeightModeCandidate = pickFirst(raw.rowHeightMode, appearanceConfig.rowHeightMode)
-  const rowHeightMode: "fixed" | "auto" = rowHeightModeCandidate === "auto" ? "auto" : "fixed"
-
-  const rowHeightCandidate = pickFirst(raw.rowHeight, appearanceConfig.rowHeight)
-  const rowHeight = Math.max(1, typeof rowHeightCandidate === "number" && Number.isFinite(rowHeightCandidate) ? rowHeightCandidate : BASE_ROW_HEIGHT)
-
-  const inlineControlsCandidate = pickFirst(raw.inlineControls, featureConfig.inlineControls)
-  const inlineControls = inlineControlsCandidate !== undefined ? Boolean(inlineControlsCandidate) : true
-
-  const showRowIndexCandidate = pickFirst(raw.showRowIndexColumn, featureConfig.rowIndexColumn)
-  const showRowIndexColumn = Boolean(showRowIndexCandidate)
-
-  const hoverableCandidate = pickFirst(raw.hoverable, featureConfig.hoverable)
-  const hoverable = hoverableCandidate === undefined ? true : Boolean(hoverableCandidate)
-
-  const showZoomCandidate = pickFirst(raw.showZoom, featureConfig.zoom)
-  const showZoomControl = Boolean(showZoomCandidate ?? false)
-
-  const hasMoreCandidate = pickFirst(raw.hasMore, loadConfig.hasMore)
-  const hasMore = typeof hasMoreCandidate === "boolean" ? hasMoreCandidate : undefined
-
-  const totalRowsCandidate = pickFirst(raw.totalRows, dataConfig.totalRows)
-  const totalRows = typeof totalRowsCandidate === "number" && Number.isFinite(totalRowsCandidate) ? totalRowsCandidate : undefined
-
-  const pageSizeCandidate = pickFirst(raw.pageSize, loadConfig.pageSize)
-  const pageSize = typeof pageSizeCandidate === "number" && Number.isFinite(pageSizeCandidate)
-    ? Math.max(1, Math.floor(pageSizeCandidate))
-    : DEFAULT_LAZY_PAGE_SIZE
-
-  const autoLoadOnScroll = Boolean(pickFirst(raw.autoLoadOnScroll, loadConfig.autoLoadOnScroll) ?? false)
-  const loadOnMount = Boolean(pickFirst(raw.loadOnMount, loadConfig.loadOnMount) ?? false)
-  const serverSideModel = Boolean(pickFirst(raw.serverSideModel, loadConfig.serverSideModel) ?? false)
-
-  const lazyLoader = raw.lazyLoader ?? loadConfig.lazyLoader
-  const filterOptionLoader = raw.filterOptionLoader ?? loadConfig.filterOptionLoader
-
-  const styleConfig = pickFirst(raw.styleConfig, appearanceConfig.styleConfig) ?? null
-
-  const summaryRow = pickFirst(raw.summaryRow, dataConfig.summaryRow) ?? null
-
-  const debugViewport = Boolean(pickFirst(raw.debugViewport, debugConfig.viewport) ?? false)
-
-  const tableId =
-    pickFirst(raw.tableId, config.tableId) ??
-    "default"
-
-  const loading = Boolean(pickFirst(raw.loading, stateConfig.loading) ?? false)
-
-  const selectionEnabledCandidate = pickFirst(raw.selectable, selectionConfig.enabled)
-  const selectionEnabled = selectionEnabledCandidate !== undefined ? Boolean(selectionEnabledCandidate) : false
-
-  const selectionModeCandidate = selectionConfig.mode ?? (raw.fullRowSelectionMode ? "row" : undefined)
-  const selectionMode: "cell" | "row" = selectionModeCandidate === "row" ? "row" : "cell"
-
-  const selectionShowColumnCandidate = pickFirst(raw.showSelectionColumn, selectionConfig.showSelectionColumn)
-  const selectionShowSelectionColumn = selectionEnabled
-    ? selectionShowColumnCandidate !== undefined
-      ? Boolean(selectionShowColumnCandidate)
-      : true
-    : false
-
-  const selectionSelectedSource: Array<RowData | RowKey | undefined> | undefined = Array.isArray(raw.selected)
-    ? raw.selected
-    : Array.isArray(selectionConfig.selected)
-      ? selectionConfig.selected
-      : Array.isArray(stateConfig.selected)
-        ? stateConfig.selected
-        : undefined
-
-  const selectionSelected = selectionSelectedSource
-    ? selectionSelectedSource.filter((item): item is RowData | RowKey => item !== undefined && item !== null)
-    : undefined
-
-  const selectionControlled = selectionEnabled && selectionSelected !== undefined
-
-  const selectionMetricsConfig = normalizeSelectionMetrics(
-    pickFirst(raw.selectionMetrics, featureConfig.selectionMetrics),
-  )
-
-  const plugins = normalizePlugins(pickFirst(raw.plugins, config.plugins))
-
-  const events: UiTableEventHandlers = {
-    ...(config.events ?? {}),
-    ...(raw.events ?? {}),
+export function normalizeTableModelSection(config: UiTableConfig): NormalizedTableModelSection {
+  const columnConfig = config.columns ?? {}
+  const featureConfig = config.features ?? {}
+  const stateConfig = config.state ?? {}
+  const selection = {
+    ...(featureConfig.selection ?? {}),
+    ...(config.selection ?? {}),
   }
 
+  const selectionEnabled = selection.enabled !== undefined ? Boolean(selection.enabled) : false
+  const selectionMode: "cell" | "row" = selection.mode === "row" ? "row" : "cell"
+  const selectionShowSelectionColumn = selectionEnabled
+    ? selection.showSelectionColumn !== undefined
+      ? Boolean(selection.showSelectionColumn)
+      : true
+    : false
+  const selectionSelected = normalizeSelectedRows(
+    selection.selected ?? stateConfig.selected,
+  )
+  const selectionControlled = selectionEnabled && selectionSelected !== undefined
+
   return {
-    rows,
-    columns,
-    columnGroups,
-    config,
-    tableId,
-    loading,
-    rowHeightMode,
-    rowHeight,
-    summaryRow,
-    debugViewport,
-    inlineControls,
-    showRowIndexColumn,
+    tableId: config.tableId ?? "default",
+    columns: coerceArray<UiTableColumn>(columnConfig.definitions),
+    columnGroups: coerceArray<UiTableColumnGroupDef>(columnConfig.groups),
     selection: {
       enabled: selectionEnabled,
       controlled: selectionControlled,
@@ -330,19 +442,100 @@ export function normalizeTableProps(raw: UiTableProps): NormalizedTableProps {
       showSelectionColumn: selectionShowSelectionColumn,
       selected: selectionSelected,
     },
-    selectionMetrics: selectionMetricsConfig,
-    hoverable,
-    styleConfig,
-    showZoomControl,
+    selectionMetrics: normalizeSelectionMetrics(
+      (featureConfig.selectionMetrics ?? config.selectionMetrics) as UiTableSelectionMetricsProp | undefined,
+    ),
+  }
+}
+
+export function normalizeTableViewSection(config: UiTableConfig): NormalizedTableViewSection {
+  const appearance = config.appearance ?? {}
+  const featureConfig = config.features ?? {}
+  const debug = config.debug ?? {}
+
+  const rowHeightMode: "fixed" | "auto" = appearance.rowHeightMode === "auto" ? "auto" : "fixed"
+  const rowHeightCandidate = asFiniteNumber(appearance.rowHeight)
+
+  return {
+    rowHeightMode,
+    rowHeight: Math.max(1, rowHeightCandidate ?? BASE_ROW_HEIGHT),
+    debugViewport: Boolean(debug.viewport ?? false),
+    inlineControls: featureConfig.inlineControls !== undefined ? Boolean(featureConfig.inlineControls) : true,
+    showRowIndexColumn: Boolean(featureConfig.rowIndexColumn),
+    hoverable: featureConfig.hoverable === undefined ? true : Boolean(featureConfig.hoverable),
+    styleConfig: appearance.styleConfig ?? null,
+    showZoomControl: Boolean(featureConfig.zoom ?? false),
+  }
+}
+
+export function normalizeTableInteractionSection(config: UiTableConfig): NormalizedTableInteractionSection {
+  const load = config.load ?? {}
+
+  const pageSizeCandidate = asFiniteNumber(load.pageSize)
+  const pageSize = pageSizeCandidate !== undefined
+    ? Math.max(1, Math.floor(pageSizeCandidate))
+    : DEFAULT_LAZY_PAGE_SIZE
+  const hasMore = asBoolean(load.hasMore)
+
+  return {
     hasMore,
-    totalRows,
     pageSize,
-    autoLoadOnScroll,
-    loadOnMount,
-    lazyLoader,
-    serverSideModel,
-    filterOptionLoader,
-    events,
-    plugins,
+    autoLoadOnScroll: Boolean(load.autoLoadOnScroll ?? false),
+    loadOnMount: Boolean(load.loadOnMount ?? false),
+    lazyLoader: load.lazyLoader,
+    serverSideModel: Boolean(load.serverSideModel ?? false),
+    filterOptionLoader: load.filterOptionLoader,
+    events: { ...(config.events ?? {}) },
+    plugins: normalizePlugins(config.plugins),
+  }
+}
+
+export function normalizeTableConfigSections(raw: UiTableProps): NormalizedTableConfigSections {
+  const config = migrateLegacyUiTableConfig(raw)
+  const data = normalizeTableDataSection(config)
+  const model = normalizeTableModelSection(config)
+  const view = normalizeTableViewSection(config)
+  const interaction = normalizeTableInteractionSection(config)
+
+  return {
+    config,
+    data,
+    model,
+    view,
+    interaction,
+  }
+}
+
+export function normalizeTableProps(raw: UiTableProps): NormalizedTableProps {
+  const sections = normalizeTableConfigSections(raw)
+
+  return {
+    rows: sections.data.rows,
+    columns: sections.model.columns,
+    columnGroups: sections.model.columnGroups,
+    config: sections.config,
+    tableId: sections.model.tableId,
+    loading: sections.data.loading,
+    rowHeightMode: sections.view.rowHeightMode,
+    rowHeight: sections.view.rowHeight,
+    summaryRow: sections.data.summaryRow,
+    debugViewport: sections.view.debugViewport,
+    inlineControls: sections.view.inlineControls,
+    showRowIndexColumn: sections.view.showRowIndexColumn,
+    selection: sections.model.selection,
+    selectionMetrics: sections.model.selectionMetrics,
+    hoverable: sections.view.hoverable,
+    styleConfig: sections.view.styleConfig,
+    showZoomControl: sections.view.showZoomControl,
+    hasMore: sections.interaction.hasMore,
+    totalRows: sections.data.totalRows,
+    pageSize: sections.interaction.pageSize,
+    autoLoadOnScroll: sections.interaction.autoLoadOnScroll,
+    loadOnMount: sections.interaction.loadOnMount,
+    lazyLoader: sections.interaction.lazyLoader,
+    serverSideModel: sections.interaction.serverSideModel,
+    filterOptionLoader: sections.interaction.filterOptionLoader,
+    events: sections.interaction.events,
+    plugins: sections.interaction.plugins,
   }
 }
