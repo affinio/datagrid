@@ -1250,7 +1250,7 @@ export function createTableViewportController(
 
 			const metaVersionChanged = columnMeta.version !== lastAppliedHorizontalMetaVersion
 			const horizontalUpdateForced =
-				force || pendingScrollLeftRequest != null || measuredScrollLeftFromPending || metaVersionChanged
+				pendingScrollLeftRequest != null || measuredScrollLeftFromPending || metaVersionChanged
 
 			pendingHorizontalSettle = false
 

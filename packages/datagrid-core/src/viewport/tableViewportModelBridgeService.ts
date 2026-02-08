@@ -1,6 +1,11 @@
 import type { UiTableColumn, VisibleRow } from "../types"
 import type { DataGridColumnDef, DataGridColumnModel } from "../models/columnModel"
-import type { DataGridRowModel, DataGridRowNode, DataGridViewportRange } from "../models/rowModel"
+import type {
+  DataGridRowModel,
+  DataGridRowModelSnapshot,
+  DataGridRowNode,
+  DataGridViewportRange,
+} from "../models/rowModel"
 
 const DEFAULT_ROW_ENTRY_CACHE_LIMIT = 1024
 const CORE_COLUMN_KEYS = new Set(["key", "label", "width", "minWidth", "maxWidth", "visible", "pin", "meta"])
@@ -39,6 +44,7 @@ export function createTableViewportModelBridgeService(
   let activeColumnModel: DataGridColumnModel = options.initialColumnModel ?? fallbackColumnModel
   let activeRowModelUnsubscribe: (() => void) | null = null
   let activeColumnModelUnsubscribe: (() => void) | null = null
+  let lastRowModelSnapshot: DataGridRowModelSnapshot<unknown> | null = null
 
   let rowCountCache = 0
   let rowCountCacheDirty = true
@@ -63,8 +69,20 @@ export function createTableViewportModelBridgeService(
     }
     activeRowModelUnsubscribe?.()
     activeRowModel = model
-    activeRowModelUnsubscribe = activeRowModel.subscribe(() => {
-      markRowModelCacheDirty()
+    lastRowModelSnapshot = activeRowModel.getSnapshot()
+    activeRowModelUnsubscribe = activeRowModel.subscribe(snapshot => {
+      const previous = lastRowModelSnapshot
+      lastRowModelSnapshot = snapshot
+      const isViewportOnlyUpdate = Boolean(previous) &&
+        snapshot.rowCount === previous?.rowCount &&
+        snapshot.loading === previous?.loading &&
+        snapshot.error === previous?.error &&
+        snapshot.sortModel === previous?.sortModel &&
+        snapshot.filterModel === previous?.filterModel
+
+      if (!isViewportOnlyUpdate) {
+        markRowModelCacheDirty()
+      }
       onInvalidate()
     })
     markRowModelCacheDirty()
@@ -207,11 +225,17 @@ export function createTableViewportModelBridgeService(
     const resolvedRows: VisibleRow[] = []
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index]
+      const rowIndex = Number.isFinite(row.displayIndex)
+        ? Math.trunc(row.displayIndex as number)
+        : Math.trunc(row.originalIndex)
+      const cached = readRowCache(rowIndex)
+      if (typeof cached !== "undefined") {
+        resolvedRows.push(cached)
+        continue
+      }
+
       const mapped = toVisibleRow(row)
       resolvedRows.push(mapped)
-      const rowIndex = Number.isFinite(mapped.displayIndex)
-        ? Math.trunc(mapped.displayIndex as number)
-        : Math.trunc(mapped.originalIndex)
       if (rowIndex >= start && rowIndex <= end) {
         writeRowCache(rowIndex, mapped)
       }

@@ -461,6 +461,11 @@ export function createTableViewportVirtualization(
       containerHeight,
     } = args
 
+    const prevViewportHeight = lastKnownViewportHeight
+    const prevRowHeight = lastKnownRowHeight
+    const prevTotalRows = lastKnownTotalRows
+    const prevVirtualizationFlag = lastVirtualizationFlag
+
     lastKnownViewportHeight = viewportHeightValue
     lastKnownRowHeight = resolvedRowHeight
     lastKnownTotalRows = totalRows
@@ -522,14 +527,25 @@ export function createTableViewportVirtualization(
 
     let overscan = 0
     if (virtualizationFlag) {
-      const overscanResult = verticalOverscanController.update({
-        timestamp: nowTs,
-        delta: deltaTop,
-        viewportSize: viewportHeightValue,
-        itemSize: resolvedRowHeight,
-        virtualizationEnabled: true,
-      })
-      overscan = overscanResult.overscan
+      const canReuseOverscan =
+        deltaTop === 0 &&
+        prevViewportHeight === viewportHeightValue &&
+        prevRowHeight === resolvedRowHeight &&
+        prevTotalRows === totalRows &&
+        prevVirtualizationFlag === virtualizationFlag
+
+      if (canReuseOverscan) {
+        overscan = verticalOverscanController.getState().lastOverscan
+      } else {
+        const overscanResult = verticalOverscanController.update({
+          timestamp: nowTs,
+          delta: deltaTop,
+          viewportSize: viewportHeightValue,
+          itemSize: resolvedRowHeight,
+          virtualizationEnabled: true,
+        })
+        overscan = overscanResult.overscan
+      }
     } else {
       verticalOverscanController.reset(nowTs)
     }

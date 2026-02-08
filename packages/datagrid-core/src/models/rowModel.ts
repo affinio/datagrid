@@ -115,7 +115,7 @@ export interface DataGridLegacyVisibleRow<T = unknown> {
   state?: Partial<DataGridRowNodeState>
 }
 
-export type DataGridRowNodeInput<T = unknown> = DataGridRowNode<T> | DataGridLegacyVisibleRow<T>
+export type DataGridRowNodeInput<T = unknown> = DataGridRowNode<T> | DataGridLegacyVisibleRow<T> | T
 
 function isDataGridRowId(value: unknown): value is DataGridRowId {
   return typeof value === "string" || typeof value === "number"
@@ -172,7 +172,10 @@ function resolveRowData<T>(node: DataGridRowNodeInput<T>): T {
   if (typeof rowNode.data !== "undefined") {
     return rowNode.data
   }
-  return (node as DataGridLegacyVisibleRow<T>).row
+  if (typeof (node as DataGridLegacyVisibleRow<T>).row !== "undefined") {
+    return (node as DataGridLegacyVisibleRow<T>).row
+  }
+  return node as T
 }
 
 function resolveRowKey<T>(node: DataGridRowNodeInput<T>): DataGridRowId {
@@ -204,7 +207,10 @@ export function withResolvedRowIdentity<T>(
   }
   const rowData = resolveRowData(node)
   const rowId = assertDataGridRowId(resolveRowId(rowData, index), "Invalid row id returned by resolver")
-  return { ...node, rowId }
+  if (typeof node === "object" && node !== null) {
+    return { ...(node as object), rowId } as DataGridRowNodeInput<T>
+  }
+  return { row: rowData, rowId } as DataGridRowNodeInput<T>
 }
 
 export function normalizeRowNode<T>(
