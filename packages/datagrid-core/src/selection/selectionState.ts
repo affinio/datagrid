@@ -67,6 +67,37 @@ export interface GridSelectionContext<TRowKey = unknown> {
   getRowIdByIndex?: (rowIndex: number) => TRowKey | null
 }
 
+export interface GridSelectionFlattenedRow<TRowKey = unknown> {
+  rowId: TRowKey | null
+}
+
+export interface CreateGridSelectionContextFromFlattenedRowsOptions<TRowKey = unknown> {
+  rows: readonly GridSelectionFlattenedRow<TRowKey>[]
+  colCount: number
+}
+
+export function createGridSelectionContextFromFlattenedRows<TRowKey = unknown>(
+  options: CreateGridSelectionContextFromFlattenedRowsOptions<TRowKey>,
+): GridSelectionContext<TRowKey> {
+  const flattenedRows = Array.isArray(options.rows) ? options.rows : []
+  const rowCount = flattenedRows.length
+  const colCount = Number.isFinite(options.colCount) ? Math.max(0, Math.trunc(options.colCount)) : 0
+
+  return {
+    grid: {
+      rowCount,
+      colCount,
+    },
+    getRowIdByIndex(rowIndex: number) {
+      const normalizedIndex = Number.isFinite(rowIndex) ? Math.trunc(rowIndex) : -1
+      if (normalizedIndex < 0 || normalizedIndex >= rowCount) {
+        return null
+      }
+      return flattenedRows[normalizedIndex]?.rowId ?? null
+    },
+  }
+}
+
 export function clampGridSelectionPoint<TRowKey = unknown>(
   point: GridSelectionPointLike<TRowKey>,
   context: GridSelectionContext<TRowKey>,

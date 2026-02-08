@@ -41,7 +41,9 @@ export {
 
 export {
   createDataGridTransactionService,
+  type DataGridTransactionAffectedRange,
   type DataGridTransactionCommand,
+  type DataGridTransactionMeta,
   type DataGridTransactionInput,
   type DataGridTransactionSnapshot,
   type DataGridTransactionPendingBatchSnapshot,
@@ -53,6 +55,7 @@ export {
   type DataGridTransactionAppliedEvent,
   type DataGridTransactionRolledBackEvent,
   type DataGridTransactionHistoryEvent,
+  type DataGridTransactionEventEntry,
   type DataGridTransactionListener,
   type CreateDataGridTransactionServiceOptions,
 } from "./core/transactionService.js"

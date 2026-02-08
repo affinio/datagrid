@@ -1,5 +1,10 @@
 import type { DataGridColumn, VisibleRow } from "../types"
 import type { DataGridColumnDef, DataGridColumnModel } from "../models/columnModel"
+import {
+  isSameGroupExpansionSnapshot,
+  isSameGroupBySpec,
+  type DataGridGroupBySpec,
+} from "../models/rowModel"
 import type {
   DataGridRowModel,
   DataGridRowModelSnapshot,
@@ -168,6 +173,20 @@ function areFilterModelsEqual(
   return true
 }
 
+function areGroupBySpecsEqual(
+  left: DataGridGroupBySpec | null | undefined,
+  right: DataGridGroupBySpec | null | undefined,
+): boolean {
+  return isSameGroupBySpec(left, right)
+}
+
+function areGroupExpansionSnapshotsEqual(
+  left: DataGridRowModelSnapshot<unknown>["groupExpansion"] | null | undefined,
+  right: DataGridRowModelSnapshot<unknown>["groupExpansion"] | null | undefined,
+): boolean {
+  return isSameGroupExpansionSnapshot(left, right)
+}
+
 export interface DataGridViewportModelBridgeServiceOptions {
   initialRowModel?: DataGridRowModel<unknown> | null
   initialColumnModel?: DataGridColumnModel | null
@@ -246,7 +265,9 @@ export function createDataGridViewportModelBridgeService(
         snapshot.loading === previous?.loading &&
         snapshot.error === previous?.error &&
         areSortModelsEqual(snapshot.sortModel, previous?.sortModel) &&
-        areFilterModelsEqual(snapshot.filterModel, previous?.filterModel)
+        areFilterModelsEqual(snapshot.filterModel, previous?.filterModel) &&
+        areGroupBySpecsEqual(snapshot.groupBy, previous?.groupBy) &&
+        areGroupExpansionSnapshotsEqual(snapshot.groupExpansion, previous?.groupExpansion)
 
       if (!isViewportOnlyUpdate) {
         markRowModelCacheDirty()

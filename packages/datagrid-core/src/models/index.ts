@@ -2,7 +2,12 @@ export type {
   DataGridAdvancedFilter,
   DataGridFilterClause,
   DataGridFilterSnapshot,
+  DataGridGroupExpansionSnapshot,
+  DataGridGroupBySpec,
   DataGridLegacyVisibleRow,
+  DataGridRowGroupMeta,
+  DataGridRowKind,
+  DataGridRowRenderMeta,
   DataGridRowNode,
   DataGridRowNodeInput,
   DataGridRowNodeState,
@@ -18,7 +23,18 @@ export type {
   DataGridSortState,
   DataGridViewportRange,
 } from "./rowModel.js"
-export { normalizeRowNode, normalizeViewportRange, withResolvedRowIdentity } from "./rowModel.js"
+export {
+  buildGroupExpansionSnapshot,
+  isDataGridGroupRowNode,
+  isDataGridLeafRowNode,
+  getDataGridRowRenderMeta,
+  isGroupExpanded,
+  isSameGroupExpansionSnapshot,
+  toggleGroupExpansionKey,
+  normalizeRowNode,
+  normalizeViewportRange,
+  withResolvedRowIdentity,
+} from "./rowModel.js"
 
 export type {
   ClientRowModel,

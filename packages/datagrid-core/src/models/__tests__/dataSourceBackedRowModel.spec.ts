@@ -50,6 +50,11 @@ describe("createDataSourceBackedRowModel", () => {
     expect(calls[0]?.request.signal.aborted).toBe(true)
     expect(calls[1]?.request.signal.aborted).toBe(true)
     expect(calls[2]?.request.signal.aborted).toBe(false)
+    expect(calls[2]?.request.groupBy).toBeNull()
+    expect(calls[2]?.request.groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
 
     calls[2]?.resolve({
       rows: Array.from({ length: 21 }, (_, offset) => {
@@ -71,6 +76,64 @@ describe("createDataSourceBackedRowModel", () => {
     expect(diagnostics.pullRequested).toBe(3)
     expect(diagnostics.pullAborted).toBeGreaterThanOrEqual(2)
     expect(diagnostics.pullCompleted).toBe(1)
+
+    model.dispose()
+  })
+
+  it("propagates group-by state into pull request and issues group-change pull", async () => {
+    const calls: PullCall[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          const call: PullCall = {
+            request,
+            resolve,
+            reject,
+          }
+          calls.push(call)
+          request.signal.addEventListener("abort", () => {
+            reject({ name: "AbortError" })
+          })
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 1_000,
+    })
+
+    model.setViewportRange({ start: 10, end: 20 })
+    calls[0]?.resolve({
+      rows: Array.from({ length: 11 }, (_, offset) => {
+        const index = 10 + offset
+        return {
+          index,
+          row: { id: index, value: `row-${index}` },
+        }
+      }),
+      total: 1_000,
+    })
+    await flushMicrotasks()
+
+    model.setGroupBy({ fields: ["value"], expandedByDefault: true })
+    expect(calls[calls.length - 1]?.request.reason).toBe("group-change")
+    expect(calls[calls.length - 1]?.request.groupBy).toEqual({
+      fields: ["value"],
+      expandedByDefault: true,
+    })
+    expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: [],
+    })
+
+    model.toggleGroup("value=row-10")
+    expect(calls[calls.length - 1]?.request.reason).toBe("group-change")
+    expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: ["value=row-10"],
+    })
 
     model.dispose()
   })

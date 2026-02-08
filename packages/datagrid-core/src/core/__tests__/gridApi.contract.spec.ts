@@ -48,6 +48,8 @@ describe("data grid api facade contracts", () => {
 
     api.setSortModel([{ key: "id", direction: "asc" }])
     api.setFilterModel({ columnFilters: { name: ["alpha"] }, advancedFilters: {} })
+    api.setGroupBy({ fields: ["name"], expandedByDefault: true })
+    api.toggleGroup("name=alpha")
     api.setViewportRange({ start: 0, end: 1 })
     api.setColumnVisibility("id", false)
     api.setColumnWidth("name", 280)
@@ -62,6 +64,14 @@ describe("data grid api facade contracts", () => {
     expect(rowSnapshot.filterModel).toEqual({
       columnFilters: { name: ["alpha"] },
       advancedFilters: {},
+    })
+    expect(rowSnapshot.groupBy).toEqual({
+      fields: ["name"],
+      expandedByDefault: true,
+    })
+    expect(rowSnapshot.groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: ["name=alpha"],
     })
     expect(rowSnapshot.viewportRange).toEqual({ start: 0, end: 1 })
     expect(viewportRange).toEqual({ start: 0, end: 1 })

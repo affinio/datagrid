@@ -5,6 +5,7 @@ import type {
   DataGridColumnPin,
   DataGridColumnSnapshot,
   DataGridFilterSnapshot,
+  DataGridGroupBySpec,
   DataGridRowModel,
   DataGridRowModelRefreshReason,
   DataGridRowModelSnapshot,
@@ -43,6 +44,8 @@ export interface DataGridApi {
   setViewportRange(range: DataGridViewportRange): void
   setSortModel(sortModel: readonly DataGridSortState[]): void
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
+  setGroupBy(groupBy: DataGridGroupBySpec | null): void
+  toggleGroup(groupKey: string): void
   refreshRows(reason?: DataGridRowModelRefreshReason): Promise<void> | void
   getColumnModelSnapshot(): DataGridColumnModelSnapshot
   getColumn(key: string): DataGridColumnSnapshot | undefined
@@ -220,6 +223,12 @@ export function createDataGridApi(options: CreateDataGridApiOptions): DataGridAp
     },
     setFilterModel(filterModel: DataGridFilterSnapshot | null) {
       rowModel.setFilterModel(filterModel)
+    },
+    setGroupBy(groupBy: DataGridGroupBySpec | null) {
+      rowModel.setGroupBy(groupBy)
+    },
+    toggleGroup(groupKey: string) {
+      rowModel.toggleGroup(groupKey)
     },
     refreshRows(reason?: DataGridRowModelRefreshReason) {
       return rowModel.refresh(reason)

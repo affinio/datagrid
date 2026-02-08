@@ -152,4 +152,88 @@ describe("transaction service contracts", () => {
       "redo:tx-2:0:2",
     ])
   })
+
+  it("caps undo history depth while preserving deterministic apply/undo order", async () => {
+    const state: Record<string, number> = { score: 0 }
+    const events: string[] = []
+    const service = createDataGridTransactionService({
+      execute: createCounterExecutor(state, events),
+      maxHistoryDepth: 2,
+    })
+
+    await service.applyTransaction({
+      id: "tx-1",
+      commands: [{ type: "set", payload: { key: "score", value: 1 }, rollbackPayload: { key: "score", value: 0 } }],
+    })
+    await service.applyTransaction({
+      id: "tx-2",
+      commands: [{ type: "set", payload: { key: "score", value: 2 }, rollbackPayload: { key: "score", value: 1 } }],
+    })
+    await service.applyTransaction({
+      id: "tx-3",
+      commands: [{ type: "set", payload: { key: "score", value: 3 }, rollbackPayload: { key: "score", value: 2 } }],
+    })
+
+    expect(state.score).toBe(3)
+    expect(service.getSnapshot().undoDepth).toBe(2)
+
+    await service.undo()
+    expect(state.score).toBe(2)
+    await service.undo()
+    expect(state.score).toBe(1)
+    await expect(service.undo()).resolves.toBeNull()
+    expect(state.score).toBe(1)
+
+    expect(events).toEqual([
+      "apply:tx-1:0:1",
+      "apply:tx-2:0:2",
+      "apply:tx-3:0:3",
+      "undo:tx-3:0:2",
+      "undo:tx-2:0:1",
+    ])
+  })
+
+  it("propagates normalized intent metadata for transaction and command events", async () => {
+    const state: Record<string, number> = { score: 0 }
+    const eventTransactions: Array<readonly string[]> = []
+    const eventIntents: Array<string | undefined> = []
+    const eventRanges: Array<string | null> = []
+
+    const service = createDataGridTransactionService({
+      execute: createCounterExecutor(state, []),
+      onApplied(event) {
+        eventTransactions.push(event.transactions.map(entry => entry.id))
+        const transactionMeta = event.transactions[0]?.meta
+        eventIntents.push(transactionMeta?.intent)
+        const range = transactionMeta?.affectedRange ?? null
+        eventRanges.push(range ? `${range.startRow}:${range.endRow}:${range.startColumn}:${range.endColumn}` : null)
+      },
+    })
+
+    await service.applyTransaction({
+      id: "tx-meta",
+      label: "Paste range",
+      meta: {
+        intent: "  paste  ",
+        affectedRange: {
+          startRow: 4,
+          endRow: 2,
+          startColumn: 7,
+          endColumn: 5,
+        },
+      },
+      commands: [
+        {
+          type: "set",
+          payload: { key: "score", value: 1 },
+          rollbackPayload: { key: "score", value: 0 },
+          meta: { intent: "paste" },
+        },
+      ],
+    })
+
+    expect(eventTransactions).toEqual([["tx-meta"]])
+    expect(eventIntents).toEqual(["paste"])
+    expect(eventRanges).toEqual(["2:4:5:7"])
+  })
 })

@@ -60,6 +60,33 @@ describe("createServerBackedRowModel", () => {
     expect(node?.sourceIndex).toBe(2)
     expect(node?.displayIndex).toBe(2)
     expect(node?.state.pinned).toBe("none")
+    expect(model.getSnapshot().groupBy).toBeNull()
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
+    model.dispose()
+  })
+
+  it("tracks group expansion toggles in snapshot", () => {
+    const { source } = createSource(10)
+    const model = createServerBackedRowModel({
+      source,
+      initialGroupBy: { fields: ["id"], expandedByDefault: false },
+    })
+
+    model.toggleGroup("id=1")
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: ["id=1"],
+    })
+
+    model.toggleGroup("id=1")
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
+
     model.dispose()
   })
 

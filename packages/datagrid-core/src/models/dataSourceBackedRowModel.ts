@@ -1,7 +1,13 @@
 import {
+  buildGroupExpansionSnapshot,
+  cloneGroupBySpec,
+  isSameGroupBySpec,
+  normalizeGroupBySpec,
   normalizeRowNode,
   normalizeViewportRange,
+  toggleGroupExpansionKey,
   type DataGridFilterSnapshot,
+  type DataGridGroupBySpec,
   type DataGridRowId,
   type DataGridRowNode,
   type DataGridRowIdResolver,
@@ -27,6 +33,7 @@ export interface CreateDataSourceBackedRowModelOptions<T = unknown> {
   resolveRowId?: DataGridRowIdResolver<T>
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
+  initialGroupBy?: DataGridGroupBySpec | null
   initialTotal?: number
   rowCacheLimit?: number
 }
@@ -80,6 +87,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
   const resolveRowId = options.resolveRowId
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
   let filterModel: DataGridFilterSnapshot | null = options.initialFilterModel ?? null
+  let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
+  const toggledGroupKeys = new Set<string>()
   let rowCount = Math.max(0, Math.trunc(options.initialTotal ?? 0))
   let loading = false
   let error: Error | null = null
@@ -163,6 +172,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
       viewportRange: normalizeViewportRange(viewportRange, rowCount),
       sortModel,
       filterModel,
+      groupBy: cloneGroupBySpec(groupBy),
+      groupExpansion: buildGroupExpansionSnapshot(groupBy, toggledGroupKeys),
     }
   }
 
@@ -294,6 +305,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
         signal: controller.signal,
         sortModel,
         filterModel,
+        groupBy: cloneGroupBySpec(groupBy),
+        groupExpansion: buildGroupExpansionSnapshot(groupBy, toggledGroupKeys),
       })
 
       if (disposed || !inFlight || inFlight.requestId !== requestId || controller.signal.aborted) {
@@ -448,6 +461,30 @@ export function createDataSourceBackedRowModel<T = unknown>(
       filterModel = nextFilterModel ?? null
       clearAll()
       void pullRange(viewportRange, "filter-change", "critical")
+      emit()
+    },
+    setGroupBy(nextGroupBy) {
+      ensureActive()
+      const normalized = normalizeGroupBySpec(nextGroupBy)
+      if (isSameGroupBySpec(groupBy, normalized)) {
+        return
+      }
+      groupBy = normalized
+      toggledGroupKeys.clear()
+      clearAll()
+      void pullRange(viewportRange, "group-change", "critical")
+      emit()
+    },
+    toggleGroup(groupKey: string) {
+      ensureActive()
+      if (!groupBy) {
+        return
+      }
+      if (!toggleGroupExpansionKey(toggledGroupKeys, groupKey)) {
+        return
+      }
+      clearAll()
+      void pullRange(viewportRange, "group-change", "critical")
       emit()
     },
     async refresh(reason?: DataGridRowModelRefreshReason) {

@@ -58,6 +58,7 @@ describe("createClientRowModel", () => {
   it("normalizes both legacy and canonical row-node inputs", () => {
     const rows: DataGridRowNodeInput<{ id: number }>[] = [
       {
+        kind: "leaf",
         data: { id: 10 },
         row: { id: 10 },
         rowKey: "a",
@@ -131,11 +132,13 @@ describe("createClientRowModel", () => {
       columnFilters: { id: ["1"] },
       advancedFilters: {},
     })
+    model.setGroupBy({ fields: ["id"], expandedByDefault: true })
 
     const snapshot = model.getSnapshot()
     const snapshotSort = [...snapshot.sortModel]
     snapshotSort[0] = { key: "id", direction: "desc" }
     ;(snapshot.filterModel?.columnFilters.id ?? []).push("2")
+    ;(snapshot.groupBy?.fields ?? []).push("owner")
 
     const nextSnapshot = model.getSnapshot()
     expect(nextSnapshot.sortModel).toEqual([{ key: "id", direction: "asc" }])
@@ -143,6 +146,75 @@ describe("createClientRowModel", () => {
       columnFilters: { id: ["1"] },
       advancedFilters: {},
     })
+    expect(nextSnapshot.groupBy).toEqual({ fields: ["id"], expandedByDefault: true })
+    expect(nextSnapshot.groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: [],
+    })
+
+    model.dispose()
+  })
+
+  it("normalizes and toggles group by state through row model API", () => {
+    const model = createClientRowModel({
+      rows: buildRows(3),
+    })
+
+    model.setGroupBy({ fields: ["", " owner ", "owner"], expandedByDefault: false })
+    expect(model.getSnapshot().groupBy).toEqual({
+      fields: ["owner"],
+      expandedByDefault: false,
+    })
+    model.toggleGroup("owner=alice")
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: ["owner=alice"],
+    })
+
+    model.setGroupBy({ fields: [] })
+    expect(model.getSnapshot().groupBy).toBeNull()
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
+
+    model.dispose()
+  })
+
+  it("applies deterministic projection order: filter -> sort -> group -> flatten", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 3, team: "A", score: 30 }, rowId: "r3", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 1, team: "B", score: 10 }, rowId: "r1", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setFilterModel({
+      columnFilters: { team: ["A"] },
+      advancedFilters: {},
+    })
+    model.setSortModel([{ key: "id", direction: "desc" }])
+    model.setGroupBy({ fields: ["team"], expandedByDefault: true })
+
+    const first = model.getRowsInRange({ start: 0, end: 4 })
+    expect(first).toHaveLength(3)
+    expect(first[0]?.kind).toBe("group")
+    expect(first[0]?.groupMeta?.groupField).toBe("team")
+    expect(first[0]?.groupMeta?.groupValue).toBe("A")
+    expect(first[1]?.kind).toBe("leaf")
+    expect((first[1]?.row as { id?: number })?.id).toBe(3)
+    expect((first[2]?.row as { id?: number })?.id).toBe(2)
+    expect(first[0]?.displayIndex).toBe(0)
+    expect(first[1]?.displayIndex).toBe(1)
+    expect(first[2]?.displayIndex).toBe(2)
+
+    const groupKey = String(first[0]?.groupMeta?.groupKey ?? "")
+    model.toggleGroup(groupKey)
+    const collapsed = model.getRowsInRange({ start: 0, end: 4 })
+    expect(collapsed).toHaveLength(1)
+    expect(collapsed[0]?.kind).toBe("group")
+    expect(collapsed[0]?.state.expanded).toBe(false)
 
     model.dispose()
   })

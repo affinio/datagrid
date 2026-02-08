@@ -45,6 +45,7 @@ function runRowProgram(): {
   model.setViewportRange({ start: 1, end: 3 })
   model.setSortModel(sortModel)
   model.setFilterModel(filterModel)
+  model.setGroupBy({ fields: ["value"], expandedByDefault: true })
   model.refresh("manual")
   model.setRows([
     ...rows,

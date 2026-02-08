@@ -65,6 +65,10 @@ describe("table viewport model bridge service", () => {
     bridge.getRow(0)
     expect(rowCalls).toEqual([0, 0])
 
+    rowModel.setGroupBy({ fields: ["value"], expandedByDefault: true })
+    bridge.getRow(0)
+    expect(rowCalls).toEqual([0, 0, 0])
+
     bridge.dispose()
     rowModel.dispose()
     columnModel.dispose()
@@ -168,6 +172,7 @@ describe("table viewport model bridge service", () => {
     const rowModel = createClientRowModel({
       rows: [
         {
+          kind: "leaf",
           data: { id: 1, value: "alpha" },
           row: { id: 1, value: "alpha" },
           rowKey: "alpha",
@@ -178,6 +183,7 @@ describe("table viewport model bridge service", () => {
           state: { selected: false, group: false, pinned: "top", expanded: false },
         },
         {
+          kind: "leaf",
           data: { id: 2, value: "bravo" },
           row: { id: 2, value: "bravo" },
           rowKey: "bravo",
@@ -220,6 +226,7 @@ describe("table viewport model bridge service", () => {
 
   it("ignores non-canonical sticky fields and maps only pinned state", () => {
     const rowNode = {
+      kind: "leaf",
       data: { id: 1, value: "alpha" },
       row: { id: 1, value: "alpha" },
       rowKey: "alpha",
@@ -241,6 +248,11 @@ describe("table viewport model bridge service", () => {
         viewportRange: { start: 0, end: 0 },
         sortModel: [],
         filterModel: null,
+        groupBy: null,
+        groupExpansion: {
+          expandedByDefault: false,
+          toggledGroupKeys: [],
+        },
       }),
       getRowCount: () => 1,
       getRow: () => rowNode,
@@ -248,6 +260,8 @@ describe("table viewport model bridge service", () => {
       setViewportRange: () => {},
       setSortModel: () => {},
       setFilterModel: () => {},
+      setGroupBy: () => {},
+      toggleGroup: () => {},
       refresh: () => {},
       subscribe: () => () => {},
       dispose: () => {},

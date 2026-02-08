@@ -1,10 +1,16 @@
 import type { ServerRowModel } from "../serverRowModel/serverRowModel"
 import {
+  buildGroupExpansionSnapshot,
+  cloneGroupBySpec,
+  isSameGroupBySpec,
   normalizeRowNode,
+  normalizeGroupBySpec,
   normalizeViewportRange,
+  toggleGroupExpansionKey,
   type DataGridRowId,
   type DataGridRowIdResolver,
   type DataGridFilterSnapshot,
+  type DataGridGroupBySpec,
   type DataGridRowNode,
   type DataGridRowModel,
   type DataGridRowModelListener,
@@ -19,6 +25,7 @@ export interface CreateServerBackedRowModelOptions<T> {
   resolveRowId?: DataGridRowIdResolver<T>
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
+  initialGroupBy?: DataGridGroupBySpec | null
 }
 
 export interface ServerBackedRowModel<T> extends DataGridRowModel<T> {
@@ -42,6 +49,8 @@ export function createServerBackedRowModel<T>(
   })
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
   let filterModel: DataGridFilterSnapshot | null = options.initialFilterModel ?? null
+  let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
+  const toggledGroupKeys = new Set<string>()
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, source.getRowCount())
   let disposed = false
   let cacheRevision = 0
@@ -67,6 +76,8 @@ export function createServerBackedRowModel<T>(
       viewportRange,
       sortModel,
       filterModel,
+      groupBy: cloneGroupBySpec(groupBy),
+      groupExpansion: buildGroupExpansionSnapshot(groupBy, toggledGroupKeys),
     }
   }
 
@@ -191,6 +202,28 @@ export function createServerBackedRowModel<T>(
     setFilterModel(nextFilterModel) {
       ensureActive()
       filterModel = nextFilterModel ?? null
+      invalidateCaches()
+      emit()
+    },
+    setGroupBy(nextGroupBy) {
+      ensureActive()
+      const normalized = normalizeGroupBySpec(nextGroupBy)
+      if (isSameGroupBySpec(groupBy, normalized)) {
+        return
+      }
+      groupBy = normalized
+      toggledGroupKeys.clear()
+      invalidateCaches()
+      emit()
+    },
+    toggleGroup(groupKey: string) {
+      ensureActive()
+      if (!groupBy) {
+        return
+      }
+      if (!toggleGroupExpansionKey(toggledGroupKeys, groupKey)) {
+        return
+      }
       invalidateCaches()
       emit()
     },

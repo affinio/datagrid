@@ -68,7 +68,12 @@ export {
   type DataGridAdvancedFilter,
   type DataGridFilterClause,
   type DataGridFilterSnapshot,
+  type DataGridGroupExpansionSnapshot,
+  type DataGridGroupBySpec,
   type DataGridLegacyVisibleRow,
+  type DataGridRowGroupMeta,
+  type DataGridRowKind,
+  type DataGridRowRenderMeta,
   type DataGridRowNode,
   type DataGridRowNodeInput,
   type DataGridRowNodeState,
@@ -87,6 +92,7 @@ export {
   type CreateClientRowModelOptions,
   type ServerBackedRowModel,
   type CreateServerBackedRowModelOptions,
+  getDataGridRowRenderMeta,
 } from "./models/index.js"
 
 export {

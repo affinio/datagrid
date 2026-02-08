@@ -1,5 +1,7 @@
 import type {
   DataGridFilterSnapshot,
+  DataGridGroupExpansionSnapshot,
+  DataGridGroupBySpec,
   DataGridRowId,
   DataGridRowNodeState,
   DataGridSortState,
@@ -14,6 +16,7 @@ export type DataGridDataSourcePullReason =
   | "refresh"
   | "sort-change"
   | "filter-change"
+  | "group-change"
   | "invalidation"
   | "push-invalidation"
 
@@ -24,6 +27,8 @@ export interface DataGridDataSourcePullRequest {
   signal: AbortSignal
   sortModel: readonly DataGridSortState[]
   filterModel: DataGridFilterSnapshot | null
+  groupBy: DataGridGroupBySpec | null
+  groupExpansion: DataGridGroupExpansionSnapshot
 }
 
 export interface DataGridDataSourceRowEntry<T = unknown> {

@@ -1,14 +1,28 @@
 export type DataGridTransactionDirection = "apply" | "rollback" | "undo" | "redo"
 
+export interface DataGridTransactionAffectedRange {
+  startRow: number
+  endRow: number
+  startColumn: number
+  endColumn: number
+}
+
+export interface DataGridTransactionMeta {
+  intent?: string
+  affectedRange?: DataGridTransactionAffectedRange | null
+}
+
 export interface DataGridTransactionCommand {
   type: string
   payload: unknown
   rollbackPayload: unknown
+  meta?: DataGridTransactionMeta | null
 }
 
 export interface DataGridTransactionInput {
   id?: string
   label?: string
+  meta?: DataGridTransactionMeta | null
   commands: readonly DataGridTransactionCommand[]
 }
 
@@ -43,12 +57,14 @@ export interface DataGridTransactionAppliedEvent {
   committedId: string
   batchId: string | null
   transactionIds: readonly string[]
+  transactions: readonly DataGridTransactionEventEntry[]
 }
 
 export interface DataGridTransactionRolledBackEvent {
   committedId: string
   batchId: string | null
   transactionIds: readonly string[]
+  transactions: readonly DataGridTransactionEventEntry[]
   error: unknown
 }
 
@@ -56,6 +72,7 @@ export interface DataGridTransactionHistoryEvent {
   committedId: string
   batchId: string | null
   transactionIds: readonly string[]
+  transactions: readonly DataGridTransactionEventEntry[]
 }
 
 export interface DataGridTransactionServiceHooks {
@@ -67,6 +84,7 @@ export interface DataGridTransactionServiceHooks {
 
 export interface CreateDataGridTransactionServiceOptions extends DataGridTransactionServiceHooks {
   execute: DataGridTransactionExecutor
+  maxHistoryDepth?: number
 }
 
 export type DataGridTransactionListener = (snapshot: DataGridTransactionSnapshot) => void
@@ -88,7 +106,14 @@ export interface DataGridTransactionService {
 interface DataGridNormalizedTransaction {
   id: string
   label: string | null
+  meta: DataGridTransactionMeta | null
   commands: readonly DataGridTransactionCommand[]
+}
+
+export interface DataGridTransactionEventEntry {
+  id: string
+  label: string | null
+  meta: DataGridTransactionMeta | null
 }
 
 interface DataGridCommittedBatch {
@@ -134,6 +159,77 @@ function normalizeCommand(command: DataGridTransactionCommand): DataGridTransact
     type: command.type,
     payload: command.payload,
     rollbackPayload: command.rollbackPayload,
+    meta: cloneTransactionMeta(command.meta),
+  }
+}
+
+function normalizeIntent(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined
+  }
+  const normalized = value.trim()
+  return normalized.length > 0 ? normalized : undefined
+}
+
+function normalizeIndex(value: unknown): number | null {
+  if (!Number.isFinite(value)) {
+    return null
+  }
+  return Math.max(0, Math.trunc(value as number))
+}
+
+function normalizeAffectedRange(value: unknown): DataGridTransactionAffectedRange | null {
+  if (!value || typeof value !== "object") {
+    return null
+  }
+  const range = value as Partial<DataGridTransactionAffectedRange>
+  const startRow = normalizeIndex(range.startRow)
+  const endRow = normalizeIndex(range.endRow)
+  const startColumn = normalizeIndex(range.startColumn)
+  const endColumn = normalizeIndex(range.endColumn)
+  if (startRow === null || endRow === null || startColumn === null || endColumn === null) {
+    return null
+  }
+  return {
+    startRow: Math.min(startRow, endRow),
+    endRow: Math.max(startRow, endRow),
+    startColumn: Math.min(startColumn, endColumn),
+    endColumn: Math.max(startColumn, endColumn),
+  }
+}
+
+function normalizeTransactionMeta(meta: DataGridTransactionMeta | null | undefined): DataGridTransactionMeta | null {
+  if (!meta || typeof meta !== "object") {
+    return null
+  }
+  const intent = normalizeIntent(meta.intent)
+  const affectedRange = normalizeAffectedRange(meta.affectedRange)
+  if (!intent && !affectedRange) {
+    return null
+  }
+  return {
+    ...(intent ? { intent } : {}),
+    ...(affectedRange ? { affectedRange } : {}),
+  }
+}
+
+function cloneTransactionMeta(meta: DataGridTransactionMeta | null | undefined): DataGridTransactionMeta | null {
+  const normalized = normalizeTransactionMeta(meta)
+  if (!normalized) {
+    return null
+  }
+  return {
+    ...(normalized.intent ? { intent: normalized.intent } : {}),
+    ...(normalized.affectedRange
+      ? {
+          affectedRange: {
+            startRow: normalized.affectedRange.startRow,
+            endRow: normalized.affectedRange.endRow,
+            startColumn: normalized.affectedRange.startColumn,
+            endColumn: normalized.affectedRange.endColumn,
+          },
+        }
+      : {}),
   }
 }
 
@@ -141,6 +237,14 @@ function createError(message: string, cause: unknown): Error {
   const error = new Error(message)
   ;(error as Error & { cause?: unknown }).cause = cause
   return error
+}
+
+function normalizeHistoryDepth(value: number | undefined): number {
+  if (!Number.isFinite(value)) {
+    return Number.POSITIVE_INFINITY
+  }
+  const normalized = Math.max(0, Math.trunc(value as number))
+  return normalized
 }
 
 export function createDataGridTransactionService(
@@ -154,6 +258,7 @@ export function createDataGridTransactionService(
   const undoStack: DataGridCommittedBatch[] = []
   const redoStack: DataGridCommittedBatch[] = []
   const execute = options.execute
+  const maxHistoryDepth = normalizeHistoryDepth(options.maxHistoryDepth)
 
   let disposed = false
   let revision = 0
@@ -213,6 +318,7 @@ export function createDataGridTransactionService(
     return {
       id: transactionId,
       label: normalizeLabel(input.label),
+      meta: cloneTransactionMeta(input.meta),
       commands: input.commands.map(command => normalizeCommand(command)),
     }
   }
@@ -349,6 +455,7 @@ export function createDataGridTransactionService(
       label,
       transactions: transactions.map(transaction => ({
         ...transaction,
+        meta: cloneTransactionMeta(transaction.meta),
         commands: transaction.commands.map(command => ({ ...command })),
       })),
     }
@@ -356,6 +463,28 @@ export function createDataGridTransactionService(
 
   function transactionIds(batch: DataGridCommittedBatch): readonly string[] {
     return batch.transactions.map(transaction => transaction.id)
+  }
+
+  function transactionEntries(batch: DataGridCommittedBatch): readonly DataGridTransactionEventEntry[] {
+    return batch.transactions.map(transaction => ({
+      id: transaction.id,
+      label: transaction.label,
+      meta: cloneTransactionMeta(transaction.meta),
+    }))
+  }
+
+  function pushUndoBatch(batch: DataGridCommittedBatch) {
+    if (maxHistoryDepth <= 0) {
+      return
+    }
+    undoStack.push(batch)
+    if (undoStack.length <= maxHistoryDepth) {
+      return
+    }
+    const overflow = undoStack.length - maxHistoryDepth
+    if (overflow > 0) {
+      undoStack.splice(0, overflow)
+    }
   }
 
   return {
@@ -408,12 +537,13 @@ export function createDataGridTransactionService(
           committedId: committedBatch.committedId,
           batchId: committedBatch.batchId,
           transactionIds: transactionIds(committedBatch),
+          transactions: transactionEntries(committedBatch),
           error,
         })
         throw error
       }
 
-      undoStack.push(committedBatch)
+      pushUndoBatch(committedBatch)
       redoStack.length = 0
       lastCommittedId = committedBatch.committedId
       bumpRevision()
@@ -421,6 +551,7 @@ export function createDataGridTransactionService(
         committedId: committedBatch.committedId,
         batchId: committedBatch.batchId,
         transactionIds: transactionIds(committedBatch),
+        transactions: transactionEntries(committedBatch),
       })
       return transactionIds(committedBatch)
     },
@@ -456,12 +587,13 @@ export function createDataGridTransactionService(
           committedId: committedBatch.committedId,
           batchId: committedBatch.batchId,
           transactionIds: transactionIds(committedBatch),
+          transactions: transactionEntries(committedBatch),
           error,
         })
         throw error
       }
 
-      undoStack.push(committedBatch)
+      pushUndoBatch(committedBatch)
       redoStack.length = 0
       lastCommittedId = committedBatch.committedId
       bumpRevision()
@@ -469,6 +601,7 @@ export function createDataGridTransactionService(
         committedId: committedBatch.committedId,
         batchId: committedBatch.batchId,
         transactionIds: transactionIds(committedBatch),
+        transactions: transactionEntries(committedBatch),
       })
       return transaction.id
     },
@@ -493,6 +626,7 @@ export function createDataGridTransactionService(
         committedId: committedBatch.committedId,
         batchId: committedBatch.batchId,
         transactionIds: transactionIds(committedBatch),
+        transactions: transactionEntries(committedBatch),
       })
       return committedBatch.committedId
     },
@@ -504,13 +638,14 @@ export function createDataGridTransactionService(
       }
       await applyCommittedBatch(committedBatch, "redo")
       redoStack.pop()
-      undoStack.push(committedBatch)
+      pushUndoBatch(committedBatch)
       lastCommittedId = committedBatch.committedId
       bumpRevision()
       options.onRedone?.({
         committedId: committedBatch.committedId,
         batchId: committedBatch.batchId,
         transactionIds: transactionIds(committedBatch),
+        transactions: transactionEntries(committedBatch),
       })
       return committedBatch.committedId
     },
