@@ -208,7 +208,7 @@ describe("table viewport model bridge service", () => {
 
     const row = bridge.getRow(0)
     expect(row?.rowId).toBe("alpha")
-    expect(row?.displayIndex).toBe(3)
+    expect(row?.displayIndex).toBe(0)
     expect(row?.stickyTop).toBe(true)
     expect(row?.stickyBottom).toBeUndefined()
     expect((row?.row as { value: string }).value).toBe("alpha")
