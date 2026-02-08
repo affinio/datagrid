@@ -1,4 +1,4 @@
-import type { ViewportSyncState, ViewportSyncTargets } from "./tableViewportTypes"
+import type { ViewportSyncState, ViewportSyncTargets } from "./dataGridViewportTypes"
 
 export interface ViewportSyncAdapter {
   getSyncTargets(): ViewportSyncTargets | null

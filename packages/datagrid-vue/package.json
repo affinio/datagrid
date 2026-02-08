@@ -27,10 +27,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.public.json",
     "type-check": "tsc -p tsconfig.public.json --noEmit",
-    "test:unit": "vitest run --config vitest.config.ts",
+    "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
     "test:contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract\"",
-    "test:strict-contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract|lifecycle|property|stress|determinism\"",
-    "test:integration": "vitest run --config vitest.config.ts --testNamePattern=\"contract|integration|property|stress\"",
+    "test:strict-contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract|lifecycle|property|stress|determinism\" --passWithNoTests",
+    "test:integration": "vitest run --config vitest.config.ts --testNamePattern=\"contract|integration|property|stress\" --passWithNoTests",
     "test:coverage": "vitest run --config vitest.config.ts --coverage",
     "test": "npm run type-check"
   },

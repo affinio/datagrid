@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { DataGridColumn, VisibleRow } from "../../types"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
-import { createTableViewportController } from "../tableViewportController"
+import { createDataGridViewportController } from "../dataGridViewportController"
 
 interface MutableElementMetrics {
   clientWidth: number
@@ -86,7 +86,7 @@ describe("horizontal virtualization stress contract", () => {
       scrollHeight: 52,
     })
 
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: column => (column.isSystem ? "left" : column.pin === "left" || column.pin === "right" ? column.pin : "none"),
       rowModel,
       columnModel,
@@ -132,7 +132,7 @@ describe("horizontal virtualization stress contract", () => {
       scrollHeight: 52,
     })
 
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: column => (column.isSystem ? "left" : column.pin === "left" || column.pin === "right" ? column.pin : "none"),
       rowModel,
       columnModel,

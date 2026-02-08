@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
 import type { DataGridColumnDef } from "../../models"
 import type { VisibleRow } from "../../types"
-import { createTableViewportModelBridgeService } from "../tableViewportModelBridgeService"
+import { createDataGridViewportModelBridgeService } from "../dataGridViewportModelBridgeService"
 
 function buildRows(count: number): VisibleRow<{ id: number; value: string }>[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -32,7 +32,7 @@ describe("table viewport model bridge service", () => {
     const onInvalidate = vi.fn()
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
-    const bridge = createTableViewportModelBridgeService({
+    const bridge = createDataGridViewportModelBridgeService({
       initialRowModel: rowModel,
       initialColumnModel: columnModel,
       fallbackRowModel,
@@ -91,7 +91,7 @@ describe("table viewport model bridge service", () => {
     const columnModel = createDataGridColumnModel({ columns })
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
-    const bridge = createTableViewportModelBridgeService({
+    const bridge = createDataGridViewportModelBridgeService({
       initialRowModel: rowModel,
       initialColumnModel: columnModel,
       fallbackRowModel,
@@ -135,7 +135,7 @@ describe("table viewport model bridge service", () => {
     const columnModel = createDataGridColumnModel()
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
-    const bridge = createTableViewportModelBridgeService({
+    const bridge = createDataGridViewportModelBridgeService({
       initialRowModel: rowModel,
       initialColumnModel: columnModel,
       fallbackRowModel,
@@ -192,7 +192,7 @@ describe("table viewport model bridge service", () => {
     const fallbackRowModel = createClientRowModel()
     const columnModel = createDataGridColumnModel()
     const fallbackColumnModel = createDataGridColumnModel()
-    const bridge = createTableViewportModelBridgeService({
+    const bridge = createDataGridViewportModelBridgeService({
       initialRowModel: rowModel,
       initialColumnModel: columnModel,
       fallbackRowModel,
@@ -255,7 +255,7 @@ describe("table viewport model bridge service", () => {
     const columnModel = createDataGridColumnModel()
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
-    const bridge = createTableViewportModelBridgeService({
+    const bridge = createDataGridViewportModelBridgeService({
       initialRowModel: rowModel,
       initialColumnModel: columnModel,
       fallbackRowModel,
@@ -283,7 +283,7 @@ describe("table viewport model bridge service", () => {
     })
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
-    const bridge = createTableViewportModelBridgeService({
+    const bridge = createDataGridViewportModelBridgeService({
       initialRowModel: rowModel,
       initialColumnModel: columnModel,
       fallbackRowModel,
@@ -321,7 +321,7 @@ describe("table viewport model bridge service", () => {
     })
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
-    const bridge = createTableViewportModelBridgeService({
+    const bridge = createDataGridViewportModelBridgeService({
       initialRowModel: rowModel,
       initialColumnModel: columnModel,
       fallbackRowModel,

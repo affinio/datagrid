@@ -1,13 +1,13 @@
 import { applyViewportSyncTransforms, resetViewportSyncTransforms } from "./scrollSync"
-import type { ViewportSyncState, ViewportSyncTargets } from "./tableViewportTypes"
+import type { ViewportSyncState, ViewportSyncTargets } from "./dataGridViewportTypes"
 
-export interface TableViewportRenderSyncServiceOptions {
+export interface DataGridViewportRenderSyncServiceOptions {
   syncState: ViewportSyncState
   resolveNextState: (overrides?: Partial<ViewportSyncState>) => ViewportSyncState
   onTargetsChanged?: (targets: ViewportSyncTargets | null) => void
 }
 
-export interface TableViewportRenderSyncService {
+export interface DataGridViewportRenderSyncService {
   getTargets(): ViewportSyncTargets | null
   getLatestTargets(): ViewportSyncTargets | null
   setTargets(targets: ViewportSyncTargets | null): void
@@ -28,9 +28,9 @@ function alignOverlayRootWithScrollHost(targets: ViewportSyncTargets | null) {
   }
 }
 
-export function createTableViewportRenderSyncService(
-  options: TableViewportRenderSyncServiceOptions,
-): TableViewportRenderSyncService {
+export function createDataGridViewportRenderSyncService(
+  options: DataGridViewportRenderSyncServiceOptions,
+): DataGridViewportRenderSyncService {
   const { syncState, resolveNextState, onTargetsChanged } = options
 
   let targets: ViewportSyncTargets | null = null

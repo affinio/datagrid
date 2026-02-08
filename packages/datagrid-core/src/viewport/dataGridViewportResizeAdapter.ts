@@ -1,16 +1,16 @@
 import type {
-  TableViewportHostEnvironment,
-  TableViewportResizeObserver,
+  DataGridViewportHostEnvironment,
+  DataGridViewportResizeObserver,
 } from "./viewportHostEnvironment"
 
-interface ManagedResizeObserver extends TableViewportResizeObserver {
+interface ManagedResizeObserver extends DataGridViewportResizeObserver {
   disconnect(): void
 }
 
 export function createManagedResizeObserver(
-  hostEnvironment: TableViewportHostEnvironment,
+  hostEnvironment: DataGridViewportHostEnvironment,
   callback: () => void,
-): TableViewportResizeObserver | null {
+): DataGridViewportResizeObserver | null {
   const rawObserver = hostEnvironment.createResizeObserver?.(callback)
   if (!rawObserver) {
     return null

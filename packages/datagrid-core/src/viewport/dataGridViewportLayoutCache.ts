@@ -1,4 +1,4 @@
-import type { TableViewportContainerMetrics, TableViewportHeaderMetrics } from "./viewportHostEnvironment"
+import type { DataGridViewportContainerMetrics, DataGridViewportHeaderMetrics } from "./viewportHostEnvironment"
 
 export interface LayoutViewportRect {
   top: number
@@ -23,8 +23,8 @@ export interface LayoutMeasurementSnapshot {
 
 export interface LayoutMeasurementCache {
   snapshot(): LayoutMeasurementSnapshot
-  updateContainer(metrics: TableViewportContainerMetrics | null, rect: DOMRect | null): void
-  updateHeader(metrics: TableViewportHeaderMetrics | null): void
+  updateContainer(metrics: DataGridViewportContainerMetrics | null, rect: DOMRect | null): void
+  updateHeader(metrics: DataGridViewportHeaderMetrics | null): void
   updateContentDimensions(width: number, height: number): void
   reset(): void
 }

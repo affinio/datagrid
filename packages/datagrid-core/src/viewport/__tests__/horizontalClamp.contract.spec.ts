@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { clampHorizontalOffset } from "../tableViewportHorizontalClamp"
+import { clampHorizontalOffset } from "../dataGridViewportHorizontalClamp"
 
 describe("horizontal clamp contract", () => {
   it("is deterministic and side-effect free for repeated calls", () => {

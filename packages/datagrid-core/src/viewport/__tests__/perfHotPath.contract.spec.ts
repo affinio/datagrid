@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { DataGridColumn, VisibleRow } from "../../types"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
-import { createTableViewportController } from "../tableViewportController"
+import { createDataGridViewportController } from "../dataGridViewportController"
 
 interface MutableElementMetrics {
   clientWidth: number
@@ -84,7 +84,7 @@ describe("viewport perf hot-path contracts", () => {
     })
     const visibleRowsReferences: VisibleRow[][] = []
 
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: () => "none",
       rowModel,
       columnModel,
@@ -137,7 +137,7 @@ describe("viewport perf hot-path contracts", () => {
     })
     let onRowsCalls = 0
 
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: () => "none",
       rowModel,
       columnModel,

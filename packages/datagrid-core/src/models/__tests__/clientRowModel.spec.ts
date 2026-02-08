@@ -120,4 +120,30 @@ describe("createClientRowModel", () => {
     expect(row?.rowId).toBe(42)
     model.dispose()
   })
+
+  it("returns snapshot copies that do not mutate internal state", () => {
+    const model = createClientRowModel({
+      rows: buildRows(5),
+    })
+
+    model.setSortModel([{ key: "id", direction: "asc" }])
+    model.setFilterModel({
+      columnFilters: { id: ["1"] },
+      advancedFilters: {},
+    })
+
+    const snapshot = model.getSnapshot()
+    const snapshotSort = [...snapshot.sortModel]
+    snapshotSort[0] = { key: "id", direction: "desc" }
+    ;(snapshot.filterModel?.columnFilters.id ?? []).push("2")
+
+    const nextSnapshot = model.getSnapshot()
+    expect(nextSnapshot.sortModel).toEqual([{ key: "id", direction: "asc" }])
+    expect(nextSnapshot.filterModel).toEqual({
+      columnFilters: { id: ["1"] },
+      advancedFilters: {},
+    })
+
+    model.dispose()
+  })
 })

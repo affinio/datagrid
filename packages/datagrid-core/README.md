@@ -89,7 +89,7 @@ Core helpers in `src/selection/coordinateSpace.ts` are the canonical conversion 
 ## Horizontal Virtualization Contract
 
 Horizontal virtualization now uses a deterministic clamp/update path:
-- clamp calculation is centralized in `src/viewport/tableViewportHorizontalClamp.ts`
+- clamp calculation is centralized in `src/viewport/dataGridViewportHorizontalClamp.ts`
 - prepare phase is pure (no mutation of input meta)
 - stress coverage includes `100k` rows and `500+` columns with pinned left/right mix
 

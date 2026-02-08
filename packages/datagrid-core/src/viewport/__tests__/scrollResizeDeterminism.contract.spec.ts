@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import type { DataGridColumn, VisibleRow } from "../../types"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
-import { createTableViewportController } from "../tableViewportController"
+import { createDataGridViewportController } from "../dataGridViewportController"
 
 interface MutableElementMetrics {
   clientWidth: number
@@ -96,7 +96,7 @@ function createControllerHarness() {
   const onColumns = vi.fn()
   const onScrollSync = vi.fn()
 
-  const controller = createTableViewportController({
+  const controller = createDataGridViewportController({
     resolvePinMode: column => (column.isSystem ? "left" : column.pin === "left" || column.pin === "right" ? column.pin : "none"),
     rowModel,
     columnModel,

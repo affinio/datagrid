@@ -4,8 +4,8 @@ import { createEmptyColumnSnapshot } from "../../virtualization/columnSnapshot"
 import { createHorizontalOverscanController } from "../../virtualization/dynamicOverscan"
 import { createAxisVirtualizer } from "../../virtualization/axisVirtualizer"
 import { createHorizontalAxisStrategy } from "../../virtualization/horizontalVirtualizer"
-import { buildHorizontalMeta } from "../tableViewportHorizontalMeta"
-import { prepareHorizontalViewport } from "../tableViewportHorizontalUpdate"
+import { buildHorizontalMeta } from "../dataGridViewportHorizontalMeta"
+import { prepareHorizontalViewport } from "../dataGridViewportHorizontalUpdate"
 
 function createColumns(): DataGridColumn[] {
   return [

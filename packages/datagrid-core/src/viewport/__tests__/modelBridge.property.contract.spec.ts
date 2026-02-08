@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
 import type { VisibleRow } from "../../types"
-import { createTableViewportModelBridgeService } from "../tableViewportModelBridgeService"
+import { createDataGridViewportModelBridgeService } from "../dataGridViewportModelBridgeService"
 
 interface BridgeRow {
   id: number
@@ -51,7 +51,7 @@ describe("table viewport model bridge property contract", () => {
       const fallbackRowModel = createClientRowModel()
       const fallbackColumnModel = createDataGridColumnModel()
 
-      const bridge = createTableViewportModelBridgeService({
+      const bridge = createDataGridViewportModelBridgeService({
         initialRowModel: rowModel,
         initialColumnModel: columnModel,
         fallbackRowModel,

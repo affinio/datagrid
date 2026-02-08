@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 import type { DataGridColumn } from "../../types"
 import { createHorizontalAxisVirtualizer } from "../../virtualization/horizontalVirtualizer"
-import { buildHorizontalMeta } from "../tableViewportHorizontalMeta"
-import { clampHorizontalOffset } from "../tableViewportHorizontalClamp"
+import { buildHorizontalMeta } from "../dataGridViewportHorizontalMeta"
+import { clampHorizontalOffset } from "../dataGridViewportHorizontalClamp"
 
 function createColumns(count: number): DataGridColumn[] {
   const columns: DataGridColumn[] = []

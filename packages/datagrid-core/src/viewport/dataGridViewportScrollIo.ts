@@ -1,11 +1,11 @@
 import type { RafScheduler } from "../runtime/rafScheduler"
-import { createManagedResizeObserver } from "./tableViewportResizeAdapter"
+import { createManagedResizeObserver } from "./dataGridViewportResizeAdapter"
 import type {
-	TableViewportHostEnvironment,
-	TableViewportResizeObserver,
+	DataGridViewportHostEnvironment,
+	DataGridViewportResizeObserver,
 } from "./viewportHostEnvironment"
 import { applyViewportSyncTransforms, type ViewportSyncAdapter } from "./scrollSync"
-import type { ViewportSyncState, ViewportSyncTargets } from "./tableViewportTypes"
+import type { ViewportSyncState, ViewportSyncTargets } from "./dataGridViewportTypes"
 
 const runtimeGlobal: typeof globalThis = typeof window !== "undefined" ? window : globalThis
 type TimeoutHandle = ReturnType<typeof runtimeGlobal.setTimeout>
@@ -14,7 +14,7 @@ type OnAfterScroll = (() => void) | null
 
 const DRIFT_THRESHOLD = 0.75
 
-export interface TableViewportScrollStateAdapter {
+export interface DataGridViewportScrollStateAdapter {
 	getContainer(): HTMLDivElement | null
 	setContainer(value: HTMLDivElement | null): void
 	getHeader(): HTMLElement | null
@@ -28,8 +28,8 @@ export interface TableViewportScrollStateAdapter {
 	setLastHeavyScroll(top: number, left: number): void
 	isAttached(): boolean
 	setAttached(value: boolean): void
-	getResizeObserver(): TableViewportResizeObserver | null
-	setResizeObserver(value: TableViewportResizeObserver | null): void
+	getResizeObserver(): DataGridViewportResizeObserver | null
+	setResizeObserver(value: DataGridViewportResizeObserver | null): void
 	getPendingScrollTop(): number | null
 	setPendingScrollTop(value: number | null): void
 	getPendingScrollLeft(): number | null
@@ -50,8 +50,8 @@ export interface TableViewportScrollStateAdapter {
 }
 
 
-export interface TableViewportScrollIoOptions {
-	hostEnvironment: TableViewportHostEnvironment
+export interface DataGridViewportScrollIoOptions {
+	hostEnvironment: DataGridViewportHostEnvironment
 	scheduler: RafScheduler
 	recordLayoutRead: (count?: number) => void
 	recordLayoutWrite?: (count?: number) => void
@@ -63,7 +63,7 @@ export interface TableViewportScrollIoOptions {
 	flushSchedulers: () => void
 	getOnAfterScroll: () => OnAfterScroll
 	onDetach?: () => void
-	state: TableViewportScrollStateAdapter
+	state: DataGridViewportScrollStateAdapter
 	normalizeAndClampScroll?: boolean
 	clampScrollTop?: (value: number) => number
 	clampScrollLeft?: (value: number) => number
@@ -73,7 +73,7 @@ export interface TableViewportScrollIoOptions {
 	onScrollSyncFrame?: (metrics: { scrollTop: number; scrollLeft: number }) => void
 }
 
-export interface TableViewportScrollIo {
+export interface DataGridViewportScrollIo {
 	attach(container: HTMLDivElement | null, header: HTMLElement | null): void
 	detach(): void
 	handleScroll(event: Event): void
@@ -83,9 +83,9 @@ export interface TableViewportScrollIo {
 	dispose(): void
 }
 
-export function createTableViewportScrollIo(
-	options: TableViewportScrollIoOptions,
-): TableViewportScrollIo {
+export function createDataGridViewportScrollIo(
+	options: DataGridViewportScrollIoOptions,
+): DataGridViewportScrollIo {
 	const {
 		hostEnvironment,
 		scheduler,
@@ -211,7 +211,7 @@ export function createTableViewportScrollIo(
 		}
 	}
 
-	function clearContainerListeners(container: HTMLDivElement | null, resizeObserver: TableViewportResizeObserver | null) {
+	function clearContainerListeners(container: HTMLDivElement | null, resizeObserver: DataGridViewportResizeObserver | null) {
 		if (container) {
 			hostEnvironment.removeScrollListener(container, handleScroll)
 		}

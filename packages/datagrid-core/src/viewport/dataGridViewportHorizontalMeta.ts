@@ -6,11 +6,52 @@ import {
 	type ColumnLayoutOutput,
 } from "../virtualization/horizontalLayout"
 import type { HorizontalVirtualizerMeta } from "../virtualization/horizontalVirtualizer"
-import type { TableViewportControllerOptions } from "./tableViewportTypes"
+import type { DataGridViewportControllerOptions } from "./dataGridViewportTypes"
 
 type LayoutOutput = ColumnLayoutOutput<DataGridColumn>
+type ResolvePinMode = BuildHorizontalMetaInput["resolvePinMode"]
 
-export interface TableViewportHorizontalMeta extends HorizontalVirtualizerMeta<DataGridColumn> {
+interface LayoutCacheEntry {
+	columns: readonly DataGridColumn[]
+	zoom: number
+	resolvePinMode: ResolvePinMode
+	layout: LayoutOutput
+}
+
+let layoutCacheEntry: LayoutCacheEntry | null = null
+
+function resolveCachedLayout(
+	columns: readonly DataGridColumn[],
+	zoom: number,
+	resolvePinMode: ResolvePinMode,
+): LayoutOutput {
+	const cached = layoutCacheEntry
+	if (
+		cached &&
+		cached.columns === columns &&
+		cached.zoom === zoom &&
+		cached.resolvePinMode === resolvePinMode
+	) {
+		return cached.layout
+	}
+
+	const layout = computeColumnLayout({
+		columns,
+		zoom,
+		resolvePinMode,
+	})
+
+	layoutCacheEntry = {
+		columns,
+		zoom,
+		resolvePinMode,
+		layout,
+	}
+
+	return layout
+}
+
+export interface DataGridViewportHorizontalMeta extends HorizontalVirtualizerMeta<DataGridColumn> {
 	scrollableColumns: DataGridColumn[]
 	scrollableIndices: LayoutOutput["scrollableIndices"]
 	metrics: LayoutOutput["scrollableMetrics"]
@@ -25,7 +66,7 @@ export interface TableViewportHorizontalMeta extends HorizontalVirtualizerMeta<D
 export interface BuildHorizontalMetaInput {
 	columns: DataGridColumn[]
 	layoutScale: number
-	resolvePinMode: TableViewportControllerOptions["resolvePinMode"]
+	resolvePinMode: DataGridViewportControllerOptions["resolvePinMode"]
 	viewportWidth: number
 	cachedNativeScrollWidth: number
 	cachedContainerWidth: number
@@ -37,7 +78,7 @@ export interface BuildHorizontalMetaInput {
 }
 
 export interface BuildHorizontalMetaResult {
-	meta: TableViewportHorizontalMeta
+	meta: DataGridViewportHorizontalMeta
 	version: number
 	signature: string
 }
@@ -55,11 +96,7 @@ export function buildHorizontalMeta({
 	version,
 	scrollWidth,
 }: BuildHorizontalMetaInput): BuildHorizontalMetaResult {
-	const layout = computeColumnLayout({
-		columns,
-		zoom: layoutScale,
-		resolvePinMode,
-	})
+	const layout = resolveCachedLayout(columns, layoutScale, resolvePinMode)
 
 	// Legacy compatibility field: index column width is no longer injected as a synthetic viewport inset.
 	// The viewport math is driven by real pinned column widths from column layout only.
@@ -79,7 +116,7 @@ export function buildHorizontalMeta({
 	const signature = `${layout.scrollableColumns.length}|${layout.scrollableMetrics.totalWidth}|${layout.zoom}|${containerWidthForColumns}|${layout.pinnedLeftWidth}|${layout.pinnedRightWidth}|${stableNativeLimit}`
 	const nextVersion = signature === lastSignature ? version : version + 1
 
-	const meta: TableViewportHorizontalMeta = {
+	const meta: DataGridViewportHorizontalMeta = {
 		scrollableColumns: layout.scrollableColumns,
 		scrollableIndices: layout.scrollableIndices,
 		metrics: layout.scrollableMetrics,

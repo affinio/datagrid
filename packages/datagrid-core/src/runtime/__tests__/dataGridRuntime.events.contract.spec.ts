@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
-  createTableRuntime,
+  createDataGridRuntime,
   type DataGridRuntimeInternalEventMap,
-} from "../tableRuntime"
+} from "../dataGridRuntime"
 
 function createPluginContext(tableId = "grid-events-test") {
   return {
@@ -16,7 +16,7 @@ describe("table runtime typed event routing", () => {
   it("dispatches host events in deterministic order: handler -> plugins -> host callback", () => {
     const calls: string[] = []
 
-    const runtime = createTableRuntime({
+    const runtime = createDataGridRuntime({
       onHostEvent: (name, args) => {
         const payload = args[0] as { rowId: string | number }
         calls.push(`host:${name}:${payload.rowId}`)
@@ -59,7 +59,7 @@ describe("table runtime typed event routing", () => {
     const legacyUnknownEvents: string[] = []
     let pluginContext: any
 
-    const runtime = createTableRuntime({
+    const runtime = createDataGridRuntime({
       onHostEvent: () => {},
       onInternalEvent: (name, args) => {
         internalEvents.push({ name, payload: args[0] })
@@ -97,7 +97,7 @@ describe("table runtime typed event routing", () => {
     const seen: number[] = []
     let pluginEmit: ((value: number) => void) | null = null
 
-    const runtime = createTableRuntime<CustomPluginEvents>({
+    const runtime = createDataGridRuntime<CustomPluginEvents>({
       onHostEvent: () => {},
       pluginContext: createPluginContext("grid-custom-events"),
       initialPlugins: [
@@ -126,7 +126,7 @@ describe("table runtime typed event routing", () => {
 
   it("emits typed plugin lifecycle events around runtime lifecycle", () => {
     const lifecycle: string[] = []
-    const runtime = createTableRuntime({
+    const runtime = createDataGridRuntime({
       onHostEvent: () => {},
       pluginContext: createPluginContext("grid-lifecycle"),
       initialPlugins: [
@@ -154,7 +154,7 @@ describe("table runtime typed event routing", () => {
 
   it("keeps internal payload map stable for compile-time guard", () => {
     const capture: Array<DataGridRuntimeInternalEventMap["host:dispatched"][0]> = []
-    const runtime = createTableRuntime({
+    const runtime = createDataGridRuntime({
       onHostEvent: () => {},
       onInternalEvent: (name, args) => {
         if (name === "host:dispatched") {
@@ -173,7 +173,7 @@ describe("table runtime typed event routing", () => {
 
   it("allows plugins to use declared capabilities only", () => {
     const calls: number[] = []
-    const runtime = createTableRuntime<
+    const runtime = createDataGridRuntime<
       Record<never, never>,
       { "metrics:increment": (value: number) => void }
     >({
@@ -205,7 +205,7 @@ describe("table runtime typed event routing", () => {
 
   it("emits internal denial event when plugin uses undeclared capability", () => {
     const denied: Array<DataGridRuntimeInternalEventMap["plugin:capability-denied"][0]> = []
-    const runtime = createTableRuntime<
+    const runtime = createDataGridRuntime<
       Record<never, never>,
       { "metrics:increment": (value: number) => void }
     >({
@@ -243,7 +243,7 @@ describe("table runtime typed event routing", () => {
 
   it("emits internal denial event when declared capability is not provided by host", () => {
     const denied: Array<DataGridRuntimeInternalEventMap["plugin:capability-denied"][0]> = []
-    const runtime = createTableRuntime<
+    const runtime = createDataGridRuntime<
       Record<never, never>,
       { "table:reset": () => void }
     >({

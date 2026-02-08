@@ -37,9 +37,31 @@ export interface ColumnLayoutOutput<TColumn extends LayoutColumnLike> {
   }
 }
 
+interface ColumnLayoutCacheEntry {
+  columns: readonly LayoutColumnLike[]
+  zoom: number
+  resolvePinMode: unknown
+  output: ColumnLayoutOutput<LayoutColumnLike>
+}
+
+const columnLayoutCache: Array<ColumnLayoutCacheEntry | null> = [null, null]
+let columnLayoutCacheWriteIndex = 0
+
 export function computeColumnLayout<TColumn extends LayoutColumnLike>(
   input: ColumnLayoutInput<TColumn>,
 ): ColumnLayoutOutput<TColumn> {
+  for (let index = 0; index < columnLayoutCache.length; index += 1) {
+    const cached = columnLayoutCache[index]
+    if (
+      cached &&
+      cached.columns === input.columns &&
+      cached.zoom === input.zoom &&
+      cached.resolvePinMode === input.resolvePinMode
+    ) {
+      return cached.output as ColumnLayoutOutput<TColumn>
+    }
+  }
+
   const pinnedLeft: ColumnLayoutMetric<TColumn>[] = []
   const pinnedRight: ColumnLayoutMetric<TColumn>[] = []
   const scrollableColumns: TColumn[] = []
@@ -96,7 +118,7 @@ export function computeColumnLayout<TColumn extends LayoutColumnLike>(
   const pinnedLeftWidth = pinnedLeft.reduce((sum, metric) => sum + metric.width, 0)
   const pinnedRightWidth = pinnedRight.reduce((sum, metric) => sum + metric.width, 0)
 
-  return {
+  const output: ColumnLayoutOutput<TColumn> = {
     zoom: input.zoom,
     pinnedLeft,
     pinnedRight,
@@ -106,4 +128,14 @@ export function computeColumnLayout<TColumn extends LayoutColumnLike>(
     scrollableIndices,
     scrollableMetrics,
   }
+
+  columnLayoutCache[columnLayoutCacheWriteIndex] = {
+    columns: input.columns,
+    zoom: input.zoom,
+    resolvePinMode: input.resolvePinMode,
+    output: output as unknown as ColumnLayoutOutput<LayoutColumnLike>,
+  }
+  columnLayoutCacheWriteIndex = (columnLayoutCacheWriteIndex + 1) % columnLayoutCache.length
+
+  return output
 }

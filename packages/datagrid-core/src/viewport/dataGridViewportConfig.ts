@@ -1,9 +1,9 @@
 import type {
-  TableViewportContainerMetrics,
-  TableViewportDomStats,
-  TableViewportHeaderMetrics,
-  TableViewportHostEnvironment,
-  TableViewportResizeObserver,
+  DataGridViewportContainerMetrics,
+  DataGridViewportDomStats,
+  DataGridViewportHeaderMetrics,
+  DataGridViewportHostEnvironment,
+  DataGridViewportResizeObserver,
 } from "./viewportHostEnvironment"
 
 const GLOBAL_FALLBACK: typeof globalThis = typeof globalThis !== "undefined" ? globalThis : ({} as typeof globalThis)
@@ -28,10 +28,10 @@ export function createMonotonicClock(globalRef: typeof globalThis = GLOBAL_FALLB
 export interface DefaultHostEnvironmentOptions {
   scrollListenerOptions?: AddEventListenerOptions
   scrollRemoveOptions?: boolean | EventListenerOptions
-  resizeObserverFactory?: (callback: () => void) => TableViewportResizeObserver | null
+  resizeObserverFactory?: (callback: () => void) => DataGridViewportResizeObserver | null
 }
 
-type ResizeObserverFactory = (callback: () => void) => TableViewportResizeObserver | null
+type ResizeObserverFactory = (callback: () => void) => DataGridViewportResizeObserver | null
 
 function createDomResizeObserverFactory(globalRef: typeof globalThis): ResizeObserverFactory {
   return callback => {
@@ -56,7 +56,7 @@ function createDomResizeObserverFactory(globalRef: typeof globalThis): ResizeObs
   }
 }
 
-export function createNoopResizeObserver(): TableViewportResizeObserver {
+export function createNoopResizeObserver(): DataGridViewportResizeObserver {
   return {
     observe() {
       // no-op
@@ -67,7 +67,7 @@ export function createNoopResizeObserver(): TableViewportResizeObserver {
   }
 }
 
-function readDomContainerMetrics(target: HTMLDivElement, _globalRef: typeof globalThis): TableViewportContainerMetrics | null {
+function readDomContainerMetrics(target: HTMLDivElement, _globalRef: typeof globalThis): DataGridViewportContainerMetrics | null {
   if (!target) return null
   const scrollTop = Number.isFinite(target.scrollTop) ? target.scrollTop : 0
   const scrollLeft = Number.isFinite(target.scrollLeft) ? target.scrollLeft : 0
@@ -86,7 +86,7 @@ function readDomContainerMetrics(target: HTMLDivElement, _globalRef: typeof glob
   }
 }
 
-function readDomHeaderMetrics(target: HTMLElement | null): TableViewportHeaderMetrics | null {
+function readDomHeaderMetrics(target: HTMLElement | null): DataGridViewportHeaderMetrics | null {
   if (!target) {
     return { height: 0 }
   }
@@ -141,7 +141,7 @@ function isDomEventFromContainer(event: Event, container: HTMLElement): boolean 
   return path.includes(container)
 }
 
-function queryDomStats(container: HTMLElement): TableViewportDomStats | null {
+function queryDomStats(container: HTMLElement): DataGridViewportDomStats | null {
   if (!container?.querySelectorAll) {
     return null
   }
@@ -158,7 +158,7 @@ function queryDomStats(container: HTMLElement): TableViewportDomStats | null {
 export function createDefaultHostEnvironment(
   globalRef: typeof globalThis = GLOBAL_FALLBACK,
   options?: DefaultHostEnvironmentOptions,
-): TableViewportHostEnvironment {
+): DataGridViewportHostEnvironment {
   const scrollOptions = options?.scrollListenerOptions ?? { passive: true }
   const removeOptions = options?.scrollRemoveOptions
   const resizeObserverFactory = options?.resizeObserverFactory ?? createDomResizeObserverFactory(globalRef)
@@ -188,7 +188,7 @@ export function createDefaultHostEnvironment(
     createResizeObserver(callback: () => void) {
       return resizeObserverFactory(callback)
     },
-    removeResizeObserverTarget(observer: TableViewportResizeObserver, target: Element) {
+    removeResizeObserverTarget(observer: DataGridViewportResizeObserver, target: Element) {
       if (typeof observer.unobserve === "function") {
         observer.unobserve(target)
       } else {

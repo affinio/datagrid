@@ -1,6 +1,6 @@
 import type { WritableSignal } from "../runtime/signals"
 import type { RafScheduler } from "../runtime/rafScheduler"
-import type { ViewportClock } from "./tableViewportConfig"
+import type { ViewportClock } from "./dataGridViewportConfig"
 
 interface DiagnosticsSignals {
 	debugMode: WritableSignal<boolean>
@@ -15,13 +15,13 @@ interface DiagnosticsSignals {
 	virtualizerSkips: WritableSignal<number>
 }
 
-export interface TableViewportDiagnosticsOptions {
+export interface DataGridViewportDiagnosticsOptions {
 	scheduler: RafScheduler
 	clock: ViewportClock
 	signals: DiagnosticsSignals
 }
 
-export interface TableViewportDiagnostics {
+export interface DataGridViewportDiagnostics {
 	recordLayoutRead: (count?: number) => void
 	recordLayoutWrite: (count?: number) => void
 	recordSyncScroll: () => void
@@ -50,9 +50,9 @@ function resolveGlobalDebugDefault(): boolean {
 	return false
 }
 
-export function createTableViewportDiagnostics(
-	options: TableViewportDiagnosticsOptions,
-): TableViewportDiagnostics {
+export function createDataGridViewportDiagnostics(
+	options: DataGridViewportDiagnosticsOptions,
+): DataGridViewportDiagnostics {
 	const { scheduler, clock, signals } = options
 	const {
 		debugMode,

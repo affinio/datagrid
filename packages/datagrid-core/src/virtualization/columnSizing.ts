@@ -20,6 +20,12 @@ export interface VisibleColumnRange {
   rightPadding: number
 }
 
+interface ColumnWidthCacheEntry {
+  columns: readonly ColumnSizeLike[]
+  zoom: number
+  metrics: ColumnWidthMetrics
+}
+
 const visibleColumnResultPool: Array<VisibleColumnRange & ColumnWidthMetrics> = [
   {
     startIndex: 0,
@@ -42,6 +48,8 @@ const visibleColumnResultPool: Array<VisibleColumnRange & ColumnWidthMetrics> = 
 ]
 
 let visibleColumnResultIndex = 0
+const columnWidthMetricsCache: Array<ColumnWidthCacheEntry | null> = [null, null]
+let columnWidthMetricsCacheWriteIndex = 0
 
 export function resolveColumnWidth<T extends ColumnSizeLike>(column: T, zoom = 1): number {
   const fallbackWidth = column.width ?? column.minWidth ?? column.maxWidth ?? DEFAULT_COLUMN_WIDTH
@@ -56,6 +64,13 @@ export function resolveColumnWidth<T extends ColumnSizeLike>(column: T, zoom = 1
 }
 
 export function accumulateColumnWidths<T extends ColumnSizeLike>(columns: readonly T[], zoom = 1): ColumnWidthMetrics {
+  for (let index = 0; index < columnWidthMetricsCache.length; index += 1) {
+    const cached = columnWidthMetricsCache[index]
+    if (cached && cached.columns === columns && cached.zoom === zoom) {
+      return cached.metrics
+    }
+  }
+
   const widths: number[] = []
   const offsets: number[] = []
   let totalWidth = 0
@@ -67,7 +82,15 @@ export function accumulateColumnWidths<T extends ColumnSizeLike>(columns: readon
     totalWidth += width
   }
 
-  return { widths, offsets, totalWidth }
+  const metrics = { widths, offsets, totalWidth }
+  columnWidthMetricsCache[columnWidthMetricsCacheWriteIndex] = {
+    columns,
+    zoom,
+    metrics,
+  }
+  columnWidthMetricsCacheWriteIndex =
+    (columnWidthMetricsCacheWriteIndex + 1) % columnWidthMetricsCache.length
+  return metrics
 }
 
 function findFirstVisibleColumn(scrollLeft: number, widths: readonly number[], offsets: readonly number[]) {

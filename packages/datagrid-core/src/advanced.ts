@@ -4,14 +4,13 @@
  */
 export {
   createDataGridRuntime,
-  isDataGridHostEventName,
-  DATAGRID_HOST_EVENT_NAME_MAP,
+  isHostEventName as isDataGridHostEventName,
+  HOST_EVENT_NAME_MAP as DATAGRID_HOST_EVENT_NAME_MAP,
   type DataGridRuntime,
   type DataGridRuntimeOptions,
   type DataGridHostEventName,
   type DataGridHostEventArgs,
   type DataGridHostEventMap,
-  type DataGridEventArgs,
   type DataGridRuntimeBasePluginEventMap,
   type DataGridRuntimePluginEventMap,
   type DataGridRuntimeInternalEventMap,
@@ -19,6 +18,7 @@ export {
 } from "./runtime/dataGridRuntime.js"
 
 export type {
+  DataGridEventArgs,
   DataGridPluginCapability,
   DataGridPluginCapabilityMap,
   DataGridPluginCapabilityName,
@@ -76,15 +76,15 @@ export {
   type DataGridViewportControllerOptions,
   type DataGridViewportImperativeCallbacks,
   type DataGridViewportRuntimeOverrides,
-  type DataGridViewportMetricsSnapshot,
-  type DataGridViewportIntegrationSnapshot,
-  type DataGridViewportSyncTargets,
-  type DataGridViewportSyncState,
+  type ViewportMetricsSnapshot as DataGridViewportMetricsSnapshot,
+  type ViewportIntegrationSnapshot as DataGridViewportIntegrationSnapshot,
+  type ViewportSyncTargets as DataGridViewportSyncTargets,
+  type ViewportSyncState as DataGridViewportSyncState,
   type DataGridViewportState,
-  type DataGridRowPoolItem,
-  type DataGridImperativeColumnUpdatePayload,
-  type DataGridImperativeRowUpdatePayload,
-  type DataGridImperativeScrollSyncPayload,
+  type RowPoolItem as DataGridRowPoolItem,
+  type ImperativeColumnUpdatePayload as DataGridImperativeColumnUpdatePayload,
+  type ImperativeRowUpdatePayload as DataGridImperativeRowUpdatePayload,
+  type ImperativeScrollSyncPayload as DataGridImperativeScrollSyncPayload,
 } from "./viewport/dataGridViewportController.js"
 
 export {

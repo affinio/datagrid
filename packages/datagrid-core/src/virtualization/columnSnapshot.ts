@@ -31,6 +31,7 @@ export interface ColumnVirtualizationSnapshot<TColumn> {
   containerWidthForColumns: number
   indexColumnWidth: number
   scrollDirection: number
+  metaVersion: number
 }
 
 export function createEmptyColumnSnapshot<TColumn = unknown>(): ColumnVirtualizationSnapshot<TColumn> {
@@ -54,6 +55,7 @@ export function createEmptyColumnSnapshot<TColumn = unknown>(): ColumnVirtualiza
     containerWidthForColumns: 0,
     indexColumnWidth: 0,
     scrollDirection: 0,
+    metaVersion: -1,
   }
 }
 
@@ -68,6 +70,7 @@ export interface ColumnSnapshotMeta<TColumn> {
   containerWidthForColumns: number
   indexColumnWidth: number
   scrollDirection: number
+  version: number
   zoom: number
 }
 
@@ -98,6 +101,7 @@ export function updateColumnSnapshot<TColumn>(
   options: UpdateColumnSnapshotOptions<TColumn>,
 ): UpdateColumnSnapshotResult {
   const { snapshot, meta, range, payload, getColumnKey, resolveColumnWidth } = options
+  const layoutChanged = snapshot.metaVersion !== meta.version
   const { start, end } = range
   const visibleScrollableEntries = snapshot.visibleScrollable
   const visibleColumnsEntries = snapshot.visibleColumns
@@ -136,42 +140,79 @@ export function updateColumnSnapshot<TColumn>(
   }
   visibleScrollableEntries.length = scrollableCount
 
-  const columnWidthMap = snapshot.columnWidthMap
-  if (columnWidthMap.size) {
-    columnWidthMap.clear()
+  if (layoutChanged) {
+    const columnWidthMap = snapshot.columnWidthMap
+    if (columnWidthMap.size) {
+      columnWidthMap.clear()
+    }
+    meta.pinnedLeft.forEach(metric => {
+      columnWidthMap.set(getColumnKey(metric.column), metric.width)
+    })
+    meta.pinnedRight.forEach(metric => {
+      columnWidthMap.set(getColumnKey(metric.column), metric.width)
+    })
+    meta.scrollableColumns.forEach((column, idx) => {
+      const widthValue = meta.metrics.widths[idx] ?? resolveColumnWidth(column, meta.zoom)
+      columnWidthMap.set(getColumnKey(column), widthValue)
+    })
   }
-  meta.pinnedLeft.forEach(metric => {
-    columnWidthMap.set(getColumnKey(metric.column), metric.width)
-  })
-  meta.pinnedRight.forEach(metric => {
-    columnWidthMap.set(getColumnKey(metric.column), metric.width)
-  })
-  meta.scrollableColumns.forEach((column, idx) => {
-    const widthValue = meta.metrics.widths[idx] ?? resolveColumnWidth(column, meta.zoom)
-    columnWidthMap.set(getColumnKey(column), widthValue)
-  })
 
   const pinnedLeftEntries = snapshot.pinnedLeft
   const pinnedRightEntries = snapshot.pinnedRight
-  pinnedLeftEntries.length = 0
-  pinnedRightEntries.length = 0
-  pinnedLeftEntries.push(...meta.pinnedLeft)
-  pinnedRightEntries.push(...meta.pinnedRight)
+  if (layoutChanged) {
+    pinnedLeftEntries.length = 0
+    pinnedRightEntries.length = 0
+    pinnedLeftEntries.push(...meta.pinnedLeft)
+    pinnedRightEntries.push(...meta.pinnedRight)
+  }
 
   visibleColumnsEntries.length = 0
+  let visibleStartIndex = Number.POSITIVE_INFINITY
+  let visibleEndIndex = -1
+  const trackVisibleIndex = (index: number) => {
+    if (index < visibleStartIndex) {
+      visibleStartIndex = index
+    }
+    if (index > visibleEndIndex) {
+      visibleEndIndex = index
+    }
+  }
   if (pinnedLeftEntries.length) {
-    visibleColumnsEntries.push(...pinnedLeftEntries)
+    for (let index = 0; index < pinnedLeftEntries.length; index += 1) {
+      const entry = pinnedLeftEntries[index]
+      if (!entry) {
+        continue
+      }
+      visibleColumnsEntries.push(entry)
+      trackVisibleIndex(entry.index)
+    }
   }
   if (visibleScrollableEntries.length) {
-    visibleColumnsEntries.push(...visibleScrollableEntries)
+    for (let index = 0; index < visibleScrollableEntries.length; index += 1) {
+      const entry = visibleScrollableEntries[index]
+      if (!entry) {
+        continue
+      }
+      visibleColumnsEntries.push(entry)
+      trackVisibleIndex(entry.index)
+    }
   }
   if (pinnedRightEntries.length) {
-    visibleColumnsEntries.push(...pinnedRightEntries)
+    for (let index = 0; index < pinnedRightEntries.length; index += 1) {
+      const entry = pinnedRightEntries[index]
+      if (!entry) {
+        continue
+      }
+      visibleColumnsEntries.push(entry)
+      trackVisibleIndex(entry.index)
+    }
   }
 
-  const visibleIndexes = visibleColumnsEntries.map(entry => entry.index)
-  const visibleStartIndex = visibleIndexes.length ? Math.min(...visibleIndexes) : 0
-  const visibleEndIndex = visibleIndexes.length ? Math.max(...visibleIndexes) + 1 : 0
+  if (!Number.isFinite(visibleStartIndex) || visibleEndIndex < 0) {
+    visibleStartIndex = 0
+    visibleEndIndex = -1
+  }
+  const visibleEndExclusive = visibleEndIndex + 1
 
   snapshot.leftPadding = payload.leftPadding
   snapshot.rightPadding = payload.rightPadding
@@ -180,13 +221,14 @@ export function updateColumnSnapshot<TColumn>(
   snapshot.scrollableStart = start
   snapshot.scrollableEnd = end
   snapshot.visibleStart = visibleStartIndex
-  snapshot.visibleEnd = visibleEndIndex
+  snapshot.visibleEnd = visibleEndExclusive
   snapshot.pinnedLeftWidth = meta.pinnedLeftWidth
   snapshot.pinnedRightWidth = meta.pinnedRightWidth
   snapshot.metrics = meta.metrics
   snapshot.containerWidthForColumns = meta.containerWidthForColumns
   snapshot.indexColumnWidth = meta.indexColumnWidth
   snapshot.scrollDirection = meta.scrollDirection
+  snapshot.metaVersion = meta.version
 
-  return { visibleStartIndex, visibleEndIndex }
+  return { visibleStartIndex, visibleEndIndex: visibleEndExclusive }
 }

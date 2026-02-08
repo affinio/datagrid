@@ -71,6 +71,8 @@ export function createDataGridColumnModel(
   const listeners = new Set<DataGridColumnModelListener>()
   const columnsByKey = new Map<string, MutableColumnState>()
   let order: string[] = []
+  let snapshotDirty = true
+  let snapshotCache: DataGridColumnModelSnapshot | null = null
 
   function ensureActive() {
     if (disposed) {
@@ -79,6 +81,10 @@ export function createDataGridColumnModel(
   }
 
   function materializeSnapshot(): DataGridColumnModelSnapshot {
+    if (!snapshotDirty && snapshotCache) {
+      return snapshotCache
+    }
+
     const columns = order
       .map(key => {
         const state = columnsByKey.get(key)
@@ -95,11 +101,18 @@ export function createDataGridColumnModel(
       })
       .filter((entry): entry is DataGridColumnSnapshot => entry !== null)
 
-    return {
+    snapshotCache = {
       columns,
       order: [...order],
       visibleColumns: columns.filter(column => column.visible),
     }
+    snapshotDirty = false
+    return snapshotCache
+  }
+
+  function markSnapshotDirty() {
+    snapshotDirty = true
+    snapshotCache = null
   }
 
   function emit() {
@@ -127,6 +140,7 @@ export function createDataGridColumnModel(
       })
       order.push(column.key)
     }
+    markSnapshotDirty()
     emit()
   }
 
@@ -174,7 +188,21 @@ export function createDataGridColumnModel(
         nextOrder.push(key)
       }
 
+      if (nextOrder.length === order.length) {
+        let unchanged = true
+        for (let index = 0; index < nextOrder.length; index += 1) {
+          if (nextOrder[index] !== order[index]) {
+            unchanged = false
+            break
+          }
+        }
+        if (unchanged) {
+          return
+        }
+      }
+
       order = nextOrder
+      markSnapshotDirty()
       emit()
     },
     setColumnVisibility(key: string, visible: boolean) {
@@ -184,6 +212,7 @@ export function createDataGridColumnModel(
         return
       }
       state.visible = visible
+      markSnapshotDirty()
       emit()
     },
     setColumnWidth(key: string, width: number | null) {
@@ -197,6 +226,7 @@ export function createDataGridColumnModel(
         return
       }
       state.width = nextWidth
+      markSnapshotDirty()
       emit()
     },
     setColumnPin(key: string, pin: DataGridColumnPin) {
@@ -210,6 +240,7 @@ export function createDataGridColumnModel(
         return
       }
       state.pin = nextPin
+      markSnapshotDirty()
       emit()
     },
     subscribe(listener: DataGridColumnModelListener) {
@@ -229,6 +260,8 @@ export function createDataGridColumnModel(
       listeners.clear()
       columnsByKey.clear()
       order = []
+      snapshotDirty = true
+      snapshotCache = null
     },
   }
 }

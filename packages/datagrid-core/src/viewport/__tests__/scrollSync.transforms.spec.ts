@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { applyViewportSyncTransforms, resetViewportSyncTransforms } from "../scrollSync"
-import type { ViewportSyncState, ViewportSyncTargets } from "../tableViewportTypes"
+import type { ViewportSyncState, ViewportSyncTargets } from "../dataGridViewportTypes"
 
 function createTargets(): ViewportSyncTargets {
   const scrollHost = document.createElement("div")

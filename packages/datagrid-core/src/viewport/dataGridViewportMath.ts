@@ -1,6 +1,6 @@
-import type { HorizontalClampContext } from "./tableViewportHorizontalClamp"
-import type { TableViewportHorizontalMeta } from "./tableViewportHorizontalMeta"
-import type { LayoutMeasurementSnapshot, ViewportMetricsSnapshot } from "./tableViewportTypes"
+import type { HorizontalClampContext } from "./dataGridViewportHorizontalClamp"
+import type { DataGridViewportHorizontalMeta } from "./dataGridViewportHorizontalMeta"
+import type { LayoutMeasurementSnapshot, ViewportMetricsSnapshot } from "./dataGridViewportTypes"
 
 export interface ResolveViewportDimensionsInput {
   viewportMetrics: ViewportMetricsSnapshot | null
@@ -54,7 +54,7 @@ export interface ShouldUseFastPathInput {
 }
 
 export interface HorizontalSizingInput {
-  columnMeta: TableViewportHorizontalMeta
+  columnMeta: DataGridViewportHorizontalMeta
   viewportWidth: number
   totalRowCount: number
   resolvedRowHeight: number

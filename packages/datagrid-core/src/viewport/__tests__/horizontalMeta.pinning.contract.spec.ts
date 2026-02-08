@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { DataGridColumn } from "../../types"
-import { buildHorizontalMeta } from "../tableViewportHorizontalMeta"
+import { buildHorizontalMeta } from "../dataGridViewportHorizontalMeta"
 
 function resolvePinMode(column: DataGridColumn): "left" | "right" | "none" {
   return column.pin === "left" || column.pin === "right" ? column.pin : "none"

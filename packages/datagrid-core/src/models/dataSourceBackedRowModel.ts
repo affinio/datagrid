@@ -28,6 +28,7 @@ export interface CreateDataSourceBackedRowModelOptions<T = unknown> {
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
   initialTotal?: number
+  rowCacheLimit?: number
 }
 
 export interface DataSourceBackedRowModel<T = unknown> extends DataGridRowModel<T> {
@@ -41,6 +42,8 @@ interface InFlightPull {
   requestId: number
   controller: AbortController
 }
+
+const DEFAULT_ROW_CACHE_LIMIT = 4096
 
 function isAbortError(error: unknown): boolean {
   if (!error) {
@@ -84,6 +87,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let requestCounter = 0
   let inFlight: InFlightPull | null = null
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rowCount)
+  const rowCacheLimit =
+    Number.isFinite(options.rowCacheLimit) && (options.rowCacheLimit as number) > 0
+      ? Math.max(1, Math.trunc(options.rowCacheLimit as number))
+      : DEFAULT_ROW_CACHE_LIMIT
 
   const rowCache = new Map<number, DataGridRowNode<T>>()
   const listeners = new Set<DataGridRowModelListener<T>>()
@@ -102,6 +109,44 @@ export function createDataSourceBackedRowModel<T = unknown>(
         applyPushEvent(event)
       })
     : null
+
+  function enforceRowCacheLimit() {
+    while (rowCache.size > rowCacheLimit) {
+      const oldest = rowCache.keys().next().value as number | undefined
+      if (typeof oldest === "undefined") {
+        break
+      }
+      rowCache.delete(oldest)
+    }
+  }
+
+  function readRowCache(index: number): DataGridRowNode<T> | undefined {
+    if (!rowCache.has(index)) {
+      return undefined
+    }
+    const cached = rowCache.get(index)
+    rowCache.delete(index)
+    if (cached) {
+      rowCache.set(index, cached)
+    }
+    return cached
+  }
+
+  function writeRowCache(index: number, row: DataGridRowNode<T>) {
+    if (rowCache.has(index)) {
+      rowCache.delete(index)
+    }
+    rowCache.set(index, row)
+    enforceRowCacheLimit()
+  }
+
+  function pruneRowCacheByRowCount() {
+    for (const index of rowCache.keys()) {
+      if (index >= rowCount) {
+        rowCache.delete(index)
+      }
+    }
+  }
 
   function ensureActive() {
     if (disposed) {
@@ -183,7 +228,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     for (const entry of rows) {
       const normalized = normalizeRowEntry(entry)
-      rowCache.set(normalized.index, normalized.node)
+      writeRowCache(normalized.index, normalized.node)
     }
     updateTotalFromRows(rows)
   }
@@ -259,6 +304,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       const nextTotal = normalizeTotal(result.total)
       if (nextTotal != null) {
         rowCount = nextTotal
+        pruneRowCacheByRowCount()
       }
       applyRows(result.rows)
       diagnostics.pullCompleted += 1
@@ -309,6 +355,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       const nextTotal = normalizeTotal(event.total)
       if (nextTotal != null) {
         rowCount = nextTotal
+        pruneRowCacheByRowCount()
       }
       emit()
       return
@@ -324,6 +371,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       const nextTotal = normalizeTotal(event.total)
       if (nextTotal != null) {
         rowCount = nextTotal
+        pruneRowCacheByRowCount()
       }
       emit()
       return
@@ -343,7 +391,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!Number.isFinite(index)) {
         return undefined
       }
-      return rowCache.get(Math.max(0, Math.trunc(index)))
+      const normalized = Math.max(0, Math.trunc(index))
+      if (normalized >= rowCount) {
+        return undefined
+      }
+      return readRowCache(normalized)
     },
     getRowsInRange(range) {
       const normalized = normalizeViewportRange(range, rowCount)
@@ -352,7 +404,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       const rows = []
       for (let index = normalized.start; index <= normalized.end; index += 1) {
-        const row = rowCache.get(index)
+        const row = readRowCache(index)
         if (row) {
           rows.push(row)
         }

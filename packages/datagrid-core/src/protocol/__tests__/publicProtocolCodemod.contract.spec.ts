@@ -4,7 +4,7 @@ import { transformDataGridPublicProtocolSource } from "../publicProtocolCodemod"
 describe("publicProtocolCodemod contract", () => {
   it("rewrites deep imports to semver-safe package entrypoints", () => {
     const input = `
-import { createTableViewportController } from "@affino/datagrid-core/viewport/tableViewportController"
+import { createDataGridViewportController } from "@affino/datagrid-core/viewport/dataGridViewportController"
 import { createDataGridApi } from "@affino/datagrid-core/src/public"
 import { buildSelectionOverlayTransform } from "@affino/datagrid-vue/src/public"
 `.trim()
@@ -15,7 +15,7 @@ import { buildSelectionOverlayTransform } from "@affino/datagrid-vue/src/public"
     expect(result.code).toContain('from "@affino/datagrid-core/advanced"')
     expect(result.code).toContain('from "@affino/datagrid-core"')
     expect(result.code).toContain('from "@affino/datagrid-vue"')
-    expect(result.code).not.toContain("@affino/datagrid-core/viewport/tableViewportController")
+    expect(result.code).not.toContain("@affino/datagrid-core/viewport/dataGridViewportController")
     expect(result.code).not.toContain("@affino/datagrid-core/src/public")
     expect(result.code).not.toContain("@affino/datagrid-vue/src/public")
   })
@@ -37,7 +37,7 @@ import { createDataGridApi, createDataGridViewportController, type DataGridHostE
 
   it("renames legacy viewport factory and marks serverIntegration path", () => {
     const input = `
-const controller = createTableViewportController({
+const controller = createDataGridViewportController({
   serverIntegration: createLegacyBridge(),
 })
 `.trim()

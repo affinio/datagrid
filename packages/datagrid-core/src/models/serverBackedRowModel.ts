@@ -44,7 +44,11 @@ export function createServerBackedRowModel<T>(
   let filterModel: DataGridFilterSnapshot | null = options.initialFilterModel ?? null
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, source.getRowCount())
   let disposed = false
+  let cacheRevision = 0
+  let lastRangeCacheKey = ""
+  let lastRangeCacheRows: readonly DataGridRowNode<T>[] = []
   const listeners = new Set<DataGridRowModelListener<T>>()
+  const rowNodeCache = new Map<number, DataGridRowNode<T> | undefined>()
 
   function ensureActive() {
     if (disposed) {
@@ -64,6 +68,23 @@ export function createServerBackedRowModel<T>(
       sortModel,
       filterModel,
     }
+  }
+
+  function invalidateCaches() {
+    rowNodeCache.clear()
+    cacheRevision += 1
+    lastRangeCacheKey = ""
+    lastRangeCacheRows = []
+  }
+
+  function invalidateCachesForRange(range: DataGridViewportRange) {
+    const normalized = normalizeViewportRange(range, source.getRowCount())
+    for (let index = normalized.start; index <= normalized.end; index += 1) {
+      rowNodeCache.delete(index)
+    }
+    cacheRevision += 1
+    lastRangeCacheKey = ""
+    lastRangeCacheRows = []
   }
 
   function emit() {
@@ -86,20 +107,26 @@ export function createServerBackedRowModel<T>(
   }
 
   function toRowNode(index: number): DataGridRowNode<T> | undefined {
+    if (rowNodeCache.has(index)) {
+      return rowNodeCache.get(index)
+    }
     const row = source.getRowAt(index)
     if (typeof row === "undefined") {
+      rowNodeCache.set(index, undefined)
       return undefined
     }
     const rowId = resolveRowId(row, index) as DataGridRowId
     if (typeof rowId !== "string" && typeof rowId !== "number") {
       throw new Error(`[DataGrid] Invalid row identity returned for index ${index}. Expected string|number.`)
     }
-    return normalizeRowNode({
+    const normalized = normalizeRowNode({
       row,
       rowId,
       originalIndex: index,
       displayIndex: index,
     }, index)
+    rowNodeCache.set(index, normalized)
+    return normalized
   }
 
   return {
@@ -113,11 +140,19 @@ export function createServerBackedRowModel<T>(
       if (!Number.isFinite(index)) {
         return undefined
       }
+      const rowCount = source.getRowCount()
       const normalized = Math.max(0, Math.trunc(index))
+      if (normalized >= rowCount) {
+        return undefined
+      }
       return toRowNode(normalized)
     },
     getRowsInRange(range) {
       const normalized = normalizeViewportRange(range, source.getRowCount())
+      const rangeCacheKey = `${normalized.start}:${normalized.end}:${cacheRevision}`
+      if (lastRangeCacheKey === rangeCacheKey) {
+        return lastRangeCacheRows
+      }
       const rows: DataGridRowNode<T>[] = []
       for (let index = normalized.start; index <= normalized.end; index += 1) {
         const row = toRowNode(index)
@@ -125,7 +160,9 @@ export function createServerBackedRowModel<T>(
           rows.push(row)
         }
       }
-      return rows
+      lastRangeCacheKey = rangeCacheKey
+      lastRangeCacheRows = Object.freeze(rows.slice())
+      return lastRangeCacheRows
     },
     setViewportRange(range) {
       ensureActive()
@@ -136,9 +173,11 @@ export function createServerBackedRowModel<T>(
       viewportRange = nextRange
       void warmViewportRange(viewportRange)
         .then(() => {
+          invalidateCachesForRange(viewportRange)
           emit()
         })
         .catch(() => {
+          invalidateCachesForRange(viewportRange)
           emit()
         })
       emit()
@@ -146,11 +185,13 @@ export function createServerBackedRowModel<T>(
     setSortModel(nextSortModel) {
       ensureActive()
       sortModel = Array.isArray(nextSortModel) ? [...nextSortModel] : []
+      invalidateCaches()
       emit()
     },
     setFilterModel(nextFilterModel) {
       ensureActive()
       filterModel = nextFilterModel ?? null
+      invalidateCaches()
       emit()
     },
     async refresh(reason?: DataGridRowModelRefreshReason) {
@@ -160,12 +201,14 @@ export function createServerBackedRowModel<T>(
       }
       try {
         await warmViewportRange(viewportRange)
+        invalidateCachesForRange(viewportRange)
       } finally {
         emit()
       }
     },
     syncFromSource() {
       ensureActive()
+      invalidateCaches()
       emit()
     },
     subscribe(listener) {
@@ -183,6 +226,8 @@ export function createServerBackedRowModel<T>(
       }
       disposed = true
       listeners.clear()
+      rowNodeCache.clear()
+      lastRangeCacheRows = []
     },
   }
 }

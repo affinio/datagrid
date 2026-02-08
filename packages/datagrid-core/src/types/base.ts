@@ -1,7 +1,7 @@
 import type { DataGridColumn, DataGridColumnGroupDef } from "./column"
 import type { DataGridStyleConfig } from "../../theme"
 import type { DataGridPluginDefinition } from "../../plugins"
-import type { DataGridSettingsAdapter } from "../tableSettingsAdapter"
+import type { DataGridSettingsAdapter } from "../dataGridSettingsAdapter"
 
 export type {
   DataGridColumn,
@@ -12,7 +12,7 @@ export type {
   DataGridColumnSticky,
 } from "./column"
 export type { DataGridThemeTokens } from "../../theme"
-export type { DataGridSettingsAdapter } from "../tableSettingsAdapter"
+export type { DataGridSettingsAdapter } from "../dataGridSettingsAdapter"
 
 export type DataGridRowId = string | number
 

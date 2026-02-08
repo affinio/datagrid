@@ -4,13 +4,171 @@ import type {
   DataGridRowModel,
   DataGridRowModelSnapshot,
   DataGridRowNode,
+  DataGridSortState,
+  DataGridFilterSnapshot,
   DataGridViewportRange,
 } from "../models/rowModel"
 
 const DEFAULT_ROW_ENTRY_CACHE_LIMIT = 1024
 const CORE_COLUMN_KEYS = new Set(["key", "label", "width", "minWidth", "maxWidth", "visible", "pin", "meta"])
 
-export interface TableViewportModelBridgeServiceOptions {
+function areSortModelsEqual(
+  left: readonly DataGridSortState[] | null | undefined,
+  right: readonly DataGridSortState[] | null | undefined,
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right || left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftEntry = left[index]
+    const rightEntry = right[index]
+    if (!rightEntry) {
+      return false
+    }
+    if (leftEntry.key !== rightEntry.key) {
+      return false
+    }
+    if ((leftEntry.field ?? null) !== (rightEntry.field ?? null)) {
+      return false
+    }
+    if (leftEntry.direction !== rightEntry.direction) {
+      return false
+    }
+  }
+  return true
+}
+
+function areFilterValuesEqual(left: unknown, right: unknown, depth = 0): boolean {
+  if (Object.is(left, right)) {
+    return true
+  }
+  if (left instanceof Date && right instanceof Date) {
+    return left.getTime() === right.getTime()
+  }
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") {
+    return false
+  }
+  if (depth > 4) {
+    return false
+  }
+  if (Array.isArray(left)) {
+    if (!Array.isArray(right) || left.length !== right.length) {
+      return false
+    }
+    for (let index = 0; index < left.length; index += 1) {
+      if (!areFilterValuesEqual(left[index], right[index], depth + 1)) {
+        return false
+      }
+    }
+    return true
+  }
+  if (Array.isArray(right)) {
+    return false
+  }
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const leftKeys = Object.keys(leftRecord)
+  const rightKeys = Object.keys(rightRecord)
+  if (leftKeys.length !== rightKeys.length) {
+    return false
+  }
+  for (const key of leftKeys) {
+    if (!Object.prototype.hasOwnProperty.call(rightRecord, key)) {
+      return false
+    }
+    if (!areFilterValuesEqual(leftRecord[key], rightRecord[key], depth + 1)) {
+      return false
+    }
+  }
+  return true
+}
+
+function areFilterModelsEqual(
+  left: DataGridFilterSnapshot | null | undefined,
+  right: DataGridFilterSnapshot | null | undefined,
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+
+  const leftColumnFilters = left.columnFilters ?? {}
+  const rightColumnFilters = right.columnFilters ?? {}
+  const leftColumnKeys = Object.keys(leftColumnFilters)
+  const rightColumnKeys = Object.keys(rightColumnFilters)
+  if (leftColumnKeys.length !== rightColumnKeys.length) {
+    return false
+  }
+  for (const key of leftColumnKeys) {
+    if (!Object.prototype.hasOwnProperty.call(rightColumnFilters, key)) {
+      return false
+    }
+    const leftValues = leftColumnFilters[key] ?? []
+    const rightValues = rightColumnFilters[key] ?? []
+    if (leftValues.length !== rightValues.length) {
+      return false
+    }
+    for (let index = 0; index < leftValues.length; index += 1) {
+      if (leftValues[index] !== rightValues[index]) {
+        return false
+      }
+    }
+  }
+
+  const leftAdvanced = left.advancedFilters ?? {}
+  const rightAdvanced = right.advancedFilters ?? {}
+  const leftAdvancedKeys = Object.keys(leftAdvanced)
+  const rightAdvancedKeys = Object.keys(rightAdvanced)
+  if (leftAdvancedKeys.length !== rightAdvancedKeys.length) {
+    return false
+  }
+  for (const key of leftAdvancedKeys) {
+    if (!Object.prototype.hasOwnProperty.call(rightAdvanced, key)) {
+      return false
+    }
+    const leftFilter = leftAdvanced[key]
+    const rightFilter = rightAdvanced[key]
+    if (!leftFilter || !rightFilter) {
+      return false
+    }
+    if (leftFilter.type !== rightFilter.type) {
+      return false
+    }
+    const leftClauses = Array.isArray(leftFilter.clauses) ? leftFilter.clauses : []
+    const rightClauses = Array.isArray(rightFilter.clauses) ? rightFilter.clauses : []
+    if (leftClauses.length !== rightClauses.length) {
+      return false
+    }
+    for (let index = 0; index < leftClauses.length; index += 1) {
+      const leftClause = leftClauses[index]
+      const rightClause = rightClauses[index]
+      if (!rightClause) {
+        return false
+      }
+      if (leftClause.operator !== rightClause.operator) {
+        return false
+      }
+      if ((leftClause.join ?? null) !== (rightClause.join ?? null)) {
+        return false
+      }
+      if (!areFilterValuesEqual(leftClause.value, rightClause.value)) {
+        return false
+      }
+      if (!areFilterValuesEqual(leftClause.value2, rightClause.value2)) {
+        return false
+      }
+    }
+  }
+
+  return true
+}
+
+export interface DataGridViewportModelBridgeServiceOptions {
   initialRowModel?: DataGridRowModel<unknown> | null
   initialColumnModel?: DataGridColumnModel | null
   fallbackRowModel: DataGridRowModel<unknown>
@@ -19,7 +177,7 @@ export interface TableViewportModelBridgeServiceOptions {
   rowEntryCacheLimit?: number
 }
 
-export interface TableViewportModelBridgeService {
+export interface DataGridViewportModelBridgeService {
   setRowModel(model: DataGridRowModel<unknown> | null | undefined): void
   setColumnModel(model: DataGridColumnModel | null | undefined): void
   getActiveRowModel(): DataGridRowModel<unknown>
@@ -31,9 +189,18 @@ export interface TableViewportModelBridgeService {
   dispose(): void
 }
 
-export function createTableViewportModelBridgeService(
-  options: TableViewportModelBridgeServiceOptions,
-): TableViewportModelBridgeService {
+interface ColumnProjectionCacheEntry {
+  columnRef: DataGridColumnDef
+  visible: boolean
+  pin: ReturnType<DataGridColumnModel["getSnapshot"]>["columns"][number]["pin"]
+  width: number | undefined
+  label: string
+  mapped: DataGridColumn
+}
+
+export function createDataGridViewportModelBridgeService(
+  options: DataGridViewportModelBridgeServiceOptions,
+): DataGridViewportModelBridgeService {
   const { fallbackRowModel, fallbackColumnModel, onInvalidate } = options
   const rowEntryCacheLimit =
     Number.isFinite(options.rowEntryCacheLimit) && (options.rowEntryCacheLimit as number) > 0
@@ -51,6 +218,7 @@ export function createTableViewportModelBridgeService(
   const rowEntryCache = new Map<number, VisibleRow | undefined>()
   let columnModelColumnsCache: DataGridColumn[] = []
   let columnModelCacheDirty = true
+  let columnProjectionCache = new Map<string, ColumnProjectionCacheEntry>()
 
   const markRowModelCacheDirty = () => {
     rowCountCacheDirty = true
@@ -77,8 +245,8 @@ export function createTableViewportModelBridgeService(
         snapshot.rowCount === previous?.rowCount &&
         snapshot.loading === previous?.loading &&
         snapshot.error === previous?.error &&
-        snapshot.sortModel === previous?.sortModel &&
-        snapshot.filterModel === previous?.filterModel
+        areSortModelsEqual(snapshot.sortModel, previous?.sortModel) &&
+        areFilterModelsEqual(snapshot.filterModel, previous?.filterModel)
 
       if (!isViewportOnlyUpdate) {
         markRowModelCacheDirty()
@@ -248,9 +416,51 @@ export function createTableViewportModelBridgeService(
       return columnModelColumnsCache
     }
     const snapshot = activeColumnModel.getSnapshot()
-    columnModelColumnsCache = snapshot.columns
-      .filter(column => column.visible)
-      .map(column => toDataGridColumn(column))
+    const nextProjectionCache = new Map<string, ColumnProjectionCacheEntry>()
+    const nextColumns: DataGridColumn[] = []
+
+    for (let index = 0; index < snapshot.columns.length; index += 1) {
+      const snapshotColumn = snapshot.columns[index]
+      if (!snapshotColumn?.visible) {
+        continue
+      }
+
+      const columnDef: DataGridColumnDef = snapshotColumn.column
+      const label = typeof columnDef.label === "string" ? columnDef.label : snapshotColumn.key
+      const widthValue = snapshotColumn.width == null ? columnDef.width : snapshotColumn.width
+      const normalizedWidth = Number.isFinite(widthValue as number) ? (widthValue as number) : undefined
+      const previous = columnProjectionCache.get(snapshotColumn.key)
+      const canReuse = Boolean(previous) &&
+        previous?.columnRef === columnDef &&
+        previous?.visible === snapshotColumn.visible &&
+        previous?.pin === snapshotColumn.pin &&
+        previous?.width === normalizedWidth &&
+        previous?.label === label
+
+      const mapped = canReuse && previous ? previous.mapped : toDataGridColumn(snapshotColumn)
+      nextColumns.push(mapped)
+      nextProjectionCache.set(snapshotColumn.key, {
+        columnRef: columnDef,
+        visible: snapshotColumn.visible,
+        pin: snapshotColumn.pin,
+        width: normalizedWidth,
+        label,
+        mapped,
+      })
+    }
+
+    let columnsUnchanged = nextColumns.length === columnModelColumnsCache.length
+    if (columnsUnchanged) {
+      for (let index = 0; index < nextColumns.length; index += 1) {
+        if (nextColumns[index] !== columnModelColumnsCache[index]) {
+          columnsUnchanged = false
+          break
+        }
+      }
+    }
+
+    columnModelColumnsCache = columnsUnchanged ? columnModelColumnsCache : nextColumns
+    columnProjectionCache = nextProjectionCache
     columnModelCacheDirty = false
     return columnModelColumnsCache
   }
@@ -285,6 +495,7 @@ export function createTableViewportModelBridgeService(
       rowEntryCache.clear()
       columnModelColumnsCache = []
       columnModelCacheDirty = true
+      columnProjectionCache.clear()
     },
   }
 }

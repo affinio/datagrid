@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { DataGridColumn, VisibleRow } from "../../types"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
-import { createTableViewportController } from "../tableViewportController"
+import { createDataGridViewportController } from "../dataGridViewportController"
 
 interface MutableElementMetrics {
   clientWidth: number
@@ -73,7 +73,7 @@ describe("viewport integration snapshot contract", () => {
       scrollWidth: 800,
       scrollHeight: 48,
     })
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
       rowModel,
       columnModel,
@@ -126,7 +126,7 @@ describe("viewport integration snapshot contract", () => {
       scrollWidth: 720,
       scrollHeight: 42,
     })
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: () => "none",
       rowModel,
       columnModel,

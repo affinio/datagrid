@@ -60,9 +60,15 @@ export function createMeasurementQueue(
 
   function schedule<T>(measure: () => T): MeasurementHandle<T> {
     if (disposed || typeof rafRef !== "function") {
-      const value = measure()
+      let promise: Promise<T>
+      try {
+        const value = measure()
+        promise = Promise.resolve(value)
+      } catch (error) {
+        promise = Promise.reject(error)
+      }
       return {
-        promise: Promise.resolve(value),
+        promise,
         cancel() {
           // no-op once resolved synchronously
         },

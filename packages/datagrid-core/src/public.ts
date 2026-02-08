@@ -5,13 +5,6 @@
 export * from "./types/index.js"
 
 export {
-  createInMemoryTableSettingsAdapter,
-  type DataGridSettingsAdapter,
-  type DataGridGroupState,
-  type DataGridPinPosition,
-} from "./tableSettingsAdapter.js"
-
-export {
   createInMemoryDataGridSettingsAdapter,
   type DataGridSettingsAdapter,
   type DataGridGroupState,

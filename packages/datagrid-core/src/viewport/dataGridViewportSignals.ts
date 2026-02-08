@@ -10,7 +10,7 @@ export interface RowPoolItem {
   rowIndex: number
 }
 
-export interface TableViewportState {
+export interface DataGridViewportState {
   startIndex: number
   endIndex: number
   visibleCount: number
@@ -20,7 +20,7 @@ export interface TableViewportState {
   overscanTrailing: number
 }
 
-export interface TableViewportInputSignals {
+export interface DataGridViewportInputSignals {
   scrollTop: WritableSignal<number>
   scrollLeft: WritableSignal<number>
   viewportHeight: WritableSignal<number>
@@ -28,7 +28,7 @@ export interface TableViewportInputSignals {
   virtualizationEnabled: WritableSignal<boolean>
 }
 
-export interface TableViewportCoreSignals {
+export interface DataGridViewportCoreSignals {
   totalRowCount: WritableSignal<number>
   effectiveRowHeight: WritableSignal<number>
   visibleCount: WritableSignal<number>
@@ -40,11 +40,11 @@ export interface TableViewportCoreSignals {
   overscanTrailing: WritableSignal<number>
 }
 
-export interface TableViewportDerivedRowSignals {
+export interface DataGridViewportDerivedRowSignals {
   visibleRange: WritableSignal<{ start: number; end: number }>
 }
 
-export interface TableViewportDerivedColumnSignals {
+export interface DataGridViewportDerivedColumnSignals {
   visibleColumns: WritableSignal<DataGridColumn[]>
   visibleColumnEntries: WritableSignal<ColumnMetric<DataGridColumn>[]>
   visibleScrollableColumns: WritableSignal<DataGridColumn[]>
@@ -74,7 +74,7 @@ export interface TableViewportDerivedColumnSignals {
   }>
 }
 
-export interface TableViewportMetricSignals {
+export interface DataGridViewportMetricSignals {
   debugMode: WritableSignal<boolean>
   fps: WritableSignal<number>
   frameTime: WritableSignal<number>
@@ -87,16 +87,16 @@ export interface TableViewportMetricSignals {
   virtualizerSkips: WritableSignal<number>
 }
 
-export interface TableViewportDerivedSignals {
-  rows: TableViewportDerivedRowSignals
-  columns: TableViewportDerivedColumnSignals
-  metrics: TableViewportMetricSignals
+export interface DataGridViewportDerivedSignals {
+  rows: DataGridViewportDerivedRowSignals
+  columns: DataGridViewportDerivedColumnSignals
+  metrics: DataGridViewportMetricSignals
 }
 
-export interface TableViewportSignals {
-  input: TableViewportInputSignals
-  core: TableViewportCoreSignals
-  derived: TableViewportDerivedSignals
+export interface DataGridViewportSignals {
+  input: DataGridViewportInputSignals
+  core: DataGridViewportCoreSignals
+  derived: DataGridViewportDerivedSignals
   dispose(): void
 }
 
@@ -115,7 +115,7 @@ function cloneInitial<T>(source: T): T {
   return source
 }
 
-export function createTableViewportSignals(createSignal: SignalFactory): TableViewportSignals {
+export function createDataGridViewportSignals(createSignal: SignalFactory): DataGridViewportSignals {
   const resets: Array<() => void> = []
 
   const track = <T,>(initial: T, factory?: () => T): WritableSignal<T> => {
@@ -141,7 +141,7 @@ export function createTableViewportSignals(createSignal: SignalFactory): TableVi
     pinnedRightWidth: 0,
   })
 
-  const input: TableViewportInputSignals = {
+  const input: DataGridViewportInputSignals = {
     scrollTop: track(0),
     scrollLeft: track(0),
     viewportHeight: track(0),
@@ -149,7 +149,7 @@ export function createTableViewportSignals(createSignal: SignalFactory): TableVi
     virtualizationEnabled: track(true),
   }
 
-  const core: TableViewportCoreSignals = {
+  const core: DataGridViewportCoreSignals = {
     totalRowCount: track(0),
     effectiveRowHeight: track(BASE_ROW_HEIGHT),
     visibleCount: track(0),
@@ -161,11 +161,11 @@ export function createTableViewportSignals(createSignal: SignalFactory): TableVi
     overscanTrailing: track(0),
   }
 
-  const derivedRows: TableViewportDerivedRowSignals = {
+  const derivedRows: DataGridViewportDerivedRowSignals = {
     visibleRange: track({ start: 0, end: 0 }, () => ({ start: 0, end: 0 })),
   }
 
-  const derivedColumns: TableViewportDerivedColumnSignals = {
+  const derivedColumns: DataGridViewportDerivedColumnSignals = {
     visibleColumns: track<DataGridColumn[]>([], () => []),
     visibleColumnEntries: track<ColumnMetric<DataGridColumn>[]>([], () => []),
     visibleScrollableColumns: track<DataGridColumn[]>([], () => []),
@@ -183,7 +183,7 @@ export function createTableViewportSignals(createSignal: SignalFactory): TableVi
     columnVirtualState: track(columnVirtualStateFactory(), columnVirtualStateFactory),
   }
 
-  const derivedMetrics: TableViewportMetricSignals = {
+  const derivedMetrics: DataGridViewportMetricSignals = {
     debugMode: track(false),
     fps: track(0),
     frameTime: track(0),
@@ -196,7 +196,7 @@ export function createTableViewportSignals(createSignal: SignalFactory): TableVi
     virtualizerSkips: track(0),
   }
 
-  const derived: TableViewportDerivedSignals = {
+  const derived: DataGridViewportDerivedSignals = {
     rows: derivedRows,
     columns: derivedColumns,
     metrics: derivedMetrics,

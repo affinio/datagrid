@@ -258,6 +258,7 @@ export function mergeRanges(ranges: SelectionArea[]): SelectionArea[] {
       keepMerging = false
       for (let index = 0; index < result.length; index += 1) {
         const current = result[index]
+        if (!current) continue
         if (areasOverlap(current, merged)) {
           merged = mergePair(current, merged)
           result.splice(index, 1)

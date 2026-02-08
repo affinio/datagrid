@@ -59,7 +59,7 @@ export const DATAGRID_SEMVER_RULES = [
 
 export const DATAGRID_DEPRECATION_WINDOWS: readonly DataGridDeprecationWindow[] = [
   {
-    id: "core.viewport.createTableViewportController",
+    id: "core.viewport.createDataGridViewportController",
     deprecatedIn: "0.2.0",
     removeIn: "0.4.0",
     replacement: "createDataGridViewportController from @affino/datagrid-core/advanced",
@@ -67,7 +67,7 @@ export const DATAGRID_DEPRECATION_WINDOWS: readonly DataGridDeprecationWindow[] 
     notes: "Use advanced import and DataGrid-named controller factory.",
   },
   {
-    id: "vue.useTableViewport.serverIntegration-option",
+    id: "vue.useDataGridViewport.serverIntegration-option",
     deprecatedIn: "0.2.0",
     removeIn: "0.4.0",
     replacement: "rowModel-driven integration via @affino/datagrid-core model contracts",

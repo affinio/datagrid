@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import type { ViewportSyncState, ViewportSyncTargets } from "../tableViewportTypes"
-import { createTableViewportRenderSyncService } from "../tableViewportRenderSyncService"
+import type { ViewportSyncState, ViewportSyncTargets } from "../dataGridViewportTypes"
+import { createDataGridViewportRenderSyncService } from "../dataGridViewportRenderSyncService"
 
 function createTargets(): ViewportSyncTargets {
   return {
@@ -24,7 +24,7 @@ describe("table viewport render sync service", () => {
       pinnedOffsetRight: 0,
     }
     const targets = createTargets()
-    const service = createTableViewportRenderSyncService({
+    const service = createDataGridViewportRenderSyncService({
       syncState: state,
       resolveNextState: () => ({
         scrollTop: 24,
@@ -62,7 +62,7 @@ describe("table viewport render sync service", () => {
       pinnedOffsetLeft: 0,
       pinnedOffsetRight: 0,
     }
-    const service = createTableViewportRenderSyncService({
+    const service = createDataGridViewportRenderSyncService({
       syncState: state,
       resolveNextState: overrides => ({
         scrollTop: overrides?.scrollTop ?? 0,

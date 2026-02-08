@@ -6,7 +6,7 @@ import {
   resolveViewportDimensions,
   shouldNotifyNearBottom,
   shouldUseFastPath,
-} from "../tableViewportMath"
+} from "../dataGridViewportMath"
 
 describe("viewport math engine contracts", () => {
   it("resolves viewport dimensions deterministically with fallback guards", () => {

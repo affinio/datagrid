@@ -3,31 +3,31 @@ import { createVerticalAxisStrategy } from "../virtualization/verticalVirtualize
 import { createVerticalOverscanController } from "../virtualization/dynamicOverscan"
 import { clampScrollOffset, computeVerticalScrollLimit } from "../virtualization/scrollLimits"
 import type { VisibleRow } from "../types"
-import type { TableViewportDiagnostics } from "./tableViewportDiagnostics"
-import type { RowPoolItem, TableViewportSignals } from "./tableViewportSignals"
-import type { TableViewportImperativeCallbacks } from "./tableViewportTypes"
-import type { ViewportClock } from "./tableViewportConfig"
+import type { DataGridViewportDiagnostics } from "./dataGridViewportDiagnostics"
+import type { RowPoolItem, DataGridViewportSignals } from "./dataGridViewportSignals"
+import type { DataGridViewportImperativeCallbacks } from "./dataGridViewportTypes"
+import type { ViewportClock } from "./dataGridViewportConfig"
 import {
   FRAME_BUDGET_CONSTANTS,
   VERTICAL_VIRTUALIZATION_CONSTANTS,
   type AxisVirtualizationConstants,
   type ViewportFrameBudget,
-} from "./tableViewportConstants"
+} from "./dataGridViewportConstants"
 
 interface VisibleRangePayload {
   start: number
   end: number
 }
 
-export interface TableViewportVirtualizationOptions {
-  signals: TableViewportSignals
-  diagnostics: TableViewportDiagnostics
+export interface DataGridViewportVirtualizationOptions {
+  signals: DataGridViewportSignals
+  diagnostics: DataGridViewportDiagnostics
   clock: ViewportClock
   frameBudget?: ViewportFrameBudget
   verticalConfig?: AxisVirtualizationConstants
 }
 
-export interface TableViewportVirtualizationUpdateArgs {
+export interface DataGridViewportVirtualizationUpdateArgs {
   resolveRow: (index: number) => VisibleRow | undefined
   resolveRowsInRange?: (range: { start: number; end: number }) => readonly VisibleRow[]
   totalRowCount: number
@@ -41,10 +41,10 @@ export interface TableViewportVirtualizationUpdateArgs {
   measuredScrollTopFromPending: boolean
   cachedNativeScrollHeight: number
   containerHeight: number
-  imperativeCallbacks: TableViewportImperativeCallbacks
+  imperativeCallbacks: DataGridViewportImperativeCallbacks
 }
 
-export interface TableViewportVirtualizationResult {
+export interface DataGridViewportVirtualizationResult {
   scrollTop: number
   lastScrollTopSample: number
   pendingScrollTop: number | null
@@ -54,7 +54,7 @@ export interface TableViewportVirtualizationResult {
   pendingScrollWrite: number | null
 }
 
-export interface TableViewportVirtualizationPrepared {
+export interface DataGridViewportVirtualizationPrepared {
   state: AxisVirtualizerState<undefined>
   scrollTop: number
   lastScrollTopSample: number
@@ -65,27 +65,27 @@ export interface TableViewportVirtualizationPrepared {
   pendingScrollWrite: number | null
 }
 
-export interface TableViewportVirtualizationApplyArgs {
+export interface DataGridViewportVirtualizationApplyArgs {
   resolveRow: (index: number) => VisibleRow | undefined
   resolveRowsInRange?: (range: { start: number; end: number }) => readonly VisibleRow[]
-  imperativeCallbacks: TableViewportImperativeCallbacks
+  imperativeCallbacks: DataGridViewportImperativeCallbacks
 }
 
-export interface TableViewportVirtualization {
+export interface DataGridViewportVirtualization {
   resetOverscan(timestamp: number): void
   resetScrollState(timestamp: number): void
   clampScrollTop(value: number): number
-  prepare(args: TableViewportVirtualizationUpdateArgs): TableViewportVirtualizationPrepared | null
+  prepare(args: DataGridViewportVirtualizationUpdateArgs): DataGridViewportVirtualizationPrepared | null
   applyPrepared(
-    prepared: TableViewportVirtualizationPrepared,
-    applyArgs: TableViewportVirtualizationApplyArgs,
-  ): TableViewportVirtualizationResult
-  update(args: TableViewportVirtualizationUpdateArgs): TableViewportVirtualizationResult | null
+    prepared: DataGridViewportVirtualizationPrepared,
+    applyArgs: DataGridViewportVirtualizationApplyArgs,
+  ): DataGridViewportVirtualizationResult
+  update(args: DataGridViewportVirtualizationUpdateArgs): DataGridViewportVirtualizationResult | null
 }
 
-export function createTableViewportVirtualization(
-  options: TableViewportVirtualizationOptions,
-): TableViewportVirtualization {
+export function createDataGridViewportVirtualization(
+  options: DataGridViewportVirtualizationOptions,
+): DataGridViewportVirtualization {
   const { signals, diagnostics, clock } = options
   const frameBudget = options.frameBudget ?? FRAME_BUDGET_CONSTANTS
   const verticalConfig = options.verticalConfig ?? VERTICAL_VIRTUALIZATION_CONSTANTS
@@ -121,6 +121,7 @@ export function createTableViewportVirtualization(
   const visibleBuffers: VisibleRow[][] = [[], []]
   const visibleSnapshotBuffers: VisibleRow[][] = [[], [], []]
   const rowPool: RowPoolItem[] = []
+  const rangeRowsByIndex = new Map<number, VisibleRow>()
   let activeBufferIndex = 0
   let activeSnapshotBufferIndex = 0
   let rowPoolVersion = 0
@@ -230,25 +231,26 @@ export function createTableViewportVirtualization(
     const rowsInRange =
       typeof resolveRowsInRange === "function"
         ? resolveRowsInRange({ start: startIndexValue, end: rangeEnd })
-        : null
-    const rowsByIndex = rowsInRange
-      ? new Map<number, VisibleRow>(
-          rowsInRange
-            .map(row => {
-              const displayIndex = Number.isFinite(row.displayIndex)
-                ? Math.trunc(row.displayIndex as number)
-                : Math.trunc(row.originalIndex)
-              return [displayIndex, row] as const
-            })
-            .filter(([index]) => index >= startIndexValue && index <= rangeEnd),
-        )
-      : null
+        : []
+    const rowsByIndex = rowsInRange.length ? rangeRowsByIndex : null
+    if (rowsByIndex) {
+      rowsByIndex.clear()
+      for (const row of rowsInRange) {
+        const displayIndex = Number.isFinite(row.displayIndex)
+          ? Math.trunc(row.displayIndex as number)
+          : Math.trunc(row.originalIndex)
+        if (displayIndex < startIndexValue || displayIndex > rangeEnd) {
+          continue
+        }
+        rowsByIndex.set(displayIndex, row)
+      }
+    }
     let filled = 0
     let changed = false
 
     for (let poolIndexValue = 0; poolIndexValue < poolSizeValue; poolIndexValue += 1) {
       const rowIndexValue = startIndexValue + poolIndexValue
-      const entry = rowsByIndex ? (rowsByIndex.get(rowIndexValue) ?? null) : (resolveRow(rowIndexValue) ?? null)
+      const sourceEntry = rowsByIndex ? (rowsByIndex.get(rowIndexValue) ?? null) : (resolveRow(rowIndexValue) ?? null)
       const item = pool[poolIndexValue]
       if (!item) {
         continue
@@ -259,16 +261,23 @@ export function createTableViewportVirtualization(
 
       item.poolIndex = poolIndexValue
       item.rowIndex = rowIndexValue
-      item.entry = entry
+      let entry = sourceEntry
 
       let nextDisplayIndex = rowIndexValue
       if (entry) {
         if (entry.displayIndex !== rowIndexValue) {
-          entry.displayIndex = rowIndexValue
+          // Keep viewport display index deterministic without mutating shared row objects.
+          entry = {
+            ...entry,
+            displayIndex: rowIndexValue,
+          }
         }
         nextDisplayIndex = entry.displayIndex ?? rowIndexValue
+        item.entry = entry
         buffer[filled] = entry
         filled += 1
+      } else {
+        item.entry = null
       }
 
       item.displayIndex = nextDisplayIndex
@@ -349,6 +358,7 @@ export function createTableViewportVirtualization(
     }
     activeSnapshotBufferIndex = 0
     rowPool.length = 0
+    rangeRowsByIndex.clear()
     rowPoolVersion = 0
     lastVisibleRowsSnapshot = visibleSnapshotBuffers[activeSnapshotBufferIndex] ?? []
     lastRowsCallbackSignature = -1
@@ -375,8 +385,8 @@ export function createTableViewportVirtualization(
   }
 
   function applyVirtualState(
-    result: TableViewportVirtualizationPrepared,
-    args: TableViewportVirtualizationApplyArgs,
+    result: DataGridViewportVirtualizationPrepared,
+    args: DataGridViewportVirtualizationApplyArgs,
   ): void {
     const { resolveRow, resolveRowsInRange, imperativeCallbacks } = args
     const {
@@ -445,8 +455,8 @@ export function createTableViewportVirtualization(
   }
 
   function runUpdate(
-    args: TableViewportVirtualizationUpdateArgs,
-  ): TableViewportVirtualizationPrepared | null {
+    args: DataGridViewportVirtualizationUpdateArgs,
+  ): DataGridViewportVirtualizationPrepared | null {
     const {
       totalRowCount: totalRows,
       viewportHeight: viewportHeightValue,
@@ -614,8 +624,8 @@ export function createTableViewportVirtualization(
   }
 
   function prepare(
-    args: TableViewportVirtualizationUpdateArgs,
-  ): TableViewportVirtualizationPrepared | null {
+    args: DataGridViewportVirtualizationUpdateArgs,
+  ): DataGridViewportVirtualizationPrepared | null {
     totalRowCount.value = args.totalRowCount
     effectiveRowHeight.value = args.resolvedRowHeight
     virtualizationEnabled.value = args.virtualizationEnabled
@@ -624,9 +634,9 @@ export function createTableViewportVirtualization(
   }
 
   function applyPrepared(
-    prepared: TableViewportVirtualizationPrepared,
-    applyArgs: TableViewportVirtualizationApplyArgs,
-  ): TableViewportVirtualizationResult {
+    prepared: DataGridViewportVirtualizationPrepared,
+    applyArgs: DataGridViewportVirtualizationApplyArgs,
+  ): DataGridViewportVirtualizationResult {
     applyVirtualState(prepared, applyArgs)
 
     return {
@@ -641,8 +651,8 @@ export function createTableViewportVirtualization(
   }
 
   function update(
-    args: TableViewportVirtualizationUpdateArgs,
-  ): TableViewportVirtualizationResult | null {
+    args: DataGridViewportVirtualizationUpdateArgs,
+  ): DataGridViewportVirtualizationResult | null {
     const prepared = prepare(args)
     if (!prepared) {
       return null

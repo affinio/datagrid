@@ -3,7 +3,7 @@ import {
   createClientRowModel,
   createDataGridColumnModel,
 } from "../../models"
-import { createTableViewportController } from "../tableViewportController"
+import { createDataGridViewportController } from "../dataGridViewportController"
 import type { VisibleRow } from "../../types"
 
 function buildRows(count: number): VisibleRow<{ id: number; value: string }>[] {
@@ -55,7 +55,7 @@ describe("table viewport column-model boundary", () => {
     columnModel.setColumnWidth("c", 240)
 
     const { container, header, cleanup } = mountLayoutNodes()
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
       rowModel,
       columnModel,
@@ -94,7 +94,7 @@ describe("table viewport column-model boundary", () => {
     })
 
     const { container, header, cleanup } = mountLayoutNodes()
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
       rowModel,
       columnModel: firstModel,

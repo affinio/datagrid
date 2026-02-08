@@ -3,13 +3,13 @@ import type { HorizontalOverscanController } from "../virtualization/dynamicOver
 import type { ColumnVirtualizationSnapshot } from "../virtualization/columnSnapshot"
 import type { HorizontalVirtualizerMeta, HorizontalVirtualizerPayload } from "../virtualization/horizontalVirtualizer"
 import type { DataGridColumn } from "../types"
-import type { TableViewportHorizontalMeta } from "./tableViewportHorizontalMeta"
-import type { ImperativeColumnUpdatePayload } from "./tableViewportTypes"
-import { clampHorizontalOffset } from "./tableViewportHorizontalClamp"
+import type { DataGridViewportHorizontalMeta } from "./dataGridViewportHorizontalMeta"
+import type { ImperativeColumnUpdatePayload } from "./dataGridViewportTypes"
+import { clampHorizontalOffset } from "./dataGridViewportHorizontalClamp"
 
 export interface HorizontalUpdateCallbacks {
 	applyColumnSnapshot: (
-		meta: TableViewportHorizontalMeta,
+		meta: DataGridViewportHorizontalMeta,
 		start: number,
 		end: number,
 		payload: HorizontalVirtualizerPayload,
@@ -22,7 +22,7 @@ export interface HorizontalUpdateCallbacks {
 		velocity: number
 		direction: number
 		horizontalState: AxisVirtualizerState<HorizontalVirtualizerPayload>
-		columnMeta: TableViewportHorizontalMeta
+		columnMeta: DataGridViewportHorizontalMeta
 		virtualizationEnabled: boolean
 	}) => void
 	onColumns?: (payload: ImperativeColumnUpdatePayload) => void
@@ -40,7 +40,7 @@ export interface HorizontalUpdatePrepared {
 	lastAppliedHorizontalMetaVersion: number
 	pendingScrollWrite: number | null
 	columnSnapshot?: {
-		meta: TableViewportHorizontalMeta
+		meta: DataGridViewportHorizontalMeta
 		start: number
 		end: number
 		payload: HorizontalVirtualizerPayload
@@ -53,14 +53,14 @@ export interface HorizontalUpdatePrepared {
 		velocity: number
 		direction: number
 		horizontalState: AxisVirtualizerState<HorizontalVirtualizerPayload>
-		columnMeta: TableViewportHorizontalMeta
+		columnMeta: DataGridViewportHorizontalMeta
 		virtualizationEnabled: boolean
 	}
 	columnCallbackPayload?: ImperativeColumnUpdatePayload
 }
 
 export interface HorizontalUpdateParams {
-	columnMeta: TableViewportHorizontalMeta
+	columnMeta: DataGridViewportHorizontalMeta
 	horizontalVirtualizer: AxisVirtualizer<HorizontalVirtualizerMeta<DataGridColumn>, HorizontalVirtualizerPayload>
 	horizontalOverscanController: HorizontalOverscanController
 	callbacks: HorizontalUpdateCallbacks
@@ -178,7 +178,7 @@ export function prepareHorizontalViewport(params: HorizontalUpdateParams): Horiz
 	}
 
 	const effectiveScrollVelocity = computeEffectiveVelocity(frameTimeValue, smoothedHorizontalVelocity)
-	const metaForVirtualizer: TableViewportHorizontalMeta = {
+	const metaForVirtualizer: DataGridViewportHorizontalMeta = {
 		...columnMeta,
 		scrollVelocity: effectiveScrollVelocity,
 		scrollDirection,

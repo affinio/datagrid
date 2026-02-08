@@ -15,8 +15,8 @@ export default createWorkspaceVitestConfig(import.meta.url, {
         "src/selection/selectionState.ts",
         "src/selection/selectionOverlay.ts",
         "src/viewport/scrollSync.ts",
-        "src/viewport/tableViewportHorizontalClamp.ts",
-        "src/viewport/tableViewportHorizontalUpdate.ts",
+        "src/viewport/dataGridViewportHorizontalClamp.ts",
+        "src/viewport/dataGridViewportHorizontalUpdate.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

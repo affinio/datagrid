@@ -28,12 +28,50 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
 export function createClientRowModel<T>(
   options: CreateClientRowModelOptions<T> = {},
 ): ClientRowModel<T> {
+  const structuredCloneRef = (globalThis as typeof globalThis & {
+    structuredClone?: <U>(value: U) => U
+  }).structuredClone
+
+  const cloneSortModel = (input: readonly DataGridSortState[]): readonly DataGridSortState[] =>
+    input.map(item => ({ ...item }))
+
+  const cloneFilterModel = (
+    input: DataGridFilterSnapshot | null,
+  ): DataGridFilterSnapshot | null => {
+    if (!input) {
+      return null
+    }
+    if (typeof structuredCloneRef === "function") {
+      try {
+        return structuredCloneRef(input)
+      } catch {
+        // Fall through to deterministic JS clone for non-cloneable payloads.
+      }
+    }
+    return {
+      columnFilters: Object.fromEntries(
+        Object.entries(input.columnFilters ?? {}).map(([key, values]) => [key, [...values]]),
+      ),
+      advancedFilters: Object.fromEntries(
+        Object.entries(input.advancedFilters ?? {}).map(([key, condition]) => [
+          key,
+          {
+            ...condition,
+            clauses: Array.isArray(condition?.clauses)
+              ? condition.clauses.map(clause => ({ ...clause }))
+              : [],
+          },
+        ]),
+      ),
+    }
+  }
+
   const resolveRowId = options.resolveRowId
   let rows: DataGridRowNode<T>[] = Array.isArray(options.rows)
     ? options.rows.map((row, index) => normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index))
     : []
-  let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
-  let filterModel: DataGridFilterSnapshot | null = options.initialFilterModel ?? null
+  let sortModel: readonly DataGridSortState[] = options.initialSortModel ? cloneSortModel(options.initialSortModel) : []
+  let filterModel: DataGridFilterSnapshot | null = cloneFilterModel(options.initialFilterModel ?? null)
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rows.length)
   let disposed = false
   const listeners = new Set<DataGridRowModelListener<T>>()
@@ -52,8 +90,8 @@ export function createClientRowModel<T>(
       loading: false,
       error: null,
       viewportRange,
-      sortModel,
-      filterModel,
+      sortModel: cloneSortModel(sortModel),
+      filterModel: cloneFilterModel(filterModel),
     }
   }
 
@@ -105,12 +143,12 @@ export function createClientRowModel<T>(
     },
     setSortModel(nextSortModel: readonly DataGridSortState[]) {
       ensureActive()
-      sortModel = Array.isArray(nextSortModel) ? [...nextSortModel] : []
+      sortModel = Array.isArray(nextSortModel) ? cloneSortModel(nextSortModel) : []
       emit()
     },
     setFilterModel(nextFilterModel: DataGridFilterSnapshot | null) {
       ensureActive()
-      filterModel = nextFilterModel ?? null
+      filterModel = cloneFilterModel(nextFilterModel ?? null)
       emit()
     },
     refresh(_reason?: DataGridRowModelRefreshReason) {

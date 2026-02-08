@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { createClientRowModel, createDataGridColumnModel, createServerBackedRowModel } from "../../models"
-import { createTableViewportController } from "../tableViewportController"
+import { createDataGridViewportController } from "../dataGridViewportController"
 import type { ServerRowModel } from "../../serverRowModel/serverRowModel"
 import type { VisibleRow } from "../../types"
 
@@ -98,7 +98,7 @@ describe("table viewport row-model boundary", () => {
 
     const { container, header, cleanup } = mountLayoutNodes()
 
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: () => "none",
       rowModel: clientModel,
       columnModel,
@@ -137,7 +137,7 @@ describe("table viewport row-model boundary", () => {
 
     const { container, header, cleanup } = mountLayoutNodes()
 
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: () => "none",
       rowModel: clientModel,
       columnModel,
@@ -173,7 +173,7 @@ describe("table viewport row-model boundary", () => {
     })
     const { container, header, cleanup } = mountLayoutNodes()
 
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: () => "none",
       rowModel: serverBackedModel,
       columnModel,

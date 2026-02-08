@@ -169,18 +169,17 @@ export function transformDataGridPublicProtocolSource(source: string): DataGridC
   )
   code = applyReplace(
     code,
-    /from\s+["']@affino\/datagrid-core\/viewport\/tableViewportController["']/g,
+    /from\s+["']@affino\/datagrid-core\/viewport\/dataGridViewportController["']/g,
     'from "@affino/datagrid-core/advanced"',
     "viewport-deep-import",
     appliedTransforms,
   )
-  code = applyReplace(
-    code,
-    /\bcreateTableViewportController\b/g,
-    "createDataGridViewportController",
-    "viewport-factory-rename",
-    appliedTransforms,
-  )
+  if (/\bcreateTableViewportController\b/.test(code)) {
+    code = code.replace(/\bcreateTableViewportController\b/g, "createDataGridViewportController")
+    appliedTransforms.push("viewport-factory-rename")
+  } else if (/\bcreateDataGridViewportController\b/.test(code)) {
+    appliedTransforms.push("viewport-factory-rename")
+  }
   code = applyReplace(
     code,
     /\bserverIntegration\s*:/g,

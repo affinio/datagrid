@@ -49,7 +49,7 @@ describe("versionedPublicProtocol contract", () => {
     for (const window of protocol.deprecations) {
       expect(["active", "warning", "removal-ready"]).toContain(window.status)
       expect(window.id.length).toBeGreaterThan(0)
-      if (window.id === "core.viewport.createTableViewportController") {
+      if (window.id === "core.viewport.createDataGridViewportController") {
         expect(window.replacement).toContain("@affino/datagrid-core/advanced")
       }
     }

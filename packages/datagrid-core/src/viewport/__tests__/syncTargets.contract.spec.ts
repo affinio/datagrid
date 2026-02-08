@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
-import { createTableViewportController } from "../tableViewportController"
-import type { ViewportSyncTargets } from "../tableViewportTypes"
+import { createDataGridViewportController } from "../dataGridViewportController"
+import type { ViewportSyncTargets } from "../dataGridViewportTypes"
 
 function createTargets(
   host: HTMLDivElement,
@@ -29,7 +29,7 @@ describe("viewport sync-target contract", () => {
     const hostQuerySpy = vi.spyOn(host, "querySelector")
     const layoutQuerySpy = vi.spyOn(layoutRoot, "querySelector")
 
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: () => "none",
     })
 
@@ -49,7 +49,7 @@ describe("viewport sync-target contract", () => {
     const hostQuerySpy = vi.spyOn(host, "querySelector")
     const layoutQuerySpy = vi.spyOn(layoutRoot, "querySelector")
 
-    const controller = createTableViewportController({
+    const controller = createDataGridViewportController({
       resolvePinMode: () => "none",
     })
 

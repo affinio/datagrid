@@ -3,15 +3,15 @@ import type { ColumnVirtualizationSnapshot } from "../virtualization/columnSnaps
 import type { ColumnPinMode } from "../virtualization/types"
 import type { DataGridColumnModel } from "../models/columnModel"
 import type { DataGridRowModel } from "../models/rowModel"
-import type { RowPoolItem } from "./tableViewportSignals"
-import type { TableViewportHostEnvironment } from "./viewportHostEnvironment"
+import type { RowPoolItem } from "./dataGridViewportSignals"
+import type { DataGridViewportHostEnvironment } from "./viewportHostEnvironment"
 import type { CreateWritableSignal } from "../runtime/signals"
-import type { AxisVirtualizationConstants, ViewportFrameBudget } from "./tableViewportConstants"
-import type { ViewportClock } from "./tableViewportConfig"
+import type { AxisVirtualizationConstants, ViewportFrameBudget } from "./dataGridViewportConstants"
+import type { ViewportClock } from "./dataGridViewportConfig"
 import type { FrameScheduler, FrameSchedulerHooks } from "../runtime/frameScheduler"
 import type { RafScheduler } from "../runtime/rafScheduler"
 import type { MeasurementQueue } from "../runtime/measurementQueue"
-export type { LayoutMeasurementSnapshot } from "./tableViewportLayoutCache"
+export type { LayoutMeasurementSnapshot } from "./dataGridViewportLayoutCache"
 
 export interface ViewportMetricsSnapshot {
   containerWidth: number
@@ -49,7 +49,7 @@ export interface ImperativeScrollSyncPayload {
   timestamp: number
 }
 
-export interface TableViewportImperativeCallbacks {
+export interface DataGridViewportImperativeCallbacks {
   onRows?: (payload: ImperativeRowUpdatePayload) => void
   onColumns?: (payload: ImperativeColumnUpdatePayload) => void
   onScrollSync?: (payload: ImperativeScrollSyncPayload) => void
@@ -95,14 +95,14 @@ export interface ViewportIntegrationSnapshot {
   overlaySync: ViewportSyncState
 }
 
-export interface TableViewportRuntimeOverrides {
+export interface DataGridViewportRuntimeOverrides {
   rafScheduler?: RafScheduler
   createRafScheduler?: () => RafScheduler
   createFrameScheduler?: (hooks: FrameSchedulerHooks) => FrameScheduler
   measurementQueue?: MeasurementQueue
 }
 
-export interface TableViewportControllerOptions {
+export interface DataGridViewportControllerOptions {
   resolvePinMode: (column: DataGridColumn) => ColumnPinMode
   getColumnKey?: (column: DataGridColumn) => string
   resolveColumnWidth?: (column: DataGridColumn, zoom: number) => number
@@ -112,12 +112,12 @@ export interface TableViewportControllerOptions {
   supportsCssZoom?: boolean
   onAfterScroll?: () => void
   onNearBottom?: () => void
-  imperativeCallbacks?: TableViewportImperativeCallbacks
-  hostEnvironment?: TableViewportHostEnvironment
+  imperativeCallbacks?: DataGridViewportImperativeCallbacks
+  hostEnvironment?: DataGridViewportHostEnvironment
   clock?: ViewportClock
   frameBudget?: ViewportFrameBudget
   verticalVirtualization?: AxisVirtualizationConstants
   horizontalVirtualization?: AxisVirtualizationConstants
   normalizeAndClampScroll?: boolean
-  runtime?: TableViewportRuntimeOverrides
+  runtime?: DataGridViewportRuntimeOverrides
 }

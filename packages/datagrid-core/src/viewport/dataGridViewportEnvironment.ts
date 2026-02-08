@@ -1,4 +1,4 @@
-import type { TableViewportHostEnvironment } from "./viewportHostEnvironment"
+import type { DataGridViewportHostEnvironment } from "./viewportHostEnvironment"
 
 export interface ContainerMetrics {
   clientHeight: number
@@ -10,7 +10,7 @@ export interface ContainerMetrics {
 }
 
 export function sampleContainerMetrics(
-  hostEnvironment: TableViewportHostEnvironment,
+  hostEnvironment: DataGridViewportHostEnvironment,
   recordLayoutRead: (count?: number) => void,
   container: HTMLDivElement,
 ): ContainerMetrics {
@@ -35,7 +35,7 @@ export function sampleContainerMetrics(
 }
 
 export function sampleHeaderHeight(
-  hostEnvironment: TableViewportHostEnvironment,
+  hostEnvironment: DataGridViewportHostEnvironment,
   recordLayoutRead: (count?: number) => void,
   header: HTMLElement | null,
 ): number {
@@ -51,7 +51,7 @@ export function sampleHeaderHeight(
 }
 
 export function sampleBoundingRect(
-  hostEnvironment: TableViewportHostEnvironment,
+  hostEnvironment: DataGridViewportHostEnvironment,
   recordLayoutRead: (count?: number) => void,
   target: HTMLElement,
 ): DOMRect | null {
@@ -64,7 +64,7 @@ export function sampleBoundingRect(
 }
 
 export function resolveDomStats(
-  hostEnvironment: TableViewportHostEnvironment,
+  hostEnvironment: DataGridViewportHostEnvironment,
   container: HTMLElement | null,
 ): { rowLayers: number; cells: number; fillers: number } {
   if (!container) {

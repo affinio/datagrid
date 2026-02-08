@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { createTableViewportScrollIo, type TableViewportScrollStateAdapter } from "../tableViewportScrollIo"
-import type { ViewportSyncState } from "../tableViewportTypes"
+import { createDataGridViewportScrollIo, type DataGridViewportScrollStateAdapter } from "../dataGridViewportScrollIo"
+import type { ViewportSyncState } from "../dataGridViewportTypes"
 import * as scrollSyncModule from "../scrollSync"
-import type { TableViewportHostEnvironment } from "../viewportHostEnvironment"
+import type { DataGridViewportHostEnvironment } from "../viewportHostEnvironment"
 import { createFakeRafScheduler } from "./utils/fakeRafScheduler"
 
-type SyncTargets = ReturnType<TableViewportScrollStateAdapter["getSyncTargets"]>
+type SyncTargets = ReturnType<DataGridViewportScrollStateAdapter["getSyncTargets"]>
 
-interface TestScrollStateAdapter extends TableViewportScrollStateAdapter {
+interface TestScrollStateAdapter extends DataGridViewportScrollStateAdapter {
   setScrollSyncTaskId(value: number | null): void
 }
 
@@ -17,7 +17,7 @@ function createScrollStateAdapter(): TestScrollStateAdapter {
   let syncTargets: SyncTargets = null
   const syncState: ViewportSyncState = { scrollLeft: 0, scrollTop: 0, pinnedOffsetLeft: 0, pinnedOffsetRight: 0 }
   let attached = false
-  let resizeObserver: ReturnType<TableViewportScrollStateAdapter["getResizeObserver"]> = null
+  let resizeObserver: ReturnType<DataGridViewportScrollStateAdapter["getResizeObserver"]> = null
   let pendingScrollTop: number | null = null
   let pendingScrollLeft: number | null = null
   let afterScrollTaskId: number | null = null
@@ -111,7 +111,7 @@ function createScrollStateAdapter(): TestScrollStateAdapter {
 }
 
 interface ScrollIoHarness {
-  scrollIo: ReturnType<typeof createTableViewportScrollIo>
+  scrollIo: ReturnType<typeof createDataGridViewportScrollIo>
   container: HTMLDivElement
   fakeRaf: ReturnType<typeof createFakeRafScheduler>
   queueHeavyUpdate: ReturnType<typeof vi.fn>
@@ -132,14 +132,14 @@ function createHarness(): ScrollIoHarness {
   state.setContainer(container)
   state.setAttached(true)
 
-  const hostEnvironment: TableViewportHostEnvironment = {
+  const hostEnvironment: DataGridViewportHostEnvironment = {
     addScrollListener: vi.fn(),
     removeScrollListener: vi.fn(),
     isEventFromContainer: () => true,
     normalizeScrollLeft: element => element.scrollLeft,
   }
 
-  const scrollIo = createTableViewportScrollIo({
+  const scrollIo = createDataGridViewportScrollIo({
     hostEnvironment,
     scheduler: fakeRaf.scheduler,
     recordLayoutRead: vi.fn(),
