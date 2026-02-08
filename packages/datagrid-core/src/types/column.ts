@@ -4,15 +4,15 @@ import type { ColumnMetric as CoreColumnMetric } from "../virtualization/columnS
  * Column related structural types live in this dedicated module so that runtime utilities
  * like `core/columns/columnGroup.ts` can consume them without re-importing the full table types.
  */
-export type UiTableColumnAlignment = "left" | "center" | "right"
+export type DataGridColumnAlignment = "left" | "center" | "right"
 
-export type UiTableColumnEditor = "text" | "select" | "number" | "checkbox" | "none"
+export type DataGridColumnEditor = "text" | "select" | "number" | "checkbox" | "none"
 
-export type UiTableColumnPin = "left" | "right" | "none"
+export type DataGridColumnPin = "left" | "right" | "none"
 
-export type UiTableColumnSticky = "left" | "right"
+export type DataGridColumnSticky = "left" | "right"
 
-export interface UiTableColumn {
+export interface DataGridColumn {
   key: string
   label: string
   width?: number
@@ -22,9 +22,9 @@ export interface UiTableColumn {
   resizable?: boolean
   sortable?: boolean
   visible?: boolean
-  editor?: UiTableColumnEditor | string
-  align?: UiTableColumnAlignment | string
-  headerAlign?: UiTableColumnAlignment | string
+  editor?: DataGridColumnEditor | string
+  align?: DataGridColumnAlignment | string
+  headerAlign?: DataGridColumnAlignment | string
   options?: { label: string; value: any }[] | ((row: any) => { label: string; value: any }[])
   placeholder?: string
   editable?: boolean
@@ -33,7 +33,7 @@ export interface UiTableColumn {
   /**
    * Canonical pin state contract used by runtime and adapters.
    */
-  pin?: UiTableColumnPin
+  pin?: DataGridColumnPin
   /**
    * Marks a column as a system column (row index, selection checkbox, etc).
    * System columns never participate in filtering or sorting.
@@ -50,22 +50,22 @@ export interface UiTableColumn {
   /**
    * @deprecated Legacy compatibility field. Normalize into `pin` in adapters.
    */
-  sticky?: UiTableColumnSticky
+  sticky?: DataGridColumnSticky
   userResized?: boolean
 }
 
-export interface UiTableColumnGroupDef {
+export interface DataGridColumnGroupDef {
   groupId: string
   headerName: string
-  children: (UiTableColumn | UiTableColumnGroupDef)[]
+  children: (DataGridColumn | DataGridColumnGroupDef)[]
   expandable?: boolean
   expanded?: boolean
   paddingLevel?: number
 }
 
-export type UiTableColumnMetric = CoreColumnMetric<UiTableColumn>
+export type DataGridColumnMetric = CoreColumnMetric<DataGridColumn>
 
-export interface HeaderRenderableEntry<TColumn = UiTableColumn> {
+export interface HeaderRenderableEntry<TColumn = DataGridColumn> {
   metric: CoreColumnMetric<TColumn>
   showLeftFiller: boolean
   showRightFiller: boolean

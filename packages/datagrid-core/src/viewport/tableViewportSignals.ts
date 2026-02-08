@@ -1,5 +1,5 @@
 import { BASE_ROW_HEIGHT } from "../utils/constants"
-import type { UiTableColumn, VisibleRow } from "../types"
+import type { DataGridColumn, VisibleRow } from "../types"
 import type { ColumnMetric } from "../virtualization/columnSnapshot"
 import type { WritableSignal } from "../runtime/signals"
 
@@ -45,14 +45,14 @@ export interface TableViewportDerivedRowSignals {
 }
 
 export interface TableViewportDerivedColumnSignals {
-  visibleColumns: WritableSignal<UiTableColumn[]>
-  visibleColumnEntries: WritableSignal<ColumnMetric<UiTableColumn>[]>
-  visibleScrollableColumns: WritableSignal<UiTableColumn[]>
-  visibleScrollableEntries: WritableSignal<ColumnMetric<UiTableColumn>[]>
-  pinnedLeftColumns: WritableSignal<UiTableColumn[]>
-  pinnedLeftEntries: WritableSignal<ColumnMetric<UiTableColumn>[]>
-  pinnedRightColumns: WritableSignal<UiTableColumn[]>
-  pinnedRightEntries: WritableSignal<ColumnMetric<UiTableColumn>[]>
+  visibleColumns: WritableSignal<DataGridColumn[]>
+  visibleColumnEntries: WritableSignal<ColumnMetric<DataGridColumn>[]>
+  visibleScrollableColumns: WritableSignal<DataGridColumn[]>
+  visibleScrollableEntries: WritableSignal<ColumnMetric<DataGridColumn>[]>
+  pinnedLeftColumns: WritableSignal<DataGridColumn[]>
+  pinnedLeftEntries: WritableSignal<ColumnMetric<DataGridColumn>[]>
+  pinnedRightColumns: WritableSignal<DataGridColumn[]>
+  pinnedRightEntries: WritableSignal<ColumnMetric<DataGridColumn>[]>
   leftPadding: WritableSignal<number>
   rightPadding: WritableSignal<number>
   columnWidthMap: WritableSignal<Map<string, number>>
@@ -166,14 +166,14 @@ export function createTableViewportSignals(createSignal: SignalFactory): TableVi
   }
 
   const derivedColumns: TableViewportDerivedColumnSignals = {
-    visibleColumns: track<UiTableColumn[]>([], () => []),
-    visibleColumnEntries: track<ColumnMetric<UiTableColumn>[]>([], () => []),
-    visibleScrollableColumns: track<UiTableColumn[]>([], () => []),
-    visibleScrollableEntries: track<ColumnMetric<UiTableColumn>[]>([], () => []),
-    pinnedLeftColumns: track<UiTableColumn[]>([], () => []),
-    pinnedLeftEntries: track<ColumnMetric<UiTableColumn>[]>([], () => []),
-    pinnedRightColumns: track<UiTableColumn[]>([], () => []),
-    pinnedRightEntries: track<ColumnMetric<UiTableColumn>[]>([], () => []),
+    visibleColumns: track<DataGridColumn[]>([], () => []),
+    visibleColumnEntries: track<ColumnMetric<DataGridColumn>[]>([], () => []),
+    visibleScrollableColumns: track<DataGridColumn[]>([], () => []),
+    visibleScrollableEntries: track<ColumnMetric<DataGridColumn>[]>([], () => []),
+    pinnedLeftColumns: track<DataGridColumn[]>([], () => []),
+    pinnedLeftEntries: track<ColumnMetric<DataGridColumn>[]>([], () => []),
+    pinnedRightColumns: track<DataGridColumn[]>([], () => []),
+    pinnedRightEntries: track<ColumnMetric<DataGridColumn>[]>([], () => []),
     leftPadding: track(0),
     rightPadding: track(0),
     columnWidthMap: track(new Map<string, number>(), () => new Map<string, number>()),

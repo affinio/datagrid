@@ -1,4 +1,4 @@
-// src/ui-table/theme/colorUtils.ts
+// src/datagrid/theme/colorUtils.ts
 // Helpers for converting palette colors into consistent CSS color strings.
 
 function normalizeHex(hex: string): string {

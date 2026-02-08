@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
-  "description": "Framework-agnostic data grid engine core (bootstrap fork from .tmp/ui-table/core)",
+  "description": "Framework-agnostic data grid engine core",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",

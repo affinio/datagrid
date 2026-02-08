@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest"
-import type { UiTableColumn } from "../../types"
+import type { DataGridColumn } from "../../types"
 import { buildHorizontalMeta } from "../tableViewportHorizontalMeta"
 
-function resolvePinMode(column: UiTableColumn): "left" | "right" | "none" {
+function resolvePinMode(column: DataGridColumn): "left" | "right" | "none" {
   return column.pin === "left" || column.pin === "right" ? column.pin : "none"
 }
 
 describe("horizontal meta pinning contract", () => {
   it("does not inject synthetic index inset into viewport width", () => {
-    const columns: UiTableColumn[] = [
+    const columns: DataGridColumn[] = [
       { key: "name", label: "Name", width: 240 },
       { key: "status", label: "Status", width: 180 },
       { key: "updated", label: "Updated", width: 220 },
@@ -33,7 +33,7 @@ describe("horizontal meta pinning contract", () => {
   })
 
   it("subtracts pinned widths exactly once from effective viewport", () => {
-    const columns: UiTableColumn[] = [
+    const columns: DataGridColumn[] = [
       { key: "selection", label: "", width: 48, pin: "left", isSystem: true },
       { key: "name", label: "Name", width: 240, pin: "left" },
       { key: "status", label: "Status", width: 180 },

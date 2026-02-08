@@ -1,36 +1,36 @@
-import type { UiTableSortState } from "./types/sort"
+import type { DataGridSortState } from "./types/sort"
 import type { FilterStateSnapshot } from "./types/filters"
 
-export type UiTablePinPosition = "left" | "right" | "none"
+export type DataGridPinPosition = "left" | "right" | "none"
 
-export interface UiTableGroupState {
+export interface DataGridGroupState {
   columns: string[]
   expansion: Record<string, boolean>
 }
 
-export interface UiTableSettingsAdapter {
+export interface DataGridSettingsAdapter {
   setColumnWidth(tableId: string, columnKey: string, width: number): void
   getColumnWidth(tableId: string, columnKey: string): number | undefined
-  setSortState(tableId: string, state: UiTableSortState[]): void
-  getSortState(tableId: string): UiTableSortState[] | undefined
+  setSortState(tableId: string, state: DataGridSortState[]): void
+  getSortState(tableId: string): DataGridSortState[] | undefined
   setFilterSnapshot(tableId: string, snapshot: FilterStateSnapshot | null): void
   getFilterSnapshot(tableId: string): FilterStateSnapshot | null
-  setPinState(tableId: string, columnKey: string, position: UiTablePinPosition): void
-  getPinState(tableId: string): Record<string, UiTablePinPosition> | null
+  setPinState(tableId: string, columnKey: string, position: DataGridPinPosition): void
+  getPinState(tableId: string): Record<string, DataGridPinPosition> | null
   setGroupState(tableId: string, columns: string[], expansion?: Record<string, boolean>): void
-  getGroupState(tableId: string): UiTableGroupState | null
+  getGroupState(tableId: string): DataGridGroupState | null
   clearTable(tableId: string): void
 }
 
 interface InMemoryTableState {
   columnWidths: Record<string, number>
-  sortState?: UiTableSortState[]
+  sortState?: DataGridSortState[]
   filterSnapshot?: FilterStateSnapshot | null
-  pinState: Record<string, UiTablePinPosition>
-  groupState?: UiTableGroupState | null
+  pinState: Record<string, DataGridPinPosition>
+  groupState?: DataGridGroupState | null
 }
 
-export function createInMemoryTableSettingsAdapter(): UiTableSettingsAdapter {
+export function createInMemoryTableSettingsAdapter(): DataGridSettingsAdapter {
   const state = new Map<string, InMemoryTableState>()
 
   const ensureState = (tableId: string): InMemoryTableState => {

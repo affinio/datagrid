@@ -1,15 +1,15 @@
-// src/ui-table/plugins/manager.ts
-// Runtime manager responsible for installing, updating, and disposing UiTable plugins.
+// src/datagrid/plugins/manager.ts
+// Runtime manager responsible for installing, updating, and disposing DataGrid plugins.
 
-import { UiTablePluginEventBus } from "./eventBus"
+import { DataGridPluginEventBus } from "./eventBus"
 import type {
   DataGridEventArgs,
   DataGridEventMap,
   DataGridEventName,
   DataGridPluginCapabilityMap,
-  UiTablePlugin,
-  UiTablePluginDefinition,
-  UiTablePluginSetupContext,
+  DataGridPlugin,
+  DataGridPluginDefinition,
+  DataGridPluginSetupContext,
 } from "./types"
 
 type HostEmit = (event: string, ...args: readonly unknown[]) => void
@@ -33,19 +33,19 @@ interface ActivePlugin<
   TPluginEvents extends DataGridEventMap,
   TCapabilities extends DataGridPluginCapabilityMap,
 > {
-  plugin: UiTablePlugin<THostEvents, TPluginEvents, TCapabilities>
+  plugin: DataGridPlugin<THostEvents, TPluginEvents, TCapabilities>
   cleanup: CleanupFn
 }
 
-function isUiTablePlugin<
+function isDataGridPlugin<
   THostEvents extends DataGridEventMap,
   TPluginEvents extends DataGridEventMap,
   TCapabilities extends DataGridPluginCapabilityMap,
->(value: unknown): value is UiTablePlugin<THostEvents, TPluginEvents, TCapabilities> {
+>(value: unknown): value is DataGridPlugin<THostEvents, TPluginEvents, TCapabilities> {
   if (!value || typeof value !== "object") {
     return false
   }
-  const plugin = value as UiTablePlugin<THostEvents, TPluginEvents, TCapabilities>
+  const plugin = value as DataGridPlugin<THostEvents, TPluginEvents, TCapabilities>
   return typeof plugin.id === "string" && plugin.id.trim().length > 0 && typeof plugin.setup === "function"
 }
 
@@ -54,18 +54,18 @@ function normalizeDefinition<
   TPluginEvents extends DataGridEventMap,
   TCapabilities extends DataGridPluginCapabilityMap,
 >(
-  definition: UiTablePluginDefinition<THostEvents, TPluginEvents, TCapabilities> | null | undefined,
-): UiTablePlugin<THostEvents, TPluginEvents, TCapabilities> | null {
+  definition: DataGridPluginDefinition<THostEvents, TPluginEvents, TCapabilities> | null | undefined,
+): DataGridPlugin<THostEvents, TPluginEvents, TCapabilities> | null {
   if (!definition) return null
 
-  let candidate: UiTablePlugin<THostEvents, TPluginEvents, TCapabilities> | null = null
+  let candidate: DataGridPlugin<THostEvents, TPluginEvents, TCapabilities> | null = null
 
   if (typeof definition === "function") {
     try {
       candidate = definition()
     } catch (error) {
       if (typeof console !== "undefined" && console.error) {
-        console.error("[UiTablePluginManager] Failed to instantiate plugin factory", error)
+        console.error("[DataGridPluginManager] Failed to instantiate plugin factory", error)
       }
       return null
     }
@@ -73,9 +73,9 @@ function normalizeDefinition<
     candidate = definition
   }
 
-  if (!isUiTablePlugin<THostEvents, TPluginEvents, TCapabilities>(candidate)) {
+  if (!isDataGridPlugin<THostEvents, TPluginEvents, TCapabilities>(candidate)) {
     if (typeof console !== "undefined" && console.warn) {
-      console.warn("[UiTablePluginManager] Ignoring invalid plugin definition", definition)
+      console.warn("[DataGridPluginManager] Ignoring invalid plugin definition", definition)
     }
     return null
   }
@@ -83,12 +83,12 @@ function normalizeDefinition<
   return candidate
 }
 
-export class UiTablePluginManager<
+export class DataGridPluginManager<
   THostEvents extends DataGridEventMap = DataGridEventMap,
   TPluginEvents extends DataGridEventMap = DataGridEventMap,
   TCapabilities extends DataGridPluginCapabilityMap = DataGridPluginCapabilityMap,
 > {
-  private readonly bus = new UiTablePluginEventBus<TPluginEvents>()
+  private readonly bus = new DataGridPluginEventBus<TPluginEvents>()
   private readonly instances = new Map<string, ActivePlugin<THostEvents, TPluginEvents, TCapabilities>>()
   private readonly options: ManagerOptions<TCapabilities>
 
@@ -96,14 +96,14 @@ export class UiTablePluginManager<
     this.options = options
   }
 
-  setPlugins(definitions: Array<UiTablePluginDefinition<THostEvents, TPluginEvents, TCapabilities> | null | undefined>) {
-    const normalized = new Map<string, UiTablePlugin<THostEvents, TPluginEvents, TCapabilities>>()
+  setPlugins(definitions: Array<DataGridPluginDefinition<THostEvents, TPluginEvents, TCapabilities> | null | undefined>) {
+    const normalized = new Map<string, DataGridPlugin<THostEvents, TPluginEvents, TCapabilities>>()
     for (const definition of definitions ?? []) {
       const plugin = normalizeDefinition<THostEvents, TPluginEvents, TCapabilities>(definition)
       if (!plugin) continue
       if (normalized.has(plugin.id)) {
         if (typeof console !== "undefined" && console.warn) {
-          console.warn(`[UiTablePluginManager] Duplicate plugin id "${plugin.id}" ignored`)
+          console.warn(`[DataGridPluginManager] Duplicate plugin id "${plugin.id}" ignored`)
         }
         continue
       }
@@ -157,7 +157,7 @@ export class UiTablePluginManager<
     this.bus.clear()
   }
 
-  private installPlugin(plugin: UiTablePlugin<THostEvents, TPluginEvents, TCapabilities>) {
+  private installPlugin(plugin: DataGridPlugin<THostEvents, TPluginEvents, TCapabilities>) {
     const cleanupFns: CleanupFn[] = []
     const declaredCapabilities = new Set<string>(plugin.capabilities ?? [])
 
@@ -188,7 +188,7 @@ export class UiTablePluginManager<
       return candidate
     }
 
-    const context: UiTablePluginSetupContext<THostEvents, TPluginEvents, TCapabilities> = {
+    const context: DataGridPluginSetupContext<THostEvents, TPluginEvents, TCapabilities> = {
       tableId: this.options.getTableId(),
       getRootElement: this.options.getRootElement,
       hasCapability: capability => resolveCapability(capability, false) !== null,
@@ -199,7 +199,7 @@ export class UiTablePluginManager<
         const handler = resolveCapability(capability, true)
         if (!handler) {
           throw new Error(
-            `[UiTablePluginManager] Plugin "${plugin.id}" attempted forbidden capability "${String(capability)}"`,
+            `[DataGridPluginManager] Plugin "${plugin.id}" attempted forbidden capability "${String(capability)}"`,
           )
         }
         return handler(...args) as ReturnType<TCapabilities[typeof capability]>
@@ -226,7 +226,7 @@ export class UiTablePluginManager<
       }
     } catch (error) {
       if (typeof console !== "undefined" && console.error) {
-        console.error(`[UiTablePluginManager] Plugin "${plugin.id}" setup failed`, error)
+        console.error(`[DataGridPluginManager] Plugin "${plugin.id}" setup failed`, error)
       }
     }
 
@@ -237,7 +237,7 @@ export class UiTablePluginManager<
           fn?.()
         } catch (error) {
           if (typeof console !== "undefined" && console.error) {
-            console.error(`[UiTablePluginManager] Plugin "${plugin.id}" cleanup failed`, error)
+            console.error(`[DataGridPluginManager] Plugin "${plugin.id}" cleanup failed`, error)
           }
         }
       }

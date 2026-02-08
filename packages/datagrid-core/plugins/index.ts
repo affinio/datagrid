@@ -1,4 +1,4 @@
-// src/ui-table/plugins/index.ts
+// src/datagrid/plugins/index.ts
 
 export * from "./types"
 export * from "./manager"

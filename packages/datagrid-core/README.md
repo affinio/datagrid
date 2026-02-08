@@ -34,14 +34,9 @@ import {
 
 Unsafe, no semver guarantees. Use only for local tooling and migrations.
 
-## Naming Migration
+## Naming
 
-`DataGrid*` aliases are available for key modules:
-- settings adapter (`createInMemoryDataGridSettingsAdapter`)
-- runtime (`createDataGridRuntime`, advanced tier)
-- viewport controller (`createDataGridViewportController`, advanced tier)
-
-Legacy `UiTable*` symbols remain available during migration.
+Core naming is fully canonicalized to `DataGrid*` across stable, advanced, and internal entrypoints.
 
 ## Deterministic Integration Snapshot
 

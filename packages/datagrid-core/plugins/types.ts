@@ -1,5 +1,5 @@
-// src/ui-table/plugins/types.ts
-// Shared plugin interfaces for UiTable/DataGrid with typed event maps.
+// src/datagrid/plugins/types.ts
+// Shared plugin interfaces for DataGrid/DataGrid with typed event maps.
 
 export type DataGridEventMap = Record<string, readonly unknown[]>
 export type DataGridPluginCapability = (...args: readonly unknown[]) => unknown
@@ -14,11 +14,11 @@ export type DataGridEventArgs<
   TEvent extends DataGridEventName<TEventMap>,
 > = TEventMap[TEvent] extends readonly unknown[] ? TEventMap[TEvent] : readonly unknown[]
 
-export type UiTablePluginEventHandler<TArgs extends readonly unknown[] = readonly unknown[]> = (
+export type DataGridPluginEventHandler<TArgs extends readonly unknown[] = readonly unknown[]> = (
   ...args: TArgs
 ) => void
 
-export interface UiTablePluginSetupContext<
+export interface DataGridPluginSetupContext<
   THostEvents extends DataGridEventMap = DataGridEventMap,
   TPluginEvents extends DataGridEventMap = DataGridEventMap,
   TCapabilities extends DataGridPluginCapabilityMap = DataGridPluginCapabilityMap,
@@ -54,7 +54,7 @@ export interface UiTablePluginSetupContext<
   /** Subscribes to plugin/local events. Returns an unsubscribe function. */
   on: <TEvent extends DataGridEventName<TPluginEvents>>(
     event: TEvent,
-    handler: UiTablePluginEventHandler<DataGridEventArgs<TPluginEvents, TEvent>>,
+    handler: DataGridPluginEventHandler<DataGridEventArgs<TPluginEvents, TEvent>>,
   ) => () => void
   /** Emits a plugin/local event to other subscribers. */
   emit: <TEvent extends DataGridEventName<TPluginEvents>>(
@@ -65,20 +65,20 @@ export interface UiTablePluginSetupContext<
   registerCleanup: (cleanup: () => void) => void
 }
 
-export interface UiTablePlugin<
+export interface DataGridPlugin<
   THostEvents extends DataGridEventMap = DataGridEventMap,
   TPluginEvents extends DataGridEventMap = DataGridEventMap,
   TCapabilities extends DataGridPluginCapabilityMap = DataGridPluginCapabilityMap,
 > {
   id: string
   capabilities?: readonly DataGridPluginCapabilityName<TCapabilities>[]
-  setup(context: UiTablePluginSetupContext<THostEvents, TPluginEvents, TCapabilities>): void | (() => void)
+  setup(context: DataGridPluginSetupContext<THostEvents, TPluginEvents, TCapabilities>): void | (() => void)
 }
 
-export type UiTablePluginDefinition<
+export type DataGridPluginDefinition<
   THostEvents extends DataGridEventMap = DataGridEventMap,
   TPluginEvents extends DataGridEventMap = DataGridEventMap,
   TCapabilities extends DataGridPluginCapabilityMap = DataGridPluginCapabilityMap,
 > =
-  | UiTablePlugin<THostEvents, TPluginEvents, TCapabilities>
-  | (() => UiTablePlugin<THostEvents, TPluginEvents, TCapabilities>)
+  | DataGridPlugin<THostEvents, TPluginEvents, TCapabilities>
+  | (() => DataGridPlugin<THostEvents, TPluginEvents, TCapabilities>)

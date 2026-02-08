@@ -1,21 +1,21 @@
-// src/ui-table/plugins/eventBus.ts
-// Lightweight event bus used by the UiTable plugin manager.
+// src/datagrid/plugins/eventBus.ts
+// Lightweight event bus used by the DataGrid plugin manager.
 
 import type {
   DataGridEventArgs,
   DataGridEventMap,
   DataGridEventName,
-  UiTablePluginEventHandler,
+  DataGridPluginEventHandler,
 } from "./types"
 
-type UntypedHandler = UiTablePluginEventHandler<readonly unknown[]>
+type UntypedHandler = DataGridPluginEventHandler<readonly unknown[]>
 
-export class UiTablePluginEventBus<TEventMap extends DataGridEventMap = DataGridEventMap> {
+export class DataGridPluginEventBus<TEventMap extends DataGridEventMap = DataGridEventMap> {
   private listeners = new Map<string, Set<UntypedHandler>>()
 
   on<TEvent extends DataGridEventName<TEventMap>>(
     event: TEvent,
-    handler: UiTablePluginEventHandler<DataGridEventArgs<TEventMap, TEvent>>,
+    handler: DataGridPluginEventHandler<DataGridEventArgs<TEventMap, TEvent>>,
   ) {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set())
@@ -25,7 +25,7 @@ export class UiTablePluginEventBus<TEventMap extends DataGridEventMap = DataGrid
 
   off<TEvent extends DataGridEventName<TEventMap>>(
     event: TEvent,
-    handler: UiTablePluginEventHandler<DataGridEventArgs<TEventMap, TEvent>>,
+    handler: DataGridPluginEventHandler<DataGridEventArgs<TEventMap, TEvent>>,
   ) {
     const handlers = this.listeners.get(event)
     if (!handlers) return
@@ -43,10 +43,10 @@ export class UiTablePluginEventBus<TEventMap extends DataGridEventMap = DataGrid
     if (!handlers?.size) return
     for (const handler of [...handlers]) {
       try {
-        ;(handler as UiTablePluginEventHandler<DataGridEventArgs<TEventMap, TEvent>>)(...args)
+        ;(handler as DataGridPluginEventHandler<DataGridEventArgs<TEventMap, TEvent>>)(...args)
       } catch (error) {
         if (typeof console !== "undefined" && console.error) {
-          console.error(`[UiTablePluginEventBus] handler for "${event}" threw`, error)
+          console.error(`[DataGridPluginEventBus] handler for "${event}" threw`, error)
         }
       }
     }

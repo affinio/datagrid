@@ -1,4 +1,4 @@
-import type { UiTableColumn, VisibleRow } from "../types"
+import type { DataGridColumn, VisibleRow } from "../types"
 import type { ColumnVirtualizationSnapshot } from "../virtualization/columnSnapshot"
 import type { ColumnPinMode } from "../virtualization/types"
 import type { DataGridColumnModel } from "../models/columnModel"
@@ -36,7 +36,7 @@ export interface ImperativeRowUpdatePayload {
 }
 
 export interface ImperativeColumnUpdatePayload {
-  snapshot: ColumnVirtualizationSnapshot<UiTableColumn>
+  snapshot: ColumnVirtualizationSnapshot<DataGridColumn>
   scrollLeft: number
   viewportWidth: number
   zoom: number
@@ -103,9 +103,9 @@ export interface TableViewportRuntimeOverrides {
 }
 
 export interface TableViewportControllerOptions {
-  resolvePinMode: (column: UiTableColumn) => ColumnPinMode
-  getColumnKey?: (column: UiTableColumn) => string
-  resolveColumnWidth?: (column: UiTableColumn, zoom: number) => number
+  resolvePinMode: (column: DataGridColumn) => ColumnPinMode
+  getColumnKey?: (column: DataGridColumn) => string
+  resolveColumnWidth?: (column: DataGridColumn, zoom: number) => number
   rowModel?: DataGridRowModel<unknown> | null
   columnModel?: DataGridColumnModel | null
   createSignal?: CreateWritableSignal<unknown>

@@ -1,11 +1,11 @@
 import { palette } from "./palette"
 import { toRgb, toRgba, transparent } from "./colorUtils"
-import type { UiTableStyleConfig } from "./types"
+import type { DataGridStyleConfig } from "./types"
 
 /**
  * Industrial neutral preset used as the default house style for the headless table demo.
  */
-export const industrialNeutralTheme: UiTableStyleConfig = {
+export const industrialNeutralTheme: DataGridStyleConfig = {
   inheritThemeFromDocument: true,
   defaultTokenVariant: "light",
   tokenVariants: {

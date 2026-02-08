@@ -6,9 +6,9 @@ export * from "./types/index.js"
 
 export {
   createInMemoryTableSettingsAdapter,
-  type UiTableSettingsAdapter,
-  type UiTableGroupState,
-  type UiTablePinPosition,
+  type DataGridSettingsAdapter,
+  type DataGridGroupState,
+  type DataGridPinPosition,
 } from "./tableSettingsAdapter.js"
 
 export {

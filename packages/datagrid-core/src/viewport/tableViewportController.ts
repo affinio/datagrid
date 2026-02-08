@@ -9,7 +9,7 @@ import { createRafScheduler } from "../runtime/rafScheduler"
 import { flushMeasurements } from "../runtime/measurementQueue"
 import type { TableViewportResizeObserver } from "./viewportHostEnvironment"
 
-import type { UiTableColumn, VisibleRow } from "../types"
+import type { DataGridColumn, VisibleRow } from "../types"
 import {
 	createClientRowModel,
 	createDataGridColumnModel,
@@ -152,11 +152,11 @@ export function createTableViewportController(
 	options: TableViewportControllerOptions,
 ): TableViewportController {
 	const resolveColumnWidth = options.resolveColumnWidth ?? resolveColumnWidthDefault
-	const getColumnKey = options.getColumnKey ?? ((column: UiTableColumn) => column.key)
+	const getColumnKey = options.getColumnKey ?? ((column: DataGridColumn) => column.key)
 
-	const fallbackResolvePinMode = (column: UiTableColumn): ColumnPinMode => resolveCanonicalPinMode(column)
+	const fallbackResolvePinMode = (column: DataGridColumn): ColumnPinMode => resolveCanonicalPinMode(column)
 
-	const resolvePinMode = (column: UiTableColumn): ColumnPinMode => {
+	const resolvePinMode = (column: DataGridColumn): ColumnPinMode => {
 		const userResolved = options.resolvePinMode ? options.resolvePinMode(column) : fallbackResolvePinMode(column)
 		if (userResolved === "left" || userResolved === "right" || userResolved === "none") {
 			return userResolved
@@ -301,7 +301,7 @@ export function createTableViewportController(
 
 		const horizontalVirtualizer = createAxisVirtualizer(
 			"horizontal",
-			createHorizontalAxisStrategy<UiTableColumn>(),
+			createHorizontalAxisStrategy<DataGridColumn>(),
 			{
 				visibleStart: 0,
 				visibleEnd: 0,
@@ -326,7 +326,7 @@ export function createTableViewportController(
 			minSampleMs: frameBudget.minVelocitySampleMs,
 		})
 
-		const columnSnapshot = createEmptyColumnSnapshot<UiTableColumn>()
+		const columnSnapshot = createEmptyColumnSnapshot<DataGridColumn>()
 		// Cache layout metrics from observers so the heavy path never touches the DOM.
 		const layoutCache: LayoutMeasurementCache = createLayoutMeasurementCache()
 		const fallbackClientRowModel = createClientRowModel<unknown>({ rows: [] })
@@ -727,7 +727,7 @@ export function createTableViewportController(
 			modelBridge.setRowModel(model)
 		}
 
-		function materializeColumnsFromModel(): UiTableColumn[] {
+		function materializeColumnsFromModel(): DataGridColumn[] {
 			return modelBridge.materializeColumns()
 		}
 
@@ -1033,7 +1033,7 @@ export function createTableViewportController(
 			const normalized = clampResult.normalized
 
 			if (isDebugEnabled()) {
-				console.debug("[UiTable] clampScrollLeftValue", {
+				console.debug("[DataGrid] clampScrollLeftValue", {
 					requested: value,
 					normalized,
 					nativeLimit: clampResult.nativeLimit,
@@ -1061,7 +1061,7 @@ export function createTableViewportController(
 			if (!isDebugEnabled()) return
 			const containerRef = container
 			const domStats = resolveDomStats(hostEnvironment, containerRef)
-			console.debug("[UiTable][Horizontal]", {
+			console.debug("[DataGrid][Horizontal]", {
 				scrollLeft: Number(payload.scrollLeft.toFixed(2)),
 				deltaLeft: Number(payload.deltaLeft.toFixed(2)),
 				direction: payload.direction,

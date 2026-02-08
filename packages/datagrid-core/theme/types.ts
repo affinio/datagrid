@@ -1,7 +1,7 @@
-// src/ui-table/theme/types.ts
+// src/datagrid/theme/types.ts
 // Contains base interfaces for table theme tokens and style config.
 
-export interface UiTableThemeTokens {
+export interface DataGridThemeTokens {
   tableFontFamily: string
   tableFontSize: string
   tableTextColor: string
@@ -52,62 +52,62 @@ export interface UiTableThemeTokens {
   pinnedRightBorderWidth: string
 }
 
-export interface UiTableResolvedStyleConfig {
+export interface DataGridResolvedStyleConfig {
   table: Record<string, string>
   header: Record<string, string>
   body: Record<string, string>
   group: Record<string, string>
   summary: Record<string, string>
   state: Record<string, string>
-  tokens: UiTableThemeTokens
+  tokens: DataGridThemeTokens
 }
 
-export interface UiTableStyleSection {
+export interface DataGridStyleSection {
   wrapper?: string
   container?: string
 }
 
-export interface UiTableHeaderStyle {
+export interface DataGridHeaderStyle {
   row?: string
   cell?: string
   selectionCell?: string
   indexCell?: string
 }
 
-export interface UiTableBodyStyle {
+export interface DataGridBodyStyle {
   row?: string
   cell?: string
   selectionCell?: string
   indexCell?: string
 }
 
-export interface UiTableGroupStyle {
+export interface DataGridGroupStyle {
   row?: string
   cell?: string
   caret?: string
 }
 
-export interface UiTableSummaryStyle {
+export interface DataGridSummaryStyle {
   row?: string
   cell?: string
   labelCell?: string
 }
 
-export interface UiTableStateStyle {
+export interface DataGridStateStyle {
   selectedRow?: string
 }
 
-export type UiTableThemeTokenVariants = Record<string, Partial<UiTableThemeTokens>>
+export type DataGridThemeTokenVariants = Record<string, Partial<DataGridThemeTokens>>
 
-export interface UiTableStyleConfig {
-  table?: UiTableStyleSection
-  header?: UiTableHeaderStyle
-  body?: UiTableBodyStyle
-  group?: UiTableGroupStyle
-  summary?: UiTableSummaryStyle
-  state?: UiTableStateStyle
-  tokens?: Partial<UiTableThemeTokens>
-  tokenVariants?: UiTableThemeTokenVariants
+export interface DataGridStyleConfig {
+  table?: DataGridStyleSection
+  header?: DataGridHeaderStyle
+  body?: DataGridBodyStyle
+  group?: DataGridGroupStyle
+  summary?: DataGridSummaryStyle
+  state?: DataGridStateStyle
+  tokens?: Partial<DataGridThemeTokens>
+  tokenVariants?: DataGridThemeTokenVariants
   activeTokenVariant?: string
   defaultTokenVariant?: string
   inheritThemeFromDocument?: boolean

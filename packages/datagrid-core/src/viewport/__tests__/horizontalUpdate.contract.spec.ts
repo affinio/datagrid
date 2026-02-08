@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { UiTableColumn } from "../../types"
+import type { DataGridColumn } from "../../types"
 import { createEmptyColumnSnapshot } from "../../virtualization/columnSnapshot"
 import { createHorizontalOverscanController } from "../../virtualization/dynamicOverscan"
 import { createAxisVirtualizer } from "../../virtualization/axisVirtualizer"
@@ -7,7 +7,7 @@ import { createHorizontalAxisStrategy } from "../../virtualization/horizontalVir
 import { buildHorizontalMeta } from "../tableViewportHorizontalMeta"
 import { prepareHorizontalViewport } from "../tableViewportHorizontalUpdate"
 
-function createColumns(): UiTableColumn[] {
+function createColumns(): DataGridColumn[] {
   return [
     { key: "id", label: "ID", pin: "left", width: 80 },
     { key: "name", label: "Name", width: 180 },
@@ -38,7 +38,7 @@ describe("horizontal update contract", () => {
 
     const horizontalVirtualizer = createAxisVirtualizer(
       "horizontal",
-      createHorizontalAxisStrategy<UiTableColumn>(),
+      createHorizontalAxisStrategy<DataGridColumn>(),
       {
         visibleStart: 0,
         visibleEnd: 0,
@@ -70,7 +70,7 @@ describe("horizontal update contract", () => {
       callbacks: {
         applyColumnSnapshot: () => {},
       },
-      columnSnapshot: createEmptyColumnSnapshot<UiTableColumn>(),
+      columnSnapshot: createEmptyColumnSnapshot<DataGridColumn>(),
       layoutScale: 1,
       viewportWidth: 900,
       nowTs: 32,

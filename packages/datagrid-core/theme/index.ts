@@ -1,4 +1,4 @@
-// src/ui-table/theme/index.ts
+// src/datagrid/theme/index.ts
 
 export * from "./types"
 export * from "./tokens"

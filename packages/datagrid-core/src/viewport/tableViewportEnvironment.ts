@@ -79,8 +79,8 @@ export function resolveDomStats(
     return { rowLayers: 0, cells: 0, fillers: 0 }
   }
   return {
-    rowLayers: query(".ui-table__row-layer").length,
-    cells: query(".ui-table__row-layer .ui-table-cell").length,
-    fillers: query(".ui-table__column-filler").length,
+    rowLayers: query(".datagrid__row-layer").length,
+    cells: query(".datagrid__row-layer .datagrid-cell").length,
+    fillers: query(".datagrid__column-filler").length,
   }
 }

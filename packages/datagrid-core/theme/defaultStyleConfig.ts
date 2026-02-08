@@ -1,7 +1,7 @@
 import { defaultThemeTokens } from "./defaultThemeTokens"
-import type { UiTableResolvedStyleConfig } from "./types"
+import type { DataGridResolvedStyleConfig } from "./types"
 
-export const defaultStyleConfig: UiTableResolvedStyleConfig = {
+export const defaultStyleConfig: DataGridResolvedStyleConfig = {
   table: {
     wrapper: "",
     container: "",

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
-import type { UiTableColumn } from "../../types"
+import type { DataGridColumn } from "../../types"
 import { createHorizontalAxisVirtualizer } from "../../virtualization/horizontalVirtualizer"
 import { buildHorizontalMeta } from "../tableViewportHorizontalMeta"
 import { clampHorizontalOffset } from "../tableViewportHorizontalClamp"
 
-function createColumns(count: number): UiTableColumn[] {
-  const columns: UiTableColumn[] = []
+function createColumns(count: number): DataGridColumn[] {
+  const columns: DataGridColumn[] = []
   for (let index = 0; index < count; index += 1) {
     const pin = index < 2 ? "left" : index >= count - 2 ? "right" : "none"
     columns.push({
@@ -38,7 +38,7 @@ describe("horizontal virtualization and pinning coupling contract", () => {
       scrollWidth: 96_000,
     })
 
-    const virtualizer = createHorizontalAxisVirtualizer<UiTableColumn>()
+    const virtualizer = createHorizontalAxisVirtualizer<DataGridColumn>()
 
     const first = virtualizer.update({
       axis: "horizontal",

@@ -22,9 +22,9 @@ export type {
   DataGridPluginCapability,
   DataGridPluginCapabilityMap,
   DataGridPluginCapabilityName,
-  UiTablePlugin,
-  UiTablePluginDefinition,
-  UiTablePluginSetupContext,
+  DataGridPlugin,
+  DataGridPluginDefinition,
+  DataGridPluginSetupContext,
 } from "../plugins"
 
 export {

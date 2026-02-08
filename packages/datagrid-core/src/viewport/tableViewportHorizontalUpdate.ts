@@ -2,7 +2,7 @@ import type { AxisVirtualizer, AxisVirtualizerState } from "../virtualization/ax
 import type { HorizontalOverscanController } from "../virtualization/dynamicOverscan"
 import type { ColumnVirtualizationSnapshot } from "../virtualization/columnSnapshot"
 import type { HorizontalVirtualizerMeta, HorizontalVirtualizerPayload } from "../virtualization/horizontalVirtualizer"
-import type { UiTableColumn } from "../types"
+import type { DataGridColumn } from "../types"
 import type { TableViewportHorizontalMeta } from "./tableViewportHorizontalMeta"
 import type { ImperativeColumnUpdatePayload } from "./tableViewportTypes"
 import { clampHorizontalOffset } from "./tableViewportHorizontalClamp"
@@ -61,10 +61,10 @@ export interface HorizontalUpdatePrepared {
 
 export interface HorizontalUpdateParams {
 	columnMeta: TableViewportHorizontalMeta
-	horizontalVirtualizer: AxisVirtualizer<HorizontalVirtualizerMeta<UiTableColumn>, HorizontalVirtualizerPayload>
+	horizontalVirtualizer: AxisVirtualizer<HorizontalVirtualizerMeta<DataGridColumn>, HorizontalVirtualizerPayload>
 	horizontalOverscanController: HorizontalOverscanController
 	callbacks: HorizontalUpdateCallbacks
-	columnSnapshot: ColumnVirtualizationSnapshot<UiTableColumn>
+	columnSnapshot: ColumnVirtualizationSnapshot<DataGridColumn>
 	layoutScale: number
 	viewportWidth: number
 	nowTs: number

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { UiTableColumn, VisibleRow } from "../../types"
+import type { DataGridColumn, VisibleRow } from "../../types"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
 import { createTableViewportController } from "../tableViewportController"
 
@@ -52,7 +52,7 @@ function createRows(count: number): VisibleRow[] {
 
 describe("viewport integration snapshot contract", () => {
   it("exposes deterministic pinned/overlay/viewport state through public snapshot", () => {
-    const columns: UiTableColumn[] = [
+    const columns: DataGridColumn[] = [
       { key: "a", label: "A", pin: "left", width: 100, minWidth: 80, maxWidth: 220, visible: true },
       { key: "b", label: "B", pin: "left", width: 120, minWidth: 80, maxWidth: 220, visible: true },
       { key: "c", label: "C", pin: "none", width: 90, minWidth: 80, maxWidth: 220, visible: true },

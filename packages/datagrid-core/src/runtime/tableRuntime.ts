@@ -1,12 +1,12 @@
 import {
-  UiTablePluginManager,
+  DataGridPluginManager,
   type DataGridEventArgs as PluginEventArgs,
   type DataGridEventMap,
   type DataGridEventName,
   type DataGridPluginCapabilityMap,
-  type UiTablePluginDefinition,
+  type DataGridPluginDefinition,
 } from "../../plugins"
-import type { UiTableEventHandlers } from "../types"
+import type { DataGridEventHandlers } from "../types"
 
 export const HOST_EVENT_NAME_MAP = {
   reachBottom: "reach-bottom",
@@ -31,7 +31,7 @@ export const HOST_EVENT_NAME_MAP = {
 export type DataGridHostEventName = keyof typeof HOST_EVENT_NAME_MAP
 
 export type DataGridHostEventArgs<K extends DataGridHostEventName> = NonNullable<
-  UiTableEventHandlers[K]
+  DataGridEventHandlers[K]
 > extends (...args: infer P) => any
   ? Readonly<P>
   : readonly []
@@ -84,8 +84,8 @@ export interface TableRuntimeOptions<
     getRootElement: () => HTMLElement | null
     getCapabilityMap: () => TPluginCapabilities
   }
-  initialHandlers?: UiTableEventHandlers | undefined
-  initialPlugins?: UiTablePluginDefinition<
+  initialHandlers?: DataGridEventHandlers | undefined
+  initialPlugins?: DataGridPluginDefinition<
     DataGridHostEventMap,
     DataGridRuntimePluginEventMap<TPluginEvents>,
     TPluginCapabilities
@@ -108,10 +108,10 @@ export interface TableRuntime<
       ...args: PluginEventArgs<DataGridRuntimePluginEventMap<TPluginEvents>, K>
     ) => void,
   ): () => void
-  setHostHandlers(handlers: UiTableEventHandlers | undefined): void
+  setHostHandlers(handlers: DataGridEventHandlers | undefined): void
   setPlugins(
     plugins:
-      | UiTablePluginDefinition<
+      | DataGridPluginDefinition<
           DataGridHostEventMap,
           DataGridRuntimePluginEventMap<TPluginEvents>,
           TPluginCapabilities
@@ -125,11 +125,11 @@ class InternalTableRuntime<
   TPluginEvents extends DataGridEventMap = Record<never, never>,
   TPluginCapabilities extends DataGridPluginCapabilityMap = Record<never, never>,
 > implements TableRuntime<TPluginEvents, TPluginCapabilities> {
-  private handlers: UiTableEventHandlers
+  private handlers: DataGridEventHandlers
   private readonly onHostEvent: TableRuntimeOptions<TPluginEvents, TPluginCapabilities>["onHostEvent"]
   private readonly onInternalEvent?: TableRuntimeOptions<TPluginEvents, TPluginCapabilities>["onInternalEvent"]
   private readonly onUnknownPluginEvent?: (event: string, args: readonly unknown[]) => void
-  private readonly pluginManager: UiTablePluginManager<
+  private readonly pluginManager: DataGridPluginManager<
     DataGridHostEventMap,
     DataGridRuntimePluginEventMap<TPluginEvents>,
     TPluginCapabilities
@@ -143,7 +143,7 @@ class InternalTableRuntime<
     this.onUnknownPluginEvent = options.onUnknownPluginEvent
     this.getTableId = options.pluginContext.getTableId
 
-    this.pluginManager = new UiTablePluginManager<
+    this.pluginManager = new DataGridPluginManager<
       DataGridHostEventMap,
       DataGridRuntimePluginEventMap<TPluginEvents>,
       TPluginCapabilities
@@ -193,13 +193,13 @@ class InternalTableRuntime<
     return this.pluginManager.on(event, handler)
   }
 
-  setHostHandlers(handlers: UiTableEventHandlers | undefined): void {
+  setHostHandlers(handlers: DataGridEventHandlers | undefined): void {
     this.handlers = handlers ?? {}
   }
 
   setPlugins(
     plugins:
-      | UiTablePluginDefinition<
+      | DataGridPluginDefinition<
           DataGridHostEventMap,
           DataGridRuntimePluginEventMap<TPluginEvents>,
           TPluginCapabilities

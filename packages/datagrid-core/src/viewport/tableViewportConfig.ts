@@ -145,9 +145,9 @@ function queryDomStats(container: HTMLElement): TableViewportDomStats | null {
   if (!container?.querySelectorAll) {
     return null
   }
-  const rowLayers = container.querySelectorAll(".ui-table__row-layer").length
-  const cells = container.querySelectorAll(".ui-table__row-layer .ui-table-cell").length
-  const fillers = container.querySelectorAll(".ui-table__column-filler").length
+  const rowLayers = container.querySelectorAll(".datagrid__row-layer").length
+  const cells = container.querySelectorAll(".datagrid__row-layer .datagrid-cell").length
+  const fillers = container.querySelectorAll(".datagrid__column-filler").length
   return {
     rowLayers,
     cells,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { UiTableColumn, VisibleRow } from "../../types"
+import type { DataGridColumn, VisibleRow } from "../../types"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
 import { createTableViewportController } from "../tableViewportController"
 
@@ -37,8 +37,8 @@ function createMeasuredElement(initial: MutableElementMetrics) {
   }
 }
 
-function createColumns(count: number): UiTableColumn[] {
-  const columns: UiTableColumn[] = []
+function createColumns(count: number): DataGridColumn[] {
+  const columns: DataGridColumn[] = []
   for (let index = 0; index < count; index += 1) {
     const pin = index < 2 ? "left" : index >= count - 2 ? "right" : "none"
     columns.push({

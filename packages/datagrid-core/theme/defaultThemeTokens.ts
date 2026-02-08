@@ -1,6 +1,6 @@
-import type { UiTableThemeTokens } from "./types"
+import type { DataGridThemeTokens } from "./types"
 
-export const defaultThemeTokens: UiTableThemeTokens = {
+export const defaultThemeTokens: DataGridThemeTokens = {
   tableFontFamily:
     '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   tableFontSize: "0.75rem",

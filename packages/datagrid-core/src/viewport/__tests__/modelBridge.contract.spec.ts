@@ -276,7 +276,7 @@ describe("table viewport model bridge service", () => {
     fallbackColumnModel.dispose()
   })
 
-  it("maps headless column defs to ui-table columns at viewport boundary", () => {
+  it("maps headless column defs to datagrid columns at viewport boundary", () => {
     const rowModel = createClientRowModel()
     const columnModel = createDataGridColumnModel({
       columns: [{ key: "id", width: 96, pin: "left", meta: { isSystem: true, stickyLeft: true } }],

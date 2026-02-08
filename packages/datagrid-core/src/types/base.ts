@@ -1,22 +1,22 @@
-import type { UiTableColumn, UiTableColumnGroupDef } from "./column"
-import type { UiTableStyleConfig } from "../../theme"
-import type { UiTablePluginDefinition } from "../../plugins"
-import type { UiTableSettingsAdapter } from "../tableSettingsAdapter"
+import type { DataGridColumn, DataGridColumnGroupDef } from "./column"
+import type { DataGridStyleConfig } from "../../theme"
+import type { DataGridPluginDefinition } from "../../plugins"
+import type { DataGridSettingsAdapter } from "../tableSettingsAdapter"
 
 export type {
-  UiTableColumn,
-  UiTableColumnAlignment,
-  UiTableColumnEditor,
-  UiTableColumnPin,
-  UiTableColumnGroupDef,
-  UiTableColumnSticky,
+  DataGridColumn,
+  DataGridColumnAlignment,
+  DataGridColumnEditor,
+  DataGridColumnPin,
+  DataGridColumnGroupDef,
+  DataGridColumnSticky,
 } from "./column"
-export type { UiTableThemeTokens } from "../../theme"
-export type { UiTableSettingsAdapter } from "../tableSettingsAdapter"
+export type { DataGridThemeTokens } from "../../theme"
+export type { DataGridSettingsAdapter } from "../tableSettingsAdapter"
 
-export type UiTableRowId = string | number
+export type DataGridRowId = string | number
 
-export type UiTableLazyLoadReason =
+export type DataGridLazyLoadReason =
   | "mount"
   | "scroll"
   | "manual"
@@ -24,88 +24,88 @@ export type UiTableLazyLoadReason =
   | "sort-change"
   | "refresh"
 
-export interface UiTableLazyLoadContext {
+export interface DataGridLazyLoadContext {
   page: number
   pageSize: number
   offset: number
   totalLoaded: number
-  reason: UiTableLazyLoadReason
-  sorts?: UiTableSortState[]
-  filters?: UiTableFilterSnapshot | null
+  reason: DataGridLazyLoadReason
+  sorts?: DataGridSortState[]
+  filters?: DataGridFilterSnapshot | null
   mode?: "page" | "block"
   signal?: AbortSignal
   background?: boolean
   blockSize?: number
 }
 
-export interface UiTableServerLoadResult<T = any> {
+export interface DataGridServerLoadResult<T = any> {
   rows: T[]
   total?: number
 }
 
-export type UiTableLazyLoader = (
-  context: UiTableLazyLoadContext
+export type DataGridLazyLoader = (
+  context: DataGridLazyLoadContext
 ) =>
-  | Promise<void | UiTableServerLoadResult | any[]>
+  | Promise<void | DataGridServerLoadResult | any[]>
   | void
-  | UiTableServerLoadResult
+  | DataGridServerLoadResult
   | any[]
 
-export type UiTableSortDirection = "asc" | "desc"
+export type DataGridSortDirection = "asc" | "desc"
 
-export interface UiTableSortState {
+export interface DataGridSortState {
   key: string
   field?: string
-  direction: UiTableSortDirection
+  direction: DataGridSortDirection
 }
 
-export interface UiTableFilterClause {
+export interface DataGridFilterClause {
   operator: string
   value: any
   value2?: any
   join?: "and" | "or"
 }
 
-export interface UiTableAdvancedFilter {
+export interface DataGridAdvancedFilter {
   type: "text" | "number" | "date"
-  clauses: UiTableFilterClause[]
+  clauses: DataGridFilterClause[]
 }
 
-export interface UiTableFilterSnapshot {
+export interface DataGridFilterSnapshot {
   columnFilters: Record<string, string[]>
-  advancedFilters: Record<string, UiTableAdvancedFilter>
+  advancedFilters: Record<string, DataGridAdvancedFilter>
 }
 
-export interface UiTableServerFilterOptionRequest {
+export interface DataGridServerFilterOptionRequest {
   columnKey: string
   search: string
-  filters: UiTableFilterSnapshot | null
+  filters: DataGridFilterSnapshot | null
   limit?: number
 }
 
-export interface UiTableServerFilterOption {
+export interface DataGridServerFilterOption {
   value: unknown
   label?: string
   count?: number
 }
 
-export type UiTableFilterOptionLoader = (
-  context: UiTableServerFilterOptionRequest
-) => Promise<UiTableServerFilterOption[]> | UiTableServerFilterOption[]
+export type DataGridFilterOptionLoader = (
+  context: DataGridServerFilterOptionRequest
+) => Promise<DataGridServerFilterOption[]> | DataGridServerFilterOption[]
 
 export type {
-  UiTableStyleSection,
-  UiTableHeaderStyle,
-  UiTableBodyStyle,
-  UiTableGroupStyle,
-  UiTableSummaryStyle,
-  UiTableStateStyle,
-  UiTableThemeTokenVariants,
-  UiTableStyleConfig,
+  DataGridStyleSection,
+  DataGridHeaderStyle,
+  DataGridBodyStyle,
+  DataGridGroupStyle,
+  DataGridSummaryStyle,
+  DataGridStateStyle,
+  DataGridThemeTokenVariants,
+  DataGridStyleConfig,
 } from "../../theme"
 
 export interface CellEditEvent<T = any> {
-  rowId: UiTableRowId
+  rowId: DataGridRowId
   rowIndex: number
   key: keyof T | string
   value: unknown
@@ -114,37 +114,37 @@ export interface CellEditEvent<T = any> {
   row?: T
 }
 
-export interface UiTableSelectionPoint {
-  rowId: UiTableRowId | null
+export interface DataGridSelectionPoint {
+  rowId: DataGridRowId | null
   rowIndex: number
   colIndex: number
 }
 
-export interface UiTableSelectionRangeInput {
+export interface DataGridSelectionRangeInput {
   startRow: number
   endRow: number
   startCol: number
   endCol: number
-  anchor?: UiTableSelectionPoint
-  focus?: UiTableSelectionPoint
+  anchor?: DataGridSelectionPoint
+  focus?: DataGridSelectionPoint
 }
 
-export interface UiTableSelectionSnapshotRange extends UiTableSelectionRangeInput {
-  anchor: UiTableSelectionPoint
-  focus: UiTableSelectionPoint
-  startRowId?: UiTableRowId | null
-  endRowId?: UiTableRowId | null
+export interface DataGridSelectionSnapshotRange extends DataGridSelectionRangeInput {
+  anchor: DataGridSelectionPoint
+  focus: DataGridSelectionPoint
+  startRowId?: DataGridRowId | null
+  endRowId?: DataGridRowId | null
 }
 
-export interface UiTableSelectionSnapshot {
-  ranges: UiTableSelectionSnapshotRange[]
+export interface DataGridSelectionSnapshot {
+  ranges: DataGridSelectionSnapshotRange[]
   activeRangeIndex: number
-  activeCell: UiTableSelectionPoint | null
-  clone(): UiTableSelectionSnapshot
+  activeCell: DataGridSelectionPoint | null
+  clone(): DataGridSelectionSnapshot
 }
 
-export interface UiTableSelectedCell<T = any> {
-  rowId: UiTableRowId
+export interface DataGridSelectedCell<T = any> {
+  rowId: DataGridRowId
   rowIndex: number
   colIndex: number
   columnKey: string
@@ -152,8 +152,8 @@ export interface UiTableSelectedCell<T = any> {
   row?: T
 }
 
-export interface UiTableSelectionMetricContext<T = any> {
-  cells: UiTableSelectedCell<T>[]
+export interface DataGridSelectionMetricContext<T = any> {
+  cells: DataGridSelectedCell<T>[]
   cellCount: number
   numericValues: number[]
   numericCount: number
@@ -163,82 +163,82 @@ export interface UiTableSelectionMetricContext<T = any> {
   average: number | null
 }
 
-export interface UiTableSelectionMetricFormatterPayload<T = any> {
+export interface DataGridSelectionMetricFormatterPayload<T = any> {
   id: string
   label: string
   value: number | null
-  context: UiTableSelectionMetricContext<T>
+  context: DataGridSelectionMetricContext<T>
 }
 
-export interface UiTableSelectionMetricDefinition<T = any> {
+export interface DataGridSelectionMetricDefinition<T = any> {
   id: string
   label?: string
   precision?: number
-  compute?: (context: UiTableSelectionMetricContext<T>) => number | null | undefined
-  formatter?: (payload: UiTableSelectionMetricFormatterPayload<T>) => string
+  compute?: (context: DataGridSelectionMetricContext<T>) => number | null | undefined
+  formatter?: (payload: DataGridSelectionMetricFormatterPayload<T>) => string
 }
 
-export interface UiTableSelectionMetricResult {
+export interface DataGridSelectionMetricResult {
   id: string
   label: string
   value: number | null
   displayValue: string
 }
 
-export type UiTableSelectionMetricsProp<T = any> =
+export type DataGridSelectionMetricsProp<T = any> =
   | boolean
-  | UiTableSelectionMetricDefinition<T>[]
+  | DataGridSelectionMetricDefinition<T>[]
   | {
       enabled?: boolean
-      metrics?: UiTableSelectionMetricDefinition<T>[]
+      metrics?: DataGridSelectionMetricDefinition<T>[]
     }
 
-export interface UiTableSelectionMetricsConfig<T = any> {
+export interface DataGridSelectionMetricsConfig<T = any> {
   enabled: boolean
-  metrics: UiTableSelectionMetricDefinition<T>[]
+  metrics: DataGridSelectionMetricDefinition<T>[]
 }
 
 export interface VisibleRow<T = any> {
   row: T
-  rowId: UiTableRowId
+  rowId: DataGridRowId
   originalIndex: number
   displayIndex?: number
   stickyTop?: boolean | number
   stickyBottom?: boolean | number
 }
 
-export interface UiTableRowClickEvent<T = any> {
+export interface DataGridRowClickEvent<T = any> {
   row: T
-  rowId: UiTableRowId
+  rowId: DataGridRowId
   rowIndex: number
   displayIndex?: number
   originalIndex?: number
 }
 
-export interface UiTableEventHandlers<T = any> {
+export interface DataGridEventHandlers<T = any> {
   reachBottom?: () => void
-  rowClick?: (payload: UiTableRowClickEvent<T>) => void
+  rowClick?: (payload: DataGridRowClickEvent<T>) => void
   cellEdit?: (event: CellEditEvent<T>) => void
   batchEdit?: (events: CellEditEvent<T>[]) => void
-  selectionChange?: (snapshot: UiTableSelectionSnapshot) => void
-  sortChange?: (state: UiTableSortState | null) => void
+  selectionChange?: (snapshot: DataGridSelectionSnapshot) => void
+  sortChange?: (state: DataGridSortState | null) => void
   filterChange?: (filters: Record<string, string[]>) => void
   filtersReset?: () => void
   zoomChange?: (value: number) => void
   columnResize?: (payload: { key: string; width: number }) => void
   groupFilterToggle?: (open: boolean) => void
   rowsDelete?: (rows: unknown) => void
-  lazyLoad?: (context: UiTableLazyLoadContext) => void
-  lazyLoadComplete?: (context: UiTableLazyLoadContext) => void
-  lazyLoadError?: (context: UiTableLazyLoadContext & { error: unknown }) => void
+  lazyLoad?: (context: DataGridLazyLoadContext) => void
+  lazyLoadComplete?: (context: DataGridLazyLoadContext) => void
+  lazyLoadError?: (context: DataGridLazyLoadContext & { error: unknown }) => void
   autoResizeApplied?: (payload: { columns: string[]; shareWidth: number; viewportWidth: number }) => void
-  selectAllRequest?: (payload: UiTableSelectAllRequestPayload) => void
+  selectAllRequest?: (payload: DataGridSelectAllRequestPayload) => void
 }
 
-export interface UiTableSelectAllRequestPayload {
+export interface DataGridSelectAllRequestPayload {
   checked: boolean
-  filters: UiTableFilterSnapshot | null
-  sorts: UiTableSortState[]
+  filters: DataGridFilterSnapshot | null
+  sorts: DataGridSortState[]
   selection: {
     allSelected: boolean
     isIndeterminate: boolean
@@ -248,71 +248,71 @@ export interface UiTableSelectAllRequestPayload {
   }
 }
 
-export interface UiTableSelectionConfig<T = any> {
+export interface DataGridSelectionConfig<T = any> {
   enabled?: boolean
   mode?: "cell" | "row"
   showSelectionColumn?: boolean
   selected?: (T | string | number)[]
 }
 
-export interface UiTableFeatureConfig<T = any> {
+export interface DataGridFeatureConfig<T = any> {
   inlineControls?: boolean
   hoverable?: boolean
   rowIndexColumn?: boolean
   zoom?: boolean
-  selection?: UiTableSelectionConfig<T>
-  selectionMetrics?: UiTableSelectionMetricsProp<T>
+  selection?: DataGridSelectionConfig<T>
+  selectionMetrics?: DataGridSelectionMetricsProp<T>
 }
 
-export interface UiTableAppearanceConfig {
+export interface DataGridAppearanceConfig {
   rowHeightMode?: "fixed" | "auto"
   rowHeight?: number
-  styleConfig?: UiTableStyleConfig | null
+  styleConfig?: DataGridStyleConfig | null
 }
 
-export interface UiTableLoadConfig {
+export interface DataGridLoadConfig {
   hasMore?: boolean
   pageSize?: number
   autoLoadOnScroll?: boolean
   loadOnMount?: boolean
-  lazyLoader?: UiTableLazyLoader
+  lazyLoader?: DataGridLazyLoader
   serverSideModel?: boolean
-  filterOptionLoader?: UiTableFilterOptionLoader
+  filterOptionLoader?: DataGridFilterOptionLoader
 }
 
-export interface UiTableDebugConfig {
+export interface DataGridDebugConfig {
   viewport?: boolean
 }
 
-export interface UiTableDataConfig<T = any> {
+export interface DataGridDataConfig<T = any> {
   rows?: T[]
   totalRows?: number
   summaryRow?: Record<string, any> | null
 }
 
-export interface UiTableColumnConfig {
-  definitions?: UiTableColumn[]
-  groups?: UiTableColumnGroupDef[]
+export interface DataGridColumnConfig {
+  definitions?: DataGridColumn[]
+  groups?: DataGridColumnGroupDef[]
 }
 
-export interface UiTableStateConfig<T = any> {
+export interface DataGridStateConfig<T = any> {
   selected?: (T | string | number)[]
   loading?: boolean
 }
 
-export interface UiTableConfig<T = any> {
+export interface DataGridConfig<T = any> {
   tableId?: string
-  data?: UiTableDataConfig<T>
-  columns?: UiTableColumnConfig
-  features?: UiTableFeatureConfig<T>
-  appearance?: UiTableAppearanceConfig
-  load?: UiTableLoadConfig
-  debug?: UiTableDebugConfig
-  state?: UiTableStateConfig<T>
-  selection?: UiTableSelectionConfig<T>
-  selectionMetrics?: UiTableSelectionMetricsProp<T>
-  plugins?: UiTablePluginDefinition[]
-  defaultSort?: UiTableSortState | null
-  events?: UiTableEventHandlers<T>
-  settingsAdapter?: UiTableSettingsAdapter
+  data?: DataGridDataConfig<T>
+  columns?: DataGridColumnConfig
+  features?: DataGridFeatureConfig<T>
+  appearance?: DataGridAppearanceConfig
+  load?: DataGridLoadConfig
+  debug?: DataGridDebugConfig
+  state?: DataGridStateConfig<T>
+  selection?: DataGridSelectionConfig<T>
+  selectionMetrics?: DataGridSelectionMetricsProp<T>
+  plugins?: DataGridPluginDefinition[]
+  defaultSort?: DataGridSortState | null
+  events?: DataGridEventHandlers<T>
+  settingsAdapter?: DataGridSettingsAdapter
 }

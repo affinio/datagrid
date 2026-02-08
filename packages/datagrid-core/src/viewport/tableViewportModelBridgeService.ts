@@ -1,4 +1,4 @@
-import type { UiTableColumn, VisibleRow } from "../types"
+import type { DataGridColumn, VisibleRow } from "../types"
 import type { DataGridColumnDef, DataGridColumnModel } from "../models/columnModel"
 import type {
   DataGridRowModel,
@@ -27,7 +27,7 @@ export interface TableViewportModelBridgeService {
   getRowCount(): number
   getRow(index: number): VisibleRow | undefined
   getRowsInRange(range: DataGridViewportRange): readonly VisibleRow[]
-  materializeColumns(): UiTableColumn[]
+  materializeColumns(): DataGridColumn[]
   dispose(): void
 }
 
@@ -49,7 +49,7 @@ export function createTableViewportModelBridgeService(
   let rowCountCache = 0
   let rowCountCacheDirty = true
   const rowEntryCache = new Map<number, VisibleRow | undefined>()
-  let columnModelColumnsCache: UiTableColumn[] = []
+  let columnModelColumnsCache: DataGridColumn[] = []
   let columnModelCacheDirty = true
 
   const markRowModelCacheDirty = () => {
@@ -118,9 +118,9 @@ export function createTableViewportModelBridgeService(
     }
   }
 
-  const toUiTableColumn = (
+  const toDataGridColumn = (
     snapshotColumn: ReturnType<DataGridColumnModel["getSnapshot"]>["columns"][number],
-  ): UiTableColumn => {
+  ): DataGridColumn => {
     const columnDef: DataGridColumnDef = snapshotColumn.column
     const legacyPassthrough = Object.fromEntries(
       Object.entries(columnDef as unknown as Record<string, unknown>)
@@ -243,14 +243,14 @@ export function createTableViewportModelBridgeService(
     return resolvedRows
   }
 
-  const materializeColumns = (): UiTableColumn[] => {
+  const materializeColumns = (): DataGridColumn[] => {
     if (!columnModelCacheDirty) {
       return columnModelColumnsCache
     }
     const snapshot = activeColumnModel.getSnapshot()
     columnModelColumnsCache = snapshot.columns
       .filter(column => column.visible)
-      .map(column => toUiTableColumn(column))
+      .map(column => toDataGridColumn(column))
     columnModelCacheDirty = false
     return columnModelColumnsCache
   }

@@ -1,9 +1,9 @@
 import type {
   DataGridEventMap,
   DataGridPluginCapabilityMap,
-  UiTablePluginDefinition,
+  DataGridPluginDefinition,
 } from "../../plugins"
-import type { UiTableEventHandlers } from "../types"
+import type { DataGridEventHandlers } from "../types"
 import {
   DATAGRID_HOST_EVENT_NAME_MAP,
   createDataGridRuntime,
@@ -56,8 +56,8 @@ export interface CreateDataGridAdapterRuntimeOptions<
     getRootElement: () => HTMLElement | null
     getCapabilityMap: () => TPluginCapabilities
   }
-  initialHandlers?: UiTableEventHandlers | undefined
-  initialPlugins?: UiTablePluginDefinition<
+  initialHandlers?: DataGridEventHandlers | undefined
+  initialPlugins?: DataGridPluginDefinition<
     DataGridHostEventMap,
     DataGridRuntimePluginEventMap<TPluginEvents>,
     TPluginCapabilities

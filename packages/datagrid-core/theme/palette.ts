@@ -1,4 +1,4 @@
-// src/ui-table/theme/palette.ts
+// src/datagrid/theme/palette.ts
 // Centralized palette definitions shared across theme presets.
 
 export const palette = {

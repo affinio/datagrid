@@ -167,7 +167,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("ui-table rAF scroll sync", () => {
+describe("datagrid rAF scroll sync", () => {
   it("defers transforms and heavy path work to rAF", () => {
     const harness = createHarness()
     const applySpy = vi.spyOn(scrollSyncModule, "applyViewportSyncTransforms")

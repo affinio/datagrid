@@ -1,1 +1,1 @@
-export type { UiTableSortState } from "./index"
+export type { DataGridSortState } from "./index"

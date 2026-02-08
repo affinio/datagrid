@@ -1,4 +1,4 @@
-import type { UiTableColumn } from "../types/column"
+import type { DataGridColumn } from "../types/column"
 import type { ColumnMetric } from "../virtualization/columnSnapshot"
 import type { ColumnPinMode } from "../virtualization/types"
 import {
@@ -19,15 +19,15 @@ export const supportsCssZoom =
   typeof CSS.supports === "function" &&
   CSS.supports("zoom: 1")
 
-export const resolveColumnWidth = (column: UiTableColumn, zoom = 1) => resolveColumnWidthCore(column, zoom)
+export const resolveColumnWidth = (column: DataGridColumn, zoom = 1) => resolveColumnWidthCore(column, zoom)
 
-export const accumulateColumnWidths = (columns: UiTableColumn[], zoom = 1): ColumnWidthMetrics =>
+export const accumulateColumnWidths = (columns: DataGridColumn[], zoom = 1): ColumnWidthMetrics =>
   accumulateColumnWidthsCore(columns, zoom)
 
 export function calculateVisibleColumns(
   scrollLeft: number,
   containerWidth: number,
-  columns: UiTableColumn[],
+  columns: DataGridColumn[],
   options: {
     zoom?: number
     pinnedLeftWidth?: number

@@ -1,5 +1,5 @@
 import { COLUMN_VIRTUALIZATION_BUFFER } from "../dom/gridUtils"
-import type { UiTableColumn } from "../types"
+import type { DataGridColumn } from "../types"
 import {
 	computeColumnLayout,
 	type ColumnLayoutMetric,
@@ -8,14 +8,14 @@ import {
 import type { HorizontalVirtualizerMeta } from "../virtualization/horizontalVirtualizer"
 import type { TableViewportControllerOptions } from "./tableViewportTypes"
 
-type LayoutOutput = ColumnLayoutOutput<UiTableColumn>
+type LayoutOutput = ColumnLayoutOutput<DataGridColumn>
 
-export interface TableViewportHorizontalMeta extends HorizontalVirtualizerMeta<UiTableColumn> {
-	scrollableColumns: UiTableColumn[]
+export interface TableViewportHorizontalMeta extends HorizontalVirtualizerMeta<DataGridColumn> {
+	scrollableColumns: DataGridColumn[]
 	scrollableIndices: LayoutOutput["scrollableIndices"]
 	metrics: LayoutOutput["scrollableMetrics"]
-	pinnedLeft: ColumnLayoutMetric<UiTableColumn>[]
-	pinnedRight: ColumnLayoutMetric<UiTableColumn>[]
+	pinnedLeft: ColumnLayoutMetric<DataGridColumn>[]
+	pinnedRight: ColumnLayoutMetric<DataGridColumn>[]
 	indexColumnWidth: number
 	effectiveViewport: number
 	version: number
@@ -23,7 +23,7 @@ export interface TableViewportHorizontalMeta extends HorizontalVirtualizerMeta<U
 }
 
 export interface BuildHorizontalMetaInput {
-	columns: UiTableColumn[]
+	columns: DataGridColumn[]
 	layoutScale: number
 	resolvePinMode: TableViewportControllerOptions["resolvePinMode"]
 	viewportWidth: number

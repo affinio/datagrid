@@ -3,16 +3,16 @@
  * opt-in and pin versions if you rely on them.
  */
 export type {
-  UiTableAdvancedFilter,
-  UiTableSelectionPoint,
-  UiTableSelectionRangeInput,
-  UiTableSelectionSnapshotRange,
-  UiTableSelectionSnapshot,
-  UiTableSelectedCell,
-  UiTableSelectionMetricContext,
-  UiTableSelectionMetricFormatterPayload,
-  UiTableSelectionMetricDefinition,
-  UiTableSelectionMetricResult,
-  UiTableSelectionMetricsProp,
-  UiTableSelectionMetricsConfig,
+  DataGridAdvancedFilter,
+  DataGridSelectionPoint,
+  DataGridSelectionRangeInput,
+  DataGridSelectionSnapshotRange,
+  DataGridSelectionSnapshot,
+  DataGridSelectedCell,
+  DataGridSelectionMetricContext,
+  DataGridSelectionMetricFormatterPayload,
+  DataGridSelectionMetricDefinition,
+  DataGridSelectionMetricResult,
+  DataGridSelectionMetricsProp,
+  DataGridSelectionMetricsConfig,
 } from "./base"
