@@ -1,3 +1,0 @@
-export { HOST_EVENT_NAME_MAP as DATAGRID_HOST_EVENT_NAME_MAP, createTableRuntime as createDataGridRuntime, isHostEventName as isDataGridHostEventName, type EventArgs as DataGridEventArgs, type HostEventName as DataGridHostEventName, type TableRuntime as DataGridRuntime, type TableRuntimeOptions as DataGridRuntimeOptions, } from "./tableRuntime";
-export * from "./tableRuntime";
-//# sourceMappingURL=dataGridRuntime.d.ts.map
