@@ -68,7 +68,7 @@ Component-level exports are intentionally held back until adapter hardening step
 ## Naming Migration
 
 Core component files now use the `DataGrid*` prefix (`DataGrid.vue`, `DataGridViewport.vue`, `DataGridOverlayLayer.vue`).
-Legacy `UiTable*` files are kept as compatibility shims during migration.
+Legacy `UiTable*` files are kept as compatibility shims during migration in `/src/components/legacy.ts`.
 Deprecation window: supported through `2026-08-31`, scheduled removal on `2026-09-01`.
 
 ## Pinning Contract (Adapter Normalization)

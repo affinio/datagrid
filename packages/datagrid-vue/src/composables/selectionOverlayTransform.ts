@@ -1,4 +1,4 @@
-import type { UiTableOverlayTransformInput } from "../types/overlay"
+import type { DataGridOverlayTransformInput } from "../types/overlay"
 import type { TableOverlayScrollSnapshot } from "./useTableOverlayScrollState"
 
 export interface SelectionOverlayViewportState {
@@ -19,7 +19,7 @@ export function buildSelectionOverlayTransform(
   viewportState: SelectionOverlayViewportState,
   pinnedLeftOffset: number,
   pinnedRightOffset: number,
-): UiTableOverlayTransformInput {
+): DataGridOverlayTransformInput {
   const scrollLeft = normalizeFinite(viewportState.scrollLeft)
   const scrollTop = normalizeFinite(viewportState.scrollTop)
   const viewportWidth = Math.max(0, normalizeFinite(viewportState.width))
@@ -39,7 +39,7 @@ export function buildSelectionOverlayTransform(
 
 export function buildSelectionOverlayTransformFromSnapshot(
   snapshot: TableOverlayScrollSnapshot,
-): UiTableOverlayTransformInput {
+): DataGridOverlayTransformInput {
   return buildSelectionOverlayTransform(
     {
       width: snapshot.viewportWidth,

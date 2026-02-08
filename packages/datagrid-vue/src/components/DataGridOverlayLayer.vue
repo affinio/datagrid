@@ -23,9 +23,9 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from "vue"
 import type {
-  UiTableOverlayHandle,
-  UiTableOverlayRectGroups,
-  UiTableOverlayTransformInput,
+  DataGridOverlayHandle,
+  DataGridOverlayRectGroups,
+  DataGridOverlayTransformInput,
 } from "../types/overlay"
 import type { FillHandleStylePayload } from "@affino/datagrid-core/selection/fillHandleStylePool"
 import { resolveOverlayFillHandlePosition } from "./overlayFillHandle"
@@ -54,8 +54,8 @@ const cursorRef = ref<HTMLDivElement | null>(null)
 const fillHandleRef = ref<HTMLDivElement | null>(null)
 
 /* Latest data */
-let latestRects: UiTableOverlayRectGroups | null = null
-let latestTransform: UiTableOverlayTransformInput | null = null
+let latestRects: DataGridOverlayRectGroups | null = null
+let latestTransform: DataGridOverlayTransformInput | null = null
 let latestFillStyle: FillHandleStylePayload | null = null
 
 /* Dirty flags */
@@ -96,7 +96,7 @@ function scheduleFlush() {
 
 /* --- Rendering --- */
 
-function applyViewportTransform(transform: UiTableOverlayTransformInput | null) {
+function applyViewportTransform(transform: DataGridOverlayTransformInput | null) {
   const vp = viewportRef.value
   if (!vp || !transform) return
 
@@ -105,7 +105,7 @@ function applyViewportTransform(transform: UiTableOverlayTransformInput | null) 
   // Scroll transform is owned by viewport sync (core). Overlay viewport only tracks size.
 }
 
-function applyCursor(rects: UiTableOverlayRectGroups | null, transform: UiTableOverlayTransformInput | null) {
+function applyCursor(rects: DataGridOverlayRectGroups | null, transform: DataGridOverlayTransformInput | null) {
   const cursor = cursorRef.value
   if (cursor) {
     const rect = rects?.cursor
@@ -125,7 +125,7 @@ function applyCursor(rects: UiTableOverlayRectGroups | null, transform: UiTableO
   }
 }
 
-function applyFillHandle(style: FillHandleStylePayload | null, transform: UiTableOverlayTransformInput | null) {
+function applyFillHandle(style: FillHandleStylePayload | null, transform: DataGridOverlayTransformInput | null) {
   const el = fillHandleRef.value
   if (!el) return
 
@@ -206,7 +206,7 @@ function flush() {
 
 /* --- Exposed API for adapter --- */
 
-function updateRects(payload: UiTableOverlayRectGroups) {
+function updateRects(payload: DataGridOverlayRectGroups) {
   const nextSelectionSignature = computeRectGroupSignature(payload.selection as readonly OverlayRectLike[] | undefined)
   const nextActiveSelectionSignature = computeRectGroupSignature(
     payload.activeSelection as readonly OverlayRectLike[] | undefined,
@@ -242,7 +242,7 @@ function updateRects(payload: UiTableOverlayRectGroups) {
   }
 }
 
-function updateTransforms(snapshot: UiTableOverlayTransformInput) {
+function updateTransforms(snapshot: DataGridOverlayTransformInput) {
   const nextTransformSignature = [
     snapshot.viewportWidth,
     snapshot.viewportHeight,
@@ -277,7 +277,7 @@ function handleAutoFill(e: MouseEvent) {
 }
 
 /* Expose */
-const api: UiTableOverlayHandle = {
+const api: DataGridOverlayHandle = {
   overlayRef: overlayRef.value,
   viewportRef: viewportRef.value,
   updateRects,

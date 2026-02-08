@@ -1,9 +1,9 @@
 import { onScopeDispose, shallowRef, watch, type Ref } from "vue"
 import type {
-  UiTableOverlayHandle,
-  UiTableOverlayRect,
-  UiTableOverlayRectGroups,
-  UiTableOverlayTransformInput,
+  DataGridOverlayHandle,
+  DataGridOverlayRect,
+  DataGridOverlayRectGroups,
+  DataGridOverlayTransformInput,
 } from "../types/overlay"
 import { releaseFillHandleStyle, type FillHandleStylePayload } from "@affino/datagrid-core/selection/fillHandleStylePool"
 import type { TableOverlayScrollEmitter, TableOverlayScrollSnapshot } from "./useTableOverlayScrollState"
@@ -20,12 +20,12 @@ interface SelectionOverlayViewportState {
 }
 
 export interface UseSelectionOverlayAdapterOptions {
-  overlayComponentRef: Ref<UiTableOverlayHandle | null>
-  selectionRects: Ref<UiTableOverlayRect[]>
-  activeSelectionRects: Ref<UiTableOverlayRect[]>
-  fillPreviewRects: Ref<UiTableOverlayRect[]>
-  cutPreviewRects: Ref<UiTableOverlayRect[]>
-  cursorRect: Ref<UiTableOverlayRect | null>
+  overlayComponentRef: Ref<DataGridOverlayHandle | null>
+  selectionRects: Ref<DataGridOverlayRect[]>
+  activeSelectionRects: Ref<DataGridOverlayRect[]>
+  fillPreviewRects: Ref<DataGridOverlayRect[]>
+  cutPreviewRects: Ref<DataGridOverlayRect[]>
+  cursorRect: Ref<DataGridOverlayRect | null>
   fillHandleStyle: Ref<FillHandleStylePayload | null>
   overlayViewport: Ref<SelectionOverlayViewportState>
   pinnedLeftOffset: Ref<number>
@@ -34,15 +34,15 @@ export interface UseSelectionOverlayAdapterOptions {
 }
 
 export interface SelectionOverlayAdapterHandle {
-  setRects(payload: UiTableOverlayRectGroups): void
-  setTransform(snapshot: UiTableOverlayTransformInput): void
+  setRects(payload: DataGridOverlayRectGroups): void
+  setTransform(snapshot: DataGridOverlayTransformInput): void
   setFillHandleStyle(style: FillHandleStylePayload | null | undefined): void
   refresh(): void
-  getLastRects(): UiTableOverlayRectGroups | null
-  getLastTransform(): UiTableOverlayTransformInput | null
+  getLastRects(): DataGridOverlayRectGroups | null
+  getLastTransform(): DataGridOverlayTransformInput | null
 }
 
-function cloneTransform(input: UiTableOverlayTransformInput): UiTableOverlayTransformInput {
+function cloneTransform(input: DataGridOverlayTransformInput): DataGridOverlayTransformInput {
   return {
     viewportWidth: input.viewportWidth,
     viewportHeight: input.viewportHeight,
@@ -65,32 +65,32 @@ function normalizeViewportSnapshot(snapshot: SelectionOverlayViewportState | und
 }
 
 export function useSelectionOverlayAdapter(options: UseSelectionOverlayAdapterOptions): SelectionOverlayAdapterHandle {
-  const rectSnapshot: UiTableOverlayRectGroups = {
+  const rectSnapshot: DataGridOverlayRectGroups = {
     selection: undefined,
     activeSelection: undefined,
     fillPreview: undefined,
     cutPreview: undefined,
     cursor: null,
   }
-  const cachedRects = shallowRef<UiTableOverlayRectGroups | null>(rectSnapshot)
-  const cachedTransform = shallowRef<UiTableOverlayTransformInput | null>(null)
+  const cachedRects = shallowRef<DataGridOverlayRectGroups | null>(rectSnapshot)
+  const cachedTransform = shallowRef<DataGridOverlayTransformInput | null>(null)
   const cachedFillHandle = shallowRef<FillHandleStylePayload | null | undefined>(undefined)
 
-  function applyRects(handle: UiTableOverlayHandle | null, payload: UiTableOverlayRectGroups | null) {
+  function applyRects(handle: DataGridOverlayHandle | null, payload: DataGridOverlayRectGroups | null) {
     if (!handle || !payload) {
       return
     }
     handle.updateRects(payload)
   }
 
-  function applyTransform(handle: UiTableOverlayHandle | null, snapshot: UiTableOverlayTransformInput | null) {
+  function applyTransform(handle: DataGridOverlayHandle | null, snapshot: DataGridOverlayTransformInput | null) {
     if (!handle || !snapshot) {
       return
     }
     handle.updateTransforms(snapshot)
   }
 
-  function applyFillHandleStyle(handle: UiTableOverlayHandle | null, style: FillHandleStylePayload | null | undefined) {
+  function applyFillHandleStyle(handle: DataGridOverlayHandle | null, style: FillHandleStylePayload | null | undefined) {
     if (!handle) {
       return
     }
@@ -114,11 +114,11 @@ export function useSelectionOverlayAdapter(options: UseSelectionOverlayAdapterOp
   }
 
   function updateRectSources(
-    selection: readonly UiTableOverlayRect[] | undefined,
-    activeSelection: readonly UiTableOverlayRect[] | undefined,
-    fillPreview: readonly UiTableOverlayRect[] | undefined,
-    cutPreview: readonly UiTableOverlayRect[] | undefined,
-    cursor: UiTableOverlayRect | null | undefined,
+    selection: readonly DataGridOverlayRect[] | undefined,
+    activeSelection: readonly DataGridOverlayRect[] | undefined,
+    fillPreview: readonly DataGridOverlayRect[] | undefined,
+    cutPreview: readonly DataGridOverlayRect[] | undefined,
+    cursor: DataGridOverlayRect | null | undefined,
   ) {
     rectSnapshot.selection = selection && selection.length ? selection : undefined
     rectSnapshot.activeSelection = activeSelection && activeSelection.length ? activeSelection : undefined
@@ -129,7 +129,7 @@ export function useSelectionOverlayAdapter(options: UseSelectionOverlayAdapterOp
     applyRects(options.overlayComponentRef.value, rectSnapshot)
   }
 
-  function setRects(payload: UiTableOverlayRectGroups) {
+  function setRects(payload: DataGridOverlayRectGroups) {
     updateRectSources(
       payload.selection,
       payload.activeSelection,
@@ -139,7 +139,7 @@ export function useSelectionOverlayAdapter(options: UseSelectionOverlayAdapterOp
     )
   }
 
-  function setTransform(snapshot: UiTableOverlayTransformInput) {
+  function setTransform(snapshot: DataGridOverlayTransformInput) {
     cachedTransform.value = cloneTransform(snapshot)
     applyTransform(options.overlayComponentRef.value, cachedTransform.value)
   }

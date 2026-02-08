@@ -1,5 +1,5 @@
 <script lang="ts">
-import UiTableRowSurface from "./UiTableRowSurface.vue"
+import DataGridRowSurface from "./DataGridRowSurface.vue"
 
-export default UiTableRowSurface
+export default DataGridRowSurface
 </script>

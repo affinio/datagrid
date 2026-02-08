@@ -40,7 +40,8 @@
                       <slot name="header-pinned-left" />
                     </div>
                   </div>
-                </div>\n                <div class="ui-table__header-section ui-table__header-section--main">
+                </div>
+                <div class="ui-table__header-section ui-table__header-section--main">
                   <div
                     ref="headerMainRef"
                     class="ui-table__header-main ui-table__header-surface ui-table__header-surface--main"
@@ -140,8 +141,8 @@ import { computed, ref, watchEffect, onBeforeUnmount, watch, toRef } from "vue"
 import UiVirtualDebugPanel from "./UiVirtualDebugPanel.vue"
 import DataGridOverlayLayer from "./DataGridOverlayLayer.vue"
 import type { VirtualDebugMetrics } from "../composables/useVirtualDebug"
-import type { UiTableExposeBindings } from "../context"
-import type { UiTableOverlayHandle } from "../types/overlay"
+import type { DataGridExposeBindings } from "../context"
+import type { DataGridOverlayHandle } from "../types/overlay"
 import type { ViewportSyncTargets } from "@affino/datagrid-core/viewport/tableViewportTypes"
 import { createWheelAccumulator } from "../utils/createWheelAccumulator"
 
@@ -151,7 +152,7 @@ const props = defineProps<{
   ariaRowCount: number
   ariaColCount: number
   containerRef: HTMLDivElement | null
-  exposedApi?: UiTableExposeBindings
+  exposedApi?: DataGridExposeBindings
   debugActive?: boolean
   debugMetrics?: VirtualDebugMetrics | null
   startFillDrag?: (event: MouseEvent) => void
@@ -198,7 +199,7 @@ const backgroundSpacerRef = ref<HTMLDivElement | null>(null)
 const colsLayerRef = ref<HTMLDivElement | null>(null)
 const rowsLayerRef = ref<HTMLDivElement | null>(null)
 const viewportContentRef = ref<HTMLDivElement | null>(null)
-const overlayComponentRef = ref<UiTableOverlayHandle | null>(null)
+const overlayComponentRef = ref<DataGridOverlayHandle | null>(null)
 
 const rowsLayerInlineStyle = computed(() => ({
   height: "var(--ui-table-total-height, 0px)",

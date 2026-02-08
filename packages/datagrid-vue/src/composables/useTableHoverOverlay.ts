@@ -21,7 +21,7 @@ import {
 import { createHoverDelegationEnvironment } from "../adapters/hoverEnvironment"
 import type { UiTableColumn, VisibleRow } from "@affino/datagrid-core/types"
 import type { HeaderRenderableEntry } from "@affino/datagrid-core/types/internal"
-import type { UiTableColumnBinding } from "../context"
+import type { DataGridColumnBinding } from "../context"
 import type { TableOverlayScrollEmitter, TableOverlayScrollSnapshot } from "./useTableOverlayScrollState"
 
 interface HoverColumnRect {
@@ -38,7 +38,7 @@ interface UseTableHoverOverlayOptions {
   headerRef: Ref<HTMLElement | null>
   isHoverableTable: ComputedRef<boolean>
   headerRenderableEntries: ComputedRef<HeaderRenderableEntry[]>
-  bodyColumnBindings: ComputedRef<Map<string, UiTableColumnBinding>>
+  bodyColumnBindings: ComputedRef<Map<string, DataGridColumnBinding>>
   columnWidthDomMap: ComputedRef<Map<string, number>>
   leftPaddingDom: ComputedRef<number>
   rightPaddingDom: ComputedRef<number>

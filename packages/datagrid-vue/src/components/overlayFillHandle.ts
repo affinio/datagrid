@@ -1,5 +1,5 @@
 import type { FillHandleStylePayload } from "@affino/datagrid-core/selection/fillHandleStylePool"
-import type { UiTableOverlayTransformInput } from "../types/overlay"
+import type { DataGridOverlayTransformInput } from "../types/overlay"
 
 export interface OverlayFillHandlePosition {
   x: number
@@ -15,7 +15,7 @@ function normalizeFinite(value: number | null | undefined): number {
 
 export function resolveOverlayFillHandlePosition(
   style: FillHandleStylePayload | null | undefined,
-  transform: UiTableOverlayTransformInput | null,
+  transform: DataGridOverlayTransformInput | null,
 ): OverlayFillHandlePosition | null {
   if (!style) {
     return null

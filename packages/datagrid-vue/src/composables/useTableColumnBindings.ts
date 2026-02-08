@@ -1,7 +1,7 @@
 import { computed, type ComputedRef, type Ref } from "vue"
 import type { UiTableColumn } from "@affino/datagrid-core/types"
 import type { HeaderRenderableEntry } from "@affino/datagrid-core/types/internal"
-import type { UiTableColumnBinding } from "../context"
+import type { DataGridColumnBinding } from "../context"
 
 interface UseTableColumnBindingsOptions {
   headerRenderableEntries: ComputedRef<HeaderRenderableEntry[]>
@@ -70,8 +70,8 @@ export function useTableColumnBindings({
     return map
   })
 
-  const bodyColumnBindings = computed<Map<string, UiTableColumnBinding>>(() => {
-    const bindings = new Map<string, UiTableColumnBinding>()
+  const bodyColumnBindings = computed<Map<string, DataGridColumnBinding>>(() => {
+    const bindings = new Map<string, DataGridColumnBinding>()
     for (const entry of headerRenderableEntries.value) {
       const column = entry.metric.column
       const columnIndex = getColumnIndex(column.key)
@@ -90,7 +90,7 @@ export function useTableColumnBindings({
     return bindings
   })
 
-  const getBodyColumnBinding = (columnKey: string): UiTableColumnBinding => {
+  const getBodyColumnBinding = (columnKey: string): DataGridColumnBinding => {
     const binding = bodyColumnBindings.value.get(columnKey)
     if (!binding) {
       throw new Error(`Missing body column binding for key: ${columnKey}`)

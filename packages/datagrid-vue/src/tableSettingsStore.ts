@@ -151,3 +151,5 @@ export const useTableSettingsStore = defineStore("tableSettingsStore", {
 })
 
 export type TableSettingsStore = ReturnType<typeof useTableSettingsStore>
+export const useDataGridSettingsStore = useTableSettingsStore
+export type DataGridSettingsStore = TableSettingsStore

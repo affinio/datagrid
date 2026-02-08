@@ -3,11 +3,11 @@
  * Component-level API will be exposed after contract hardening.
  */
 export {
-  createPiniaTableSettingsAdapter as createDataGridSettingsAdapter,
+  createDataGridSettingsAdapter,
 } from "./piniaTableSettingsAdapter"
 export {
-  useTableSettingsStore as useDataGridSettingsStore,
-  type TableSettingsStore as DataGridSettingsStore,
+  useDataGridSettingsStore,
+  type DataGridSettingsStore,
 } from "./tableSettingsStore"
 export {
   buildSelectionOverlayTransform as buildDataGridOverlayTransform,

@@ -4,7 +4,7 @@
       :class="['ui-table', tableWrapperClass, { 'ui-table--hoverable': isHoverableTable }]"
       :style="tableInlineStyle"
     >
-      <UiTableToolbar
+      <DataGridToolbar
         :use-inline-controls="useInlineControls"
         :has-active-filters-or-groups="hasActiveFiltersOrGroups"
         :reset-filters-button-name="resetFiltersButtonName"
@@ -40,28 +40,28 @@
         @scroll="handleViewportScrollEvent"
       >
         <template #header-pinned-left>
-          <UiTableHeader section="pinned-left" />
+          <DataGridHeader section="pinned-left" />
         </template>
         <template #header-main>
-          <UiTableHeader section="main" />
+          <DataGridHeader section="main" />
         </template>
         <template #header-pinned-right>
-          <UiTableHeader section="pinned-right" />
+          <DataGridHeader section="pinned-right" />
         </template>
         <template #body-pinned-left>
-          <UiTableVirtualBodyRegion section="pinned-left" />
+          <DataGridVirtualBodyRegion section="pinned-left" />
         </template>
         <template #body-pinned-right>
-          <UiTableVirtualBodyRegion section="pinned-right" />
+          <DataGridVirtualBodyRegion section="pinned-right" />
         </template>
         <template #body-main>
-          <UiTableVirtualBodyRegion section="main" />
+          <DataGridVirtualBodyRegion section="main" />
           <div v-if="showVirtualEmptyState" class="ui-table__empty-state">No data</div>
-          <UiTableSummary v-if="hasSummaryRow" />
+          <DataGridSummary v-if="hasSummaryRow" />
         </template>
       </DataGridViewport>
     </div>
-    <UiTableStatusBar
+    <DataGridStatusBar
       :row-count-display="formattedRowCount"
       :selected-row-count="selectedRowCount"
       :selected-row-count-display="formattedSelectedRowCount"
@@ -73,7 +73,7 @@
       v-model:zoom="zoomModel"
     />
 
-    <UiTableModals
+    <DataGridModals
       :advanced-open="advancedModalState.open"
       :advanced-column-label="advancedModalColumn?.label ?? ''"
       :advanced-type="advancedModalType"
@@ -93,15 +93,15 @@
 import { ref, computed, watch, nextTick, useSlots, onBeforeUnmount, onMounted, shallowRef, provide, unref } from "vue"
 import type { ComputedRef, Ref, CSSProperties } from "vue"
 import DataGridViewport from "./DataGridViewport.vue"
-import UiTableVirtualBodyRegion from "./UiTableVirtualBodyRegion.vue"
-import UiTableHeader from "./UiTableHeader.vue"
-import UiTableStatusBar from "./UiTableStatusBar.vue"
-import UiTableSummary from "./UiTableSummary.vue"
+import DataGridVirtualBodyRegion from "./DataGridVirtualBodyRegion.vue"
+import DataGridHeader from "./DataGridHeader.vue"
+import DataGridStatusBar from "./DataGridStatusBar.vue"
+import DataGridSummary from "./DataGridSummary.vue"
 import { useTableClipboardBridge } from "../composables/useTableClipboardBridge"
 import { useTableTheme } from "../composables/useTableTheme"
-import { useTableSettingsStore } from "../tableSettingsStore"
+import { useDataGridSettingsStore } from "../tableSettingsStore"
 import type { UiTableSettingsAdapter } from "@affino/datagrid-core/tableSettingsAdapter"
-import { createPiniaTableSettingsAdapter } from "../piniaTableSettingsAdapter"
+import { createDataGridSettingsAdapter } from "../piniaTableSettingsAdapter"
 import type {
   CellEditEvent,
   UiTableColumn,
@@ -126,7 +126,7 @@ import { useTableHistory, type HistoryEntry } from "../composables/useTableHisto
 import { useTableEditing, isColumnEditable as baseIsColumnEditable } from "../composables/useTableEditing"
 import { useTableSelection, type SelectionArea, type SelectionPoint, type SelectionRange } from "../composables/useTableSelection"
 import type { TableOverlayScrollEmitter } from "../composables/useTableOverlayScrollState"
-import type { UiTableOverlayHandle } from "../types/overlay"
+import type { DataGridOverlayHandle } from "../types/overlay"
 import { useCellFlash } from "@affino/datagrid-core/dom/useCellFlash"
 import { getCellElement, supportsCssZoom } from "@affino/datagrid-core/dom/gridUtils"
 import { useTableHoverOverlay } from "../composables/useTableHoverOverlay"
@@ -172,8 +172,8 @@ import "@affino/datagrid-core/styles/empty-state.css"
 import "@affino/datagrid-core/styles/summary-footer.css"
 import "@affino/datagrid-core/styles/cell-select-trigger.css"
 import "@affino/datagrid-core/styles/debug.css"
-import UiTableToolbar from "./UiTableToolbar.vue"
-import UiTableModals from "./UiTableModals.vue"
+import DataGridToolbar from "./DataGridToolbar.vue"
+import DataGridModals from "./DataGridModals.vue"
 import { useColumnGroups } from "../composables/useColumnGroups"
 import type { UiTableColumnGroupDef } from "@affino/datagrid-core/types/column"
 import { useFindReplaceStore } from "../stores/useFindReplaceStore"
@@ -187,19 +187,19 @@ import { useDataGridRowSelectionFacade } from "../features/useDataGridRowSelecti
 import { useDataGridViewportBridge } from "../features/useDataGridViewportBridge"
 import { useColumnFilterMenuBridge } from "@affino/datagrid-core/filtering/useColumnFilterMenuBridge"
 import {
-  UiTableHeaderContextKey,
-  type UiTableHeaderBindings,
-  UiTableBodyContextKey,
-  type UiTableBodyBindings,
-  type UiTableRowViewModel,
-  type UiTableRowCellDescriptor,
-  type UiTableRowRegion,
-  type UiTableColumnBinding,
+  DataGridHeaderContextKey,
+  type DataGridHeaderBindings,
+  DataGridBodyContextKey,
+  type DataGridBodyBindings,
+  type DataGridRowViewModel,
+  type DataGridRowCellDescriptor,
+  type DataGridRowRegion,
+  type DataGridColumnBinding,
   type GroupSelectionState,
-  UiTableSummaryContextKey,
-  type UiTableSummaryBindings,
-  UiTableExposeContextKey,
-  type UiTableExposeBindings,
+  DataGridSummaryContextKey,
+  type DataGridSummaryBindings,
+  DataGridExposeContextKey,
+  type DataGridExposeBindings,
   type ColumnPinPosition,
 } from "../context"
 import type { HeaderRenderableEntry } from "@affino/datagrid-core/types/internal"
@@ -212,7 +212,7 @@ import {
 } from "@affino/datagrid-core/config/tableConfig"
 import { useTableRuntime } from "../composables/useTableRuntime"
 import { computeSelectionMetrics, createNumberFormatterResolver } from "@affino/datagrid-core/selection/selectionMetrics"
-import { useUiTableApi, createLegacyExpose } from "../core/api/useUiTableApi"
+import { useDataGridApi, createDataGridLegacyExpose } from "../core/api/useDataGridApi"
 import { useTableRecalcWatcher } from "../composables/useTableRecalcWatcher"
 
 const FILTER_OPTION_FETCH_LIMIT = 200
@@ -285,8 +285,8 @@ const emit = defineEmits([
 const findReplace = useFindReplaceStore()
 
 const tableId = computed<string>(() => normalizedProps.value.tableId)
-const tableSettings = useTableSettingsStore()
-const defaultSettingsAdapter = createPiniaTableSettingsAdapter(tableSettings)
+const tableSettings = useDataGridSettingsStore()
+const defaultSettingsAdapter = createDataGridSettingsAdapter(tableSettings)
 const settingsAdapter = computed<UiTableSettingsAdapter>(() => {
   return normalizedProps.value.config.settingsAdapter ?? defaultSettingsAdapter
 })
@@ -548,7 +548,7 @@ type TableViewportExposeRefs = {
   colsLayerRef?: ExposedViewportElement
   rowsLayerRef?: ExposedViewportElement
   overlayRef?: ExposedViewportElement
-  overlayComponentRef?: Ref<UiTableOverlayHandle | null>
+  overlayComponentRef?: Ref<DataGridOverlayHandle | null>
 }
 
 type TableSelectionFallback = {
@@ -617,7 +617,7 @@ const tableViewportRef = ref<TableViewportExposeRefs | null>(null)
 const containerRef = ref<HTMLDivElement | null>(null)
 const viewportSyncTargets = ref<ViewportSyncTargets | null>(null)
 
-const overlayComponentHandle = computed<UiTableOverlayHandle | null>(() => {
+const overlayComponentHandle = computed<DataGridOverlayHandle | null>(() => {
   const viewport = tableViewportRef.value
   if (!viewport?.overlayComponentRef) {
     return null
@@ -1456,7 +1456,7 @@ type TableRecalcOptions = {
 const requestTableRecalc = (reason: string, options: TableRecalcOptions = {}) => {
   const { refresh: shouldRefresh = true, overlay = false, viewport = false } = options
   if (isTableDebugEnabled && typeof console !== "undefined" && typeof console.info === "function") {
-    console.info(`[UiTable] recalc requested: ${reason}`, {
+    console.info(`[DataGrid] recalc requested: ${reason}`, {
       refresh: shouldRefresh,
       overlay,
       viewport,
@@ -1746,7 +1746,7 @@ const columnSurfaces = computed(() => {
       "pinned-left": pinnedLeft,
       center,
       "pinned-right": pinnedRight,
-    } as Record<UiTableRowRegion, RegionSurface>,
+    } as Record<DataGridRowRegion, RegionSurface>,
     map: aggregate,
   }
 })
@@ -1759,7 +1759,7 @@ const selectionOverlayColumnSurfaces = computed<Map<string, SelectionOverlayColu
   const pinnedRightWorldStart = centerWorldStart + (surfaces.byRegion.center?.totalWidth ?? 0)
 
   const appendRegion = (
-    region: UiTableRowRegion,
+    region: DataGridRowRegion,
     pin: SelectionOverlayColumnSurface["pin"],
     worldStart: number,
   ) => {
@@ -1786,7 +1786,7 @@ const selectionOverlayColumnSurfaces = computed<Map<string, SelectionOverlayColu
   return result
 })
 
-const resolveColumnSurface = (region: UiTableRowRegion, columnKey: string): ColumnSurface | null => {
+const resolveColumnSurface = (region: DataGridRowRegion, columnKey: string): ColumnSurface | null => {
   const surfaces = columnSurfaces.value
   const regionSurface = surfaces.byRegion[region]?.map.get(columnKey)
   if (regionSurface) {
@@ -2361,12 +2361,12 @@ const renderTableSlotNodes = (slotName: string, slotProps: Record<string, unknow
 interface BuildRowViewOptions {
   pooled: RowPoolItem
   entries: HeaderRenderableEntry[]
-  region: UiTableRowRegion
+  region: DataGridRowRegion
 }
 
 const buildDataCellProps = (
   pooledRow: RowPoolItem,
-  binding: UiTableColumnBinding,
+  binding: DataGridColumnBinding,
   columnKey: string,
 ): Record<string, unknown> => {
   const rowEntry = pooledRow.entry
@@ -2424,7 +2424,7 @@ const createSelectionCellDescriptor = (
     entry: HeaderRenderableEntry
     surface: ColumnSurface
   },
-): UiTableRowCellDescriptor => {
+): DataGridRowCellDescriptor => {
   const { pooled, entry, surface } = options
   const binding = getBodyColumnBinding(entry.metric.column.key)
   const rowIndex = pooled.displayIndex
@@ -2470,7 +2470,7 @@ const createIndexCellDescriptor = (
     entry: HeaderRenderableEntry
     surface: ColumnSurface
   },
-): UiTableRowCellDescriptor => {
+): DataGridRowCellDescriptor => {
   const { pooled, entry, surface } = options
   const binding = getBodyColumnBinding(entry.metric.column.key)
   const rowIndex = pooled.displayIndex
@@ -2506,7 +2506,7 @@ const createDataCellDescriptor = (
     entry: HeaderRenderableEntry
     surface: ColumnSurface
   },
-): UiTableRowCellDescriptor => {
+): DataGridRowCellDescriptor => {
   const { pooled, entry, surface } = options
   const columnKey = entry.metric.column.key
   const binding = getBodyColumnBinding(columnKey)
@@ -2537,7 +2537,7 @@ const buildRowViewModel = ({
   pooled,
   entries,
   region,
-}: BuildRowViewOptions): UiTableRowViewModel => {
+}: BuildRowViewOptions): DataGridRowViewModel => {
   const rowEntry = pooled.entry
   if (!rowEntry) {
     return { kind: "empty" }
@@ -2573,7 +2573,7 @@ const buildRowViewModel = ({
     rowGridClass(rowEntry.row ?? null),
   ]
 
-  const cells: UiTableRowCellDescriptor[] = []
+  const cells: DataGridRowCellDescriptor[] = []
 
   for (const entry of entries) {
     const columnKey = entry.metric.column.key
@@ -2604,7 +2604,7 @@ const buildRowViewModel = ({
   }
 }
 
-const headerBindings: UiTableHeaderBindings = createDataGridHeaderBindings({
+const headerBindings: DataGridHeaderBindings = createDataGridHeaderBindings({
   headerRef,
   headerRowStickyStyle,
   hasColumnGroups,
@@ -2675,7 +2675,7 @@ const headerBindings: UiTableHeaderBindings = createDataGridHeaderBindings({
   resolveColumnSurface,
 })
 
-provide(UiTableHeaderContextKey, headerBindings)
+provide(DataGridHeaderContextKey, headerBindings)
 
 const { closeFindReplace } = useDataGridFindReplaceFacade({
   findReplace,
@@ -2862,7 +2862,7 @@ function hasCustomRenderer(columnKey: string) {
   return Boolean(tableSlots[`cell-${columnKey}`])
 }
 
-const bodyBindings: UiTableBodyBindings = {
+const bodyBindings: DataGridBodyBindings = {
   virtualContainerStyle,
   pooledRows,
   rowLayerStyle,
@@ -2966,9 +2966,9 @@ const bodyBindings: UiTableBodyBindings = {
   getRegionSurfaceWidth: region => columnSurfaces.value.byRegion[region]?.totalWidth ?? 0,
 }
 
-provide(UiTableBodyContextKey, bodyBindings)
+provide(DataGridBodyContextKey, bodyBindings)
 
-const summaryBindings: UiTableSummaryBindings = {
+const summaryBindings: DataGridSummaryBindings = {
   headerRenderableEntries,
   summaryRowClass,
   summaryCellClass,
@@ -2983,9 +2983,9 @@ const summaryBindings: UiTableSummaryBindings = {
   resolveColumnSurface: (region, columnKey) => resolveColumnSurface(region, columnKey),
 }
 
-provide(UiTableSummaryContextKey, summaryBindings)
+provide(DataGridSummaryContextKey, summaryBindings)
 
-const tableApi = useUiTableApi({
+const tableApi = useDataGridApi({
   navigation: {
     scrollToRow,
     scrollToColumn,
@@ -3054,16 +3054,16 @@ const tableApi = useUiTableApi({
   },
 })
 
-const legacyExpose = createLegacyExpose(tableApi)
+const legacyExpose = createDataGridLegacyExpose(tableApi)
 
-const tableExpose: UiTableExposeBindings = {
+const tableExpose: DataGridExposeBindings = {
   ...legacyExpose,
   ...tableApi,
 }
 
 setTableExpose(tableExpose)
 
-provide(UiTableExposeContextKey, tableExpose)
+provide(DataGridExposeContextKey, tableExpose)
 
 // Check if a column header should render highlighted state
 function isColumnHeaderHighlighted(colIndex: number) {

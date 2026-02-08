@@ -8,7 +8,7 @@ import {
   type DataGridRuntimeInternalEventMap,
 } from "@affino/datagrid-core/advanced"
 import type { NormalizedTableProps } from "@affino/datagrid-core/config/tableConfig"
-import type { UiTableExposeBindings } from "../context"
+import type { DataGridExposeBindings } from "../context"
 
 type HostEventEmitName = DataGridKebabHostEventName
 
@@ -21,7 +21,7 @@ interface UseTableRuntimeOptions {
 
 interface UseTableRuntimeResult {
   fireEvent: <K extends DataGridHostEventName>(name: K, ...args: DataGridHostEventArgs<K>) => void
-  setTableExpose: (expose: UiTableExposeBindings) => void
+  setTableExpose: (expose: DataGridExposeBindings) => void
 }
 
 type VuePluginCapabilityMap = {
@@ -35,7 +35,7 @@ type VuePluginCapabilityMap = {
 }
 
 export function useTableRuntime(options: UseTableRuntimeOptions): UseTableRuntimeResult {
-  const tableExposeRef = shallowRef<UiTableExposeBindings | null>(null)
+  const tableExposeRef = shallowRef<DataGridExposeBindings | null>(null)
   const getCapabilityMap = (): VuePluginCapabilityMap => {
     return {
       "table:get-selected-rows": () => tableExposeRef.value?.getSelectedRows?.(),
@@ -59,7 +59,7 @@ export function useTableRuntime(options: UseTableRuntimeOptions): UseTableRuntim
         }
         const payload = args[0] as DataGridRuntimeInternalEventMap["plugin:host-unknown"][0]
         if (typeof console !== "undefined" && console.warn) {
-          console.warn(`[UiTable] Plugin attempted to emit unknown host event "${payload.event}"`, payload.args)
+          console.warn(`[DataGrid] Plugin attempted to emit unknown host event "${payload.event}"`, payload.args)
         }
       },
       pluginContext: {
@@ -100,7 +100,7 @@ export function useTableRuntime(options: UseTableRuntimeOptions): UseTableRuntim
     tableExposeRef.value = null
   })
 
-  const setTableExpose = (expose: UiTableExposeBindings) => {
+  const setTableExpose = (expose: DataGridExposeBindings) => {
     tableExposeRef.value = expose
   }
 

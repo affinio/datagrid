@@ -3,7 +3,7 @@ import {
   type UseTableHeaderLayoutOptions,
   type UseTableHeaderLayoutResult,
 } from "../composables/useTableHeaderLayout"
-import type { UiTableHeaderBindings } from "../context"
+import type { DataGridHeaderBindings } from "../context"
 
 export function useDataGridHeaderOrchestration(
   options: UseTableHeaderLayoutOptions,
@@ -12,7 +12,7 @@ export function useDataGridHeaderOrchestration(
 }
 
 export function createDataGridHeaderBindings(
-  bindings: UiTableHeaderBindings,
-): UiTableHeaderBindings {
+  bindings: DataGridHeaderBindings,
+): DataGridHeaderBindings {
   return bindings
 }

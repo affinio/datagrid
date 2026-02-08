@@ -48,3 +48,5 @@ export function createPiniaTableSettingsAdapter(store: TableSettingsStore): UiTa
     },
   }
 }
+
+export const createDataGridSettingsAdapter = createPiniaTableSettingsAdapter

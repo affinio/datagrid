@@ -19,8 +19,10 @@ import type { SelectionPoint, SelectionRange } from "./composables/useTableSelec
 import type { ImperativeSelectionSnapshot } from "../core/imperative/types"
 
 export type UiTableRowRegion = "pinned-left" | "center" | "pinned-right"
+export type DataGridRowRegion = UiTableRowRegion
 
 export type UiTableRowCellKind = "data" | "selection" | "index"
+export type DataGridRowCellKind = UiTableRowCellKind
 
 export interface GroupSelectionState {
   checked: boolean
@@ -36,7 +38,7 @@ export interface UiTableRowCellDescriptor {
   classList: Array<string | string[] | Record<string, boolean> | undefined>
   style: CSSProperties
   columnKey: string
-  binding: UiTableColumnBinding
+  binding: DataGridColumnBinding
   cellProps?: Record<string, unknown>
   hasCustomRenderer?: boolean
   selectionState?: {
@@ -46,6 +48,7 @@ export interface UiTableRowCellDescriptor {
   }
   indexDisplay?: number
 }
+export type DataGridRowCellDescriptor = UiTableRowCellDescriptor
 
 export type UiTableRowViewModel =
   | { kind: "empty" }
@@ -70,6 +73,7 @@ export type UiTableRowViewModel =
       displayIndex: number
       cells: UiTableRowCellDescriptor[]
     }
+export type DataGridRowViewModel = UiTableRowViewModel
 
 export type ColumnPinPosition = "left" | "right" | "none"
 
@@ -84,8 +88,10 @@ export interface UiTableColumnStorage {
   set: (storageKey: string, snapshot: ColumnVisibilitySnapshot[]) => void
   remove?: (storageKey: string) => void
 }
+export type DataGridColumnStorage = UiTableColumnStorage
 
-export const UiTableColumnStorageKey: InjectionKey<UiTableColumnStorage> = Symbol("UiTableColumnStorage")
+export const DataGridColumnStorageKey: InjectionKey<DataGridColumnStorage> = Symbol("DataGridColumnStorage")
+export const UiTableColumnStorageKey = DataGridColumnStorageKey
 
 export interface UiTableHeaderBindings {
   headerRef: Ref<HTMLElement | null>
@@ -157,8 +163,10 @@ export interface UiTableHeaderBindings {
   SELECTION_COLUMN_KEY: string
   resolveColumnSurface: (region: UiTableRowRegion, columnKey: string) => { left: number; width: number } | null
 }
+export type DataGridHeaderBindings = UiTableHeaderBindings
 
-export const UiTableHeaderContextKey: InjectionKey<UiTableHeaderBindings> = Symbol("UiTableHeaderContext")
+export const DataGridHeaderContextKey: InjectionKey<DataGridHeaderBindings> = Symbol("DataGridHeaderContext")
+export const UiTableHeaderContextKey = DataGridHeaderContextKey
 
 export interface UiTableColumnBinding {
   column: UiTableColumn
@@ -171,6 +179,7 @@ export interface UiTableColumnBinding {
   stickyRightOffset?: number
   ariaColIndex: number
 }
+export type DataGridColumnBinding = UiTableColumnBinding
 
 export interface SelectionAreaDescriptor {
   startRow: number
@@ -198,8 +207,8 @@ export interface UiTableBodyBindings {
   headerMainEntries: ComputedRef<HeaderRenderableEntry[]>
   headerPinnedRightEntries: ComputedRef<HeaderRenderableEntry[]>
   headerRenderableEntries: ComputedRef<HeaderRenderableEntry[]>
-  columnBindings: ComputedRef<Map<string, UiTableColumnBinding>>
-  getColumnBinding: (columnKey: string) => UiTableColumnBinding
+  columnBindings: ComputedRef<Map<string, DataGridColumnBinding>>
+  getColumnBinding: (columnKey: string) => DataGridColumnBinding
   bodySelectionCellClass: ComputedRef<string | string[] | Record<string, boolean> | undefined>
   bodyRowClass: ComputedRef<string | string[] | Record<string, boolean> | undefined>
   bodyCellClass: (column: UiTableColumn) => string | undefined
@@ -294,8 +303,10 @@ export interface UiTableBodyBindings {
   resolveColumnSurface: (region: UiTableRowRegion, columnKey: string) => { left: number; width: number } | null
   getRegionSurfaceWidth: (region: UiTableRowRegion) => number
 }
+export type DataGridBodyBindings = UiTableBodyBindings
 
-export const UiTableBodyContextKey: InjectionKey<UiTableBodyBindings> = Symbol("UiTableBodyContext")
+export const DataGridBodyContextKey: InjectionKey<DataGridBodyBindings> = Symbol("DataGridBodyContext")
+export const UiTableBodyContextKey = DataGridBodyContextKey
 
 export interface UiTableSummaryBindings {
   headerRenderableEntries: ComputedRef<HeaderRenderableEntry[]>
@@ -306,13 +317,15 @@ export interface UiTableSummaryBindings {
   summaryRowAriaIndex: ComputedRef<number>
   summaryRowData: ComputedRef<Record<string, unknown> | null>
   tableSlots: Slots
-  columnBindings: ComputedRef<Map<string, UiTableColumnBinding>>
-  getColumnBinding: (columnKey: string) => UiTableColumnBinding
+  columnBindings: ComputedRef<Map<string, DataGridColumnBinding>>
+  getColumnBinding: (columnKey: string) => DataGridColumnBinding
   selectionColumnKey: string
   resolveColumnSurface: (region: UiTableRowRegion, columnKey: string) => { left: number; width: number } | null
 }
+export type DataGridSummaryBindings = UiTableSummaryBindings
 
-export const UiTableSummaryContextKey: InjectionKey<UiTableSummaryBindings> = Symbol("UiTableSummaryContext")
+export const DataGridSummaryContextKey: InjectionKey<DataGridSummaryBindings> = Symbol("DataGridSummaryContext")
+export const UiTableSummaryContextKey = DataGridSummaryContextKey
 
 export interface UiTableNavigationApi {
   scrollToRow: (rowIndex: number) => void
@@ -320,6 +333,7 @@ export interface UiTableNavigationApi {
   isRowVisible: (rowIndex: number) => boolean
   focusCell: (rowIndex: number, column: number | string, options?: { extend?: boolean }) => boolean
 }
+export type DataGridNavigationApi = UiTableNavigationApi
 
 export interface UiTableSelectionApi {
   setSelection: (
@@ -335,6 +349,7 @@ export interface UiTableSelectionApi {
   toggleRowSelection: (row: RowData) => void
   getSelectedRows: () => RowData[]
 }
+export type DataGridSelectionApi = UiTableSelectionApi
 
 export interface UiTableClipboardApi {
   copySelectionToClipboard: () => Promise<void>
@@ -342,6 +357,7 @@ export interface UiTableClipboardApi {
   pasteClipboardData: () => Promise<void>
   pasteClipboardDataImmediate: () => Promise<void>
 }
+export type DataGridClipboardApi = UiTableClipboardApi
 
 export interface UiTableDataApi {
   getCellValue: (rowRef: number | RowKey, column: number | string) => unknown
@@ -349,17 +365,20 @@ export interface UiTableDataApi {
   exportCSV: (options?: { includeHeaders?: boolean; range?: SelectionRange | null }) => string
   importCSV: (text: string, options?: { base?: SelectionPoint | null }) => boolean
 }
+export type DataGridDataApi = UiTableDataApi
 
 export interface UiTablePagingApi {
   requestPage: (page: number, reason?: UiTableLazyLoadReason) => Promise<void>
   requestNextPage: (reason?: UiTableLazyLoadReason) => Promise<void>
   resetLazyPaging: (options?: { clearRows?: boolean }) => void
 }
+export type DataGridPagingApi = UiTablePagingApi
 
 export interface UiTableHistoryApi {
   undo: () => void
   redo: () => void
 }
+export type DataGridHistoryApi = UiTableHistoryApi
 
 export interface UiTableFilterApi {
   onApplyFilter: () => void
@@ -377,6 +396,7 @@ export interface UiTableFilterApi {
   getFilterStateSnapshot: () => FilterStateSnapshot
   setFilterStateSnapshot: (snapshot: FilterStateSnapshot | null | undefined) => void
 }
+export type DataGridFilterApi = UiTableFilterApi
 
 export interface UiTableColumnsApi {
   handleColumnHeaderClick: (column: UiTableColumn, columnIndex: number, event: MouseEvent | KeyboardEvent) => void
@@ -384,6 +404,7 @@ export interface UiTableColumnsApi {
   openVisibilityPanel: () => void
   closeVisibilityPanel: () => void
 }
+export type DataGridColumnsApi = UiTableColumnsApi
 
 export interface UiTableGroupingApi {
   onGroupColumn: (column: UiTableColumn) => void
@@ -391,6 +412,7 @@ export interface UiTableGroupingApi {
   getFilteredRowEntries: () => Array<{ row: RowData; originalIndex: number }>
   getFilteredRows: () => RowData[]
 }
+export type DataGridGroupingApi = UiTableGroupingApi
 
 export interface UiTableApiExpose {
   navigation: UiTableNavigationApi
@@ -403,6 +425,7 @@ export interface UiTableApiExpose {
   columns: UiTableColumnsApi
   grouping: UiTableGroupingApi
 }
+export type DataGridApiExpose = UiTableApiExpose
 
 export interface UiTableLegacyExpose {
   scrollToRow: UiTableNavigationApi["scrollToRow"]
@@ -454,7 +477,10 @@ export interface UiTableLegacyExpose {
   toggleRowSelection: UiTableSelectionApi["toggleRowSelection"]
   getSelectedRows: UiTableSelectionApi["getSelectedRows"]
 }
+export type DataGridLegacyExpose = UiTableLegacyExpose
 
 export interface UiTableExposeBindings extends UiTableApiExpose, UiTableLegacyExpose {}
+export type DataGridExposeBindings = UiTableExposeBindings
 
-export const UiTableExposeContextKey: InjectionKey<UiTableExposeBindings> = Symbol("UiTableExposeContext")
+export const DataGridExposeContextKey: InjectionKey<DataGridExposeBindings> = Symbol("DataGridExposeContext")
+export const UiTableExposeContextKey = DataGridExposeContextKey

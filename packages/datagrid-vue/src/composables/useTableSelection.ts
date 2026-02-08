@@ -77,7 +77,7 @@ import {
   type SelectionOverlayComputationPrepared,
 } from "@affino/datagrid-core/selection/selectionOverlay"
 import { releaseOverlayRect, releaseOverlayRectArray } from "@affino/datagrid-core/selection/selectionOverlayRectPool"
-import type { UiTableOverlayHandle, UiTableOverlayRect } from "../types/overlay"
+import type { DataGridOverlayHandle, DataGridOverlayRect } from "../types/overlay"
 import { useSelectionOverlayAdapter } from "./useSelectionOverlayAdapter"
 import { createTableOverlayScrollEmitter } from "./useTableOverlayScrollState"
 import { createVueSelectionEnvironment } from "../adapters/selectionEnvironment"
@@ -159,7 +159,7 @@ function runWithOverlayTiming<T>(label: string, callback: () => T): T {
     return callback()
   }
 
-  const id = `ui-table-overlay:${label}:${overlayTimingCounter++}`
+  const id = `datagrid-overlay:${label}:${overlayTimingCounter++}`
   const startMark = `${id}:start`
   const endMark = `${id}:end`
 
@@ -234,7 +234,7 @@ interface UseTableSelectionOptions {
   findRowIndexById: (rowId: RowKey) => number | null
   resolveCellElement: (rowIndex: number, columnKey: string) => HTMLElement | null
   resolveHeaderCellElement: (columnKey: string) => HTMLElement | null
-  overlayComponentRef?: Ref<UiTableOverlayHandle | null>
+  overlayComponentRef?: Ref<DataGridOverlayHandle | null>
   pinnedRightWidth?: Ref<number>
   pinnedLeftOffset?: Ref<number>
   pinnedRightOffset?: Ref<number>
@@ -276,7 +276,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
     overlayScrollControlledExternally,
   } = options
 
-  const overlayComponentRef = overlayComponentRefOption ?? shallowRef<UiTableOverlayHandle | null>(null)
+  const overlayComponentRef = overlayComponentRefOption ?? shallowRef<DataGridOverlayHandle | null>(null)
   const pinnedRightWidth = pinnedRightWidthRef ?? ref(0)
   const pinnedLeftOffset = pinnedLeftOffsetRef ?? ref(0)
   const pinnedRightOffset = pinnedRightOffsetRef ?? pinnedRightWidth
@@ -363,11 +363,11 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
   const fullColumnSelection = computed<number | null>(() =>
     detectFullColumnSelectionIndex(selectionRanges.value, getGridDimensions())
   )
-  const selectionOverlayRects = ref<UiTableOverlayRect[]>([])
-  const activeSelectionOverlayRects = ref<UiTableOverlayRect[]>([])
-  const selectionCursorOverlay = shallowRef<UiTableOverlayRect | null>(null)
-  const fillPreviewOverlayRects = ref<UiTableOverlayRect[]>([])
-  const cutPreviewOverlayRects = ref<UiTableOverlayRect[]>([])
+  const selectionOverlayRects = ref<DataGridOverlayRect[]>([])
+  const activeSelectionOverlayRects = ref<DataGridOverlayRect[]>([])
+  const selectionCursorOverlay = shallowRef<DataGridOverlayRect | null>(null)
+  const fillPreviewOverlayRects = ref<DataGridOverlayRect[]>([])
+  const cutPreviewOverlayRects = ref<DataGridOverlayRect[]>([])
   const cutPreviewState = ref<CutPreviewState | null>(null)
   const pendingCutState = ref<PendingCutState | null>(null)
   const cutPreviewRanges = computed(() => cutPreviewState.value?.areas ?? [])
@@ -1007,8 +1007,8 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
     overlayUpdateScheduler.schedule(options)
   }
 
-  function applyOverlayOffsetToRect(rect: SelectionOverlayRect): UiTableOverlayRect {
-    const clone: UiTableOverlayRect = {
+  function applyOverlayOffsetToRect(rect: SelectionOverlayRect): DataGridOverlayRect {
+    const clone: DataGridOverlayRect = {
       id: rect.id,
       left: rect.left,
       top: rect.top,
@@ -1024,7 +1024,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
     return clone
   }
 
-  function offsetOverlayRect(rect: SelectionOverlayRect | null): UiTableOverlayRect | null {
+  function offsetOverlayRect(rect: SelectionOverlayRect | null): DataGridOverlayRect | null {
     if (!rect) return null
     const clone = applyOverlayOffsetToRect(rect)
     releaseOverlayRect(rect)
@@ -1034,7 +1034,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
   function offsetOverlayRectArray(
     rects: SelectionOverlayRect[],
     options?: { release?: boolean },
-  ): UiTableOverlayRect[] {
+  ): DataGridOverlayRect[] {
     const shouldRelease = options?.release !== false
     if (!rects.length) {
       if (shouldRelease) {
@@ -1042,7 +1042,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
       }
       return []
     }
-    const result: UiTableOverlayRect[] = new Array(rects.length)
+    const result: DataGridOverlayRect[] = new Array(rects.length)
     for (let index = 0; index < rects.length; index += 1) {
       result[index] = applyOverlayOffsetToRect(rects[index])
     }
@@ -1052,7 +1052,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
     return result
   }
 
-  function rectsEqual(left: UiTableOverlayRect | null, right: UiTableOverlayRect | null): boolean {
+  function rectsEqual(left: DataGridOverlayRect | null, right: DataGridOverlayRect | null): boolean {
     if (left === right) return true
     if (!left || !right) return false
     return (
@@ -1066,7 +1066,7 @@ export const useTableSelection = (options: UseTableSelectionOptions) => {
     )
   }
 
-  function rectArraysEqual(left: UiTableOverlayRect[], right: UiTableOverlayRect[]): boolean {
+  function rectArraysEqual(left: DataGridOverlayRect[], right: DataGridOverlayRect[]): boolean {
     if (left === right) return true
     if (left.length !== right.length) return false
     for (let index = 0; index < left.length; index += 1) {

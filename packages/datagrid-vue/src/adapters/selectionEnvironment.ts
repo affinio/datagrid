@@ -9,7 +9,7 @@ import type {
 } from "@affino/datagrid-core/selection/selectionEnvironment"
 import type { UiTableColumn } from "@affino/datagrid-core/types"
 import type { SelectionOverlayRect } from "@affino/datagrid-core/selection/selectionOverlay"
-import type { UiTableOverlayRect } from "../types/overlay"
+import type { DataGridOverlayRect } from "../types/overlay"
 import { createFrameRequestScheduler } from "@affino/datagrid-core/runtime/frameRequestScheduler"
 import { createIdleCallbackScheduler } from "@affino/datagrid-core/runtime/idleCallbackScheduler"
 import type { PointerCoordinates } from "@affino/datagrid-core/selection/autoScroll"
@@ -22,11 +22,11 @@ import {
 
 interface SelectionEnvironmentOptions<RowKey> {
   localColumns: Ref<UiTableColumn[]>
-  selectionOverlayRects: Ref<UiTableOverlayRect[]>
-  activeSelectionOverlayRects: Ref<UiTableOverlayRect[]>
-  selectionCursorOverlay: Ref<UiTableOverlayRect | null>
-  fillPreviewOverlayRects: Ref<UiTableOverlayRect[]>
-  cutPreviewOverlayRects: Ref<UiTableOverlayRect[]>
+  selectionOverlayRects: Ref<DataGridOverlayRect[]>
+  activeSelectionOverlayRects: Ref<DataGridOverlayRect[]>
+  selectionCursorOverlay: Ref<DataGridOverlayRect | null>
+  fillPreviewOverlayRects: Ref<DataGridOverlayRect[]>
+  cutPreviewOverlayRects: Ref<DataGridOverlayRect[]>
   focusContainer: () => void
   resolveCellElement?: (rowIndex: number, columnKey: string) => HTMLElement | null
   resolveHeaderCellElement?: (columnKey: string) => HTMLElement | null
