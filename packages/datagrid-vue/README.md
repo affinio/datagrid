@@ -10,10 +10,31 @@ Import only from the package root:
 import {
   useTableSettingsStore,
   createPiniaTableSettingsAdapter,
+  buildSelectionOverlayTransform,
+  buildSelectionOverlayTransformFromSnapshot,
 } from "@affino/datagrid-vue"
 ```
 
-Current stable contract is focused on settings persistence bridge.
+Current stable contract is focused on:
+- settings persistence bridge
+- deterministic overlay transform helpers for pinned/scroll sync
+
+## Deterministic Overlay Contract
+
+Use public helpers instead of ad-hoc transform math in product integration:
+
+```ts
+const transform = buildSelectionOverlayTransformFromSnapshot({
+  viewportWidth,
+  viewportHeight,
+  scrollLeft,
+  scrollTop,
+  pinnedOffsetLeft,
+  pinnedOffsetRight,
+})
+```
+
+This keeps overlay transform behavior aligned with core viewport contracts.
 Component-level exports are intentionally held back until adapter hardening steps are closed.
 
 ## Naming Migration
@@ -70,4 +91,4 @@ Implementation split:
 ## Roadmap
 
 Execution and quality hardening are tracked in:
-`/Users/anton/Projects/affinio/docs/datagrid-engine-9.5-pipeline-checklist.md`.
+`/Users/anton/Projects/affinio/docs/datagrid-ag-architecture-9.5-pipeline-checklist.md`.

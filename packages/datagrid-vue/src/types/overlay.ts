@@ -14,6 +14,8 @@ export interface UiTableOverlayRectGroups {
 export interface UiTableOverlayTransformInput {
   viewportWidth: number
   viewportHeight: number
+  scrollLeft: number
+  scrollTop: number
   pinnedLeftTranslateX: number
   pinnedRightTranslateX: number
 }

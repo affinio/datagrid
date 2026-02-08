@@ -7,6 +7,10 @@ import type {
 } from "../types/overlay"
 import { releaseFillHandleStyle, type FillHandleStylePayload } from "@affino/datagrid-core/selection/fillHandleStylePool"
 import type { TableOverlayScrollEmitter, TableOverlayScrollSnapshot } from "./useTableOverlayScrollState"
+import {
+  buildSelectionOverlayTransform,
+  buildSelectionOverlayTransformFromSnapshot,
+} from "./selectionOverlayTransform"
 
 interface SelectionOverlayViewportState {
   width: number
@@ -42,6 +46,8 @@ function cloneTransform(input: UiTableOverlayTransformInput): UiTableOverlayTran
   return {
     viewportWidth: input.viewportWidth,
     viewportHeight: input.viewportHeight,
+    scrollLeft: input.scrollLeft,
+    scrollTop: input.scrollTop,
     pinnedLeftTranslateX: input.pinnedLeftTranslateX,
     pinnedRightTranslateX: input.pinnedRightTranslateX,
   }
@@ -56,20 +62,6 @@ function normalizeViewportSnapshot(snapshot: SelectionOverlayViewportState | und
   const scrollLeft = Number.isFinite(snapshot.scrollLeft) ? snapshot.scrollLeft : 0
   const scrollTop = Number.isFinite(snapshot.scrollTop) ? snapshot.scrollTop : 0
   return { width, height, scrollLeft, scrollTop }
-}
-
-function buildTransform(
-  viewportState: SelectionOverlayViewportState,
-  pinnedLeftOffset: number,
-  pinnedRightOffset: number,
-): UiTableOverlayTransformInput {
-  const { width, height, scrollLeft } = viewportState
-  return {
-    viewportWidth: width,
-    viewportHeight: height,
-    pinnedLeftTranslateX: scrollLeft + pinnedLeftOffset,
-    pinnedRightTranslateX: scrollLeft - pinnedRightOffset,
-  }
 }
 
 export function useSelectionOverlayAdapter(options: UseSelectionOverlayAdapterOptions): SelectionOverlayAdapterHandle {
@@ -196,17 +188,7 @@ export function useSelectionOverlayAdapter(options: UseSelectionOverlayAdapterOp
 
   if (options.overlayScrollState) {
     const unsubscribe = options.overlayScrollState.subscribe((snapshot: TableOverlayScrollSnapshot) => {
-      const viewportState: SelectionOverlayViewportState = {
-        width: snapshot.viewportWidth,
-        height: snapshot.viewportHeight,
-        scrollLeft: snapshot.scrollLeft,
-        scrollTop: snapshot.scrollTop,
-      }
-      const transform = buildTransform(
-        viewportState,
-        snapshot.pinnedOffsetLeft,
-        snapshot.pinnedOffsetRight,
-      )
+      const transform = buildSelectionOverlayTransformFromSnapshot(snapshot)
       setTransform(transform)
     })
     onScopeDispose(() => {
@@ -224,7 +206,7 @@ export function useSelectionOverlayAdapter(options: UseSelectionOverlayAdapterOp
           : 0,
       }),
       ({ viewport, pinnedLeftOffset, pinnedRightOffset }) => {
-        const transform = buildTransform(viewport, pinnedLeftOffset, pinnedRightOffset)
+        const transform = buildSelectionOverlayTransform(viewport, pinnedLeftOffset, pinnedRightOffset)
         setTransform(transform)
       },
       { flush: "sync" },

@@ -90,14 +90,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, useSlots, onBeforeUnmount, onMounted, watchEffect, shallowRef, provide, unref } from "vue"
-import type { ComponentPublicInstance, ComputedRef, Ref, CSSProperties } from "vue"
+import { ref, computed, watch, nextTick, useSlots, onBeforeUnmount, onMounted, shallowRef, provide, unref } from "vue"
+import type { ComputedRef, Ref, CSSProperties } from "vue"
 import DataGridViewport from "./DataGridViewport.vue"
 import UiTableVirtualBodyRegion from "./UiTableVirtualBodyRegion.vue"
 import UiTableHeader from "./UiTableHeader.vue"
 import UiTableStatusBar from "./UiTableStatusBar.vue"
 import UiTableSummary from "./UiTableSummary.vue"
-import { useTableFindReplaceBridge } from "../composables/useTableFindReplaceBridge"
 import { useTableClipboardBridge } from "../composables/useTableClipboardBridge"
 import { useTableTheme } from "../composables/useTableTheme"
 import { useTableSettingsStore } from "../tableSettingsStore"
@@ -120,7 +119,7 @@ import { useTableZoom } from "../composables/useTableZoom"
 import { useTableFilters } from "../composables/useTableFilters"
 import type { FilterStateSnapshot } from "../composables/useTableFilters"
 import { useTableSorting, type SortState } from "../composables/useTableSorting"
-import { useTableViewport, type ImperativeScrollSyncPayload, type RowPoolItem } from "../composables/useTableViewport"
+import { useTableViewport, type RowPoolItem } from "../composables/useTableViewport"
 import type { ViewportSyncTargets } from "@affino/datagrid-core/viewport/tableViewportController"
 import { useVirtualDebug } from "../composables/useVirtualDebug"
 import { useTableHistory, type HistoryEntry } from "../composables/useTableHistory"
@@ -144,7 +143,6 @@ import { useTableDataModel } from "../composables/useTableDataModel"
 import { useDomSampling } from "../composables/useDomSampling"
 import { useTableServerSync } from "../composables/useTableServerSync"
 import { useTableStickyColumns } from "../composables/useTableStickyColumns"
-import { useTableHeaderLayout } from "../composables/useTableHeaderLayout"
 import { useTableGridLayout } from "../composables/useTableGridLayout"
 import { useTableColumnBindings } from "../composables/useTableColumnBindings"
 import { useTableFocusManagement } from "../composables/useTableFocusManagement"
@@ -179,7 +177,14 @@ import UiTableModals from "./UiTableModals.vue"
 import { useColumnGroups } from "../composables/useColumnGroups"
 import type { UiTableColumnGroupDef } from "@affino/datagrid-core/types/column"
 import { useFindReplaceStore } from "../stores/useFindReplaceStore"
-import { useSelectableRows, type RowData, type RowKey } from "../composables/useSelectableRows"
+import type { RowData, RowKey } from "../composables/useSelectableRows"
+import { useDataGridFindReplaceFacade } from "../features/useDataGridFindReplaceFacade"
+import {
+  createDataGridHeaderBindings,
+  useDataGridHeaderOrchestration,
+} from "../features/useDataGridHeaderOrchestration"
+import { useDataGridRowSelectionFacade } from "../features/useDataGridRowSelectionFacade"
+import { useDataGridViewportBridge } from "../features/useDataGridViewportBridge"
 import { useColumnFilterMenuBridge } from "@affino/datagrid-core/filtering/useColumnFilterMenuBridge"
 import {
   UiTableHeaderContextKey,
@@ -1121,17 +1126,27 @@ const selectionModel = computed<(RowData | RowKey)[] | undefined>(() => {
   return normalizedProps.value.selection.selected
 })
 
-const rowSelection = useSelectableRows<RowData>({
+const {
+  rowSelection,
+  selectedRowCount,
+  setHeaderSelectionCheckboxRef,
+  isSelectableDataRow,
+  isCheckboxRowSelected,
+  handleRowCheckboxToggle,
+  rowGridClass,
+} = useDataGridRowSelectionFacade<RowData>({
   rows: selectableRows,
   modelValue: selectionModel,
   controlled: isSelectionControlled,
-  emitUpdate: rows => {
+  enabled: selectionEnabled,
+  rowKey: rowKeyResolver,
+  isServerPlaceholderRow,
+  selectedRowClass,
+  emitUpdateSelected: rows => {
     emit("update:selected", rows)
   },
-  rowKey: rowKeyResolver,
 })
 
-const selectedRowCount = computed(() => rowSelection.selectedKeySet.value.size)
 const formattedSelectedRowCount = computed(() => rowCountFormatter.format(selectedRowCount.value))
 
 const groupSelectionVisible = computed(() => selectionColumnVisible.value)
@@ -1230,22 +1245,7 @@ function toggleGroupSelection(groupKey: string, next?: boolean) {
   rowSelection.setSelection(nextRows)
 }
 
-watch(
-  selectionEnabled,
-  enabled => {
-    if (!enabled) {
-      rowSelection.clearSelection()
-    }
-  },
-  { immediate: false },
-)
-
 const selectableRowCount = computed(() => selectableRows.value.length)
-const headerSelectionCheckboxRef = ref<HTMLInputElement | null>(null)
-
-function setHeaderSelectionCheckboxRef(element: Element | ComponentPublicInstance | null) {
-  headerSelectionCheckboxRef.value = element instanceof HTMLInputElement ? element : null
-}
 
 function emitSelectAllRequest(checked: boolean) {
   const payload: UiTableSelectAllRequestPayload = {
@@ -1263,14 +1263,6 @@ function emitSelectAllRequest(checked: boolean) {
   emit("select-all-request", payload)
   fireEvent("selectAllRequest", payload)
 }
-
-watchEffect(() => {
-  const checkbox = headerSelectionCheckboxRef.value
-  if (!checkbox) {
-    return
-  }
-  checkbox.indeterminate = selectionEnabled.value && rowSelection.isIndeterminate.value
-})
 
 function handleHeaderSelectionChange(event: Event) {
   if (!selectionEnabled.value) {
@@ -1297,38 +1289,6 @@ function selectAllRows() {
     return
   }
   rowSelection.selectAll()
-}
-
-function isSelectableDataRow(row: any): row is RowData {
-  if (!row || (row as any).__group) {
-    return false
-  }
-  if (isServerPlaceholderRow(row)) {
-    return false
-  }
-  return true
-}
-
-function isCheckboxRowSelected(row: any): boolean {
-  if (!selectionEnabled.value || !isSelectableDataRow(row)) {
-    return false
-  }
-  return rowSelection.isRowSelected(row)
-}
-
-function handleRowCheckboxToggle(row: any) {
-  if (!selectionEnabled.value || !isSelectableDataRow(row)) {
-    return
-  }
-  rowSelection.toggleRow(row)
-}
-
-function rowGridClass(row: any) {
-  if (!selectionEnabled.value || !isSelectableDataRow(row)) {
-    return undefined
-  }
-  if (!rowSelection.isRowSelected(row)) return undefined
-  return selectedRowClass.value || undefined
 }
 
 function handleNearBottom() {
@@ -1409,6 +1369,7 @@ const viewport = useTableViewport({
     enabled: serverSideModel,
     rowModel: serverRowModel,
   },
+  resolveRowId: (row, index) => resolveRowKey(row as RowData, index),
   normalizeAndClampScroll: true,
 })
 
@@ -1468,7 +1429,17 @@ const pinnedRightWidth = computed(() =>
 )
 
 const pinnedLeftOffset = computed(() => Math.max(0, columnVirtualState.value.indexColumnWidth ?? 0))
-const pinnedRightOffset = computed(() => Math.max(0, columnVirtualState.value.pinnedRightWidth ?? 0))
+const pinnedRightOffset = computed(() => {
+  let totalWidthDom = 0
+  columnWidthMap.value.forEach(width => {
+    if (!Number.isFinite(width)) {
+      return
+    }
+    totalWidthDom += Math.max(0, toDomUnits(width))
+  })
+  const viewportWidthDom = Math.max(0, viewportWidth.value)
+  return Math.max(0, totalWidthDom - viewportWidthDom)
+})
 
 const isTableDebugEnabled = typeof window !== "undefined" && Boolean((window as any).__UNITLAB_TABLE_DEBUG__)
 
@@ -1779,8 +1750,15 @@ const columnSurfaces = computed(() => {
 const selectionOverlayColumnSurfaces = computed<Map<string, SelectionOverlayColumnSurface>>(() => {
   const result = new Map<string, SelectionOverlayColumnSurface>()
   const surfaces = columnSurfaces.value
+  const pinnedLeftWorldStart = 0
+  const centerWorldStart = surfaces.byRegion["pinned-left"]?.totalWidth ?? 0
+  const pinnedRightWorldStart = centerWorldStart + (surfaces.byRegion.center?.totalWidth ?? 0)
 
-  const appendRegion = (region: UiTableRowRegion, pin: SelectionOverlayColumnSurface["pin"]) => {
+  const appendRegion = (
+    region: UiTableRowRegion,
+    pin: SelectionOverlayColumnSurface["pin"],
+    worldStart: number,
+  ) => {
     const regionSurface = surfaces.byRegion[region]
     if (!regionSurface) {
       return
@@ -1790,16 +1768,16 @@ const selectionOverlayColumnSurfaces = computed<Map<string, SelectionOverlayColu
         continue
       }
       result.set(entry.columnKey, {
-        left: entry.left,
+        left: worldStart + entry.left,
         width: entry.width,
         pin,
       })
     }
   }
 
-  appendRegion("pinned-left", "left")
-  appendRegion("center", "none")
-  appendRegion("pinned-right", "right")
+  appendRegion("pinned-left", "left", pinnedLeftWorldStart)
+  appendRegion("center", "none", centerWorldStart)
+  appendRegion("pinned-right", "right", pinnedRightWorldStart)
 
   return result
 })
@@ -2022,7 +2000,7 @@ const {
   hasColumnGroups,
   visibleColumnEntries,
   columnTrackStartMap,
-} = useTableHeaderLayout({
+} = useDataGridHeaderOrchestration({
   rootColumnGroups,
   ungroupedColumns,
   pinnedLeftEntries,
@@ -2622,7 +2600,7 @@ const buildRowViewModel = ({
   }
 }
 
-const headerBindings: UiTableHeaderBindings = {
+const headerBindings: UiTableHeaderBindings = createDataGridHeaderBindings({
   headerRef,
   headerRowStickyStyle,
   hasColumnGroups,
@@ -2691,11 +2669,11 @@ const headerBindings: UiTableHeaderBindings = {
   hideColumn,
   SELECTION_COLUMN_KEY,
   resolveColumnSurface,
-}
+})
 
 provide(UiTableHeaderContextKey, headerBindings)
 
-const { closeFindReplace } = useTableFindReplaceBridge({
+const { closeFindReplace } = useDataGridFindReplaceFacade({
   findReplace,
   processedRows,
   visibleColumns,
@@ -2840,56 +2818,16 @@ const { handleKeydown: handleTableKeydown, handleWheel, focusNextCell } = useTab
   requestEdit,
 })
 
-let pendingViewportScrollFrame: number | null = null
-let pendingViewportScrollTarget: HTMLElement | null = null
-
-const handleViewportScrollEvent = (event: Event) => {
-  const target = event.target as HTMLElement | null
-  if (!target) {
-    pendingViewportScrollTarget = null
-    return
-  }
-
-  pendingViewportScrollTarget = target
-
-  if (pendingViewportScrollFrame != null) {
-    return
-  }
-
-  pendingViewportScrollFrame = requestAnimationFrame(() => {
-    const frameTarget = pendingViewportScrollTarget
-    pendingViewportScrollFrame = null
-    pendingViewportScrollTarget = null
-
-    if (!frameTarget) {
-      return
-    }
-
-    const syntheticEvent = {
-      type: "scroll",
-      target: frameTarget,
-      currentTarget: frameTarget,
-    } as unknown as Event
-    handleViewportScroll(syntheticEvent)
-  })
-}
-
-function handleViewportScrollSync(payload: ImperativeScrollSyncPayload) {
-  scrollLeft.value = payload.scrollLeft
-  scrollTop.value = payload.scrollTop
-  emitOverlayScrollSnapshot({
-    scrollLeft: payload.scrollLeft,
-    scrollTop: payload.scrollTop,
-  })
-}
-
-function cancelPendingViewportScroll() {
-  if (pendingViewportScrollFrame != null) {
-    cancelAnimationFrame(pendingViewportScrollFrame)
-    pendingViewportScrollFrame = null
-  }
-  pendingViewportScrollTarget = null
-}
+const {
+  handleViewportScrollEvent,
+  handleViewportScrollSync,
+  cancelPendingViewportScroll,
+} = useDataGridViewportBridge({
+  handleViewportScroll,
+  scrollLeft,
+  scrollTop,
+  emitOverlayScrollSnapshot,
+})
 
 function handleKeydown(event: KeyboardEvent) {
   if (findReplace.isActive) return

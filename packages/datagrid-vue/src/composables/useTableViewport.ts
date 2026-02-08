@@ -17,12 +17,18 @@ import {
   createDataGridColumnModel,
   createClientRowModel,
   createServerBackedRowModel,
+  type DataGridColumnDef,
+  type DataGridRowIdResolver,
+  type DataGridRowNode,
+  type DataGridRowNodeState,
+  type DataGridRowPinState,
   type ServerBackedRowModel,
 } from "@affino/datagrid-core/models"
 import { resolvePinMode, resolveRowHeightModeValue } from "../core/virtualization/viewportConfig"
 import type { ColumnMetric } from "../core/virtualization/types"
 import type { ServerRowModel } from "./useServerRowModel"
 import { createViewportHostEnvironment } from "../adapters/viewportHostEnvironment"
+import { normalizeColumnPinInput } from "../adapters/columnPinNormalization"
 
 export type { ColumnMetric, ColumnPinMode, ColumnVirtualizationSnapshot } from "../core/virtualization/types"
 export type {
@@ -84,6 +90,117 @@ function resolveBaseRowHeight(source: UseTableViewportOptions["baseRowHeight"]):
   return BASE_ROW_HEIGHT
 }
 
+function resolvePinnedStateFromVisibleRow(row: VisibleRow<unknown>): DataGridRowPinState {
+  if (row.stickyTop) {
+    return "top"
+  }
+  if (row.stickyBottom) {
+    return "bottom"
+  }
+  return "none"
+}
+
+function isRowId(value: unknown): value is string | number {
+  return typeof value === "string" || typeof value === "number"
+}
+
+function resolveModelRowState(row: VisibleRow<unknown>): DataGridRowNodeState {
+  const candidate = (row as { state?: Partial<DataGridRowNodeState> | null }).state
+  const pinned = candidate?.pinned === "top" || candidate?.pinned === "bottom" || candidate?.pinned === "none"
+    ? candidate.pinned
+    : resolvePinnedStateFromVisibleRow(row)
+
+  return {
+    selected: Boolean(candidate?.selected),
+    group: Boolean(candidate?.group),
+    pinned,
+    expanded: Boolean(candidate?.expanded),
+  }
+}
+
+function resolveVisibleRowId(
+  row: VisibleRow<unknown>,
+  visibleIndex: number,
+  sourceIndex: number,
+  resolveRowId?: DataGridRowIdResolver<unknown>,
+): string | number {
+  if (isRowId((row as { rowId?: unknown }).rowId)) {
+    return row.rowId
+  }
+  if (typeof resolveRowId === "function") {
+    const resolved = resolveRowId(row.row, sourceIndex)
+    if (isRowId(resolved)) {
+      return resolved
+    }
+    throw new Error(
+      `[DataGrid][vue/useTableViewport] resolveRowId returned invalid id for row at source index ${sourceIndex}. ` +
+      "Expected string|number.",
+    )
+  }
+  throw new Error(
+    `[DataGrid][vue/useTableViewport] Missing rowId for processed row at visible index ${visibleIndex} ` +
+    `(source index ${sourceIndex}). Provide options.resolveRowId(row, index) or include rowId in processed rows.`,
+  )
+}
+
+function mapVisibleRowsToModelRows(
+  rows: readonly VisibleRow<unknown>[],
+  resolveRowId?: DataGridRowIdResolver<unknown>,
+): DataGridRowNode<unknown>[] {
+  return rows.map((entry, index) => {
+    const sourceIndex = Number.isFinite(entry.originalIndex)
+      ? Math.max(0, Math.trunc(entry.originalIndex))
+      : Math.max(0, index)
+    const displayIndexSource = typeof entry.displayIndex === "number" ? entry.displayIndex : sourceIndex
+    const displayIndex = Number.isFinite(displayIndexSource)
+      ? Math.max(0, Math.trunc(displayIndexSource))
+      : sourceIndex
+    const rowKey = resolveVisibleRowId(entry, index, sourceIndex, resolveRowId)
+    return {
+      data: entry.row,
+      row: entry.row,
+      rowKey,
+      rowId: rowKey,
+      sourceIndex,
+      originalIndex: sourceIndex,
+      displayIndex,
+      state: resolveModelRowState(entry),
+    }
+  })
+}
+
+function mapUiColumnsToModelColumns(columns: readonly UiTableColumn[]): DataGridColumnDef[] {
+  return columns.map(column => {
+    const normalized = normalizeColumnPinInput(column)
+    const {
+      key,
+      label,
+      width,
+      minWidth,
+      maxWidth,
+      visible,
+      pin,
+      ...meta
+    } = normalized as UiTableColumn & Record<string, unknown>
+
+    const definition: DataGridColumnDef = {
+      key,
+      label,
+      width,
+      minWidth,
+      maxWidth,
+      visible,
+      pin,
+    }
+
+    if (Object.keys(meta).length > 0) {
+      definition.meta = meta
+    }
+
+    return definition
+  })
+}
+
 function resolveServerIntegration(
   integration: UseTableViewportOptions["serverIntegration"],
 ): { rowModel: ServerRowModel<unknown> | null; enabled: boolean } | null {
@@ -120,6 +237,7 @@ export interface UseTableViewportOptions {
   normalizeAndClampScroll?: boolean
   runtime?: TableViewportRuntimeOverrides
   syncTargets?: Ref<ViewportSyncTargets | null> | ComputedRef<ViewportSyncTargets | null>
+  resolveRowId?: DataGridRowIdResolver<unknown>
 }
 
 export interface UseTableViewportResult {
@@ -192,7 +310,10 @@ export interface UseTableViewportResult {
 
 export function useTableViewport(options: UseTableViewportOptions): UseTableViewportResult {
   const signalRegistry: SignalRegistry = new WeakMap()
-  const clientRowModel = createClientRowModel<unknown>({ rows: [] })
+  const clientRowModel = createClientRowModel<unknown>({
+    rows: [],
+    resolveRowId: options.resolveRowId,
+  })
   const clientColumnModel = createDataGridColumnModel({ columns: [] })
   let serverBackedRowModel: ServerBackedRowModel<unknown> | null = null
   let serverBackedSource: ServerRowModel<unknown> | null = null
@@ -254,7 +375,8 @@ export function useTableViewport(options: UseTableViewportOptions): UseTableView
   watch(
     options.processedRows,
     rows => {
-      clientRowModel.setRows(Array.isArray(rows) ? rows : [])
+      const normalizedRows = Array.isArray(rows) ? mapVisibleRowsToModelRows(rows, options.resolveRowId) : []
+      clientRowModel.setRows(normalizedRows)
     },
     { immediate: true },
   )
@@ -262,7 +384,8 @@ export function useTableViewport(options: UseTableViewportOptions): UseTableView
   watch(
     options.columns,
     value => {
-      clientColumnModel.setColumns(Array.isArray(value) ? value : [])
+      const normalizedColumns = Array.isArray(value) ? mapUiColumnsToModelColumns(value) : []
+      clientColumnModel.setColumns(normalizedColumns)
     },
     { immediate: true },
   )
@@ -346,6 +469,7 @@ export function useTableViewport(options: UseTableViewportOptions): UseTableView
             serverBackedSource = value.rowModel
             serverBackedRowModel = createServerBackedRowModel({
               source: value.rowModel,
+              resolveRowId: options.resolveRowId,
             })
           }
           controller.setRowModel(serverBackedRowModel)

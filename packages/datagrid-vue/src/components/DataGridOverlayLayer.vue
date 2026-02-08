@@ -28,6 +28,7 @@ import type {
   UiTableOverlayTransformInput,
 } from "../types/overlay"
 import type { FillHandleStylePayload } from "@affino/datagrid-core/selection/fillHandleStylePool"
+import { resolveOverlayFillHandlePosition } from "./overlayFillHandle"
 import {
   computeCursorSignature,
   computeRectGroupSignature,
@@ -124,7 +125,7 @@ function applyCursor(rects: UiTableOverlayRectGroups | null, transform: UiTableO
   }
 }
 
-function applyFillHandle(style: FillHandleStylePayload | null) {
+function applyFillHandle(style: FillHandleStylePayload | null, transform: UiTableOverlayTransformInput | null) {
   const el = fillHandleRef.value
   if (!el) return
 
@@ -133,8 +134,14 @@ function applyFillHandle(style: FillHandleStylePayload | null) {
     return
   }
 
+  const position = resolveOverlayFillHandlePosition(style, transform)
+  if (!position) {
+    el.style.visibility = "hidden"
+    return
+  }
+
   el.style.visibility = "visible"
-  el.style.transform = translate3d(style.x, style.y)
+  el.style.transform = translate3d(position.x, position.y)
   el.style.width = `${style.widthValue}px`
   el.style.height = `${style.heightValue}px`
 }
@@ -184,8 +191,8 @@ function flush() {
     applyCursor(latestRects, latestTransform)
   }
 
-  if (dirtyFill) {
-    applyFillHandle(latestFillStyle)
+  if (dirtyFill || dirtyTransform) {
+    applyFillHandle(latestFillStyle, latestTransform)
   }
 
   dirtySelection = false
@@ -239,6 +246,8 @@ function updateTransforms(snapshot: UiTableOverlayTransformInput) {
   const nextTransformSignature = [
     snapshot.viewportWidth,
     snapshot.viewportHeight,
+    snapshot.scrollLeft,
+    snapshot.scrollTop,
     snapshot.pinnedLeftTranslateX,
     snapshot.pinnedRightTranslateX,
   ].join("|")
@@ -249,6 +258,7 @@ function updateTransforms(snapshot: UiTableOverlayTransformInput) {
   latestTransform = snapshot
   dirtyTransform = true
   dirtyCursor = true
+  dirtyFill = true
   scheduleFlush()
 }
 

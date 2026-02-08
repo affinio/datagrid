@@ -19,7 +19,11 @@
     "src/public.ts",
     "src/piniaTableSettingsAdapter.ts",
     "src/tableSettingsStore.ts",
-    "src/types/**/*.d.ts"
+    "src/types/**/*.ts",
+    "src/types/**/*.d.ts",
+    "src/adapters/a11yAttributesAdapter.ts",
+    "src/composables/selectionOverlayTransform.ts",
+    "src/composables/useTableOverlayScrollState.ts"
   ],
   "exclude": [
     "src/**/__tests__/**",
