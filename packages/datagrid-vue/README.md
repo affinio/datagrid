@@ -6,6 +6,7 @@ Vue adapter surface for `@affino/datagrid-core`.
 
 - `createDataGridVueRuntime`
 - `useDataGridRuntime`
+- `useAffinoDataGrid`
 - `useDataGridSettingsStore`
 - `createDataGridSettingsAdapter`
 - `buildDataGridOverlayTransform`
@@ -15,6 +16,8 @@ Vue adapter surface for `@affino/datagrid-core`.
 - `useDataGridContextMenu`
 
 ## Advanced API (`@affino/datagrid-vue/advanced`)
+
+Compatibility entrypoint. New demo/workbench wiring should import `@affino/datagrid-vue/internal`.
 
 - `useDataGridViewportBridge`
 - `useDataGridHeaderOrchestration`
@@ -106,3 +109,36 @@ const { api, columnSnapshot } = useDataGridRuntime({
   columns,
 })
 ```
+
+## High-level sugar API
+
+```ts
+import { ref } from "vue"
+import { useAffinoDataGrid } from "@affino/datagrid-vue"
+
+const rows = ref([
+  { rowId: "1", service: "edge-gateway", owner: "NOC" },
+  { rowId: "2", service: "billing-api", owner: "Payments" },
+])
+
+const columns = ref([
+  { key: "service", label: "Service", width: 220 },
+  { key: "owner", label: "Owner", width: 180 },
+])
+
+const grid = useAffinoDataGrid({
+  rows,
+  columns,
+  features: {
+    selection: true,
+    clipboard: true,
+    editing: {
+      mode: "cell",
+      enum: true,
+    },
+  },
+})
+```
+
+- `grid.componentProps` can be passed into `<DataGrid v-bind="grid.componentProps" />`.
+- Demo-level orchestration can be imported from `@affino/datagrid-vue/internal`.

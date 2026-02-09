@@ -45,6 +45,18 @@ export {
 } from "./composables/useDataGridRuntime"
 
 export {
+  useAffinoDataGrid,
+  type AffinoDataGridEditMode,
+  type AffinoDataGridEditSession,
+  type AffinoDataGridSelectionFeature,
+  type AffinoDataGridClipboardFeature,
+  type AffinoDataGridEditingFeature,
+  type AffinoDataGridFeatures,
+  type UseAffinoDataGridOptions,
+  type UseAffinoDataGridResult,
+} from "./composables/useAffinoDataGrid"
+
+export {
   createDataGridVueRuntime,
   type CreateDataGridVueRuntimeOptions,
   type DataGridVueRuntime,

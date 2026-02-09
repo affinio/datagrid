@@ -1,3 +1,8 @@
+/**
+ * Advanced composition surface.
+ * For demo/workbench orchestration prefer "@affino/datagrid-vue/internal".
+ * For product integrations prefer stable API from "@affino/datagrid-vue".
+ */
 import { computed, ref, type Ref } from "vue"
 import type { DataGridSortDirection, DataGridSortState } from "@affino/datagrid-core"
 import {
