@@ -10,6 +10,17 @@
   border: 0;
 }
 
+#affino-menu-host,
+[data-affino-menu-host] {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 2000;
+  overflow: visible;
+}
+
 .datagrid-page {
   display: flex;
   flex-direction: column;
@@ -92,6 +103,12 @@
   color: var(--datagrid-text-soft);
 }
 
+.datagrid-controls__menu-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .datagrid-controls input,
 .datagrid-controls select,
 .datagrid-controls > button {
@@ -138,6 +155,87 @@
   background: transparent;
 }
 
+.datagrid-controls__menu-trigger {
+  min-width: 120px;
+  border-radius: 0.55rem;
+  border: 1px solid var(--datagrid-glass-border);
+  background: var(--datagrid-controls-input-bg);
+  color: var(--datagrid-text-primary);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.datagrid-controls__menu-trigger:hover {
+  border-color: var(--datagrid-accent-strong);
+}
+
+.datagrid-controls__menu-content {
+  z-index: 1000;
+  --ui-menu-bg: var(--datagrid-controls-surface-bg);
+  --ui-menu-border: var(--datagrid-glass-border);
+  --ui-menu-text: var(--datagrid-text-primary);
+  --ui-menu-muted: var(--datagrid-text-soft);
+  --ui-menu-hover-bg: var(--datagrid-chip-bg);
+  --ui-menu-padding-y: 0.28rem;
+  --ui-menu-padding-x: 0.28rem;
+  --ui-menu-item-radius: 0.45rem;
+  --ui-menu-radius: 0.62rem;
+  --ui-menu-min-width: 220px;
+  --ui-menu-max-width: 340px;
+  flex: initial;
+  width: min(332px, calc(100vw - 0.8rem));
+  max-height: min(68vh, 480px);
+  border: 1px solid var(--ui-menu-border);
+  background: var(--ui-menu-bg);
+  padding: 0.38rem;
+  overflow: auto;
+  align-content: start;
+  gap: 0.42rem;
+  box-shadow: var(--ui-menu-shadow, 0 24px 60px rgba(2, 6, 23, 0.65));
+}
+
+.datagrid-controls__menu-content.ui-menu-content {
+  z-index: 2001;
+}
+
+.datagrid-controls__menu-content .ui-menu-label {
+  padding: 0.25rem 0.55rem 0.15rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.datagrid-controls__menu-content .ui-menu-separator {
+  margin: 0.3rem 0.35rem 0.4rem;
+  height: 1px;
+  background: color-mix(in oklab, var(--datagrid-glass-border) 70%, transparent);
+}
+
+.datagrid-controls__menu-content .ui-menu-item {
+  padding: 0.38rem 0.6rem;
+  font-size: 0.78rem;
+  gap: 0.4rem;
+}
+
+.datagrid-controls__menu-content .ui-menu-item:hover,
+.datagrid-controls__menu-content .ui-menu-item[data-highlighted],
+.datagrid-controls__menu-content .ui-menu-item:focus-visible {
+  color: #f8fafc;
+}
+
+.datagrid-controls__menu-content .ui-menu-item[data-disabled],
+.datagrid-controls__menu-content .ui-menu-item[aria-disabled="true"] {
+  opacity: 0.5;
+}
+
+.datagrid-controls__menu-check {
+  width: 0.9rem;
+  text-align: center;
+  color: var(--datagrid-accent-strong);
+}
+
 .datagrid-controls__clear-filter:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -178,6 +276,29 @@
   padding: 0.7rem;
 }
 
+.datagrid-column-filter--menu {
+  --ui-menu-bg: var(--datagrid-controls-surface-bg);
+  --ui-menu-border: var(--datagrid-glass-border);
+  --ui-menu-text: var(--datagrid-text-primary);
+  --ui-menu-muted: var(--datagrid-text-soft);
+  --ui-menu-hover-bg: var(--datagrid-chip-bg);
+  --ui-menu-padding-y: 0.28rem;
+  --ui-menu-padding-x: 0.28rem;
+  --ui-menu-item-radius: 0.45rem;
+  --ui-menu-radius: 0.62rem;
+  --ui-menu-min-width: 220px;
+  --ui-menu-max-width: 340px;
+  flex: initial;
+  width: min(332px, calc(100vw - 0.8rem));
+  max-height: min(68vh, 480px);
+  border: none;
+  background: transparent;
+  padding: 0.38rem;
+  overflow: auto;
+  align-content: start;
+  gap: 0.42rem;
+}
+
 .datagrid-column-filter__header {
   grid-column: 1 / -1;
   display: flex;
@@ -189,15 +310,15 @@
 
 .datagrid-column-filter__header p {
   margin: 0;
-  font-size: 0.73rem;
+  font-size: 0.69rem;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--datagrid-text-muted);
+  letter-spacing: 0.08em;
+  color: var(--datagrid-text-soft);
 }
 
 .datagrid-column-filter__header strong {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: 0.79rem;
   color: var(--datagrid-text-primary);
 }
 
@@ -208,10 +329,10 @@
 }
 
 .datagrid-column-filter label span {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--datagrid-text-muted);
+  letter-spacing: 0.06em;
+  color: var(--datagrid-text-soft);
 }
 
 .datagrid-column-filter input {
@@ -220,12 +341,12 @@
 }
 
 .datagrid-column-filter__select .affino-select__trigger {
-  min-height: 2.1rem;
+  min-height: 1.9rem;
   border-radius: 0.55rem;
   border: 1px solid var(--datagrid-glass-border);
   background: var(--datagrid-controls-input-bg);
   color: var(--datagrid-text-primary);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
 }
 
 .datagrid-column-filter__select .affino-select__surface {
@@ -251,13 +372,142 @@
   cursor: pointer;
 }
 
+.datagrid-column-filter__actions .ui-menu-item {
+  border-radius: 0.55rem;
+  border: 1px solid var(--datagrid-glass-border);
+  background: var(--datagrid-controls-input-bg);
+  color: var(--datagrid-text-primary);
+  justify-content: center;
+  padding: 0.34rem 0.55rem;
+  font-size: 0.74rem;
+  cursor: pointer;
+  line-height: 1.1;
+}
+
 .datagrid-column-filter__actions button.ghost {
+  background: transparent;
+}
+
+.datagrid-column-filter__actions .ui-menu-item.ghost {
   background: transparent;
 }
 
 .datagrid-column-filter__actions button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.datagrid-column-filter__actions .ui-menu-item[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.datagrid-column-filter__set {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.38rem;
+  border: 1px solid var(--datagrid-glass-border);
+  border-radius: 0.65rem;
+  background: var(--datagrid-controls-input-bg);
+  padding: 0.46rem;
+}
+
+.datagrid-column-filter__set-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.datagrid-column-filter__set-header p {
+  margin: 0;
+  font-size: 0.67rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--datagrid-text-soft);
+}
+
+.datagrid-column-filter__set-header strong {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-column-filter__set-search {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.datagrid-column-filter__set-search span {
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--datagrid-text-soft);
+}
+
+.datagrid-column-filter__set-search input {
+  width: 100%;
+}
+
+.datagrid-column-filter__set-mode,
+.datagrid-column-filter__set-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.datagrid-column-filter__set-mode button,
+.datagrid-column-filter__set-actions button {
+  border-radius: 0.5rem;
+  border: 1px solid var(--datagrid-glass-border);
+  background: transparent;
+  color: var(--datagrid-text-primary);
+  padding: 0.28rem 0.5rem;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.datagrid-column-filter__set-mode button.is-active {
+  border-color: var(--datagrid-accent-strong);
+  color: var(--datagrid-text-primary);
+  background: var(--datagrid-chip-bg);
+}
+
+.datagrid-column-filter__set-list {
+  max-height: 136px;
+  overflow: auto;
+  border: 1px solid var(--datagrid-glass-border);
+  border-radius: 0.5rem;
+  background: var(--datagrid-controls-bg);
+  padding: 0.2rem;
+}
+
+.datagrid-column-filter__set-option {
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  border-radius: 0.4rem;
+  padding: 0.24rem 0.32rem;
+  font-size: 0.72rem;
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-column-filter__set-option:hover {
+  background: var(--datagrid-chip-bg);
+}
+
+.datagrid-column-filter__set-option input {
+  min-width: auto;
+  width: 0.9rem;
+  height: 0.9rem;
+  margin: 0;
+}
+
+.datagrid-column-filter__set-empty {
+  margin: 0;
+  padding: 0.4rem;
+  font-size: 0.74rem;
+  color: var(--datagrid-text-muted);
 }
 
 .datagrid-controls__filter-indicator {

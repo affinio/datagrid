@@ -69,11 +69,15 @@ export const DATA_GRID_TEXT_FILTER_OPERATOR_OPTIONS: readonly DataGridFilterOper
   { value: "contains", label: "Contains" },
   { value: "equals", label: "Equals" },
   { value: "starts-with", label: "Starts with" },
+  { value: "in-list", label: "In list" },
+  { value: "not-in-list", label: "Not in list" },
 ] as const
 
 export const DATA_GRID_ENUM_FILTER_OPERATOR_OPTIONS: readonly DataGridFilterOperatorOption[] = [
   { value: "is", label: "Is" },
   { value: "is-not", label: "Is not" },
+  { value: "in-list", label: "In list" },
+  { value: "not-in-list", label: "Not in list" },
 ] as const
 
 export const DATA_GRID_NUMBER_FILTER_OPERATOR_OPTIONS: readonly DataGridFilterOperatorOption[] = [
@@ -104,9 +108,32 @@ function resolveDefaultInputValue(value: unknown): string {
   return ""
 }
 
+function parseFilterValueList(raw: string): string[] {
+  const normalized = raw.trim()
+  if (!normalized) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(normalized)
+    if (!Array.isArray(parsed)) {
+      return [normalized]
+    }
+    return parsed
+      .map(item => String(item ?? "").trim())
+      .filter(Boolean)
+  } catch {
+    return [normalized]
+  }
+}
+
 function matchTextFilter(value: unknown, operator: string, rawExpected: string): boolean {
   const haystack = String(value ?? "").toLowerCase()
   const expected = rawExpected.toLowerCase()
+  if (operator === "in-list" || operator === "not-in-list") {
+    const list = parseFilterValueList(rawExpected).map(entry => entry.toLowerCase())
+    const contains = list.includes(haystack)
+    return operator === "not-in-list" ? !contains : contains
+  }
   if (operator === "equals") {
     return haystack === expected
   }
@@ -118,6 +145,11 @@ function matchTextFilter(value: unknown, operator: string, rawExpected: string):
 
 function matchEnumFilter(value: unknown, operator: string, rawExpected: string): boolean {
   const current = String(value ?? "").toLowerCase()
+  if (operator === "in-list" || operator === "not-in-list") {
+    const list = parseFilterValueList(rawExpected).map(entry => entry.toLowerCase())
+    const contains = list.includes(current)
+    return operator === "not-in-list" ? !contains : contains
+  }
   const expected = rawExpected.toLowerCase()
   if (operator === "is-not") {
     return current !== expected
@@ -165,6 +197,9 @@ export function useDataGridColumnFilterOrchestration<TRow>(
   }
 
   function doesFilterDraftHaveRequiredValues(draft: DataGridColumnFilterDraft): boolean {
+    if (draft.operator === "in-list" || draft.operator === "not-in-list") {
+      return parseFilterValueList(draft.value).length > 0
+    }
     if (!draft.value.trim()) {
       return false
     }
