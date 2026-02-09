@@ -76,21 +76,21 @@ export function useDataGridMoveMutationPolicy<TRow, TEditableColumnKey extends s
     if (isBlockedColumn(columnKey)) {
       return false
     }
-    if (options.isEditableColumn(columnKey)) {
-      options.applyEditedValue(row, columnKey, value)
-      return true
+    if (!options.isEditableColumn(columnKey)) {
+      return false
     }
-    return applyRecordValueForMove(row as unknown as Record<string, unknown>, columnKey, value)
+    options.applyEditedValue(row, columnKey, value)
+    return true
   }
 
   function clearValueForMove(row: TRow, columnKey: string): boolean {
     if (isBlockedColumn(columnKey)) {
       return false
     }
-    if (options.isEditableColumn(columnKey)) {
-      return options.clearEditedValue(row, columnKey)
+    if (!options.isEditableColumn(columnKey)) {
+      return false
     }
-    return clearRecordValueForMove(row as unknown as Record<string, unknown>, columnKey)
+    return options.clearEditedValue(row, columnKey)
   }
 
   return {

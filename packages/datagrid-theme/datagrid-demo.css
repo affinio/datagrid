@@ -11,12 +11,12 @@
 }
 
 .datagrid-page {
-  --datagrid-controls-height: 210px;
   display: flex;
   flex-direction: column;
   gap: 1rem;
   height: calc(100dvh - 11.5rem);
   min-height: 640px;
+  --datagrid-controls-height: 13rem;
   font-family: var(--datagrid-font-family);
   font-size: var(--datagrid-font-size);
   color: var(--datagrid-text-color);
@@ -76,6 +76,7 @@
   align-content: flex-start;
   gap: 0.75rem;
   height: var(--datagrid-controls-height);
+  min-height: var(--datagrid-controls-height);
   overflow: auto;
   border-radius: 0.9rem;
   border: 1px solid var(--datagrid-glass-border);
@@ -861,7 +862,8 @@
 
   .datagrid-controls {
     height: auto;
-    max-height: 320px;
+    min-height: var(--datagrid-controls-height);
+    max-height: none;
   }
 
   .datagrid-metrics {

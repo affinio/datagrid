@@ -28,6 +28,29 @@ function prevent(event: KeyboardEvent) {
   event.preventDefault()
 }
 
+function resolveNavigationKey(event: KeyboardEvent): string {
+  if (event.code === "ArrowUp" || event.code === "ArrowDown" || event.code === "ArrowLeft" || event.code === "ArrowRight") {
+    return event.code
+  }
+  // Some environments report ArrowUp/ArrowDown combos as PageUp/PageDown while
+  // preserving Arrow* code. Prefer the physical key in that case.
+  if (event.key === "PageDown" && event.code === "ArrowDown") {
+    return "ArrowDown"
+  }
+  if (event.key === "PageUp" && event.code === "ArrowUp") {
+    return "ArrowUp"
+  }
+  // Playwright/WebKit on macOS can occasionally emit Shift+Arrow as PageUp/PageDown
+  // without Arrow* codes. Preserve expected single-row extension semantics.
+  if (event.key === "PageDown" && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    return "ArrowDown"
+  }
+  if (event.key === "PageUp" && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    return "ArrowUp"
+  }
+  return event.key
+}
+
 export function useDataGridCellNavigation<
   TCoord extends DataGridNavigationCellCoord = DataGridNavigationCellCoord,
 >(
@@ -42,8 +65,9 @@ export function useDataGridCellNavigation<
     let target: TCoord = { ...current }
     let extend = event.shiftKey
     const stepRows = Math.max(1, options.resolveStepRows())
+    const key = resolveNavigationKey(event)
 
-    switch (event.key) {
+    switch (key) {
       case "ArrowUp":
         target.rowIndex -= 1
         break

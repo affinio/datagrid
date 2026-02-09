@@ -48,6 +48,16 @@ function createDefaultState(): DataGridContextMenuState {
   return { ...DEFAULT_CONTEXT_MENU_STATE }
 }
 
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min
+  }
+  if (max <= min) {
+    return min
+  }
+  return Math.max(min, Math.min(max, value))
+}
+
 function resolveContextMenuActions(
   contextMenu: DataGridContextMenuState,
   isColumnResizable?: (columnKey: string) => boolean,
@@ -162,13 +172,26 @@ export function useDataGridContextMenu(
 
   function openContextMenu(clientX: number, clientY: number, context: OpenDataGridContextMenuInput) {
     options.onBeforeOpen?.()
-    contextMenu = {
+    const baseState: DataGridContextMenuState = {
       visible: true,
-      x: Math.max(8, clientX),
-      y: Math.max(8, clientY),
+      x: 0,
+      y: 0,
       zone: context.zone,
       columnKey: context.columnKey ?? null,
       rowId: context.rowId ?? null,
+    }
+    const actionCount = resolveContextMenuActions(baseState, options.isColumnResizable).length
+    const estimatedMenuWidth = 240
+    const estimatedMenuHeight = Math.max(56, actionCount * 36 + 12)
+    const viewportWidth = typeof window !== "undefined" ? window.innerWidth : clientX + estimatedMenuWidth + 16
+    const viewportHeight = typeof window !== "undefined" ? window.innerHeight : clientY + estimatedMenuHeight + 16
+    const maxX = Math.max(8, viewportWidth - estimatedMenuWidth - 8)
+    const maxY = Math.max(8, viewportHeight - estimatedMenuHeight - 8)
+
+    contextMenu = {
+      ...baseState,
+      x: clamp(clientX, 8, maxX),
+      y: clamp(clientY, 8, maxY),
     }
     emit()
   }

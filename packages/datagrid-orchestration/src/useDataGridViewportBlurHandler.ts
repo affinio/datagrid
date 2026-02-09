@@ -17,6 +17,17 @@ export interface UseDataGridViewportBlurHandlerResult {
 export function useDataGridViewportBlurHandler(
   options: UseDataGridViewportBlurHandlerOptions,
 ): UseDataGridViewportBlurHandlerResult {
+  function finalizeBlurCleanup() {
+    options.stopDragSelection()
+    options.stopFillSelection(false)
+    options.stopRangeMove(false)
+    options.stopColumnResize()
+    options.closeContextMenu()
+    if (options.hasInlineEditor()) {
+      options.commitInlineEdit()
+    }
+  }
+
   function handleViewportBlur(event: FocusEvent): boolean {
     const viewport = options.resolveViewportElement()
     const nextFocused = event.relatedTarget as Node | null
@@ -29,14 +40,30 @@ export function useDataGridViewportBlurHandler(
       return false
     }
 
-    options.stopDragSelection()
-    options.stopFillSelection(false)
-    options.stopRangeMove(false)
-    options.stopColumnResize()
-    options.closeContextMenu()
-    if (options.hasInlineEditor()) {
-      options.commitInlineEdit()
+    if (!nextFocused && viewport) {
+      const runDeferred = () => {
+        const active = viewport.ownerDocument?.activeElement as Node | null
+        if (active && viewport.contains(active)) {
+          return
+        }
+        const menuElement = options.resolveContextMenuElement()
+        if (active && menuElement?.contains(active)) {
+          return
+        }
+        finalizeBlurCleanup()
+      }
+      const view = viewport.ownerDocument?.defaultView
+      if (typeof view?.requestAnimationFrame === "function") {
+        view.requestAnimationFrame(() => view.requestAnimationFrame(runDeferred))
+      } else if (typeof view?.setTimeout === "function") {
+        view.setTimeout(runDeferred, 0)
+      } else {
+        setTimeout(runDeferred, 0)
+      }
+      return true
     }
+
+    finalizeBlurCleanup()
     return true
   }
 

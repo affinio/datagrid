@@ -80,10 +80,8 @@ export function useDataGridGlobalPointerLifecycle(
     }
 
     if (state.isDragSelecting) {
-      if (pointer) {
-        options.setDragPointer(pointer)
-        options.applyDragSelectionFromPointer()
-      }
+      // Drag-selection preview is already updated on pointer move/enter events.
+      // Re-applying by release coordinates is brittle when layout shifts.
       options.stopDragSelection()
     }
   }
@@ -91,6 +89,9 @@ export function useDataGridGlobalPointerLifecycle(
   function dispatchGlobalMouseMove(event: MouseEvent): boolean {
     const state = options.resolveInteractionState()
     if (event.buttons === 0 && hasAnyInteraction(state)) {
+      // Fallback path when mouseup/pointerup was not observed.
+      // Keep the final pointer for move/fill/resize flows; drag-selection no
+      // longer re-applies from release coordinates in finalize.
       finalizePointerInteractions({ clientX: event.clientX, clientY: event.clientY }, true)
       return true
     }
