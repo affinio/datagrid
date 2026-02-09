@@ -4,7 +4,9 @@ import {
   h,
   ref,
   watch,
+  type ComponentPublicInstance,
   type PropType,
+  type VNodeRef,
 } from "vue"
 import type {
   DataGridColumnDef,
@@ -275,7 +277,10 @@ export const AffinoDataGridSimple = defineComponent({
       return String(value)
     }
 
-    const setContextMenuRef = (element: Element | null) => {
+    const setContextMenuRef: VNodeRef = refValue => {
+      const element = refValue && typeof (refValue as ComponentPublicInstance).$el !== "undefined"
+        ? ((refValue as ComponentPublicInstance).$el as Element | null)
+        : (refValue as Element | null)
       grid.ui.bindContextMenuRef(element)
     }
 

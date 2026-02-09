@@ -99,7 +99,9 @@
     "src/composables/useDataGridKeyboardCommandRouter.ts",
     "src/composables/useDataGridRuntime.ts",
     "src/composables/selectionOverlayTransform.ts",
-    "src/composables/useTableOverlayScrollState.ts"
+    "src/composables/useTableOverlayScrollState.ts",
+    "src/composables/useAffinoDataGrid.ts",
+    "src/composables/useAffinoDataGridUi.ts"
   ],
   "exclude": [
     "src/**/__tests__/**",
