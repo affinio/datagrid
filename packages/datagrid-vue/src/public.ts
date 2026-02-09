@@ -3,12 +3,12 @@
  */
 export {
   createDataGridSettingsAdapter,
-} from "./piniaTableSettingsAdapter"
+} from "./dataGridSettingsAdapter"
 
 export {
   useDataGridSettingsStore,
   type DataGridSettingsStore,
-} from "./tableSettingsStore"
+} from "./dataGridSettingsStore"
 
 export {
   buildDataGridOverlayTransform,
@@ -25,7 +25,7 @@ export {
 export {
   useDataGridOverlayScrollState,
   type UseDataGridOverlayScrollStateOptions,
-} from "./composables/useTableOverlayScrollState"
+} from "./composables/useDataGridOverlayScrollState"
 
 export {
   useDataGridContextMenu,

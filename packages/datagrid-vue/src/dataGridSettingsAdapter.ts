@@ -1,5 +1,5 @@
 import type { DataGridSettingsAdapter } from "@affino/datagrid-core"
-import type { DataGridSettingsStore } from "./tableSettingsStore"
+import type { DataGridSettingsStore } from "./dataGridSettingsStore"
 
 export function createDataGridSettingsAdapter(
   store: DataGridSettingsStore,

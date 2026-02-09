@@ -41,12 +41,12 @@ const createMemoryStorage = () => {
   }
 }
 
-const tableSettingsStorage: Storage =
+const dataGridSettingsStorage: Storage =
   typeof window !== "undefined" && window.localStorage
     ? window.localStorage
     : (createMemoryStorage() as unknown as Storage)
 
-export const useDataGridSettingsStore = defineStore("tableSettingsStore", {
+export const useDataGridSettingsStore = defineStore("dataGridSettingsStore", {
   state: (): DataGridSettingsStoreState => ({
     columnWidths: {},
     sortStates: {},
@@ -152,8 +152,8 @@ export const useDataGridSettingsStore = defineStore("tableSettingsStore", {
     },
   },
   persist: {
-    key: "unitlab-table-settings",
-    storage: tableSettingsStorage,
+    key: "affino-datagrid-settings",
+    storage: dataGridSettingsStorage,
   },
 })
 
