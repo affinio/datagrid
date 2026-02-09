@@ -84,8 +84,12 @@ describe("useDataGridColumnFilterOrchestration contract", () => {
       latencyMs: { kind: "number" as const, operator: "gte", value: "100" },
     }
 
-    expect(api.rowMatchesColumnFilters(rows[0], filters)).toBe(true)
-    expect(api.rowMatchesColumnFilters(rows[1], filters)).toBe(false)
+    expect(rows[0]).toBeDefined()
+    expect(rows[1]).toBeDefined()
+    const firstRow = rows[0]!
+    const secondRow = rows[1]!
+    expect(api.rowMatchesColumnFilters(firstRow, filters)).toBe(true)
+    expect(api.rowMatchesColumnFilters(secondRow, filters)).toBe(false)
 
     expect(api.buildFilterSnapshot(filters)).toEqual({
       columnFilters: {},

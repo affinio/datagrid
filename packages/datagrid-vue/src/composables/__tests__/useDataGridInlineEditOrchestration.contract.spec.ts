@@ -33,7 +33,9 @@ describe("useDataGridInlineEditOrchestration contract", () => {
       resolveRowLabel: row => row.service,
     })
 
-    expect(api.beginInlineEdit(sourceRows.value[0], "owner", "text")).toBe(true)
+    expect(sourceRows.value[0]).toBeDefined()
+    const firstRow = sourceRows.value[0]!
+    expect(api.beginInlineEdit(firstRow, "owner", "text")).toBe(true)
     expect(api.isEditingCell("r1", "owner")).toBe(true)
 
     api.updateEditorDraft("zoe")
@@ -61,7 +63,9 @@ describe("useDataGridInlineEditOrchestration contract", () => {
       },
     })
 
-    api.beginInlineEdit(sourceRows.value[0], "owner", "select")
+    expect(sourceRows.value[0]).toBeDefined()
+    const firstRow = sourceRows.value[0]!
+    api.beginInlineEdit(firstRow, "owner", "select")
     expect(api.isSelectEditorCell("r1", "owner")).toBe(true)
     expect(api.onEditorSelectChange("ops")).toBe(true)
     expect(sourceRows.value[0]?.owner).toBe("ops")
@@ -89,7 +93,9 @@ describe("useDataGridInlineEditOrchestration contract", () => {
       recordIntentTransaction,
     })
 
-    api.beginInlineEdit(sourceRows.value[0], "owner")
+    expect(sourceRows.value[0]).toBeDefined()
+    const firstRow = sourceRows.value[0]!
+    api.beginInlineEdit(firstRow, "owner")
     api.updateEditorDraft("charlie")
     expect(api.commitInlineEdit()).toBe(true)
     await Promise.resolve()

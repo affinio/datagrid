@@ -105,14 +105,14 @@ describe("createClientRowModel", () => {
   it("throws when row identity is missing and no resolver is configured", () => {
     expect(() =>
       createClientRowModel({
-        rows: [{ row: { id: 999 }, originalIndex: 0, displayIndex: 0 } as DataGridRowNodeInput<{ id: number }>],
+        rows: [{ row: { id: 999 }, originalIndex: 0, displayIndex: 0 } as unknown as DataGridRowNodeInput<{ id: number }>],
       }),
     ).toThrowError(/Missing row identity/)
   })
 
   it("resolves row identity through explicit resolver", () => {
     const model = createClientRowModel({
-      rows: [{ row: { id: 42 }, originalIndex: 0, displayIndex: 0 }],
+      rows: [{ row: { id: 42 }, originalIndex: 0, displayIndex: 0 } as unknown as DataGridRowNodeInput<{ id: number }>],
       resolveRowId: row => row.id,
     })
 

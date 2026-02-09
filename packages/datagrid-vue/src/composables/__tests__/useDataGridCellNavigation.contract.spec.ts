@@ -32,26 +32,26 @@ describe("useDataGridCellNavigation contract", () => {
     })
 
     expect(router.dispatchNavigation(new KeyboardEvent("keydown", { key: "ArrowUp", cancelable: true }))).toBe(true)
-    expect(applied.at(-1)?.coord).toEqual({ rowIndex: 4, columnIndex: 3 })
-    expect(applied.at(-1)?.extend).toBe(false)
+    expect(applied[applied.length - 1]?.coord).toEqual({ rowIndex: 4, columnIndex: 3 })
+    expect(applied[applied.length - 1]?.extend).toBe(false)
 
     expect(router.dispatchNavigation(new KeyboardEvent("keydown", { key: "PageDown", shiftKey: true, cancelable: true }))).toBe(true)
-    expect(applied.at(-1)?.coord).toEqual({ rowIndex: 17, columnIndex: 3 })
-    expect(applied.at(-1)?.extend).toBe(true)
+    expect(applied[applied.length - 1]?.coord).toEqual({ rowIndex: 17, columnIndex: 3 })
+    expect(applied[applied.length - 1]?.extend).toBe(true)
 
     expect(router.dispatchNavigation(new KeyboardEvent("keydown", { key: "Home", cancelable: true }))).toBe(true)
-    expect(applied.at(-1)?.coord).toEqual({ rowIndex: 5, columnIndex: 0 })
+    expect(applied[applied.length - 1]?.coord).toEqual({ rowIndex: 5, columnIndex: 0 })
 
     expect(router.dispatchNavigation(new KeyboardEvent("keydown", { key: "End", metaKey: true, cancelable: true }))).toBe(true)
-    expect(applied.at(-1)?.coord).toEqual({ rowIndex: 99, columnIndex: 9 })
+    expect(applied[applied.length - 1]?.coord).toEqual({ rowIndex: 99, columnIndex: 9 })
 
     expect(router.dispatchNavigation(new KeyboardEvent("keydown", { key: "Tab", cancelable: true }))).toBe(true)
-    expect(applied.at(-1)?.coord).toEqual({ rowIndex: 6, columnIndex: 4 })
-    expect(applied.at(-1)?.extend).toBe(false)
+    expect(applied[applied.length - 1]?.coord).toEqual({ rowIndex: 6, columnIndex: 4 })
+    expect(applied[applied.length - 1]?.extend).toBe(false)
 
     expect(router.dispatchNavigation(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, cancelable: true }))).toBe(true)
-    expect(applied.at(-1)?.coord).toEqual({ rowIndex: 4, columnIndex: 3 })
-    expect(applied.at(-1)?.extend).toBe(false)
+    expect(applied[applied.length - 1]?.coord).toEqual({ rowIndex: 4, columnIndex: 3 })
+    expect(applied[applied.length - 1]?.extend).toBe(false)
   })
 
   it("handles escape and no-op conditions", () => {

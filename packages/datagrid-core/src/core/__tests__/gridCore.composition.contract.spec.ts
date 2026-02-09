@@ -19,11 +19,11 @@ describe("grid core state-engine composition contract", () => {
 
     const core = createDataGridCore({
       services: {
-        event: { name: "event", init: () => log.push("init:event") },
-        rowModel: { name: "rowModel", model: rowModel, init: () => log.push("init:rowModel") },
-        columnModel: { name: "columnModel", model: columnModel, init: () => log.push("init:columnModel") },
-        edit: { name: "edit", model: editModel, init: () => log.push("init:edit") },
-        transaction: { name: "transaction", init: () => log.push("init:transaction") },
+        event: { name: "event", init: () => { log.push("init:event") } },
+        rowModel: { name: "rowModel", model: rowModel, init: () => { log.push("init:rowModel") } },
+        columnModel: { name: "columnModel", model: columnModel, init: () => { log.push("init:columnModel") } },
+        edit: { name: "edit", model: editModel, init: () => { log.push("init:edit") } },
+        transaction: { name: "transaction", init: () => { log.push("init:transaction") } },
         selection: {
           name: "selection",
           init(context) {
@@ -40,7 +40,7 @@ describe("grid core state-engine composition contract", () => {
             return { ranges: [], activeRangeIndex: -1, activeCell: null }
           },
         },
-        viewport: { name: "viewport", init: () => log.push("init:viewport") },
+        viewport: { name: "viewport", init: () => { log.push("init:viewport") } },
       },
     })
 
@@ -74,13 +74,13 @@ describe("grid core state-engine composition contract", () => {
     const log: string[] = []
     const core = createDataGridCore({
       services: {
-        event: { name: "event", init: () => log.push("init:event") },
-        rowModel: { name: "rowModel", init: () => log.push("init:rowModel") },
-        columnModel: { name: "columnModel", init: () => log.push("init:columnModel") },
-        edit: { name: "edit", init: () => log.push("init:edit") },
-        transaction: { name: "transaction", init: () => log.push("init:transaction") },
-        selection: { name: "selection", init: () => log.push("init:selection") },
-        viewport: { name: "viewport", init: () => log.push("init:viewport") },
+        event: { name: "event", init: () => { log.push("init:event") } },
+        rowModel: { name: "rowModel", init: () => { log.push("init:rowModel") } },
+        columnModel: { name: "columnModel", init: () => { log.push("init:columnModel") } },
+        edit: { name: "edit", init: () => { log.push("init:edit") } },
+        transaction: { name: "transaction", init: () => { log.push("init:transaction") } },
+        selection: { name: "selection", init: () => { log.push("init:selection") } },
+        viewport: { name: "viewport", init: () => { log.push("init:viewport") } },
       },
     })
 

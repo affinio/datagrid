@@ -19,7 +19,7 @@ describe("useDataGridColumnUiPolicy contract", () => {
     isEnumColumn: columnKey => columnKey === "status",
     resolveEnumEditorOptions: columnKey => (columnKey === "status" ? ["stable", "watch", "degraded"] : null),
     resolveRows: () => rows,
-    resolveCellValue: (row, columnKey) => (row as Record<string, unknown>)[columnKey],
+    resolveCellValue: (row, columnKey) => row[columnKey as keyof Row],
     numericColumnKeys: new Set(["latencyMs"]),
   })
 

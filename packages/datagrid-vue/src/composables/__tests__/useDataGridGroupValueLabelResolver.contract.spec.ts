@@ -13,6 +13,9 @@ describe("useDataGridGroupValueLabelResolver contract", () => {
   it("returns trimmed group label for present values", () => {
     const resolver = useDataGridGroupValueLabelResolver<Row, GroupKey>({
       resolveCellValue(row, key) {
+        if (key === "none") {
+          return undefined
+        }
         return row[key]
       },
       disabledGroupKeys: ["none"],
@@ -23,6 +26,9 @@ describe("useDataGridGroupValueLabelResolver contract", () => {
   it("returns empty placeholder for blank values", () => {
     const resolver = useDataGridGroupValueLabelResolver<Row, GroupKey>({
       resolveCellValue(row, key) {
+        if (key === "none") {
+          return undefined
+        }
         return row[key]
       },
       emptyLabel: "(n/a)",
@@ -35,6 +41,9 @@ describe("useDataGridGroupValueLabelResolver contract", () => {
   it("returns empty string for disabled group key", () => {
     const resolver = useDataGridGroupValueLabelResolver<Row, GroupKey>({
       resolveCellValue(row, key) {
+        if (key === "none") {
+          return undefined
+        }
         return row[key]
       },
       disabledGroupKeys: ["none"],

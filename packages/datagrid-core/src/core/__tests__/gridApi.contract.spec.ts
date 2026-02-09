@@ -78,7 +78,7 @@ describe("data grid api facade contracts", () => {
     expect(api.getRowCount()).toBe(2)
     const maxIndex = Math.max(0, api.getRowCount() - 1)
     const candidates = api.getRowsInRange({ start: 0, end: Math.min(3, maxIndex) })
-    const firstLeaf = candidates.find(row => row.kind === "leaf")
+    const firstLeaf = candidates.find(row => row.kind === "leaf") as { row: { name: string } } | undefined
     expect(firstLeaf?.row.name).toBe("alpha")
     expect(columnSnapshot.order).toEqual(["name", "id"])
     expect(api.getColumn("id")?.visible).toBe(false)

@@ -48,10 +48,10 @@ describe("useDataGridRangeMutationEngine contract", () => {
       },
       resolveDisplayedCellValue(row, columnKey) {
         const source = rows.find(entry => entry.rowId === row.rowId)
-        return source ? (source as Record<string, unknown>)[columnKey] : ""
+        return source ? source[columnKey as keyof Row] : ""
       },
       resolveSourceCellValue(row, columnKey) {
-        return (row as Record<string, unknown>)[columnKey]
+        return row[columnKey as keyof Row]
       },
       normalizeClipboardValue(value) {
         return String(value ?? "")
@@ -129,7 +129,7 @@ describe("useDataGridRangeMutationEngine contract", () => {
         return ""
       },
       resolveSourceCellValue(row, columnKey) {
-        return (row as Record<string, unknown>)[columnKey]
+        return row[columnKey as keyof Row]
       },
       normalizeClipboardValue(value) {
         return String(value ?? "")

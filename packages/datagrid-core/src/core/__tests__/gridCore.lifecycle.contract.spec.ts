@@ -9,7 +9,7 @@ function createTrackedService<TName extends DataGridCoreServiceName>(
   name: TName,
   log: string[],
 ): DataGridCoreServiceByName[TName] {
-  return {
+  const service = {
     name,
     init() {
       log.push(`init:${name}`)
@@ -23,7 +23,8 @@ function createTrackedService<TName extends DataGridCoreServiceName>(
     dispose() {
       log.push(`dispose:${name}`)
     },
-  } as DataGridCoreServiceByName[TName]
+  }
+  return service as unknown as DataGridCoreServiceByName[TName]
 }
 
 describe("data grid core service registry lifecycle", () => {

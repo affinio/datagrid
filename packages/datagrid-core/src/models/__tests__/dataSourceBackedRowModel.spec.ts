@@ -277,6 +277,9 @@ describe("createDataSourceBackedRowModel", () => {
   it("applies push updates and handles push invalidation with refetch", async () => {
     const invalidate = vi.fn()
     let pushListener: DataGridDataSourcePushListener<{ id: number; value: string }> | null = null
+    const emitPush = (event: Parameters<DataGridDataSourcePushListener<{ id: number; value: string }>>[0]) => {
+      ;(pushListener as DataGridDataSourcePushListener<{ id: number; value: string }> | null)?.(event)
+    }
     const pull = vi.fn(async (request: DataGridDataSourcePullRequest) => {
       const rows = Array.from({ length: request.range.end - request.range.start + 1 }, (_, offset) => {
         const index = request.range.start + offset
@@ -312,14 +315,14 @@ describe("createDataSourceBackedRowModel", () => {
     await flushMicrotasks()
     expect(model.getRow(1)?.row.value).toBe("row-1")
 
-    pushListener?.({
+    emitPush({
       type: "upsert",
       rows: [{ index: 1, row: { id: 1, value: "patched-1" } }],
       total: 500,
     })
     expect(model.getRow(1)?.row.value).toBe("patched-1")
 
-    pushListener?.({
+    emitPush({
       type: "invalidate",
       invalidation: { kind: "all", reason: "stream-reset" },
     })

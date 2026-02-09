@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import type { DataGridEventMap, DataGridPluginCapabilityMap } from "@affino/datagrid-plugins"
 import {
   createDataGridRuntime,
   type DataGridRuntimeInternalEventMap,
@@ -90,12 +91,15 @@ describe("table runtime typed event routing", () => {
   })
 
   it("routes custom plugin events with strict domain separation", () => {
-    interface CustomPluginEvents {
+    type CustomPluginEvents = DataGridEventMap & {
       "metrics:tick": readonly [number]
     }
 
     const seen: number[] = []
     let pluginEmit: ((value: number) => void) | null = null
+    const emitFromPlugin = (value: number) => {
+      ;(pluginEmit as ((value: number) => void) | null)?.(value)
+    }
 
     const runtime = createDataGridRuntime<CustomPluginEvents>({
       onHostEvent: () => {},
@@ -116,7 +120,7 @@ describe("table runtime typed event routing", () => {
       seen.push(value)
     })
 
-    pluginEmit?.(3)
+    emitFromPlugin(3)
     runtime.emitPlugin("metrics:tick", 5)
     off()
     runtime.dispose()
@@ -158,7 +162,7 @@ describe("table runtime typed event routing", () => {
       onHostEvent: () => {},
       onInternalEvent: (name, args) => {
         if (name === "host:dispatched") {
-          capture.push(args[0])
+          capture.push(args[0] as DataGridRuntimeInternalEventMap["host:dispatched"][0])
         }
       },
       pluginContext: createPluginContext("grid-guard"),
@@ -175,13 +179,14 @@ describe("table runtime typed event routing", () => {
     const calls: number[] = []
     const runtime = createDataGridRuntime<
       Record<never, never>,
-      { "metrics:increment": (value: number) => void }
+      DataGridPluginCapabilityMap
     >({
       onHostEvent: () => {},
       pluginContext: {
         ...createPluginContext("grid-cap-ok"),
         getCapabilityMap: () => ({
-          "metrics:increment": value => {
+          "metrics:increment": (...args: readonly unknown[]) => {
+            const [value] = args as [number]
             calls.push(value)
           },
         }),
@@ -207,12 +212,12 @@ describe("table runtime typed event routing", () => {
     const denied: Array<DataGridRuntimeInternalEventMap["plugin:capability-denied"][0]> = []
     const runtime = createDataGridRuntime<
       Record<never, never>,
-      { "metrics:increment": (value: number) => void }
+      DataGridPluginCapabilityMap
     >({
       onHostEvent: () => {},
       onInternalEvent: (name, args) => {
         if (name === "plugin:capability-denied") {
-          denied.push(args[0])
+          denied.push(args[0] as DataGridRuntimeInternalEventMap["plugin:capability-denied"][0])
         }
       },
       pluginContext: {
@@ -245,12 +250,12 @@ describe("table runtime typed event routing", () => {
     const denied: Array<DataGridRuntimeInternalEventMap["plugin:capability-denied"][0]> = []
     const runtime = createDataGridRuntime<
       Record<never, never>,
-      { "table:reset": () => void }
+      DataGridPluginCapabilityMap
     >({
       onHostEvent: () => {},
       onInternalEvent: (name, args) => {
         if (name === "plugin:capability-denied") {
-          denied.push(args[0])
+          denied.push(args[0] as DataGridRuntimeInternalEventMap["plugin:capability-denied"][0])
         }
       },
       pluginContext: {

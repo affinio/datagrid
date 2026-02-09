@@ -23,6 +23,6 @@ describe("resolveCanonicalPinMode", () => {
       lock: "left",
       locked: true,
     }
-    expect(resolveCanonicalPinMode(legacyPayload)).toBe("none")
+    expect(resolveCanonicalPinMode(legacyPayload as unknown as Parameters<typeof resolveCanonicalPinMode>[0])).toBe("none")
   })
 })

@@ -78,7 +78,7 @@ describe("table viewport model bridge service", () => {
 
   it("serves row access by index without full materialization", () => {
     const rows = buildRows(100_000)
-    const columns = Array.from({ length: 520 }, (_, index) => ({
+    const columns: DataGridColumnDef[] = Array.from({ length: 520 }, (_, index) => ({
       key: `col_${index}`,
       label: `Column ${index}`,
       width: 90 + (index % 5) * 10,

@@ -114,4 +114,170 @@ describe("useAffinoDataGrid contract", () => {
 
     wrapper.unmount()
   })
+
+  it("provides bindings helpers for header sort, row selection, and inline editing", async () => {
+    const onCommit = vi.fn()
+    const rows = ref<GridRow[]>([
+      { rowId: "r1", service: "edge-gateway", owner: "NOC" },
+    ])
+    let grid: ReturnType<typeof useAffinoDataGrid<GridRow>> | null = null
+
+    const Host = defineComponent({
+      name: "AffinoDataGridBindingsHost",
+      setup() {
+        grid = useAffinoDataGrid<GridRow>({
+          rows,
+          columns: COLUMNS,
+          features: {
+            selection: true,
+            editing: {
+              enabled: true,
+              onCommit,
+            },
+          },
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushTasks()
+
+    const header = grid!.bindings.headerSort("service")
+    expect(header["aria-sort"]).toBe("none")
+    header.onClick()
+    await flushTasks()
+    expect(grid!.sortState.value).toEqual([{ key: "service", direction: "asc" }])
+    grid!.bindings.headerSort("service").onKeydown({
+      key: "Enter",
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent)
+    await flushTasks()
+    expect(grid!.sortState.value).toEqual([{ key: "service", direction: "desc" }])
+
+    expect(rows.value[0]).toBeDefined()
+    const firstRow = rows.value[0]!
+    const rowBinding = grid!.bindings.rowSelection(firstRow, 0)
+    rowBinding.onClick()
+    expect(grid!.features.selection.selectedCount.value).toBe(1)
+    expect(grid!.features.selection.selectedRowKeys.value).toEqual(["r1"])
+
+    const editableCell = grid!.bindings.editableCell({
+      row: firstRow,
+      rowIndex: 0,
+      columnKey: "owner",
+      value: "NOC",
+    })
+    editableCell.onDblclick()
+    expect(grid!.bindings.isCellEditing("r1", "owner")).toBe(true)
+
+    const editor = grid!.bindings.inlineEditor({
+      rowKey: "r1",
+      columnKey: "owner",
+    })
+    editor.onInput({
+      target: { value: "qa-owner" },
+    } as unknown as Event)
+    expect(grid!.features.editing.activeSession.value?.draft).toBe("qa-owner")
+    editor.onKeydown({
+      key: "Enter",
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent)
+    await flushTasks()
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(grid!.features.editing.activeSession.value).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it("routes sugar actions and context-menu actions without custom routers", async () => {
+    const rows = ref<GridRow[]>([
+      { rowId: "r1", service: "edge-gateway", owner: "NOC" },
+      { rowId: "r2", service: "billing-api", owner: "Payments" },
+    ])
+    let grid: ReturnType<typeof useAffinoDataGrid<GridRow>> | null = null
+
+    const Host = defineComponent({
+      name: "AffinoDataGridActionsHost",
+      setup() {
+        grid = useAffinoDataGrid<GridRow>({
+          rows,
+          columns: COLUMNS,
+          features: {
+            selection: true,
+            clipboard: {
+              enabled: true,
+              useSystemClipboard: false,
+            },
+          },
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushTasks()
+
+    grid!.features.selection.setSelectedByKey("r1", true)
+    await expect(grid!.actions.copySelectedRows()).resolves.toBe(true)
+    expect(grid!.features.clipboard.lastCopiedText.value).toContain("edge-gateway")
+
+    await expect(grid!.actions.runAction("cut")).resolves.toMatchObject({
+      ok: true,
+      affected: 1,
+    })
+    expect(rows.value).toHaveLength(1)
+    expect(rows.value[0]).toBeDefined()
+    const firstRow = rows.value[0]!
+    expect(firstRow.rowId).toBe("r2")
+
+    await expect(grid!.actions.runAction("paste")).resolves.toMatchObject({
+      ok: true,
+      affected: 1,
+    })
+    expect(rows.value).toHaveLength(2)
+
+    await expect(grid!.actions.runAction("sort-asc", { columnKey: "service" })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(grid!.sortState.value).toEqual([{ key: "service", direction: "asc" }])
+
+    grid!.bindings.headerCell("owner").onContextmenu({
+      preventDefault: vi.fn(),
+      clientX: 120,
+      clientY: 80,
+    } as unknown as MouseEvent)
+    await flushTasks()
+    const captureResult = vi.fn()
+    grid!.bindings.contextMenuAction("sort-desc", { onResult: captureResult }).onClick()
+    await flushTasks()
+    expect(captureResult).toHaveBeenCalledWith(expect.objectContaining({
+      ok: true,
+      affected: 1,
+    }))
+    expect(grid!.sortState.value).toEqual([{ key: "owner", direction: "desc" }])
+    expect(grid!.contextMenu.state.value.visible).toBe(false)
+
+    const toolbarResult = vi.fn()
+    grid!.bindings.actionButton("clear-selection", { onResult: toolbarResult }).onClick()
+    await flushTasks()
+    expect(toolbarResult).toHaveBeenCalled()
+
+    expect(rows.value[0]).toBeDefined()
+    const contextMenuRow = rows.value[0]!
+    grid!.bindings.dataCell({
+      row: contextMenuRow,
+      rowIndex: 0,
+      columnKey: "owner",
+      value: contextMenuRow.owner,
+    }).onContextmenu({
+      preventDefault: vi.fn(),
+      clientX: 32,
+      clientY: 16,
+    } as unknown as MouseEvent)
+    expect(grid!.contextMenu.state.value.zone).toBe("cell")
+    expect(grid!.contextMenu.state.value.columnKey).toBe("owner")
+
+    wrapper.unmount()
+  })
 })

@@ -48,6 +48,10 @@ export {
   useAffinoDataGrid,
   type AffinoDataGridEditMode,
   type AffinoDataGridEditSession,
+  type AffinoDataGridActionId,
+  type AffinoDataGridRunActionOptions,
+  type AffinoDataGridActionResult,
+  type AffinoDataGridActionBindingOptions,
   type AffinoDataGridSelectionFeature,
   type AffinoDataGridClipboardFeature,
   type AffinoDataGridEditingFeature,
@@ -57,10 +61,22 @@ export {
 } from "./composables/useAffinoDataGrid"
 
 export {
+  useAffinoDataGridUi,
+  type AffinoDataGridUiToolbarAction,
+  type UseAffinoDataGridUiOptions,
+  type UseAffinoDataGridUiResult,
+} from "./composables/useAffinoDataGridUi"
+
+export {
   createDataGridVueRuntime,
   type CreateDataGridVueRuntimeOptions,
   type DataGridVueRuntime,
 } from "./runtime/createDataGridVueRuntime"
+
+export {
+  DataGrid,
+  AffinoDataGridSimple,
+} from "./components"
 
 export type {
   DataGridOverlayTransform,

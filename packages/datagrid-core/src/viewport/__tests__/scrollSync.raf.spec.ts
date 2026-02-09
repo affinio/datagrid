@@ -234,7 +234,7 @@ describe("datagrid rAF scroll sync", () => {
     harness.fakeRaf.tickFrame()
 
     expect(applySpy).toHaveBeenCalledTimes(1)
-    const [, nextState] = applySpy.mock.calls[0] as [unknown, ViewportSyncState]
+    const [, , nextState] = applySpy.mock.calls[0] as unknown as [unknown, ViewportSyncState, ViewportSyncState]
     expect(nextState.scrollTop).toBe(42)
     expect(nextState.scrollLeft).toBe(9)
     expect(nextState.pinnedOffsetLeft).toBe(12)
@@ -281,7 +281,7 @@ describe("datagrid rAF scroll sync", () => {
 
     expect(applySpy).toHaveBeenCalledTimes(1)
     expect(harness.queueHeavyUpdate).toHaveBeenCalledTimes(1)
-    const [, nextState] = applySpy.mock.calls[0] as [unknown, ViewportSyncState]
+    const [, , nextState] = applySpy.mock.calls[0] as unknown as [unknown, ViewportSyncState, ViewportSyncState]
     expect(nextState.scrollTop).toBe(31)
     expect(nextState.scrollLeft).toBe(13)
   })
