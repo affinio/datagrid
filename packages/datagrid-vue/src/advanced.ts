@@ -177,6 +177,12 @@ export {
   type UseDataGridGroupingSortOrchestrationResult,
 } from "./composables/useDataGridGroupingSortOrchestration"
 export {
+  type DataGridHeaderLayerViewportGeometryInput,
+  type DataGridHeaderLayerViewportGeometry,
+  resolveDataGridHeaderScrollSyncLeft,
+  resolveDataGridHeaderLayerViewportGeometry,
+} from "./composables/useDataGridHeaderLayerOrchestration"
+export {
   useDataGridViewportMeasureScheduler,
   type DataGridViewportMeasuredState,
   type UseDataGridViewportMeasureSchedulerOptions,

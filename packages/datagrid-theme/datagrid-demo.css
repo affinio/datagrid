@@ -567,9 +567,26 @@
   overflow: hidden;
 }
 
-.datagrid-stage__viewport {
+.datagrid-stage__header-viewport {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--datagrid-header-row-bg);
+  border-bottom: 1px solid var(--datagrid-header-divider-color);
+  z-index: 34;
+}
+
+.datagrid-stage__body {
   position: relative;
   flex: 1 1 auto;
+  min-height: 0;
+}
+
+.datagrid-stage__viewport {
+  position: relative;
+  height: 100%;
+  width: 100%;
   min-height: 0;
   max-height: none;
   overflow: auto;
@@ -627,11 +644,18 @@
 }
 
 .datagrid-stage__header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 30;
   background: var(--datagrid-header-row-bg);
-  border-bottom: 1px solid var(--datagrid-header-divider-color);
+}
+
+.datagrid-stage__overlay-layer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 14;
 }
 
 .datagrid-stage__row {
