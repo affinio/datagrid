@@ -17,16 +17,6 @@ export {
   type DataGridRuntimeInternalEventName,
 } from "./runtime/dataGridRuntime.js"
 
-export type {
-  DataGridEventArgs,
-  DataGridPluginCapability,
-  DataGridPluginCapabilityMap,
-  DataGridPluginCapabilityName,
-  DataGridPlugin,
-  DataGridPluginDefinition,
-  DataGridPluginSetupContext,
-} from "../plugins"
-
 export {
   createDataGridAdapterRuntime,
   resolveDataGridAdapterEventName,

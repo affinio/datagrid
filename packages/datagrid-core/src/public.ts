@@ -112,12 +112,3 @@ export {
   type DataGridEditPatch,
 } from "./models/index.js"
 
-export {
-  applyGridTheme,
-  resolveGridThemeTokens,
-  mergeThemeTokens,
-  THEME_TOKEN_VARIABLE_MAP,
-  defaultThemeTokens,
-  defaultStyleConfig,
-  industrialNeutralTheme,
-} from "../theme/index.js"

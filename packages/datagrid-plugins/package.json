@@ -1,0 +1,38 @@
+{
+  "name": "@affino/datagrid-plugins",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Plugin contracts and runtime helpers for the Affino DataGrid",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/affinio/affinio/tree/main/packages/datagrid-plugins"
+  },
+  "homepage": "https://affino.dev",
+  "license": "MIT",
+  "keywords": [
+    "datagrid",
+    "plugins",
+    "runtime",
+    "headless"
+  ],
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/index.js"
+}

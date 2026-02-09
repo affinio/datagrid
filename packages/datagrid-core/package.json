@@ -53,6 +53,10 @@
     "headless",
     "core"
   ],
+  "dependencies": {
+    "@affino/datagrid-plugins": "workspace:*",
+    "@affino/datagrid-theme": "workspace:*"
+  },
   "bugs": {
     "url": "https://github.com/affinio/affinio/issues"
   },

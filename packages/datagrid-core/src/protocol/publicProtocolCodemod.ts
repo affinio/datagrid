@@ -85,6 +85,45 @@ const ADVANCED_SYMBOLS = new Set([
   "DataGridDataSourceRowEntry",
 ])
 
+const THEME_SYMBOLS = new Set([
+  "applyGridTheme",
+  "mergeThemeTokens",
+  "resolveGridThemeTokens",
+  "THEME_TOKEN_VARIABLE_MAP",
+  "defaultThemeTokens",
+  "defaultStyleConfig",
+  "industrialNeutralTheme",
+  "palette",
+  "toRgb",
+  "toRgba",
+  "transparent",
+  "normalizeHex",
+  "DataGridThemeTokens",
+  "DataGridResolvedStyleConfig",
+  "DataGridStyleSection",
+  "DataGridHeaderStyle",
+  "DataGridBodyStyle",
+  "DataGridGroupStyle",
+  "DataGridSummaryStyle",
+  "DataGridStateStyle",
+  "DataGridThemeTokenVariants",
+  "DataGridStyleConfig",
+])
+
+const PLUGIN_SYMBOLS = new Set([
+  "DataGridEventMap",
+  "DataGridEventName",
+  "DataGridEventArgs",
+  "DataGridPluginCapability",
+  "DataGridPluginCapabilityMap",
+  "DataGridPluginCapabilityName",
+  "DataGridPluginEventHandler",
+  "DataGridPluginSetupContext",
+  "DataGridPlugin",
+  "DataGridPluginDefinition",
+  "DataGridPluginManager",
+])
+
 function applyReplace(
   source: string,
   pattern: RegExp,
@@ -127,17 +166,23 @@ function rewriteRootImportsToTieredEntrypoints(source: string, appliedTransforms
       const specifiers = normalizeSpecifiers(rawSpecifiers)
       const stableSpecifiers: string[] = []
       const advancedSpecifiers: string[] = []
+      const themeSpecifiers: string[] = []
+      const pluginSpecifiers: string[] = []
 
       for (const specifier of specifiers) {
         const importedName = extractImportedName(specifier)
-        if (importedName && ADVANCED_SYMBOLS.has(importedName)) {
+        if (importedName && THEME_SYMBOLS.has(importedName)) {
+          themeSpecifiers.push(specifier)
+        } else if (importedName && PLUGIN_SYMBOLS.has(importedName)) {
+          pluginSpecifiers.push(specifier)
+        } else if (importedName && ADVANCED_SYMBOLS.has(importedName)) {
           advancedSpecifiers.push(specifier)
         } else {
           stableSpecifiers.push(specifier)
         }
       }
 
-      if (advancedSpecifiers.length === 0) {
+      if (advancedSpecifiers.length === 0 && themeSpecifiers.length === 0 && pluginSpecifiers.length === 0) {
         return statement
       }
 
@@ -145,6 +190,8 @@ function rewriteRootImportsToTieredEntrypoints(source: string, appliedTransforms
       const lines = [
         buildImportLine(stableSpecifiers, "@affino/datagrid-core"),
         buildImportLine(advancedSpecifiers, "@affino/datagrid-core/advanced"),
+        buildImportLine(themeSpecifiers, "@affino/datagrid-theme"),
+        buildImportLine(pluginSpecifiers, "@affino/datagrid-plugins"),
       ].filter((line): line is string => Boolean(line))
 
       return lines.join("\n")
@@ -161,6 +208,20 @@ export function transformDataGridPublicProtocolSource(source: string): DataGridC
     /from\s+["']@affino\/datagrid-core\/src\/public["']/g,
     'from "@affino/datagrid-core"',
     "core-root-entrypoint",
+    appliedTransforms,
+  )
+  code = applyReplace(
+    code,
+    /from\s+["']@affino\/datagrid-core\/theme(?:\/index)?["']/g,
+    'from "@affino/datagrid-theme"',
+    "theme-entrypoint",
+    appliedTransforms,
+  )
+  code = applyReplace(
+    code,
+    /from\s+["']@affino\/datagrid-core\/plugins(?:\/index)?["']/g,
+    'from "@affino/datagrid-plugins"',
+    "plugins-entrypoint",
     appliedTransforms,
   )
   code = applyReplace(

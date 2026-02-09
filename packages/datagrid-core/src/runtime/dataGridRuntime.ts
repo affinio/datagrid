@@ -5,7 +5,7 @@ import {
   type DataGridEventName,
   type DataGridPluginCapabilityMap,
   type DataGridPluginDefinition,
-} from "../../plugins"
+} from "@affino/datagrid-plugins"
 import type { DataGridEventHandlers } from "../types"
 
 export const HOST_EVENT_NAME_MAP = {

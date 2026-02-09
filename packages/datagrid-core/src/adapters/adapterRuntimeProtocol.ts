@@ -2,7 +2,7 @@ import type {
   DataGridEventMap,
   DataGridPluginCapabilityMap,
   DataGridPluginDefinition,
-} from "../../plugins"
+} from "@affino/datagrid-plugins"
 import type { DataGridEventHandlers } from "../types"
 import {
   DATAGRID_HOST_EVENT_NAME_MAP,

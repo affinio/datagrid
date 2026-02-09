@@ -1,6 +1,6 @@
 import type { DataGridColumn, DataGridColumnGroupDef } from "./column"
-import type { DataGridStyleConfig } from "../../theme"
-import type { DataGridPluginDefinition } from "../../plugins"
+import type { DataGridStyleConfig } from "@affino/datagrid-theme"
+import type { DataGridPluginDefinition } from "@affino/datagrid-plugins"
 import type { DataGridSettingsAdapter } from "../dataGridSettingsAdapter"
 
 export type {
@@ -11,7 +11,6 @@ export type {
   DataGridColumnGroupDef,
   DataGridColumnSticky,
 } from "./column"
-export type { DataGridThemeTokens } from "../../theme"
 export type { DataGridSettingsAdapter } from "../dataGridSettingsAdapter"
 
 export type DataGridRowId = string | number
@@ -93,16 +92,6 @@ export type DataGridFilterOptionLoader = (
   context: DataGridServerFilterOptionRequest
 ) => Promise<DataGridServerFilterOption[]> | DataGridServerFilterOption[]
 
-export type {
-  DataGridStyleSection,
-  DataGridHeaderStyle,
-  DataGridBodyStyle,
-  DataGridGroupStyle,
-  DataGridSummaryStyle,
-  DataGridStateStyle,
-  DataGridThemeTokenVariants,
-  DataGridStyleConfig,
-} from "../../theme"
 
 export interface CellEditEvent<T = any> {
   rowId: DataGridRowId
