@@ -1,4 +1,5 @@
 import { defineStore } from "pinia"
+import type {} from "./types/pinia-persist"
 import type {
   DataGridGroupState,
   DataGridPinPosition,

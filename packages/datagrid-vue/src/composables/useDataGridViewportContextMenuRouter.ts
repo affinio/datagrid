@@ -38,7 +38,13 @@ export interface UseDataGridViewportContextMenuRouterResult {
   dispatchViewportContextMenu: (event: MouseEvent) => boolean
 }
 
-function isContextEnabled(columnKey: string, options: UseDataGridViewportContextMenuRouterOptions): boolean {
+function isContextEnabled<
+  TCoord extends DataGridViewportContextMenuCoord,
+  TRange extends DataGridViewportContextMenuRange,
+>(
+  columnKey: string,
+  options: UseDataGridViewportContextMenuRouterOptions<TCoord, TRange>,
+): boolean {
   return options.isColumnContextEnabled?.(columnKey) ?? columnKey !== "select"
 }
 
