@@ -1,41 +1,23 @@
-import { computed, nextTick, ref, type Ref } from "vue"
+import { computed, nextTick, onBeforeUnmount, ref, type Ref } from "vue"
+import {
+  resolveDataGridContextMenuKeyboardIntent,
+  useDataGridContextMenu as useDataGridContextMenuCore,
+  type DataGridContextMenuAction,
+  type DataGridContextMenuActionId,
+  type DataGridContextMenuSnapshot,
+  type DataGridContextMenuState,
+  type DataGridContextMenuZone,
+  type OpenDataGridContextMenuInput,
+  type UseDataGridContextMenuOptions,
+} from "@affino/datagrid-orchestration"
 
-export type DataGridContextMenuZone = "cell" | "range" | "header"
-
-export type DataGridContextMenuActionId =
-  | "copy"
-  | "paste"
-  | "cut"
-  | "clear"
-  | "sort-asc"
-  | "sort-desc"
-  | "sort-clear"
-  | "filter"
-  | "auto-size"
-
-export interface DataGridContextMenuState {
-  visible: boolean
-  x: number
-  y: number
-  zone: DataGridContextMenuZone
-  columnKey: string | null
-  rowId: string | null
-}
-
-export interface DataGridContextMenuAction {
-  id: DataGridContextMenuActionId
-  label: string
-}
-
-export interface OpenDataGridContextMenuInput {
-  zone: DataGridContextMenuZone
-  columnKey?: string | null
-  rowId?: string | null
-}
-
-export interface UseDataGridContextMenuOptions {
-  isColumnResizable?: (columnKey: string) => boolean
-  onBeforeOpen?: () => void
+export type {
+  DataGridContextMenuZone,
+  DataGridContextMenuActionId,
+  DataGridContextMenuState,
+  DataGridContextMenuAction,
+  OpenDataGridContextMenuInput,
+  UseDataGridContextMenuOptions,
 }
 
 export interface UseDataGridContextMenuResult {
@@ -48,61 +30,39 @@ export interface UseDataGridContextMenuResult {
   onContextMenuKeyDown: (event: KeyboardEvent, handlers?: { onEscape?: () => void }) => void
 }
 
-const DEFAULT_CONTEXT_MENU_STATE: DataGridContextMenuState = {
-  visible: false,
-  x: 0,
-  y: 0,
-  zone: "cell",
-  columnKey: null,
-  rowId: null,
-}
-
-function createDefaultState(): DataGridContextMenuState {
-  return { ...DEFAULT_CONTEXT_MENU_STATE }
+function resolveFocusedMenuIndex(
+  items: readonly HTMLButtonElement[],
+  activeElement: HTMLElement | null,
+): number {
+  if (!activeElement || !items.length) {
+    return -1
+  }
+  return items.findIndex(item => item === activeElement)
 }
 
 export function useDataGridContextMenu(
   options: UseDataGridContextMenuOptions = {},
 ): UseDataGridContextMenuResult {
-  const contextMenu = ref<DataGridContextMenuState>(createDefaultState())
+  const core = useDataGridContextMenuCore(options)
+  const snapshot = ref<DataGridContextMenuSnapshot>(core.getSnapshot())
+  const contextMenu = ref<DataGridContextMenuState>(snapshot.value.contextMenu)
+  const contextMenuActions = ref<readonly DataGridContextMenuAction[]>(snapshot.value.actions)
   const contextMenuRef = ref<HTMLElement | null>(null)
+
+  const unsubscribe = core.subscribe(nextSnapshot => {
+    snapshot.value = nextSnapshot
+    contextMenu.value = nextSnapshot.contextMenu
+    contextMenuActions.value = nextSnapshot.actions
+  })
+
+  onBeforeUnmount(() => {
+    unsubscribe()
+  })
 
   const contextMenuStyle = computed(() => ({
     left: `${contextMenu.value.x}px`,
     top: `${contextMenu.value.y}px`,
   }))
-
-  const contextMenuActions = computed<readonly DataGridContextMenuAction[]>(() => {
-    if (!contextMenu.value.visible) {
-      return []
-    }
-    if (contextMenu.value.zone === "header") {
-      const actions: DataGridContextMenuAction[] = [
-        { id: "sort-asc", label: "Sort ascending" },
-        { id: "sort-desc", label: "Sort descending" },
-        { id: "sort-clear", label: "Clear sort" },
-        { id: "filter", label: "Filter column" },
-      ]
-      const canResize = typeof contextMenu.value.columnKey === "string" &&
-        contextMenu.value.columnKey.length > 0 &&
-        (options.isColumnResizable?.(contextMenu.value.columnKey) ?? false)
-      if (canResize) {
-        actions.push({ id: "auto-size", label: "Auto size column" })
-      }
-      return actions
-    }
-    return [
-      { id: "cut", label: "Cut" },
-      { id: "paste", label: "Paste" },
-      { id: "copy", label: "Copy" },
-      { id: "clear", label: "Clear values" },
-    ]
-  })
-
-  function closeContextMenu() {
-    contextMenu.value = createDefaultState()
-  }
-
   async function focusContextMenuFirstItem() {
     await nextTick()
     const menu = contextMenuRef.value
@@ -117,16 +77,12 @@ export function useDataGridContextMenu(
     menu.focus()
   }
 
+  function closeContextMenu() {
+    core.closeContextMenu()
+  }
+
   function openContextMenu(clientX: number, clientY: number, context: OpenDataGridContextMenuInput) {
-    options.onBeforeOpen?.()
-    contextMenu.value = {
-      visible: true,
-      x: Math.max(8, clientX),
-      y: Math.max(8, clientY),
-      zone: context.zone,
-      columnKey: context.columnKey ?? null,
-      rowId: context.rowId ?? null,
-    }
+    core.openContextMenu(clientX, clientY, context)
     void focusContextMenuFirstItem()
   }
 
@@ -139,50 +95,32 @@ export function useDataGridContextMenu(
     if (!items.length) {
       return
     }
-    const active = (typeof document !== "undefined" ? document.activeElement : null) as HTMLElement | null
-    let index = items.findIndex(item => item === active)
+    const activeElement = (typeof document !== "undefined" ? document.activeElement : null) as HTMLElement | null
+    const intent = resolveDataGridContextMenuKeyboardIntent({
+      key: event.key,
+      activeIndex: resolveFocusedMenuIndex(items, activeElement),
+      itemCount: items.length,
+      shiftKey: event.shiftKey,
+    })
+    if (!intent.handled) {
+      return
+    }
 
-    if (event.key === "ArrowDown") {
-      event.preventDefault()
-      index = index < 0 ? 0 : (index + 1) % items.length
-      items[index]?.focus()
-      return
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault()
-      index = index < 0 ? items.length - 1 : (index - 1 + items.length) % items.length
-      items[index]?.focus()
-      return
-    }
-    if (event.key === "Home") {
-      event.preventDefault()
-      items[0]?.focus()
-      return
-    }
-    if (event.key === "End") {
-      event.preventDefault()
-      items[items.length - 1]?.focus()
-      return
-    }
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault()
-      const target = index >= 0 ? items[index] : items[0]
-      target?.click()
-      return
-    }
-    if (event.key === "Escape") {
-      event.preventDefault()
+    event.preventDefault()
+
+    if (intent.shouldClose) {
       closeContextMenu()
       handlers?.onEscape?.()
       return
     }
-    if (event.key === "Tab") {
-      event.preventDefault()
-      const nextIndex = event.shiftKey
-        ? (index <= 0 ? items.length - 1 : index - 1)
-        : (index + 1) % items.length
-      items[nextIndex]?.focus()
+
+    const target = items[intent.nextIndex] ?? null
+    if (intent.shouldTrigger) {
+      target?.click()
+      return
     }
+
+    target?.focus()
   }
 
   return {

@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*",
+    "@affino/datagrid-orchestration": "workspace:*",
     "@affino/dialog-vue": "workspace:^",
     "@affino/listbox-core": "workspace:^",
     "@affino/menu-vue": "workspace:^",

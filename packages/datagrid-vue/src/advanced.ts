@@ -8,6 +8,102 @@ import type {
   DataGridOverlayTransformInput,
 } from "./types"
 export {
+  useDataGridClipboardValuePolicy,
+  type UseDataGridClipboardValuePolicyResult,
+} from "./composables/useDataGridClipboardValuePolicy"
+export {
+  useDataGridCopyRangeHelpers,
+  type DataGridCopyRangeCoord,
+  type DataGridCopyRange,
+  type UseDataGridCopyRangeHelpersOptions,
+  type UseDataGridCopyRangeHelpersResult,
+} from "./composables/useDataGridCopyRangeHelpers"
+export {
+  useDataGridCellDatasetResolver,
+  type DataGridDatasetCellCoord,
+  type UseDataGridCellDatasetResolverOptions,
+  type UseDataGridCellDatasetResolverResult,
+} from "./composables/useDataGridCellDatasetResolver"
+export {
+  useDataGridCellRangeHelpers,
+  type DataGridCellRangeCoord,
+  type DataGridCellRange,
+  type UseDataGridCellRangeHelpersOptions,
+  type UseDataGridCellRangeHelpersResult,
+} from "./composables/useDataGridCellRangeHelpers"
+export {
+  useDataGridNavigationPrimitives,
+  type DataGridNavigationPrimitiveCoord,
+  type DataGridNavigationPrimitiveRange,
+  type DataGridNavigationPrimitiveColumn,
+  type UseDataGridNavigationPrimitivesOptions,
+  type UseDataGridNavigationPrimitivesResult,
+} from "./composables/useDataGridNavigationPrimitives"
+export {
+  useDataGridMutationSnapshot,
+  type DataGridMutationSnapshotCoord,
+  type DataGridMutationSnapshotRange,
+  type DataGridMutationAffectedRange,
+  type DataGridMutationSnapshotState,
+  type UseDataGridMutationSnapshotOptions,
+  type UseDataGridMutationSnapshotResult,
+} from "./composables/useDataGridMutationSnapshot"
+export {
+  useDataGridCellVisualStatePredicates,
+  type DataGridCellVisualStateCoord,
+  type DataGridCellVisualStateRange,
+  type UseDataGridCellVisualStatePredicatesOptions,
+  type UseDataGridCellVisualStatePredicatesResult,
+} from "./composables/useDataGridCellVisualStatePredicates"
+export {
+  useDataGridRangeMutationEngine,
+  type DataGridRangeMutationRange,
+  type UseDataGridRangeMutationEngineOptions,
+  type UseDataGridRangeMutationEngineResult,
+} from "./composables/useDataGridRangeMutationEngine"
+export {
+  useDataGridA11yCellIds,
+  type UseDataGridA11yCellIdsOptions,
+  type UseDataGridA11yCellIdsResult,
+} from "./composables/useDataGridA11yCellIds"
+export {
+  useDataGridColumnUiPolicy,
+  type UseDataGridColumnUiPolicyOptions,
+  type UseDataGridColumnUiPolicyResult,
+} from "./composables/useDataGridColumnUiPolicy"
+export {
+  useDataGridMoveMutationPolicy,
+  type UseDataGridMoveMutationPolicyOptions,
+  type UseDataGridMoveMutationPolicyResult,
+} from "./composables/useDataGridMoveMutationPolicy"
+export {
+  useDataGridEditableValuePolicy,
+  type DataGridEditableValueStrategy,
+  type UseDataGridEditableValuePolicyOptions,
+  type UseDataGridEditableValuePolicyResult,
+} from "./composables/useDataGridEditableValuePolicy"
+export {
+  useDataGridInlineEditorSchema,
+  type UseDataGridInlineEditorSchemaOptions,
+  type UseDataGridInlineEditorSchemaResult,
+} from "./composables/useDataGridInlineEditorSchema"
+export {
+  useDataGridInlineEditOrchestration,
+  type DataGridInlineEditorMode,
+  type DataGridInlineEditorState,
+  type DataGridInlineEditTarget,
+  type UseDataGridInlineEditOrchestrationOptions,
+  type UseDataGridInlineEditOrchestrationResult,
+} from "./composables/useDataGridInlineEditOrchestration"
+export {
+  useDataGridInlineEditorTargetNavigation,
+  type DataGridInlineEditorNavigationColumnLike,
+  type DataGridInlineEditorNavigationCoord,
+  type DataGridInlineEditorNavigationTarget,
+  type UseDataGridInlineEditorTargetNavigationOptions,
+  type UseDataGridInlineEditorTargetNavigationResult,
+} from "./composables/useDataGridInlineEditorTargetNavigation"
+export {
   useDataGridInlineEditorKeyRouter,
   type UseDataGridInlineEditorKeyRouterOptions,
   type UseDataGridInlineEditorKeyRouterResult,
@@ -36,6 +132,96 @@ export {
   type UseDataGridHeaderResizeOrchestrationResult,
 } from "./composables/useDataGridHeaderResizeOrchestration"
 export {
+  useDataGridHeaderInteractionRouter,
+  type UseDataGridHeaderInteractionRouterOptions,
+  type UseDataGridHeaderInteractionRouterResult,
+} from "./composables/useDataGridHeaderInteractionRouter"
+export {
+  useDataGridColumnFilterOrchestration,
+  type DataGridColumnFilterKind,
+  type DataGridAppliedColumnFilter,
+  type DataGridColumnFilterDraft,
+  type DataGridFilterOperatorOption,
+  type UseDataGridColumnFilterOrchestrationOptions,
+  type UseDataGridColumnFilterOrchestrationResult,
+} from "./composables/useDataGridColumnFilterOrchestration"
+export {
+  useDataGridEnumTrigger,
+  type UseDataGridEnumTriggerOptions,
+  type UseDataGridEnumTriggerResult,
+} from "./composables/useDataGridEnumTrigger"
+export {
+  useDataGridGroupValueLabelResolver,
+  type UseDataGridGroupValueLabelResolverOptions,
+  type UseDataGridGroupValueLabelResolverResult,
+} from "./composables/useDataGridGroupValueLabelResolver"
+export {
+  useDataGridGroupMetaOrchestration,
+  type DataGridGroupMetaSnapshot,
+  type UseDataGridGroupMetaOrchestrationOptions,
+  type UseDataGridGroupMetaOrchestrationResult,
+} from "./composables/useDataGridGroupMetaOrchestration"
+export {
+  useDataGridGroupBadge,
+  type UseDataGridGroupBadgeOptions,
+  type UseDataGridGroupBadgeResult,
+} from "./composables/useDataGridGroupBadge"
+export {
+  useDataGridGroupingSortOrchestration,
+  type UseDataGridGroupingSortOrchestrationOptions,
+  type UseDataGridGroupingSortOrchestrationResult,
+} from "./composables/useDataGridGroupingSortOrchestration"
+export {
+  useDataGridViewportMeasureScheduler,
+  type DataGridViewportMeasuredState,
+  type UseDataGridViewportMeasureSchedulerOptions,
+  type UseDataGridViewportMeasureSchedulerResult,
+} from "./composables/useDataGridViewportMeasureScheduler"
+export {
+  useDataGridVisibleRowsSyncScheduler,
+  type DataGridVisibleRowsRange,
+  type UseDataGridVisibleRowsSyncSchedulerOptions,
+  type UseDataGridVisibleRowsSyncSchedulerResult,
+} from "./composables/useDataGridVisibleRowsSyncScheduler"
+export {
+  useDataGridColumnLayoutOrchestration,
+  type DataGridColumnLayoutColumn,
+  type DataGridColumnLayoutMetric,
+  type DataGridVisibleColumnsWindow,
+  type UseDataGridColumnLayoutOrchestrationOptions,
+  type UseDataGridColumnLayoutOrchestrationResult,
+} from "./composables/useDataGridColumnLayoutOrchestration"
+export {
+  useDataGridSelectionOverlayOrchestration,
+  type DataGridOverlayRange,
+  type DataGridOverlayColumnLike,
+  type DataGridOverlayColumnMetricLike,
+  type DataGridSelectionOverlaySegment,
+  type UseDataGridSelectionOverlayOrchestrationOptions,
+  type UseDataGridSelectionOverlayOrchestrationResult,
+} from "./composables/useDataGridSelectionOverlayOrchestration"
+export {
+  useDataGridRowsProjection,
+  type UseDataGridRowsProjectionOptions,
+  type UseDataGridRowsProjectionResult,
+} from "./composables/useDataGridRowsProjection"
+export {
+  useDataGridRowSelectionOrchestration,
+  type UseDataGridRowSelectionOrchestrationOptions,
+  type UseDataGridRowSelectionOrchestrationResult,
+} from "./composables/useDataGridRowSelectionOrchestration"
+export {
+  useDataGridRowSelectionInputHandlers,
+  type UseDataGridRowSelectionInputHandlersOptions,
+  type UseDataGridRowSelectionInputHandlersResult,
+} from "./composables/useDataGridRowSelectionInputHandlers"
+export {
+  useDataGridVirtualRangeMetrics,
+  type DataGridVirtualRange,
+  type UseDataGridVirtualRangeMetricsOptions,
+  type UseDataGridVirtualRangeMetricsResult,
+} from "./composables/useDataGridVirtualRangeMetrics"
+export {
   useDataGridContextMenuAnchor,
   type DataGridContextMenuAnchorCellCoord,
   type DataGridContextMenuAnchorRange,
@@ -58,6 +244,11 @@ export {
   type UseDataGridCellPointerHoverRouterResult,
 } from "./composables/useDataGridCellPointerHoverRouter"
 export {
+  useDataGridClearSelectionLifecycle,
+  type UseDataGridClearSelectionLifecycleOptions,
+  type UseDataGridClearSelectionLifecycleResult,
+} from "./composables/useDataGridClearSelectionLifecycle"
+export {
   useDataGridDragSelectionLifecycle,
   type UseDataGridDragSelectionLifecycleOptions,
   type UseDataGridDragSelectionLifecycleResult,
@@ -75,6 +266,12 @@ export {
   type UseDataGridFillSelectionLifecycleResult,
 } from "./composables/useDataGridFillSelectionLifecycle"
 export {
+  useDataGridFillHandleStart,
+  type DataGridFillHandleStartRange,
+  type UseDataGridFillHandleStartOptions,
+  type UseDataGridFillHandleStartResult,
+} from "./composables/useDataGridFillHandleStart"
+export {
   useDataGridRangeMoveLifecycle,
   type UseDataGridRangeMoveLifecycleOptions,
   type UseDataGridRangeMoveLifecycleResult,
@@ -87,6 +284,14 @@ export {
   type UseDataGridRangeMoveStartOptions,
   type UseDataGridRangeMoveStartResult,
 } from "./composables/useDataGridRangeMoveStart"
+export {
+  useDataGridSelectionMoveHandle,
+  type DataGridSelectionMoveHandleCoord,
+  type DataGridSelectionMoveHandleRange,
+  type DataGridSelectionMoveHandleSides,
+  type UseDataGridSelectionMoveHandleOptions,
+  type UseDataGridSelectionMoveHandleResult,
+} from "./composables/useDataGridSelectionMoveHandle"
 export {
   useDataGridTabTargetResolver,
   type DataGridTabTargetCoord,
@@ -112,6 +317,11 @@ export {
   type UseDataGridViewportBlurHandlerOptions,
   type UseDataGridViewportBlurHandlerResult,
 } from "./composables/useDataGridViewportBlurHandler"
+export {
+  useDataGridViewportScrollLifecycle,
+  type UseDataGridViewportScrollLifecycleOptions,
+  type UseDataGridViewportScrollLifecycleResult,
+} from "./composables/useDataGridViewportScrollLifecycle"
 export {
   useDataGridGlobalPointerLifecycle,
   type DataGridPointerCoordinates,
@@ -165,6 +375,37 @@ export {
   type UseDataGridKeyboardCommandRouterOptions,
   type UseDataGridKeyboardCommandRouterResult,
 } from "./composables/useDataGridKeyboardCommandRouter"
+export {
+  useDataGridQuickFilterActions,
+  type UseDataGridQuickFilterActionsOptions,
+  type UseDataGridQuickFilterActionsResult,
+} from "./composables/useDataGridQuickFilterActions"
+export {
+  useDataGridCellCoordNormalizer,
+  type DataGridCellCoordNormalizerCoord,
+  type UseDataGridCellCoordNormalizerOptions,
+  type UseDataGridCellCoordNormalizerResult,
+} from "./composables/useDataGridCellCoordNormalizer"
+export {
+  useDataGridSelectionComparators,
+  type DataGridSelectionComparatorCoord,
+  type DataGridSelectionComparatorRange,
+  type UseDataGridSelectionComparatorsResult,
+} from "./composables/useDataGridSelectionComparators"
+export {
+  useDataGridPointerModifierPolicy,
+  type UseDataGridPointerModifierPolicyResult,
+} from "./composables/useDataGridPointerModifierPolicy"
+export {
+  useDataGridHistoryActionRunner,
+  type UseDataGridHistoryActionRunnerOptions,
+  type UseDataGridHistoryActionRunnerResult,
+} from "./composables/useDataGridHistoryActionRunner"
+export {
+  useDataGridInlineEditorFocus,
+  type UseDataGridInlineEditorFocusOptions,
+  type UseDataGridInlineEditorFocusResult,
+} from "./composables/useDataGridInlineEditorFocus"
 export {
   useDataGridClipboardBridge,
   type DataGridClipboardRange,

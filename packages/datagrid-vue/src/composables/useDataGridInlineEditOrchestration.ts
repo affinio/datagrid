@@ -1,17 +1,15 @@
-import { shallowRef, type Ref } from "vue"
+import { onBeforeUnmount, shallowRef, type Ref } from "vue"
+import {
+  useDataGridInlineEditOrchestration as useDataGridInlineEditOrchestrationCore,
+  type DataGridInlineEditorMode,
+  type DataGridInlineEditorState,
+  type DataGridInlineEditTarget,
+} from "@affino/datagrid-orchestration"
 
-export type DataGridInlineEditorMode = "text" | "select"
-
-export interface DataGridInlineEditorState<TColumnKey extends string> {
-  rowId: string
-  columnKey: TColumnKey
-  draft: string
-  mode: DataGridInlineEditorMode
-}
-
-export interface DataGridInlineEditTarget<TColumnKey extends string> {
-  rowId: string
-  columnKey: TColumnKey
+export type {
+  DataGridInlineEditorMode,
+  DataGridInlineEditorState,
+  DataGridInlineEditTarget,
 }
 
 export interface UseDataGridInlineEditOrchestrationOptions<
@@ -70,127 +68,42 @@ export function useDataGridInlineEditOrchestration<
 >(
   options: UseDataGridInlineEditOrchestrationOptions<TRow, TColumnKey, TRange, TSnapshot>,
 ): UseDataGridInlineEditOrchestrationResult<TRow, TColumnKey> {
-  const inlineEditor = shallowRef<DataGridInlineEditorState<TColumnKey> | null>(null)
+  const core = useDataGridInlineEditOrchestrationCore<TRow, TColumnKey, TRange, TSnapshot>({
+    sourceRows: () => options.sourceRows.value,
+    setSourceRows: options.setSourceRows,
+    cloneRow: options.cloneRow,
+    resolveRowId: options.resolveRowId,
+    resolveCellValue: options.resolveCellValue,
+    isEditableColumn: options.isEditableColumn,
+    isSelectColumn: options.isSelectColumn,
+    resolveRowLabel: options.resolveRowLabel,
+    applyEditedValue: options.applyEditedValue,
+    finalizeEditedRow: options.finalizeEditedRow,
+    focusInlineEditor: options.focusInlineEditor,
+    setLastAction: options.setLastAction,
+    captureBeforeSnapshot: options.captureBeforeSnapshot,
+    resolveAffectedRange: options.resolveAffectedRange,
+    recordIntentTransaction: options.recordIntentTransaction,
+  })
 
-  function isEditingCell(rowId: string, columnKey: string): boolean {
-    return inlineEditor.value?.rowId === rowId && inlineEditor.value?.columnKey === columnKey
-  }
+  const inlineEditor = shallowRef<DataGridInlineEditorState<TColumnKey> | null>(core.getInlineEditor())
+  const unsubscribe = core.subscribeInlineEditor(nextEditor => {
+    inlineEditor.value = nextEditor
+  })
 
-  function isSelectEditorCell(rowId: string, columnKey: string): boolean {
-    if (!isEditingCell(rowId, columnKey) || inlineEditor.value?.mode !== "select") {
-      return false
-    }
-    return options.isSelectColumn ? options.isSelectColumn(columnKey) : true
-  }
-
-  function beginInlineEdit(
-    row: TRow,
-    columnKey: string,
-    mode: DataGridInlineEditorMode = "text",
-    openPicker = false,
-  ): boolean {
-    if (!options.isEditableColumn(columnKey)) {
-      return false
-    }
-    const rowId = options.resolveRowId(row)
-    inlineEditor.value = {
-      rowId,
-      columnKey,
-      draft: String(options.resolveCellValue(row, columnKey) ?? ""),
-      mode,
-    }
-    if (options.setLastAction) {
-      const rowLabel = options.resolveRowLabel?.(row)
-      options.setLastAction(
-        mode === "select"
-          ? `Selecting ${columnKey}${rowLabel ? ` for ${rowLabel}` : ""}`
-          : `Editing ${columnKey}${rowLabel ? ` for ${rowLabel}` : ""}`,
-      )
-    }
-    void options.focusInlineEditor?.(rowId, columnKey, mode, openPicker)
-    return true
-  }
-
-  function cancelInlineEdit(): void {
-    if (!inlineEditor.value) {
-      return
-    }
-    inlineEditor.value = null
-    options.setLastAction?.("Edit canceled")
-  }
-
-  function commitInlineEdit(): boolean {
-    if (!inlineEditor.value) {
-      return false
-    }
-    const editor = inlineEditor.value
-    const beforeSnapshot = options.captureBeforeSnapshot?.()
-    const nextDraft = editor.draft.trim()
-    inlineEditor.value = null
-
-    let updated = false
-    const nextRows = options.sourceRows.value.map(row => {
-      if (options.resolveRowId(row) !== editor.rowId) {
-        return row
-      }
-      const nextRow = options.cloneRow(row)
-      options.applyEditedValue(nextRow, editor.columnKey, nextDraft)
-      options.finalizeEditedRow?.(nextRow, editor.columnKey, nextDraft)
-      updated = true
-      return nextRow
-    })
-
-    if (updated) {
-      options.setSourceRows(nextRows)
-      options.setLastAction?.(`Saved ${editor.columnKey}`)
-      if (options.recordIntentTransaction && typeof beforeSnapshot !== "undefined") {
-        const affectedRange = options.resolveAffectedRange
-          ? options.resolveAffectedRange({ rowId: editor.rowId, columnKey: editor.columnKey })
-          : null
-        void options.recordIntentTransaction(
-          {
-            intent: "edit",
-            label: `Edit ${editor.columnKey}`,
-            affectedRange,
-          },
-          beforeSnapshot,
-        )
-      }
-      return true
-    }
-
-    options.setLastAction?.("Edit target no longer available")
-    return false
-  }
-
-  function updateEditorDraft(value: string): void {
-    if (!inlineEditor.value) {
-      return
-    }
-    inlineEditor.value = {
-      ...inlineEditor.value,
-      draft: value,
-    }
-  }
-
-  function onEditorInput(event: Event): void {
-    updateEditorDraft((event.target as HTMLInputElement).value)
-  }
-
-  function onEditorSelectChange(value: string | number): boolean {
-    updateEditorDraft(String(value))
-    return commitInlineEdit()
-  }
+  onBeforeUnmount(() => {
+    unsubscribe()
+  })
 
   return {
     inlineEditor,
-    isEditingCell,
-    isSelectEditorCell,
-    beginInlineEdit,
-    cancelInlineEdit,
-    commitInlineEdit,
-    updateEditorDraft,
-    onEditorInput,
-    onEditorSelectChange,
+    isEditingCell: core.isEditingCell,
+    isSelectEditorCell: core.isSelectEditorCell,
+    beginInlineEdit: core.beginInlineEdit,
+    cancelInlineEdit: core.cancelInlineEdit,
+    commitInlineEdit: core.commitInlineEdit,
+    updateEditorDraft: core.updateEditorDraft,
+    onEditorInput: core.onEditorInput,
+    onEditorSelectChange: core.onEditorSelectChange,
   }
 }

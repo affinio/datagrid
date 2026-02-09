@@ -3,23 +3,14 @@ import type {
   CreateDataGridCoreOptions,
   DataGridColumnDef,
   DataGridColumnModelSnapshot,
-  DataGridCoreServiceRegistry,
   DataGridRowNode,
-  DataGridRowModel,
   DataGridViewportRange,
 } from "@affino/datagrid-core"
 import {
-  createDataGridVueRuntime,
-  type CreateDataGridVueRuntimeOptions,
-  type DataGridVueRuntime,
-} from "../runtime/createDataGridVueRuntime"
-
-type DataGridRuntimeOverrides = Omit<
-  Partial<DataGridCoreServiceRegistry>,
-  "rowModel" | "columnModel" | "viewport"
-> & {
-  viewport?: DataGridCoreServiceRegistry["viewport"]
-}
+  useDataGridRuntimeService,
+  type DataGridRuntimeOverrides,
+} from "@affino/datagrid-orchestration"
+import type { DataGridVueRuntime } from "../runtime/createDataGridVueRuntime"
 
 type MaybeRef<T> = T | Ref<T>
 
@@ -43,103 +34,59 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
 }
 
-type MutableRowsRowModel<TRow> = DataGridRowModel<TRow> & {
-  setRows: (rows: readonly TRow[]) => void
-}
-
-function isMutableRowsModel<TRow>(model: DataGridRowModel<TRow>): model is MutableRowsRowModel<TRow> {
-  return typeof (model as { setRows?: unknown }).setRows === "function"
-}
-
 export function useDataGridRuntime<TRow = unknown>(
   options: UseDataGridRuntimeOptions<TRow>,
 ): UseDataGridRuntimeResult<TRow> {
-  const runtime = createDataGridVueRuntime<TRow>({
+  const runtime = useDataGridRuntimeService<TRow>({
     rows: options.rows ? resolveMaybeRef(options.rows) : [],
     columns: resolveMaybeRef(options.columns),
-    services: options.services as CreateDataGridVueRuntimeOptions<TRow>["services"],
+    services: options.services,
     startupOrder: options.startupOrder,
   })
   const { rowModel, columnModel, core, api } = runtime
+  const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
 
-  const columnSnapshot = ref<DataGridColumnModelSnapshot>(api.getColumnModelSnapshot())
+  const unsubscribeColumns = runtime.subscribeColumnSnapshot(next => {
+    columnSnapshot.value = next
+  })
 
-  let disposed = false
-  let started = false
-  let unsubscribeColumns: (() => void) | null = null
-
-  function setRows(rows: readonly TRow[]) {
-    if (!isMutableRowsModel(rowModel)) {
-      return
-    }
-    rowModel.setRows(rows)
-  }
-
-  function ensureColumnSubscription() {
-    if (unsubscribeColumns) {
-      return
-    }
-    columnSnapshot.value = api.getColumnModelSnapshot()
-    unsubscribeColumns = columnModel.subscribe(next => {
-      columnSnapshot.value = next
-    })
-  }
-
-  async function start(): Promise<void> {
-    if (disposed || started) {
-      return
-    }
-    ensureColumnSubscription()
-    await api.start()
-    started = true
-  }
-
-  function stop() {
-    if (disposed) {
-      return
-    }
-    unsubscribeColumns?.()
-    unsubscribeColumns = null
-    void core.dispose()
-    started = false
-    disposed = true
-  }
+  const shouldAutoStart = options.autoStart !== false
 
   if (options.rows && isRef(options.rows)) {
     watch(options.rows, rows => {
-      if (disposed) {
+      if (runtime.isDisposed()) {
         return
       }
-      setRows(rows)
+      runtime.setRows(rows)
     })
   }
 
   if (isRef(options.columns)) {
     watch(options.columns, columns => {
-      if (disposed) {
+      if (runtime.isDisposed()) {
         return
       }
-      columnModel.setColumns(columns)
+      runtime.setColumns(columns)
     })
   }
 
-  const shouldAutoStart = options.autoStart !== false
   if (shouldAutoStart) {
     onMounted(() => {
-      void start()
+      void runtime.start()
     })
-  } else {
-    ensureColumnSubscription()
+  }
+
+  function stop() {
+    if (runtime.isDisposed()) {
+      return
+    }
+    unsubscribeColumns()
+    runtime.stop()
   }
 
   onBeforeUnmount(() => {
     stop()
   })
-
-  function syncRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[] {
-    api.setViewportRange(range)
-    return api.getRowsInRange<TRow>(range)
-  }
 
   return {
     rowModel,
@@ -147,9 +94,9 @@ export function useDataGridRuntime<TRow = unknown>(
     core,
     api,
     columnSnapshot,
-    setRows,
-    start,
+    setRows: runtime.setRows,
+    start: runtime.start,
     stop,
-    syncRowsInRange,
+    syncRowsInRange: runtime.syncRowsInRange,
   }
 }
