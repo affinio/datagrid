@@ -193,6 +193,8 @@ export {
   type DataGridColumnLayoutColumn,
   type DataGridColumnLayoutMetric,
   type DataGridVisibleColumnsWindow,
+  type DataGridColumnLayerKey,
+  type DataGridColumnLayer,
   type UseDataGridColumnLayoutOrchestrationOptions,
   type UseDataGridColumnLayoutOrchestrationResult,
 } from "./composables/useDataGridColumnLayoutOrchestration"

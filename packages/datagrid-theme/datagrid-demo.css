@@ -607,6 +607,25 @@
   min-width: max-content;
 }
 
+.datagrid-stage__layer {
+  display: grid;
+  min-width: 0;
+}
+
+.datagrid-stage__layer--left,
+.datagrid-stage__layer--right {
+  position: sticky;
+  z-index: 18;
+}
+
+.datagrid-stage__layer--left {
+  left: 0;
+}
+
+.datagrid-stage__layer--right {
+  right: 0;
+}
+
 .datagrid-stage__header {
   position: sticky;
   top: 0;
@@ -618,6 +637,11 @@
 .datagrid-stage__row {
   height: 38px;
   border-bottom: 1px solid var(--datagrid-row-divider-color);
+}
+
+.datagrid-stage__header .datagrid-stage__layer--left,
+.datagrid-stage__header .datagrid-stage__layer--right {
+  z-index: 42;
 }
 
 .datagrid-stage__row--group-start .datagrid-stage__cell {
@@ -908,12 +932,15 @@
 }
 
 .datagrid-stage__cell--sticky {
-  position: sticky;
   z-index: 16;
   background: var(--datagrid-sticky-bg);
-  box-shadow: 1px 0 0 var(--datagrid-sticky-shadow);
+  box-shadow: inset -1px 0 0 var(--datagrid-sticky-shadow);
   background-clip: padding-box;
   contain: paint;
+}
+
+.datagrid-stage__layer--right .datagrid-stage__cell--sticky {
+  box-shadow: inset 1px 0 0 var(--datagrid-sticky-shadow);
 }
 
 .datagrid-stage__row .datagrid-stage__cell--sticky.datagrid-stage__cell--range {

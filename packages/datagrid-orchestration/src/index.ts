@@ -101,12 +101,16 @@ export {
   type DataGridColumnLayoutColumn,
   type DataGridColumnLayoutMetric,
   type DataGridVisibleColumnsWindow,
+  type DataGridColumnLayerKey,
+  type DataGridColumnLayer,
   type UseDataGridColumnLayoutOrchestrationOptions,
   type DataGridColumnLayoutSnapshot,
   orderDataGridColumns,
   buildDataGridColumnMetrics,
   resolveDataGridColumnCellStyle,
   isDataGridStickyColumn,
+  buildDataGridColumnLayers,
+  resolveDataGridLayerTrackTemplate,
   useDataGridColumnLayoutOrchestration,
 } from "./useDataGridColumnLayoutOrchestration"
 

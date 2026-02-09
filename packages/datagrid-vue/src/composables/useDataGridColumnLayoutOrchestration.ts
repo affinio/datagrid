@@ -3,15 +3,21 @@ import {
   useDataGridColumnLayoutOrchestration as buildDataGridColumnLayoutSnapshot,
   resolveDataGridColumnCellStyle,
   isDataGridStickyColumn,
+  buildDataGridColumnLayers,
+  resolveDataGridLayerTrackTemplate,
   type DataGridColumnLayoutColumn,
   type DataGridColumnLayoutMetric,
   type DataGridVisibleColumnsWindow,
+  type DataGridColumnLayer,
+  type DataGridColumnLayerKey,
 } from "@affino/datagrid-orchestration"
 
 export type {
   DataGridColumnLayoutColumn,
   DataGridColumnLayoutMetric,
   DataGridVisibleColumnsWindow,
+  DataGridColumnLayer,
+  DataGridColumnLayerKey,
 }
 
 export interface UseDataGridColumnLayoutOrchestrationOptions<TColumn extends DataGridColumnLayoutColumn> {
@@ -25,6 +31,8 @@ export interface UseDataGridColumnLayoutOrchestrationResult<TColumn extends Data
   orderedColumns: ComputedRef<readonly TColumn[]>
   orderedColumnMetrics: ComputedRef<readonly DataGridColumnLayoutMetric[]>
   templateColumns: ComputedRef<string>
+  columnLayers: ComputedRef<readonly DataGridColumnLayer<TColumn>[]>
+  layerTrackTemplate: ComputedRef<string>
   stickyLeftOffsets: ComputedRef<Map<string, number>>
   stickyRightOffsets: ComputedRef<Map<string, number>>
   visibleColumnsWindow: ComputedRef<DataGridVisibleColumnsWindow>
@@ -50,10 +58,17 @@ export function useDataGridColumnLayoutOrchestration<TColumn extends DataGridCol
     return isDataGridStickyColumn(layout.value, columnKey)
   }
 
+  const columnLayers = computed(() => buildDataGridColumnLayers(layout.value))
+  const layerTrackTemplate = computed(() =>
+    resolveDataGridLayerTrackTemplate(columnLayers.value),
+  )
+
   return {
     orderedColumns: computed(() => layout.value.orderedColumns),
     orderedColumnMetrics: computed(() => layout.value.orderedColumnMetrics),
     templateColumns: computed(() => layout.value.templateColumns),
+    columnLayers,
+    layerTrackTemplate,
     stickyLeftOffsets: computed(() => layout.value.stickyLeftOffsets),
     stickyRightOffsets: computed(() => layout.value.stickyRightOffsets),
     visibleColumnsWindow: computed(() => layout.value.visibleColumnsWindow),

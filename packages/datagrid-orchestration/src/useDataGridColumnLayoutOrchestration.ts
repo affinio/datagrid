@@ -18,6 +18,15 @@ export interface DataGridVisibleColumnsWindow {
   keys: string
 }
 
+export type DataGridColumnLayerKey = "left" | "scroll" | "right"
+
+export interface DataGridColumnLayer<TColumn extends DataGridColumnLayoutColumn> {
+  key: DataGridColumnLayerKey
+  columns: readonly TColumn[]
+  templateColumns: string
+  width: number
+}
+
 export interface UseDataGridColumnLayoutOrchestrationOptions<TColumn extends DataGridColumnLayoutColumn> {
   columns: readonly TColumn[]
   resolveColumnWidth: (column: TColumn) => number
@@ -167,6 +176,68 @@ export function isDataGridStickyColumn(
   columnKey: string,
 ): boolean {
   return snapshot.stickyLeftOffsets.has(columnKey) || snapshot.stickyRightOffsets.has(columnKey)
+}
+
+export function buildDataGridColumnLayers<TColumn extends DataGridColumnLayoutColumn>(
+  snapshot: DataGridColumnLayoutSnapshot<TColumn>,
+): readonly DataGridColumnLayer<TColumn>[] {
+  const leftColumns: TColumn[] = []
+  const scrollColumns: TColumn[] = []
+  const rightColumns: TColumn[] = []
+
+  const leftWidths: number[] = []
+  const scrollWidths: number[] = []
+  const rightWidths: number[] = []
+
+  for (let index = 0; index < snapshot.orderedColumns.length; index += 1) {
+    const column = snapshot.orderedColumns[index]
+    const metric = snapshot.orderedColumnMetrics[index]
+    if (!column || !metric) {
+      continue
+    }
+    const width = Math.max(0, metric.width)
+    if (column.pin === "left") {
+      leftColumns.push(column)
+      leftWidths.push(width)
+      continue
+    }
+    if (column.pin === "right") {
+      rightColumns.push(column)
+      rightWidths.push(width)
+      continue
+    }
+    scrollColumns.push(column)
+    scrollWidths.push(width)
+  }
+
+  const layers: DataGridColumnLayer<TColumn>[] = [
+    {
+      key: "left",
+      columns: leftColumns,
+      templateColumns: leftWidths.map(width => `${width}px`).join(" "),
+      width: leftWidths.reduce((total, width) => total + width, 0),
+    },
+    {
+      key: "scroll",
+      columns: scrollColumns,
+      templateColumns: scrollWidths.map(width => `${width}px`).join(" "),
+      width: scrollWidths.reduce((total, width) => total + width, 0),
+    },
+    {
+      key: "right",
+      columns: rightColumns,
+      templateColumns: rightWidths.map(width => `${width}px`).join(" "),
+      width: rightWidths.reduce((total, width) => total + width, 0),
+    },
+  ]
+
+  return layers.filter(layer => layer.key === "scroll" || layer.columns.length > 0)
+}
+
+export function resolveDataGridLayerTrackTemplate<TColumn extends DataGridColumnLayoutColumn>(
+  layers: readonly DataGridColumnLayer<TColumn>[],
+): string {
+  return layers.map(layer => `${Math.max(0, layer.width)}px`).join(" ")
 }
 
 export function useDataGridColumnLayoutOrchestration<TColumn extends DataGridColumnLayoutColumn>(
