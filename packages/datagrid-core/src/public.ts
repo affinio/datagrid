@@ -53,6 +53,7 @@ export {
   createDataGridApi,
   type DataGridApi,
   type CreateDataGridApiOptions,
+  type DataGridSelectionSummaryApiOptions,
 } from "./core/gridApi.js"
 
 export {
@@ -63,9 +64,23 @@ export {
 } from "./selection/snapshot.js"
 
 export {
+  createDataGridSelectionSummary,
+  type CreateDataGridSelectionSummaryOptions,
+  type DataGridSelectionAggregationKind,
+  type DataGridSelectionSummaryColumnConfig,
+  type DataGridSelectionSummaryColumnSnapshot,
+  type DataGridSelectionSummarySnapshot,
+} from "./selection/selectionSummary.js"
+
+export {
   createClientRowModel,
   createServerBackedRowModel,
   type DataGridAdvancedFilter,
+  type DataGridAdvancedFilterCondition,
+  type DataGridAdvancedFilterConditionType,
+  type DataGridAdvancedFilterExpression,
+  type DataGridAdvancedFilterGroup,
+  type DataGridAdvancedFilterNot,
   type DataGridFilterClause,
   type DataGridFilterSnapshot,
   type DataGridGroupExpansionSnapshot,
@@ -92,6 +107,10 @@ export {
   type CreateClientRowModelOptions,
   type ServerBackedRowModel,
   type CreateServerBackedRowModelOptions,
+  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
+  cloneDataGridFilterSnapshot,
+  evaluateDataGridAdvancedFilterExpression,
+  normalizeDataGridAdvancedFilterExpression,
   getDataGridRowRenderMeta,
 } from "./models/index.js"
 
@@ -111,4 +130,3 @@ export {
   type DataGridEditModelSnapshot,
   type DataGridEditPatch,
 } from "./models/index.js"
-

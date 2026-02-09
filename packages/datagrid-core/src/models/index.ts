@@ -1,5 +1,10 @@
 export type {
   DataGridAdvancedFilter,
+  DataGridAdvancedFilterCondition,
+  DataGridAdvancedFilterConditionType,
+  DataGridAdvancedFilterExpression,
+  DataGridAdvancedFilterGroup,
+  DataGridAdvancedFilterNot,
   DataGridFilterClause,
   DataGridFilterSnapshot,
   DataGridGroupExpansionSnapshot,
@@ -35,6 +40,14 @@ export {
   normalizeViewportRange,
   withResolvedRowIdentity,
 } from "./rowModel.js"
+
+export {
+  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
+  cloneDataGridFilterSnapshot,
+  evaluateDataGridAdvancedFilterExpression,
+  normalizeDataGridAdvancedFilterExpression,
+  type DataGridAdvancedFilterResolver,
+} from "./advancedFilter.js"
 
 export type {
   ClientRowModel,

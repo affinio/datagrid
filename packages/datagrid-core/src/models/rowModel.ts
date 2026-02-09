@@ -21,9 +21,42 @@ export interface DataGridAdvancedFilter {
   clauses: DataGridFilterClause[]
 }
 
+export type DataGridAdvancedFilterConditionType =
+  | "text"
+  | "number"
+  | "date"
+  | "boolean"
+
+export interface DataGridAdvancedFilterCondition {
+  kind: "condition"
+  key: string
+  field?: string
+  type?: DataGridAdvancedFilterConditionType
+  operator: string
+  value?: unknown
+  value2?: unknown
+}
+
+export interface DataGridAdvancedFilterGroup {
+  kind: "group"
+  operator: "and" | "or"
+  children: DataGridAdvancedFilterExpression[]
+}
+
+export interface DataGridAdvancedFilterNot {
+  kind: "not"
+  child: DataGridAdvancedFilterExpression
+}
+
+export type DataGridAdvancedFilterExpression =
+  | DataGridAdvancedFilterCondition
+  | DataGridAdvancedFilterGroup
+  | DataGridAdvancedFilterNot
+
 export interface DataGridFilterSnapshot {
   columnFilters: Record<string, string[]>
   advancedFilters: Record<string, DataGridAdvancedFilter>
+  advancedExpression?: DataGridAdvancedFilterExpression | null
 }
 
 export interface DataGridGroupBySpec {

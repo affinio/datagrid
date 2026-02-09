@@ -167,6 +167,30 @@ const grid = useAffinoDataGrid({
       mode: "cell",
       enum: true,
     },
+    filtering: {
+      enabled: true,
+      initialFilterModel: {
+        columnFilters: {},
+        advancedFilters: {},
+      },
+    },
+    summary: {
+      enabled: true,
+      columns: [
+        { key: "owner", aggregations: ["countDistinct"] },
+      ],
+    },
+    visibility: {
+      enabled: true,
+      hiddenColumnKeys: [],
+    },
+    tree: {
+      enabled: true,
+      initialGroupBy: {
+        fields: ["owner"],
+        expandedByDefault: true,
+      },
+    },
   },
 })
 ```
@@ -203,6 +227,10 @@ const grid = useAffinoDataGrid({
 - `grid.contextMenu` wraps menu state + keyboard support + action execution:
   - `open(x, y, { zone, columnKey?, rowId? })`
   - `runAction(actionId)` (maps directly into `grid.actions`)
+- `grid.features.filtering` exposes `model`, `setModel`, `setAdvancedExpression`, and `clear`.
+- `grid.features.summary.selected` returns deterministic aggregates for current selection scope.
+- `grid.features.visibility` exposes `setColumnVisible`, `toggleColumnVisible`, `setHiddenColumnKeys`, `reset`.
+- `grid.features.tree` exposes `groupBy`, `groupExpansion`, `setGroupBy`, `toggleGroup`, `expandAll`, `collapseAll`.
 
 ## Junior-first UI wrapper
 

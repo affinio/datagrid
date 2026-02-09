@@ -18,6 +18,7 @@ import {
   type DataGridSortState,
   type DataGridViewportRange,
 } from "./rowModel.js"
+import { cloneDataGridFilterSnapshot } from "./advancedFilter.js"
 import type {
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
@@ -86,7 +87,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   const dataSource = options.dataSource
   const resolveRowId = options.resolveRowId
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
-  let filterModel: DataGridFilterSnapshot | null = options.initialFilterModel ?? null
+  let filterModel: DataGridFilterSnapshot | null = cloneDataGridFilterSnapshot(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
   const toggledGroupKeys = new Set<string>()
   let rowCount = Math.max(0, Math.trunc(options.initialTotal ?? 0))
@@ -171,7 +172,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       error,
       viewportRange: normalizeViewportRange(viewportRange, rowCount),
       sortModel,
-      filterModel,
+      filterModel: cloneDataGridFilterSnapshot(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
       groupExpansion: buildGroupExpansionSnapshot(groupBy, toggledGroupKeys),
     }
@@ -458,7 +459,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     },
     setFilterModel(nextFilterModel) {
       ensureActive()
-      filterModel = nextFilterModel ?? null
+      filterModel = cloneDataGridFilterSnapshot(nextFilterModel ?? null)
       clearAll()
       void pullRange(viewportRange, "filter-change", "critical")
       emit()

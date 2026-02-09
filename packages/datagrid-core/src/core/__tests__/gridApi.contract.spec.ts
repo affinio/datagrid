@@ -147,6 +147,69 @@ describe("data grid api facade contracts", () => {
     expect(api.getSelectionSnapshot()).toBeNull()
   })
 
+  it("computes selection summary through api facade when selection capability is present", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "noc", latencyMs: 120 }, rowId: 1, originalIndex: 0 },
+        { row: { id: 2, owner: "ops", latencyMs: 80 }, rowId: 2, originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "owner", label: "Owner" },
+        { key: "latencyMs", label: "Latency" },
+      ],
+    })
+    let selectionSnapshot: DataGridSelectionSnapshot | null = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 1,
+          startCol: 0,
+          endCol: 1,
+          startRowId: 1,
+          endRowId: 2,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: 1 },
+          focus: { rowIndex: 1, colIndex: 1, rowId: 2 },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 1, rowId: 2 },
+    }
+
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getSelectionSnapshot() {
+            return selectionSnapshot
+          },
+          setSelectionSnapshot(snapshot) {
+            selectionSnapshot = snapshot
+          },
+          clearSelection() {
+            selectionSnapshot = null
+          },
+        },
+      },
+    })
+
+    const api = createDataGridApi({ core })
+    const summary = api.summarizeSelection({
+      columns: [
+        { key: "owner", aggregations: ["countDistinct"] },
+        { key: "latencyMs", aggregations: ["sum", "max"] },
+      ],
+    })
+
+    expect(summary?.selectedCells).toBe(4)
+    expect(summary?.columns.owner.metrics.countDistinct).toBe(2)
+    expect(summary?.columns.latencyMs.metrics.sum).toBe(200)
+    expect(summary?.columns.latencyMs.metrics.max).toBe(120)
+  })
+
   it("exposes transaction capability checks and fails loudly for missing methods", () => {
     const rowModel = createClientRowModel()
     const columnModel = createDataGridColumnModel()

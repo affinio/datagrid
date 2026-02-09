@@ -14,6 +14,12 @@ import type {
   DataGridViewportRange,
 } from "../models"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
+import {
+  createDataGridSelectionSummary,
+  type DataGridSelectionAggregationKind,
+  type DataGridSelectionSummaryColumnConfig,
+  type DataGridSelectionSummarySnapshot,
+} from "../selection/selectionSummary"
 import type {
   DataGridTransactionInput,
   DataGridTransactionSnapshot,
@@ -68,6 +74,13 @@ export interface DataGridApi {
   getSelectionSnapshot(): DataGridSelectionSnapshot | null
   setSelectionSnapshot(snapshot: DataGridSelectionSnapshot): void
   clearSelection(): void
+  summarizeSelection<TRow = unknown>(options?: DataGridSelectionSummaryApiOptions<TRow>): DataGridSelectionSummarySnapshot | null
+}
+
+export interface DataGridSelectionSummaryApiOptions<TRow = unknown> {
+  columns?: readonly DataGridSelectionSummaryColumnConfig<TRow>[]
+  defaultAggregations?: readonly DataGridSelectionAggregationKind[]
+  getColumnKeyByIndex?: (columnIndex: number) => string | null | undefined
 }
 
 function assertRowModelService(core: DataGridCore): DataGridCoreRowModelService {
@@ -315,6 +328,30 @@ export function createDataGridApi(options: CreateDataGridApiOptions): DataGridAp
     clearSelection() {
       const selection = assertSelectionCapability(selectionService)
       selection.clearSelection()
+    },
+    summarizeSelection<TRow = unknown>(options: DataGridSelectionSummaryApiOptions<TRow> = {}) {
+      if (!hasSelectionSupport()) {
+        return null
+      }
+      const selectionSnapshot = selectionService.getSelectionSnapshot!()
+      if (!selectionSnapshot) {
+        return null
+      }
+
+      const columnSnapshot = columnModel.getSnapshot()
+      const visibleColumns = columnSnapshot.visibleColumns
+      const getColumnKeyByIndex = options.getColumnKeyByIndex ?? ((columnIndex: number) => {
+        return visibleColumns[columnIndex]?.key ?? null
+      })
+
+      return createDataGridSelectionSummary<TRow>({
+        selection: selectionSnapshot,
+        rowCount: rowModel.getRowCount(),
+        getRow: rowIndex => rowModel.getRow(rowIndex) as DataGridRowNode<TRow> | undefined,
+        getColumnKeyByIndex,
+        columns: options.columns,
+        defaultAggregations: options.defaultAggregations,
+      })
     },
   }
 }

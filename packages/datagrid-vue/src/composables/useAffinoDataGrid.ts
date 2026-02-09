@@ -1,7 +1,15 @@
 import { computed, isRef, ref, watch, type Ref } from "vue"
 import type {
+  DataGridAdvancedFilterExpression,
   CreateDataGridCoreOptions,
   DataGridColumnDef,
+  DataGridFilterSnapshot,
+  DataGridGroupBySpec,
+  DataGridGroupExpansionSnapshot,
+  DataGridSelectionAggregationKind,
+  DataGridSelectionSnapshot,
+  DataGridSelectionSummaryColumnConfig,
+  DataGridSelectionSummarySnapshot,
   DataGridSortDirection,
   DataGridSortState,
 } from "@affino/datagrid-core"
@@ -17,6 +25,34 @@ import {
   type DataGridContextMenuState,
   type OpenDataGridContextMenuInput,
 } from "./useDataGridContextMenu"
+import {
+  normalizeClipboardFeature,
+  useAffinoDataGridClipboardFeature,
+} from "./useAffinoDataGridClipboardFeature"
+import {
+  normalizeEditingFeature,
+  useAffinoDataGridEditingFeature,
+} from "./useAffinoDataGridEditingFeature"
+import {
+  normalizeFilteringFeature,
+  useAffinoDataGridFilteringFeature,
+} from "./useAffinoDataGridFilteringFeature"
+import {
+  normalizeSelectionFeature,
+  useAffinoDataGridSelectionFeature,
+} from "./useAffinoDataGridSelectionFeature"
+import {
+  normalizeSummaryFeature,
+  useAffinoDataGridSummaryFeature,
+} from "./useAffinoDataGridSummaryFeature"
+import {
+  normalizeVisibilityFeature,
+  useAffinoDataGridVisibilityFeature,
+} from "./useAffinoDataGridVisibilityFeature"
+import {
+  normalizeTreeFeature,
+  useAffinoDataGridTreeFeature,
+} from "./useAffinoDataGridTreeFeature"
 
 type MaybeRef<T> = T | Ref<T>
 
@@ -56,6 +92,31 @@ export interface AffinoDataGridFeatures<TRow> {
   selection?: boolean | AffinoDataGridSelectionFeature<TRow>
   clipboard?: boolean | AffinoDataGridClipboardFeature<TRow>
   editing?: boolean | AffinoDataGridEditingFeature<TRow>
+  filtering?: boolean | AffinoDataGridFilteringFeature
+  summary?: boolean | AffinoDataGridSummaryFeature<TRow>
+  visibility?: boolean | AffinoDataGridVisibilityFeature
+  tree?: boolean | AffinoDataGridTreeFeature
+}
+
+export interface AffinoDataGridFilteringFeature {
+  enabled?: boolean
+  initialFilterModel?: DataGridFilterSnapshot | null
+}
+
+export interface AffinoDataGridSummaryFeature<TRow> {
+  enabled?: boolean
+  columns?: readonly DataGridSelectionSummaryColumnConfig<TRow>[]
+  defaultAggregations?: readonly DataGridSelectionAggregationKind[]
+}
+
+export interface AffinoDataGridVisibilityFeature {
+  enabled?: boolean
+  hiddenColumnKeys?: readonly string[]
+}
+
+export interface AffinoDataGridTreeFeature {
+  enabled?: boolean
+  initialGroupBy?: DataGridGroupBySpec | null
 }
 
 export interface UseAffinoDataGridOptions<TRow> {
@@ -145,6 +206,40 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
       cancelEdit: () => boolean
       commitEdit: () => Promise<boolean>
     }
+    filtering: {
+      enabled: Ref<boolean>
+      model: Ref<DataGridFilterSnapshot | null>
+      setModel: (nextModel: DataGridFilterSnapshot | null) => void
+      clear: () => void
+      setAdvancedExpression: (expression: DataGridAdvancedFilterExpression | null) => void
+    }
+    summary: {
+      enabled: Ref<boolean>
+      selected: Ref<DataGridSelectionSummarySnapshot | null>
+      recomputeSelected: () => DataGridSelectionSummarySnapshot | null
+    }
+    visibility: {
+      enabled: Ref<boolean>
+      hiddenColumnKeys: Ref<readonly string[]>
+      isColumnVisible: (columnKey: string) => boolean
+      setColumnVisible: (columnKey: string, visible: boolean) => void
+      toggleColumnVisible: (columnKey: string) => void
+      setHiddenColumnKeys: (keys: readonly string[]) => void
+      reset: () => void
+    }
+    tree: {
+      enabled: Ref<boolean>
+      groupBy: Ref<DataGridGroupBySpec | null>
+      groupExpansion: Ref<DataGridGroupExpansionSnapshot>
+      setGroupBy: (groupBy: DataGridGroupBySpec | null) => void
+      clearGroupBy: () => void
+      toggleGroup: (groupKey: string) => void
+      isGroupExpanded: (groupKey: string) => boolean
+      expandGroups: (groupKeys?: readonly string[]) => number
+      collapseGroups: (groupKeys?: readonly string[]) => number
+      expandAll: () => number
+      collapseAll: () => number
+    }
   }
   bindings: {
     getRowKey: (row: TRow, index: number) => string
@@ -231,112 +326,11 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
   }
 }
 
-interface NormalizedSelectionFeature<TRow> {
-  enabled: boolean
-  initialSelectedRowKeys: readonly string[]
-  resolveRowKey?: (row: TRow, index: number) => string
-}
-
-interface NormalizedClipboardFeature<TRow> {
-  enabled: boolean
-  useSystemClipboard: boolean
-  serializeRows: (rows: readonly TRow[]) => string
-  parseRows: (text: string) => readonly TRow[]
-}
-
-interface NormalizedEditingFeature<TRow> {
-  enabled: boolean
-  mode: AffinoDataGridEditMode
-  enum: boolean
-  onCommit?: AffinoDataGridEditingFeature<TRow>["onCommit"]
-}
-
 function toReadonlyRef<T>(source: MaybeRef<T>): Ref<T> {
   if (isRef(source)) {
     return source as Ref<T>
   }
   return ref(source) as Ref<T>
-}
-
-function normalizeSelectionFeature<TRow>(
-  input: boolean | AffinoDataGridSelectionFeature<TRow> | undefined,
-): NormalizedSelectionFeature<TRow> {
-  if (typeof input === "boolean") {
-    return {
-      enabled: input,
-      initialSelectedRowKeys: [],
-    }
-  }
-  if (!input) {
-    return {
-      enabled: false,
-      initialSelectedRowKeys: [],
-    }
-  }
-  return {
-    enabled: input.enabled ?? true,
-    initialSelectedRowKeys: input.initialSelectedRowKeys ?? [],
-    resolveRowKey: input.resolveRowKey,
-  }
-}
-
-function normalizeClipboardFeature<TRow>(
-  input: boolean | AffinoDataGridClipboardFeature<TRow> | undefined,
-): NormalizedClipboardFeature<TRow> {
-  if (typeof input === "boolean") {
-    return {
-      enabled: input,
-      useSystemClipboard: true,
-      serializeRows: rows => JSON.stringify(rows),
-      parseRows: text => {
-        try {
-          const parsed = JSON.parse(text)
-          return Array.isArray(parsed) ? (parsed as readonly TRow[]) : []
-        } catch {
-          return []
-        }
-      },
-    }
-  }
-  if (!input) {
-    return {
-      enabled: false,
-      useSystemClipboard: true,
-      serializeRows: rows => JSON.stringify(rows),
-      parseRows: () => [],
-    }
-  }
-  return {
-    enabled: input.enabled ?? true,
-    useSystemClipboard: input.useSystemClipboard ?? true,
-    serializeRows: input.serializeRows ?? (rows => JSON.stringify(rows)),
-    parseRows: input.parseRows ?? (() => []),
-  }
-}
-
-function normalizeEditingFeature<TRow>(
-  input: boolean | AffinoDataGridEditingFeature<TRow> | undefined,
-): NormalizedEditingFeature<TRow> {
-  if (typeof input === "boolean") {
-    return {
-      enabled: input,
-      mode: "cell",
-      enum: false,
-    }
-  }
-  if (!input) {
-    return {
-      enabled: false,
-      mode: "cell",
-      enum: false,
-    }
-  }
-  return {
-    enabled: input.enabled ?? true,
-    mode: input.mode ?? "cell",
-    enum: input.enum ?? false,
-    onCommit: input.onCommit,
-  }
 }
 
 function fallbackResolveRowKey<TRow>(row: TRow, index: number): string {
@@ -371,73 +365,63 @@ export function useAffinoDataGrid<TRow>(
   const rows = toReadonlyRef(options.rows)
   const columns = toReadonlyRef(options.columns)
 
+  const normalizedSelectionFeature = normalizeSelectionFeature(options.features?.selection)
+  const normalizedClipboardFeature = normalizeClipboardFeature(options.features?.clipboard)
+  const normalizedEditingFeature = normalizeEditingFeature(options.features?.editing)
+  const normalizedFilteringFeature = normalizeFilteringFeature(options.features?.filtering)
+  const normalizedSummaryFeature = normalizeSummaryFeature(options.features?.summary)
+  const normalizedVisibilityFeature = normalizeVisibilityFeature(options.features?.visibility)
+  const normalizedTreeFeature = normalizeTreeFeature(options.features?.tree)
+
+  const internalSelectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
+  const internalSelectionService: NonNullable<UseDataGridRuntimeOptions<TRow>["services"]>["selection"] = {
+    name: "selection",
+    getSelectionSnapshot() {
+      return internalSelectionSnapshot.value
+    },
+    setSelectionSnapshot(snapshot) {
+      internalSelectionSnapshot.value = snapshot
+    },
+    clearSelection() {
+      internalSelectionSnapshot.value = null
+    },
+  }
+
+  const runtimeServices: UseDataGridRuntimeOptions<TRow>["services"] = {
+    ...options.services,
+    selection: options.services?.selection ?? internalSelectionService,
+  }
+
   const runtime = useDataGridRuntime<TRow>({
     rows,
     columns,
-    services: options.services,
+    services: runtimeServices,
     startupOrder: options.startupOrder,
     autoStart: options.autoStart ?? true,
   })
 
-  const normalizedSelectionFeature = normalizeSelectionFeature(options.features?.selection)
-  const normalizedClipboardFeature = normalizeClipboardFeature(options.features?.clipboard)
-  const normalizedEditingFeature = normalizeEditingFeature(options.features?.editing)
-
-  const selectionEnabled = ref(normalizedSelectionFeature.enabled)
-  const selectedRowKeySet = ref<Set<string>>(new Set(normalizedSelectionFeature.initialSelectedRowKeys))
-  const resolveRowKey = (row: TRow, index: number): string => (
-    normalizedSelectionFeature.resolveRowKey
-      ? normalizedSelectionFeature.resolveRowKey(row, index)
-      : fallbackResolveRowKey(row, index)
-  )
-
-  watch(rows, nextRows => {
-    if (!selectionEnabled.value) {
-      return
-    }
-    const allowed = new Set<string>()
-    nextRows.forEach((row, index) => {
-      allowed.add(resolveRowKey(row, index))
-    })
-    const nextSelected = new Set<string>()
-    selectedRowKeySet.value.forEach(rowKey => {
-      if (allowed.has(rowKey)) {
-        nextSelected.add(rowKey)
-      }
-    })
-    selectedRowKeySet.value = nextSelected
+  const selectionFeature = useAffinoDataGridSelectionFeature({
+    rows,
+    runtime,
+    feature: normalizedSelectionFeature,
+    fallbackResolveRowKey,
+    internalSelectionSnapshot,
   })
-
-  const selectedRowKeys = computed<readonly string[]>(() => Array.from(selectedRowKeySet.value))
-  const selectedCount = computed(() => selectedRowKeySet.value.size)
-
-  const isSelectedByKey = (rowKey: string): boolean => (
-    selectionEnabled.value && selectedRowKeySet.value.has(rowKey)
-  )
-
-  const setSelectedByKey = (rowKey: string, selected: boolean): void => {
-    if (!selectionEnabled.value) {
-      return
-    }
-    const next = new Set(selectedRowKeySet.value)
-    if (selected) {
-      next.add(rowKey)
-    } else {
-      next.delete(rowKey)
-    }
-    selectedRowKeySet.value = next
-  }
-
-  const toggleSelectedByKey = (rowKey: string): void => {
-    setSelectedByKey(rowKey, !isSelectedByKey(rowKey))
-  }
-
-  const clearSelection = (): void => {
-    if (selectedRowKeySet.value.size === 0) {
-      return
-    }
-    selectedRowKeySet.value = new Set()
-  }
+  const {
+    selectionEnabled,
+    selectedRowKeySet,
+    selectedRowKeys,
+    selectedCount,
+    resolveRowKey,
+    isSelectedByKey,
+    setSelectedByKey,
+    toggleSelectedByKey,
+    clearSelection,
+    selectOnlyRow,
+    selectAllRows,
+    resolveSelectedRows,
+    selectionSnapshot,
+  } = selectionFeature
 
   const sortState = ref<readonly DataGridSortState[]>(options.initialSortState ?? [])
   const setSortState = (nextState: readonly DataGridSortState[]) => {
@@ -490,200 +474,104 @@ export function useAffinoDataGrid<TRow>(
     return entry?.direction ?? null
   }
 
-  const resolveSelectedRows = (): readonly TRow[] => rows.value.filter((row, index) => (
-    selectedRowKeySet.value.has(resolveRowKey(row, index))
-  ))
-
-  const selectAllRows = (): number => {
-    if (!selectionEnabled.value) {
-      return 0
-    }
-    const nextSelected = new Set<string>()
-    rows.value.forEach((row, index) => {
-      nextSelected.add(resolveRowKey(row, index))
-    })
-    selectedRowKeySet.value = nextSelected
-    return nextSelected.size
-  }
-
   watch(sortState, nextSortState => {
     runtime.api.setSortModel(nextSortState)
   }, { immediate: true })
+  const filteringFeature = useAffinoDataGridFilteringFeature({
+    runtime,
+    feature: normalizedFilteringFeature,
+  })
+  const {
+    filteringEnabled,
+    filterModel,
+    setFilterModel,
+    clearFilterModel,
+    setAdvancedFilterExpression,
+  } = filteringFeature
 
-  const clipboardEnabled = ref(normalizedClipboardFeature.enabled)
-  const clipboardBuffer = ref("")
-  const lastCopiedText = computed(() => clipboardBuffer.value)
+  const clipboardFeature = useAffinoDataGridClipboardFeature({
+    rows,
+    selectedRowKeySet,
+    feature: normalizedClipboardFeature,
+    resolveRowKey,
+    replaceRows,
+    clearSelection,
+  })
+  const {
+    clipboardEnabled,
+    lastCopiedText,
+    copyText,
+    readText,
+    copyRows,
+    parseRows,
+    copySelectedRows,
+    clearSelectedRows,
+    cutSelectedRows,
+    pasteRowsAppend,
+  } = clipboardFeature
 
-  const copyText = async (text: string): Promise<boolean> => {
-    if (!clipboardEnabled.value) {
-      return false
-    }
-    clipboardBuffer.value = text
-    if (!normalizedClipboardFeature.useSystemClipboard) {
-      return true
-    }
+  const editingFeature = useAffinoDataGridEditingFeature({
+    rows,
+    columns,
+    feature: normalizedEditingFeature,
+  })
+  const {
+    editingEnabled,
+    editingMode,
+    editingEnum,
+    activeSession,
+    beginEdit,
+    updateDraft,
+    cancelEdit,
+    commitEdit,
+    isCellEditing,
+    resolveCellDraft,
+  } = editingFeature
 
-    try {
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text)
-      }
-      return true
-    } catch {
-      return false
-    }
-  }
+  const visibilityFeature = useAffinoDataGridVisibilityFeature({
+    runtime,
+    columns,
+    feature: normalizedVisibilityFeature,
+  })
+  const {
+    visibilityEnabled,
+    hiddenColumnKeys,
+    isColumnVisible,
+    setColumnVisible,
+    toggleColumnVisible,
+    setHiddenColumnKeys,
+    resetHiddenColumns,
+  } = visibilityFeature
 
-  const readText = async (): Promise<string> => {
-    if (!clipboardEnabled.value) {
-      return ""
-    }
-    if (!normalizedClipboardFeature.useSystemClipboard) {
-      return clipboardBuffer.value
-    }
+  const treeFeature = useAffinoDataGridTreeFeature({
+    runtime,
+    feature: normalizedTreeFeature,
+  })
+  const {
+    treeEnabled,
+    groupBy,
+    groupExpansion,
+    setGroupBy,
+    clearGroupBy,
+    toggleGroup,
+    isGroupExpanded,
+    expandGroups,
+    collapseGroups,
+    expandAllGroups,
+    collapseAllGroups,
+  } = treeFeature
 
-    try {
-      if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
-        const text = await navigator.clipboard.readText()
-        clipboardBuffer.value = text
-        return text
-      }
-    } catch {
-      // Ignore clipboard read failures and fall back to in-memory value.
-    }
-
-    return clipboardBuffer.value
-  }
-
-  const copyRows = async (rowsOverride?: readonly TRow[]): Promise<boolean> => {
-    const payload = normalizedClipboardFeature.serializeRows(rowsOverride ?? rows.value)
-    return copyText(payload)
-  }
-
-  const parseRows = (text: string): readonly TRow[] => normalizedClipboardFeature.parseRows(text)
-
-  const copySelectedRows = async (): Promise<boolean> => copyRows(resolveSelectedRows())
-
-  const clearSelectedRows = (): number => {
-    const selectedKeys = selectedRowKeySet.value
-    if (!selectedKeys.size) {
-      return 0
-    }
-    const nextRows = rows.value.filter((row, index) => !selectedKeys.has(resolveRowKey(row, index)))
-    const affected = rows.value.length - nextRows.length
-    if (affected <= 0) {
-      return 0
-    }
-    const didReplace = replaceRows(nextRows)
-    if (!didReplace) {
-      return 0
-    }
-    selectedRowKeySet.value = new Set()
-    return affected
-  }
-
-  const cutSelectedRows = async (): Promise<number> => {
-    const copied = await copySelectedRows()
-    if (!copied) {
-      return 0
-    }
-    return clearSelectedRows()
-  }
-
-  const pasteRowsAppend = async (): Promise<number> => {
-    const text = await readText()
-    if (!text) {
-      return 0
-    }
-    const parsedRows = parseRows(text)
-    if (parsedRows.length === 0) {
-      return 0
-    }
-    const nextRows = [...rows.value, ...parsedRows]
-    const didReplace = replaceRows(nextRows)
-    if (!didReplace) {
-      return 0
-    }
-    return parsedRows.length
-  }
-
-  const editingEnabled = ref(normalizedEditingFeature.enabled)
-  const editingMode = ref<AffinoDataGridEditMode>(normalizedEditingFeature.mode)
-  const editingEnum = ref(normalizedEditingFeature.enum)
-  const activeSession = ref<AffinoDataGridEditSession | null>(null)
-
-  const beginEdit = (session: Omit<AffinoDataGridEditSession, "mode"> & { mode?: AffinoDataGridEditMode }): boolean => {
-    if (!editingEnabled.value) {
-      return false
-    }
-    activeSession.value = {
-      rowKey: session.rowKey,
-      columnKey: session.columnKey,
-      mode: session.mode ?? editingMode.value,
-      draft: session.draft,
-    }
-    return true
-  }
-
-  const updateDraft = (draft: string): boolean => {
-    if (!activeSession.value) {
-      return false
-    }
-    activeSession.value = {
-      ...activeSession.value,
-      draft,
-    }
-    return true
-  }
-
-  const cancelEdit = (): boolean => {
-    if (!activeSession.value) {
-      return false
-    }
-    activeSession.value = null
-    return true
-  }
-
-  const commitEdit = async (): Promise<boolean> => {
-    if (!activeSession.value) {
-      return false
-    }
-    const session = activeSession.value
-    activeSession.value = null
-
-    if (!normalizedEditingFeature.onCommit) {
-      return true
-    }
-
-    await normalizedEditingFeature.onCommit(session, {
-      rows: rows.value,
-      columns: columns.value,
-    })
-    return true
-  }
-
-  const isCellEditing = (rowKey: string, columnKey: string): boolean => (
-    activeSession.value?.rowKey === rowKey && activeSession.value?.columnKey === columnKey
-  )
-
-  const resolveCellDraft = (params: {
-    row: TRow
-    columnKey: string
-    value?: unknown
-  }): string => {
-    if (params.value !== undefined && params.value !== null) {
-      return String(params.value)
-    }
-    const candidate = params.row as Record<string, unknown>
-    const fromRow = candidate[params.columnKey]
-    return fromRow === undefined || fromRow === null ? "" : String(fromRow)
-  }
-
-  const selectOnlyRow = (rowKey: string): void => {
-    if (!selectionEnabled.value) {
-      return
-    }
-    selectedRowKeySet.value = new Set([rowKey])
-  }
+  const summaryFeature = useAffinoDataGridSummaryFeature({
+    runtime,
+    feature: normalizedSummaryFeature,
+    selectionEnabled,
+    selectionSnapshot,
+  })
+  const {
+    summaryEnabled,
+    selectedSummary,
+    recomputeSelectedSummary,
+  } = summaryFeature
 
   const createHeaderSortBindings = (columnKey: string) => ({
     role: "columnheader" as const,
@@ -1043,6 +931,40 @@ export function useAffinoDataGrid<TRow>(
         updateDraft,
         cancelEdit,
         commitEdit,
+      },
+      filtering: {
+        enabled: filteringEnabled,
+        model: filterModel,
+        setModel: setFilterModel,
+        clear: clearFilterModel,
+        setAdvancedExpression: setAdvancedFilterExpression,
+      },
+      summary: {
+        enabled: summaryEnabled,
+        selected: selectedSummary,
+        recomputeSelected: recomputeSelectedSummary,
+      },
+      visibility: {
+        enabled: visibilityEnabled,
+        hiddenColumnKeys,
+        isColumnVisible,
+        setColumnVisible,
+        toggleColumnVisible,
+        setHiddenColumnKeys,
+        reset: resetHiddenColumns,
+      },
+      tree: {
+        enabled: treeEnabled,
+        groupBy,
+        groupExpansion,
+        setGroupBy,
+        clearGroupBy,
+        toggleGroup,
+        isGroupExpanded,
+        expandGroups,
+        collapseGroups,
+        expandAll: expandAllGroups,
+        collapseAll: collapseAllGroups,
       },
     },
     bindings: {

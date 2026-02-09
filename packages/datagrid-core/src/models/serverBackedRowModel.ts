@@ -19,6 +19,7 @@ import {
   type DataGridSortState,
   type DataGridViewportRange,
 } from "./rowModel.js"
+import { cloneDataGridFilterSnapshot } from "./advancedFilter.js"
 
 export interface CreateServerBackedRowModelOptions<T> {
   source: ServerRowModel<T>
@@ -48,7 +49,7 @@ export function createServerBackedRowModel<T>(
     )
   })
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
-  let filterModel: DataGridFilterSnapshot | null = options.initialFilterModel ?? null
+  let filterModel: DataGridFilterSnapshot | null = cloneDataGridFilterSnapshot(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
   const toggledGroupKeys = new Set<string>()
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, source.getRowCount())
@@ -75,7 +76,7 @@ export function createServerBackedRowModel<T>(
       error: source.error.value ?? null,
       viewportRange,
       sortModel,
-      filterModel,
+      filterModel: cloneDataGridFilterSnapshot(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
       groupExpansion: buildGroupExpansionSnapshot(groupBy, toggledGroupKeys),
     }
@@ -201,7 +202,7 @@ export function createServerBackedRowModel<T>(
     },
     setFilterModel(nextFilterModel) {
       ensureActive()
-      filterModel = nextFilterModel ?? null
+      filterModel = cloneDataGridFilterSnapshot(nextFilterModel ?? null)
       invalidateCaches()
       emit()
     },

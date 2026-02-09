@@ -20,6 +20,13 @@ import {
   type DataGridSortState,
   type DataGridViewportRange,
 } from "./rowModel.js"
+import type { DataGridAdvancedFilterExpression } from "./rowModel.js"
+import {
+  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
+  cloneDataGridFilterSnapshot as cloneFilterSnapshot,
+  evaluateDataGridAdvancedFilterExpression,
+  normalizeDataGridAdvancedFilterExpression,
+} from "./advancedFilter.js"
 
 export interface CreateClientRowModelOptions<T> {
   rows?: readonly DataGridRowNodeInput<T>[]
@@ -81,121 +88,47 @@ function toComparableNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function evaluateAdvancedFilterClause(
-  candidate: unknown,
-  type: "text" | "number" | "date",
-  operator: string,
-  value: unknown,
-  value2: unknown,
-): boolean {
-  const normalizedOperator = operator.trim().toLowerCase()
-  if (type === "number" || type === "date") {
-    const left = toComparableNumber(candidate)
-    const right = toComparableNumber(value)
-    const right2 = toComparableNumber(value2)
-    if (left == null) {
-      return false
-    }
-    if ((normalizedOperator === "between" || normalizedOperator === "range") && right != null && right2 != null) {
-      const min = Math.min(right, right2)
-      const max = Math.max(right, right2)
-      return left >= min && left <= max
-    }
-    if (right == null) {
-      return true
-    }
-    if (normalizedOperator === "eq" || normalizedOperator === "equals") {
-      return left === right
-    }
-    if (normalizedOperator === "ne" || normalizedOperator === "not-equals" || normalizedOperator === "notequals") {
-      return left !== right
-    }
-    if (normalizedOperator === "gt" || normalizedOperator === ">") {
-      return left > right
-    }
-    if (normalizedOperator === "gte" || normalizedOperator === ">=") {
-      return left >= right
-    }
-    if (normalizedOperator === "lt" || normalizedOperator === "<") {
-      return left < right
-    }
-    if (normalizedOperator === "lte" || normalizedOperator === "<=") {
-      return left <= right
-    }
-    return true
+function resolveAdvancedExpression(
+  filterModel: DataGridFilterSnapshot | null,
+): DataGridAdvancedFilterExpression | null {
+  if (!filterModel) {
+    return null
   }
-
-  const left = normalizeText(candidate).toLowerCase()
-  const right = normalizeText(value).toLowerCase()
-  if (normalizedOperator === "eq" || normalizedOperator === "equals") {
-    return left === right
+  const explicit = normalizeDataGridAdvancedFilterExpression(filterModel.advancedExpression ?? null)
+  if (explicit) {
+    return explicit
   }
-  if (normalizedOperator === "ne" || normalizedOperator === "not-equals" || normalizedOperator === "notequals") {
-    return left !== right
-  }
-  if (normalizedOperator === "contains") {
-    return left.includes(right)
-  }
-  if (normalizedOperator === "startswith" || normalizedOperator === "starts-with") {
-    return left.startsWith(right)
-  }
-  if (normalizedOperator === "endswith" || normalizedOperator === "ends-with") {
-    return left.endsWith(right)
-  }
-  return true
+  return buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModel.advancedFilters)
 }
 
-function passesColumnFilters<T>(rowNode: DataGridRowNode<T>, filterModel: DataGridFilterSnapshot | null): boolean {
+function createFilterPredicate<T>(
+  filterModel: DataGridFilterSnapshot | null,
+): (rowNode: DataGridRowNode<T>) => boolean {
   if (!filterModel) {
+    return () => true
+  }
+
+  const columnFilters = Object.entries(filterModel.columnFilters ?? {})
+    .filter(([, values]) => Array.isArray(values) && values.length > 0)
+    .map(([key, values]) => [key, [...values]] as const)
+  const advancedExpression = resolveAdvancedExpression(filterModel)
+
+  return (rowNode: DataGridRowNode<T>) => {
+    for (const [key, values] of columnFilters) {
+      const candidate = normalizeText(readRowField(rowNode, key))
+      if (!values.includes(candidate)) {
+        return false
+      }
+    }
+
+    if (advancedExpression) {
+      return evaluateDataGridAdvancedFilterExpression(advancedExpression, condition => {
+        return readRowField(rowNode, condition.key, condition.field)
+      })
+    }
+
     return true
   }
-
-  for (const [key, values] of Object.entries(filterModel.columnFilters ?? {})) {
-    if (!Array.isArray(values) || values.length === 0) {
-      continue
-    }
-    const candidate = normalizeText(readRowField(rowNode, key))
-    if (!values.includes(candidate)) {
-      return false
-    }
-  }
-
-  for (const [key, advanced] of Object.entries(filterModel.advancedFilters ?? {})) {
-    if (!advanced || !Array.isArray(advanced.clauses) || advanced.clauses.length === 0) {
-      continue
-    }
-    const candidate = readRowField(rowNode, key)
-    let decision = evaluateAdvancedFilterClause(
-      candidate,
-      advanced.type,
-      advanced.clauses[0]?.operator ?? "equals",
-      advanced.clauses[0]?.value,
-      advanced.clauses[0]?.value2,
-    )
-    for (let index = 1; index < advanced.clauses.length; index += 1) {
-      const clause = advanced.clauses[index]
-      if (!clause) {
-        continue
-      }
-      const nextDecision = evaluateAdvancedFilterClause(
-        candidate,
-        advanced.type,
-        clause.operator,
-        clause.value,
-        clause.value2,
-      )
-      if ((clause.join ?? "and") === "or") {
-        decision = decision || nextDecision
-      } else {
-        decision = decision && nextDecision
-      }
-    }
-    if (!decision) {
-      return false
-    }
-  }
-
-  return true
 }
 
 function compareUnknown(left: unknown, right: unknown): number {
@@ -379,9 +312,7 @@ export function createClientRowModel<T>(
   const cloneSortModel = (input: readonly DataGridSortState[]): readonly DataGridSortState[] =>
     input.map(item => ({ ...item }))
 
-  const cloneFilterModel = (
-    input: DataGridFilterSnapshot | null,
-  ): DataGridFilterSnapshot | null => {
+  const cloneFilterModel = (input: DataGridFilterSnapshot | null): DataGridFilterSnapshot | null => {
     if (!input) {
       return null
     }
@@ -392,22 +323,7 @@ export function createClientRowModel<T>(
         // Fall through to deterministic JS clone for non-cloneable payloads.
       }
     }
-    return {
-      columnFilters: Object.fromEntries(
-        Object.entries(input.columnFilters ?? {}).map(([key, values]) => [key, [...values]]),
-      ),
-      advancedFilters: Object.fromEntries(
-        Object.entries(input.advancedFilters ?? {}).map(([key, condition]) => [
-          key,
-          {
-            ...condition,
-            clauses: Array.isArray(condition?.clauses)
-              ? condition.clauses.map(clause => ({ ...clause }))
-              : [],
-          },
-        ]),
-      ),
-    }
+    return cloneFilterSnapshot(input)
   }
 
   const resolveRowId = options.resolveRowId
@@ -430,7 +346,8 @@ export function createClientRowModel<T>(
   }
 
   function recomputeProjection() {
-    const filteredRows = sourceRows.filter(row => passesColumnFilters(row, filterModel))
+    const filterPredicate = createFilterPredicate(filterModel)
+    const filteredRows = sourceRows.filter(filterPredicate)
     const sortedRows = sortLeafRows(filteredRows, sortModel)
     const expansionSnapshot = buildGroupExpansionSnapshot(groupBy, toggledGroupKeys)
     const groupedRows = groupBy

@@ -218,4 +218,46 @@ describe("createClientRowModel", () => {
 
     model.dispose()
   })
+
+  it("applies advanced expression filters before sort/group projection", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "noc", latencyMs: 120, status: "active" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, owner: "ops", latencyMs: 75, status: "warning" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, owner: "noc", latencyMs: 50, status: "inactive" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setFilterModel({
+      columnFilters: {},
+      advancedFilters: {},
+      advancedExpression: {
+        kind: "group",
+        operator: "and",
+        children: [
+          {
+            kind: "condition",
+            key: "status",
+            operator: "in",
+            value: ["active", "warning"],
+            type: "text",
+          },
+          {
+            kind: "condition",
+            key: "latencyMs",
+            operator: "gt",
+            value: 90,
+            type: "number",
+          },
+        ],
+      },
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rows).toHaveLength(1)
+    expect((rows[0]?.row as { id?: number })?.id).toBe(1)
+    expect((model.getSnapshot().filterModel?.advancedExpression as { kind?: string })?.kind).toBe("group")
+
+    model.dispose()
+  })
 })
