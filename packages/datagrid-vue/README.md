@@ -198,6 +198,12 @@ type Grid = ReturnType<typeof useAffinoDataGrid>
 // grid is fully typed and safe to destructure.
 ```
 
+Row identity contract (required):
+
+- Each row must expose a stable non-empty `rowId` (or `id`/`key`), or
+- Provide `features.selection.resolveRowKey(row, index)`.
+- Index-based fallback keys are intentionally not used.
+
 ```vue
 <th v-for="column in columns" :key="column.key" v-bind="grid.bindings.headerCell(column.key)">
   {{ column.label }}

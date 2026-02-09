@@ -32,15 +32,27 @@ interface RowLike {
 
 function fallbackResolveRowKey(row: RowLike, index: number): string {
   if (row.rowId !== undefined && row.rowId !== null) {
-    return String(row.rowId)
+    const rowKey = String(row.rowId).trim()
+    if (rowKey.length > 0) {
+      return rowKey
+    }
   }
   if (row.id !== undefined && row.id !== null) {
-    return String(row.id)
+    const rowKey = String(row.id).trim()
+    if (rowKey.length > 0) {
+      return rowKey
+    }
   }
   if (row.key !== undefined && row.key !== null) {
-    return String(row.key)
+    const rowKey = String(row.key).trim()
+    if (rowKey.length > 0) {
+      return rowKey
+    }
   }
-  return `row-${index}`
+  throw new Error(
+    `[AffinoDataGridSimple] Missing stable row identity at index ${index}. ` +
+    "Provide features.selection.resolveRowKey(row, index) or include non-empty rowId/id/key.",
+  )
 }
 
 function castDraftValue(previous: unknown, draft: string): unknown {

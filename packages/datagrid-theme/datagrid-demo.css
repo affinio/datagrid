@@ -632,7 +632,7 @@
 .datagrid-stage__layer--left,
 .datagrid-stage__layer--right {
   position: sticky;
-  z-index: 18;
+  z-index: 50;
 }
 
 .datagrid-stage__layer--left {
@@ -652,6 +652,7 @@
 .datagrid-stage__overlay-layer {
   position: absolute;
   left: 0;
+  top: 0;
   right: 0;
   overflow: hidden;
   pointer-events: none;
@@ -956,6 +957,7 @@
 }
 
 .datagrid-stage__cell--sticky {
+  position: relative;
   z-index: 16;
   background: var(--datagrid-sticky-bg);
   box-shadow: inset -1px 0 0 var(--datagrid-sticky-shadow);
@@ -993,7 +995,7 @@
 }
 
 .datagrid-stage__row .datagrid-stage__cell--sticky {
-  z-index: 18;
+  z-index: 52;
 }
 
 .datagrid-stage__cell--range-end {

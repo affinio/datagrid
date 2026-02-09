@@ -54,6 +54,7 @@ export function createServerBackedRowModel<T>(
   const toggledGroupKeys = new Set<string>()
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, source.getRowCount())
   let disposed = false
+  let revision = 0
   let cacheRevision = 0
   let lastRangeCacheKey = ""
   let lastRangeCacheRows: readonly DataGridRowNode<T>[] = []
@@ -70,6 +71,7 @@ export function createServerBackedRowModel<T>(
     const rowCount = source.getRowCount()
     viewportRange = normalizeViewportRange(viewportRange, rowCount)
     return {
+      revision,
       kind: "server",
       rowCount,
       loading: Boolean(source.loading.value),
@@ -87,6 +89,7 @@ export function createServerBackedRowModel<T>(
     cacheRevision += 1
     lastRangeCacheKey = ""
     lastRangeCacheRows = []
+    revision += 1
   }
 
   function invalidateCachesForRange(range: DataGridViewportRange) {
@@ -97,6 +100,7 @@ export function createServerBackedRowModel<T>(
     cacheRevision += 1
     lastRangeCacheKey = ""
     lastRangeCacheRows = []
+    revision += 1
   }
 
   function emit() {

@@ -172,9 +172,12 @@ export function useAffinoDataGridTreeFeature<TRow>(
 
   const collectVisibleGroupKeys = (): readonly string[] => {
     const total = options.runtime.api.getRowCount()
+    if (total <= 0) {
+      return []
+    }
+    const rows = options.runtime.api.getRowsInRange({ start: 0, end: total - 1 })
     const keys = new Set<string>()
-    for (let rowIndex = 0; rowIndex < total; rowIndex += 1) {
-      const row = options.runtime.api.getRow(rowIndex)
+    for (const row of rows) {
       if (!row) {
         continue
       }

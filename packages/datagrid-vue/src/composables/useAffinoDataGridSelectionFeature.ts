@@ -65,10 +65,27 @@ export function useAffinoDataGridSelectionFeature<TRow>(
 ): UseAffinoDataGridSelectionFeatureResult<TRow> {
   const selectionEnabled = ref(options.feature.enabled)
   const selectedRowKeySet = ref<Set<string>>(new Set(options.feature.initialSelectedRowKeys))
+  const normalizeResolvedRowKey = (rowKey: unknown, index: number): string => {
+    if (typeof rowKey !== "string" && typeof rowKey !== "number") {
+      throw new Error(
+        `[AffinoDataGrid] resolveRowKey must return string|number (received ${typeof rowKey}) at row index ${index}.`,
+      )
+    }
+    const normalized = String(rowKey).trim()
+    if (normalized.length === 0) {
+      throw new Error(
+        `[AffinoDataGrid] resolveRowKey returned an empty key at row index ${index}.`,
+      )
+    }
+    return normalized
+  }
   const resolveRowKey = (row: TRow, index: number): string => (
-    options.feature.resolveRowKey
-      ? options.feature.resolveRowKey(row, index)
-      : options.fallbackResolveRowKey(row, index)
+    normalizeResolvedRowKey(
+      options.feature.resolveRowKey
+        ? options.feature.resolveRowKey(row, index)
+        : options.fallbackResolveRowKey(row, index),
+      index,
+    )
   )
 
   watch(options.rows, nextRows => {

@@ -80,7 +80,7 @@ export function useAffinoDataGridFilteringFeature<TRow>(
 
   watch([filterModel, filteringEnabled], ([nextFilterModel, enabled]) => {
     options.runtime.api.setFilterModel(enabled ? cloneDataGridFilterSnapshot(nextFilterModel) : null)
-  }, { immediate: true, deep: true })
+  }, { immediate: true })
 
   return {
     filteringEnabled,

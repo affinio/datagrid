@@ -331,6 +331,7 @@ export function createClientRowModel<T>(
     ? options.rows.map((row, index) => normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index))
     : []
   let rows: DataGridRowNode<T>[] = []
+  let revision = 0
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? cloneSortModel(options.initialSortModel) : []
   let filterModel: DataGridFilterSnapshot | null = cloneFilterModel(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
@@ -355,11 +356,13 @@ export function createClientRowModel<T>(
       : sortedRows
     rows = assignDisplayIndexes(groupedRows)
     viewportRange = normalizeViewportRange(viewportRange, rows.length)
+    revision += 1
   }
 
   function getSnapshot(): DataGridRowModelSnapshot<T> {
     viewportRange = normalizeViewportRange(viewportRange, rows.length)
     return {
+      revision,
       kind: "client",
       rowCount: rows.length,
       loading: false,

@@ -94,6 +94,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let loading = false
   let error: Error | null = null
   let disposed = false
+  let revision = 0
   let requestCounter = 0
   let inFlight: InFlightPull | null = null
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rowCount)
@@ -128,6 +129,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       rowCache.delete(oldest)
     }
+  }
+
+  function bumpRevision() {
+    revision += 1
   }
 
   function readRowCache(index: number): DataGridRowNode<T> | undefined {
@@ -166,6 +171,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   function getSnapshot(): DataGridRowModelSnapshot<T> {
     return {
+      revision,
       kind: "server",
       rowCount,
       loading,
@@ -234,15 +240,16 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
   }
 
-  function applyRows(rows: readonly DataGridDataSourceRowEntry<T>[]) {
+  function applyRows(rows: readonly DataGridDataSourceRowEntry<T>[]): boolean {
     if (rows.length === 0) {
-      return
+      return false
     }
     for (const entry of rows) {
       const normalized = normalizeRowEntry(entry)
       writeRowCache(normalized.index, normalized.node)
     }
     updateTotalFromRows(rows)
+    return true
   }
 
   function clearRange(range: DataGridViewportRange) {
@@ -251,14 +258,22 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (rowCount <= 0) {
       return
     }
+    let changed = false
     for (let index = bounded.start; index <= bounded.end; index += 1) {
       if (rowCache.delete(index)) {
         diagnostics.invalidatedRows += 1
+        changed = true
       }
+    }
+    if (changed) {
+      bumpRevision()
     }
   }
 
   function clearAll() {
+    if (rowCache.size > 0) {
+      bumpRevision()
+    }
     diagnostics.invalidatedRows += rowCache.size
     rowCache.clear()
   }
@@ -315,12 +330,18 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
 
+      let changed = false
+      const previousRowCount = rowCount
       const nextTotal = normalizeTotal(result.total)
       if (nextTotal != null) {
         rowCount = nextTotal
         pruneRowCacheByRowCount()
+        changed = changed || rowCount !== previousRowCount
       }
-      applyRows(result.rows)
+      changed = applyRows(result.rows) || changed
+      if (changed) {
+        bumpRevision()
+      }
       diagnostics.pullCompleted += 1
     } catch (reasonError) {
       if (isAbortError(reasonError)) {
@@ -365,27 +386,38 @@ export function createDataSourceBackedRowModel<T = unknown>(
     diagnostics.pushApplied += 1
 
     if (event.type === "upsert") {
-      applyRows(event.rows)
+      let changed = applyRows(event.rows)
+      const previousRowCount = rowCount
       const nextTotal = normalizeTotal(event.total)
       if (nextTotal != null) {
         rowCount = nextTotal
         pruneRowCacheByRowCount()
+        changed = changed || rowCount !== previousRowCount
+      }
+      if (changed) {
+        bumpRevision()
       }
       emit()
       return
     }
 
     if (event.type === "remove") {
+      let changed = false
       for (const rawIndex of event.indexes) {
         const index = Number.isFinite(rawIndex) ? Math.max(0, Math.trunc(rawIndex)) : -1
         if (index >= 0) {
-          rowCache.delete(index)
+          changed = rowCache.delete(index) || changed
         }
       }
+      const previousRowCount = rowCount
       const nextTotal = normalizeTotal(event.total)
       if (nextTotal != null) {
         rowCount = nextTotal
         pruneRowCacheByRowCount()
+        changed = changed || rowCount !== previousRowCount
+      }
+      if (changed) {
+        bumpRevision()
       }
       emit()
       return
@@ -453,6 +485,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     setSortModel(nextSortModel) {
       ensureActive()
       sortModel = Array.isArray(nextSortModel) ? [...nextSortModel] : []
+      bumpRevision()
       clearAll()
       void pullRange(viewportRange, "sort-change", "critical")
       emit()
@@ -460,6 +493,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     setFilterModel(nextFilterModel) {
       ensureActive()
       filterModel = cloneDataGridFilterSnapshot(nextFilterModel ?? null)
+      bumpRevision()
       clearAll()
       void pullRange(viewportRange, "filter-change", "critical")
       emit()
@@ -472,6 +506,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       groupBy = normalized
       toggledGroupKeys.clear()
+      bumpRevision()
       clearAll()
       void pullRange(viewportRange, "group-change", "critical")
       emit()
@@ -484,6 +519,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!toggleGroupExpansionKey(toggledGroupKeys, groupKey)) {
         return
       }
+      bumpRevision()
       clearAll()
       void pullRange(viewportRange, "group-change", "critical")
       emit()

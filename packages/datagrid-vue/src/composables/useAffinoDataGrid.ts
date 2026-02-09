@@ -1,4 +1,4 @@
-import { computed, isRef, ref, watch, type Ref } from "vue"
+import { computed, isRef, ref, type Ref } from "vue"
 import type {
   DataGridAdvancedFilterExpression,
   CreateDataGridCoreOptions,
@@ -19,7 +19,6 @@ import {
   type UseDataGridRuntimeResult,
 } from "./useDataGridRuntime"
 import {
-  useDataGridContextMenu,
   type DataGridContextMenuAction,
   type DataGridContextMenuActionId,
   type DataGridContextMenuState,
@@ -53,6 +52,13 @@ import {
   normalizeTreeFeature,
   useAffinoDataGridTreeFeature,
 } from "./useAffinoDataGridTreeFeature"
+import { useAffinoDataGridSortingFeature } from "./useAffinoDataGridSortingFeature"
+import {
+  useAffinoDataGridActionRunner,
+  type AffinoDataGridInternalActionId,
+} from "./useAffinoDataGridActionRunner"
+import { useAffinoDataGridBaseBindings } from "./useAffinoDataGridBaseBindings"
+import { useAffinoDataGridContextMenuFeature } from "./useAffinoDataGridContextMenuFeature"
 
 type MaybeRef<T> = T | Ref<T>
 
@@ -336,27 +342,27 @@ function toReadonlyRef<T>(source: MaybeRef<T>): Ref<T> {
 function fallbackResolveRowKey<TRow>(row: TRow, index: number): string {
   const candidate = row as { rowId?: unknown; id?: unknown; key?: unknown }
   if (typeof candidate.rowId === "string" || typeof candidate.rowId === "number") {
-    return String(candidate.rowId)
+    const rowKey = String(candidate.rowId).trim()
+    if (rowKey.length > 0) {
+      return rowKey
+    }
   }
   if (typeof candidate.id === "string" || typeof candidate.id === "number") {
-    return String(candidate.id)
+    const rowKey = String(candidate.id).trim()
+    if (rowKey.length > 0) {
+      return rowKey
+    }
   }
   if (typeof candidate.key === "string" || typeof candidate.key === "number") {
-    return String(candidate.key)
+    const rowKey = String(candidate.key).trim()
+    if (rowKey.length > 0) {
+      return rowKey
+    }
   }
-  return `row-${index}`
-}
-
-function toAriaSortDirection(
-  direction: DataGridSortDirection | null,
-): "none" | "ascending" | "descending" {
-  if (direction === "asc") {
-    return "ascending"
-  }
-  if (direction === "desc") {
-    return "descending"
-  }
-  return "none"
+  throw new Error(
+    `[AffinoDataGrid] Missing stable row identity at index ${index}. ` +
+    "Provide features.selection.resolveRowKey(row, index) or include non-empty rowId/id/key.",
+  )
 }
 
 export function useAffinoDataGrid<TRow>(
@@ -423,42 +429,18 @@ export function useAffinoDataGrid<TRow>(
     selectionSnapshot,
   } = selectionFeature
 
-  const sortState = ref<readonly DataGridSortState[]>(options.initialSortState ?? [])
-  const setSortState = (nextState: readonly DataGridSortState[]) => {
-    sortState.value = nextState.map(entry => ({ ...entry }))
-  }
-
-  const toggleColumnSort = (
-    columnKey: string,
-    directionCycle: readonly DataGridSortDirection[] = ["asc", "desc"],
-  ) => {
-    const current = sortState.value.find(entry => entry.key === columnKey)
-    if (!current) {
-      setSortState([{ key: columnKey, direction: directionCycle[0] ?? "asc" }])
-      return
-    }
-
-    const currentIndex = directionCycle.indexOf(current.direction)
-    if (currentIndex < 0 || currentIndex === directionCycle.length - 1) {
-      setSortState(sortState.value.filter(entry => entry.key !== columnKey))
-      return
-    }
-
-    setSortState(
-      sortState.value.map(entry => (
-        entry.key === columnKey
-          ? { key: columnKey, direction: directionCycle[currentIndex + 1] ?? "asc" }
-          : { ...entry }
-      )),
-    )
-  }
-
-  const clearSort = () => {
-    if (sortState.value.length === 0) {
-      return
-    }
-    sortState.value = []
-  }
+  const {
+    sortState,
+    setSortState,
+    toggleColumnSort,
+    clearSort,
+    resolveColumnSortDirection,
+  } = useAffinoDataGridSortingFeature({
+    initialSortState: options.initialSortState,
+    onSortModelChange(nextSortState) {
+      runtime.api.setSortModel(nextSortState)
+    },
+  })
 
   const replaceRows = (nextRows: readonly TRow[]): boolean => {
     try {
@@ -469,14 +451,6 @@ export function useAffinoDataGrid<TRow>(
     }
   }
 
-  const resolveColumnSortDirection = (columnKey: string): DataGridSortDirection | null => {
-    const entry = sortState.value.find(item => item.key === columnKey)
-    return entry?.direction ?? null
-  }
-
-  watch(sortState, nextSortState => {
-    runtime.api.setSortModel(nextSortState)
-  }, { immediate: true })
   const filteringFeature = useAffinoDataGridFilteringFeature({
     runtime,
     feature: normalizedFilteringFeature,
@@ -573,123 +547,26 @@ export function useAffinoDataGrid<TRow>(
     recomputeSelectedSummary,
   } = summaryFeature
 
-  const createHeaderSortBindings = (columnKey: string) => ({
-    role: "columnheader" as const,
-    tabindex: 0,
-    "aria-sort": toAriaSortDirection(resolveColumnSortDirection(columnKey)),
-    onClick: (_event?: MouseEvent) => {
-      toggleColumnSort(columnKey)
-    },
-    onKeydown: (event: KeyboardEvent) => {
-      if (event.key !== "Enter" && event.key !== " ") {
-        return
-      }
-      event.preventDefault()
-      toggleColumnSort(columnKey)
-    },
-  })
-
-  const createRowSelectionBindings = (row: TRow, index: number) => {
-    const rowKey = resolveRowKey(row, index)
-    return {
-      role: "row" as const,
-      tabindex: 0,
-      "data-row-key": rowKey,
-      "aria-selected": (isSelectedByKey(rowKey) ? "true" : "false") as "true" | "false",
-      onClick: (event?: MouseEvent) => {
-        const shouldToggle = Boolean(event?.metaKey || event?.ctrlKey)
-        if (shouldToggle) {
-          toggleSelectedByKey(rowKey)
-          return
-        }
-        selectOnlyRow(rowKey)
-      },
-      onKeydown: (event: KeyboardEvent) => {
-        if (event.key !== " " && event.key !== "Enter") {
-          return
-        }
-        event.preventDefault()
-        const shouldToggle = event.metaKey || event.ctrlKey
-        if (shouldToggle) {
-          toggleSelectedByKey(rowKey)
-          return
-        }
-        selectOnlyRow(rowKey)
-      },
-    }
-  }
-
-  const createEditableCellBindings = (params: {
-    row: TRow
-    rowIndex: number
-    columnKey: string
-    editable?: boolean
-    value?: unknown
-  }) => {
-    const rowKey = resolveRowKey(params.row, params.rowIndex)
-    const editable = params.editable ?? true
-    const startEdit = (): void => {
-      if (!editable || !editingEnabled.value) {
-        return
-      }
-      beginEdit({
-        rowKey,
-        columnKey: params.columnKey,
-        draft: resolveCellDraft({
-          row: params.row,
-          columnKey: params.columnKey,
-          value: params.value,
-        }),
-      })
-    }
-
-    return {
-      "data-row-key": rowKey,
-      "data-column-key": params.columnKey,
-      "data-inline-editable": editable ? ("true" as const) : ("false" as const),
-      onDblclick: (_event?: MouseEvent) => {
-        startEdit()
-      },
-      onKeydown: (event: KeyboardEvent) => {
-        if (event.key !== "Enter" && event.key !== "F2") {
-          return
-        }
-        event.preventDefault()
-        startEdit()
-      },
-    }
-  }
-
-  const createInlineEditorBindings = (params: {
-    rowKey: string
-    columnKey: string
-    commitOnBlur?: boolean
-  }) => ({
-    value: isCellEditing(params.rowKey, params.columnKey)
-      ? (activeSession.value?.draft ?? "")
-      : "",
-    onInput: (event: Event) => {
-      const target = event.target as HTMLInputElement | null
-      updateDraft(target?.value ?? "")
-    },
-    onBlur: () => {
-      if (params.commitOnBlur === false) {
-        return
-      }
-      void commitEdit()
-    },
-    onKeydown: (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault()
-        cancelEdit()
-        return
-      }
-      if (event.key !== "Enter") {
-        return
-      }
-      event.preventDefault()
-      void commitEdit()
-    },
+  const {
+    createHeaderSortBindings,
+    createRowSelectionBindings,
+    createEditableCellBindings,
+    createInlineEditorBindings,
+  } = useAffinoDataGridBaseBindings({
+    resolveColumnSortDirection,
+    toggleColumnSort,
+    resolveRowKey,
+    isSelectedByKey,
+    toggleSelectedByKey,
+    selectOnlyRow,
+    editingEnabled,
+    beginEdit,
+    resolveCellDraft,
+    isCellEditing,
+    activeSession,
+    updateDraft,
+    cancelEdit,
+    commitEdit,
   })
 
   const componentProps = computed(() => ({
@@ -700,181 +577,55 @@ export function useAffinoDataGrid<TRow>(
     autoStart: options.autoStart ?? true,
   }))
 
-  const runAction = async (
+  const { runAction: runActionInternal } = useAffinoDataGridActionRunner({
+    selectedRowKeySet,
+    clearSelection,
+    selectAllRows,
+    resolveSelectedRows,
+    copySelectedRows,
+    cutSelectedRows,
+    pasteRowsAppend,
+    clearSelectedRows,
+    setSortState,
+    clearSort,
+  })
+  const runAction = (
     actionId: AffinoDataGridActionId,
     actionOptions: AffinoDataGridRunActionOptions = {},
   ): Promise<AffinoDataGridActionResult> => {
-    switch (actionId) {
-      case "copy": {
-        const ok = await copySelectedRows()
-        const affected = resolveSelectedRows().length
-        return {
-          ok,
-          affected: ok ? affected : 0,
-          message: ok ? `Copied ${affected} selected row(s)` : "Copy failed",
-        }
-      }
-      case "cut": {
-        const affected = await cutSelectedRows()
-        return {
-          ok: affected > 0,
-          affected,
-          message: affected > 0 ? `Cut ${affected} row(s)` : "Nothing was cut",
-        }
-      }
-      case "paste": {
-        const affected = await pasteRowsAppend()
-        return {
-          ok: affected > 0,
-          affected,
-          message: affected > 0 ? `Pasted ${affected} row(s)` : "Nothing to paste",
-        }
-      }
-      case "clear": {
-        const affected = clearSelectedRows()
-        return {
-          ok: affected > 0,
-          affected,
-          message: affected > 0 ? `Cleared ${affected} row(s)` : "Nothing to clear",
-        }
-      }
-      case "sort-asc":
-      case "sort-desc": {
-        const columnKey = actionOptions.columnKey ?? null
-        if (!columnKey) {
-          return {
-            ok: false,
-            affected: 0,
-            message: "Missing column key for sort action",
-          }
-        }
-        setSortState([{ key: columnKey, direction: actionId === "sort-asc" ? "asc" : "desc" }])
-        return {
-          ok: true,
-          affected: 1,
-          message: `Sorted ${columnKey} ${actionId === "sort-asc" ? "ascending" : "descending"}`,
-        }
-      }
-      case "sort-clear": {
-        clearSort()
-        return {
-          ok: true,
-          affected: 1,
-          message: "Sort cleared",
-        }
-      }
-      case "select-all": {
-        const affected = selectAllRows()
-        return {
-          ok: affected > 0,
-          affected,
-          message: affected > 0 ? `Selected ${affected} row(s)` : "Nothing to select",
-        }
-      }
-      case "clear-selection": {
-        const affected = selectedRowKeySet.value.size
-        clearSelection()
-        return {
-          ok: affected > 0,
-          affected,
-          message: affected > 0 ? "Selection cleared" : "Selection already empty",
-        }
-      }
-      case "filter":
-      case "auto-size":
-      default:
-        return {
-          ok: false,
-          affected: 0,
-          message: `Action "${actionId}" is not mapped in useAffinoDataGrid`,
-        }
-    }
+    return runActionInternal(
+      actionId as AffinoDataGridInternalActionId,
+      actionOptions,
+    )
   }
 
-  const contextMenuBridge = useDataGridContextMenu({
-    isColumnResizable(columnKey) {
-      return columns.value.some(column => column.key === columnKey)
-    },
+  const contextMenuFeature = useAffinoDataGridContextMenuFeature<
+    TRow,
+    AffinoDataGridActionId,
+    AffinoDataGridActionResult
+  >({
+    columns,
+    resolveRowKey,
+    createHeaderSortBindings,
+    createEditableCellBindings,
+    runAction,
   })
-
-  const runContextMenuAction = async (
-    actionId: DataGridContextMenuActionId,
-  ): Promise<AffinoDataGridActionResult> => {
-    const result = await runAction(actionId, {
-      columnKey: contextMenuBridge.contextMenu.value.columnKey,
-    })
-    contextMenuBridge.closeContextMenu()
-    return result
-  }
-
-  const createHeaderCellBindings = (columnKey: string) => ({
-    ...createHeaderSortBindings(columnKey),
-    onContextmenu: (event: MouseEvent) => {
-      event.preventDefault()
-      contextMenuBridge.openContextMenu(event.clientX, event.clientY, {
-        zone: "header",
-        columnKey,
-      })
-    },
-  })
-
-  const createDataCellBindings = (params: {
-    row: TRow
-    rowIndex: number
-    columnKey: string
-    editable?: boolean
-    value?: unknown
-  }) => {
-    const base = createEditableCellBindings(params)
-    return {
-      ...base,
-      onContextmenu: (event: MouseEvent) => {
-        event.preventDefault()
-        contextMenuBridge.openContextMenu(event.clientX, event.clientY, {
-          zone: "cell",
-          rowId: String(resolveRowKey(params.row, params.rowIndex)),
-          columnKey: params.columnKey,
-        })
-      },
-    }
-  }
-
-  const setContextMenuRef = (element: Element | null) => {
-    contextMenuBridge.contextMenuRef.value = element as HTMLElement | null
-  }
-
-  const createContextMenuRootBindings = (handlers?: { onEscape?: () => void }) => ({
-    role: "menu" as const,
-    tabindex: -1,
-    onMousedown: (event: MouseEvent) => {
-      event.stopPropagation()
-    },
-    onKeydown: (event: KeyboardEvent) => {
-      contextMenuBridge.onContextMenuKeyDown(event, handlers)
-    },
-  })
-
-  const createContextMenuActionBinding = (
-    actionId: DataGridContextMenuActionId,
-    options: AffinoDataGridActionBindingOptions = {},
-  ) => ({
-    onClick: () => {
-      void runContextMenuAction(actionId).then(result => {
-        options.onResult?.(result)
-      })
-    },
-  })
-
-  const createActionButtonBinding = (
-    actionId: AffinoDataGridActionId,
-    options: AffinoDataGridActionBindingOptions & { actionOptions?: AffinoDataGridRunActionOptions } = {},
-  ) => ({
-    onClick: () => {
-      void runAction(actionId, options.actionOptions).then(result => {
-        options.onResult?.(result)
-      })
-    },
-  })
+  const {
+    contextMenuState,
+    contextMenuStyle,
+    contextMenuActions,
+    contextMenuRef,
+    openContextMenu,
+    closeContextMenu,
+    onContextMenuKeyDown,
+    runContextMenuAction,
+    createHeaderCellBindings,
+    createDataCellBindings,
+    setContextMenuRef,
+    createContextMenuRootBindings,
+    createContextMenuActionBinding,
+    createActionButtonBinding,
+  } = contextMenuFeature
 
   return {
     ...runtime,
@@ -894,13 +645,13 @@ export function useAffinoDataGrid<TRow>(
       runAction,
     },
     contextMenu: {
-      state: contextMenuBridge.contextMenu,
-      style: contextMenuBridge.contextMenuStyle,
-      actions: contextMenuBridge.contextMenuActions,
-      contextMenuRef: contextMenuBridge.contextMenuRef,
-      open: contextMenuBridge.openContextMenu,
-      close: contextMenuBridge.closeContextMenu,
-      onKeyDown: contextMenuBridge.onContextMenuKeyDown,
+      state: contextMenuState,
+      style: contextMenuStyle,
+      actions: contextMenuActions,
+      contextMenuRef,
+      open: openContextMenu,
+      close: closeContextMenu,
+      onKeyDown: onContextMenuKeyDown,
       runAction: runContextMenuAction,
     },
     features: {

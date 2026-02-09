@@ -260,14 +260,23 @@ export function createDataGridViewportModelBridgeService(
     activeRowModelUnsubscribe = activeRowModel.subscribe(snapshot => {
       const previous = lastRowModelSnapshot
       lastRowModelSnapshot = snapshot
+      const hasComparableRevision = (
+        typeof snapshot.revision === "number" &&
+        typeof previous?.revision === "number"
+      )
       const isViewportOnlyUpdate = Boolean(previous) &&
-        snapshot.rowCount === previous?.rowCount &&
-        snapshot.loading === previous?.loading &&
-        snapshot.error === previous?.error &&
-        areSortModelsEqual(snapshot.sortModel, previous?.sortModel) &&
-        areFilterModelsEqual(snapshot.filterModel, previous?.filterModel) &&
-        areGroupBySpecsEqual(snapshot.groupBy, previous?.groupBy) &&
-        areGroupExpansionSnapshotsEqual(snapshot.groupExpansion, previous?.groupExpansion)
+        (
+          (hasComparableRevision && snapshot.revision === previous?.revision) ||
+          (
+            snapshot.rowCount === previous?.rowCount &&
+            snapshot.loading === previous?.loading &&
+            snapshot.error === previous?.error &&
+            areSortModelsEqual(snapshot.sortModel, previous?.sortModel) &&
+            areFilterModelsEqual(snapshot.filterModel, previous?.filterModel) &&
+            areGroupBySpecsEqual(snapshot.groupBy, previous?.groupBy) &&
+            areGroupExpansionSnapshotsEqual(snapshot.groupExpansion, previous?.groupExpansion)
+          )
+        )
 
       if (!isViewportOnlyUpdate) {
         markRowModelCacheDirty()

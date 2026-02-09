@@ -124,6 +124,7 @@ export interface DataGridRowNode<T = unknown> {
 }
 
 export interface DataGridRowModelSnapshot<T = unknown> {
+  revision?: number
   kind: DataGridRowModelKind
   rowCount: number
   loading: boolean
