@@ -1,2 +1,14 @@
-// Placeholder types for @affino/datagrid-vue.
-export type DatagridVuePlaceholder = never
+export interface DataGridOverlayTransformInput {
+  viewportWidth: number
+  viewportHeight: number
+  scrollLeft: number
+  scrollTop: number
+  pinnedOffsetLeft?: number
+  pinnedOffsetRight?: number
+}
+
+export interface DataGridOverlayTransform {
+  transform: string
+  clipPath: string
+  willChange: "transform"
+}

@@ -16,6 +16,10 @@
     "./advanced": {
       "types": "./dist/advanced.d.ts",
       "import": "./dist/advanced.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js"
     }
   },
   "main": "dist/index.js",

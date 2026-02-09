@@ -1,2 +1,1 @@
-// Placeholder entrypoint for @affino/datagrid-vue.
-export {}
+export * from "./stable"

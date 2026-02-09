@@ -1,2 +1,56 @@
-// Placeholder adapter; implementation removed.
-export {}
+import type { DataGridSettingsAdapter } from "@affino/datagrid-core"
+import type { DataGridSettingsStore } from "./tableSettingsStore"
+
+export function createDataGridSettingsAdapter(
+  store: DataGridSettingsStore,
+): DataGridSettingsAdapter {
+  return {
+    setColumnWidth(tableId, columnKey, width) {
+      store.setColumnWidth(tableId, columnKey, width)
+    },
+    getColumnWidth(tableId, columnKey) {
+      return store.getColumnWidth(tableId, columnKey)
+    },
+    setSortState(tableId, state) {
+      store.setSortState(tableId, state)
+    },
+    getSortState(tableId) {
+      return store.getSortState(tableId)
+    },
+    setFilterSnapshot(tableId, snapshot) {
+      store.setFilterSnapshot(tableId, snapshot)
+    },
+    getFilterSnapshot(tableId) {
+      return store.getFilterSnapshot(tableId)
+    },
+    setPinState(tableId, columnKey, position) {
+      store.setPinState(tableId, columnKey, position)
+    },
+    getPinState(tableId) {
+      return store.getPinState(tableId)
+    },
+    setGroupState(tableId, columns, expansion) {
+      store.setGroupState(tableId, columns, expansion)
+    },
+    getGroupState(tableId) {
+      return store.getGroupState(tableId)
+    },
+    clearTable(tableId) {
+      store.clearTable(tableId)
+    },
+  }
+}
+
+let legacyAdapterAliasWarned = false
+
+export function createPiniaTableSettingsAdapter(
+  store: DataGridSettingsStore,
+): DataGridSettingsAdapter {
+  if (!legacyAdapterAliasWarned) {
+    legacyAdapterAliasWarned = true
+    console.warn(
+      "[DataGrid][deprecated] createPiniaTableSettingsAdapter is deprecated. Use createDataGridSettingsAdapter.",
+    )
+  }
+  return createDataGridSettingsAdapter(store)
+}
