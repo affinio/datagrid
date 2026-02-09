@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@affino/datagrid-core": ["../datagrid-core/dist/src/index.d.ts"],
+      "@affino/datagrid-core/*": ["../datagrid-core/dist/src/*"],
+      "@affino/datagrid-plugins": ["../datagrid-plugins/dist/index.d.ts"],
+      "@affino/datagrid-plugins/*": ["../datagrid-plugins/dist/*"],
+      "@affino/datagrid-theme": ["../datagrid-theme/dist/index.d.ts"],
+      "@affino/datagrid-theme/*": ["../datagrid-theme/dist/*"]
+    }
+  }
+}
+
