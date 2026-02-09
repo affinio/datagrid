@@ -3,4 +3,4 @@ export {
   type DataGridOverlayTransform,
   buildDataGridOverlayTransform,
   buildDataGridOverlayTransformFromSnapshot,
-} from "@affino/datagrid-orchestration/selectionOverlayTransform"
+} from "@affino/datagrid-orchestration"

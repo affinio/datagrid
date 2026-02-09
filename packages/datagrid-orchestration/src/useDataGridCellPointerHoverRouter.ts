@@ -7,6 +7,7 @@ export interface UseDataGridCellPointerHoverRouterOptions<
   TRow,
   TCoord extends DataGridCellPointerHoverCoord = DataGridCellPointerHoverCoord,
 > {
+  isPrimaryPointerPressed?: (event: MouseEvent) => boolean
   hasInlineEditor: () => boolean
   isDragSelecting: () => boolean
   isSelectionColumn: (columnKey: string) => boolean
@@ -30,8 +31,13 @@ export function useDataGridCellPointerHoverRouter<
 >(
   options: UseDataGridCellPointerHoverRouterOptions<TRow, TCoord>,
 ): UseDataGridCellPointerHoverRouterResult<TRow> {
+  const isPrimaryPointerPressed = options.isPrimaryPointerPressed ?? ((event: MouseEvent) => (event.buttons & 1) === 1)
+
   function dispatchCellPointerEnter(row: TRow, columnKey: string, event: MouseEvent): boolean {
     if (options.hasInlineEditor() || !options.isDragSelecting() || options.isSelectionColumn(columnKey)) {
+      return false
+    }
+    if (!isPrimaryPointerPressed(event)) {
       return false
     }
 

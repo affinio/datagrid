@@ -25,7 +25,7 @@ describe("useDataGridCellPointerHoverRouter contract", () => {
       applyCellSelection,
     })
 
-    const event = createEvent({ clientX: 55, clientY: 66 })
+    const event = createEvent({ clientX: 55, clientY: 66, buttons: 1 })
     expect(router.dispatchCellPointerEnter({ rowId: "R3" }, "owner", event)).toBe(true)
     expect(lastCoord).toEqual({ rowIndex: 2, columnIndex: 3 })
     expect(setDragPointer).toHaveBeenCalledWith({ clientX: 55, clientY: 66 })
@@ -67,6 +67,24 @@ describe("useDataGridCellPointerHoverRouter contract", () => {
     })
     expect(inlineRouter.dispatchCellPointerEnter({ rowId: "R1" }, "owner", createEvent())).toBe(false)
 
+    expect(applyCellSelection).not.toHaveBeenCalled()
+  })
+
+  it("ignores hover when primary pointer is not pressed", () => {
+    const applyCellSelection = vi.fn()
+    const router = useDataGridCellPointerHoverRouter({
+      hasInlineEditor: () => false,
+      isDragSelecting: () => true,
+      isSelectionColumn: () => false,
+      resolveCellCoord: () => ({ rowIndex: 2, columnIndex: 1 }),
+      resolveLastDragCoord: () => null,
+      setLastDragCoord: vi.fn(),
+      cellCoordsEqual: () => false,
+      setDragPointer: vi.fn(),
+      applyCellSelection,
+    })
+
+    expect(router.dispatchCellPointerEnter({ rowId: "R3" }, "service", createEvent({ buttons: 0 }))).toBe(false)
     expect(applyCellSelection).not.toHaveBeenCalled()
   })
 

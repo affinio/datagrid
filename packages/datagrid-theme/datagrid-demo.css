@@ -11,6 +11,7 @@
 }
 
 .datagrid-page {
+  --datagrid-controls-height: 210px;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -72,7 +73,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  align-content: flex-start;
   gap: 0.75rem;
+  height: var(--datagrid-controls-height);
+  overflow: auto;
   border-radius: 0.9rem;
   border: 1px solid var(--datagrid-glass-border);
   background: var(--datagrid-controls-bg);
@@ -153,8 +157,13 @@
 
 .datagrid-controls__status {
   margin: 0;
+  flex: 1 1 100%;
+  min-height: 1.15rem;
   font-size: 0.8rem;
   color: var(--datagrid-text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .datagrid-column-filter {
@@ -252,8 +261,13 @@
 
 .datagrid-controls__filter-indicator {
   margin: 0;
+  flex: 1 1 100%;
+  min-height: 1.05rem;
   font-size: 0.78rem;
   color: var(--datagrid-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .datagrid-controls__filter-indicator[data-active="true"] {
@@ -843,6 +857,11 @@
   .datagrid-page {
     height: auto;
     min-height: 0;
+  }
+
+  .datagrid-controls {
+    height: auto;
+    max-height: 320px;
   }
 
   .datagrid-metrics {

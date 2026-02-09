@@ -47,8 +47,8 @@ export function useDataGridIntentHistory<TSnapshot>(
   return {
     transactionService: core.transactionService,
     transactionSnapshot,
-    canUndo: computed(() => core.canUndo()),
-    canRedo: computed(() => core.canRedo()),
+    canUndo: computed(() => transactionSnapshot.value.undoDepth > 0),
+    canRedo: computed(() => transactionSnapshot.value.redoDepth > 0),
     recordIntentTransaction: core.recordIntentTransaction,
     runHistoryAction: core.runHistoryAction,
     dispose,
