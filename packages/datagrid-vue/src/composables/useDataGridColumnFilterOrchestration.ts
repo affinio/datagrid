@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, type ComputedRef, type Ref } from "vue"
+import { computed, onBeforeUnmount, ref, getCurrentInstance, type ComputedRef, type Ref } from "vue"
 import type { DataGridFilterSnapshot } from "@affino/datagrid-core"
 import {
   DATA_GRID_ENUM_FILTER_OPERATOR_OPTIONS,
@@ -72,9 +72,11 @@ export function useDataGridColumnFilterOrchestration<TRow>(
     appliedColumnFilters.value = nextSnapshot.appliedColumnFilters
   })
 
-  onBeforeUnmount(() => {
-    unsubscribe()
-  })
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      unsubscribe()
+    })
+  }
 
   return {
     activeFilterColumnKey,

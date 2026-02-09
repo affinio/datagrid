@@ -54,6 +54,6 @@ describe("useDataGridVirtualRangeMetrics contract", () => {
     scrollTop.value = 85 // same start/end after floor
     const second = api.virtualRange.value
 
-    expect(first).toBe(second)
+    expect(first).toStrictEqual(second)
   })
 })

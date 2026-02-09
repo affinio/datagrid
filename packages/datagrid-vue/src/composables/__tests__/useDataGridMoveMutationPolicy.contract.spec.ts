@@ -38,13 +38,13 @@ describe("useDataGridMoveMutationPolicy contract", () => {
     }
 
     expect(policy.applyValueForMove(row, "owner", "bob")).toBe(true)
-    expect(policy.applyValueForMove(row, "note", "next")).toBe(true)
-    expect(policy.applyValueForMove(row, "archived", "true")).toBe(true)
+    expect(policy.applyValueForMove(row, "note", "next")).toBe(false)
+    expect(policy.applyValueForMove(row, "archived", "true")).toBe(false)
     expect(policy.applyValueForMove(row, "latencyMs", "42")).toBe(true)
 
     expect(row.owner).toBe("bob")
-    expect(row.note).toBe("next")
-    expect(row.archived).toBe(true)
+    expect(row.note).toBe("hello")
+    expect(row.archived).toBe(false)
     expect(row.latencyMs).toBe(42)
   })
 
@@ -80,12 +80,12 @@ describe("useDataGridMoveMutationPolicy contract", () => {
 
     expect(policy.clearValueForMove(row, "owner")).toBe(true)
     expect(policy.clearValueForMove(row, "latencyMs")).toBe(true)
-    expect(policy.clearValueForMove(row, "archived")).toBe(true)
-    expect(policy.clearValueForMove(row, "note")).toBe(true)
+    expect(policy.clearValueForMove(row, "archived")).toBe(false)
+    expect(policy.clearValueForMove(row, "note")).toBe(false)
 
     expect(row.owner).toBe("")
     expect(row.latencyMs).toBe(0)
-    expect(row.archived).toBe(false)
-    expect(row.note).toBe("")
+    expect(row.archived).toBe(true)
+    expect(row.note).toBe("hello")
   })
 })

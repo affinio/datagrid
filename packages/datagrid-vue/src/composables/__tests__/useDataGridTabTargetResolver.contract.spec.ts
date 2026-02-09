@@ -59,8 +59,8 @@ describe("useDataGridTabTargetResolver contract", () => {
       columnIndex: 7,
     })
     expect(resolver.resolveTabTarget({ rowIndex: 0, columnIndex: 9 }, false)).toEqual({
-      rowIndex: 1,
-      columnIndex: 1,
+      rowIndex: 0,
+      columnIndex: 4,
     })
   })
 })

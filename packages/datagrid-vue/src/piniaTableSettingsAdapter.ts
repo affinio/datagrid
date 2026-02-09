@@ -40,17 +40,3 @@ export function createDataGridSettingsAdapter(
     },
   }
 }
-
-let legacyAdapterAliasWarned = false
-
-export function createPiniaTableSettingsAdapter(
-  store: DataGridSettingsStore,
-): DataGridSettingsAdapter {
-  if (!legacyAdapterAliasWarned) {
-    legacyAdapterAliasWarned = true
-    console.warn(
-      "[DataGrid][deprecated] createPiniaTableSettingsAdapter is deprecated. Use createDataGridSettingsAdapter.",
-    )
-  }
-  return createDataGridSettingsAdapter(store)
-}

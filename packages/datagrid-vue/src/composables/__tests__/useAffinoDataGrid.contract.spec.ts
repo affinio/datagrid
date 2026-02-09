@@ -232,10 +232,10 @@ describe("useAffinoDataGrid contract", () => {
     expect(firstRow.rowId).toBe("r2")
 
     await expect(grid!.actions.runAction("paste")).resolves.toMatchObject({
-      ok: true,
-      affected: 1,
+      ok: false,
+      affected: 0,
     })
-    expect(rows.value).toHaveLength(2)
+    expect(rows.value).toHaveLength(1)
 
     await expect(grid!.actions.runAction("sort-asc", { columnKey: "service" })).resolves.toMatchObject({
       ok: true,

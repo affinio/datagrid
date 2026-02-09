@@ -5,7 +5,7 @@
 export {
   createDataGridRuntime,
   isHostEventName as isDataGridHostEventName,
-  HOST_EVENT_NAME_MAP as DATAGRID_HOST_EVENT_NAME_MAP,
+  HOST_EVENT_NAME_MAP,
   type DataGridRuntime,
   type DataGridRuntimeOptions,
   type DataGridHostEventName,

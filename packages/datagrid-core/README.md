@@ -63,8 +63,7 @@ Runtime now treats only one pin state as canonical:
 - `column.pin = "left" | "right" | "none"`
 - `column.isSystem = true` is always resolved as left-pinned.
 
-Legacy pin fields are adapter-only input compatibility and must be normalized before runtime:
-- `pinned`, `sticky`, `stickyLeft`, `stickyRight`, `lock`, `locked`
+Legacy pin fields are not part of the supported contract.
 
 ### Migration Guide
 

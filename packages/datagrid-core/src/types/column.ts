@@ -10,8 +10,6 @@ export type DataGridColumnEditor = "text" | "select" | "number" | "checkbox" | "
 
 export type DataGridColumnPin = "left" | "right" | "none"
 
-export type DataGridColumnSticky = "left" | "right"
-
 export interface DataGridColumn {
   key: string
   label: string
@@ -39,18 +37,6 @@ export interface DataGridColumn {
    * System columns never participate in filtering or sorting.
    */
   isSystem?: boolean
-  /**
-   * @deprecated Legacy compatibility field. Normalize into `pin` in adapters.
-   */
-  stickyLeft?: boolean | number
-  /**
-   * @deprecated Legacy compatibility field. Normalize into `pin` in adapters.
-   */
-  stickyRight?: boolean | number
-  /**
-   * @deprecated Legacy compatibility field. Normalize into `pin` in adapters.
-   */
-  sticky?: DataGridColumnSticky
   userResized?: boolean
 }
 

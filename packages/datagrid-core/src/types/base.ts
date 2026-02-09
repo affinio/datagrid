@@ -9,7 +9,6 @@ export type {
   DataGridColumnEditor,
   DataGridColumnPin,
   DataGridColumnGroupDef,
-  DataGridColumnSticky,
 } from "./column"
 export type { DataGridSettingsAdapter } from "../dataGridSettingsAdapter"
 

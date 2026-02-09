@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, type ComputedRef } from "vue"
+import { computed, onBeforeUnmount, ref, getCurrentInstance, type ComputedRef } from "vue"
 import {
   useDataGridHeaderResizeOrchestration as useDataGridHeaderResizeOrchestrationCore,
   type DataGridHeaderResizeState,
@@ -30,13 +30,15 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
     activeColumnResize.value = nextState
   })
 
-  onBeforeUnmount(() => {
-    unsubscribe()
-  })
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      unsubscribe()
+    })
+  }
 
   return {
     activeColumnResize,
-    isColumnResizing: computed(() => core.isColumnResizing()),
+    isColumnResizing: computed(() => activeColumnResize.value !== null),
     setColumnWidth: core.setColumnWidth,
     estimateColumnAutoWidth: core.estimateColumnAutoWidth,
     onHeaderResizeHandleMouseDown: core.onHeaderResizeHandleMouseDown,

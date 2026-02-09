@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, ref, type Ref } from "vue"
+import { computed, nextTick, onBeforeUnmount, ref, getCurrentInstance, type Ref } from "vue"
 import {
   resolveDataGridContextMenuKeyboardIntent,
   useDataGridContextMenu as useDataGridContextMenuCore,
@@ -55,9 +55,11 @@ export function useDataGridContextMenu(
     contextMenuActions.value = nextSnapshot.actions
   })
 
-  onBeforeUnmount(() => {
-    unsubscribe()
-  })
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      unsubscribe()
+    })
+  }
 
   const contextMenuStyle = computed(() => ({
     left: `${contextMenu.value.x}px`,

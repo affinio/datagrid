@@ -159,18 +159,6 @@ export const useDataGridSettingsStore = defineStore("tableSettingsStore", {
 
 export type DataGridSettingsStore = ReturnType<typeof useDataGridSettingsStore>
 
-let legacyStoreAliasWarned = false
-
-export function useTableSettingsStore(): DataGridSettingsStore {
-  if (!legacyStoreAliasWarned) {
-    legacyStoreAliasWarned = true
-    console.warn(
-      "[DataGrid][deprecated] useTableSettingsStore is deprecated. Use useDataGridSettingsStore.",
-    )
-  }
-  return useDataGridSettingsStore()
-}
-
 function structuredCloneSafe<T>(value: T): T {
   if (typeof structuredClone === "function") {
     try {

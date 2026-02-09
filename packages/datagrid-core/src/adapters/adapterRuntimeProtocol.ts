@@ -5,7 +5,7 @@ import type {
 } from "@affino/datagrid-plugins"
 import type { DataGridEventHandlers } from "../types"
 import {
-  DATAGRID_HOST_EVENT_NAME_MAP,
+  HOST_EVENT_NAME_MAP,
   createDataGridRuntime,
   type DataGridHostEventMap,
   type DataGridHostEventName,
@@ -17,7 +17,7 @@ import {
 
 export type DataGridAdapterKind = "vue" | "react" | "laravel" | "web-component"
 export type DataGridKebabHostEventName =
-  (typeof DATAGRID_HOST_EVENT_NAME_MAP)[keyof typeof DATAGRID_HOST_EVENT_NAME_MAP]
+  (typeof HOST_EVENT_NAME_MAP)[keyof typeof HOST_EVENT_NAME_MAP]
 
 export interface DataGridAdapterEventNameByKind {
   vue: DataGridKebabHostEventName
@@ -80,7 +80,7 @@ export function resolveDataGridAdapterEventName<TKind extends DataGridAdapterKin
   if (kind === "react") {
     return hostEvent as DataGridAdapterEventNameByKind[TKind]
   }
-  return DATAGRID_HOST_EVENT_NAME_MAP[hostEvent] as DataGridAdapterEventNameByKind[TKind]
+  return HOST_EVENT_NAME_MAP[hostEvent] as DataGridAdapterEventNameByKind[TKind]
 }
 
 export function createDataGridAdapterRuntime<

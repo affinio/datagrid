@@ -28,9 +28,6 @@ export const HOST_EVENT_NAME_MAP = {
   selectAllRequest: "select-all-request",
 } as const
 
-// Legacy alias kept for migration compatibility.
-export const DATAGRID_HOST_EVENT_NAME_MAP = HOST_EVENT_NAME_MAP
-
 export type DataGridHostEventName = keyof typeof HOST_EVENT_NAME_MAP
 
 export type DataGridHostEventArgs<K extends DataGridHostEventName> = NonNullable<
@@ -63,10 +60,6 @@ export interface DataGridRuntimeInternalEventMap {
 }
 
 export type DataGridRuntimeInternalEventName = keyof DataGridRuntimeInternalEventMap
-
-// Legacy aliases kept for migration compatibility.
-export type HostEventName = DataGridHostEventName
-export type EventArgs<K extends HostEventName> = DataGridHostEventArgs<K>
 
 export function isHostEventName(value: string): value is DataGridHostEventName {
   return value in HOST_EVENT_NAME_MAP

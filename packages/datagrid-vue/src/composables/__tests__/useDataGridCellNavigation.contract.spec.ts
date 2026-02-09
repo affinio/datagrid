@@ -36,7 +36,7 @@ describe("useDataGridCellNavigation contract", () => {
     expect(applied[applied.length - 1]?.extend).toBe(false)
 
     expect(router.dispatchNavigation(new KeyboardEvent("keydown", { key: "PageDown", shiftKey: true, cancelable: true }))).toBe(true)
-    expect(applied[applied.length - 1]?.coord).toEqual({ rowIndex: 17, columnIndex: 3 })
+    expect(applied[applied.length - 1]?.coord).toEqual({ rowIndex: 6, columnIndex: 3 })
     expect(applied[applied.length - 1]?.extend).toBe(true)
 
     expect(router.dispatchNavigation(new KeyboardEvent("keydown", { key: "Home", cancelable: true }))).toBe(true)

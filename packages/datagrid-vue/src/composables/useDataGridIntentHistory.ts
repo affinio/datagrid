@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, type Ref } from "vue"
+import { computed, onBeforeUnmount, ref, getCurrentInstance, type Ref } from "vue"
 import type { DataGridCoreTransactionService } from "@affino/datagrid-core"
 import {
   useDataGridIntentHistory as useDataGridIntentHistoryCore,
@@ -40,9 +40,11 @@ export function useDataGridIntentHistory<TSnapshot>(
     core.dispose()
   }
 
-  onBeforeUnmount(() => {
-    dispose()
-  })
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      dispose()
+    })
+  }
 
   return {
     transactionService: core.transactionService,

@@ -1,4 +1,4 @@
-import { onBeforeUnmount, shallowRef, type Ref } from "vue"
+import { onBeforeUnmount, shallowRef, getCurrentInstance, type Ref } from "vue"
 import {
   useDataGridInlineEditOrchestration as useDataGridInlineEditOrchestrationCore,
   type DataGridInlineEditorMode,
@@ -91,9 +91,11 @@ export function useDataGridInlineEditOrchestration<
     inlineEditor.value = nextEditor
   })
 
-  onBeforeUnmount(() => {
-    unsubscribe()
-  })
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      unsubscribe()
+    })
+  }
 
   return {
     inlineEditor,

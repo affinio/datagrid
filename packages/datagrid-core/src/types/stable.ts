@@ -8,7 +8,6 @@ export type {
   DataGridColumnEditor,
   DataGridColumnPin,
   DataGridColumnGroupDef,
-  DataGridColumnSticky,
   DataGridSettingsAdapter,
   DataGridRowId,
   DataGridLazyLoadReason,

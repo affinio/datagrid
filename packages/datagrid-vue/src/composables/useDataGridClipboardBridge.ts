@@ -1,4 +1,4 @@
-import { onBeforeUnmount } from "vue"
+import { onBeforeUnmount, getCurrentInstance } from "vue"
 import {
   useDataGridClipboardBridge as useDataGridClipboardBridgeCore,
   type DataGridClipboardRange,
@@ -28,9 +28,11 @@ export function useDataGridClipboardBridge<
   options: UseDataGridClipboardBridgeOptions<TRow, TRange>,
 ): UseDataGridClipboardBridgeResult<TRange> {
   const bridge: DataGridClipboardBridgeCoreResult<TRange> = useDataGridClipboardBridgeCore(options)
-  onBeforeUnmount(() => {
-    bridge.dispose()
-  })
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      bridge.dispose()
+    })
+  }
   const { dispose: _dispose, ...result } = bridge
   return result
 }

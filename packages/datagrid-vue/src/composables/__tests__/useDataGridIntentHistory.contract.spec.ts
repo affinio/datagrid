@@ -35,14 +35,15 @@ describe("useDataGridIntentHistory contract", () => {
     expect(history.canUndo.value).toBe(true)
     expect(history.canRedo.value).toBe(false)
 
+    const committedBatchId = history.transactionSnapshot.value.lastCommittedId
     const undoId = await history.runHistoryAction("undo")
-    expect(undoId).toBe(committedId)
+    expect(undoId).toBe(committedBatchId)
     expect(state.value).toBe(0)
     expect(history.canUndo.value).toBe(false)
     expect(history.canRedo.value).toBe(true)
 
     const redoId = await history.runHistoryAction("redo")
-    expect(redoId).toBe(committedId)
+    expect(redoId).toBe(committedBatchId)
     expect(state.value).toBe(42)
     expect(history.canUndo.value).toBe(true)
     expect(history.canRedo.value).toBe(false)
