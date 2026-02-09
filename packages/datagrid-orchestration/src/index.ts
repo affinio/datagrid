@@ -253,6 +253,13 @@ export {
 } from "./useDataGridGroupingSortOrchestration"
 
 export {
+  type DataGridHeaderLayerViewportGeometryInput,
+  type DataGridHeaderLayerViewportGeometry,
+  resolveDataGridHeaderScrollSyncLeft,
+  resolveDataGridHeaderLayerViewportGeometry,
+} from "./useDataGridHeaderLayerOrchestration"
+
+export {
   type UseDataGridHeaderContextActionsOptions,
   type UseDataGridHeaderContextActionsResult,
   useDataGridHeaderContextActions,
