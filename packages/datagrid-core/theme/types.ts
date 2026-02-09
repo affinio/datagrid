@@ -2,10 +2,15 @@
 // Contains base interfaces for table theme tokens and style config.
 
 export interface DataGridThemeTokens {
-  tableFontFamily: string
-  tableFontSize: string
-  tableTextColor: string
-  tableBackgroundColor: string
+  gridFontFamily: string
+  gridFontSize: string
+  gridTextColor: string
+  gridBackgroundColor: string
+  gridTextPrimary: string
+  gridTextMuted: string
+  gridTextSoft: string
+  gridGlassBorder: string
+  gridAccentStrong: string
   headerBackgroundColor: string
   headerTextColor: string
   headerBorderColor: string
@@ -50,10 +55,86 @@ export interface DataGridThemeTokens {
   pinnedLeftBorderWidth: string
   pinnedRightBorderColor: string
   pinnedRightBorderWidth: string
+  gridHeroBackgroundStart: string
+  gridHeroBackgroundEnd: string
+  gridChipBackground: string
+  gridControlsBackground: string
+  gridControlsInputBackground: string
+  gridControlsSurfaceBackground: string
+  gridFilterPanelBorderColor: string
+  gridFilterPanelBackground: string
+  gridFilterIndicatorActiveColor: string
+  gridMetricsCardBackground: string
+  gridViewportBackground: string
+  gridFocusOutlineColor: string
+  gridHeaderRowBackgroundColor: string
+  gridHeaderCellBackgroundColor: string
+  gridHeaderCellHoverBackgroundColor: string
+  gridHeaderFilterOpenBackgroundColor: string
+  gridGroupRowBorderColor: string
+  gridRowSelectedStickyBackgroundColor: string
+  gridRowSelectedRangeBackgroundColor: string
+  gridCheckboxAccentColor: string
+  gridSortIndicatorColor: string
+  gridSortPriorityBorderColor: string
+  gridHeaderFilterHighlightColor: string
+  gridFilterTriggerBorderColor: string
+  gridFilterTriggerBackgroundColor: string
+  gridFilterTriggerHoverBorderColor: string
+  gridFilterTriggerHoverTextColor: string
+  gridFilterTriggerActiveBorderColor: string
+  gridFilterTriggerActiveBackgroundColor: string
+  gridFilterTriggerActiveTextColor: string
+  gridResizeHandleHoverColor: string
+  gridNumericTextColor: string
+  gridEditableHoverBackgroundColor: string
+  gridSelectionRangeBackgroundColor: string
+  gridSelectionCopiedBorderColor: string
+  gridSelectionCopiedBackgroundColor: string
+  gridSelectionFillPreviewBackgroundColor: string
+  gridSelectionMovePreviewBackgroundColor: string
+  gridSelectionAnchorBackgroundColor: string
+  gridSelectionActiveBorderColor: string
+  gridEditorBorderColor: string
+  gridEditorBackgroundColor: string
+  gridEditorFocusBorderColor: string
+  gridEditorFocusRingColor: string
+  gridEnumTriggerBorderColor: string
+  gridEnumTriggerBackgroundColor: string
+  gridEnumTriggerTextColor: string
+  gridEnumTriggerHoverBorderColor: string
+  gridEnumTriggerHoverBackgroundColor: string
+  gridStickyBackgroundColor: string
+  gridStickyShadowColor: string
+  gridStickyRangeBackgroundColor: string
+  gridStickyRangeBorderColor: string
+  gridStickyAnchorBackgroundColor: string
+  gridStickyAnchorBorderColor: string
+  gridStickyActiveBorderColor: string
+  gridHeaderStickyBackgroundColor: string
+  gridGroupStartGradientStart: string
+  gridGroupStartGradientEnd: string
+  gridGroupBadgeTextColor: string
+  gridSelectionOverlayBorderColor: string
+  gridSelectionOverlayBackgroundColor: string
+  gridSelectionOverlayFillBorderColor: string
+  gridSelectionOverlayFillBackgroundColor: string
+  gridSelectionOverlayMoveBorderColor: string
+  gridSelectionOverlayMoveBackgroundColor: string
+  gridSelectionHandleBorderColor: string
+  gridSelectionHandleBackgroundColor: string
+  gridMoveHandleHoverBackgroundColor: string
+  gridHintBorderColor: string
+  gridHintBackgroundColor: string
+  gridCopyMenuBorderColor: string
+  gridCopyMenuBackgroundColor: string
+  gridCopyMenuShadowColor: string
+  gridCopyMenuItemHoverBorderColor: string
+  gridCopyMenuItemHoverBackgroundColor: string
 }
 
 export interface DataGridResolvedStyleConfig {
-  table: Record<string, string>
+  grid: Record<string, string>
   header: Record<string, string>
   body: Record<string, string>
   group: Record<string, string>
@@ -100,7 +181,7 @@ export interface DataGridStateStyle {
 export type DataGridThemeTokenVariants = Record<string, Partial<DataGridThemeTokens>>
 
 export interface DataGridStyleConfig {
-  table?: DataGridStyleSection
+  grid?: DataGridStyleSection
   header?: DataGridHeaderStyle
   body?: DataGridBodyStyle
   group?: DataGridGroupStyle
