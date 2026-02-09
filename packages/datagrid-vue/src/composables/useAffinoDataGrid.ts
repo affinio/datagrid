@@ -1,4 +1,4 @@
-import { computed, isRef, ref, type Ref } from "vue"
+import { computed, ref, type Ref } from "vue"
 import type {
   DataGridAdvancedFilterExpression,
   CreateDataGridCoreOptions,
@@ -25,31 +25,24 @@ import {
   type OpenDataGridContextMenuInput,
 } from "./useDataGridContextMenu"
 import {
-  normalizeClipboardFeature,
   useAffinoDataGridClipboardFeature,
 } from "./useAffinoDataGridClipboardFeature"
 import {
-  normalizeEditingFeature,
   useAffinoDataGridEditingFeature,
 } from "./useAffinoDataGridEditingFeature"
 import {
-  normalizeFilteringFeature,
   useAffinoDataGridFilteringFeature,
 } from "./useAffinoDataGridFilteringFeature"
 import {
-  normalizeSelectionFeature,
   useAffinoDataGridSelectionFeature,
 } from "./useAffinoDataGridSelectionFeature"
 import {
-  normalizeSummaryFeature,
   useAffinoDataGridSummaryFeature,
 } from "./useAffinoDataGridSummaryFeature"
 import {
-  normalizeVisibilityFeature,
   useAffinoDataGridVisibilityFeature,
 } from "./useAffinoDataGridVisibilityFeature"
 import {
-  normalizeTreeFeature,
   useAffinoDataGridTreeFeature,
 } from "./useAffinoDataGridTreeFeature"
 import { useAffinoDataGridSortingFeature } from "./useAffinoDataGridSortingFeature"
@@ -59,8 +52,15 @@ import {
 } from "./useAffinoDataGridActionRunner"
 import { useAffinoDataGridBaseBindings } from "./useAffinoDataGridBaseBindings"
 import { useAffinoDataGridContextMenuFeature } from "./useAffinoDataGridContextMenuFeature"
-
-type MaybeRef<T> = T | Ref<T>
+import {
+  normalizeAffinoDataGridFeatures,
+  type AffinoDataGridFeatureInput,
+} from "./useAffinoDataGridFeatureNormalization"
+import {
+  fallbackResolveRowKey,
+  toReadonlyRef,
+  type MaybeRef,
+} from "./useAffinoDataGridIdentity"
 
 export type AffinoDataGridEditMode = "cell" | "row"
 
@@ -94,15 +94,7 @@ export interface AffinoDataGridEditingFeature<TRow> {
   }) => void | Promise<void>
 }
 
-export interface AffinoDataGridFeatures<TRow> {
-  selection?: boolean | AffinoDataGridSelectionFeature<TRow>
-  clipboard?: boolean | AffinoDataGridClipboardFeature<TRow>
-  editing?: boolean | AffinoDataGridEditingFeature<TRow>
-  filtering?: boolean | AffinoDataGridFilteringFeature
-  summary?: boolean | AffinoDataGridSummaryFeature<TRow>
-  visibility?: boolean | AffinoDataGridVisibilityFeature
-  tree?: boolean | AffinoDataGridTreeFeature
-}
+export interface AffinoDataGridFeatures<TRow> extends AffinoDataGridFeatureInput<TRow> {}
 
 export interface AffinoDataGridFilteringFeature {
   enabled?: boolean
@@ -332,52 +324,22 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
   }
 }
 
-function toReadonlyRef<T>(source: MaybeRef<T>): Ref<T> {
-  if (isRef(source)) {
-    return source as Ref<T>
-  }
-  return ref(source) as Ref<T>
-}
-
-function fallbackResolveRowKey<TRow>(row: TRow, index: number): string {
-  const candidate = row as { rowId?: unknown; id?: unknown; key?: unknown }
-  if (typeof candidate.rowId === "string" || typeof candidate.rowId === "number") {
-    const rowKey = String(candidate.rowId).trim()
-    if (rowKey.length > 0) {
-      return rowKey
-    }
-  }
-  if (typeof candidate.id === "string" || typeof candidate.id === "number") {
-    const rowKey = String(candidate.id).trim()
-    if (rowKey.length > 0) {
-      return rowKey
-    }
-  }
-  if (typeof candidate.key === "string" || typeof candidate.key === "number") {
-    const rowKey = String(candidate.key).trim()
-    if (rowKey.length > 0) {
-      return rowKey
-    }
-  }
-  throw new Error(
-    `[AffinoDataGrid] Missing stable row identity at index ${index}. ` +
-    "Provide features.selection.resolveRowKey(row, index) or include non-empty rowId/id/key.",
-  )
-}
-
 export function useAffinoDataGrid<TRow>(
   options: UseAffinoDataGridOptions<TRow>,
 ): UseAffinoDataGridResult<TRow> {
   const rows = toReadonlyRef(options.rows)
   const columns = toReadonlyRef(options.columns)
 
-  const normalizedSelectionFeature = normalizeSelectionFeature(options.features?.selection)
-  const normalizedClipboardFeature = normalizeClipboardFeature(options.features?.clipboard)
-  const normalizedEditingFeature = normalizeEditingFeature(options.features?.editing)
-  const normalizedFilteringFeature = normalizeFilteringFeature(options.features?.filtering)
-  const normalizedSummaryFeature = normalizeSummaryFeature(options.features?.summary)
-  const normalizedVisibilityFeature = normalizeVisibilityFeature(options.features?.visibility)
-  const normalizedTreeFeature = normalizeTreeFeature(options.features?.tree)
+  const normalizedFeatures = normalizeAffinoDataGridFeatures(options.features)
+  const {
+    selection: normalizedSelectionFeature,
+    clipboard: normalizedClipboardFeature,
+    editing: normalizedEditingFeature,
+    filtering: normalizedFilteringFeature,
+    summary: normalizedSummaryFeature,
+    visibility: normalizedVisibilityFeature,
+    tree: normalizedTreeFeature,
+  } = normalizedFeatures
 
   const internalSelectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
   const internalSelectionService: NonNullable<UseDataGridRuntimeOptions<TRow>["services"]>["selection"] = {
