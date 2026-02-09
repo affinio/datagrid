@@ -193,6 +193,9 @@ const grid = useAffinoDataGrid({
     },
   },
 })
+
+type Grid = ReturnType<typeof useAffinoDataGrid>
+// grid is fully typed and safe to destructure.
 ```
 
 ```vue
@@ -231,6 +234,13 @@ const grid = useAffinoDataGrid({
 - `grid.features.summary.selected` returns deterministic aggregates for current selection scope.
 - `grid.features.visibility` exposes `setColumnVisible`, `toggleColumnVisible`, `setHiddenColumnKeys`, `reset`.
 - `grid.features.tree` exposes `groupBy`, `groupExpansion`, `setGroupBy`, `toggleGroup`, `expandAll`, `collapseAll`.
+
+## Complete integration playbook
+
+For end-to-end integration (tree rendering contract, advanced-filter AST cookbook, interaction/hotkey contract, and full-page setup), use:
+
+- `/Users/anton/Projects/affinio/docs/datagrid-vue-sugar-playbook.md`
+- `/Users/anton/Projects/affinio/docs/datagrid-sheets-user-interactions-and-integrator-api.md`
 
 ## Junior-first UI wrapper
 
