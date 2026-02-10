@@ -58,8 +58,10 @@ import {
 import type {
 	ViewportMetricsSnapshot,
 	LayoutMeasurementSnapshot,
+	ImperativeWindowUpdatePayload,
 	DataGridViewportImperativeCallbacks,
 	DataGridViewportControllerOptions,
+	DataGridVirtualWindowSnapshot,
 	ViewportIntegrationSnapshot,
 	ViewportSyncTargets,
 } from "./dataGridViewportTypes"
@@ -74,12 +76,14 @@ import {
 export type {
 	ViewportMetricsSnapshot,
 	LayoutMeasurementSnapshot,
+	ImperativeWindowUpdatePayload,
 	ImperativeColumnUpdatePayload,
 	ImperativeRowUpdatePayload,
 	ImperativeScrollSyncPayload,
 	DataGridViewportImperativeCallbacks,
 	DataGridViewportControllerOptions,
 	DataGridViewportRuntimeOverrides,
+	DataGridVirtualWindowSnapshot,
 	ViewportIntegrationSnapshot,
 	ViewportSyncTargets,
 	ViewportSyncState,
@@ -142,6 +146,7 @@ export interface DataGridViewportController extends DataGridViewportSignals {
 	clampScrollTopValue(value: number): number
 	setViewportSyncTargets(targets: ViewportSyncTargets | null): void
 	getViewportSyncState(): ViewportSyncState
+	getVirtualWindow(): DataGridVirtualWindowSnapshot
 	getIntegrationSnapshot(): ViewportIntegrationSnapshot
 	refresh(force?: boolean): void
 	dispose(): void
@@ -342,6 +347,7 @@ export function createDataGridViewportController(
 		let imperativeCallbacks: DataGridViewportImperativeCallbacks = options.imperativeCallbacks ?? {}
 		let lastImperativeScrollSyncSignature = ""
 		let lastImperativeColumnSignature = ""
+		let lastImperativeWindowSignature = ""
 		let onAfterScroll = options.onAfterScroll ?? null
 		let onNearBottom = options.onNearBottom ?? null
 
@@ -546,6 +552,41 @@ export function createDataGridViewportController(
 			})
 		}
 
+		function emitImperativeWindow(snapshot: DataGridVirtualWindowSnapshot, timestamp?: number) {
+			if (typeof imperativeCallbacks.onWindow !== "function") {
+				return
+			}
+			const signature = [
+				snapshot.rowStart,
+				snapshot.rowEnd,
+				snapshot.rowTotal,
+				snapshot.colStart,
+				snapshot.colEnd,
+				snapshot.colTotal,
+				snapshot.overscan.top,
+				snapshot.overscan.bottom,
+				snapshot.overscan.left,
+				snapshot.overscan.right,
+				Math.round(scrollTop.value * 1000),
+				Math.round(scrollLeft.value * 1000),
+				Math.round(viewportHeight.value * 1000),
+				Math.round(viewportWidth.value * 1000),
+			].join("|")
+			if (signature === lastImperativeWindowSignature) {
+				return
+			}
+			lastImperativeWindowSignature = signature
+			const resolvedTs = Number.isFinite(timestamp) ? (timestamp as number) : clock.now()
+			imperativeCallbacks.onWindow({
+				virtualWindow: snapshot,
+				scrollTop: scrollTop.value,
+				scrollLeft: scrollLeft.value,
+				viewportHeight: viewportHeight.value,
+				viewportWidth: viewportWidth.value,
+				timestamp: resolvedTs,
+			})
+		}
+
 		let scrollSyncTaskId: number | null = null
 
 		const scrollState: DataGridViewportScrollStateAdapter = {
@@ -705,6 +746,7 @@ export function createDataGridViewportController(
 				renderSync.clearCurrentTargets()
 				lastImperativeScrollSyncSignature = ""
 				lastImperativeColumnSignature = ""
+				lastImperativeWindowSignature = ""
 				scrollIo.detach()
 				cancelScrollRaf()
 				layoutCache.reset()
@@ -795,6 +837,7 @@ export function createDataGridViewportController(
 			imperativeCallbacks = callbacks ?? {}
 			lastImperativeScrollSyncSignature = ""
 			lastImperativeColumnSignature = ""
+			lastImperativeWindowSignature = ""
 		}
 
 		function setOnAfterScrollValue(callback: (() => void) | null | undefined) {
@@ -992,9 +1035,27 @@ export function createDataGridViewportController(
 			}
 		}
 
-		function getIntegrationSnapshotValue(): ViewportIntegrationSnapshot {
+		function getVirtualWindowValue(): DataGridVirtualWindowSnapshot {
 			const rowRange = derived.rows.visibleRange.value
-			const columnRange = scrollableRange.value
+			const columnState = columnVirtualState.value
+			return {
+				rowStart: rowRange.start,
+				rowEnd: rowRange.end,
+				rowTotal: totalRowCount.value,
+				colStart: columnState.visibleStart,
+				colEnd: columnState.visibleEnd,
+				colTotal: columnState.totalCount,
+				overscan: {
+					top: core.overscanLeading.value,
+					bottom: core.overscanTrailing.value,
+					left: columnState.overscanLeading,
+					right: columnState.overscanTrailing,
+				},
+			}
+		}
+
+		function getIntegrationSnapshotValue(): ViewportIntegrationSnapshot {
+			const virtualWindow = getVirtualWindowValue()
 			const pinnedLeftWidth = computePinnedWidth(pinnedLeftEntries.value)
 			const pinnedRightWidth = computePinnedWidth(pinnedRightEntries.value)
 			return {
@@ -1002,15 +1063,16 @@ export function createDataGridViewportController(
 				scrollLeft: scrollLeft.value,
 				viewportHeight: viewportHeight.value,
 				viewportWidth: viewportWidth.value,
+				virtualWindow,
 				visibleRowRange: {
-					start: rowRange.start,
-					end: rowRange.end,
-					total: totalRowCount.value,
+					start: virtualWindow.rowStart,
+					end: virtualWindow.rowEnd,
+					total: virtualWindow.rowTotal,
 				},
 				visibleColumnRange: {
-					start: columnRange.start,
-					end: columnRange.end,
-					total: columnVirtualState.value.totalCount,
+					start: virtualWindow.colStart,
+					end: virtualWindow.colEnd,
+					total: virtualWindow.colTotal,
 				},
 				pinnedWidth: {
 					left: pinnedLeftWidth,
@@ -1371,6 +1433,7 @@ export function createDataGridViewportController(
 			lastHeavyScrollLeft = resolvedScrollLeft
 
 			emitImperativeScrollSync(resolvedScrollTop, resolvedScrollLeft, nowTs)
+			emitImperativeWindow(getVirtualWindowValue(), nowTs)
 
 				if (
 					onNearBottom &&
@@ -1421,6 +1484,7 @@ export function createDataGridViewportController(
 			clampScrollTopValue,
 			setViewportSyncTargets: setViewportSyncTargetsValue,
 			getViewportSyncState: getViewportSyncStateValue,
+			getVirtualWindow: getVirtualWindowValue,
 			getIntegrationSnapshot: getIntegrationSnapshotValue,
 			refresh: refreshValue,
 			dispose: disposeValue,

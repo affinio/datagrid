@@ -58,6 +58,7 @@
     "src/composables/useDataGridHeaderSortOrchestration.ts",
     "src/composables/useDataGridHeaderResizeOrchestration.ts",
     "src/composables/useDataGridHeaderInteractionRouter.ts",
+    "src/composables/useDataGridHeaderLayerOrchestration.ts",
     "src/composables/useDataGridColumnFilterOrchestration.ts",
     "src/composables/useDataGridEnumTrigger.ts",
     "src/composables/useDataGridGroupValueLabelResolver.ts",

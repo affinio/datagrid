@@ -23,6 +23,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.public.json",
     "type-check": "tsc -p tsconfig.public.json --noEmit",
+    "type-check:public": "tsc -p tsconfig.public.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
     "test:contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract\" --passWithNoTests",
     "test": "npm run type-check"

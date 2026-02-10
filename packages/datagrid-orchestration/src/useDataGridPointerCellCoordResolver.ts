@@ -16,11 +16,16 @@ export interface DataGridPointerColumnSnapshot {
   pin?: DataGridColumnPin | null
 }
 
+export interface DataGridPointerVirtualWindowSnapshot {
+  rowTotal: number
+  colTotal: number
+}
+
 export interface UseDataGridPointerCellCoordResolverOptions<TCoord extends DataGridPointerCellCoord> {
   resolveViewportElement: () => HTMLElement | null
-  resolveRowCount: () => number
   resolveColumnMetrics: () => readonly DataGridPointerColumnMetric[]
   resolveColumns: () => readonly DataGridPointerColumnSnapshot[]
+  resolveVirtualWindow: () => DataGridPointerVirtualWindowSnapshot | null | undefined
   resolveHeaderHeight: () => number
   resolveRowHeight: () => number
   resolveNearestNavigableColumnIndex: (columnIndex: number) => number
@@ -35,24 +40,46 @@ export interface UseDataGridPointerCellCoordResolverResult<TCoord extends DataGr
 export function useDataGridPointerCellCoordResolver<TCoord extends DataGridPointerCellCoord>(
   options: UseDataGridPointerCellCoordResolverOptions<TCoord>,
 ): UseDataGridPointerCellCoordResolverResult<TCoord> {
+  function resolveRowCount(): number {
+    const snapshot = options.resolveVirtualWindow()
+    return Math.max(0, Math.trunc(snapshot?.rowTotal ?? 0))
+  }
+
+  function resolveColumnCountFromWindow(metricsLength: number): number {
+    const snapshot = options.resolveVirtualWindow()
+    if (!snapshot) {
+      return 0
+    }
+    return Math.max(0, Math.min(metricsLength, Math.trunc(snapshot.colTotal)))
+  }
+
   function resolveColumnIndexByAbsoluteX(absoluteX: number): number {
     const metrics = options.resolveColumnMetrics()
     const lastMetric = metrics[metrics.length - 1]
     if (!lastMetric) {
       return -1
     }
+    const columnCount = resolveColumnCountFromWindow(metrics.length)
+    if (columnCount <= 0) {
+      return -1
+    }
+    const lastAllowedMetric = metrics[Math.max(0, columnCount - 1)]
+    if (!lastAllowedMetric) {
+      return -1
+    }
     const clampedX = Math.max(0, Math.min(absoluteX, Math.max(0, lastMetric.end - 1)))
     for (const metric of metrics) {
       if (clampedX < metric.end) {
-        return metric.columnIndex
+        return Math.min(metric.columnIndex, lastAllowedMetric.columnIndex)
       }
     }
-    return lastMetric.columnIndex
+    return lastAllowedMetric.columnIndex
   }
 
   function resolveCellCoordFromPointer(clientX: number, clientY: number): TCoord | null {
     const viewport = options.resolveViewportElement()
-    if (!viewport || options.resolveRowCount() === 0) {
+    const rowCount = resolveRowCount()
+    if (!viewport || rowCount === 0) {
       return null
     }
 
@@ -108,10 +135,17 @@ export function useDataGridPointerCellCoordResolver<TCoord extends DataGridPoint
       return null
     }
 
-    return options.normalizeCellCoord({
+    const normalized = options.normalizeCellCoord({
       rowIndex: rowRawIndex,
       columnIndex,
     } as TCoord)
+    if (!normalized) {
+      return null
+    }
+    if (normalized.rowIndex < 0 || normalized.rowIndex >= rowCount) {
+      return null
+    }
+    return normalized
   }
 
   return {

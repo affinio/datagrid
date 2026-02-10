@@ -4,8 +4,10 @@ import { useDataGridCellCoordNormalizer } from "../useDataGridCellCoordNormalize
 describe("useDataGridCellCoordNormalizer contract", () => {
   it("clamps coordinate into current row/column bounds", () => {
     const normalizer = useDataGridCellCoordNormalizer({
-      resolveRowCount: () => 5,
-      resolveColumnCount: () => 4,
+      resolveVirtualWindow: () => ({
+        rowTotal: 5,
+        colTotal: 4,
+      }),
     })
     expect(normalizer.normalizeCellCoordBase({ rowIndex: -3, columnIndex: 12 })).toEqual({
       rowIndex: 0,
@@ -19,10 +21,24 @@ describe("useDataGridCellCoordNormalizer contract", () => {
 
   it("returns null when there are no rows or columns", () => {
     const normalizer = useDataGridCellCoordNormalizer({
-      resolveRowCount: () => 0,
-      resolveColumnCount: () => 3,
+      resolveVirtualWindow: () => ({
+        rowTotal: 0,
+        colTotal: 3,
+      }),
     })
     expect(normalizer.normalizeCellCoordBase({ rowIndex: 0, columnIndex: 0 })).toBeNull()
   })
-})
 
+  it("uses virtualWindow totals as canonical bounds", () => {
+    const normalizer = useDataGridCellCoordNormalizer({
+      resolveVirtualWindow: () => ({
+        rowTotal: 10,
+        colTotal: 5,
+      }),
+    })
+    expect(normalizer.normalizeCellCoordBase({ rowIndex: 12, columnIndex: 7 })).toEqual({
+      rowIndex: 9,
+      columnIndex: 4,
+    })
+  })
+})

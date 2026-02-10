@@ -26,13 +26,17 @@ describe("DataGrid component contract", () => {
         columns: COLUMNS,
       },
       slots: {
-        default: scope => h("div", { class: "row-count" }, String(scope.api.getRowCount())),
+        default: scope => h("div", { class: "row-count" }, [
+          h("span", { class: "rows" }, String(scope.api.getRowCount())),
+          h("span", { class: "window-total" }, String(scope.virtualWindow?.rowTotal ?? 0)),
+        ]),
       },
     })
 
     await flushRuntimeTasks()
 
-    expect(wrapper.find(".row-count").text()).toBe("2")
+    expect(wrapper.find(".row-count .rows").text()).toBe("2")
+    expect(wrapper.find(".row-count .window-total").text()).toBe("2")
 
     await wrapper.setProps({
       rows: [
@@ -43,7 +47,8 @@ describe("DataGrid component contract", () => {
     })
     await flushRuntimeTasks()
 
-    expect(wrapper.find(".row-count").text()).toBe("3")
+    expect(wrapper.find(".row-count .rows").text()).toBe("3")
+    expect(wrapper.find(".row-count .window-total").text()).toBe("3")
   })
 
   it("publishes API/core over component expose contract", async () => {
@@ -58,12 +63,15 @@ describe("DataGrid component contract", () => {
     const exposed = wrapper.vm as unknown as {
       api: { getRowCount(): number }
       core: { lifecycle: { state: string } }
+      virtualWindow: { value: { rowTotal: number; colTotal: number } | null }
       start(): Promise<void>
       stop(): void
     }
 
     expect(typeof exposed.api.getRowCount).toBe("function")
     expect(exposed.api.getRowCount()).toBe(1)
+    expect(exposed.virtualWindow.value?.rowTotal).toBe(1)
+    expect(exposed.virtualWindow.value?.colTotal).toBe(1)
     expect(exposed.core.lifecycle.state).toBe("started")
     expect(typeof exposed.start).toBe("function")
     expect(typeof exposed.stop).toBe("function")

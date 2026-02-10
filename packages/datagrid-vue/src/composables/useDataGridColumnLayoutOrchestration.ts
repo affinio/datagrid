@@ -8,6 +8,7 @@ import {
   type DataGridColumnLayoutColumn,
   type DataGridColumnLayoutMetric,
   type DataGridVisibleColumnsWindow,
+  type DataGridVirtualWindowColumnSnapshot,
   type DataGridColumnLayer,
   type DataGridColumnLayerKey,
 } from "@affino/datagrid-orchestration"
@@ -16,6 +17,7 @@ export type {
   DataGridColumnLayoutColumn,
   DataGridColumnLayoutMetric,
   DataGridVisibleColumnsWindow,
+  DataGridVirtualWindowColumnSnapshot,
   DataGridColumnLayer,
   DataGridColumnLayerKey,
 }
@@ -25,6 +27,7 @@ export interface UseDataGridColumnLayoutOrchestrationOptions<TColumn extends Dat
   resolveColumnWidth: (column: TColumn) => number
   viewportWidth: Ref<number>
   scrollLeft: Ref<number>
+  virtualWindow?: Ref<DataGridVirtualWindowColumnSnapshot | null | undefined>
 }
 
 export interface UseDataGridColumnLayoutOrchestrationResult<TColumn extends DataGridColumnLayoutColumn> {
@@ -48,6 +51,7 @@ export function useDataGridColumnLayoutOrchestration<TColumn extends DataGridCol
     resolveColumnWidth: options.resolveColumnWidth,
     viewportWidth: options.viewportWidth.value,
     scrollLeft: options.scrollLeft.value,
+    virtualWindow: options.virtualWindow?.value ?? null,
   }))
 
   function getCellStyle(columnKey: string): Record<string, string> {

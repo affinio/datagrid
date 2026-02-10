@@ -40,6 +40,7 @@ export {
 
 export {
   useDataGridRuntime,
+  type DataGridRuntimeVirtualWindowSnapshot,
   type UseDataGridRuntimeOptions,
   type UseDataGridRuntimeResult,
 } from "./composables/useDataGridRuntime"

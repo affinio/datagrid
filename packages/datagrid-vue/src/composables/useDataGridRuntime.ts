@@ -8,9 +8,14 @@ import type {
 } from "@affino/datagrid-core"
 import {
   useDataGridRuntimeService,
+  type DataGridRuntimeVirtualWindowSnapshot,
   type DataGridRuntimeOverrides,
 } from "@affino/datagrid-orchestration"
 import type { DataGridVueRuntime } from "../runtime/createDataGridVueRuntime"
+
+export type {
+  DataGridRuntimeVirtualWindowSnapshot,
+}
 
 type MaybeRef<T> = T | Ref<T>
 
@@ -28,6 +33,7 @@ export interface UseDataGridRuntimeOptions<TRow = unknown> {
 
 export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRuntime<TRow> {
   columnSnapshot: Ref<DataGridColumnModelSnapshot>
+  virtualWindow: Ref<DataGridRuntimeVirtualWindowSnapshot | null>
   setRows: (rows: readonly TRow[]) => void
   start: () => Promise<void>
   stop: () => void
@@ -45,9 +51,15 @@ export function useDataGridRuntime<TRow = unknown>(
   })
   const { rowModel, columnModel, core, api } = runtime
   const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
+  const virtualWindow = ref<DataGridRuntimeVirtualWindowSnapshot | null>(
+    runtime.getVirtualWindowSnapshot(),
+  )
 
   const unsubscribeColumns = runtime.subscribeColumnSnapshot(next => {
     columnSnapshot.value = next
+  })
+  const unsubscribeVirtualWindow = runtime.subscribeVirtualWindow(next => {
+    virtualWindow.value = next
   })
 
   const shouldAutoStart = options.autoStart !== false
@@ -81,6 +93,7 @@ export function useDataGridRuntime<TRow = unknown>(
       return
     }
     unsubscribeColumns()
+    unsubscribeVirtualWindow()
     runtime.stop()
   }
 
@@ -94,6 +107,7 @@ export function useDataGridRuntime<TRow = unknown>(
     core,
     api,
     columnSnapshot,
+    virtualWindow,
     setRows: runtime.setRows,
     start: runtime.start,
     stop,

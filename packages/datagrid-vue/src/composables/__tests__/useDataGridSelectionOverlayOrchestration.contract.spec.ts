@@ -28,6 +28,10 @@ describe("useDataGridSelectionOverlayOrchestration contract", () => {
       rangeMovePreviewRange: ref(null),
       rangeMoveBaseRange: ref(null),
       isRangeMoving: ref(false),
+      virtualWindow: ref({
+        rowTotal: 10,
+        colTotal: 3,
+      }),
       resolveDevicePixelRatio: () => 1,
     })
 
@@ -66,6 +70,10 @@ describe("useDataGridSelectionOverlayOrchestration contract", () => {
       rangeMovePreviewRange: ref(null),
       rangeMoveBaseRange: ref(null),
       isRangeMoving: ref(false),
+      virtualWindow: ref({
+        rowTotal: 10,
+        colTotal: 2,
+      }),
     })
 
     expect(api.fillPreviewOverlaySegments.value).toEqual([])
@@ -100,6 +108,10 @@ describe("useDataGridSelectionOverlayOrchestration contract", () => {
       rangeMovePreviewRange: ref(movePreview),
       rangeMoveBaseRange: ref(moveBase),
       isRangeMoving,
+      virtualWindow: ref({
+        rowTotal: 10,
+        colTotal: 2,
+      }),
       resolveDevicePixelRatio: () => 1,
     })
 
@@ -115,6 +127,47 @@ describe("useDataGridSelectionOverlayOrchestration contract", () => {
           left: "0px",
           width: "140px",
           height: "50px",
+        },
+      },
+    ])
+  })
+
+  it("clamps overlay ranges using virtualWindow totals", () => {
+    const api = useDataGridSelectionOverlayOrchestration({
+      headerHeight: ref(20),
+      rowHeight: 20,
+      orderedColumns: ref([{ pin: "none" }, { pin: "none" }]),
+      orderedColumnMetrics: ref([
+        { start: 0, end: 80 },
+        { start: 80, end: 160 },
+      ]),
+      cellSelectionRange: ref({
+        startRow: 0,
+        endRow: 99,
+        startColumn: 0,
+        endColumn: 99,
+      }),
+      fillPreviewRange: ref(null),
+      fillBaseRange: ref(null),
+      rangeMovePreviewRange: ref(null),
+      rangeMoveBaseRange: ref(null),
+      isRangeMoving: ref(false),
+      virtualWindow: ref({
+        rowTotal: 4,
+        colTotal: 2,
+      }),
+      resolveDevicePixelRatio: () => 1,
+    })
+
+    expect(api.cellSelectionOverlaySegments.value).toEqual([
+      {
+        key: "selection-scroll-0-1",
+        mode: "scroll",
+        style: {
+          top: "20px",
+          left: "0px",
+          width: "160px",
+          height: "80px",
         },
       },
     ])

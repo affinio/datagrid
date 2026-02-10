@@ -25,6 +25,11 @@ export interface DataGridSelectionOverlaySegment {
   }
 }
 
+export interface DataGridSelectionOverlayVirtualWindow {
+  rowTotal: number
+  colTotal: number
+}
+
 export interface UseDataGridSelectionOverlayOrchestrationOptions {
   headerHeight: number
   rowHeight: number
@@ -36,6 +41,7 @@ export interface UseDataGridSelectionOverlayOrchestrationOptions {
   rangeMovePreviewRange: DataGridOverlayRange | null
   rangeMoveBaseRange: DataGridOverlayRange | null
   isRangeMoving: boolean
+  virtualWindow: DataGridSelectionOverlayVirtualWindow
   resolveDevicePixelRatio?: () => number
 }
 
@@ -61,6 +67,33 @@ function snapOverlayValue(value: number, resolveDevicePixelRatio?: () => number)
   const rawDpr = resolveDevicePixelRatio?.() ?? 1
   const dpr = Number.isFinite(rawDpr) && rawDpr > 0 ? rawDpr : 1
   return Math.round(value * dpr) / dpr
+}
+
+function clampOverlayRange(
+  range: DataGridOverlayRange | null,
+  options: {
+    rowTotal: number
+    colTotal: number
+  },
+): DataGridOverlayRange | null {
+  if (!range) {
+    return null
+  }
+  const maxRow = options.rowTotal - 1
+  const maxColumn = options.colTotal - 1
+  if (maxRow < 0 || maxColumn < 0) {
+    return null
+  }
+  const startRow = Math.max(0, Math.min(maxRow, Math.trunc(range.startRow)))
+  const endRow = Math.max(startRow, Math.min(maxRow, Math.trunc(range.endRow)))
+  const startColumn = Math.max(0, Math.min(maxColumn, Math.trunc(range.startColumn)))
+  const endColumn = Math.max(startColumn, Math.min(maxColumn, Math.trunc(range.endColumn)))
+  return {
+    startRow,
+    endRow,
+    startColumn,
+    endColumn,
+  }
 }
 
 function buildScrollOverlaySegments(
@@ -134,8 +167,23 @@ function buildScrollOverlaySegments(
 export function useDataGridSelectionOverlayOrchestration(
   options: UseDataGridSelectionOverlayOrchestrationOptions,
 ): DataGridSelectionOverlaySnapshot {
+  const rowTotal = Math.max(0, Math.trunc(options.virtualWindow.rowTotal))
+  const colTotal = Math.max(
+    0,
+    Math.min(
+      options.orderedColumns.length,
+      Math.trunc(options.virtualWindow.colTotal),
+    ),
+  )
+
+  const cellSelectionRange = clampOverlayRange(options.cellSelectionRange, { rowTotal, colTotal })
+  const fillPreviewRange = clampOverlayRange(options.fillPreviewRange, { rowTotal, colTotal })
+  const fillBaseRange = clampOverlayRange(options.fillBaseRange, { rowTotal, colTotal })
+  const rangeMovePreviewRange = clampOverlayRange(options.rangeMovePreviewRange, { rowTotal, colTotal })
+  const rangeMoveBaseRange = clampOverlayRange(options.rangeMoveBaseRange, { rowTotal, colTotal })
+
   const cellSelectionOverlaySegments = buildScrollOverlaySegments(
-    options.cellSelectionRange,
+    cellSelectionRange,
     "selection",
     options.headerHeight,
     options.rowHeight,
@@ -144,12 +192,12 @@ export function useDataGridSelectionOverlayOrchestration(
     options.resolveDevicePixelRatio,
   )
 
-  const fillPreviewOverlaySegments = !options.fillPreviewRange ||
-    !options.fillBaseRange ||
-    rangesEqual(options.fillPreviewRange, options.fillBaseRange)
+  const fillPreviewOverlaySegments = !fillPreviewRange ||
+    !fillBaseRange ||
+    rangesEqual(fillPreviewRange, fillBaseRange)
     ? []
     : buildScrollOverlaySegments(
-      options.fillPreviewRange,
+      fillPreviewRange,
       "fill-preview",
       options.headerHeight,
       options.rowHeight,
@@ -159,12 +207,12 @@ export function useDataGridSelectionOverlayOrchestration(
     )
 
   const rangeMoveOverlaySegments = !options.isRangeMoving ||
-    !options.rangeMovePreviewRange ||
-    !options.rangeMoveBaseRange ||
-    rangesEqual(options.rangeMovePreviewRange, options.rangeMoveBaseRange)
+    !rangeMovePreviewRange ||
+    !rangeMoveBaseRange ||
+    rangesEqual(rangeMovePreviewRange, rangeMoveBaseRange)
     ? []
     : buildScrollOverlaySegments(
-      options.rangeMovePreviewRange,
+      rangeMovePreviewRange,
       "move-preview",
       options.headerHeight,
       options.rowHeight,

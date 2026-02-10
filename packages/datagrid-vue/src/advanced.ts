@@ -364,6 +364,7 @@ export {
   type DataGridPointerCellCoord,
   type DataGridPointerColumnMetric,
   type DataGridPointerColumnSnapshot,
+  type DataGridPointerVirtualWindowSnapshot,
   type UseDataGridPointerCellCoordResolverOptions,
   type UseDataGridPointerCellCoordResolverResult,
 } from "./composables/useDataGridPointerCellCoordResolver"
@@ -377,6 +378,7 @@ export {
   type DataGridCellVisibilityCoord,
   type DataGridCellVisibilityColumnMetric,
   type DataGridCellVisibilityScrollPosition,
+  type DataGridCellVisibilityVirtualWindow,
   type UseDataGridCellVisibilityScrollerOptions,
   type UseDataGridCellVisibilityScrollerResult,
 } from "./composables/useDataGridCellVisibilityScroller"
@@ -398,6 +400,7 @@ export {
 export {
   useDataGridCellCoordNormalizer,
   type DataGridCellCoordNormalizerCoord,
+  type DataGridCellCoordNormalizerVirtualWindow,
   type UseDataGridCellCoordNormalizerOptions,
   type UseDataGridCellCoordNormalizerResult,
 } from "./composables/useDataGridCellCoordNormalizer"

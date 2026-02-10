@@ -12,6 +12,7 @@ export {
 
 export {
   type DataGridCellCoordNormalizerCoord,
+  type DataGridCellCoordNormalizerVirtualWindow,
   type UseDataGridCellCoordNormalizerOptions,
   type UseDataGridCellCoordNormalizerResult,
   useDataGridCellCoordNormalizer,
@@ -58,6 +59,7 @@ export {
   type DataGridCellVisibilityCoord,
   type DataGridCellVisibilityColumnMetric,
   type DataGridCellVisibilityScrollPosition,
+  type DataGridCellVisibilityVirtualWindow,
   type UseDataGridCellVisibilityScrollerOptions,
   type UseDataGridCellVisibilityScrollerResult,
   useDataGridCellVisibilityScroller,
@@ -101,6 +103,7 @@ export {
   type DataGridColumnLayoutColumn,
   type DataGridColumnLayoutMetric,
   type DataGridVisibleColumnsWindow,
+  type DataGridVirtualWindowColumnSnapshot,
   type DataGridColumnLayerKey,
   type DataGridColumnLayer,
   type UseDataGridColumnLayoutOrchestrationOptions,
@@ -379,6 +382,7 @@ export {
   type DataGridPointerCellCoord,
   type DataGridPointerColumnMetric,
   type DataGridPointerColumnSnapshot,
+  type DataGridPointerVirtualWindowSnapshot,
   type UseDataGridPointerCellCoordResolverOptions,
   type UseDataGridPointerCellCoordResolverResult,
   useDataGridPointerCellCoordResolver,
@@ -470,6 +474,7 @@ export {
   type DataGridOverlayRange,
   type DataGridOverlayColumnLike,
   type DataGridOverlayColumnMetricLike,
+  type DataGridSelectionOverlayVirtualWindow,
   type DataGridSelectionOverlaySegment,
   type UseDataGridSelectionOverlayOrchestrationOptions,
   type DataGridSelectionOverlaySnapshot,
@@ -513,6 +518,7 @@ export {
 
 export {
   type DataGridVirtualRange,
+  type DataGridVirtualWindowRowSnapshot,
   type UseDataGridVirtualRangeMetricsOptions,
   type DataGridVirtualRangeMetricsSnapshot,
   computeDataGridVirtualRange,
@@ -534,6 +540,7 @@ export {
 } from "./createDataGridRuntime"
 
 export {
+  type DataGridRuntimeVirtualWindowSnapshot,
   type UseDataGridRuntimeServiceOptions,
   type UseDataGridRuntimeServiceResult,
   useDataGridRuntimeService,

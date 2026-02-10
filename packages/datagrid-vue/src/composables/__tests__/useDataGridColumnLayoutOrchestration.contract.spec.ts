@@ -88,4 +88,30 @@ describe("useDataGridColumnLayoutOrchestration contract", () => {
     expect(api.visibleColumnsWindow.value.total).toBe(4)
     expect(api.visibleColumnsWindow.value.keys).toBe("b • c")
   })
+
+  it("uses virtualWindow snapshot for visible columns window when provided", () => {
+    const columns = ref<readonly Column[]>([
+      { key: "a", pin: "none", width: 100 },
+      { key: "b", pin: "none", width: 100 },
+      { key: "c", pin: "none", width: 100 },
+      { key: "d", pin: "none", width: 100 },
+    ])
+
+    const api = useDataGridColumnLayoutOrchestration({
+      columns,
+      resolveColumnWidth: column => column.width,
+      viewportWidth: ref(180),
+      scrollLeft: ref(0),
+      virtualWindow: ref({
+        colStart: 2,
+        colEnd: 3,
+        colTotal: 4,
+      }),
+    })
+
+    expect(api.visibleColumnsWindow.value.start).toBe(3)
+    expect(api.visibleColumnsWindow.value.end).toBe(4)
+    expect(api.visibleColumnsWindow.value.total).toBe(4)
+    expect(api.visibleColumnsWindow.value.keys).toBe("c • d")
+  })
 })

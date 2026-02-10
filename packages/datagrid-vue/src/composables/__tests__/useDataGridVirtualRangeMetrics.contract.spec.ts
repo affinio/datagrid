@@ -56,4 +56,24 @@ describe("useDataGridVirtualRangeMetrics contract", () => {
 
     expect(first).toStrictEqual(second)
   })
+
+  it("uses virtualWindow snapshot as source of truth when provided", () => {
+    const api = useDataGridVirtualRangeMetrics({
+      totalRows: ref(0),
+      scrollTop: ref(0),
+      viewportHeight: ref(0),
+      rowHeight: 40,
+      overscan: 0,
+      virtualWindow: ref({
+        rowStart: 5,
+        rowEnd: 11,
+        rowTotal: 64,
+      }),
+    })
+
+    expect(api.virtualRange.value).toEqual({ start: 5, end: 11 })
+    expect(api.spacerTopHeight.value).toBe(200)
+    expect(api.spacerBottomHeight.value).toBe((64 - 12) * 40)
+    expect(api.rangeLabel.value).toBe("6-12")
+  })
 })

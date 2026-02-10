@@ -3,9 +3,13 @@ export interface DataGridCellCoordNormalizerCoord {
   columnIndex: number
 }
 
+export interface DataGridCellCoordNormalizerVirtualWindow {
+  rowTotal: number
+  colTotal: number
+}
+
 export interface UseDataGridCellCoordNormalizerOptions {
-  resolveRowCount: () => number
-  resolveColumnCount: () => number
+  resolveVirtualWindow: () => DataGridCellCoordNormalizerVirtualWindow | null | undefined
 }
 
 export interface UseDataGridCellCoordNormalizerResult<
@@ -19,12 +23,23 @@ export function useDataGridCellCoordNormalizer<
 >(
   options: UseDataGridCellCoordNormalizerOptions,
 ): UseDataGridCellCoordNormalizerResult<TCoord> {
+  function resolveBounds(): { rowCount: number; columnCount: number } {
+    const window = options.resolveVirtualWindow()
+    const rowCount = Math.max(0, Math.trunc(window?.rowTotal ?? 0))
+    const columnCount = Math.max(0, Math.trunc(window?.colTotal ?? 0))
+    return {
+      rowCount,
+      columnCount,
+    }
+  }
+
   function normalizeCellCoordBase(coord: TCoord): TCoord | null {
     if (!Number.isFinite(coord.rowIndex) || !Number.isFinite(coord.columnIndex)) {
       return null
     }
-    const maxRowIndex = options.resolveRowCount() - 1
-    const maxColumnIndex = options.resolveColumnCount() - 1
+    const bounds = resolveBounds()
+    const maxRowIndex = bounds.rowCount - 1
+    const maxColumnIndex = bounds.columnCount - 1
     if (maxRowIndex < 0 || maxColumnIndex < 0) {
       return null
     }
@@ -38,4 +53,3 @@ export function useDataGridCellCoordNormalizer<
     normalizeCellCoordBase,
   }
 }
-

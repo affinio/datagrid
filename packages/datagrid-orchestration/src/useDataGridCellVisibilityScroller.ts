@@ -13,12 +13,18 @@ export interface DataGridCellVisibilityScrollPosition {
   left: number
 }
 
+export interface DataGridCellVisibilityVirtualWindow {
+  rowTotal: number
+  colTotal: number
+}
+
 export interface UseDataGridCellVisibilityScrollerOptions<
   TCoord extends DataGridCellVisibilityCoord,
   TMetric extends DataGridCellVisibilityColumnMetric = DataGridCellVisibilityColumnMetric,
 > {
   resolveViewportElement: () => HTMLElement | null
   resolveColumnMetric: (columnIndex: number) => TMetric | null | undefined
+  resolveVirtualWindow: () => DataGridCellVisibilityVirtualWindow | null | undefined
   resolveHeaderHeight: () => number
   resolveRowHeight: () => number
   setScrollPosition: (position: DataGridCellVisibilityScrollPosition) => void
@@ -37,15 +43,24 @@ export function useDataGridCellVisibilityScroller<
   options: UseDataGridCellVisibilityScrollerOptions<TCoord, TMetric>,
 ): UseDataGridCellVisibilityScrollerResult<TCoord> {
   function ensureCellVisible(coord: TCoord) {
+    const virtualWindow = options.resolveVirtualWindow()
+    const rowTotal = Math.max(0, Math.trunc(virtualWindow?.rowTotal ?? 0))
+    const colTotal = Math.max(0, Math.trunc(virtualWindow?.colTotal ?? 0))
+    if (rowTotal === 0 || colTotal === 0) {
+      return
+    }
+    const safeRowIndex = Math.max(0, Math.min(rowTotal - 1, Math.trunc(coord.rowIndex)))
+    const safeColumnIndex = Math.max(0, Math.min(colTotal - 1, Math.trunc(coord.columnIndex)))
+
     const viewport = options.resolveViewportElement()
-    const columnMetric = options.resolveColumnMetric(coord.columnIndex)
+    const columnMetric = options.resolveColumnMetric(safeColumnIndex)
     if (!viewport || !columnMetric) {
       return
     }
 
     const headerHeight = options.resolveHeaderHeight()
     const rowHeight = options.resolveRowHeight()
-    const rowTop = headerHeight + coord.rowIndex * rowHeight
+    const rowTop = headerHeight + safeRowIndex * rowHeight
     const rowBottom = rowTop + rowHeight
     const visibleTop = viewport.scrollTop + headerHeight
     const visibleBottom = viewport.scrollTop + viewport.clientHeight

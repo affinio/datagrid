@@ -34,7 +34,10 @@ describe("useDataGridPointerCellCoordResolver contract", () => {
   it("returns null when viewport is missing or row count is zero", () => {
     const resolver = useDataGridPointerCellCoordResolver<Coord>({
       resolveViewportElement: () => null,
-      resolveRowCount: () => 0,
+      resolveVirtualWindow: () => ({
+        rowTotal: 0,
+        colTotal: 0,
+      }),
       resolveColumnMetrics: () => [],
       resolveColumns: () => [],
       resolveHeaderHeight: () => 40,
@@ -46,11 +49,40 @@ describe("useDataGridPointerCellCoordResolver contract", () => {
     expect(resolver.resolveCellCoordFromPointer(100, 100)).toBeNull()
   })
 
+  it("uses virtualWindow totals as canonical bounds", () => {
+    const viewport = createViewport({ left: 10, top: 20, width: 300, height: 220 }, 64, 40)
+    const resolver = useDataGridPointerCellCoordResolver<Coord>({
+      resolveViewportElement: () => viewport,
+      resolveVirtualWindow: () => ({
+        rowTotal: 100,
+        colTotal: 3,
+      }),
+      resolveColumnMetrics: () => [
+        { columnIndex: 0, start: 0, end: 60, width: 60 },
+        { columnIndex: 1, start: 60, end: 180, width: 120 },
+        { columnIndex: 2, start: 180, end: 280, width: 100 },
+      ],
+      resolveColumns: () => [{ pin: "left" }, { pin: null }, { pin: null }],
+      resolveHeaderHeight: () => 40,
+      resolveRowHeight: () => 32,
+      resolveNearestNavigableColumnIndex: index => index,
+      normalizeCellCoord: coord => coord,
+    })
+
+    expect(resolver.resolveCellCoordFromPointer(100, 100)).toEqual({
+      rowIndex: 3,
+      columnIndex: 2,
+    })
+  })
+
   it("resolves center area using viewport scroll offset", () => {
     const viewport = createViewport({ left: 10, top: 20, width: 300, height: 220 }, 96, 120)
     const resolver = useDataGridPointerCellCoordResolver<Coord>({
       resolveViewportElement: () => viewport,
-      resolveRowCount: () => 500,
+      resolveVirtualWindow: () => ({
+        rowTotal: 500,
+        colTotal: 3,
+      }),
       resolveColumnMetrics: () => [
         { columnIndex: 0, start: 0, end: 60, width: 60 },
         { columnIndex: 1, start: 60, end: 180, width: 120 },
@@ -73,7 +105,10 @@ describe("useDataGridPointerCellCoordResolver contract", () => {
     const viewport = createViewport({ left: 100, top: 50, width: 500, height: 260 }, 0, 260)
     const resolver = useDataGridPointerCellCoordResolver<Coord>({
       resolveViewportElement: () => viewport,
-      resolveRowCount: () => 100,
+      resolveVirtualWindow: () => ({
+        rowTotal: 100,
+        colTotal: 4,
+      }),
       resolveColumnMetrics: () => [
         { columnIndex: 0, start: 0, end: 80, width: 80 },
         { columnIndex: 1, start: 80, end: 220, width: 140 },
@@ -94,7 +129,10 @@ describe("useDataGridPointerCellCoordResolver contract", () => {
   it("clamps absolute X to available metrics and resolves last column fallback", () => {
     const resolver = useDataGridPointerCellCoordResolver<Coord>({
       resolveViewportElement: () => null,
-      resolveRowCount: () => 1,
+      resolveVirtualWindow: () => ({
+        rowTotal: 1,
+        colTotal: 2,
+      }),
       resolveColumnMetrics: () => [
         { columnIndex: 0, start: 0, end: 50, width: 50 },
         { columnIndex: 1, start: 50, end: 100, width: 50 },

@@ -43,6 +43,15 @@ export interface ImperativeColumnUpdatePayload {
   timestamp: number
 }
 
+export interface ImperativeWindowUpdatePayload {
+  virtualWindow: DataGridVirtualWindowSnapshot
+  scrollTop: number
+  scrollLeft: number
+  viewportHeight: number
+  viewportWidth: number
+  timestamp: number
+}
+
 export interface ImperativeScrollSyncPayload {
   scrollTop: number
   scrollLeft: number
@@ -52,6 +61,7 @@ export interface ImperativeScrollSyncPayload {
 export interface DataGridViewportImperativeCallbacks {
   onRows?: (payload: ImperativeRowUpdatePayload) => void
   onColumns?: (payload: ImperativeColumnUpdatePayload) => void
+  onWindow?: (payload: ImperativeWindowUpdatePayload) => void
   onScrollSync?: (payload: ImperativeScrollSyncPayload) => void
 }
 
@@ -73,11 +83,27 @@ export interface ViewportSyncState {
   pinnedOffsetRight: number
 }
 
+export interface DataGridVirtualWindowSnapshot {
+  rowStart: number
+  rowEnd: number
+  rowTotal: number
+  colStart: number
+  colEnd: number
+  colTotal: number
+  overscan: {
+    top: number
+    bottom: number
+    left: number
+    right: number
+  }
+}
+
 export interface ViewportIntegrationSnapshot {
   scrollTop: number
   scrollLeft: number
   viewportHeight: number
   viewportWidth: number
+  virtualWindow: DataGridVirtualWindowSnapshot
   visibleRowRange: {
     start: number
     end: number

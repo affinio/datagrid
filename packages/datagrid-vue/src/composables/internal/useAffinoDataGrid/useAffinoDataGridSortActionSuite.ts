@@ -4,6 +4,7 @@ import {
   useAffinoDataGridActionRunner,
   type AffinoDataGridInternalActionId,
 } from "./useAffinoDataGridActionRunner"
+import type { Ref } from "vue"
 import type {
   AffinoDataGridActionId,
   AffinoDataGridActionResult,
@@ -13,7 +14,7 @@ import type {
 export interface UseAffinoDataGridSortActionSuiteOptions<TRow> {
   initialSortState?: readonly DataGridSortState[]
   onSortModelChange: (nextSortState: readonly DataGridSortState[]) => void
-  selectedRowKeySet: { value: Set<string> }
+  selectedRowKeySet: Ref<Set<string>>
   clearSelection: () => void
   selectAllRows: () => number
   resolveSelectedRows: () => readonly TRow[]

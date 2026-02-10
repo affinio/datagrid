@@ -4,6 +4,7 @@ import {
   type DataGridOverlayRange,
   type DataGridOverlayColumnLike,
   type DataGridOverlayColumnMetricLike,
+  type DataGridSelectionOverlayVirtualWindow,
   type DataGridSelectionOverlaySegment,
 } from "@affino/datagrid-orchestration"
 
@@ -11,6 +12,7 @@ export type {
   DataGridOverlayRange,
   DataGridOverlayColumnLike,
   DataGridOverlayColumnMetricLike,
+  DataGridSelectionOverlayVirtualWindow,
   DataGridSelectionOverlaySegment,
 }
 
@@ -25,6 +27,7 @@ export interface UseDataGridSelectionOverlayOrchestrationOptions {
   rangeMovePreviewRange: Ref<DataGridOverlayRange | null>
   rangeMoveBaseRange: Ref<DataGridOverlayRange | null>
   isRangeMoving: Ref<boolean>
+  virtualWindow: Ref<DataGridSelectionOverlayVirtualWindow>
   resolveDevicePixelRatio?: () => number
 }
 
@@ -48,6 +51,7 @@ export function useDataGridSelectionOverlayOrchestration(
     rangeMovePreviewRange: options.rangeMovePreviewRange.value,
     rangeMoveBaseRange: options.rangeMoveBaseRange.value,
     isRangeMoving: options.isRangeMoving.value,
+    virtualWindow: options.virtualWindow.value,
     resolveDevicePixelRatio: options.resolveDevicePixelRatio,
   }))
 

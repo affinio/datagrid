@@ -49,11 +49,16 @@ const viewport = createDataGridViewportController({ resolvePinMode })
 const snapshot = viewport.getIntegrationSnapshot()
 
 // stable integration fields:
+snapshot.virtualWindow
 snapshot.visibleRowRange
 snapshot.visibleColumnRange
 snapshot.pinnedWidth
 snapshot.overlaySync
 ```
+
+`visibleRowRange` / `visibleColumnRange` are legacy mirrors of `virtualWindow` for compatibility.
+
+For imperative adapters, `DataGridViewportImperativeCallbacks` also exposes `onWindow(payload)` with the same `virtualWindow` snapshot.
 
 `getViewportSyncState()` is also available when only sync transform state is needed.
 

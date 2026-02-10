@@ -2,6 +2,7 @@ import { computed, type ComputedRef, type Ref } from "vue"
 import {
   useDataGridVirtualRangeMetrics as buildDataGridVirtualRangeMetrics,
   type DataGridVirtualRange,
+  type DataGridVirtualWindowRowSnapshot,
 } from "@affino/datagrid-orchestration"
 
 export type { DataGridVirtualRange }
@@ -12,6 +13,7 @@ export interface UseDataGridVirtualRangeMetricsOptions {
   viewportHeight: Ref<number>
   rowHeight: number
   overscan: number
+  virtualWindow?: Ref<DataGridVirtualWindowRowSnapshot | null | undefined>
 }
 
 export interface UseDataGridVirtualRangeMetricsResult {
@@ -25,11 +27,18 @@ export function useDataGridVirtualRangeMetrics(
   options: UseDataGridVirtualRangeMetricsOptions,
 ): UseDataGridVirtualRangeMetricsResult {
   const metrics = computed(() => buildDataGridVirtualRangeMetrics({
-    totalRows: options.totalRows.value,
-    scrollTop: options.scrollTop.value,
-    viewportHeight: options.viewportHeight.value,
-    rowHeight: options.rowHeight,
-    overscan: options.overscan,
+    ...(options.virtualWindow?.value
+      ? {
+          virtualWindow: options.virtualWindow.value,
+          rowHeight: options.rowHeight,
+        }
+      : {
+          totalRows: options.totalRows.value,
+          scrollTop: options.scrollTop.value,
+          viewportHeight: options.viewportHeight.value,
+          rowHeight: options.rowHeight,
+          overscan: options.overscan,
+        }),
   }))
 
   return {

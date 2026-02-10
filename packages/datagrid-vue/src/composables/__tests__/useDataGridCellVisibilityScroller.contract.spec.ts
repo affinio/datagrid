@@ -26,6 +26,10 @@ describe("useDataGridCellVisibilityScroller contract", () => {
     const scroller = useDataGridCellVisibilityScroller<Coord, Metric>({
       resolveViewportElement: () => null,
       resolveColumnMetric: () => null,
+      resolveVirtualWindow: () => ({
+        rowTotal: 10,
+        colTotal: 10,
+      }),
       resolveHeaderHeight: () => 40,
       resolveRowHeight: () => 32,
       setScrollPosition,
@@ -41,6 +45,10 @@ describe("useDataGridCellVisibilityScroller contract", () => {
     const scroller = useDataGridCellVisibilityScroller<Coord, Metric>({
       resolveViewportElement: () => viewport,
       resolveColumnMetric: () => ({ start: 0, end: 100 }),
+      resolveVirtualWindow: () => ({
+        rowTotal: 20,
+        colTotal: 4,
+      }),
       resolveHeaderHeight: () => 40,
       resolveRowHeight: () => 32,
       setScrollPosition,
@@ -57,6 +65,10 @@ describe("useDataGridCellVisibilityScroller contract", () => {
     const scroller = useDataGridCellVisibilityScroller<Coord, Metric>({
       resolveViewportElement: () => viewport,
       resolveColumnMetric: () => ({ start: 0, end: 100 }),
+      resolveVirtualWindow: () => ({
+        rowTotal: 20,
+        colTotal: 4,
+      }),
       resolveHeaderHeight: () => 40,
       resolveRowHeight: () => 32,
       setScrollPosition,
@@ -79,6 +91,10 @@ describe("useDataGridCellVisibilityScroller contract", () => {
     const scroller = useDataGridCellVisibilityScroller<Coord, Metric>({
       resolveViewportElement: () => viewport,
       resolveColumnMetric: columnIndex => metrics[columnIndex],
+      resolveVirtualWindow: () => ({
+        rowTotal: 20,
+        colTotal: metrics.length,
+      }),
       resolveHeaderHeight: () => 40,
       resolveRowHeight: () => 32,
       setScrollPosition,
@@ -90,5 +106,31 @@ describe("useDataGridCellVisibilityScroller contract", () => {
     scroller.ensureCellVisible({ rowIndex: 0, columnIndex: 3 })
     expect(viewport.scrollLeft).toBe(200)
     expect(setScrollPosition).toHaveBeenLastCalledWith({ top: 0, left: 200 })
+  })
+
+  it("clamps coordinates using virtualWindow totals when provided", () => {
+    const viewport = createViewport(0, 0, 200, 120)
+    const setScrollPosition = vi.fn()
+    const metrics: Metric[] = [
+      { start: 0, end: 80 },
+      { start: 80, end: 160 },
+      { start: 160, end: 240 },
+    ]
+    const scroller = useDataGridCellVisibilityScroller<Coord, Metric>({
+      resolveViewportElement: () => viewport,
+      resolveColumnMetric: columnIndex => metrics[columnIndex],
+      resolveVirtualWindow: () => ({
+        rowTotal: 4,
+        colTotal: 3,
+      }),
+      resolveHeaderHeight: () => 40,
+      resolveRowHeight: () => 32,
+      setScrollPosition,
+    })
+
+    scroller.ensureCellVisible({ rowIndex: 99, columnIndex: 99 })
+    expect(viewport.scrollTop).toBe(0)
+    expect(viewport.scrollLeft).toBe(120)
+    expect(setScrollPosition).toHaveBeenLastCalledWith({ top: 0, left: 120 })
   })
 })

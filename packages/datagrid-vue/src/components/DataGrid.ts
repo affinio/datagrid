@@ -56,6 +56,7 @@ export const DataGrid = defineComponent({
       rowModel: runtime.rowModel,
       columnModel: runtime.columnModel,
       columnSnapshot: runtime.columnSnapshot,
+      virtualWindow: runtime.virtualWindow,
       setRows: runtime.setRows,
       syncRowsInRange: runtime.syncRowsInRange,
       start: runtime.start,
@@ -76,6 +77,7 @@ export const DataGrid = defineComponent({
             rowModel: runtime.rowModel,
             columnModel: runtime.columnModel,
             columnSnapshot: runtime.columnSnapshot.value,
+            virtualWindow: runtime.virtualWindow.value,
             setRows: runtime.setRows,
             syncRowsInRange: runtime.syncRowsInRange,
           })

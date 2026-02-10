@@ -18,6 +18,12 @@ export interface DataGridVisibleColumnsWindow {
   keys: string
 }
 
+export interface DataGridVirtualWindowColumnSnapshot {
+  colStart: number
+  colEnd: number
+  colTotal: number
+}
+
 export type DataGridColumnLayerKey = "left" | "scroll" | "right"
 
 export interface DataGridColumnLayer<TColumn extends DataGridColumnLayoutColumn> {
@@ -32,6 +38,7 @@ export interface UseDataGridColumnLayoutOrchestrationOptions<TColumn extends Dat
   resolveColumnWidth: (column: TColumn) => number
   viewportWidth: number
   scrollLeft: number
+  virtualWindow?: DataGridVirtualWindowColumnSnapshot | null
 }
 
 export interface DataGridColumnLayoutSnapshot<TColumn extends DataGridColumnLayoutColumn> {
@@ -115,9 +122,26 @@ function buildVisibleColumnsWindow(
   columns: readonly DataGridColumnLayoutMetric[],
   viewportWidth: number,
   scrollLeft: number,
+  virtualWindow?: DataGridVirtualWindowColumnSnapshot | null,
 ): DataGridVisibleColumnsWindow {
   if (!columns.length) {
     return { start: 0, end: 0, total: 0, keys: "none" }
+  }
+
+  if (virtualWindow) {
+    const total = Math.max(0, Math.trunc(virtualWindow.colTotal))
+    const safeTotal = Math.max(0, Math.min(columns.length, total))
+    if (safeTotal === 0) {
+      return { start: 0, end: 0, total: 0, keys: "none" }
+    }
+    const startIndex = Math.max(0, Math.min(safeTotal - 1, Math.trunc(virtualWindow.colStart)))
+    const endIndex = Math.max(startIndex, Math.min(safeTotal - 1, Math.trunc(virtualWindow.colEnd)))
+    return {
+      start: startIndex + 1,
+      end: endIndex + 1,
+      total: safeTotal,
+      keys: columns.slice(startIndex, endIndex + 1).map(column => column.key).join(" • ") || "none",
+    }
   }
 
   const windowStart = Math.max(0, scrollLeft)
@@ -255,6 +279,7 @@ export function useDataGridColumnLayoutOrchestration<TColumn extends DataGridCol
       orderedColumnMetrics,
       options.viewportWidth,
       options.scrollLeft,
+      options.virtualWindow,
     ),
   }
 }

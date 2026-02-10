@@ -265,7 +265,12 @@ export const AffinoDataGridSimple = defineComponent({
       })
     }
 
+    const sortSignature = computed(() => grid.sortState.value
+      .map(entry => `${entry.key}:${entry.direction}`)
+      .join("|"))
+
     const leafRows = computed(() => {
+      void sortSignature.value
       const count = grid.rowModel.getRowCount()
       if (count <= 0) {
         return [] as readonly DataGridRowNode<RowLike>[]

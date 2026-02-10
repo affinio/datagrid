@@ -40,6 +40,8 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime).not.toBeNull()
     expect(runtime!.api.lifecycle.state).toBe("started")
     expect(runtime!.api.getRowCount()).toBe(2)
+    expect(runtime!.virtualWindow.value?.rowTotal).toBe(2)
+    expect(runtime!.virtualWindow.value?.colTotal).toBe(1)
 
     rows.value = [
       { rowId: "r1", name: "Alpha" },
@@ -49,11 +51,14 @@ describe("useDataGridRuntime contract", () => {
     await flushRuntimeTasks()
 
     expect(runtime!.api.getRowCount()).toBe(3)
+    expect(runtime!.virtualWindow.value?.rowTotal).toBe(3)
 
     const inRange = runtime!.syncRowsInRange({ start: 1, end: 2 })
     expect(inRange).toHaveLength(2)
     expect(String(inRange[0]?.rowId)).toBe("r2")
     expect(String(inRange[1]?.rowId)).toBe("r3")
+    expect(runtime!.virtualWindow.value?.rowStart).toBe(1)
+    expect(runtime!.virtualWindow.value?.rowEnd).toBe(2)
 
     wrapper.unmount()
     await flushRuntimeTasks()
@@ -80,6 +85,7 @@ describe("useDataGridRuntime contract", () => {
 
     expect(runtime).not.toBeNull()
     expect(runtime!.api.lifecycle.state).toBe("idle")
+    expect(runtime!.virtualWindow.value?.rowTotal).toBe(1)
 
     await runtime!.start()
     expect(runtime!.api.lifecycle.state).toBe("started")
