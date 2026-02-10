@@ -192,7 +192,7 @@ export interface DataGridViewportModelBridgeServiceOptions {
   initialColumnModel?: DataGridColumnModel | null
   fallbackRowModel: DataGridRowModel<unknown>
   fallbackColumnModel: DataGridColumnModel
-  onInvalidate: () => void
+  onInvalidate: (reason: "rows" | "columns" | "both") => void
   rowEntryCacheLimit?: number
 }
 
@@ -251,7 +251,7 @@ export function createDataGridViewportModelBridgeService(
   const bindRowModel = (model: DataGridRowModel<unknown>) => {
     if (activeRowModel === model && activeRowModelUnsubscribe) {
       markRowModelCacheDirty()
-      onInvalidate()
+      onInvalidate("rows")
       return
     }
     activeRowModelUnsubscribe?.()
@@ -281,26 +281,26 @@ export function createDataGridViewportModelBridgeService(
       if (!isViewportOnlyUpdate) {
         markRowModelCacheDirty()
       }
-      onInvalidate()
+      onInvalidate("rows")
     })
     markRowModelCacheDirty()
-    onInvalidate()
+    onInvalidate("rows")
   }
 
   const bindColumnModel = (model: DataGridColumnModel) => {
     if (activeColumnModel === model && activeColumnModelUnsubscribe) {
       markColumnModelCacheDirty()
-      onInvalidate()
+      onInvalidate("columns")
       return
     }
     activeColumnModelUnsubscribe?.()
     activeColumnModel = model
     activeColumnModelUnsubscribe = activeColumnModel.subscribe(() => {
       markColumnModelCacheDirty()
-      onInvalidate()
+      onInvalidate("columns")
     })
     markColumnModelCacheDirty()
-    onInvalidate()
+    onInvalidate("columns")
   }
 
   const toVisibleRow = (node: DataGridRowNode<unknown>): VisibleRow => {

@@ -1,16 +1,22 @@
 import {
-  COLUMN_VIRTUALIZATION_BUFFER,
-  calculateVisibleColumns,
   type ColumnSizeLike,
-  type ColumnWidthMetrics,
 } from "./columnSizing"
-import { clamp, SCROLL_EDGE_PADDING } from "../utils/constants"
+import { clamp } from "../utils/constants"
 import { createAxisVirtualizer, type AxisVirtualizerStrategy } from "./axisVirtualizer"
+import {
+  computeHorizontalScrollClamp,
+  computeHorizontalVirtualWindowRange,
+  resolveHorizontalEffectiveViewport,
+} from "./horizontalVirtualWindowMath"
 
 export interface HorizontalVirtualizerMeta<TColumn extends ColumnSizeLike> {
   scrollableColumns: readonly TColumn[]
   scrollableIndices: readonly number[]
-  metrics: ColumnWidthMetrics
+  metrics: {
+    widths: number[]
+    offsets: number[]
+    totalWidth: number
+  }
   pinnedLeftWidth: number
   pinnedRightWidth: number
   containerWidthForColumns: number
@@ -33,10 +39,6 @@ export interface HorizontalVirtualizerPayload {
   averageWidth: number
   scrollSpeed: number
   effectiveViewport: number
-}
-
-function resolveEffectiveViewport(containerWidth: number, pinnedLeftWidth: number, pinnedRightWidth: number): number {
-  return Math.max(0, containerWidth - pinnedLeftWidth - pinnedRightWidth)
 }
 
 export function createHorizontalAxisStrategy<TColumn extends ColumnSizeLike>(): AxisVirtualizerStrategy<
@@ -69,7 +71,11 @@ export function createHorizontalAxisStrategy<TColumn extends ColumnSizeLike>(): 
       if (!Number.isFinite(averageWidth) || averageWidth <= 0) {
         return metrics.widths.length
       }
-      const effectiveViewport = resolveEffectiveViewport(containerWidthForColumns, pinnedLeftWidth, pinnedRightWidth)
+      const effectiveViewport = resolveHorizontalEffectiveViewport(
+        containerWidthForColumns,
+        pinnedLeftWidth,
+        pinnedRightWidth,
+      )
       if (effectiveViewport <= 0) return 1
       return Math.max(1, Math.ceil(effectiveViewport / averageWidth))
     },
@@ -102,78 +108,31 @@ export function createHorizontalAxisStrategy<TColumn extends ColumnSizeLike>(): 
 
       if (!metrics.widths.length) return 0
 
-      const nativeLimit = Math.max(0, nativeScrollLimit)
-
-      if (!context.virtualizationEnabled) {
-        lastClampInput = value
-        lastClampResult = clamp(value, 0, nativeLimit)
-        return lastClampResult
-      }
-
       if (Number.isFinite(lastClampInput) && Math.abs(value - lastClampInput) < 1) {
         return lastClampResult
       }
 
-      const offsets = metrics.offsets
-      const widths = metrics.widths
-      const lastIndex = Math.max(0, widths.length - 1)
-      const totalScrollableWidth = Number.isFinite(metrics.totalWidth)
-        ? metrics.totalWidth
-        : offsets.length
-          ? (offsets[lastIndex] ?? 0) + (widths[lastIndex] ?? 0)
-          : 0
-
-      if (!Number.isFinite(totalScrollableWidth) || totalScrollableWidth <= 0) {
-        lastClampInput = value
-        lastClampResult = clamp(value, 0, nativeLimit)
-        return lastClampResult
-      }
-
-      const effectiveViewport = resolveEffectiveViewport(containerWidthForColumns, pinnedLeftWidth, pinnedRightWidth)
-      if (effectiveViewport <= 0) {
-        lastClampInput = value
-        lastClampResult = 0
-        return 0
-      }
-
-      const baseMax = Math.max(0, totalScrollableWidth - effectiveViewport)
-      const trailingGap = Math.max(0, effectiveViewport - totalScrollableWidth)
-
-      const baseBuffer = Number.isFinite(buffer) ? buffer : COLUMN_VIRTUALIZATION_BUFFER
-      const overscanColumns = Math.max(baseBuffer, context.overscanLeading, context.overscanTrailing)
-      const overscanCount = Math.min(widths.length, Math.max(0, Math.ceil(overscanColumns)))
-      let overscanWidth = 0
-      if (overscanCount > 0) {
-        const overscanStartIndex = Math.max(0, widths.length - overscanCount)
-        const overscanStartOffset = offsets[overscanStartIndex] ?? totalScrollableWidth
-        overscanWidth = Math.max(0, totalScrollableWidth - overscanStartOffset)
-      }
-
-      const virtualizationLimit = Math.max(0, baseMax + overscanWidth + trailingGap + SCROLL_EDGE_PADDING)
-      const maxScroll = Math.max(nativeLimit, virtualizationLimit)
-
-      if (!Number.isFinite(maxScroll) || maxScroll <= 0) {
-        lastClampInput = value
-        lastClampResult = 0
-        return 0
-      }
-
       lastClampInput = value
-      lastClampResult = clamp(value, 0, maxScroll)
+      lastClampResult = computeHorizontalScrollClamp({
+        value,
+        virtualizationEnabled: context.virtualizationEnabled,
+        overscanLeading: context.overscanLeading,
+        overscanTrailing: context.overscanTrailing,
+        meta: {
+          metrics,
+          pinnedLeftWidth,
+          pinnedRightWidth,
+          containerWidthForColumns,
+          nativeScrollLimit,
+          zoom: context.meta.zoom,
+          buffer,
+          isRTL: context.meta.isRTL,
+        },
+      })
       return lastClampResult
     },
     computeRange(offset, context, target) {
-      const {
-        scrollableColumns,
-        containerWidthForColumns,
-        pinnedLeftWidth,
-        pinnedRightWidth,
-        metrics,
-        zoom,
-        buffer,
-        scrollVelocity = 0,
-        version = -1,
-      } = context.meta
+      const { metrics, scrollVelocity = 0, version = -1 } = context.meta
       const payload = target.payload
 
       const isRTL = Boolean(context.meta.isRTL)
@@ -196,7 +155,7 @@ export function createHorizontalAxisStrategy<TColumn extends ColumnSizeLike>(): 
         lastRangeVirtualizationEnabled = context.virtualizationEnabled
       }
 
-      if (!scrollableColumns.length) {
+      if (context.totalCount <= 0 || !metrics.widths.length) {
         payload.visibleStart = 0
         payload.visibleEnd = 0
         payload.leftPadding = 0
@@ -230,66 +189,37 @@ export function createHorizontalAxisStrategy<TColumn extends ColumnSizeLike>(): 
         return target
       }
 
-      if (!context.virtualizationEnabled) {
-        const totalWidth = metrics.totalWidth
-        payload.visibleStart = 0
-        payload.visibleEnd = scrollableColumns.length
-        const leftPadding = 0
-        const rightPadding = 0
-        payload.leftPadding = isRTL ? rightPadding : leftPadding
-        payload.rightPadding = isRTL ? leftPadding : rightPadding
-        payload.totalScrollableWidth = totalWidth
-        payload.visibleScrollableWidth = totalWidth
-        payload.averageWidth = metrics.widths.length ? totalWidth / Math.max(metrics.widths.length, 1) : 0
-        payload.scrollSpeed = scrollVelocity
-        payload.effectiveViewport = resolveEffectiveViewport(containerWidthForColumns, pinnedLeftWidth, pinnedRightWidth)
-        target.start = 0
-        target.end = scrollableColumns.length
-        lastRangeOffset = offset
-        lastRangeStart = target.start
-        lastRangeEnd = target.end
-        lastRangePayload = { ...payload }
-        return target
-      }
-
-      const baseBuffer = Number.isFinite(buffer) ? buffer : COLUMN_VIRTUALIZATION_BUFFER
-      const dynamicOverscanMultiplier = 1 + Math.min(Math.abs(scrollVelocity) / 1500, 1)
-      const dynamicOverscan = Math.min(256, Math.max(0, Math.ceil(baseBuffer * dynamicOverscanMultiplier)))
-      const overscanLeading = Math.max(context.overscanLeading, dynamicOverscan)
-      const overscanTrailing = Math.max(context.overscanTrailing, dynamicOverscan)
-      const visibleRange = calculateVisibleColumns(offset, containerWidthForColumns, scrollableColumns, {
-        zoom,
-        pinnedLeftWidth,
-        pinnedRightWidth,
-        metrics,
+      const result = computeHorizontalVirtualWindowRange({
+        offset,
+        totalCount: context.totalCount,
+        virtualizationEnabled: context.virtualizationEnabled,
+        overscanLeading: context.overscanLeading,
+        overscanTrailing: context.overscanTrailing,
+        scrollVelocity,
+        meta: {
+          metrics,
+          pinnedLeftWidth: context.meta.pinnedLeftWidth,
+          pinnedRightWidth: context.meta.pinnedRightWidth,
+          containerWidthForColumns: context.meta.containerWidthForColumns,
+          nativeScrollLimit: context.meta.nativeScrollLimit,
+          zoom: context.meta.zoom,
+          buffer: context.meta.buffer,
+          isRTL,
+        },
       })
 
-      const visibleStart = visibleRange.startIndex
-      const visibleEnd = visibleRange.endIndex
-      const overscanStart = Math.max(0, visibleStart - overscanLeading)
-      const overscanEnd = Math.min(context.totalCount, visibleEnd + overscanTrailing)
-      const visibleScrollableWidth = Math.max(
-        0,
-        visibleRange.totalWidth - (visibleRange.leftPadding + visibleRange.rightPadding),
-      )
+      payload.visibleStart = result.payload.visibleStart
+      payload.visibleEnd = result.payload.visibleEnd
+      payload.leftPadding = result.payload.leftPadding
+      payload.rightPadding = result.payload.rightPadding
+      payload.totalScrollableWidth = result.payload.totalScrollableWidth
+      payload.visibleScrollableWidth = result.payload.visibleScrollableWidth
+      payload.averageWidth = result.payload.averageWidth
+      payload.scrollSpeed = result.payload.scrollSpeed
+      payload.effectiveViewport = result.payload.effectiveViewport
 
-      const averageWidth = metrics.widths.length ? metrics.totalWidth / Math.max(metrics.widths.length, 1) : 0
-      const effectiveViewport = resolveEffectiveViewport(containerWidthForColumns, pinnedLeftWidth, pinnedRightWidth)
-      const leftPadding = isRTL ? visibleRange.rightPadding : visibleRange.leftPadding
-      const rightPadding = isRTL ? visibleRange.leftPadding : visibleRange.rightPadding
-
-      payload.visibleStart = visibleStart
-      payload.visibleEnd = visibleEnd
-      payload.leftPadding = leftPadding
-      payload.rightPadding = rightPadding
-      payload.totalScrollableWidth = metrics.totalWidth
-      payload.visibleScrollableWidth = visibleScrollableWidth
-      payload.averageWidth = Number.isFinite(averageWidth) ? averageWidth : 0
-      payload.scrollSpeed = scrollVelocity
-      payload.effectiveViewport = effectiveViewport
-
-      target.start = overscanStart
-      target.end = overscanEnd
+      target.start = result.start
+      target.end = result.end
 
       lastRangeOffset = offset
       lastRangeStart = target.start

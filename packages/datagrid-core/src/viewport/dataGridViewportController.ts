@@ -410,8 +410,8 @@ export function createDataGridViewportController(
 			initialColumnModel: options.columnModel ?? null,
 			fallbackRowModel: fallbackClientRowModel,
 			fallbackColumnModel,
-			onInvalidate: () => {
-				scheduleUpdate(true)
+			onInvalidate: reason => {
+				scheduleUpdate(reason !== "rows")
 			},
 		})
 

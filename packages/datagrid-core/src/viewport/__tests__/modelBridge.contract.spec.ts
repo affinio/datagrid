@@ -76,6 +76,37 @@ describe("table viewport model bridge service", () => {
     fallbackColumnModel.dispose()
   })
 
+  it("emits axis-scoped invalidation reasons for row and column updates", () => {
+    const rowModel = createClientRowModel({ rows: buildRows(3) })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "value", label: "Value", width: 160 }],
+    })
+    const fallbackRowModel = createClientRowModel()
+    const fallbackColumnModel = createDataGridColumnModel()
+    const reasons: Array<"rows" | "columns" | "both"> = []
+    const bridge = createDataGridViewportModelBridgeService({
+      initialRowModel: rowModel,
+      initialColumnModel: columnModel,
+      fallbackRowModel,
+      fallbackColumnModel,
+      onInvalidate: reason => {
+        reasons.push(reason)
+      },
+    })
+
+    reasons.length = 0
+    rowModel.setRows(buildRows(2))
+    columnModel.setColumnWidth("value", 220)
+
+    expect(reasons).toEqual(["rows", "columns"])
+
+    bridge.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+    fallbackRowModel.dispose()
+    fallbackColumnModel.dispose()
+  })
+
   it("serves row access by index without full materialization", () => {
     const rows = buildRows(100_000)
     const columns: DataGridColumnDef[] = Array.from({ length: 520 }, (_, index) => ({
@@ -100,7 +131,7 @@ describe("table viewport model bridge service", () => {
       initialColumnModel: columnModel,
       fallbackRowModel,
       fallbackColumnModel,
-      onInvalidate: () => {},
+      onInvalidate: (_reason) => {},
     })
 
     const baselineCount = bridge.getRowCount()
@@ -144,7 +175,7 @@ describe("table viewport model bridge service", () => {
       initialColumnModel: columnModel,
       fallbackRowModel,
       fallbackColumnModel,
-      onInvalidate: () => {},
+      onInvalidate: (_reason) => {},
       rowEntryCacheLimit: 4,
     })
 
@@ -203,7 +234,7 @@ describe("table viewport model bridge service", () => {
       initialColumnModel: columnModel,
       fallbackRowModel,
       fallbackColumnModel,
-      onInvalidate: () => {},
+      onInvalidate: (_reason) => {},
     })
 
     const row = bridge.getRow(0)
@@ -274,7 +305,7 @@ describe("table viewport model bridge service", () => {
       initialColumnModel: columnModel,
       fallbackRowModel,
       fallbackColumnModel,
-      onInvalidate: () => {},
+      onInvalidate: (_reason) => {},
     })
 
     const row = bridge.getRow(0)
@@ -302,7 +333,7 @@ describe("table viewport model bridge service", () => {
       initialColumnModel: columnModel,
       fallbackRowModel,
       fallbackColumnModel,
-      onInvalidate: () => {},
+      onInvalidate: (_reason) => {},
     })
 
     const columns = bridge.materializeColumns()
@@ -340,7 +371,7 @@ describe("table viewport model bridge service", () => {
       initialColumnModel: columnModel,
       fallbackRowModel,
       fallbackColumnModel,
-      onInvalidate: () => {},
+      onInvalidate: (_reason) => {},
     })
 
     const columns = bridge.materializeColumns()

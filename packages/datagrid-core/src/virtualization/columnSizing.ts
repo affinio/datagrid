@@ -20,6 +20,11 @@ export interface VisibleColumnRange {
   rightPadding: number
 }
 
+export interface CalculateVisibleColumnsFromMetricsOptions {
+  pinnedLeftWidth?: number
+  pinnedRightWidth?: number
+}
+
 interface ColumnWidthCacheEntry {
   columns: readonly ColumnSizeLike[]
   zoom: number
@@ -152,6 +157,19 @@ export function calculateVisibleColumns<T extends ColumnSizeLike>(
   } = options
 
   const metrics = suppliedMetrics ?? accumulateColumnWidths(columns, zoom)
+  return calculateVisibleColumnsFromMetrics(scrollLeft, containerWidth, metrics, {
+    pinnedLeftWidth,
+    pinnedRightWidth,
+  })
+}
+
+export function calculateVisibleColumnsFromMetrics(
+  scrollLeft: number,
+  containerWidth: number,
+  metrics: ColumnWidthMetrics,
+  options: CalculateVisibleColumnsFromMetricsOptions = {},
+): VisibleColumnRange & ColumnWidthMetrics {
+  const { pinnedLeftWidth = 0, pinnedRightWidth = 0 } = options
   const { widths, offsets, totalWidth } = metrics
 
   let result = visibleColumnResultPool[visibleColumnResultIndex]

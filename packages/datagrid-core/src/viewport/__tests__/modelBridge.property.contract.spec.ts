@@ -56,7 +56,7 @@ describe("table viewport model bridge property contract", () => {
         initialColumnModel: columnModel,
         fallbackRowModel,
         fallbackColumnModel,
-        onInvalidate: () => {},
+        onInvalidate: (_reason) => {},
       })
 
       try {
