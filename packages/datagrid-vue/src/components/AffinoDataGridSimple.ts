@@ -21,7 +21,7 @@ import type {
   AffinoDataGridActionId,
   AffinoDataGridFeatures,
   AffinoDataGridEditSession,
-} from "../composables/useAffinoDataGrid"
+} from "../composables/useAffinoDataGrid.types"
 
 interface RowLike {
   [key: string]: unknown

@@ -30,6 +30,7 @@ describe("useDataGridHeaderResizeOrchestration contract", () => {
       autoSizeCharWidth: 7.2,
       autoSizeHorizontalPadding: 28,
       autoSizeMaxWidth: 640,
+      resizeApplyMode: "sync",
     })
 
     const mouseDownEvent = {
@@ -81,6 +82,7 @@ describe("useDataGridHeaderResizeOrchestration contract", () => {
       autoSizeCharWidth: 7.2,
       autoSizeHorizontalPadding: 28,
       autoSizeMaxWidth: 640,
+      resizeApplyMode: "sync",
     })
 
     const event = {
@@ -113,6 +115,7 @@ describe("useDataGridHeaderResizeOrchestration contract", () => {
       autoSizeCharWidth: 7.2,
       autoSizeHorizontalPadding: 28,
       autoSizeMaxWidth: 640,
+      resizeApplyMode: "sync",
     })
 
     orchestration.setColumnWidth("service", 20)
@@ -138,6 +141,7 @@ describe("useDataGridHeaderResizeOrchestration contract", () => {
       autoSizeCharWidth: 7.2,
       autoSizeHorizontalPadding: 28,
       autoSizeMaxWidth: 640,
+      resizeApplyMode: "sync",
     })
     const event = {
       button: 0,
@@ -147,5 +151,56 @@ describe("useDataGridHeaderResizeOrchestration contract", () => {
     } as unknown as MouseEvent
     orchestration.onHeaderResizeHandleMouseDown("select", event)
     expect(orchestration.activeColumnResize.value).toBeNull()
+  })
+
+  it("coalesces live resize updates in raf mode and flushes latest width", () => {
+    const applyColumnWidth = vi.fn()
+    const frameQueue: FrameRequestCallback[] = []
+    const orchestration = useDataGridHeaderResizeOrchestration<Row>({
+      resolveColumnBaseWidth: () => 120,
+      resolveColumnLabel: () => "Service",
+      resolveRowsForAutoSize: () => [],
+      resolveCellText: () => "",
+      resolveColumnWidthOverride: () => null,
+      resolveColumnMinWidth: () => 110,
+      applyColumnWidth,
+      isColumnResizable: () => true,
+      isFillDragging: () => false,
+      stopFillSelection: vi.fn(),
+      isDragSelecting: () => false,
+      stopDragSelection: vi.fn(),
+      setLastAction: vi.fn(),
+      autoSizeSampleLimit: 260,
+      autoSizeCharWidth: 7.2,
+      autoSizeHorizontalPadding: 28,
+      autoSizeMaxWidth: 640,
+      resizeApplyMode: "raf",
+      requestAnimationFrame(callback) {
+        frameQueue.push(callback)
+        return frameQueue.length
+      },
+      cancelAnimationFrame: vi.fn(),
+    })
+
+    orchestration.onHeaderResizeHandleMouseDown("service", {
+      button: 0,
+      clientX: 100,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as MouseEvent)
+
+    orchestration.applyColumnResizeFromPointer(130)
+    orchestration.applyColumnResizeFromPointer(145)
+    orchestration.applyColumnResizeFromPointer(160)
+
+    expect(applyColumnWidth).not.toHaveBeenCalled()
+    expect(frameQueue.length).toBe(1)
+
+    const flushFrame = frameQueue.shift()
+    flushFrame?.(16.6)
+
+    expect(applyColumnWidth).toHaveBeenCalledTimes(1)
+    expect(applyColumnWidth).toHaveBeenCalledWith("service", 180)
+    expect(orchestration.activeColumnResize.value?.lastWidth).toBe(180)
   })
 })

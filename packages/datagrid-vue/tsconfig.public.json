@@ -101,14 +101,9 @@
     "src/composables/selectionOverlayTransform.ts",
     "src/composables/useDataGridOverlayScrollState.ts",
     "src/composables/useAffinoDataGrid.ts",
+    "src/composables/useAffinoDataGrid.types.ts",
     "src/composables/useAffinoDataGridUi.ts",
-    "src/composables/useAffinoDataGridClipboardFeature.ts",
-    "src/composables/useAffinoDataGridEditingFeature.ts",
-    "src/composables/useAffinoDataGridFilteringFeature.ts",
-    "src/composables/useAffinoDataGridSelectionFeature.ts",
-    "src/composables/useAffinoDataGridSummaryFeature.ts",
-    "src/composables/useAffinoDataGridVisibilityFeature.ts",
-    "src/composables/useAffinoDataGridTreeFeature.ts"
+    "src/composables/internal/useAffinoDataGrid/**/*.ts"
   ],
   "exclude": [
     "src/**/__tests__/**",

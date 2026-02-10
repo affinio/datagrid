@@ -176,4 +176,49 @@ describe("useDataGridGlobalPointerLifecycle contract", () => {
     expect(lifecycle.dispatchGlobalMouseMove(moveWithoutButtons)).toBe(true)
     expect(stopRangeMove).toHaveBeenCalledWith(true)
   })
+
+  it("coalesces pointer preview updates in raf mode", () => {
+    const applyRangeMovePreviewFromPointer = vi.fn()
+    const frameQueue: FrameRequestCallback[] = []
+    const lifecycle = useDataGridGlobalPointerLifecycle({
+      resolveInteractionState: () => ({
+        isRangeMoving: true,
+        isColumnResizing: false,
+        isFillDragging: false,
+        isDragSelecting: false,
+      }),
+      resolveRangeMovePointer: () => null,
+      setRangeMovePointer: vi.fn(),
+      applyRangeMovePreviewFromPointer,
+      stopRangeMove: vi.fn(),
+      applyColumnResizeFromPointer: vi.fn(),
+      stopColumnResize: vi.fn(),
+      resolveFillPointer: () => null,
+      setFillPointer: vi.fn(),
+      applyFillPreviewFromPointer: vi.fn(),
+      stopFillSelection: vi.fn(),
+      resolveDragPointer: () => null,
+      setDragPointer: vi.fn(),
+      applyDragSelectionFromPointer: vi.fn(),
+      stopDragSelection: vi.fn(),
+      pointerPreviewApplyMode: "raf",
+      requestAnimationFrame(callback) {
+        frameQueue.push(callback)
+        return frameQueue.length
+      },
+      cancelAnimationFrame: vi.fn(),
+    })
+
+    expect(lifecycle.dispatchGlobalMouseMove(createMouseEvent("mousemove", { buttons: 1, clientX: 11, clientY: 12 }))).toBe(true)
+    expect(lifecycle.dispatchGlobalMouseMove(createMouseEvent("mousemove", { buttons: 1, clientX: 21, clientY: 22 }))).toBe(true)
+    expect(lifecycle.dispatchGlobalMouseMove(createMouseEvent("mousemove", { buttons: 1, clientX: 31, clientY: 32 }))).toBe(true)
+
+    expect(applyRangeMovePreviewFromPointer).not.toHaveBeenCalled()
+    expect(frameQueue.length).toBe(1)
+
+    const flush = frameQueue.shift()
+    flush?.(16.6)
+
+    expect(applyRangeMovePreviewFromPointer).toHaveBeenCalledTimes(1)
+  })
 })

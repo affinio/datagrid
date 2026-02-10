@@ -1,12 +1,12 @@
 import { computed, ref, type Ref } from "vue"
-import {
-  useAffinoDataGrid,
-  type AffinoDataGridActionId,
-  type AffinoDataGridActionResult,
-  type UseAffinoDataGridOptions,
-  type UseAffinoDataGridResult,
-} from "./useAffinoDataGrid"
+import { useAffinoDataGrid } from "./useAffinoDataGrid"
 import type { DataGridContextMenuActionId } from "./useDataGridContextMenu"
+import type {
+  AffinoDataGridActionId,
+  AffinoDataGridActionResult,
+  UseAffinoDataGridOptions,
+  UseAffinoDataGridResult,
+} from "./useAffinoDataGrid.types"
 
 const DEFAULT_ACTION_LABELS: Record<AffinoDataGridActionId, string> = {
   copy: "Copy",

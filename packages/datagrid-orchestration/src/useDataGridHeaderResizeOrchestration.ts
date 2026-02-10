@@ -5,6 +5,8 @@ export interface DataGridHeaderResizeState {
   lastWidth: number
 }
 
+export type DataGridHeaderResizeApplyMode = "sync" | "raf"
+
 export interface UseDataGridHeaderResizeOrchestrationOptions<TRow> {
   resolveColumnBaseWidth: (columnKey: string) => number | null | undefined
   resolveColumnLabel: (columnKey: string) => string | null | undefined
@@ -23,6 +25,9 @@ export interface UseDataGridHeaderResizeOrchestrationOptions<TRow> {
   autoSizeCharWidth: number
   autoSizeHorizontalPadding: number
   autoSizeMaxWidth: number
+  resizeApplyMode?: DataGridHeaderResizeApplyMode
+  requestAnimationFrame?: (callback: FrameRequestCallback) => number
+  cancelAnimationFrame?: (handle: number) => void
 }
 
 export interface UseDataGridHeaderResizeOrchestrationResult {
@@ -35,12 +40,19 @@ export interface UseDataGridHeaderResizeOrchestrationResult {
   onHeaderResizeHandleDoubleClick: (columnKey: string, event: MouseEvent) => void
   applyColumnResizeFromPointer: (clientX: number) => void
   stopColumnResize: () => void
+  dispose: () => void
 }
 
 export function useDataGridHeaderResizeOrchestration<TRow>(
   options: UseDataGridHeaderResizeOrchestrationOptions<TRow>,
 ): UseDataGridHeaderResizeOrchestrationResult {
+  const resizeApplyMode = options.resizeApplyMode ?? "raf"
+  const requestFrame = options.requestAnimationFrame ?? (callback => window.requestAnimationFrame(callback))
+  const cancelFrame = options.cancelAnimationFrame ?? (handle => window.cancelAnimationFrame(handle))
+
   let activeColumnResize: DataGridHeaderResizeState | null = null
+  let pendingResizeClientX: number | null = null
+  let pendingResizeFrame: number | null = null
   const listeners = new Set<(state: DataGridHeaderResizeState | null) => void>()
 
   function setActiveColumnResize(state: DataGridHeaderResizeState | null) {
@@ -76,6 +88,58 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
 
   function setColumnWidth(columnKey: string, width: number) {
     options.applyColumnWidth(columnKey, clampColumnWidth(columnKey, width))
+  }
+
+  function cancelPendingResizeFrame() {
+    if (pendingResizeFrame === null) {
+      return
+    }
+    cancelFrame(pendingResizeFrame)
+    pendingResizeFrame = null
+  }
+
+  function canUseRaf(): boolean {
+    return resizeApplyMode === "raf" && typeof window !== "undefined"
+  }
+
+  function applyResizeFromClientX(clientX: number): boolean {
+    if (!activeColumnResize) {
+      return false
+    }
+    const delta = clientX - activeColumnResize.startClientX
+    const nextWidth = clampColumnWidth(activeColumnResize.columnKey, activeColumnResize.startWidth + delta)
+    if (nextWidth === activeColumnResize.lastWidth) {
+      return false
+    }
+    setColumnWidth(activeColumnResize.columnKey, nextWidth)
+    setActiveColumnResize({
+      ...activeColumnResize,
+      lastWidth: nextWidth,
+    })
+    return true
+  }
+
+  function flushPendingResize(): boolean {
+    if (pendingResizeClientX === null) {
+      return false
+    }
+    const nextClientX = pendingResizeClientX
+    pendingResizeClientX = null
+    return applyResizeFromClientX(nextClientX)
+  }
+
+  function schedulePendingResizeFlush() {
+    if (!canUseRaf()) {
+      flushPendingResize()
+      return
+    }
+    if (pendingResizeFrame !== null) {
+      return
+    }
+    pendingResizeFrame = requestFrame(() => {
+      pendingResizeFrame = null
+      flushPendingResize()
+    })
   }
 
   function sampleRowsForAutoSize(rows: readonly TRow[], maxSamples: number): readonly TRow[] {
@@ -119,6 +183,8 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
     if (options.isDragSelecting()) {
       options.stopDragSelection()
     }
+    cancelPendingResizeFrame()
+    pendingResizeClientX = null
     const startWidth = resolveColumnCurrentWidth(columnKey)
     setActiveColumnResize({
       columnKey,
@@ -143,25 +209,26 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
     if (!activeColumnResize) {
       return
     }
-    const delta = clientX - activeColumnResize.startClientX
-    const nextWidth = clampColumnWidth(activeColumnResize.columnKey, activeColumnResize.startWidth + delta)
-    if (nextWidth === activeColumnResize.lastWidth) {
-      return
-    }
-    setColumnWidth(activeColumnResize.columnKey, nextWidth)
-    setActiveColumnResize({
-      ...activeColumnResize,
-      lastWidth: nextWidth,
-    })
+    pendingResizeClientX = clientX
+    schedulePendingResizeFlush()
   }
 
   function stopColumnResize() {
     if (!activeColumnResize) {
       return
     }
+    flushPendingResize()
+    cancelPendingResizeFrame()
+    pendingResizeClientX = null
     const state = activeColumnResize
     setActiveColumnResize(null)
     options.setLastAction(`Resized ${state.columnKey} to ${state.lastWidth}px`)
+  }
+
+  function dispose() {
+    cancelPendingResizeFrame()
+    pendingResizeClientX = null
+    setActiveColumnResize(null)
   }
 
   return {
@@ -174,5 +241,6 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
     onHeaderResizeHandleDoubleClick,
     applyColumnResizeFromPointer,
     stopColumnResize,
+    dispose,
   }
 }

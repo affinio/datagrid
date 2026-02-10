@@ -7,6 +7,8 @@ export interface DataGridPointerInteractionState {
   isDragSelecting: boolean
 }
 
+export type DataGridPointerPreviewApplyMode = "sync" | "raf"
+
 export interface UseDataGridGlobalPointerLifecycleOptions {
   resolveInteractionState: () => DataGridPointerInteractionState
 
@@ -27,6 +29,10 @@ export interface UseDataGridGlobalPointerLifecycleOptions {
   setDragPointer: (pointer: DataGridPointerCoordinates) => void
   applyDragSelectionFromPointer: () => void
   stopDragSelection: () => void
+
+  pointerPreviewApplyMode?: DataGridPointerPreviewApplyMode
+  requestAnimationFrame?: (callback: FrameRequestCallback) => number
+  cancelAnimationFrame?: (handle: number) => void
 }
 
 export interface UseDataGridGlobalPointerLifecycleResult {
@@ -37,6 +43,7 @@ export interface UseDataGridGlobalPointerLifecycleResult {
   dispatchGlobalPointerCancel: () => boolean
   dispatchGlobalContextMenuCapture: (event: MouseEvent) => boolean
   dispatchGlobalWindowBlur: () => boolean
+  dispose: () => void
 }
 
 function hasAnyInteraction(state: DataGridPointerInteractionState): boolean {
@@ -56,7 +63,62 @@ function syncPointerIfChanged(
 export function useDataGridGlobalPointerLifecycle(
   options: UseDataGridGlobalPointerLifecycleOptions,
 ): UseDataGridGlobalPointerLifecycleResult {
+  const pointerPreviewApplyMode = options.pointerPreviewApplyMode ?? "sync"
+  const requestFrame = options.requestAnimationFrame ?? (callback => window.requestAnimationFrame(callback))
+  const cancelFrame = options.cancelAnimationFrame ?? (handle => window.cancelAnimationFrame(handle))
+
+  let pendingPreviewFrame: number | null = null
+  let pendingPreviewKind: "range" | "fill" | "drag" | null = null
+
+  function canUseRaf(): boolean {
+    return pointerPreviewApplyMode === "raf" && typeof window !== "undefined"
+  }
+
+  function clearPendingPreview() {
+    pendingPreviewKind = null
+    if (pendingPreviewFrame === null) {
+      return
+    }
+    cancelFrame(pendingPreviewFrame)
+    pendingPreviewFrame = null
+  }
+
+  function applyPreview(kind: "range" | "fill" | "drag") {
+    if (kind === "range") {
+      options.applyRangeMovePreviewFromPointer()
+      return
+    }
+    if (kind === "fill") {
+      options.applyFillPreviewFromPointer()
+      return
+    }
+    options.applyDragSelectionFromPointer()
+  }
+
+  function flushPendingPreview() {
+    pendingPreviewFrame = null
+    const kind = pendingPreviewKind
+    pendingPreviewKind = null
+    if (!kind) {
+      return
+    }
+    applyPreview(kind)
+  }
+
+  function schedulePreview(kind: "range" | "fill" | "drag") {
+    if (!canUseRaf()) {
+      applyPreview(kind)
+      return
+    }
+    pendingPreviewKind = kind
+    if (pendingPreviewFrame !== null) {
+      return
+    }
+    pendingPreviewFrame = requestFrame(() => flushPendingPreview())
+  }
+
   function finalizePointerInteractions(pointer?: DataGridPointerCoordinates, commit = true) {
+    clearPendingPreview()
     const state = options.resolveInteractionState()
 
     if (state.isRangeMoving) {
@@ -102,7 +164,7 @@ export function useDataGridGlobalPointerLifecycle(
         { clientX: event.clientX, clientY: event.clientY },
         options.setRangeMovePointer,
       )
-      options.applyRangeMovePreviewFromPointer()
+      schedulePreview("range")
       return true
     }
 
@@ -117,7 +179,7 @@ export function useDataGridGlobalPointerLifecycle(
         { clientX: event.clientX, clientY: event.clientY },
         options.setFillPointer,
       )
-      options.applyFillPreviewFromPointer()
+      schedulePreview("fill")
       return true
     }
 
@@ -130,7 +192,7 @@ export function useDataGridGlobalPointerLifecycle(
       { clientX: event.clientX, clientY: event.clientY },
       options.setDragPointer,
     )
-    options.applyDragSelectionFromPointer()
+    schedulePreview("drag")
     return true
   }
 
@@ -166,6 +228,10 @@ export function useDataGridGlobalPointerLifecycle(
     return true
   }
 
+  function dispose() {
+    clearPendingPreview()
+  }
+
   return {
     finalizePointerInteractions,
     dispatchGlobalMouseMove,
@@ -174,5 +240,6 @@ export function useDataGridGlobalPointerLifecycle(
     dispatchGlobalPointerCancel,
     dispatchGlobalContextMenuCapture,
     dispatchGlobalWindowBlur,
+    dispose,
   }
 }

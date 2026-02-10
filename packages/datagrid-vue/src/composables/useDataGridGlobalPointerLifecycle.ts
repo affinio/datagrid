@@ -1,6 +1,7 @@
 export {
   type DataGridPointerCoordinates,
   type DataGridPointerInteractionState,
+  type DataGridPointerPreviewApplyMode,
   type UseDataGridGlobalPointerLifecycleOptions,
   type UseDataGridGlobalPointerLifecycleResult,
   useDataGridGlobalPointerLifecycle,

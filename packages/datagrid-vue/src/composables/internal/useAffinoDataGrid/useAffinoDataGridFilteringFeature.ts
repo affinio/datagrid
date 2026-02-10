@@ -4,7 +4,7 @@ import {
   type DataGridAdvancedFilterExpression,
   type DataGridFilterSnapshot,
 } from "@affino/datagrid-core"
-import type { UseDataGridRuntimeResult } from "./useDataGridRuntime"
+import type { UseDataGridRuntimeResult } from "../../useDataGridRuntime"
 
 export interface AffinoFilteringFeatureInput {
   enabled?: boolean

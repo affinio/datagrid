@@ -132,6 +132,7 @@ export {
 } from "./composables/useDataGridHeaderSortOrchestration"
 export {
   useDataGridHeaderResizeOrchestration,
+  type DataGridHeaderResizeApplyMode,
   type DataGridHeaderResizeState,
   type UseDataGridHeaderResizeOrchestrationOptions,
   type UseDataGridHeaderResizeOrchestrationResult,
@@ -336,6 +337,7 @@ export {
   type UseDataGridViewportScrollLifecycleResult,
 } from "./composables/useDataGridViewportScrollLifecycle"
 export {
+  type DataGridPointerPreviewApplyMode,
   useDataGridGlobalPointerLifecycle,
   type DataGridPointerCoordinates,
   type DataGridPointerInteractionState,

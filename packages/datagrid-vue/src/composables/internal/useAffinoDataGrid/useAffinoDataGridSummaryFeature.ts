@@ -5,7 +5,7 @@ import type {
   DataGridSelectionSummaryColumnConfig,
   DataGridSelectionSummarySnapshot,
 } from "@affino/datagrid-core"
-import type { UseDataGridRuntimeResult } from "./useDataGridRuntime"
+import type { UseDataGridRuntimeResult } from "../../useDataGridRuntime"
 
 export interface AffinoSummaryFeatureInput<TRow> {
   enabled?: boolean

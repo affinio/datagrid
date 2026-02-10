@@ -1,6 +1,6 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from "vue"
 import type { DataGridSelectionSnapshot } from "@affino/datagrid-core"
-import type { UseDataGridRuntimeResult } from "./useDataGridRuntime"
+import type { UseDataGridRuntimeResult } from "../../useDataGridRuntime"
 
 export interface AffinoSelectionFeatureInput<TRow> {
   enabled?: boolean

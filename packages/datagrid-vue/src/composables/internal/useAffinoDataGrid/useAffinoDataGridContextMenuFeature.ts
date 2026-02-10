@@ -5,7 +5,7 @@ import {
   type DataGridContextMenuAction,
   type DataGridContextMenuActionId,
   type DataGridContextMenuState,
-} from "./useDataGridContextMenu"
+} from "../../useDataGridContextMenu"
 
 interface EditableCellParams<TRow> {
   row: TRow

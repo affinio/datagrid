@@ -217,6 +217,7 @@ export {
 
 export {
   type DataGridPointerInteractionState,
+  type DataGridPointerPreviewApplyMode,
   type UseDataGridGlobalPointerLifecycleOptions,
   type UseDataGridGlobalPointerLifecycleResult,
   useDataGridGlobalPointerLifecycle,
@@ -272,6 +273,7 @@ export {
 } from "./useDataGridHeaderInteractionRouter"
 
 export {
+  type DataGridHeaderResizeApplyMode,
   type DataGridHeaderResizeState,
   type UseDataGridHeaderResizeOrchestrationOptions,
   type UseDataGridHeaderResizeOrchestrationResult,

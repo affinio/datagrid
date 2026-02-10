@@ -1,11 +1,13 @@
 import { computed, onBeforeUnmount, ref, getCurrentInstance, type ComputedRef } from "vue"
 import {
+  type DataGridHeaderResizeApplyMode,
   useDataGridHeaderResizeOrchestration as useDataGridHeaderResizeOrchestrationCore,
   type DataGridHeaderResizeState,
   type UseDataGridHeaderResizeOrchestrationOptions,
 } from "@affino/datagrid-orchestration"
 
 export type {
+  DataGridHeaderResizeApplyMode,
   DataGridHeaderResizeState,
   UseDataGridHeaderResizeOrchestrationOptions,
 }
@@ -19,6 +21,7 @@ export interface UseDataGridHeaderResizeOrchestrationResult {
   onHeaderResizeHandleDoubleClick: (columnKey: string, event: MouseEvent) => void
   applyColumnResizeFromPointer: (clientX: number) => void
   stopColumnResize: () => void
+  dispose: () => void
 }
 
 export function useDataGridHeaderResizeOrchestration<TRow>(
@@ -33,6 +36,7 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
   if (getCurrentInstance()) {
     onBeforeUnmount(() => {
       unsubscribe()
+      core.dispose()
     })
   }
 
@@ -45,5 +49,6 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
     onHeaderResizeHandleDoubleClick: core.onHeaderResizeHandleDoubleClick,
     applyColumnResizeFromPointer: core.applyColumnResizeFromPointer,
     stopColumnResize: core.stopColumnResize,
+    dispose: core.dispose,
   }
 }

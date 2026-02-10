@@ -4,7 +4,7 @@ import type {
   DataGridGroupExpansionSnapshot,
   DataGridRowNode,
 } from "@affino/datagrid-core"
-import type { UseDataGridRuntimeResult } from "./useDataGridRuntime"
+import type { UseDataGridRuntimeResult } from "../../useDataGridRuntime"
 
 export interface AffinoTreeFeatureInput {
   enabled?: boolean
