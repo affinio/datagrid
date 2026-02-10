@@ -46,6 +46,15 @@ export {
 } from "./composables/useDataGridRuntime"
 
 export {
+  DATA_GRID_CLASS_NAMES,
+  DATA_GRID_DATA_ATTRS,
+  DATA_GRID_SELECTORS,
+  dataGridCellSelector,
+  dataGridHeaderCellSelector,
+  dataGridResizeHandleSelector,
+} from "./contracts/dataGridSelectors"
+
+export {
   useAffinoDataGrid,
   type AffinoDataGridEditMode,
   type AffinoDataGridEditSession,

@@ -17,6 +17,23 @@ Vue adapter surface for `@affino/datagrid-core`.
 - `mapDataGridA11yGridAttributes`
 - `mapDataGridA11yCellAttributes`
 - `useDataGridContextMenu`
+- `DATA_GRID_SELECTORS`
+- `DATA_GRID_DATA_ATTRS`
+- `dataGridCellSelector`
+- `dataGridHeaderCellSelector`
+- `dataGridResizeHandleSelector`
+
+Stable selector contract (for parity tests/integration-safe querying):
+
+```ts
+import {
+  DATA_GRID_SELECTORS,
+  dataGridCellSelector,
+} from "@affino/datagrid-vue"
+
+const viewportSelector = DATA_GRID_SELECTORS.viewport
+const ownerCellSelector = dataGridCellSelector("owner")
+```
 
 ## Advanced API (`@affino/datagrid-vue/advanced`)
 
