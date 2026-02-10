@@ -309,4 +309,86 @@ describe("viewport integration snapshot contract", () => {
     rowModel.dispose()
     columnModel.dispose()
   })
+
+  it("keeps axis invalidation scoped between vertical and horizontal updates", () => {
+    const columns: DataGridColumn[] = [
+      { key: "a", label: "A", pin: "left", width: 110, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "b", label: "B", pin: "none", width: 140, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "c", label: "C", pin: "none", width: 140, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "d", label: "D", pin: "right", width: 120, minWidth: 80, maxWidth: 240, visible: true },
+    ]
+    const rowModel = createClientRowModel({ rows: createRows(800) })
+    const columnModel = createDataGridColumnModel({ columns })
+    const containerMetrics = createMeasuredElement({
+      clientWidth: 860,
+      clientHeight: 540,
+      scrollWidth: 3600,
+      scrollHeight: 28_000,
+    })
+    const headerMetrics = createMeasuredElement({
+      clientWidth: 860,
+      clientHeight: 44,
+      scrollWidth: 860,
+      scrollHeight: 44,
+    })
+
+    let onRowsCalls = 0
+    let onColumnsCalls = 0
+    let onWindowCalls = 0
+
+    const controller = createDataGridViewportController({
+      resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+      rowModel,
+      columnModel,
+      imperativeCallbacks: {
+        onRows() {
+          onRowsCalls += 1
+        },
+        onColumns() {
+          onColumnsCalls += 1
+        },
+        onWindow() {
+          onWindowCalls += 1
+        },
+      },
+    })
+
+    controller.attach(containerMetrics.element, headerMetrics.element)
+    controller.setViewportMetrics({
+      containerWidth: containerMetrics.state.clientWidth,
+      containerHeight: containerMetrics.state.clientHeight,
+      headerHeight: headerMetrics.state.clientHeight,
+    })
+    controller.refresh(true)
+
+    const baselineRows = onRowsCalls
+    const baselineColumns = onColumnsCalls
+    const baselineWindow = onWindowCalls
+
+    containerMetrics.element.scrollTop = 1600
+    containerMetrics.element.dispatchEvent(new Event("scroll"))
+    controller.refresh(true)
+
+    expect(onRowsCalls).toBe(baselineRows + 1)
+    expect(onColumnsCalls).toBe(baselineColumns)
+    expect(onWindowCalls).toBe(baselineWindow + 1)
+
+    containerMetrics.element.scrollLeft = 420
+    containerMetrics.element.dispatchEvent(new Event("scroll"))
+    controller.refresh(true)
+
+    expect(onRowsCalls).toBe(baselineRows + 1)
+    expect(onColumnsCalls).toBe(baselineColumns + 1)
+    expect(onWindowCalls).toBe(baselineWindow + 2)
+
+    columnModel.setColumnWidth("b", 260)
+    controller.refresh(true)
+
+    expect(onRowsCalls).toBe(baselineRows + 1)
+    expect(onColumnsCalls).toBe(baselineColumns + 2)
+
+    controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+  })
 })

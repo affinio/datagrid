@@ -372,6 +372,13 @@ export function createDataGridViewportController(
 		let horizontalMetaVersion = 0
 		let lastHorizontalMetaSignature = ""
 		let lastAppliedHorizontalMetaVersion = -1
+		let lastHorizontalMeta: DataGridViewportHorizontalMeta | null = null
+		let lastHorizontalColumnsRef: DataGridColumn[] | null = null
+		let lastHorizontalLayoutScale = -1
+		let lastHorizontalViewportWidth = -1
+		let lastHorizontalCachedNativeScrollWidth = -1
+		let lastHorizontalCachedContainerWidth = -1
+		let lastHorizontalMeasuredScrollWidth = -1
 		let cachedContainerWidth = -1
 		let cachedContainerHeight = -1
 		let cachedHeaderHeight = -1
@@ -1277,163 +1284,206 @@ export function createDataGridViewportController(
 					const nowTs = virtualizationPrepared.timestamp
 					const columns = materializeColumnsFromModel()
 
-			const horizontalMetaResult = buildHorizontalMeta({
-				columns,
-				layoutScale,
-				resolvePinMode,
-				viewportWidth: viewportWidthValue,
-				cachedNativeScrollWidth,
-				cachedContainerWidth,
-				lastScrollDirection,
-				smoothedHorizontalVelocity,
-				lastSignature: lastHorizontalMetaSignature,
-				version: horizontalMetaVersion,
-				scrollWidth: measurements?.scrollWidth ?? cachedNativeScrollWidth,
-			})
-			horizontalMetaVersion = horizontalMetaResult.version
-			lastHorizontalMetaSignature = horizontalMetaResult.signature
-			const columnMeta = horizontalMetaResult.meta
-			const horizontalSizing = resolveHorizontalSizing({
-				columnMeta,
-				viewportWidth: viewportWidthValue,
-				totalRowCount: totalRowCount.value,
-				resolvedRowHeight,
-				viewportHeight: viewportHeightValue,
-			})
-			const contentWidthEstimate = horizontalSizing.contentWidthEstimate
-			const contentHeightEstimate = horizontalSizing.contentHeightEstimate
-			layoutCache.updateContentDimensions(contentWidthEstimate, contentHeightEstimate)
-			const averageColumnWidth = horizontalSizing.averageColumnWidth
-			lastAverageColumnWidth = averageColumnWidth
-			horizontalClampContext = horizontalSizing.horizontalClampContext
+					const currentPendingLeft = Math.max(0, pendingLeft)
+					const rawDeltaLeft = currentPendingLeft - lastScrollLeftSample
+					const deltaLeft = Math.abs(rawDeltaLeft)
+					const horizontalDirection = rawDeltaLeft === 0 ? lastScrollDirection : rawDeltaLeft > 0 ? 1 : -1
+					const horizontalVirtualizationEnabled = true
+					const measuredScrollWidthForMeta = measurements?.scrollWidth ?? cachedNativeScrollWidth
+					const horizontalStructureDirty =
+						!lastHorizontalMeta ||
+						lastHorizontalColumnsRef !== columns ||
+						lastHorizontalLayoutScale !== layoutScale ||
+						Math.abs(lastHorizontalViewportWidth - viewportWidthValue) > 0.5 ||
+						Math.abs(lastHorizontalCachedNativeScrollWidth - cachedNativeScrollWidth) > 0.5 ||
+						Math.abs(lastHorizontalCachedContainerWidth - cachedContainerWidth) > 0.5 ||
+						Math.abs(lastHorizontalMeasuredScrollWidth - measuredScrollWidthForMeta) > 0.5
+					const horizontalMotionDirty =
+						pendingScrollLeftRequest != null ||
+						measuredScrollLeftFromPending ||
+						deltaLeft > horizontalScrollEpsilon ||
+						pendingHorizontalSettle
+					const shouldRecomputeHorizontal = force || horizontalStructureDirty || horizontalMotionDirty
 
-			const currentPendingLeft = Math.max(0, pendingLeft)
-			const rawDeltaLeft = currentPendingLeft - lastScrollLeftSample
-			const deltaLeft = Math.abs(rawDeltaLeft)
-			const horizontalDirection = rawDeltaLeft === 0 ? lastScrollDirection : rawDeltaLeft > 0 ? 1 : -1
-			const horizontalVirtualizationEnabled = true
-
-			const metaVersionChanged = columnMeta.version !== lastAppliedHorizontalMetaVersion
-			const horizontalUpdateForced =
-				pendingScrollLeftRequest != null || measuredScrollLeftFromPending || metaVersionChanged
-
-			pendingHorizontalSettle = false
-
-			const imperativeOnColumns =
-				typeof imperativeCallbacks.onColumns === "function"
-					? imperativeCallbacks.onColumns
-					: null
-
-			const horizontalCallbacks = {
-				applyColumnSnapshot,
-				logHorizontalDebug,
-				onColumns: imperativeOnColumns
-					? payload => {
-						const snapshot = payload.snapshot
-						const signature = [
-							Math.round(payload.scrollLeft * 1000),
-							Math.round(payload.viewportWidth * 1000),
-							Math.round(payload.zoom * 1000),
-							snapshot.scrollableStart,
-							snapshot.scrollableEnd,
-							snapshot.visibleStart,
-							snapshot.visibleEnd,
-							Math.round(snapshot.leftPadding * 1000),
-							Math.round(snapshot.rightPadding * 1000),
-							Math.round(snapshot.totalScrollableWidth * 1000),
-							Math.round(snapshot.visibleScrollableWidth * 1000),
-							Math.round(snapshot.pinnedLeftWidth * 1000),
-							Math.round(snapshot.pinnedRightWidth * 1000),
-						].join("|")
-						if (signature === lastImperativeColumnSignature) {
-							return
-						}
-						lastImperativeColumnSignature = signature
-						imperativeOnColumns(payload)
+					let columnMeta: DataGridViewportHorizontalMeta
+					if (shouldRecomputeHorizontal) {
+						const horizontalMetaResult = buildHorizontalMeta({
+							columns,
+							layoutScale,
+							resolvePinMode,
+							viewportWidth: viewportWidthValue,
+							cachedNativeScrollWidth,
+							cachedContainerWidth,
+							lastScrollDirection,
+							smoothedHorizontalVelocity,
+							lastSignature: lastHorizontalMetaSignature,
+							version: horizontalMetaVersion,
+							scrollWidth: measuredScrollWidthForMeta,
+						})
+						horizontalMetaVersion = horizontalMetaResult.version
+						lastHorizontalMetaSignature = horizontalMetaResult.signature
+						columnMeta = horizontalMetaResult.meta
+						lastHorizontalMeta = columnMeta
+						lastHorizontalColumnsRef = columns
+						lastHorizontalLayoutScale = layoutScale
+						lastHorizontalViewportWidth = viewportWidthValue
+						lastHorizontalCachedNativeScrollWidth = cachedNativeScrollWidth
+						lastHorizontalCachedContainerWidth = cachedContainerWidth
+						lastHorizontalMeasuredScrollWidth = measuredScrollWidthForMeta
+					} else {
+						columnMeta = lastHorizontalMeta!
 					}
-					: undefined,
-			} satisfies HorizontalUpdateCallbacks
+					const horizontalSizing = resolveHorizontalSizing({
+						columnMeta,
+						viewportWidth: viewportWidthValue,
+						totalRowCount: totalRowCount.value,
+						resolvedRowHeight,
+						viewportHeight: viewportHeightValue,
+					})
+					const contentWidthEstimate = horizontalSizing.contentWidthEstimate
+					const contentHeightEstimate = horizontalSizing.contentHeightEstimate
+					layoutCache.updateContentDimensions(contentWidthEstimate, contentHeightEstimate)
+					const averageColumnWidth = horizontalSizing.averageColumnWidth
+					lastAverageColumnWidth = averageColumnWidth
+					horizontalClampContext = horizontalSizing.horizontalClampContext
 
-			// Two-phase (A6): compute horizontal plan without DOM writes.
-			const horizontalPrepared: HorizontalUpdatePrepared = prepareHorizontalViewport({
-				columnMeta,
-				horizontalVirtualizer,
-				horizontalOverscanController,
-				callbacks: horizontalCallbacks,
-				columnSnapshot,
-				layoutScale,
-				viewportWidth: viewportWidthValue,
-				nowTs,
-				frameTimeValue: frameTime.value,
-				averageColumnWidth,
-				scrollDirection: horizontalDirection,
-				horizontalVirtualizationEnabled,
-				horizontalUpdateForced,
-				currentPendingLeft,
-				previousScrollLeftSample: lastScrollLeftSample,
-				deltaLeft,
-				horizontalScrollEpsilon,
-				pendingScrollLeftRequest,
-				measuredScrollLeftFromPending,
-				currentScrollLeftMeasurement: normalizedFallbackScrollLeft,
-				smoothedHorizontalVelocity,
-				lastHorizontalSampleTime,
-				horizontalOverscan,
-				lastAppliedHorizontalMetaVersion,
-			})
+					const metaVersionChanged = columnMeta.version !== lastAppliedHorizontalMetaVersion
+					const horizontalUpdateForced = horizontalStructureDirty ||
+						pendingScrollLeftRequest != null ||
+						measuredScrollLeftFromPending ||
+						metaVersionChanged ||
+						force
 
-			const horizontalScrollLeftValue = horizontalPrepared.scrollLeftValue
-			if (horizontalPrepared.syncScrollLeftValue != null) {
-				syncScrollLeftValue = horizontalPrepared.syncScrollLeftValue
-			}
+					pendingHorizontalSettle = false
 
-			smoothedHorizontalVelocity = horizontalPrepared.smoothedHorizontalVelocity
-			horizontalOverscan = horizontalPrepared.horizontalOverscan
-			lastHorizontalSampleTime = horizontalPrepared.lastHorizontalSampleTime
-			lastScrollDirection = horizontalPrepared.lastScrollDirection
-			lastScrollLeftSample = horizontalPrepared.lastScrollLeftSample
-			lastAppliedHorizontalMetaVersion = horizontalPrepared.lastAppliedHorizontalMetaVersion
+					const imperativeOnColumns =
+						typeof imperativeCallbacks.onColumns === "function"
+							? imperativeCallbacks.onColumns
+							: null
 
-			const virtualizationResult = virtualization.applyPrepared(virtualizationPrepared, {
-				resolveRow: resolveRowFromModel,
-				resolveRowsInRange: resolveRowsInRangeFromModel,
-				imperativeCallbacks,
-			})
-			const activeRowModel = modelBridge.getActiveRowModel()
-			const modelSnapshot = activeRowModel.getSnapshot()
-			const modelRange = modelSnapshot.viewportRange
-			if (
-				modelRange.start !== virtualizationResult.visibleRange.start ||
-				modelRange.end !== virtualizationResult.visibleRange.end
-			) {
-				activeRowModel.setViewportRange(virtualizationResult.visibleRange)
-			}
-			const pendingVerticalScrollWrite = virtualizationResult.pendingScrollWrite
-			const pendingHorizontalScrollWrite = horizontalPrepared.pendingScrollWrite
+					const horizontalCallbacks = {
+						applyColumnSnapshot,
+						logHorizontalDebug,
+						onColumns: imperativeOnColumns
+							? payload => {
+								const snapshot = payload.snapshot
+								const signature = [
+									Math.round(payload.scrollLeft * 1000),
+									Math.round(payload.viewportWidth * 1000),
+									Math.round(payload.zoom * 1000),
+									snapshot.scrollableStart,
+									snapshot.scrollableEnd,
+									snapshot.visibleStart,
+									snapshot.visibleEnd,
+									Math.round(snapshot.leftPadding * 1000),
+									Math.round(snapshot.rightPadding * 1000),
+									Math.round(snapshot.totalScrollableWidth * 1000),
+									Math.round(snapshot.visibleScrollableWidth * 1000),
+									Math.round(snapshot.pinnedLeftWidth * 1000),
+									Math.round(snapshot.pinnedRightWidth * 1000),
+								].join("|")
+								if (signature === lastImperativeColumnSignature) {
+									return
+								}
+								lastImperativeColumnSignature = signature
+								imperativeOnColumns(payload)
+							}
+							: undefined,
+					} satisfies HorizontalUpdateCallbacks
 
-			applyHorizontalViewport({
-				callbacks: horizontalCallbacks,
-				prepared: horizontalPrepared,
-			})
-			scrollIo.applyProgrammaticScrollWrites({
-				scrollTop: pendingVerticalScrollWrite,
-				scrollLeft: pendingHorizontalScrollWrite,
-			})
-			// Verified (A5): heavy path leaves pinned/header transforms to sync layer.
-			scrollLeft.value = horizontalScrollLeftValue
-			nextScrollTop = virtualizationResult.scrollTop
-			syncScrollTopValue = virtualizationResult.syncedScrollTop
-			lastScrollTopSample = virtualizationResult.lastScrollTopSample
-			pendingScrollTop = virtualizationResult.pendingScrollTop
+					// Two-phase (A6): compute horizontal plan without DOM writes.
+					const horizontalPrepared: HorizontalUpdatePrepared = shouldRecomputeHorizontal
+						? prepareHorizontalViewport({
+							columnMeta,
+							horizontalVirtualizer,
+							horizontalOverscanController,
+							callbacks: horizontalCallbacks,
+							columnSnapshot,
+							layoutScale,
+							viewportWidth: viewportWidthValue,
+							nowTs,
+							frameTimeValue: frameTime.value,
+							averageColumnWidth,
+							scrollDirection: horizontalDirection,
+							horizontalVirtualizationEnabled,
+							horizontalUpdateForced,
+							currentPendingLeft,
+							previousScrollLeftSample: lastScrollLeftSample,
+							deltaLeft,
+							horizontalScrollEpsilon,
+							pendingScrollLeftRequest,
+							measuredScrollLeftFromPending,
+							currentScrollLeftMeasurement: normalizedFallbackScrollLeft,
+							smoothedHorizontalVelocity,
+							lastHorizontalSampleTime,
+							horizontalOverscan,
+							lastAppliedHorizontalMetaVersion,
+						})
+						: {
+							shouldUpdate: false,
+							scrollLeftValue: lastScrollLeftSample,
+							syncScrollLeftValue: null,
+							smoothedHorizontalVelocity,
+							horizontalOverscan,
+							lastHorizontalSampleTime,
+							lastScrollDirection,
+							lastScrollLeftSample,
+							lastAppliedHorizontalMetaVersion,
+							pendingScrollWrite: null,
+						}
 
-			const resolvedScrollTop = syncScrollTopValue ?? nextScrollTop
-			const resolvedScrollLeft = syncScrollLeftValue ?? horizontalScrollLeftValue
-			updateCachedScrollOffsets(resolvedScrollTop, resolvedScrollLeft)
-			lastHeavyScrollTop = resolvedScrollTop
-			lastHeavyScrollLeft = resolvedScrollLeft
+					const horizontalScrollLeftValue = horizontalPrepared.scrollLeftValue
+					if (horizontalPrepared.syncScrollLeftValue != null) {
+						syncScrollLeftValue = horizontalPrepared.syncScrollLeftValue
+					}
 
-			emitImperativeScrollSync(resolvedScrollTop, resolvedScrollLeft, nowTs)
-			emitImperativeWindow(getVirtualWindowValue(), nowTs)
+					smoothedHorizontalVelocity = horizontalPrepared.smoothedHorizontalVelocity
+					horizontalOverscan = horizontalPrepared.horizontalOverscan
+					lastHorizontalSampleTime = horizontalPrepared.lastHorizontalSampleTime
+					lastScrollDirection = horizontalPrepared.lastScrollDirection
+					lastScrollLeftSample = horizontalPrepared.lastScrollLeftSample
+					lastAppliedHorizontalMetaVersion = horizontalPrepared.lastAppliedHorizontalMetaVersion
+
+					const virtualizationResult = virtualization.applyPrepared(virtualizationPrepared, {
+						resolveRow: resolveRowFromModel,
+						resolveRowsInRange: resolveRowsInRangeFromModel,
+						imperativeCallbacks,
+					})
+					const activeRowModel = modelBridge.getActiveRowModel()
+					const modelSnapshot = activeRowModel.getSnapshot()
+					const modelRange = modelSnapshot.viewportRange
+					if (
+						modelRange.start !== virtualizationResult.visibleRange.start ||
+						modelRange.end !== virtualizationResult.visibleRange.end
+					) {
+						activeRowModel.setViewportRange(virtualizationResult.visibleRange)
+					}
+					const pendingVerticalScrollWrite = virtualizationResult.pendingScrollWrite
+					const pendingHorizontalScrollWrite = horizontalPrepared.pendingScrollWrite
+
+					applyHorizontalViewport({
+						callbacks: horizontalCallbacks,
+						prepared: horizontalPrepared,
+					})
+					scrollIo.applyProgrammaticScrollWrites({
+						scrollTop: pendingVerticalScrollWrite,
+						scrollLeft: pendingHorizontalScrollWrite,
+					})
+					// Verified (A5): heavy path leaves pinned/header transforms to sync layer.
+					scrollLeft.value = horizontalScrollLeftValue
+					nextScrollTop = virtualizationResult.scrollTop
+					syncScrollTopValue = virtualizationResult.syncedScrollTop
+					lastScrollTopSample = virtualizationResult.lastScrollTopSample
+					pendingScrollTop = virtualizationResult.pendingScrollTop
+
+					const resolvedScrollTop = syncScrollTopValue ?? nextScrollTop
+					const resolvedScrollLeft = syncScrollLeftValue ?? horizontalScrollLeftValue
+					updateCachedScrollOffsets(resolvedScrollTop, resolvedScrollLeft)
+					lastHeavyScrollTop = resolvedScrollTop
+					lastHeavyScrollLeft = resolvedScrollLeft
+
+					emitImperativeScrollSync(resolvedScrollTop, resolvedScrollLeft, nowTs)
+					emitImperativeWindow(getVirtualWindowValue(), nowTs)
 
 				if (
 					onNearBottom &&
