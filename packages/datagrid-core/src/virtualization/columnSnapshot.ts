@@ -104,6 +104,24 @@ export function updateColumnSnapshot<TColumn>(
   const layoutChanged = snapshot.metaVersion !== meta.version
   const widthProjectionChanged = snapshot.metrics !== meta.metrics || snapshot.metaVersion < 0
   const { start, end } = range
+  const rangeChanged = snapshot.scrollableStart !== start || snapshot.scrollableEnd !== end
+
+  if (!layoutChanged && !widthProjectionChanged && !rangeChanged) {
+    snapshot.leftPadding = payload.leftPadding
+    snapshot.rightPadding = payload.rightPadding
+    snapshot.totalScrollableWidth = meta.metrics.totalWidth
+    snapshot.visibleScrollableWidth = payload.visibleScrollableWidth
+    snapshot.pinnedLeftWidth = meta.pinnedLeftWidth
+    snapshot.pinnedRightWidth = meta.pinnedRightWidth
+    snapshot.containerWidthForColumns = meta.containerWidthForColumns
+    snapshot.indexColumnWidth = meta.indexColumnWidth
+    snapshot.scrollDirection = meta.scrollDirection
+    return {
+      visibleStartIndex: snapshot.visibleStart,
+      visibleEndIndex: snapshot.visibleEnd,
+    }
+  }
+
   const visibleScrollableEntries = snapshot.visibleScrollable
   const visibleColumnsEntries = snapshot.visibleColumns
   const scrollableCount = Math.max(0, end - start)

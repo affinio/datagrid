@@ -102,6 +102,36 @@ describe("createServerBackedRowModel", () => {
     model.dispose()
   })
 
+  it("deduplicates viewport warmup when refresh overlaps inflight range fetch", async () => {
+    const { source, fetchBlock } = createSource(40)
+    const pendingResolves: Array<() => void> = []
+    fetchBlock.mockImplementation(
+      () =>
+        new Promise<void>(resolve => {
+          pendingResolves.push(resolve)
+        }),
+    )
+    const model = createServerBackedRowModel({ source })
+
+    model.setViewportRange({ start: 5, end: 9 })
+    const refreshPromise = model.refresh("viewport-change")
+    await Promise.resolve()
+
+    // Overlapping refresh should reuse inflight warmup, not trigger a duplicate start fetch.
+    expect(fetchBlock).toHaveBeenCalledTimes(1)
+    expect(fetchBlock.mock.calls[0]).toEqual([5])
+
+    pendingResolves.shift()?.()
+    await Promise.resolve()
+
+    expect(fetchBlock).toHaveBeenCalledTimes(2)
+    expect(fetchBlock.mock.calls[1]).toEqual([9])
+
+    pendingResolves.shift()?.()
+    await refreshPromise
+    model.dispose()
+  })
+
   it("calls source.reset on refresh(reset)", async () => {
     const { source, reset } = createSource(15)
     const model = createServerBackedRowModel({ source })

@@ -24,39 +24,41 @@
 .datagrid-page {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  height: calc(100dvh - 11.5rem);
+  gap: 0.5rem;
+  height: calc(100dvh - 6.5rem);
   min-height: 640px;
-  --datagrid-controls-height: 13rem;
+  --datagrid-controls-height: 6.2rem;
   font-family: var(--datagrid-font-family);
   font-size: var(--datagrid-font-size);
   color: var(--datagrid-text-color);
 }
 
 .datagrid-hero {
-  display: grid;
-  gap: 1rem;
-  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 0.8rem;
   border: 1px solid var(--datagrid-glass-border);
   background: linear-gradient(
     130deg,
     var(--datagrid-hero-bg-start),
     var(--datagrid-hero-bg-end)
   );
-  padding: 1.25rem;
+  padding: 0.7rem 0.9rem;
 }
 
 .datagrid-hero__eyebrow {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   text-transform: uppercase;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.14em;
   color: var(--datagrid-text-soft);
 }
 
 .datagrid-hero h2 {
-  margin: 0.35rem 0;
-  font-size: clamp(1.25rem, 2vw, 1.7rem);
+  margin: 0 0 0 0.5rem;
+  font-size: clamp(0.95rem, 1.5vw, 1.15rem);
   color: var(--datagrid-text-primary);
 }
 
@@ -67,17 +69,19 @@
 
 .datagrid-hero__chips {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  margin-left: auto;
 }
 
 .datagrid-hero__chips span {
   border: 1px solid var(--datagrid-glass-border);
   border-radius: 999px;
-  padding: 0.3rem 0.7rem;
-  font-size: 0.75rem;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.66rem;
   color: var(--datagrid-text-soft);
   background: var(--datagrid-chip-bg);
+  white-space: nowrap;
 }
 
 .datagrid-controls {
@@ -85,21 +89,21 @@
   flex-wrap: wrap;
   align-items: center;
   align-content: flex-start;
-  gap: 0.75rem;
-  height: var(--datagrid-controls-height);
-  min-height: var(--datagrid-controls-height);
+  gap: 0.48rem;
+  min-height: 0;
+  max-height: var(--datagrid-controls-height);
   overflow: auto;
-  border-radius: 0.9rem;
+  border-radius: 0.78rem;
   border: 1px solid var(--datagrid-glass-border);
   background: var(--datagrid-controls-bg);
-  padding: 0.9rem;
+  padding: 0.55rem 0.62rem;
 }
 
 .datagrid-controls label {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  gap: 0.38rem;
+  font-size: 0.74rem;
   color: var(--datagrid-text-soft);
 }
 
@@ -140,7 +144,7 @@
 }
 
 .datagrid-controls input {
-  min-width: 210px;
+  min-width: 168px;
 }
 
 .datagrid-controls > button {
@@ -238,6 +242,240 @@
   color: var(--datagrid-accent-strong);
 }
 
+.datagrid-controls__column-state-preview {
+  margin: 0.08rem 0.32rem 0.16rem;
+  border: 1px solid color-mix(in srgb, var(--datagrid-glass-border) 82%, transparent);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--datagrid-controls-input-bg) 80%, transparent);
+  padding: 0.42rem 0.5rem;
+  max-height: 134px;
+  overflow: auto;
+  font-size: 0.66rem;
+  line-height: 1.34;
+  color: var(--datagrid-text-soft);
+}
+
+.datagrid-controls__column-state-panel {
+  display: grid;
+  gap: 0.42rem;
+  padding: 0.2rem 0.25rem 0.1rem;
+}
+
+.datagrid-controls__column-state-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--datagrid-text-soft);
+}
+
+.datagrid-controls__column-state-panel-header .ghost {
+  border: 1px solid var(--datagrid-glass-border);
+  background: transparent;
+  color: var(--datagrid-text-primary);
+  border-radius: 0.4rem;
+  padding: 0.16rem 0.38rem;
+  font-size: 0.63rem;
+  cursor: pointer;
+}
+
+.datagrid-controls__column-state-panel-header .ghost:hover {
+  border-color: var(--datagrid-accent-strong);
+}
+
+.datagrid-controls__column-state-list {
+  display: grid;
+  gap: 0.28rem;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 0.08rem;
+}
+
+.datagrid-controls__column-state-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--datagrid-glass-border) 70%, transparent);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--datagrid-controls-input-bg) 80%, transparent);
+  padding: 0.22rem 0.35rem;
+}
+
+.datagrid-controls__column-state-visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.datagrid-controls__column-state-visibility span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--datagrid-text-primary);
+  font-size: 0.72rem;
+}
+
+.datagrid-controls__column-state-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+}
+
+.datagrid-controls__column-state-pin button {
+  border: 1px solid var(--datagrid-glass-border);
+  background: transparent;
+  color: var(--datagrid-text-soft);
+  border-radius: 0.34rem;
+  min-width: 1.42rem;
+  height: 1.3rem;
+  font-size: 0.66rem;
+  padding: 0 0.22rem;
+  cursor: pointer;
+}
+
+.datagrid-controls__column-state-pin button[data-active="true"] {
+  border-color: var(--datagrid-accent-strong);
+  color: var(--datagrid-text-primary);
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 18%, transparent);
+}
+
+.datagrid-controls__row-height-slider {
+  display: grid;
+  gap: 0.42rem;
+  padding: 0.2rem 0.25rem 0.1rem;
+}
+
+.datagrid-controls__row-height-slider label {
+  display: grid;
+  gap: 0.24rem;
+  min-width: 170px;
+}
+
+.datagrid-controls__row-height-slider label span {
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--datagrid-text-soft);
+}
+
+.datagrid-controls__row-height-slider input[type="range"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.datagrid-controls__row-height-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.datagrid-controls__row-height-presets button {
+  border-radius: 0.45rem;
+  border: 1px solid var(--datagrid-glass-border);
+  background: var(--datagrid-controls-input-bg);
+  color: var(--datagrid-text-primary);
+  padding: 0.2rem 0.45rem;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.datagrid-controls__row-height-presets button:hover {
+  border-color: var(--datagrid-accent-strong);
+}
+
+.datagrid-controls__row-height-action {
+  border-radius: 0.45rem;
+  border: 1px solid var(--datagrid-glass-border);
+  background: var(--datagrid-controls-input-bg);
+  color: var(--datagrid-text-primary);
+  padding: 0.24rem 0.48rem;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.datagrid-controls__row-height-action:hover:not(:disabled) {
+  border-color: var(--datagrid-accent-strong);
+}
+
+.datagrid-controls__row-height-action.ghost {
+  background: transparent;
+}
+
+.datagrid-controls__row-height-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.datagrid-controls__pagination-panel {
+  display: grid;
+  gap: 0.48rem;
+  padding: 0.2rem 0.25rem 0.1rem;
+  min-width: 250px;
+}
+
+.datagrid-controls__pagination-panel label {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.datagrid-controls__pagination-panel label > span {
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--datagrid-text-soft);
+}
+
+.datagrid-controls__pagination-select {
+  min-width: 130px;
+}
+
+.datagrid-controls__pagination-row {
+  display: grid;
+  grid-template-columns: auto minmax(72px, 1fr) auto;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.datagrid-controls__pagination-row input {
+  min-width: 0;
+  width: 100%;
+  text-align: center;
+}
+
+.datagrid-controls__pagination-row button,
+.datagrid-controls__pagination-roundtrip {
+  border-radius: 0.45rem;
+  border: 1px solid var(--datagrid-glass-border);
+  background: var(--datagrid-controls-input-bg);
+  color: var(--datagrid-text-primary);
+  padding: 0.22rem 0.48rem;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.datagrid-controls__pagination-row button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.datagrid-controls__pagination-roundtrip:hover,
+.datagrid-controls__pagination-row button:hover:not(:disabled) {
+  border-color: var(--datagrid-accent-strong);
+}
+
+.datagrid-controls__pagination-meta {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--datagrid-text-soft);
+}
+
 .datagrid-controls__clear-filter:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -260,7 +498,7 @@
   margin: 0;
   flex: 1 1 100%;
   min-height: 1.15rem;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   color: var(--datagrid-text-soft);
   white-space: nowrap;
   overflow: hidden;
@@ -529,9 +767,9 @@
 
 .datagrid-metrics {
   display: grid;
-  gap: 0.55rem;
-  grid-template-columns: 1fr;
-  height: 256px;
+  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  height: 96px;
   overflow: auto;
   align-content: start;
   padding-right: 0.2rem;
@@ -539,13 +777,13 @@
 
 .datagrid-metrics div {
   border: 1px solid var(--datagrid-glass-border);
-  border-radius: 0.75rem;
+  border-radius: 0.6rem;
   background: var(--datagrid-metrics-card-bg);
-  padding: 0.55rem 0.8rem;
+  padding: 0.35rem 0.52rem;
 }
 
 .datagrid-metrics dt {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.13em;
   color: var(--datagrid-text-muted);
@@ -553,7 +791,7 @@
 
 .datagrid-metrics dd {
   margin: 0.25rem 0 0;
-  font-size: 0.92rem;
+  font-size: 0.76rem;
   line-height: 1.3;
   overflow-wrap: anywhere;
   color: var(--datagrid-text-primary);
@@ -665,6 +903,12 @@
   user-select: none;
 }
 
+.datagrid-stage__viewport.is-row-resizing,
+.datagrid-stage__viewport.is-row-resizing .datagrid-stage__cell {
+  cursor: row-resize;
+  user-select: none;
+}
+
 .datagrid-stage__header,
 .datagrid-stage__row {
   display: grid;
@@ -707,8 +951,12 @@
 }
 
 .datagrid-stage__row {
-  height: 38px;
+  height: var(--datagrid-row-height, 38px);
   border-bottom: 1px solid var(--datagrid-row-divider-color);
+}
+
+.datagrid-stage__row--drop-target .datagrid-stage__cell {
+  background: color-mix(in srgb, var(--datagrid-selection-fill-preview-bg) 70%, transparent);
 }
 
 .datagrid-stage__header .datagrid-stage__layer--left,
@@ -758,6 +1006,60 @@
   padding: 0;
 }
 
+.datagrid-stage__select-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.datagrid-stage__row-resize-handle {
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  transform: translateX(-50%);
+  width: 1.35rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--datagrid-glass-border) 80%, transparent);
+  background: color-mix(in srgb, var(--datagrid-controls-input-bg) 82%, transparent);
+  cursor: row-resize;
+  opacity: 0;
+  transition: opacity 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.datagrid-stage__row:hover .datagrid-stage__row-resize-handle,
+.datagrid-stage__viewport.is-row-resizing .datagrid-stage__row-resize-handle {
+  opacity: 1;
+}
+
+.datagrid-stage__row-resize-handle:hover {
+  border-color: var(--datagrid-accent-strong);
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 24%, var(--datagrid-controls-input-bg));
+}
+
+.datagrid-stage__row-drag-handle {
+  width: 0.9rem;
+  min-width: 0.9rem;
+  height: 1.1rem;
+  border: 1px solid var(--datagrid-glass-border);
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--datagrid-controls-input-bg) 80%, transparent);
+  color: var(--datagrid-text-soft);
+  font-size: 0.62rem;
+  line-height: 1;
+  padding: 0;
+  cursor: grab;
+}
+
+.datagrid-stage__row-drag-handle:active {
+  cursor: grabbing;
+}
+
+.datagrid-stage__row-drag-handle:hover {
+  border-color: var(--datagrid-accent-strong);
+  color: var(--datagrid-text-primary);
+}
+
 .datagrid-stage__checkbox {
   width: 1rem;
   height: 1rem;
@@ -781,6 +1083,36 @@
 
 .datagrid-stage__cell--header.datagrid-stage__cell--sortable:hover {
   background: var(--datagrid-header-cell-hover-bg);
+}
+
+.datagrid-stage__cell--header.datagrid-stage__cell--column-drop-target {
+  box-shadow: inset 0 0 0 1px var(--datagrid-accent-strong);
+  background: color-mix(in srgb, var(--datagrid-header-cell-hover-bg) 80%, var(--datagrid-accent-strong) 20%);
+}
+
+.datagrid-stage__column-drag-handle {
+  flex: 0 0 auto;
+  width: 0.92rem;
+  min-width: 0.92rem;
+  height: 1.06rem;
+  margin-right: 0.26rem;
+  border: 1px solid var(--datagrid-glass-border);
+  border-radius: 0.26rem;
+  background: color-mix(in srgb, var(--datagrid-controls-input-bg) 78%, transparent);
+  color: var(--datagrid-text-soft);
+  font-size: 0.58rem;
+  line-height: 1;
+  padding: 0;
+  cursor: grab;
+}
+
+.datagrid-stage__column-drag-handle:hover {
+  border-color: var(--datagrid-accent-strong);
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-stage__column-drag-handle:active {
+  cursor: grabbing;
 }
 
 .datagrid-stage__header-label {
@@ -1208,6 +1540,21 @@
   .datagrid-page {
     height: auto;
     min-height: 0;
+  }
+
+  .datagrid-hero {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .datagrid-hero h2 {
+    margin-left: 0;
+  }
+
+  .datagrid-hero__chips {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
   }
 
   .datagrid-controls {

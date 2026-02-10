@@ -46,6 +46,9 @@ function normalizeHeight(height: unknown): number | null {
 }
 
 function normalizeFallbackHeight(fallback: unknown): number {
+  if (!Number.isFinite(fallback) || (fallback as number) <= 0) {
+    return 32
+  }
   const normalized = normalizeHeight(fallback)
   return normalized ?? 32
 }

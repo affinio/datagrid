@@ -160,7 +160,7 @@ export interface DataGridViewportController extends DataGridViewportSignals {
 
 const AUTO_ROW_HEIGHT_CACHE_LIMIT = 512
 const AUTO_ROW_HEIGHT_EPSILON = 0.6
-const AUTO_ROW_HEIGHT_SMOOTHING = 0.35
+const AUTO_ROW_HEIGHT_SMOOTHING = 0.5
 
 interface AutoRowHeightEstimateSyncOptions {
 	preserveLowerBound?: number
@@ -364,6 +364,8 @@ export function createDataGridViewportController(
 			limit: AUTO_ROW_HEIGHT_CACHE_LIMIT,
 		})
 		let autoRowHeightEstimate = BASE_ROW_HEIGHT
+		let autoRowHeightHasMeasurements = false
+		let pendingAutoRowHeightMeasurement = false
 		let viewportMetrics: ViewportMetricsSnapshot | null = null
 		let loading = false
 		let imperativeCallbacks: DataGridViewportImperativeCallbacks = options.imperativeCallbacks ?? {}
@@ -382,6 +384,7 @@ export function createDataGridViewportController(
 		let heavyFrameInProgress = false
 		let heavyUpdateTaskId: number | null = null
 		let pendingHorizontalSettle = false
+		let pendingColumnInvalidation = false
 		let horizontalOverscan = horizontalMinOverscan
 		let resizeObserver: DataGridViewportResizeObserver | null = null
 		let attached = false
@@ -416,7 +419,9 @@ export function createDataGridViewportController(
 		let lastHorizontalSizingMeta: DataGridViewportHorizontalMeta | null = null
 		let lastHorizontalSizingMetaVersion = -1
 		let lastHorizontalSizingViewportWidth = -1
+		let lastViewportMetricsSignature = ""
 		let pendingContentInvalidationRange: DataGridViewportRange | null = null
+		let lastRowApplySignature = ""
 		const recomputeDiagnostics = {
 			rowApplyCount: 0,
 			columnApplyCount: 0,
@@ -461,6 +466,7 @@ export function createDataGridViewportController(
 		function resetAutoRowHeightState() {
 			autoRowHeightCache.clear()
 			autoRowHeightEstimate = Math.max(1, baseRowHeight)
+			autoRowHeightHasMeasurements = false
 		}
 
 		function normalizeAutoMeasuredHeight(height: number, layoutScale: number): number | null {
@@ -505,11 +511,15 @@ export function createDataGridViewportController(
 			fallbackRowModel: fallbackClientRowModel,
 			fallbackColumnModel,
 			onInvalidate: (invalidation: DataGridViewportModelBridgeInvalidation) => {
+				if (invalidation.axes.columns) {
+					pendingColumnInvalidation = true
+				}
 				if (invalidation.axes.rows) {
-					if (invalidation.scope === "structural") {
+					if (invalidation.scope === "structural" || invalidation.reason === "rows") {
 						resetAutoRowHeightState()
 					} else if (invalidation.rowRange) {
 						autoRowHeightCache.deleteRange(invalidation.rowRange)
+						autoRowHeightHasMeasurements = autoRowHeightCache.getSnapshot().size > 0
 						syncAutoRowHeightEstimateFromCache()
 					}
 				}
@@ -635,8 +645,8 @@ export function createDataGridViewportController(
 
 		function flushSchedulers() {
 			flushMeasurementQueue()
-			frameScheduler.flush()
 			scheduler.flush()
+			frameScheduler.flush()
 		}
 
 		function updateCachedScrollOffsets(scrollTopValue: number, scrollLeftValue: number) {
@@ -922,6 +932,12 @@ export function createDataGridViewportController(
 				resetAutoRowHeightState()
 			} else {
 				syncAutoRowHeightEstimateFromCache()
+				pendingAutoRowHeightMeasurement = true
+				const layoutScale = (options.supportsCssZoom ?? supportsCssZoom) ? zoom : 1
+				const didIngest = maybeIngestAutoRowHeights(derived.rows.visibleRange.value, layoutScale)
+				if (didIngest) {
+					scheduleUpdate(false)
+				}
 			}
 			scheduleUpdate(false)
 		}
@@ -991,6 +1007,14 @@ export function createDataGridViewportController(
 		}
 
 		function measureRowHeightValue() {
+			autoRowHeightCache.clear()
+			autoRowHeightHasMeasurements = false
+			pendingAutoRowHeightMeasurement = true
+			const layoutScale = (options.supportsCssZoom ?? supportsCssZoom) ? zoom : 1
+			const didIngest = maybeIngestAutoRowHeights(derived.rows.visibleRange.value, layoutScale)
+			if (didIngest) {
+				scheduleUpdate(false)
+			}
 			scheduleUpdate(false)
 		}
 
@@ -1089,6 +1113,12 @@ export function createDataGridViewportController(
 			end: number,
 			payload: HorizontalVirtualizerPayload,
 		) {
+			const previousMetaVersion = columnSnapshot.metaVersion
+			const previousScrollableStart = columnSnapshot.scrollableStart
+			const previousScrollableEnd = columnSnapshot.scrollableEnd
+			const previousVisibleStart = columnSnapshot.visibleStart
+			const previousVisibleEnd = columnSnapshot.visibleEnd
+
 			columnSnapshot.columnWidthMap = columnWidthMap.value
 			const { visibleStartIndex, visibleEndIndex } = updateColumnSnapshot({
 				snapshot: columnSnapshot,
@@ -1112,21 +1142,132 @@ export function createDataGridViewportController(
 				resolveColumnWidth,
 			})
 
-			const visibleColumnsSnapshot = columnSnapshot.visibleColumns
-			visibleColumns.value = visibleColumnsSnapshot.map(entry => entry.column)
-			visibleColumnEntries.value = visibleColumnsSnapshot.slice()
+			const layoutProjectionChanged = columnSnapshot.metaVersion !== previousMetaVersion
+			const rangeProjectionChanged =
+				columnSnapshot.scrollableStart !== previousScrollableStart ||
+				columnSnapshot.scrollableEnd !== previousScrollableEnd ||
+				columnSnapshot.visibleStart !== previousVisibleStart ||
+				columnSnapshot.visibleEnd !== previousVisibleEnd
 
-			const visibleScrollableSnapshot = columnSnapshot.visibleScrollable
-			visibleScrollableColumns.value = visibleScrollableSnapshot.map(entry => entry.column)
-			visibleScrollableEntries.value = visibleScrollableSnapshot.slice()
+			if (layoutProjectionChanged || rangeProjectionChanged) {
+				const visibleColumnsSnapshot = columnSnapshot.visibleColumns
+				const currentVisibleColumns = visibleColumns.value
+				let visibleColumnsChanged = currentVisibleColumns.length !== visibleColumnsSnapshot.length
+				if (!visibleColumnsChanged) {
+					for (let index = 0; index < visibleColumnsSnapshot.length; index += 1) {
+						if (currentVisibleColumns[index] !== visibleColumnsSnapshot[index]?.column) {
+							visibleColumnsChanged = true
+							break
+						}
+					}
+				}
+				if (visibleColumnsChanged) {
+					visibleColumns.value = visibleColumnsSnapshot.map(entry => entry.column)
+				}
 
-			const pinnedLeftSnapshot = columnSnapshot.pinnedLeft
-			pinnedLeftColumns.value = pinnedLeftSnapshot.map(entry => entry.column)
-			pinnedLeftEntries.value = pinnedLeftSnapshot.slice()
+				const currentVisibleEntries = visibleColumnEntries.value
+				let visibleEntriesChanged = currentVisibleEntries.length !== visibleColumnsSnapshot.length
+				if (!visibleEntriesChanged) {
+					for (let index = 0; index < visibleColumnsSnapshot.length; index += 1) {
+						if (currentVisibleEntries[index] !== visibleColumnsSnapshot[index]) {
+							visibleEntriesChanged = true
+							break
+						}
+					}
+				}
+				if (visibleEntriesChanged) {
+					visibleColumnEntries.value = visibleColumnsSnapshot.slice()
+				}
 
-			const pinnedRightSnapshot = columnSnapshot.pinnedRight
-			pinnedRightColumns.value = pinnedRightSnapshot.map(entry => entry.column)
-			pinnedRightEntries.value = pinnedRightSnapshot.slice()
+				const visibleScrollableSnapshot = columnSnapshot.visibleScrollable
+				const currentScrollableColumns = visibleScrollableColumns.value
+				let visibleScrollableChanged = currentScrollableColumns.length !== visibleScrollableSnapshot.length
+				if (!visibleScrollableChanged) {
+					for (let index = 0; index < visibleScrollableSnapshot.length; index += 1) {
+						if (currentScrollableColumns[index] !== visibleScrollableSnapshot[index]?.column) {
+							visibleScrollableChanged = true
+							break
+						}
+					}
+				}
+				if (visibleScrollableChanged) {
+					visibleScrollableColumns.value = visibleScrollableSnapshot.map(entry => entry.column)
+				}
+
+				const currentScrollableEntries = visibleScrollableEntries.value
+				let visibleScrollableEntriesChanged = currentScrollableEntries.length !== visibleScrollableSnapshot.length
+				if (!visibleScrollableEntriesChanged) {
+					for (let index = 0; index < visibleScrollableSnapshot.length; index += 1) {
+						if (currentScrollableEntries[index] !== visibleScrollableSnapshot[index]) {
+							visibleScrollableEntriesChanged = true
+							break
+						}
+					}
+				}
+				if (visibleScrollableEntriesChanged) {
+					visibleScrollableEntries.value = visibleScrollableSnapshot.slice()
+				}
+			}
+
+			if (layoutProjectionChanged) {
+				const pinnedLeftSnapshot = columnSnapshot.pinnedLeft
+				const currentPinnedLeft = pinnedLeftColumns.value
+				let pinnedLeftChanged = currentPinnedLeft.length !== pinnedLeftSnapshot.length
+				if (!pinnedLeftChanged) {
+					for (let index = 0; index < pinnedLeftSnapshot.length; index += 1) {
+						if (currentPinnedLeft[index] !== pinnedLeftSnapshot[index]?.column) {
+							pinnedLeftChanged = true
+							break
+						}
+					}
+				}
+				if (pinnedLeftChanged) {
+					pinnedLeftColumns.value = pinnedLeftSnapshot.map(entry => entry.column)
+				}
+
+				const currentPinnedLeftEntries = pinnedLeftEntries.value
+				let pinnedLeftEntriesChanged = currentPinnedLeftEntries.length !== pinnedLeftSnapshot.length
+				if (!pinnedLeftEntriesChanged) {
+					for (let index = 0; index < pinnedLeftSnapshot.length; index += 1) {
+						if (currentPinnedLeftEntries[index] !== pinnedLeftSnapshot[index]) {
+							pinnedLeftEntriesChanged = true
+							break
+						}
+					}
+				}
+				if (pinnedLeftEntriesChanged) {
+					pinnedLeftEntries.value = pinnedLeftSnapshot.slice()
+				}
+
+				const pinnedRightSnapshot = columnSnapshot.pinnedRight
+				const currentPinnedRight = pinnedRightColumns.value
+				let pinnedRightChanged = currentPinnedRight.length !== pinnedRightSnapshot.length
+				if (!pinnedRightChanged) {
+					for (let index = 0; index < pinnedRightSnapshot.length; index += 1) {
+						if (currentPinnedRight[index] !== pinnedRightSnapshot[index]?.column) {
+							pinnedRightChanged = true
+							break
+						}
+					}
+				}
+				if (pinnedRightChanged) {
+					pinnedRightColumns.value = pinnedRightSnapshot.map(entry => entry.column)
+				}
+
+				const currentPinnedRightEntries = pinnedRightEntries.value
+				let pinnedRightEntriesChanged = currentPinnedRightEntries.length !== pinnedRightSnapshot.length
+				if (!pinnedRightEntriesChanged) {
+					for (let index = 0; index < pinnedRightSnapshot.length; index += 1) {
+						if (currentPinnedRightEntries[index] !== pinnedRightSnapshot[index]) {
+							pinnedRightEntriesChanged = true
+							break
+						}
+					}
+				}
+				if (pinnedRightEntriesChanged) {
+					pinnedRightEntries.value = pinnedRightSnapshot.slice()
+				}
+			}
 
 			leftPadding.value = payload.leftPadding
 			rightPadding.value = payload.rightPadding
@@ -1380,6 +1521,8 @@ export function createDataGridViewportController(
 					const viewportWidthValue = resolvedDimensions.viewportWidth
 					viewportHeight.value = viewportHeightValue
 					viewportWidth.value = viewportWidthValue
+					const viewportMetricsSignature = `${Math.round(viewportWidthValue * 1000)}|${Math.round(viewportHeightValue * 1000)}`
+					const viewportMetricsDirty = viewportMetricsSignature !== lastViewportMetricsSignature
 
 					const pendingScrollTopRequest = pendingScrollTop
 					const pendingScrollLeftRequest = pendingScrollLeft
@@ -1401,7 +1544,16 @@ export function createDataGridViewportController(
 
 					const scrollTopDelta = Math.abs(pendingTop - lastScrollTopSample)
 					const scrollLeftDelta = Math.abs(pendingLeft - lastScrollLeftSample)
-					const shouldFastPath = shouldUseFastPath({
+					const shouldForceAutoRowHeightMeasure =
+						rowHeightMode === "auto" &&
+						(!autoRowHeightHasMeasurements || pendingAutoRowHeightMeasurement)
+					const columnWindowReady = columnSnapshot.metaVersion >= 0 || columnVirtualState.value.totalCount > 0
+					const shouldFastPath =
+						columnWindowReady &&
+						!pendingColumnInvalidation &&
+						!viewportMetricsDirty &&
+						!shouldForceAutoRowHeightMeasure &&
+						shouldUseFastPath({
 						force,
 						pendingHorizontalSettle,
 						measuredScrollTopFromPending,
@@ -1412,7 +1564,7 @@ export function createDataGridViewportController(
 						scrollLeftDelta,
 						verticalScrollEpsilon,
 						horizontalScrollEpsilon,
-					})
+						})
 
 					if (shouldFastPath && pendingContentInvalidationRange == null) {
 						scrollTop.value = lastScrollTopSample
@@ -1463,6 +1615,7 @@ export function createDataGridViewportController(
 						scheduleAfterScroll()
 						return
 					}
+					lastViewportMetricsSignature = viewportMetricsSignature
 					recordVirtualizerUpdate()
 					// Two-phase (A6): virtualization apply happens later with pending writes.
 
@@ -1657,7 +1810,18 @@ export function createDataGridViewportController(
 						resolveRowsInRange: resolveRowsInRangeFromModel,
 						imperativeCallbacks,
 					})
-					recomputeDiagnostics.rowApplyCount += 1
+					const rowApplySignature = [
+						virtualizationResult.visibleRange.start,
+						virtualizationResult.visibleRange.end,
+						Math.round(virtualizationResult.scrollTop * 1000),
+						totalRowCount.value,
+						Math.round(effectiveRowHeight.value * 1000),
+						Math.round(viewportHeightValue * 1000),
+					].join("|")
+					if (rowApplySignature !== lastRowApplySignature) {
+						recomputeDiagnostics.rowApplyCount += 1
+						lastRowApplySignature = rowApplySignature
+					}
 					const estimatedMaxScrollTop = Math.max(0, totalContentHeight.value - viewportHeightValue)
 					const bottomStabilityThreshold = Math.max(
 						viewportHeightValue * 0.35,
@@ -1675,6 +1839,12 @@ export function createDataGridViewportController(
 							? { preserveLowerBound: autoRowHeightEstimate }
 							: undefined,
 					)
+					if (autoHeightChanged) {
+						pendingAutoRowHeightMeasurement = true
+						scheduleUpdate(false)
+					} else {
+						pendingAutoRowHeightMeasurement = false
+					}
 					const activeRowModel = modelBridge.getActiveRowModel()
 					const modelSnapshot = activeRowModel.getSnapshot()
 					const modelRange = modelSnapshot.viewportRange
@@ -1691,6 +1861,9 @@ export function createDataGridViewportController(
 						callbacks: horizontalCallbacks,
 						prepared: horizontalPrepared,
 					})
+					if (horizontalPrepared.shouldUpdate) {
+						pendingColumnInvalidation = false
+					}
 					if (horizontalPrepared.shouldUpdate) {
 						recomputeDiagnostics.columnApplyCount += 1
 					}

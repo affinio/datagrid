@@ -79,4 +79,78 @@ describe("columnSnapshot performance contract", () => {
     expect(clearSpy).not.toHaveBeenCalled()
     expect(setSpy).not.toHaveBeenCalled()
   })
+
+  it("skips column projection traversal when meta and range are unchanged", () => {
+    const baseColumns: DataGridColumn[] = [
+      { key: "id", label: "ID", width: 80 },
+      { key: "name", label: "Name", width: 180 },
+      { key: "status", label: "Status", width: 140 },
+    ]
+    let indexReads = 0
+    const columns = new Proxy(baseColumns, {
+      get(target, property, receiver) {
+        if (typeof property === "string" && /^\d+$/.test(property)) {
+          indexReads += 1
+        }
+        return Reflect.get(target, property, receiver)
+      },
+    })
+
+    const metrics = {
+      widths: [80, 180, 140],
+      offsets: [0, 80, 260],
+      totalWidth: 400,
+    }
+
+    const meta: ColumnSnapshotMeta<DataGridColumn> = {
+      scrollableColumns: columns as unknown as DataGridColumn[],
+      scrollableIndices: [0, 1, 2],
+      metrics,
+      pinnedLeft: [],
+      pinnedRight: [],
+      pinnedLeftWidth: 0,
+      pinnedRightWidth: 0,
+      containerWidthForColumns: 640,
+      indexColumnWidth: 0,
+      scrollDirection: 0,
+      version: 1,
+      zoom: 1,
+    }
+
+    const snapshot = createEmptyColumnSnapshot<DataGridColumn>()
+    updateColumnSnapshot({
+      snapshot,
+      meta,
+      range: { start: 0, end: 3 },
+      payload: {
+        visibleStart: 0,
+        visibleEnd: 3,
+        leftPadding: 0,
+        rightPadding: 0,
+        totalScrollableWidth: metrics.totalWidth,
+        visibleScrollableWidth: metrics.totalWidth,
+      },
+      getColumnKey: column => column.key,
+      resolveColumnWidth: column => column.width ?? 0,
+    })
+    const baselineReads = indexReads
+
+    updateColumnSnapshot({
+      snapshot,
+      meta,
+      range: { start: 0, end: 3 },
+      payload: {
+        visibleStart: 0,
+        visibleEnd: 3,
+        leftPadding: 0,
+        rightPadding: 0,
+        totalScrollableWidth: metrics.totalWidth,
+        visibleScrollableWidth: metrics.totalWidth,
+      },
+      getColumnKey: column => column.key,
+      resolveColumnWidth: column => column.width ?? 0,
+    })
+
+    expect(indexReads).toBe(baselineReads)
+  })
 })

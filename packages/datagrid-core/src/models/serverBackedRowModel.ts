@@ -41,6 +41,12 @@ export interface ServerBackedRowModel<T> extends DataGridRowModel<T> {
 
 const DEFAULT_ROW_CACHE_LIMIT = 4096
 
+interface InFlightViewportWarmup {
+  start: number
+  end: number
+  promise: Promise<void>
+}
+
 export function createServerBackedRowModel<T>(
   options: CreateServerBackedRowModelOptions<T>,
 ): ServerBackedRowModel<T> {
@@ -69,8 +75,10 @@ export function createServerBackedRowModel<T>(
   let lastRangeCacheRevision = -1
   const emptyRangeRows = Object.freeze([]) as readonly DataGridRowNode<T>[]
   let lastRangeCacheRows: readonly DataGridRowNode<T>[] = emptyRangeRows
+  let inFlightViewportWarmup: InFlightViewportWarmup | null = null
   const listeners = new Set<DataGridRowModelListener<T>>()
   const rowNodeCache = new Map<number, DataGridRowNode<T> | undefined>()
+  const rowNodeCacheRevision = new Map<number, number>()
   const rowCacheLimit =
     Number.isFinite(options.rowCacheLimit) && (options.rowCacheLimit as number) > 0
       ? Math.max(1, Math.trunc(options.rowCacheLimit as number))
@@ -81,8 +89,13 @@ export function createServerBackedRowModel<T>(
       return undefined
     }
     const cached = rowNodeCache.get(index)
+    const revision = rowNodeCacheRevision.get(index)
     rowNodeCache.delete(index)
     rowNodeCache.set(index, cached)
+    if (typeof revision !== "undefined") {
+      rowNodeCacheRevision.delete(index)
+      rowNodeCacheRevision.set(index, revision)
+    }
     return cached
   }
 
@@ -91,12 +104,14 @@ export function createServerBackedRowModel<T>(
       rowNodeCache.delete(index)
     }
     rowNodeCache.set(index, row)
+    rowNodeCacheRevision.set(index, cacheRevision)
     while (rowNodeCache.size > rowCacheLimit) {
       const oldest = rowNodeCache.keys().next().value as number | undefined
       if (typeof oldest === "undefined") {
         break
       }
       rowNodeCache.delete(oldest)
+      rowNodeCacheRevision.delete(oldest)
     }
   }
 
@@ -162,6 +177,7 @@ export function createServerBackedRowModel<T>(
 
   function invalidateCaches() {
     rowNodeCache.clear()
+    rowNodeCacheRevision.clear()
     cacheRevision += 1
     lastRangeCacheStart = -1
     lastRangeCacheEnd = -1
@@ -193,17 +209,41 @@ export function createServerBackedRowModel<T>(
     const sourceRange = toSourceRange(range)
     const start = Math.max(0, Math.trunc(sourceRange.start))
     const end = Math.max(start, Math.trunc(sourceRange.end))
-    await source.fetchBlock(start)
-    if (end !== start) {
-      await source.fetchBlock(end)
+    if (
+      inFlightViewportWarmup &&
+      inFlightViewportWarmup.start === start &&
+      inFlightViewportWarmup.end === end
+    ) {
+      return inFlightViewportWarmup.promise
     }
+    const promise = (async () => {
+      await source.fetchBlock(start)
+      if (end !== start) {
+        await source.fetchBlock(end)
+      }
+    })()
+    inFlightViewportWarmup = {
+      start,
+      end,
+      promise,
+    }
+    void promise.finally(() => {
+      if (inFlightViewportWarmup?.promise === promise) {
+        inFlightViewportWarmup = null
+      }
+    })
+    return promise
   }
 
   function toRowNode(index: number): DataGridRowNode<T> | undefined {
     const sourceIndex = toSourceIndex(index)
+    if (rowNodeCache.has(sourceIndex) && rowNodeCacheRevision.get(sourceIndex) === cacheRevision) {
+      return readRowCache(sourceIndex)
+    }
     const row = source.getRowAt(sourceIndex)
     if (rowNodeCache.has(sourceIndex)) {
       const cached = readRowCache(sourceIndex)
+      rowNodeCacheRevision.set(sourceIndex, cacheRevision)
       if (typeof row === "undefined") {
         writeRowCache(sourceIndex, undefined)
         return undefined
@@ -313,13 +353,14 @@ export function createServerBackedRowModel<T>(
         return
       }
       viewportRange = nextRange
-      void warmViewportRange(viewportRange)
+      const warmedRange = nextRange
+      void warmViewportRange(warmedRange)
         .then(() => {
-          invalidateCachesForRange(viewportRange)
+          invalidateCachesForRange(warmedRange)
           emit()
         })
         .catch(() => {
-          invalidateCachesForRange(viewportRange)
+          invalidateCachesForRange(warmedRange)
           emit()
         })
       emit()
@@ -434,8 +475,10 @@ export function createServerBackedRowModel<T>(
         return
       }
       disposed = true
+      inFlightViewportWarmup = null
       listeners.clear()
       rowNodeCache.clear()
+      rowNodeCacheRevision.clear()
       lastRangeCacheRows = emptyRangeRows
     },
   }

@@ -239,6 +239,77 @@ describe("viewport integration snapshot contract", () => {
     columnModel.dispose()
   })
 
+  it("keeps column projection signal references stable when horizontal range does not change", () => {
+    const columns: DataGridColumn[] = [
+      { key: "pin-left", label: "Pin Left", pin: "left", width: 140, minWidth: 80, maxWidth: 260, visible: true },
+      { key: "c1", label: "C1", pin: "none", width: 260, minWidth: 120, maxWidth: 360, visible: true },
+      { key: "c2", label: "C2", pin: "none", width: 260, minWidth: 120, maxWidth: 360, visible: true },
+      { key: "c3", label: "C3", pin: "none", width: 260, minWidth: 120, maxWidth: 360, visible: true },
+      { key: "pin-right", label: "Pin Right", pin: "right", width: 160, minWidth: 100, maxWidth: 260, visible: true },
+    ]
+    const rowModel = createClientRowModel({ rows: createRows(120) })
+    const columnModel = createDataGridColumnModel({ columns })
+    const containerMetrics = createMeasuredElement({
+      clientWidth: 920,
+      clientHeight: 480,
+      scrollWidth: 2800,
+      scrollHeight: 9600,
+    })
+    const headerMetrics = createMeasuredElement({
+      clientWidth: 920,
+      clientHeight: 44,
+      scrollWidth: 920,
+      scrollHeight: 44,
+    })
+
+    const controller = createDataGridViewportController({
+      resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+      rowModel,
+      columnModel,
+    })
+
+    controller.attach(containerMetrics.element, headerMetrics.element)
+    controller.setViewportMetrics({
+      containerWidth: containerMetrics.state.clientWidth,
+      containerHeight: containerMetrics.state.clientHeight,
+      headerHeight: headerMetrics.state.clientHeight,
+    })
+    controller.refresh(true)
+
+    const beforeWindow = controller.getVirtualWindow()
+    const beforeVisibleColumns = controller.derived.columns.visibleColumns.value
+    const beforeVisibleEntries = controller.derived.columns.visibleColumnEntries.value
+    const beforeScrollableColumns = controller.derived.columns.visibleScrollableColumns.value
+    const beforeScrollableEntries = controller.derived.columns.visibleScrollableEntries.value
+    const beforePinnedLeft = controller.derived.columns.pinnedLeftColumns.value
+    const beforePinnedRight = controller.derived.columns.pinnedRightColumns.value
+    const beforePinnedLeftEntries = controller.derived.columns.pinnedLeftEntries.value
+    const beforePinnedRightEntries = controller.derived.columns.pinnedRightEntries.value
+
+
+    // Move inside first visible center column: should not cross virtual boundary.
+    containerMetrics.element.scrollLeft = 24
+    containerMetrics.element.dispatchEvent(new Event("scroll"))
+    controller.refresh(true)
+
+    const afterWindow = controller.getVirtualWindow()
+    expect(afterWindow.colStart).toBe(beforeWindow.colStart)
+    expect(afterWindow.colEnd).toBe(beforeWindow.colEnd)
+
+    expect(controller.derived.columns.visibleColumns.value).toBe(beforeVisibleColumns)
+    expect(controller.derived.columns.visibleColumnEntries.value).toBe(beforeVisibleEntries)
+    expect(controller.derived.columns.visibleScrollableColumns.value).toBe(beforeScrollableColumns)
+    expect(controller.derived.columns.visibleScrollableEntries.value).toBe(beforeScrollableEntries)
+    expect(controller.derived.columns.pinnedLeftColumns.value).toBe(beforePinnedLeft)
+    expect(controller.derived.columns.pinnedRightColumns.value).toBe(beforePinnedRight)
+    expect(controller.derived.columns.pinnedLeftEntries.value).toBe(beforePinnedLeftEntries)
+    expect(controller.derived.columns.pinnedRightEntries.value).toBe(beforePinnedRightEntries)
+
+    controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+  })
+
   it("coalesces burst scroll input into a single apply cycle", () => {
     const columns: DataGridColumn[] = [
       { key: "a", label: "A", pin: "left", width: 110, minWidth: 80, maxWidth: 240, visible: true },
