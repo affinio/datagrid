@@ -56,6 +56,7 @@ export {
 export type {
   ClientRowModel,
   CreateClientRowModelOptions,
+  DataGridClientRowModelDerivedCacheDiagnostics,
   DataGridClientRowReorderInput,
 } from "./clientRowModel.js"
 export { createClientRowModel } from "./clientRowModel.js"

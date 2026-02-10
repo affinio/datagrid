@@ -411,6 +411,14 @@ export function createDataGridViewportController(
 		let lastHorizontalSizingMetaVersion = -1
 		let lastHorizontalSizingViewportWidth = -1
 		let pendingContentInvalidationRange: DataGridViewportRange | null = null
+		const recomputeDiagnostics = {
+			rowApplyCount: 0,
+			columnApplyCount: 0,
+			horizontalMetaRecomputeCount: 0,
+			horizontalSizingRecomputeCount: 0,
+			offscreenRowInvalidationSkips: 0,
+			contentRowInvalidationApplyCount: 0,
+		}
 		let horizontalClampContext: HorizontalClampContext = {
 			totalScrollableWidth: 0,
 			containerWidthForColumns: 0,
@@ -1192,6 +1200,7 @@ export function createDataGridViewportController(
 					right: pinnedRightWidth,
 				},
 				overlaySync: getViewportSyncStateValue(),
+				recompute: { ...recomputeDiagnostics },
 			}
 		}
 
@@ -1411,6 +1420,7 @@ export function createDataGridViewportController(
 						!pendingHorizontalSettle &&
 						isRangeOutsideVisibleRows(contentInvalidationRange)
 					) {
+						recomputeDiagnostics.offscreenRowInvalidationSkips += 1
 						pendingContentInvalidationRange = null
 						scheduleAfterScroll()
 						return
@@ -1475,6 +1485,7 @@ export function createDataGridViewportController(
 
 					let columnMeta: DataGridViewportHorizontalMeta
 					if (!lastHorizontalMeta || horizontalStructureDirty) {
+						recomputeDiagnostics.horizontalMetaRecomputeCount += 1
 						const horizontalMetaResult = buildHorizontalMetaFn({
 							columns,
 							layoutScale,
@@ -1516,6 +1527,7 @@ export function createDataGridViewportController(
 						: (lastHorizontalSizing as HorizontalSizingResolution)
 
 					if (shouldRecomputeHorizontalSizing) {
+						recomputeDiagnostics.horizontalSizingRecomputeCount += 1
 						lastHorizontalSizing = horizontalSizing
 						lastHorizontalSizingMeta = columnMeta
 						lastHorizontalSizingMetaVersion = columnMeta.version
@@ -1624,11 +1636,15 @@ export function createDataGridViewportController(
 					lastScrollLeftSample = horizontalPrepared.lastScrollLeftSample
 					lastAppliedHorizontalMetaVersion = horizontalPrepared.lastAppliedHorizontalMetaVersion
 
+					if (contentInvalidationRange != null) {
+						recomputeDiagnostics.contentRowInvalidationApplyCount += 1
+					}
 					const virtualizationResult = virtualization.applyPrepared(virtualizationPrepared, {
 						resolveRow: resolveRowFromModel,
 						resolveRowsInRange: resolveRowsInRangeFromModel,
 						imperativeCallbacks,
 					})
+					recomputeDiagnostics.rowApplyCount += 1
 					const autoHeightChanged = maybeIngestAutoRowHeights(
 						virtualizationResult.visibleRange,
 						layoutScale,
@@ -1649,6 +1665,9 @@ export function createDataGridViewportController(
 						callbacks: horizontalCallbacks,
 						prepared: horizontalPrepared,
 					})
+					if (horizontalPrepared.shouldUpdate) {
+						recomputeDiagnostics.columnApplyCount += 1
+					}
 					scrollIo.applyProgrammaticScrollWrites({
 						scrollTop: pendingVerticalScrollWrite,
 						scrollLeft: pendingHorizontalScrollWrite,

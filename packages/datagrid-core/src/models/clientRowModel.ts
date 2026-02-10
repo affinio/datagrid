@@ -13,6 +13,7 @@ import {
   type DataGridPaginationInput,
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
+  type DataGridRowId,
   type DataGridRowIdResolver,
   type DataGridRowNode,
   type DataGridRowNodeInput,
@@ -49,6 +50,22 @@ export interface DataGridClientRowReorderInput {
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
   reorderRows(input: DataGridClientRowReorderInput): boolean
+  getDerivedCacheDiagnostics(): DataGridClientRowModelDerivedCacheDiagnostics
+}
+
+export interface DataGridClientRowModelDerivedCacheDiagnostics {
+  revisions: {
+    row: number
+    sort: number
+    filter: number
+    group: number
+  }
+  filterPredicateHits: number
+  filterPredicateMisses: number
+  sortValueHits: number
+  sortValueMisses: number
+  groupValueHits: number
+  groupValueMisses: number
 }
 
 function readByPath(value: unknown, path: string): unknown {
@@ -154,6 +171,15 @@ function serializeFilterModelForCache(filterModel: DataGridFilterSnapshot | null
   return `${columnPart}||${advancedPart}`
 }
 
+function serializeSortModelForCache(sortModel: readonly DataGridSortState[]): string {
+  if (!Array.isArray(sortModel) || sortModel.length === 0) {
+    return "__none__"
+  }
+  return sortModel
+    .map(descriptor => `${descriptor.key}:${descriptor.direction}:${descriptor.field ?? ""}`)
+    .join("|")
+}
+
 function compareUnknown(left: unknown, right: unknown): number {
   if (left == null && right == null) {
     return 0
@@ -177,6 +203,7 @@ function compareUnknown(left: unknown, right: unknown): number {
 function sortLeafRows<T>(
   rows: readonly DataGridRowNode<T>[],
   sortModel: readonly DataGridSortState[],
+  resolveSortValues?: (row: DataGridRowNode<T>, descriptors: readonly DataGridSortState[]) => readonly unknown[],
 ): DataGridRowNode<T>[] {
   const descriptors = Array.isArray(sortModel) ? sortModel.filter(Boolean) : []
   if (descriptors.length === 0) {
@@ -185,7 +212,9 @@ function sortLeafRows<T>(
   const decorated = rows.map((row, index) => ({
     row,
     index,
-    sortValues: descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field)),
+    sortValues: resolveSortValues
+      ? resolveSortValues(row, descriptors)
+      : descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field)),
   }))
   decorated.sort((left, right) => {
     for (let descriptorIndex = 0; descriptorIndex < descriptors.length; descriptorIndex += 1) {
@@ -238,20 +267,30 @@ function buildGroupedRows<T>(
   inputRows: readonly DataGridRowNode<T>[],
   groupBy: DataGridGroupBySpec,
   expansionSnapshot: ReturnType<typeof buildGroupExpansionSnapshot>,
+  groupValueCache?: Map<string, string>,
+  groupValueCounters?: { hits: number; misses: number },
 ): DataGridRowNode<T>[] {
   const fields = groupBy.fields
   if (fields.length === 0) {
     return inputRows.map(row => normalizeLeafRow(row))
   }
-  const groupValueCache = new Map<string, string>()
   const resolveGroupedValue = (row: DataGridRowNode<T>, field: string): string => {
     const cacheKey = `${String(row.rowId)}::${field}`
-    const cached = groupValueCache.get(cacheKey)
+    const cache = groupValueCache
+    const cached = cache?.get(cacheKey)
     if (typeof cached !== "undefined") {
+      if (groupValueCounters) {
+        groupValueCounters.hits += 1
+      }
       return cached
     }
     const computed = normalizeText(readRowField(row, field))
-    groupValueCache.set(cacheKey, computed)
+    if (cache) {
+      cache.set(cacheKey, computed)
+      if (groupValueCounters) {
+        groupValueCounters.misses += 1
+      }
+    }
     return computed
   }
 
@@ -401,8 +440,30 @@ export function createClientRowModel<T>(
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rows.length)
   let disposed = false
   const listeners = new Set<DataGridRowModelListener<T>>()
+  let rowRevision = 0
+  let sortRevision = 0
+  let filterRevision = 0
+  let groupRevision = 0
   let cachedFilterPredicateKey = "__none__"
   let cachedFilterPredicate: ((rowNode: DataGridRowNode<T>) => boolean) | null = null
+  const sortValueCache = new Map<DataGridRowId, readonly unknown[]>()
+  let sortValueCacheKey = "__none__"
+  const groupValueCache = new Map<string, string>()
+  let groupValueCacheKey = "__none__"
+  const derivedCacheDiagnostics: DataGridClientRowModelDerivedCacheDiagnostics = {
+    revisions: {
+      row: rowRevision,
+      sort: sortRevision,
+      filter: filterRevision,
+      group: groupRevision,
+    },
+    filterPredicateHits: 0,
+    filterPredicateMisses: 0,
+    sortValueHits: 0,
+    sortValueMisses: 0,
+    groupValueHits: 0,
+    groupValueMisses: 0,
+  }
 
   function ensureActive() {
     if (disposed) {
@@ -411,21 +472,53 @@ export function createClientRowModel<T>(
   }
 
   function recomputeProjection() {
-    const filterKey = serializeFilterModelForCache(filterModel)
+    const filterKey = `${filterRevision}:${serializeFilterModelForCache(filterModel)}`
     const filterPredicate = filterKey === cachedFilterPredicateKey && cachedFilterPredicate
-      ? cachedFilterPredicate
+      ? (() => {
+          derivedCacheDiagnostics.filterPredicateHits += 1
+          return cachedFilterPredicate as (rowNode: DataGridRowNode<T>) => boolean
+        })()
       : (() => {
           const next = createFilterPredicate(filterModel)
           cachedFilterPredicateKey = filterKey
           cachedFilterPredicate = next
+          derivedCacheDiagnostics.filterPredicateMisses += 1
           return next
         })()
     const filteredRows = sourceRows.filter(filterPredicate)
-    const sortedRows = sortLeafRows(filteredRows, sortModel)
+    const sortKey = `${rowRevision}:${sortRevision}:${serializeSortModelForCache(sortModel)}`
+    if (sortKey !== sortValueCacheKey) {
+      sortValueCache.clear()
+      sortValueCacheKey = sortKey
+    }
+    const sortedRows = sortLeafRows(filteredRows, sortModel, (row, descriptors) => {
+      const cached = sortValueCache.get(row.rowId)
+      if (cached) {
+        derivedCacheDiagnostics.sortValueHits += 1
+        return cached
+      }
+      const resolved = descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field))
+      sortValueCache.set(row.rowId, resolved)
+      derivedCacheDiagnostics.sortValueMisses += 1
+      return resolved
+    })
     const expansionSnapshot = buildGroupExpansionSnapshot(groupBy, toggledGroupKeys)
+    const nextGroupValueCacheKey = groupBy
+      ? `${rowRevision}:${groupRevision}:${groupBy.fields.join("|")}`
+      : "__none__"
+    if (nextGroupValueCacheKey !== groupValueCacheKey) {
+      groupValueCache.clear()
+      groupValueCacheKey = nextGroupValueCacheKey
+    }
+    const groupValueCounters = {
+      hits: derivedCacheDiagnostics.groupValueHits,
+      misses: derivedCacheDiagnostics.groupValueMisses,
+    }
     const groupedRows = groupBy
-      ? buildGroupedRows(sortedRows, groupBy, expansionSnapshot)
+      ? buildGroupedRows(sortedRows, groupBy, expansionSnapshot, groupValueCache, groupValueCounters)
       : sortedRows
+    derivedCacheDiagnostics.groupValueHits = groupValueCounters.hits
+    derivedCacheDiagnostics.groupValueMisses = groupValueCounters.misses
     pagination = buildPaginationSnapshot(groupedRows.length, paginationInput)
     if (pagination.enabled && pagination.startIndex >= 0 && pagination.endIndex >= pagination.startIndex) {
       rows = assignDisplayIndexes(groupedRows.slice(pagination.startIndex, pagination.endIndex + 1))
@@ -437,6 +530,12 @@ export function createClientRowModel<T>(
       currentPage: pagination.currentPage,
     }
     viewportRange = normalizeViewportRange(viewportRange, rows.length)
+    derivedCacheDiagnostics.revisions = {
+      row: rowRevision,
+      sort: sortRevision,
+      filter: filterRevision,
+      group: groupRevision,
+    }
     revision += 1
   }
 
@@ -493,6 +592,7 @@ export function createClientRowModel<T>(
       sourceRows = Array.isArray(nextRows)
         ? reindexSourceRows(nextRows.map((row, index) => normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index)))
         : []
+      rowRevision += 1
       recomputeProjection()
       emit()
     },
@@ -517,6 +617,7 @@ export function createClientRowModel<T>(
       const adjustedTarget = toIndexRaw > fromIndex ? Math.max(0, toIndexRaw - moved.length) : toIndexRaw
       rows.splice(adjustedTarget, 0, ...moved)
       sourceRows = reindexSourceRows(rows)
+      rowRevision += 1
       recomputeProjection()
       emit()
       return true
@@ -572,12 +673,14 @@ export function createClientRowModel<T>(
     setSortModel(nextSortModel: readonly DataGridSortState[]) {
       ensureActive()
       sortModel = Array.isArray(nextSortModel) ? cloneSortModel(nextSortModel) : []
+      sortRevision += 1
       recomputeProjection()
       emit()
     },
     setFilterModel(nextFilterModel: DataGridFilterSnapshot | null) {
       ensureActive()
       filterModel = cloneFilterModel(nextFilterModel ?? null)
+      filterRevision += 1
       recomputeProjection()
       emit()
     },
@@ -589,6 +692,7 @@ export function createClientRowModel<T>(
       }
       groupBy = normalized
       toggledGroupKeys.clear()
+      groupRevision += 1
       recomputeProjection()
       emit()
     },
@@ -616,6 +720,17 @@ export function createClientRowModel<T>(
         listeners.delete(listener)
       }
     },
+    getDerivedCacheDiagnostics() {
+      return {
+        revisions: { ...derivedCacheDiagnostics.revisions },
+        filterPredicateHits: derivedCacheDiagnostics.filterPredicateHits,
+        filterPredicateMisses: derivedCacheDiagnostics.filterPredicateMisses,
+        sortValueHits: derivedCacheDiagnostics.sortValueHits,
+        sortValueMisses: derivedCacheDiagnostics.sortValueMisses,
+        groupValueHits: derivedCacheDiagnostics.groupValueHits,
+        groupValueMisses: derivedCacheDiagnostics.groupValueMisses,
+      }
+    },
     dispose() {
       if (disposed) {
         return
@@ -624,6 +739,10 @@ export function createClientRowModel<T>(
       listeners.clear()
       sourceRows = []
       rows = []
+      sortValueCache.clear()
+      groupValueCache.clear()
+      cachedFilterPredicate = null
+      cachedFilterPredicateKey = "__none__"
     },
   }
 }

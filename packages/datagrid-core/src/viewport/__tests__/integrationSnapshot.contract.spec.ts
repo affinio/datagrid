@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it } from "vitest"
 import type { DataGridColumn, VisibleRow } from "../../types"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
@@ -783,6 +785,87 @@ describe("viewport integration snapshot contract", () => {
     columnModel.dispose()
   })
 
+  it("keeps single apply per scheduler flush under mixed input burst", () => {
+    const columns: DataGridColumn[] = [
+      { key: "a", label: "A", pin: "none", width: 120, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "b", label: "B", pin: "none", width: 140, minWidth: 80, maxWidth: 260, visible: true },
+      { key: "c", label: "C", pin: "none", width: 130, minWidth: 80, maxWidth: 260, visible: true },
+    ]
+    const rowModel = createClientRowModel({ rows: createRows(180) })
+    const columnModel = createDataGridColumnModel({ columns })
+    const containerMetrics = createMeasuredElement({
+      clientWidth: 760,
+      clientHeight: 420,
+      scrollWidth: 2600,
+      scrollHeight: 11_000,
+    })
+    const headerMetrics = createMeasuredElement({
+      clientWidth: 760,
+      clientHeight: 40,
+      scrollWidth: 760,
+      scrollHeight: 40,
+    })
+    const fakeRaf = createFakeRafScheduler()
+
+    const controller = createDataGridViewportController({
+      resolvePinMode: () => "none",
+      rowModel,
+      columnModel,
+      runtime: {
+        rafScheduler: fakeRaf.scheduler,
+      },
+    })
+
+    controller.attach(containerMetrics.element, headerMetrics.element)
+    controller.setViewportMetrics({
+      containerWidth: containerMetrics.state.clientWidth,
+      containerHeight: containerMetrics.state.clientHeight,
+      headerHeight: headerMetrics.state.clientHeight,
+    })
+    controller.refresh(true)
+
+    const baseline = controller.getIntegrationSnapshot().recompute
+
+    controller.setZoom(1.05)
+    controller.setViewportMetrics({
+      containerWidth: 744,
+      containerHeight: 408,
+      headerHeight: 40,
+    })
+    containerMetrics.element.scrollTop = 520
+    containerMetrics.element.scrollLeft = 210
+    containerMetrics.element.dispatchEvent(new Event("scroll"))
+    rowModel.setRows(createRows(180).map((row, index) => ({
+      ...row,
+      row: { id: index + 5_000, value: `row-${index + 5_000}` },
+      rowId: index + 5_000,
+      originalIndex: index + 5_000,
+      displayIndex: index + 5_000,
+    })))
+    columnModel.setColumnWidth("b", 220)
+
+    expect(controller.getIntegrationSnapshot().recompute).toEqual(baseline)
+    expect(fakeRaf.pendingTasks()).toBeGreaterThanOrEqual(0)
+
+    fakeRaf.scheduler.flush()
+    const afterFirstFlush = controller.getIntegrationSnapshot().recompute
+    expect(afterFirstFlush.rowApplyCount).toBeLessThanOrEqual(baseline.rowApplyCount + 1)
+    expect(afterFirstFlush.columnApplyCount).toBeLessThanOrEqual(baseline.columnApplyCount + 1)
+    expect(afterFirstFlush.horizontalMetaRecomputeCount).toBeLessThanOrEqual(
+      baseline.horizontalMetaRecomputeCount + 1,
+    )
+    expect(afterFirstFlush.horizontalSizingRecomputeCount).toBeLessThanOrEqual(
+      baseline.horizontalSizingRecomputeCount + 1,
+    )
+
+    fakeRaf.scheduler.flush()
+    expect(controller.getIntegrationSnapshot().recompute).toEqual(afterFirstFlush)
+
+    controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+  })
+
   it("does not schedule viewport pipeline on viewport-only row model churn", () => {
     const columns: DataGridColumn[] = [
       { key: "a", label: "A", pin: "none", width: 120, minWidth: 80, maxWidth: 240, visible: true },
@@ -1125,6 +1208,113 @@ describe("viewport integration snapshot contract", () => {
     expect(onWindowCalls).toBeLessThanOrEqual(postColumnWindow + 1)
     expect(buildHorizontalMetaCalls).toBe(postColumnMetaCalls)
     expect(resolveHorizontalSizingCalls).toBe(postColumnSizingCalls)
+
+    controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+  })
+
+  it("tracks recompute scope counters for vertical/horizontal/offscreen invalidation paths", () => {
+    const columns: DataGridColumn[] = [
+      { key: "a", label: "A", pin: "none", width: 120, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "b", label: "B", pin: "none", width: 140, minWidth: 80, maxWidth: 260, visible: true },
+      { key: "c", label: "C", pin: "none", width: 130, minWidth: 80, maxWidth: 260, visible: true },
+    ]
+    const rowModel = createClientRowModel({ rows: createRows(320) })
+    const columnModel = createDataGridColumnModel({ columns })
+    const containerMetrics = createMeasuredElement({
+      clientWidth: 780,
+      clientHeight: 430,
+      scrollWidth: 2800,
+      scrollHeight: 14_000,
+    })
+    const headerMetrics = createMeasuredElement({
+      clientWidth: 780,
+      clientHeight: 40,
+      scrollWidth: 780,
+      scrollHeight: 40,
+    })
+    const fakeRaf = createFakeRafScheduler()
+
+    const controller = createDataGridViewportController({
+      resolvePinMode: () => "none",
+      rowModel,
+      columnModel,
+      runtime: {
+        rafScheduler: fakeRaf.scheduler,
+      },
+    })
+
+    controller.attach(containerMetrics.element, headerMetrics.element)
+    controller.setViewportMetrics({
+      containerWidth: containerMetrics.state.clientWidth,
+      containerHeight: containerMetrics.state.clientHeight,
+      headerHeight: headerMetrics.state.clientHeight,
+    })
+    controller.refresh(true)
+
+    const baseline = controller.getIntegrationSnapshot().recompute
+
+    rowModel.setViewportRange({ start: 0, end: 28 })
+    rowModel.setRows(createRows(320).map((row, index) => {
+      const rowIndex = index + 10_000
+      return {
+        ...row,
+        row: { id: rowIndex, value: `row-${rowIndex}` },
+        rowId: rowIndex,
+        originalIndex: rowIndex,
+        displayIndex: rowIndex,
+      }
+    }))
+    // Force one deterministic vertical apply cycle so recompute counters do not depend
+    // on fast-path short-circuiting when invalidation coalesces with zero scroll delta.
+    controller.scrollToRow(6)
+
+    expect(fakeRaf.pendingTasks()).toBeGreaterThanOrEqual(0)
+    fakeRaf.scheduler.flush()
+
+    const afterVertical = controller.getIntegrationSnapshot().recompute
+    expect(afterVertical.rowApplyCount).toBeGreaterThanOrEqual(baseline.rowApplyCount + 1)
+    expect(afterVertical.contentRowInvalidationApplyCount).toBeGreaterThanOrEqual(
+      baseline.contentRowInvalidationApplyCount + 1,
+    )
+    expect(afterVertical.columnApplyCount).toBeLessThanOrEqual(baseline.columnApplyCount + 1)
+    expect(afterVertical.horizontalMetaRecomputeCount).toBeLessThanOrEqual(
+      baseline.horizontalMetaRecomputeCount + 1,
+    )
+    expect(afterVertical.horizontalSizingRecomputeCount).toBeLessThanOrEqual(
+      baseline.horizontalSizingRecomputeCount + 1,
+    )
+
+    const beforeOffscreen = controller.getIntegrationSnapshot().recompute
+    rowModel.setViewportRange({ start: 220, end: 250 })
+    rowModel.setRows(createRows(320))
+    expect(fakeRaf.pendingTasks()).toBeGreaterThanOrEqual(0)
+    fakeRaf.scheduler.flush()
+
+    const afterOffscreen = controller.getIntegrationSnapshot().recompute
+    expect(afterOffscreen.offscreenRowInvalidationSkips).toBeGreaterThanOrEqual(
+      beforeOffscreen.offscreenRowInvalidationSkips,
+    )
+    expect(afterOffscreen.rowApplyCount).toBe(beforeOffscreen.rowApplyCount)
+    expect(afterOffscreen.columnApplyCount).toBe(beforeOffscreen.columnApplyCount)
+    expect(afterOffscreen.contentRowInvalidationApplyCount).toBe(
+      beforeOffscreen.contentRowInvalidationApplyCount,
+    )
+
+    const beforeHorizontal = controller.getIntegrationSnapshot().recompute
+    columnModel.setColumnWidth("b", 220)
+    expect(fakeRaf.pendingTasks()).toBeGreaterThanOrEqual(0)
+    fakeRaf.scheduler.flush()
+
+    const afterHorizontal = controller.getIntegrationSnapshot().recompute
+    expect(afterHorizontal.columnApplyCount).toBeGreaterThanOrEqual(beforeHorizontal.columnApplyCount)
+    expect(afterHorizontal.horizontalMetaRecomputeCount).toBeGreaterThanOrEqual(
+      beforeHorizontal.horizontalMetaRecomputeCount,
+    )
+    expect(afterHorizontal.horizontalSizingRecomputeCount).toBeGreaterThanOrEqual(
+      beforeHorizontal.horizontalSizingRecomputeCount,
+    )
 
     controller.dispose()
     rowModel.dispose()

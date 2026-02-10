@@ -121,6 +121,14 @@ export interface ViewportIntegrationSnapshot {
     right: number
   }
   overlaySync: ViewportSyncState
+  recompute: {
+    rowApplyCount: number
+    columnApplyCount: number
+    horizontalMetaRecomputeCount: number
+    horizontalSizingRecomputeCount: number
+    offscreenRowInvalidationSkips: number
+    contentRowInvalidationApplyCount: number
+  }
 }
 
 export interface DataGridViewportRuntimeOverrides {

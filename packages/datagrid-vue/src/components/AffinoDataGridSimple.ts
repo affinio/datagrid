@@ -2,6 +2,7 @@ import {
   computed,
   defineComponent,
   h,
+  onBeforeUnmount,
   ref,
   watch,
   type ComponentPublicInstance,
@@ -225,6 +226,14 @@ export const AffinoDataGridSimple = defineComponent({
       toolbarActions: props.toolbarActions,
     })
 
+    const rowModelVersion = ref(0)
+    const unsubscribeRowModel = grid.rowModel.subscribe(() => {
+      rowModelVersion.value += 1
+    })
+    onBeforeUnmount(() => {
+      unsubscribeRowModel()
+    })
+
     const syncRowsFromModel = () => {
       const count = grid.rowModel.getRowCount()
       if (count <= 0) {
@@ -271,6 +280,7 @@ export const AffinoDataGridSimple = defineComponent({
 
     const leafRows = computed(() => {
       void sortSignature.value
+      void rowModelVersion.value
       const count = grid.rowModel.getRowCount()
       if (count <= 0) {
         return [] as readonly DataGridRowNode<RowLike>[]
@@ -285,6 +295,10 @@ export const AffinoDataGridSimple = defineComponent({
 
     const statusText = computed(() => grid.ui.status.value)
     const selectedCount = computed(() => grid.features.selection.selectedCount.value)
+    const visibleRowCount = computed(() => {
+      void rowModelVersion.value
+      return grid.rowModel.getRowCount()
+    })
 
     const renderCellValue = (row: RowLike, columnKey: string): string => {
       const value = row[columnKey]
@@ -340,7 +354,7 @@ export const AffinoDataGridSimple = defineComponent({
               "div",
               { class: "affino-datagrid-simple__metrics" },
               [
-                h("span", `Rows: ${internalRows.value.length}`),
+                h("span", `Rows: ${visibleRowCount.value}`),
                 h("span", `Selected: ${selectedCount.value}`),
               ],
             )

@@ -342,4 +342,117 @@ describe("createClientRowModel", () => {
 
     model.dispose()
   })
+
+  it("reuses derived sort cache across grouping expansion changes when rows/sort stay stable", () => {
+    let scoreReads = 0
+    const makeRow = (id: number, team: string, score: number): { id: number; team: string; score: number } => {
+      const row = { id, team } as { id: number; team: string; score: number }
+      Object.defineProperty(row, "score", {
+        enumerable: true,
+        configurable: false,
+        get() {
+          scoreReads += 1
+          return score
+        },
+      })
+      return row
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: makeRow(1, "a", 30), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: makeRow(2, "a", 10), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: makeRow(3, "b", 20), rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    expect(scoreReads).toBe(3)
+    const afterSort = model.getDerivedCacheDiagnostics()
+
+    model.setGroupBy({ fields: ["team"], expandedByDefault: true })
+    const grouped = model.getRowsInRange({ start: 0, end: 10 })
+    const groupKey = String(grouped.find(row => row.kind === "group")?.groupMeta?.groupKey ?? "")
+    model.toggleGroup(groupKey)
+
+    const afterToggle = model.getDerivedCacheDiagnostics()
+    expect(scoreReads).toBe(3)
+    expect(afterToggle.sortValueHits).toBeGreaterThan(afterSort.sortValueHits)
+    expect(afterToggle.sortValueMisses).toBe(afterSort.sortValueMisses)
+
+    model.dispose()
+  })
+
+  it("invalidates filter predicate cache only when filter revision changes", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "noc" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, owner: "ops" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    const baseline = model.getDerivedCacheDiagnostics()
+
+    model.setFilterModel({
+      columnFilters: { owner: ["noc"] },
+      advancedFilters: {},
+    })
+    const afterFirstFilter = model.getDerivedCacheDiagnostics()
+    expect(afterFirstFilter.filterPredicateMisses).toBeGreaterThan(baseline.filterPredicateMisses)
+
+    model.setGroupBy({ fields: ["owner"], expandedByDefault: true })
+    const afterGroup = model.getDerivedCacheDiagnostics()
+    expect(afterGroup.filterPredicateMisses).toBe(afterFirstFilter.filterPredicateMisses)
+    expect(afterGroup.filterPredicateHits).toBeGreaterThan(afterFirstFilter.filterPredicateHits)
+
+    model.setFilterModel({
+      columnFilters: { owner: ["ops"] },
+      advancedFilters: {},
+    })
+    const afterSecondFilter = model.getDerivedCacheDiagnostics()
+    expect(afterSecondFilter.filterPredicateMisses).toBeGreaterThan(afterGroup.filterPredicateMisses)
+    expect(afterSecondFilter.revisions.filter).toBeGreaterThan(afterGroup.revisions.filter)
+
+    model.dispose()
+  })
+
+  it("invalidates derived sort cache on row revision to avoid stale sort values", () => {
+    let scoreReads = 0
+    const rowWithScore = (id: number, score: number) => {
+      const row = { id } as { id: number; score: number }
+      Object.defineProperty(row, "score", {
+        enumerable: true,
+        configurable: false,
+        get() {
+          scoreReads += 1
+          return score
+        },
+      })
+      return row
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: rowWithScore(1, 10), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: rowWithScore(2, 20), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    model.setSortModel([{ key: "score", direction: "desc" }])
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => (row.row as { id: number }).id)).toEqual([2, 1])
+    expect(scoreReads).toBe(2)
+
+    model.setRows([
+      { row: rowWithScore(1, 50), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      { row: rowWithScore(2, 5), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+    ])
+
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => (row.row as { id: number }).id)).toEqual([1, 2])
+    expect(scoreReads).toBe(4)
+    const diagnostics = model.getDerivedCacheDiagnostics()
+    expect(diagnostics.revisions.row).toBeGreaterThan(0)
+    expect(diagnostics.sortValueMisses).toBeGreaterThanOrEqual(4)
+
+    model.dispose()
+  })
 })

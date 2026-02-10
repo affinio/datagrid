@@ -95,7 +95,13 @@ export interface DataGridDataSourceBackpressureDiagnostics {
   pullCompleted: number
   pullAborted: number
   pullDropped: number
+  pullCoalesced: number
+  pullDeferred: number
+  rowCacheEvicted: number
   pushApplied: number
   invalidatedRows: number
   inFlight: boolean
+  hasPendingPull: boolean
+  rowCacheSize: number
+  rowCacheLimit: number
 }
