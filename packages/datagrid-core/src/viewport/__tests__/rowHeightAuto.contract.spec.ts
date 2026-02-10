@@ -177,4 +177,98 @@ describe("viewport auto row-height contract", () => {
     rowModel.dispose()
     columnModel.dispose()
   })
+
+  it("keeps near-bottom scroll stable when auto estimate would otherwise shrink", () => {
+    const rowModel = createClientRowModel({
+      rows: createRows(1800),
+      resolveRowId: row => row.rowId,
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "message", label: "Message", width: 320, pin: "none", visible: true }],
+    })
+
+    const containerMetrics = createMeasuredElement({
+      clientWidth: 920,
+      clientHeight: 460,
+      scrollWidth: 920,
+      scrollHeight: 120_000,
+    })
+    const headerMetrics = createMeasuredElement({
+      clientWidth: 920,
+      clientHeight: 40,
+      scrollWidth: 920,
+      scrollHeight: 40,
+    })
+    const fakeRaf = createFakeRafScheduler()
+
+    let phase: "tall" | "compact" = "tall"
+    const hostEnvironment = createHostEnvironment(
+      containerMetrics.element,
+      headerMetrics.element,
+      range => {
+        const heights = phase === "tall"
+          ? [62, 64, 66, 68, 70, 72]
+          : [26, 28, 30, 32, 34, 36]
+        return heights.map((height, offset) => ({
+          index: range.start + offset,
+          height,
+        }))
+      },
+    )
+
+    const controller = createDataGridViewportController({
+      resolvePinMode: () => "none",
+      rowModel,
+      columnModel,
+      hostEnvironment,
+      runtime: {
+        rafScheduler: fakeRaf.scheduler,
+      },
+    })
+
+    controller.attach(containerMetrics.element, headerMetrics.element)
+    controller.setViewportMetrics({
+      containerWidth: containerMetrics.state.clientWidth,
+      containerHeight: containerMetrics.state.clientHeight,
+      headerHeight: headerMetrics.state.clientHeight,
+    })
+    controller.setBaseRowHeight(38)
+    controller.setRowHeightMode("auto")
+
+    controller.refresh(true)
+    controller.refresh(true)
+
+    const initialEstimate = controller.core.effectiveRowHeight.value
+    expect(initialEstimate).toBeGreaterThan(50)
+
+    containerMetrics.element.scrollTop = 1_000_000
+    containerMetrics.element.dispatchEvent(new Event("scroll"))
+    controller.refresh(true)
+
+    const bottomEstimateBefore = controller.core.effectiveRowHeight.value
+    const bottomScrollBefore = controller.input.scrollTop.value
+
+    phase = "compact"
+    containerMetrics.element.scrollTop = 1_000_000
+    containerMetrics.element.dispatchEvent(new Event("scroll"))
+    controller.refresh(true)
+    controller.refresh(true)
+
+    const bottomEstimateAfter = controller.core.effectiveRowHeight.value
+    const bottomScrollAfter = controller.input.scrollTop.value
+
+    expect(bottomEstimateAfter).toBeGreaterThanOrEqual(bottomEstimateBefore - 0.1)
+    expect(bottomScrollAfter).toBeGreaterThanOrEqual(bottomScrollBefore - 1)
+
+    containerMetrics.element.scrollTop = 0
+    containerMetrics.element.dispatchEvent(new Event("scroll"))
+    controller.refresh(true)
+    controller.refresh(true)
+
+    expect(controller.core.effectiveRowHeight.value).toBeLessThan(bottomEstimateBefore)
+
+    controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+  })
 })

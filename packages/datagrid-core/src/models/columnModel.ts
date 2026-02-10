@@ -64,6 +64,21 @@ function normalizeWidth(width: number | undefined | null): number | null {
   return Math.max(0, Math.trunc(width as number))
 }
 
+function normalizeColumnKey(key: unknown, index: number): string {
+  if (typeof key !== "string") {
+    throw new Error(
+      `[DataGridColumnModel] column key at index ${index} must be a non-empty string.`,
+    )
+  }
+  const normalized = key.trim()
+  if (normalized.length === 0) {
+    throw new Error(
+      `[DataGridColumnModel] column key at index ${index} must be a non-empty string.`,
+    )
+  }
+  return normalized
+}
+
 export function createDataGridColumnModel(
   options: CreateDataGridColumnModelOptions = {},
 ): DataGridColumnModel {
@@ -128,18 +143,31 @@ export function createDataGridColumnModel(
   function setColumnsValue(columns: readonly DataGridColumnDef[]) {
     columnsByKey.clear()
     order = []
-    for (const column of columns) {
-      if (!column || typeof column.key !== "string" || column.key.length === 0) {
-        continue
+    const seen = new Set<string>()
+    columns.forEach((column, index) => {
+      if (!column || typeof column !== "object") {
+        throw new Error(
+          `[DataGridColumnModel] column definition at index ${index} must be an object.`,
+        )
       }
-      columnsByKey.set(column.key, {
-        column,
+      const key = normalizeColumnKey(column.key, index)
+      if (seen.has(key)) {
+        throw new Error(
+          `[DataGridColumnModel] duplicate column key "${key}" is not allowed.`,
+        )
+      }
+      seen.add(key)
+      const normalizedColumn: DataGridColumnDef = key === column.key
+        ? column
+        : { ...column, key }
+      columnsByKey.set(key, {
+        column: normalizedColumn,
         visible: column.visible !== false,
         pin: normalizePin(column.pin),
         width: normalizeWidth(column.width),
       })
-      order.push(column.key)
-    }
+      order.push(key)
+    })
     markSnapshotDirty()
     emit()
   }

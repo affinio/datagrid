@@ -70,4 +70,14 @@ describe("createDataGridColumnModel", () => {
     })
     model.dispose()
   })
+
+  it("fails fast for invalid or duplicated column keys", () => {
+    expect(() => createDataGridColumnModel({
+      columns: [{ key: "" }],
+    })).toThrowError(/column key/i)
+
+    expect(() => createDataGridColumnModel({
+      columns: [{ key: "owner" }, { key: "owner" }],
+    })).toThrowError(/duplicate column key/i)
+  })
 })

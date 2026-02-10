@@ -251,4 +251,75 @@ describe("createServerBackedRowModel", () => {
 
     model.dispose()
   })
+
+  it("reuses row node objects across viewport refresh when identity stays stable", async () => {
+    const { source } = createSource(24)
+    const model = createServerBackedRowModel({ source })
+
+    model.setViewportRange({ start: 4, end: 9 })
+    await Promise.resolve()
+    await model.refresh("viewport-change")
+
+    const first = model.getRow(5)
+    expect(first?.rowKey).toBe(5)
+
+    await model.refresh("viewport-change")
+    const second = model.getRow(5)
+
+    expect(second).toBe(first)
+    expect(second?.displayIndex).toBe(5)
+
+    model.dispose()
+  })
+
+  it("updates cached row node payload in-place when source row instance changes", async () => {
+    const rows = [{ id: 0, value: "initial" }]
+    const source: ServerRowModel<{ id: number; value: string }> = {
+      rows: { value: rows },
+      loading: { value: false },
+      error: { value: null },
+      blocks: { value: new Map() },
+      total: { value: rows.length },
+      loadedRanges: { value: [] },
+      progress: { value: 1 },
+      blockErrors: { value: new Map() },
+      diagnostics: {
+        value: {
+          cacheBlocks: 0,
+          cachedRows: rows.length,
+          pendingBlocks: 0,
+          pendingRequests: 0,
+          abortedRequests: 0,
+          cacheHits: 0,
+          cacheMisses: 0,
+          effectivePreloadThreshold: 0.6,
+        },
+      },
+      getRowAt(index) {
+        return rows[index]
+      },
+      getRowCount() {
+        return rows.length
+      },
+      refreshBlock: vi.fn(async () => {}),
+      fetchBlock: vi.fn(async () => {}),
+      reset: vi.fn(),
+      abortAll: vi.fn(),
+      dispose: vi.fn(),
+    }
+
+    const model = createServerBackedRowModel({ source })
+    const first = model.getRow(0)
+    expect(first?.row.value).toBe("initial")
+
+    rows[0] = { id: 0, value: "updated" }
+    await model.refresh("viewport-change")
+
+    const second = model.getRow(0)
+    expect(second).toBe(first)
+    expect(second?.row.value).toBe("updated")
+    expect(second?.data.value).toBe("updated")
+
+    model.dispose()
+  })
 })

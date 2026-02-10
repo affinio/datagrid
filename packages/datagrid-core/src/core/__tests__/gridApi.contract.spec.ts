@@ -217,6 +217,140 @@ describe("data grid api facade contracts", () => {
     expect(summary?.columns.latencyMs.metrics.max).toBe(120)
   })
 
+  it("roundtrips row/column/filter/pagination/group/selection snapshots deterministically", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "noc", status: "open" }, rowId: 1, originalIndex: 0 },
+        { row: { id: 2, owner: "ops", status: "open" }, rowId: 2, originalIndex: 1 },
+        { row: { id: 3, owner: "qa", status: "closed" }, rowId: 3, originalIndex: 2 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "id", label: "ID", width: 90 },
+        { key: "owner", label: "Owner", width: 160 },
+        { key: "status", label: "Status", width: 140 },
+      ],
+    })
+    let selectionSnapshot: DataGridSelectionSnapshot | null = null
+
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getSelectionSnapshot() {
+            return selectionSnapshot
+          },
+          setSelectionSnapshot(snapshot) {
+            selectionSnapshot = snapshot
+          },
+          clearSelection() {
+            selectionSnapshot = null
+          },
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.setSortModel([{ key: "owner", direction: "asc" }])
+    api.setFilterModel({
+      columnFilters: { status: ["open"] },
+      advancedFilters: {},
+    })
+    api.setGroupBy({ fields: ["status"], expandedByDefault: true })
+    api.toggleGroup(`[["status","open"]]`)
+    api.setPagination({ pageSize: 2, currentPage: 0 })
+    api.setViewportRange({ start: 0, end: 1 })
+    api.setColumnOrder(["status", "owner", "id"])
+    api.setColumnVisibility("id", false)
+    api.setColumnPin("owner", "left")
+    api.setColumnWidth("status", 220)
+    api.setSelectionSnapshot({
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 0,
+          startCol: 0,
+          endCol: 1,
+          startRowId: 1,
+          endRowId: 1,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: 1 },
+          focus: { rowIndex: 0, colIndex: 1, rowId: 1 },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 1, rowId: 1 },
+    })
+
+    const expectedRow = api.getRowModelSnapshot()
+    const expectedColumns = api.getColumnModelSnapshot()
+    const expectedSelection = api.getSelectionSnapshot()
+
+    api.setSortModel([{ key: "status", direction: "desc" }])
+    api.setFilterModel({ columnFilters: {}, advancedFilters: {} })
+    api.setGroupBy(null)
+    api.setPagination({ pageSize: 1, currentPage: 1 })
+    api.setViewportRange({ start: 1, end: 1 })
+    api.setColumnOrder(["id", "owner", "status"])
+    api.setColumnVisibility("id", true)
+    api.setColumnPin("owner", "none")
+    api.setColumnWidth("status", 100)
+    api.clearSelection()
+
+    api.setSortModel(expectedRow.sortModel)
+    api.setFilterModel(expectedRow.filterModel)
+    api.setGroupBy(expectedRow.groupBy)
+    for (const groupKey of expectedRow.groupExpansion.toggledGroupKeys) {
+      api.toggleGroup(groupKey)
+    }
+    api.setPagination({
+      pageSize: expectedRow.pagination.pageSize,
+      currentPage: expectedRow.pagination.currentPage,
+    })
+    api.setViewportRange(expectedRow.viewportRange)
+    api.setColumnOrder(expectedColumns.order)
+    for (const column of expectedColumns.columns) {
+      api.setColumnVisibility(column.key, column.visible)
+      api.setColumnPin(column.key, column.pin)
+      api.setColumnWidth(column.key, column.width)
+    }
+    if (expectedSelection) {
+      api.setSelectionSnapshot(expectedSelection)
+    }
+
+    const rowRoundtrip = api.getRowModelSnapshot()
+    const columnsRoundtrip = api.getColumnModelSnapshot()
+    const selectionRoundtrip = api.getSelectionSnapshot()
+
+    expect(rowRoundtrip.sortModel).toEqual(expectedRow.sortModel)
+    expect(rowRoundtrip.filterModel).toEqual(expectedRow.filterModel)
+    expect(rowRoundtrip.groupBy).toEqual(expectedRow.groupBy)
+    expect(rowRoundtrip.groupExpansion).toEqual(expectedRow.groupExpansion)
+    expect(rowRoundtrip.pagination).toEqual(expectedRow.pagination)
+    expect(rowRoundtrip.viewportRange).toEqual(expectedRow.viewportRange)
+
+    expect(columnsRoundtrip.order).toEqual(expectedColumns.order)
+    expect(
+      columnsRoundtrip.columns.map(column => ({
+        key: column.key,
+        visible: column.visible,
+        pin: column.pin,
+        width: column.width,
+      })),
+    ).toEqual(
+      expectedColumns.columns.map(column => ({
+        key: column.key,
+        visible: column.visible,
+        pin: column.pin,
+        width: column.width,
+      })),
+    )
+
+    expect(selectionRoundtrip).toEqual(expectedSelection)
+  })
+
   it("exposes transaction capability checks and fails loudly for missing methods", () => {
     const rowModel = createClientRowModel()
     const columnModel = createDataGridColumnModel()

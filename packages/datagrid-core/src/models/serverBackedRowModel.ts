@@ -64,8 +64,11 @@ export function createServerBackedRowModel<T>(
   let disposed = false
   let revision = 0
   let cacheRevision = 0
-  let lastRangeCacheKey = ""
-  let lastRangeCacheRows: readonly DataGridRowNode<T>[] = []
+  let lastRangeCacheStart = -1
+  let lastRangeCacheEnd = -1
+  let lastRangeCacheRevision = -1
+  const emptyRangeRows = Object.freeze([]) as readonly DataGridRowNode<T>[]
+  let lastRangeCacheRows: readonly DataGridRowNode<T>[] = emptyRangeRows
   const listeners = new Set<DataGridRowModelListener<T>>()
   const rowNodeCache = new Map<number, DataGridRowNode<T> | undefined>()
   const rowCacheLimit =
@@ -160,19 +163,19 @@ export function createServerBackedRowModel<T>(
   function invalidateCaches() {
     rowNodeCache.clear()
     cacheRevision += 1
-    lastRangeCacheKey = ""
-    lastRangeCacheRows = []
+    lastRangeCacheStart = -1
+    lastRangeCacheEnd = -1
+    lastRangeCacheRevision = -1
+    lastRangeCacheRows = emptyRangeRows
     revision += 1
   }
 
-  function invalidateCachesForRange(range: DataGridViewportRange) {
-    const normalized = normalizeViewportRange(toSourceRange(range), source.getRowCount())
-    for (let index = normalized.start; index <= normalized.end; index += 1) {
-      rowNodeCache.delete(index)
-    }
+  function invalidateCachesForRange(_range: DataGridViewportRange) {
     cacheRevision += 1
-    lastRangeCacheKey = ""
-    lastRangeCacheRows = []
+    lastRangeCacheStart = -1
+    lastRangeCacheEnd = -1
+    lastRangeCacheRevision = -1
+    lastRangeCacheRows = emptyRangeRows
     revision += 1
   }
 
@@ -198,10 +201,46 @@ export function createServerBackedRowModel<T>(
 
   function toRowNode(index: number): DataGridRowNode<T> | undefined {
     const sourceIndex = toSourceIndex(index)
-    if (rowNodeCache.has(sourceIndex)) {
-      return readRowCache(sourceIndex)
-    }
     const row = source.getRowAt(sourceIndex)
+    if (rowNodeCache.has(sourceIndex)) {
+      const cached = readRowCache(sourceIndex)
+      if (typeof row === "undefined") {
+        writeRowCache(sourceIndex, undefined)
+        return undefined
+      }
+      const rowId = resolveRowId(row, sourceIndex) as DataGridRowId
+      if (typeof rowId !== "string" && typeof rowId !== "number") {
+        throw new Error(`[DataGrid] Invalid row identity returned for index ${sourceIndex}. Expected string|number.`)
+      }
+      if (cached) {
+        if (
+          cached.row !== row ||
+          cached.data !== row ||
+          cached.rowId !== rowId ||
+          cached.rowKey !== rowId ||
+          cached.sourceIndex !== sourceIndex ||
+          cached.originalIndex !== sourceIndex ||
+          cached.displayIndex !== index
+        ) {
+          cached.row = row
+          cached.data = row
+          cached.rowId = rowId
+          cached.rowKey = rowId
+          cached.sourceIndex = sourceIndex
+          cached.originalIndex = sourceIndex
+          cached.displayIndex = index
+        }
+        return cached
+      }
+      const normalized = normalizeRowNode({
+        row,
+        rowId,
+        originalIndex: sourceIndex,
+        displayIndex: index,
+      }, sourceIndex)
+      writeRowCache(sourceIndex, normalized)
+      return normalized
+    }
     if (typeof row === "undefined") {
       writeRowCache(sourceIndex, undefined)
       return undefined
@@ -240,8 +279,18 @@ export function createServerBackedRowModel<T>(
     },
     getRowsInRange(range) {
       const normalized = normalizeViewportRange(range, getVisibleRowCount())
-      const rangeCacheKey = `${normalized.start}:${normalized.end}:${cacheRevision}`
-      if (lastRangeCacheKey === rangeCacheKey) {
+      if (
+        lastRangeCacheRevision === cacheRevision &&
+        lastRangeCacheStart === normalized.start &&
+        lastRangeCacheEnd === normalized.end
+      ) {
+        return lastRangeCacheRows
+      }
+      if (normalized.end < normalized.start) {
+        lastRangeCacheStart = normalized.start
+        lastRangeCacheEnd = normalized.end
+        lastRangeCacheRevision = cacheRevision
+        lastRangeCacheRows = emptyRangeRows
         return lastRangeCacheRows
       }
       const rows: DataGridRowNode<T>[] = []
@@ -251,8 +300,10 @@ export function createServerBackedRowModel<T>(
           rows.push(row)
         }
       }
-      lastRangeCacheKey = rangeCacheKey
-      lastRangeCacheRows = Object.freeze(rows.slice())
+      lastRangeCacheStart = normalized.start
+      lastRangeCacheEnd = normalized.end
+      lastRangeCacheRevision = cacheRevision
+      lastRangeCacheRows = rows.length > 0 ? Object.freeze(rows) : emptyRangeRows
       return lastRangeCacheRows
     },
     setViewportRange(range) {
@@ -385,7 +436,7 @@ export function createServerBackedRowModel<T>(
       disposed = true
       listeners.clear()
       rowNodeCache.clear()
-      lastRangeCacheRows = []
+      lastRangeCacheRows = emptyRangeRows
     },
   }
 }

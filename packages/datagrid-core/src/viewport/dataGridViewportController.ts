@@ -162,6 +162,12 @@ const AUTO_ROW_HEIGHT_CACHE_LIMIT = 512
 const AUTO_ROW_HEIGHT_EPSILON = 0.6
 const AUTO_ROW_HEIGHT_SMOOTHING = 0.35
 
+interface AutoRowHeightEstimateSyncOptions {
+	preserveLowerBound?: number
+}
+
+interface AutoRowHeightIngestOptions extends AutoRowHeightEstimateSyncOptions {}
+
 
 export function createDataGridViewportController(
 	options: DataGridViewportControllerOptions,
@@ -469,8 +475,14 @@ export function createDataGridViewportController(
 			return normalized
 		}
 
-		function syncAutoRowHeightEstimateFromCache(): boolean {
-			const nextEstimate = autoRowHeightCache.resolveEstimatedHeight(baseRowHeight)
+		function syncAutoRowHeightEstimateFromCache(options: AutoRowHeightEstimateSyncOptions = {}): boolean {
+			const nextEstimateCandidate = autoRowHeightCache.resolveEstimatedHeight(baseRowHeight)
+			const lowerBound = Number.isFinite(options.preserveLowerBound)
+				? Math.max(1, options.preserveLowerBound as number)
+				: null
+			const nextEstimate = lowerBound != null
+				? Math.max(nextEstimateCandidate, lowerBound)
+				: nextEstimateCandidate
 			if (!Number.isFinite(nextEstimate) || nextEstimate <= 0) {
 				return false
 			}
@@ -1282,6 +1294,7 @@ export function createDataGridViewportController(
 		function maybeIngestAutoRowHeights(
 			range: DataGridViewportRange,
 			layoutScale: number,
+			options: AutoRowHeightIngestOptions = {},
 		): boolean {
 			if (rowHeightMode !== "auto") {
 				return false
@@ -1316,7 +1329,7 @@ export function createDataGridViewportController(
 			if (!changed) {
 				return false
 			}
-			return syncAutoRowHeightEstimateFromCache()
+			return syncAutoRowHeightEstimateFromCache(options)
 		}
 
 			function runUpdate(force: boolean) {
@@ -1645,9 +1658,22 @@ export function createDataGridViewportController(
 						imperativeCallbacks,
 					})
 					recomputeDiagnostics.rowApplyCount += 1
+					const estimatedMaxScrollTop = Math.max(0, totalContentHeight.value - viewportHeightValue)
+					const bottomStabilityThreshold = Math.max(
+						viewportHeightValue * 0.35,
+						(effectiveRowHeight.value || baseRowHeight) * 2,
+					)
+					const isNearBottomWhileMovingDown =
+						estimatedMaxScrollTop > 0 &&
+						estimatedMaxScrollTop - virtualizationResult.scrollTop <= bottomStabilityThreshold &&
+						pendingTop + verticalScrollEpsilon >= lastScrollTopSample
+
 					const autoHeightChanged = maybeIngestAutoRowHeights(
 						virtualizationResult.visibleRange,
 						layoutScale,
+						isNearBottomWhileMovingDown
+							? { preserveLowerBound: autoRowHeightEstimate }
+							: undefined,
 					)
 					const activeRowModel = modelBridge.getActiveRowModel()
 					const modelSnapshot = activeRowModel.getSnapshot()
