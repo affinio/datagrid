@@ -19,8 +19,6 @@ describe("useDataGridColumnLayoutOrchestration contract", () => {
     const snapshot = useDataGridColumnLayoutOrchestration({
       columns,
       resolveColumnWidth: column => column.width,
-      viewportWidth: 180,
-      scrollLeft: 0,
       virtualWindow: {
         colStart: 2,
         colEnd: 3,
@@ -36,4 +34,3 @@ describe("useDataGridColumnLayoutOrchestration contract", () => {
     })
   })
 })
-

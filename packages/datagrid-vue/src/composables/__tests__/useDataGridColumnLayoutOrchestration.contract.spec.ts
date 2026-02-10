@@ -16,14 +16,15 @@ describe("useDataGridColumnLayoutOrchestration contract", () => {
       { key: "right-a", pin: "right", width: 80 },
       { key: "center-b", pin: "none", width: 90 },
     ])
-    const viewportWidth = ref(200)
-    const scrollLeft = ref(0)
 
     const api = useDataGridColumnLayoutOrchestration({
       columns,
       resolveColumnWidth: column => column.width,
-      viewportWidth,
-      scrollLeft,
+      virtualWindow: ref({
+        colStart: 0,
+        colEnd: 3,
+        colTotal: 4,
+      }),
     })
 
     expect(api.orderedColumns.value.map(column => column.key)).toEqual([
@@ -51,8 +52,11 @@ describe("useDataGridColumnLayoutOrchestration contract", () => {
     const api = useDataGridColumnLayoutOrchestration({
       columns,
       resolveColumnWidth: column => column.width,
-      viewportWidth: ref(260),
-      scrollLeft: ref(0),
+      virtualWindow: ref({
+        colStart: 0,
+        colEnd: 3,
+        colTotal: 4,
+      }),
     })
 
     expect(api.stickyLeftOffsets.value.get("left-a")).toBe(0)
@@ -66,21 +70,22 @@ describe("useDataGridColumnLayoutOrchestration contract", () => {
     expect(api.isStickyColumn("center-a")).toBe(false)
   })
 
-  it("computes visible columns window based on scroll position", () => {
+  it("computes visible columns window from canonical virtual window", () => {
     const columns = ref<readonly Column[]>([
       { key: "a", pin: "none", width: 100 },
       { key: "b", pin: "none", width: 100 },
       { key: "c", pin: "none", width: 100 },
       { key: "d", pin: "none", width: 100 },
     ])
-    const viewportWidth = ref(180)
-    const scrollLeft = ref(110)
 
     const api = useDataGridColumnLayoutOrchestration({
       columns,
       resolveColumnWidth: column => column.width,
-      viewportWidth,
-      scrollLeft,
+      virtualWindow: ref({
+        colStart: 1,
+        colEnd: 2,
+        colTotal: 4,
+      }),
     })
 
     expect(api.visibleColumnsWindow.value.start).toBe(2)
@@ -100,8 +105,6 @@ describe("useDataGridColumnLayoutOrchestration contract", () => {
     const api = useDataGridColumnLayoutOrchestration({
       columns,
       resolveColumnWidth: column => column.width,
-      viewportWidth: ref(180),
-      scrollLeft: ref(0),
       virtualWindow: ref({
         colStart: 2,
         colEnd: 3,

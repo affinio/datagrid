@@ -5,13 +5,14 @@ import {
 } from "../useDataGridVirtualRangeMetrics"
 
 describe("useDataGridVirtualRangeMetrics contract", () => {
-  it("computes range from scroll metrics", () => {
+  it("computes range from canonical virtualWindow", () => {
     const range = computeDataGridVirtualRange({
-      totalRows: 100,
-      scrollTop: 400,
-      viewportHeight: 320,
+      virtualWindow: {
+        rowStart: 8,
+        rowEnd: 19,
+        rowTotal: 100,
+      },
       rowHeight: 40,
-      overscan: 2,
     })
     expect(range).toEqual({ start: 8, end: 19 })
   })
@@ -32,4 +33,3 @@ describe("useDataGridVirtualRangeMetrics contract", () => {
     expect(metrics.spacerBottomHeight).toBe((240 - 42) * 36)
   })
 })
-

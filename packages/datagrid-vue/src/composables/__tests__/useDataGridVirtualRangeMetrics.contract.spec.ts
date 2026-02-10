@@ -5,11 +5,12 @@ import { useDataGridVirtualRangeMetrics } from "../useDataGridVirtualRangeMetric
 describe("useDataGridVirtualRangeMetrics contract", () => {
   it("returns empty range and zero spacers for empty dataset", () => {
     const api = useDataGridVirtualRangeMetrics({
-      totalRows: ref(0),
-      scrollTop: ref(0),
-      viewportHeight: ref(400),
+      virtualWindow: ref({
+        rowStart: 0,
+        rowEnd: 0,
+        rowTotal: 0,
+      }),
       rowHeight: 40,
-      overscan: 4,
     })
 
     expect(api.virtualRange.value).toEqual({ start: 0, end: -1 })
@@ -18,17 +19,16 @@ describe("useDataGridVirtualRangeMetrics contract", () => {
     expect(api.rangeLabel.value).toBe("0-0")
   })
 
-  it("computes start/end with overscan and spacer heights", () => {
-    const totalRows = ref(100)
-    const scrollTop = ref(400)
-    const viewportHeight = ref(320)
+  it("computes start/end and spacer heights from virtual window", () => {
+    const virtualWindow = ref({
+      rowStart: 8,
+      rowEnd: 19,
+      rowTotal: 100,
+    })
 
     const api = useDataGridVirtualRangeMetrics({
-      totalRows,
-      scrollTop,
-      viewportHeight,
+      virtualWindow,
       rowHeight: 40,
-      overscan: 2,
     })
 
     expect(api.virtualRange.value).toEqual({ start: 8, end: 19 })
@@ -37,21 +37,24 @@ describe("useDataGridVirtualRangeMetrics contract", () => {
     expect(api.rangeLabel.value).toBe("9-20")
   })
 
-  it("reuses same range object identity when coordinates are unchanged", () => {
-    const totalRows = ref(50)
-    const scrollTop = ref(80)
-    const viewportHeight = ref(200)
+  it("reuses same range object identity when virtual window coordinates are unchanged", () => {
+    const virtualWindow = ref({
+      rowStart: 1,
+      rowEnd: 6,
+      rowTotal: 50,
+    })
 
     const api = useDataGridVirtualRangeMetrics({
-      totalRows,
-      scrollTop,
-      viewportHeight,
+      virtualWindow,
       rowHeight: 40,
-      overscan: 1,
     })
 
     const first = api.virtualRange.value
-    scrollTop.value = 85 // same start/end after floor
+    virtualWindow.value = {
+      rowStart: 1,
+      rowEnd: 6,
+      rowTotal: 50,
+    }
     const second = api.virtualRange.value
 
     expect(first).toStrictEqual(second)
@@ -59,16 +62,12 @@ describe("useDataGridVirtualRangeMetrics contract", () => {
 
   it("uses virtualWindow snapshot as source of truth when provided", () => {
     const api = useDataGridVirtualRangeMetrics({
-      totalRows: ref(0),
-      scrollTop: ref(0),
-      viewportHeight: ref(0),
-      rowHeight: 40,
-      overscan: 0,
       virtualWindow: ref({
         rowStart: 5,
         rowEnd: 11,
         rowTotal: 64,
       }),
+      rowHeight: 40,
     })
 
     expect(api.virtualRange.value).toEqual({ start: 5, end: 11 })

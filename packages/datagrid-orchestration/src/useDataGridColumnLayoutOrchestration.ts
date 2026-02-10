@@ -36,9 +36,7 @@ export interface DataGridColumnLayer<TColumn extends DataGridColumnLayoutColumn>
 export interface UseDataGridColumnLayoutOrchestrationOptions<TColumn extends DataGridColumnLayoutColumn> {
   columns: readonly TColumn[]
   resolveColumnWidth: (column: TColumn) => number
-  viewportWidth: number
-  scrollLeft: number
-  virtualWindow?: DataGridVirtualWindowColumnSnapshot | null
+  virtualWindow: DataGridVirtualWindowColumnSnapshot
 }
 
 export interface DataGridColumnLayoutSnapshot<TColumn extends DataGridColumnLayoutColumn> {
@@ -120,62 +118,23 @@ function buildStickyRightOffsets<TColumn extends DataGridColumnLayoutColumn>(
 
 function buildVisibleColumnsWindow(
   columns: readonly DataGridColumnLayoutMetric[],
-  viewportWidth: number,
-  scrollLeft: number,
-  virtualWindow?: DataGridVirtualWindowColumnSnapshot | null,
+  virtualWindow: DataGridVirtualWindowColumnSnapshot,
 ): DataGridVisibleColumnsWindow {
   if (!columns.length) {
     return { start: 0, end: 0, total: 0, keys: "none" }
   }
 
-  if (virtualWindow) {
-    const total = Math.max(0, Math.trunc(virtualWindow.colTotal))
-    const safeTotal = Math.max(0, Math.min(columns.length, total))
-    if (safeTotal === 0) {
-      return { start: 0, end: 0, total: 0, keys: "none" }
-    }
-    const startIndex = Math.max(0, Math.min(safeTotal - 1, Math.trunc(virtualWindow.colStart)))
-    const endIndex = Math.max(startIndex, Math.min(safeTotal - 1, Math.trunc(virtualWindow.colEnd)))
-    return {
-      start: startIndex + 1,
-      end: endIndex + 1,
-      total: safeTotal,
-      keys: columns.slice(startIndex, endIndex + 1).map(column => column.key).join(" • ") || "none",
-    }
+  const total = Math.max(0, Math.trunc(virtualWindow.colTotal))
+  const safeTotal = Math.max(0, Math.min(columns.length, total))
+  if (safeTotal === 0) {
+    return { start: 0, end: 0, total: 0, keys: "none" }
   }
-
-  const windowStart = Math.max(0, scrollLeft)
-  const windowEnd = windowStart + Math.max(1, viewportWidth)
-  let offset = 0
-  let startIndex = 0
-  let endIndex = columns.length - 1
-  let found = false
-
-  for (let index = 0; index < columns.length; index += 1) {
-    const column = columns[index]
-    if (!column) continue
-    const columnStart = offset
-    const columnEnd = columnStart + column.width
-    const intersects = columnEnd > windowStart && columnStart < windowEnd
-    if (intersects && !found) {
-      startIndex = index
-      found = true
-    }
-    if (intersects) {
-      endIndex = index
-    }
-    offset = columnEnd
-  }
-
-  if (!found) {
-    startIndex = Math.max(0, columns.length - 1)
-    endIndex = startIndex
-  }
-
+  const startIndex = Math.max(0, Math.min(safeTotal - 1, Math.trunc(virtualWindow.colStart)))
+  const endIndex = Math.max(startIndex, Math.min(safeTotal - 1, Math.trunc(virtualWindow.colEnd)))
   return {
     start: startIndex + 1,
     end: endIndex + 1,
-    total: columns.length,
+    total: safeTotal,
     keys: columns.slice(startIndex, endIndex + 1).map(column => column.key).join(" • ") || "none",
   }
 }
@@ -277,8 +236,6 @@ export function useDataGridColumnLayoutOrchestration<TColumn extends DataGridCol
     stickyRightOffsets: buildStickyRightOffsets(orderedColumns, options.resolveColumnWidth),
     visibleColumnsWindow: buildVisibleColumnsWindow(
       orderedColumnMetrics,
-      options.viewportWidth,
-      options.scrollLeft,
       options.virtualWindow,
     ),
   }

@@ -25,9 +25,7 @@ export type {
 export interface UseDataGridColumnLayoutOrchestrationOptions<TColumn extends DataGridColumnLayoutColumn> {
   columns: Ref<readonly TColumn[]>
   resolveColumnWidth: (column: TColumn) => number
-  viewportWidth: Ref<number>
-  scrollLeft: Ref<number>
-  virtualWindow?: Ref<DataGridVirtualWindowColumnSnapshot | null | undefined>
+  virtualWindow: Ref<DataGridVirtualWindowColumnSnapshot | null | undefined>
 }
 
 export interface UseDataGridColumnLayoutOrchestrationResult<TColumn extends DataGridColumnLayoutColumn> {
@@ -46,13 +44,18 @@ export interface UseDataGridColumnLayoutOrchestrationResult<TColumn extends Data
 export function useDataGridColumnLayoutOrchestration<TColumn extends DataGridColumnLayoutColumn>(
   options: UseDataGridColumnLayoutOrchestrationOptions<TColumn>,
 ): UseDataGridColumnLayoutOrchestrationResult<TColumn> {
-  const layout = computed(() => buildDataGridColumnLayoutSnapshot({
-    columns: options.columns.value,
-    resolveColumnWidth: options.resolveColumnWidth,
-    viewportWidth: options.viewportWidth.value,
-    scrollLeft: options.scrollLeft.value,
-    virtualWindow: options.virtualWindow?.value ?? null,
-  }))
+  const layout = computed(() => {
+    const virtualWindow = options.virtualWindow.value
+    return buildDataGridColumnLayoutSnapshot({
+      columns: options.columns.value,
+      resolveColumnWidth: options.resolveColumnWidth,
+      virtualWindow: virtualWindow ?? {
+        colStart: 0,
+        colEnd: 0,
+        colTotal: 0,
+      },
+    })
+  })
 
   function getCellStyle(columnKey: string): Record<string, string> {
     return resolveDataGridColumnCellStyle(layout.value, columnKey)
