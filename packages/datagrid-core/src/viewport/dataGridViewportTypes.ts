@@ -11,6 +11,8 @@ import type { ViewportClock } from "./dataGridViewportConfig"
 import type { FrameScheduler, FrameSchedulerHooks } from "../runtime/frameScheduler"
 import type { RafScheduler } from "../runtime/rafScheduler"
 import type { MeasurementQueue } from "../runtime/measurementQueue"
+import type { HorizontalSizingInput, HorizontalSizingResolution } from "./dataGridViewportMath"
+import type { BuildHorizontalMetaInput, BuildHorizontalMetaResult } from "./dataGridViewportHorizontalMeta"
 export type { LayoutMeasurementSnapshot } from "./dataGridViewportLayoutCache"
 
 export interface ViewportMetricsSnapshot {
@@ -126,6 +128,8 @@ export interface DataGridViewportRuntimeOverrides {
   createRafScheduler?: () => RafScheduler
   createFrameScheduler?: (hooks: FrameSchedulerHooks) => FrameScheduler
   measurementQueue?: MeasurementQueue
+  buildHorizontalMeta?: (input: BuildHorizontalMetaInput) => BuildHorizontalMetaResult
+  resolveHorizontalSizing?: (input: HorizontalSizingInput) => HorizontalSizingResolution
 }
 
 export interface DataGridViewportControllerOptions {

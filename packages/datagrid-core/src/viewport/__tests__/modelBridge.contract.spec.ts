@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
 import type { DataGridColumnDef } from "../../models"
 import type { VisibleRow } from "../../types"
-import { createDataGridViewportModelBridgeService } from "../dataGridViewportModelBridgeService"
+import {
+  createDataGridViewportModelBridgeService,
+  type DataGridViewportModelBridgeInvalidation,
+} from "../dataGridViewportModelBridgeService"
 
 function buildRows(count: number): VisibleRow<{ id: number; value: string }>[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -83,22 +86,103 @@ describe("table viewport model bridge service", () => {
     })
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
-    const reasons: Array<"rows" | "columns" | "both"> = []
+    const invalidations: DataGridViewportModelBridgeInvalidation[] = []
     const bridge = createDataGridViewportModelBridgeService({
       initialRowModel: rowModel,
       initialColumnModel: columnModel,
       fallbackRowModel,
       fallbackColumnModel,
-      onInvalidate: reason => {
-        reasons.push(reason)
+      onInvalidate: invalidation => {
+        invalidations.push(invalidation)
       },
     })
 
-    reasons.length = 0
+    invalidations.length = 0
     rowModel.setRows(buildRows(2))
     columnModel.setColumnWidth("value", 220)
 
-    expect(reasons).toEqual(["rows", "columns"])
+    expect(invalidations).toEqual([
+      {
+        reason: "rows",
+        axes: { rows: true, columns: false },
+        rowRange: { start: 0, end: 0 },
+      },
+      {
+        reason: "columns",
+        axes: { rows: false, columns: true },
+        rowRange: null,
+      },
+    ])
+
+    bridge.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+    fallbackRowModel.dispose()
+    fallbackColumnModel.dispose()
+  })
+
+  it("does not emit bridge invalidation for viewport-only row model updates", () => {
+    const rowModel = createClientRowModel({ rows: buildRows(24) })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "value", label: "Value", width: 160 }],
+    })
+    const fallbackRowModel = createClientRowModel()
+    const fallbackColumnModel = createDataGridColumnModel()
+    const invalidations: DataGridViewportModelBridgeInvalidation[] = []
+    const bridge = createDataGridViewportModelBridgeService({
+      initialRowModel: rowModel,
+      initialColumnModel: columnModel,
+      fallbackRowModel,
+      fallbackColumnModel,
+      onInvalidate: invalidation => {
+        invalidations.push(invalidation)
+      },
+    })
+
+    invalidations.length = 0
+    rowModel.setViewportRange({ start: 8, end: 12 })
+    rowModel.setViewportRange({ start: 8, end: 12 })
+    rowModel.setViewportRange({ start: 10, end: 16 })
+
+    expect(invalidations).toEqual([])
+
+    bridge.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+    fallbackRowModel.dispose()
+    fallbackColumnModel.dispose()
+  })
+
+  it("keeps row invalidation when row content changes with same rowCount", () => {
+    const rowModel = createClientRowModel({
+      rows: buildRows(6),
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "value", label: "Value", width: 160 }],
+    })
+    const fallbackRowModel = createClientRowModel()
+    const fallbackColumnModel = createDataGridColumnModel()
+    const invalidations: DataGridViewportModelBridgeInvalidation[] = []
+    const bridge = createDataGridViewportModelBridgeService({
+      initialRowModel: rowModel,
+      initialColumnModel: columnModel,
+      fallbackRowModel,
+      fallbackColumnModel,
+      onInvalidate: invalidation => {
+        invalidations.push(invalidation)
+      },
+    })
+
+    invalidations.length = 0
+    rowModel.setRows(buildRows(6, 10_000))
+
+    expect(invalidations).toEqual([
+      {
+        reason: "rows",
+        axes: { rows: true, columns: false },
+        rowRange: { start: 0, end: 0 },
+      },
+    ])
 
     bridge.dispose()
     rowModel.dispose()

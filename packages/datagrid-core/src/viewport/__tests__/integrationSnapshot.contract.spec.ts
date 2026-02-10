@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest"
 import type { DataGridColumn, VisibleRow } from "../../types"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
+import { resolveHorizontalSizing } from "../dataGridViewportMath"
+import { buildHorizontalMeta } from "../dataGridViewportHorizontalMeta"
+import { createFakeRafScheduler } from "./utils/fakeRafScheduler"
 
 interface MutableElementMetrics {
   clientWidth: number
@@ -446,6 +449,170 @@ describe("viewport integration snapshot contract", () => {
 
     expect(onRowsCalls).toBeGreaterThan(baselineRows)
     expect(onColumnsCalls).toBe(baselineColumns)
+
+    controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+  })
+
+  it("reuses horizontal sizing resolution for scroll-only horizontal motion", () => {
+    const columns: DataGridColumn[] = Array.from({ length: 16 }, (_, index) => ({
+      key: `c_${index}`,
+      label: `C${index}`,
+      pin: index === 0 ? "left" : index === 15 ? "right" : "none",
+      width: 96 + (index % 3) * 14,
+      minWidth: 80,
+      maxWidth: 260,
+      visible: true,
+    }))
+    const rowModel = createClientRowModel({ rows: createRows(900) })
+    const columnModel = createDataGridColumnModel({ columns })
+    const containerMetrics = createMeasuredElement({
+      clientWidth: 900,
+      clientHeight: 520,
+      scrollWidth: 5600,
+      scrollHeight: 32_000,
+    })
+    const headerMetrics = createMeasuredElement({
+      clientWidth: 900,
+      clientHeight: 44,
+      scrollWidth: 900,
+      scrollHeight: 44,
+    })
+
+    let resolveHorizontalSizingCalls = 0
+    let buildHorizontalMetaCalls = 0
+
+    const controller = createDataGridViewportController({
+      resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+      rowModel,
+      columnModel,
+      runtime: {
+        buildHorizontalMeta(input) {
+          buildHorizontalMetaCalls += 1
+          return buildHorizontalMeta(input)
+        },
+        resolveHorizontalSizing(input) {
+          resolveHorizontalSizingCalls += 1
+          return resolveHorizontalSizing(input)
+        },
+      },
+    })
+
+    controller.attach(containerMetrics.element, headerMetrics.element)
+    controller.setViewportMetrics({
+      containerWidth: containerMetrics.state.clientWidth,
+      containerHeight: containerMetrics.state.clientHeight,
+      headerHeight: headerMetrics.state.clientHeight,
+    })
+    controller.refresh(true)
+
+    const baselineResolveCalls = resolveHorizontalSizingCalls
+    const baselineMetaCalls = buildHorizontalMetaCalls
+    expect(baselineResolveCalls).toBeGreaterThan(0)
+    expect(baselineMetaCalls).toBeGreaterThan(0)
+
+    for (let step = 0; step < 9; step += 1) {
+      containerMetrics.element.scrollLeft = 160 + step * 84
+      containerMetrics.element.dispatchEvent(new Event("scroll"))
+      controller.refresh(true)
+    }
+
+    // Motion-only horizontal updates should reuse cached sizing resolution.
+    expect(resolveHorizontalSizingCalls).toBe(baselineResolveCalls)
+    // Structural horizontal metadata should also stay cached across pure scroll motion.
+    expect(buildHorizontalMetaCalls).toBe(baselineMetaCalls)
+
+    // Structural column-layout change should invalidate sizing cache and recompute once.
+    columnModel.setColumnWidth("c_7", 250)
+    controller.refresh(true)
+    expect(resolveHorizontalSizingCalls).toBe(baselineResolveCalls + 1)
+    expect(buildHorizontalMetaCalls).toBe(baselineMetaCalls + 1)
+
+    controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+  })
+
+  it("keeps imperative non-force setters in async input->compute->apply phase", () => {
+    const columns: DataGridColumn[] = [
+      { key: "a", label: "A", pin: "left", width: 110, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "b", label: "B", pin: "none", width: 140, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "c", label: "C", pin: "right", width: 120, minWidth: 80, maxWidth: 240, visible: true },
+    ]
+    const rowModel = createClientRowModel({ rows: createRows(220) })
+    const columnModel = createDataGridColumnModel({ columns })
+    const containerMetrics = createMeasuredElement({
+      clientWidth: 760,
+      clientHeight: 460,
+      scrollWidth: 2600,
+      scrollHeight: 14_000,
+    })
+    const headerMetrics = createMeasuredElement({
+      clientWidth: 760,
+      clientHeight: 42,
+      scrollWidth: 760,
+      scrollHeight: 42,
+    })
+    const fakeRaf = createFakeRafScheduler()
+
+    let onRowsCalls = 0
+    let onColumnsCalls = 0
+    let onWindowCalls = 0
+
+    const controller = createDataGridViewportController({
+      resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+      rowModel,
+      columnModel,
+      runtime: {
+        rafScheduler: fakeRaf.scheduler,
+      },
+      imperativeCallbacks: {
+        onRows() {
+          onRowsCalls += 1
+        },
+        onColumns() {
+          onColumnsCalls += 1
+        },
+        onWindow() {
+          onWindowCalls += 1
+        },
+      },
+    })
+
+    controller.attach(containerMetrics.element, headerMetrics.element)
+    controller.setViewportMetrics({
+      containerWidth: containerMetrics.state.clientWidth,
+      containerHeight: containerMetrics.state.clientHeight,
+      headerHeight: headerMetrics.state.clientHeight,
+    })
+    controller.refresh(true)
+
+    const baselineRows = onRowsCalls
+    const baselineColumns = onColumnsCalls
+    const baselineWindow = onWindowCalls
+
+    controller.setZoom(1.1)
+    controller.setVirtualizationEnabled(false)
+    controller.setBaseRowHeight(44)
+    controller.setViewportMetrics({
+      containerWidth: 744,
+      containerHeight: 452,
+      headerHeight: 40,
+    })
+
+    // No immediate apply before scheduler phase flush.
+    expect(onRowsCalls).toBe(baselineRows)
+    expect(onColumnsCalls).toBe(baselineColumns)
+    expect(onWindowCalls).toBe(baselineWindow)
+    expect(fakeRaf.pendingTasks()).toBeGreaterThan(0)
+
+    fakeRaf.scheduler.flush()
+
+    // Coalesced into a single heavy apply cycle.
+    expect(onRowsCalls).toBe(baselineRows + 1)
+    expect(onColumnsCalls).toBe(baselineColumns + 1)
+    expect(onWindowCalls).toBe(baselineWindow + 1)
 
     controller.dispose()
     rowModel.dispose()

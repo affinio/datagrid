@@ -192,8 +192,19 @@ export interface DataGridViewportModelBridgeServiceOptions {
   initialColumnModel?: DataGridColumnModel | null
   fallbackRowModel: DataGridRowModel<unknown>
   fallbackColumnModel: DataGridColumnModel
-  onInvalidate: (reason: "rows" | "columns" | "both") => void
+  onInvalidate: (invalidation: DataGridViewportModelBridgeInvalidation) => void
   rowEntryCacheLimit?: number
+}
+
+export type DataGridViewportModelBridgeInvalidationReason = "rows" | "columns" | "both"
+
+export interface DataGridViewportModelBridgeInvalidation {
+  reason: DataGridViewportModelBridgeInvalidationReason
+  axes: {
+    rows: boolean
+    columns: boolean
+  }
+  rowRange: DataGridViewportRange | null
 }
 
 export interface DataGridViewportModelBridgeService {
@@ -239,6 +250,33 @@ export function createDataGridViewportModelBridgeService(
   let columnModelCacheDirty = true
   let columnProjectionCache = new Map<string, ColumnProjectionCacheEntry>()
 
+  const normalizeViewportRange = (
+    range: DataGridViewportRange | null | undefined,
+  ): DataGridViewportRange | null => {
+    if (!range) {
+      return null
+    }
+    const rawStart = Number.isFinite(range.start) ? Math.trunc(range.start) : 0
+    const rawEnd = Number.isFinite(range.end) ? Math.trunc(range.end) : rawStart
+    const start = Math.max(0, Math.min(rawStart, rawEnd))
+    const end = Math.max(start, Math.max(rawStart, rawEnd))
+    return { start, end }
+  }
+
+  const emitInvalidation = (
+    reason: DataGridViewportModelBridgeInvalidationReason,
+    rowRange: DataGridViewportRange | null = null,
+  ): void => {
+    onInvalidate({
+      reason,
+      axes: {
+        rows: reason !== "columns",
+        columns: reason !== "rows",
+      },
+      rowRange: reason === "rows" || reason === "both" ? normalizeViewportRange(rowRange) : null,
+    })
+  }
+
   const markRowModelCacheDirty = () => {
     rowCountCacheDirty = true
     rowEntryCache.clear()
@@ -251,7 +289,7 @@ export function createDataGridViewportModelBridgeService(
   const bindRowModel = (model: DataGridRowModel<unknown>) => {
     if (activeRowModel === model && activeRowModelUnsubscribe) {
       markRowModelCacheDirty()
-      onInvalidate("rows")
+      emitInvalidation("rows", lastRowModelSnapshot?.viewportRange ?? activeRowModel.getSnapshot().viewportRange)
       return
     }
     activeRowModelUnsubscribe?.()
@@ -264,43 +302,47 @@ export function createDataGridViewportModelBridgeService(
         typeof snapshot.revision === "number" &&
         typeof previous?.revision === "number"
       )
-      const isViewportOnlyUpdate = Boolean(previous) &&
-        (
-          (hasComparableRevision && snapshot.revision === previous?.revision) ||
-          (
-            snapshot.rowCount === previous?.rowCount &&
-            snapshot.loading === previous?.loading &&
-            snapshot.error === previous?.error &&
-            areSortModelsEqual(snapshot.sortModel, previous?.sortModel) &&
-            areFilterModelsEqual(snapshot.filterModel, previous?.filterModel) &&
-            areGroupBySpecsEqual(snapshot.groupBy, previous?.groupBy) &&
-            areGroupExpansionSnapshotsEqual(snapshot.groupExpansion, previous?.groupExpansion)
-          )
-        )
+      const isStableStructuralState = Boolean(previous) &&
+        snapshot.rowCount === previous?.rowCount &&
+        snapshot.loading === previous?.loading &&
+        snapshot.error === previous?.error &&
+        areSortModelsEqual(snapshot.sortModel, previous?.sortModel) &&
+        areFilterModelsEqual(snapshot.filterModel, previous?.filterModel) &&
+        areGroupBySpecsEqual(snapshot.groupBy, previous?.groupBy) &&
+        areGroupExpansionSnapshotsEqual(snapshot.groupExpansion, previous?.groupExpansion)
+      const isViewportOnlyUpdate = Boolean(previous) && (
+        hasComparableRevision
+          ? snapshot.revision === previous?.revision && isStableStructuralState
+          : isStableStructuralState
+      )
 
       if (!isViewportOnlyUpdate) {
         markRowModelCacheDirty()
+      } else {
+        // Viewport range churn is controller-owned and should not enqueue a new
+        // bridge invalidation cycle. This avoids redundant heavy passes.
+        return
       }
-      onInvalidate("rows")
+      emitInvalidation("rows", snapshot.viewportRange)
     })
     markRowModelCacheDirty()
-    onInvalidate("rows")
+    emitInvalidation("rows", lastRowModelSnapshot?.viewportRange)
   }
 
   const bindColumnModel = (model: DataGridColumnModel) => {
     if (activeColumnModel === model && activeColumnModelUnsubscribe) {
       markColumnModelCacheDirty()
-      onInvalidate("columns")
+      emitInvalidation("columns")
       return
     }
     activeColumnModelUnsubscribe?.()
     activeColumnModel = model
     activeColumnModelUnsubscribe = activeColumnModel.subscribe(() => {
       markColumnModelCacheDirty()
-      onInvalidate("columns")
+      emitInvalidation("columns")
     })
     markColumnModelCacheDirty()
-    onInvalidate("columns")
+    emitInvalidation("columns")
   }
 
   const toVisibleRow = (node: DataGridRowNode<unknown>): VisibleRow => {

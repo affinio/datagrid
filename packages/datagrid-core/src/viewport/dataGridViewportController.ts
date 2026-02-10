@@ -111,6 +111,7 @@ import {
 import {
 	computePinnedWidth,
 	resolveHorizontalSizing,
+	type HorizontalSizingResolution,
 	resolvePendingScroll,
 	resolveViewportDimensions,
 	shouldNotifyNearBottom,
@@ -178,6 +179,8 @@ export function createDataGridViewportController(
 		const horizontalScrollEpsilon = horizontalVirtualization.scrollEpsilon
 		const horizontalMinOverscan = Math.max(0, horizontalVirtualization.minOverscan)
 	const runtimeOverrides = options.runtime ?? {}
+	const buildHorizontalMetaFn = runtimeOverrides.buildHorizontalMeta ?? buildHorizontalMeta
+	const resolveHorizontalSizingFn = runtimeOverrides.resolveHorizontalSizing ?? resolveHorizontalSizing
 	const scheduler =
 		runtimeOverrides.rafScheduler ??
 		(typeof runtimeOverrides.createRafScheduler === "function"
@@ -390,6 +393,13 @@ export function createDataGridViewportController(
 		let lastHeavyScrollLeft = 0
 		let lastAverageColumnWidth = 0
 		let lastScrollDirection = 0
+		let lastHorizontalSizing: HorizontalSizingResolution | null = null
+		let lastHorizontalSizingMeta: DataGridViewportHorizontalMeta | null = null
+		let lastHorizontalSizingMetaVersion = -1
+		let lastHorizontalSizingViewportWidth = -1
+		let lastHorizontalSizingViewportHeight = -1
+		let lastHorizontalSizingTotalRowCount = -1
+		let lastHorizontalSizingResolvedRowHeight = -1
 		let horizontalClampContext: HorizontalClampContext = {
 			totalScrollableWidth: 0,
 			containerWidthForColumns: 0,
@@ -410,8 +420,8 @@ export function createDataGridViewportController(
 			initialColumnModel: options.columnModel ?? null,
 			fallbackRowModel: fallbackClientRowModel,
 			fallbackColumnModel,
-			onInvalidate: reason => {
-				scheduleUpdate(reason !== "rows")
+			onInvalidate: invalidation => {
+				scheduleUpdate(invalidation.reason !== "rows")
 			},
 		})
 
@@ -831,7 +841,6 @@ export function createDataGridViewportController(
 					null,
 				)
 				layoutCache.updateHeader({ height: metrics.headerHeight })
-				measureLayout()
 			}
 			scheduleUpdate(false)
 		}
@@ -1310,7 +1319,7 @@ export function createDataGridViewportController(
 
 					let columnMeta: DataGridViewportHorizontalMeta
 					if (!lastHorizontalMeta || horizontalStructureDirty) {
-						const horizontalMetaResult = buildHorizontalMeta({
+						const horizontalMetaResult = buildHorizontalMetaFn({
 							columns,
 							layoutScale,
 							resolvePinMode,
@@ -1336,13 +1345,35 @@ export function createDataGridViewportController(
 					} else {
 						columnMeta = lastHorizontalMeta
 					}
-					const horizontalSizing = resolveHorizontalSizing({
-						columnMeta,
-						viewportWidth: viewportWidthValue,
-						totalRowCount: totalRowCount.value,
-						resolvedRowHeight,
-						viewportHeight: viewportHeightValue,
-					})
+
+					const shouldRecomputeHorizontalSizing =
+						!lastHorizontalSizing ||
+						lastHorizontalSizingMeta !== columnMeta ||
+						lastHorizontalSizingMetaVersion !== columnMeta.version ||
+						Math.abs(lastHorizontalSizingViewportWidth - viewportWidthValue) > 0.5 ||
+						Math.abs(lastHorizontalSizingViewportHeight - viewportHeightValue) > 0.5 ||
+						lastHorizontalSizingTotalRowCount !== rowCount ||
+						Math.abs(lastHorizontalSizingResolvedRowHeight - resolvedRowHeight) > 0.5
+
+					const horizontalSizing = shouldRecomputeHorizontalSizing
+						? resolveHorizontalSizingFn({
+							columnMeta,
+							viewportWidth: viewportWidthValue,
+							totalRowCount: rowCount,
+							resolvedRowHeight,
+							viewportHeight: viewportHeightValue,
+						})
+						: (lastHorizontalSizing as HorizontalSizingResolution)
+
+					if (shouldRecomputeHorizontalSizing) {
+						lastHorizontalSizing = horizontalSizing
+						lastHorizontalSizingMeta = columnMeta
+						lastHorizontalSizingMetaVersion = columnMeta.version
+						lastHorizontalSizingViewportWidth = viewportWidthValue
+						lastHorizontalSizingViewportHeight = viewportHeightValue
+						lastHorizontalSizingTotalRowCount = rowCount
+						lastHorizontalSizingResolvedRowHeight = resolvedRowHeight
+					}
 					const contentWidthEstimate = horizontalSizing.contentWidthEstimate
 					const contentHeightEstimate = horizontalSizing.contentHeightEstimate
 					layoutCache.updateContentDimensions(contentWidthEstimate, contentHeightEstimate)
