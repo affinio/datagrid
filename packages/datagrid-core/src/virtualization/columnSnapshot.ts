@@ -102,6 +102,7 @@ export function updateColumnSnapshot<TColumn>(
 ): UpdateColumnSnapshotResult {
   const { snapshot, meta, range, payload, getColumnKey, resolveColumnWidth } = options
   const layoutChanged = snapshot.metaVersion !== meta.version
+  const widthProjectionChanged = snapshot.metrics !== meta.metrics || snapshot.metaVersion < 0
   const { start, end } = range
   const visibleScrollableEntries = snapshot.visibleScrollable
   const visibleColumnsEntries = snapshot.visibleColumns
@@ -140,7 +141,7 @@ export function updateColumnSnapshot<TColumn>(
   }
   visibleScrollableEntries.length = scrollableCount
 
-  if (layoutChanged) {
+  if (layoutChanged && widthProjectionChanged) {
     const columnWidthMap = snapshot.columnWidthMap
     if (columnWidthMap.size) {
       columnWidthMap.clear()
@@ -159,7 +160,7 @@ export function updateColumnSnapshot<TColumn>(
 
   const pinnedLeftEntries = snapshot.pinnedLeft
   const pinnedRightEntries = snapshot.pinnedRight
-  if (layoutChanged) {
+  if (layoutChanged && widthProjectionChanged) {
     pinnedLeftEntries.length = 0
     pinnedRightEntries.length = 0
     pinnedLeftEntries.push(...meta.pinnedLeft)

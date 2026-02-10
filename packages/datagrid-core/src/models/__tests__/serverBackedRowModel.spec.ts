@@ -194,4 +194,61 @@ describe("createServerBackedRowModel", () => {
     expect(model.getRow(0)?.rowKey).toBe("r-1")
     model.dispose()
   })
+
+  it("bounds row cache with LRU eviction policy", () => {
+    const rows = Array.from({ length: 8 }, (_, index) => ({ id: index }))
+    const getRowAt = vi.fn((index: number) => rows[index])
+
+    const source: ServerRowModel<{ id: number }> = {
+      rows: { value: rows },
+      loading: { value: false },
+      error: { value: null },
+      blocks: { value: new Map() },
+      total: { value: rows.length },
+      loadedRanges: { value: [] },
+      progress: { value: 1 },
+      blockErrors: { value: new Map() },
+      diagnostics: {
+        value: {
+          cacheBlocks: 0,
+          cachedRows: rows.length,
+          pendingBlocks: 0,
+          pendingRequests: 0,
+          abortedRequests: 0,
+          cacheHits: 0,
+          cacheMisses: 0,
+          effectivePreloadThreshold: 0.6,
+        },
+      },
+      getRowAt,
+      getRowCount() {
+        return rows.length
+      },
+      refreshBlock: vi.fn(async () => {}),
+      fetchBlock: vi.fn(async () => {}),
+      reset: vi.fn(),
+      abortAll: vi.fn(),
+      dispose: vi.fn(),
+    }
+
+    const model = createServerBackedRowModel({
+      source,
+      rowCacheLimit: 2,
+    })
+
+    expect(model.getRow(0)?.rowKey).toBe(0)
+    expect(model.getRow(1)?.rowKey).toBe(1)
+    expect(model.getRow(2)?.rowKey).toBe(2)
+    expect(getRowAt).toHaveBeenCalledTimes(3)
+
+    // Still cached due recent access window (cache contains 1,2).
+    expect(model.getRow(1)?.rowKey).toBe(1)
+    expect(getRowAt).toHaveBeenCalledTimes(3)
+
+    // Row 0 should be evicted and re-read from source.
+    expect(model.getRow(0)?.rowKey).toBe(0)
+    expect(getRowAt).toHaveBeenCalledTimes(4)
+
+    model.dispose()
+  })
 })

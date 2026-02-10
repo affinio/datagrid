@@ -1,5 +1,6 @@
 import { type Ref } from "vue"
 import type { DataGridColumnDef, DataGridSelectionSnapshot } from "@affino/datagrid-core"
+import type { DataGridTransactionAffectedRange } from "@affino/datagrid-core/advanced"
 import type { UseDataGridRuntimeResult } from "../../useDataGridRuntime"
 import {
   useAffinoDataGridSelectionFeature,
@@ -48,7 +49,17 @@ export interface UseAffinoDataGridFeatureSuiteResult<TRow>
     UseAffinoDataGridVisibilityFeatureResult,
     UseAffinoDataGridTreeFeatureResult,
     UseAffinoDataGridSummaryFeatureResult {
-  replaceRows: (nextRows: readonly TRow[]) => boolean
+  replaceRows: (
+    nextRows: readonly TRow[],
+    options?: AffinoDataGridRowMutationOptions,
+  ) => Promise<boolean>
+}
+
+export interface AffinoDataGridRowMutationOptions {
+  intent?: string
+  label?: string
+  clearSelection?: boolean
+  affectedRange?: DataGridTransactionAffectedRange | null
 }
 
 export function useAffinoDataGridFeatureSuite<TRow>(
@@ -77,11 +88,66 @@ export function useAffinoDataGridFeatureSuite<TRow>(
     selectionSnapshot,
   } = selectionFeature
 
-  const replaceRows = (nextRows: readonly TRow[]): boolean => {
+  const replaceRows = async (
+    nextRows: readonly TRow[],
+    mutationOptions: AffinoDataGridRowMutationOptions = {},
+  ): Promise<boolean> => {
+    const previousRows = options.rows.value
+    const previousSelection = options.runtime.api.getSelectionSnapshot()
+    const shouldClearSelection = mutationOptions.clearSelection ?? false
+
     try {
       options.rows.value = nextRows
+      if (shouldClearSelection) {
+        clearSelection()
+      }
+    } catch {
+      return false
+    }
+
+    const nextSelection = shouldClearSelection ? null : options.runtime.api.getSelectionSnapshot()
+    if (!options.runtime.api.hasTransactionSupport()) {
+      return true
+    }
+
+    const intent = mutationOptions.intent?.trim() || "rows-replace"
+    const label = mutationOptions.label?.trim() || "Replace rows"
+    const meta = {
+      intent,
+      affectedRange: mutationOptions.affectedRange ?? null,
+    }
+
+    try {
+      await options.runtime.api.applyTransaction({
+        label,
+        meta,
+        commands: [
+          {
+            type: `rows.${intent}`,
+            payload: {
+              rows: nextRows,
+              selection: nextSelection,
+            },
+            rollbackPayload: {
+              rows: previousRows,
+              selection: previousSelection,
+            },
+            meta,
+          },
+        ],
+      })
       return true
     } catch {
+      try {
+        options.rows.value = previousRows
+        if (previousSelection) {
+          options.runtime.api.setSelectionSnapshot(previousSelection)
+        } else {
+          options.runtime.api.clearSelection()
+        }
+      } catch {
+        // Keep failure deterministic for caller; best-effort rollback only.
+      }
       return false
     }
   }
@@ -104,7 +170,6 @@ export function useAffinoDataGridFeatureSuite<TRow>(
     feature: options.normalizedFeatures.clipboard,
     resolveRowKey,
     replaceRows,
-    clearSelection,
   })
   const {
     clipboardEnabled,

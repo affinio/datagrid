@@ -232,7 +232,8 @@ Row identity contract (required):
   - `grid.bindings.actionButton("copy" | "cut" | "paste" | ...)` for toolbar-level actions.
 - `grid.actions` provides no-router commands for common flows:
   - `runAction("copy" | "cut" | "paste" | "clear" | "sort-asc" | "sort-desc" | "sort-clear")`
-  - `copySelectedRows()`, `cutSelectedRows()`, `pasteRowsAppend()`, `selectAllRows()`
+  - `copySelectedRows()`, `cutSelectedRows()`, `pasteRowsAppend()`, `clearSelectedRows()`, `selectAllRows()`
+  - Mutating clipboard flows (`clear/cut/paste`) are intent-transaction backed in sugar path (undo/redo-capable when history controls are wired).
 - `grid.contextMenu` wraps menu state + keyboard support + action execution:
   - `open(x, y, { zone, columnKey?, rowId? })`
   - `runAction(actionId)` (maps directly into `grid.actions`)

@@ -27,12 +27,15 @@ export interface CreateServerBackedRowModelOptions<T> {
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
   initialGroupBy?: DataGridGroupBySpec | null
+  rowCacheLimit?: number
 }
 
 export interface ServerBackedRowModel<T> extends DataGridRowModel<T> {
   readonly source: ServerRowModel<T>
   syncFromSource(): void
 }
+
+const DEFAULT_ROW_CACHE_LIMIT = 4096
 
 export function createServerBackedRowModel<T>(
   options: CreateServerBackedRowModelOptions<T>,
@@ -60,6 +63,34 @@ export function createServerBackedRowModel<T>(
   let lastRangeCacheRows: readonly DataGridRowNode<T>[] = []
   const listeners = new Set<DataGridRowModelListener<T>>()
   const rowNodeCache = new Map<number, DataGridRowNode<T> | undefined>()
+  const rowCacheLimit =
+    Number.isFinite(options.rowCacheLimit) && (options.rowCacheLimit as number) > 0
+      ? Math.max(1, Math.trunc(options.rowCacheLimit as number))
+      : DEFAULT_ROW_CACHE_LIMIT
+
+  function readRowCache(index: number): DataGridRowNode<T> | undefined {
+    if (!rowNodeCache.has(index)) {
+      return undefined
+    }
+    const cached = rowNodeCache.get(index)
+    rowNodeCache.delete(index)
+    rowNodeCache.set(index, cached)
+    return cached
+  }
+
+  function writeRowCache(index: number, row: DataGridRowNode<T> | undefined): void {
+    if (rowNodeCache.has(index)) {
+      rowNodeCache.delete(index)
+    }
+    rowNodeCache.set(index, row)
+    while (rowNodeCache.size > rowCacheLimit) {
+      const oldest = rowNodeCache.keys().next().value as number | undefined
+      if (typeof oldest === "undefined") {
+        break
+      }
+      rowNodeCache.delete(oldest)
+    }
+  }
 
   function ensureActive() {
     if (disposed) {
@@ -124,11 +155,11 @@ export function createServerBackedRowModel<T>(
 
   function toRowNode(index: number): DataGridRowNode<T> | undefined {
     if (rowNodeCache.has(index)) {
-      return rowNodeCache.get(index)
+      return readRowCache(index)
     }
     const row = source.getRowAt(index)
     if (typeof row === "undefined") {
-      rowNodeCache.set(index, undefined)
+      writeRowCache(index, undefined)
       return undefined
     }
     const rowId = resolveRowId(row, index) as DataGridRowId
@@ -141,7 +172,7 @@ export function createServerBackedRowModel<T>(
       originalIndex: index,
       displayIndex: index,
     }, index)
-    rowNodeCache.set(index, normalized)
+    writeRowCache(index, normalized)
     return normalized
   }
 

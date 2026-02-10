@@ -1,4 +1,5 @@
 import { computed, ref, type ComputedRef, type Ref } from "vue"
+import type { AffinoDataGridRowMutationOptions } from "./useAffinoDataGridFeatureSuite"
 
 export interface AffinoClipboardFeatureInput<TRow> {
   enabled?: boolean
@@ -19,8 +20,7 @@ export interface UseAffinoDataGridClipboardFeatureOptions<TRow> {
   selectedRowKeySet: Ref<Set<string>>
   feature: NormalizedAffinoClipboardFeature<TRow>
   resolveRowKey: (row: TRow, index: number) => string
-  replaceRows: (rows: readonly TRow[]) => boolean
-  clearSelection: () => void
+  replaceRows: (rows: readonly TRow[], options?: AffinoDataGridRowMutationOptions) => Promise<boolean>
 }
 
 export interface UseAffinoDataGridClipboardFeatureResult<TRow> {
@@ -32,7 +32,7 @@ export interface UseAffinoDataGridClipboardFeatureResult<TRow> {
   parseRows: (text: string) => readonly TRow[]
   resolveSelectedRows: () => readonly TRow[]
   copySelectedRows: () => Promise<boolean>
-  clearSelectedRows: () => number
+  clearSelectedRows: () => Promise<number>
   cutSelectedRows: () => Promise<number>
   pasteRowsAppend: () => Promise<number>
 }
@@ -131,7 +131,10 @@ export function useAffinoDataGridClipboardFeature<TRow>(
 
   const copySelectedRows = async (): Promise<boolean> => copyRows(resolveSelectedRows())
 
-  const clearSelectedRows = (): number => {
+  const removeSelectedRows = async (mutation: {
+    intent: string
+    label: string
+  }): Promise<number> => {
     const selectedKeys = options.selectedRowKeySet.value
     if (!selectedKeys.size) {
       return 0
@@ -141,20 +144,31 @@ export function useAffinoDataGridClipboardFeature<TRow>(
     if (affected <= 0) {
       return 0
     }
-    const didReplace = options.replaceRows(nextRows)
+    const didReplace = await options.replaceRows(nextRows, {
+      intent: mutation.intent,
+      label: mutation.label,
+      clearSelection: true,
+    })
     if (!didReplace) {
       return 0
     }
-    options.clearSelection()
     return affected
   }
+
+  const clearSelectedRows = async (): Promise<number> => removeSelectedRows({
+    intent: "clear",
+    label: "Clear selected rows",
+  })
 
   const cutSelectedRows = async (): Promise<number> => {
     const copied = await copySelectedRows()
     if (!copied) {
       return 0
     }
-    return clearSelectedRows()
+    return removeSelectedRows({
+      intent: "cut",
+      label: "Cut selected rows",
+    })
   }
 
   const pasteRowsAppend = async (): Promise<number> => {
@@ -167,7 +181,10 @@ export function useAffinoDataGridClipboardFeature<TRow>(
       return 0
     }
     const nextRows = [...options.rows.value, ...parsedRows]
-    const didReplace = options.replaceRows(nextRows)
+    const didReplace = await options.replaceRows(nextRows, {
+      intent: "paste",
+      label: "Paste rows append",
+    })
     if (!didReplace) {
       return 0
     }

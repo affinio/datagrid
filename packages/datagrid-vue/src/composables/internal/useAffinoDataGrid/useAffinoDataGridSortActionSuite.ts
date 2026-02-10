@@ -20,7 +20,7 @@ export interface UseAffinoDataGridSortActionSuiteOptions<TRow> {
   copySelectedRows: () => Promise<boolean>
   cutSelectedRows: () => Promise<number>
   pasteRowsAppend: () => Promise<number>
-  clearSelectedRows: () => number
+  clearSelectedRows: () => Promise<number>
 }
 
 export function useAffinoDataGridSortActionSuite<TRow>(

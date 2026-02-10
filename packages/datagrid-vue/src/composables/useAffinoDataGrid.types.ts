@@ -123,7 +123,7 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
     copySelectedRows: () => Promise<boolean>
     cutSelectedRows: () => Promise<number>
     pasteRowsAppend: () => Promise<number>
-    clearSelectedRows: () => number
+    clearSelectedRows: () => Promise<number>
     selectAllRows: () => number
     runAction: (actionId: AffinoDataGridActionId, options?: AffinoDataGridRunActionOptions) => Promise<AffinoDataGridActionResult>
   }

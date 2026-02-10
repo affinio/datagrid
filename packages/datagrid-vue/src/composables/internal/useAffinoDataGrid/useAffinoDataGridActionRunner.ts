@@ -9,7 +9,7 @@ export interface UseAffinoDataGridActionRunnerOptions {
   copySelectedRows: () => Promise<boolean>
   cutSelectedRows: () => Promise<number>
   pasteRowsAppend: () => Promise<number>
-  clearSelectedRows: () => number
+  clearSelectedRows: () => Promise<number>
   setSortState: (nextState: readonly DataGridSortState[]) => void
   clearSort: () => void
 }
@@ -78,7 +78,7 @@ export function useAffinoDataGridActionRunner(
         }
       }
       case "clear": {
-        const affected = options.clearSelectedRows()
+        const affected = await options.clearSelectedRows()
         return {
           ok: affected > 0,
           affected,

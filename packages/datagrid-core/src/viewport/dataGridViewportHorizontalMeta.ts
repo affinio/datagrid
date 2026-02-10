@@ -18,21 +18,24 @@ interface LayoutCacheEntry {
 	layout: LayoutOutput
 }
 
-let layoutCacheEntry: LayoutCacheEntry | null = null
+const layoutCache: Array<LayoutCacheEntry | null> = [null, null]
+let layoutCacheWriteIndex = 0
 
 function resolveCachedLayout(
 	columns: readonly DataGridColumn[],
 	zoom: number,
 	resolvePinMode: ResolvePinMode,
 ): LayoutOutput {
-	const cached = layoutCacheEntry
-	if (
-		cached &&
-		cached.columns === columns &&
-		cached.zoom === zoom &&
-		cached.resolvePinMode === resolvePinMode
-	) {
-		return cached.layout
+	for (let index = 0; index < layoutCache.length; index += 1) {
+		const cached = layoutCache[index]
+		if (
+			cached &&
+			cached.columns === columns &&
+			cached.zoom === zoom &&
+			cached.resolvePinMode === resolvePinMode
+		) {
+			return cached.layout
+		}
 	}
 
 	const layout = computeColumnLayout({
@@ -41,12 +44,13 @@ function resolveCachedLayout(
 		resolvePinMode,
 	})
 
-	layoutCacheEntry = {
+	layoutCache[layoutCacheWriteIndex] = {
 		columns,
 		zoom,
 		resolvePinMode,
 		layout,
 	}
+	layoutCacheWriteIndex = (layoutCacheWriteIndex + 1) % layoutCache.length
 
 	return layout
 }

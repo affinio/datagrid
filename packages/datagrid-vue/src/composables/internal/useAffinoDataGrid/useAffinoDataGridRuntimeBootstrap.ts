@@ -1,11 +1,21 @@
 import { ref, type Ref } from "vue"
-import type { DataGridColumnDef, DataGridSelectionSnapshot } from "@affino/datagrid-core"
+import type {
+  DataGridColumnDef,
+  DataGridCoreTransactionService,
+  DataGridSelectionSnapshot,
+} from "@affino/datagrid-core"
+import { createDataGridTransactionService } from "@affino/datagrid-core/advanced"
 import {
   useDataGridRuntime,
   type UseDataGridRuntimeOptions,
   type UseDataGridRuntimeResult,
 } from "../../useDataGridRuntime"
 import { toReadonlyRef, type MaybeRef } from "./useAffinoDataGridIdentity"
+
+interface AffinoDataGridMutationSnapshot<TRow> {
+  rows: readonly TRow[]
+  selection: DataGridSelectionSnapshot | null
+}
 
 export interface UseAffinoDataGridRuntimeBootstrapOptions<TRow> {
   rows: MaybeRef<readonly TRow[]>
@@ -42,8 +52,38 @@ export function useAffinoDataGridRuntimeBootstrap<TRow>(
     },
   }
 
+  const applyMutationSnapshot = (snapshot: AffinoDataGridMutationSnapshot<TRow>): void => {
+    rows.value = snapshot.rows
+    internalSelectionSnapshot.value = snapshot.selection
+  }
+
+  const internalTransactionEngine = createDataGridTransactionService({
+    execute(command, context) {
+      if (context.direction === "apply") {
+        return
+      }
+      const snapshot = command.payload as AffinoDataGridMutationSnapshot<TRow>
+      applyMutationSnapshot(snapshot)
+    },
+  })
+
+  const internalTransactionService: DataGridCoreTransactionService = {
+    name: "transaction",
+    getTransactionSnapshot: internalTransactionEngine.getSnapshot,
+    beginTransactionBatch: internalTransactionEngine.beginBatch,
+    commitTransactionBatch: internalTransactionEngine.commitBatch,
+    rollbackTransactionBatch: internalTransactionEngine.rollbackBatch,
+    applyTransaction: internalTransactionEngine.applyTransaction,
+    canUndoTransaction: internalTransactionEngine.canUndo,
+    canRedoTransaction: internalTransactionEngine.canRedo,
+    undoTransaction: internalTransactionEngine.undo,
+    redoTransaction: internalTransactionEngine.redo,
+    dispose: internalTransactionEngine.dispose,
+  }
+
   const runtimeServices: UseDataGridRuntimeOptions<TRow>["services"] = {
     ...options.services,
+    transaction: options.services?.transaction ?? internalTransactionService,
     selection: options.services?.selection ?? internalSelectionService,
   }
 
