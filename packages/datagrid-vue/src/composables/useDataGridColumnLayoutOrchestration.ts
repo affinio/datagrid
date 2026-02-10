@@ -50,9 +50,18 @@ export function useDataGridColumnLayoutOrchestration<TColumn extends DataGridCol
       columns: options.columns.value,
       resolveColumnWidth: options.resolveColumnWidth,
       virtualWindow: virtualWindow ?? {
+        rowStart: 0,
+        rowEnd: 0,
+        rowTotal: 0,
         colStart: 0,
         colEnd: 0,
         colTotal: 0,
+        overscan: {
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+        },
       },
     })
   })

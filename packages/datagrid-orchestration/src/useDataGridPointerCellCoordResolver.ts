@@ -17,8 +17,18 @@ export interface DataGridPointerColumnSnapshot {
 }
 
 export interface DataGridPointerVirtualWindowSnapshot {
+  rowStart?: number
+  rowEnd?: number
   rowTotal: number
+  colStart?: number
+  colEnd?: number
   colTotal: number
+  overscan?: {
+    top?: number
+    bottom?: number
+    left?: number
+    right?: number
+  }
 }
 
 export interface UseDataGridPointerCellCoordResolverOptions<TCoord extends DataGridPointerCellCoord> {

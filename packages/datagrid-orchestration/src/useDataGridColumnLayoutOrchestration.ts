@@ -19,9 +19,18 @@ export interface DataGridVisibleColumnsWindow {
 }
 
 export interface DataGridVirtualWindowColumnSnapshot {
+  rowStart?: number
+  rowEnd?: number
+  rowTotal?: number
   colStart: number
   colEnd: number
   colTotal: number
+  overscan?: {
+    top?: number
+    bottom?: number
+    left?: number
+    right?: number
+  }
 }
 
 export type DataGridColumnLayerKey = "left" | "scroll" | "right"

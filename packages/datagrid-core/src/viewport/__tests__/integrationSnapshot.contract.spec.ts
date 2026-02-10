@@ -214,7 +214,7 @@ describe("viewport integration snapshot contract", () => {
     const repeatB = controller.getIntegrationSnapshot()
 
     expect(repeat).toEqual(repeatB)
-    expect(onWindowCalls).toBe(baselineWindowCalls)
+    expect(onWindowCalls).toBe(afterScrollWindowCalls)
     expect(repeat.overlaySync.scrollLeft).not.toBe(111)
     expect(repeat.overlaySync.scrollTop).not.toBe(222)
     expect(repeat.virtualWindow.rowStart).not.toBe(999_999)
@@ -225,6 +225,85 @@ describe("viewport integration snapshot contract", () => {
     expect(repeat.virtualWindow.overscan.top).not.toBe(555_555)
     expect(controller.getViewportSyncState().scrollLeft).not.toBe(999_999)
     expect(controller.getViewportSyncState().scrollTop).not.toBe(999_999)
+
+    controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+  })
+
+  it("coalesces burst scroll input into a single apply cycle", () => {
+    const columns: DataGridColumn[] = [
+      { key: "a", label: "A", pin: "left", width: 110, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "b", label: "B", pin: "none", width: 140, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "c", label: "C", pin: "none", width: 140, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "d", label: "D", pin: "right", width: 120, minWidth: 80, maxWidth: 240, visible: true },
+    ]
+    const rowModel = createClientRowModel({ rows: createRows(600) })
+    const columnModel = createDataGridColumnModel({ columns })
+    const containerMetrics = createMeasuredElement({
+      clientWidth: 840,
+      clientHeight: 500,
+      scrollWidth: 3200,
+      scrollHeight: 24_000,
+    })
+    const headerMetrics = createMeasuredElement({
+      clientWidth: 840,
+      clientHeight: 44,
+      scrollWidth: 840,
+      scrollHeight: 44,
+    })
+
+    let onRowsCalls = 0
+    let onColumnsCalls = 0
+    let onWindowCalls = 0
+
+    const controller = createDataGridViewportController({
+      resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+      rowModel,
+      columnModel,
+      imperativeCallbacks: {
+        onRows() {
+          onRowsCalls += 1
+        },
+        onColumns() {
+          onColumnsCalls += 1
+        },
+        onWindow() {
+          onWindowCalls += 1
+        },
+      },
+    })
+
+    controller.attach(containerMetrics.element, headerMetrics.element)
+    controller.setViewportMetrics({
+      containerWidth: containerMetrics.state.clientWidth,
+      containerHeight: containerMetrics.state.clientHeight,
+      headerHeight: headerMetrics.state.clientHeight,
+    })
+    controller.refresh(true)
+
+    const baseline = {
+      rows: onRowsCalls,
+      columns: onColumnsCalls,
+      window: onWindowCalls,
+    }
+
+    for (let step = 0; step < 7; step += 1) {
+      containerMetrics.element.scrollTop = 260 + step * 96
+      containerMetrics.element.scrollLeft = 120 + step * 38
+      containerMetrics.element.dispatchEvent(new Event("scroll"))
+    }
+
+    controller.refresh(true)
+
+    expect(onRowsCalls).toBe(baseline.rows + 1)
+    expect(onColumnsCalls).toBe(baseline.columns + 1)
+    expect(onWindowCalls).toBe(baseline.window + 1)
+
+    controller.refresh(true)
+    expect(onRowsCalls).toBe(baseline.rows + 1)
+    expect(onColumnsCalls).toBe(baseline.columns + 1)
+    expect(onWindowCalls).toBe(baseline.window + 1)
 
     controller.dispose()
     rowModel.dispose()

@@ -25,7 +25,20 @@ export function useDataGridVirtualRangeMetrics(
   const metrics = computed(() => {
     const virtualWindow = options.virtualWindow.value
     return buildDataGridVirtualRangeMetrics({
-      virtualWindow: virtualWindow ?? { rowStart: 0, rowEnd: 0, rowTotal: 0 },
+      virtualWindow: virtualWindow ?? {
+        rowStart: 0,
+        rowEnd: 0,
+        rowTotal: 0,
+        colStart: 0,
+        colEnd: 0,
+        colTotal: 0,
+        overscan: {
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+        },
+      },
       rowHeight: options.rowHeight,
     })
   })

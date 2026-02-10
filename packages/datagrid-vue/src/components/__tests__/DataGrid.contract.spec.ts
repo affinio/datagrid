@@ -70,8 +70,10 @@ describe("DataGrid component contract", () => {
 
     expect(typeof exposed.api.getRowCount).toBe("function")
     expect(exposed.api.getRowCount()).toBe(1)
-    expect(exposed.virtualWindow.value?.rowTotal).toBe(1)
-    expect(exposed.virtualWindow.value?.colTotal).toBe(1)
+    const exposedWindow = (exposed.virtualWindow as { value?: { rowTotal: number; colTotal: number } | null })?.value ??
+      (exposed.virtualWindow as { rowTotal?: number; colTotal?: number } | null)
+    expect(exposedWindow?.rowTotal).toBe(1)
+    expect(exposedWindow?.colTotal).toBe(1)
     expect(exposed.core.lifecycle.state).toBe("started")
     expect(typeof exposed.start).toBe("function")
     expect(typeof exposed.stop).toBe("function")

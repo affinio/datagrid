@@ -51,15 +51,28 @@ export function useDataGridRuntime<TRow = unknown>(
   })
   const { rowModel, columnModel, core, api } = runtime
   const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
+  const buildFallbackVirtualWindow = (): DataGridRuntimeVirtualWindowSnapshot => {
+    const rowTotal = Math.max(0, api.getRowCount())
+    const colTotal = Math.max(0, columnSnapshot.value.visibleColumns.length)
+    return {
+      rowStart: 0,
+      rowEnd: Math.max(0, rowTotal - 1),
+      rowTotal,
+      colStart: 0,
+      colEnd: Math.max(0, colTotal - 1),
+      colTotal,
+      overscan: { top: 0, bottom: 0, left: 0, right: 0 },
+    }
+  }
   const virtualWindow = ref<DataGridRuntimeVirtualWindowSnapshot | null>(
-    runtime.getVirtualWindowSnapshot(),
+    runtime.getVirtualWindowSnapshot() ?? buildFallbackVirtualWindow(),
   )
 
   const unsubscribeColumns = runtime.subscribeColumnSnapshot(next => {
     columnSnapshot.value = next
   })
   const unsubscribeVirtualWindow = runtime.subscribeVirtualWindow(next => {
-    virtualWindow.value = next
+    virtualWindow.value = next ?? buildFallbackVirtualWindow()
   })
 
   const shouldAutoStart = options.autoStart !== false

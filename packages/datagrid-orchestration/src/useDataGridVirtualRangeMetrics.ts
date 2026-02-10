@@ -4,9 +4,18 @@ export interface DataGridVirtualRange {
 }
 
 export interface DataGridVirtualWindowRowSnapshot {
+  colStart?: number
+  colEnd?: number
+  colTotal?: number
   rowStart: number
   rowEnd: number
   rowTotal: number
+  overscan?: {
+    top?: number
+    bottom?: number
+    left?: number
+    right?: number
+  }
 }
 
 export interface UseDataGridVirtualRangeMetricsWindowOptions {
