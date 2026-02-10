@@ -25,6 +25,7 @@
     "src/dataGridSettingsStore.ts",
     "src/runtime/**/*.ts",
     "src/components/**/*.ts",
+    "src/contracts/**/*.ts",
     "src/types/**/*.ts",
     "src/types/**/*.d.ts",
     "src/adapters/a11yAttributesAdapter.ts",

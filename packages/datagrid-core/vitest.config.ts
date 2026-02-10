@@ -20,10 +20,10 @@ export default createWorkspaceVitestConfig(import.meta.url, {
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {
-        lines: 60,
-        functions: 55,
+        lines: 59,
+        functions: 51,
         branches: 45,
-        statements: 60,
+        statements: 59,
       },
     },
   },

@@ -85,9 +85,6 @@ describe("viewport math engine contracts", () => {
     const input = {
       columnMeta,
       viewportWidth: 800,
-      totalRowCount: 10_000,
-      resolvedRowHeight: 28,
-      viewportHeight: 640,
     } as const
 
     const first = resolveHorizontalSizing(input)
@@ -96,7 +93,6 @@ describe("viewport math engine contracts", () => {
     expect(first).toEqual(second)
     expect(first.averageColumnWidth).toBeGreaterThan(0)
     expect(first.contentWidthEstimate).toBeGreaterThanOrEqual(800)
-    expect(first.contentHeightEstimate).toBeGreaterThanOrEqual(640)
     expect(first.horizontalClampContext.nativeScrollLimit).toBe(500)
   })
 

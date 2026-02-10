@@ -1,16 +1,19 @@
 import type { ServerRowModel } from "../serverRowModel/serverRowModel"
 import {
   buildGroupExpansionSnapshot,
+  buildPaginationSnapshot,
   cloneGroupBySpec,
   isSameGroupBySpec,
   normalizeRowNode,
   normalizeGroupBySpec,
+  normalizePaginationInput,
   normalizeViewportRange,
   toggleGroupExpansionKey,
   type DataGridRowId,
   type DataGridRowIdResolver,
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
+  type DataGridPaginationInput,
   type DataGridRowNode,
   type DataGridRowModel,
   type DataGridRowModelListener,
@@ -27,6 +30,7 @@ export interface CreateServerBackedRowModelOptions<T> {
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
   initialGroupBy?: DataGridGroupBySpec | null
+  initialPagination?: DataGridPaginationInput | null
   rowCacheLimit?: number
 }
 
@@ -54,6 +58,7 @@ export function createServerBackedRowModel<T>(
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
   let filterModel: DataGridFilterSnapshot | null = cloneDataGridFilterSnapshot(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
+  let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
   const toggledGroupKeys = new Set<string>()
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, source.getRowCount())
   let disposed = false
@@ -98,8 +103,44 @@ export function createServerBackedRowModel<T>(
     }
   }
 
+  function getPaginationSnapshot() {
+    return buildPaginationSnapshot(source.getRowCount(), paginationInput)
+  }
+
+  function getVisibleRowCount() {
+    const pagination = getPaginationSnapshot()
+    if (!pagination.enabled) {
+      return pagination.totalRowCount
+    }
+    if (pagination.startIndex < 0 || pagination.endIndex < pagination.startIndex) {
+      return 0
+    }
+    return pagination.endIndex - pagination.startIndex + 1
+  }
+
+  function toSourceIndex(index: number): number {
+    const pagination = getPaginationSnapshot()
+    if (!pagination.enabled || pagination.startIndex < 0) {
+      return index
+    }
+    return pagination.startIndex + index
+  }
+
+  function toSourceRange(range: DataGridViewportRange): DataGridViewportRange {
+    const visibleCount = getVisibleRowCount()
+    const normalized = normalizeViewportRange(range, visibleCount)
+    if (visibleCount <= 0) {
+      return { start: 0, end: 0 }
+    }
+    return {
+      start: toSourceIndex(normalized.start),
+      end: toSourceIndex(normalized.end),
+    }
+  }
+
   function getSnapshot(): DataGridRowModelSnapshot<T> {
-    const rowCount = source.getRowCount()
+    const pagination = getPaginationSnapshot()
+    const rowCount = getVisibleRowCount()
     viewportRange = normalizeViewportRange(viewportRange, rowCount)
     return {
       revision,
@@ -108,6 +149,7 @@ export function createServerBackedRowModel<T>(
       loading: Boolean(source.loading.value),
       error: source.error.value ?? null,
       viewportRange,
+      pagination,
       sortModel,
       filterModel: cloneDataGridFilterSnapshot(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
@@ -124,7 +166,7 @@ export function createServerBackedRowModel<T>(
   }
 
   function invalidateCachesForRange(range: DataGridViewportRange) {
-    const normalized = normalizeViewportRange(range, source.getRowCount())
+    const normalized = normalizeViewportRange(toSourceRange(range), source.getRowCount())
     for (let index = normalized.start; index <= normalized.end; index += 1) {
       rowNodeCache.delete(index)
     }
@@ -145,8 +187,9 @@ export function createServerBackedRowModel<T>(
   }
 
   async function warmViewportRange(range: DataGridViewportRange): Promise<void> {
-    const start = Math.max(0, Math.trunc(range.start))
-    const end = Math.max(start, Math.trunc(range.end))
+    const sourceRange = toSourceRange(range)
+    const start = Math.max(0, Math.trunc(sourceRange.start))
+    const end = Math.max(start, Math.trunc(sourceRange.end))
     await source.fetchBlock(start)
     if (end !== start) {
       await source.fetchBlock(end)
@@ -154,25 +197,26 @@ export function createServerBackedRowModel<T>(
   }
 
   function toRowNode(index: number): DataGridRowNode<T> | undefined {
-    if (rowNodeCache.has(index)) {
-      return readRowCache(index)
+    const sourceIndex = toSourceIndex(index)
+    if (rowNodeCache.has(sourceIndex)) {
+      return readRowCache(sourceIndex)
     }
-    const row = source.getRowAt(index)
+    const row = source.getRowAt(sourceIndex)
     if (typeof row === "undefined") {
-      writeRowCache(index, undefined)
+      writeRowCache(sourceIndex, undefined)
       return undefined
     }
-    const rowId = resolveRowId(row, index) as DataGridRowId
+    const rowId = resolveRowId(row, sourceIndex) as DataGridRowId
     if (typeof rowId !== "string" && typeof rowId !== "number") {
-      throw new Error(`[DataGrid] Invalid row identity returned for index ${index}. Expected string|number.`)
+      throw new Error(`[DataGrid] Invalid row identity returned for index ${sourceIndex}. Expected string|number.`)
     }
     const normalized = normalizeRowNode({
       row,
       rowId,
-      originalIndex: index,
+      originalIndex: sourceIndex,
       displayIndex: index,
-    }, index)
-    writeRowCache(index, normalized)
+    }, sourceIndex)
+    writeRowCache(sourceIndex, normalized)
     return normalized
   }
 
@@ -181,13 +225,13 @@ export function createServerBackedRowModel<T>(
     source,
     getSnapshot,
     getRowCount() {
-      return source.getRowCount()
+      return getVisibleRowCount()
     },
     getRow(index) {
       if (!Number.isFinite(index)) {
         return undefined
       }
-      const rowCount = source.getRowCount()
+      const rowCount = getVisibleRowCount()
       const normalized = Math.max(0, Math.trunc(index))
       if (normalized >= rowCount) {
         return undefined
@@ -195,7 +239,7 @@ export function createServerBackedRowModel<T>(
       return toRowNode(normalized)
     },
     getRowsInRange(range) {
-      const normalized = normalizeViewportRange(range, source.getRowCount())
+      const normalized = normalizeViewportRange(range, getVisibleRowCount())
       const rangeCacheKey = `${normalized.start}:${normalized.end}:${cacheRevision}`
       if (lastRangeCacheKey === rangeCacheKey) {
         return lastRangeCacheRows
@@ -213,7 +257,7 @@ export function createServerBackedRowModel<T>(
     },
     setViewportRange(range) {
       ensureActive()
-      const nextRange = normalizeViewportRange(range, source.getRowCount())
+      const nextRange = normalizeViewportRange(range, getVisibleRowCount())
       if (nextRange.start === viewportRange.start && nextRange.end === viewportRange.end) {
         return
       }
@@ -227,6 +271,51 @@ export function createServerBackedRowModel<T>(
           invalidateCachesForRange(viewportRange)
           emit()
         })
+      emit()
+    },
+    setPagination(nextPagination: DataGridPaginationInput | null) {
+      ensureActive()
+      const normalized = normalizePaginationInput(nextPagination)
+      if (
+        normalized.pageSize === paginationInput.pageSize &&
+        normalized.currentPage === paginationInput.currentPage
+      ) {
+        return
+      }
+      paginationInput = normalized
+      viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
+      invalidateCaches()
+      emit()
+    },
+    setPageSize(pageSize: number | null) {
+      ensureActive()
+      const normalizedPageSize = normalizePaginationInput({ pageSize: pageSize ?? 0, currentPage: 0 }).pageSize
+      if (normalizedPageSize === paginationInput.pageSize) {
+        return
+      }
+      paginationInput = {
+        pageSize: normalizedPageSize,
+        currentPage: 0,
+      }
+      viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
+      invalidateCaches()
+      emit()
+    },
+    setCurrentPage(page: number) {
+      ensureActive()
+      const normalizedPage = normalizePaginationInput({
+        pageSize: paginationInput.pageSize,
+        currentPage: page,
+      }).currentPage
+      if (normalizedPage === paginationInput.currentPage) {
+        return
+      }
+      paginationInput = {
+        ...paginationInput,
+        currentPage: normalizedPage,
+      }
+      viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
+      invalidateCaches()
       emit()
     },
     setSortModel(nextSortModel) {

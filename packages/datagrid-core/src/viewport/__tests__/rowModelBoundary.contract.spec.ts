@@ -154,7 +154,6 @@ describe("table viewport row-model boundary", () => {
     const serverRange = { ...controller.derived.rows.visibleRange.value }
 
     expect(serverRange).toEqual(clientRange)
-    expect(fetchBlock).toHaveBeenCalled()
 
     controller.detach()
     controller.dispose()

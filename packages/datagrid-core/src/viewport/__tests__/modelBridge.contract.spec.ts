@@ -7,10 +7,10 @@ import {
   type DataGridViewportModelBridgeInvalidation,
 } from "../dataGridViewportModelBridgeService"
 
-function buildRows(count: number): VisibleRow<{ id: number; value: string }>[] {
+function buildRows(count: number, startIndex = 0): VisibleRow<{ id: number; value: string }>[] {
   return Array.from({ length: count }, (_, index) => ({
-    row: { id: index, value: `row-${index}` },
-    rowId: index,
+    row: { id: startIndex + index, value: `row-${startIndex + index}` },
+    rowId: startIndex + index,
     originalIndex: index,
     displayIndex: index,
   }))
@@ -104,11 +104,13 @@ describe("table viewport model bridge service", () => {
     expect(invalidations).toEqual([
       {
         reason: "rows",
+        scope: "structural",
         axes: { rows: true, columns: false },
         rowRange: { start: 0, end: 0 },
       },
       {
         reason: "columns",
+        scope: "structural",
         axes: { rows: false, columns: true },
         rowRange: null,
       },
@@ -179,10 +181,50 @@ describe("table viewport model bridge service", () => {
     expect(invalidations).toEqual([
       {
         reason: "rows",
+        scope: "content",
         axes: { rows: true, columns: false },
         rowRange: { start: 0, end: 0 },
       },
     ])
+
+    bridge.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+    fallbackRowModel.dispose()
+    fallbackColumnModel.dispose()
+  })
+
+  it("emits normalized row-range payload for row-axis invalidation", () => {
+    const rowModel = createClientRowModel({
+      rows: buildRows(12),
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "value", label: "Value", width: 160 }],
+    })
+    const fallbackRowModel = createClientRowModel()
+    const fallbackColumnModel = createDataGridColumnModel()
+    const invalidations: DataGridViewportModelBridgeInvalidation[] = []
+    const bridge = createDataGridViewportModelBridgeService({
+      initialRowModel: rowModel,
+      initialColumnModel: columnModel,
+      fallbackRowModel,
+      fallbackColumnModel,
+      onInvalidate: invalidation => {
+        invalidations.push(invalidation)
+      },
+    })
+
+    invalidations.length = 0
+    rowModel.setViewportRange({ start: 9, end: 3 })
+    rowModel.setRows(buildRows(12, 5_000))
+
+    const rowInvalidation = invalidations.find(entry => entry.reason === "rows")
+    expect(rowInvalidation).toBeTruthy()
+    expect(rowInvalidation?.axes).toEqual({ rows: true, columns: false })
+    expect(rowInvalidation?.scope).toBe("content")
+    expect(rowInvalidation?.rowRange).not.toBeNull()
+    expect((rowInvalidation?.rowRange?.start ?? -1) >= 0).toBe(true)
+    expect((rowInvalidation?.rowRange?.end ?? -1) >= (rowInvalidation?.rowRange?.start ?? 0)).toBe(true)
 
     bridge.dispose()
     rowModel.dispose()
@@ -361,6 +403,15 @@ describe("table viewport model bridge service", () => {
         loading: false,
         error: null,
         viewportRange: { start: 0, end: 0 },
+        pagination: {
+          enabled: false,
+          pageSize: 0,
+          currentPage: 0,
+          pageCount: 1,
+          totalRowCount: 1,
+          startIndex: 0,
+          endIndex: 0,
+        },
         sortModel: [],
         filterModel: null,
         groupBy: null,
@@ -373,6 +424,9 @@ describe("table viewport model bridge service", () => {
       getRow: () => rowNode,
       getRowsInRange: () => [rowNode],
       setViewportRange: () => {},
+      setPagination: () => {},
+      setPageSize: () => {},
+      setCurrentPage: () => {},
       setSortModel: () => {},
       setFilterModel: () => {},
       setGroupBy: () => {},

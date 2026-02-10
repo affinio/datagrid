@@ -153,4 +153,45 @@ describe("advanced filter expression", () => {
     expect(source.columnFilters.owner).toEqual(["noc"])
     expect(source.advancedFilters.latencyMs.clauses[0]!.operator).toBe("between")
   })
+
+  it("supports set/date operators in advanced expression", () => {
+    const expression = normalizeDataGridAdvancedFilterExpression({
+      kind: "group",
+      operator: "and",
+      children: [
+        {
+          kind: "condition",
+          key: "region",
+          type: "set",
+          operator: "in",
+          value: ["us-east", "eu-central"],
+        },
+        {
+          kind: "condition",
+          key: "updatedAt",
+          type: "date",
+          operator: "gte",
+          value: "2026-02-01T00:00:00.000Z",
+        },
+      ],
+    })
+
+    const accepted = evaluateDataGridAdvancedFilterExpression(expression, condition => {
+      const row = {
+        region: "us-east",
+        updatedAt: "2026-02-10T10:00:00.000Z",
+      }
+      return (row as Record<string, unknown>)[condition.key]
+    })
+    const rejected = evaluateDataGridAdvancedFilterExpression(expression, condition => {
+      const row = {
+        region: "ap-south",
+        updatedAt: "2026-01-15T09:00:00.000Z",
+      }
+      return (row as Record<string, unknown>)[condition.key]
+    })
+
+    expect(accepted).toBe(true)
+    expect(rejected).toBe(false)
+  })
 })

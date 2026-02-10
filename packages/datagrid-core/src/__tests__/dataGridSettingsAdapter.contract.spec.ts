@@ -55,4 +55,50 @@ describe("dataGrid settings adapter filter snapshot cloning", () => {
     const secondRead = adapter.getFilterSnapshot("grid-2")
     expect(secondRead?.columnFilters.owner).toEqual(["noc"])
   })
+
+  it("persists and restores full column state snapshot defensively", () => {
+    const adapter = createInMemoryDataGridSettingsAdapter()
+
+    adapter.setColumnState("grid-state", {
+      order: ["owner", "service", "region"],
+      visibility: {
+        owner: true,
+        service: true,
+        region: false,
+      },
+      widths: {
+        owner: 220,
+        service: 180,
+      },
+      pinning: {
+        owner: "left",
+        region: "right",
+      },
+    })
+
+    const firstRead = adapter.getColumnState("grid-state")
+    expect(firstRead).toEqual({
+      order: ["owner", "service", "region"],
+      visibility: {
+        owner: true,
+        service: true,
+        region: false,
+      },
+      widths: {
+        owner: 220,
+        service: 180,
+      },
+      pinning: {
+        owner: "left",
+        region: "right",
+      },
+    })
+
+    firstRead?.order.push("extra")
+    firstRead?.widths && (firstRead.widths.owner = 999)
+
+    const secondRead = adapter.getColumnState("grid-state")
+    expect(secondRead?.order).toEqual(["owner", "service", "region"])
+    expect(secondRead?.widths.owner).toBe(220)
+  })
 })

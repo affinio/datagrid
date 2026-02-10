@@ -6,6 +6,7 @@ export * from "./types/index.js"
 
 export {
   createInMemoryDataGridSettingsAdapter,
+  type DataGridColumnStateSnapshot,
   type DataGridSettingsAdapter,
   type DataGridGroupState,
   type DataGridPinPosition,
@@ -83,6 +84,8 @@ export {
   type DataGridAdvancedFilterNot,
   type DataGridFilterClause,
   type DataGridFilterSnapshot,
+  type DataGridPaginationInput,
+  type DataGridPaginationSnapshot,
   type DataGridGroupExpansionSnapshot,
   type DataGridGroupBySpec,
   type DataGridLegacyVisibleRow,
@@ -105,12 +108,15 @@ export {
   type DataGridViewportRange,
   type ClientRowModel,
   type CreateClientRowModelOptions,
+  type DataGridClientRowReorderInput,
   type ServerBackedRowModel,
   type CreateServerBackedRowModelOptions,
   buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   cloneDataGridFilterSnapshot,
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,
+  normalizePaginationInput,
+  buildPaginationSnapshot,
   getDataGridRowRenderMeta,
 } from "./models/index.js"
 

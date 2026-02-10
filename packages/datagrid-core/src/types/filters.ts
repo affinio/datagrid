@@ -7,7 +7,7 @@ export interface FilterConditionClause {
 }
 
 export interface FilterCondition {
-	type: "text" | "number" | "date"
+	type: "text" | "number" | "date" | "set"
 	clauses: FilterConditionClause[]
 }
 
@@ -15,7 +15,7 @@ export interface AdvancedFilterConditionNode {
 	kind: "condition"
 	key: string
 	field?: string
-	type?: "text" | "number" | "date" | "boolean"
+	type?: "text" | "number" | "date" | "set" | "boolean"
 	operator: string
 	value?: unknown
 	value2?: unknown

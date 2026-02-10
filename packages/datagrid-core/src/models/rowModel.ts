@@ -17,7 +17,7 @@ export interface DataGridFilterClause {
 }
 
 export interface DataGridAdvancedFilter {
-  type: "text" | "number" | "date"
+  type: "text" | "number" | "date" | "set"
   clauses: DataGridFilterClause[]
 }
 
@@ -25,6 +25,7 @@ export type DataGridAdvancedFilterConditionType =
   | "text"
   | "number"
   | "date"
+  | "set"
   | "boolean"
 
 export interface DataGridAdvancedFilterCondition {
@@ -84,6 +85,21 @@ export interface DataGridViewportRange {
   end: number
 }
 
+export interface DataGridPaginationInput {
+  pageSize: number
+  currentPage: number
+}
+
+export interface DataGridPaginationSnapshot {
+  enabled: boolean
+  pageSize: number
+  currentPage: number
+  pageCount: number
+  totalRowCount: number
+  startIndex: number
+  endIndex: number
+}
+
 export type DataGridRowPinState = "none" | "top" | "bottom"
 
 export interface DataGridRowNodeState {
@@ -130,6 +146,7 @@ export interface DataGridRowModelSnapshot<T = unknown> {
   loading: boolean
   error: Error | null
   viewportRange: DataGridViewportRange
+  pagination: DataGridPaginationSnapshot
   sortModel: readonly DataGridSortState[]
   filterModel: DataGridFilterSnapshot | null
   groupBy: DataGridGroupBySpec | null
@@ -145,6 +162,9 @@ export interface DataGridRowModel<T = unknown> {
   getRow(index: number): DataGridRowNode<T> | undefined
   getRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<T>[]
   setViewportRange(range: DataGridViewportRange): void
+  setPagination(pagination: DataGridPaginationInput | null): void
+  setPageSize(pageSize: number | null): void
+  setCurrentPage(page: number): void
   setSortModel(sortModel: readonly DataGridSortState[]): void
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
@@ -311,6 +331,69 @@ export function normalizeViewportRange(
   return {
     start: Math.min(start, maxIndex),
     end: Math.min(end, maxIndex),
+  }
+}
+
+function normalizePaginationPageSize(value: number | null | undefined): number {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+  const normalized = Math.max(0, Math.trunc(value as number))
+  return normalized
+}
+
+function normalizePaginationPage(value: number | null | undefined): number {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+  return Math.max(0, Math.trunc(value as number))
+}
+
+export function normalizePaginationInput(
+  input: DataGridPaginationInput | null | undefined,
+): DataGridPaginationInput {
+  return {
+    pageSize: normalizePaginationPageSize(input?.pageSize),
+    currentPage: normalizePaginationPage(input?.currentPage),
+  }
+}
+
+export function buildPaginationSnapshot(
+  totalRowCount: number,
+  input: DataGridPaginationInput | null | undefined,
+): DataGridPaginationSnapshot {
+  const normalizedTotal = Number.isFinite(totalRowCount) ? Math.max(0, Math.trunc(totalRowCount)) : 0
+  const normalizedInput = normalizePaginationInput(input)
+  const enabled = normalizedInput.pageSize > 0
+  if (!enabled) {
+    return {
+      enabled: false,
+      pageSize: 0,
+      currentPage: 0,
+      pageCount: normalizedTotal > 0 ? 1 : 0,
+      totalRowCount: normalizedTotal,
+      startIndex: normalizedTotal > 0 ? 0 : -1,
+      endIndex: normalizedTotal > 0 ? normalizedTotal - 1 : -1,
+    }
+  }
+
+  const pageCount = Math.ceil(normalizedTotal / normalizedInput.pageSize)
+  const maxPage = Math.max(0, pageCount - 1)
+  const currentPage = Math.min(normalizedInput.currentPage, maxPage)
+  const startIndex = normalizedTotal > 0
+    ? currentPage * normalizedInput.pageSize
+    : -1
+  const endIndex = normalizedTotal > 0
+    ? Math.min(normalizedTotal - 1, startIndex + normalizedInput.pageSize - 1)
+    : -1
+  return {
+    enabled: true,
+    pageSize: normalizedInput.pageSize,
+    currentPage,
+    pageCount,
+    totalRowCount: normalizedTotal,
+    startIndex,
+    endIndex,
   }
 }
 

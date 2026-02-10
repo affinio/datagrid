@@ -22,7 +22,7 @@ function normalizeOperator(operator: unknown): string {
 }
 
 function normalizeConditionType(type: unknown): DataGridAdvancedFilterCondition["type"] {
-  if (type === "number" || type === "date" || type === "boolean" || type === "text") {
+  if (type === "number" || type === "date" || type === "set" || type === "boolean" || type === "text") {
     return type
   }
   return "text"
@@ -34,6 +34,15 @@ function toComparableNumber(value: unknown): number | null {
   }
   if (value instanceof Date) {
     return value.getTime()
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    if (/[T:-]/.test(trimmed)) {
+      const parsedDate = Date.parse(trimmed)
+      if (Number.isFinite(parsedDate)) {
+        return parsedDate
+      }
+    }
   }
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
@@ -195,6 +204,38 @@ function evaluateCondition(condition: DataGridAdvancedFilterCondition, candidate
       return left <= right
     }
     return false
+  }
+
+  if (type === "set") {
+    const normalizedSet = new Set(
+      toArray(condition.value)
+        .map(value => normalizeText(value).toLowerCase()),
+    )
+    const candidateValues = Array.isArray(candidate)
+      ? candidate.map(value => normalizeText(value).toLowerCase())
+      : [normalizeText(candidate).toLowerCase()]
+    const hasMatch = candidateValues.some(value => normalizedSet.has(value))
+    if (operator === "has-all" || operator === "all") {
+      if (normalizedSet.size === 0) {
+        return false
+      }
+      return Array.from(normalizedSet).every(value => candidateValues.includes(value))
+    }
+    if (
+      operator === "contains" ||
+      operator === "has-any" ||
+      operator === "any" ||
+      operator === "in" ||
+      operator === "eq" ||
+      operator === "equals" ||
+      operator === "is"
+    ) {
+      return hasMatch
+    }
+    if (operator === "not-in" || operator === "notin" || operator === "ne" || operator === "is-not") {
+      return !hasMatch
+    }
+    return hasMatch
   }
 
   const left = normalizeText(candidate).toLowerCase()

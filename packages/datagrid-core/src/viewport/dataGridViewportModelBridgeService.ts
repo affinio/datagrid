@@ -200,6 +200,7 @@ export type DataGridViewportModelBridgeInvalidationReason = "rows" | "columns" |
 
 export interface DataGridViewportModelBridgeInvalidation {
   reason: DataGridViewportModelBridgeInvalidationReason
+  scope: "structural" | "content"
   axes: {
     rows: boolean
     columns: boolean
@@ -266,9 +267,11 @@ export function createDataGridViewportModelBridgeService(
   const emitInvalidation = (
     reason: DataGridViewportModelBridgeInvalidationReason,
     rowRange: DataGridViewportRange | null = null,
+    scope: "structural" | "content" = "structural",
   ): void => {
     onInvalidate({
       reason,
+      scope,
       axes: {
         rows: reason !== "columns",
         columns: reason !== "rows",
@@ -289,7 +292,7 @@ export function createDataGridViewportModelBridgeService(
   const bindRowModel = (model: DataGridRowModel<unknown>) => {
     if (activeRowModel === model && activeRowModelUnsubscribe) {
       markRowModelCacheDirty()
-      emitInvalidation("rows", lastRowModelSnapshot?.viewportRange ?? activeRowModel.getSnapshot().viewportRange)
+      emitInvalidation("rows", lastRowModelSnapshot?.viewportRange ?? activeRowModel.getSnapshot().viewportRange, "structural")
       return
     }
     activeRowModelUnsubscribe?.()
@@ -323,10 +326,11 @@ export function createDataGridViewportModelBridgeService(
         // bridge invalidation cycle. This avoids redundant heavy passes.
         return
       }
-      emitInvalidation("rows", snapshot.viewportRange)
+      const scope = isStableStructuralState ? "content" : "structural"
+      emitInvalidation("rows", snapshot.viewportRange, scope)
     })
     markRowModelCacheDirty()
-    emitInvalidation("rows", lastRowModelSnapshot?.viewportRange)
+    emitInvalidation("rows", lastRowModelSnapshot?.viewportRange, "structural")
   }
 
   const bindColumnModel = (model: DataGridColumnModel) => {

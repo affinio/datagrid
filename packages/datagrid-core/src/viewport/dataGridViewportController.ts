@@ -107,6 +107,7 @@ import {
 	sampleContainerMetrics,
 	sampleHeaderHeight,
 	resolveDomStats,
+	sampleVisibleRowHeights,
 } from "./dataGridViewportEnvironment"
 import {
 	computePinnedWidth,
@@ -117,8 +118,12 @@ import {
 	shouldNotifyNearBottom,
 	shouldUseFastPath,
 } from "./dataGridViewportMath"
-import { createDataGridViewportModelBridgeService } from "./dataGridViewportModelBridgeService"
+import {
+	createDataGridViewportModelBridgeService,
+	type DataGridViewportModelBridgeInvalidation,
+} from "./dataGridViewportModelBridgeService"
 import { createDataGridViewportRenderSyncService } from "./dataGridViewportRenderSyncService"
+import { createDataGridViewportRowHeightCache } from "./dataGridViewportRowHeightCache"
 export type { DataGridViewportState, RowPoolItem } from "./dataGridViewportSignals"
 
 
@@ -152,6 +157,10 @@ export interface DataGridViewportController extends DataGridViewportSignals {
 	refresh(force?: boolean): void
 	dispose(): void
 }
+
+const AUTO_ROW_HEIGHT_CACHE_LIMIT = 512
+const AUTO_ROW_HEIGHT_EPSILON = 0.6
+const AUTO_ROW_HEIGHT_SMOOTHING = 0.35
 
 
 export function createDataGridViewportController(
@@ -345,6 +354,10 @@ export function createDataGridViewportController(
 		let virtualizationFlag = true
 		let rowHeightMode: "fixed" | "auto" = "fixed"
 		let baseRowHeight = BASE_ROW_HEIGHT
+		const autoRowHeightCache = createDataGridViewportRowHeightCache({
+			limit: AUTO_ROW_HEIGHT_CACHE_LIMIT,
+		})
+		let autoRowHeightEstimate = BASE_ROW_HEIGHT
 		let viewportMetrics: ViewportMetricsSnapshot | null = null
 		let loading = false
 		let imperativeCallbacks: DataGridViewportImperativeCallbacks = options.imperativeCallbacks ?? {}
@@ -397,9 +410,7 @@ export function createDataGridViewportController(
 		let lastHorizontalSizingMeta: DataGridViewportHorizontalMeta | null = null
 		let lastHorizontalSizingMetaVersion = -1
 		let lastHorizontalSizingViewportWidth = -1
-		let lastHorizontalSizingViewportHeight = -1
-		let lastHorizontalSizingTotalRowCount = -1
-		let lastHorizontalSizingResolvedRowHeight = -1
+		let pendingContentInvalidationRange: DataGridViewportRange | null = null
 		let horizontalClampContext: HorizontalClampContext = {
 			totalScrollableWidth: 0,
 			containerWidthForColumns: 0,
@@ -415,13 +426,83 @@ export function createDataGridViewportController(
 			pinnedOffsetLeft: 0,
 			pinnedOffsetRight: 0,
 		}
+
+		function mergeViewportRanges(
+			left: DataGridViewportRange | null,
+			right: DataGridViewportRange | null,
+		): DataGridViewportRange | null {
+			if (!left) return right ? { ...right } : null
+			if (!right) return { ...left }
+			return {
+				start: Math.min(left.start, right.start),
+				end: Math.max(left.end, right.end),
+			}
+		}
+
+		function isRangeOutsideVisibleRows(range: DataGridViewportRange): boolean {
+			const visible = derived.rows.visibleRange.value
+			return range.end < visible.start || range.start > visible.end
+		}
+
+		function resetAutoRowHeightState() {
+			autoRowHeightCache.clear()
+			autoRowHeightEstimate = Math.max(1, baseRowHeight)
+		}
+
+		function normalizeAutoMeasuredHeight(height: number, layoutScale: number): number | null {
+			if (!Number.isFinite(height) || height <= 0) {
+				return null
+			}
+			const normalizedScale = Number.isFinite(layoutScale) && layoutScale > 0 ? layoutScale : 1
+			const normalized = height / normalizedScale
+			if (!Number.isFinite(normalized) || normalized <= 0) {
+				return null
+			}
+			return normalized
+		}
+
+		function syncAutoRowHeightEstimateFromCache(): boolean {
+			const nextEstimate = autoRowHeightCache.resolveEstimatedHeight(baseRowHeight)
+			if (!Number.isFinite(nextEstimate) || nextEstimate <= 0) {
+				return false
+			}
+			const delta = nextEstimate - autoRowHeightEstimate
+			if (Math.abs(delta) < AUTO_ROW_HEIGHT_EPSILON) {
+				return false
+			}
+			const smoothed = autoRowHeightEstimate + (delta * AUTO_ROW_HEIGHT_SMOOTHING)
+			const normalized = Math.round(smoothed * 10) / 10
+			if (Math.abs(normalized - autoRowHeightEstimate) < AUTO_ROW_HEIGHT_EPSILON) {
+				return false
+			}
+			autoRowHeightEstimate = normalized
+			return true
+		}
+
 		const modelBridge = createDataGridViewportModelBridgeService({
 			initialRowModel: options.rowModel ?? null,
 			initialColumnModel: options.columnModel ?? null,
 			fallbackRowModel: fallbackClientRowModel,
 			fallbackColumnModel,
-			onInvalidate: invalidation => {
-				scheduleUpdate(invalidation.reason !== "rows")
+			onInvalidate: (invalidation: DataGridViewportModelBridgeInvalidation) => {
+				if (invalidation.axes.rows) {
+					if (invalidation.scope === "structural") {
+						resetAutoRowHeightState()
+					} else if (invalidation.rowRange) {
+						autoRowHeightCache.deleteRange(invalidation.rowRange)
+						syncAutoRowHeightEstimateFromCache()
+					}
+				}
+				if (invalidation.reason === "rows" && invalidation.scope === "content") {
+					pendingContentInvalidationRange = mergeViewportRanges(
+						pendingContentInvalidationRange,
+						invalidation.rowRange,
+					)
+				} else {
+					pendingContentInvalidationRange = null
+				}
+				// Keep model-bridge invalidations in async frame pipeline.
+				scheduleUpdate(false)
 			},
 		})
 
@@ -783,6 +864,7 @@ export function createDataGridViewportController(
 		}
 
 		function setRowModelValue(model: DataGridRowModel<unknown> | null | undefined) {
+			pendingContentInvalidationRange = null
 			modelBridge.setRowModel(model)
 		}
 
@@ -791,6 +873,7 @@ export function createDataGridViewportController(
 		}
 
 		function setColumnModelValue(model: DataGridColumnModel | null | undefined) {
+			pendingContentInvalidationRange = null
 			modelBridge.setColumnModel(model)
 		}
 
@@ -798,6 +881,7 @@ export function createDataGridViewportController(
 			const normalized = Number.isFinite(nextZoom) && nextZoom > 0 ? nextZoom : 1
 			if (normalized === zoom) return
 			zoom = normalized
+			resetAutoRowHeightState()
 			const timestamp = clock.now()
 			virtualization.resetOverscan(timestamp)
 			horizontalOverscanController.reset(timestamp)
@@ -814,6 +898,11 @@ export function createDataGridViewportController(
 		function setRowHeightModeValue(mode: "fixed" | "auto") {
 			if (rowHeightMode === mode) return
 			rowHeightMode = mode
+			if (rowHeightMode === "fixed") {
+				resetAutoRowHeightState()
+			} else {
+				syncAutoRowHeightEstimateFromCache()
+			}
 			scheduleUpdate(false)
 		}
 
@@ -821,6 +910,11 @@ export function createDataGridViewportController(
 			const normalized = Number.isFinite(height) && height > 0 ? height : BASE_ROW_HEIGHT
 			if (baseRowHeight === normalized) return
 			baseRowHeight = normalized
+			if (rowHeightMode === "fixed") {
+				resetAutoRowHeightState()
+			} else {
+				syncAutoRowHeightEstimateFromCache()
+			}
 			scheduleUpdate(false)
 		}
 
@@ -887,6 +981,7 @@ export function createDataGridViewportController(
 			pendingForce = false
 			frameForce = false
 			pendingHorizontalSettle = false
+			pendingContentInvalidationRange = null
 			horizontalOverscan = horizontalMinOverscan
 			const timestamp = clock.now()
 			horizontalOverscanController.reset(timestamp)
@@ -900,7 +995,7 @@ export function createDataGridViewportController(
 			if (total <= 0) return
 			const clampedIndex = clamp(index, 0, Math.max(total - 1, 0))
 			const rawTarget = clampedIndex * effectiveRowHeight.value
-			const virtualizationActive = virtualizationEnabled.value || (virtualizationFlag && rowHeightMode === "fixed")
+			const virtualizationActive = virtualizationEnabled.value || virtualizationFlag
 			let target: number
 			if (virtualizationActive) {
 				// Allow the final row to align with the top edge when virtualization synthesizes scroll height.
@@ -934,7 +1029,9 @@ export function createDataGridViewportController(
 		}
 
 		function refreshValue(force?: boolean) {
-			scheduleUpdate(force === true)
+			// Keep refresh in async input->compute->apply pipeline.
+			// `force` here means "flush scheduled work now", not "bypass phased pipeline".
+			scheduleUpdate(false)
 			if (force === true) {
 				flushSchedulers()
 			}
@@ -1173,6 +1270,46 @@ export function createDataGridViewportController(
 			})
 		}
 
+		function maybeIngestAutoRowHeights(
+			range: DataGridViewportRange,
+			layoutScale: number,
+		): boolean {
+			if (rowHeightMode !== "auto") {
+				return false
+			}
+			const containerRef = container
+			if (!containerRef) {
+				return false
+			}
+			const measured = sampleVisibleRowHeights(
+				hostEnvironment,
+				recordLayoutRead,
+				containerRef,
+				range,
+			)
+			if (!measured.length) {
+				return false
+			}
+			const normalized = measured
+				.map(sample => ({
+					index: sample.index,
+					height: normalizeAutoMeasuredHeight(sample.height, layoutScale),
+				}))
+				.filter((sample): sample is { index: number; height: number } => sample.height != null)
+				.map(sample => ({
+					index: sample.index,
+					height: sample.height,
+				}))
+			if (!normalized.length) {
+				return false
+			}
+			const changed = autoRowHeightCache.ingest(normalized)
+			if (!changed) {
+				return false
+			}
+			return syncAutoRowHeightEstimateFromCache()
+		}
+
 			function runUpdate(force: boolean) {
 				if (!heavyFramePending && !heavyFrameInProgress && !force && !pendingForce) {
 					return
@@ -1195,12 +1332,15 @@ export function createDataGridViewportController(
 					totalRowCount.value = rowCount
 
 					const virtualizationByProp = virtualizationFlag
-					const verticalVirtualizationEnabled = virtualizationByProp && rowHeightMode === "fixed"
+					const verticalVirtualizationEnabled = virtualizationByProp
 					virtualizationEnabled.value = verticalVirtualizationEnabled
 
 					const zoomFactor = Math.max(zoom || 1, 0.01)
 					const layoutScale = (options.supportsCssZoom ?? supportsCssZoom) ? zoomFactor : 1
-					const resolvedRowHeight = baseRowHeight * layoutScale
+					const resolvedBaseRowHeight = rowHeightMode === "auto"
+						? Math.max(1, autoRowHeightEstimate)
+						: baseRowHeight
+					const resolvedRowHeight = resolvedBaseRowHeight * layoutScale
 					effectiveRowHeight.value = resolvedRowHeight
 
 					const measurements = layoutMeasurement
@@ -1252,10 +1392,26 @@ export function createDataGridViewportController(
 						horizontalScrollEpsilon,
 					})
 
-					if (shouldFastPath) {
+					if (shouldFastPath && pendingContentInvalidationRange == null) {
 						scrollTop.value = lastScrollTopSample
 						scrollLeft.value = lastScrollLeftSample
 						pendingHorizontalSettle = false
+						scheduleAfterScroll()
+						return
+					}
+
+					const contentInvalidationRange = pendingContentInvalidationRange
+					if (
+						contentInvalidationRange != null &&
+						!force &&
+						pendingScrollTopRequest == null &&
+						pendingScrollLeftRequest == null &&
+						!measuredScrollTopFromPending &&
+						!measuredScrollLeftFromPending &&
+						!pendingHorizontalSettle &&
+						isRangeOutsideVisibleRows(contentInvalidationRange)
+					) {
+						pendingContentInvalidationRange = null
 						scheduleAfterScroll()
 						return
 					}
@@ -1350,18 +1506,12 @@ export function createDataGridViewportController(
 						!lastHorizontalSizing ||
 						lastHorizontalSizingMeta !== columnMeta ||
 						lastHorizontalSizingMetaVersion !== columnMeta.version ||
-						Math.abs(lastHorizontalSizingViewportWidth - viewportWidthValue) > 0.5 ||
-						Math.abs(lastHorizontalSizingViewportHeight - viewportHeightValue) > 0.5 ||
-						lastHorizontalSizingTotalRowCount !== rowCount ||
-						Math.abs(lastHorizontalSizingResolvedRowHeight - resolvedRowHeight) > 0.5
+						Math.abs(lastHorizontalSizingViewportWidth - viewportWidthValue) > 0.5
 
 					const horizontalSizing = shouldRecomputeHorizontalSizing
 						? resolveHorizontalSizingFn({
 							columnMeta,
 							viewportWidth: viewportWidthValue,
-							totalRowCount: rowCount,
-							resolvedRowHeight,
-							viewportHeight: viewportHeightValue,
 						})
 						: (lastHorizontalSizing as HorizontalSizingResolution)
 
@@ -1370,12 +1520,9 @@ export function createDataGridViewportController(
 						lastHorizontalSizingMeta = columnMeta
 						lastHorizontalSizingMetaVersion = columnMeta.version
 						lastHorizontalSizingViewportWidth = viewportWidthValue
-						lastHorizontalSizingViewportHeight = viewportHeightValue
-						lastHorizontalSizingTotalRowCount = rowCount
-						lastHorizontalSizingResolvedRowHeight = resolvedRowHeight
 					}
 					const contentWidthEstimate = horizontalSizing.contentWidthEstimate
-					const contentHeightEstimate = horizontalSizing.contentHeightEstimate
+					const contentHeightEstimate = Math.max(rowCount * resolvedRowHeight, viewportHeightValue)
 					layoutCache.updateContentDimensions(contentWidthEstimate, contentHeightEstimate)
 					const averageColumnWidth = horizontalSizing.averageColumnWidth
 					lastAverageColumnWidth = averageColumnWidth
@@ -1482,6 +1629,10 @@ export function createDataGridViewportController(
 						resolveRowsInRange: resolveRowsInRangeFromModel,
 						imperativeCallbacks,
 					})
+					const autoHeightChanged = maybeIngestAutoRowHeights(
+						virtualizationResult.visibleRange,
+						layoutScale,
+					)
 					const activeRowModel = modelBridge.getActiveRowModel()
 					const modelSnapshot = activeRowModel.getSnapshot()
 					const modelRange = modelSnapshot.viewportRange
@@ -1517,6 +1668,10 @@ export function createDataGridViewportController(
 
 					emitImperativeScrollSync(resolvedScrollTop, resolvedScrollLeft, nowTs)
 					emitImperativeWindow(getVirtualWindowValue(), nowTs)
+					pendingContentInvalidationRange = null
+					if (autoHeightChanged) {
+						scheduleUpdate(false)
+					}
 
 				if (
 					onNearBottom &&

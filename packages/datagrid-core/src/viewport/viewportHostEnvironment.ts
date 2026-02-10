@@ -1,3 +1,5 @@
+import type { DataGridViewportRange } from "../models/rowModel"
+
 export interface DataGridViewportResizeObserver {
 	observe(target: Element): void
 	unobserve?(target: Element): void
@@ -23,6 +25,11 @@ export interface DataGridViewportDomStats {
 	fillers: number
 }
 
+export interface DataGridViewportRowHeightSample {
+	index: number
+	height: number
+}
+
 export interface DataGridViewportHostEnvironment {
 	addScrollListener(target: EventTarget, listener: (event: Event) => void, options?: AddEventListenerOptions): void
 	removeScrollListener(
@@ -38,4 +45,8 @@ export interface DataGridViewportHostEnvironment {
 	isEventFromContainer?(event: Event, container: HTMLElement): boolean
 	normalizeScrollLeft?(target: HTMLElement): number
 	queryDebugDomStats?(container: HTMLElement): DataGridViewportDomStats | null
+	readVisibleRowHeights?(
+		container: HTMLElement,
+		range: DataGridViewportRange,
+	): readonly DataGridViewportRowHeightSample[] | null
 }

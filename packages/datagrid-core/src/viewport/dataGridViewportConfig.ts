@@ -3,8 +3,10 @@ import type {
   DataGridViewportDomStats,
   DataGridViewportHeaderMetrics,
   DataGridViewportHostEnvironment,
+  DataGridViewportRowHeightSample,
   DataGridViewportResizeObserver,
 } from "./viewportHostEnvironment"
+import type { DataGridViewportRange } from "../models/rowModel"
 
 const GLOBAL_FALLBACK: typeof globalThis = typeof globalThis !== "undefined" ? globalThis : ({} as typeof globalThis)
 
@@ -155,6 +157,39 @@ function queryDomStats(container: HTMLElement): DataGridViewportDomStats | null 
   }
 }
 
+function readDomVisibleRowHeights(
+  container: HTMLElement,
+  range: DataGridViewportRange,
+): readonly DataGridViewportRowHeightSample[] {
+  const nodes = container.querySelectorAll<HTMLElement>("[data-row-index]")
+  if (!nodes || nodes.length === 0) {
+    return []
+  }
+  const samples: DataGridViewportRowHeightSample[] = []
+  const rangeStart = Math.max(0, Math.trunc(range.start))
+  const rangeEnd = Math.max(rangeStart, Math.trunc(range.end))
+  nodes.forEach(node => {
+    const indexRaw = node.getAttribute("data-row-index")
+    if (!indexRaw) {
+      return
+    }
+    const index = Number.parseInt(indexRaw, 10)
+    if (!Number.isFinite(index) || index < rangeStart || index > rangeEnd) {
+      return
+    }
+    const height = Number.isFinite(node.offsetHeight) && node.offsetHeight > 0
+      ? node.offsetHeight
+      : typeof node.getBoundingClientRect === "function"
+        ? node.getBoundingClientRect().height
+        : 0
+    if (!Number.isFinite(height) || height <= 0) {
+      return
+    }
+    samples.push({ index, height })
+  })
+  return samples
+}
+
 export function createDefaultHostEnvironment(
   globalRef: typeof globalThis = GLOBAL_FALLBACK,
   options?: DefaultHostEnvironmentOptions,
@@ -212,6 +247,9 @@ export function createDefaultHostEnvironment(
     },
     queryDebugDomStats(container: HTMLElement) {
       return queryDomStats(container)
+    },
+    readVisibleRowHeights(container: HTMLElement, range: DataGridViewportRange) {
+      return readDomVisibleRowHeights(container, range)
     },
   }
 }

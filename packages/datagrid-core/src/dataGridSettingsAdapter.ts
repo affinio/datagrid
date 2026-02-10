@@ -3,12 +3,21 @@ import type { FilterStateSnapshot } from "./types/filters"
 
 export type DataGridPinPosition = "left" | "right" | "none"
 
+export interface DataGridColumnStateSnapshot {
+  order: string[]
+  visibility: Record<string, boolean>
+  widths: Record<string, number>
+  pinning: Record<string, DataGridPinPosition>
+}
+
 export interface DataGridGroupState {
   columns: string[]
   expansion: Record<string, boolean>
 }
 
 export interface DataGridSettingsAdapter {
+  setColumnState(tableId: string, state: DataGridColumnStateSnapshot | null): void
+  getColumnState(tableId: string): DataGridColumnStateSnapshot | null
   setColumnWidth(tableId: string, columnKey: string, width: number): void
   getColumnWidth(tableId: string, columnKey: string): number | undefined
   setSortState(tableId: string, state: DataGridSortState[]): void
@@ -23,6 +32,7 @@ export interface DataGridSettingsAdapter {
 }
 
 interface InMemoryDataGridState {
+  columnState?: DataGridColumnStateSnapshot | null
   columnWidths: Record<string, number>
   sortState?: DataGridSortState[]
   filterSnapshot?: FilterStateSnapshot | null
@@ -120,9 +130,91 @@ export function createInMemoryDataGridSettingsAdapter(): DataGridSettingsAdapter
   }
 
   return {
+    setColumnState(tableId, stateSnapshot) {
+      const entry = ensureState(tableId)
+      if (!stateSnapshot) {
+        entry.columnState = null
+        entry.columnWidths = {}
+        entry.pinState = {}
+        return
+      }
+
+      const order = Array.isArray(stateSnapshot.order)
+        ? stateSnapshot.order.filter(key => typeof key === "string" && key.length > 0)
+        : []
+      const visibility: Record<string, boolean> = {}
+      Object.entries(stateSnapshot.visibility ?? {}).forEach(([key, visible]) => {
+        if (typeof key === "string" && key.length > 0 && typeof visible === "boolean") {
+          visibility[key] = visible
+        }
+      })
+      const widths: Record<string, number> = {}
+      Object.entries(stateSnapshot.widths ?? {}).forEach(([key, width]) => {
+        if (typeof key !== "string" || key.length === 0) {
+          return
+        }
+        if (!Number.isFinite(width)) {
+          return
+        }
+        widths[key] = Math.max(0, Math.trunc(width))
+      })
+      const pinning: Record<string, DataGridPinPosition> = {}
+      Object.entries(stateSnapshot.pinning ?? {}).forEach(([key, pin]) => {
+        if (typeof key !== "string" || key.length === 0) {
+          return
+        }
+        if (pin === "left" || pin === "right" || pin === "none") {
+          pinning[key] = pin
+        }
+      })
+
+      entry.columnState = {
+        order: [...order],
+        visibility,
+        widths,
+        pinning,
+      }
+      entry.columnWidths = { ...widths }
+      const pinState: Record<string, DataGridPinPosition> = {}
+      Object.entries(pinning).forEach(([key, pin]) => {
+        if (pin === "left" || pin === "right") {
+          pinState[key] = pin
+        }
+      })
+      entry.pinState = pinState
+    },
+
+    getColumnState(tableId) {
+      const entry = state.get(tableId)
+      if (!entry) {
+        return null
+      }
+      const fromSnapshot = entry.columnState
+      if (fromSnapshot) {
+        return cloneValue(fromSnapshot)
+      }
+      return {
+        order: [],
+        visibility: {},
+        widths: { ...entry.columnWidths },
+        pinning: Object.fromEntries(
+          Object.entries(entry.pinState).map(([key, pin]) => [key, pin ?? "none"]),
+        ),
+      }
+    },
+
     setColumnWidth(tableId, columnKey, width) {
       const entry = ensureState(tableId)
       entry.columnWidths[columnKey] = width
+      if (!entry.columnState) {
+        entry.columnState = {
+          order: [],
+          visibility: {},
+          widths: {},
+          pinning: {},
+        }
+      }
+      entry.columnState.widths[columnKey] = Math.max(0, Math.trunc(width))
     },
 
     getColumnWidth(tableId, columnKey) {
@@ -169,9 +261,21 @@ export function createInMemoryDataGridSettingsAdapter(): DataGridSettingsAdapter
       const entry = ensureState(tableId)
       if (position === "none") {
         delete entry.pinState[columnKey]
+        if (entry.columnState?.pinning) {
+          delete entry.columnState.pinning[columnKey]
+        }
         return
       }
       entry.pinState[columnKey] = position
+      if (!entry.columnState) {
+        entry.columnState = {
+          order: [],
+          visibility: {},
+          widths: {},
+          pinning: {},
+        }
+      }
+      entry.columnState.pinning[columnKey] = position
     },
 
     getPinState(tableId) {

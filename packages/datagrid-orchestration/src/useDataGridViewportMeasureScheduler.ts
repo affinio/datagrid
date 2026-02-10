@@ -38,7 +38,7 @@ export function useDataGridViewportMeasureScheduler(
     }
 
     const current = options.resolveCurrentState()
-    const nextViewportHeight = Math.max(minViewportBodyHeight, viewport.clientHeight - options.rowHeight)
+    const nextViewportHeight = Math.max(minViewportBodyHeight, viewport.clientHeight)
     const nextViewportWidth = viewport.clientWidth
     const header = options.resolveHeaderElement()
     const nextHeaderHeight = header

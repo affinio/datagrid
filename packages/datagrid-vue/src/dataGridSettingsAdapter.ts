@@ -5,6 +5,12 @@ export function createDataGridSettingsAdapter(
   store: DataGridSettingsStore,
 ): DataGridSettingsAdapter {
   return {
+    setColumnState(tableId, state) {
+      store.setColumnState(tableId, state)
+    },
+    getColumnState(tableId) {
+      return store.getColumnState(tableId)
+    },
     setColumnWidth(tableId, columnKey, width) {
       store.setColumnWidth(tableId, columnKey, width)
     },

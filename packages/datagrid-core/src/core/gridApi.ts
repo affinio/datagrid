@@ -6,6 +6,8 @@ import type {
   DataGridColumnSnapshot,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
+  DataGridPaginationInput,
+  DataGridPaginationSnapshot,
   DataGridRowModel,
   DataGridRowModelRefreshReason,
   DataGridRowModelSnapshot,
@@ -48,6 +50,10 @@ export interface DataGridApi {
   getRow<TRow = unknown>(index: number): DataGridRowNode<TRow> | undefined
   getRowsInRange<TRow = unknown>(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[]
   setViewportRange(range: DataGridViewportRange): void
+  getPaginationSnapshot(): DataGridPaginationSnapshot
+  setPagination(pagination: DataGridPaginationInput | null): void
+  setPageSize(pageSize: number | null): void
+  setCurrentPage(page: number): void
   setSortModel(sortModel: readonly DataGridSortState[]): void
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
@@ -230,6 +236,18 @@ export function createDataGridApi(options: CreateDataGridApiOptions): DataGridAp
     setViewportRange(range: DataGridViewportRange) {
       rowModel.setViewportRange(range)
       viewportService.setViewportRange?.(range)
+    },
+    getPaginationSnapshot() {
+      return rowModel.getSnapshot().pagination
+    },
+    setPagination(pagination: DataGridPaginationInput | null) {
+      rowModel.setPagination(pagination)
+    },
+    setPageSize(pageSize: number | null) {
+      rowModel.setPageSize(pageSize)
+    },
+    setCurrentPage(page: number) {
+      rowModel.setCurrentPage(page)
     },
     setSortModel(sortModel: readonly DataGridSortState[]) {
       rowModel.setSortModel(sortModel)

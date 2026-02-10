@@ -1,4 +1,6 @@
 import type { DataGridViewportHostEnvironment } from "./viewportHostEnvironment"
+import type { DataGridViewportRange } from "../models/rowModel"
+import type { DataGridViewportRowHeightSample } from "./viewportHostEnvironment"
 
 export interface ContainerMetrics {
   clientHeight: number
@@ -83,4 +85,47 @@ export function resolveDomStats(
     cells: query(".datagrid__row-layer .datagrid-cell").length,
     fillers: query(".datagrid__column-filler").length,
   }
+}
+
+export function sampleVisibleRowHeights(
+  hostEnvironment: DataGridViewportHostEnvironment,
+  recordLayoutRead: (count?: number) => void,
+  container: HTMLElement | null,
+  range: DataGridViewportRange,
+): readonly DataGridViewportRowHeightSample[] {
+  if (!container) {
+    return []
+  }
+  recordLayoutRead()
+  const fromHost = hostEnvironment.readVisibleRowHeights?.(container, range)
+  if (Array.isArray(fromHost)) {
+    return fromHost
+  }
+  const nodes = container.querySelectorAll?.<HTMLElement>("[data-row-index]")
+  if (!nodes || nodes.length === 0) {
+    return []
+  }
+  const rangeStart = Math.max(0, Math.trunc(range.start))
+  const rangeEnd = Math.max(rangeStart, Math.trunc(range.end))
+  const samples: DataGridViewportRowHeightSample[] = []
+  nodes.forEach(node => {
+    const indexRaw = node.getAttribute("data-row-index")
+    if (!indexRaw) {
+      return
+    }
+    const index = Number.parseInt(indexRaw, 10)
+    if (!Number.isFinite(index) || index < rangeStart || index > rangeEnd) {
+      return
+    }
+    const height = Number.isFinite(node.offsetHeight) && node.offsetHeight > 0
+      ? node.offsetHeight
+      : typeof node.getBoundingClientRect === "function"
+        ? node.getBoundingClientRect().height
+        : 0
+    if (!Number.isFinite(height) || height <= 0) {
+      return
+    }
+    samples.push({ index, height })
+  })
+  return samples
 }

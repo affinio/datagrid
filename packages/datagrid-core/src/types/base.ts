@@ -65,7 +65,7 @@ export interface DataGridFilterClause {
 }
 
 export interface DataGridAdvancedFilter {
-  type: "text" | "number" | "date"
+  type: "text" | "number" | "date" | "set"
   clauses: DataGridFilterClause[]
 }
 
@@ -73,6 +73,7 @@ export type DataGridAdvancedFilterConditionType =
   | "text"
   | "number"
   | "date"
+  | "set"
   | "boolean"
 
 export interface DataGridAdvancedFilterCondition {

@@ -7,6 +7,8 @@ export type {
   DataGridAdvancedFilterNot,
   DataGridFilterClause,
   DataGridFilterSnapshot,
+  DataGridPaginationInput,
+  DataGridPaginationSnapshot,
   DataGridGroupExpansionSnapshot,
   DataGridGroupBySpec,
   DataGridLegacyVisibleRow,
@@ -36,6 +38,8 @@ export {
   isGroupExpanded,
   isSameGroupExpansionSnapshot,
   toggleGroupExpansionKey,
+  normalizePaginationInput,
+  buildPaginationSnapshot,
   normalizeRowNode,
   normalizeViewportRange,
   withResolvedRowIdentity,
@@ -52,6 +56,7 @@ export {
 export type {
   ClientRowModel,
   CreateClientRowModelOptions,
+  DataGridClientRowReorderInput,
 } from "./clientRowModel.js"
 export { createClientRowModel } from "./clientRowModel.js"
 

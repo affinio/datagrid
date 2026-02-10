@@ -1,13 +1,16 @@
 import {
   buildGroupExpansionSnapshot,
+  buildPaginationSnapshot,
   cloneGroupBySpec,
   isGroupExpanded,
   isSameGroupBySpec,
   normalizeRowNode,
   normalizeGroupBySpec,
+  normalizePaginationInput,
   normalizeViewportRange,
   toggleGroupExpansionKey,
   withResolvedRowIdentity,
+  type DataGridPaginationInput,
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
   type DataGridRowIdResolver,
@@ -34,10 +37,18 @@ export interface CreateClientRowModelOptions<T> {
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
   initialGroupBy?: DataGridGroupBySpec | null
+  initialPagination?: DataGridPaginationInput | null
+}
+
+export interface DataGridClientRowReorderInput {
+  fromIndex: number
+  toIndex: number
+  count?: number
 }
 
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
+  reorderRows(input: DataGridClientRowReorderInput): boolean
 }
 
 function readByPath(value: unknown, path: string): unknown {
@@ -334,6 +345,23 @@ function assignDisplayIndexes<T>(rows: readonly DataGridRowNode<T>[]): DataGridR
   return projected
 }
 
+function reindexSourceRows<T>(rows: readonly DataGridRowNode<T>[]): DataGridRowNode<T>[] {
+  const normalized: DataGridRowNode<T>[] = []
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    if (!row) {
+      continue
+    }
+    normalized.push({
+      ...row,
+      sourceIndex: index,
+      originalIndex: index,
+      displayIndex: index,
+    })
+  }
+  return normalized
+}
+
 export function createClientRowModel<T>(
   options: CreateClientRowModelOptions<T> = {},
 ): ClientRowModel<T> {
@@ -360,13 +388,15 @@ export function createClientRowModel<T>(
 
   const resolveRowId = options.resolveRowId
   let sourceRows: DataGridRowNode<T>[] = Array.isArray(options.rows)
-    ? options.rows.map((row, index) => normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index))
+    ? reindexSourceRows(options.rows.map((row, index) => normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index)))
     : []
   let rows: DataGridRowNode<T>[] = []
   let revision = 0
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? cloneSortModel(options.initialSortModel) : []
   let filterModel: DataGridFilterSnapshot | null = cloneFilterModel(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
+  let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
+  let pagination = buildPaginationSnapshot(0, paginationInput)
   const toggledGroupKeys = new Set<string>()
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rows.length)
   let disposed = false
@@ -396,7 +426,16 @@ export function createClientRowModel<T>(
     const groupedRows = groupBy
       ? buildGroupedRows(sortedRows, groupBy, expansionSnapshot)
       : sortedRows
-    rows = assignDisplayIndexes(groupedRows)
+    pagination = buildPaginationSnapshot(groupedRows.length, paginationInput)
+    if (pagination.enabled && pagination.startIndex >= 0 && pagination.endIndex >= pagination.startIndex) {
+      rows = assignDisplayIndexes(groupedRows.slice(pagination.startIndex, pagination.endIndex + 1))
+    } else {
+      rows = assignDisplayIndexes(groupedRows)
+    }
+    paginationInput = {
+      pageSize: pagination.pageSize,
+      currentPage: pagination.currentPage,
+    }
     viewportRange = normalizeViewportRange(viewportRange, rows.length)
     revision += 1
   }
@@ -410,6 +449,7 @@ export function createClientRowModel<T>(
       loading: false,
       error: null,
       viewportRange,
+      pagination,
       sortModel: cloneSortModel(sortModel),
       filterModel: cloneFilterModel(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
@@ -451,10 +491,35 @@ export function createClientRowModel<T>(
     setRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
       ensureActive()
       sourceRows = Array.isArray(nextRows)
-        ? nextRows.map((row, index) => normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index))
+        ? reindexSourceRows(nextRows.map((row, index) => normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index)))
         : []
       recomputeProjection()
       emit()
+    },
+    reorderRows(input: DataGridClientRowReorderInput) {
+      ensureActive()
+      const length = sourceRows.length
+      if (length <= 1) {
+        return false
+      }
+      if (!Number.isFinite(input.fromIndex) || !Number.isFinite(input.toIndex)) {
+        return false
+      }
+      const fromIndex = Math.max(0, Math.min(length - 1, Math.trunc(input.fromIndex)))
+      const count = Number.isFinite(input.count) ? Math.max(1, Math.trunc(input.count as number)) : 1
+      const maxCount = Math.max(1, Math.min(count, length - fromIndex))
+      const toIndexRaw = Math.max(0, Math.min(length, Math.trunc(input.toIndex)))
+      const rows = sourceRows.slice()
+      const moved = rows.splice(fromIndex, maxCount)
+      if (moved.length === 0) {
+        return false
+      }
+      const adjustedTarget = toIndexRaw > fromIndex ? Math.max(0, toIndexRaw - moved.length) : toIndexRaw
+      rows.splice(adjustedTarget, 0, ...moved)
+      sourceRows = reindexSourceRows(rows)
+      recomputeProjection()
+      emit()
+      return true
     },
     setViewportRange(range: DataGridViewportRange) {
       ensureActive()
@@ -463,6 +528,45 @@ export function createClientRowModel<T>(
         return
       }
       viewportRange = nextRange
+      emit()
+    },
+    setPagination(nextPagination: DataGridPaginationInput | null) {
+      ensureActive()
+      const normalized = normalizePaginationInput(nextPagination)
+      if (
+        normalized.pageSize === paginationInput.pageSize &&
+        normalized.currentPage === paginationInput.currentPage
+      ) {
+        return
+      }
+      paginationInput = normalized
+      recomputeProjection()
+      emit()
+    },
+    setPageSize(pageSize: number | null) {
+      ensureActive()
+      const normalizedPageSize = normalizePaginationInput({ pageSize: pageSize ?? 0, currentPage: 0 }).pageSize
+      if (normalizedPageSize === paginationInput.pageSize) {
+        return
+      }
+      paginationInput = {
+        pageSize: normalizedPageSize,
+        currentPage: 0,
+      }
+      recomputeProjection()
+      emit()
+    },
+    setCurrentPage(page: number) {
+      ensureActive()
+      const normalizedPage = normalizePaginationInput({ pageSize: paginationInput.pageSize, currentPage: page }).currentPage
+      if (normalizedPage === paginationInput.currentPage) {
+        return
+      }
+      paginationInput = {
+        ...paginationInput,
+        currentPage: normalizedPage,
+      }
+      recomputeProjection()
       emit()
     },
     setSortModel(nextSortModel: readonly DataGridSortState[]) {

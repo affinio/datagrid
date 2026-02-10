@@ -50,6 +50,8 @@ describe("data grid api facade contracts", () => {
     api.setFilterModel({ columnFilters: { name: ["alpha"] }, advancedFilters: {} })
     api.setGroupBy({ fields: ["name"], expandedByDefault: true })
     api.toggleGroup("name=alpha")
+    api.setPageSize(1)
+    api.setCurrentPage(1)
     api.setViewportRange({ start: 0, end: 1 })
     api.setColumnVisibility("id", false)
     api.setColumnWidth("name", 280)
@@ -73,9 +75,14 @@ describe("data grid api facade contracts", () => {
       expandedByDefault: true,
       toggledGroupKeys: ["name=alpha"],
     })
-    expect(rowSnapshot.viewportRange).toEqual({ start: 0, end: 1 })
+    expect(rowSnapshot.pagination.enabled).toBe(true)
+    expect(rowSnapshot.pagination.pageSize).toBe(1)
+    expect(rowSnapshot.pagination.currentPage).toBe(1)
+    expect(rowSnapshot.pagination.totalRowCount).toBe(2)
+    expect(rowSnapshot.viewportRange).toEqual({ start: 0, end: 0 })
     expect(viewportRange).toEqual({ start: 0, end: 1 })
-    expect(api.getRowCount()).toBe(2)
+    expect(api.getRowCount()).toBe(1)
+    expect(api.getPaginationSnapshot().currentPage).toBe(1)
     const maxIndex = Math.max(0, api.getRowCount() - 1)
     const candidates = api.getRowsInRange({ start: 0, end: Math.min(3, maxIndex) })
     const firstLeaf = candidates.find(row => row.kind === "leaf") as { row: { name: string } } | undefined

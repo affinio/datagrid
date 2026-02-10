@@ -1,6 +1,7 @@
 import { defineStore } from "pinia"
 import type {} from "./types/pinia-persist"
 import type {
+  DataGridColumnStateSnapshot,
   DataGridGroupState,
   DataGridPinPosition,
   DataGridSettingsAdapter,
@@ -10,6 +11,7 @@ type DataGridStoredSortState = Parameters<DataGridSettingsAdapter["setSortState"
 type DataGridStoredFilterSnapshot = ReturnType<DataGridSettingsAdapter["getFilterSnapshot"]>
 
 interface DataGridSettingsStoreState {
+  columnStates: Record<string, DataGridColumnStateSnapshot>
   columnWidths: Record<string, Record<string, number>>
   sortStates: Record<string, DataGridStoredSortState>
   filterSnapshots: Record<string, DataGridStoredFilterSnapshot>
@@ -48,6 +50,7 @@ const dataGridSettingsStorage: Storage =
 
 export const useDataGridSettingsStore = defineStore("dataGridSettingsStore", {
   state: (): DataGridSettingsStoreState => ({
+    columnStates: {},
     columnWidths: {},
     sortStates: {},
     filterSnapshots: {},
@@ -55,6 +58,20 @@ export const useDataGridSettingsStore = defineStore("dataGridSettingsStore", {
     groupStates: {},
   }),
   actions: {
+    setColumnState(tableId: string, state: DataGridColumnStateSnapshot | null) {
+      if (!state) {
+        delete this.columnStates[tableId]
+        return
+      }
+      this.columnStates[tableId] = structuredCloneSafe(state)
+    },
+    getColumnState(tableId: string): DataGridColumnStateSnapshot | null {
+      const stored = this.columnStates[tableId]
+      if (!stored) {
+        return null
+      }
+      return structuredCloneSafe(stored)
+    },
     setColumnWidth(tableId: string, columnKey: string, width: number) {
       if (!this.columnWidths[tableId]) {
         this.columnWidths[tableId] = {}
@@ -144,6 +161,7 @@ export const useDataGridSettingsStore = defineStore("dataGridSettingsStore", {
       }
     },
     clearTable(tableId: string) {
+      delete this.columnStates[tableId]
       delete this.columnWidths[tableId]
       delete this.sortStates[tableId]
       delete this.filterSnapshots[tableId]

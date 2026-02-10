@@ -56,15 +56,11 @@ export interface ShouldUseFastPathInput {
 export interface HorizontalSizingInput {
   columnMeta: DataGridViewportHorizontalMeta
   viewportWidth: number
-  totalRowCount: number
-  resolvedRowHeight: number
-  viewportHeight: number
 }
 
 export interface HorizontalSizingResolution {
   averageColumnWidth: number
   contentWidthEstimate: number
-  contentHeightEstimate: number
   horizontalClampContext: HorizontalClampContext
 }
 
@@ -155,10 +151,9 @@ export function shouldUseFastPath(input: ShouldUseFastPathInput): boolean {
 }
 
 export function resolveHorizontalSizing(input: HorizontalSizingInput): HorizontalSizingResolution {
-  const { columnMeta, viewportWidth, totalRowCount, resolvedRowHeight, viewportHeight } = input
+  const { columnMeta, viewportWidth } = input
   const totalPinnedWidth = columnMeta.pinnedLeftWidth + columnMeta.pinnedRightWidth
   const contentWidthEstimate = Math.max(columnMeta.metrics.totalWidth + totalPinnedWidth, viewportWidth)
-  const contentHeightEstimate = Math.max(totalRowCount * resolvedRowHeight, viewportHeight)
 
   const fallbackWidth =
     columnMeta.metrics.widths[0] ??
@@ -172,7 +167,6 @@ export function resolveHorizontalSizing(input: HorizontalSizingInput): Horizonta
   return {
     averageColumnWidth,
     contentWidthEstimate,
-    contentHeightEstimate,
     horizontalClampContext: {
       totalScrollableWidth: columnMeta.metrics.totalWidth,
       containerWidthForColumns: columnMeta.containerWidthForColumns,

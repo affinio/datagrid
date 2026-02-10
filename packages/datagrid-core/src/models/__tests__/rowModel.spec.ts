@@ -6,9 +6,11 @@ import {
   normalizeRowNode,
 } from "../index"
 import {
+  buildPaginationSnapshot,
   cloneGroupBySpec,
   isGroupExpanded,
   isSameGroupBySpec,
+  normalizePaginationInput,
   normalizeGroupBySpec,
   toggleGroupExpansionKey,
 } from "../rowModel"
@@ -148,5 +150,36 @@ describe("rowModel normalization", () => {
     expect(toggleGroupExpansionKey(toggled, "owner=alice")).toBe(true)
     expect(isGroupExpanded({ expandedByDefault: false, toggledGroupKeys: [...toggled] }, "owner=alice")).toBe(false)
     expect(toggleGroupExpansionKey(toggled, "   ")).toBe(false)
+  })
+
+  it("normalizes pagination input and builds deterministic snapshot", () => {
+    const normalized = normalizePaginationInput({
+      pageSize: 25.7,
+      currentPage: -4,
+    })
+    expect(normalized).toEqual({
+      pageSize: 25,
+      currentPage: 0,
+    })
+
+    expect(buildPaginationSnapshot(137, normalized)).toEqual({
+      enabled: true,
+      pageSize: 25,
+      currentPage: 0,
+      pageCount: 6,
+      totalRowCount: 137,
+      startIndex: 0,
+      endIndex: 24,
+    })
+
+    expect(buildPaginationSnapshot(0, { pageSize: 25, currentPage: 0 })).toEqual({
+      enabled: true,
+      pageSize: 25,
+      currentPage: 0,
+      pageCount: 0,
+      totalRowCount: 0,
+      startIndex: -1,
+      endIndex: -1,
+    })
   })
 })

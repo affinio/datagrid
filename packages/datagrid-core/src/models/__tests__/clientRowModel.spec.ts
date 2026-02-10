@@ -37,6 +37,56 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("supports pagination state roundtrip and deterministic page projection", () => {
+    const model = createClientRowModel({ rows: buildRows(23) })
+
+    model.setPagination({ pageSize: 5, currentPage: 2 })
+    const snapshot = model.getSnapshot()
+    expect(snapshot.pagination).toEqual({
+      enabled: true,
+      pageSize: 5,
+      currentPage: 2,
+      pageCount: 5,
+      totalRowCount: 23,
+      startIndex: 10,
+      endIndex: 14,
+    })
+    expect(snapshot.rowCount).toBe(5)
+    expect(model.getRowsInRange({ start: 0, end: 4 }).map(row => row.row.id)).toEqual([10, 11, 12, 13, 14])
+
+    model.setPageSize(10)
+    expect(model.getSnapshot().pagination.currentPage).toBe(0)
+    expect(model.getSnapshot().rowCount).toBe(10)
+
+    model.setCurrentPage(2)
+    expect(model.getRowsInRange({ start: 0, end: 9 }).map(row => row.row.id)).toEqual([20, 21, 22])
+
+    model.refresh("manual")
+    expect(model.getSnapshot().pagination.currentPage).toBe(2)
+
+    model.setPageSize(null)
+    expect(model.getSnapshot().pagination.enabled).toBe(false)
+    expect(model.getSnapshot().rowCount).toBe(23)
+
+    model.dispose()
+  })
+
+  it("reorders client source rows deterministically and updates projection snapshot", () => {
+    const model = createClientRowModel({
+      rows: buildRows(6),
+    })
+
+    const moved = model.reorderRows({ fromIndex: 0, toIndex: 6 })
+    expect(moved).toBe(true)
+    expect(model.getRowsInRange({ start: 0, end: 5 }).map(row => row.row.id)).toEqual([1, 2, 3, 4, 5, 0])
+
+    model.setPageSize(3)
+    model.setCurrentPage(1)
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => row.row.id)).toEqual([4, 5, 0])
+
+    model.dispose()
+  })
+
   it("returns rows in canonical range", () => {
     const rows = buildRows(10)
     const model = createClientRowModel({ rows })

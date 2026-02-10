@@ -1,11 +1,14 @@
 import {
   buildGroupExpansionSnapshot,
+  buildPaginationSnapshot,
   cloneGroupBySpec,
   isSameGroupBySpec,
+  normalizePaginationInput,
   normalizeGroupBySpec,
   normalizeRowNode,
   normalizeViewportRange,
   toggleGroupExpansionKey,
+  type DataGridPaginationInput,
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
   type DataGridRowId,
@@ -35,6 +38,7 @@ export interface CreateDataSourceBackedRowModelOptions<T = unknown> {
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
   initialGroupBy?: DataGridGroupBySpec | null
+  initialPagination?: DataGridPaginationInput | null
   initialTotal?: number
   rowCacheLimit?: number
 }
@@ -89,6 +93,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
   let filterModel: DataGridFilterSnapshot | null = cloneDataGridFilterSnapshot(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
+  let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
   const toggledGroupKeys = new Set<string>()
   let rowCount = Math.max(0, Math.trunc(options.initialTotal ?? 0))
   let loading = false
@@ -169,14 +174,53 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
   }
 
+  function getPaginationSnapshot() {
+    return buildPaginationSnapshot(rowCount, paginationInput)
+  }
+
+  function getVisibleRowCount() {
+    const pagination = getPaginationSnapshot()
+    if (!pagination.enabled) {
+      return pagination.totalRowCount
+    }
+    if (pagination.startIndex < 0 || pagination.endIndex < pagination.startIndex) {
+      return 0
+    }
+    return pagination.endIndex - pagination.startIndex + 1
+  }
+
+  function toSourceIndex(index: number): number {
+    const pagination = getPaginationSnapshot()
+    if (!pagination.enabled || pagination.startIndex < 0) {
+      return index
+    }
+    return pagination.startIndex + index
+  }
+
+  function toSourceRange(range: DataGridViewportRange): DataGridViewportRange {
+    const visibleCount = getVisibleRowCount()
+    if (visibleCount <= 0) {
+      return { start: 0, end: 0 }
+    }
+    const normalized = normalizeViewportRange(range, visibleCount)
+    return {
+      start: toSourceIndex(normalized.start),
+      end: toSourceIndex(normalized.end),
+    }
+  }
+
   function getSnapshot(): DataGridRowModelSnapshot<T> {
+    const pagination = getPaginationSnapshot()
+    const visibleCount = getVisibleRowCount()
+    viewportRange = normalizeViewportRange(viewportRange, visibleCount)
     return {
       revision,
       kind: "server",
-      rowCount,
+      rowCount: visibleCount,
       loading,
       error,
-      viewportRange: normalizeViewportRange(viewportRange, rowCount),
+      viewportRange,
+      pagination,
       sortModel,
       filterModel: cloneDataGridFilterSnapshot(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
@@ -337,6 +381,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         rowCount = nextTotal
         pruneRowCacheByRowCount()
         changed = changed || rowCount !== previousRowCount
+        viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       }
       changed = applyRows(result.rows) || changed
       if (changed) {
@@ -364,7 +409,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate(invalidation))
       }
-      void pullRange(viewportRange, "push-invalidation", "normal")
+      void pullRange(toSourceRange(viewportRange), "push-invalidation", "normal")
       return
     }
 
@@ -372,8 +417,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (typeof dataSource.invalidate === "function") {
       void Promise.resolve(dataSource.invalidate(invalidation))
     }
-    if (rangesOverlap(normalizeRequestedRange(invalidation.range), viewportRange)) {
-      void pullRange(viewportRange, "push-invalidation", "normal")
+    if (rangesOverlap(normalizeRequestedRange(invalidation.range), toSourceRange(viewportRange))) {
+      void pullRange(toSourceRange(viewportRange), "push-invalidation", "normal")
     } else {
       emit()
     }
@@ -393,6 +438,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         rowCount = nextTotal
         pruneRowCacheByRowCount()
         changed = changed || rowCount !== previousRowCount
+        viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       }
       if (changed) {
         bumpRevision()
@@ -415,6 +461,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         rowCount = nextTotal
         pruneRowCacheByRowCount()
         changed = changed || rowCount !== previousRowCount
+        viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       }
       if (changed) {
         bumpRevision()
@@ -431,26 +478,28 @@ export function createDataSourceBackedRowModel<T = unknown>(
     dataSource,
     getSnapshot,
     getRowCount() {
-      return rowCount
+      return getVisibleRowCount()
     },
     getRow(index) {
       if (!Number.isFinite(index)) {
         return undefined
       }
       const normalized = Math.max(0, Math.trunc(index))
-      if (normalized >= rowCount) {
+      const visibleCount = getVisibleRowCount()
+      if (normalized >= visibleCount) {
         return undefined
       }
-      return readRowCache(normalized)
+      return readRowCache(toSourceIndex(normalized))
     },
     getRowsInRange(range) {
-      const normalized = normalizeViewportRange(range, rowCount)
-      if (rowCount <= 0) {
+      const visibleCount = getVisibleRowCount()
+      const normalized = normalizeViewportRange(range, visibleCount)
+      if (visibleCount <= 0) {
         return []
       }
       const rows = []
       for (let index = normalized.start; index <= normalized.end; index += 1) {
-        const row = readRowCache(index)
+        const row = readRowCache(toSourceIndex(index))
         if (row) {
           rows.push(row)
         }
@@ -460,15 +509,17 @@ export function createDataSourceBackedRowModel<T = unknown>(
     setViewportRange(range) {
       ensureActive()
       const requested = normalizeRequestedRange(range)
-      const nextViewport = rowCount > 0 ? normalizeViewportRange(requested, rowCount) : requested
+      const visibleCount = getVisibleRowCount()
+      const nextViewport = visibleCount > 0 ? normalizeViewportRange(requested, visibleCount) : requested
       const unchanged =
         nextViewport.start === viewportRange.start &&
         nextViewport.end === viewportRange.end
       viewportRange = nextViewport
 
       if (unchanged) {
+        const sourceViewport = toSourceRange(nextViewport)
         let hasFullRange = true
-        for (let index = nextViewport.start; index <= nextViewport.end; index += 1) {
+        for (let index = sourceViewport.start; index <= sourceViewport.end; index += 1) {
           if (!rowCache.has(index)) {
             hasFullRange = false
             break
@@ -479,7 +530,52 @@ export function createDataSourceBackedRowModel<T = unknown>(
         }
       }
 
-      void pullRange(nextViewport, "viewport-change", "critical")
+      void pullRange(toSourceRange(nextViewport), "viewport-change", "critical")
+      emit()
+    },
+    setPagination(nextPagination: DataGridPaginationInput | null) {
+      ensureActive()
+      const normalized = normalizePaginationInput(nextPagination)
+      if (
+        normalized.pageSize === paginationInput.pageSize &&
+        normalized.currentPage === paginationInput.currentPage
+      ) {
+        return
+      }
+      paginationInput = normalized
+      viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
+      bumpRevision()
+      emit()
+    },
+    setPageSize(pageSize: number | null) {
+      ensureActive()
+      const normalizedPageSize = normalizePaginationInput({ pageSize: pageSize ?? 0, currentPage: 0 }).pageSize
+      if (normalizedPageSize === paginationInput.pageSize) {
+        return
+      }
+      paginationInput = {
+        pageSize: normalizedPageSize,
+        currentPage: 0,
+      }
+      viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
+      bumpRevision()
+      emit()
+    },
+    setCurrentPage(page: number) {
+      ensureActive()
+      const normalizedPage = normalizePaginationInput({
+        pageSize: paginationInput.pageSize,
+        currentPage: page,
+      }).currentPage
+      if (normalizedPage === paginationInput.currentPage) {
+        return
+      }
+      paginationInput = {
+        ...paginationInput,
+        currentPage: normalizedPage,
+      }
+      viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
+      bumpRevision()
       emit()
     },
     setSortModel(nextSortModel) {
@@ -487,7 +583,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       sortModel = Array.isArray(nextSortModel) ? [...nextSortModel] : []
       bumpRevision()
       clearAll()
-      void pullRange(viewportRange, "sort-change", "critical")
+      void pullRange(toSourceRange(viewportRange), "sort-change", "critical")
       emit()
     },
     setFilterModel(nextFilterModel) {
@@ -495,7 +591,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       filterModel = cloneDataGridFilterSnapshot(nextFilterModel ?? null)
       bumpRevision()
       clearAll()
-      void pullRange(viewportRange, "filter-change", "critical")
+      void pullRange(toSourceRange(viewportRange), "filter-change", "critical")
       emit()
     },
     setGroupBy(nextGroupBy) {
@@ -508,7 +604,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       toggledGroupKeys.clear()
       bumpRevision()
       clearAll()
-      void pullRange(viewportRange, "group-change", "critical")
+      void pullRange(toSourceRange(viewportRange), "group-change", "critical")
       emit()
     },
     toggleGroup(groupKey: string) {
@@ -521,7 +617,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       bumpRevision()
       clearAll()
-      void pullRange(viewportRange, "group-change", "critical")
+      void pullRange(toSourceRange(viewportRange), "group-change", "critical")
       emit()
     },
     async refresh(reason?: DataGridRowModelRefreshReason) {
@@ -532,17 +628,18 @@ export function createDataSourceBackedRowModel<T = unknown>(
           await dataSource.invalidate({ kind: "all", reason: "reset" })
         }
       }
-      await pullRange(viewportRange, "refresh", "critical")
+      await pullRange(toSourceRange(viewportRange), "refresh", "critical")
     },
     invalidateRange(range) {
       ensureActive()
-      const invalidation: DataGridDataSourceInvalidation = { kind: "range", range, reason: "model-range" }
-      clearRange(range)
+      const sourceRange = toSourceRange(range)
+      const invalidation: DataGridDataSourceInvalidation = { kind: "range", range: sourceRange, reason: "model-range" }
+      clearRange(sourceRange)
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate(invalidation))
       }
-      if (rangesOverlap(normalizeRequestedRange(range), viewportRange)) {
-        void pullRange(viewportRange, "invalidation", "normal")
+      if (rangesOverlap(normalizeRequestedRange(sourceRange), toSourceRange(viewportRange))) {
+        void pullRange(toSourceRange(viewportRange), "invalidation", "normal")
       } else {
         emit()
       }
@@ -553,7 +650,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate({ kind: "all", reason: "model-all" }))
       }
-      void pullRange(viewportRange, "invalidation", "normal")
+      void pullRange(toSourceRange(viewportRange), "invalidation", "normal")
     },
     getBackpressureDiagnostics() {
       return { ...diagnostics }
