@@ -391,4 +391,64 @@ describe("viewport integration snapshot contract", () => {
     rowModel.dispose()
     columnModel.dispose()
   })
+
+  it("does not force horizontal apply on row-only model invalidation", () => {
+    const columns: DataGridColumn[] = [
+      { key: "a", label: "A", pin: "left", width: 110, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "b", label: "B", pin: "none", width: 140, minWidth: 80, maxWidth: 240, visible: true },
+      { key: "c", label: "C", pin: "right", width: 120, minWidth: 80, maxWidth: 240, visible: true },
+    ]
+    const rowModel = createClientRowModel({ rows: createRows(200) })
+    const columnModel = createDataGridColumnModel({ columns })
+    const containerMetrics = createMeasuredElement({
+      clientWidth: 760,
+      clientHeight: 460,
+      scrollWidth: 2600,
+      scrollHeight: 14_000,
+    })
+    const headerMetrics = createMeasuredElement({
+      clientWidth: 760,
+      clientHeight: 42,
+      scrollWidth: 760,
+      scrollHeight: 42,
+    })
+
+    let onRowsCalls = 0
+    let onColumnsCalls = 0
+
+    const controller = createDataGridViewportController({
+      resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+      rowModel,
+      columnModel,
+      imperativeCallbacks: {
+        onRows() {
+          onRowsCalls += 1
+        },
+        onColumns() {
+          onColumnsCalls += 1
+        },
+      },
+    })
+
+    controller.attach(containerMetrics.element, headerMetrics.element)
+    controller.setViewportMetrics({
+      containerWidth: containerMetrics.state.clientWidth,
+      containerHeight: containerMetrics.state.clientHeight,
+      headerHeight: headerMetrics.state.clientHeight,
+    })
+    controller.refresh(true)
+
+    const baselineRows = onRowsCalls
+    const baselineColumns = onColumnsCalls
+
+    rowModel.setRows(createRows(180))
+    controller.refresh(true)
+
+    expect(onRowsCalls).toBeGreaterThan(baselineRows)
+    expect(onColumnsCalls).toBe(baselineColumns)
+
+    controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+  })
 })

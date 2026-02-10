@@ -260,4 +260,36 @@ describe("createClientRowModel", () => {
 
     model.dispose()
   })
+
+  it("materializes sort keys once per row during each sort projection pass", () => {
+    let scoreReads = 0
+    const makeRow = (id: number, score: number): { id: number; score: number } => {
+      const row = { id } as { id: number; score: number }
+      Object.defineProperty(row, "score", {
+        enumerable: true,
+        configurable: false,
+        get() {
+          scoreReads += 1
+          return score
+        },
+      })
+      return row
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: makeRow(1, 30), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: makeRow(2, 10), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: makeRow(3, 20), rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    const sorted = model.getRowsInRange({ start: 0, end: 3 })
+
+    expect(sorted.map(row => (row.row as { id: number }).id)).toEqual([2, 3, 1])
+    expect(scoreReads).toBe(3)
+
+    model.dispose()
+  })
 })

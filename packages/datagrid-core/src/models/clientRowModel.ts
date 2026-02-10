@@ -131,6 +131,18 @@ function createFilterPredicate<T>(
   }
 }
 
+function serializeFilterModelForCache(filterModel: DataGridFilterSnapshot | null): string {
+  if (!filterModel) {
+    return "__none__"
+  }
+  const columnPart = Object.entries(filterModel.columnFilters ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, values]) => `${key}:${values.join("\u001f")}`)
+    .join("\u001e")
+  const advancedPart = JSON.stringify(resolveAdvancedExpression(filterModel))
+  return `${columnPart}||${advancedPart}`
+}
+
 function compareUnknown(left: unknown, right: unknown): number {
   if (left == null && right == null) {
     return 0
@@ -155,15 +167,24 @@ function sortLeafRows<T>(
   rows: readonly DataGridRowNode<T>[],
   sortModel: readonly DataGridSortState[],
 ): DataGridRowNode<T>[] {
-  if (!Array.isArray(sortModel) || sortModel.length === 0) {
+  const descriptors = Array.isArray(sortModel) ? sortModel.filter(Boolean) : []
+  if (descriptors.length === 0) {
     return [...rows]
   }
-  const decorated = rows.map((row, index) => ({ row, index }))
+  const decorated = rows.map((row, index) => ({
+    row,
+    index,
+    sortValues: descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field)),
+  }))
   decorated.sort((left, right) => {
-    for (const descriptor of sortModel) {
+    for (let descriptorIndex = 0; descriptorIndex < descriptors.length; descriptorIndex += 1) {
+      const descriptor = descriptors[descriptorIndex]
+      if (!descriptor) {
+        continue
+      }
       const direction = descriptor.direction === "desc" ? -1 : 1
-      const leftValue = readRowField(left.row, descriptor.key, descriptor.field)
-      const rightValue = readRowField(right.row, descriptor.key, descriptor.field)
+      const leftValue = left.sortValues[descriptorIndex]
+      const rightValue = right.sortValues[descriptorIndex]
       const compared = compareUnknown(leftValue, rightValue)
       if (compared !== 0) {
         return compared * direction
@@ -211,6 +232,17 @@ function buildGroupedRows<T>(
   if (fields.length === 0) {
     return inputRows.map(row => normalizeLeafRow(row))
   }
+  const groupValueCache = new Map<string, string>()
+  const resolveGroupedValue = (row: DataGridRowNode<T>, field: string): string => {
+    const cacheKey = `${String(row.rowId)}::${field}`
+    const cached = groupValueCache.get(cacheKey)
+    if (typeof cached !== "undefined") {
+      return cached
+    }
+    const computed = normalizeText(readRowField(row, field))
+    groupValueCache.set(cacheKey, computed)
+    return computed
+  }
 
   const projectLevel = (
     rowsAtLevel: readonly DataGridRowNode<T>[],
@@ -223,7 +255,7 @@ function buildGroupedRows<T>(
     const field = fields[level] ?? ""
     const buckets = new Map<string, DataGridRowNode<T>[]>()
     for (const row of rowsAtLevel) {
-      const value = normalizeText(readRowField(row, field))
+      const value = resolveGroupedValue(row, field)
       if (!buckets.has(value)) {
         buckets.set(value, [])
       }
@@ -339,6 +371,8 @@ export function createClientRowModel<T>(
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rows.length)
   let disposed = false
   const listeners = new Set<DataGridRowModelListener<T>>()
+  let cachedFilterPredicateKey = "__none__"
+  let cachedFilterPredicate: ((rowNode: DataGridRowNode<T>) => boolean) | null = null
 
   function ensureActive() {
     if (disposed) {
@@ -347,7 +381,15 @@ export function createClientRowModel<T>(
   }
 
   function recomputeProjection() {
-    const filterPredicate = createFilterPredicate(filterModel)
+    const filterKey = serializeFilterModelForCache(filterModel)
+    const filterPredicate = filterKey === cachedFilterPredicateKey && cachedFilterPredicate
+      ? cachedFilterPredicate
+      : (() => {
+          const next = createFilterPredicate(filterModel)
+          cachedFilterPredicateKey = filterKey
+          cachedFilterPredicate = next
+          return next
+        })()
     const filteredRows = sourceRows.filter(filterPredicate)
     const sortedRows = sortLeafRows(filteredRows, sortModel)
     const expansionSnapshot = buildGroupExpansionSnapshot(groupBy, toggledGroupKeys)

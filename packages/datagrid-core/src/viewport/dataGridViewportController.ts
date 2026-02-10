@@ -791,27 +791,27 @@ export function createDataGridViewportController(
 			const timestamp = clock.now()
 			virtualization.resetOverscan(timestamp)
 			horizontalOverscanController.reset(timestamp)
-			scheduleUpdate(true)
+			scheduleUpdate(false)
 		}
 
 		function setVirtualizationEnabledValue(enabled: boolean) {
 			const normalized = Boolean(enabled)
 			if (virtualizationFlag === normalized) return
 			virtualizationFlag = normalized
-			scheduleUpdate(true)
+			scheduleUpdate(false)
 		}
 
 		function setRowHeightModeValue(mode: "fixed" | "auto") {
 			if (rowHeightMode === mode) return
 			rowHeightMode = mode
-			scheduleUpdate(true)
+			scheduleUpdate(false)
 		}
 
 		function setBaseRowHeightValue(height: number) {
 			const normalized = Number.isFinite(height) && height > 0 ? height : BASE_ROW_HEIGHT
 			if (baseRowHeight === normalized) return
 			baseRowHeight = normalized
-			scheduleUpdate(true)
+			scheduleUpdate(false)
 		}
 
 		function setViewportMetricsValue(metrics: ViewportMetricsSnapshot | null) {
@@ -833,7 +833,7 @@ export function createDataGridViewportController(
 				layoutCache.updateHeader({ height: metrics.headerHeight })
 				measureLayout()
 			}
-			scheduleUpdate(true)
+			scheduleUpdate(false)
 		}
 
 		function setIsLoadingValue(value: boolean) {
@@ -864,11 +864,11 @@ export function createDataGridViewportController(
 		}
 
 		function updateViewportHeightValue() {
-			scheduleUpdate(true)
+			scheduleUpdate(false)
 		}
 
 		function measureRowHeightValue() {
-			scheduleUpdate(true)
+			scheduleUpdate(false)
 		}
 
 		function cancelScrollRaf() {
@@ -1303,10 +1303,13 @@ export function createDataGridViewportController(
 						measuredScrollLeftFromPending ||
 						deltaLeft > horizontalScrollEpsilon ||
 						pendingHorizontalSettle
-					const shouldRecomputeHorizontal = force || horizontalStructureDirty || horizontalMotionDirty
+					const shouldRecomputeHorizontal =
+						!lastHorizontalMeta ||
+						horizontalStructureDirty ||
+						horizontalMotionDirty
 
 					let columnMeta: DataGridViewportHorizontalMeta
-					if (shouldRecomputeHorizontal) {
+					if (!lastHorizontalMeta || horizontalStructureDirty) {
 						const horizontalMetaResult = buildHorizontalMeta({
 							columns,
 							layoutScale,
@@ -1331,7 +1334,7 @@ export function createDataGridViewportController(
 						lastHorizontalCachedContainerWidth = cachedContainerWidth
 						lastHorizontalMeasuredScrollWidth = measuredScrollWidthForMeta
 					} else {
-						columnMeta = lastHorizontalMeta!
+						columnMeta = lastHorizontalMeta
 					}
 					const horizontalSizing = resolveHorizontalSizing({
 						columnMeta,
@@ -1351,8 +1354,7 @@ export function createDataGridViewportController(
 					const horizontalUpdateForced = horizontalStructureDirty ||
 						pendingScrollLeftRequest != null ||
 						measuredScrollLeftFromPending ||
-						metaVersionChanged ||
-						force
+						metaVersionChanged
 
 					pendingHorizontalSettle = false
 

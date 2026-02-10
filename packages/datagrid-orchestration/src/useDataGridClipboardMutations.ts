@@ -1,5 +1,9 @@
 import type { DataGridClipboardRange } from "./useDataGridClipboardBridge"
 import type { DataGridWritableRef } from "./dataGridWritableRef"
+import {
+  createDataGridMutableRowStore,
+  forEachDataGridRangeCell,
+} from "./dataGridRangeMutationKernel"
 
 export interface DataGridClipboardCoord {
   rowIndex: number
@@ -58,52 +62,6 @@ export interface UseDataGridClipboardMutationsResult<
   pasteSelection: (trigger: "keyboard" | "context-menu") => Promise<boolean>
   clearCurrentSelection: (trigger: "keyboard" | "context-menu") => Promise<boolean>
   cutSelection: (trigger: "keyboard" | "context-menu") => Promise<boolean>
-}
-
-interface MutableRowBundle<TRow> {
-  sourceById: Map<string, TRow>
-  mutableById: Map<string, TRow>
-  getMutableRow: (rowId: string) => TRow | null
-}
-
-function createMutableRows<TRow>(
-  rows: readonly TRow[],
-  resolveRowId: (row: TRow) => string,
-  cloneRow: (row: TRow) => TRow,
-): MutableRowBundle<TRow> {
-  const sourceById = new Map<string, TRow>(rows.map(row => [resolveRowId(row), row]))
-  const mutableById = new Map<string, TRow>()
-
-  const getMutableRow = (rowId: string): TRow | null => {
-    const existing = mutableById.get(rowId)
-    if (existing) {
-      return existing
-    }
-    const source = sourceById.get(rowId)
-    if (!source) {
-      return null
-    }
-    const clone = cloneRow(source)
-    mutableById.set(rowId, clone)
-    return clone
-  }
-
-  return {
-    sourceById,
-    mutableById,
-    getMutableRow,
-  }
-}
-
-function commitMutableRows<TRow>(
-  rows: readonly TRow[],
-  resolveRowId: (row: TRow) => string,
-  mutableById: Map<string, TRow>,
-): readonly TRow[] {
-  if (mutableById.size === 0) {
-    return rows
-  }
-  return rows.map(row => mutableById.get(resolveRowId(row)) ?? row)
 }
 
 export function useDataGridClipboardMutations<
@@ -182,42 +140,42 @@ export function useDataGridClipboardMutations<
     }
 
     const beforeSnapshot = options.captureBeforeSnapshot ? options.captureBeforeSnapshot() : null
-    const bundle = createMutableRows(options.sourceRows.value, options.resolveRowId, options.cloneRow)
-    const { mutableById, getMutableRow } = bundle
+    const rowStore = createDataGridMutableRowStore({
+      rows: options.sourceRows.value,
+      resolveRowId: options.resolveRowId,
+      cloneRow: options.cloneRow,
+    })
+    const { mutableById, getMutableRow } = rowStore
 
     let applied = 0
     let blocked = 0
     const matrixHeight = matrix.length
     const matrixWidth = Math.max(1, matrix[0]?.length ?? 1)
 
-    for (let rowOffset = 0; rowOffset <= targetRange.endRow - targetRange.startRow; rowOffset += 1) {
-      const targetRowIndex = targetRange.startRow + rowOffset
-      const targetRow = options.resolveRowAtViewIndex(targetRowIndex)
+    forEachDataGridRangeCell(targetRange, ({ rowIndex, columnIndex, rowOffset, columnOffset }) => {
+      const targetRow = options.resolveRowAtViewIndex(rowIndex)
       if (!targetRow) {
-        blocked += matrixWidth
-        continue
+        blocked += 1
+        return
       }
-      for (let columnOffset = 0; columnOffset <= targetRange.endColumn - targetRange.startColumn; columnOffset += 1) {
-        const targetColumnIndex = targetRange.startColumn + columnOffset
-        const targetColumnKey = options.resolveColumnKeyAtIndex(targetColumnIndex)
-        if (!targetColumnKey || !options.isEditableColumn(targetColumnKey)) {
-          blocked += 1
-          continue
-        }
-        const sourceValue = matrix[rowOffset % matrixHeight]?.[columnOffset % matrixWidth] ?? ""
-        if (!options.canApplyPastedValue(targetColumnKey, sourceValue)) {
-          blocked += 1
-          continue
-        }
-        const mutable = getMutableRow(options.resolveRowId(targetRow))
-        if (!mutable) {
-          blocked += 1
-          continue
-        }
-        options.applyEditedValue(mutable, targetColumnKey, sourceValue)
-        applied += 1
+      const targetColumnKey = options.resolveColumnKeyAtIndex(columnIndex)
+      if (!targetColumnKey || !options.isEditableColumn(targetColumnKey)) {
+        blocked += 1
+        return
       }
-    }
+      const sourceValue = matrix[rowOffset % matrixHeight]?.[columnOffset % matrixWidth] ?? ""
+      if (!options.canApplyPastedValue(targetColumnKey, sourceValue)) {
+        blocked += 1
+        return
+      }
+      const mutable = getMutableRow(options.resolveRowId(targetRow))
+      if (!mutable) {
+        blocked += 1
+        return
+      }
+      options.applyEditedValue(mutable, targetColumnKey, sourceValue)
+      applied += 1
+    })
 
     if (applied === 0) {
       options.closeContextMenu()
@@ -226,7 +184,7 @@ export function useDataGridClipboardMutations<
     }
 
     options.finalizeMutableRows?.(mutableById)
-    options.setSourceRows(commitMutableRows(options.sourceRows.value, options.resolveRowId, mutableById))
+    options.setSourceRows(rowStore.commitRows(options.sourceRows.value))
     options.applySelectionRange(targetRange)
 
     await maybeRecordTransaction(
@@ -249,40 +207,42 @@ export function useDataGridClipboardMutations<
   }
 
   function clearSelectionValues(range: TRange): DataGridClipboardMutationResult<TRange> {
-    const bundle = createMutableRows(options.sourceRows.value, options.resolveRowId, options.cloneRow)
-    const { mutableById, getMutableRow } = bundle
+    const rowStore = createDataGridMutableRowStore({
+      rows: options.sourceRows.value,
+      resolveRowId: options.resolveRowId,
+      cloneRow: options.cloneRow,
+    })
+    const { mutableById, getMutableRow } = rowStore
 
     let applied = 0
     let blocked = 0
-    for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
+    forEachDataGridRangeCell(range, ({ rowIndex, columnIndex }) => {
       const targetRow = options.resolveRowAtViewIndex(rowIndex)
       if (!targetRow) {
-        blocked += range.endColumn - range.startColumn + 1
-        continue
+        blocked += 1
+        return
       }
-      for (let columnIndex = range.startColumn; columnIndex <= range.endColumn; columnIndex += 1) {
-        const targetColumnKey = options.resolveColumnKeyAtIndex(columnIndex)
-        if (!targetColumnKey || !options.isEditableColumn(targetColumnKey)) {
-          blocked += 1
-          continue
-        }
-        const mutable = getMutableRow(options.resolveRowId(targetRow))
-        if (!mutable) {
-          blocked += 1
-          continue
-        }
-        const didClear = options.clearValueForCut(mutable, targetColumnKey)
-        if (!didClear) {
-          blocked += 1
-          continue
-        }
-        applied += 1
+      const targetColumnKey = options.resolveColumnKeyAtIndex(columnIndex)
+      if (!targetColumnKey || !options.isEditableColumn(targetColumnKey)) {
+        blocked += 1
+        return
       }
-    }
+      const mutable = getMutableRow(options.resolveRowId(targetRow))
+      if (!mutable) {
+        blocked += 1
+        return
+      }
+      const didClear = options.clearValueForCut(mutable, targetColumnKey)
+      if (!didClear) {
+        blocked += 1
+        return
+      }
+      applied += 1
+    })
 
     if (applied > 0) {
       options.finalizeMutableRows?.(mutableById)
-      options.setSourceRows(commitMutableRows(options.sourceRows.value, options.resolveRowId, mutableById))
+      options.setSourceRows(rowStore.commitRows(options.sourceRows.value))
       options.applySelectionRange(range)
     }
 

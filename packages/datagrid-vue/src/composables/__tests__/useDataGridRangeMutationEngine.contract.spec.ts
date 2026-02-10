@@ -39,7 +39,7 @@ describe("useDataGridRangeMutationEngine contract", () => {
       resolveSourceRows: () => rows,
       resolveSourceRowId: row => row.rowId,
       applySourceRows(next) {
-        rows = next
+        rows = [...next]
       },
       resolveDisplayedRows: () => displayRows,
       resolveDisplayedRowId: row => row.rowId,
@@ -118,7 +118,7 @@ describe("useDataGridRangeMutationEngine contract", () => {
       resolveSourceRows: () => rows,
       resolveSourceRowId: row => row.rowId,
       applySourceRows(next) {
-        rows = next
+        rows = [...next]
       },
       resolveDisplayedRows: () => displayRows,
       resolveDisplayedRowId: row => row.rowId,

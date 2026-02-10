@@ -1,3 +1,8 @@
+import {
+  createDataGridMutableRowStore,
+  forEachDataGridRangeCell,
+} from "./dataGridRangeMutationKernel"
+
 export interface DataGridRangeMutationRange {
   startRow: number
   endRow: number
@@ -19,7 +24,7 @@ export interface UseDataGridRangeMutationEngineOptions<
   captureBeforeSnapshot: () => TSnapshot
   resolveSourceRows: () => readonly TRow[]
   resolveSourceRowId: (row: TRow) => string
-  applySourceRows: (rows: TRow[]) => void
+  applySourceRows: (rows: readonly TRow[]) => void
   resolveDisplayedRows: () => readonly TDisplayRow[]
   resolveDisplayedRowId: (row: TDisplayRow) => string
   resolveColumnKeyAtIndex: (columnIndex: number) => string | null
@@ -75,8 +80,12 @@ export function useDataGridRangeMutationEngine<
     const beforeSnapshot = options.captureBeforeSnapshot()
 
     const sourceRows = options.resolveSourceRows()
-    const sourceById = new Map(sourceRows.map(row => [options.resolveSourceRowId(row), row]))
-    const mutableById = new Map<string, TRow>()
+    const rowStore = createDataGridMutableRowStore({
+      rows: sourceRows,
+      resolveRowId: options.resolveSourceRowId,
+      cloneRow: row => ({ ...row }) as TRow,
+    })
+    const { sourceById, mutableById, getMutableRow } = rowStore
     const needsRecompute = new Set<string>()
     const moveEntries: Array<{
       sourceRowId: string
@@ -86,53 +95,35 @@ export function useDataGridRangeMutationEngine<
       value: string
     }> = []
 
-    const getMutableRow = (rowId: string): TRow | null => {
-      const existing = mutableById.get(rowId)
-      if (existing) {
-        return existing
-      }
-      const source = sourceById.get(rowId)
-      if (!source) {
-        return null
-      }
-      const clone = { ...source } as TRow
-      mutableById.set(rowId, clone)
-      return clone
-    }
-
     let blocked = 0
     const displayedRows = options.resolveDisplayedRows()
-    const rowSpan = baseRange.endRow - baseRange.startRow
-    const columnSpan = baseRange.endColumn - baseRange.startColumn
-    for (let rowOffset = 0; rowOffset <= rowSpan; rowOffset += 1) {
-      const sourceRow = displayedRows[baseRange.startRow + rowOffset]
+    forEachDataGridRangeCell(baseRange, ({ rowIndex, columnIndex, rowOffset, columnOffset }) => {
+      const sourceRow = displayedRows[rowIndex]
       const targetRow = displayedRows[targetRange.startRow + rowOffset]
       if (!sourceRow || !targetRow) {
-        blocked += columnSpan + 1
-        continue
+        blocked += 1
+        return
       }
-      for (let columnOffset = 0; columnOffset <= columnSpan; columnOffset += 1) {
-        const sourceColumnKey = options.resolveColumnKeyAtIndex(baseRange.startColumn + columnOffset)
-        const targetColumnKey = options.resolveColumnKeyAtIndex(targetRange.startColumn + columnOffset)
-        if (!sourceColumnKey || !targetColumnKey) {
-          blocked += 1
-          continue
-        }
-        if (isExcludedColumn(sourceColumnKey) || isExcludedColumn(targetColumnKey)) {
-          blocked += 1
-          continue
-        }
-        moveEntries.push({
-          sourceRowId: options.resolveDisplayedRowId(sourceRow),
-          sourceColumnKey,
-          targetRowId: options.resolveDisplayedRowId(targetRow),
-          targetColumnKey,
-          value: options.normalizeClipboardValue(
-            options.resolveDisplayedCellValue(sourceRow, sourceColumnKey),
-          ),
-        })
+      const sourceColumnKey = options.resolveColumnKeyAtIndex(columnIndex)
+      const targetColumnKey = options.resolveColumnKeyAtIndex(targetRange.startColumn + columnOffset)
+      if (!sourceColumnKey || !targetColumnKey) {
+        blocked += 1
+        return
       }
-    }
+      if (isExcludedColumn(sourceColumnKey) || isExcludedColumn(targetColumnKey)) {
+        blocked += 1
+        return
+      }
+      moveEntries.push({
+        sourceRowId: options.resolveDisplayedRowId(sourceRow),
+        sourceColumnKey,
+        targetRowId: options.resolveDisplayedRowId(targetRow),
+        targetColumnKey,
+        value: options.normalizeClipboardValue(
+          options.resolveDisplayedCellValue(sourceRow, sourceColumnKey),
+        ),
+      })
+    })
 
     if (!moveEntries.length) {
       if (blocked > 0) {
@@ -192,7 +183,7 @@ export function useDataGridRangeMutationEngine<
       options.recomputeDerived(row)
     }
 
-    options.applySourceRows(sourceRows.map(row => mutableById.get(options.resolveSourceRowId(row)) ?? row))
+    options.applySourceRows(rowStore.commitRows(sourceRows))
     options.setSelectionFromRange(targetRange, "start")
     void options.recordIntent(
       {
@@ -225,8 +216,12 @@ export function useDataGridRangeMutationEngine<
     }
 
     const sourceRows = options.resolveSourceRows()
-    const sourceById = new Map(sourceRows.map(row => [options.resolveSourceRowId(row), row]))
-    const mutableById = new Map<string, TRow>()
+    const rowStore = createDataGridMutableRowStore({
+      rows: sourceRows,
+      resolveRowId: options.resolveSourceRowId,
+      cloneRow: row => ({ ...row }) as TRow,
+    })
+    const { sourceById, mutableById, getMutableRow } = rowStore
     const needsRecompute = new Set<string>()
     const baseEditableKeys = new Set<string>()
 
@@ -244,61 +239,45 @@ export function useDataGridRangeMutationEngine<
       return
     }
 
-    const getMutableRow = (rowId: string): TRow | null => {
-      const existing = mutableById.get(rowId)
-      if (existing) {
-        return existing
-      }
-      const source = sourceById.get(rowId)
-      if (!source) {
-        return null
-      }
-      const clone = { ...source } as TRow
-      mutableById.set(rowId, clone)
-      return clone
-    }
-
     let changedCells = 0
-    for (let rowIndex = previewRange.startRow; rowIndex <= previewRange.endRow; rowIndex += 1) {
+    forEachDataGridRangeCell(previewRange, ({ rowIndex, columnIndex }) => {
       const destinationDisplayRow = displayedRows[rowIndex]
       if (!destinationDisplayRow) {
-        continue
+        return
       }
-      for (let columnIndex = previewRange.startColumn; columnIndex <= previewRange.endColumn; columnIndex += 1) {
-        if (options.isCellWithinRange(rowIndex, columnIndex, baseRange)) {
-          continue
-        }
-        const columnKey = options.resolveColumnKeyAtIndex(columnIndex)
-        if (!columnKey || isExcludedColumn(columnKey)) {
-          continue
-        }
-        if (!options.isEditableColumn(columnKey) || !baseEditableKeys.has(columnKey)) {
-          continue
-        }
-
-        const sourceRowIndex = baseRange.startRow + positiveModulo(rowIndex - baseRange.startRow, baseHeight)
-        const sourceDisplayRow = displayedRows[sourceRowIndex]
-        if (!sourceDisplayRow) {
-          continue
-        }
-
-        const sourceRow = sourceById.get(options.resolveDisplayedRowId(sourceDisplayRow))
-        const destinationRow = getMutableRow(options.resolveDisplayedRowId(destinationDisplayRow))
-        if (!sourceRow || !destinationRow) {
-          continue
-        }
-
-        options.applyEditedValue(
-          destinationRow,
-          columnKey,
-          String(options.resolveSourceCellValue(sourceRow, columnKey) ?? ""),
-        )
-        if (shouldRecomputeDerivedForColumn(columnKey)) {
-          needsRecompute.add(options.resolveSourceRowId(destinationRow))
-        }
-        changedCells += 1
+      if (options.isCellWithinRange(rowIndex, columnIndex, baseRange)) {
+        return
       }
-    }
+      const columnKey = options.resolveColumnKeyAtIndex(columnIndex)
+      if (!columnKey || isExcludedColumn(columnKey)) {
+        return
+      }
+      if (!options.isEditableColumn(columnKey) || !baseEditableKeys.has(columnKey)) {
+        return
+      }
+
+      const sourceRowIndex = baseRange.startRow + positiveModulo(rowIndex - baseRange.startRow, baseHeight)
+      const sourceDisplayRow = displayedRows[sourceRowIndex]
+      if (!sourceDisplayRow) {
+        return
+      }
+
+      const sourceRow = sourceById.get(options.resolveDisplayedRowId(sourceDisplayRow))
+      const destinationRow = getMutableRow(options.resolveDisplayedRowId(destinationDisplayRow))
+      if (!sourceRow || !destinationRow) {
+        return
+      }
+
+      options.applyEditedValue(
+        destinationRow,
+        columnKey,
+        String(options.resolveSourceCellValue(sourceRow, columnKey) ?? ""),
+      )
+      if (shouldRecomputeDerivedForColumn(columnKey)) {
+        needsRecompute.add(options.resolveSourceRowId(destinationRow))
+      }
+      changedCells += 1
+    })
 
     if (changedCells === 0) {
       return
@@ -312,7 +291,7 @@ export function useDataGridRangeMutationEngine<
       options.recomputeDerived(row)
     }
 
-    options.applySourceRows(sourceRows.map(row => mutableById.get(options.resolveSourceRowId(row)) ?? row))
+    options.applySourceRows(rowStore.commitRows(sourceRows))
     options.setSelectionFromRange(previewRange, "end")
     void options.recordIntent(
       {
