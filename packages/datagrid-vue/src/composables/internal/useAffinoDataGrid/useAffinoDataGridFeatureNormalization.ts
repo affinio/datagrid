@@ -33,6 +33,11 @@ import {
   type AffinoTreeFeatureInput,
   type NormalizedAffinoTreeFeature,
 } from "./useAffinoDataGridTreeFeature"
+import {
+  normalizeRowHeightFeature,
+  type AffinoRowHeightFeatureInput,
+  type NormalizedAffinoRowHeightFeature,
+} from "./useAffinoDataGridRowHeightFeature"
 
 export interface AffinoDataGridFeatureInput<TRow> {
   selection?: boolean | AffinoSelectionFeatureInput<TRow>
@@ -42,6 +47,7 @@ export interface AffinoDataGridFeatureInput<TRow> {
   summary?: boolean | AffinoSummaryFeatureInput<TRow>
   visibility?: boolean | AffinoVisibilityFeatureInput
   tree?: boolean | AffinoTreeFeatureInput
+  rowHeight?: boolean | AffinoRowHeightFeatureInput
 }
 
 export interface NormalizedAffinoDataGridFeatures<TRow> {
@@ -52,6 +58,7 @@ export interface NormalizedAffinoDataGridFeatures<TRow> {
   summary: NormalizedAffinoSummaryFeature<TRow>
   visibility: NormalizedAffinoVisibilityFeature
   tree: NormalizedAffinoTreeFeature
+  rowHeight: NormalizedAffinoRowHeightFeature
 }
 
 export function normalizeAffinoDataGridFeatures<TRow>(
@@ -65,5 +72,6 @@ export function normalizeAffinoDataGridFeatures<TRow>(
     summary: normalizeSummaryFeature(features?.summary),
     visibility: normalizeVisibilityFeature(features?.visibility),
     tree: normalizeTreeFeature(features?.tree),
+    rowHeight: normalizeRowHeightFeature(features?.rowHeight),
   }
 }

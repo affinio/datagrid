@@ -185,11 +185,13 @@ export const AffinoDataGridSimple = defineComponent({
       statusRef.value = `Updated ${session.columnKey}`
     }
 
+    const incomingFeatures = (props.features as AffinoDataGridFeatures<RowLike> | undefined)
+
     const normalizedFeatures: AffinoDataGridFeatures<RowLike> = {
-      selection: (props.features as AffinoDataGridFeatures<RowLike> | undefined)?.selection ?? true,
-      clipboard: (props.features as AffinoDataGridFeatures<RowLike> | undefined)?.clipboard ?? true,
+      selection: incomingFeatures?.selection ?? true,
+      clipboard: incomingFeatures?.clipboard ?? true,
       editing: (() => {
-        const editing = (props.features as AffinoDataGridFeatures<RowLike> | undefined)?.editing
+        const editing = incomingFeatures?.editing
         if (editing === undefined) {
           return {
             enabled: true,
@@ -215,6 +217,11 @@ export const AffinoDataGridSimple = defineComponent({
           onCommit: defaultCommit,
         }
       })(),
+      filtering: incomingFeatures?.filtering,
+      summary: incomingFeatures?.summary,
+      visibility: incomingFeatures?.visibility,
+      tree: incomingFeatures?.tree,
+      rowHeight: incomingFeatures?.rowHeight,
     }
 
     const grid = useAffinoDataGridUi<RowLike>({

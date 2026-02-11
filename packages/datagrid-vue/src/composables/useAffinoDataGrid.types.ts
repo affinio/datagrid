@@ -1,17 +1,23 @@
 import type { Ref } from "vue"
 import type {
   DataGridAdvancedFilterExpression,
+  DataGridAdvancedFilterCondition,
+  DataGridColumnModelSnapshot,
+  DataGridColumnPin,
   CreateDataGridCoreOptions,
   DataGridColumnDef,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
+  DataGridPaginationInput,
+  DataGridPaginationSnapshot,
   DataGridSelectionAggregationKind,
   DataGridSelectionSummaryColumnConfig,
   DataGridSelectionSummarySnapshot,
   DataGridSortDirection,
   DataGridSortState,
 } from "@affino/datagrid-core"
+import type { DataGridTransactionSnapshot } from "@affino/datagrid-core/advanced"
 import type {
   UseDataGridRuntimeOptions,
   UseDataGridRuntimeResult,
@@ -79,6 +85,62 @@ export interface AffinoDataGridTreeFeature {
   initialGroupBy?: DataGridGroupBySpec | null
 }
 
+export interface AffinoDataGridRowHeightFeature {
+  enabled?: boolean
+  mode?: "fixed" | "auto"
+  base?: number
+}
+
+export type AffinoDataGridFilterMergeMode = "replace" | "merge-and" | "merge-or"
+export type AffinoDataGridSetFilterValueMode = "replace" | "append" | "remove"
+
+export interface AffinoDataGridFilteringHelpers {
+  condition: (condition: Omit<DataGridAdvancedFilterCondition, "kind">) => DataGridAdvancedFilterCondition
+  and: (...children: readonly (DataGridAdvancedFilterExpression | null | undefined)[]) => DataGridAdvancedFilterExpression | null
+  or: (...children: readonly (DataGridAdvancedFilterExpression | null | undefined)[]) => DataGridAdvancedFilterExpression | null
+  not: (child: DataGridAdvancedFilterExpression | null | undefined) => DataGridAdvancedFilterExpression | null
+  apply: (
+    expression: DataGridAdvancedFilterExpression | null,
+    options?: { mergeMode?: AffinoDataGridFilterMergeMode },
+  ) => DataGridAdvancedFilterExpression | null
+  clearByKey: (columnKey: string) => DataGridAdvancedFilterExpression | null
+  setText: (
+    columnKey: string,
+    options: {
+      operator?: string
+      value?: unknown
+      mergeMode?: AffinoDataGridFilterMergeMode
+    },
+  ) => DataGridAdvancedFilterExpression | null
+  setNumber: (
+    columnKey: string,
+    options: {
+      operator?: string
+      value?: unknown
+      value2?: unknown
+      mergeMode?: AffinoDataGridFilterMergeMode
+    },
+  ) => DataGridAdvancedFilterExpression | null
+  setDate: (
+    columnKey: string,
+    options: {
+      operator?: string
+      value?: unknown
+      value2?: unknown
+      mergeMode?: AffinoDataGridFilterMergeMode
+    },
+  ) => DataGridAdvancedFilterExpression | null
+  setSet: (
+    columnKey: string,
+    values: readonly unknown[],
+    options?: {
+      operator?: string
+      mergeMode?: AffinoDataGridFilterMergeMode
+      valueMode?: AffinoDataGridSetFilterValueMode
+    },
+  ) => DataGridAdvancedFilterExpression | null
+}
+
 export interface UseAffinoDataGridOptions<TRow> {
   rows: MaybeRef<readonly TRow[]>
   columns: MaybeRef<readonly DataGridColumnDef[]>
@@ -105,6 +167,18 @@ export interface AffinoDataGridActionBindingOptions {
   onResult?: (result: AffinoDataGridActionResult) => void
 }
 
+export interface AffinoDataGridCellCoord {
+  rowIndex: number
+  columnIndex: number
+}
+
+export interface AffinoDataGridCellRange {
+  startRow: number
+  endRow: number
+  startColumn: number
+  endColumn: number
+}
+
 export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<TRow> {
   rows: Ref<readonly TRow[]>
   columns: Ref<readonly DataGridColumnDef[]>
@@ -119,6 +193,96 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
   setSortState: (nextState: readonly DataGridSortState[]) => void
   toggleColumnSort: (columnKey: string, directionCycle?: readonly DataGridSortDirection[]) => void
   clearSort: () => void
+  pagination: {
+    snapshot: Ref<DataGridPaginationSnapshot>
+    set: (pagination: DataGridPaginationInput | null) => void
+    setPageSize: (pageSize: number | null) => void
+    setCurrentPage: (page: number) => void
+    goToNextPage: () => void
+    goToPreviousPage: () => void
+    goToFirstPage: () => void
+    goToLastPage: () => void
+    refresh: () => DataGridPaginationSnapshot
+  }
+  columnState: {
+    snapshot: Ref<DataGridColumnModelSnapshot>
+    setOrder: (keys: readonly string[]) => void
+    setVisibility: (columnKey: string, visible: boolean) => void
+    setWidth: (columnKey: string, width: number | null) => void
+    setPin: (columnKey: string, pin: DataGridColumnPin) => void
+    capture: () => DataGridColumnModelSnapshot
+    apply: (snapshot: DataGridColumnModelSnapshot) => void
+    refresh: () => DataGridColumnModelSnapshot
+  }
+  history: {
+    supported: Ref<boolean>
+    snapshot: Ref<DataGridTransactionSnapshot | null>
+    canUndo: Ref<boolean>
+    canRedo: Ref<boolean>
+    refresh: () => DataGridTransactionSnapshot | null
+    undo: () => Promise<string | null>
+    redo: () => Promise<string | null>
+  }
+  rowReorder: {
+    supported: Ref<boolean>
+    canReorder: Ref<boolean>
+    reason: Ref<string | null>
+    moveByIndex: (fromIndex: number, toIndex: number, count?: number) => Promise<boolean>
+    moveByKey: (
+      sourceRowKey: string,
+      targetRowKey: string,
+      position?: "before" | "after",
+    ) => Promise<boolean>
+  }
+  cellSelection: {
+    activeCell: Ref<{
+      rowKey: string
+      columnKey: string
+      rowIndex: number
+      columnIndex: number
+    } | null>
+    anchorCell: Ref<{
+      rowKey: string
+      columnKey: string
+      rowIndex: number
+      columnIndex: number
+    } | null>
+    focusCell: Ref<{
+      rowKey: string
+      columnKey: string
+      rowIndex: number
+      columnIndex: number
+    } | null>
+    range: Ref<{
+      startRow: number
+      endRow: number
+      startColumn: number
+      endColumn: number
+    } | null>
+    ranges: Ref<readonly {
+      startRow: number
+      endRow: number
+      startColumn: number
+      endColumn: number
+    }[]>
+    isCellSelected: (rowIndex: number, columnIndex: number) => boolean
+    setCellByKey: (rowKey: string, columnKey: string, options?: { extend?: boolean }) => boolean
+    clear: () => void
+  }
+  cellRange: {
+    copiedRange: Ref<AffinoDataGridCellRange | null>
+    fillPreviewRange: Ref<AffinoDataGridCellRange | null>
+    rangeMovePreviewRange: Ref<AffinoDataGridCellRange | null>
+    lastAction: Ref<string>
+    copy: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+    paste: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+    cut: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+    clear: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+    setFillPreviewRange: (range: AffinoDataGridCellRange | null) => void
+    setRangeMovePreviewRange: (range: AffinoDataGridCellRange | null) => void
+    applyFillPreview: () => void
+    applyRangeMove: () => boolean
+  }
   actions: {
     copySelectedRows: () => Promise<boolean>
     cutSelectedRows: () => Promise<number>
@@ -172,6 +336,7 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
       setModel: (nextModel: DataGridFilterSnapshot | null) => void
       clear: () => void
       setAdvancedExpression: (expression: DataGridAdvancedFilterExpression | null) => void
+      helpers: AffinoDataGridFilteringHelpers
     }
     summary: {
       enabled: Ref<boolean>
@@ -200,6 +365,16 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
       expandAll: () => number
       collapseAll: () => number
     }
+    rowHeight: {
+      enabled: Ref<boolean>
+      supported: Ref<boolean>
+      mode: Ref<"fixed" | "auto">
+      base: Ref<number>
+      setMode: (mode: "fixed" | "auto") => void
+      setBase: (height: number) => void
+      measureVisible: () => boolean
+      apply: () => boolean
+    }
   }
   bindings: {
     getRowKey: (row: TRow, index: number) => string
@@ -216,6 +391,27 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
       "data-row-key": string
       "aria-selected": "true" | "false"
       onClick: (event?: MouseEvent) => void
+      onKeydown: (event: KeyboardEvent) => void
+    }
+    rowReorder: (row: TRow, index: number) => {
+      draggable: true
+      "data-row-key": string
+      onDragstart: (event: DragEvent) => void
+      onDragover: (event: DragEvent) => void
+      onDrop: (event: DragEvent) => void
+      onDragend: (event?: DragEvent) => void
+      onKeydown: (event: KeyboardEvent) => void
+    }
+    cellSelection: (params: {
+      row: TRow
+      rowIndex: number
+      columnKey: string
+    }) => {
+      "data-row-key": string
+      "data-column-key": string
+      onMousedown: (event: MouseEvent) => void
+      onMouseenter: (event: MouseEvent) => void
+      onMouseup: (event?: MouseEvent) => void
       onKeydown: (event: KeyboardEvent) => void
     }
     editableCell: (params: {
@@ -246,9 +442,24 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
       role: "columnheader"
       tabindex: number
       "aria-sort": "none" | "ascending" | "descending"
+      draggable: true
+      "data-column-key": string
       onClick: (event?: MouseEvent) => void
+      onDragstart: (event: DragEvent) => void
+      onDragover: (event: DragEvent) => void
+      onDrop: (event: DragEvent) => void
+      onDragend: (event?: DragEvent) => void
       onKeydown: (event: KeyboardEvent) => void
       onContextmenu: (event: MouseEvent) => void
+    }
+    headerReorder: (columnKey: string) => {
+      draggable: true
+      "data-column-key": string
+      onDragstart: (event: DragEvent) => void
+      onDragover: (event: DragEvent) => void
+      onDrop: (event: DragEvent) => void
+      onDragend: (event?: DragEvent) => void
+      onKeydown: (event: KeyboardEvent) => void
     }
     dataCell: (params: {
       row: TRow

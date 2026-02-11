@@ -31,6 +31,16 @@ interface HeaderSortBindings {
   onKeydown: (event: KeyboardEvent) => void
 }
 
+interface HeaderReorderBindings {
+  draggable: true
+  "data-column-key": string
+  onDragstart: (event: DragEvent) => void
+  onDragover: (event: DragEvent) => void
+  onDrop: (event: DragEvent) => void
+  onDragend: (event?: DragEvent) => void
+  onKeydown: (event: KeyboardEvent) => void
+}
+
 export interface DataGridContextMenuFeatureActionOptions {
   columnKey?: string | null
 }
@@ -47,6 +57,7 @@ export interface UseAffinoDataGridContextMenuFeatureOptions<
   columns: Ref<readonly DataGridColumnDef[]>
   resolveRowKey: (row: TRow, index: number) => string
   createHeaderSortBindings: (columnKey: string) => HeaderSortBindings
+  createHeaderReorderBindings: (columnKey: string) => HeaderReorderBindings
   createEditableCellBindings: (params: EditableCellParams<TRow>) => EditableCellBindings
   runAction: (
     actionId: TActionId,
@@ -71,7 +82,9 @@ export interface UseAffinoDataGridContextMenuFeatureResult<
   closeContextMenu: () => void
   onContextMenuKeyDown: (event: KeyboardEvent, handlers?: { onEscape?: () => void }) => void
   runContextMenuAction: (actionId: DataGridContextMenuActionId) => Promise<TActionResult>
-  createHeaderCellBindings: (columnKey: string) => HeaderSortBindings & { onContextmenu: (event: MouseEvent) => void }
+  createHeaderCellBindings: (
+    columnKey: string,
+  ) => HeaderSortBindings & HeaderReorderBindings & { onContextmenu: (event: MouseEvent) => void }
   createDataCellBindings: (params: EditableCellParams<TRow>) => EditableCellBindings & { onContextmenu: (event: MouseEvent) => void }
   setContextMenuRef: (element: Element | null) => void
   createContextMenuRootBindings: (handlers?: { onEscape?: () => void }) => {
@@ -119,16 +132,25 @@ export function useAffinoDataGridContextMenuFeature<
     return result
   }
 
-  const createHeaderCellBindings = (columnKey: string) => ({
-    ...options.createHeaderSortBindings(columnKey),
-    onContextmenu: (event: MouseEvent) => {
-      event.preventDefault()
-      contextMenuBridge.openContextMenu(event.clientX, event.clientY, {
-        zone: "header",
-        columnKey,
-      })
-    },
-  })
+  const createHeaderCellBindings = (columnKey: string) => {
+    const sortBindings = options.createHeaderSortBindings(columnKey)
+    const reorderBindings = options.createHeaderReorderBindings(columnKey)
+    return {
+      ...sortBindings,
+      ...reorderBindings,
+      onKeydown: (event: KeyboardEvent) => {
+        sortBindings.onKeydown(event)
+        reorderBindings.onKeydown(event)
+      },
+      onContextmenu: (event: MouseEvent) => {
+        event.preventDefault()
+        contextMenuBridge.openContextMenu(event.clientX, event.clientY, {
+          zone: "header",
+          columnKey,
+        })
+      },
+    }
+  }
 
   const createDataCellBindings = (params: EditableCellParams<TRow>) => {
     const base = options.createEditableCellBindings(params)

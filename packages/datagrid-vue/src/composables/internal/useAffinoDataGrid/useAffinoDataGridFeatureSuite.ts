@@ -30,6 +30,10 @@ import {
   useAffinoDataGridSummaryFeature,
   type UseAffinoDataGridSummaryFeatureResult,
 } from "./useAffinoDataGridSummaryFeature"
+import {
+  useAffinoDataGridRowHeightFeature,
+  type UseAffinoDataGridRowHeightFeatureResult,
+} from "./useAffinoDataGridRowHeightFeature"
 import type { NormalizedAffinoDataGridFeatures } from "./useAffinoDataGridFeatureNormalization"
 
 export interface UseAffinoDataGridFeatureSuiteOptions<TRow> {
@@ -48,7 +52,8 @@ export interface UseAffinoDataGridFeatureSuiteResult<TRow>
     UseAffinoDataGridFilteringFeatureResult,
     UseAffinoDataGridVisibilityFeatureResult,
     UseAffinoDataGridTreeFeatureResult,
-    UseAffinoDataGridSummaryFeatureResult {
+    UseAffinoDataGridSummaryFeatureResult,
+    UseAffinoDataGridRowHeightFeatureResult {
   replaceRows: (
     nextRows: readonly TRow[],
     options?: AffinoDataGridRowMutationOptions,
@@ -247,6 +252,21 @@ export function useAffinoDataGridFeatureSuite<TRow>(
     recomputeSelectedSummary,
   } = summaryFeature
 
+  const rowHeightFeature = useAffinoDataGridRowHeightFeature({
+    runtime: options.runtime,
+    feature: options.normalizedFeatures.rowHeight,
+  })
+  const {
+    rowHeightEnabled,
+    rowHeightMode,
+    baseRowHeight,
+    rowHeightSupported,
+    setRowHeightMode,
+    setBaseRowHeight,
+    measureVisibleRowHeights,
+    applyRowHeightSettings,
+  } = rowHeightFeature
+
   return {
     replaceRows,
     selectionEnabled,
@@ -308,5 +328,13 @@ export function useAffinoDataGridFeatureSuite<TRow>(
     summaryEnabled,
     selectedSummary,
     recomputeSelectedSummary,
+    rowHeightEnabled,
+    rowHeightMode,
+    baseRowHeight,
+    rowHeightSupported,
+    setRowHeightMode,
+    setBaseRowHeight,
+    measureVisibleRowHeights,
+    applyRowHeightSettings,
   }
 }

@@ -255,9 +255,20 @@ Row identity contract (required):
   - `open(x, y, { zone, columnKey?, rowId? })`
   - `runAction(actionId)` (maps directly into `grid.actions`)
 - `grid.features.filtering` exposes `model`, `setModel`, `setAdvancedExpression`, and `clear`.
+- `grid.features.filtering.helpers` provides typed advanced-filter helpers:
+  - `setText`, `setNumber`, `setDate`, `setSet`, `apply`, `clearByKey`
+  - merge modes: `replace | merge-and | merge-or`
+  - set value modes: `replace | append | remove`
 - `grid.features.summary.selected` returns deterministic aggregates for current selection scope.
 - `grid.features.visibility` exposes `setColumnVisible`, `toggleColumnVisible`, `setHiddenColumnKeys`, `reset`.
 - `grid.features.tree` exposes `groupBy`, `groupExpansion`, `setGroupBy`, `toggleGroup`, `expandAll`, `collapseAll`.
+- `grid.features.rowHeight` exposes `setMode("fixed" | "auto")`, `setBase(height)`, `measureVisible()`.
+- `grid.pagination` exposes first/prev/next/last + snapshot wrappers.
+- `grid.columnState` exposes `capture/apply` and point updates (`setOrder`, `setVisibility`, `setWidth`, `setPin`).
+- `grid.history` exposes `supported/canUndo/canRedo/undo/redo`.
+- `grid.rowReorder` exposes guarded client-side reorder (`moveByIndex`, `moveByKey`).
+- `grid.cellSelection` exposes anchor/focus/range model (`setCellByKey`, `isCellSelected`, `clear`).
+- `grid.cellRange` exposes range clipboard/fill/move (`copy`, `cut`, `paste`, `clear`, `applyFillPreview`, `applyRangeMove`).
 
 ## Complete integration playbook
 

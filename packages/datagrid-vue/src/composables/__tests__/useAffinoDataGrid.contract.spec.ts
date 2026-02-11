@@ -280,4 +280,162 @@ describe("useAffinoDataGrid contract", () => {
 
     wrapper.unmount()
   })
+
+  it("exposes advanced filtering helpers for typed composition and set merge flows", async () => {
+    const rows = ref<GridRow[]>([
+      { rowId: "r1", service: "edge-gateway", owner: "NOC" },
+      { rowId: "r2", service: "billing-api", owner: "Payments" },
+    ])
+    let grid: ReturnType<typeof useAffinoDataGrid<GridRow>> | null = null
+
+    const Host = defineComponent({
+      name: "AffinoDataGridAdvancedFilterHelpersHost",
+      setup() {
+        grid = useAffinoDataGrid<GridRow>({
+          rows,
+          columns: COLUMNS,
+          features: {
+            filtering: {
+              enabled: true,
+              initialFilterModel: {
+                columnFilters: {},
+                advancedFilters: {},
+              },
+            },
+          },
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushTasks()
+
+    const firstExpression = grid!.features.filtering.helpers.setText("service", {
+      operator: "contains",
+      value: "api",
+      mergeMode: "replace",
+    })
+    expect(firstExpression?.kind).toBe("condition")
+    expect(grid!.features.filtering.model.value?.advancedExpression).toEqual(firstExpression)
+
+    const secondExpression = grid!.features.filtering.helpers.setNumber("latencyMs", {
+      operator: ">",
+      value: 250,
+      mergeMode: "merge-and",
+    })
+    expect(secondExpression?.kind).toBe("group")
+
+    const thirdExpression = grid!.features.filtering.helpers.setSet("owner", ["NOC"], {
+      valueMode: "replace",
+      mergeMode: "merge-and",
+    })
+    expect(thirdExpression).not.toBeNull()
+
+    const fourthExpression = grid!.features.filtering.helpers.setSet("owner", ["Payments"], {
+      valueMode: "append",
+      mergeMode: "merge-and",
+    })
+    expect(fourthExpression).not.toBeNull()
+
+    const removeOwnerExpression = grid!.features.filtering.helpers.setSet("owner", ["NOC", "Payments"], {
+      valueMode: "remove",
+      mergeMode: "merge-and",
+    })
+    expect(removeOwnerExpression).not.toBeNull()
+
+    const clearedOwner = grid!.features.filtering.helpers.clearByKey("owner")
+    expect(clearedOwner).not.toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it("supports cell selection and cell-range clipboard/fill/move sugar flows", async () => {
+    const rows = ref<GridRow[]>([
+      { rowId: "r1", service: "edge-gateway", owner: "NOC" },
+      { rowId: "r2", service: "billing-api", owner: "Payments" },
+      { rowId: "r3", service: "search-api", owner: "Ops" },
+    ])
+    let grid: ReturnType<typeof useAffinoDataGrid<GridRow>> | null = null
+
+    const Host = defineComponent({
+      name: "AffinoDataGridCellRangeHost",
+      setup() {
+        grid = useAffinoDataGrid<GridRow>({
+          rows,
+          columns: COLUMNS,
+          features: {
+            selection: true,
+            clipboard: {
+              enabled: true,
+              useSystemClipboard: false,
+            },
+          },
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushTasks()
+
+    expect(grid!.cellSelection.setCellByKey("r1", "owner")).toBe(true)
+    expect(grid!.cellSelection.activeCell.value?.rowKey).toBe("r1")
+    expect(grid!.cellSelection.activeCell.value?.columnKey).toBe("owner")
+    expect(grid!.cellSelection.isCellSelected(0, 1)).toBe(true)
+
+    expect(grid!.cellSelection.setCellByKey("r2", "owner", { extend: true })).toBe(true)
+    expect(grid!.cellSelection.range.value).toMatchObject({
+      startRow: 0,
+      endRow: 1,
+      startColumn: 1,
+      endColumn: 1,
+    })
+
+    await expect(grid!.cellRange.copy("context-menu")).resolves.toBe(true)
+    expect(grid!.cellRange.copiedRange.value).toMatchObject({
+      startRow: 0,
+      endRow: 1,
+      startColumn: 1,
+      endColumn: 1,
+    })
+
+    expect(grid!.cellSelection.setCellByKey("r1", "owner")).toBe(true)
+    await expect(grid!.cellRange.clear("context-menu")).resolves.toBe(true)
+    expect(rows.value[0]?.owner).toBeNull()
+
+    await expect(grid!.cellRange.paste("context-menu")).resolves.toBe(true)
+    expect(rows.value[0]?.owner).toBe("NOC")
+
+    grid!.cellRange.setFillPreviewRange({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 1,
+      endColumn: 1,
+    })
+    expect(grid!.cellRange.fillPreviewRange.value).toMatchObject({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 1,
+      endColumn: 1,
+    })
+    grid!.cellRange.applyFillPreview()
+    expect(rows.value[1]?.owner).toBe("NOC")
+
+    grid!.cellRange.setRangeMovePreviewRange({
+      startRow: 2,
+      endRow: 2,
+      startColumn: 1,
+      endColumn: 1,
+    })
+    expect(grid!.cellRange.rangeMovePreviewRange.value).toMatchObject({
+      startRow: 2,
+      endRow: 2,
+      startColumn: 1,
+      endColumn: 1,
+    })
+    expect(grid!.cellRange.applyRangeMove()).toBe(true)
+
+    wrapper.unmount()
+  })
 })

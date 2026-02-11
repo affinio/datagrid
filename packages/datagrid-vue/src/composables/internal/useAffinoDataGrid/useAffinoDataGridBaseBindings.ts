@@ -34,6 +34,35 @@ export interface UseAffinoDataGridBaseBindingsOptions<TRow> {
   updateDraft: (draft: string) => boolean
   cancelEdit: () => boolean
   commitEdit: () => Promise<boolean>
+  resolveColumnOrder: () => readonly string[]
+  setColumnOrder: (keys: readonly string[]) => void
+  resolveRowOrder: () => readonly string[]
+  moveRowByKey: (
+    sourceRowKey: string,
+    targetRowKey: string,
+    position?: "before" | "after",
+  ) => Promise<boolean> | boolean
+  canReorderRows: () => boolean
+}
+
+export interface HeaderReorderBindings {
+  draggable: true
+  "data-column-key": string
+  onDragstart: (event: DragEvent) => void
+  onDragover: (event: DragEvent) => void
+  onDrop: (event: DragEvent) => void
+  onDragend: (event?: DragEvent) => void
+  onKeydown: (event: KeyboardEvent) => void
+}
+
+export interface RowReorderBindings {
+  draggable: true
+  "data-row-key": string
+  onDragstart: (event: DragEvent) => void
+  onDragover: (event: DragEvent) => void
+  onDrop: (event: DragEvent) => void
+  onDragend: (event?: DragEvent) => void
+  onKeydown: (event: KeyboardEvent) => void
 }
 
 export interface UseAffinoDataGridBaseBindingsResult<TRow> {
@@ -44,6 +73,7 @@ export interface UseAffinoDataGridBaseBindingsResult<TRow> {
     onClick: (event?: MouseEvent) => void
     onKeydown: (event: KeyboardEvent) => void
   }
+  createHeaderReorderBindings: (columnKey: string) => HeaderReorderBindings
   createRowSelectionBindings: (row: TRow, index: number) => {
     role: "row"
     tabindex: number
@@ -52,6 +82,7 @@ export interface UseAffinoDataGridBaseBindingsResult<TRow> {
     onClick: (event?: MouseEvent) => void
     onKeydown: (event: KeyboardEvent) => void
   }
+  createRowReorderBindings: (row: TRow, index: number) => RowReorderBindings
   createEditableCellBindings: (params: EditableCellParams<TRow>) => {
     "data-row-key": string
     "data-column-key": string
@@ -82,6 +113,100 @@ function toAriaSortDirection(
 export function useAffinoDataGridBaseBindings<TRow>(
   options: UseAffinoDataGridBaseBindingsOptions<TRow>,
 ): UseAffinoDataGridBaseBindingsResult<TRow> {
+  const DRAG_COLUMN_KEY_MIME = "application/x-affino-datagrid-column-key"
+  const DRAG_ROW_KEY_MIME = "application/x-affino-datagrid-row-key"
+  let draggedColumnKey: string | null = null
+  let draggedRowKey: string | null = null
+
+  const resolveDraggedColumnKey = (event?: DragEvent): string | null => {
+    const dataTransfer = event?.dataTransfer ?? null
+    if (dataTransfer) {
+      const explicit = dataTransfer.getData(DRAG_COLUMN_KEY_MIME)
+      if (explicit) {
+        return explicit
+      }
+      const fallback = dataTransfer.getData("text/plain")
+      if (fallback) {
+        return fallback
+      }
+    }
+    return draggedColumnKey
+  }
+
+  const moveColumnBefore = (sourceKey: string, targetKey: string): boolean => {
+    if (!sourceKey || !targetKey || sourceKey === targetKey) {
+      return false
+    }
+    const currentOrder = [...options.resolveColumnOrder()]
+    const sourceIndex = currentOrder.indexOf(sourceKey)
+    const targetIndex = currentOrder.indexOf(targetKey)
+    if (sourceIndex < 0 || targetIndex < 0) {
+      return false
+    }
+    const withoutSource = currentOrder.filter(key => key !== sourceKey)
+    const nextTargetIndex = withoutSource.indexOf(targetKey)
+    if (nextTargetIndex < 0) {
+      return false
+    }
+    withoutSource.splice(nextTargetIndex, 0, sourceKey)
+    options.setColumnOrder(withoutSource)
+    return true
+  }
+
+  const moveColumnByOffset = (columnKey: string, offset: -1 | 1): boolean => {
+    const currentOrder = [...options.resolveColumnOrder()]
+    const fromIndex = currentOrder.indexOf(columnKey)
+    if (fromIndex < 0) {
+      return false
+    }
+    const toIndex = Math.max(0, Math.min(currentOrder.length - 1, fromIndex + offset))
+    if (toIndex === fromIndex) {
+      return false
+    }
+    const [moved] = currentOrder.splice(fromIndex, 1)
+    if (!moved) {
+      return false
+    }
+    currentOrder.splice(toIndex, 0, moved)
+    options.setColumnOrder(currentOrder)
+    return true
+  }
+
+  const resolveDraggedRowKey = (event?: DragEvent): string | null => {
+    const dataTransfer = event?.dataTransfer ?? null
+    if (dataTransfer) {
+      const explicit = dataTransfer.getData(DRAG_ROW_KEY_MIME)
+      if (explicit) {
+        return explicit
+      }
+      const fallback = dataTransfer.getData("text/plain")
+      if (fallback) {
+        return fallback
+      }
+    }
+    return draggedRowKey
+  }
+
+  const moveRowByOffset = async (rowKey: string, offset: -1 | 1): Promise<boolean> => {
+    if (!options.canReorderRows()) {
+      return false
+    }
+    const order = options.resolveRowOrder()
+    const fromIndex = order.indexOf(rowKey)
+    if (fromIndex < 0) {
+      return false
+    }
+    const targetIndex = fromIndex + offset
+    if (targetIndex < 0 || targetIndex >= order.length) {
+      return false
+    }
+    const targetKey = order[targetIndex]
+    if (!targetKey) {
+      return false
+    }
+    return options.moveRowByKey(rowKey, targetKey, offset > 0 ? "after" : "before")
+  }
+
   const createHeaderSortBindings = (columnKey: string) => ({
     role: "columnheader" as const,
     tabindex: 0,
@@ -95,6 +220,52 @@ export function useAffinoDataGridBaseBindings<TRow>(
       }
       event.preventDefault()
       options.toggleColumnSort(columnKey)
+    },
+  })
+
+  const createHeaderReorderBindings = (columnKey: string): HeaderReorderBindings => ({
+    draggable: true as const,
+    "data-column-key": columnKey,
+    onDragstart: (event: DragEvent) => {
+      draggedColumnKey = columnKey
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move"
+        event.dataTransfer.setData(DRAG_COLUMN_KEY_MIME, columnKey)
+        event.dataTransfer.setData("text/plain", columnKey)
+      }
+    },
+    onDragover: (event: DragEvent) => {
+      event.preventDefault()
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "move"
+      }
+    },
+    onDrop: (event: DragEvent) => {
+      event.preventDefault()
+      const sourceKey = resolveDraggedColumnKey(event)
+      if (!sourceKey) {
+        draggedColumnKey = null
+        return
+      }
+      moveColumnBefore(sourceKey, columnKey)
+      draggedColumnKey = null
+    },
+    onDragend: (_event?: DragEvent) => {
+      draggedColumnKey = null
+    },
+    onKeydown: (event: KeyboardEvent) => {
+      if (!(event.altKey && event.shiftKey)) {
+        return
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault()
+        moveColumnByOffset(columnKey, -1)
+        return
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault()
+        moveColumnByOffset(columnKey, 1)
+      }
     },
   })
 
@@ -124,6 +295,67 @@ export function useAffinoDataGridBaseBindings<TRow>(
           return
         }
         options.selectOnlyRow(rowKey)
+      },
+    }
+  }
+
+  const createRowReorderBindings = (row: TRow, index: number): RowReorderBindings => {
+    const rowKey = options.resolveRowKey(row, index)
+    return {
+      draggable: true as const,
+      "data-row-key": rowKey,
+      onDragstart: (event: DragEvent) => {
+        if (!options.canReorderRows()) {
+          event.preventDefault()
+          draggedRowKey = null
+          return
+        }
+        draggedRowKey = rowKey
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move"
+          event.dataTransfer.setData(DRAG_ROW_KEY_MIME, rowKey)
+          event.dataTransfer.setData("text/plain", rowKey)
+        }
+      },
+      onDragover: (event: DragEvent) => {
+        if (!options.canReorderRows()) {
+          return
+        }
+        event.preventDefault()
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "move"
+        }
+      },
+      onDrop: (event: DragEvent) => {
+        event.preventDefault()
+        if (!options.canReorderRows()) {
+          draggedRowKey = null
+          return
+        }
+        const sourceKey = resolveDraggedRowKey(event)
+        if (!sourceKey) {
+          draggedRowKey = null
+          return
+        }
+        void options.moveRowByKey(sourceKey, rowKey, "before")
+        draggedRowKey = null
+      },
+      onDragend: (_event?: DragEvent) => {
+        draggedRowKey = null
+      },
+      onKeydown: (event: KeyboardEvent) => {
+        if (!(event.altKey && event.shiftKey)) {
+          return
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault()
+          void moveRowByOffset(rowKey, -1)
+          return
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault()
+          void moveRowByOffset(rowKey, 1)
+        }
       },
     }
   }
@@ -193,7 +425,9 @@ export function useAffinoDataGridBaseBindings<TRow>(
 
   return {
     createHeaderSortBindings,
+    createHeaderReorderBindings,
     createRowSelectionBindings,
+    createRowReorderBindings,
     createEditableCellBindings,
     createInlineEditorBindings,
   }

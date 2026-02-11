@@ -18,6 +18,15 @@ import type {
 
 export interface UseAffinoDataGridBindingSuiteOptions<TRow> {
   columns: Ref<readonly DataGridColumnDef[]>
+  resolveColumnOrder: () => readonly string[]
+  setColumnOrder: (keys: readonly string[]) => void
+  resolveRowOrder: () => readonly string[]
+  moveRowByKey: (
+    sourceRowKey: string,
+    targetRowKey: string,
+    position?: "before" | "after",
+  ) => Promise<boolean> | boolean
+  canReorderRows: () => boolean
   resolveRowKey: (row: TRow, index: number) => string
   resolveColumnSortDirection: (columnKey: string) => DataGridSortDirection | null
   toggleColumnSort: (columnKey: string, directionCycle?: readonly DataGridSortDirection[]) => void
@@ -48,10 +57,17 @@ export function useAffinoDataGridBindingSuite<TRow>(
 ): UseAffinoDataGridBindingSuiteResult<TRow> {
   const {
     createHeaderSortBindings,
+    createHeaderReorderBindings,
     createRowSelectionBindings,
+    createRowReorderBindings,
     createEditableCellBindings,
     createInlineEditorBindings,
   } = useAffinoDataGridBaseBindings({
+    resolveColumnOrder: options.resolveColumnOrder,
+    setColumnOrder: options.setColumnOrder,
+    resolveRowOrder: options.resolveRowOrder,
+    moveRowByKey: options.moveRowByKey,
+    canReorderRows: options.canReorderRows,
     resolveColumnSortDirection: options.resolveColumnSortDirection,
     toggleColumnSort: options.toggleColumnSort,
     resolveRowKey: options.resolveRowKey,
@@ -76,13 +92,16 @@ export function useAffinoDataGridBindingSuite<TRow>(
     columns: options.columns,
     resolveRowKey: options.resolveRowKey,
     createHeaderSortBindings,
+    createHeaderReorderBindings,
     createEditableCellBindings,
     runAction: options.runAction,
   })
 
   return {
     createHeaderSortBindings,
+    createHeaderReorderBindings,
     createRowSelectionBindings,
+    createRowReorderBindings,
     createEditableCellBindings,
     createInlineEditorBindings,
     ...contextMenuFeature,

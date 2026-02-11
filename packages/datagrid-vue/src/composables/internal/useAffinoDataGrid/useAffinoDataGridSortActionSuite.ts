@@ -1,4 +1,5 @@
 import type { DataGridSortState } from "@affino/datagrid-core"
+import type { DataGridColumnDef } from "@affino/datagrid-core"
 import { useAffinoDataGridSortingFeature } from "./useAffinoDataGridSortingFeature"
 import {
   useAffinoDataGridActionRunner,
@@ -22,6 +23,11 @@ export interface UseAffinoDataGridSortActionSuiteOptions<TRow> {
   cutSelectedRows: () => Promise<number>
   pasteRowsAppend: () => Promise<number>
   clearSelectedRows: () => Promise<number>
+  resolveRows: () => readonly TRow[]
+  resolveColumns: () => readonly DataGridColumnDef[]
+  setColumnWidth: (columnKey: string, width: number) => void
+  isFilteringEnabled: () => boolean
+  runFilterAction?: (columnKey: string) => boolean
 }
 
 export function useAffinoDataGridSortActionSuite<TRow>(
@@ -47,6 +53,11 @@ export function useAffinoDataGridSortActionSuite<TRow>(
     cutSelectedRows: options.cutSelectedRows,
     pasteRowsAppend: options.pasteRowsAppend,
     clearSelectedRows: options.clearSelectedRows,
+    resolveRows: options.resolveRows,
+    resolveColumns: options.resolveColumns,
+    setColumnWidth: options.setColumnWidth,
+    isFilteringEnabled: options.isFilteringEnabled,
+    runFilterAction: options.runFilterAction,
     setSortState,
     clearSort,
   })

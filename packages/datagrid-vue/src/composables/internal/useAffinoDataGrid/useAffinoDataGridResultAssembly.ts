@@ -15,13 +15,21 @@ export interface UseAffinoDataGridResultAssemblyOptions<TRow> {
     "sortState" | "setSortState" | "toggleColumnSort" | "clearSort"
   >
   runAction: UseAffinoDataGridResult<TRow>["actions"]["runAction"]
+  filteringHelpers: UseAffinoDataGridResult<TRow>["features"]["filtering"]["helpers"]
   featureSuite: UseAffinoDataGridFeatureSuiteResult<TRow>
   bindingSuite: UseAffinoDataGridBindingSuiteResult<TRow>
 }
 
+type UseAffinoDataGridAssembledBaseResult<TRow> = Omit<
+  UseAffinoDataGridResult<TRow>,
+  "pagination" | "columnState" | "history" | "rowReorder" | "cellSelection" | "cellRange" | "bindings"
+> & {
+  bindings: Omit<UseAffinoDataGridResult<TRow>["bindings"], "cellSelection">
+}
+
 export function assembleAffinoDataGridResult<TRow>(
   options: UseAffinoDataGridResultAssemblyOptions<TRow>,
-): UseAffinoDataGridResult<TRow> {
+): UseAffinoDataGridAssembledBaseResult<TRow> {
   const { runtime, rows, columns, componentProps, sort, runAction } = options
   const features = options.featureSuite
   const bindings = options.bindingSuite
@@ -88,6 +96,7 @@ export function assembleAffinoDataGridResult<TRow>(
         setModel: features.setFilterModel,
         clear: features.clearFilterModel,
         setAdvancedExpression: features.setAdvancedFilterExpression,
+        helpers: options.filteringHelpers,
       },
       summary: {
         enabled: features.summaryEnabled,
@@ -116,6 +125,16 @@ export function assembleAffinoDataGridResult<TRow>(
         expandAll: features.expandAllGroups,
         collapseAll: features.collapseAllGroups,
       },
+      rowHeight: {
+        enabled: features.rowHeightEnabled,
+        supported: features.rowHeightSupported,
+        mode: features.rowHeightMode,
+        base: features.baseRowHeight,
+        setMode: features.setRowHeightMode,
+        setBase: features.setBaseRowHeight,
+        measureVisible: features.measureVisibleRowHeights,
+        apply: features.applyRowHeightSettings,
+      },
     },
     bindings: {
       getRowKey: features.resolveRowKey,
@@ -125,6 +144,8 @@ export function assembleAffinoDataGridResult<TRow>(
       isCellEditing: features.isCellEditing,
       inlineEditor: bindings.createInlineEditorBindings,
       headerCell: bindings.createHeaderCellBindings,
+      headerReorder: bindings.createHeaderReorderBindings,
+      rowReorder: bindings.createRowReorderBindings,
       dataCell: bindings.createDataCellBindings,
       contextMenuRef: bindings.setContextMenuRef,
       contextMenuRoot: bindings.createContextMenuRootBindings,
