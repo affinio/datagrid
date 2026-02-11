@@ -48,6 +48,7 @@ export interface AffinoDataGridFeatureInput<TRow> {
   visibility?: boolean | AffinoVisibilityFeatureInput
   tree?: boolean | AffinoTreeFeatureInput
   rowHeight?: boolean | AffinoRowHeightFeatureInput
+  keyboardNavigation?: boolean | { enabled?: boolean }
 }
 
 export interface NormalizedAffinoDataGridFeatures<TRow> {
@@ -59,6 +60,19 @@ export interface NormalizedAffinoDataGridFeatures<TRow> {
   visibility: NormalizedAffinoVisibilityFeature
   tree: NormalizedAffinoTreeFeature
   rowHeight: NormalizedAffinoRowHeightFeature
+  keyboardNavigation: { enabled: boolean }
+}
+
+function normalizeKeyboardNavigationFeature(
+  input?: boolean | { enabled?: boolean },
+): { enabled: boolean } {
+  if (typeof input === "boolean") {
+    return { enabled: input }
+  }
+  if (!input) {
+    return { enabled: true }
+  }
+  return { enabled: input.enabled ?? true }
 }
 
 export function normalizeAffinoDataGridFeatures<TRow>(
@@ -73,5 +87,6 @@ export function normalizeAffinoDataGridFeatures<TRow>(
     visibility: normalizeVisibilityFeature(features?.visibility),
     tree: normalizeTreeFeature(features?.tree),
     rowHeight: normalizeRowHeightFeature(features?.rowHeight),
+    keyboardNavigation: normalizeKeyboardNavigationFeature(features?.keyboardNavigation),
   }
 }

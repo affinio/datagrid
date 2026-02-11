@@ -1,4 +1,4 @@
-import type { Ref } from "vue"
+import type { Component, Ref } from "vue"
 import type {
   DataGridAdvancedFilterExpression,
   DataGridAdvancedFilterCondition,
@@ -91,6 +91,10 @@ export interface AffinoDataGridRowHeightFeature {
   base?: number
 }
 
+export interface AffinoDataGridKeyboardNavigationFeature {
+  enabled?: boolean
+}
+
 export type AffinoDataGridFilterMergeMode = "replace" | "merge-and" | "merge-or"
 export type AffinoDataGridSetFilterValueMode = "replace" | "append" | "remove"
 
@@ -180,6 +184,7 @@ export interface AffinoDataGridCellRange {
 }
 
 export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<TRow> {
+  DataGrid: Component
   rows: Ref<readonly TRow[]>
   columns: Ref<readonly DataGridColumnDef[]>
   componentProps: Ref<{

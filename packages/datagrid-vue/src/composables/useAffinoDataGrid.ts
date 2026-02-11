@@ -14,6 +14,7 @@ import {
   useDataGridClipboardMutations,
   useDataGridRangeMutationEngine,
 } from "@affino/datagrid-orchestration"
+import { DataGrid } from "../components/DataGrid"
 import {
   assembleAffinoDataGridResult,
   fallbackResolveRowKey,
@@ -358,6 +359,7 @@ export type {
   AffinoDataGridVisibilityFeature,
   AffinoDataGridTreeFeature,
   AffinoDataGridRowHeightFeature,
+  AffinoDataGridKeyboardNavigationFeature,
   AffinoDataGridFilterMergeMode,
   AffinoDataGridSetFilterValueMode,
   AffinoDataGridFilteringHelpers,
@@ -799,6 +801,8 @@ export function useAffinoDataGrid<TRow>(
     isPointerSelectingCells.value = false
   }
 
+  let dispatchCellKeyboardCommands = (_event: KeyboardEvent): boolean => false
+
   if (typeof window !== "undefined") {
     window.addEventListener("mouseup", stopPointerCellSelection)
     window.addEventListener("pointerup", stopPointerCellSelection)
@@ -840,6 +844,10 @@ export function useAffinoDataGrid<TRow>(
           return
         }
         event.preventDefault()
+        const currentTarget = event.currentTarget
+        if (currentTarget instanceof HTMLElement) {
+          currentTarget.focus({ preventScroll: true })
+        }
         setCellSelection(coord, event.shiftKey)
         isPointerSelectingCells.value = true
       },
@@ -858,6 +866,9 @@ export function useAffinoDataGrid<TRow>(
       },
       onKeydown: (event: KeyboardEvent) => {
         ensureCurrentCoord()
+        if (dispatchCellKeyboardCommands(event)) {
+          return
+        }
         if (cellNavigation.dispatchNavigation(event)) {
           return
         }
@@ -1423,6 +1434,74 @@ export function useAffinoDataGrid<TRow>(
     return ok ? Math.max(1, resolveActiveRangeCellCount()) : 0
   }
 
+  let refreshHistorySnapshotBridge: () => DataGridTransactionSnapshot | null = () => null
+
+  const isPrimaryModifierPressed = (event: KeyboardEvent): boolean => (
+    event.metaKey || event.ctrlKey
+  )
+
+  const runHistoryActionFromKeyboard = (direction: "undo" | "redo"): void => {
+    if (!runtime.api.hasTransactionSupport()) {
+      return
+    }
+    void (async () => {
+      if (direction === "undo") {
+        if (!runtime.api.canUndoTransaction()) {
+          return
+        }
+        await runtime.api.undoTransaction()
+      } else {
+        if (!runtime.api.canRedoTransaction()) {
+          return
+        }
+        await runtime.api.redoTransaction()
+      }
+      refreshHistorySnapshotBridge()
+    })()
+  }
+
+  const dispatchGridCellKeyboardCommands = (event: KeyboardEvent): boolean => {
+    if (!normalizedFeatures.keyboardNavigation.enabled) {
+      return false
+    }
+    const key = event.key.toLowerCase()
+    const primary = isPrimaryModifierPressed(event)
+
+    if (primary && !event.altKey && key === "z") {
+      event.preventDefault()
+      runHistoryActionFromKeyboard(event.shiftKey ? "redo" : "undo")
+      return true
+    }
+    if (primary && !event.altKey && !event.shiftKey && key === "y") {
+      event.preventDefault()
+      runHistoryActionFromKeyboard("redo")
+      return true
+    }
+    if (primary && !event.altKey && key === "c") {
+      event.preventDefault()
+      void copyCellRangeSelection("keyboard")
+      return true
+    }
+    if (primary && !event.altKey && key === "v") {
+      event.preventDefault()
+      void pasteCellRangeSelection("keyboard")
+      return true
+    }
+    if (primary && !event.altKey && key === "x") {
+      event.preventDefault()
+      void cutCellRangeSelection("keyboard")
+      return true
+    }
+    if (!primary && !event.altKey && (event.key === "Delete" || event.key === "Backspace")) {
+      event.preventDefault()
+      void clearCellRangeSelection("keyboard")
+      return true
+    }
+    return false
+  }
+
+  dispatchCellKeyboardCommands = dispatchGridCellKeyboardCommands
+
   const paginationSnapshot = ref<DataGridPaginationSnapshot>(
     clonePaginationSnapshot(runtime.api.getPaginationSnapshot()),
   )
@@ -1456,6 +1535,7 @@ export function useAffinoDataGrid<TRow>(
     historySnapshot.value = nextSnapshot
     return nextSnapshot
   }
+  refreshHistorySnapshotBridge = refreshHistorySnapshot
 
   const unsubscribeRowModel = runtime.rowModel.subscribe(nextSnapshot => {
     paginationSnapshot.value = clonePaginationSnapshot(nextSnapshot.pagination)
@@ -1597,6 +1677,7 @@ export function useAffinoDataGrid<TRow>(
 
   return {
     ...baseResult,
+    DataGrid,
     cellSelection: {
       activeCell: activeCellSelection,
       anchorCell: anchorCellSelection,

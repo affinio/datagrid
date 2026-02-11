@@ -208,6 +208,7 @@ const grid = useAffinoDataGrid({
         expandedByDefault: true,
       },
     },
+    keyboardNavigation: true,
   },
 })
 
@@ -263,6 +264,10 @@ Row identity contract (required):
 - `grid.features.visibility` exposes `setColumnVisible`, `toggleColumnVisible`, `setHiddenColumnKeys`, `reset`.
 - `grid.features.tree` exposes `groupBy`, `groupExpansion`, `setGroupBy`, `toggleGroup`, `expandAll`, `collapseAll`.
 - `grid.features.rowHeight` exposes `setMode("fixed" | "auto")`, `setBase(height)`, `measureVisible()`.
+- `features.keyboardNavigation: true` enables out-of-the-box shortcuts and cell navigation:
+  - `Cmd/Ctrl+C`, `Cmd/Ctrl+X`, `Cmd/Ctrl+V`, `Delete/Backspace`
+  - `Cmd/Ctrl+Z`, `Cmd/Ctrl+Shift+Z`, `Cmd/Ctrl+Y`
+  - arrows/home/end/page/tab/enter range navigation on focused grid cells
 - `grid.pagination` exposes first/prev/next/last + snapshot wrappers.
 - `grid.columnState` exposes `capture/apply` and point updates (`setOrder`, `setVisibility`, `setWidth`, `setPin`).
 - `grid.history` exposes `supported/canUndo/canRedo/undo/redo`.
