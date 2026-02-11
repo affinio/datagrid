@@ -16,6 +16,10 @@ import type {
   DataGridSelectionSummarySnapshot,
   DataGridSortDirection,
   DataGridSortState,
+  DataGridEventEnvelope,
+  DataGridEventTier,
+  DataGridEventSource,
+  DataGridEventPhase,
 } from "@affino/datagrid-core"
 import type { DataGridTransactionSnapshot } from "@affino/datagrid-core/advanced"
 import type {
@@ -104,6 +108,28 @@ export interface AffinoDataGridFeedbackFeature {
 
 export interface AffinoDataGridStatusBarFeature {
   enabled?: boolean
+}
+
+export interface AffinoDataGridEventRecord
+  extends DataGridEventEnvelope<DataGridEventTier, string, readonly unknown[]> {
+  id: number
+}
+
+export type AffinoDataGridEventListener = (event: AffinoDataGridEventRecord) => void
+
+export interface AffinoDataGridEmitEventInput {
+  tier: DataGridEventTier
+  name: string
+  args: readonly unknown[]
+  source: DataGridEventSource
+  phase: DataGridEventPhase
+  reason?: string
+  affected?: {
+    rowStart?: number
+    rowEnd?: number
+    columnStart?: number
+    columnEnd?: number
+  }
 }
 
 export interface AffinoDataGridLayoutProfile {
@@ -249,6 +275,8 @@ export interface UseAffinoDataGridOptions<TRow> {
   features?: AffinoDataGridFeatures<TRow>
 }
 
+export type UseAffinoDataGridMinimalOptions<TRow> = UseAffinoDataGridOptions<TRow>
+
 export type AffinoDataGridActionId = DataGridContextMenuActionId | "select-all" | "clear-selection"
 
 export interface AffinoDataGridRunActionOptions {
@@ -389,6 +417,15 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
     clearSelectedRows: () => Promise<number>
     selectAllRows: () => number
     runAction: (actionId: AffinoDataGridActionId, options?: AffinoDataGridRunActionOptions) => Promise<AffinoDataGridActionResult>
+  }
+  events: {
+    enabled: Ref<boolean>
+    last: Ref<AffinoDataGridEventRecord | null>
+    log: Ref<readonly AffinoDataGridEventRecord[]>
+    on: (name: string | "*", listener: AffinoDataGridEventListener) => () => void
+    off: (name: string | "*", listener: AffinoDataGridEventListener) => void
+    emit: (input: AffinoDataGridEmitEventInput) => AffinoDataGridEventRecord | null
+    clear: () => void
   }
   feedback?: {
     enabled: Ref<boolean>
@@ -730,3 +767,16 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
     }
   }
 }
+
+export type UseAffinoDataGridMinimalResult<TRow> = Omit<
+  UseAffinoDataGridResult<TRow>,
+  | "events"
+  | "layoutProfiles"
+  | "statusBar"
+  | "contextMenu"
+  | "cellSelection"
+  | "cellRange"
+  | "columnState"
+  | "history"
+  | "rowReorder"
+>

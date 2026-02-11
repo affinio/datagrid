@@ -14,6 +14,8 @@ describe("entrypoint tier contract", () => {
     expect("createDataGridA11yStateMachine" in stable).toBe(false)
     expect("createDataGridTransactionService" in stable).toBe(false)
     expect("normalizeRowNode" in stable).toBe(false)
+    expect(typeof stable.createDataGridEventEnvelope).toBe("function")
+    expect(typeof stable.isDataGridEventTier).toBe("function")
   })
 
   it("exposes advanced power-user APIs via advanced entrypoint", () => {
@@ -22,6 +24,7 @@ describe("entrypoint tier contract", () => {
     expect(typeof advanced.createDataGridTransactionService).toBe("function")
     expect(typeof advanced.createDataGridAdapterRuntime).toBe("function")
     expect(typeof advanced.createDataSourceBackedRowModel).toBe("function")
+    expect(typeof advanced.createDataGridEventEnvelope).toBe("function")
   })
 
   it("exposes unsafe helpers via internal entrypoint only", () => {

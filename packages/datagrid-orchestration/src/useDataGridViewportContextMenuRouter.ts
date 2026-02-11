@@ -87,7 +87,19 @@ export function useDataGridViewportContextMenuRouter<
       const rowId = cell.dataset.rowId ?? ""
       const columnKey = cell.dataset.columnKey ?? ""
       if (columnKey && isContextEnabled(columnKey, options)) {
-        const coord = options.resolveCellCoordFromDataset(rowId, columnKey)
+        let coord = null as TCoord | null
+        const rowIndex = cell.dataset.rowIndex
+        const columnIndex = cell.dataset.columnIndex
+        if (rowIndex !== undefined && columnIndex !== undefined) {
+          const parsedRow = Number(rowIndex)
+          const parsedColumn = Number(columnIndex)
+          if (Number.isFinite(parsedRow) && Number.isFinite(parsedColumn)) {
+            coord = { rowIndex: parsedRow, columnIndex: parsedColumn } as TCoord
+          }
+        }
+        if (!coord) {
+          coord = options.resolveCellCoordFromDataset(rowId, columnKey)
+        }
         if (coord) {
           if (!currentRange || !options.isCoordInsideRange(coord, currentRange)) {
             options.applyCellSelection(coord, false, coord, false)

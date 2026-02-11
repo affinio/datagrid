@@ -22,7 +22,15 @@ export interface UseAffinoDataGridResultAssemblyOptions<TRow> {
 
 type UseAffinoDataGridAssembledBaseResult<TRow> = Omit<
   UseAffinoDataGridResult<TRow>,
-  "DataGrid" | "pagination" | "columnState" | "history" | "rowReorder" | "cellSelection" | "cellRange" | "bindings"
+  "DataGrid"
+  | "pagination"
+  | "columnState"
+  | "history"
+  | "rowReorder"
+  | "cellSelection"
+  | "cellRange"
+  | "bindings"
+  | "events"
 > & {
   bindings: Omit<UseAffinoDataGridResult<TRow>["bindings"], "cellSelection">
 }

@@ -75,7 +75,13 @@ export {
   type AffinoDataGridFeatures,
   type UseAffinoDataGridOptions,
   type UseAffinoDataGridResult,
+  type UseAffinoDataGridMinimalOptions,
+  type UseAffinoDataGridMinimalResult,
 } from "./composables/useAffinoDataGrid"
+
+export {
+  useAffinoDataGridMinimal,
+} from "./composables/useAffinoDataGridMinimal"
 
 export {
   useAffinoDataGridUi,

@@ -881,6 +881,11 @@
   background: var(--datagrid-viewport-bg);
 }
 
+[data-datagrid-spacer-top],
+[data-datagrid-spacer-bottom] {
+  overflow-anchor: none;
+}
+
 .datagrid-stage__viewport:focus-visible {
   outline: 2px solid var(--datagrid-focus-outline);
   outline-offset: -2px;

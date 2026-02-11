@@ -1,5 +1,5 @@
 import type { DataGridEventMap } from "@affino/datagrid-plugins"
-import type { DataGridEventHandlers } from "../types/base"
+import type { DataGridEventHandlers } from "../types"
 import type {
   DataGridRuntimeInternalEventMap,
   DataGridRuntimePluginEventMap,
@@ -95,6 +95,6 @@ export function createDataGridEventEnvelope<
 ): DataGridEventEnvelope<TTier, TName, TArgs> {
   return {
     ...input,
-    timestampMs: input.timestampMs ?? Date.now(),
+    timestampMs: input.timestampMs ?? 0,
   }
 }

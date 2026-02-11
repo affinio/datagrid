@@ -51,6 +51,10 @@ export type UseAffinoDataGridBindingSuiteResult<TRow> =
     AffinoDataGridActionId,
     AffinoDataGridActionResult
   >
+  & {
+    findCellElement: (rowKey: string, columnKey: string) => HTMLElement | null
+    findHeaderElement: (columnKey: string) => HTMLElement | null
+  }
 
 export function useAffinoDataGridBindingSuite<TRow>(
   options: UseAffinoDataGridBindingSuiteOptions<TRow>,
@@ -97,6 +101,32 @@ export function useAffinoDataGridBindingSuite<TRow>(
     runAction: options.runAction,
   })
 
+  const findCellElement = (rowKey: string, columnKey: string): HTMLElement | null => {
+    if (typeof document === "undefined") {
+      return null
+    }
+    const cells = document.querySelectorAll<HTMLElement>("[data-row-key][data-column-key]")
+    for (const cell of cells) {
+      if (cell.dataset.rowKey === rowKey && cell.dataset.columnKey === columnKey) {
+        return cell
+      }
+    }
+    return null
+  }
+
+  const findHeaderElement = (columnKey: string): HTMLElement | null => {
+    if (typeof document === "undefined") {
+      return null
+    }
+    const headers = document.querySelectorAll<HTMLElement>("[role='columnheader'][data-column-key]")
+    for (const header of headers) {
+      if (header.dataset.columnKey === columnKey) {
+        return header
+      }
+    }
+    return null
+  }
+
   return {
     createHeaderSortBindings,
     createHeaderReorderBindings,
@@ -104,6 +134,8 @@ export function useAffinoDataGridBindingSuite<TRow>(
     createRowReorderBindings,
     createEditableCellBindings,
     createInlineEditorBindings,
+    findCellElement,
+    findHeaderElement,
     ...contextMenuFeature,
   }
 }

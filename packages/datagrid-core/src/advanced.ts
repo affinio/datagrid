@@ -105,3 +105,23 @@ export {
   transformDataGridPublicProtocolSource,
   type DataGridCodemodResult,
 } from "./protocol/index.js"
+
+export type {
+  DataGridAdvancedEventMap,
+  DataGridAdvancedEventName,
+  DataGridEventAffectedRange,
+  DataGridEventEnvelope,
+  DataGridEventPhase,
+  DataGridEventSource,
+  DataGridEventTier,
+  DataGridInternalEventMap,
+  DataGridInternalEventName,
+  DataGridStableEventMap,
+  DataGridStableEventName,
+} from "./protocol/index.js"
+export {
+  DATAGRID_EVENT_TIERS,
+  DATAGRID_EVENT_TIER_ENTRYPOINTS,
+  createDataGridEventEnvelope,
+  isDataGridEventTier,
+} from "./protocol/index.js"
