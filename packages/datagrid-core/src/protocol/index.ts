@@ -21,3 +21,23 @@ export {
 
 export type { DataGridCodemodResult } from "./publicProtocolCodemod"
 export { transformDataGridPublicProtocolSource } from "./publicProtocolCodemod"
+
+export type {
+  DataGridAdvancedEventMap,
+  DataGridAdvancedEventName,
+  DataGridEventAffectedRange,
+  DataGridEventEnvelope,
+  DataGridEventPhase,
+  DataGridEventSource,
+  DataGridEventTier,
+  DataGridInternalEventMap,
+  DataGridInternalEventName,
+  DataGridStableEventMap,
+  DataGridStableEventName,
+} from "./eventContractTiers"
+export {
+  DATAGRID_EVENT_TIERS,
+  DATAGRID_EVENT_TIER_ENTRYPOINTS,
+  createDataGridEventEnvelope,
+  isDataGridEventTier,
+} from "./eventContractTiers"

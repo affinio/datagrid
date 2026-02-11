@@ -56,13 +56,107 @@ export interface AffinoDataGridEditingFeature<TRow> {
   enabled?: boolean
   mode?: AffinoDataGridEditMode
   enum?: boolean
+  enumEditor?: {
+    enabled?: boolean
+    resolveOptions?: (context: {
+      row: TRow
+      rowKey: string
+      columnKey: string
+      value: unknown
+      rows: readonly TRow[]
+      columns: readonly DataGridColumnDef[]
+    }) => readonly { label: string; value: unknown }[]
+    primitive?: "affino-listbox" | "affino-menu"
+  }
   onCommit?: (session: AffinoDataGridEditSession, context: {
     rows: readonly TRow[]
     columns: readonly DataGridColumnDef[]
   }) => void | Promise<void>
 }
 
-export interface AffinoDataGridFeatures<TRow> extends AffinoDataGridFeatureInput<TRow> {}
+export interface AffinoDataGridFeatures<TRow> extends AffinoDataGridFeatureInput<TRow> {
+  interactions?: boolean | AffinoDataGridInteractionsFeature
+  headerFilters?: boolean | AffinoDataGridHeaderFiltersFeature
+  feedback?: boolean | AffinoDataGridFeedbackFeature
+  statusBar?: boolean | AffinoDataGridStatusBarFeature
+}
+
+export interface AffinoDataGridRangeInteractionsFeature {
+  enabled?: boolean
+  fill?: boolean
+  move?: boolean
+}
+
+export interface AffinoDataGridInteractionsFeature {
+  enabled?: boolean
+  range?: boolean | AffinoDataGridRangeInteractionsFeature
+}
+
+export interface AffinoDataGridHeaderFiltersFeature {
+  enabled?: boolean
+  maxUniqueValues?: number
+}
+
+export interface AffinoDataGridFeedbackFeature {
+  enabled?: boolean
+  maxEvents?: number
+}
+
+export interface AffinoDataGridStatusBarFeature {
+  enabled?: boolean
+}
+
+export interface AffinoDataGridLayoutProfile {
+  id: string
+  name: string
+  createdAt: number
+  sortState: readonly DataGridSortState[]
+  filterModel: DataGridFilterSnapshot | null
+  groupBy: DataGridGroupBySpec | null
+  groupExpansion: DataGridGroupExpansionSnapshot
+  columnState: DataGridColumnModelSnapshot
+}
+
+export interface AffinoDataGridFeedbackEvent {
+  id: number
+  action: string
+  message: string
+  timestamp: number
+  source: "action" | "context-menu" | "range" | "history" | "layout" | "header-filter"
+  affected?: number
+  ok?: boolean
+  meta?: Record<string, unknown>
+}
+
+export interface AffinoDataGridHeaderFilterValueEntry {
+  key: string
+  value: unknown
+  label: string
+  count: number
+  selected: boolean
+}
+
+export interface AffinoDataGridHeaderFilterOperatorEntry {
+  value: string
+  label: string
+}
+
+export interface AffinoDataGridStatusBarMetrics<TRow = unknown> {
+  rowsTotal: number
+  rowsFiltered: number
+  columnsVisible: number
+  selectedCells: number
+  selectedRows: number
+  activeCell: { rowKey: string; columnKey: string } | null
+  anchorCell: { rowKey: string; columnKey: string } | null
+  summary: DataGridSelectionSummarySnapshot | null
+  format: (columnKey: string, fallback?: string) => string
+  getAggregate: (
+    columnKey: string,
+    aggregation: DataGridSelectionAggregationKind,
+  ) => number | null
+  resolveRowByKey: (rowKey: string) => TRow | null
+}
 
 export interface AffinoDataGridFilteringFeature {
   enabled?: boolean
@@ -296,12 +390,41 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
     selectAllRows: () => number
     runAction: (actionId: AffinoDataGridActionId, options?: AffinoDataGridRunActionOptions) => Promise<AffinoDataGridActionResult>
   }
+  feedback?: {
+    enabled: Ref<boolean>
+    lastAction: Ref<string>
+    events: Ref<readonly AffinoDataGridFeedbackEvent[]>
+    clear: () => void
+  }
+  layoutProfiles?: {
+    profiles: Ref<readonly AffinoDataGridLayoutProfile[]>
+    capture: (name: string, options?: { id?: string }) => AffinoDataGridLayoutProfile
+    apply: (idOrProfile: string | AffinoDataGridLayoutProfile) => boolean
+    remove: (id: string) => boolean
+    clear: () => void
+  }
+  statusBar?: {
+    enabled: Ref<boolean>
+    metrics: Ref<AffinoDataGridStatusBarMetrics<TRow>>
+    refresh: () => AffinoDataGridStatusBarMetrics<TRow>
+  }
   contextMenu: {
     state: Ref<DataGridContextMenuState>
     style: Ref<{ left: string; top: string }>
     actions: Ref<readonly DataGridContextMenuAction[]>
+    groupedActions?: Ref<
+      readonly {
+        id: "clipboard" | "sorting" | "filters" | "column"
+        label: string
+        actions: readonly DataGridContextMenuAction[]
+      }[]
+    >
     contextMenuRef: Ref<HTMLElement | null>
     open: (clientX: number, clientY: number, context: OpenDataGridContextMenuInput) => void
+    openForActiveCell?: (options?: { zone?: "cell" | "range"; clientX?: number; clientY?: number }) => boolean
+    openForHeader?: (columnKey: string, options?: { clientX?: number; clientY?: number }) => boolean
+    isActionDisabled?: (actionId: DataGridContextMenuActionId) => boolean
+    getActionDisabledReason?: (actionId: DataGridContextMenuActionId) => string | null
     close: () => void
     onKeyDown: (event: KeyboardEvent, handlers?: { onEscape?: () => void }) => void
     runAction: (actionId: DataGridContextMenuActionId) => Promise<AffinoDataGridActionResult>
@@ -329,6 +452,16 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
       enabled: Ref<boolean>
       mode: Ref<AffinoDataGridEditMode>
       enum: Ref<boolean>
+      enumEditor?: {
+        enabled: Ref<boolean>
+        primitive: Ref<"affino-listbox" | "affino-menu">
+        resolveOptions: (params: {
+          row: TRow
+          rowKey: string
+          columnKey: string
+          value: unknown
+        }) => readonly { label: string; value: unknown }[]
+      }
       activeSession: Ref<AffinoDataGridEditSession | null>
       beginEdit: (session: Omit<AffinoDataGridEditSession, "mode"> & { mode?: AffinoDataGridEditMode }) => boolean
       updateDraft: (draft: string) => boolean
@@ -342,6 +475,65 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
       clear: () => void
       setAdvancedExpression: (expression: DataGridAdvancedFilterExpression | null) => void
       helpers: AffinoDataGridFilteringHelpers
+    }
+    interactions?: {
+      enabled: Ref<boolean>
+      range: {
+        enabled: Ref<boolean>
+        fillEnabled: Ref<boolean>
+        moveEnabled: Ref<boolean>
+        pointerMode: Ref<"idle" | "fill" | "move">
+        stop: () => void
+      }
+    }
+    headerFilters?: {
+      enabled: Ref<boolean>
+      state: Ref<{
+        open: boolean
+        columnKey: string | null
+        query: string
+        operator: string
+        type: "text" | "number" | "date" | "set"
+      }>
+      open: (columnKey: string) => boolean
+      close: () => void
+      toggle: (columnKey: string) => boolean
+      setQuery: (query: string) => void
+      setOperator: (operator: string) => void
+      getOperators: (columnKey: string) => readonly AffinoDataGridHeaderFilterOperatorEntry[]
+      getUniqueValues: (columnKey: string) => readonly AffinoDataGridHeaderFilterValueEntry[]
+      setValueSelected: (
+        columnKey: string,
+        value: unknown,
+        selected: boolean,
+        options?: { mode?: AffinoDataGridSetFilterValueMode },
+      ) => DataGridAdvancedFilterExpression | null
+      selectOnlyValue: (columnKey: string, value: unknown) => DataGridAdvancedFilterExpression | null
+      selectAllValues: (columnKey: string) => DataGridAdvancedFilterExpression | null
+      clearValues: (columnKey: string) => DataGridAdvancedFilterExpression | null
+      applyText: (
+        columnKey: string,
+        options: { operator?: string; value?: unknown; mergeMode?: AffinoDataGridFilterMergeMode },
+      ) => DataGridAdvancedFilterExpression | null
+      applyNumber: (
+        columnKey: string,
+        options: {
+          operator?: string
+          value?: unknown
+          value2?: unknown
+          mergeMode?: AffinoDataGridFilterMergeMode
+        },
+      ) => DataGridAdvancedFilterExpression | null
+      applyDate: (
+        columnKey: string,
+        options: {
+          operator?: string
+          value?: unknown
+          value2?: unknown
+          mergeMode?: AffinoDataGridFilterMergeMode
+        },
+      ) => DataGridAdvancedFilterExpression | null
+      clear: (columnKey: string) => DataGridAdvancedFilterExpression | null
     }
     summary: {
       enabled: Ref<boolean>
@@ -419,6 +611,25 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
       onMouseup: (event?: MouseEvent) => void
       onKeydown: (event: KeyboardEvent) => void
     }
+    rangeHandle?: (params: {
+      rowIndex: number
+      columnKey: string
+      mode?: "fill" | "move"
+    }) => {
+      "data-row-index": number
+      "data-column-key": string
+      "data-range-mode": "fill" | "move"
+      onMousedown: (event: MouseEvent) => void
+    }
+    rangeSurface?: (params: {
+      rowIndex: number
+      columnKey: string
+    }) => {
+      "data-row-index": number
+      "data-column-key": string
+      onMouseenter: (event?: MouseEvent) => void
+      onMouseup: (event?: MouseEvent) => void
+    }
     editableCell: (params: {
       row: TRow
       rowIndex: number
@@ -464,6 +675,24 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
       onDragover: (event: DragEvent) => void
       onDrop: (event: DragEvent) => void
       onDragend: (event?: DragEvent) => void
+      onKeydown: (event: KeyboardEvent) => void
+    }
+    columnResizeHandle?: (columnKey: string) => {
+      role: "separator"
+      tabindex: number
+      "aria-orientation": "vertical"
+      "data-column-key": string
+      onMousedown: (event: MouseEvent) => void
+      onDblclick: (event?: MouseEvent) => void
+      onKeydown: (event: KeyboardEvent) => void
+    }
+    rowResizeHandle?: (rowKey: string) => {
+      role: "separator"
+      tabindex: number
+      "aria-orientation": "horizontal"
+      "data-row-key": string
+      onMousedown: (event: MouseEvent) => void
+      onDblclick: (event?: MouseEvent) => void
       onKeydown: (event: KeyboardEvent) => void
     }
     dataCell: (params: {

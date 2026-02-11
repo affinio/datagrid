@@ -5,6 +5,7 @@ import type {
   DataGridSelectionSnapshot,
   DataGridColumnModelSnapshot,
   DataGridPaginationSnapshot,
+  DataGridColumnDef,
   DataGridRowNode,
 } from "@affino/datagrid-core"
 import type { DataGridTransactionSnapshot } from "@affino/datagrid-core/advanced"
@@ -14,6 +15,10 @@ import {
   useDataGridClipboardMutations,
   useDataGridRangeMutationEngine,
 } from "@affino/datagrid-orchestration"
+import type {
+  DataGridContextMenuAction,
+  DataGridContextMenuActionId,
+} from "./useDataGridContextMenu"
 import { DataGrid } from "../components/DataGrid"
 import {
   assembleAffinoDataGridResult,
@@ -25,6 +30,14 @@ import {
   useAffinoDataGridSortActionSuite,
 } from "./internal/useAffinoDataGrid"
 import type {
+  AffinoDataGridActionId,
+  AffinoDataGridActionResult,
+  AffinoDataGridRunActionOptions,
+  AffinoDataGridFeedbackEvent,
+  AffinoDataGridHeaderFilterOperatorEntry,
+  AffinoDataGridHeaderFilterValueEntry,
+  AffinoDataGridLayoutProfile,
+  AffinoDataGridStatusBarMetrics,
   AffinoDataGridFilteringHelpers,
   AffinoDataGridFilterMergeMode,
   AffinoDataGridSetFilterValueMode,
@@ -347,6 +360,67 @@ function nextSetFilterValues(
   }
   return Array.from(currentMap.values())
 }
+
+function stableSerialize(value: unknown): string {
+  if (typeof value === "string") {
+    return value
+  }
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function stableClone<T>(value: T): T {
+  try {
+    if (typeof structuredClone === "function") {
+      return structuredClone(value)
+    }
+  } catch {
+    // Fallback below.
+  }
+  try {
+    const serialized = JSON.stringify(value)
+    if (typeof serialized !== "string") {
+      return value
+    }
+    return JSON.parse(serialized) as T
+  } catch {
+    return value
+  }
+}
+
+const DEFAULT_HEADER_FILTER_OPERATORS: Record<
+  "text" | "number" | "date" | "set",
+  readonly AffinoDataGridHeaderFilterOperatorEntry[]
+> = {
+  text: [
+    { value: "contains", label: "Contains" },
+    { value: "equals", label: "Equals" },
+    { value: "startsWith", label: "Starts with" },
+    { value: "endsWith", label: "Ends with" },
+  ],
+  number: [
+    { value: "equals", label: "Equals" },
+    { value: "notEquals", label: "Not equals" },
+    { value: "gt", label: "Greater than" },
+    { value: "gte", label: "Greater than or equal" },
+    { value: "lt", label: "Less than" },
+    { value: "lte", label: "Less than or equal" },
+    { value: "between", label: "Between" },
+  ],
+  date: [
+    { value: "equals", label: "Equals" },
+    { value: "before", label: "Before" },
+    { value: "after", label: "After" },
+    { value: "between", label: "Between" },
+  ],
+  set: [
+    { value: "in", label: "In list" },
+    { value: "notIn", label: "Not in list" },
+  ],
+}
 export type {
   AffinoDataGridEditMode,
   AffinoDataGridSelectionFeature,
@@ -354,6 +428,16 @@ export type {
   AffinoDataGridEditSession,
   AffinoDataGridEditingFeature,
   AffinoDataGridFeatures,
+  AffinoDataGridRangeInteractionsFeature,
+  AffinoDataGridInteractionsFeature,
+  AffinoDataGridHeaderFiltersFeature,
+  AffinoDataGridFeedbackFeature,
+  AffinoDataGridStatusBarFeature,
+  AffinoDataGridHeaderFilterValueEntry,
+  AffinoDataGridHeaderFilterOperatorEntry,
+  AffinoDataGridFeedbackEvent,
+  AffinoDataGridLayoutProfile,
+  AffinoDataGridStatusBarMetrics,
   AffinoDataGridFilteringFeature,
   AffinoDataGridSummaryFeature,
   AffinoDataGridVisibilityFeature,
@@ -404,11 +488,16 @@ export function useAffinoDataGrid<TRow>(
     selectAllRows,
     resolveSelectedRows,
     filteringEnabled,
+    clipboardEnabled,
     copySelectedRows,
     clearSelectedRows,
     cutSelectedRows,
     pasteRowsAppend,
     editingEnabled,
+    editingEnum,
+    enumEditorEnabled,
+    enumEditorPrimitive,
+    resolveEnumEditorOptions,
     activeSession,
     beginEdit,
     updateDraft,
@@ -422,6 +511,29 @@ export function useAffinoDataGrid<TRow>(
   let runCutAction: () => Promise<number> = () => cutSelectedRows()
   let runPasteAction: () => Promise<number> = () => pasteRowsAppend()
   let runClearAction: () => Promise<number> = () => clearSelectedRows()
+  const feedbackEnabled = ref(normalizedFeatures.feedback.enabled)
+  const feedbackLastAction = ref("Ready")
+  const feedbackEvents = ref<readonly AffinoDataGridFeedbackEvent[]>([])
+  let nextFeedbackEventId = 1
+
+  const pushFeedback = (
+    event: Omit<AffinoDataGridFeedbackEvent, "id" | "timestamp">,
+  ): void => {
+    if (!feedbackEnabled.value) {
+      return
+    }
+    const nextEvent: AffinoDataGridFeedbackEvent = {
+      ...event,
+      id: nextFeedbackEventId++,
+      timestamp: Date.now(),
+    }
+    feedbackLastAction.value = nextEvent.message
+    const nextEvents = [...feedbackEvents.value, nextEvent]
+    const limit = normalizedFeatures.feedback.maxEvents
+    feedbackEvents.value = nextEvents.length > limit
+      ? nextEvents.slice(nextEvents.length - limit)
+      : nextEvents
+  }
 
   const {
     sortState,
@@ -450,6 +562,22 @@ export function useAffinoDataGrid<TRow>(
     pasteRowsAppend: () => runPasteAction(),
     clearSelectedRows: () => runClearAction(),
   })
+
+  const runActionWithFeedback = async (
+    actionId: AffinoDataGridActionId,
+    actionOptions?: AffinoDataGridRunActionOptions,
+  ): Promise<AffinoDataGridActionResult> => {
+    const result = await runAction(actionId, actionOptions)
+    pushFeedback({
+      source: "action",
+      action: actionId,
+      message: result.message,
+      affected: result.affected,
+      ok: result.ok,
+      meta: actionOptions ? { columnKey: actionOptions.columnKey ?? null } : undefined,
+    })
+    return result
+  }
 
   const componentProps = computed(() => ({
     rows: rows.value,
@@ -803,12 +931,6 @@ export function useAffinoDataGrid<TRow>(
 
   let dispatchCellKeyboardCommands = (_event: KeyboardEvent): boolean => false
 
-  if (typeof window !== "undefined") {
-    window.addEventListener("mouseup", stopPointerCellSelection)
-    window.addEventListener("pointerup", stopPointerCellSelection)
-    window.addEventListener("pointercancel", stopPointerCellSelection)
-  }
-
   const createCellSelectionBindings = (params: {
     row: TRow
     rowIndex: number
@@ -883,6 +1005,38 @@ export function useAffinoDataGrid<TRow>(
       },
     }
   }
+
+  const createRangeHandleBindings = (params: {
+    rowIndex: number
+    columnKey: string
+    mode?: "fill" | "move"
+  }) => ({
+    "data-row-index": params.rowIndex,
+    "data-column-key": params.columnKey,
+    "data-range-mode": (params.mode ?? "fill") as "fill" | "move",
+    onMousedown: (event: MouseEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+      startRangePointerInteraction(params.mode ?? "fill", {
+        rowIndex: params.rowIndex,
+        columnKey: params.columnKey,
+      })
+    },
+  })
+
+  const createRangeSurfaceBindings = (params: {
+    rowIndex: number
+    columnKey: string
+  }) => ({
+    "data-row-index": params.rowIndex,
+    "data-column-key": params.columnKey,
+    onMouseenter: (_event?: MouseEvent) => {
+      updateRangePointerPreview(params.rowIndex, params.columnKey)
+    },
+    onMouseup: (_event?: MouseEvent) => {
+      stopRangePointerInteraction(true)
+    },
+  })
 
   const bindingSuite = useAffinoDataGridBindingSuite({
     columns,
@@ -1009,6 +1163,19 @@ export function useAffinoDataGrid<TRow>(
   }
 
   const cellRangeLastAction = ref("Ready")
+  const setRangeLastAction = (
+    message: string,
+    options: { action?: string; affected?: number } = {},
+  ): void => {
+    cellRangeLastAction.value = message
+    pushFeedback({
+      source: "range",
+      action: options.action ?? "range",
+      message,
+      affected: options.affected,
+      ok: true,
+    })
+  }
   const copiedSelectionRange = ref<InternalCellRange | null>(null)
   const fillPreviewRange = ref<InternalCellRange | null>(null)
   const rangeMovePreviewRange = ref<InternalCellRange | null>(null)
@@ -1247,7 +1414,7 @@ export function useAffinoDataGrid<TRow>(
     getColumnKeyAtIndex: resolveColumnKeyAtIndex,
     getCellValue: resolveCellValue,
     setLastAction(message) {
-      cellRangeLastAction.value = message
+      setRangeLastAction(message, { action: "copy-range" })
     },
     closeContextMenu: () => {
       bindingSuite.closeContextMenu()
@@ -1309,7 +1476,7 @@ export function useAffinoDataGrid<TRow>(
       bindingSuite.closeContextMenu()
     },
     setLastAction(message) {
-      cellRangeLastAction.value = message
+      setRangeLastAction(message, { action: "clipboard-range" })
     },
     readClipboardPayload: clipboardBridge.readClipboardPayload,
     parseClipboardMatrix: clipboardBridge.parseClipboardMatrix,
@@ -1382,7 +1549,7 @@ export function useAffinoDataGrid<TRow>(
       })
     },
     setLastAction(message) {
-      cellRangeLastAction.value = message
+      setRangeLastAction(message, { action: "range-mutation" })
     },
   })
 
@@ -1392,6 +1559,137 @@ export function useAffinoDataGrid<TRow>(
 
   const setRangeMovePreviewRange = (range: AffinoDataGridCellRange | null): void => {
     rangeMovePreviewRange.value = normalizeCellRange(range)
+  }
+
+  const interactionsEnabled = ref(normalizedFeatures.interactions.enabled)
+  const rangeInteractionsEnabled = ref(normalizedFeatures.interactions.range.enabled)
+  const rangeFillEnabled = ref(normalizedFeatures.interactions.range.fill)
+  const rangeMoveEnabled = ref(normalizedFeatures.interactions.range.move)
+  const rangePointerMode = ref<"idle" | "fill" | "move">("idle")
+  const isRangePointerActive = ref(false)
+
+  const clearRangePreviews = (): void => {
+    setFillPreviewRange(null)
+    setRangeMovePreviewRange(null)
+  }
+
+  const computeFillPreview = (
+    baseRange: InternalCellRange,
+    rowIndex: number,
+    columnIndex: number,
+  ): InternalCellRange => {
+    const rowDistance = Math.abs(rowIndex - baseRange.endRow)
+    const columnDistance = Math.abs(columnIndex - baseRange.endColumn)
+    const fillAxis = rowDistance >= columnDistance ? "vertical" : "horizontal"
+    if (fillAxis === "vertical") {
+      return normalizeCellRange({
+        startRow: Math.min(baseRange.startRow, rowIndex),
+        endRow: Math.max(baseRange.endRow, rowIndex),
+        startColumn: baseRange.startColumn,
+        endColumn: baseRange.endColumn,
+      }) ?? baseRange
+    }
+    return normalizeCellRange({
+      startRow: baseRange.startRow,
+      endRow: baseRange.endRow,
+      startColumn: Math.min(baseRange.startColumn, columnIndex),
+      endColumn: Math.max(baseRange.endColumn, columnIndex),
+    }) ?? baseRange
+  }
+
+  const computeRangeMovePreview = (
+    baseRange: InternalCellRange,
+    rowIndex: number,
+    columnIndex: number,
+  ): InternalCellRange => {
+    const rowSpan = Math.max(1, baseRange.endRow - baseRange.startRow + 1)
+    const columnSpan = Math.max(1, baseRange.endColumn - baseRange.startColumn + 1)
+    return normalizeCellRange({
+      startRow: rowIndex,
+      endRow: rowIndex + rowSpan - 1,
+      startColumn: columnIndex,
+      endColumn: columnIndex + columnSpan - 1,
+    }) ?? baseRange
+  }
+
+  const updateRangePointerPreview = (rowIndex: number, columnKey: string): void => {
+    if (!rangeInteractionsEnabled.value || !isRangePointerActive.value) {
+      return
+    }
+    const baseRange = normalizeCellRange(cellSelectionRange.value)
+    const columnIndex = resolveVisibleColumnIndex(columnKey)
+    if (!baseRange || columnIndex < 0) {
+      return
+    }
+    if (rangePointerMode.value === "fill" && rangeFillEnabled.value) {
+      setFillPreviewRange(computeFillPreview(baseRange, rowIndex, columnIndex))
+      return
+    }
+    if (rangePointerMode.value === "move" && rangeMoveEnabled.value) {
+      setRangeMovePreviewRange(computeRangeMovePreview(baseRange, rowIndex, columnIndex))
+    }
+  }
+
+  const stopRangePointerInteraction = (apply = true): void => {
+    if (!isRangePointerActive.value) {
+      return
+    }
+    const mode = rangePointerMode.value
+    isRangePointerActive.value = false
+    rangePointerMode.value = "idle"
+    if (!apply) {
+      clearRangePreviews()
+      return
+    }
+    if (mode === "fill" && rangeFillEnabled.value) {
+      rangeMutationEngine.applyFillPreview()
+      return
+    }
+    if (mode === "move" && rangeMoveEnabled.value) {
+      rangeMutationEngine.applyRangeMove()
+    }
+  }
+
+  const startRangePointerInteraction = (
+    mode: "fill" | "move",
+    params: { rowIndex: number; columnKey: string },
+  ): boolean => {
+    if (!interactionsEnabled.value || !rangeInteractionsEnabled.value) {
+      return false
+    }
+    if (mode === "fill" && !rangeFillEnabled.value) {
+      return false
+    }
+    if (mode === "move" && !rangeMoveEnabled.value) {
+      return false
+    }
+    const columnIndex = resolveVisibleColumnIndex(params.columnKey)
+    if (columnIndex < 0 || !normalizeCellRange(cellSelectionRange.value)) {
+      return false
+    }
+    rangePointerMode.value = mode
+    isRangePointerActive.value = true
+    updateRangePointerPreview(params.rowIndex, params.columnKey)
+    return true
+  }
+
+  const stopAllPointerInteractions = (applyRange = true): void => {
+    stopPointerCellSelection()
+    stopRangePointerInteraction(applyRange)
+  }
+
+  const handleGlobalPointerUp = (): void => {
+    stopAllPointerInteractions(true)
+  }
+
+  const handleGlobalPointerCancel = (): void => {
+    stopAllPointerInteractions(false)
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("mouseup", handleGlobalPointerUp)
+    window.addEventListener("pointerup", handleGlobalPointerUp)
+    window.addEventListener("pointercancel", handleGlobalPointerCancel)
   }
 
   const copyCellRangeSelection = (trigger: "keyboard" | "context-menu" = "context-menu") => (
@@ -1450,11 +1748,23 @@ export function useAffinoDataGrid<TRow>(
           return
         }
         await runtime.api.undoTransaction()
+        pushFeedback({
+          source: "history",
+          action: "undo",
+          message: "Undo",
+          ok: true,
+        })
       } else {
         if (!runtime.api.canRedoTransaction()) {
           return
         }
         await runtime.api.redoTransaction()
+        pushFeedback({
+          source: "history",
+          action: "redo",
+          message: "Redo",
+          ok: true,
+        })
       }
       refreshHistorySnapshotBridge()
     })()
@@ -1537,8 +1847,403 @@ export function useAffinoDataGrid<TRow>(
   }
   refreshHistorySnapshotBridge = refreshHistorySnapshot
 
+  const headerFiltersEnabled = ref(normalizedFeatures.headerFilters.enabled)
+  const headerFilterState = ref<{
+    open: boolean
+    columnKey: string | null
+    query: string
+    operator: string
+    type: "text" | "number" | "date" | "set"
+  }>({
+    open: false,
+    columnKey: null,
+    query: "",
+    operator: "contains",
+    type: "text",
+  })
+
+  const resolveColumnByKey = (columnKey: string): DataGridColumnDef | null => (
+    columns.value.find(column => column.key === columnKey) ?? null
+  )
+
+  const resolveHeaderFilterType = (columnKey: string): "text" | "number" | "date" | "set" => {
+    const column = resolveColumnByKey(columnKey)
+    const meta = (column?.meta ?? {}) as Record<string, unknown>
+    const explicitType = meta.filterType ?? meta.filterKind
+    if (explicitType === "set" || explicitType === "enum") {
+      return "set"
+    }
+    if (explicitType === "number") {
+      return "number"
+    }
+    if (explicitType === "date") {
+      return "date"
+    }
+    if (Array.isArray(meta.options)) {
+      return "set"
+    }
+    for (const row of rows.value) {
+      if (!isRecordRow(row)) {
+        continue
+      }
+      const value = row[columnKey]
+      if (typeof value === "number") {
+        return "number"
+      }
+      if (value instanceof Date) {
+        return "date"
+      }
+      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+        return "date"
+      }
+    }
+    return "text"
+  }
+
+  const resolveHeaderFilterOperators = (
+    columnKey: string,
+  ): readonly AffinoDataGridHeaderFilterOperatorEntry[] => {
+    const type = resolveHeaderFilterType(columnKey)
+    return DEFAULT_HEADER_FILTER_OPERATORS[type]
+  }
+
+  const setHeaderFilterQuery = (query: string): void => {
+    headerFilterState.value = {
+      ...headerFilterState.value,
+      query,
+    }
+  }
+
+  const setHeaderFilterOperator = (operator: string): void => {
+    headerFilterState.value = {
+      ...headerFilterState.value,
+      operator,
+    }
+  }
+
+  const openHeaderFilter = (columnKey: string): boolean => {
+    if (!headerFiltersEnabled.value || !columnKey) {
+      return false
+    }
+    const type = resolveHeaderFilterType(columnKey)
+    const operators = resolveHeaderFilterOperators(columnKey)
+    headerFilterState.value = {
+      open: true,
+      columnKey,
+      query: "",
+      operator: operators[0]?.value ?? "contains",
+      type,
+    }
+    pushFeedback({
+      source: "header-filter",
+      action: "open",
+      message: `Filter menu: ${columnKey}`,
+      ok: true,
+    })
+    return true
+  }
+
+  const closeHeaderFilter = (): void => {
+    if (!headerFilterState.value.open) {
+      return
+    }
+    headerFilterState.value = {
+      ...headerFilterState.value,
+      open: false,
+    }
+  }
+
+  const toggleHeaderFilter = (columnKey: string): boolean => {
+    if (
+      headerFilterState.value.open &&
+      headerFilterState.value.columnKey === columnKey
+    ) {
+      closeHeaderFilter()
+      return false
+    }
+    return openHeaderFilter(columnKey)
+  }
+
+  const getHeaderFilterUniqueValues = (
+    columnKey: string,
+  ): readonly AffinoDataGridHeaderFilterValueEntry[] => {
+    const counts = new Map<string, { value: unknown; count: number }>()
+    for (const row of rows.value) {
+      if (!isRecordRow(row)) {
+        continue
+      }
+      const value = row[columnKey]
+      const key = stableSerialize(value)
+      const existing = counts.get(key)
+      if (existing) {
+        existing.count += 1
+      } else {
+        counts.set(key, { value, count: 1 })
+      }
+    }
+    const selectedSet = new Set(findSetConditionValuesByKey(
+      featureSuite.filterModel.value?.advancedExpression,
+      columnKey,
+    ).map(value => stableSerialize(value)))
+    const query = headerFilterState.value.query.trim().toLowerCase()
+    return Array.from(counts.entries())
+      .map(([key, entry]) => ({
+        key,
+        value: entry.value,
+        label: String(entry.value ?? ""),
+        count: entry.count,
+        selected: selectedSet.has(key),
+      }))
+      .filter(entry => {
+        if (!query) {
+          return true
+        }
+        return entry.label.toLowerCase().includes(query)
+      })
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .slice(0, normalizedFeatures.headerFilters.maxUniqueValues)
+  }
+
+  const setHeaderFilterValueSelected = (
+    columnKey: string,
+    value: unknown,
+    selected: boolean,
+    options: { mode?: AffinoDataGridSetFilterValueMode } = {},
+  ): DataGridAdvancedFilterExpression | null => {
+    const mode = selected ? (options.mode ?? "append") : "remove"
+    const next = filteringHelpers.setSet(columnKey, [value], {
+      valueMode: mode,
+      mergeMode: "merge-and",
+    })
+    pushFeedback({
+      source: "header-filter",
+      action: "set-value",
+      message: `${selected ? "Selected" : "Unselected"} ${String(value ?? "")}`,
+      ok: true,
+    })
+    return next
+  }
+
+  const clearHeaderFilterValues = (columnKey: string): DataGridAdvancedFilterExpression | null => {
+    const next = filteringHelpers.clearByKey(columnKey)
+    pushFeedback({
+      source: "header-filter",
+      action: "clear",
+      message: `Filter cleared: ${columnKey}`,
+      ok: true,
+    })
+    return next
+  }
+
+  const selectAllHeaderFilterValues = (columnKey: string): DataGridAdvancedFilterExpression | null => (
+    clearHeaderFilterValues(columnKey)
+  )
+
+  const selectOnlyHeaderFilterValue = (
+    columnKey: string,
+    value: unknown,
+  ): DataGridAdvancedFilterExpression | null => {
+    const next = filteringHelpers.setSet(columnKey, [value], {
+      valueMode: "replace",
+      mergeMode: "merge-and",
+    })
+    pushFeedback({
+      source: "header-filter",
+      action: "select-only",
+      message: `Filter only: ${String(value ?? "")}`,
+      ok: true,
+    })
+    return next
+  }
+
+  const applyHeaderTextFilter = (
+    columnKey: string,
+    options: { operator?: string; value?: unknown; mergeMode?: AffinoDataGridFilterMergeMode },
+  ): DataGridAdvancedFilterExpression | null => {
+    const next = filteringHelpers.setText(columnKey, options)
+    pushFeedback({
+      source: "header-filter",
+      action: "apply-text",
+      message: `Text filter applied: ${columnKey}`,
+      ok: true,
+    })
+    return next
+  }
+
+  const applyHeaderNumberFilter = (
+    columnKey: string,
+    options: {
+      operator?: string
+      value?: unknown
+      value2?: unknown
+      mergeMode?: AffinoDataGridFilterMergeMode
+    },
+  ): DataGridAdvancedFilterExpression | null => {
+    const next = filteringHelpers.setNumber(columnKey, options)
+    pushFeedback({
+      source: "header-filter",
+      action: "apply-number",
+      message: `Number filter applied: ${columnKey}`,
+      ok: true,
+    })
+    return next
+  }
+
+  const applyHeaderDateFilter = (
+    columnKey: string,
+    options: {
+      operator?: string
+      value?: unknown
+      value2?: unknown
+      mergeMode?: AffinoDataGridFilterMergeMode
+    },
+  ): DataGridAdvancedFilterExpression | null => {
+    const next = filteringHelpers.setDate(columnKey, options)
+    pushFeedback({
+      source: "header-filter",
+      action: "apply-date",
+      message: `Date filter applied: ${columnKey}`,
+      ok: true,
+    })
+    return next
+  }
+
+  const layoutProfiles = ref<readonly AffinoDataGridLayoutProfile[]>([])
+  const captureLayoutProfile = (
+    name: string,
+    options: { id?: string } = {},
+  ): AffinoDataGridLayoutProfile => {
+    const snapshot = runtime.api.getRowModelSnapshot()
+    const profile: AffinoDataGridLayoutProfile = {
+      id: options.id?.trim() || `layout-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      name: name.trim() || "Layout",
+      createdAt: Date.now(),
+      sortState: [...sortState.value],
+      filterModel: stableClone(featureSuite.filterModel.value),
+      groupBy: stableClone(snapshot.groupBy),
+      groupExpansion: stableClone(snapshot.groupExpansion),
+      columnState: cloneColumnModelSnapshot(runtime.api.getColumnModelSnapshot()),
+    }
+    layoutProfiles.value = [...layoutProfiles.value, profile]
+    pushFeedback({
+      source: "layout",
+      action: "capture",
+      message: `Layout saved: ${profile.name}`,
+      ok: true,
+    })
+    return profile
+  }
+
+  const applyLayoutProfile = (idOrProfile: string | AffinoDataGridLayoutProfile): boolean => {
+    const profile = typeof idOrProfile === "string"
+      ? layoutProfiles.value.find(entry => entry.id === idOrProfile)
+      : idOrProfile
+    if (!profile) {
+      return false
+    }
+    setSortState([...profile.sortState])
+    featureSuite.setFilterModel(stableClone(profile.filterModel))
+    featureSuite.setGroupBy(stableClone(profile.groupBy))
+    applyColumnStateSnapshot(stableClone(profile.columnState))
+    const currentExpansion = runtime.api.getRowModelSnapshot().groupExpansion.toggledGroupKeys
+    const targetExpansion = profile.groupExpansion.toggledGroupKeys
+    const expansionSet = new Set(targetExpansion)
+    for (const groupKey of currentExpansion) {
+      if (!expansionSet.has(groupKey)) {
+        runtime.api.toggleGroup(groupKey)
+      }
+    }
+    for (const groupKey of targetExpansion) {
+      if (!currentExpansion.includes(groupKey)) {
+        runtime.api.toggleGroup(groupKey)
+      }
+    }
+    pushFeedback({
+      source: "layout",
+      action: "apply",
+      message: `Layout applied: ${profile.name}`,
+      ok: true,
+    })
+    return true
+  }
+
+  const removeLayoutProfile = (id: string): boolean => {
+    const current = layoutProfiles.value
+    const next = current.filter(entry => entry.id !== id)
+    if (next.length === current.length) {
+      return false
+    }
+    layoutProfiles.value = next
+    return true
+  }
+
+  const clearLayoutProfiles = (): void => {
+    layoutProfiles.value = []
+  }
+
+  const statusBarEnabled = ref(normalizedFeatures.statusBar.enabled)
+  const buildStatusBarMetrics = (): AffinoDataGridStatusBarMetrics<TRow> => {
+    const range = cellSelectionRange.value
+    const selectedCells = range
+      ? (range.endRow - range.startRow + 1) * (range.endColumn - range.startColumn + 1)
+      : 0
+    const selectedSummarySnapshot = featureSuite.summaryEnabled.value
+      ? (featureSuite.selectedSummary.value ?? featureSuite.recomputeSelectedSummary())
+      : null
+    const metrics: AffinoDataGridStatusBarMetrics<TRow> = {
+      rowsTotal: rows.value.length,
+      rowsFiltered: runtime.api.getRowCount(),
+      columnsVisible: runtime.columnSnapshot.value.visibleColumns.length,
+      selectedCells,
+      selectedRows: featureSuite.selectedCount.value,
+      activeCell: activeCellSelection.value
+        ? {
+            rowKey: activeCellSelection.value.rowKey,
+            columnKey: activeCellSelection.value.columnKey,
+          }
+        : null,
+      anchorCell: anchorCellSelection.value
+        ? {
+            rowKey: anchorCellSelection.value.rowKey,
+            columnKey: anchorCellSelection.value.columnKey,
+          }
+        : null,
+      summary: selectedSummarySnapshot,
+      format: (_columnKey, fallback = "") => fallback,
+      getAggregate: (columnKey, aggregation) => {
+        const column = selectedSummarySnapshot?.columns?.[columnKey]
+        if (!column) {
+          return null
+        }
+        return column.metrics[aggregation] ?? null
+      },
+      resolveRowByKey: (rowKey: string): TRow | null => {
+        for (let index = 0; index < rows.value.length; index += 1) {
+          const row = rows.value[index]
+          if (!row) {
+            continue
+          }
+          if (resolveRowKey(row, index) === rowKey) {
+            return row
+          }
+        }
+        return null
+      },
+    }
+    return metrics
+  }
+
+  const statusBarMetrics = ref<AffinoDataGridStatusBarMetrics<TRow>>(buildStatusBarMetrics())
+
+  const refreshStatusBarMetrics = (): AffinoDataGridStatusBarMetrics<TRow> => {
+    const nextMetrics = buildStatusBarMetrics()
+    statusBarMetrics.value = nextMetrics
+    return nextMetrics
+  }
+
   const unsubscribeRowModel = runtime.rowModel.subscribe(nextSnapshot => {
     paginationSnapshot.value = clonePaginationSnapshot(nextSnapshot.pagination)
+    refreshStatusBarMetrics()
     if (historySupported.value) {
       refreshHistorySnapshot()
     }
@@ -1546,19 +2251,40 @@ export function useAffinoDataGrid<TRow>(
 
   const unsubscribeColumnModel = runtime.columnModel.subscribe(nextSnapshot => {
     columnStateSnapshot.value = cloneColumnModelSnapshot(nextSnapshot)
+    refreshStatusBarMetrics()
     if (historySupported.value) {
       refreshHistorySnapshot()
     }
   })
 
+  watch(
+    [
+      () => rows.value,
+      () => featureSuite.selectedCount.value,
+      cellSelectionRange,
+      () => featureSuite.selectedSummary.value,
+      () => runtime.columnSnapshot.value.visibleColumns.length,
+    ],
+    () => {
+      refreshStatusBarMetrics()
+    },
+    { flush: "sync" },
+  )
+
   onBeforeUnmount(() => {
     if (typeof window !== "undefined") {
-      window.removeEventListener("mouseup", stopPointerCellSelection)
-      window.removeEventListener("pointerup", stopPointerCellSelection)
-      window.removeEventListener("pointercancel", stopPointerCellSelection)
+      window.removeEventListener("mouseup", handleGlobalPointerUp)
+      window.removeEventListener("pointerup", handleGlobalPointerUp)
+      window.removeEventListener("pointercancel", handleGlobalPointerCancel)
+      window.removeEventListener("mousemove", onColumnResizeMove)
+      window.removeEventListener("mouseup", onColumnResizeEnd)
+      window.removeEventListener("mousemove", onRowResizeMove)
+      window.removeEventListener("mouseup", onRowResizeEnd)
     }
     clipboardBridge.dispose()
-    stopPointerCellSelection()
+    stopAllPointerInteractions(false)
+    stopColumnResize()
+    stopRowResize()
     unsubscribeRowModel()
     unsubscribeColumnModel()
   })
@@ -1574,11 +2300,166 @@ export function useAffinoDataGrid<TRow>(
       toggleColumnSort,
       clearSort,
     },
-    runAction,
+    runAction: runActionWithFeedback,
     filteringHelpers,
     featureSuite,
     bindingSuite,
   })
+
+  const findCellElement = (rowKey: string, columnKey: string): HTMLElement | null => {
+    if (typeof document === "undefined") {
+      return null
+    }
+    const cells = document.querySelectorAll<HTMLElement>("[data-row-key][data-column-key]")
+    for (const cell of cells) {
+      if (cell.dataset.rowKey === rowKey && cell.dataset.columnKey === columnKey) {
+        return cell
+      }
+    }
+    return null
+  }
+
+  const findHeaderElement = (columnKey: string): HTMLElement | null => {
+    if (typeof document === "undefined") {
+      return null
+    }
+    const headers = document.querySelectorAll<HTMLElement>("[role='columnheader'][data-column-key]")
+    for (const header of headers) {
+      if (header.dataset.columnKey === columnKey) {
+        return header
+      }
+    }
+    return null
+  }
+
+  const openContextMenuForActiveCell = (
+    options: { zone?: "cell" | "range"; clientX?: number; clientY?: number } = {},
+  ): boolean => {
+    const active = activeCellSelection.value
+    if (!active) {
+      return false
+    }
+    const zone = options.zone ?? "cell"
+    const cell = findCellElement(active.rowKey, active.columnKey)
+    const rect = cell?.getBoundingClientRect()
+    const x = options.clientX ?? (rect ? rect.left + rect.width / 2 : 0)
+    const y = options.clientY ?? (rect ? rect.top + rect.height / 2 : 0)
+    baseResult.contextMenu.open(x, y, {
+      zone,
+      columnKey: active.columnKey,
+      rowId: active.rowKey,
+    })
+    return true
+  }
+
+  const openContextMenuForHeader = (
+    columnKey: string,
+    options: { clientX?: number; clientY?: number } = {},
+  ): boolean => {
+    const header = findHeaderElement(columnKey)
+    const rect = header?.getBoundingClientRect()
+    const x = options.clientX ?? (rect ? rect.left + rect.width / 2 : 0)
+    const y = options.clientY ?? (rect ? rect.top + rect.height / 2 : 0)
+    baseResult.contextMenu.open(x, y, {
+      zone: "header",
+      columnKey,
+      rowId: null,
+    })
+    return true
+  }
+
+  const resolveContextMenuActionDisabledReason = (
+    actionId: DataGridContextMenuActionId,
+  ): string | null => {
+    const state = baseResult.contextMenu.state.value
+    if ((actionId === "copy" || actionId === "cut" || actionId === "clear") && !hasCellRangeContext()) {
+      return "No active cell range"
+    }
+    if (actionId === "paste" && !clipboardEnabled.value) {
+      return "Clipboard feature disabled"
+    }
+    if ((actionId === "sort-asc" || actionId === "sort-desc" || actionId === "sort-clear" || actionId === "auto-size") && !state.columnKey) {
+      return "No target column"
+    }
+    if (actionId === "filter" && !filteringEnabled.value) {
+      return "Filtering feature disabled"
+    }
+    return null
+  }
+
+  const isContextMenuActionDisabled = (actionId: DataGridContextMenuActionId): boolean => (
+    resolveContextMenuActionDisabledReason(actionId) != null
+  )
+
+  const groupedContextMenuActions = computed(() => {
+    const actionsById = new Map(
+      baseResult.contextMenu.actions.value.map(action => [action.id, action] as const),
+    )
+    const groups: Array<{
+      id: "clipboard" | "sorting" | "filters" | "column"
+      label: string
+      actions: readonly DataGridContextMenuAction[]
+    }> = [
+      {
+        id: "clipboard",
+        label: "Clipboard",
+        actions: ["copy", "cut", "paste", "clear"]
+          .map(id => actionsById.get(id as DataGridContextMenuActionId))
+          .filter((entry): entry is DataGridContextMenuAction => Boolean(entry)),
+      },
+      {
+        id: "sorting",
+        label: "Sorting",
+        actions: ["sort-asc", "sort-desc", "sort-clear"]
+          .map(id => actionsById.get(id as DataGridContextMenuActionId))
+          .filter((entry): entry is DataGridContextMenuAction => Boolean(entry)),
+      },
+      {
+        id: "filters",
+        label: "Filters",
+        actions: ["filter"]
+          .map(id => actionsById.get(id as DataGridContextMenuActionId))
+          .filter((entry): entry is DataGridContextMenuAction => Boolean(entry)),
+      },
+      {
+        id: "column",
+        label: "Column",
+        actions: ["auto-size"]
+          .map(id => actionsById.get(id as DataGridContextMenuActionId))
+          .filter((entry): entry is DataGridContextMenuAction => Boolean(entry)),
+      },
+    ]
+    return groups.filter(group => group.actions.length > 0)
+  })
+
+  const runContextMenuActionWithParity = async (
+    actionId: DataGridContextMenuActionId,
+  ): Promise<AffinoDataGridActionResult> => {
+    const disabledReason = resolveContextMenuActionDisabledReason(actionId)
+    if (disabledReason) {
+      const result = {
+        ok: false,
+        affected: 0,
+        message: disabledReason,
+      } satisfies AffinoDataGridActionResult
+      pushFeedback({
+        source: "context-menu",
+        action: actionId,
+        message: disabledReason,
+        ok: false,
+      })
+      return result
+    }
+    const result = await baseResult.contextMenu.runAction(actionId)
+    pushFeedback({
+      source: "context-menu",
+      action: actionId,
+      message: result.message,
+      affected: result.affected,
+      ok: result.ok,
+    })
+    return result
+  }
 
   const setPagination = (pagination: { pageSize: number; currentPage: number } | null): void => {
     runtime.api.setPagination(pagination)
@@ -1640,6 +2521,182 @@ export function useAffinoDataGrid<TRow>(
     refreshColumnStateSnapshot()
   }
 
+  const columnResizeState = ref<{
+    columnKey: string
+    startX: number
+    startWidth: number
+  } | null>(null)
+
+  const stopColumnResize = (): void => {
+    columnResizeState.value = null
+    if (typeof window !== "undefined") {
+      window.removeEventListener("mousemove", onColumnResizeMove)
+      window.removeEventListener("mouseup", onColumnResizeEnd)
+    }
+    refreshColumnStateSnapshot()
+  }
+
+  const onColumnResizeMove = (event: MouseEvent): void => {
+    const state = columnResizeState.value
+    if (!state) {
+      return
+    }
+    const delta = event.clientX - state.startX
+    const nextWidth = Math.max(56, Math.round(state.startWidth + delta))
+    runtime.api.setColumnWidth(state.columnKey, nextWidth)
+  }
+
+  const onColumnResizeEnd = (): void => {
+    if (!columnResizeState.value) {
+      return
+    }
+    stopColumnResize()
+  }
+
+  const startColumnResize = (columnKey: string, event: MouseEvent): void => {
+    event.preventDefault()
+    const column = runtime.api.getColumn(columnKey)
+    if (!column) {
+      return
+    }
+    const startWidth = Number.isFinite(column.width)
+      ? Number(column.width)
+      : Number(column.column.width ?? 160)
+    columnResizeState.value = {
+      columnKey,
+      startX: event.clientX,
+      startWidth: Math.max(56, startWidth || 160),
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("mousemove", onColumnResizeMove)
+      window.addEventListener("mouseup", onColumnResizeEnd)
+    }
+  }
+
+  const autosizeColumn = async (columnKey: string): Promise<void> => {
+    await runActionWithFeedback("auto-size", { columnKey })
+    refreshColumnStateSnapshot()
+  }
+
+  const createColumnResizeHandleBindings = (columnKey: string) => ({
+    role: "separator" as const,
+    tabindex: 0,
+    "aria-orientation": "vertical" as const,
+    "data-column-key": columnKey,
+    onMousedown: (event: MouseEvent) => {
+      startColumnResize(columnKey, event)
+    },
+    onDblclick: (_event?: MouseEvent) => {
+      void autosizeColumn(columnKey)
+    },
+    onKeydown: (event: KeyboardEvent) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault()
+        void autosizeColumn(columnKey)
+        return
+      }
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault()
+        const direction = event.key === "ArrowRight" ? 1 : -1
+        const current = runtime.api.getColumn(columnKey)
+        const currentWidth = Number(current?.width ?? current?.column.width ?? 160)
+        runtime.api.setColumnWidth(columnKey, Math.max(56, currentWidth + direction * 12))
+      }
+    },
+  })
+
+  const rowResizeState = ref<{
+    rowKey: string
+    startY: number
+    startBase: number
+  } | null>(null)
+
+  const stopRowResize = (): void => {
+    rowResizeState.value = null
+    if (typeof window !== "undefined") {
+      window.removeEventListener("mousemove", onRowResizeMove)
+      window.removeEventListener("mouseup", onRowResizeEnd)
+    }
+  }
+
+  const onRowResizeMove = (event: MouseEvent): void => {
+    const state = rowResizeState.value
+    if (!state || !featureSuite.rowHeightEnabled.value) {
+      return
+    }
+    featureSuite.setRowHeightMode("fixed")
+    const delta = event.clientY - state.startY
+    featureSuite.setBaseRowHeight(Math.max(22, Math.round(state.startBase + delta)))
+  }
+
+  const onRowResizeEnd = (): void => {
+    if (!rowResizeState.value) {
+      return
+    }
+    stopRowResize()
+  }
+
+  const startRowResize = (rowKey: string, event: MouseEvent): void => {
+    if (!featureSuite.rowHeightEnabled.value) {
+      return
+    }
+    event.preventDefault()
+    rowResizeState.value = {
+      rowKey,
+      startY: event.clientY,
+      startBase: featureSuite.baseRowHeight.value,
+    }
+    featureSuite.setRowHeightMode("fixed")
+    if (typeof window !== "undefined") {
+      window.addEventListener("mousemove", onRowResizeMove)
+      window.addEventListener("mouseup", onRowResizeEnd)
+    }
+  }
+
+  const autosizeRows = (): void => {
+    if (!featureSuite.rowHeightEnabled.value || !featureSuite.rowHeightSupported.value) {
+      return
+    }
+    featureSuite.setRowHeightMode("auto")
+    featureSuite.measureVisibleRowHeights()
+    featureSuite.applyRowHeightSettings()
+    pushFeedback({
+      source: "action",
+      action: "autosize-rows",
+      message: "Auto-sized visible rows",
+      ok: true,
+    })
+  }
+
+  const createRowResizeHandleBindings = (rowKey: string) => ({
+    role: "separator" as const,
+    tabindex: 0,
+    "aria-orientation": "horizontal" as const,
+    "data-row-key": rowKey,
+    onMousedown: (event: MouseEvent) => {
+      startRowResize(rowKey, event)
+    },
+    onDblclick: (_event?: MouseEvent) => {
+      autosizeRows()
+    },
+    onKeydown: (event: KeyboardEvent) => {
+      if (!featureSuite.rowHeightEnabled.value) {
+        return
+      }
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault()
+        autosizeRows()
+        return
+      }
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault()
+        featureSuite.setRowHeightMode("fixed")
+        const delta = event.key === "ArrowDown" ? 2 : -2
+        featureSuite.setBaseRowHeight(Math.max(22, featureSuite.baseRowHeight.value + delta))
+      }
+    },
+  })
+
   const applyColumnStateSnapshot = (snapshot: DataGridColumnModelSnapshot): void => {
     runtime.api.setColumnOrder(snapshot.order)
     for (const column of snapshot.columns) {
@@ -1663,6 +2720,12 @@ export function useAffinoDataGrid<TRow>(
     }
     const committedId = await runtime.api.undoTransaction()
     refreshHistorySnapshot()
+    pushFeedback({
+      source: "history",
+      action: "undo",
+      message: "Undo",
+      ok: true,
+    })
     return committedId
   }
 
@@ -1672,12 +2735,51 @@ export function useAffinoDataGrid<TRow>(
     }
     const committedId = await runtime.api.redoTransaction()
     refreshHistorySnapshot()
+    pushFeedback({
+      source: "history",
+      action: "redo",
+      message: "Redo",
+      ok: true,
+    })
     return committedId
   }
 
   return {
     ...baseResult,
     DataGrid,
+    actions: {
+      ...baseResult.actions,
+      runAction: runActionWithFeedback,
+    },
+    feedback: {
+      enabled: feedbackEnabled,
+      lastAction: feedbackLastAction,
+      events: feedbackEvents,
+      clear: () => {
+        feedbackEvents.value = []
+      },
+    },
+    layoutProfiles: {
+      profiles: layoutProfiles,
+      capture: captureLayoutProfile,
+      apply: applyLayoutProfile,
+      remove: removeLayoutProfile,
+      clear: clearLayoutProfiles,
+    },
+    statusBar: {
+      enabled: statusBarEnabled,
+      metrics: statusBarMetrics,
+      refresh: refreshStatusBarMetrics,
+    },
+    contextMenu: {
+      ...baseResult.contextMenu,
+      groupedActions: groupedContextMenuActions,
+      openForActiveCell: openContextMenuForActiveCell,
+      openForHeader: openContextMenuForHeader,
+      isActionDisabled: isContextMenuActionDisabled,
+      getActionDisabledReason: resolveContextMenuActionDisabledReason,
+      runAction: runContextMenuActionWithParity,
+    },
     cellSelection: {
       activeCell: activeCellSelection,
       anchorCell: anchorCellSelection,
@@ -1702,9 +2804,65 @@ export function useAffinoDataGrid<TRow>(
       applyFillPreview: rangeMutationEngine.applyFillPreview,
       applyRangeMove: rangeMutationEngine.applyRangeMove,
     },
+    features: {
+      ...baseResult.features,
+      editing: {
+        ...baseResult.features.editing,
+        enumEditor: {
+          enabled: enumEditorEnabled,
+          primitive: enumEditorPrimitive,
+          resolveOptions: resolveEnumEditorOptions,
+        },
+      },
+      interactions: {
+        enabled: interactionsEnabled,
+        range: {
+          enabled: rangeInteractionsEnabled,
+          fillEnabled: rangeFillEnabled,
+          moveEnabled: rangeMoveEnabled,
+          pointerMode: rangePointerMode,
+          stop: () => {
+            stopRangePointerInteraction(false)
+          },
+        },
+      },
+      headerFilters: {
+        enabled: headerFiltersEnabled,
+        state: headerFilterState,
+        open: openHeaderFilter,
+        close: closeHeaderFilter,
+        toggle: toggleHeaderFilter,
+        setQuery: setHeaderFilterQuery,
+        setOperator: setHeaderFilterOperator,
+        getOperators: resolveHeaderFilterOperators,
+        getUniqueValues: getHeaderFilterUniqueValues,
+        setValueSelected: setHeaderFilterValueSelected,
+        selectOnlyValue: selectOnlyHeaderFilterValue,
+        selectAllValues: selectAllHeaderFilterValues,
+        clearValues: clearHeaderFilterValues,
+        applyText: applyHeaderTextFilter,
+        applyNumber: applyHeaderNumberFilter,
+        applyDate: applyHeaderDateFilter,
+        clear: clearHeaderFilterValues,
+      },
+    },
     bindings: {
       ...baseResult.bindings,
       cellSelection: createCellSelectionBindings,
+      rangeHandle: createRangeHandleBindings,
+      rangeSurface: createRangeSurfaceBindings,
+      columnResizeHandle: createColumnResizeHandleBindings,
+      rowResizeHandle: createRowResizeHandleBindings,
+      contextMenuAction: (
+        actionId,
+        options = {},
+      ) => ({
+        onClick: () => {
+          void runContextMenuActionWithParity(actionId).then(result => {
+            options.onResult?.(result)
+          })
+        },
+      }),
     },
     pagination: {
       snapshot: paginationSnapshot,

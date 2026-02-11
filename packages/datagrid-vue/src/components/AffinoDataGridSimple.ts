@@ -222,6 +222,11 @@ export const AffinoDataGridSimple = defineComponent({
       visibility: incomingFeatures?.visibility,
       tree: incomingFeatures?.tree,
       rowHeight: incomingFeatures?.rowHeight,
+      keyboardNavigation: incomingFeatures?.keyboardNavigation ?? true,
+      interactions: incomingFeatures?.interactions,
+      headerFilters: incomingFeatures?.headerFilters,
+      feedback: incomingFeatures?.feedback,
+      statusBar: incomingFeatures?.statusBar,
     }
 
     const grid = useAffinoDataGridUi<RowLike>({

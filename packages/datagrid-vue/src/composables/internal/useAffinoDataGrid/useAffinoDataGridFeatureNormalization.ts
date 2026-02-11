@@ -49,6 +49,25 @@ export interface AffinoDataGridFeatureInput<TRow> {
   tree?: boolean | AffinoTreeFeatureInput
   rowHeight?: boolean | AffinoRowHeightFeatureInput
   keyboardNavigation?: boolean | { enabled?: boolean }
+  interactions?: boolean | {
+    enabled?: boolean
+    range?: boolean | {
+      enabled?: boolean
+      fill?: boolean
+      move?: boolean
+    }
+  }
+  headerFilters?: boolean | {
+    enabled?: boolean
+    maxUniqueValues?: number
+  }
+  feedback?: boolean | {
+    enabled?: boolean
+    maxEvents?: number
+  }
+  statusBar?: boolean | {
+    enabled?: boolean
+  }
 }
 
 export interface NormalizedAffinoDataGridFeatures<TRow> {
@@ -61,11 +80,139 @@ export interface NormalizedAffinoDataGridFeatures<TRow> {
   tree: NormalizedAffinoTreeFeature
   rowHeight: NormalizedAffinoRowHeightFeature
   keyboardNavigation: { enabled: boolean }
+  interactions: {
+    enabled: boolean
+    range: {
+      enabled: boolean
+      fill: boolean
+      move: boolean
+    }
+  }
+  headerFilters: {
+    enabled: boolean
+    maxUniqueValues: number
+  }
+  feedback: {
+    enabled: boolean
+    maxEvents: number
+  }
+  statusBar: {
+    enabled: boolean
+  }
 }
 
 function normalizeKeyboardNavigationFeature(
   input?: boolean | { enabled?: boolean },
 ): { enabled: boolean } {
+  if (typeof input === "boolean") {
+    return { enabled: input }
+  }
+  if (!input) {
+    return { enabled: true }
+  }
+  return { enabled: input.enabled ?? true }
+}
+
+function normalizeInteractionsFeature(
+  input?: boolean | {
+    enabled?: boolean
+    range?: boolean | {
+      enabled?: boolean
+      fill?: boolean
+      move?: boolean
+    }
+  },
+): NormalizedAffinoDataGridFeatures<never>["interactions"] {
+  if (typeof input === "boolean") {
+    return {
+      enabled: input,
+      range: {
+        enabled: input,
+        fill: input,
+        move: input,
+      },
+    }
+  }
+  if (!input) {
+    return {
+      enabled: false,
+      range: {
+        enabled: false,
+        fill: false,
+        move: false,
+      },
+    }
+  }
+  const rangeInput = input.range
+  const rangeEnabled = typeof rangeInput === "boolean"
+    ? rangeInput
+    : (rangeInput?.enabled ?? (input.enabled ?? true))
+  const fillEnabled = typeof rangeInput === "boolean"
+    ? rangeInput
+    : (rangeInput?.fill ?? rangeEnabled)
+  const moveEnabled = typeof rangeInput === "boolean"
+    ? rangeInput
+    : (rangeInput?.move ?? rangeEnabled)
+
+  return {
+    enabled: input.enabled ?? true,
+    range: {
+      enabled: rangeEnabled,
+      fill: fillEnabled,
+      move: moveEnabled,
+    },
+  }
+}
+
+function normalizeHeaderFiltersFeature(
+  input?: boolean | { enabled?: boolean; maxUniqueValues?: number },
+): NormalizedAffinoDataGridFeatures<never>["headerFilters"] {
+  if (typeof input === "boolean") {
+    return {
+      enabled: input,
+      maxUniqueValues: 250,
+    }
+  }
+  if (!input) {
+    return {
+      enabled: false,
+      maxUniqueValues: 250,
+    }
+  }
+  return {
+    enabled: input.enabled ?? true,
+    maxUniqueValues: Number.isFinite(input.maxUniqueValues)
+      ? Math.max(20, Math.trunc(input.maxUniqueValues as number))
+      : 250,
+  }
+}
+
+function normalizeFeedbackFeature(
+  input?: boolean | { enabled?: boolean; maxEvents?: number },
+): NormalizedAffinoDataGridFeatures<never>["feedback"] {
+  if (typeof input === "boolean") {
+    return {
+      enabled: input,
+      maxEvents: 100,
+    }
+  }
+  if (!input) {
+    return {
+      enabled: true,
+      maxEvents: 100,
+    }
+  }
+  return {
+    enabled: input.enabled ?? true,
+    maxEvents: Number.isFinite(input.maxEvents)
+      ? Math.max(20, Math.trunc(input.maxEvents as number))
+      : 100,
+  }
+}
+
+function normalizeStatusBarFeature(
+  input?: boolean | { enabled?: boolean },
+): NormalizedAffinoDataGridFeatures<never>["statusBar"] {
   if (typeof input === "boolean") {
     return { enabled: input }
   }
@@ -88,5 +235,9 @@ export function normalizeAffinoDataGridFeatures<TRow>(
     tree: normalizeTreeFeature(features?.tree),
     rowHeight: normalizeRowHeightFeature(features?.rowHeight),
     keyboardNavigation: normalizeKeyboardNavigationFeature(features?.keyboardNavigation),
+    interactions: normalizeInteractionsFeature(features?.interactions),
+    headerFilters: normalizeHeaderFiltersFeature(features?.headerFilters),
+    feedback: normalizeFeedbackFeature(features?.feedback),
+    statusBar: normalizeStatusBarFeature(features?.statusBar),
   }
 }

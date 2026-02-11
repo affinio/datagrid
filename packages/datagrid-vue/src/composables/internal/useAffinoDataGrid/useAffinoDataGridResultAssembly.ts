@@ -84,6 +84,11 @@ export function assembleAffinoDataGridResult<TRow>(
         enabled: features.editingEnabled,
         mode: features.editingMode,
         enum: features.editingEnum,
+        enumEditor: {
+          enabled: features.enumEditorEnabled,
+          primitive: features.enumEditorPrimitive,
+          resolveOptions: features.resolveEnumEditorOptions,
+        },
         activeSession: features.activeSession,
         beginEdit: features.beginEdit,
         updateDraft: features.updateDraft,

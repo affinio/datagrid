@@ -208,6 +208,21 @@ const grid = useAffinoDataGrid({
         expandedByDefault: true,
       },
     },
+    interactions: {
+      enabled: true,
+      range: { enabled: true, fill: true, move: true },
+    },
+    headerFilters: {
+      enabled: true,
+      maxUniqueValues: 300,
+    },
+    feedback: {
+      enabled: true,
+      maxEvents: 120,
+    },
+    statusBar: {
+      enabled: true,
+    },
     keyboardNavigation: true,
   },
 })
@@ -274,6 +289,15 @@ Row identity contract (required):
 - `grid.rowReorder` exposes guarded client-side reorder (`moveByIndex`, `moveByKey`).
 - `grid.cellSelection` exposes anchor/focus/range model (`setCellByKey`, `isCellSelected`, `clear`).
 - `grid.cellRange` exposes range clipboard/fill/move (`copy`, `cut`, `paste`, `clear`, `applyFillPreview`, `applyRangeMove`).
+- `grid.features.interactions.range` provides declarative fill/move lifecycle flags.
+- `grid.bindings.rangeHandle` + `grid.bindings.rangeSurface` wire fill/move without page-local pointer logic.
+- `grid.bindings.columnResizeHandle` + `grid.bindings.rowResizeHandle` provide drag/keyboard/double-click autosize.
+- `grid.features.headerFilters` provides Excel-style popover model (`open/toggle/query/operators/unique-values/select-only/select-all`).
+- `grid.feedback` exposes unified event stream for action/context/history/range/header-filter flows.
+- `grid.contextMenu` parity helpers: `openForActiveCell`, `openForHeader`, `groupedActions`, disabled reason helpers.
+- `grid.features.editing.enumEditor` exposes Affino enum-editor contract (`primitive`, `resolveOptions`).
+- `grid.layoutProfiles` exposes save/apply/remove/clear for sort/filter/group/column snapshots.
+- `grid.statusBar` exposes built-in metrics model and summary accessors for status bar UIs.
 
 ## Complete integration playbook
 
