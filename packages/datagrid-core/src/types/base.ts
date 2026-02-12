@@ -1,5 +1,4 @@
 import type { DataGridColumn, DataGridColumnGroupDef } from "./column"
-import type { DataGridStyleConfig } from "@affino/datagrid-theme"
 import type { DataGridPluginDefinition } from "@affino/datagrid-plugins"
 import type { DataGridSettingsAdapter } from "../dataGridSettingsAdapter"
 
@@ -297,7 +296,6 @@ export interface DataGridFeatureConfig<T = any> {
 export interface DataGridAppearanceConfig {
   rowHeightMode?: "fixed" | "auto"
   rowHeight?: number
-  styleConfig?: DataGridStyleConfig | null
 }
 
 export interface DataGridLoadConfig {

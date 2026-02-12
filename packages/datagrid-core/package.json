@@ -54,9 +54,10 @@
     "core"
   ],
   "dependencies": {
-    "@affino/datagrid-plugins": "workspace:*",
-    "@affino/datagrid-theme": "workspace:*"
+    "@affino/datagrid-plugins": "workspace:*"
   },
+  "peerDependencies": {},
+  "devDependencies": {},
   "bugs": {
     "url": "https://github.com/affinio/affinio/issues"
   },

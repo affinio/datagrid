@@ -10,9 +10,7 @@
     "noUncheckedIndexedAccess": false,
     "paths": {
       "@affino/datagrid-plugins": ["../datagrid-plugins/dist/index.d.ts"],
-      "@affino/datagrid-plugins/*": ["../datagrid-plugins/dist/*"],
-      "@affino/datagrid-theme": ["../datagrid-theme/dist/index.d.ts"],
-      "@affino/datagrid-theme/*": ["../datagrid-theme/dist/*"]
+      "@affino/datagrid-plugins/*": ["../datagrid-plugins/dist/*"]
     }
   },
   "include": [

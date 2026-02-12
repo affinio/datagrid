@@ -104,4 +104,6 @@ export {
 export type {
   DataGridOverlayTransform,
   DataGridOverlayTransformInput,
+  DataGridAppearanceConfig,
+  DataGridStyleConfig,
 } from "./types"

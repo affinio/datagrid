@@ -45,15 +45,15 @@
   },
   "peerDependencies": {
     "pinia": "^2.1.0 || ^3.0.0",
-    "vue": "^3.3.0"
+    "vue": "^3.3.0",
+    "@affino/datagrid-theme": "workspace:^"
   },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*",
-    "@affino/datagrid-orchestration": "workspace:*",
-    "@affino/dialog-vue": "workspace:^",
-    "@affino/listbox-core": "workspace:^",
-    "@affino/menu-vue": "workspace:^",
-    "@affino/popover-vue": "workspace:^"
+    "@affino/datagrid-orchestration": "workspace:*"
+  },
+  "devDependencies": {
+    "@affino/datagrid-theme": "workspace:^"
   },
   "repository": {
     "type": "git",
