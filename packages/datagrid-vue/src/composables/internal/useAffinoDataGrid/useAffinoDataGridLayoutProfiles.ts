@@ -69,19 +69,7 @@ export function useAffinoDataGridLayoutProfiles<TRow>(
     options.featureSuite.setFilterModel(options.stableClone(profile.filterModel))
     options.featureSuite.setGroupBy(options.stableClone(profile.groupBy))
     options.applyColumnStateSnapshot(options.stableClone(profile.columnState))
-    const currentExpansion = options.runtime.api.getRowModelSnapshot().groupExpansion.toggledGroupKeys
-    const targetExpansion = profile.groupExpansion.toggledGroupKeys
-    const expansionSet = new Set(targetExpansion)
-    for (const groupKey of currentExpansion) {
-      if (!expansionSet.has(groupKey)) {
-        options.runtime.api.toggleGroup(groupKey)
-      }
-    }
-    for (const groupKey of targetExpansion) {
-      if (!currentExpansion.includes(groupKey)) {
-        options.runtime.api.toggleGroup(groupKey)
-      }
-    }
+    options.runtime.api.setGroupExpansion(options.stableClone(profile.groupExpansion))
     options.pushFeedback({
       source: "layout",
       action: "apply",

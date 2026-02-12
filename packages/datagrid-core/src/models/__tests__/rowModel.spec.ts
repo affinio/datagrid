@@ -7,11 +7,14 @@ import {
 } from "../index"
 import {
   buildPaginationSnapshot,
+  cloneTreeDataSpec,
   cloneGroupBySpec,
   isGroupExpanded,
   isSameGroupBySpec,
+  isSameTreeDataSpec,
   normalizePaginationInput,
   normalizeGroupBySpec,
+  normalizeTreeDataSpec,
   toggleGroupExpansionKey,
 } from "../rowModel"
 
@@ -181,5 +184,104 @@ describe("rowModel normalization", () => {
       startIndex: -1,
       endIndex: -1,
     })
+  })
+
+  it("normalizes treeData path spec with deterministic defaults", () => {
+    const getDataPath = (row: { path: string[] }) => row.path
+    const normalized = normalizeTreeDataSpec({
+      mode: "path",
+      getDataPath,
+      expandedByDefault: 1 as unknown as boolean,
+    })
+
+    expect(normalized).toEqual({
+      mode: "path",
+      getDataPath,
+      expandedByDefault: true,
+      orphanPolicy: "root",
+      cyclePolicy: "ignore-edge",
+      filterMode: "include-parents",
+    })
+    expect(cloneTreeDataSpec(normalized)).toEqual(normalized)
+    expect(
+      isSameTreeDataSpec(normalized, {
+        mode: "path",
+        getDataPath,
+        expandedByDefault: true,
+      }),
+    ).toBe(true)
+  })
+
+  it("normalizes treeData parent spec with deterministic defaults", () => {
+    const getParentId = (row: { parentId?: string | null }) => row.parentId ?? null
+    const normalized = normalizeTreeDataSpec({
+      mode: "parent",
+      getParentId,
+      orphanPolicy: "drop",
+      cyclePolicy: "error",
+      rootParentId: null,
+    })
+
+    expect(normalized).toEqual({
+      mode: "parent",
+      getParentId,
+      rootParentId: null,
+      expandedByDefault: false,
+      orphanPolicy: "drop",
+      cyclePolicy: "error",
+      filterMode: "include-parents",
+    })
+    expect(cloneTreeDataSpec(normalized)).toEqual(normalized)
+    expect(
+      isSameTreeDataSpec(normalized, {
+        mode: "parent",
+        getParentId,
+        orphanPolicy: "drop",
+        cyclePolicy: "error",
+        filterMode: "include-parents",
+      }),
+    ).toBe(true)
+  })
+
+  it("normalizes treeData filter mode deterministically", () => {
+    const getParentId = (row: { parentId?: string | null }) => row.parentId ?? null
+    const normalized = normalizeTreeDataSpec({
+      mode: "parent",
+      getParentId,
+      filterMode: "include-descendants",
+    })
+    expect(normalized?.filterMode).toBe("include-descendants")
+
+    const fallback = normalizeTreeDataSpec({
+      mode: "parent",
+      getParentId,
+      filterMode: "unknown" as unknown as "include-parents",
+    })
+    expect(fallback?.filterMode).toBe("include-parents")
+  })
+
+  it("rejects mixed hierarchy sources and missing resolver in treeData spec", () => {
+    const getDataPath = (row: { path: string[] }) => row.path
+    const getParentId = (row: { parentId?: string | null }) => row.parentId ?? null
+
+    expect(
+      normalizeTreeDataSpec({
+        mode: "path",
+        getDataPath,
+        getParentId,
+      } as unknown as Parameters<typeof normalizeTreeDataSpec>[0]),
+    ).toBeNull()
+    expect(
+      normalizeTreeDataSpec({
+        mode: "parent",
+      } as unknown as Parameters<typeof normalizeTreeDataSpec>[0]),
+    ).toBeNull()
+    expect(() =>
+      normalizeTreeDataSpec({
+        mode: "parent",
+        getParentId,
+        rootParentId: {} as unknown as string,
+      }),
+    ).toThrowError(/treeData.rootParentId/)
   })
 })

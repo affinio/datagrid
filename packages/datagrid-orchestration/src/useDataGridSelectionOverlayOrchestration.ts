@@ -43,6 +43,8 @@ export interface DataGridSelectionOverlayVirtualWindow {
 export interface UseDataGridSelectionOverlayOrchestrationOptions {
   headerHeight: number
   rowHeight: number
+  resolveRowHeight?: (rowIndex: number) => number
+  resolveRowOffset?: (rowIndex: number) => number
   orderedColumns: readonly DataGridOverlayColumnLike[]
   orderedColumnMetrics: readonly DataGridOverlayColumnMetricLike[]
   cellSelectionRange: DataGridOverlayRange | null
@@ -111,6 +113,8 @@ function buildScrollOverlaySegments(
   keyPrefix: string,
   headerHeight: number,
   rowHeight: number,
+  resolveRowHeight: ((rowIndex: number) => number) | undefined,
+  resolveRowOffset: ((rowIndex: number) => number) | undefined,
   orderedColumns: readonly DataGridOverlayColumnLike[],
   orderedColumnMetrics: readonly DataGridOverlayColumnMetricLike[],
   resolveDevicePixelRatio?: () => number,
@@ -118,8 +122,33 @@ function buildScrollOverlaySegments(
   if (!range) {
     return []
   }
-  const top = headerHeight + range.startRow * rowHeight
-  const height = (range.endRow - range.startRow + 1) * rowHeight
+  const resolveOffset = (rowIndex: number): number => {
+    if (resolveRowOffset) {
+      return resolveRowOffset(rowIndex)
+    }
+    if (resolveRowHeight) {
+      let offset = 0
+      for (let index = 0; index < rowIndex; index += 1) {
+        offset += resolveRowHeight(index)
+      }
+      return offset
+    }
+    return rowIndex * rowHeight
+  }
+
+  const resolveSpanHeight = (start: number, end: number): number => {
+    if (!resolveRowHeight) {
+      return (end - start + 1) * rowHeight
+    }
+    let height = 0
+    for (let index = start; index <= end; index += 1) {
+      height += resolveRowHeight(index)
+    }
+    return height
+  }
+
+  const top = headerHeight + resolveOffset(range.startRow)
+  const height = resolveSpanHeight(range.startRow, range.endRow)
 
   const segments: Array<{ start: number; end: number; mode: "pinned-left" | "scroll" }> = []
   let currentMode: "pinned-left" | "scroll" | null = null
@@ -197,6 +226,8 @@ export function useDataGridSelectionOverlayOrchestration(
     "selection",
     options.headerHeight,
     options.rowHeight,
+    options.resolveRowHeight,
+    options.resolveRowOffset,
     options.orderedColumns,
     options.orderedColumnMetrics,
     options.resolveDevicePixelRatio,
@@ -211,6 +242,8 @@ export function useDataGridSelectionOverlayOrchestration(
       "fill-preview",
       options.headerHeight,
       options.rowHeight,
+      options.resolveRowHeight,
+      options.resolveRowOffset,
       options.orderedColumns,
       options.orderedColumnMetrics,
       options.resolveDevicePixelRatio,
@@ -226,6 +259,8 @@ export function useDataGridSelectionOverlayOrchestration(
       "move-preview",
       options.headerHeight,
       options.rowHeight,
+      options.resolveRowHeight,
+      options.resolveRowOffset,
       options.orderedColumns,
       options.orderedColumnMetrics,
       options.resolveDevicePixelRatio,

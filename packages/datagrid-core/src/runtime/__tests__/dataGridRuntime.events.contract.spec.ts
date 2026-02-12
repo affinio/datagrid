@@ -169,10 +169,15 @@ describe("table runtime typed event routing", () => {
     })
 
     runtime.emit("filtersReset")
+    runtime.emit("groupByChange", { fields: ["service"], expandedByDefault: false }, {
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
     runtime.dispose()
 
-    expect(capture).toHaveLength(1)
+    expect(capture).toHaveLength(2)
     expect(capture[0]?.name).toBe("filtersReset")
+    expect(capture[1]?.name).toBe("groupByChange")
   })
 
   it("allows plugins to use declared capabilities only", () => {

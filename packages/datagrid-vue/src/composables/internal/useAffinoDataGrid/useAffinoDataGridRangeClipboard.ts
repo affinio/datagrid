@@ -120,7 +120,7 @@ export function useAffinoDataGridRangeClipboard<TRow>(
   )
 
   const resolveDisplayNodeAtIndex = (rowIndex: number): DataGridRowNode<TRow> | undefined => (
-    options.runtime.api.getRow<TRow>(rowIndex)
+    options.runtime.api.getRow(rowIndex)
   )
 
   const resolveDisplayLeafRowAtIndex = (rowIndex: number): TRow | undefined => {

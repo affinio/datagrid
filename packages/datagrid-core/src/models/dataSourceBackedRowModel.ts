@@ -2,12 +2,15 @@ import {
   buildGroupExpansionSnapshot,
   buildPaginationSnapshot,
   cloneGroupBySpec,
+  isSameGroupExpansionSnapshot,
   isSameGroupBySpec,
   normalizePaginationInput,
   normalizeGroupBySpec,
   normalizeRowNode,
   normalizeViewportRange,
+  setGroupExpansionKey,
   toggleGroupExpansionKey,
+  type DataGridGroupExpansionSnapshot,
   type DataGridPaginationInput,
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
@@ -28,6 +31,7 @@ import type {
   DataGridDataSourceInvalidation,
   DataGridDataSourcePullPriority,
   DataGridDataSourcePullReason,
+  DataGridDataSourceTreePullContext,
   DataGridDataSourcePushEvent,
   DataGridDataSourceRowEntry,
 } from "./dataSourceProtocol.js"
@@ -65,6 +69,7 @@ interface PendingPull {
   reason: DataGridDataSourcePullReason
   priority: DataGridDataSourcePullPriority
   key: string
+  treeData: DataGridDataSourceTreePullContext | null
 }
 
 const DEFAULT_ROW_CACHE_LIMIT = 4096
@@ -122,6 +127,32 @@ function resolvePriorityRank(priority: DataGridDataSourcePullPriority): number {
   }
 }
 
+function normalizeTreePullContext(
+  treeData: DataGridDataSourceTreePullContext | null | undefined,
+): DataGridDataSourceTreePullContext | null {
+  if (!treeData) {
+    return null
+  }
+  const seenGroupKeys = new Set<string>()
+  const groupKeys: string[] = []
+  for (const rawGroupKey of treeData.groupKeys ?? []) {
+    if (typeof rawGroupKey !== "string") {
+      continue
+    }
+    const normalizedGroupKey = rawGroupKey.trim()
+    if (normalizedGroupKey.length === 0 || seenGroupKeys.has(normalizedGroupKey)) {
+      continue
+    }
+    seenGroupKeys.add(normalizedGroupKey)
+    groupKeys.push(normalizedGroupKey)
+  }
+  return {
+    operation: treeData.operation,
+    scope: treeData.scope,
+    groupKeys,
+  }
+}
+
 export function createDataSourceBackedRowModel<T = unknown>(
   options: CreateDataSourceBackedRowModelOptions<T>,
 ): DataSourceBackedRowModel<T> {
@@ -130,6 +161,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
   let filterModel: DataGridFilterSnapshot | null = cloneDataGridFilterSnapshot(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
+  let expansionExpandedByDefault = Boolean(groupBy?.expandedByDefault)
   let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
   const toggledGroupKeys = new Set<string>()
   let rowCount = Math.max(0, Math.trunc(options.initialTotal ?? 0))
@@ -283,8 +315,42 @@ export function createDataSourceBackedRowModel<T = unknown>(
       sortModel,
       filterModel: cloneDataGridFilterSnapshot(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
-      groupExpansion: buildGroupExpansionSnapshot(groupBy, toggledGroupKeys),
+      groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
     }
+  }
+
+  function getExpansionSpec(): DataGridGroupBySpec | null {
+    if (!groupBy) {
+      return null
+    }
+    return {
+      fields: groupBy.fields,
+      expandedByDefault: expansionExpandedByDefault,
+    }
+  }
+
+  function applyGroupExpansion(nextExpansion: DataGridGroupExpansionSnapshot | null): boolean {
+    const expansionSpec = getExpansionSpec()
+    if (!expansionSpec) {
+      return false
+    }
+    const normalizedSnapshot = buildGroupExpansionSnapshot(
+      {
+        fields: expansionSpec.fields,
+        expandedByDefault: nextExpansion?.expandedByDefault ?? expansionSpec.expandedByDefault,
+      },
+      nextExpansion?.toggledGroupKeys ?? [],
+    )
+    const currentSnapshot = buildGroupExpansionSnapshot(expansionSpec, toggledGroupKeys)
+    if (isSameGroupExpansionSnapshot(currentSnapshot, normalizedSnapshot)) {
+      return false
+    }
+    expansionExpandedByDefault = normalizedSnapshot.expandedByDefault
+    toggledGroupKeys.clear()
+    for (const groupKey of normalizedSnapshot.toggledGroupKeys) {
+      toggledGroupKeys.add(groupKey)
+    }
+    return true
   }
 
   function emit() {
@@ -399,21 +465,24 @@ export function createDataSourceBackedRowModel<T = unknown>(
     range: DataGridViewportRange,
     reason: DataGridDataSourcePullReason,
     priority: DataGridDataSourcePullPriority,
+    treeData?: DataGridDataSourceTreePullContext | null,
   ): Promise<void> {
     if (disposed) {
       return
     }
     const requestRange = normalizeRequestedRange(range)
+    const treePullContext = normalizeTreePullContext(treeData)
     const requestStateKey = serializePullState({
       sortModel,
       filterModel,
       groupBy,
-      groupExpansion: buildGroupExpansionSnapshot(groupBy, toggledGroupKeys),
+      groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
     })
     const requestKey = serializePullState({
       range: requestRange,
       reason,
       priority,
+      treeData: treePullContext,
       state: requestStateKey,
     })
 
@@ -449,6 +518,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
             reason,
             priority,
             key: requestKey,
+            treeData: treePullContext,
           }
           diagnostics.hasPendingPull = true
         }
@@ -477,7 +547,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
           sortModel,
           filterModel,
           groupBy: cloneGroupBySpec(groupBy),
-          groupExpansion: buildGroupExpansionSnapshot(groupBy, toggledGroupKeys),
+          groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
+          treeData: treePullContext,
         })
 
         if (disposed || !inFlight || inFlight.requestId !== requestId || controller.signal.aborted) {
@@ -512,7 +583,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
             const next = pendingPull
             pendingPull = null
             diagnostics.hasPendingPull = false
-            void pullRange(next.range, next.reason, next.priority)
+            void pullRange(next.range, next.reason, next.priority, next.treeData)
           }
         }
         loading = Boolean(inFlight)
@@ -602,6 +673,35 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
 
     applyPushInvalidation(event.invalidation)
+  }
+
+  function createTreePullContext(
+    operation: DataGridDataSourceTreePullContext["operation"],
+    groupKeys: readonly string[],
+    scope: DataGridDataSourceTreePullContext["scope"] = "branch",
+  ): DataGridDataSourceTreePullContext {
+    return {
+      operation,
+      scope,
+      groupKeys: toUniqueGroupKeys(groupKeys),
+    }
+  }
+
+  function toUniqueGroupKeys(groupKeys: readonly string[]): readonly string[] {
+    const seen = new Set<string>()
+    const normalized: string[] = []
+    for (const rawGroupKey of groupKeys) {
+      if (typeof rawGroupKey !== "string") {
+        continue
+      }
+      const groupKey = rawGroupKey.trim()
+      if (groupKey.length === 0 || seen.has(groupKey)) {
+        continue
+      }
+      seen.add(groupKey)
+      normalized.push(groupKey)
+    }
+    return normalized
   }
 
   return {
@@ -732,15 +832,36 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
       groupBy = normalized
+      expansionExpandedByDefault = Boolean(normalized?.expandedByDefault)
       toggledGroupKeys.clear()
       bumpRevision()
       clearAll()
-      void pullRange(toSourceRange(viewportRange), "group-change", "critical")
+      void pullRange(
+        toSourceRange(viewportRange),
+        "group-change",
+        "critical",
+        createTreePullContext("set-group-by", [], "all"),
+      )
+      emit()
+    },
+    setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
+      ensureActive()
+      if (!applyGroupExpansion(expansion)) {
+        return
+      }
+      bumpRevision()
+      clearAll()
+      void pullRange(
+        toSourceRange(viewportRange),
+        "group-change",
+        "critical",
+        createTreePullContext("set-group-expansion", expansion?.toggledGroupKeys ?? [], "all"),
+      )
       emit()
     },
     toggleGroup(groupKey: string) {
       ensureActive()
-      if (!groupBy) {
+      if (!getExpansionSpec()) {
         return
       }
       if (!toggleGroupExpansionKey(toggledGroupKeys, groupKey)) {
@@ -748,7 +869,88 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       bumpRevision()
       clearAll()
-      void pullRange(toSourceRange(viewportRange), "group-change", "critical")
+      void pullRange(
+        toSourceRange(viewportRange),
+        "group-change",
+        "critical",
+        createTreePullContext("toggle-group", [groupKey]),
+      )
+      emit()
+    },
+    expandGroup(groupKey: string) {
+      ensureActive()
+      if (!getExpansionSpec()) {
+        return
+      }
+      if (!setGroupExpansionKey(toggledGroupKeys, groupKey, false, true)) {
+        return
+      }
+      bumpRevision()
+      clearAll()
+      void pullRange(
+        toSourceRange(viewportRange),
+        "group-change",
+        "critical",
+        createTreePullContext("expand-group", [groupKey]),
+      )
+      emit()
+    },
+    collapseGroup(groupKey: string) {
+      ensureActive()
+      if (!getExpansionSpec()) {
+        return
+      }
+      if (!setGroupExpansionKey(toggledGroupKeys, groupKey, false, false)) {
+        return
+      }
+      bumpRevision()
+      clearAll()
+      void pullRange(
+        toSourceRange(viewportRange),
+        "group-change",
+        "critical",
+        createTreePullContext("collapse-group", [groupKey]),
+      )
+      emit()
+    },
+    expandAllGroups() {
+      ensureActive()
+      if (!getExpansionSpec()) {
+        return
+      }
+      if (expansionExpandedByDefault && toggledGroupKeys.size === 0) {
+        return
+      }
+      expansionExpandedByDefault = true
+      toggledGroupKeys.clear()
+      bumpRevision()
+      clearAll()
+      void pullRange(
+        toSourceRange(viewportRange),
+        "group-change",
+        "critical",
+        createTreePullContext("expand-all-groups", [], "all"),
+      )
+      emit()
+    },
+    collapseAllGroups() {
+      ensureActive()
+      if (!getExpansionSpec()) {
+        return
+      }
+      if (!expansionExpandedByDefault && toggledGroupKeys.size === 0) {
+        return
+      }
+      expansionExpandedByDefault = false
+      toggledGroupKeys.clear()
+      bumpRevision()
+      clearAll()
+      void pullRange(
+        toSourceRange(viewportRange),
+        "group-change",
+        "critical",
+        createTreePullContext("collapse-all-groups", [], "all"),
+      )
       emit()
     },
     async refresh(reason?: DataGridRowModelRefreshReason) {

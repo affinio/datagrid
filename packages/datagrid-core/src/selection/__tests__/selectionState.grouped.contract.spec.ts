@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { createSelectionSnapshot } from "../snapshot"
 import {
+  applyGroupSelectionPolicy,
   clampGridSelectionPoint,
   createGridSelectionContextFromFlattenedRows,
   createGridSelectionRange,
@@ -83,5 +84,52 @@ describe("selection grouped projection contract", () => {
       colIndex: 1,
       rowId: "group:region=us",
     })
+  })
+
+  it("expands single group-row selection to descendant subtree when policy is enabled", () => {
+    const rows = [
+      { rowId: "group:region=eu", isGroup: true, level: 0 },
+      { rowId: "leaf:incident-1", isGroup: false, level: 1 },
+      { rowId: "group:service=api", isGroup: true, level: 1 },
+      { rowId: "leaf:incident-2", isGroup: false, level: 2 },
+      { rowId: "group:region=us", isGroup: true, level: 0 },
+    ] as const
+    const context = createGridSelectionContextFromFlattenedRows({ rows, colCount: 6 })
+    const single = createGridSelectionRange(
+      { rowIndex: 0, colIndex: 2 },
+      { rowIndex: 0, colIndex: 2 },
+      context,
+    )
+
+    const expanded = applyGroupSelectionPolicy(single, {
+      rows,
+      groupSelectsChildren: true,
+    })
+
+    expect(expanded.startRow).toBe(0)
+    expect(expanded.endRow).toBe(3)
+    expect(expanded.startRowId).toBe("group:region=eu")
+    expect(expanded.endRowId).toBe("leaf:incident-2")
+    expect(expanded.focus.rowIndex).toBe(3)
+  })
+
+  it("keeps range unchanged when groupSelectsChildren is disabled", () => {
+    const rows = [
+      { rowId: "group:region=eu", isGroup: true, level: 0 },
+      { rowId: "leaf:incident-1", isGroup: false, level: 1 },
+    ] as const
+    const context = createGridSelectionContextFromFlattenedRows({ rows, colCount: 4 })
+    const single = createGridSelectionRange(
+      { rowIndex: 0, colIndex: 1 },
+      { rowIndex: 0, colIndex: 1 },
+      context,
+    )
+
+    const unchanged = applyGroupSelectionPolicy(single, {
+      rows,
+      groupSelectsChildren: false,
+    })
+
+    expect(unchanged).toEqual(single)
   })
 })

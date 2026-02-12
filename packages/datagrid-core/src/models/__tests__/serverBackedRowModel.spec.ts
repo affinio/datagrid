@@ -50,9 +50,10 @@ describe("createServerBackedRowModel", () => {
     const model = createServerBackedRowModel({ source })
     model.setViewportRange({ start: 2, end: 10 })
     await Promise.resolve()
-    expect(fetchBlock).toHaveBeenCalledWith(2)
-    expect(fetchBlock).toHaveBeenCalledWith(10)
+    await Promise.resolve()
+    expect(fetchBlock).toHaveBeenCalledWith(0)
     expect(model.getSnapshot().viewportRange).toEqual({ start: 2, end: 10 })
+    expect(model.getSnapshot().warming).toBe(false)
     const node = model.getRow(2)
     expect(node?.data.id).toBe(2)
     expect(node?.row.id).toBe(2)
@@ -65,6 +66,22 @@ describe("createServerBackedRowModel", () => {
       expandedByDefault: false,
       toggledGroupKeys: [],
     })
+    model.dispose()
+  })
+
+  it("warms full viewport span using configured block step", async () => {
+    const { source, fetchBlock } = createSource(2_000)
+    const model = createServerBackedRowModel({
+      source,
+      warmupBlockStep: 200,
+    })
+
+    model.setViewportRange({ start: 0, end: 620 })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(fetchBlock.mock.calls.map(call => call[0])).toEqual([0, 200, 400, 600])
     model.dispose()
   })
 
@@ -82,6 +99,49 @@ describe("createServerBackedRowModel", () => {
     })
 
     model.toggleGroup("id=1")
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
+
+    model.dispose()
+  })
+
+  it("supports explicit expansion APIs and snapshot roundtrip", () => {
+    const { source } = createSource(10)
+    const model = createServerBackedRowModel({
+      source,
+      initialGroupBy: { fields: ["id"], expandedByDefault: false },
+    })
+
+    model.expandGroup("id=1")
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: ["id=1"],
+    })
+
+    model.collapseGroup("id=1")
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
+
+    model.expandAllGroups()
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: [],
+    })
+
+    model.setGroupExpansion({
+      expandedByDefault: false,
+      toggledGroupKeys: ["id=2", "id=3"],
+    })
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: ["id=2", "id=3"],
+    })
+
+    model.collapseAllGroups()
     expect(model.getSnapshot().groupExpansion).toEqual({
       expandedByDefault: false,
       toggledGroupKeys: [],
@@ -117,18 +177,57 @@ describe("createServerBackedRowModel", () => {
     const refreshPromise = model.refresh("viewport-change")
     await Promise.resolve()
 
-    // Overlapping refresh should reuse inflight warmup, not trigger a duplicate start fetch.
+    // Overlapping refresh should reuse inflight warmup, not trigger a duplicate fetch start.
     expect(fetchBlock).toHaveBeenCalledTimes(1)
-    expect(fetchBlock.mock.calls[0]).toEqual([5])
+    expect(fetchBlock.mock.calls[0]).toEqual([0])
 
     pendingResolves.shift()?.()
     await Promise.resolve()
 
-    expect(fetchBlock).toHaveBeenCalledTimes(2)
-    expect(fetchBlock.mock.calls[1]).toEqual([9])
-
-    pendingResolves.shift()?.()
+    expect(fetchBlock).toHaveBeenCalledTimes(1)
     await refreshPromise
+    model.dispose()
+  })
+
+  it("cancels stale warmup range when a newer viewport range supersedes it", async () => {
+    const { source, fetchBlock } = createSource(4_000)
+    const pendingResolves = new Map<number, () => void>()
+    fetchBlock.mockImplementation((startIndex: number) => {
+      return new Promise<void>(resolve => {
+        pendingResolves.set(startIndex, resolve)
+      })
+    })
+
+    const model = createServerBackedRowModel({
+      source,
+      warmupBlockStep: 200,
+    })
+
+    model.setViewportRange({ start: 0, end: 650 })
+    await Promise.resolve()
+    expect(fetchBlock.mock.calls.map(call => call[0])).toEqual([0])
+
+    model.setViewportRange({ start: 1_200, end: 1_700 })
+    await Promise.resolve()
+    expect(fetchBlock.mock.calls.map(call => call[0])).toEqual([0, 1200])
+
+    pendingResolves.get(0)?.()
+    await Promise.resolve()
+    expect(fetchBlock.mock.calls.map(call => call[0])).toEqual([0, 1200])
+
+    pendingResolves.get(1200)?.()
+    await Promise.resolve()
+    expect(fetchBlock.mock.calls.map(call => call[0])).toEqual([0, 1200, 1400])
+
+    pendingResolves.get(1400)?.()
+    await Promise.resolve()
+    expect(fetchBlock.mock.calls.map(call => call[0])).toEqual([0, 1200, 1400, 1600])
+
+    pendingResolves.get(1600)?.()
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(model.getSnapshot().warming).toBe(false)
     model.dispose()
   })
 
@@ -350,6 +449,79 @@ describe("createServerBackedRowModel", () => {
     expect(second?.row.value).toBe("updated")
     expect(second?.data.value).toBe("updated")
 
+    model.dispose()
+  })
+
+  it("does not cache missing rows (undefined) between reads", () => {
+    const rows: Array<{ id: number; value: string } | undefined> = [
+      { id: 0, value: "ready" },
+      undefined,
+      { id: 2, value: "ready-2" },
+    ]
+    const getRowAt = vi.fn((index: number) => rows[index])
+    const source: ServerRowModel<{ id: number; value: string } | undefined> = {
+      rows: { value: rows },
+      loading: { value: false },
+      error: { value: null },
+      blocks: { value: new Map() },
+      total: { value: rows.length },
+      loadedRanges: { value: [] },
+      progress: { value: 1 },
+      blockErrors: { value: new Map() },
+      diagnostics: {
+        value: {
+          cacheBlocks: 0,
+          cachedRows: 2,
+          pendingBlocks: 0,
+          pendingRequests: 0,
+          abortedRequests: 0,
+          cacheHits: 0,
+          cacheMisses: 0,
+          effectivePreloadThreshold: 0.6,
+        },
+      },
+      getRowAt,
+      getRowCount() {
+        return rows.length
+      },
+      refreshBlock: vi.fn(async () => {}),
+      fetchBlock: vi.fn(async () => {}),
+      reset: vi.fn(),
+      abortAll: vi.fn(),
+      dispose: vi.fn(),
+    }
+
+    const model = createServerBackedRowModel({
+      source: source as ServerRowModel<{ id: number; value: string }>,
+    })
+
+    expect(model.getRow(1)).toBeUndefined()
+    expect(model.getRow(1)).toBeUndefined()
+    expect(getRowAt).toHaveBeenCalledTimes(2)
+    model.dispose()
+  })
+
+  it("syncs from optional source.subscribe updates", () => {
+    const { source } = createSource(12)
+    let onUpdate: (() => void) | null = null
+    const sourceWithSubscribe = source as ServerRowModel<{ id: number }> & {
+      subscribe: (listener: () => void) => () => void
+    }
+    sourceWithSubscribe.subscribe = (listener: () => void) => {
+      onUpdate = listener
+      return () => {
+        onUpdate = null
+      }
+    }
+
+    const model = createServerBackedRowModel({
+      source: sourceWithSubscribe,
+    })
+
+    const before = model.getSnapshot().revision ?? 0
+    onUpdate?.()
+    const after = model.getSnapshot().revision ?? 0
+    expect(after).toBeGreaterThan(before)
     model.dispose()
   })
 })

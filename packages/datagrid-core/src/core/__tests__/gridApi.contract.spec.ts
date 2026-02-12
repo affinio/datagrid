@@ -49,7 +49,8 @@ describe("data grid api facade contracts", () => {
     api.setSortModel([{ key: "id", direction: "asc" }])
     api.setFilterModel({ columnFilters: { name: ["alpha"] }, advancedFilters: {} })
     api.setGroupBy({ fields: ["name"], expandedByDefault: true })
-    api.toggleGroup("name=alpha")
+    api.setGroupExpansion({ expandedByDefault: true, toggledGroupKeys: [] })
+    api.collapseGroup("name=alpha")
     api.setPageSize(1)
     api.setCurrentPage(1)
     api.setViewportRange({ start: 0, end: 1 })
@@ -57,9 +58,9 @@ describe("data grid api facade contracts", () => {
     api.setColumnWidth("name", 280)
     api.setColumnPin("name", "left")
     api.setColumnOrder(["name", "id"])
-    api.refreshRows("manual")
+    api.refresh()
 
-    const rowSnapshot = api.getRowModelSnapshot<{ id: number; name: string }>()
+    const rowSnapshot = api.getRowModelSnapshot()
     const columnSnapshot = api.getColumnModelSnapshot()
 
     expect(rowSnapshot.sortModel).toEqual([{ key: "id", direction: "asc" }])
@@ -91,6 +92,45 @@ describe("data grid api facade contracts", () => {
     expect(api.getColumn("id")?.visible).toBe(false)
     expect(api.getColumn("name")?.pin).toBe("left")
     expect(api.getColumn("name")?.width).toBe(280)
+  })
+
+  it("routes explicit group expansion APIs through row model service", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "alpha" }, rowId: 1, originalIndex: 0 },
+        { row: { id: 2, team: "beta" }, rowId: 2, originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel()
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+
+    const api = createDataGridApi({ core })
+    const alphaGroupKey = JSON.stringify([["team", "alpha"]])
+    const betaGroupKey = JSON.stringify([["team", "beta"]])
+    api.setGroupBy({ fields: ["team"], expandedByDefault: false })
+    api.expandGroup(alphaGroupKey)
+    api.collapseGroup(alphaGroupKey)
+    api.expandAllGroups()
+    api.setGroupExpansion({
+      expandedByDefault: false,
+      toggledGroupKeys: [betaGroupKey],
+    })
+
+    expect(api.getRowModelSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [betaGroupKey],
+    })
+
+    api.collapseAllGroups()
+    expect(api.getRowModelSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
   })
 
   it("exposes selection capability checks and fails loudly for missing capability methods", () => {
@@ -302,9 +342,7 @@ describe("data grid api facade contracts", () => {
     api.setSortModel(expectedRow.sortModel)
     api.setFilterModel(expectedRow.filterModel)
     api.setGroupBy(expectedRow.groupBy)
-    for (const groupKey of expectedRow.groupExpansion.toggledGroupKeys) {
-      api.toggleGroup(groupKey)
-    }
+    api.setGroupExpansion(expectedRow.groupExpansion)
     api.setPagination({
       pageSize: expectedRow.pagination.pageSize,
       currentPage: expectedRow.pagination.currentPage,

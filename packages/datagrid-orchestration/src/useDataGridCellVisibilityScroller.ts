@@ -37,6 +37,8 @@ export interface UseDataGridCellVisibilityScrollerOptions<
   resolveVirtualWindow: () => DataGridCellVisibilityVirtualWindow | null | undefined
   resolveHeaderHeight: () => number
   resolveRowHeight: () => number
+  resolveRowOffset?: (rowIndex: number) => number
+  resolveRowHeightAtIndex?: (rowIndex: number) => number
   setScrollPosition: (position: DataGridCellVisibilityScrollPosition) => void
 }
 
@@ -70,8 +72,9 @@ export function useDataGridCellVisibilityScroller<
 
     const headerHeight = options.resolveHeaderHeight()
     const rowHeight = options.resolveRowHeight()
-    const rowTop = headerHeight + safeRowIndex * rowHeight
-    const rowBottom = rowTop + rowHeight
+    const rowTop = headerHeight + (options.resolveRowOffset?.(safeRowIndex) ?? (safeRowIndex * rowHeight))
+    const rowSpan = Math.max(1, options.resolveRowHeightAtIndex?.(safeRowIndex) ?? rowHeight)
+    const rowBottom = rowTop + rowSpan
     const visibleTop = viewport.scrollTop + headerHeight
     const visibleBottom = viewport.scrollTop + viewport.clientHeight
 

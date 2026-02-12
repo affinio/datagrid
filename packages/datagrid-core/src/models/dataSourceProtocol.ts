@@ -20,6 +20,23 @@ export type DataGridDataSourcePullReason =
   | "invalidation"
   | "push-invalidation"
 
+export type DataGridDataSourceTreePullOperation =
+  | "set-group-by"
+  | "set-group-expansion"
+  | "toggle-group"
+  | "expand-group"
+  | "collapse-group"
+  | "expand-all-groups"
+  | "collapse-all-groups"
+
+export type DataGridDataSourceTreePullScope = "all" | "branch"
+
+export interface DataGridDataSourceTreePullContext {
+  operation: DataGridDataSourceTreePullOperation
+  scope: DataGridDataSourceTreePullScope
+  groupKeys: readonly string[]
+}
+
 export interface DataGridDataSourcePullRequest {
   range: DataGridViewportRange
   priority: DataGridDataSourcePullPriority
@@ -29,6 +46,7 @@ export interface DataGridDataSourcePullRequest {
   filterModel: DataGridFilterSnapshot | null
   groupBy: DataGridGroupBySpec | null
   groupExpansion: DataGridGroupExpansionSnapshot
+  treeData: DataGridDataSourceTreePullContext | null
 }
 
 export interface DataGridDataSourceRowEntry<T = unknown> {

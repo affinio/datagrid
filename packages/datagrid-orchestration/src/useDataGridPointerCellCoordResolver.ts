@@ -38,6 +38,7 @@ export interface UseDataGridPointerCellCoordResolverOptions<TCoord extends DataG
   resolveVirtualWindow: () => DataGridPointerVirtualWindowSnapshot | null | undefined
   resolveHeaderHeight: () => number
   resolveRowHeight: () => number
+  resolveRowIndexAtOffset?: (offset: number) => number
   resolveNearestNavigableColumnIndex: (columnIndex: number) => number
   normalizeCellCoord: (coord: TCoord) => TCoord | null
 }
@@ -123,9 +124,10 @@ export function useDataGridPointerCellCoordResolver<TCoord extends DataGridPoint
     const pointerXInViewport = clientX - rect.left
     const pointerYInViewport = clientY - rect.top
     const clampedY = Math.max(0, Math.min(rect.height - 1, pointerYInViewport))
-    const rowRawIndex = Math.floor(
-      (viewport.scrollTop + clampedY - options.resolveHeaderHeight()) / options.resolveRowHeight(),
-    )
+    const rowOffset = viewport.scrollTop + clampedY - options.resolveHeaderHeight()
+    const rowRawIndex = options.resolveRowIndexAtOffset
+      ? options.resolveRowIndexAtOffset(rowOffset)
+      : Math.floor(rowOffset / options.resolveRowHeight())
 
     let absoluteX: number
     if (pointerXInViewport <= leftPinnedWidth) {

@@ -40,6 +40,12 @@ export function useDataGridViewportBlurHandler(
       return false
     }
 
+    if (nextFocused && nextFocused instanceof HTMLElement) {
+      if (nextFocused.closest("[data-datagrid-menu-action],[data-datagrid-copy-menu],.datagrid-sugar-context")) {
+        return false
+      }
+    }
+
     if (!nextFocused && viewport) {
       const runDeferred = () => {
         const active = viewport.ownerDocument?.activeElement as Node | null
@@ -49,6 +55,11 @@ export function useDataGridViewportBlurHandler(
         const menuElement = options.resolveContextMenuElement()
         if (active && menuElement?.contains(active)) {
           return
+        }
+        if (active && active instanceof HTMLElement) {
+          if (active.closest("[data-datagrid-menu-action],[data-datagrid-copy-menu],.datagrid-sugar-context")) {
+            return
+          }
         }
         finalizeBlurCleanup()
       }

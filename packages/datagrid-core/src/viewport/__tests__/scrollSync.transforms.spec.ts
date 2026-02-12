@@ -37,6 +37,24 @@ function createState(): ViewportSyncState {
 }
 
 describe("viewport scroll sync transforms", () => {
+  it("updates state even when sync targets are missing", () => {
+    const state = createState()
+
+    applyViewportSyncTransforms(null, state, {
+      scrollTop: 21,
+      scrollLeft: 13,
+      pinnedOffsetLeft: 4,
+      pinnedOffsetRight: 6,
+    })
+
+    expect(state).toEqual({
+      scrollTop: 21,
+      scrollLeft: 13,
+      pinnedOffsetLeft: 4,
+      pinnedOffsetRight: 6,
+    })
+  })
+
   it("keeps body and overlay transforms aligned across horizontal and vertical scroll", () => {
     const targets = createTargets()
     const state = createState()
@@ -71,6 +89,28 @@ describe("viewport scroll sync transforms", () => {
     expect(state.scrollLeft).toBe(20)
     expect(state.pinnedOffsetLeft).toBe(14)
     expect(state.pinnedOffsetRight).toBe(22)
+  })
+
+  it("supports adapter overload path for transform application", () => {
+    const targets = createTargets()
+    const state = createState()
+
+    const adapter = {
+      getSyncTargets: () => targets,
+      getAppliedState: () => state,
+    }
+
+    applyViewportSyncTransforms(adapter, {
+      scrollTop: 10,
+      scrollLeft: 5,
+      pinnedOffsetLeft: 3,
+      pinnedOffsetRight: 7,
+    })
+
+    expect(targets.bodyLayer?.style.transform).toBe("translate3d(-5px, -10px, 0)")
+    expect(targets.pinnedLeftLayer?.style.transform).toBe("translate3d(3px, -10px, 0)")
+    expect(state.scrollTop).toBe(10)
+    expect(state.scrollLeft).toBe(5)
   })
 
   it("resets sync transforms back to identity", () => {

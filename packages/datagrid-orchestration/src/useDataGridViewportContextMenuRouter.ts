@@ -71,17 +71,6 @@ export function useDataGridViewportContextMenuRouter<
       return false
     }
 
-    const headerCell = targetNode.closest(".datagrid-stage__cell--header[data-column-key]") as HTMLElement | null
-    if (headerCell) {
-      const columnKey = headerCell.dataset.columnKey ?? ""
-      if (columnKey && isContextEnabled(columnKey, options)) {
-        event.preventDefault()
-        options.openContextMenu(event.clientX, event.clientY, { zone: "header", columnKey })
-        return true
-      }
-      return false
-    }
-
     const cell = targetNode.closest(".datagrid-stage__cell[data-row-id][data-column-key]") as HTMLElement | null
     if (cell) {
       const rowId = cell.dataset.rowId ?? ""
@@ -99,6 +88,11 @@ export function useDataGridViewportContextMenuRouter<
         }
         if (!coord) {
           coord = options.resolveCellCoordFromDataset(rowId, columnKey)
+        }
+        if (!coord) {
+          event.preventDefault()
+          options.openContextMenu(event.clientX, event.clientY, { zone: "cell", columnKey, rowId })
+          return true
         }
         if (coord) {
           if (!currentRange || !options.isCoordInsideRange(coord, currentRange)) {
@@ -119,6 +113,18 @@ export function useDataGridViewportContextMenuRouter<
           return true
         }
       }
+
+    }
+
+    const headerCell = targetNode.closest(".datagrid-stage__cell--header[data-column-key]") as HTMLElement | null
+    if (headerCell) {
+      const columnKey = headerCell.dataset.columnKey ?? ""
+      if (columnKey && isContextEnabled(columnKey, options)) {
+        event.preventDefault()
+        options.openContextMenu(event.clientX, event.clientY, { zone: "header", columnKey })
+        return true
+      }
+      return false
     }
 
     event.preventDefault()

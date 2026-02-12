@@ -246,6 +246,14 @@ export interface DataGridEventHandlers<T = any> {
   sortChange?: (state: DataGridSortState | null) => void
   filterChange?: (filters: Record<string, string[]>) => void
   filtersReset?: () => void
+  groupByChange?: (
+    groupBy: { fields: string[]; expandedByDefault?: boolean } | null,
+    groupExpansion: { expandedByDefault: boolean; toggledGroupKeys: readonly string[] },
+  ) => void
+  groupExpansionChange?: (
+    groupExpansion: { expandedByDefault: boolean; toggledGroupKeys: readonly string[] },
+    groupBy: { fields: string[]; expandedByDefault?: boolean } | null,
+  ) => void
   zoomChange?: (value: number) => void
   columnResize?: (payload: { key: string; width: number }) => void
   groupFilterToggle?: (open: boolean) => void

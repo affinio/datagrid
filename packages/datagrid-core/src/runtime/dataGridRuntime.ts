@@ -17,6 +17,8 @@ export const HOST_EVENT_NAME_MAP = {
   sortChange: "sort-change",
   filterChange: "filter-change",
   filtersReset: "filters-reset",
+  groupByChange: "group-by-change",
+  groupExpansionChange: "group-expansion-change",
   zoomChange: "zoom-change",
   columnResize: "column-resize",
   groupFilterToggle: "group-filter-toggle",

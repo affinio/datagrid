@@ -1,6 +1,7 @@
 import { defineComponent, h, nextTick, ref } from "vue"
 import { mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
+import { createClientRowModel } from "@affino/datagrid-core"
 import { useAffinoDataGrid } from "../useAffinoDataGrid"
 
 interface GridRow {
@@ -20,6 +21,67 @@ async function flushTasks() {
 }
 
 describe("useAffinoDataGrid contract", () => {
+  it("applies tree groupSelectsChildren policy in sugar cell selection", async () => {
+    const treeRows = ref([
+      { rowId: "r1", path: ["eu", "payments"], service: "payments-api", owner: "NOC" },
+      { rowId: "r2", path: ["eu", "payments"], service: "billing-worker", owner: "Payments" },
+      { rowId: "r3", path: ["us", "core"], service: "incident-timeline", owner: "Core" },
+    ])
+    const treeColumns = [
+      { key: "service", label: "Service", width: 220 },
+      { key: "owner", label: "Owner", width: 180 },
+    ] as const
+    const treeRowModel = createClientRowModel({
+      rows: treeRows.value,
+      initialTreeData: {
+        mode: "path",
+        getDataPath(row) {
+          return row.path
+        },
+        expandedByDefault: true,
+      },
+    })
+    let grid: ReturnType<typeof useAffinoDataGrid<typeof treeRows.value[number]>> | null = null
+
+    const Host = defineComponent({
+      name: "AffinoDataGridTreeSelectionPolicyHost",
+      setup() {
+        grid = useAffinoDataGrid({
+          rows: treeRows,
+          columns: treeColumns,
+          rowModel: treeRowModel,
+          features: {
+            tree: {
+              enabled: true,
+              groupSelectsChildren: true,
+            },
+          },
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushTasks()
+
+    const firstGroup = grid!.api.getRow(0)
+    expect(firstGroup?.kind).toBe("group")
+    const selected = grid!.cellSelection.setCellByKey(String(firstGroup?.rowId ?? ""), "service")
+    expect(selected).toBe(true)
+    expect(grid!.cellSelection.range.value?.startRow).toBe(0)
+    expect(grid!.cellSelection.range.value?.endRow ?? 0).toBeGreaterThan(0)
+
+    grid!.features.tree.groupSelectsChildren.value = false
+    const reselection = grid!.cellSelection.setCellByKey(String(firstGroup?.rowId ?? ""), "service")
+    expect(reselection).toBe(true)
+    expect(grid!.cellSelection.range.value).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+    })
+
+    wrapper.unmount()
+  })
+
   it("boots runtime and exposes sort + selection sugar", async () => {
     const rows = ref<GridRow[]>([
       { rowId: "r1", service: "edge-gateway", owner: "NOC" },
@@ -436,6 +498,59 @@ describe("useAffinoDataGrid contract", () => {
     })
     expect(grid!.cellRange.applyRangeMove()).toBe(true)
 
+    wrapper.unmount()
+  })
+
+  it("emits stable tree events for group-by and expansion updates", async () => {
+    const rows = ref<GridRow[]>([
+      { rowId: "r1", service: "edge-gateway", owner: "NOC" },
+      { rowId: "r2", service: "billing-api", owner: "NOC" },
+      { rowId: "r3", service: "search-api", owner: "Ops" },
+    ])
+    let grid: ReturnType<typeof useAffinoDataGrid<GridRow>> | null = null
+
+    const Host = defineComponent({
+      name: "AffinoDataGridTreeEventsHost",
+      setup() {
+        grid = useAffinoDataGrid<GridRow>({
+          rows,
+          columns: COLUMNS,
+          features: {
+            tree: {
+              enabled: true,
+            },
+          },
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushTasks()
+
+    const captured: string[] = []
+    const unsubscribe = grid!.events.on("*", event => {
+      if (event.name === "groupByChange" || event.name === "groupExpansionChange") {
+        captured.push(event.name)
+      }
+    })
+    grid!.events.clear()
+
+    grid!.features.tree.setGroupBy({
+      fields: ["owner"],
+      expandedByDefault: false,
+    })
+    await flushTasks()
+
+    grid!.features.tree.expandAll()
+    await flushTasks()
+
+    expect(captured).toContain("groupByChange")
+    expect(captured).toContain("groupExpansionChange")
+    expect(grid!.events.log.value.some(event => event.name === "groupByChange")).toBe(true)
+    expect(grid!.events.log.value.some(event => event.name === "groupExpansionChange")).toBe(true)
+
+    unsubscribe()
     wrapper.unmount()
   })
 })

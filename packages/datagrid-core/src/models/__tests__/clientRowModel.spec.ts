@@ -231,6 +231,38 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("supports deterministic expansion snapshot roundtrip and explicit expand/collapse APIs", () => {
+    const model = createClientRowModel({
+      rows: buildRows(6),
+    })
+
+    model.setGroupBy({ fields: ["owner"], expandedByDefault: false })
+    model.expandGroup("owner=alice")
+    model.collapseGroup("owner=alice")
+    model.expandAllGroups()
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: [],
+    })
+
+    model.setGroupExpansion({
+      expandedByDefault: false,
+      toggledGroupKeys: ["owner=alice", "owner=bob"],
+    })
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: ["owner=alice", "owner=bob"],
+    })
+
+    model.collapseAllGroups()
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
+
+    model.dispose()
+  })
+
   it("applies deterministic projection order: filter -> sort -> group -> flatten", () => {
     const model = createClientRowModel({
       rows: [
@@ -265,6 +297,181 @@ describe("createClientRowModel", () => {
     expect(collapsed).toHaveLength(1)
     expect(collapsed[0]?.kind).toBe("group")
     expect(collapsed[0]?.state.expanded).toBe(false)
+
+    model.dispose()
+  })
+
+  it("projects treeData path mode deterministically and toggles expansion by group key", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, path: ["infra", "api"] }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, path: ["infra", "web"] }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialTreeData: {
+        mode: "path",
+        getDataPath: row => row.path,
+        expandedByDefault: true,
+      },
+    })
+
+    const expandedRows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(expandedRows.map(row => row.kind)).toEqual([
+      "group", // infra
+      "group", // infra/api
+      "leaf",  // r1
+      "group", // infra/web
+      "leaf",  // r2
+    ])
+    const topGroupKey = String(expandedRows[0]?.groupMeta?.groupKey ?? "")
+    expect(topGroupKey.startsWith("tree:path:")).toBe(true)
+
+    model.toggleGroup(topGroupKey)
+    const collapsedRows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(collapsedRows).toHaveLength(1)
+    expect(collapsedRows[0]?.kind).toBe("group")
+    expect(collapsedRows[0]?.state.expanded).toBe(false)
+
+    model.dispose()
+  })
+
+  it("projects treeData parent mode with root orphan policy and cycle-edge ignore", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "a", parentId: "b" }, rowId: "a", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "b", parentId: "a" }, rowId: "b", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "c", parentId: "missing-parent" }, rowId: "c", originalIndex: 2, displayIndex: 2 },
+        { row: { id: "d", parentId: "b" }, rowId: "d", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+        orphanPolicy: "root",
+        cyclePolicy: "ignore-edge",
+      },
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 20 })
+    expect(rows.find(row => row.rowId === "c")).toBeDefined() // orphan promoted to root
+    expect(rows.find(row => row.rowId === "a")?.kind).toBe("group")
+    expect(rows.find(row => row.rowId === "b")?.kind).toBe("group")
+    expect(rows.find(row => row.rowId === "d")?.kind).toBe("leaf")
+    expect(model.getSnapshot().treeDataDiagnostics).toEqual({
+      orphans: 1,
+      cycles: 1,
+      duplicates: 0,
+      lastError: null,
+    })
+
+    model.dispose()
+  })
+
+  it("rejects duplicate row identity in tree mode and preserves previous snapshot revision", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, path: ["infra", "api"] }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, path: ["infra", "web"] }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialTreeData: {
+        mode: "path",
+        getDataPath: row => row.path,
+        expandedByDefault: true,
+      },
+    })
+
+    const before = model.getSnapshot()
+    expect(() => {
+      model.setRows([
+        { row: { id: 3, path: ["infra", "worker"] }, rowId: "dup", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 4, path: ["infra", "jobs"] }, rowId: "dup", originalIndex: 1, displayIndex: 1 },
+      ])
+    }).toThrow(/Duplicate rowId/)
+
+    const after = model.getSnapshot()
+    expect(after.revision).toBe(before.revision)
+    expect(after.rowCount).toBe(before.rowCount)
+    expect(after.treeDataDiagnostics?.duplicates).toBe(1)
+    expect(after.treeDataDiagnostics?.lastError).toMatch(/Duplicate rowId/)
+
+    model.dispose()
+  })
+
+  it("uses include-parents tree filter mode by default for parent treeData", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "root", parentId: null, value: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "child-1", parentId: "root", value: "keep" }, rowId: "child-1", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "child-2", parentId: "root", value: "drop" }, rowId: "child-2", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: { value: ["keep"] },
+      advancedFilters: {},
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rows.map(row => row.rowId)).toEqual(["root", "child-1"])
+    expect(rows[0]?.kind).toBe("group")
+    expect(rows[1]?.kind).toBe("leaf")
+
+    model.dispose()
+  })
+
+  it("uses leaf-only tree filter mode to avoid ancestor projection", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "root", parentId: null, value: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "child-1", parentId: "root", value: "keep" }, rowId: "child-1", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+        filterMode: "leaf-only",
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: { value: ["keep"] },
+      advancedFilters: {},
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rows.map(row => row.rowId)).toEqual(["child-1"])
+    expect(rows[0]?.kind).toBe("leaf")
+
+    model.dispose()
+  })
+
+  it("uses include-descendants tree filter mode to keep matched subtree", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "root", parentId: null, value: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "child-1", parentId: "root", value: "drop-1" }, rowId: "child-1", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "child-2", parentId: "root", value: "drop-2" }, rowId: "child-2", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+        filterMode: "include-descendants",
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: { value: ["root"] },
+      advancedFilters: {},
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rows.map(row => row.rowId)).toEqual(["root", "child-1", "child-2"])
+    expect(rows[0]?.kind).toBe("group")
 
     model.dispose()
   })
@@ -339,6 +546,22 @@ describe("createClientRowModel", () => {
 
     expect(sorted.map(row => (row.row as { id: number }).id)).toEqual([2, 3, 1])
     expect(scoreReads).toBe(3)
+
+    model.dispose()
+  })
+
+  it("uses rowId as deterministic tie-breaker for equal sort values", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, score: 10 }, rowId: "z", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, score: 10 }, rowId: "a", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, score: 10 }, rowId: "m", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    const sorted = model.getRowsInRange({ start: 0, end: 10 })
+    expect(sorted.map(row => String(row.rowId))).toEqual(["a", "m", "z"])
 
     model.dispose()
   })

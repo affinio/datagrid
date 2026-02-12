@@ -1,5 +1,6 @@
 export interface UseDataGridViewportScrollLifecycleOptions {
   isContextMenuVisible: () => boolean
+  shouldCloseContextMenuOnScroll?: () => boolean
   closeContextMenu: () => void
   resolveScrollTop: () => number
   resolveScrollLeft: () => number
@@ -21,7 +22,10 @@ export function useDataGridViewportScrollLifecycle(
     if (!target) {
       return
     }
-    if (options.isContextMenuVisible()) {
+    const shouldCloseContextMenu = options.shouldCloseContextMenuOnScroll
+      ? options.shouldCloseContextMenuOnScroll()
+      : true
+    if (options.isContextMenuVisible() && shouldCloseContextMenu) {
       options.closeContextMenu()
     }
     const nextTop = target.scrollTop

@@ -21,7 +21,12 @@ export interface DataGridSelectionSummaryColumnSnapshot {
   metrics: Record<DataGridSelectionAggregationKind, number | null>
 }
 
+export type DataGridSelectionSummaryScope = "selected-loaded" | "selected-visible"
+
 export interface DataGridSelectionSummarySnapshot {
+  scope: DataGridSelectionSummaryScope
+  isPartial: boolean
+  missingRowCount: number
   selectedCells: number
   selectedRows: number
   columns: Record<string, DataGridSelectionSummaryColumnSnapshot>
@@ -34,6 +39,8 @@ export interface CreateDataGridSelectionSummaryOptions<TRow = unknown> {
   getColumnKeyByIndex: (columnIndex: number) => string | null | undefined
   columns?: readonly DataGridSelectionSummaryColumnConfig<TRow>[]
   defaultAggregations?: readonly DataGridSelectionAggregationKind[]
+  scope?: DataGridSelectionSummaryScope
+  includeRowIndex?: (rowIndex: number) => boolean
 }
 
 const DEFAULT_AGGREGATIONS: readonly DataGridSelectionAggregationKind[] = [
@@ -199,9 +206,13 @@ function readDefaultCellValue<TRow>(rowNode: DataGridRowNode<TRow>, columnKey: s
 export function createDataGridSelectionSummary<TRow = unknown>(
   options: CreateDataGridSelectionSummaryOptions<TRow>,
 ): DataGridSelectionSummarySnapshot {
+  const scope: DataGridSelectionSummaryScope = options.scope ?? "selected-loaded"
   const selection = options.selection
   if (!selection || !Array.isArray(selection.ranges) || selection.ranges.length === 0) {
     return {
+      scope,
+      isPartial: false,
+      missingRowCount: 0,
       selectedCells: 0,
       selectedRows: 0,
       columns: {},
@@ -211,6 +222,9 @@ export function createDataGridSelectionSummary<TRow = unknown>(
   const rowCount = Number.isFinite(options.rowCount) ? Math.max(0, Math.trunc(options.rowCount)) : 0
   if (rowCount <= 0) {
     return {
+      scope,
+      isPartial: false,
+      missingRowCount: 0,
       selectedCells: 0,
       selectedRows: 0,
       columns: {},
@@ -229,6 +243,7 @@ export function createDataGridSelectionSummary<TRow = unknown>(
   const seenCells = new Set<string>()
   const seenRows = new Set<number>()
   const accumulators = new Map<string, ColumnAccumulator>()
+  let missingRowCount = 0
 
   for (const range of selection.ranges) {
     const startRow = Math.max(0, Math.min(rowCount - 1, Math.trunc(Math.min(range.startRow, range.endRow))))
@@ -237,8 +252,12 @@ export function createDataGridSelectionSummary<TRow = unknown>(
     const endCol = Math.max(0, Math.trunc(Math.max(range.startCol, range.endCol)))
 
     for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
+      if (typeof options.includeRowIndex === "function" && !options.includeRowIndex(rowIndex)) {
+        continue
+      }
       const rowNode = options.getRow(rowIndex)
       if (!rowNode) {
+        missingRowCount += 1
         continue
       }
       for (let colIndex = startCol; colIndex <= endCol; colIndex += 1) {
@@ -291,6 +310,9 @@ export function createDataGridSelectionSummary<TRow = unknown>(
   }
 
   return {
+    scope,
+    isPartial: missingRowCount > 0,
+    missingRowCount,
     selectedCells: seenCells.size,
     selectedRows: seenRows.size,
     columns,

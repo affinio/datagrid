@@ -93,6 +93,9 @@ export {
   type DataGridDataSourcePullReason,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourcePullResult,
+  type DataGridDataSourceTreePullContext,
+  type DataGridDataSourceTreePullOperation,
+  type DataGridDataSourceTreePullScope,
   type DataGridDataSourcePushEvent,
   type DataGridDataSourcePushInvalidateEvent,
   type DataGridDataSourcePushListener,
@@ -100,6 +103,23 @@ export {
   type DataGridDataSourcePushUpsertEvent,
   type DataGridDataSourceRowEntry,
 } from "./models/index.js"
+
+export {
+  applyGroupSelectionPolicy,
+  clampGridSelectionPoint,
+  clampSelectionArea,
+  createGridSelectionContextFromFlattenedRows,
+  createGridSelectionRange,
+  createGridSelectionRangeFromInput,
+  normalizeGridSelectionRange,
+  type GridSelectionFlattenedRow,
+  type GridSelectionContext,
+  type GridSelectionPoint,
+  type GridSelectionPointLike,
+  type GridSelectionRange,
+  type GridSelectionRangeInput,
+  type GridSelectionGroupPolicyOptions,
+} from "./selection/selectionState.js"
 
 export {
   transformDataGridPublicProtocolSource,

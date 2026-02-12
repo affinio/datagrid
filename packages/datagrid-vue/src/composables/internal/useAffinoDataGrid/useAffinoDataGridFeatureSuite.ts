@@ -231,9 +231,11 @@ export function useAffinoDataGridFeatureSuite<TRow>(
   })
   const {
     treeEnabled,
+    groupSelectsChildren,
     groupBy,
     groupExpansion,
     setGroupBy,
+    setGroupExpansion,
     clearGroupBy,
     toggleGroup,
     isGroupExpanded,
@@ -321,9 +323,11 @@ export function useAffinoDataGridFeatureSuite<TRow>(
     setHiddenColumnKeys,
     resetHiddenColumns,
     treeEnabled,
+    groupSelectsChildren,
     groupBy,
     groupExpansion,
     setGroupBy,
+    setGroupExpansion,
     clearGroupBy,
     toggleGroup,
     isGroupExpanded,

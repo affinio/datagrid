@@ -9,11 +9,13 @@ import type { UseDataGridRuntimeResult } from "../../useDataGridRuntime"
 export interface AffinoTreeFeatureInput {
   enabled?: boolean
   initialGroupBy?: DataGridGroupBySpec | null
+  groupSelectsChildren?: boolean
 }
 
 export interface NormalizedAffinoTreeFeature {
   enabled: boolean
   initialGroupBy: DataGridGroupBySpec | null
+  groupSelectsChildren: boolean
 }
 
 export interface UseAffinoDataGridTreeFeatureOptions<TRow> {
@@ -23,9 +25,11 @@ export interface UseAffinoDataGridTreeFeatureOptions<TRow> {
 
 export interface UseAffinoDataGridTreeFeatureResult {
   treeEnabled: Ref<boolean>
+  groupSelectsChildren: Ref<boolean>
   groupBy: Ref<DataGridGroupBySpec | null>
   groupExpansion: Ref<DataGridGroupExpansionSnapshot>
   setGroupBy: (groupBy: DataGridGroupBySpec | null) => void
+  setGroupExpansion: (expansion: DataGridGroupExpansionSnapshot | null) => void
   clearGroupBy: () => void
   toggleGroup: (groupKey: string) => void
   isGroupExpanded: (groupKey: string) => boolean
@@ -100,17 +104,20 @@ export function normalizeTreeFeature(
     return {
       enabled: input,
       initialGroupBy: null,
+      groupSelectsChildren: false,
     }
   }
   if (!input) {
     return {
       enabled: false,
       initialGroupBy: null,
+      groupSelectsChildren: false,
     }
   }
   return {
     enabled: input.enabled ?? true,
     initialGroupBy: cloneGroupBy(input.initialGroupBy ?? null),
+    groupSelectsChildren: Boolean(input.groupSelectsChildren),
   }
 }
 
@@ -118,6 +125,7 @@ export function useAffinoDataGridTreeFeature<TRow>(
   options: UseAffinoDataGridTreeFeatureOptions<TRow>,
 ): UseAffinoDataGridTreeFeatureResult {
   const treeEnabled = ref(options.feature.enabled)
+  const groupSelectsChildren = ref(Boolean(options.feature.groupSelectsChildren))
   const snapshot = options.runtime.rowModel.getSnapshot()
   const groupBy = ref<DataGridGroupBySpec | null>(cloneGroupBy(snapshot.groupBy))
   const groupExpansion = ref<DataGridGroupExpansionSnapshot>(cloneGroupExpansion(snapshot.groupExpansion))
@@ -147,6 +155,13 @@ export function useAffinoDataGridTreeFeature<TRow>(
       return
     }
     options.runtime.api.setGroupBy(null)
+  }
+
+  const setGroupExpansion = (expansion: DataGridGroupExpansionSnapshot | null) => {
+    if (!treeEnabled.value) {
+      return
+    }
+    options.runtime.api.setGroupExpansion(expansion)
   }
 
   const toggleGroup = (groupKey: string) => {
@@ -197,7 +212,7 @@ export function useAffinoDataGridTreeFeature<TRow>(
   }
 
   const expandGroups = (groupKeys?: readonly string[]): number => {
-    if (!treeEnabled.value || !groupBy.value) {
+    if (!treeEnabled.value) {
       return 0
     }
     const targets = resolveTargetGroupKeys(groupKeys)
@@ -206,14 +221,14 @@ export function useAffinoDataGridTreeFeature<TRow>(
       if (isGroupExpanded(groupKey)) {
         continue
       }
-      options.runtime.api.toggleGroup(groupKey)
+      options.runtime.api.expandGroup(groupKey)
       affected += 1
     }
     return affected
   }
 
   const collapseGroups = (groupKeys?: readonly string[]): number => {
-    if (!treeEnabled.value || !groupBy.value) {
+    if (!treeEnabled.value) {
       return 0
     }
     const targets = resolveTargetGroupKeys(groupKeys)
@@ -222,20 +237,45 @@ export function useAffinoDataGridTreeFeature<TRow>(
       if (!isGroupExpanded(groupKey)) {
         continue
       }
-      options.runtime.api.toggleGroup(groupKey)
+      options.runtime.api.collapseGroup(groupKey)
       affected += 1
     }
     return affected
   }
 
-  const expandAllGroups = (): number => expandGroups()
-  const collapseAllGroups = (): number => collapseGroups()
+  const expandAllGroups = (): number => {
+    if (!treeEnabled.value) {
+      return 0
+    }
+    const previous = cloneGroupExpansion(groupExpansion.value)
+    if (previous.expandedByDefault && previous.toggledGroupKeys.length === 0) {
+      return 0
+    }
+    const visibleGroupsBefore = collectVisibleGroupKeys().length
+    options.runtime.api.expandAllGroups()
+    return visibleGroupsBefore > 0 ? visibleGroupsBefore : 1
+  }
+
+  const collapseAllGroups = (): number => {
+    if (!treeEnabled.value) {
+      return 0
+    }
+    const previous = cloneGroupExpansion(groupExpansion.value)
+    if (!previous.expandedByDefault && previous.toggledGroupKeys.length === 0) {
+      return 0
+    }
+    const visibleGroupsBefore = collectVisibleGroupKeys().length
+    options.runtime.api.collapseAllGroups()
+    return visibleGroupsBefore > 0 ? visibleGroupsBefore : 1
+  }
 
   return {
     treeEnabled,
+    groupSelectsChildren,
     groupBy,
     groupExpansion,
     setGroupBy,
+    setGroupExpansion,
     clearGroupBy,
     toggleGroup,
     isGroupExpanded,

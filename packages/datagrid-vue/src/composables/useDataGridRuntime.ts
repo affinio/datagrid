@@ -4,6 +4,7 @@ import type {
   DataGridColumnDef,
   DataGridColumnModelSnapshot,
   DataGridRowNode,
+  DataGridRowModel,
   DataGridViewportRange,
 } from "@affino/datagrid-core"
 import {
@@ -25,6 +26,7 @@ function resolveMaybeRef<T>(value: MaybeRef<T>): T {
 
 export interface UseDataGridRuntimeOptions<TRow = unknown> {
   rows?: MaybeRef<readonly TRow[]>
+  rowModel?: DataGridRowModel<TRow>
   columns: MaybeRef<readonly DataGridColumnDef[]>
   services?: DataGridRuntimeOverrides
   startupOrder?: CreateDataGridCoreOptions["startupOrder"]
@@ -45,6 +47,7 @@ export function useDataGridRuntime<TRow = unknown>(
 ): UseDataGridRuntimeResult<TRow> {
   const runtime = useDataGridRuntimeService<TRow>({
     rows: options.rows ? resolveMaybeRef(options.rows) : [],
+    rowModel: options.rowModel,
     columns: resolveMaybeRef(options.columns),
     services: options.services,
     startupOrder: options.startupOrder,

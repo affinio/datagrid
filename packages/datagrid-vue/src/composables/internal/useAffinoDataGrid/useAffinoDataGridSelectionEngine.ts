@@ -1,5 +1,11 @@
 import { computed, ref, watch, type Ref } from "vue"
 import type { DataGridSelectionSnapshot } from "@affino/datagrid-core"
+import {
+  applyGroupSelectionPolicy,
+  createGridSelectionContextFromFlattenedRows,
+  createGridSelectionRange,
+  type GridSelectionFlattenedRow,
+} from "@affino/datagrid-core/advanced"
 import type { UseDataGridRuntimeResult } from "../../useDataGridRuntime"
 import { useDataGridCellNavigation } from "@affino/datagrid-orchestration"
 
@@ -22,6 +28,7 @@ export interface UseAffinoDataGridSelectionEngineOptions<TRow> {
   runtime: UseDataGridRuntimeResult<TRow>
   rows: Ref<readonly TRow[]>
   resolveRowKey: (row: TRow, index: number) => string
+  groupSelectsChildren?: Ref<boolean> | boolean
   internalSelectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   selectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   emitSelectionChange: (snapshot: DataGridSelectionSnapshot | null) => void
@@ -62,6 +69,78 @@ export function useAffinoDataGridSelectionEngine<TRow>(
   const cellSelectionFocus = ref<AffinoDataGridCellSelectionCoord | null>(null)
   const isPointerSelectingCells = ref(false)
 
+  const isGroupSelectsChildrenEnabled = (): boolean => {
+    if (typeof options.groupSelectsChildren === "boolean") {
+      return options.groupSelectsChildren
+    }
+    return Boolean(options.groupSelectsChildren?.value)
+  }
+
+  const buildFlattenedSelectionRows = (): readonly GridSelectionFlattenedRow<string | number>[] => {
+    const totalRows = options.runtime.api.getRowCount()
+    const flattened: GridSelectionFlattenedRow<string | number>[] = []
+    for (let rowIndex = 0; rowIndex < totalRows; rowIndex += 1) {
+      const rowNode = options.runtime.api.getRow(rowIndex)
+      flattened.push({
+        rowId: rowNode?.rowId ?? null,
+        isGroup: rowNode?.kind === "group",
+        level: rowNode?.groupMeta?.level ?? 0,
+      })
+    }
+    return flattened
+  }
+
+  const applyGroupSelectionRangePolicy = (): void => {
+    if (!isGroupSelectsChildrenEnabled()) {
+      return
+    }
+    const anchor = cellSelectionAnchor.value
+    const focus = cellSelectionFocus.value
+    if (!anchor || !focus) {
+      return
+    }
+    const colCount = options.runtime.columnSnapshot.value.visibleColumns.length
+    if (colCount <= 0) {
+      return
+    }
+    const flattenedRows = buildFlattenedSelectionRows()
+    const context = createGridSelectionContextFromFlattenedRows({
+      rows: flattenedRows,
+      colCount,
+    })
+    if (context.grid.rowCount <= 0) {
+      return
+    }
+    const baseRange = createGridSelectionRange(
+      {
+        rowIndex: anchor.rowIndex,
+        colIndex: anchor.columnIndex,
+        rowId: anchor.rowId,
+      },
+      {
+        rowIndex: focus.rowIndex,
+        colIndex: focus.columnIndex,
+        rowId: focus.rowId,
+      },
+      context,
+    )
+    const nextRange = applyGroupSelectionPolicy(baseRange, {
+      rows: flattenedRows,
+      groupSelectsChildren: true,
+    })
+    if (
+      nextRange.focus.rowIndex === focus.rowIndex
+      && nextRange.focus.colIndex === focus.columnIndex
+    ) {
+      return
+    }
+    const nextFocus = resolveCellCoordByIndex(nextRange.focus.rowIndex, nextRange.focus.colIndex)
+    if (!nextFocus) {
+      return
+    }
+    cellSelectionFocus.value = nextFocus
+  }
+
   const resolveVisibleColumnIndex = (columnKey: string): number => (
     options.runtime.columnSnapshot.value.visibleColumns.findIndex(column => column.key === columnKey)
   )
@@ -69,7 +148,7 @@ export function useAffinoDataGridSelectionEngine<TRow>(
   const resolveVisibleRowIndexByKey = (rowKey: string): number => {
     const rowCount = options.runtime.api.getRowCount()
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-      const rowNode = options.runtime.api.getRow<TRow>(rowIndex)
+      const rowNode = options.runtime.api.getRow(rowIndex)
       if (!rowNode) {
         continue
       }
@@ -94,7 +173,7 @@ export function useAffinoDataGridSelectionEngine<TRow>(
     }
     const rowIndex = Math.max(0, Math.min(rowCount - 1, Math.trunc(rowIndexRaw)))
     const columnIndex = Math.max(0, Math.min(columnCount - 1, Math.trunc(columnIndexRaw)))
-    const rowNode = options.runtime.api.getRow<TRow>(rowIndex)
+    const rowNode = options.runtime.api.getRow(rowIndex)
     const column = options.runtime.columnSnapshot.value.visibleColumns[columnIndex]
     if (!rowNode || !column) {
       return null
@@ -141,6 +220,7 @@ export function useAffinoDataGridSelectionEngine<TRow>(
     if (!extend) {
       cellSelectionAnchor.value = coord
       cellSelectionFocus.value = coord
+      applyGroupSelectionRangePolicy()
       return
     }
 
@@ -153,6 +233,7 @@ export function useAffinoDataGridSelectionEngine<TRow>(
 
     cellSelectionAnchor.value = anchor
     cellSelectionFocus.value = coord
+    applyGroupSelectionRangePolicy()
   }
 
   const clearCellSelection = (): void => {
@@ -387,10 +468,12 @@ export function useAffinoDataGridSelectionEngine<TRow>(
     if (activePosition === "start") {
       cellSelectionAnchor.value = end
       cellSelectionFocus.value = start
+      applyGroupSelectionRangePolicy()
       return
     }
     cellSelectionAnchor.value = start
     cellSelectionFocus.value = end
+    applyGroupSelectionRangePolicy()
   }
 
   return {

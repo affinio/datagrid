@@ -19,6 +19,8 @@ export type {
 export interface UseDataGridSelectionOverlayOrchestrationOptions {
   headerHeight: Ref<number>
   rowHeight: number
+  resolveRowHeight?: (rowIndex: number) => number
+  resolveRowOffset?: (rowIndex: number) => number
   orderedColumns: Ref<readonly DataGridOverlayColumnLike[]>
   orderedColumnMetrics: Ref<readonly DataGridOverlayColumnMetricLike[]>
   cellSelectionRange: Ref<DataGridOverlayRange | null>
@@ -43,6 +45,8 @@ export function useDataGridSelectionOverlayOrchestration(
   const overlay = computed(() => buildDataGridSelectionOverlaySnapshot({
     headerHeight: options.headerHeight.value,
     rowHeight: options.rowHeight,
+    resolveRowHeight: options.resolveRowHeight,
+    resolveRowOffset: options.resolveRowOffset,
     orderedColumns: options.orderedColumns.value,
     orderedColumnMetrics: options.orderedColumnMetrics.value,
     cellSelectionRange: options.cellSelectionRange.value,

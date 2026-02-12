@@ -16,6 +16,7 @@ import type {
   DataGridSelectionSummarySnapshot,
   DataGridSortDirection,
   DataGridSortState,
+  DataGridRowModel,
   DataGridEventEnvelope,
   DataGridEventTier,
   DataGridEventSource,
@@ -203,6 +204,7 @@ export interface AffinoDataGridVisibilityFeature {
 export interface AffinoDataGridTreeFeature {
   enabled?: boolean
   initialGroupBy?: DataGridGroupBySpec | null
+  groupSelectsChildren?: boolean
 }
 
 export interface AffinoDataGridRowHeightFeature {
@@ -268,6 +270,7 @@ export interface AffinoDataGridFilteringHelpers {
 export interface UseAffinoDataGridOptions<TRow> {
   rows: MaybeRef<readonly TRow[]>
   columns: MaybeRef<readonly DataGridColumnDef[]>
+  rowModel?: DataGridRowModel<TRow>
   services?: UseDataGridRuntimeOptions<TRow>["services"]
   startupOrder?: CreateDataGridCoreOptions["startupOrder"]
   autoStart?: boolean
@@ -588,9 +591,11 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
     }
     tree: {
       enabled: Ref<boolean>
+      groupSelectsChildren: Ref<boolean>
       groupBy: Ref<DataGridGroupBySpec | null>
       groupExpansion: Ref<DataGridGroupExpansionSnapshot>
       setGroupBy: (groupBy: DataGridGroupBySpec | null) => void
+      setGroupExpansion: (expansion: DataGridGroupExpansionSnapshot | null) => void
       clearGroupBy: () => void
       toggleGroup: (groupKey: string) => void
       isGroupExpanded: (groupKey: string) => boolean

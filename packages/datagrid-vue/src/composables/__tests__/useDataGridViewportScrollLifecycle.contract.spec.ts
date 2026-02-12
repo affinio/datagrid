@@ -53,4 +53,25 @@ describe("useDataGridViewportScrollLifecycle contract", () => {
     expect(setScrollTop).not.toHaveBeenCalled()
     expect(setScrollLeft).not.toHaveBeenCalled()
   })
+
+  it("skips closing the context menu when disabled", () => {
+    const closeContextMenu = vi.fn()
+    const lifecycle = useDataGridViewportScrollLifecycle({
+      isContextMenuVisible: () => true,
+      shouldCloseContextMenuOnScroll: () => false,
+      closeContextMenu,
+      resolveScrollTop: () => 0,
+      resolveScrollLeft: () => 0,
+      setScrollTop: vi.fn(),
+      setScrollLeft: vi.fn(),
+      hasInlineEditor: () => false,
+      commitInlineEdit: vi.fn(),
+    })
+
+    lifecycle.onViewportScroll({
+      currentTarget: { scrollTop: 40, scrollLeft: 10 },
+    } as unknown as Event)
+
+    expect(closeContextMenu).not.toHaveBeenCalled()
+  })
 })

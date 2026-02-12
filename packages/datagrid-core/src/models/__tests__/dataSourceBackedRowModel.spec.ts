@@ -55,6 +55,7 @@ describe("createDataSourceBackedRowModel", () => {
       expandedByDefault: false,
       toggledGroupKeys: [],
     })
+    expect(calls[2]?.request.treeData).toBeNull()
 
     calls[2]?.resolve({
       rows: Array.from({ length: 21 }, (_, offset) => {
@@ -424,12 +425,80 @@ describe("createDataSourceBackedRowModel", () => {
       expandedByDefault: true,
       toggledGroupKeys: [],
     })
+    expect(calls[calls.length - 1]?.request.treeData).toEqual({
+      operation: "set-group-by",
+      scope: "all",
+      groupKeys: [],
+    })
 
     model.toggleGroup("value=row-10")
     expect(calls[calls.length - 1]?.request.reason).toBe("group-change")
     expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
       expandedByDefault: true,
       toggledGroupKeys: ["value=row-10"],
+    })
+    expect(calls[calls.length - 1]?.request.treeData).toEqual({
+      operation: "toggle-group",
+      scope: "branch",
+      groupKeys: ["value=row-10"],
+    })
+
+    model.collapseGroup("value=row-10")
+    expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: [],
+    })
+    expect(calls[calls.length - 1]?.request.treeData).toEqual({
+      operation: "collapse-group",
+      scope: "branch",
+      groupKeys: ["value=row-10"],
+    })
+
+    model.expandGroup("value=row-10")
+    expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: ["value=row-10"],
+    })
+    expect(calls[calls.length - 1]?.request.treeData).toEqual({
+      operation: "expand-group",
+      scope: "branch",
+      groupKeys: ["value=row-10"],
+    })
+
+    model.expandAllGroups()
+    expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: [],
+    })
+    expect(calls[calls.length - 1]?.request.treeData).toEqual({
+      operation: "expand-all-groups",
+      scope: "all",
+      groupKeys: [],
+    })
+
+    model.collapseAllGroups()
+    expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
+    expect(calls[calls.length - 1]?.request.treeData).toEqual({
+      operation: "collapse-all-groups",
+      scope: "all",
+      groupKeys: [],
+    })
+
+    model.setGroupExpansion({
+      expandedByDefault: false,
+      toggledGroupKeys: ["value=row-11", "value=row-12"],
+    })
+    expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: ["value=row-11", "value=row-12"],
+    })
+    expect(calls[calls.length - 1]?.request.treeData).toEqual({
+      operation: "set-group-expansion",
+      scope: "all",
+      groupKeys: ["value=row-11", "value=row-12"],
     })
 
     model.dispose()

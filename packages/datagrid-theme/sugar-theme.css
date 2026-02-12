@@ -101,6 +101,11 @@
 	color: var(--datagrid-group-row-text-color);
 }
 
+.datagrid-sugar-stage__cell--group-tabular {
+	background: var(--datagrid-group-row-background-color);
+	color: var(--datagrid-group-row-text-color);
+}
+
 .datagrid-sugar-stage__group-toggle {
 	border: 0;
 	background: transparent;
@@ -110,6 +115,129 @@
 	align-items: center;
 	cursor: pointer;
 	padding: 0;
+}
+
+.datagrid-sugar-stage__group-toggle--tabular {
+	width: 100%;
+	justify-content: flex-start;
+	gap: 0.5rem;
+}
+
+.datagrid-sugar-stage__group-chevron {
+	font-size: 0.78rem;
+	color: var(--datagrid-sort-indicator-color);
+}
+
+.datagrid-sugar-stage__group-label {
+	font-weight: 600;
+	letter-spacing: 0.01em;
+}
+
+.datagrid-sugar-stage__group-copy {
+	display: grid;
+	min-width: 0;
+	gap: 0.02rem;
+}
+
+.datagrid-sugar-stage__group-subtitle {
+	font-size: 0.68rem;
+	color: var(--datagrid-text-soft);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.datagrid-sugar-stage__group-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.55rem;
+	height: 1.1rem;
+	padding: 0 0.35rem;
+	border-radius: 999px;
+	font-size: 0.66rem;
+	font-weight: 700;
+	color: var(--datagrid-header-text-color);
+	background: color-mix(in srgb, var(--datagrid-accent-strong) 20%, transparent);
+	border: 1px solid color-mix(in srgb, var(--datagrid-accent-strong) 35%, transparent);
+}
+
+.datagrid-sugar-stage__group-placeholder {
+	display: inline-flex;
+	min-width: 100%;
+	min-height: 0.95rem;
+}
+
+.datagrid-sugar-stage__group-value {
+	display: inline-flex;
+	align-items: center;
+	width: 100%;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.datagrid-sugar-stage__tree-leaf {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.52rem;
+	width: 100%;
+	min-width: 0;
+}
+
+.datagrid-sugar-stage__tree-avatar {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.45rem;
+	height: 1.45rem;
+	border-radius: 999px;
+	font-size: 0.62rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	color: var(--datagrid-header-text-color);
+	background: color-mix(in srgb, var(--datagrid-accent-strong) 24%, transparent);
+	border: 1px solid color-mix(in srgb, var(--datagrid-accent-strong) 45%, transparent);
+	flex: 0 0 auto;
+}
+
+.datagrid-sugar-stage__tree-copy {
+	display: grid;
+	min-width: 0;
+	gap: 0.02rem;
+}
+
+.datagrid-sugar-stage__tree-title {
+	font-weight: 550;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.datagrid-sugar-stage__tree-subtitle {
+	font-size: 0.68rem;
+	color: var(--datagrid-text-soft);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.datagrid-sugar-stage.is-tree-variant .datagrid-sugar-stage__row {
+	background: color-mix(in srgb, var(--datagrid-row-background-color) 92%, #09111d);
+}
+
+.datagrid-sugar-stage.is-tree-variant .datagrid-sugar-stage__cell {
+	min-height: 40px;
+}
+
+.datagrid-sugar-stage.is-tree-variant .datagrid-sugar-stage__cell--group-tabular {
+	background: color-mix(in srgb, var(--datagrid-group-row-background-color) 90%, #07101a);
+}
+
+.datagrid-sugar-stage.is-tree-variant .datagrid-sugar-stage__cell.is-pinned-left,
+.datagrid-sugar-stage.is-tree-variant .datagrid-sugar-stage__cell.is-pinned-right {
+	background: color-mix(in srgb, var(--datagrid-sticky-bg) 90%, #081220);
 }
 
 .datagrid-sugar-stage__header-meta {

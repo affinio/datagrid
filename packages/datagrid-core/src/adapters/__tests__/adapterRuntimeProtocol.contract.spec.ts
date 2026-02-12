@@ -18,6 +18,8 @@ describe("cross-platform adapter runtime protocol", () => {
     expect(resolveDataGridAdapterEventName("vue", "reachBottom")).toBe("reach-bottom")
     expect(resolveDataGridAdapterEventName("laravel", "rowClick")).toBe("row-click")
     expect(resolveDataGridAdapterEventName("web-component", "filtersReset")).toBe("filters-reset")
+    expect(resolveDataGridAdapterEventName("web-component", "groupByChange")).toBe("group-by-change")
+    expect(resolveDataGridAdapterEventName("web-component", "groupExpansionChange")).toBe("group-expansion-change")
     expect(resolveDataGridAdapterEventName("react", "selectionChange")).toBe("selectionChange")
   })
 

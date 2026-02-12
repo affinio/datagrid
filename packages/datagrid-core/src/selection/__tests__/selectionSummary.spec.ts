@@ -81,6 +81,9 @@ describe("selection summary", () => {
     })
 
     expect(summary).toEqual({
+      scope: "selected-loaded",
+      isPartial: false,
+      missingRowCount: 0,
       selectedCells: 0,
       selectedRows: 0,
       columns: {},

@@ -70,6 +70,56 @@ export interface DataGridGroupExpansionSnapshot {
   toggledGroupKeys: readonly string[]
 }
 
+export type DataGridTreeDataMode = "path" | "parent"
+export type DataGridTreeDataOrphanPolicy = "root" | "drop" | "error"
+export type DataGridTreeDataCyclePolicy = "ignore-edge" | "error"
+export type DataGridTreeDataFilterMode = "leaf-only" | "include-parents" | "include-descendants"
+
+export interface DataGridTreeDataBaseSpec {
+  expandedByDefault?: boolean
+  orphanPolicy?: DataGridTreeDataOrphanPolicy
+  cyclePolicy?: DataGridTreeDataCyclePolicy
+  filterMode?: DataGridTreeDataFilterMode
+}
+
+export interface DataGridTreeDataPathSpec<T = unknown> extends DataGridTreeDataBaseSpec {
+  mode: "path"
+  getDataPath: (row: T, index: number) => readonly (string | number)[]
+}
+
+export interface DataGridTreeDataParentSpec<T = unknown> extends DataGridTreeDataBaseSpec {
+  mode: "parent"
+  getParentId: (row: T, index: number) => DataGridRowId | null | undefined
+  rootParentId?: DataGridRowId | null
+}
+
+export type DataGridTreeDataSpec<T = unknown> =
+  | DataGridTreeDataPathSpec<T>
+  | DataGridTreeDataParentSpec<T>
+
+export interface DataGridTreeDataResolvedPathSpec<T = unknown> {
+  mode: "path"
+  getDataPath: (row: T, index: number) => readonly (string | number)[]
+  expandedByDefault: boolean
+  orphanPolicy: DataGridTreeDataOrphanPolicy
+  cyclePolicy: DataGridTreeDataCyclePolicy
+  filterMode: DataGridTreeDataFilterMode
+}
+
+export interface DataGridTreeDataResolvedParentSpec<T = unknown> {
+  mode: "parent"
+  getParentId: (row: T, index: number) => DataGridRowId | null | undefined
+  rootParentId: DataGridRowId | null
+  expandedByDefault: boolean
+  orphanPolicy: DataGridTreeDataOrphanPolicy
+  cyclePolicy: DataGridTreeDataCyclePolicy
+  filterMode: DataGridTreeDataFilterMode
+}
+
+export type DataGridTreeDataResolvedSpec<T = unknown> =
+  | DataGridTreeDataResolvedPathSpec<T>
+  | DataGridTreeDataResolvedParentSpec<T>
+
 export type DataGridRowModelKind = "client" | "server"
 
 export type DataGridRowModelRefreshReason =
@@ -144,13 +194,22 @@ export interface DataGridRowModelSnapshot<T = unknown> {
   kind: DataGridRowModelKind
   rowCount: number
   loading: boolean
+  warming?: boolean
   error: Error | null
+  treeDataDiagnostics?: DataGridTreeDataDiagnostics | null
   viewportRange: DataGridViewportRange
   pagination: DataGridPaginationSnapshot
   sortModel: readonly DataGridSortState[]
   filterModel: DataGridFilterSnapshot | null
   groupBy: DataGridGroupBySpec | null
   groupExpansion: DataGridGroupExpansionSnapshot
+}
+
+export interface DataGridTreeDataDiagnostics {
+  orphans: number
+  cycles: number
+  duplicates: number
+  lastError: string | null
 }
 
 export type DataGridRowModelListener<T = unknown> = (snapshot: DataGridRowModelSnapshot<T>) => void
@@ -168,10 +227,167 @@ export interface DataGridRowModel<T = unknown> {
   setSortModel(sortModel: readonly DataGridSortState[]): void
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
+  setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null): void
   toggleGroup(groupKey: string): void
+  expandGroup(groupKey: string): void
+  collapseGroup(groupKey: string): void
+  expandAllGroups(): void
+  collapseAllGroups(): void
   refresh(reason?: DataGridRowModelRefreshReason): Promise<void> | void
   subscribe(listener: DataGridRowModelListener<T>): () => void
   dispose(): void
+}
+
+const DATAGRID_TREE_DATA_DEFAULT_ORPHAN_POLICY: DataGridTreeDataOrphanPolicy = "root"
+const DATAGRID_TREE_DATA_DEFAULT_CYCLE_POLICY: DataGridTreeDataCyclePolicy = "ignore-edge"
+const DATAGRID_TREE_DATA_DEFAULT_FILTER_MODE: DataGridTreeDataFilterMode = "include-parents"
+
+function normalizeTreeDataOrphanPolicy(
+  value: unknown,
+): DataGridTreeDataOrphanPolicy {
+  if (value === "root" || value === "drop" || value === "error") {
+    return value
+  }
+  return DATAGRID_TREE_DATA_DEFAULT_ORPHAN_POLICY
+}
+
+function normalizeTreeDataCyclePolicy(
+  value: unknown,
+): DataGridTreeDataCyclePolicy {
+  if (value === "ignore-edge" || value === "error") {
+    return value
+  }
+  return DATAGRID_TREE_DATA_DEFAULT_CYCLE_POLICY
+}
+
+function normalizeTreeDataFilterMode(
+  value: unknown,
+): DataGridTreeDataFilterMode {
+  if (value === "leaf-only" || value === "include-parents" || value === "include-descendants") {
+    return value
+  }
+  return DATAGRID_TREE_DATA_DEFAULT_FILTER_MODE
+}
+
+export function normalizeTreeDataSpec<T>(
+  treeData: DataGridTreeDataSpec<T> | null | undefined,
+): DataGridTreeDataResolvedSpec<T> | null {
+  if (!treeData) {
+    return null
+  }
+
+  const orphanPolicy = normalizeTreeDataOrphanPolicy(treeData.orphanPolicy)
+  const cyclePolicy = normalizeTreeDataCyclePolicy(treeData.cyclePolicy)
+  const filterMode = normalizeTreeDataFilterMode(treeData.filterMode)
+  const expandedByDefault = Boolean(treeData.expandedByDefault)
+  if (treeData.mode === "path") {
+    if (typeof (treeData as { getParentId?: unknown }).getParentId !== "undefined") {
+      return null
+    }
+    if (typeof treeData.getDataPath !== "function") {
+      return null
+    }
+    return {
+      mode: "path",
+      getDataPath: treeData.getDataPath,
+      expandedByDefault,
+      orphanPolicy,
+      cyclePolicy,
+      filterMode,
+    }
+  }
+
+  if (treeData.mode === "parent") {
+    if (typeof (treeData as { getDataPath?: unknown }).getDataPath !== "undefined") {
+      return null
+    }
+    if (typeof treeData.getParentId !== "function") {
+      return null
+    }
+    const rootParentId =
+      treeData.rootParentId === null ||
+      typeof treeData.rootParentId === "undefined"
+        ? null
+        : assertDataGridRowId(treeData.rootParentId, "Invalid treeData.rootParentId")
+    return {
+      mode: "parent",
+      getParentId: treeData.getParentId,
+      rootParentId,
+      expandedByDefault,
+      orphanPolicy,
+      cyclePolicy,
+      filterMode,
+    }
+  }
+
+  return null
+}
+
+export function cloneTreeDataSpec<T>(
+  treeData: DataGridTreeDataSpec<T> | DataGridTreeDataResolvedSpec<T> | null | undefined,
+): DataGridTreeDataResolvedSpec<T> | null {
+  const normalized = normalizeTreeDataSpec(treeData as DataGridTreeDataSpec<T> | null | undefined)
+  if (!normalized) {
+    return null
+  }
+  if (normalized.mode === "path") {
+    return {
+      mode: "path",
+      getDataPath: normalized.getDataPath,
+      expandedByDefault: normalized.expandedByDefault,
+      orphanPolicy: normalized.orphanPolicy,
+      cyclePolicy: normalized.cyclePolicy,
+      filterMode: normalized.filterMode,
+    }
+  }
+  return {
+    mode: "parent",
+    getParentId: normalized.getParentId,
+    rootParentId: normalized.rootParentId,
+    expandedByDefault: normalized.expandedByDefault,
+    orphanPolicy: normalized.orphanPolicy,
+    cyclePolicy: normalized.cyclePolicy,
+    filterMode: normalized.filterMode,
+  }
+}
+
+export function isSameTreeDataSpec<T>(
+  left: DataGridTreeDataSpec<T> | DataGridTreeDataResolvedSpec<T> | null | undefined,
+  right: DataGridTreeDataSpec<T> | DataGridTreeDataResolvedSpec<T> | null | undefined,
+): boolean {
+  const normalizedLeft = normalizeTreeDataSpec(left as DataGridTreeDataSpec<T> | null | undefined)
+  const normalizedRight = normalizeTreeDataSpec(right as DataGridTreeDataSpec<T> | null | undefined)
+  if (!normalizedLeft && !normalizedRight) {
+    return true
+  }
+  if (!normalizedLeft || !normalizedRight) {
+    return false
+  }
+  if (normalizedLeft.mode !== normalizedRight.mode) {
+    return false
+  }
+  if (normalizedLeft.expandedByDefault !== normalizedRight.expandedByDefault) {
+    return false
+  }
+  if (normalizedLeft.orphanPolicy !== normalizedRight.orphanPolicy) {
+    return false
+  }
+  if (normalizedLeft.cyclePolicy !== normalizedRight.cyclePolicy) {
+    return false
+  }
+  if (normalizedLeft.filterMode !== normalizedRight.filterMode) {
+    return false
+  }
+  if (normalizedLeft.mode === "path" && normalizedRight.mode === "path") {
+    return normalizedLeft.getDataPath === normalizedRight.getDataPath
+  }
+  if (normalizedLeft.mode === "parent" && normalizedRight.mode === "parent") {
+    return (
+      normalizedLeft.getParentId === normalizedRight.getParentId &&
+      normalizedLeft.rootParentId === normalizedRight.rootParentId
+    )
+  }
+  return false
 }
 
 export function normalizeGroupBySpec(groupBy: DataGridGroupBySpec | null | undefined): DataGridGroupBySpec | null {
@@ -284,6 +500,36 @@ export function toggleGroupExpansionKey(
     toggledGroupKeys.delete(key)
   } else {
     toggledGroupKeys.add(key)
+  }
+  return true
+}
+
+export function setGroupExpansionKey(
+  toggledGroupKeys: Set<string>,
+  groupKey: string,
+  expandedByDefault: boolean,
+  expanded: boolean,
+): boolean {
+  const key = normalizeGroupKey(groupKey)
+  if (!key) {
+    return false
+  }
+  const currentlyExpanded = expandedByDefault ? !toggledGroupKeys.has(key) : toggledGroupKeys.has(key)
+  if (currentlyExpanded === expanded) {
+    return false
+  }
+  if (expandedByDefault) {
+    if (expanded) {
+      toggledGroupKeys.delete(key)
+    } else {
+      toggledGroupKeys.add(key)
+    }
+    return true
+  }
+  if (expanded) {
+    toggledGroupKeys.add(key)
+  } else {
+    toggledGroupKeys.delete(key)
   }
   return true
 }

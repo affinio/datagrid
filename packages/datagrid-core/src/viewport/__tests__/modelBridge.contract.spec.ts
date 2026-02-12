@@ -123,6 +123,51 @@ describe("table viewport model bridge service", () => {
     fallbackColumnModel.dispose()
   })
 
+  it("keeps treeData projection updates scoped to row-axis invalidations", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, path: ["infra"], value: "keep" }, rowId: 1, originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, path: ["infra"], value: "drop" }, rowId: 2, originalIndex: 1, displayIndex: 1 },
+      ],
+      initialTreeData: {
+        mode: "path",
+        getDataPath: row => row.path,
+        expandedByDefault: true,
+      },
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "value", label: "Value", width: 160 }],
+    })
+    const fallbackRowModel = createClientRowModel()
+    const fallbackColumnModel = createDataGridColumnModel()
+    const invalidations: DataGridViewportModelBridgeInvalidation[] = []
+    const bridge = createDataGridViewportModelBridgeService({
+      initialRowModel: rowModel,
+      initialColumnModel: columnModel,
+      fallbackRowModel,
+      fallbackColumnModel,
+      onInvalidate: invalidation => {
+        invalidations.push(invalidation)
+      },
+    })
+
+    invalidations.length = 0
+    rowModel.setFilterModel({
+      columnFilters: { value: ["keep"] },
+      advancedFilters: {},
+    })
+    rowModel.collapseAllGroups()
+
+    expect(invalidations.length).toBeGreaterThanOrEqual(1)
+    expect(invalidations.every(entry => entry.axes.rows === true && entry.axes.columns === false)).toBe(true)
+
+    bridge.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+    fallbackRowModel.dispose()
+    fallbackColumnModel.dispose()
+  })
+
   it("does not emit bridge invalidation for viewport-only row model updates", () => {
     const rowModel = createClientRowModel({ rows: buildRows(24) })
     const columnModel = createDataGridColumnModel({
@@ -430,7 +475,12 @@ describe("table viewport model bridge service", () => {
       setSortModel: () => {},
       setFilterModel: () => {},
       setGroupBy: () => {},
+      setGroupExpansion: () => {},
       toggleGroup: () => {},
+      expandGroup: () => {},
+      collapseGroup: () => {},
+      expandAllGroups: () => {},
+      collapseAllGroups: () => {},
       refresh: () => {},
       subscribe: () => () => {},
       dispose: () => {},

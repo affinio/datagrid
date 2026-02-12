@@ -20,6 +20,7 @@ interface AffinoDataGridMutationSnapshot<TRow> {
 export interface UseAffinoDataGridRuntimeBootstrapOptions<TRow> {
   rows: MaybeRef<readonly TRow[]>
   columns: MaybeRef<readonly DataGridColumnDef[]>
+  rowModel?: UseDataGridRuntimeOptions<TRow>["rowModel"]
   services?: UseDataGridRuntimeOptions<TRow>["services"]
   startupOrder?: UseDataGridRuntimeOptions<TRow>["startupOrder"]
   autoStart?: boolean
@@ -90,6 +91,7 @@ export function useAffinoDataGridRuntimeBootstrap<TRow>(
   const runtime = useDataGridRuntime<TRow>({
     rows,
     columns,
+    rowModel: options.rowModel,
     services: runtimeServices,
     startupOrder: options.startupOrder,
     autoStart: options.autoStart ?? true,

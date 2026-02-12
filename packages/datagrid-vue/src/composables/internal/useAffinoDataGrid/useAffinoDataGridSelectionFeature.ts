@@ -174,7 +174,7 @@ export function useAffinoDataGridSelectionFeature<TRow>(
     const ranges: DataGridSelectionSnapshot["ranges"] = []
 
     for (let rowIndex = 0; rowIndex < totalRows; rowIndex += 1) {
-      const rowNode = options.runtime.api.getRow<TRow>(rowIndex)
+      const rowNode = options.runtime.api.getRow(rowIndex)
       if (!rowNode || rowNode.kind !== "leaf") {
         continue
       }

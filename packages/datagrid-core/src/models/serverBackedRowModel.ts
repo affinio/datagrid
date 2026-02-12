@@ -3,12 +3,15 @@ import {
   buildGroupExpansionSnapshot,
   buildPaginationSnapshot,
   cloneGroupBySpec,
+  isSameGroupExpansionSnapshot,
   isSameGroupBySpec,
   normalizeRowNode,
   normalizeGroupBySpec,
   normalizePaginationInput,
   normalizeViewportRange,
+  setGroupExpansionKey,
   toggleGroupExpansionKey,
+  type DataGridGroupExpansionSnapshot,
   type DataGridRowId,
   type DataGridRowIdResolver,
   type DataGridFilterSnapshot,
@@ -32,6 +35,7 @@ export interface CreateServerBackedRowModelOptions<T> {
   initialGroupBy?: DataGridGroupBySpec | null
   initialPagination?: DataGridPaginationInput | null
   rowCacheLimit?: number
+  warmupBlockStep?: number
 }
 
 export interface ServerBackedRowModel<T> extends DataGridRowModel<T> {
@@ -44,13 +48,31 @@ const DEFAULT_ROW_CACHE_LIMIT = 4096
 interface InFlightViewportWarmup {
   start: number
   end: number
+  step: number
+  token: number
   promise: Promise<void>
+  cancel: () => void
 }
 
 export function createServerBackedRowModel<T>(
   options: CreateServerBackedRowModelOptions<T>,
 ): ServerBackedRowModel<T> {
   const { source } = options
+  type SourceUpdatePayload =
+    | DataGridViewportRange
+    | {
+      start?: number
+      end?: number
+      range?: {
+        start?: number
+        end?: number
+      }
+    }
+    | null
+    | undefined
+  const sourceSubscribe = (source as unknown as {
+    subscribe?: (listener: (payload?: SourceUpdatePayload) => void) => (() => void) | void
+  }).subscribe
   const resolveRowId: DataGridRowIdResolver<T> = options.resolveRowId ?? ((row, index) => {
     const value = (row as { id?: unknown })?.id
     if (typeof value === "string" || typeof value === "number") {
@@ -64,6 +86,7 @@ export function createServerBackedRowModel<T>(
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
   let filterModel: DataGridFilterSnapshot | null = cloneDataGridFilterSnapshot(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
+  let expansionExpandedByDefault = Boolean(groupBy?.expandedByDefault)
   let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
   const toggledGroupKeys = new Set<string>()
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, source.getRowCount())
@@ -76,19 +99,36 @@ export function createServerBackedRowModel<T>(
   const emptyRangeRows = Object.freeze([]) as readonly DataGridRowNode<T>[]
   let lastRangeCacheRows: readonly DataGridRowNode<T>[] = emptyRangeRows
   let inFlightViewportWarmup: InFlightViewportWarmup | null = null
+  let warmupToken = 0
+  let warming = false
   const listeners = new Set<DataGridRowModelListener<T>>()
-  const rowNodeCache = new Map<number, DataGridRowNode<T> | undefined>()
+  const rowNodeCache = new Map<number, DataGridRowNode<T>>()
   const rowNodeCacheRevision = new Map<number, number>()
   const rowCacheLimit =
     Number.isFinite(options.rowCacheLimit) && (options.rowCacheLimit as number) > 0
       ? Math.max(1, Math.trunc(options.rowCacheLimit as number))
       : DEFAULT_ROW_CACHE_LIMIT
+  const unsubscribeSource =
+    typeof sourceSubscribe === "function"
+      ? sourceSubscribe((payload?: SourceUpdatePayload) => {
+          if (disposed) {
+            return
+          }
+          const sourceRange = resolveSourceInvalidationRange(payload)
+          if (sourceRange) {
+            invalidateCachesForSourceRange(sourceRange)
+          } else {
+            invalidateCachesForRange(viewportRange)
+          }
+          emit()
+        }) ?? null
+      : null
 
   function readRowCache(index: number): DataGridRowNode<T> | undefined {
-    if (!rowNodeCache.has(index)) {
+    const cached = rowNodeCache.get(index)
+    if (!cached) {
       return undefined
     }
-    const cached = rowNodeCache.get(index)
     const revision = rowNodeCacheRevision.get(index)
     rowNodeCache.delete(index)
     rowNodeCache.set(index, cached)
@@ -99,7 +139,7 @@ export function createServerBackedRowModel<T>(
     return cached
   }
 
-  function writeRowCache(index: number, row: DataGridRowNode<T> | undefined): void {
+  function writeRowCache(index: number, row: DataGridRowNode<T>): void {
     if (rowNodeCache.has(index)) {
       rowNodeCache.delete(index)
     }
@@ -115,10 +155,52 @@ export function createServerBackedRowModel<T>(
     }
   }
 
+  function deleteRowCache(index: number): void {
+    rowNodeCache.delete(index)
+    rowNodeCacheRevision.delete(index)
+  }
+
   function ensureActive() {
     if (disposed) {
       throw new Error("ServerBackedRowModel has been disposed")
     }
+  }
+
+  function setWarming(next: boolean): boolean {
+    if (warming === next) {
+      return false
+    }
+    warming = next
+    revision += 1
+    return true
+  }
+
+  function normalizeSourceRange(startValue: unknown, endValue: unknown): DataGridViewportRange | null {
+    if (!Number.isFinite(startValue) || !Number.isFinite(endValue)) {
+      return null
+    }
+    const rawStart = Math.trunc(startValue as number)
+    const rawEnd = Math.trunc(endValue as number)
+    const start = Math.max(0, Math.min(rawStart, rawEnd))
+    const end = Math.max(start, Math.max(rawStart, rawEnd))
+    return { start, end }
+  }
+
+  function resolveSourceInvalidationRange(payload: SourceUpdatePayload): DataGridViewportRange | null {
+    if (!payload || typeof payload !== "object") {
+      return null
+    }
+    const nestedRange = (payload as { range?: { start?: unknown; end?: unknown } }).range
+    if (nestedRange && typeof nestedRange === "object") {
+      const normalizedNested = normalizeSourceRange(nestedRange.start, nestedRange.end)
+      if (normalizedNested) {
+        return normalizedNested
+      }
+    }
+    return normalizeSourceRange(
+      (payload as { start?: unknown }).start,
+      (payload as { end?: unknown }).end,
+    )
   }
 
   function getPaginationSnapshot() {
@@ -165,20 +247,56 @@ export function createServerBackedRowModel<T>(
       kind: "server",
       rowCount,
       loading: Boolean(source.loading.value),
+      warming,
       error: source.error.value ?? null,
       viewportRange,
       pagination,
       sortModel,
       filterModel: cloneDataGridFilterSnapshot(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
-      groupExpansion: buildGroupExpansionSnapshot(groupBy, toggledGroupKeys),
+      groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
     }
+  }
+
+  function getExpansionSpec(): DataGridGroupBySpec | null {
+    if (!groupBy) {
+      return null
+    }
+    return {
+      fields: groupBy.fields,
+      expandedByDefault: expansionExpandedByDefault,
+    }
+  }
+
+  function applyGroupExpansion(nextExpansion: DataGridGroupExpansionSnapshot | null): boolean {
+    const expansionSpec = getExpansionSpec()
+    if (!expansionSpec) {
+      return false
+    }
+    const normalizedSnapshot = buildGroupExpansionSnapshot(
+      {
+        fields: expansionSpec.fields,
+        expandedByDefault: nextExpansion?.expandedByDefault ?? expansionSpec.expandedByDefault,
+      },
+      nextExpansion?.toggledGroupKeys ?? [],
+    )
+    const currentSnapshot = buildGroupExpansionSnapshot(expansionSpec, toggledGroupKeys)
+    if (isSameGroupExpansionSnapshot(currentSnapshot, normalizedSnapshot)) {
+      return false
+    }
+    expansionExpandedByDefault = normalizedSnapshot.expandedByDefault
+    toggledGroupKeys.clear()
+    for (const groupKey of normalizedSnapshot.toggledGroupKeys) {
+      toggledGroupKeys.add(groupKey)
+    }
+    return true
   }
 
   function invalidateCaches() {
     rowNodeCache.clear()
     rowNodeCacheRevision.clear()
     cacheRevision += 1
+    warmupToken += 1
     lastRangeCacheStart = -1
     lastRangeCacheEnd = -1
     lastRangeCacheRevision = -1
@@ -186,13 +304,51 @@ export function createServerBackedRowModel<T>(
     revision += 1
   }
 
-  function invalidateCachesForRange(_range: DataGridViewportRange) {
-    cacheRevision += 1
+  function clearLastRangeCache(): void {
     lastRangeCacheStart = -1
     lastRangeCacheEnd = -1
     lastRangeCacheRevision = -1
     lastRangeCacheRows = emptyRangeRows
+  }
+
+  function invalidateRowCacheForSourceRange(sourceRange: DataGridViewportRange): void {
+    if (rowNodeCache.size === 0) {
+      return
+    }
+    for (const sourceIndex of rowNodeCache.keys()) {
+      if (sourceIndex < sourceRange.start || sourceIndex > sourceRange.end) {
+        continue
+      }
+      deleteRowCache(sourceIndex)
+    }
+  }
+
+  function invalidateCachesForSourceRange(sourceRange: DataGridViewportRange): void {
+    invalidateRowCacheForSourceRange(sourceRange)
+    if (lastRangeCacheStart >= 0 && lastRangeCacheEnd >= lastRangeCacheStart) {
+      const lastSourceStart = toSourceIndex(lastRangeCacheStart)
+      const lastSourceEnd = toSourceIndex(lastRangeCacheEnd)
+      const intersects =
+        sourceRange.start <= lastSourceEnd &&
+        sourceRange.end >= lastSourceStart
+      if (intersects) {
+        clearLastRangeCache()
+      }
+    } else {
+      clearLastRangeCache()
+    }
     revision += 1
+  }
+
+  function invalidateCachesForRange(range: DataGridViewportRange) {
+    const rowCount = getVisibleRowCount()
+    if (rowCount <= 0) {
+      clearLastRangeCache()
+      revision += 1
+      return
+    }
+    const sourceRange = toSourceRange(range)
+    invalidateCachesForSourceRange(sourceRange)
   }
 
   function emit() {
@@ -205,90 +361,196 @@ export function createServerBackedRowModel<T>(
     }
   }
 
-  async function warmViewportRange(range: DataGridViewportRange): Promise<void> {
+  function resolveWarmupBlockStep(): number {
+    const configuredStep = options.warmupBlockStep
+    if (Number.isFinite(configuredStep) && (configuredStep as number) > 0) {
+      return Math.max(1, Math.trunc(configuredStep as number))
+    }
+
+    for (const loadedRange of source.loadedRanges.value) {
+      if (
+        loadedRange &&
+        Number.isFinite(loadedRange.start) &&
+        Number.isFinite(loadedRange.end) &&
+        loadedRange.end >= loadedRange.start
+      ) {
+        const span = Math.max(1, Math.trunc(loadedRange.end - loadedRange.start + 1))
+        if (span > 0) {
+          return span
+        }
+      }
+    }
+
+    for (const rows of source.blocks.value.values()) {
+      if (Array.isArray(rows) && rows.length > 0) {
+        return rows.length
+      }
+    }
+
+    return 300
+  }
+
+  function buildWarmupStarts(start: number, end: number, step: number): readonly number[] {
+    const normalizedStep = Math.max(1, Math.trunc(step))
+    const starts = new Set<number>()
+    const alignedStart = Math.max(0, Math.floor(start / normalizedStep) * normalizedStep)
+    const alignedEnd = Math.max(alignedStart, Math.floor(end / normalizedStep) * normalizedStep)
+    for (let cursor = alignedStart; cursor <= alignedEnd; cursor += normalizedStep) {
+      starts.add(cursor)
+    }
+    if (starts.size === 0) {
+      starts.add(alignedStart)
+    }
+    return Array.from(starts).sort((left, right) => left - right)
+  }
+
+  function warmViewportRange(range: DataGridViewportRange): InFlightViewportWarmup {
     const sourceRange = toSourceRange(range)
     const start = Math.max(0, Math.trunc(sourceRange.start))
     const end = Math.max(start, Math.trunc(sourceRange.end))
+    const step = resolveWarmupBlockStep()
     if (
       inFlightViewportWarmup &&
       inFlightViewportWarmup.start === start &&
-      inFlightViewportWarmup.end === end
+      inFlightViewportWarmup.end === end &&
+      inFlightViewportWarmup.step === step
     ) {
-      return inFlightViewportWarmup.promise
+      return inFlightViewportWarmup
     }
-    const promise = (async () => {
-      await source.fetchBlock(start)
-      if (end !== start) {
-        await source.fetchBlock(end)
+    if (inFlightViewportWarmup) {
+      inFlightViewportWarmup.cancel()
+    }
+    const token = ++warmupToken
+    let cancelled = false
+    let resolved = false
+    let resolvePromise: (() => void) | null = null
+    const promise = new Promise<void>(resolve => {
+      resolvePromise = () => {
+        if (resolved) {
+          return
+        }
+        resolved = true
+        resolve()
       }
-    })()
+    })
+    const warmupStarts = buildWarmupStarts(start, end, step)
+    const firstStart = warmupStarts[0]
+    const shouldContinue = () => !resolved && !cancelled && !disposed && token === warmupToken
+    const finalize = () => {
+      resolvePromise?.()
+    }
+    let remainingStarted = false
+    const startRemaining = () => {
+      if (remainingStarted) {
+        return
+      }
+      remainingStarted = true
+      if (!shouldContinue()) {
+        finalize()
+        return
+      }
+      let index = 1
+      const step = () => {
+        if (!shouldContinue()) {
+          finalize()
+          return
+        }
+        if (index >= warmupStarts.length) {
+          finalize()
+          return
+        }
+        const warmupStart = warmupStarts[index]
+        index += 1
+        if (typeof warmupStart !== "number") {
+          step()
+          return
+        }
+        Promise.resolve(source.fetchBlock(warmupStart))
+          .then(step)
+          .catch(step)
+      }
+      step()
+    }
+    if (typeof firstStart !== "number") {
+      finalize()
+    } else {
+      const firstPromise = Promise.resolve(source.fetchBlock(firstStart))
+      const advance = () => {
+        if (!shouldContinue()) {
+          finalize()
+          return
+        }
+        startRemaining()
+      }
+      firstPromise.then(advance).catch(advance)
+    }
     inFlightViewportWarmup = {
       start,
       end,
+      step,
+      token,
       promise,
+      cancel: () => {
+        if (cancelled) {
+          return
+        }
+        cancelled = true
+        resolvePromise?.()
+      },
     }
     void promise.finally(() => {
       if (inFlightViewportWarmup?.promise === promise) {
         inFlightViewportWarmup = null
       }
     })
-    return promise
+    return inFlightViewportWarmup
+  }
+
+  function markCachesStale(): void {
+    cacheRevision += 1
+    clearLastRangeCache()
+    revision += 1
   }
 
   function toRowNode(index: number): DataGridRowNode<T> | undefined {
     const sourceIndex = toSourceIndex(index)
-    if (rowNodeCache.has(sourceIndex) && rowNodeCacheRevision.get(sourceIndex) === cacheRevision) {
-      return readRowCache(sourceIndex)
+    const cached = readRowCache(sourceIndex)
+    if (cached && rowNodeCacheRevision.get(sourceIndex) === cacheRevision) {
+      return cached
     }
+
     const row = source.getRowAt(sourceIndex)
-    if (rowNodeCache.has(sourceIndex)) {
-      const cached = readRowCache(sourceIndex)
-      rowNodeCacheRevision.set(sourceIndex, cacheRevision)
-      if (typeof row === "undefined") {
-        writeRowCache(sourceIndex, undefined)
-        return undefined
-      }
-      const rowId = resolveRowId(row, sourceIndex) as DataGridRowId
-      if (typeof rowId !== "string" && typeof rowId !== "number") {
-        throw new Error(`[DataGrid] Invalid row identity returned for index ${sourceIndex}. Expected string|number.`)
-      }
-      if (cached) {
-        if (
-          cached.row !== row ||
-          cached.data !== row ||
-          cached.rowId !== rowId ||
-          cached.rowKey !== rowId ||
-          cached.sourceIndex !== sourceIndex ||
-          cached.originalIndex !== sourceIndex ||
-          cached.displayIndex !== index
-        ) {
-          cached.row = row
-          cached.data = row
-          cached.rowId = rowId
-          cached.rowKey = rowId
-          cached.sourceIndex = sourceIndex
-          cached.originalIndex = sourceIndex
-          cached.displayIndex = index
-        }
-        return cached
-      }
-      const normalized = normalizeRowNode({
-        row,
-        rowId,
-        originalIndex: sourceIndex,
-        displayIndex: index,
-      }, sourceIndex)
-      writeRowCache(sourceIndex, normalized)
-      return normalized
-    }
     if (typeof row === "undefined") {
-      writeRowCache(sourceIndex, undefined)
+      deleteRowCache(sourceIndex)
       return undefined
     }
     const rowId = resolveRowId(row, sourceIndex) as DataGridRowId
     if (typeof rowId !== "string" && typeof rowId !== "number") {
       throw new Error(`[DataGrid] Invalid row identity returned for index ${sourceIndex}. Expected string|number.`)
     }
+
+    if (cached) {
+      if (
+        cached.row !== row ||
+        cached.data !== row ||
+        cached.rowId !== rowId ||
+        cached.rowKey !== rowId ||
+        cached.sourceIndex !== sourceIndex ||
+        cached.originalIndex !== sourceIndex ||
+        cached.displayIndex !== index
+      ) {
+        cached.row = row
+        cached.data = row
+        cached.rowId = rowId
+        cached.rowKey = rowId
+        cached.sourceIndex = sourceIndex
+        cached.originalIndex = sourceIndex
+        cached.displayIndex = index
+      }
+      writeRowCache(sourceIndex, cached)
+      return cached
+    }
+
     const normalized = normalizeRowNode({
       row,
       rowId,
@@ -354,16 +616,26 @@ export function createServerBackedRowModel<T>(
       }
       viewportRange = nextRange
       const warmedRange = nextRange
-      void warmViewportRange(warmedRange)
+      const warmup = warmViewportRange(warmedRange)
+      setWarming(true)
+      emit()
+      void warmup.promise
         .then(() => {
+          if (disposed || warmup.token !== warmupToken) {
+            return
+          }
+          setWarming(false)
           invalidateCachesForRange(warmedRange)
           emit()
         })
         .catch(() => {
+          if (disposed || warmup.token !== warmupToken) {
+            return
+          }
+          setWarming(false)
           invalidateCachesForRange(warmedRange)
           emit()
         })
-      emit()
     },
     setPagination(nextPagination: DataGridPaginationInput | null) {
       ensureActive()
@@ -429,13 +701,22 @@ export function createServerBackedRowModel<T>(
         return
       }
       groupBy = normalized
+      expansionExpandedByDefault = Boolean(normalized?.expandedByDefault)
       toggledGroupKeys.clear()
+      invalidateCaches()
+      emit()
+    },
+    setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
+      ensureActive()
+      if (!applyGroupExpansion(expansion)) {
+        return
+      }
       invalidateCaches()
       emit()
     },
     toggleGroup(groupKey: string) {
       ensureActive()
-      if (!groupBy) {
+      if (!getExpansionSpec()) {
         return
       }
       if (!toggleGroupExpansionKey(toggledGroupKeys, groupKey)) {
@@ -444,15 +725,73 @@ export function createServerBackedRowModel<T>(
       invalidateCaches()
       emit()
     },
+    expandGroup(groupKey: string) {
+      ensureActive()
+      if (!getExpansionSpec()) {
+        return
+      }
+      if (!setGroupExpansionKey(toggledGroupKeys, groupKey, expansionExpandedByDefault, true)) {
+        return
+      }
+      invalidateCaches()
+      emit()
+    },
+    collapseGroup(groupKey: string) {
+      ensureActive()
+      if (!getExpansionSpec()) {
+        return
+      }
+      if (!setGroupExpansionKey(toggledGroupKeys, groupKey, expansionExpandedByDefault, false)) {
+        return
+      }
+      invalidateCaches()
+      emit()
+    },
+    expandAllGroups() {
+      ensureActive()
+      if (!getExpansionSpec()) {
+        return
+      }
+      if (expansionExpandedByDefault && toggledGroupKeys.size === 0) {
+        return
+      }
+      expansionExpandedByDefault = true
+      toggledGroupKeys.clear()
+      invalidateCaches()
+      emit()
+    },
+    collapseAllGroups() {
+      ensureActive()
+      if (!getExpansionSpec()) {
+        return
+      }
+      if (!expansionExpandedByDefault && toggledGroupKeys.size === 0) {
+        return
+      }
+      expansionExpandedByDefault = false
+      toggledGroupKeys.clear()
+      invalidateCaches()
+      emit()
+    },
     async refresh(reason?: DataGridRowModelRefreshReason) {
       ensureActive()
       if (reason === "reset") {
         source.reset()
       }
+      const warmup = warmViewportRange(viewportRange)
+      setWarming(true)
       try {
-        await warmViewportRange(viewportRange)
-        invalidateCachesForRange(viewportRange)
+        await warmup.promise
+        if (disposed || warmup.token !== warmupToken) {
+          return
+        }
+        setWarming(false)
+        markCachesStale()
       } finally {
+        if (disposed || warmup.token !== warmupToken) {
+          return
+        }
+        setWarming(false)
         emit()
       }
     },
@@ -475,7 +814,10 @@ export function createServerBackedRowModel<T>(
         return
       }
       disposed = true
+      warmupToken += 1
+      unsubscribeSource?.()
       inFlightViewportWarmup = null
+      warming = false
       listeners.clear()
       rowNodeCache.clear()
       rowNodeCacheRevision.clear()

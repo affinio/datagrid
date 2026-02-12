@@ -6,10 +6,10 @@ import type {
   DataGridColumnSnapshot,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
+  DataGridGroupExpansionSnapshot,
   DataGridPaginationInput,
   DataGridPaginationSnapshot,
   DataGridRowModel,
-  DataGridRowModelRefreshReason,
   DataGridRowModelSnapshot,
   DataGridRowNode,
   DataGridSortState,
@@ -20,6 +20,7 @@ import {
   createDataGridSelectionSummary,
   type DataGridSelectionAggregationKind,
   type DataGridSelectionSummaryColumnConfig,
+  type DataGridSelectionSummaryScope,
   type DataGridSelectionSummarySnapshot,
 } from "../selection/selectionSummary"
 import type {
@@ -35,20 +36,44 @@ import type {
   DataGridCoreViewportService,
 } from "./gridCore"
 
-export interface CreateDataGridApiOptions {
+export interface CreateDataGridApiFromCoreOptions {
   core: DataGridCore
 }
 
-export interface DataGridApi {
+export interface CreateDataGridApiFromDepsOptions<TRow = unknown> {
+  lifecycle: DataGridCore["lifecycle"]
+  init(): Promise<void>
+  start(): Promise<void>
+  stop(): Promise<void>
+  dispose(): Promise<void>
+  rowModel: DataGridRowModel<TRow>
+  columnModel: DataGridColumnModel
+  viewportService?: DataGridCoreViewportService | null
+  transactionService?: DataGridCoreTransactionService | null
+  selectionService?: DataGridCoreSelectionService | null
+}
+
+/** @deprecated Use CreateDataGridApiFromDepsOptions instead. */
+export type CreateDataGridApiDependencies<TRow = unknown> = CreateDataGridApiFromDepsOptions<TRow>
+
+export type CreateDataGridApiOptions<TRow = unknown> =
+  | CreateDataGridApiFromCoreOptions
+  | CreateDataGridApiFromDepsOptions<TRow>
+
+export interface DataGridRefreshOptions {
+  reset?: boolean
+}
+
+export interface DataGridApi<TRow = unknown> {
   readonly lifecycle: DataGridCore["lifecycle"]
   init(): Promise<void>
   start(): Promise<void>
   stop(): Promise<void>
   dispose(): Promise<void>
-  getRowModelSnapshot<TRow = unknown>(): DataGridRowModelSnapshot<TRow>
+  getRowModelSnapshot(): DataGridRowModelSnapshot<TRow>
   getRowCount(): number
-  getRow<TRow = unknown>(index: number): DataGridRowNode<TRow> | undefined
-  getRowsInRange<TRow = unknown>(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[]
+  getRow(index: number): DataGridRowNode<TRow> | undefined
+  getRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[]
   setViewportRange(range: DataGridViewportRange): void
   getPaginationSnapshot(): DataGridPaginationSnapshot
   setPagination(pagination: DataGridPaginationInput | null): void
@@ -57,8 +82,13 @@ export interface DataGridApi {
   setSortModel(sortModel: readonly DataGridSortState[]): void
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
+  setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null): void
   toggleGroup(groupKey: string): void
-  refreshRows(reason?: DataGridRowModelRefreshReason): Promise<void> | void
+  expandGroup(groupKey: string): void
+  collapseGroup(groupKey: string): void
+  expandAllGroups(): void
+  collapseAllGroups(): void
+  refresh(options?: DataGridRefreshOptions): Promise<void> | void
   getColumnModelSnapshot(): DataGridColumnModelSnapshot
   getColumn(key: string): DataGridColumnSnapshot | undefined
   setColumns(columns: DataGridColumnDef[]): void
@@ -80,14 +110,51 @@ export interface DataGridApi {
   getSelectionSnapshot(): DataGridSelectionSnapshot | null
   setSelectionSnapshot(snapshot: DataGridSelectionSnapshot): void
   clearSelection(): void
-  summarizeSelection<TRow = unknown>(options?: DataGridSelectionSummaryApiOptions<TRow>): DataGridSelectionSummarySnapshot | null
+  summarizeSelection(options?: DataGridSelectionSummaryApiOptions<TRow>): DataGridSelectionSummarySnapshot | null
 }
 
 export interface DataGridSelectionSummaryApiOptions<TRow = unknown> {
+  /**
+   * "selected-loaded" summarizes all selected cells that are currently materialized by the row model.
+   * "selected-visible" limits summary to selected cells that intersect current viewportRange.
+   */
+  scope?: DataGridSelectionSummaryScope
   columns?: readonly DataGridSelectionSummaryColumnConfig<TRow>[]
   defaultAggregations?: readonly DataGridSelectionAggregationKind[]
   getColumnKeyByIndex?: (columnIndex: number) => string | null | undefined
 }
+
+interface ResolvedDataGridApiDependencies<TRow = unknown> {
+  lifecycle: DataGridCore["lifecycle"]
+  init(): Promise<void>
+  start(): Promise<void>
+  stop(): Promise<void>
+  dispose(): Promise<void>
+  rowModel: DataGridRowModel<TRow>
+  columnModel: DataGridColumnModel
+  getViewportService(): DataGridCoreViewportService | null
+  getTransactionService(): DataGridCoreTransactionService | null
+  getSelectionService(): DataGridCoreSelectionService | null
+}
+
+type DataGridSelectionCapability = Required<
+  Pick<DataGridCoreSelectionService, "getSelectionSnapshot" | "setSelectionSnapshot" | "clearSelection">
+>
+
+type DataGridTransactionCapability = Required<
+  Pick<
+    DataGridCoreTransactionService,
+    | "getTransactionSnapshot"
+    | "beginTransactionBatch"
+    | "commitTransactionBatch"
+    | "rollbackTransactionBatch"
+    | "applyTransaction"
+    | "canUndoTransaction"
+    | "canRedoTransaction"
+    | "undoTransaction"
+    | "redoTransaction"
+  >
+>
 
 function assertRowModelService(core: DataGridCore): DataGridCoreRowModelService {
   const service = core.getService("rowModel")
@@ -105,29 +172,62 @@ function assertColumnModelService(core: DataGridCore): DataGridCoreColumnModelSe
   return service
 }
 
-function getSelectionService(core: DataGridCore): DataGridCoreSelectionService {
-  return core.getService("selection")
+function isCoreApiOptions<TRow>(
+  options: CreateDataGridApiOptions<TRow>,
+): options is CreateDataGridApiFromCoreOptions {
+  return "core" in options
 }
 
-function getTransactionService(core: DataGridCore): DataGridCoreTransactionService {
-  return core.getService("transaction")
+function resolveApiDependencies<TRow = unknown>(
+  options: CreateDataGridApiOptions<TRow>,
+): ResolvedDataGridApiDependencies<TRow> {
+  if (isCoreApiOptions(options)) {
+    const core = options.core
+    const rowModelService = assertRowModelService(core)
+    const columnModelService = assertColumnModelService(core)
+    const rowModel = rowModelService.model as DataGridRowModel<TRow>
+    const columnModel = columnModelService.model as DataGridColumnModel
+    return {
+      lifecycle: core.lifecycle,
+      init: () => core.init(),
+      start: () => core.start(),
+      stop: () => core.stop(),
+      dispose: () => core.dispose(),
+      rowModel,
+      columnModel,
+      getViewportService: () => core.getService("viewport"),
+      getTransactionService: () => core.getService("transaction"),
+      getSelectionService: () => core.getService("selection"),
+    }
+  }
+
+  return {
+    lifecycle: options.lifecycle,
+    init: options.init,
+    start: options.start,
+    stop: options.stop,
+    dispose: options.dispose,
+    rowModel: options.rowModel,
+    columnModel: options.columnModel,
+    getViewportService: () => options.viewportService ?? null,
+    getTransactionService: () => options.transactionService ?? null,
+    getSelectionService: () => options.selectionService ?? null,
+  }
 }
 
-function getViewportService(core: DataGridCore): DataGridCoreViewportService {
-  return core.getService("viewport")
-}
-
-function assertSelectionCapability(
-  service: DataGridCoreSelectionService,
-): Required<Pick<DataGridCoreSelectionService, "getSelectionSnapshot" | "setSelectionSnapshot" | "clearSelection">> {
+function resolveSelectionCapability(
+  service: DataGridCoreSelectionService | null,
+): DataGridSelectionCapability | null {
+  if (!service) {
+    return null
+  }
   if (
     typeof service.getSelectionSnapshot !== "function" ||
     typeof service.setSelectionSnapshot !== "function" ||
     typeof service.clearSelection !== "function"
   ) {
-    throw new Error('[DataGridApi] "selection" service is present but does not implement selection capabilities.')
+    return null
   }
-
   return {
     getSelectionSnapshot: service.getSelectionSnapshot,
     setSelectionSnapshot: service.setSelectionSnapshot,
@@ -135,22 +235,12 @@ function assertSelectionCapability(
   }
 }
 
-function assertTransactionCapability(
-  service: DataGridCoreTransactionService,
-): Required<
-  Pick<
-    DataGridCoreTransactionService,
-    | "getTransactionSnapshot"
-    | "beginTransactionBatch"
-    | "commitTransactionBatch"
-    | "rollbackTransactionBatch"
-    | "applyTransaction"
-    | "canUndoTransaction"
-    | "canRedoTransaction"
-    | "undoTransaction"
-    | "redoTransaction"
-  >
-> {
+function resolveTransactionCapability(
+  service: DataGridCoreTransactionService | null,
+): DataGridTransactionCapability | null {
+  if (!service) {
+    return null
+  }
   if (
     typeof service.getTransactionSnapshot !== "function" ||
     typeof service.beginTransactionBatch !== "function" ||
@@ -162,9 +252,7 @@ function assertTransactionCapability(
     typeof service.undoTransaction !== "function" ||
     typeof service.redoTransaction !== "function"
   ) {
-    throw new Error(
-      '[DataGridApi] "transaction" service is present but does not implement transaction capabilities.',
-    )
+    return null
   }
 
   return {
@@ -180,62 +268,67 @@ function assertTransactionCapability(
   }
 }
 
-export function createDataGridApi(options: CreateDataGridApiOptions): DataGridApi {
-  const core = options.core
-  const rowModelService = assertRowModelService(core)
-  const columnModelService = assertColumnModelService(core)
-  const transactionService = getTransactionService(core)
-  const selectionService = getSelectionService(core)
-  const viewportService = getViewportService(core)
+function assertSelectionCapability(
+  capability: DataGridSelectionCapability | null,
+): DataGridSelectionCapability {
+  if (!capability) {
+    throw new Error('[DataGridApi] "selection" service is present but does not implement selection capabilities.')
+  }
+  return capability
+}
 
-  const rowModel = rowModelService.model as DataGridRowModel<unknown>
-  const columnModel = columnModelService.model as DataGridColumnModel
+function assertTransactionCapability(
+  capability: DataGridTransactionCapability | null,
+): DataGridTransactionCapability {
+  if (!capability) {
+    throw new Error(
+      '[DataGridApi] "transaction" service is present but does not implement transaction capabilities.',
+    )
+  }
+  return capability
+}
 
-  const hasSelectionSupport = () =>
-    typeof selectionService.getSelectionSnapshot === "function" &&
-    typeof selectionService.setSelectionSnapshot === "function" &&
-    typeof selectionService.clearSelection === "function"
+export function createDataGridApi<TRow = unknown>(
+  options: CreateDataGridApiOptions<TRow>,
+): DataGridApi<TRow> {
+  const deps = resolveApiDependencies(options)
+  const {
+    lifecycle,
+    init,
+    start,
+    stop,
+    dispose,
+    rowModel,
+    columnModel,
+    getViewportService,
+    getSelectionService,
+    getTransactionService,
+  } = deps
 
-  const hasTransactionSupport = () =>
-    typeof transactionService.getTransactionSnapshot === "function" &&
-    typeof transactionService.beginTransactionBatch === "function" &&
-    typeof transactionService.commitTransactionBatch === "function" &&
-    typeof transactionService.rollbackTransactionBatch === "function" &&
-    typeof transactionService.applyTransaction === "function" &&
-    typeof transactionService.canUndoTransaction === "function" &&
-    typeof transactionService.canRedoTransaction === "function" &&
-    typeof transactionService.undoTransaction === "function" &&
-    typeof transactionService.redoTransaction === "function"
+  const resolveCurrentSelectionCapability = () => resolveSelectionCapability(getSelectionService())
+  const resolveCurrentTransactionCapability = () => resolveTransactionCapability(getTransactionService())
 
   return {
-    lifecycle: core.lifecycle,
-    init() {
-      return core.init()
-    },
-    start() {
-      return core.start()
-    },
-    stop() {
-      return core.stop()
-    },
-    dispose() {
-      return core.dispose()
-    },
-    getRowModelSnapshot<TRow = unknown>() {
-      return rowModel.getSnapshot() as DataGridRowModelSnapshot<TRow>
+    lifecycle,
+    init,
+    start,
+    stop,
+    dispose,
+    getRowModelSnapshot() {
+      return rowModel.getSnapshot()
     },
     getRowCount() {
       return rowModel.getRowCount()
     },
-    getRow<TRow = unknown>(index: number) {
-      return rowModel.getRow(index) as DataGridRowNode<TRow> | undefined
+    getRow(index: number) {
+      return rowModel.getRow(index)
     },
-    getRowsInRange<TRow = unknown>(range: DataGridViewportRange) {
-      return rowModel.getRowsInRange(range) as readonly DataGridRowNode<TRow>[]
+    getRowsInRange(range: DataGridViewportRange) {
+      return rowModel.getRowsInRange(range)
     },
     setViewportRange(range: DataGridViewportRange) {
       rowModel.setViewportRange(range)
-      viewportService.setViewportRange?.(range)
+      getViewportService()?.setViewportRange?.(range)
     },
     getPaginationSnapshot() {
       return rowModel.getSnapshot().pagination
@@ -258,11 +351,26 @@ export function createDataGridApi(options: CreateDataGridApiOptions): DataGridAp
     setGroupBy(groupBy: DataGridGroupBySpec | null) {
       rowModel.setGroupBy(groupBy)
     },
+    setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
+      rowModel.setGroupExpansion(expansion)
+    },
     toggleGroup(groupKey: string) {
       rowModel.toggleGroup(groupKey)
     },
-    refreshRows(reason?: DataGridRowModelRefreshReason) {
-      return rowModel.refresh(reason)
+    expandGroup(groupKey: string) {
+      rowModel.expandGroup(groupKey)
+    },
+    collapseGroup(groupKey: string) {
+      rowModel.collapseGroup(groupKey)
+    },
+    expandAllGroups() {
+      rowModel.expandAllGroups()
+    },
+    collapseAllGroups() {
+      rowModel.collapseAllGroups()
+    },
+    refresh(options?: DataGridRefreshOptions) {
+      return rowModel.refresh(options?.reset ? "reset" : undefined)
     },
     getColumnModelSnapshot() {
       return columnModel.getSnapshot()
@@ -286,72 +394,77 @@ export function createDataGridApi(options: CreateDataGridApiOptions): DataGridAp
       columnModel.setColumnPin(key, pin)
     },
     hasTransactionSupport() {
-      return hasTransactionSupport()
+      return resolveCurrentTransactionCapability() != null
     },
     getTransactionSnapshot() {
-      if (!hasTransactionSupport()) {
+      const transactionCapability = resolveCurrentTransactionCapability()
+      if (!transactionCapability) {
         return null
       }
-      return transactionService.getTransactionSnapshot!()
+      return transactionCapability.getTransactionSnapshot()
     },
     beginTransactionBatch(label?: string) {
-      const transaction = assertTransactionCapability(transactionService)
+      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
       return transaction.beginTransactionBatch(label)
     },
     commitTransactionBatch(batchId?: string) {
-      const transaction = assertTransactionCapability(transactionService)
+      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
       return transaction.commitTransactionBatch(batchId)
     },
     rollbackTransactionBatch(batchId?: string) {
-      const transaction = assertTransactionCapability(transactionService)
+      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
       return transaction.rollbackTransactionBatch(batchId)
     },
     applyTransaction(transactionInput: DataGridTransactionInput) {
-      const transaction = assertTransactionCapability(transactionService)
+      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
       return transaction.applyTransaction(transactionInput)
     },
     canUndoTransaction() {
-      if (!hasTransactionSupport()) {
+      const transactionCapability = resolveCurrentTransactionCapability()
+      if (!transactionCapability) {
         return false
       }
-      return transactionService.canUndoTransaction!()
+      return transactionCapability.canUndoTransaction()
     },
     canRedoTransaction() {
-      if (!hasTransactionSupport()) {
+      const transactionCapability = resolveCurrentTransactionCapability()
+      if (!transactionCapability) {
         return false
       }
-      return transactionService.canRedoTransaction!()
+      return transactionCapability.canRedoTransaction()
     },
     undoTransaction() {
-      const transaction = assertTransactionCapability(transactionService)
+      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
       return transaction.undoTransaction()
     },
     redoTransaction() {
-      const transaction = assertTransactionCapability(transactionService)
+      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
       return transaction.redoTransaction()
     },
     hasSelectionSupport() {
-      return hasSelectionSupport()
+      return resolveCurrentSelectionCapability() != null
     },
     getSelectionSnapshot() {
-      if (!hasSelectionSupport()) {
+      const selectionCapability = resolveCurrentSelectionCapability()
+      if (!selectionCapability) {
         return null
       }
-      return selectionService.getSelectionSnapshot!()
+      return selectionCapability.getSelectionSnapshot()
     },
     setSelectionSnapshot(snapshot: DataGridSelectionSnapshot) {
-      const selection = assertSelectionCapability(selectionService)
+      const selection = assertSelectionCapability(resolveCurrentSelectionCapability())
       selection.setSelectionSnapshot(snapshot)
     },
     clearSelection() {
-      const selection = assertSelectionCapability(selectionService)
+      const selection = assertSelectionCapability(resolveCurrentSelectionCapability())
       selection.clearSelection()
     },
-    summarizeSelection<TRow = unknown>(options: DataGridSelectionSummaryApiOptions<TRow> = {}) {
-      if (!hasSelectionSupport()) {
+    summarizeSelection(options: DataGridSelectionSummaryApiOptions<TRow> = {}) {
+      const selectionCapability = resolveCurrentSelectionCapability()
+      if (!selectionCapability) {
         return null
       }
-      const selectionSnapshot = selectionService.getSelectionSnapshot!()
+      const selectionSnapshot = selectionCapability.getSelectionSnapshot()
       if (!selectionSnapshot) {
         return null
       }
@@ -361,11 +474,18 @@ export function createDataGridApi(options: CreateDataGridApiOptions): DataGridAp
       const getColumnKeyByIndex = options.getColumnKeyByIndex ?? ((columnIndex: number) => {
         return visibleColumns[columnIndex]?.key ?? null
       })
+      const scope = options.scope ?? "selected-loaded"
+      const viewportRange = rowModel.getSnapshot().viewportRange
+      const includeRowIndex = scope === "selected-visible"
+        ? (rowIndex: number) => rowIndex >= viewportRange.start && rowIndex <= viewportRange.end
+        : undefined
 
       return createDataGridSelectionSummary<TRow>({
         selection: selectionSnapshot,
+        scope,
         rowCount: rowModel.getRowCount(),
-        getRow: rowIndex => rowModel.getRow(rowIndex) as DataGridRowNode<TRow> | undefined,
+        includeRowIndex,
+        getRow: rowIndex => rowModel.getRow(rowIndex),
         getColumnKeyByIndex,
         columns: options.columns,
         defaultAggregations: options.defaultAggregations,

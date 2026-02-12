@@ -390,6 +390,7 @@ export function useAffinoDataGrid<TRow>(
   const runtimeBootstrap = useAffinoDataGridRuntimeBootstrap({
     rows: options.rows,
     columns: options.columns,
+    rowModel: options.rowModel,
     services: options.services,
     startupOrder: options.startupOrder,
     autoStart: options.autoStart,
@@ -578,6 +579,34 @@ export function useAffinoDataGrid<TRow>(
   )
 
   watch(
+    () => featureSuite.groupBy.value,
+    nextGroupBy => {
+      emitGridEvent({
+        tier: "stable",
+        name: "groupByChange",
+        args: [nextGroupBy, featureSuite.groupExpansion.value],
+        source: "ui",
+        phase: "change",
+      })
+    },
+    { immediate: true, flush: "sync" },
+  )
+
+  watch(
+    () => featureSuite.groupExpansion.value,
+    nextGroupExpansion => {
+      emitGridEvent({
+        tier: "stable",
+        name: "groupExpansionChange",
+        args: [nextGroupExpansion, featureSuite.groupBy.value],
+        source: "ui",
+        phase: "change",
+      })
+    },
+    { immediate: true, flush: "sync" },
+  )
+
+  watch(
     selectedRowKeys,
     nextSelectedRowKeys => {
       emitGridEvent({
@@ -664,6 +693,7 @@ export function useAffinoDataGrid<TRow>(
     runtime,
     rows,
     resolveRowKey,
+    groupSelectsChildren: featureSuite.groupSelectsChildren,
     internalSelectionSnapshot,
     selectionSnapshot: featureSuite.selectionSnapshot,
     emitSelectionChange: snapshot => {

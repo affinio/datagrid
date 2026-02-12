@@ -69,6 +69,8 @@ export interface GridSelectionContext<TRowKey = unknown> {
 
 export interface GridSelectionFlattenedRow<TRowKey = unknown> {
   rowId: TRowKey | null
+  isGroup?: boolean
+  level?: number
 }
 
 export interface CreateGridSelectionContextFromFlattenedRowsOptions<TRowKey = unknown> {
@@ -94,6 +96,67 @@ export function createGridSelectionContextFromFlattenedRows<TRowKey = unknown>(
         return null
       }
       return flattenedRows[normalizedIndex]?.rowId ?? null
+    },
+  }
+}
+
+export interface GridSelectionGroupPolicyOptions<TRowKey = unknown> {
+  rows: readonly GridSelectionFlattenedRow<TRowKey>[]
+  groupSelectsChildren?: boolean
+}
+
+function normalizeFlattenedRowLevel<TRowKey = unknown>(
+  row: GridSelectionFlattenedRow<TRowKey> | undefined,
+  fallback: number,
+): number {
+  if (!row || !Number.isFinite(row.level)) {
+    return fallback
+  }
+  return Math.max(0, Math.trunc(row.level as number))
+}
+
+export function applyGroupSelectionPolicy<TRowKey = unknown>(
+  range: GridSelectionRange<TRowKey>,
+  options: GridSelectionGroupPolicyOptions<TRowKey>,
+): GridSelectionRange<TRowKey> {
+  if (!options.groupSelectsChildren) {
+    return range
+  }
+  if (range.startRow !== range.endRow) {
+    return range
+  }
+  const rows = Array.isArray(options.rows) ? options.rows : []
+  const groupRow = rows[range.startRow]
+  if (!groupRow?.isGroup) {
+    return range
+  }
+
+  const groupLevel = normalizeFlattenedRowLevel(groupRow, 0)
+  let endRow = range.startRow
+  for (let rowIndex = range.startRow + 1; rowIndex < rows.length; rowIndex += 1) {
+    const candidate = rows[rowIndex]
+    if (!candidate) {
+      continue
+    }
+    const candidateLevel = normalizeFlattenedRowLevel(candidate, groupLevel + 1)
+    if (candidateLevel <= groupLevel) {
+      break
+    }
+    endRow = rowIndex
+  }
+
+  if (endRow === range.endRow) {
+    return range
+  }
+
+  return {
+    ...range,
+    endRow,
+    endRowId: rows[endRow]?.rowId ?? null,
+    focus: {
+      ...range.focus,
+      rowIndex: endRow,
+      rowId: rows[endRow]?.rowId ?? null,
     },
   }
 }
@@ -197,6 +260,14 @@ export function clampSelectionArea<TRowKey = unknown>(
   context: GridSelectionContext<TRowKey>,
 ): SelectionArea | null {
   const normalized = normalizeArea(area)
+  if (
+    !Number.isFinite(normalized.startRow) ||
+    !Number.isFinite(normalized.endRow) ||
+    !Number.isFinite(normalized.startCol) ||
+    !Number.isFinite(normalized.endCol)
+  ) {
+    return null
+  }
   const rowCount = Math.max(0, context.grid.rowCount)
   const colCount = Math.max(0, context.grid.colCount)
   if (rowCount === 0 || colCount === 0) {

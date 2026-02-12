@@ -127,9 +127,11 @@ export function assembleAffinoDataGridResult<TRow>(
       },
       tree: {
         enabled: features.treeEnabled,
+        groupSelectsChildren: features.groupSelectsChildren,
         groupBy: features.groupBy,
         groupExpansion: features.groupExpansion,
         setGroupBy: features.setGroupBy,
+        setGroupExpansion: features.setGroupExpansion,
         clearGroupBy: features.clearGroupBy,
         toggleGroup: features.toggleGroup,
         isGroupExpanded: features.isGroupExpanded,
