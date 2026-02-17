@@ -74,4 +74,52 @@ describe("useDataGridViewportScrollLifecycle contract", () => {
 
     expect(closeContextMenu).not.toHaveBeenCalled()
   })
+
+  it("batches updates in raf mode", () => {
+    let top = 0
+    let left = 0
+    const setScrollTop = vi.fn((value: number) => {
+      top = value
+    })
+    const setScrollLeft = vi.fn((value: number) => {
+      left = value
+    })
+    const frames: FrameRequestCallback[] = []
+
+    const lifecycle = useDataGridViewportScrollLifecycle({
+      isContextMenuVisible: () => false,
+      closeContextMenu: vi.fn(),
+      resolveScrollTop: () => top,
+      resolveScrollLeft: () => left,
+      setScrollTop,
+      setScrollLeft,
+      hasInlineEditor: () => false,
+      commitInlineEdit: vi.fn(),
+      scrollUpdateMode: "raf",
+      requestAnimationFrame(callback) {
+        frames.push(callback)
+        return frames.length
+      },
+      cancelAnimationFrame: vi.fn(),
+    })
+
+    lifecycle.onViewportScroll({
+      currentTarget: { scrollTop: 10, scrollLeft: 20 },
+    } as unknown as Event)
+    lifecycle.onViewportScroll({
+      currentTarget: { scrollTop: 30, scrollLeft: 40 },
+    } as unknown as Event)
+
+    expect(setScrollTop).not.toHaveBeenCalled()
+    expect(setScrollLeft).not.toHaveBeenCalled()
+    expect(frames.length).toBe(1)
+
+    const callback = frames[0]
+    callback(0)
+
+    expect(setScrollTop).toHaveBeenCalledTimes(1)
+    expect(setScrollLeft).toHaveBeenCalledTimes(1)
+    expect(top).toBe(30)
+    expect(left).toBe(40)
+  })
 })

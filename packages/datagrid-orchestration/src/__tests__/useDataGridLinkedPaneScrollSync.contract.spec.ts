@@ -40,4 +40,35 @@ describe("useDataGridLinkedPaneScrollSync contract", () => {
 
     expect(host.style.getPropertyValue("--grid-scroll-top")).toBe("")
   })
+
+  it("batches source scroll updates with onSourceScroll", () => {
+    let sourceTop = 0
+    const pane = document.createElement("div")
+    const frameCallbacks: FrameRequestCallback[] = []
+
+    const sync = useDataGridLinkedPaneScrollSync({
+      resolveSourceScrollTop: () => sourceTop,
+      mode: "direct-transform",
+      resolvePaneElements: () => [pane],
+      requestAnimationFrame(callback) {
+        frameCallbacks.push(callback)
+        return frameCallbacks.length
+      },
+      cancelAnimationFrame() {
+      },
+    })
+
+    sourceTop = 10
+    sync.onSourceScroll()
+    sourceTop = 26
+    sync.onSourceScroll()
+
+    expect(pane.style.transform).toBe("")
+    expect(frameCallbacks.length).toBe(1)
+
+    const callback = frameCallbacks[0]
+    callback(0)
+
+    expect(pane.style.transform).toBe("translate3d(0, -26px, 0)")
+  })
 })

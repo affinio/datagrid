@@ -13,6 +13,7 @@ export interface UseDataGridLinkedPaneScrollSyncOptions {
 
 export interface UseDataGridLinkedPaneScrollSyncResult {
   syncNow: (scrollTop?: number) => number
+  onSourceScroll: (scrollTop?: number) => void
   scheduleSyncLoop: () => void
   cancelSyncLoop: () => void
   isSyncLoopScheduled: () => boolean
@@ -31,6 +32,7 @@ export function useDataGridLinkedPaneScrollSync(
 
   let syncFrame: number | null = null
   let lastAppliedScrollTop = Number.NaN
+  let pendingScrollTop: number | null = null
 
   function normalizeScrollTop(value: number): number {
     return Math.max(0, Number.isFinite(value) ? value : 0)
@@ -91,15 +93,33 @@ export function useDataGridLinkedPaneScrollSync(
     return apply(scrollTop)
   }
 
-  function runSyncLoop(): void {
-    syncFrame = null
-    const sourceTop = normalizeScrollTop(options.resolveSourceScrollTop())
-    const appliedTop = apply(sourceTop)
-    if (sourceTop !== appliedTop) {
-      scheduleSyncLoop()
+  function flushPendingSourceScroll(): void {
+    if (pendingScrollTop === null) {
       return
     }
-    if (sourceTop !== lastAppliedScrollTop) {
+    const nextTop = pendingScrollTop
+    pendingScrollTop = null
+    apply(nextTop)
+  }
+
+  function onSourceScroll(scrollTop = options.resolveSourceScrollTop()): void {
+    pendingScrollTop = normalizeScrollTop(scrollTop)
+    if (syncFrame !== null) {
+      return
+    }
+    syncFrame = requestFrame(() => {
+      syncFrame = null
+      flushPendingSourceScroll()
+    })
+  }
+
+  function runSyncLoop(): void {
+    syncFrame = null
+    flushPendingSourceScroll()
+    const sourceTop = normalizeScrollTop(options.resolveSourceScrollTop())
+    apply(sourceTop)
+    const shouldContinue = pendingScrollTop !== null || sourceTop !== lastAppliedScrollTop
+    if (shouldContinue) {
       scheduleSyncLoop()
     }
   }
@@ -129,6 +149,7 @@ export function useDataGridLinkedPaneScrollSync(
 
   return {
     syncNow,
+    onSourceScroll,
     scheduleSyncLoop,
     cancelSyncLoop,
     isSyncLoopScheduled: () => syncFrame !== null,
