@@ -92,6 +92,7 @@ Compatibility entrypoint. New demo/workbench wiring should import `@affino/datag
 - `useDataGridViewportContextMenuRouter`
 - `useDataGridViewportBlurHandler`
 - `useDataGridViewportScrollLifecycle`
+- `useDataGridManagedWheelScroll`
 - `useDataGridClearSelectionLifecycle`
 - `useDataGridGlobalPointerLifecycle`
 - `useDataGridPointerAutoScroll`
@@ -129,6 +130,49 @@ const { api, columnSnapshot } = useDataGridRuntime({
   columns,
 })
 ```
+
+## Managed wheel scroll (advanced)
+
+Use `useDataGridManagedWheelScroll` when you want deterministic wheel ownership (axis lock, preventDefault policy, and consistent header/body horizontal sync).
+
+```ts
+import { useDataGridManagedWheelScroll } from "@affino/datagrid-vue/advanced"
+
+const managedWheelScroll = useDataGridManagedWheelScroll({
+  resolveWheelMode: () => "managed", // "managed" | "native"
+  resolveWheelAxisLockMode: () => "dominant",
+  resolvePreventDefaultWhenHandled: () => true,
+  resolveBodyViewport: () => viewportRef.value,
+  resolveMainViewport: () => viewportRef.value
+    ? {
+        scrollLeft: viewportRef.value.scrollLeft,
+        scrollWidth: viewportRef.value.scrollWidth,
+        clientWidth: viewportRef.value.clientWidth,
+      }
+    : null,
+  setHandledScrollTop: (nextTop) => {
+    if (viewportRef.value) {
+      viewportRef.value.scrollTop = nextTop
+    }
+  },
+  setHandledScrollLeft: (nextLeft) => {
+    if (viewportRef.value) {
+      viewportRef.value.scrollLeft = nextLeft
+    }
+  },
+})
+
+function onViewportWheel(event: WheelEvent) {
+  managedWheelScroll.onBodyViewportWheel(event)
+}
+```
+
+```vue
+<div ref="viewportRef" @wheel="onViewportWheel" @scroll="onViewportScroll" />
+```
+
+- Call `managedWheelScroll.reset()` on unmount.
+- Keep DOM reads/writes in adapter/demo/UI layer; do not move wheel DOM handling into core.
 
 ## 60-second integration (junior-friendly)
 

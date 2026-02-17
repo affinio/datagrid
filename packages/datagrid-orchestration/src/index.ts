@@ -5,6 +5,20 @@ export {
 } from "./useDataGridA11yCellIds"
 
 export {
+  type DataGridWheelMode,
+  type DataGridWheelAxisLockMode,
+  type DataGridWheelAxisPolicy,
+  type DataGridWheelConsumptionResult,
+  type DataGridManagedWheelBodyViewport,
+  type DataGridManagedWheelMainViewport,
+  type UseDataGridManagedWheelScrollOptions,
+  type UseDataGridManagedWheelScrollResult,
+  normalizeDataGridWheelDelta,
+  resolveDataGridWheelAxisPolicy,
+  useDataGridManagedWheelScroll,
+} from "./useDataGridManagedWheelScroll"
+
+export {
   type UseDataGridAxisAutoScrollDeltaOptions,
   type UseDataGridAxisAutoScrollDeltaResult,
   useDataGridAxisAutoScrollDelta,

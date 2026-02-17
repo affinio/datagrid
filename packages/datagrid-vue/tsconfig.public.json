@@ -48,6 +48,7 @@
     "src/composables/useDataGridViewportContextMenuRouter.ts",
     "src/composables/useDataGridViewportBlurHandler.ts",
     "src/composables/useDataGridViewportScrollLifecycle.ts",
+    "src/composables/useDataGridManagedWheelScroll.ts",
     "src/composables/useDataGridGlobalPointerLifecycle.ts",
     "src/composables/useDataGridClearSelectionLifecycle.ts",
     "src/composables/useDataGridPointerAutoScroll.ts",

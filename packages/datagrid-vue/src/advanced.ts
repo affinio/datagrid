@@ -337,6 +337,18 @@ export {
   type UseDataGridViewportScrollLifecycleResult,
 } from "./composables/useDataGridViewportScrollLifecycle"
 export {
+  type DataGridWheelMode,
+  type DataGridWheelAxisLockMode,
+  type DataGridWheelAxisPolicy,
+  type DataGridManagedWheelBodyViewport,
+  type DataGridManagedWheelMainViewport,
+  type UseDataGridManagedWheelScrollOptions,
+  type UseDataGridManagedWheelScrollResult,
+  normalizeDataGridWheelDelta,
+  resolveDataGridWheelAxisPolicy,
+  useDataGridManagedWheelScroll,
+} from "./composables/useDataGridManagedWheelScroll"
+export {
   type DataGridPointerPreviewApplyMode,
   useDataGridGlobalPointerLifecycle,
   type DataGridPointerCoordinates,
