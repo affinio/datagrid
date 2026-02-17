@@ -429,6 +429,12 @@ export {
 } from "./useDataGridRangeMoveLifecycle"
 
 export {
+  type UseDataGridResizeClickGuardOptions,
+  type UseDataGridResizeClickGuardResult,
+  useDataGridResizeClickGuard,
+} from "./useDataGridResizeClickGuard"
+
+export {
   type DataGridRangeMoveStartCoord,
   type DataGridRangeMoveStartRange,
   type DataGridRangeMoveStartPointer,
@@ -449,6 +455,13 @@ export {
   type UseDataGridRowSelectionInputHandlersResult,
   useDataGridRowSelectionInputHandlers,
 } from "./useDataGridRowSelectionInputHandlers"
+
+export {
+  type DataGridRowSelectionGesture,
+  type UseDataGridRowSelectionModelOptions,
+  type UseDataGridRowSelectionModelResult,
+  useDataGridRowSelectionModel,
+} from "./useDataGridRowSelectionModel"
 
 export {
   setsEqual,
@@ -529,6 +542,19 @@ export {
   type UseDataGridViewportScrollLifecycleResult,
   useDataGridViewportScrollLifecycle,
 } from "./useDataGridViewportScrollLifecycle"
+
+export {
+  type DataGridLinkedPaneSyncMode,
+  type UseDataGridLinkedPaneScrollSyncOptions,
+  type UseDataGridLinkedPaneScrollSyncResult,
+  useDataGridLinkedPaneScrollSync,
+} from "./useDataGridLinkedPaneScrollSync"
+
+export {
+  type UseDataGridInitialViewportRecoveryOptions,
+  type UseDataGridInitialViewportRecoveryResult,
+  useDataGridInitialViewportRecovery,
+} from "./useDataGridInitialViewportRecovery"
 
 export {
   type DataGridVirtualRange,

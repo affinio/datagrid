@@ -2,6 +2,17 @@
 
 Framework-agnostic data grid core.
 
+## Layer boundaries (Core vs Orchestration vs Adapter)
+
+- Keep in `@affino/datagrid-core`:
+  - row/column/filter/sort/group runtime state and deterministic model contracts.
+  - snapshot APIs consumed by adapters.
+- Keep in `@affino/datagrid-orchestration`:
+  - interaction policies (scroll linking, resize guards, recovery loops, selection gestures).
+  - reusable orchestration logic that is UI-framework agnostic.
+- Keep in adapters (`@affino/datagrid-vue` etc):
+  - framework lifecycle, refs/DOM reads-writes, template wiring and presentation concerns.
+
 ## API Tiers
 
 ### Tier 1: Stable (`@affino/datagrid-core`)

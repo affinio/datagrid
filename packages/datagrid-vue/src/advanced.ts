@@ -337,6 +337,22 @@ export {
   type UseDataGridViewportScrollLifecycleResult,
 } from "./composables/useDataGridViewportScrollLifecycle"
 export {
+  type DataGridLinkedPaneSyncMode,
+  type UseDataGridLinkedPaneScrollSyncOptions,
+  type UseDataGridLinkedPaneScrollSyncResult,
+  useDataGridLinkedPaneScrollSync,
+} from "./composables/useDataGridLinkedPaneScrollSync"
+export {
+  type UseDataGridResizeClickGuardOptions,
+  type UseDataGridResizeClickGuardResult,
+  useDataGridResizeClickGuard,
+} from "./composables/useDataGridResizeClickGuard"
+export {
+  type UseDataGridInitialViewportRecoveryOptions,
+  type UseDataGridInitialViewportRecoveryResult,
+  useDataGridInitialViewportRecovery,
+} from "./composables/useDataGridInitialViewportRecovery"
+export {
   type DataGridWheelMode,
   type DataGridWheelAxisLockMode,
   type DataGridWheelAxisPolicy,
@@ -422,6 +438,12 @@ export {
   type DataGridSelectionComparatorRange,
   type UseDataGridSelectionComparatorsResult,
 } from "./composables/useDataGridSelectionComparators"
+export {
+  type DataGridRowSelectionGesture,
+  type UseDataGridRowSelectionModelOptions,
+  type UseDataGridRowSelectionModelResult,
+  useDataGridRowSelectionModel,
+} from "./composables/useDataGridRowSelectionModel"
 export {
   useDataGridPointerModifierPolicy,
   type UseDataGridPointerModifierPolicyResult,

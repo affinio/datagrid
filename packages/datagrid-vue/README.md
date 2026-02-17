@@ -92,6 +92,9 @@ Compatibility entrypoint. New demo/workbench wiring should import `@affino/datag
 - `useDataGridViewportContextMenuRouter`
 - `useDataGridViewportBlurHandler`
 - `useDataGridViewportScrollLifecycle`
+- `useDataGridLinkedPaneScrollSync`
+- `useDataGridResizeClickGuard`
+- `useDataGridInitialViewportRecovery`
 - `useDataGridManagedWheelScroll`
 - `useDataGridClearSelectionLifecycle`
 - `useDataGridGlobalPointerLifecycle`
@@ -105,6 +108,7 @@ Compatibility entrypoint. New demo/workbench wiring should import `@affino/datag
 - `useDataGridQuickFilterActions`
 - `useDataGridCellCoordNormalizer`
 - `useDataGridSelectionComparators`
+- `useDataGridRowSelectionModel`
 - `useDataGridPointerModifierPolicy`
 - `useDataGridHistoryActionRunner`
 - `useDataGridInlineEditorFocus`
@@ -173,6 +177,43 @@ function onViewportWheel(event: WheelEvent) {
 
 - Call `managedWheelScroll.reset()` on unmount.
 - Keep DOM reads/writes in adapter/demo/UI layer; do not move wheel DOM handling into core.
+
+## Orchestration-heavy viewport integration
+
+Use orchestration primitives from `@affino/datagrid-vue/advanced` to keep component code thin while preserving high-fidelity interaction behavior.
+
+```ts
+import {
+  useDataGridLinkedPaneScrollSync,
+  useDataGridResizeClickGuard,
+  useDataGridInitialViewportRecovery,
+  useDataGridRowSelectionModel,
+} from "@affino/datagrid-vue/advanced"
+
+const linkedPaneSync = useDataGridLinkedPaneScrollSync({
+  resolveSourceScrollTop: () => viewportRef.value?.scrollTop ?? 0,
+  mode: "css-var",
+  resolveCssVarHost: () => gridRootRef.value,
+})
+
+const resizeGuard = useDataGridResizeClickGuard()
+
+const viewportRecovery = useDataGridInitialViewportRecovery({
+  resolveShouldRecover: () => totalRows.value > 1 && renderedRowsCount.value <= 1,
+  runRecoveryStep: () => syncViewportMetrics(),
+})
+
+const rowSelectionModel = useDataGridRowSelectionModel({
+  resolveFilteredRows: () => filteredRows.value,
+  resolveRowId: row => String(row.rowId),
+  resolveAllRows: () => allRows.value,
+})
+```
+
+Recommended ownership:
+- `@affino/datagrid-core`: deterministic data/runtime contracts.
+- `@affino/datagrid-orchestration`: interaction policies and state orchestration.
+- `@affino/datagrid-vue`: refs/template wiring and DOM lifecycle integration.
 
 ## 60-second integration (junior-friendly)
 
