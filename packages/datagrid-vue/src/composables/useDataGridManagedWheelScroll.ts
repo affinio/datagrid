@@ -1,6 +1,7 @@
 export {
   type DataGridWheelMode,
   type DataGridWheelAxisLockMode,
+  type DataGridWheelPropagationMode,
   type DataGridWheelAxisPolicy,
   type DataGridWheelConsumptionResult,
   type DataGridManagedWheelBodyViewport,
@@ -9,5 +10,6 @@ export {
   type UseDataGridManagedWheelScrollResult,
   normalizeDataGridWheelDelta,
   resolveDataGridWheelAxisPolicy,
+  resolveDataGridWheelPropagationDecision,
   useDataGridManagedWheelScroll,
 } from "@affino/datagrid-orchestration"

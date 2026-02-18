@@ -17,6 +17,23 @@ This package contains pure TypeScript logic (state commands, interaction policie
 - `useDataGridResizeClickGuard`: resize interaction guard that blocks accidental header-sort click after resize.
 - `useDataGridInitialViewportRecovery`: post-mount/resize recovery loop for virtual viewport stabilization.
 - `useDataGridRowSelectionModel`: anchor + shift-range row selection model with reconcile helpers for filtering/virtualization flows.
+- `useDataGridScrollIdleGate`: lightweight scroll-activity gate for deferring non-critical sync work until scroll idle.
+- `useDataGridScrollPerfTelemetry`: runtime frame telemetry for active scroll sessions (`fps`, dropped frames, long-task frames) with a minimal quality classification (`good`/`degraded`).
+
+## Scroll ownership contract
+
+`useDataGridManagedWheelScroll` supports explicit ownership release for nested containers:
+
+- `resolveWheelPropagationMode()` supports policy modes:
+	- `retain`
+	- `release-at-boundary-when-unconsumed`
+	- `release-when-unconsumed`
+- `resolveShouldPropagateWheelEvent(result)` remains available as a callback override for custom contracts.
+- Propagation decisions are ownership-based (`handled`) to preserve managed-wheel stability under pending/clamped deltas.
+- Optional hard-stop behavior: `resolveStopImmediatePropagation()` enables `stopImmediatePropagation()` for handled events when required by nested listener topology.
+- `resolvePreventDefaultWhenHandled()` keeps managed behavior deterministic for handled wheel input.
+
+This enables controlled wheel chaining in layouts like `grid -> modal -> page` without losing managed wheel behavior inside the grid.
 
 ## Quick example
 
@@ -45,6 +62,16 @@ const rowSelection = useDataGridRowSelectionModel({
 	resolveFilteredRows: () => filteredRows,
 	resolveRowId: row => String(row.rowId),
 	resolveAllRows: () => allRows,
+})
+
+const scrollIdleGate = useDataGridScrollIdleGate({
+	resolveIdleDelayMs: () => 80,
+})
+
+scrollIdleGate.markScrollActivity()
+scrollIdleGate.runWhenScrollIdle(() => {
+	// defer heavy non-critical sync while user is actively scrolling
+	recomputeSelectionSummary()
 })
 ```
 

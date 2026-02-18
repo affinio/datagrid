@@ -355,6 +355,7 @@ export {
 export {
   type DataGridWheelMode,
   type DataGridWheelAxisLockMode,
+  type DataGridWheelPropagationMode,
   type DataGridWheelAxisPolicy,
   type DataGridManagedWheelBodyViewport,
   type DataGridManagedWheelMainViewport,
@@ -362,8 +363,21 @@ export {
   type UseDataGridManagedWheelScrollResult,
   normalizeDataGridWheelDelta,
   resolveDataGridWheelAxisPolicy,
+  resolveDataGridWheelPropagationDecision,
   useDataGridManagedWheelScroll,
 } from "./composables/useDataGridManagedWheelScroll"
+export {
+  type UseDataGridScrollIdleGateOptions,
+  type UseDataGridScrollIdleGateResult,
+  useDataGridScrollIdleGate,
+} from "./composables/useDataGridScrollIdleGate"
+export {
+  type DataGridScrollPerfQuality,
+  type DataGridScrollPerfSnapshot,
+  type UseDataGridScrollPerfTelemetryOptions,
+  type UseDataGridScrollPerfTelemetryResult,
+  useDataGridScrollPerfTelemetry,
+} from "./composables/useDataGridScrollPerfTelemetry"
 export {
   type DataGridPointerPreviewApplyMode,
   useDataGridGlobalPointerLifecycle,

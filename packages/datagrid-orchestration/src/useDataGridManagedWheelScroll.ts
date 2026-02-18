@@ -1,5 +1,6 @@
 export type DataGridWheelMode = "managed" | "native"
 export type DataGridWheelAxisLockMode = "off" | "dominant" | "vertical-preferred" | "horizontal-preferred"
+export type DataGridWheelPropagationMode = "retain" | "release-at-boundary-when-unconsumed" | "release-when-unconsumed"
 
 export interface DataGridWheelAxisPolicy {
   applyX: boolean
@@ -33,6 +34,9 @@ export interface UseDataGridManagedWheelScrollOptions {
   resolveWheelMode?: () => DataGridWheelMode
   resolveWheelAxisLockMode?: () => DataGridWheelAxisLockMode
   resolvePreventDefaultWhenHandled?: () => boolean
+  resolveStopImmediatePropagation?: () => boolean
+  resolveWheelPropagationMode?: () => DataGridWheelPropagationMode
+  resolveShouldPropagateWheelEvent?: (result: DataGridWheelConsumptionResult) => boolean
   /** @deprecated Use resolvePreventDefaultWhenHandled */
   resolvePreventDefaultWhenConsumed?: () => boolean
   resolveMinDeltaToApply?: () => number
@@ -101,6 +105,19 @@ export function resolveDataGridWheelAxisPolicy(
   }
 }
 
+export function resolveDataGridWheelPropagationDecision(
+  result: DataGridWheelConsumptionResult,
+  mode: DataGridWheelPropagationMode,
+): boolean {
+  if (mode === "retain") {
+    return false
+  }
+  if (mode === "release-when-unconsumed") {
+    return !result.handled
+  }
+  return !result.handled && (result.atBoundaryX || result.atBoundaryY)
+}
+
 export function useDataGridManagedWheelScroll(
   options: UseDataGridManagedWheelScrollOptions,
 ): UseDataGridManagedWheelScrollResult {
@@ -109,6 +126,8 @@ export function useDataGridManagedWheelScroll(
   const resolvePreventDefaultWhenHandled = options.resolvePreventDefaultWhenHandled
     ?? options.resolvePreventDefaultWhenConsumed
     ?? (() => true)
+  const resolveStopImmediatePropagation = options.resolveStopImmediatePropagation ?? (() => false)
+  const resolveWheelPropagationMode = options.resolveWheelPropagationMode ?? (() => "retain" as const)
   const resolveMinDeltaToApply = options.resolveMinDeltaToApply ?? (() => 0)
   const isLinkedScrollSyncLoopScheduled = options.isLinkedScrollSyncLoopScheduled ?? (() => false)
 
@@ -269,9 +288,16 @@ export function useDataGridManagedWheelScroll(
 
   function handleWheelCommon(event: WheelEvent): void {
     const result = applyWheelToViewports(event)
-    if (result.handled && resolvePreventDefaultWhenHandled()) {
+    const shouldPropagateByMode = resolveDataGridWheelPropagationDecision(result, resolveWheelPropagationMode())
+    const shouldPropagateByOverride = options.resolveShouldPropagateWheelEvent?.(result) ?? false
+    const shouldPropagate = shouldPropagateByMode || shouldPropagateByOverride
+    if (result.handled && resolvePreventDefaultWhenHandled() && !shouldPropagate) {
       event.preventDefault()
-      event.stopPropagation()
+      if (resolveStopImmediatePropagation() && typeof event.stopImmediatePropagation === "function") {
+        event.stopImmediatePropagation()
+      } else {
+        event.stopPropagation()
+      }
     }
   }
 

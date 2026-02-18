@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import {
+  resolveDataGridWheelPropagationDecision,
   resolveDataGridWheelAxisPolicy,
   useDataGridManagedWheelScroll,
 } from "../useDataGridManagedWheelScroll"
@@ -15,6 +16,45 @@ describe("useDataGridManagedWheelScroll contract", () => {
 
   it("supports off policy with both axes", () => {
     expect(resolveDataGridWheelAxisPolicy(8, 12, "off")).toEqual({ applyX: true, applyY: true })
+  })
+
+  it("supports propagation decision helper policies", () => {
+    const boundaryUnconsumed = {
+      handled: false,
+      handledX: false,
+      handledY: false,
+      consumed: false,
+      consumedX: false,
+      consumedY: false,
+      atBoundaryX: true,
+      atBoundaryY: false,
+    }
+    const midScrollConsumed = {
+      handled: true,
+      handledX: false,
+      handledY: true,
+      consumed: true,
+      consumedX: false,
+      consumedY: true,
+      atBoundaryX: false,
+      atBoundaryY: false,
+    }
+
+    expect(resolveDataGridWheelPropagationDecision(boundaryUnconsumed, "retain")).toBe(false)
+    expect(resolveDataGridWheelPropagationDecision(boundaryUnconsumed, "release-at-boundary-when-unconsumed")).toBe(true)
+    expect(resolveDataGridWheelPropagationDecision(boundaryUnconsumed, "release-when-unconsumed")).toBe(true)
+    const handledUnconsumed = {
+      handled: true,
+      handledX: false,
+      handledY: true,
+      consumed: false,
+      consumedX: false,
+      consumedY: false,
+      atBoundaryX: false,
+      atBoundaryY: false,
+    }
+    expect(resolveDataGridWheelPropagationDecision(handledUnconsumed, "release-when-unconsumed")).toBe(false)
+    expect(resolveDataGridWheelPropagationDecision(midScrollConsumed, "release-when-unconsumed")).toBe(false)
   })
 
   it("does not consume wheel in native mode", () => {
@@ -106,6 +146,153 @@ describe("useDataGridManagedWheelScroll contract", () => {
     expect(onWheelConsumed).toHaveBeenCalledTimes(1)
     expect(event.preventDefault).toHaveBeenCalledTimes(1)
     expect(event.stopPropagation).toHaveBeenCalledTimes(1)
+  })
+
+  it("allows propagation on boundary when ownership policy requests release", () => {
+    const state = {
+      top: 0,
+      left: 100,
+    }
+    const bodyViewport = {
+      get scrollTop() { return state.top },
+      scrollHeight: 1000,
+      clientHeight: 200,
+    }
+    const mainViewport = {
+      get scrollLeft() { return state.left },
+      scrollWidth: 1000,
+      clientWidth: 200,
+    }
+
+    const lifecycle = useDataGridManagedWheelScroll({
+      resolveWheelMode: () => "managed",
+      resolveWheelAxisLockMode: () => "off",
+      resolveBodyViewport: () => bodyViewport,
+      resolveMainViewport: () => mainViewport,
+      resolveWheelPropagationMode: () => "release-at-boundary-when-unconsumed",
+      setHandledScrollTop(value) {
+        state.top = value
+      },
+      setHandledScrollLeft(value) {
+        state.left = value
+      },
+    })
+
+    const event = {
+      deltaX: 0,
+      deltaY: -30,
+      deltaMode: 0,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as WheelEvent
+
+    lifecycle.onBodyViewportWheel(event)
+
+    expect(state.top).toBe(0)
+    expect(state.left).toBe(100)
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(event.stopPropagation).not.toHaveBeenCalled()
+  })
+
+  it("allows explicit propagation callback to extend mode policy", () => {
+    const state = {
+      top: 10,
+      left: 100,
+    }
+    const bodyViewport = {
+      get scrollTop() { return state.top },
+      scrollHeight: 1000,
+      clientHeight: 200,
+    }
+    const mainViewport = {
+      get scrollLeft() { return state.left },
+      scrollWidth: 1000,
+      clientWidth: 200,
+    }
+
+    const lifecycle = useDataGridManagedWheelScroll({
+      resolveWheelMode: () => "managed",
+      resolveWheelAxisLockMode: () => "off",
+      resolveBodyViewport: () => bodyViewport,
+      resolveMainViewport: () => mainViewport,
+      resolveWheelPropagationMode: () => "retain",
+      resolveShouldPropagateWheelEvent: () => true,
+      setHandledScrollTop(value) {
+        state.top = value
+      },
+      setHandledScrollLeft(value) {
+        state.left = value
+      },
+    })
+
+    const event = {
+      deltaX: 0,
+      deltaY: 30,
+      deltaMode: 0,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as WheelEvent
+
+    lifecycle.onBodyViewportWheel(event)
+
+    expect(state.top).toBe(40)
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(event.stopPropagation).not.toHaveBeenCalled()
+  })
+
+  it("retains ownership when handled but not consumed in release-when-unconsumed mode", () => {
+    const state = { top: 10 }
+    const lifecycle = useDataGridManagedWheelScroll({
+      resolveWheelMode: () => "managed",
+      resolveWheelPropagationMode: () => "release-when-unconsumed",
+      resolveMinDeltaToApply: () => 10,
+      resolveBodyViewport: () => ({ scrollTop: state.top, scrollHeight: 1000, clientHeight: 200 }),
+      setHandledScrollTop(value) {
+        state.top = value
+      },
+    })
+
+    const event = {
+      deltaX: 0,
+      deltaY: 3,
+      deltaMode: 0,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as WheelEvent
+
+    lifecycle.onBodyViewportWheel(event)
+
+    expect(state.top).toBe(10)
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(event.stopPropagation).toHaveBeenCalledTimes(1)
+  })
+
+  it("supports optional stopImmediatePropagation for handled wheel events", () => {
+    const state = { top: 10 }
+    const lifecycle = useDataGridManagedWheelScroll({
+      resolveWheelMode: () => "managed",
+      resolveStopImmediatePropagation: () => true,
+      resolveBodyViewport: () => ({ scrollTop: state.top, scrollHeight: 1000, clientHeight: 200 }),
+      setHandledScrollTop(value) {
+        state.top = value
+      },
+    })
+
+    const event = {
+      deltaX: 0,
+      deltaY: 12,
+      deltaMode: 0,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      stopImmediatePropagation: vi.fn(),
+    } as unknown as WheelEvent
+
+    lifecycle.onBodyViewportWheel(event)
+
+    expect(state.top).toBe(22)
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(event.stopImmediatePropagation).toHaveBeenCalledTimes(1)
+    expect(event.stopPropagation).not.toHaveBeenCalled()
   })
 
   it("reports boundary status when clamped at top edge", () => {

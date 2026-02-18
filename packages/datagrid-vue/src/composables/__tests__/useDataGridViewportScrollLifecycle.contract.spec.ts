@@ -115,6 +115,10 @@ describe("useDataGridViewportScrollLifecycle contract", () => {
     expect(frames.length).toBe(1)
 
     const callback = frames[0]
+    expect(callback).toBeDefined()
+    if (!callback) {
+      throw new Error("Expected a scheduled animation frame callback")
+    }
     callback(0)
 
     expect(setScrollTop).toHaveBeenCalledTimes(1)

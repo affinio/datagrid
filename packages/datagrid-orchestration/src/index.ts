@@ -7,6 +7,7 @@ export {
 export {
   type DataGridWheelMode,
   type DataGridWheelAxisLockMode,
+  type DataGridWheelPropagationMode,
   type DataGridWheelAxisPolicy,
   type DataGridWheelConsumptionResult,
   type DataGridManagedWheelBodyViewport,
@@ -15,8 +16,23 @@ export {
   type UseDataGridManagedWheelScrollResult,
   normalizeDataGridWheelDelta,
   resolveDataGridWheelAxisPolicy,
+  resolveDataGridWheelPropagationDecision,
   useDataGridManagedWheelScroll,
 } from "./useDataGridManagedWheelScroll"
+
+export {
+  type UseDataGridScrollIdleGateOptions,
+  type UseDataGridScrollIdleGateResult,
+  useDataGridScrollIdleGate,
+} from "./useDataGridScrollIdleGate"
+
+export {
+  type DataGridScrollPerfQuality,
+  type DataGridScrollPerfSnapshot,
+  type UseDataGridScrollPerfTelemetryOptions,
+  type UseDataGridScrollPerfTelemetryResult,
+  useDataGridScrollPerfTelemetry,
+} from "./useDataGridScrollPerfTelemetry"
 
 export {
   type UseDataGridAxisAutoScrollDeltaOptions,
