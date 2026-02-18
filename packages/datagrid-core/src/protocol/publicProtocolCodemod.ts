@@ -163,43 +163,87 @@ function buildImportLine(specifiers: string[], source: string): string | null {
 }
 
 function rewriteRootImportsToTieredEntrypoints(source: string, appliedTransforms: string[]): string {
-  return source.replace(
-    /import\s*{([^}]+)}\s*from\s*["']@affino\/datagrid-core["'];?/g,
-    (statement, rawSpecifiers: string) => {
-      const specifiers = normalizeSpecifiers(rawSpecifiers)
-      const stableSpecifiers: string[] = []
-      const advancedSpecifiers: string[] = []
-      const themeSpecifiers: string[] = []
-      const pluginSpecifiers: string[] = []
+  let cursor = 0
+  let output = ""
 
-      for (const specifier of specifiers) {
-        const importedName = extractImportedName(specifier)
-        if (importedName && THEME_SYMBOLS.has(importedName)) {
-          themeSpecifiers.push(specifier)
-        } else if (importedName && PLUGIN_SYMBOLS.has(importedName)) {
-          pluginSpecifiers.push(specifier)
-        } else if (importedName && ADVANCED_SYMBOLS.has(importedName)) {
-          advancedSpecifiers.push(specifier)
-        } else {
-          stableSpecifiers.push(specifier)
-        }
-      }
+  while (cursor < source.length) {
+    const importStart = source.indexOf("import", cursor)
+    if (importStart === -1) {
+      output += source.slice(cursor)
+      break
+    }
 
-      if (advancedSpecifiers.length === 0 && themeSpecifiers.length === 0 && pluginSpecifiers.length === 0) {
-        return statement
-      }
+    output += source.slice(cursor, importStart)
+    const statementEnd = source.indexOf(";", importStart)
+    if (statementEnd === -1) {
+      output += source.slice(importStart)
+      break
+    }
 
-      appliedTransforms.push("root-import-tier-split")
-      const lines = [
-        buildImportLine(stableSpecifiers, "@affino/datagrid-core"),
-        buildImportLine(advancedSpecifiers, "@affino/datagrid-core/advanced"),
-        buildImportLine(themeSpecifiers, "@affino/datagrid-theme"),
-        buildImportLine(pluginSpecifiers, "@affino/datagrid-plugins"),
-      ].filter((line): line is string => Boolean(line))
+    const statement = source.slice(importStart, statementEnd + 1)
+    const rewritten = rewriteCoreImportStatement(statement, appliedTransforms)
+    output += rewritten ?? statement
+    cursor = statementEnd + 1
+  }
 
-      return lines.join("\n")
-    },
-  )
+  return output
+}
+
+function rewriteCoreImportStatement(statement: string, appliedTransforms: string[]): string | null {
+  const trimmed = statement.trim()
+  if (!trimmed.startsWith("import") || !trimmed.includes("@affino/datagrid-core")) {
+    return null
+  }
+
+  const specifierOpen = trimmed.indexOf("{")
+  const specifierClose = trimmed.lastIndexOf("}")
+  if (specifierOpen === -1 || specifierClose === -1 || specifierClose <= specifierOpen) {
+    return null
+  }
+
+  const fromIndex = trimmed.indexOf("from", specifierClose)
+  if (fromIndex === -1) {
+    return null
+  }
+
+  const importSource = trimmed.slice(fromIndex + 4).trim().replace(/;$/, "")
+  if (importSource !== '"@affino/datagrid-core"' && importSource !== "'@affino/datagrid-core'") {
+    return null
+  }
+
+  const rawSpecifiers = trimmed.slice(specifierOpen + 1, specifierClose)
+  const specifiers = normalizeSpecifiers(rawSpecifiers)
+  const stableSpecifiers: string[] = []
+  const advancedSpecifiers: string[] = []
+  const themeSpecifiers: string[] = []
+  const pluginSpecifiers: string[] = []
+
+  for (const specifier of specifiers) {
+    const importedName = extractImportedName(specifier)
+    if (importedName && THEME_SYMBOLS.has(importedName)) {
+      themeSpecifiers.push(specifier)
+    } else if (importedName && PLUGIN_SYMBOLS.has(importedName)) {
+      pluginSpecifiers.push(specifier)
+    } else if (importedName && ADVANCED_SYMBOLS.has(importedName)) {
+      advancedSpecifiers.push(specifier)
+    } else {
+      stableSpecifiers.push(specifier)
+    }
+  }
+
+  if (advancedSpecifiers.length === 0 && themeSpecifiers.length === 0 && pluginSpecifiers.length === 0) {
+    return null
+  }
+
+  appliedTransforms.push("root-import-tier-split")
+  const lines = [
+    buildImportLine(stableSpecifiers, "@affino/datagrid-core"),
+    buildImportLine(advancedSpecifiers, "@affino/datagrid-core/advanced"),
+    buildImportLine(themeSpecifiers, "@affino/datagrid-theme"),
+    buildImportLine(pluginSpecifiers, "@affino/datagrid-plugins"),
+  ].filter((line): line is string => Boolean(line))
+
+  return lines.join("\n")
 }
 
 export function transformDataGridPublicProtocolSource(source: string): DataGridCodemodResult {
