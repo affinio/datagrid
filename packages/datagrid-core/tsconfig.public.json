@@ -9,8 +9,14 @@
     "moduleResolution": "bundler",
     "noUncheckedIndexedAccess": false,
     "paths": {
-      "@affino/datagrid-plugins": ["../datagrid-plugins/dist/index.d.ts"],
-      "@affino/datagrid-plugins/*": ["../datagrid-plugins/dist/*"]
+      "@affino/datagrid-plugins": [
+        "../datagrid-plugins/src/index.ts",
+        "../datagrid-plugins/dist/index.d.ts"
+      ],
+      "@affino/datagrid-plugins/*": [
+        "../datagrid-plugins/src/*",
+        "../datagrid-plugins/dist/*"
+      ]
     }
   },
   "include": [
