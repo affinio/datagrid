@@ -173,20 +173,106 @@ function rewriteRootImportsToTieredEntrypoints(source: string, appliedTransforms
       break
     }
 
-    output += source.slice(cursor, importStart)
-    const statementEnd = source.indexOf(";", importStart)
-    if (statementEnd === -1) {
-      output += source.slice(importStart)
-      break
+    if (!isImportKeywordAt(source, importStart)) {
+      output += source.slice(cursor, importStart + 6)
+      cursor = importStart + 6
+      continue
     }
 
-    const statement = source.slice(importStart, statementEnd + 1)
+    output += source.slice(cursor, importStart)
+    const statementEnd = findImportStatementEnd(source, importStart)
+    const statement = source.slice(importStart, statementEnd)
     const rewritten = rewriteCoreImportStatement(statement, appliedTransforms)
     output += rewritten ?? statement
-    cursor = statementEnd + 1
+    cursor = statementEnd
   }
 
   return output
+}
+
+function isImportKeywordAt(source: string, index: number): boolean {
+  const before = index === 0 ? "" : source[index - 1] ?? ""
+  const after = source[index + 6] ?? ""
+  const isWordChar = (char: string): boolean => /[A-Za-z0-9_$]/.test(char)
+  return !isWordChar(before) && !isWordChar(after)
+}
+
+function findImportStatementEnd(source: string, importStart: number): number {
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let inTemplate = false
+  let escaping = false
+  let braceDepth = 0
+
+  for (let index = importStart; index < source.length; index += 1) {
+    const char = source[index] ?? ""
+
+    if (escaping) {
+      escaping = false
+      continue
+    }
+
+    if (char === "\\") {
+      escaping = true
+      continue
+    }
+
+    if (inSingleQuote) {
+      if (char === "'") {
+        inSingleQuote = false
+      }
+      continue
+    }
+
+    if (inDoubleQuote) {
+      if (char === '"') {
+        inDoubleQuote = false
+      }
+      continue
+    }
+
+    if (inTemplate) {
+      if (char === "`") {
+        inTemplate = false
+      }
+      continue
+    }
+
+    if (char === "'") {
+      inSingleQuote = true
+      continue
+    }
+
+    if (char === '"') {
+      inDoubleQuote = true
+      continue
+    }
+
+    if (char === "`") {
+      inTemplate = true
+      continue
+    }
+
+    if (char === "{") {
+      braceDepth += 1
+      continue
+    }
+
+    if (char === "}") {
+      braceDepth = Math.max(0, braceDepth - 1)
+      continue
+    }
+
+    if (char === ";" && braceDepth === 0) {
+      return index + 1
+    }
+
+    if ((char === "\n" || char === "\r") && braceDepth === 0) {
+      return index
+    }
+  }
+
+  return source.length
 }
 
 function rewriteCoreImportStatement(statement: string, appliedTransforms: string[]): string | null {

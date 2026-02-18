@@ -52,6 +52,8 @@
     "src/composables/useDataGridResizeClickGuard.ts",
     "src/composables/useDataGridInitialViewportRecovery.ts",
     "src/composables/useDataGridManagedWheelScroll.ts",
+    "src/composables/useDataGridScrollIdleGate.ts",
+    "src/composables/useDataGridScrollPerfTelemetry.ts",
     "src/composables/useDataGridGlobalPointerLifecycle.ts",
     "src/composables/useDataGridClearSelectionLifecycle.ts",
     "src/composables/useDataGridPointerAutoScroll.ts",
