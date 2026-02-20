@@ -61,7 +61,11 @@ describe("DataGrid component contract", () => {
     await flushRuntimeTasks()
 
     const exposed = wrapper.vm as unknown as {
-      api: { getRowCount(): number }
+      api: {
+        getRowCount(): number
+        refreshCellsByRowKeys(rowKeys: readonly (string | number)[], columnKeys: readonly string[]): void
+        refreshCellsByRanges(ranges: readonly { rowKey: string | number; columnKeys: readonly string[] }[]): void
+      }
       core: { lifecycle: { state: string } }
       virtualWindow: { value: { rowTotal: number; colTotal: number } | null }
       start(): Promise<void>
@@ -69,6 +73,8 @@ describe("DataGrid component contract", () => {
     }
 
     expect(typeof exposed.api.getRowCount).toBe("function")
+    expect(typeof exposed.api.refreshCellsByRowKeys).toBe("function")
+    expect(typeof exposed.api.refreshCellsByRanges).toBe("function")
     expect(exposed.api.getRowCount()).toBe(1)
     const exposedWindow = (exposed.virtualWindow as { value?: { rowTotal: number; colTotal: number } | null })?.value ??
       (exposed.virtualWindow as { rowTotal?: number; colTotal?: number } | null)

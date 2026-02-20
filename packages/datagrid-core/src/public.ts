@@ -68,6 +68,11 @@ export {
   type CreateDataGridApiFromDepsOptions,
   type CreateDataGridApiDependencies,
   type CreateDataGridApiOptions,
+  type DataGridCellRefreshEntry,
+  type DataGridCellRefreshOptions,
+  type DataGridCellRefreshRange,
+  type DataGridCellsRefreshBatch,
+  type DataGridCellsRefreshListener,
   type DataGridRefreshOptions,
   type DataGridSelectionSummaryApiOptions,
 } from "./core/gridApi.js"

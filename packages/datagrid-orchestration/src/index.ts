@@ -589,6 +589,12 @@ export {
 } from "./useDataGridVisibleRowsSyncScheduler"
 
 export {
+  type UseDataGridCellRefreshBatcherOptions,
+  type UseDataGridCellRefreshBatcherResult,
+  useDataGridCellRefreshBatcher,
+} from "./useDataGridCellRefreshBatcher"
+
+export {
   type CreateDataGridRuntimeOptions,
   type DataGridRuntime,
   type DataGridRuntimeOverrides,

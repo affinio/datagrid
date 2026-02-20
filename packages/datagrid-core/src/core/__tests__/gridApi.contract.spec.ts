@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { createDataGridColumnModel, createClientRowModel } from "../../models"
 import type { DataGridSelectionSnapshot } from "../../selection/snapshot"
 import { createDataGridTransactionService } from "../transactionService"
@@ -7,6 +7,10 @@ import { createDataGridApi } from "../gridApi"
 import { createDataGridCore } from "../gridCore"
 
 describe("data grid api facade contracts", () => {
+  const waitForCellRefreshFrame = async (): Promise<void> => {
+    await new Promise(resolve => setTimeout(resolve, 30))
+  }
+
   it("is exported through the stable public entrypoint", () => {
     expect(typeof createDataGridApiFromPublic).toBe("function")
   })
@@ -131,6 +135,128 @@ describe("data grid api facade contracts", () => {
       expandedByDefault: false,
       toggledGroupKeys: [],
     })
+  })
+
+  it("batches cell refresh for large row-key sets without triggering full row-model refresh", async () => {
+    const rows = Array.from({ length: 1_500 }, (_unused, index) => ({
+      row: {
+        rowId: `r${index}`,
+        tested_at: `2026-02-${String((index % 28) + 1).padStart(2, "0")}`,
+      },
+      rowId: `r${index}`,
+      originalIndex: index,
+    }))
+    const rowModel = createClientRowModel({ rows })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "tested_at", label: "Tested At" },
+        { key: "control", label: "Control" },
+      ],
+    })
+
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    api.setViewportRange({ start: 0, end: 49 })
+
+    const refreshSpy = vi.spyOn(rowModel, "refresh")
+    const batches: Array<{ cells: number }> = []
+    const unsubscribe = api.onCellsRefresh(batch => {
+      batches.push({ cells: batch.cells.length })
+    })
+
+    api.refreshCellsByRowKeys(
+      Array.from({ length: 1_200 }, (_unused, index) => `r${index}`),
+      ["tested_at"],
+    )
+    await waitForCellRefreshFrame()
+
+    unsubscribe()
+    expect(refreshSpy).not.toHaveBeenCalled()
+    expect(batches).toHaveLength(1)
+    expect(batches[0]?.cells).toBe(50)
+  })
+
+  it("does not emit repaint entries for rows outside current viewport", async () => {
+    const rows = Array.from({ length: 300 }, (_unused, index) => ({
+      row: { rowId: `r${index}`, tested_at: `T-${index}` },
+      rowId: `r${index}`,
+      originalIndex: index,
+    }))
+    const rowModel = createClientRowModel({ rows })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "tested_at", label: "Tested At" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    api.setViewportRange({ start: 0, end: 19 })
+
+    let emitted = 0
+    const unsubscribe = api.onCellsRefresh(() => {
+      emitted += 1
+    })
+
+    api.refreshCellsByRowKeys(["r120", "r121", "r122"], ["tested_at"])
+    await waitForCellRefreshFrame()
+
+    unsubscribe()
+    expect(emitted).toBe(0)
+  })
+
+  it("includes pinned left/right metadata in viewport refresh batches", async () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { rowId: "r1", tested_at: "2026-02-20", control: "alpha" }, rowId: "r1", originalIndex: 0 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "tested_at", label: "Tested At", pin: "left" },
+        { key: "control", label: "Control", pin: "right" },
+      ],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    api.setViewportRange({ start: 0, end: 0 })
+
+    let latestBatch:
+      | {
+          cells: Array<{ columnKey: string; pin: "left" | "right" | "none" }>
+        }
+      | null = null
+    const unsubscribe = api.onCellsRefresh(batch => {
+      latestBatch = {
+        cells: batch.cells.map(cell => ({ columnKey: cell.columnKey, pin: cell.pin })),
+      }
+    })
+
+    api.refreshCellsByRanges([
+      {
+        rowKey: "r1",
+        columnKeys: ["tested_at", "control"],
+      },
+    ])
+    await waitForCellRefreshFrame()
+
+    unsubscribe()
+    expect(latestBatch?.cells).toEqual([
+      { columnKey: "tested_at", pin: "left" },
+      { columnKey: "control", pin: "right" },
+    ])
   })
 
   it("exposes selection capability checks and fails loudly for missing capability methods", () => {

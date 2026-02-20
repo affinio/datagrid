@@ -553,4 +553,98 @@ describe("useAffinoDataGrid contract", () => {
     unsubscribe()
     wrapper.unmount()
   })
+
+  it("exposes cell refresh api and repaints only visible targeted pinned cells", async () => {
+    interface RefreshRow {
+      rowId: string
+      tested_at: string
+      control: string
+    }
+
+    const rows = ref<RefreshRow[]>(
+      Array.from({ length: 1_200 }, (_unused, index) => ({
+        rowId: `r${index}`,
+        tested_at: `T-${index}`,
+        control: `C-${index}`,
+      })),
+    )
+    const columns = [
+      { key: "tested_at", label: "Tested At", pin: "left" as const },
+      { key: "control", label: "Control", pin: "right" as const },
+    ]
+
+    let grid: ReturnType<typeof useAffinoDataGrid<RefreshRow>> | null = null
+
+    const Host = defineComponent({
+      name: "AffinoDataGridCellRefreshHost",
+      setup() {
+        grid = useAffinoDataGrid<RefreshRow>({ rows, columns })
+        return () => {
+          const viewport = grid!.api.getRowModelSnapshot().viewportRange
+          const visibleRows = grid!.api.getRowsInRange(viewport)
+          return h(
+            "table",
+            { class: "refresh-grid" },
+            visibleRows.map(rowNode => {
+              const row = rowNode.row as RefreshRow
+              return h(
+                "tr",
+                { key: String(rowNode.rowId) },
+                grid!.columns.value.map(column => {
+                  const columnKey = column.key
+                  const value = row[columnKey as keyof RefreshRow]
+                  return h(
+                    "td",
+                    {
+                      ...grid!.bindings.dataCell({
+                        row,
+                        rowIndex: rowNode.displayIndex,
+                        columnKey,
+                        value,
+                      }),
+                    },
+                    String(value ?? ""),
+                  )
+                }),
+              )
+            }),
+          )
+        }
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushTasks()
+
+    grid!.api.setViewportRange({ start: 0, end: 19 })
+    await flushTasks()
+
+    const batches: Array<{ pins: readonly ("left" | "right" | "none")[] }> = []
+    const unsubscribe = grid!.api.onCellsRefresh(batch => {
+      batches.push({ pins: batch.cells.map(cell => cell.pin) })
+    })
+
+    rows.value[0]!.tested_at = "T-UPDATED"
+    rows.value[0]!.control = "C-UPDATED"
+    rows.value[900]!.tested_at = "T-HIDDEN"
+
+    grid!.api.refreshCellsByRowKeys(["r0", "r900"], ["tested_at", "control"])
+    await new Promise(resolve => setTimeout(resolve, 40))
+
+    const testedCell = wrapper.find('[data-row-key="r0"][data-column-key="tested_at"]')
+    const controlCell = wrapper.find('[data-row-key="r0"][data-column-key="control"]')
+    expect(testedCell.exists()).toBe(true)
+    expect(controlCell.exists()).toBe(true)
+    expect(testedCell.text()).toBe("T-UPDATED")
+    expect(controlCell.text()).toBe("C-UPDATED")
+
+    expect(wrapper.find('[data-row-key="r900"][data-column-key="tested_at"]').exists()).toBe(false)
+
+    expect(batches).toHaveLength(1)
+    expect(batches[0]?.pins).toEqual(["left", "right"])
+    expect(batches[0]?.pins).toHaveLength(2)
+
+    unsubscribe()
+    wrapper.unmount()
+  })
 })

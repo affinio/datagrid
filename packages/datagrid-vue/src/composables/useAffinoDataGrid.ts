@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue"
 import type {
   DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterExpression,
+  DataGridCellsRefreshBatch,
   DataGridColumnModelSnapshot,
   DataGridPaginationSnapshot,
 } from "@affino/datagrid-core"
@@ -896,6 +897,57 @@ export function useAffinoDataGrid<TRow>(
     runAction,
   })
 
+  const resolveCellRefreshValue = (batch: DataGridCellsRefreshBatch, rowKey: string | number, columnKey: string): string | null => {
+    const targetKey = String(rowKey)
+    const directHit = batch.cells.find(cell => String(cell.rowKey) === targetKey && cell.columnKey === columnKey)
+    if (!directHit) {
+      return null
+    }
+
+    const directNode = runtime.api.getRow(directHit.rowIndex)
+    let resolvedRow: unknown = directNode?.row
+    if (!resolvedRow || String(directNode?.rowId ?? "") !== targetKey) {
+      const viewportRange = runtime.api.getRowModelSnapshot().viewportRange
+      const visibleRows = runtime.api.getRowsInRange(viewportRange)
+      resolvedRow = visibleRows.find(node => String(node.rowId) === targetKey)?.row
+    }
+
+    if (!resolvedRow || typeof resolvedRow !== "object") {
+      return null
+    }
+
+    const value = (resolvedRow as Record<string, unknown>)[columnKey]
+    if (value == null) {
+      return ""
+    }
+    return String(value)
+  }
+
+  const unsubscribeCellRefresh = runtime.api.onCellsRefresh(batch => {
+    for (const cell of batch.cells) {
+      const cellElement = bindingSuite.findCellElement(String(cell.rowKey), cell.columnKey)
+      if (!cellElement) {
+        continue
+      }
+
+      cellElement.setAttribute("data-affino-cell-refresh-ts", String(batch.timestamp))
+      const nextValue = resolveCellRefreshValue(batch, cell.rowKey, cell.columnKey)
+      if (nextValue != null && cellElement.childElementCount === 0) {
+        cellElement.textContent = nextValue
+      }
+
+      if (typeof CustomEvent === "function") {
+        cellElement.dispatchEvent(new CustomEvent("affino-datagrid:cell-refresh", {
+          detail: {
+            ...cell,
+            timestamp: batch.timestamp,
+            reason: batch.reason,
+          },
+        }))
+      }
+    }
+  })
+
   const applyAdvancedExpression = (
     expression: DataGridAdvancedFilterExpression | null,
     options: { mergeMode?: AffinoDataGridFilterMergeMode } = {},
@@ -1178,6 +1230,7 @@ export function useAffinoDataGrid<TRow>(
     stopRowResize()
     unsubscribeRowModel()
     unsubscribeColumnModel()
+    unsubscribeCellRefresh()
   })
 
   const baseResult = assembleAffinoDataGridResult({
