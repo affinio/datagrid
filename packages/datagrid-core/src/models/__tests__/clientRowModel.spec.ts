@@ -600,7 +600,7 @@ describe("createClientRowModel", () => {
 
     const afterToggle = model.getDerivedCacheDiagnostics()
     expect(scoreReads).toBe(3)
-    expect(afterToggle.sortValueHits).toBeGreaterThan(afterSort.sortValueHits)
+    expect(afterToggle.sortValueHits).toBe(afterSort.sortValueHits)
     expect(afterToggle.sortValueMisses).toBe(afterSort.sortValueMisses)
 
     model.dispose()
@@ -626,7 +626,7 @@ describe("createClientRowModel", () => {
     model.setGroupBy({ fields: ["owner"], expandedByDefault: true })
     const afterGroup = model.getDerivedCacheDiagnostics()
     expect(afterGroup.filterPredicateMisses).toBe(afterFirstFilter.filterPredicateMisses)
-    expect(afterGroup.filterPredicateHits).toBeGreaterThan(afterFirstFilter.filterPredicateHits)
+    expect(afterGroup.filterPredicateHits).toBe(afterFirstFilter.filterPredicateHits)
 
     model.setFilterModel({
       columnFilters: { owner: ["ops"] },
@@ -635,6 +635,251 @@ describe("createClientRowModel", () => {
     const afterSecondFilter = model.getDerivedCacheDiagnostics()
     expect(afterSecondFilter.filterPredicateMisses).toBeGreaterThan(afterGroup.filterPredicateMisses)
     expect(afterSecondFilter.revisions.filter).toBeGreaterThan(afterGroup.revisions.filter)
+
+    model.dispose()
+  })
+
+  it("keeps current row order when patchRows updates sort key with recomputeSort=false", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, tested_at: 300 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setSortModel([{ key: "tested_at", direction: "desc" }])
+    const before = model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))
+    expect(before).toEqual(["r3", "r2", "r1"])
+
+    model.patchRows(
+      [{ rowId: "r1", data: { tested_at: 999 } }],
+      { recomputeSort: false },
+    )
+
+    const after = model.getRowsInRange({ start: 0, end: 10 })
+    expect(after.map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
+    expect((after[2]?.row as { tested_at?: number })?.tested_at).toBe(999)
+
+    model.dispose()
+  })
+
+  it("recomputes row order when patchRows updates sort key with recomputeSort=true", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, tested_at: 300 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setSortModel([{ key: "tested_at", direction: "desc" }])
+    model.patchRows(
+      [{ rowId: "r1", data: { tested_at: 999 } }],
+      { recomputeSort: true },
+    )
+
+    const after = model.getRowsInRange({ start: 0, end: 10 })
+    expect(after.map(row => String(row.rowId))).toEqual(["r1", "r3", "r2"])
+
+    model.dispose()
+  })
+
+  it("tracks projection diagnostics version and stale stage markers", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    model.setSortModel([{ key: "tested_at", direction: "asc" }])
+    const before = model.getSnapshot().projection
+    expect(before?.version).toBeGreaterThan(0)
+    expect(before?.cycleVersion).toBe(before?.version)
+    expect(before?.recomputeVersion).toBeGreaterThan(0)
+    expect(before?.staleStages).toEqual([])
+
+    model.patchRows(
+      [{ rowId: "r1", data: { tested_at: 999 } }],
+      { recomputeSort: false },
+    )
+    const staleSnapshot = model.getSnapshot().projection
+    expect(staleSnapshot?.version).toBeGreaterThan(before?.version ?? 0)
+    expect(staleSnapshot?.recomputeVersion).toBe(before?.recomputeVersion)
+    expect(staleSnapshot?.staleStages).toContain("sort")
+
+    model.patchRows(
+      [{ rowId: "r2", data: { tested_at: 5 } }],
+      { recomputeSort: true },
+    )
+    const healedSnapshot = model.getSnapshot().projection
+    expect(healedSnapshot?.version).toBeGreaterThan(staleSnapshot?.version ?? 0)
+    expect(healedSnapshot?.recomputeVersion).toBeGreaterThan(staleSnapshot?.recomputeVersion ?? 0)
+    expect(healedSnapshot?.staleStages).not.toContain("sort")
+
+    model.dispose()
+  })
+
+  it("skips sort-stage invalidation when patched fields do not affect active sort", () => {
+    let scoreReads = 0
+    const rowWithScore = (id: number, score: number, label: string) => {
+      const row = { id, label } as { id: number; label: string; score: number }
+      Object.defineProperty(row, "score", {
+        enumerable: true,
+        configurable: false,
+        get() {
+          scoreReads += 1
+          return score
+        },
+      })
+      return row
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: rowWithScore(1, 10, "alpha"), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: rowWithScore(2, 20, "bravo"), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    model.setSortModel([{ key: "score", direction: "desc" }])
+    expect(scoreReads).toBe(2)
+
+    model.patchRows([{ rowId: "r1", data: { label: "alpha-updated" } }])
+    expect(scoreReads).toBe(2)
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r1"])
+
+    model.dispose()
+  })
+
+  it("respects recomputeFilter in patchRows for filtered projection membership", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, status: "active" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, status: "inactive" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    model.setFilterModel({
+      columnFilters: { status: ["active"] },
+      advancedFilters: {},
+    })
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1"])
+
+    model.patchRows(
+      [{ rowId: "r2", data: { status: "active" } }],
+      { recomputeFilter: false },
+    )
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1"])
+
+    model.patchRows(
+      [{ rowId: "r1", data: { status: "inactive" } }],
+      { recomputeFilter: true },
+    )
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r2"])
+
+    model.dispose()
+  })
+
+  it("keeps sort stage blocked when recomputeSort=false even if filter stage is recomputed", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, status: "inactive", tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, status: "active", tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, status: "active", tested_at: 300 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setSortModel([{ key: "tested_at", direction: "desc" }])
+    model.setFilterModel({
+      columnFilters: { status: ["active"] },
+      advancedFilters: {},
+    })
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r3", "r2"])
+
+    model.patchRows(
+      [{ rowId: "r1", data: { status: "active", tested_at: 999 } }],
+      { recomputeFilter: true, recomputeSort: false },
+    )
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rows.map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
+    expect(model.getSnapshot().projection?.staleStages).toContain("sort")
+
+    model.dispose()
+  })
+
+  it("keeps stale grouping when recomputeGroup=false and restores consistency when recomputeGroup=true", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", label: "one" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", label: "two" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, team: "B", label: "three" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setGroupBy({ fields: ["team"], expandedByDefault: true })
+    const baseline = model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))
+    expect(baseline).toEqual([
+      JSON.stringify([["team", "A"]]),
+      "r1",
+      "r2",
+      JSON.stringify([["team", "B"]]),
+      "r3",
+    ])
+
+    model.patchRows(
+      [{ rowId: "r1", data: { team: "B" } }],
+      { recomputeGroup: false },
+    )
+    const stale = model.getRowsInRange({ start: 0, end: 10 })
+    expect(stale.map(row => String(row.rowId))).toEqual(baseline)
+    expect((stale[1]?.row as { team?: string })?.team).toBe("B")
+    expect(stale[0]?.groupMeta?.childrenCount).toBe(2)
+
+    model.patchRows(
+      [{ rowId: "r2", data: { label: "two-updated" } }],
+      { recomputeGroup: true },
+    )
+    const regrouped = model.getRowsInRange({ start: 0, end: 10 })
+    expect(regrouped.map(row => String(row.rowId))).toEqual([
+      JSON.stringify([["team", "B"]]),
+      "r1",
+      "r3",
+      JSON.stringify([["team", "A"]]),
+      "r2",
+    ])
+    expect(regrouped[0]?.groupMeta?.childrenCount).toBe(2)
+    expect(regrouped[3]?.groupMeta?.childrenCount).toBe(1)
+
+    model.dispose()
+  })
+
+  it("skips tree grouping invalidation when patch fields do not intersect tree dependencyFields", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", parentId: null, label: "Root" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", parentId: "r1", label: "Child" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        dependencyFields: ["parentId"],
+        expandedByDefault: true,
+      },
+    })
+
+    const before = model.getSnapshot().projection
+    model.patchRows([{ rowId: "r2", data: { label: "Child-updated" } }])
+    const after = model.getSnapshot().projection
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+
+    expect(rows.map(row => String(row.rowId))).toEqual(["r1", "r2"])
+    expect((rows[1]?.row as { label?: string })?.label).toBe("Child-updated")
+    expect(after?.staleStages).toEqual([])
+    expect(after?.recomputeVersion).toBe(before?.recomputeVersion)
+    expect(after?.version).toBeGreaterThan(before?.version ?? 0)
 
     model.dispose()
   })

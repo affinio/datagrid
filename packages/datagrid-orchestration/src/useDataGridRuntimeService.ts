@@ -1,5 +1,7 @@
 import type {
   DataGridColumnDef,
+  DataGridClientRowPatch,
+  DataGridClientRowPatchOptions,
   DataGridColumnModelSnapshot,
   DataGridRowNode,
   DataGridRowModel,
@@ -9,6 +11,10 @@ import { createDataGridRuntime, type CreateDataGridRuntimeOptions, type DataGrid
 
 type MutableRowsRowModel<TRow> = DataGridRowModel<TRow> & {
   setRows: (rows: readonly TRow[]) => void
+  patchRows?: (
+    updates: readonly DataGridClientRowPatch<TRow>[],
+    options?: DataGridClientRowPatchOptions,
+  ) => void
 }
 
 function isMutableRowsModel<TRow>(model: DataGridRowModel<TRow>): model is MutableRowsRowModel<TRow> {
@@ -40,6 +46,10 @@ export interface UseDataGridRuntimeServiceResult<TRow = unknown> extends DataGri
     listener: (snapshot: DataGridRuntimeVirtualWindowSnapshot | null) => void,
   ) => () => void
   setRows: (rows: readonly TRow[]) => void
+  patchRows: (
+    updates: readonly DataGridClientRowPatch<TRow>[],
+    options?: DataGridClientRowPatchOptions,
+  ) => void
   setColumns: (columns: readonly DataGridColumnDef[]) => void
   start: () => Promise<void>
   stop: () => void
@@ -225,6 +235,17 @@ export function useDataGridRuntimeService<TRow = unknown>(
     recomputeVirtualWindow()
   }
 
+  function patchRows(
+    updates: readonly DataGridClientRowPatch<TRow>[],
+    options?: DataGridClientRowPatchOptions,
+  ) {
+    if (!isMutableRowsModel(rowModel) || typeof rowModel.patchRows !== "function") {
+      return
+    }
+    rowModel.patchRows(updates, options)
+    recomputeVirtualWindow()
+  }
+
   function setColumns(columns: readonly DataGridColumnDef[]) {
     columnModel.setColumns(columns)
     recomputeVirtualWindow()
@@ -282,6 +303,7 @@ export function useDataGridRuntimeService<TRow = unknown>(
     getVirtualWindowSnapshot,
     subscribeVirtualWindow,
     setRows,
+    patchRows,
     setColumns,
     start,
     stop,

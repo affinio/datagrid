@@ -80,6 +80,7 @@ export interface DataGridTreeDataBaseSpec {
   orphanPolicy?: DataGridTreeDataOrphanPolicy
   cyclePolicy?: DataGridTreeDataCyclePolicy
   filterMode?: DataGridTreeDataFilterMode
+  dependencyFields?: readonly string[]
 }
 
 export interface DataGridTreeDataPathSpec<T = unknown> extends DataGridTreeDataBaseSpec {
@@ -104,6 +105,7 @@ export interface DataGridTreeDataResolvedPathSpec<T = unknown> {
   orphanPolicy: DataGridTreeDataOrphanPolicy
   cyclePolicy: DataGridTreeDataCyclePolicy
   filterMode: DataGridTreeDataFilterMode
+  dependencyFields: readonly string[]
 }
 
 export interface DataGridTreeDataResolvedParentSpec<T = unknown> {
@@ -114,6 +116,7 @@ export interface DataGridTreeDataResolvedParentSpec<T = unknown> {
   orphanPolicy: DataGridTreeDataOrphanPolicy
   cyclePolicy: DataGridTreeDataCyclePolicy
   filterMode: DataGridTreeDataFilterMode
+  dependencyFields: readonly string[]
 }
 
 export type DataGridTreeDataResolvedSpec<T = unknown> =
@@ -197,12 +200,27 @@ export interface DataGridRowModelSnapshot<T = unknown> {
   warming?: boolean
   error: Error | null
   treeDataDiagnostics?: DataGridTreeDataDiagnostics | null
+  projection?: DataGridProjectionDiagnostics | null
   viewportRange: DataGridViewportRange
   pagination: DataGridPaginationSnapshot
   sortModel: readonly DataGridSortState[]
   filterModel: DataGridFilterSnapshot | null
   groupBy: DataGridGroupBySpec | null
   groupExpansion: DataGridGroupExpansionSnapshot
+}
+
+export type DataGridProjectionStage =
+  | "filter"
+  | "sort"
+  | "group"
+  | "paginate"
+  | "visible"
+
+export interface DataGridProjectionDiagnostics {
+  version: number
+  cycleVersion?: number
+  recomputeVersion?: number
+  staleStages: readonly DataGridProjectionStage[]
 }
 
 export interface DataGridTreeDataDiagnostics {
@@ -269,6 +287,24 @@ function normalizeTreeDataFilterMode(
   return DATAGRID_TREE_DATA_DEFAULT_FILTER_MODE
 }
 
+function normalizeTreeDataDependencyFields(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const unique = new Set<string>()
+  for (const entry of value) {
+    if (typeof entry !== "string") {
+      continue
+    }
+    const normalized = entry.trim()
+    if (normalized.length === 0 || unique.has(normalized)) {
+      continue
+    }
+    unique.add(normalized)
+  }
+  return Array.from(unique).sort((left, right) => left.localeCompare(right))
+}
+
 export function normalizeTreeDataSpec<T>(
   treeData: DataGridTreeDataSpec<T> | null | undefined,
 ): DataGridTreeDataResolvedSpec<T> | null {
@@ -279,6 +315,7 @@ export function normalizeTreeDataSpec<T>(
   const orphanPolicy = normalizeTreeDataOrphanPolicy(treeData.orphanPolicy)
   const cyclePolicy = normalizeTreeDataCyclePolicy(treeData.cyclePolicy)
   const filterMode = normalizeTreeDataFilterMode(treeData.filterMode)
+  const dependencyFields = normalizeTreeDataDependencyFields(treeData.dependencyFields)
   const expandedByDefault = Boolean(treeData.expandedByDefault)
   if (treeData.mode === "path") {
     if (typeof (treeData as { getParentId?: unknown }).getParentId !== "undefined") {
@@ -294,6 +331,7 @@ export function normalizeTreeDataSpec<T>(
       orphanPolicy,
       cyclePolicy,
       filterMode,
+      dependencyFields,
     }
   }
 
@@ -317,6 +355,7 @@ export function normalizeTreeDataSpec<T>(
       orphanPolicy,
       cyclePolicy,
       filterMode,
+      dependencyFields,
     }
   }
 
@@ -338,6 +377,7 @@ export function cloneTreeDataSpec<T>(
       orphanPolicy: normalized.orphanPolicy,
       cyclePolicy: normalized.cyclePolicy,
       filterMode: normalized.filterMode,
+      dependencyFields: [...normalized.dependencyFields],
     }
   }
   return {
@@ -348,6 +388,7 @@ export function cloneTreeDataSpec<T>(
     orphanPolicy: normalized.orphanPolicy,
     cyclePolicy: normalized.cyclePolicy,
     filterMode: normalized.filterMode,
+    dependencyFields: [...normalized.dependencyFields],
   }
 }
 
@@ -377,6 +418,14 @@ export function isSameTreeDataSpec<T>(
   }
   if (normalizedLeft.filterMode !== normalizedRight.filterMode) {
     return false
+  }
+  if (normalizedLeft.dependencyFields.length !== normalizedRight.dependencyFields.length) {
+    return false
+  }
+  for (let index = 0; index < normalizedLeft.dependencyFields.length; index += 1) {
+    if (normalizedLeft.dependencyFields[index] !== normalizedRight.dependencyFields[index]) {
+      return false
+    }
   }
   if (normalizedLeft.mode === "path" && normalizedRight.mode === "path") {
     return normalizedLeft.getDataPath === normalizedRight.getDataPath

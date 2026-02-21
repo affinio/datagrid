@@ -29,7 +29,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc -p tsconfig.public.json",
+    "build": "tsc -p tsconfig.public.json && node ./scripts/fix-esm-specifiers.mjs",
     "type-check": "tsc -p tsconfig.public.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract|lifecycle\"",
@@ -54,6 +54,7 @@
     "core"
   ],
   "dependencies": {
+    "@affino/projection-engine": "workspace:*",
     "@affino/datagrid-plugins": "workspace:*"
   },
   "peerDependencies": {},

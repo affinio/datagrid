@@ -49,6 +49,40 @@ Unsafe, no semver guarantees. Use only for local tooling and migrations.
 
 Core naming is fully canonicalized to `DataGrid*` across stable, advanced, and internal entrypoints.
 
+## Row Updates: `setRows` vs `patchRows`
+
+`createClientRowModel()` now supports two update modes:
+
+- `setRows(rows)`:
+  - full source replacement.
+  - keeps legacy behavior: increments row revision and recomputes filter/sort/group projection.
+- `patchRows(updates, options?)`:
+  - partial updates by `rowId` (cell-level/streaming updates).
+  - defaults are backward-compatible (`recomputeSort/filter/group = true`).
+  - can disable projection phases for UX stability:
+    - `recomputeSort: false`
+    - `recomputeFilter: false`
+    - `recomputeGroup: false`
+
+```ts
+rowModel.patchRows(
+  [{ rowId: "r-42", data: { tested_at: "2026-02-21T10:15:00Z" } }],
+  { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+)
+```
+
+When all recompute flags are disabled, cell values update and snapshot revision changes, but visible row order/filter/group projection may be temporarily stale by design.
+
+Client projection is internally modeled as a stage graph:
+
+- `filter -> sort -> group -> paginate -> visible`
+
+Stage dirty state is propagated through dependencies, and snapshot includes `projection` diagnostics (`version`, `staleStages`) for devtools/integration debugging.
+`patchRows` uses field-aware invalidation internally: only stages whose dependency fields intersect patched fields are invalidated.
+Projection recompute is dirty-stage driven (not full-pass): blocked stages (`recompute* = false`) run in non-recompute mode for data continuity and remain marked stale until an explicit recompute is allowed.
+Projection diagnostics expose cycle vs actual recompute semantics: `version`/`cycleVersion` increase every projection cycle, while `recomputeVersion` increases only when at least one stage actually recomputed.
+For `treeData`, set `dependencyFields` to avoid unnecessary regroup/tree projection on unrelated cell patches.
+
 ## Deterministic Integration Snapshot
 
 Viewport integration should read deterministic state from controller snapshot API instead of peeking into internal signals or DOM transforms:

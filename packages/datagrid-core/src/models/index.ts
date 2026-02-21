@@ -35,6 +35,8 @@ export type {
   DataGridRowIdResolver,
   DataGridRowModel,
   DataGridRowModelKind,
+  DataGridProjectionDiagnostics,
+  DataGridProjectionStage,
   DataGridRowModelListener,
   DataGridRowModelRefreshReason,
   DataGridRowModelSnapshot,
@@ -71,6 +73,8 @@ export {
 
 export type {
   ClientRowModel,
+  DataGridClientRowPatch,
+  DataGridClientRowPatchOptions,
   CreateClientRowModelOptions,
   DataGridClientRowModelDerivedCacheDiagnostics,
   DataGridClientRowReorderInput,

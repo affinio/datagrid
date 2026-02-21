@@ -15,6 +15,7 @@ import {
   withResolvedRowIdentity,
   type DataGridGroupExpansionSnapshot,
   type DataGridPaginationInput,
+  type DataGridProjectionDiagnostics,
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
   type DataGridRowId,
@@ -32,6 +33,14 @@ import {
   type DataGridViewportRange,
 } from "./rowModel.js"
 import type { DataGridAdvancedFilterExpression } from "./rowModel.js"
+import {
+  createClientRowProjectionEngine,
+  type DataGridClientProjectionFinalizeMeta,
+  type DataGridClientProjectionRecomputeOptions,
+  type DataGridClientProjectionStage,
+  type DataGridClientProjectionStageHandlers,
+  expandClientProjectionStages,
+} from "./clientRowProjectionEngine.js"
 import {
   buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   cloneDataGridFilterSnapshot as cloneFilterSnapshot,
@@ -55,8 +64,24 @@ export interface DataGridClientRowReorderInput {
   count?: number
 }
 
+export interface DataGridClientRowPatch<T = unknown> {
+  rowId: DataGridRowId
+  data: Partial<T>
+}
+
+export interface DataGridClientRowPatchOptions {
+  recomputeSort?: boolean
+  recomputeFilter?: boolean
+  recomputeGroup?: boolean
+  emit?: boolean
+}
+
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
+  patchRows(
+    updates: readonly DataGridClientRowPatch<T>[],
+    options?: DataGridClientRowPatchOptions,
+  ): void
   reorderRows(input: DataGridClientRowReorderInput): boolean
   getDerivedCacheDiagnostics(): DataGridClientRowModelDerivedCacheDiagnostics
 }
@@ -179,6 +204,137 @@ function serializeFilterModelForCache(filterModel: DataGridFilterSnapshot | null
   return `${columnPart}||${advancedPart}`
 }
 
+function hasActiveFilterModel(filterModel: DataGridFilterSnapshot | null): boolean {
+  if (!filterModel) {
+    return false
+  }
+  const columnFilters = Object.values(filterModel.columnFilters ?? {})
+  if (columnFilters.some(values => Array.isArray(values) && values.length > 0)) {
+    return true
+  }
+  const advancedKeys = Object.keys(filterModel.advancedFilters ?? {})
+  if (advancedKeys.length > 0) {
+    return true
+  }
+  return resolveAdvancedExpression(filterModel) !== null
+}
+
+function collectAdvancedExpressionFields(
+  expression: DataGridAdvancedFilterExpression | null,
+  fields: Set<string>,
+): void {
+  if (!expression) {
+    return
+  }
+  if (expression.kind === "condition") {
+    const key = (expression.field ?? expression.key ?? "").trim()
+    if (key.length > 0) {
+      fields.add(key)
+    }
+    return
+  }
+  if (expression.kind === "not") {
+    collectAdvancedExpressionFields(expression.child, fields)
+    return
+  }
+  for (const child of expression.children) {
+    collectAdvancedExpressionFields(child, fields)
+  }
+}
+
+function collectFilterModelFields(filterModel: DataGridFilterSnapshot | null): Set<string> {
+  const fields = new Set<string>()
+  if (!filterModel) {
+    return fields
+  }
+  for (const [key, values] of Object.entries(filterModel.columnFilters ?? {})) {
+    if (!Array.isArray(values) || values.length === 0) {
+      continue
+    }
+    const normalized = key.trim()
+    if (normalized.length > 0) {
+      fields.add(normalized)
+    }
+  }
+  const expression = resolveAdvancedExpression(filterModel)
+  collectAdvancedExpressionFields(expression, fields)
+  return fields
+}
+
+function collectSortModelFields(sortModel: readonly DataGridSortState[]): Set<string> {
+  const fields = new Set<string>()
+  for (const descriptor of sortModel) {
+    const normalized = (descriptor.field ?? descriptor.key ?? "").trim()
+    if (normalized.length > 0) {
+      fields.add(normalized)
+    }
+  }
+  return fields
+}
+
+function collectGroupByFields(groupBy: DataGridGroupBySpec | null): Set<string> {
+  const fields = new Set<string>()
+  for (const field of groupBy?.fields ?? []) {
+    const normalized = field.trim()
+    if (normalized.length > 0) {
+      fields.add(normalized)
+    }
+  }
+  return fields
+}
+
+function collectTreeDataDependencyFields<T>(
+  treeData: DataGridTreeDataResolvedSpec<T> | null,
+): Set<string> {
+  const fields = new Set<string>()
+  for (const field of treeData?.dependencyFields ?? []) {
+    const normalized = field.trim()
+    if (normalized.length > 0) {
+      fields.add(normalized)
+    }
+  }
+  return fields
+}
+
+function collectChangedFieldsFromPatches<T>(
+  updatesById: ReadonlyMap<DataGridRowId, Partial<T>>,
+): Set<string> {
+  const fields = new Set<string>()
+  for (const patch of updatesById.values()) {
+    if (!isRecord(patch)) {
+      continue
+    }
+    for (const key of Object.keys(patch)) {
+      const normalized = key.trim()
+      if (normalized.length > 0) {
+        fields.add(normalized)
+      }
+    }
+  }
+  return fields
+}
+
+function doFieldPathsIntersect(
+  changedFields: ReadonlySet<string>,
+  dependencyFields: ReadonlySet<string>,
+): boolean {
+  if (changedFields.size === 0 || dependencyFields.size === 0) {
+    return false
+  }
+  for (const changed of changedFields) {
+    for (const dependency of dependencyFields) {
+      if (
+        changed === dependency ||
+        changed.startsWith(`${dependency}.`) ||
+        dependency.startsWith(`${changed}.`)
+      ) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 function serializeSortModelForCache(sortModel: readonly DataGridSortState[]): string {
   if (!Array.isArray(sortModel) || sortModel.length === 0) {
     return "__none__"
@@ -262,6 +418,111 @@ function buildGroupKey(segments: readonly GroupKeySegment[]): string {
 
 function isDataGridRowId(value: unknown): value is DataGridRowId {
   return typeof value === "string" || typeof value === "number"
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
+function applyRowDataPatch<T>(current: T, patch: Partial<T>): T {
+  if (!isRecord(current) || !isRecord(patch)) {
+    return patch as T
+  }
+  let changed = false
+  const next = Object.create(Object.getPrototypeOf(current)) as Record<string, unknown>
+  Object.defineProperties(next, Object.getOwnPropertyDescriptors(current))
+  for (const [key, value] of Object.entries(patch as Record<string, unknown>)) {
+    if (Object.is(next[key], value)) {
+      continue
+    }
+    next[key] = value
+    changed = true
+  }
+  return changed ? (next as T) : current
+}
+
+function mergeRowPatch<T>(left: Partial<T>, right: Partial<T>): Partial<T> {
+  if (isRecord(left) && isRecord(right)) {
+    return {
+      ...left,
+      ...right,
+    } as Partial<T>
+  }
+  return right
+}
+
+function buildRowIdIndex<T>(inputRows: readonly DataGridRowNode<T>[]): Map<DataGridRowId, DataGridRowNode<T>> {
+  const byId = new Map<DataGridRowId, DataGridRowNode<T>>()
+  for (const row of inputRows) {
+    byId.set(row.rowId, row)
+  }
+  return byId
+}
+
+function remapRowsByIdentity<T>(
+  inputRows: readonly DataGridRowNode<T>[],
+  byId: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+): DataGridRowNode<T>[] {
+  const remapped: DataGridRowNode<T>[] = []
+  for (const row of inputRows) {
+    const replacement = byId.get(row.rowId)
+    if (replacement) {
+      remapped.push(replacement)
+    }
+  }
+  return remapped
+}
+
+function preserveRowOrder<T>(
+  previousRows: readonly DataGridRowNode<T>[],
+  nextRows: readonly DataGridRowNode<T>[],
+): DataGridRowNode<T>[] {
+  if (previousRows.length === 0) {
+    return [...nextRows]
+  }
+  const nextById = buildRowIdIndex(nextRows)
+  const seen = new Set<DataGridRowId>()
+  const projected: DataGridRowNode<T>[] = []
+  for (const row of previousRows) {
+    const candidate = nextById.get(row.rowId)
+    if (!candidate || seen.has(candidate.rowId)) {
+      continue
+    }
+    projected.push(candidate)
+    seen.add(candidate.rowId)
+  }
+  for (const row of nextRows) {
+    if (seen.has(row.rowId)) {
+      continue
+    }
+    projected.push(row)
+    seen.add(row.rowId)
+  }
+  return projected
+}
+
+function patchProjectedRowsByIdentity<T>(
+  inputRows: readonly DataGridRowNode<T>[],
+  byId: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+): DataGridRowNode<T>[] {
+  const patched: DataGridRowNode<T>[] = []
+  for (const row of inputRows) {
+    const next = byId.get(row.rowId)
+    if (!next) {
+      patched.push(row)
+      continue
+    }
+    if (row.data === next.data && row.row === next.row) {
+      patched.push(row)
+      continue
+    }
+    patched.push({
+      ...row,
+      data: next.data,
+      row: next.row,
+    })
+  }
+  return patched
 }
 
 function normalizeTreePathSegments(raw: readonly (string | number)[]): string[] {
@@ -943,6 +1204,13 @@ export function createClientRowModel<T>(
     groupValueHits: 0,
     groupValueMisses: 0,
   }
+  let filteredRowsProjection: DataGridRowNode<T>[] = []
+  let sortedRowsProjection: DataGridRowNode<T>[] = []
+  let groupedRowsProjection: DataGridRowNode<T>[] = []
+  let paginatedRowsProjection: DataGridRowNode<T>[] = []
+  const projectionEngine = createClientRowProjectionEngine<T>()
+  let projectionCycleVersion = 0
+  let projectionRecomputeVersion = 0
 
   function ensureActive() {
     if (disposed) {
@@ -950,9 +1218,9 @@ export function createClientRowModel<T>(
     }
   }
 
-  function recomputeProjection() {
+  function resolveFilterPredicate(): (rowNode: DataGridRowNode<T>) => boolean {
     const filterKey = `${filterRevision}:${serializeFilterModelForCache(filterModel)}`
-    const filterPredicate = filterKey === cachedFilterPredicateKey && cachedFilterPredicate
+    return filterKey === cachedFilterPredicateKey && cachedFilterPredicate
       ? (() => {
           derivedCacheDiagnostics.filterPredicateHits += 1
           return cachedFilterPredicate as (rowNode: DataGridRowNode<T>) => boolean
@@ -964,74 +1232,155 @@ export function createClientRowModel<T>(
           derivedCacheDiagnostics.filterPredicateMisses += 1
           return next
         })()
+  }
+
+  function runFilterStage(
+    context: Parameters<DataGridClientProjectionStageHandlers<T>["runFilterStage"]>[0],
+  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runFilterStage"]> {
+    const shouldRecomputeFilter = context.shouldRecompute || filteredRowsProjection.length === 0
+    if (shouldRecomputeFilter) {
+      const filterPredicate = context.filterPredicate ?? resolveFilterPredicate()
+      filteredRowsProjection = sourceRows.filter(filterPredicate)
+    } else {
+      filteredRowsProjection = remapRowsByIdentity(filteredRowsProjection, context.sourceById)
+    }
+    const filteredRowIds = new Set<DataGridRowId>()
+    for (const row of filteredRowsProjection) {
+      filteredRowIds.add(row.rowId)
+    }
+    return {
+      filteredRowIds,
+      recomputed: shouldRecomputeFilter,
+    }
+  }
+
+  function runSortStage(
+    context: Parameters<DataGridClientProjectionStageHandlers<T>["runSortStage"]>[0],
+  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runSortStage"]> {
     const rowsForSort = treeData
       ? sourceRows
-      : sourceRows.filter(filterPredicate)
-    const sortKey = `${rowRevision}:${sortRevision}:${serializeSortModelForCache(sortModel)}`
-    if (sortKey !== sortValueCacheKey) {
-      sortValueCache.clear()
-      sortValueCacheKey = sortKey
-    }
-    const sortedRows = sortLeafRows(rowsForSort, sortModel, (row, descriptors) => {
-      const cached = sortValueCache.get(row.rowId)
-      if (cached) {
-        derivedCacheDiagnostics.sortValueHits += 1
-        return cached
+      : filteredRowsProjection
+    const shouldRecomputeSort = context.shouldRecompute || sortedRowsProjection.length === 0
+    if (shouldRecomputeSort) {
+      const sortKey = `${rowRevision}:${sortRevision}:${serializeSortModelForCache(sortModel)}`
+      if (sortKey !== sortValueCacheKey) {
+        sortValueCache.clear()
+        sortValueCacheKey = sortKey
       }
-      const resolved = descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field))
-      sortValueCache.set(row.rowId, resolved)
-      derivedCacheDiagnostics.sortValueMisses += 1
-      return resolved
-    })
+      sortedRowsProjection = sortLeafRows(rowsForSort, sortModel, (row, descriptors) => {
+        const cached = sortValueCache.get(row.rowId)
+        if (cached) {
+          derivedCacheDiagnostics.sortValueHits += 1
+          return cached
+        }
+        const resolved = descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field))
+        sortValueCache.set(row.rowId, resolved)
+        derivedCacheDiagnostics.sortValueMisses += 1
+        return resolved
+      })
+    } else {
+      sortedRowsProjection = preserveRowOrder(sortedRowsProjection, rowsForSort)
+    }
+    return shouldRecomputeSort
+  }
+
+  function runGroupStage(
+    context: Parameters<DataGridClientProjectionStageHandlers<T>["runGroupStage"]>[0],
+  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runGroupStage"]> {
     const expansionSpec = getExpansionSpec()
     const expansionSnapshot = buildGroupExpansionSnapshot(expansionSpec, toggledGroupKeys)
     const nextGroupValueCacheKey = groupBy
       ? `${rowRevision}:${groupRevision}:${groupBy.fields.join("|")}`
       : "__none__"
-    if (nextGroupValueCacheKey !== groupValueCacheKey) {
-      groupValueCache.clear()
-      groupValueCacheKey = nextGroupValueCacheKey
-    }
     const groupValueCounters = {
       hits: derivedCacheDiagnostics.groupValueHits,
       misses: derivedCacheDiagnostics.groupValueMisses,
     }
     let groupedResult: TreeProjectionResult<T> | null = null
+    let recomputedGroupStage = false
     if (treeData) {
-      try {
-        groupedResult = buildTreeDataRows(sortedRows, treeData, expansionSnapshot, filterPredicate)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        treeDataDiagnostics = createEmptyTreeDataDiagnostics({
-          duplicates: treeDataDiagnostics?.duplicates ?? 0,
-          lastError: message,
-        })
-        throw error
+      const shouldRecomputeGroup = context.shouldRecompute || groupedRowsProjection.length === 0
+      if (shouldRecomputeGroup) {
+        try {
+          groupedResult = buildTreeDataRows(sortedRowsProjection, treeData, expansionSnapshot, context.rowMatchesFilter)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          treeDataDiagnostics = createEmptyTreeDataDiagnostics({
+            duplicates: treeDataDiagnostics?.duplicates ?? 0,
+            lastError: message,
+          })
+          throw error
+        }
+        groupedRowsProjection = groupedResult.rows
+        recomputedGroupStage = true
+      } else {
+        groupedRowsProjection = patchProjectedRowsByIdentity(groupedRowsProjection, context.sourceById)
       }
-    }
-    const groupedRows = groupedResult
-      ? groupedResult.rows
-      : (
-          groupBy
-            ? buildGroupedRows(sortedRows, groupBy, expansionSnapshot, groupValueCache, groupValueCounters)
-            : sortedRows
+      if (shouldRecomputeGroup || groupedResult) {
+        treeDataDiagnostics = createEmptyTreeDataDiagnostics({
+          duplicates: 0,
+          lastError: null,
+          orphans: groupedResult?.diagnostics.orphans ?? 0,
+          cycles: groupedResult?.diagnostics.cycles ?? 0,
+        })
+      }
+    } else if (groupBy) {
+      const shouldRecomputeGroup = context.shouldRecompute || groupedRowsProjection.length === 0
+      if (shouldRecomputeGroup) {
+        if (nextGroupValueCacheKey !== groupValueCacheKey) {
+          groupValueCache.clear()
+          groupValueCacheKey = nextGroupValueCacheKey
+        }
+        groupedRowsProjection = buildGroupedRows(
+          sortedRowsProjection,
+          groupBy,
+          expansionSnapshot,
+          groupValueCache,
+          groupValueCounters,
         )
-    if (treeData) {
-      treeDataDiagnostics = createEmptyTreeDataDiagnostics({
-        duplicates: 0,
-        lastError: null,
-        orphans: groupedResult?.diagnostics.orphans ?? 0,
-        cycles: groupedResult?.diagnostics.cycles ?? 0,
-      })
+        recomputedGroupStage = true
+      } else {
+        groupedRowsProjection = patchProjectedRowsByIdentity(groupedRowsProjection, context.sourceById)
+      }
+    } else {
+      groupedRowsProjection = sortedRowsProjection
+      recomputedGroupStage = context.shouldRecompute
     }
     derivedCacheDiagnostics.groupValueHits = groupValueCounters.hits
     derivedCacheDiagnostics.groupValueMisses = groupValueCounters.misses
-    pagination = buildPaginationSnapshot(groupedRows.length, paginationInput)
-    if (pagination.enabled && pagination.startIndex >= 0 && pagination.endIndex >= pagination.startIndex) {
-      rows = assignDisplayIndexes(groupedRows.slice(pagination.startIndex, pagination.endIndex + 1))
+    return recomputedGroupStage
+  }
+
+  function runPaginateStage(
+    context: Parameters<DataGridClientProjectionStageHandlers<T>["runPaginateStage"]>[0],
+  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runPaginateStage"]> {
+    const shouldRecomputePaginate = context.shouldRecompute || paginatedRowsProjection.length === 0
+    if (shouldRecomputePaginate) {
+      pagination = buildPaginationSnapshot(groupedRowsProjection.length, paginationInput)
+      if (pagination.enabled && pagination.startIndex >= 0 && pagination.endIndex >= pagination.startIndex) {
+        paginatedRowsProjection = groupedRowsProjection.slice(pagination.startIndex, pagination.endIndex + 1)
+      } else {
+        paginatedRowsProjection = groupedRowsProjection
+      }
     } else {
-      rows = assignDisplayIndexes(groupedRows)
+      paginatedRowsProjection = patchProjectedRowsByIdentity(paginatedRowsProjection, context.sourceById)
     }
+    return shouldRecomputePaginate
+  }
+
+  function runVisibleStage(
+    context: Parameters<DataGridClientProjectionStageHandlers<T>["runVisibleStage"]>[0],
+  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runVisibleStage"]> {
+    const shouldRecomputeVisible = context.shouldRecompute || rows.length === 0
+    if (shouldRecomputeVisible) {
+      rows = assignDisplayIndexes(paginatedRowsProjection)
+    } else {
+      rows = assignDisplayIndexes(patchProjectedRowsByIdentity(rows, context.sourceById))
+    }
+    return shouldRecomputeVisible
+  }
+
+  function finalizeProjectionRecompute(meta: DataGridClientProjectionFinalizeMeta): void {
     paginationInput = {
       pageSize: pagination.pageSize,
       currentPage: pagination.currentPage,
@@ -1043,7 +1392,51 @@ export function createClientRowModel<T>(
       filter: filterRevision,
       group: groupRevision,
     }
+    projectionCycleVersion += 1
+    if (meta.hadActualRecompute) {
+      projectionRecomputeVersion += 1
+    }
     revision += 1
+  }
+
+  const projectionStageHandlers: DataGridClientProjectionStageHandlers<T> = {
+    buildSourceById: () => buildRowIdIndex(sourceRows),
+    getCurrentFilteredRowIds: () => {
+      const rowIds = new Set<DataGridRowId>()
+      for (const row of filteredRowsProjection) {
+        rowIds.add(row.rowId)
+      }
+      return rowIds
+    },
+    resolveFilterPredicate,
+    runFilterStage,
+    runSortStage,
+    runGroupStage,
+    runPaginateStage,
+    runVisibleStage,
+    finalizeProjectionRecompute,
+  }
+
+  function recomputeProjection(
+    options?: DataGridClientProjectionRecomputeOptions,
+  ) {
+    projectionEngine.recompute(projectionStageHandlers, options)
+  }
+
+  function recomputeProjectionFromStage(
+    stage: DataGridClientProjectionStage,
+    options?: DataGridClientProjectionRecomputeOptions,
+  ): void {
+    projectionEngine.recomputeFromStage(stage, projectionStageHandlers, options)
+  }
+
+  function getProjectionDiagnostics(): DataGridProjectionDiagnostics {
+    return {
+      version: projectionCycleVersion,
+      cycleVersion: projectionCycleVersion,
+      recomputeVersion: projectionRecomputeVersion,
+      staleStages: projectionEngine.getStaleStages(),
+    }
   }
 
   function getSnapshot(): DataGridRowModelSnapshot<T> {
@@ -1056,6 +1449,7 @@ export function createClientRowModel<T>(
       loading: false,
       error: null,
       ...(treeData ? { treeDataDiagnostics: createEmptyTreeDataDiagnostics(treeDataDiagnostics ?? undefined) } : {}),
+      projection: getProjectionDiagnostics(),
       viewportRange,
       pagination,
       sortModel: cloneSortModel(sortModel),
@@ -1115,7 +1509,7 @@ export function createClientRowModel<T>(
     return true
   }
 
-  recomputeProjection()
+  recomputeProjectionFromStage("filter")
 
   return {
     kind: "client",
@@ -1141,8 +1535,153 @@ export function createClientRowModel<T>(
       const nextSourceRows = normalizeSourceRows(nextRows ?? [])
       sourceRows = nextSourceRows
       rowRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("filter")
       emit()
+    },
+    patchRows(
+      updates: readonly DataGridClientRowPatch<T>[],
+      options: DataGridClientRowPatchOptions = {},
+    ) {
+      ensureActive()
+      if (!Array.isArray(updates) || updates.length === 0) {
+        return
+      }
+      const updatesById = new Map<DataGridRowId, Partial<T>>()
+      for (const update of updates) {
+        if (!update || !isDataGridRowId(update.rowId) || typeof update.data === "undefined" || update.data === null) {
+          continue
+        }
+        const existing = updatesById.get(update.rowId)
+        if (existing) {
+          updatesById.set(update.rowId, mergeRowPatch(existing, update.data))
+          continue
+        }
+        updatesById.set(update.rowId, update.data)
+      }
+      if (updatesById.size === 0) {
+        return
+      }
+      let changed = false
+      sourceRows = sourceRows.map(row => {
+        const patch = updatesById.get(row.rowId)
+        if (!patch) {
+          return row
+        }
+        const nextData = applyRowDataPatch(row.data, patch)
+        if (nextData === row.data) {
+          return row
+        }
+        changed = true
+        return {
+          ...row,
+          data: nextData,
+          row: nextData,
+        }
+      })
+      if (!changed) {
+        return
+      }
+      rowRevision += 1
+      const changedFields = collectChangedFieldsFromPatches(updatesById)
+      const filterActive = hasActiveFilterModel(filterModel)
+      const sortActive = sortModel.length > 0
+      const groupActive = Boolean(treeData) || Boolean(groupBy)
+      const allowFilterRecompute = options.recomputeFilter !== false
+      const allowSortRecompute = options.recomputeSort !== false
+      const allowGroupRecompute = options.recomputeGroup !== false
+      const filterFields = filterActive ? collectFilterModelFields(filterModel) : new Set<string>()
+      const sortFields = sortActive ? collectSortModelFields(sortModel) : new Set<string>()
+      const groupFields = groupActive && !treeData ? collectGroupByFields(groupBy) : new Set<string>()
+      const treeDataDependencyFields = treeData ? collectTreeDataDependencyFields(treeData) : new Set<string>()
+      const affectsFilter = filterActive && (
+        filterFields.size === 0
+          ? true
+          : doFieldPathsIntersect(changedFields, filterFields)
+      )
+      const affectsSort = sortActive && (
+        sortFields.size === 0
+          ? true
+          : doFieldPathsIntersect(changedFields, sortFields)
+      )
+      const affectsGroup = groupActive && (
+        treeData
+          ? (
+              treeDataDependencyFields.size === 0
+                ? true
+                : doFieldPathsIntersect(changedFields, treeDataDependencyFields)
+            )
+          : (
+              groupFields.size === 0
+                ? true
+                : doFieldPathsIntersect(changedFields, groupFields)
+            )
+      )
+      const staleStagesBeforeRequest = new Set<DataGridClientProjectionStage>(projectionEngine.getStaleStages())
+      const requestedStages: DataGridClientProjectionStage[] = []
+      if (affectsFilter) {
+        requestedStages.push("filter")
+      }
+      if (affectsSort) {
+        requestedStages.push("sort")
+      }
+      if (affectsGroup) {
+        requestedStages.push("group")
+      }
+      // Always request a projection refresh pass so every stage can patch row identity
+      // even when no expensive stage recompute is needed.
+      projectionEngine.requestRefreshPass()
+      projectionEngine.requestStages(requestedStages)
+
+      const recomputeRoots: DataGridClientProjectionStage[] = []
+      if (affectsFilter && allowFilterRecompute) {
+        recomputeRoots.push("filter")
+      }
+      if (affectsSort && allowSortRecompute) {
+        recomputeRoots.push("sort")
+      }
+      if (affectsGroup && allowGroupRecompute) {
+        recomputeRoots.push("group")
+      }
+      if (!affectsFilter && allowFilterRecompute && staleStagesBeforeRequest.has("filter")) {
+        recomputeRoots.push("filter")
+      }
+      if (!affectsSort && allowSortRecompute && staleStagesBeforeRequest.has("sort")) {
+        recomputeRoots.push("sort")
+      }
+      if (!affectsGroup && allowGroupRecompute && staleStagesBeforeRequest.has("group")) {
+        recomputeRoots.push("group")
+      }
+      const recomputeAllowed = new Set<DataGridClientProjectionStage>(
+        expandClientProjectionStages(recomputeRoots),
+      )
+      if (affectsFilter && !allowFilterRecompute) {
+        recomputeAllowed.delete("filter")
+      }
+      if (affectsSort && !allowSortRecompute) {
+        recomputeAllowed.delete("sort")
+      }
+      if (affectsGroup && !allowGroupRecompute) {
+        recomputeAllowed.delete("group")
+      }
+      const allStages: readonly DataGridClientProjectionStage[] = [
+        "filter",
+        "sort",
+        "group",
+        "paginate",
+        "visible",
+      ]
+      const blockedStages: DataGridClientProjectionStage[] = []
+      for (const stage of allStages) {
+        if (!recomputeAllowed.has(stage)) {
+          blockedStages.push(stage)
+        }
+      }
+      recomputeProjection({
+        blockedStages,
+      })
+      if (options.emit !== false) {
+        emit()
+      }
     },
     reorderRows(input: DataGridClientRowReorderInput) {
       ensureActive()
@@ -1166,7 +1705,7 @@ export function createClientRowModel<T>(
       rows.splice(adjustedTarget, 0, ...moved)
       sourceRows = reindexSourceRows(rows)
       rowRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("filter")
       emit()
       return true
     },
@@ -1189,7 +1728,7 @@ export function createClientRowModel<T>(
         return
       }
       paginationInput = normalized
-      recomputeProjection()
+      recomputeProjectionFromStage("paginate")
       emit()
     },
     setPageSize(pageSize: number | null) {
@@ -1202,7 +1741,7 @@ export function createClientRowModel<T>(
         pageSize: normalizedPageSize,
         currentPage: 0,
       }
-      recomputeProjection()
+      recomputeProjectionFromStage("paginate")
       emit()
     },
     setCurrentPage(page: number) {
@@ -1215,21 +1754,21 @@ export function createClientRowModel<T>(
         ...paginationInput,
         currentPage: normalizedPage,
       }
-      recomputeProjection()
+      recomputeProjectionFromStage("paginate")
       emit()
     },
     setSortModel(nextSortModel: readonly DataGridSortState[]) {
       ensureActive()
       sortModel = Array.isArray(nextSortModel) ? cloneSortModel(nextSortModel) : []
       sortRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("sort")
       emit()
     },
     setFilterModel(nextFilterModel: DataGridFilterSnapshot | null) {
       ensureActive()
       filterModel = cloneFilterModel(nextFilterModel ?? null)
       filterRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("filter")
       emit()
     },
     setGroupBy(nextGroupBy: DataGridGroupBySpec | null) {
@@ -1245,7 +1784,7 @@ export function createClientRowModel<T>(
       expansionExpandedByDefault = Boolean(normalized?.expandedByDefault)
       toggledGroupKeys.clear()
       groupRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("group")
       emit()
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
@@ -1254,7 +1793,7 @@ export function createClientRowModel<T>(
         return
       }
       groupRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("group")
       emit()
     },
     toggleGroup(groupKey: string) {
@@ -1267,7 +1806,7 @@ export function createClientRowModel<T>(
         return
       }
       groupRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("group")
       emit()
     },
     expandGroup(groupKey: string) {
@@ -1280,7 +1819,7 @@ export function createClientRowModel<T>(
         return
       }
       groupRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("group")
       emit()
     },
     collapseGroup(groupKey: string) {
@@ -1293,7 +1832,7 @@ export function createClientRowModel<T>(
         return
       }
       groupRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("group")
       emit()
     },
     expandAllGroups() {
@@ -1308,7 +1847,7 @@ export function createClientRowModel<T>(
       expansionExpandedByDefault = true
       toggledGroupKeys.clear()
       groupRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("group")
       emit()
     },
     collapseAllGroups() {
@@ -1323,11 +1862,13 @@ export function createClientRowModel<T>(
       expansionExpandedByDefault = false
       toggledGroupKeys.clear()
       groupRevision += 1
-      recomputeProjection()
+      recomputeProjectionFromStage("group")
       emit()
     },
     refresh(_reason?: DataGridRowModelRefreshReason) {
       ensureActive()
+      projectionEngine.requestRefreshPass()
+      recomputeProjection()
       emit()
     },
     subscribe(listener: DataGridRowModelListener<T>) {

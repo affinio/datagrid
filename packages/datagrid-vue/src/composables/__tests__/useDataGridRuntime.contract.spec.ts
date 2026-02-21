@@ -53,6 +53,13 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime!.api.getRowCount()).toBe(3)
     expect(runtime!.virtualWindow.value?.rowTotal).toBe(3)
 
+    runtime!.patchRows(
+      [{ rowId: "r2", data: { name: "Bravo-updated" } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+    const patched = runtime!.api.getRowsInRange({ start: 0, end: 2 })
+    expect((patched[1]?.row as { name?: string })?.name).toBe("Bravo-updated")
+
     const inRange = runtime!.syncRowsInRange({ start: 1, end: 2 })
     expect(inRange).toHaveLength(2)
     expect(String(inRange[0]?.rowId)).toBe("r2")

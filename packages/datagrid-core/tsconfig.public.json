@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.core.json",
   "compilerOptions": {
+    "baseUrl": ".",
     "rootDir": ".",
     "outDir": "dist",
     "declaration": true,
@@ -9,12 +10,16 @@
     "moduleResolution": "bundler",
     "noUncheckedIndexedAccess": false,
     "paths": {
+      "@affino/projection-engine": [
+        "../projection-engine/dist/index.d.ts"
+      ],
+      "@affino/projection-engine/*": [
+        "../projection-engine/dist/*"
+      ],
       "@affino/datagrid-plugins": [
-        "../datagrid-plugins/src/index.ts",
         "../datagrid-plugins/dist/index.d.ts"
       ],
       "@affino/datagrid-plugins/*": [
-        "../datagrid-plugins/src/*",
         "../datagrid-plugins/dist/*"
       ]
     }

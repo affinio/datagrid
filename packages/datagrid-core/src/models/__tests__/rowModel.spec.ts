@@ -201,6 +201,7 @@ describe("rowModel normalization", () => {
       orphanPolicy: "root",
       cyclePolicy: "ignore-edge",
       filterMode: "include-parents",
+      dependencyFields: [],
     })
     expect(cloneTreeDataSpec(normalized)).toEqual(normalized)
     expect(
@@ -230,6 +231,7 @@ describe("rowModel normalization", () => {
       orphanPolicy: "drop",
       cyclePolicy: "error",
       filterMode: "include-parents",
+      dependencyFields: [],
     })
     expect(cloneTreeDataSpec(normalized)).toEqual(normalized)
     expect(
@@ -258,6 +260,17 @@ describe("rowModel normalization", () => {
       filterMode: "unknown" as unknown as "include-parents",
     })
     expect(fallback?.filterMode).toBe("include-parents")
+  })
+
+  it("normalizes treeData dependency fields deterministically", () => {
+    const getParentId = (row: { parentId?: string | null }) => row.parentId ?? null
+    const normalized = normalizeTreeDataSpec({
+      mode: "parent",
+      getParentId,
+      dependencyFields: [" parentId ", "meta.parentId", "parentId", ""],
+    })
+
+    expect(normalized?.dependencyFields).toEqual(["meta.parentId", "parentId"])
   })
 
   it("rejects mixed hierarchy sources and missing resolver in treeData spec", () => {

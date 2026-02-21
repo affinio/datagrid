@@ -1,6 +1,8 @@
 import { isRef, onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue"
 import type {
   CreateDataGridCoreOptions,
+  DataGridClientRowPatch,
+  DataGridClientRowPatchOptions,
   DataGridColumnDef,
   DataGridColumnModelSnapshot,
   DataGridRowNode,
@@ -37,6 +39,10 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   columnSnapshot: Ref<DataGridColumnModelSnapshot>
   virtualWindow: Ref<DataGridRuntimeVirtualWindowSnapshot | null>
   setRows: (rows: readonly TRow[]) => void
+  patchRows: (
+    updates: readonly DataGridClientRowPatch<TRow>[],
+    options?: DataGridClientRowPatchOptions,
+  ) => void
   start: () => Promise<void>
   stop: () => void
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
@@ -125,6 +131,7 @@ export function useDataGridRuntime<TRow = unknown>(
     columnSnapshot,
     virtualWindow,
     setRows: runtime.setRows,
+    patchRows: runtime.patchRows,
     start: runtime.start,
     stop,
     syncRowsInRange: runtime.syncRowsInRange,

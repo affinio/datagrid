@@ -135,6 +135,19 @@ const { api, columnSnapshot } = useDataGridRuntime({
 })
 ```
 
+`useDataGridRuntime` also exposes `patchRows(updates, options?)` for partial row updates without mandatory sort/filter/group recompute on every cell change:
+
+```ts
+const runtime = useDataGridRuntime({ rows, columns })
+runtime.patchRows(
+  [{ rowId: "r-42", data: { tested_at: "2026-02-21T10:15:00Z" } }],
+  { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+)
+```
+
+Use `setRows` for full data replacement; use `patchRows` for interactive/streaming cell updates when you want to avoid immediate projection jumps.
+In no-recompute mode (`recomputeSort/filter/group = false`), row order/filter/group visibility can remain temporarily stale by design until a recompute pass is requested.
+
 ## Managed wheel scroll (advanced)
 
 Use `useDataGridManagedWheelScroll` when you want deterministic wheel ownership (axis lock, preventDefault policy, and consistent header/body horizontal sync).
