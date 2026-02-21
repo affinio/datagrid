@@ -322,6 +322,40 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("supports batched sort+filter update with a single projection recompute cycle", () => {
+    const rows = [
+      { row: { id: "r1", owner: "noc", score: 20 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      { row: { id: "r2", owner: "ops", score: 40 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      { row: { id: "r3", owner: "noc", score: 10 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+    ] as const
+
+    const batched = createClientRowModel({ rows })
+    const beforeBatched = batched.getSnapshot().projection?.recomputeVersion ?? 0
+    batched.setSortAndFilterModel({
+      filterModel: {
+        columnFilters: { owner: ["noc"] },
+        advancedFilters: {},
+      },
+      sortModel: [{ key: "score", direction: "desc" }],
+    })
+    const afterBatched = batched.getSnapshot().projection?.recomputeVersion ?? 0
+    expect(afterBatched - beforeBatched).toBe(1)
+    expect(batched.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1", "r3"])
+
+    const sequential = createClientRowModel({ rows })
+    const beforeSequential = sequential.getSnapshot().projection?.recomputeVersion ?? 0
+    sequential.setFilterModel({
+      columnFilters: { owner: ["noc"] },
+      advancedFilters: {},
+    })
+    sequential.setSortModel([{ key: "score", direction: "desc" }])
+    const afterSequential = sequential.getSnapshot().projection?.recomputeVersion ?? 0
+    expect(afterSequential - beforeSequential).toBe(2)
+
+    batched.dispose()
+    sequential.dispose()
+  })
+
   it("computes group aggregates when aggregation model is configured", () => {
     const model = createClientRowModel({
       rows: [
@@ -968,6 +1002,143 @@ describe("createClientRowModel", () => {
 
     expect(sorted.map(row => (row.row as { id: number }).id)).toEqual([2, 3, 1])
     expect(scoreReads).toBe(3)
+
+    model.dispose()
+  })
+
+  it("reuses sort value cache when only sort direction flips", () => {
+    let scoreReads = 0
+    const makeRow = (id: number, score: number): { id: number; score: number } => {
+      const row = { id } as { id: number; score: number }
+      Object.defineProperty(row, "score", {
+        enumerable: true,
+        configurable: false,
+        get() {
+          scoreReads += 1
+          return score
+        },
+      })
+      return row
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: makeRow(1, 30), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: makeRow(2, 10), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: makeRow(3, 20), rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    expect(scoreReads).toBe(3)
+
+    model.setSortModel([{ key: "score", direction: "desc" }])
+    expect(scoreReads).toBe(3)
+    expect(model.getRowsInRange({ start: 0, end: 3 }).map(row => String(row.rowId))).toEqual(["r1", "r3", "r2"])
+
+    model.dispose()
+  })
+
+  it("sorts tree path rows from filtered projection for include-parents mode", () => {
+    let latencyReads = 0
+    const makeRow = (id: string, owner: string, latency: number, path: string[]): {
+      id: string
+      owner: string
+      latency: number
+      path: string[]
+    } => {
+      const row = { id, owner, path } as { id: string; owner: string; latency: number; path: string[] }
+      Object.defineProperty(row, "latency", {
+        enumerable: true,
+        configurable: false,
+        get() {
+          latencyReads += 1
+          return latency
+        },
+      })
+      return row
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: makeRow("r1", "noc", 300, ["org", "svc-a"]), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: makeRow("r2", "ops", 900, ["org", "svc-b"]), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: makeRow("r3", "noc", 100, ["org", "svc-c"]), rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialTreeData: {
+        mode: "path",
+        expandedByDefault: true,
+        filterMode: "include-parents",
+        getDataPath: row => row.path,
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: { owner: ["noc"] },
+      advancedFilters: {},
+    })
+    model.setSortModel([{ key: "latency", direction: "desc" }])
+
+    // Only filtered rows should materialize sort values in path include-parents mode.
+    expect(latencyReads).toBe(2)
+    expect(model.getRowsInRange({ start: 0, end: 20 }).filter(row => row.kind === "leaf").map(row => String(row.rowId))).toEqual([
+      "r1",
+      "r3",
+    ])
+
+    model.dispose()
+  })
+
+  it("sorts tree path rows from filtered projection for include-descendants mode", () => {
+    let latencyReads = 0
+    let pathReads = 0
+    const makeRow = (id: string, owner: string, latency: number, path: string[]): {
+      id: string
+      owner: string
+      latency: number
+      path: string[]
+    } => {
+      const row = { id, owner, path } as { id: string; owner: string; latency: number; path: string[] }
+      Object.defineProperty(row, "latency", {
+        enumerable: true,
+        configurable: false,
+        get() {
+          latencyReads += 1
+          return latency
+        },
+      })
+      return row
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: makeRow("r1", "noc", 300, ["org", "svc-a"]), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: makeRow("r2", "ops", 900, ["org", "svc-b"]), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: makeRow("r3", "noc", 100, ["org", "svc-c"]), rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialTreeData: {
+        mode: "path",
+        expandedByDefault: true,
+        filterMode: "include-descendants",
+        getDataPath: row => {
+          pathReads += 1
+          return row.path
+        },
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: { owner: ["noc"] },
+      advancedFilters: {},
+    })
+    model.setSortModel([{ key: "latency", direction: "desc" }])
+
+    expect(latencyReads).toBe(2)
+    expect(pathReads).toBe(7)
+    expect(model.getRowsInRange({ start: 0, end: 20 }).filter(row => row.kind === "leaf").map(row => String(row.rowId))).toEqual([
+      "r1",
+      "r3",
+    ])
 
     model.dispose()
   })

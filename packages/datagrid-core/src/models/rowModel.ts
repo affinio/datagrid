@@ -61,6 +61,11 @@ export interface DataGridFilterSnapshot {
   advancedExpression?: DataGridAdvancedFilterExpression | null
 }
 
+export interface DataGridSortAndFilterModelInput {
+  sortModel: readonly DataGridSortState[]
+  filterModel: DataGridFilterSnapshot | null
+}
+
 export interface DataGridGroupBySpec {
   fields: string[]
   expandedByDefault?: boolean
@@ -276,6 +281,7 @@ export interface DataGridRowModel<T = unknown> {
   setCurrentPage(page: number): void
   setSortModel(sortModel: readonly DataGridSortState[]): void
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
+  setSortAndFilterModel?(input: DataGridSortAndFilterModelInput): void
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
   setAggregationModel(aggregationModel: DataGridAggregationModel<T> | null): void
   getAggregationModel(): DataGridAggregationModel<T> | null

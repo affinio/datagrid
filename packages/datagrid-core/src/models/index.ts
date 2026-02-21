@@ -7,6 +7,7 @@ export type {
   DataGridAdvancedFilterNot,
   DataGridFilterClause,
   DataGridFilterSnapshot,
+  DataGridSortAndFilterModelInput,
   DataGridPaginationInput,
   DataGridPaginationSnapshot,
   DataGridGroupExpansionSnapshot,

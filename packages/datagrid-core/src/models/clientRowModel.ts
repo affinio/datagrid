@@ -16,7 +16,9 @@ import {
   type DataGridGroupExpansionSnapshot,
   type DataGridPaginationInput,
   type DataGridProjectionDiagnostics,
+  type DataGridAdvancedFilter,
   type DataGridFilterSnapshot,
+  type DataGridSortAndFilterModelInput,
   type DataGridAggregationModel,
   type DataGridGroupBySpec,
   type DataGridRowId,
@@ -118,6 +120,7 @@ export interface DataGridClientRowPatchOptions {
 
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
+  setSortAndFilterModel(input: DataGridSortAndFilterModelInput): void
   patchRows(
     updates: readonly DataGridClientRowPatch<T>[],
     options?: DataGridClientRowPatchOptions,
@@ -551,13 +554,113 @@ function hasActiveFilterModel(filterModel: DataGridFilterSnapshot | null): boole
   return resolveAdvancedExpression(filterModel) !== null
 }
 
-function serializeSortValueModelForCache(sortModel: readonly DataGridSortState[]): string {
+function alwaysMatchesFilter<T>(_row: DataGridRowNode<T>): boolean {
+  return true
+}
+
+function shouldUseFilteredRowsForTreeSort<T>(
+  treeData: DataGridTreeDataResolvedSpec<T> | null,
+  filterModel: DataGridFilterSnapshot | null,
+): boolean {
+  if (!treeData || treeData.mode !== "path" || !hasActiveFilterModel(filterModel)) {
+    return false
+  }
+  return (
+    treeData.filterMode === "leaf-only"
+    || treeData.filterMode === "include-parents"
+    || treeData.filterMode === "include-descendants"
+  )
+}
+
+function serializeSortValueModelForCache(
+  sortModel: readonly DataGridSortState[],
+  options: { includeDirection?: boolean } = {},
+): string {
   if (!Array.isArray(sortModel) || sortModel.length === 0) {
     return "__none__"
   }
+  const includeDirection = options.includeDirection !== false
   return sortModel
-    .map(descriptor => `${descriptor.key}:${descriptor.field ?? ""}:${descriptor.direction ?? "asc"}`)
+    .map(descriptor => {
+      const dependencyFields = Array.isArray(descriptor.dependencyFields)
+        ? [...descriptor.dependencyFields].map(value => String(value).trim()).filter(Boolean).sort().join(",")
+        : ""
+      const direction = includeDirection ? descriptor.direction ?? "asc" : ""
+      return `${descriptor.key}:${descriptor.field ?? ""}:${direction}:${dependencyFields}`
+    })
     .join("|")
+}
+
+function stableSerializeUnknown(value: unknown): string {
+  if (value == null || typeof value !== "object") {
+    return JSON.stringify(value)
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerializeUnknown).join(",")}]`
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, nested]) => `${JSON.stringify(key)}:${stableSerializeUnknown(nested)}`)
+  return `{${entries.join(",")}}`
+}
+
+function normalizeFilterValuesForSignature(values: readonly unknown[]): readonly string[] {
+  const normalized: string[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    const token = normalizeText(value)
+    if (seen.has(token)) {
+      continue
+    }
+    seen.add(token)
+    normalized.push(token)
+  }
+  return normalized.sort((left, right) => left.localeCompare(right))
+}
+
+function serializeFilterModelForSignature(filterModel: DataGridFilterSnapshot | null): string {
+  if (!filterModel) {
+    return "__none__"
+  }
+  const normalizedColumnFilters: Record<string, readonly string[]> = {}
+  for (const [rawKey, values] of Object.entries(filterModel.columnFilters ?? {})) {
+    if (!Array.isArray(values) || values.length === 0) {
+      continue
+    }
+    const key = rawKey.trim()
+    if (!key) {
+      continue
+    }
+    normalizedColumnFilters[key] = normalizeFilterValuesForSignature(values)
+  }
+  const normalizedAdvancedFilters: Record<string, DataGridAdvancedFilter> = {}
+  for (const [rawKey, advancedFilter] of Object.entries(filterModel.advancedFilters ?? {})) {
+    const key = rawKey.trim()
+    if (!key) {
+      continue
+    }
+    normalizedAdvancedFilters[key] = advancedFilter
+  }
+  return stableSerializeUnknown({
+    columnFilters: normalizedColumnFilters,
+    advancedFilters: normalizedAdvancedFilters,
+    advancedExpression: resolveAdvancedExpression(filterModel),
+  })
+}
+
+function isSameSortModel(
+  left: readonly DataGridSortState[],
+  right: readonly DataGridSortState[],
+): boolean {
+  return serializeSortValueModelForCache(left, { includeDirection: true })
+    === serializeSortValueModelForCache(right, { includeDirection: true })
+}
+
+function isSameFilterModel(
+  left: DataGridFilterSnapshot | null,
+  right: DataGridFilterSnapshot | null,
+): boolean {
+  return serializeFilterModelForSignature(left) === serializeFilterModelForSignature(right)
 }
 
 function compareUnknown(left: unknown, right: unknown): number {
@@ -2462,15 +2565,23 @@ export function createClientRowModel<T>(
     context: Parameters<DataGridClientProjectionStageHandlers<T>["runFilterStage"]>[0],
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runFilterStage"]> {
     const shouldRecomputeFilter = context.shouldRecompute || runtimeState.filteredRowsProjection.length === 0
+    let filteredRowIds = new Set<DataGridRowId>()
     if (shouldRecomputeFilter) {
       const filterPredicate = context.filterPredicate ?? resolveFilterPredicate()
-      runtimeState.filteredRowsProjection = sourceRows.filter(filterPredicate)
+      const nextFilteredRows: DataGridRowNode<T>[] = []
+      for (const row of sourceRows) {
+        if (!filterPredicate(row)) {
+          continue
+        }
+        nextFilteredRows.push(row)
+        filteredRowIds.add(row.rowId)
+      }
+      runtimeState.filteredRowsProjection = nextFilteredRows
     } else {
       runtimeState.filteredRowsProjection = remapRowsByIdentity(runtimeState.filteredRowsProjection, context.sourceById)
-    }
-    const filteredRowIds = new Set<DataGridRowId>()
-    for (const row of runtimeState.filteredRowsProjection) {
-      filteredRowIds.add(row.rowId)
+      for (const row of runtimeState.filteredRowsProjection) {
+        filteredRowIds.add(row.rowId)
+      }
     }
     return {
       filteredRowIds,
@@ -2482,13 +2593,15 @@ export function createClientRowModel<T>(
     context: Parameters<DataGridClientProjectionStageHandlers<T>["runSortStage"]>[0],
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runSortStage"]> {
     const rowsForSort = treeData
-      ? sourceRows
+      ? (shouldUseFilteredRowsForTreeSort(treeData, filterModel)
+          ? runtimeState.filteredRowsProjection
+          : sourceRows)
       : runtimeState.filteredRowsProjection
     const shouldRecomputeSort = context.shouldRecompute || runtimeState.sortedRowsProjection.length === 0
     if (shouldRecomputeSort) {
       const shouldCacheSortValues = projectionPolicy.shouldCacheSortValues()
       const maxSortValueCacheSize = projectionPolicy.maxSortValueCacheSize(sourceRows.length)
-      const sortKey = `${runtimeState.sortRevision}:${serializeSortValueModelForCache(sortModel)}`
+      const sortKey = serializeSortValueModelForCache(sortModel, { includeDirection: false })
       if (sortKey !== sortValueCacheKey || !shouldCacheSortValues || maxSortValueCacheSize <= 0) {
         sortValueCache.clear()
         sortValueCacheKey = sortKey
@@ -2547,6 +2660,27 @@ export function createClientRowModel<T>(
         const aggregationBasis: "filtered" | "source" = aggregationModel?.basis === "source"
           ? "source"
           : "filtered"
+        let treeRowsForProjection = runtimeState.sortedRowsProjection
+        let treeRowMatchesFilter = context.rowMatchesFilter
+        if (
+          isTreePathSpec(treeData) &&
+          shouldUseFilteredRowsForTreeSort(treeData, filterModel) &&
+          aggregationBasis !== "source"
+        ) {
+          if (runtimeState.sortedRowsProjection.length === runtimeState.filteredRowsProjection.length) {
+            treeRowMatchesFilter = alwaysMatchesFilter
+          } else {
+            const filteredSortedRows: DataGridRowNode<T>[] = []
+            for (const row of runtimeState.sortedRowsProjection) {
+              if (!context.rowMatchesFilter(row)) {
+                continue
+              }
+              filteredSortedRows.push(row)
+            }
+            treeRowsForProjection = filteredSortedRows
+            treeRowMatchesFilter = alwaysMatchesFilter
+          }
+        }
         const hasTreeAggregationModel = Boolean(aggregationModel && aggregationModel.columns.length > 0)
         if (hasTreeAggregationModel) {
           aggregationEngine.setModel(aggregationModel)
@@ -2602,11 +2736,11 @@ export function createClientRowModel<T>(
         if (!groupedResult) {
           try {
             const projected = projectTreeDataRowsFromCache(
-              runtimeState.sortedRowsProjection,
+              treeRowsForProjection,
               treeData,
               expansionSnapshot,
               toggledGroupKeys,
-              context.rowMatchesFilter,
+              treeRowMatchesFilter,
               treePathProjectionCacheState,
               treeParentProjectionCacheState,
               treeCacheKey,
@@ -3122,16 +3256,44 @@ export function createClientRowModel<T>(
     },
     setSortModel(nextSortModel: readonly DataGridSortState[]) {
       ensureActive()
-      sortModel = Array.isArray(nextSortModel) ? cloneSortModel(nextSortModel) : []
+      const normalizedSortModel = Array.isArray(nextSortModel) ? cloneSortModel(nextSortModel) : []
+      if (isSameSortModel(sortModel, normalizedSortModel)) {
+        return
+      }
+      sortModel = normalizedSortModel
       runtimeStateStore.bumpSortRevision()
       projectionOrchestrator.recomputeFromStage("sort")
       emit()
     },
     setFilterModel(nextFilterModel: DataGridFilterSnapshot | null) {
       ensureActive()
-      filterModel = cloneFilterModel(nextFilterModel ?? null)
+      const normalizedFilterModel = cloneFilterModel(nextFilterModel ?? null)
+      if (isSameFilterModel(filterModel, normalizedFilterModel)) {
+        return
+      }
+      filterModel = normalizedFilterModel
       runtimeStateStore.bumpFilterRevision()
       projectionOrchestrator.recomputeFromStage("filter")
+      emit()
+    },
+    setSortAndFilterModel(input: DataGridSortAndFilterModelInput) {
+      ensureActive()
+      const normalizedSortModel = Array.isArray(input?.sortModel) ? cloneSortModel(input.sortModel) : []
+      const normalizedFilterModel = cloneFilterModel(input?.filterModel ?? null)
+      const sortChanged = !isSameSortModel(sortModel, normalizedSortModel)
+      const filterChanged = !isSameFilterModel(filterModel, normalizedFilterModel)
+      if (!sortChanged && !filterChanged) {
+        return
+      }
+      sortModel = normalizedSortModel
+      filterModel = normalizedFilterModel
+      if (filterChanged) {
+        runtimeStateStore.bumpFilterRevision()
+      }
+      if (sortChanged) {
+        runtimeStateStore.bumpSortRevision()
+      }
+      projectionOrchestrator.recomputeFromStage(filterChanged ? "filter" : "sort")
       emit()
     },
     setGroupBy(nextGroupBy: DataGridGroupBySpec | null) {

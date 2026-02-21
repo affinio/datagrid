@@ -7,6 +7,7 @@ import type {
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
   DataGridFilterSnapshot,
+  DataGridSortAndFilterModelInput,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
   DataGridAggregationModel,
@@ -116,6 +117,7 @@ export interface DataGridApi<TRow = unknown> {
   setCurrentPage(page: number): void
   setSortModel(sortModel: readonly DataGridSortState[]): void
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
+  setSortAndFilterModel(input: DataGridSortAndFilterModelInput): void
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
   setAggregationModel(aggregationModel: DataGridAggregationModel<TRow> | null): void
   getAggregationModel(): DataGridAggregationModel<TRow> | null
@@ -380,6 +382,10 @@ type DataGridPatchCapability<TRow = unknown> = {
   ) => void
 }
 
+type DataGridSortFilterBatchCapability = {
+  setSortAndFilterModel: (input: DataGridSortAndFilterModelInput) => void
+}
+
 type DataGridTransactionCapability = Required<
   Pick<
     DataGridCoreTransactionService,
@@ -539,6 +545,18 @@ function resolvePatchCapability<TRow>(
   }
 }
 
+function resolveSortFilterBatchCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): DataGridSortFilterBatchCapability | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DataGridSortFilterBatchCapability>
+  if (typeof candidate.setSortAndFilterModel !== "function") {
+    return null
+  }
+  return {
+    setSortAndFilterModel: candidate.setSortAndFilterModel.bind(rowModel),
+  }
+}
+
 function assertPatchCapability<TRow>(
   capability: DataGridPatchCapability<TRow> | null,
 ): DataGridPatchCapability<TRow> {
@@ -568,6 +586,7 @@ export function createDataGridApi<TRow = unknown>(
   const resolveCurrentSelectionCapability = () => resolveSelectionCapability(getSelectionService())
   const resolveCurrentTransactionCapability = () => resolveTransactionCapability(getTransactionService())
   const resolveCurrentPatchCapability = () => resolvePatchCapability(rowModel)
+  const resolveCurrentSortFilterBatchCapability = () => resolveSortFilterBatchCapability(rowModel)
   const deferredScheduler = createDeferredScheduler()
   let autoReapply = false
 
@@ -690,6 +709,15 @@ export function createDataGridApi<TRow = unknown>(
     },
     setFilterModel(filterModel: DataGridFilterSnapshot | null) {
       rowModel.setFilterModel(filterModel)
+    },
+    setSortAndFilterModel(input: DataGridSortAndFilterModelInput) {
+      const capability = resolveCurrentSortFilterBatchCapability()
+      if (capability) {
+        capability.setSortAndFilterModel(input)
+        return
+      }
+      rowModel.setFilterModel(input.filterModel)
+      rowModel.setSortModel(input.sortModel)
     },
     setGroupBy(groupBy: DataGridGroupBySpec | null) {
       rowModel.setGroupBy(groupBy)

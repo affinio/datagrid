@@ -106,6 +106,7 @@ export {
   type DataGridAdvancedFilterNot,
   type DataGridFilterClause,
   type DataGridFilterSnapshot,
+  type DataGridSortAndFilterModelInput,
   type DataGridPaginationInput,
   type DataGridPaginationSnapshot,
   type DataGridGroupExpansionSnapshot,

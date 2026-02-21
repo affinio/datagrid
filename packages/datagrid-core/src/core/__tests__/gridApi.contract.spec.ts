@@ -53,6 +53,10 @@ describe("data grid api facade contracts", () => {
 
     api.setSortModel([{ key: "id", direction: "asc" }])
     api.setFilterModel({ columnFilters: { name: ["alpha"] }, advancedFilters: {} })
+    api.setSortAndFilterModel({
+      sortModel: [{ key: "id", direction: "desc" }],
+      filterModel: { columnFilters: { name: ["beta"] }, advancedFilters: {} },
+    })
     api.setGroupBy({ fields: ["name"], expandedByDefault: true })
     api.setAggregationModel({ columns: [{ key: "id", op: "count" }] })
     api.setGroupExpansion({ expandedByDefault: true, toggledGroupKeys: [] })
@@ -69,9 +73,9 @@ describe("data grid api facade contracts", () => {
     const rowSnapshot = api.getRowModelSnapshot()
     const columnSnapshot = api.getColumnModelSnapshot()
 
-    expect(rowSnapshot.sortModel).toEqual([{ key: "id", direction: "asc" }])
+    expect(rowSnapshot.sortModel).toEqual([{ key: "id", direction: "desc" }])
     expect(rowSnapshot.filterModel).toEqual({
-      columnFilters: { name: ["alpha"] },
+      columnFilters: { name: ["beta"] },
       advancedFilters: {},
     })
     expect(rowSnapshot.groupBy).toEqual({
@@ -96,7 +100,7 @@ describe("data grid api facade contracts", () => {
     const maxIndex = Math.max(0, api.getRowCount() - 1)
     const candidates = api.getRowsInRange({ start: 0, end: Math.min(3, maxIndex) })
     const firstLeaf = candidates.find(row => row.kind === "leaf") as { row: { name: string } } | undefined
-    expect(firstLeaf?.row.name).toBe("alpha")
+    expect(firstLeaf?.row.name).toBe("beta")
     expect(columnSnapshot.order).toEqual(["name", "id"])
     expect(api.getColumn("id")?.visible).toBe(false)
     expect(api.getColumn("name")?.pin).toBe("left")
@@ -140,6 +144,43 @@ describe("data grid api facade contracts", () => {
       expandedByDefault: false,
       toggledGroupKeys: [],
     })
+  })
+
+  it("falls back to sequential setFilterModel/setSortModel when row model lacks batched sort+filter capability", () => {
+    const clientRowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "noc", score: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, owner: "ops", score: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+    const { setSortAndFilterModel: _omitBatch, ...rowModelWithoutBatch } = clientRowModel
+    const rowModel = rowModelWithoutBatch as unknown as DataGridRowModel<{ id: number; owner: string; score: number }>
+    const setSortModelSpy = vi.spyOn(rowModel, "setSortModel")
+    const setFilterModelSpy = vi.spyOn(rowModel, "setFilterModel")
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "owner", label: "Owner" },
+        { key: "score", label: "Score" },
+      ],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.setSortAndFilterModel({
+      filterModel: {
+        columnFilters: { owner: ["noc"] },
+        advancedFilters: {},
+      },
+      sortModel: [{ key: "score", direction: "desc" }],
+    })
+
+    expect(setFilterModelSpy).toHaveBeenCalledTimes(1)
+    expect(setSortModelSpy).toHaveBeenCalledTimes(1)
   })
 
   it("exposes patchRows/applyEdits/reapplyView with Excel-like defaults and optional auto-reapply", () => {

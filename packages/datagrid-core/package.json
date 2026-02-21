@@ -30,7 +30,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.public.json && node ./scripts/fix-esm-specifiers.mjs",
-    "type-check": "tsc -p tsconfig.public.json --noEmit",
+    "type-check": "pnpm --filter @affino/datagrid-plugins run build && pnpm --filter @affino/projection-engine run build && tsc -p tsconfig.public.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract|lifecycle\"",
     "test:regressions": "vitest run --config vitest.config.ts --testNamePattern=\"determinism|stress\"",
