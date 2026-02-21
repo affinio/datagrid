@@ -1,0 +1,1 @@
+{"version":3,"file":"publicProtocolCodemod.d.ts","sourceRoot":"","sources":["publicProtocolCodemod.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,qBAAqB;IACpC,IAAI,EAAE,MAAM,CAAA;IACZ,OAAO,EAAE,OAAO,CAAA;IAChB,iBAAiB,EAAE,MAAM,EAAE,CAAA;CAC5B;AA0UD,wBAAgB,qCAAqC,CAAC,MAAM,EAAE,MAAM,GAAG,qBAAqB,CA2D3F"}

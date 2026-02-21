@@ -1,0 +1,216 @@
+import { createDataGridMutableRowStore, forEachDataGridRangeCell, } from "./dataGridRangeMutationKernel";
+export function useDataGridClipboardMutations(options) {
+    function resolvePasteStartCoord() {
+        const selected = options.resolveCopyRange();
+        if (selected) {
+            return options.normalizeCellCoord({
+                rowIndex: selected.startRow,
+                columnIndex: selected.startColumn,
+            });
+        }
+        const current = options.resolveCurrentCellCoord();
+        if (!current) {
+            return null;
+        }
+        return options.normalizeCellCoord(current);
+    }
+    function resolvePasteTargets(matrix, start) {
+        const rowCount = Math.max(1, matrix.length);
+        const columnCount = Math.max(1, matrix[0]?.length ?? 1);
+        const selected = options.resolveCopyRange();
+        if (selected &&
+            rowCount === 1 &&
+            columnCount === 1 &&
+            (selected.endRow !== selected.startRow || selected.endColumn !== selected.startColumn)) {
+            return selected;
+        }
+        return options.normalizeSelectionRange({
+            startRow: start.rowIndex,
+            endRow: start.rowIndex + rowCount - 1,
+            startColumn: start.columnIndex,
+            endColumn: start.columnIndex + columnCount - 1,
+        });
+    }
+    async function maybeRecordTransaction(descriptor, beforeSnapshot) {
+        if (!options.recordIntentTransaction || beforeSnapshot === null) {
+            return;
+        }
+        await options.recordIntentTransaction(descriptor, beforeSnapshot);
+    }
+    async function pasteSelection(trigger) {
+        const start = resolvePasteStartCoord();
+        if (!start) {
+            options.closeContextMenu();
+            options.setLastAction("Paste skipped: no active target");
+            return false;
+        }
+        const payload = await options.readClipboardPayload();
+        if (!payload.trim()) {
+            options.closeContextMenu();
+            options.setLastAction("Paste skipped: clipboard empty");
+            return false;
+        }
+        const matrix = options.parseClipboardMatrix(payload);
+        const targetRange = resolvePasteTargets(matrix, start);
+        if (!targetRange) {
+            options.closeContextMenu();
+            options.setLastAction("Paste skipped: target out of range");
+            return false;
+        }
+        const beforeSnapshot = options.captureBeforeSnapshot ? options.captureBeforeSnapshot() : null;
+        const rowStore = createDataGridMutableRowStore({
+            rows: options.sourceRows.value,
+            resolveRowId: options.resolveRowId,
+            cloneRow: options.cloneRow,
+        });
+        const { mutableById, getMutableRow } = rowStore;
+        let applied = 0;
+        let blocked = 0;
+        const matrixHeight = matrix.length;
+        const matrixWidth = Math.max(1, matrix[0]?.length ?? 1);
+        forEachDataGridRangeCell(targetRange, ({ rowIndex, columnIndex, rowOffset, columnOffset }) => {
+            const targetRow = options.resolveRowAtViewIndex(rowIndex);
+            if (!targetRow) {
+                blocked += 1;
+                return;
+            }
+            const targetColumnKey = options.resolveColumnKeyAtIndex(columnIndex);
+            if (!targetColumnKey || !options.isEditableColumn(targetColumnKey)) {
+                blocked += 1;
+                return;
+            }
+            const sourceValue = matrix[rowOffset % matrixHeight]?.[columnOffset % matrixWidth] ?? "";
+            if (!options.canApplyPastedValue(targetColumnKey, sourceValue)) {
+                blocked += 1;
+                return;
+            }
+            const mutable = getMutableRow(options.resolveRowId(targetRow));
+            if (!mutable) {
+                blocked += 1;
+                return;
+            }
+            options.applyEditedValue(mutable, targetColumnKey, sourceValue);
+            applied += 1;
+        });
+        if (applied === 0) {
+            options.closeContextMenu();
+            options.setLastAction(`Paste blocked (${blocked} cells)`);
+            return false;
+        }
+        options.finalizeMutableRows?.(mutableById);
+        options.setSourceRows(rowStore.commitRows(options.sourceRows.value));
+        options.applySelectionRange(targetRange);
+        await maybeRecordTransaction({
+            intent: "paste",
+            label: blocked > 0
+                ? `Paste ${applied} cells (blocked ${blocked})`
+                : `Paste ${applied} cells`,
+            affectedRange: targetRange,
+        }, beforeSnapshot);
+        options.closeContextMenu();
+        options.setLastAction(blocked > 0
+            ? `Pasted ${applied} cells (${trigger}), blocked ${blocked}`
+            : `Pasted ${applied} cells (${trigger})`);
+        return true;
+    }
+    function clearSelectionValues(range) {
+        const rowStore = createDataGridMutableRowStore({
+            rows: options.sourceRows.value,
+            resolveRowId: options.resolveRowId,
+            cloneRow: options.cloneRow,
+        });
+        const { mutableById, getMutableRow } = rowStore;
+        let applied = 0;
+        let blocked = 0;
+        forEachDataGridRangeCell(range, ({ rowIndex, columnIndex }) => {
+            const targetRow = options.resolveRowAtViewIndex(rowIndex);
+            if (!targetRow) {
+                blocked += 1;
+                return;
+            }
+            const targetColumnKey = options.resolveColumnKeyAtIndex(columnIndex);
+            if (!targetColumnKey || !options.isEditableColumn(targetColumnKey)) {
+                blocked += 1;
+                return;
+            }
+            const mutable = getMutableRow(options.resolveRowId(targetRow));
+            if (!mutable) {
+                blocked += 1;
+                return;
+            }
+            const didClear = options.clearValueForCut(mutable, targetColumnKey);
+            if (!didClear) {
+                blocked += 1;
+                return;
+            }
+            applied += 1;
+        });
+        if (applied > 0) {
+            options.finalizeMutableRows?.(mutableById);
+            options.setSourceRows(rowStore.commitRows(options.sourceRows.value));
+            options.applySelectionRange(range);
+        }
+        return { applied, blocked, range };
+    }
+    async function clearCurrentSelection(trigger) {
+        const range = options.resolveCopyRange();
+        if (!range) {
+            options.closeContextMenu();
+            options.setLastAction("Clear skipped: no active selection");
+            return false;
+        }
+        const beforeSnapshot = options.captureBeforeSnapshot ? options.captureBeforeSnapshot() : null;
+        const result = clearSelectionValues(range);
+        options.closeContextMenu();
+        if (result.applied === 0) {
+            options.setLastAction(`Clear blocked (${result.blocked} cells)`);
+            return false;
+        }
+        await maybeRecordTransaction({
+            intent: "clear",
+            label: result.blocked > 0
+                ? `Clear ${result.applied} cells (blocked ${result.blocked})`
+                : `Clear ${result.applied} cells`,
+            affectedRange: range,
+        }, beforeSnapshot);
+        options.setLastAction(result.blocked > 0
+            ? `Cleared ${result.applied} cells (${trigger}), blocked ${result.blocked}`
+            : `Cleared ${result.applied} cells (${trigger})`);
+        return true;
+    }
+    async function cutSelection(trigger) {
+        const range = options.resolveCopyRange();
+        if (!range) {
+            options.closeContextMenu();
+            options.setLastAction("Cut skipped: no active selection");
+            return false;
+        }
+        const copied = await options.copySelection(trigger);
+        if (!copied) {
+            return false;
+        }
+        const beforeSnapshot = options.captureBeforeSnapshot ? options.captureBeforeSnapshot() : null;
+        const result = clearSelectionValues(range);
+        options.closeContextMenu();
+        if (result.applied === 0) {
+            options.setLastAction(`Cut blocked (${result.blocked} cells)`);
+            return false;
+        }
+        await maybeRecordTransaction({
+            intent: "cut",
+            label: result.blocked > 0
+                ? `Cut ${result.applied} cells (blocked ${result.blocked})`
+                : `Cut ${result.applied} cells`,
+            affectedRange: range,
+        }, beforeSnapshot);
+        options.setLastAction(result.blocked > 0
+            ? `Cut ${result.applied} cells (${trigger}), blocked ${result.blocked}`
+            : `Cut ${result.applied} cells (${trigger})`);
+        return true;
+    }
+    return {
+        pasteSelection,
+        clearCurrentSelection,
+        cutSelection,
+    };
+}

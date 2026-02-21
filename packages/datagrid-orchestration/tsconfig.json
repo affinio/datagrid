@@ -1,11 +1,7 @@
 {
   "extends": "../../tsconfig.adapter.json",
   "compilerOptions": {
-    "rootDir": ".",
-    "outDir": "dist",
-    "declaration": true,
-    "emitDeclarationOnly": false,
-    "declarationMap": true,
+    "composite": false,
     "moduleResolution": "bundler",
     "types": ["node"]
   },
@@ -18,4 +14,3 @@
     "src/**/*.test.ts"
   ]
 }
-

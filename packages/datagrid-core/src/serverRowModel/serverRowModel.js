@@ -1,0 +1,628 @@
+import { createWritableSignal, } from "../runtime/signals";
+function createScheduledTaskHandle(cancel) {
+    return {
+        cancel,
+    };
+}
+function createDefaultServerRowModelRuntime(globalRef = globalThis) {
+    const raf = globalRef.requestAnimationFrame;
+    const cancelRaf = globalRef.cancelAnimationFrame;
+    const setTimeoutRef = globalRef.setTimeout ?? setTimeout;
+    const clearTimeoutRef = globalRef.clearTimeout ?? clearTimeout;
+    const performanceNow = (() => {
+        const performanceRef = globalRef.performance;
+        if (performanceRef && typeof performanceRef.now === "function") {
+            return () => performanceRef.now();
+        }
+        return null;
+    })();
+    return {
+        scheduleFrame(callback) {
+            if (typeof raf === "function") {
+                const handle = raf.call(globalRef, () => callback());
+                const cancel = typeof cancelRaf === "function"
+                    ? () => cancelRaf.call(globalRef, handle)
+                    : () => { };
+                return createScheduledTaskHandle(cancel);
+            }
+            const timeoutId = setTimeoutRef.call(globalRef, callback, 16);
+            return createScheduledTaskHandle(() => clearTimeoutRef.call(globalRef, timeoutId));
+        },
+        scheduleTimeout(callback, delay) {
+            const timeoutId = setTimeoutRef.call(globalRef, callback, delay);
+            return createScheduledTaskHandle(() => clearTimeoutRef.call(globalRef, timeoutId));
+        },
+        now() {
+            if (performanceNow) {
+                return performanceNow();
+            }
+            const DateCtor = globalRef.Date ?? Date;
+            return new DateCtor().getTime();
+        },
+    };
+}
+function isAbortError(error) {
+    if (!error)
+        return false;
+    if (error instanceof DOMException) {
+        return error.name === "AbortError";
+    }
+    return error.name === "AbortError";
+}
+const DEFAULT_PROGRESS_DEBOUNCE_MS = 120;
+export function createServerRowModel(options, config = {}) {
+    const runtime = config.runtime ?? createDefaultServerRowModelRuntime();
+    const blockSize = Math.max(1, options.blockSize ?? 300);
+    const maxCacheBlocks = Math.max(2, options.maxCacheBlocks ?? 3);
+    const preloadThreshold = Math.min(Math.max(options.preloadThreshold ?? 0.6, 0.1), 0.95);
+    const adaptiveTiming = options.adaptiveScrollTiming ?? {};
+    const fastScrollDeltaMs = Math.max(0, adaptiveTiming.fast ?? 120);
+    const slowScrollDeltaMs = Math.max(fastScrollDeltaMs + 1, adaptiveTiming.slow ?? 400);
+    const adaptivePrefetch = options.adaptivePrefetch !== false;
+    const progressDebounceMs = Math.max(0, config.progressDebounceMs ?? DEFAULT_PROGRESS_DEBOUNCE_MS);
+    const signalFactory = config.createSignal;
+    const createSignal = (initial) => {
+        if (signalFactory) {
+            return signalFactory(initial);
+        }
+        return createWritableSignal(initial);
+    };
+    let disposed = false;
+    const rows = createSignal([]);
+    const loading = createSignal(false);
+    const error = createSignal(null);
+    const blocks = createSignal(new Map());
+    const total = createSignal(null);
+    const loadedRanges = createSignal([]);
+    const progress = createSignal(null);
+    const blockErrors = createSignal(new Map());
+    const diagnostics = createSignal({
+        cacheBlocks: 0,
+        cachedRows: 0,
+        pendingBlocks: 0,
+        pendingRequests: 0,
+        abortedRequests: 0,
+        cacheHits: 0,
+        cacheMisses: 0,
+        effectivePreloadThreshold: preloadThreshold,
+    });
+    let hasExplicitTotal = false;
+    const cachedRowCountSignal = createSignal(0);
+    const pendingBlockCountSignal = createSignal(0);
+    const pendingRequestsSignal = createSignal(0);
+    const abortedRequestsSignal = createSignal(0);
+    const cacheHitsSignal = createSignal(0);
+    const cacheMissesSignal = createSignal(0);
+    const effectivePreloadThresholdSignal = createSignal(preloadThreshold);
+    const pending = new Map();
+    let cachedRowCount = 0;
+    let cacheUpdateHandle = null;
+    let snapshotDirty = true;
+    let sortedKeysDirty = true;
+    let rowSnapshot = [];
+    let rangeSnapshot = [];
+    let sortedKeys = [];
+    let currentBlockIndex = null;
+    let lastFetchTimestamp = null;
+    let lastRequestedBlock = null;
+    let lastDirection = 0;
+    let progressTimeout = null;
+    let effectivePreloadThreshold = preloadThreshold;
+    function scheduleCacheUpdate() {
+        if (disposed) {
+            return;
+        }
+        snapshotDirty = true;
+        sortedKeysDirty = true;
+        if (cacheUpdateHandle) {
+            return;
+        }
+        cacheUpdateHandle = runtime.scheduleFrame(() => {
+            cacheUpdateHandle = null;
+            if (disposed) {
+                return;
+            }
+            flushCacheUpdate();
+        });
+    }
+    function flushCacheUpdate() {
+        if (disposed) {
+            return;
+        }
+        if (snapshotDirty) {
+            const keys = getSortedCacheKeys();
+            const merged = [];
+            for (const start of keys) {
+                const blockRows = blocks.value.get(start);
+                if (blockRows && blockRows.length) {
+                    merged.push(...blockRows);
+                }
+            }
+            rowSnapshot = merged;
+            rows.value = rowSnapshot;
+            snapshotDirty = false;
+        }
+        if (sortedKeysDirty) {
+            const keys = Array.from(blocks.value.keys()).sort((a, b) => a - b);
+            sortedKeys = keys;
+            sortedKeysDirty = false;
+        }
+        const nextRanges = [];
+        for (const start of sortedKeys) {
+            const blockRows = blocks.value.get(start);
+            const length = blockRows?.length ?? 0;
+            nextRanges.push({
+                start,
+                end: start + Math.max(length - 1, 0),
+            });
+        }
+        rangeSnapshot = nextRanges;
+        loadedRanges.value = rangeSnapshot;
+        updateProgress();
+        updateDiagnostics();
+    }
+    function updateProgress() {
+        const currentTotal = total.value;
+        let value = null;
+        if (currentTotal == null) {
+            value = null;
+        }
+        else if (currentTotal <= 0) {
+            value = currentTotal === 0 ? 1 : 0;
+        }
+        else {
+            value = Math.min(1, Math.max(0, cachedRowCount / Math.max(currentTotal, 1)));
+        }
+        progress.value = value;
+        notifyProgress();
+    }
+    function notifyProgress() {
+        if (!options.onProgress || disposed) {
+            return;
+        }
+        if (progressTimeout != null) {
+            progressTimeout.cancel();
+            progressTimeout = null;
+        }
+        progressTimeout = runtime.scheduleTimeout(() => {
+            progressTimeout = null;
+            if (disposed) {
+                return;
+            }
+            options.onProgress?.({
+                progress: progress.value,
+                total: total.value,
+                loadedRows: cachedRowCount,
+            });
+        }, progressDebounceMs);
+    }
+    function updateDiagnostics() {
+        diagnostics.value = {
+            cacheBlocks: blocks.value.size,
+            cachedRows: cachedRowCount,
+            pendingBlocks: pending.size,
+            pendingRequests: pendingRequestsSignal.value,
+            abortedRequests: abortedRequestsSignal.value,
+            cacheHits: cacheHitsSignal.value,
+            cacheMisses: cacheMissesSignal.value,
+            effectivePreloadThreshold: effectivePreloadThreshold,
+        };
+    }
+    function getSortedCacheKeys() {
+        if (sortedKeysDirty) {
+            sortedKeys = Array.from(blocks.value.keys()).sort((a, b) => a - b);
+            sortedKeysDirty = false;
+        }
+        return sortedKeys;
+    }
+    function resolvePreloadThreshold() {
+        const now = runtime.now();
+        if (!adaptivePrefetch) {
+            lastFetchTimestamp = now;
+            effectivePreloadThreshold = preloadThreshold;
+            effectivePreloadThresholdSignal.value = effectivePreloadThreshold;
+            return effectivePreloadThreshold;
+        }
+        if (lastFetchTimestamp == null) {
+            lastFetchTimestamp = now;
+            effectivePreloadThreshold = preloadThreshold;
+            effectivePreloadThresholdSignal.value = effectivePreloadThreshold;
+            return effectivePreloadThreshold;
+        }
+        const delta = now - lastFetchTimestamp;
+        lastFetchTimestamp = now;
+        if (delta <= fastScrollDeltaMs) {
+            effectivePreloadThreshold = Math.max(0.2, preloadThreshold - 0.2);
+        }
+        else if (delta >= slowScrollDeltaMs) {
+            effectivePreloadThreshold = Math.min(0.9, preloadThreshold + 0.1);
+        }
+        else {
+            effectivePreloadThreshold = preloadThreshold;
+        }
+        effectivePreloadThresholdSignal.value = effectivePreloadThreshold;
+        updateDiagnostics();
+        return effectivePreloadThreshold;
+    }
+    function abortAllPending() {
+        const entries = Array.from(pending.entries());
+        for (const [start, pendingFetch] of entries) {
+            if (!pendingFetch.controller.signal.aborted) {
+                pendingFetch.controller.abort();
+                abortedRequestsSignal.value = abortedRequestsSignal.value + 1;
+            }
+            pending.delete(start);
+        }
+        pendingBlockCountSignal.value = pending.size;
+        updateDiagnostics();
+    }
+    function setCacheBlock(start, blockRows) {
+        const next = new Map(blocks.value);
+        const previous = next.get(start);
+        next.set(start, blockRows);
+        blocks.value = next;
+        cachedRowCount += blockRows.length - (previous?.length ?? 0);
+        cachedRowCountSignal.value = cachedRowCount;
+        scheduleCacheUpdate();
+    }
+    function trimCache(anchorBlockIndex) {
+        const keys = getSortedCacheKeys();
+        if (keys.length <= maxCacheBlocks) {
+            return;
+        }
+        const firstBlockIndex = Math.floor((keys[0] ?? 0) / blockSize);
+        const lastBlockIndex = Math.floor((keys[keys.length - 1] ?? 0) / blockSize);
+        let windowStart = Math.max(firstBlockIndex, anchorBlockIndex - Math.floor((maxCacheBlocks - 1) / 2));
+        let windowEnd = windowStart + maxCacheBlocks - 1;
+        if (windowEnd > lastBlockIndex) {
+            windowEnd = lastBlockIndex;
+            windowStart = Math.max(firstBlockIndex, windowEnd - maxCacheBlocks + 1);
+        }
+        const next = new Map();
+        let nextCount = 0;
+        keys.forEach(start => {
+            const blockIdx = Math.floor(start / blockSize);
+            if (blockIdx >= windowStart && blockIdx <= windowEnd) {
+                const blockRows = blocks.value.get(start);
+                if (blockRows) {
+                    next.set(start, blockRows);
+                    nextCount += blockRows.length;
+                }
+            }
+        });
+        blocks.value = next;
+        cachedRowCount = nextCount;
+        cachedRowCountSignal.value = cachedRowCount;
+        scheduleCacheUpdate();
+    }
+    function preloadBlock(targetBlockIndex) {
+        if (disposed)
+            return;
+        if (targetBlockIndex < 0)
+            return;
+        const start = targetBlockIndex * blockSize;
+        if (blocks.value.has(start))
+            return;
+        if (pending.has(start))
+            return;
+        void loadBlock(targetBlockIndex, { background: true });
+    }
+    function cancelPendingOutsideWindow(centerBlockIndex) {
+        if (!pending.size)
+            return;
+        const tolerance = Math.max(2, Math.ceil(maxCacheBlocks / 2));
+        const entries = Array.from(pending.entries());
+        for (const [start, pendingFetch] of entries) {
+            const blockIndex = Math.floor(start / blockSize);
+            if (Math.abs(blockIndex - centerBlockIndex) > tolerance) {
+                if (!pendingFetch.controller.signal.aborted) {
+                    pendingFetch.controller.abort();
+                    abortedRequestsSignal.value = abortedRequestsSignal.value + 1;
+                }
+                pending.delete(start);
+            }
+        }
+        pendingBlockCountSignal.value = pending.size;
+        updateDiagnostics();
+    }
+    function updateLoadingSignal() {
+        loading.value = pendingRequestsSignal.value > 0;
+    }
+    async function loadBlock(blockIndex, { background = false } = {}) {
+        if (disposed)
+            return;
+        if (blockIndex < 0)
+            return;
+        const start = blockIndex * blockSize;
+        if (blocks.value.has(start))
+            return;
+        const existing = pending.get(start);
+        if (existing) {
+            await existing.promise;
+            return;
+        }
+        const controller = new AbortController();
+        const fetchPromise = (async () => {
+            pendingRequestsSignal.value = pendingRequestsSignal.value + 1;
+            pendingBlockCountSignal.value = pending.size;
+            updateLoadingSignal();
+            updateDiagnostics();
+            try {
+                const result = await options.loadBlock({
+                    start,
+                    limit: blockSize,
+                    signal: controller.signal,
+                    background,
+                });
+                if (controller.signal.aborted || disposed)
+                    return;
+                let blockRows = [];
+                if (Array.isArray(result)) {
+                    blockRows = result.slice();
+                }
+                else if (result && typeof result === "object") {
+                    const payload = result;
+                    if (Array.isArray(payload.rows)) {
+                        blockRows = payload.rows.slice();
+                    }
+                    if (typeof payload.total === "number" && Number.isFinite(payload.total)) {
+                        const normalizedTotal = Math.max(0, Math.floor(payload.total));
+                        if (normalizedTotal !== total.value) {
+                            total.value = normalizedTotal;
+                        }
+                        hasExplicitTotal = true;
+                    }
+                }
+                if (disposed)
+                    return;
+                if (!hasExplicitTotal) {
+                    const candidate = start + blockRows.length;
+                    const currentTotal = total.value;
+                    if (blockRows.length < blockSize) {
+                        if (currentTotal == null || candidate !== currentTotal) {
+                            total.value = candidate;
+                        }
+                    }
+                    else if (candidate > (currentTotal ?? 0)) {
+                        total.value = candidate;
+                    }
+                }
+                setCacheBlock(start, blockRows);
+                updateBlockError(start);
+                options.onBlockLoaded?.({
+                    blockIndex,
+                    start,
+                    rows: blockRows,
+                    total: total.value,
+                    background,
+                });
+                const anchor = currentBlockIndex ?? blockIndex;
+                trimCache(anchor);
+            }
+            catch (err) {
+                if (isAbortError(err))
+                    return;
+                if (!background) {
+                    const normalized = err instanceof Error ? err : new Error(String(err));
+                    error.value = normalized;
+                    updateBlockError(start, normalized);
+                    options.onError?.({
+                        blockIndex,
+                        start,
+                        error: normalized,
+                        background,
+                    });
+                }
+            }
+            finally {
+                pending.delete(start);
+                pendingBlockCountSignal.value = pending.size;
+                pendingRequestsSignal.value = Math.max(0, pendingRequestsSignal.value - 1);
+                updateLoadingSignal();
+                updateDiagnostics();
+            }
+        })();
+        pending.set(start, { controller, promise: fetchPromise });
+        pendingBlockCountSignal.value = pending.size;
+        if (!background) {
+            error.value = null;
+            await fetchPromise;
+        }
+    }
+    function maybePreload(blockIndex, direction, relativeIndex, threshold) {
+        if (blockSize <= 0)
+            return;
+        const jitter = adaptivePrefetch ? Math.random() * 0.1 - 0.05 : 0;
+        const normalizedThreshold = Math.min(Math.max(threshold + jitter, 0.1), 0.95);
+        const blockProgress = Math.min(Math.max(relativeIndex / blockSize, 0), 1);
+        if (direction >= 0 && blockProgress >= normalizedThreshold) {
+            preloadBlock(blockIndex + 1);
+        }
+        else if (direction <= 0 && 1 - blockProgress >= normalizedThreshold) {
+            preloadBlock(blockIndex - 1);
+        }
+    }
+    async function fetchBlock(startIndex) {
+        if (disposed)
+            return;
+        const targetBlockIndex = Math.max(0, Math.floor(startIndex / blockSize));
+        const targetStart = targetBlockIndex * blockSize;
+        const effectiveThresholdValue = resolvePreloadThreshold();
+        const direction = lastRequestedBlock == null
+            ? 0
+            : targetBlockIndex > lastRequestedBlock
+                ? 1
+                : targetBlockIndex < lastRequestedBlock
+                    ? -1
+                    : lastDirection;
+        if (lastRequestedBlock != null && ((direction !== 0 && direction !== lastDirection) || Math.abs(targetBlockIndex - lastRequestedBlock) > 1)) {
+            cancelPendingOutsideWindow(targetBlockIndex);
+        }
+        lastRequestedBlock = targetBlockIndex;
+        if (direction !== 0) {
+            lastDirection = direction;
+        }
+        currentBlockIndex = targetBlockIndex;
+        if (!blocks.value.has(targetStart)) {
+            if (!pending.has(targetStart)) {
+                cacheMissesSignal.value = cacheMissesSignal.value + 1;
+            }
+            await loadBlock(targetBlockIndex);
+            if (disposed)
+                return;
+        }
+        else {
+            cacheHitsSignal.value = cacheHitsSignal.value + 1;
+            trimCache(targetBlockIndex);
+        }
+        const relativeIndex = startIndex - targetStart;
+        const preloadDirection = direction === 0 ? 1 : direction;
+        if (disposed) {
+            return;
+        }
+        maybePreload(targetBlockIndex, preloadDirection, Math.max(0, relativeIndex), effectiveThresholdValue);
+        updateDiagnostics();
+    }
+    async function refreshBlock(blockIndex) {
+        if (disposed)
+            return;
+        if (blockIndex < 0)
+            return;
+        const start = blockIndex * blockSize;
+        const existing = blocks.value.get(start);
+        if (existing) {
+            cachedRowCount = Math.max(0, cachedRowCount - existing.length);
+            cachedRowCountSignal.value = cachedRowCount;
+            const next = new Map(blocks.value);
+            next.delete(start);
+            blocks.value = next;
+            scheduleCacheUpdate();
+        }
+        updateBlockError(start);
+        await loadBlock(blockIndex);
+    }
+    function updateBlockError(start, blockError) {
+        const next = new Map(blockErrors.value);
+        if (blockError) {
+            next.set(start, blockError);
+        }
+        else {
+            next.delete(start);
+        }
+        blockErrors.value = next;
+    }
+    function getRowAt(index) {
+        if (!Number.isFinite(index)) {
+            return undefined;
+        }
+        const normalized = Math.floor(index);
+        if (normalized < 0) {
+            return undefined;
+        }
+        const blockIndex = Math.floor(normalized / blockSize);
+        const blockStart = blockIndex * blockSize;
+        const blockRows = blocks.value.get(blockStart);
+        if (!blockRows) {
+            return undefined;
+        }
+        const offset = normalized - blockStart;
+        return blockRows[offset];
+    }
+    function getRowCount() {
+        if (typeof total.value === "number" && Number.isFinite(total.value)) {
+            return total.value;
+        }
+        return cachedRowCount;
+    }
+    function reset() {
+        if (disposed) {
+            return;
+        }
+        abortAllPending();
+        blocks.value = new Map();
+        cachedRowCount = 0;
+        cachedRowCountSignal.value = 0;
+        pendingRequestsSignal.value = 0;
+        pendingBlockCountSignal.value = pending.size;
+        abortedRequestsSignal.value = 0;
+        cacheHitsSignal.value = 0;
+        cacheMissesSignal.value = 0;
+        loading.value = false;
+        error.value = null;
+        total.value = null;
+        currentBlockIndex = null;
+        lastRequestedBlock = null;
+        lastDirection = 0;
+        blockErrors.value = new Map();
+        rowSnapshot = [];
+        rangeSnapshot = [];
+        snapshotDirty = true;
+        sortedKeys = [];
+        sortedKeysDirty = true;
+        lastFetchTimestamp = null;
+        effectivePreloadThreshold = preloadThreshold;
+        hasExplicitTotal = false;
+        effectivePreloadThresholdSignal.value = effectivePreloadThreshold;
+        if (progressTimeout != null) {
+            progressTimeout.cancel();
+            progressTimeout = null;
+        }
+        if (cacheUpdateHandle) {
+            cacheUpdateHandle.cancel();
+            cacheUpdateHandle = null;
+        }
+        scheduleCacheUpdate();
+    }
+    function dispose() {
+        if (disposed) {
+            return;
+        }
+        disposed = true;
+        if (progressTimeout) {
+            progressTimeout.cancel();
+            progressTimeout = null;
+        }
+        if (cacheUpdateHandle) {
+            cacheUpdateHandle.cancel();
+            cacheUpdateHandle = null;
+        }
+        abortAllPending();
+        pendingRequestsSignal.value = 0;
+        pendingBlockCountSignal.value = pending.size;
+        updateLoadingSignal();
+        loading.value = false;
+    }
+    const debug = {
+        cache: blocks,
+        pending,
+        metrics: {
+            cachedRowCount: cachedRowCountSignal,
+            pendingBlocks: pendingBlockCountSignal,
+            pendingRequests: pendingRequestsSignal,
+            abortedRequests: abortedRequestsSignal,
+            cacheHits: cacheHitsSignal,
+            cacheMisses: cacheMissesSignal,
+            effectivePreloadThreshold: effectivePreloadThresholdSignal,
+        },
+    };
+    const model = {
+        rows,
+        loading,
+        error,
+        blocks,
+        total,
+        loadedRanges,
+        progress,
+        blockErrors,
+        diagnostics,
+        getRowAt,
+        getRowCount,
+        refreshBlock,
+        fetchBlock,
+        reset,
+        abortAll: abortAllPending,
+        dispose,
+        __debug: debug,
+    };
+    return model;
+}

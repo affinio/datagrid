@@ -1,14 +1,20 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "composite": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "declarationMap": true,
     "baseUrl": ".",
     "paths": {
-      "@affino/datagrid-core": ["../datagrid-core/src/index.ts"],
-      "@affino/datagrid-core/*": ["../datagrid-core/src/*"],
-      "@affino/datagrid-plugins": ["../datagrid-plugins/src/index.ts"],
-      "@affino/datagrid-plugins/*": ["../datagrid-plugins/src/*"],
-      "@affino/datagrid-theme": ["../datagrid-theme/src/index.ts"],
-      "@affino/datagrid-theme/*": ["../datagrid-theme/src/*"]
+      "@affino/datagrid-core": ["../datagrid-core/dist/src/index.d.ts"],
+      "@affino/datagrid-core/*": ["../datagrid-core/dist/src/*"],
+      "@affino/datagrid-plugins": ["../datagrid-plugins/dist/index.d.ts"],
+      "@affino/datagrid-plugins/*": ["../datagrid-plugins/dist/*"],
+      "@affino/datagrid-theme": ["../datagrid-theme/dist/index.d.ts"],
+      "@affino/datagrid-theme/*": ["../datagrid-theme/dist/*"]
     }
   }
 }

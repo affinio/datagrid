@@ -1,0 +1,1 @@
+{"version":3,"file":"pinning.d.ts","sourceRoot":"","sources":["pinning.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,aAAa,EAAE,MAAM,yBAAyB,CAAA;AAE5D,MAAM,WAAW,kBAAkB;IACjC,QAAQ,CAAC,EAAE,OAAO,CAAA;IAClB,GAAG,CAAC,EAAE,OAAO,CAAA;CACd;AAED;;;GAGG;AACH,wBAAgB,uBAAuB,CAAC,MAAM,EAAE,kBAAkB,GAAG,IAAI,GAAG,SAAS,GAAG,aAAa,CAIpG"}
