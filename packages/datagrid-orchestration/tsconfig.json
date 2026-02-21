@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.adapter.json",
   "compilerOptions": {
     "composite": false,
+    "noEmit": true,
     "moduleResolution": "bundler",
     "types": ["node"]
   },
