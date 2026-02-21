@@ -10,10 +10,10 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@affino/datagrid-core": ["../datagrid-core/dist/src/index.d.ts"],
-      "@affino/datagrid-core/*": ["../datagrid-core/dist/src/*"],
-      "@affino/datagrid-orchestration": ["../datagrid-orchestration/dist/src/index.d.ts"],
-      "@affino/datagrid-orchestration/*": ["../datagrid-orchestration/dist/src/*"]
+      "@affino/datagrid-core": ["../datagrid-core/src/index.ts"],
+      "@affino/datagrid-core/*": ["../datagrid-core/src/*"],
+      "@affino/datagrid-orchestration": ["../datagrid-orchestration/src/index.ts"],
+      "@affino/datagrid-orchestration/*": ["../datagrid-orchestration/src/*"]
     }
   },
   "include": [
