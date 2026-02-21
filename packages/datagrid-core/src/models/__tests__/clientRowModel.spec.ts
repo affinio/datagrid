@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { createClientRowModel, normalizeViewportRange } from "../index"
+import {
+  createClientRowModel,
+  createDataGridDependencyGraph,
+  createDataGridProjectionPolicy,
+  normalizeViewportRange,
+} from "../index"
 import type { VisibleRow } from "../../types"
 import type { DataGridRowNodeInput } from "../rowModel"
 
@@ -10,6 +15,22 @@ function buildRows(count: number): VisibleRow<{ id: number }>[] {
     originalIndex: index,
     displayIndex: index,
   }))
+}
+
+function encodeGroupKey(segments: readonly { field: string; value: string }[]): string {
+  let encoded = "group:"
+  for (const segment of segments) {
+    encoded += `${segment.field.length}:${segment.field}${segment.value.length}:${segment.value}`
+  }
+  return encoded
+}
+
+function encodeTreePathGroupKey(segments: readonly string[]): string {
+  let encoded = "tree:path:"
+  for (const segment of segments) {
+    encoded += `${segment.length}:${segment}`
+  }
+  return encoded
 }
 
 describe("createClientRowModel", () => {
@@ -334,6 +355,45 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("keeps unrelated root leaves visible when collapsing a path group", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", path: ["workspace", "docs"] }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", path: [] }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialTreeData: {
+        mode: "path",
+        getDataPath: row => row.path,
+        expandedByDefault: true,
+      },
+    })
+
+    const before = model.getRowsInRange({ start: 0, end: 10 })
+    const workspaceGroupKey = String(before.find(row => row.kind === "group")?.rowId ?? "")
+    expect(before.map(row => String(row.rowId))).toEqual([
+      workspaceGroupKey,
+      encodeTreePathGroupKey(["workspace", "docs"]),
+      "r1",
+      "r2",
+    ])
+
+    model.toggleGroup(workspaceGroupKey)
+    const collapsed = model.getRowsInRange({ start: 0, end: 10 })
+    expect(collapsed.map(row => String(row.rowId))).toEqual([workspaceGroupKey, "r2"])
+    expect(collapsed[0]?.state.expanded).toBe(false)
+
+    model.toggleGroup(workspaceGroupKey)
+    const expandedAgain = model.getRowsInRange({ start: 0, end: 10 })
+    expect(expandedAgain.map(row => String(row.rowId))).toEqual([
+      workspaceGroupKey,
+      encodeTreePathGroupKey(["workspace", "docs"]),
+      "r1",
+      "r2",
+    ])
+
+    model.dispose()
+  })
+
   it("projects treeData parent mode with root orphan policy and cycle-edge ignore", () => {
     const model = createClientRowModel({
       rows: [
@@ -362,6 +422,69 @@ describe("createClientRowModel", () => {
       duplicates: 0,
       lastError: null,
     })
+
+    model.dispose()
+  })
+
+  it("keeps sibling roots visible when collapsing a parent group", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "root-a", parentId: null }, rowId: "root-a", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "child-a", parentId: "root-a" }, rowId: "child-a", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "root-b", parentId: null }, rowId: "root-b", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+      },
+    })
+
+    const expanded = model.getRowsInRange({ start: 0, end: 10 })
+    expect(expanded.map(row => String(row.rowId))).toEqual(["root-a", "child-a", "root-b"])
+
+    model.toggleGroup("tree:parent:root-a")
+    const collapsed = model.getRowsInRange({ start: 0, end: 10 })
+    expect(collapsed.map(row => String(row.rowId))).toEqual(["root-a", "root-b"])
+    expect(collapsed[0]?.state.expanded).toBe(false)
+
+    model.toggleGroup("tree:parent:root-a")
+    const expandedAgain = model.getRowsInRange({ start: 0, end: 10 })
+    expect(expandedAgain.map(row => String(row.rowId))).toEqual(["root-a", "child-a", "root-b"])
+
+    model.dispose()
+  })
+
+  it("orders parent-tree root groups by sort model instead of source index", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "root-a", parentId: null, score: 10 }, rowId: "root-a", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "child-a", parentId: "root-a", score: 1 }, rowId: "child-a", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "root-b", parentId: null, score: 20 }, rowId: "root-b", originalIndex: 2, displayIndex: 2 },
+        { row: { id: "child-b", parentId: "root-b", score: 2 }, rowId: "child-b", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+      },
+    })
+
+    model.setSortModel([{ key: "score", direction: "desc" }])
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual([
+      "root-b",
+      "child-b",
+      "root-a",
+      "child-a",
+    ])
+
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual([
+      "root-a",
+      "child-a",
+      "root-b",
+      "child-b",
+    ])
 
     model.dispose()
   })
@@ -514,6 +637,69 @@ describe("createClientRowModel", () => {
     expect(rows).toHaveLength(1)
     expect((rows[0]?.row as { id?: number })?.id).toBe(1)
     expect((model.getSnapshot().filterModel?.advancedExpression as { kind?: string })?.kind).toBe("group")
+
+    model.dispose()
+  })
+
+  it("normalizes column filter keys/values and matches non-string runtime values", () => {
+    const model = createClientRowModel({
+      rows: [
+        {
+          row: { id: 1, status: 1, flags: { active: true } },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+        {
+          row: { id: 2, status: 2, flags: { active: false } },
+          rowId: "r2",
+          originalIndex: 1,
+          displayIndex: 1,
+        },
+      ],
+    })
+
+    model.setFilterModel({
+      columnFilters: {
+        " status ": [1 as unknown as string],
+        "flags.active": [true as unknown as string],
+      },
+      advancedFilters: {},
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rows.map(row => String(row.rowId))).toEqual(["r1"])
+
+    model.dispose()
+  })
+
+  it("supports array index access in readByPath-backed filters", () => {
+    const model = createClientRowModel({
+      rows: [
+        {
+          row: { id: 1, items: [{ name: "alpha" }] },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+        {
+          row: { id: 2, items: [{ name: "beta" }] },
+          rowId: "r2",
+          originalIndex: 1,
+          displayIndex: 1,
+        },
+      ],
+    })
+
+    model.setFilterModel({
+      columnFilters: {
+        "items.0.name": ["alpha"],
+      },
+      advancedFilters: {},
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rows.map(row => String(row.rowId))).toEqual(["r1"])
 
     model.dispose()
   })
@@ -753,6 +939,100 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("invalidates sort when patched fields intersect sort dependencyFields", () => {
+    const rowWithDerivedScore = (id: number, label: string) => {
+      const row = { id, label } as { id: number; label: string; score: number }
+      Object.defineProperty(row, "score", {
+        enumerable: true,
+        configurable: false,
+        get() {
+          return this.label.length
+        },
+      })
+      return row
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: rowWithDerivedScore(1, "zzzz"), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: rowWithDerivedScore(2, "aa"), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    model.setSortModel([{ key: "score", direction: "asc", dependencyFields: ["label"] }])
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r1"])
+
+    model.patchRows([{ rowId: "r1", data: { label: "a" } }])
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
+
+    model.dispose()
+  })
+
+  it("propagates transitive dependency graph fields into sort invalidation", () => {
+    const dependencyGraph = createDataGridDependencyGraph([
+      { sourceField: "rawScore", dependentField: "computedScore" },
+      { sourceField: "computedScore", dependentField: "score" },
+    ])
+    const projectionPolicy = createDataGridProjectionPolicy({ dependencyGraph })
+
+    const rowWithDerivedScore = (id: number, rawScore: number) => {
+      const row = { id, rawScore, computedScore: rawScore } as {
+        id: number
+        rawScore: number
+        computedScore: number
+        score: number
+      }
+      Object.defineProperty(row, "score", {
+        enumerable: true,
+        configurable: false,
+        get() {
+          return this.rawScore
+        },
+      })
+      return row
+    }
+
+    const model = createClientRowModel({
+      projectionPolicy,
+      rows: [
+        { row: rowWithDerivedScore(1, 10), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: rowWithDerivedScore(2, 20), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
+
+    model.patchRows([{ rowId: "r1", data: { rawScore: 30 } }])
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r1"])
+
+    model.dispose()
+  })
+
+  it("supports projection policy that disables sort-value caching", () => {
+    const projectionPolicy = {
+      ...createDataGridProjectionPolicy(),
+      shouldCacheSortValues: () => false,
+    }
+    const model = createClientRowModel({
+      projectionPolicy,
+      rows: [
+        { row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    model.setSortModel([{ key: "score", direction: "desc" }])
+    const beforeRefresh = model.getDerivedCacheDiagnostics()
+    model.refresh("manual")
+    const afterRefresh = model.getDerivedCacheDiagnostics()
+
+    expect(afterRefresh.sortValueHits).toBe(beforeRefresh.sortValueHits)
+    expect(afterRefresh.sortValueMisses).toBeGreaterThan(beforeRefresh.sortValueMisses)
+
+    model.dispose()
+  })
+
   it("respects recomputeFilter in patchRows for filtered projection membership", () => {
     const model = createClientRowModel({
       rows: [
@@ -822,10 +1102,10 @@ describe("createClientRowModel", () => {
     model.setGroupBy({ fields: ["team"], expandedByDefault: true })
     const baseline = model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))
     expect(baseline).toEqual([
-      JSON.stringify([["team", "A"]]),
+      encodeGroupKey([{ field: "team", value: "A" }]),
       "r1",
       "r2",
-      JSON.stringify([["team", "B"]]),
+      encodeGroupKey([{ field: "team", value: "B" }]),
       "r3",
     ])
 
@@ -844,10 +1124,10 @@ describe("createClientRowModel", () => {
     )
     const regrouped = model.getRowsInRange({ start: 0, end: 10 })
     expect(regrouped.map(row => String(row.rowId))).toEqual([
-      JSON.stringify([["team", "B"]]),
+      encodeGroupKey([{ field: "team", value: "B" }]),
       "r1",
       "r3",
-      JSON.stringify([["team", "A"]]),
+      encodeGroupKey([{ field: "team", value: "A" }]),
       "r2",
     ])
     expect(regrouped[0]?.groupMeta?.childrenCount).toBe(2)
@@ -880,6 +1160,12 @@ describe("createClientRowModel", () => {
     expect(after?.staleStages).toEqual([])
     expect(after?.recomputeVersion).toBe(before?.recomputeVersion)
     expect(after?.version).toBeGreaterThan(before?.version ?? 0)
+
+    model.toggleGroup("tree:parent:r1")
+    model.toggleGroup("tree:parent:r1")
+    const afterToggle = model.getRowsInRange({ start: 0, end: 10 })
+    expect(afterToggle.map(row => String(row.rowId))).toEqual(["r1", "r2"])
+    expect((afterToggle[1]?.row as { label?: string })?.label).toBe("Child-updated")
 
     model.dispose()
   })
@@ -922,5 +1208,55 @@ describe("createClientRowModel", () => {
     expect(diagnostics.sortValueMisses).toBeGreaterThanOrEqual(4)
 
     model.dispose()
+  })
+
+  it("keeps unaffected sort cache entries hot across patch + refresh via row versions", () => {
+    const scoreReadsByRowId = new Map<string, number>()
+    const rowWithDerivedScore = (rowId: string, label: string) => {
+      const row = { id: rowId, label } as { id: string; label: string; score: number }
+      Object.defineProperty(row, "score", {
+        enumerable: true,
+        configurable: false,
+        get() {
+          scoreReadsByRowId.set(rowId, (scoreReadsByRowId.get(rowId) ?? 0) + 1)
+          return this.label.length
+        },
+      })
+      return row
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: rowWithDerivedScore("r1", "zzzz"), rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: rowWithDerivedScore("r2", "aa"), rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r1"])
+    expect(scoreReadsByRowId.get("r1")).toBe(1)
+    expect(scoreReadsByRowId.get("r2")).toBe(1)
+
+    model.patchRows([{ rowId: "r1", data: { label: "a" } }], { recomputeSort: false })
+    model.refresh("manual")
+
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
+    expect(scoreReadsByRowId.get("r1")).toBe(2)
+    expect(scoreReadsByRowId.get("r2")).toBe(1)
+
+    model.dispose()
+  })
+
+  it("rejects mutating API calls after dispose", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      ],
+    })
+
+    model.dispose()
+    expect(() => {
+      model.setSortModel([{ key: "score", direction: "asc" }])
+    }).toThrow(/disposed/i)
   })
 })

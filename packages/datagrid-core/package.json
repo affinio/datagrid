@@ -37,7 +37,7 @@
     "test:strict-contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract|lifecycle|property|stress|determinism\"",
     "test:integration": "vitest run --config vitest.config.ts --testNamePattern=\"contract|integration|property|stress\"",
     "test:coverage": "vitest run --config vitest.config.ts --coverage",
-    "test": "npm run type-check"
+    "test": "pnpm run type-check"
   },
   "repository": {
     "type": "git",

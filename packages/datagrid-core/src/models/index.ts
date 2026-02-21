@@ -82,6 +82,49 @@ export type {
 export { createClientRowModel } from "./clientRowModel.js"
 
 export type {
+  DataGridDependencyTokenDomain,
+  DataGridDependencyToken,
+  DataGridFieldNode,
+  DataGridComputedNode,
+  DataGridMetaNode,
+  DataGridDependencyNode,
+  DataGridDependencyEdgeKind,
+  DataGridDependencyEdge,
+  CreateDataGridDependencyEdgeInput,
+} from "./dependencyModel.js"
+export {
+  isDataGridDependencyTokenDomain,
+  normalizeDataGridDependencyToken,
+  parseDataGridDependencyNode,
+  createDataGridDependencyEdge,
+} from "./dependencyModel.js"
+
+export type {
+  DataGridDependencyKind,
+  DataGridDependencyCyclePolicy,
+  DataGridFieldDependency,
+  DataGridDependencyGraph,
+  DataGridRegisterDependencyOptions,
+  CreateDataGridDependencyGraphOptions,
+} from "./dependencyGraph.js"
+export { createDataGridDependencyGraph } from "./dependencyGraph.js"
+
+export type {
+  DataGridClientPerformanceMode,
+  DataGridProjectionCacheBucketPolicy,
+  DataGridProjectionModeCachePolicy,
+  DataGridProjectionCachePolicyMatrix,
+  DataGridResolvedProjectionCachePolicy,
+  DataGridProjectionPolicy,
+  CreateDataGridProjectionPolicyOptions,
+} from "./projectionPolicy.js"
+export {
+  DATAGRID_PROJECTION_CACHE_POLICY_MATRIX,
+  createDataGridProjectionPolicy,
+  resolveDataGridProjectionCachePolicy,
+} from "./projectionPolicy.js"
+
+export type {
   CreateServerBackedRowModelOptions,
   ServerBackedRowModel,
 } from "./serverBackedRowModel.js"

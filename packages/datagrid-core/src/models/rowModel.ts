@@ -6,6 +6,7 @@ export type DataGridSortDirection = "asc" | "desc"
 export interface DataGridSortState {
   key: string
   field?: string
+  dependencyFields?: readonly string[]
   direction: DataGridSortDirection
 }
 
@@ -527,13 +528,14 @@ export function isSameGroupExpansionSnapshot(
 export function isGroupExpanded(
   expansion: DataGridGroupExpansionSnapshot | null | undefined,
   groupKey: string,
+  precomputedToggledGroupKeys?: ReadonlySet<string>,
 ): boolean {
   const key = normalizeGroupKey(groupKey)
   if (!key) {
     return false
   }
   const normalized = expansion ?? { expandedByDefault: false, toggledGroupKeys: [] }
-  const toggled = new Set(normalized.toggledGroupKeys)
+  const toggled = precomputedToggledGroupKeys ?? new Set(normalized.toggledGroupKeys)
   return normalized.expandedByDefault ? !toggled.has(key) : toggled.has(key)
 }
 
