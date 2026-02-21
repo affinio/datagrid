@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "baseUrl": ".",
     "paths": {
       "@affino/datagrid-core": ["../datagrid-core/src/index.ts"],
       "@affino/datagrid-core/*": ["../datagrid-core/src/*"],
