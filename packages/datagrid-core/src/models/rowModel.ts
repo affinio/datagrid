@@ -71,6 +71,34 @@ export interface DataGridGroupExpansionSnapshot {
   toggledGroupKeys: readonly string[]
 }
 
+export type DataGridAggOp =
+  | "sum"
+  | "avg"
+  | "min"
+  | "max"
+  | "count"
+  | "countNonNull"
+  | "first"
+  | "last"
+  | "custom"
+
+export interface DataGridAggregationColumnSpec<T = unknown> {
+  key: string
+  field?: string
+  op: DataGridAggOp
+  createState?: () => unknown
+  add?: (state: unknown, value: unknown, row: DataGridRowNode<T>) => void
+  merge?: (state: unknown, childState: unknown) => void
+  remove?: (state: unknown, value: unknown, row: DataGridRowNode<T>) => void
+  finalize?: (state: unknown) => unknown
+  coerce?: (value: unknown) => number | string | null
+}
+
+export interface DataGridAggregationModel<T = unknown> {
+  columns: readonly DataGridAggregationColumnSpec<T>[]
+  basis?: "filtered" | "source"
+}
+
 export type DataGridTreeDataMode = "path" | "parent"
 export type DataGridTreeDataOrphanPolicy = "root" | "drop" | "error"
 export type DataGridTreeDataCyclePolicy = "ignore-edge" | "error"
@@ -129,6 +157,7 @@ export type DataGridRowModelKind = "client" | "server"
 export type DataGridRowModelRefreshReason =
   | "mount"
   | "manual"
+  | "reapply"
   | "sort-change"
   | "filter-change"
   | "viewport-change"
@@ -171,6 +200,7 @@ export interface DataGridRowGroupMeta {
   groupValue: string
   level: number
   childrenCount: number
+  aggregates?: Record<string, unknown>
 }
 
 export interface DataGridRowRenderMeta {
@@ -214,6 +244,7 @@ export type DataGridProjectionStage =
   | "filter"
   | "sort"
   | "group"
+  | "aggregate"
   | "paginate"
   | "visible"
 
@@ -246,6 +277,8 @@ export interface DataGridRowModel<T = unknown> {
   setSortModel(sortModel: readonly DataGridSortState[]): void
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
+  setAggregationModel(aggregationModel: DataGridAggregationModel<T> | null): void
+  getAggregationModel(): DataGridAggregationModel<T> | null
   setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null): void
   toggleGroup(groupKey: string): void
   expandGroup(groupKey: string): void
@@ -750,6 +783,9 @@ function normalizeGroupMeta(
   const childrenCount = Number.isFinite(value?.childrenCount)
     ? Math.max(0, Math.trunc(value?.childrenCount as number))
     : 0
+  const aggregates = (value?.aggregates && typeof value.aggregates === "object" && !Array.isArray(value.aggregates))
+    ? ({ ...(value.aggregates as Record<string, unknown>) })
+    : undefined
 
   return {
     groupKey: normalizedKey,
@@ -757,6 +793,7 @@ function normalizeGroupMeta(
     groupValue: normalizedValue,
     level,
     childrenCount,
+    ...(aggregates ? { aggregates } : {}),
   }
 }
 

@@ -17,6 +17,7 @@ import {
   type DataGridPaginationInput,
   type DataGridProjectionDiagnostics,
   type DataGridFilterSnapshot,
+  type DataGridAggregationModel,
   type DataGridGroupBySpec,
   type DataGridRowId,
   type DataGridRowIdResolver,
@@ -44,11 +45,17 @@ import { createClientRowProjectionOrchestrator } from "./clientRowProjectionOrch
 import { DATAGRID_CLIENT_ALL_PROJECTION_STAGES } from "./projectionStages.js"
 import { buildGroupedRowsProjection } from "./groupProjectionController.js"
 import {
+  createDataGridAggregationEngine,
+  type DataGridIncrementalAggregationGroupState,
+  type DataGridIncrementalAggregationLeafContribution,
+} from "./aggregationEngine.js"
+import {
   cloneDataGridFilterSnapshot as cloneFilterSnapshot,
   evaluateDataGridAdvancedFilterExpression,
 } from "./advancedFilter.js"
 import {
   analyzeRowPatchChangeSet,
+  collectAggregationModelFields,
   buildPatchProjectionExecutionPlan,
   collectFilterModelFields,
   collectGroupByFields,
@@ -72,6 +79,7 @@ export interface CreateClientRowModelOptions<T> {
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
   initialGroupBy?: DataGridGroupBySpec | null
+  initialAggregationModel?: DataGridAggregationModel<T> | null
   initialPagination?: DataGridPaginationInput | null
   performanceMode?: DataGridClientPerformanceMode
   projectionPolicy?: DataGridProjectionPolicy
@@ -90,8 +98,20 @@ export interface DataGridClientRowPatch<T = unknown> {
 }
 
 export interface DataGridClientRowPatchOptions {
+  /**
+   * `false` by default for Excel-like edit flow: keep current projection order
+   * until explicit reapply (`refresh`) or recompute-enabled patch.
+   */
   recomputeSort?: boolean
+  /**
+   * `false` by default for Excel-like edit flow: keep current filter membership
+   * until explicit reapply (`refresh`) or recompute-enabled patch.
+   */
   recomputeFilter?: boolean
+  /**
+   * `false` by default for Excel-like edit flow: keep current grouping/aggregation
+   * layout until explicit reapply (`refresh`) or recompute-enabled patch.
+   */
   recomputeGroup?: boolean
   emit?: boolean
 }
@@ -169,6 +189,273 @@ function normalizeText(value: unknown): string {
     return ""
   }
   return String(value)
+}
+
+interface GroupKeySegment {
+  field: string
+  value: string
+}
+
+function createGroupedRowKey(segments: readonly GroupKeySegment[]): string {
+  let encoded = "group:"
+  for (const segment of segments) {
+    encoded += `${segment.field.length}:${segment.field}${segment.value.length}:${segment.value}`
+  }
+  return encoded
+}
+
+function computeGroupByAggregatesMap<T>(
+  inputRows: readonly DataGridRowNode<T>[],
+  groupBy: DataGridGroupBySpec,
+  resolveGroupValue: (row: DataGridRowNode<T>, field: string) => string,
+  computeAggregates: (rows: readonly DataGridRowNode<T>[]) => Record<string, unknown>,
+): Map<string, Record<string, unknown>> {
+  const aggregatesByGroupKey = new Map<string, Record<string, unknown>>()
+  const fields = groupBy.fields
+  if (fields.length === 0 || inputRows.length === 0) {
+    return aggregatesByGroupKey
+  }
+
+  const projectLevel = (
+    rows: readonly DataGridRowNode<T>[],
+    level: number,
+    path: readonly GroupKeySegment[],
+  ): void => {
+    if (level >= fields.length || rows.length === 0) {
+      return
+    }
+    const field = fields[level] ?? ""
+    const buckets = new Map<string, DataGridRowNode<T>[]>()
+    for (const row of rows) {
+      const value = resolveGroupValue(row, field)
+      const bucket = buckets.get(value)
+      if (bucket) {
+        bucket.push(row)
+      } else {
+        buckets.set(value, [row])
+      }
+    }
+    for (const [value, bucketRows] of buckets.entries()) {
+      const nextPath: GroupKeySegment[] = [...path, { field, value }]
+      const groupKey = createGroupedRowKey(nextPath)
+      const aggregates = computeAggregates(bucketRows)
+      if (Object.keys(aggregates).length > 0) {
+        aggregatesByGroupKey.set(groupKey, { ...aggregates })
+      }
+      projectLevel(bucketRows, level + 1, nextPath)
+    }
+  }
+
+  projectLevel(inputRows, 0, [])
+  return aggregatesByGroupKey
+}
+
+interface GroupByIncrementalAggregationResult {
+  statesByGroupKey: Map<string, DataGridIncrementalAggregationGroupState>
+  aggregatesByGroupKey: Map<string, Record<string, unknown>>
+  groupPathByRowId: Map<DataGridRowId, readonly string[]>
+  leafContributionByRowId: Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>
+}
+
+function computeGroupByIncrementalAggregation<T>(
+  inputRows: readonly DataGridRowNode<T>[],
+  groupBy: DataGridGroupBySpec,
+  resolveGroupValue: (row: DataGridRowNode<T>, field: string) => string,
+  createLeafContribution: (
+    row: DataGridRowNode<T>,
+  ) => DataGridIncrementalAggregationLeafContribution | null,
+  createEmptyGroupState: () => DataGridIncrementalAggregationGroupState | null,
+  applyContributionDelta: (
+    groupState: DataGridIncrementalAggregationGroupState,
+    previous: DataGridIncrementalAggregationLeafContribution | null,
+    next: DataGridIncrementalAggregationLeafContribution | null,
+  ) => void,
+  finalizeGroupState: (groupState: DataGridIncrementalAggregationGroupState) => Record<string, unknown>,
+): GroupByIncrementalAggregationResult {
+  const statesByGroupKey = new Map<string, DataGridIncrementalAggregationGroupState>()
+  const aggregatesByGroupKey = new Map<string, Record<string, unknown>>()
+  const groupPathByRowId = new Map<DataGridRowId, string[]>()
+  const leafContributionByRowId = new Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>()
+  const fields = groupBy.fields
+  if (fields.length === 0 || inputRows.length === 0) {
+    return {
+      statesByGroupKey,
+      aggregatesByGroupKey,
+      groupPathByRowId,
+      leafContributionByRowId,
+    }
+  }
+
+  const projectLevel = (
+    rows: readonly DataGridRowNode<T>[],
+    level: number,
+    path: readonly GroupKeySegment[],
+  ): void => {
+    if (level >= fields.length || rows.length === 0) {
+      return
+    }
+    const field = fields[level] ?? ""
+    const buckets = new Map<string, DataGridRowNode<T>[]>()
+    for (const row of rows) {
+      const value = resolveGroupValue(row, field)
+      const bucket = buckets.get(value)
+      if (bucket) {
+        bucket.push(row)
+      } else {
+        buckets.set(value, [row])
+      }
+    }
+    for (const [value, bucketRows] of buckets.entries()) {
+      const nextPath: GroupKeySegment[] = [...path, { field, value }]
+      const groupKey = createGroupedRowKey(nextPath)
+      const state = createEmptyGroupState()
+      if (!state) {
+        continue
+      }
+      for (const row of bucketRows) {
+        if (row.kind !== "leaf") {
+          continue
+        }
+        const contribution = createLeafContribution(row)
+        if (!contribution) {
+          continue
+        }
+        leafContributionByRowId.set(row.rowId, contribution)
+        const existingPath = groupPathByRowId.get(row.rowId)
+        if (existingPath) {
+          existingPath.push(groupKey)
+        } else {
+          groupPathByRowId.set(row.rowId, [groupKey])
+        }
+        applyContributionDelta(state, null, contribution)
+      }
+      statesByGroupKey.set(groupKey, state)
+      const aggregates = finalizeGroupState(state)
+      if (Object.keys(aggregates).length > 0) {
+        aggregatesByGroupKey.set(groupKey, aggregates)
+      }
+      projectLevel(bucketRows, level + 1, nextPath)
+    }
+  }
+
+  projectLevel(inputRows, 0, [])
+  return {
+    statesByGroupKey,
+    aggregatesByGroupKey,
+    groupPathByRowId,
+    leafContributionByRowId,
+  }
+}
+
+function patchGroupRowsAggregatesByGroupKey<T>(
+  rows: readonly DataGridRowNode<T>[],
+  resolveAggregates: (groupKey: string) => Record<string, unknown> | undefined,
+): DataGridRowNode<T>[] {
+  const patched: DataGridRowNode<T>[] = []
+  for (const row of rows) {
+    if (row.kind !== "group" || !row.groupMeta?.groupKey) {
+      patched.push(row)
+      continue
+    }
+    const nextAggregates = resolveAggregates(row.groupMeta.groupKey)
+    if (!nextAggregates || Object.keys(nextAggregates).length === 0) {
+      if (!row.groupMeta.aggregates) {
+        patched.push(row)
+        continue
+      }
+      const { aggregates: _dropAggregates, ...groupMeta } = row.groupMeta
+      patched.push({
+        ...row,
+        groupMeta,
+      })
+      continue
+    }
+    if (areSameAggregateRecords(row.groupMeta.aggregates, nextAggregates)) {
+      patched.push(row)
+      continue
+    }
+    patched.push({
+      ...row,
+      groupMeta: {
+        ...row.groupMeta,
+        aggregates: { ...nextAggregates },
+      },
+    })
+  }
+  return patched
+}
+
+function cloneAggregationModel<T>(
+  input: DataGridAggregationModel<T> | null | undefined,
+): DataGridAggregationModel<T> | null {
+  if (!input || !Array.isArray(input.columns)) {
+    return null
+  }
+  return {
+    basis: input.basis,
+    columns: input.columns.map(column => ({ ...column })),
+  }
+}
+
+function isSameAggregationModel<T>(
+  left: DataGridAggregationModel<T> | null,
+  right: DataGridAggregationModel<T> | null,
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  if (left.basis !== right.basis) {
+    return false
+  }
+  if (left.columns.length !== right.columns.length) {
+    return false
+  }
+  for (let index = 0; index < left.columns.length; index += 1) {
+    const leftColumn = left.columns[index]
+    const rightColumn = right.columns[index]
+    if (!leftColumn || !rightColumn) {
+      return false
+    }
+    if (
+      leftColumn.key !== rightColumn.key ||
+      leftColumn.field !== rightColumn.field ||
+      leftColumn.op !== rightColumn.op ||
+      leftColumn.createState !== rightColumn.createState ||
+      leftColumn.add !== rightColumn.add ||
+      leftColumn.remove !== rightColumn.remove ||
+      leftColumn.finalize !== rightColumn.finalize ||
+      leftColumn.coerce !== rightColumn.coerce
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+function areSameAggregateRecords(
+  left: Record<string, unknown> | undefined,
+  right: Record<string, unknown> | undefined,
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) {
+    return false
+  }
+  for (const key of leftKeys) {
+    if (!(key in right) || left[key] !== right[key]) {
+      return false
+    }
+  }
+  return true
 }
 
 interface NormalizedColumnFilterEntry {
@@ -269,7 +556,7 @@ function serializeSortValueModelForCache(sortModel: readonly DataGridSortState[]
     return "__none__"
   }
   return sortModel
-    .map(descriptor => `${descriptor.key}:${descriptor.field ?? ""}`)
+    .map(descriptor => `${descriptor.key}:${descriptor.field ?? ""}:${descriptor.direction ?? "asc"}`)
     .join("|")
 }
 
@@ -544,17 +831,28 @@ interface TreePathProjectionCache<T> {
   diagnostics: TreeProjectionDiagnostics
   rootGroups: Map<string, TreePathBranch<T>>
   branchByKey: Map<string, TreePathBranch<T>>
+  branchParentByKey: Map<string, string | null>
+  branchPathByLeafRowId: Map<DataGridRowId, readonly string[]>
   rootLeaves: DataGridRowNode<T>[]
   matchedLeafRowIds: Set<DataGridRowId>
   leafOnlyRows: DataGridRowNode<T>[]
+  aggregatesByGroupKey: Map<string, Record<string, unknown>>
+  aggregateStateByGroupKey?: Map<string, DataGridIncrementalAggregationGroupState>
+  leafContributionById?: Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>
+  dirtyBranchKeys: Set<string>
 }
 
 interface TreeParentProjectionCache<T> {
   diagnostics: TreeProjectionDiagnostics
   rowById: Map<DataGridRowId, DataGridRowNode<T>>
+  parentById: Map<DataGridRowId, DataGridRowId | null>
   includedChildrenById: Map<DataGridRowId, DataGridRowId[]>
   groupRowIdByGroupKey: Map<string, DataGridRowId>
   rootIncluded: DataGridRowId[]
+  aggregatesByGroupRowId: Map<DataGridRowId, Record<string, unknown>>
+  aggregateStateByGroupRowId?: Map<DataGridRowId, DataGridIncrementalAggregationGroupState>
+  leafContributionById?: Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>
+  dirtyBranchRootIds: Set<DataGridRowId>
 }
 
 interface TreePathProjectionCacheState<T> {
@@ -570,6 +868,7 @@ interface TreeParentProjectionCacheState<T> {
 function patchTreePathProjectionCacheRowsByIdentity<T>(
   cache: TreePathProjectionCache<T>,
   sourceById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+  changedRowIds: readonly DataGridRowId[] = [],
 ): TreePathProjectionCache<T> {
   cache.rootLeaves = patchProjectedRowsByIdentity(cache.rootLeaves, sourceById)
   cache.leafOnlyRows = patchProjectedRowsByIdentity(cache.leafOnlyRows, sourceById)
@@ -582,12 +881,22 @@ function patchTreePathProjectionCacheRowsByIdentity<T>(
   for (const branch of cache.rootGroups.values()) {
     patchBranch(branch)
   }
+  for (const rowId of changedRowIds) {
+    const branchPath = cache.branchPathByLeafRowId.get(rowId)
+    if (!branchPath) {
+      continue
+    }
+    for (const branchKey of branchPath) {
+      cache.dirtyBranchKeys.add(branchKey)
+    }
+  }
   return cache
 }
 
 function patchTreeParentProjectionCacheRowsByIdentity<T>(
   cache: TreeParentProjectionCache<T>,
   sourceById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+  changedRowIds: readonly DataGridRowId[] = [],
 ): TreeParentProjectionCache<T> {
   for (const [rowId, row] of cache.rowById.entries()) {
     const next = sourceById.get(rowId)
@@ -595,6 +904,13 @@ function patchTreeParentProjectionCacheRowsByIdentity<T>(
       continue
     }
     cache.rowById.set(rowId, normalizeLeafRow(next))
+  }
+  for (const rowId of changedRowIds) {
+    let cursor: DataGridRowId | null = rowId
+    while (cursor != null) {
+      cache.dirtyBranchRootIds.add(cursor)
+      cursor = cache.parentById.get(cursor) ?? null
+    }
   }
   return cache
 }
@@ -611,6 +927,18 @@ function buildTreePathProjectionCache<T>(
   inputRows: readonly DataGridRowNode<T>[],
   treeData: Extract<DataGridTreeDataResolvedSpec<T>, { mode: "path" }>,
   rowMatchesFilter: (row: DataGridRowNode<T>) => boolean,
+  computeAggregates?: (rows: readonly DataGridRowNode<T>[]) => Record<string, unknown> | null,
+  aggregationBasis: "filtered" | "source" = "filtered",
+  createLeafContribution?: (
+    row: DataGridRowNode<T>,
+  ) => DataGridIncrementalAggregationLeafContribution | null,
+  createEmptyGroupState?: () => DataGridIncrementalAggregationGroupState | null,
+  applyContributionDelta?: (
+    groupState: DataGridIncrementalAggregationGroupState,
+    previous: DataGridIncrementalAggregationLeafContribution | null,
+    next: DataGridIncrementalAggregationLeafContribution | null,
+  ) => void,
+  finalizeGroupState?: (groupState: DataGridIncrementalAggregationGroupState) => Record<string, unknown>,
 ): TreePathProjectionCache<T> {
   const diagnostics: TreeProjectionDiagnostics = {
     orphans: 0,
@@ -618,9 +946,24 @@ function buildTreePathProjectionCache<T>(
   }
   const rootGroups = new Map<string, TreePathBranch<T>>()
   const branchByKey = new Map<string, TreePathBranch<T>>()
+  const branchParentByKey = new Map<string, string | null>()
+  const branchPathByLeafRowId = new Map<DataGridRowId, readonly string[]>()
   const rootLeaves: DataGridRowNode<T>[] = []
   const matchedLeafRowIds = new Set<DataGridRowId>()
   const leafOnlyRows: DataGridRowNode<T>[] = []
+  const aggregatesByGroupKey = new Map<string, Record<string, unknown>>()
+  const leafContributionById = (computeAggregates || createLeafContribution)
+    ? new Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>()
+    : undefined
+  const aggregateStateByGroupKey = (
+    createLeafContribution &&
+    createEmptyGroupState &&
+    applyContributionDelta &&
+    finalizeGroupState
+  )
+    ? new Map<string, DataGridIncrementalAggregationGroupState>()
+    : undefined
+  const dirtyBranchKeys = new Set<string>()
 
   for (const row of inputRows) {
     const normalizedLeaf = normalizeLeafRow(row)
@@ -647,6 +990,7 @@ function buildTreePathProjectionCache<T>(
         currentGroups = existing.groups
         continue
       }
+      const parentBranch = traversed[traversed.length - 1]
       const next: TreePathBranch<T> = {
         key: groupKey,
         value,
@@ -657,12 +1001,20 @@ function buildTreePathProjectionCache<T>(
       }
       currentGroups.set(value, next)
       branchByKey.set(groupKey, next)
+      branchParentByKey.set(groupKey, parentBranch ? parentBranch.key : null)
       traversed.push(next)
       currentGroups = next.groups
     }
     const target = traversed[traversed.length - 1]
     if (target) {
       target.leaves.push(normalizedLeaf)
+      branchPathByLeafRowId.set(normalizedLeaf.rowId, traversed.map(branch => branch.key))
+    }
+    if (leafContributionById && createLeafContribution && (aggregationBasis === "source" || matches)) {
+      const contribution = createLeafContribution(normalizedLeaf)
+      if (contribution) {
+        leafContributionById.set(normalizedLeaf.rowId, contribution)
+      }
     }
     for (const branch of traversed) {
       if (matches) {
@@ -671,19 +1023,91 @@ function buildTreePathProjectionCache<T>(
     }
   }
 
+  if (
+    aggregateStateByGroupKey &&
+    leafContributionById &&
+    createEmptyGroupState &&
+    applyContributionDelta &&
+    finalizeGroupState
+  ) {
+    const collectBranchContributions = (
+      branch: TreePathBranch<T>,
+    ): DataGridIncrementalAggregationLeafContribution[] => {
+      const contributions: DataGridIncrementalAggregationLeafContribution[] = []
+      for (const child of branch.groups.values()) {
+        contributions.push(...collectBranchContributions(child))
+      }
+      for (const leaf of branch.leaves) {
+        if (aggregationBasis !== "source" && !matchedLeafRowIds.has(leaf.rowId)) {
+          continue
+        }
+        const contribution = leafContributionById.get(leaf.rowId)
+        if (contribution) {
+          contributions.push(contribution)
+        }
+      }
+      const groupState = createEmptyGroupState()
+      if (!groupState) {
+        return contributions
+      }
+      for (const contribution of contributions) {
+        applyContributionDelta(groupState, null, contribution)
+      }
+      aggregateStateByGroupKey.set(branch.key, groupState)
+      const aggregates = finalizeGroupState(groupState)
+      if (Object.keys(aggregates).length > 0) {
+        aggregatesByGroupKey.set(branch.key, { ...aggregates })
+      }
+      return contributions
+    }
+    for (const branch of rootGroups.values()) {
+      collectBranchContributions(branch)
+    }
+  } else if (computeAggregates) {
+    const collectBranchLeaves = (branch: TreePathBranch<T>): DataGridRowNode<T>[] => {
+      const leafRows: DataGridRowNode<T>[] = []
+      for (const child of branch.groups.values()) {
+        leafRows.push(...collectBranchLeaves(child))
+      }
+      for (const leaf of branch.leaves) {
+        if (aggregationBasis === "source" || matchedLeafRowIds.has(leaf.rowId)) {
+          leafRows.push(leaf)
+        }
+      }
+      if (leafRows.length === 0) {
+        return leafRows
+      }
+      const aggregates = computeAggregates(leafRows)
+      if (aggregates && Object.keys(aggregates).length > 0) {
+        aggregatesByGroupKey.set(branch.key, { ...aggregates })
+      }
+      return leafRows
+    }
+    for (const branch of rootGroups.values()) {
+      collectBranchLeaves(branch)
+    }
+  }
+
   return {
     diagnostics,
     rootGroups,
     branchByKey,
+    branchParentByKey,
+    branchPathByLeafRowId,
     rootLeaves,
     matchedLeafRowIds,
     leafOnlyRows,
+    aggregatesByGroupKey,
+    aggregateStateByGroupKey,
+    leafContributionById,
+    dirtyBranchKeys,
   }
 }
 
 function createTreePathGroupNode<T>(
   branch: TreePathBranch<T>,
   expanded: boolean,
+  aggregates?: Record<string, unknown>,
 ): DataGridRowNode<T> {
   const rowData = ({
     __tree: true,
@@ -712,6 +1136,7 @@ function createTreePathGroupNode<T>(
       groupValue: branch.value,
       level: branch.level,
       childrenCount: branch.matchedLeaves,
+      ...(aggregates ? { aggregates } : {}),
     },
   }
 }
@@ -730,7 +1155,7 @@ function appendTreePathBranch<T>(
     return
   }
   const expanded = isGroupExpanded(expansionSnapshot, branch.key, expansionToggledKeys)
-  output.push(createTreePathGroupNode(branch, expanded))
+  output.push(createTreePathGroupNode(branch, expanded, cache.aggregatesByGroupKey.get(branch.key)))
   if (!expanded) {
     return
   }
@@ -812,6 +1237,18 @@ function projectTreeDataRowsFromCache<T>(
   pathCacheState: TreePathProjectionCacheState<T> | null,
   parentCacheState: TreeParentProjectionCacheState<T> | null,
   cacheKey: string,
+  computeAggregates?: (rows: readonly DataGridRowNode<T>[]) => Record<string, unknown> | null,
+  aggregationBasis: "filtered" | "source" = "filtered",
+  createLeafContribution?: (
+    row: DataGridRowNode<T>,
+  ) => DataGridIncrementalAggregationLeafContribution | null,
+  createEmptyGroupState?: () => DataGridIncrementalAggregationGroupState | null,
+  applyContributionDelta?: (
+    groupState: DataGridIncrementalAggregationGroupState,
+    previous: DataGridIncrementalAggregationLeafContribution | null,
+    next: DataGridIncrementalAggregationLeafContribution | null,
+  ) => void,
+  finalizeGroupState?: (groupState: DataGridIncrementalAggregationGroupState) => Record<string, unknown>,
 ): {
     result: TreeProjectionResult<T>
     pathCache: TreePathProjectionCacheState<T> | null
@@ -821,8 +1258,18 @@ function projectTreeDataRowsFromCache<T>(
     const nextPathCacheState = pathCacheState?.key === cacheKey
       ? pathCacheState
       : {
-          key: cacheKey,
-          cache: buildTreePathProjectionCache(inputRows, treeData, rowMatchesFilter),
+        key: cacheKey,
+          cache: buildTreePathProjectionCache(
+            inputRows,
+            treeData,
+            rowMatchesFilter,
+            computeAggregates,
+            aggregationBasis,
+            createLeafContribution,
+            createEmptyGroupState,
+            applyContributionDelta,
+            finalizeGroupState,
+          ),
         }
     return {
       result: materializeTreePathProjection(
@@ -840,7 +1287,17 @@ function projectTreeDataRowsFromCache<T>(
     ? parentCacheState
     : {
         key: cacheKey,
-        cache: buildTreeParentProjectionCache(inputRows, treeData, rowMatchesFilter),
+        cache: buildTreeParentProjectionCache(
+          inputRows,
+          treeData,
+          rowMatchesFilter,
+          computeAggregates,
+          aggregationBasis,
+          createLeafContribution,
+          createEmptyGroupState,
+          applyContributionDelta,
+          finalizeGroupState,
+        ),
       }
   return {
     result: materializeTreeParentProjection(nextParentCacheState.cache, expansionSnapshot, expansionToggledKeys),
@@ -857,6 +1314,18 @@ function buildTreeParentProjectionCache<T>(
   inputRows: readonly DataGridRowNode<T>[],
   treeData: Extract<DataGridTreeDataResolvedSpec<T>, { mode: "parent" }>,
   rowMatchesFilter: (row: DataGridRowNode<T>) => boolean,
+  computeAggregates?: (rows: readonly DataGridRowNode<T>[]) => Record<string, unknown> | null,
+  aggregationBasis: "filtered" | "source" = "filtered",
+  createLeafContribution?: (
+    row: DataGridRowNode<T>,
+  ) => DataGridIncrementalAggregationLeafContribution | null,
+  createEmptyGroupState?: () => DataGridIncrementalAggregationGroupState | null,
+  applyContributionDelta?: (
+    groupState: DataGridIncrementalAggregationGroupState,
+    previous: DataGridIncrementalAggregationLeafContribution | null,
+    next: DataGridIncrementalAggregationLeafContribution | null,
+  ) => void,
+  finalizeGroupState?: (groupState: DataGridIncrementalAggregationGroupState) => Record<string, unknown>,
 ): TreeParentProjectionCache<T> {
   const diagnostics: TreeProjectionDiagnostics = {
     orphans: 0,
@@ -1003,10 +1472,22 @@ function buildTreeParentProjectionCache<T>(
     return {
       diagnostics,
       rowById,
+      parentById: new Map<DataGridRowId, DataGridRowId | null>(),
       includedChildrenById: new Map<DataGridRowId, DataGridRowId[]>(),
       groupRowIdByGroupKey: new Map<string, DataGridRowId>(),
       rootIncluded: [],
+      aggregatesByGroupRowId: new Map<DataGridRowId, Record<string, unknown>>(),
+      aggregateStateByGroupRowId: new Map<DataGridRowId, DataGridIncrementalAggregationGroupState>(),
+      leafContributionById: (computeAggregates || createLeafContribution)
+        ? new Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>()
+        : undefined,
+      dirtyBranchRootIds: new Set<DataGridRowId>(),
     }
+  }
+
+  const parentById = new Map<DataGridRowId, DataGridRowId | null>()
+  for (const rowId of includeIds) {
+    parentById.set(rowId, rawParentById.get(rowId) ?? null)
   }
 
   const includedChildrenById = new Map<DataGridRowId, DataGridRowId[]>()
@@ -1041,12 +1522,119 @@ function buildTreeParentProjectionCache<T>(
     groupRowIdByGroupKey.set(createTreeParentGroupKey(rowId), rowId)
   }
 
+  const aggregatesByGroupRowId = new Map<DataGridRowId, Record<string, unknown>>()
+  const aggregateStateByGroupRowId = (
+    createLeafContribution &&
+    createEmptyGroupState &&
+    applyContributionDelta &&
+    finalizeGroupState
+  )
+    ? new Map<DataGridRowId, DataGridIncrementalAggregationGroupState>()
+    : undefined
+  const leafContributionById = (computeAggregates || createLeafContribution)
+    ? new Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>()
+    : undefined
+  if (
+    aggregateStateByGroupRowId &&
+    leafContributionById &&
+    createLeafContribution &&
+    createEmptyGroupState &&
+    applyContributionDelta &&
+    finalizeGroupState
+  ) {
+    const aggregateChildrenById = aggregationBasis === "source"
+      ? childrenById
+      : includedChildrenById
+    const collectLeafContributions = (
+      rowId: DataGridRowId,
+    ): DataGridIncrementalAggregationLeafContribution[] => {
+      const children = aggregateChildrenById.get(rowId) ?? []
+      if (children.length === 0) {
+        const leaf = rowById.get(rowId)
+        if (!leaf) {
+          return []
+        }
+        const contribution = createLeafContribution(leaf)
+        if (!contribution) {
+          return []
+        }
+        leafContributionById.set(rowId, contribution)
+        return [contribution]
+      }
+      const contributions: DataGridIncrementalAggregationLeafContribution[] = []
+      for (const childId of children) {
+        contributions.push(...collectLeafContributions(childId))
+      }
+      const groupState = createEmptyGroupState()
+      if (!groupState) {
+        return contributions
+      }
+      for (const contribution of contributions) {
+        applyContributionDelta(groupState, null, contribution)
+      }
+      aggregateStateByGroupRowId.set(rowId, groupState)
+      const aggregates = finalizeGroupState(groupState)
+      if (Object.keys(aggregates).length > 0) {
+        aggregatesByGroupRowId.set(rowId, { ...aggregates })
+      }
+      return contributions
+    }
+    for (const rootId of rootIncluded) {
+      collectLeafContributions(rootId)
+    }
+  } else if (computeAggregates) {
+    const aggregateChildrenById = aggregationBasis === "source"
+      ? childrenById
+      : includedChildrenById
+    const leafRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
+    for (const [rowId, row] of rowById.entries()) {
+      if ((aggregateChildrenById.get(rowId) ?? []).length === 0) {
+        leafRowsById.set(rowId, row)
+        if (leafContributionById) {
+          leafContributionById.set(rowId, {})
+        }
+      }
+    }
+    const leafMemo = new Map<DataGridRowId, DataGridRowNode<T>[]>()
+    const collectLeafRows = (rowId: DataGridRowId): DataGridRowNode<T>[] => {
+      const cached = leafMemo.get(rowId)
+      if (cached) {
+        return cached
+      }
+      const children = aggregateChildrenById.get(rowId) ?? []
+      if (children.length === 0) {
+        const leaf = leafRowsById.get(rowId)
+        const leafRows = leaf ? [leaf] : []
+        leafMemo.set(rowId, leafRows)
+        return leafRows
+      }
+      const leafRows: DataGridRowNode<T>[] = []
+      for (const childId of children) {
+        leafRows.push(...collectLeafRows(childId))
+      }
+      const aggregates = computeAggregates(leafRows)
+      if (aggregates && Object.keys(aggregates).length > 0) {
+        aggregatesByGroupRowId.set(rowId, { ...aggregates })
+      }
+      leafMemo.set(rowId, leafRows)
+      return leafRows
+    }
+    for (const rootId of rootIncluded) {
+      collectLeafRows(rootId)
+    }
+  }
+
   return {
     diagnostics,
     rowById,
+    parentById,
     includedChildrenById,
     groupRowIdByGroupKey,
     rootIncluded,
+    aggregatesByGroupRowId,
+    aggregateStateByGroupRowId,
+    leafContributionById,
+    dirtyBranchRootIds: new Set<DataGridRowId>(),
   }
 }
 
@@ -1056,6 +1644,7 @@ function createTreeParentGroupNode<T>(
   level: number,
   childrenCount: number,
   expanded: boolean,
+  aggregates?: Record<string, unknown>,
 ): DataGridRowNode<T> {
   return {
     ...row,
@@ -1071,6 +1660,7 @@ function createTreeParentGroupNode<T>(
       groupValue: String(rowId),
       level,
       childrenCount,
+      ...(aggregates ? { aggregates } : {}),
     },
   }
 }
@@ -1094,7 +1684,16 @@ function appendTreeParentRow<T>(
   }
   const groupKey = createTreeParentGroupKey(rowId)
   const expanded = isGroupExpanded(expansionSnapshot, groupKey, expansionToggledKeys)
-  output.push(createTreeParentGroupNode(row, rowId, level, children.length, expanded))
+  output.push(
+    createTreeParentGroupNode(
+      row,
+      rowId,
+      level,
+      children.length,
+      expanded,
+      cache.aggregatesByGroupRowId.get(rowId),
+    ),
+  )
   if (!expanded) {
     return
   }
@@ -1190,12 +1789,42 @@ function projectionSegmentMatches<T>(
   return true
 }
 
+function buildGroupRowIndexByRowId<T>(
+  rows: readonly DataGridRowNode<T>[],
+): Map<DataGridRowId, number> {
+  const indexByRowId = new Map<DataGridRowId, number>()
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    if (!row || row.kind !== "group") {
+      continue
+    }
+    indexByRowId.set(row.rowId, index)
+  }
+  return indexByRowId
+}
+
+function resolveGroupRowIndexByRowId<T>(
+  rows: readonly DataGridRowNode<T>[],
+  groupRowId: DataGridRowId,
+  groupIndexByRowId?: ReadonlyMap<DataGridRowId, number>,
+): number {
+  const indexed = groupIndexByRowId?.get(groupRowId)
+  if (typeof indexed === "number") {
+    const candidate = rows[indexed]
+    if (candidate?.kind === "group" && candidate.rowId === groupRowId) {
+      return indexed
+    }
+  }
+  return rows.findIndex(row => row.kind === "group" && row.rowId === groupRowId)
+}
+
 function tryProjectTreePathSubtreeToggle<T>(
   rows: readonly DataGridRowNode<T>[],
   cacheState: TreePathProjectionCacheState<T>,
   treeData: Extract<DataGridTreeDataResolvedSpec<T>, { mode: "path" }>,
   previousExpansionSnapshot: DataGridGroupExpansionSnapshot,
   nextExpansionSnapshot: DataGridGroupExpansionSnapshot,
+  groupIndexByRowId?: ReadonlyMap<DataGridRowId, number>,
 ): TreeProjectionResult<T> | null {
   if (treeData.filterMode === "leaf-only") {
     return null
@@ -1210,7 +1839,7 @@ function tryProjectTreePathSubtreeToggle<T>(
   }
   const previousExpanded = isGroupExpanded(previousExpansionSnapshot, changedGroupKey, new Set<string>(previousExpansionSnapshot.toggledGroupKeys))
   const nextExpanded = isGroupExpanded(nextExpansionSnapshot, changedGroupKey, new Set<string>(nextExpansionSnapshot.toggledGroupKeys))
-  const groupIndex = rows.findIndex(row => row.kind === "group" && row.rowId === changedGroupKey)
+  const groupIndex = resolveGroupRowIndexByRowId(rows, changedGroupKey, groupIndexByRowId)
   if (groupIndex < 0) {
     return null
   }
@@ -1266,6 +1895,7 @@ function tryProjectTreeParentSubtreeToggle<T>(
   cacheState: TreeParentProjectionCacheState<T>,
   previousExpansionSnapshot: DataGridGroupExpansionSnapshot,
   nextExpansionSnapshot: DataGridGroupExpansionSnapshot,
+  groupIndexByRowId?: ReadonlyMap<DataGridRowId, number>,
 ): TreeProjectionResult<T> | null {
   const changedGroupKey = resolveSingleExpansionDelta(previousExpansionSnapshot, nextExpansionSnapshot)
   if (!changedGroupKey) {
@@ -1277,9 +1907,7 @@ function tryProjectTreeParentSubtreeToggle<T>(
   }
   const previousExpanded = isGroupExpanded(previousExpansionSnapshot, changedGroupKey, new Set<string>(previousExpansionSnapshot.toggledGroupKeys))
   const nextExpanded = isGroupExpanded(nextExpansionSnapshot, changedGroupKey, new Set<string>(nextExpansionSnapshot.toggledGroupKeys))
-  const groupIndex = rows.findIndex(
-    row => row.kind === "group" && row.groupMeta?.groupKey === changedGroupKey,
-  )
+  const groupIndex = resolveGroupRowIndexByRowId(rows, rowId, groupIndexByRowId)
   if (groupIndex < 0) {
     return null
   }
@@ -1483,6 +2111,8 @@ export function createClientRowModel<T>(
   let groupBy: DataGridGroupBySpec | null = treeData
     ? null
     : normalizeGroupBySpec(options.initialGroupBy ?? null)
+  let aggregationModel: DataGridAggregationModel<T> | null = cloneAggregationModel(options.initialAggregationModel ?? null)
+  const aggregationEngine = createDataGridAggregationEngine<T>(aggregationModel)
   let expansionExpandedByDefault = Boolean(treeData?.expandedByDefault ?? groupBy?.expandedByDefault)
   let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
   let pagination = buildPaginationSnapshot(0, paginationInput)
@@ -1513,6 +2143,11 @@ export function createClientRowModel<T>(
   let treeCacheRevision = 0
   let treePathProjectionCacheState: TreePathProjectionCacheState<T> | null = null
   let treeParentProjectionCacheState: TreeParentProjectionCacheState<T> | null = null
+  let groupByAggregateStateByGroupKey = new Map<string, DataGridIncrementalAggregationGroupState>()
+  let groupByAggregatesByGroupKey = new Map<string, Record<string, unknown>>()
+  let groupByAggregatePathByRowId = new Map<DataGridRowId, readonly string[]>()
+  let groupByLeafContributionByRowId = new Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>()
+  let groupedProjectionGroupIndexByRowId = new Map<DataGridRowId, number>()
   let lastTreeProjectionCacheKey: string | null = null
   let lastTreeExpansionSnapshot: DataGridGroupExpansionSnapshot | null = null
   const projectionEngine = createClientRowProjectionEngine<T>()
@@ -1529,7 +2164,7 @@ export function createClientRowModel<T>(
     lastTreeExpansionSnapshot = null
   }
 
-  function patchTreeProjectionCacheRowsByIdentity(): void {
+  function patchTreeProjectionCacheRowsByIdentity(changedRowIds: readonly DataGridRowId[] = []): void {
     if (!treeData || (!treePathProjectionCacheState && !treeParentProjectionCacheState)) {
       return
     }
@@ -1537,15 +2172,274 @@ export function createClientRowModel<T>(
     if (treePathProjectionCacheState) {
       treePathProjectionCacheState = {
         key: treePathProjectionCacheState.key,
-        cache: patchTreePathProjectionCacheRowsByIdentity(treePathProjectionCacheState.cache, sourceById),
+        cache: patchTreePathProjectionCacheRowsByIdentity(
+          treePathProjectionCacheState.cache,
+          sourceById,
+          changedRowIds,
+        ),
       }
     }
     if (treeParentProjectionCacheState) {
       treeParentProjectionCacheState = {
         key: treeParentProjectionCacheState.key,
-        cache: patchTreeParentProjectionCacheRowsByIdentity(treeParentProjectionCacheState.cache, sourceById),
+        cache: patchTreeParentProjectionCacheRowsByIdentity(
+          treeParentProjectionCacheState.cache,
+          sourceById,
+          changedRowIds,
+        ),
       }
     }
+  }
+
+  function resetGroupByIncrementalAggregationState(): void {
+    groupByAggregateStateByGroupKey = new Map<string, DataGridIncrementalAggregationGroupState>()
+    groupByAggregatesByGroupKey = new Map<string, Record<string, unknown>>()
+    groupByAggregatePathByRowId = new Map<DataGridRowId, readonly string[]>()
+    groupByLeafContributionByRowId = new Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>()
+  }
+
+  function patchRuntimeGroupAggregates(
+    resolveAggregates: (groupKey: string) => Record<string, unknown> | undefined,
+  ): void {
+    runtimeState.groupedRowsProjection = patchGroupRowsAggregatesByGroupKey(
+      runtimeState.groupedRowsProjection,
+      resolveAggregates,
+    )
+    runtimeState.aggregatedRowsProjection = patchGroupRowsAggregatesByGroupKey(
+      runtimeState.aggregatedRowsProjection,
+      resolveAggregates,
+    )
+    runtimeState.paginatedRowsProjection = patchGroupRowsAggregatesByGroupKey(
+      runtimeState.paginatedRowsProjection,
+      resolveAggregates,
+    )
+    runtimeState.rows = patchGroupRowsAggregatesByGroupKey(runtimeState.rows, resolveAggregates)
+  }
+
+  function applyIncrementalGroupByAggregationDelta(
+    changedRowIds: readonly DataGridRowId[],
+    previousRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+  ): boolean {
+    if (
+      groupByAggregateStateByGroupKey.size === 0 ||
+      groupByAggregatePathByRowId.size === 0 ||
+      !aggregationEngine.isIncrementalAggregationSupported()
+    ) {
+      return false
+    }
+    const sourceById = buildRowIdIndex(sourceRows)
+    const dirtyGroupKeys = new Set<string>()
+    for (const rowId of changedRowIds) {
+      const groupPath = groupByAggregatePathByRowId.get(rowId)
+      if (!groupPath || groupPath.length === 0) {
+        continue
+      }
+      const previousRow = previousRowsById.get(rowId)
+      const previousContribution = groupByLeafContributionByRowId.get(rowId)
+        ?? (previousRow ? aggregationEngine.createLeafContribution(previousRow) : null)
+      const nextRow = sourceById.get(rowId)
+      const nextContribution = nextRow
+        ? aggregationEngine.createLeafContribution(nextRow)
+        : null
+      if (nextContribution) {
+        groupByLeafContributionByRowId.set(rowId, nextContribution)
+      } else {
+        groupByLeafContributionByRowId.delete(rowId)
+      }
+      for (const groupKey of groupPath) {
+        const state = groupByAggregateStateByGroupKey.get(groupKey)
+        if (!state) {
+          continue
+        }
+        aggregationEngine.applyContributionDelta(
+          state,
+          previousContribution ?? null,
+          nextContribution,
+        )
+        dirtyGroupKeys.add(groupKey)
+      }
+    }
+    if (dirtyGroupKeys.size === 0) {
+      return false
+    }
+    for (const groupKey of dirtyGroupKeys) {
+      const state = groupByAggregateStateByGroupKey.get(groupKey)
+      if (!state) {
+        continue
+      }
+      const aggregates = aggregationEngine.finalizeGroupState(state)
+      if (Object.keys(aggregates).length > 0) {
+        groupByAggregatesByGroupKey.set(groupKey, aggregates)
+      } else {
+        groupByAggregatesByGroupKey.delete(groupKey)
+      }
+    }
+    patchRuntimeGroupAggregates(groupKey => groupByAggregatesByGroupKey.get(groupKey))
+    return true
+  }
+
+  function applyIncrementalTreePathAggregationDelta(
+    changedRowIds: readonly DataGridRowId[],
+    previousRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+  ): boolean {
+    const cache = treePathProjectionCacheState?.cache
+    if (
+      !cache ||
+      !cache.aggregateStateByGroupKey ||
+      !cache.leafContributionById ||
+      !aggregationEngine.isIncrementalAggregationSupported()
+    ) {
+      return false
+    }
+    const sourceById = buildRowIdIndex(sourceRows)
+    const dirtyGroupKeys = new Set<string>()
+    for (const rowId of changedRowIds) {
+      const groupPath = cache.branchPathByLeafRowId.get(rowId)
+      if (!groupPath || groupPath.length === 0) {
+        continue
+      }
+      const previousRow = previousRowsById.get(rowId)
+      const previousContribution = cache.leafContributionById.get(rowId)
+        ?? (previousRow ? aggregationEngine.createLeafContribution(previousRow) : null)
+      const nextRow = sourceById.get(rowId)
+      const nextContribution = nextRow
+        ? aggregationEngine.createLeafContribution(nextRow)
+        : null
+      if (nextContribution) {
+        cache.leafContributionById.set(rowId, nextContribution)
+      } else {
+        cache.leafContributionById.delete(rowId)
+      }
+      for (const groupKey of groupPath) {
+        const state = cache.aggregateStateByGroupKey.get(groupKey)
+        if (!state) {
+          continue
+        }
+        aggregationEngine.applyContributionDelta(
+          state,
+          previousContribution ?? null,
+          nextContribution,
+        )
+        dirtyGroupKeys.add(groupKey)
+        cache.dirtyBranchKeys.add(groupKey)
+      }
+    }
+    if (dirtyGroupKeys.size === 0) {
+      return false
+    }
+    for (const groupKey of dirtyGroupKeys) {
+      const state = cache.aggregateStateByGroupKey.get(groupKey)
+      if (!state) {
+        continue
+      }
+      const aggregates = aggregationEngine.finalizeGroupState(state)
+      if (Object.keys(aggregates).length > 0) {
+        cache.aggregatesByGroupKey.set(groupKey, aggregates)
+      } else {
+        cache.aggregatesByGroupKey.delete(groupKey)
+      }
+    }
+    patchRuntimeGroupAggregates(groupKey => cache.aggregatesByGroupKey.get(groupKey))
+    cache.dirtyBranchKeys.clear()
+    return true
+  }
+
+  function applyIncrementalTreeParentAggregationDelta(
+    changedRowIds: readonly DataGridRowId[],
+    previousRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+  ): boolean {
+    const cache = treeParentProjectionCacheState?.cache
+    if (
+      !cache ||
+      !cache.aggregateStateByGroupRowId ||
+      !cache.leafContributionById ||
+      !aggregationEngine.isIncrementalAggregationSupported()
+    ) {
+      return false
+    }
+    const sourceById = buildRowIdIndex(sourceRows)
+    const dirtyGroupRowIds = new Set<DataGridRowId>()
+    for (const rowId of changedRowIds) {
+      const previousRow = previousRowsById.get(rowId)
+      const previousContribution = cache.leafContributionById.get(rowId)
+        ?? (previousRow ? aggregationEngine.createLeafContribution(previousRow) : null)
+      const nextRow = sourceById.get(rowId)
+      const nextContribution = nextRow
+        ? aggregationEngine.createLeafContribution(nextRow)
+        : null
+      if (nextContribution) {
+        cache.leafContributionById.set(rowId, nextContribution)
+      } else {
+        cache.leafContributionById.delete(rowId)
+      }
+      let cursor: DataGridRowId | null = rowId
+      while (cursor != null) {
+        const state = cache.aggregateStateByGroupRowId.get(cursor)
+        if (state) {
+          aggregationEngine.applyContributionDelta(
+            state,
+            previousContribution ?? null,
+            nextContribution,
+          )
+          dirtyGroupRowIds.add(cursor)
+          cache.dirtyBranchRootIds.add(cursor)
+        }
+        cursor = cache.parentById.get(cursor) ?? null
+      }
+    }
+    if (dirtyGroupRowIds.size === 0) {
+      return false
+    }
+    for (const rowId of dirtyGroupRowIds) {
+      const state = cache.aggregateStateByGroupRowId.get(rowId)
+      if (!state) {
+        continue
+      }
+      const aggregates = aggregationEngine.finalizeGroupState(state)
+      if (Object.keys(aggregates).length > 0) {
+        cache.aggregatesByGroupRowId.set(rowId, aggregates)
+      } else {
+        cache.aggregatesByGroupRowId.delete(rowId)
+      }
+    }
+    patchRuntimeGroupAggregates(groupKey => {
+      const groupRowId = cache.groupRowIdByGroupKey.get(groupKey)
+      if (typeof groupRowId === "undefined") {
+        return undefined
+      }
+      return cache.aggregatesByGroupRowId.get(groupRowId)
+    })
+    cache.dirtyBranchRootIds.clear()
+    return true
+  }
+
+  function applyIncrementalAggregationPatch(
+    changeSet: ReturnType<typeof analyzeRowPatchChangeSet<T>>,
+    previousRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+  ): boolean {
+    if (!aggregationModel || aggregationModel.columns.length === 0) {
+      return false
+    }
+    if (
+      !changeSet.stageImpact.affectsAggregation ||
+      changeSet.stageImpact.affectsFilter ||
+      changeSet.stageImpact.affectsSort ||
+      changeSet.stageImpact.affectsGroup
+    ) {
+      return false
+    }
+    aggregationEngine.setModel(aggregationModel)
+    if (!aggregationEngine.isIncrementalAggregationSupported()) {
+      return false
+    }
+    if (treeData) {
+      return applyIncrementalTreePathAggregationDelta(changeSet.changedRowIds, previousRowsById)
+        || applyIncrementalTreeParentAggregationDelta(changeSet.changedRowIds, previousRowsById)
+    }
+    if (!groupBy) {
+      return false
+    }
+    return applyIncrementalGroupByAggregationDelta(changeSet.changedRowIds, previousRowsById)
   }
 
   function resolveFilterPredicate(): (rowNode: DataGridRowNode<T>) => boolean {
@@ -1650,6 +2544,36 @@ export function createClientRowModel<T>(
       )
       const shouldRecomputeGroup = context.shouldRecompute || runtimeState.groupedRowsProjection.length === 0
       if (shouldRecomputeGroup) {
+        const aggregationBasis: "filtered" | "source" = aggregationModel?.basis === "source"
+          ? "source"
+          : "filtered"
+        const hasTreeAggregationModel = Boolean(aggregationModel && aggregationModel.columns.length > 0)
+        if (hasTreeAggregationModel) {
+          aggregationEngine.setModel(aggregationModel)
+        }
+        const computeTreeAggregates = hasTreeAggregationModel
+          ? ((rows: readonly DataGridRowNode<T>[]) => aggregationEngine.computeAggregatesForLeaves(rows))
+          : undefined
+        const supportsIncrementalTreeAggregation = hasTreeAggregationModel
+          && aggregationEngine.isIncrementalAggregationSupported()
+        const createTreeLeafContribution = supportsIncrementalTreeAggregation
+          ? ((row: DataGridRowNode<T>) => aggregationEngine.createLeafContribution(row))
+          : undefined
+        const createTreeGroupState = supportsIncrementalTreeAggregation
+          ? (() => aggregationEngine.createEmptyGroupState())
+          : undefined
+        const applyTreeContributionDelta = supportsIncrementalTreeAggregation
+          ? ((
+            groupState: DataGridIncrementalAggregationGroupState,
+            previous: DataGridIncrementalAggregationLeafContribution | null,
+            next: DataGridIncrementalAggregationLeafContribution | null,
+          ) => {
+            aggregationEngine.applyContributionDelta(groupState, previous, next)
+          })
+          : undefined
+        const finalizeTreeGroupState = supportsIncrementalTreeAggregation
+          ? ((groupState: DataGridIncrementalAggregationGroupState) => aggregationEngine.finalizeGroupState(groupState))
+          : undefined
         if (
           context.shouldRecompute &&
           runtimeState.groupedRowsProjection.length > 0 &&
@@ -1663,6 +2587,7 @@ export function createClientRowModel<T>(
               treeData,
               lastTreeExpansionSnapshot,
               expansionSnapshot,
+              groupedProjectionGroupIndexByRowId,
             )
           } else if (treeData.mode === "parent" && treeParentProjectionCacheState?.key === treeCacheKey) {
             groupedResult = tryProjectTreeParentSubtreeToggle(
@@ -1670,6 +2595,7 @@ export function createClientRowModel<T>(
               treeParentProjectionCacheState,
               lastTreeExpansionSnapshot,
               expansionSnapshot,
+              groupedProjectionGroupIndexByRowId,
             )
           }
         }
@@ -1684,6 +2610,12 @@ export function createClientRowModel<T>(
               treePathProjectionCacheState,
               treeParentProjectionCacheState,
               treeCacheKey,
+              computeTreeAggregates,
+              aggregationBasis,
+              createTreeLeafContribution,
+              createTreeGroupState,
+              applyTreeContributionDelta,
+              finalizeTreeGroupState,
             )
             groupedResult = projected.result
             treePathProjectionCacheState = projected.pathCache
@@ -1752,6 +2684,9 @@ export function createClientRowModel<T>(
       runtimeState.groupedRowsProjection = runtimeState.sortedRowsProjection
       recomputedGroupStage = context.shouldRecompute
     }
+    if (recomputedGroupStage) {
+      groupedProjectionGroupIndexByRowId = buildGroupRowIndexByRowId(runtimeState.groupedRowsProjection)
+    }
     derivedCacheDiagnostics.groupValueHits = groupValueCounters.hits
     derivedCacheDiagnostics.groupValueMisses = groupValueCounters.misses
     return recomputedGroupStage
@@ -1762,16 +2697,81 @@ export function createClientRowModel<T>(
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runPaginateStage"]> {
     const shouldRecomputePaginate = context.shouldRecompute || runtimeState.paginatedRowsProjection.length === 0
     if (shouldRecomputePaginate) {
-      pagination = buildPaginationSnapshot(runtimeState.groupedRowsProjection.length, paginationInput)
+      pagination = buildPaginationSnapshot(runtimeState.aggregatedRowsProjection.length, paginationInput)
       if (pagination.enabled && pagination.startIndex >= 0 && pagination.endIndex >= pagination.startIndex) {
-        runtimeState.paginatedRowsProjection = runtimeState.groupedRowsProjection.slice(pagination.startIndex, pagination.endIndex + 1)
+        runtimeState.paginatedRowsProjection = runtimeState.aggregatedRowsProjection.slice(pagination.startIndex, pagination.endIndex + 1)
       } else {
-        runtimeState.paginatedRowsProjection = runtimeState.groupedRowsProjection
+        runtimeState.paginatedRowsProjection = runtimeState.aggregatedRowsProjection
       }
     } else {
       runtimeState.paginatedRowsProjection = patchProjectedRowsByIdentity(runtimeState.paginatedRowsProjection, context.sourceById)
     }
     return shouldRecomputePaginate
+  }
+
+  function runAggregateStage(
+    context: Parameters<DataGridClientProjectionStageHandlers<T>["runAggregateStage"]>[0],
+  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runAggregateStage"]> {
+    const shouldRecomputeAggregate = context.shouldRecompute || runtimeState.aggregatedRowsProjection.length === 0
+    if (!shouldRecomputeAggregate) {
+      runtimeState.aggregatedRowsProjection = patchProjectedRowsByIdentity(runtimeState.aggregatedRowsProjection, context.sourceById)
+      return false
+    }
+
+    const activeGroupBy = groupBy
+    const activeAggregationModel = aggregationModel
+    const hasAggregationModel = Boolean(activeAggregationModel && activeAggregationModel.columns.length > 0)
+    if (treeData || !activeGroupBy || !hasAggregationModel || !activeAggregationModel) {
+      resetGroupByIncrementalAggregationState()
+      runtimeState.aggregatedRowsProjection = runtimeState.groupedRowsProjection
+      return true
+    }
+
+    aggregationEngine.setModel(activeAggregationModel)
+    const aggregationBasis: "filtered" | "source" = activeAggregationModel.basis === "source"
+      ? "source"
+      : "filtered"
+    const sourceRowsForAggregation = sortModel.length > 0
+      ? sortLeafRows(sourceRows, sortModel, (row, descriptors) => {
+          return descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field))
+        })
+      : sourceRows
+    const rowsForAggregation = aggregationBasis === "source"
+      ? sourceRowsForAggregation
+      : runtimeState.sortedRowsProjection
+
+    let aggregatesByGroupKey: ReadonlyMap<string, Record<string, unknown>>
+    if (aggregationEngine.isIncrementalAggregationSupported()) {
+      const incremental = computeGroupByIncrementalAggregation(
+        rowsForAggregation,
+        activeGroupBy,
+        (row, field) => normalizeText(readRowField(row, field)),
+        row => aggregationEngine.createLeafContribution(row),
+        () => aggregationEngine.createEmptyGroupState(),
+        (groupState, previous, next) => aggregationEngine.applyContributionDelta(groupState, previous, next),
+        groupState => aggregationEngine.finalizeGroupState(groupState),
+      )
+      groupByAggregateStateByGroupKey = incremental.statesByGroupKey
+      groupByAggregatesByGroupKey = incremental.aggregatesByGroupKey
+      groupByAggregatePathByRowId = incremental.groupPathByRowId
+      groupByLeafContributionByRowId = incremental.leafContributionByRowId
+      aggregatesByGroupKey = groupByAggregatesByGroupKey
+    } else {
+      resetGroupByIncrementalAggregationState()
+      aggregatesByGroupKey = computeGroupByAggregatesMap(
+        rowsForAggregation,
+        activeGroupBy,
+        (row, field) => normalizeText(readRowField(row, field)),
+        rows => aggregationEngine.computeAggregatesForLeaves(rows),
+      )
+      groupByAggregatesByGroupKey = new Map(aggregatesByGroupKey)
+    }
+
+    runtimeState.aggregatedRowsProjection = patchGroupRowsAggregatesByGroupKey(
+      runtimeState.groupedRowsProjection,
+      groupKey => aggregatesByGroupKey.get(groupKey),
+    )
+    return true
   }
 
   function runVisibleStage(
@@ -1814,6 +2814,7 @@ export function createClientRowModel<T>(
     runFilterStage,
     runSortStage,
     runGroupStage,
+    runAggregateStage,
     runPaginateStage,
     runVisibleStage,
     finalizeProjectionRecompute,
@@ -1919,6 +2920,7 @@ export function createClientRowModel<T>(
       sourceRows = nextSourceRows
       pruneSortCacheRows(sortValueCache, sourceRows)
       runtimeStateStore.bumpRowRevision()
+      resetGroupByIncrementalAggregationState()
       invalidateTreeProjectionCaches()
       projectionOrchestrator.recomputeFromStage("filter")
       emit()
@@ -1948,6 +2950,8 @@ export function createClientRowModel<T>(
       }
       let changed = false
       const changedRowIds: DataGridRowId[] = []
+      const changedUpdatesById = new Map<DataGridRowId, Partial<T>>()
+      const previousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
       sourceRows = sourceRows.map(row => {
         const patch = updatesById.get(row.rowId)
         if (!patch) {
@@ -1959,13 +2963,15 @@ export function createClientRowModel<T>(
         }
         changed = true
         changedRowIds.push(row.rowId)
+        changedUpdatesById.set(row.rowId, patch)
+        previousRowsById.set(row.rowId, row)
         return {
           ...row,
           data: nextData,
           row: nextData,
         }
       })
-      if (!changed) {
+      if (!changed || changedUpdatesById.size === 0) {
         return
       }
       bumpRowVersions(rowVersionById, changedRowIds)
@@ -1973,22 +2979,26 @@ export function createClientRowModel<T>(
       const filterActive = hasActiveFilterModel(filterModel)
       const sortActive = sortModel.length > 0
       const groupActive = Boolean(treeData) || Boolean(groupBy)
-      const allowFilterRecompute = options.recomputeFilter !== false
-      const allowSortRecompute = options.recomputeSort !== false
-      const allowGroupRecompute = options.recomputeGroup !== false
+      const aggregationActive = Boolean(aggregationModel && aggregationModel.columns.length > 0)
+      const allowFilterRecompute = options.recomputeFilter === true
+      const allowSortRecompute = options.recomputeSort === true
+      const allowGroupRecompute = options.recomputeGroup === true
       const filterFields = filterActive ? collectFilterModelFields(filterModel) : new Set<string>()
       const sortFields = sortActive ? collectSortModelFields(sortModel) : new Set<string>()
       const groupFields = groupActive && !treeData ? collectGroupByFields(groupBy) : new Set<string>()
+      const aggregationFields = aggregationActive ? collectAggregationModelFields(aggregationModel) : new Set<string>()
       const treeDataDependencyFields = treeData ? collectTreeDataDependencyFields(treeData) : new Set<string>()
       const changeSet = analyzeRowPatchChangeSet({
-        updatesById,
+        updatesById: changedUpdatesById,
         dependencyGraph: projectionPolicy.dependencyGraph,
         filterActive,
         sortActive,
         groupActive,
+        aggregationActive,
         filterFields,
         sortFields,
         groupFields,
+        aggregationFields,
         treeDataDependencyFields,
         hasTreeData: Boolean(treeData),
       })
@@ -2002,12 +3012,23 @@ export function createClientRowModel<T>(
       if (changeSet.cacheEvictionPlan.invalidateTreeProjectionCaches) {
         invalidateTreeProjectionCaches()
       } else if (changeSet.cacheEvictionPlan.patchTreeProjectionCacheRowsByIdentity) {
-        patchTreeProjectionCacheRowsByIdentity()
+        patchTreeProjectionCacheRowsByIdentity(changedRowIds)
       }
+      const appliedIncrementalAggregation = !allowGroupRecompute
+        && applyIncrementalAggregationPatch(changeSet, previousRowsById)
+      const effectiveChangeSet = appliedIncrementalAggregation
+        ? {
+            ...changeSet,
+            stageImpact: {
+              ...changeSet.stageImpact,
+              affectsAggregation: false,
+            },
+          }
+        : changeSet
       const staleStagesBeforeRequest = new Set<DataGridClientProjectionStage>(projectionOrchestrator.getStaleStages())
       const allStages: readonly DataGridClientProjectionStage[] = DATAGRID_CLIENT_ALL_PROJECTION_STAGES
       const projectionExecutionPlan = buildPatchProjectionExecutionPlan({
-        changeSet,
+        changeSet: effectiveChangeSet,
         recomputePolicy: {
           filter: allowFilterRecompute,
           sort: allowSortRecompute,
@@ -2129,6 +3150,24 @@ export function createClientRowModel<T>(
       projectionOrchestrator.recomputeFromStage("group")
       emit()
     },
+    setAggregationModel(nextAggregationModel: DataGridAggregationModel<T> | null) {
+      ensureActive()
+      const normalized = cloneAggregationModel(nextAggregationModel ?? null)
+      if (isSameAggregationModel(aggregationModel, normalized)) {
+        return
+      }
+      aggregationModel = normalized
+      if (treeData) {
+        invalidateTreeProjectionCaches()
+        projectionOrchestrator.recomputeFromStage("group")
+      } else {
+        projectionOrchestrator.recomputeFromStage("aggregate")
+      }
+      emit()
+    },
+    getAggregationModel() {
+      return cloneAggregationModel(aggregationModel)
+    },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
       ensureActive()
       if (!applyGroupExpansion(expansion)) {
@@ -2235,8 +3274,11 @@ export function createClientRowModel<T>(
       runtimeState.filteredRowsProjection = []
       runtimeState.sortedRowsProjection = []
       runtimeState.groupedRowsProjection = []
+      runtimeState.aggregatedRowsProjection = []
       runtimeState.paginatedRowsProjection = []
       rowVersionById.clear()
+      resetGroupByIncrementalAggregationState()
+      groupedProjectionGroupIndexByRowId.clear()
       sortValueCache.clear()
       groupValueCache.clear()
       invalidateTreeProjectionCaches()

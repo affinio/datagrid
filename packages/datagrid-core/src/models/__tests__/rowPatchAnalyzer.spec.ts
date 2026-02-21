@@ -3,10 +3,23 @@ import { createDataGridDependencyGraph } from "../dependencyGraph"
 import {
   analyzeRowPatchChangeSet,
   buildPatchProjectionExecutionPlan,
+  collectAggregationModelFields,
   type DataGridPatchStageRule,
 } from "../rowPatchAnalyzer"
 
 describe("rowPatchAnalyzer change-set", () => {
+  it("collects aggregation dependency fields from field/key descriptors", () => {
+    const fields = collectAggregationModelFields({
+      basis: "filtered",
+      columns: [
+        { key: "score", op: "sum" },
+        { key: "label", field: "meta.label", op: "count" },
+      ],
+    })
+
+    expect(Array.from(fields.values())).toEqual(["score", "meta.label"])
+  })
+
   it("derives sort impact and row-scoped sort cache eviction for specific sort fields", () => {
     const dependencyGraph = createDataGridDependencyGraph()
     const updatesById = new Map([
@@ -20,14 +33,17 @@ describe("rowPatchAnalyzer change-set", () => {
       filterActive: false,
       sortActive: true,
       groupActive: false,
+      aggregationActive: true,
       filterFields: new Set<string>(),
       sortFields: new Set<string>(["tested_at"]),
       groupFields: new Set<string>(),
+      aggregationFields: new Set<string>(["tested_at"]),
       treeDataDependencyFields: new Set<string>(),
       hasTreeData: false,
     })
 
     expect(changeSet.stageImpact.affectsSort).toBe(true)
+    expect(changeSet.stageImpact.affectsAggregation).toBe(true)
     expect(changeSet.cacheEvictionPlan.clearSortValueCache).toBe(false)
     expect(changeSet.cacheEvictionPlan.evictSortValueRowIds).toEqual(["r1", "r2"])
     expect(changeSet.cacheEvictionPlan.invalidateTreeProjectionCaches).toBe(false)
@@ -45,9 +61,11 @@ describe("rowPatchAnalyzer change-set", () => {
       filterActive: false,
       sortActive: false,
       groupActive: true,
+      aggregationActive: false,
       filterFields: new Set<string>(),
       sortFields: new Set<string>(),
       groupFields: new Set<string>(),
+      aggregationFields: new Set<string>(),
       treeDataDependencyFields: new Set<string>(["parentId"]),
       hasTreeData: true,
     })
@@ -59,11 +77,12 @@ describe("rowPatchAnalyzer change-set", () => {
 })
 
 describe("rowPatchAnalyzer projection plan", () => {
-  type Stage = "filter" | "sort" | "group" | "paginate" | "visible"
+  type Stage = "filter" | "sort" | "group" | "aggregate" | "paginate" | "visible"
   const stageDependents: Readonly<Record<Stage, readonly Stage[]>> = {
-    filter: ["sort", "group", "paginate", "visible"],
-    sort: ["group", "paginate", "visible"],
-    group: ["paginate", "visible"],
+    filter: ["sort", "group", "aggregate", "paginate", "visible"],
+    sort: ["group", "aggregate", "paginate", "visible"],
+    group: ["aggregate", "paginate", "visible"],
+    aggregate: ["paginate", "visible"],
     paginate: ["visible"],
     visible: [],
   }
@@ -94,9 +113,11 @@ describe("rowPatchAnalyzer projection plan", () => {
           filterActive: false,
           sortActive: true,
           groupActive: false,
+          aggregationActive: true,
           affectsFilter: false,
           affectsSort: true,
           affectsGroup: false,
+          affectsAggregation: true,
         },
         cacheEvictionPlan: {
           clearSortValueCache: false,
@@ -111,12 +132,12 @@ describe("rowPatchAnalyzer projection plan", () => {
         group: true,
       },
       staleStages: new Set(),
-      allStages: ["filter", "sort", "group", "paginate", "visible"],
+      allStages: ["filter", "sort", "group", "aggregate", "paginate", "visible"],
       expandStages,
     })
 
-    expect(plan.requestedStages).toEqual(["sort"])
-    expect(plan.blockedStages).toEqual(["filter", "sort", "group", "paginate", "visible"])
+    expect(plan.requestedStages).toEqual(["sort", "aggregate"])
+    expect(plan.blockedStages).toEqual(["filter", "sort", "group"])
   })
 
   it("unblocks full dependent chain when filter recompute is allowed", () => {
@@ -129,9 +150,11 @@ describe("rowPatchAnalyzer projection plan", () => {
           filterActive: true,
           sortActive: true,
           groupActive: true,
+          aggregationActive: true,
           affectsFilter: true,
           affectsSort: false,
           affectsGroup: false,
+          affectsAggregation: false,
         },
         cacheEvictionPlan: {
           clearSortValueCache: false,
@@ -146,7 +169,7 @@ describe("rowPatchAnalyzer projection plan", () => {
         group: true,
       },
       staleStages: new Set(),
-      allStages: ["filter", "sort", "group", "paginate", "visible"],
+      allStages: ["filter", "sort", "group", "aggregate", "paginate", "visible"],
       expandStages,
     })
 
@@ -176,9 +199,11 @@ describe("rowPatchAnalyzer projection plan", () => {
           filterActive: false,
           sortActive: true,
           groupActive: true,
+          aggregationActive: false,
           affectsFilter: false,
           affectsSort: false,
           affectsGroup: false,
+          affectsAggregation: false,
         },
         cacheEvictionPlan: {
           clearSortValueCache: false,
@@ -193,7 +218,7 @@ describe("rowPatchAnalyzer projection plan", () => {
         group: true,
       },
       staleStages: new Set(),
-      allStages: ["filter", "sort", "group", "paginate", "visible"],
+      allStages: ["filter", "sort", "group", "aggregate", "paginate", "visible"],
       expandStages,
       stageRules: customRules,
     })

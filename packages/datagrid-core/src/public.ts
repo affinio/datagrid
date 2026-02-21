@@ -74,6 +74,7 @@ export {
   type DataGridCellsRefreshBatch,
   type DataGridCellsRefreshListener,
   type DataGridRefreshOptions,
+  type DataGridApplyEditsOptions,
   type DataGridSelectionSummaryApiOptions,
 } from "./core/gridApi.js"
 
@@ -109,6 +110,9 @@ export {
   type DataGridPaginationSnapshot,
   type DataGridGroupExpansionSnapshot,
   type DataGridGroupBySpec,
+  type DataGridAggOp,
+  type DataGridAggregationColumnSpec,
+  type DataGridAggregationModel,
   type DataGridTreeDataMode,
   type DataGridTreeDataFilterMode,
   type DataGridTreeDataOrphanPolicy,

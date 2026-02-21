@@ -91,6 +91,31 @@ describe("rowModel normalization", () => {
     })
   })
 
+  it("keeps group aggregates in group meta and clones aggregate payload", () => {
+    const aggregates = { sumLatency: 42, owners: 3 }
+    const row = normalizeRowNode(
+      {
+        kind: "group",
+        row: { label: "service=api" },
+        rowId: "service=api",
+        originalIndex: 8,
+        displayIndex: 8,
+        groupMeta: {
+          groupKey: "service=api",
+          groupField: "service",
+          groupValue: "api",
+          level: 1,
+          childrenCount: 2,
+          aggregates,
+        },
+      },
+      8,
+    )
+
+    expect(row.groupMeta?.aggregates).toEqual({ sumLatency: 42, owners: 3 })
+    expect(row.groupMeta?.aggregates).not.toBe(aggregates)
+  })
+
   it("builds adapter render meta from canonical row kinds without viewport coupling", () => {
     const groupRow = normalizeRowNode(
       {

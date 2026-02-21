@@ -6,7 +6,7 @@ import {
 import type { DataGridProjectionStage } from "./rowModel.js"
 
 export type DataGridClientProjectionStage = DataGridProjectionStage
-export type DataGridClientPatchStage = Extract<DataGridClientProjectionStage, "filter" | "sort" | "group">
+export type DataGridClientPatchStage = Extract<DataGridClientProjectionStage, "filter" | "sort" | "group" | "aggregate">
 
 export const DATAGRID_CLIENT_PROJECTION_REFRESH_ENTRY_STAGE: DataGridClientProjectionStage = "filter"
 
@@ -17,7 +17,8 @@ export const DATAGRID_CLIENT_PROJECTION_STAGE_DEPENDENCIES: Readonly<Record<
   filter: [],
   sort: ["filter"],
   group: ["sort"],
-  paginate: ["group"],
+  aggregate: ["group"],
+  paginate: ["aggregate"],
   visible: ["paginate"],
 }
 
@@ -51,6 +52,7 @@ export const DATAGRID_CLIENT_PATCH_STAGE_IDS: readonly DataGridClientPatchStage[
   "filter",
   "sort",
   "group",
+  "aggregate",
 ]
 
 export function expandClientProjectionStages(

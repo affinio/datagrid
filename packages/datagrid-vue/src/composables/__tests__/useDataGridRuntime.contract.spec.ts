@@ -6,6 +6,7 @@ import { useDataGridRuntime } from "../useDataGridRuntime"
 interface RuntimeRow {
   rowId: string
   name: string
+  tested_at?: number
 }
 
 const COLUMNS = [{ key: "name", label: "Name" }] as const
@@ -18,8 +19,8 @@ async function flushRuntimeTasks() {
 describe("useDataGridRuntime contract", () => {
   it("auto-starts lifecycle, syncs rows and disposes on unmount", async () => {
     const rows = ref<RuntimeRow[]>([
-      { rowId: "r1", name: "Alpha" },
-      { rowId: "r2", name: "Bravo" },
+      { rowId: "r1", name: "Alpha", tested_at: 100 },
+      { rowId: "r2", name: "Bravo", tested_at: 200 },
     ])
     let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
 
@@ -44,14 +45,19 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime!.virtualWindow.value?.colTotal).toBe(1)
 
     rows.value = [
-      { rowId: "r1", name: "Alpha" },
-      { rowId: "r2", name: "Bravo" },
-      { rowId: "r3", name: "Charlie" },
+      { rowId: "r1", name: "Alpha", tested_at: 100 },
+      { rowId: "r2", name: "Bravo", tested_at: 200 },
+      { rowId: "r3", name: "Charlie", tested_at: 300 },
     ]
     await flushRuntimeTasks()
 
     expect(runtime!.api.getRowCount()).toBe(3)
     expect(runtime!.virtualWindow.value?.rowTotal).toBe(3)
+
+    runtime!.setAggregationModel({ columns: [{ key: "name", op: "count" }] })
+    expect(runtime!.getAggregationModel()).toEqual({
+      columns: [{ key: "name", op: "count" }],
+    })
 
     runtime!.patchRows(
       [{ rowId: "r2", data: { name: "Bravo-updated" } }],
@@ -60,10 +66,27 @@ describe("useDataGridRuntime contract", () => {
     const patched = runtime!.api.getRowsInRange({ start: 0, end: 2 })
     expect((patched[1]?.row as { name?: string })?.name).toBe("Bravo-updated")
 
+    runtime!.api.setSortModel([{ key: "tested_at", direction: "desc" }])
+    expect(runtime!.api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
+
+    expect(runtime!.autoReapply.value).toBe(false)
+    runtime!.applyEdits([{ rowId: "r1", data: { tested_at: 999 } }])
+    expect(runtime!.api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
+
+    runtime!.autoReapply.value = true
+    runtime!.applyEdits([{ rowId: "r2", data: { tested_at: 1 } }])
+    expect(runtime!.api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r3", "r2"])
+
+    runtime!.applyEdits(
+      [{ rowId: "r3", data: { tested_at: 5000 } }],
+      { freezeView: true, reapplyView: true },
+    )
+    expect(runtime!.api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r1", "r2"])
+
     const inRange = runtime!.syncRowsInRange({ start: 1, end: 2 })
     expect(inRange).toHaveLength(2)
-    expect(String(inRange[0]?.rowId)).toBe("r2")
-    expect(String(inRange[1]?.rowId)).toBe("r3")
+    expect(String(inRange[0]?.rowId)).toBe("r1")
+    expect(String(inRange[1]?.rowId)).toBe("r2")
     expect(runtime!.virtualWindow.value?.rowStart).toBe(1)
     expect(runtime!.virtualWindow.value?.rowEnd).toBe(2)
 

@@ -322,6 +322,89 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("computes group aggregates when aggregation model is configured", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, team: "B", score: 5 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      initialAggregationModel: {
+        columns: [
+          { key: "score", op: "sum" },
+          { key: "id", op: "count" },
+        ],
+      },
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    const groups = rows.filter(row => row.kind === "group")
+    expect(groups).toHaveLength(2)
+    expect(groups[0]?.groupMeta?.aggregates).toEqual({
+      score: 30,
+      id: 2,
+    })
+    expect(groups[1]?.groupMeta?.aggregates).toEqual({
+      score: 5,
+      id: 1,
+    })
+
+    model.dispose()
+  })
+
+  it("patches grouped identity without aggregate recompute when stage stays in refresh-only pass", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10, label: "one" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 20, label: "two" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      initialAggregationModel: {
+        columns: [{ key: "score", op: "sum" }],
+      },
+    })
+
+    const before = model.getRowsInRange({ start: 0, end: 10 })
+    const beforeGroup = before.find(row => row.kind === "group")
+    expect(beforeGroup?.groupMeta?.aggregates).toEqual({ score: 30 })
+
+    model.patchRows([{ rowId: "r1", data: { label: "one-updated" } }])
+
+    const after = model.getRowsInRange({ start: 0, end: 10 })
+    const afterGroup = after.find(row => row.kind === "group")
+    const leaf = after.find(row => String(row.rowId) === "r1")
+    expect((leaf?.row as { label?: string })?.label).toBe("one-updated")
+    expect(afterGroup?.groupMeta?.aggregates).toEqual({ score: 30 })
+
+    model.dispose()
+  })
+
+  it("updates aggregates reactively when aggregation model changes at runtime", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+    })
+
+    const before = model.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "group")
+    expect(before?.groupMeta?.aggregates).toBeUndefined()
+
+    model.setAggregationModel({ columns: [{ key: "score", op: "sum" }] })
+    expect(model.getAggregationModel()).toEqual({ columns: [{ key: "score", op: "sum" }] })
+    const afterSet = model.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "group")
+    expect(afterSet?.groupMeta?.aggregates).toEqual({ score: 30 })
+
+    model.setAggregationModel(null)
+    expect(model.getAggregationModel()).toBeNull()
+    const afterReset = model.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "group")
+    expect(afterReset?.groupMeta?.aggregates).toBeUndefined()
+
+    model.dispose()
+  })
+
   it("projects treeData path mode deterministically and toggles expansion by group key", () => {
     const model = createClientRowModel({
       rows: [
@@ -351,6 +434,39 @@ describe("createClientRowModel", () => {
     expect(collapsedRows).toHaveLength(1)
     expect(collapsedRows[0]?.kind).toBe("group")
     expect(collapsedRows[0]?.state.expanded).toBe(false)
+
+    model.dispose()
+  })
+
+  it("computes tree path aggregates from matched leaf rows and keeps them on collapse", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", path: ["workspace", "docs"], score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", path: ["workspace", "design"], score: 5 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialTreeData: {
+        mode: "path",
+        getDataPath: row => row.path,
+        expandedByDefault: true,
+      },
+      initialAggregationModel: {
+        columns: [{ key: "score", op: "sum" }],
+      },
+    })
+
+    const expanded = model.getRowsInRange({ start: 0, end: 10 })
+    expect(expanded[0]?.kind).toBe("group")
+    expect(expanded[0]?.groupMeta?.aggregates).toEqual({ score: 15 })
+    expect(expanded[1]?.kind).toBe("group")
+    expect(expanded[1]?.groupMeta?.aggregates).toEqual({ score: 10 })
+    expect(expanded[3]?.kind).toBe("group")
+    expect(expanded[3]?.groupMeta?.aggregates).toEqual({ score: 5 })
+
+    const workspaceGroupKey = String(expanded[0]?.groupMeta?.groupKey ?? "")
+    model.toggleGroup(workspaceGroupKey)
+    const collapsed = model.getRowsInRange({ start: 0, end: 10 })
+    expect(collapsed).toHaveLength(1)
+    expect(collapsed[0]?.groupMeta?.aggregates).toEqual({ score: 15 })
 
     model.dispose()
   })
@@ -422,6 +538,36 @@ describe("createClientRowModel", () => {
       duplicates: 0,
       lastError: null,
     })
+
+    model.dispose()
+  })
+
+  it("computes tree parent aggregates from descendant leaves and keeps them on collapse", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "root", parentId: null, score: 1 }, rowId: "root", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "child-a", parentId: "root", score: 10 }, rowId: "child-a", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "child-b", parentId: "root", score: 5 }, rowId: "child-b", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+      },
+      initialAggregationModel: {
+        columns: [{ key: "score", op: "sum" }],
+      },
+    })
+
+    const expanded = model.getRowsInRange({ start: 0, end: 10 })
+    expect(expanded.map(row => String(row.rowId))).toEqual(["root", "child-a", "child-b"])
+    expect(expanded[0]?.kind).toBe("group")
+    expect(expanded[0]?.groupMeta?.aggregates).toEqual({ score: 15 })
+
+    model.toggleGroup("tree:parent:root")
+    const collapsed = model.getRowsInRange({ start: 0, end: 10 })
+    expect(collapsed).toHaveLength(1)
+    expect(collapsed[0]?.groupMeta?.aggregates).toEqual({ score: 15 })
 
     model.dispose()
   })
@@ -542,6 +688,96 @@ describe("createClientRowModel", () => {
     expect(rows.map(row => row.rowId)).toEqual(["root", "child-1"])
     expect(rows[0]?.kind).toBe("group")
     expect(rows[1]?.kind).toBe("leaf")
+
+    model.dispose()
+  })
+
+  it("uses aggregation basis filtered by default for grouped rows under active filter", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10, status: "active" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 20, status: "inactive" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      initialAggregationModel: { columns: [{ key: "score", op: "sum" }] },
+    })
+
+    model.setFilterModel({
+      columnFilters: { status: ["active"] },
+      advancedFilters: {},
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    const group = rows.find(row => row.kind === "group")
+    expect(group?.groupMeta?.aggregates).toEqual({ score: 10 })
+
+    model.dispose()
+  })
+
+  it("supports aggregation basis source for group and tree projections", () => {
+    const groupedModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10, status: "active" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 20, status: "inactive" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      initialAggregationModel: { basis: "source", columns: [{ key: "score", op: "sum" }] },
+    })
+    groupedModel.setFilterModel({
+      columnFilters: { status: ["active"] },
+      advancedFilters: {},
+    })
+    const groupedRows = groupedModel.getRowsInRange({ start: 0, end: 10 })
+    const groupedRoot = groupedRows.find(row => row.kind === "group")
+    expect(groupedRoot?.groupMeta?.aggregates).toEqual({ score: 30 })
+    groupedModel.dispose()
+
+    const treeModel = createClientRowModel({
+      rows: [
+        { row: { id: "root", parentId: null, score: 0, status: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "child-a", parentId: "root", score: 10, status: "active" }, rowId: "child-a", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "child-b", parentId: "root", score: 20, status: "inactive" }, rowId: "child-b", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+      },
+      initialAggregationModel: { basis: "source", columns: [{ key: "score", op: "sum" }] },
+    })
+    treeModel.setFilterModel({
+      columnFilters: { status: ["active"] },
+      advancedFilters: {},
+    })
+    const treeRows = treeModel.getRowsInRange({ start: 0, end: 10 })
+    expect(treeRows.map(row => String(row.rowId))).toEqual(["root", "child-a"])
+    expect(treeRows[0]?.groupMeta?.aggregates).toEqual({ score: 30 })
+    treeModel.dispose()
+  })
+
+  it("uses aggregation basis filtered by default for tree projections under active filter", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "root", parentId: null, score: 0, status: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "child-a", parentId: "root", score: 10, status: "active" }, rowId: "child-a", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "child-b", parentId: "root", score: 20, status: "inactive" }, rowId: "child-b", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+      },
+      initialAggregationModel: { columns: [{ key: "score", op: "sum" }] },
+    })
+
+    model.setFilterModel({
+      columnFilters: { status: ["active"] },
+      advancedFilters: {},
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rows.map(row => String(row.rowId))).toEqual(["root", "child-a"])
+    expect(rows[0]?.groupMeta?.aggregates).toEqual({ score: 10 })
 
     model.dispose()
   })
@@ -825,7 +1061,7 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
-  it("keeps current row order when patchRows updates sort key with recomputeSort=false", () => {
+  it("keeps current row order when patchRows updates sort key by default (freeze mode)", () => {
     const model = createClientRowModel({
       rows: [
         { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
@@ -838,10 +1074,7 @@ describe("createClientRowModel", () => {
     const before = model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))
     expect(before).toEqual(["r3", "r2", "r1"])
 
-    model.patchRows(
-      [{ rowId: "r1", data: { tested_at: 999 } }],
-      { recomputeSort: false },
-    )
+    model.patchRows([{ rowId: "r1", data: { tested_at: 999 } }])
 
     const after = model.getRowsInRange({ start: 0, end: 10 })
     expect(after.map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
@@ -962,7 +1195,10 @@ describe("createClientRowModel", () => {
     model.setSortModel([{ key: "score", direction: "asc", dependencyFields: ["label"] }])
     expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r1"])
 
-    model.patchRows([{ rowId: "r1", data: { label: "a" } }])
+    model.patchRows(
+      [{ rowId: "r1", data: { label: "a" } }],
+      { recomputeSort: true },
+    )
     expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
 
     model.dispose()
@@ -1003,7 +1239,10 @@ describe("createClientRowModel", () => {
     model.setSortModel([{ key: "score", direction: "asc" }])
     expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
 
-    model.patchRows([{ rowId: "r1", data: { rawScore: 30 } }])
+    model.patchRows(
+      [{ rowId: "r1", data: { rawScore: 30 } }],
+      { recomputeSort: true },
+    )
     expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r1"])
 
     model.dispose()
@@ -1033,7 +1272,7 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
-  it("respects recomputeFilter in patchRows for filtered projection membership", () => {
+  it("keeps filter membership frozen by default and applies it with recomputeFilter=true", () => {
     const model = createClientRowModel({
       rows: [
         { row: { id: 1, status: "active" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
@@ -1047,10 +1286,7 @@ describe("createClientRowModel", () => {
     })
     expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1"])
 
-    model.patchRows(
-      [{ rowId: "r2", data: { status: "active" } }],
-      { recomputeFilter: false },
-    )
+    model.patchRows([{ rowId: "r2", data: { status: "active" } }])
     expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1"])
 
     model.patchRows(
@@ -1058,6 +1294,127 @@ describe("createClientRowModel", () => {
       { recomputeFilter: true },
     )
     expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r2"])
+
+    model.dispose()
+  })
+
+  it("recomputes aggregate stage only when patch touches aggregation fields", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10, label: "one" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 20, label: "two" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      initialAggregationModel: { columns: [{ key: "score", op: "sum" }] },
+    })
+
+    const before = model.getSnapshot().projection
+    const baselineGroup = model.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "group")
+    expect(baselineGroup?.groupMeta?.aggregates).toEqual({ score: 30 })
+
+    model.patchRows([{ rowId: "r1", data: { label: "one-updated" } }])
+    const afterUnrelated = model.getSnapshot().projection
+    const unchangedGroup = model.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "group")
+    expect(unchangedGroup?.groupMeta?.aggregates).toEqual({ score: 30 })
+    expect(afterUnrelated?.recomputeVersion).toBe(before?.recomputeVersion)
+
+    model.patchRows(
+      [{ rowId: "r1", data: { score: 50 } }],
+      { recomputeGroup: true },
+    )
+    const afterScore = model.getSnapshot().projection
+    const updatedGroup = model.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "group")
+    expect(updatedGroup?.groupMeta?.aggregates).toEqual({ score: 70 })
+    expect(afterScore?.recomputeVersion).toBeGreaterThan(afterUnrelated?.recomputeVersion ?? 0)
+
+    model.dispose()
+  })
+
+  it("applies incremental aggregate delta for supported ops even when recomputeGroup=false", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      initialAggregationModel: {
+        columns: [
+          { key: "score", op: "sum" },
+          { key: "avgScore", field: "score", op: "avg" },
+          { key: "countRows", field: "score", op: "count" },
+        ],
+      },
+    })
+
+    const before = model.getSnapshot().projection
+    model.patchRows([{ rowId: "r1", data: { score: 100 } }], { recomputeGroup: false })
+    const afterPatch = model.getSnapshot().projection
+    const updatedGroup = model.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "group")
+    expect(afterPatch?.staleStages).not.toContain("aggregate")
+    expect(updatedGroup?.groupMeta?.aggregates).toEqual({
+      score: 120,
+      avgScore: 60,
+      countRows: 2,
+    })
+    expect(afterPatch?.recomputeVersion).toBe(before?.recomputeVersion)
+
+    model.dispose()
+  })
+
+  it("keeps aggregate stage stale for unsupported incremental ops when recomputeGroup=false", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      initialAggregationModel: { columns: [{ key: "score", op: "min" }] },
+    })
+
+    model.patchRows([{ rowId: "r1", data: { score: 100 } }], { recomputeGroup: false })
+    const staleSnapshot = model.getSnapshot().projection
+    const staleGroup = model.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "group")
+    expect(staleSnapshot?.staleStages).toContain("aggregate")
+    expect(staleGroup?.groupMeta?.aggregates).toEqual({ score: 10 })
+
+    model.refresh("manual")
+    const healedSnapshot = model.getSnapshot().projection
+    const healedGroup = model.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "group")
+    expect(healedSnapshot?.staleStages).not.toContain("aggregate")
+    expect(healedGroup?.groupMeta?.aggregates).toEqual({ score: 20 })
+
+    model.dispose()
+  })
+
+  it("applies incremental tree parent aggregation when dependency fields isolate structure", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "root", parentId: null, score: 0 }, rowId: "root", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "child-1", parentId: "root", score: 10 }, rowId: "child-1", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "child-2", parentId: "root", score: 20 }, rowId: "child-2", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        dependencyFields: ["parentId"],
+        expandedByDefault: true,
+      },
+      initialAggregationModel: {
+        columns: [{ key: "score", op: "sum" }],
+      },
+    })
+
+    const before = model.getSnapshot().projection
+    const baseline = model.getRowsInRange({ start: 0, end: 10 })
+    expect(baseline[0]?.groupMeta?.aggregates).toEqual({ score: 30 })
+
+    model.patchRows([{ rowId: "child-1", data: { score: 100 } }], { recomputeGroup: false })
+
+    const afterPatch = model.getSnapshot().projection
+    const rowsAfter = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rowsAfter[0]?.groupMeta?.aggregates).toEqual({ score: 120 })
+    expect(afterPatch?.staleStages).not.toContain("aggregate")
+    expect(afterPatch?.recomputeVersion).toBe(before?.recomputeVersion)
 
     model.dispose()
   })
@@ -1090,7 +1447,7 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
-  it("keeps stale grouping when recomputeGroup=false and restores consistency when recomputeGroup=true", () => {
+  it("keeps stale grouping by default and restores consistency when recomputeGroup=true", () => {
     const model = createClientRowModel({
       rows: [
         { row: { id: 1, team: "A", label: "one" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
@@ -1109,10 +1466,7 @@ describe("createClientRowModel", () => {
       "r3",
     ])
 
-    model.patchRows(
-      [{ rowId: "r1", data: { team: "B" } }],
-      { recomputeGroup: false },
-    )
+    model.patchRows([{ rowId: "r1", data: { team: "B" } }])
     const stale = model.getRowsInRange({ start: 0, end: 10 })
     expect(stale.map(row => String(row.rowId))).toEqual(baseline)
     expect((stale[1]?.row as { team?: string })?.team).toBe("B")

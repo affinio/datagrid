@@ -16,6 +16,7 @@ import {
   type DataGridRowIdResolver,
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
+  type DataGridAggregationModel,
   type DataGridPaginationInput,
   type DataGridRowNode,
   type DataGridRowModel,
@@ -44,6 +45,47 @@ export interface ServerBackedRowModel<T> extends DataGridRowModel<T> {
 }
 
 const DEFAULT_ROW_CACHE_LIMIT = 4096
+
+function cloneAggregationModel<T>(
+  input: DataGridAggregationModel<T> | null | undefined,
+): DataGridAggregationModel<T> | null {
+  if (!input) {
+    return null
+  }
+  return {
+    basis: input.basis,
+    columns: input.columns.map(column => ({ ...column })),
+  }
+}
+
+function isSameAggregationModel<T>(
+  left: DataGridAggregationModel<T> | null,
+  right: DataGridAggregationModel<T> | null,
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  if (left.basis !== right.basis || left.columns.length !== right.columns.length) {
+    return false
+  }
+  for (let index = 0; index < left.columns.length; index += 1) {
+    const leftColumn = left.columns[index]
+    const rightColumn = right.columns[index]
+    if (
+      !leftColumn ||
+      !rightColumn ||
+      leftColumn.key !== rightColumn.key ||
+      leftColumn.field !== rightColumn.field ||
+      leftColumn.op !== rightColumn.op
+    ) {
+      return false
+    }
+  }
+  return true
+}
 
 interface InFlightViewportWarmup {
   start: number
@@ -86,6 +128,7 @@ export function createServerBackedRowModel<T>(
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
   let filterModel: DataGridFilterSnapshot | null = cloneDataGridFilterSnapshot(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
+  let aggregationModel: DataGridAggregationModel<T> | null = null
   let expansionExpandedByDefault = Boolean(groupBy?.expandedByDefault)
   let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
   const toggledGroupKeys = new Set<string>()
@@ -705,6 +748,19 @@ export function createServerBackedRowModel<T>(
       toggledGroupKeys.clear()
       invalidateCaches()
       emit()
+    },
+    setAggregationModel(nextAggregationModel) {
+      ensureActive()
+      const normalized = cloneAggregationModel(nextAggregationModel ?? null)
+      if (isSameAggregationModel(aggregationModel, normalized)) {
+        return
+      }
+      aggregationModel = normalized
+      invalidateCaches()
+      emit()
+    },
+    getAggregationModel() {
+      return cloneAggregationModel(aggregationModel)
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
       ensureActive()

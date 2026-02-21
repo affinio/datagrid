@@ -10,6 +10,7 @@ describe("clientRowRuntimeStateStore", () => {
     expect(store.state.filteredRowsProjection).toEqual([])
     expect(store.state.sortedRowsProjection).toEqual([])
     expect(store.state.groupedRowsProjection).toEqual([])
+    expect(store.state.aggregatedRowsProjection).toEqual([])
     expect(store.state.paginatedRowsProjection).toEqual([])
     expect(store.state.rowRevision).toBe(0)
     expect(store.state.sortRevision).toBe(0)

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { createDataGridColumnModel, createClientRowModel } from "../../models"
+import type { DataGridRowModel } from "../../models"
 import type { DataGridSelectionSnapshot } from "../../selection/snapshot"
 import { createDataGridTransactionService } from "../transactionService"
 import { createDataGridApi as createDataGridApiFromPublic } from "../../public"
@@ -53,6 +54,7 @@ describe("data grid api facade contracts", () => {
     api.setSortModel([{ key: "id", direction: "asc" }])
     api.setFilterModel({ columnFilters: { name: ["alpha"] }, advancedFilters: {} })
     api.setGroupBy({ fields: ["name"], expandedByDefault: true })
+    api.setAggregationModel({ columns: [{ key: "id", op: "count" }] })
     api.setGroupExpansion({ expandedByDefault: true, toggledGroupKeys: [] })
     api.collapseGroup("name=alpha")
     api.setPageSize(1)
@@ -75,6 +77,9 @@ describe("data grid api facade contracts", () => {
     expect(rowSnapshot.groupBy).toEqual({
       fields: ["name"],
       expandedByDefault: true,
+    })
+    expect(api.getAggregationModel()).toEqual({
+      columns: [{ key: "id", op: "count" }],
     })
     expect(rowSnapshot.groupExpansion).toEqual({
       expandedByDefault: true,
@@ -135,6 +140,81 @@ describe("data grid api facade contracts", () => {
       expandedByDefault: false,
       toggledGroupKeys: [],
     })
+  })
+
+  it("exposes patchRows/applyEdits/reapplyView with Excel-like defaults and optional auto-reapply", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, tested_at: 300 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "tested_at", label: "Tested At" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.hasPatchSupport()).toBe(true)
+    expect(api.getAutoReapply()).toBe(false)
+
+    api.setSortModel([{ key: "tested_at", direction: "desc" }])
+    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
+
+    // applyEdits defaults to frozen view semantics (no live re-sort/filter/group)
+    api.applyEdits([{ rowId: "r1", data: { tested_at: 999 } }])
+    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
+    expect((api.getRow(2)?.row as { tested_at?: number })?.tested_at).toBe(999)
+
+    api.setAutoReapply(true)
+    expect(api.getAutoReapply()).toBe(true)
+    api.applyEdits([{ rowId: "r2", data: { tested_at: 1 } }])
+    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r3", "r2"])
+
+    api.patchRows([{ rowId: "r3", data: { tested_at: 2000 } }], { recomputeSort: true })
+    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r1", "r2"])
+
+    api.patchRows([{ rowId: "r2", data: { tested_at: 5000 } }], { recomputeSort: false })
+    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r1", "r2"])
+
+    api.reapplyView()
+    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r3", "r1"])
+  })
+
+  it("reports missing patch capability for non-client row models and fails loudly", () => {
+    const clientRowModel = createClientRowModel({
+      rows: [{ row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 }],
+    })
+    const { patchRows: _omitPatch, ...rowModelWithoutPatch } = clientRowModel
+    const rowModel = rowModelWithoutPatch as unknown as DataGridRowModel<{ id: number; tested_at: number }>
+    const refreshSpy = vi.spyOn(rowModel, "refresh")
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "tested_at", label: "Tested At" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.hasPatchSupport()).toBe(false)
+    expect(() => {
+      api.patchRows([{ rowId: "r1", data: { tested_at: 200 } }])
+    }).toThrow(/patchRows capability/i)
+    expect(() => {
+      api.applyEdits([{ rowId: "r1", data: { tested_at: 200 } }])
+    }).toThrow(/patchRows capability/i)
+
+    api.reapplyView()
+    expect(refreshSpy).toHaveBeenCalledWith("reapply")
   })
 
   it("batches cell refresh for large row-key sets without triggering full row-model refresh", async () => {

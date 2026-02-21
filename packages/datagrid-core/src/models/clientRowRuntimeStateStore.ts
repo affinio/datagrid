@@ -9,6 +9,7 @@ export interface DataGridClientRowRuntimeState<T> {
   filteredRowsProjection: DataGridRowNode<T>[]
   sortedRowsProjection: DataGridRowNode<T>[]
   groupedRowsProjection: DataGridRowNode<T>[]
+  aggregatedRowsProjection: DataGridRowNode<T>[]
   paginatedRowsProjection: DataGridRowNode<T>[]
   revision: number
   rowRevision: number
@@ -37,6 +38,7 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
     filteredRowsProjection: [],
     sortedRowsProjection: [],
     groupedRowsProjection: [],
+    aggregatedRowsProjection: [],
     paginatedRowsProjection: [],
     revision: 0,
     rowRevision: 0,

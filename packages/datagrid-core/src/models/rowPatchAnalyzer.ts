@@ -1,5 +1,6 @@
 import type {
   DataGridAdvancedFilterExpression,
+  DataGridAggregationModel,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridRowId,
@@ -104,6 +105,27 @@ export function collectGroupByFields(groupBy: DataGridGroupBySpec | null): Set<s
   return fields
 }
 
+export function collectAggregationModelFields<T>(
+  aggregationModel: DataGridAggregationModel<T> | null,
+): Set<string> {
+  const fields = new Set<string>()
+  if (!aggregationModel) {
+    return fields
+  }
+  for (const column of aggregationModel.columns ?? []) {
+    const directField = (column.field ?? "").trim()
+    if (directField.length > 0) {
+      fields.add(directField)
+      continue
+    }
+    const keyField = (column.key ?? "").trim()
+    if (keyField.length > 0) {
+      fields.add(keyField)
+    }
+  }
+  return fields
+}
+
 export function collectTreeDataDependencyFields<T>(
   treeData: DataGridTreeDataResolvedSpec<T> | null,
 ): Set<string> {
@@ -160,9 +182,11 @@ export interface DataGridPatchStageImpact {
   filterActive: boolean
   sortActive: boolean
   groupActive: boolean
+  aggregationActive: boolean
   affectsFilter: boolean
   affectsSort: boolean
   affectsGroup: boolean
+  affectsAggregation: boolean
 }
 
 export interface DataGridPatchCacheEvictionPlan {
@@ -186,9 +210,11 @@ export interface AnalyzeRowPatchChangeSetInput<T> {
   filterActive: boolean
   sortActive: boolean
   groupActive: boolean
+  aggregationActive: boolean
   filterFields: ReadonlySet<string>
   sortFields: ReadonlySet<string>
   groupFields: ReadonlySet<string>
+  aggregationFields: ReadonlySet<string>
   treeDataDependencyFields: ReadonlySet<string>
   hasTreeData: boolean
 }
@@ -223,6 +249,11 @@ export function analyzeRowPatchChangeSet<T>(
             : input.dependencyGraph.affectsAny(affectedFields, input.groupFields)
       )
   )
+  const affectsAggregation = input.aggregationActive && (
+    input.aggregationFields.size === 0
+      ? true
+      : input.dependencyGraph.affectsAny(affectedFields, input.aggregationFields)
+  )
 
   const clearSortValueCache = input.sortActive && affectsSort && input.sortFields.size === 0
   const evictSortValueRowIds = input.sortActive && affectsSort && input.sortFields.size > 0
@@ -239,9 +270,11 @@ export function analyzeRowPatchChangeSet<T>(
       filterActive: input.filterActive,
       sortActive: input.sortActive,
       groupActive: input.groupActive,
+      aggregationActive: input.aggregationActive,
       affectsFilter,
       affectsSort,
       affectsGroup,
+      affectsAggregation,
     },
     cacheEvictionPlan: {
       clearSortValueCache,
@@ -294,6 +327,10 @@ const DATAGRID_PATCH_STAGE_RULE_MAP: DataGridPatchStageRuleMap = {
   },
   group: {
     invalidate: (changeSet: DataGridPatchChangeSet) => changeSet.stageImpact.affectsGroup,
+    allowRecompute: (policy: DataGridPatchRecomputePolicy) => policy.group,
+  },
+  aggregate: {
+    invalidate: (changeSet: DataGridPatchChangeSet) => changeSet.stageImpact.affectsAggregation,
     allowRecompute: (policy: DataGridPatchRecomputePolicy) => policy.group,
   },
 }

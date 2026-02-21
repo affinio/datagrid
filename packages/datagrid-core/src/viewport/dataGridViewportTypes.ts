@@ -140,11 +140,11 @@ export interface DataGridViewportRuntimeOverrides {
   resolveHorizontalSizing?: (input: HorizontalSizingInput) => HorizontalSizingResolution
 }
 
-export interface DataGridViewportControllerOptions {
+export interface DataGridViewportControllerOptions<TRow = unknown> {
   resolvePinMode: (column: DataGridColumn) => ColumnPinMode
   getColumnKey?: (column: DataGridColumn) => string
   resolveColumnWidth?: (column: DataGridColumn, zoom: number) => number
-  rowModel?: DataGridRowModel<unknown> | null
+  rowModel?: DataGridRowModel<TRow> | null
   columnModel?: DataGridColumnModel | null
   createSignal?: CreateWritableSignal<unknown>
   supportsCssZoom?: boolean

@@ -43,7 +43,7 @@ export function createDataGridRuntime<TRow = unknown>(
   const services: Partial<DataGridCoreServiceRegistry> = {
     rowModel: {
       name: "rowModel",
-      model: rowModel,
+      model: rowModel as DataGridRowModel<unknown>,
     },
     columnModel: {
       name: "columnModel",

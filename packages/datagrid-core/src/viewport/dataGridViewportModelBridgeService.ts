@@ -187,10 +187,10 @@ function areGroupExpansionSnapshotsEqual(
   return isSameGroupExpansionSnapshot(left, right)
 }
 
-export interface DataGridViewportModelBridgeServiceOptions {
-  initialRowModel?: DataGridRowModel<unknown> | null
+export interface DataGridViewportModelBridgeServiceOptions<TRow = unknown> {
+  initialRowModel?: DataGridRowModel<TRow> | null
   initialColumnModel?: DataGridColumnModel | null
-  fallbackRowModel: DataGridRowModel<unknown>
+  fallbackRowModel: DataGridRowModel<TRow>
   fallbackColumnModel: DataGridColumnModel
   onInvalidate: (invalidation: DataGridViewportModelBridgeInvalidation) => void
   rowEntryCacheLimit?: number
@@ -208,10 +208,10 @@ export interface DataGridViewportModelBridgeInvalidation {
   rowRange: DataGridViewportRange | null
 }
 
-export interface DataGridViewportModelBridgeService {
-  setRowModel(model: DataGridRowModel<unknown> | null | undefined): void
+export interface DataGridViewportModelBridgeService<TRow = unknown> {
+  setRowModel(model: DataGridRowModel<TRow> | null | undefined): void
   setColumnModel(model: DataGridColumnModel | null | undefined): void
-  getActiveRowModel(): DataGridRowModel<unknown>
+  getActiveRowModel(): DataGridRowModel<TRow>
   getActiveColumnModel(): DataGridColumnModel
   getRowCount(): number
   getRow(index: number): VisibleRow | undefined
@@ -229,20 +229,20 @@ interface ColumnProjectionCacheEntry {
   mapped: DataGridColumn
 }
 
-export function createDataGridViewportModelBridgeService(
-  options: DataGridViewportModelBridgeServiceOptions,
-): DataGridViewportModelBridgeService {
+export function createDataGridViewportModelBridgeService<TRow = unknown>(
+  options: DataGridViewportModelBridgeServiceOptions<TRow>,
+): DataGridViewportModelBridgeService<TRow> {
   const { fallbackRowModel, fallbackColumnModel, onInvalidate } = options
   const rowEntryCacheLimit =
     Number.isFinite(options.rowEntryCacheLimit) && (options.rowEntryCacheLimit as number) > 0
       ? Math.max(1, Math.trunc(options.rowEntryCacheLimit as number))
       : DEFAULT_ROW_ENTRY_CACHE_LIMIT
 
-  let activeRowModel: DataGridRowModel<unknown> = options.initialRowModel ?? fallbackRowModel
+  let activeRowModel: DataGridRowModel<TRow> = options.initialRowModel ?? fallbackRowModel
   let activeColumnModel: DataGridColumnModel = options.initialColumnModel ?? fallbackColumnModel
   let activeRowModelUnsubscribe: (() => void) | null = null
   let activeColumnModelUnsubscribe: (() => void) | null = null
-  let lastRowModelSnapshot: DataGridRowModelSnapshot<unknown> | null = null
+  let lastRowModelSnapshot: DataGridRowModelSnapshot<TRow> | null = null
 
   let rowCountCache = 0
   let rowCountCacheDirty = true
@@ -289,7 +289,7 @@ export function createDataGridViewportModelBridgeService(
     columnModelCacheDirty = true
   }
 
-  const bindRowModel = (model: DataGridRowModel<unknown>) => {
+  const bindRowModel = (model: DataGridRowModel<TRow>) => {
     if (activeRowModel === model && activeRowModelUnsubscribe) {
       markRowModelCacheDirty()
       emitInvalidation("rows", lastRowModelSnapshot?.viewportRange ?? activeRowModel.getSnapshot().viewportRange, "structural")

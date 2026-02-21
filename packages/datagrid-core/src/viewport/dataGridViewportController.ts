@@ -127,10 +127,10 @@ import { createDataGridViewportRowHeightCache } from "./dataGridViewportRowHeigh
 export type { DataGridViewportState, RowPoolItem } from "./dataGridViewportSignals"
 
 
-export interface DataGridViewportController extends DataGridViewportSignals {
+export interface DataGridViewportController<TRow = unknown> extends DataGridViewportSignals {
 	attach(container: HTMLDivElement | null, header: HTMLElement | null): void
 	detach(): void
-	setRowModel(rowModel: DataGridRowModel<unknown> | null | undefined): void
+	setRowModel(rowModel: DataGridRowModel<TRow> | null | undefined): void
 	setColumnModel(columnModel: DataGridColumnModel | null | undefined): void
 	setZoom(zoom: number): void
 	setVirtualizationEnabled(enabled: boolean): void
@@ -169,9 +169,9 @@ interface AutoRowHeightEstimateSyncOptions {
 interface AutoRowHeightIngestOptions extends AutoRowHeightEstimateSyncOptions {}
 
 
-export function createDataGridViewportController(
-	options: DataGridViewportControllerOptions,
-): DataGridViewportController {
+export function createDataGridViewportController<TRow = unknown>(
+	options: DataGridViewportControllerOptions<TRow>,
+): DataGridViewportController<TRow> {
 	const resolveColumnWidth = options.resolveColumnWidth ?? resolveColumnWidthDefault
 	const getColumnKey = options.getColumnKey ?? ((column: DataGridColumn) => column.key)
 
@@ -352,7 +352,7 @@ export function createDataGridViewportController(
 		const columnSnapshot = createEmptyColumnSnapshot<DataGridColumn>()
 		// Cache layout metrics from observers so the heavy path never touches the DOM.
 		const layoutCache: LayoutMeasurementCache = createLayoutMeasurementCache()
-		const fallbackClientRowModel = createClientRowModel<unknown>({ rows: [] })
+		const fallbackClientRowModel = createClientRowModel<TRow>({ rows: [] })
 		const fallbackColumnModel = createDataGridColumnModel({ columns: [] })
 		let container: HTMLDivElement | null = null
 		let header: HTMLElement | null = null
@@ -893,7 +893,7 @@ export function createDataGridViewportController(
 			return modelBridge.getRowsInRange(range)
 		}
 
-		function setRowModelValue(model: DataGridRowModel<unknown> | null | undefined) {
+		function setRowModelValue(model: DataGridRowModel<TRow> | null | undefined) {
 			pendingContentInvalidationRange = null
 			modelBridge.setRowModel(model)
 		}

@@ -4,9 +4,12 @@ import type {
   DataGridColumnModelSnapshot,
   DataGridColumnPin,
   DataGridColumnSnapshot,
+  DataGridClientRowPatch,
+  DataGridClientRowPatchOptions,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
+  DataGridAggregationModel,
   DataGridPaginationInput,
   DataGridPaginationSnapshot,
   DataGridRowId,
@@ -70,6 +73,11 @@ export interface DataGridCellRefreshOptions {
   reason?: string
 }
 
+export interface DataGridApplyEditsOptions {
+  emit?: boolean
+  reapply?: boolean
+}
+
 export interface DataGridCellRefreshRange {
   rowKey: DataGridRowId
   columnKeys: readonly string[]
@@ -109,6 +117,8 @@ export interface DataGridApi<TRow = unknown> {
   setSortModel(sortModel: readonly DataGridSortState[]): void
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
+  setAggregationModel(aggregationModel: DataGridAggregationModel<TRow> | null): void
+  getAggregationModel(): DataGridAggregationModel<TRow> | null
   setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null): void
   toggleGroup(groupKey: string): void
   expandGroup(groupKey: string): void
@@ -116,6 +126,18 @@ export interface DataGridApi<TRow = unknown> {
   expandAllGroups(): void
   collapseAllGroups(): void
   refresh(options?: DataGridRefreshOptions): Promise<void> | void
+  reapplyView(): Promise<void> | void
+  hasPatchSupport(): boolean
+  patchRows(
+    updates: readonly DataGridClientRowPatch<TRow>[],
+    options?: DataGridClientRowPatchOptions,
+  ): void
+  applyEdits(
+    updates: readonly DataGridClientRowPatch<TRow>[],
+    options?: DataGridApplyEditsOptions,
+  ): void
+  setAutoReapply(value: boolean): void
+  getAutoReapply(): boolean
   refreshCellsByRowKeys(
     rowKeys: readonly DataGridRowId[],
     columnKeys: readonly string[],
@@ -351,6 +373,13 @@ type DataGridSelectionCapability = Required<
   Pick<DataGridCoreSelectionService, "getSelectionSnapshot" | "setSelectionSnapshot" | "clearSelection">
 >
 
+type DataGridPatchCapability<TRow = unknown> = {
+  patchRows: (
+    updates: readonly DataGridClientRowPatch<TRow>[],
+    options?: DataGridClientRowPatchOptions,
+  ) => void
+}
+
 type DataGridTransactionCapability = Required<
   Pick<
     DataGridCoreTransactionService,
@@ -498,6 +527,27 @@ function assertTransactionCapability(
   return capability
 }
 
+function resolvePatchCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): DataGridPatchCapability<TRow> | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DataGridPatchCapability<TRow>>
+  if (typeof candidate.patchRows !== "function") {
+    return null
+  }
+  return {
+    patchRows: candidate.patchRows.bind(rowModel),
+  }
+}
+
+function assertPatchCapability<TRow>(
+  capability: DataGridPatchCapability<TRow> | null,
+): DataGridPatchCapability<TRow> {
+  if (!capability) {
+    throw new Error('[DataGridApi] rowModel does not implement patchRows capability.')
+  }
+  return capability
+}
+
 export function createDataGridApi<TRow = unknown>(
   options: CreateDataGridApiOptions<TRow>,
 ): DataGridApi<TRow> {
@@ -517,7 +567,9 @@ export function createDataGridApi<TRow = unknown>(
 
   const resolveCurrentSelectionCapability = () => resolveSelectionCapability(getSelectionService())
   const resolveCurrentTransactionCapability = () => resolveTransactionCapability(getTransactionService())
+  const resolveCurrentPatchCapability = () => resolvePatchCapability(rowModel)
   const deferredScheduler = createDeferredScheduler()
+  let autoReapply = false
 
   const resolveVisibleCellRefreshEntries = (
     pendingRows: readonly PendingRefreshRow[],
@@ -642,6 +694,12 @@ export function createDataGridApi<TRow = unknown>(
     setGroupBy(groupBy: DataGridGroupBySpec | null) {
       rowModel.setGroupBy(groupBy)
     },
+    setAggregationModel(aggregationModel: DataGridAggregationModel<TRow> | null) {
+      rowModel.setAggregationModel(aggregationModel)
+    },
+    getAggregationModel() {
+      return rowModel.getAggregationModel()
+    },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
       rowModel.setGroupExpansion(expansion)
     },
@@ -662,6 +720,40 @@ export function createDataGridApi<TRow = unknown>(
     },
     refresh(options?: DataGridRefreshOptions) {
       return rowModel.refresh(options?.reset ? "reset" : undefined)
+    },
+    reapplyView() {
+      return rowModel.refresh("reapply")
+    },
+    hasPatchSupport() {
+      return resolveCurrentPatchCapability() !== null
+    },
+    patchRows(
+      updates: readonly DataGridClientRowPatch<TRow>[],
+      options?: DataGridClientRowPatchOptions,
+    ) {
+      const capability = assertPatchCapability(resolveCurrentPatchCapability())
+      capability.patchRows(updates, options)
+    },
+    applyEdits(
+      updates: readonly DataGridClientRowPatch<TRow>[],
+      options?: DataGridApplyEditsOptions,
+    ) {
+      const capability = assertPatchCapability(resolveCurrentPatchCapability())
+      const shouldReapply = typeof options?.reapply === "boolean"
+        ? options.reapply
+        : autoReapply
+      capability.patchRows(updates, {
+        recomputeSort: shouldReapply,
+        recomputeFilter: shouldReapply,
+        recomputeGroup: shouldReapply,
+        emit: options?.emit,
+      })
+    },
+    setAutoReapply(value: boolean) {
+      autoReapply = Boolean(value)
+    },
+    getAutoReapply() {
+      return autoReapply
     },
     refreshCellsByRowKeys(
       rowKeys: readonly DataGridRowId[],
