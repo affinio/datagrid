@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-plugins",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Plugin contracts and runtime helpers for the Affino DataGrid",

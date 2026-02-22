@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-laravel",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Laravel-oriented facade for Affino DataGrid (core + orchestration)",
   "type": "module",
   "main": "dist/index.cjs",
