@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
-  "description": "Vue adapter and UI layer for @affino/datagrid-core (bootstrap fork from .tmp/ui-table/vue)",
+  "description": "Vue adapter and UI layer for @affino/datagrid-core",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -48,6 +48,11 @@
     "vue": "^3.3.0",
     "@affino/datagrid-theme": "workspace:^"
   },
+  "peerDependenciesMeta": {
+    "@affino/datagrid-theme": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*",
     "@affino/datagrid-orchestration": "workspace:*"
@@ -57,9 +62,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/affinio/affinio/tree/main/packages/datagrid-vue"
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-vue"
   },
-  "homepage": "https://affino.dev",
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-vue#readme",
   "license": "MIT",
   "keywords": [
     "datagrid",

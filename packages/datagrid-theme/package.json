@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
-  "description": "Theme tokens and presets for the Affino DataGrid",
+  "description": "Theme tokens and presets for Affino DataGrid",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -22,9 +22,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/affinio/affinio/tree/main/packages/datagrid-theme"
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-theme"
   },
-  "homepage": "https://affino.dev",
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-theme#readme",
   "license": "MIT",
   "keywords": [
     "datagrid",

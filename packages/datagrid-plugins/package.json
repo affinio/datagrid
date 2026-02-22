@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
-  "description": "Plugin contracts and runtime helpers for the Affino DataGrid",
+  "description": "Plugin contracts and runtime helpers for Affino DataGrid",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -21,9 +21,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/affinio/affinio/tree/main/packages/datagrid-plugins"
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-plugins"
   },
-  "homepage": "https://affino.dev",
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-plugins#readme",
   "license": "MIT",
   "keywords": [
     "datagrid",

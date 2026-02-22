@@ -1,7 +1,7 @@
 {
   "name": "@affino/datagrid-laravel",
   "version": "0.2.1",
-  "description": "Laravel-oriented facade for Affino DataGrid (core + orchestration)",
+  "description": "Laravel / Livewire adapter facade for Affino DataGrid",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -29,9 +29,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/affinio/affinio/tree/main/packages/datagrid-laravel"
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-laravel"
   },
-  "homepage": "https://affino.dev",
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-laravel#readme",
   "bugs": {
     "url": "https://github.com/affinio/affinio/issues"
   },

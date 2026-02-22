@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
-  "description": "Framework-agnostic orchestration primitives for Affino DataGrid adapters",
+  "description": "Framework-agnostic orchestration layer for @affino/datagrid-core",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -33,9 +33,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/affinio/affinio/tree/main/packages/datagrid-orchestration"
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-orchestration"
   },
-  "homepage": "https://affino.dev",
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-orchestration#readme",
   "license": "MIT",
   "keywords": [
     "datagrid",

@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
-  "description": "Framework-agnostic data grid engine core",
+  "description": "Headless data grid core for Affino UI primitives",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -41,9 +41,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/affinio/affinio/tree/main/packages/datagrid-core"
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-core"
   },
-  "homepage": "https://affino.dev",
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-core#readme",
   "license": "MIT",
   "keywords": [
     "datagrid",
