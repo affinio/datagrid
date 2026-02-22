@@ -12,6 +12,18 @@ import type {
   DataGridOverlayTransform,
   DataGridOverlayTransformInput,
 } from "./types"
+
+// Curated advanced core facade exports for Vue consumers that need lower-level viewport/runtime
+// primitives without importing @affino/datagrid-core/advanced directly.
+export {
+  createDataGridViewportController,
+} from "@affino/datagrid-core/advanced"
+
+export type {
+  DataGridImperativeRowUpdatePayload,
+  DataGridVirtualWindowSnapshot,
+} from "@affino/datagrid-core/advanced"
+
 export {
   useDataGridClipboardValuePolicy,
   type UseDataGridClipboardValuePolicyResult,
@@ -205,6 +217,9 @@ export {
   type UseDataGridColumnLayoutOrchestrationOptions,
   type UseDataGridColumnLayoutOrchestrationResult,
 } from "./composables/useDataGridColumnLayoutOrchestration"
+export {
+  setsEqual,
+} from "@affino/datagrid-orchestration"
 export {
   useDataGridSelectionOverlayOrchestration,
   type DataGridOverlayRange,

@@ -2,6 +2,9 @@
 
 Vue adapter surface for `@affino/datagrid-core`.
 
+For normal Vue usage, install and import only `@affino/datagrid-vue`.
+`@affino/datagrid-core` and `@affino/datagrid-orchestration` are internal dependencies of this adapter.
+
 ## Stable API (`@affino/datagrid-vue`)
 
 - `createDataGridVueRuntime`
@@ -147,6 +150,21 @@ runtime.patchRows(
 
 Use `setRows` for full data replacement; use `patchRows` for interactive/streaming cell updates when you want to avoid immediate projection jumps.
 In no-recompute mode (`recomputeSort/filter/group = false`), row order/filter/group visibility can remain temporarily stale by design until a recompute pass is requested.
+
+For app-level editing flows, prefer the higher-level `applyEdits()` + `reapplyView()` API:
+
+```ts
+const runtime = useDataGridRuntime({ rows, columns })
+
+// default Excel-style behavior: update values, keep current view stable
+runtime.applyEdits([{ rowId: "r-42", data: { tested_at: "2026-02-21T10:15:00Z" } }])
+
+// explicit reapply when the user clicks "Reapply" or leaves edit mode
+runtime.reapplyView()
+
+// optional live-reapply mode
+runtime.autoReapply.value = true
+```
 
 ## Managed wheel scroll (advanced)
 

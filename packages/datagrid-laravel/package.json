@@ -1,0 +1,46 @@
+{
+  "name": "@affino/datagrid-laravel",
+  "version": "0.1.0",
+  "description": "Laravel-oriented facade for Affino DataGrid (core + orchestration)",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup resources/js/index.ts --format esm,cjs --dts --clean"
+  },
+  "dependencies": {
+    "@affino/datagrid-core": "workspace:*",
+    "@affino/datagrid-orchestration": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/affinio/affinio/tree/main/packages/datagrid-laravel"
+  },
+  "homepage": "https://affino.dev",
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "keywords": [
+    "affino",
+    "laravel",
+    "livewire",
+    "datagrid",
+    "adapter",
+    "headless"
+  ]
+}

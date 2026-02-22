@@ -1,6 +1,65 @@
 /**
  * Stable public API for @affino/datagrid-vue.
  */
+
+// Curated core facade exports so Vue consumers can stay on @affino/datagrid-vue
+// for common configuration/state/filter/sort/row-model typing and helper functions.
+export {
+  createClientRowModel,
+  createDataGridColumnModel,
+  createDataGridSelectionSummary,
+  createInMemoryDataGridSettingsAdapter,
+  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
+  cloneDataGridFilterSnapshot,
+  evaluateDataGridAdvancedFilterExpression,
+  normalizeDataGridAdvancedFilterExpression,
+} from "@affino/datagrid-core"
+
+export type {
+  CreateDataGridCoreOptions,
+  DataGridAggregationModel,
+  DataGridAdvancedFilterExpression,
+  DataGridAdvancedFilterCondition,
+  DataGridColumnModel,
+  DataGridColumnDef,
+  DataGridColumnModelSnapshot,
+  DataGridColumnPin,
+  DataGridColumnSnapshot,
+  DataGridColumnStateSnapshot,
+  DataGridClientRowPatch,
+  DataGridClientRowPatchOptions,
+  DataGridClientRowReorderInput,
+  DataGridCoreServiceContext,
+  DataGridEventEnvelope,
+  DataGridEventPhase,
+  DataGridEventSource,
+  DataGridEventTier,
+  DataGridFilterSnapshot,
+  DataGridGroupBySpec,
+  DataGridGroupExpansionSnapshot,
+  DataGridPaginationInput,
+  DataGridPaginationSnapshot,
+  DataGridProjectionDiagnostics,
+  DataGridRowId,
+  DataGridRowModel,
+  DataGridRowNode,
+  DataGridSettingsAdapter,
+  DataGridSelectionAggregationKind,
+  DataGridSelectionSummaryColumnConfig,
+  DataGridSelectionSummarySnapshot,
+  DataGridSortDirection,
+  DataGridSortState,
+  DataGridViewportRange,
+} from "@affino/datagrid-core"
+
+export type {
+  DataGridTransactionSnapshot,
+} from "@affino/datagrid-core/advanced"
+
+export type {
+  DataGridRuntimeOverrides,
+} from "@affino/datagrid-orchestration"
+
 export {
   createDataGridSettingsAdapter,
 } from "./dataGridSettingsAdapter"
