@@ -56,9 +56,60 @@ export type DataGridAdvancedFilterExpression =
   | DataGridAdvancedFilterNot
 
 export interface DataGridFilterSnapshot {
-  columnFilters: Record<string, string[]>
+  columnFilters: Record<string, DataGridColumnFilterSnapshotEntry>
   advancedFilters: Record<string, DataGridAdvancedFilter>
   advancedExpression?: DataGridAdvancedFilterExpression | null
+}
+
+export interface DataGridColumnValueSetFilter {
+  kind: "valueSet"
+  tokens: string[]
+}
+
+export type DataGridColumnPredicateOperator =
+  | "contains"
+  | "startsWith"
+  | "endsWith"
+  | "equals"
+  | "notEquals"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "between"
+  | "isEmpty"
+  | "notEmpty"
+  | "isNull"
+  | "notNull"
+
+export interface DataGridColumnPredicateFilter {
+  kind: "predicate"
+  operator: DataGridColumnPredicateOperator
+  value?: unknown
+  value2?: unknown
+  caseSensitive?: boolean
+}
+
+export type DataGridColumnFilter =
+  | DataGridColumnValueSetFilter
+  | DataGridColumnPredicateFilter
+
+export type DataGridColumnFilterSnapshotEntry = DataGridColumnFilter
+
+export interface DataGridColumnHistogramEntry {
+  token: string
+  value: unknown
+  count: number
+  text?: string
+}
+
+export type DataGridColumnHistogram = readonly DataGridColumnHistogramEntry[]
+
+export interface DataGridColumnHistogramOptions {
+  scope?: "filtered" | "sourceAll"
+  ignoreSelfFilter?: boolean
+  limit?: number
+  orderBy?: "countDesc" | "valueAsc"
 }
 
 export interface DataGridSortAndFilterModelInput {
@@ -285,6 +336,7 @@ export interface DataGridRowModel<T = unknown> {
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
   setAggregationModel(aggregationModel: DataGridAggregationModel<T> | null): void
   getAggregationModel(): DataGridAggregationModel<T> | null
+  getColumnHistogram?(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
   setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null): void
   toggleGroup(groupKey: string): void
   expandGroup(groupKey: string): void

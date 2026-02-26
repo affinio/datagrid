@@ -6,6 +6,7 @@ import {
   type DataGridGroupBySpec,
 } from "../models/rowModel"
 import type {
+  DataGridColumnFilterSnapshotEntry,
   DataGridRowModel,
   DataGridRowModelSnapshot,
   DataGridRowNode,
@@ -113,15 +114,13 @@ function areFilterModelsEqual(
     if (!Object.prototype.hasOwnProperty.call(rightColumnFilters, key)) {
       return false
     }
-    const leftValues = leftColumnFilters[key] ?? []
-    const rightValues = rightColumnFilters[key] ?? []
-    if (leftValues.length !== rightValues.length) {
+    const leftValues = leftColumnFilters[key]
+    const rightValues = rightColumnFilters[key]
+    if (!leftValues || !rightValues) {
       return false
     }
-    for (let index = 0; index < leftValues.length; index += 1) {
-      if (leftValues[index] !== rightValues[index]) {
-        return false
-      }
+    if (!areColumnFilterEntriesEqual(leftValues, rightValues)) {
+      return false
     }
   }
 
@@ -171,6 +170,33 @@ function areFilterModelsEqual(
   }
 
   return true
+}
+
+function areColumnFilterEntriesEqual(
+  left: DataGridColumnFilterSnapshotEntry,
+  right: DataGridColumnFilterSnapshotEntry,
+): boolean {
+  if (left.kind !== right.kind) {
+    return false
+  }
+  if (left.kind === "valueSet" && right.kind === "valueSet") {
+    if (left.tokens.length !== right.tokens.length) {
+      return false
+    }
+    for (let index = 0; index < left.tokens.length; index += 1) {
+      if (left.tokens[index] !== right.tokens[index]) {
+        return false
+      }
+    }
+    return true
+  }
+  if (left.kind === "predicate" && right.kind === "predicate") {
+    return left.operator === right.operator
+      && left.caseSensitive === right.caseSensitive
+      && areFilterValuesEqual(left.value, right.value)
+      && areFilterValuesEqual(left.value2, right.value2)
+  }
+  return false
 }
 
 function areGroupBySpecsEqual(

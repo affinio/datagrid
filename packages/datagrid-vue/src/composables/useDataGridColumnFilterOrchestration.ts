@@ -41,6 +41,7 @@ export interface UseDataGridColumnFilterOrchestrationResult<TRow> {
   onFilterEnumValueChange: (value: string | number) => void
   onFilterValueInput: (value: string | number | Event) => void
   onFilterSecondValueInput: (value: string | number | Event) => void
+  setActiveValueSetTokens: (tokens: readonly string[], options?: { operator?: "in-list" | "not-in-list" }) => void
   doesOperatorNeedSecondValue: (kind: DataGridColumnFilterKind, operator: string) => boolean
   doesFilterDraftHaveRequiredValues: (draft: DataGridColumnFilterDraft) => boolean
   applyActiveColumnFilter: () => void
@@ -96,6 +97,7 @@ export function useDataGridColumnFilterOrchestration<TRow>(
     onFilterEnumValueChange: core.onFilterEnumValueChange,
     onFilterValueInput: core.onFilterValueInput as (value: string | number | Event) => void,
     onFilterSecondValueInput: core.onFilterSecondValueInput as (value: string | number | Event) => void,
+    setActiveValueSetTokens: core.setActiveValueSetTokens,
     doesOperatorNeedSecondValue: core.doesOperatorNeedSecondValue,
     doesFilterDraftHaveRequiredValues: core.doesFilterDraftHaveRequiredValues,
     applyActiveColumnFilter: core.applyActiveColumnFilter,

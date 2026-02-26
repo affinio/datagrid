@@ -153,7 +153,7 @@ describe("table viewport model bridge service", () => {
 
     invalidations.length = 0
     rowModel.setFilterModel({
-      columnFilters: { value: ["keep"] },
+      columnFilters: { value: { kind: "valueSet", tokens: ["string:keep"] } },
       advancedFilters: {},
     })
     rowModel.collapseAllGroups()

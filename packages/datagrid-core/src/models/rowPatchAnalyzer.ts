@@ -64,7 +64,12 @@ export function collectFilterModelFields(filterModel: DataGridFilterSnapshot | n
     return fields
   }
   for (const [key, values] of Object.entries(filterModel.columnFilters ?? {})) {
-    if (!Array.isArray(values) || values.length === 0) {
+    const hasValueSet = Array.isArray(values)
+      ? values.length > 0
+      : values.kind === "valueSet"
+        ? values.tokens.length > 0
+        : true
+    if (!hasValueSet) {
       continue
     }
     const normalized = key.trim()

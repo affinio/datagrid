@@ -33,7 +33,7 @@ export interface DataGridCoreEventService extends DataGridCoreService {
   readonly name: "event"
 }
 
-export interface DataGridCoreRowModelService<TRow = unknown> extends DataGridCoreService {
+export interface DataGridCoreRowModelService<TRow = any> extends DataGridCoreService {
   readonly name: "rowModel"
   model?: DataGridRowModel<TRow>
 }
@@ -76,7 +76,7 @@ export interface DataGridCoreViewportService extends DataGridCoreService {
 
 export interface DataGridCoreServiceByName {
   event: DataGridCoreEventService
-  rowModel: DataGridCoreRowModelService
+  rowModel: DataGridCoreRowModelService<any>
   columnModel: DataGridCoreColumnModelService
   edit: DataGridCoreEditService
   transaction: DataGridCoreTransactionService

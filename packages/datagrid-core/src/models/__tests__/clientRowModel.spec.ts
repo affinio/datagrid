@@ -200,7 +200,7 @@ describe("createClientRowModel", () => {
 
     model.setSortModel([{ key: "id", direction: "asc" }])
     model.setFilterModel({
-      columnFilters: { id: ["1"] },
+      columnFilters: { id: { kind: "valueSet", tokens: ["string:1"] } },
       advancedFilters: {},
     })
     model.setGroupBy({ fields: ["id"], expandedByDefault: true })
@@ -208,13 +208,18 @@ describe("createClientRowModel", () => {
     const snapshot = model.getSnapshot()
     const snapshotSort = [...snapshot.sortModel]
     snapshotSort[0] = { key: "id", direction: "desc" }
-    ;(snapshot.filterModel?.columnFilters.id ?? []).push("2")
+    const snapshotIdFilter = snapshot.filterModel?.columnFilters.id
+    if (Array.isArray(snapshotIdFilter)) {
+      snapshotIdFilter.push("2")
+    } else if (snapshotIdFilter?.kind === "valueSet") {
+      snapshotIdFilter.tokens.push("string:2")
+    }
     ;(snapshot.groupBy?.fields ?? []).push("owner")
 
     const nextSnapshot = model.getSnapshot()
     expect(nextSnapshot.sortModel).toEqual([{ key: "id", direction: "asc" }])
     expect(nextSnapshot.filterModel).toEqual({
-      columnFilters: { id: ["1"] },
+      columnFilters: { id: { kind: "valueSet", tokens: ["string:1"] } },
       advancedFilters: {},
     })
     expect(nextSnapshot.groupBy).toEqual({ fields: ["id"], expandedByDefault: true })
@@ -294,7 +299,7 @@ describe("createClientRowModel", () => {
     })
 
     model.setFilterModel({
-      columnFilters: { team: ["A"] },
+      columnFilters: { team: { kind: "valueSet", tokens: ["string:A"] } },
       advancedFilters: {},
     })
     model.setSortModel([{ key: "id", direction: "desc" }])
@@ -327,13 +332,13 @@ describe("createClientRowModel", () => {
       { row: { id: "r1", owner: "noc", score: 20 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
       { row: { id: "r2", owner: "ops", score: 40 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
       { row: { id: "r3", owner: "noc", score: 10 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
-    ] as const
+    ]
 
     const batched = createClientRowModel({ rows })
     const beforeBatched = batched.getSnapshot().projection?.recomputeVersion ?? 0
     batched.setSortAndFilterModel({
       filterModel: {
-        columnFilters: { owner: ["noc"] },
+        columnFilters: { owner: { kind: "valueSet", tokens: ["string:noc"] } },
         advancedFilters: {},
       },
       sortModel: [{ key: "score", direction: "desc" }],
@@ -345,7 +350,7 @@ describe("createClientRowModel", () => {
     const sequential = createClientRowModel({ rows })
     const beforeSequential = sequential.getSnapshot().projection?.recomputeVersion ?? 0
     sequential.setFilterModel({
-      columnFilters: { owner: ["noc"] },
+      columnFilters: { owner: { kind: "valueSet", tokens: ["string:noc"] } },
       advancedFilters: {},
     })
     sequential.setSortModel([{ key: "score", direction: "desc" }])
@@ -354,6 +359,42 @@ describe("createClientRowModel", () => {
 
     batched.dispose()
     sequential.dispose()
+  })
+
+  it("builds per-column histogram from filtered projection and can ignore self filter", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "Alice", team: "A" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, owner: "Bob", team: "A" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, owner: "Alice", team: "B" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+
+    model.setFilterModel({
+      columnFilters: {
+        team: { kind: "valueSet", tokens: ["string:A"] },
+        owner: { kind: "valueSet", tokens: ["string:Alice"] },
+      },
+      advancedFilters: {},
+    })
+
+    expect(model.getColumnHistogram("owner")).toEqual([
+      { token: "string:Alice", value: "Alice", count: 1, text: "Alice" },
+    ])
+    expect(model.getColumnHistogram("owner", { ignoreSelfFilter: true })).toEqual([
+      { token: "string:Alice", value: "Alice", count: 1, text: "Alice" },
+      { token: "string:Bob", value: "Bob", count: 1, text: "Bob" },
+    ])
+    expect(model.getColumnHistogram("team", { ignoreSelfFilter: true })).toEqual([
+      { token: "string:A", value: "A", count: 1, text: "A" },
+      { token: "string:B", value: "B", count: 1, text: "B" },
+    ])
+    expect(model.getColumnHistogram("owner", { scope: "sourceAll" })).toEqual([
+      { token: "string:Alice", value: "Alice", count: 2, text: "Alice" },
+      { token: "string:Bob", value: "Bob", count: 1, text: "Bob" },
+    ])
+
+    model.dispose()
   })
 
   it("computes group aggregates when aggregation model is configured", () => {
@@ -714,7 +755,7 @@ describe("createClientRowModel", () => {
     })
 
     model.setFilterModel({
-      columnFilters: { value: ["keep"] },
+      columnFilters: { value: { kind: "valueSet", tokens: ["string:keep"] } },
       advancedFilters: {},
     })
 
@@ -737,7 +778,7 @@ describe("createClientRowModel", () => {
     })
 
     model.setFilterModel({
-      columnFilters: { status: ["active"] },
+      columnFilters: { status: { kind: "valueSet", tokens: ["string:active"] } },
       advancedFilters: {},
     })
 
@@ -758,7 +799,7 @@ describe("createClientRowModel", () => {
       initialAggregationModel: { basis: "source", columns: [{ key: "score", op: "sum" }] },
     })
     groupedModel.setFilterModel({
-      columnFilters: { status: ["active"] },
+      columnFilters: { status: { kind: "valueSet", tokens: ["string:active"] } },
       advancedFilters: {},
     })
     const groupedRows = groupedModel.getRowsInRange({ start: 0, end: 10 })
@@ -780,7 +821,7 @@ describe("createClientRowModel", () => {
       initialAggregationModel: { basis: "source", columns: [{ key: "score", op: "sum" }] },
     })
     treeModel.setFilterModel({
-      columnFilters: { status: ["active"] },
+      columnFilters: { status: { kind: "valueSet", tokens: ["string:active"] } },
       advancedFilters: {},
     })
     const treeRows = treeModel.getRowsInRange({ start: 0, end: 10 })
@@ -805,7 +846,7 @@ describe("createClientRowModel", () => {
     })
 
     model.setFilterModel({
-      columnFilters: { status: ["active"] },
+      columnFilters: { status: { kind: "valueSet", tokens: ["string:active"] } },
       advancedFilters: {},
     })
 
@@ -831,7 +872,7 @@ describe("createClientRowModel", () => {
     })
 
     model.setFilterModel({
-      columnFilters: { value: ["keep"] },
+      columnFilters: { value: { kind: "valueSet", tokens: ["string:keep"] } },
       advancedFilters: {},
     })
 
@@ -858,7 +899,7 @@ describe("createClientRowModel", () => {
     })
 
     model.setFilterModel({
-      columnFilters: { value: ["root"] },
+      columnFilters: { value: { kind: "valueSet", tokens: ["string:root"] } },
       advancedFilters: {},
     })
 
@@ -931,8 +972,8 @@ describe("createClientRowModel", () => {
 
     model.setFilterModel({
       columnFilters: {
-        " status ": [1 as unknown as string],
-        "flags.active": [true as unknown as string],
+        " status ": { kind: "valueSet", tokens: ["number:1"] },
+        "flags.active": { kind: "valueSet", tokens: ["boolean:true"] },
       },
       advancedFilters: {},
     })
@@ -963,7 +1004,7 @@ describe("createClientRowModel", () => {
 
     model.setFilterModel({
       columnFilters: {
-        "items.0.name": ["alpha"],
+        "items.0.name": { kind: "valueSet", tokens: ["string:alpha"] },
       },
       advancedFilters: {},
     })
@@ -1074,7 +1115,7 @@ describe("createClientRowModel", () => {
     })
 
     model.setFilterModel({
-      columnFilters: { owner: ["noc"] },
+      columnFilters: { owner: { kind: "valueSet", tokens: ["string:noc"] } },
       advancedFilters: {},
     })
     model.setSortModel([{ key: "latency", direction: "desc" }])
@@ -1128,7 +1169,7 @@ describe("createClientRowModel", () => {
     })
 
     model.setFilterModel({
-      columnFilters: { owner: ["noc"] },
+      columnFilters: { owner: { kind: "valueSet", tokens: ["string:noc"] } },
       advancedFilters: {},
     })
     model.setSortModel([{ key: "latency", direction: "desc" }])
@@ -1210,7 +1251,7 @@ describe("createClientRowModel", () => {
     const baseline = model.getDerivedCacheDiagnostics()
 
     model.setFilterModel({
-      columnFilters: { owner: ["noc"] },
+      columnFilters: { owner: { kind: "valueSet", tokens: ["string:noc"] } },
       advancedFilters: {},
     })
     const afterFirstFilter = model.getDerivedCacheDiagnostics()
@@ -1222,7 +1263,7 @@ describe("createClientRowModel", () => {
     expect(afterGroup.filterPredicateHits).toBe(afterFirstFilter.filterPredicateHits)
 
     model.setFilterModel({
-      columnFilters: { owner: ["ops"] },
+      columnFilters: { owner: { kind: "valueSet", tokens: ["string:ops"] } },
       advancedFilters: {},
     })
     const afterSecondFilter = model.getDerivedCacheDiagnostics()
@@ -1452,7 +1493,7 @@ describe("createClientRowModel", () => {
     })
 
     model.setFilterModel({
-      columnFilters: { status: ["active"] },
+      columnFilters: { status: { kind: "valueSet", tokens: ["string:active"] } },
       advancedFilters: {},
     })
     expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1"])
@@ -1601,7 +1642,7 @@ describe("createClientRowModel", () => {
 
     model.setSortModel([{ key: "tested_at", direction: "desc" }])
     model.setFilterModel({
-      columnFilters: { status: ["active"] },
+      columnFilters: { status: { kind: "valueSet", tokens: ["string:active"] } },
       advancedFilters: {},
     })
     expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r3", "r2"])

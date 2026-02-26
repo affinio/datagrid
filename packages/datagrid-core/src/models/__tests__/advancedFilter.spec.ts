@@ -117,7 +117,7 @@ describe("advanced filter expression", () => {
   it("clones filter snapshot without leaking mutable references", () => {
     const source: DataGridFilterSnapshot = {
       columnFilters: {
-        owner: ["noc"],
+        owner: { kind: "valueSet", tokens: ["string:noc"] },
       },
       advancedFilters: {
         latencyMs: {
@@ -147,10 +147,10 @@ describe("advanced filter expression", () => {
       return
     }
 
-    cloned.columnFilters.owner.push("ops")
+    cloned.columnFilters.owner = { kind: "valueSet", tokens: ["string:ops"] }
     cloned.advancedFilters.latencyMs.clauses[0]!.operator = "gt"
 
-    expect(source.columnFilters.owner).toEqual(["noc"])
+    expect(source.columnFilters.owner).toEqual({ kind: "valueSet", tokens: ["string:noc"] })
     expect(source.advancedFilters.latencyMs.clauses[0]!.operator).toBe("between")
   })
 

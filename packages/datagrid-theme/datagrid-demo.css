@@ -521,8 +521,9 @@
 }
 
 .datagrid-column-filter--menu {
-  --ui-menu-bg: var(--datagrid-controls-surface-bg);
-  --ui-menu-border: var(--datagrid-glass-border);
+  z-index: 2100;
+  --ui-menu-bg: color-mix(in srgb, var(--datagrid-controls-surface-bg) 94%, #0b0d16 6%);
+  --ui-menu-border: color-mix(in srgb, var(--datagrid-glass-border) 74%, var(--datagrid-accent-strong) 26%);
   --ui-menu-text: var(--datagrid-text-primary);
   --ui-menu-muted: var(--datagrid-text-soft);
   --ui-menu-hover-bg: var(--datagrid-chip-bg);
@@ -535,12 +536,18 @@
   flex: initial;
   width: min(332px, calc(100vw - 0.8rem));
   max-height: min(68vh, 480px);
-  border: none;
-  background: transparent;
+  border: 1px solid var(--ui-menu-border);
+  background: var(--ui-menu-bg);
   padding: 0.38rem;
   overflow: auto;
   align-content: start;
   gap: 0.42rem;
+  box-shadow: var(--ui-menu-shadow, 0 26px 70px rgba(2, 6, 23, 0.75));
+  backdrop-filter: blur(10px);
+}
+
+.datagrid-column-filter--menu.ui-menu-content {
+  z-index: 2101;
 }
 
 .datagrid-column-filter__header {
@@ -691,6 +698,18 @@
 
 .datagrid-column-filter__set-search input {
   width: 100%;
+}
+
+.datagrid-column-filter__set-source {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.datagrid-column-filter__set-source > span {
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--datagrid-text-soft);
 }
 
 .datagrid-column-filter__set-mode,

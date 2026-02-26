@@ -6,6 +6,8 @@ import type {
   DataGridColumnSnapshot,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
+  DataGridColumnHistogram,
+  DataGridColumnHistogramOptions,
   DataGridFilterSnapshot,
   DataGridSortAndFilterModelInput,
   DataGridGroupBySpec,
@@ -121,6 +123,7 @@ export interface DataGridApi<TRow = unknown> {
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
   setAggregationModel(aggregationModel: DataGridAggregationModel<TRow> | null): void
   getAggregationModel(): DataGridAggregationModel<TRow> | null
+  getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
   setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null): void
   toggleGroup(groupKey: string): void
   expandGroup(groupKey: string): void
@@ -386,6 +389,10 @@ type DataGridSortFilterBatchCapability = {
   setSortAndFilterModel: (input: DataGridSortAndFilterModelInput) => void
 }
 
+type DataGridColumnHistogramCapability = {
+  getColumnHistogram: (columnId: string, options?: DataGridColumnHistogramOptions) => DataGridColumnHistogram
+}
+
 type DataGridTransactionCapability = Required<
   Pick<
     DataGridCoreTransactionService,
@@ -557,6 +564,18 @@ function resolveSortFilterBatchCapability<TRow>(
   }
 }
 
+function resolveColumnHistogramCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): DataGridColumnHistogramCapability | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DataGridColumnHistogramCapability>
+  if (typeof candidate.getColumnHistogram !== "function") {
+    return null
+  }
+  return {
+    getColumnHistogram: candidate.getColumnHistogram.bind(rowModel),
+  }
+}
+
 function assertPatchCapability<TRow>(
   capability: DataGridPatchCapability<TRow> | null,
 ): DataGridPatchCapability<TRow> {
@@ -587,6 +606,7 @@ export function createDataGridApi<TRow = unknown>(
   const resolveCurrentTransactionCapability = () => resolveTransactionCapability(getTransactionService())
   const resolveCurrentPatchCapability = () => resolvePatchCapability(rowModel)
   const resolveCurrentSortFilterBatchCapability = () => resolveSortFilterBatchCapability(rowModel)
+  const resolveCurrentColumnHistogramCapability = () => resolveColumnHistogramCapability(rowModel)
   const deferredScheduler = createDeferredScheduler()
   let autoReapply = false
 
@@ -727,6 +747,13 @@ export function createDataGridApi<TRow = unknown>(
     },
     getAggregationModel() {
       return rowModel.getAggregationModel()
+    },
+    getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions) {
+      const capability = resolveCurrentColumnHistogramCapability()
+      if (!capability) {
+        return []
+      }
+      return capability.getColumnHistogram(columnId, options)
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
       rowModel.setGroupExpansion(expansion)

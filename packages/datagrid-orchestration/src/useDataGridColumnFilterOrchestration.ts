@@ -1,4 +1,9 @@
-import type { DataGridFilterSnapshot } from "@affino/datagrid-core"
+import {
+  evaluateColumnPredicateFilter,
+  serializeColumnValueToToken,
+  type DataGridColumnPredicateFilter,
+  type DataGridFilterSnapshot,
+} from "@affino/datagrid-core"
 
 export type DataGridColumnFilterKind = "text" | "enum" | "number"
 
@@ -7,6 +12,7 @@ export interface DataGridAppliedColumnFilter {
   operator: string
   value: string
   value2?: string
+  valueTokens?: string[]
 }
 
 export interface DataGridColumnFilterDraft {
@@ -15,6 +21,7 @@ export interface DataGridColumnFilterDraft {
   operator: string
   value: string
   value2: string
+  valueTokens: string[]
 }
 
 export interface DataGridFilterOperatorOption {
@@ -56,6 +63,7 @@ export interface UseDataGridColumnFilterOrchestrationResult<TRow> {
   onFilterEnumValueChange: (value: string | number) => void
   onFilterValueInput: (value: unknown) => void
   onFilterSecondValueInput: (value: unknown) => void
+  setActiveValueSetTokens: (tokens: readonly string[], options?: { operator?: "in-list" | "not-in-list" }) => void
   doesOperatorNeedSecondValue: (kind: DataGridColumnFilterKind, operator: string) => boolean
   doesFilterDraftHaveRequiredValues: (draft: DataGridColumnFilterDraft) => boolean
   applyActiveColumnFilter: () => void
@@ -108,76 +116,45 @@ function resolveDefaultInputValue(value: unknown): string {
   return ""
 }
 
-function parseFilterValueList(raw: string): string[] {
-  const normalized = raw.trim()
-  if (!normalized) {
-    return []
-  }
-  try {
-    const parsed = JSON.parse(normalized)
-    if (!Array.isArray(parsed)) {
-      return [normalized]
+function normalizeTokenList(tokens: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  for (const token of tokens) {
+    const value = String(token ?? "")
+    if (!value || seen.has(value)) {
+      continue
     }
-    return parsed
-      .map(item => String(item ?? "").trim())
-      .filter(Boolean)
-  } catch {
-    return [normalized]
+    seen.add(value)
+    normalized.push(value)
   }
+  return normalized
 }
 
-function matchTextFilter(value: unknown, operator: string, rawExpected: string): boolean {
-  const haystack = String(value ?? "").toLowerCase()
-  const expected = rawExpected.toLowerCase()
-  if (operator === "in-list" || operator === "not-in-list") {
-    const list = parseFilterValueList(rawExpected).map(entry => entry.toLowerCase())
-    const contains = list.includes(haystack)
-    return operator === "not-in-list" ? !contains : contains
-  }
-  if (operator === "equals") {
-    return haystack === expected
-  }
-  if (operator === "starts-with") {
-    return haystack.startsWith(expected)
-  }
-  return haystack.includes(expected)
+function mapOperatorToPredicateOperator(
+  operator: string,
+): "contains" | "startsWith" | "equals" | "notEquals" | "gt" | "gte" | "lt" | "lte" | "between" | null {
+  if (operator === "contains") return "contains"
+  if (operator === "starts-with") return "startsWith"
+  if (operator === "equals" || operator === "is") return "equals"
+  if (operator === "is-not") return "notEquals"
+  if (operator === "between") return "between"
+  if (operator === "gt" || operator === "gte" || operator === "lt" || operator === "lte") return operator
+  return null
 }
 
-function matchEnumFilter(value: unknown, operator: string, rawExpected: string): boolean {
-  const current = String(value ?? "").toLowerCase()
-  if (operator === "in-list" || operator === "not-in-list") {
-    const list = parseFilterValueList(rawExpected).map(entry => entry.toLowerCase())
-    const contains = list.includes(current)
-    return operator === "not-in-list" ? !contains : contains
+function createPredicateFilterFromAppliedFilter(
+  filter: DataGridAppliedColumnFilter,
+): DataGridColumnPredicateFilter | null {
+  const predicateOperator = mapOperatorToPredicateOperator(filter.operator)
+  if (!predicateOperator) {
+    return null
   }
-  const expected = rawExpected.toLowerCase()
-  if (operator === "is-not") {
-    return current !== expected
+  return {
+    kind: "predicate",
+    operator: predicateOperator,
+    value: filter.value,
+    value2: filter.value2,
   }
-  return current === expected
-}
-
-function matchNumberFilter(value: unknown, operator: string, rawExpected: string, rawExpected2?: string): boolean {
-  const current = Number(value)
-  const expected = Number(rawExpected)
-  if (!Number.isFinite(current) || !Number.isFinite(expected)) {
-    return false
-  }
-
-  if (operator === "gt") return current > expected
-  if (operator === "gte") return current >= expected
-  if (operator === "lt") return current < expected
-  if (operator === "lte") return current <= expected
-  if (operator === "between") {
-    const second = Number(rawExpected2)
-    if (!Number.isFinite(second)) {
-      return false
-    }
-    const lower = Math.min(expected, second)
-    const upper = Math.max(expected, second)
-    return current >= lower && current <= upper
-  }
-  return current === expected
 }
 
 export function useDataGridColumnFilterOrchestration<TRow>(
@@ -198,7 +175,7 @@ export function useDataGridColumnFilterOrchestration<TRow>(
 
   function doesFilterDraftHaveRequiredValues(draft: DataGridColumnFilterDraft): boolean {
     if (draft.operator === "in-list" || draft.operator === "not-in-list") {
-      return parseFilterValueList(draft.value).length > 0
+      return draft.valueTokens.length > 0
     }
     if (!draft.value.trim()) {
       return false
@@ -273,6 +250,7 @@ export function useDataGridColumnFilterOrchestration<TRow>(
       operator: current?.operator ?? defaultFilterOperator(kind),
       value: current?.value ?? (enumOptions[0] ?? ""),
       value2: current?.value2 ?? "",
+      valueTokens: [...(current?.valueTokens ?? [])],
     }
     activeFilterColumnKey = columnKey
     emit()
@@ -295,6 +273,9 @@ export function useDataGridColumnFilterOrchestration<TRow>(
       ...columnFilterDraft,
       operator: nextOperator,
       value2: doesOperatorNeedSecondValue(columnFilterDraft.kind, nextOperator) ? columnFilterDraft.value2 : "",
+      valueTokens: (nextOperator === "in-list" || nextOperator === "not-in-list")
+        ? columnFilterDraft.valueTokens
+        : [],
     }
     emit()
   }
@@ -306,6 +287,7 @@ export function useDataGridColumnFilterOrchestration<TRow>(
     columnFilterDraft = {
       ...columnFilterDraft,
       value: String(value),
+      valueTokens: [],
     }
     emit()
   }
@@ -317,6 +299,7 @@ export function useDataGridColumnFilterOrchestration<TRow>(
     columnFilterDraft = {
       ...columnFilterDraft,
       value: resolveInputValue(value),
+      valueTokens: [],
     }
     emit()
   }
@@ -328,6 +311,23 @@ export function useDataGridColumnFilterOrchestration<TRow>(
     columnFilterDraft = {
       ...columnFilterDraft,
       value2: resolveInputValue(value),
+    }
+    emit()
+  }
+
+  function setActiveValueSetTokens(
+    tokens: readonly string[],
+    options: { operator?: "in-list" | "not-in-list" } = {},
+  ) {
+    if (!columnFilterDraft) {
+      return
+    }
+    columnFilterDraft = {
+      ...columnFilterDraft,
+      operator: options.operator ?? "in-list",
+      valueTokens: normalizeTokenList(tokens),
+      value: "",
+      value2: "",
     }
     emit()
   }
@@ -350,6 +350,7 @@ export function useDataGridColumnFilterOrchestration<TRow>(
       operator: draft.operator,
       value: draft.value.trim(),
       value2: draft.value2.trim() || undefined,
+      valueTokens: [...draft.valueTokens],
     }
     appliedColumnFilters = next
     options.setLastAction?.(`Filter applied: ${draft.columnKey}`)
@@ -386,25 +387,56 @@ export function useDataGridColumnFilterOrchestration<TRow>(
     if (!keys.length) {
       return null
     }
+    const columnFilterEntries: Array<[string, DataGridFilterSnapshot["columnFilters"][string]]> = []
+    for (const key of keys) {
+      const filter = filters[key]
+      if (!filter) {
+        continue
+      }
+      if (filter.operator === "in-list") {
+        const tokens = normalizeTokenList(filter.valueTokens ?? [])
+        if (tokens.length > 0) {
+          columnFilterEntries.push([key, { kind: "valueSet", tokens }])
+        }
+        continue
+      }
+      const predicateOperator = mapOperatorToPredicateOperator(filter.operator)
+      if (!predicateOperator) {
+        continue
+      }
+      columnFilterEntries.push([
+        key,
+        {
+          kind: "predicate",
+          operator: predicateOperator,
+          value: filter.value,
+          value2: filter.value2,
+        },
+      ])
+    }
+
     return {
-      columnFilters: {},
+      columnFilters: Object.fromEntries(columnFilterEntries),
       advancedFilters: Object.fromEntries(
-        keys.map(key => {
+        keys.flatMap(key => {
           const filter = filters[key]
-          const type = filter?.kind === "number" ? "number" : "text"
-          return [
+          if (!filter || filter.operator === "in-list") {
+            return []
+          }
+          const type = filter.kind === "number" ? "number" : "text"
+          return [[
             key,
             {
               type,
               clauses: [
                 {
-                  operator: filter?.operator ?? "equals",
-                  value: filter?.value ?? "",
-                  value2: filter?.value2,
+                  operator: filter.operator,
+                  value: filter.value,
+                  value2: filter.value2,
                 },
               ],
             },
-          ]
+          ]]
         }),
       ),
     }
@@ -413,19 +445,33 @@ export function useDataGridColumnFilterOrchestration<TRow>(
   function rowMatchesColumnFilters(row: TRow, filters: Record<string, DataGridAppliedColumnFilter>): boolean {
     for (const [columnKey, filter] of Object.entries(filters)) {
       const value = options.resolveCellValue(row, columnKey)
-      if (filter.kind === "number") {
-        if (!matchNumberFilter(value, filter.operator, filter.value, filter.value2)) {
+
+      if (
+        (filter.operator === "in-list" || filter.operator === "not-in-list")
+        && Array.isArray(filter.valueTokens)
+        && filter.valueTokens.length > 0
+      ) {
+        const token = serializeColumnValueToToken(value)
+        const contains = filter.valueTokens.includes(token)
+        if (filter.operator === "in-list" && !contains) {
+          return false
+        }
+        if (filter.operator === "not-in-list" && contains) {
           return false
         }
         continue
       }
-      if (filter.kind === "enum") {
-        if (!matchEnumFilter(value, filter.operator, filter.value)) {
+
+      const predicateFilter = createPredicateFilterFromAppliedFilter(filter)
+      if (predicateFilter) {
+        if (!evaluateColumnPredicateFilter(predicateFilter, value)) {
           return false
         }
         continue
       }
-      if (!matchTextFilter(value, filter.operator, filter.value)) {
+
+      // Unknown operator for current contract — treat as non-match for deterministic behavior.
+      if (filter.operator) {
         return false
       }
     }
@@ -443,6 +489,7 @@ export function useDataGridColumnFilterOrchestration<TRow>(
     onFilterEnumValueChange,
     onFilterValueInput,
     onFilterSecondValueInput,
+    setActiveValueSetTokens,
     doesOperatorNeedSecondValue,
     doesFilterDraftHaveRequiredValues,
     applyActiveColumnFilter,

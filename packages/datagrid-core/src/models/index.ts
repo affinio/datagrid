@@ -5,6 +5,14 @@ export type {
   DataGridAdvancedFilterExpression,
   DataGridAdvancedFilterGroup,
   DataGridAdvancedFilterNot,
+  DataGridColumnFilter,
+  DataGridColumnFilterSnapshotEntry,
+  DataGridColumnPredicateFilter,
+  DataGridColumnPredicateOperator,
+  DataGridColumnValueSetFilter,
+  DataGridColumnHistogram,
+  DataGridColumnHistogramEntry,
+  DataGridColumnHistogramOptions,
   DataGridFilterClause,
   DataGridFilterSnapshot,
   DataGridSortAndFilterModelInput,
@@ -74,6 +82,11 @@ export {
   normalizeDataGridAdvancedFilterExpression,
   type DataGridAdvancedFilterResolver,
 } from "./advancedFilter.js"
+
+export {
+  evaluateColumnPredicateFilter,
+  serializeColumnValueToToken,
+} from "./columnFilterUtils.js"
 
 export type {
   ClientRowModel,

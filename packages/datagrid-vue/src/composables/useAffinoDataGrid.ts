@@ -91,13 +91,23 @@ function isFilteringModelActive(snapshot: unknown): boolean {
     return false
   }
   const filterSnapshot = snapshot as {
-    columnFilters?: Record<string, readonly unknown[]>
+    columnFilters?: Record<string, unknown>
     advancedFilters?: Record<string, unknown>
     advancedExpression?: unknown
   }
   const columnFilters = filterSnapshot.columnFilters ?? {}
-  for (const values of Object.values(columnFilters)) {
-    if (Array.isArray(values) && values.length > 0) {
+  for (const entry of Object.values(columnFilters)) {
+    if (Array.isArray(entry) && entry.length > 0) {
+      return true
+    }
+    if (!entry || typeof entry !== "object") {
+      continue
+    }
+    const valueSetEntry = entry as { kind?: unknown; tokens?: unknown[] }
+    if (valueSetEntry.kind === "valueSet" && Array.isArray(valueSetEntry.tokens) && valueSetEntry.tokens.length > 0) {
+      return true
+    }
+    if (valueSetEntry.kind === "predicate") {
       return true
     }
   }
@@ -555,7 +565,19 @@ export function useAffinoDataGrid<TRow>(
     () => featureSuite.filterModel.value,
     nextFilterModel => {
       const nextColumnFilters = nextFilterModel?.columnFilters ?? {}
-      const hasColumnFilters = Object.values(nextColumnFilters).some(values => Array.isArray(values) && values.length > 0)
+      const hasColumnFilters = Object.values(nextColumnFilters).some(entry => {
+        if (Array.isArray(entry)) {
+          return entry.length > 0
+        }
+        if (!entry || typeof entry !== "object") {
+          return false
+        }
+        const valueSetEntry = entry as { kind?: unknown; tokens?: unknown[] }
+        if (valueSetEntry.kind === "valueSet") {
+          return Array.isArray(valueSetEntry.tokens) && valueSetEntry.tokens.length > 0
+        }
+        return valueSetEntry.kind === "predicate"
+      })
       const hasAdvancedFilters = Boolean(nextFilterModel?.advancedExpression)
         || Boolean(nextFilterModel?.advancedFilters && Object.keys(nextFilterModel.advancedFilters).length > 0)
       if (!hasColumnFilters && !hasAdvancedFilters) {

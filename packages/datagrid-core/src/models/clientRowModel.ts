@@ -17,6 +17,11 @@ import {
   type DataGridPaginationInput,
   type DataGridProjectionDiagnostics,
   type DataGridAdvancedFilter,
+  type DataGridColumnFilterSnapshotEntry,
+  type DataGridColumnHistogram,
+  type DataGridColumnHistogramEntry,
+  type DataGridColumnPredicateFilter,
+  type DataGridColumnHistogramOptions,
   type DataGridFilterSnapshot,
   type DataGridSortAndFilterModelInput,
   type DataGridAggregationModel,
@@ -55,6 +60,10 @@ import {
   cloneDataGridFilterSnapshot as cloneFilterSnapshot,
   evaluateDataGridAdvancedFilterExpression,
 } from "./advancedFilter.js"
+import {
+  evaluateColumnPredicateFilter,
+  serializeColumnValueToToken,
+} from "./columnFilterUtils.js"
 import {
   analyzeRowPatchChangeSet,
   collectAggregationModelFields,
@@ -121,6 +130,7 @@ export interface DataGridClientRowPatchOptions {
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
   setSortAndFilterModel(input: DataGridSortAndFilterModelInput): void
+  getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
   patchRows(
     updates: readonly DataGridClientRowPatch<T>[],
     options?: DataGridClientRowPatchOptions,
@@ -463,68 +473,131 @@ function areSameAggregateRecords(
 
 interface NormalizedColumnFilterEntry {
   key: string
-  values: readonly string[]
+  kind: "valueSet" | "predicate"
+  valueTokenSet?: ReadonlySet<string>
+  predicate?: DataGridColumnPredicateFilter
 }
 
 function normalizeColumnFilterEntries(
-  columnFilters: Record<string, readonly unknown[]>,
+  columnFilters: Record<string, DataGridColumnFilterSnapshotEntry>,
 ): NormalizedColumnFilterEntry[] {
   const normalized: NormalizedColumnFilterEntry[] = []
-  for (const [rawKey, rawValues] of Object.entries(columnFilters ?? {})) {
-    if (!Array.isArray(rawValues) || rawValues.length === 0) {
-      continue
-    }
+  for (const [rawKey, rawEntry] of Object.entries(columnFilters ?? {})) {
     const key = rawKey.trim()
     if (key.length === 0) {
       continue
     }
-    const seen = new Set<string>()
-    const values: string[] = []
-    for (const rawValue of rawValues) {
-      const value = normalizeText(rawValue)
-      if (seen.has(value)) {
-        continue
-      }
-      seen.add(value)
-      values.push(value)
-    }
-    if (values.length === 0) {
+
+    if (!rawEntry || typeof rawEntry !== "object") {
       continue
     }
-    normalized.push({ key, values })
+
+    if (rawEntry.kind === "valueSet") {
+      const seen = new Set<string>()
+      const valueTokens: string[] = []
+      for (const rawToken of rawEntry.tokens ?? []) {
+        const token = String(rawToken ?? "")
+        if (!token || seen.has(token)) {
+          continue
+        }
+        seen.add(token)
+        valueTokens.push(token)
+      }
+      if (valueTokens.length === 0) {
+        continue
+      }
+      normalized.push({ key, kind: "valueSet", valueTokenSet: new Set(valueTokens) })
+      continue
+    }
+
+    if (rawEntry.kind !== "predicate") {
+      continue
+    }
+
+    normalized.push({
+      key,
+      kind: "predicate",
+      predicate: {
+        kind: "predicate",
+        operator: rawEntry.operator,
+        value: rawEntry.value,
+        value2: rawEntry.value2,
+        caseSensitive: rawEntry.caseSensitive,
+      },
+    })
   }
   return normalized
 }
 
-function toComparableNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value
-  }
-  if (value instanceof Date) {
-    return value.getTime()
-  }
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
 function createFilterPredicate<T>(
   filterModel: DataGridFilterSnapshot | null,
+  options: { ignoreColumnFilterKey?: string } = {},
 ): (rowNode: DataGridRowNode<T>) => boolean {
   if (!filterModel) {
     return () => true
   }
 
+  const ignoredColumnKey = typeof options.ignoreColumnFilterKey === "string"
+    ? options.ignoreColumnFilterKey.trim()
+    : ""
+
+  const effectiveFilterModel = (() => {
+    if (!ignoredColumnKey) {
+      return filterModel
+    }
+    let changed = false
+    const nextColumnFilters: Record<string, DataGridColumnFilterSnapshotEntry> = {}
+    for (const [rawKey, values] of Object.entries(filterModel.columnFilters ?? {})) {
+      if (rawKey.trim() === ignoredColumnKey) {
+        changed = true
+        continue
+      }
+      if (values.kind === "valueSet") {
+        nextColumnFilters[rawKey] = { kind: "valueSet", tokens: [...values.tokens] }
+        continue
+      }
+      nextColumnFilters[rawKey] = {
+        kind: "predicate",
+        operator: values.operator,
+        value: values.value,
+        value2: values.value2,
+        caseSensitive: values.caseSensitive,
+      }
+    }
+    const nextAdvancedFilters: Record<string, DataGridAdvancedFilter> = {}
+    for (const [rawKey, advancedFilter] of Object.entries(filterModel.advancedFilters ?? {})) {
+      if (rawKey.trim() === ignoredColumnKey) {
+        changed = true
+        continue
+      }
+      nextAdvancedFilters[rawKey] = advancedFilter
+    }
+    if (!changed) {
+      return filterModel
+    }
+    return {
+      columnFilters: nextColumnFilters,
+      advancedFilters: nextAdvancedFilters,
+      advancedExpression: filterModel.advancedExpression ?? null,
+    } satisfies DataGridFilterSnapshot
+  })()
+
   const columnFilters = normalizeColumnFilterEntries(
-    (filterModel.columnFilters ?? {}) as Record<string, readonly unknown[]>,
-  ).map(entry => {
-    return [entry.key, new Set<string>(entry.values)] as const
-  })
-  const advancedExpression = resolveAdvancedExpression(filterModel)
+    (effectiveFilterModel.columnFilters ?? {}) as Record<string, DataGridColumnFilterSnapshotEntry>,
+  ).map(entry => [entry.key, entry] as const)
+  const advancedExpression = resolveAdvancedExpression(effectiveFilterModel)
 
   return (rowNode: DataGridRowNode<T>) => {
-    for (const [key, valueSet] of columnFilters) {
-      const candidate = normalizeText(readRowField(rowNode, key))
-      if (!valueSet.has(candidate)) {
+    for (const [key, filterEntry] of columnFilters) {
+      const candidate = readRowField(rowNode, key)
+      if (filterEntry.kind === "valueSet") {
+        const candidateToken = serializeColumnValueToToken(candidate)
+        if (!filterEntry.valueTokenSet?.has(candidateToken)) {
+          return false
+        }
+        continue
+      }
+      if (filterEntry.predicate && !evaluateColumnPredicateFilter(filterEntry.predicate, candidate)) {
         return false
       }
     }
@@ -544,7 +617,12 @@ function hasActiveFilterModel(filterModel: DataGridFilterSnapshot | null): boole
     return false
   }
   const columnFilters = Object.values(filterModel.columnFilters ?? {})
-  if (columnFilters.some(values => Array.isArray(values) && values.length > 0)) {
+  if (columnFilters.some(entry => {
+    if (entry.kind === "valueSet") {
+      return entry.tokens.length > 0
+    }
+    return true
+  })) {
     return true
   }
   const advancedKeys = Object.keys(filterModel.advancedFilters ?? {})
@@ -604,6 +682,52 @@ function stableSerializeUnknown(value: unknown): string {
   return `{${entries.join(",")}}`
 }
 
+function buildColumnHistogram<T>(
+  rows: readonly DataGridRowNode<T>[],
+  columnId: string,
+  options?: Pick<DataGridColumnHistogramOptions, "limit" | "orderBy">,
+): DataGridColumnHistogram {
+  const countsByToken = new Map<string, { value: unknown; count: number }>()
+  for (const row of rows) {
+    if (row.kind !== "leaf") {
+      continue
+    }
+    const value = readRowField(row, columnId)
+    const token = serializeColumnValueToToken(value)
+    const current = countsByToken.get(token)
+    if (current) {
+      current.count += 1
+      continue
+    }
+    countsByToken.set(token, { value, count: 1 })
+  }
+  const entries: DataGridColumnHistogramEntry[] = []
+  for (const [token, entry] of countsByToken.entries()) {
+    entries.push({
+      token,
+      value: entry.value,
+      count: entry.count,
+      text: normalizeText(entry.value),
+    })
+  }
+
+  const orderBy = options?.orderBy ?? "valueAsc"
+  if (orderBy === "countDesc") {
+    entries.sort((left, right) => right.count - left.count || left.text?.localeCompare(right.text ?? "") || 0)
+  } else {
+    entries.sort((left, right) => (left.text ?? "").localeCompare(right.text ?? "", undefined, {
+      numeric: true,
+      sensitivity: "base",
+    }))
+  }
+
+  const limit = Number.isFinite(options?.limit) ? Math.max(0, Math.trunc(options?.limit as number)) : 0
+  if (limit > 0 && entries.length > limit) {
+    return entries.slice(0, limit)
+  }
+  return entries
+}
+
 function normalizeFilterValuesForSignature(values: readonly unknown[]): readonly string[] {
   const normalized: string[] = []
   const seen = new Set<string>()
@@ -618,20 +742,38 @@ function normalizeFilterValuesForSignature(values: readonly unknown[]): readonly
   return normalized.sort((left, right) => left.localeCompare(right))
 }
 
+function normalizeColumnFilterEntryForSignature(
+  entry: DataGridColumnFilterSnapshotEntry,
+): string {
+  if (entry.kind === "valueSet") {
+    return stableSerializeUnknown({ kind: "valueSet", tokens: normalizeFilterValuesForSignature(entry.tokens) })
+  }
+  return stableSerializeUnknown({
+    kind: "predicate",
+    operator: entry.operator,
+    value: entry.value,
+    value2: entry.value2,
+    caseSensitive: entry.caseSensitive,
+  })
+}
+
 function serializeFilterModelForSignature(filterModel: DataGridFilterSnapshot | null): string {
   if (!filterModel) {
     return "__none__"
   }
-  const normalizedColumnFilters: Record<string, readonly string[]> = {}
-  for (const [rawKey, values] of Object.entries(filterModel.columnFilters ?? {})) {
-    if (!Array.isArray(values) || values.length === 0) {
+  const normalizedColumnFilters: Record<string, string> = {}
+  for (const [rawKey, entry] of Object.entries(filterModel.columnFilters ?? {})) {
+    const hasContent = entry.kind === "valueSet"
+      ? entry.tokens.length > 0
+      : true
+    if (!hasContent) {
       continue
     }
     const key = rawKey.trim()
     if (!key) {
       continue
     }
-    normalizedColumnFilters[key] = normalizeFilterValuesForSignature(values)
+    normalizedColumnFilters[key] = normalizeColumnFilterEntryForSignature(entry)
   }
   const normalizedAdvancedFilters: Record<string, DataGridAdvancedFilter> = {}
   for (const [rawKey, advancedFilter] of Object.entries(filterModel.advancedFilters ?? {})) {
@@ -661,6 +803,17 @@ function isSameFilterModel(
   right: DataGridFilterSnapshot | null,
 ): boolean {
   return serializeFilterModelForSignature(left) === serializeFilterModelForSignature(right)
+}
+
+function toComparableNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value
+  }
+  if (value instanceof Date) {
+    return value.getTime()
+  }
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 function compareUnknown(left: unknown, right: unknown): number {
@@ -2545,7 +2698,17 @@ export function createClientRowModel<T>(
     return applyIncrementalGroupByAggregationDelta(changeSet.changedRowIds, previousRowsById)
   }
 
-  function resolveFilterPredicate(): (rowNode: DataGridRowNode<T>) => boolean {
+  function resolveFilterPredicate(
+    options: { ignoreColumnFilterKey?: string } = {},
+  ): (rowNode: DataGridRowNode<T>) => boolean {
+    const ignoredColumnKey = typeof options.ignoreColumnFilterKey === "string"
+      ? options.ignoreColumnFilterKey.trim()
+      : ""
+    if (ignoredColumnKey) {
+      derivedCacheDiagnostics.filterPredicateMisses += 1
+      return createFilterPredicate(filterModel, { ignoreColumnFilterKey: ignoredColumnKey })
+    }
+
     const filterKey = String(runtimeState.filterRevision)
     return filterKey === cachedFilterPredicateKey && cachedFilterPredicate
       ? (() => {
@@ -3329,6 +3492,31 @@ export function createClientRowModel<T>(
     },
     getAggregationModel() {
       return cloneAggregationModel(aggregationModel)
+    },
+    getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions) {
+      ensureActive()
+      const normalizedColumnId = columnId.trim()
+      if (normalizedColumnId.length === 0) {
+        return []
+      }
+
+      const scope = options?.scope ?? "filtered"
+      if (scope === "sourceAll") {
+        return buildColumnHistogram(sourceRows, normalizedColumnId, options)
+      }
+
+      if (options?.ignoreSelfFilter === true) {
+        const filterPredicate = resolveFilterPredicate({ ignoreColumnFilterKey: normalizedColumnId })
+        const rowsForHistogram: DataGridRowNode<T>[] = []
+        for (const row of sourceRows) {
+          if (filterPredicate(row)) {
+            rowsForHistogram.push(row)
+          }
+        }
+        return buildColumnHistogram(rowsForHistogram, normalizedColumnId, options)
+      }
+
+      return buildColumnHistogram(runtimeState.filteredRowsProjection, normalizedColumnId, options)
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
       ensureActive()

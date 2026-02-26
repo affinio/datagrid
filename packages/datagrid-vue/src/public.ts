@@ -11,8 +11,10 @@ export {
   createInMemoryDataGridSettingsAdapter,
   buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   cloneDataGridFilterSnapshot,
+  evaluateColumnPredicateFilter,
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,
+  serializeColumnValueToToken,
 } from "@affino/datagrid-core"
 
 export type {

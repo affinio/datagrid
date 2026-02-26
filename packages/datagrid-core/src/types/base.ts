@@ -101,8 +101,43 @@ export type DataGridAdvancedFilterExpression =
   | DataGridAdvancedFilterGroup
   | DataGridAdvancedFilterNot
 
+export interface DataGridColumnValueSetFilter {
+  kind: "valueSet"
+  tokens: string[]
+}
+
+export type DataGridColumnPredicateOperator =
+  | "contains"
+  | "startsWith"
+  | "endsWith"
+  | "equals"
+  | "notEquals"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "between"
+  | "isEmpty"
+  | "notEmpty"
+  | "isNull"
+  | "notNull"
+
+export interface DataGridColumnPredicateFilter {
+  kind: "predicate"
+  operator: DataGridColumnPredicateOperator
+  value?: unknown
+  value2?: unknown
+  caseSensitive?: boolean
+}
+
+export type DataGridColumnFilter =
+  | DataGridColumnValueSetFilter
+  | DataGridColumnPredicateFilter
+
+export type DataGridColumnFilterSnapshotEntry = DataGridColumnFilter
+
 export interface DataGridFilterSnapshot {
-  columnFilters: Record<string, string[]>
+  columnFilters: Record<string, DataGridColumnFilterSnapshotEntry>
   advancedFilters: Record<string, DataGridAdvancedFilter>
   advancedExpression?: DataGridAdvancedFilterExpression | null
 }

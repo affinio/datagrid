@@ -52,10 +52,10 @@ describe("data grid api facade contracts", () => {
     const api = createDataGridApi({ core })
 
     api.setSortModel([{ key: "id", direction: "asc" }])
-    api.setFilterModel({ columnFilters: { name: ["alpha"] }, advancedFilters: {} })
+    api.setFilterModel({ columnFilters: { name: { kind: "valueSet", tokens: ["string:alpha"] } }, advancedFilters: {} })
     api.setSortAndFilterModel({
       sortModel: [{ key: "id", direction: "desc" }],
-      filterModel: { columnFilters: { name: ["beta"] }, advancedFilters: {} },
+      filterModel: { columnFilters: { name: { kind: "valueSet", tokens: ["string:beta"] } }, advancedFilters: {} },
     })
     api.setGroupBy({ fields: ["name"], expandedByDefault: true })
     api.setAggregationModel({ columns: [{ key: "id", op: "count" }] })
@@ -75,7 +75,7 @@ describe("data grid api facade contracts", () => {
 
     expect(rowSnapshot.sortModel).toEqual([{ key: "id", direction: "desc" }])
     expect(rowSnapshot.filterModel).toEqual({
-      columnFilters: { name: ["beta"] },
+      columnFilters: { name: { kind: "valueSet", tokens: ["string:beta"] } },
       advancedFilters: {},
     })
     expect(rowSnapshot.groupBy).toEqual({
@@ -85,6 +85,14 @@ describe("data grid api facade contracts", () => {
     expect(api.getAggregationModel()).toEqual({
       columns: [{ key: "id", op: "count" }],
     })
+    expect(api.getColumnHistogram("name")).toEqual([
+      {
+        token: "string:beta",
+        value: "beta",
+        count: 1,
+        text: "beta",
+      },
+    ])
     expect(rowSnapshot.groupExpansion).toEqual({
       expandedByDefault: true,
       toggledGroupKeys: ["name=alpha"],
@@ -173,7 +181,7 @@ describe("data grid api facade contracts", () => {
 
     api.setSortAndFilterModel({
       filterModel: {
-        columnFilters: { owner: ["noc"] },
+        columnFilters: { owner: { kind: "valueSet", tokens: ["string:noc"] } },
         advancedFilters: {},
       },
       sortModel: [{ key: "score", direction: "desc" }],
@@ -181,6 +189,26 @@ describe("data grid api facade contracts", () => {
 
     expect(setFilterModelSpy).toHaveBeenCalledTimes(1)
     expect(setSortModelSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it("returns empty histogram map when row model does not expose histogram capability", () => {
+    const clientRowModel = createClientRowModel({
+      rows: [{ row: { id: 1, owner: "noc" }, rowId: "r1", originalIndex: 0, displayIndex: 0 }],
+    })
+    const { getColumnHistogram: _omitHistogram, ...rowModelWithoutHistogram } = clientRowModel
+    const rowModel = rowModelWithoutHistogram as unknown as DataGridRowModel<{ id: number; owner: string }>
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.getColumnHistogram("owner")).toEqual([])
   })
 
   it("exposes patchRows/applyEdits/reapplyView with Excel-like defaults and optional auto-reapply", () => {
@@ -374,10 +402,15 @@ describe("data grid api facade contracts", () => {
     await waitForCellRefreshFrame()
 
     unsubscribe()
-    expect(latestBatch?.cells).toEqual([
-      { columnKey: "tested_at", pin: "left" },
-      { columnKey: "control", pin: "right" },
-    ])
+    if (!latestBatch) {
+      throw new Error("Expected refresh batch to be emitted")
+    }
+    expect(latestBatch).toEqual({
+      cells: [
+        { columnKey: "tested_at", pin: "left" },
+        { columnKey: "control", pin: "right" },
+      ],
+    })
   })
 
   it("exposes selection capability checks and fails loudly for missing capability methods", () => {
@@ -543,7 +576,7 @@ describe("data grid api facade contracts", () => {
 
     api.setSortModel([{ key: "owner", direction: "asc" }])
     api.setFilterModel({
-      columnFilters: { status: ["open"] },
+      columnFilters: { status: { kind: "valueSet", tokens: ["string:open"] } },
       advancedFilters: {},
     })
     api.setGroupBy({ fields: ["status"], expandedByDefault: true })

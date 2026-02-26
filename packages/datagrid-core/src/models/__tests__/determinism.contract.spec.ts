@@ -34,7 +34,7 @@ function runRowProgram(): {
   const snapshots: DataGridRowModelSnapshot<{ id: number; value: string }>[] = []
   const sortModel: readonly DataGridSortState[] = [{ key: "value", direction: "asc" }]
   const filterModel: DataGridFilterSnapshot = {
-    columnFilters: { value: ["row-1", "row-3"] },
+    columnFilters: { value: { kind: "valueSet", tokens: ["string:row-1", "string:row-3"] } },
     advancedFilters: {},
   }
 

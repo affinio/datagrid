@@ -44,7 +44,22 @@ export interface FilterMenuState {
 }
 
 export interface FilterStateSnapshot {
-	columnFilters: Record<string, string[]>
+	columnFilters: Record<string, FilterColumnEntry>
 	advancedFilters: Record<string, FilterCondition>
 	advancedExpression?: AdvancedFilterExpressionNode | null
 }
+
+export interface FilterColumnValueSetEntry {
+	kind: "valueSet"
+	tokens: string[]
+}
+
+export interface FilterColumnPredicateEntry {
+	kind: "predicate"
+	operator: "contains" | "startsWith" | "endsWith" | "equals" | "notEquals" | "gt" | "gte" | "lt" | "lte" | "isEmpty" | "notEmpty" | "isNull" | "notNull"
+	value?: unknown
+	value2?: unknown
+	caseSensitive?: boolean
+}
+
+export type FilterColumnEntry = string[] | FilterColumnValueSetEntry | FilterColumnPredicateEntry

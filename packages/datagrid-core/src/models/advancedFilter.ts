@@ -1,5 +1,6 @@
 import type {
   DataGridAdvancedFilter,
+  DataGridColumnFilterSnapshotEntry,
   DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterExpression,
   DataGridAdvancedFilterGroup,
@@ -481,7 +482,7 @@ export function cloneDataGridFilterSnapshot(
 
   return {
     columnFilters: Object.fromEntries(
-      Object.entries(input.columnFilters ?? {}).map(([key, values]) => [key, [...values]]),
+      Object.entries(input.columnFilters ?? {}).map(([key, entry]) => [key, cloneColumnFilterEntry(entry)]),
     ),
     advancedFilters: Object.fromEntries(
       Object.entries(input.advancedFilters ?? {}).map(([key, condition]) => [
@@ -495,6 +496,22 @@ export function cloneDataGridFilterSnapshot(
       ]),
     ),
     advancedExpression: cloneDataGridAdvancedFilterExpression(input.advancedExpression ?? null),
+  }
+}
+
+function cloneColumnFilterEntry(entry: DataGridColumnFilterSnapshotEntry): DataGridColumnFilterSnapshotEntry {
+  if (entry.kind === "valueSet") {
+    return {
+      kind: "valueSet",
+      tokens: Array.isArray(entry.tokens) ? [...entry.tokens] : [],
+    }
+  }
+  return {
+    kind: "predicate",
+    operator: entry.operator,
+    value: entry.value,
+    value2: entry.value2,
+    caseSensitive: entry.caseSensitive,
   }
 }
 

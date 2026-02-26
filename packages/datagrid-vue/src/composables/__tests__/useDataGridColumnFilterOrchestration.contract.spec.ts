@@ -34,6 +34,7 @@ describe("useDataGridColumnFilterOrchestration contract", () => {
       operator: "is",
       value: "eu-west",
       value2: "",
+      valueTokens: [],
     })
 
     api.openColumnFilter("latencyMs")
@@ -61,6 +62,7 @@ describe("useDataGridColumnFilterOrchestration contract", () => {
       operator: "contains",
       value: "api",
       value2: undefined,
+      valueTokens: [],
     })
     expect(setLastAction).toHaveBeenCalledWith("Filter applied: service")
 
@@ -92,7 +94,20 @@ describe("useDataGridColumnFilterOrchestration contract", () => {
     expect(api.rowMatchesColumnFilters(secondRow, filters)).toBe(false)
 
     expect(api.buildFilterSnapshot(filters)).toEqual({
-      columnFilters: {},
+      columnFilters: {
+        service: {
+          kind: "predicate",
+          operator: "contains",
+          value: "api",
+          value2: undefined,
+        },
+        latencyMs: {
+          kind: "predicate",
+          operator: "gte",
+          value: "100",
+          value2: undefined,
+        },
+      },
       advancedFilters: {
         service: {
           type: "text",
@@ -104,5 +119,59 @@ describe("useDataGridColumnFilterOrchestration contract", () => {
         },
       },
     })
+  })
+
+  it("matches tokenized in-list and not-in-list filters", () => {
+    const rows = createRows()
+    const api = useDataGridColumnFilterOrchestration<Row>({
+      resolveColumnFilterKind: () => "text",
+      resolveEnumFilterOptions: () => [],
+      resolveColumnLabel: key => key,
+      resolveCellValue: (row, key) => row[key as keyof Row],
+    })
+
+    const includeFilters = {
+      service: {
+        kind: "text" as const,
+        operator: "in-list",
+        value: "",
+        valueTokens: ["string:api"],
+      },
+    }
+    const excludeFilters = {
+      service: {
+        kind: "text" as const,
+        operator: "not-in-list",
+        value: "",
+        valueTokens: ["string:api"],
+      },
+    }
+
+    expect(api.rowMatchesColumnFilters(rows[0]!, includeFilters)).toBe(true)
+    expect(api.rowMatchesColumnFilters(rows[1]!, includeFilters)).toBe(false)
+    expect(api.rowMatchesColumnFilters(rows[0]!, excludeFilters)).toBe(false)
+    expect(api.rowMatchesColumnFilters(rows[1]!, excludeFilters)).toBe(true)
+  })
+
+  it("matches numeric between operator", () => {
+    const rows = createRows()
+    const api = useDataGridColumnFilterOrchestration<Row>({
+      resolveColumnFilterKind: key => (key === "latencyMs" ? "number" : "text"),
+      resolveEnumFilterOptions: () => [],
+      resolveColumnLabel: key => key,
+      resolveCellValue: (row, key) => row[key as keyof Row],
+    })
+
+    const filters = {
+      latencyMs: {
+        kind: "number" as const,
+        operator: "between",
+        value: "100",
+        value2: "150",
+      },
+    }
+
+    expect(api.rowMatchesColumnFilters(rows[0]!, filters)).toBe(true)
+    expect(api.rowMatchesColumnFilters(rows[1]!, filters)).toBe(false)
   })
 })
