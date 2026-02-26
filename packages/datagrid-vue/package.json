@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Vue adapter and UI layer for @affino/datagrid-core",
