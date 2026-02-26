@@ -35,6 +35,15 @@ This package contains pure TypeScript logic (state commands, interaction policie
 
 This enables controlled wheel chaining in layouts like `grid -> modal -> page` without losing managed wheel behavior inside the grid.
 
+`useDataGridManagedTouchScroll` extends the same ownership model to touch/pan input (mobile-first):
+
+- single-finger pan is translated into managed viewport deltas via `setHandledScrollTop` / `setHandledScrollLeft`
+- supports the same axis-lock semantics (`off`, `dominant`, `vertical-preferred`, `horizontal-preferred`)
+- keeps clamp/boundary behavior aligned with managed wheel contract
+- respects linked pane synchronization hooks (`syncLinkedScroll`, `scheduleLinkedScrollSyncLoop`)
+- only calls `preventDefault()` when the grid actually handles the gesture
+- ignores multi-touch gestures and editable targets (`input`, `textarea`, `select`, `contenteditable`)
+
 ## Quick example
 
 ```ts

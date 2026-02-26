@@ -21,6 +21,18 @@ export {
 } from "./useDataGridManagedWheelScroll"
 
 export {
+  type DataGridTouchPanMode,
+  type DataGridTouchAxisLockMode,
+  type DataGridTouchPropagationMode,
+  type DataGridTouchConsumptionResult,
+  type DataGridManagedTouchBodyViewport,
+  type DataGridManagedTouchMainViewport,
+  type UseDataGridManagedTouchScrollOptions,
+  type UseDataGridManagedTouchScrollResult,
+  useDataGridManagedTouchScroll,
+} from "./useDataGridManagedTouchScroll"
+
+export {
   type UseDataGridScrollIdleGateOptions,
   type UseDataGridScrollIdleGateResult,
   useDataGridScrollIdleGate,
