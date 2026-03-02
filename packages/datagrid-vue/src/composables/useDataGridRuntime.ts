@@ -6,6 +6,7 @@ import type {
   DataGridClientRowPatchOptions,
   DataGridColumnDef,
   DataGridColumnModelSnapshot,
+  DataGridPivotSpec,
   DataGridRowNode,
   DataGridRowModel,
   DataGridViewportRange,
@@ -56,6 +57,8 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   setRows: (rows: readonly TRow[]) => void
   setAggregationModel: (aggregationModel: DataGridAggregationModel<TRow> | null) => void
   getAggregationModel: () => DataGridAggregationModel<TRow> | null
+  setPivotModel: (pivotModel: DataGridPivotSpec | null) => void
+  getPivotModel: () => DataGridPivotSpec | null
   patchRows: (
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
@@ -184,6 +187,8 @@ export function useDataGridRuntime<TRow = unknown>(
     setRows: runtime.setRows,
     setAggregationModel: api.setAggregationModel,
     getAggregationModel: api.getAggregationModel,
+    setPivotModel: api.setPivotModel,
+    getPivotModel: api.getPivotModel,
     patchRows,
     applyEdits,
     reapplyView,

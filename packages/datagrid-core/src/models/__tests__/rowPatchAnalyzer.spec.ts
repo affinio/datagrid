@@ -4,6 +4,7 @@ import {
   analyzeRowPatchChangeSet,
   buildPatchProjectionExecutionPlan,
   collectAggregationModelFields,
+  collectPivotModelFields,
   type DataGridPatchStageRule,
 } from "../rowPatchAnalyzer"
 
@@ -18,6 +19,16 @@ describe("rowPatchAnalyzer change-set", () => {
     })
 
     expect(Array.from(fields.values())).toEqual(["score", "meta.label"])
+  })
+
+  it("collects pivot dependency fields from rows/columns/values", () => {
+    const fields = collectPivotModelFields({
+      rows: ["team", "owner"],
+      columns: ["status"],
+      values: [{ field: "revenue", agg: "sum" }],
+    })
+
+    expect(Array.from(fields.values())).toEqual(["team", "owner", "status", "revenue"])
   })
 
   it("derives sort impact and row-scoped sort cache eviction for specific sort fields", () => {
@@ -77,11 +88,12 @@ describe("rowPatchAnalyzer change-set", () => {
 })
 
 describe("rowPatchAnalyzer projection plan", () => {
-  type Stage = "filter" | "sort" | "group" | "aggregate" | "paginate" | "visible"
+  type Stage = "filter" | "sort" | "group" | "pivot" | "aggregate" | "paginate" | "visible"
   const stageDependents: Readonly<Record<Stage, readonly Stage[]>> = {
-    filter: ["sort", "group", "aggregate", "paginate", "visible"],
-    sort: ["group", "aggregate", "paginate", "visible"],
-    group: ["aggregate", "paginate", "visible"],
+    filter: ["sort", "group", "pivot", "aggregate", "paginate", "visible"],
+    sort: ["group", "pivot", "aggregate", "paginate", "visible"],
+    group: ["pivot", "aggregate", "paginate", "visible"],
+    pivot: ["aggregate", "paginate", "visible"],
     aggregate: ["paginate", "visible"],
     paginate: ["visible"],
     visible: [],
@@ -132,12 +144,12 @@ describe("rowPatchAnalyzer projection plan", () => {
         group: true,
       },
       staleStages: new Set(),
-      allStages: ["filter", "sort", "group", "aggregate", "paginate", "visible"],
+      allStages: ["filter", "sort", "group", "pivot", "aggregate", "paginate", "visible"],
       expandStages,
     })
 
     expect(plan.requestedStages).toEqual(["sort", "aggregate"])
-    expect(plan.blockedStages).toEqual(["filter", "sort", "group"])
+    expect(plan.blockedStages).toEqual(["filter", "sort", "group", "pivot"])
   })
 
   it("unblocks full dependent chain when filter recompute is allowed", () => {
@@ -169,7 +181,7 @@ describe("rowPatchAnalyzer projection plan", () => {
         group: true,
       },
       staleStages: new Set(),
-      allStages: ["filter", "sort", "group", "aggregate", "paginate", "visible"],
+      allStages: ["filter", "sort", "group", "pivot", "aggregate", "paginate", "visible"],
       expandStages,
     })
 
@@ -218,7 +230,7 @@ describe("rowPatchAnalyzer projection plan", () => {
         group: true,
       },
       staleStages: new Set(),
-      allStages: ["filter", "sort", "group", "aggregate", "paginate", "visible"],
+      allStages: ["filter", "sort", "group", "pivot", "aggregate", "paginate", "visible"],
       expandStages,
       stageRules: customRules,
     })

@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from "vitest"
 import { createClientRowProjectionEngine } from "../clientRowProjectionEngine"
 
 describe("clientRowProjectionEngine aggregate stage graph", () => {
-  it("expands group request to aggregate->paginate->visible chain", () => {
+  it("expands group request to pivot->aggregate->paginate->visible chain", () => {
     const engine = createClientRowProjectionEngine<unknown>()
     engine.requestStages(["group"])
     expect(engine.getStaleStages()).toEqual([
       "group",
+      "pivot",
       "aggregate",
       "paginate",
       "visible",
@@ -24,6 +25,7 @@ describe("clientRowProjectionEngine aggregate stage graph", () => {
       runFilterStage: () => ({ filteredRowIds: new Set(), recomputed: true }),
       runSortStage: () => true,
       runGroupStage: () => true,
+      runPivotStage: () => true,
       runAggregateStage,
       runPaginateStage: () => true,
       runVisibleStage: () => true,

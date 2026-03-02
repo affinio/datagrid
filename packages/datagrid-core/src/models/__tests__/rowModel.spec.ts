@@ -9,11 +9,14 @@ import {
   buildPaginationSnapshot,
   cloneTreeDataSpec,
   cloneGroupBySpec,
+  clonePivotSpec,
   isGroupExpanded,
   isSameGroupBySpec,
+  isSamePivotSpec,
   isSameTreeDataSpec,
   normalizePaginationInput,
   normalizeGroupBySpec,
+  normalizePivotSpec,
   normalizeTreeDataSpec,
   toggleGroupExpansionKey,
 } from "../rowModel"
@@ -178,6 +181,36 @@ describe("rowModel normalization", () => {
     expect(toggleGroupExpansionKey(toggled, "owner=alice")).toBe(true)
     expect(isGroupExpanded({ expandedByDefault: false, toggledGroupKeys: [...toggled] }, "owner=alice")).toBe(false)
     expect(toggleGroupExpansionKey(toggled, "   ")).toBe(false)
+  })
+
+  it("normalizes pivot spec deterministically", () => {
+    const normalized = normalizePivotSpec({
+      rows: [" team ", "team"],
+      columns: [" status ", ""],
+      values: [
+        { field: " revenue ", agg: "sum" },
+        { field: "revenue", agg: "sum" },
+        { field: "id", agg: "count" },
+      ],
+    })
+
+    expect(normalized).toEqual({
+      rows: ["team"],
+      columns: ["status"],
+      values: [
+        { field: "revenue", agg: "sum" },
+        { field: "id", agg: "count" },
+      ],
+    })
+    expect(clonePivotSpec(normalized)).toEqual(normalized)
+    expect(isSamePivotSpec(normalized, {
+      rows: ["team"],
+      columns: ["status"],
+      values: [
+        { field: "revenue", agg: "sum" },
+        { field: "id", agg: "count" },
+      ],
+    })).toBe(true)
   })
 
   it("normalizes pagination input and builds deterministic snapshot", () => {

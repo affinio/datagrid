@@ -3,10 +3,13 @@ import {
   buildGroupExpansionSnapshot,
   buildPaginationSnapshot,
   cloneGroupBySpec,
+  clonePivotSpec,
   isSameGroupExpansionSnapshot,
   isSameGroupBySpec,
+  isSamePivotSpec,
   normalizeRowNode,
   normalizeGroupBySpec,
+  normalizePivotSpec,
   normalizePaginationInput,
   normalizeViewportRange,
   setGroupExpansionKey,
@@ -16,6 +19,7 @@ import {
   type DataGridRowIdResolver,
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
+  type DataGridPivotSpec,
   type DataGridAggregationModel,
   type DataGridPaginationInput,
   type DataGridRowNode,
@@ -34,6 +38,7 @@ export interface CreateServerBackedRowModelOptions<T> {
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
   initialGroupBy?: DataGridGroupBySpec | null
+  initialPivotModel?: DataGridPivotSpec | null
   initialPagination?: DataGridPaginationInput | null
   rowCacheLimit?: number
   warmupBlockStep?: number
@@ -128,6 +133,7 @@ export function createServerBackedRowModel<T>(
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
   let filterModel: DataGridFilterSnapshot | null = cloneDataGridFilterSnapshot(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
+  let pivotModel: DataGridPivotSpec | null = normalizePivotSpec(options.initialPivotModel ?? null)
   let aggregationModel: DataGridAggregationModel<T> | null = null
   let expansionExpandedByDefault = Boolean(groupBy?.expandedByDefault)
   let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
@@ -297,6 +303,7 @@ export function createServerBackedRowModel<T>(
       sortModel,
       filterModel: cloneDataGridFilterSnapshot(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
+      ...(pivotModel ? { pivotModel: clonePivotSpec(pivotModel), pivotColumns: [] } : {}),
       groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
     }
   }
@@ -748,6 +755,19 @@ export function createServerBackedRowModel<T>(
       toggledGroupKeys.clear()
       invalidateCaches()
       emit()
+    },
+    setPivotModel(nextPivotModel) {
+      ensureActive()
+      const normalized = normalizePivotSpec(nextPivotModel)
+      if (isSamePivotSpec(pivotModel, normalized)) {
+        return
+      }
+      pivotModel = normalized
+      invalidateCaches()
+      emit()
+    },
+    getPivotModel() {
+      return clonePivotSpec(pivotModel)
     },
     setAggregationModel(nextAggregationModel) {
       ensureActive()

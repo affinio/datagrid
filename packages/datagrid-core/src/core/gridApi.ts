@@ -11,6 +11,7 @@ import type {
   DataGridFilterSnapshot,
   DataGridSortAndFilterModelInput,
   DataGridGroupBySpec,
+  DataGridPivotSpec,
   DataGridGroupExpansionSnapshot,
   DataGridAggregationModel,
   DataGridPaginationInput,
@@ -121,6 +122,8 @@ export interface DataGridApi<TRow = unknown> {
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
   setSortAndFilterModel(input: DataGridSortAndFilterModelInput): void
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
+  setPivotModel(pivotModel: DataGridPivotSpec | null): void
+  getPivotModel(): DataGridPivotSpec | null
   setAggregationModel(aggregationModel: DataGridAggregationModel<TRow> | null): void
   getAggregationModel(): DataGridAggregationModel<TRow> | null
   getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
@@ -741,6 +744,12 @@ export function createDataGridApi<TRow = unknown>(
     },
     setGroupBy(groupBy: DataGridGroupBySpec | null) {
       rowModel.setGroupBy(groupBy)
+    },
+    setPivotModel(pivotModel: DataGridPivotSpec | null) {
+      rowModel.setPivotModel(pivotModel)
+    },
+    getPivotModel() {
+      return rowModel.getPivotModel()
     },
     setAggregationModel(aggregationModel: DataGridAggregationModel<TRow> | null) {
       rowModel.setAggregationModel(aggregationModel)

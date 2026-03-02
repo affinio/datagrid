@@ -58,7 +58,7 @@ Core naming is fully canonicalized to `DataGrid*` across stable, advanced, and i
   - keeps legacy behavior: increments row revision and recomputes filter/sort/group projection.
 - `patchRows(updates, options?)`:
   - partial updates by `rowId` (cell-level/streaming updates).
-  - defaults are backward-compatible (`recomputeSort/filter/group = true`).
+  - defaults are Excel-like (`recomputeSort/filter/group = false`) to keep current view stable during edits.
   - can disable projection phases for UX stability:
     - `recomputeSort: false`
     - `recomputeFilter: false`
@@ -75,13 +75,44 @@ When all recompute flags are disabled, cell values update and snapshot revision 
 
 Client projection is internally modeled as a stage graph:
 
-- `filter -> sort -> group -> paginate -> visible`
+- `filter -> sort -> group -> pivot -> aggregate -> paginate -> visible`
 
 Stage dirty state is propagated through dependencies, and snapshot includes `projection` diagnostics (`version`, `staleStages`) for devtools/integration debugging.
 `patchRows` uses field-aware invalidation internally: only stages whose dependency fields intersect patched fields are invalidated.
 Projection recompute is dirty-stage driven (not full-pass): blocked stages (`recompute* = false`) run in non-recompute mode for data continuity and remain marked stale until an explicit recompute is allowed.
 Projection diagnostics expose cycle vs actual recompute semantics: `version`/`cycleVersion` increase every projection cycle, while `recomputeVersion` increases only when at least one stage actually recomputed.
 For `treeData`, set `dependencyFields` to avoid unnecessary regroup/tree projection on unrelated cell patches.
+
+## Pivot Model (Engine Primitive)
+
+Client row model supports declarative pivot projection via:
+
+- `setPivotModel(pivotSpec | null)`
+- `getPivotModel()`
+
+Minimal V1 pivot spec:
+
+```ts
+{
+  rows: ["team"],
+  columns: ["year"],
+  values: [{ field: "revenue", agg: "sum" }],
+}
+```
+
+Pivot is executed as a pure projection stage and exposes deterministic runtime pivot columns in snapshot:
+
+- `snapshot.pivotModel`
+- `snapshot.pivotColumns`
+
+Current V1 scope/limitations:
+
+- Pivot is flat (projected rows are leaf-like; no pivot expand/collapse/subtotals yet).
+- Pivot values are taken from `pivotModel.values` and aggregated inside pivot stage.
+  `aggregationModel` group-aggregate stage is bypassed while pivot is active.
+- Pivot aggregation uses an incremental state path for `sum/count/countNonNull/avg`
+  and falls back to leaf-bucket recompute for other ops (`min/max/first/last/custom`).
+- Pivot invalidation is field-aware, but recompute is full-stage (no incremental pivot recompute yet).
 
 ## Deterministic Integration Snapshot
 

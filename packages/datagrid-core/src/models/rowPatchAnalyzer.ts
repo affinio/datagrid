@@ -3,6 +3,7 @@ import type {
   DataGridAggregationModel,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
+  DataGridPivotSpec,
   DataGridRowId,
   DataGridSortState,
   DataGridTreeDataResolvedSpec,
@@ -103,6 +104,34 @@ export function collectGroupByFields(groupBy: DataGridGroupBySpec | null): Set<s
   const fields = new Set<string>()
   for (const field of groupBy?.fields ?? []) {
     const normalized = field.trim()
+    if (normalized.length > 0) {
+      fields.add(normalized)
+    }
+  }
+  return fields
+}
+
+export function collectPivotModelFields(
+  pivotModel: DataGridPivotSpec | null,
+): Set<string> {
+  const fields = new Set<string>()
+  if (!pivotModel) {
+    return fields
+  }
+  for (const rowField of pivotModel.rows ?? []) {
+    const normalized = rowField.trim()
+    if (normalized.length > 0) {
+      fields.add(normalized)
+    }
+  }
+  for (const columnField of pivotModel.columns ?? []) {
+    const normalized = columnField.trim()
+    if (normalized.length > 0) {
+      fields.add(normalized)
+    }
+  }
+  for (const valueField of pivotModel.values ?? []) {
+    const normalized = valueField.field.trim()
     if (normalized.length > 0) {
       fields.add(normalized)
     }
@@ -331,6 +360,10 @@ const DATAGRID_PATCH_STAGE_RULE_MAP: DataGridPatchStageRuleMap = {
     allowRecompute: (policy: DataGridPatchRecomputePolicy) => policy.sort,
   },
   group: {
+    invalidate: (changeSet: DataGridPatchChangeSet) => changeSet.stageImpact.affectsGroup,
+    allowRecompute: (policy: DataGridPatchRecomputePolicy) => policy.group,
+  },
+  pivot: {
     invalidate: (changeSet: DataGridPatchChangeSet) => changeSet.stageImpact.affectsGroup,
     allowRecompute: (policy: DataGridPatchRecomputePolicy) => policy.group,
   },

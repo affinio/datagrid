@@ -2,10 +2,13 @@ import {
   buildGroupExpansionSnapshot,
   buildPaginationSnapshot,
   cloneGroupBySpec,
+  clonePivotSpec,
   isSameGroupExpansionSnapshot,
   isSameGroupBySpec,
+  isSamePivotSpec,
   normalizePaginationInput,
   normalizeGroupBySpec,
+  normalizePivotSpec,
   normalizeRowNode,
   normalizeViewportRange,
   setGroupExpansionKey,
@@ -14,6 +17,7 @@ import {
   type DataGridPaginationInput,
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
+  type DataGridPivotSpec,
   type DataGridAggregationModel,
   type DataGridRowId,
   type DataGridRowNode,
@@ -43,6 +47,7 @@ export interface CreateDataSourceBackedRowModelOptions<T = unknown> {
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
   initialGroupBy?: DataGridGroupBySpec | null
+  initialPivotModel?: DataGridPivotSpec | null
   initialPagination?: DataGridPaginationInput | null
   initialTotal?: number
   rowCacheLimit?: number
@@ -203,6 +208,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? [...options.initialSortModel] : []
   let filterModel: DataGridFilterSnapshot | null = cloneDataGridFilterSnapshot(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
+  let pivotModel: DataGridPivotSpec | null = normalizePivotSpec(options.initialPivotModel ?? null)
   let aggregationModel: DataGridAggregationModel<T> | null = null
   let expansionExpandedByDefault = Boolean(groupBy?.expandedByDefault)
   let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
@@ -358,6 +364,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       sortModel,
       filterModel: cloneDataGridFilterSnapshot(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
+      ...(pivotModel ? { pivotModel: clonePivotSpec(pivotModel), pivotColumns: [] } : {}),
       groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
     }
   }
@@ -886,6 +893,21 @@ export function createDataSourceBackedRowModel<T = unknown>(
         createTreePullContext("set-group-by", [], "all"),
       )
       emit()
+    },
+    setPivotModel(nextPivotModel) {
+      ensureActive()
+      const normalized = normalizePivotSpec(nextPivotModel)
+      if (isSamePivotSpec(pivotModel, normalized)) {
+        return
+      }
+      pivotModel = normalized
+      bumpRevision()
+      clearAll()
+      void pullRange(toSourceRange(viewportRange), "group-change", "critical")
+      emit()
+    },
+    getPivotModel() {
+      return clonePivotSpec(pivotModel)
     },
     setAggregationModel(nextAggregationModel) {
       ensureActive()

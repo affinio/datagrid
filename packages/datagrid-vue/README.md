@@ -166,6 +166,22 @@ runtime.reapplyView()
 runtime.autoReapply.value = true
 ```
 
+Pivot can be controlled directly from runtime API (without direct core/orchestration imports):
+
+```ts
+runtime.setPivotModel({
+  rows: ["team"],
+  columns: ["year"],
+  values: [{ field: "revenue", agg: "sum" }],
+})
+
+const activePivot = runtime.getPivotModel()
+runtime.setPivotModel(null)
+```
+
+When pivot is active, runtime automatically reconciles `snapshot.pivotColumns` into the column model
+so adapters render pivot columns without manual `setColumns` wiring. Base columns remain the source of truth.
+
 ## Managed wheel scroll (advanced)
 
 Use `useDataGridManagedWheelScroll` when you want deterministic wheel ownership (axis lock, preventDefault policy, and consistent header/body horizontal sync).

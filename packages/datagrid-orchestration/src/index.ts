@@ -642,3 +642,10 @@ export {
   buildDataGridOverlayTransform,
   buildDataGridOverlayTransformFromSnapshot,
 } from "./selectionOverlayTransform"
+
+export type {
+  DataGridPivotSpec,
+  DataGridPivotValueSpec,
+  DataGridPivotColumn,
+  DataGridPivotColumnPathSegment,
+} from "@affino/datagrid-core"

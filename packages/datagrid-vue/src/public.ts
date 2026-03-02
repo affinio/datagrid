@@ -14,6 +14,9 @@ export {
   evaluateColumnPredicateFilter,
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,
+  normalizePivotSpec,
+  clonePivotSpec,
+  isSamePivotSpec,
   serializeColumnValueToToken,
 } from "@affino/datagrid-core"
 
@@ -39,6 +42,10 @@ export type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
+  DataGridPivotSpec,
+  DataGridPivotValueSpec,
+  DataGridPivotColumn,
+  DataGridPivotColumnPathSegment,
   DataGridPaginationInput,
   DataGridPaginationSnapshot,
   DataGridProjectionDiagnostics,

@@ -154,6 +154,42 @@ describe("data grid api facade contracts", () => {
     })
   })
 
+  it("routes pivot model through row model service", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "alpha", status: "open" }, rowId: 1, originalIndex: 0 },
+        { row: { id: 2, team: "alpha", status: "done" }, rowId: 2, originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "id", label: "ID" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.setPivotModel({
+      rows: ["team"],
+      columns: ["status"],
+      values: [{ field: "id", agg: "count" }],
+    })
+
+    expect(api.getPivotModel()).toEqual({
+      rows: ["team"],
+      columns: ["status"],
+      values: [{ field: "id", agg: "count" }],
+    })
+    expect(api.getRowModelSnapshot().pivotModel).toEqual({
+      rows: ["team"],
+      columns: ["status"],
+      values: [{ field: "id", agg: "count" }],
+    })
+  })
+
   it("falls back to sequential setFilterModel/setSortModel when row model lacks batched sort+filter capability", () => {
     const clientRowModel = createClientRowModel({
       rows: [

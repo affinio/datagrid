@@ -13,6 +13,9 @@ export {
   cloneDataGridFilterSnapshot,
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,
+  normalizePivotSpec,
+  clonePivotSpec,
+  isSamePivotSpec,
 } from "@affino/datagrid-core"
 
 export type {
@@ -28,6 +31,10 @@ export type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
+  DataGridPivotSpec,
+  DataGridPivotValueSpec,
+  DataGridPivotColumn,
+  DataGridPivotColumnPathSegment,
   DataGridPaginationSnapshot,
   DataGridProjectionDiagnostics,
   DataGridRowNode,

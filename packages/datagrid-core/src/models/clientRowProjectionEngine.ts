@@ -42,6 +42,7 @@ export interface DataGridClientProjectionStageHandlers<T> {
   runFilterStage: (context: DataGridClientProjectionFilterStageContext<T>) => DataGridClientProjectionFilterStageResult
   runSortStage: (context: DataGridClientProjectionStageContext<T>) => boolean
   runGroupStage: (context: DataGridClientProjectionGroupStageContext<T>) => boolean
+  runPivotStage: (context: DataGridClientProjectionStageContext<T>) => boolean
   runAggregateStage: (context: DataGridClientProjectionStageContext<T>) => boolean
   runPaginateStage: (context: DataGridClientProjectionStageContext<T>) => boolean
   runVisibleStage: (context: DataGridClientProjectionStageContext<T>) => boolean
@@ -112,6 +113,14 @@ const DATAGRID_CLIENT_PROJECTION_STAGE_DEFINITIONS = {
       return context.handlers.runGroupStage({
         sourceById: context.sourceById,
         rowMatchesFilter: (row: DataGridRowNode<T>) => context.getFilteredRowIds().has(row.rowId),
+        shouldRecompute,
+      })
+    },
+  },
+  pivot: {
+    compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
+      return context.handlers.runPivotStage({
+        sourceById: context.sourceById,
         shouldRecompute,
       })
     },

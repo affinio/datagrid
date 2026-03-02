@@ -58,6 +58,21 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime!.getAggregationModel()).toEqual({
       columns: [{ key: "name", op: "count" }],
     })
+    runtime!.setPivotModel({
+      rows: ["name"],
+      columns: ["tested_at"],
+      values: [{ field: "tested_at", agg: "count" }],
+    })
+    await flushRuntimeTasks()
+    expect(runtime!.getPivotModel()).toEqual({
+      rows: ["name"],
+      columns: ["tested_at"],
+      values: [{ field: "tested_at", agg: "count" }],
+    })
+    expect(runtime!.columnSnapshot.value.columns.some(column => column.key.startsWith("pivot|"))).toBe(true)
+    runtime!.setPivotModel(null)
+    await flushRuntimeTasks()
+    expect(runtime!.columnSnapshot.value.columns.some(column => column.key.startsWith("pivot|"))).toBe(false)
 
     runtime!.patchRows(
       [{ rowId: "r2", data: { name: "Bravo-updated" } }],

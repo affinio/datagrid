@@ -66,4 +66,41 @@ describe("useDataGridRuntimeService contract", () => {
     runtime.stop()
     expect(runtime.isDisposed()).toBe(true)
   })
+
+  it("syncs pivot runtime columns into column model and removes them when pivot is cleared", () => {
+    const runtime = useDataGridRuntimeService<{
+      rowId: string
+      team: string
+      year: number
+      revenue: number
+    }>({
+      rows: [
+        { rowId: "r1", team: "A", year: 2024, revenue: 10 },
+        { rowId: "r2", team: "A", year: 2025, revenue: 20 },
+      ],
+      columns: [{ key: "team", label: "Team", width: 180 }],
+    })
+
+    expect(runtime.getColumnSnapshot().columns.map(column => column.key)).toEqual(["team"])
+
+    runtime.api.setPivotModel({
+      rows: ["team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+    })
+
+    const withPivot = runtime.getColumnSnapshot()
+    const pivotKeys = withPivot.columns
+      .map(column => column.key)
+      .filter(key => key.startsWith("pivot|"))
+    expect(pivotKeys.length).toBe(2)
+    expect(withPivot.columns.find(column => column.key === "team")?.width).toBe(180)
+
+    runtime.api.setPivotModel(null)
+    const afterClear = runtime.getColumnSnapshot()
+    expect(afterClear.columns.map(column => column.key)).toEqual(["team"])
+    expect(afterClear.columns.find(column => column.key === "team")?.width).toBe(180)
+
+    runtime.stop()
+  })
 })

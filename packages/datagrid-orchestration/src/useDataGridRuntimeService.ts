@@ -3,6 +3,8 @@ import type {
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
   DataGridColumnModelSnapshot,
+  DataGridColumnPin,
+  DataGridPivotColumn,
   DataGridRowNode,
   DataGridRowModel,
   DataGridViewportRange,
@@ -123,11 +125,149 @@ function isSameVirtualWindow(
   )
 }
 
+function stableSerializeUnknown(value: unknown): string {
+  if (value == null || typeof value !== "object") {
+    return JSON.stringify(value)
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerializeUnknown).join(",")}]`
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, nested]) => `${JSON.stringify(key)}:${stableSerializeUnknown(nested)}`)
+  return `{${entries.join(",")}}`
+}
+
+function cloneColumnDef(column: DataGridColumnDef): DataGridColumnDef {
+  return {
+    ...column,
+    meta: column.meta ? { ...column.meta } : undefined,
+  }
+}
+
+function serializeBaseColumnsSignature(columns: readonly DataGridColumnDef[]): string {
+  return columns
+    .map((column) => {
+      return [
+        column.key,
+        column.label ?? "",
+        column.width ?? "",
+        column.minWidth ?? "",
+        column.maxWidth ?? "",
+        column.visible === false ? "0" : "1",
+        column.pin ?? "none",
+        stableSerializeUnknown(column.meta ?? null),
+      ].join("|")
+    })
+    .join("||")
+}
+
+function serializePivotColumnsSignature(columns: readonly DataGridPivotColumn[]): string {
+  return columns
+    .map((column) => {
+      const path = column.columnPath
+        .map(segment => `${segment.field}=${segment.value}`)
+        .join(">")
+      return [
+        column.id,
+        column.valueField,
+        column.agg,
+        column.label,
+        path,
+      ].join("|")
+    })
+    .join("||")
+}
+
+function createPivotColumnDef(column: DataGridPivotColumn): DataGridColumnDef {
+  return {
+    key: column.id,
+    label: column.label,
+    visible: true,
+    pin: "none",
+    meta: {
+      affinoPivot: true,
+      valueField: column.valueField,
+      agg: column.agg,
+      columnPath: column.columnPath.map(segment => ({
+        field: segment.field,
+        value: segment.value,
+      })),
+    },
+  }
+}
+
+interface ColumnStateSnapshot {
+  visible: boolean
+  pin: DataGridColumnPin
+  width: number | undefined
+}
+
+function buildColumnStateByKey(snapshot: DataGridColumnModelSnapshot): Map<string, ColumnStateSnapshot> {
+  const stateByKey = new Map<string, ColumnStateSnapshot>()
+  for (const column of snapshot.columns) {
+    stateByKey.set(column.key, {
+      visible: column.visible,
+      pin: column.pin,
+      width: column.width ?? undefined,
+    })
+  }
+  return stateByKey
+}
+
+function applyPersistedColumnState(
+  column: DataGridColumnDef,
+  state: ColumnStateSnapshot | undefined,
+): DataGridColumnDef {
+  if (!state) {
+    return column
+  }
+  return {
+    ...column,
+    visible: state.visible,
+    pin: state.pin,
+    width: state.width,
+  }
+}
+
+function buildEffectiveColumns(
+  baseColumns: readonly DataGridColumnDef[],
+  pivotColumns: readonly DataGridPivotColumn[],
+  stateByKey: ReadonlyMap<string, ColumnStateSnapshot>,
+): DataGridColumnDef[] {
+  const seen = new Set<string>()
+  const effective: DataGridColumnDef[] = []
+
+  for (const baseColumn of baseColumns) {
+    const normalized = cloneColumnDef(baseColumn)
+    if (!normalized.key || seen.has(normalized.key)) {
+      continue
+    }
+    seen.add(normalized.key)
+    effective.push(applyPersistedColumnState(normalized, stateByKey.get(normalized.key)))
+  }
+
+  for (const pivotColumn of pivotColumns) {
+    if (!pivotColumn.id || seen.has(pivotColumn.id)) {
+      continue
+    }
+    seen.add(pivotColumn.id)
+    const columnDef = createPivotColumnDef(pivotColumn)
+    effective.push(applyPersistedColumnState(columnDef, stateByKey.get(columnDef.key)))
+  }
+
+  return effective
+}
+
 export function useDataGridRuntimeService<TRow = unknown>(
   options: UseDataGridRuntimeServiceOptions<TRow>,
 ): UseDataGridRuntimeServiceResult<TRow> {
   const runtime = createDataGridRuntime(options)
   const { rowModel, columnModel, core, api } = runtime
+  let baseColumns: DataGridColumnDef[] = Array.isArray(options.columns)
+    ? options.columns.map(cloneColumnDef)
+    : []
+  let lastColumnsSyncSignature = ""
 
   let started = false
   let disposed = false
@@ -206,7 +346,21 @@ export function useDataGridRuntimeService<TRow = unknown>(
     emitVirtualWindow()
   }
 
+  const syncColumnsFromRowPivot = (force = false): void => {
+    const rowSnapshot = rowModel.getSnapshot()
+    const pivotColumns = rowSnapshot.pivotColumns ?? []
+    const signature = `${serializeBaseColumnsSignature(baseColumns)}::${serializePivotColumnsSignature(pivotColumns)}`
+    if (!force && signature === lastColumnsSyncSignature) {
+      return
+    }
+    const stateByKey = buildColumnStateByKey(columnModel.getSnapshot())
+    const effectiveColumns = buildEffectiveColumns(baseColumns, pivotColumns, stateByKey)
+    columnModel.setColumns(effectiveColumns)
+    lastColumnsSyncSignature = signature
+  }
+
   const unsubscribeRowModel = rowModel.subscribe(() => {
+    syncColumnsFromRowPivot()
     recomputeVirtualWindow()
   })
   const unsubscribeColumnModelForWindow = columnModel.subscribe(() => {
@@ -247,7 +401,10 @@ export function useDataGridRuntimeService<TRow = unknown>(
   }
 
   function setColumns(columns: readonly DataGridColumnDef[]) {
-    columnModel.setColumns(columns)
+    baseColumns = Array.isArray(columns)
+      ? columns.map(cloneColumnDef)
+      : []
+    syncColumnsFromRowPivot(true)
     recomputeVirtualWindow()
   }
 
@@ -278,6 +435,8 @@ export function useDataGridRuntimeService<TRow = unknown>(
     recomputeVirtualWindow()
     return rows
   }
+
+  syncColumnsFromRowPivot(true)
 
   function getVirtualWindowSnapshot(): DataGridRuntimeVirtualWindowSnapshot | null {
     return cloneVirtualWindow(virtualWindowSnapshot)

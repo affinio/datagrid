@@ -122,6 +122,30 @@ export interface DataGridGroupBySpec {
   expandedByDefault?: boolean
 }
 
+export interface DataGridPivotValueSpec {
+  field: string
+  agg: DataGridAggOp
+}
+
+export interface DataGridPivotSpec {
+  rows: string[]
+  columns: string[]
+  values: DataGridPivotValueSpec[]
+}
+
+export interface DataGridPivotColumnPathSegment {
+  field: string
+  value: string
+}
+
+export interface DataGridPivotColumn {
+  id: string
+  valueField: string
+  agg: DataGridAggOp
+  columnPath: readonly DataGridPivotColumnPathSegment[]
+  label: string
+}
+
 export interface DataGridGroupExpansionSnapshot {
   expandedByDefault: boolean
   toggledGroupKeys: readonly string[]
@@ -293,6 +317,8 @@ export interface DataGridRowModelSnapshot<T = unknown> {
   sortModel: readonly DataGridSortState[]
   filterModel: DataGridFilterSnapshot | null
   groupBy: DataGridGroupBySpec | null
+  pivotModel?: DataGridPivotSpec | null
+  pivotColumns?: readonly DataGridPivotColumn[]
   groupExpansion: DataGridGroupExpansionSnapshot
 }
 
@@ -300,6 +326,7 @@ export type DataGridProjectionStage =
   | "filter"
   | "sort"
   | "group"
+  | "pivot"
   | "aggregate"
   | "paginate"
   | "visible"
@@ -334,6 +361,8 @@ export interface DataGridRowModel<T = unknown> {
   setFilterModel(filterModel: DataGridFilterSnapshot | null): void
   setSortAndFilterModel?(input: DataGridSortAndFilterModelInput): void
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
+  setPivotModel(pivotModel: DataGridPivotSpec | null): void
+  getPivotModel(): DataGridPivotSpec | null
   setAggregationModel(aggregationModel: DataGridAggregationModel<T> | null): void
   getAggregationModel(): DataGridAggregationModel<T> | null
   getColumnHistogram?(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
@@ -566,6 +595,133 @@ export function cloneGroupBySpec(groupBy: DataGridGroupBySpec | null | undefined
     fields: [...groupBy.fields],
     expandedByDefault: Boolean(groupBy.expandedByDefault),
   }
+}
+
+function isPivotAggOp(value: unknown): value is DataGridAggOp {
+  return (
+    value === "sum"
+    || value === "avg"
+    || value === "min"
+    || value === "max"
+    || value === "count"
+    || value === "countNonNull"
+    || value === "first"
+    || value === "last"
+    || value === "custom"
+  )
+}
+
+export function normalizePivotSpec(pivotSpec: DataGridPivotSpec | null | undefined): DataGridPivotSpec | null {
+  if (!pivotSpec) {
+    return null
+  }
+  const normalizeFieldList = (input: unknown): string[] => {
+    if (!Array.isArray(input)) {
+      return []
+    }
+    const unique = new Set<string>()
+    for (const rawField of input) {
+      if (typeof rawField !== "string") {
+        continue
+      }
+      const field = rawField.trim()
+      if (field.length === 0 || unique.has(field)) {
+        continue
+      }
+      unique.add(field)
+    }
+    return Array.from(unique)
+  }
+  const normalizedRows = normalizeFieldList(pivotSpec.rows)
+  const normalizedColumns = normalizeFieldList(pivotSpec.columns)
+  const normalizedValues: DataGridPivotValueSpec[] = []
+  const seenValues = new Set<string>()
+  if (Array.isArray(pivotSpec.values)) {
+    for (const valueSpec of pivotSpec.values) {
+      const field = typeof valueSpec?.field === "string"
+        ? valueSpec.field.trim()
+        : ""
+      const agg = valueSpec?.agg
+      if (field.length === 0 || !isPivotAggOp(agg)) {
+        continue
+      }
+      const dedupeKey = `${field}::${agg}`
+      if (seenValues.has(dedupeKey)) {
+        continue
+      }
+      seenValues.add(dedupeKey)
+      normalizedValues.push({
+        field,
+        agg,
+      })
+    }
+  }
+  if (normalizedValues.length === 0) {
+    return null
+  }
+  return {
+    rows: normalizedRows,
+    columns: normalizedColumns,
+    values: normalizedValues,
+  }
+}
+
+export function clonePivotSpec(
+  pivotSpec: DataGridPivotSpec | null | undefined,
+): DataGridPivotSpec | null {
+  const normalized = normalizePivotSpec(pivotSpec)
+  if (!normalized) {
+    return null
+  }
+  return {
+    rows: [...normalized.rows],
+    columns: [...normalized.columns],
+    values: normalized.values.map(value => ({ ...value })),
+  }
+}
+
+export function isSamePivotSpec(
+  left: DataGridPivotSpec | null | undefined,
+  right: DataGridPivotSpec | null | undefined,
+): boolean {
+  const normalizedLeft = normalizePivotSpec(left)
+  const normalizedRight = normalizePivotSpec(right)
+  if (!normalizedLeft && !normalizedRight) {
+    return true
+  }
+  if (!normalizedLeft || !normalizedRight) {
+    return false
+  }
+  if (normalizedLeft.rows.length !== normalizedRight.rows.length) {
+    return false
+  }
+  if (normalizedLeft.columns.length !== normalizedRight.columns.length) {
+    return false
+  }
+  if (normalizedLeft.values.length !== normalizedRight.values.length) {
+    return false
+  }
+  for (let index = 0; index < normalizedLeft.rows.length; index += 1) {
+    if (normalizedLeft.rows[index] !== normalizedRight.rows[index]) {
+      return false
+    }
+  }
+  for (let index = 0; index < normalizedLeft.columns.length; index += 1) {
+    if (normalizedLeft.columns[index] !== normalizedRight.columns[index]) {
+      return false
+    }
+  }
+  for (let index = 0; index < normalizedLeft.values.length; index += 1) {
+    const leftValue = normalizedLeft.values[index]
+    const rightValue = normalizedRight.values[index]
+    if (!leftValue || !rightValue) {
+      return false
+    }
+    if (leftValue.field !== rightValue.field || leftValue.agg !== rightValue.agg) {
+      return false
+    }
+  }
+  return true
 }
 
 function normalizeGroupKey(groupKey: string): string | null {

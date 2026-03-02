@@ -480,6 +480,233 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("projects pivot rows with deterministic runtime pivot columns", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", team: "A", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", team: "A", year: 2025, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", team: "B", year: 2024, revenue: 7 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialPivotModel: {
+        rows: ["team"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+      },
+    })
+
+    const snapshot = model.getSnapshot()
+    expect(snapshot.pivotModel).toEqual({
+      rows: ["team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+    })
+    const pivotColumns = snapshot.pivotColumns ?? []
+    expect(pivotColumns).toHaveLength(2)
+    const y2024 = pivotColumns.find(column => column.label.includes("year=2024"))
+    const y2025 = pivotColumns.find(column => column.label.includes("year=2025"))
+    expect(y2024).toBeDefined()
+    expect(y2025).toBeDefined()
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rows).toHaveLength(2)
+    const rowA = rows.find(row => (row.row as { team?: string }).team === "A")
+    const rowB = rows.find(row => (row.row as { team?: string }).team === "B")
+    const rowARecord = rowA?.row as Record<string, unknown> | undefined
+    const rowBRecord = rowB?.row as Record<string, unknown> | undefined
+    expect(rowARecord?.[String(y2024?.id)]).toBe(10)
+    expect(rowARecord?.[String(y2025?.id)]).toBe(20)
+    expect(rowBRecord?.[String(y2024?.id)]).toBe(7)
+    expect(rowBRecord?.[String(y2025?.id)]).toBeNull()
+    expect(rowARecord?.id).toBeUndefined()
+    expect(rowBRecord?.id).toBeUndefined()
+    expect(rowARecord?.rowId).toBeDefined()
+    expect(rowBRecord?.rowId).toBeDefined()
+    expect(typeof rowARecord?.rowId).toBe("string")
+    expect(typeof rowBRecord?.rowId).toBe("string")
+
+    model.dispose()
+  })
+
+  it("projects pivot rows with non-incremental aggregation ops via fallback path", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", team: "A", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", team: "A", year: 2024, revenue: 15 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", team: "A", year: 2025, revenue: 8 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+        { row: { id: "r4", team: "B", year: 2024, revenue: 7 }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialPivotModel: {
+        rows: ["team"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "max" }],
+      },
+    })
+
+    const pivotColumns = model.getSnapshot().pivotColumns ?? []
+    const y2024 = pivotColumns.find(column => column.label.includes("year=2024"))
+    const y2025 = pivotColumns.find(column => column.label.includes("year=2025"))
+    expect(y2024).toBeDefined()
+    expect(y2025).toBeDefined()
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    const rowA = rows.find(row => (row.row as { team?: string }).team === "A")
+    const rowB = rows.find(row => (row.row as { team?: string }).team === "B")
+    expect((rowA?.row as Record<string, unknown> | undefined)?.[String(y2024?.id)]).toBe(15)
+    expect((rowA?.row as Record<string, unknown> | undefined)?.[String(y2025?.id)]).toBe(8)
+    expect((rowB?.row as Record<string, unknown> | undefined)?.[String(y2024?.id)]).toBe(7)
+    expect((rowB?.row as Record<string, unknown> | undefined)?.[String(y2025?.id)]).toBeNull()
+
+    model.dispose()
+  })
+
+  it("supports nested pivot field paths for rows/columns/values", () => {
+    const model = createClientRowModel({
+      rows: [
+        {
+          row: {
+            id: "r1",
+            meta: { team: "A", year: 2024 },
+            metrics: { revenue: 10 },
+          },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+        {
+          row: {
+            id: "r2",
+            meta: { team: "A", year: 2025 },
+            metrics: { revenue: 20 },
+          },
+          rowId: "r2",
+          originalIndex: 1,
+          displayIndex: 1,
+        },
+      ],
+      initialPivotModel: {
+        rows: ["meta.team"],
+        columns: ["meta.year"],
+        values: [{ field: "metrics.revenue", agg: "sum" }],
+      },
+    })
+
+    const pivotColumns = model.getSnapshot().pivotColumns ?? []
+    const y2024 = pivotColumns.find(column => column.label.includes("meta.year=2024"))
+    const y2025 = pivotColumns.find(column => column.label.includes("meta.year=2025"))
+    expect(y2024).toBeDefined()
+    expect(y2025).toBeDefined()
+
+    const rowA = model.getRowsInRange({ start: 0, end: 10 })[0]
+    const rowARecord = rowA?.row as Record<string, unknown> | undefined
+    expect(rowARecord?.["meta.team"]).toBe("A")
+    expect(rowARecord?.[String(y2024?.id)]).toBe(10)
+    expect(rowARecord?.[String(y2025?.id)]).toBe(20)
+
+    model.dispose()
+  })
+
+  it("keeps pivot row and column order deterministic for shuffled input rows", () => {
+    const rowNodes = [
+      { row: { id: "r1", team: "A", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      { row: { id: "r2", team: "A", year: 2025, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      { row: { id: "r3", team: "B", year: 2024, revenue: 7 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      { row: { id: "r4", team: "B", year: 2025, revenue: 5 }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+    ]
+
+    const buildProjection = (rows: typeof rowNodes) => {
+      const model = createClientRowModel({
+        rows,
+        initialPivotModel: {
+          rows: ["team"],
+          columns: ["year"],
+          values: [{ field: "revenue", agg: "sum" }],
+        },
+      })
+      const columns = model.getSnapshot().pivotColumns ?? []
+      const projection = {
+        columnLabels: columns.map(column => column.label),
+        rows: model.getRowsInRange({ start: 0, end: 10 }).map(row => {
+          const record = row.row as Record<string, unknown>
+          return {
+            team: String(record.team ?? ""),
+            values: columns.map(column => record[column.id] ?? null),
+          }
+        }),
+      }
+      model.dispose()
+      return projection
+    }
+
+    const ordered = buildProjection([rowNodes[0], rowNodes[1], rowNodes[2], rowNodes[3]])
+    const shuffled = buildProjection([rowNodes[3], rowNodes[1], rowNodes[2], rowNodes[0]])
+    expect(shuffled).toEqual(ordered)
+    expect(ordered.rows.map(row => row.team)).toEqual(["A", "B"])
+  })
+
+  it("normalizes null/undefined pivot axis values into a single blank column bucket", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", team: "A", year: null, revenue: 1 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", team: "A", revenue: 2 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", team: "A", year: "", revenue: 3 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialPivotModel: {
+        rows: ["team"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+      },
+    })
+
+    const pivotColumns = model.getSnapshot().pivotColumns ?? []
+    expect(pivotColumns).toHaveLength(1)
+    expect(pivotColumns[0]?.label.includes("year=")).toBe(true)
+
+    const row = model.getRowsInRange({ start: 0, end: 5 })[0]
+    const rowRecord = row?.row as Record<string, unknown> | undefined
+    expect(rowRecord?.team).toBe("A")
+    expect(rowRecord?.[pivotColumns[0]?.id ?? ""]).toBe(6)
+    expect(rowRecord?.id).toBeUndefined()
+
+    model.dispose()
+  })
+
+  it("keeps pivot projection frozen when recomputeGroup=false and reapplies when recomputeGroup=true", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", team: "A", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", team: "A", year: 2025, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialPivotModel: {
+        rows: ["team"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+      },
+    })
+
+    const year2024ColumnId = model.getSnapshot().pivotColumns?.find(column => column.label.includes("year=2024"))?.id
+    expect(typeof year2024ColumnId).toBe("string")
+
+    const before = model.getRowsInRange({ start: 0, end: 10 })[0]
+    const beforeValue = (before?.row as Record<string, unknown> | undefined)?.[String(year2024ColumnId)]
+    expect(beforeValue).toBe(10)
+
+    model.patchRows([{ rowId: "r1", data: { revenue: 100 } }], {
+      recomputeGroup: false,
+    })
+    const frozen = model.getRowsInRange({ start: 0, end: 10 })[0]
+    const frozenValue = (frozen?.row as Record<string, unknown> | undefined)?.[String(year2024ColumnId)]
+    expect(frozenValue).toBe(10)
+
+    model.patchRows([{ rowId: "r1", data: { revenue: 120 } }], {
+      recomputeGroup: true,
+    })
+    const reapplied = model.getRowsInRange({ start: 0, end: 10 })[0]
+    const reappliedValue = (reapplied?.row as Record<string, unknown> | undefined)?.[String(year2024ColumnId)]
+    expect(reappliedValue).toBe(120)
+
+    model.dispose()
+  })
+
   it("projects treeData path mode deterministically and toggles expansion by group key", () => {
     const model = createClientRowModel({
       rows: [
