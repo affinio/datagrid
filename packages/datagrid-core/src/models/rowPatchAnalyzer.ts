@@ -139,6 +139,38 @@ export function collectPivotModelFields(
   return fields
 }
 
+export function collectPivotAxisFields(
+  pivotModel: DataGridPivotSpec | null,
+): Set<string> {
+  const fields = new Set<string>()
+  if (!pivotModel) {
+    return fields
+  }
+  for (const field of [...pivotModel.rows, ...pivotModel.columns]) {
+    const normalized = field.trim()
+    if (normalized.length > 0) {
+      fields.add(normalized)
+    }
+  }
+  return fields
+}
+
+export function collectPivotValueFields(
+  pivotModel: DataGridPivotSpec | null,
+): Set<string> {
+  const fields = new Set<string>()
+  if (!pivotModel) {
+    return fields
+  }
+  for (const valueSpec of pivotModel.values) {
+    const normalized = valueSpec.field.trim()
+    if (normalized.length > 0) {
+      fields.add(normalized)
+    }
+  }
+  return fields
+}
+
 export function collectAggregationModelFields<T>(
   aggregationModel: DataGridAggregationModel<T> | null,
 ): Set<string> {

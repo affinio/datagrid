@@ -40,7 +40,24 @@ const ownerCellSelector = dataGridCellSelector("owner")
 
 ## Advanced API (`@affino/datagrid-vue/advanced`)
 
-Compatibility entrypoint. New demo/workbench wiring should import `@affino/datagrid-vue/internal`.
+Advanced entrypoint. For new integrations prefer domain entrypoints:
+
+- `@affino/datagrid-vue/advanced/layout`
+- `@affino/datagrid-vue/advanced/pointer`
+- `@affino/datagrid-vue/advanced/selection`
+- `@affino/datagrid-vue/advanced/editing`
+- `@affino/datagrid-vue/advanced/clipboard`
+- `@affino/datagrid-vue/advanced/filtering`
+- `@affino/datagrid-vue/advanced/history`
+
+Example:
+
+```ts
+import {
+  useDataGridManagedWheelScroll,
+  useDataGridColumnLayoutOrchestration,
+} from "@affino/datagrid-vue/advanced/layout"
+```
 
 - `useDataGridViewportBridge`
 - `useDataGridHeaderOrchestration`
@@ -469,4 +486,4 @@ const grid = useAffinoDataGridUi({
   />
 </td>
 ```
-- Demo-level orchestration can be imported from `@affino/datagrid-vue/internal`.
+- Demo-level orchestration should import from `@affino/datagrid-vue/advanced/*` domain entrypoints.

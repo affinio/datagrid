@@ -17,9 +17,33 @@
       "types": "./dist/advanced.d.ts",
       "import": "./dist/advanced.js"
     },
-    "./internal": {
-      "types": "./dist/internal.d.ts",
-      "import": "./dist/internal.js"
+    "./advanced/layout": {
+      "types": "./dist/advanced/layout.d.ts",
+      "import": "./dist/advanced/layout.js"
+    },
+    "./advanced/pointer": {
+      "types": "./dist/advanced/pointer.d.ts",
+      "import": "./dist/advanced/pointer.js"
+    },
+    "./advanced/selection": {
+      "types": "./dist/advanced/selection.d.ts",
+      "import": "./dist/advanced/selection.js"
+    },
+    "./advanced/editing": {
+      "types": "./dist/advanced/editing.d.ts",
+      "import": "./dist/advanced/editing.js"
+    },
+    "./advanced/clipboard": {
+      "types": "./dist/advanced/clipboard.d.ts",
+      "import": "./dist/advanced/clipboard.js"
+    },
+    "./advanced/filtering": {
+      "types": "./dist/advanced/filtering.d.ts",
+      "import": "./dist/advanced/filtering.js"
+    },
+    "./advanced/history": {
+      "types": "./dist/advanced/history.d.ts",
+      "import": "./dist/advanced/history.js"
     },
     "./components": {
       "types": "./dist/components/index.d.ts",

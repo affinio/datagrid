@@ -1,25 +1,17 @@
 import {
-  buildGroupExpansionSnapshot,
   buildPaginationSnapshot,
   cloneGroupBySpec,
   clonePivotSpec,
-  isSameGroupExpansionSnapshot,
-  isSameGroupBySpec,
-  isSamePivotSpec,
   normalizeRowNode,
   normalizeGroupBySpec,
-  normalizePivotSpec,
   normalizePaginationInput,
+  normalizePivotSpec,
   normalizeTreeDataSpec,
   normalizeViewportRange,
-  setGroupExpansionKey,
-  toggleGroupExpansionKey,
   withResolvedRowIdentity,
   type DataGridGroupExpansionSnapshot,
   type DataGridPaginationInput,
-  type DataGridPivotCellDrilldown,
   type DataGridPivotCellDrilldownInput,
-  type DataGridProjectionDiagnostics,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramOptions,
   type DataGridFilterSnapshot,
@@ -43,9 +35,6 @@ import {
 } from "./rowModel.js"
 import {
   createClientRowProjectionEngine,
-  type DataGridClientProjectionFinalizeMeta,
-  type DataGridClientProjectionStage,
-  type DataGridClientProjectionStageHandlers,
   expandClientProjectionStages,
 } from "./clientRowProjectionEngine.js"
 import { createClientRowProjectionOrchestrator } from "./clientRowProjectionOrchestrator.js"
@@ -57,14 +46,7 @@ import {
   cloneDataGridFilterSnapshot as cloneFilterSnapshot,
 } from "./advancedFilter.js"
 import {
-  analyzeRowPatchChangeSet,
-  collectAggregationModelFields,
-  buildPatchProjectionExecutionPlan,
-  collectFilterModelFields,
-  collectGroupByFields,
-  collectPivotModelFields,
-  collectSortModelFields,
-  collectTreeDataDependencyFields,
+  type DataGridPatchChangeSet,
 } from "./rowPatchAnalyzer.js"
 import {
   createDataGridProjectionPolicy,
@@ -82,7 +64,6 @@ import {
   cloneAggregationModel,
   createEmptyTreeDataDiagnostics,
   findDuplicateRowIds,
-  isSameAggregationModel,
   patchGroupRowsAggregatesByGroupKey,
 } from "./clientRowModelHelpers.js"
 import {
@@ -98,33 +79,31 @@ import {
 import {
   buildColumnHistogram,
   createFilterPredicate,
-  hasActiveFilterModel,
-  isSameFilterModel,
-  isSameSortModel,
   normalizeText,
   readRowField,
 } from "./clientRowProjectionPrimitives.js"
 import {
   applyRowDataPatch,
   buildRowIdIndex,
-  bumpRowVersions,
   createRowVersionIndex,
-  mergeRowPatch,
   pruneSortCacheRows,
   rebuildRowVersionIndex,
   reindexSourceRows,
 } from "./clientRowRuntimeUtils.js"
-import {
-  runFilterProjectionStage,
-  runPaginateProjectionStage,
-  runSortProjectionStage,
-  runVisibleProjectionStage,
-  type SortValueCacheEntry,
-} from "./clientRowProjectionBasicStages.js"
-import { runPivotProjectionStage } from "./clientRowProjectionPivotStage.js"
-import { runAggregateProjectionStage } from "./clientRowProjectionAggregateStage.js"
-import { runGroupProjectionStage } from "./clientRowProjectionGroupStage.js"
+import type { SortValueCacheEntry } from "./clientRowProjectionBasicStages.js"
 import type { DataGridFieldDependency } from "./dependencyGraph.js"
+import { resolveClientRowPivotCellDrilldown } from "./clientRowPivotDrilldownRuntime.js"
+import {
+  applyClientRowGroupExpansion,
+  resolveClientRowExpansionSnapshot,
+  resolveClientRowExpansionSpec,
+  resolveClientRowExpansionStateStore,
+} from "./clientRowExpansionRuntime.js"
+import { createClientRowRowsMutationsRuntime } from "./clientRowRowsMutationsRuntime.js"
+import { createClientRowPatchCoordinatorRuntime } from "./clientRowPatchCoordinatorRuntime.js"
+import { createClientRowStateMutationsRuntime } from "./clientRowStateMutationsRuntime.js"
+import { createClientRowSnapshotRuntime } from "./clientRowSnapshotRuntime.js"
+import { createClientRowProjectionHandlersRuntime } from "./clientRowProjectionHandlersRuntime.js"
 
 export interface CreateClientRowModelOptions<T> {
   rows?: readonly DataGridRowNodeInput<T>[]
@@ -385,7 +364,7 @@ export function createClientRowModel<T>(
   }
 
   function applyIncrementalAggregationPatch(
-    changeSet: ReturnType<typeof analyzeRowPatchChangeSet<T>>,
+    changeSet: DataGridPatchChangeSet,
     previousRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
   ): boolean {
     aggregationEngine.setModel(aggregationModel)
@@ -442,448 +421,165 @@ export function createClientRowModel<T>(
         })()
   }
 
-  function isPivotExpansionActive(): boolean {
-    return Boolean(pivotModel) && !treeData
-  }
-
   function getActiveExpansionStateStore(): {
     expandedByDefault: boolean
     toggledKeys: Set<string>
     setExpandedByDefault: (value: boolean) => void
   } {
-    if (isPivotExpansionActive()) {
-      return {
-        expandedByDefault: pivotExpansionExpandedByDefault,
-        toggledKeys: toggledPivotGroupKeys,
-        setExpandedByDefault: (value: boolean) => {
-          pivotExpansionExpandedByDefault = value
-        },
-      }
-    }
-    return {
-      expandedByDefault: expansionExpandedByDefault,
-      toggledKeys: toggledGroupKeys,
-      setExpandedByDefault: (value: boolean) => {
+    return resolveClientRowExpansionStateStore({
+      pivotModel,
+      treeDataEnabled: Boolean(treeData),
+      expansionExpandedByDefault,
+      pivotExpansionExpandedByDefault,
+      toggledGroupKeys,
+      toggledPivotGroupKeys,
+      setExpansionExpandedByDefault: (value: boolean) => {
         expansionExpandedByDefault = value
       },
-    }
+      setPivotExpansionExpandedByDefault: (value: boolean) => {
+        pivotExpansionExpandedByDefault = value
+      },
+    })
   }
 
   function getCurrentExpansionSnapshot(): DataGridGroupExpansionSnapshot {
     const expansionSpec = getExpansionSpec()
     const expansionState = getActiveExpansionStateStore()
-    return buildGroupExpansionSnapshot(expansionSpec, expansionState.toggledKeys)
-  }
-
-  function resolvePivotDrilldownRowConstraints(
-    row: DataGridRowNode<T>,
-    rowFields: readonly string[],
-  ): Array<{ field: string; value: string }> {
-    if (String(row.rowId) === "pivot:grand-total") {
-      return []
-    }
-    const constraints: Array<{ field: string; value: string }> = []
-    if (row.kind === "group") {
-      const depth = Math.max(1, Math.min(rowFields.length, Math.trunc((row.groupMeta?.level ?? 0) + 1)))
-      for (let index = 0; index < depth; index += 1) {
-        const field = rowFields[index]
-        if (!field) {
-          continue
-        }
-        constraints.push({
-          field,
-          value: normalizePivotAxisValue(readRowField(row, field)),
-        })
-      }
-      return constraints
-    }
-
-    for (const field of rowFields) {
-      const normalizedValue = normalizePivotAxisValue(readRowField(row, field))
-      if (normalizedValue === "Subtotal" || normalizedValue === "Grand Total") {
-        break
-      }
-      constraints.push({
-        field,
-        value: normalizedValue,
-      })
-    }
-    return constraints
-  }
-
-  function resolvePivotCellDrilldown(
-    input: DataGridPivotCellDrilldownInput,
-  ): DataGridPivotCellDrilldown<T> | null {
-    ensureActive()
-    if (!pivotModel || !Array.isArray(pivotColumns) || pivotColumns.length === 0) {
-      return null
-    }
-    if (!isDataGridRowId(input?.rowId)) {
-      return null
-    }
-    const columnId = typeof input.columnId === "string" ? input.columnId.trim() : ""
-    if (columnId.length === 0) {
-      return null
-    }
-    const pivotColumn = pivotColumns.find(column => column.id === columnId)
-    if (!pivotColumn) {
-      return null
-    }
-    const pivotRow = runtimeState.aggregatedRowsProjection.find(row => row.rowId === input.rowId)
-      ?? runtimeState.pivotedRowsProjection.find(row => row.rowId === input.rowId)
-      ?? runtimeState.groupedRowsProjection.find(row => row.rowId === input.rowId)
-    if (!pivotRow) {
-      return null
-    }
-    const normalizedLimit = Number.isFinite(input.limit)
-      ? Math.max(1, Math.min(5000, Math.trunc(input.limit as number)))
-      : 200
-    const rowConstraints = resolvePivotDrilldownRowConstraints(pivotRow, pivotModel.rows)
-    const columnConstraints = pivotColumn.columnPath.map(segment => ({
-      field: segment.field,
-      value: segment.value,
-    }))
-    const matches: DataGridRowNode<T>[] = []
-    let matchCount = 0
-    for (const sourceRow of sourceRows) {
-      if (sourceRow.kind !== "leaf") {
-        continue
-      }
-      let rowMatches = true
-      for (const constraint of rowConstraints) {
-        if (normalizePivotAxisValue(readRowField(sourceRow, constraint.field)) !== constraint.value) {
-          rowMatches = false
-          break
-        }
-      }
-      if (!rowMatches) {
-        continue
-      }
-      let columnMatches = true
-      for (const constraint of columnConstraints) {
-        if (normalizePivotAxisValue(readRowField(sourceRow, constraint.field)) !== constraint.value) {
-          columnMatches = false
-          break
-        }
-      }
-      if (!columnMatches) {
-        continue
-      }
-      matchCount += 1
-      if (matches.length < normalizedLimit) {
-        matches.push(sourceRow)
-      }
-    }
-    return {
-      rowId: input.rowId,
-      columnId,
-      valueField: pivotColumn.valueField,
-      agg: pivotColumn.agg,
-      cellValue: readRowField(pivotRow, columnId),
-      matchCount,
-      truncated: matchCount > matches.length,
-      rows: matches,
-    }
-  }
-
-  function runFilterStage(
-    context: Parameters<DataGridClientProjectionStageHandlers<T>["runFilterStage"]>[0],
-  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runFilterStage"]> {
-    const result = runFilterProjectionStage({
-      sourceRows,
-      previousFilteredRowsProjection: runtimeState.filteredRowsProjection,
-      sourceById: context.sourceById,
-      shouldRecompute: context.shouldRecompute,
-      filterPredicate: context.filterPredicate,
-      resolveFilterPredicate,
+    return resolveClientRowExpansionSnapshot({
+      expansionSpec,
+      expansionState,
     })
-    runtimeState.filteredRowsProjection = result.filteredRowsProjection
-    return {
-      filteredRowIds: result.filteredRowIds,
-      recomputed: result.recomputed,
-    }
   }
 
-  function runSortStage(
-    context: Parameters<DataGridClientProjectionStageHandlers<T>["runSortStage"]>[0],
-  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runSortStage"]> {
-    const counters = {
-      hits: derivedCacheDiagnostics.sortValueHits,
-      misses: derivedCacheDiagnostics.sortValueMisses,
-    }
-    const result = runSortProjectionStage({
-      treeData,
-      filterModel,
-      sourceRows,
-      filteredRowsProjection: runtimeState.filteredRowsProjection,
-      previousSortedRowsProjection: runtimeState.sortedRowsProjection,
-      shouldRecompute: context.shouldRecompute,
-      sortModel,
-      projectionPolicy,
-      sortValueCache,
-      sortValueCacheKey,
-      rowVersionById,
-      counters,
-      readRowField,
-    })
-    runtimeState.sortedRowsProjection = result.sortedRowsProjection
-    sortValueCacheKey = result.sortValueCacheKey
-    derivedCacheDiagnostics.sortValueHits = counters.hits
-    derivedCacheDiagnostics.sortValueMisses = counters.misses
-    return result.recomputed
-  }
-
-  function runGroupStage(
-    context: Parameters<DataGridClientProjectionStageHandlers<T>["runGroupStage"]>[0],
-  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runGroupStage"]> {
-    const expansionSnapshot = getCurrentExpansionSnapshot()
-    const expansionState = getActiveExpansionStateStore()
-    const result = runGroupProjectionStage({
-      shouldRecompute: context.shouldRecompute,
-      sourceById: context.sourceById,
-      rowMatchesFilter: context.rowMatchesFilter,
-      treeData,
-      pivotModelEnabled: Boolean(pivotModel),
-      groupBy,
-      filterModel,
-      sourceRows,
-      sortedRowsProjection: runtimeState.sortedRowsProjection,
-      filteredRowsProjection: runtimeState.filteredRowsProjection,
-      previousGroupedRowsProjection: runtimeState.groupedRowsProjection,
-      expansionSnapshot,
-      expansionToggledKeys: expansionState.toggledKeys,
-      treeCacheRevision,
-      rowRevision: runtimeState.rowRevision,
-      groupRevision: runtimeState.groupRevision,
-      filterRevision: runtimeState.filterRevision,
-      sortRevision: runtimeState.sortRevision,
-      projectionPolicy,
-      groupValueCache,
-      groupValueCacheKey,
-      groupValueCounters: {
-        hits: derivedCacheDiagnostics.groupValueHits,
-        misses: derivedCacheDiagnostics.groupValueMisses,
-      },
-      treeProjectionRuntime,
-      treePathProjectionCacheState,
-      treeParentProjectionCacheState,
-      lastTreeProjectionCacheKey,
-      lastTreeExpansionSnapshot,
-      groupedProjectionGroupIndexByRowId,
-      aggregationModel,
-      aggregationEngine,
-      treeDataDiagnostics,
-    })
-    runtimeState.groupedRowsProjection = result.groupedRowsProjection
-    groupValueCacheKey = result.groupValueCacheKey
-    derivedCacheDiagnostics.groupValueHits = result.groupValueCounters.hits
-    derivedCacheDiagnostics.groupValueMisses = result.groupValueCounters.misses
-    groupedProjectionGroupIndexByRowId = result.groupedProjectionGroupIndexByRowId
-    treePathProjectionCacheState = result.treePathProjectionCacheState
-    treeParentProjectionCacheState = result.treeParentProjectionCacheState
-    lastTreeProjectionCacheKey = result.lastTreeProjectionCacheKey
-    lastTreeExpansionSnapshot = result.lastTreeExpansionSnapshot
-    treeDataDiagnostics = result.treeDataDiagnostics
-    return result.recomputed
-  }
-
-  function runPivotStage(
-    context: Parameters<DataGridClientProjectionStageHandlers<T>["runPivotStage"]>[0],
-  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runPivotStage"]> {
-    const result = runPivotProjectionStage({
-      pivotModel,
-      shouldRecompute: context.shouldRecompute,
-      previousPivotedRowsProjection: runtimeState.pivotedRowsProjection,
-      previousPivotColumns: pivotColumns,
-      groupedRowsProjection: runtimeState.groupedRowsProjection,
-      pendingValuePatchRows: pendingPivotValuePatch,
-      pivotRuntime,
-      normalizeFieldValue: normalizeText,
-      expansionSnapshot: getCurrentExpansionSnapshot(),
-    })
-    runtimeState.pivotedRowsProjection = result.pivotedRowsProjection
-    pivotColumns = result.pivotColumns
-    return result.recomputed
-  }
-
-  function runPaginateStage(
-    context: Parameters<DataGridClientProjectionStageHandlers<T>["runPaginateStage"]>[0],
-  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runPaginateStage"]> {
-    const result = runPaginateProjectionStage({
-      aggregatedRowsProjection: runtimeState.aggregatedRowsProjection,
-      previousPaginatedRowsProjection: runtimeState.paginatedRowsProjection,
-      sourceById: context.sourceById,
-      shouldRecompute: context.shouldRecompute,
-      paginationInput,
-      currentPagination: pagination,
-    })
-    runtimeState.paginatedRowsProjection = result.paginatedRowsProjection
-    pagination = result.pagination
-    return result.recomputed
-  }
-
-  function runAggregateStage(
-    context: Parameters<DataGridClientProjectionStageHandlers<T>["runAggregateStage"]>[0],
-  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runAggregateStage"]> {
-    const result = runAggregateProjectionStage({
-      shouldRecompute: context.shouldRecompute,
-      sourceById: context.sourceById,
-      previousAggregatedRowsProjection: runtimeState.aggregatedRowsProjection,
-      groupedRowsProjection: runtimeState.groupedRowsProjection,
-      pivotedRowsProjection: runtimeState.pivotedRowsProjection,
-      sortedRowsProjection: runtimeState.sortedRowsProjection,
-      sourceRows,
-      sortModel,
-      groupBy,
-      pivotModelEnabled: Boolean(pivotModel),
-      treeData,
-      aggregationModel,
-      aggregationEngine,
-      groupByIncrementalAggregationState,
-      resetGroupByIncrementalAggregationState,
-      readRowField,
-      normalizeText,
-    })
-    runtimeState.aggregatedRowsProjection = result.aggregatedRowsProjection
-    return result.recomputed
-  }
-
-  function runVisibleStage(
-    context: Parameters<DataGridClientProjectionStageHandlers<T>["runVisibleStage"]>[0],
-  ): ReturnType<DataGridClientProjectionStageHandlers<T>["runVisibleStage"]> {
-    const result = runVisibleProjectionStage({
-      paginatedRowsProjection: runtimeState.paginatedRowsProjection,
-      previousRows: runtimeState.rows,
-      sourceById: context.sourceById,
-      shouldRecompute: context.shouldRecompute,
-      pivotEnabled: Boolean(pivotModel),
-    })
-    runtimeState.rows = result.rows
-    return result.recomputed
-  }
-
-  function finalizeProjectionRecompute(meta: DataGridClientProjectionFinalizeMeta): void {
-    paginationInput = {
-      pageSize: pagination.pageSize,
-      currentPage: pagination.currentPage,
-    }
-    viewportRange = normalizeViewportRange(viewportRange, runtimeState.rows.length)
-    derivedCacheDiagnostics.revisions = {
-      row: runtimeState.rowRevision,
-      sort: runtimeState.sortRevision,
-      filter: runtimeState.filterRevision,
-      group: runtimeState.groupRevision,
-    }
-    pendingPivotValuePatch = null
-    runtimeStateStore.commitProjectionCycle(meta.hadActualRecompute)
-  }
-
-  const projectionStageHandlers: DataGridClientProjectionStageHandlers<T> = {
-    buildSourceById: () => buildRowIdIndex(sourceRows),
-    getCurrentFilteredRowIds: () => {
-      const rowIds = new Set<DataGridRowId>()
-      for (const row of runtimeState.filteredRowsProjection) {
-        rowIds.add(row.rowId)
-      }
-      return rowIds
+  const projectionHandlersRuntime = createClientRowProjectionHandlersRuntime<T>({
+    runtimeState,
+    commitProjectionCycle: (hadActualRecompute) => {
+      runtimeStateStore.commitProjectionCycle(hadActualRecompute)
     },
+    getSourceRows: () => sourceRows,
+    buildSourceById: () => buildRowIdIndex(sourceRows),
+    readRowField,
+    normalizeText,
     resolveFilterPredicate,
-    runFilterStage,
-    runSortStage,
-    runGroupStage,
-    runPivotStage,
-    runAggregateStage,
-    runPaginateStage,
-    runVisibleStage,
-    finalizeProjectionRecompute,
-  }
+    getTreeData: () => treeData,
+    getFilterModel: () => filterModel,
+    getSortModel: () => sortModel,
+    getGroupBy: () => groupBy,
+    getPivotModel: () => pivotModel,
+    getAggregationModel: () => aggregationModel,
+    getProjectionPolicy: () => projectionPolicy,
+    getRowVersionById: () => rowVersionById,
+    getTreeCacheRevision: () => treeCacheRevision,
+    getPaginationInput: () => paginationInput,
+    setPaginationInput: (nextPaginationInput) => {
+      paginationInput = nextPaginationInput
+    },
+    getPagination: () => pagination,
+    setPagination: (nextPagination) => {
+      pagination = nextPagination
+    },
+    getViewportRange: () => viewportRange,
+    setViewportRange: (range) => {
+      viewportRange = range
+    },
+    normalizeViewportRange,
+    getSortValueCacheKey: () => sortValueCacheKey,
+    setSortValueCacheKey: (key) => {
+      sortValueCacheKey = key
+    },
+    sortValueCache,
+    getGroupValueCacheKey: () => groupValueCacheKey,
+    setGroupValueCacheKey: (key) => {
+      groupValueCacheKey = key
+    },
+    groupValueCache,
+    getGroupedProjectionGroupIndexByRowId: () => groupedProjectionGroupIndexByRowId,
+    setGroupedProjectionGroupIndexByRowId: (index) => {
+      groupedProjectionGroupIndexByRowId = index
+    },
+    getTreePathProjectionCacheState: () => treePathProjectionCacheState,
+    setTreePathProjectionCacheState: (state) => {
+      treePathProjectionCacheState = state
+    },
+    getTreeParentProjectionCacheState: () => treeParentProjectionCacheState,
+    setTreeParentProjectionCacheState: (state) => {
+      treeParentProjectionCacheState = state
+    },
+    getLastTreeProjectionCacheKey: () => lastTreeProjectionCacheKey,
+    setLastTreeProjectionCacheKey: (key) => {
+      lastTreeProjectionCacheKey = key
+    },
+    getLastTreeExpansionSnapshot: () => lastTreeExpansionSnapshot,
+    setLastTreeExpansionSnapshot: (snapshot) => {
+      lastTreeExpansionSnapshot = snapshot
+    },
+    getTreeDataDiagnostics: () => treeDataDiagnostics,
+    setTreeDataDiagnostics: (diagnostics) => {
+      treeDataDiagnostics = diagnostics
+    },
+    getPivotColumns: () => pivotColumns,
+    setPivotColumns: (columns) => {
+      pivotColumns = columns
+    },
+    getPendingPivotValuePatch: () => pendingPivotValuePatch,
+    setPendingPivotValuePatch: (rows) => {
+      pendingPivotValuePatch = rows
+    },
+    getCurrentExpansionSnapshot: () => getCurrentExpansionSnapshot(),
+    getExpansionToggledKeys: () => getActiveExpansionStateStore().toggledKeys,
+    derivedCacheDiagnostics,
+    treeProjectionRuntime,
+    pivotRuntime,
+    aggregationEngine,
+    groupByIncrementalAggregationState,
+    resetGroupByIncrementalAggregationState,
+  })
+
   const projectionOrchestrator = createClientRowProjectionOrchestrator(
     projectionEngine,
-    projectionStageHandlers,
+    projectionHandlersRuntime.projectionStageHandlers,
   )
 
-  function getProjectionDiagnostics(): DataGridProjectionDiagnostics {
-    return runtimeStateStore.getProjectionDiagnostics(() => projectionOrchestrator.getStaleStages())
-  }
+  const snapshotRuntime = createClientRowSnapshotRuntime<T>({
+    runtimeState,
+    runtimeStateStore,
+    getStaleStages: () => projectionOrchestrator.getStaleStages(),
+    getViewportRange: () => viewportRange,
+    setViewportRange: (range) => {
+      viewportRange = range
+    },
+    normalizeViewportRange,
+    getPagination: () => pagination,
+    getSortModel: () => sortModel,
+    cloneSortModel,
+    getFilterModel: () => filterModel,
+    cloneFilterModel,
+    isTreeDataEnabled: () => Boolean(treeData),
+    getTreeDataDiagnostics: () => treeDataDiagnostics,
+    cloneTreeDataDiagnostics: (diagnostics) => createEmptyTreeDataDiagnostics(diagnostics ?? undefined),
+    getGroupBy: () => groupBy,
+    cloneGroupBySpec,
+    getPivotModel: () => pivotModel,
+    clonePivotSpec,
+    getPivotColumns: () => pivotColumns,
+    normalizePivotColumns: (columns) => pivotRuntime.normalizeColumns(columns),
+    getExpansionSnapshot: () => getCurrentExpansionSnapshot(),
+  })
 
-  function collectPivotAxisFields(activePivotModel: DataGridPivotSpec | null): Set<string> {
-    const fields = new Set<string>()
-    if (!activePivotModel) {
-      return fields
-    }
-    for (const field of [...activePivotModel.rows, ...activePivotModel.columns]) {
-      const normalized = field.trim()
-      if (normalized.length > 0) {
-        fields.add(normalized)
-      }
-    }
-    return fields
-  }
-
-  function collectPivotValueFields(activePivotModel: DataGridPivotSpec | null): Set<string> {
-    const fields = new Set<string>()
-    if (!activePivotModel) {
-      return fields
-    }
-    for (const valueSpec of activePivotModel.values) {
-      const normalized = valueSpec.field.trim()
-      if (normalized.length > 0) {
-        fields.add(normalized)
-      }
-    }
-    return fields
-  }
-
-  function getSnapshot(): DataGridRowModelSnapshot<T> {
-    viewportRange = normalizeViewportRange(viewportRange, runtimeState.rows.length)
-    const expansionSnapshot = getCurrentExpansionSnapshot()
-    return {
-      revision: runtimeState.revision,
-      kind: "client",
-      rowCount: runtimeState.rows.length,
-      loading: false,
-      error: null,
-      ...(treeData ? { treeDataDiagnostics: createEmptyTreeDataDiagnostics(treeDataDiagnostics ?? undefined) } : {}),
-      projection: getProjectionDiagnostics(),
-      viewportRange,
-      pagination,
-      sortModel: cloneSortModel(sortModel),
-      filterModel: cloneFilterModel(filterModel),
-      groupBy: treeData ? null : cloneGroupBySpec(groupBy),
-      ...(pivotModel
-        ? {
-            pivotModel: clonePivotSpec(pivotModel),
-            pivotColumns: pivotRuntime.normalizeColumns(pivotColumns),
-          }
-        : {}),
-      groupExpansion: expansionSnapshot,
-    }
-  }
+  const getSnapshot = (): DataGridRowModelSnapshot<T> => snapshotRuntime.getSnapshot()
 
   function emit() {
     lifecycle.emit(getSnapshot)
   }
 
   function getExpansionSpec(): DataGridGroupBySpec | null {
-    if (treeData) {
-      return {
-        fields: ["__tree__"],
-        expandedByDefault: expansionExpandedByDefault,
-      }
-    }
-    if (pivotModel) {
-      return {
-        fields: pivotModel.rows.length > 0 ? pivotModel.rows : ["__pivot__"],
-        expandedByDefault: pivotExpansionExpandedByDefault,
-      }
-    }
-    if (!groupBy) {
-      return null
-    }
-    return {
-      fields: groupBy.fields,
-      expandedByDefault: expansionExpandedByDefault,
-    }
+    return resolveClientRowExpansionSpec({
+      treeDataEnabled: Boolean(treeData),
+      pivotModel,
+      groupBy,
+      expansionExpandedByDefault,
+      pivotExpansionExpandedByDefault,
+    })
   }
 
   function applyGroupExpansion(nextExpansion: DataGridGroupExpansionSnapshot | null): boolean {
@@ -891,25 +587,149 @@ export function createClientRowModel<T>(
     if (!expansionSpec) {
       return false
     }
-    const expansionState = getActiveExpansionStateStore()
-    const normalizedSnapshot = buildGroupExpansionSnapshot(
-      {
-        fields: expansionSpec.fields,
-        expandedByDefault: nextExpansion?.expandedByDefault ?? expansionSpec.expandedByDefault,
-      },
-      nextExpansion?.toggledGroupKeys ?? [],
-    )
-    const currentSnapshot = buildGroupExpansionSnapshot(expansionSpec, expansionState.toggledKeys)
-    if (isSameGroupExpansionSnapshot(currentSnapshot, normalizedSnapshot)) {
-      return false
-    }
-    expansionState.setExpandedByDefault(normalizedSnapshot.expandedByDefault)
-    expansionState.toggledKeys.clear()
-    for (const groupKey of normalizedSnapshot.toggledGroupKeys) {
-      expansionState.toggledKeys.add(groupKey)
-    }
-    return true
+    return applyClientRowGroupExpansion({
+      nextExpansion,
+      expansionSpec,
+      expansionState: getActiveExpansionStateStore(),
+    })
   }
+
+  const stateMutationsRuntime = createClientRowStateMutationsRuntime<T>({
+    ensureActive,
+    emit,
+    recomputeFromStage: (stage) => {
+      projectionOrchestrator.recomputeFromStage(stage)
+    },
+    bumpSortRevision: () => {
+      runtimeStateStore.bumpSortRevision()
+    },
+    bumpFilterRevision: () => {
+      runtimeStateStore.bumpFilterRevision()
+    },
+    bumpGroupRevision: () => {
+      runtimeStateStore.bumpGroupRevision()
+    },
+    getRuntimeRowCount: () => runtimeState.rows.length,
+    getViewportRange: () => viewportRange,
+    setViewportRange: (range) => {
+      viewportRange = range
+    },
+    getPaginationInput: () => paginationInput,
+    setPaginationInput: (nextPaginationInput) => {
+      paginationInput = nextPaginationInput
+    },
+    getSortModel: () => sortModel,
+    setSortModel: (nextSortModel) => {
+      sortModel = nextSortModel
+    },
+    cloneSortModel,
+    getFilterModel: () => filterModel,
+    setFilterModel: (nextFilterModel) => {
+      filterModel = nextFilterModel
+    },
+    cloneFilterModel,
+    isTreeDataEnabled: () => Boolean(treeData),
+    getGroupBy: () => groupBy,
+    setGroupBy: (nextGroupBy) => {
+      groupBy = nextGroupBy
+    },
+    setExpansionExpandedByDefault: (value) => {
+      expansionExpandedByDefault = value
+    },
+    clearToggledGroupKeys: () => {
+      toggledGroupKeys.clear()
+    },
+    getPivotModel: () => pivotModel,
+    setPivotModel: (nextPivotModel) => {
+      pivotModel = nextPivotModel
+    },
+    resetPivotColumns: () => {
+      pivotColumns = []
+    },
+    setPivotExpansionExpandedByDefault: (value) => {
+      pivotExpansionExpandedByDefault = value
+    },
+    clearToggledPivotGroupKeys: () => {
+      toggledPivotGroupKeys.clear()
+    },
+    getAggregationModel: () => aggregationModel,
+    setAggregationModel: (nextAggregationModel) => {
+      aggregationModel = nextAggregationModel
+    },
+    invalidateTreeProjectionCaches,
+    applyGroupExpansion,
+    getExpansionSpec,
+    getActiveExpansionStateStore,
+  })
+
+  const rowsMutationsRuntime = createClientRowRowsMutationsRuntime<T>({
+    ensureActive,
+    emit,
+    recomputeFromFilterStage: () => {
+      projectionOrchestrator.recomputeFromStage("filter")
+    },
+    bumpRowRevision: () => {
+      runtimeStateStore.bumpRowRevision()
+    },
+    resetGroupByIncrementalAggregationState,
+    invalidateTreeProjectionCaches,
+    getSourceRows: () => sourceRows,
+    setSourceRows: (rows) => {
+      sourceRows = rows
+    },
+    normalizeSourceRows,
+    reindexSourceRows,
+    getRowVersionById: () => rowVersionById,
+    setRowVersionById: (index) => {
+      rowVersionById = index
+    },
+    rebuildRowVersionIndex,
+    pruneSortCacheRows: (rows) => {
+      pruneSortCacheRows(sortValueCache, rows)
+    },
+  })
+
+  const patchCoordinatorRuntime = createClientRowPatchCoordinatorRuntime<T>({
+    ensureActive,
+    emit,
+    setPendingPivotValuePatch: (patch) => {
+      pendingPivotValuePatch = patch
+    },
+    isDataGridRowId,
+    applyRowDataPatch,
+    getSourceRows: () => sourceRows,
+    setSourceRows: (rows) => {
+      sourceRows = [...rows]
+    },
+    getRowVersionById: () => rowVersionById,
+    bumpRowRevision: () => {
+      runtimeStateStore.bumpRowRevision()
+    },
+    getStaleStages: () => projectionOrchestrator.getStaleStages(),
+    recomputeWithExecutionPlan: (executionPlan) => {
+      projectionOrchestrator.recomputeWithExecutionPlan(executionPlan)
+    },
+    getFilterModel: () => filterModel,
+    getSortModel: () => sortModel,
+    getTreeData: () => treeData,
+    getGroupBy: () => groupBy,
+    getPivotModel: () => pivotModel,
+    getAggregationModel: () => aggregationModel,
+    getProjectionPolicy: () => projectionPolicy,
+    getAllStages: () => DATAGRID_CLIENT_ALL_PROJECTION_STAGES,
+    expandStages: expandClientProjectionStages,
+    applyIncrementalAggregationPatch,
+    clearSortValueCache: () => {
+      sortValueCache.clear()
+    },
+    evictSortValueCacheRows: (rowIds) => {
+      for (const rowId of rowIds) {
+        sortValueCache.delete(rowId)
+      }
+    },
+    invalidateTreeProjectionCaches,
+    patchTreeProjectionCacheRowsByIdentity,
+  })
 
   projectionOrchestrator.recomputeFromStage("filter")
 
@@ -933,343 +753,64 @@ export function createClientRowModel<T>(
       return runtimeState.rows.slice(normalized.start, normalized.end + 1)
     },
     setRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
-      ensureActive()
-      const nextSourceRows = normalizeSourceRows(nextRows ?? [])
-      rowVersionById = rebuildRowVersionIndex(rowVersionById, nextSourceRows)
-      sourceRows = nextSourceRows
-      pruneSortCacheRows(sortValueCache, sourceRows)
-      runtimeStateStore.bumpRowRevision()
-      resetGroupByIncrementalAggregationState()
-      invalidateTreeProjectionCaches()
-      projectionOrchestrator.recomputeFromStage("filter")
-      emit()
+      rowsMutationsRuntime.setRows(nextRows)
     },
     patchRows(
       updates: readonly DataGridClientRowPatch<T>[],
       options: DataGridClientRowPatchOptions = {},
     ) {
-      ensureActive()
-      pendingPivotValuePatch = null
-      if (!Array.isArray(updates) || updates.length === 0) {
-        return
-      }
-      const updatesById = new Map<DataGridRowId, Partial<T>>()
-      for (const update of updates) {
-        if (!update || !isDataGridRowId(update.rowId) || typeof update.data === "undefined" || update.data === null) {
-          continue
-        }
-        const existing = updatesById.get(update.rowId)
-        if (existing) {
-          updatesById.set(update.rowId, mergeRowPatch(existing, update.data))
-          continue
-        }
-        updatesById.set(update.rowId, update.data)
-      }
-      if (updatesById.size === 0) {
-        return
-      }
-      let changed = false
-      const changedRowIds: DataGridRowId[] = []
-      const changedUpdatesById = new Map<DataGridRowId, Partial<T>>()
-      const previousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
-      const nextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
-      sourceRows = sourceRows.map(row => {
-        const patch = updatesById.get(row.rowId)
-        if (!patch) {
-          return row
-        }
-        const nextData = applyRowDataPatch(row.data, patch)
-        if (nextData === row.data) {
-          return row
-        }
-        changed = true
-        changedRowIds.push(row.rowId)
-        changedUpdatesById.set(row.rowId, patch)
-        previousRowsById.set(row.rowId, row)
-        const nextRow = {
-          ...row,
-          data: nextData,
-          row: nextData,
-        }
-        nextRowsById.set(row.rowId, nextRow)
-        return nextRow
-      })
-      if (!changed || changedUpdatesById.size === 0) {
-        return
-      }
-      bumpRowVersions(rowVersionById, changedRowIds)
-      runtimeStateStore.bumpRowRevision()
-      const filterActive = hasActiveFilterModel(filterModel)
-      const sortActive = sortModel.length > 0
-      const groupActive = Boolean(treeData) || Boolean(groupBy) || Boolean(pivotModel)
-      const aggregationActive = Boolean(aggregationModel && aggregationModel.columns.length > 0)
-      const allowFilterRecompute = options.recomputeFilter === true
-      const allowSortRecompute = options.recomputeSort === true
-      const allowGroupRecompute = options.recomputeGroup === true
-      const filterFields = filterActive ? collectFilterModelFields(filterModel) : new Set<string>()
-      const sortFields = sortActive ? collectSortModelFields(sortModel) : new Set<string>()
-      const groupFields = groupActive && !treeData
-        ? (pivotModel ? collectPivotModelFields(pivotModel) : collectGroupByFields(groupBy))
-        : new Set<string>()
-      const aggregationFields = aggregationActive ? collectAggregationModelFields(aggregationModel) : new Set<string>()
-      const treeDataDependencyFields = treeData ? collectTreeDataDependencyFields(treeData) : new Set<string>()
-      const changeSet = analyzeRowPatchChangeSet({
-        updatesById: changedUpdatesById,
-        dependencyGraph: projectionPolicy.dependencyGraph,
-        filterActive,
-        sortActive,
-        groupActive,
-        aggregationActive,
-        filterFields,
-        sortFields,
-        groupFields,
-        aggregationFields,
-        treeDataDependencyFields,
-        hasTreeData: Boolean(treeData),
-      })
-      if (changeSet.cacheEvictionPlan.clearSortValueCache) {
-        sortValueCache.clear()
-      } else if (changeSet.cacheEvictionPlan.evictSortValueRowIds.length > 0) {
-        for (const rowId of changeSet.cacheEvictionPlan.evictSortValueRowIds) {
-          sortValueCache.delete(rowId)
-        }
-      }
-      if (changeSet.cacheEvictionPlan.invalidateTreeProjectionCaches) {
-        invalidateTreeProjectionCaches()
-      } else if (changeSet.cacheEvictionPlan.patchTreeProjectionCacheRowsByIdentity) {
-        patchTreeProjectionCacheRowsByIdentity(changedRowIds)
-      }
-      const appliedIncrementalAggregation = !allowGroupRecompute
-        && applyIncrementalAggregationPatch(changeSet, previousRowsById)
-      const effectiveChangeSet = appliedIncrementalAggregation
-        ? {
-            ...changeSet,
-            stageImpact: {
-              ...changeSet.stageImpact,
-              affectsAggregation: false,
-            },
-          }
-        : changeSet
-      const staleStagesBeforeRequest = new Set<DataGridClientProjectionStage>(projectionOrchestrator.getStaleStages())
-      if (pivotModel && allowGroupRecompute) {
-        const pivotAxisFields = collectPivotAxisFields(pivotModel)
-        const pivotValueFields = collectPivotValueFields(pivotModel)
-        const affectsPivotAxis = pivotAxisFields.size > 0
-          && projectionPolicy.dependencyGraph.affectsAny(effectiveChangeSet.affectedFields, pivotAxisFields)
-        const affectsPivotValues = pivotValueFields.size === 0
-          ? false
-          : projectionPolicy.dependencyGraph.affectsAny(effectiveChangeSet.affectedFields, pivotValueFields)
-        const canApplyPivotValuePatch =
-          affectsPivotValues &&
-          !affectsPivotAxis &&
-          !effectiveChangeSet.stageImpact.affectsFilter &&
-          !effectiveChangeSet.stageImpact.affectsSort &&
-          !staleStagesBeforeRequest.has("group") &&
-          !staleStagesBeforeRequest.has("pivot")
-        if (canApplyPivotValuePatch) {
-          const changedRows: DataGridPivotIncrementalPatchRow<T>[] = []
-          for (const changedRowId of changedRowIds) {
-            const previousRow = previousRowsById.get(changedRowId)
-            const nextRow = nextRowsById.get(changedRowId)
-            if (!previousRow || !nextRow || previousRow.kind !== "leaf" || nextRow.kind !== "leaf") {
-              continue
-            }
-            changedRows.push({
-              previousRow,
-              nextRow,
-            })
-          }
-          if (changedRows.length > 0) {
-            pendingPivotValuePatch = changedRows
-          }
-        }
-      }
-      const allStages: readonly DataGridClientProjectionStage[] = DATAGRID_CLIENT_ALL_PROJECTION_STAGES
-      const projectionExecutionPlan = buildPatchProjectionExecutionPlan({
-        changeSet: effectiveChangeSet,
-        recomputePolicy: {
-          filter: allowFilterRecompute,
-          sort: allowSortRecompute,
-          group: allowGroupRecompute,
-        },
-        staleStages: staleStagesBeforeRequest,
-        allStages,
-        expandStages: expandClientProjectionStages,
-      })
-      // Always request a projection refresh pass so every stage can patch row identity
-      // even when no expensive stage recompute is needed.
-      projectionOrchestrator.recomputeWithExecutionPlan(projectionExecutionPlan)
-      if (options.emit !== false) {
-        emit()
-      }
+      patchCoordinatorRuntime.patchRows(updates, options)
     },
     reorderRows(input: DataGridClientRowReorderInput) {
-      ensureActive()
-      const length = sourceRows.length
-      if (length <= 1) {
-        return false
-      }
-      if (!Number.isFinite(input.fromIndex) || !Number.isFinite(input.toIndex)) {
-        return false
-      }
-      const fromIndex = Math.max(0, Math.min(length - 1, Math.trunc(input.fromIndex)))
-      const count = Number.isFinite(input.count) ? Math.max(1, Math.trunc(input.count as number)) : 1
-      const maxCount = Math.max(1, Math.min(count, length - fromIndex))
-      const toIndexRaw = Math.max(0, Math.min(length, Math.trunc(input.toIndex)))
-      const rows = sourceRows.slice()
-      const moved = rows.splice(fromIndex, maxCount)
-      if (moved.length === 0) {
-        return false
-      }
-      const adjustedTarget = toIndexRaw > fromIndex ? Math.max(0, toIndexRaw - moved.length) : toIndexRaw
-      rows.splice(adjustedTarget, 0, ...moved)
-      sourceRows = reindexSourceRows(rows)
-      runtimeStateStore.bumpRowRevision()
-      invalidateTreeProjectionCaches()
-      projectionOrchestrator.recomputeFromStage("filter")
-      emit()
-      return true
+      return rowsMutationsRuntime.reorderRows(input)
     },
     setViewportRange(range: DataGridViewportRange) {
-      ensureActive()
-      const nextRange = normalizeViewportRange(range, runtimeState.rows.length)
-      if (nextRange.start === viewportRange.start && nextRange.end === viewportRange.end) {
-        return
-      }
-      viewportRange = nextRange
-      emit()
+      stateMutationsRuntime.setViewportRange(range)
     },
     setPagination(nextPagination: DataGridPaginationInput | null) {
-      ensureActive()
-      const normalized = normalizePaginationInput(nextPagination)
-      if (
-        normalized.pageSize === paginationInput.pageSize &&
-        normalized.currentPage === paginationInput.currentPage
-      ) {
-        return
-      }
-      paginationInput = normalized
-      projectionOrchestrator.recomputeFromStage("paginate")
-      emit()
+      stateMutationsRuntime.setPagination(nextPagination)
     },
     setPageSize(pageSize: number | null) {
-      ensureActive()
-      const normalizedPageSize = normalizePaginationInput({ pageSize: pageSize ?? 0, currentPage: 0 }).pageSize
-      if (normalizedPageSize === paginationInput.pageSize) {
-        return
-      }
-      paginationInput = {
-        pageSize: normalizedPageSize,
-        currentPage: 0,
-      }
-      projectionOrchestrator.recomputeFromStage("paginate")
-      emit()
+      stateMutationsRuntime.setPageSize(pageSize)
     },
     setCurrentPage(page: number) {
-      ensureActive()
-      const normalizedPage = normalizePaginationInput({ pageSize: paginationInput.pageSize, currentPage: page }).currentPage
-      if (normalizedPage === paginationInput.currentPage) {
-        return
-      }
-      paginationInput = {
-        ...paginationInput,
-        currentPage: normalizedPage,
-      }
-      projectionOrchestrator.recomputeFromStage("paginate")
-      emit()
+      stateMutationsRuntime.setCurrentPage(page)
     },
     setSortModel(nextSortModel: readonly DataGridSortState[]) {
-      ensureActive()
-      const normalizedSortModel = Array.isArray(nextSortModel) ? cloneSortModel(nextSortModel) : []
-      if (isSameSortModel(sortModel, normalizedSortModel)) {
-        return
-      }
-      sortModel = normalizedSortModel
-      runtimeStateStore.bumpSortRevision()
-      projectionOrchestrator.recomputeFromStage("sort")
-      emit()
+      stateMutationsRuntime.setSortModel(nextSortModel)
     },
     setFilterModel(nextFilterModel: DataGridFilterSnapshot | null) {
-      ensureActive()
-      const normalizedFilterModel = cloneFilterModel(nextFilterModel ?? null)
-      if (isSameFilterModel(filterModel, normalizedFilterModel)) {
-        return
-      }
-      filterModel = normalizedFilterModel
-      runtimeStateStore.bumpFilterRevision()
-      projectionOrchestrator.recomputeFromStage("filter")
-      emit()
+      stateMutationsRuntime.setFilterModel(nextFilterModel)
     },
     setSortAndFilterModel(input: DataGridSortAndFilterModelInput) {
-      ensureActive()
-      const normalizedSortModel = Array.isArray(input?.sortModel) ? cloneSortModel(input.sortModel) : []
-      const normalizedFilterModel = cloneFilterModel(input?.filterModel ?? null)
-      const sortChanged = !isSameSortModel(sortModel, normalizedSortModel)
-      const filterChanged = !isSameFilterModel(filterModel, normalizedFilterModel)
-      if (!sortChanged && !filterChanged) {
-        return
-      }
-      sortModel = normalizedSortModel
-      filterModel = normalizedFilterModel
-      if (filterChanged) {
-        runtimeStateStore.bumpFilterRevision()
-      }
-      if (sortChanged) {
-        runtimeStateStore.bumpSortRevision()
-      }
-      projectionOrchestrator.recomputeFromStage(filterChanged ? "filter" : "sort")
-      emit()
+      stateMutationsRuntime.setSortAndFilterModel(input)
     },
     setGroupBy(nextGroupBy: DataGridGroupBySpec | null) {
-      ensureActive()
-      if (treeData) {
-        return
-      }
-      const normalized = normalizeGroupBySpec(nextGroupBy)
-      if (isSameGroupBySpec(groupBy, normalized)) {
-        return
-      }
-      groupBy = normalized
-      expansionExpandedByDefault = Boolean(normalized?.expandedByDefault)
-      toggledGroupKeys.clear()
-      runtimeStateStore.bumpGroupRevision()
-      projectionOrchestrator.recomputeFromStage("group")
-      emit()
+      stateMutationsRuntime.setGroupBy(nextGroupBy)
     },
     setPivotModel(nextPivotModel: DataGridPivotSpec | null) {
-      ensureActive()
-      const normalized = normalizePivotSpec(nextPivotModel)
-      if (isSamePivotSpec(pivotModel, normalized)) {
-        return
-      }
-      pivotModel = normalized
-      pivotColumns = []
-      pivotExpansionExpandedByDefault = true
-      toggledPivotGroupKeys.clear()
-      runtimeStateStore.bumpGroupRevision()
-      projectionOrchestrator.recomputeFromStage("pivot")
-      emit()
+      stateMutationsRuntime.setPivotModel(nextPivotModel)
     },
     getPivotModel() {
       return clonePivotSpec(pivotModel)
     },
     getPivotCellDrilldown(input: DataGridPivotCellDrilldownInput) {
-      return resolvePivotCellDrilldown(input)
+      ensureActive()
+      return resolveClientRowPivotCellDrilldown({
+        input,
+        pivotModel,
+        pivotColumns,
+        aggregatedRowsProjection: runtimeState.aggregatedRowsProjection,
+        pivotedRowsProjection: runtimeState.pivotedRowsProjection,
+        groupedRowsProjection: runtimeState.groupedRowsProjection,
+        sourceRows,
+        isDataGridRowId,
+        normalizePivotAxisValue,
+        readRowField: (row, key) => readRowField(row, key),
+      })
     },
     setAggregationModel(nextAggregationModel: DataGridAggregationModel<T> | null) {
-      ensureActive()
-      const normalized = cloneAggregationModel(nextAggregationModel ?? null)
-      if (isSameAggregationModel(aggregationModel, normalized)) {
-        return
-      }
-      aggregationModel = normalized
-      if (treeData) {
-        invalidateTreeProjectionCaches()
-        projectionOrchestrator.recomputeFromStage("group")
-      } else {
-        projectionOrchestrator.recomputeFromStage("aggregate")
-      }
-      emit()
+      stateMutationsRuntime.setAggregationModel(nextAggregationModel)
     },
     getAggregationModel() {
       return cloneAggregationModel(aggregationModel)
@@ -1300,87 +841,22 @@ export function createClientRowModel<T>(
       return buildColumnHistogram(runtimeState.filteredRowsProjection, normalizedColumnId, options)
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
-      ensureActive()
-      if (!applyGroupExpansion(expansion)) {
-        return
-      }
-      runtimeStateStore.bumpGroupRevision()
-      projectionOrchestrator.recomputeFromStage("group")
-      emit()
+      stateMutationsRuntime.setGroupExpansion(expansion)
     },
     toggleGroup(groupKey: string) {
-      ensureActive()
-      const expansionSpec = getExpansionSpec()
-      if (!expansionSpec) {
-        return
-      }
-      const expansionState = getActiveExpansionStateStore()
-      if (!toggleGroupExpansionKey(expansionState.toggledKeys, groupKey)) {
-        return
-      }
-      runtimeStateStore.bumpGroupRevision()
-      projectionOrchestrator.recomputeFromStage("group")
-      emit()
+      stateMutationsRuntime.toggleGroup(groupKey)
     },
     expandGroup(groupKey: string) {
-      ensureActive()
-      const expansionSpec = getExpansionSpec()
-      if (!expansionSpec) {
-        return
-      }
-      const expansionState = getActiveExpansionStateStore()
-      if (!setGroupExpansionKey(expansionState.toggledKeys, groupKey, expansionState.expandedByDefault, true)) {
-        return
-      }
-      runtimeStateStore.bumpGroupRevision()
-      projectionOrchestrator.recomputeFromStage("group")
-      emit()
+      stateMutationsRuntime.expandGroup(groupKey)
     },
     collapseGroup(groupKey: string) {
-      ensureActive()
-      const expansionSpec = getExpansionSpec()
-      if (!expansionSpec) {
-        return
-      }
-      const expansionState = getActiveExpansionStateStore()
-      if (!setGroupExpansionKey(expansionState.toggledKeys, groupKey, expansionState.expandedByDefault, false)) {
-        return
-      }
-      runtimeStateStore.bumpGroupRevision()
-      projectionOrchestrator.recomputeFromStage("group")
-      emit()
+      stateMutationsRuntime.collapseGroup(groupKey)
     },
     expandAllGroups() {
-      ensureActive()
-      const expansionSpec = getExpansionSpec()
-      if (!expansionSpec) {
-        return
-      }
-      const expansionState = getActiveExpansionStateStore()
-      if (expansionState.expandedByDefault && expansionState.toggledKeys.size === 0) {
-        return
-      }
-      expansionState.setExpandedByDefault(true)
-      expansionState.toggledKeys.clear()
-      runtimeStateStore.bumpGroupRevision()
-      projectionOrchestrator.recomputeFromStage("group")
-      emit()
+      stateMutationsRuntime.expandAllGroups()
     },
     collapseAllGroups() {
-      ensureActive()
-      const expansionSpec = getExpansionSpec()
-      if (!expansionSpec) {
-        return
-      }
-      const expansionState = getActiveExpansionStateStore()
-      if (!expansionState.expandedByDefault && expansionState.toggledKeys.size === 0) {
-        return
-      }
-      expansionState.setExpandedByDefault(false)
-      expansionState.toggledKeys.clear()
-      runtimeStateStore.bumpGroupRevision()
-      projectionOrchestrator.recomputeFromStage("group")
-      emit()
+      stateMutationsRuntime.collapseAllGroups()
     },
     refresh(_reason?: DataGridRowModelRefreshReason) {
       ensureActive()

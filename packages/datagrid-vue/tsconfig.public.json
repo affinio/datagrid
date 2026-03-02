@@ -20,6 +20,7 @@
     "src/index.ts",
     "src/stable.ts",
     "src/advanced.ts",
+    "src/advanced/**/*.ts",
     "src/public.ts",
     "src/dataGridSettingsAdapter.ts",
     "src/dataGridSettingsStore.ts",
