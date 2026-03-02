@@ -140,28 +140,28 @@ export function useAffinoDataGridTreeFeature<TRow>(
   })
 
   if (treeEnabled.value && options.feature.initialGroupBy) {
-    options.runtime.api.setGroupBy(cloneGroupBy(options.feature.initialGroupBy))
+    options.runtime.api.rows.setGroupBy(cloneGroupBy(options.feature.initialGroupBy))
   }
 
   const setGroupBy = (nextGroupBy: DataGridGroupBySpec | null) => {
     if (!treeEnabled.value) {
       return
     }
-    options.runtime.api.setGroupBy(cloneGroupBy(nextGroupBy))
+    options.runtime.api.rows.setGroupBy(cloneGroupBy(nextGroupBy))
   }
 
   const clearGroupBy = () => {
     if (!treeEnabled.value) {
       return
     }
-    options.runtime.api.setGroupBy(null)
+    options.runtime.api.rows.setGroupBy(null)
   }
 
   const setGroupExpansion = (expansion: DataGridGroupExpansionSnapshot | null) => {
     if (!treeEnabled.value) {
       return
     }
-    options.runtime.api.setGroupExpansion(expansion)
+    options.runtime.api.rows.setGroupExpansion(expansion)
   }
 
   const toggleGroup = (groupKey: string) => {
@@ -172,7 +172,7 @@ export function useAffinoDataGridTreeFeature<TRow>(
     if (!key) {
       return
     }
-    options.runtime.api.toggleGroup(key)
+    options.runtime.api.rows.toggleGroup(key)
   }
 
   const isGroupExpanded = (groupKey: string): boolean => {
@@ -186,11 +186,11 @@ export function useAffinoDataGridTreeFeature<TRow>(
   }
 
   const collectVisibleGroupKeys = (): readonly string[] => {
-    const total = options.runtime.api.getRowCount()
+    const total = options.runtime.api.rows.getCount()
     if (total <= 0) {
       return []
     }
-    const rows = options.runtime.api.getRowsInRange({ start: 0, end: total - 1 })
+    const rows = options.runtime.api.rows.getRange({ start: 0, end: total - 1 })
     const keys = new Set<string>()
     for (const row of rows) {
       if (!row) {
@@ -221,7 +221,7 @@ export function useAffinoDataGridTreeFeature<TRow>(
       if (isGroupExpanded(groupKey)) {
         continue
       }
-      options.runtime.api.expandGroup(groupKey)
+      options.runtime.api.rows.expandGroup(groupKey)
       affected += 1
     }
     return affected
@@ -237,7 +237,7 @@ export function useAffinoDataGridTreeFeature<TRow>(
       if (!isGroupExpanded(groupKey)) {
         continue
       }
-      options.runtime.api.collapseGroup(groupKey)
+      options.runtime.api.rows.collapseGroup(groupKey)
       affected += 1
     }
     return affected
@@ -252,7 +252,7 @@ export function useAffinoDataGridTreeFeature<TRow>(
       return 0
     }
     const visibleGroupsBefore = collectVisibleGroupKeys().length
-    options.runtime.api.expandAllGroups()
+    options.runtime.api.view.expandAllGroups()
     return visibleGroupsBefore > 0 ? visibleGroupsBefore : 1
   }
 
@@ -265,7 +265,7 @@ export function useAffinoDataGridTreeFeature<TRow>(
       return 0
     }
     const visibleGroupsBefore = collectVisibleGroupKeys().length
-    options.runtime.api.collapseAllGroups()
+    options.runtime.api.view.collapseAllGroups()
     return visibleGroupsBefore > 0 ? visibleGroupsBefore : 1
   }
 

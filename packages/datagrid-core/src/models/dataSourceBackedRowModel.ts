@@ -31,6 +31,13 @@ import {
   type DataGridViewportRange,
 } from "./rowModel.js"
 import { cloneDataGridFilterSnapshot } from "./advancedFilter.js"
+import {
+  clonePullAggregationModel,
+  clonePivotColumnsSnapshot,
+  isSamePivotColumnsSnapshot,
+  isSamePullAggregationModel,
+  normalizePivotColumnsFromUnknown,
+} from "./pullRowModelSerialization.js"
 import type {
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
@@ -81,47 +88,6 @@ interface PendingPull {
 
 const DEFAULT_ROW_CACHE_LIMIT = 4096
 
-function cloneAggregationModel<T>(
-  input: DataGridAggregationModel<T> | null | undefined,
-): DataGridAggregationModel<T> | null {
-  if (!input) {
-    return null
-  }
-  return {
-    basis: input.basis,
-    columns: input.columns.map(column => ({ ...column })),
-  }
-}
-
-function isSameAggregationModel<T>(
-  left: DataGridAggregationModel<T> | null,
-  right: DataGridAggregationModel<T> | null,
-): boolean {
-  if (left === right) {
-    return true
-  }
-  if (!left || !right) {
-    return false
-  }
-  if (left.basis !== right.basis || left.columns.length !== right.columns.length) {
-    return false
-  }
-  for (let index = 0; index < left.columns.length; index += 1) {
-    const leftColumn = left.columns[index]
-    const rightColumn = right.columns[index]
-    if (
-      !leftColumn ||
-      !rightColumn ||
-      leftColumn.key !== rightColumn.key ||
-      leftColumn.field !== rightColumn.field ||
-      leftColumn.op !== rightColumn.op
-    ) {
-      return false
-    }
-  }
-  return true
-}
-
 function isAbortError(error: unknown): boolean {
   if (!error) {
     return false
@@ -154,82 +120,6 @@ function normalizeTotal(total: number | null | undefined): number | null {
   return Math.max(0, Math.trunc(total as number))
 }
 
-function normalizePivotColumns(
-  pivotColumns: readonly DataGridPivotColumn[] | null | undefined,
-): DataGridPivotColumn[] | null {
-  if (!Array.isArray(pivotColumns)) {
-    return null
-  }
-  return pivotColumns.map(column => ({
-    id: String(column.id),
-    valueField: String(column.valueField),
-    agg: column.agg,
-    label: String(column.label),
-    ...(column.subtotal ? { subtotal: true } : {}),
-    ...(column.grandTotal ? { grandTotal: true } : {}),
-    columnPath: Array.isArray(column.columnPath)
-      ? column.columnPath.map((segment: { field?: unknown; value?: unknown }) => ({
-          field: String(segment.field ?? ""),
-          value: String(segment.value ?? ""),
-        }))
-      : [],
-  }))
-}
-
-function clonePivotColumns(pivotColumns: readonly DataGridPivotColumn[]): DataGridPivotColumn[] {
-  return pivotColumns.map(column => ({
-    id: column.id,
-    valueField: column.valueField,
-    agg: column.agg,
-    label: column.label,
-    ...(column.subtotal ? { subtotal: true } : {}),
-    ...(column.grandTotal ? { grandTotal: true } : {}),
-    columnPath: column.columnPath.map((segment: { field: string; value: string }) => ({
-      field: segment.field,
-      value: segment.value,
-    })),
-  }))
-}
-
-function isSamePivotColumns(
-  left: readonly DataGridPivotColumn[],
-  right: readonly DataGridPivotColumn[],
-): boolean {
-  if (left === right) {
-    return true
-  }
-  if (left.length !== right.length) {
-    return false
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    const leftColumn = left[index]
-    const rightColumn = right[index]
-    if (!leftColumn || !rightColumn) {
-      return false
-    }
-    if (
-      leftColumn.id !== rightColumn.id ||
-      leftColumn.valueField !== rightColumn.valueField ||
-      leftColumn.agg !== rightColumn.agg ||
-      leftColumn.label !== rightColumn.label ||
-      Boolean(leftColumn.subtotal) !== Boolean(rightColumn.subtotal) ||
-      Boolean(leftColumn.grandTotal) !== Boolean(rightColumn.grandTotal)
-    ) {
-      return false
-    }
-    if (leftColumn.columnPath.length !== rightColumn.columnPath.length) {
-      return false
-    }
-    for (let pathIndex = 0; pathIndex < leftColumn.columnPath.length; pathIndex += 1) {
-      const leftPath = leftColumn.columnPath[pathIndex]
-      const rightPath = rightColumn.columnPath[pathIndex]
-      if (!leftPath || !rightPath || leftPath.field !== rightPath.field || leftPath.value !== rightPath.value) {
-        return false
-      }
-    }
-  }
-  return true
-}
 
 function serializePullState(value: unknown): string {
   try {
@@ -447,7 +337,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       ...(pivotModel
         ? {
             pivotModel: clonePivotSpec(pivotModel),
-            pivotColumns: clonePivotColumns(pivotColumns),
+            pivotColumns: clonePivotColumnsSnapshot(pivotColumns),
           }
         : {}),
       groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
@@ -702,7 +592,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
           treeData: treePullContext,
           pivot: {
             pivotModel: clonePivotSpec(pivotModel),
-            aggregationModel: cloneAggregationModel(aggregationModel),
+            aggregationModel: clonePullAggregationModel(aggregationModel),
           },
           pagination: {
             snapshot: getPaginationSnapshot(),
@@ -732,8 +622,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
           }
         }
         if (pivotModel) {
-          const normalizedPivotColumns = normalizePivotColumns(result.pivotColumns)
-          if (normalizedPivotColumns && !isSamePivotColumns(pivotColumns, normalizedPivotColumns)) {
+          const normalizedPivotColumns = normalizePivotColumnsFromUnknown(result.pivotColumns)
+          if (normalizedPivotColumns && !isSamePivotColumnsSnapshot(pivotColumns, normalizedPivotColumns)) {
             pivotColumns = normalizedPivotColumns
             changed = true
           }
@@ -823,8 +713,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
         viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       }
       if (pivotModel) {
-        const normalizedPivotColumns = normalizePivotColumns(event.pivotColumns)
-        if (normalizedPivotColumns && !isSamePivotColumns(pivotColumns, normalizedPivotColumns)) {
+        const normalizedPivotColumns = normalizePivotColumnsFromUnknown(event.pivotColumns)
+        if (normalizedPivotColumns && !isSamePivotColumnsSnapshot(pivotColumns, normalizedPivotColumns)) {
           pivotColumns = normalizedPivotColumns
           changed = true
         }
@@ -1060,8 +950,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
     },
     setAggregationModel(nextAggregationModel) {
       ensureActive()
-      const normalized = cloneAggregationModel(nextAggregationModel ?? null)
-      if (isSameAggregationModel(aggregationModel, normalized)) {
+      const normalized = clonePullAggregationModel(nextAggregationModel ?? null)
+      if (isSamePullAggregationModel(aggregationModel, normalized)) {
         return
       }
       aggregationModel = normalized
@@ -1072,7 +962,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       emit()
     },
     getAggregationModel() {
-      return cloneAggregationModel(aggregationModel)
+      return clonePullAggregationModel(aggregationModel)
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
       ensureActive()

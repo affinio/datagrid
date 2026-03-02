@@ -88,6 +88,12 @@ function normalizeColumnFilterEntries(
     kind: "predicate"
     predicate: DataGridColumnPredicateFilter
   }> {
+  const normalizeValueSetTokenForLookup = (token: string): string => {
+    if (token.startsWith("string:")) {
+      return `string:${token.slice("string:".length).toLowerCase()}`
+    }
+    return token
+  }
   const normalized: Array<{
     key: string
     kind: "valueSet"
@@ -107,7 +113,7 @@ function normalizeColumnFilterEntries(
       const seen = new Set<string>()
       const valueTokens: string[] = []
       for (const rawToken of rawEntry.tokens ?? []) {
-        const token = String(rawToken ?? "")
+        const token = normalizeValueSetTokenForLookup(String(rawToken ?? ""))
         if (!token || seen.has(token)) {
           continue
         }
@@ -197,12 +203,18 @@ export function createFilterPredicate<T>(
     (effectiveFilterModel.columnFilters ?? {}) as Record<string, DataGridColumnFilterSnapshotEntry>,
   ).map(entry => [entry.key, entry] as const)
   const advancedExpression = resolveAdvancedExpression(effectiveFilterModel)
+  const normalizeValueSetTokenForLookup = (token: string): string => {
+    if (token.startsWith("string:")) {
+      return `string:${token.slice("string:".length).toLowerCase()}`
+    }
+    return token
+  }
 
   return (rowNode: DataGridRowNode<T>) => {
     for (const [key, filterEntry] of columnFilters) {
       const candidate = readRowField(rowNode, key)
       if (filterEntry.kind === "valueSet") {
-        const candidateToken = serializeColumnValueToToken(candidate)
+        const candidateToken = normalizeValueSetTokenForLookup(serializeColumnValueToToken(candidate))
         if (!filterEntry.valueTokenSet?.has(candidateToken)) {
           return false
         }

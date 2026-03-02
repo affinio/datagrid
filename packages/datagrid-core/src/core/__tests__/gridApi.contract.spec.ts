@@ -21,6 +21,33 @@ describe("data grid api facade contracts", () => {
     expect(() => createDataGridApi({ core })).toThrow(/rowModel/)
   })
 
+  it("exposes namespaced API only (no legacy unscoped methods)", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, name: "alpha" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "name", label: "Name" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+
+    const api = createDataGridApi({ core }) as Record<string, unknown>
+    expect(typeof api.rows).toBe("object")
+    expect(typeof api.columns).toBe("object")
+    expect(typeof api.view).toBe("object")
+    expect(typeof api.pivot).toBe("object")
+    expect(typeof api.selection).toBe("object")
+    expect(typeof api.transaction).toBe("object")
+    expect("getRowCount" in api).toBe(false)
+    expect("setSortModel" in api).toBe(false)
+    expect("setColumnWidth" in api).toBe(false)
+    expect("refreshCellsByRowKeys" in api).toBe(false)
+  })
+
   it("routes row/column/filter/sort/refresh through core services", () => {
     const rowModel = createClientRowModel({
       rows: [
@@ -51,27 +78,27 @@ describe("data grid api facade contracts", () => {
 
     const api = createDataGridApi({ core })
 
-    api.setSortModel([{ key: "id", direction: "asc" }])
-    api.setFilterModel({ columnFilters: { name: { kind: "valueSet", tokens: ["string:alpha"] } }, advancedFilters: {} })
-    api.setSortAndFilterModel({
+    api.rows.setSortModel([{ key: "id", direction: "asc" }])
+    api.rows.setFilterModel({ columnFilters: { name: { kind: "valueSet", tokens: ["string:alpha"] } }, advancedFilters: {} })
+    api.rows.setSortAndFilterModel({
       sortModel: [{ key: "id", direction: "desc" }],
       filterModel: { columnFilters: { name: { kind: "valueSet", tokens: ["string:beta"] } }, advancedFilters: {} },
     })
-    api.setGroupBy({ fields: ["name"], expandedByDefault: true })
-    api.setAggregationModel({ columns: [{ key: "id", op: "count" }] })
-    api.setGroupExpansion({ expandedByDefault: true, toggledGroupKeys: [] })
-    api.collapseGroup("name=alpha")
-    api.setPageSize(1)
-    api.setCurrentPage(1)
-    api.setViewportRange({ start: 0, end: 1 })
-    api.setColumnVisibility("id", false)
-    api.setColumnWidth("name", 280)
-    api.setColumnPin("name", "left")
-    api.setColumnOrder(["name", "id"])
-    api.refresh()
+    api.rows.setGroupBy({ fields: ["name"], expandedByDefault: true })
+    api.rows.setAggregationModel({ columns: [{ key: "id", op: "count" }] })
+    api.rows.setGroupExpansion({ expandedByDefault: true, toggledGroupKeys: [] })
+    api.rows.collapseGroup("name=alpha")
+    api.rows.setPageSize(1)
+    api.rows.setCurrentPage(1)
+    api.view.setViewportRange({ start: 0, end: 1 })
+    api.columns.setVisibility("id", false)
+    api.columns.setWidth("name", 280)
+    api.columns.setPin("name", "left")
+    api.columns.setOrder(["name", "id"])
+    api.view.refresh()
 
-    const rowSnapshot = api.getRowModelSnapshot()
-    const columnSnapshot = api.getColumnModelSnapshot()
+    const rowSnapshot = api.rows.getSnapshot()
+    const columnSnapshot = api.columns.getSnapshot()
 
     expect(rowSnapshot.sortModel).toEqual([{ key: "id", direction: "desc" }])
     expect(rowSnapshot.filterModel).toEqual({
@@ -82,10 +109,10 @@ describe("data grid api facade contracts", () => {
       fields: ["name"],
       expandedByDefault: true,
     })
-    expect(api.getAggregationModel()).toEqual({
+    expect(api.rows.getAggregationModel()).toEqual({
       columns: [{ key: "id", op: "count" }],
     })
-    expect(api.getColumnHistogram("name")).toEqual([
+    expect(api.columns.getHistogram("name")).toEqual([
       {
         token: "string:beta",
         value: "beta",
@@ -103,16 +130,16 @@ describe("data grid api facade contracts", () => {
     expect(rowSnapshot.pagination.totalRowCount).toBe(2)
     expect(rowSnapshot.viewportRange).toEqual({ start: 0, end: 0 })
     expect(viewportRange).toEqual({ start: 0, end: 1 })
-    expect(api.getRowCount()).toBe(1)
-    expect(api.getPaginationSnapshot().currentPage).toBe(1)
-    const maxIndex = Math.max(0, api.getRowCount() - 1)
-    const candidates = api.getRowsInRange({ start: 0, end: Math.min(3, maxIndex) })
+    expect(api.rows.getCount()).toBe(1)
+    expect(api.rows.getPagination().currentPage).toBe(1)
+    const maxIndex = Math.max(0, api.rows.getCount() - 1)
+    const candidates = api.rows.getRange({ start: 0, end: Math.min(3, maxIndex) })
     const firstLeaf = candidates.find(row => row.kind === "leaf") as { row: { name: string } } | undefined
     expect(firstLeaf?.row.name).toBe("beta")
     expect(columnSnapshot.order).toEqual(["name", "id"])
-    expect(api.getColumn("id")?.visible).toBe(false)
-    expect(api.getColumn("name")?.pin).toBe("left")
-    expect(api.getColumn("name")?.width).toBe(280)
+    expect(api.columns.get("id")?.visible).toBe(false)
+    expect(api.columns.get("name")?.pin).toBe("left")
+    expect(api.columns.get("name")?.width).toBe(280)
   })
 
   it("routes explicit group expansion APIs through row model service", () => {
@@ -133,22 +160,22 @@ describe("data grid api facade contracts", () => {
     const api = createDataGridApi({ core })
     const alphaGroupKey = JSON.stringify([["team", "alpha"]])
     const betaGroupKey = JSON.stringify([["team", "beta"]])
-    api.setGroupBy({ fields: ["team"], expandedByDefault: false })
-    api.expandGroup(alphaGroupKey)
-    api.collapseGroup(alphaGroupKey)
-    api.expandAllGroups()
-    api.setGroupExpansion({
+    api.rows.setGroupBy({ fields: ["team"], expandedByDefault: false })
+    api.rows.expandGroup(alphaGroupKey)
+    api.rows.collapseGroup(alphaGroupKey)
+    api.view.expandAllGroups()
+    api.rows.setGroupExpansion({
       expandedByDefault: false,
       toggledGroupKeys: [betaGroupKey],
     })
 
-    expect(api.getRowModelSnapshot().groupExpansion).toEqual({
+    expect(api.rows.getSnapshot().groupExpansion).toEqual({
       expandedByDefault: false,
       toggledGroupKeys: [betaGroupKey],
     })
 
-    api.collapseAllGroups()
-    expect(api.getRowModelSnapshot().groupExpansion).toEqual({
+    api.view.collapseAllGroups()
+    expect(api.rows.getSnapshot().groupExpansion).toEqual({
       expandedByDefault: false,
       toggledGroupKeys: [],
     })
@@ -172,18 +199,18 @@ describe("data grid api facade contracts", () => {
     })
     const api = createDataGridApi({ core })
 
-    api.setPivotModel({
+    api.pivot.setModel({
       rows: ["team"],
       columns: ["status"],
       values: [{ field: "id", agg: "count" }],
     })
 
-    expect(api.getPivotModel()).toEqual({
+    expect(api.pivot.getModel()).toEqual({
       rows: ["team"],
       columns: ["status"],
       values: [{ field: "id", agg: "count" }],
     })
-    expect(api.getRowModelSnapshot().pivotModel).toEqual({
+    expect(api.rows.getSnapshot().pivotModel).toEqual({
       rows: ["team"],
       columns: ["status"],
       values: [{ field: "id", agg: "count" }],
@@ -222,33 +249,33 @@ describe("data grid api facade contracts", () => {
     })
     const api = createDataGridApi({ core })
 
-    api.setSortAndFilterModel({
+    api.rows.setSortAndFilterModel({
       sortModel: [{ key: "revenue", direction: "desc" }],
       filterModel: {
         columnFilters: { region: { kind: "valueSet", tokens: ["string:amer"] } },
         advancedFilters: {},
       },
     })
-    api.setGroupBy({ fields: ["region"], expandedByDefault: true })
-    api.setPivotModel({
+    api.rows.setGroupBy({ fields: ["region"], expandedByDefault: true })
+    api.pivot.setModel({
       rows: ["region", "team"],
       columns: ["year"],
       values: [{ field: "revenue", agg: "sum" }],
     })
-    api.setAggregationModel({
+    api.rows.setAggregationModel({
       columns: [{ key: "revenue", field: "revenue", op: "sum" }],
     })
-    api.setGroupExpansion({
+    api.rows.setGroupExpansion({
       expandedByDefault: false,
       toggledGroupKeys: ["pivot:group:6:region4:AMER"],
     })
-    api.setColumnOrder(["team", "region", "year", "owner", "revenue"])
-    api.setColumnVisibility("owner", false)
-    api.setColumnWidth("revenue", 260)
-    api.setColumnPin("team", "left")
+    api.columns.setOrder(["team", "region", "year", "owner", "revenue"])
+    api.columns.setVisibility("owner", false)
+    api.columns.setWidth("revenue", 260)
+    api.columns.setPin("team", "left")
 
-    const exported = api.exportPivotLayout()
-    const interop = api.exportPivotInterop()
+    const exported = api.pivot.exportLayout()
+    const interop = api.pivot.exportInterop()
     expect(interop).not.toBeNull()
     expect(interop?.version).toBe(1)
     expect(interop?.layout.pivotModel).toEqual(exported.pivotModel)
@@ -256,21 +283,21 @@ describe("data grid api facade contracts", () => {
     expect((interop?.rows.length ?? 0) > 0).toBe(true)
     expect(Array.isArray(interop?.pivotColumns)).toBe(true)
 
-    api.setSortModel([{ key: "region", direction: "asc" }])
-    api.setFilterModel(null)
-    api.setGroupBy(null)
-    api.setPivotModel(null)
-    api.setAggregationModel(null)
-    api.setGroupExpansion({ expandedByDefault: true, toggledGroupKeys: [] })
-    api.setColumnOrder(["region", "team", "owner", "year", "revenue"])
-    api.setColumnVisibility("owner", true)
-    api.setColumnWidth("revenue", 140)
-    api.setColumnPin("team", "none")
+    api.rows.setSortModel([{ key: "region", direction: "asc" }])
+    api.rows.setFilterModel(null)
+    api.rows.setGroupBy(null)
+    api.pivot.setModel(null)
+    api.rows.setAggregationModel(null)
+    api.rows.setGroupExpansion({ expandedByDefault: true, toggledGroupKeys: [] })
+    api.columns.setOrder(["region", "team", "owner", "year", "revenue"])
+    api.columns.setVisibility("owner", true)
+    api.columns.setWidth("revenue", 140)
+    api.columns.setPin("team", "none")
 
-    api.importPivotLayout(exported)
+    api.pivot.importLayout(exported)
 
-    const rowSnapshot = api.getRowModelSnapshot()
-    const columnSnapshot = api.getColumnModelSnapshot()
+    const rowSnapshot = api.rows.getSnapshot()
+    const columnSnapshot = api.columns.getSnapshot()
 
     expect(rowSnapshot.sortModel).toEqual([{ key: "revenue", direction: "desc" }])
     expect(rowSnapshot.filterModel).toEqual({
@@ -283,7 +310,7 @@ describe("data grid api facade contracts", () => {
       columns: ["year"],
       values: [{ field: "revenue", agg: "sum" }],
     })
-    expect(api.getAggregationModel()).toEqual({
+    expect(api.rows.getAggregationModel()).toEqual({
       columns: [{ key: "revenue", field: "revenue", op: "sum" }],
     })
     expect(rowSnapshot.groupExpansion).toEqual({
@@ -291,9 +318,9 @@ describe("data grid api facade contracts", () => {
       toggledGroupKeys: ["pivot:group:6:region4:AMER"],
     })
     expect(columnSnapshot.order).toEqual(["team", "region", "year", "owner", "revenue"])
-    expect(api.getColumn("owner")?.visible).toBe(false)
-    expect(api.getColumn("revenue")?.width).toBe(260)
-    expect(api.getColumn("team")?.pin).toBe("left")
+    expect(api.columns.get("owner")?.visible).toBe(false)
+    expect(api.columns.get("revenue")?.width).toBe(260)
+    expect(api.columns.get("team")?.pin).toBe("left")
   })
 
   it("falls back to sequential setFilterModel/setSortModel when row model lacks batched sort+filter capability", () => {
@@ -321,7 +348,7 @@ describe("data grid api facade contracts", () => {
     })
     const api = createDataGridApi({ core })
 
-    api.setSortAndFilterModel({
+    api.rows.setSortAndFilterModel({
       filterModel: {
         columnFilters: { owner: { kind: "valueSet", tokens: ["string:noc"] } },
         advancedFilters: {},
@@ -350,10 +377,10 @@ describe("data grid api facade contracts", () => {
     })
     const api = createDataGridApi({ core })
 
-    expect(api.getColumnHistogram("owner")).toEqual([])
+    expect(api.columns.getHistogram("owner")).toEqual([])
   })
 
-  it("exposes patchRows/applyEdits/reapplyView with Excel-like defaults and optional auto-reapply", () => {
+  it("exposes rows.patch/rows.applyEdits/view.reapply with Excel-like defaults and optional auto-reapply", () => {
     const rowModel = createClientRowModel({
       rows: [
         { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
@@ -372,30 +399,30 @@ describe("data grid api facade contracts", () => {
     })
     const api = createDataGridApi({ core })
 
-    expect(api.hasPatchSupport()).toBe(true)
-    expect(api.getAutoReapply()).toBe(false)
+    expect(api.rows.hasPatchSupport()).toBe(true)
+    expect(api.rows.getAutoReapply()).toBe(false)
 
-    api.setSortModel([{ key: "tested_at", direction: "desc" }])
-    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
+    api.rows.setSortModel([{ key: "tested_at", direction: "desc" }])
+    expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
 
     // applyEdits defaults to frozen view semantics (no live re-sort/filter/group)
-    api.applyEdits([{ rowId: "r1", data: { tested_at: 999 } }])
-    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
-    expect((api.getRow(2)?.row as { tested_at?: number })?.tested_at).toBe(999)
+    api.rows.applyEdits([{ rowId: "r1", data: { tested_at: 999 } }])
+    expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
+    expect((api.rows.get(2)?.row as { tested_at?: number })?.tested_at).toBe(999)
 
-    api.setAutoReapply(true)
-    expect(api.getAutoReapply()).toBe(true)
-    api.applyEdits([{ rowId: "r2", data: { tested_at: 1 } }])
-    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r3", "r2"])
+    api.rows.setAutoReapply(true)
+    expect(api.rows.getAutoReapply()).toBe(true)
+    api.rows.applyEdits([{ rowId: "r2", data: { tested_at: 1 } }])
+    expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r3", "r2"])
 
-    api.patchRows([{ rowId: "r3", data: { tested_at: 2000 } }], { recomputeSort: true })
-    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r1", "r2"])
+    api.rows.patch([{ rowId: "r3", data: { tested_at: 2000 } }], { recomputeSort: true })
+    expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r1", "r2"])
 
-    api.patchRows([{ rowId: "r2", data: { tested_at: 5000 } }], { recomputeSort: false })
-    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r1", "r2"])
+    api.rows.patch([{ rowId: "r2", data: { tested_at: 5000 } }], { recomputeSort: false })
+    expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r1", "r2"])
 
-    api.reapplyView()
-    expect(api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r3", "r1"])
+    api.view.reapply()
+    expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r3", "r1"])
   })
 
   it("reports missing patch capability for non-client row models and fails loudly", () => {
@@ -416,15 +443,15 @@ describe("data grid api facade contracts", () => {
     })
     const api = createDataGridApi({ core })
 
-    expect(api.hasPatchSupport()).toBe(false)
+    expect(api.rows.hasPatchSupport()).toBe(false)
     expect(() => {
-      api.patchRows([{ rowId: "r1", data: { tested_at: 200 } }])
+      api.rows.patch([{ rowId: "r1", data: { tested_at: 200 } }])
     }).toThrow(/patchRows capability/i)
     expect(() => {
-      api.applyEdits([{ rowId: "r1", data: { tested_at: 200 } }])
+      api.rows.applyEdits([{ rowId: "r1", data: { tested_at: 200 } }])
     }).toThrow(/patchRows capability/i)
 
-    api.reapplyView()
+    api.view.reapply()
     expect(refreshSpy).toHaveBeenCalledWith("reapply")
   })
 
@@ -452,15 +479,15 @@ describe("data grid api facade contracts", () => {
       },
     })
     const api = createDataGridApi({ core })
-    api.setViewportRange({ start: 0, end: 49 })
+    api.view.setViewportRange({ start: 0, end: 49 })
 
     const refreshSpy = vi.spyOn(rowModel, "refresh")
     const batches: Array<{ cells: number }> = []
-    const unsubscribe = api.onCellsRefresh(batch => {
+    const unsubscribe = api.view.onCellsRefresh(batch => {
       batches.push({ cells: batch.cells.length })
     })
 
-    api.refreshCellsByRowKeys(
+    api.view.refreshCellsByRowKeys(
       Array.from({ length: 1_200 }, (_unused, index) => `r${index}`),
       ["tested_at"],
     )
@@ -489,14 +516,14 @@ describe("data grid api facade contracts", () => {
       },
     })
     const api = createDataGridApi({ core })
-    api.setViewportRange({ start: 0, end: 19 })
+    api.view.setViewportRange({ start: 0, end: 19 })
 
     let emitted = 0
-    const unsubscribe = api.onCellsRefresh(() => {
+    const unsubscribe = api.view.onCellsRefresh(() => {
       emitted += 1
     })
 
-    api.refreshCellsByRowKeys(["r120", "r121", "r122"], ["tested_at"])
+    api.view.refreshCellsByRowKeys(["r120", "r121", "r122"], ["tested_at"])
     await waitForCellRefreshFrame()
 
     unsubscribe()
@@ -522,20 +549,20 @@ describe("data grid api facade contracts", () => {
       },
     })
     const api = createDataGridApi({ core })
-    api.setViewportRange({ start: 0, end: 0 })
+    api.view.setViewportRange({ start: 0, end: 0 })
 
     let latestBatch:
       | {
           cells: Array<{ columnKey: string; pin: "left" | "right" | "none" }>
         }
       | null = null
-    const unsubscribe = api.onCellsRefresh(batch => {
+    const unsubscribe = api.view.onCellsRefresh(batch => {
       latestBatch = {
         cells: batch.cells.map(cell => ({ columnKey: cell.columnKey, pin: cell.pin })),
       }
     })
 
-    api.refreshCellsByRanges([
+    api.view.refreshCellsByRanges([
       {
         rowKey: "r1",
         columnKeys: ["tested_at", "control"],
@@ -569,9 +596,9 @@ describe("data grid api facade contracts", () => {
 
     const api = createDataGridApi({ core })
 
-    expect(api.hasSelectionSupport()).toBe(false)
-    expect(api.getSelectionSnapshot()).toBeNull()
-    expect(() => api.clearSelection()).toThrow(/selection/)
+    expect(api.selection.hasSupport()).toBe(false)
+    expect(api.selection.getSnapshot()).toBeNull()
+    expect(() => api.selection.clear()).toThrow(/selection/)
   })
 
   it("delegates selection APIs when selection capability is implemented", () => {
@@ -607,13 +634,13 @@ describe("data grid api facade contracts", () => {
       activeCell: null,
     } satisfies DataGridSelectionSnapshot
 
-    api.setSelectionSnapshot(snapshot)
-    expect(api.hasSelectionSupport()).toBe(true)
-    expect(api.getSelectionSnapshot()).toBe(snapshot)
+    api.selection.setSnapshot(snapshot)
+    expect(api.selection.hasSupport()).toBe(true)
+    expect(api.selection.getSnapshot()).toBe(snapshot)
 
-    api.clearSelection()
+    api.selection.clear()
     expect(clearCount).toBe(1)
-    expect(api.getSelectionSnapshot()).toBeNull()
+    expect(api.selection.getSnapshot()).toBeNull()
   })
 
   it("computes selection summary through api facade when selection capability is present", () => {
@@ -666,7 +693,7 @@ describe("data grid api facade contracts", () => {
     })
 
     const api = createDataGridApi({ core })
-    const summary = api.summarizeSelection({
+    const summary = api.selection.summarize({
       columns: [
         { key: "owner", aggregations: ["countDistinct"] },
         { key: "latencyMs", aggregations: ["sum", "max"] },
@@ -716,20 +743,20 @@ describe("data grid api facade contracts", () => {
     })
     const api = createDataGridApi({ core })
 
-    api.setSortModel([{ key: "owner", direction: "asc" }])
-    api.setFilterModel({
+    api.rows.setSortModel([{ key: "owner", direction: "asc" }])
+    api.rows.setFilterModel({
       columnFilters: { status: { kind: "valueSet", tokens: ["string:open"] } },
       advancedFilters: {},
     })
-    api.setGroupBy({ fields: ["status"], expandedByDefault: true })
-    api.toggleGroup(`[["status","open"]]`)
-    api.setPagination({ pageSize: 2, currentPage: 0 })
-    api.setViewportRange({ start: 0, end: 1 })
-    api.setColumnOrder(["status", "owner", "id"])
-    api.setColumnVisibility("id", false)
-    api.setColumnPin("owner", "left")
-    api.setColumnWidth("status", 220)
-    api.setSelectionSnapshot({
+    api.rows.setGroupBy({ fields: ["status"], expandedByDefault: true })
+    api.rows.toggleGroup(`[["status","open"]]`)
+    api.rows.setPagination({ pageSize: 2, currentPage: 0 })
+    api.view.setViewportRange({ start: 0, end: 1 })
+    api.columns.setOrder(["status", "owner", "id"])
+    api.columns.setVisibility("id", false)
+    api.columns.setPin("owner", "left")
+    api.columns.setWidth("status", 220)
+    api.selection.setSnapshot({
       ranges: [
         {
           startRow: 0,
@@ -746,43 +773,43 @@ describe("data grid api facade contracts", () => {
       activeCell: { rowIndex: 0, colIndex: 1, rowId: 1 },
     })
 
-    const expectedRow = api.getRowModelSnapshot()
-    const expectedColumns = api.getColumnModelSnapshot()
-    const expectedSelection = api.getSelectionSnapshot()
+    const expectedRow = api.rows.getSnapshot()
+    const expectedColumns = api.columns.getSnapshot()
+    const expectedSelection = api.selection.getSnapshot()
 
-    api.setSortModel([{ key: "status", direction: "desc" }])
-    api.setFilterModel({ columnFilters: {}, advancedFilters: {} })
-    api.setGroupBy(null)
-    api.setPagination({ pageSize: 1, currentPage: 1 })
-    api.setViewportRange({ start: 1, end: 1 })
-    api.setColumnOrder(["id", "owner", "status"])
-    api.setColumnVisibility("id", true)
-    api.setColumnPin("owner", "none")
-    api.setColumnWidth("status", 100)
-    api.clearSelection()
+    api.rows.setSortModel([{ key: "status", direction: "desc" }])
+    api.rows.setFilterModel({ columnFilters: {}, advancedFilters: {} })
+    api.rows.setGroupBy(null)
+    api.rows.setPagination({ pageSize: 1, currentPage: 1 })
+    api.view.setViewportRange({ start: 1, end: 1 })
+    api.columns.setOrder(["id", "owner", "status"])
+    api.columns.setVisibility("id", true)
+    api.columns.setPin("owner", "none")
+    api.columns.setWidth("status", 100)
+    api.selection.clear()
 
-    api.setSortModel(expectedRow.sortModel)
-    api.setFilterModel(expectedRow.filterModel)
-    api.setGroupBy(expectedRow.groupBy)
-    api.setGroupExpansion(expectedRow.groupExpansion)
-    api.setPagination({
+    api.rows.setSortModel(expectedRow.sortModel)
+    api.rows.setFilterModel(expectedRow.filterModel)
+    api.rows.setGroupBy(expectedRow.groupBy)
+    api.rows.setGroupExpansion(expectedRow.groupExpansion)
+    api.rows.setPagination({
       pageSize: expectedRow.pagination.pageSize,
       currentPage: expectedRow.pagination.currentPage,
     })
-    api.setViewportRange(expectedRow.viewportRange)
-    api.setColumnOrder(expectedColumns.order)
+    api.view.setViewportRange(expectedRow.viewportRange)
+    api.columns.setOrder(expectedColumns.order)
     for (const column of expectedColumns.columns) {
-      api.setColumnVisibility(column.key, column.visible)
-      api.setColumnPin(column.key, column.pin)
-      api.setColumnWidth(column.key, column.width)
+      api.columns.setVisibility(column.key, column.visible)
+      api.columns.setPin(column.key, column.pin)
+      api.columns.setWidth(column.key, column.width)
     }
     if (expectedSelection) {
-      api.setSelectionSnapshot(expectedSelection)
+      api.selection.setSnapshot(expectedSelection)
     }
 
-    const rowRoundtrip = api.getRowModelSnapshot()
-    const columnsRoundtrip = api.getColumnModelSnapshot()
-    const selectionRoundtrip = api.getSelectionSnapshot()
+    const rowRoundtrip = api.rows.getSnapshot()
+    const columnsRoundtrip = api.columns.getSnapshot()
+    const selectionRoundtrip = api.selection.getSnapshot()
 
     expect(rowRoundtrip.sortModel).toEqual(expectedRow.sortModel)
     expect(rowRoundtrip.filterModel).toEqual(expectedRow.filterModel)
@@ -825,9 +852,9 @@ describe("data grid api facade contracts", () => {
 
     const api = createDataGridApi({ core })
 
-    expect(api.hasTransactionSupport()).toBe(false)
-    expect(api.getTransactionSnapshot()).toBeNull()
-    expect(() => api.undoTransaction()).toThrow(/transaction/)
+    expect(api.transaction.hasSupport()).toBe(false)
+    expect(api.transaction.getSnapshot()).toBeNull()
+    expect(() => api.transaction.undo()).toThrow(/transaction/)
   })
 
   it("delegates transaction APIs when transaction capability is implemented", async () => {
@@ -864,7 +891,7 @@ describe("data grid api facade contracts", () => {
     })
 
     const api = createDataGridApi({ core })
-    await api.applyTransaction({
+    await api.transaction.apply({
       commands: [
         {
           type: "set",
@@ -873,12 +900,12 @@ describe("data grid api facade contracts", () => {
         },
       ],
     })
-    expect(api.hasTransactionSupport()).toBe(true)
-    expect(api.canUndoTransaction()).toBe(true)
+    expect(api.transaction.hasSupport()).toBe(true)
+    expect(api.transaction.canUndo()).toBe(true)
     expect(values.a).toBe(1)
 
-    await api.undoTransaction()
+    await api.transaction.undo()
     expect(values.a).toBe(0)
-    expect(api.canRedoTransaction()).toBe(true)
+    expect(api.transaction.canRedo()).toBe(true)
   })
 })

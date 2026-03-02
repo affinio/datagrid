@@ -101,7 +101,7 @@ export function useDataGridRuntime<TRow = unknown>(
   const { rowModel, columnModel, core, api } = runtime
   const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
   const buildFallbackVirtualWindow = (): DataGridRuntimeVirtualWindowSnapshot => {
-    const rowTotal = Math.max(0, api.getRowCount())
+    const rowTotal = Math.max(0, api.rows.getCount())
     const colTotal = Math.max(0, columnSnapshot.value.visibleColumns.length)
     return {
       rowStart: 0,
@@ -165,7 +165,7 @@ export function useDataGridRuntime<TRow = unknown>(
   })
 
   function reapplyView() {
-    api.reapplyView()
+    api.view.reapply()
   }
 
   function patchRows(
@@ -199,14 +199,14 @@ export function useDataGridRuntime<TRow = unknown>(
     columnSnapshot,
     virtualWindow,
     setRows: runtime.setRows,
-    setAggregationModel: api.setAggregationModel,
-    getAggregationModel: api.getAggregationModel,
-    setPivotModel: api.setPivotModel,
-    getPivotModel: api.getPivotModel,
-    getPivotCellDrilldown: api.getPivotCellDrilldown,
-    exportPivotLayout: api.exportPivotLayout,
-    exportPivotInterop: api.exportPivotInterop,
-    importPivotLayout: api.importPivotLayout,
+    setAggregationModel: api.rows.setAggregationModel,
+    getAggregationModel: api.rows.getAggregationModel,
+    setPivotModel: api.pivot.setModel,
+    getPivotModel: api.pivot.getModel,
+    getPivotCellDrilldown: api.pivot.getCellDrilldown,
+    exportPivotLayout: api.pivot.exportLayout,
+    exportPivotInterop: api.pivot.exportInterop,
+    importPivotLayout: api.pivot.importLayout,
     patchRows,
     applyEdits,
     reapplyView,

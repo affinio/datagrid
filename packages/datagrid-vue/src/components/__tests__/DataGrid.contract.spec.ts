@@ -27,7 +27,7 @@ describe("DataGrid component contract", () => {
       },
       slots: {
         default: scope => h("div", { class: "row-count" }, [
-          h("span", { class: "rows" }, String(scope.api.getRowCount())),
+          h("span", { class: "rows" }, String(scope.api.rows.getCount())),
           h("span", { class: "window-total" }, String(scope.virtualWindow?.rowTotal ?? 0)),
         ]),
       },
@@ -62,9 +62,13 @@ describe("DataGrid component contract", () => {
 
     const exposed = wrapper.vm as unknown as {
       api: {
-        getRowCount(): number
-        refreshCellsByRowKeys(rowKeys: readonly (string | number)[], columnKeys: readonly string[]): void
-        refreshCellsByRanges(ranges: readonly { rowKey: string | number; columnKeys: readonly string[] }[]): void
+        rows: {
+          getCount(): number
+        }
+        view: {
+          refreshCellsByRowKeys(rowKeys: readonly (string | number)[], columnKeys: readonly string[]): void
+          refreshCellsByRanges(ranges: readonly { rowKey: string | number; columnKeys: readonly string[] }[]): void
+        }
       }
       core: { lifecycle: { state: string } }
       virtualWindow: { value: { rowTotal: number; colTotal: number } | null }
@@ -72,10 +76,10 @@ describe("DataGrid component contract", () => {
       stop(): void
     }
 
-    expect(typeof exposed.api.getRowCount).toBe("function")
-    expect(typeof exposed.api.refreshCellsByRowKeys).toBe("function")
-    expect(typeof exposed.api.refreshCellsByRanges).toBe("function")
-    expect(exposed.api.getRowCount()).toBe(1)
+    expect(typeof exposed.api.rows.getCount).toBe("function")
+    expect(typeof exposed.api.view.refreshCellsByRowKeys).toBe("function")
+    expect(typeof exposed.api.view.refreshCellsByRanges).toBe("function")
+    expect(exposed.api.rows.getCount()).toBe(1)
     const exposedWindow = (exposed.virtualWindow as { value?: { rowTotal: number; colTotal: number } | null })?.value ??
       (exposed.virtualWindow as { rowTotal?: number; colTotal?: number } | null)
     expect(exposedWindow?.rowTotal).toBe(1)

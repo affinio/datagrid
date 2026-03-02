@@ -40,7 +40,7 @@ describe("useDataGridRuntime contract", () => {
 
     expect(runtime).not.toBeNull()
     expect(runtime!.api.lifecycle.state).toBe("started")
-    expect(runtime!.api.getRowCount()).toBe(2)
+    expect(runtime!.api.rows.getCount()).toBe(2)
     expect(runtime!.virtualWindow.value?.rowTotal).toBe(2)
     expect(runtime!.virtualWindow.value?.colTotal).toBe(1)
 
@@ -51,7 +51,7 @@ describe("useDataGridRuntime contract", () => {
     ]
     await flushRuntimeTasks()
 
-    expect(runtime!.api.getRowCount()).toBe(3)
+    expect(runtime!.api.rows.getCount()).toBe(3)
     expect(runtime!.virtualWindow.value?.rowTotal).toBe(3)
 
     runtime!.setAggregationModel({ columns: [{ key: "name", op: "count" }] })
@@ -81,9 +81,9 @@ describe("useDataGridRuntime contract", () => {
     expect(exportedPivotInterop).not.toBeNull()
     expect(exportedPivotInterop?.layout.pivotModel).toEqual(exportedPivotLayout.pivotModel)
     expect(Array.isArray(exportedPivotInterop?.rows)).toBe(true)
-    const pivotSnapshot = runtime!.api.getRowModelSnapshot()
+    const pivotSnapshot = runtime!.api.rows.getSnapshot()
     const firstPivotColumn = pivotSnapshot.pivotColumns?.[0]
-    const firstPivotRow = runtime!.api.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "leaf")
+    const firstPivotRow = runtime!.api.rows.getRange({ start: 0, end: 10 }).find(row => row.kind === "leaf")
     if (firstPivotColumn && firstPivotRow) {
       const drilldown = runtime!.getPivotCellDrilldown({
         rowId: firstPivotRow.rowId,
@@ -101,29 +101,34 @@ describe("useDataGridRuntime contract", () => {
     await flushRuntimeTasks()
     expect(runtime!.columnSnapshot.value.columns.some(column => column.key.startsWith("pivot|"))).toBe(true)
 
+    // Return to source-row projection before row patch/sort assertions.
+    runtime!.setPivotModel(null)
+    await flushRuntimeTasks()
+    expect(runtime!.columnSnapshot.value.columns.some(column => column.key.startsWith("pivot|"))).toBe(false)
+
     runtime!.patchRows(
       [{ rowId: "r2", data: { name: "Bravo-updated" } }],
       { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
     )
-    const patched = runtime!.api.getRowsInRange({ start: 0, end: 2 })
+    const patched = runtime!.api.rows.getRange({ start: 0, end: 2 })
     expect((patched[1]?.row as { name?: string })?.name).toBe("Bravo-updated")
 
-    runtime!.api.setSortModel([{ key: "tested_at", direction: "desc" }])
-    expect(runtime!.api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
+    runtime!.api.rows.setSortModel([{ key: "tested_at", direction: "desc" }])
+    expect(runtime!.api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
 
     expect(runtime!.autoReapply.value).toBe(false)
     runtime!.applyEdits([{ rowId: "r1", data: { tested_at: 999 } }])
-    expect(runtime!.api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
+    expect(runtime!.api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
 
     runtime!.autoReapply.value = true
     runtime!.applyEdits([{ rowId: "r2", data: { tested_at: 1 } }])
-    expect(runtime!.api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r3", "r2"])
+    expect(runtime!.api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r1", "r3", "r2"])
 
     runtime!.applyEdits(
       [{ rowId: "r3", data: { tested_at: 5000 } }],
       { freezeView: true, reapplyView: true },
     )
-    expect(runtime!.api.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r1", "r2"])
+    expect(runtime!.api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r1", "r2"])
 
     const inRange = runtime!.syncRowsInRange({ start: 1, end: 2 })
     expect(inRange).toHaveLength(2)
@@ -161,7 +166,7 @@ describe("useDataGridRuntime contract", () => {
 
     await runtime!.start()
     expect(runtime!.api.lifecycle.state).toBe("started")
-    expect(runtime!.api.getRowCount()).toBe(1)
+    expect(runtime!.api.rows.getCount()).toBe(1)
 
     runtime!.stop()
     await flushRuntimeTasks()

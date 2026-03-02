@@ -77,10 +77,10 @@ export function useAffinoDataGridSelectionEngine<TRow>(
   }
 
   const buildFlattenedSelectionRows = (): readonly GridSelectionFlattenedRow<string | number>[] => {
-    const totalRows = options.runtime.api.getRowCount()
+    const totalRows = options.runtime.api.rows.getCount()
     const flattened: GridSelectionFlattenedRow<string | number>[] = []
     for (let rowIndex = 0; rowIndex < totalRows; rowIndex += 1) {
-      const rowNode = options.runtime.api.getRow(rowIndex)
+      const rowNode = options.runtime.api.rows.get(rowIndex)
       flattened.push({
         rowId: rowNode?.rowId ?? null,
         isGroup: rowNode?.kind === "group",
@@ -146,9 +146,9 @@ export function useAffinoDataGridSelectionEngine<TRow>(
   )
 
   const resolveVisibleRowIndexByKey = (rowKey: string): number => {
-    const rowCount = options.runtime.api.getRowCount()
+    const rowCount = options.runtime.api.rows.getCount()
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-      const rowNode = options.runtime.api.getRow(rowIndex)
+      const rowNode = options.runtime.api.rows.get(rowIndex)
       if (!rowNode) {
         continue
       }
@@ -166,14 +166,14 @@ export function useAffinoDataGridSelectionEngine<TRow>(
     rowIndexRaw: number,
     columnIndexRaw: number,
   ): AffinoDataGridCellSelectionCoord | null => {
-    const rowCount = options.runtime.api.getRowCount()
+    const rowCount = options.runtime.api.rows.getCount()
     const columnCount = options.runtime.columnSnapshot.value.visibleColumns.length
     if (rowCount <= 0 || columnCount <= 0) {
       return null
     }
     const rowIndex = Math.max(0, Math.min(rowCount - 1, Math.trunc(rowIndexRaw)))
     const columnIndex = Math.max(0, Math.min(columnCount - 1, Math.trunc(columnIndexRaw)))
-    const rowNode = options.runtime.api.getRow(rowIndex)
+    const rowNode = options.runtime.api.rows.get(rowIndex)
     const column = options.runtime.columnSnapshot.value.visibleColumns[columnIndex]
     if (!rowNode || !column) {
       return null
@@ -297,8 +297,8 @@ export function useAffinoDataGridSelectionEngine<TRow>(
     if (!range || !anchor || !focus) {
       return null
     }
-    const startRowId = options.runtime.api.getRow(range.startRow)?.rowId ?? null
-    const endRowId = options.runtime.api.getRow(range.endRow)?.rowId ?? null
+    const startRowId = options.runtime.api.rows.get(range.startRow)?.rowId ?? null
+    const endRowId = options.runtime.api.rows.get(range.endRow)?.rowId ?? null
     return {
       ranges: [
         {
@@ -332,15 +332,15 @@ export function useAffinoDataGridSelectionEngine<TRow>(
   const syncSelectionSnapshot = (): void => {
     const nextSnapshot = buildCellSelectionSnapshot() ?? options.selectionSnapshot.value
     options.internalSelectionSnapshot.value = nextSnapshot
-    if (!options.runtime.api.hasSelectionSupport()) {
+    if (!options.runtime.api.selection.hasSupport()) {
       return
     }
     if (!nextSnapshot) {
-      options.runtime.api.clearSelection()
+      options.runtime.api.selection.clear()
       options.emitSelectionChange(null)
       return
     }
-    options.runtime.api.setSelectionSnapshot(nextSnapshot)
+    options.runtime.api.selection.setSnapshot(nextSnapshot)
     options.emitSelectionChange(nextSnapshot)
   }
 
@@ -372,7 +372,7 @@ export function useAffinoDataGridSelectionEngine<TRow>(
       }
     },
     resolveTabTarget: (current, backwards) => {
-      const rowCount = options.runtime.api.getRowCount()
+      const rowCount = options.runtime.api.rows.getCount()
       const columnCount = options.runtime.columnSnapshot.value.visibleColumns.length
       if (rowCount <= 0 || columnCount <= 0) {
         return null
@@ -414,7 +414,7 @@ export function useAffinoDataGridSelectionEngine<TRow>(
     getLastNavigableColumnIndex: () => (
       Math.max(-1, options.runtime.columnSnapshot.value.visibleColumns.length - 1)
     ),
-    getLastRowIndex: () => Math.max(0, options.runtime.api.getRowCount() - 1),
+    getLastRowIndex: () => Math.max(0, options.runtime.api.rows.getCount() - 1),
     resolveStepRows: options.resolveStepRows ?? (() => 20),
     closeContextMenu: options.closeContextMenu ?? (() => {}),
     clearCellSelection,
@@ -432,7 +432,7 @@ export function useAffinoDataGridSelectionEngine<TRow>(
     if (!range) {
       return null
     }
-    const rowTotal = options.runtime.api.getRowCount()
+    const rowTotal = options.runtime.api.rows.getCount()
     const colTotal = options.runtime.columnSnapshot.value.visibleColumns.length
     if (rowTotal <= 0 || colTotal <= 0) {
       return null

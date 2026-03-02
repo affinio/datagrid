@@ -64,7 +64,7 @@ describe("useAffinoDataGrid contract", () => {
     const wrapper = mount(Host)
     await flushTasks()
 
-    const firstGroup = grid!.api.getRow(0)
+    const firstGroup = grid!.api.rows.get(0)
     expect(firstGroup?.kind).toBe("group")
     const selected = grid!.cellSelection.setCellByKey(String(firstGroup?.rowId ?? ""), "service")
     expect(selected).toBe(true)
@@ -580,8 +580,8 @@ describe("useAffinoDataGrid contract", () => {
       setup() {
         grid = useAffinoDataGrid<RefreshRow>({ rows, columns })
         return () => {
-          const viewport = grid!.api.getRowModelSnapshot().viewportRange
-          const visibleRows = grid!.api.getRowsInRange(viewport)
+          const viewport = grid!.api.rows.getSnapshot().viewportRange
+          const visibleRows = grid!.api.rows.getRange(viewport)
           return h(
             "table",
             { class: "refresh-grid" },
@@ -616,11 +616,11 @@ describe("useAffinoDataGrid contract", () => {
     const wrapper = mount(Host)
     await flushTasks()
 
-    grid!.api.setViewportRange({ start: 0, end: 19 })
+    grid!.api.view.setViewportRange({ start: 0, end: 19 })
     await flushTasks()
 
     const batches: Array<{ pins: readonly ("left" | "right" | "none")[] }> = []
-    const unsubscribe = grid!.api.onCellsRefresh(batch => {
+    const unsubscribe = grid!.api.view.onCellsRefresh(batch => {
       batches.push({ pins: batch.cells.map(cell => cell.pin) })
     })
 
@@ -628,7 +628,7 @@ describe("useAffinoDataGrid contract", () => {
     rows.value[0]!.control = "C-UPDATED"
     rows.value[900]!.tested_at = "T-HIDDEN"
 
-    grid!.api.refreshCellsByRowKeys(["r0", "r900"], ["tested_at", "control"])
+    grid!.api.view.refreshCellsByRowKeys(["r0", "r900"], ["tested_at", "control"])
     await new Promise(resolve => setTimeout(resolve, 40))
 
     const testedCell = wrapper.find('[data-row-key="r0"][data-column-key="tested_at"]')

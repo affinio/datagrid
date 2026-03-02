@@ -63,7 +63,7 @@ export function useAffinoDataGridSummaryFeature<TRow>(
     if (!options.selectionSnapshot.value) {
       return null
     }
-    return options.runtime.api.summarizeSelection({
+    return options.runtime.api.selection.summarize({
       columns: options.feature.columns,
       defaultAggregations: options.feature.defaultAggregations,
     })

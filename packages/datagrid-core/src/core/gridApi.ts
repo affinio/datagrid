@@ -1,681 +1,66 @@
-import type {
-  DataGridColumnDef,
-  DataGridColumnModel,
-  DataGridColumnModelSnapshot,
-  DataGridColumnPin,
-  DataGridColumnSnapshot,
-  DataGridClientRowPatch,
-  DataGridClientRowPatchOptions,
-  DataGridColumnHistogram,
-  DataGridColumnHistogramOptions,
-  DataGridFilterSnapshot,
-  DataGridSortAndFilterModelInput,
-  DataGridGroupBySpec,
-  DataGridPivotSpec,
-  DataGridPivotColumn,
-  DataGridPivotCellDrilldown,
-  DataGridPivotCellDrilldownInput,
-  DataGridGroupExpansionSnapshot,
-  DataGridAggregationModel,
-  DataGridPaginationInput,
-  DataGridPaginationSnapshot,
-  DataGridRowId,
-  DataGridRowModel,
-  DataGridRowModelSnapshot,
-  DataGridRowNode,
-  DataGridSortState,
-  DataGridViewportRange,
-} from "../models"
-import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import {
-  createDataGridSelectionSummary,
-  type DataGridSelectionAggregationKind,
-  type DataGridSelectionSummaryColumnConfig,
-  type DataGridSelectionSummaryScope,
-  type DataGridSelectionSummarySnapshot,
-} from "../selection/selectionSummary"
-import type {
-  DataGridTransactionInput,
-  DataGridTransactionSnapshot,
-} from "./transactionService"
-import type {
-  DataGridCore,
-  DataGridCoreColumnModelService,
-  DataGridCoreRowModelService,
-  DataGridCoreSelectionService,
-  DataGridCoreTransactionService,
-  DataGridCoreViewportService,
-} from "./gridCore"
-
-export interface CreateDataGridApiFromCoreOptions {
-  core: DataGridCore
-}
-
-export interface CreateDataGridApiFromDepsOptions<TRow = unknown> {
-  lifecycle: DataGridCore["lifecycle"]
-  init(): Promise<void>
-  start(): Promise<void>
-  stop(): Promise<void>
-  dispose(): Promise<void>
-  rowModel: DataGridRowModel<TRow>
-  columnModel: DataGridColumnModel
-  viewportService?: DataGridCoreViewportService | null
-  transactionService?: DataGridCoreTransactionService | null
-  selectionService?: DataGridCoreSelectionService | null
-}
-
-/** @deprecated Use CreateDataGridApiFromDepsOptions instead. */
-export type CreateDataGridApiDependencies<TRow = unknown> = CreateDataGridApiFromDepsOptions<TRow>
-
-export type CreateDataGridApiOptions<TRow = unknown> =
-  | CreateDataGridApiFromCoreOptions
-  | CreateDataGridApiFromDepsOptions<TRow>
-
-export interface DataGridRefreshOptions {
-  reset?: boolean
-}
-
-export interface DataGridCellRefreshOptions {
-  immediate?: boolean
-  reason?: string
-}
-
-export interface DataGridApplyEditsOptions {
-  emit?: boolean
-  reapply?: boolean
-}
-
-export interface DataGridPivotLayoutColumnState {
-  order: readonly string[]
-  visibility: Readonly<Record<string, boolean>>
-  widths: Readonly<Record<string, number | null>>
-  pins: Readonly<Record<string, DataGridColumnPin>>
-}
-
-export interface DataGridPivotLayoutSnapshot<TRow = unknown> {
-  version: 1
-  sortModel: readonly DataGridSortState[]
-  filterModel: DataGridFilterSnapshot | null
-  groupBy: DataGridGroupBySpec | null
-  pivotModel: DataGridPivotSpec | null
-  aggregationModel: DataGridAggregationModel<TRow> | null
-  groupExpansion: DataGridGroupExpansionSnapshot | null
-  columnState: DataGridPivotLayoutColumnState
-}
-
-export interface DataGridPivotLayoutImportOptions {
-  applyColumnState?: boolean
-}
-
-export interface DataGridPivotInteropSnapshot<TRow = unknown> {
-  version: 1
-  layout: DataGridPivotLayoutSnapshot<TRow>
-  pivotColumns: readonly DataGridPivotColumn[]
-  rows: readonly DataGridRowNode<TRow>[]
-}
-
-export interface DataGridCellRefreshRange {
-  rowKey: DataGridRowId
-  columnKeys: readonly string[]
-}
-
-export interface DataGridCellRefreshEntry {
-  rowKey: DataGridRowId
-  rowIndex: number
-  columnKey: string
-  columnIndex: number
-  pin: DataGridColumnPin
-}
-
-export interface DataGridCellsRefreshBatch {
-  timestamp: number
-  reason?: string
-  cells: readonly DataGridCellRefreshEntry[]
-}
-
-export type DataGridCellsRefreshListener = (batch: DataGridCellsRefreshBatch) => void
-
-export interface DataGridApi<TRow = unknown> {
-  readonly lifecycle: DataGridCore["lifecycle"]
-  init(): Promise<void>
-  start(): Promise<void>
-  stop(): Promise<void>
-  dispose(): Promise<void>
-  getRowModelSnapshot(): DataGridRowModelSnapshot<TRow>
-  getRowCount(): number
-  getRow(index: number): DataGridRowNode<TRow> | undefined
-  getRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[]
-  setViewportRange(range: DataGridViewportRange): void
-  getPaginationSnapshot(): DataGridPaginationSnapshot
-  setPagination(pagination: DataGridPaginationInput | null): void
-  setPageSize(pageSize: number | null): void
-  setCurrentPage(page: number): void
-  setSortModel(sortModel: readonly DataGridSortState[]): void
-  setFilterModel(filterModel: DataGridFilterSnapshot | null): void
-  setSortAndFilterModel(input: DataGridSortAndFilterModelInput): void
-  setGroupBy(groupBy: DataGridGroupBySpec | null): void
-  setPivotModel(pivotModel: DataGridPivotSpec | null): void
-  getPivotModel(): DataGridPivotSpec | null
-  getPivotCellDrilldown(input: DataGridPivotCellDrilldownInput): DataGridPivotCellDrilldown<TRow> | null
-  exportPivotLayout(): DataGridPivotLayoutSnapshot<TRow>
-  exportPivotInterop(): DataGridPivotInteropSnapshot<TRow> | null
-  importPivotLayout(
-    layout: DataGridPivotLayoutSnapshot<TRow>,
-    options?: DataGridPivotLayoutImportOptions,
-  ): void
-  setAggregationModel(aggregationModel: DataGridAggregationModel<TRow> | null): void
-  getAggregationModel(): DataGridAggregationModel<TRow> | null
-  getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
-  setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null): void
-  toggleGroup(groupKey: string): void
-  expandGroup(groupKey: string): void
-  collapseGroup(groupKey: string): void
-  expandAllGroups(): void
-  collapseAllGroups(): void
-  refresh(options?: DataGridRefreshOptions): Promise<void> | void
-  reapplyView(): Promise<void> | void
-  hasPatchSupport(): boolean
-  patchRows(
-    updates: readonly DataGridClientRowPatch<TRow>[],
-    options?: DataGridClientRowPatchOptions,
-  ): void
-  applyEdits(
-    updates: readonly DataGridClientRowPatch<TRow>[],
-    options?: DataGridApplyEditsOptions,
-  ): void
-  setAutoReapply(value: boolean): void
-  getAutoReapply(): boolean
-  refreshCellsByRowKeys(
-    rowKeys: readonly DataGridRowId[],
-    columnKeys: readonly string[],
-    options?: DataGridCellRefreshOptions,
-  ): void
-  refreshCellsByRanges(
-    ranges: readonly DataGridCellRefreshRange[],
-    options?: DataGridCellRefreshOptions,
-  ): void
-  onCellsRefresh(listener: DataGridCellsRefreshListener): () => void
-  getColumnModelSnapshot(): DataGridColumnModelSnapshot
-  getColumn(key: string): DataGridColumnSnapshot | undefined
-  setColumns(columns: DataGridColumnDef[]): void
-  setColumnOrder(keys: readonly string[]): void
-  setColumnVisibility(key: string, visible: boolean): void
-  setColumnWidth(key: string, width: number | null): void
-  setColumnPin(key: string, pin: DataGridColumnPin): void
-  hasTransactionSupport(): boolean
-  getTransactionSnapshot(): DataGridTransactionSnapshot | null
-  beginTransactionBatch(label?: string): string
-  commitTransactionBatch(batchId?: string): Promise<readonly string[]>
-  rollbackTransactionBatch(batchId?: string): readonly string[]
-  applyTransaction(transaction: DataGridTransactionInput): Promise<string>
-  canUndoTransaction(): boolean
-  canRedoTransaction(): boolean
-  undoTransaction(): Promise<string | null>
-  redoTransaction(): Promise<string | null>
-  hasSelectionSupport(): boolean
-  getSelectionSnapshot(): DataGridSelectionSnapshot | null
-  setSelectionSnapshot(snapshot: DataGridSelectionSnapshot): void
-  clearSelection(): void
-  summarizeSelection(options?: DataGridSelectionSummaryApiOptions<TRow>): DataGridSelectionSummarySnapshot | null
-}
-
-export interface DataGridSelectionSummaryApiOptions<TRow = unknown> {
-  /**
-   * "selected-loaded" summarizes all selected cells that are currently materialized by the row model.
-   * "selected-visible" limits summary to selected cells that intersect current viewportRange.
-   */
-  scope?: DataGridSelectionSummaryScope
-  columns?: readonly DataGridSelectionSummaryColumnConfig<TRow>[]
-  defaultAggregations?: readonly DataGridSelectionAggregationKind[]
-  getColumnKeyByIndex?: (columnIndex: number) => string | null | undefined
-}
-
-interface ResolvedDataGridApiDependencies<TRow = unknown> {
-  lifecycle: DataGridCore["lifecycle"]
-  init(): Promise<void>
-  start(): Promise<void>
-  stop(): Promise<void>
-  dispose(): Promise<void>
-  rowModel: DataGridRowModel<TRow>
-  columnModel: DataGridColumnModel
-  getViewportService(): DataGridCoreViewportService | null
-  getTransactionService(): DataGridCoreTransactionService | null
-  getSelectionService(): DataGridCoreSelectionService | null
-}
-
-interface DataGridDeferredHandle {
-  id: number
-}
-
-type DataGridDeferredScheduler = (callback: () => void) => DataGridDeferredHandle
-type DataGridDeferredCanceler = (handle: DataGridDeferredHandle) => void
-
-interface PendingRefreshRow {
-  rowKey: DataGridRowId
-  columnKeys: Set<string>
-}
-
-function normalizeRowRefreshKey(rowKey: DataGridRowId): string {
-  if (typeof rowKey === "number") {
-    return `n:${rowKey}`
-  }
-  return `s:${rowKey}`
-}
-
-function normalizeRefreshColumnKey(columnKey: string): string | null {
-  if (typeof columnKey !== "string") {
-    return null
-  }
-  const normalized = columnKey.trim()
-  return normalized.length > 0 ? normalized : null
-}
-
-function createDeferredScheduler(): {
-  schedule: DataGridDeferredScheduler
-  cancel: DataGridDeferredCanceler
-} {
-  let nextHandleId = 1
-  const cancelledHandles = new Set<number>()
-
-  return {
-    schedule(callback) {
-      const handle: DataGridDeferredHandle = { id: nextHandleId }
-      nextHandleId += 1
-      Promise.resolve().then(() => {
-        if (cancelledHandles.has(handle.id)) {
-          cancelledHandles.delete(handle.id)
-          return
-        }
-        callback()
-      })
-      return handle
-    },
-    cancel(handle) {
-      cancelledHandles.add(handle.id)
-    },
-  }
-}
-
-function cloneSerializable<T>(value: T): T {
-  const structuredCloneRef = (globalThis as typeof globalThis & {
-    structuredClone?: <U>(input: U) => U
-  }).structuredClone
-  if (typeof structuredCloneRef === "function") {
-    try {
-      return structuredCloneRef(value)
-    } catch {
-      // Fall through to JSON fallback.
-    }
-  }
-  try {
-    return JSON.parse(JSON.stringify(value)) as T
-  } catch {
-    return value
-  }
-}
-
-function normalizePivotLayoutOrder(input: readonly string[] | undefined): string[] {
-  if (!Array.isArray(input)) {
-    return []
-  }
-  const seen = new Set<string>()
-  const normalized: string[] = []
-  for (const rawKey of input) {
-    if (typeof rawKey !== "string") {
-      continue
-    }
-    const key = rawKey.trim()
-    if (key.length === 0 || seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    normalized.push(key)
-  }
-  return normalized
-}
-
-function normalizePivotLayoutPin(pin: unknown): DataGridColumnPin | null {
-  if (pin === "left" || pin === "right" || pin === "none") {
-    return pin
-  }
-  return null
-}
-
-class DataGridCellRefreshRegistry {
-  private readonly listeners = new Set<DataGridCellsRefreshListener>()
-  private readonly pendingRowsByKey = new Map<string, PendingRefreshRow>()
-  private scheduledHandle: DataGridDeferredHandle | null = null
-  private pendingReason: string | undefined
-  private nextBatchSequence = 1
-
-  constructor(
-    private readonly resolveVisibleEntries: (
-      pendingRows: readonly PendingRefreshRow[],
-    ) => readonly DataGridCellRefreshEntry[],
-    private readonly scheduleFrame: DataGridDeferredScheduler,
-    private readonly cancelFrame: DataGridDeferredCanceler,
-  ) {}
-
-  queueByRowKeys(
-    rowKeys: readonly DataGridRowId[],
-    columnKeys: readonly string[],
-    options?: DataGridCellRefreshOptions,
-  ): void {
-    this.queueByRanges(
-      rowKeys.map(rowKey => ({ rowKey, columnKeys })),
-      options,
-    )
-  }
-
-  queueByRanges(
-    ranges: readonly DataGridCellRefreshRange[],
-    options?: DataGridCellRefreshOptions,
-  ): void {
-    for (const range of ranges) {
-      const normalizedRowKey = normalizeRowRefreshKey(range.rowKey)
-      const pendingRow = this.pendingRowsByKey.get(normalizedRowKey) ?? {
-        rowKey: range.rowKey,
-        columnKeys: new Set<string>(),
-      }
-
-      for (const rawColumnKey of range.columnKeys) {
-        const columnKey = normalizeRefreshColumnKey(rawColumnKey)
-        if (!columnKey) {
-          continue
-        }
-        pendingRow.columnKeys.add(columnKey)
-      }
-
-      if (pendingRow.columnKeys.size > 0) {
-        this.pendingRowsByKey.set(normalizedRowKey, pendingRow)
-      }
-    }
-
-    if (typeof options?.reason === "string" && options.reason.trim().length > 0) {
-      this.pendingReason = options.reason
-    }
-
-    if (options?.immediate) {
-      this.flush()
-      return
-    }
-
-    this.schedule()
-  }
-
-  subscribe(listener: DataGridCellsRefreshListener): () => void {
-    this.listeners.add(listener)
-    return () => {
-      this.listeners.delete(listener)
-    }
-  }
-
-  dispose(): void {
-    if (this.scheduledHandle != null) {
-      this.cancelFrame(this.scheduledHandle)
-      this.scheduledHandle = null
-    }
-    this.pendingRowsByKey.clear()
-    this.listeners.clear()
-    this.pendingReason = undefined
-  }
-
-  private schedule(): void {
-    if (this.scheduledHandle != null || this.pendingRowsByKey.size === 0) {
-      return
-    }
-    this.scheduledHandle = this.scheduleFrame(() => {
-      this.scheduledHandle = null
-      this.flush()
-    })
-  }
-
-  private flush(): void {
-    if (this.pendingRowsByKey.size === 0) {
-      return
-    }
-
-    const timestamp = this.nextBatchSequence
-    this.nextBatchSequence += 1
-
-    const pendingRows = Array.from(this.pendingRowsByKey.values())
-    this.pendingRowsByKey.clear()
-
-    const cells = this.resolveVisibleEntries(pendingRows)
-    const reason = this.pendingReason
-    this.pendingReason = undefined
-
-    if (cells.length === 0 || this.listeners.size === 0) {
-      return
-    }
-
-    const batch: DataGridCellsRefreshBatch = {
-      timestamp,
-      reason,
-      cells,
-    }
-
-    for (const listener of this.listeners) {
-      listener(batch)
-    }
-  }
-}
-
-type DataGridSelectionCapability = Required<
-  Pick<DataGridCoreSelectionService, "getSelectionSnapshot" | "setSelectionSnapshot" | "clearSelection">
->
-
-type DataGridPatchCapability<TRow = unknown> = {
-  patchRows: (
-    updates: readonly DataGridClientRowPatch<TRow>[],
-    options?: DataGridClientRowPatchOptions,
-  ) => void
-}
-
-type DataGridSortFilterBatchCapability = {
-  setSortAndFilterModel: (input: DataGridSortAndFilterModelInput) => void
-}
-
-type DataGridColumnHistogramCapability = {
-  getColumnHistogram: (columnId: string, options?: DataGridColumnHistogramOptions) => DataGridColumnHistogram
-}
-
-type DataGridTransactionCapability = Required<
-  Pick<
-    DataGridCoreTransactionService,
-    | "getTransactionSnapshot"
-    | "beginTransactionBatch"
-    | "commitTransactionBatch"
-    | "rollbackTransactionBatch"
-    | "applyTransaction"
-    | "canUndoTransaction"
-    | "canRedoTransaction"
-    | "undoTransaction"
-    | "redoTransaction"
-  >
->
-
-function assertRowModelService(core: DataGridCore): DataGridCoreRowModelService {
-  const service = core.getService("rowModel")
-  if (!service.model) {
-    throw new Error('[DataGridApi] "rowModel" service must expose model: DataGridRowModel.')
-  }
-  return service
-}
-
-function assertColumnModelService(core: DataGridCore): DataGridCoreColumnModelService {
-  const service = core.getService("columnModel")
-  if (!service.model) {
-    throw new Error('[DataGridApi] "columnModel" service must expose model: DataGridColumnModel.')
-  }
-  return service
-}
-
-function isCoreApiOptions<TRow>(
-  options: CreateDataGridApiOptions<TRow>,
-): options is CreateDataGridApiFromCoreOptions {
-  return "core" in options
-}
-
-function resolveApiDependencies<TRow = unknown>(
-  options: CreateDataGridApiOptions<TRow>,
-): ResolvedDataGridApiDependencies<TRow> {
-  if (isCoreApiOptions(options)) {
-    const core = options.core
-    const rowModelService = assertRowModelService(core)
-    const columnModelService = assertColumnModelService(core)
-    const rowModel = rowModelService.model as DataGridRowModel<TRow>
-    const columnModel = columnModelService.model as DataGridColumnModel
-    return {
-      lifecycle: core.lifecycle,
-      init: () => core.init(),
-      start: () => core.start(),
-      stop: () => core.stop(),
-      dispose: () => core.dispose(),
-      rowModel,
-      columnModel,
-      getViewportService: () => core.getService("viewport"),
-      getTransactionService: () => core.getService("transaction"),
-      getSelectionService: () => core.getService("selection"),
-    }
-  }
-
-  return {
-    lifecycle: options.lifecycle,
-    init: options.init,
-    start: options.start,
-    stop: options.stop,
-    dispose: options.dispose,
-    rowModel: options.rowModel,
-    columnModel: options.columnModel,
-    getViewportService: () => options.viewportService ?? null,
-    getTransactionService: () => options.transactionService ?? null,
-    getSelectionService: () => options.selectionService ?? null,
-  }
-}
-
-function resolveSelectionCapability(
-  service: DataGridCoreSelectionService | null,
-): DataGridSelectionCapability | null {
-  if (!service) {
-    return null
-  }
-  if (
-    typeof service.getSelectionSnapshot !== "function" ||
-    typeof service.setSelectionSnapshot !== "function" ||
-    typeof service.clearSelection !== "function"
-  ) {
-    return null
-  }
-  return {
-    getSelectionSnapshot: service.getSelectionSnapshot,
-    setSelectionSnapshot: service.setSelectionSnapshot,
-    clearSelection: service.clearSelection,
-  }
-}
-
-function resolveTransactionCapability(
-  service: DataGridCoreTransactionService | null,
-): DataGridTransactionCapability | null {
-  if (!service) {
-    return null
-  }
-  if (
-    typeof service.getTransactionSnapshot !== "function" ||
-    typeof service.beginTransactionBatch !== "function" ||
-    typeof service.commitTransactionBatch !== "function" ||
-    typeof service.rollbackTransactionBatch !== "function" ||
-    typeof service.applyTransaction !== "function" ||
-    typeof service.canUndoTransaction !== "function" ||
-    typeof service.canRedoTransaction !== "function" ||
-    typeof service.undoTransaction !== "function" ||
-    typeof service.redoTransaction !== "function"
-  ) {
-    return null
-  }
-
-  return {
-    getTransactionSnapshot: service.getTransactionSnapshot,
-    beginTransactionBatch: service.beginTransactionBatch,
-    commitTransactionBatch: service.commitTransactionBatch,
-    rollbackTransactionBatch: service.rollbackTransactionBatch,
-    applyTransaction: service.applyTransaction,
-    canUndoTransaction: service.canUndoTransaction,
-    canRedoTransaction: service.canRedoTransaction,
-    undoTransaction: service.undoTransaction,
-    redoTransaction: service.redoTransaction,
-  }
-}
-
-function assertSelectionCapability(
-  capability: DataGridSelectionCapability | null,
-): DataGridSelectionCapability {
-  if (!capability) {
-    throw new Error('[DataGridApi] "selection" service is present but does not implement selection capabilities.')
-  }
-  return capability
-}
-
-function assertTransactionCapability(
-  capability: DataGridTransactionCapability | null,
-): DataGridTransactionCapability {
-  if (!capability) {
-    throw new Error(
-      '[DataGridApi] "transaction" service is present but does not implement transaction capabilities.',
-    )
-  }
-  return capability
-}
-
-function resolvePatchCapability<TRow>(
-  rowModel: DataGridRowModel<TRow>,
-): DataGridPatchCapability<TRow> | null {
-  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DataGridPatchCapability<TRow>>
-  if (typeof candidate.patchRows !== "function") {
-    return null
-  }
-  return {
-    patchRows: candidate.patchRows.bind(rowModel),
-  }
-}
-
-function resolveSortFilterBatchCapability<TRow>(
-  rowModel: DataGridRowModel<TRow>,
-): DataGridSortFilterBatchCapability | null {
-  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DataGridSortFilterBatchCapability>
-  if (typeof candidate.setSortAndFilterModel !== "function") {
-    return null
-  }
-  return {
-    setSortAndFilterModel: candidate.setSortAndFilterModel.bind(rowModel),
-  }
-}
-
-function resolveColumnHistogramCapability<TRow>(
-  rowModel: DataGridRowModel<TRow>,
-): DataGridColumnHistogramCapability | null {
-  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DataGridColumnHistogramCapability>
-  if (typeof candidate.getColumnHistogram !== "function") {
-    return null
-  }
-  return {
-    getColumnHistogram: candidate.getColumnHistogram.bind(rowModel),
-  }
-}
-
-function assertPatchCapability<TRow>(
-  capability: DataGridPatchCapability<TRow> | null,
-): DataGridPatchCapability<TRow> {
-  if (!capability) {
-    throw new Error('[DataGridApi] rowModel does not implement patchRows capability.')
-  }
-  return capability
-}
+  createDataGridCellRefreshRegistry,
+} from "./gridApiCellRefresh"
+import { createDataGridApiColumnsMethods } from "./gridApiColumnsMethods"
+import {
+  createDataGridApiCapabilityRuntime,
+} from "./gridApiCapabilitiesRuntime"
+import type { DataGridApi } from "./gridApiContracts"
+import {
+  resolveDataGridApiDependencies,
+  type CreateDataGridApiOptions,
+} from "./gridApiDependencies"
+import {
+  createDataGridApiFromMethodSet,
+  type DataGridApiMethodSet,
+} from "./gridApiNamespaces"
+import { createDataGridApiPivotMethods } from "./gridApiPivotMethods"
+import { createDataGridApiRowsMethods } from "./gridApiRowsMethods"
+import { createDataGridApiSelectionMethods } from "./gridApiSelectionMethods"
+import { buildDataGridSelectionSummary } from "./gridApiSelectionSummary"
+import { createDataGridApiTransactionMethods } from "./gridApiTransactionMethods"
+import { createDataGridApiViewMethods } from "./gridApiViewMethods"
+
+export type {
+  CreateDataGridApiFromCoreOptions,
+  CreateDataGridApiFromDepsOptions,
+  CreateDataGridApiDependencies,
+  CreateDataGridApiOptions,
+} from "./gridApiDependencies"
+
+export type {
+  DataGridRefreshOptions,
+  DataGridApplyEditsOptions,
+  DataGridApiPivotNamespace,
+  DataGridApiSelectionNamespace,
+  DataGridApiTransactionNamespace,
+  DataGridApiRowsNamespace,
+  DataGridApiColumnsNamespace,
+  DataGridApiViewNamespace,
+  DataGridApiCapabilities,
+  DataGridApi,
+  DataGridSelectionSummaryApiOptions,
+} from "./gridApiContracts"
+
+export type {
+  DataGridCellRefreshOptions,
+  DataGridCellRefreshRange,
+  DataGridCellRefreshEntry,
+  DataGridCellsRefreshBatch,
+  DataGridCellsRefreshListener,
+} from "./gridApiCellRefresh"
+
+export type {
+  DataGridPivotLayoutColumnState,
+  DataGridPivotLayoutSnapshot,
+  DataGridPivotLayoutImportOptions,
+  DataGridPivotInteropSnapshot,
+} from "./gridApiPivotLayout"
 
 export function createDataGridApi<TRow = unknown>(
   options: CreateDataGridApiOptions<TRow>,
 ): DataGridApi<TRow> {
-  const deps = resolveApiDependencies(options)
+  const deps = resolveDataGridApiDependencies(options)
   const {
     lifecycle,
     init,
@@ -689,93 +74,56 @@ export function createDataGridApi<TRow = unknown>(
     getTransactionService,
   } = deps
 
-  const resolveCurrentSelectionCapability = () => resolveSelectionCapability(getSelectionService())
-  const resolveCurrentTransactionCapability = () => resolveTransactionCapability(getTransactionService())
-  const resolveCurrentPatchCapability = () => resolvePatchCapability(rowModel)
-  const resolveCurrentSortFilterBatchCapability = () => resolveSortFilterBatchCapability(rowModel)
-  const resolveCurrentColumnHistogramCapability = () => resolveColumnHistogramCapability(rowModel)
-  const deferredScheduler = createDeferredScheduler()
-  let autoReapply = false
+  const capabilityRuntime = createDataGridApiCapabilityRuntime<TRow>({
+    rowModel,
+    getSelectionService,
+    getTransactionService,
+  })
+  const {
+    capabilities,
+    getSelectionCapability,
+    getTransactionCapability,
+    getPatchCapability,
+    getSortFilterBatchCapability,
+    getColumnHistogramCapability,
+  } = capabilityRuntime
+  const cellRefreshRegistry = createDataGridCellRefreshRegistry(rowModel, columnModel)
+  const rowsMethods = createDataGridApiRowsMethods<TRow>({
+    rowModel,
+    getPatchCapability,
+    getSortFilterBatchCapability,
+  })
+  const viewMethods = createDataGridApiViewMethods<TRow>({
+    rowModel,
+    getViewportService,
+    cellRefreshQueue: cellRefreshRegistry,
+  })
+  const pivotMethods = createDataGridApiPivotMethods<TRow>({
+    rowModel,
+    columnModel,
+    getSortFilterBatchCapability,
+  })
+  const columnsMethods = createDataGridApiColumnsMethods({
+    columnModel,
+    getColumnHistogramCapability,
+  })
+  const transactionMethods = createDataGridApiTransactionMethods({
+    getTransactionCapability,
+  })
+  const selectionMethods = createDataGridApiSelectionMethods<TRow>({
+    getSelectionCapability,
+    summarize: (selectionSnapshot, options) =>
+      buildDataGridSelectionSummary<TRow>({
+        selectionSnapshot,
+        rowModel,
+        columnModel,
+        options,
+      }),
+  })
 
-  const resolveVisibleCellRefreshEntries = (
-    pendingRows: readonly PendingRefreshRow[],
-  ): readonly DataGridCellRefreshEntry[] => {
-    if (pendingRows.length === 0) {
-      return []
-    }
-
-    const rowSnapshot = rowModel.getSnapshot()
-    const viewportRows = rowModel.getRowsInRange(rowSnapshot.viewportRange)
-    if (viewportRows.length === 0) {
-      return []
-    }
-
-    const visibleRowIndexByKey = new Map<string, number>()
-    for (const row of viewportRows) {
-      visibleRowIndexByKey.set(normalizeRowRefreshKey(row.rowId), row.displayIndex)
-    }
-
-    const columnSnapshot = columnModel.getSnapshot()
-    const visibleColumnMetaByKey = new Map<string, { columnIndex: number; pin: DataGridColumnPin }>()
-    for (let index = 0; index < columnSnapshot.visibleColumns.length; index += 1) {
-      const column = columnSnapshot.visibleColumns[index]
-      if (!column) {
-        continue
-      }
-      visibleColumnMetaByKey.set(column.key, {
-        columnIndex: index,
-        pin: column.pin,
-      })
-    }
-
-    const dedupe = new Set<string>()
-    const cells: DataGridCellRefreshEntry[] = []
-    for (const pendingRow of pendingRows) {
-      const rowIndex = visibleRowIndexByKey.get(normalizeRowRefreshKey(pendingRow.rowKey))
-      if (typeof rowIndex !== "number") {
-        continue
-      }
-
-      for (const columnKey of pendingRow.columnKeys) {
-        const columnMeta = visibleColumnMetaByKey.get(columnKey)
-        if (!columnMeta) {
-          continue
-        }
-
-        const dedupeKey = `${normalizeRowRefreshKey(pendingRow.rowKey)}|${columnKey}`
-        if (dedupe.has(dedupeKey)) {
-          continue
-        }
-        dedupe.add(dedupeKey)
-
-        cells.push({
-          rowKey: pendingRow.rowKey,
-          rowIndex,
-          columnKey,
-          columnIndex: columnMeta.columnIndex,
-          pin: columnMeta.pin,
-        })
-      }
-    }
-
-    cells.sort((left, right) => {
-      if (left.rowIndex !== right.rowIndex) {
-        return left.rowIndex - right.rowIndex
-      }
-      return left.columnIndex - right.columnIndex
-    })
-
-    return cells
-  }
-
-  const cellRefreshRegistry = new DataGridCellRefreshRegistry(
-    resolveVisibleCellRefreshEntries,
-    deferredScheduler.schedule,
-    deferredScheduler.cancel,
-  )
-
-  return {
+  const methodSet: DataGridApiMethodSet<TRow> = {
     lifecycle,
+    capabilities,
     init,
     start,
     stop,
@@ -783,391 +131,12 @@ export function createDataGridApi<TRow = unknown>(
       cellRefreshRegistry.dispose()
       return dispose()
     },
-    getRowModelSnapshot() {
-      return rowModel.getSnapshot()
-    },
-    getRowCount() {
-      return rowModel.getRowCount()
-    },
-    getRow(index: number) {
-      return rowModel.getRow(index)
-    },
-    getRowsInRange(range: DataGridViewportRange) {
-      return rowModel.getRowsInRange(range)
-    },
-    setViewportRange(range: DataGridViewportRange) {
-      rowModel.setViewportRange(range)
-      getViewportService()?.setViewportRange?.(range)
-    },
-    getPaginationSnapshot() {
-      return rowModel.getSnapshot().pagination
-    },
-    setPagination(pagination: DataGridPaginationInput | null) {
-      rowModel.setPagination(pagination)
-    },
-    setPageSize(pageSize: number | null) {
-      rowModel.setPageSize(pageSize)
-    },
-    setCurrentPage(page: number) {
-      rowModel.setCurrentPage(page)
-    },
-    setSortModel(sortModel: readonly DataGridSortState[]) {
-      rowModel.setSortModel(sortModel)
-    },
-    setFilterModel(filterModel: DataGridFilterSnapshot | null) {
-      rowModel.setFilterModel(filterModel)
-    },
-    setSortAndFilterModel(input: DataGridSortAndFilterModelInput) {
-      const capability = resolveCurrentSortFilterBatchCapability()
-      if (capability) {
-        capability.setSortAndFilterModel(input)
-        return
-      }
-      rowModel.setFilterModel(input.filterModel)
-      rowModel.setSortModel(input.sortModel)
-    },
-    setGroupBy(groupBy: DataGridGroupBySpec | null) {
-      rowModel.setGroupBy(groupBy)
-    },
-    setPivotModel(pivotModel: DataGridPivotSpec | null) {
-      rowModel.setPivotModel(pivotModel)
-    },
-    getPivotModel() {
-      return rowModel.getPivotModel()
-    },
-    getPivotCellDrilldown(input: DataGridPivotCellDrilldownInput) {
-      return typeof rowModel.getPivotCellDrilldown === "function"
-        ? rowModel.getPivotCellDrilldown(input)
-        : null
-    },
-    exportPivotLayout() {
-      const rowSnapshot = rowModel.getSnapshot()
-      const columnSnapshot = columnModel.getSnapshot()
-      const visibility: Record<string, boolean> = {}
-      const widths: Record<string, number | null> = {}
-      const pins: Record<string, DataGridColumnPin> = {}
-      for (const column of columnSnapshot.columns) {
-        visibility[column.key] = column.visible
-        widths[column.key] = column.width
-        pins[column.key] = column.pin
-      }
-      return {
-        version: 1,
-        sortModel: cloneSerializable(rowSnapshot.sortModel),
-        filterModel: cloneSerializable(rowSnapshot.filterModel),
-        groupBy: cloneSerializable(rowSnapshot.groupBy),
-        pivotModel: cloneSerializable(rowModel.getPivotModel()),
-        aggregationModel: cloneSerializable(rowModel.getAggregationModel()),
-        groupExpansion: cloneSerializable(rowSnapshot.groupExpansion),
-        columnState: {
-          order: cloneSerializable(columnSnapshot.order),
-          visibility,
-          widths,
-          pins,
-        },
-      }
-    },
-    exportPivotInterop() {
-      const pivotModel = rowModel.getPivotModel()
-      if (!pivotModel) {
-        return null
-      }
-      const rowSnapshot = rowModel.getSnapshot()
-      const rowCount = Math.max(0, Math.trunc(rowSnapshot.rowCount))
-      const rows = rowCount > 0
-        ? rowModel.getRowsInRange({ start: 0, end: rowCount - 1 })
-        : []
-      const columnSnapshot = columnModel.getSnapshot()
-      const visibility: Record<string, boolean> = {}
-      const widths: Record<string, number | null> = {}
-      const pins: Record<string, DataGridColumnPin> = {}
-      for (const column of columnSnapshot.columns) {
-        visibility[column.key] = column.visible
-        widths[column.key] = column.width
-        pins[column.key] = column.pin
-      }
-      return {
-        version: 1,
-        layout: {
-          version: 1,
-          sortModel: cloneSerializable(rowSnapshot.sortModel),
-          filterModel: cloneSerializable(rowSnapshot.filterModel),
-          groupBy: cloneSerializable(rowSnapshot.groupBy),
-          pivotModel: cloneSerializable(rowModel.getPivotModel()),
-          aggregationModel: cloneSerializable(rowModel.getAggregationModel()),
-          groupExpansion: cloneSerializable(rowSnapshot.groupExpansion),
-          columnState: {
-            order: cloneSerializable(columnSnapshot.order),
-            visibility,
-            widths,
-            pins,
-          },
-        },
-        pivotColumns: cloneSerializable(rowSnapshot.pivotColumns ?? []),
-        rows: cloneSerializable(rows),
-      }
-    },
-    importPivotLayout(
-      layout: DataGridPivotLayoutSnapshot<TRow>,
-      options: DataGridPivotLayoutImportOptions = {},
-    ) {
-      if (!layout || typeof layout !== "object") {
-        return
-      }
-      if (options.applyColumnState !== false) {
-        const order = normalizePivotLayoutOrder(layout.columnState?.order)
-        if (order.length > 0) {
-          columnModel.setColumnOrder(order)
-        }
-        const visibility = layout.columnState?.visibility ?? {}
-        for (const [key, value] of Object.entries(visibility)) {
-          columnModel.setColumnVisibility(key, Boolean(value))
-        }
-        const widths = layout.columnState?.widths ?? {}
-        for (const [key, value] of Object.entries(widths)) {
-          const normalizedWidth = Number.isFinite(value)
-            ? Math.max(0, Math.trunc(value as number))
-            : null
-          columnModel.setColumnWidth(key, normalizedWidth)
-        }
-        const pins = layout.columnState?.pins ?? {}
-        for (const [key, value] of Object.entries(pins)) {
-          const normalizedPin = normalizePivotLayoutPin(value)
-          if (!normalizedPin) {
-            continue
-          }
-          columnModel.setColumnPin(key, normalizedPin)
-        }
-      }
-
-      const sortModel = Array.isArray(layout.sortModel)
-        ? cloneSerializable(layout.sortModel)
-        : []
-      const filterModel = layout.filterModel == null
-        ? null
-        : cloneSerializable(layout.filterModel)
-      const batchSortFilterCapability = resolveCurrentSortFilterBatchCapability()
-      if (batchSortFilterCapability) {
-        batchSortFilterCapability.setSortAndFilterModel({ sortModel, filterModel })
-      } else {
-        rowModel.setFilterModel(filterModel)
-        rowModel.setSortModel(sortModel)
-      }
-      rowModel.setGroupBy(layout.groupBy == null ? null : cloneSerializable(layout.groupBy))
-      rowModel.setPivotModel(layout.pivotModel == null ? null : cloneSerializable(layout.pivotModel))
-      rowModel.setAggregationModel(
-        layout.aggregationModel == null
-          ? null
-          : cloneSerializable(layout.aggregationModel),
-      )
-      rowModel.setGroupExpansion(
-        layout.groupExpansion == null
-          ? null
-          : cloneSerializable(layout.groupExpansion),
-      )
-    },
-    setAggregationModel(aggregationModel: DataGridAggregationModel<TRow> | null) {
-      rowModel.setAggregationModel(aggregationModel)
-    },
-    getAggregationModel() {
-      return rowModel.getAggregationModel()
-    },
-    getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions) {
-      const capability = resolveCurrentColumnHistogramCapability()
-      if (!capability) {
-        return []
-      }
-      return capability.getColumnHistogram(columnId, options)
-    },
-    setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
-      rowModel.setGroupExpansion(expansion)
-    },
-    toggleGroup(groupKey: string) {
-      rowModel.toggleGroup(groupKey)
-    },
-    expandGroup(groupKey: string) {
-      rowModel.expandGroup(groupKey)
-    },
-    collapseGroup(groupKey: string) {
-      rowModel.collapseGroup(groupKey)
-    },
-    expandAllGroups() {
-      rowModel.expandAllGroups()
-    },
-    collapseAllGroups() {
-      rowModel.collapseAllGroups()
-    },
-    refresh(options?: DataGridRefreshOptions) {
-      return rowModel.refresh(options?.reset ? "reset" : undefined)
-    },
-    reapplyView() {
-      return rowModel.refresh("reapply")
-    },
-    hasPatchSupport() {
-      return resolveCurrentPatchCapability() !== null
-    },
-    patchRows(
-      updates: readonly DataGridClientRowPatch<TRow>[],
-      options?: DataGridClientRowPatchOptions,
-    ) {
-      const capability = assertPatchCapability(resolveCurrentPatchCapability())
-      capability.patchRows(updates, options)
-    },
-    applyEdits(
-      updates: readonly DataGridClientRowPatch<TRow>[],
-      options?: DataGridApplyEditsOptions,
-    ) {
-      const capability = assertPatchCapability(resolveCurrentPatchCapability())
-      const shouldReapply = typeof options?.reapply === "boolean"
-        ? options.reapply
-        : autoReapply
-      capability.patchRows(updates, {
-        recomputeSort: shouldReapply,
-        recomputeFilter: shouldReapply,
-        recomputeGroup: shouldReapply,
-        emit: options?.emit,
-      })
-    },
-    setAutoReapply(value: boolean) {
-      autoReapply = Boolean(value)
-    },
-    getAutoReapply() {
-      return autoReapply
-    },
-    refreshCellsByRowKeys(
-      rowKeys: readonly DataGridRowId[],
-      columnKeys: readonly string[],
-      options?: DataGridCellRefreshOptions,
-    ) {
-      cellRefreshRegistry.queueByRowKeys(rowKeys, columnKeys, options)
-    },
-    refreshCellsByRanges(
-      ranges: readonly DataGridCellRefreshRange[],
-      options?: DataGridCellRefreshOptions,
-    ) {
-      cellRefreshRegistry.queueByRanges(ranges, options)
-    },
-    onCellsRefresh(listener: DataGridCellsRefreshListener) {
-      return cellRefreshRegistry.subscribe(listener)
-    },
-    getColumnModelSnapshot() {
-      return columnModel.getSnapshot()
-    },
-    getColumn(key: string) {
-      return columnModel.getColumn(key)
-    },
-    setColumns(columns) {
-      columnModel.setColumns(columns)
-    },
-    setColumnOrder(keys: readonly string[]) {
-      columnModel.setColumnOrder(keys)
-    },
-    setColumnVisibility(key: string, visible: boolean) {
-      columnModel.setColumnVisibility(key, visible)
-    },
-    setColumnWidth(key: string, width: number | null) {
-      columnModel.setColumnWidth(key, width)
-    },
-    setColumnPin(key: string, pin: DataGridColumnPin) {
-      columnModel.setColumnPin(key, pin)
-    },
-    hasTransactionSupport() {
-      return resolveCurrentTransactionCapability() != null
-    },
-    getTransactionSnapshot() {
-      const transactionCapability = resolveCurrentTransactionCapability()
-      if (!transactionCapability) {
-        return null
-      }
-      return transactionCapability.getTransactionSnapshot()
-    },
-    beginTransactionBatch(label?: string) {
-      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
-      return transaction.beginTransactionBatch(label)
-    },
-    commitTransactionBatch(batchId?: string) {
-      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
-      return transaction.commitTransactionBatch(batchId)
-    },
-    rollbackTransactionBatch(batchId?: string) {
-      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
-      return transaction.rollbackTransactionBatch(batchId)
-    },
-    applyTransaction(transactionInput: DataGridTransactionInput) {
-      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
-      return transaction.applyTransaction(transactionInput)
-    },
-    canUndoTransaction() {
-      const transactionCapability = resolveCurrentTransactionCapability()
-      if (!transactionCapability) {
-        return false
-      }
-      return transactionCapability.canUndoTransaction()
-    },
-    canRedoTransaction() {
-      const transactionCapability = resolveCurrentTransactionCapability()
-      if (!transactionCapability) {
-        return false
-      }
-      return transactionCapability.canRedoTransaction()
-    },
-    undoTransaction() {
-      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
-      return transaction.undoTransaction()
-    },
-    redoTransaction() {
-      const transaction = assertTransactionCapability(resolveCurrentTransactionCapability())
-      return transaction.redoTransaction()
-    },
-    hasSelectionSupport() {
-      return resolveCurrentSelectionCapability() != null
-    },
-    getSelectionSnapshot() {
-      const selectionCapability = resolveCurrentSelectionCapability()
-      if (!selectionCapability) {
-        return null
-      }
-      return selectionCapability.getSelectionSnapshot()
-    },
-    setSelectionSnapshot(snapshot: DataGridSelectionSnapshot) {
-      const selection = assertSelectionCapability(resolveCurrentSelectionCapability())
-      selection.setSelectionSnapshot(snapshot)
-    },
-    clearSelection() {
-      const selection = assertSelectionCapability(resolveCurrentSelectionCapability())
-      selection.clearSelection()
-    },
-    summarizeSelection(options: DataGridSelectionSummaryApiOptions<TRow> = {}) {
-      const selectionCapability = resolveCurrentSelectionCapability()
-      if (!selectionCapability) {
-        return null
-      }
-      const selectionSnapshot = selectionCapability.getSelectionSnapshot()
-      if (!selectionSnapshot) {
-        return null
-      }
-
-      const columnSnapshot = columnModel.getSnapshot()
-      const visibleColumns = columnSnapshot.visibleColumns
-      const getColumnKeyByIndex = options.getColumnKeyByIndex ?? ((columnIndex: number) => {
-        return visibleColumns[columnIndex]?.key ?? null
-      })
-      const scope = options.scope ?? "selected-loaded"
-      const viewportRange = rowModel.getSnapshot().viewportRange
-      const includeRowIndex = scope === "selected-visible"
-        ? (rowIndex: number) => rowIndex >= viewportRange.start && rowIndex <= viewportRange.end
-        : undefined
-
-      return createDataGridSelectionSummary<TRow>({
-        selection: selectionSnapshot,
-        scope,
-        rowCount: rowModel.getRowCount(),
-        includeRowIndex,
-        getRow: rowIndex => rowModel.getRow(rowIndex),
-        getColumnKeyByIndex,
-        columns: options.columns,
-        defaultAggregations: options.defaultAggregations,
-      })
-    },
+    ...rowsMethods,
+    ...viewMethods,
+    ...pivotMethods,
+    ...columnsMethods,
+    ...transactionMethods,
+    ...selectionMethods,
   }
+  return createDataGridApiFromMethodSet(methodSet)
 }

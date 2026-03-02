@@ -368,7 +368,7 @@ export function useDataGridRuntimeService<TRow = unknown>(
   })
 
   function getColumnSnapshot(): DataGridColumnModelSnapshot {
-    return api.getColumnModelSnapshot()
+    return api.columns.getSnapshot()
   }
 
   function subscribeColumnSnapshot(listener: (snapshot: DataGridColumnModelSnapshot) => void): () => void {
@@ -430,8 +430,8 @@ export function useDataGridRuntimeService<TRow = unknown>(
   }
 
   function syncRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[] {
-    api.setViewportRange(range)
-    const rows = api.getRowsInRange(range)
+    api.view.setViewportRange(range)
+    const rows = api.rows.getRange(range)
     recomputeVirtualWindow()
     return rows
   }

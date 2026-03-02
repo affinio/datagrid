@@ -85,7 +85,7 @@ export function useAffinoDataGridVisibilityFeature<TRow>(
   watch([options.columns, hiddenColumnKeys, visibilityEnabled], ([nextColumns, nextHiddenColumnKeys, enabled]) => {
     const hidden = new Set(nextHiddenColumnKeys)
     nextColumns.forEach(column => {
-      options.runtime.api.setColumnVisibility(column.key, !enabled || !hidden.has(column.key))
+      options.runtime.api.columns.setVisibility(column.key, !enabled || !hidden.has(column.key))
     })
   }, { immediate: true })
 

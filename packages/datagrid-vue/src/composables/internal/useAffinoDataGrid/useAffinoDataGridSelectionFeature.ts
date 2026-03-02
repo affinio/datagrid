@@ -164,7 +164,7 @@ export function useAffinoDataGridSelectionFeature<TRow>(
       return null
     }
 
-    const totalRows = options.runtime.api.getRowCount()
+    const totalRows = options.runtime.api.rows.getCount()
     if (totalRows <= 0) {
       return null
     }
@@ -174,7 +174,7 @@ export function useAffinoDataGridSelectionFeature<TRow>(
     const ranges: DataGridSelectionSnapshot["ranges"] = []
 
     for (let rowIndex = 0; rowIndex < totalRows; rowIndex += 1) {
-      const rowNode = options.runtime.api.getRow(rowIndex)
+      const rowNode = options.runtime.api.rows.get(rowIndex)
       if (!rowNode || rowNode.kind !== "leaf") {
         continue
       }
@@ -215,14 +215,14 @@ export function useAffinoDataGridSelectionFeature<TRow>(
 
   watch(selectionSnapshot, snapshot => {
     options.internalSelectionSnapshot.value = snapshot
-    if (!options.runtime.api.hasSelectionSupport()) {
+    if (!options.runtime.api.selection.hasSupport()) {
       return
     }
     if (!snapshot) {
-      options.runtime.api.clearSelection()
+      options.runtime.api.selection.clear()
       return
     }
-    options.runtime.api.setSelectionSnapshot(snapshot)
+    options.runtime.api.selection.setSnapshot(snapshot)
   }, { immediate: true, flush: "sync" })
 
   return {

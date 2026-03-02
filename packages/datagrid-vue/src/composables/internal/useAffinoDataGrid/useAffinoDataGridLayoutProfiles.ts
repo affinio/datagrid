@@ -37,7 +37,7 @@ export function useAffinoDataGridLayoutProfiles<TRow>(
     name: string,
     profileOptions: { id?: string } = {},
   ): AffinoDataGridLayoutProfile => {
-    const snapshot = options.runtime.api.getRowModelSnapshot()
+    const snapshot = options.runtime.api.rows.getSnapshot()
     const profile: AffinoDataGridLayoutProfile = {
       id: profileOptions.id?.trim() || `layout-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       name: name.trim() || "Layout",
@@ -46,7 +46,7 @@ export function useAffinoDataGridLayoutProfiles<TRow>(
       filterModel: options.stableClone(options.featureSuite.filterModel.value),
       groupBy: options.stableClone(snapshot.groupBy),
       groupExpansion: options.stableClone(snapshot.groupExpansion),
-      columnState: options.cloneColumnModelSnapshot(options.runtime.api.getColumnModelSnapshot()),
+      columnState: options.cloneColumnModelSnapshot(options.runtime.api.columns.getSnapshot()),
     }
     layoutProfiles.value = [...layoutProfiles.value, profile]
     options.pushFeedback({
@@ -69,7 +69,7 @@ export function useAffinoDataGridLayoutProfiles<TRow>(
     options.featureSuite.setFilterModel(options.stableClone(profile.filterModel))
     options.featureSuite.setGroupBy(options.stableClone(profile.groupBy))
     options.applyColumnStateSnapshot(options.stableClone(profile.columnState))
-    options.runtime.api.setGroupExpansion(options.stableClone(profile.groupExpansion))
+    options.runtime.api.rows.setGroupExpansion(options.stableClone(profile.groupExpansion))
     options.pushFeedback({
       source: "layout",
       action: "apply",

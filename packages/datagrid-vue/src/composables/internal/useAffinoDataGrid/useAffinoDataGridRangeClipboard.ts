@@ -120,7 +120,7 @@ export function useAffinoDataGridRangeClipboard<TRow>(
   )
 
   const resolveDisplayNodeAtIndex = (rowIndex: number): DataGridRowNode<TRow> | undefined => (
-    options.runtime.api.getRow(rowIndex)
+    options.runtime.api.rows.get(rowIndex)
   )
 
   const resolveDisplayLeafRowAtIndex = (rowIndex: number): TRow | undefined => {
@@ -132,7 +132,7 @@ export function useAffinoDataGridRangeClipboard<TRow>(
   }
 
   const materializeDisplayRows = (): readonly DataGridRowNode<TRow>[] => {
-    const rowCount = options.runtime.api.getRowCount()
+    const rowCount = options.runtime.api.rows.getCount()
     const rowsBuffer: DataGridRowNode<TRow>[] = []
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
       const rowNode = resolveDisplayNodeAtIndex(rowIndex)
@@ -147,7 +147,7 @@ export function useAffinoDataGridRangeClipboard<TRow>(
     if (!range) {
       return null
     }
-    const rowTotal = options.runtime.api.getRowCount()
+    const rowTotal = options.runtime.api.rows.getCount()
     const colTotal = options.runtime.columnSnapshot.value.visibleColumns.length
     if (rowTotal <= 0 || colTotal <= 0) {
       return null
@@ -278,21 +278,21 @@ export function useAffinoDataGridRangeClipboard<TRow>(
 
   const captureMutationSnapshot = (): AffinoDataGridMutationSnapshot<TRow> => ({
     rows: options.rows.value,
-    selection: options.runtime.api.hasSelectionSupport() ? options.runtime.api.getSelectionSnapshot() : null,
+    selection: options.runtime.api.selection.hasSupport() ? options.runtime.api.selection.getSnapshot() : null,
   })
 
   const recordCellRangeIntent = async (
     descriptor: { intent: "paste" | "clear" | "cut" | "fill" | "move"; label: string; affectedRange: InternalCellRange },
     beforeSnapshot: AffinoDataGridMutationSnapshot<TRow>,
   ): Promise<void> => {
-    if (!options.runtime.api.hasTransactionSupport()) {
+    if (!options.runtime.api.transaction.hasSupport()) {
       return
     }
-    const afterSelection = options.runtime.api.hasSelectionSupport()
-      ? options.runtime.api.getSelectionSnapshot()
+    const afterSelection = options.runtime.api.selection.hasSupport()
+      ? options.runtime.api.selection.getSnapshot()
       : null
     const affectedRange = normalizeCellRange(descriptor.affectedRange)
-    await options.runtime.api.applyTransaction({
+    await options.runtime.api.transaction.apply({
       label: descriptor.label,
       meta: {
         intent: `cells-${descriptor.intent}`,

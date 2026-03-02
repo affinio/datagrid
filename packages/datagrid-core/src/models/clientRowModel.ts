@@ -38,7 +38,6 @@ import {
   type DataGridRowModelSnapshot,
   type DataGridSortState,
   type DataGridTreeDataDiagnostics,
-  type DataGridTreeDataResolvedSpec,
   type DataGridTreeDataSpec,
   type DataGridViewportRange,
 } from "./rowModel.js"
@@ -51,11 +50,8 @@ import {
 } from "./clientRowProjectionEngine.js"
 import { createClientRowProjectionOrchestrator } from "./clientRowProjectionOrchestrator.js"
 import { DATAGRID_CLIENT_ALL_PROJECTION_STAGES } from "./projectionStages.js"
-import { buildGroupedRowsProjection } from "./groupProjectionController.js"
 import {
   createDataGridAggregationEngine,
-  type DataGridIncrementalAggregationGroupState,
-  type DataGridIncrementalAggregationLeafContribution,
 } from "./aggregationEngine.js"
 import {
   cloneDataGridFilterSnapshot as cloneFilterSnapshot,
@@ -84,7 +80,6 @@ import {
 import {
   areSameAggregateRecords,
   cloneAggregationModel,
-  computeGroupByAggregatesMap,
   createEmptyTreeDataDiagnostics,
   findDuplicateRowIds,
   isSameAggregationModel,
@@ -94,44 +89,41 @@ import {
   createTreeProjectionRuntime,
   type TreeParentProjectionCacheState,
   type TreePathProjectionCacheState,
-  type TreeProjectionResult,
 } from "./treeProjectionRuntime.js"
 import {
   applyIncrementalAggregationPatch as applyIncrementalAggregationPatchRuntime,
-  computeGroupByIncrementalAggregation,
   createGroupByIncrementalAggregationState,
   resetGroupByIncrementalAggregationState as resetGroupByIncrementalAggregationStateRuntime,
 } from "./incrementalAggregationRuntime.js"
 import {
-  alwaysMatchesFilter,
   buildColumnHistogram,
   createFilterPredicate,
   hasActiveFilterModel,
   isSameFilterModel,
   isSameSortModel,
-  normalizeLeafRow,
   normalizeText,
   readRowField,
-  serializeSortValueModelForCache,
-  shouldUseFilteredRowsForTreeSort,
-  sortLeafRows,
 } from "./clientRowProjectionPrimitives.js"
 import {
   applyRowDataPatch,
-  assignDisplayIndexes,
-  buildGroupRowIndexByRowId,
   buildRowIdIndex,
   bumpRowVersions,
   createRowVersionIndex,
-  enforceCacheCap,
   mergeRowPatch,
-  patchProjectedRowsByIdentity,
-  preserveRowOrder,
   pruneSortCacheRows,
   rebuildRowVersionIndex,
   reindexSourceRows,
-  remapRowsByIdentity,
 } from "./clientRowRuntimeUtils.js"
+import {
+  runFilterProjectionStage,
+  runPaginateProjectionStage,
+  runSortProjectionStage,
+  runVisibleProjectionStage,
+  type SortValueCacheEntry,
+} from "./clientRowProjectionBasicStages.js"
+import { runPivotProjectionStage } from "./clientRowProjectionPivotStage.js"
+import { runAggregateProjectionStage } from "./clientRowProjectionAggregateStage.js"
+import { runGroupProjectionStage } from "./clientRowProjectionGroupStage.js"
 import type { DataGridFieldDependency } from "./dependencyGraph.js"
 
 export interface CreateClientRowModelOptions<T> {
@@ -179,10 +171,6 @@ export interface DataGridClientRowPatchOptions {
   emit?: boolean
 }
 
-interface DataGridPendingPivotValuePatchContext<T> {
-  changedRows: readonly DataGridPivotIncrementalPatchRow<T>[]
-}
-
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
   setSortAndFilterModel(input: DataGridSortAndFilterModelInput): void
@@ -208,11 +196,6 @@ export interface DataGridClientRowModelDerivedCacheDiagnostics {
   sortValueMisses: number
   groupValueHits: number
   groupValueMisses: number
-}
-
-interface SortValueCacheEntry {
-  rowVersion: number
-  values: readonly unknown[]
 }
 
 function isDataGridRowId(value: unknown): value is DataGridRowId {
@@ -337,7 +320,7 @@ export function createClientRowModel<T>(
   let groupedProjectionGroupIndexByRowId = new Map<DataGridRowId, number>()
   let lastTreeProjectionCacheKey: string | null = null
   let lastTreeExpansionSnapshot: DataGridGroupExpansionSnapshot | null = null
-  let pendingPivotValuePatch: DataGridPendingPivotValuePatchContext<T> | null = null
+  let pendingPivotValuePatch: readonly DataGridPivotIncrementalPatchRow<T>[] | null = null
   const projectionEngine = createClientRowProjectionEngine<T>()
 
   function ensureActive() {
@@ -492,214 +475,6 @@ export function createClientRowModel<T>(
     return buildGroupExpansionSnapshot(expansionSpec, expansionState.toggledKeys)
   }
 
-  function toComparableNumber(value: unknown): number | null {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value
-    }
-    if (value instanceof Date) {
-      return value.getTime()
-    }
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-
-  function comparePivotSortValue(left: unknown, right: unknown): number {
-    if (left == null && right == null) {
-      return 0
-    }
-    if (left == null) {
-      return 1
-    }
-    if (right == null) {
-      return -1
-    }
-    const leftNumber = toComparableNumber(left)
-    const rightNumber = toComparableNumber(right)
-    if (leftNumber != null && rightNumber != null) {
-      return leftNumber - rightNumber
-    }
-    return normalizeText(left).localeCompare(normalizeText(right), undefined, {
-      numeric: true,
-      sensitivity: "base",
-    })
-  }
-
-  function sortPivotProjectionRows(
-    rows: readonly DataGridRowNode<T>[],
-    descriptors: readonly DataGridSortState[],
-  ): DataGridRowNode<T>[] {
-    if (!Array.isArray(rows) || rows.length <= 1 || descriptors.length === 0) {
-      return [...rows]
-    }
-
-    interface PivotBlock {
-      anchor: DataGridRowNode<T>
-      rows: DataGridRowNode<T>[]
-      index: number
-    }
-
-    const blocks: PivotBlock[] = []
-    const grandTotalRows: DataGridRowNode<T>[] = []
-    let index = 0
-    while (index < rows.length) {
-      const current = rows[index]
-      if (!current) {
-        index += 1
-        continue
-      }
-      if (String(current.rowId) === "pivot:grand-total") {
-        grandTotalRows.push(current)
-        index += 1
-        continue
-      }
-      const currentLevel = current.kind === "group"
-        ? Math.max(0, Math.trunc(current.groupMeta?.level ?? 0))
-        : -1
-      if (current.kind === "group" && currentLevel === 0) {
-        const blockStart = index
-        index += 1
-        while (index < rows.length) {
-          const next = rows[index]
-          if (!next || String(next.rowId) === "pivot:grand-total") {
-            break
-          }
-          if (next.kind === "group" && Math.max(0, Math.trunc(next.groupMeta?.level ?? 0)) === 0) {
-            break
-          }
-          index += 1
-        }
-        blocks.push({
-          anchor: current,
-          rows: rows.slice(blockStart, index),
-          index: blocks.length,
-        })
-        continue
-      }
-      blocks.push({
-        anchor: current,
-        rows: [current],
-        index: blocks.length,
-      })
-      index += 1
-    }
-
-    blocks.sort((left, right) => {
-      for (const descriptor of descriptors) {
-        const direction = descriptor.direction === "desc" ? -1 : 1
-        const leftValue = readRowField(left.anchor, descriptor.key, descriptor.field)
-        const rightValue = readRowField(right.anchor, descriptor.key, descriptor.field)
-        const compared = comparePivotSortValue(leftValue, rightValue)
-        if (compared !== 0) {
-          return compared * direction
-        }
-      }
-      const rowIdDelta = comparePivotSortValue(left.anchor.rowId, right.anchor.rowId)
-      if (rowIdDelta !== 0) {
-        return rowIdDelta
-      }
-      const sourceDelta = left.anchor.sourceIndex - right.anchor.sourceIndex
-      if (sourceDelta !== 0) {
-        return sourceDelta
-      }
-      return left.index - right.index
-    })
-
-    const sortedRows: DataGridRowNode<T>[] = []
-    for (const block of blocks) {
-      sortedRows.push(...block.rows)
-    }
-    if (grandTotalRows.length > 0) {
-      sortedRows.push(...grandTotalRows)
-    }
-    return sortedRows
-  }
-
-  function isSamePivotGroupMeta(
-    left: DataGridRowNode<T>["groupMeta"],
-    right: DataGridRowNode<T>["groupMeta"],
-  ): boolean {
-    if (left === right) {
-      return true
-    }
-    if (!left || !right) {
-      return false
-    }
-    return left.groupKey === right.groupKey
-      && left.groupField === right.groupField
-      && left.groupValue === right.groupValue
-      && left.level === right.level
-      && left.childrenCount === right.childrenCount
-  }
-
-  function isSamePivotRowData(
-    left: unknown,
-    right: unknown,
-  ): boolean {
-    if (left === right) {
-      return true
-    }
-    if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) {
-      return false
-    }
-    const leftRecord = left as Record<string, unknown>
-    const rightRecord = right as Record<string, unknown>
-    const leftKeys = Object.keys(leftRecord)
-    const rightKeys = Object.keys(rightRecord)
-    if (leftKeys.length !== rightKeys.length) {
-      return false
-    }
-    for (const key of leftKeys) {
-      if (leftRecord[key] !== rightRecord[key]) {
-        return false
-      }
-    }
-    return true
-  }
-
-  function canReusePivotProjectedRow(
-    previous: DataGridRowNode<T>,
-    next: DataGridRowNode<T>,
-    options: { includeDisplayIndex?: boolean } = {},
-  ): boolean {
-    const includeDisplayIndex = options.includeDisplayIndex === true
-    return previous.kind === next.kind
-      && previous.rowId === next.rowId
-      && previous.rowKey === next.rowKey
-      && previous.sourceIndex === next.sourceIndex
-      && previous.originalIndex === next.originalIndex
-      && (!includeDisplayIndex || previous.displayIndex === next.displayIndex)
-      && previous.state.selected === next.state.selected
-      && previous.state.group === next.state.group
-      && previous.state.pinned === next.state.pinned
-      && previous.state.expanded === next.state.expanded
-      && isSamePivotGroupMeta(previous.groupMeta, next.groupMeta)
-      && isSamePivotRowData(previous.data, next.data)
-  }
-
-  function preservePivotProjectionRowIdentity(
-    previousRows: readonly DataGridRowNode<T>[],
-    nextRows: readonly DataGridRowNode<T>[],
-    options: { includeDisplayIndex?: boolean } = {},
-  ): DataGridRowNode<T>[] {
-    if (previousRows.length === 0 || nextRows.length === 0) {
-      return [...nextRows]
-    }
-    const previousByRowId = new Map<DataGridRowId, DataGridRowNode<T>>()
-    for (const row of previousRows) {
-      previousByRowId.set(row.rowId, row)
-    }
-    const projected: DataGridRowNode<T>[] = []
-    for (const nextRow of nextRows) {
-      const previousRow = previousByRowId.get(nextRow.rowId)
-      if (previousRow && canReusePivotProjectedRow(previousRow, nextRow, options)) {
-        projected.push(previousRow)
-        continue
-      }
-      projected.push(nextRow)
-    }
-    return projected
-  }
-
   function resolvePivotDrilldownRowConstraints(
     row: DataGridRowNode<T>,
     rowFields: readonly string[],
@@ -814,74 +589,48 @@ export function createClientRowModel<T>(
   function runFilterStage(
     context: Parameters<DataGridClientProjectionStageHandlers<T>["runFilterStage"]>[0],
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runFilterStage"]> {
-    const shouldRecomputeFilter = context.shouldRecompute || runtimeState.filteredRowsProjection.length === 0
-    let filteredRowIds = new Set<DataGridRowId>()
-    if (shouldRecomputeFilter) {
-      const filterPredicate = context.filterPredicate ?? resolveFilterPredicate()
-      const nextFilteredRows: DataGridRowNode<T>[] = []
-      for (const row of sourceRows) {
-        if (!filterPredicate(row)) {
-          continue
-        }
-        nextFilteredRows.push(row)
-        filteredRowIds.add(row.rowId)
-      }
-      runtimeState.filteredRowsProjection = nextFilteredRows
-    } else {
-      runtimeState.filteredRowsProjection = remapRowsByIdentity(runtimeState.filteredRowsProjection, context.sourceById)
-      for (const row of runtimeState.filteredRowsProjection) {
-        filteredRowIds.add(row.rowId)
-      }
-    }
+    const result = runFilterProjectionStage({
+      sourceRows,
+      previousFilteredRowsProjection: runtimeState.filteredRowsProjection,
+      sourceById: context.sourceById,
+      shouldRecompute: context.shouldRecompute,
+      filterPredicate: context.filterPredicate,
+      resolveFilterPredicate,
+    })
+    runtimeState.filteredRowsProjection = result.filteredRowsProjection
     return {
-      filteredRowIds,
-      recomputed: shouldRecomputeFilter,
+      filteredRowIds: result.filteredRowIds,
+      recomputed: result.recomputed,
     }
   }
 
   function runSortStage(
     context: Parameters<DataGridClientProjectionStageHandlers<T>["runSortStage"]>[0],
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runSortStage"]> {
-    const rowsForSort = treeData
-      ? (shouldUseFilteredRowsForTreeSort(treeData, filterModel)
-          ? runtimeState.filteredRowsProjection
-          : sourceRows)
-      : runtimeState.filteredRowsProjection
-    const shouldRecomputeSort = context.shouldRecompute || runtimeState.sortedRowsProjection.length === 0
-    if (shouldRecomputeSort) {
-      const shouldCacheSortValues = projectionPolicy.shouldCacheSortValues()
-      const maxSortValueCacheSize = projectionPolicy.maxSortValueCacheSize(sourceRows.length)
-      const sortKey = serializeSortValueModelForCache(sortModel, { includeDirection: false })
-      if (sortKey !== sortValueCacheKey || !shouldCacheSortValues || maxSortValueCacheSize <= 0) {
-        sortValueCache.clear()
-        sortValueCacheKey = sortKey
-      }
-      runtimeState.sortedRowsProjection = sortLeafRows(rowsForSort, sortModel, (row, descriptors) => {
-        if (!shouldCacheSortValues || maxSortValueCacheSize <= 0) {
-          derivedCacheDiagnostics.sortValueMisses += 1
-          return descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field))
-        }
-        const currentRowVersion = rowVersionById.get(row.rowId) ?? 0
-        const cached = sortValueCache.get(row.rowId)
-        if (cached && cached.rowVersion === currentRowVersion) {
-          sortValueCache.delete(row.rowId)
-          sortValueCache.set(row.rowId, cached)
-          derivedCacheDiagnostics.sortValueHits += 1
-          return cached.values
-        }
-        const resolved = descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field))
-        sortValueCache.set(row.rowId, {
-          rowVersion: currentRowVersion,
-          values: resolved,
-        })
-        enforceCacheCap(sortValueCache, maxSortValueCacheSize)
-        derivedCacheDiagnostics.sortValueMisses += 1
-        return resolved
-      })
-    } else {
-      runtimeState.sortedRowsProjection = preserveRowOrder(runtimeState.sortedRowsProjection, rowsForSort)
+    const counters = {
+      hits: derivedCacheDiagnostics.sortValueHits,
+      misses: derivedCacheDiagnostics.sortValueMisses,
     }
-    return shouldRecomputeSort
+    const result = runSortProjectionStage({
+      treeData,
+      filterModel,
+      sourceRows,
+      filteredRowsProjection: runtimeState.filteredRowsProjection,
+      previousSortedRowsProjection: runtimeState.sortedRowsProjection,
+      shouldRecompute: context.shouldRecompute,
+      sortModel,
+      projectionPolicy,
+      sortValueCache,
+      sortValueCacheKey,
+      rowVersionById,
+      counters,
+      readRowField,
+    })
+    runtimeState.sortedRowsProjection = result.sortedRowsProjection
+    sortValueCacheKey = result.sortValueCacheKey
+    derivedCacheDiagnostics.sortValueHits = counters.hits
+    derivedCacheDiagnostics.sortValueMisses = counters.misses
+    return result.recomputed
   }
 
   function runGroupStage(
@@ -889,346 +638,128 @@ export function createClientRowModel<T>(
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runGroupStage"]> {
     const expansionSnapshot = getCurrentExpansionSnapshot()
     const expansionState = getActiveExpansionStateStore()
-    const nextGroupValueCacheKey = groupBy
-      ? `${runtimeState.rowRevision}:${runtimeState.groupRevision}:${groupBy.fields.join("|")}`
-      : "__none__"
-    const groupValueCounters = {
-      hits: derivedCacheDiagnostics.groupValueHits,
-      misses: derivedCacheDiagnostics.groupValueMisses,
-    }
-    let groupedResult: TreeProjectionResult<T> | null = null
-    let recomputedGroupStage = false
-    if (treeData) {
-      const treeCacheKey = treeProjectionRuntime.buildCacheKey({
-        treeCacheRevision,
-        filterRevision: runtimeState.filterRevision,
-        sortRevision: runtimeState.sortRevision,
-        treeData,
-      })
-      const shouldRecomputeGroup = context.shouldRecompute || runtimeState.groupedRowsProjection.length === 0
-      if (shouldRecomputeGroup) {
-        const aggregationBasis: "filtered" | "source" = aggregationModel?.basis === "source"
-          ? "source"
-          : "filtered"
-        let treeRowsForProjection = runtimeState.sortedRowsProjection
-        let treeRowMatchesFilter = context.rowMatchesFilter
-        if (
-          treeData.mode === "path" &&
-          shouldUseFilteredRowsForTreeSort(treeData, filterModel) &&
-          aggregationBasis !== "source"
-        ) {
-          if (runtimeState.sortedRowsProjection.length === runtimeState.filteredRowsProjection.length) {
-            treeRowMatchesFilter = alwaysMatchesFilter
-          } else {
-            const filteredSortedRows: DataGridRowNode<T>[] = []
-            for (const row of runtimeState.sortedRowsProjection) {
-              if (!context.rowMatchesFilter(row)) {
-                continue
-              }
-              filteredSortedRows.push(row)
-            }
-            treeRowsForProjection = filteredSortedRows
-            treeRowMatchesFilter = alwaysMatchesFilter
-          }
-        }
-        const hasTreeAggregationModel = Boolean(aggregationModel && aggregationModel.columns.length > 0)
-        if (hasTreeAggregationModel) {
-          aggregationEngine.setModel(aggregationModel)
-        }
-        const computeTreeAggregates = hasTreeAggregationModel
-          ? ((rows: readonly DataGridRowNode<T>[]) => aggregationEngine.computeAggregatesForLeaves(rows))
-          : undefined
-        const supportsIncrementalTreeAggregation = hasTreeAggregationModel
-          && aggregationEngine.isIncrementalAggregationSupported()
-        const createTreeLeafContribution = supportsIncrementalTreeAggregation
-          ? ((row: DataGridRowNode<T>) => aggregationEngine.createLeafContribution(row))
-          : undefined
-        const createTreeGroupState = supportsIncrementalTreeAggregation
-          ? (() => aggregationEngine.createEmptyGroupState())
-          : undefined
-        const applyTreeContributionDelta = supportsIncrementalTreeAggregation
-          ? ((
-            groupState: DataGridIncrementalAggregationGroupState,
-            previous: DataGridIncrementalAggregationLeafContribution | null,
-            next: DataGridIncrementalAggregationLeafContribution | null,
-          ) => {
-            aggregationEngine.applyContributionDelta(groupState, previous, next)
-          })
-          : undefined
-        const finalizeTreeGroupState = supportsIncrementalTreeAggregation
-          ? ((groupState: DataGridIncrementalAggregationGroupState) => aggregationEngine.finalizeGroupState(groupState))
-          : undefined
-        if (
-          context.shouldRecompute &&
-          runtimeState.groupedRowsProjection.length > 0 &&
-          lastTreeProjectionCacheKey === treeCacheKey &&
-          lastTreeExpansionSnapshot
-        ) {
-          if (treeData.mode === "path" && treePathProjectionCacheState?.key === treeCacheKey) {
-            groupedResult = treeProjectionRuntime.tryProjectPathSubtreeToggle({
-              rows: runtimeState.groupedRowsProjection,
-              cacheState: treePathProjectionCacheState,
-              treeData,
-              previousExpansionSnapshot: lastTreeExpansionSnapshot,
-              nextExpansionSnapshot: expansionSnapshot,
-              groupIndexByRowId: groupedProjectionGroupIndexByRowId,
-            })
-          } else if (treeData.mode === "parent" && treeParentProjectionCacheState?.key === treeCacheKey) {
-            groupedResult = treeProjectionRuntime.tryProjectParentSubtreeToggle({
-              rows: runtimeState.groupedRowsProjection,
-              cacheState: treeParentProjectionCacheState,
-              previousExpansionSnapshot: lastTreeExpansionSnapshot,
-              nextExpansionSnapshot: expansionSnapshot,
-              groupIndexByRowId: groupedProjectionGroupIndexByRowId,
-            })
-          }
-        }
-        if (!groupedResult) {
-          try {
-            const projected = treeProjectionRuntime.projectRowsFromCache({
-              inputRows: treeRowsForProjection,
-              treeData,
-              expansionSnapshot,
-              expansionToggledKeys: expansionState.toggledKeys,
-              rowMatchesFilter: treeRowMatchesFilter,
-              pathCacheState: treePathProjectionCacheState,
-              parentCacheState: treeParentProjectionCacheState,
-              cacheKey: treeCacheKey,
-              computeAggregates: computeTreeAggregates,
-              aggregationBasis,
-              createLeafContribution: createTreeLeafContribution,
-              createEmptyGroupState: createTreeGroupState,
-              applyContributionDelta: applyTreeContributionDelta,
-              finalizeGroupState: finalizeTreeGroupState,
-            })
-            groupedResult = projected.result
-            treePathProjectionCacheState = projected.pathCache
-            treeParentProjectionCacheState = projected.parentCache
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            treeDataDiagnostics = createEmptyTreeDataDiagnostics({
-              duplicates: treeDataDiagnostics?.duplicates ?? 0,
-              lastError: message,
-            })
-            throw error
-          }
-        }
-        runtimeState.groupedRowsProjection = groupedResult.rows
-        lastTreeProjectionCacheKey = treeCacheKey
-        lastTreeExpansionSnapshot = expansionSnapshot
-        recomputedGroupStage = true
-      } else {
-        runtimeState.groupedRowsProjection = patchProjectedRowsByIdentity(runtimeState.groupedRowsProjection, context.sourceById)
-      }
-      if (shouldRecomputeGroup || groupedResult) {
-        treeDataDiagnostics = createEmptyTreeDataDiagnostics({
-          duplicates: 0,
-          lastError: null,
-          orphans: groupedResult?.diagnostics.orphans ?? 0,
-          cycles: groupedResult?.diagnostics.cycles ?? 0,
-        })
-      }
-    } else if (pivotModel) {
-      const shouldRecomputeGroup = context.shouldRecompute || runtimeState.groupedRowsProjection.length === 0
-      if (shouldRecomputeGroup) {
-        runtimeState.groupedRowsProjection = runtimeState.filteredRowsProjection
-        recomputedGroupStage = true
-      } else {
-        runtimeState.groupedRowsProjection = remapRowsByIdentity(runtimeState.groupedRowsProjection, context.sourceById)
-      }
-    } else if (groupBy) {
-      const shouldRecomputeGroup = context.shouldRecompute || runtimeState.groupedRowsProjection.length === 0
-      if (shouldRecomputeGroup) {
-        const shouldCacheGroupValues = projectionPolicy.shouldCacheGroupValues()
-        const maxGroupValueCacheSize = projectionPolicy.maxGroupValueCacheSize(sourceRows.length)
-        if (nextGroupValueCacheKey !== groupValueCacheKey) {
-          groupValueCache.clear()
-          groupValueCacheKey = nextGroupValueCacheKey
-        }
-        if (!shouldCacheGroupValues || maxGroupValueCacheSize <= 0) {
-          groupValueCache.clear()
-        }
-        runtimeState.groupedRowsProjection = buildGroupedRowsProjection({
-          inputRows: runtimeState.sortedRowsProjection,
-          groupBy,
-          expansionSnapshot,
-          readRowField: (row, key, field) => readRowField(row, key, field),
-          normalizeText,
-          normalizeLeafRow,
-          groupValueCache: shouldCacheGroupValues && maxGroupValueCacheSize > 0
-            ? groupValueCache
-            : undefined,
-          groupValueCounters: shouldCacheGroupValues && maxGroupValueCacheSize > 0
-            ? groupValueCounters
-            : undefined,
-          maxGroupValueCacheSize: shouldCacheGroupValues && maxGroupValueCacheSize > 0
-            ? maxGroupValueCacheSize
-            : undefined,
-        })
-        if (shouldCacheGroupValues) {
-          enforceCacheCap(groupValueCache, maxGroupValueCacheSize)
-        }
-        recomputedGroupStage = true
-      } else {
-        runtimeState.groupedRowsProjection = patchProjectedRowsByIdentity(runtimeState.groupedRowsProjection, context.sourceById)
-      }
-    } else {
-      runtimeState.groupedRowsProjection = runtimeState.sortedRowsProjection
-      recomputedGroupStage = context.shouldRecompute
-    }
-    if (recomputedGroupStage) {
-      groupedProjectionGroupIndexByRowId = buildGroupRowIndexByRowId(runtimeState.groupedRowsProjection)
-    }
-    derivedCacheDiagnostics.groupValueHits = groupValueCounters.hits
-    derivedCacheDiagnostics.groupValueMisses = groupValueCounters.misses
-    return recomputedGroupStage
+    const result = runGroupProjectionStage({
+      shouldRecompute: context.shouldRecompute,
+      sourceById: context.sourceById,
+      rowMatchesFilter: context.rowMatchesFilter,
+      treeData,
+      pivotModelEnabled: Boolean(pivotModel),
+      groupBy,
+      filterModel,
+      sourceRows,
+      sortedRowsProjection: runtimeState.sortedRowsProjection,
+      filteredRowsProjection: runtimeState.filteredRowsProjection,
+      previousGroupedRowsProjection: runtimeState.groupedRowsProjection,
+      expansionSnapshot,
+      expansionToggledKeys: expansionState.toggledKeys,
+      treeCacheRevision,
+      rowRevision: runtimeState.rowRevision,
+      groupRevision: runtimeState.groupRevision,
+      filterRevision: runtimeState.filterRevision,
+      sortRevision: runtimeState.sortRevision,
+      projectionPolicy,
+      groupValueCache,
+      groupValueCacheKey,
+      groupValueCounters: {
+        hits: derivedCacheDiagnostics.groupValueHits,
+        misses: derivedCacheDiagnostics.groupValueMisses,
+      },
+      treeProjectionRuntime,
+      treePathProjectionCacheState,
+      treeParentProjectionCacheState,
+      lastTreeProjectionCacheKey,
+      lastTreeExpansionSnapshot,
+      groupedProjectionGroupIndexByRowId,
+      aggregationModel,
+      aggregationEngine,
+      treeDataDiagnostics,
+    })
+    runtimeState.groupedRowsProjection = result.groupedRowsProjection
+    groupValueCacheKey = result.groupValueCacheKey
+    derivedCacheDiagnostics.groupValueHits = result.groupValueCounters.hits
+    derivedCacheDiagnostics.groupValueMisses = result.groupValueCounters.misses
+    groupedProjectionGroupIndexByRowId = result.groupedProjectionGroupIndexByRowId
+    treePathProjectionCacheState = result.treePathProjectionCacheState
+    treeParentProjectionCacheState = result.treeParentProjectionCacheState
+    lastTreeProjectionCacheKey = result.lastTreeProjectionCacheKey
+    lastTreeExpansionSnapshot = result.lastTreeExpansionSnapshot
+    treeDataDiagnostics = result.treeDataDiagnostics
+    return result.recomputed
   }
 
   function runPivotStage(
     context: Parameters<DataGridClientProjectionStageHandlers<T>["runPivotStage"]>[0],
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runPivotStage"]> {
-    if (!pivotModel) {
-      pivotColumns = []
-      const shouldRecomputePivot = context.shouldRecompute || runtimeState.pivotedRowsProjection.length === 0
-      runtimeState.pivotedRowsProjection = runtimeState.groupedRowsProjection
-      return shouldRecomputePivot
-    }
-
-    const shouldRecomputePivot = context.shouldRecompute || runtimeState.pivotedRowsProjection.length === 0
-    if (!shouldRecomputePivot) {
-      return false
-    }
-    if (pendingPivotValuePatch && runtimeState.pivotedRowsProjection.length > 0) {
-      const patchedProjection = pivotRuntime.applyValueOnlyPatch({
-        projectedRows: runtimeState.pivotedRowsProjection,
-        pivotModel,
-        changedRows: pendingPivotValuePatch.changedRows,
-      })
-      if (patchedProjection) {
-        runtimeState.pivotedRowsProjection = preservePivotProjectionRowIdentity(
-          runtimeState.pivotedRowsProjection,
-          patchedProjection.rows,
-        )
-        pivotColumns = pivotRuntime.normalizeColumns(patchedProjection.columns)
-        return true
-      }
-    }
-    const pivotProjection = pivotRuntime.projectRows({
-      inputRows: runtimeState.groupedRowsProjection,
+    const result = runPivotProjectionStage({
       pivotModel,
+      shouldRecompute: context.shouldRecompute,
+      previousPivotedRowsProjection: runtimeState.pivotedRowsProjection,
+      previousPivotColumns: pivotColumns,
+      groupedRowsProjection: runtimeState.groupedRowsProjection,
+      pendingValuePatchRows: pendingPivotValuePatch,
+      pivotRuntime,
       normalizeFieldValue: normalizeText,
       expansionSnapshot: getCurrentExpansionSnapshot(),
     })
-    runtimeState.pivotedRowsProjection = preservePivotProjectionRowIdentity(
-      runtimeState.pivotedRowsProjection,
-      pivotProjection.rows,
-    )
-    pivotColumns = pivotRuntime.normalizeColumns(pivotProjection.columns)
-    return true
+    runtimeState.pivotedRowsProjection = result.pivotedRowsProjection
+    pivotColumns = result.pivotColumns
+    return result.recomputed
   }
 
   function runPaginateStage(
     context: Parameters<DataGridClientProjectionStageHandlers<T>["runPaginateStage"]>[0],
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runPaginateStage"]> {
-    const shouldRecomputePaginate = context.shouldRecompute || runtimeState.paginatedRowsProjection.length === 0
-    if (shouldRecomputePaginate) {
-      pagination = buildPaginationSnapshot(runtimeState.aggregatedRowsProjection.length, paginationInput)
-      if (pagination.enabled && pagination.startIndex >= 0 && pagination.endIndex >= pagination.startIndex) {
-        runtimeState.paginatedRowsProjection = runtimeState.aggregatedRowsProjection.slice(pagination.startIndex, pagination.endIndex + 1)
-      } else {
-        runtimeState.paginatedRowsProjection = runtimeState.aggregatedRowsProjection
-      }
-    } else {
-      runtimeState.paginatedRowsProjection = patchProjectedRowsByIdentity(runtimeState.paginatedRowsProjection, context.sourceById)
-    }
-    return shouldRecomputePaginate
+    const result = runPaginateProjectionStage({
+      aggregatedRowsProjection: runtimeState.aggregatedRowsProjection,
+      previousPaginatedRowsProjection: runtimeState.paginatedRowsProjection,
+      sourceById: context.sourceById,
+      shouldRecompute: context.shouldRecompute,
+      paginationInput,
+      currentPagination: pagination,
+    })
+    runtimeState.paginatedRowsProjection = result.paginatedRowsProjection
+    pagination = result.pagination
+    return result.recomputed
   }
 
   function runAggregateStage(
     context: Parameters<DataGridClientProjectionStageHandlers<T>["runAggregateStage"]>[0],
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runAggregateStage"]> {
-    const shouldRecomputeAggregate = context.shouldRecompute || runtimeState.aggregatedRowsProjection.length === 0
-    if (!shouldRecomputeAggregate) {
-      runtimeState.aggregatedRowsProjection = patchProjectedRowsByIdentity(runtimeState.aggregatedRowsProjection, context.sourceById)
-      return false
-    }
-
-    const activeGroupBy = groupBy
-    const activeAggregationModel = aggregationModel
-    const hasAggregationModel = Boolean(activeAggregationModel && activeAggregationModel.columns.length > 0)
-    if (pivotModel) {
-      resetGroupByIncrementalAggregationState()
-      runtimeState.aggregatedRowsProjection = sortModel.length > 0
-        ? sortPivotProjectionRows(runtimeState.pivotedRowsProjection, sortModel)
-        : runtimeState.pivotedRowsProjection
-      return true
-    }
-    if (treeData || !activeGroupBy || !hasAggregationModel || !activeAggregationModel) {
-      resetGroupByIncrementalAggregationState()
-      runtimeState.aggregatedRowsProjection = runtimeState.groupedRowsProjection
-      return true
-    }
-
-    aggregationEngine.setModel(activeAggregationModel)
-    const aggregationBasis: "filtered" | "source" = activeAggregationModel.basis === "source"
-      ? "source"
-      : "filtered"
-    const sourceRowsForAggregation = sortModel.length > 0
-      ? sortLeafRows(sourceRows, sortModel, (row, descriptors) => {
-          return descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field))
-        })
-      : sourceRows
-    const rowsForAggregation = aggregationBasis === "source"
-      ? sourceRowsForAggregation
-      : runtimeState.sortedRowsProjection
-
-    let aggregatesByGroupKey: ReadonlyMap<string, Record<string, unknown>>
-    if (aggregationEngine.isIncrementalAggregationSupported()) {
-      const incremental = computeGroupByIncrementalAggregation(
-        rowsForAggregation,
-        activeGroupBy.fields,
-        (row, field) => normalizeText(readRowField(row, field)),
-        row => aggregationEngine.createLeafContribution(row),
-        () => aggregationEngine.createEmptyGroupState(),
-        (groupState, previous, next) => aggregationEngine.applyContributionDelta(groupState, previous, next),
-        groupState => aggregationEngine.finalizeGroupState(groupState),
-      )
-      groupByIncrementalAggregationState.statesByGroupKey = incremental.statesByGroupKey
-      groupByIncrementalAggregationState.aggregatesByGroupKey = incremental.aggregatesByGroupKey
-      groupByIncrementalAggregationState.groupPathByRowId = incremental.groupPathByRowId
-      groupByIncrementalAggregationState.leafContributionByRowId = incremental.leafContributionByRowId
-      aggregatesByGroupKey = groupByIncrementalAggregationState.aggregatesByGroupKey
-    } else {
-      resetGroupByIncrementalAggregationState()
-      aggregatesByGroupKey = computeGroupByAggregatesMap(
-        rowsForAggregation,
-        activeGroupBy,
-        (row, field) => normalizeText(readRowField(row, field)),
-        rows => aggregationEngine.computeAggregatesForLeaves(rows),
-      )
-      groupByIncrementalAggregationState.aggregatesByGroupKey = new Map(aggregatesByGroupKey)
-    }
-
-    runtimeState.aggregatedRowsProjection = patchGroupRowsAggregatesByGroupKey(
-      runtimeState.groupedRowsProjection,
-      groupKey => aggregatesByGroupKey.get(groupKey),
-    )
-    return true
+    const result = runAggregateProjectionStage({
+      shouldRecompute: context.shouldRecompute,
+      sourceById: context.sourceById,
+      previousAggregatedRowsProjection: runtimeState.aggregatedRowsProjection,
+      groupedRowsProjection: runtimeState.groupedRowsProjection,
+      pivotedRowsProjection: runtimeState.pivotedRowsProjection,
+      sortedRowsProjection: runtimeState.sortedRowsProjection,
+      sourceRows,
+      sortModel,
+      groupBy,
+      pivotModelEnabled: Boolean(pivotModel),
+      treeData,
+      aggregationModel,
+      aggregationEngine,
+      groupByIncrementalAggregationState,
+      resetGroupByIncrementalAggregationState,
+      readRowField,
+      normalizeText,
+    })
+    runtimeState.aggregatedRowsProjection = result.aggregatedRowsProjection
+    return result.recomputed
   }
 
   function runVisibleStage(
     context: Parameters<DataGridClientProjectionStageHandlers<T>["runVisibleStage"]>[0],
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runVisibleStage"]> {
-    const shouldRecomputeVisible = context.shouldRecompute || runtimeState.rows.length === 0
-    if (shouldRecomputeVisible) {
-      const nextVisibleRows = assignDisplayIndexes(runtimeState.paginatedRowsProjection)
-      runtimeState.rows = pivotModel
-        ? preservePivotProjectionRowIdentity(runtimeState.rows, nextVisibleRows, { includeDisplayIndex: true })
-        : nextVisibleRows
-    } else {
-      runtimeState.rows = patchProjectedRowsByIdentity(runtimeState.rows, context.sourceById)
-    }
-    return shouldRecomputeVisible
+    const result = runVisibleProjectionStage({
+      paginatedRowsProjection: runtimeState.paginatedRowsProjection,
+      previousRows: runtimeState.rows,
+      sourceById: context.sourceById,
+      shouldRecompute: context.shouldRecompute,
+      pivotEnabled: Boolean(pivotModel),
+    })
+    runtimeState.rows = result.rows
+    return result.recomputed
   }
 
   function finalizeProjectionRecompute(meta: DataGridClientProjectionFinalizeMeta): void {
@@ -1519,6 +1050,7 @@ export function createClientRowModel<T>(
             },
           }
         : changeSet
+      const staleStagesBeforeRequest = new Set<DataGridClientProjectionStage>(projectionOrchestrator.getStaleStages())
       if (pivotModel && allowGroupRecompute) {
         const pivotAxisFields = collectPivotAxisFields(pivotModel)
         const pivotValueFields = collectPivotValueFields(pivotModel)
@@ -1531,7 +1063,9 @@ export function createClientRowModel<T>(
           affectsPivotValues &&
           !affectsPivotAxis &&
           !effectiveChangeSet.stageImpact.affectsFilter &&
-          !effectiveChangeSet.stageImpact.affectsSort
+          !effectiveChangeSet.stageImpact.affectsSort &&
+          !staleStagesBeforeRequest.has("group") &&
+          !staleStagesBeforeRequest.has("pivot")
         if (canApplyPivotValuePatch) {
           const changedRows: DataGridPivotIncrementalPatchRow<T>[] = []
           for (const changedRowId of changedRowIds) {
@@ -1546,11 +1080,10 @@ export function createClientRowModel<T>(
             })
           }
           if (changedRows.length > 0) {
-            pendingPivotValuePatch = { changedRows }
+            pendingPivotValuePatch = changedRows
           }
         }
       }
-      const staleStagesBeforeRequest = new Set<DataGridClientProjectionStage>(projectionOrchestrator.getStaleStages())
       const allStages: readonly DataGridClientProjectionStage[] = DATAGRID_CLIENT_ALL_PROJECTION_STAGES
       const projectionExecutionPlan = buildPatchProjectionExecutionPlan({
         changeSet: effectiveChangeSet,

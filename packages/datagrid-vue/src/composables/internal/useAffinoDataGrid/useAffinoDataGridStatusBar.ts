@@ -47,7 +47,7 @@ export function useAffinoDataGridStatusBar<TRow>(
       : null
     return {
       rowsTotal: options.rows.value.length,
-      rowsFiltered: options.runtime.api.getRowCount(),
+      rowsFiltered: options.runtime.api.rows.getCount(),
       columnsVisible: options.runtime.columnSnapshot.value.visibleColumns.length,
       selectedCells,
       selectedRows: options.featureSuite.selectedCount.value,

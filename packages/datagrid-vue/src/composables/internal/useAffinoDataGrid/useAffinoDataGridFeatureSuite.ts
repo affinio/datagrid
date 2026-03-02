@@ -98,7 +98,7 @@ export function useAffinoDataGridFeatureSuite<TRow>(
     mutationOptions: AffinoDataGridRowMutationOptions = {},
   ): Promise<boolean> => {
     const previousRows = options.rows.value
-    const previousSelection = options.runtime.api.getSelectionSnapshot()
+    const previousSelection = options.runtime.api.selection.getSnapshot()
     const shouldClearSelection = mutationOptions.clearSelection ?? false
 
     try {
@@ -110,8 +110,8 @@ export function useAffinoDataGridFeatureSuite<TRow>(
       return false
     }
 
-    const nextSelection = shouldClearSelection ? null : options.runtime.api.getSelectionSnapshot()
-    if (!options.runtime.api.hasTransactionSupport()) {
+    const nextSelection = shouldClearSelection ? null : options.runtime.api.selection.getSnapshot()
+    if (!options.runtime.api.transaction.hasSupport()) {
       return true
     }
 
@@ -123,7 +123,7 @@ export function useAffinoDataGridFeatureSuite<TRow>(
     }
 
     try {
-      await options.runtime.api.applyTransaction({
+      await options.runtime.api.transaction.apply({
         label,
         meta,
         commands: [
@@ -146,9 +146,9 @@ export function useAffinoDataGridFeatureSuite<TRow>(
       try {
         options.rows.value = previousRows
         if (previousSelection) {
-          options.runtime.api.setSelectionSnapshot(previousSelection)
+          options.runtime.api.selection.setSnapshot(previousSelection)
         } else {
-          options.runtime.api.clearSelection()
+          options.runtime.api.selection.clear()
         }
       } catch {
         // Keep failure deterministic for caller; best-effort rollback only.

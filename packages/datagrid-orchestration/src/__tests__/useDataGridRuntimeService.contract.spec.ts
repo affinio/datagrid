@@ -83,7 +83,7 @@ describe("useDataGridRuntimeService contract", () => {
 
     expect(runtime.getColumnSnapshot().columns.map(column => column.key)).toEqual(["team"])
 
-    runtime.api.setPivotModel({
+    runtime.api.pivot.setModel({
       rows: ["team"],
       columns: ["year"],
       values: [{ field: "revenue", agg: "sum" }],
@@ -96,7 +96,7 @@ describe("useDataGridRuntimeService contract", () => {
     expect(pivotKeys.length).toBe(2)
     expect(withPivot.columns.find(column => column.key === "team")?.width).toBe(180)
 
-    runtime.api.setPivotModel(null)
+    runtime.api.pivot.setModel(null)
     const afterClear = runtime.getColumnSnapshot()
     expect(afterClear.columns.map(column => column.key)).toEqual(["team"])
     expect(afterClear.columns.find(column => column.key === "team")?.width).toBe(180)

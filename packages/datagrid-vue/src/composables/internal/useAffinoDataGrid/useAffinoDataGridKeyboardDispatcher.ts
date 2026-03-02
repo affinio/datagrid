@@ -29,15 +29,15 @@ export function useAffinoDataGridKeyboardDispatcher<TRow>(
   options: UseAffinoDataGridKeyboardDispatcherOptions<TRow>,
 ): UseAffinoDataGridKeyboardDispatcherResult {
   const runHistoryActionFromKeyboard = (direction: "undo" | "redo"): void => {
-    if (!options.runtime.api.hasTransactionSupport()) {
+    if (!options.runtime.api.transaction.hasSupport()) {
       return
     }
     void (async () => {
       if (direction === "undo") {
-        if (!options.runtime.api.canUndoTransaction()) {
+        if (!options.runtime.api.transaction.canUndo()) {
           return
         }
-        await options.runtime.api.undoTransaction()
+        await options.runtime.api.transaction.undo()
         options.pushFeedback({
           source: "history",
           action: "undo",
@@ -45,10 +45,10 @@ export function useAffinoDataGridKeyboardDispatcher<TRow>(
           ok: true,
         })
       } else {
-        if (!options.runtime.api.canRedoTransaction()) {
+        if (!options.runtime.api.transaction.canRedo()) {
           return
         }
-        await options.runtime.api.redoTransaction()
+        await options.runtime.api.transaction.redo()
         options.pushFeedback({
           source: "history",
           action: "redo",

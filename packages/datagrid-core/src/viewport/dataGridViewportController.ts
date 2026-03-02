@@ -24,7 +24,6 @@ import {
 } from "../dom/gridUtils"
 import { createHorizontalOverscanController } from "../virtualization/dynamicOverscan"
 import {
-	updateColumnSnapshot,
 	createEmptyColumnSnapshot,
 } from "../virtualization/columnSnapshot"
 import {
@@ -55,6 +54,11 @@ import {
 	type HorizontalUpdateCallbacks,
 	type HorizontalUpdatePrepared,
 } from "./dataGridViewportHorizontalUpdate"
+import { applyColumnProjection } from "./dataGridViewportColumnProjection"
+import {
+	buildImperativeScrollSyncSignature,
+	buildImperativeWindowSignature,
+} from "./dataGridViewportImperative"
 import type {
 	ViewportMetricsSnapshot,
 	LayoutMeasurementSnapshot,
@@ -231,20 +235,9 @@ export function createDataGridViewportController<TRow = unknown>(
 		} = core
 		const {
 			columns: {
-				visibleColumns,
-				visibleColumnEntries,
-				visibleScrollableColumns,
-				visibleScrollableEntries,
-				pinnedLeftColumns,
 				pinnedLeftEntries,
-				pinnedRightColumns,
 				pinnedRightEntries,
-				leftPadding,
-				rightPadding,
 				columnWidthMap,
-				visibleStartCol,
-				visibleEndCol,
-				scrollableRange,
 				columnVirtualState,
 			},
 			metrics: {
@@ -667,7 +660,7 @@ export function createDataGridViewportController<TRow = unknown>(
 			if (typeof imperativeCallbacks.onScrollSync !== "function") {
 				return
 			}
-			const signature = `${Math.round(scrollTopValue * 1000)}|${Math.round(scrollLeftValue * 1000)}`
+			const signature = buildImperativeScrollSyncSignature(scrollTopValue, scrollLeftValue)
 			if (signature === lastImperativeScrollSyncSignature) {
 				return
 			}
@@ -684,22 +677,13 @@ export function createDataGridViewportController<TRow = unknown>(
 			if (typeof imperativeCallbacks.onWindow !== "function") {
 				return
 			}
-			const signature = [
-				snapshot.rowStart,
-				snapshot.rowEnd,
-				snapshot.rowTotal,
-				snapshot.colStart,
-				snapshot.colEnd,
-				snapshot.colTotal,
-				snapshot.overscan.top,
-				snapshot.overscan.bottom,
-				snapshot.overscan.left,
-				snapshot.overscan.right,
-				Math.round(scrollTop.value * 1000),
-				Math.round(scrollLeft.value * 1000),
-				Math.round(viewportHeight.value * 1000),
-				Math.round(viewportWidth.value * 1000),
-			].join("|")
+			const signature = buildImperativeWindowSignature(
+				snapshot,
+				scrollTop.value,
+				scrollLeft.value,
+				viewportHeight.value,
+				viewportWidth.value,
+			)
 			if (signature === lastImperativeWindowSignature) {
 				return
 			}
@@ -1113,187 +1097,18 @@ export function createDataGridViewportController<TRow = unknown>(
 			end: number,
 			payload: HorizontalVirtualizerPayload,
 		) {
-			const previousMetaVersion = columnSnapshot.metaVersion
-			const previousScrollableStart = columnSnapshot.scrollableStart
-			const previousScrollableEnd = columnSnapshot.scrollableEnd
-			const previousVisibleStart = columnSnapshot.visibleStart
-			const previousVisibleEnd = columnSnapshot.visibleEnd
-
-			columnSnapshot.columnWidthMap = columnWidthMap.value
-			const { visibleStartIndex, visibleEndIndex } = updateColumnSnapshot({
-				snapshot: columnSnapshot,
-				meta: {
-					scrollableColumns: meta.scrollableColumns,
-					scrollableIndices: meta.scrollableIndices,
-					metrics: meta.metrics,
-					pinnedLeft: meta.pinnedLeft,
-					pinnedRight: meta.pinnedRight,
-					pinnedLeftWidth: meta.pinnedLeftWidth,
-					pinnedRightWidth: meta.pinnedRightWidth,
-					containerWidthForColumns: meta.containerWidthForColumns,
-					indexColumnWidth: meta.indexColumnWidth,
-					scrollDirection: meta.scrollDirection,
-					version: meta.version,
-					zoom: meta.zoom,
-				},
-				range: { start, end },
+			applyColumnProjection({
+				meta,
+				start,
+				end,
 				payload,
+				columnSnapshot,
+				columnSignals: derived.columns,
+				horizontalState: horizontalVirtualizer.getState(),
 				getColumnKey,
 				resolveColumnWidth,
+				onUpdatePinnedOffsets: updatePinnedOffsets,
 			})
-
-			const layoutProjectionChanged = columnSnapshot.metaVersion !== previousMetaVersion
-			const rangeProjectionChanged =
-				columnSnapshot.scrollableStart !== previousScrollableStart ||
-				columnSnapshot.scrollableEnd !== previousScrollableEnd ||
-				columnSnapshot.visibleStart !== previousVisibleStart ||
-				columnSnapshot.visibleEnd !== previousVisibleEnd
-
-			if (layoutProjectionChanged || rangeProjectionChanged) {
-				const visibleColumnsSnapshot = columnSnapshot.visibleColumns
-				const currentVisibleColumns = visibleColumns.value
-				let visibleColumnsChanged = currentVisibleColumns.length !== visibleColumnsSnapshot.length
-				if (!visibleColumnsChanged) {
-					for (let index = 0; index < visibleColumnsSnapshot.length; index += 1) {
-						if (currentVisibleColumns[index] !== visibleColumnsSnapshot[index]?.column) {
-							visibleColumnsChanged = true
-							break
-						}
-					}
-				}
-				if (visibleColumnsChanged) {
-					visibleColumns.value = visibleColumnsSnapshot.map(entry => entry.column)
-				}
-
-				const currentVisibleEntries = visibleColumnEntries.value
-				let visibleEntriesChanged = currentVisibleEntries.length !== visibleColumnsSnapshot.length
-				if (!visibleEntriesChanged) {
-					for (let index = 0; index < visibleColumnsSnapshot.length; index += 1) {
-						if (currentVisibleEntries[index] !== visibleColumnsSnapshot[index]) {
-							visibleEntriesChanged = true
-							break
-						}
-					}
-				}
-				if (visibleEntriesChanged) {
-					visibleColumnEntries.value = visibleColumnsSnapshot.slice()
-				}
-
-				const visibleScrollableSnapshot = columnSnapshot.visibleScrollable
-				const currentScrollableColumns = visibleScrollableColumns.value
-				let visibleScrollableChanged = currentScrollableColumns.length !== visibleScrollableSnapshot.length
-				if (!visibleScrollableChanged) {
-					for (let index = 0; index < visibleScrollableSnapshot.length; index += 1) {
-						if (currentScrollableColumns[index] !== visibleScrollableSnapshot[index]?.column) {
-							visibleScrollableChanged = true
-							break
-						}
-					}
-				}
-				if (visibleScrollableChanged) {
-					visibleScrollableColumns.value = visibleScrollableSnapshot.map(entry => entry.column)
-				}
-
-				const currentScrollableEntries = visibleScrollableEntries.value
-				let visibleScrollableEntriesChanged = currentScrollableEntries.length !== visibleScrollableSnapshot.length
-				if (!visibleScrollableEntriesChanged) {
-					for (let index = 0; index < visibleScrollableSnapshot.length; index += 1) {
-						if (currentScrollableEntries[index] !== visibleScrollableSnapshot[index]) {
-							visibleScrollableEntriesChanged = true
-							break
-						}
-					}
-				}
-				if (visibleScrollableEntriesChanged) {
-					visibleScrollableEntries.value = visibleScrollableSnapshot.slice()
-				}
-			}
-
-			if (layoutProjectionChanged) {
-				const pinnedLeftSnapshot = columnSnapshot.pinnedLeft
-				const currentPinnedLeft = pinnedLeftColumns.value
-				let pinnedLeftChanged = currentPinnedLeft.length !== pinnedLeftSnapshot.length
-				if (!pinnedLeftChanged) {
-					for (let index = 0; index < pinnedLeftSnapshot.length; index += 1) {
-						if (currentPinnedLeft[index] !== pinnedLeftSnapshot[index]?.column) {
-							pinnedLeftChanged = true
-							break
-						}
-					}
-				}
-				if (pinnedLeftChanged) {
-					pinnedLeftColumns.value = pinnedLeftSnapshot.map(entry => entry.column)
-				}
-
-				const currentPinnedLeftEntries = pinnedLeftEntries.value
-				let pinnedLeftEntriesChanged = currentPinnedLeftEntries.length !== pinnedLeftSnapshot.length
-				if (!pinnedLeftEntriesChanged) {
-					for (let index = 0; index < pinnedLeftSnapshot.length; index += 1) {
-						if (currentPinnedLeftEntries[index] !== pinnedLeftSnapshot[index]) {
-							pinnedLeftEntriesChanged = true
-							break
-						}
-					}
-				}
-				if (pinnedLeftEntriesChanged) {
-					pinnedLeftEntries.value = pinnedLeftSnapshot.slice()
-				}
-
-				const pinnedRightSnapshot = columnSnapshot.pinnedRight
-				const currentPinnedRight = pinnedRightColumns.value
-				let pinnedRightChanged = currentPinnedRight.length !== pinnedRightSnapshot.length
-				if (!pinnedRightChanged) {
-					for (let index = 0; index < pinnedRightSnapshot.length; index += 1) {
-						if (currentPinnedRight[index] !== pinnedRightSnapshot[index]?.column) {
-							pinnedRightChanged = true
-							break
-						}
-					}
-				}
-				if (pinnedRightChanged) {
-					pinnedRightColumns.value = pinnedRightSnapshot.map(entry => entry.column)
-				}
-
-				const currentPinnedRightEntries = pinnedRightEntries.value
-				let pinnedRightEntriesChanged = currentPinnedRightEntries.length !== pinnedRightSnapshot.length
-				if (!pinnedRightEntriesChanged) {
-					for (let index = 0; index < pinnedRightSnapshot.length; index += 1) {
-						if (currentPinnedRightEntries[index] !== pinnedRightSnapshot[index]) {
-							pinnedRightEntriesChanged = true
-							break
-						}
-					}
-				}
-				if (pinnedRightEntriesChanged) {
-					pinnedRightEntries.value = pinnedRightSnapshot.slice()
-				}
-			}
-
-			leftPadding.value = payload.leftPadding
-			rightPadding.value = payload.rightPadding
-			if (columnWidthMap.value !== columnSnapshot.columnWidthMap) {
-				columnWidthMap.value = columnSnapshot.columnWidthMap
-			}
-
-			visibleStartCol.value = visibleStartIndex
-			visibleEndCol.value = visibleEndIndex
-			scrollableRange.value = { start, end }
-
-			const columnState = columnVirtualState.value
-			columnState.start = start
-			columnState.end = end
-			columnState.visibleStart = payload.visibleStart
-			columnState.visibleEnd = payload.visibleEnd
-			columnState.overscanLeading = horizontalVirtualizer.getState().overscanLeading
-			columnState.overscanTrailing = horizontalVirtualizer.getState().overscanTrailing
-			columnState.poolSize = horizontalVirtualizer.getState().poolSize
-			columnState.visibleCount = horizontalVirtualizer.getState().visibleCount
-			columnState.totalCount = meta.scrollableColumns.length
-			columnState.indexColumnWidth = meta.indexColumnWidth
-			columnState.pinnedRightWidth = meta.pinnedRightWidth
-			columnVirtualState.value = { ...columnState }
-
-			updatePinnedOffsets()
 		}
 
 		function clampScrollTopValue(value: number) {

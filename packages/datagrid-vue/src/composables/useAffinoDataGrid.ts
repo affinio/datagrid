@@ -499,7 +499,7 @@ export function useAffinoDataGrid<TRow>(
   } = useAffinoDataGridSortActionSuite({
     initialSortState: options.initialSortState,
     onSortModelChange(nextSortState) {
-      runtime.api.setSortModel(nextSortState)
+      runtime.api.rows.setSortModel(nextSortState)
     },
     selectedRowKeySet,
     clearSelection,
@@ -508,7 +508,7 @@ export function useAffinoDataGrid<TRow>(
     resolveRows: () => rows.value,
     resolveColumns: () => columns.value,
     setColumnWidth: (columnKey, width) => {
-      runtime.api.setColumnWidth(columnKey, width)
+      runtime.api.columns.setWidth(columnKey, width)
     },
     isFilteringEnabled: () => filteringEnabled.value,
     copySelectedRows: () => runCopyAction(),
@@ -895,9 +895,9 @@ export function useAffinoDataGrid<TRow>(
 
   const bindingSuite = useAffinoDataGridBindingSuite({
     columns,
-    resolveColumnOrder: () => runtime.api.getColumnModelSnapshot().order,
+    resolveColumnOrder: () => runtime.api.columns.getSnapshot().order,
     setColumnOrder: keys => {
-      runtime.api.setColumnOrder(keys)
+      runtime.api.columns.setOrder(keys)
     },
     resolveRowOrder: () => rows.value.map((row, index) => resolveRowKey(row, index)),
     moveRowByKey: moveRowsByKey,
@@ -926,11 +926,11 @@ export function useAffinoDataGrid<TRow>(
       return null
     }
 
-    const directNode = runtime.api.getRow(directHit.rowIndex)
+    const directNode = runtime.api.rows.get(directHit.rowIndex)
     let resolvedRow: unknown = directNode?.row
     if (!resolvedRow || String(directNode?.rowId ?? "") !== targetKey) {
-      const viewportRange = runtime.api.getRowModelSnapshot().viewportRange
-      const visibleRows = runtime.api.getRowsInRange(viewportRange)
+      const viewportRange = runtime.api.rows.getSnapshot().viewportRange
+      const visibleRows = runtime.api.rows.getRange(viewportRange)
       resolvedRow = visibleRows.find(node => String(node.rowId) === targetKey)?.row
     }
 
@@ -945,7 +945,7 @@ export function useAffinoDataGrid<TRow>(
     return String(value)
   }
 
-  const unsubscribeCellRefresh = runtime.api.onCellsRefresh(batch => {
+  const unsubscribeCellRefresh = runtime.api.view.onCellsRefresh(batch => {
     for (const cell of batch.cells) {
       const cellElement = bindingSuite.findCellElement(String(cell.rowKey), cell.columnKey)
       if (!cellElement) {
@@ -1165,35 +1165,35 @@ export function useAffinoDataGrid<TRow>(
   dispatchCellKeyboardCommands = keyboardDispatcher.dispatch
 
   const paginationSnapshot = ref<DataGridPaginationSnapshot>(
-    clonePaginationSnapshot(runtime.api.getPaginationSnapshot()),
+    clonePaginationSnapshot(runtime.api.rows.getPagination()),
   )
   const columnStateSnapshot = ref<DataGridColumnModelSnapshot>(
-    cloneColumnModelSnapshot(runtime.api.getColumnModelSnapshot()),
+    cloneColumnModelSnapshot(runtime.api.columns.getSnapshot()),
   )
-  const historySupported = ref(runtime.api.hasTransactionSupport())
+  const historySupported = ref(runtime.api.transaction.hasSupport())
   const historySnapshot = ref<DataGridTransactionSnapshot | null>(
-    cloneTransactionSnapshot(runtime.api.getTransactionSnapshot()),
+    cloneTransactionSnapshot(runtime.api.transaction.getSnapshot()),
   )
 
   const refreshPaginationSnapshot = (): DataGridPaginationSnapshot => {
-    const nextSnapshot = clonePaginationSnapshot(runtime.api.getPaginationSnapshot())
+    const nextSnapshot = clonePaginationSnapshot(runtime.api.rows.getPagination())
     paginationSnapshot.value = nextSnapshot
     return nextSnapshot
   }
 
   const refreshColumnStateSnapshot = (): DataGridColumnModelSnapshot => {
-    const nextSnapshot = cloneColumnModelSnapshot(runtime.api.getColumnModelSnapshot())
+    const nextSnapshot = cloneColumnModelSnapshot(runtime.api.columns.getSnapshot())
     columnStateSnapshot.value = nextSnapshot
     return nextSnapshot
   }
 
   const refreshHistorySnapshot = (): DataGridTransactionSnapshot | null => {
-    historySupported.value = runtime.api.hasTransactionSupport()
+    historySupported.value = runtime.api.transaction.hasSupport()
     if (!historySupported.value) {
       historySnapshot.value = null
       return null
     }
-    const nextSnapshot = cloneTransactionSnapshot(runtime.api.getTransactionSnapshot())
+    const nextSnapshot = cloneTransactionSnapshot(runtime.api.transaction.getSnapshot())
     historySnapshot.value = nextSnapshot
     return nextSnapshot
   }
@@ -1423,31 +1423,31 @@ export function useAffinoDataGrid<TRow>(
   }
 
   const setPagination = (pagination: { pageSize: number; currentPage: number } | null): void => {
-    runtime.api.setPagination(pagination)
+    runtime.api.rows.setPagination(pagination)
     refreshPaginationSnapshot()
     emitGridEvent({
       tier: "advanced",
       name: "sugar:pagination",
-      args: [paginationSnapshot.value ?? runtime.api.getPaginationSnapshot()],
+      args: [paginationSnapshot.value ?? runtime.api.rows.getPagination()],
       source: "api",
       phase: "change",
     })
   }
 
   const setPageSize = (pageSize: number | null): void => {
-    runtime.api.setPageSize(pageSize)
+    runtime.api.rows.setPageSize(pageSize)
     refreshPaginationSnapshot()
     emitGridEvent({
       tier: "advanced",
       name: "sugar:pagination",
-      args: [paginationSnapshot.value ?? runtime.api.getPaginationSnapshot()],
+      args: [paginationSnapshot.value ?? runtime.api.rows.getPagination()],
       source: "api",
       phase: "change",
     })
   }
 
   const setCurrentPage = (page: number): void => {
-    runtime.api.setCurrentPage(page)
+    runtime.api.rows.setCurrentPage(page)
     const snapshot = refreshPaginationSnapshot()
     emitGridEvent({
       tier: "advanced",
@@ -1484,22 +1484,22 @@ export function useAffinoDataGrid<TRow>(
   }
 
   const setColumnOrder = (keys: readonly string[]): void => {
-    runtime.api.setColumnOrder(keys)
+    runtime.api.columns.setOrder(keys)
     refreshColumnStateSnapshot()
   }
 
   const setColumnVisibility = (columnKey: string, visible: boolean): void => {
-    runtime.api.setColumnVisibility(columnKey, visible)
+    runtime.api.columns.setVisibility(columnKey, visible)
     refreshColumnStateSnapshot()
   }
 
   const setColumnWidth = (columnKey: string, width: number | null): void => {
-    runtime.api.setColumnWidth(columnKey, width)
+    runtime.api.columns.setWidth(columnKey, width)
     refreshColumnStateSnapshot()
   }
 
   const setColumnPin = (columnKey: string, pin: "left" | "right" | "none"): void => {
-    runtime.api.setColumnPin(columnKey, pin)
+    runtime.api.columns.setPin(columnKey, pin)
     refreshColumnStateSnapshot()
   }
 
@@ -1525,7 +1525,7 @@ export function useAffinoDataGrid<TRow>(
     }
     const delta = event.clientX - state.startX
     const nextWidth = Math.max(56, Math.round(state.startWidth + delta))
-    runtime.api.setColumnWidth(state.columnKey, nextWidth)
+    runtime.api.columns.setWidth(state.columnKey, nextWidth)
   }
 
   const onColumnResizeEnd = (): void => {
@@ -1533,7 +1533,7 @@ export function useAffinoDataGrid<TRow>(
     if (!state) {
       return
     }
-    const column = runtime.api.getColumn(state.columnKey)
+    const column = runtime.api.columns.get(state.columnKey)
     emitGridEvent({
       tier: "stable",
       name: "columnResize",
@@ -1549,7 +1549,7 @@ export function useAffinoDataGrid<TRow>(
 
   const startColumnResize = (columnKey: string, event: MouseEvent): void => {
     event.preventDefault()
-    const column = runtime.api.getColumn(columnKey)
+    const column = runtime.api.columns.get(columnKey)
     if (!column) {
       return
     }
@@ -1592,9 +1592,9 @@ export function useAffinoDataGrid<TRow>(
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault()
         const direction = event.key === "ArrowRight" ? 1 : -1
-        const current = runtime.api.getColumn(columnKey)
+        const current = runtime.api.columns.get(columnKey)
         const currentWidth = Number(current?.width ?? current?.column.width ?? 160)
-        runtime.api.setColumnWidth(columnKey, Math.max(56, currentWidth + direction * 12))
+        runtime.api.columns.setWidth(columnKey, Math.max(56, currentWidth + direction * 12))
       }
     },
   })
@@ -1692,11 +1692,11 @@ export function useAffinoDataGrid<TRow>(
   })
 
   const applyColumnStateSnapshot = (snapshot: DataGridColumnModelSnapshot): void => {
-    runtime.api.setColumnOrder(snapshot.order)
+    runtime.api.columns.setOrder(snapshot.order)
     for (const column of snapshot.columns) {
-      runtime.api.setColumnVisibility(column.key, column.visible)
-      runtime.api.setColumnWidth(column.key, column.width)
-      runtime.api.setColumnPin(column.key, column.pin)
+      runtime.api.columns.setVisibility(column.key, column.visible)
+      runtime.api.columns.setWidth(column.key, column.width)
+      runtime.api.columns.setPin(column.key, column.pin)
     }
     refreshColumnStateSnapshot()
   }
@@ -1713,14 +1713,14 @@ export function useAffinoDataGrid<TRow>(
   })
 
   const canUndo = computed(() => (
-    historySupported.value ? runtime.api.canUndoTransaction() : false
+    historySupported.value ? runtime.api.transaction.canUndo() : false
   ))
   const canRedo = computed(() => (
-    historySupported.value ? runtime.api.canRedoTransaction() : false
+    historySupported.value ? runtime.api.transaction.canRedo() : false
   ))
 
   const undo = async (): Promise<string | null> => {
-    if (!historySupported.value || !runtime.api.canUndoTransaction()) {
+    if (!historySupported.value || !runtime.api.transaction.canUndo()) {
       return null
     }
     emitGridEvent({
@@ -1730,7 +1730,7 @@ export function useAffinoDataGrid<TRow>(
       source: "keyboard",
       phase: "start",
     })
-    const committedId = await runtime.api.undoTransaction()
+    const committedId = await runtime.api.transaction.undo()
     refreshHistorySnapshot()
     pushFeedback({
       source: "history",
@@ -1749,7 +1749,7 @@ export function useAffinoDataGrid<TRow>(
   }
 
   const redo = async (): Promise<string | null> => {
-    if (!historySupported.value || !runtime.api.canRedoTransaction()) {
+    if (!historySupported.value || !runtime.api.transaction.canRedo()) {
       return null
     }
     emitGridEvent({
@@ -1759,7 +1759,7 @@ export function useAffinoDataGrid<TRow>(
       source: "keyboard",
       phase: "start",
     })
-    const committedId = await runtime.api.redoTransaction()
+    const committedId = await runtime.api.transaction.redo()
     refreshHistorySnapshot()
     pushFeedback({
       source: "history",
