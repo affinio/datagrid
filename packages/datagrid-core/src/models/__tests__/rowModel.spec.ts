@@ -213,6 +213,37 @@ describe("rowModel normalization", () => {
     })).toBe(true)
   })
 
+  it("normalizes pivot totals flags and keeps pivot identity comparisons deterministic", () => {
+    const normalized = normalizePivotSpec({
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+      rowSubtotals: true,
+      grandTotal: true,
+    })
+    expect(normalized).toEqual({
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+      rowSubtotals: true,
+      grandTotal: true,
+    })
+    expect(isSamePivotSpec(normalized, {
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+      rowSubtotals: true,
+      grandTotal: true,
+    })).toBe(true)
+    expect(isSamePivotSpec(normalized, {
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+      rowSubtotals: true,
+      grandTotal: false,
+    })).toBe(false)
+  })
+
   it("normalizes pagination input and builds deterministic snapshot", () => {
     const normalized = normalizePaginationInput({
       pageSize: 25.7,

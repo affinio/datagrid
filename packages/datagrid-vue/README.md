@@ -173,6 +173,8 @@ runtime.setPivotModel({
   rows: ["team"],
   columns: ["year"],
   values: [{ field: "revenue", agg: "sum" }],
+  rowSubtotals: true,
+  grandTotal: true,
 })
 
 const activePivot = runtime.getPivotModel()

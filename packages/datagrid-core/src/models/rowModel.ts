@@ -131,6 +131,8 @@ export interface DataGridPivotSpec {
   rows: string[]
   columns: string[]
   values: DataGridPivotValueSpec[]
+  rowSubtotals?: boolean
+  grandTotal?: boolean
 }
 
 export interface DataGridPivotColumnPathSegment {
@@ -659,10 +661,14 @@ export function normalizePivotSpec(pivotSpec: DataGridPivotSpec | null | undefin
   if (normalizedValues.length === 0) {
     return null
   }
+  const rowSubtotals = pivotSpec.rowSubtotals === true
+  const grandTotal = pivotSpec.grandTotal === true
   return {
     rows: normalizedRows,
     columns: normalizedColumns,
     values: normalizedValues,
+    ...(rowSubtotals ? { rowSubtotals: true } : {}),
+    ...(grandTotal ? { grandTotal: true } : {}),
   }
 }
 
@@ -677,6 +683,8 @@ export function clonePivotSpec(
     rows: [...normalized.rows],
     columns: [...normalized.columns],
     values: normalized.values.map(value => ({ ...value })),
+    ...(normalized.rowSubtotals ? { rowSubtotals: true } : {}),
+    ...(normalized.grandTotal ? { grandTotal: true } : {}),
   }
 }
 
@@ -699,6 +707,12 @@ export function isSamePivotSpec(
     return false
   }
   if (normalizedLeft.values.length !== normalizedRight.values.length) {
+    return false
+  }
+  if (Boolean(normalizedLeft.rowSubtotals) !== Boolean(normalizedRight.rowSubtotals)) {
+    return false
+  }
+  if (Boolean(normalizedLeft.grandTotal) !== Boolean(normalizedRight.grandTotal)) {
     return false
   }
   for (let index = 0; index < normalizedLeft.rows.length; index += 1) {

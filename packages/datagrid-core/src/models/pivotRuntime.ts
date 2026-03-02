@@ -1,5 +1,6 @@
 import {
   createDataGridAggregationEngine,
+  type DataGridIncrementalAggregationLeafContribution,
   type DataGridIncrementalAggregationGroupState,
 } from "./aggregationEngine.js"
 import type {
@@ -39,8 +40,12 @@ interface DataGridPivotFieldResolver<T> {
   read: (rowNode: DataGridRowNode<T>) => unknown
 }
 
+type DataGridPivotProjectionEntryKind = "detail" | "subtotal" | "grand-total"
+
 interface DataGridPivotProjectionEntry<T> {
+  kind: DataGridPivotProjectionEntryKind
   rowPath: readonly DataGridPivotRowPathSegment[]
+  rowDepth: number
   minSourceIndex: number
   minOriginalIndex: number
   columnBuckets?: Map<string, DataGridRowNode<T>[]>
@@ -64,7 +69,7 @@ export interface DataGridPivotRuntime<T> {
 }
 
 function createPivotAxisKey(
-  prefix: "pivot:row:" | "pivot:column:",
+  prefix: "pivot:row:" | "pivot:column:" | "pivot:subtotal:",
   segments: readonly { field: string; value: string }[],
 ): string {
   let encoded = prefix
@@ -136,6 +141,69 @@ function comparePivotPathSegments(
     }
   }
   return 0
+}
+
+function isPivotPathPrefix(
+  prefix: readonly { field: string; value: string }[],
+  candidate: readonly { field: string; value: string }[],
+): boolean {
+  if (prefix.length >= candidate.length) {
+    return false
+  }
+  for (let index = 0; index < prefix.length; index += 1) {
+    const leftSegment = prefix[index]
+    const rightSegment = candidate[index]
+    if (!leftSegment || !rightSegment) {
+      return false
+    }
+    if (leftSegment.field !== rightSegment.field || leftSegment.value !== rightSegment.value) {
+      return false
+    }
+  }
+  return true
+}
+
+function resolvePivotProjectionEntryRank(kind: DataGridPivotProjectionEntryKind): number {
+  if (kind === "detail") {
+    return 0
+  }
+  if (kind === "subtotal") {
+    return 1
+  }
+  return 2
+}
+
+function comparePivotProjectionEntries<T>(
+  leftKey: string,
+  left: DataGridPivotProjectionEntry<T>,
+  rightKey: string,
+  right: DataGridPivotProjectionEntry<T>,
+): number {
+  const leftRank = resolvePivotProjectionEntryRank(left.kind)
+  const rightRank = resolvePivotProjectionEntryRank(right.kind)
+  if (left.kind === "grand-total" || right.kind === "grand-total") {
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank
+    }
+  }
+
+  const leftSubtotalParent = left.kind === "subtotal" && isPivotPathPrefix(left.rowPath, right.rowPath)
+  const rightSubtotalParent = right.kind === "subtotal" && isPivotPathPrefix(right.rowPath, left.rowPath)
+  if (leftSubtotalParent !== rightSubtotalParent) {
+    return leftSubtotalParent ? 1 : -1
+  }
+
+  const pathComparison = comparePivotPathSegments(left.rowPath, right.rowPath)
+  if (pathComparison !== 0) {
+    return pathComparison
+  }
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank
+  }
+  if (left.rowDepth !== right.rowDepth) {
+    return left.rowDepth - right.rowDepth
+  }
+  return leftKey.localeCompare(rightKey)
 }
 
 function readByPathSegments(value: unknown, segments: readonly string[]): unknown {
@@ -237,10 +305,76 @@ function buildPivotProjectionRows<T>(
   const columnFieldResolvers: DataGridPivotFieldResolver<T>[] = pivotModel.columns
     .map(field => createPivotFieldResolver<T>(field))
     .filter((resolver): resolver is DataGridPivotFieldResolver<T> => resolver !== null)
+  const includeRowSubtotals = pivotModel.rowSubtotals === true && rowFieldResolvers.length > 1
+  const includeGrandTotal = pivotModel.grandTotal === true
 
   const rowEntries = new Map<string, DataGridPivotProjectionEntry<T>>()
-  const rowPathByKey = new Map<string, readonly DataGridPivotRowPathSegment[]>()
   const columnPathByKey = new Map<string, readonly DataGridPivotColumnPathSegment[]>()
+  const ensureRowEntry = (
+    rowKey: string,
+    rowPath: readonly DataGridPivotRowPathSegment[],
+    row: DataGridRowNode<T>,
+    kind: DataGridPivotProjectionEntryKind,
+    rowDepth: number,
+  ): DataGridPivotProjectionEntry<T> => {
+    const existing = rowEntries.get(rowKey)
+    if (existing) {
+      existing.minSourceIndex = Math.min(existing.minSourceIndex, row.sourceIndex)
+      existing.minOriginalIndex = Math.min(existing.minOriginalIndex, row.originalIndex)
+      return existing
+    }
+    const created: DataGridPivotProjectionEntry<T> = {
+      kind,
+      rowPath,
+      rowDepth,
+      minSourceIndex: row.sourceIndex,
+      minOriginalIndex: row.originalIndex,
+      ...(canUseIncrementalPivotAggregation
+        ? { columnAggregateStateByKey: new Map<string, DataGridIncrementalAggregationGroupState>() }
+        : { columnBuckets: new Map<string, DataGridRowNode<T>[]>() }),
+    }
+    rowEntries.set(rowKey, created)
+    return created
+  }
+
+  const addRowToPivotEntry = (
+    rowEntry: DataGridPivotProjectionEntry<T>,
+    columnKey: string,
+    row: DataGridRowNode<T>,
+    leafContribution: DataGridIncrementalAggregationLeafContribution | null,
+  ): void => {
+    if (canUseIncrementalPivotAggregation) {
+      if (!leafContribution) {
+        return
+      }
+      const aggregateStates = rowEntry.columnAggregateStateByKey
+      if (!aggregateStates) {
+        return
+      }
+      let groupState = aggregateStates.get(columnKey)
+      if (!groupState) {
+        const createdGroupState = pivotAggregationEngine.createEmptyGroupState()
+        if (!createdGroupState) {
+          return
+        }
+        aggregateStates.set(columnKey, createdGroupState)
+        groupState = createdGroupState
+      }
+      pivotAggregationEngine.applyContributionDelta(groupState, null, leafContribution)
+      return
+    }
+
+    const buckets = rowEntry.columnBuckets
+    if (!buckets) {
+      return
+    }
+    const bucket = buckets.get(columnKey)
+    if (bucket) {
+      bucket.push(row)
+    } else {
+      buckets.set(columnKey, [row])
+    }
+  }
 
   for (const row of inputRows) {
     if (row.kind !== "leaf") {
@@ -256,54 +390,22 @@ function buildPivotProjectionRows<T>(
     }))
     const rowKey = createPivotAxisKey("pivot:row:", rowPath)
     const columnKey = createPivotAxisKey("pivot:column:", columnPath)
-
-    let rowEntry = rowEntries.get(rowKey)
-    if (!rowEntry) {
-      rowEntry = {
-        rowPath,
-        minSourceIndex: row.sourceIndex,
-        minOriginalIndex: row.originalIndex,
-        ...(canUseIncrementalPivotAggregation
-          ? { columnAggregateStateByKey: new Map<string, DataGridIncrementalAggregationGroupState>() }
-          : { columnBuckets: new Map<string, DataGridRowNode<T>[]>() }),
+    const leafContribution = canUseIncrementalPivotAggregation
+      ? pivotAggregationEngine.createLeafContribution(row)
+      : null
+    const rowEntry = ensureRowEntry(rowKey, rowPath, row, "detail", rowPath.length)
+    addRowToPivotEntry(rowEntry, columnKey, row, leafContribution)
+    if (includeRowSubtotals) {
+      for (let depth = 1; depth < rowPath.length; depth += 1) {
+        const subtotalPath = rowPath.slice(0, depth)
+        const subtotalKey = `${createPivotAxisKey("pivot:subtotal:", subtotalPath)}depth:${depth}`
+        const subtotalEntry = ensureRowEntry(subtotalKey, subtotalPath, row, "subtotal", depth)
+        addRowToPivotEntry(subtotalEntry, columnKey, row, leafContribution)
       }
-      rowEntries.set(rowKey, rowEntry)
-      rowPathByKey.set(rowKey, rowPath)
-    } else {
-      rowEntry.minSourceIndex = Math.min(rowEntry.minSourceIndex, row.sourceIndex)
-      rowEntry.minOriginalIndex = Math.min(rowEntry.minOriginalIndex, row.originalIndex)
     }
-
-    if (canUseIncrementalPivotAggregation) {
-      const leafContribution = pivotAggregationEngine.createLeafContribution(row)
-      if (leafContribution) {
-        const aggregateStates = rowEntry.columnAggregateStateByKey
-        if (!aggregateStates) {
-          continue
-        }
-        let groupState = aggregateStates.get(columnKey)
-        if (!groupState) {
-          const createdGroupState = pivotAggregationEngine.createEmptyGroupState()
-          if (createdGroupState) {
-            aggregateStates.set(columnKey, createdGroupState)
-            groupState = createdGroupState
-          }
-        }
-        if (groupState) {
-          pivotAggregationEngine.applyContributionDelta(groupState, null, leafContribution)
-        }
-      }
-    } else {
-      const buckets = rowEntry.columnBuckets
-      if (!buckets) {
-        continue
-      }
-      const bucket = buckets.get(columnKey)
-      if (bucket) {
-        bucket.push(row)
-      } else {
-        buckets.set(columnKey, [row])
-      }
+    if (includeGrandTotal) {
+      const grandTotalEntry = ensureRowEntry("pivot:grand-total", [], row, "grand-total", 0)
+      addRowToPivotEntry(grandTotalEntry, columnKey, row, leafContribution)
     }
 
     if (!columnPathByKey.has(columnKey)) {
@@ -311,13 +413,9 @@ function buildPivotProjectionRows<T>(
     }
   }
 
-  const rowOrder = Array.from(rowPathByKey.entries())
-    .sort(([leftKey, leftPath], [rightKey, rightPath]) => {
-      const pathComparison = comparePivotPathSegments(leftPath, rightPath)
-      if (pathComparison !== 0) {
-        return pathComparison
-      }
-      return leftKey.localeCompare(rightKey)
+  const rowOrder = Array.from(rowEntries.entries())
+    .sort(([leftKey, leftEntry], [rightKey, rightEntry]) => {
+      return comparePivotProjectionEntries(leftKey, leftEntry, rightKey, rightEntry)
     })
     .map(([rowKey]) => rowKey)
   if (rowOrder.length === 0) {
@@ -363,6 +461,17 @@ function buildPivotProjectionRows<T>(
     const rowData: Record<string, unknown> = {}
     for (const segment of rowEntry.rowPath) {
       rowData[segment.field] = segment.value
+    }
+    if (rowEntry.kind === "subtotal") {
+      const subtotalField = rowFieldResolvers[rowEntry.rowDepth]?.field
+      if (subtotalField) {
+        rowData[subtotalField] = "Subtotal"
+      }
+    } else if (rowEntry.kind === "grand-total") {
+      const firstRowField = rowFieldResolvers[0]?.field
+      if (firstRowField) {
+        rowData[firstRowField] = "Grand Total"
+      }
     }
     // Keep synthetic pivot rows compatible with adapters that resolve row key from row payload.
     if (typeof rowData.rowId === "undefined") {

@@ -670,6 +670,62 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("projects pivot row subtotals and grand total deterministically", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", region: "AMER", team: "core", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", region: "AMER", team: "payments", year: 2024, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", region: "EMEA", team: "core", year: 2025, revenue: 5 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+        { row: { id: "r4", region: "EMEA", team: "payments", year: 2025, revenue: 7 }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialPivotModel: {
+        rows: ["region", "team"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+        rowSubtotals: true,
+        grandTotal: true,
+      },
+    })
+
+    const pivotColumns = model.getSnapshot().pivotColumns ?? []
+    const y2024 = pivotColumns.find(column => column.label.includes("year=2024"))
+    const y2025 = pivotColumns.find(column => column.label.includes("year=2025"))
+    expect(y2024).toBeDefined()
+    expect(y2025).toBeDefined()
+
+    const rows = model.getRowsInRange({ start: 0, end: 20 })
+    expect(rows).toHaveLength(7)
+    const labels = rows.map(row => {
+      const record = row.row as Record<string, unknown>
+      return `${String(record.region ?? "")}|${String(record.team ?? "")}`
+    })
+    expect(labels).toEqual([
+      "AMER|core",
+      "AMER|payments",
+      "AMER|Subtotal",
+      "EMEA|core",
+      "EMEA|payments",
+      "EMEA|Subtotal",
+      "Grand Total|",
+    ])
+
+    const byLabel = new Map<string, Record<string, unknown>>(
+      rows.map(row => {
+        const record = row.row as Record<string, unknown>
+        return [`${String(record.region ?? "")}|${String(record.team ?? "")}`, record]
+      }),
+    )
+
+    expect(byLabel.get("AMER|Subtotal")?.[String(y2024?.id)]).toBe(30)
+    expect(byLabel.get("AMER|Subtotal")?.[String(y2025?.id)]).toBeNull()
+    expect(byLabel.get("EMEA|Subtotal")?.[String(y2024?.id)]).toBeNull()
+    expect(byLabel.get("EMEA|Subtotal")?.[String(y2025?.id)]).toBe(12)
+    expect(byLabel.get("Grand Total|")?.[String(y2024?.id)]).toBe(30)
+    expect(byLabel.get("Grand Total|")?.[String(y2025?.id)]).toBe(12)
+
+    model.dispose()
+  })
+
   it("keeps pivot projection frozen when recomputeGroup=false and reapplies when recomputeGroup=true", () => {
     const model = createClientRowModel({
       rows: [

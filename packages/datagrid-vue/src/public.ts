@@ -22,6 +22,7 @@ export {
 
 export type {
   CreateDataGridCoreOptions,
+  DataGridAggOp,
   DataGridAggregationModel,
   DataGridAdvancedFilterExpression,
   DataGridAdvancedFilterCondition,

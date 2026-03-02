@@ -97,6 +97,8 @@ Minimal V1 pivot spec:
   rows: ["team"],
   columns: ["year"],
   values: [{ field: "revenue", agg: "sum" }],
+  rowSubtotals: true, // optional
+  grandTotal: true,   // optional
 }
 ```
 
@@ -107,7 +109,8 @@ Pivot is executed as a pure projection stage and exposes deterministic runtime p
 
 Current V1 scope/limitations:
 
-- Pivot is flat (projected rows are leaf-like; no pivot expand/collapse/subtotals yet).
+- Pivot is flat (projected rows are leaf-like; no pivot expand/collapse yet).
+- Optional totals are available: `rowSubtotals` (for multi-level row axis) and `grandTotal`.
 - Pivot values are taken from `pivotModel.values` and aggregated inside pivot stage.
   `aggregationModel` group-aggregate stage is bypassed while pivot is active.
 - Pivot aggregation uses an incremental state path for `sum/count/countNonNull/avg`

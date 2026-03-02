@@ -40,6 +40,30 @@
 	background: var(--datagrid-row-background-color);
 }
 
+.datagrid-sugar-stage__row.is-pivot-subtotal {
+	background: color-mix(in srgb, var(--datagrid-row-background-color) 82%, var(--datagrid-accent-strong) 18%);
+}
+
+.datagrid-sugar-stage__row.is-pivot-grand-total {
+	background: color-mix(in srgb, var(--datagrid-row-background-color) 70%, var(--datagrid-accent-strong) 30%);
+	border-top: 1px solid color-mix(in srgb, var(--datagrid-accent-strong) 42%, transparent);
+}
+
+.datagrid-sugar-stage__row.is-pivot-subtotal .datagrid-sugar-stage__cell,
+.datagrid-sugar-stage__row.is-pivot-grand-total .datagrid-sugar-stage__cell {
+	font-weight: 600;
+}
+
+.datagrid-sugar-stage__row.is-pivot-subtotal .datagrid-sugar-stage__cell.is-pinned-left,
+.datagrid-sugar-stage__row.is-pivot-subtotal .datagrid-sugar-stage__cell.is-pinned-right {
+	background: color-mix(in srgb, var(--datagrid-sticky-bg) 82%, var(--datagrid-accent-strong) 18%);
+}
+
+.datagrid-sugar-stage__row.is-pivot-grand-total .datagrid-sugar-stage__cell.is-pinned-left,
+.datagrid-sugar-stage__row.is-pivot-grand-total .datagrid-sugar-stage__cell.is-pinned-right {
+	background: color-mix(in srgb, var(--datagrid-sticky-bg) 74%, var(--datagrid-accent-strong) 26%);
+}
+
 .datagrid-sugar-stage__spacer {
 	width: 100%;
 }
