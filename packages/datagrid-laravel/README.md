@@ -8,6 +8,8 @@ Use this package as the public entrypoint in Laravel apps instead of importing
 It re-exports a curated set of:
 
 - core row/column/filter helpers
+- pivot helpers (`setPivotModel`, drilldown, layout export/import, interop export)
+- server/data-source row model contracts (including server-side pivot pull context)
 - orchestration runtime/layout/wheel primitives
 
 ## Install

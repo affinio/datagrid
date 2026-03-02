@@ -127,11 +127,26 @@ export interface DataGridPivotValueSpec {
   agg: DataGridAggOp
 }
 
+export type DataGridPivotColumnSubtotalPosition = "after" | "before"
+export type DataGridPivotColumnGrandTotalPosition = "last" | "first"
+
 export interface DataGridPivotSpec {
   rows: string[]
   columns: string[]
   values: DataGridPivotValueSpec[]
   rowSubtotals?: boolean
+  columnSubtotals?: boolean
+  columnGrandTotal?: boolean
+  /**
+   * Controls subtotal column placement relative to matching leaf columns.
+   * Default: "after"
+   */
+  columnSubtotalPosition?: DataGridPivotColumnSubtotalPosition
+  /**
+   * Controls grand-total column placement in pivot column set.
+   * Default: "last"
+   */
+  columnGrandTotalPosition?: DataGridPivotColumnGrandTotalPosition
   grandTotal?: boolean
 }
 
@@ -146,6 +161,8 @@ export interface DataGridPivotColumn {
   agg: DataGridAggOp
   columnPath: readonly DataGridPivotColumnPathSegment[]
   label: string
+  subtotal?: boolean
+  grandTotal?: boolean
 }
 
 export interface DataGridGroupExpansionSnapshot {
@@ -324,6 +341,23 @@ export interface DataGridRowModelSnapshot<T = unknown> {
   groupExpansion: DataGridGroupExpansionSnapshot
 }
 
+export interface DataGridPivotCellDrilldownInput {
+  rowId: DataGridRowId
+  columnId: string
+  limit?: number
+}
+
+export interface DataGridPivotCellDrilldown<T = unknown> {
+  rowId: DataGridRowId
+  columnId: string
+  valueField: string
+  agg: DataGridAggOp
+  cellValue: unknown
+  matchCount: number
+  truncated: boolean
+  rows: readonly DataGridRowNode<T>[]
+}
+
 export type DataGridProjectionStage =
   | "filter"
   | "sort"
@@ -365,6 +399,7 @@ export interface DataGridRowModel<T = unknown> {
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
   setPivotModel(pivotModel: DataGridPivotSpec | null): void
   getPivotModel(): DataGridPivotSpec | null
+  getPivotCellDrilldown?(input: DataGridPivotCellDrilldownInput): DataGridPivotCellDrilldown<T> | null
   setAggregationModel(aggregationModel: DataGridAggregationModel<T> | null): void
   getAggregationModel(): DataGridAggregationModel<T> | null
   getColumnHistogram?(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
@@ -662,12 +697,24 @@ export function normalizePivotSpec(pivotSpec: DataGridPivotSpec | null | undefin
     return null
   }
   const rowSubtotals = pivotSpec.rowSubtotals === true
+  const columnSubtotals = pivotSpec.columnSubtotals === true
+  const columnGrandTotal = pivotSpec.columnGrandTotal === true
+  const columnSubtotalPosition = pivotSpec.columnSubtotalPosition === "before"
+    ? "before"
+    : undefined
+  const columnGrandTotalPosition = pivotSpec.columnGrandTotalPosition === "first"
+    ? "first"
+    : undefined
   const grandTotal = pivotSpec.grandTotal === true
   return {
     rows: normalizedRows,
     columns: normalizedColumns,
     values: normalizedValues,
     ...(rowSubtotals ? { rowSubtotals: true } : {}),
+    ...(columnSubtotals ? { columnSubtotals: true } : {}),
+    ...(columnGrandTotal ? { columnGrandTotal: true } : {}),
+    ...(columnSubtotalPosition ? { columnSubtotalPosition } : {}),
+    ...(columnGrandTotalPosition ? { columnGrandTotalPosition } : {}),
     ...(grandTotal ? { grandTotal: true } : {}),
   }
 }
@@ -684,6 +731,10 @@ export function clonePivotSpec(
     columns: [...normalized.columns],
     values: normalized.values.map(value => ({ ...value })),
     ...(normalized.rowSubtotals ? { rowSubtotals: true } : {}),
+    ...(normalized.columnSubtotals ? { columnSubtotals: true } : {}),
+    ...(normalized.columnGrandTotal ? { columnGrandTotal: true } : {}),
+    ...(normalized.columnSubtotalPosition ? { columnSubtotalPosition: normalized.columnSubtotalPosition } : {}),
+    ...(normalized.columnGrandTotalPosition ? { columnGrandTotalPosition: normalized.columnGrandTotalPosition } : {}),
     ...(normalized.grandTotal ? { grandTotal: true } : {}),
   }
 }
@@ -710,6 +761,18 @@ export function isSamePivotSpec(
     return false
   }
   if (Boolean(normalizedLeft.rowSubtotals) !== Boolean(normalizedRight.rowSubtotals)) {
+    return false
+  }
+  if (Boolean(normalizedLeft.columnSubtotals) !== Boolean(normalizedRight.columnSubtotals)) {
+    return false
+  }
+  if (Boolean(normalizedLeft.columnGrandTotal) !== Boolean(normalizedRight.columnGrandTotal)) {
+    return false
+  }
+  if ((normalizedLeft.columnSubtotalPosition ?? "after") !== (normalizedRight.columnSubtotalPosition ?? "after")) {
+    return false
+  }
+  if ((normalizedLeft.columnGrandTotalPosition ?? "last") !== (normalizedRight.columnGrandTotalPosition ?? "last")) {
     return false
   }
   if (Boolean(normalizedLeft.grandTotal) !== Boolean(normalizedRight.grandTotal)) {

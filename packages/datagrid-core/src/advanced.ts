@@ -89,10 +89,14 @@ export {
   type DataGridDataSource,
   type DataGridDataSourceBackpressureDiagnostics,
   type DataGridDataSourceInvalidation,
+  type DataGridDataSourcePaginationPullContext,
   type DataGridDataSourcePullPriority,
+  type DataGridDataSourcePivotPullContext,
   type DataGridDataSourcePullReason,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourcePullResult,
+  type DataGridServerPivotRowIdInput,
+  type DataGridServerPivotRowRole,
   type DataGridDataSourceTreePullContext,
   type DataGridDataSourceTreePullOperation,
   type DataGridDataSourceTreePullScope,
@@ -102,6 +106,7 @@ export {
   type DataGridDataSourcePushRemoveEvent,
   type DataGridDataSourcePushUpsertEvent,
   type DataGridDataSourceRowEntry,
+  createDataGridServerPivotRowId,
 } from "./models/index.js"
 
 export {

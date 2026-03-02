@@ -190,6 +190,112 @@ describe("data grid api facade contracts", () => {
     })
   })
 
+  it("exports and imports pivot layout snapshot with row/column state", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        {
+          row: { id: 1, region: "AMER", team: "core", owner: "NOC", year: "2024", revenue: 1000 },
+          rowId: "r1",
+          originalIndex: 0,
+        },
+        {
+          row: { id: 2, region: "EMEA", team: "payments", owner: "SRE", year: "2025", revenue: 2000 },
+          rowId: "r2",
+          originalIndex: 1,
+        },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "region", label: "Region" },
+        { key: "team", label: "Team" },
+        { key: "owner", label: "Owner" },
+        { key: "year", label: "Year" },
+        { key: "revenue", label: "Revenue" },
+      ],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.setSortAndFilterModel({
+      sortModel: [{ key: "revenue", direction: "desc" }],
+      filterModel: {
+        columnFilters: { region: { kind: "valueSet", tokens: ["string:amer"] } },
+        advancedFilters: {},
+      },
+    })
+    api.setGroupBy({ fields: ["region"], expandedByDefault: true })
+    api.setPivotModel({
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+    })
+    api.setAggregationModel({
+      columns: [{ key: "revenue", field: "revenue", op: "sum" }],
+    })
+    api.setGroupExpansion({
+      expandedByDefault: false,
+      toggledGroupKeys: ["pivot:group:6:region4:AMER"],
+    })
+    api.setColumnOrder(["team", "region", "year", "owner", "revenue"])
+    api.setColumnVisibility("owner", false)
+    api.setColumnWidth("revenue", 260)
+    api.setColumnPin("team", "left")
+
+    const exported = api.exportPivotLayout()
+    const interop = api.exportPivotInterop()
+    expect(interop).not.toBeNull()
+    expect(interop?.version).toBe(1)
+    expect(interop?.layout.pivotModel).toEqual(exported.pivotModel)
+    expect(Array.isArray(interop?.rows)).toBe(true)
+    expect((interop?.rows.length ?? 0) > 0).toBe(true)
+    expect(Array.isArray(interop?.pivotColumns)).toBe(true)
+
+    api.setSortModel([{ key: "region", direction: "asc" }])
+    api.setFilterModel(null)
+    api.setGroupBy(null)
+    api.setPivotModel(null)
+    api.setAggregationModel(null)
+    api.setGroupExpansion({ expandedByDefault: true, toggledGroupKeys: [] })
+    api.setColumnOrder(["region", "team", "owner", "year", "revenue"])
+    api.setColumnVisibility("owner", true)
+    api.setColumnWidth("revenue", 140)
+    api.setColumnPin("team", "none")
+
+    api.importPivotLayout(exported)
+
+    const rowSnapshot = api.getRowModelSnapshot()
+    const columnSnapshot = api.getColumnModelSnapshot()
+
+    expect(rowSnapshot.sortModel).toEqual([{ key: "revenue", direction: "desc" }])
+    expect(rowSnapshot.filterModel).toEqual({
+      columnFilters: { region: { kind: "valueSet", tokens: ["string:amer"] } },
+      advancedFilters: {},
+    })
+    expect(rowSnapshot.groupBy).toEqual({ fields: ["region"], expandedByDefault: true })
+    expect(rowSnapshot.pivotModel).toEqual({
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+    })
+    expect(api.getAggregationModel()).toEqual({
+      columns: [{ key: "revenue", field: "revenue", op: "sum" }],
+    })
+    expect(rowSnapshot.groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: ["pivot:group:6:region4:AMER"],
+    })
+    expect(columnSnapshot.order).toEqual(["team", "region", "year", "owner", "revenue"])
+    expect(api.getColumn("owner")?.visible).toBe(false)
+    expect(api.getColumn("revenue")?.width).toBe(260)
+    expect(api.getColumn("team")?.pin).toBe("left")
+  })
+
   it("falls back to sequential setFilterModel/setSortModel when row model lacks batched sort+filter capability", () => {
     const clientRowModel = createClientRowModel({
       rows: [

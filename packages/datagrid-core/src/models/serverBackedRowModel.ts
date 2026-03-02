@@ -22,6 +22,7 @@ import {
   type DataGridPivotSpec,
   type DataGridAggregationModel,
   type DataGridPaginationInput,
+  type DataGridPivotColumn,
   type DataGridRowNode,
   type DataGridRowModel,
   type DataGridRowModelListener,
@@ -35,6 +36,7 @@ import { cloneDataGridFilterSnapshot } from "./advancedFilter.js"
 export interface CreateServerBackedRowModelOptions<T> {
   source: ServerRowModel<T>
   resolveRowId?: DataGridRowIdResolver<T>
+  resolvePivotColumns?: () => readonly DataGridPivotColumn[] | null | undefined
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null
   initialGroupBy?: DataGridGroupBySpec | null
@@ -101,6 +103,85 @@ interface InFlightViewportWarmup {
   cancel: () => void
 }
 
+function normalizePivotColumns(
+  pivotColumns: readonly DataGridPivotColumn[] | null | undefined,
+): DataGridPivotColumn[] | null {
+  if (!Array.isArray(pivotColumns)) {
+    return null
+  }
+  return pivotColumns.map(column => ({
+    id: String(column.id),
+    valueField: String(column.valueField),
+    agg: column.agg,
+    label: String(column.label),
+    ...(column.subtotal ? { subtotal: true } : {}),
+    ...(column.grandTotal ? { grandTotal: true } : {}),
+    columnPath: Array.isArray(column.columnPath)
+      ? column.columnPath.map((segment: { field?: unknown; value?: unknown }) => ({
+          field: String(segment.field ?? ""),
+          value: String(segment.value ?? ""),
+        }))
+      : [],
+  }))
+}
+
+function clonePivotColumns(
+  pivotColumns: readonly DataGridPivotColumn[],
+): DataGridPivotColumn[] {
+  return pivotColumns.map(column => ({
+    id: column.id,
+    valueField: column.valueField,
+    agg: column.agg,
+    label: column.label,
+    ...(column.subtotal ? { subtotal: true } : {}),
+    ...(column.grandTotal ? { grandTotal: true } : {}),
+    columnPath: column.columnPath.map((segment: { field: string; value: string }) => ({
+      field: segment.field,
+      value: segment.value,
+    })),
+  }))
+}
+
+function isSamePivotColumns(
+  left: readonly DataGridPivotColumn[],
+  right: readonly DataGridPivotColumn[],
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftColumn = left[index]
+    const rightColumn = right[index]
+    if (!leftColumn || !rightColumn) {
+      return false
+    }
+    if (
+      leftColumn.id !== rightColumn.id ||
+      leftColumn.valueField !== rightColumn.valueField ||
+      leftColumn.agg !== rightColumn.agg ||
+      leftColumn.label !== rightColumn.label ||
+      Boolean(leftColumn.subtotal) !== Boolean(rightColumn.subtotal) ||
+      Boolean(leftColumn.grandTotal) !== Boolean(rightColumn.grandTotal)
+    ) {
+      return false
+    }
+    if (leftColumn.columnPath.length !== rightColumn.columnPath.length) {
+      return false
+    }
+    for (let pathIndex = 0; pathIndex < leftColumn.columnPath.length; pathIndex += 1) {
+      const leftPath = leftColumn.columnPath[pathIndex]
+      const rightPath = rightColumn.columnPath[pathIndex]
+      if (!leftPath || !rightPath || leftPath.field !== rightPath.field || leftPath.value !== rightPath.value) {
+        return false
+      }
+    }
+  }
+  return true
+}
+
 export function createServerBackedRowModel<T>(
   options: CreateServerBackedRowModelOptions<T>,
 ): ServerBackedRowModel<T> {
@@ -135,6 +216,7 @@ export function createServerBackedRowModel<T>(
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
   let pivotModel: DataGridPivotSpec | null = normalizePivotSpec(options.initialPivotModel ?? null)
   let aggregationModel: DataGridAggregationModel<T> | null = null
+  let pivotColumns: DataGridPivotColumn[] = []
   let expansionExpandedByDefault = Boolean(groupBy?.expandedByDefault)
   let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
   const toggledGroupKeys = new Set<string>()
@@ -163,6 +245,7 @@ export function createServerBackedRowModel<T>(
           if (disposed) {
             return
           }
+          syncPivotColumnsFromSource()
           const sourceRange = resolveSourceInvalidationRange(payload)
           if (sourceRange) {
             invalidateCachesForSourceRange(sourceRange)
@@ -172,6 +255,42 @@ export function createServerBackedRowModel<T>(
           emit()
         }) ?? null
       : null
+
+  function resolvePivotColumnsFromSource(): readonly DataGridPivotColumn[] | null | undefined {
+    if (typeof options.resolvePivotColumns === "function") {
+      return options.resolvePivotColumns()
+    }
+    const sourcePivotSignal = (source as unknown as {
+      pivotColumns?: { value: readonly DataGridPivotColumn[] | null | undefined }
+    }).pivotColumns
+    return sourcePivotSignal?.value
+  }
+
+  function syncPivotColumnsFromSource(): boolean {
+    if (!pivotModel) {
+      if (pivotColumns.length > 0) {
+        pivotColumns = []
+        return true
+      }
+      return false
+    }
+    const normalized = normalizePivotColumns(resolvePivotColumnsFromSource())
+    if (!normalized) {
+      return false
+    }
+    if (isSamePivotColumns(pivotColumns, normalized)) {
+      return false
+    }
+    pivotColumns = normalized
+    return true
+  }
+
+  if (pivotModel) {
+    const initialPivotColumns = normalizePivotColumns(resolvePivotColumnsFromSource())
+    if (initialPivotColumns) {
+      pivotColumns = initialPivotColumns
+    }
+  }
 
   function readRowCache(index: number): DataGridRowNode<T> | undefined {
     const cached = rowNodeCache.get(index)
@@ -303,7 +422,12 @@ export function createServerBackedRowModel<T>(
       sortModel,
       filterModel: cloneDataGridFilterSnapshot(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
-      ...(pivotModel ? { pivotModel: clonePivotSpec(pivotModel), pivotColumns: [] } : {}),
+      ...(pivotModel
+        ? {
+            pivotModel: clonePivotSpec(pivotModel),
+            pivotColumns: clonePivotColumns(pivotColumns),
+          }
+        : {}),
       groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
     }
   }
@@ -763,6 +887,11 @@ export function createServerBackedRowModel<T>(
         return
       }
       pivotModel = normalized
+      if (!pivotModel) {
+        pivotColumns = []
+      } else {
+        syncPivotColumnsFromSource()
+      }
       invalidateCaches()
       emit()
     },
@@ -862,6 +991,9 @@ export function createServerBackedRowModel<T>(
           return
         }
         setWarming(false)
+        if (syncPivotColumnsFromSource()) {
+          revision += 1
+        }
         markCachesStale()
       } finally {
         if (disposed || warmup.token !== warmupToken) {
@@ -873,6 +1005,9 @@ export function createServerBackedRowModel<T>(
     },
     syncFromSource() {
       ensureActive()
+      if (syncPivotColumnsFromSource()) {
+        revision += 1
+      }
       invalidateCaches()
       emit()
     },

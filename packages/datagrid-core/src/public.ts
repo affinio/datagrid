@@ -75,6 +75,10 @@ export {
   type DataGridCellsRefreshListener,
   type DataGridRefreshOptions,
   type DataGridApplyEditsOptions,
+  type DataGridPivotLayoutColumnState,
+  type DataGridPivotLayoutSnapshot,
+  type DataGridPivotLayoutImportOptions,
+  type DataGridPivotInteropSnapshot,
   type DataGridSelectionSummaryApiOptions,
 } from "./core/gridApi.js"
 
@@ -97,7 +101,9 @@ export {
 
 export {
   createClientRowModel,
+  createDataSourceBackedRowModel,
   createServerBackedRowModel,
+  createDataGridServerPivotRowId,
   type DataGridAdvancedFilter,
   type DataGridAdvancedFilterCondition,
   type DataGridAdvancedFilterConditionType,
@@ -123,6 +129,8 @@ export {
   type DataGridPivotValueSpec,
   type DataGridPivotColumn,
   type DataGridPivotColumnPathSegment,
+  type DataGridPivotColumnSubtotalPosition,
+  type DataGridPivotColumnGrandTotalPosition,
   type DataGridAggOp,
   type DataGridAggregationColumnSpec,
   type DataGridAggregationModel,
@@ -152,6 +160,28 @@ export {
   type DataGridRowModelKind,
   type DataGridProjectionDiagnostics,
   type DataGridProjectionStage,
+  type DataGridPivotCellDrilldownInput,
+  type DataGridPivotCellDrilldown,
+  type DataGridDataSource,
+  type DataGridDataSourceBackpressureDiagnostics,
+  type DataGridDataSourceInvalidation,
+  type DataGridDataSourcePaginationPullContext,
+  type DataGridDataSourcePullPriority,
+  type DataGridDataSourcePivotPullContext,
+  type DataGridDataSourcePullReason,
+  type DataGridDataSourcePullRequest,
+  type DataGridDataSourcePullResult,
+  type DataGridDataSourceTreePullContext,
+  type DataGridDataSourceTreePullOperation,
+  type DataGridDataSourceTreePullScope,
+  type DataGridDataSourcePushEvent,
+  type DataGridDataSourcePushInvalidateEvent,
+  type DataGridDataSourcePushListener,
+  type DataGridDataSourcePushRemoveEvent,
+  type DataGridDataSourcePushUpsertEvent,
+  type DataGridDataSourceRowEntry,
+  type DataGridServerPivotRowIdInput,
+  type DataGridServerPivotRowRole,
   type DataGridRowModelSnapshot,
   type DataGridRowModelListener,
   type DataGridRowModelRefreshReason,
@@ -187,6 +217,8 @@ export {
   type DataGridClientRowReorderInput,
   type ServerBackedRowModel,
   type CreateServerBackedRowModelOptions,
+  type DataSourceBackedRowModel,
+  type CreateDataSourceBackedRowModelOptions,
   isDataGridDependencyTokenDomain,
   normalizeDataGridDependencyToken,
   parseDataGridDependencyNode,
@@ -211,6 +243,13 @@ export {
   buildPaginationSnapshot,
   getDataGridRowRenderMeta,
 } from "./models/index.js"
+
+export {
+  createServerRowModel,
+  type ServerRowModel,
+  type ServerRowModelOptions,
+  type ServerRowModelFetchResult,
+} from "./serverRowModel/serverRowModel.js"
 
 export {
   createDataGridColumnModel,

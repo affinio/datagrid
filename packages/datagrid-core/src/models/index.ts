@@ -24,6 +24,8 @@ export type {
   DataGridPivotValueSpec,
   DataGridPivotColumn,
   DataGridPivotColumnPathSegment,
+  DataGridPivotColumnSubtotalPosition,
+  DataGridPivotColumnGrandTotalPosition,
   DataGridAggOp,
   DataGridAggregationColumnSpec,
   DataGridAggregationModel,
@@ -53,6 +55,8 @@ export type {
   DataGridRowModelKind,
   DataGridProjectionDiagnostics,
   DataGridProjectionStage,
+  DataGridPivotCellDrilldownInput,
+  DataGridPivotCellDrilldown,
   DataGridRowModelListener,
   DataGridRowModelRefreshReason,
   DataGridRowModelSnapshot,
@@ -178,10 +182,14 @@ export type {
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
   DataGridDataSourceInvalidation,
+  DataGridDataSourcePaginationPullContext,
   DataGridDataSourcePullPriority,
+  DataGridDataSourcePivotPullContext,
   DataGridDataSourcePullReason,
   DataGridDataSourcePullRequest,
   DataGridDataSourcePullResult,
+  DataGridServerPivotRowIdInput,
+  DataGridServerPivotRowRole,
   DataGridDataSourceTreePullContext,
   DataGridDataSourceTreePullOperation,
   DataGridDataSourceTreePullScope,
@@ -192,6 +200,7 @@ export type {
   DataGridDataSourcePushUpsertEvent,
   DataGridDataSourceRowEntry,
 } from "./dataSourceProtocol.js"
+export { createDataGridServerPivotRowId } from "./dataSourceProtocol.js"
 
 export type {
   CreateDataSourceBackedRowModelOptions,

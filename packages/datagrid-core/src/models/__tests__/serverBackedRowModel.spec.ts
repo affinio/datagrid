@@ -69,6 +69,59 @@ describe("createServerBackedRowModel", () => {
     model.dispose()
   })
 
+  it("hydrates pivot columns from source signal and keeps previous metadata on partial updates", () => {
+    const { source } = createSource(20)
+    const sourceWithPivot = source as ServerRowModel<{ id: number }> & {
+      pivotColumns: { value: Array<{
+        id: string
+        valueField: string
+        agg: "sum"
+        label: string
+        columnPath: Array<{ field: string; value: string }>
+      }> | null }
+    }
+    sourceWithPivot.pivotColumns = {
+      value: [
+        {
+          id: "pivot|year=2024|v:sum:value",
+          valueField: "value",
+          agg: "sum",
+          label: "year=2024 · sum(value)",
+          columnPath: [{ field: "year", value: "2024" }],
+        },
+      ],
+    }
+
+    const model = createServerBackedRowModel({
+      source: sourceWithPivot,
+      initialPivotModel: {
+        rows: ["region"],
+        columns: ["year"],
+        values: [{ field: "value", agg: "sum" }],
+      },
+    })
+
+    expect(model.getSnapshot().pivotColumns?.length).toBe(1)
+
+    sourceWithPivot.pivotColumns.value = [
+      {
+        id: "pivot|year=2025|v:sum:value",
+        valueField: "value",
+        agg: "sum",
+        label: "year=2025 · sum(value)",
+        columnPath: [{ field: "year", value: "2025" }],
+      },
+    ]
+    model.syncFromSource()
+    expect(model.getSnapshot().pivotColumns?.[0]?.label).toContain("year=2025")
+
+    sourceWithPivot.pivotColumns.value = null
+    model.syncFromSource()
+    expect(model.getSnapshot().pivotColumns?.[0]?.label).toContain("year=2025")
+
+    model.dispose()
+  })
+
   it("warms full viewport span using configured block step", async () => {
     const { source, fetchBlock } = createSource(2_000)
     const model = createServerBackedRowModel({

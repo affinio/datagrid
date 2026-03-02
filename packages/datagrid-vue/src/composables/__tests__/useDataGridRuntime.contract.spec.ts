@@ -70,9 +70,36 @@ describe("useDataGridRuntime contract", () => {
       values: [{ field: "tested_at", agg: "count" }],
     })
     expect(runtime!.columnSnapshot.value.columns.some(column => column.key.startsWith("pivot|"))).toBe(true)
+
+    const exportedPivotLayout = runtime!.exportPivotLayout()
+    expect(exportedPivotLayout.pivotModel).toEqual({
+      rows: ["name"],
+      columns: ["tested_at"],
+      values: [{ field: "tested_at", agg: "count" }],
+    })
+    const exportedPivotInterop = runtime!.exportPivotInterop()
+    expect(exportedPivotInterop).not.toBeNull()
+    expect(exportedPivotInterop?.layout.pivotModel).toEqual(exportedPivotLayout.pivotModel)
+    expect(Array.isArray(exportedPivotInterop?.rows)).toBe(true)
+    const pivotSnapshot = runtime!.api.getRowModelSnapshot()
+    const firstPivotColumn = pivotSnapshot.pivotColumns?.[0]
+    const firstPivotRow = runtime!.api.getRowsInRange({ start: 0, end: 10 }).find(row => row.kind === "leaf")
+    if (firstPivotColumn && firstPivotRow) {
+      const drilldown = runtime!.getPivotCellDrilldown({
+        rowId: firstPivotRow.rowId,
+        columnId: firstPivotColumn.id,
+        limit: 50,
+      })
+      expect(drilldown).not.toBeNull()
+      expect(drilldown?.rows.length).toBeGreaterThan(0)
+    }
+
     runtime!.setPivotModel(null)
     await flushRuntimeTasks()
     expect(runtime!.columnSnapshot.value.columns.some(column => column.key.startsWith("pivot|"))).toBe(false)
+    runtime!.importPivotLayout(exportedPivotLayout)
+    await flushRuntimeTasks()
+    expect(runtime!.columnSnapshot.value.columns.some(column => column.key.startsWith("pivot|"))).toBe(true)
 
     runtime!.patchRows(
       [{ rowId: "r2", data: { name: "Bravo-updated" } }],

@@ -21,6 +21,7 @@ import {
   type DataGridAggregationModel,
   type DataGridRowId,
   type DataGridRowNode,
+  type DataGridPivotColumn,
   type DataGridRowIdResolver,
   type DataGridRowModel,
   type DataGridRowModelListener,
@@ -153,6 +154,83 @@ function normalizeTotal(total: number | null | undefined): number | null {
   return Math.max(0, Math.trunc(total as number))
 }
 
+function normalizePivotColumns(
+  pivotColumns: readonly DataGridPivotColumn[] | null | undefined,
+): DataGridPivotColumn[] | null {
+  if (!Array.isArray(pivotColumns)) {
+    return null
+  }
+  return pivotColumns.map(column => ({
+    id: String(column.id),
+    valueField: String(column.valueField),
+    agg: column.agg,
+    label: String(column.label),
+    ...(column.subtotal ? { subtotal: true } : {}),
+    ...(column.grandTotal ? { grandTotal: true } : {}),
+    columnPath: Array.isArray(column.columnPath)
+      ? column.columnPath.map((segment: { field?: unknown; value?: unknown }) => ({
+          field: String(segment.field ?? ""),
+          value: String(segment.value ?? ""),
+        }))
+      : [],
+  }))
+}
+
+function clonePivotColumns(pivotColumns: readonly DataGridPivotColumn[]): DataGridPivotColumn[] {
+  return pivotColumns.map(column => ({
+    id: column.id,
+    valueField: column.valueField,
+    agg: column.agg,
+    label: column.label,
+    ...(column.subtotal ? { subtotal: true } : {}),
+    ...(column.grandTotal ? { grandTotal: true } : {}),
+    columnPath: column.columnPath.map((segment: { field: string; value: string }) => ({
+      field: segment.field,
+      value: segment.value,
+    })),
+  }))
+}
+
+function isSamePivotColumns(
+  left: readonly DataGridPivotColumn[],
+  right: readonly DataGridPivotColumn[],
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftColumn = left[index]
+    const rightColumn = right[index]
+    if (!leftColumn || !rightColumn) {
+      return false
+    }
+    if (
+      leftColumn.id !== rightColumn.id ||
+      leftColumn.valueField !== rightColumn.valueField ||
+      leftColumn.agg !== rightColumn.agg ||
+      leftColumn.label !== rightColumn.label ||
+      Boolean(leftColumn.subtotal) !== Boolean(rightColumn.subtotal) ||
+      Boolean(leftColumn.grandTotal) !== Boolean(rightColumn.grandTotal)
+    ) {
+      return false
+    }
+    if (leftColumn.columnPath.length !== rightColumn.columnPath.length) {
+      return false
+    }
+    for (let pathIndex = 0; pathIndex < leftColumn.columnPath.length; pathIndex += 1) {
+      const leftPath = leftColumn.columnPath[pathIndex]
+      const rightPath = rightColumn.columnPath[pathIndex]
+      if (!leftPath || !rightPath || leftPath.field !== rightPath.field || leftPath.value !== rightPath.value) {
+        return false
+      }
+    }
+  }
+  return true
+}
+
 function serializePullState(value: unknown): string {
   try {
     return JSON.stringify(value) ?? ""
@@ -209,9 +287,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let filterModel: DataGridFilterSnapshot | null = cloneDataGridFilterSnapshot(options.initialFilterModel ?? null)
   let groupBy: DataGridGroupBySpec | null = normalizeGroupBySpec(options.initialGroupBy ?? null)
   let pivotModel: DataGridPivotSpec | null = normalizePivotSpec(options.initialPivotModel ?? null)
+  let pivotColumns: DataGridPivotColumn[] = []
   let aggregationModel: DataGridAggregationModel<T> | null = null
   let expansionExpandedByDefault = Boolean(groupBy?.expandedByDefault)
   let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
+  let paginationCursor: string | null = null
   const toggledGroupKeys = new Set<string>()
   let rowCount = Math.max(0, Math.trunc(options.initialTotal ?? 0))
   let loading = false
@@ -364,7 +444,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
       sortModel,
       filterModel: cloneDataGridFilterSnapshot(filterModel),
       groupBy: cloneGroupBySpec(groupBy),
-      ...(pivotModel ? { pivotModel: clonePivotSpec(pivotModel), pivotColumns: [] } : {}),
+      ...(pivotModel
+        ? {
+            pivotModel: clonePivotSpec(pivotModel),
+            pivotColumns: clonePivotColumns(pivotColumns),
+          }
+        : {}),
       groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
     }
   }
@@ -432,6 +517,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (typeof entry.rowId === "string" || typeof entry.rowId === "number") {
         return entry.rowId as DataGridRowId
       }
+      if (entry.kind === "group") {
+        throw new Error(
+          `[DataGrid] Missing row identity for data-source group row at index ${index}. ` +
+          "Server must provide deterministic rowId for group rows.",
+        )
+      }
       if (typeof resolveRowId === "function") {
         return resolveRowId(entry.row, index)
       }
@@ -450,6 +541,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
         {
           row: entry.row,
           rowId,
+          ...(entry.kind ? { kind: entry.kind } : {}),
+          ...(entry.groupMeta ? { groupMeta: entry.groupMeta } : {}),
           originalIndex: index,
           displayIndex: index,
           state: entry.state,
@@ -499,6 +592,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
     diagnostics.rowCacheSize = rowCache.size
   }
 
+  function resetPaginationCursor(): void {
+    paginationCursor = null
+  }
+
   function abortInFlight() {
     if (!inFlight) {
       return
@@ -527,6 +624,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
       filterModel,
       groupBy,
       groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
+      pivotModel,
+      aggregationModel,
+      pagination: getPaginationSnapshot(),
+      cursor: paginationCursor,
     })
     const requestKey = serializePullState({
       range: requestRange,
@@ -599,6 +700,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
           groupBy: cloneGroupBySpec(groupBy),
           groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
           treeData: treePullContext,
+          pivot: {
+            pivotModel: clonePivotSpec(pivotModel),
+            aggregationModel: cloneAggregationModel(aggregationModel),
+          },
+          pagination: {
+            snapshot: getPaginationSnapshot(),
+            cursor: paginationCursor,
+          },
         })
 
         if (disposed || !inFlight || inFlight.requestId !== requestId || controller.signal.aborted) {
@@ -616,6 +725,22 @@ export function createDataSourceBackedRowModel<T = unknown>(
           viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
         }
         changed = applyRows(result.rows) || changed
+        if (typeof result.cursor !== "undefined") {
+          const normalizedCursor = result.cursor == null ? null : String(result.cursor)
+          if (normalizedCursor !== paginationCursor) {
+            paginationCursor = normalizedCursor
+          }
+        }
+        if (pivotModel) {
+          const normalizedPivotColumns = normalizePivotColumns(result.pivotColumns)
+          if (normalizedPivotColumns && !isSamePivotColumns(pivotColumns, normalizedPivotColumns)) {
+            pivotColumns = normalizedPivotColumns
+            changed = true
+          }
+        } else if (pivotColumns.length > 0) {
+          pivotColumns = []
+          changed = true
+        }
         if (changed) {
           bumpRevision()
         }
@@ -683,6 +808,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
     if (event.type === "upsert") {
       let changed = applyRows(event.rows)
+      if (typeof event.cursor !== "undefined") {
+        const normalizedCursor = event.cursor == null ? null : String(event.cursor)
+        if (normalizedCursor !== paginationCursor) {
+          paginationCursor = normalizedCursor
+        }
+      }
       const previousRowCount = rowCount
       const nextTotal = normalizeTotal(event.total)
       if (nextTotal != null) {
@@ -690,6 +821,16 @@ export function createDataSourceBackedRowModel<T = unknown>(
         pruneRowCacheByRowCount()
         changed = changed || rowCount !== previousRowCount
         viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
+      }
+      if (pivotModel) {
+        const normalizedPivotColumns = normalizePivotColumns(event.pivotColumns)
+        if (normalizedPivotColumns && !isSamePivotColumns(pivotColumns, normalizedPivotColumns)) {
+          pivotColumns = normalizedPivotColumns
+          changed = true
+        }
+      } else if (pivotColumns.length > 0) {
+        pivotColumns = []
+        changed = true
       }
       if (changed) {
         bumpRevision()
@@ -824,6 +965,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
       paginationInput = normalized
+      resetPaginationCursor()
       viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       bumpRevision()
       emit()
@@ -838,6 +980,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         pageSize: normalizedPageSize,
         currentPage: 0,
       }
+      resetPaginationCursor()
       viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       bumpRevision()
       emit()
@@ -855,6 +998,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         ...paginationInput,
         currentPage: normalizedPage,
       }
+      resetPaginationCursor()
       viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       bumpRevision()
       emit()
@@ -862,6 +1006,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     setSortModel(nextSortModel) {
       ensureActive()
       sortModel = Array.isArray(nextSortModel) ? [...nextSortModel] : []
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(toSourceRange(viewportRange), "sort-change", "critical")
@@ -870,6 +1015,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     setFilterModel(nextFilterModel) {
       ensureActive()
       filterModel = cloneDataGridFilterSnapshot(nextFilterModel ?? null)
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(toSourceRange(viewportRange), "filter-change", "critical")
@@ -884,6 +1030,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       groupBy = normalized
       expansionExpandedByDefault = Boolean(normalized?.expandedByDefault)
       toggledGroupKeys.clear()
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(
@@ -901,6 +1048,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
       pivotModel = normalized
+      pivotColumns = []
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(toSourceRange(viewportRange), "group-change", "critical")
@@ -916,6 +1065,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
       aggregationModel = normalized
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(toSourceRange(viewportRange), "group-change", "critical")
@@ -929,6 +1079,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!applyGroupExpansion(expansion)) {
         return
       }
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(
@@ -947,6 +1098,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!toggleGroupExpansionKey(toggledGroupKeys, groupKey)) {
         return
       }
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(
@@ -965,6 +1117,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!setGroupExpansionKey(toggledGroupKeys, groupKey, false, true)) {
         return
       }
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(
@@ -983,6 +1136,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!setGroupExpansionKey(toggledGroupKeys, groupKey, false, false)) {
         return
       }
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(
@@ -1003,6 +1157,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       expansionExpandedByDefault = true
       toggledGroupKeys.clear()
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(
@@ -1023,6 +1178,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       expansionExpandedByDefault = false
       toggledGroupKeys.clear()
+      resetPaginationCursor()
       bumpRevision()
       clearAll()
       void pullRange(

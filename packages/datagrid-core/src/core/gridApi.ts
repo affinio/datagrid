@@ -12,6 +12,9 @@ import type {
   DataGridSortAndFilterModelInput,
   DataGridGroupBySpec,
   DataGridPivotSpec,
+  DataGridPivotColumn,
+  DataGridPivotCellDrilldown,
+  DataGridPivotCellDrilldownInput,
   DataGridGroupExpansionSnapshot,
   DataGridAggregationModel,
   DataGridPaginationInput,
@@ -82,6 +85,35 @@ export interface DataGridApplyEditsOptions {
   reapply?: boolean
 }
 
+export interface DataGridPivotLayoutColumnState {
+  order: readonly string[]
+  visibility: Readonly<Record<string, boolean>>
+  widths: Readonly<Record<string, number | null>>
+  pins: Readonly<Record<string, DataGridColumnPin>>
+}
+
+export interface DataGridPivotLayoutSnapshot<TRow = unknown> {
+  version: 1
+  sortModel: readonly DataGridSortState[]
+  filterModel: DataGridFilterSnapshot | null
+  groupBy: DataGridGroupBySpec | null
+  pivotModel: DataGridPivotSpec | null
+  aggregationModel: DataGridAggregationModel<TRow> | null
+  groupExpansion: DataGridGroupExpansionSnapshot | null
+  columnState: DataGridPivotLayoutColumnState
+}
+
+export interface DataGridPivotLayoutImportOptions {
+  applyColumnState?: boolean
+}
+
+export interface DataGridPivotInteropSnapshot<TRow = unknown> {
+  version: 1
+  layout: DataGridPivotLayoutSnapshot<TRow>
+  pivotColumns: readonly DataGridPivotColumn[]
+  rows: readonly DataGridRowNode<TRow>[]
+}
+
 export interface DataGridCellRefreshRange {
   rowKey: DataGridRowId
   columnKeys: readonly string[]
@@ -124,6 +156,13 @@ export interface DataGridApi<TRow = unknown> {
   setGroupBy(groupBy: DataGridGroupBySpec | null): void
   setPivotModel(pivotModel: DataGridPivotSpec | null): void
   getPivotModel(): DataGridPivotSpec | null
+  getPivotCellDrilldown(input: DataGridPivotCellDrilldownInput): DataGridPivotCellDrilldown<TRow> | null
+  exportPivotLayout(): DataGridPivotLayoutSnapshot<TRow>
+  exportPivotInterop(): DataGridPivotInteropSnapshot<TRow> | null
+  importPivotLayout(
+    layout: DataGridPivotLayoutSnapshot<TRow>,
+    options?: DataGridPivotLayoutImportOptions,
+  ): void
   setAggregationModel(aggregationModel: DataGridAggregationModel<TRow> | null): void
   getAggregationModel(): DataGridAggregationModel<TRow> | null
   getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
@@ -255,6 +294,51 @@ function createDeferredScheduler(): {
       cancelledHandles.add(handle.id)
     },
   }
+}
+
+function cloneSerializable<T>(value: T): T {
+  const structuredCloneRef = (globalThis as typeof globalThis & {
+    structuredClone?: <U>(input: U) => U
+  }).structuredClone
+  if (typeof structuredCloneRef === "function") {
+    try {
+      return structuredCloneRef(value)
+    } catch {
+      // Fall through to JSON fallback.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as T
+  } catch {
+    return value
+  }
+}
+
+function normalizePivotLayoutOrder(input: readonly string[] | undefined): string[] {
+  if (!Array.isArray(input)) {
+    return []
+  }
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  for (const rawKey of input) {
+    if (typeof rawKey !== "string") {
+      continue
+    }
+    const key = rawKey.trim()
+    if (key.length === 0 || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    normalized.push(key)
+  }
+  return normalized
+}
+
+function normalizePivotLayoutPin(pin: unknown): DataGridColumnPin | null {
+  if (pin === "left" || pin === "right" || pin === "none") {
+    return pin
+  }
+  return null
 }
 
 class DataGridCellRefreshRegistry {
@@ -750,6 +834,137 @@ export function createDataGridApi<TRow = unknown>(
     },
     getPivotModel() {
       return rowModel.getPivotModel()
+    },
+    getPivotCellDrilldown(input: DataGridPivotCellDrilldownInput) {
+      return typeof rowModel.getPivotCellDrilldown === "function"
+        ? rowModel.getPivotCellDrilldown(input)
+        : null
+    },
+    exportPivotLayout() {
+      const rowSnapshot = rowModel.getSnapshot()
+      const columnSnapshot = columnModel.getSnapshot()
+      const visibility: Record<string, boolean> = {}
+      const widths: Record<string, number | null> = {}
+      const pins: Record<string, DataGridColumnPin> = {}
+      for (const column of columnSnapshot.columns) {
+        visibility[column.key] = column.visible
+        widths[column.key] = column.width
+        pins[column.key] = column.pin
+      }
+      return {
+        version: 1,
+        sortModel: cloneSerializable(rowSnapshot.sortModel),
+        filterModel: cloneSerializable(rowSnapshot.filterModel),
+        groupBy: cloneSerializable(rowSnapshot.groupBy),
+        pivotModel: cloneSerializable(rowModel.getPivotModel()),
+        aggregationModel: cloneSerializable(rowModel.getAggregationModel()),
+        groupExpansion: cloneSerializable(rowSnapshot.groupExpansion),
+        columnState: {
+          order: cloneSerializable(columnSnapshot.order),
+          visibility,
+          widths,
+          pins,
+        },
+      }
+    },
+    exportPivotInterop() {
+      const pivotModel = rowModel.getPivotModel()
+      if (!pivotModel) {
+        return null
+      }
+      const rowSnapshot = rowModel.getSnapshot()
+      const rowCount = Math.max(0, Math.trunc(rowSnapshot.rowCount))
+      const rows = rowCount > 0
+        ? rowModel.getRowsInRange({ start: 0, end: rowCount - 1 })
+        : []
+      const columnSnapshot = columnModel.getSnapshot()
+      const visibility: Record<string, boolean> = {}
+      const widths: Record<string, number | null> = {}
+      const pins: Record<string, DataGridColumnPin> = {}
+      for (const column of columnSnapshot.columns) {
+        visibility[column.key] = column.visible
+        widths[column.key] = column.width
+        pins[column.key] = column.pin
+      }
+      return {
+        version: 1,
+        layout: {
+          version: 1,
+          sortModel: cloneSerializable(rowSnapshot.sortModel),
+          filterModel: cloneSerializable(rowSnapshot.filterModel),
+          groupBy: cloneSerializable(rowSnapshot.groupBy),
+          pivotModel: cloneSerializable(rowModel.getPivotModel()),
+          aggregationModel: cloneSerializable(rowModel.getAggregationModel()),
+          groupExpansion: cloneSerializable(rowSnapshot.groupExpansion),
+          columnState: {
+            order: cloneSerializable(columnSnapshot.order),
+            visibility,
+            widths,
+            pins,
+          },
+        },
+        pivotColumns: cloneSerializable(rowSnapshot.pivotColumns ?? []),
+        rows: cloneSerializable(rows),
+      }
+    },
+    importPivotLayout(
+      layout: DataGridPivotLayoutSnapshot<TRow>,
+      options: DataGridPivotLayoutImportOptions = {},
+    ) {
+      if (!layout || typeof layout !== "object") {
+        return
+      }
+      if (options.applyColumnState !== false) {
+        const order = normalizePivotLayoutOrder(layout.columnState?.order)
+        if (order.length > 0) {
+          columnModel.setColumnOrder(order)
+        }
+        const visibility = layout.columnState?.visibility ?? {}
+        for (const [key, value] of Object.entries(visibility)) {
+          columnModel.setColumnVisibility(key, Boolean(value))
+        }
+        const widths = layout.columnState?.widths ?? {}
+        for (const [key, value] of Object.entries(widths)) {
+          const normalizedWidth = Number.isFinite(value)
+            ? Math.max(0, Math.trunc(value as number))
+            : null
+          columnModel.setColumnWidth(key, normalizedWidth)
+        }
+        const pins = layout.columnState?.pins ?? {}
+        for (const [key, value] of Object.entries(pins)) {
+          const normalizedPin = normalizePivotLayoutPin(value)
+          if (!normalizedPin) {
+            continue
+          }
+          columnModel.setColumnPin(key, normalizedPin)
+        }
+      }
+
+      const sortModel = Array.isArray(layout.sortModel)
+        ? cloneSerializable(layout.sortModel)
+        : []
+      const filterModel = layout.filterModel == null
+        ? null
+        : cloneSerializable(layout.filterModel)
+      const batchSortFilterCapability = resolveCurrentSortFilterBatchCapability()
+      if (batchSortFilterCapability) {
+        batchSortFilterCapability.setSortAndFilterModel({ sortModel, filterModel })
+      } else {
+        rowModel.setFilterModel(filterModel)
+        rowModel.setSortModel(sortModel)
+      }
+      rowModel.setGroupBy(layout.groupBy == null ? null : cloneSerializable(layout.groupBy))
+      rowModel.setPivotModel(layout.pivotModel == null ? null : cloneSerializable(layout.pivotModel))
+      rowModel.setAggregationModel(
+        layout.aggregationModel == null
+          ? null
+          : cloneSerializable(layout.aggregationModel),
+      )
+      rowModel.setGroupExpansion(
+        layout.groupExpansion == null
+          ? null
+          : cloneSerializable(layout.groupExpansion),
+      )
     },
     setAggregationModel(aggregationModel: DataGridAggregationModel<TRow> | null) {
       rowModel.setAggregationModel(aggregationModel)

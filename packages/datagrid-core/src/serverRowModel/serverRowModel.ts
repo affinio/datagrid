@@ -3,6 +3,7 @@ import {
   type CreateWritableSignal,
   type WritableSignal,
 } from "../runtime/signals"
+import type { DataGridPivotColumn } from "../models/rowModel"
 
 export interface ServerRowModelFetchResult<T> {
   rows: T[]
@@ -89,6 +90,7 @@ export interface ServerRowModel<T> extends ServerRowModelSignals<T> {
   reset: () => void
   abortAll: () => void
   dispose: () => void
+  pivotColumns?: WritableSignal<readonly DataGridPivotColumn[] | null>
   __debug?: ServerRowModelDebug<T>
 }
 

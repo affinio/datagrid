@@ -1,8 +1,15 @@
 import type {
+  DataGridAggregationModel,
   DataGridFilterSnapshot,
   DataGridGroupExpansionSnapshot,
   DataGridGroupBySpec,
+  DataGridPaginationSnapshot,
+  DataGridPivotColumn,
+  DataGridPivotColumnPathSegment,
+  DataGridPivotSpec,
   DataGridRowId,
+  DataGridRowGroupMeta,
+  DataGridRowKind,
   DataGridRowNodeState,
   DataGridSortState,
   DataGridViewportRange,
@@ -37,6 +44,16 @@ export interface DataGridDataSourceTreePullContext {
   groupKeys: readonly string[]
 }
 
+export interface DataGridDataSourcePivotPullContext {
+  pivotModel: DataGridPivotSpec | null
+  aggregationModel: DataGridAggregationModel<any> | null
+}
+
+export interface DataGridDataSourcePaginationPullContext {
+  snapshot: DataGridPaginationSnapshot
+  cursor: string | null
+}
+
 export interface DataGridDataSourcePullRequest {
   range: DataGridViewportRange
   priority: DataGridDataSourcePullPriority
@@ -47,18 +64,24 @@ export interface DataGridDataSourcePullRequest {
   groupBy: DataGridGroupBySpec | null
   groupExpansion: DataGridGroupExpansionSnapshot
   treeData: DataGridDataSourceTreePullContext | null
+  pivot: DataGridDataSourcePivotPullContext | null
+  pagination: DataGridDataSourcePaginationPullContext
 }
 
 export interface DataGridDataSourceRowEntry<T = unknown> {
   index: number
   row: T
   rowId?: DataGridRowId
+  kind?: DataGridRowKind
+  groupMeta?: Partial<DataGridRowGroupMeta>
   state?: Partial<DataGridRowNodeState>
 }
 
 export interface DataGridDataSourcePullResult<T = unknown> {
   rows: readonly DataGridDataSourceRowEntry<T>[]
   total?: number | null
+  pivotColumns?: readonly DataGridPivotColumn[]
+  cursor?: string | null
 }
 
 export interface DataGridDataSourceInvalidationAll {
@@ -80,6 +103,8 @@ export interface DataGridDataSourcePushUpsertEvent<T = unknown> {
   type: "upsert"
   rows: readonly DataGridDataSourceRowEntry<T>[]
   total?: number | null
+  pivotColumns?: readonly DataGridPivotColumn[]
+  cursor?: string | null
 }
 
 export interface DataGridDataSourcePushRemoveEvent {
@@ -122,4 +147,31 @@ export interface DataGridDataSourceBackpressureDiagnostics {
   hasPendingPull: boolean
   rowCacheSize: number
   rowCacheLimit: number
+}
+
+export type DataGridServerPivotRowRole = "group" | "detail" | "subtotal" | "grand-total"
+
+export interface DataGridServerPivotRowIdInput {
+  role: DataGridServerPivotRowRole
+  rowPath?: readonly DataGridPivotColumnPathSegment[]
+  rowDepth?: number
+  marker?: string | number | null
+}
+
+/**
+ * Stable row identity contract for server-side pivot rows.
+ * The same semantic row (role + path + depth + marker) must always produce the same id.
+ */
+export function createDataGridServerPivotRowId(input: DataGridServerPivotRowIdInput): string {
+  const role = input.role
+  const depth = Number.isFinite(input.rowDepth) ? Math.max(0, Math.trunc(input.rowDepth as number)) : 0
+  const marker = input.marker == null ? "" : String(input.marker)
+  const rowPath = Array.isArray(input.rowPath) ? input.rowPath : []
+  let encodedPath = ""
+  for (const segment of rowPath) {
+    const field = typeof segment.field === "string" ? segment.field : ""
+    const value = typeof segment.value === "string" ? segment.value : ""
+    encodedPath += `${field.length}:${field}${value.length}:${value}`
+  }
+  return `pivot:server:${role}:d${depth}:p${encodedPath}:m${marker.length}:${marker}`
 }

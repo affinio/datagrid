@@ -694,15 +694,18 @@ describe("createClientRowModel", () => {
     expect(y2025).toBeDefined()
 
     const rows = model.getRowsInRange({ start: 0, end: 20 })
-    expect(rows).toHaveLength(7)
+    expect(rows).toHaveLength(9)
+    expect(rows.filter(row => row.kind === "group")).toHaveLength(2)
     const labels = rows.map(row => {
       const record = row.row as Record<string, unknown>
       return `${String(record.region ?? "")}|${String(record.team ?? "")}`
     })
     expect(labels).toEqual([
+      "AMER|",
       "AMER|core",
       "AMER|payments",
       "AMER|Subtotal",
+      "EMEA|",
       "EMEA|core",
       "EMEA|payments",
       "EMEA|Subtotal",
@@ -720,8 +723,317 @@ describe("createClientRowModel", () => {
     expect(byLabel.get("AMER|Subtotal")?.[String(y2025?.id)]).toBeNull()
     expect(byLabel.get("EMEA|Subtotal")?.[String(y2024?.id)]).toBeNull()
     expect(byLabel.get("EMEA|Subtotal")?.[String(y2025?.id)]).toBe(12)
+    expect(byLabel.get("AMER|")?.[String(y2024?.id)]).toBe(30)
+    expect(byLabel.get("EMEA|")?.[String(y2025?.id)]).toBe(12)
     expect(byLabel.get("Grand Total|")?.[String(y2024?.id)]).toBe(30)
     expect(byLabel.get("Grand Total|")?.[String(y2025?.id)]).toBe(12)
+
+    model.dispose()
+  })
+
+  it("projects pivot column subtotals for multi-level column axis", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", team: "A", year: 2024, quarter: "Q1", revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", team: "A", year: 2024, quarter: "Q2", revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", team: "A", year: 2025, quarter: "Q1", revenue: 7 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialPivotModel: {
+        rows: ["team"],
+        columns: ["year", "quarter"],
+        values: [{ field: "revenue", agg: "sum" }],
+        columnSubtotals: true,
+      },
+    })
+
+    const pivotColumns = model.getSnapshot().pivotColumns ?? []
+    const y2024q1 = pivotColumns.find(column => column.label.includes("year=2024 · quarter=Q1"))
+    const y2024q2 = pivotColumns.find(column => column.label.includes("year=2024 · quarter=Q2"))
+    const y2024Subtotal = pivotColumns.find(column => column.label.includes("year=2024 · subtotal"))
+    const y2025q1 = pivotColumns.find(column => column.label.includes("year=2025 · quarter=Q1"))
+    const y2025Subtotal = pivotColumns.find(column => column.label.includes("year=2025 · subtotal"))
+    expect(y2024q1).toBeDefined()
+    expect(y2024q2).toBeDefined()
+    expect(y2024Subtotal).toBeDefined()
+    expect(y2025q1).toBeDefined()
+    expect(y2025Subtotal).toBeDefined()
+    expect(y2024Subtotal?.subtotal).toBe(true)
+    expect(y2025Subtotal?.subtotal).toBe(true)
+
+    const firstRow = model.getRowsInRange({ start: 0, end: 5 })[0]
+    const rowRecord = firstRow?.row as Record<string, unknown> | undefined
+    expect(rowRecord?.team).toBe("A")
+    expect(rowRecord?.[String(y2024q1?.id)]).toBe(10)
+    expect(rowRecord?.[String(y2024q2?.id)]).toBe(20)
+    expect(rowRecord?.[String(y2024Subtotal?.id)]).toBe(30)
+    expect(rowRecord?.[String(y2025q1?.id)]).toBe(7)
+    expect(rowRecord?.[String(y2025Subtotal?.id)]).toBe(7)
+
+    model.dispose()
+  })
+
+  it("projects pivot column grand total when enabled", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", team: "A", year: 2024, quarter: "Q1", revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", team: "A", year: 2024, quarter: "Q2", revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", team: "A", year: 2025, quarter: "Q1", revenue: 7 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+        { row: { id: "r4", team: "B", year: 2024, quarter: "Q1", revenue: 5 }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialPivotModel: {
+        rows: ["team"],
+        columns: ["year", "quarter"],
+        values: [{ field: "revenue", agg: "sum" }],
+        columnSubtotals: true,
+        columnGrandTotal: true,
+      },
+    })
+
+    const pivotColumns = model.getSnapshot().pivotColumns ?? []
+    const grandTotalColumn = pivotColumns.find(column => column.label.includes("grand total"))
+    expect(grandTotalColumn).toBeDefined()
+    expect(grandTotalColumn?.grandTotal).toBe(true)
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    const rowA = rows.find(row => (row.row as Record<string, unknown>)?.team === "A")
+    const rowB = rows.find(row => (row.row as Record<string, unknown>)?.team === "B")
+    const rowARecord = rowA?.row as Record<string, unknown> | undefined
+    const rowBRecord = rowB?.row as Record<string, unknown> | undefined
+    expect(rowARecord?.[String(grandTotalColumn?.id)]).toBe(37)
+    expect(rowBRecord?.[String(grandTotalColumn?.id)]).toBe(5)
+
+    model.dispose()
+  })
+
+  it("applies pivot column order policy for subtotal and grand total placement", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", team: "A", year: 2024, quarter: "Q1", revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", team: "A", year: 2024, quarter: "Q2", revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", team: "A", year: 2025, quarter: "Q1", revenue: 7 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialPivotModel: {
+        rows: ["team"],
+        columns: ["year", "quarter"],
+        values: [{ field: "revenue", agg: "sum" }],
+        columnSubtotals: true,
+        columnGrandTotal: true,
+        columnSubtotalPosition: "before",
+        columnGrandTotalPosition: "first",
+      },
+    })
+
+    const pivotColumns = model.getSnapshot().pivotColumns ?? []
+    expect(pivotColumns.length).toBeGreaterThan(0)
+    expect(pivotColumns[0]?.label.includes("grand total")).toBe(true)
+    expect(pivotColumns[0]?.grandTotal).toBe(true)
+
+    const y2024q1Index = pivotColumns.findIndex(column => column.label.includes("year=2024 · quarter=Q1"))
+    const y2024q2Index = pivotColumns.findIndex(column => column.label.includes("year=2024 · quarter=Q2"))
+    const y2024SubtotalIndex = pivotColumns.findIndex(column => column.label.includes("year=2024 · subtotal"))
+    expect(y2024q1Index).toBeGreaterThanOrEqual(0)
+    expect(y2024q2Index).toBeGreaterThanOrEqual(0)
+    expect(y2024SubtotalIndex).toBeGreaterThanOrEqual(0)
+    expect(y2024SubtotalIndex).toBeLessThan(y2024q1Index)
+    expect(y2024SubtotalIndex).toBeLessThan(y2024q2Index)
+
+    model.dispose()
+  })
+
+  it("returns pivot cell drilldown rows for subtotal and grand total cells", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", region: "AMER", team: "core", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", region: "AMER", team: "payments", year: 2024, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", region: "EMEA", team: "core", year: 2025, revenue: 5 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+        { row: { id: "r4", region: "EMEA", team: "payments", year: 2025, revenue: 7 }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialPivotModel: {
+        rows: ["region", "team"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+        rowSubtotals: true,
+        columnGrandTotal: true,
+        grandTotal: true,
+      },
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 30 })
+    const amerSubtotal = rows.find(row => {
+      const record = row.row as Record<string, unknown>
+      return String(record.region ?? "") === "AMER" && String(record.team ?? "") === "Subtotal"
+    })
+    const grandTotalRow = rows.find(row => String(row.rowId) === "pivot:grand-total")
+    expect(amerSubtotal).toBeDefined()
+    expect(grandTotalRow).toBeDefined()
+
+    const pivotColumns = model.getSnapshot().pivotColumns ?? []
+    const year2024 = pivotColumns.find(column => column.label.includes("year=2024"))
+    const columnGrandTotal = pivotColumns.find(column => column.grandTotal === true)
+    expect(year2024).toBeDefined()
+    expect(columnGrandTotal).toBeDefined()
+
+    const subtotalDrilldown = model.getPivotCellDrilldown?.({
+      rowId: amerSubtotal?.rowId ?? "",
+      columnId: String(year2024?.id ?? ""),
+      limit: 10,
+    })
+    expect(subtotalDrilldown).toBeDefined()
+    expect(subtotalDrilldown?.matchCount).toBe(2)
+    expect(subtotalDrilldown?.truncated).toBe(false)
+    expect(subtotalDrilldown?.rows.map(row => String(row.rowId))).toEqual(["r1", "r2"])
+
+    const grandTotalDrilldown = model.getPivotCellDrilldown?.({
+      rowId: grandTotalRow?.rowId ?? "",
+      columnId: String(columnGrandTotal?.id ?? ""),
+      limit: 2,
+    })
+    expect(grandTotalDrilldown).toBeDefined()
+    expect(grandTotalDrilldown?.matchCount).toBe(4)
+    expect(grandTotalDrilldown?.truncated).toBe(true)
+    expect(grandTotalDrilldown?.rows.map(row => String(row.rowId))).toEqual(["r1", "r2"])
+
+    model.dispose()
+  })
+
+  it("sorts pivot detail rows by generated pivot column and keeps grand total pinned last", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", team: "A", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", team: "B", year: 2024, revenue: 35 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", team: "C", year: 2024, revenue: 20 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialPivotModel: {
+        rows: ["team"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+        grandTotal: true,
+      },
+    })
+
+    const year2024Column = model.getSnapshot().pivotColumns?.find(column => column.label.includes("year=2024"))
+    expect(year2024Column).toBeDefined()
+    model.setSortModel([{ key: String(year2024Column?.id), direction: "desc" }])
+
+    const rows = model.getRowsInRange({ start: 0, end: 20 })
+    const labels = rows.map(row => String((row.row as Record<string, unknown>)?.team ?? ""))
+    expect(labels).toEqual(["B", "C", "A", "Grand Total"])
+
+    const values = rows.map(row => {
+      const record = row.row as Record<string, unknown>
+      return Number(record[String(year2024Column?.id)] ?? NaN)
+    })
+    expect(values).toEqual([35, 20, 10, 65])
+    expect(String(rows[rows.length - 1]?.rowId)).toBe("pivot:grand-total")
+
+    model.dispose()
+  })
+
+  it("sorts pivot top-level group blocks by generated column while preserving child block order", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", region: "AMER", team: "core", year: 2024, revenue: 5 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", region: "AMER", team: "payments", year: 2024, revenue: 15 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", region: "EMEA", team: "core", year: 2024, revenue: 30 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+        { row: { id: "r4", region: "EMEA", team: "payments", year: 2024, revenue: 40 }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialPivotModel: {
+        rows: ["region", "team"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+        grandTotal: true,
+      },
+    })
+
+    const year2024Column = model.getSnapshot().pivotColumns?.find(column => column.label.includes("year=2024"))
+    expect(year2024Column).toBeDefined()
+    model.setSortModel([{ key: String(year2024Column?.id), direction: "desc" }])
+
+    const rows = model.getRowsInRange({ start: 0, end: 50 })
+    expect(String(rows[rows.length - 1]?.rowId)).toBe("pivot:grand-total")
+
+    const topGroups = rows.filter(row => row.kind === "group" && row.groupMeta?.level === 0)
+    expect(topGroups.map(row => String((row.row as Record<string, unknown>)?.region ?? ""))).toEqual(["EMEA", "AMER"])
+
+    const firstGroupIndex = rows.findIndex(
+      row => row.kind === "group" && row.groupMeta?.level === 0 && (row.row as Record<string, unknown>)?.region === "EMEA",
+    )
+    const secondGroupIndex = rows.findIndex(
+      row => row.kind === "group" && row.groupMeta?.level === 0 && (row.row as Record<string, unknown>)?.region === "AMER",
+    )
+    expect(firstGroupIndex).toBeGreaterThanOrEqual(0)
+    expect(secondGroupIndex).toBeGreaterThan(firstGroupIndex)
+
+    const emeaBlockRows = rows.slice(firstGroupIndex + 1, secondGroupIndex)
+    expect(emeaBlockRows.every(row => (row.row as Record<string, unknown>)?.region === "EMEA")).toBe(true)
+    expect(
+      emeaBlockRows
+        .filter(row => row.kind === "leaf")
+        .map(row => String((row.row as Record<string, unknown>)?.team ?? "")),
+    ).toEqual(["core", "payments"])
+
+    const amerBlockRows = rows.slice(secondGroupIndex + 1, rows.length - 1)
+    expect(amerBlockRows.every(row => (row.row as Record<string, unknown>)?.region === "AMER")).toBe(true)
+    expect(
+      amerBlockRows
+        .filter(row => row.kind === "leaf")
+        .map(row => String((row.row as Record<string, unknown>)?.team ?? "")),
+    ).toEqual(["core", "payments"])
+
+    model.dispose()
+  })
+
+  it("supports pivot row-axis expand/collapse for multi-level rows", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", region: "AMER", team: "core", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", region: "AMER", team: "payments", year: 2025, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", region: "EMEA", team: "core", year: 2024, revenue: 7 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+        { row: { id: "r4", region: "EMEA", team: "payments", year: 2025, revenue: 9 }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialPivotModel: {
+        rows: ["region", "team"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+      },
+    })
+
+    const expanded = model.getRowsInRange({ start: 0, end: 20 })
+    expect(expanded.map(row => row.kind)).toEqual(["group", "leaf", "leaf", "group", "leaf", "leaf"])
+    const amerGroup = expanded.find(row => row.kind === "group" && (row.row as Record<string, unknown>)?.region === "AMER")
+    const amerGroupKey = String(amerGroup?.groupMeta?.groupKey ?? "")
+    expect(amerGroupKey.startsWith("pivot:group:")).toBe(true)
+    expect(model.getSnapshot().groupExpansion.expandedByDefault).toBe(true)
+    expect(model.getSnapshot().groupExpansion.toggledGroupKeys).toEqual([])
+
+    model.toggleGroup(amerGroupKey)
+    const collapsedAmer = model.getRowsInRange({ start: 0, end: 20 })
+    expect(collapsedAmer.map(row => `${row.kind}:${String((row.row as Record<string, unknown>)?.region ?? "")}`)).toEqual([
+      "group:AMER",
+      "group:EMEA",
+      "leaf:EMEA",
+      "leaf:EMEA",
+    ])
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: [amerGroupKey],
+    })
+
+    model.collapseAllGroups()
+    const collapsedAll = model.getRowsInRange({ start: 0, end: 20 })
+    expect(collapsedAll.map(row => row.kind)).toEqual(["group", "group"])
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: [],
+    })
+
+    model.expandAllGroups()
+    const reexpanded = model.getRowsInRange({ start: 0, end: 20 })
+    expect(reexpanded.map(row => row.kind)).toEqual(["group", "leaf", "leaf", "group", "leaf", "leaf"])
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: [],
+    })
 
     model.dispose()
   })
@@ -759,6 +1071,50 @@ describe("createClientRowModel", () => {
     const reapplied = model.getRowsInRange({ start: 0, end: 10 })[0]
     const reappliedValue = (reapplied?.row as Record<string, unknown> | undefined)?.[String(year2024ColumnId)]
     expect(reappliedValue).toBe(120)
+
+    model.dispose()
+  })
+
+  it("applies value-only pivot patch incrementally and preserves unaffected row identity", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", region: "AMER", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", region: "EMEA", year: 2024, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialPivotModel: {
+        rows: ["region"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+      },
+    })
+
+    const year2024ColumnId = model.getSnapshot().pivotColumns?.find(column => column.label.includes("year=2024"))?.id
+    expect(typeof year2024ColumnId).toBe("string")
+
+    const beforeRows = model.getRowsInRange({ start: 0, end: 10 })
+    const amerBefore = beforeRows.find(row => String((row.row as Record<string, unknown>)?.region ?? "") === "AMER")
+    const emeaBefore = beforeRows.find(row => String((row.row as Record<string, unknown>)?.region ?? "") === "EMEA")
+    expect(amerBefore).toBeDefined()
+    expect(emeaBefore).toBeDefined()
+
+    model.patchRows([{ rowId: "r1", data: { revenue: 100 } }], {
+      recomputeGroup: true,
+    })
+
+    const afterRows = model.getRowsInRange({ start: 0, end: 10 })
+    const amerAfter = afterRows.find(row => String((row.row as Record<string, unknown>)?.region ?? "") === "AMER")
+    const emeaAfter = afterRows.find(row => String((row.row as Record<string, unknown>)?.region ?? "") === "EMEA")
+    expect(amerAfter).toBeDefined()
+    expect(emeaAfter).toBeDefined()
+
+    const amerValue = (amerAfter?.row as Record<string, unknown> | undefined)?.[String(year2024ColumnId)]
+    const emeaValue = (emeaAfter?.row as Record<string, unknown> | undefined)?.[String(year2024ColumnId)]
+    expect(amerValue).toBe(100)
+    expect(emeaValue).toBe(20)
+
+    // Unaffected pivot row stays referentially stable on incremental patch path.
+    expect(emeaAfter).toBe(emeaBefore)
+    expect(amerAfter).not.toBe(amerBefore)
 
     model.dispose()
   })

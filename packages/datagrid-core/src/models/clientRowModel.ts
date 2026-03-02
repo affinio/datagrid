@@ -17,6 +17,8 @@ import {
   withResolvedRowIdentity,
   type DataGridGroupExpansionSnapshot,
   type DataGridPaginationInput,
+  type DataGridPivotCellDrilldown,
+  type DataGridPivotCellDrilldownInput,
   type DataGridProjectionDiagnostics,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramOptions,
@@ -75,7 +77,10 @@ import {
 } from "./projectionPolicy.js"
 import { createClientRowRuntimeStateStore } from "./clientRowRuntimeStateStore.js"
 import { createClientRowLifecycle } from "./clientRowLifecycle.js"
-import { createPivotRuntime } from "./pivotRuntime.js"
+import {
+  createPivotRuntime,
+  type DataGridPivotIncrementalPatchRow,
+} from "./pivotRuntime.js"
 import {
   areSameAggregateRecords,
   cloneAggregationModel,
@@ -174,6 +179,10 @@ export interface DataGridClientRowPatchOptions {
   emit?: boolean
 }
 
+interface DataGridPendingPivotValuePatchContext<T> {
+  changedRows: readonly DataGridPivotIncrementalPatchRow<T>[]
+}
+
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
   setSortAndFilterModel(input: DataGridSortAndFilterModelInput): void
@@ -208,6 +217,13 @@ interface SortValueCacheEntry {
 
 function isDataGridRowId(value: unknown): value is DataGridRowId {
   return typeof value === "string" || typeof value === "number"
+}
+
+function normalizePivotAxisValue(value: unknown): string {
+  if (value == null) {
+    return ""
+  }
+  return normalizeText(value)
 }
 
 export function createClientRowModel<T>(
@@ -286,9 +302,11 @@ export function createClientRowModel<T>(
   const treeProjectionRuntime = createTreeProjectionRuntime<T>()
   const aggregationEngine = createDataGridAggregationEngine<T>(aggregationModel)
   let expansionExpandedByDefault = Boolean(treeData?.expandedByDefault ?? groupBy?.expandedByDefault)
+  let pivotExpansionExpandedByDefault = true
   let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
   let pagination = buildPaginationSnapshot(0, paginationInput)
   const toggledGroupKeys = new Set<string>()
+  const toggledPivotGroupKeys = new Set<string>()
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, runtimeState.rows.length)
   const lifecycle = createClientRowLifecycle<T>()
   let cachedFilterPredicateKey = "__none__"
@@ -319,6 +337,7 @@ export function createClientRowModel<T>(
   let groupedProjectionGroupIndexByRowId = new Map<DataGridRowId, number>()
   let lastTreeProjectionCacheKey: string | null = null
   let lastTreeExpansionSnapshot: DataGridGroupExpansionSnapshot | null = null
+  let pendingPivotValuePatch: DataGridPendingPivotValuePatchContext<T> | null = null
   const projectionEngine = createClientRowProjectionEngine<T>()
 
   function ensureActive() {
@@ -440,6 +459,358 @@ export function createClientRowModel<T>(
         })()
   }
 
+  function isPivotExpansionActive(): boolean {
+    return Boolean(pivotModel) && !treeData
+  }
+
+  function getActiveExpansionStateStore(): {
+    expandedByDefault: boolean
+    toggledKeys: Set<string>
+    setExpandedByDefault: (value: boolean) => void
+  } {
+    if (isPivotExpansionActive()) {
+      return {
+        expandedByDefault: pivotExpansionExpandedByDefault,
+        toggledKeys: toggledPivotGroupKeys,
+        setExpandedByDefault: (value: boolean) => {
+          pivotExpansionExpandedByDefault = value
+        },
+      }
+    }
+    return {
+      expandedByDefault: expansionExpandedByDefault,
+      toggledKeys: toggledGroupKeys,
+      setExpandedByDefault: (value: boolean) => {
+        expansionExpandedByDefault = value
+      },
+    }
+  }
+
+  function getCurrentExpansionSnapshot(): DataGridGroupExpansionSnapshot {
+    const expansionSpec = getExpansionSpec()
+    const expansionState = getActiveExpansionStateStore()
+    return buildGroupExpansionSnapshot(expansionSpec, expansionState.toggledKeys)
+  }
+
+  function toComparableNumber(value: unknown): number | null {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value
+    }
+    if (value instanceof Date) {
+      return value.getTime()
+    }
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  function comparePivotSortValue(left: unknown, right: unknown): number {
+    if (left == null && right == null) {
+      return 0
+    }
+    if (left == null) {
+      return 1
+    }
+    if (right == null) {
+      return -1
+    }
+    const leftNumber = toComparableNumber(left)
+    const rightNumber = toComparableNumber(right)
+    if (leftNumber != null && rightNumber != null) {
+      return leftNumber - rightNumber
+    }
+    return normalizeText(left).localeCompare(normalizeText(right), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    })
+  }
+
+  function sortPivotProjectionRows(
+    rows: readonly DataGridRowNode<T>[],
+    descriptors: readonly DataGridSortState[],
+  ): DataGridRowNode<T>[] {
+    if (!Array.isArray(rows) || rows.length <= 1 || descriptors.length === 0) {
+      return [...rows]
+    }
+
+    interface PivotBlock {
+      anchor: DataGridRowNode<T>
+      rows: DataGridRowNode<T>[]
+      index: number
+    }
+
+    const blocks: PivotBlock[] = []
+    const grandTotalRows: DataGridRowNode<T>[] = []
+    let index = 0
+    while (index < rows.length) {
+      const current = rows[index]
+      if (!current) {
+        index += 1
+        continue
+      }
+      if (String(current.rowId) === "pivot:grand-total") {
+        grandTotalRows.push(current)
+        index += 1
+        continue
+      }
+      const currentLevel = current.kind === "group"
+        ? Math.max(0, Math.trunc(current.groupMeta?.level ?? 0))
+        : -1
+      if (current.kind === "group" && currentLevel === 0) {
+        const blockStart = index
+        index += 1
+        while (index < rows.length) {
+          const next = rows[index]
+          if (!next || String(next.rowId) === "pivot:grand-total") {
+            break
+          }
+          if (next.kind === "group" && Math.max(0, Math.trunc(next.groupMeta?.level ?? 0)) === 0) {
+            break
+          }
+          index += 1
+        }
+        blocks.push({
+          anchor: current,
+          rows: rows.slice(blockStart, index),
+          index: blocks.length,
+        })
+        continue
+      }
+      blocks.push({
+        anchor: current,
+        rows: [current],
+        index: blocks.length,
+      })
+      index += 1
+    }
+
+    blocks.sort((left, right) => {
+      for (const descriptor of descriptors) {
+        const direction = descriptor.direction === "desc" ? -1 : 1
+        const leftValue = readRowField(left.anchor, descriptor.key, descriptor.field)
+        const rightValue = readRowField(right.anchor, descriptor.key, descriptor.field)
+        const compared = comparePivotSortValue(leftValue, rightValue)
+        if (compared !== 0) {
+          return compared * direction
+        }
+      }
+      const rowIdDelta = comparePivotSortValue(left.anchor.rowId, right.anchor.rowId)
+      if (rowIdDelta !== 0) {
+        return rowIdDelta
+      }
+      const sourceDelta = left.anchor.sourceIndex - right.anchor.sourceIndex
+      if (sourceDelta !== 0) {
+        return sourceDelta
+      }
+      return left.index - right.index
+    })
+
+    const sortedRows: DataGridRowNode<T>[] = []
+    for (const block of blocks) {
+      sortedRows.push(...block.rows)
+    }
+    if (grandTotalRows.length > 0) {
+      sortedRows.push(...grandTotalRows)
+    }
+    return sortedRows
+  }
+
+  function isSamePivotGroupMeta(
+    left: DataGridRowNode<T>["groupMeta"],
+    right: DataGridRowNode<T>["groupMeta"],
+  ): boolean {
+    if (left === right) {
+      return true
+    }
+    if (!left || !right) {
+      return false
+    }
+    return left.groupKey === right.groupKey
+      && left.groupField === right.groupField
+      && left.groupValue === right.groupValue
+      && left.level === right.level
+      && left.childrenCount === right.childrenCount
+  }
+
+  function isSamePivotRowData(
+    left: unknown,
+    right: unknown,
+  ): boolean {
+    if (left === right) {
+      return true
+    }
+    if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) {
+      return false
+    }
+    const leftRecord = left as Record<string, unknown>
+    const rightRecord = right as Record<string, unknown>
+    const leftKeys = Object.keys(leftRecord)
+    const rightKeys = Object.keys(rightRecord)
+    if (leftKeys.length !== rightKeys.length) {
+      return false
+    }
+    for (const key of leftKeys) {
+      if (leftRecord[key] !== rightRecord[key]) {
+        return false
+      }
+    }
+    return true
+  }
+
+  function canReusePivotProjectedRow(
+    previous: DataGridRowNode<T>,
+    next: DataGridRowNode<T>,
+    options: { includeDisplayIndex?: boolean } = {},
+  ): boolean {
+    const includeDisplayIndex = options.includeDisplayIndex === true
+    return previous.kind === next.kind
+      && previous.rowId === next.rowId
+      && previous.rowKey === next.rowKey
+      && previous.sourceIndex === next.sourceIndex
+      && previous.originalIndex === next.originalIndex
+      && (!includeDisplayIndex || previous.displayIndex === next.displayIndex)
+      && previous.state.selected === next.state.selected
+      && previous.state.group === next.state.group
+      && previous.state.pinned === next.state.pinned
+      && previous.state.expanded === next.state.expanded
+      && isSamePivotGroupMeta(previous.groupMeta, next.groupMeta)
+      && isSamePivotRowData(previous.data, next.data)
+  }
+
+  function preservePivotProjectionRowIdentity(
+    previousRows: readonly DataGridRowNode<T>[],
+    nextRows: readonly DataGridRowNode<T>[],
+    options: { includeDisplayIndex?: boolean } = {},
+  ): DataGridRowNode<T>[] {
+    if (previousRows.length === 0 || nextRows.length === 0) {
+      return [...nextRows]
+    }
+    const previousByRowId = new Map<DataGridRowId, DataGridRowNode<T>>()
+    for (const row of previousRows) {
+      previousByRowId.set(row.rowId, row)
+    }
+    const projected: DataGridRowNode<T>[] = []
+    for (const nextRow of nextRows) {
+      const previousRow = previousByRowId.get(nextRow.rowId)
+      if (previousRow && canReusePivotProjectedRow(previousRow, nextRow, options)) {
+        projected.push(previousRow)
+        continue
+      }
+      projected.push(nextRow)
+    }
+    return projected
+  }
+
+  function resolvePivotDrilldownRowConstraints(
+    row: DataGridRowNode<T>,
+    rowFields: readonly string[],
+  ): Array<{ field: string; value: string }> {
+    if (String(row.rowId) === "pivot:grand-total") {
+      return []
+    }
+    const constraints: Array<{ field: string; value: string }> = []
+    if (row.kind === "group") {
+      const depth = Math.max(1, Math.min(rowFields.length, Math.trunc((row.groupMeta?.level ?? 0) + 1)))
+      for (let index = 0; index < depth; index += 1) {
+        const field = rowFields[index]
+        if (!field) {
+          continue
+        }
+        constraints.push({
+          field,
+          value: normalizePivotAxisValue(readRowField(row, field)),
+        })
+      }
+      return constraints
+    }
+
+    for (const field of rowFields) {
+      const normalizedValue = normalizePivotAxisValue(readRowField(row, field))
+      if (normalizedValue === "Subtotal" || normalizedValue === "Grand Total") {
+        break
+      }
+      constraints.push({
+        field,
+        value: normalizedValue,
+      })
+    }
+    return constraints
+  }
+
+  function resolvePivotCellDrilldown(
+    input: DataGridPivotCellDrilldownInput,
+  ): DataGridPivotCellDrilldown<T> | null {
+    ensureActive()
+    if (!pivotModel || !Array.isArray(pivotColumns) || pivotColumns.length === 0) {
+      return null
+    }
+    if (!isDataGridRowId(input?.rowId)) {
+      return null
+    }
+    const columnId = typeof input.columnId === "string" ? input.columnId.trim() : ""
+    if (columnId.length === 0) {
+      return null
+    }
+    const pivotColumn = pivotColumns.find(column => column.id === columnId)
+    if (!pivotColumn) {
+      return null
+    }
+    const pivotRow = runtimeState.aggregatedRowsProjection.find(row => row.rowId === input.rowId)
+      ?? runtimeState.pivotedRowsProjection.find(row => row.rowId === input.rowId)
+      ?? runtimeState.groupedRowsProjection.find(row => row.rowId === input.rowId)
+    if (!pivotRow) {
+      return null
+    }
+    const normalizedLimit = Number.isFinite(input.limit)
+      ? Math.max(1, Math.min(5000, Math.trunc(input.limit as number)))
+      : 200
+    const rowConstraints = resolvePivotDrilldownRowConstraints(pivotRow, pivotModel.rows)
+    const columnConstraints = pivotColumn.columnPath.map(segment => ({
+      field: segment.field,
+      value: segment.value,
+    }))
+    const matches: DataGridRowNode<T>[] = []
+    let matchCount = 0
+    for (const sourceRow of sourceRows) {
+      if (sourceRow.kind !== "leaf") {
+        continue
+      }
+      let rowMatches = true
+      for (const constraint of rowConstraints) {
+        if (normalizePivotAxisValue(readRowField(sourceRow, constraint.field)) !== constraint.value) {
+          rowMatches = false
+          break
+        }
+      }
+      if (!rowMatches) {
+        continue
+      }
+      let columnMatches = true
+      for (const constraint of columnConstraints) {
+        if (normalizePivotAxisValue(readRowField(sourceRow, constraint.field)) !== constraint.value) {
+          columnMatches = false
+          break
+        }
+      }
+      if (!columnMatches) {
+        continue
+      }
+      matchCount += 1
+      if (matches.length < normalizedLimit) {
+        matches.push(sourceRow)
+      }
+    }
+    return {
+      rowId: input.rowId,
+      columnId,
+      valueField: pivotColumn.valueField,
+      agg: pivotColumn.agg,
+      cellValue: readRowField(pivotRow, columnId),
+      matchCount,
+      truncated: matchCount > matches.length,
+      rows: matches,
+    }
+  }
+
   function runFilterStage(
     context: Parameters<DataGridClientProjectionStageHandlers<T>["runFilterStage"]>[0],
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runFilterStage"]> {
@@ -516,8 +887,8 @@ export function createClientRowModel<T>(
   function runGroupStage(
     context: Parameters<DataGridClientProjectionStageHandlers<T>["runGroupStage"]>[0],
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runGroupStage"]> {
-    const expansionSpec = getExpansionSpec()
-    const expansionSnapshot = buildGroupExpansionSnapshot(expansionSpec, toggledGroupKeys)
+    const expansionSnapshot = getCurrentExpansionSnapshot()
+    const expansionState = getActiveExpansionStateStore()
     const nextGroupValueCacheKey = groupBy
       ? `${runtimeState.rowRevision}:${runtimeState.groupRevision}:${groupBy.fields.join("|")}`
       : "__none__"
@@ -618,7 +989,7 @@ export function createClientRowModel<T>(
               inputRows: treeRowsForProjection,
               treeData,
               expansionSnapshot,
-              expansionToggledKeys: toggledGroupKeys,
+              expansionToggledKeys: expansionState.toggledKeys,
               rowMatchesFilter: treeRowMatchesFilter,
               pathCacheState: treePathProjectionCacheState,
               parentCacheState: treeParentProjectionCacheState,
@@ -727,12 +1098,31 @@ export function createClientRowModel<T>(
     if (!shouldRecomputePivot) {
       return false
     }
+    if (pendingPivotValuePatch && runtimeState.pivotedRowsProjection.length > 0) {
+      const patchedProjection = pivotRuntime.applyValueOnlyPatch({
+        projectedRows: runtimeState.pivotedRowsProjection,
+        pivotModel,
+        changedRows: pendingPivotValuePatch.changedRows,
+      })
+      if (patchedProjection) {
+        runtimeState.pivotedRowsProjection = preservePivotProjectionRowIdentity(
+          runtimeState.pivotedRowsProjection,
+          patchedProjection.rows,
+        )
+        pivotColumns = pivotRuntime.normalizeColumns(patchedProjection.columns)
+        return true
+      }
+    }
     const pivotProjection = pivotRuntime.projectRows({
       inputRows: runtimeState.groupedRowsProjection,
       pivotModel,
       normalizeFieldValue: normalizeText,
+      expansionSnapshot: getCurrentExpansionSnapshot(),
     })
-    runtimeState.pivotedRowsProjection = pivotProjection.rows
+    runtimeState.pivotedRowsProjection = preservePivotProjectionRowIdentity(
+      runtimeState.pivotedRowsProjection,
+      pivotProjection.rows,
+    )
     pivotColumns = pivotRuntime.normalizeColumns(pivotProjection.columns)
     return true
   }
@@ -768,7 +1158,9 @@ export function createClientRowModel<T>(
     const hasAggregationModel = Boolean(activeAggregationModel && activeAggregationModel.columns.length > 0)
     if (pivotModel) {
       resetGroupByIncrementalAggregationState()
-      runtimeState.aggregatedRowsProjection = runtimeState.pivotedRowsProjection
+      runtimeState.aggregatedRowsProjection = sortModel.length > 0
+        ? sortPivotProjectionRows(runtimeState.pivotedRowsProjection, sortModel)
+        : runtimeState.pivotedRowsProjection
       return true
     }
     if (treeData || !activeGroupBy || !hasAggregationModel || !activeAggregationModel) {
@@ -829,7 +1221,10 @@ export function createClientRowModel<T>(
   ): ReturnType<DataGridClientProjectionStageHandlers<T>["runVisibleStage"]> {
     const shouldRecomputeVisible = context.shouldRecompute || runtimeState.rows.length === 0
     if (shouldRecomputeVisible) {
-      runtimeState.rows = assignDisplayIndexes(runtimeState.paginatedRowsProjection)
+      const nextVisibleRows = assignDisplayIndexes(runtimeState.paginatedRowsProjection)
+      runtimeState.rows = pivotModel
+        ? preservePivotProjectionRowIdentity(runtimeState.rows, nextVisibleRows, { includeDisplayIndex: true })
+        : nextVisibleRows
     } else {
       runtimeState.rows = patchProjectedRowsByIdentity(runtimeState.rows, context.sourceById)
     }
@@ -848,6 +1243,7 @@ export function createClientRowModel<T>(
       filter: runtimeState.filterRevision,
       group: runtimeState.groupRevision,
     }
+    pendingPivotValuePatch = null
     runtimeStateStore.commitProjectionCycle(meta.hadActualRecompute)
   }
 
@@ -879,9 +1275,37 @@ export function createClientRowModel<T>(
     return runtimeStateStore.getProjectionDiagnostics(() => projectionOrchestrator.getStaleStages())
   }
 
+  function collectPivotAxisFields(activePivotModel: DataGridPivotSpec | null): Set<string> {
+    const fields = new Set<string>()
+    if (!activePivotModel) {
+      return fields
+    }
+    for (const field of [...activePivotModel.rows, ...activePivotModel.columns]) {
+      const normalized = field.trim()
+      if (normalized.length > 0) {
+        fields.add(normalized)
+      }
+    }
+    return fields
+  }
+
+  function collectPivotValueFields(activePivotModel: DataGridPivotSpec | null): Set<string> {
+    const fields = new Set<string>()
+    if (!activePivotModel) {
+      return fields
+    }
+    for (const valueSpec of activePivotModel.values) {
+      const normalized = valueSpec.field.trim()
+      if (normalized.length > 0) {
+        fields.add(normalized)
+      }
+    }
+    return fields
+  }
+
   function getSnapshot(): DataGridRowModelSnapshot<T> {
     viewportRange = normalizeViewportRange(viewportRange, runtimeState.rows.length)
-    const expansionSpec = getExpansionSpec()
+    const expansionSnapshot = getCurrentExpansionSnapshot()
     return {
       revision: runtimeState.revision,
       kind: "client",
@@ -901,7 +1325,7 @@ export function createClientRowModel<T>(
             pivotColumns: pivotRuntime.normalizeColumns(pivotColumns),
           }
         : {}),
-      groupExpansion: buildGroupExpansionSnapshot(expansionSpec, toggledGroupKeys),
+      groupExpansion: expansionSnapshot,
     }
   }
 
@@ -917,7 +1341,10 @@ export function createClientRowModel<T>(
       }
     }
     if (pivotModel) {
-      return null
+      return {
+        fields: pivotModel.rows.length > 0 ? pivotModel.rows : ["__pivot__"],
+        expandedByDefault: pivotExpansionExpandedByDefault,
+      }
     }
     if (!groupBy) {
       return null
@@ -933,6 +1360,7 @@ export function createClientRowModel<T>(
     if (!expansionSpec) {
       return false
     }
+    const expansionState = getActiveExpansionStateStore()
     const normalizedSnapshot = buildGroupExpansionSnapshot(
       {
         fields: expansionSpec.fields,
@@ -940,14 +1368,14 @@ export function createClientRowModel<T>(
       },
       nextExpansion?.toggledGroupKeys ?? [],
     )
-    const currentSnapshot = buildGroupExpansionSnapshot(expansionSpec, toggledGroupKeys)
+    const currentSnapshot = buildGroupExpansionSnapshot(expansionSpec, expansionState.toggledKeys)
     if (isSameGroupExpansionSnapshot(currentSnapshot, normalizedSnapshot)) {
       return false
     }
-    expansionExpandedByDefault = normalizedSnapshot.expandedByDefault
-    toggledGroupKeys.clear()
+    expansionState.setExpandedByDefault(normalizedSnapshot.expandedByDefault)
+    expansionState.toggledKeys.clear()
     for (const groupKey of normalizedSnapshot.toggledGroupKeys) {
-      toggledGroupKeys.add(groupKey)
+      expansionState.toggledKeys.add(groupKey)
     }
     return true
   }
@@ -990,6 +1418,7 @@ export function createClientRowModel<T>(
       options: DataGridClientRowPatchOptions = {},
     ) {
       ensureActive()
+      pendingPivotValuePatch = null
       if (!Array.isArray(updates) || updates.length === 0) {
         return
       }
@@ -1012,6 +1441,7 @@ export function createClientRowModel<T>(
       const changedRowIds: DataGridRowId[] = []
       const changedUpdatesById = new Map<DataGridRowId, Partial<T>>()
       const previousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
+      const nextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
       sourceRows = sourceRows.map(row => {
         const patch = updatesById.get(row.rowId)
         if (!patch) {
@@ -1025,11 +1455,13 @@ export function createClientRowModel<T>(
         changedRowIds.push(row.rowId)
         changedUpdatesById.set(row.rowId, patch)
         previousRowsById.set(row.rowId, row)
-        return {
+        const nextRow = {
           ...row,
           data: nextData,
           row: nextData,
         }
+        nextRowsById.set(row.rowId, nextRow)
+        return nextRow
       })
       if (!changed || changedUpdatesById.size === 0) {
         return
@@ -1087,6 +1519,37 @@ export function createClientRowModel<T>(
             },
           }
         : changeSet
+      if (pivotModel && allowGroupRecompute) {
+        const pivotAxisFields = collectPivotAxisFields(pivotModel)
+        const pivotValueFields = collectPivotValueFields(pivotModel)
+        const affectsPivotAxis = pivotAxisFields.size > 0
+          && projectionPolicy.dependencyGraph.affectsAny(effectiveChangeSet.affectedFields, pivotAxisFields)
+        const affectsPivotValues = pivotValueFields.size === 0
+          ? false
+          : projectionPolicy.dependencyGraph.affectsAny(effectiveChangeSet.affectedFields, pivotValueFields)
+        const canApplyPivotValuePatch =
+          affectsPivotValues &&
+          !affectsPivotAxis &&
+          !effectiveChangeSet.stageImpact.affectsFilter &&
+          !effectiveChangeSet.stageImpact.affectsSort
+        if (canApplyPivotValuePatch) {
+          const changedRows: DataGridPivotIncrementalPatchRow<T>[] = []
+          for (const changedRowId of changedRowIds) {
+            const previousRow = previousRowsById.get(changedRowId)
+            const nextRow = nextRowsById.get(changedRowId)
+            if (!previousRow || !nextRow || previousRow.kind !== "leaf" || nextRow.kind !== "leaf") {
+              continue
+            }
+            changedRows.push({
+              previousRow,
+              nextRow,
+            })
+          }
+          if (changedRows.length > 0) {
+            pendingPivotValuePatch = { changedRows }
+          }
+        }
+      }
       const staleStagesBeforeRequest = new Set<DataGridClientProjectionStage>(projectionOrchestrator.getStaleStages())
       const allStages: readonly DataGridClientProjectionStage[] = DATAGRID_CLIENT_ALL_PROJECTION_STAGES
       const projectionExecutionPlan = buildPatchProjectionExecutionPlan({
@@ -1248,12 +1711,17 @@ export function createClientRowModel<T>(
       }
       pivotModel = normalized
       pivotColumns = []
+      pivotExpansionExpandedByDefault = true
+      toggledPivotGroupKeys.clear()
       runtimeStateStore.bumpGroupRevision()
       projectionOrchestrator.recomputeFromStage("pivot")
       emit()
     },
     getPivotModel() {
       return clonePivotSpec(pivotModel)
+    },
+    getPivotCellDrilldown(input: DataGridPivotCellDrilldownInput) {
+      return resolvePivotCellDrilldown(input)
     },
     setAggregationModel(nextAggregationModel: DataGridAggregationModel<T> | null) {
       ensureActive()
@@ -1313,7 +1781,8 @@ export function createClientRowModel<T>(
       if (!expansionSpec) {
         return
       }
-      if (!toggleGroupExpansionKey(toggledGroupKeys, groupKey)) {
+      const expansionState = getActiveExpansionStateStore()
+      if (!toggleGroupExpansionKey(expansionState.toggledKeys, groupKey)) {
         return
       }
       runtimeStateStore.bumpGroupRevision()
@@ -1326,7 +1795,8 @@ export function createClientRowModel<T>(
       if (!expansionSpec) {
         return
       }
-      if (!setGroupExpansionKey(toggledGroupKeys, groupKey, expansionExpandedByDefault, true)) {
+      const expansionState = getActiveExpansionStateStore()
+      if (!setGroupExpansionKey(expansionState.toggledKeys, groupKey, expansionState.expandedByDefault, true)) {
         return
       }
       runtimeStateStore.bumpGroupRevision()
@@ -1339,7 +1809,8 @@ export function createClientRowModel<T>(
       if (!expansionSpec) {
         return
       }
-      if (!setGroupExpansionKey(toggledGroupKeys, groupKey, expansionExpandedByDefault, false)) {
+      const expansionState = getActiveExpansionStateStore()
+      if (!setGroupExpansionKey(expansionState.toggledKeys, groupKey, expansionState.expandedByDefault, false)) {
         return
       }
       runtimeStateStore.bumpGroupRevision()
@@ -1352,11 +1823,12 @@ export function createClientRowModel<T>(
       if (!expansionSpec) {
         return
       }
-      if (expansionExpandedByDefault && toggledGroupKeys.size === 0) {
+      const expansionState = getActiveExpansionStateStore()
+      if (expansionState.expandedByDefault && expansionState.toggledKeys.size === 0) {
         return
       }
-      expansionExpandedByDefault = true
-      toggledGroupKeys.clear()
+      expansionState.setExpandedByDefault(true)
+      expansionState.toggledKeys.clear()
       runtimeStateStore.bumpGroupRevision()
       projectionOrchestrator.recomputeFromStage("group")
       emit()
@@ -1367,11 +1839,12 @@ export function createClientRowModel<T>(
       if (!expansionSpec) {
         return
       }
-      if (!expansionExpandedByDefault && toggledGroupKeys.size === 0) {
+      const expansionState = getActiveExpansionStateStore()
+      if (!expansionState.expandedByDefault && expansionState.toggledKeys.size === 0) {
         return
       }
-      expansionExpandedByDefault = false
-      toggledGroupKeys.clear()
+      expansionState.setExpandedByDefault(false)
+      expansionState.toggledKeys.clear()
       runtimeStateStore.bumpGroupRevision()
       projectionOrchestrator.recomputeFromStage("group")
       emit()
@@ -1411,6 +1884,7 @@ export function createClientRowModel<T>(
       rowVersionById.clear()
       resetGroupByIncrementalAggregationState()
       groupedProjectionGroupIndexByRowId.clear()
+      toggledPivotGroupKeys.clear()
       sortValueCache.clear()
       groupValueCache.clear()
       invalidateTreeProjectionCaches()

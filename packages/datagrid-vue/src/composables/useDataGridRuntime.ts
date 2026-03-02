@@ -6,6 +6,11 @@ import type {
   DataGridClientRowPatchOptions,
   DataGridColumnDef,
   DataGridColumnModelSnapshot,
+  DataGridPivotCellDrilldown,
+  DataGridPivotCellDrilldownInput,
+  DataGridPivotLayoutImportOptions,
+  DataGridPivotInteropSnapshot,
+  DataGridPivotLayoutSnapshot,
   DataGridPivotSpec,
   DataGridRowNode,
   DataGridRowModel,
@@ -59,6 +64,15 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   getAggregationModel: () => DataGridAggregationModel<TRow> | null
   setPivotModel: (pivotModel: DataGridPivotSpec | null) => void
   getPivotModel: () => DataGridPivotSpec | null
+  getPivotCellDrilldown: (
+    input: DataGridPivotCellDrilldownInput,
+  ) => DataGridPivotCellDrilldown<TRow> | null
+  exportPivotLayout: () => DataGridPivotLayoutSnapshot<TRow>
+  exportPivotInterop: () => DataGridPivotInteropSnapshot<TRow> | null
+  importPivotLayout: (
+    layout: DataGridPivotLayoutSnapshot<TRow>,
+    options?: DataGridPivotLayoutImportOptions,
+  ) => void
   patchRows: (
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
@@ -189,6 +203,10 @@ export function useDataGridRuntime<TRow = unknown>(
     getAggregationModel: api.getAggregationModel,
     setPivotModel: api.setPivotModel,
     getPivotModel: api.getPivotModel,
+    getPivotCellDrilldown: api.getPivotCellDrilldown,
+    exportPivotLayout: api.exportPivotLayout,
+    exportPivotInterop: api.exportPivotInterop,
+    importPivotLayout: api.importPivotLayout,
     patchRows,
     applyEdits,
     reapplyView,

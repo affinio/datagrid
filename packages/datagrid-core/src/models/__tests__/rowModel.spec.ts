@@ -219,6 +219,10 @@ describe("rowModel normalization", () => {
       columns: ["year"],
       values: [{ field: "revenue", agg: "sum" }],
       rowSubtotals: true,
+      columnSubtotals: true,
+      columnGrandTotal: true,
+      columnSubtotalPosition: "before",
+      columnGrandTotalPosition: "first",
       grandTotal: true,
     })
     expect(normalized).toEqual({
@@ -226,6 +230,10 @@ describe("rowModel normalization", () => {
       columns: ["year"],
       values: [{ field: "revenue", agg: "sum" }],
       rowSubtotals: true,
+      columnSubtotals: true,
+      columnGrandTotal: true,
+      columnSubtotalPosition: "before",
+      columnGrandTotalPosition: "first",
       grandTotal: true,
     })
     expect(isSamePivotSpec(normalized, {
@@ -233,6 +241,10 @@ describe("rowModel normalization", () => {
       columns: ["year"],
       values: [{ field: "revenue", agg: "sum" }],
       rowSubtotals: true,
+      columnSubtotals: true,
+      columnGrandTotal: true,
+      columnSubtotalPosition: "before",
+      columnGrandTotalPosition: "first",
       grandTotal: true,
     })).toBe(true)
     expect(isSamePivotSpec(normalized, {
@@ -240,8 +252,71 @@ describe("rowModel normalization", () => {
       columns: ["year"],
       values: [{ field: "revenue", agg: "sum" }],
       rowSubtotals: true,
+      columnSubtotals: false,
+      columnGrandTotal: true,
+      grandTotal: true,
+    })).toBe(false)
+    expect(isSamePivotSpec(normalized, {
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+      rowSubtotals: true,
+      columnSubtotals: true,
+      columnGrandTotal: false,
+      columnSubtotalPosition: "before",
+      columnGrandTotalPosition: "first",
+      grandTotal: true,
+    })).toBe(false)
+    expect(isSamePivotSpec(normalized, {
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+      rowSubtotals: true,
+      columnSubtotals: true,
+      columnSubtotalPosition: "after",
+      columnGrandTotalPosition: "first",
+      grandTotal: true,
+    })).toBe(false)
+    expect(isSamePivotSpec(normalized, {
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+      rowSubtotals: true,
+      columnSubtotals: true,
+      columnGrandTotal: true,
+      columnGrandTotalPosition: "last",
+      grandTotal: true,
+    })).toBe(false)
+    expect(isSamePivotSpec(normalized, {
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+      rowSubtotals: true,
+      columnSubtotals: true,
+      columnGrandTotal: true,
+      columnSubtotalPosition: "before",
+      columnGrandTotalPosition: "first",
       grandTotal: false,
     })).toBe(false)
+    expect(isSamePivotSpec({
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+      rowSubtotals: true,
+      columnSubtotals: true,
+      columnGrandTotal: true,
+      columnSubtotalPosition: "after",
+      columnGrandTotalPosition: "last",
+      grandTotal: true,
+    }, {
+      rows: ["region", "team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+      rowSubtotals: true,
+      columnSubtotals: true,
+      columnGrandTotal: true,
+      grandTotal: true,
+    })).toBe(true)
   })
 
   it("normalizes pagination input and builds deterministic snapshot", () => {

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
-import { createDataSourceBackedRowModel } from "../index"
+import {
+  createClientRowModel,
+  createDataGridServerPivotRowId,
+  createDataSourceBackedRowModel,
+} from "../index"
 import type {
   DataGridDataSource,
   DataGridDataSourcePullRequest,
@@ -803,5 +807,228 @@ describe("createDataSourceBackedRowModel", () => {
     expect(model.getBackpressureDiagnostics().pushApplied).toBe(2)
 
     model.dispose()
+  })
+
+  it("sends pivot+pagination context and reuses cursor across pulls", async () => {
+    const calls: PullCall[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: number; region: string; year: number }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          calls.push({
+            request,
+            resolve,
+            reject,
+          })
+          request.signal.addEventListener("abort", () => reject({ name: "AbortError" }))
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 1_000,
+      initialPagination: { pageSize: 25, currentPage: 2 },
+      initialPivotModel: {
+        rows: ["region"],
+        columns: ["year"],
+        values: [{ field: "value", agg: "sum" }],
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 10 })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.request.pivot?.pivotModel).toEqual({
+      rows: ["region"],
+      columns: ["year"],
+      values: [{ field: "value", agg: "sum" }],
+    })
+    expect(calls[0]?.request.pagination.snapshot.pageSize).toBe(25)
+    expect(calls[0]?.request.pagination.snapshot.currentPage).toBe(2)
+    expect(calls[0]?.request.pagination.cursor).toBeNull()
+
+    calls[0]?.resolve({
+      rows: [{ index: 0, row: { id: 1, value: 10, region: "EMEA", year: 2024 } }],
+      total: 1_000,
+      cursor: "cursor:page-2",
+      pivotColumns: [
+        {
+          id: "pivot|year=2024|v:sum:value",
+          valueField: "value",
+          agg: "sum",
+          label: "year=2024 · sum(value)",
+          columnPath: [{ field: "year", value: "2024" }],
+        },
+      ],
+    })
+    await flushMicrotasks()
+
+    model.setViewportRange({ start: 5, end: 15 })
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.request.pagination.cursor).toBe("cursor:page-2")
+
+    calls[1]?.resolve({
+      rows: [{ index: 5, row: { id: 6, value: 20, region: "EMEA", year: 2024 } }],
+      total: 1_000,
+    })
+    await flushMicrotasks()
+
+    model.dispose()
+  })
+
+  it("keeps pivot column metadata when server returns partial upsert/pull payloads", async () => {
+    const calls: PullCall[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: number; region: string; year: number }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          calls.push({ request, resolve, reject })
+          request.signal.addEventListener("abort", () => reject({ name: "AbortError" }))
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100,
+      initialPivotModel: {
+        rows: ["region"],
+        columns: ["year"],
+        values: [{ field: "value", agg: "sum" }],
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 10 })
+    calls[0]?.resolve({
+      rows: [{ index: 0, row: { id: 1, value: 42, region: "EMEA", year: 2024 } }],
+      total: 100,
+      pivotColumns: [
+        {
+          id: "pivot|year=2024|v:sum:value",
+          valueField: "value",
+          agg: "sum",
+          label: "year=2024 · sum(value)",
+          columnPath: [{ field: "year", value: "2024" }],
+        },
+      ],
+    })
+    await flushMicrotasks()
+
+    expect(model.getSnapshot().pivotColumns?.length).toBe(1)
+
+    model.setViewportRange({ start: 20, end: 30 })
+    calls[1]?.resolve({
+      rows: [{ index: 20, row: { id: 21, value: 11, region: "EMEA", year: 2024 } }],
+      total: 100,
+    })
+    await flushMicrotasks()
+
+    expect(model.getSnapshot().pivotColumns?.length).toBe(1)
+    expect(model.getSnapshot().pivotColumns?.[0]?.label).toContain("year=2024")
+
+    model.dispose()
+  })
+
+  it("keeps client/server pivot layout semantics aligned for same pivot model", async () => {
+    const sourceRows = [
+      { id: 1, region: "EMEA", year: 2024, value: 10 },
+      { id: 2, region: "EMEA", year: 2025, value: 20 },
+      { id: 3, region: "APAC", year: 2024, value: 15 },
+      { id: 4, region: "APAC", year: 2025, value: 25 },
+    ]
+    const pivotModel = {
+      rows: ["region"],
+      columns: ["year"],
+      values: [{ field: "value", agg: "sum" as const }],
+      grandTotal: true,
+      columnGrandTotal: true,
+    }
+
+    const client = createClientRowModel({
+      rows: sourceRows,
+      resolveRowId: row => row.id,
+      initialPivotModel: pivotModel,
+    })
+    client.refresh("manual")
+    const clientSnapshot = client.getSnapshot()
+    const clientRows = client.getRowsInRange({
+      start: 0,
+      end: Math.max(0, client.getRowCount() - 1),
+    })
+
+    const dataSource: DataGridDataSource<Record<string, unknown>> = {
+      async pull(request) {
+        const serverBuilder = createClientRowModel({
+          rows: sourceRows,
+          resolveRowId: row => row.id,
+          initialPivotModel: request.pivot?.pivotModel ?? pivotModel,
+        })
+        serverBuilder.refresh("manual")
+        const snapshot = serverBuilder.getSnapshot()
+        const rows = serverBuilder.getRowsInRange({
+          start: 0,
+          end: Math.max(0, serverBuilder.getRowCount() - 1),
+        }).map((row, index) => ({
+          index,
+          rowId: row.rowId,
+          kind: row.kind,
+          groupMeta: row.groupMeta,
+          state: row.state,
+          row: row.data as Record<string, unknown>,
+        }))
+        serverBuilder.dispose()
+        return {
+          rows,
+          total: rows.length,
+          pivotColumns: snapshot.pivotColumns ?? [],
+        }
+      },
+    }
+
+    const server = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id as number,
+      initialTotal: 0,
+      initialPivotModel: pivotModel,
+    })
+    server.setViewportRange({ start: 0, end: 200 })
+    await flushMicrotasks()
+    const serverSnapshot = server.getSnapshot()
+    const serverRows = server.getRowsInRange({
+      start: 0,
+      end: Math.max(0, server.getRowCount() - 1),
+    })
+
+    expect(serverSnapshot.pivotColumns?.map(column => column.label)).toEqual(
+      clientSnapshot.pivotColumns?.map(column => column.label),
+    )
+    expect(serverRows.map(row => String(row.rowId))).toEqual(clientRows.map(row => String(row.rowId)))
+    expect(serverRows.map(row => row.kind)).toEqual(clientRows.map(row => row.kind))
+
+    server.dispose()
+    client.dispose()
+  })
+
+  it("builds deterministic server pivot row ids", () => {
+    const idA = createDataGridServerPivotRowId({
+      role: "group",
+      rowDepth: 1,
+      rowPath: [{ field: "region", value: "EMEA" }],
+      marker: "node",
+    })
+    const idB = createDataGridServerPivotRowId({
+      role: "group",
+      rowDepth: 1,
+      rowPath: [{ field: "region", value: "EMEA" }],
+      marker: "node",
+    })
+    const idC = createDataGridServerPivotRowId({
+      role: "group",
+      rowDepth: 1,
+      rowPath: [{ field: "region", value: "APAC" }],
+      marker: "node",
+    })
+    expect(idA).toBe(idB)
+    expect(idA).not.toBe(idC)
   })
 })
