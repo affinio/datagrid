@@ -13,6 +13,9 @@ import type {
 
 export interface DataGridApiMetaMethods {
   getSchema: DataGridApiMetaNamespace["getSchema"]
+  getRowModelKind: DataGridApiMetaNamespace["getRowModelKind"]
+  getApiVersion: DataGridApiMetaNamespace["getApiVersion"]
+  getProtocolVersion: DataGridApiMetaNamespace["getProtocolVersion"]
   getApiCapabilities: DataGridApiMetaNamespace["getCapabilities"]
   getRuntimeInfo: DataGridApiMetaNamespace["getRuntimeInfo"]
 }
@@ -24,12 +27,15 @@ export interface CreateDataGridApiMetaMethodsInput<TRow = unknown> {
   getProjectionMode: () => DataGridApiProjectionMode
   getComputeMode: () => DataGridClientComputeMode | null
   getCapabilities: () => DataGridApiCapabilities
+  getApiVersion: () => string
+  getProtocolVersion: () => string
 }
 
 function cloneCapabilities(capabilities: DataGridApiCapabilities): DataGridApiCapabilities {
   return {
     patch: capabilities.patch,
     dataMutation: capabilities.dataMutation,
+    backpressureControl: capabilities.backpressureControl,
     compute: capabilities.compute,
     selection: capabilities.selection,
     transaction: capabilities.transaction,
@@ -68,6 +74,15 @@ export function createDataGridApiMetaMethods<TRow = unknown>(
       }
       return schema
     },
+    getRowModelKind() {
+      return rowModel.kind
+    },
+    getApiVersion() {
+      return input.getApiVersion()
+    },
+    getProtocolVersion() {
+      return input.getProtocolVersion()
+    },
     getApiCapabilities() {
       return cloneCapabilities(input.getCapabilities())
     },
@@ -75,6 +90,8 @@ export function createDataGridApiMetaMethods<TRow = unknown>(
       const snapshot = rowModel.getSnapshot()
       return {
         lifecycleState: input.lifecycleState(),
+        apiVersion: input.getApiVersion(),
+        protocolVersion: input.getProtocolVersion(),
         rowModelKind: rowModel.kind,
         rowCount: snapshot.rowCount,
         revision: typeof snapshot.revision === "number" ? snapshot.revision : null,

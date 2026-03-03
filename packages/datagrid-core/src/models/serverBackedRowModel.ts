@@ -56,6 +56,9 @@ export interface CreateServerBackedRowModelOptions<T> {
 export interface ServerBackedRowModel<T> extends DataGridRowModel<T> {
   readonly source: ServerRowModel<T>
   syncFromSource(): void
+  pauseBackpressure(): boolean
+  resumeBackpressure(): boolean
+  flushBackpressure(): Promise<void>
 }
 
 const DEFAULT_ROW_CACHE_LIMIT = 4096
@@ -119,6 +122,9 @@ export function createServerBackedRowModel<T>(
   let inFlightViewportWarmup: InFlightViewportWarmup | null = null
   let warmupToken = 0
   let warming = false
+  let backpressurePaused = false
+  let pendingWarmupRange: DataGridViewportRange | null = null
+  let pendingRefreshReason: DataGridRowModelRefreshReason | null = null
   const listeners = new Set<DataGridRowModelListener<T>>()
   const rowNodeCache = new Map<number, DataGridRowNode<T>>()
   const rowNodeCacheRevision = new Map<number, number>()
@@ -567,6 +573,74 @@ export function createServerBackedRowModel<T>(
     return inFlightViewportWarmup
   }
 
+  function queuePendingWarmup(range: DataGridViewportRange, refreshReason?: DataGridRowModelRefreshReason): void {
+    const normalized = normalizeViewportRange(range, getVisibleRowCount())
+    if (!pendingWarmupRange) {
+      pendingWarmupRange = normalized
+    } else {
+      pendingWarmupRange = normalizeViewportRange({
+        start: Math.min(pendingWarmupRange.start, normalized.start),
+        end: Math.max(pendingWarmupRange.end, normalized.end),
+      }, getVisibleRowCount())
+    }
+    if (typeof refreshReason === "string") {
+      pendingRefreshReason = refreshReason
+    }
+  }
+
+  function runViewportWarmup(warmedRange: DataGridViewportRange): Promise<void> {
+    const warmup = warmViewportRange(warmedRange)
+    setWarming(true)
+    emit()
+    return warmup.promise
+      .then(() => {
+        if (disposed || warmup.token !== warmupToken) {
+          return
+        }
+        setWarming(false)
+        invalidateCachesForRange(warmedRange)
+        emit()
+      })
+      .catch(() => {
+        if (disposed || warmup.token !== warmupToken) {
+          return
+        }
+        setWarming(false)
+        invalidateCachesForRange(warmedRange)
+        emit()
+      })
+  }
+
+  async function refreshInternal(reason?: DataGridRowModelRefreshReason): Promise<void> {
+    if (reason === "reset") {
+      source.reset()
+    }
+    if (backpressurePaused) {
+      queuePendingWarmup(viewportRange, reason ?? "manual")
+      emit()
+      return
+    }
+    const warmup = warmViewportRange(viewportRange)
+    setWarming(true)
+    try {
+      await warmup.promise
+      if (disposed || warmup.token !== warmupToken) {
+        return
+      }
+      setWarming(false)
+      if (syncPivotColumnsFromSource()) {
+        revision += 1
+      }
+      markCachesStale()
+    } finally {
+      if (disposed || warmup.token !== warmupToken) {
+        return
+      }
+      setWarming(false)
+      emit()
+    }
+  }
+
   function markCachesStale(): void {
     cacheRevision += 1
     clearLastRangeCache()
@@ -676,27 +750,12 @@ export function createServerBackedRowModel<T>(
         return
       }
       viewportRange = nextRange
-      const warmedRange = nextRange
-      const warmup = warmViewportRange(warmedRange)
-      setWarming(true)
-      emit()
-      void warmup.promise
-        .then(() => {
-          if (disposed || warmup.token !== warmupToken) {
-            return
-          }
-          setWarming(false)
-          invalidateCachesForRange(warmedRange)
-          emit()
-        })
-        .catch(() => {
-          if (disposed || warmup.token !== warmupToken) {
-            return
-          }
-          setWarming(false)
-          invalidateCachesForRange(warmedRange)
-          emit()
-        })
+      if (backpressurePaused) {
+        queuePendingWarmup(nextRange)
+        emit()
+        return
+      }
+      void runViewportWarmup(nextRange)
     },
     setPagination(nextPagination: DataGridPaginationInput | null) {
       ensureActive()
@@ -867,28 +926,7 @@ export function createServerBackedRowModel<T>(
     },
     async refresh(reason?: DataGridRowModelRefreshReason) {
       ensureActive()
-      if (reason === "reset") {
-        source.reset()
-      }
-      const warmup = warmViewportRange(viewportRange)
-      setWarming(true)
-      try {
-        await warmup.promise
-        if (disposed || warmup.token !== warmupToken) {
-          return
-        }
-        setWarming(false)
-        if (syncPivotColumnsFromSource()) {
-          revision += 1
-        }
-        markCachesStale()
-      } finally {
-        if (disposed || warmup.token !== warmupToken) {
-          return
-        }
-        setWarming(false)
-        emit()
-      }
+      await refreshInternal(reason)
     },
     syncFromSource() {
       ensureActive()
@@ -897,6 +935,61 @@ export function createServerBackedRowModel<T>(
       }
       invalidateCaches()
       emit()
+    },
+    pauseBackpressure() {
+      ensureActive()
+      if (backpressurePaused) {
+        return false
+      }
+      backpressurePaused = true
+      emit()
+      return true
+    },
+    resumeBackpressure() {
+      ensureActive()
+      if (!backpressurePaused) {
+        return false
+      }
+      backpressurePaused = false
+      const pendingRefresh = pendingRefreshReason
+      const pendingRange = pendingWarmupRange
+      pendingRefreshReason = null
+      pendingWarmupRange = null
+      if (pendingRefresh) {
+        void refreshInternal(pendingRefresh)
+      } else if (pendingRange) {
+        void runViewportWarmup(pendingRange)
+      } else {
+        emit()
+      }
+      return true
+    },
+    async flushBackpressure() {
+      ensureActive()
+      const wasPaused = backpressurePaused
+      backpressurePaused = false
+      try {
+        const pendingRefresh = pendingRefreshReason
+        const pendingRange = pendingWarmupRange
+        pendingRefreshReason = null
+        pendingWarmupRange = null
+
+        if (pendingRefresh) {
+          await refreshInternal(pendingRefresh)
+        } else if (pendingRange) {
+          await runViewportWarmup(pendingRange)
+        }
+
+        const activeWarmup = inFlightViewportWarmup
+        if (activeWarmup) {
+          await activeWarmup.promise
+        }
+      } finally {
+        if (!disposed && wasPaused) {
+          backpressurePaused = true
+        }
+        emit()
+      }
     },
     subscribe(listener) {
       if (disposed) {

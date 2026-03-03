@@ -144,6 +144,7 @@ export interface DataGridDataSourceBackpressureDiagnostics {
   pushApplied: number
   invalidatedRows: number
   inFlight: boolean
+  paused: boolean
   hasPendingPull: boolean
   rowCacheSize: number
   rowCacheLimit: number

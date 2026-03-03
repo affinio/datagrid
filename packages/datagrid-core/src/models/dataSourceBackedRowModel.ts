@@ -65,6 +65,9 @@ export interface DataSourceBackedRowModel<T = unknown> extends DataGridRowModel<
   readonly dataSource: DataGridDataSource<T>
   invalidateRange(range: DataGridViewportRange): void
   invalidateAll(): void
+  pauseBackpressure(): boolean
+  resumeBackpressure(): boolean
+  flushBackpressure(): Promise<void>
   getBackpressureDiagnostics(): DataGridDataSourceBackpressureDiagnostics
 }
 
@@ -191,6 +194,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let requestCounter = 0
   let inFlight: InFlightPull | null = null
   let pendingPull: PendingPull | null = null
+  let backpressurePaused = false
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rowCount)
   const rowCacheLimit =
     Number.isFinite(options.rowCacheLimit) && (options.rowCacheLimit as number) > 0
@@ -210,6 +214,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     pushApplied: 0,
     invalidatedRows: 0,
     inFlight: false,
+    paused: false,
     hasPendingPull: false,
     rowCacheSize: 0,
     rowCacheLimit,
@@ -498,6 +503,52 @@ export function createDataSourceBackedRowModel<T = unknown>(
     diagnostics.inFlight = false
   }
 
+  function queuePendingPull(
+    requestRange: DataGridViewportRange,
+    reason: DataGridDataSourcePullReason,
+    priority: DataGridDataSourcePullPriority,
+    requestKey: string,
+    treePullContext: DataGridDataSourceTreePullContext | null,
+  ): Promise<void> {
+    if (pendingPull && pendingPull.key === requestKey) {
+      diagnostics.pullCoalesced += 1
+      return inFlight?.promise ?? Promise.resolve()
+    }
+    const pendingRank = pendingPull ? resolvePriorityRank(pendingPull.priority) : -1
+    const nextRank = resolvePriorityRank(priority)
+    if (nextRank >= pendingRank) {
+      pendingPull = {
+        range: requestRange,
+        reason,
+        priority,
+        key: requestKey,
+        treeData: treePullContext,
+      }
+      diagnostics.hasPendingPull = true
+    }
+    diagnostics.pullDeferred += 1
+    emit()
+    return inFlight?.promise ?? Promise.resolve()
+  }
+
+  async function drainBackpressureQueue(): Promise<void> {
+    while (!disposed) {
+      const active = inFlight?.promise ?? null
+      if (active) {
+        await active.catch(() => {})
+        continue
+      }
+      const next = pendingPull
+      if (!next) {
+        diagnostics.hasPendingPull = false
+        return
+      }
+      pendingPull = null
+      diagnostics.hasPendingPull = false
+      await pullRange(next.range, next.reason, next.priority, next.treeData)
+    }
+  }
+
   async function pullRange(
     range: DataGridViewportRange,
     reason: DataGridDataSourcePullReason,
@@ -526,6 +577,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
       treeData: treePullContext,
       state: requestStateKey,
     })
+
+    if (backpressurePaused) {
+      return queuePendingPull(requestRange, reason, priority, requestKey, treePullContext)
+    }
 
     if (inFlight && !inFlight.controller.signal.aborted && inFlight.key === requestKey) {
       diagnostics.pullCoalesced += 1
@@ -574,6 +629,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     const controller = new AbortController()
     const requestPromise = (async () => {
       diagnostics.inFlight = true
+      diagnostics.paused = backpressurePaused
       diagnostics.pullRequested += 1
       loading = true
       error = null
@@ -644,7 +700,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         if (inFlight && inFlight.requestId === requestId) {
           inFlight = null
           diagnostics.inFlight = false
-          if (!disposed && pendingPull) {
+          if (!disposed && pendingPull && !backpressurePaused) {
             const next = pendingPull
             pendingPull = null
             diagnostics.hasPendingPull = false
@@ -1111,9 +1167,54 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       void pullRange(toSourceRange(viewportRange), "invalidation", "normal")
     },
+    pauseBackpressure() {
+      ensureActive()
+      if (backpressurePaused) {
+        return false
+      }
+      backpressurePaused = true
+      diagnostics.paused = true
+      emit()
+      return true
+    },
+    resumeBackpressure() {
+      ensureActive()
+      if (!backpressurePaused) {
+        return false
+      }
+      backpressurePaused = false
+      diagnostics.paused = false
+      if (pendingPull && !inFlight) {
+        const next = pendingPull
+        pendingPull = null
+        diagnostics.hasPendingPull = false
+        void pullRange(next.range, next.reason, next.priority, next.treeData)
+      } else {
+        emit()
+      }
+      return true
+    },
+    async flushBackpressure() {
+      ensureActive()
+      const wasPaused = backpressurePaused
+      if (wasPaused) {
+        backpressurePaused = false
+        diagnostics.paused = false
+      }
+      try {
+        await drainBackpressureQueue()
+      } finally {
+        if (wasPaused && !disposed) {
+          backpressurePaused = true
+          diagnostics.paused = true
+        }
+        emit()
+      }
+    },
     getBackpressureDiagnostics() {
       diagnostics.inFlight = Boolean(inFlight)
       diagnostics.hasPendingPull = Boolean(pendingPull)
+      diagnostics.paused = backpressurePaused
       diagnostics.rowCacheSize = rowCache.size
       return { ...diagnostics }
     },
@@ -1136,6 +1237,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       rowCache.clear()
       pendingPull = null
       diagnostics.inFlight = false
+      diagnostics.paused = false
       diagnostics.hasPendingPull = false
       diagnostics.rowCacheSize = 0
       unsubscribePush?.()

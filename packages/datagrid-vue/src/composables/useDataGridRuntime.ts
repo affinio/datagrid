@@ -7,6 +7,7 @@ import type {
   DataGridApiProjectionMode,
   DataGridApiRuntimeInfo,
   DataGridApiSchemaSnapshot,
+  DataGridMigrateStateOptions,
   CreateDataGridCoreOptions,
   DataGridAggregationModel,
   DataGridClientRowPatch,
@@ -22,6 +23,8 @@ import type {
   DataGridRowNode,
   DataGridRowModel,
   DataGridViewportRange,
+  DataGridSetStateOptions,
+  DataGridUnifiedState,
 } from "@affino/datagrid-core"
 import {
   createDataGridWorkerOwnedRowModel,
@@ -108,6 +111,12 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   hasPlugin: (id: string) => boolean
   listPlugins: () => readonly string[]
   clearPlugins: () => void
+  getUnifiedState: () => DataGridUnifiedState<TRow>
+  migrateUnifiedState: (
+    state: unknown,
+    options?: DataGridMigrateStateOptions,
+  ) => DataGridUnifiedState<TRow> | null
+  setUnifiedState: (state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions) => void
   start: () => Promise<void>
   stop: () => void
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
@@ -278,5 +287,8 @@ export function useDataGridRuntime<TRow = unknown>(
     hasPlugin: api.plugins.has,
     listPlugins: api.plugins.list,
     clearPlugins: api.plugins.clear,
+    getUnifiedState: api.state.get,
+    migrateUnifiedState: api.state.migrate,
+    setUnifiedState: api.state.set,
   }
 }

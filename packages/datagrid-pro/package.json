@@ -1,0 +1,44 @@
+{
+  "name": "@affino/datagrid-pro",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Pro licensing activation package for Affino DataGrid",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@affino/datagrid": "workspace:^"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-pro"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-pro#readme",
+  "license": "MIT",
+  "keywords": [
+    "datagrid",
+    "pro",
+    "license",
+    "commercial",
+    "enterprise"
+  ],
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/index.js"
+}

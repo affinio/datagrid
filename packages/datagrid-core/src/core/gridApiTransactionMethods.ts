@@ -1,3 +1,4 @@
+import type { DataGridApiMutationControlOptions } from "./gridApiContracts"
 import type { DataGridTransactionInput, DataGridTransactionSnapshot } from "./transactionService"
 import {
   assertTransactionCapability,
@@ -10,7 +11,10 @@ export interface DataGridApiTransactionMethods {
   beginTransactionBatch: (label?: string) => string
   commitTransactionBatch: (batchId?: string) => Promise<readonly string[]>
   rollbackTransactionBatch: (batchId?: string) => readonly string[]
-  applyTransaction: (transactionInput: DataGridTransactionInput) => Promise<string>
+  applyTransaction: (
+    transactionInput: DataGridTransactionInput,
+    options?: DataGridApiMutationControlOptions,
+  ) => Promise<string>
   canUndoTransaction: () => boolean
   canRedoTransaction: () => boolean
   undoTransaction: () => Promise<string | null>
@@ -20,6 +24,18 @@ export interface DataGridApiTransactionMethods {
 export interface CreateDataGridApiTransactionMethodsInput {
   getTransactionCapability: () => DataGridTransactionCapability | null
   onChanged?: (snapshot: DataGridTransactionSnapshot | null) => void
+}
+
+function createAbortError(operation: string): Error {
+  const error = new Error(`[DataGridApi] ${operation} aborted.`)
+  error.name = "AbortError"
+  return error
+}
+
+function assertNotAborted(signal: AbortSignal | null | undefined, operation: string): void {
+  if (signal?.aborted) {
+    throw createAbortError(operation)
+  }
 }
 
 export function createDataGridApiTransactionMethods(
@@ -57,7 +73,8 @@ export function createDataGridApiTransactionMethods(
       onChanged?.(transaction.getTransactionSnapshot())
       return rolledBack
     },
-    applyTransaction(transactionInput: DataGridTransactionInput) {
+    applyTransaction(transactionInput: DataGridTransactionInput, options?: DataGridApiMutationControlOptions) {
+      assertNotAborted(options?.signal, "transaction.apply")
       const transaction = assertTransactionCapability(getTransactionCapability())
       return transaction.applyTransaction(transactionInput).then((transactionId) => {
         onChanged?.(transaction.getTransactionSnapshot())

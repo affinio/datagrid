@@ -4,6 +4,7 @@ import type {
   DataGridCoreTransactionService,
 } from "./gridCore"
 import {
+  type DataGridBackpressureControlCapability,
   type DataGridColumnHistogramCapability,
   type DataGridComputeCapability,
   type DataGridRowsDataMutationCapability,
@@ -11,6 +12,7 @@ import {
   type DataGridSelectionCapability,
   type DataGridSortFilterBatchCapability,
   type DataGridTransactionCapability,
+  resolveBackpressureControlCapability,
   resolveColumnHistogramCapability,
   resolveComputeCapability,
   resolvePatchCapability,
@@ -23,6 +25,7 @@ import {
 export interface DataGridApiCapabilityFlags {
   readonly patch: boolean
   readonly dataMutation: boolean
+  readonly backpressureControl: boolean
   readonly compute: boolean
   readonly selection: boolean
   readonly transaction: boolean
@@ -36,6 +39,7 @@ export interface DataGridApiCapabilityRuntime<TRow = unknown> {
   getTransactionCapability: () => DataGridTransactionCapability | null
   getPatchCapability: () => DataGridPatchCapability<TRow> | null
   getRowsDataMutationCapability: () => DataGridRowsDataMutationCapability<TRow> | null
+  getBackpressureControlCapability: () => DataGridBackpressureControlCapability | null
   getComputeCapability: () => DataGridComputeCapability | null
   getSortFilterBatchCapability: () => DataGridSortFilterBatchCapability | null
   getColumnHistogramCapability: () => DataGridColumnHistogramCapability | null
@@ -76,6 +80,9 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
   const getRowsDataMutationCapability = createLazyResolver<DataGridRowsDataMutationCapability<TRow> | null>(() =>
     resolveRowsDataMutationCapability(input.rowModel),
   )
+  const getBackpressureControlCapability = createLazyResolver<DataGridBackpressureControlCapability | null>(() =>
+    resolveBackpressureControlCapability(input.rowModel),
+  )
   const getComputeCapability = createLazyResolver<DataGridComputeCapability | null>(() =>
     resolveComputeCapability(input.rowModel),
   )
@@ -92,6 +99,9 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
     },
     get dataMutation() {
       return getRowsDataMutationCapability() !== null
+    },
+    get backpressureControl() {
+      return getBackpressureControlCapability() !== null
     },
     get compute() {
       return getComputeCapability() !== null
@@ -116,6 +126,7 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
     getTransactionCapability,
     getPatchCapability,
     getRowsDataMutationCapability,
+    getBackpressureControlCapability,
     getComputeCapability,
     getSortFilterBatchCapability,
     getColumnHistogramCapability,

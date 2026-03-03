@@ -46,6 +46,12 @@ export type DataGridColumnHistogramCapability = {
   getColumnHistogram: (columnId: string, options?: DataGridColumnHistogramOptions) => DataGridColumnHistogram
 }
 
+export type DataGridBackpressureControlCapability = {
+  pauseBackpressure: () => boolean
+  resumeBackpressure: () => boolean
+  flushBackpressure: () => Promise<void> | void
+}
+
 export type DataGridTransactionCapability = Required<
   Pick<
     DataGridCoreTransactionService,
@@ -203,6 +209,24 @@ export function resolveColumnHistogramCapability<TRow>(
   }
 }
 
+export function resolveBackpressureControlCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): DataGridBackpressureControlCapability | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DataGridBackpressureControlCapability>
+  if (
+    typeof candidate.pauseBackpressure !== "function" ||
+    typeof candidate.resumeBackpressure !== "function" ||
+    typeof candidate.flushBackpressure !== "function"
+  ) {
+    return null
+  }
+  return {
+    pauseBackpressure: candidate.pauseBackpressure.bind(rowModel),
+    resumeBackpressure: candidate.resumeBackpressure.bind(rowModel),
+    flushBackpressure: candidate.flushBackpressure.bind(rowModel),
+  }
+}
+
 export function assertPatchCapability<TRow>(
   capability: DataGridPatchCapability<TRow> | null,
 ): DataGridPatchCapability<TRow> {
@@ -226,6 +250,15 @@ export function assertComputeCapability(
 ): DataGridComputeCapability {
   if (!capability) {
     throw new Error('[DataGridApi] rowModel does not implement compute mode capability.')
+  }
+  return capability
+}
+
+export function assertBackpressureControlCapability(
+  capability: DataGridBackpressureControlCapability | null,
+): DataGridBackpressureControlCapability {
+  if (!capability) {
+    throw new Error('[DataGridApi] rowModel does not implement backpressure control capability.')
   }
   return capability
 }

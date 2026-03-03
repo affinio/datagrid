@@ -157,6 +157,7 @@ export interface DataGridClientRowPatchOptions {
    */
   recomputeGroup?: boolean
   emit?: boolean
+  signal?: AbortSignal | null
 }
 
 export interface ClientRowModel<T> extends DataGridRowModel<T> {

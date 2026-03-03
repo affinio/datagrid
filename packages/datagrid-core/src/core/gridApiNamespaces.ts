@@ -58,6 +58,11 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   applyEdits: DataGridApi<TRow>["rows"]["applyEdits"]
   setAutoReapply: DataGridApi<TRow>["rows"]["setAutoReapply"]
   getAutoReapply: DataGridApi<TRow>["rows"]["getAutoReapply"]
+  batchRows: DataGridApi<TRow>["rows"]["batch"]
+  hasBackpressureControlSupport: DataGridApi<TRow>["data"]["hasBackpressureControlSupport"]
+  pauseBackpressure: DataGridApi<TRow>["data"]["pause"]
+  resumeBackpressure: DataGridApi<TRow>["data"]["resume"]
+  flushBackpressure: DataGridApi<TRow>["data"]["flush"]
   getColumnModelSnapshot: DataGridApi<TRow>["columns"]["getSnapshot"]
   getColumn: DataGridApi<TRow>["columns"]["get"]
   setColumns: DataGridApi<TRow>["columns"]["setAll"]
@@ -78,6 +83,9 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   getComputeDiagnostics: DataGridApi<TRow>["compute"]["getDiagnostics"]
   getAllDiagnostics: DataGridApi<TRow>["diagnostics"]["getAll"]
   getSchema: DataGridApi<TRow>["meta"]["getSchema"]
+  getRowModelKind: DataGridApi<TRow>["meta"]["getRowModelKind"]
+  getApiVersion: DataGridApi<TRow>["meta"]["getApiVersion"]
+  getProtocolVersion: DataGridApi<TRow>["meta"]["getProtocolVersion"]
   getApiCapabilities: DataGridApi<TRow>["meta"]["getCapabilities"]
   getRuntimeInfo: DataGridApi<TRow>["meta"]["getRuntimeInfo"]
   getProjectionMode: DataGridApi<TRow>["policy"]["getProjectionMode"]
@@ -88,6 +96,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   listPlugins: DataGridApi<TRow>["plugins"]["list"]
   clearPlugins: DataGridApi<TRow>["plugins"]["clear"]
   getUnifiedState: DataGridApi<TRow>["state"]["get"]
+  migrateUnifiedState: DataGridApi<TRow>["state"]["migrate"]
   setUnifiedState: DataGridApi<TRow>["state"]["set"]
   onApiEvent: DataGridApi<TRow>["events"]["on"]
 }
@@ -160,6 +169,13 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       applyEdits: methodSet.applyEdits,
       setAutoReapply: methodSet.setAutoReapply,
       getAutoReapply: methodSet.getAutoReapply,
+      batch: methodSet.batchRows,
+    },
+    data: {
+      hasBackpressureControlSupport: methodSet.hasBackpressureControlSupport,
+      pause: methodSet.pauseBackpressure,
+      resume: methodSet.resumeBackpressure,
+      flush: methodSet.flushBackpressure,
     },
     columns: {
       getSnapshot: methodSet.getColumnModelSnapshot,
@@ -192,6 +208,9 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     },
     meta: {
       getSchema: methodSet.getSchema,
+      getRowModelKind: methodSet.getRowModelKind,
+      getApiVersion: methodSet.getApiVersion,
+      getProtocolVersion: methodSet.getProtocolVersion,
       getCapabilities: methodSet.getApiCapabilities,
       getRuntimeInfo: methodSet.getRuntimeInfo,
     },
@@ -208,6 +227,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     },
     state: {
       get: methodSet.getUnifiedState,
+      migrate: methodSet.migrateUnifiedState,
       set: methodSet.setUnifiedState,
     },
     events: {

@@ -94,6 +94,12 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime!.getSchema().columns.map(column => column.key)).toEqual(["name"])
     expect(runtime!.getApiCapabilities().patch).toBe(true)
     expect(runtime!.getRuntimeInfo().rowModelKind).toBe("client")
+    const unifiedState = runtime!.getUnifiedState()
+    const migratedState = runtime!.migrateUnifiedState(unifiedState, { strict: true })
+    expect(migratedState).toEqual(unifiedState)
+    if (migratedState) {
+      runtime!.setUnifiedState(migratedState)
+    }
 
     const pluginEvents: string[] = []
     expect(runtime!.registerPlugin({

@@ -28,6 +28,19 @@ function normalizePluginId(rawId: string): string {
   return id
 }
 
+function createPluginPayloadSnapshot<TPayload>(
+  payload: TPayload,
+): TPayload {
+  if (!payload || typeof payload !== "object") {
+    return payload
+  }
+  if (Array.isArray(payload)) {
+    return Object.freeze([...payload]) as unknown as TPayload
+  }
+  const record = payload as unknown as Record<string, unknown>
+  return Object.freeze({ ...record }) as unknown as TPayload
+}
+
 const DATAGRID_API_EVENT_NAMES: readonly DataGridApiEventName[] = [
   "rows:changed",
   "columns:changed",
@@ -36,7 +49,10 @@ const DATAGRID_API_EVENT_NAMES: readonly DataGridApiEventName[] = [
   "pivot:changed",
   "transaction:changed",
   "viewport:changed",
+  "state:import:begin",
+  "state:import:end",
   "state:imported",
+  "error",
 ]
 
 export function createDataGridApiPluginsRuntime<TRow = unknown>(
@@ -52,9 +68,13 @@ export function createDataGridApiPluginsRuntime<TRow = unknown>(
       return
     }
     const eventName = event as DataGridApiEventName<TRow>
-    const eventPayload = payload as DataGridApiEventPayload<TRow>
+    const pluginPayload = createPluginPayloadSnapshot(payload) as DataGridApiEventPayload<TRow>
     for (const plugin of plugins.values()) {
-      plugin.onEvent?.(eventName, eventPayload)
+      try {
+        plugin.onEvent?.(eventName, pluginPayload)
+      } catch {
+        // Plugin failures are isolated from the core runtime event pipeline.
+      }
     }
   }
 

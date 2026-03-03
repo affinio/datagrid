@@ -6,6 +6,10 @@ import {
 } from "../../models"
 import type { DataGridRowModel } from "../../models"
 import type { DataGridSelectionSnapshot } from "../../selection/snapshot"
+import {
+  DATAGRID_PUBLIC_PACKAGE_VERSION,
+  DATAGRID_PUBLIC_PROTOCOL_VERSION,
+} from "../../protocol"
 import { createDataGridTransactionService } from "../transactionService"
 import { createDataGridApi as createDataGridApiFromPublic } from "../../public"
 import { createDataGridApi } from "../gridApi"
@@ -46,13 +50,19 @@ describe("data grid api facade contracts", () => {
     expect(typeof api.pivot).toBe("object")
     expect(typeof api.selection).toBe("object")
     expect(typeof api.transaction).toBe("object")
+    expect(typeof api.data).toBe("object")
     expect(typeof api.compute).toBe("object")
     expect(typeof api.diagnostics).toBe("object")
     expect(typeof api.meta).toBe("object")
     expect(typeof api.policy).toBe("object")
     expect(typeof api.plugins).toBe("object")
     expect(typeof api.state).toBe("object")
+    expect(typeof (api.state as { migrate?: unknown }).migrate).toBe("function")
     expect(typeof api.events).toBe("object")
+    expect(typeof api.lifecycle).toBe("object")
+    expect(typeof (api.lifecycle as { isBusy?: unknown }).isBusy).toBe("function")
+    expect(typeof (api.lifecycle as { whenIdle?: unknown }).whenIdle).toBe("function")
+    expect(typeof (api.lifecycle as { runExclusive?: unknown }).runExclusive).toBe("function")
     expect("getRowCount" in api).toBe(false)
     expect("setSortModel" in api).toBe(false)
     expect("setColumnWidth" in api).toBe(false)
@@ -631,6 +641,88 @@ describe("data grid api facade contracts", () => {
     expect(diagnostics.backpressure?.pullRequested).toBeGreaterThanOrEqual(0)
   })
 
+  it("exposes data namespace controls for datasource-backed row models", async () => {
+    const pullGates: Array<{ resolve: () => void; promise: Promise<void> }> = []
+    let pullCalls = 0
+    const rowModel = createDataSourceBackedRowModel({
+      initialTotal: 200,
+      dataSource: {
+        async pull(request) {
+          pullCalls += 1
+          let resolve!: () => void
+          const promise = new Promise<void>(nextResolve => {
+            resolve = nextResolve
+          })
+          pullGates.push({ resolve, promise })
+          await promise
+          const rows = []
+          for (let index = request.range.start; index <= request.range.end; index += 1) {
+            rows.push({
+              index,
+              row: { id: index, owner: `owner-${index}` },
+              rowId: index,
+            })
+          }
+          return {
+            rows,
+            total: 200,
+          }
+        },
+      },
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.data.hasBackpressureControlSupport()).toBe(true)
+    expect(api.data.pause()).toBe(true)
+    expect(api.data.pause()).toBe(false)
+
+    api.view.setViewportRange({ start: 0, end: 20 })
+    await Promise.resolve()
+    expect(pullCalls).toBe(0)
+    expect(api.diagnostics.getAll().backpressure?.paused).toBe(true)
+    expect(api.diagnostics.getAll().backpressure?.hasPendingPull).toBe(true)
+
+    expect(api.data.resume()).toBe(true)
+    expect(api.data.resume()).toBe(false)
+    await Promise.resolve()
+    expect(pullCalls).toBe(1)
+    expect(api.diagnostics.getAll().backpressure?.paused).toBe(false)
+
+    pullGates[0]?.resolve()
+    await api.data.flush()
+    expect(api.diagnostics.getAll().backpressure?.inFlight).toBe(false)
+  })
+
+  it("reports data namespace as unsupported when row model lacks backpressure controls", async () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.data.hasBackpressureControlSupport()).toBe(false)
+    expect(() => api.data.pause()).toThrow(/backpressure control capability/i)
+    expect(() => api.data.resume()).toThrow(/backpressure control capability/i)
+    await expect(api.data.flush()).rejects.toThrow(/backpressure control capability/i)
+  })
+
   it("exposes meta schema/capabilities/runtime info without requiring direct model access", () => {
     const rowModel = createClientRowModel({
       rows: [{ row: { id: "r1", owner: "noc" }, rowId: "r1", originalIndex: 0 }],
@@ -653,6 +745,7 @@ describe("data grid api facade contracts", () => {
     const runtime = api.meta.getRuntimeInfo()
 
     expect(schema.rowModelKind).toBe("client")
+    expect(api.meta.getRowModelKind()).toBe("client")
     expect(schema.columns).toEqual([
       {
         key: "owner",
@@ -666,8 +759,13 @@ describe("data grid api facade contracts", () => {
     ])
     expect(capabilities.patch).toBe(true)
     expect(capabilities.dataMutation).toBe(true)
+    expect(capabilities.backpressureControl).toBe(false)
     expect(capabilities.compute).toBe(true)
     expect(runtime.lifecycleState).toBe("idle")
+    expect(api.meta.getApiVersion()).toBe(DATAGRID_PUBLIC_PACKAGE_VERSION)
+    expect(api.meta.getProtocolVersion()).toBe(DATAGRID_PUBLIC_PROTOCOL_VERSION)
+    expect(runtime.apiVersion).toBe(DATAGRID_PUBLIC_PACKAGE_VERSION)
+    expect(runtime.protocolVersion).toBe(DATAGRID_PUBLIC_PROTOCOL_VERSION)
     expect(runtime.projectionMode).toBe("excel-like")
     expect(runtime.computeMode).toBe("sync")
   })
@@ -705,6 +803,68 @@ describe("data grid api facade contracts", () => {
     expect(api.rows.getAutoReapply()).toBe(false)
     api.rows.patch([{ rowId: "r1", data: { score: 999 } }], { recomputeSort: false })
     expect((api.rows.get(0)?.row as { score?: number })?.score).toBe(999)
+  })
+
+  it("supports rows.batch and lifecycle exclusivity guards with typed error events", async () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    let marker = 0
+    const beforeRevision = api.rows.getSnapshot().revision ?? 0
+    const rowsEvents: number[] = []
+    const projectionEvents: number[] = []
+    const unsubscribeRows = api.events.on("rows:changed", payload => {
+      rowsEvents.push(payload.snapshot.revision ?? -1)
+    })
+    const unsubscribeProjection = api.events.on("projection:recomputed", payload => {
+      projectionEvents.push(payload.nextVersion)
+    })
+    const batchedResult = api.rows.batch(() => {
+      marker = 7
+      api.rows.setSortModel([{ key: "score", direction: "asc" }])
+      api.rows.setSortModel([{ key: "score", direction: "desc" }])
+      return marker * 2
+    })
+    expect(marker).toBe(7)
+    expect(batchedResult).toBe(14)
+    expect((api.rows.getSnapshot().revision ?? 0)).toBeGreaterThan(beforeRevision)
+    expect(rowsEvents.length).toBe(1)
+    expect(projectionEvents.length).toBe(1)
+    unsubscribeRows()
+    unsubscribeProjection()
+
+    expect(api.lifecycle.isBusy()).toBe(false)
+    const pendingExclusive = api.lifecycle.runExclusive(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0))
+    })
+    expect(api.lifecycle.isBusy()).toBe(true)
+
+    let errorEvent: { code: string; operation: string } | null = null
+    const unsubscribe = api.events.on("error", payload => {
+      errorEvent = { code: payload.code, operation: payload.operation }
+    })
+
+    expect(() => api.compute.switchMode("worker")).toThrow(/exclusive lifecycle operation/i)
+    await pendingExclusive
+    await api.lifecycle.whenIdle()
+    expect(api.lifecycle.isBusy()).toBe(false)
+    unsubscribe()
+
+    expect(errorEvent).toEqual({
+      code: "lifecycle-conflict",
+      operation: "compute.switchMode",
+    })
   })
 
   it("registers plugins from constructor/options and dispatches facade events", () => {
@@ -1146,7 +1306,7 @@ describe("data grid api facade contracts", () => {
     expect(selectionRoundtrip).toEqual(expectedSelection)
   })
 
-  it("exposes transaction capability checks and fails loudly for missing methods", () => {
+  it("exposes transaction capability checks and fails loudly for missing methods", async () => {
     const rowModel = createClientRowModel()
     const columnModel = createDataGridColumnModel()
 
@@ -1162,7 +1322,104 @@ describe("data grid api facade contracts", () => {
 
     expect(api.transaction.hasSupport()).toBe(false)
     expect(api.transaction.getSnapshot()).toBeNull()
-    expect(() => api.transaction.undo()).toThrow(/transaction/)
+    await expect(api.transaction.undo()).rejects.toThrow(/transaction/)
+  })
+
+  it("emits explicit state import begin/end boundaries around state.set", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    const state = api.state.get()
+    const events: string[] = []
+
+    const unsubBegin = api.events.on("state:import:begin", () => {
+      events.push("begin")
+    })
+    const unsubEnd = api.events.on("state:import:end", () => {
+      events.push("end")
+    })
+    const unsubImported = api.events.on("state:imported", () => {
+      events.push("imported")
+    })
+
+    api.state.set(state)
+
+    unsubBegin()
+    unsubEnd()
+    unsubImported()
+
+    expect(events).toEqual(["begin", "imported", "end"])
+  })
+
+  it("supports state migration hook with strict and non-strict behavior", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    const state = api.state.get()
+
+    const migrated = api.state.migrate(state, { strict: true })
+    expect(migrated).toEqual(state)
+    expect(migrated).not.toBe(state)
+
+    expect(api.state.migrate({ version: 999 })).toBeNull()
+    expect(() => api.state.migrate({ version: 999 }, { strict: true })).toThrow(/Unsupported state version/)
+  })
+
+  it("isolates plugin event-handler failures from core event dispatch", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    let goodPluginRowsChanged = 0
+
+    expect(api.plugins.register({
+      id: "bad-plugin",
+      onEvent() {
+        throw new Error("plugin failure")
+      },
+    })).toBe(true)
+    expect(api.plugins.register({
+      id: "good-plugin",
+      onEvent(event) {
+        if (event === "rows:changed") {
+          goodPluginRowsChanged += 1
+        }
+      },
+    })).toBe(true)
+
+    expect(() => {
+      api.rows.setSortModel([{ key: "owner", direction: "asc" }])
+    }).not.toThrow()
+    expect(goodPluginRowsChanged > 0).toBe(true)
   })
 
   it("delegates transaction APIs when transaction capability is implemented", async () => {
@@ -1380,6 +1637,7 @@ describe("data grid api facade contracts", () => {
       viewport: 0,
       pivot: 0,
       imported: 0,
+      error: 0,
     }
     const unsubs = [
       api.events.on("rows:changed", () => {
@@ -1405,6 +1663,9 @@ describe("data grid api facade contracts", () => {
       }),
       api.events.on("state:imported", () => {
         counters.imported += 1
+      }),
+      api.events.on("error", () => {
+        counters.error += 1
       }),
     ]
 
@@ -1445,5 +1706,6 @@ describe("data grid api facade contracts", () => {
     expect(counters.viewport).toBeGreaterThan(0)
     expect(counters.pivot).toBeGreaterThan(0)
     expect(counters.imported).toBeGreaterThan(0)
+    expect(counters.error).toBeGreaterThanOrEqual(0)
   })
 })

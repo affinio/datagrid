@@ -1,0 +1,26 @@
+{
+  "extends": "../../tsconfig.core.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": false,
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@affino/datagrid-core": ["../datagrid-core/src/index.ts"],
+      "@affino/datagrid-core/*": ["../datagrid-core/src/*"],
+      "@affino/datagrid-vue": ["../datagrid-vue/src/index.ts"],
+      "@affino/datagrid-vue/*": ["../datagrid-vue/src/*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/__tests__/**",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
+  ]
+}

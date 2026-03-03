@@ -29,6 +29,7 @@ export interface DataGridRowsRefreshOptions {
 export interface DataGridRowsApplyEditsOptions {
   emit?: boolean
   reapply?: boolean
+  signal?: AbortSignal | null
 }
 
 export interface DataGridApiRowsMethods<TRow = unknown> {
@@ -70,6 +71,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   ) => void
   setAutoReapply: (value: boolean) => void
   getAutoReapply: () => boolean
+  batch: <TResult>(fn: () => TResult) => TResult
 }
 
 export interface CreateDataGridApiRowsMethodsInput<TRow = unknown> {
@@ -95,6 +97,14 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
   const assertMutationsAllowed = (operation: string): void => {
     if (getProjectionMode?.() === "immutable") {
       throw new Error(`[DataGridApi] cannot ${operation} when projection mode is "immutable".`)
+    }
+  }
+
+  const assertNotAborted = (signal: AbortSignal | null | undefined, operation: string): void => {
+    if (signal?.aborted) {
+      const error = new Error(`[DataGridApi] ${operation} aborted.`)
+      error.name = "AbortError"
+      throw error
     }
   }
 
@@ -212,6 +222,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
       options?: DataGridClientRowPatchOptions,
     ) {
       assertMutationsAllowed("patch rows")
+      assertNotAborted(options?.signal, "rows.patch")
       const capability = assertPatchCapability(getPatchCapability())
       capability.patchRows(updates, options)
     },
@@ -220,6 +231,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
       options?: DataGridRowsApplyEditsOptions,
     ) {
       assertMutationsAllowed("apply edits")
+      assertNotAborted(options?.signal, "rows.applyEdits")
       const capability = assertPatchCapability(getPatchCapability())
       const shouldReapply = typeof options?.reapply === "boolean"
         ? options.reapply
@@ -229,6 +241,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
         recomputeFilter: shouldReapply,
         recomputeGroup: shouldReapply,
         emit: options?.emit,
+        signal: options?.signal,
       })
     },
     setAutoReapply(value: boolean) {
@@ -236,6 +249,9 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     },
     getAutoReapply() {
       return autoReapply
+    },
+    batch<TResult>(fn: () => TResult): TResult {
+      return fn()
     },
   }
 }

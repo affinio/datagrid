@@ -1,0 +1,49 @@
+{
+  "name": "@affino/datagrid",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Community package facade for Affino DataGrid",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@affino/datagrid-core": "workspace:^",
+    "@affino/datagrid-vue": "workspace:^"
+  },
+  "peerDependencies": {
+    "pinia": "^2.1.0 || ^3.0.0",
+    "vue": "^3.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid#readme",
+  "license": "MIT",
+  "keywords": [
+    "datagrid",
+    "community",
+    "grid",
+    "table",
+    "vue"
+  ],
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/index.js"
+}

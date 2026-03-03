@@ -18,6 +18,7 @@ import type {
   DataGridTransactionCapability,
 } from "./gridApiCapabilities"
 import type {
+  DataGridMigrateStateOptions,
   DataGridSetStateOptions,
   DataGridUnifiedState,
 } from "./gridApiContracts"
@@ -25,6 +26,7 @@ import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 
 export interface DataGridApiStateMethods<TRow = unknown> {
   getUnifiedState: () => DataGridUnifiedState<TRow>
+  migrateUnifiedState: (state: unknown, options?: DataGridMigrateStateOptions) => DataGridUnifiedState<TRow> | null
   setUnifiedState: (state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions) => void
 }
 
@@ -146,6 +148,28 @@ export function createDataGridApiStateMethods<TRow = unknown>(
     onStateImported,
   } = input
 
+  const migrateUnifiedState = (
+    state: unknown,
+    options: DataGridMigrateStateOptions = {},
+  ): DataGridUnifiedState<TRow> | null => {
+    if (!state || typeof state !== "object") {
+      if (options.strict) {
+        throw new Error("[DataGridApi] State migration failed: input must be an object.")
+      }
+      return null
+    }
+
+    const candidate = state as { version?: unknown }
+    if (candidate.version !== 1) {
+      if (options.strict) {
+        throw new Error(`[DataGridApi] Unsupported state version: ${String(candidate.version)}`)
+      }
+      return null
+    }
+
+    return cloneSerializable(state as DataGridUnifiedState<TRow>)
+  }
+
   return {
     getUnifiedState() {
       const rowSnapshot = rowModel.getSnapshot()
@@ -174,18 +198,16 @@ export function createDataGridApiStateMethods<TRow = unknown>(
         transaction: cloneSerializable(getTransactionCapability()?.getTransactionSnapshot() ?? null),
       }
     },
+    migrateUnifiedState(state: unknown, options?: DataGridMigrateStateOptions) {
+      return migrateUnifiedState(state, options)
+    },
     setUnifiedState(state: DataGridUnifiedState<TRow>, options: DataGridSetStateOptions = {}) {
-      if (!state || typeof state !== "object") {
-        return
-      }
-      if (state.version !== 1) {
-        if (options.strict) {
-          throw new Error(`[DataGridApi] Unsupported state version: ${String((state as { version?: unknown }).version)}`)
-        }
+      const migratedState = migrateUnifiedState(state, { strict: options.strict })
+      if (!migratedState) {
         return
       }
 
-      const rowSnapshot = state.rows?.snapshot
+      const rowSnapshot = migratedState.rows?.snapshot
       if (rowSnapshot) {
         const sortModel = normalizeSortModel(rowSnapshot.sortModel)
         const filterModel = normalizeFilterModel(rowSnapshot.filterModel)
@@ -203,7 +225,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
 
         rowModel.setGroupBy(normalizeGroupBy(rowSnapshot.groupBy))
         rowModel.setPivotModel(normalizePivotModel(rowSnapshot.pivotModel))
-        rowModel.setAggregationModel(normalizeAggregationModel(state.rows?.aggregationModel))
+        rowModel.setAggregationModel(normalizeAggregationModel(migratedState.rows?.aggregationModel))
         rowModel.setGroupExpansion(normalizeGroupExpansion(rowSnapshot.groupExpansion))
         rowModel.setPagination(normalizePaginationInput(rowSnapshot.pagination))
         if (options.applyViewport !== false) {
@@ -214,19 +236,19 @@ export function createDataGridApiStateMethods<TRow = unknown>(
         }
       }
 
-      if (options.applyColumns !== false && state.columns) {
-        const order = Array.isArray(state.columns.order) ? state.columns.order : []
+      if (options.applyColumns !== false && migratedState.columns) {
+        const order = Array.isArray(migratedState.columns.order) ? migratedState.columns.order : []
         if (order.length > 0) {
           columnModel.setColumnOrder(order)
         }
-        for (const [key, value] of Object.entries(state.columns.visibility ?? {})) {
+        for (const [key, value] of Object.entries(migratedState.columns.visibility ?? {})) {
           columnModel.setColumnVisibility(key, Boolean(value))
         }
-        for (const [key, value] of Object.entries(state.columns.widths ?? {})) {
+        for (const [key, value] of Object.entries(migratedState.columns.widths ?? {})) {
           const width = Number.isFinite(value) ? Math.max(0, Math.trunc(value as number)) : null
           columnModel.setColumnWidth(key, width)
         }
-        for (const [key, value] of Object.entries(state.columns.pins ?? {})) {
+        for (const [key, value] of Object.entries(migratedState.columns.pins ?? {})) {
           const pin = normalizePin(value)
           if (!pin) {
             continue
@@ -238,23 +260,23 @@ export function createDataGridApiStateMethods<TRow = unknown>(
       if (options.applySelection !== false) {
         const selectionCapability = getSelectionCapability()
         if (selectionCapability) {
-          if (state.selection) {
-            selectionCapability.setSelectionSnapshot(cloneSerializable(state.selection))
+          if (migratedState.selection) {
+            selectionCapability.setSelectionSnapshot(cloneSerializable(migratedState.selection))
             onSelectionChanged?.(selectionCapability.getSelectionSnapshot())
           } else {
             selectionCapability.clearSelection()
             onSelectionChanged?.(selectionCapability.getSelectionSnapshot())
           }
-        } else if (options.strict && state.selection) {
+        } else if (options.strict && migratedState.selection) {
           throw new Error("[DataGridApi] Cannot restore selection state without selection capability.")
         }
       }
 
-      if (options.strict && state.transaction) {
+      if (options.strict && migratedState.transaction) {
         throw new Error("[DataGridApi] Transaction state restore is not supported by current facade.")
       }
 
-      onStateImported?.(cloneSerializable(state))
+      onStateImported?.(cloneSerializable(migratedState))
     },
   }
 }
