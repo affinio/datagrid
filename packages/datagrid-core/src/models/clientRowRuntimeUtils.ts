@@ -39,6 +39,20 @@ export function buildRowIdIndex<T>(inputRows: readonly DataGridRowNode<T>[]): Ma
   return byId
 }
 
+export function buildRowIdPositionIndex<T>(
+  inputRows: readonly DataGridRowNode<T>[],
+): Map<DataGridRowId, number> {
+  const byId = new Map<DataGridRowId, number>()
+  for (let index = 0; index < inputRows.length; index += 1) {
+    const row = inputRows[index]
+    if (!row) {
+      continue
+    }
+    byId.set(row.rowId, index)
+  }
+  return byId
+}
+
 export function remapRowsByIdentity<T>(
   inputRows: readonly DataGridRowNode<T>[],
   byId: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,

@@ -339,13 +339,21 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     }
   }
 
-  const normalizeCommandPayload = (
+  const validateCommandPayload = (
     payload: DataGridWorkerRowModelCommand<T>,
-  ): DataGridWorkerRowModelCommand<T> => {
+  ): void => {
     if (payload.type === "set-aggregation-model") {
       ensureAggregationModelSerializable(payload.aggregationModel)
     }
-    return cloneForTransport(payload, `command '${payload.type}'`)
+  }
+
+  const isDataCloneError = (error: unknown): boolean => {
+    return Boolean(
+      error
+      && typeof error === "object"
+      && "name" in error
+      && (error as { name?: unknown }).name === "DataCloneError",
+    )
   }
 
   const pushWindowCache = (
@@ -396,13 +404,25 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       queuedCommandIndexByKey.clear()
       for (const command of commands) {
         try {
-          const message = createDataGridWorkerRowModelCommandMessage(
+          let message = createDataGridWorkerRowModelCommandMessage(
             command.requestId,
             command.payload,
             options.channel,
           )
           dispatchCount += 1
-          options.target.postMessage(message)
+          try {
+            options.target.postMessage(message)
+          } catch (error) {
+            if (!isDataCloneError(error)) {
+              throw error
+            }
+            message = createDataGridWorkerRowModelCommandMessage(
+              command.requestId,
+              cloneForTransport(command.payload, `command '${command.payload.type}'`),
+              options.channel,
+            )
+            options.target.postMessage(message)
+          }
           if (command.payload.type === "set-viewport-range") {
             markViewportLoading(command.payload.range, command.requestId)
           }
@@ -425,15 +445,15 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     if (disposed) {
       return 0
     }
-    const normalizedPayload = normalizeCommandPayload(payload)
+    validateCommandPayload(payload)
     const requestId = nextRequestId++
-    const coalesceKey = getCoalesceKey(normalizedPayload)
+    const coalesceKey = getCoalesceKey(payload)
     if (coalesceKey) {
       const existingIndex = queuedCommandIndexByKey.get(coalesceKey)
       if (typeof existingIndex === "number" && queuedCommands[existingIndex]) {
         queuedCommands[existingIndex] = {
           requestId,
-          payload: normalizedPayload,
+          payload,
           coalesceKey,
         }
         scheduleFlush()
@@ -442,7 +462,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     }
     const command: QueuedCommand = {
       requestId,
-      payload: normalizedPayload,
+      payload,
       coalesceKey,
     }
     queuedCommands.push(command)
@@ -533,7 +553,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       start: update.visibleRange.start,
       end: update.visibleRange.end,
     }
-    visibleRows = update.visibleRows.map(cloneRowNode)
+    visibleRows = update.visibleRows as DataGridRowNode<T>[]
     pushWindowCache(visibleRange, visibleRows, false)
 
     if (!initialWindowPrefetchResolved && requestId === 0) {

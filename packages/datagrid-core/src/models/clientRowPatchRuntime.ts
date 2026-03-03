@@ -64,6 +64,7 @@ export function buildClientRowPatchUpdatesById<T>(
 
 export interface ApplyClientRowPatchUpdatesInput<T> {
   sourceRows: readonly DataGridRowNode<T>[]
+  sourceRowIndexById?: ReadonlyMap<DataGridRowId, number>
   updatesById: ReadonlyMap<DataGridRowId, Partial<T>>
   applyRowDataPatch: (current: T, patch: Partial<T>) => T
 }
@@ -85,15 +86,35 @@ export function applyClientRowPatchUpdates<T>(
   const changedUpdatesById = new Map<DataGridRowId, Partial<T>>()
   const previousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
   const nextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
+  const sourceRows = input.sourceRows
+  const indexByRowId = input.sourceRowIndexById ?? (() => {
+    const next = new Map<DataGridRowId, number>()
+    for (let index = 0; index < sourceRows.length; index += 1) {
+      const row = sourceRows[index]
+      if (!row) {
+        continue
+      }
+      next.set(row.rowId, index)
+    }
+    return next
+  })()
+  let nextSourceRows: DataGridRowNode<T>[] | null = null
 
-  const nextSourceRows = input.sourceRows.map((row) => {
-    const patch = input.updatesById.get(row.rowId)
-    if (!patch) {
-      return row
+  for (const [rowId, patch] of input.updatesById.entries()) {
+    const position = indexByRowId.get(rowId) ?? -1
+    if (position < 0 || position >= sourceRows.length) {
+      continue
+    }
+    const row = sourceRows[position]
+    if (!row) {
+      continue
     }
     const nextData = input.applyRowDataPatch(row.data, patch)
     if (nextData === row.data) {
-      return row
+      continue
+    }
+    if (!nextSourceRows) {
+      nextSourceRows = sourceRows.slice()
     }
     changed = true
     changedRowIds.push(row.rowId)
@@ -105,11 +126,11 @@ export function applyClientRowPatchUpdates<T>(
       row: nextData,
     }
     nextRowsById.set(row.rowId, nextRow)
-    return nextRow
-  })
+    nextSourceRows[position] = nextRow
+  }
 
   return {
-    nextSourceRows,
+    nextSourceRows: nextSourceRows ?? sourceRows,
     changed,
     changedRowIds,
     changedUpdatesById,

@@ -42,6 +42,7 @@ export interface DataGridClientRowPatchCoordinatorRuntimeContext<T> {
   applyRowDataPatch: (current: T, patch: Partial<T>) => T
 
   getSourceRows: () => readonly DataGridRowNode<T>[]
+  getSourceRowIndexById: () => ReadonlyMap<DataGridRowId, number>
   setSourceRows: (rows: readonly DataGridRowNode<T>[]) => void
   getRowVersionById: () => Map<DataGridRowId, number>
 
@@ -99,6 +100,7 @@ export function createClientRowPatchCoordinatorRuntime<T>(
       }
       const patchResult = applyClientRowPatchUpdates<T>({
         sourceRows: context.getSourceRows(),
+        sourceRowIndexById: context.getSourceRowIndexById(),
         updatesById,
         applyRowDataPatch: context.applyRowDataPatch,
       })

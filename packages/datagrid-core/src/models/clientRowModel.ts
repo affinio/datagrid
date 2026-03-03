@@ -90,6 +90,7 @@ import {
 } from "./clientRowProjectionPrimitives.js"
 import {
   applyRowDataPatch,
+  buildRowIdPositionIndex,
   buildRowIdIndex,
   createRowVersionIndex,
   pruneSortCacheRows,
@@ -259,6 +260,7 @@ export function createClientRowModel<T>(
   }
 
   let sourceRows: DataGridRowNode<T>[] = normalizeSourceRows(options.rows ?? [])
+  let sourceRowIndexById = buildRowIdPositionIndex(sourceRows)
   const runtimeStateStore = createClientRowRuntimeStateStore<T>()
   const runtimeState = runtimeStateStore.state
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? cloneSortModel(options.initialSortModel) : []
@@ -690,6 +692,7 @@ export function createClientRowModel<T>(
     getSourceRows: () => sourceRows,
     setSourceRows: (rows) => {
       sourceRows = rows
+      sourceRowIndexById = buildRowIdPositionIndex(sourceRows)
     },
     normalizeSourceRows,
     reindexSourceRows,
@@ -712,8 +715,9 @@ export function createClientRowModel<T>(
     isDataGridRowId,
     applyRowDataPatch,
     getSourceRows: () => sourceRows,
+    getSourceRowIndexById: () => sourceRowIndexById,
     setSourceRows: (rows) => {
-      sourceRows = [...rows]
+      sourceRows = rows as DataGridRowNode<T>[]
     },
     getRowVersionById: () => rowVersionById,
     bumpRowRevision: () => {
