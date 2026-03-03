@@ -6,7 +6,12 @@
     "declarationDir": "dist",
     "emitDeclarationOnly": false,
     "moduleResolution": "bundler",
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@affino/datagrid-worker": ["../datagrid-worker/src/index.ts"],
+      "@affino/datagrid-worker/*": ["../datagrid-worker/src/*"]
+    }
   },
   "include": ["src/**/*"]
 }

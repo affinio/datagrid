@@ -32,6 +32,12 @@ function buildGroupKey(segments: readonly GroupKeySegment[]): string {
   return encoded
 }
 
+function appendRows<T>(target: DataGridRowNode<T>[], source: readonly DataGridRowNode<T>[]): void {
+  for (const row of source) {
+    target.push(row)
+  }
+}
+
 export interface BuildGroupedRowsProjectionOptions<T> {
   inputRows: readonly DataGridRowNode<T>[]
   groupBy: DataGridGroupBySpec
@@ -59,6 +65,8 @@ export function buildGroupedRowsProjection<T>(
     maxGroupValueCacheSize,
   } = options
   const fields = groupBy.fields
+    .map(field => (typeof field === "string" ? field.trim() : ""))
+    .filter((field): field is string => field.length > 0)
   const expansionToggledKeys = new Set<string>(expansionSnapshot.toggledGroupKeys)
   if (fields.length === 0) {
     return inputRows.map(row => normalizeLeafRow(row))
@@ -88,88 +96,171 @@ export function buildGroupedRowsProjection<T>(
     return computed
   }
 
-  const projectLevel = (
-    rowIndexesAtLevel: readonly number[],
-    level: number,
-    path: readonly GroupKeySegment[],
-  ): DataGridRowNode<T>[] => {
-    if (level >= fields.length) {
-      const projectedLeaves: DataGridRowNode<T>[] = []
-      for (const rowIndex of rowIndexesAtLevel) {
-        const row = inputRows[rowIndex]
-        if (!row) {
-          continue
-        }
-        projectedLeaves.push(normalizeLeafRow(row))
-      }
-      return projectedLeaves
-    }
-    const field = fields[level] ?? ""
-    const buckets = new Map<string, number[]>()
-    for (const rowIndex of rowIndexesAtLevel) {
-      const row = inputRows[rowIndex]
-      if (!row) {
-        continue
-      }
-      const value = resolveGroupedValue(row, field)
-      const bucket = buckets.get(value)
-      if (bucket) {
-        bucket.push(rowIndex)
-        continue
-      }
-      buckets.set(value, [rowIndex])
-    }
+  interface BucketContext {
+    field: string
+    value: string
+    level: number
+    groupKey: string
+    representative: DataGridRowNode<T> | undefined
+    bucketRowIndexes: number[]
+    expanded: boolean
+  }
 
-    const projected: DataGridRowNode<T>[] = []
-    for (const [value, bucketRowIndexes] of buckets.entries()) {
-      const nextPath: GroupKeySegment[] = [...path, { field, value }]
-      const groupKey = buildGroupKey(nextPath)
-      const expanded = isGroupExpanded(expansionSnapshot, groupKey, expansionToggledKeys)
-      const representative = inputRows[bucketRowIndexes[0] ?? -1]
-      const children = projectLevel(bucketRowIndexes, level + 1, nextPath)
-      const groupNode: DataGridRowNode<T> = {
-        kind: "group",
-        data: ({
-          __group: true,
-          groupKey,
-          field,
-          value,
-          level,
-        } as unknown as T),
-        row: ({
-          __group: true,
-          groupKey,
-          field,
-          value,
-          level,
-        } as unknown as T),
-        rowKey: groupKey,
-        rowId: groupKey,
-        sourceIndex: representative?.sourceIndex ?? 0,
-        originalIndex: representative?.originalIndex ?? 0,
-        displayIndex: -1,
-        state: {
-          selected: false,
-          group: true,
-          pinned: "none",
-          expanded,
-        },
-        groupMeta: {
-          groupKey,
-          groupField: field,
-          groupValue: value,
-          level,
-          childrenCount: bucketRowIndexes.length,
-        },
-      }
-      projected.push(groupNode)
-      if (expanded) {
-        projected.push(...children)
-      }
+  interface ProjectionFrame {
+    level: number
+    path: GroupKeySegment[]
+    rowIndexes: number[]
+    initialized: boolean
+    entries: Array<[string, number[]]>
+    index: number
+    projected: DataGridRowNode<T>[]
+    pendingBucket: BucketContext | null
+  }
+
+  const createGroupNode = (bucket: BucketContext): DataGridRowNode<T> => {
+    return {
+      kind: "group",
+      data: ({
+        __group: true,
+        groupKey: bucket.groupKey,
+        field: bucket.field,
+        value: bucket.value,
+        level: bucket.level,
+      } as unknown as T),
+      row: ({
+        __group: true,
+        groupKey: bucket.groupKey,
+        field: bucket.field,
+        value: bucket.value,
+        level: bucket.level,
+      } as unknown as T),
+      rowKey: bucket.groupKey,
+      rowId: bucket.groupKey,
+      sourceIndex: bucket.representative?.sourceIndex ?? 0,
+      originalIndex: bucket.representative?.originalIndex ?? 0,
+      displayIndex: -1,
+      state: {
+        selected: false,
+        group: true,
+        pinned: "none",
+        expanded: bucket.expanded,
+      },
+      groupMeta: {
+        groupKey: bucket.groupKey,
+        groupField: bucket.field,
+        groupValue: bucket.value,
+        level: bucket.level,
+        childrenCount: bucket.bucketRowIndexes.length,
+      },
     }
-    return projected
+  }
+
+  const createFrame = (
+    rowIndexes: number[],
+    level: number,
+    path: GroupKeySegment[],
+  ): ProjectionFrame => {
+    return {
+      level,
+      path,
+      rowIndexes,
+      initialized: false,
+      entries: [],
+      index: 0,
+      projected: [],
+      pendingBucket: null,
+    }
   }
 
   const allRowIndexes = inputRows.map((_, index) => index)
-  return projectLevel(allRowIndexes, 0, [])
+  const stack: ProjectionFrame[] = [createFrame(allRowIndexes, 0, [])]
+
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1]
+    if (!frame) {
+      break
+    }
+
+    if (!frame.initialized) {
+      frame.initialized = true
+      if (frame.level >= fields.length) {
+        for (const rowIndex of frame.rowIndexes) {
+          const row = inputRows[rowIndex]
+          if (!row) {
+            continue
+          }
+          frame.projected.push(normalizeLeafRow(row))
+        }
+      } else {
+        const field = fields[frame.level] ?? ""
+        const buckets = new Map<string, number[]>()
+        for (const rowIndex of frame.rowIndexes) {
+          const row = inputRows[rowIndex]
+          if (!row) {
+            continue
+          }
+          const value = resolveGroupedValue(row, field)
+          const bucket = buckets.get(value)
+          if (bucket) {
+            bucket.push(rowIndex)
+            continue
+          }
+          buckets.set(value, [rowIndex])
+        }
+        frame.entries = Array.from(buckets.entries())
+      }
+    }
+
+    const frameCompleted = frame.level >= fields.length || frame.index >= frame.entries.length
+    if (frameCompleted) {
+      const completedProjection = frame.projected
+      stack.pop()
+      const parent = stack[stack.length - 1]
+      if (!parent) {
+        return completedProjection
+      }
+      const pendingBucket = parent.pendingBucket
+      if (!pendingBucket) {
+        continue
+      }
+      parent.pendingBucket = null
+      parent.projected.push(createGroupNode(pendingBucket))
+      if (pendingBucket.expanded) {
+        appendRows(parent.projected, completedProjection)
+      }
+      parent.index += 1
+      continue
+    }
+
+    const field = fields[frame.level] ?? ""
+    const nextEntry = frame.entries[frame.index]
+    if (!nextEntry) {
+      frame.index += 1
+      continue
+    }
+    const [value, bucketRowIndexes] = nextEntry
+    const nextPath: GroupKeySegment[] = [...frame.path, { field, value }]
+    const groupKey = buildGroupKey(nextPath)
+    const expanded = isGroupExpanded(expansionSnapshot, groupKey, expansionToggledKeys)
+    const bucketContext: BucketContext = {
+      field,
+      value,
+      level: frame.level,
+      groupKey,
+      representative: inputRows[bucketRowIndexes[0] ?? -1],
+      bucketRowIndexes,
+      expanded,
+    }
+
+    if (!expanded) {
+      frame.projected.push(createGroupNode(bucketContext))
+      frame.index += 1
+      continue
+    }
+
+    frame.pendingBucket = bucketContext
+    stack.push(createFrame(bucketRowIndexes, frame.level + 1, nextPath))
+  }
+
+  return []
 }

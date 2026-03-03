@@ -110,6 +110,17 @@ export type {
 export { createClientRowModel } from "./clientRowModel.js"
 
 export type {
+  DataGridClientComputeDiagnostics,
+  DataGridClientComputeMode,
+  DataGridClientComputeRequest,
+  DataGridClientComputeTransport,
+  DataGridClientComputeTransportResult,
+  DataGridClientComputeRuntime,
+  CreateClientRowComputeRuntimeOptions,
+} from "./clientRowComputeRuntime.js"
+export { createClientRowComputeRuntime } from "./clientRowComputeRuntime.js"
+
+export type {
   DataGridDependencyTokenDomain,
   DataGridDependencyToken,
   DataGridFieldNode,

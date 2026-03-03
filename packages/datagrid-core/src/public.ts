@@ -100,6 +100,7 @@ export {
 } from "./selection/selectionSummary.js"
 
 export {
+  createClientRowComputeRuntime,
   createClientRowModel,
   createDataSourceBackedRowModel,
   createServerBackedRowModel,
@@ -189,6 +190,11 @@ export {
   type DataGridSortState,
   type DataGridViewportRange,
   type ClientRowModel,
+  type DataGridClientComputeDiagnostics,
+  type DataGridClientComputeMode,
+  type DataGridClientComputeRequest,
+  type DataGridClientComputeTransport,
+  type DataGridClientComputeTransportResult,
   type DataGridClientRowPatch,
   type DataGridClientRowPatchOptions,
   type DataGridDependencyTokenDomain,

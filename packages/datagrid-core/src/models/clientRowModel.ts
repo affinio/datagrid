@@ -40,6 +40,12 @@ import {
 import { createClientRowProjectionOrchestrator } from "./clientRowProjectionOrchestrator.js"
 import { DATAGRID_CLIENT_ALL_PROJECTION_STAGES } from "./projectionStages.js"
 import {
+  createClientRowComputeRuntime,
+  type DataGridClientComputeDiagnostics,
+  type DataGridClientComputeMode,
+  type DataGridClientComputeTransport,
+} from "./clientRowComputeRuntime.js"
+import {
   createDataGridAggregationEngine,
 } from "./aggregationEngine.js"
 import {
@@ -118,6 +124,8 @@ export interface CreateClientRowModelOptions<T> {
   performanceMode?: DataGridClientPerformanceMode
   projectionPolicy?: DataGridProjectionPolicy
   fieldDependencies?: readonly DataGridFieldDependency[]
+  computeMode?: DataGridClientComputeMode
+  computeTransport?: DataGridClientComputeTransport | null
 }
 
 export interface DataGridClientRowReorderInput {
@@ -160,6 +168,7 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
   ): void
   reorderRows(input: DataGridClientRowReorderInput): boolean
   getDerivedCacheDiagnostics(): DataGridClientRowModelDerivedCacheDiagnostics
+  getComputeDiagnostics(): DataGridClientComputeDiagnostics
 }
 
 export interface DataGridClientRowModelDerivedCacheDiagnostics {
@@ -539,11 +548,16 @@ export function createClientRowModel<T>(
     projectionEngine,
     projectionHandlersRuntime.projectionStageHandlers,
   )
+  const computeRuntime = createClientRowComputeRuntime({
+    mode: options.computeMode,
+    transport: options.computeTransport ?? null,
+    orchestrator: projectionOrchestrator,
+  })
 
   const snapshotRuntime = createClientRowSnapshotRuntime<T>({
     runtimeState,
     runtimeStateStore,
-    getStaleStages: () => projectionOrchestrator.getStaleStages(),
+    getStaleStages: () => computeRuntime.getStaleStages(),
     getViewportRange: () => viewportRange,
     setViewportRange: (range) => {
       viewportRange = range
@@ -598,7 +612,7 @@ export function createClientRowModel<T>(
     ensureActive,
     emit,
     recomputeFromStage: (stage) => {
-      projectionOrchestrator.recomputeFromStage(stage)
+      computeRuntime.recomputeFromStage(stage)
     },
     bumpSortRevision: () => {
       runtimeStateStore.bumpSortRevision()
@@ -666,7 +680,7 @@ export function createClientRowModel<T>(
     ensureActive,
     emit,
     recomputeFromFilterStage: () => {
-      projectionOrchestrator.recomputeFromStage("filter")
+      computeRuntime.recomputeFromStage("filter")
     },
     bumpRowRevision: () => {
       runtimeStateStore.bumpRowRevision()
@@ -705,9 +719,9 @@ export function createClientRowModel<T>(
     bumpRowRevision: () => {
       runtimeStateStore.bumpRowRevision()
     },
-    getStaleStages: () => projectionOrchestrator.getStaleStages(),
+    getStaleStages: () => computeRuntime.getStaleStages(),
     recomputeWithExecutionPlan: (executionPlan) => {
-      projectionOrchestrator.recomputeWithExecutionPlan(executionPlan)
+      computeRuntime.recomputeWithExecutionPlan(executionPlan)
     },
     getFilterModel: () => filterModel,
     getSortModel: () => sortModel,
@@ -731,7 +745,7 @@ export function createClientRowModel<T>(
     patchTreeProjectionCacheRowsByIdentity,
   })
 
-  projectionOrchestrator.recomputeFromStage("filter")
+  computeRuntime.recomputeFromStage("filter")
 
   return {
     kind: "client",
@@ -860,7 +874,7 @@ export function createClientRowModel<T>(
     },
     refresh(_reason?: DataGridRowModelRefreshReason) {
       ensureActive()
-      projectionOrchestrator.refresh()
+      computeRuntime.refresh()
       emit()
     },
     subscribe(listener: DataGridRowModelListener<T>) {
@@ -877,10 +891,14 @@ export function createClientRowModel<T>(
         groupValueMisses: derivedCacheDiagnostics.groupValueMisses,
       }
     },
+    getComputeDiagnostics() {
+      return computeRuntime.getDiagnostics()
+    },
     dispose() {
       if (!lifecycle.dispose()) {
         return
       }
+      computeRuntime.dispose()
       sourceRows = []
       runtimeState.rows = []
       runtimeState.filteredRowsProjection = []

@@ -402,6 +402,8 @@ export function useAffinoDataGrid<TRow>(
     rows: options.rows,
     columns: options.columns,
     rowModel: options.rowModel,
+    workerOwnedRowModelOptions: options.workerOwnedRowModelOptions,
+    clientRowModelOptions: options.clientRowModelOptions,
     services: options.services,
     startupOrder: options.startupOrder,
     autoStart: options.autoStart,

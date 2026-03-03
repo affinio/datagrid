@@ -2452,6 +2452,50 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("reports sync compute diagnostics by default", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      ],
+    })
+
+    const diagnostics = model.getComputeDiagnostics()
+    expect(diagnostics.configuredMode).toBe("sync")
+    expect(diagnostics.effectiveMode).toBe("sync")
+    expect(diagnostics.transportKind).toBe("none")
+    expect(diagnostics.dispatchCount).toBe(0)
+    expect(diagnostics.fallbackCount).toBe(0)
+
+    model.dispose()
+  })
+
+  it("supports worker compute mode through custom transport contract", () => {
+    const dispatchCalls: string[] = []
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      ],
+      computeMode: "worker",
+      computeTransport: {
+        dispatch(request) {
+          dispatchCalls.push(request.kind)
+          return { handled: false }
+        },
+      },
+    })
+
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    const diagnostics = model.getComputeDiagnostics()
+    expect(diagnostics.configuredMode).toBe("worker")
+    expect(diagnostics.effectiveMode).toBe("worker")
+    expect(diagnostics.transportKind).toBe("custom")
+    expect(diagnostics.dispatchCount).toBeGreaterThan(0)
+    expect(diagnostics.fallbackCount).toBeGreaterThan(0)
+    expect(dispatchCalls.length).toBeGreaterThan(0)
+
+    model.dispose()
+  })
+
   it("rejects mutating API calls after dispose", () => {
     const model = createClientRowModel({
       rows: [

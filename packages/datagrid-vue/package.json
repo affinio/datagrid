@@ -59,7 +59,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.public.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
-    "type-check:public": "tsc -p tsconfig.public.json --noEmit",
+    "type-check:public": "node ./scripts/type-check-public.mjs",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
     "test:contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract\"",
     "test:strict-contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract|lifecycle|property|stress|determinism\" --passWithNoTests",
@@ -79,7 +79,8 @@
   },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*",
-    "@affino/datagrid-orchestration": "workspace:*"
+    "@affino/datagrid-orchestration": "workspace:*",
+    "@affino/datagrid-worker": "workspace:*"
   },
   "devDependencies": {
     "@affino/datagrid-theme": "workspace:^"

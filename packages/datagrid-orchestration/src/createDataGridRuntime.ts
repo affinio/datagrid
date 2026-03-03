@@ -3,6 +3,7 @@ import {
   createDataGridApi,
   createDataGridColumnModel,
   createDataGridCore,
+  type CreateClientRowModelOptions,
   type CreateDataGridCoreOptions,
   type CreateDataGridColumnModelOptions,
   type DataGridApi,
@@ -22,6 +23,7 @@ export type DataGridRuntimeOverrides = Omit<
 export interface CreateDataGridRuntimeOptions<TRow = unknown> {
   rows?: readonly TRow[]
   rowModel?: DataGridRowModel<TRow>
+  clientRowModelOptions?: Omit<CreateClientRowModelOptions<TRow>, "rows">
   columns: CreateDataGridColumnModelOptions["columns"]
   services?: DataGridRuntimeOverrides
   startupOrder?: CreateDataGridCoreOptions["startupOrder"]
@@ -37,7 +39,10 @@ export interface DataGridRuntime<TRow = unknown> {
 export function createDataGridRuntime<TRow = unknown>(
   options: CreateDataGridRuntimeOptions<TRow>,
 ): DataGridRuntime<TRow> {
-  const rowModel = options.rowModel ?? createClientRowModel<TRow>({ rows: options.rows ?? [] })
+  const rowModel = options.rowModel ?? createClientRowModel<TRow>({
+    ...(options.clientRowModelOptions ?? {}),
+    rows: options.rows ?? [],
+  })
   const columnModel = createDataGridColumnModel({ columns: options.columns })
 
   const services: Partial<DataGridCoreServiceRegistry> = {

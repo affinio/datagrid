@@ -89,4 +89,46 @@ describe("groupProjectionController cache policy", () => {
     expect(cache.has("r2::team")).toBe(false)
     expect(cache.has("r3::team")).toBe(true)
   })
+
+  it("projects deep grouping levels without recursive stack overflow", () => {
+    const cache = new Map<string, string>()
+    const deepFields = Array.from({ length: 2048 }, (_, index) => `g${index}`)
+    const expansionSnapshot: DataGridGroupExpansionSnapshot = {
+      expandedByDefault: true,
+      toggledGroupKeys: [],
+    }
+    const rows: DataGridRowNode<Record<string, unknown>>[] = [{
+      kind: "leaf",
+      data: { id: "r1", g0: "x" },
+      row: { id: "r1", g0: "x" },
+      rowKey: "r1",
+      rowId: "r1",
+      sourceIndex: 0,
+      originalIndex: 0,
+      displayIndex: 0,
+      state: {
+        selected: false,
+        group: false,
+        pinned: "none",
+        expanded: false,
+      },
+    }]
+
+    const projected = buildGroupedRowsProjection({
+      inputRows: rows,
+      groupBy: {
+        fields: deepFields,
+        expandedByDefault: true,
+      },
+      expansionSnapshot,
+      readRowField: (rowNode, key) => (rowNode.data as Record<string, unknown>)[key],
+      normalizeText: value => String(value ?? ""),
+      normalizeLeafRow: row => row,
+      groupValueCache: cache,
+      maxGroupValueCacheSize: 4096,
+    })
+
+    expect(projected.length).toBe(deepFields.length + 1)
+    expect(projected[projected.length - 1]?.kind).toBe("leaf")
+  })
 })

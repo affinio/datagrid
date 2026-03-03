@@ -1,6 +1,10 @@
 import { defineComponent, h, nextTick, ref } from "vue"
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
+import {
+  createDataGridWorkerOwnedRowModelHost,
+  type DataGridWorkerMessageEvent,
+} from "@affino/datagrid-worker"
 import { useDataGridRuntime } from "../useDataGridRuntime"
 
 interface RuntimeRow {
@@ -14,6 +18,49 @@ const COLUMNS = [{ key: "name", label: "Name" }] as const
 async function flushRuntimeTasks() {
   await nextTick()
   await Promise.resolve()
+}
+
+type MessageListener = (event: DataGridWorkerMessageEvent) => void
+
+class MemoryMessageEndpoint {
+  private readonly listeners = new Set<MessageListener>()
+  private peer: MemoryMessageEndpoint | null = null
+
+  connect(peer: MemoryMessageEndpoint): void {
+    this.peer = peer
+  }
+
+  postMessage(message: unknown): void {
+    const peer = this.peer
+    if (!peer) {
+      return
+    }
+    queueMicrotask(() => {
+      peer.emit(message)
+    })
+  }
+
+  addEventListener(_type: "message", listener: MessageListener): void {
+    this.listeners.add(listener)
+  }
+
+  removeEventListener(_type: "message", listener: MessageListener): void {
+    this.listeners.delete(listener)
+  }
+
+  private emit(message: unknown): void {
+    for (const listener of this.listeners) {
+      listener({ data: message })
+    }
+  }
+}
+
+function createMessageChannelPair(): { main: MemoryMessageEndpoint; worker: MemoryMessageEndpoint } {
+  const main = new MemoryMessageEndpoint()
+  const worker = new MemoryMessageEndpoint()
+  main.connect(worker)
+  worker.connect(main)
+  return { main, worker }
 }
 
 describe("useDataGridRuntime contract", () => {
@@ -173,5 +220,91 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime!.api.lifecycle.state).toBe("disposed")
 
     wrapper.unmount()
+  })
+
+  it("forwards clientRowModelOptions to runtime-created client row model", async () => {
+    const dispatchedKinds: string[] = []
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+
+    const Host = defineComponent({
+      name: "RuntimeClientModelOptionsHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          rows: [
+            { rowId: "r1", name: "Alpha", tested_at: 100 },
+            { rowId: "r2", name: "Bravo", tested_at: 200 },
+          ],
+          columns: COLUMNS,
+          clientRowModelOptions: {
+            computeMode: "worker",
+            computeTransport: {
+              dispatch(request) {
+                dispatchedKinds.push(request.kind)
+                return { handled: false }
+              },
+            },
+          },
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+
+    runtime!.api.rows.setSortModel([{ key: "name", direction: "asc" }])
+    await flushRuntimeTasks()
+
+    const diagnostics = (
+      runtime!.rowModel as {
+        getComputeDiagnostics?: () => { configuredMode?: string; dispatchCount?: number }
+      }
+    ).getComputeDiagnostics?.()
+
+    expect(diagnostics?.configuredMode).toBe("worker")
+    expect((diagnostics?.dispatchCount ?? 0) > 0).toBe(true)
+    expect(dispatchedKinds.length).toBeGreaterThan(0)
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
+  })
+
+  it("supports worker-owned row model mode through composable options", async () => {
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<RuntimeRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows: [
+        { row: { rowId: "r1", name: "Alpha", tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { rowId: "r2", name: "Bravo", tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+    const Host = defineComponent({
+      name: "RuntimeWorkerOwnedModeHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          columns: COLUMNS,
+          workerOwnedRowModelOptions: {
+            source: channel.main,
+            target: channel.main,
+          },
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+    await flushRuntimeTasks()
+
+    expect(runtime).not.toBeNull()
+    expect(runtime!.api.rows.getCount()).toBe(2)
+    expect(runtime!.api.rows.getRange({ start: 0, end: 1 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
+    host.dispose()
   })
 })

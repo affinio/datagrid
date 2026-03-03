@@ -103,4 +103,46 @@ describe("useDataGridRuntimeService contract", () => {
 
     runtime.stop()
   })
+
+  it("forwards client row model compute options when runtime creates client model internally", () => {
+    const dispatchedKinds: string[] = []
+    const runtime = useDataGridRuntimeService<{
+      rowId: string
+      name: string
+    }>({
+      rows: [
+        { rowId: "r1", name: "alpha" },
+        { rowId: "r2", name: "bravo" },
+      ],
+      columns: [{ key: "name", label: "Name" }],
+      clientRowModelOptions: {
+        computeMode: "worker",
+        computeTransport: {
+          dispatch(request) {
+            dispatchedKinds.push(request.kind)
+            return { handled: false }
+          },
+        },
+      },
+    })
+
+    runtime.api.rows.setSortModel([{ key: "name", direction: "asc" }])
+    runtime.setRows([
+      { rowId: "r1", name: "alpha" },
+      { rowId: "r2", name: "bravo" },
+      { rowId: "r3", name: "charlie" },
+    ])
+
+    const diagnostics = (
+      runtime.rowModel as {
+        getComputeDiagnostics?: () => { configuredMode?: string; dispatchCount?: number }
+      }
+    ).getComputeDiagnostics?.()
+
+    expect(diagnostics?.configuredMode).toBe("worker")
+    expect((diagnostics?.dispatchCount ?? 0) > 0).toBe(true)
+    expect(dispatchedKinds.length).toBeGreaterThan(0)
+
+    runtime.stop()
+  })
 })

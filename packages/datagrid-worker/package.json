@@ -1,0 +1,44 @@
+{
+  "name": "@affino/datagrid-worker",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Worker transport protocol and postMessage bridge for Affino DataGrid compute runtime",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@affino/datagrid-core": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-worker"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-worker#readme",
+  "license": "MIT",
+  "keywords": [
+    "datagrid",
+    "worker",
+    "postmessage",
+    "runtime",
+    "transport"
+  ],
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/index.js"
+}

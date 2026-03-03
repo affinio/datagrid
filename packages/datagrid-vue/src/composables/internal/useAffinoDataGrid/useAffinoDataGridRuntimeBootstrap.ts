@@ -21,6 +21,8 @@ export interface UseAffinoDataGridRuntimeBootstrapOptions<TRow> {
   rows: MaybeRef<readonly TRow[]>
   columns: MaybeRef<readonly DataGridColumnDef[]>
   rowModel?: UseDataGridRuntimeOptions<TRow>["rowModel"]
+  workerOwnedRowModelOptions?: UseDataGridRuntimeOptions<TRow>["workerOwnedRowModelOptions"]
+  clientRowModelOptions?: UseDataGridRuntimeOptions<TRow>["clientRowModelOptions"]
   services?: UseDataGridRuntimeOptions<TRow>["services"]
   startupOrder?: UseDataGridRuntimeOptions<TRow>["startupOrder"]
   autoStart?: boolean
@@ -92,6 +94,8 @@ export function useAffinoDataGridRuntimeBootstrap<TRow>(
     rows,
     columns,
     rowModel: options.rowModel,
+    workerOwnedRowModelOptions: options.workerOwnedRowModelOptions,
+    clientRowModelOptions: options.clientRowModelOptions,
     services: runtimeServices,
     startupOrder: options.startupOrder,
     autoStart: options.autoStart ?? true,

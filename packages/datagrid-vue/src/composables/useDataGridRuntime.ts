@@ -17,7 +17,12 @@ import type {
   DataGridViewportRange,
 } from "@affino/datagrid-core"
 import {
+  createDataGridWorkerOwnedRowModel,
+  type CreateDataGridWorkerOwnedRowModelOptions,
+} from "@affino/datagrid-worker"
+import {
   useDataGridRuntimeService,
+  type CreateDataGridRuntimeOptions,
   type DataGridRuntimeVirtualWindowSnapshot,
   type DataGridRuntimeOverrides,
 } from "@affino/datagrid-orchestration"
@@ -50,6 +55,8 @@ export interface DataGridEditOptions extends Omit<
 export interface UseDataGridRuntimeOptions<TRow = unknown> {
   rows?: MaybeRef<readonly TRow[]>
   rowModel?: DataGridRowModel<TRow>
+  workerOwnedRowModelOptions?: CreateDataGridWorkerOwnedRowModelOptions<TRow>
+  clientRowModelOptions?: CreateDataGridRuntimeOptions<TRow>["clientRowModelOptions"]
   columns: MaybeRef<readonly DataGridColumnDef[]>
   services?: DataGridRuntimeOverrides
   startupOrder?: CreateDataGridCoreOptions["startupOrder"]
@@ -91,13 +98,25 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
 export function useDataGridRuntime<TRow = unknown>(
   options: UseDataGridRuntimeOptions<TRow>,
 ): UseDataGridRuntimeResult<TRow> {
+  const initialRows = options.rows ? resolveMaybeRef(options.rows) : []
+  const resolvedRowModel = options.rowModel ?? (
+    options.workerOwnedRowModelOptions
+      ? createDataGridWorkerOwnedRowModel(options.workerOwnedRowModelOptions)
+      : undefined
+  )
   const runtime = useDataGridRuntimeService<TRow>({
-    rows: options.rows ? resolveMaybeRef(options.rows) : [],
-    rowModel: options.rowModel,
+    rows: initialRows,
+    rowModel: resolvedRowModel,
+    clientRowModelOptions: options.clientRowModelOptions,
     columns: resolveMaybeRef(options.columns),
     services: options.services,
     startupOrder: options.startupOrder,
   })
+
+  if (resolvedRowModel && options.rows) {
+    runtime.setRows(initialRows)
+  }
+
   const { rowModel, columnModel, core, api } = runtime
   const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
   const buildFallbackVirtualWindow = (): DataGridRuntimeVirtualWindowSnapshot => {
