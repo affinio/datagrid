@@ -161,6 +161,9 @@ export interface DataGridClientRowPatchOptions {
 
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
+  replaceRows(rows: readonly DataGridRowNodeInput<T>[]): void
+  appendRows(rows: readonly DataGridRowNodeInput<T>[]): void
+  prependRows(rows: readonly DataGridRowNodeInput<T>[]): void
   setSortAndFilterModel(input: DataGridSortAndFilterModelInput): void
   getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
   patchRows(
@@ -168,6 +171,8 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
     options?: DataGridClientRowPatchOptions,
   ): void
   reorderRows(input: DataGridClientRowReorderInput): boolean
+  getComputeMode(): DataGridClientComputeMode
+  switchComputeMode(mode: DataGridClientComputeMode): boolean
   getDerivedCacheDiagnostics(): DataGridClientRowModelDerivedCacheDiagnostics
   getComputeDiagnostics(): DataGridClientComputeDiagnostics
 }
@@ -550,9 +555,11 @@ export function createClientRowModel<T>(
     projectionEngine,
     projectionHandlersRuntime.projectionStageHandlers,
   )
-  const computeRuntime = createClientRowComputeRuntime({
-    mode: options.computeMode,
-    transport: options.computeTransport ?? null,
+  const computeTransport = options.computeTransport ?? null
+  let computeMode: DataGridClientComputeMode = options.computeMode ?? "sync"
+  let computeRuntime = createClientRowComputeRuntime({
+    mode: computeMode,
+    transport: computeTransport,
     orchestrator: projectionOrchestrator,
   })
 
@@ -773,6 +780,21 @@ export function createClientRowModel<T>(
     setRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
       rowsMutationsRuntime.setRows(nextRows)
     },
+    replaceRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
+      rowsMutationsRuntime.setRows(nextRows)
+    },
+    appendRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
+      if (nextRows.length === 0) {
+        return
+      }
+      rowsMutationsRuntime.setRows([...sourceRows, ...nextRows])
+    },
+    prependRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
+      if (nextRows.length === 0) {
+        return
+      }
+      rowsMutationsRuntime.setRows([...nextRows, ...sourceRows])
+    },
     patchRows(
       updates: readonly DataGridClientRowPatch<T>[],
       options: DataGridClientRowPatchOptions = {},
@@ -894,6 +916,24 @@ export function createClientRowModel<T>(
         groupValueHits: derivedCacheDiagnostics.groupValueHits,
         groupValueMisses: derivedCacheDiagnostics.groupValueMisses,
       }
+    },
+    getComputeMode() {
+      return computeMode
+    },
+    switchComputeMode(nextMode: DataGridClientComputeMode) {
+      const normalizedMode: DataGridClientComputeMode = nextMode === "worker" ? "worker" : "sync"
+      if (normalizedMode === computeMode) {
+        return false
+      }
+      const previousRuntime = computeRuntime
+      computeMode = normalizedMode
+      computeRuntime = createClientRowComputeRuntime({
+        mode: computeMode,
+        transport: computeTransport,
+        orchestrator: projectionOrchestrator,
+      })
+      previousRuntime.dispose()
+      return true
     },
     getComputeDiagnostics() {
       return computeRuntime.getDiagnostics()

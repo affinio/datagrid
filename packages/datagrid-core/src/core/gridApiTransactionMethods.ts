@@ -19,12 +19,13 @@ export interface DataGridApiTransactionMethods {
 
 export interface CreateDataGridApiTransactionMethodsInput {
   getTransactionCapability: () => DataGridTransactionCapability | null
+  onChanged?: (snapshot: DataGridTransactionSnapshot | null) => void
 }
 
 export function createDataGridApiTransactionMethods(
   input: CreateDataGridApiTransactionMethodsInput,
 ): DataGridApiTransactionMethods {
-  const { getTransactionCapability } = input
+  const { getTransactionCapability, onChanged } = input
 
   return {
     hasTransactionSupport() {
@@ -39,19 +40,29 @@ export function createDataGridApiTransactionMethods(
     },
     beginTransactionBatch(label?: string) {
       const transaction = assertTransactionCapability(getTransactionCapability())
-      return transaction.beginTransactionBatch(label)
+      const batchId = transaction.beginTransactionBatch(label)
+      onChanged?.(transaction.getTransactionSnapshot())
+      return batchId
     },
     commitTransactionBatch(batchId?: string) {
       const transaction = assertTransactionCapability(getTransactionCapability())
-      return transaction.commitTransactionBatch(batchId)
+      return transaction.commitTransactionBatch(batchId).then((committed) => {
+        onChanged?.(transaction.getTransactionSnapshot())
+        return committed
+      })
     },
     rollbackTransactionBatch(batchId?: string) {
       const transaction = assertTransactionCapability(getTransactionCapability())
-      return transaction.rollbackTransactionBatch(batchId)
+      const rolledBack = transaction.rollbackTransactionBatch(batchId)
+      onChanged?.(transaction.getTransactionSnapshot())
+      return rolledBack
     },
     applyTransaction(transactionInput: DataGridTransactionInput) {
       const transaction = assertTransactionCapability(getTransactionCapability())
-      return transaction.applyTransaction(transactionInput)
+      return transaction.applyTransaction(transactionInput).then((transactionId) => {
+        onChanged?.(transaction.getTransactionSnapshot())
+        return transactionId
+      })
     },
     canUndoTransaction() {
       const transactionCapability = getTransactionCapability()
@@ -69,11 +80,17 @@ export function createDataGridApiTransactionMethods(
     },
     undoTransaction() {
       const transaction = assertTransactionCapability(getTransactionCapability())
-      return transaction.undoTransaction()
+      return transaction.undoTransaction().then((transactionId) => {
+        onChanged?.(transaction.getTransactionSnapshot())
+        return transactionId
+      })
     },
     redoTransaction() {
       const transaction = assertTransactionCapability(getTransactionCapability())
-      return transaction.redoTransaction()
+      return transaction.redoTransaction().then((transactionId) => {
+        onChanged?.(transaction.getTransactionSnapshot())
+        return transactionId
+      })
     },
   }
 }

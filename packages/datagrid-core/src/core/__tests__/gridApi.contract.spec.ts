@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
-import { createDataGridColumnModel, createClientRowModel } from "../../models"
+import {
+  createDataGridColumnModel,
+  createClientRowModel,
+  createDataSourceBackedRowModel,
+} from "../../models"
 import type { DataGridRowModel } from "../../models"
 import type { DataGridSelectionSnapshot } from "../../selection/snapshot"
 import { createDataGridTransactionService } from "../transactionService"
@@ -42,6 +46,13 @@ describe("data grid api facade contracts", () => {
     expect(typeof api.pivot).toBe("object")
     expect(typeof api.selection).toBe("object")
     expect(typeof api.transaction).toBe("object")
+    expect(typeof api.compute).toBe("object")
+    expect(typeof api.diagnostics).toBe("object")
+    expect(typeof api.meta).toBe("object")
+    expect(typeof api.policy).toBe("object")
+    expect(typeof api.plugins).toBe("object")
+    expect(typeof api.state).toBe("object")
+    expect(typeof api.events).toBe("object")
     expect("getRowCount" in api).toBe(false)
     expect("setSortModel" in api).toBe(false)
     expect("setColumnWidth" in api).toBe(false)
@@ -453,6 +464,303 @@ describe("data grid api facade contracts", () => {
 
     api.view.reapply()
     expect(refreshSpy).toHaveBeenCalledWith("reapply")
+  })
+
+  it("exposes rows data-mutation methods for models with setRows capability", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: "r0", score: 0 }, rowId: "r0", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.rows.hasDataMutationSupport()).toBe(true)
+    api.rows.setData([
+      { row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 },
+      { row: { id: "r2", score: 2 }, rowId: "r2", originalIndex: 1 },
+    ])
+    expect(api.rows.getCount()).toBe(2)
+    expect((api.rows.get(0)?.row as { id?: string })?.id).toBe("r1")
+
+    api.rows.appendData([{ row: { id: "r3", score: 3 }, rowId: "r3", originalIndex: 2 }])
+    expect(api.rows.getCount()).toBe(3)
+    expect((api.rows.get(2)?.row as { id?: string })?.id).toBe("r3")
+
+    api.rows.prependData([{ row: { id: "r00", score: 0 }, rowId: "r00", originalIndex: 0 }])
+    expect(api.rows.getCount()).toBe(4)
+    expect((api.rows.get(0)?.row as { id?: string })?.id).toBe("r00")
+
+    api.rows.replaceData([{ row: { id: "rx", score: 9 }, rowId: "rx", originalIndex: 0 }])
+    expect(api.rows.getCount()).toBe(1)
+    expect((api.rows.get(0)?.row as { id?: string })?.id).toBe("rx")
+  })
+
+  it("reports missing data-mutation capability when row model does not expose setRows", () => {
+    const clientRowModel = createClientRowModel({
+      rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }],
+    })
+    const {
+      setRows: _omitSetRows,
+      replaceRows: _omitReplaceRows,
+      appendRows: _omitAppendRows,
+      prependRows: _omitPrependRows,
+      ...rowModelWithoutDataMutation
+    } = clientRowModel
+    const rowModel = rowModelWithoutDataMutation as unknown as DataGridRowModel<{ id: number }>
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "id", label: "ID" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.rows.hasDataMutationSupport()).toBe(false)
+    expect(() => api.rows.setData([])).toThrow(/setRows data mutation capability/i)
+    expect(() => api.rows.replaceData([])).toThrow(/setRows data mutation capability/i)
+    expect(() => api.rows.appendData([])).toThrow(/setRows data mutation capability/i)
+    expect(() => api.rows.prependData([])).toThrow(/setRows data mutation capability/i)
+  })
+
+  it("exposes compute-mode control and diagnostics through dedicated namespaces", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.compute.hasSupport()).toBe(true)
+    expect(api.compute.getMode()).toBe("sync")
+    expect(api.compute.getDiagnostics()?.configuredMode).toBe("sync")
+    expect(api.compute.switchMode("worker")).toBe(true)
+    expect(api.compute.getMode()).toBe("worker")
+    expect(api.compute.getDiagnostics()?.configuredMode).toBe("worker")
+    expect(api.compute.switchMode("worker")).toBe(false)
+
+    const diagnostics = api.diagnostics.getAll()
+    expect(diagnostics.rowModel.kind).toBe("client")
+    expect(diagnostics.compute?.configuredMode).toBe("worker")
+    expect(diagnostics.derivedCache).not.toBeNull()
+    expect(diagnostics.backpressure).toBeNull()
+  })
+
+  it("reports compute namespace as unsupported when row model lacks compute capability", () => {
+    const clientRowModel = createClientRowModel({
+      rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }],
+    })
+    const {
+      getComputeMode: _omitGetComputeMode,
+      switchComputeMode: _omitSwitchComputeMode,
+      getComputeDiagnostics: _omitGetComputeDiagnostics,
+      ...rowModelWithoutCompute
+    } = clientRowModel
+    const rowModel = rowModelWithoutCompute as unknown as DataGridRowModel<{ id: number }>
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "id", label: "ID" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.compute.hasSupport()).toBe(false)
+    expect(api.compute.getMode()).toBeNull()
+    expect(api.compute.getDiagnostics()).toBeNull()
+    expect(() => api.compute.switchMode("worker")).toThrow(/compute mode capability/i)
+  })
+
+  it("surfaces datasource backpressure diagnostics via unified diagnostics namespace", () => {
+    const dataSourceRows = [
+      { id: 1, owner: "noc" },
+      { id: 2, owner: "ops" },
+    ]
+    const rowModel = createDataSourceBackedRowModel({
+      initialTotal: dataSourceRows.length,
+      dataSource: {
+        async pull(request) {
+          return {
+            rows: dataSourceRows
+              .slice(request.range.start, request.range.end + 1)
+              .map((row, offset) => ({
+                index: request.range.start + offset,
+                row,
+                rowId: row.id,
+              })),
+            total: dataSourceRows.length,
+          }
+        },
+      },
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    const diagnostics = api.diagnostics.getAll()
+    expect(diagnostics.rowModel.kind).toBe("server")
+    expect(diagnostics.compute).toBeNull()
+    expect(diagnostics.derivedCache).toBeNull()
+    expect(diagnostics.backpressure).not.toBeNull()
+    expect(diagnostics.backpressure?.pullRequested).toBeGreaterThanOrEqual(0)
+  })
+
+  it("exposes meta schema/capabilities/runtime info without requiring direct model access", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: "r1", owner: "noc" }, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "owner", label: "Owner", meta: { formatter: "text", category: "identity" } },
+      ],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    const schema = api.meta.getSchema()
+    const capabilities = api.meta.getCapabilities()
+    const runtime = api.meta.getRuntimeInfo()
+
+    expect(schema.rowModelKind).toBe("client")
+    expect(schema.columns).toEqual([
+      {
+        key: "owner",
+        label: "Owner",
+        visible: true,
+        pin: "none",
+        width: null,
+        hasMeta: true,
+        metaKeys: ["category", "formatter"],
+      },
+    ])
+    expect(capabilities.patch).toBe(true)
+    expect(capabilities.dataMutation).toBe(true)
+    expect(capabilities.compute).toBe(true)
+    expect(runtime.lifecycleState).toBe("idle")
+    expect(runtime.projectionMode).toBe("excel-like")
+    expect(runtime.computeMode).toBe("sync")
+  })
+
+  it("applies projection policy mode and blocks data mutation in immutable mode", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: "r1", score: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", score: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.policy.getProjectionMode()).toBe("excel-like")
+    expect(api.rows.getAutoReapply()).toBe(false)
+
+    expect(api.policy.setProjectionMode("mutable")).toBe("mutable")
+    expect(api.rows.getAutoReapply()).toBe(true)
+
+    expect(api.policy.setProjectionMode("immutable")).toBe("immutable")
+    expect(api.rows.getAutoReapply()).toBe(false)
+    expect(() => api.rows.patch([{ rowId: "r1", data: { score: 999 } }])).toThrow(/immutable/)
+    expect(() => api.rows.setData([])).toThrow(/immutable/)
+
+    expect(api.policy.setProjectionMode("excel-like")).toBe("excel-like")
+    expect(api.rows.getAutoReapply()).toBe(false)
+    api.rows.patch([{ rowId: "r1", data: { score: 999 } }], { recomputeSort: false })
+    expect((api.rows.get(0)?.row as { score?: number })?.score).toBe(999)
+  })
+
+  it("registers plugins from constructor/options and dispatches facade events", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const events: string[] = []
+    const disposed: string[] = []
+
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({
+      core,
+      plugins: [
+        {
+          id: "boot",
+          onEvent(event) {
+            events.push(`boot:${event}`)
+          },
+          onDispose() {
+            disposed.push("boot")
+          },
+        },
+      ],
+    })
+
+    expect(api.plugins.list()).toEqual(["boot"])
+    expect(api.plugins.has("boot")).toBe(true)
+
+    expect(api.plugins.register({
+      id: "runtime",
+      onEvent(event) {
+        events.push(`runtime:${event}`)
+      },
+      onDispose() {
+        disposed.push("runtime")
+      },
+    })).toBe(true)
+    expect(api.plugins.register({ id: "runtime" })).toBe(false)
+
+    api.rows.setSortModel([{ key: "score", direction: "desc" }])
+    expect(events.some(event => event.includes("rows:changed"))).toBe(true)
+
+    expect(api.plugins.unregister("runtime")).toBe(true)
+    expect(api.plugins.unregister("runtime")).toBe(false)
+    api.plugins.clear()
+    expect(api.plugins.list()).toEqual([])
+    expect(disposed).toContain("runtime")
+    expect(disposed).toContain("boot")
   })
 
   it("batches cell refresh for large row-key sets without triggering full row-model refresh", async () => {
@@ -907,5 +1215,235 @@ describe("data grid api facade contracts", () => {
     await api.transaction.undo()
     expect(values.a).toBe(0)
     expect(api.transaction.canRedo()).toBe(true)
+  })
+
+  it("supports unified state get/set roundtrip for rows/columns/selection", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "noc", status: "open" }, rowId: 1, originalIndex: 0 },
+        { row: { id: 2, owner: "ops", status: "open" }, rowId: 2, originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "id", label: "ID", width: 90 },
+        { key: "owner", label: "Owner", width: 160 },
+        { key: "status", label: "Status", width: 140 },
+      ],
+    })
+    let selectionSnapshot: DataGridSelectionSnapshot | null = null
+
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getSelectionSnapshot() {
+            return selectionSnapshot
+          },
+          setSelectionSnapshot(snapshot) {
+            selectionSnapshot = snapshot
+          },
+          clearSelection() {
+            selectionSnapshot = null
+          },
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.rows.setSortModel([{ key: "owner", direction: "desc" }])
+    api.rows.setFilterModel({
+      columnFilters: { status: { kind: "valueSet", tokens: ["string:open"] } },
+      advancedFilters: {},
+    })
+    api.rows.setGroupBy({ fields: ["status"], expandedByDefault: true })
+    api.rows.setPagination({ pageSize: 1, currentPage: 0 })
+    api.view.setViewportRange({ start: 0, end: 0 })
+    api.rows.setAggregationModel({ columns: [{ key: "id", op: "count" }] })
+    api.columns.setOrder(["status", "owner", "id"])
+    api.columns.setVisibility("id", false)
+    api.columns.setPin("owner", "left")
+    api.columns.setWidth("status", 220)
+    api.selection.setSnapshot({
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 0,
+          startCol: 0,
+          endCol: 1,
+          startRowId: 1,
+          endRowId: 1,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: 1 },
+          focus: { rowIndex: 0, colIndex: 1, rowId: 1 },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 1, rowId: 1 },
+    })
+
+    const saved = api.state.get()
+
+    api.rows.setSortModel([{ key: "id", direction: "asc" }])
+    api.rows.setFilterModel({ columnFilters: {}, advancedFilters: {} })
+    api.rows.setGroupBy(null)
+    api.rows.setAggregationModel(null)
+    api.rows.setPagination({ pageSize: 2, currentPage: 0 })
+    api.view.setViewportRange({ start: 0, end: 1 })
+    api.columns.setOrder(["id", "owner", "status"])
+    api.columns.setVisibility("id", true)
+    api.columns.setPin("owner", "none")
+    api.columns.setWidth("status", 100)
+    api.selection.clear()
+
+    api.state.set(saved)
+
+    expect(api.rows.getSnapshot().sortModel).toEqual(saved.rows.snapshot.sortModel)
+    expect(api.rows.getSnapshot().filterModel).toEqual(saved.rows.snapshot.filterModel)
+    expect(api.rows.getSnapshot().groupBy).toEqual(saved.rows.snapshot.groupBy)
+    expect(api.rows.getSnapshot().groupExpansion).toEqual(saved.rows.snapshot.groupExpansion)
+    expect(api.rows.getSnapshot().pagination.pageSize).toBe(saved.rows.snapshot.pagination.pageSize)
+    expect(api.rows.getSnapshot().pagination.currentPage).toBe(saved.rows.snapshot.pagination.currentPage)
+    expect(api.rows.getSnapshot().viewportRange).toEqual(saved.rows.snapshot.viewportRange)
+    expect(api.rows.getAggregationModel()).toEqual(saved.rows.aggregationModel)
+    expect(api.columns.getSnapshot().order).toEqual(saved.columns.order)
+    expect(api.selection.getSnapshot()).toEqual(saved.selection)
+  })
+
+  it("emits facade events for rows/columns/projection/selection/transaction/state", async () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "noc", score: 100 }, rowId: 1, originalIndex: 0 },
+        { row: { id: 2, owner: "ops", score: 200 }, rowId: 2, originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "owner", label: "Owner" },
+        { key: "score", label: "Score" },
+      ],
+    })
+    let selectionSnapshot: DataGridSelectionSnapshot | null = null
+    const values: Record<string, number> = {}
+    const transactionService = createDataGridTransactionService({
+      execute(command, context) {
+        if (command.type === "set") {
+          const payload = (
+            context.direction === "apply" || context.direction === "redo"
+              ? command.payload
+              : command.rollbackPayload
+          ) as { key: string; value: number }
+          values[payload.key] = payload.value
+        }
+      },
+    })
+
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getSelectionSnapshot() {
+            return selectionSnapshot
+          },
+          setSelectionSnapshot(snapshot) {
+            selectionSnapshot = snapshot
+          },
+          clearSelection() {
+            selectionSnapshot = null
+          },
+        },
+        transaction: {
+          name: "transaction",
+          getTransactionSnapshot: transactionService.getSnapshot,
+          beginTransactionBatch: transactionService.beginBatch,
+          commitTransactionBatch: transactionService.commitBatch,
+          rollbackTransactionBatch: transactionService.rollbackBatch,
+          applyTransaction: transactionService.applyTransaction,
+          canUndoTransaction: transactionService.canUndo,
+          canRedoTransaction: transactionService.canRedo,
+          undoTransaction: transactionService.undo,
+          redoTransaction: transactionService.redo,
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    const counters = {
+      rows: 0,
+      columns: 0,
+      projection: 0,
+      selection: 0,
+      transaction: 0,
+      viewport: 0,
+      pivot: 0,
+      imported: 0,
+    }
+    const unsubs = [
+      api.events.on("rows:changed", () => {
+        counters.rows += 1
+      }),
+      api.events.on("columns:changed", () => {
+        counters.columns += 1
+      }),
+      api.events.on("projection:recomputed", () => {
+        counters.projection += 1
+      }),
+      api.events.on("selection:changed", () => {
+        counters.selection += 1
+      }),
+      api.events.on("transaction:changed", () => {
+        counters.transaction += 1
+      }),
+      api.events.on("viewport:changed", () => {
+        counters.viewport += 1
+      }),
+      api.events.on("pivot:changed", () => {
+        counters.pivot += 1
+      }),
+      api.events.on("state:imported", () => {
+        counters.imported += 1
+      }),
+    ]
+
+    api.rows.setSortModel([{ key: "score", direction: "desc" }])
+    api.columns.setWidth("score", 220)
+    api.view.setViewportRange({ start: 0, end: 1 })
+    api.pivot.setModel({
+      rows: ["owner"],
+      columns: ["score"],
+      values: [{ field: "score", agg: "count" }],
+    })
+    api.selection.setSnapshot({
+      ranges: [],
+      activeRangeIndex: -1,
+      activeCell: null,
+    })
+    await api.transaction.apply({
+      commands: [
+        {
+          type: "set",
+          payload: { key: "x", value: 1 },
+          rollbackPayload: { key: "x", value: 0 },
+        },
+      ],
+    })
+    expect(values.x).toBe(1)
+    api.state.set(api.state.get())
+
+    for (const unsub of unsubs) {
+      unsub()
+    }
+
+    expect(counters.rows).toBeGreaterThan(0)
+    expect(counters.columns).toBeGreaterThan(0)
+    expect(counters.projection).toBeGreaterThan(0)
+    expect(counters.selection).toBeGreaterThan(0)
+    expect(counters.transaction).toBeGreaterThan(0)
+    expect(counters.viewport).toBeGreaterThan(0)
+    expect(counters.pivot).toBeGreaterThan(0)
+    expect(counters.imported).toBeGreaterThan(0)
   })
 })

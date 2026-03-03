@@ -1,5 +1,12 @@
 import { isRef, onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue"
 import type {
+  DataGridApiCapabilities,
+  DataGridApiEventName,
+  DataGridApiEventPayload,
+  DataGridApiPluginDefinition,
+  DataGridApiProjectionMode,
+  DataGridApiRuntimeInfo,
+  DataGridApiSchemaSnapshot,
   CreateDataGridCoreOptions,
   DataGridAggregationModel,
   DataGridClientRowPatch,
@@ -55,6 +62,7 @@ export interface DataGridEditOptions extends Omit<
 export interface UseDataGridRuntimeOptions<TRow = unknown> {
   rows?: MaybeRef<readonly TRow[]>
   rowModel?: DataGridRowModel<TRow>
+  plugins?: readonly DataGridApiPluginDefinition<TRow>[]
   workerOwnedRowModelOptions?: CreateDataGridWorkerOwnedRowModelOptions<TRow>
   clientRowModelOptions?: CreateDataGridRuntimeOptions<TRow>["clientRowModelOptions"]
   columns: MaybeRef<readonly DataGridColumnDef[]>
@@ -90,6 +98,16 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   ) => void
   reapplyView: () => void
   autoReapply: Ref<boolean>
+  getProjectionMode: () => DataGridApiProjectionMode
+  setProjectionMode: (mode: DataGridApiProjectionMode) => DataGridApiProjectionMode
+  getSchema: () => DataGridApiSchemaSnapshot
+  getApiCapabilities: () => DataGridApiCapabilities
+  getRuntimeInfo: () => DataGridApiRuntimeInfo
+  registerPlugin: (plugin: DataGridApiPluginDefinition<TRow>) => boolean
+  unregisterPlugin: (id: string) => boolean
+  hasPlugin: (id: string) => boolean
+  listPlugins: () => readonly string[]
+  clearPlugins: () => void
   start: () => Promise<void>
   stop: () => void
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
@@ -107,6 +125,7 @@ export function useDataGridRuntime<TRow = unknown>(
   const runtime = useDataGridRuntimeService<TRow>({
     rows: initialRows,
     rowModel: resolvedRowModel,
+    plugins: options.plugins,
     clientRowModelOptions: options.clientRowModelOptions,
     columns: resolveMaybeRef(options.columns),
     services: options.services,
@@ -191,6 +210,9 @@ export function useDataGridRuntime<TRow = unknown>(
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
   ) {
+    if (api.policy.getProjectionMode() === "immutable") {
+      throw new Error("[DataGridRuntime] patchRows is blocked while projection mode is immutable.")
+    }
     runtime.patchRows(updates, options)
   }
 
@@ -199,7 +221,7 @@ export function useDataGridRuntime<TRow = unknown>(
     options: DataGridEditOptions = {},
   ) {
     const freezeView = options.freezeView ?? !autoReapply.value
-    runtime.patchRows(updates, {
+    patchRows(updates, {
       emit: options.emit,
       recomputeSort: freezeView ? false : true,
       recomputeFilter: freezeView ? false : true,
@@ -233,5 +255,28 @@ export function useDataGridRuntime<TRow = unknown>(
     start: runtime.start,
     stop,
     syncRowsInRange: runtime.syncRowsInRange,
+    getProjectionMode: api.policy.getProjectionMode,
+    setProjectionMode(mode: DataGridApiProjectionMode) {
+      const nextMode = api.policy.setProjectionMode(mode)
+      autoReapply.value = nextMode === "mutable"
+      return nextMode
+    },
+    getSchema: api.meta.getSchema,
+    getApiCapabilities: api.meta.getCapabilities,
+    getRuntimeInfo: api.meta.getRuntimeInfo,
+    registerPlugin(plugin: DataGridApiPluginDefinition<TRow>) {
+      return api.plugins.register({
+        ...plugin,
+        onEvent: plugin.onEvent
+          ? (event: DataGridApiEventName<TRow>, payload: DataGridApiEventPayload<TRow>) => {
+            plugin.onEvent?.(event, payload)
+          }
+          : undefined,
+      })
+    },
+    unregisterPlugin: api.plugins.unregister,
+    hasPlugin: api.plugins.has,
+    listPlugins: api.plugins.list,
+    clearPlugins: api.plugins.clear,
   }
 }

@@ -32,6 +32,11 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   getRowCount: DataGridApi<TRow>["rows"]["getCount"]
   getRow: DataGridApi<TRow>["rows"]["get"]
   getRowsInRange: DataGridApi<TRow>["rows"]["getRange"]
+  hasDataMutationSupport: DataGridApi<TRow>["rows"]["hasDataMutationSupport"]
+  setData: DataGridApi<TRow>["rows"]["setData"]
+  replaceData: DataGridApi<TRow>["rows"]["replaceData"]
+  appendData: DataGridApi<TRow>["rows"]["appendData"]
+  prependData: DataGridApi<TRow>["rows"]["prependData"]
   getPaginationSnapshot: DataGridApi<TRow>["rows"]["getPagination"]
   setPagination: DataGridApi<TRow>["rows"]["setPagination"]
   setPageSize: DataGridApi<TRow>["rows"]["setPageSize"]
@@ -67,6 +72,24 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   refreshCellsByRowKeys: DataGridApi<TRow>["view"]["refreshCellsByRowKeys"]
   refreshCellsByRanges: DataGridApi<TRow>["view"]["refreshCellsByRanges"]
   onCellsRefresh: DataGridApi<TRow>["view"]["onCellsRefresh"]
+  hasComputeSupport: DataGridApi<TRow>["compute"]["hasSupport"]
+  getComputeMode: DataGridApi<TRow>["compute"]["getMode"]
+  switchComputeMode: DataGridApi<TRow>["compute"]["switchMode"]
+  getComputeDiagnostics: DataGridApi<TRow>["compute"]["getDiagnostics"]
+  getAllDiagnostics: DataGridApi<TRow>["diagnostics"]["getAll"]
+  getSchema: DataGridApi<TRow>["meta"]["getSchema"]
+  getApiCapabilities: DataGridApi<TRow>["meta"]["getCapabilities"]
+  getRuntimeInfo: DataGridApi<TRow>["meta"]["getRuntimeInfo"]
+  getProjectionMode: DataGridApi<TRow>["policy"]["getProjectionMode"]
+  setProjectionMode: DataGridApi<TRow>["policy"]["setProjectionMode"]
+  registerPlugin: DataGridApi<TRow>["plugins"]["register"]
+  unregisterPlugin: DataGridApi<TRow>["plugins"]["unregister"]
+  hasPlugin: DataGridApi<TRow>["plugins"]["has"]
+  listPlugins: DataGridApi<TRow>["plugins"]["list"]
+  clearPlugins: DataGridApi<TRow>["plugins"]["clear"]
+  getUnifiedState: DataGridApi<TRow>["state"]["get"]
+  setUnifiedState: DataGridApi<TRow>["state"]["set"]
+  onApiEvent: DataGridApi<TRow>["events"]["on"]
 }
 
 export function createDataGridApiFromMethodSet<TRow = unknown>(
@@ -111,6 +134,11 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       getCount: methodSet.getRowCount,
       get: methodSet.getRow,
       getRange: methodSet.getRowsInRange,
+      hasDataMutationSupport: methodSet.hasDataMutationSupport,
+      setData: methodSet.setData,
+      replaceData: methodSet.replaceData,
+      appendData: methodSet.appendData,
+      prependData: methodSet.prependData,
       getPagination: methodSet.getPaginationSnapshot,
       setPagination: methodSet.setPagination,
       setPageSize: methodSet.setPageSize,
@@ -152,6 +180,38 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       refreshCellsByRowKeys: methodSet.refreshCellsByRowKeys,
       refreshCellsByRanges: methodSet.refreshCellsByRanges,
       onCellsRefresh: methodSet.onCellsRefresh,
+    },
+    compute: {
+      hasSupport: methodSet.hasComputeSupport,
+      getMode: methodSet.getComputeMode,
+      switchMode: methodSet.switchComputeMode,
+      getDiagnostics: methodSet.getComputeDiagnostics,
+    },
+    diagnostics: {
+      getAll: methodSet.getAllDiagnostics,
+    },
+    meta: {
+      getSchema: methodSet.getSchema,
+      getCapabilities: methodSet.getApiCapabilities,
+      getRuntimeInfo: methodSet.getRuntimeInfo,
+    },
+    policy: {
+      getProjectionMode: methodSet.getProjectionMode,
+      setProjectionMode: methodSet.setProjectionMode,
+    },
+    plugins: {
+      register: methodSet.registerPlugin,
+      unregister: methodSet.unregisterPlugin,
+      has: methodSet.hasPlugin,
+      list: methodSet.listPlugins,
+      clear: methodSet.clearPlugins,
+    },
+    state: {
+      get: methodSet.getUnifiedState,
+      set: methodSet.setUnifiedState,
+    },
+    events: {
+      on: methodSet.onApiEvent,
     },
   }
 }

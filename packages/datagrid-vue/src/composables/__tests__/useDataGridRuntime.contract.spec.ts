@@ -90,6 +90,35 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime!.api.rows.getCount()).toBe(2)
     expect(runtime!.virtualWindow.value?.rowTotal).toBe(2)
     expect(runtime!.virtualWindow.value?.colTotal).toBe(1)
+    expect(runtime!.getProjectionMode()).toBe("excel-like")
+    expect(runtime!.getSchema().columns.map(column => column.key)).toEqual(["name"])
+    expect(runtime!.getApiCapabilities().patch).toBe(true)
+    expect(runtime!.getRuntimeInfo().rowModelKind).toBe("client")
+
+    const pluginEvents: string[] = []
+    expect(runtime!.registerPlugin({
+      id: "runtime-contract-plugin",
+      onEvent(event) {
+        pluginEvents.push(String(event))
+      },
+    })).toBe(true)
+    expect(runtime!.hasPlugin("runtime-contract-plugin")).toBe(true)
+    expect(runtime!.listPlugins()).toContain("runtime-contract-plugin")
+
+    runtime!.api.rows.setSortModel([{ key: "tested_at", direction: "desc" }])
+    await flushRuntimeTasks()
+    expect(pluginEvents.some(event => event === "rows:changed")).toBe(true)
+    expect(runtime!.unregisterPlugin("runtime-contract-plugin")).toBe(true)
+    expect(runtime!.hasPlugin("runtime-contract-plugin")).toBe(false)
+
+    runtime!.setProjectionMode("immutable")
+    expect(() => {
+      runtime!.patchRows(
+        [{ rowId: "r2", data: { name: "blocked" } }],
+        { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+      )
+    }).toThrow(/immutable/)
+    runtime!.setProjectionMode("excel-like")
 
     rows.value = [
       { rowId: "r1", name: "Alpha", tested_at: 100 },
@@ -264,6 +293,45 @@ describe("useDataGridRuntime contract", () => {
     expect(diagnostics?.configuredMode).toBe("worker")
     expect((diagnostics?.dispatchCount ?? 0) > 0).toBe(true)
     expect(dispatchedKinds.length).toBeGreaterThan(0)
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
+  })
+
+  it("passes plugin definitions from composable options into runtime api", async () => {
+    const pluginEvents: string[] = []
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+
+    const Host = defineComponent({
+      name: "RuntimePluginsHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          rows: [{ rowId: "r1", name: "Alpha", tested_at: 100 }],
+          columns: COLUMNS,
+          plugins: [
+            {
+              id: "seed-plugin",
+              onEvent(event) {
+                pluginEvents.push(String(event))
+              },
+            },
+          ],
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+
+    expect(runtime).not.toBeNull()
+    expect(runtime!.listPlugins()).toContain("seed-plugin")
+    runtime!.api.rows.setFilterModel({
+      columnFilters: { name: { kind: "valueSet", tokens: ["string:alpha"] } },
+      advancedFilters: {},
+    })
+    await flushRuntimeTasks()
+    expect(pluginEvents.some(event => event === "rows:changed")).toBe(true)
 
     wrapper.unmount()
     await flushRuntimeTasks()

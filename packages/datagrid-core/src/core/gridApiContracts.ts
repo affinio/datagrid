@@ -1,13 +1,18 @@
 import type {
   DataGridAggregationModel,
+  DataGridClientComputeDiagnostics,
+  DataGridClientComputeMode,
+  DataGridClientRowModelDerivedCacheDiagnostics,
   DataGridColumnDef,
   DataGridColumnHistogram,
   DataGridColumnHistogramOptions,
-  DataGridColumnModelSnapshot,
   DataGridColumnPin,
+  DataGridColumnModelSnapshot,
+  DataGridPivotColumn,
   DataGridColumnSnapshot,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
+  DataGridDataSourceBackpressureDiagnostics,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
@@ -15,12 +20,17 @@ import type {
   DataGridPaginationSnapshot,
   DataGridPivotCellDrilldown,
   DataGridPivotCellDrilldownInput,
+  DataGridProjectionDiagnostics,
+  DataGridProjectionStage,
   DataGridPivotSpec,
   DataGridRowId,
+  DataGridRowModelKind,
+  DataGridRowNodeInput,
   DataGridRowModelSnapshot,
   DataGridRowNode,
   DataGridSortAndFilterModelInput,
   DataGridSortState,
+  DataGridTreeDataDiagnostics,
   DataGridViewportRange,
 } from "../models"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
@@ -93,6 +103,11 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   getCount(): number
   get(index: number): DataGridRowNode<TRow> | undefined
   getRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[]
+  hasDataMutationSupport(): boolean
+  setData(rows: readonly DataGridRowNodeInput<TRow>[]): void
+  replaceData(rows: readonly DataGridRowNodeInput<TRow>[]): void
+  appendData(rows: readonly DataGridRowNodeInput<TRow>[]): void
+  prependData(rows: readonly DataGridRowNodeInput<TRow>[]): void
   getPagination(): DataGridPaginationSnapshot
   setPagination(pagination: DataGridPaginationInput | null): void
   setPageSize(pageSize: number | null): void
@@ -151,8 +166,183 @@ export interface DataGridApiViewNamespace {
   onCellsRefresh(listener: DataGridCellsRefreshListener): () => void
 }
 
+export type DataGridApiProjectionMode = "mutable" | "immutable" | "excel-like"
+
+export interface DataGridApiComputeNamespace {
+  hasSupport(): boolean
+  getMode(): DataGridClientComputeMode | null
+  switchMode(mode: DataGridClientComputeMode): boolean
+  getDiagnostics(): DataGridClientComputeDiagnostics | null
+}
+
+export interface DataGridApiPolicyNamespace {
+  getProjectionMode(): DataGridApiProjectionMode
+  setProjectionMode(mode: DataGridApiProjectionMode): DataGridApiProjectionMode
+}
+
+export interface DataGridApiRowModelDiagnostics {
+  kind: DataGridRowModelKind
+  revision: number | null
+  rowCount: number
+  loading: boolean
+  warming: boolean
+  projection: DataGridProjectionDiagnostics | null
+  treeData: DataGridTreeDataDiagnostics | null
+}
+
+export interface DataGridApiDiagnosticsSnapshot {
+  rowModel: DataGridApiRowModelDiagnostics
+  compute: DataGridClientComputeDiagnostics | null
+  derivedCache: DataGridClientRowModelDerivedCacheDiagnostics | null
+  backpressure: DataGridDataSourceBackpressureDiagnostics | null
+}
+
+export interface DataGridApiDiagnosticsNamespace {
+  getAll(): DataGridApiDiagnosticsSnapshot
+}
+
+export interface DataGridApiSchemaColumn {
+  key: string
+  label: string
+  visible: boolean
+  pin: DataGridColumnPin
+  width: number | null
+  hasMeta: boolean
+  metaKeys: readonly string[]
+}
+
+export interface DataGridApiSchemaSnapshot {
+  rowModelKind: DataGridRowModelKind
+  columns: readonly DataGridApiSchemaColumn[]
+}
+
+export interface DataGridApiRuntimeInfo {
+  lifecycleState: DataGridCore["lifecycle"]["state"]
+  rowModelKind: DataGridRowModelKind
+  rowCount: number
+  revision: number | null
+  loading: boolean
+  warming: boolean
+  viewportRange: DataGridViewportRange
+  projectionMode: DataGridApiProjectionMode
+  computeMode: DataGridClientComputeMode | null
+}
+
+export interface DataGridApiMetaNamespace {
+  getSchema(): DataGridApiSchemaSnapshot
+  getCapabilities(): DataGridApiCapabilities
+  getRuntimeInfo(): DataGridApiRuntimeInfo
+}
+
+export interface DataGridUnifiedColumnState {
+  order: readonly string[]
+  visibility: Readonly<Record<string, boolean>>
+  widths: Readonly<Record<string, number | null>>
+  pins: Readonly<Record<string, DataGridColumnPin>>
+}
+
+export interface DataGridUnifiedRowsState<TRow = unknown> {
+  snapshot: DataGridRowModelSnapshot<TRow>
+  aggregationModel: DataGridAggregationModel<TRow> | null
+}
+
+export interface DataGridUnifiedState<TRow = unknown> {
+  version: 1
+  rows: DataGridUnifiedRowsState<TRow>
+  columns: DataGridUnifiedColumnState
+  selection: DataGridSelectionSnapshot | null
+  transaction: DataGridTransactionSnapshot | null
+}
+
+export interface DataGridSetStateOptions {
+  applyColumns?: boolean
+  applySelection?: boolean
+  applyViewport?: boolean
+  strict?: boolean
+}
+
+export interface DataGridApiStateNamespace<TRow = unknown> {
+  get(): DataGridUnifiedState<TRow>
+  set(state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions): void
+}
+
+export interface DataGridApiRowsChangedEvent<TRow = unknown> {
+  snapshot: DataGridRowModelSnapshot<TRow>
+}
+
+export interface DataGridApiColumnsChangedEvent {
+  snapshot: DataGridColumnModelSnapshot
+}
+
+export interface DataGridApiProjectionRecomputedEvent<TRow = unknown> {
+  snapshot: DataGridRowModelSnapshot<TRow>
+  previousVersion: number
+  nextVersion: number
+  staleStages: readonly DataGridProjectionStage[]
+}
+
+export interface DataGridApiSelectionChangedEvent {
+  snapshot: DataGridSelectionSnapshot | null
+}
+
+export interface DataGridApiPivotChangedEvent {
+  pivotModel: DataGridPivotSpec | null
+  pivotColumns: readonly DataGridPivotColumn[]
+}
+
+export interface DataGridApiTransactionChangedEvent {
+  snapshot: DataGridTransactionSnapshot | null
+}
+
+export interface DataGridApiViewportChangedEvent<TRow = unknown> {
+  range: DataGridViewportRange
+  snapshot: DataGridRowModelSnapshot<TRow>
+}
+
+export interface DataGridApiStateImportedEvent<TRow = unknown> {
+  state: DataGridUnifiedState<TRow>
+}
+
+export interface DataGridApiEventMap<TRow = unknown> {
+  "rows:changed": DataGridApiRowsChangedEvent<TRow>
+  "columns:changed": DataGridApiColumnsChangedEvent
+  "projection:recomputed": DataGridApiProjectionRecomputedEvent<TRow>
+  "selection:changed": DataGridApiSelectionChangedEvent
+  "pivot:changed": DataGridApiPivotChangedEvent
+  "transaction:changed": DataGridApiTransactionChangedEvent
+  "viewport:changed": DataGridApiViewportChangedEvent<TRow>
+  "state:imported": DataGridApiStateImportedEvent<TRow>
+}
+
+export type DataGridApiEventName<TRow = unknown> = keyof DataGridApiEventMap<TRow>
+export type DataGridApiEventPayload<TRow = unknown> = DataGridApiEventMap<TRow>[DataGridApiEventName<TRow>]
+
+export interface DataGridApiPluginDefinition<TRow = unknown> {
+  id: string
+  onRegister?: () => void
+  onDispose?: () => void
+  onEvent?: (event: DataGridApiEventName<TRow>, payload: DataGridApiEventPayload<TRow>) => void
+}
+
+export interface DataGridApiPluginsNamespace<TRow = unknown> {
+  register(plugin: DataGridApiPluginDefinition<TRow>): boolean
+  unregister(id: string): boolean
+  has(id: string): boolean
+  list(): readonly string[]
+  clear(): void
+}
+
+export interface DataGridApiEventsNamespace<TRow = unknown> {
+  on<K extends keyof DataGridApiEventMap<TRow>>(
+    event: K,
+    listener: (payload: DataGridApiEventMap<TRow>[K]) => void,
+  ): () => void
+}
+
 export interface DataGridApiCapabilities {
   readonly patch: boolean
+  readonly dataMutation: boolean
+  readonly compute: boolean
   readonly selection: boolean
   readonly transaction: boolean
   readonly histogram: boolean
@@ -168,6 +358,13 @@ export interface DataGridApi<TRow = unknown> {
   readonly rows: DataGridApiRowsNamespace<TRow>
   readonly columns: DataGridApiColumnsNamespace
   readonly view: DataGridApiViewNamespace
+  readonly compute: DataGridApiComputeNamespace
+  readonly diagnostics: DataGridApiDiagnosticsNamespace
+  readonly meta: DataGridApiMetaNamespace
+  readonly policy: DataGridApiPolicyNamespace
+  readonly plugins: DataGridApiPluginsNamespace<TRow>
+  readonly state: DataGridApiStateNamespace<TRow>
+  readonly events: DataGridApiEventsNamespace<TRow>
   init(): Promise<void>
   start(): Promise<void>
   stop(): Promise<void>

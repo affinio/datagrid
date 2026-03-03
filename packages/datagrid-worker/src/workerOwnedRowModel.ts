@@ -433,7 +433,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
           const reason = error instanceof Error ? error.message : String(error)
           snapshot = {
             ...snapshot,
-            error: `[AffinoDataGrid worker] dispatch failed: ${reason}`,
+            error: new Error(`[AffinoDataGrid worker] dispatch failed: ${reason}`),
           }
           emit()
         }

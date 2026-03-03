@@ -2,6 +2,12 @@
 
 Framework-agnostic data grid core.
 
+## Canonical Feature Catalog
+
+Single source of truth for platform capabilities:
+
+- [DataGrid Feature Catalog](https://github.com/affinio/affinio/blob/main/docs/datagrid-feature-catalog.md)
+
 ## Layer boundaries (Core vs Orchestration vs Adapter)
 
 - Keep in `@affino/datagrid-core`:

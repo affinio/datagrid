@@ -1,9 +1,12 @@
 import type {
+  DataGridClientComputeDiagnostics,
+  DataGridClientComputeMode,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
   DataGridColumnHistogram,
   DataGridColumnHistogramOptions,
   DataGridRowModel,
+  DataGridRowNodeInput,
   DataGridSortAndFilterModelInput,
 } from "../models"
 import type {
@@ -22,8 +25,21 @@ export type DataGridPatchCapability<TRow = unknown> = {
   ) => void
 }
 
+export type DataGridRowsDataMutationCapability<TRow = unknown> = {
+  setRows: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+  replaceRows?: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+  appendRows?: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+  prependRows?: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+}
+
 export type DataGridSortFilterBatchCapability = {
   setSortAndFilterModel: (input: DataGridSortAndFilterModelInput) => void
+}
+
+export type DataGridComputeCapability = {
+  getComputeMode: () => DataGridClientComputeMode
+  switchComputeMode: (mode: DataGridClientComputeMode) => boolean
+  getComputeDiagnostics: () => DataGridClientComputeDiagnostics
 }
 
 export type DataGridColumnHistogramCapability = {
@@ -130,6 +146,21 @@ export function resolvePatchCapability<TRow>(
   }
 }
 
+export function resolveRowsDataMutationCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): DataGridRowsDataMutationCapability<TRow> | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DataGridRowsDataMutationCapability<TRow>>
+  if (typeof candidate.setRows !== "function") {
+    return null
+  }
+  return {
+    setRows: candidate.setRows.bind(rowModel),
+    replaceRows: typeof candidate.replaceRows === "function" ? candidate.replaceRows.bind(rowModel) : undefined,
+    appendRows: typeof candidate.appendRows === "function" ? candidate.appendRows.bind(rowModel) : undefined,
+    prependRows: typeof candidate.prependRows === "function" ? candidate.prependRows.bind(rowModel) : undefined,
+  }
+}
+
 export function resolveSortFilterBatchCapability<TRow>(
   rowModel: DataGridRowModel<TRow>,
 ): DataGridSortFilterBatchCapability | null {
@@ -139,6 +170,24 @@ export function resolveSortFilterBatchCapability<TRow>(
   }
   return {
     setSortAndFilterModel: candidate.setSortAndFilterModel.bind(rowModel),
+  }
+}
+
+export function resolveComputeCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): DataGridComputeCapability | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DataGridComputeCapability>
+  if (
+    typeof candidate.getComputeMode !== "function" ||
+    typeof candidate.switchComputeMode !== "function" ||
+    typeof candidate.getComputeDiagnostics !== "function"
+  ) {
+    return null
+  }
+  return {
+    getComputeMode: candidate.getComputeMode.bind(rowModel),
+    switchComputeMode: candidate.switchComputeMode.bind(rowModel),
+    getComputeDiagnostics: candidate.getComputeDiagnostics.bind(rowModel),
   }
 }
 
@@ -159,6 +208,24 @@ export function assertPatchCapability<TRow>(
 ): DataGridPatchCapability<TRow> {
   if (!capability) {
     throw new Error('[DataGridApi] rowModel does not implement patchRows capability.')
+  }
+  return capability
+}
+
+export function assertRowsDataMutationCapability<TRow>(
+  capability: DataGridRowsDataMutationCapability<TRow> | null,
+): DataGridRowsDataMutationCapability<TRow> {
+  if (!capability) {
+    throw new Error('[DataGridApi] rowModel does not implement setRows data mutation capability.')
+  }
+  return capability
+}
+
+export function assertComputeCapability(
+  capability: DataGridComputeCapability | null,
+): DataGridComputeCapability {
+  if (!capability) {
+    throw new Error('[DataGridApi] rowModel does not implement compute mode capability.')
   }
   return capability
 }

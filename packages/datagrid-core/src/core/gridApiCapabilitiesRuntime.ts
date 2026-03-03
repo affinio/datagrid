@@ -5,12 +5,16 @@ import type {
 } from "./gridCore"
 import {
   type DataGridColumnHistogramCapability,
+  type DataGridComputeCapability,
+  type DataGridRowsDataMutationCapability,
   type DataGridPatchCapability,
   type DataGridSelectionCapability,
   type DataGridSortFilterBatchCapability,
   type DataGridTransactionCapability,
   resolveColumnHistogramCapability,
+  resolveComputeCapability,
   resolvePatchCapability,
+  resolveRowsDataMutationCapability,
   resolveSelectionCapability,
   resolveSortFilterBatchCapability,
   resolveTransactionCapability,
@@ -18,6 +22,8 @@ import {
 
 export interface DataGridApiCapabilityFlags {
   readonly patch: boolean
+  readonly dataMutation: boolean
+  readonly compute: boolean
   readonly selection: boolean
   readonly transaction: boolean
   readonly histogram: boolean
@@ -29,6 +35,8 @@ export interface DataGridApiCapabilityRuntime<TRow = unknown> {
   getSelectionCapability: () => DataGridSelectionCapability | null
   getTransactionCapability: () => DataGridTransactionCapability | null
   getPatchCapability: () => DataGridPatchCapability<TRow> | null
+  getRowsDataMutationCapability: () => DataGridRowsDataMutationCapability<TRow> | null
+  getComputeCapability: () => DataGridComputeCapability | null
   getSortFilterBatchCapability: () => DataGridSortFilterBatchCapability | null
   getColumnHistogramCapability: () => DataGridColumnHistogramCapability | null
 }
@@ -65,6 +73,12 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
   const getPatchCapability = createLazyResolver<DataGridPatchCapability<TRow> | null>(() =>
     resolvePatchCapability(input.rowModel),
   )
+  const getRowsDataMutationCapability = createLazyResolver<DataGridRowsDataMutationCapability<TRow> | null>(() =>
+    resolveRowsDataMutationCapability(input.rowModel),
+  )
+  const getComputeCapability = createLazyResolver<DataGridComputeCapability | null>(() =>
+    resolveComputeCapability(input.rowModel),
+  )
   const getSortFilterBatchCapability = createLazyResolver<DataGridSortFilterBatchCapability | null>(() =>
     resolveSortFilterBatchCapability(input.rowModel),
   )
@@ -75,6 +89,12 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
   const capabilities: DataGridApiCapabilityFlags = Object.freeze({
     get patch() {
       return getPatchCapability() !== null
+    },
+    get dataMutation() {
+      return getRowsDataMutationCapability() !== null
+    },
+    get compute() {
+      return getComputeCapability() !== null
     },
     get selection() {
       return getSelectionCapability() !== null
@@ -95,6 +115,8 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
     getSelectionCapability,
     getTransactionCapability,
     getPatchCapability,
+    getRowsDataMutationCapability,
+    getComputeCapability,
     getSortFilterBatchCapability,
     getColumnHistogramCapability,
   }

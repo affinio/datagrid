@@ -5,6 +5,53 @@ Vue adapter surface for `@affino/datagrid-core`.
 For normal Vue usage, install and import only `@affino/datagrid-vue`.
 `@affino/datagrid-core` and `@affino/datagrid-orchestration` are internal dependencies of this adapter.
 
+## Canonical Feature Catalog
+
+Single source of truth for platform capabilities:
+
+- [DataGrid Feature Catalog](https://github.com/affinio/affinio/blob/main/docs/datagrid-feature-catalog.md)
+
+## Runtime mode decision (Main thread vs Worker vs Server-side)
+
+| Scenario | Recommended mode | Why |
+| --- | --- | --- |
+| Up to ~10k rows, simple table, low patch rate | `main-thread` | Lowest setup complexity, good baseline latency |
+| 20k+ rows, interactive editing, heavy sort/group/filter under user actions | `worker-owned` | Keeps UI thread responsive, significantly lower synchronous dispatch cost |
+| Very large datasets, remote paging/aggregation, backend-owned querying | `server-side row model` | Moves data shaping and heavy compute to backend, minimizes client memory pressure |
+
+Practical default:
+
+- Start with `main-thread`.
+- Switch to `worker-owned` when UI responsiveness under patch pressure becomes the bottleneck.
+- Move to `server-side` when dataset size and query shape are primarily backend concerns.
+
+## Feature overview (adapter surface)
+
+Out of the box (through this package):
+
+- Client row model: sorting, filtering, grouping, pagination, viewport range.
+- Pivot: row/column/value axes, generated pivot columns, subtotals and grand totals, layout export/import, drilldown.
+- Selection/range engine: anchor/focus/range, fill handle, drag-move, clipboard workflows.
+- Editing flow: patch-based updates, Excel-like freeze/reapply control (`applyEdits`, `reapplyView`, `autoReapply`).
+- Context menu and keyboard orchestration primitives.
+- Runtime snapshots/revisions for deterministic integration and tests.
+- Worker-owned row model support for off-main-thread compute path.
+- Server/data-source row model contracts for backend pull/push flows.
+
+## Performance snapshot (how to read it)
+
+Representative pressure benchmark trend from `artifacts/performance/worker-pressure-matrix-scaled`:
+
+- At `20k` rows: worker path reduced end-to-end pressure time by roughly `~5.4x` vs main-thread.
+- At `100k` rows: worker path remained ahead at roughly `~1.6x`.
+- At `200k` rows (with heavier patch size): worker path remained ahead at roughly `~1.34x`.
+
+Interpretation for integrators:
+
+- Worker mode gives the strongest value when synchronous UI-thread patch dispatch becomes expensive.
+- Main-thread can be enough for smaller tables and simpler interaction profiles.
+- Server-side model is the next step when data volume/query cost dominates client constraints.
+
 ## Stable API (`@affino/datagrid-vue`)
 
 - `createDataGridVueRuntime`
@@ -62,6 +109,7 @@ import {
 - `useDataGridViewportBridge`
 - `useDataGridHeaderOrchestration`
 - `createDataGridHeaderBindings`
+- `createDataGridViewportController`
 - `useDataGridCellPointerDownRouter`
 - `useDataGridCellPointerHoverRouter`
 - `useDataGridDragSelectionLifecycle`
@@ -89,6 +137,7 @@ import {
 - `useDataGridInlineEditorTargetNavigation`
 - `useDataGridInlineEditorKeyRouter`
 - `useDataGridHeaderContextActions`
+- `useDataGridHeaderLayerOrchestration`
 - `useDataGridCopyRangeHelpers`
 - `useDataGridHeaderSortOrchestration`
 - `useDataGridHeaderResizeOrchestration`
@@ -116,6 +165,9 @@ import {
 - `useDataGridResizeClickGuard`
 - `useDataGridInitialViewportRecovery`
 - `useDataGridManagedWheelScroll`
+- `useDataGridManagedTouchScroll`
+- `useDataGridScrollIdleGate`
+- `useDataGridScrollPerfTelemetry`
 - `useDataGridClearSelectionLifecycle`
 - `useDataGridGlobalPointerLifecycle`
 - `useDataGridPointerAutoScroll`
@@ -137,6 +189,7 @@ import {
 - `useDataGridClipboardBridge`
 - `useDataGridClipboardMutations`
 - `useDataGridIntentHistory`
+- `setsEqual`
 
 ## Quick start
 

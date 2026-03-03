@@ -2,6 +2,7 @@ import type {
   DataGridColumnModel,
   DataGridRowModel,
 } from "../models"
+import type { DataGridApiPluginDefinition } from "./gridApiContracts"
 import type {
   DataGridCore,
   DataGridCoreColumnModelService,
@@ -11,8 +12,9 @@ import type {
   DataGridCoreViewportService,
 } from "./gridCore"
 
-export interface CreateDataGridApiFromCoreOptions {
+export interface CreateDataGridApiFromCoreOptions<TRow = unknown> {
   core: DataGridCore
+  plugins?: readonly DataGridApiPluginDefinition<TRow>[]
 }
 
 export interface CreateDataGridApiFromDepsOptions<TRow = unknown> {
@@ -26,13 +28,14 @@ export interface CreateDataGridApiFromDepsOptions<TRow = unknown> {
   viewportService?: DataGridCoreViewportService | null
   transactionService?: DataGridCoreTransactionService | null
   selectionService?: DataGridCoreSelectionService | null
+  plugins?: readonly DataGridApiPluginDefinition<TRow>[]
 }
 
 /** @deprecated Use CreateDataGridApiFromDepsOptions instead. */
 export type CreateDataGridApiDependencies<TRow = unknown> = CreateDataGridApiFromDepsOptions<TRow>
 
 export type CreateDataGridApiOptions<TRow = unknown> =
-  | CreateDataGridApiFromCoreOptions
+  | CreateDataGridApiFromCoreOptions<TRow>
   | CreateDataGridApiFromDepsOptions<TRow>
 
 export interface ResolvedDataGridApiDependencies<TRow = unknown> {
@@ -46,6 +49,7 @@ export interface ResolvedDataGridApiDependencies<TRow = unknown> {
   getViewportService(): DataGridCoreViewportService | null
   getTransactionService(): DataGridCoreTransactionService | null
   getSelectionService(): DataGridCoreSelectionService | null
+  initialPlugins: readonly DataGridApiPluginDefinition<TRow>[]
 }
 
 function assertRowModelService(core: DataGridCore): DataGridCoreRowModelService {
@@ -66,7 +70,7 @@ function assertColumnModelService(core: DataGridCore): DataGridCoreColumnModelSe
 
 function isCoreApiOptions<TRow>(
   options: CreateDataGridApiOptions<TRow>,
-): options is CreateDataGridApiFromCoreOptions {
+): options is CreateDataGridApiFromCoreOptions<TRow> {
   return "core" in options
 }
 
@@ -90,6 +94,7 @@ export function resolveDataGridApiDependencies<TRow = unknown>(
       getViewportService: () => core.getService("viewport"),
       getTransactionService: () => core.getService("transaction"),
       getSelectionService: () => core.getService("selection"),
+      initialPlugins: Array.isArray(options.plugins) ? [...options.plugins] : [],
     }
   }
 
@@ -104,5 +109,6 @@ export function resolveDataGridApiDependencies<TRow = unknown>(
     getViewportService: () => options.viewportService ?? null,
     getTransactionService: () => options.transactionService ?? null,
     getSelectionService: () => options.selectionService ?? null,
+    initialPlugins: Array.isArray(options.plugins) ? [...options.plugins] : [],
   }
 }

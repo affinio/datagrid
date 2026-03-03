@@ -145,4 +145,25 @@ describe("useDataGridRuntimeService contract", () => {
 
     runtime.stop()
   })
+
+  it("passes api plugins through runtime constructor options", () => {
+    const pluginEvents: string[] = []
+    const runtime = useDataGridRuntimeService<Row>({
+      rows: [{ rowId: "r1", name: "alpha" }],
+      columns: [{ key: "name", label: "Name" }],
+      plugins: [
+        {
+          id: "runtime-service-plugin",
+          onEvent(event) {
+            pluginEvents.push(String(event))
+          },
+        },
+      ],
+    })
+
+    expect(runtime.api.plugins.has("runtime-service-plugin")).toBe(true)
+    runtime.api.rows.setSortModel([{ key: "name", direction: "asc" }])
+    expect(pluginEvents.some(event => event === "rows:changed")).toBe(true)
+    runtime.stop()
+  })
 })

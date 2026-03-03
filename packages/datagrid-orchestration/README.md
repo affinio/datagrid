@@ -4,6 +4,12 @@ Framework-agnostic orchestration primitives shared by DataGrid adapters.
 
 This package contains pure TypeScript logic (state commands, interaction policies, transformation helpers) that should be reused by Vue/Laravel/React adapters.
 
+## Canonical Feature Catalog
+
+Single source of truth for platform capabilities:
+
+- [DataGrid Feature Catalog](https://github.com/affinio/affinio/blob/main/docs/datagrid-feature-catalog.md)
+
 ## Layer role
 
 - `@affino/datagrid-core`: data/row/column runtime and deterministic model contracts.
@@ -83,4 +89,3 @@ scrollIdleGate.runWhenScrollIdle(() => {
 	recomputeSelectionSummary()
 })
 ```
-

@@ -1,11 +1,17 @@
 import {
   createDataGridCellRefreshRegistry,
 } from "./gridApiCellRefresh"
+import { createDataGridApiComputeMethods } from "./gridApiComputeMethods"
 import { createDataGridApiColumnsMethods } from "./gridApiColumnsMethods"
+import { createDataGridApiDiagnosticsMethods } from "./gridApiDiagnosticsMethods"
+import { createDataGridApiEventsRuntime } from "./gridApiEventsRuntime"
+import { createDataGridApiMetaMethods } from "./gridApiMetaMethods"
 import {
   createDataGridApiCapabilityRuntime,
 } from "./gridApiCapabilitiesRuntime"
-import type { DataGridApi } from "./gridApiContracts"
+import { createDataGridApiPluginsRuntime } from "./gridApiPluginsRuntime"
+import { createDataGridApiPolicyMethods } from "./gridApiPolicyMethods"
+import type { DataGridApi, DataGridApiProjectionMode } from "./gridApiContracts"
 import {
   resolveDataGridApiDependencies,
   type CreateDataGridApiOptions,
@@ -18,6 +24,7 @@ import { createDataGridApiPivotMethods } from "./gridApiPivotMethods"
 import { createDataGridApiRowsMethods } from "./gridApiRowsMethods"
 import { createDataGridApiSelectionMethods } from "./gridApiSelectionMethods"
 import { buildDataGridSelectionSummary } from "./gridApiSelectionSummary"
+import { createDataGridApiStateMethods } from "./gridApiStateMethods"
 import { createDataGridApiTransactionMethods } from "./gridApiTransactionMethods"
 import { createDataGridApiViewMethods } from "./gridApiViewMethods"
 
@@ -37,7 +44,28 @@ export type {
   DataGridApiRowsNamespace,
   DataGridApiColumnsNamespace,
   DataGridApiViewNamespace,
+  DataGridApiComputeNamespace,
+  DataGridApiDiagnosticsNamespace,
+  DataGridApiDiagnosticsSnapshot,
+  DataGridApiRowModelDiagnostics,
+  DataGridApiMetaNamespace,
+  DataGridApiSchemaSnapshot,
+  DataGridApiSchemaColumn,
+  DataGridApiRuntimeInfo,
+  DataGridApiPolicyNamespace,
+  DataGridApiProjectionMode,
+  DataGridApiPluginDefinition,
+  DataGridApiPluginsNamespace,
+  DataGridApiStateNamespace,
+  DataGridApiEventsNamespace,
   DataGridApiCapabilities,
+  DataGridApiEventMap,
+  DataGridApiEventName,
+  DataGridApiEventPayload,
+  DataGridSetStateOptions,
+  DataGridUnifiedRowsState,
+  DataGridUnifiedColumnState,
+  DataGridUnifiedState,
   DataGridApi,
   DataGridSelectionSummaryApiOptions,
 } from "./gridApiContracts"
@@ -72,7 +100,9 @@ export function createDataGridApi<TRow = unknown>(
     getViewportService,
     getSelectionService,
     getTransactionService,
+    initialPlugins,
   } = deps
+  let projectionMode: DataGridApiProjectionMode = "excel-like"
 
   const capabilityRuntime = createDataGridApiCapabilityRuntime<TRow>({
     rowModel,
@@ -84,14 +114,22 @@ export function createDataGridApi<TRow = unknown>(
     getSelectionCapability,
     getTransactionCapability,
     getPatchCapability,
+    getRowsDataMutationCapability,
+    getComputeCapability,
     getSortFilterBatchCapability,
     getColumnHistogramCapability,
   } = capabilityRuntime
   const cellRefreshRegistry = createDataGridCellRefreshRegistry(rowModel, columnModel)
+  const eventsRuntime = createDataGridApiEventsRuntime<TRow>({
+    rowModel,
+    columnModel,
+  })
   const rowsMethods = createDataGridApiRowsMethods<TRow>({
     rowModel,
     getPatchCapability,
+    getRowsDataMutationCapability,
     getSortFilterBatchCapability,
+    getProjectionMode: () => projectionMode,
   })
   const viewMethods = createDataGridApiViewMethods<TRow>({
     rowModel,
@@ -107,11 +145,20 @@ export function createDataGridApi<TRow = unknown>(
     columnModel,
     getColumnHistogramCapability,
   })
+  const computeMethods = createDataGridApiComputeMethods({
+    getComputeCapability,
+  })
+  const diagnosticsMethods = createDataGridApiDiagnosticsMethods({
+    rowModel,
+    getComputeCapability,
+  })
   const transactionMethods = createDataGridApiTransactionMethods({
     getTransactionCapability,
+    onChanged: snapshot => eventsRuntime.emitTransactionChanged(snapshot),
   })
   const selectionMethods = createDataGridApiSelectionMethods<TRow>({
     getSelectionCapability,
+    onChanged: snapshot => eventsRuntime.emitSelectionChanged(snapshot),
     summarize: (selectionSnapshot, options) =>
       buildDataGridSelectionSummary<TRow>({
         selectionSnapshot,
@@ -119,6 +166,39 @@ export function createDataGridApi<TRow = unknown>(
         columnModel,
         options,
       }),
+  })
+  const stateMethods = createDataGridApiStateMethods<TRow>({
+    rowModel,
+    columnModel,
+    getSelectionCapability,
+    getTransactionCapability,
+    getSortFilterBatchCapability,
+    setViewportRange: viewMethods.setViewportRange,
+    onSelectionChanged: snapshot => eventsRuntime.emitSelectionChanged(snapshot),
+    onStateImported: state => eventsRuntime.emitStateImported(state),
+  })
+  const policyMethods = createDataGridApiPolicyMethods({
+    getProjectionMode: () => projectionMode,
+    setProjectionMode: (mode) => {
+      projectionMode = mode
+      if (mode === "mutable") {
+        rowsMethods.setAutoReapply(true)
+        return
+      }
+      rowsMethods.setAutoReapply(false)
+    },
+  })
+  const metaMethods = createDataGridApiMetaMethods({
+    rowModel,
+    columnModel,
+    lifecycleState: () => lifecycle.state,
+    getProjectionMode: () => projectionMode,
+    getComputeMode: () => computeMethods.getComputeMode(),
+    getCapabilities: () => capabilities,
+  })
+  const pluginsRuntime = createDataGridApiPluginsRuntime<TRow>({
+    events: eventsRuntime.namespace,
+    initialPlugins,
   })
 
   const methodSet: DataGridApiMethodSet<TRow> = {
@@ -128,15 +208,28 @@ export function createDataGridApi<TRow = unknown>(
     start,
     stop,
     dispose() {
+      pluginsRuntime.dispose()
       cellRefreshRegistry.dispose()
+      eventsRuntime.dispose()
       return dispose()
     },
     ...rowsMethods,
     ...viewMethods,
     ...pivotMethods,
     ...columnsMethods,
+    ...computeMethods,
+    ...diagnosticsMethods,
+    ...metaMethods,
+    ...policyMethods,
     ...transactionMethods,
     ...selectionMethods,
+    ...stateMethods,
+    registerPlugin: pluginsRuntime.registerPlugin,
+    unregisterPlugin: pluginsRuntime.unregisterPlugin,
+    hasPlugin: pluginsRuntime.hasPlugin,
+    listPlugins: pluginsRuntime.listPlugins,
+    clearPlugins: pluginsRuntime.clearPlugins,
+    onApiEvent: eventsRuntime.namespace.on,
   }
   return createDataGridApiFromMethodSet(methodSet)
 }

@@ -16,6 +16,7 @@ export interface DataGridApiSelectionMethods<TRow = unknown> {
 
 export interface CreateDataGridApiSelectionMethodsInput<TRow = unknown> {
   getSelectionCapability: () => DataGridSelectionCapability | null
+  onChanged?: (snapshot: DataGridSelectionSnapshot | null) => void
   summarize: (
     selectionSnapshot: DataGridSelectionSnapshot,
     options?: DataGridSelectionSummaryApiOptions<TRow>,
@@ -25,7 +26,7 @@ export interface CreateDataGridApiSelectionMethodsInput<TRow = unknown> {
 export function createDataGridApiSelectionMethods<TRow = unknown>(
   input: CreateDataGridApiSelectionMethodsInput<TRow>,
 ): DataGridApiSelectionMethods<TRow> {
-  const { getSelectionCapability, summarize } = input
+  const { getSelectionCapability, summarize, onChanged } = input
 
   return {
     hasSelectionSupport() {
@@ -41,10 +42,12 @@ export function createDataGridApiSelectionMethods<TRow = unknown>(
     setSelectionSnapshot(snapshot: DataGridSelectionSnapshot) {
       const selection = assertSelectionCapability(getSelectionCapability())
       selection.setSelectionSnapshot(snapshot)
+      onChanged?.(selection.getSelectionSnapshot())
     },
     clearSelection() {
       const selection = assertSelectionCapability(getSelectionCapability())
       selection.clearSelection()
+      onChanged?.(selection.getSelectionSnapshot())
     },
     summarizeSelection(options: DataGridSelectionSummaryApiOptions<TRow> = {}) {
       const selectionCapability = getSelectionCapability()

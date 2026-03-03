@@ -7,15 +7,20 @@ import type {
   DataGridGroupExpansionSnapshot,
   DataGridPaginationInput,
   DataGridRowModel,
+  DataGridRowNodeInput,
   DataGridSortAndFilterModelInput,
   DataGridSortState,
   DataGridViewportRange,
 } from "../models"
 import {
   assertPatchCapability,
+  assertRowsDataMutationCapability,
   type DataGridPatchCapability,
+  type DataGridRowsDataMutationCapability,
   type DataGridSortFilterBatchCapability,
 } from "./gridApiCapabilities"
+
+type DataGridApiProjectionMode = "mutable" | "immutable" | "excel-like"
 
 export interface DataGridRowsRefreshOptions {
   reset?: boolean
@@ -49,6 +54,11 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   collapseAllGroups: () => void
   refresh: (options?: DataGridRowsRefreshOptions) => ReturnType<DataGridRowModel<TRow>["refresh"]>
   reapplyView: () => ReturnType<DataGridRowModel<TRow>["refresh"]>
+  hasDataMutationSupport: () => boolean
+  setData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+  replaceData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+  appendData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+  prependData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   hasPatchSupport: () => boolean
   patchRows: (
     updates: readonly DataGridClientRowPatch<TRow>[],
@@ -65,14 +75,28 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
 export interface CreateDataGridApiRowsMethodsInput<TRow = unknown> {
   rowModel: DataGridRowModel<TRow>
   getPatchCapability: () => DataGridPatchCapability<TRow> | null
+  getRowsDataMutationCapability: () => DataGridRowsDataMutationCapability<TRow> | null
   getSortFilterBatchCapability: () => DataGridSortFilterBatchCapability | null
+  getProjectionMode?: () => DataGridApiProjectionMode
 }
 
 export function createDataGridApiRowsMethods<TRow = unknown>(
   input: CreateDataGridApiRowsMethodsInput<TRow>,
 ): DataGridApiRowsMethods<TRow> {
-  const { rowModel, getPatchCapability, getSortFilterBatchCapability } = input
+  const {
+    rowModel,
+    getPatchCapability,
+    getRowsDataMutationCapability,
+    getSortFilterBatchCapability,
+    getProjectionMode,
+  } = input
   let autoReapply = false
+
+  const assertMutationsAllowed = (operation: string): void => {
+    if (getProjectionMode?.() === "immutable") {
+      throw new Error(`[DataGridApi] cannot ${operation} when projection mode is "immutable".`)
+    }
+  }
 
   return {
     getRowModelSnapshot() {
@@ -147,6 +171,39 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     reapplyView() {
       return rowModel.refresh("reapply")
     },
+    hasDataMutationSupport() {
+      return getRowsDataMutationCapability() !== null
+    },
+    setData(rows: readonly DataGridRowNodeInput<TRow>[]) {
+      assertMutationsAllowed("set rows")
+      const capability = assertRowsDataMutationCapability(getRowsDataMutationCapability())
+      capability.setRows(rows)
+    },
+    replaceData(rows: readonly DataGridRowNodeInput<TRow>[]) {
+      assertMutationsAllowed("replace rows")
+      const capability = assertRowsDataMutationCapability(getRowsDataMutationCapability())
+      if (typeof capability.replaceRows === "function") {
+        capability.replaceRows(rows)
+        return
+      }
+      capability.setRows(rows)
+    },
+    appendData(rows: readonly DataGridRowNodeInput<TRow>[]) {
+      assertMutationsAllowed("append rows")
+      const capability = assertRowsDataMutationCapability(getRowsDataMutationCapability())
+      if (typeof capability.appendRows !== "function") {
+        throw new Error('[DataGridApi] rowModel does not implement appendRows data mutation capability.')
+      }
+      capability.appendRows(rows)
+    },
+    prependData(rows: readonly DataGridRowNodeInput<TRow>[]) {
+      assertMutationsAllowed("prepend rows")
+      const capability = assertRowsDataMutationCapability(getRowsDataMutationCapability())
+      if (typeof capability.prependRows !== "function") {
+        throw new Error('[DataGridApi] rowModel does not implement prependRows data mutation capability.')
+      }
+      capability.prependRows(rows)
+    },
     hasPatchSupport() {
       return getPatchCapability() !== null
     },
@@ -154,6 +211,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
       updates: readonly DataGridClientRowPatch<TRow>[],
       options?: DataGridClientRowPatchOptions,
     ) {
+      assertMutationsAllowed("patch rows")
       const capability = assertPatchCapability(getPatchCapability())
       capability.patchRows(updates, options)
     },
@@ -161,6 +219,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
       updates: readonly DataGridClientRowPatch<TRow>[],
       options?: DataGridRowsApplyEditsOptions,
     ) {
+      assertMutationsAllowed("apply edits")
       const capability = assertPatchCapability(getPatchCapability())
       const shouldReapply = typeof options?.reapply === "boolean"
         ? options.reapply
