@@ -1,0 +1,11 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+      tags:
+        - affino-dev:latest
+    container_name: affino-dev-container
+    volumes:
+      - .:/workspace
+    command: sleep infinity

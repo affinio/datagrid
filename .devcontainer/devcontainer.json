@@ -1,0 +1,24 @@
+{
+  "name": "Affino Dev",
+  "dockerComposeFile": [
+    "../docker-compose.yml"
+  ],
+  "service": "dev",
+  "workspaceFolder": "/workspace",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "Vue.volar",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+
+  "shutdownAction": "stopCompose"
+}
