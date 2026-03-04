@@ -313,7 +313,7 @@ export function createClientRowModel<T>(
   let treePathProjectionCacheState: TreePathProjectionCacheState<T> | null = null
   let treeParentProjectionCacheState: TreeParentProjectionCacheState<T> | null = null
   const groupByIncrementalAggregationState = createGroupByIncrementalAggregationState()
-  let groupedProjectionGroupIndexByRowId = new Map<DataGridRowId, number>()
+  let groupedProjectionGroupIndexByRowId: ReadonlyMap<DataGridRowId, number> = new Map<DataGridRowId, number>()
   let lastTreeProjectionCacheKey: string | null = null
   let lastTreeExpansionSnapshot: DataGridGroupExpansionSnapshot | null = null
   let pendingPivotValuePatch: readonly DataGridPivotIncrementalPatchRow<T>[] | null = null
@@ -388,7 +388,13 @@ export function createClientRowModel<T>(
     return applyIncrementalAggregationPatchRuntime({
       changedRowIds: changeSet.changedRowIds,
       previousRowsById,
-      sourceRows,
+      resolveNextRowById: (rowId) => {
+        const rowIndex = sourceRowIndexById.get(rowId)
+        if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= sourceRows.length) {
+          return undefined
+        }
+        return sourceRows[rowIndex]
+      },
       stageImpact: {
         affectsAggregation: changeSet.stageImpact.affectsAggregation,
         affectsFilter: changeSet.stageImpact.affectsFilter,
@@ -955,7 +961,7 @@ export function createClientRowModel<T>(
       pivotColumns = []
       rowVersionById.clear()
       resetGroupByIncrementalAggregationState()
-      groupedProjectionGroupIndexByRowId.clear()
+      groupedProjectionGroupIndexByRowId = new Map<DataGridRowId, number>()
       toggledPivotGroupKeys.clear()
       sortValueCache.clear()
       groupValueCache.clear()

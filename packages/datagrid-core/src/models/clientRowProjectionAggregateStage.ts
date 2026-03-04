@@ -15,7 +15,7 @@ import { sortPivotProjectionRows } from "./clientRowPivotProjectionUtils.js"
 import { sortLeafRows } from "./clientRowProjectionPrimitives.js"
 import { patchProjectedRowsByIdentity } from "./clientRowRuntimeUtils.js"
 import {
-  computeGroupByIncrementalAggregation,
+  rebuildGroupByIncrementalAggregationState,
   type GroupByIncrementalAggregationState,
 } from "./incrementalAggregationRuntime.js"
 
@@ -37,6 +37,9 @@ export interface AggregateProjectionEngine<T> {
 
 export interface RunAggregateProjectionStageParams<T> {
   shouldRecompute: boolean
+  rowRevision: number
+  sortRevision: number
+  filterRevision: number
   sourceById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
   previousAggregatedRowsProjection: readonly DataGridRowNode<T>[]
   groupedRowsProjection: readonly DataGridRowNode<T>[]
@@ -92,23 +95,50 @@ export function runAggregateProjectionStage<T>(
       recomputed: true,
     }
   }
+  const activeGroupByFieldsKey = activeGroupBy.fields.join("\u0001")
+
+  const canReuseExistingAggregates =
+    params.groupByIncrementalAggregationState.aggregatesByGroupKey.size > 0
+    && params.groupByIncrementalAggregationState.lastRowRevision === params.rowRevision
+    && params.groupByIncrementalAggregationState.lastSortRevision === params.sortRevision
+    && params.groupByIncrementalAggregationState.lastFilterRevision === params.filterRevision
+    && params.groupByIncrementalAggregationState.lastAggregationModelRef === activeAggregationModel
+    && params.groupByIncrementalAggregationState.lastGroupByFieldsKey === activeGroupByFieldsKey
+
+  if (canReuseExistingAggregates) {
+    return {
+      aggregatedRowsProjection: patchGroupRowsAggregatesByGroupKey(
+        params.groupedRowsProjection,
+        groupKey => params.groupByIncrementalAggregationState.aggregatesByGroupKey.get(groupKey),
+      ),
+      // Must stay `true` for projection-engine stage bookkeeping:
+      // returning `false` keeps the stage stale in requested/computed revisions.
+      recomputed: true,
+    }
+  }
 
   params.aggregationEngine.setModel(activeAggregationModel)
   const aggregationBasis: "filtered" | "source" = activeAggregationModel.basis === "source"
     ? "source"
     : "filtered"
-  const sourceRowsForAggregation = params.sortModel.length > 0
-    ? sortLeafRows(params.sourceRows, params.sortModel, (row, descriptors) => {
-        return descriptors.map(descriptor => params.readRowField(row, descriptor.key, descriptor.field))
-      })
-    : (params.sourceRows as DataGridRowNode<T>[])
   const rowsForAggregation = aggregationBasis === "source"
-    ? sourceRowsForAggregation
+    ? (params.sortModel.length > 0
+        ? sortLeafRows(params.sourceRows, params.sortModel, (row, descriptors) => {
+            const values = new Array<unknown>(descriptors.length)
+            for (let index = 0; index < descriptors.length; index += 1) {
+              const descriptor = descriptors[index]
+              values[index] = descriptor
+                ? params.readRowField(row, descriptor.key, descriptor.field)
+                : undefined
+            }
+            return values
+          })
+        : (params.sourceRows as DataGridRowNode<T>[]))
     : params.sortedRowsProjection
 
-  let aggregatesByGroupKey: ReadonlyMap<string, Record<string, unknown>>
+  let aggregatesByGroupKey: Map<string, Record<string, unknown>>
   if (params.aggregationEngine.isIncrementalAggregationSupported()) {
-    const incremental = computeGroupByIncrementalAggregation(
+    const incremental = rebuildGroupByIncrementalAggregationState(
       rowsForAggregation,
       activeGroupBy.fields,
       (row, field) => params.normalizeText(params.readRowField(row, field)),
@@ -130,8 +160,14 @@ export function runAggregateProjectionStage<T>(
       (row, field) => params.normalizeText(params.readRowField(row, field)),
       rows => params.aggregationEngine.computeAggregatesForLeaves(rows),
     )
-    params.groupByIncrementalAggregationState.aggregatesByGroupKey = new Map(aggregatesByGroupKey)
+    params.groupByIncrementalAggregationState.aggregatesByGroupKey = aggregatesByGroupKey
   }
+
+  params.groupByIncrementalAggregationState.lastRowRevision = params.rowRevision
+  params.groupByIncrementalAggregationState.lastSortRevision = params.sortRevision
+  params.groupByIncrementalAggregationState.lastFilterRevision = params.filterRevision
+  params.groupByIncrementalAggregationState.lastAggregationModelRef = activeAggregationModel
+  params.groupByIncrementalAggregationState.lastGroupByFieldsKey = activeGroupByFieldsKey
 
   return {
     aggregatedRowsProjection: patchGroupRowsAggregatesByGroupKey(

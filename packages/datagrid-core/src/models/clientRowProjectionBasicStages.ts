@@ -17,6 +17,7 @@ export interface SortValueCounters {
 export interface RunFilterProjectionStageParams<T> {
   sourceRows: readonly DataGridRowNode<T>[]
   previousFilteredRowsProjection: readonly DataGridRowNode<T>[]
+  previousFilteredRowIds: ReadonlySet<DataGridRowId>
   sourceById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
   shouldRecompute: boolean
   filterPredicate?: ((rowNode: DataGridRowNode<T>) => boolean) | null
@@ -33,8 +34,8 @@ export function runFilterProjectionStage<T>(
   params: RunFilterProjectionStageParams<T>,
 ): RunFilterProjectionStageResult<T> {
   const shouldRecomputeFilter = params.shouldRecompute || params.previousFilteredRowsProjection.length === 0
-  const filteredRowIds = new Set<DataGridRowId>()
   if (shouldRecomputeFilter) {
+    const filteredRowIds = new Set<DataGridRowId>()
     const filterPredicate = params.filterPredicate ?? params.resolveFilterPredicate()
     const nextFilteredRows: DataGridRowNode<T>[] = []
     for (const row of params.sourceRows) {
@@ -51,12 +52,9 @@ export function runFilterProjectionStage<T>(
     }
   }
   const nextFilteredRows = remapRowsByIdentity(params.previousFilteredRowsProjection, params.sourceById)
-  for (const row of nextFilteredRows) {
-    filteredRowIds.add(row.rowId)
-  }
   return {
     filteredRowsProjection: nextFilteredRows,
-    filteredRowIds,
+    filteredRowIds: new Set(params.previousFilteredRowIds),
     recomputed: false,
   }
 }
@@ -102,7 +100,14 @@ export function runSortProjectionStage<T>(
     const sortedRowsProjection = sortLeafRows(rowsForSort, params.sortModel, (row, descriptors) => {
       if (!shouldCacheSortValues || maxSortValueCacheSize <= 0) {
         params.counters.misses += 1
-        return descriptors.map(descriptor => params.readRowField(row, descriptor.key, descriptor.field))
+        const values = new Array<unknown>(descriptors.length)
+        for (let index = 0; index < descriptors.length; index += 1) {
+          const descriptor = descriptors[index]
+          values[index] = descriptor
+            ? params.readRowField(row, descriptor.key, descriptor.field)
+            : undefined
+        }
+        return values
       }
       const currentRowVersion = params.rowVersionById.get(row.rowId) ?? 0
       const cached = params.sortValueCache.get(row.rowId)
@@ -112,7 +117,13 @@ export function runSortProjectionStage<T>(
         params.counters.hits += 1
         return cached.values
       }
-      const resolved = descriptors.map(descriptor => params.readRowField(row, descriptor.key, descriptor.field))
+      const resolved = new Array<unknown>(descriptors.length)
+      for (let index = 0; index < descriptors.length; index += 1) {
+        const descriptor = descriptors[index]
+        resolved[index] = descriptor
+          ? params.readRowField(row, descriptor.key, descriptor.field)
+          : undefined
+      }
       params.sortValueCache.set(row.rowId, {
         rowVersion: currentRowVersion,
         values: resolved,

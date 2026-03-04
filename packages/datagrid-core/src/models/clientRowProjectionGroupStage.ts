@@ -76,7 +76,7 @@ export interface RunGroupProjectionStageResult<T> {
   recomputed: boolean
   groupValueCacheKey: string
   groupValueCounters: { hits: number; misses: number }
-  groupedProjectionGroupIndexByRowId: Map<DataGridRowId, number>
+  groupedProjectionGroupIndexByRowId: ReadonlyMap<DataGridRowId, number>
   treePathProjectionCacheState: TreePathProjectionCacheState<T> | null
   treeParentProjectionCacheState: TreeParentProjectionCacheState<T> | null
   lastTreeProjectionCacheKey: string | null
@@ -91,10 +91,7 @@ export function runGroupProjectionStage<T>(
     ? `${params.rowRevision}:${params.groupRevision}:${params.groupBy.fields.join("|")}`
     : "__none__"
   let groupValueCacheKey = params.groupValueCacheKey
-  const groupValueCounters = {
-    hits: params.groupValueCounters.hits,
-    misses: params.groupValueCounters.misses,
-  }
+  const groupValueCounters = params.groupValueCounters
   let groupedRowsProjection = params.previousGroupedRowsProjection as DataGridRowNode<T>[]
   let groupedResult: TreeProjectionResult<T> | null = null
   let recomputedGroupStage = false
@@ -258,6 +255,7 @@ export function runGroupProjectionStage<T>(
         inputRows: params.sortedRowsProjection,
         groupBy: params.groupBy,
         expansionSnapshot: params.expansionSnapshot,
+        expansionToggledKeys: params.expansionToggledKeys,
         readRowField: (row, key, field) => readRowField(row, key, field),
         normalizeText,
         normalizeLeafRow,
@@ -290,7 +288,7 @@ export function runGroupProjectionStage<T>(
     groupValueCounters,
     groupedProjectionGroupIndexByRowId: recomputedGroupStage
       ? buildGroupRowIndexByRowId(groupedRowsProjection)
-      : new Map(params.groupedProjectionGroupIndexByRowId),
+      : params.groupedProjectionGroupIndexByRowId,
     treePathProjectionCacheState,
     treeParentProjectionCacheState,
     lastTreeProjectionCacheKey,

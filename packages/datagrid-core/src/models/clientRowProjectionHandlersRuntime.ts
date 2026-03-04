@@ -92,7 +92,7 @@ export interface ClientRowProjectionHandlersRuntimeContext<T> {
   groupValueCache: Map<string, string>
 
   getGroupedProjectionGroupIndexByRowId: () => ReadonlyMap<DataGridRowId, number>
-  setGroupedProjectionGroupIndexByRowId: (index: Map<DataGridRowId, number>) => void
+  setGroupedProjectionGroupIndexByRowId: (index: ReadonlyMap<DataGridRowId, number>) => void
 
   getTreePathProjectionCacheState: () => TreePathProjectionCacheState<T> | null
   setTreePathProjectionCacheState: (state: TreePathProjectionCacheState<T> | null) => void
@@ -128,16 +128,30 @@ export interface ClientRowProjectionHandlersRuntime<T> {
 export function createClientRowProjectionHandlersRuntime<T>(
   context: ClientRowProjectionHandlersRuntimeContext<T>,
 ): ClientRowProjectionHandlersRuntime<T> {
+  let currentFilteredRowIds: ReadonlySet<DataGridRowId> = new Set(
+    context.runtimeState.filteredRowsProjection.map(row => row.rowId),
+  )
+  const sortValueCounters = {
+    hits: context.derivedCacheDiagnostics.sortValueHits,
+    misses: context.derivedCacheDiagnostics.sortValueMisses,
+  }
+  const groupValueCounters = {
+    hits: context.derivedCacheDiagnostics.groupValueHits,
+    misses: context.derivedCacheDiagnostics.groupValueMisses,
+  }
+
   const runFilterStage: DataGridClientProjectionStageHandlers<T>["runFilterStage"] = stageContext => {
     const result = runFilterProjectionStage({
       sourceRows: context.getSourceRows(),
       previousFilteredRowsProjection: context.runtimeState.filteredRowsProjection,
+      previousFilteredRowIds: currentFilteredRowIds,
       sourceById: stageContext.sourceById,
       shouldRecompute: stageContext.shouldRecompute,
       filterPredicate: stageContext.filterPredicate,
       resolveFilterPredicate: () => context.resolveFilterPredicate(),
     })
     context.runtimeState.filteredRowsProjection = result.filteredRowsProjection
+    currentFilteredRowIds = result.filteredRowIds
     return {
       filteredRowIds: result.filteredRowIds,
       recomputed: result.recomputed,
@@ -145,10 +159,8 @@ export function createClientRowProjectionHandlersRuntime<T>(
   }
 
   const runSortStage: DataGridClientProjectionStageHandlers<T>["runSortStage"] = stageContext => {
-    const counters = {
-      hits: context.derivedCacheDiagnostics.sortValueHits,
-      misses: context.derivedCacheDiagnostics.sortValueMisses,
-    }
+    sortValueCounters.hits = context.derivedCacheDiagnostics.sortValueHits
+    sortValueCounters.misses = context.derivedCacheDiagnostics.sortValueMisses
     const result = runSortProjectionStage({
       treeData: context.getTreeData(),
       filterModel: context.getFilterModel(),
@@ -161,17 +173,19 @@ export function createClientRowProjectionHandlersRuntime<T>(
       sortValueCache: context.sortValueCache,
       sortValueCacheKey: context.getSortValueCacheKey(),
       rowVersionById: context.getRowVersionById(),
-      counters,
+      counters: sortValueCounters,
       readRowField: context.readRowField,
     })
     context.runtimeState.sortedRowsProjection = result.sortedRowsProjection
     context.setSortValueCacheKey(result.sortValueCacheKey)
-    context.derivedCacheDiagnostics.sortValueHits = counters.hits
-    context.derivedCacheDiagnostics.sortValueMisses = counters.misses
+    context.derivedCacheDiagnostics.sortValueHits = sortValueCounters.hits
+    context.derivedCacheDiagnostics.sortValueMisses = sortValueCounters.misses
     return result.recomputed
   }
 
   const runGroupStage: DataGridClientProjectionStageHandlers<T>["runGroupStage"] = stageContext => {
+    groupValueCounters.hits = context.derivedCacheDiagnostics.groupValueHits
+    groupValueCounters.misses = context.derivedCacheDiagnostics.groupValueMisses
     const result = runGroupProjectionStage({
       shouldRecompute: stageContext.shouldRecompute,
       sourceById: stageContext.sourceById,
@@ -194,10 +208,7 @@ export function createClientRowProjectionHandlersRuntime<T>(
       projectionPolicy: context.getProjectionPolicy(),
       groupValueCache: context.groupValueCache,
       groupValueCacheKey: context.getGroupValueCacheKey(),
-      groupValueCounters: {
-        hits: context.derivedCacheDiagnostics.groupValueHits,
-        misses: context.derivedCacheDiagnostics.groupValueMisses,
-      },
+      groupValueCounters,
       treeProjectionRuntime: context.treeProjectionRuntime,
       treePathProjectionCacheState: context.getTreePathProjectionCacheState(),
       treeParentProjectionCacheState: context.getTreeParentProjectionCacheState(),
@@ -241,6 +252,9 @@ export function createClientRowProjectionHandlersRuntime<T>(
   const runAggregateStage: DataGridClientProjectionStageHandlers<T>["runAggregateStage"] = stageContext => {
     const result = runAggregateProjectionStage({
       shouldRecompute: stageContext.shouldRecompute,
+      rowRevision: context.runtimeState.rowRevision,
+      sortRevision: context.runtimeState.sortRevision,
+      filterRevision: context.runtimeState.filterRevision,
       sourceById: stageContext.sourceById,
       previousAggregatedRowsProjection: context.runtimeState.aggregatedRowsProjection,
       groupedRowsProjection: context.runtimeState.groupedRowsProjection,
@@ -289,34 +303,41 @@ export function createClientRowProjectionHandlersRuntime<T>(
   }
 
   const finalizeProjectionRecompute = (meta: DataGridClientProjectionFinalizeMeta): void => {
-    const pagination = context.getPagination()
-    context.setPaginationInput({
-      pageSize: pagination.pageSize,
-      currentPage: pagination.currentPage,
-    })
-    context.setViewportRange(
-      context.normalizeViewportRange(context.getViewportRange(), context.runtimeState.rows.length),
-    )
-    context.derivedCacheDiagnostics.revisions = {
-      row: context.runtimeState.rowRevision,
-      sort: context.runtimeState.sortRevision,
-      filter: context.runtimeState.filterRevision,
-      group: context.runtimeState.groupRevision,
+    if (meta.hadActualRecompute) {
+      const pagination = context.getPagination()
+      const paginationInput = context.getPaginationInput()
+      if (
+        paginationInput.pageSize !== pagination.pageSize
+        || paginationInput.currentPage !== pagination.currentPage
+      ) {
+        context.setPaginationInput({
+          pageSize: pagination.pageSize,
+          currentPage: pagination.currentPage,
+        })
+      }
+      const currentViewportRange = context.getViewportRange()
+      const normalizedViewportRange = context.normalizeViewportRange(currentViewportRange, context.runtimeState.rows.length)
+      if (
+        normalizedViewportRange.start !== currentViewportRange.start
+        || normalizedViewportRange.end !== currentViewportRange.end
+      ) {
+        context.setViewportRange(normalizedViewportRange)
+      }
     }
-    context.setPendingPivotValuePatch(null)
+    context.derivedCacheDiagnostics.revisions.row = context.runtimeState.rowRevision
+    context.derivedCacheDiagnostics.revisions.sort = context.runtimeState.sortRevision
+    context.derivedCacheDiagnostics.revisions.filter = context.runtimeState.filterRevision
+    context.derivedCacheDiagnostics.revisions.group = context.runtimeState.groupRevision
+    if (context.getPendingPivotValuePatch() !== null) {
+      context.setPendingPivotValuePatch(null)
+    }
     context.commitProjectionCycle(meta.hadActualRecompute)
   }
 
   return {
     projectionStageHandlers: {
       buildSourceById: context.buildSourceById,
-      getCurrentFilteredRowIds: () => {
-        const rowIds = new Set<DataGridRowId>()
-        for (const row of context.runtimeState.filteredRowsProjection) {
-          rowIds.add(row.rowId)
-        }
-        return rowIds
-      },
+      getCurrentFilteredRowIds: () => currentFilteredRowIds,
       resolveFilterPredicate: () => context.resolveFilterPredicate(),
       runFilterStage,
       runSortStage,

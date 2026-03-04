@@ -48,6 +48,10 @@
     "./components": {
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
     }
   },
   "main": "dist/index.js",
@@ -70,20 +74,24 @@
   "peerDependencies": {
     "pinia": "^2.1.0 || ^3.0.0",
     "vue": "^3.3.0",
-    "@affino/datagrid-theme": "workspace:^"
+    "@affino/datagrid-theme": "workspace:^",
+    "@affino/datagrid-worker": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@affino/datagrid-theme": {
+      "optional": true
+    },
+    "@affino/datagrid-worker": {
       "optional": true
     }
   },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*",
-    "@affino/datagrid-orchestration": "workspace:*",
-    "@affino/datagrid-worker": "workspace:*"
+    "@affino/datagrid-orchestration": "workspace:*"
   },
   "devDependencies": {
-    "@affino/datagrid-theme": "workspace:^"
+    "@affino/datagrid-theme": "workspace:^",
+    "@affino/datagrid-worker": "workspace:*"
   },
   "repository": {
     "type": "git",

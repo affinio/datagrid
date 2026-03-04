@@ -21,6 +21,7 @@
   "include": [
     "src/index.ts",
     "src/stable.ts",
+    "src/worker.ts",
     "src/advanced.ts",
     "src/advanced/**/*.ts",
     "src/public.ts",

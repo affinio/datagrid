@@ -22,14 +22,11 @@ import type {
   DataGridPivotSpec,
   DataGridRowNode,
   DataGridRowModel,
+  DataGridRowModelSnapshot,
   DataGridViewportRange,
   DataGridSetStateOptions,
   DataGridUnifiedState,
 } from "@affino/datagrid-core"
-import {
-  createDataGridWorkerOwnedRowModel,
-  type CreateDataGridWorkerOwnedRowModelOptions,
-} from "@affino/datagrid-worker"
 import {
   useDataGridRuntimeService,
   type CreateDataGridRuntimeOptions,
@@ -65,8 +62,15 @@ export interface DataGridEditOptions extends Omit<
 export interface UseDataGridRuntimeOptions<TRow = unknown> {
   rows?: MaybeRef<readonly TRow[]>
   rowModel?: DataGridRowModel<TRow>
+  workerOwnedRowModelOptions?: {
+    source: unknown
+    target: unknown
+    channel?: string | null
+    initialSnapshot?: DataGridRowModelSnapshot<TRow> | null
+    requestInitialSync?: boolean
+    viewportCoalescingStrategy?: "split" | "simple"
+  }
   plugins?: readonly DataGridApiPluginDefinition<TRow>[]
-  workerOwnedRowModelOptions?: CreateDataGridWorkerOwnedRowModelOptions<TRow>
   clientRowModelOptions?: CreateDataGridRuntimeOptions<TRow>["clientRowModelOptions"]
   columns: MaybeRef<readonly DataGridColumnDef[]>
   services?: DataGridRuntimeOverrides
@@ -126,11 +130,13 @@ export function useDataGridRuntime<TRow = unknown>(
   options: UseDataGridRuntimeOptions<TRow>,
 ): UseDataGridRuntimeResult<TRow> {
   const initialRows = options.rows ? resolveMaybeRef(options.rows) : []
-  const resolvedRowModel = options.rowModel ?? (
-    options.workerOwnedRowModelOptions
-      ? createDataGridWorkerOwnedRowModel(options.workerOwnedRowModelOptions)
-      : undefined
-  )
+  if (!options.rowModel && options.workerOwnedRowModelOptions) {
+    throw new Error(
+      "[DataGridRuntime] workerOwnedRowModelOptions are not supported in the stable entrypoint. "
+      + "Pass a prebuilt rowModel or import worker helpers from '@affino/datagrid-vue/worker'.",
+    )
+  }
+  const resolvedRowModel = options.rowModel
   const runtime = useDataGridRuntimeService<TRow>({
     rows: initialRows,
     rowModel: resolvedRowModel,

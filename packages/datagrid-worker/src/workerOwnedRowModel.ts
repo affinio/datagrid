@@ -270,6 +270,9 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
   }
 
   const emit = (): void => {
+    if (listeners.size === 0) {
+      return
+    }
     const nextSnapshot = buildPublicSnapshot()
     for (const listener of listeners) {
       listener(nextSnapshot)
@@ -359,7 +362,6 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
   const pushWindowCache = (
     range: DataGridViewportRange,
     rows: readonly DataGridRowNode<T>[],
-    cloneRows = true,
   ): void => {
     const key = rangeKey(range)
     if (visibleWindowCache.has(key)) {
@@ -368,7 +370,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
         visibleWindowCacheOrder.splice(existingIndex, 1)
       }
     }
-    visibleWindowCache.set(key, cloneRows ? rows.map(cloneRowNode) : rows)
+    visibleWindowCache.set(key, rows.map(cloneRowNode))
     visibleWindowCacheOrder.push(key)
     while (visibleWindowCacheOrder.length > MAX_WINDOW_CACHE_SIZE) {
       const oldestKey = visibleWindowCacheOrder.shift()
@@ -541,7 +543,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       lastAppliedRequestId = requestId
     }
     const update = event.data.payload
-    snapshot = cloneSnapshot(update.snapshot)
+    snapshot = update.snapshot as DataGridRowModelSnapshot<T>
     if (requestedViewportRange) {
       snapshot = {
         ...snapshot,
@@ -554,7 +556,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       end: update.visibleRange.end,
     }
     visibleRows = update.visibleRows as DataGridRowNode<T>[]
-    pushWindowCache(visibleRange, visibleRows, false)
+    pushWindowCache(visibleRange, visibleRows)
 
     if (!initialWindowPrefetchResolved && requestId === 0) {
       const totalRows = snapshot.rowCount
@@ -625,7 +627,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       const key = rangeKey(range)
       const cachedRows = visibleWindowCache.get(key)
       if (cachedRows) {
-        return cachedRows.map(cloneRowNode)
+        return [...cachedRows]
       }
       const rows: DataGridRowNode<T>[] = []
       for (let index = range.start; index <= range.end; index += 1) {

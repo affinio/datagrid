@@ -13,11 +13,11 @@ export interface GroupByIncrementalAggregationState {
   aggregatesByGroupKey: Map<string, Record<string, unknown>>
   groupPathByRowId: Map<DataGridRowId, readonly string[]>
   leafContributionByRowId: Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>
-}
-
-interface GroupKeySegment {
-  field: string
-  value: string
+  lastRowRevision: number
+  lastSortRevision: number
+  lastFilterRevision: number
+  lastAggregationModelRef: unknown
+  lastGroupByFieldsKey: string
 }
 
 export interface GroupByIncrementalAggregationResult {
@@ -37,7 +37,7 @@ export interface IncrementalAggregationStageImpact {
 export interface IncrementalAggregationPatchInput<T> {
   changedRowIds: readonly DataGridRowId[]
   previousRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
-  sourceRows: readonly DataGridRowNode<T>[]
+  resolveNextRowById: (rowId: DataGridRowId) => DataGridRowNode<T> | undefined
   stageImpact: IncrementalAggregationStageImpact
   hasPivotModel: boolean
   hasAggregationModel: boolean
@@ -57,20 +57,16 @@ export interface IncrementalAggregationPatchInput<T> {
   patchRuntimeGroupAggregates: (resolveAggregates: (groupKey: string) => Record<string, unknown> | undefined) => void
 }
 
-function buildRowIdIndex<T>(inputRows: readonly DataGridRowNode<T>[]): Map<DataGridRowId, DataGridRowNode<T>> {
-  const byId = new Map<DataGridRowId, DataGridRowNode<T>>()
-  for (const row of inputRows) {
-    byId.set(row.rowId, row)
-  }
-  return byId
+function appendGroupedRowKeySegment(prefix: string, field: string, value: string): string {
+  return `${prefix}${field.length}:${field}${value.length}:${value}`
 }
 
-function createGroupedRowKey(segments: readonly GroupKeySegment[]): string {
-  let encoded = "group:"
-  for (const segment of segments) {
-    encoded += `${segment.field.length}:${segment.field}${segment.value.length}:${segment.value}`
+function hasOwnEnumerableProperties(record: Record<string, unknown>): boolean {
+  // Hot path helper: avoid Object.keys(...) allocation in patch loops.
+  for (const _key in record) {
+    return true
   }
-  return encoded
+  return false
 }
 
 export function createGroupByIncrementalAggregationState(): GroupByIncrementalAggregationState {
@@ -79,10 +75,19 @@ export function createGroupByIncrementalAggregationState(): GroupByIncrementalAg
     aggregatesByGroupKey: new Map<string, Record<string, unknown>>(),
     groupPathByRowId: new Map<DataGridRowId, readonly string[]>(),
     leafContributionByRowId: new Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>(),
+    lastRowRevision: -1,
+    lastSortRevision: -1,
+    lastFilterRevision: -1,
+    lastAggregationModelRef: null,
+    lastGroupByFieldsKey: "",
   }
 }
 
-export function computeGroupByIncrementalAggregation<T>(
+/**
+ * Rebuilds group-by aggregation caches from a full row projection.
+ * This is intentionally a full scan (non-patch path).
+ */
+export function rebuildGroupByIncrementalAggregationState<T>(
   inputRows: readonly DataGridRowNode<T>[],
   groupByFields: readonly string[],
   resolveGroupValue: (row: DataGridRowNode<T>, field: string) => string,
@@ -113,7 +118,7 @@ export function computeGroupByIncrementalAggregation<T>(
   const projectLevel = (
     rows: readonly DataGridRowNode<T>[],
     level: number,
-    path: readonly GroupKeySegment[],
+    groupKeyPrefix: string,
   ): void => {
     if (level >= groupByFields.length || rows.length === 0) {
       return
@@ -130,8 +135,7 @@ export function computeGroupByIncrementalAggregation<T>(
       }
     }
     for (const [value, bucketRows] of buckets.entries()) {
-      const nextPath: GroupKeySegment[] = [...path, { field, value }]
-      const groupKey = createGroupedRowKey(nextPath)
+      const groupKey = appendGroupedRowKeySegment(groupKeyPrefix, field, value)
       const state = createEmptyGroupState()
       if (!state) {
         continue
@@ -155,14 +159,14 @@ export function computeGroupByIncrementalAggregation<T>(
       }
       statesByGroupKey.set(groupKey, state)
       const aggregates = finalizeGroupState(state)
-      if (Object.keys(aggregates).length > 0) {
+      if (hasOwnEnumerableProperties(aggregates)) {
         aggregatesByGroupKey.set(groupKey, aggregates)
       }
-      projectLevel(bucketRows, level + 1, nextPath)
+      projectLevel(bucketRows, level + 1, groupKey)
     }
   }
 
-  projectLevel(inputRows, 0, [])
+  projectLevel(inputRows, 0, "group:")
   return {
     statesByGroupKey,
     aggregatesByGroupKey,
@@ -171,6 +175,9 @@ export function computeGroupByIncrementalAggregation<T>(
   }
 }
 
+// Backward-compatible alias while call sites migrate to explicit "rebuild" naming.
+export const computeGroupByIncrementalAggregation = rebuildGroupByIncrementalAggregationState
+
 export function resetGroupByIncrementalAggregationState(
   state: GroupByIncrementalAggregationState,
 ): void {
@@ -178,6 +185,11 @@ export function resetGroupByIncrementalAggregationState(
   state.aggregatesByGroupKey = new Map<string, Record<string, unknown>>()
   state.groupPathByRowId = new Map<DataGridRowId, readonly string[]>()
   state.leafContributionByRowId = new Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>()
+  state.lastRowRevision = -1
+  state.lastSortRevision = -1
+  state.lastFilterRevision = -1
+  state.lastAggregationModelRef = null
+  state.lastGroupByFieldsKey = ""
 }
 
 function applyIncrementalGroupByAggregationDelta<T>(
@@ -186,7 +198,7 @@ function applyIncrementalGroupByAggregationDelta<T>(
   const {
     groupByState,
     previousRowsById,
-    sourceRows,
+    resolveNextRowById,
     changedRowIds,
     isIncrementalAggregationSupported,
     createLeafContribution,
@@ -201,7 +213,6 @@ function applyIncrementalGroupByAggregationDelta<T>(
   ) {
     return false
   }
-  const sourceById = buildRowIdIndex(sourceRows)
   const dirtyGroupKeys = new Set<string>()
   for (const rowId of changedRowIds) {
     const groupPath = groupByState.groupPathByRowId.get(rowId)
@@ -211,7 +222,7 @@ function applyIncrementalGroupByAggregationDelta<T>(
     const previousRow = previousRowsById.get(rowId)
     const previousContribution = groupByState.leafContributionByRowId.get(rowId)
       ?? (previousRow ? createLeafContribution(previousRow) : null)
-    const nextRow = sourceById.get(rowId)
+    const nextRow = resolveNextRowById(rowId)
     const nextContribution = nextRow
       ? createLeafContribution(nextRow)
       : null
@@ -242,7 +253,7 @@ function applyIncrementalGroupByAggregationDelta<T>(
       continue
     }
     const aggregates = finalizeGroupState(state)
-    if (Object.keys(aggregates).length > 0) {
+    if (hasOwnEnumerableProperties(aggregates)) {
       groupByState.aggregatesByGroupKey.set(groupKey, aggregates)
     } else {
       groupByState.aggregatesByGroupKey.delete(groupKey)
@@ -258,7 +269,7 @@ function applyIncrementalTreePathAggregationDelta<T>(
   const {
     treePathCacheState,
     previousRowsById,
-    sourceRows,
+    resolveNextRowById,
     changedRowIds,
     isIncrementalAggregationSupported,
     createLeafContribution,
@@ -275,17 +286,16 @@ function applyIncrementalTreePathAggregationDelta<T>(
   ) {
     return false
   }
-  const sourceById = buildRowIdIndex(sourceRows)
   const dirtyGroupKeys = new Set<string>()
   for (const rowId of changedRowIds) {
-    const groupPath = cache.branchPathByLeafRowId.get(rowId)
-    if (!groupPath || groupPath.length === 0) {
+    const leafBranch = cache.leafBranchByLeafRowId.get(rowId)
+    if (!leafBranch) {
       continue
     }
     const previousRow = previousRowsById.get(rowId)
     const previousContribution = cache.leafContributionById.get(rowId)
       ?? (previousRow ? createLeafContribution(previousRow) : null)
-    const nextRow = sourceById.get(rowId)
+    const nextRow = resolveNextRowById(rowId)
     const nextContribution = nextRow
       ? createLeafContribution(nextRow)
       : null
@@ -294,9 +304,11 @@ function applyIncrementalTreePathAggregationDelta<T>(
     } else {
       cache.leafContributionById.delete(rowId)
     }
-    for (const groupKey of groupPath) {
-      const state = cache.aggregateStateByGroupKey.get(groupKey)
+    let branch: typeof leafBranch | null = leafBranch
+    while (branch) {
+      const state = cache.aggregateStateByGroupKey.get(branch.key)
       if (!state) {
+        branch = branch.parent
         continue
       }
       applyContributionDelta(
@@ -304,8 +316,9 @@ function applyIncrementalTreePathAggregationDelta<T>(
         previousContribution ?? null,
         nextContribution,
       )
-      dirtyGroupKeys.add(groupKey)
-      cache.dirtyBranchKeys.add(groupKey)
+      dirtyGroupKeys.add(branch.key)
+      cache.dirtyBranchKeys.add(branch.key)
+      branch = branch.parent
     }
   }
   if (dirtyGroupKeys.size === 0) {
@@ -317,7 +330,7 @@ function applyIncrementalTreePathAggregationDelta<T>(
       continue
     }
     const aggregates = finalizeGroupState(state)
-    if (Object.keys(aggregates).length > 0) {
+    if (hasOwnEnumerableProperties(aggregates)) {
       cache.aggregatesByGroupKey.set(groupKey, aggregates)
     } else {
       cache.aggregatesByGroupKey.delete(groupKey)
@@ -334,7 +347,7 @@ function applyIncrementalTreeParentAggregationDelta<T>(
   const {
     treeParentCacheState,
     previousRowsById,
-    sourceRows,
+    resolveNextRowById,
     changedRowIds,
     isIncrementalAggregationSupported,
     createLeafContribution,
@@ -351,13 +364,12 @@ function applyIncrementalTreeParentAggregationDelta<T>(
   ) {
     return false
   }
-  const sourceById = buildRowIdIndex(sourceRows)
   const dirtyGroupRowIds = new Set<DataGridRowId>()
   for (const rowId of changedRowIds) {
     const previousRow = previousRowsById.get(rowId)
     const previousContribution = cache.leafContributionById.get(rowId)
       ?? (previousRow ? createLeafContribution(previousRow) : null)
-    const nextRow = sourceById.get(rowId)
+    const nextRow = resolveNextRowById(rowId)
     const nextContribution = nextRow
       ? createLeafContribution(nextRow)
       : null
@@ -390,7 +402,7 @@ function applyIncrementalTreeParentAggregationDelta<T>(
       continue
     }
     const aggregates = finalizeGroupState(state)
-    if (Object.keys(aggregates).length > 0) {
+    if (hasOwnEnumerableProperties(aggregates)) {
       cache.aggregatesByGroupRowId.set(rowId, aggregates)
     } else {
       cache.aggregatesByGroupRowId.delete(rowId)

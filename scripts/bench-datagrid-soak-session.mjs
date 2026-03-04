@@ -302,6 +302,14 @@ async function runSoakScenario(createClientRowModel, seed) {
   }
 
   const opDurations = []
+  const opDurationsByType = {
+    patch: [],
+    sort: [],
+    filter: [],
+    group: [],
+    pivot: [],
+    refresh: [],
+  }
   const opCounters = {
     patch: 0,
     sort: 0,
@@ -319,6 +327,7 @@ async function runSoakScenario(createClientRowModel, seed) {
   for (let iteration = 0; iteration < BENCH_ITERATIONS; iteration += 1) {
     const opRoll = rng()
     const opStart = performance.now()
+    let opType = "refresh"
 
     if (opRoll < 0.58) {
       const updates = createPatchUpdates(rng, BENCH_ROW_COUNT, BENCH_PATCH_ROWS_PER_ITERATION)
@@ -329,25 +338,33 @@ async function runSoakScenario(createClientRowModel, seed) {
         emit: false,
       })
       opCounters.patch += 1
+      opType = "patch"
     } else if (opRoll < 0.72) {
       model.setSortModel(buildSortModel(iteration))
       opCounters.sort += 1
+      opType = "sort"
     } else if (opRoll < 0.84) {
       model.setFilterModel(buildFilterModel(iteration))
       opCounters.filter += 1
+      opType = "filter"
     } else if (opRoll < 0.92) {
       model.setGroupBy(buildGroupBy(iteration))
       opCounters.group += 1
+      opType = "group"
     } else if (opRoll < 0.97) {
       model.setPivotModel(buildPivot(iteration))
       opCounters.pivot += 1
+      opType = "pivot"
     } else {
       await maybeRefresh(model, "reapply")
       opCounters.refresh += 1
+      opType = "refresh"
     }
 
     model.getRowsInRange({ start: 0, end: Math.min(BENCH_VIEWPORT_SIZE - 1, Math.max(0, model.getRowCount() - 1)) })
-    opDurations.push(performance.now() - opStart)
+    const opDuration = performance.now() - opStart
+    opDurations.push(opDuration)
+    opDurationsByType[opType].push(opDuration)
 
     if ((iteration + 1) % BENCH_HEAP_SAMPLE_EVERY === 0 || iteration === BENCH_ITERATIONS - 1) {
       const heapUsed = await sampleHeapUsed()
@@ -375,6 +392,14 @@ async function runSoakScenario(createClientRowModel, seed) {
       iterations: BENCH_ITERATIONS,
       counters: opCounters,
       latencyMs: stats(opDurations),
+      latencyByTypeMs: {
+        patch: stats(opDurationsByType.patch),
+        sort: stats(opDurationsByType.sort),
+        filter: stats(opDurationsByType.filter),
+        group: stats(opDurationsByType.group),
+        pivot: stats(opDurationsByType.pivot),
+        refresh: stats(opDurationsByType.refresh),
+      },
     },
     heap: {
       beforeMb: toMb(heapBefore),

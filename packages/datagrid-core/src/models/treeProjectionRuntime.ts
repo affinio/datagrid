@@ -15,10 +15,22 @@ interface TreePathBranch<T> {
   key: string
   value: string
   level: number
+  groupRowData?: T
+  groupRowNoAggExpanded?: DataGridRowNode<T>
+  groupRowNoAggCollapsed?: DataGridRowNode<T>
+  groupRowAggRef?: Record<string, unknown>
+  groupRowAggExpanded?: DataGridRowNode<T>
+  groupRowAggCollapsed?: DataGridRowNode<T>
   groups: Map<string, TreePathBranch<T>>
   leaves: DataGridRowNode<T>[]
   matchedLeaves: number
 }
+const EMPTY_STRING_SET: ReadonlySet<string> = new Set<string>()
+type ExpansionToggledKeysCacheEntry = {
+  ref: readonly string[]
+  set: ReadonlySet<string>
+}
+const EXPANSION_TOGGLED_KEYS_CACHE = new WeakMap<DataGridGroupExpansionSnapshot, ExpansionToggledKeysCacheEntry>()
 
 interface TreeProjectionDiagnostics {
   orphans: number
@@ -36,6 +48,9 @@ export interface TreePathProjectionCache<T> {
   branchByKey: Map<string, TreePathBranch<T>>
   branchParentByKey: Map<string, string | null>
   branchPathByLeafRowId: Map<DataGridRowId, readonly string[]>
+  groupIndexByRowId: Map<DataGridRowId, number>
+  togglePreviousDescendantsBuffer: DataGridRowNode<T>[]
+  toggleNextDescendantsBuffer: DataGridRowNode<T>[]
   rootLeaves: DataGridRowNode<T>[]
   matchedLeafRowIds: Set<DataGridRowId>
   leafOnlyRows: DataGridRowNode<T>[]
@@ -51,6 +66,9 @@ export interface TreeParentProjectionCache<T> {
   parentById: Map<DataGridRowId, DataGridRowId | null>
   includedChildrenById: Map<DataGridRowId, DataGridRowId[]>
   groupRowIdByGroupKey: Map<string, DataGridRowId>
+  groupIndexByRowId: Map<DataGridRowId, number>
+  togglePreviousDescendantsBuffer: DataGridRowNode<T>[]
+  toggleNextDescendantsBuffer: DataGridRowNode<T>[]
   rootIncluded: DataGridRowId[]
   aggregatesByGroupRowId: Map<DataGridRowId, Record<string, unknown>>
   aggregateStateByGroupRowId?: Map<DataGridRowId, DataGridIncrementalAggregationGroupState>
@@ -201,6 +219,30 @@ function createTreeParentGroupKey(rowId: DataGridRowId): string {
   return `tree:parent:${String(rowId)}`
 }
 
+function resolveExpansionToggledKeys(
+  snapshot: DataGridGroupExpansionSnapshot,
+  precomputedExpansionToggledKeys?: ReadonlySet<string>,
+): ReadonlySet<string> {
+  if (precomputedExpansionToggledKeys) {
+    return precomputedExpansionToggledKeys
+  }
+  if (snapshot.toggledGroupKeys.length === 0) {
+    return EMPTY_STRING_SET
+  }
+
+  const cached = EXPANSION_TOGGLED_KEYS_CACHE.get(snapshot)
+  if (cached && cached.ref === snapshot.toggledGroupKeys) {
+    return cached.set
+  }
+
+  const set = new Set(snapshot.toggledGroupKeys)
+  EXPANSION_TOGGLED_KEYS_CACHE.set(snapshot, {
+    ref: snapshot.toggledGroupKeys,
+    set,
+  })
+  return set
+}
+
 function patchTreePathProjectionCacheRowsByIdentity<T>(
   cache: TreePathProjectionCache<T>,
   sourceById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
@@ -282,6 +324,9 @@ function buildTreePathProjectionCache<T>(
     finalizeGroupState,
   )
   const branchPathByLeafRowId = new Map<DataGridRowId, readonly string[]>()
+  const groupIndexByRowId = new Map<DataGridRowId, number>()
+  const togglePreviousDescendantsBuffer: DataGridRowNode<T>[] = []
+  const toggleNextDescendantsBuffer: DataGridRowNode<T>[] = []
   const rootLeaves: DataGridRowNode<T>[] = []
   const matchedLeafRowIds = new Set<DataGridRowId>()
   const leafOnlyRows: DataGridRowNode<T>[] = []
@@ -425,6 +470,9 @@ function buildTreePathProjectionCache<T>(
     branchByKey,
     branchParentByKey,
     branchPathByLeafRowId,
+    groupIndexByRowId,
+    togglePreviousDescendantsBuffer,
+    toggleNextDescendantsBuffer,
     rootLeaves,
     matchedLeafRowIds,
     leafOnlyRows,
@@ -440,13 +488,38 @@ function createTreePathGroupNode<T>(
   expanded: boolean,
   aggregates?: Record<string, unknown>,
 ): DataGridRowNode<T> {
-  const rowData = ({
+  if (!aggregates) {
+    const cachedNoAgg = expanded
+      ? branch.groupRowNoAggExpanded
+      : branch.groupRowNoAggCollapsed
+    if (cachedNoAgg) {
+      return cachedNoAgg
+    }
+  } else {
+    if (branch.groupRowAggRef !== aggregates) {
+      branch.groupRowAggRef = aggregates
+      branch.groupRowAggExpanded = undefined
+      branch.groupRowAggCollapsed = undefined
+    }
+    const cachedWithAgg = expanded
+      ? branch.groupRowAggExpanded
+      : branch.groupRowAggCollapsed
+    if (cachedWithAgg) {
+      return cachedWithAgg
+    }
+  }
+
+  const rowData = branch.groupRowData ?? (({
     __tree: true,
     key: branch.key,
     value: branch.value,
     level: branch.level,
-  } as unknown as T)
-  return {
+  } as unknown as T))
+  if (!branch.groupRowData) {
+    branch.groupRowData = rowData
+  }
+
+  const nextRow: DataGridRowNode<T> = {
     kind: "group",
     data: rowData,
     row: rowData,
@@ -470,6 +543,19 @@ function createTreePathGroupNode<T>(
       ...(aggregates ? { aggregates } : {}),
     },
   }
+
+  if (aggregates) {
+    if (expanded) {
+      branch.groupRowAggExpanded = nextRow
+    } else {
+      branch.groupRowAggCollapsed = nextRow
+    }
+  } else if (expanded) {
+    branch.groupRowNoAggExpanded = nextRow
+  } else {
+    branch.groupRowNoAggCollapsed = nextRow
+  }
+  return nextRow
 }
 
 function appendTreePathBranch<T>(
@@ -478,16 +564,25 @@ function appendTreePathBranch<T>(
   expansionSnapshot: DataGridGroupExpansionSnapshot,
   expansionToggledKeys: ReadonlySet<string>,
   output: DataGridRowNode<T>[],
+  groupIndexByRowId: Map<DataGridRowId, number>,
 ): void {
   if (branch.matchedLeaves <= 0) {
     return
   }
   const expanded = isGroupExpanded(expansionSnapshot, branch.key, expansionToggledKeys)
+  groupIndexByRowId.set(branch.key, output.length)
   output.push(createTreePathGroupNode(branch, expanded, cache.aggregatesByGroupKey.get(branch.key)))
   if (!expanded) {
     return
   }
-  appendTreePathBranchChildren(cache, branch, expansionSnapshot, expansionToggledKeys, output)
+  appendTreePathBranchChildren(
+    cache,
+    branch,
+    expansionSnapshot,
+    expansionToggledKeys,
+    output,
+    groupIndexByRowId,
+  )
 }
 
 function appendTreePathBranchChildren<T>(
@@ -496,9 +591,17 @@ function appendTreePathBranchChildren<T>(
   expansionSnapshot: DataGridGroupExpansionSnapshot,
   expansionToggledKeys: ReadonlySet<string>,
   output: DataGridRowNode<T>[],
+  groupIndexByRowId: Map<DataGridRowId, number>,
 ): void {
   for (const child of branch.groups.values()) {
-    appendTreePathBranch(cache, child, expansionSnapshot, expansionToggledKeys, output)
+    appendTreePathBranch(
+      cache,
+      child,
+      expansionSnapshot,
+      expansionToggledKeys,
+      output,
+      groupIndexByRowId,
+    )
   }
   for (const leaf of branch.leaves) {
     if (cache.matchedLeafRowIds.has(leaf.rowId)) {
@@ -520,9 +623,20 @@ function materializeTreePathProjection<T>(
     }
   }
   const projected: DataGridRowNode<T>[] = []
-  const expansionToggledKeys = precomputedExpansionToggledKeys ?? new Set<string>(expansionSnapshot.toggledGroupKeys)
+  cache.groupIndexByRowId.clear()
+  const expansionToggledKeys = resolveExpansionToggledKeys(
+    expansionSnapshot,
+    precomputedExpansionToggledKeys,
+  )
   for (const branch of cache.rootGroups.values()) {
-    appendTreePathBranch(cache, branch, expansionSnapshot, expansionToggledKeys, projected)
+    appendTreePathBranch(
+      cache,
+      branch,
+      expansionSnapshot,
+      expansionToggledKeys,
+      projected,
+      cache.groupIndexByRowId,
+    )
   }
   for (const leaf of cache.rootLeaves) {
     if (cache.matchedLeafRowIds.has(leaf.rowId)) {
@@ -699,6 +813,9 @@ function buildTreeParentProjectionCache<T>(
       parentById: new Map<DataGridRowId, DataGridRowId | null>(),
       includedChildrenById: new Map<DataGridRowId, DataGridRowId[]>(),
       groupRowIdByGroupKey: new Map<string, DataGridRowId>(),
+      groupIndexByRowId: new Map<DataGridRowId, number>(),
+      togglePreviousDescendantsBuffer: [],
+      toggleNextDescendantsBuffer: [],
       rootIncluded: [],
       aggregatesByGroupRowId: new Map<DataGridRowId, Record<string, unknown>>(),
       aggregateStateByGroupRowId: new Map<DataGridRowId, DataGridIncrementalAggregationGroupState>(),
@@ -850,6 +967,9 @@ function buildTreeParentProjectionCache<T>(
     parentById,
     includedChildrenById,
     groupRowIdByGroupKey,
+    groupIndexByRowId: new Map<DataGridRowId, number>(),
+    togglePreviousDescendantsBuffer: [],
+    toggleNextDescendantsBuffer: [],
     rootIncluded,
     aggregatesByGroupRowId,
     aggregateStateByGroupRowId,
@@ -904,6 +1024,7 @@ function appendTreeParentRow<T>(
   }
   const groupKey = createTreeParentGroupKey(rowId)
   const expanded = isGroupExpanded(expansionSnapshot, groupKey, expansionToggledKeys)
+  cache.groupIndexByRowId.set(rowId, output.length)
   output.push(
     createTreeParentGroupNode(
       row,
@@ -946,7 +1067,11 @@ function materializeTreeParentProjection<T>(
     }
   }
   const projected: DataGridRowNode<T>[] = []
-  const expansionToggledKeys = precomputedExpansionToggledKeys ?? new Set<string>(expansionSnapshot.toggledGroupKeys)
+  cache.groupIndexByRowId.clear()
+  const expansionToggledKeys = resolveExpansionToggledKeys(
+    expansionSnapshot,
+    precomputedExpansionToggledKeys,
+  )
   for (const rootId of cache.rootIncluded) {
     appendTreeParentRow(cache, rootId, 0, expansionSnapshot, expansionToggledKeys, projected)
   }
@@ -1040,12 +1165,20 @@ function projectTreeDataRowsFromCache<T>(
 function resolveSingleExpansionDelta(
   previousSnapshot: DataGridGroupExpansionSnapshot,
   nextSnapshot: DataGridGroupExpansionSnapshot,
+  previousSet?: ReadonlySet<string>,
+  nextSet?: ReadonlySet<string>,
 ): string | null {
   if (previousSnapshot.expandedByDefault !== nextSnapshot.expandedByDefault) {
     return null
   }
-  const previous = new Set<string>(previousSnapshot.toggledGroupKeys)
-  const next = new Set<string>(nextSnapshot.toggledGroupKeys)
+  const previousArray = previousSnapshot.toggledGroupKeys
+  const nextArray = nextSnapshot.toggledGroupKeys
+  if (Math.abs(previousArray.length - nextArray.length) > 1) {
+    return null
+  }
+
+  const previous = previousSet ?? new Set<string>(previousArray)
+  const next = nextSet ?? new Set<string>(nextArray)
   let changedKey: string | null = null
   let changedCount = 0
   for (const key of previous) {
@@ -1094,15 +1227,54 @@ function resolveGroupRowIndexByRowId<T>(
   rows: readonly DataGridRowNode<T>[],
   groupRowId: DataGridRowId,
   groupIndexByRowId?: ReadonlyMap<DataGridRowId, number>,
+  fallbackGroupIndexByRowId?: ReadonlyMap<DataGridRowId, number>,
 ): number {
-  const indexed = groupIndexByRowId?.get(groupRowId)
-  if (typeof indexed === "number") {
+  const tryResolve = (indexMap?: ReadonlyMap<DataGridRowId, number>): number => {
+    const indexed = indexMap?.get(groupRowId)
+    if (typeof indexed !== "number") {
+      return -1
+    }
     const candidate = rows[indexed]
     if (candidate?.kind === "group" && candidate.rowId === groupRowId) {
       return indexed
     }
+    return -1
   }
-  return rows.findIndex(row => row.kind === "group" && row.rowId === groupRowId)
+
+  const primary = tryResolve(groupIndexByRowId)
+  if (primary >= 0) {
+    return primary
+  }
+  const fallback = tryResolve(fallbackGroupIndexByRowId)
+  if (fallback >= 0) {
+    return fallback
+  }
+  return -1
+}
+
+function rebuildGroupIndexByRowIdFrom<T>(
+  rows: readonly DataGridRowNode<T>[],
+  groupIndexByRowId: Map<DataGridRowId, number>,
+  startIndex = 0,
+): void {
+  if (startIndex <= 0) {
+    groupIndexByRowId.clear()
+    startIndex = 0
+  } else {
+    for (const [rowId, index] of groupIndexByRowId.entries()) {
+      if (index >= startIndex) {
+        groupIndexByRowId.delete(rowId)
+      }
+    }
+  }
+
+  for (let index = startIndex; index < rows.length; index += 1) {
+    const row = rows[index]
+    if (!row || row.kind !== "group") {
+      continue
+    }
+    groupIndexByRowId.set(row.rowId, index)
+  }
 }
 
 function tryProjectTreePathSubtreeToggle<T>(
@@ -1111,7 +1283,14 @@ function tryProjectTreePathSubtreeToggle<T>(
   if (input.treeData.filterMode === "leaf-only") {
     return null
   }
-  const changedGroupKey = resolveSingleExpansionDelta(input.previousExpansionSnapshot, input.nextExpansionSnapshot)
+  const previousExpandedKeys = resolveExpansionToggledKeys(input.previousExpansionSnapshot)
+  const nextExpandedKeys = resolveExpansionToggledKeys(input.nextExpansionSnapshot)
+  const changedGroupKey = resolveSingleExpansionDelta(
+    input.previousExpansionSnapshot,
+    input.nextExpansionSnapshot,
+    previousExpandedKeys,
+    nextExpandedKeys,
+  )
   if (!changedGroupKey) {
     return null
   }
@@ -1122,20 +1301,27 @@ function tryProjectTreePathSubtreeToggle<T>(
   const previousExpanded = isGroupExpanded(
     input.previousExpansionSnapshot,
     changedGroupKey,
-    new Set<string>(input.previousExpansionSnapshot.toggledGroupKeys),
+    previousExpandedKeys,
   )
   const nextExpanded = isGroupExpanded(
     input.nextExpansionSnapshot,
     changedGroupKey,
-    new Set<string>(input.nextExpansionSnapshot.toggledGroupKeys),
+    nextExpandedKeys,
   )
   const groupIndex = resolveGroupRowIndexByRowId(input.rows, changedGroupKey, input.groupIndexByRowId)
-  if (groupIndex < 0) {
+  const resolvedGroupIndex = groupIndex >= 0
+    ? groupIndex
+    : resolveGroupRowIndexByRowId(
+      input.rows,
+      changedGroupKey,
+      input.cacheState.cache.groupIndexByRowId,
+    )
+  if (resolvedGroupIndex < 0) {
     return null
   }
 
-  const previousDescendants: DataGridRowNode<T>[] = []
-  const previousExpandedKeys = new Set<string>(input.previousExpansionSnapshot.toggledGroupKeys)
+  const previousDescendants = input.cacheState.cache.togglePreviousDescendantsBuffer
+  previousDescendants.length = 0
   if (previousExpanded) {
     appendTreePathBranchChildren(
       input.cacheState.cache,
@@ -1143,11 +1329,12 @@ function tryProjectTreePathSubtreeToggle<T>(
       input.previousExpansionSnapshot,
       previousExpandedKeys,
       previousDescendants,
+      input.cacheState.cache.groupIndexByRowId,
     )
   }
 
-  const nextDescendants: DataGridRowNode<T>[] = []
-  const nextExpandedKeys = new Set<string>(input.nextExpansionSnapshot.toggledGroupKeys)
+  const nextDescendants = input.cacheState.cache.toggleNextDescendantsBuffer
+  nextDescendants.length = 0
   if (nextExpanded) {
     appendTreePathBranchChildren(
       input.cacheState.cache,
@@ -1155,17 +1342,18 @@ function tryProjectTreePathSubtreeToggle<T>(
       input.nextExpansionSnapshot,
       nextExpandedKeys,
       nextDescendants,
+      input.cacheState.cache.groupIndexByRowId,
     )
   }
 
-  const replaceStart = groupIndex + 1
+  const replaceStart = resolvedGroupIndex + 1
   if (!projectionSegmentMatches(input.rows, replaceStart, previousDescendants)) {
     return null
   }
   const nextRows = input.rows.slice()
-  const currentGroup = nextRows[groupIndex]
+  const currentGroup = nextRows[resolvedGroupIndex]
   if (currentGroup && currentGroup.kind === "group") {
-    nextRows[groupIndex] = {
+    nextRows[resolvedGroupIndex] = {
       ...currentGroup,
       state: {
         ...currentGroup.state,
@@ -1174,6 +1362,7 @@ function tryProjectTreePathSubtreeToggle<T>(
     }
   }
   nextRows.splice(replaceStart, previousDescendants.length, ...nextDescendants)
+  rebuildGroupIndexByRowIdFrom(nextRows, input.cacheState.cache.groupIndexByRowId, resolvedGroupIndex)
   return {
     rows: nextRows,
     diagnostics: input.cacheState.cache.diagnostics,
@@ -1183,7 +1372,14 @@ function tryProjectTreePathSubtreeToggle<T>(
 function tryProjectTreeParentSubtreeToggle<T>(
   input: TreeParentSubtreeToggleInput<T>,
 ): TreeProjectionResult<T> | null {
-  const changedGroupKey = resolveSingleExpansionDelta(input.previousExpansionSnapshot, input.nextExpansionSnapshot)
+  const previousExpandedKeys = resolveExpansionToggledKeys(input.previousExpansionSnapshot)
+  const nextExpandedKeys = resolveExpansionToggledKeys(input.nextExpansionSnapshot)
+  const changedGroupKey = resolveSingleExpansionDelta(
+    input.previousExpansionSnapshot,
+    input.nextExpansionSnapshot,
+    previousExpandedKeys,
+    nextExpandedKeys,
+  )
   if (!changedGroupKey) {
     return null
   }
@@ -1194,25 +1390,37 @@ function tryProjectTreeParentSubtreeToggle<T>(
   const previousExpanded = isGroupExpanded(
     input.previousExpansionSnapshot,
     changedGroupKey,
-    new Set<string>(input.previousExpansionSnapshot.toggledGroupKeys),
+    previousExpandedKeys,
   )
   const nextExpanded = isGroupExpanded(
     input.nextExpansionSnapshot,
     changedGroupKey,
-    new Set<string>(input.nextExpansionSnapshot.toggledGroupKeys),
+    nextExpandedKeys,
   )
-  const groupIndex = resolveGroupRowIndexByRowId(input.rows, rowId, input.groupIndexByRowId)
-  if (groupIndex < 0) {
+  const groupIndex = resolveGroupRowIndexByRowId(
+    input.rows,
+    rowId,
+    input.groupIndexByRowId,
+    input.cacheState.cache.groupIndexByRowId,
+  )
+  const resolvedGroupIndex = groupIndex >= 0
+    ? groupIndex
+    : resolveGroupRowIndexByRowId(
+      input.rows,
+      rowId,
+      input.cacheState.cache.groupIndexByRowId,
+    )
+  if (resolvedGroupIndex < 0) {
     return null
   }
-  const groupRow = input.rows[groupIndex]
+  const groupRow = input.rows[resolvedGroupIndex]
   const baseLevel = groupRow?.groupMeta?.level
   if (typeof baseLevel !== "number") {
     return null
   }
 
-  const previousDescendants: DataGridRowNode<T>[] = []
-  const previousExpandedKeys = new Set<string>(input.previousExpansionSnapshot.toggledGroupKeys)
+  const previousDescendants = input.cacheState.cache.togglePreviousDescendantsBuffer
+  previousDescendants.length = 0
   if (previousExpanded) {
     appendTreeParentRowChildren(
       input.cacheState.cache,
@@ -1224,8 +1432,8 @@ function tryProjectTreeParentSubtreeToggle<T>(
     )
   }
 
-  const nextDescendants: DataGridRowNode<T>[] = []
-  const nextExpandedKeys = new Set<string>(input.nextExpansionSnapshot.toggledGroupKeys)
+  const nextDescendants = input.cacheState.cache.toggleNextDescendantsBuffer
+  nextDescendants.length = 0
   if (nextExpanded) {
     appendTreeParentRowChildren(
       input.cacheState.cache,
@@ -1237,14 +1445,14 @@ function tryProjectTreeParentSubtreeToggle<T>(
     )
   }
 
-  const replaceStart = groupIndex + 1
+  const replaceStart = resolvedGroupIndex + 1
   if (!projectionSegmentMatches(input.rows, replaceStart, previousDescendants)) {
     return null
   }
   const nextRows = input.rows.slice()
-  const currentGroup = nextRows[groupIndex]
+  const currentGroup = nextRows[resolvedGroupIndex]
   if (currentGroup && currentGroup.kind === "group") {
-    nextRows[groupIndex] = {
+    nextRows[resolvedGroupIndex] = {
       ...currentGroup,
       state: {
         ...currentGroup.state,
@@ -1253,6 +1461,7 @@ function tryProjectTreeParentSubtreeToggle<T>(
     }
   }
   nextRows.splice(replaceStart, previousDescendants.length, ...nextDescendants)
+  rebuildGroupIndexByRowIdFrom(nextRows, input.cacheState.cache.groupIndexByRowId, resolvedGroupIndex)
   return {
     rows: nextRows,
     diagnostics: input.cacheState.cache.diagnostics,

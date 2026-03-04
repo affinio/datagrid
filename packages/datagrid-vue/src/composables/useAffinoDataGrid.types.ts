@@ -27,7 +27,6 @@ import type {
   UseDataGridRuntimeOptions,
   UseDataGridRuntimeResult,
 } from "./useDataGridRuntime"
-import type { CreateDataGridWorkerOwnedRowModelOptions } from "@affino/datagrid-worker"
 import type {
   DataGridContextMenuAction,
   DataGridContextMenuActionId,
@@ -272,7 +271,7 @@ export interface UseAffinoDataGridOptions<TRow> {
   rows: MaybeRef<readonly TRow[]>
   columns: MaybeRef<readonly DataGridColumnDef[]>
   rowModel?: DataGridRowModel<TRow>
-  workerOwnedRowModelOptions?: CreateDataGridWorkerOwnedRowModelOptions<TRow>
+  workerOwnedRowModelOptions?: UseDataGridRuntimeOptions<TRow>["workerOwnedRowModelOptions"]
   clientRowModelOptions?: UseDataGridRuntimeOptions<TRow>["clientRowModelOptions"]
   services?: UseDataGridRuntimeOptions<TRow>["services"]
   startupOrder?: CreateDataGridCoreOptions["startupOrder"]

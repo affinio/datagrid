@@ -2,6 +2,7 @@ import { defineComponent, h, nextTick, ref } from "vue"
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
 import {
+  createDataGridWorkerOwnedRowModel,
   createDataGridWorkerOwnedRowModelHost,
   type DataGridWorkerMessageEvent,
 } from "@affino/datagrid-worker"
@@ -358,12 +359,13 @@ describe("useDataGridRuntime contract", () => {
     const Host = defineComponent({
       name: "RuntimeWorkerOwnedModeHost",
       setup() {
+        const rowModel = createDataGridWorkerOwnedRowModel<RuntimeRow>({
+          source: channel.main,
+          target: channel.main,
+        })
         runtime = useDataGridRuntime<RuntimeRow>({
           columns: COLUMNS,
-          workerOwnedRowModelOptions: {
-            source: channel.main,
-            target: channel.main,
-          },
+          rowModel,
         })
         return () => h("div")
       },

@@ -64,6 +64,7 @@ interface DataGridPivotProjectionEntry<T> {
 interface DataGridPivotIncrementalProjectionState<T> {
   modelKey: string
   runtimeColumns: readonly DataGridPivotRuntimeColumn[]
+  normalizedColumns: readonly DataGridPivotColumn[]
   columnOrder: readonly string[]
   runtimeColumnsByColumnKey: ReadonlyMap<string, readonly DataGridPivotRuntimeColumn[]>
   rowEntries: ReadonlyMap<string, DataGridPivotProjectionEntry<T>>
@@ -159,6 +160,11 @@ function normalizePivotAxisValue(
   return normalized == null ? "" : String(normalized)
 }
 
+const pivotPathValueCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+})
+
 function comparePivotPathSegments(
   left: readonly { field: string; value: string }[],
   right: readonly { field: string; value: string }[],
@@ -176,14 +182,15 @@ function comparePivotPathSegments(
     if (!rightSegment) {
       return 1
     }
-    const fieldComparison = leftSegment.field.localeCompare(rightSegment.field)
+    const fieldComparison = leftSegment.field < rightSegment.field
+      ? -1
+      : leftSegment.field > rightSegment.field
+      ? 1
+      : 0
     if (fieldComparison !== 0) {
       return fieldComparison
     }
-    const valueComparison = leftSegment.value.localeCompare(rightSegment.value, undefined, {
-      numeric: true,
-      sensitivity: "base",
-    })
+    const valueComparison = pivotPathValueCollator.compare(leftSegment.value, rightSegment.value)
     if (valueComparison !== 0) {
       return valueComparison
     }
@@ -1028,12 +1035,14 @@ function buildPivotProjectionRows<T>(
       grandTotal: column.grandTotal,
     }),
   }))
+  const normalizedColumns = normalizePivotColumns(columns)
 
   const modelKey = serializePivotModelForIncrementalState(pivotModel)
   const incrementalState = canUseIncrementalPivotAggregation
     ? {
         modelKey,
         runtimeColumns,
+        normalizedColumns,
         columnOrder,
         runtimeColumnsByColumnKey,
         rowEntries,
@@ -1070,7 +1079,7 @@ export function createPivotRuntime<T>(): DataGridPivotRuntime<T> {
     if (state.modelKey !== serializePivotModelForIncrementalState(input.pivotModel)) {
       return null
     }
-    const normalizedColumns = normalizePivotColumns(toPivotRuntimeColumns(state.runtimeColumns))
+    const normalizedColumns = normalizePivotColumns(state.normalizedColumns)
     if (!Array.isArray(input.changedRows) || input.changedRows.length === 0) {
       return {
         rows: [...input.projectedRows],
@@ -1079,6 +1088,7 @@ export function createPivotRuntime<T>(): DataGridPivotRuntime<T> {
     }
     const nextRows = input.projectedRows.slice()
     const affectedEntryKeys = new Set<string>()
+    const affectedColumnKeysByEntry = new Map<string, Set<string>>()
     for (const changedRow of input.changedRows) {
       if (changedRow.previousRow.kind !== "leaf" || changedRow.nextRow.kind !== "leaf") {
         return null
@@ -1106,7 +1116,13 @@ export function createPivotRuntime<T>(): DataGridPivotRuntime<T> {
           return null
         }
         affectedEntryKeys.add(entryKey)
+        let affectedColumnKeys = affectedColumnKeysByEntry.get(entryKey)
+        if (!affectedColumnKeys) {
+          affectedColumnKeys = new Set<string>()
+          affectedColumnKeysByEntry.set(entryKey, affectedColumnKeys)
+        }
         for (const columnKey of previousTouched.columnKeys) {
+          affectedColumnKeys.add(columnKey)
           let groupState = aggregateStates.get(columnKey)
           if (!groupState) {
             const createdState = state.aggregationEngine.createEmptyGroupState()
@@ -1139,7 +1155,11 @@ export function createPivotRuntime<T>(): DataGridPivotRuntime<T> {
         return null
       }
       const nextRowData = { ...(currentRow.data as Record<string, unknown>) }
-      for (const columnKey of state.columnOrder) {
+      const affectedColumnKeys = affectedColumnKeysByEntry.get(entryKey)
+      if (!affectedColumnKeys || affectedColumnKeys.size === 0) {
+        continue
+      }
+      for (const columnKey of affectedColumnKeys) {
         const runtimeColumnsForKey = state.runtimeColumnsByColumnKey.get(columnKey)
         if (!runtimeColumnsForKey || runtimeColumnsForKey.length === 0) {
           continue

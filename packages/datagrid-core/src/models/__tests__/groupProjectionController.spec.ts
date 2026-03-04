@@ -69,7 +69,7 @@ describe("groupProjectionController cache policy", () => {
     expect(cache.has("r3::team")).toBe(true)
   })
 
-  it("touches cached keys on hit so hot entries survive eviction", () => {
+  it("keeps insertion-order eviction policy when cache hits occur", () => {
     const cache = new Map<string, string>([
       ["r1::team", "a"],
       ["r2::team", "b"],
@@ -85,8 +85,8 @@ describe("groupProjectionController cache policy", () => {
     )
 
     expect(cache.size).toBe(2)
-    expect(cache.has("r1::team")).toBe(true)
-    expect(cache.has("r2::team")).toBe(false)
+    expect(cache.has("r1::team")).toBe(false)
+    expect(cache.has("r2::team")).toBe(true)
     expect(cache.has("r3::team")).toBe(true)
   })
 

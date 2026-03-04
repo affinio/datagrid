@@ -10,7 +10,7 @@ This repository contains only DataGrid packages and supporting infrastructure.
 - `@affino/datagrid-worker`
 - `@affino/datagrid-plugins`
 - `@affino/datagrid-theme`
-- `@affino/projection-engine` (internal dependency)
+- `@affino/projection-engine`
 
 ## Requirements
 
@@ -26,11 +26,11 @@ pnpm install
 ## Common Commands
 
 ```bash
-pnpm run typecheck
-pnpm run test:datagrid:unit
-pnpm run test:datagrid:contracts
-pnpm run test:datagrid:integration
-pnpm run lint
+pnpm type-check
+pnpm test:datagrid:unit
+pnpm test:datagrid:contracts
+pnpm test:datagrid:integration
+pnpm lint
 ```
 
 ## Benchmarks

@@ -2,34 +2,17 @@ import {
   isGroupExpanded,
   type DataGridGroupBySpec,
   type DataGridGroupExpansionSnapshot,
+  type DataGridRowId,
   type DataGridRowNode,
 } from "./rowModel.js"
+import { enforceCacheCap } from "./clientRowRuntimeUtils.js"
 
-interface GroupKeySegment {
-  field: string
-  value: string
+function appendGroupKeyFieldPrefix(prefix: string, field: string): string {
+  return `${prefix}${field.length}:${field}`
 }
 
-function enforceCacheCap<K, V>(cache: Map<K, V>, maxSize: number): void {
-  if (!Number.isFinite(maxSize) || maxSize <= 0) {
-    cache.clear()
-    return
-  }
-  while (cache.size > maxSize) {
-    const next = cache.keys().next()
-    if (next.done) {
-      break
-    }
-    cache.delete(next.value)
-  }
-}
-
-function buildGroupKey(segments: readonly GroupKeySegment[]): string {
-  let encoded = "group:"
-  for (const segment of segments) {
-    encoded += `${segment.field.length}:${segment.field}${segment.value.length}:${segment.value}`
-  }
-  return encoded
+function appendGroupKeyValue(fieldPrefix: string, value: string): string {
+  return `${fieldPrefix}${value.length}:${value}`
 }
 
 function appendRows<T>(target: DataGridRowNode<T>[], source: readonly DataGridRowNode<T>[]): void {
@@ -42,6 +25,7 @@ export interface BuildGroupedRowsProjectionOptions<T> {
   inputRows: readonly DataGridRowNode<T>[]
   groupBy: DataGridGroupBySpec
   expansionSnapshot: DataGridGroupExpansionSnapshot
+  expansionToggledKeys?: ReadonlySet<string>
   readRowField: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown
   normalizeText: (value: unknown) => string
   normalizeLeafRow: (row: DataGridRowNode<T>) => DataGridRowNode<T>
@@ -57,6 +41,7 @@ export function buildGroupedRowsProjection<T>(
     inputRows,
     groupBy,
     expansionSnapshot,
+    expansionToggledKeys: providedExpansionToggledKeys,
     readRowField,
     normalizeText,
     normalizeLeafRow,
@@ -64,31 +49,59 @@ export function buildGroupedRowsProjection<T>(
     groupValueCounters,
     maxGroupValueCacheSize,
   } = options
-  const fields = groupBy.fields
-    .map(field => (typeof field === "string" ? field.trim() : ""))
-    .filter((field): field is string => field.length > 0)
-  const expansionToggledKeys = new Set<string>(expansionSnapshot.toggledGroupKeys)
+  const rawFields = groupBy.fields
+  let fields: readonly string[] = rawFields
+  for (let index = 0; index < rawFields.length; index += 1) {
+    const field = rawFields[index] ?? ""
+    if (field.length > 0 && field.trim() === field) {
+      continue
+    }
+    const normalizedFields: string[] = []
+    for (let normalizeIndex = 0; normalizeIndex < rawFields.length; normalizeIndex += 1) {
+      const rawField = rawFields[normalizeIndex]
+      const normalized = typeof rawField === "string"
+        ? rawField.trim()
+        : ""
+      if (normalized.length > 0) {
+        normalizedFields.push(normalized)
+      }
+    }
+    fields = normalizedFields
+    break
+  }
+  const expansionToggledKeys = providedExpansionToggledKeys ?? new Set<string>(expansionSnapshot.toggledGroupKeys)
+  const cache = groupValueCache
+  const cacheMaxSize = Number.isFinite(maxGroupValueCacheSize ?? 0)
+    ? Math.max(0, Math.trunc(maxGroupValueCacheSize ?? 0))
+    : 0
+  const rowIdPrefixById = cache
+    ? new Map<DataGridRowId, string>()
+    : null
   if (fields.length === 0) {
     return inputRows.map(row => normalizeLeafRow(row))
   }
   const resolveGroupedValue = (row: DataGridRowNode<T>, field: string): string => {
-    const cacheKey = `${String(row.rowId)}::${field}`
-    const cache = groupValueCache
-    const cached = cache?.get(cacheKey)
-    if (typeof cached !== "undefined") {
-      if (cache) {
-        cache.delete(cacheKey)
-        cache.set(cacheKey, cached)
+    let cacheKey: string | null = null
+    if (cache && rowIdPrefixById) {
+      let prefix = rowIdPrefixById.get(row.rowId)
+      if (!prefix) {
+        prefix = `${String(row.rowId)}::`
+        rowIdPrefixById.set(row.rowId, prefix)
       }
+      cacheKey = `${prefix}${field}`
+    }
+    const cached = cache && cacheKey !== null
+      ? cache.get(cacheKey)
+      : undefined
+    if (typeof cached !== "undefined") {
       if (groupValueCounters) {
         groupValueCounters.hits += 1
       }
       return cached
     }
     const computed = normalizeText(readRowField(row, field))
-    if (cache) {
+    if (cache && cacheKey) {
       cache.set(cacheKey, computed)
-      enforceCacheCap(cache, maxGroupValueCacheSize ?? 0)
       if (groupValueCounters) {
         groupValueCounters.misses += 1
       }
@@ -108,11 +121,12 @@ export function buildGroupedRowsProjection<T>(
 
   interface ProjectionFrame {
     level: number
-    path: GroupKeySegment[]
+    groupKeyPrefix: string
     rowIndexes: number[]
     initialized: boolean
-    entries: Array<[string, number[]]>
-    index: number
+    bucketField: string
+    bucketFieldPrefix: string
+    bucketIterator: Iterator<[string, number[]]> | null
     projected: DataGridRowNode<T>[]
     pendingBucket: BucketContext | null
   }
@@ -158,22 +172,26 @@ export function buildGroupedRowsProjection<T>(
   const createFrame = (
     rowIndexes: number[],
     level: number,
-    path: GroupKeySegment[],
+    groupKeyPrefix: string,
   ): ProjectionFrame => {
     return {
       level,
-      path,
+      groupKeyPrefix,
       rowIndexes,
       initialized: false,
-      entries: [],
-      index: 0,
+      bucketField: "",
+      bucketFieldPrefix: "",
+      bucketIterator: null,
       projected: [],
       pendingBucket: null,
     }
   }
 
-  const allRowIndexes = inputRows.map((_, index) => index)
-  const stack: ProjectionFrame[] = [createFrame(allRowIndexes, 0, [])]
+  const allRowIndexes = new Array<number>(inputRows.length)
+  for (let index = 0; index < inputRows.length; index += 1) {
+    allRowIndexes[index] = index
+  }
+  const stack: ProjectionFrame[] = [createFrame(allRowIndexes, 0, "group:")]
 
   while (stack.length > 0) {
     const frame = stack[stack.length - 1]
@@ -207,16 +225,20 @@ export function buildGroupedRowsProjection<T>(
           }
           buckets.set(value, [rowIndex])
         }
-        frame.entries = Array.from(buckets.entries())
+        frame.bucketField = field
+        frame.bucketFieldPrefix = appendGroupKeyFieldPrefix(frame.groupKeyPrefix, field)
+        frame.bucketIterator = buckets.entries()
       }
     }
 
-    const frameCompleted = frame.level >= fields.length || frame.index >= frame.entries.length
-    if (frameCompleted) {
+    if (frame.level >= fields.length) {
       const completedProjection = frame.projected
       stack.pop()
       const parent = stack[stack.length - 1]
       if (!parent) {
+        if (cache && cacheMaxSize > 0) {
+          enforceCacheCap(cache, cacheMaxSize)
+        }
         return completedProjection
       }
       const pendingBucket = parent.pendingBucket
@@ -228,22 +250,36 @@ export function buildGroupedRowsProjection<T>(
       if (pendingBucket.expanded) {
         appendRows(parent.projected, completedProjection)
       }
-      parent.index += 1
       continue
     }
 
-    const field = fields[frame.level] ?? ""
-    const nextEntry = frame.entries[frame.index]
-    if (!nextEntry) {
-      frame.index += 1
+    const nextEntry = frame.bucketIterator?.next()
+    if (!nextEntry || nextEntry.done) {
+      const completedProjection = frame.projected
+      stack.pop()
+      const parent = stack[stack.length - 1]
+      if (!parent) {
+        if (cache && cacheMaxSize > 0) {
+          enforceCacheCap(cache, cacheMaxSize)
+        }
+        return completedProjection
+      }
+      const pendingBucket = parent.pendingBucket
+      if (!pendingBucket) {
+        continue
+      }
+      parent.pendingBucket = null
+      parent.projected.push(createGroupNode(pendingBucket))
+      if (pendingBucket.expanded) {
+        appendRows(parent.projected, completedProjection)
+      }
       continue
     }
-    const [value, bucketRowIndexes] = nextEntry
-    const nextPath: GroupKeySegment[] = [...frame.path, { field, value }]
-    const groupKey = buildGroupKey(nextPath)
+    const [value, bucketRowIndexes] = nextEntry.value
+    const groupKey = appendGroupKeyValue(frame.bucketFieldPrefix, value)
     const expanded = isGroupExpanded(expansionSnapshot, groupKey, expansionToggledKeys)
     const bucketContext: BucketContext = {
-      field,
+      field: frame.bucketField,
       value,
       level: frame.level,
       groupKey,
@@ -254,13 +290,15 @@ export function buildGroupedRowsProjection<T>(
 
     if (!expanded) {
       frame.projected.push(createGroupNode(bucketContext))
-      frame.index += 1
       continue
     }
 
     frame.pendingBucket = bucketContext
-    stack.push(createFrame(bucketRowIndexes, frame.level + 1, nextPath))
+    stack.push(createFrame(bucketRowIndexes, frame.level + 1, groupKey))
   }
 
+  if (cache && cacheMaxSize > 0) {
+    enforceCacheCap(cache, cacheMaxSize)
+  }
   return []
 }

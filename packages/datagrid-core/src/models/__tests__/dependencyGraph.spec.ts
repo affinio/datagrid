@@ -23,6 +23,15 @@ describe("createDataGridDependencyGraph", () => {
     expect(graph.affectsAny(affected, new Set<string>(["status"]))).toBe(false)
   })
 
+  it("normalizes path tokens for affectsAny overlap checks", () => {
+    const graph = createDataGridDependencyGraph([
+      { sourceField: "raw.value", dependentField: "computed.value" },
+    ])
+    const affected = graph.getAffectedFields(new Set<string>([" raw.value "]))
+    expect(graph.affectsAny(affected, new Set<string>([" raw "]))).toBe(true)
+    expect(graph.affectsAny(affected, new Set<string>([" computed.value "]))).toBe(true)
+  })
+
   it("matches both ancestor and descendant structural source paths", () => {
     const graph = createDataGridDependencyGraph([
       { sourceField: "raw", dependentField: "stage:ancestor", kind: "structural" },
