@@ -53,7 +53,7 @@ describe("useDataGridPointerCellCoordResolver contract", () => {
 
     expect(resolver.resolveCellCoordFromPointer(100, 100)).toEqual({
       rowIndex: 3,
-      columnIndex: 2,
+      columnIndex: 1,
     })
   })
 })

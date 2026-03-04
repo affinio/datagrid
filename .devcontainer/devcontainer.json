@@ -1,10 +1,11 @@
 {
-  "name": "Affino Dev",
+  "name": "affinio-datagrid",
   "dockerComposeFile": [
     "../docker-compose.yml"
   ],
   "service": "dev",
   "workspaceFolder": "/workspace",
+  "postCreateCommand": "corepack enable && pnpm install",
 
   "customizations": {
     "vscode": {
@@ -14,10 +15,6 @@
         "esbenp.prettier-vscode"
       ]
     }
-  },
-
-  "features": {
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
 
   "shutdownAction": "stopCompose"

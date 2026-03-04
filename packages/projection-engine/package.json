@@ -1,0 +1,44 @@
+{
+  "name": "@affino/projection-engine",
+  "version": "0.2.1",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Projection stage graph engine for Affino data pipelines",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "vitest": "^4.0.15"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/projection-engine"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/projection-engine#readme",
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "keywords": [
+    "affino",
+    "projection",
+    "stage-graph",
+    "core",
+    "internal"
+  ],
+  "module": "dist/index.js"
+}

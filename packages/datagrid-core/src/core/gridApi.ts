@@ -4,7 +4,7 @@ import {
 import {
   DATAGRID_PUBLIC_PACKAGE_VERSION,
   DATAGRID_PUBLIC_PROTOCOL_VERSION,
-} from "../protocol"
+} from "../protocol/index.js"
 import { createDataGridApiComputeMethods } from "./gridApiComputeMethods"
 import { createDataGridApiColumnsMethods } from "./gridApiColumnsMethods"
 import { createDataGridApiDataMethods } from "./gridApiDataMethods"

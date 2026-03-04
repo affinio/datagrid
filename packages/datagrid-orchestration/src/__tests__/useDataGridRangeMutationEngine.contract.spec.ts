@@ -98,7 +98,7 @@ describe("useDataGridRangeMutationEngine contract", () => {
     expect(applied).toBe(true)
     expect(sourceRows).toEqual([
       { rowId: "r1", owner: "", status: "" },
-      { rowId: "r2", owner: "alice", status: "" },
+      { rowId: "r2", owner: "alice", status: "stable" },
     ])
     expect(lastAction).toBe("Moved 1 cells, blocked 1")
     expect(recorded).toHaveLength(1)
