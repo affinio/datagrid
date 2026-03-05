@@ -2,6 +2,16 @@ export {
   setsEqual,
 } from "@affino/datagrid-orchestration"
 
+export {
+  createGridSelectionContextFromFlattenedRows,
+  createGridSelectionRange,
+  applyGroupSelectionPolicy,
+  type GridSelectionContext,
+  type GridSelectionPointLike,
+  type GridSelectionRange,
+  type GridSelectionFlattenedRow,
+} from "@affino/datagrid-core/advanced"
+
 export * from "../composables/useDataGridSelectionOverlayOrchestration"
 export * from "../composables/useDataGridRowsProjection"
 export * from "../composables/useDataGridRowSelectionOrchestration"

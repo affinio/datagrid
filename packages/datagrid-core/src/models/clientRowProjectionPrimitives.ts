@@ -468,36 +468,65 @@ export function sortLeafRows<T>(
   if (descriptors.length === 0) {
     return [...rows]
   }
-  const decorated = rows.map((row, index) => ({
-    row,
-    index,
-    sortValues: resolveSortValues
+  const sortValuesByIndex = new Array<readonly unknown[]>(rows.length)
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    if (!row) {
+      sortValuesByIndex[index] = []
+      continue
+    }
+    sortValuesByIndex[index] = resolveSortValues
       ? resolveSortValues(row, descriptors)
-      : descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field)),
-  }))
-  decorated.sort((left, right) => {
+      : descriptors.map(descriptor => readRowField(row, descriptor.key, descriptor.field))
+  }
+
+  const orderedIndexes = new Array<number>(rows.length)
+  for (let index = 0; index < rows.length; index += 1) {
+    orderedIndexes[index] = index
+  }
+
+  orderedIndexes.sort((leftIndex, rightIndex) => {
+    const leftRow = rows[leftIndex]
+    const rightRow = rows[rightIndex]
+    if (!leftRow || !rightRow) {
+      return leftIndex - rightIndex
+    }
+    const leftSortValues = sortValuesByIndex[leftIndex] ?? []
+    const rightSortValues = sortValuesByIndex[rightIndex] ?? []
     for (let descriptorIndex = 0; descriptorIndex < descriptors.length; descriptorIndex += 1) {
       const descriptor = descriptors[descriptorIndex]
       if (!descriptor) {
         continue
       }
       const direction = descriptor.direction === "desc" ? -1 : 1
-      const leftValue = left.sortValues[descriptorIndex]
-      const rightValue = right.sortValues[descriptorIndex]
+      const leftValue = leftSortValues[descriptorIndex]
+      const rightValue = rightSortValues[descriptorIndex]
       const compared = compareUnknown(leftValue, rightValue)
       if (compared !== 0) {
         return compared * direction
       }
     }
-    const rowIdDelta = compareUnknown(left.row.rowId, right.row.rowId)
+    const rowIdDelta = compareUnknown(leftRow.rowId, rightRow.rowId)
     if (rowIdDelta !== 0) {
       return rowIdDelta
     }
-    const sourceDelta = left.row.sourceIndex - right.row.sourceIndex
+    const sourceDelta = leftRow.sourceIndex - rightRow.sourceIndex
     if (sourceDelta !== 0) {
       return sourceDelta
     }
-    return left.index - right.index
+    return leftIndex - rightIndex
   })
-  return decorated.map(entry => entry.row)
+
+  const sortedRows = new Array<DataGridRowNode<T>>(orderedIndexes.length)
+  for (let index = 0; index < orderedIndexes.length; index += 1) {
+    const rowIndex = orderedIndexes[index]
+    if (typeof rowIndex === "undefined") {
+      continue
+    }
+    const row = rows[rowIndex]
+    if (row) {
+      sortedRows[index] = row
+    }
+  }
+  return sortedRows
 }

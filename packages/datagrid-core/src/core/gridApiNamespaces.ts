@@ -72,6 +72,12 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   setColumnPin: DataGridApi<TRow>["columns"]["setPin"]
   getColumnHistogram: DataGridApi<TRow>["columns"]["getHistogram"]
   setViewportRange: DataGridApi<TRow>["view"]["setViewportRange"]
+  setRowHeightMode: DataGridApi<TRow>["view"]["setRowHeightMode"]
+  setBaseRowHeight: DataGridApi<TRow>["view"]["setBaseRowHeight"]
+  measureRowHeight: DataGridApi<TRow>["view"]["measureRowHeight"]
+  setRowHeightOverride: DataGridApi<TRow>["view"]["setRowHeightOverride"]
+  getRowHeightOverride: DataGridApi<TRow>["view"]["getRowHeightOverride"]
+  clearRowHeightOverrides: DataGridApi<TRow>["view"]["clearRowHeightOverrides"]
   refresh: DataGridApi<TRow>["view"]["refresh"]
   reapplyView: DataGridApi<TRow>["view"]["reapply"]
   refreshCellsByRowKeys: DataGridApi<TRow>["view"]["refreshCellsByRowKeys"]
@@ -189,6 +195,12 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     },
     view: {
       setViewportRange: methodSet.setViewportRange,
+      setRowHeightMode: methodSet.setRowHeightMode,
+      setBaseRowHeight: methodSet.setBaseRowHeight,
+      measureRowHeight: methodSet.measureRowHeight,
+      setRowHeightOverride: methodSet.setRowHeightOverride,
+      getRowHeightOverride: methodSet.getRowHeightOverride,
+      clearRowHeightOverrides: methodSet.clearRowHeightOverrides,
       refresh: methodSet.refresh,
       reapply: methodSet.reapplyView,
       expandAllGroups: methodSet.expandAllGroups,

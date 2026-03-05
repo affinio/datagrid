@@ -15,6 +15,7 @@ interface TreePathBranch<T> {
   key: string
   value: string
   level: number
+  parent: TreePathBranch<T> | null
   groupRowData?: T
   groupRowNoAggExpanded?: DataGridRowNode<T>
   groupRowNoAggCollapsed?: DataGridRowNode<T>
@@ -46,6 +47,7 @@ export interface TreePathProjectionCache<T> {
   diagnostics: TreeProjectionDiagnostics
   rootGroups: Map<string, TreePathBranch<T>>
   branchByKey: Map<string, TreePathBranch<T>>
+  leafBranchByLeafRowId: Map<DataGridRowId, TreePathBranch<T>>
   branchParentByKey: Map<string, string | null>
   branchPathByLeafRowId: Map<DataGridRowId, readonly string[]>
   groupIndexByRowId: Map<DataGridRowId, number>
@@ -316,6 +318,7 @@ function buildTreePathProjectionCache<T>(
   }
   const rootGroups = new Map<string, TreePathBranch<T>>()
   const branchByKey = new Map<string, TreePathBranch<T>>()
+  const leafBranchByLeafRowId = new Map<DataGridRowId, TreePathBranch<T>>()
   const branchParentByKey = new Map<string, string | null>()
   const supportsIncrementalAggregation = Boolean(
     createLeafContribution &&
@@ -369,6 +372,7 @@ function buildTreePathProjectionCache<T>(
         key: groupKey,
         value,
         level,
+        parent: parentBranch ?? null,
         groups: new Map<string, TreePathBranch<T>>(),
         leaves: [],
         matchedLeaves: 0,
@@ -382,6 +386,7 @@ function buildTreePathProjectionCache<T>(
     const target = traversed[traversed.length - 1]
     if (target) {
       target.leaves.push(normalizedLeaf)
+      leafBranchByLeafRowId.set(normalizedLeaf.rowId, target)
       if (supportsIncrementalAggregation) {
         branchPathByLeafRowId.set(normalizedLeaf.rowId, traversed.map(branch => branch.key))
       }
@@ -468,6 +473,7 @@ function buildTreePathProjectionCache<T>(
     diagnostics,
     rootGroups,
     branchByKey,
+    leafBranchByLeafRowId,
     branchParentByKey,
     branchPathByLeafRowId,
     groupIndexByRowId,

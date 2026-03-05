@@ -72,6 +72,12 @@ export interface DataGridCoreViewportService extends DataGridCoreService {
   readonly name: "viewport"
   getViewportRange?(): DataGridViewportRange
   setViewportRange?(range: DataGridViewportRange): void
+  setRowHeightMode?(mode: "fixed" | "auto"): void
+  setBaseRowHeight?(height: number): void
+  measureRowHeight?(): void
+  setRowHeightOverride?(rowIndex: number, height: number | null): void
+  getRowHeightOverride?(rowIndex: number): number | null
+  clearRowHeightOverrides?(): void
 }
 
 export interface DataGridCoreServiceByName {

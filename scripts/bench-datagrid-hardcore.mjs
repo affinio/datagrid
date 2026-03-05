@@ -53,6 +53,8 @@ const PERF_BUDGET_MAX_SORT_STRESS_P99_MS = Number.parseFloat(process.env.PERF_BU
 const PERF_BUDGET_MAX_FILTER_30_P95_MS = Number.parseFloat(process.env.PERF_BUDGET_MAX_FILTER_30_P95_MS ?? "Infinity")
 const PERF_BUDGET_MAX_FILTER_1_P95_MS = Number.parseFloat(process.env.PERF_BUDGET_MAX_FILTER_1_P95_MS ?? "Infinity")
 const PERF_BUDGET_MAX_FILTER_0_P95_MS = Number.parseFloat(process.env.PERF_BUDGET_MAX_FILTER_0_P95_MS ?? "Infinity")
+const PERF_BUDGET_MIN_FILTER_30_ROW_COUNT = Number.parseInt(process.env.PERF_BUDGET_MIN_FILTER_30_ROW_COUNT ?? "1", 10)
+const PERF_BUDGET_MIN_FILTER_1_ROW_COUNT = Number.parseInt(process.env.PERF_BUDGET_MIN_FILTER_1_ROW_COUNT ?? "1", 10)
 const PERF_BUDGET_MAX_PATCH_STORM_TOTAL_MS = Number.parseFloat(process.env.PERF_BUDGET_MAX_PATCH_STORM_TOTAL_MS ?? "Infinity")
 const PERF_BUDGET_MAX_PATCH_REAPPLY_MS = Number.parseFloat(process.env.PERF_BUDGET_MAX_PATCH_REAPPLY_MS ?? "Infinity")
 const PERF_BUDGET_MIN_PATCH_THROUGHPUT_ROWS_PER_SEC = Number.parseFloat(
@@ -70,6 +72,8 @@ assertPositiveInteger(SORT_STRESS_VIEWPORT, "BENCH_HARDCORE_SORT_VIEWPORT")
 assertPositiveInteger(FILTER_STRESS_ROW_COUNT, "BENCH_HARDCORE_FILTER_ROW_COUNT")
 assertPositiveInteger(FILTER_STRESS_ITERATIONS, "BENCH_HARDCORE_FILTER_ITERATIONS")
 assertPositiveInteger(FILTER_STRESS_VIEWPORT, "BENCH_HARDCORE_FILTER_VIEWPORT")
+assertNonNegativeInteger(PERF_BUDGET_MIN_FILTER_30_ROW_COUNT, "PERF_BUDGET_MIN_FILTER_30_ROW_COUNT")
+assertNonNegativeInteger(PERF_BUDGET_MIN_FILTER_1_ROW_COUNT, "PERF_BUDGET_MIN_FILTER_1_ROW_COUNT")
 assertPositiveInteger(PATCH_STORM_ROW_COUNT, "BENCH_HARDCORE_PATCH_ROW_COUNT")
 assertPositiveInteger(PATCH_STORM_ITERATIONS, "BENCH_HARDCORE_PATCH_ITERATIONS")
 assertPositiveInteger(PATCH_STORM_ROWS_PER_ITERATION, "BENCH_HARDCORE_PATCH_ROWS_PER_ITERATION")
@@ -353,11 +357,15 @@ async function runSortStressScenario(createClientRowModel, seed) {
 }
 
 function buildFilterModel(tokens) {
+  const normalizedTokens = tokens
+    .map(token => String(token ?? "").trim())
+    .filter(Boolean)
+    .map(token => (token.includes(":") ? token : `string:${token}`))
   return {
     columnFilters: {
       filterBand: {
         kind: "valueSet",
-        tokens,
+        tokens: normalizedTokens,
       },
     },
     advancedFilters: {},
@@ -592,6 +600,16 @@ for (const seed of BENCH_SEEDS) {
       `seed ${seed}: filter[0%] p95 ${filterStress.match0.latencyMs.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_FILTER_0_P95_MS=${PERF_BUDGET_MAX_FILTER_0_P95_MS}ms`,
     )
   }
+  if (filterStress.match30.rowCount < PERF_BUDGET_MIN_FILTER_30_ROW_COUNT) {
+    budgetErrors.push(
+      `seed ${seed}: filter[30%] rowCount ${filterStress.match30.rowCount} below PERF_BUDGET_MIN_FILTER_30_ROW_COUNT=${PERF_BUDGET_MIN_FILTER_30_ROW_COUNT}`,
+    )
+  }
+  if (filterStress.match1.rowCount < PERF_BUDGET_MIN_FILTER_1_ROW_COUNT) {
+    budgetErrors.push(
+      `seed ${seed}: filter[1%] rowCount ${filterStress.match1.rowCount} below PERF_BUDGET_MIN_FILTER_1_ROW_COUNT=${PERF_BUDGET_MIN_FILTER_1_ROW_COUNT}`,
+    )
+  }
   if (patchStorm.patchTotalMs > PERF_BUDGET_MAX_PATCH_STORM_TOTAL_MS) {
     budgetErrors.push(
       `seed ${seed}: patch-storm total ${patchStorm.patchTotalMs.toFixed(3)}ms exceeds PERF_BUDGET_MAX_PATCH_STORM_TOTAL_MS=${PERF_BUDGET_MAX_PATCH_STORM_TOTAL_MS}ms`,
@@ -716,6 +734,8 @@ const summary = {
     maxFilter30P95Ms: PERF_BUDGET_MAX_FILTER_30_P95_MS,
     maxFilter1P95Ms: PERF_BUDGET_MAX_FILTER_1_P95_MS,
     maxFilter0P95Ms: PERF_BUDGET_MAX_FILTER_0_P95_MS,
+    minFilter30RowCount: PERF_BUDGET_MIN_FILTER_30_ROW_COUNT,
+    minFilter1RowCount: PERF_BUDGET_MIN_FILTER_1_ROW_COUNT,
     maxPatchStormTotalMs: PERF_BUDGET_MAX_PATCH_STORM_TOTAL_MS,
     maxPatchReapplyMs: PERF_BUDGET_MAX_PATCH_REAPPLY_MS,
     minPatchThroughputRowsPerSec: PERF_BUDGET_MIN_PATCH_THROUGHPUT_ROWS_PER_SEC,

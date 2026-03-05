@@ -18,12 +18,12 @@ const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/datagrid-orchestration": "packages/datagrid-orchestration/src/index.ts",
   "@affino/datagrid-orchestration/*": "packages/datagrid-orchestration/src/*",
   "@affino/datagrid-vue/components": "packages/datagrid-vue/src/components/index.ts",
+  "@affino/datagrid-vue/advanced": "packages/datagrid-vue/src/advanced.ts",
+  "@affino/datagrid-vue/worker": "packages/datagrid-vue/src/worker.ts",
   "@affino/datagrid-vue": "packages/datagrid-vue/src/index.ts",
   "@affino/datagrid-vue/*": "packages/datagrid-vue/src/*",
   "@affino/datagrid-laravel": "packages/datagrid-laravel/resources/js/index.ts",
   "@affino/datagrid-laravel/*": "packages/datagrid-laravel/resources/js/*",
-  "@affino/datagrid": "packages/datagrid/src/index.ts",
-  "@affino/datagrid/*": "packages/datagrid/src/*",
 }
 
 export type AliasOverrides = Record<string, string>

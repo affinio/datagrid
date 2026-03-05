@@ -163,6 +163,12 @@ export interface DataGridApiColumnsNamespace {
 
 export interface DataGridApiViewNamespace {
   setViewportRange(range: DataGridViewportRange): void
+  setRowHeightMode(mode: "fixed" | "auto"): void
+  setBaseRowHeight(height: number): void
+  measureRowHeight(): void
+  setRowHeightOverride(rowIndex: number, height: number | null): void
+  getRowHeightOverride(rowIndex: number): number | null
+  clearRowHeightOverrides(): void
   refresh(options?: DataGridRefreshOptions): Promise<void> | void
   reapply(): Promise<void> | void
   expandAllGroups(): void

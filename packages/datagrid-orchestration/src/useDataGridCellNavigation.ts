@@ -18,6 +18,7 @@ export interface UseDataGridCellNavigationOptions<
   clearCellSelection: () => void
   setLastAction: (message: string) => void
   applyCellSelection: (nextCoord: TCoord, extend: boolean, fallbackAnchor?: TCoord) => void
+  onNavigationApplied?: (nextCoord: TCoord) => void
 }
 
 export interface UseDataGridCellNavigationResult {
@@ -136,6 +137,7 @@ export function useDataGridCellNavigation<
     }
     prevent(event)
     options.applyCellSelection(normalized, extend, current)
+    options.onNavigationApplied?.(normalized)
     return true
   }
 

@@ -1991,6 +1991,34 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("keeps flat projections synchronized on patchRows without recompute requests", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, score: 10, label: "left" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, score: 20, label: "right" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    const before = model.getSnapshot().projection
+    model.patchRows(
+      [{ rowId: "r1", data: { score: 100, label: "left-updated" } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+
+    const patchedRows = model.getRowsInRange({ start: 0, end: 2 })
+    const patchedRow = patchedRows.find(row => String(row.rowId) === "r1")
+    expect((patchedRow?.row as { score: number }).score).toBe(100)
+    expect((patchedRow?.row as { label: string }).label).toBe("left-updated")
+
+    const after = model.getSnapshot().projection
+    expect(after?.version).toBeGreaterThan(before?.version ?? 0)
+
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    expect(model.getRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r1"])
+
+    model.dispose()
+  })
+
   it("skips sort-stage invalidation when patched fields do not affect active sort", () => {
     let scoreReads = 0
     const rowWithScore = (id: number, score: number, label: string) => {

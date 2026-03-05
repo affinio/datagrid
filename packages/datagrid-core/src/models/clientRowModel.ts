@@ -85,6 +85,7 @@ import {
 import {
   buildColumnHistogram,
   createFilterPredicate,
+  hasActiveFilterModel,
   normalizeText,
   readRowField,
 } from "./clientRowProjectionPrimitives.js"
@@ -736,6 +737,76 @@ export function createClientRowModel<T>(
     getRowVersionById: () => rowVersionById,
     bumpRowRevision: () => {
       runtimeStateStore.bumpRowRevision()
+    },
+    tryApplyFlatProjectionPatch: (changedRowIds, nextRowsById) => {
+      if (
+        hasActiveFilterModel(filterModel)
+        || sortModel.length > 0
+        || treeData !== null
+        || groupBy !== null
+        || pivotModel !== null
+        || Boolean(aggregationModel && aggregationModel.columns.length > 0)
+        || pagination.enabled
+        || computeRuntime.getStaleStages().length > 0
+      ) {
+        return false
+      }
+      const sourceCount = sourceRows.length
+      if (
+        runtimeState.filteredRowsProjection.length !== sourceCount
+        || runtimeState.sortedRowsProjection.length !== sourceCount
+        || runtimeState.groupedRowsProjection.length !== sourceCount
+        || runtimeState.pivotedRowsProjection.length !== sourceCount
+        || runtimeState.aggregatedRowsProjection.length !== sourceCount
+        || runtimeState.paginatedRowsProjection.length !== sourceCount
+        || runtimeState.rows.length !== sourceCount
+      ) {
+        return false
+      }
+
+      const projectionRowsToPatch: DataGridRowNode<T>[][] = []
+      const registerProjectionRows = (rows: readonly DataGridRowNode<T>[]) => {
+        const mutableRows = rows as DataGridRowNode<T>[]
+        if (!projectionRowsToPatch.includes(mutableRows)) {
+          projectionRowsToPatch.push(mutableRows)
+        }
+      }
+      registerProjectionRows(runtimeState.filteredRowsProjection)
+      registerProjectionRows(runtimeState.sortedRowsProjection)
+      registerProjectionRows(runtimeState.groupedRowsProjection)
+      registerProjectionRows(runtimeState.pivotedRowsProjection)
+      registerProjectionRows(runtimeState.aggregatedRowsProjection)
+      registerProjectionRows(runtimeState.paginatedRowsProjection)
+      registerProjectionRows(runtimeState.rows)
+
+      for (const rowId of changedRowIds) {
+        const position = sourceRowIndexById.get(rowId) ?? -1
+        if (position < 0 || position >= sourceCount) {
+          continue
+        }
+        const nextRow = nextRowsById.get(rowId)
+        if (!nextRow) {
+          continue
+        }
+        for (const projectionRows of projectionRowsToPatch) {
+          const currentRow = projectionRows[position]
+          if (!currentRow || (currentRow.data === nextRow.data && currentRow.row === nextRow.row)) {
+            continue
+          }
+          projectionRows[position] = {
+            ...currentRow,
+            data: nextRow.data,
+            row: nextRow.row,
+          }
+        }
+      }
+
+      runtimeStateStore.commitProjectionCycle(false)
+      derivedCacheDiagnostics.revisions.row = runtimeState.rowRevision
+      derivedCacheDiagnostics.revisions.sort = runtimeState.sortRevision
+      derivedCacheDiagnostics.revisions.filter = runtimeState.filterRevision
+      derivedCacheDiagnostics.revisions.group = runtimeState.groupRevision
+      return true
     },
     getStaleStages: () => computeRuntime.getStaleStages(),
     recomputeWithExecutionPlan: (executionPlan) => {

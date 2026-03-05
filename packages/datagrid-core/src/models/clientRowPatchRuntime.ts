@@ -67,6 +67,7 @@ export interface ApplyClientRowPatchUpdatesInput<T> {
   sourceRowIndexById?: ReadonlyMap<DataGridRowId, number>
   updatesById: ReadonlyMap<DataGridRowId, Partial<T>>
   applyRowDataPatch: (current: T, patch: Partial<T>) => T
+  mutateSourceRowsInPlace?: boolean
 }
 
 export interface ApplyClientRowPatchUpdatesResult<T> {
@@ -82,6 +83,7 @@ export function applyClientRowPatchUpdates<T>(
   input: ApplyClientRowPatchUpdatesInput<T>,
 ): ApplyClientRowPatchUpdatesResult<T> {
   let changed = false
+  const mutateSourceRowsInPlace = input.mutateSourceRowsInPlace === true
   const changedRowIds: DataGridRowId[] = []
   const changedUpdatesById = new Map<DataGridRowId, Partial<T>>()
   const previousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
@@ -98,7 +100,9 @@ export function applyClientRowPatchUpdates<T>(
     }
     return next
   })()
-  let nextSourceRows: DataGridRowNode<T>[] | null = null
+  let nextSourceRows: DataGridRowNode<T>[] | null = mutateSourceRowsInPlace
+    ? (sourceRows as DataGridRowNode<T>[])
+    : null
 
   for (const [rowId, patch] of input.updatesById.entries()) {
     const position = indexByRowId.get(rowId) ?? -1

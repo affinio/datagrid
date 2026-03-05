@@ -112,8 +112,6 @@ export function runSortProjectionStage<T>(
       const currentRowVersion = params.rowVersionById.get(row.rowId) ?? 0
       const cached = params.sortValueCache.get(row.rowId)
       if (cached && cached.rowVersion === currentRowVersion) {
-        params.sortValueCache.delete(row.rowId)
-        params.sortValueCache.set(row.rowId, cached)
         params.counters.hits += 1
         return cached.values
       }

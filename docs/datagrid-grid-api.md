@@ -1,6 +1,6 @@
 # DataGrid Unified Grid API
 
-Updated: `2026-03-03`
+Updated: `2026-03-05`
 
 `DataGridApi` is the semver-safe, namespace-based facade for model/service operations in `@affino/datagrid-core`.
 
@@ -110,6 +110,23 @@ Creation is fail-fast for missing required services.
 - `count`, `countDistinct`, `sum`, `avg`, `min`, `max`
 
 Selection stays headless in core; adapter/UI mapping remains at adapter boundary.
+
+## Row height contract (`api.view`)
+
+Row-height semantics are part of Core `view` namespace and are adapter-consumable:
+
+- `api.view.setRowHeightMode("fixed" | "auto")`
+- `api.view.setBaseRowHeight(height)`
+- `api.view.measureRowHeight()`
+- `api.view.setRowHeightOverride(rowIndex, height | null)`
+- `api.view.getRowHeightOverride(rowIndex)`
+- `api.view.clearRowHeightOverrides()`
+
+Semantics:
+
+- Per-row resize/autosize persistence is owned by Core `view` state, not sandbox/component-local maps.
+- `rowIndex` addresses displayed row index in active row model projection.
+- Passing `null` to `setRowHeightOverride` removes the override for that row.
 
 ## Viewport integration boundary
 

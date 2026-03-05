@@ -47,6 +47,10 @@ export interface DataGridClientRowPatchCoordinatorRuntimeContext<T> {
   getRowVersionById: () => Map<DataGridRowId, number>
 
   bumpRowRevision: () => void
+  tryApplyFlatProjectionPatch?: (
+    changedRowIds: readonly DataGridRowId[],
+    nextRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+  ) => boolean
   getStaleStages: () => readonly DataGridClientProjectionStage[]
   recomputeWithExecutionPlan: (executionPlan: DataGridPatchProjectionExecutionPlan) => void
 
@@ -103,13 +107,20 @@ export function createClientRowPatchCoordinatorRuntime<T>(
         sourceRowIndexById: context.getSourceRowIndexById(),
         updatesById,
         applyRowDataPatch: context.applyRowDataPatch,
+        mutateSourceRowsInPlace: true,
       })
       context.setSourceRows(patchResult.nextSourceRows)
-      if (!patchResult.changed || patchResult.changedUpdatesById.size === 0) {
+      if (!patchResult.changed) {
         return
       }
       bumpRowVersions(context.getRowVersionById(), patchResult.changedRowIds)
       context.bumpRowRevision()
+      if (context.tryApplyFlatProjectionPatch?.(patchResult.changedRowIds, patchResult.nextRowsById)) {
+        if (options.emit !== false) {
+          context.emit()
+        }
+        return
+      }
       const staleStagesBeforeRequest = new Set<DataGridClientProjectionStage>(context.getStaleStages())
       const patchProjection = runClientRowPatchProjection<T>({
         changedRowIds: patchResult.changedRowIds,

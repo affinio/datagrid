@@ -241,24 +241,31 @@ function buildSortModel(iteration) {
 }
 
 function buildFilterModel(iteration) {
+  const toFilterToken = (value) => {
+    const normalized = String(value ?? "").trim()
+    if (normalized.length === 0) {
+      return normalized
+    }
+    return normalized.includes(":") ? normalized : `string:${normalized}`
+  }
   const step = iteration % 4
   if (step === 0) {
     return null
   }
   if (step === 1) {
     return {
-      columnFilters: { filterBand: { kind: "valueSet", tokens: Array.from({ length: 30 }, (_, index) => String(index)) } },
+      columnFilters: { filterBand: { kind: "valueSet", tokens: Array.from({ length: 30 }, (_, index) => toFilterToken(index)) } },
       advancedFilters: {},
     }
   }
   if (step === 2) {
     return {
-      columnFilters: { filterBand: { kind: "valueSet", tokens: ["0"] } },
+      columnFilters: { filterBand: { kind: "valueSet", tokens: [toFilterToken("0")] } },
       advancedFilters: {},
     }
   }
   return {
-    columnFilters: { filterBand: { kind: "valueSet", tokens: ["999"] } },
+    columnFilters: { filterBand: { kind: "valueSet", tokens: [toFilterToken("999")] } },
     advancedFilters: {},
   }
 }

@@ -124,6 +124,8 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   start: () => Promise<void>
   stop: () => void
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
+  setViewportRange: (range: DataGridViewportRange) => void
+  getViewportRange: () => DataGridViewportRange
 }
 
 export function useDataGridRuntime<TRow = unknown>(
@@ -270,6 +272,14 @@ export function useDataGridRuntime<TRow = unknown>(
     start: runtime.start,
     stop,
     syncRowsInRange: runtime.syncRowsInRange,
+    setViewportRange: api.view.setViewportRange,
+    getViewportRange: () => {
+      const snapshot = api.rows.getSnapshot()
+      return {
+        start: snapshot.viewportRange.start,
+        end: snapshot.viewportRange.end,
+      }
+    },
     getProjectionMode: api.policy.getProjectionMode,
     setProjectionMode(mode: DataGridApiProjectionMode) {
       const nextMode = api.policy.setProjectionMode(mode)
