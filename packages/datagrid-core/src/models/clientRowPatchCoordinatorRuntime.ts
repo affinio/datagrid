@@ -17,6 +17,7 @@ import type {
   DataGridPatchChangeSet,
   DataGridPatchProjectionExecutionPlan,
 } from "./rowPatchAnalyzer.js"
+import type { DataGridClientComputeExecutionPlanRequestOptions } from "./clientRowComputeRuntime.js"
 import type { DataGridPivotIncrementalPatchRow } from "./pivotRuntime.js"
 import {
   applyClientRowPatchUpdates,
@@ -58,7 +59,10 @@ export interface DataGridClientRowPatchCoordinatorRuntimeContext<T> {
     nextRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
   ) => boolean
   getStaleStages: () => readonly DataGridClientProjectionStage[]
-  recomputeWithExecutionPlan: (executionPlan: DataGridPatchProjectionExecutionPlan) => void
+  recomputeWithExecutionPlan: (
+    executionPlan: DataGridPatchProjectionExecutionPlan,
+    options?: DataGridClientComputeExecutionPlanRequestOptions,
+  ) => void
 
   getFilterModel: () => DataGridFilterSnapshot | null
   getSortModel: () => readonly DataGridSortState[]

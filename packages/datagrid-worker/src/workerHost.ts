@@ -2,6 +2,7 @@ import {
   createDataGridWorkerComputeAckMessage,
   createDataGridWorkerComputeErrorAckMessage,
   isDataGridWorkerComputeRequestMessage,
+  resolveWorkerComputeRequestPayload,
   type DataGridWorkerComputeRequest,
   type DataGridWorkerComputeResult,
 } from "./protocol.js"
@@ -59,8 +60,12 @@ export function createDataGridWorkerMessageHost(
       return
     }
     const requestMessage = event.data
+    const payload = resolveWorkerComputeRequestPayload(requestMessage.payload)
+    if (!payload) {
+      return
+    }
     try {
-      const result = options.handleRequest(requestMessage.payload)
+      const result = options.handleRequest(payload.request)
       if (result instanceof Promise) {
         result
           .then((resolvedResult) => {

@@ -220,6 +220,7 @@ describe("createClientRowModel", () => {
     expect(grossCalls).toBe(0)
     expect((model.getRow(0)?.row as { gross?: number }).gross).toBe(12)
     expect(model.getFormulaComputeStageDiagnostics()).toEqual({
+      strategy: "column-cache",
       rowsTouched: 1,
       changedRows: 0,
       fieldsTouched: [],
@@ -393,7 +394,169 @@ describe("createClientRowModel", () => {
     )
     expect((model.getRow(0)?.row as { total?: number }).total).toBe(33)
 
+    model.patchRows(
+      [{
+        rowId: "r1",
+        data: {
+          order: {
+            unitPrice: 20,
+            items: [{ tax: 5 }],
+          },
+        },
+      }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(65)
+
     model.dispose()
+  })
+
+  it("recomputes formula values after setRows replaces source dataset", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+      total?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10, qty: 2 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "price * qty" },
+      ],
+    })
+
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(20)
+
+    model.setRows([
+      {
+        row: { id: 1, price: 7, qty: 5 },
+        rowId: "r1",
+        originalIndex: 0,
+        displayIndex: 0,
+      },
+    ])
+
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(35)
+    model.dispose()
+  })
+
+  it("supports column cache parity verification mode", () => {
+    const globalRecord = globalThis as Record<string, unknown>
+    const verifyFlag = "__AFFINO_DATAGRID_VERIFY_COLUMN_CACHE__"
+    const previousFlag = globalRecord[verifyFlag]
+    globalRecord[verifyFlag] = true
+    try {
+      const model = createClientRowModel<{
+        id: number
+        price: number
+        qty: number
+        total?: number
+      }>({
+        rows: [
+          {
+            row: { id: 1, price: 10, qty: 2 },
+            rowId: "r1",
+            originalIndex: 0,
+            displayIndex: 0,
+          },
+        ],
+        initialFormulaFields: [
+          { name: "total", formula: "price * qty" },
+        ],
+      })
+
+      expect((model.getRow(0)?.row as { total?: number }).total).toBe(20)
+      model.patchRows(
+        [{ rowId: "r1", data: { price: 12 } }],
+        { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+      )
+      expect((model.getRow(0)?.row as { total?: number }).total).toBe(24)
+      model.dispose()
+    } finally {
+      if (typeof previousFlag === "undefined") {
+        delete globalRecord[verifyFlag]
+      } else {
+        globalRecord[verifyFlag] = previousFlag
+      }
+    }
+  })
+
+  it("keeps snapshot and row output stable with column cache verification enabled", () => {
+    const runScenario = (verify: boolean) => {
+      const globalRecord = globalThis as Record<string, unknown>
+      const verifyFlag = "__AFFINO_DATAGRID_VERIFY_COLUMN_CACHE__"
+      const previousFlag = globalRecord[verifyFlag]
+      globalRecord[verifyFlag] = verify
+      try {
+        const model = createClientRowModel<{
+          id: number
+          price: number
+          qty: number
+          total?: number
+        }>({
+          rows: [
+            {
+              row: { id: 1, price: 10, qty: 2 },
+              rowId: "r1",
+              originalIndex: 0,
+              displayIndex: 0,
+            },
+          ],
+          initialFormulaFields: [
+            { name: "total", formula: "price * qty" },
+          ],
+        })
+        model.patchRows(
+          [{ rowId: "r1", data: { price: 12 } }],
+          { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+        )
+        const snapshot = model.getSnapshot()
+        const row = model.getRow(0)?.row as { total?: number } | undefined
+        model.dispose()
+        return {
+          row,
+          projection: snapshot.projection
+            ? {
+                staleStages: [...snapshot.projection.staleStages],
+                lastInvalidationReasons: snapshot.projection.lastInvalidationReasons
+                  ? [...snapshot.projection.lastInvalidationReasons]
+                  : [],
+                formula: snapshot.projection.formula
+                  ? {
+                      recomputedFields: [...snapshot.projection.formula.recomputedFields],
+                      runtimeErrorCount: snapshot.projection.formula.runtimeErrorCount,
+                    }
+                  : null,
+                computeStage: snapshot.projection.computeStage
+                  ? {
+                      rowsTouched: snapshot.projection.computeStage.rowsTouched,
+                      changedRows: snapshot.projection.computeStage.changedRows,
+                      fieldsTouched: [...snapshot.projection.computeStage.fieldsTouched],
+                      evaluations: snapshot.projection.computeStage.evaluations,
+                      skippedByObjectIs: snapshot.projection.computeStage.skippedByObjectIs,
+                    }
+                  : null,
+              }
+            : null,
+        }
+      } finally {
+        if (typeof previousFlag === "undefined") {
+          delete globalRecord[verifyFlag]
+        } else {
+          globalRecord[verifyFlag] = previousFlag
+        }
+      }
+    }
+
+    const baseline = runScenario(false)
+    const withVerification = runScenario(true)
+    expect(withVerification).toEqual(baseline)
   })
 
   it("detects cycles in initial formula fields referenced by target field", () => {
@@ -443,9 +606,17 @@ describe("createClientRowModel", () => {
     })
 
     const formulaDiagnostics = model.getSnapshot().projection.formula
+    const computeStageDiagnostics = model.getSnapshot().projection.computeStage
     expect(formulaDiagnostics?.recomputedFields).toEqual(["subtotal", "total"])
     expect(formulaDiagnostics?.runtimeErrorCount).toBe(0)
     expect(formulaDiagnostics?.runtimeErrors).toEqual([])
+    expect(computeStageDiagnostics?.rowsTouched).toBe(1)
+    expect(computeStageDiagnostics?.changedRows).toBe(1)
+    expect(computeStageDiagnostics?.fieldsTouched).toEqual(["subtotal", "total"])
+    expect(computeStageDiagnostics?.evaluations).toBe(2)
+    expect(computeStageDiagnostics?.skippedByObjectIs).toBe(0)
+    expect(computeStageDiagnostics?.dirtyRows).toBe(1)
+    expect(computeStageDiagnostics?.dirtyNodes).toEqual(["subtotal", "total"])
 
     model.dispose()
   })
@@ -2969,6 +3140,44 @@ describe("createClientRowModel", () => {
     expect(diagnostics.dispatchCount).toBeGreaterThan(0)
     expect(diagnostics.fallbackCount).toBeGreaterThan(0)
     expect(dispatchCalls.length).toBeGreaterThan(0)
+
+    model.dispose()
+  })
+
+  it("uses threshold policy to keep small patch execution plans local in worker mode", () => {
+    const executionPlanDispatches: string[] = []
+    const rows = Array.from({ length: 20 }, (_, index) => ({
+      row: { id: index + 1, score: index + 1, label: `row-${index + 1}` },
+      rowId: `r${index + 1}`,
+      originalIndex: index,
+      displayIndex: index,
+    }))
+    const model = createClientRowModel({
+      rows,
+      computeMode: "worker",
+      workerPatchDispatchThreshold: 4,
+      computeTransport: {
+        dispatch(request) {
+          if (request.kind === "recompute-with-execution-plan") {
+            executionPlanDispatches.push(request.kind)
+          }
+          return { handled: false }
+        },
+      },
+    })
+
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    executionPlanDispatches.length = 0
+
+    model.patchRows([{ rowId: "r1", data: { score: 100 } }], { recomputeSort: true })
+    expect(executionPlanDispatches).toEqual([])
+
+    const burstUpdates = Array.from({ length: 10 }, (_, index) => ({
+      rowId: `r${index + 1}`,
+      data: { score: 1000 + index },
+    }))
+    model.patchRows(burstUpdates, { recomputeSort: true })
+    expect(executionPlanDispatches).toEqual(["recompute-with-execution-plan"])
 
     model.dispose()
   })

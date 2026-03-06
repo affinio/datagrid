@@ -3,6 +3,7 @@ import type {
   DataGridClientComputeDiagnostics,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
+  DataGridFormulaComputeStageDiagnostics,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
   DataGridFormulaExecutionPlanSnapshot,
@@ -11,6 +12,7 @@ import type {
   DataGridGroupExpansionSnapshot,
   DataGridPaginationInput,
   DataGridPivotSpec,
+  DataGridRowId,
   DataGridRowModel,
   DataGridRowModelListener,
   DataGridRowModelRefreshReason,
@@ -27,6 +29,8 @@ import type {
   DataGridWorkerMessageTarget,
 } from "./postMessageTransport.js"
 import {
+  DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
+  DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION,
   createDataGridWorkerRowModelCommandMessage,
   isDataGridWorkerRowModelUpdateMessage,
   type DataGridWorkerRowModelCommand,
@@ -42,12 +46,24 @@ export interface DataGridWorkerOwnedRowModel<T = unknown> extends DataGridRowMod
   registerFormulaField: (definition: DataGridFormulaFieldDefinition) => void
   getFormulaFields: () => readonly DataGridFormulaFieldSnapshot[]
   getFormulaExecutionPlan: () => DataGridFormulaExecutionPlanSnapshot | null
+  getFormulaComputeStageDiagnostics: () => DataGridFormulaComputeStageDiagnostics | null
   getComputeDiagnostics: () => DataGridClientComputeDiagnostics
   getWorkerProtocolDiagnostics: () => {
     updatesReceived: number
     updatesApplied: number
     updatesDroppedStale: number
     updatesDroppedInitialAfterApplied: number
+    commandsCoalesced: number
+    patchCommandsCoalesced: number
+    patchUpdatesReceived: number
+    patchUpdatesDispatched: number
+    patchUpdatesMergedAway: number
+    immediateFlushCount: number
+    queuePeak: number
+    protocolVersion: number
+    expectedPayloadSchemaVersion: number
+    lastPayloadSchemaVersion: number | null
+    payloadSchemaMismatches: number
     loadingSetCount: number
     loadingClearCount: number
   }
@@ -193,6 +209,24 @@ function cloneFormulaExecutionPlan(
   }
 }
 
+function cloneFormulaComputeStageDiagnostics(
+  diagnostics: DataGridFormulaComputeStageDiagnostics | null | undefined,
+): DataGridFormulaComputeStageDiagnostics | null {
+  if (!diagnostics) {
+    return null
+  }
+  return {
+    strategy: diagnostics.strategy,
+    rowsTouched: diagnostics.rowsTouched,
+    changedRows: diagnostics.changedRows,
+    fieldsTouched: [...diagnostics.fieldsTouched],
+    evaluations: diagnostics.evaluations,
+    skippedByObjectIs: diagnostics.skippedByObjectIs,
+    dirtyRows: diagnostics.dirtyRows,
+    dirtyNodes: [...diagnostics.dirtyNodes],
+  }
+}
+
 export function createDataGridWorkerOwnedRowModel<T = unknown>(
   options: CreateDataGridWorkerOwnedRowModelOptions<T>,
 ): DataGridWorkerOwnedRowModel<T> {
@@ -204,6 +238,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
 
   const MAX_WINDOW_CACHE_SIZE = 8
   const INITIAL_SYNC_PREFETCH_MAX_ROWS = 25
+  const PATCH_BURST_IMMEDIATE_FLUSH_THRESHOLD = 1024
   const viewportCoalescingStrategy = options.viewportCoalescingStrategy ?? "split"
   let disposed = false
   let nextRequestId = 1
@@ -218,6 +253,15 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
   let updatesApplied = 0
   let updatesDroppedStale = 0
   let updatesDroppedInitialAfterApplied = 0
+  let commandsCoalesced = 0
+  let patchCommandsCoalesced = 0
+  let patchUpdatesReceived = 0
+  let patchUpdatesDispatched = 0
+  let patchUpdatesMergedAway = 0
+  let immediateFlushCount = 0
+  let queuePeak = 0
+  let lastPayloadSchemaVersion: number | null = null
+  let payloadSchemaMismatches = 0
   let loadingSetCount = 0
   let loadingClearCount = 0
   let snapshot = options.initialSnapshot
@@ -226,6 +270,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
   let aggregationModel: DataGridAggregationModel<T> | null = null
   let formulaFields: readonly DataGridFormulaFieldSnapshot[] = []
   let formulaExecutionPlan: DataGridFormulaExecutionPlanSnapshot | null = null
+  let formulaComputeStageDiagnostics: DataGridFormulaComputeStageDiagnostics | null = null
   let visibleRange = {
     start: snapshot.viewportRange.start,
     end: snapshot.viewportRange.end,
@@ -307,9 +352,84 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     }
   }
 
+  const mergePatchRowOptions = (
+    left: DataGridClientRowPatchOptions | undefined,
+    right: DataGridClientRowPatchOptions | undefined,
+  ): DataGridClientRowPatchOptions | undefined => {
+    if (!left && !right) {
+      return undefined
+    }
+    const merged: DataGridClientRowPatchOptions = {}
+    if (left?.recomputeSort === true || right?.recomputeSort === true) {
+      merged.recomputeSort = true
+    }
+    if (left?.recomputeFilter === true || right?.recomputeFilter === true) {
+      merged.recomputeFilter = true
+    }
+    if (left?.recomputeGroup === true || right?.recomputeGroup === true) {
+      merged.recomputeGroup = true
+    }
+    if (right && "emit" in right && right.emit !== undefined) {
+      merged.emit = right.emit
+    }
+    if (right && "signal" in right) {
+      merged.signal = right.signal ?? null
+    }
+    return Object.keys(merged).length > 0 ? merged : undefined
+  }
+
+  const mergePatchRowUpdates = (
+    left: readonly DataGridClientRowPatch<T>[],
+    right: readonly DataGridClientRowPatch<T>[],
+  ): readonly DataGridClientRowPatch<T>[] => {
+    if (left.length === 0) {
+      return right
+    }
+    if (right.length === 0) {
+      return left
+    }
+    const mergedByRowId = new Map<DataGridRowId, Partial<T>>()
+    const order: DataGridRowId[] = []
+    const addUpdates = (updates: readonly DataGridClientRowPatch<T>[]) => {
+      for (const update of updates) {
+        if (!mergedByRowId.has(update.rowId)) {
+          order.push(update.rowId)
+          mergedByRowId.set(update.rowId, update.data)
+          continue
+        }
+        const previous = mergedByRowId.get(update.rowId) ?? {}
+        mergedByRowId.set(update.rowId, { ...previous, ...update.data })
+      }
+    }
+    addUpdates(left)
+    addUpdates(right)
+    return order.map((rowId) => ({
+      rowId,
+      data: mergedByRowId.get(rowId) ?? ({} as Partial<T>),
+    }))
+  }
+
+  const mergeCommandPayload = (
+    left: DataGridWorkerRowModelCommand<T>,
+    right: DataGridWorkerRowModelCommand<T>,
+  ): DataGridWorkerRowModelCommand<T> => {
+    if (left.type === "patch-rows" && right.type === "patch-rows") {
+      const mergedOptions = mergePatchRowOptions(left.options, right.options)
+      const mergedUpdates = mergePatchRowUpdates(left.updates, right.updates)
+      return {
+        type: "patch-rows",
+        updates: mergedUpdates,
+        ...(mergedOptions ? { options: mergedOptions } : {}),
+      }
+    }
+    return right
+  }
+
   const getCoalesceKey = (payload: DataGridWorkerRowModelCommand<T>): string | null => {
     switch (payload.type) {
       case "set-rows":
+        return payload.type
+      case "patch-rows":
         return payload.type
       case "set-viewport-range":
         if (viewportCoalescingStrategy === "simple") {
@@ -421,6 +541,59 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     emit()
   }
 
+  const flushQueuedCommands = (): void => {
+    if (disposed || queuedCommands.length === 0) {
+      return
+    }
+    const commands = queuedCommands.splice(0, queuedCommands.length)
+    queuedCommandIndexByKey.clear()
+    for (const command of commands) {
+      try {
+        let message = createDataGridWorkerRowModelCommandMessage(
+          command.requestId,
+          command.payload,
+          options.channel,
+        )
+        if (command.payload.type === "patch-rows") {
+          patchUpdatesDispatched += command.payload.updates.length
+        }
+        dispatchCount += 1
+        try {
+          options.target.postMessage(message)
+        } catch (error) {
+          if (!isDataCloneError(error)) {
+            throw error
+          }
+          message = createDataGridWorkerRowModelCommandMessage(
+            command.requestId,
+            cloneForTransport(command.payload, `command '${command.payload.type}'`),
+            options.channel,
+          )
+          options.target.postMessage(message)
+        }
+        if (command.payload.type === "set-viewport-range") {
+          markViewportLoading(command.payload.range, command.requestId)
+        }
+      } catch (error) {
+        loadingViewport = false
+        pendingViewportRequestId = 0
+        pendingViewportRange = null
+        const reason = error instanceof Error ? error.message : String(error)
+        snapshot = {
+          ...snapshot,
+          error: new Error(`[AffinoDataGrid worker] dispatch failed: ${reason}`),
+        }
+        emit()
+      }
+    }
+  }
+
+  const flushNow = (): void => {
+    immediateFlushCount += 1
+    flushScheduled = false
+    flushQueuedCommands()
+  }
+
   const scheduleFlush = (): void => {
     if (flushScheduled || disposed) {
       return
@@ -428,47 +601,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     flushScheduled = true
     queueMicrotask(() => {
       flushScheduled = false
-      if (disposed || queuedCommands.length === 0) {
-        return
-      }
-      const commands = queuedCommands.splice(0, queuedCommands.length)
-      queuedCommandIndexByKey.clear()
-      for (const command of commands) {
-        try {
-          let message = createDataGridWorkerRowModelCommandMessage(
-            command.requestId,
-            command.payload,
-            options.channel,
-          )
-          dispatchCount += 1
-          try {
-            options.target.postMessage(message)
-          } catch (error) {
-            if (!isDataCloneError(error)) {
-              throw error
-            }
-            message = createDataGridWorkerRowModelCommandMessage(
-              command.requestId,
-              cloneForTransport(command.payload, `command '${command.payload.type}'`),
-              options.channel,
-            )
-            options.target.postMessage(message)
-          }
-          if (command.payload.type === "set-viewport-range") {
-            markViewportLoading(command.payload.range, command.requestId)
-          }
-        } catch (error) {
-          loadingViewport = false
-          pendingViewportRequestId = 0
-          pendingViewportRange = null
-          const reason = error instanceof Error ? error.message : String(error)
-          snapshot = {
-            ...snapshot,
-            error: new Error(`[AffinoDataGrid worker] dispatch failed: ${reason}`),
-          }
-          emit()
-        }
-      }
+      flushQueuedCommands()
     })
   }
 
@@ -477,15 +610,43 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       return 0
     }
     validateCommandPayload(payload)
+    if (payload.type === "patch-rows") {
+      patchUpdatesReceived += payload.updates.length
+    }
     const requestId = nextRequestId++
     const coalesceKey = getCoalesceKey(payload)
     if (coalesceKey) {
       const existingIndex = queuedCommandIndexByKey.get(coalesceKey)
       if (typeof existingIndex === "number" && queuedCommands[existingIndex]) {
+        const existingCommand = queuedCommands[existingIndex]
+        const mergedPayload = mergeCommandPayload(existingCommand.payload, payload)
+        commandsCoalesced += 1
+        if (
+          existingCommand.payload.type === "patch-rows"
+          && payload.type === "patch-rows"
+          && mergedPayload.type === "patch-rows"
+        ) {
+          patchCommandsCoalesced += 1
+          const mergedAway = (
+            existingCommand.payload.updates.length
+            + payload.updates.length
+            - mergedPayload.updates.length
+          )
+          if (mergedAway > 0) {
+            patchUpdatesMergedAway += mergedAway
+          }
+        }
         queuedCommands[existingIndex] = {
           requestId,
-          payload,
+          payload: mergedPayload,
           coalesceKey,
+        }
+        if (
+          mergedPayload.type === "patch-rows"
+          && mergedPayload.updates.length >= PATCH_BURST_IMMEDIATE_FLUSH_THRESHOLD
+        ) {
+          flushNow()
+          return requestId
         }
         scheduleFlush()
         return requestId
@@ -499,6 +660,16 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     queuedCommands.push(command)
     if (coalesceKey) {
       queuedCommandIndexByKey.set(coalesceKey, queuedCommands.length - 1)
+    }
+    if (queuedCommands.length > queuePeak) {
+      queuePeak = queuedCommands.length
+    }
+    if (
+      payload.type === "patch-rows"
+      && payload.updates.length >= PATCH_BURST_IMMEDIATE_FLUSH_THRESHOLD
+    ) {
+      flushNow()
+      return requestId
     }
     scheduleFlush()
     return requestId
@@ -572,6 +743,13 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       lastAppliedRequestId = requestId
     }
     const update = event.data.payload
+    const payloadSchemaVersion = typeof update.schemaVersion === "number"
+      ? update.schemaVersion
+      : 1
+    lastPayloadSchemaVersion = payloadSchemaVersion
+    if (payloadSchemaVersion !== DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION) {
+      payloadSchemaMismatches += 1
+    }
     snapshot = update.snapshot as DataGridRowModelSnapshot<T>
     if (requestedViewportRange) {
       snapshot = {
@@ -589,6 +767,9 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
         }))
       : []
     formulaExecutionPlan = cloneFormulaExecutionPlan(update.formulaExecutionPlan)
+    formulaComputeStageDiagnostics = cloneFormulaComputeStageDiagnostics(
+      update.formulaComputeStageDiagnostics,
+    )
     visibleRange = {
       start: update.visibleRange.start,
       end: update.visibleRange.end,
@@ -787,6 +968,9 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     getFormulaExecutionPlan() {
       return cloneFormulaExecutionPlan(formulaExecutionPlan)
     },
+    getFormulaComputeStageDiagnostics() {
+      return cloneFormulaComputeStageDiagnostics(formulaComputeStageDiagnostics)
+    },
     getComputeDiagnostics() {
       return {
         configuredMode: "worker",
@@ -802,6 +986,17 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
         updatesApplied,
         updatesDroppedStale,
         updatesDroppedInitialAfterApplied,
+        commandsCoalesced,
+        patchCommandsCoalesced,
+        patchUpdatesReceived,
+        patchUpdatesDispatched,
+        patchUpdatesMergedAway,
+        immediateFlushCount,
+        queuePeak,
+        protocolVersion: DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION,
+        expectedPayloadSchemaVersion: DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
+        lastPayloadSchemaVersion,
+        payloadSchemaMismatches,
         loadingSetCount,
         loadingClearCount,
       }
@@ -820,6 +1015,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       queuedCommandIndexByKey.clear()
       formulaFields = []
       formulaExecutionPlan = null
+      formulaComputeStageDiagnostics = null
     },
   }
 }

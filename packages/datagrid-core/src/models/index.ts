@@ -143,6 +143,7 @@ export type {
   DataGridClientComputeDiagnostics,
   DataGridClientComputeStagePlan,
   DataGridClientComputeMode,
+  DataGridClientComputeExecutionPlanRequestOptions,
   DataGridClientComputeRequest,
   DataGridClientComputeTransport,
   DataGridClientComputeTransportResult,

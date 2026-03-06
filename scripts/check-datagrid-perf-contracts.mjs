@@ -184,6 +184,16 @@ registerFileCheck(
   "docs/perf/datagrid-benchmark-baseline.json",
   "Benchmark baseline lock file for CI drift guard",
 )
+registerFileCheck(
+  "formula-benchmark-baseline-lock-file",
+  "docs/perf/datagrid-formula-engine-baseline.json",
+  "Formula benchmark baseline lock file for formula-engine drift guard",
+)
+registerFileCheck(
+  "formula-benchmark-baseline-freeze-script",
+  "scripts/freeze-datagrid-formula-baseline.mjs",
+  "Formula benchmark baseline freeze/check script",
+)
 
 registerTokenCheck(
   "viewport-object-pool-contract",

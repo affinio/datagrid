@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
+  DATAGRID_WORKER_COMPUTE_PAYLOAD_SCHEMA_VERSION,
   createDataGridWorkerMessageHost,
   createDataGridWorkerPostMessageTransport,
   DATAGRID_WORKER_PROTOCOL_CHANNEL,
+  isDataGridWorkerComputeRequestMessage,
+  resolveWorkerComputeRequestPayload,
   type DataGridWorkerMessageEvent,
 } from "../index"
 
@@ -11,6 +14,7 @@ type MessageListener = (event: DataGridWorkerMessageEvent) => void
 class MemoryMessageEndpoint {
   private readonly listeners = new Set<MessageListener>()
   private peer: MemoryMessageEndpoint | null = null
+  readonly receivedMessages: unknown[] = []
 
   connect(peer: MemoryMessageEndpoint): void {
     this.peer = peer
@@ -35,6 +39,7 @@ class MemoryMessageEndpoint {
   }
 
   private emit(message: unknown): void {
+    this.receivedMessages.push(message)
     for (const listener of this.listeners) {
       listener({ data: message })
     }
@@ -98,5 +103,61 @@ describe("datagrid-worker postMessage transport", () => {
     expect(result?.handled).toBe(true)
     expect(transport.getStats().dispatched).toBe(1)
     transport.dispose()
+  })
+
+  it("serializes compute batch plan for execution-stage requests", async () => {
+    const channel = createMessageChannelPair()
+    const transport = createDataGridWorkerPostMessageTransport({
+      target: channel.main,
+      source: null,
+      channel: DATAGRID_WORKER_PROTOCOL_CHANNEL,
+      dispatchStrategy: "fire-and-forget",
+      requestTimeoutMs: 0,
+    })
+
+    transport.dispatch({
+      kind: "recompute-with-execution-plan",
+      plan: {
+        requestedStages: ["compute", "filter", "sort"],
+        blockedStages: ["group"],
+      },
+      options: { patchChangedRowCount: 12 },
+    })
+    await Promise.resolve()
+
+    const requestMessage = channel.worker.receivedMessages.find(message =>
+      isDataGridWorkerComputeRequestMessage(message, DATAGRID_WORKER_PROTOCOL_CHANNEL),
+    )
+    expect(requestMessage).toBeTruthy()
+    const payloadEnvelope = resolveWorkerComputeRequestPayload(
+      (requestMessage as { payload?: unknown }).payload,
+    )
+    expect(payloadEnvelope).toEqual({
+      schemaVersion: DATAGRID_WORKER_COMPUTE_PAYLOAD_SCHEMA_VERSION,
+      request: {
+        kind: "recompute-with-execution-plan",
+        plan: {
+          requestedStages: ["compute", "filter", "sort"],
+          blockedStages: ["group"],
+        },
+        options: { patchChangedRowCount: 12 },
+      },
+      batchPlan: {
+        kind: "execution-plan",
+        requestedStages: ["compute", "filter", "sort"],
+        blockedStages: ["group"],
+        patchChangedRowCount: 12,
+      },
+    })
+
+    transport.dispose()
+  })
+
+  it("keeps backward compatibility for legacy direct compute payload", () => {
+    expect(resolveWorkerComputeRequestPayload({ kind: "refresh" })).toEqual({
+      schemaVersion: 1,
+      request: { kind: "refresh" },
+      batchPlan: null,
+    })
   })
 })

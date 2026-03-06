@@ -1,0 +1,139 @@
+{
+  "baselineSchemaVersion": 1,
+  "benchmark": "datagrid-formula-engine",
+  "generatedAt": "2026-03-06T15:38:00.204Z",
+  "source": {
+    "file": "artifacts/performance/bench-datagrid-formula-engine.assert-second.json",
+    "runGeneratedAt": "2026-03-06T15:38:00.204Z"
+  },
+  "config": {
+    "scenarios": [
+      "small",
+      "medium",
+      "large"
+    ],
+    "seeds": [
+      1337,
+      7331,
+      2026
+    ],
+    "patchSizes": [
+      1,
+      100,
+      1000
+    ],
+    "fullRecomputeIterations": 5,
+    "patchIterations": 5,
+    "compileIterations": 3,
+    "warmupRuns": 1
+  },
+  "budgets": {
+    "totalMs": 180000,
+    "maxFullRecomputeP95Ms": 2200,
+    "maxPatchP95Ms": 900,
+    "minFullEvaluationsPerSec": 2200000,
+    "minIncrementalEvaluationsPerSec": 50000,
+    "incrementalPatchSize": 1000,
+    "maxHeapDeltaMb": 350,
+    "heapEpsilonMb": 1,
+    "maxVariancePct": 130,
+    "varianceMinMeanMs": 0.5
+  },
+  "aggregate": {
+    "elapsedP95Ms": 47740.71800919999,
+    "heapDeltaP95Mb": 29.898997497558593,
+    "fullRecomputeP95Ms": 1424.1231804399856,
+    "patchP95Ms": 637.4776181600009,
+    "fullEvaluationsPerSecMean": 2678337.6233548885,
+    "incrementalEvaluationsPerSecMean": 105805.29473655547
+  },
+  "scenarios": [
+    {
+      "name": "large",
+      "config": {
+        "rows": 100000,
+        "formulas": 40,
+        "depth": 4
+      },
+      "compileMeanMs": 0.11813911110867696,
+      "initMeanMs": 37276.16977933332,
+      "fullRecomputeP95Ms": 1430.858886459992,
+      "fullEvaluationsPerSecMean": 2851170.834203519,
+      "patch": [
+        {
+          "patchSize": 1,
+          "p95Ms": 15.182447979998832,
+          "evaluationsPerSecMean": 3504.943995420423
+        },
+        {
+          "patchSize": 100,
+          "p95Ms": 76.07394584000285,
+          "evaluationsPerSecMean": 53110.697002321336
+        },
+        {
+          "patchSize": 1000,
+          "p95Ms": 660.0363781399955,
+          "evaluationsPerSecMean": 60403.97264879153
+        }
+      ]
+    },
+    {
+      "name": "medium",
+      "config": {
+        "rows": 50000,
+        "formulas": 20,
+        "depth": 3
+      },
+      "compileMeanMs": 0.07189355555601651,
+      "initMeanMs": 5997.436364666668,
+      "fullRecomputeP95Ms": 943.4553419800254,
+      "fullEvaluationsPerSecMean": 2324888.337243896,
+      "patch": [
+        {
+          "patchSize": 1,
+          "p95Ms": 20.07863109997357,
+          "evaluationsPerSecMean": 3515.5951638238844
+        },
+        {
+          "patchSize": 100,
+          "p95Ms": 25.64601523999532,
+          "evaluationsPerSecMean": 85878.9456192187
+        },
+        {
+          "patchSize": 1000,
+          "p95Ms": 183.15747034000407,
+          "evaluationsPerSecMean": 104509.72793190704
+        }
+      ]
+    },
+    {
+      "name": "small",
+      "config": {
+        "rows": 10000,
+        "formulas": 10,
+        "depth": 2
+      },
+      "compileMeanMs": 0.03580088888783292,
+      "initMeanMs": 447.50240399999893,
+      "fullRecomputeP95Ms": 52.868555479998754,
+      "fullEvaluationsPerSecMean": 2858953.698617251,
+      "patch": [
+        {
+          "patchSize": 1,
+          "p95Ms": 1.3556543599984434,
+          "evaluationsPerSecMean": 10444.684357492844
+        },
+        {
+          "patchSize": 100,
+          "p95Ms": 7.477405860000581,
+          "evaluationsPerSecMean": 136156.03713363668
+        },
+        {
+          "patchSize": 1000,
+          "p95Ms": 68.93000286000039,
+          "evaluationsPerSecMean": 152502.18362896785
+        }
+      ]
+    }
+  ]
+}

@@ -102,4 +102,58 @@ describe("createClientRowComputeRuntime", () => {
       fallbackCount: 2,
     })
   })
+
+  it("keeps small execution-plan patches local in worker mode", () => {
+    const orchestrator = createOrchestratorMock()
+    const dispatch = vi.fn(() => ({ handled: true }))
+    const runtime = createClientRowComputeRuntime({
+      mode: "worker",
+      transport: { dispatch },
+      orchestrator,
+      workerPatchDispatchThreshold: 32,
+    })
+    const executionPlan: DataGridPatchProjectionExecutionPlan = {
+      requestedStages: ["filter"],
+      blockedStages: [],
+    }
+
+    runtime.recomputeWithExecutionPlan(executionPlan, { patchChangedRowCount: 8 })
+
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(orchestrator.recomputeWithExecutionPlan).toHaveBeenCalledTimes(1)
+    expect(runtime.getDiagnostics()).toEqual({
+      configuredMode: "worker",
+      effectiveMode: "worker",
+      transportKind: "custom",
+      dispatchCount: 0,
+      fallbackCount: 0,
+    })
+  })
+
+  it("dispatches large execution-plan patches to worker transport", () => {
+    const orchestrator = createOrchestratorMock()
+    const dispatch = vi.fn(() => ({ handled: true }))
+    const runtime = createClientRowComputeRuntime({
+      mode: "worker",
+      transport: { dispatch },
+      orchestrator,
+      workerPatchDispatchThreshold: 32,
+    })
+    const executionPlan: DataGridPatchProjectionExecutionPlan = {
+      requestedStages: ["group"],
+      blockedStages: [],
+    }
+
+    runtime.recomputeWithExecutionPlan(executionPlan, { patchChangedRowCount: 256 })
+
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(orchestrator.recomputeWithExecutionPlan).toHaveBeenCalledTimes(0)
+    expect(runtime.getDiagnostics()).toEqual({
+      configuredMode: "worker",
+      effectiveMode: "worker",
+      transportKind: "custom",
+      dispatchCount: 1,
+      fallbackCount: 0,
+    })
+  })
 })

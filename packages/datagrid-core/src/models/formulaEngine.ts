@@ -76,8 +76,12 @@ interface DataGridFormulaFunctionRuntime {
   compute: (args: readonly number[]) => unknown
 }
 
+type DataGridFormulaTokenValueReader = (
+  token: DataGridComputedDependencyToken,
+) => unknown
+
 type DataGridFormulaEvaluator = (
-  resolveIdentifierValue: (identifier: string) => unknown,
+  readTokenValue: DataGridFormulaTokenValueReader,
 ) => number
 
 class DataGridFormulaEvaluationError extends Error {
@@ -291,46 +295,6 @@ function validateFormulaFunctionArity(
   if (typeof arity.max === "number" && argsCount > arity.max) {
     throwFormulaError(
       `Function '${functionDefinition.name}' expects at most ${arity.max} argument(s), got ${argsCount}.`,
-    )
-  }
-}
-
-function validateFormulaFunctionArityRuntime(
-  functionDefinition: DataGridFormulaFunctionRuntime,
-  argsCount: number,
-): void {
-  const { arity } = functionDefinition
-  if (typeof arity === "undefined") {
-    return
-  }
-  if (typeof arity === "number") {
-    if (argsCount !== arity) {
-      throw new DataGridFormulaEvaluationError(
-        createFormulaRuntimeError(
-          "FUNCTION_ARITY",
-          `Function '${functionDefinition.name}' expects ${arity} argument(s), got ${argsCount}.`,
-          { functionName: functionDefinition.name },
-        ),
-      )
-    }
-    return
-  }
-  if (argsCount < arity.min) {
-    throw new DataGridFormulaEvaluationError(
-      createFormulaRuntimeError(
-        "FUNCTION_ARITY",
-        `Function '${functionDefinition.name}' expects at least ${arity.min} argument(s), got ${argsCount}.`,
-        { functionName: functionDefinition.name },
-      ),
-    )
-  }
-  if (typeof arity.max === "number" && argsCount > arity.max) {
-    throw new DataGridFormulaEvaluationError(
-      createFormulaRuntimeError(
-        "FUNCTION_ARITY",
-        `Function '${functionDefinition.name}' expects at most ${arity.max} argument(s), got ${argsCount}.`,
-        { functionName: functionDefinition.name },
-      ),
     )
   }
 }
@@ -698,12 +662,17 @@ function normalizeFormulaNumber(value: unknown): number {
 function compileFormulaAstEvaluator(
   root: DataGridFormulaAstNode,
   functionRegistry: ReadonlyMap<string, DataGridFormulaFunctionRuntime>,
+  resolveIdentifierToken: (identifier: string) => DataGridComputedDependencyToken | undefined,
 ): DataGridFormulaEvaluator {
   if (root.kind === "number") {
     return () => root.value
   }
   if (root.kind === "identifier") {
-    return resolveIdentifierValue => normalizeFormulaNumber(resolveIdentifierValue(root.name))
+    const token = resolveIdentifierToken(root.name)
+    if (!token) {
+      return () => 0
+    }
+    return readTokenValue => normalizeFormulaNumber(readTokenValue(token))
   }
   if (root.kind === "call") {
     const functionDefinition = functionRegistry.get(normalizeFormulaFunctionName(root.name))
@@ -716,10 +685,18 @@ function compileFormulaAstEvaluator(
         ),
       )
     }
-    const argEvaluators = root.args.map(arg => compileFormulaAstEvaluator(arg, functionRegistry))
-    return (resolveIdentifierValue) => {
-      const args = argEvaluators.map(evaluator => evaluator(resolveIdentifierValue))
-      validateFormulaFunctionArityRuntime(functionDefinition, args.length)
+    const argEvaluators = root.args.map(arg => compileFormulaAstEvaluator(
+      arg,
+      functionRegistry,
+      resolveIdentifierToken,
+    ))
+    const argsCount = argEvaluators.length
+    return (readTokenValue) => {
+      const args = new Array<number>(argsCount)
+      for (let index = 0; index < argsCount; index += 1) {
+        const evaluator = argEvaluators[index]
+        args[index] = evaluator ? evaluator(readTokenValue) : 0
+      }
       try {
         return normalizeFormulaNumber(functionDefinition.compute(args))
       } catch (error) {
@@ -734,27 +711,27 @@ function compileFormulaAstEvaluator(
     }
   }
   if (root.kind === "unary") {
-    const valueEvaluator = compileFormulaAstEvaluator(root.value, functionRegistry)
-    return resolveIdentifierValue => {
-      const value = valueEvaluator(resolveIdentifierValue)
+    const valueEvaluator = compileFormulaAstEvaluator(root.value, functionRegistry, resolveIdentifierToken)
+    return readTokenValue => {
+      const value = valueEvaluator(readTokenValue)
       return root.operator === "-" ? -value : value
     }
   }
 
-  const leftEvaluator = compileFormulaAstEvaluator(root.left, functionRegistry)
-  const rightEvaluator = compileFormulaAstEvaluator(root.right, functionRegistry)
+  const leftEvaluator = compileFormulaAstEvaluator(root.left, functionRegistry, resolveIdentifierToken)
+  const rightEvaluator = compileFormulaAstEvaluator(root.right, functionRegistry, resolveIdentifierToken)
   if (root.operator === "+") {
-    return resolveIdentifierValue => leftEvaluator(resolveIdentifierValue) + rightEvaluator(resolveIdentifierValue)
+    return readTokenValue => leftEvaluator(readTokenValue) + rightEvaluator(readTokenValue)
   }
   if (root.operator === "-") {
-    return resolveIdentifierValue => leftEvaluator(resolveIdentifierValue) - rightEvaluator(resolveIdentifierValue)
+    return readTokenValue => leftEvaluator(readTokenValue) - rightEvaluator(readTokenValue)
   }
   if (root.operator === "*") {
-    return resolveIdentifierValue => leftEvaluator(resolveIdentifierValue) * rightEvaluator(resolveIdentifierValue)
+    return readTokenValue => leftEvaluator(readTokenValue) * rightEvaluator(readTokenValue)
   }
   if (root.operator === "/") {
-    return (resolveIdentifierValue) => {
-      const right = rightEvaluator(resolveIdentifierValue)
+    return (readTokenValue) => {
+      const right = rightEvaluator(readTokenValue)
       if (right === 0) {
         // Grid runtime policy: division by zero is coerced to 0 (unless throw policy is enabled).
         throw new DataGridFormulaEvaluationError(
@@ -765,37 +742,37 @@ function compileFormulaAstEvaluator(
           ),
         )
       }
-      const left = leftEvaluator(resolveIdentifierValue)
+      const left = leftEvaluator(readTokenValue)
       return left / right
     }
   }
   if (root.operator === ">") {
-    return resolveIdentifierValue => (
-      leftEvaluator(resolveIdentifierValue) > rightEvaluator(resolveIdentifierValue) ? 1 : 0
+    return readTokenValue => (
+      leftEvaluator(readTokenValue) > rightEvaluator(readTokenValue) ? 1 : 0
     )
   }
   if (root.operator === "<") {
-    return resolveIdentifierValue => (
-      leftEvaluator(resolveIdentifierValue) < rightEvaluator(resolveIdentifierValue) ? 1 : 0
+    return readTokenValue => (
+      leftEvaluator(readTokenValue) < rightEvaluator(readTokenValue) ? 1 : 0
     )
   }
   if (root.operator === ">=") {
-    return resolveIdentifierValue => (
-      leftEvaluator(resolveIdentifierValue) >= rightEvaluator(resolveIdentifierValue) ? 1 : 0
+    return readTokenValue => (
+      leftEvaluator(readTokenValue) >= rightEvaluator(readTokenValue) ? 1 : 0
     )
   }
   if (root.operator === "<=") {
-    return resolveIdentifierValue => (
-      leftEvaluator(resolveIdentifierValue) <= rightEvaluator(resolveIdentifierValue) ? 1 : 0
+    return readTokenValue => (
+      leftEvaluator(readTokenValue) <= rightEvaluator(readTokenValue) ? 1 : 0
     )
   }
   if (root.operator === "==") {
-    return resolveIdentifierValue => (
-      leftEvaluator(resolveIdentifierValue) === rightEvaluator(resolveIdentifierValue) ? 1 : 0
+    return readTokenValue => (
+      leftEvaluator(readTokenValue) === rightEvaluator(readTokenValue) ? 1 : 0
     )
   }
-  return resolveIdentifierValue => (
-    leftEvaluator(resolveIdentifierValue) !== rightEvaluator(resolveIdentifierValue) ? 1 : 0
+  return readTokenValue => (
+    leftEvaluator(readTokenValue) !== rightEvaluator(readTokenValue) ? 1 : 0
   )
 }
 
@@ -812,7 +789,6 @@ export function compileDataGridFormulaFieldDefinition<TRow = unknown>(
     onFunctionOverride: options.onFunctionOverride,
   })
   validateFormulaFunctions(ast, functionRegistry)
-  const evaluator = compileFormulaAstEvaluator(ast, functionRegistry)
   const runtimeErrorPolicy: DataGridFormulaRuntimeErrorPolicy = options.runtimeErrorPolicy ?? "coerce-zero"
 
   const references: string[] = []
@@ -845,6 +821,12 @@ export function compileDataGridFormulaFieldDefinition<TRow = unknown>(
     deps.push(token)
   }
 
+  const evaluator = compileFormulaAstEvaluator(
+    ast,
+    functionRegistry,
+    identifier => dependencyTokenByIdentifier.get(identifier),
+  )
+
   return {
     name,
     field,
@@ -853,13 +835,7 @@ export function compileDataGridFormulaFieldDefinition<TRow = unknown>(
     deps,
     compute: (context) => {
       try {
-        return evaluator((identifier) => {
-          const token = dependencyTokenByIdentifier.get(identifier)
-          if (!token) {
-            return 0
-          }
-          return context.get(token)
-        })
+        return evaluator(token => context.get(token))
       } catch (error) {
         const runtimeError = normalizeFormulaRuntimeError(error, {
           formulaName: name,

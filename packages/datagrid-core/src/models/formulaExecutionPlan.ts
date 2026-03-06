@@ -50,6 +50,54 @@ function normalizeDependency(dependency: DataGridFormulaExecutionDependency): Da
   }
 }
 
+function splitFieldPathSegments(field: string): readonly string[] {
+  return field
+    .split(".")
+    .map(segment => segment.trim())
+    .filter(segment => segment.length > 0)
+}
+
+function collectFieldPathAncestors(field: string): readonly string[] {
+  const segments = splitFieldPathSegments(field)
+  if (segments.length === 0) {
+    return []
+  }
+  const ancestors: string[] = []
+  for (let index = 0; index < segments.length; index += 1) {
+    ancestors.push(segments.slice(0, index + 1).join("."))
+  }
+  return ancestors
+}
+
+function mergeValueSetIntoMap(
+  target: Map<string, Set<string>>,
+  key: string,
+  values: ReadonlySet<string>,
+): void {
+  if (values.size === 0) {
+    return
+  }
+  const bucket = target.get(key) ?? new Set<string>()
+  for (const value of values) {
+    bucket.add(value)
+  }
+  target.set(key, bucket)
+}
+
+function addMapValues(
+  target: Set<string>,
+  source: ReadonlyMap<string, ReadonlySet<string>>,
+  key: string,
+): void {
+  const values = source.get(key)
+  if (!values || values.size === 0) {
+    return
+  }
+  for (const value of values) {
+    target.add(value)
+  }
+}
+
 export function createDataGridFormulaExecutionPlan(
   input: readonly DataGridFormulaExecutionPlanNode[],
 ): DataGridFormulaExecutionPlan {
@@ -190,88 +238,75 @@ export function createDataGridFormulaExecutionPlan(
         const rightIndex = orderIndexByName.get(right) ?? Number.MAX_SAFE_INTEGER
         return leftIndex - rightIndex
       })
-    nodes.set(name, {
+    nodes.set(name, Object.freeze({
       name,
       field: node.field,
       level: levelByName.get(name) ?? 0,
       fieldDeps: fieldDepsByName.get(name) ?? Object.freeze([]),
       computedDeps: computedDepsByName.get(name) ?? Object.freeze([]),
       dependents: Object.freeze(sortedDependents),
-    })
+    }))
   }
 
-  const affectedByFieldClosureCache = new Map<string, ReadonlySet<string>>()
-  const affectedByComputedClosureCache = new Map<string, ReadonlySet<string>>()
-
-  const resolveAffectedByField = (field: string): ReadonlySet<string> => {
-    const normalizedField = field.trim()
-    if (normalizedField.length === 0) {
-      return new Set<string>()
+  const affectedByComputedClosure = new Map<string, ReadonlySet<string>>()
+  for (let index = order.length - 1; index >= 0; index -= 1) {
+    const name = order[index]
+    if (!name) {
+      continue
     }
-    const cached = affectedByFieldClosureCache.get(normalizedField)
-    if (cached) {
-      return cached
-    }
-    const affectedNames = new Set<string>()
-    const fieldQueue = [normalizedField]
-    const visitedFields = new Set<string>()
-
-    while (fieldQueue.length > 0) {
-      const field = fieldQueue.shift()
-      if (!field || visitedFields.has(field)) {
-        continue
-      }
-      visitedFields.add(field)
-      const dependents = dependentsByField.get(field)
-      if (!dependents || dependents.size === 0) {
-        continue
-      }
+    const closure = new Set<string>([name])
+    const dependents = dependentsByComputed.get(name)
+    if (dependents && dependents.size > 0) {
       for (const dependentName of dependents) {
-        if (affectedNames.has(dependentName)) {
+        const dependentClosure = affectedByComputedClosure.get(dependentName)
+        if (!dependentClosure) {
+          closure.add(dependentName)
           continue
         }
-        affectedNames.add(dependentName)
-        const dependentField = nodeByName.get(dependentName)?.field
-        if (dependentField) {
-          fieldQueue.push(dependentField)
+        for (const computedName of dependentClosure) {
+          closure.add(computedName)
         }
       }
     }
-    const frozen = Object.freeze(Array.from(affectedNames))
-    const asSet = new Set<string>(frozen)
-    affectedByFieldClosureCache.set(normalizedField, asSet)
-    return asSet
+    affectedByComputedClosure.set(name, closure)
   }
 
-  const resolveAffectedByComputed = (computed: string): ReadonlySet<string> => {
-    const normalizedComputed = computed.trim()
-    if (normalizedComputed.length === 0) {
-      return new Set<string>()
-    }
-    const cached = affectedByComputedClosureCache.get(normalizedComputed)
-    if (cached) {
-      return cached
-    }
-    const affectedNames = new Set<string>()
-    const computedQueue = [normalizedComputed]
-    while (computedQueue.length > 0) {
-      const computedName = computedQueue.shift()
-      if (!computedName || affectedNames.has(computedName) || !nodeByName.has(computedName)) {
+  const affectedByFieldClosure = new Map<string, ReadonlySet<string>>()
+  for (const [field, directDependents] of dependentsByField) {
+    const closure = new Set<string>()
+    for (const dependentName of directDependents) {
+      const dependentClosure = affectedByComputedClosure.get(dependentName)
+      if (!dependentClosure) {
+        closure.add(dependentName)
         continue
       }
-      affectedNames.add(computedName)
-      const dependents = dependentsByComputed.get(computedName)
-      if (!dependents || dependents.size === 0) {
-        continue
-      }
-      for (const dependentName of dependents) {
-        computedQueue.push(dependentName)
+      for (const computedName of dependentClosure) {
+        closure.add(computedName)
       }
     }
-    const frozen = Object.freeze(Array.from(affectedNames))
-    const asSet = new Set<string>(frozen)
-    affectedByComputedClosureCache.set(normalizedComputed, asSet)
-    return asSet
+    affectedByFieldClosure.set(field, closure)
+  }
+
+  const directByFieldPrefixClosure = new Map<string, Set<string>>()
+  for (const [field, directDependents] of dependentsByField) {
+    const ancestors = collectFieldPathAncestors(field)
+    if (ancestors.length === 0) {
+      continue
+    }
+    for (const ancestor of ancestors) {
+      mergeValueSetIntoMap(directByFieldPrefixClosure, ancestor, directDependents)
+    }
+  }
+
+  const affectedByFieldPrefixClosure = new Map<string, Set<string>>()
+  for (const [field, closure] of affectedByFieldClosure) {
+    const ancestors = collectFieldPathAncestors(field)
+    if (ancestors.length === 0) {
+      continue
+    }
+    for (const ancestor of ancestors) {
+      mergeValueSetIntoMap(affectedByFieldPrefixClosure, ancestor, closure)
+    }
   }
 
   const directByFields = (changedFields: ReadonlySet<string>): ReadonlySet<string> => {
@@ -281,12 +316,16 @@ export function createDataGridFormulaExecutionPlan(
       if (field.length === 0) {
         continue
       }
-      const directDependents = dependentsByField.get(field)
-      if (!directDependents || directDependents.size === 0) {
-        continue
-      }
-      for (const dependentName of directDependents) {
-        affectedNames.add(dependentName)
+      addMapValues(affectedNames, directByFieldPrefixClosure, field)
+      const ancestors = collectFieldPathAncestors(field)
+      for (const ancestor of ancestors) {
+        const directDependents = dependentsByField.get(ancestor)
+        if (!directDependents || directDependents.size === 0) {
+          continue
+        }
+        for (const dependentName of directDependents) {
+          affectedNames.add(dependentName)
+        }
       }
     }
     return affectedNames
@@ -294,10 +333,15 @@ export function createDataGridFormulaExecutionPlan(
 
   const affectedByFields = (changedFields: ReadonlySet<string>): ReadonlySet<string> => {
     const affectedNames = new Set<string>()
-    for (const field of changedFields) {
-      const affectedByField = resolveAffectedByField(field)
-      for (const name of affectedByField) {
-        affectedNames.add(name)
+    for (const rawField of changedFields) {
+      const field = rawField.trim()
+      if (field.length === 0) {
+        continue
+      }
+      addMapValues(affectedNames, affectedByFieldPrefixClosure, field)
+      const ancestors = collectFieldPathAncestors(field)
+      for (const ancestor of ancestors) {
+        addMapValues(affectedNames, affectedByFieldClosure, ancestor)
       }
     }
     return affectedNames
@@ -305,8 +349,15 @@ export function createDataGridFormulaExecutionPlan(
 
   const affectedByComputed = (changedComputed: ReadonlySet<string>): ReadonlySet<string> => {
     const affectedNames = new Set<string>()
-    for (const computed of changedComputed) {
-      const affectedByComputedValue = resolveAffectedByComputed(computed)
+    for (const rawComputed of changedComputed) {
+      const computed = rawComputed.trim()
+      if (computed.length === 0) {
+        continue
+      }
+      const affectedByComputedValue = affectedByComputedClosure.get(computed)
+      if (!affectedByComputedValue) {
+        continue
+      }
       for (const name of affectedByComputedValue) {
         affectedNames.add(name)
       }

@@ -145,6 +145,12 @@ import {
 
 const DATAGRID_FORMULA_RUNTIME_ERRORS_PREVIEW_LIMIT = 50
 const DATAGRID_COMPUTE_VECTOR_BATCH_SIZE = 1024
+const DATAGRID_COLUMN_CACHE_VERIFY_FLAG = "__AFFINO_DATAGRID_VERIFY_COLUMN_CACHE__"
+
+function isDataGridColumnCacheParityVerificationEnabled(): boolean {
+  const globalRecord = globalThis as Record<string, unknown>
+  return globalRecord[DATAGRID_COLUMN_CACHE_VERIFY_FLAG] === true
+}
 
 export interface CreateClientRowModelOptions<T> {
   rows?: readonly DataGridRowNodeInput<T>[]
@@ -164,6 +170,13 @@ export interface CreateClientRowModelOptions<T> {
   initialFormulaFunctionRegistry?: DataGridFormulaFunctionRegistry
   computeMode?: DataGridClientComputeMode
   computeTransport?: DataGridClientComputeTransport | null
+  /**
+   * Worker-mode patch routing threshold.
+   * Execution-plan recomputes with `changedRowCount <= threshold` stay local;
+   * larger patch plans dispatch through worker transport.
+   * Default: `64`.
+   */
+  workerPatchDispatchThreshold?: number | null
 }
 
 export interface DataGridClientRowReorderInput {
@@ -381,6 +394,7 @@ export function createClientRowModel<T>(
 
   let sourceRows: DataGridRowNode<T>[] = normalizeSourceRows(options.rows ?? [])
   let sourceRowIndexById = buildRowIdPositionIndex(sourceRows)
+  const sourceColumnValuesByField = new Map<string, unknown[]>()
   const runtimeStateStore = createClientRowRuntimeStateStore<T>()
   const runtimeState = runtimeStateStore.state
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? cloneSortModel(options.initialSortModel) : []
@@ -453,6 +467,7 @@ export function createClientRowModel<T>(
   interface ApplyComputedFieldsToSourceRowsOptions {
     rowIds?: ReadonlySet<DataGridRowId>
     changedFieldsByRowId?: ReadonlyMap<DataGridRowId, ReadonlySet<string>>
+    captureRowPatchMaps?: boolean
   }
   interface ApplyComputedFieldsToSourceRowsResult {
     changed: boolean
@@ -467,6 +482,18 @@ export function createClientRowModel<T>(
     runtimeErrorCount: number
     runtimeErrors: DataGridFormulaRuntimeError[]
   }
+  interface DataGridComputedColumnReadContext {
+    readFieldAtRow: (
+      field: string,
+      rowIndex: number,
+      rowNode: DataGridRowNode<T>,
+    ) => unknown
+  }
+  type DataGridComputedTokenReader = (
+    rowNode: DataGridRowNode<T>,
+    rowIndex?: number,
+    columnReadContext?: DataGridComputedColumnReadContext,
+  ) => unknown
   const computedFieldsByName = new Map<string, DataGridRegisteredComputedField>()
   const computedFieldNameByTargetField = new Map<string, string>()
   const formulaFieldsByName = new Map<string, DataGridRegisteredFormulaField>()
@@ -477,7 +504,7 @@ export function createClientRowModel<T>(
   let computedExecutionPlan: DataGridFormulaExecutionPlan = createDataGridFormulaExecutionPlan([])
   const computedAffectedPlanCache = new Map<string, readonly number[]>()
   const rowFieldReaderCache = new Map<string, (rowNode: DataGridRowNode<T>) => unknown>()
-  const computedTokenReaderCache = new Map<string, (rowNode: DataGridRowNode<T>) => unknown>()
+  const computedTokenReaderCache = new Map<string, DataGridComputedTokenReader>()
   let computedOrder: readonly string[] = []
   let computedEntryByIndex: readonly DataGridRegisteredComputedField[] = []
   let computedFieldReaderByIndex: readonly ((rowNode: DataGridRowNode<T>) => unknown)[] = []
@@ -493,6 +520,7 @@ export function createClientRowModel<T>(
   })
 
   const createEmptyFormulaComputeStageDiagnostics = (): DataGridFormulaComputeStageDiagnostics => ({
+    strategy: "row",
     rowsTouched: 0,
     changedRows: 0,
     fieldsTouched: [],
@@ -505,6 +533,7 @@ export function createClientRowModel<T>(
   const cloneFormulaComputeStageDiagnostics = (
     diagnostics: DataGridFormulaComputeStageDiagnostics,
   ): DataGridFormulaComputeStageDiagnostics => ({
+    strategy: diagnostics.strategy,
     rowsTouched: diagnostics.rowsTouched,
     changedRows: diagnostics.changedRows,
     fieldsTouched: [...diagnostics.fieldsTouched],
@@ -653,6 +682,48 @@ export function createClientRowModel<T>(
     }
     rowFieldReaderCache.set(field, nextReader)
     return nextReader
+  }
+
+  const clearSourceColumnValuesCache = (): void => {
+    sourceColumnValuesByField.clear()
+  }
+
+  const getSourceColumnValues = (fieldInput: string): unknown[] => {
+    const field = fieldInput.trim()
+    let values = sourceColumnValuesByField.get(field)
+    if (!values) {
+      values = []
+      sourceColumnValuesByField.set(field, values)
+    }
+    return values
+  }
+
+  const invalidateSourceColumnValuesByRowIds = (
+    rowIds: readonly DataGridRowId[],
+  ): void => {
+    if (sourceColumnValuesByField.size === 0 || rowIds.length === 0) {
+      return
+    }
+    const rowIndexes: number[] = []
+    for (const rowId of rowIds) {
+      const rowIndex = sourceRowIndexById.get(rowId)
+      if (typeof rowIndex !== "number" || rowIndex < 0) {
+        continue
+      }
+      rowIndexes.push(rowIndex)
+    }
+    if (rowIndexes.length === 0) {
+      return
+    }
+    if (rowIndexes.length >= Math.max(1, Math.trunc(sourceRows.length / 2))) {
+      clearSourceColumnValuesCache()
+      return
+    }
+    for (const values of sourceColumnValuesByField.values()) {
+      for (const rowIndex of rowIndexes) {
+        delete values[rowIndex]
+      }
+    }
   }
 
   const rebuildComputedOrder = (): void => {
@@ -967,6 +1038,8 @@ export function createClientRowModel<T>(
   const resolveComputedTokenValue = (
     rowNode: DataGridRowNode<T>,
     token: DataGridComputedDependencyToken,
+    rowIndex?: number,
+    columnReadContext?: DataGridComputedColumnReadContext,
   ): unknown => {
     if (typeof token !== "string") {
       return undefined
@@ -981,10 +1054,38 @@ export function createClientRowModel<T>(
         const computedDependency = computedFieldsByName.get(tokenInput)
         if (computedDependency) {
           const readComputedField = resolveRowFieldReader(computedDependency.field)
-          reader = (nextRowNode: DataGridRowNode<T>) => readComputedField(nextRowNode)
+          const dependencyField = computedDependency.field
+          reader = (
+            nextRowNode: DataGridRowNode<T>,
+            nextRowIndex?: number,
+            nextColumnReadContext?: DataGridComputedColumnReadContext,
+          ) => {
+            if (
+              nextColumnReadContext
+              && typeof nextRowIndex === "number"
+              && nextRowIndex >= 0
+            ) {
+              return nextColumnReadContext.readFieldAtRow(dependencyField, nextRowIndex, nextRowNode)
+            }
+            return readComputedField(nextRowNode)
+          }
         } else {
           const readField = resolveRowFieldReader(tokenInput)
-          reader = (nextRowNode: DataGridRowNode<T>) => readField(nextRowNode)
+          const field = tokenInput
+          reader = (
+            nextRowNode: DataGridRowNode<T>,
+            nextRowIndex?: number,
+            nextColumnReadContext?: DataGridComputedColumnReadContext,
+          ) => {
+            if (
+              nextColumnReadContext
+              && typeof nextRowIndex === "number"
+              && nextRowIndex >= 0
+            ) {
+              return nextColumnReadContext.readFieldAtRow(field, nextRowIndex, nextRowNode)
+            }
+            return readField(nextRowNode)
+          }
         }
       } else {
         const dependency = resolveComputedDependency(tokenInput)
@@ -996,16 +1097,44 @@ export function createClientRowModel<T>(
             reader = () => undefined
           } else {
             const readComputedField = resolveRowFieldReader(computedDependency.field)
-            reader = (nextRowNode: DataGridRowNode<T>) => readComputedField(nextRowNode)
+            const dependencyField = computedDependency.field
+            reader = (
+              nextRowNode: DataGridRowNode<T>,
+              nextRowIndex?: number,
+              nextColumnReadContext?: DataGridComputedColumnReadContext,
+            ) => {
+              if (
+                nextColumnReadContext
+                && typeof nextRowIndex === "number"
+                && nextRowIndex >= 0
+              ) {
+                return nextColumnReadContext.readFieldAtRow(dependencyField, nextRowIndex, nextRowNode)
+              }
+              return readComputedField(nextRowNode)
+            }
           }
         } else {
           const readField = resolveRowFieldReader(dependency.value)
-          reader = (nextRowNode: DataGridRowNode<T>) => readField(nextRowNode)
+          const field = dependency.value
+          reader = (
+            nextRowNode: DataGridRowNode<T>,
+            nextRowIndex?: number,
+            nextColumnReadContext?: DataGridComputedColumnReadContext,
+          ) => {
+            if (
+              nextColumnReadContext
+              && typeof nextRowIndex === "number"
+              && nextRowIndex >= 0
+            ) {
+              return nextColumnReadContext.readFieldAtRow(field, nextRowIndex, nextRowNode)
+            }
+            return readField(nextRowNode)
+          }
         }
       }
       computedTokenReaderCache.set(tokenInput, reader)
     }
-    return reader(rowNode)
+    return reader(rowNode, rowIndex, columnReadContext)
   }
 
   const applyComputedFieldsToSourceRows = (
@@ -1024,6 +1153,7 @@ export function createClientRowModel<T>(
     }
 
     const sourceRowsBaseline = sourceRows
+    const captureRowPatchMaps = options.captureRowPatchMaps === true
     const rowCount = sourceRowsBaseline.length
     const rowIds = options.rowIds
     const hasExplicitChangedFields = Boolean(options.changedFieldsByRowId)
@@ -1130,6 +1260,15 @@ export function createClientRowModel<T>(
       }
     }
 
+    const formulaComputeStrategy: "row" | "column-cache" = (
+      captureRowPatchMaps
+      || hasExplicitChangedFields
+      || selectedRowIndexes.length >= 64
+      || nodeCount >= 8
+    )
+      ? "column-cache"
+      : "row"
+
     if (!hasExplicitChangedFields) {
       for (let nodeIndex = 0; nodeIndex < nodeCount; nodeIndex += 1) {
         for (const rowIndex of selectedRowIndexes) {
@@ -1142,9 +1281,15 @@ export function createClientRowModel<T>(
     const changedRowMarks = new Uint8Array(rowCount)
     const touchedRowMarks = new Uint8Array(rowCount)
     let touchedRowsCount = 0
-    const computedPatchByRowIndex = new Array<Record<string, unknown> | undefined>(rowCount)
-    const previousRowByIndex = new Array<DataGridRowNode<T> | undefined>(rowCount)
-    const nextRowByIndex = new Array<DataGridRowNode<T> | undefined>(rowCount)
+    const computedPatchByRowIndex = captureRowPatchMaps
+      ? new Array<Record<string, unknown> | undefined>(rowCount)
+      : null
+    const previousRowByIndex = captureRowPatchMaps
+      ? new Array<DataGridRowNode<T> | undefined>(rowCount)
+      : null
+    const nextRowByIndex = captureRowPatchMaps
+      ? new Array<DataGridRowNode<T> | undefined>(rowCount)
+      : null
     const workingRowByIndex = new Array<DataGridRowNode<T> | undefined>(rowCount)
     const nodeVisitMarks = new Int32Array(rowCount)
     let nodeVisitEpoch = 0
@@ -1157,6 +1302,58 @@ export function createClientRowModel<T>(
     let computeEvaluationCount = 0
     let skippedByObjectIs = 0
     let activeComputeRowNode: DataGridRowNode<T> | null = null
+    let activeComputeRowIndex = -1
+    let effectiveRuntimeStrategy: "row" | "column-cache" = formulaComputeStrategy
+    let forceRowReadFallback = false
+    const verifyColumnCacheParity = (
+      formulaComputeStrategy === "column-cache"
+      && isDataGridColumnCacheParityVerificationEnabled()
+    )
+    const rowRuntimeColumnValuesByField = new Map<string, unknown[]>()
+    const getColumnValuesForField = (fieldInput: string): unknown[] => {
+      if (formulaComputeStrategy === "column-cache") {
+        return getSourceColumnValues(fieldInput)
+      }
+      const field = fieldInput.trim()
+      let values = rowRuntimeColumnValuesByField.get(field)
+      if (!values) {
+        values = []
+        rowRuntimeColumnValuesByField.set(field, values)
+      }
+      return values
+    }
+    const columnReadContext: DataGridComputedColumnReadContext = {
+      readFieldAtRow: (field, rowIndex, rowNode) => {
+        const values = getColumnValuesForField(field)
+        const readFieldDirect = resolveRowFieldReader(field)
+        if (forceRowReadFallback) {
+          const directValue = readFieldDirect(rowNode)
+          values[rowIndex] = directValue
+          return directValue
+        }
+        if (rowIndex in values) {
+          if (verifyColumnCacheParity) {
+            const directValue = readFieldDirect(rowNode)
+            if (!Object.is(directValue, values[rowIndex])) {
+              clearSourceColumnValuesCache()
+              forceRowReadFallback = true
+              effectiveRuntimeStrategy = "row"
+              const fallbackValues = getColumnValuesForField(field)
+              fallbackValues[rowIndex] = directValue
+              return directValue
+            }
+          }
+          return values[rowIndex]
+        }
+        const value = readFieldDirect(rowNode)
+        values[rowIndex] = value
+        return value
+      },
+    }
+    const writeFieldAtRow = (field: string, rowIndex: number, value: unknown): void => {
+      const values = getColumnValuesForField(field)
+      values[rowIndex] = value
+    }
     const nextNodeVisitEpoch = (): number => {
       nodeVisitEpoch += 1
       if (nodeVisitEpoch >= 2_000_000_000) {
@@ -1173,7 +1370,12 @@ export function createClientRowModel<T>(
         if (!activeComputeRowNode) {
           return undefined
         }
-        return resolveComputedTokenValue(activeComputeRowNode, token)
+        return resolveComputedTokenValue(
+          activeComputeRowNode,
+          token,
+          activeComputeRowIndex,
+          columnReadContext,
+        )
       },
     } satisfies DataGridComputedFieldComputeContext<T>
     const previousFormulaRuntimeErrorsCollector = activeFormulaRuntimeErrorsCollector
@@ -1234,6 +1436,7 @@ export function createClientRowModel<T>(
               }
               computeEvaluationCount += 1
               activeComputeRowNode = workingRowNode
+              activeComputeRowIndex = rowIndex
               reusableComputeContext.row = workingRowNode.row
               reusableComputeContext.rowId = workingRowNode.rowId
               reusableComputeContext.sourceIndex = workingRowNode.sourceIndex
@@ -1242,20 +1445,30 @@ export function createClientRowModel<T>(
                 nextValue = computed.compute(reusableComputeContext)
               } finally {
                 activeComputeRowNode = null
+                activeComputeRowIndex = -1
               }
-              const previousValue = readComputedField(workingRowNode)
+              const previousColumnValues = getColumnValuesForField(computed.field)
+              const previousValue = rowIndex in previousColumnValues
+                ? previousColumnValues[rowIndex]
+                : (() => {
+                    const value = readComputedField(workingRowNode)
+                    previousColumnValues[rowIndex] = value
+                    return value
+                  })()
               if (Object.is(nextValue, previousValue)) {
                 skippedByObjectIs += 1
                 continue
               }
               touchedComputedFields.add(computed.field)
 
-              let rowPatch = computedPatchByRowIndex[rowIndex]
-              if (!rowPatch) {
-                rowPatch = {}
-                computedPatchByRowIndex[rowIndex] = rowPatch
+              if (computedPatchByRowIndex) {
+                let rowPatch = computedPatchByRowIndex[rowIndex]
+                if (!rowPatch) {
+                  rowPatch = {}
+                  computedPatchByRowIndex[rowIndex] = rowPatch
+                }
+                rowPatch[computed.field] = nextValue
               }
-              rowPatch[computed.field] = nextValue
 
               let levelPatch = levelPatchByRowIndex[rowIndex]
               if (!levelPatch) {
@@ -1264,6 +1477,7 @@ export function createClientRowModel<T>(
                 levelPatchedRowIndexes.push(rowIndex)
               }
               levelPatch[computed.field] = nextValue
+              writeFieldAtRow(computed.field, rowIndex, nextValue)
 
               for (const dependentIndex of dependentIndexes) {
                 let dependentDirtyRows = nextDirtyRowIndexesByNode[dependentIndex]
@@ -1311,10 +1525,12 @@ export function createClientRowModel<T>(
               nextSourceRows = sourceRowsBaseline.slice()
             }
             nextSourceRows[rowIndex] = nextRowNode
-            if (!previousRowByIndex[rowIndex]) {
-              previousRowByIndex[rowIndex] = sourceRow
+            if (previousRowByIndex && nextRowByIndex) {
+              if (!previousRowByIndex[rowIndex]) {
+                previousRowByIndex[rowIndex] = sourceRow
+              }
+              nextRowByIndex[rowIndex] = nextRowNode
             }
-            nextRowByIndex[rowIndex] = nextRowNode
             changedRowMarks[rowIndex] = 1
           }
         }
@@ -1357,23 +1573,25 @@ export function createClientRowModel<T>(
     const previousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
     const nextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
 
-    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-      const rowNode = sourceRowsBaseline[rowIndex]
-      if (!rowNode) {
-        continue
-      }
-      const rowId = rowNode.rowId
-      const computedPatch = computedPatchByRowIndex[rowIndex]
-      if (computedPatch) {
-        computedUpdatesByRowId.set(rowId, computedPatch as Partial<T>)
-      }
-      const previousRow = previousRowByIndex[rowIndex]
-      if (previousRow) {
-        previousRowsById.set(rowId, previousRow)
-      }
-      const nextRow = nextRowByIndex[rowIndex]
-      if (nextRow) {
-        nextRowsById.set(rowId, nextRow)
+    if (captureRowPatchMaps && computedPatchByRowIndex && previousRowByIndex && nextRowByIndex) {
+      for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+        const rowNode = sourceRowsBaseline[rowIndex]
+        if (!rowNode) {
+          continue
+        }
+        const rowId = rowNode.rowId
+        const computedPatch = computedPatchByRowIndex[rowIndex]
+        if (computedPatch) {
+          computedUpdatesByRowId.set(rowId, computedPatch as Partial<T>)
+        }
+        const previousRow = previousRowByIndex[rowIndex]
+        if (previousRow) {
+          previousRowsById.set(rowId, previousRow)
+        }
+        const nextRow = nextRowByIndex[rowIndex]
+        if (nextRow) {
+          nextRowsById.set(rowId, nextRow)
+        }
       }
     }
 
@@ -1391,6 +1609,7 @@ export function createClientRowModel<T>(
         runtimeErrors: formulaRuntimeErrorsCollector.runtimeErrors,
       },
       computeStageDiagnostics: {
+        strategy: effectiveRuntimeStrategy,
         rowsTouched: touchedRowsCount,
         changedRows: changedRowIds.length,
         fieldsTouched: Array.from(touchedComputedFields).sort((left, right) => left.localeCompare(right)),
@@ -1822,10 +2041,12 @@ export function createClientRowModel<T>(
     projectionHandlersRuntime.projectionStageHandlers,
   )
   const computeTransport = options.computeTransport ?? null
+  const workerPatchDispatchThreshold = options.workerPatchDispatchThreshold ?? null
   let computeMode: DataGridClientComputeMode = options.computeMode ?? "sync"
   let computeRuntime = createClientRowComputeRuntime({
     mode: computeMode,
     transport: computeTransport,
+    workerPatchDispatchThreshold,
     orchestrator: projectionOrchestrator,
   })
 
@@ -1833,6 +2054,7 @@ export function createClientRowModel<T>(
     runtimeState,
     runtimeStateStore,
     getStaleStages: () => computeRuntime.getStaleStages(),
+    getFormulaComputeStageDiagnostics: () => getFormulaComputeStageDiagnosticsSnapshot(),
     getViewportRange: () => viewportRange,
     setViewportRange: (range) => {
       viewportRange = range
@@ -1981,6 +2203,7 @@ export function createClientRowModel<T>(
     setSourceRows: (rows) => {
       sourceRows = rows
       sourceRowIndexById = buildRowIdPositionIndex(sourceRows)
+      clearSourceColumnValuesCache()
     },
     normalizeSourceRows,
     reindexSourceRows,
@@ -2015,6 +2238,7 @@ export function createClientRowModel<T>(
       runtimeStateStore.setProjectionInvalidation(reasons)
     },
     applyComputedFieldsToPatchResult: (patchResult) => {
+      invalidateSourceColumnValuesByRowIds(patchResult.changedRowIds)
       const changedFieldsByRowId = new Map<DataGridRowId, ReadonlySet<string>>()
       for (const [rowId, patch] of patchResult.changedUpdatesById.entries()) {
         const fields = new Set<string>()
@@ -2028,6 +2252,7 @@ export function createClientRowModel<T>(
       const computedResult = applyComputedFieldsToSourceRows({
         rowIds: new Set<DataGridRowId>(patchResult.changedRowIds),
         changedFieldsByRowId,
+        captureRowPatchMaps: true,
       })
       commitFormulaDiagnostics(computedResult.formulaDiagnostics)
       commitFormulaComputeStageDiagnostics(computedResult.computeStageDiagnostics)
@@ -2143,8 +2368,8 @@ export function createClientRowModel<T>(
       return true
     },
     getStaleStages: () => computeRuntime.getStaleStages(),
-    recomputeWithExecutionPlan: (executionPlan) => {
-      computeRuntime.recomputeWithExecutionPlan(executionPlan)
+    recomputeWithExecutionPlan: (executionPlan, requestOptions) => {
+      computeRuntime.recomputeWithExecutionPlan(executionPlan, requestOptions)
     },
     getFilterModel: () => filterModel,
     getSortModel: () => sortModel,
@@ -2467,6 +2692,7 @@ export function createClientRowModel<T>(
       computeRuntime = createClientRowComputeRuntime({
         mode: computeMode,
         transport: computeTransport,
+        workerPatchDispatchThreshold,
         orchestrator: projectionOrchestrator,
       })
       previousRuntime.dispose()
@@ -2481,6 +2707,7 @@ export function createClientRowModel<T>(
       }
       computeRuntime.dispose()
       sourceRows = []
+      clearSourceColumnValuesCache()
       runtimeState.rows = []
       runtimeState.filteredRowsProjection = []
       runtimeState.sortedRowsProjection = []

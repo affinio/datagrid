@@ -71,6 +71,47 @@ describe("formulaExecutionPlan", () => {
     expect(Array.from(plan.directByFields(new Set(["taxRate"])))).toEqual(["tax"])
   })
 
+  it("resolves nested field path ancestors and descendants", () => {
+    const plan = createDataGridFormulaExecutionPlan([
+      {
+        name: "total",
+        field: "total",
+        deps: [
+          { domain: "field", value: "order.unitPrice" },
+          { domain: "field", value: "order.items.0.tax" },
+        ],
+      },
+      {
+        name: "gross",
+        field: "gross",
+        deps: [{ domain: "computed", value: "total" }],
+      },
+      {
+        name: "orderTouch",
+        field: "orderTouch",
+        deps: [{ domain: "field", value: "order" }],
+      },
+    ])
+
+    expect(Array.from(plan.directByFields(new Set(["order"]))).sort()).toEqual([
+      "orderTouch",
+      "total",
+    ])
+    expect(Array.from(plan.affectedByFields(new Set(["order"]))).sort()).toEqual([
+      "gross",
+      "orderTouch",
+      "total",
+    ])
+    expect(Array.from(plan.directByFields(new Set(["order.items"]))).sort()).toEqual([
+      "orderTouch",
+      "total",
+    ])
+    expect(Array.from(plan.directByFields(new Set(["order.unitPrice"]))).sort()).toEqual([
+      "orderTouch",
+      "total",
+    ])
+  })
+
   it("resolves affected nodes by computed changes", () => {
     const plan = createDataGridFormulaExecutionPlan([
       {

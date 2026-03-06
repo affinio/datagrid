@@ -2,6 +2,7 @@ import type {
   DataGridAggregationModel,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
+  DataGridFormulaComputeStageDiagnostics,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
   DataGridFormulaExecutionPlanSnapshot,
@@ -20,6 +21,7 @@ import type {
 } from "@affino/datagrid-core"
 
 export const DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION = 1 as const
+export const DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION = 2 as const
 export const DATAGRID_WORKER_ROW_MODEL_PROTOCOL_CHANNEL = "affino.datagrid.row-model"
 
 export interface DataGridWorkerRowModelProtocolHeader {
@@ -64,10 +66,12 @@ export interface DataGridWorkerRowModelCommandMessage<T = unknown> extends DataG
 }
 
 export interface DataGridWorkerRowModelUpdatePayload<T = unknown> {
+  schemaVersion?: number
   snapshot: DataGridRowModelSnapshot<T>
   aggregationModel: DataGridAggregationModel<T> | null
   formulaFields?: readonly DataGridFormulaFieldSnapshot[]
   formulaExecutionPlan?: DataGridFormulaExecutionPlanSnapshot | null
+  formulaComputeStageDiagnostics?: DataGridFormulaComputeStageDiagnostics | null
   visibleRows: readonly DataGridRowNode<T>[]
   visibleRange: DataGridViewportRange
 }
@@ -121,13 +125,22 @@ export function createDataGridWorkerRowModelUpdateMessage<T = unknown>(
   payload: DataGridWorkerRowModelUpdatePayload<T>,
   channel?: string | null,
 ): DataGridWorkerRowModelUpdateMessage<T> {
+  const normalizedPayload = (
+    typeof payload.schemaVersion === "number"
+    && Number.isFinite(payload.schemaVersion)
+  )
+    ? payload
+    : {
+        ...payload,
+        schemaVersion: DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
+      }
   return {
     kind: "row-model-update",
     version: DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION,
     channel: normalizeChannel(channel),
     requestId,
     timestamp: Date.now(),
-    payload,
+    payload: normalizedPayload,
   }
 }
 
@@ -155,10 +168,15 @@ export function isDataGridWorkerRowModelUpdateMessage<T = unknown>(
     return false
   }
   const candidate = value as Partial<DataGridWorkerRowModelUpdateMessage<T>>
+  const payloadSchemaVersion = (candidate.payload as { schemaVersion?: unknown } | undefined)?.schemaVersion
   return (
     candidate.kind === "row-model-update" &&
     candidate.channel === normalizeChannel(channel) &&
     candidate.payload != null &&
+    (
+      payloadSchemaVersion == null
+      || (typeof payloadSchemaVersion === "number" && Number.isFinite(payloadSchemaVersion))
+    ) &&
     typeof (candidate.payload as { snapshot?: unknown }).snapshot === "object"
   )
 }

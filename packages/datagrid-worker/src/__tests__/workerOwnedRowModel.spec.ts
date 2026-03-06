@@ -6,6 +6,8 @@ import {
   type DataGridRowNodeInput,
 } from "@affino/datagrid-core"
 import {
+  DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
+  DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION,
   createDataGridWorkerOwnedRowModel,
   createDataGridWorkerOwnedRowModelHost,
   createDataGridWorkerRowModelUpdateMessage,
@@ -66,6 +68,23 @@ function countRowModelCommands(endpoint: MemoryMessageEndpoint, type: string): n
     }
     return message.payload.type === type
   }).length
+}
+
+function getRowModelCommandsByType<TType extends DataGridWorkerRowModelCommand["type"]>(
+  endpoint: MemoryMessageEndpoint,
+  type: TType,
+): Array<Extract<DataGridWorkerRowModelCommand, { type: TType }>> {
+  const commands: Array<Extract<DataGridWorkerRowModelCommand, { type: TType }>> = []
+  for (const message of endpoint.receivedMessages) {
+    if (!isDataGridWorkerRowModelCommandMessage(message)) {
+      continue
+    }
+    if (message.payload.type !== type) {
+      continue
+    }
+    commands.push(message.payload as Extract<DataGridWorkerRowModelCommand, { type: TType }>)
+  }
+  return commands
 }
 
 function getViewportCommandScopes(endpoint: MemoryMessageEndpoint): string[] {
@@ -149,6 +168,19 @@ function createSnapshot(
 }
 
 describe("worker-owned row model", () => {
+  it("stamps schema version on row-model update payloads", () => {
+    const message = createDataGridWorkerRowModelUpdateMessage<BenchRow>(
+      1,
+      {
+        snapshot: createSnapshot(0, { start: 0, end: 0 }),
+        aggregationModel: null,
+        visibleRows: [],
+        visibleRange: { start: 0, end: 0 },
+      },
+    )
+    expect(message.payload.schemaVersion).toBe(DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION)
+  })
+
   it("mirrors snapshot + visible rows from worker-owned host", async () => {
     const rows = buildRows(60)
     const channel = createMessageChannelPair()
@@ -237,6 +269,102 @@ describe("worker-owned row model", () => {
     const afterViewportCommands = countRowModelCommands(channel.worker, "set-viewport-range")
     expect(afterViewportCommands - beforeViewportCommands).toBe(1)
     expect(mirror.getSnapshot().viewportRange).toEqual({ start: 20, end: 30 })
+
+    mirror.dispose()
+    host.dispose()
+  })
+
+  it("coalesces high-frequency patch commands and merges payload/options", async () => {
+    const rows = buildRows(20)
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows,
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+    await flushMessages()
+    mirror.setViewportRange({ start: 0, end: 1 })
+    await flushMessages()
+
+    const beforePatchCommands = countRowModelCommands(channel.worker, "patch-rows")
+    mirror.patchRows(
+      [{ rowId: 1, data: { revenue: 150 } }],
+      { recomputeSort: true, recomputeFilter: false, recomputeGroup: false, emit: false },
+    )
+    mirror.patchRows(
+      [
+        { rowId: 1, data: { qty: 3 } },
+        { rowId: 2, data: { revenue: 250 } },
+      ],
+      { recomputeFilter: true, recomputeGroup: true },
+    )
+    await flushMessages()
+
+    const afterPatchCommands = countRowModelCommands(channel.worker, "patch-rows")
+    expect(afterPatchCommands - beforePatchCommands).toBe(1)
+
+    const patchCommands = getRowModelCommandsByType(channel.worker, "patch-rows")
+    const mergedPatchCommand = patchCommands.at(-1)
+    expect(mergedPatchCommand?.updates).toEqual([
+      { rowId: 1, data: { revenue: 150, qty: 3 } },
+      { rowId: 2, data: { revenue: 250 } },
+    ])
+    expect(mergedPatchCommand?.options).toEqual({
+      recomputeSort: true,
+      recomputeFilter: true,
+      recomputeGroup: true,
+    })
+    expect((mirror.getRow(0)?.row as { revenue?: number })?.revenue).toBe(150)
+    expect((mirror.getRow(1)?.row as { revenue?: number })?.revenue).toBe(250)
+    expect((mirror.getRow(0)?.row as { qty?: number })?.qty).toBe(3)
+    expect(mirror.getWorkerProtocolDiagnostics()).toMatchObject({
+      commandsCoalesced: 1,
+      patchCommandsCoalesced: 1,
+      patchUpdatesReceived: 3,
+      patchUpdatesDispatched: 2,
+      patchUpdatesMergedAway: 1,
+    })
+
+    mirror.dispose()
+    host.dispose()
+  })
+
+  it("flushes large patch bursts immediately", async () => {
+    const rows = buildRows(2000)
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows,
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+    await flushMessages()
+    mirror.setViewportRange({ start: 0, end: 10 })
+    await flushMessages()
+
+    const beforePatchCommands = countRowModelCommands(channel.worker, "patch-rows")
+    const updates = Array.from({ length: 1100 }, (_, index) => ({
+      rowId: index + 1,
+      data: { revenue: 500 + index },
+    }))
+    mirror.patchRows(updates, { recomputeSort: true })
+
+    expect(mirror.getWorkerProtocolDiagnostics()).toMatchObject({
+      patchUpdatesReceived: 1100,
+      patchUpdatesDispatched: 1100,
+      immediateFlushCount: 1,
+    })
+    await flushMessages()
+
+    const afterPatchCommands = countRowModelCommands(channel.worker, "patch-rows")
+    expect(afterPatchCommands - beforePatchCommands).toBe(1)
 
     mirror.dispose()
     host.dispose()
@@ -351,6 +479,49 @@ describe("worker-owned row model", () => {
     expect(protocolDiagnostics.updatesReceived).toBe(2)
     expect(protocolDiagnostics.updatesApplied).toBe(1)
     expect(protocolDiagnostics.updatesDroppedStale).toBe(1)
+    mirror.dispose()
+  })
+
+  it("tracks payload schema mismatches in worker protocol diagnostics", async () => {
+    const channel = createMessageChannelPair()
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+      requestInitialSync: false,
+    })
+
+    channel.worker.postMessage(createDataGridWorkerRowModelUpdateMessage<BenchRow>(
+      1,
+      {
+        schemaVersion: 1,
+        snapshot: createSnapshot(2, { start: 0, end: 0 }),
+        aggregationModel: null,
+        visibleRows: [],
+        visibleRange: { start: 0, end: 0 },
+      },
+    ))
+    channel.worker.postMessage(createDataGridWorkerRowModelUpdateMessage<BenchRow>(
+      2,
+      {
+        snapshot: createSnapshot(3, { start: 0, end: 0 }),
+        aggregationModel: null,
+        visibleRows: [],
+        visibleRange: { start: 0, end: 0 },
+      },
+    ))
+    await flushMessages()
+
+    const protocolDiagnostics = mirror.getWorkerProtocolDiagnostics()
+    expect(protocolDiagnostics.protocolVersion).toBe(DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION)
+    expect(protocolDiagnostics.expectedPayloadSchemaVersion).toBe(
+      DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
+    )
+    expect(protocolDiagnostics.lastPayloadSchemaVersion).toBe(
+      DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
+    )
+    expect(protocolDiagnostics.payloadSchemaMismatches).toBe(1)
+    expect(protocolDiagnostics.updatesApplied).toBe(2)
+
     mirror.dispose()
   })
 
@@ -512,6 +683,16 @@ describe("worker-owned row model", () => {
     await flushMessages()
 
     expect((mirror.getRow(0)?.row as { total?: number })?.total).toBe(30)
+    expect(mirror.getFormulaComputeStageDiagnostics()).toEqual({
+      strategy: "column-cache",
+      rowsTouched: 1,
+      changedRows: 1,
+      fieldsTouched: ["total"],
+      evaluations: 1,
+      skippedByObjectIs: 0,
+      dirtyRows: 1,
+      dirtyNodes: ["total"],
+    })
 
     mirror.dispose()
     host.dispose()

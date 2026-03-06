@@ -9,6 +9,10 @@ import type { DataGridPatchProjectionExecutionPlan } from "./rowPatchAnalyzer.js
 export type DataGridClientComputeMode = "sync" | "worker"
 export type DataGridClientComputeStagePlan = DataGridClientProjectionStagePlan
 
+export interface DataGridClientComputeExecutionPlanRequestOptions {
+  patchChangedRowCount?: number
+}
+
 export type DataGridClientComputeRequest =
   | {
     kind: "recompute-from-stage"
@@ -22,6 +26,7 @@ export type DataGridClientComputeRequest =
   | {
     kind: "recompute-with-execution-plan"
     plan: DataGridPatchProjectionExecutionPlan
+    options?: DataGridClientComputeExecutionPlanRequestOptions
   }
   | {
     kind: "refresh"
@@ -51,6 +56,7 @@ export interface DataGridClientComputeRuntime {
   ) => void
   recomputeWithExecutionPlan: (
     plan: DataGridPatchProjectionExecutionPlan,
+    options?: DataGridClientComputeExecutionPlanRequestOptions,
   ) => void
   recomputeWithStagePlan: (
     plan: DataGridClientComputeStagePlan,
@@ -65,6 +71,7 @@ export interface CreateClientRowComputeRuntimeOptions<T> {
   mode?: DataGridClientComputeMode
   orchestrator: DataGridClientRowProjectionOrchestrator<T>
   transport?: DataGridClientComputeTransport | null
+  workerPatchDispatchThreshold?: number | null
 }
 
 function createLoopbackComputeTransport<T>(
@@ -106,6 +113,13 @@ export function createClientRowComputeRuntime<T>(
 
   let dispatchCount = 0
   let fallbackCount = 0
+  const workerPatchDispatchThreshold = (
+    typeof options.workerPatchDispatchThreshold === "number"
+    && Number.isFinite(options.workerPatchDispatchThreshold)
+    && options.workerPatchDispatchThreshold > 0
+  )
+    ? Math.max(1, Math.trunc(options.workerPatchDispatchThreshold))
+    : 64
 
   const runSynchronous = (request: DataGridClientComputeRequest): void => {
     if (request.kind === "recompute-from-stage") {
@@ -124,7 +138,13 @@ export function createClientRowComputeRuntime<T>(
   }
 
   const run = (request: DataGridClientComputeRequest): void => {
-    if (!transport) {
+    const shouldBypassTransport = (
+      request.kind === "recompute-with-execution-plan"
+      && typeof request.options?.patchChangedRowCount === "number"
+      && request.options.patchChangedRowCount >= 0
+      && request.options.patchChangedRowCount <= workerPatchDispatchThreshold
+    )
+    if (!transport || shouldBypassTransport) {
       runSynchronous(request)
       return
     }
@@ -148,10 +168,14 @@ export function createClientRowComputeRuntime<T>(
         options,
       })
     },
-    recomputeWithExecutionPlan: (plan: DataGridPatchProjectionExecutionPlan): void => {
+    recomputeWithExecutionPlan: (
+      plan: DataGridPatchProjectionExecutionPlan,
+      requestOptions?: DataGridClientComputeExecutionPlanRequestOptions,
+    ): void => {
       run({
         kind: "recompute-with-execution-plan",
         plan,
+        options: requestOptions,
       })
     },
     recomputeWithStagePlan: (plan: DataGridClientComputeStagePlan): void => {

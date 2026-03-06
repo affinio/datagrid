@@ -368,6 +368,8 @@ export type DataGridProjectionStage =
   | "pivot"
   | "aggregate"
   | "paginate"
+  // `visible` is projection output materialization.
+  // Viewport windowing is a separate runtime/UI concern.
   | "visible"
 
 export type DataGridProjectionInvalidationReason =
@@ -447,6 +449,7 @@ export interface DataGridProjectionFormulaDiagnostics {
 }
 
 export interface DataGridFormulaComputeStageDiagnostics {
+  strategy?: "row" | "column-cache"
   rowsTouched: number
   changedRows: number
   fieldsTouched: readonly string[]
@@ -467,6 +470,7 @@ export interface DataGridProjectionDiagnostics {
   lastRecomputedStages?: readonly DataGridProjectionStage[]
   lastBlockedStages?: readonly DataGridProjectionStage[]
   formula?: DataGridProjectionFormulaDiagnostics
+  computeStage?: DataGridFormulaComputeStageDiagnostics
 }
 
 export interface DataGridTreeDataDiagnostics {

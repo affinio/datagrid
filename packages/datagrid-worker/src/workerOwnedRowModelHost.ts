@@ -9,6 +9,7 @@ import type {
   DataGridWorkerMessageTarget,
 } from "./postMessageTransport.js"
 import {
+  DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
   createDataGridWorkerRowModelUpdateMessage,
   isDataGridWorkerRowModelCommandMessage,
   type DataGridWorkerRowModelCommand,
@@ -129,10 +130,12 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
     }
     const visibleRows = model.getRowsInRange(visibleRange)
     const payload: DataGridWorkerRowModelUpdatePayload<T> = {
+      schemaVersion: DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
       snapshot,
       aggregationModel: model.getAggregationModel(),
       formulaFields: model.getFormulaFields?.() ?? [],
       formulaExecutionPlan: model.getFormulaExecutionPlan?.() ?? null,
+      formulaComputeStageDiagnostics: model.getFormulaComputeStageDiagnostics?.() ?? null,
       visibleRows,
       visibleRange,
     }

@@ -118,6 +118,7 @@ function cloneFormulaComputeStageDiagnostics(
   diagnostics: DataGridFormulaComputeStageDiagnostics,
 ): DataGridFormulaComputeStageDiagnostics {
   return {
+    strategy: diagnostics.strategy,
     rowsTouched: diagnostics.rowsTouched,
     changedRows: diagnostics.changedRows,
     fieldsTouched: [...diagnostics.fieldsTouched],

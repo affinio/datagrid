@@ -1,5 +1,6 @@
 import type {
   DataGridFilterSnapshot,
+  DataGridFormulaComputeStageDiagnostics,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
   DataGridPaginationSnapshot,
@@ -18,6 +19,7 @@ export interface ClientRowSnapshotRuntimeContext<T> {
   runtimeState: DataGridClientRowRuntimeState<T>
   runtimeStateStore: Pick<DataGridClientRowRuntimeStateStore<T>, "getProjectionDiagnostics">
   getStaleStages: () => readonly DataGridProjectionStage[]
+  getFormulaComputeStageDiagnostics?: () => DataGridFormulaComputeStageDiagnostics | null
 
   getViewportRange: () => DataGridViewportRange
   setViewportRange: (range: DataGridViewportRange) => void
@@ -53,8 +55,29 @@ export interface ClientRowSnapshotRuntime<T> {
 export function createClientRowSnapshotRuntime<T>(
   context: ClientRowSnapshotRuntimeContext<T>,
 ): ClientRowSnapshotRuntime<T> {
+  const cloneFormulaComputeStageDiagnostics = (
+    diagnostics: DataGridFormulaComputeStageDiagnostics,
+  ): DataGridFormulaComputeStageDiagnostics => ({
+    strategy: diagnostics.strategy,
+    rowsTouched: diagnostics.rowsTouched,
+    changedRows: diagnostics.changedRows,
+    fieldsTouched: [...diagnostics.fieldsTouched],
+    evaluations: diagnostics.evaluations,
+    skippedByObjectIs: diagnostics.skippedByObjectIs,
+    dirtyRows: diagnostics.dirtyRows,
+    dirtyNodes: [...diagnostics.dirtyNodes],
+  })
+
   const getProjectionDiagnostics = (): DataGridProjectionDiagnostics => {
-    return context.runtimeStateStore.getProjectionDiagnostics(context.getStaleStages)
+    const base = context.runtimeStateStore.getProjectionDiagnostics(context.getStaleStages)
+    const computeStage = context.getFormulaComputeStageDiagnostics?.() ?? null
+    if (!computeStage) {
+      return base
+    }
+    return {
+      ...base,
+      computeStage: cloneFormulaComputeStageDiagnostics(computeStage),
+    }
   }
 
   const getSnapshot = (): DataGridRowModelSnapshot<T> => {

@@ -25,6 +25,7 @@ import {
   type DataGridPatchChangeSet,
   type DataGridPatchProjectionExecutionPlan,
 } from "./rowPatchAnalyzer.js"
+import type { DataGridClientComputeExecutionPlanRequestOptions } from "./clientRowComputeRuntime.js"
 import { hasActiveFilterModel } from "./clientRowProjectionPrimitives.js"
 
 export interface DataGridClientRowPatchLike<T = unknown> {
@@ -169,7 +170,10 @@ export interface RunClientRowPatchProjectionInput<T> {
   evictSortValueCacheRows: (rowIds: readonly DataGridRowId[]) => void
   invalidateTreeProjectionCaches: () => void
   patchTreeProjectionCacheRowsByIdentity: (changedRowIds: readonly DataGridRowId[]) => void
-  recomputeWithExecutionPlan: (plan: DataGridPatchProjectionExecutionPlan) => void
+  recomputeWithExecutionPlan: (
+    plan: DataGridPatchProjectionExecutionPlan,
+    options?: DataGridClientComputeExecutionPlanRequestOptions,
+  ) => void
 }
 
 export interface RunClientRowPatchProjectionResult<T> {
@@ -273,7 +277,9 @@ export function runClientRowPatchProjection<T>(
     allStages: input.allStages,
     expandStages: input.expandStages,
   })
-  input.recomputeWithExecutionPlan(projectionExecutionPlan)
+  input.recomputeWithExecutionPlan(projectionExecutionPlan, {
+    patchChangedRowCount: input.changedRowIds.length,
+  })
 
   return {
     pendingPivotValuePatch,

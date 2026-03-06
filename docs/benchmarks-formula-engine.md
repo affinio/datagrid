@@ -44,11 +44,26 @@ Run with CI/perf gates:
 pnpm run bench:datagrid:formula-engine:assert
 ```
 
+Run worker/main-thread compare benchmark:
+
+```bash
+pnpm run bench:datagrid:formula-engine:worker
+```
+
+Run worker/main-thread compare with assert profile:
+
+```bash
+pnpm run bench:datagrid:formula-engine:worker:assert
+```
+
 Scenario-specific gates are supported via env keys:
 
 - `PERF_BUDGET_MAX_FULL_RECOMPUTE_P95_MS_<SCENARIO>`
 - `PERF_BUDGET_MAX_PATCH_P95_MS_<SCENARIO>`
 - `PERF_BUDGET_INCREMENTAL_PATCH_SIZE` (patch size used for incremental throughput + patch p95 gate)
+- `PERF_BUDGET_MIN_WORKER_SPEEDUP_FULL` (optional worker speedup gate for full refresh)
+- `PERF_BUDGET_MIN_WORKER_SPEEDUP_PATCH` (optional worker speedup gate for incremental patch)
+- `PERF_BUDGET_WORKER_SPEEDUP_PATCH_SIZE` (patch size used for worker speedup comparison)
 
 ## Output
 
@@ -56,5 +71,10 @@ By default:
 
 - JSON: `artifacts/performance/bench-datagrid-formula-engine.json`
 - Markdown: `artifacts/performance/bench-datagrid-formula-engine.md`
+
+Worker compare outputs:
+
+- JSON: `artifacts/performance/bench-datagrid-formula-engine-worker.json`
+- Markdown: `artifacts/performance/bench-datagrid-formula-engine-worker.md`
 
 Use the markdown report as the source table for README/perf tracking.
