@@ -145,6 +145,80 @@ function stats(values) {
   }
 }
 
+function cloneComputeDiagnostics(diagnostics) {
+  if (!diagnostics || typeof diagnostics !== "object") {
+    return null
+  }
+  return {
+    strategy: diagnostics.strategy ?? null,
+    rowsTouched: Number.isFinite(diagnostics.rowsTouched) ? Number(diagnostics.rowsTouched) : 0,
+    changedRows: Number.isFinite(diagnostics.changedRows) ? Number(diagnostics.changedRows) : 0,
+    evaluations: Number.isFinite(diagnostics.evaluations) ? Number(diagnostics.evaluations) : 0,
+    skippedByObjectIs: Number.isFinite(diagnostics.skippedByObjectIs)
+      ? Number(diagnostics.skippedByObjectIs)
+      : 0,
+    dirtyRows: Number.isFinite(diagnostics.dirtyRows) ? Number(diagnostics.dirtyRows) : 0,
+    dirtyNodes: Array.isArray(diagnostics.dirtyNodes)
+      ? diagnostics.dirtyNodes.map(value => String(value))
+      : [],
+    nodes: Array.isArray(diagnostics.nodes)
+      ? diagnostics.nodes.map((node) => ({
+        name: String(node?.name ?? ""),
+        dirtyRows: Number.isFinite(node?.dirtyRows) ? Number(node.dirtyRows) : 0,
+        evaluations: Number.isFinite(node?.evaluations) ? Number(node.evaluations) : 0,
+        touched: node?.touched === true,
+        dirty: node?.dirty === true,
+      }))
+      : [],
+  }
+}
+
+function summarizeComputeDiagnostics(samples) {
+  const validSamples = samples.filter(sample => sample !== null)
+  const strategyCounts = {}
+  const dirtyNodeSet = new Set()
+  const hotNodeScores = new Map()
+
+  for (const sample of validSamples) {
+    const strategy = sample.strategy ?? "unknown"
+    strategyCounts[strategy] = (strategyCounts[strategy] ?? 0) + 1
+    for (const dirtyNode of sample.dirtyNodes) {
+      dirtyNodeSet.add(dirtyNode)
+    }
+    for (const node of sample.nodes) {
+      if (!node?.name) {
+        continue
+      }
+      const current = hotNodeScores.get(node.name) ?? { evaluations: 0, dirtyRows: 0, touches: 0 }
+      current.evaluations += node.evaluations
+      current.dirtyRows += node.dirtyRows
+      if (node.touched) {
+        current.touches += 1
+      }
+      hotNodeScores.set(node.name, current)
+    }
+  }
+
+  return {
+    samples: validSamples.length,
+    strategyCounts,
+    rowsTouched: stats(validSamples.map(sample => sample.rowsTouched)),
+    changedRows: stats(validSamples.map(sample => sample.changedRows)),
+    skippedByObjectIs: stats(validSamples.map(sample => sample.skippedByObjectIs)),
+    dirtyRows: stats(validSamples.map(sample => sample.dirtyRows)),
+    dirtyNodes: Array.from(dirtyNodeSet).sort((left, right) => left.localeCompare(right)),
+    hotNodes: Array.from(hotNodeScores.entries())
+      .map(([name, score]) => ({
+        name,
+        evaluations: score.evaluations,
+        dirtyRows: score.dirtyRows,
+        touches: score.touches,
+      }))
+      .sort((left, right) => right.evaluations - left.evaluations || right.dirtyRows - left.dirtyRows)
+      .slice(0, 8),
+  }
+}
+
 function shouldEnforceVariance(stat) {
   return (
     PERF_BUDGET_MAX_VARIANCE_PCT !== Number.POSITIVE_INFINITY
@@ -456,6 +530,17 @@ async function runScenario({ scenarioName, seed, api }) {
   })
   const initMs = performance.now() - initStart
 
+  if (typeof model.getFormulaComputeStageDiagnostics !== "function") {
+    model.dispose?.()
+    throw new Error(
+      [
+        "Loaded datagrid-core build does not expose getFormulaComputeStageDiagnostics().",
+        "The formula benchmark is running against a stale dist build.",
+        "Rebuild @affino/datagrid-core before running the benchmark.",
+      ].join(" "),
+    )
+  }
+
   const planSnapshot = model.getFormulaExecutionPlan?.() ?? null
   const depthFromPlan = planSnapshot?.levels?.length ?? depth
   const affectedByPatchFields = countAffectedComputedNamesFromSnapshot(
@@ -465,11 +550,13 @@ async function runScenario({ scenarioName, seed, api }) {
 
   const fullRecomputeDurations = []
   const fullRecomputeEvaluations = []
+  const fullRecomputeDiagnostics = []
   for (let iteration = 0; iteration < BENCH_FULL_RECOMPUTE_ITERATIONS; iteration += 1) {
     const recomputeStart = performance.now()
     model.recomputeComputedFields()
     fullRecomputeDurations.push(performance.now() - recomputeStart)
     const computeDiagnostics = model.getFormulaComputeStageDiagnostics?.()
+    fullRecomputeDiagnostics.push(cloneComputeDiagnostics(computeDiagnostics))
     fullRecomputeEvaluations.push(
       Number.isFinite(computeDiagnostics?.evaluations)
         ? Math.max(0, Number(computeDiagnostics.evaluations))
@@ -482,6 +569,7 @@ async function runScenario({ scenarioName, seed, api }) {
     const effectivePatchSize = Math.min(patchSize, scenarioConfig.rows)
     const patchDurations = []
     const patchEvaluationCounts = []
+    const patchDiagnostics = []
     for (let iteration = 0; iteration < BENCH_PATCH_ITERATIONS; iteration += 1) {
       const indices = selectPatchIndices(scenarioConfig.rows, effectivePatchSize, rng)
       const updates = []
@@ -509,6 +597,7 @@ async function runScenario({ scenarioName, seed, api }) {
       })
       patchDurations.push(performance.now() - patchStart)
       const computeDiagnostics = model.getFormulaComputeStageDiagnostics?.()
+      patchDiagnostics.push(cloneComputeDiagnostics(computeDiagnostics))
       patchEvaluationCounts.push(
         Number.isFinite(computeDiagnostics?.evaluations)
           ? Math.max(0, Number(computeDiagnostics.evaluations))
@@ -531,6 +620,7 @@ async function runScenario({ scenarioName, seed, api }) {
       durationMs: durationStat,
       evaluationsPerSec: evaluationsPerSecStat.mean,
       evaluationsPerSecStat,
+      diagnostics: summarizeComputeDiagnostics(patchDiagnostics),
     })
   }
 
@@ -566,6 +656,7 @@ async function runScenario({ scenarioName, seed, api }) {
     fullEvaluations: fullRecomputeEvaluationsStat,
     fullEvaluationsPerSec: fullEvaluationsPerSecStat.mean,
     fullEvaluationsPerSecStat,
+    fullRecomputeDiagnostics: summarizeComputeDiagnostics(fullRecomputeDiagnostics),
     patch: patchBenchmarks,
     elapsedMs,
     heapDeltaMb,
@@ -598,8 +689,11 @@ for (const seed of BENCH_SEEDS) {
     results.push(run)
 
     const patchSummary = run.patch.map(entry => `${entry.patchSize}:${entry.durationMs.p95.toFixed(3)}ms`).join(" ")
+    const fullStrategies = Object.entries(run.fullRecomputeDiagnostics.strategyCounts)
+      .map(([strategy, count]) => `${strategy}:${count}`)
+      .join(",")
     console.log(
-      `seed=${seed} scenario=${scenarioName} rows=${run.config.rows} formulas=${run.config.formulas} depth=${run.config.depthActual} compileMean=${run.compileMs.mean.toFixed(3)}ms init=${run.initMs.toFixed(3)}ms fullP95=${run.fullRecomputeMs.p95.toFixed(3)}ms fullEval/s=${run.fullEvaluationsPerSec.toFixed(0)} patchP95=[${patchSummary}] heapDelta=${run.heapDeltaMb.toFixed(2)}MB`,
+      `seed=${seed} scenario=${scenarioName} rows=${run.config.rows} formulas=${run.config.formulas} depth=${run.config.depthActual} compileMean=${run.compileMs.mean.toFixed(3)}ms init=${run.initMs.toFixed(3)}ms fullP95=${run.fullRecomputeMs.p95.toFixed(3)}ms fullEval/s=${run.fullEvaluationsPerSec.toFixed(0)} fullStrategy=[${fullStrategies}] fullDirtyRows=${run.fullRecomputeDiagnostics.dirtyRows.mean.toFixed(0)} fullSkipped=${run.fullRecomputeDiagnostics.skippedByObjectIs.mean.toFixed(0)} patchP95=[${patchSummary}] heapDelta=${run.heapDeltaMb.toFixed(2)}MB`,
     )
   }
 }

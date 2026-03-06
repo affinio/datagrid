@@ -764,6 +764,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
           field: field.field,
           formula: field.formula,
           deps: [...field.deps],
+          contextKeys: [...field.contextKeys],
         }))
       : []
     formulaExecutionPlan = cloneFormulaExecutionPlan(update.formulaExecutionPlan)
@@ -963,6 +964,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
         field: field.field,
         formula: field.formula,
         deps: [...field.deps],
+        contextKeys: [...field.contextKeys],
       }))
     },
     getFormulaExecutionPlan() {

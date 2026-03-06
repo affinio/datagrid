@@ -68,15 +68,16 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
   let nextSourceRows: DataGridRowNode<T>[] | null = null
   const changedRowMarks = new Uint8Array(rowCount)
   const touchedRowMarks = new Uint8Array(rowCount)
+  const changedRowIndexes: number[] = []
   let touchedRowsCount = 0
   const computedPatchByRowIndex = captureRowPatchMaps
-    ? new Array<Record<string, unknown> | undefined>(rowCount)
+    ? new Map<number, Record<string, unknown>>()
     : null
   const previousRowByIndex = captureRowPatchMaps
-    ? new Array<DataGridRowNode<T> | undefined>(rowCount)
+    ? new Map<number, DataGridRowNode<T>>()
     : null
   const nextRowByIndex = captureRowPatchMaps
-    ? new Array<DataGridRowNode<T> | undefined>(rowCount)
+    ? new Map<number, DataGridRowNode<T>>()
     : null
   const workingRowByIndex = new Array<DataGridRowNode<T> | undefined>(rowCount)
   const nodeVisitMarks = new Int32Array(rowCount)
@@ -154,7 +155,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
     },
   } satisfies DataGridComputedFieldComputeContext<T>
   const nextDirtyRowIndexesByNode = new Array<number[] | undefined>(nodeCount)
-  const levelPatchByRowIndex = new Array<Record<string, unknown> | undefined>(rowCount)
+  const levelPatchByRowIndex = new Map<number, Record<string, unknown>>()
   const levelPatchedRowIndexes: number[] = []
   const nextDirtyNodeIndexes: number[] = []
 
@@ -206,18 +207,18 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       touchedComputedFields.add(computed.field)
 
       if (computedPatchByRowIndex) {
-        let rowPatch = computedPatchByRowIndex[rowIndex]
+        let rowPatch = computedPatchByRowIndex.get(rowIndex)
         if (!rowPatch) {
           rowPatch = {}
-          computedPatchByRowIndex[rowIndex] = rowPatch
+          computedPatchByRowIndex.set(rowIndex, rowPatch)
         }
         rowPatch[computed.field] = nextValue
       }
 
-      let levelPatch = levelPatchByRowIndex[rowIndex]
+      let levelPatch = levelPatchByRowIndex.get(rowIndex)
       if (!levelPatch) {
         levelPatch = {}
-        levelPatchByRowIndex[rowIndex] = levelPatch
+        levelPatchByRowIndex.set(rowIndex, levelPatch)
         levelPatchedRowIndexes.push(rowIndex)
       }
       levelPatch[computed.field] = nextValue
@@ -400,7 +401,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       return
     }
     for (const rowIndex of levelPatchedRowIndexes) {
-      const levelPatch = levelPatchByRowIndex[rowIndex]
+      const levelPatch = levelPatchByRowIndex.get(rowIndex)
       if (!levelPatch) {
         continue
       }
@@ -414,7 +415,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
         levelPatch as Partial<T>,
       )
       if (nextData === workingRowNode.data) {
-        levelPatchByRowIndex[rowIndex] = undefined
+        levelPatchByRowIndex.delete(rowIndex)
         continue
       }
       const nextRowNode: DataGridRowNode<T> = {
@@ -428,13 +429,16 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       }
       nextSourceRows[rowIndex] = nextRowNode
       if (previousRowByIndex && nextRowByIndex) {
-        if (!previousRowByIndex[rowIndex]) {
-          previousRowByIndex[rowIndex] = sourceRow
+        if (!previousRowByIndex.has(rowIndex)) {
+          previousRowByIndex.set(rowIndex, sourceRow)
         }
-        nextRowByIndex[rowIndex] = nextRowNode
+        nextRowByIndex.set(rowIndex, nextRowNode)
       }
-      changedRowMarks[rowIndex] = 1
-      levelPatchByRowIndex[rowIndex] = undefined
+      if (changedRowMarks[rowIndex] === 0) {
+        changedRowMarks[rowIndex] = 1
+        changedRowIndexes.push(rowIndex)
+      }
+      levelPatchByRowIndex.delete(rowIndex)
     }
     levelPatchedRowIndexes.length = 0
   }
@@ -459,10 +463,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
 
   const finalize = (): DataGridComputedExecutionFinalizeResult<T> => {
     const changedRowIds: DataGridRowId[] = []
-    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-      if (changedRowMarks[rowIndex] === 0) {
-        continue
-      }
+    for (const rowIndex of changedRowIndexes) {
       const rowNode = sourceRowsBaseline[rowIndex]
       if (!rowNode) {
         continue
@@ -475,21 +476,21 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
     const nextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
 
     if (captureRowPatchMaps && computedPatchByRowIndex && previousRowByIndex && nextRowByIndex) {
-      for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      for (const rowIndex of changedRowIndexes) {
         const rowNode = sourceRowsBaseline[rowIndex]
         if (!rowNode) {
           continue
         }
         const rowId = rowNode.rowId
-        const computedPatch = computedPatchByRowIndex[rowIndex]
+        const computedPatch = computedPatchByRowIndex.get(rowIndex)
         if (computedPatch) {
           computedUpdatesByRowId.set(rowId, computedPatch as Partial<T>)
         }
-        const previousRow = previousRowByIndex[rowIndex]
+        const previousRow = previousRowByIndex.get(rowIndex)
         if (previousRow) {
           previousRowsById.set(rowId, previousRow)
         }
-        const nextRow = nextRowByIndex[rowIndex]
+        const nextRow = nextRowByIndex.get(rowIndex)
         if (nextRow) {
           nextRowsById.set(rowId, nextRow)
         }

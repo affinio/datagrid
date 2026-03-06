@@ -54,31 +54,31 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 
 ## Phase 5 — Execution Engine Maturity
 
-- [ ] Block 13. Compile Reuse and Expression Identity
+- [ ] Block 13. Compile Reuse and Expression Identity (`Mixed`)
   - Add compiled expression cache (`formula string -> compiled artifact`).
   - Add normalized AST hash for structurally equivalent formulas.
   - Expose cache hit/miss metrics in diagnostics.
-- [ ] Block 14. Access Specialization
+- [ ] Block 14. Access Specialization (`Perf`)
   - Replace generic string-token hot path with `tokenIndex -> accessor` specialization.
   - Precompile nested path readers and common scalar slot readers.
   - Make JIT/batch evaluators consume accessor tables instead of raw token strings.
-- [ ] Block 15. Formal Expression DAG Runtime
+- [ ] Block 15. Formal Expression DAG Runtime (`Architecture`)
   - Promote current dependency planning/runtime into an explicit `FormulaGraph`.
   - Keep stable topological levels as a first-class execution artifact.
   - Add explain/debug visibility for node-level and row-level recompute causes.
-- [ ] Block 16. Fused Batch Execution
+- [ ] Block 16. Fused Batch Execution (`Perf`)
   - Compile arithmetic/comparison chains into tighter batched loops.
   - Avoid generic node dispatch inside hot recompute paths where graph shape is stable.
   - Keep deterministic fallback for unsupported/branch-heavy subgraphs.
-- [ ] Block 16.1. Batch-Major Level Execution
+- [ ] Block 16.1. Batch-Major Level Execution (`Perf`)
   - Switch hot execution order from `level -> node -> rows batch` toward `level -> rows batch -> node`.
   - Keep temporary row-batch state hot across multiple nodes inside the same level.
   - Use this as the default runtime shape for fused batch execution and future vector kernels.
-- [ ] Block 16.2. Dependency-Signature Group Execution
+- [ ] Block 16.2. Dependency-Signature Group Execution (`Perf`)
   - Group same-level nodes by normalized dependency signature before execution.
   - Preload shared dependency columns/readers once per batch and reuse them across grouped nodes.
   - Use shared-input scheduling to reduce repeated column reads and token resolution for formulas with overlapping inputs.
-- [ ] Block 17. True Vector Kernels
+- [ ] Block 17. True Vector Kernels (`Perf`)
   - Add column-pointer/vector-kernel execution for numeric-heavy workloads.
   - Support masked fallback for branchy operators/functions (`IF`, `IFS`, `COALESCE`).
   - Make worker-oriented vector execution possible without changing formula contracts.
