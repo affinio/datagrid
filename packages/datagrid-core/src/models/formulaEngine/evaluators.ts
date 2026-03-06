@@ -9,8 +9,11 @@ import {
   coerceFormulaValueToBoolean,
   coerceFormulaValueToNumber,
   compareFormulaValues,
+  createFormulaSourceSpan,
   createFormulaRuntimeError,
+  findFormulaErrorValue,
   formulaNumberIsTruthy,
+  isFormulaErrorValue,
   isFormulaValuePresent,
   normalizeFormulaFunctionName,
   normalizeFormulaValue,
@@ -22,6 +25,28 @@ import {
   type DataGridFormulaFunctionRuntime,
   type DataGridFormulaTokenIndexEvaluator,
 } from "./core.js"
+
+const ZERO_FORMULA_NODE: DataGridFormulaAstNode = {
+  kind: "number",
+  value: 0,
+  span: createFormulaSourceSpan(0, 0),
+}
+
+const NON_INLINEABLE_BUILTIN_FUNCTIONS = new Set<string>([
+  "ARRAY",
+  "AVG",
+  "CONCAT",
+  "COUNT",
+  "INDEX",
+  "IN",
+  "LEN",
+  "MATCH",
+  "MAX",
+  "MIN",
+  "RANGE",
+  "SUM",
+  "XLOOKUP",
+])
 
 function compileFormulaAstEvaluatorForToken<TKey>(
   root: DataGridFormulaAstNode,
@@ -56,24 +81,30 @@ function compileFormulaAstEvaluatorForToken<TKey>(
 
     if (normalizedFunctionName === "IF") {
       const conditionEvaluator = compileFormulaAstEvaluatorForToken(
-        root.args[0] ?? { kind: "number", value: 0 },
+        root.args[0] ?? ZERO_FORMULA_NODE,
         functionRegistry,
         resolveIdentifierToken,
       )
       const trueEvaluator = compileFormulaAstEvaluatorForToken(
-        root.args[1] ?? { kind: "number", value: 0 },
+        root.args[1] ?? ZERO_FORMULA_NODE,
         functionRegistry,
         resolveIdentifierToken,
       )
       const falseEvaluator = compileFormulaAstEvaluatorForToken(
-        root.args[2] ?? { kind: "number", value: 0 },
+        root.args[2] ?? ZERO_FORMULA_NODE,
         functionRegistry,
         resolveIdentifierToken,
       )
       return (readTokenValue) => (
-        formulaNumberIsTruthy(conditionEvaluator(readTokenValue))
-          ? trueEvaluator(readTokenValue)
-          : falseEvaluator(readTokenValue)
+        (() => {
+          const conditionValue = conditionEvaluator(readTokenValue)
+          if (isFormulaErrorValue(conditionValue)) {
+            return conditionValue
+          }
+          return formulaNumberIsTruthy(conditionValue)
+            ? trueEvaluator(readTokenValue)
+            : falseEvaluator(readTokenValue)
+        })()
       )
     }
 
@@ -88,6 +119,9 @@ function compileFormulaAstEvaluatorForToken<TKey>(
           const conditionEvaluator = pairEvaluators[index]
           const valueEvaluator = pairEvaluators[index + 1]
           const conditionValue = conditionEvaluator ? conditionEvaluator(readTokenValue) : 0
+          if (isFormulaErrorValue(conditionValue)) {
+            return conditionValue
+          }
           if (!formulaNumberIsTruthy(conditionValue)) {
             continue
           }
@@ -125,6 +159,10 @@ function compileFormulaAstEvaluatorForToken<TKey>(
         const evaluator = argEvaluators[index]
         args[index] = evaluator ? evaluator(readTokenValue) : null
       }
+      const formulaError = findFormulaErrorValue(args)
+      if (formulaError) {
+        return formulaError
+      }
       try {
         return normalizeFormulaValue(functionDefinition.compute(args))
       } catch (error) {
@@ -142,6 +180,9 @@ function compileFormulaAstEvaluatorForToken<TKey>(
     const valueEvaluator = compileFormulaAstEvaluatorForToken(root.value, functionRegistry, resolveIdentifierToken)
     return readTokenValue => {
       const value = valueEvaluator(readTokenValue)
+      if (isFormulaErrorValue(value)) {
+        return value
+      }
       if (root.operator === "-") {
         return -coerceFormulaValueToNumber(value)
       }
@@ -157,20 +198,32 @@ function compileFormulaAstEvaluatorForToken<TKey>(
   if (root.operator === "AND") {
     return (readTokenValue) => {
       const left = leftEvaluator(readTokenValue)
+      if (isFormulaErrorValue(left)) {
+        return left
+      }
       if (!formulaNumberIsTruthy(left)) {
         return 0
       }
       const right = rightEvaluator(readTokenValue)
+      if (isFormulaErrorValue(right)) {
+        return right
+      }
       return formulaNumberIsTruthy(right) ? 1 : 0
     }
   }
   if (root.operator === "OR") {
     return (readTokenValue) => {
       const left = leftEvaluator(readTokenValue)
+      if (isFormulaErrorValue(left)) {
+        return left
+      }
       if (formulaNumberIsTruthy(left)) {
         return 1
       }
       const right = rightEvaluator(readTokenValue)
+      if (isFormulaErrorValue(right)) {
+        return right
+      }
       return formulaNumberIsTruthy(right) ? 1 : 0
     }
   }
@@ -299,15 +352,15 @@ function compileFormulaAstToJitExpression(
     const normalizedFunctionName = normalizeFormulaFunctionName(root.name)
     if (normalizedFunctionName === "IF") {
       const condition = compileFormulaAstToJitExpression(
-        root.args[0] ?? { kind: "number", value: 0 },
+        root.args[0] ?? ZERO_FORMULA_NODE,
         options,
       )
       const whenTrue = compileFormulaAstToJitExpression(
-        root.args[1] ?? { kind: "number", value: 0 },
+        root.args[1] ?? ZERO_FORMULA_NODE,
         options,
       )
       const whenFalse = compileFormulaAstToJitExpression(
-        root.args[2] ?? { kind: "number", value: 0 },
+        root.args[2] ?? ZERO_FORMULA_NODE,
         options,
       )
       return `(toBoolean(${condition}) ? (${whenTrue}) : (${whenFalse}))`
@@ -316,11 +369,11 @@ function compileFormulaAstToJitExpression(
       const conditions: string[] = []
       for (let index = 0; index < root.args.length; index += 2) {
         const conditionExpression = compileFormulaAstToJitExpression(
-          root.args[index] ?? { kind: "number", value: 0 },
+          root.args[index] ?? ZERO_FORMULA_NODE,
           options,
         )
         const valueExpression = compileFormulaAstToJitExpression(
-          root.args[index + 1] ?? { kind: "number", value: 0 },
+          root.args[index + 1] ?? ZERO_FORMULA_NODE,
           options,
         )
         conditions.push(`if (toBoolean(${conditionExpression})) { return (${valueExpression}) }`)
@@ -339,18 +392,18 @@ function compileFormulaAstToJitExpression(
     if (options.canInlineBuiltin(normalizedFunctionName)) {
       if (normalizedFunctionName === "ABS") {
         const valueExpression = compileFormulaAstToJitExpression(
-          root.args[0] ?? { kind: "number", value: 0 },
+          root.args[0] ?? ZERO_FORMULA_NODE,
           options,
         )
         return `Math.abs(toNumber(${valueExpression}))`
       }
       if (normalizedFunctionName === "ROUND") {
         const valueExpression = compileFormulaAstToJitExpression(
-          root.args[0] ?? { kind: "number", value: 0 },
+          root.args[0] ?? ZERO_FORMULA_NODE,
           options,
         )
         const digitsExpression = compileFormulaAstToJitExpression(
-          root.args[1] ?? { kind: "number", value: 0 },
+          root.args[1] ?? ZERO_FORMULA_NODE,
           options,
         )
         return `round(toNumber(${valueExpression}), toNumber(${digitsExpression}))`
@@ -473,6 +526,9 @@ function buildJitReadValueBody(mode: DataGridFormulaJitReadValueMode): string {
           if (rawType === "string" || rawType === "boolean") {
             return raw
           }
+          if (rawType === "object" && raw && raw.kind === "error" && typeof raw.code === "string" && typeof raw.message === "string") {
+            return raw
+          }
           if (rawType === "bigint") {
             return Number(raw)
           }
@@ -511,6 +567,10 @@ function createFormulaJitRuntimeHelpers(
       )
     }
     try {
+      const formulaError = findFormulaErrorValue(args)
+      if (formulaError) {
+        return formulaError
+      }
       return normalizeFormulaValue(functionDefinition.compute(args))
     } catch (error) {
       throw new DataGridFormulaEvaluationError(
@@ -555,6 +615,9 @@ export function compileFormulaAstEvaluatorJit(
   dependencyTokens: readonly DataGridComputedDependencyToken[],
 ): DataGridFormulaEvaluator {
   const canInlineBuiltin = (functionName: string): boolean => {
+    if (NON_INLINEABLE_BUILTIN_FUNCTIONS.has(functionName)) {
+      return false
+    }
     const defaultDefinition = DATAGRID_DEFAULT_FORMULA_FUNCTIONS[functionName]
     const runtimeDefinition = functionRegistry.get(functionName)
     if (!defaultDefinition || !runtimeDefinition) {
@@ -623,6 +686,9 @@ export function compileFormulaAstBatchEvaluatorJit(
   resolveIdentifierTokenIndex: (identifier: string) => number | undefined,
 ): DataGridFormulaBatchEvaluator {
   const canInlineBuiltin = (functionName: string): boolean => {
+    if (NON_INLINEABLE_BUILTIN_FUNCTIONS.has(functionName)) {
+      return false
+    }
     const defaultDefinition = DATAGRID_DEFAULT_FORMULA_FUNCTIONS[functionName]
     const runtimeDefinition = functionRegistry.get(functionName)
     if (!defaultDefinition || !runtimeDefinition) {
@@ -692,6 +758,9 @@ export function compileFormulaAstColumnarBatchEvaluatorJit(
   resolveIdentifierTokenIndex: (identifier: string) => number | undefined,
 ): DataGridFormulaColumnarBatchEvaluator {
   const canInlineBuiltin = (functionName: string): boolean => {
+    if (NON_INLINEABLE_BUILTIN_FUNCTIONS.has(functionName)) {
+      return false
+    }
     const defaultDefinition = DATAGRID_DEFAULT_FORMULA_FUNCTIONS[functionName]
     const runtimeDefinition = functionRegistry.get(functionName)
     if (!defaultDefinition || !runtimeDefinition) {

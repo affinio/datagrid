@@ -208,4 +208,52 @@ describe("formulaExecutionPlan", () => {
       ],
     })
   })
+
+  it("supports iterative cycle groups when explicitly enabled", () => {
+    const plan = createDataGridFormulaExecutionPlan([
+      {
+        name: "left",
+        field: "left",
+        deps: [{ domain: "computed", value: "right" }],
+      },
+      {
+        name: "right",
+        field: "right",
+        deps: [{ domain: "computed", value: "left" }],
+      },
+    ], {
+      cyclePolicy: "iterative",
+    })
+
+    expect(plan.order).toEqual(["left", "right"])
+    expect(plan.levels).toEqual([["left", "right"]])
+    expect(plan.iterativeGroups).toEqual([["left", "right"]])
+    expect(snapshotDataGridFormulaExecutionPlan(plan)).toEqual({
+      order: ["left", "right"],
+      levels: [["left", "right"]],
+      nodes: [
+        {
+          name: "left",
+          field: "left",
+          level: 0,
+          fieldDeps: ["right"],
+          computedDeps: ["right"],
+          dependents: ["right"],
+          iterative: true,
+          cycleGroup: ["left", "right"],
+        },
+        {
+          name: "right",
+          field: "right",
+          level: 0,
+          fieldDeps: ["left"],
+          computedDeps: ["left"],
+          dependents: ["left"],
+          iterative: true,
+          cycleGroup: ["left", "right"],
+        },
+      ],
+      iterativeGroups: [["left", "right"]],
+    })
+  })
 })

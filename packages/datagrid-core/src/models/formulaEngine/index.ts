@@ -1,12 +1,45 @@
 export type {
   DataGridCompiledFormulaBatchContext,
   DataGridCompiledFormulaField,
+  DataGridFormulaDiagnostic,
+  DataGridFormulaExplainDependency,
+  DataGridFormulaExplainDependencyDomain,
+  DataGridFormulaExplainNode,
+  DataGridFormulaExplainResult,
+  DataGridFormulaFieldExplainResult,
   DataGridFormulaCompileOptions,
   DataGridFormulaCompileStrategy,
   DataGridFormulaFunctionArity,
   DataGridFormulaFunctionDefinition,
   DataGridFormulaFunctionRegistry,
+  DataGridFormulaParseResult,
   DataGridFormulaRuntimeErrorPolicy,
+  DataGridFormulaDiagnosticsResult,
+  DataGridFormulaSourceSpan,
 } from "./core.js"
 
-export { compileDataGridFormulaFieldDefinition } from "./compile.js"
+export {
+  compileDataGridFormulaFieldDefinition,
+} from "./compile.js"
+
+export {
+  collectFormulaContextKeys,
+  explainDataGridFormulaExpression,
+  explainDataGridFormulaFieldDefinition,
+  createFormulaErrorValue,
+  createFormulaSourceSpan,
+  createFormulaDiagnostic,
+  diagnoseDataGridFormulaExpression,
+  findFormulaErrorValue,
+  getFormulaNodeSpan,
+  isFormulaErrorValue,
+  isFormulaValueBlank,
+  isFormulaValueEmptyText,
+  normalizeFormulaValue,
+  normalizeFormulaDiagnostic,
+  parseDataGridFormulaExpression,
+  coerceFormulaValueToNumber,
+  coerceFormulaValueToBoolean,
+  areFormulaValuesEqual,
+  compareFormulaValues,
+} from "./core.js"

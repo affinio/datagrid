@@ -61,6 +61,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   hasFormulaSupport: DataGridApi<TRow>["rows"]["hasFormulaSupport"]
   registerFormulaField: DataGridApi<TRow>["rows"]["registerFormulaField"]
   getFormulaFields: DataGridApi<TRow>["rows"]["getFormulaFields"]
+  recomputeFormulaContext: DataGridApi<TRow>["rows"]["recomputeFormulaContext"]
   hasFormulaFunctionRegistrySupport: DataGridApi<TRow>["rows"]["hasFormulaFunctionRegistrySupport"]
   registerFormulaFunction: DataGridApi<TRow>["rows"]["registerFormulaFunction"]
   unregisterFormulaFunction: DataGridApi<TRow>["rows"]["unregisterFormulaFunction"]
@@ -190,6 +191,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       hasFormulaSupport: methodSet.hasFormulaSupport,
       registerFormulaField: methodSet.registerFormulaField,
       getFormulaFields: methodSet.getFormulaFields,
+      recomputeFormulaContext: methodSet.recomputeFormulaContext,
       hasFormulaFunctionRegistrySupport: methodSet.hasFormulaFunctionRegistrySupport,
       registerFormulaFunction: methodSet.registerFormulaFunction,
       unregisterFormulaFunction: methodSet.unregisterFormulaFunction,

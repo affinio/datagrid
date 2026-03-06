@@ -5,7 +5,9 @@ import type {
   DataGridRowId,
 } from "../rowModel.js"
 import {
+  collectFormulaContextKeys,
   collectFormulaIdentifiers,
+  createFormulaErrorValue,
   foldFormulaConstants,
   normalizeFormulaFieldName,
   normalizeFormulaFunctionRegistry,
@@ -62,6 +64,12 @@ export function compileDataGridFormulaFieldDefinition<TRow = unknown>(
     identifiers.push(normalized)
   }
 
+  const contextKeys = (() => {
+    const collected: string[] = []
+    collectFormulaContextKeys(optimizedAst, functionRegistry, collected)
+    return Array.from(new Set(collected.map(key => key.trim()).filter(key => key.length > 0)))
+  })()
+
   const resolveDependencyToken = options.resolveDependencyToken
     ?? ((identifier: string): DataGridComputedDependencyToken => `field:${identifier}`)
   const deps: DataGridComputedDependencyToken[] = []
@@ -107,6 +115,7 @@ export function compileDataGridFormulaFieldDefinition<TRow = unknown>(
   )
     ? options.compileStrategy
     : "auto"
+  const allowDynamicCodegen = options.allowDynamicCodegen !== false
 
   let evaluator: DataGridFormulaEvaluator
   let batchEvaluator: DataGridFormulaBatchEvaluator | null = null
@@ -116,7 +125,12 @@ export function compileDataGridFormulaFieldDefinition<TRow = unknown>(
     functionRegistry,
     resolveIdentifierTokenIndex,
   )
-  if (compileStrategy === "ast") {
+  if (compileStrategy === "jit" && !allowDynamicCodegen) {
+    throwFormulaError(
+      `Failed to compile JIT evaluator for '${name}': dynamic code generation is disabled. Use compileStrategy 'ast' or allowDynamicCodegen: true.`,
+    )
+  }
+  if (compileStrategy === "ast" || !allowDynamicCodegen) {
     evaluator = compileFormulaAstEvaluator(
       optimizedAst,
       functionRegistry,
@@ -175,6 +189,9 @@ export function compileDataGridFormulaFieldDefinition<TRow = unknown>(
       options.onRuntimeError?.(runtimeError)
       if (runtimeErrorPolicy === "throw") {
         throw new Error(`[DataGridFormula] ${runtimeError.message}`)
+      }
+      if (runtimeErrorPolicy === "error-value") {
+        return createFormulaErrorValue(runtimeError)
       }
       return 0
     }
@@ -324,6 +341,7 @@ export function compileDataGridFormulaFieldDefinition<TRow = unknown>(
     formula,
     identifiers,
     deps,
+    contextKeys,
     computeBatch,
     computeBatchColumnar,
     compute: (context) => {

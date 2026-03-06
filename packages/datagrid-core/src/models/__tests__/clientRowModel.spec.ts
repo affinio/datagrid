@@ -228,6 +228,35 @@ describe("createClientRowModel", () => {
       skippedByObjectIs: 1,
       dirtyRows: 1,
       dirtyNodes: ["total"],
+      nodes: [
+        {
+          name: "total",
+          field: "total",
+          dirty: true,
+          touched: false,
+          evaluations: 1,
+          dirtyRows: 1,
+          dirtyCauses: [{ kind: "field", value: "price", rows: 1 }],
+        },
+        {
+          name: "tax",
+          field: "tax",
+          dirty: false,
+          touched: false,
+          evaluations: 0,
+          dirtyRows: 0,
+          dirtyCauses: [],
+        },
+        {
+          name: "gross",
+          field: "gross",
+          dirty: false,
+          touched: false,
+          evaluations: 0,
+          dirtyRows: 0,
+          dirtyCauses: [],
+        },
+      ],
     })
 
     model.dispose()
@@ -314,6 +343,170 @@ describe("createClientRowModel", () => {
     expect(() => model.unregisterFormulaFunction("DOUBLE")).toThrow(/Unknown function/i)
     expect(model.getFormulaFunctionNames()).toEqual(["DOUBLE"])
     expect((model.getRow(0)?.row as { doubled?: number }).doubled).toBe(20)
+
+    model.dispose()
+  })
+
+  it("supports expanded reference syntax for nested and quoted field paths", () => {
+    const model = createClientRowModel<{
+      id: number
+      user: { orders: Array<{ price: number }>; metrics: { "tax.rate": number } }
+      "gross margin"?: number
+      total?: number
+      adjusted?: number
+    }>({
+      rows: [
+        {
+          row: {
+            id: 1,
+            user: {
+              orders: [{ price: 10 }],
+              metrics: { "tax.rate": 2 },
+            },
+            "gross margin": 5,
+          },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "user.orders[0].price + user.metrics['tax.rate']" },
+        { name: "adjusted", formula: "total + [gross margin]" },
+      ],
+    })
+
+    const row = model.getRow(0)?.row as { total?: number; adjusted?: number }
+    expect(row.total).toBe(12)
+    expect(row.adjusted).toBe(17)
+    expect(model.getFormulaFields()).toEqual([
+      {
+        name: "total",
+        field: "total",
+        formula: "user.orders[0].price + user.metrics['tax.rate']",
+        deps: ["field:user.orders.0.price", 'field:user.metrics."tax.rate"'],
+        contextKeys: [],
+      },
+      {
+        name: "adjusted",
+        field: "adjusted",
+        formula: "total + [gross margin]",
+        deps: ["computed:total", 'field:"gross margin"'],
+        contextKeys: [],
+      },
+    ])
+
+    model.dispose()
+  })
+
+  it("supports array and lookup formula helpers in row-model runtime", () => {
+    const model = createClientRowModel<{
+      id: number
+      code: string
+      price: number
+      tax: number
+      bonus: number
+      picked?: number
+      matched?: number
+      total?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, code: "B", price: 10, tax: 2, bonus: 3 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "SUM(RANGE(price, tax, bonus))" },
+        { name: "matched", formula: "MATCH(code, ARRAY('A', 'B', 'C'))" },
+        { name: "picked", formula: "XLOOKUP(code, ARRAY('A', 'B', 'C'), ARRAY(price, tax, bonus), 0)" },
+      ],
+    })
+
+    const row = model.getRow(0)?.row as {
+      total?: number
+      matched?: number
+      picked?: number
+    }
+    expect(row.total).toBe(15)
+    expect(row.matched).toBe(2)
+    expect(row.picked).toBe(2)
+
+    model.dispose()
+  })
+
+  it("recomputes contextual formula functions for targeted rows", () => {
+    let rate = 2
+    const model = createClientRowModel<{
+      id: number
+      qty: number
+      total?: number
+      grand?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, qty: 3 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+        {
+          row: { id: 2, qty: 4 },
+          rowId: "r2",
+          originalIndex: 1,
+          displayIndex: 1,
+        },
+      ],
+    })
+
+    model.registerFormulaFunction("RATE", {
+      arity: 0,
+      contextKeys: ["pricing"],
+      compute: () => rate,
+    })
+    model.registerFormulaField({ name: "total", formula: "qty * RATE()" })
+    model.registerFormulaField({ name: "grand", formula: "total + 1" })
+
+    expect(model.getFormulaFields()).toEqual([
+      {
+        name: "total",
+        field: "total",
+        formula: "qty * RATE()",
+        deps: ["field:qty"],
+        contextKeys: ["pricing"],
+      },
+      {
+        name: "grand",
+        field: "grand",
+        formula: "total + 1",
+        deps: ["computed:total"],
+        contextKeys: [],
+      },
+    ])
+    expect((model.getRow(0)?.row as { total?: number; grand?: number }).total).toBe(6)
+    expect((model.getRow(1)?.row as { total?: number; grand?: number }).total).toBe(8)
+
+    rate = 5
+    expect(model.recomputeFormulaContext({ contextKeys: ["missing"] })).toBe(0)
+    expect(model.recomputeFormulaContext({ contextKeys: ["pricing"], rowIds: ["r1"] })).toBe(1)
+
+    expect((model.getRow(0)?.row as { total?: number; grand?: number }).total).toBe(15)
+    expect((model.getRow(0)?.row as { total?: number; grand?: number }).grand).toBe(16)
+    expect((model.getRow(1)?.row as { total?: number; grand?: number }).total).toBe(8)
+    expect((model.getRow(1)?.row as { total?: number; grand?: number }).grand).toBe(9)
+
+    expect(model.getFormulaComputeStageDiagnostics()?.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "total",
+          dirtyCauses: [
+            { kind: "context", value: "pricing", rows: 1 },
+          ],
+        }),
+      ]),
+    )
 
     model.dispose()
   })
@@ -582,6 +775,146 @@ describe("createClientRowModel", () => {
     }).toThrow(/cycle detected/i)
   })
 
+  it("supports iterative formula cycles when enabled", () => {
+    const model = createClientRowModel<{
+      id: number
+      seed: number
+      left?: number
+      right?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, seed: 8, left: 0, right: 0 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      formulaCyclePolicy: "iterative",
+      formulaIterativeCalculation: {
+        maxIterations: 24,
+        epsilon: 0.001,
+      },
+      initialFormulaFields: [
+        { name: "leftFormula", field: "left", formula: "seed + right * 0.5" },
+        { name: "rightFormula", field: "right", formula: "left * 0.5" },
+      ],
+    })
+
+    const row = model.getRow(0)?.row as { left?: number; right?: number }
+    expect(row.left).toBeCloseTo(10.666, 2)
+    expect(row.right).toBeCloseTo(5.333, 2)
+    expect(model.getFormulaExecutionPlan()).toEqual({
+      order: ["leftFormula", "rightFormula"],
+      levels: [["leftFormula", "rightFormula"]],
+      nodes: [
+        {
+          name: "leftFormula",
+          field: "left",
+          level: 0,
+          fieldDeps: ["seed", "right"],
+          computedDeps: ["rightFormula"],
+          dependents: ["rightFormula"],
+          iterative: true,
+          cycleGroup: ["leftFormula", "rightFormula"],
+        },
+        {
+          name: "rightFormula",
+          field: "right",
+          level: 0,
+          fieldDeps: ["left"],
+          computedDeps: ["leftFormula"],
+          dependents: ["leftFormula"],
+          iterative: true,
+          cycleGroup: ["leftFormula", "rightFormula"],
+        },
+      ],
+      iterativeGroups: [["leftFormula", "rightFormula"]],
+    })
+
+    expect(model.getFormulaComputeStageDiagnostics()?.nodes).toEqual([
+      expect.objectContaining({
+        name: "leftFormula",
+        field: "left",
+        dirty: true,
+        touched: true,
+        dirtyRows: 1,
+        iterative: true,
+        converged: true,
+        cycleGroup: ["leftFormula", "rightFormula"],
+      }),
+      expect.objectContaining({
+        name: "rightFormula",
+        field: "right",
+        dirty: true,
+        touched: true,
+        dirtyRows: 1,
+        iterative: true,
+        converged: true,
+        cycleGroup: ["leftFormula", "rightFormula"],
+      }),
+    ])
+    expect(model.getFormulaComputeStageDiagnostics()?.nodes?.[0]?.iterationCount).toBeGreaterThan(1)
+    expect(model.getFormulaComputeStageDiagnostics()?.nodes?.[1]?.iterationCount).toBeGreaterThan(1)
+
+    model.dispose()
+  })
+
+  it("reports non-converged iterative formula cycles when max iterations are exhausted", () => {
+    const model = createClientRowModel<{
+      id: number
+      left?: number
+      right?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, left: 0, right: 0 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      formulaCyclePolicy: "iterative",
+      formulaIterativeCalculation: {
+        maxIterations: 1,
+        epsilon: 0,
+      },
+      initialFormulaFields: [
+        { name: "leftFormula", field: "left", formula: "right + 1" },
+        { name: "rightFormula", field: "right", formula: "left + 1" },
+      ],
+    })
+
+    expect(model.getFormulaComputeStageDiagnostics()?.nodes).toEqual([
+      expect.objectContaining({
+        name: "leftFormula",
+        field: "left",
+        dirty: true,
+        touched: true,
+        evaluations: 1,
+        dirtyRows: 1,
+        iterative: true,
+        converged: false,
+        iterationCount: 1,
+        cycleGroup: ["leftFormula", "rightFormula"],
+      }),
+      expect.objectContaining({
+        name: "rightFormula",
+        field: "right",
+        dirty: true,
+        touched: true,
+        evaluations: 1,
+        dirtyRows: 1,
+        iterative: true,
+        converged: false,
+        iterationCount: 1,
+        cycleGroup: ["leftFormula", "rightFormula"],
+      }),
+    ])
+
+    model.dispose()
+  })
+
   it("exposes formula diagnostics in projection snapshot", () => {
     const model = createClientRowModel<{
       id: number
@@ -657,6 +990,74 @@ describe("createClientRowModel", () => {
     expect(patchedDiagnostics?.runtimeErrorCount).toBe(0)
     expect(patchedDiagnostics?.runtimeErrors).toEqual([])
     expect(model.getSnapshot().projection.lastInvalidationReasons).toContain("computedChanged")
+
+    model.dispose()
+  })
+
+  it("supports first-class meta dependencies in formula fields", () => {
+    const model = createClientRowModel<{
+      id: number
+      label?: string
+      ordinal?: number
+      rowKind?: string
+      grouped?: number
+    }>({
+      rows: [
+        {
+          row: { id: 7 },
+          rowId: "r7",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "label", formula: "CONCAT(meta.rowId, '-', meta.sourceIndex)" },
+        { name: "ordinal", formula: "meta.sourceIndex + 1" },
+        { name: "rowKind", formula: "meta.kind" },
+        { name: "grouped", formula: "IF(meta.isGroup, 1, 0)" },
+      ],
+    })
+
+    const row = model.getRow(0)?.row as {
+      label?: string
+      ordinal?: number
+      rowKind?: string
+      grouped?: number
+    }
+    expect(row.label).toBe("r7-0")
+    expect(row.ordinal).toBe(1)
+    expect(row.rowKind).toBe("leaf")
+    expect(row.grouped).toBe(0)
+    expect(model.getFormulaFields()).toEqual([
+      {
+        name: "label",
+        field: "label",
+        formula: "CONCAT(meta.rowId, '-', meta.sourceIndex)",
+        deps: ["meta:rowId", "meta:sourceIndex"],
+        contextKeys: [],
+      },
+      {
+        name: "ordinal",
+        field: "ordinal",
+        formula: "meta.sourceIndex + 1",
+        deps: ["meta:sourceIndex"],
+        contextKeys: [],
+      },
+      {
+        name: "rowKind",
+        field: "rowKind",
+        formula: "meta.kind",
+        deps: ["meta:kind"],
+        contextKeys: [],
+      },
+      {
+        name: "grouped",
+        field: "grouped",
+        formula: "IF(meta.isGroup, 1, 0)",
+        deps: ["meta:isGroup"],
+        contextKeys: [],
+      },
+    ])
 
     model.dispose()
   })

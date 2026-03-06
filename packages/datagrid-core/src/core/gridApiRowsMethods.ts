@@ -4,6 +4,7 @@ import type {
   DataGridClientRowPatchOptions,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
+  DataGridFormulaContextRecomputeRequest,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
   DataGridFormulaFunctionDefinition,
@@ -75,6 +76,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   hasFormulaSupport: () => boolean
   registerFormulaField: (definition: DataGridFormulaFieldDefinition) => void
   getFormulaFields: () => readonly DataGridFormulaFieldSnapshot[]
+  recomputeFormulaContext: (request: DataGridFormulaContextRecomputeRequest) => number
   hasFormulaFunctionRegistrySupport: () => boolean
   registerFormulaFunction: (
     name: string,
@@ -274,6 +276,13 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
         return []
       }
       return rowModel.getFormulaFields()
+    },
+    recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest) {
+      assertMutationsAllowed("recompute formula context")
+      if (typeof rowModel.recomputeFormulaContext !== "function") {
+        throw new Error("[DataGridApi] rowModel does not implement formula field capability.")
+      }
+      return rowModel.recomputeFormulaContext(request)
     },
     registerFormulaFunction(
       name: string,

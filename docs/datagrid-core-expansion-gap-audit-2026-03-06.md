@@ -134,6 +134,84 @@ Phase A delivery status: completed in current branch.
 2. Phase C (core structural changes: column groups, row pinning, group footers).
 3. Phase D (devtools after structural APIs are stable).
 
+## Top-Tier Core Roadmap
+
+Scope: `packages/datagrid-core` only. Formula engine is intentionally excluded from this backlog.
+
+Legend:
+
+- Impact:
+  - `critical` = required to be credible as a top-tier grid engine.
+  - `high` = major enterprise gap.
+  - `medium` = important but can follow after structural platform work.
+- Break risk:
+  - `low`, `medium`, `high`.
+
+### L1: Structural platform gaps
+
+These are the capabilities that still separate the current core from top-tier grid engines.
+
+| Priority | Work item | Impact | Complexity | Break risk | Why it matters |
+| --- | --- | --- | --- | --- | --- |
+| L1.1 | Column groups runtime (`column tree`, nested headers, spans, group visibility/order/pin integration) | critical | XL | high | Current core has group types only; top-tier grids need a real grouped column model and stable layout semantics. |
+| L1.2 | Server-side row model v2 (`hierarchical stores`, block cache policy, group/tree store identity, partial refresh) | critical | XL | high | Current datasource protocol is range-oriented, not a full enterprise store architecture. |
+| L1.3 | First-class editing subsystem (`edit sessions`, validation lifecycle, pending/error states, commit/cancel contract) | critical | L | medium | Current edit model is a patch buffer, not a full edit engine. |
+| L1.4 | Layout/state v2 (`versioned migrations`, partial import/export, data-free layout snapshots) | high | L | medium | Current unified state is too snapshot-oriented for durable product-grade layout persistence. |
+| L1.5 | Row pinning runtime (`top/body/bottom partitions`, selection/sort/pagination semantics) | high | L | high | Row pinning exists in types, but not in behavior or API. |
+
+### L2: Query and analytics maturity
+
+These features make the engine feel complete in enterprise usage.
+
+| Priority | Work item | Impact | Complexity | Break risk | Why it matters |
+| --- | --- | --- | --- | --- | --- |
+| L2.1 | Aggregation function registry service | high | M | medium | Needed for reusable, serializable, state-safe aggregate functions across client/server/app layers. |
+| L2.2 | Comparator policy runtime (`custom`, `locale-aware`, `natural`, comparator ids) | high | L | medium | Sorting is already strong, but top-tier grids need stable comparator extensibility. |
+| L2.3 | Quick/global filter as first-class core model | high | L | medium | A major product gap for real-world datasets and app shells. |
+| L2.4 | Remote filter-values runtime (`filterOptionLoader` end-to-end) | medium | M | low | Important for server-backed set filters and large distinct-value lists. |
+| L2.5 | Group footer / totals row support | high | L | high | Enterprise grouping is incomplete without footer/totals rows and per-level rollups. |
+
+### L3: Platform polish and ecosystem completeness
+
+These are not the first blockers, but they matter for “top-level” positioning.
+
+| Priority | Work item | Impact | Complexity | Break risk | Why it matters |
+| --- | --- | --- | --- | --- | --- |
+| L3.1 | Export namespace in core (`csv` contract hardening, workbook-ready export context) | medium | M | low | Export should be a stable engine capability, not only adapter sugar. |
+| L3.2 | Autosize engine (`fit-content`, `fit-grid`, measurement policy contract) | medium | M | medium | Current autosize is mostly declarative metadata. |
+| L3.3 | Tree data app-facing contract hardening | medium | M | low | Core primitives exist, but high-level semantics should be stabilized. |
+| L3.4 | Devtools runtime surface (`inspector`, `recompute trace`, `feature profiler`) | medium | M/L | low/medium | Strong differentiator once structural APIs stop moving. |
+
+## Recommended implementation sequence
+
+1. `L1.1` Column groups runtime.
+2. `L1.3` Editing subsystem.
+3. `L1.4` Layout/state v2.
+4. `L1.5` Row pinning runtime.
+5. `L2.1` Aggregation registry.
+6. `L2.2` Comparator policy runtime.
+7. `L2.3` Quick/global filter model.
+8. `L2.4` Remote filter-values runtime.
+9. `L2.5` Group footers / totals.
+10. `L1.2` Server-side row model v2.
+11. `L3.*` export, autosize, devtools polish.
+
+## Why this order
+
+- Column groups, editing, state, and row pinning reshape public contracts; they should land before tooling polish.
+- Aggregation registry, sort comparator policy, and quick filter unlock a large amount of product value without forcing a total model rewrite.
+- SSRM v2 is intentionally later because it is the most invasive subsystem and should build on stabilized state/layout/edit contracts.
+
+## Definition of done for "top-tier core"
+
+The core can reasonably be called top-tier when all of the following are true:
+
+1. Grouped columns, row pinning, and editing are first-class runtime models, not only types or adapter glue.
+2. Server-side row model supports hierarchical stores and partial refresh semantics.
+3. State import/export is versioned, migratable, and separated into layout/view/data layers.
+4. Sorting and aggregation are registry/policy driven, not only inline callback driven.
+5. Quick filter, remote filter-values, and grouped totals are stable core contracts.
+
 ## Conclusion
 
 The largest true core gaps are:

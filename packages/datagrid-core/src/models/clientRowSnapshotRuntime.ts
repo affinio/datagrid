@@ -66,6 +66,23 @@ export function createClientRowSnapshotRuntime<T>(
     skippedByObjectIs: diagnostics.skippedByObjectIs,
     dirtyRows: diagnostics.dirtyRows,
     dirtyNodes: [...diagnostics.dirtyNodes],
+    ...(diagnostics.nodes
+      ? {
+        nodes: diagnostics.nodes.map(node => ({
+          name: node.name,
+          field: node.field,
+          dirty: node.dirty,
+          touched: node.touched,
+          evaluations: node.evaluations,
+          dirtyRows: node.dirtyRows,
+          dirtyCauses: node.dirtyCauses.map(cause => ({ ...cause })),
+          ...(node.iterative ? { iterative: true } : {}),
+          ...(typeof node.converged === "boolean" ? { converged: node.converged } : {}),
+          ...(typeof node.iterationCount === "number" ? { iterationCount: node.iterationCount } : {}),
+          ...(node.cycleGroup ? { cycleGroup: [...node.cycleGroup] } : {}),
+        })),
+      }
+      : {}),
   })
 
   const getProjectionDiagnostics = (): DataGridProjectionDiagnostics => {

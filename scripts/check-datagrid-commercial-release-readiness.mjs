@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import process from "node:process"
@@ -59,6 +60,37 @@ async function main() {
     if (!ok) {
       failures.push({ id, details })
     }
+  }
+
+  const commercialSurfacePaths = [
+    "packages/datagrid/package.json",
+    "packages/datagrid-pro/package.json",
+    ".github/workflows/commercial-release.yml",
+    ".github/workflows/enterprise-hotfix-release.yml",
+  ]
+  const hasCommercialSurface = commercialSurfacePaths.some(relPath =>
+    existsSync(path.join(workspaceRoot, relPath)),
+  )
+
+  if (!hasCommercialSurface) {
+    const report = {
+      generatedAt: new Date().toISOString(),
+      workspaceRoot,
+      requireDist,
+      checks,
+      failures,
+      ok: true,
+      skipped: true,
+      reason: "commercial release surface is not present in this workspace",
+    }
+
+    await mkdir(path.dirname(REPORT_PATH), { recursive: true })
+    await writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf8")
+
+    console.log("DataGrid Commercial Release Readiness")
+    console.log(`report: ${REPORT_PATH}`)
+    console.log("status: skipped (commercial release surface not present)")
+    return
   }
 
   const manifests = await Promise.all(

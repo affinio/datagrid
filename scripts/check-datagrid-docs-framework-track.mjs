@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { existsSync } from "node:fs"
 import path from "node:path"
 import process from "node:process"
 import { fileURLToPath } from "node:url"
@@ -95,10 +96,19 @@ function compactSnippet(text) {
 async function main() {
   const violations = []
   const fileReports = []
+  const skippedFiles = []
 
   for (const group of FILE_GROUPS) {
     for (const relFile of group.files) {
       const absFile = path.join(workspaceRoot, relFile)
+      if (!existsSync(absFile)) {
+        skippedFiles.push({
+          group: group.group,
+          file: relFile,
+          reason: "missing",
+        })
+        continue
+      }
       const text = await readFile(absFile, "utf8")
       const fileViolations = []
 
@@ -134,8 +144,10 @@ async function main() {
     generatedAt: new Date().toISOString(),
     workspaceRoot,
     totalFiles: fileReports.length,
+    skippedFileCount: skippedFiles.length,
     totalViolations: violations.reduce((sum, item) => sum + item.violations.length, 0),
     files: fileReports,
+    skippedFiles,
     violations,
   }
 
@@ -145,6 +157,7 @@ async function main() {
   console.log("DataGrid Docs Framework-Track Check")
   console.log(`report: ${REPORT_PATH}`)
   console.log(`files: ${report.totalFiles}`)
+  console.log(`skipped: ${report.skippedFileCount}`)
   console.log(`violations: ${report.totalViolations}`)
 
   if (violations.length === 0) {

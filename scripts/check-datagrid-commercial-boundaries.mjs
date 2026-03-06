@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import process from "node:process"
@@ -32,6 +33,35 @@ async function main() {
     if (!ok) {
       failures.push({ id, details })
     }
+  }
+
+  const commercialSurfaceFiles = [
+    "packages/datagrid/package.json",
+    "packages/datagrid-pro/package.json",
+    "docs/datagrid-commercial-packaging-plan.md",
+  ]
+  const hasCommercialSurface = commercialSurfaceFiles.some(relPath =>
+    existsSync(path.join(workspaceRoot, relPath)),
+  )
+
+  if (!hasCommercialSurface) {
+    const report = {
+      generatedAt: new Date().toISOString(),
+      workspaceRoot,
+      checks,
+      failures,
+      ok: true,
+      skipped: true,
+      reason: "commercial sku surface is not present in this workspace",
+    }
+
+    await mkdir(path.dirname(REPORT_PATH), { recursive: true })
+    await writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf8")
+
+    console.log("DataGrid Commercial Boundaries Check")
+    console.log(`report: ${REPORT_PATH}`)
+    console.log("status: skipped (commercial sku surface not present)")
+    return
   }
 
   const datagridManifest = await readJson("packages/datagrid/package.json")

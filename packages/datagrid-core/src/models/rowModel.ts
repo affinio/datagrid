@@ -391,6 +391,28 @@ export type DataGridComputedDependencyToken =
   | `meta:${string}`
   | (string & {})
 
+export type DataGridFormulaMetaField =
+  | "rowId"
+  | "rowKey"
+  | "sourceIndex"
+  | "originalIndex"
+  | "kind"
+  | "isGroup"
+
+export const DATAGRID_FORMULA_META_FIELDS = Object.freeze([
+  "rowId",
+  "rowKey",
+  "sourceIndex",
+  "originalIndex",
+  "kind",
+  "isGroup",
+] as const) satisfies readonly DataGridFormulaMetaField[]
+
+export function isDataGridFormulaMetaField(value: unknown): value is DataGridFormulaMetaField {
+  return typeof value === "string"
+    && (DATAGRID_FORMULA_META_FIELDS as readonly string[]).includes(value)
+}
+
 export interface DataGridComputedFieldComputeContext<T = unknown> {
   row: T
   rowId: DataGridRowId
@@ -422,20 +444,46 @@ export interface DataGridFormulaFieldSnapshot {
   field: string
   formula: string
   deps: readonly DataGridComputedDependencyToken[]
+  contextKeys: readonly string[]
 }
 
-export type DataGridFormulaValue =
-  | number
-  | string
-  | boolean
-  | Date
-  | null
+export interface DataGridFormulaContextRecomputeRequest {
+  contextKeys: readonly string[]
+  rowIds?: readonly DataGridRowId[]
+}
+
+export type DataGridFormulaCyclePolicy = "error" | "iterative"
+
+export interface DataGridFormulaIterativeCalculationOptions {
+  maxIterations?: number
+  epsilon?: number
+}
 
 export type DataGridFormulaRuntimeErrorCode =
   | "DIV_ZERO"
   | "FUNCTION_UNKNOWN"
   | "FUNCTION_ARITY"
   | "EVAL_ERROR"
+
+export interface DataGridFormulaErrorValue {
+  kind: "error"
+  code: DataGridFormulaRuntimeErrorCode
+  message: string
+}
+
+export type DataGridFormulaScalarValue =
+  | number
+  | string
+  | boolean
+  | Date
+  | DataGridFormulaErrorValue
+  | null
+
+export type DataGridFormulaArrayValue = readonly DataGridFormulaScalarValue[]
+
+export type DataGridFormulaValue =
+  | DataGridFormulaScalarValue
+  | DataGridFormulaArrayValue
 
 export interface DataGridFormulaRuntimeError {
   code: DataGridFormulaRuntimeErrorCode
@@ -455,6 +503,26 @@ export interface DataGridProjectionFormulaDiagnostics {
   runtimeErrors: readonly DataGridFormulaRuntimeError[]
 }
 
+export interface DataGridFormulaDirtyCause {
+  kind: "all" | "field" | "computed" | "context"
+  value?: string
+  rows: number
+}
+
+export interface DataGridFormulaNodeComputeDiagnostics {
+  name: string
+  field: string
+  dirty: boolean
+  touched: boolean
+  evaluations: number
+  dirtyRows: number
+  dirtyCauses: readonly DataGridFormulaDirtyCause[]
+  iterative?: boolean
+  converged?: boolean
+  iterationCount?: number
+  cycleGroup?: readonly string[]
+}
+
 export interface DataGridFormulaComputeStageDiagnostics {
   strategy?: "row" | "column-cache"
   rowsTouched: number
@@ -464,6 +532,7 @@ export interface DataGridFormulaComputeStageDiagnostics {
   skippedByObjectIs: number
   dirtyRows: number
   dirtyNodes: readonly string[]
+  nodes?: readonly DataGridFormulaNodeComputeDiagnostics[]
 }
 
 export interface DataGridProjectionDiagnostics {
@@ -520,6 +589,7 @@ export interface DataGridRowModel<T = unknown> {
   recomputeComputedFields?(rowIds?: readonly DataGridRowId[]): number
   registerFormulaField?(definition: DataGridFormulaFieldDefinition): void
   getFormulaFields?(): readonly DataGridFormulaFieldSnapshot[]
+  recomputeFormulaContext?(request: DataGridFormulaContextRecomputeRequest): number
   registerFormulaFunction?(
     name: string,
     definition:

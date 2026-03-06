@@ -59,6 +59,7 @@ export type {
   DataGridApiComputeNamespace,
   DataGridApiDiagnosticsNamespace,
   DataGridApiDiagnosticsSnapshot,
+  DataGridApiFormulaExplainEntry,
   DataGridApiFormulaExplainSnapshot,
   DataGridApiRowModelDiagnostics,
   DataGridApiLifecycleNamespace,

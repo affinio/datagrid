@@ -4,10 +4,15 @@ import type {
   DataGridDataSourceBackpressureDiagnostics,
   DataGridFormulaComputeStageDiagnostics,
   DataGridFormulaExecutionPlanSnapshot,
+  DataGridFormulaFieldSnapshot,
   DataGridProjectionFormulaDiagnostics,
   DataGridRowModel,
 } from "../models"
+import {
+  explainDataGridFormulaExpression,
+} from "../models"
 import type {
+  DataGridApiFormulaExplainEntry,
   DataGridApiDiagnosticsSnapshot,
   DataGridApiFormulaExplainSnapshot,
 } from "./gridApiContracts"
@@ -27,6 +32,10 @@ type FormulaPlanCapability = {
 
 type FormulaComputeDiagnosticsCapability = {
   getFormulaComputeStageDiagnostics: () => DataGridFormulaComputeStageDiagnostics | null
+}
+
+type FormulaFieldsCapability = {
+  getFormulaFields: () => readonly DataGridFormulaFieldSnapshot[]
 }
 
 export interface DataGridApiDiagnosticsMethods {
@@ -87,6 +96,18 @@ function resolveFormulaComputeDiagnosticsCapability<TRow>(
   }
 }
 
+function resolveFormulaFieldsCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): FormulaFieldsCapability | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<FormulaFieldsCapability>
+  if (typeof candidate.getFormulaFields !== "function") {
+    return null
+  }
+  return {
+    getFormulaFields: candidate.getFormulaFields.bind(rowModel),
+  }
+}
+
 function cloneFormulaExecutionPlanSnapshot(
   snapshot: DataGridFormulaExecutionPlanSnapshot,
 ): DataGridFormulaExecutionPlanSnapshot {
@@ -100,7 +121,12 @@ function cloneFormulaExecutionPlanSnapshot(
       fieldDeps: [...node.fieldDeps],
       computedDeps: [...node.computedDeps],
       dependents: [...node.dependents],
+      ...(node.iterative ? { iterative: true } : {}),
+      ...(node.cycleGroup ? { cycleGroup: [...node.cycleGroup] } : {}),
     })),
+    ...(snapshot.iterativeGroups
+      ? { iterativeGroups: snapshot.iterativeGroups.map(group => [...group]) }
+      : {}),
   }
 }
 
@@ -126,7 +152,108 @@ function cloneFormulaComputeStageDiagnostics(
     skippedByObjectIs: diagnostics.skippedByObjectIs,
     dirtyRows: diagnostics.dirtyRows,
     dirtyNodes: [...diagnostics.dirtyNodes],
+    ...(diagnostics.nodes
+      ? {
+        nodes: diagnostics.nodes.map(node => ({
+          name: node.name,
+          field: node.field,
+          dirty: node.dirty,
+          touched: node.touched,
+          evaluations: node.evaluations,
+          dirtyRows: node.dirtyRows,
+          dirtyCauses: node.dirtyCauses.map(cause => ({ ...cause })),
+          ...(node.iterative ? { iterative: true } : {}),
+          ...(typeof node.converged === "boolean" ? { converged: node.converged } : {}),
+          ...(typeof node.iterationCount === "number" ? { iterationCount: node.iterationCount } : {}),
+          ...(node.cycleGroup ? { cycleGroup: [...node.cycleGroup] } : {}),
+        })),
+      }
+      : {}),
   }
+}
+
+function buildFormulaExplainEntries(
+  formulaFields: readonly DataGridFormulaFieldSnapshot[],
+  executionPlan: DataGridFormulaExecutionPlanSnapshot | null,
+  projectionFormula: DataGridProjectionFormulaDiagnostics | null,
+  computeStage: DataGridFormulaComputeStageDiagnostics | null,
+): readonly DataGridApiFormulaExplainEntry[] {
+  if (formulaFields.length === 0) {
+    return []
+  }
+  const planNodeByName = new Map((executionPlan?.nodes ?? []).map(node => [node.name, node] as const))
+  const runtimeNodeByName = new Map((computeStage?.nodes ?? []).map(node => [node.name, node] as const))
+  const recomputedFields = new Set(projectionFormula?.recomputedFields ?? [])
+
+  return formulaFields.map((formulaField) => {
+    const explained = explainDataGridFormulaExpression(formulaField.formula)
+    const dependencies = explained.identifiers.map((identifier, index) => {
+      const token = formulaField.deps[index] ?? `field:${identifier}`
+      const normalizedToken = typeof token === "string" ? token.trim() : ""
+      if (normalizedToken.startsWith("field:")) {
+        return {
+          identifier,
+          token,
+          domain: "field" as const,
+          value: normalizedToken.slice("field:".length),
+        }
+      }
+      if (normalizedToken.startsWith("computed:")) {
+        return {
+          identifier,
+          token,
+          domain: "computed" as const,
+          value: normalizedToken.slice("computed:".length),
+        }
+      }
+      if (normalizedToken.startsWith("meta:")) {
+        return {
+          identifier,
+          token,
+          domain: "meta" as const,
+          value: normalizedToken.slice("meta:".length),
+        }
+      }
+      return {
+        identifier,
+        token,
+        domain: "unknown" as const,
+        value: normalizedToken.length > 0 ? normalizedToken : String(token),
+      }
+    })
+    const planNode = planNodeByName.get(formulaField.name) ?? null
+    const runtimeNode = runtimeNodeByName.get(formulaField.name) ?? null
+    return {
+      name: formulaField.name,
+      field: formulaField.field,
+      formula: formulaField.formula,
+      level: planNode?.level ?? null,
+      identifiers: [...explained.identifiers],
+      dependencies,
+      contextKeys: [...formulaField.contextKeys],
+      dependents: [...(planNode?.dependents ?? [])],
+      tree: explained.tree,
+      runtime: runtimeNode
+        ? {
+          name: runtimeNode.name,
+          field: runtimeNode.field,
+          dirty: runtimeNode.dirty,
+          touched: runtimeNode.touched,
+          evaluations: runtimeNode.evaluations,
+          dirtyRows: runtimeNode.dirtyRows,
+          dirtyCauses: runtimeNode.dirtyCauses.map(cause => ({ ...cause })),
+          ...(runtimeNode.iterative ? { iterative: true } : {}),
+          ...(typeof runtimeNode.converged === "boolean" ? { converged: runtimeNode.converged } : {}),
+          ...(typeof runtimeNode.iterationCount === "number" ? { iterationCount: runtimeNode.iterationCount } : {}),
+          ...(runtimeNode.cycleGroup ? { cycleGroup: [...runtimeNode.cycleGroup] } : {}),
+        }
+        : null,
+      dirty: runtimeNode?.dirty === true,
+      recomputed: recomputedFields.has(formulaField.name),
+      touched: runtimeNode?.touched === true,
+      dirtyCauses: runtimeNode?.dirtyCauses.map(cause => ({ ...cause })) ?? [],
+    }
+  })
 }
 
 function cloneDerivedCacheDiagnostics(
@@ -154,6 +281,7 @@ export function createDataGridApiDiagnosticsMethods<TRow = unknown>(
   const getBackpressureDiagnostics = resolveBackpressureCapability(rowModel)
   const getFormulaPlan = resolveFormulaPlanCapability(rowModel)
   const getFormulaComputeDiagnostics = resolveFormulaComputeDiagnosticsCapability(rowModel)
+  const getFormulaFields = resolveFormulaFieldsCapability(rowModel)
 
   const resolveComputeDiagnostics = (): DataGridClientComputeDiagnostics | null => {
     const capability = getComputeCapability()
@@ -188,14 +316,24 @@ export function createDataGridApiDiagnosticsMethods<TRow = unknown>(
       const snapshot = rowModel.getSnapshot()
       const executionPlan = getFormulaPlan?.getFormulaExecutionPlan() ?? null
       const computeStageDiagnostics = getFormulaComputeDiagnostics?.getFormulaComputeStageDiagnostics() ?? null
+      const projectionFormula = snapshot.projection?.formula
+        ? cloneProjectionFormulaDiagnostics(snapshot.projection.formula)
+        : null
+      const computeStage = computeStageDiagnostics
+        ? cloneFormulaComputeStageDiagnostics(computeStageDiagnostics)
+        : null
+      const formulaFields = getFormulaFields?.getFormulaFields() ?? []
+      const formulas = buildFormulaExplainEntries(
+        formulaFields,
+        executionPlan,
+        projectionFormula,
+        computeStage,
+      )
       return {
         executionPlan: executionPlan ? cloneFormulaExecutionPlanSnapshot(executionPlan) : null,
-        projectionFormula: snapshot.projection?.formula
-          ? cloneProjectionFormulaDiagnostics(snapshot.projection.formula)
-          : null,
-        computeStage: computeStageDiagnostics
-          ? cloneFormulaComputeStageDiagnostics(computeStageDiagnostics)
-          : null,
+        projectionFormula,
+        computeStage,
+        ...(formulas.length > 0 ? { formulas } : {}),
       }
     },
   }

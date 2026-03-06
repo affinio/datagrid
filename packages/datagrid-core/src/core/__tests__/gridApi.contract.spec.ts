@@ -547,6 +547,7 @@ describe("data grid api facade contracts", () => {
     const {
       registerFormulaField: _omitRegisterFormulaField,
       getFormulaFields: _omitGetFormulaFields,
+      recomputeFormulaContext: _omitRecomputeFormulaContext,
       registerFormulaFunction: _omitRegisterFormulaFunction,
       unregisterFormulaFunction: _omitUnregisterFormulaFunction,
       getFormulaFunctionNames: _omitGetFormulaFunctionNames,
@@ -581,6 +582,54 @@ describe("data grid api facade contracts", () => {
     expect(() => {
       api.rows.unregisterFormulaFunction("double")
     }).toThrow(/formula function registry capability/i)
+    expect(() => {
+      api.rows.recomputeFormulaContext({ contextKeys: ["pricing"] })
+    }).toThrow(/formula field capability/i)
+  })
+
+  it("exposes contextual formula recompute through rows api", () => {
+    let rate = 2
+    const rowModel = createClientRowModel<{
+      id: number
+      qty: number
+      total?: number
+    }>({
+      rows: [
+        { row: { id: 1, qty: 3 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, qty: 4 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "total", label: "Total" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.rows.registerFormulaFunction("RATE", {
+      arity: 0,
+      contextKeys: ["pricing"],
+      compute: () => rate,
+    })
+    api.rows.registerFormulaField({
+      name: "total",
+      formula: "qty * RATE()",
+    })
+
+    rate = 5
+    expect(api.rows.recomputeFormulaContext({ contextKeys: ["pricing"], rowIds: ["r2"] })).toBe(1)
+    expect((api.rows.get(0)?.row as { total?: number })?.total).toBe(6)
+    expect((api.rows.get(1)?.row as { total?: number })?.total).toBe(20)
+    expect(api.diagnostics.getFormulaExplain().formulas).toEqual([
+      expect.objectContaining({
+        name: "total",
+        contextKeys: ["pricing"],
+      }),
+    ])
   })
 
   it("reports missing patch capability for non-client row models and fails loudly", () => {
@@ -778,6 +827,158 @@ describe("data grid api facade contracts", () => {
     expect(explain.computeStage?.skippedByObjectIs).toBeGreaterThanOrEqual(0)
     expect(explain.computeStage?.dirtyRows).toBeGreaterThan(0)
     expect(explain.computeStage?.dirtyNodes).toEqual(["subtotal", "total"])
+    expect(explain.formulas).toEqual([
+      expect.objectContaining({
+        name: "subtotal",
+        field: "subtotal",
+        formula: "price * qty",
+        level: 0,
+        identifiers: ["price", "qty"],
+        dependencies: [
+          { identifier: "price", token: "field:price", domain: "field", value: "price" },
+          { identifier: "qty", token: "field:qty", domain: "field", value: "qty" },
+        ],
+        dependents: ["total"],
+        dirty: true,
+        recomputed: true,
+        touched: true,
+        dirtyCauses: [{ kind: "all", rows: 1 }],
+        tree: expect.objectContaining({ kind: "binary", label: "*" }),
+        runtime: expect.objectContaining({
+          name: "subtotal",
+          field: "subtotal",
+          dirty: true,
+          touched: true,
+          dirtyRows: 1,
+        }),
+      }),
+      expect.objectContaining({
+        name: "total",
+        field: "total",
+        formula: "subtotal + 1",
+        level: 1,
+        identifiers: ["subtotal"],
+        dependencies: [
+          {
+            identifier: "subtotal",
+            token: "computed:subtotal",
+            domain: "computed",
+            value: "subtotal",
+          },
+        ],
+        dependents: [],
+        dirty: true,
+        recomputed: true,
+        touched: true,
+        dirtyCauses: [
+          { kind: "all", rows: 1 },
+          { kind: "computed", value: "subtotal", rows: 1 },
+        ],
+        tree: expect.objectContaining({ kind: "binary", label: "+" }),
+        runtime: expect.objectContaining({
+          name: "total",
+          field: "total",
+          dirty: true,
+          touched: true,
+          dirtyRows: 1,
+        }),
+      }),
+    ])
+  })
+
+  it("surfaces meta-domain formula dependencies in explain snapshots", () => {
+    const rowModel = createClientRowModel<{
+      id: number
+      label?: string
+    }>({
+      rows: [
+        { row: { id: 1 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      ],
+      initialFormulaFields: [
+        { name: "label", formula: "CONCAT(meta.rowId, '-', meta.kind)" },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "label", label: "Label" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    const explain = api.diagnostics.getFormulaExplain()
+    expect(explain.formulas).toEqual([
+      expect.objectContaining({
+        name: "label",
+        field: "label",
+        identifiers: ["meta.rowId", "meta.kind"],
+        dependencies: [
+          { identifier: "meta.rowId", token: "meta:rowId", domain: "meta", value: "rowId" },
+          { identifier: "meta.kind", token: "meta:kind", domain: "meta", value: "kind" },
+        ],
+      }),
+    ])
+  })
+
+  it("surfaces expanded reference syntax in explain snapshots", () => {
+    const rowModel = createClientRowModel<{
+      id: number
+      user: { orders: Array<{ price: number }>; metrics: { "tax.rate": number } }
+      total?: number
+    }>({
+      rows: [
+        {
+          row: {
+            id: 1,
+            user: {
+              orders: [{ price: 10 }],
+              metrics: { "tax.rate": 2 },
+            },
+          },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "user.orders[0].price + user.metrics['tax.rate']" },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "total", label: "Total" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    const explain = api.diagnostics.getFormulaExplain()
+    expect(explain.formulas).toEqual([
+      expect.objectContaining({
+        name: "total",
+        identifiers: ["user.orders.0.price", 'user.metrics."tax.rate"'],
+        dependencies: [
+          {
+            identifier: "user.orders.0.price",
+            token: "field:user.orders.0.price",
+            domain: "field",
+            value: "user.orders.0.price",
+          },
+          {
+            identifier: 'user.metrics."tax.rate"',
+            token: 'field:user.metrics."tax.rate"',
+            domain: "field",
+            value: 'user.metrics."tax.rate"',
+          },
+        ],
+      }),
+    ])
   })
 
   it("reports compute namespace as unsupported when row model lacks compute capability", () => {

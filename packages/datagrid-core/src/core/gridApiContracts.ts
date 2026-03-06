@@ -5,6 +5,7 @@ import type {
   DataGridClientRowModelDerivedCacheDiagnostics,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
+  DataGridFormulaContextRecomputeRequest,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
   DataGridFormulaFunctionDefinition,
@@ -30,6 +31,10 @@ import type {
   DataGridProjectionDiagnostics,
   DataGridProjectionFormulaDiagnostics,
   DataGridFormulaComputeStageDiagnostics,
+  DataGridFormulaDirtyCause,
+  DataGridFormulaExplainDependency,
+  DataGridFormulaExplainNode,
+  DataGridFormulaNodeComputeDiagnostics,
   DataGridProjectionStage,
   DataGridPivotSpec,
   DataGridRowId,
@@ -146,6 +151,7 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   hasFormulaSupport(): boolean
   registerFormulaField(definition: DataGridFormulaFieldDefinition): void
   getFormulaFields(): readonly DataGridFormulaFieldSnapshot[]
+  recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest): number
   hasFormulaFunctionRegistrySupport(): boolean
   registerFormulaFunction(
     name: string,
@@ -239,10 +245,28 @@ export interface DataGridApiDiagnosticsSnapshot {
   backpressure: DataGridDataSourceBackpressureDiagnostics | null
 }
 
+export interface DataGridApiFormulaExplainEntry {
+  name: string
+  field: string
+  formula: string
+  level: number | null
+  identifiers: readonly string[]
+  dependencies: readonly DataGridFormulaExplainDependency[]
+  contextKeys: readonly string[]
+  dependents: readonly string[]
+  tree: DataGridFormulaExplainNode
+  runtime: DataGridFormulaNodeComputeDiagnostics | null
+  dirty: boolean
+  recomputed: boolean
+  touched: boolean
+  dirtyCauses: readonly DataGridFormulaDirtyCause[]
+}
+
 export interface DataGridApiFormulaExplainSnapshot {
   executionPlan: DataGridFormulaExecutionPlanSnapshot | null
   projectionFormula: DataGridProjectionFormulaDiagnostics | null
   computeStage: DataGridFormulaComputeStageDiagnostics | null
+  formulas?: readonly DataGridApiFormulaExplainEntry[]
 }
 
 export interface DataGridApiDiagnosticsNamespace {

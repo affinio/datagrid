@@ -18,7 +18,13 @@ export interface ClientRowComputedBootstrapRuntimeContext<T> {
     definitions: readonly DataGridComputedFieldDefinition<T>[],
   ) => readonly DataGridComputedFieldDefinition<T>[]
 
-  registerComputedFieldInternal: (definition: DataGridComputedFieldDefinition<T>) => void
+  registerComputedFieldInternal: (
+    definition: DataGridComputedFieldDefinition<T>,
+    options?: {
+      knownComputedNames?: ReadonlySet<string>
+      deferRebuild?: boolean
+    },
+  ) => void
   compileFormulaFieldDefinition: (
     definition: DataGridFormulaFieldDefinition,
     options: {
@@ -31,8 +37,10 @@ export interface ClientRowComputedBootstrapRuntimeContext<T> {
     options: {
       knownComputedNames?: ReadonlySet<string>
       knownComputedNameByField?: ReadonlyMap<string, string>
+      deferRebuild?: boolean
     },
   ) => void
+  rebuildComputedPlan: () => void
 
   applyComputedFieldsToSourceRows: () => ApplyComputedFieldsToSourceRowsResult<T>
   commitFormulaDiagnostics: (diagnostics: ApplyComputedFieldsToSourceRowsResult<T>["formulaDiagnostics"]) => void
@@ -59,9 +67,16 @@ export function createClientRowComputedBootstrapRuntime<T>(
   const bootstrapInitialComputedAndFormulaFields = (): void => {
     if (Array.isArray(context.initialComputedFields) && context.initialComputedFields.length > 0) {
       const orderedInitialComputedFields = context.resolveInitialComputedRegistrationOrder(context.initialComputedFields)
+      const knownInitialComputedNames = new Set(
+        orderedInitialComputedFields.map(definition => context.normalizeComputedName(definition.name)),
+      )
       for (const definition of orderedInitialComputedFields) {
-        context.registerComputedFieldInternal(definition)
+        context.registerComputedFieldInternal(definition, {
+          knownComputedNames: knownInitialComputedNames,
+          deferRebuild: true,
+        })
       }
+      context.rebuildComputedPlan()
       runInitialRecompute()
     }
 
@@ -116,8 +131,11 @@ export function createClientRowComputedBootstrapRuntime<T>(
         }, {
           knownComputedNames: initialFormulaNames,
           knownComputedNameByField: initialFormulaNameByField,
+          deferRebuild: true,
         })
       }
+
+      context.rebuildComputedPlan()
 
       runInitialRecompute()
     }

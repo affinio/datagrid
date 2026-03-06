@@ -161,6 +161,13 @@ Formula explain payload includes:
   - `fieldsTouched`
   - `evaluations`
   - `skippedByObjectIs`
+- `formulas`:
+  - per-formula explain tree
+  - dependency trace
+  - function context keys
+  - dependents
+  - runtime dirty / recomputed / touched flags
+  - dirty-cause summary (`field`, `computed`, `context`, `all`)
 
 Cost/behavior contract:
 

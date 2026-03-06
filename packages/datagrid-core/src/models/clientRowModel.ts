@@ -14,9 +14,12 @@ import {
   type DataGridPivotCellDrilldownInput,
   type DataGridComputedFieldDefinition,
   type DataGridComputedFieldSnapshot,
+  type DataGridFormulaCyclePolicy,
+  type DataGridFormulaContextRecomputeRequest,
   type DataGridFormulaFieldDefinition,
   type DataGridFormulaFieldSnapshot,
   type DataGridFormulaComputeStageDiagnostics,
+  type DataGridFormulaIterativeCalculationOptions,
   type DataGridFormulaValue,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramOptions,
@@ -172,6 +175,8 @@ export interface CreateClientRowModelOptions<T> {
   initialComputedFields?: readonly DataGridComputedFieldDefinition<T>[]
   initialFormulaFields?: readonly DataGridFormulaFieldDefinition[]
   initialFormulaFunctionRegistry?: DataGridFormulaFunctionRegistry
+  formulaCyclePolicy?: DataGridFormulaCyclePolicy
+  formulaIterativeCalculation?: DataGridFormulaIterativeCalculationOptions
   computeMode?: DataGridClientComputeMode
   computeTransport?: DataGridClientComputeTransport | null
   /**
@@ -235,6 +240,7 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
   recomputeComputedFields(rowIds?: readonly DataGridRowId[]): number
   registerFormulaField(definition: DataGridFormulaFieldDefinition): void
   getFormulaFields(): readonly DataGridFormulaFieldSnapshot[]
+  recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest): number
   registerFormulaFunction(
     name: string,
     definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
@@ -433,9 +439,13 @@ export function createClientRowModel<T>(
   const commitFormulaDiagnostics = formulaDiagnosticsRuntime.commitFormulaDiagnostics
   const commitFormulaComputeStageDiagnostics = formulaDiagnosticsRuntime.commitFormulaComputeStageDiagnostics
   const getFormulaComputeStageDiagnosticsSnapshot = formulaDiagnosticsRuntime.getFormulaComputeStageDiagnosticsSnapshot
+  const formulaCyclePolicy: DataGridFormulaCyclePolicy = options.formulaCyclePolicy === "iterative"
+    ? "iterative"
+    : "error"
   const computedRegistry = createClientRowComputedRegistryRuntime<T>({
     projectionPolicy,
     initialFormulaFunctionRegistry: options.initialFormulaFunctionRegistry,
+    formulaCyclePolicy,
     onFormulaRuntimeError: pushFormulaRuntimeError,
     onComputedPlanChanged: () => {},
   })
@@ -475,13 +485,18 @@ export function createClientRowModel<T>(
       sourceRowIndexById = buildRowIdPositionIndex(sourceRows)
     },
     resolveRowFieldReader: computedRegistry.resolveRowFieldReader,
+    getComputedExecutionPlan: computedRegistry.getComputedExecutionPlan,
     getComputedOrder: computedRegistry.getComputedOrder,
     getComputedEntryByIndex: computedRegistry.getComputedEntryByIndex,
     getComputedFieldReaderByIndex: computedRegistry.getComputedFieldReaderByIndex,
     getComputedLevelIndexes: computedRegistry.getComputedLevelIndexes,
     getComputedDependentsByIndex: computedRegistry.getComputedDependentsByIndex,
+    getFormulaIterativeCalculationOptions: () => options.formulaIterativeCalculation ?? null,
     getFormulaFieldsByName: computedRegistry.getFormulaFieldsByName,
     resolveComputedRootIndexes: computedRegistry.resolveComputedRootIndexes,
+    resolveComputedRootIndexesForField: computedRegistry.resolveComputedRootIndexesForField,
+    resolveComputedRootIndexesForContext: computedRegistry.resolveComputedRootIndexesForContext,
+    resolveComputedRootIndexesForContextKeys: computedRegistry.resolveComputedRootIndexesForContextKeys,
     resolveComputedTokenValue: computedRegistry.resolveComputedTokenValue,
     getSourceColumnValues,
     clearSourceColumnValuesCache,
@@ -496,14 +511,19 @@ export function createClientRowModel<T>(
   }
   const registerComputedFieldInternal = (
     definition: DataGridComputedFieldDefinition<T>,
+    internalOptions?: {
+      knownComputedNames?: ReadonlySet<string>
+      deferRebuild?: boolean
+    },
   ): void => {
-    computedRegistry.registerComputedFieldInternal(definition)
+    computedRegistry.registerComputedFieldInternal(definition, internalOptions)
   }
   const registerFormulaFieldInternal = (
     definition: DataGridFormulaFieldDefinition,
     options: {
       knownComputedNames?: ReadonlySet<string>
       knownComputedNameByField?: ReadonlyMap<string, string>
+      deferRebuild?: boolean
     } = {},
   ): void => {
     computedRegistry.registerFormulaFieldInternal(definition, options)
@@ -524,6 +544,7 @@ export function createClientRowModel<T>(
     registerComputedFieldInternal,
     compileFormulaFieldDefinition: computedRegistry.compileFormulaFieldDefinition,
     registerFormulaFieldInternal,
+    rebuildComputedPlan: computedRegistry.rebuildComputedPlan,
     applyComputedFieldsToSourceRows: () => applyComputedFieldsToSourceRows(),
     commitFormulaDiagnostics,
     commitFormulaComputeStageDiagnostics,
@@ -1087,9 +1108,13 @@ export function createClientRowModel<T>(
 
   const recomputeComputedFieldsAndRefresh = (
     rowIds?: ReadonlySet<DataGridRowId>,
+    options: {
+      contextKeys?: ReadonlySet<string>
+    } = {},
   ): number => {
     const computedResult = applyComputedFieldsToSourceRows({
       rowIds,
+      changedContextKeys: options.contextKeys,
     })
     commitFormulaDiagnostics(computedResult.formulaDiagnostics)
     commitFormulaComputeStageDiagnostics(computedResult.computeStageDiagnostics)
@@ -1209,6 +1234,25 @@ export function createClientRowModel<T>(
         : []
       return recomputeComputedFieldsAndRefresh(
         normalizedRowIds.length > 0 ? new Set<DataGridRowId>(normalizedRowIds) : undefined,
+      )
+    },
+    recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest) {
+      ensureActive()
+      const contextKeys = Array.isArray(request.contextKeys)
+        ? request.contextKeys
+          .filter((value): value is string => typeof value === "string")
+          .map(value => value.trim())
+          .filter(value => value.length > 0)
+        : []
+      if (contextKeys.length === 0) {
+        return 0
+      }
+      const normalizedRowIds = Array.isArray(request.rowIds)
+        ? request.rowIds.filter(isDataGridRowId)
+        : []
+      return recomputeComputedFieldsAndRefresh(
+        normalizedRowIds.length > 0 ? new Set<DataGridRowId>(normalizedRowIds) : undefined,
+        { contextKeys: new Set<string>(contextKeys) },
       )
     },
     reorderRows(input: DataGridClientRowReorderInput) {

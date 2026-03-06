@@ -1,3 +1,7 @@
+import { parseFormulaReferenceSegments } from "./formulaEngine/core.js"
+
+export type DataGridFormulaExecutionCyclePolicy = "error" | "iterative"
+
 export type DataGridFormulaExecutionDependencyDomain = "field" | "computed" | "meta"
 
 export interface DataGridFormulaExecutionDependency {
@@ -18,12 +22,15 @@ export interface DataGridFormulaExecutionPlanNodeSnapshot {
   fieldDeps: readonly string[]
   computedDeps: readonly string[]
   dependents: readonly string[]
+  iterative?: boolean
+  cycleGroup?: readonly string[]
 }
 
 export interface DataGridFormulaExecutionPlan {
   order: readonly string[]
   levels: readonly (readonly string[])[]
   nodes: ReadonlyMap<string, DataGridFormulaExecutionPlanNodeSnapshot>
+  iterativeGroups: readonly (readonly string[])[]
   directByFields: (changedFields: ReadonlySet<string>) => ReadonlySet<string>
   affectedByFields: (changedFields: ReadonlySet<string>) => ReadonlySet<string>
   affectedByComputed: (changedComputed: ReadonlySet<string>) => ReadonlySet<string>
@@ -33,6 +40,11 @@ export interface DataGridFormulaExecutionPlanSnapshot {
   order: readonly string[]
   levels: readonly (readonly string[])[]
   nodes: readonly DataGridFormulaExecutionPlanNodeSnapshot[]
+  iterativeGroups?: readonly (readonly string[] )[]
+}
+
+export interface CreateDataGridFormulaExecutionPlanOptions {
+  cyclePolicy?: DataGridFormulaExecutionCyclePolicy
 }
 
 function normalizeName(value: string, label: string): string {
@@ -51,9 +63,8 @@ function normalizeDependency(dependency: DataGridFormulaExecutionDependency): Da
 }
 
 function splitFieldPathSegments(field: string): readonly string[] {
-  return field
-    .split(".")
-    .map(segment => segment.trim())
+  return parseFormulaReferenceSegments(field)
+    .map(segment => String(segment).trim())
     .filter(segment => segment.length > 0)
 }
 
@@ -100,8 +111,13 @@ function addMapValues(
 
 export function createDataGridFormulaExecutionPlan(
   input: readonly DataGridFormulaExecutionPlanNode[],
+  options: CreateDataGridFormulaExecutionPlanOptions = {},
 ): DataGridFormulaExecutionPlan {
+  const cyclePolicy: DataGridFormulaExecutionCyclePolicy = options.cyclePolicy === "iterative"
+    ? "iterative"
+    : "error"
   const nodeByName = new Map<string, DataGridFormulaExecutionPlanNode>()
+  const nodeIndexByName = new Map<string, number>()
   for (const rawNode of input) {
     const name = normalizeName(rawNode.name, "Node name")
     const field = normalizeName(rawNode.field, `Field for node '${name}'`)
@@ -112,25 +128,12 @@ export function createDataGridFormulaExecutionPlan(
       ? rawNode.deps.map(normalizeDependency)
       : []
     nodeByName.set(name, { name, field, deps })
+    nodeIndexByName.set(name, nodeIndexByName.size)
   }
 
-  const order: string[] = []
-  const visitStateByName = new Map<string, 0 | 1 | 2>()
-  const visitNode = (name: string): void => {
-    const visitState = visitStateByName.get(name) ?? 0
-    if (visitState === 2) {
-      return
-    }
-    if (visitState === 1) {
-      throw new Error(`[DataGridFormulaExecutionPlan] Cycle detected at '${name}'.`)
-    }
-
-    const node = nodeByName.get(name)
-    if (!node) {
-      throw new Error(`[DataGridFormulaExecutionPlan] Missing node '${name}'.`)
-    }
-
-    visitStateByName.set(name, 1)
+  const adjacency = new Map<string, string[]>()
+  for (const [name, node] of nodeByName) {
+    const deps: string[] = []
     for (const dependency of node.deps) {
       if (dependency.domain !== "computed") {
         continue
@@ -140,15 +143,160 @@ export function createDataGridFormulaExecutionPlan(
           `[DataGridFormulaExecutionPlan] Missing computed dependency '${dependency.value}' for '${name}'.`,
         )
       }
-      visitNode(dependency.value)
+      deps.push(dependency.value)
     }
-    visitStateByName.set(name, 2)
-    order.push(name)
+    adjacency.set(name, deps)
+  }
+
+  const indexByName = new Map<string, number>()
+  const lowLinkByName = new Map<string, number>()
+  const stack: string[] = []
+  const onStack = new Set<string>()
+  const components: string[][] = []
+  let indexCounter = 0
+
+  const strongConnect = (name: string): void => {
+    indexByName.set(name, indexCounter)
+    lowLinkByName.set(name, indexCounter)
+    indexCounter += 1
+    stack.push(name)
+    onStack.add(name)
+
+    const deps = adjacency.get(name) ?? []
+    for (const dependencyName of deps) {
+      if (!indexByName.has(dependencyName)) {
+        strongConnect(dependencyName)
+        lowLinkByName.set(
+          name,
+          Math.min(lowLinkByName.get(name) ?? 0, lowLinkByName.get(dependencyName) ?? 0),
+        )
+        continue
+      }
+      if (onStack.has(dependencyName)) {
+        lowLinkByName.set(
+          name,
+          Math.min(lowLinkByName.get(name) ?? 0, indexByName.get(dependencyName) ?? 0),
+        )
+      }
+    }
+
+    if ((lowLinkByName.get(name) ?? -1) !== (indexByName.get(name) ?? -2)) {
+      return
+    }
+
+    const component: string[] = []
+    while (stack.length > 0) {
+      const entry = stack.pop()
+      if (!entry) {
+        break
+      }
+      onStack.delete(entry)
+      component.push(entry)
+      if (entry === name) {
+        break
+      }
+    }
+    component.sort((left, right) => (nodeIndexByName.get(left) ?? 0) - (nodeIndexByName.get(right) ?? 0))
+    components.push(component)
   }
 
   for (const name of nodeByName.keys()) {
-    visitNode(name)
+    if (!indexByName.has(name)) {
+      strongConnect(name)
+    }
   }
+
+  const componentIndexByName = new Map<string, number>()
+  for (let componentIndex = 0; componentIndex < components.length; componentIndex += 1) {
+    for (const name of components[componentIndex] ?? []) {
+      componentIndexByName.set(name, componentIndex)
+    }
+  }
+
+  const isIterativeComponent = (component: readonly string[]): boolean => {
+    if (component.length > 1) {
+      return true
+    }
+    const name = component[0]
+    if (!name) {
+      return false
+    }
+    return (adjacency.get(name) ?? []).includes(name)
+  }
+
+  const iterativeGroups = components
+    .filter(component => isIterativeComponent(component))
+    .map(component => Object.freeze([...component]) as readonly string[])
+
+  if (cyclePolicy === "error" && iterativeGroups.length > 0) {
+    throw new Error(`[DataGridFormulaExecutionPlan] Cycle detected at '${iterativeGroups[0]?.[0] ?? "unknown"}'.`)
+  }
+
+  const componentDeps = new Map<number, Set<number>>()
+  const componentDependents = new Map<number, Set<number>>()
+  const indegreeByComponent = new Uint32Array(components.length)
+
+  for (let componentIndex = 0; componentIndex < components.length; componentIndex += 1) {
+    const component = components[componentIndex] ?? []
+    const deps = componentDeps.get(componentIndex) ?? new Set<number>()
+    for (const name of component) {
+      for (const dependencyName of adjacency.get(name) ?? []) {
+        const dependencyComponentIndex = componentIndexByName.get(dependencyName)
+        if (typeof dependencyComponentIndex !== "number" || dependencyComponentIndex === componentIndex) {
+          continue
+        }
+        if (!deps.has(dependencyComponentIndex)) {
+          deps.add(dependencyComponentIndex)
+          indegreeByComponent[componentIndex] = (indegreeByComponent[componentIndex] ?? 0) + 1
+        }
+        const dependents = componentDependents.get(dependencyComponentIndex) ?? new Set<number>()
+        dependents.add(componentIndex)
+        componentDependents.set(dependencyComponentIndex, dependents)
+      }
+    }
+    componentDeps.set(componentIndex, deps)
+  }
+
+  const availableComponents: number[] = []
+  for (let componentIndex = 0; componentIndex < components.length; componentIndex += 1) {
+    if ((indegreeByComponent[componentIndex] ?? 0) === 0) {
+      availableComponents.push(componentIndex)
+    }
+  }
+  availableComponents.sort((left, right) => {
+    const leftOrder = Math.min(...(components[left] ?? []).map(name => nodeIndexByName.get(name) ?? Number.MAX_SAFE_INTEGER))
+    const rightOrder = Math.min(...(components[right] ?? []).map(name => nodeIndexByName.get(name) ?? Number.MAX_SAFE_INTEGER))
+    return leftOrder - rightOrder
+  })
+
+  const componentOrder: number[] = []
+  const componentLevelByIndex = new Map<number, number>()
+  while (availableComponents.length > 0) {
+    const componentIndex = availableComponents.shift()
+    if (typeof componentIndex !== "number") {
+      continue
+    }
+    componentOrder.push(componentIndex)
+    const deps = componentDeps.get(componentIndex) ?? new Set<number>()
+    let level = 0
+    for (const dependencyComponentIndex of deps) {
+      level = Math.max(level, (componentLevelByIndex.get(dependencyComponentIndex) ?? 0) + 1)
+    }
+    componentLevelByIndex.set(componentIndex, level)
+    for (const dependentComponentIndex of componentDependents.get(componentIndex) ?? []) {
+      indegreeByComponent[dependentComponentIndex] = (indegreeByComponent[dependentComponentIndex] ?? 0) - 1
+      if (indegreeByComponent[dependentComponentIndex] === 0) {
+        availableComponents.push(dependentComponentIndex)
+        availableComponents.sort((left, right) => {
+          const leftOrder = Math.min(...(components[left] ?? []).map(name => nodeIndexByName.get(name) ?? Number.MAX_SAFE_INTEGER))
+          const rightOrder = Math.min(...(components[right] ?? []).map(name => nodeIndexByName.get(name) ?? Number.MAX_SAFE_INTEGER))
+          return leftOrder - rightOrder
+        })
+      }
+    }
+  }
+
+  const order = componentOrder.flatMap(componentIndex => components[componentIndex] ?? [])
 
   const levelByName = new Map<string, number>()
   for (const name of order) {
@@ -156,14 +304,10 @@ export function createDataGridFormulaExecutionPlan(
     if (!node) {
       continue
     }
-    let level = 0
-    for (const dependency of node.deps) {
-      if (dependency.domain !== "computed") {
-        continue
-      }
-      const dependencyLevel = levelByName.get(dependency.value) ?? 0
-      level = Math.max(level, dependencyLevel + 1)
-    }
+    const componentIndex = componentIndexByName.get(name)
+    let level = typeof componentIndex === "number"
+      ? (componentLevelByIndex.get(componentIndex) ?? 0)
+      : 0
     levelByName.set(name, level)
   }
 
@@ -232,6 +376,10 @@ export function createDataGridFormulaExecutionPlan(
     if (!node) {
       continue
     }
+    const componentIndex = componentIndexByName.get(name)
+    const cycleGroup = typeof componentIndex === "number" && isIterativeComponent(components[componentIndex] ?? [])
+      ? Object.freeze([...(components[componentIndex] ?? [])])
+      : null
     const sortedDependents = Array.from(dependentsByComputed.get(name) ?? [])
       .sort((left, right) => {
         const leftIndex = orderIndexByName.get(left) ?? Number.MAX_SAFE_INTEGER
@@ -245,6 +393,12 @@ export function createDataGridFormulaExecutionPlan(
       fieldDeps: fieldDepsByName.get(name) ?? Object.freeze([]),
       computedDeps: computedDepsByName.get(name) ?? Object.freeze([]),
       dependents: Object.freeze(sortedDependents),
+      ...(cycleGroup
+        ? {
+          iterative: true,
+          cycleGroup,
+        }
+        : {}),
     }))
   }
 
@@ -369,6 +523,7 @@ export function createDataGridFormulaExecutionPlan(
     order: Object.freeze([...order]),
     levels: Object.freeze([...levels]),
     nodes,
+    iterativeGroups: Object.freeze(iterativeGroups.map(group => Object.freeze([...group]) as readonly string[])),
     directByFields,
     affectedByFields,
     affectedByComputed,
@@ -383,26 +538,34 @@ export function snapshotDataGridFormulaExecutionPlan(
     plan.levels.map(level => Object.freeze([...level]) as readonly string[]),
   ) as readonly (readonly string[])[]
   const nodes = Object.freeze(
-    order
-      .map((name) => {
-        const node = plan.nodes.get(name)
-        if (!node) {
-          return null
-        }
-        return {
-          name: node.name,
-          field: node.field,
-          level: node.level,
-          fieldDeps: Object.freeze([...node.fieldDeps]),
-          computedDeps: Object.freeze([...node.computedDeps]),
-          dependents: Object.freeze([...node.dependents]),
-        } satisfies DataGridFormulaExecutionPlanNodeSnapshot
+    order.reduce<DataGridFormulaExecutionPlanNodeSnapshot[]>((accumulator, name) => {
+      const node = plan.nodes.get(name)
+      if (!node) {
+        return accumulator
+      }
+      accumulator.push({
+        name: node.name,
+        field: node.field,
+        level: node.level,
+        fieldDeps: Object.freeze([...node.fieldDeps]),
+        computedDeps: Object.freeze([...node.computedDeps]),
+        dependents: Object.freeze([...node.dependents]),
+        ...(node.iterative ? { iterative: true } : {}),
+        ...(node.cycleGroup ? { cycleGroup: Object.freeze([...node.cycleGroup]) } : {}),
       })
-      .filter((node): node is DataGridFormulaExecutionPlanNodeSnapshot => node !== null),
+      return accumulator
+    }, []),
   )
   return {
     order,
     levels,
     nodes,
+    ...(plan.iterativeGroups.length > 0
+      ? {
+        iterativeGroups: Object.freeze(
+          plan.iterativeGroups.map(group => Object.freeze([...group]) as readonly string[]),
+        ),
+      }
+      : {}),
   }
 }

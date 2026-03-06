@@ -12,6 +12,15 @@ Fix a formal typed model for dependency graph nodes and edges so patch analysis 
 - `computed:*` - derived/calculated tokens (`computed:latencyRank`).
 - `meta:*` - UI/runtime meta tokens (`meta:rowColor`).
 
+For formula/runtime integration, client row-model currently exposes stable formula meta keys:
+
+- `meta:rowId`
+- `meta:rowKey`
+- `meta:sourceIndex`
+- `meta:originalIndex`
+- `meta:kind`
+- `meta:isGroup`
+
 ## Canonical Types
 
 - `DataGridFieldNode`
