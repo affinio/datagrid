@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router"
 import CoreGridCard from "./components/CoreGridCard.vue"
+import VueFactoryBaseGridCard from "./components/VueFactoryBaseGridCard.vue"
 import VueGridCard from "./components/VueGridCard.vue"
 
 const routes = [
@@ -26,6 +27,10 @@ const routes = [
     path: "/vue/worker-grid",
     component: VueGridCard,
     props: { title: "Vue: Worker Grid", mode: "worker" },
+  },
+  {
+    path: "/vue/base-grid-factory",
+    component: VueFactoryBaseGridCard,
   },
   {
     path: "/core/base-grid",

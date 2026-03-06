@@ -196,6 +196,202 @@ export {
 } from "./composables/useDataGridRuntime"
 
 export {
+  provideDataGridEngineContext,
+  useDataGridEngineContext,
+  useGridApi,
+  type DataGridEngineContextValue,
+} from "./composables/useDataGridEngineContext"
+
+export {
+  provideDataGridViewContext,
+  useDataGridViewContext,
+  type DataGridViewContextValue,
+} from "./composables/useDataGridViewContext"
+
+export {
+  provideDataGridContext,
+  useDataGridContext,
+  type DataGridContextValue,
+} from "./composables/useDataGridContext"
+
+export {
+  useAffinoGrid,
+  type UseAffinoGridPlugins,
+  type AffinoGridInstalledFeatures,
+  type UseAffinoGridOptions,
+  type UseAffinoGridResult,
+} from "./composables/useAffinoGrid"
+
+export {
+  createGrid,
+} from "./grid/createGrid"
+
+export type {
+  DataGridRuntime,
+  GridContext,
+  DataGridFeature,
+  CreateGridOptions,
+  GridInstance,
+} from "./grid/types"
+
+export {
+  createDataGridFeatureRegistry,
+  resolveDataGridFeatureDependencies,
+} from "./composables/useDataGridFeatureRegistry"
+
+export type {
+  DataGridFeatureName,
+  DataGridFeatureRegistry,
+  CreateDataGridFeatureRegistryOptions,
+  DataGridExportContext,
+  DataGridExportPayload,
+} from "./composables/useDataGridFeatureRegistry"
+
+export {
+  selectionFeature,
+} from "./features/selectionFeature"
+
+export {
+  clipboardFeature,
+} from "./features/clipboardFeature"
+
+export {
+  advancedClipboardFeature,
+} from "./features/advancedClipboardFeature"
+
+export {
+  excelCompatibleClipboardFeature,
+} from "./features/excelCompatibleClipboardFeature"
+
+export {
+  fillHandleFeature,
+} from "./features/fillHandleFeature"
+
+export {
+  navigationFeature,
+} from "./features/navigationFeature"
+
+export {
+  historyFeature,
+} from "./features/historyFeature"
+
+export {
+  sortingFeature,
+} from "./features/sortingFeature"
+
+export {
+  pivotFeature,
+} from "./features/pivotFeature"
+
+export {
+  advancedPivotEngineFeature,
+} from "./features/advancedPivotEngineFeature"
+
+export {
+  pivotPanelFeature,
+} from "./features/pivotPanelFeature"
+
+export {
+  groupingFeature,
+} from "./features/groupingFeature"
+
+export {
+  groupPanelFeature,
+} from "./features/groupPanelFeature"
+
+export {
+  aggregationFeature,
+} from "./features/aggregationFeature"
+
+export {
+  aggregationFunctionsRegistryFeature,
+} from "./features/aggregationFunctionsRegistryFeature"
+
+export {
+  filterDslFeature,
+} from "./features/filterDslFeature"
+
+export {
+  filterBuilderUiFeature,
+} from "./features/filterBuilderUiFeature"
+
+export {
+  columnPinningFeature,
+} from "./features/columnPinningFeature"
+
+export {
+  columnVisibilityFeature,
+} from "./features/columnVisibilityFeature"
+
+export {
+  columnAutosizeFeature,
+} from "./features/columnAutosizeFeature"
+
+export {
+  columnMenuFeature,
+} from "./features/columnMenuFeature"
+
+export {
+  columnResizeFeature,
+} from "./features/columnResizeFeature"
+
+export {
+  columnReorderFeature,
+} from "./features/columnReorderFeature"
+
+export {
+  columnVirtualizationFeature,
+} from "./features/columnVirtualizationFeature"
+
+export {
+  cellEditorsFeature,
+} from "./features/cellEditorsFeature"
+
+export {
+  serverSideRowModelFeature,
+} from "./features/serverSideRowModelFeature"
+
+export {
+  rowHeightFeature,
+} from "./features/rowHeightFeature"
+
+export {
+  rowSelectionModesFeature,
+} from "./features/rowSelectionModesFeature"
+
+export {
+  selectionOverlayFeature,
+} from "./features/selectionOverlayFeature"
+
+export {
+  dataExportFeature,
+} from "./features/dataExportFeature"
+
+export {
+  exportExcelFeature,
+} from "./features/exportExcelFeature"
+
+export {
+  rangeMoveFeature,
+} from "./features/rangeMoveFeature"
+
+export {
+  pointerPreviewFeature,
+} from "./features/pointerPreviewFeature"
+
+export {
+  autoScrollFeature,
+} from "./features/autoScrollFeature"
+
+export {
+  resizeFeature,
+} from "./features/resizeFeature"
+
+export {
+  keyboardFeature,
+} from "./features/keyboardFeature"
+
+export {
   DATA_GRID_CLASS_NAMES,
   DATA_GRID_DATA_ATTRS,
   DATA_GRID_SELECTORS,
@@ -248,6 +444,7 @@ export {
 
 export {
   DataGrid,
+  LegacyAffinoDataGrid,
   AffinoDataGridSimple,
 } from "./components"
 

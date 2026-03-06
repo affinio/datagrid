@@ -7,6 +7,7 @@
 
     <nav class="sandbox__nav">
       <RouterLink class="sandbox__link" to="/vue/base-grid">Vue Base</RouterLink>
+      <RouterLink class="sandbox__link" to="/vue/base-grid-factory">Vue Base (Factory)</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/tree-grid">Vue Tree</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/pivot-grid">Vue Pivot</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/worker-grid">Vue Worker</RouterLink>

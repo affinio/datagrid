@@ -1,6 +1,8 @@
 import { createWorkspaceVitestConfig } from "../../config/vitest.base"
+import vue from "@vitejs/plugin-vue"
 
 export default createWorkspaceVitestConfig(import.meta.url, {
+  plugins: [vue()],
   test: {
     environment: "jsdom",
     globals: true,

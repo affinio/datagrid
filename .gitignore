@@ -75,6 +75,7 @@ packages/*/src/**/*.js
 packages/*/src/**/*.js.map
 packages/*/src/**/*.d.ts
 packages/*/src/**/*.d.ts.map
+!packages/datagrid-vue/src/shims-vue.d.ts
 
 # -----------------------
 # Optional: ignores for build tools

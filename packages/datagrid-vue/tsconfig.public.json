@@ -19,6 +19,7 @@
     }
   },
   "include": [
+    "src/shims-vue.d.ts",
     "src/index.ts",
     "src/stable.ts",
     "src/worker.ts",

@@ -24,12 +24,14 @@ import type {
   AffinoDataGridEditSession,
 } from "../composables/useAffinoDataGrid.types"
 
-interface RowLike {
+export interface AffinoDataGridSimpleRowLike {
   [key: string]: unknown
   rowId?: string | number
   id?: string | number
   key?: string | number
 }
+
+type RowLike = AffinoDataGridSimpleRowLike
 
 function fallbackResolveRowKey(row: RowLike, index: number): string {
   if (row.rowId !== undefined && row.rowId !== null) {
