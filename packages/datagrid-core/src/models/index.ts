@@ -54,7 +54,12 @@ export type {
   DataGridRowModel,
   DataGridRowModelKind,
   DataGridProjectionDiagnostics,
+  DataGridProjectionInvalidationReason,
   DataGridProjectionStage,
+  DataGridComputedDependencyToken,
+  DataGridComputedFieldComputeContext,
+  DataGridComputedFieldDefinition,
+  DataGridComputedFieldSnapshot,
   DataGridPivotCellDrilldownInput,
   DataGridPivotCellDrilldown,
   DataGridRowModelListener,
@@ -150,6 +155,7 @@ export { createDataGridDependencyGraph } from "./dependencyGraph.js"
 
 export type {
   DataGridClientPerformanceMode,
+  DataGridProjectionCacheStage,
   DataGridProjectionCacheBucketPolicy,
   DataGridProjectionModeCachePolicy,
   DataGridProjectionCachePolicyMatrix,

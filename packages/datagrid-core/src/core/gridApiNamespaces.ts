@@ -54,6 +54,10 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   expandAllGroups: DataGridApi<TRow>["rows"]["expandAllGroups"]
   collapseAllGroups: DataGridApi<TRow>["rows"]["collapseAllGroups"]
   hasPatchSupport: DataGridApi<TRow>["rows"]["hasPatchSupport"]
+  hasComputedSupport: DataGridApi<TRow>["rows"]["hasComputedSupport"]
+  registerComputedField: DataGridApi<TRow>["rows"]["registerComputedField"]
+  getComputedFields: DataGridApi<TRow>["rows"]["getComputedFields"]
+  recomputeComputedFields: DataGridApi<TRow>["rows"]["recomputeComputedFields"]
   patchRows: DataGridApi<TRow>["rows"]["patch"]
   applyEdits: DataGridApi<TRow>["rows"]["applyEdits"]
   setAutoReapply: DataGridApi<TRow>["rows"]["setAutoReapply"]
@@ -171,6 +175,10 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       expandAllGroups: methodSet.expandAllGroups,
       collapseAllGroups: methodSet.collapseAllGroups,
       hasPatchSupport: methodSet.hasPatchSupport,
+      hasComputedSupport: methodSet.hasComputedSupport,
+      registerComputedField: methodSet.registerComputedField,
+      getComputedFields: methodSet.getComputedFields,
+      recomputeComputedFields: methodSet.recomputeComputedFields,
       patch: methodSet.patchRows,
       applyEdits: methodSet.applyEdits,
       setAutoReapply: methodSet.setAutoReapply,

@@ -27,11 +27,13 @@
         role="presentation"
         :style="gridLayoutStyle"
       >
+        <GridFeaturePanels />
         <GridHeader />
         <GridBody
           @row-select="handleRowSelect"
           @cell-click="handleCellClick"
         />
+        <GridColumnMenu />
       </div>
     </slot>
   </section>
@@ -62,6 +64,8 @@ import { useDataGridFeatureInstaller } from "../composables/useDataGridFeatureIn
 import { provideDataGridContext } from "../composables/useDataGridContext"
 import { useDataGridViewModel } from "../composables/useDataGridViewModel"
 import GridBody from "./GridBody.vue"
+import GridColumnMenu from "./GridColumnMenu.vue"
+import GridFeaturePanels from "./GridFeaturePanels.vue"
 import GridHeader from "./GridHeader.vue"
 import type { DataGridCellClickPayload, DataGridRowSelectPayload } from "./gridUiTypes"
 

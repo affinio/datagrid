@@ -14,10 +14,7 @@ import type {
   DataGridSortState,
   DataGridRowNode,
 } from "@affino/datagrid-core"
-import {
-  useAffinoDataGridUi,
-  type UseAffinoDataGridUiOptions,
-} from "../composables/useAffinoDataGridUi"
+import { useAffinoDataGridUi } from "../composables/useAffinoDataGridUi"
 import type {
   AffinoDataGridActionId,
   AffinoDataGridFeatures,
@@ -88,7 +85,7 @@ export const AffinoDataGridSimple = defineComponent({
       required: true,
     },
     features: {
-      type: Object as PropType<UseAffinoDataGridUiOptions<any>["features"]>,
+      type: Object as PropType<AffinoDataGridFeatures<RowLike> | undefined>,
       default: undefined,
     },
     initialSortState: {
@@ -313,6 +310,7 @@ export const AffinoDataGridSimple = defineComponent({
       void rowModelVersion.value
       return grid.rowModel.getRowCount()
     })
+    const gridTemplateColumns = computed(() => `repeat(${Math.max(1, props.columns.length)}, minmax(0, 1fr))`)
 
     const renderCellValue = (row: RowLike, columnKey: string): string => {
       const value = row[columnKey]
@@ -378,17 +376,33 @@ export const AffinoDataGridSimple = defineComponent({
           { class: "affino-datagrid-simple__viewport" },
           [
             h(
-              "table",
-              { class: "affino-datagrid-simple__table" },
+              "div",
+              {
+                class: "affino-datagrid-simple__table",
+                role: "grid",
+              },
               [
                 h(
-                  "thead",
+                  "div",
+                  {
+                    class: "affino-datagrid-simple__header",
+                    role: "rowgroup",
+                  },
                   h(
-                    "tr",
+                    "div",
+                    {
+                      class: "affino-datagrid-simple__header-row",
+                      role: "row",
+                      style: {
+                        display: "grid",
+                        gridTemplateColumns: gridTemplateColumns.value,
+                      },
+                    },
                     props.columns.map(column => h(
-                      "th",
+                      "div",
                       {
                         key: column.key,
+                        class: "affino-datagrid-simple__header-cell",
                         ...grid.ui.bindHeaderCell(column.key),
                       },
                       [
@@ -399,26 +413,35 @@ export const AffinoDataGridSimple = defineComponent({
                   ),
                 ),
                 h(
-                  "tbody",
+                  "div",
+                  {
+                    class: "affino-datagrid-simple__body",
+                    role: "rowgroup",
+                  },
                   leafRows.value.map((rowNode, rowIndex) => {
                     const rowData = rowNode.data as RowLike
                     const rowKey = String(rowNode.rowId)
                     return h(
-                      "tr",
+                      "div",
                       {
                         key: rowKey,
                         class: {
                           "affino-datagrid-simple__row": true,
                           "is-selected": grid.features.selection.isSelectedByKey(rowKey),
                         },
+                        style: {
+                          display: "grid",
+                          gridTemplateColumns: gridTemplateColumns.value,
+                        },
                         ...grid.ui.bindRowSelection(rowData, rowIndex),
                       },
                       props.columns.map(column => {
                         const isEditing = grid.ui.isCellEditing(rowKey, column.key)
                         return h(
-                          "td",
+                          "div",
                           {
                             key: `${rowKey}-${column.key}`,
+                            role: "gridcell",
                             class: {
                               "affino-datagrid-simple__cell": true,
                               "is-editing": isEditing,

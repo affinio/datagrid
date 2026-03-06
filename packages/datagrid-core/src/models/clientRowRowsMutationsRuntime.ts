@@ -1,9 +1,16 @@
-import type { DataGridRowId, DataGridRowNode, DataGridRowNodeInput } from "./rowModel.js"
+import type {
+  DataGridProjectionInvalidationReason,
+  DataGridRowId,
+  DataGridRowNode,
+  DataGridRowNodeInput,
+} from "./rowModel.js"
 
 export interface ClientRowRowsMutationsRuntimeContext<T> {
   ensureActive: () => void
   emit: () => void
-  recomputeFromFilterStage: () => void
+  recomputeFromProjectionEntryStage: () => void
+  applyComputedFields?: () => void
+  setProjectionInvalidation: (reasons: readonly DataGridProjectionInvalidationReason[]) => void
   bumpRowRevision: () => void
   resetGroupByIncrementalAggregationState: () => void
   invalidateTreeProjectionCaches: () => void
@@ -45,11 +52,13 @@ export function createClientRowRowsMutationsRuntime<T>(
         context.rebuildRowVersionIndex(context.getRowVersionById(), nextSourceRows),
       )
       context.setSourceRows(nextSourceRows)
+      context.applyComputedFields?.()
       context.pruneSortCacheRows(nextSourceRows)
       context.bumpRowRevision()
       context.resetGroupByIncrementalAggregationState()
       context.invalidateTreeProjectionCaches()
-      context.recomputeFromFilterStage()
+      context.setProjectionInvalidation(["rowsChanged"])
+      context.recomputeFromProjectionEntryStage()
       context.emit()
     },
     reorderRows(input: ClientRowRowsMutationsRuntimeReorderInput): boolean {
@@ -74,9 +83,11 @@ export function createClientRowRowsMutationsRuntime<T>(
       const adjustedTarget = toIndexRaw > fromIndex ? Math.max(0, toIndexRaw - moved.length) : toIndexRaw
       rows.splice(adjustedTarget, 0, ...moved)
       context.setSourceRows(context.reindexSourceRows(rows))
+      context.applyComputedFields?.()
       context.bumpRowRevision()
       context.invalidateTreeProjectionCaches()
-      context.recomputeFromFilterStage()
+      context.setProjectionInvalidation(["rowsChanged"])
+      context.recomputeFromProjectionEntryStage()
       context.emit()
       return true
     },

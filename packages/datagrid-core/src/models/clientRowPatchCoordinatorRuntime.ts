@@ -2,6 +2,7 @@ import type {
   DataGridAggregationModel,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
+  DataGridProjectionInvalidationReason,
   DataGridPivotSpec,
   DataGridRowId,
   DataGridRowNode,
@@ -21,6 +22,7 @@ import {
   applyClientRowPatchUpdates,
   buildClientRowPatchUpdatesById,
   runClientRowPatchProjection,
+  type ApplyClientRowPatchUpdatesResult,
   type DataGridClientRowPatchLike,
 } from "./clientRowPatchRuntime.js"
 import { bumpRowVersions, mergeRowPatch } from "./clientRowRuntimeUtils.js"
@@ -47,6 +49,10 @@ export interface DataGridClientRowPatchCoordinatorRuntimeContext<T> {
   getRowVersionById: () => Map<DataGridRowId, number>
 
   bumpRowRevision: () => void
+  setProjectionInvalidation: (reasons: readonly DataGridProjectionInvalidationReason[]) => void
+  applyComputedFieldsToPatchResult?: (
+    patchResult: ApplyClientRowPatchUpdatesResult<T>,
+  ) => ApplyClientRowPatchUpdatesResult<T>
   tryApplyFlatProjectionPatch?: (
     changedRowIds: readonly DataGridRowId[],
     nextRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
@@ -102,17 +108,31 @@ export function createClientRowPatchCoordinatorRuntime<T>(
       if (updatesById.size === 0) {
         return
       }
-      const patchResult = applyClientRowPatchUpdates<T>({
+      let patchResult = applyClientRowPatchUpdates<T>({
         sourceRows: context.getSourceRows(),
         sourceRowIndexById: context.getSourceRowIndexById(),
         updatesById,
         applyRowDataPatch: context.applyRowDataPatch,
         mutateSourceRowsInPlace: true,
       })
+      patchResult = context.applyComputedFieldsToPatchResult
+        ? context.applyComputedFieldsToPatchResult(patchResult)
+        : patchResult
       context.setSourceRows(patchResult.nextSourceRows)
       if (!patchResult.changed) {
         return
       }
+      const invalidationReasons: DataGridProjectionInvalidationReason[] = ["rowsPatched"]
+      if (options.recomputeFilter === true) {
+        invalidationReasons.push("filterChanged")
+      }
+      if (options.recomputeSort === true) {
+        invalidationReasons.push("sortChanged")
+      }
+      if (options.recomputeGroup === true) {
+        invalidationReasons.push("groupChanged")
+      }
+      context.setProjectionInvalidation(invalidationReasons)
       bumpRowVersions(context.getRowVersionById(), patchResult.changedRowIds)
       context.bumpRowRevision()
       if (context.tryApplyFlatProjectionPatch?.(patchResult.changedRowIds, patchResult.nextRowsById)) {

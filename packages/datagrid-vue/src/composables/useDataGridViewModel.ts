@@ -48,13 +48,17 @@ export interface UseDataGridViewModelResult<TRow = unknown> {
 }
 
 export function useDataGridViewModel<TRow = unknown>(grid: DataGridRuntimeShape<TRow>): UseDataGridViewModelResult<TRow> {
-  const rowSnapshot = shallowRef<DataGridRowModelSnapshot<TRow>>(grid.api.rows.getSnapshot())
-  const visibleRows = shallowRef<ReadonlyArray<DataGridRowNode<TRow>>>(grid.api.rows.getRange(rowSnapshot.value.viewportRange))
+  const rowSnapshot: ShallowRef<DataGridRowModelSnapshot<TRow>> = shallowRef(
+    grid.api.rows.getSnapshot() as DataGridRowModelSnapshot<TRow>,
+  )
+  const visibleRows: ShallowRef<ReadonlyArray<DataGridRowNode<TRow>>> = shallowRef(
+    grid.api.rows.getRange(rowSnapshot.value.viewportRange) as readonly DataGridRowNode<TRow>[],
+  )
 
   const refreshRows = () => {
-    const snapshot = grid.api.rows.getSnapshot()
+    const snapshot = grid.api.rows.getSnapshot() as DataGridRowModelSnapshot<TRow>
     rowSnapshot.value = snapshot
-    visibleRows.value = grid.api.rows.getRange(snapshot.viewportRange)
+    visibleRows.value = grid.api.rows.getRange(snapshot.viewportRange) as readonly DataGridRowNode<TRow>[]
   }
 
   const unsubscribeRowModel = grid.runtime.rowModel.subscribe(() => {

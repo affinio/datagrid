@@ -119,7 +119,10 @@
     "src/composables/useAffinoDataGrid.types.ts",
     "src/composables/useAffinoDataGridMinimal.ts",
     "src/composables/useAffinoDataGridUi.ts",
-    "src/composables/internal/useAffinoDataGrid/**/*.ts"
+    "src/composables/internal/useAffinoDataGrid/**/*.ts",
+    "src/composables/**/*.ts",
+    "src/features/**/*.ts",
+    "src/grid/**/*.ts"
   ],
   "exclude": [
     "src/**/__tests__/**",

@@ -2,6 +2,21 @@ import { describe, expect, it, vi } from "vitest"
 import { createClientRowProjectionEngine } from "../clientRowProjectionEngine"
 
 describe("clientRowProjectionEngine aggregate stage graph", () => {
+  it("expands compute request to full projection chain", () => {
+    const engine = createClientRowProjectionEngine<unknown>()
+    engine.requestStages(["compute"])
+    expect(engine.getStaleStages()).toEqual([
+      "compute",
+      "filter",
+      "sort",
+      "group",
+      "pivot",
+      "aggregate",
+      "paginate",
+      "visible",
+    ])
+  })
+
   it("expands group request to pivot->aggregate->paginate->visible chain", () => {
     const engine = createClientRowProjectionEngine<unknown>()
     engine.requestStages(["group"])
@@ -21,6 +36,7 @@ describe("clientRowProjectionEngine aggregate stage graph", () => {
     engine.recomputeFromStage("group", {
       buildSourceById: () => new Map(),
       getCurrentFilteredRowIds: () => new Set(),
+      runComputeStage: () => true,
       resolveFilterPredicate: () => (() => true),
       runFilterStage: () => ({ filteredRowIds: new Set(), recomputed: true }),
       runSortStage: () => true,

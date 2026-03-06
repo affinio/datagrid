@@ -6,8 +6,12 @@ import {
 } from "@affino/projection-engine"
 import type {
   DataGridRowId,
-  DataGridRowNode,
 } from "./rowModel.js"
+import {
+  DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP,
+  type DataGridClientProjectionRuntimeStageHandlers,
+  type DataGridClientProjectionStageRuntimeContext,
+} from "./clientRowProjectionStageRegistry.js"
 import {
   DATAGRID_CLIENT_PREPARED_PROJECTION_GRAPH,
   DATAGRID_CLIENT_PROJECTION_REFRESH_ENTRY_STAGE,
@@ -16,36 +20,14 @@ import {
 } from "./projectionStages.js"
 
 export type { DataGridClientProjectionStage } from "./projectionStages.js"
+export type {
+  DataGridClientProjectionFilterStageResult,
+  DataGridClientProjectionFilterStageContext,
+  DataGridClientProjectionGroupStageContext,
+  DataGridClientProjectionStageContext,
+} from "./clientRowProjectionStageRegistry.js"
 
-export interface DataGridClientProjectionFilterStageResult {
-  filteredRowIds: Set<DataGridRowId>
-  recomputed: boolean
-}
-
-export interface DataGridClientProjectionStageContext<T> {
-  sourceById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
-  shouldRecompute: boolean
-}
-
-export interface DataGridClientProjectionFilterStageContext<T> extends DataGridClientProjectionStageContext<T> {
-  filterPredicate?: (rowNode: DataGridRowNode<T>) => boolean
-}
-
-export interface DataGridClientProjectionGroupStageContext<T> extends DataGridClientProjectionStageContext<T> {
-  rowMatchesFilter: (row: DataGridRowNode<T>) => boolean
-}
-
-export interface DataGridClientProjectionStageHandlers<T> {
-  buildSourceById: () => ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
-  getCurrentFilteredRowIds: () => ReadonlySet<DataGridRowId>
-  resolveFilterPredicate: () => (rowNode: DataGridRowNode<T>) => boolean
-  runFilterStage: (context: DataGridClientProjectionFilterStageContext<T>) => DataGridClientProjectionFilterStageResult
-  runSortStage: (context: DataGridClientProjectionStageContext<T>) => boolean
-  runGroupStage: (context: DataGridClientProjectionGroupStageContext<T>) => boolean
-  runPivotStage: (context: DataGridClientProjectionStageContext<T>) => boolean
-  runAggregateStage: (context: DataGridClientProjectionStageContext<T>) => boolean
-  runPaginateStage: (context: DataGridClientProjectionStageContext<T>) => boolean
-  runVisibleStage: (context: DataGridClientProjectionStageContext<T>) => boolean
+export interface DataGridClientProjectionStageHandlers<T> extends DataGridClientProjectionRuntimeStageHandlers<T> {
   finalizeProjectionRecompute: (meta: DataGridClientProjectionFinalizeMeta) => void
 }
 
@@ -74,83 +56,6 @@ export interface DataGridClientProjectionEngine<T> {
   getStaleStages: () => readonly DataGridClientProjectionStage[]
 }
 
-interface DataGridClientProjectionStageRuntimeContext<T> {
-  sourceById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
-  handlers: DataGridClientProjectionStageHandlers<T>
-  getFilteredRowIds: () => ReadonlySet<DataGridRowId>
-  setFilteredRowIds: (rowIds: ReadonlySet<DataGridRowId>) => void
-}
-
-interface DataGridClientProjectionStageDefinition {
-  compute: <T>(
-    context: DataGridClientProjectionStageRuntimeContext<T>,
-    shouldRecompute: boolean,
-  ) => boolean
-}
-
-const DATAGRID_CLIENT_PROJECTION_STAGE_DEFINITIONS = {
-  filter: {
-    compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
-      const filterResult = context.handlers.runFilterStage({
-        sourceById: context.sourceById,
-        filterPredicate: shouldRecompute ? context.handlers.resolveFilterPredicate() : undefined,
-        shouldRecompute,
-      })
-      context.setFilteredRowIds(filterResult.filteredRowIds)
-      return filterResult.recomputed
-    },
-  },
-  sort: {
-    compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
-      return context.handlers.runSortStage({
-        sourceById: context.sourceById,
-        shouldRecompute,
-      })
-    },
-  },
-  group: {
-    compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
-      return context.handlers.runGroupStage({
-        sourceById: context.sourceById,
-        rowMatchesFilter: (row: DataGridRowNode<T>) => context.getFilteredRowIds().has(row.rowId),
-        shouldRecompute,
-      })
-    },
-  },
-  pivot: {
-    compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
-      return context.handlers.runPivotStage({
-        sourceById: context.sourceById,
-        shouldRecompute,
-      })
-    },
-  },
-  aggregate: {
-    compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
-      return context.handlers.runAggregateStage({
-        sourceById: context.sourceById,
-        shouldRecompute,
-      })
-    },
-  },
-  paginate: {
-    compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
-      return context.handlers.runPaginateStage({
-        sourceById: context.sourceById,
-        shouldRecompute,
-      })
-    },
-  },
-  visible: {
-    compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
-      return context.handlers.runVisibleStage({
-        sourceById: context.sourceById,
-        shouldRecompute,
-      })
-    },
-  },
-} as const satisfies Readonly<Record<DataGridClientProjectionStage, DataGridClientProjectionStageDefinition>>
-
 export function createClientRowProjectionEngine<T>(): DataGridClientProjectionEngine<T> {
   const projection = createProjectionStageEngine<DataGridClientProjectionStage>({
     nodes: DATAGRID_CLIENT_PREPARED_PROJECTION_GRAPH.nodes,
@@ -178,7 +83,7 @@ export function createClientRowProjectionEngine<T>(): DataGridClientProjectionEn
     }
 
     const meta = projection.recompute((stage: DataGridClientProjectionStage, shouldRecompute: boolean) => {
-      return DATAGRID_CLIENT_PROJECTION_STAGE_DEFINITIONS[stage]
+      return DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP[stage]
         .compute(stageRuntimeContext, shouldRecompute)
     }, options)
     if (!meta) {

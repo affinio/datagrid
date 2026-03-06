@@ -435,10 +435,16 @@ export function buildPatchProjectionExecutionPlan(
     const allowRecompute = stageRule.allowRecompute(input.recomputePolicy)
     if (affected && allowRecompute) {
       recomputeRoots.push(stageRule.id)
+      if (stageRule.id === "filter") {
+        recomputeRoots.push("compute")
+      }
       continue
     }
     if (!affected && allowRecompute && input.staleStages.has(stageRule.id)) {
       recomputeRoots.push(stageRule.id)
+      if (stageRule.id === "filter") {
+        recomputeRoots.push("compute")
+      }
     }
   }
 

@@ -12,6 +12,9 @@ import {
   type DataGridGroupExpansionSnapshot,
   type DataGridPaginationInput,
   type DataGridPivotCellDrilldownInput,
+  type DataGridComputedFieldDefinition,
+  type DataGridComputedFieldSnapshot,
+  type DataGridComputedDependencyToken,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramOptions,
   type DataGridFilterSnapshot,
@@ -91,15 +94,18 @@ import {
 } from "./clientRowProjectionPrimitives.js"
 import {
   applyRowDataPatch,
+  bumpRowVersions,
   buildRowIdPositionIndex,
   buildRowIdIndex,
   createRowVersionIndex,
+  mergeRowPatch,
   pruneSortCacheRows,
   rebuildRowVersionIndex,
   reindexSourceRows,
 } from "./clientRowRuntimeUtils.js"
 import type { SortValueCacheEntry } from "./clientRowProjectionBasicStages.js"
 import type { DataGridFieldDependency } from "./dependencyGraph.js"
+import { normalizeDataGridDependencyToken } from "./dependencyModel.js"
 import { resolveClientRowPivotCellDrilldown } from "./clientRowPivotDrilldownRuntime.js"
 import {
   applyClientRowGroupExpansion,
@@ -112,6 +118,7 @@ import { createClientRowPatchCoordinatorRuntime } from "./clientRowPatchCoordina
 import { createClientRowStateMutationsRuntime } from "./clientRowStateMutationsRuntime.js"
 import { createClientRowSnapshotRuntime } from "./clientRowSnapshotRuntime.js"
 import { createClientRowProjectionHandlersRuntime } from "./clientRowProjectionHandlersRuntime.js"
+import type { ApplyClientRowPatchUpdatesResult } from "./clientRowPatchRuntime.js"
 
 export interface CreateClientRowModelOptions<T> {
   rows?: readonly DataGridRowNodeInput<T>[]
@@ -126,6 +133,7 @@ export interface CreateClientRowModelOptions<T> {
   performanceMode?: DataGridClientPerformanceMode
   projectionPolicy?: DataGridProjectionPolicy
   fieldDependencies?: readonly DataGridFieldDependency[]
+  initialComputedFields?: readonly DataGridComputedFieldDefinition<T>[]
   computeMode?: DataGridClientComputeMode
   computeTransport?: DataGridClientComputeTransport | null
 }
@@ -172,6 +180,9 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
     updates: readonly DataGridClientRowPatch<T>[],
     options?: DataGridClientRowPatchOptions,
   ): void
+  registerComputedField(definition: DataGridComputedFieldDefinition<T>): void
+  getComputedFields(): readonly DataGridComputedFieldSnapshot[]
+  recomputeComputedFields(rowIds?: readonly DataGridRowId[]): number
   reorderRows(input: DataGridClientRowReorderInput): boolean
   getComputeMode(): DataGridClientComputeMode
   switchComputeMode(mode: DataGridClientComputeMode): boolean
@@ -196,6 +207,10 @@ export interface DataGridClientRowModelDerivedCacheDiagnostics {
 
 function isDataGridRowId(value: unknown): value is DataGridRowId {
   return typeof value === "string" || typeof value === "number"
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
 }
 
 function normalizePivotAxisValue(value: unknown): string {
@@ -319,6 +334,429 @@ export function createClientRowModel<T>(
   let lastTreeExpansionSnapshot: DataGridGroupExpansionSnapshot | null = null
   let pendingPivotValuePatch: readonly DataGridPivotIncrementalPatchRow<T>[] | null = null
   const projectionEngine = createClientRowProjectionEngine<T>()
+  type ComputedDependencyDomain = "field" | "computed" | "meta"
+  interface DataGridResolvedComputedDependency {
+    token: DataGridComputedDependencyToken
+    domain: ComputedDependencyDomain
+    value: string
+  }
+  interface DataGridRegisteredComputedField {
+    name: string
+    field: string
+    deps: readonly DataGridResolvedComputedDependency[]
+    compute: DataGridComputedFieldDefinition<T>["compute"]
+  }
+  interface ApplyComputedFieldsToSourceRowsOptions {
+    rowIds?: ReadonlySet<DataGridRowId>
+    changedFieldsByRowId?: ReadonlyMap<DataGridRowId, ReadonlySet<string>>
+  }
+  interface ApplyComputedFieldsToSourceRowsResult {
+    changed: boolean
+    changedRowIds: readonly DataGridRowId[]
+    computedUpdatesByRowId: ReadonlyMap<DataGridRowId, Partial<T>>
+    previousRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
+    nextRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
+  }
+  const computedFieldsByName = new Map<string, DataGridRegisteredComputedField>()
+  const computedFieldNameByTargetField = new Map<string, string>()
+  let computedOrder: string[] = []
+
+  const normalizeComputedName = (value: unknown): string => {
+    if (typeof value !== "string") {
+      throw new Error("[DataGridComputed] Computed field name must be a string.")
+    }
+    const normalized = value.trim()
+    if (normalized.length === 0) {
+      throw new Error("[DataGridComputed] Computed field name must be non-empty.")
+    }
+    return normalized
+  }
+
+  const normalizeComputedTargetField = (
+    value: unknown,
+    fallbackName: string,
+  ): string => {
+    const rawValue = typeof value === "string" && value.trim().length > 0
+      ? value
+      : fallbackName
+    const normalized = rawValue.trim()
+    if (normalized.length === 0) {
+      throw new Error("[DataGridComputed] Computed field target must be non-empty.")
+    }
+    if (normalized.includes(".")) {
+      throw new Error(
+        `[DataGridComputed] Nested target path '${normalized}' is not supported yet. Use a top-level field.`,
+      )
+    }
+    return normalized
+  }
+
+  const resolveComputedDependency = (
+    value: DataGridComputedDependencyToken,
+  ): DataGridResolvedComputedDependency => {
+    const normalizedToken = normalizeDataGridDependencyToken(String(value), "field")
+    if (normalizedToken.startsWith("computed:")) {
+      return {
+        token: normalizedToken,
+        domain: "computed",
+        value: normalizedToken.slice("computed:".length),
+      }
+    }
+    if (normalizedToken.startsWith("meta:")) {
+      return {
+        token: normalizedToken,
+        domain: "meta",
+        value: normalizedToken.slice("meta:".length),
+      }
+    }
+    return {
+      token: normalizedToken,
+      domain: "field",
+      value: normalizedToken.slice("field:".length),
+    }
+  }
+
+  const rebuildComputedOrder = (): void => {
+    const stateByName = new Map<string, 0 | 1 | 2>()
+    const ordered: string[] = []
+    const visit = (name: string): void => {
+      const state = stateByName.get(name) ?? 0
+      if (state === 2) {
+        return
+      }
+      if (state === 1) {
+        throw new Error(`[DataGridComputed] Cycle detected at computed field '${name}'.`)
+      }
+      const entry = computedFieldsByName.get(name)
+      if (!entry) {
+        throw new Error(`[DataGridComputed] Missing computed field '${name}'.`)
+      }
+      stateByName.set(name, 1)
+      for (const dependency of entry.deps) {
+        if (dependency.domain !== "computed") {
+          continue
+        }
+        if (!computedFieldsByName.has(dependency.value)) {
+          throw new Error(
+            `[DataGridComputed] Missing dependency 'computed:${dependency.value}' for '${name}'.`,
+          )
+        }
+        visit(dependency.value)
+      }
+      stateByName.set(name, 2)
+      ordered.push(name)
+    }
+    for (const name of computedFieldsByName.keys()) {
+      visit(name)
+    }
+    computedOrder = ordered
+  }
+
+  const registerComputedFieldInternal = (
+    definition: DataGridComputedFieldDefinition<T>,
+  ): void => {
+    const name = normalizeComputedName(definition.name)
+    if (computedFieldsByName.has(name)) {
+      throw new Error(`[DataGridComputed] Computed field '${name}' is already registered.`)
+    }
+    if (typeof definition.compute !== "function") {
+      throw new Error(`[DataGridComputed] Computed field '${name}' must provide a compute function.`)
+    }
+
+    const targetField = normalizeComputedTargetField(definition.field, name)
+    const existingFieldOwner = computedFieldNameByTargetField.get(targetField)
+    if (existingFieldOwner) {
+      throw new Error(
+        `[DataGridComputed] Target field '${targetField}' is already owned by computed field '${existingFieldOwner}'.`,
+      )
+    }
+
+    const rawDeps = Array.isArray(definition.deps) ? definition.deps : []
+    const deps = rawDeps.map(resolveComputedDependency)
+    for (const dependency of deps) {
+      if (dependency.domain !== "computed") {
+        continue
+      }
+      if (dependency.value === name) {
+        throw new Error(`[DataGridComputed] Computed field '${name}' cannot depend on itself.`)
+      }
+      if (!computedFieldsByName.has(dependency.value)) {
+        throw new Error(
+          `[DataGridComputed] Missing dependency 'computed:${dependency.value}' for '${name}'.`,
+        )
+      }
+    }
+
+    const entry: DataGridRegisteredComputedField = {
+      name,
+      field: targetField,
+      deps,
+      compute: definition.compute,
+    }
+    computedFieldsByName.set(name, entry)
+    computedFieldNameByTargetField.set(targetField, name)
+    try {
+      rebuildComputedOrder()
+    } catch (error) {
+      computedFieldsByName.delete(name)
+      computedFieldNameByTargetField.delete(targetField)
+      throw error
+    }
+
+    for (const dependency of deps) {
+      if (dependency.domain === "meta") {
+        continue
+      }
+      const sourceField = dependency.domain === "computed"
+        ? computedFieldsByName.get(dependency.value)?.field
+        : dependency.value
+      if (!sourceField || sourceField.length === 0) {
+        continue
+      }
+      projectionPolicy.dependencyGraph.registerDependency(
+        sourceField,
+        targetField,
+        { kind: dependency.domain === "field" ? "structural" : "computed" },
+      )
+    }
+  }
+
+  const resolveComputedAffectedNames = (
+    changedFields: ReadonlySet<string>,
+  ): ReadonlySet<string> => {
+    if (computedOrder.length === 0 || changedFields.size === 0) {
+      return new Set<string>()
+    }
+    const affectedFields = projectionPolicy.dependencyGraph.getAffectedFields(changedFields)
+    const affectedNames = new Set<string>()
+    for (const computedName of computedOrder) {
+      const computed = computedFieldsByName.get(computedName)
+      if (!computed) {
+        continue
+      }
+      if (affectedFields.has(computed.field)) {
+        affectedNames.add(computedName)
+      }
+    }
+    return affectedNames
+  }
+
+  const resolveComputedTokenValue = (
+    rowNode: DataGridRowNode<T>,
+    token: DataGridComputedDependencyToken,
+  ): unknown => {
+    if (typeof token !== "string") {
+      return undefined
+    }
+    const normalizedTokenInput = token.trim()
+    if (normalizedTokenInput.length === 0) {
+      return undefined
+    }
+    if (!normalizedTokenInput.includes(":") && computedFieldsByName.has(normalizedTokenInput)) {
+      const computedDependency = computedFieldsByName.get(normalizedTokenInput)
+      if (!computedDependency) {
+        return undefined
+      }
+      return readRowField(rowNode, computedDependency.field, computedDependency.field)
+    }
+    const dependency = resolveComputedDependency(normalizedTokenInput)
+    if (dependency.domain === "meta") {
+      return undefined
+    }
+    if (dependency.domain === "computed") {
+      const computedDependency = computedFieldsByName.get(dependency.value)
+      if (!computedDependency) {
+        return undefined
+      }
+      return readRowField(rowNode, computedDependency.field, computedDependency.field)
+    }
+    return readRowField(rowNode, dependency.value, dependency.value)
+  }
+
+  const applyComputedFieldsToSourceRows = (
+    options: ApplyComputedFieldsToSourceRowsOptions = {},
+  ): ApplyComputedFieldsToSourceRowsResult => {
+    if (computedOrder.length === 0 || sourceRows.length === 0) {
+      return {
+        changed: false,
+        changedRowIds: [],
+        computedUpdatesByRowId: new Map<DataGridRowId, Partial<T>>(),
+        previousRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
+        nextRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
+      }
+    }
+
+    const rowIds = options.rowIds
+    let nextSourceRows: DataGridRowNode<T>[] | null = null
+    const changedRowIds: DataGridRowId[] = []
+    const computedUpdatesByRowId = new Map<DataGridRowId, Partial<T>>()
+    const previousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
+    const nextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
+
+    for (let rowIndex = 0; rowIndex < sourceRows.length; rowIndex += 1) {
+      const row = sourceRows[rowIndex]
+      if (!row) {
+        continue
+      }
+      if (rowIds && !rowIds.has(row.rowId)) {
+        continue
+      }
+      if (!isRecord(row.data)) {
+        continue
+      }
+      const changedFields = options.changedFieldsByRowId?.get(row.rowId) ?? null
+      const affectedNames = changedFields
+        ? resolveComputedAffectedNames(changedFields)
+        : null
+      if (affectedNames && affectedNames.size === 0) {
+        continue
+      }
+
+      let workingRowNode = row
+      let rowPatch: Record<string, unknown> | null = null
+      for (const computedName of computedOrder) {
+        if (affectedNames && !affectedNames.has(computedName)) {
+          continue
+        }
+        const computed = computedFieldsByName.get(computedName)
+        if (!computed) {
+          continue
+        }
+        const nextValue = computed.compute({
+          row: workingRowNode.row,
+          rowId: workingRowNode.rowId,
+          sourceIndex: workingRowNode.sourceIndex,
+          get: (token) => resolveComputedTokenValue(workingRowNode, token),
+        })
+        const previousValue = readRowField(workingRowNode, computed.field, computed.field)
+        if (Object.is(nextValue, previousValue)) {
+          continue
+        }
+        rowPatch = rowPatch ?? {}
+        rowPatch[computed.field] = nextValue
+        const nextData = applyRowDataPatch(
+          workingRowNode.data,
+          { [computed.field]: nextValue } as Partial<T>,
+        )
+        if (nextData !== workingRowNode.data) {
+          workingRowNode = {
+            ...workingRowNode,
+            data: nextData,
+            row: nextData,
+          }
+        }
+      }
+
+      if (!rowPatch) {
+        continue
+      }
+      if (!nextSourceRows) {
+        nextSourceRows = sourceRows.slice()
+      }
+      const finalizedRow = workingRowNode
+      if (finalizedRow.data === row.data && finalizedRow.row === row.row) {
+        continue
+      }
+      nextSourceRows[rowIndex] = finalizedRow
+      changedRowIds.push(row.rowId)
+      computedUpdatesByRowId.set(row.rowId, rowPatch as Partial<T>)
+      previousRowsById.set(row.rowId, row)
+      nextRowsById.set(row.rowId, finalizedRow)
+    }
+
+    if (nextSourceRows && changedRowIds.length > 0) {
+      sourceRows = nextSourceRows
+      sourceRowIndexById = buildRowIdPositionIndex(sourceRows)
+    }
+
+    return {
+      changed: changedRowIds.length > 0,
+      changedRowIds,
+      computedUpdatesByRowId,
+      previousRowsById,
+      nextRowsById,
+    }
+  }
+
+  const getComputedFieldSnapshots = (): readonly DataGridComputedFieldSnapshot[] => {
+    return computedOrder
+      .map((name): DataGridComputedFieldSnapshot | null => {
+        const computed = computedFieldsByName.get(name)
+        if (!computed) {
+          return null
+        }
+        return {
+          name: computed.name,
+          field: computed.field,
+          deps: computed.deps.map(dep => dep.token),
+        }
+      })
+      .filter((entry): entry is DataGridComputedFieldSnapshot => entry !== null)
+  }
+
+  const resolveInitialComputedRegistrationOrder = (
+    definitions: readonly DataGridComputedFieldDefinition<T>[],
+  ): readonly DataGridComputedFieldDefinition<T>[] => {
+    if (definitions.length === 0) {
+      return []
+    }
+    const byName = new Map<string, DataGridComputedFieldDefinition<T>>()
+    for (const definition of definitions) {
+      const name = normalizeComputedName(definition.name)
+      if (byName.has(name)) {
+        throw new Error(`[DataGridComputed] Duplicate computed field '${name}' in initialComputedFields.`)
+      }
+      byName.set(name, definition)
+    }
+    const ordered: DataGridComputedFieldDefinition<T>[] = []
+    const states = new Map<string, 0 | 1 | 2>()
+    const visit = (name: string): void => {
+      const state = states.get(name) ?? 0
+      if (state === 2) {
+        return
+      }
+      if (state === 1) {
+        throw new Error(`[DataGridComputed] Cycle detected at computed field '${name}'.`)
+      }
+      const definition = byName.get(name)
+      if (!definition) {
+        throw new Error(`[DataGridComputed] Missing initial computed field '${name}'.`)
+      }
+      states.set(name, 1)
+      for (const rawDependency of Array.isArray(definition.deps) ? definition.deps : []) {
+        const dependency = resolveComputedDependency(rawDependency)
+        if (dependency.domain !== "computed") {
+          continue
+        }
+        if (byName.has(dependency.value)) {
+          visit(dependency.value)
+          continue
+        }
+        if (!computedFieldsByName.has(dependency.value)) {
+          throw new Error(
+            `[DataGridComputed] Missing dependency 'computed:${dependency.value}' for '${name}'.`,
+          )
+        }
+      }
+      states.set(name, 2)
+      ordered.push(definition)
+    }
+    for (const name of byName.keys()) {
+      visit(name)
+    }
+    return ordered
+  }
+
+  if (Array.isArray(options.initialComputedFields) && options.initialComputedFields.length > 0) {
+    const orderedInitialComputedFields = resolveInitialComputedRegistrationOrder(options.initialComputedFields)
+    for (const definition of orderedInitialComputedFields) {
+      registerComputedFieldInternal(definition)
+    }
+    const initialComputedRecompute = applyComputedFieldsToSourceRows()
+    if (initialComputedRecompute.changed) {
+      bumpRowVersions(rowVersionById, initialComputedRecompute.changedRowIds)
+    }
+  }
 
   function ensureActive() {
     lifecycle.ensureActive()
@@ -631,6 +1069,9 @@ export function createClientRowModel<T>(
     recomputeFromStage: (stage) => {
       computeRuntime.recomputeFromStage(stage)
     },
+    setProjectionInvalidation: (reasons) => {
+      runtimeStateStore.setProjectionInvalidation(reasons)
+    },
     bumpSortRevision: () => {
       runtimeStateStore.bumpSortRevision()
     },
@@ -696,8 +1137,18 @@ export function createClientRowModel<T>(
   const rowsMutationsRuntime = createClientRowRowsMutationsRuntime<T>({
     ensureActive,
     emit,
-    recomputeFromFilterStage: () => {
-      computeRuntime.recomputeFromStage("filter")
+    recomputeFromProjectionEntryStage: () => {
+      computeRuntime.recomputeFromStage("compute")
+    },
+    applyComputedFields: () => {
+      const computedResult = applyComputedFieldsToSourceRows()
+      if (!computedResult.changed) {
+        return
+      }
+      bumpRowVersions(rowVersionById, computedResult.changedRowIds)
+    },
+    setProjectionInvalidation: (reasons) => {
+      runtimeStateStore.setProjectionInvalidation(reasons)
     },
     bumpRowRevision: () => {
       runtimeStateStore.bumpRowRevision()
@@ -737,6 +1188,64 @@ export function createClientRowModel<T>(
     getRowVersionById: () => rowVersionById,
     bumpRowRevision: () => {
       runtimeStateStore.bumpRowRevision()
+    },
+    setProjectionInvalidation: (reasons) => {
+      runtimeStateStore.setProjectionInvalidation(reasons)
+    },
+    applyComputedFieldsToPatchResult: (patchResult) => {
+      const changedFieldsByRowId = new Map<DataGridRowId, ReadonlySet<string>>()
+      for (const [rowId, patch] of patchResult.changedUpdatesById.entries()) {
+        const fields = new Set<string>()
+        if (isRecord(patch)) {
+          for (const key of Object.keys(patch)) {
+            fields.add(key)
+          }
+        }
+        changedFieldsByRowId.set(rowId, fields)
+      }
+      const computedResult = applyComputedFieldsToSourceRows({
+        rowIds: new Set<DataGridRowId>(patchResult.changedRowIds),
+        changedFieldsByRowId,
+      })
+      if (!computedResult.changed) {
+        return patchResult
+      }
+
+      const mergedChangedUpdatesById = new Map<DataGridRowId, Partial<T>>(patchResult.changedUpdatesById)
+      for (const [rowId, computedPatch] of computedResult.computedUpdatesByRowId.entries()) {
+        const existingPatch = mergedChangedUpdatesById.get(rowId)
+        if (existingPatch) {
+          mergedChangedUpdatesById.set(rowId, mergeRowPatch(existingPatch, computedPatch))
+        } else {
+          mergedChangedUpdatesById.set(rowId, computedPatch)
+        }
+      }
+
+      const mergedPreviousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>(patchResult.previousRowsById)
+      for (const [rowId, previousRow] of computedResult.previousRowsById.entries()) {
+        if (!mergedPreviousRowsById.has(rowId)) {
+          mergedPreviousRowsById.set(rowId, previousRow)
+        }
+      }
+
+      const mergedNextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>(patchResult.nextRowsById)
+      for (const [rowId, nextRow] of computedResult.nextRowsById.entries()) {
+        mergedNextRowsById.set(rowId, nextRow)
+      }
+
+      const changedRowIdSet = new Set<DataGridRowId>(patchResult.changedRowIds)
+      for (const rowId of computedResult.changedRowIds) {
+        changedRowIdSet.add(rowId)
+      }
+
+      return {
+        nextSourceRows: sourceRows,
+        changed: true,
+        changedRowIds: Array.from(changedRowIdSet),
+        changedUpdatesById: mergedChangedUpdatesById,
+        previousRowsById: mergedPreviousRowsById,
+        nextRowsById: mergedNextRowsById,
+      } satisfies ApplyClientRowPatchUpdatesResult<T>
     },
     tryApplyFlatProjectionPatch: (changedRowIds, nextRowsById) => {
       if (
@@ -834,7 +1343,27 @@ export function createClientRowModel<T>(
     patchTreeProjectionCacheRowsByIdentity,
   })
 
-  computeRuntime.recomputeFromStage("filter")
+  const recomputeComputedFieldsAndRefresh = (
+    rowIds?: ReadonlySet<DataGridRowId>,
+  ): number => {
+    const computedResult = applyComputedFieldsToSourceRows({
+      rowIds,
+    })
+    if (!computedResult.changed) {
+      return 0
+    }
+    bumpRowVersions(rowVersionById, computedResult.changedRowIds)
+    runtimeStateStore.bumpRowRevision()
+    resetGroupByIncrementalAggregationState()
+    invalidateTreeProjectionCaches()
+    runtimeStateStore.setProjectionInvalidation(["computedChanged"])
+    computeRuntime.recomputeFromStage("compute")
+    emit()
+    return computedResult.changedRowIds.length
+  }
+
+  runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
+  computeRuntime.recomputeFromStage("compute")
 
   return {
     kind: "client",
@@ -878,6 +1407,23 @@ export function createClientRowModel<T>(
       options: DataGridClientRowPatchOptions = {},
     ) {
       patchCoordinatorRuntime.patchRows(updates, options)
+    },
+    registerComputedField(definition: DataGridComputedFieldDefinition<T>) {
+      ensureActive()
+      registerComputedFieldInternal(definition)
+      void recomputeComputedFieldsAndRefresh()
+    },
+    getComputedFields() {
+      return getComputedFieldSnapshots()
+    },
+    recomputeComputedFields(rowIds?: readonly DataGridRowId[]) {
+      ensureActive()
+      const normalizedRowIds = Array.isArray(rowIds)
+        ? rowIds.filter(isDataGridRowId)
+        : []
+      return recomputeComputedFieldsAndRefresh(
+        normalizedRowIds.length > 0 ? new Set<DataGridRowId>(normalizedRowIds) : undefined,
+      )
     },
     reorderRows(input: DataGridClientRowReorderInput) {
       return rowsMutationsRuntime.reorderRows(input)
@@ -976,8 +1522,11 @@ export function createClientRowModel<T>(
     collapseAllGroups() {
       stateMutationsRuntime.collapseAllGroups()
     },
-    refresh(_reason?: DataGridRowModelRefreshReason) {
+    refresh(reason?: DataGridRowModelRefreshReason) {
       ensureActive()
+      runtimeStateStore.setProjectionInvalidation(
+        reason === "sort-change" ? ["sortChanged"] : ["manualRefresh"],
+      )
       computeRuntime.refresh()
       emit()
     },
@@ -1036,6 +1585,9 @@ export function createClientRowModel<T>(
       toggledPivotGroupKeys.clear()
       sortValueCache.clear()
       groupValueCache.clear()
+      computedFieldsByName.clear()
+      computedFieldNameByTargetField.clear()
+      computedOrder = []
       invalidateTreeProjectionCaches()
       cachedFilterPredicate = null
       cachedFilterPredicateKey = "__none__"

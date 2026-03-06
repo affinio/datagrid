@@ -38,18 +38,20 @@ const emit = defineEmits<{
 const { visibleColumns, viewModel } = useDataGridViewContext()
 
 const handleCellClick = (columnKey: string, columnIndex: number) => {
-  return () => {
-    if (!props.row.state.selected) {
-      emit("row-select", {
-        row: props.row,
-        rowIndex: props.row.displayIndex,
-      })
-    }
+  return (payload: { additive: boolean; toggle: boolean }) => {
+    emit("row-select", {
+      row: props.row,
+      rowIndex: props.row.displayIndex,
+      additive: payload.additive,
+      toggle: payload.toggle,
+    })
     emit("cell-click", {
       row: props.row,
       rowIndex: props.row.displayIndex,
       columnKey,
       columnIndex,
+      additive: payload.additive,
+      toggle: payload.toggle,
     })
   }
 }

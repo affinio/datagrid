@@ -16,6 +16,32 @@ describe("projectionPolicy", () => {
         enabled: true,
         maxSize: 1_000,
       },
+      stages: {
+        compute: {
+          enabled: true,
+          maxSize: 1_250,
+        },
+        filter: {
+          enabled: true,
+          maxSize: 1_250,
+        },
+        sort: {
+          enabled: true,
+          maxSize: 1_250,
+        },
+        group: {
+          enabled: true,
+          maxSize: 1_000,
+        },
+        pivot: {
+          enabled: true,
+          maxSize: 1_000,
+        },
+        aggregate: {
+          enabled: true,
+          maxSize: 1_000,
+        },
+      },
     })
     expect(resolveDataGridProjectionCachePolicy("balanced", 100)).toEqual({
       sortValues: {
@@ -25,6 +51,32 @@ describe("projectionPolicy", () => {
       groupValues: {
         enabled: true,
         maxSize: 1_024,
+      },
+      stages: {
+        compute: {
+          enabled: true,
+          maxSize: 1_024,
+        },
+        filter: {
+          enabled: true,
+          maxSize: 1_024,
+        },
+        sort: {
+          enabled: true,
+          maxSize: 1_024,
+        },
+        group: {
+          enabled: true,
+          maxSize: 1_024,
+        },
+        pivot: {
+          enabled: true,
+          maxSize: 1_024,
+        },
+        aggregate: {
+          enabled: true,
+          maxSize: 1_024,
+        },
       },
     })
     expect(resolveDataGridProjectionCachePolicy("speed", 1_000)).toEqual({
@@ -36,10 +88,36 @@ describe("projectionPolicy", () => {
         enabled: true,
         maxSize: 8_000,
       },
+      stages: {
+        compute: {
+          enabled: true,
+          maxSize: 4_000,
+        },
+        filter: {
+          enabled: true,
+          maxSize: 4_000,
+        },
+        sort: {
+          enabled: true,
+          maxSize: 6_000,
+        },
+        group: {
+          enabled: true,
+          maxSize: 8_000,
+        },
+        pivot: {
+          enabled: true,
+          maxSize: 6_000,
+        },
+        aggregate: {
+          enabled: true,
+          maxSize: 6_000,
+        },
+      },
     })
   })
 
-  it("keeps legacy sort/group cache API aligned with unified cache matrix", () => {
+  it("keeps legacy sort/group cache API aligned with stage-aware cache matrix", () => {
     const policy = createDataGridProjectionPolicy({ performanceMode: "memory" })
     const resolved = policy.resolveCachePolicy?.(2_000)
     expect(resolved).toEqual({
@@ -51,7 +129,35 @@ describe("projectionPolicy", () => {
         enabled: DATAGRID_PROJECTION_CACHE_POLICY_MATRIX.memory.groupValues.enabled,
         maxSize: 2_000,
       },
+      stages: {
+        compute: {
+          enabled: true,
+          maxSize: 2_500,
+        },
+        filter: {
+          enabled: true,
+          maxSize: 2_500,
+        },
+        sort: {
+          enabled: true,
+          maxSize: 2_500,
+        },
+        group: {
+          enabled: true,
+          maxSize: 2_000,
+        },
+        pivot: {
+          enabled: true,
+          maxSize: 2_000,
+        },
+        aggregate: {
+          enabled: true,
+          maxSize: 2_000,
+        },
+      },
     })
+    expect(policy.shouldCacheStage("sort")).toBe(resolved?.stages.sort.enabled)
+    expect(policy.maxStageCacheSize("sort", 2_000)).toBe(resolved?.stages.sort.maxSize)
     expect(policy.shouldCacheSortValues()).toBe(resolved?.sortValues.enabled)
     expect(policy.shouldCacheGroupValues()).toBe(resolved?.groupValues.enabled)
     expect(policy.maxSortValueCacheSize(2_000)).toBe(resolved?.sortValues.maxSize)
@@ -76,6 +182,18 @@ describe("projectionPolicy", () => {
       maxSize: 0,
     })
     expect(resolved.groupValues).toEqual({
+      enabled: true,
+      maxSize: 4_000,
+    })
+    expect(resolved.stages.filter).toEqual({
+      enabled: false,
+      maxSize: 0,
+    })
+    expect(resolved.stages.compute).toEqual({
+      enabled: false,
+      maxSize: 0,
+    })
+    expect(resolved.stages.pivot).toEqual({
       enabled: true,
       maxSize: 4_000,
     })

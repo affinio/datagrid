@@ -108,6 +108,110 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("registers initial computed fields and applies incremental recompute on patches", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      quantity: number
+      tax: number
+      subtotal?: number
+      total?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10, quantity: 2, tax: 3 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialComputedFields: [
+        {
+          name: "total",
+          deps: ["computed:subtotal", "field:tax"],
+          compute: ({ get }) => Number(get("computed:subtotal") ?? 0) + Number(get("field:tax") ?? 0),
+        },
+        {
+          name: "subtotal",
+          deps: ["field:price", "field:quantity"],
+          compute: ({ row }) => row.price * row.quantity,
+        },
+      ],
+    })
+
+    const initialRow = model.getRow(0)?.row as { subtotal?: number; total?: number }
+    expect(initialRow.subtotal).toBe(20)
+    expect(initialRow.total).toBe(23)
+    expect(model.getComputedFields().map(field => field.name)).toEqual(["subtotal", "total"])
+
+    model.patchRows(
+      [{ rowId: "r1", data: { price: 20 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+
+    const patchedRow = model.getRow(0)?.row as { subtotal?: number; total?: number }
+    expect(patchedRow.subtotal).toBe(40)
+    expect(patchedRow.total).toBe(43)
+
+    model.dispose()
+  })
+
+  it("marks sort stale when patched fields affect computed sort keys", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      quantity: number
+      tax: number
+      subtotal?: number
+      total?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 5, quantity: 2, tax: 1 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+        {
+          row: { id: 2, price: 10, quantity: 2, tax: 0 },
+          rowId: "r2",
+          originalIndex: 1,
+          displayIndex: 1,
+        },
+      ],
+      initialComputedFields: [
+        {
+          name: "subtotal",
+          deps: ["field:price", "field:quantity"],
+          compute: ({ row }) => row.price * row.quantity,
+        },
+        {
+          name: "total",
+          deps: ["computed:subtotal", "field:tax"],
+          compute: ({ get }) => Number(get("subtotal") ?? 0) + Number(get("tax") ?? 0),
+        },
+      ],
+    })
+
+    model.setSortModel([{ key: "total", direction: "desc" }])
+    expect(model.getRowsInRange({ start: 0, end: 1 }).map(row => String(row.rowId))).toEqual(["r2", "r1"])
+
+    model.patchRows(
+      [{ rowId: "r1", data: { price: 50 } }],
+      { recomputeSort: false },
+    )
+    expect(model.getSnapshot().projection?.staleStages).toContain("sort")
+    expect((model.getRow(1)?.row as { total?: number })?.total).toBe(101)
+
+    model.patchRows(
+      [{ rowId: "r1", data: { quantity: 3 } }],
+      { recomputeSort: true },
+    )
+    expect(model.getRowsInRange({ start: 0, end: 1 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
+
+    model.dispose()
+  })
+
   it("returns rows in canonical range", () => {
     const rows = buildRows(10)
     const model = createClientRowModel({ rows })
@@ -1969,6 +2073,7 @@ describe("createClientRowModel", () => {
     expect(before?.cycleVersion).toBe(before?.version)
     expect(before?.recomputeVersion).toBeGreaterThan(0)
     expect(before?.staleStages).toEqual([])
+    expect(before?.lastInvalidationReasons).toEqual(["sortChanged"])
 
     model.patchRows(
       [{ rowId: "r1", data: { tested_at: 999 } }],
@@ -1978,6 +2083,7 @@ describe("createClientRowModel", () => {
     expect(staleSnapshot?.version).toBeGreaterThan(before?.version ?? 0)
     expect(staleSnapshot?.recomputeVersion).toBe(before?.recomputeVersion)
     expect(staleSnapshot?.staleStages).toContain("sort")
+    expect(staleSnapshot?.lastInvalidationReasons).toContain("rowsPatched")
 
     model.patchRows(
       [{ rowId: "r2", data: { tested_at: 5 } }],
@@ -1987,6 +2093,7 @@ describe("createClientRowModel", () => {
     expect(healedSnapshot?.version).toBeGreaterThan(staleSnapshot?.version ?? 0)
     expect(healedSnapshot?.recomputeVersion).toBeGreaterThan(staleSnapshot?.recomputeVersion ?? 0)
     expect(healedSnapshot?.staleStages).not.toContain("sort")
+    expect(healedSnapshot?.lastInvalidationReasons).toContain("sortChanged")
 
     model.dispose()
   })

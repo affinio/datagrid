@@ -2,10 +2,13 @@ import type {
   DataGridAggregationModel,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
+  DataGridComputedFieldDefinition,
+  DataGridComputedFieldSnapshot,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
   DataGridPaginationInput,
+  DataGridRowId,
   DataGridRowModel,
   DataGridRowNodeInput,
   DataGridSortAndFilterModelInput,
@@ -61,6 +64,10 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   appendData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   prependData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   hasPatchSupport: () => boolean
+  hasComputedSupport: () => boolean
+  registerComputedField: (definition: DataGridComputedFieldDefinition<TRow>) => void
+  getComputedFields: () => readonly DataGridComputedFieldSnapshot[]
+  recomputeComputedFields: (rowIds?: readonly DataGridRowId[]) => number
   patchRows: (
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
@@ -216,6 +223,29 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     },
     hasPatchSupport() {
       return getPatchCapability() !== null
+    },
+    hasComputedSupport() {
+      return typeof rowModel.registerComputedField === "function"
+    },
+    registerComputedField(definition: DataGridComputedFieldDefinition<TRow>) {
+      assertMutationsAllowed("register computed field")
+      if (typeof rowModel.registerComputedField !== "function") {
+        throw new Error("[DataGridApi] rowModel does not implement computed field capability.")
+      }
+      rowModel.registerComputedField(definition)
+    },
+    getComputedFields() {
+      if (typeof rowModel.getComputedFields !== "function") {
+        return []
+      }
+      return rowModel.getComputedFields()
+    },
+    recomputeComputedFields(rowIds?: readonly DataGridRowId[]) {
+      assertMutationsAllowed("recompute computed fields")
+      if (typeof rowModel.recomputeComputedFields !== "function") {
+        throw new Error("[DataGridApi] rowModel does not implement computed field capability.")
+      }
+      return rowModel.recomputeComputedFields(rowIds)
     },
     patchRows(
       updates: readonly DataGridClientRowPatch<TRow>[],

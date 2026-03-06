@@ -104,6 +104,9 @@ importers:
       '@affino/datagrid-core':
         specifier: workspace:*
         version: link:../datagrid-core
+      '@affino/datagrid-orchestration':
+        specifier: workspace:*
+        version: link:../datagrid-orchestration
       '@affino/datagrid-vue':
         specifier: workspace:*
         version: link:../datagrid-vue
@@ -140,6 +143,9 @@ importers:
       '@affino/datagrid-orchestration':
         specifier: workspace:*
         version: link:../datagrid-orchestration
+      '@affino/menu-vue':
+        specifier: ^2.1.1
+        version: 2.1.1(@affino/menu-core@1.1.0)(vue@3.4.38(typescript@5.9.3))
       pinia:
         specifier: ^2.1.0 || ^3.0.0
         version: 3.0.4(typescript@5.9.3)(vue@3.4.38(typescript@5.9.3))
@@ -170,6 +176,27 @@ packages:
 
   '@acemir/cssom@0.9.31':
     resolution: {integrity: sha512-ZnR3GSaH+/vJ0YlHau21FjfLYjMpYVIzTD8M8vIEQvIGxeOXyXdzCI140rrCY862p/C/BbzWsjc1dgnM9mkoTA==}
+
+  '@affino/focus-utils@1.1.0':
+    resolution: {integrity: sha512-DjE9w0WLlqmtjSXbmzf2y0WNGvhQ1hTIhkiRV8DPsCmKKXREr/6sm8Yc5PrCLqzuawdYUDzyDBEPxFqhMJOOCg==}
+
+  '@affino/menu-core@1.1.0':
+    resolution: {integrity: sha512-8kXmr/ryhzXSSCF/ew813IhBr2LKztW4+hdpQzKptZnAO3oh8TIB2bY/nFpweVb4Nbl7GZtw+ZXKdKHLTKWpBw==}
+
+  '@affino/menu-vue@2.1.1':
+    resolution: {integrity: sha512-83fDTTpdJC8spvtFst6wz6nodKYOawFNxGb4OB2FG7K+qElMxqD/3PJhaiRktM7qtJgwCk0+PguCuMJSAQGgSQ==}
+    peerDependencies:
+      '@affino/menu-core': ^1.1.0
+      vue: 3.4.38
+
+  '@affino/overlay-host@1.1.0':
+    resolution: {integrity: sha512-f1adFx/bnNuO/Z4CSeUvGtLyr09/4zDIHpJuVs8LgCEsM1hXrxX6aJ4Qir5ujI1j/y5S+R1G22fapANDYMikWQ==}
+
+  '@affino/overlay-kernel@0.2.0':
+    resolution: {integrity: sha512-yPbhRuzMKBuUEDVM8ZhKTQcWH9jonuhTEaG6UXlpYaLNNiaWofYmmqOuP3J46ZZmlbHZInXIGFNuXo5LdhzeCg==}
+
+  '@affino/surface-core@1.1.0':
+    resolution: {integrity: sha512-9BtgLjWR6brOMMb+QQc6nlX0dY5nS1IgYZL3BhTO56Dt9XJpy0/uu00AW5dHnAIqku5VlZx1hmIW3vEBd/CWCw==}
 
   '@asamuzakjp/css-color@5.0.1':
     resolution: {integrity: sha512-2SZFvqMyvboVV1d15lMf7XiI3m7SDqXUuKaTymJYLN6dSGadqp+fVojqJlVoMlbZnlTmu3S0TLwLTJpvBMO1Aw==}
@@ -1990,6 +2017,27 @@ packages:
 snapshots:
 
   '@acemir/cssom@0.9.31': {}
+
+  '@affino/focus-utils@1.1.0': {}
+
+  '@affino/menu-core@1.1.0':
+    dependencies:
+      '@affino/overlay-kernel': 0.2.0
+      '@affino/surface-core': 1.1.0
+
+  '@affino/menu-vue@2.1.1(@affino/menu-core@1.1.0)(vue@3.4.38(typescript@5.9.3))':
+    dependencies:
+      '@affino/focus-utils': 1.1.0
+      '@affino/menu-core': 1.1.0
+      '@affino/overlay-host': 1.1.0
+      '@affino/overlay-kernel': 0.2.0
+      vue: 3.4.38(typescript@5.9.3)
+
+  '@affino/overlay-host@1.1.0': {}
+
+  '@affino/overlay-kernel@0.2.0': {}
+
+  '@affino/surface-core@1.1.0': {}
 
   '@asamuzakjp/css-color@5.0.1':
     dependencies:

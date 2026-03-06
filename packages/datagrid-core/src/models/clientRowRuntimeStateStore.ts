@@ -1,8 +1,10 @@
 import type {
+  DataGridProjectionInvalidationReason,
   DataGridProjectionDiagnostics,
   DataGridProjectionStage,
   DataGridRowNode,
 } from "./rowModel.js"
+import { resolveClientProjectionInvalidationStages } from "./projectionStages.js"
 
 export interface DataGridClientRowRuntimeState<T> {
   rows: DataGridRowNode<T>[]
@@ -19,6 +21,7 @@ export interface DataGridClientRowRuntimeState<T> {
   groupRevision: number
   projectionCycleVersion: number
   projectionRecomputeVersion: number
+  lastInvalidationReasons: DataGridProjectionInvalidationReason[]
 }
 
 export interface DataGridClientRowRuntimeStateStore<T> {
@@ -27,6 +30,9 @@ export interface DataGridClientRowRuntimeStateStore<T> {
   bumpSortRevision: () => number
   bumpFilterRevision: () => number
   bumpGroupRevision: () => number
+  setProjectionInvalidation: (
+    reasons: readonly DataGridProjectionInvalidationReason[],
+  ) => void
   commitProjectionCycle: (hadActualRecompute: boolean) => number
   getProjectionDiagnostics: (
     getStaleStages: () => readonly DataGridProjectionStage[],
@@ -49,6 +55,7 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
     groupRevision: 0,
     projectionCycleVersion: 0,
     projectionRecomputeVersion: 0,
+    lastInvalidationReasons: [],
   }
 
   return {
@@ -69,6 +76,9 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
       state.groupRevision += 1
       return state.groupRevision
     },
+    setProjectionInvalidation: (reasons) => {
+      state.lastInvalidationReasons = Array.from(new Set(reasons))
+    },
     commitProjectionCycle: (hadActualRecompute: boolean) => {
       state.projectionCycleVersion += 1
       if (hadActualRecompute) {
@@ -78,11 +88,14 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
       return state.revision
     },
     getProjectionDiagnostics: (getStaleStages) => {
+      const lastInvalidationReasons = [...state.lastInvalidationReasons]
       return {
         version: state.projectionCycleVersion,
         cycleVersion: state.projectionCycleVersion,
         recomputeVersion: state.projectionRecomputeVersion,
         staleStages: getStaleStages(),
+        lastInvalidationReasons,
+        lastInvalidatedStages: resolveClientProjectionInvalidationStages(lastInvalidationReasons),
       }
     },
   }

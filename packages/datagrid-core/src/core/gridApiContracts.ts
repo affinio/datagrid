@@ -3,6 +3,8 @@ import type {
   DataGridClientComputeDiagnostics,
   DataGridClientComputeMode,
   DataGridClientRowModelDerivedCacheDiagnostics,
+  DataGridComputedFieldDefinition,
+  DataGridComputedFieldSnapshot,
   DataGridColumnDef,
   DataGridColumnHistogram,
   DataGridColumnHistogramOptions,
@@ -130,6 +132,10 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   expandAllGroups(): void
   collapseAllGroups(): void
   hasPatchSupport(): boolean
+  hasComputedSupport(): boolean
+  registerComputedField(definition: DataGridComputedFieldDefinition<TRow>): void
+  getComputedFields(): readonly DataGridComputedFieldSnapshot[]
+  recomputeComputedFields(rowIds?: readonly DataGridRowId[]): number
   patch(
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,

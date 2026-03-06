@@ -446,6 +446,75 @@ describe("data grid api facade contracts", () => {
     expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r3", "r1"])
   })
 
+  it("exposes computed field APIs for client row models", () => {
+    const rowModel = createClientRowModel<{
+      id: number
+      price: number
+      quantity: number
+      total?: number
+    }>({
+      rows: [
+        { row: { id: 1, price: 10, quantity: 2 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "total", label: "Total" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.rows.hasComputedSupport()).toBe(true)
+    api.rows.registerComputedField({
+      name: "total",
+      deps: ["field:price", "field:quantity"],
+      compute: ({ row }) => row.price * row.quantity,
+    })
+    expect(api.rows.getComputedFields().map(field => field.name)).toEqual(["total"])
+    expect((api.rows.get(0)?.row as { total?: number })?.total).toBe(20)
+
+    api.rows.patch([{ rowId: "r1", data: { price: 15 } }], { recomputeSort: false })
+    expect((api.rows.get(0)?.row as { total?: number })?.total).toBe(30)
+    expect(api.rows.recomputeComputedFields()).toBe(0)
+  })
+
+  it("reports missing computed field capability for row models without computed runtime", () => {
+    const clientRowModel = createClientRowModel({
+      rows: [{ row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 }],
+    })
+    const {
+      registerComputedField: _omitRegisterComputedField,
+      getComputedFields: _omitGetComputedFields,
+      recomputeComputedFields: _omitRecomputeComputedFields,
+      ...rowModelWithoutComputed
+    } = clientRowModel
+    const rowModel = rowModelWithoutComputed as unknown as DataGridRowModel<{ id: number; score: number }>
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.rows.hasComputedSupport()).toBe(false)
+    expect(api.rows.getComputedFields()).toEqual([])
+    expect(() => {
+      api.rows.registerComputedField({
+        name: "score2",
+        deps: ["field:score"],
+        compute: ({ row }) => row.score,
+      })
+    }).toThrow(/computed field capability/i)
+  })
+
   it("reports missing patch capability for non-client row models and fails loudly", () => {
     const clientRowModel = createClientRowModel({
       rows: [{ row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 }],

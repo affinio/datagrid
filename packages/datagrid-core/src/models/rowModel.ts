@@ -359,6 +359,7 @@ export interface DataGridPivotCellDrilldown<T = unknown> {
 }
 
 export type DataGridProjectionStage =
+  | "compute"
   | "filter"
   | "sort"
   | "group"
@@ -367,11 +368,52 @@ export type DataGridProjectionStage =
   | "paginate"
   | "visible"
 
+export type DataGridProjectionInvalidationReason =
+  | "rowsChanged"
+  | "rowsPatched"
+  | "computedChanged"
+  | "filterChanged"
+  | "sortChanged"
+  | "groupChanged"
+  | "groupExpansionChanged"
+  | "pivotChanged"
+  | "aggregationChanged"
+  | "paginationChanged"
+  | "manualRefresh"
+
+export type DataGridComputedDependencyToken =
+  | `field:${string}`
+  | `computed:${string}`
+  | `meta:${string}`
+  | (string & {})
+
+export interface DataGridComputedFieldComputeContext<T = unknown> {
+  row: T
+  rowId: DataGridRowId
+  sourceIndex: number
+  get: (token: DataGridComputedDependencyToken) => unknown
+}
+
+export interface DataGridComputedFieldDefinition<T = unknown> {
+  name: string
+  field?: string
+  deps: readonly DataGridComputedDependencyToken[]
+  compute: (context: DataGridComputedFieldComputeContext<T>) => unknown
+}
+
+export interface DataGridComputedFieldSnapshot {
+  name: string
+  field: string
+  deps: readonly DataGridComputedDependencyToken[]
+}
+
 export interface DataGridProjectionDiagnostics {
   version: number
   cycleVersion?: number
   recomputeVersion?: number
   staleStages: readonly DataGridProjectionStage[]
+  lastInvalidationReasons?: readonly DataGridProjectionInvalidationReason[]
+  lastInvalidatedStages?: readonly DataGridProjectionStage[]
 }
 
 export interface DataGridTreeDataDiagnostics {
@@ -409,6 +451,9 @@ export interface DataGridRowModel<T = unknown> {
   collapseGroup(groupKey: string): void
   expandAllGroups(): void
   collapseAllGroups(): void
+  registerComputedField?(definition: DataGridComputedFieldDefinition<T>): void
+  getComputedFields?(): readonly DataGridComputedFieldSnapshot[]
+  recomputeComputedFields?(rowIds?: readonly DataGridRowId[]): number
   refresh(reason?: DataGridRowModelRefreshReason): Promise<void> | void
   subscribe(listener: DataGridRowModelListener<T>): () => void
   dispose(): void

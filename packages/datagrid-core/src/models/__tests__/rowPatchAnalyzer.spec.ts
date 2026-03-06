@@ -88,8 +88,9 @@ describe("rowPatchAnalyzer change-set", () => {
 })
 
 describe("rowPatchAnalyzer projection plan", () => {
-  type Stage = "filter" | "sort" | "group" | "pivot" | "aggregate" | "paginate" | "visible"
+  type Stage = "compute" | "filter" | "sort" | "group" | "pivot" | "aggregate" | "paginate" | "visible"
   const stageDependents: Readonly<Record<Stage, readonly Stage[]>> = {
+    compute: ["filter", "sort", "group", "pivot", "aggregate", "paginate", "visible"],
     filter: ["sort", "group", "pivot", "aggregate", "paginate", "visible"],
     sort: ["group", "pivot", "aggregate", "paginate", "visible"],
     group: ["pivot", "aggregate", "paginate", "visible"],
@@ -144,12 +145,12 @@ describe("rowPatchAnalyzer projection plan", () => {
         group: true,
       },
       staleStages: new Set(),
-      allStages: ["filter", "sort", "group", "pivot", "aggregate", "paginate", "visible"],
+      allStages: ["compute", "filter", "sort", "group", "pivot", "aggregate", "paginate", "visible"],
       expandStages,
     })
 
     expect(plan.requestedStages).toEqual(["sort", "aggregate"])
-    expect(plan.blockedStages).toEqual(["filter", "sort", "group", "pivot"])
+    expect(plan.blockedStages).toEqual(["compute", "filter", "sort", "group", "pivot"])
   })
 
   it("unblocks full dependent chain when filter recompute is allowed", () => {
@@ -181,7 +182,7 @@ describe("rowPatchAnalyzer projection plan", () => {
         group: true,
       },
       staleStages: new Set(),
-      allStages: ["filter", "sort", "group", "pivot", "aggregate", "paginate", "visible"],
+      allStages: ["compute", "filter", "sort", "group", "pivot", "aggregate", "paginate", "visible"],
       expandStages,
     })
 
@@ -230,12 +231,12 @@ describe("rowPatchAnalyzer projection plan", () => {
         group: true,
       },
       staleStages: new Set(),
-      allStages: ["filter", "sort", "group", "pivot", "aggregate", "paginate", "visible"],
+      allStages: ["compute", "filter", "sort", "group", "pivot", "aggregate", "paginate", "visible"],
       expandStages,
       stageRules: customRules,
     })
 
     expect(plan.requestedStages).toEqual(["sort"])
-    expect(plan.blockedStages).toEqual(["filter"])
+    expect(plan.blockedStages).toEqual(["compute", "filter"])
   })
 })

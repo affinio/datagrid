@@ -36,6 +36,7 @@ import { serverSideRowModelFeature } from "../features/serverSideRowModelFeature
 import { sortingFeature } from "../features/sortingFeature"
 import type { DataGridFeature, GridContext } from "../grid/types"
 import type {
+  DataGridAggregationColumnSpec,
   DataGridAggregationModel,
   DataGridColumnPin,
   DataGridColumnSnapshot,
@@ -49,6 +50,7 @@ import type {
   DataGridPivotLayoutSnapshot,
   DataGridPivotSpec,
   DataGridPivotValueSpec,
+  DataGridProjectionStage,
   DataGridRowModelKind,
   DataGridSelectionSnapshot,
   DataGridSortAndFilterModelInput,
@@ -96,16 +98,161 @@ export type DataGridFeatureName =
   | "autoScroll"
   | "resize"
 
-const KEYBOARD_TRIGGER_FEATURES: readonly DataGridFeatureName[] = [
-  "selection",
-  "clipboard",
-  "advancedClipboard",
-  "excelCompatibleClipboard",
-  "fill",
-  "fillHandle",
-  "navigation",
-  "history",
-]
+export interface DataGridFeatureDescriptor {
+  dependsOn: readonly DataGridFeatureName[]
+  stages: readonly DataGridProjectionStage[]
+}
+
+export const DATAGRID_FEATURE_DESCRIPTORS: Readonly<Record<DataGridFeatureName, DataGridFeatureDescriptor>> = {
+  selection: {
+    dependsOn: ["keyboard"],
+    stages: [],
+  },
+  clipboard: {
+    dependsOn: ["selection", "keyboard"],
+    stages: [],
+  },
+  advancedClipboard: {
+    dependsOn: ["clipboard", "selection", "keyboard"],
+    stages: [],
+  },
+  excelCompatibleClipboard: {
+    dependsOn: ["advancedClipboard"],
+    stages: [],
+  },
+  fill: {
+    dependsOn: ["fillHandle"],
+    stages: [],
+  },
+  fillHandle: {
+    dependsOn: ["clipboard", "selection", "keyboard"],
+    stages: [],
+  },
+  navigation: {
+    dependsOn: ["selection", "keyboard"],
+    stages: [],
+  },
+  keyboard: {
+    dependsOn: [],
+    stages: [],
+  },
+  history: {
+    dependsOn: ["keyboard"],
+    stages: [],
+  },
+  sorting: {
+    dependsOn: [],
+    stages: ["sort"],
+  },
+  pivot: {
+    dependsOn: [],
+    stages: ["pivot"],
+  },
+  advancedPivotEngine: {
+    dependsOn: ["pivot"],
+    stages: ["pivot"],
+  },
+  pivotPanel: {
+    dependsOn: ["pivot"],
+    stages: ["pivot"],
+  },
+  grouping: {
+    dependsOn: [],
+    stages: ["group"],
+  },
+  groupPanel: {
+    dependsOn: ["grouping"],
+    stages: ["group"],
+  },
+  aggregation: {
+    dependsOn: [],
+    stages: ["aggregate"],
+  },
+  aggregationFunctionsRegistry: {
+    dependsOn: ["aggregation"],
+    stages: ["aggregate"],
+  },
+  filterDsl: {
+    dependsOn: [],
+    stages: ["filter"],
+  },
+  filterBuilderUI: {
+    dependsOn: ["filterDsl"],
+    stages: ["filter"],
+  },
+  columnPinning: {
+    dependsOn: [],
+    stages: [],
+  },
+  columnVisibility: {
+    dependsOn: [],
+    stages: [],
+  },
+  columnAutosize: {
+    dependsOn: [],
+    stages: [],
+  },
+  columnMenu: {
+    dependsOn: ["sorting", "columnPinning", "columnVisibility"],
+    stages: [],
+  },
+  columnResize: {
+    dependsOn: [],
+    stages: [],
+  },
+  columnReorder: {
+    dependsOn: [],
+    stages: [],
+  },
+  columnVirtualization: {
+    dependsOn: [],
+    stages: [],
+  },
+  cellEditors: {
+    dependsOn: [],
+    stages: [],
+  },
+  serverSideRowModel: {
+    dependsOn: [],
+    stages: [],
+  },
+  rowHeight: {
+    dependsOn: [],
+    stages: [],
+  },
+  rowSelectionModes: {
+    dependsOn: ["selection"],
+    stages: [],
+  },
+  selectionOverlay: {
+    dependsOn: ["selection"],
+    stages: [],
+  },
+  export: {
+    dependsOn: [],
+    stages: [],
+  },
+  exportExcel: {
+    dependsOn: ["export", "excelCompatibleClipboard"],
+    stages: [],
+  },
+  rangeMove: {
+    dependsOn: ["selection"],
+    stages: [],
+  },
+  pointerPreview: {
+    dependsOn: ["selection"],
+    stages: [],
+  },
+  autoScroll: {
+    dependsOn: ["selection"],
+    stages: [],
+  },
+  resize: {
+    dependsOn: ["columnResize"],
+    stages: [],
+  },
+}
 
 export type DataGridFeatureRegistry<TRow = unknown> = Record<
   DataGridFeatureName,
@@ -147,11 +294,16 @@ export interface DataGridSelectedCell {
   columnIndex: number
 }
 
+export interface DataGridRowSelectOptions {
+  additive?: boolean
+  toggle?: boolean
+}
+
 export interface DataGridSelectionFeatureApi {
   getSnapshot: () => DataGridSelectionSnapshot | null
   getActiveCell: () => DataGridSelectedCell | null
   selectCell: (rowIndex: number, columnIndex: number) => DataGridSelectionSnapshot | null
-  selectRow: (rowIndex: number) => DataGridSelectionSnapshot | null
+  selectRow: (rowIndex: number, options?: DataGridRowSelectOptions) => DataGridSelectionSnapshot | null
   clear: () => void
 }
 
@@ -273,6 +425,74 @@ export interface DataGridAggregationFunctionsRegistryFeatureApi {
   unregister: (name: string) => boolean
   resolve: (name: string) => DataGridAggregationFunction | null
   list: () => readonly string[]
+}
+
+function resolveAggregationFunctionsRegistryFeature<TRow>(
+  ctx: GridContext<TRow>,
+): DataGridAggregationFunctionsRegistryFeatureApi | null {
+  const feature = ctx.features.get("aggregationFunctionsRegistry")
+  if (!feature || typeof feature !== "object") {
+    return null
+  }
+  return feature as DataGridAggregationFunctionsRegistryFeatureApi
+}
+
+function materializeAggregationModelWithRegistry<TRow>(
+  aggregationModel: DataGridAggregationModel<TRow> | null,
+  registry: DataGridAggregationFunctionsRegistryFeatureApi | null,
+): DataGridAggregationModel<TRow> | null {
+  if (!aggregationModel || !registry) {
+    return aggregationModel
+  }
+
+  let changed = false
+  const columns = aggregationModel.columns.map((column): DataGridAggregationColumnSpec<TRow> => {
+    if (column.op !== "custom") {
+      return column
+    }
+    if (column.createState || column.add || column.merge || column.remove || column.finalize) {
+      return column
+    }
+    const fn = registry.resolve(column.key) ?? (column.field ? registry.resolve(column.field) : null)
+    if (!fn) {
+      return column
+    }
+    changed = true
+    return {
+      ...column,
+      createState: () => ({ values: [] as unknown[] }),
+      add: (state, value) => {
+        const accumulator = state as { values?: unknown[] }
+        accumulator.values = accumulator.values ?? []
+        accumulator.values.push(value)
+      },
+      merge: (state, childState) => {
+        const accumulator = state as { values?: unknown[] }
+        const child = childState as { values?: unknown[] }
+        accumulator.values = [...(accumulator.values ?? []), ...(child.values ?? [])]
+      },
+      remove: (state, value) => {
+        const accumulator = state as { values?: unknown[] }
+        const values = accumulator.values ?? []
+        const index = values.findIndex(entry => Object.is(entry, value))
+        if (index >= 0) {
+          values.splice(index, 1)
+        }
+      },
+      finalize: (state) => {
+        const accumulator = state as { values?: unknown[] }
+        return fn(accumulator.values ?? [])
+      },
+    }
+  })
+
+  if (!changed) {
+    return aggregationModel
+  }
+  return {
+    ...aggregationModel,
+    columns,
+  }
 }
 
 export interface DataGridFilterDslFeatureApi {
@@ -708,12 +928,25 @@ function resolveBooleanPayload(payload: unknown): boolean | null {
   return typeof payload === "boolean" ? payload : null
 }
 
-function resolveRowIndexFromPayload(payload: unknown): number | null {
+function resolveRowSelectPayload(
+  payload: unknown,
+): { rowIndex: number; additive: boolean; toggle: boolean } | null {
   if (!payload || typeof payload !== "object") {
     return null
   }
-  const candidate = payload as { rowIndex?: unknown }
-  return typeof candidate.rowIndex === "number" ? candidate.rowIndex : null
+  const candidate = payload as {
+    rowIndex?: unknown
+    additive?: unknown
+    toggle?: unknown
+  }
+  if (typeof candidate.rowIndex !== "number") {
+    return null
+  }
+  return {
+    rowIndex: candidate.rowIndex,
+    additive: candidate.additive === true,
+    toggle: candidate.toggle === true,
+  }
 }
 
 function resolveCellCoordFromPayload(payload: unknown): { rowIndex: number; columnIndex: number } | null {
@@ -818,33 +1051,33 @@ function resolveCellEditCommitPayload(payload: unknown): { value: unknown; emit?
 export function resolveDataGridFeatureDependencies(
   features: readonly DataGridFeatureName[],
 ): readonly DataGridFeatureName[] {
-  const nextFeatures = [...features]
-  const requiresKeyboard = nextFeatures.some(feature => KEYBOARD_TRIGGER_FEATURES.includes(feature))
-  if (requiresKeyboard && !nextFeatures.includes("keyboard")) {
-    nextFeatures.push("keyboard")
+  const visited = new Set<DataGridFeatureName>()
+  const visiting = new Set<DataGridFeatureName>()
+  const resolved: DataGridFeatureName[] = []
+
+  const visit = (feature: DataGridFeatureName): void => {
+    if (visited.has(feature)) {
+      return
+    }
+    if (visiting.has(feature)) {
+      throw new Error(`[DataGrid] Feature dependency cycle detected at "${feature}".`)
+    }
+
+    visiting.add(feature)
+    const descriptor = DATAGRID_FEATURE_DESCRIPTORS[feature]
+    for (const dependency of descriptor.dependsOn) {
+      visit(dependency)
+    }
+    visiting.delete(feature)
+    visited.add(feature)
+    resolved.push(feature)
   }
-  if (
-    (nextFeatures.includes("advancedClipboard") || nextFeatures.includes("excelCompatibleClipboard"))
-    && !nextFeatures.includes("clipboard")
-  ) {
-    nextFeatures.push("clipboard")
+
+  for (const feature of features) {
+    visit(feature)
   }
-  if (
-    (nextFeatures.includes("advancedClipboard") || nextFeatures.includes("excelCompatibleClipboard"))
-    && !nextFeatures.includes("selection")
-  ) {
-    nextFeatures.push("selection")
-  }
-  if (nextFeatures.includes("pivotPanel") && !nextFeatures.includes("pivot")) {
-    nextFeatures.push("pivot")
-  }
-  if (nextFeatures.includes("advancedPivotEngine") && !nextFeatures.includes("pivot")) {
-    nextFeatures.push("pivot")
-  }
-  if (nextFeatures.includes("groupPanel") && !nextFeatures.includes("grouping")) {
-    nextFeatures.push("grouping")
-  }
-  return nextFeatures
+
+  return resolved
 }
 
 export function createDataGridFeatureRegistry<TRow = unknown>(
@@ -861,6 +1094,39 @@ export function createDataGridFeatureRegistry<TRow = unknown>(
       const resolveRowIdByIndex = (rowIndex: number): string | number | null => {
         const row = ctx.api.rows.get(rowIndex)
         return row ? row.rowId : null
+      }
+      const resolveRowSelectionMode = (): DataGridRowSelectionMode => {
+        const feature = ctx.features.get("rowSelectionModes")
+        if (!feature || typeof feature !== "object") {
+          return "multiple"
+        }
+        const api = feature as DataGridRowSelectionModesFeatureApi
+        return api.getMode()
+      }
+      const buildFullRowRange = (
+        rowIndex: number,
+        columnCount: number,
+      ): DataGridSelectionSnapshot["ranges"][number] => {
+        const endCol = Math.max(0, columnCount - 1)
+        const rowId = resolveRowIdByIndex(rowIndex)
+        return {
+          startRow: rowIndex,
+          endRow: rowIndex,
+          startCol: 0,
+          endCol,
+          startRowId: rowId,
+          endRowId: rowId,
+          anchor: {
+            rowIndex,
+            colIndex: 0,
+            rowId,
+          },
+          focus: {
+            rowIndex,
+            colIndex: 0,
+            rowId,
+          },
+        }
       }
 
       const setSnapshot = (snapshot: DataGridSelectionSnapshot | null): void => {
@@ -908,7 +1174,7 @@ export function createDataGridFeatureRegistry<TRow = unknown>(
         return snapshot
       }
 
-      const selectRow = (rowIndex: number): DataGridSelectionSnapshot | null => {
+      const selectRow = (rowIndex: number, selectionOptions: DataGridRowSelectOptions = {}): DataGridSelectionSnapshot | null => {
         const rowCount = resolveRowCount()
         const colCount = resolveColumnCount()
         if (rowCount <= 0 || colCount <= 0) {
@@ -917,17 +1183,63 @@ export function createDataGridFeatureRegistry<TRow = unknown>(
         }
 
         const safeRowIndex = clamp(rowIndex, 0, rowCount - 1)
-        const snapshot = createSelectionSnapshot({
-          startRow: safeRowIndex,
-          endRow: safeRowIndex,
-          startColumn: 0,
-          endColumn: colCount - 1,
-          anchorRow: safeRowIndex,
-          anchorColumn: 0,
-          focusRow: safeRowIndex,
-          focusColumn: 0,
-          resolveRowId: resolveRowIdByIndex,
+        const nextRange = buildFullRowRange(safeRowIndex, colCount)
+        const selectionMode = resolveRowSelectionMode()
+        if (selectionMode === "single" || selectionOptions.additive !== true) {
+          const snapshot = {
+            ranges: [nextRange],
+            activeRangeIndex: 0,
+            activeCell: {
+              rowIndex: safeRowIndex,
+              colIndex: 0,
+              rowId: resolveRowIdByIndex(safeRowIndex),
+            },
+          } satisfies DataGridSelectionSnapshot
+          setSnapshot(snapshot)
+          return snapshot
+        }
+
+        const current = getSnapshot()
+        const currentRanges = current?.ranges ?? []
+        const isSameRowRange = (range: DataGridSelectionSnapshot["ranges"][number]): boolean => {
+          return range.startRow === safeRowIndex
+            && range.endRow === safeRowIndex
+            && range.startCol === 0
+            && range.endCol === Math.max(0, colCount - 1)
+        }
+        const hasExistingRange = currentRanges.some(isSameRowRange)
+        let nextRanges = currentRanges.filter((range) => {
+          if (!isSameRowRange(range)) {
+            return true
+          }
+          return selectionOptions.toggle !== true
         })
+        if (!hasExistingRange || selectionOptions.toggle !== true) {
+          nextRanges = [...nextRanges, nextRange]
+        }
+        if (nextRanges.length === 0) {
+          setSnapshot(null)
+          return null
+        }
+        const activeRangeIndex = Math.max(0, nextRanges.length - 1)
+        const activeRange = nextRanges[activeRangeIndex] ?? nextRanges[0]
+        if (!activeRange) {
+          setSnapshot(null)
+          return null
+        }
+        const snapshot = createSelectionSnapshot({
+          startRow: activeRange.startRow,
+          endRow: activeRange.endRow,
+          startColumn: activeRange.startCol,
+          endColumn: activeRange.endCol,
+          anchorRow: activeRange.anchor.rowIndex,
+          anchorColumn: activeRange.anchor.colIndex,
+          focusRow: activeRange.focus.rowIndex,
+          focusColumn: activeRange.focus.colIndex,
+          resolveRowId: (index) => resolveRowIdByIndex(index),
+        })
+        snapshot.ranges = nextRanges
+        snapshot.activeRangeIndex = activeRangeIndex
         setSnapshot(snapshot)
         return snapshot
       }
@@ -960,11 +1272,14 @@ export function createDataGridFeatureRegistry<TRow = unknown>(
         this.selectCell(coord.rowIndex, coord.columnIndex)
       },
       "row-select"(payload) {
-        const rowIndex = resolveRowIndexFromPayload(payload)
-        if (rowIndex == null) {
+        const rowSelectPayload = resolveRowSelectPayload(payload)
+        if (!rowSelectPayload) {
           return
         }
-        this.selectRow(rowIndex)
+        this.selectRow(rowSelectPayload.rowIndex, {
+          additive: rowSelectPayload.additive,
+          toggle: rowSelectPayload.toggle,
+        })
       },
     },
   })
@@ -1693,10 +2008,20 @@ export function createDataGridFeatureRegistry<TRow = unknown>(
 
   const createAggregation = (): DataGridFeature<TRow, "aggregation", DataGridAggregationFeatureApi<TRow>> => aggregationFeature({
     install(ctx) {
+      let sourceModel: DataGridAggregationModel<TRow> | null = ctx.api.rows.getAggregationModel()
+      const setModel = (aggregationModel: DataGridAggregationModel<TRow> | null): void => {
+        sourceModel = aggregationModel
+        const registry = resolveAggregationFunctionsRegistryFeature(ctx)
+        const materialized = materializeAggregationModelWithRegistry(aggregationModel, registry)
+        ctx.api.rows.setAggregationModel(materialized)
+      }
       return {
-        setModel: ctx.api.rows.setAggregationModel,
-        getModel: ctx.api.rows.getAggregationModel,
-        clearModel: () => ctx.api.rows.setAggregationModel(null),
+        setModel,
+        getModel: () => sourceModel ?? ctx.api.rows.getAggregationModel(),
+        clearModel: () => {
+          sourceModel = null
+          ctx.api.rows.setAggregationModel(null)
+        },
       }
     },
   })
@@ -1704,14 +2029,24 @@ export function createDataGridFeatureRegistry<TRow = unknown>(
   const createAggregationFunctionsRegistry = (): DataGridFeature<TRow, "aggregationFunctionsRegistry", DataGridAggregationFunctionsRegistryFeatureApi> => aggregationFunctionsRegistryFeature({
     install(ctx) {
       const registry = new Map<string, DataGridAggregationFunction>()
+      const reapplyAggregationModel = (): void => {
+        const aggregationFeature = ctx.features.get("aggregation")
+        if (!aggregationFeature || typeof aggregationFeature !== "object") {
+          return
+        }
+        const api = aggregationFeature as DataGridAggregationFeatureApi<TRow>
+        api.setModel(api.getModel())
+      }
       return {
         register: (name, fn) => {
           registry.set(name, fn)
+          reapplyAggregationModel()
           ctx.emit("aggregation:functions:changed", { name, action: "register" })
         },
         unregister: (name) => {
           const deleted = registry.delete(name)
           if (deleted) {
+            reapplyAggregationModel()
             ctx.emit("aggregation:functions:changed", { name, action: "unregister" })
           }
           return deleted
@@ -2065,23 +2400,42 @@ export function createDataGridFeatureRegistry<TRow = unknown>(
   const createColumnVirtualization = (): DataGridFeature<TRow, "columnVirtualization", DataGridColumnVirtualizationFeatureApi> => columnVirtualizationFeature({
     install(ctx) {
       const viewportService = ctx.runtime.core.getService("viewport") as {
+        setVirtualizationEnabled?: (enabled: boolean) => void
+        getVirtualizationEnabled?: () => boolean
         setColumnVirtualizationEnabled?: (enabled: boolean) => void
         setHorizontalVirtualizationEnabled?: (enabled: boolean) => void
         getColumnVirtualizationEnabled?: () => boolean
         getHorizontalVirtualizationEnabled?: () => boolean
       }
       const enabled = ref(
-        viewportService.getColumnVirtualizationEnabled?.()
+        viewportService.getVirtualizationEnabled?.()
+        ?? viewportService.getColumnVirtualizationEnabled?.()
         ?? viewportService.getHorizontalVirtualizationEnabled?.()
         ?? true,
       )
+      const syncEnabledFromService = (): void => {
+        enabled.value = (
+          viewportService.getVirtualizationEnabled?.()
+          ?? viewportService.getColumnVirtualizationEnabled?.()
+          ?? viewportService.getHorizontalVirtualizationEnabled?.()
+          ?? enabled.value
+        )
+      }
       const setEnabled = (next: boolean): void => {
-        enabled.value = next
+        viewportService.setVirtualizationEnabled?.(next)
         viewportService.setColumnVirtualizationEnabled?.(next)
         viewportService.setHorizontalVirtualizationEnabled?.(next)
-        ctx.emit("column-virtualization:changed", { enabled: next })
+        syncEnabledFromService()
+        if (enabled.value !== next) {
+          enabled.value = next
+        }
+        ctx.emit("column-virtualization:changed", { enabled: enabled.value })
       }
-      const getEnabled = (): boolean => enabled.value
+      syncEnabledFromService()
+      const getEnabled = (): boolean => {
+        syncEnabledFromService()
+        return enabled.value
+      }
       return {
         enabled,
         setEnabled,
@@ -2158,6 +2512,13 @@ export function createDataGridFeatureRegistry<TRow = unknown>(
         },
         getMode: () => mode.value,
       }
+    },
+    on: {
+      "row-selection-mode:set"(payload) {
+        if (payload === "single" || payload === "multiple") {
+          this.setMode(payload)
+        }
+      },
     },
   })
 

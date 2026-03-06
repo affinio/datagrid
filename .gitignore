@@ -84,6 +84,7 @@ packages/*/src/**/*.d.ts.map
 .stylelintcache
 .cache/
 vite.config.ts.timestamp*
+.refs/
 
 # -----------------------
 # Vue specific

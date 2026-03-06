@@ -10,9 +10,13 @@ export interface DataGridCellClickPayload {
   rowIndex: number
   columnKey: string
   columnIndex: number
+  additive?: boolean
+  toggle?: boolean
 }
 
 export interface DataGridRowSelectPayload {
   row: DataGridRowNode<unknown>
   rowIndex: number
+  additive?: boolean
+  toggle?: boolean
 }

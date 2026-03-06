@@ -20,7 +20,7 @@ async function flushRuntimeTasks() {
 }
 
 describe("AffinoDataGridSimple contract", () => {
-  it("renders default sugar surface with toolbar, metrics, and table rows", async () => {
+  it("renders default sugar surface with toolbar, metrics, and grid rows", async () => {
     const wrapper = mount(AffinoDataGridSimple, {
       props: {
         rows: [
@@ -35,7 +35,7 @@ describe("AffinoDataGridSimple contract", () => {
 
     expect(wrapper.find(".affino-datagrid-simple__toolbar").exists()).toBe(true)
     expect(wrapper.find(".affino-datagrid-simple__metrics").text()).toContain("Rows: 2")
-    expect(wrapper.findAll("tbody .affino-datagrid-simple__row")).toHaveLength(2)
+    expect(wrapper.findAll(".affino-datagrid-simple__body .affino-datagrid-simple__row")).toHaveLength(2)
 
     await wrapper.get(".affino-datagrid-simple__toolbar-action").trigger("click")
     await flushRuntimeTasks()
@@ -56,7 +56,7 @@ describe("AffinoDataGridSimple contract", () => {
 
     await flushRuntimeTasks()
 
-    const ownerCell = wrapper.get('td[data-column-key="owner"]')
+    const ownerCell = wrapper.get('.affino-datagrid-simple__cell[data-column-key="owner"]')
     await ownerCell.trigger("dblclick")
     await flushRuntimeTasks()
 

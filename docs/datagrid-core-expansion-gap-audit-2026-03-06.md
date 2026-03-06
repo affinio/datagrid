@@ -22,7 +22,7 @@ Goal: identify what is truly missing vs what is already in core/adapter/app, the
 | Locale-aware sortable policy (configurable) | partial | partial | missing | configurable comparator policy missing |
 | Natural sorting | missing | missing | missing | core extension required |
 | Filter DSL / advanced expressions | present | present | present (`filterDsl`) | none |
-| Column filter UI | present (filter model only) | partial (legacy `useAffinoDataGrid` header filters) | missing | app UI module missing |
+| Column filter UI | present (filter model only) | partial (legacy `useAffinoDataGrid` header filters + `filterBuilderUI`) | partial (JSON builder shell) | production-grade per-column UX still missing |
 | Quick filter / global search model | missing (only generic filter model) | partial (`useDataGridQuickFilterActions` = clear action only) | missing | core + app design missing |
 | Saved filters / presets | missing | missing | missing | state model + UI missing |
 | Selection range/cell/row | present | present | present | none |
@@ -35,19 +35,19 @@ Goal: identify what is truly missing vs what is already in core/adapter/app, the
 | Grouping + expansion + aggregates in group nodes | present | present | partial | app renders plain rows, no rich group UI |
 | Group footers / per-level total rows | missing | missing | missing | core projection stage extension required |
 | Tree data + expand/collapse | present | present | partial | no high-level tree props/UI in app |
-| Column pinning / visibility / resize / reorder APIs | present | present | partial | app has no built-in interactive header controls |
+| Column pinning / visibility / resize / reorder APIs | present | present | partial | app has built-in column menu for pin/visibility/autosize, but no resize/reorder UI yet |
 | Column groups / nested headers / header spans | partial (types only) | missing | missing | core runtime + app header renderer missing |
 | Row pinning (top/bottom frozen rows) | partial (`row.state.pinned` type only) | missing | missing | core API/projection behavior missing |
-| Row height API | partial (depends on viewport service methods) | partial | partial | app default runtime does not provide full viewport service |
-| Column virtualization toggle | partial (viewport has virtualization flag, no stable column toggle API) | partial | partial | app feature currently not wired to stable core service |
+| Row height API | partial (depends on viewport service methods) | present (default viewport fallback methods are available) | present | custom viewport services may still omit optional row-height methods |
+| Column virtualization toggle | partial (viewport has virtualization flag, no stable column toggle API) | present (adapter bridges stable + legacy viewport methods) | present | no major gap in app path |
 | Server-side row model | present | present | partial (via `rowModel` prop) | convenience builder and UI contracts missing |
 | Transactions / batch / undo-redo | present | present | present | none |
 | Patch/delta pipeline + immutable mode | present | present | present | none |
 | Unified state save/restore + migration | present | present | present | none |
 | CSV export | partial (text export path) | present | present | good enough for CSV |
 | Excel export (`.xlsx`) | missing (native workbook writer) | partial (TSV with xlsx mime) | partial | real workbook export missing |
-| Aggregation function registry | partial (custom aggregators per model exist) | partial (local registry map) | partial | registry is not wired as first-class core service |
-| Group panel / pivot panel / filter builder UI | missing | partial (headless state features) | missing | default app UI components missing |
+| Aggregation function registry | partial (custom aggregators per model exist) | partial (registry materializes aggregation model handlers) | partial | still not a first-class core service/contract |
+| Group panel / pivot panel / filter builder UI | missing | present (headless state + app shells) | present (basic toolbar/panel shells) | richer enterprise UX still missing |
 | Devtools inspector / profiler / pipeline debugger | partial (`api.diagnostics`) | partial | missing | dedicated devtools package missing |
 
 ## Evidence (code pointers)
@@ -59,19 +59,46 @@ Goal: identify what is truly missing vs what is already in core/adapter/app, the
 - Unified state API: `packages/datagrid-core/src/core/gridApiStateMethods.ts`, `packages/datagrid-core/src/core/gridApiContracts.ts`
 - Runtime transactions: `packages/datagrid-core/src/core/gridApiTransactionMethods.ts`
 - App feature registry and current wrapper behavior: `packages/datagrid-vue/src/composables/useDataGridFeatureRegistry.ts`
-- Current app shell renderer: `packages/datagrid-vue/src/components/DataGrid.vue`, `GridHeader.vue`, `GridBody.vue`, `GridRow.vue`, `GridCell.vue`
+- Current app shell renderer: `packages/datagrid-vue/src/components/DataGrid.vue`, `GridHeader.vue`, `GridBody.vue`, `GridRow.vue`, `GridCell.vue`, `GridFeaturePanels.vue`, `GridColumnMenu.vue`
+- Runtime default viewport fallback wiring: `packages/datagrid-orchestration/src/createDataGridRuntime.ts`
 - Quick filter helper scope: `packages/datagrid-orchestration/src/useDataGridQuickFilterActions.ts`
 
+## Requested Capability Checklist (from product audit)
+
+| Requested capability | In `DataGridFeatureName` | App `<DataGrid />` wiring | Current note |
+| --- | --- | --- | --- |
+| `sorting` | yes | yes | Header click + menu actions are wired. |
+| `columnPinning` | yes | partial | Wired via column menu; no drag pin UX. |
+| `columnVisibility` | yes | partial | Hide action wired; no full column chooser panel. |
+| `columnAutosize` | yes | partial | Menu autosize action wired; no batch autosize UI. |
+| `columnMenu` | yes | yes | Built-in menu is backed by `@affino/menu-vue` primitives. |
+| `serverSideRowModel` | yes | partial | Works through `rowModel`/feature wiring, no high-level datasource props yet. |
+| `rowHeight` | yes | yes | Runtime fallback now exposes row-height methods. |
+| `columnVirtualization` | yes | yes | Feature bridged to stable+legacy viewport methods. |
+| `export` (CSV) | yes (`export`) | yes | Export API ready; no default toolbar action yet. |
+| `exportExcel` | yes | partial | TSV payload with xlsx mime; native workbook writer missing. |
+| `aggregationFunctionsRegistry` | yes | partial | Registry integrated into aggregation model materialization. |
+| `groupPanel` | yes | yes | Built-in panel shell uses `@affino/menu-vue` surface primitives. |
+| `pivotPanel` | yes | yes | Built-in panel shell uses `@affino/menu-vue` surface primitives. |
+| `advancedClipboard` | yes | yes | Feature available and installable. |
+| `excelCompatibleClipboard` | yes | yes | Feature available and installable. |
+| `rowSelectionModes` | yes | yes | Selection behavior now honors mode. |
+| `selectionOverlay` | yes | partial | Headless API exists; no default visual overlay component yet. |
+| `advancedPivotEngine` | yes | partial | Feature exists; app has no dedicated advanced controls yet. |
+| `filterBuilderUI` | yes | yes | JSON-based builder shell uses `@affino/menu-vue` surface primitives. |
+
 ## Expansion Pipeline
+
+Phase A delivery status: completed in current branch.
 
 ### Phase A: Close wiring gaps first (low risk, fast value)
 
 | Work item | Complexity | Core break risk | Notes |
 | --- | --- | --- | --- |
-| Fix column virtualization toggle wiring in app feature | S | low | Align app feature with stable viewport service API (`setVirtualizationEnabled`) or add adapter bridge. |
-| Make `rowSelectionModes` affect real selection behavior | M | low | Current mode is local state only. |
-| Promote `aggregationFunctionsRegistry` from local map to integrated resolver path | M | medium | Keep backward compatibility with existing aggregation model. |
-| Add built-in app UI shells for `groupPanel`, `pivotPanel`, `filterBuilderUI`, `columnMenu` | M | low | Mostly app-level components; minimal core impact. |
+| Fix column virtualization toggle wiring in app feature | S | low | Done: adapter bridges `set/getVirtualizationEnabled` with legacy method names. |
+| Make `rowSelectionModes` affect real selection behavior | M | low | Done: row-select payload now supports additive/toggle and honors mode. |
+| Promote `aggregationFunctionsRegistry` from local map to integrated resolver path | M | medium | Done: registry now materializes custom handlers into aggregation model. |
+| Add built-in app UI shells for `groupPanel`, `pivotPanel`, `filterBuilderUI`, `columnMenu` | M | low | Done: base shells are wired in `<DataGrid />`. |
 
 ### Phase B: Query and clipboard power features (medium risk)
 
@@ -103,10 +130,9 @@ Goal: identify what is truly missing vs what is already in core/adapter/app, the
 
 ## Recommended execution order
 
-1. Phase A (stabilize app wiring and headless-to-UI gaps).
-2. Phase B (sort/filter/clipboard power features with minimal projection rewrites).
-3. Phase C (core structural changes: column groups, row pinning, group footers).
-4. Phase D (devtools after structural APIs are stable).
+1. Phase B (sort/filter/clipboard power features with minimal projection rewrites).
+2. Phase C (core structural changes: column groups, row pinning, group footers).
+3. Phase D (devtools after structural APIs are stable).
 
 ## Conclusion
 

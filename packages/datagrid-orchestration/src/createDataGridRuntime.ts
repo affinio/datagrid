@@ -12,6 +12,7 @@ import {
   type DataGridCore,
   type DataGridCoreServiceRegistry,
   type DataGridRowModel,
+  type DataGridViewportRange,
 } from "@affino/datagrid-core"
 
 export type DataGridRuntimeOverrides = Omit<
@@ -46,6 +47,60 @@ export function createDataGridRuntime<TRow = unknown>(
     rows: options.rows ?? [],
   })
   const columnModel = createDataGridColumnModel({ columns: options.columns })
+  let viewportRange: DataGridViewportRange = { start: 0, end: 0 }
+  let virtualizationEnabled = true
+  const rowHeightOverrides = new Map<number, number>()
+
+  const defaultViewportService: DataGridCoreServiceRegistry["viewport"] & {
+    setVirtualizationEnabled: (enabled: boolean) => void
+    getVirtualizationEnabled: () => boolean
+  } = {
+    name: "viewport",
+    setViewportRange(range) {
+      viewportRange = range
+      rowModel.setViewportRange(range)
+    },
+    getViewportRange() {
+      return viewportRange
+    },
+    setVirtualizationEnabled(enabled) {
+      virtualizationEnabled = Boolean(enabled)
+    },
+    getVirtualizationEnabled() {
+      return virtualizationEnabled
+    },
+    setRowHeightMode() {
+      // No-op in headless default runtime.
+    },
+    setBaseRowHeight() {
+      // No-op in headless default runtime.
+    },
+    measureRowHeight() {
+      // No-op in headless default runtime.
+    },
+    setRowHeightOverride(rowIndex, height) {
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+        return
+      }
+      if (height == null) {
+        rowHeightOverrides.delete(rowIndex)
+        return
+      }
+      if (!Number.isFinite(height)) {
+        return
+      }
+      rowHeightOverrides.set(rowIndex, Math.max(1, Math.trunc(height)))
+    },
+    getRowHeightOverride(rowIndex) {
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+        return null
+      }
+      return rowHeightOverrides.get(rowIndex) ?? null
+    },
+    clearRowHeightOverrides() {
+      rowHeightOverrides.clear()
+    },
+  }
 
   const services: Partial<DataGridCoreServiceRegistry> = {
     rowModel: {
@@ -56,12 +111,7 @@ export function createDataGridRuntime<TRow = unknown>(
       name: "columnModel",
       model: columnModel,
     },
-    viewport: options.services?.viewport ?? {
-      name: "viewport",
-      setViewportRange(range) {
-        rowModel.setViewportRange(range)
-      },
-    },
+    viewport: options.services?.viewport ?? defaultViewportService,
     ...options.services,
   }
 

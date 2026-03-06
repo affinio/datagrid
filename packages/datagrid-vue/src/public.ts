@@ -215,6 +215,10 @@ export {
 } from "./composables/useDataGridContext"
 
 export {
+  useFeature,
+} from "./composables/useDataGridFeature"
+
+export {
   useAffinoGrid,
   type UseAffinoGridPlugins,
   type AffinoGridInstalledFeatures,
@@ -236,10 +240,12 @@ export type {
 
 export {
   createDataGridFeatureRegistry,
+  DATAGRID_FEATURE_DESCRIPTORS,
   resolveDataGridFeatureDependencies,
 } from "./composables/useDataGridFeatureRegistry"
 
 export type {
+  DataGridFeatureDescriptor,
   DataGridFeatureName,
   DataGridFeatureRegistry,
   CreateDataGridFeatureRegistryOptions,

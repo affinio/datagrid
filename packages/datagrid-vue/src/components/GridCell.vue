@@ -26,13 +26,21 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (event: "cell-click", payload: { rowKey: string | number; columnKey: string }): void
+  (
+    event: "cell-click",
+    payload: {
+      rowKey: string | number
+      columnKey: string
+      additive: boolean
+      toggle: boolean
+    },
+  ): void
 }>()
 
 const displayValue = computed<string>(() => {
   const value = props.value
   if (typeof value === "string") {
-    return props.value
+    return value
   }
   if (typeof value === "number") {
     return String(value)
@@ -46,10 +54,13 @@ const displayValue = computed<string>(() => {
   return String(value)
 })
 
-const handleClick = (): void => {
+const handleClick = (event: MouseEvent): void => {
+  const additive = event.metaKey || event.ctrlKey
   emit("cell-click", {
     rowKey: props.rowKey,
     columnKey: props.columnKey,
+    additive,
+    toggle: additive,
   })
 }
 </script>

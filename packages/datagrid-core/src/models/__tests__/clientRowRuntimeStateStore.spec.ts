@@ -35,6 +35,7 @@ describe("clientRowRuntimeStateStore", () => {
 
   it("builds projection diagnostics from stale-stage resolver", () => {
     const store = createClientRowRuntimeStateStore<{ id: number }>()
+    store.setProjectionInvalidation(["sortChanged"])
     store.commitProjectionCycle(false)
 
     const diagnostics = store.getProjectionDiagnostics(() => ["sort"])
@@ -42,5 +43,26 @@ describe("clientRowRuntimeStateStore", () => {
     expect(diagnostics.cycleVersion).toBe(1)
     expect(diagnostics.recomputeVersion).toBe(0)
     expect(diagnostics.staleStages).toEqual(["sort"])
+    expect(diagnostics.lastInvalidationReasons).toEqual(["sortChanged"])
+    expect(diagnostics.lastInvalidatedStages).toEqual(["sort", "group", "pivot", "aggregate", "paginate", "visible"])
+  })
+
+  it("maps rowsChanged invalidation to compute-first projection chain", () => {
+    const store = createClientRowRuntimeStateStore<{ id: number }>()
+    store.setProjectionInvalidation(["rowsChanged"])
+    store.commitProjectionCycle(false)
+
+    const diagnostics = store.getProjectionDiagnostics(() => ["compute"])
+    expect(diagnostics.lastInvalidationReasons).toEqual(["rowsChanged"])
+    expect(diagnostics.lastInvalidatedStages).toEqual([
+      "compute",
+      "filter",
+      "sort",
+      "group",
+      "pivot",
+      "aggregate",
+      "paginate",
+      "visible",
+    ])
   })
 })

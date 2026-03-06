@@ -158,6 +158,12 @@ export function createClientRowProjectionHandlersRuntime<T>(
     }
   }
 
+  const runComputeStage: DataGridClientProjectionStageHandlers<T>["runComputeStage"] = stageContext => {
+    // Computed fields are currently applied eagerly in mutation paths.
+    // Keep the stage explicit in the projection graph for diagnostics/invalidation orchestration.
+    return stageContext.shouldRecompute
+  }
+
   const runSortStage: DataGridClientProjectionStageHandlers<T>["runSortStage"] = stageContext => {
     sortValueCounters.hits = context.derivedCacheDiagnostics.sortValueHits
     sortValueCounters.misses = context.derivedCacheDiagnostics.sortValueMisses
@@ -338,6 +344,7 @@ export function createClientRowProjectionHandlersRuntime<T>(
     projectionStageHandlers: {
       buildSourceById: context.buildSourceById,
       getCurrentFilteredRowIds: () => currentFilteredRowIds,
+      runComputeStage,
       resolveFilterPredicate: () => context.resolveFilterPredicate(),
       runFilterStage,
       runSortStage,

@@ -15,6 +15,7 @@ import {
   type DataGridPivotSpec,
   type DataGridSortAndFilterModelInput,
   type DataGridSortState,
+  type DataGridProjectionInvalidationReason,
   type DataGridViewportRange,
 } from "./rowModel.js"
 import { isSameFilterModel, isSameSortModel } from "./clientRowProjectionPrimitives.js"
@@ -26,6 +27,7 @@ export interface ClientRowStateMutationsRuntimeContext<T> {
   ensureActive: () => void
   emit: () => void
   recomputeFromStage: (stage: DataGridClientProjectionStage) => void
+  setProjectionInvalidation: (reasons: readonly DataGridProjectionInvalidationReason[]) => void
   bumpSortRevision: () => void
   bumpFilterRevision: () => void
   bumpGroupRevision: () => void
@@ -110,6 +112,7 @@ export function createClientRowStateMutationsRuntime<T>(
         return
       }
       context.setPaginationInput(normalized)
+      context.setProjectionInvalidation(["paginationChanged"])
       context.recomputeFromStage("paginate")
       context.emit()
     },
@@ -124,6 +127,7 @@ export function createClientRowStateMutationsRuntime<T>(
         pageSize: normalizedPageSize,
         currentPage: 0,
       })
+      context.setProjectionInvalidation(["paginationChanged"])
       context.recomputeFromStage("paginate")
       context.emit()
     },
@@ -138,6 +142,7 @@ export function createClientRowStateMutationsRuntime<T>(
         ...current,
         currentPage: normalizedPage,
       })
+      context.setProjectionInvalidation(["paginationChanged"])
       context.recomputeFromStage("paginate")
       context.emit()
     },
@@ -150,6 +155,7 @@ export function createClientRowStateMutationsRuntime<T>(
       }
       context.setSortModel(normalizedSortModel)
       context.bumpSortRevision()
+      context.setProjectionInvalidation(["sortChanged"])
       context.recomputeFromStage("sort")
       context.emit()
     },
@@ -162,6 +168,7 @@ export function createClientRowStateMutationsRuntime<T>(
       }
       context.setFilterModel(normalizedFilterModel)
       context.bumpFilterRevision()
+      context.setProjectionInvalidation(["filterChanged"])
       context.recomputeFromStage("filter")
       context.emit()
     },
@@ -184,6 +191,14 @@ export function createClientRowStateMutationsRuntime<T>(
       if (sortChanged) {
         context.bumpSortRevision()
       }
+      const invalidationReasons: DataGridProjectionInvalidationReason[] = []
+      if (filterChanged) {
+        invalidationReasons.push("filterChanged")
+      }
+      if (sortChanged) {
+        invalidationReasons.push("sortChanged")
+      }
+      context.setProjectionInvalidation(invalidationReasons)
       context.recomputeFromStage(filterChanged ? "filter" : "sort")
       context.emit()
     },
@@ -201,6 +216,7 @@ export function createClientRowStateMutationsRuntime<T>(
       context.setExpansionExpandedByDefault(Boolean(normalized?.expandedByDefault))
       context.clearToggledGroupKeys()
       context.bumpGroupRevision()
+      context.setProjectionInvalidation(["groupChanged"])
       context.recomputeFromStage("group")
       context.emit()
     },
@@ -216,6 +232,7 @@ export function createClientRowStateMutationsRuntime<T>(
       context.setPivotExpansionExpandedByDefault(true)
       context.clearToggledPivotGroupKeys()
       context.bumpGroupRevision()
+      context.setProjectionInvalidation(["pivotChanged"])
       context.recomputeFromStage("pivot")
       context.emit()
     },
@@ -227,6 +244,7 @@ export function createClientRowStateMutationsRuntime<T>(
         return
       }
       context.setAggregationModel(normalized)
+      context.setProjectionInvalidation(["aggregationChanged"])
       if (context.isTreeDataEnabled()) {
         context.invalidateTreeProjectionCaches()
         context.recomputeFromStage("group")
@@ -241,6 +259,7 @@ export function createClientRowStateMutationsRuntime<T>(
         return
       }
       context.bumpGroupRevision()
+      context.setProjectionInvalidation(["groupExpansionChanged"])
       context.recomputeFromStage("group")
       context.emit()
     },
@@ -255,6 +274,7 @@ export function createClientRowStateMutationsRuntime<T>(
         return
       }
       context.bumpGroupRevision()
+      context.setProjectionInvalidation(["groupExpansionChanged"])
       context.recomputeFromStage("group")
       context.emit()
     },
@@ -269,6 +289,7 @@ export function createClientRowStateMutationsRuntime<T>(
         return
       }
       context.bumpGroupRevision()
+      context.setProjectionInvalidation(["groupExpansionChanged"])
       context.recomputeFromStage("group")
       context.emit()
     },
@@ -283,6 +304,7 @@ export function createClientRowStateMutationsRuntime<T>(
         return
       }
       context.bumpGroupRevision()
+      context.setProjectionInvalidation(["groupExpansionChanged"])
       context.recomputeFromStage("group")
       context.emit()
     },
@@ -299,6 +321,7 @@ export function createClientRowStateMutationsRuntime<T>(
       expansionState.setExpandedByDefault(true)
       expansionState.toggledKeys.clear()
       context.bumpGroupRevision()
+      context.setProjectionInvalidation(["groupExpansionChanged"])
       context.recomputeFromStage("group")
       context.emit()
     },
@@ -315,6 +338,7 @@ export function createClientRowStateMutationsRuntime<T>(
       expansionState.setExpandedByDefault(false)
       expansionState.toggledKeys.clear()
       context.bumpGroupRevision()
+      context.setProjectionInvalidation(["groupExpansionChanged"])
       context.recomputeFromStage("group")
       context.emit()
     },
