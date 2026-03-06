@@ -1,15 +1,23 @@
 import type { DataGridClientProjectionRecomputeOptions } from "./clientRowProjectionEngine.js"
-import type { DataGridClientRowProjectionOrchestrator } from "./clientRowProjectionOrchestrator.js"
+import type {
+  DataGridClientProjectionStagePlan,
+  DataGridClientRowProjectionOrchestrator,
+} from "./clientRowProjectionOrchestrator.js"
 import type { DataGridClientProjectionStage } from "./projectionStages.js"
 import type { DataGridPatchProjectionExecutionPlan } from "./rowPatchAnalyzer.js"
 
 export type DataGridClientComputeMode = "sync" | "worker"
+export type DataGridClientComputeStagePlan = DataGridClientProjectionStagePlan
 
 export type DataGridClientComputeRequest =
   | {
     kind: "recompute-from-stage"
     stage: DataGridClientProjectionStage
     options?: DataGridClientProjectionRecomputeOptions
+  }
+  | {
+    kind: "recompute-with-stage-plan"
+    plan: DataGridClientComputeStagePlan
   }
   | {
     kind: "recompute-with-execution-plan"
@@ -44,6 +52,9 @@ export interface DataGridClientComputeRuntime {
   recomputeWithExecutionPlan: (
     plan: DataGridPatchProjectionExecutionPlan,
   ) => void
+  recomputeWithStagePlan: (
+    plan: DataGridClientComputeStagePlan,
+  ) => void
   refresh: () => void
   getStaleStages: () => readonly DataGridClientProjectionStage[]
   getDiagnostics: () => DataGridClientComputeDiagnostics
@@ -63,6 +74,10 @@ function createLoopbackComputeTransport<T>(
     dispatch: (request: DataGridClientComputeRequest): DataGridClientComputeTransportResult => {
       if (request.kind === "recompute-from-stage") {
         orchestrator.recomputeFromStage(request.stage, request.options)
+        return { handled: true }
+      }
+      if (request.kind === "recompute-with-stage-plan") {
+        orchestrator.recomputeWithStagePlan(request.plan)
         return { handled: true }
       }
       if (request.kind === "recompute-with-execution-plan") {
@@ -95,6 +110,10 @@ export function createClientRowComputeRuntime<T>(
   const runSynchronous = (request: DataGridClientComputeRequest): void => {
     if (request.kind === "recompute-from-stage") {
       orchestrator.recomputeFromStage(request.stage, request.options)
+      return
+    }
+    if (request.kind === "recompute-with-stage-plan") {
+      orchestrator.recomputeWithStagePlan(request.plan)
       return
     }
     if (request.kind === "recompute-with-execution-plan") {
@@ -135,6 +154,12 @@ export function createClientRowComputeRuntime<T>(
         plan,
       })
     },
+    recomputeWithStagePlan: (plan: DataGridClientComputeStagePlan): void => {
+      run({
+        kind: "recompute-with-stage-plan",
+        plan,
+      })
+    },
     refresh: (): void => {
       run({ kind: "refresh" })
     },
@@ -151,4 +176,3 @@ export function createClientRowComputeRuntime<T>(
     },
   }
 }
-

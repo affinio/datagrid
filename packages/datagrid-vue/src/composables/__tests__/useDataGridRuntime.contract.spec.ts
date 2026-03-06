@@ -378,6 +378,15 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime).not.toBeNull()
     expect(runtime!.api.rows.getCount()).toBe(2)
     expect(runtime!.api.rows.getRange({ start: 0, end: 1 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
+    expect(runtime!.api.rows.hasFormulaSupport()).toBe(true)
+
+    runtime!.api.rows.registerFormulaField({
+      name: "double_tested_at",
+      formula: "tested_at * 2",
+    })
+    await flushRuntimeTasks()
+    expect(runtime!.api.rows.getFormulaFields().map(field => field.name)).toEqual(["double_tested_at"])
+    expect((runtime!.api.rows.get(0)?.row as { double_tested_at?: number }).double_tested_at).toBe(200)
 
     wrapper.unmount()
     await flushRuntimeTasks()

@@ -6,6 +6,36 @@ import type {
 } from "../clientRowProjectionEngine"
 
 describe("clientRowProjectionOrchestrator", () => {
+  it("recomputeWithStagePlan performs refresh-pass request and blocked recompute", () => {
+    const requestRefreshPass = vi.fn()
+    const requestStages = vi.fn()
+    const recompute = vi.fn()
+    const recomputeFromStage = vi.fn()
+    const getStaleStages = vi.fn(() => ["sort"] as const)
+    const hasDirtyStages = vi.fn(() => true)
+    const engine: DataGridClientProjectionEngine<unknown> = {
+      requestStages,
+      requestRefreshPass,
+      hasDirtyStages,
+      recompute,
+      recomputeFromStage,
+      getStaleStages,
+    }
+    const handlers = {} as DataGridClientProjectionStageHandlers<unknown>
+    const orchestrator = createClientRowProjectionOrchestrator(engine, handlers)
+
+    orchestrator.recomputeWithStagePlan({
+      requestedStages: ["filter", "sort"],
+      blockedStages: ["sort", "group", "paginate", "visible"],
+    })
+
+    expect(requestRefreshPass).toHaveBeenCalledTimes(1)
+    expect(requestStages).toHaveBeenCalledWith(["filter", "sort"])
+    expect(recompute).toHaveBeenCalledWith(handlers, {
+      blockedStages: ["sort", "group", "paginate", "visible"],
+    })
+  })
+
   it("recomputeWithExecutionPlan performs refresh-pass request and blocked recompute", () => {
     const requestRefreshPass = vi.fn()
     const requestStages = vi.fn()

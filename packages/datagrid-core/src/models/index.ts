@@ -60,6 +60,12 @@ export type {
   DataGridComputedFieldComputeContext,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
+  DataGridFormulaFieldDefinition,
+  DataGridFormulaFieldSnapshot,
+  DataGridFormulaRuntimeErrorCode,
+  DataGridFormulaRuntimeError,
+  DataGridProjectionFormulaDiagnostics,
+  DataGridFormulaComputeStageDiagnostics,
   DataGridPivotCellDrilldownInput,
   DataGridPivotCellDrilldown,
   DataGridRowModelListener,
@@ -92,6 +98,25 @@ export {
 } from "./rowModel.js"
 
 export {
+  compileDataGridFormulaFieldDefinition,
+  type DataGridCompiledFormulaField,
+  type DataGridFormulaFunctionArity,
+  type DataGridFormulaFunctionDefinition,
+  type DataGridFormulaFunctionRegistry,
+  type DataGridFormulaCompileOptions,
+} from "./formulaEngine.js"
+export {
+  createDataGridFormulaExecutionPlan,
+  snapshotDataGridFormulaExecutionPlan,
+  type DataGridFormulaExecutionDependencyDomain,
+  type DataGridFormulaExecutionDependency,
+  type DataGridFormulaExecutionPlanNode,
+  type DataGridFormulaExecutionPlanNodeSnapshot,
+  type DataGridFormulaExecutionPlan,
+  type DataGridFormulaExecutionPlanSnapshot,
+} from "./formulaExecutionPlan.js"
+
+export {
   buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   cloneDataGridFilterSnapshot,
   evaluateDataGridAdvancedFilterExpression,
@@ -116,6 +141,7 @@ export { createClientRowModel } from "./clientRowModel.js"
 
 export type {
   DataGridClientComputeDiagnostics,
+  DataGridClientComputeStagePlan,
   DataGridClientComputeMode,
   DataGridClientComputeRequest,
   DataGridClientComputeTransport,
@@ -124,6 +150,16 @@ export type {
   CreateClientRowComputeRuntimeOptions,
 } from "./clientRowComputeRuntime.js"
 export { createClientRowComputeRuntime } from "./clientRowComputeRuntime.js"
+
+export type {
+  DataGridClientProjectionComputeStageExecutionContext,
+  DataGridClientProjectionComputeStageExecutionResult,
+  DataGridClientProjectionComputeStageExecutor,
+} from "./clientRowProjectionComputeStage.js"
+export {
+  DATAGRID_NOOP_CLIENT_PROJECTION_COMPUTE_STAGE_EXECUTOR,
+  runDataGridClientProjectionComputeStageExecutor,
+} from "./clientRowProjectionComputeStage.js"
 
 export type {
   DataGridDependencyTokenDomain,

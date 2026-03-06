@@ -4,6 +4,9 @@ import type {
   DataGridClientRowPatchOptions,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
+  DataGridFormulaFieldDefinition,
+  DataGridFormulaFieldSnapshot,
+  DataGridFormulaFunctionDefinition,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
@@ -68,6 +71,16 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   registerComputedField: (definition: DataGridComputedFieldDefinition<TRow>) => void
   getComputedFields: () => readonly DataGridComputedFieldSnapshot[]
   recomputeComputedFields: (rowIds?: readonly DataGridRowId[]) => number
+  hasFormulaSupport: () => boolean
+  registerFormulaField: (definition: DataGridFormulaFieldDefinition) => void
+  getFormulaFields: () => readonly DataGridFormulaFieldSnapshot[]
+  hasFormulaFunctionRegistrySupport: () => boolean
+  registerFormulaFunction: (
+    name: string,
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly number[]) => unknown),
+  ) => void
+  unregisterFormulaFunction: (name: string) => boolean
+  getFormulaFunctionNames: () => readonly string[]
   patchRows: (
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
@@ -227,6 +240,14 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     hasComputedSupport() {
       return typeof rowModel.registerComputedField === "function"
     },
+    hasFormulaSupport() {
+      return typeof rowModel.registerFormulaField === "function"
+    },
+    hasFormulaFunctionRegistrySupport() {
+      return typeof rowModel.registerFormulaFunction === "function"
+        && typeof rowModel.unregisterFormulaFunction === "function"
+        && typeof rowModel.getFormulaFunctionNames === "function"
+    },
     registerComputedField(definition: DataGridComputedFieldDefinition<TRow>) {
       assertMutationsAllowed("register computed field")
       if (typeof rowModel.registerComputedField !== "function") {
@@ -234,11 +255,47 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
       }
       rowModel.registerComputedField(definition)
     },
+    registerFormulaField(definition: DataGridFormulaFieldDefinition) {
+      assertMutationsAllowed("register formula field")
+      if (typeof rowModel.registerFormulaField !== "function") {
+        throw new Error("[DataGridApi] rowModel does not implement formula field capability.")
+      }
+      rowModel.registerFormulaField(definition)
+    },
     getComputedFields() {
       if (typeof rowModel.getComputedFields !== "function") {
         return []
       }
       return rowModel.getComputedFields()
+    },
+    getFormulaFields() {
+      if (typeof rowModel.getFormulaFields !== "function") {
+        return []
+      }
+      return rowModel.getFormulaFields()
+    },
+    registerFormulaFunction(
+      name: string,
+      definition: DataGridFormulaFunctionDefinition | ((args: readonly number[]) => unknown),
+    ) {
+      assertMutationsAllowed("register formula function")
+      if (typeof rowModel.registerFormulaFunction !== "function") {
+        throw new Error("[DataGridApi] rowModel does not implement formula function registry capability.")
+      }
+      rowModel.registerFormulaFunction(name, definition)
+    },
+    unregisterFormulaFunction(name: string) {
+      assertMutationsAllowed("unregister formula function")
+      if (typeof rowModel.unregisterFormulaFunction !== "function") {
+        throw new Error("[DataGridApi] rowModel does not implement formula function registry capability.")
+      }
+      return rowModel.unregisterFormulaFunction(name)
+    },
+    getFormulaFunctionNames() {
+      if (typeof rowModel.getFormulaFunctionNames !== "function") {
+        return []
+      }
+      return rowModel.getFormulaFunctionNames()
     },
     recomputeComputedFields(rowIds?: readonly DataGridRowId[]) {
       assertMutationsAllowed("recompute computed fields")

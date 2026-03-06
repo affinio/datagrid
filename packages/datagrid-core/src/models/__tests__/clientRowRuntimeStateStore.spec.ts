@@ -31,6 +31,9 @@ describe("clientRowRuntimeStateStore", () => {
     expect(store.state.groupRevision).toBe(1)
     expect(store.state.projectionCycleVersion).toBe(1)
     expect(store.state.projectionRecomputeVersion).toBe(1)
+    expect(store.state.lastRecomputeHadActual).toBe(true)
+    expect(store.state.lastRecomputedStages).toEqual([])
+    expect(store.state.lastBlockedStages).toEqual([])
   })
 
   it("builds projection diagnostics from stale-stage resolver", () => {
@@ -45,6 +48,24 @@ describe("clientRowRuntimeStateStore", () => {
     expect(diagnostics.staleStages).toEqual(["sort"])
     expect(diagnostics.lastInvalidationReasons).toEqual(["sortChanged"])
     expect(diagnostics.lastInvalidatedStages).toEqual(["sort", "group", "pivot", "aggregate", "paginate", "visible"])
+    expect(diagnostics.lastRecomputeHadActual).toBe(false)
+    expect(diagnostics.lastRecomputedStages).toEqual([])
+    expect(diagnostics.lastBlockedStages).toEqual([])
+  })
+
+  it("captures recompute tracing details in diagnostics", () => {
+    const store = createClientRowRuntimeStateStore<{ id: number }>()
+    store.setProjectionInvalidation(["filterChanged"])
+    store.commitProjectionCycle({
+      hadActualRecompute: true,
+      recomputedStages: ["filter", "sort"],
+      blockedStages: ["group", "pivot"],
+    })
+
+    const diagnostics = store.getProjectionDiagnostics(() => [])
+    expect(diagnostics.lastRecomputeHadActual).toBe(true)
+    expect(diagnostics.lastRecomputedStages).toEqual(["filter", "sort"])
+    expect(diagnostics.lastBlockedStages).toEqual(["group", "pivot"])
   })
 
   it("maps rowsChanged invalidation to compute-first projection chain", () => {
@@ -64,5 +85,75 @@ describe("clientRowRuntimeStateStore", () => {
       "paginate",
       "visible",
     ])
+  })
+
+  it("maps computedChanged invalidation to compute-first projection chain", () => {
+    const store = createClientRowRuntimeStateStore<{ id: number }>()
+    store.setProjectionInvalidation(["computedChanged"])
+    store.commitProjectionCycle(false)
+
+    const diagnostics = store.getProjectionDiagnostics(() => ["compute"])
+    expect(diagnostics.lastInvalidationReasons).toEqual(["computedChanged"])
+    expect(diagnostics.lastInvalidatedStages).toEqual([
+      "compute",
+      "filter",
+      "sort",
+      "group",
+      "pivot",
+      "aggregate",
+      "paginate",
+      "visible",
+    ])
+  })
+
+  it("maps manualRefresh invalidation to compute-first projection chain", () => {
+    const store = createClientRowRuntimeStateStore<{ id: number }>()
+    store.setProjectionInvalidation(["manualRefresh"])
+    store.commitProjectionCycle(false)
+
+    const diagnostics = store.getProjectionDiagnostics(() => ["compute"])
+    expect(diagnostics.lastInvalidationReasons).toEqual(["manualRefresh"])
+    expect(diagnostics.lastInvalidatedStages).toEqual([
+      "compute",
+      "filter",
+      "sort",
+      "group",
+      "pivot",
+      "aggregate",
+      "paginate",
+      "visible",
+    ])
+  })
+
+  it("includes projection formula diagnostics when provided", () => {
+    const store = createClientRowRuntimeStateStore<{ id: number }>()
+    store.setProjectionFormulaDiagnostics({
+      recomputedFields: ["total"],
+      runtimeErrorCount: 2,
+      runtimeErrors: [
+        {
+          code: "DIV_ZERO",
+          message: "Division by zero.",
+          formulaName: "ratio",
+          rowId: "r1",
+          sourceIndex: 0,
+        },
+      ],
+    })
+
+    const diagnostics = store.getProjectionDiagnostics(() => [])
+    expect(diagnostics.formula).toEqual({
+      recomputedFields: ["total"],
+      runtimeErrorCount: 2,
+      runtimeErrors: [
+        {
+          code: "DIV_ZERO",
+          message: "Division by zero.",
+          formulaName: "ratio",
+          rowId: "r1",
+          sourceIndex: 0,
+        },
+      ],
+    })
   })
 })

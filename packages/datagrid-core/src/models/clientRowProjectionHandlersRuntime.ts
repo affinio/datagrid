@@ -18,6 +18,8 @@ import type {
   DataGridClientProjectionFinalizeMeta,
   DataGridClientProjectionStageHandlers,
 } from "./clientRowProjectionEngine.js"
+import type { DataGridClientProjectionComputeStageExecutor } from "./clientRowProjectionComputeStage.js"
+import { runDataGridClientProjectionComputeStageExecutor } from "./clientRowProjectionComputeStage.js"
 import type { DataGridProjectionPolicy } from "./projectionPolicy.js"
 import type { DataGridClientRowRuntimeState } from "./clientRowRuntimeStateStore.js"
 import type { GroupByIncrementalAggregationState } from "./incrementalAggregationRuntime.js"
@@ -52,12 +54,13 @@ export interface ClientRowProjectionHandlersDiagnosticsState {
 
 export interface ClientRowProjectionHandlersRuntimeContext<T> {
   runtimeState: DataGridClientRowRuntimeState<T>
-  commitProjectionCycle: (hadActualRecompute: boolean) => void
+  commitProjectionCycle: (meta: DataGridClientProjectionFinalizeMeta) => void
 
   getSourceRows: () => readonly DataGridRowNode<T>[]
   buildSourceById: () => ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
   readRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown
   normalizeText: (value: unknown) => string
+  computeStageExecutor: DataGridClientProjectionComputeStageExecutor<T>
 
   resolveFilterPredicate: (
     options?: { ignoreColumnFilterKey?: string },
@@ -159,9 +162,10 @@ export function createClientRowProjectionHandlersRuntime<T>(
   }
 
   const runComputeStage: DataGridClientProjectionStageHandlers<T>["runComputeStage"] = stageContext => {
-    // Computed fields are currently applied eagerly in mutation paths.
-    // Keep the stage explicit in the projection graph for diagnostics/invalidation orchestration.
-    return stageContext.shouldRecompute
+    return runDataGridClientProjectionComputeStageExecutor(context.computeStageExecutor, {
+      sourceById: stageContext.sourceById,
+      shouldRecompute: stageContext.shouldRecompute,
+    })
   }
 
   const runSortStage: DataGridClientProjectionStageHandlers<T>["runSortStage"] = stageContext => {
@@ -337,7 +341,7 @@ export function createClientRowProjectionHandlersRuntime<T>(
     if (context.getPendingPivotValuePatch() !== null) {
       context.setPendingPivotValuePatch(null)
     }
-    context.commitProjectionCycle(meta.hadActualRecompute)
+    context.commitProjectionCycle(meta)
   }
 
   return {

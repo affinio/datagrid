@@ -383,6 +383,12 @@ type DataGridPatchStageRuleMap = Readonly<Record<
 >>
 
 const DATAGRID_PATCH_STAGE_RULE_MAP: DataGridPatchStageRuleMap = {
+  compute: {
+    invalidate: () => false,
+    allowRecompute: (policy: DataGridPatchRecomputePolicy) => (
+      policy.filter || policy.sort || policy.group
+    ),
+  },
   filter: {
     invalidate: (changeSet: DataGridPatchChangeSet) => changeSet.stageImpact.affectsFilter,
     allowRecompute: (policy: DataGridPatchRecomputePolicy) => policy.filter,

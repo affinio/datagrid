@@ -54,7 +54,7 @@ TreeData policies:
 
 Canonical order:
 
-`source -> tree index -> filter markers -> sibling sort -> flatten(expansion, filterPolicy) -> viewport`
+`source -> tree index -> filter markers -> sibling sort -> flatten(expansion, filterPolicy) -> visible`
 
 Key rules:
 

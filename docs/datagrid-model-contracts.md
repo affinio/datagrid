@@ -69,7 +69,7 @@ Projection order (must stay deterministic):
 
 Execution notes:
 
-- `createClientRowModel` executes this projection order locally and exposes flattened rows to viewport.
+- `createClientRowModel` executes this projection order locally and exposes flattened rows as visible projection.
 - server/data-source-backed models propagate `sortModel`, `filterModel`, `groupBy`, `groupExpansion` through protocol state and keep viewport consumption on flattened row stream.
 - selection adapters must resolve row indexes/ids against flattened projection; `selectionState.createGridSelectionContextFromFlattenedRows` is the canonical helper for this boundary.
 - adapters derive tree-like render hints through `getDataGridRowRenderMeta(rowNode)`; viewport/virtualization stay tree-agnostic.

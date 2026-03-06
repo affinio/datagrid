@@ -78,6 +78,9 @@ function executeCommand<T>(
     case "set-group-expansion":
       model.setGroupExpansion(command.expansion)
       return
+    case "register-formula-field":
+      model.registerFormulaField?.(command.definition)
+      return
     case "toggle-group":
       model.toggleGroup(command.groupKey)
       return
@@ -128,6 +131,8 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
     const payload: DataGridWorkerRowModelUpdatePayload<T> = {
       snapshot,
       aggregationModel: model.getAggregationModel(),
+      formulaFields: model.getFormulaFields?.() ?? [],
+      formulaExecutionPlan: model.getFormulaExecutionPlan?.() ?? null,
       visibleRows,
       visibleRange,
     }

@@ -141,6 +141,7 @@ Non-guarantee:
 
 ```ts
 const diagnostics = api.diagnostics.getAll()
+const formulaExplain = api.diagnostics.getFormulaExplain()
 ```
 
 Domains:
@@ -149,6 +150,17 @@ Domains:
 - `compute`
 - `derivedCache`
 - `backpressure`
+
+Formula explain payload includes:
+
+- `executionPlan` (compiled formula/computed DAG snapshot)
+- `projectionFormula` (runtime errors + recomputed formula names)
+- `computeStage`:
+  - `rowsTouched`
+  - `changedRows`
+  - `fieldsTouched`
+  - `evaluations`
+  - `skippedByObjectIs`
 
 Cost/behavior contract:
 

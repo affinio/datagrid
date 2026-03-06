@@ -58,6 +58,13 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   registerComputedField: DataGridApi<TRow>["rows"]["registerComputedField"]
   getComputedFields: DataGridApi<TRow>["rows"]["getComputedFields"]
   recomputeComputedFields: DataGridApi<TRow>["rows"]["recomputeComputedFields"]
+  hasFormulaSupport: DataGridApi<TRow>["rows"]["hasFormulaSupport"]
+  registerFormulaField: DataGridApi<TRow>["rows"]["registerFormulaField"]
+  getFormulaFields: DataGridApi<TRow>["rows"]["getFormulaFields"]
+  hasFormulaFunctionRegistrySupport: DataGridApi<TRow>["rows"]["hasFormulaFunctionRegistrySupport"]
+  registerFormulaFunction: DataGridApi<TRow>["rows"]["registerFormulaFunction"]
+  unregisterFormulaFunction: DataGridApi<TRow>["rows"]["unregisterFormulaFunction"]
+  getFormulaFunctionNames: DataGridApi<TRow>["rows"]["getFormulaFunctionNames"]
   patchRows: DataGridApi<TRow>["rows"]["patch"]
   applyEdits: DataGridApi<TRow>["rows"]["applyEdits"]
   setAutoReapply: DataGridApi<TRow>["rows"]["setAutoReapply"]
@@ -92,6 +99,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   switchComputeMode: DataGridApi<TRow>["compute"]["switchMode"]
   getComputeDiagnostics: DataGridApi<TRow>["compute"]["getDiagnostics"]
   getAllDiagnostics: DataGridApi<TRow>["diagnostics"]["getAll"]
+  getFormulaExplain: DataGridApi<TRow>["diagnostics"]["getFormulaExplain"]
   getSchema: DataGridApi<TRow>["meta"]["getSchema"]
   getRowModelKind: DataGridApi<TRow>["meta"]["getRowModelKind"]
   getApiVersion: DataGridApi<TRow>["meta"]["getApiVersion"]
@@ -179,6 +187,13 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       registerComputedField: methodSet.registerComputedField,
       getComputedFields: methodSet.getComputedFields,
       recomputeComputedFields: methodSet.recomputeComputedFields,
+      hasFormulaSupport: methodSet.hasFormulaSupport,
+      registerFormulaField: methodSet.registerFormulaField,
+      getFormulaFields: methodSet.getFormulaFields,
+      hasFormulaFunctionRegistrySupport: methodSet.hasFormulaFunctionRegistrySupport,
+      registerFormulaFunction: methodSet.registerFormulaFunction,
+      unregisterFormulaFunction: methodSet.unregisterFormulaFunction,
+      getFormulaFunctionNames: methodSet.getFormulaFunctionNames,
       patch: methodSet.patchRows,
       applyEdits: methodSet.applyEdits,
       setAutoReapply: methodSet.setAutoReapply,
@@ -225,6 +240,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     },
     diagnostics: {
       getAll: methodSet.getAllDiagnostics,
+      getFormulaExplain: methodSet.getFormulaExplain,
     },
     meta: {
       getSchema: methodSet.getSchema,

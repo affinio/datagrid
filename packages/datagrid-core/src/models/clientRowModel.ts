@@ -13,8 +13,13 @@ import {
   type DataGridPaginationInput,
   type DataGridPivotCellDrilldownInput,
   type DataGridComputedFieldDefinition,
+  type DataGridComputedFieldComputeContext,
   type DataGridComputedFieldSnapshot,
   type DataGridComputedDependencyToken,
+  type DataGridFormulaFieldDefinition,
+  type DataGridFormulaFieldSnapshot,
+  type DataGridFormulaComputeStageDiagnostics,
+  type DataGridFormulaRuntimeError,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramOptions,
   type DataGridFilterSnapshot,
@@ -23,6 +28,7 @@ import {
   type DataGridGroupBySpec,
   type DataGridPivotColumn,
   type DataGridPivotSpec,
+  type DataGridProjectionFormulaDiagnostics,
   type DataGridRowId,
   type DataGridRowIdResolver,
   type DataGridRowNode,
@@ -40,6 +46,10 @@ import {
   createClientRowProjectionEngine,
   expandClientProjectionStages,
 } from "./clientRowProjectionEngine.js"
+import {
+  DATAGRID_NOOP_CLIENT_PROJECTION_COMPUTE_STAGE_EXECUTOR,
+  type DataGridClientProjectionComputeStageExecutor,
+} from "./clientRowProjectionComputeStage.js"
 import { createClientRowProjectionOrchestrator } from "./clientRowProjectionOrchestrator.js"
 import { DATAGRID_CLIENT_ALL_PROJECTION_STAGES } from "./projectionStages.js"
 import {
@@ -119,6 +129,22 @@ import { createClientRowStateMutationsRuntime } from "./clientRowStateMutationsR
 import { createClientRowSnapshotRuntime } from "./clientRowSnapshotRuntime.js"
 import { createClientRowProjectionHandlersRuntime } from "./clientRowProjectionHandlersRuntime.js"
 import type { ApplyClientRowPatchUpdatesResult } from "./clientRowPatchRuntime.js"
+import {
+  compileDataGridFormulaFieldDefinition,
+  type DataGridCompiledFormulaField,
+  type DataGridFormulaFunctionDefinition,
+  type DataGridFormulaFunctionRegistry,
+} from "./formulaEngine.js"
+import {
+  createDataGridFormulaExecutionPlan,
+  snapshotDataGridFormulaExecutionPlan,
+  type DataGridFormulaExecutionPlan,
+  type DataGridFormulaExecutionDependencyDomain,
+  type DataGridFormulaExecutionPlanSnapshot,
+} from "./formulaExecutionPlan.js"
+
+const DATAGRID_FORMULA_RUNTIME_ERRORS_PREVIEW_LIMIT = 50
+const DATAGRID_COMPUTE_VECTOR_BATCH_SIZE = 1024
 
 export interface CreateClientRowModelOptions<T> {
   rows?: readonly DataGridRowNodeInput<T>[]
@@ -134,6 +160,8 @@ export interface CreateClientRowModelOptions<T> {
   projectionPolicy?: DataGridProjectionPolicy
   fieldDependencies?: readonly DataGridFieldDependency[]
   initialComputedFields?: readonly DataGridComputedFieldDefinition<T>[]
+  initialFormulaFields?: readonly DataGridFormulaFieldDefinition[]
+  initialFormulaFunctionRegistry?: DataGridFormulaFunctionRegistry
   computeMode?: DataGridClientComputeMode
   computeTransport?: DataGridClientComputeTransport | null
 }
@@ -183,6 +211,16 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
   registerComputedField(definition: DataGridComputedFieldDefinition<T>): void
   getComputedFields(): readonly DataGridComputedFieldSnapshot[]
   recomputeComputedFields(rowIds?: readonly DataGridRowId[]): number
+  registerFormulaField(definition: DataGridFormulaFieldDefinition): void
+  getFormulaFields(): readonly DataGridFormulaFieldSnapshot[]
+  registerFormulaFunction(
+    name: string,
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly number[]) => unknown),
+  ): void
+  unregisterFormulaFunction(name: string): boolean
+  getFormulaFunctionNames(): readonly string[]
+  getFormulaExecutionPlan(): DataGridFormulaExecutionPlanSnapshot | null
+  getFormulaComputeStageDiagnostics(): DataGridFormulaComputeStageDiagnostics | null
   reorderRows(input: DataGridClientRowReorderInput): boolean
   getComputeMode(): DataGridClientComputeMode
   switchComputeMode(mode: DataGridClientComputeMode): boolean
@@ -211,6 +249,66 @@ function isDataGridRowId(value: unknown): value is DataGridRowId {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
+}
+
+type DataGridCompiledPathSegment = string | number
+
+function compileDataGridPathSegments(path: string): readonly DataGridCompiledPathSegment[] {
+  if (!path.includes(".")) {
+    return Object.freeze([]) as readonly DataGridCompiledPathSegment[]
+  }
+  return Object.freeze(
+    path
+      .split(".")
+      .filter(segment => segment.length > 0)
+      .map((segment) => {
+        const parsedIndex = Number(segment)
+        return Number.isInteger(parsedIndex) && parsedIndex >= 0
+          ? parsedIndex
+          : segment
+      }),
+  )
+}
+
+function createCompiledDataGridRowDataReader(
+  field: string,
+): (source: unknown) => unknown {
+  const normalizedField = field.trim()
+  if (normalizedField.length === 0) {
+    return () => undefined
+  }
+  const compiledSegments = compileDataGridPathSegments(normalizedField)
+  if (compiledSegments.length === 0) {
+    return (source: unknown) => (
+      isRecord(source)
+        ? (source as Record<string, unknown>)[normalizedField]
+        : undefined
+    )
+  }
+  return (source: unknown) => {
+    if (!isRecord(source)) {
+      return undefined
+    }
+    const directValue = (source as Record<string, unknown>)[normalizedField]
+    if (typeof directValue !== "undefined") {
+      return directValue
+    }
+    let current: unknown = source
+    for (const segment of compiledSegments) {
+      if (typeof segment === "number") {
+        if (!Array.isArray(current) || segment >= current.length) {
+          return undefined
+        }
+        current = current[segment]
+        continue
+      }
+      if (!isRecord(current) || !(segment in current)) {
+        return undefined
+      }
+      current = (current as Record<string, unknown>)[segment]
+    }
+    return current
+  }
 }
 
 function normalizePivotAxisValue(value: unknown): string {
@@ -334,7 +432,7 @@ export function createClientRowModel<T>(
   let lastTreeExpansionSnapshot: DataGridGroupExpansionSnapshot | null = null
   let pendingPivotValuePatch: readonly DataGridPivotIncrementalPatchRow<T>[] | null = null
   const projectionEngine = createClientRowProjectionEngine<T>()
-  type ComputedDependencyDomain = "field" | "computed" | "meta"
+  type ComputedDependencyDomain = DataGridFormulaExecutionDependencyDomain
   interface DataGridResolvedComputedDependency {
     token: DataGridComputedDependencyToken
     domain: ComputedDependencyDomain
@@ -346,6 +444,12 @@ export function createClientRowModel<T>(
     deps: readonly DataGridResolvedComputedDependency[]
     compute: DataGridComputedFieldDefinition<T>["compute"]
   }
+  interface DataGridRegisteredFormulaField {
+    name: string
+    field: string
+    formula: string
+    deps: readonly DataGridComputedDependencyToken[]
+  }
   interface ApplyComputedFieldsToSourceRowsOptions {
     rowIds?: ReadonlySet<DataGridRowId>
     changedFieldsByRowId?: ReadonlyMap<DataGridRowId, ReadonlySet<string>>
@@ -356,10 +460,98 @@ export function createClientRowModel<T>(
     computedUpdatesByRowId: ReadonlyMap<DataGridRowId, Partial<T>>
     previousRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
     nextRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
+    formulaDiagnostics: DataGridProjectionFormulaDiagnostics
+    computeStageDiagnostics: DataGridFormulaComputeStageDiagnostics
+  }
+  interface DataGridFormulaRuntimeErrorsCollector {
+    runtimeErrorCount: number
+    runtimeErrors: DataGridFormulaRuntimeError[]
   }
   const computedFieldsByName = new Map<string, DataGridRegisteredComputedField>()
   const computedFieldNameByTargetField = new Map<string, string>()
-  let computedOrder: string[] = []
+  const formulaFieldsByName = new Map<string, DataGridRegisteredFormulaField>()
+  const formulaFunctionRegistry = new Map<
+    string,
+    DataGridFormulaFunctionDefinition | ((args: readonly number[]) => unknown)
+  >()
+  let computedExecutionPlan: DataGridFormulaExecutionPlan = createDataGridFormulaExecutionPlan([])
+  const computedAffectedPlanCache = new Map<string, readonly number[]>()
+  const rowFieldReaderCache = new Map<string, (rowNode: DataGridRowNode<T>) => unknown>()
+  const computedTokenReaderCache = new Map<string, (rowNode: DataGridRowNode<T>) => unknown>()
+  let computedOrder: readonly string[] = []
+  let computedEntryByIndex: readonly DataGridRegisteredComputedField[] = []
+  let computedFieldReaderByIndex: readonly ((rowNode: DataGridRowNode<T>) => unknown)[] = []
+  let computedLevelIndexes: readonly (readonly number[])[] = []
+  let computedDependentsByIndex: readonly (readonly number[])[] = []
+  let activeFormulaRuntimeErrorsCollector: DataGridFormulaRuntimeErrorsCollector | null = null
+  let latestFormulaComputeStageDiagnostics: DataGridFormulaComputeStageDiagnostics | null = null
+
+  const createEmptyFormulaDiagnostics = (): DataGridProjectionFormulaDiagnostics => ({
+    recomputedFields: [],
+    runtimeErrorCount: 0,
+    runtimeErrors: [],
+  })
+
+  const createEmptyFormulaComputeStageDiagnostics = (): DataGridFormulaComputeStageDiagnostics => ({
+    rowsTouched: 0,
+    changedRows: 0,
+    fieldsTouched: [],
+    evaluations: 0,
+    skippedByObjectIs: 0,
+    dirtyRows: 0,
+    dirtyNodes: [],
+  })
+
+  const cloneFormulaComputeStageDiagnostics = (
+    diagnostics: DataGridFormulaComputeStageDiagnostics,
+  ): DataGridFormulaComputeStageDiagnostics => ({
+    rowsTouched: diagnostics.rowsTouched,
+    changedRows: diagnostics.changedRows,
+    fieldsTouched: [...diagnostics.fieldsTouched],
+    evaluations: diagnostics.evaluations,
+    skippedByObjectIs: diagnostics.skippedByObjectIs,
+    dirtyRows: diagnostics.dirtyRows,
+    dirtyNodes: [...diagnostics.dirtyNodes],
+  })
+
+  const pushFormulaRuntimeError = (runtimeError: DataGridFormulaRuntimeError): void => {
+    if (!activeFormulaRuntimeErrorsCollector) {
+      return
+    }
+    activeFormulaRuntimeErrorsCollector.runtimeErrorCount += 1
+    if (activeFormulaRuntimeErrorsCollector.runtimeErrors.length >= DATAGRID_FORMULA_RUNTIME_ERRORS_PREVIEW_LIMIT) {
+      return
+    }
+    activeFormulaRuntimeErrorsCollector.runtimeErrors.push({ ...runtimeError })
+  }
+
+  const commitFormulaDiagnostics = (diagnostics: DataGridProjectionFormulaDiagnostics): void => {
+    if (
+      formulaFieldsByName.size === 0
+      && diagnostics.recomputedFields.length === 0
+      && diagnostics.runtimeErrorCount === 0
+      && diagnostics.runtimeErrors.length === 0
+    ) {
+      runtimeStateStore.setProjectionFormulaDiagnostics(null)
+      return
+    }
+    runtimeStateStore.setProjectionFormulaDiagnostics(diagnostics)
+  }
+
+  const commitFormulaComputeStageDiagnostics = (
+    diagnostics: DataGridFormulaComputeStageDiagnostics,
+  ): void => {
+    latestFormulaComputeStageDiagnostics = computedOrder.length > 0
+      ? cloneFormulaComputeStageDiagnostics(diagnostics)
+      : null
+  }
+
+  const getFormulaComputeStageDiagnosticsSnapshot = (): DataGridFormulaComputeStageDiagnostics | null => {
+    if (!latestFormulaComputeStageDiagnostics) {
+      return null
+    }
+    return cloneFormulaComputeStageDiagnostics(latestFormulaComputeStageDiagnostics)
+  }
 
   const normalizeComputedName = (value: unknown): string => {
     if (typeof value !== "string") {
@@ -370,6 +562,34 @@ export function createClientRowModel<T>(
       throw new Error("[DataGridComputed] Computed field name must be non-empty.")
     }
     return normalized
+  }
+
+  const normalizeFormulaFunctionName = (value: unknown): string => {
+    if (typeof value !== "string") {
+      throw new Error("[DataGridFormula] Formula function name must be a string.")
+    }
+    const normalized = value.trim().toUpperCase()
+    if (normalized.length === 0) {
+      throw new Error("[DataGridFormula] Formula function name must be non-empty.")
+    }
+    return normalized
+  }
+
+  const resolveFormulaFunctionRegistrySnapshot = (): DataGridFormulaFunctionRegistry | undefined => {
+    if (formulaFunctionRegistry.size === 0) {
+      return undefined
+    }
+    const registry: Record<string, DataGridFormulaFunctionDefinition | ((args: readonly number[]) => unknown)> = {}
+    for (const [name, definition] of formulaFunctionRegistry) {
+      registry[name] = definition
+    }
+    return registry
+  }
+
+  if (options.initialFormulaFunctionRegistry) {
+    for (const [name, definition] of Object.entries(options.initialFormulaFunctionRegistry)) {
+      formulaFunctionRegistry.set(normalizeFormulaFunctionName(name), definition)
+    }
   }
 
   const normalizeComputedTargetField = (
@@ -416,40 +636,78 @@ export function createClientRowModel<T>(
     }
   }
 
+  const resolveRowFieldReader = (
+    fieldInput: string,
+  ): ((rowNode: DataGridRowNode<T>) => unknown) => {
+    const field = fieldInput.trim()
+    if (field.length === 0) {
+      return () => undefined
+    }
+    const cachedReader = rowFieldReaderCache.get(field)
+    if (cachedReader) {
+      return cachedReader
+    }
+    const readDataValue = createCompiledDataGridRowDataReader(field)
+    const nextReader = (rowNode: DataGridRowNode<T>): unknown => {
+      return readDataValue(rowNode.data as unknown)
+    }
+    rowFieldReaderCache.set(field, nextReader)
+    return nextReader
+  }
+
   const rebuildComputedOrder = (): void => {
-    const stateByName = new Map<string, 0 | 1 | 2>()
-    const ordered: string[] = []
-    const visit = (name: string): void => {
-      const state = stateByName.get(name) ?? 0
-      if (state === 2) {
-        return
+    computedExecutionPlan = createDataGridFormulaExecutionPlan(
+      Array.from(computedFieldsByName.values()).map((entry) => ({
+        name: entry.name,
+        field: entry.field,
+        deps: entry.deps.map(dep => ({
+          domain: dep.domain,
+          value: dep.value,
+        })),
+      })),
+    )
+    computedOrder = [...computedExecutionPlan.order]
+    const nextOrderIndexByName = new Map<string, number>()
+    for (let index = 0; index < computedOrder.length; index += 1) {
+      const name = computedOrder[index]
+      if (typeof name === "string") {
+        nextOrderIndexByName.set(name, index)
       }
-      if (state === 1) {
-        throw new Error(`[DataGridComputed] Cycle detected at computed field '${name}'.`)
-      }
-      const entry = computedFieldsByName.get(name)
-      if (!entry) {
-        throw new Error(`[DataGridComputed] Missing computed field '${name}'.`)
-      }
-      stateByName.set(name, 1)
-      for (const dependency of entry.deps) {
-        if (dependency.domain !== "computed") {
-          continue
-        }
-        if (!computedFieldsByName.has(dependency.value)) {
-          throw new Error(
-            `[DataGridComputed] Missing dependency 'computed:${dependency.value}' for '${name}'.`,
-          )
-        }
-        visit(dependency.value)
-      }
-      stateByName.set(name, 2)
-      ordered.push(name)
     }
-    for (const name of computedFieldsByName.keys()) {
-      visit(name)
-    }
-    computedOrder = ordered
+    computedLevelIndexes = Object.freeze(
+      computedExecutionPlan.levels.map((level) => Object.freeze(
+        level
+          .map(name => nextOrderIndexByName.get(name))
+          .filter((index): index is number => typeof index === "number"),
+      )),
+    )
+    computedDependentsByIndex = Object.freeze(
+      computedOrder.map((name) => {
+        const node = computedExecutionPlan.nodes.get(name)
+        if (!node) {
+          return Object.freeze([]) as readonly number[]
+        }
+        return Object.freeze(
+          node.dependents
+            .map(dependentName => nextOrderIndexByName.get(dependentName))
+            .filter((index): index is number => typeof index === "number"),
+        ) as readonly number[]
+      }),
+    )
+    computedEntryByIndex = Object.freeze(
+      computedOrder.map((name) => {
+        const entry = computedFieldsByName.get(name)
+        if (!entry) {
+          throw new Error(`[DataGridComputed] Missing runtime entry for computed field '${name}'.`)
+        }
+        return entry
+      }),
+    )
+    computedFieldReaderByIndex = Object.freeze(
+      computedEntryByIndex.map(entry => resolveRowFieldReader(entry.field)),
+    )
+    computedAffectedPlanCache.clear()
+    computedTokenReaderCache.clear()
   }
 
   const registerComputedFieldInternal = (
@@ -521,24 +779,189 @@ export function createClientRowModel<T>(
     }
   }
 
-  const resolveComputedAffectedNames = (
+  const compileFormulaFieldDefinition = (
+    definition: DataGridFormulaFieldDefinition,
+    options: {
+      knownComputedNames?: ReadonlySet<string>
+      knownComputedNameByField?: ReadonlyMap<string, string>
+    } = {},
+  ): DataGridCompiledFormulaField<T> => {
+    return compileDataGridFormulaFieldDefinition<T>(definition, {
+      resolveDependencyToken: (identifier) => {
+        const normalizedIdentifier = identifier.trim()
+        const knownByTargetField = (
+          computedFieldNameByTargetField.get(normalizedIdentifier)
+          ?? options.knownComputedNameByField?.get(normalizedIdentifier)
+        )
+        if (knownByTargetField) {
+          return `computed:${knownByTargetField}`
+        }
+        if (
+          computedFieldsByName.has(normalizedIdentifier)
+          || formulaFieldsByName.has(normalizedIdentifier)
+          || options.knownComputedNames?.has(normalizedIdentifier) === true
+        ) {
+          return `computed:${normalizedIdentifier}`
+        }
+        return `field:${normalizedIdentifier}`
+      },
+      onRuntimeError: pushFormulaRuntimeError,
+      functionRegistry: resolveFormulaFunctionRegistrySnapshot(),
+    })
+  }
+
+  const compileRegisteredFormulaFields = (): Map<string, DataGridCompiledFormulaField<T>> => {
+    if (formulaFieldsByName.size === 0) {
+      return new Map<string, DataGridCompiledFormulaField<T>>()
+    }
+    const knownFormulaNames = new Set<string>()
+    const knownFormulaNameByField = new Map<string, string>()
+    for (const entry of formulaFieldsByName.values()) {
+      knownFormulaNames.add(entry.name)
+      knownFormulaNameByField.set(entry.field, entry.name)
+    }
+    const compiledByName = new Map<string, DataGridCompiledFormulaField<T>>()
+    for (const entry of formulaFieldsByName.values()) {
+      const compiled = compileFormulaFieldDefinition(
+        {
+          name: entry.name,
+          field: entry.field,
+          formula: entry.formula,
+        },
+        {
+          knownComputedNames: knownFormulaNames,
+          knownComputedNameByField: knownFormulaNameByField,
+        },
+      )
+      if (compiled.name !== entry.name) {
+        throw new Error(
+          `[DataGridFormula] Formula field '${entry.name}' compiled with unexpected name '${compiled.name}'.`,
+        )
+      }
+      if (compiled.field !== entry.field) {
+        throw new Error(
+          `[DataGridFormula] Formula field '${entry.name}' target changed from '${entry.field}' to '${compiled.field}'.`,
+        )
+      }
+      compiledByName.set(entry.name, compiled)
+    }
+    return compiledByName
+  }
+
+  const applyCompiledFormulaFields = (
+    compiledByName: ReadonlyMap<string, DataGridCompiledFormulaField<T>>,
+  ): void => {
+    const previousComputedFieldsByName = new Map(computedFieldsByName)
+    const previousFormulaFieldsByName = new Map(formulaFieldsByName)
+    const previousComputedExecutionPlan = computedExecutionPlan
+    const previousComputedOrder = computedOrder
+    const previousComputedEntryByIndex = computedEntryByIndex
+    const previousComputedFieldReaderByIndex = computedFieldReaderByIndex
+    const previousComputedLevelIndexes = computedLevelIndexes
+    const previousComputedDependentsByIndex = computedDependentsByIndex
+    const previousComputedAffectedPlanCache = new Map(computedAffectedPlanCache)
+
+    try {
+      for (const [formulaName, compiled] of compiledByName) {
+        const computed = computedFieldsByName.get(formulaName)
+        if (!computed) {
+          throw new Error(
+            `[DataGridFormula] Missing computed field '${formulaName}' while applying compiled formulas.`,
+          )
+        }
+        const resolvedDeps = compiled.deps.map(resolveComputedDependency)
+        computedFieldsByName.set(formulaName, {
+          ...computed,
+          field: compiled.field,
+          deps: resolvedDeps,
+          compute: compiled.compute,
+        })
+        formulaFieldsByName.set(formulaName, {
+          name: compiled.name,
+          field: compiled.field,
+          formula: compiled.formula,
+          deps: compiled.deps,
+        })
+      }
+      rebuildComputedOrder()
+    } catch (error) {
+      computedFieldsByName.clear()
+      for (const [name, entry] of previousComputedFieldsByName) {
+        computedFieldsByName.set(name, entry)
+      }
+      formulaFieldsByName.clear()
+      for (const [name, entry] of previousFormulaFieldsByName) {
+        formulaFieldsByName.set(name, entry)
+      }
+      computedExecutionPlan = previousComputedExecutionPlan
+      computedOrder = previousComputedOrder
+      computedEntryByIndex = previousComputedEntryByIndex
+      computedFieldReaderByIndex = previousComputedFieldReaderByIndex
+      computedLevelIndexes = previousComputedLevelIndexes
+      computedDependentsByIndex = previousComputedDependentsByIndex
+      computedAffectedPlanCache.clear()
+      for (const [key, value] of previousComputedAffectedPlanCache) {
+        computedAffectedPlanCache.set(key, value)
+      }
+      computedTokenReaderCache.clear()
+      throw error
+    }
+  }
+
+  const registerFormulaFieldInternal = (
+    definition: DataGridFormulaFieldDefinition,
+    options: {
+      knownComputedNames?: ReadonlySet<string>
+      knownComputedNameByField?: ReadonlyMap<string, string>
+    } = {},
+  ): void => {
+    const compiled = compileFormulaFieldDefinition(definition, options)
+    if (formulaFieldsByName.has(compiled.name)) {
+      throw new Error(`[DataGridFormula] Formula field '${compiled.name}' is already registered.`)
+    }
+    registerComputedFieldInternal({
+      name: compiled.name,
+      field: compiled.field,
+      deps: compiled.deps,
+      compute: compiled.compute,
+    })
+    formulaFieldsByName.set(compiled.name, {
+      name: compiled.name,
+      field: compiled.field,
+      formula: compiled.formula,
+      deps: compiled.deps,
+    })
+  }
+
+  const resolveComputedRootIndexes = (
     changedFields: ReadonlySet<string>,
-  ): ReadonlySet<string> => {
+  ): readonly number[] => {
     if (computedOrder.length === 0 || changedFields.size === 0) {
-      return new Set<string>()
+      return []
     }
-    const affectedFields = projectionPolicy.dependencyGraph.getAffectedFields(changedFields)
-    const affectedNames = new Set<string>()
-    for (const computedName of computedOrder) {
-      const computed = computedFieldsByName.get(computedName)
-      if (!computed) {
-        continue
-      }
-      if (affectedFields.has(computed.field)) {
-        affectedNames.add(computedName)
-      }
+
+    const normalizedChangedFields = Array.from(changedFields)
+      .map(field => field.trim())
+      .filter(field => field.length > 0)
+      .sort((left, right) => left.localeCompare(right))
+    if (normalizedChangedFields.length === 0) {
+      return []
     }
-    return affectedNames
+
+    const cacheKey = normalizedChangedFields.join("|")
+    const cachedPlan = computedAffectedPlanCache.get(cacheKey)
+    if (cachedPlan) {
+      return cachedPlan
+    }
+
+    const affectedNames = computedExecutionPlan.directByFields(
+      new Set<string>(normalizedChangedFields),
+    )
+    const orderedPlan = computedOrder
+      .map((name, index) => (affectedNames.has(name) ? index : -1))
+      .filter(index => index >= 0)
+    computedAffectedPlanCache.set(cacheKey, orderedPlan)
+    return orderedPlan
   }
 
   const resolveComputedTokenValue = (
@@ -548,29 +971,41 @@ export function createClientRowModel<T>(
     if (typeof token !== "string") {
       return undefined
     }
-    const normalizedTokenInput = token.trim()
-    if (normalizedTokenInput.length === 0) {
+    const tokenInput = token.trim()
+    if (tokenInput.length === 0) {
       return undefined
     }
-    if (!normalizedTokenInput.includes(":") && computedFieldsByName.has(normalizedTokenInput)) {
-      const computedDependency = computedFieldsByName.get(normalizedTokenInput)
-      if (!computedDependency) {
-        return undefined
+    let reader = computedTokenReaderCache.get(tokenInput)
+    if (!reader) {
+      if (!tokenInput.includes(":")) {
+        const computedDependency = computedFieldsByName.get(tokenInput)
+        if (computedDependency) {
+          const readComputedField = resolveRowFieldReader(computedDependency.field)
+          reader = (nextRowNode: DataGridRowNode<T>) => readComputedField(nextRowNode)
+        } else {
+          const readField = resolveRowFieldReader(tokenInput)
+          reader = (nextRowNode: DataGridRowNode<T>) => readField(nextRowNode)
+        }
+      } else {
+        const dependency = resolveComputedDependency(tokenInput)
+        if (dependency.domain === "meta") {
+          reader = () => undefined
+        } else if (dependency.domain === "computed") {
+          const computedDependency = computedFieldsByName.get(dependency.value)
+          if (!computedDependency) {
+            reader = () => undefined
+          } else {
+            const readComputedField = resolveRowFieldReader(computedDependency.field)
+            reader = (nextRowNode: DataGridRowNode<T>) => readComputedField(nextRowNode)
+          }
+        } else {
+          const readField = resolveRowFieldReader(dependency.value)
+          reader = (nextRowNode: DataGridRowNode<T>) => readField(nextRowNode)
+        }
       }
-      return readRowField(rowNode, computedDependency.field, computedDependency.field)
+      computedTokenReaderCache.set(tokenInput, reader)
     }
-    const dependency = resolveComputedDependency(normalizedTokenInput)
-    if (dependency.domain === "meta") {
-      return undefined
-    }
-    if (dependency.domain === "computed") {
-      const computedDependency = computedFieldsByName.get(dependency.value)
-      if (!computedDependency) {
-        return undefined
-      }
-      return readRowField(rowNode, computedDependency.field, computedDependency.field)
-    }
-    return readRowField(rowNode, dependency.value, dependency.value)
+    return reader(rowNode)
   }
 
   const applyComputedFieldsToSourceRows = (
@@ -583,18 +1018,52 @@ export function createClientRowModel<T>(
         computedUpdatesByRowId: new Map<DataGridRowId, Partial<T>>(),
         previousRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
         nextRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
+        formulaDiagnostics: createEmptyFormulaDiagnostics(),
+        computeStageDiagnostics: createEmptyFormulaComputeStageDiagnostics(),
       }
     }
 
+    const sourceRowsBaseline = sourceRows
+    const rowCount = sourceRowsBaseline.length
     const rowIds = options.rowIds
-    let nextSourceRows: DataGridRowNode<T>[] | null = null
-    const changedRowIds: DataGridRowId[] = []
-    const computedUpdatesByRowId = new Map<DataGridRowId, Partial<T>>()
-    const previousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
-    const nextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
+    const hasExplicitChangedFields = Boolean(options.changedFieldsByRowId)
+    const selectedRowIndexes: number[] = []
+    const nodeCount = computedOrder.length
+    const dirtyRowIndexesByNode = new Array<number[] | undefined>(nodeCount)
+    const dirtyNodeMarks = new Uint8Array(nodeCount)
+    let dirtyNodeCount = 0
+    const dirtyRowMarks = new Uint8Array(rowCount)
+    let dirtyRowsCount = 0
 
-    for (let rowIndex = 0; rowIndex < sourceRows.length; rowIndex += 1) {
-      const row = sourceRows[rowIndex]
+    const markDirtyRow = (rowIndex: number): void => {
+      if (dirtyRowMarks[rowIndex] !== 0) {
+        return
+      }
+      dirtyRowMarks[rowIndex] = 1
+      dirtyRowsCount += 1
+    }
+
+    const markDirtyNode = (nodeIndex: number): void => {
+      if (dirtyNodeMarks[nodeIndex] !== 0) {
+        return
+      }
+      dirtyNodeMarks[nodeIndex] = 1
+      dirtyNodeCount += 1
+    }
+
+    const enqueueDirtyNodeRowIndex = (nodeIndex: number, rowIndex: number): void => {
+      let nodeDirtyRows = dirtyRowIndexesByNode[nodeIndex]
+      if (!nodeDirtyRows) {
+        nodeDirtyRows = []
+        dirtyRowIndexesByNode[nodeIndex] = nodeDirtyRows
+      }
+      nodeDirtyRows.push(rowIndex)
+      markDirtyNode(nodeIndex)
+      markDirtyRow(rowIndex)
+    }
+
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      const row = sourceRowsBaseline[rowIndex]
       if (!row) {
         continue
       }
@@ -604,64 +1073,279 @@ export function createClientRowModel<T>(
       if (!isRecord(row.data)) {
         continue
       }
-      const changedFields = options.changedFieldsByRowId?.get(row.rowId) ?? null
-      const affectedNames = changedFields
-        ? resolveComputedAffectedNames(changedFields)
-        : null
-      if (affectedNames && affectedNames.size === 0) {
+
+      if (!hasExplicitChangedFields) {
+        selectedRowIndexes.push(rowIndex)
         continue
       }
 
-      let workingRowNode = row
-      let rowPatch: Record<string, unknown> | null = null
-      for (const computedName of computedOrder) {
-        if (affectedNames && !affectedNames.has(computedName)) {
-          continue
+      const rawChangedFields = options.changedFieldsByRowId?.get(row.rowId) ?? null
+      if (!rawChangedFields || rawChangedFields.size === 0) {
+        continue
+      }
+      const normalizedChangedFields = new Set<string>()
+      for (const field of rawChangedFields) {
+        const normalized = field.trim()
+        if (normalized.length > 0) {
+          normalizedChangedFields.add(normalized)
         }
-        const computed = computedFieldsByName.get(computedName)
-        if (!computed) {
-          continue
+      }
+      if (normalizedChangedFields.size === 0) {
+        continue
+      }
+      const rootOrderIndexes = resolveComputedRootIndexes(normalizedChangedFields)
+      if (rootOrderIndexes.length === 0) {
+        continue
+      }
+
+      selectedRowIndexes.push(rowIndex)
+      for (const nodeIndex of rootOrderIndexes) {
+        enqueueDirtyNodeRowIndex(nodeIndex, rowIndex)
+      }
+    }
+
+    if (selectedRowIndexes.length === 0) {
+      return {
+        changed: false,
+        changedRowIds: [],
+        computedUpdatesByRowId: new Map<DataGridRowId, Partial<T>>(),
+        previousRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
+        nextRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
+        formulaDiagnostics: createEmptyFormulaDiagnostics(),
+        computeStageDiagnostics: createEmptyFormulaComputeStageDiagnostics(),
+      }
+    }
+
+    const levelsToRun = computedLevelIndexes
+
+    if (levelsToRun.length === 0) {
+      return {
+        changed: false,
+        changedRowIds: [],
+        computedUpdatesByRowId: new Map<DataGridRowId, Partial<T>>(),
+        previousRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
+        nextRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
+        formulaDiagnostics: createEmptyFormulaDiagnostics(),
+        computeStageDiagnostics: createEmptyFormulaComputeStageDiagnostics(),
+      }
+    }
+
+    if (!hasExplicitChangedFields) {
+      for (let nodeIndex = 0; nodeIndex < nodeCount; nodeIndex += 1) {
+        for (const rowIndex of selectedRowIndexes) {
+          enqueueDirtyNodeRowIndex(nodeIndex, rowIndex)
         }
-        const nextValue = computed.compute({
-          row: workingRowNode.row,
-          rowId: workingRowNode.rowId,
-          sourceIndex: workingRowNode.sourceIndex,
-          get: (token) => resolveComputedTokenValue(workingRowNode, token),
-        })
-        const previousValue = readRowField(workingRowNode, computed.field, computed.field)
-        if (Object.is(nextValue, previousValue)) {
-          continue
+      }
+    }
+
+    let nextSourceRows: DataGridRowNode<T>[] | null = null
+    const changedRowMarks = new Uint8Array(rowCount)
+    const touchedRowMarks = new Uint8Array(rowCount)
+    let touchedRowsCount = 0
+    const computedPatchByRowIndex = new Array<Record<string, unknown> | undefined>(rowCount)
+    const previousRowByIndex = new Array<DataGridRowNode<T> | undefined>(rowCount)
+    const nextRowByIndex = new Array<DataGridRowNode<T> | undefined>(rowCount)
+    const workingRowByIndex = new Array<DataGridRowNode<T> | undefined>(rowCount)
+    const nodeVisitMarks = new Int32Array(rowCount)
+    let nodeVisitEpoch = 0
+    const recomputedFormulaFieldNames = new Set<string>()
+    const touchedComputedFields = new Set<string>()
+    const formulaRuntimeErrorsCollector: DataGridFormulaRuntimeErrorsCollector = {
+      runtimeErrorCount: 0,
+      runtimeErrors: [],
+    }
+    let computeEvaluationCount = 0
+    let skippedByObjectIs = 0
+    let activeComputeRowNode: DataGridRowNode<T> | null = null
+    const nextNodeVisitEpoch = (): number => {
+      nodeVisitEpoch += 1
+      if (nodeVisitEpoch >= 2_000_000_000) {
+        nodeVisitMarks.fill(0)
+        nodeVisitEpoch = 1
+      }
+      return nodeVisitEpoch
+    }
+    const reusableComputeContext = {
+      row: undefined as T,
+      rowId: 0 as DataGridRowId,
+      sourceIndex: 0,
+      get: (token: DataGridComputedDependencyToken) => {
+        if (!activeComputeRowNode) {
+          return undefined
         }
-        rowPatch = rowPatch ?? {}
-        rowPatch[computed.field] = nextValue
-        const nextData = applyRowDataPatch(
-          workingRowNode.data,
-          { [computed.field]: nextValue } as Partial<T>,
-        )
-        if (nextData !== workingRowNode.data) {
-          workingRowNode = {
-            ...workingRowNode,
-            data: nextData,
-            row: nextData,
+        return resolveComputedTokenValue(activeComputeRowNode, token)
+      },
+    } satisfies DataGridComputedFieldComputeContext<T>
+    const previousFormulaRuntimeErrorsCollector = activeFormulaRuntimeErrorsCollector
+    activeFormulaRuntimeErrorsCollector = formulaRuntimeErrorsCollector
+
+    try {
+      for (const level of levelsToRun) {
+        const nextDirtyRowIndexesByNode = new Array<number[] | undefined>(nodeCount)
+        const levelPatchByRowIndex = new Array<Record<string, unknown> | undefined>(rowCount)
+        const levelPatchedRowIndexes: number[] = []
+
+        // Vector-style stage execution: evaluate one node over row batches.
+        for (const nodeIndex of level) {
+          const computedName = computedOrder[nodeIndex]
+          const computed = computedEntryByIndex[nodeIndex]
+          const readComputedField = computedFieldReaderByIndex[nodeIndex]
+          if (!computedName || !computed || !readComputedField) {
+            continue
+          }
+          const nodeDirtyRowIndexes = dirtyRowIndexesByNode[nodeIndex]
+          if (!nodeDirtyRowIndexes || nodeDirtyRowIndexes.length === 0) {
+            continue
+          }
+          dirtyRowIndexesByNode[nodeIndex] = undefined
+          const dependentIndexes = computedDependentsByIndex[nodeIndex] ?? []
+          const visitEpoch = nextNodeVisitEpoch()
+          let evaluatedAtLeastOnce = false
+
+          const dirtyRowIndexesForNode = nodeDirtyRowIndexes
+          for (
+            let batchStart = 0;
+            batchStart < dirtyRowIndexesForNode.length;
+            batchStart += DATAGRID_COMPUTE_VECTOR_BATCH_SIZE
+          ) {
+            const batchEnd = Math.min(
+              dirtyRowIndexesForNode.length,
+              batchStart + DATAGRID_COMPUTE_VECTOR_BATCH_SIZE,
+            )
+            for (let rowCursor = batchStart; rowCursor < batchEnd; rowCursor += 1) {
+              const rowIndex = dirtyRowIndexesForNode[rowCursor]
+              if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= rowCount) {
+                continue
+              }
+              if (nodeVisitMarks[rowIndex] === visitEpoch) {
+                continue
+              }
+              nodeVisitMarks[rowIndex] = visitEpoch
+              const sourceRow = sourceRowsBaseline[rowIndex]
+              if (!sourceRow || !isRecord(sourceRow.data)) {
+                continue
+              }
+
+              const workingRowNode = workingRowByIndex[rowIndex] ?? sourceRow
+              evaluatedAtLeastOnce = true
+              if (touchedRowMarks[rowIndex] === 0) {
+                touchedRowMarks[rowIndex] = 1
+                touchedRowsCount += 1
+              }
+              computeEvaluationCount += 1
+              activeComputeRowNode = workingRowNode
+              reusableComputeContext.row = workingRowNode.row
+              reusableComputeContext.rowId = workingRowNode.rowId
+              reusableComputeContext.sourceIndex = workingRowNode.sourceIndex
+              let nextValue: unknown
+              try {
+                nextValue = computed.compute(reusableComputeContext)
+              } finally {
+                activeComputeRowNode = null
+              }
+              const previousValue = readComputedField(workingRowNode)
+              if (Object.is(nextValue, previousValue)) {
+                skippedByObjectIs += 1
+                continue
+              }
+              touchedComputedFields.add(computed.field)
+
+              let rowPatch = computedPatchByRowIndex[rowIndex]
+              if (!rowPatch) {
+                rowPatch = {}
+                computedPatchByRowIndex[rowIndex] = rowPatch
+              }
+              rowPatch[computed.field] = nextValue
+
+              let levelPatch = levelPatchByRowIndex[rowIndex]
+              if (!levelPatch) {
+                levelPatch = {}
+                levelPatchByRowIndex[rowIndex] = levelPatch
+                levelPatchedRowIndexes.push(rowIndex)
+              }
+              levelPatch[computed.field] = nextValue
+
+              for (const dependentIndex of dependentIndexes) {
+                let dependentDirtyRows = nextDirtyRowIndexesByNode[dependentIndex]
+                if (!dependentDirtyRows) {
+                  dependentDirtyRows = []
+                  nextDirtyRowIndexesByNode[dependentIndex] = dependentDirtyRows
+                }
+                dependentDirtyRows.push(rowIndex)
+                markDirtyNode(dependentIndex)
+                markDirtyRow(rowIndex)
+              }
+            }
+          }
+
+          if (evaluatedAtLeastOnce && formulaFieldsByName.has(computedName)) {
+            recomputedFormulaFieldNames.add(computedName)
           }
         }
-      }
 
-      if (!rowPatch) {
+        if (levelPatchedRowIndexes.length > 0) {
+          for (const rowIndex of levelPatchedRowIndexes) {
+            const levelPatch = levelPatchByRowIndex[rowIndex]
+            if (!levelPatch) {
+              continue
+            }
+            const sourceRow = sourceRowsBaseline[rowIndex]
+            if (!sourceRow) {
+              continue
+            }
+            const workingRowNode = workingRowByIndex[rowIndex] ?? sourceRow
+            const nextData = applyRowDataPatch(
+              workingRowNode.data,
+              levelPatch as Partial<T>,
+            )
+            if (nextData === workingRowNode.data) {
+              continue
+            }
+            const nextRowNode: DataGridRowNode<T> = {
+              ...workingRowNode,
+              data: nextData,
+              row: nextData,
+            }
+            workingRowByIndex[rowIndex] = nextRowNode
+            if (!nextSourceRows) {
+              nextSourceRows = sourceRowsBaseline.slice()
+            }
+            nextSourceRows[rowIndex] = nextRowNode
+            if (!previousRowByIndex[rowIndex]) {
+              previousRowByIndex[rowIndex] = sourceRow
+            }
+            nextRowByIndex[rowIndex] = nextRowNode
+            changedRowMarks[rowIndex] = 1
+          }
+        }
+
+        for (let nodeIndex = 0; nodeIndex < nodeCount; nodeIndex += 1) {
+          const dependentRows = nextDirtyRowIndexesByNode[nodeIndex]
+          if (!dependentRows || dependentRows.length === 0) {
+            continue
+          }
+          let queued = dirtyRowIndexesByNode[nodeIndex]
+          if (!queued) {
+            dirtyRowIndexesByNode[nodeIndex] = dependentRows
+            continue
+          }
+          queued.push(...dependentRows)
+        }
+      }
+    } finally {
+      activeFormulaRuntimeErrorsCollector = previousFormulaRuntimeErrorsCollector
+    }
+
+    const changedRowIds: DataGridRowId[] = []
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      if (changedRowMarks[rowIndex] === 0) {
         continue
       }
-      if (!nextSourceRows) {
-        nextSourceRows = sourceRows.slice()
-      }
-      const finalizedRow = workingRowNode
-      if (finalizedRow.data === row.data && finalizedRow.row === row.row) {
+      const rowNode = sourceRowsBaseline[rowIndex]
+      if (!rowNode) {
         continue
       }
-      nextSourceRows[rowIndex] = finalizedRow
-      changedRowIds.push(row.rowId)
-      computedUpdatesByRowId.set(row.rowId, rowPatch as Partial<T>)
-      previousRowsById.set(row.rowId, row)
-      nextRowsById.set(row.rowId, finalizedRow)
+      changedRowIds.push(rowNode.rowId)
     }
 
     if (nextSourceRows && changedRowIds.length > 0) {
@@ -669,18 +1353,77 @@ export function createClientRowModel<T>(
       sourceRowIndexById = buildRowIdPositionIndex(sourceRows)
     }
 
+    const computedUpdatesByRowId = new Map<DataGridRowId, Partial<T>>()
+    const previousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
+    const nextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
+
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      const rowNode = sourceRowsBaseline[rowIndex]
+      if (!rowNode) {
+        continue
+      }
+      const rowId = rowNode.rowId
+      const computedPatch = computedPatchByRowIndex[rowIndex]
+      if (computedPatch) {
+        computedUpdatesByRowId.set(rowId, computedPatch as Partial<T>)
+      }
+      const previousRow = previousRowByIndex[rowIndex]
+      if (previousRow) {
+        previousRowsById.set(rowId, previousRow)
+      }
+      const nextRow = nextRowByIndex[rowIndex]
+      if (nextRow) {
+        nextRowsById.set(rowId, nextRow)
+      }
+    }
+
+    const recomputedFields = computedOrder.filter(name => recomputedFormulaFieldNames.has(name))
+
     return {
       changed: changedRowIds.length > 0,
       changedRowIds,
       computedUpdatesByRowId,
       previousRowsById,
       nextRowsById,
+      formulaDiagnostics: {
+        recomputedFields,
+        runtimeErrorCount: formulaRuntimeErrorsCollector.runtimeErrorCount,
+        runtimeErrors: formulaRuntimeErrorsCollector.runtimeErrors,
+      },
+      computeStageDiagnostics: {
+        rowsTouched: touchedRowsCount,
+        changedRows: changedRowIds.length,
+        fieldsTouched: Array.from(touchedComputedFields).sort((left, right) => left.localeCompare(right)),
+        evaluations: computeEvaluationCount,
+        skippedByObjectIs,
+        dirtyRows: dirtyRowsCount,
+        dirtyNodes: (() => {
+          if (dirtyNodeCount === 0) {
+            return [] as string[]
+          }
+          const dirtyNodes: string[] = []
+          for (let index = 0; index < nodeCount; index += 1) {
+            if (dirtyNodeMarks[index] === 0) {
+              continue
+            }
+            const name = computedOrder[index]
+            if (typeof name === "string") {
+              dirtyNodes.push(name)
+            }
+          }
+          dirtyNodes.sort((left, right) => left.localeCompare(right))
+          return dirtyNodes
+        })(),
+      },
     }
   }
 
   const getComputedFieldSnapshots = (): readonly DataGridComputedFieldSnapshot[] => {
     return computedOrder
       .map((name): DataGridComputedFieldSnapshot | null => {
+        if (formulaFieldsByName.has(name)) {
+          return null
+        }
         const computed = computedFieldsByName.get(name)
         if (!computed) {
           return null
@@ -692,6 +1435,15 @@ export function createClientRowModel<T>(
         }
       })
       .filter((entry): entry is DataGridComputedFieldSnapshot => entry !== null)
+  }
+
+  const getFormulaFieldSnapshots = (): readonly DataGridFormulaFieldSnapshot[] => {
+    return Array.from(formulaFieldsByName.values()).map((formula) => ({
+      name: formula.name,
+      field: formula.field,
+      formula: formula.formula,
+      deps: [...formula.deps],
+    }))
   }
 
   const resolveInitialComputedRegistrationOrder = (
@@ -753,8 +1505,71 @@ export function createClientRowModel<T>(
       registerComputedFieldInternal(definition)
     }
     const initialComputedRecompute = applyComputedFieldsToSourceRows()
+    commitFormulaDiagnostics(initialComputedRecompute.formulaDiagnostics)
+    commitFormulaComputeStageDiagnostics(initialComputedRecompute.computeStageDiagnostics)
     if (initialComputedRecompute.changed) {
       bumpRowVersions(rowVersionById, initialComputedRecompute.changedRowIds)
+    }
+  }
+
+  if (Array.isArray(options.initialFormulaFields) && options.initialFormulaFields.length > 0) {
+    const initialFormulaNames = new Set<string>()
+    const initialFormulaNameByField = new Map<string, string>()
+    const compiledByName = new Map<string, DataGridCompiledFormulaField<T>>()
+    const initialFormulaDefinitions: DataGridComputedFieldDefinition<T>[] = []
+
+    for (const definition of options.initialFormulaFields) {
+      const normalizedName = normalizeComputedName(definition.name)
+      const normalizedField = normalizeComputedTargetField(definition.field, normalizedName)
+      if (initialFormulaNames.has(normalizedName)) {
+        throw new Error(
+          `[DataGridFormula] Duplicate formula field '${normalizedName}' in initialFormulaFields.`,
+        )
+      }
+      if (initialFormulaNameByField.has(normalizedField)) {
+        throw new Error(
+          `[DataGridFormula] Duplicate formula target field '${normalizedField}' in initialFormulaFields.`,
+        )
+      }
+      initialFormulaNames.add(normalizedName)
+      initialFormulaNameByField.set(normalizedField, normalizedName)
+    }
+
+    for (const definition of options.initialFormulaFields) {
+      const compiled = compileFormulaFieldDefinition(definition, {
+        knownComputedNames: initialFormulaNames,
+        knownComputedNameByField: initialFormulaNameByField,
+      })
+      compiledByName.set(compiled.name, compiled)
+      initialFormulaDefinitions.push({
+        name: compiled.name,
+        field: compiled.field,
+        deps: compiled.deps,
+        compute: compiled.compute,
+      })
+    }
+
+    const orderedInitialFormulaFields = resolveInitialComputedRegistrationOrder(initialFormulaDefinitions)
+    for (const definition of orderedInitialFormulaFields) {
+      const formulaName = normalizeComputedName(definition.name)
+      const compiled = compiledByName.get(formulaName)
+      if (!compiled) {
+        continue
+      }
+      registerComputedFieldInternal(definition)
+      formulaFieldsByName.set(formulaName, {
+        name: compiled.name,
+        field: compiled.field,
+        formula: compiled.formula,
+        deps: compiled.deps,
+      })
+    }
+
+    const initialFormulaRecompute = applyComputedFieldsToSourceRows()
+    commitFormulaDiagnostics(initialFormulaRecompute.formulaDiagnostics)
+    commitFormulaComputeStageDiagnostics(initialFormulaRecompute.computeStageDiagnostics)
+    if (initialFormulaRecompute.changed) {
+      bumpRowVersions(rowVersionById, initialFormulaRecompute.changedRowIds)
     }
   }
 
@@ -915,13 +1730,18 @@ export function createClientRowModel<T>(
 
   const projectionHandlersRuntime = createClientRowProjectionHandlersRuntime<T>({
     runtimeState,
-    commitProjectionCycle: (hadActualRecompute) => {
-      runtimeStateStore.commitProjectionCycle(hadActualRecompute)
+    commitProjectionCycle: (meta) => {
+      runtimeStateStore.commitProjectionCycle({
+        hadActualRecompute: meta.hadActualRecompute,
+        recomputedStages: meta.recomputedStages,
+        blockedStages: meta.blockedStages,
+      })
     },
     getSourceRows: () => sourceRows,
     buildSourceById: () => buildRowIdIndex(sourceRows),
     readRowField,
     normalizeText,
+    computeStageExecutor: DATAGRID_NOOP_CLIENT_PROJECTION_COMPUTE_STAGE_EXECUTOR as DataGridClientProjectionComputeStageExecutor<T>,
     resolveFilterPredicate,
     getTreeData: () => treeData,
     getFilterModel: () => filterModel,
@@ -1142,6 +1962,8 @@ export function createClientRowModel<T>(
     },
     applyComputedFields: () => {
       const computedResult = applyComputedFieldsToSourceRows()
+      commitFormulaDiagnostics(computedResult.formulaDiagnostics)
+      commitFormulaComputeStageDiagnostics(computedResult.computeStageDiagnostics)
       if (!computedResult.changed) {
         return
       }
@@ -1207,6 +2029,8 @@ export function createClientRowModel<T>(
         rowIds: new Set<DataGridRowId>(patchResult.changedRowIds),
         changedFieldsByRowId,
       })
+      commitFormulaDiagnostics(computedResult.formulaDiagnostics)
+      commitFormulaComputeStageDiagnostics(computedResult.computeStageDiagnostics)
       if (!computedResult.changed) {
         return patchResult
       }
@@ -1241,6 +2065,7 @@ export function createClientRowModel<T>(
       return {
         nextSourceRows: sourceRows,
         changed: true,
+        computedChanged: true,
         changedRowIds: Array.from(changedRowIdSet),
         changedUpdatesById: mergedChangedUpdatesById,
         previousRowsById: mergedPreviousRowsById,
@@ -1349,6 +2174,8 @@ export function createClientRowModel<T>(
     const computedResult = applyComputedFieldsToSourceRows({
       rowIds,
     })
+    commitFormulaDiagnostics(computedResult.formulaDiagnostics)
+    commitFormulaComputeStageDiagnostics(computedResult.computeStageDiagnostics)
     if (!computedResult.changed) {
       return 0
     }
@@ -1360,6 +2187,11 @@ export function createClientRowModel<T>(
     computeRuntime.recomputeFromStage("compute")
     emit()
     return computedResult.changedRowIds.length
+  }
+
+  const recompileRegisteredFormulaFields = (): void => {
+    const compiledByName = compileRegisteredFormulaFields()
+    applyCompiledFormulaFields(compiledByName)
   }
 
   runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
@@ -1413,8 +2245,86 @@ export function createClientRowModel<T>(
       registerComputedFieldInternal(definition)
       void recomputeComputedFieldsAndRefresh()
     },
+    registerFormulaField(definition: DataGridFormulaFieldDefinition) {
+      ensureActive()
+      registerFormulaFieldInternal(definition)
+      void recomputeComputedFieldsAndRefresh()
+    },
     getComputedFields() {
       return getComputedFieldSnapshots()
+    },
+    getFormulaFields() {
+      return getFormulaFieldSnapshots()
+    },
+    registerFormulaFunction(
+      name: string,
+      definition: DataGridFormulaFunctionDefinition | ((args: readonly number[]) => unknown),
+    ) {
+      ensureActive()
+      const normalizedName = normalizeFormulaFunctionName(name)
+      if (
+        typeof definition !== "function"
+        && (
+          typeof definition !== "object"
+          || definition === null
+          || typeof definition.compute !== "function"
+        )
+      ) {
+        throw new Error(
+          `[DataGridFormula] Formula function '${normalizedName}' must be a function or an object with compute(args).`,
+        )
+      }
+
+      const previousRegistry = new Map(formulaFunctionRegistry)
+      formulaFunctionRegistry.set(normalizedName, definition)
+      try {
+        recompileRegisteredFormulaFields()
+      } catch (error) {
+        formulaFunctionRegistry.clear()
+        for (const [entryName, entryDefinition] of previousRegistry) {
+          formulaFunctionRegistry.set(entryName, entryDefinition)
+        }
+        throw error
+      }
+
+      if (formulaFieldsByName.size > 0) {
+        void recomputeComputedFieldsAndRefresh()
+      }
+    },
+    unregisterFormulaFunction(name: string) {
+      ensureActive()
+      const normalizedName = normalizeFormulaFunctionName(name)
+      if (!formulaFunctionRegistry.has(normalizedName)) {
+        return false
+      }
+      const previousRegistry = new Map(formulaFunctionRegistry)
+      formulaFunctionRegistry.delete(normalizedName)
+      try {
+        recompileRegisteredFormulaFields()
+      } catch (error) {
+        formulaFunctionRegistry.clear()
+        for (const [entryName, entryDefinition] of previousRegistry) {
+          formulaFunctionRegistry.set(entryName, entryDefinition)
+        }
+        throw error
+      }
+      if (formulaFieldsByName.size > 0) {
+        void recomputeComputedFieldsAndRefresh()
+      }
+      return true
+    },
+    getFormulaFunctionNames() {
+      return Array.from(formulaFunctionRegistry.keys())
+        .sort((left, right) => left.localeCompare(right))
+    },
+    getFormulaExecutionPlan() {
+      if (computedExecutionPlan.order.length === 0) {
+        return null
+      }
+      return snapshotDataGridFormulaExecutionPlan(computedExecutionPlan)
+    },
+    getFormulaComputeStageDiagnostics() {
+      return getFormulaComputeStageDiagnosticsSnapshot()
     },
     recomputeComputedFields(rowIds?: readonly DataGridRowId[]) {
       ensureActive()
@@ -1587,7 +2497,19 @@ export function createClientRowModel<T>(
       groupValueCache.clear()
       computedFieldsByName.clear()
       computedFieldNameByTargetField.clear()
+      formulaFieldsByName.clear()
+      formulaFunctionRegistry.clear()
       computedOrder = []
+      computedExecutionPlan = createDataGridFormulaExecutionPlan([])
+      computedEntryByIndex = []
+      computedFieldReaderByIndex = []
+      computedLevelIndexes = []
+      computedDependentsByIndex = []
+      computedAffectedPlanCache.clear()
+      rowFieldReaderCache.clear()
+      computedTokenReaderCache.clear()
+      latestFormulaComputeStageDiagnostics = null
+      runtimeStateStore.setProjectionFormulaDiagnostics(null)
       invalidateTreeProjectionCaches()
       cachedFilterPredicate = null
       cachedFilterPredicateKey = "__none__"

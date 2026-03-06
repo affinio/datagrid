@@ -2,6 +2,9 @@ import type {
   DataGridAggregationModel,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
+  DataGridFormulaFieldDefinition,
+  DataGridFormulaFieldSnapshot,
+  DataGridFormulaExecutionPlanSnapshot,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
@@ -47,6 +50,7 @@ export type DataGridWorkerRowModelCommand<T = unknown> =
   | { type: "set-pivot-model"; pivotModel: DataGridPivotSpec | null }
   | { type: "set-aggregation-model"; aggregationModel: DataGridAggregationModel<T> | null }
   | { type: "set-group-expansion"; expansion: DataGridGroupExpansionSnapshot | null }
+  | { type: "register-formula-field"; definition: DataGridFormulaFieldDefinition }
   | { type: "toggle-group"; groupKey: string }
   | { type: "expand-group"; groupKey: string }
   | { type: "collapse-group"; groupKey: string }
@@ -62,6 +66,8 @@ export interface DataGridWorkerRowModelCommandMessage<T = unknown> extends DataG
 export interface DataGridWorkerRowModelUpdatePayload<T = unknown> {
   snapshot: DataGridRowModelSnapshot<T>
   aggregationModel: DataGridAggregationModel<T> | null
+  formulaFields?: readonly DataGridFormulaFieldSnapshot[]
+  formulaExecutionPlan?: DataGridFormulaExecutionPlanSnapshot | null
   visibleRows: readonly DataGridRowNode<T>[]
   visibleRange: DataGridViewportRange
 }

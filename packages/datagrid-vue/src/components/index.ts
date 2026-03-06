@@ -1,7 +1,10 @@
+import type { Component } from "vue"
 import { DataGrid } from "./DataGrid"
+import AffinoDataGridSimpleComponent from "./AffinoDataGridSimple"
+
 export { DataGrid }
-export { default as AffinoDataGridSimple } from "./AffinoDataGridSimple"
-export { default as LegacyAffinoDataGrid } from "./AffinoDataGridSimple"
+export const AffinoDataGridSimple: Component = AffinoDataGridSimpleComponent
+export const LegacyAffinoDataGrid: Component = AffinoDataGridSimpleComponent
 
 export { default as GridHeader } from "./GridHeader.vue"
 export { default as GridBody } from "./GridBody.vue"

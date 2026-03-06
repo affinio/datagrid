@@ -9,7 +9,7 @@ import { DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP } from "./clientRowProjec
 export type DataGridClientProjectionStage = DataGridProjectionStage
 export type DataGridClientPatchStage = Extract<
   DataGridClientProjectionStage,
-  "filter" | "sort" | "group" | "pivot" | "aggregate"
+  "compute" | "filter" | "sort" | "group" | "pivot" | "aggregate"
 >
 
 export const DATAGRID_CLIENT_PROJECTION_REFRESH_ENTRY_STAGE: DataGridClientProjectionStage = "compute"
@@ -52,6 +52,7 @@ export const DATAGRID_CLIENT_ALL_PROJECTION_STAGES: readonly DataGridClientProje
 ]
 
 export const DATAGRID_CLIENT_PATCH_STAGE_IDS: readonly DataGridClientPatchStage[] = [
+  "compute",
   "filter",
   "sort",
   "group",

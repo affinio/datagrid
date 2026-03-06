@@ -73,6 +73,7 @@ export interface ApplyClientRowPatchUpdatesInput<T> {
 export interface ApplyClientRowPatchUpdatesResult<T> {
   nextSourceRows: readonly DataGridRowNode<T>[]
   changed: boolean
+  computedChanged: boolean
   changedRowIds: readonly DataGridRowId[]
   changedUpdatesById: ReadonlyMap<DataGridRowId, Partial<T>>
   previousRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
@@ -136,6 +137,7 @@ export function applyClientRowPatchUpdates<T>(
   return {
     nextSourceRows: nextSourceRows ?? sourceRows,
     changed,
+    computedChanged: false,
     changedRowIds,
     changedUpdatesById,
     previousRowsById,

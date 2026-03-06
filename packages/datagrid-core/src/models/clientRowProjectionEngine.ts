@@ -71,10 +71,14 @@ export function createClientRowProjectionEngine<T>(): DataGridClientProjectionEn
       return
     }
 
-    const sourceById = handlers.buildSourceById()
+    let sourceById = handlers.buildSourceById()
     let filteredRowIds: ReadonlySet<DataGridRowId> = handlers.getCurrentFilteredRowIds()
     const stageRuntimeContext: DataGridClientProjectionStageRuntimeContext<T> = {
-      sourceById,
+      getSourceById: () => sourceById,
+      refreshSourceById: () => {
+        sourceById = handlers.buildSourceById()
+        return sourceById
+      },
       handlers,
       getFilteredRowIds: () => filteredRowIds,
       setFilteredRowIds: (rowIds: ReadonlySet<DataGridRowId>) => {

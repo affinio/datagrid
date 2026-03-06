@@ -6,10 +6,18 @@ import type {
 import type { DataGridClientProjectionStage } from "./projectionStages.js"
 import type { DataGridPatchProjectionExecutionPlan } from "./rowPatchAnalyzer.js"
 
+export interface DataGridClientProjectionStagePlan {
+  requestedStages: readonly DataGridClientProjectionStage[]
+  blockedStages?: readonly DataGridClientProjectionStage[]
+}
+
 export interface DataGridClientRowProjectionOrchestrator<T> {
   recomputeFromStage: (
     stage: DataGridClientProjectionStage,
     options?: DataGridClientProjectionRecomputeOptions,
+  ) => void
+  recomputeWithStagePlan: (
+    plan: DataGridClientProjectionStagePlan,
   ) => void
   recomputeWithExecutionPlan: (
     plan: DataGridPatchProjectionExecutionPlan,
@@ -22,6 +30,14 @@ export function createClientRowProjectionOrchestrator<T>(
   projectionEngine: DataGridClientProjectionEngine<T>,
   projectionStageHandlers: DataGridClientProjectionStageHandlers<T>,
 ): DataGridClientRowProjectionOrchestrator<T> {
+  const recomputeWithStagePlan = (plan: DataGridClientProjectionStagePlan): void => {
+    projectionEngine.requestRefreshPass()
+    projectionEngine.requestStages(plan.requestedStages)
+    projectionEngine.recompute(projectionStageHandlers, {
+      blockedStages: plan.blockedStages ?? [],
+    })
+  }
+
   return {
     recomputeFromStage: (
       stage: DataGridClientProjectionStage,
@@ -29,12 +45,9 @@ export function createClientRowProjectionOrchestrator<T>(
     ): void => {
       projectionEngine.recomputeFromStage(stage, projectionStageHandlers, options)
     },
+    recomputeWithStagePlan,
     recomputeWithExecutionPlan: (plan: DataGridPatchProjectionExecutionPlan): void => {
-      projectionEngine.requestRefreshPass()
-      projectionEngine.requestStages(plan.requestedStages)
-      projectionEngine.recompute(projectionStageHandlers, {
-        blockedStages: plan.blockedStages,
-      })
+      recomputeWithStagePlan(plan)
     },
     refresh: (): void => {
       projectionEngine.requestRefreshPass()

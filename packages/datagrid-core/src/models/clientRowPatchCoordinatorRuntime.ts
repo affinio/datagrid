@@ -123,6 +123,9 @@ export function createClientRowPatchCoordinatorRuntime<T>(
         return
       }
       const invalidationReasons: DataGridProjectionInvalidationReason[] = ["rowsPatched"]
+      if (patchResult.computedChanged) {
+        invalidationReasons.push("computedChanged")
+      }
       if (options.recomputeFilter === true) {
         invalidationReasons.push("filterChanged")
       }

@@ -3,6 +3,7 @@ import type {
   DataGridRowId,
   DataGridRowNode,
 } from "./rowModel.js"
+import type { DataGridClientProjectionComputeStageExecutionResult } from "./clientRowProjectionComputeStage.js"
 
 export type DataGridClientProjectionStage = DataGridProjectionStage
 
@@ -27,7 +28,9 @@ export interface DataGridClientProjectionGroupStageContext<T> extends DataGridCl
 export interface DataGridClientProjectionRuntimeStageHandlers<T> {
   buildSourceById: () => ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
   getCurrentFilteredRowIds: () => ReadonlySet<DataGridRowId>
-  runComputeStage: (context: DataGridClientProjectionStageContext<T>) => boolean
+  runComputeStage: (
+    context: DataGridClientProjectionStageContext<T>,
+  ) => DataGridClientProjectionComputeStageExecutionResult
   resolveFilterPredicate: () => (rowNode: DataGridRowNode<T>) => boolean
   runFilterStage: (context: DataGridClientProjectionFilterStageContext<T>) => DataGridClientProjectionFilterStageResult
   runSortStage: (context: DataGridClientProjectionStageContext<T>) => boolean
@@ -39,7 +42,8 @@ export interface DataGridClientProjectionRuntimeStageHandlers<T> {
 }
 
 export interface DataGridClientProjectionStageRuntimeContext<T> {
-  sourceById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
+  getSourceById: () => ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
+  refreshSourceById: () => ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
   handlers: DataGridClientProjectionRuntimeStageHandlers<T>
   getFilteredRowIds: () => ReadonlySet<DataGridRowId>
   setFilteredRowIds: (rowIds: ReadonlySet<DataGridRowId>) => void
@@ -61,10 +65,14 @@ export const DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP: Readonly<
     id: "compute",
     dependsOn: [],
     compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
-      return context.handlers.runComputeStage({
-        sourceById: context.sourceById,
+      const result = context.handlers.runComputeStage({
+        sourceById: context.getSourceById(),
         shouldRecompute,
       })
+      if (result.refreshSourceById) {
+        context.refreshSourceById()
+      }
+      return result.recomputed
     },
   },
   filter: {
@@ -72,7 +80,7 @@ export const DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP: Readonly<
     dependsOn: ["compute"],
     compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
       const filterResult = context.handlers.runFilterStage({
-        sourceById: context.sourceById,
+        sourceById: context.getSourceById(),
         filterPredicate: shouldRecompute ? context.handlers.resolveFilterPredicate() : undefined,
         shouldRecompute,
       })
@@ -85,7 +93,7 @@ export const DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP: Readonly<
     dependsOn: ["filter"],
     compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
       return context.handlers.runSortStage({
-        sourceById: context.sourceById,
+        sourceById: context.getSourceById(),
         shouldRecompute,
       })
     },
@@ -95,7 +103,7 @@ export const DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP: Readonly<
     dependsOn: ["sort"],
     compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
       return context.handlers.runGroupStage({
-        sourceById: context.sourceById,
+        sourceById: context.getSourceById(),
         rowMatchesFilter: (row: DataGridRowNode<T>) => context.getFilteredRowIds().has(row.rowId),
         shouldRecompute,
       })
@@ -106,7 +114,7 @@ export const DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP: Readonly<
     dependsOn: ["group"],
     compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
       return context.handlers.runPivotStage({
-        sourceById: context.sourceById,
+        sourceById: context.getSourceById(),
         shouldRecompute,
       })
     },
@@ -116,7 +124,7 @@ export const DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP: Readonly<
     dependsOn: ["pivot"],
     compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
       return context.handlers.runAggregateStage({
-        sourceById: context.sourceById,
+        sourceById: context.getSourceById(),
         shouldRecompute,
       })
     },
@@ -126,7 +134,7 @@ export const DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP: Readonly<
     dependsOn: ["aggregate"],
     compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
       return context.handlers.runPaginateStage({
-        sourceById: context.sourceById,
+        sourceById: context.getSourceById(),
         shouldRecompute,
       })
     },
@@ -136,7 +144,7 @@ export const DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP: Readonly<
     dependsOn: ["paginate"],
     compute: <T>(context: DataGridClientProjectionStageRuntimeContext<T>, shouldRecompute: boolean): boolean => {
       return context.handlers.runVisibleStage({
-        sourceById: context.sourceById,
+        sourceById: context.getSourceById(),
         shouldRecompute,
       })
     },

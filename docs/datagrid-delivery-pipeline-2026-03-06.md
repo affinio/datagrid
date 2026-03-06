@@ -17,15 +17,16 @@ Status:
 - Completed:
   - `compute` stage is formalized in projection stages and invalidation reasons.
   - Stage-aware cache policy is present (`projectionPolicy`).
+  - `compute` stage executor can request `sourceById` refresh in the same recompute cycle.
 - In progress:
-  - Move stage definitions to declarative stage registry.
+  - Keep patch planner semantics compatible while expanding `compute` stage usage.
 
 Pipeline:
-1. [ ] Extract `client projection stage registry` (id, dependsOn, execute).
-2. [ ] Make graph builder consume registry (single source of truth).
-3. [ ] Make projection engine dispatch consume registry (remove duplicated stage maps).
-4. [ ] Keep patch planner semantics compatible (no behavior regressions).
-5. [ ] Add diagnostics parity checks for stale stages / invalidation roots.
+1. [x] Extract `client projection stage registry` (id, dependsOn, execute).
+2. [x] Make graph builder consume registry (single source of truth).
+3. [x] Make projection engine dispatch consume registry (remove duplicated stage maps).
+4. [x] Keep patch planner semantics compatible (compute stage is registered, patch invalidation remains disabled by default).
+5. [x] Add diagnostics parity checks for stale stages / invalidation roots.
 
 ## Track 2: Vue App Wrapper and Feature Surface
 
@@ -60,11 +61,11 @@ Deferred after formula-engine kickoff:
 ## Track 4: Formula-Engine Readiness Gates
 
 Entry criteria:
-1. [ ] Stage registry is the single source for projection stage topology.
-2. [ ] `compute` stage has explicit executor contract (not placeholder).
-3. [ ] Invalidation reasons map deterministically to stage roots.
-4. [ ] Worker compute path can execute recompute plans from stage ids.
-5. [ ] Snapshot diagnostics expose enough data for recompute tracing.
+1. [x] Stage registry is the single source for projection stage topology.
+2. [x] `compute` stage has explicit executor contract (not placeholder).
+3. [x] Invalidation reasons map deterministically to stage roots.
+4. [x] Worker compute path can execute recompute plans from stage ids.
+5. [x] Snapshot diagnostics expose enough data for recompute tracing.
 
 Exit from readiness:
 - Formula engine can be introduced as compute node(s) without changing orchestration API.
@@ -72,6 +73,12 @@ Exit from readiness:
 ## Current Slice (active)
 
 Active slice:
-1. Stage registry extraction and wiring (no behavior change).
-2. Tests update for registry-driven stage graph.
-3. Reconcile remaining type-check blockers in vue/sandbox/core.
+1. Stage registry extraction and wiring (no behavior change). Done.
+2. Tests update for registry-driven stage graph + compute refresh propagation. Done.
+3. Formula-engine foundation (field formulas compiler + client/API wiring). Done.
+4. Worker-owned row-model parity for formulas (`registerFormulaField` protocol + update payload). Done.
+5. Formula runtime diagnostics in projection snapshot (`projection.formula`). Done.
+6. Formula execution plan (DAG levels + dirty propagation by value) integrated into client recompute path. Done.
+7. Diagnostics explain API (`diagnostics.getFormulaExplain`) with execution-plan snapshot. Done.
+8. Runtime formula function registry (`rows.register/unregisterFormulaFunction`) with safe rollback. Done.
+9. Worker-owned formula explain parity (`formulaExecutionPlan` mirrored over row-model protocol). Done.

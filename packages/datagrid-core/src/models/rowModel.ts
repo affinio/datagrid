@@ -1,3 +1,5 @@
+import type { DataGridFormulaExecutionPlanSnapshot } from "./formulaExecutionPlan.js"
+
 export type DataGridRowId = string | number
 export type DataGridRowIdResolver<T = unknown> = (row: T, index: number) => DataGridRowId
 
@@ -407,6 +409,53 @@ export interface DataGridComputedFieldSnapshot {
   deps: readonly DataGridComputedDependencyToken[]
 }
 
+export interface DataGridFormulaFieldDefinition {
+  name: string
+  field?: string
+  formula: string
+}
+
+export interface DataGridFormulaFieldSnapshot {
+  name: string
+  field: string
+  formula: string
+  deps: readonly DataGridComputedDependencyToken[]
+}
+
+export type DataGridFormulaRuntimeErrorCode =
+  | "DIV_ZERO"
+  | "FUNCTION_UNKNOWN"
+  | "FUNCTION_ARITY"
+  | "EVAL_ERROR"
+
+export interface DataGridFormulaRuntimeError {
+  code: DataGridFormulaRuntimeErrorCode
+  message: string
+  formulaName?: string
+  field?: string
+  formula?: string
+  functionName?: string
+  operator?: string
+  rowId?: DataGridRowId
+  sourceIndex?: number
+}
+
+export interface DataGridProjectionFormulaDiagnostics {
+  recomputedFields: readonly string[]
+  runtimeErrorCount: number
+  runtimeErrors: readonly DataGridFormulaRuntimeError[]
+}
+
+export interface DataGridFormulaComputeStageDiagnostics {
+  rowsTouched: number
+  changedRows: number
+  fieldsTouched: readonly string[]
+  evaluations: number
+  skippedByObjectIs: number
+  dirtyRows: number
+  dirtyNodes: readonly string[]
+}
+
 export interface DataGridProjectionDiagnostics {
   version: number
   cycleVersion?: number
@@ -414,6 +463,10 @@ export interface DataGridProjectionDiagnostics {
   staleStages: readonly DataGridProjectionStage[]
   lastInvalidationReasons?: readonly DataGridProjectionInvalidationReason[]
   lastInvalidatedStages?: readonly DataGridProjectionStage[]
+  lastRecomputeHadActual?: boolean
+  lastRecomputedStages?: readonly DataGridProjectionStage[]
+  lastBlockedStages?: readonly DataGridProjectionStage[]
+  formula?: DataGridProjectionFormulaDiagnostics
 }
 
 export interface DataGridTreeDataDiagnostics {
@@ -454,6 +507,21 @@ export interface DataGridRowModel<T = unknown> {
   registerComputedField?(definition: DataGridComputedFieldDefinition<T>): void
   getComputedFields?(): readonly DataGridComputedFieldSnapshot[]
   recomputeComputedFields?(rowIds?: readonly DataGridRowId[]): number
+  registerFormulaField?(definition: DataGridFormulaFieldDefinition): void
+  getFormulaFields?(): readonly DataGridFormulaFieldSnapshot[]
+  registerFormulaFunction?(
+    name: string,
+    definition:
+      | {
+        arity?: number | { min: number; max?: number }
+        compute: (args: readonly number[]) => unknown
+      }
+      | ((args: readonly number[]) => unknown),
+  ): void
+  unregisterFormulaFunction?(name: string): boolean
+  getFormulaFunctionNames?(): readonly string[]
+  getFormulaExecutionPlan?(): DataGridFormulaExecutionPlanSnapshot | null
+  getFormulaComputeStageDiagnostics?(): DataGridFormulaComputeStageDiagnostics | null
   refresh(reason?: DataGridRowModelRefreshReason): Promise<void> | void
   subscribe(listener: DataGridRowModelListener<T>): () => void
   dispose(): void

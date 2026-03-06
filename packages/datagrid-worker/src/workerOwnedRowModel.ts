@@ -3,6 +3,9 @@ import type {
   DataGridClientComputeDiagnostics,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
+  DataGridFormulaFieldDefinition,
+  DataGridFormulaFieldSnapshot,
+  DataGridFormulaExecutionPlanSnapshot,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
@@ -36,6 +39,9 @@ export interface DataGridWorkerOwnedRowModel<T = unknown> extends DataGridRowMod
     updates: readonly DataGridClientRowPatch<T>[],
     options?: DataGridClientRowPatchOptions,
   ) => void
+  registerFormulaField: (definition: DataGridFormulaFieldDefinition) => void
+  getFormulaFields: () => readonly DataGridFormulaFieldSnapshot[]
+  getFormulaExecutionPlan: () => DataGridFormulaExecutionPlanSnapshot | null
   getComputeDiagnostics: () => DataGridClientComputeDiagnostics
   getWorkerProtocolDiagnostics: () => {
     updatesReceived: number
@@ -167,6 +173,26 @@ function cloneAggregationModel<T>(
   }
 }
 
+function cloneFormulaExecutionPlan(
+  plan: DataGridFormulaExecutionPlanSnapshot | null | undefined,
+): DataGridFormulaExecutionPlanSnapshot | null {
+  if (!plan) {
+    return null
+  }
+  return {
+    order: [...plan.order],
+    levels: plan.levels.map(level => [...level]),
+    nodes: plan.nodes.map(node => ({
+      name: node.name,
+      field: node.field,
+      level: node.level,
+      fieldDeps: [...node.fieldDeps],
+      computedDeps: [...node.computedDeps],
+      dependents: [...node.dependents],
+    })),
+  }
+}
+
 export function createDataGridWorkerOwnedRowModel<T = unknown>(
   options: CreateDataGridWorkerOwnedRowModelOptions<T>,
 ): DataGridWorkerOwnedRowModel<T> {
@@ -198,6 +224,8 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     ? cloneSnapshot(options.initialSnapshot)
     : createDefaultSnapshot<T>()
   let aggregationModel: DataGridAggregationModel<T> | null = null
+  let formulaFields: readonly DataGridFormulaFieldSnapshot[] = []
+  let formulaExecutionPlan: DataGridFormulaExecutionPlanSnapshot | null = null
   let visibleRange = {
     start: snapshot.viewportRange.start,
     end: snapshot.viewportRange.end,
@@ -298,6 +326,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       case "set-pivot-model":
       case "set-aggregation-model":
       case "set-group-expansion":
+      case "register-formula-field":
       case "refresh":
         return payload.type
       default:
@@ -551,6 +580,15 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       }
     }
     aggregationModel = cloneAggregationModel(update.aggregationModel)
+    formulaFields = Array.isArray(update.formulaFields)
+      ? update.formulaFields.map(field => ({
+          name: field.name,
+          field: field.field,
+          formula: field.formula,
+          deps: [...field.deps],
+        }))
+      : []
+    formulaExecutionPlan = cloneFormulaExecutionPlan(update.formulaExecutionPlan)
     visibleRange = {
       start: update.visibleRange.start,
       end: update.visibleRange.end,
@@ -735,6 +773,20 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     ) {
       dispatchCommand({ type: "patch-rows", updates, options })
     },
+    registerFormulaField(definition: DataGridFormulaFieldDefinition) {
+      dispatchCommand({ type: "register-formula-field", definition })
+    },
+    getFormulaFields() {
+      return formulaFields.map(field => ({
+        name: field.name,
+        field: field.field,
+        formula: field.formula,
+        deps: [...field.deps],
+      }))
+    },
+    getFormulaExecutionPlan() {
+      return cloneFormulaExecutionPlan(formulaExecutionPlan)
+    },
     getComputeDiagnostics() {
       return {
         configuredMode: "worker",
@@ -766,6 +818,8 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       visibleWindowCacheOrder.length = 0
       queuedCommands.length = 0
       queuedCommandIndexByKey.clear()
+      formulaFields = []
+      formulaExecutionPlan = null
     },
   }
 }

@@ -6,6 +6,7 @@ import type { DataGridPatchProjectionExecutionPlan } from "../rowPatchAnalyzer"
 function createOrchestratorMock(): DataGridClientRowProjectionOrchestrator<unknown> {
   return {
     recomputeFromStage: vi.fn(),
+    recomputeWithStagePlan: vi.fn(),
     recomputeWithExecutionPlan: vi.fn(),
     refresh: vi.fn(),
     getStaleStages: vi.fn(() => ["filter"]),
@@ -27,9 +28,14 @@ describe("createClientRowComputeRuntime", () => {
 
     runtime.recomputeFromStage("filter")
     runtime.recomputeWithExecutionPlan(executionPlan)
+    runtime.recomputeWithStagePlan({
+      requestedStages: ["sort"],
+      blockedStages: ["sort"],
+    })
     runtime.refresh()
 
     expect(orchestrator.recomputeFromStage).toHaveBeenCalledTimes(1)
+    expect(orchestrator.recomputeWithStagePlan).toHaveBeenCalledTimes(1)
     expect(orchestrator.recomputeWithExecutionPlan).toHaveBeenCalledTimes(1)
     expect(orchestrator.refresh).toHaveBeenCalledTimes(1)
     expect(runtime.getStaleStages()).toEqual(["filter"])
@@ -50,15 +56,20 @@ describe("createClientRowComputeRuntime", () => {
     })
 
     runtime.recomputeFromStage("group")
+    runtime.recomputeWithStagePlan({
+      requestedStages: ["group"],
+      blockedStages: [],
+    })
     runtime.refresh()
 
     expect(orchestrator.recomputeFromStage).toHaveBeenCalledTimes(1)
+    expect(orchestrator.recomputeWithStagePlan).toHaveBeenCalledTimes(1)
     expect(orchestrator.refresh).toHaveBeenCalledTimes(1)
     expect(runtime.getDiagnostics()).toEqual({
       configuredMode: "worker",
       effectiveMode: "worker",
       transportKind: "loopback",
-      dispatchCount: 2,
+      dispatchCount: 3,
       fallbackCount: 0,
     })
   })
@@ -75,16 +86,20 @@ describe("createClientRowComputeRuntime", () => {
     })
 
     runtime.recomputeFromStage("pivot")
+    runtime.recomputeWithStagePlan({
+      requestedStages: ["pivot"],
+      blockedStages: [],
+    })
 
-    expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(dispatch).toHaveBeenCalledTimes(2)
     expect(orchestrator.recomputeFromStage).toHaveBeenCalledTimes(1)
+    expect(orchestrator.recomputeWithStagePlan).toHaveBeenCalledTimes(1)
     expect(runtime.getDiagnostics()).toEqual({
       configuredMode: "worker",
       effectiveMode: "worker",
       transportKind: "custom",
-      dispatchCount: 1,
-      fallbackCount: 1,
+      dispatchCount: 2,
+      fallbackCount: 2,
     })
   })
 })
-

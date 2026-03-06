@@ -1,6 +1,7 @@
 import type {
   DataGridProjectionInvalidationReason,
   DataGridProjectionDiagnostics,
+  DataGridProjectionFormulaDiagnostics,
   DataGridProjectionStage,
   DataGridRowNode,
 } from "./rowModel.js"
@@ -22,6 +23,16 @@ export interface DataGridClientRowRuntimeState<T> {
   projectionCycleVersion: number
   projectionRecomputeVersion: number
   lastInvalidationReasons: DataGridProjectionInvalidationReason[]
+  lastRecomputeHadActual: boolean
+  lastRecomputedStages: DataGridProjectionStage[]
+  lastBlockedStages: DataGridProjectionStage[]
+  projectionFormulaDiagnostics: DataGridProjectionFormulaDiagnostics | null
+}
+
+export interface DataGridProjectionCycleCommitMeta {
+  hadActualRecompute: boolean
+  recomputedStages?: readonly DataGridProjectionStage[]
+  blockedStages?: readonly DataGridProjectionStage[]
 }
 
 export interface DataGridClientRowRuntimeStateStore<T> {
@@ -33,10 +44,25 @@ export interface DataGridClientRowRuntimeStateStore<T> {
   setProjectionInvalidation: (
     reasons: readonly DataGridProjectionInvalidationReason[],
   ) => void
-  commitProjectionCycle: (hadActualRecompute: boolean) => number
+  commitProjectionCycle: (
+    meta: boolean | DataGridProjectionCycleCommitMeta,
+  ) => number
+  setProjectionFormulaDiagnostics: (
+    diagnostics: DataGridProjectionFormulaDiagnostics | null,
+  ) => void
   getProjectionDiagnostics: (
     getStaleStages: () => readonly DataGridProjectionStage[],
   ) => DataGridProjectionDiagnostics
+}
+
+function cloneProjectionFormulaDiagnostics(
+  diagnostics: DataGridProjectionFormulaDiagnostics,
+): DataGridProjectionFormulaDiagnostics {
+  return {
+    recomputedFields: [...diagnostics.recomputedFields],
+    runtimeErrorCount: diagnostics.runtimeErrorCount,
+    runtimeErrors: [...diagnostics.runtimeErrors],
+  }
 }
 
 export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeStateStore<T> {
@@ -56,6 +82,10 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
     projectionCycleVersion: 0,
     projectionRecomputeVersion: 0,
     lastInvalidationReasons: [],
+    lastRecomputeHadActual: false,
+    lastRecomputedStages: [],
+    lastBlockedStages: [],
+    projectionFormulaDiagnostics: null,
   }
 
   return {
@@ -79,13 +109,24 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
     setProjectionInvalidation: (reasons) => {
       state.lastInvalidationReasons = Array.from(new Set(reasons))
     },
-    commitProjectionCycle: (hadActualRecompute: boolean) => {
+    commitProjectionCycle: (meta) => {
+      const resolvedMeta = typeof meta === "boolean"
+        ? { hadActualRecompute: meta }
+        : meta
       state.projectionCycleVersion += 1
-      if (hadActualRecompute) {
+      if (resolvedMeta.hadActualRecompute) {
         state.projectionRecomputeVersion += 1
       }
+      state.lastRecomputeHadActual = resolvedMeta.hadActualRecompute
+      state.lastRecomputedStages = [...(resolvedMeta.recomputedStages ?? [])]
+      state.lastBlockedStages = [...(resolvedMeta.blockedStages ?? [])]
       state.revision += 1
       return state.revision
+    },
+    setProjectionFormulaDiagnostics: (diagnostics) => {
+      state.projectionFormulaDiagnostics = diagnostics
+        ? cloneProjectionFormulaDiagnostics(diagnostics)
+        : null
     },
     getProjectionDiagnostics: (getStaleStages) => {
       const lastInvalidationReasons = [...state.lastInvalidationReasons]
@@ -96,6 +137,12 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
         staleStages: getStaleStages(),
         lastInvalidationReasons,
         lastInvalidatedStages: resolveClientProjectionInvalidationStages(lastInvalidationReasons),
+        lastRecomputeHadActual: state.lastRecomputeHadActual,
+        lastRecomputedStages: [...state.lastRecomputedStages],
+        lastBlockedStages: [...state.lastBlockedStages],
+        ...(state.projectionFormulaDiagnostics
+          ? { formula: cloneProjectionFormulaDiagnostics(state.projectionFormulaDiagnostics) }
+          : {}),
       }
     },
   }

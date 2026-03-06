@@ -54,7 +54,7 @@ All implementation steps must preserve these semantics unless this file is expli
 ## Projection Semantics
 
 1. Pipeline:
-   - `source rows -> tree index -> filter markers -> sibling sort -> flatten(expansion, filterPolicy) -> viewport`.
+   - `source rows -> tree index -> filter markers -> sibling sort -> flatten(expansion, filterPolicy) -> visible`.
    - Filter stage marks match-state; tree index is built from valid source rows first.
    - Sibling sort is applied on sibling sets before flattening (deterministic tie-break by `rowId`).
 2. Flattening:

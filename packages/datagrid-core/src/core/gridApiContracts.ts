@@ -5,6 +5,10 @@ import type {
   DataGridClientRowModelDerivedCacheDiagnostics,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
+  DataGridFormulaFieldDefinition,
+  DataGridFormulaFieldSnapshot,
+  DataGridFormulaFunctionDefinition,
+  DataGridFormulaExecutionPlanSnapshot,
   DataGridColumnDef,
   DataGridColumnHistogram,
   DataGridColumnHistogramOptions,
@@ -23,6 +27,8 @@ import type {
   DataGridPivotCellDrilldown,
   DataGridPivotCellDrilldownInput,
   DataGridProjectionDiagnostics,
+  DataGridProjectionFormulaDiagnostics,
+  DataGridFormulaComputeStageDiagnostics,
   DataGridProjectionStage,
   DataGridPivotSpec,
   DataGridRowId,
@@ -136,6 +142,16 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   registerComputedField(definition: DataGridComputedFieldDefinition<TRow>): void
   getComputedFields(): readonly DataGridComputedFieldSnapshot[]
   recomputeComputedFields(rowIds?: readonly DataGridRowId[]): number
+  hasFormulaSupport(): boolean
+  registerFormulaField(definition: DataGridFormulaFieldDefinition): void
+  getFormulaFields(): readonly DataGridFormulaFieldSnapshot[]
+  hasFormulaFunctionRegistrySupport(): boolean
+  registerFormulaFunction(
+    name: string,
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly number[]) => unknown),
+  ): void
+  unregisterFormulaFunction(name: string): boolean
+  getFormulaFunctionNames(): readonly string[]
   patch(
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
@@ -222,8 +238,15 @@ export interface DataGridApiDiagnosticsSnapshot {
   backpressure: DataGridDataSourceBackpressureDiagnostics | null
 }
 
+export interface DataGridApiFormulaExplainSnapshot {
+  executionPlan: DataGridFormulaExecutionPlanSnapshot | null
+  projectionFormula: DataGridProjectionFormulaDiagnostics | null
+  computeStage: DataGridFormulaComputeStageDiagnostics | null
+}
+
 export interface DataGridApiDiagnosticsNamespace {
   getAll(): DataGridApiDiagnosticsSnapshot
+  getFormulaExplain(): DataGridApiFormulaExplainSnapshot
 }
 
 export interface DataGridApiSchemaColumn {

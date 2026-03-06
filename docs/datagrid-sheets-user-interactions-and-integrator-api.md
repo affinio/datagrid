@@ -92,7 +92,7 @@ await api.start()
 - Required services: `rowModel`, `columnModel`.
 - Optional capability services: `transaction`, `selection`, `viewport`.
 - Keep row identity stable (`rowId`/`rowKey`), never index-based fallback.
-- Keep GroupBy in row-model pipeline (`filter -> sort -> groupBy -> flatten -> viewport`).
+- Keep GroupBy in row-model pipeline (`filter -> sort -> groupBy -> flatten -> visible`).
 - Treat transaction history as model-level capability, not UI-only state.
 - Prefer declarative `advancedExpression` in filter snapshot for complex conditions (`and`/`or`/`not`).
 

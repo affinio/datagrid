@@ -2,9 +2,15 @@ import type {
   DataGridClientComputeDiagnostics,
   DataGridClientRowModelDerivedCacheDiagnostics,
   DataGridDataSourceBackpressureDiagnostics,
+  DataGridFormulaComputeStageDiagnostics,
+  DataGridFormulaExecutionPlanSnapshot,
+  DataGridProjectionFormulaDiagnostics,
   DataGridRowModel,
 } from "../models"
-import type { DataGridApiDiagnosticsSnapshot } from "./gridApiContracts"
+import type {
+  DataGridApiDiagnosticsSnapshot,
+  DataGridApiFormulaExplainSnapshot,
+} from "./gridApiContracts"
 import type { DataGridComputeCapability } from "./gridApiCapabilities"
 
 type DerivedCacheCapability<TRow = unknown> = {
@@ -15,8 +21,17 @@ type BackpressureCapability = {
   getBackpressureDiagnostics: () => DataGridDataSourceBackpressureDiagnostics
 }
 
+type FormulaPlanCapability = {
+  getFormulaExecutionPlan: () => DataGridFormulaExecutionPlanSnapshot | null
+}
+
+type FormulaComputeDiagnosticsCapability = {
+  getFormulaComputeStageDiagnostics: () => DataGridFormulaComputeStageDiagnostics | null
+}
+
 export interface DataGridApiDiagnosticsMethods {
   getAllDiagnostics: () => DataGridApiDiagnosticsSnapshot
+  getFormulaExplain: () => DataGridApiFormulaExplainSnapshot
 }
 
 export interface CreateDataGridApiDiagnosticsMethodsInput<TRow = unknown> {
@@ -48,12 +63,79 @@ function resolveBackpressureCapability<TRow>(
   }
 }
 
+function resolveFormulaPlanCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): FormulaPlanCapability | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<FormulaPlanCapability>
+  if (typeof candidate.getFormulaExecutionPlan !== "function") {
+    return null
+  }
+  return {
+    getFormulaExecutionPlan: candidate.getFormulaExecutionPlan.bind(rowModel),
+  }
+}
+
+function resolveFormulaComputeDiagnosticsCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): FormulaComputeDiagnosticsCapability | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<FormulaComputeDiagnosticsCapability>
+  if (typeof candidate.getFormulaComputeStageDiagnostics !== "function") {
+    return null
+  }
+  return {
+    getFormulaComputeStageDiagnostics: candidate.getFormulaComputeStageDiagnostics.bind(rowModel),
+  }
+}
+
+function cloneFormulaExecutionPlanSnapshot(
+  snapshot: DataGridFormulaExecutionPlanSnapshot,
+): DataGridFormulaExecutionPlanSnapshot {
+  return {
+    order: [...snapshot.order],
+    levels: snapshot.levels.map(level => [...level]),
+    nodes: snapshot.nodes.map(node => ({
+      name: node.name,
+      field: node.field,
+      level: node.level,
+      fieldDeps: [...node.fieldDeps],
+      computedDeps: [...node.computedDeps],
+      dependents: [...node.dependents],
+    })),
+  }
+}
+
+function cloneProjectionFormulaDiagnostics(
+  diagnostics: DataGridProjectionFormulaDiagnostics,
+): DataGridProjectionFormulaDiagnostics {
+  return {
+    recomputedFields: [...diagnostics.recomputedFields],
+    runtimeErrorCount: diagnostics.runtimeErrorCount,
+    runtimeErrors: diagnostics.runtimeErrors.map(error => ({ ...error })),
+  }
+}
+
+function cloneFormulaComputeStageDiagnostics(
+  diagnostics: DataGridFormulaComputeStageDiagnostics,
+): DataGridFormulaComputeStageDiagnostics {
+  return {
+    rowsTouched: diagnostics.rowsTouched,
+    changedRows: diagnostics.changedRows,
+    fieldsTouched: [...diagnostics.fieldsTouched],
+    evaluations: diagnostics.evaluations,
+    skippedByObjectIs: diagnostics.skippedByObjectIs,
+    dirtyRows: diagnostics.dirtyRows,
+    dirtyNodes: [...diagnostics.dirtyNodes],
+  }
+}
+
 export function createDataGridApiDiagnosticsMethods<TRow = unknown>(
   input: CreateDataGridApiDiagnosticsMethodsInput<TRow>,
 ): DataGridApiDiagnosticsMethods {
   const { rowModel, getComputeCapability } = input
   const getDerivedCacheDiagnostics = resolveDerivedCacheCapability(rowModel)
   const getBackpressureDiagnostics = resolveBackpressureCapability(rowModel)
+  const getFormulaPlan = resolveFormulaPlanCapability(rowModel)
+  const getFormulaComputeDiagnostics = resolveFormulaComputeDiagnosticsCapability(rowModel)
 
   const resolveComputeDiagnostics = (): DataGridClientComputeDiagnostics | null => {
     const capability = getComputeCapability()
@@ -79,6 +161,20 @@ export function createDataGridApiDiagnosticsMethods<TRow = unknown>(
         compute: resolveComputeDiagnostics(),
         derivedCache: getDerivedCacheDiagnostics?.getDerivedCacheDiagnostics() ?? null,
         backpressure: getBackpressureDiagnostics?.getBackpressureDiagnostics() ?? null,
+      }
+    },
+    getFormulaExplain() {
+      const snapshot = rowModel.getSnapshot()
+      const executionPlan = getFormulaPlan?.getFormulaExecutionPlan() ?? null
+      const computeStageDiagnostics = getFormulaComputeDiagnostics?.getFormulaComputeStageDiagnostics() ?? null
+      return {
+        executionPlan: executionPlan ? cloneFormulaExecutionPlanSnapshot(executionPlan) : null,
+        projectionFormula: snapshot.projection?.formula
+          ? cloneProjectionFormulaDiagnostics(snapshot.projection.formula)
+          : null,
+        computeStage: computeStageDiagnostics
+          ? cloneFormulaComputeStageDiagnostics(computeStageDiagnostics)
+          : null,
       }
     },
   }

@@ -16,7 +16,7 @@ export function useDiagnosticsPanel<TSnapshot>(
   options: UseDiagnosticsPanelOptions<TSnapshot>,
 ): UseDiagnosticsPanelResult<TSnapshot> {
   const isOpen: ShallowRef<boolean> = shallowRef(false)
-  const snapshot: ShallowRef<TSnapshot | null> = shallowRef<TSnapshot | null>(null)
+  const snapshot: ShallowRef<unknown> = shallowRef(null)
 
   const refreshDiagnosticsPanel = (): void => {
     snapshot.value = options.readDiagnostics()
@@ -31,7 +31,9 @@ export function useDiagnosticsPanel<TSnapshot>(
     isOpen.value = false
   }
 
-  const diagnosticsSnapshot = computed<TSnapshot | null>(() => snapshot.value)
+  const diagnosticsSnapshot: ComputedRef<TSnapshot | null> = computed(
+    () => snapshot.value as TSnapshot | null,
+  )
 
   return {
     isDiagnosticsPanelOpen: computed<boolean>(() => isOpen.value),

@@ -156,6 +156,340 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("propagates computed dirtiness by value changes across dependency levels", () => {
+    let totalCalls = 0
+    let taxCalls = 0
+    let grossCalls = 0
+
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      taxRate: number
+      total?: number
+      tax?: number
+      gross?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10.1, taxRate: 0.2 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialComputedFields: [
+        {
+          name: "total",
+          deps: ["field:price"],
+          compute: ({ row }) => {
+            totalCalls += 1
+            return Math.round(row.price)
+          },
+        },
+        {
+          name: "tax",
+          deps: ["computed:total", "field:taxRate"],
+          compute: ({ get }) => {
+            taxCalls += 1
+            return Number(get("computed:total") ?? 0) * Number(get("field:taxRate") ?? 0)
+          },
+        },
+        {
+          name: "gross",
+          deps: ["computed:total", "computed:tax"],
+          compute: ({ get }) => {
+            grossCalls += 1
+            return Number(get("computed:total") ?? 0) + Number(get("computed:tax") ?? 0)
+          },
+        },
+      ],
+    })
+
+    // Reset initialization calls to isolate patch behavior.
+    totalCalls = 0
+    taxCalls = 0
+    grossCalls = 0
+
+    model.patchRows(
+      [{ rowId: "r1", data: { price: 10.2 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+
+    expect(totalCalls).toBe(1)
+    expect(taxCalls).toBe(0)
+    expect(grossCalls).toBe(0)
+    expect((model.getRow(0)?.row as { gross?: number }).gross).toBe(12)
+    expect(model.getFormulaComputeStageDiagnostics()).toEqual({
+      rowsTouched: 1,
+      changedRows: 0,
+      fieldsTouched: [],
+      evaluations: 1,
+      skippedByObjectIs: 1,
+      dirtyRows: 1,
+      dirtyNodes: ["total"],
+    })
+
+    model.dispose()
+  })
+
+  it("registers formula fields and reuses incremental computed pipeline", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      quantity: number
+      tax: number
+      subtotal?: number
+      total?: number
+      margin?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10, quantity: 2, tax: 3 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "subtotal + tax" },
+        { name: "subtotal", formula: "price * quantity" },
+      ],
+    })
+
+    const initialRow = model.getRow(0)?.row as { subtotal?: number; total?: number }
+    expect(initialRow.subtotal).toBe(20)
+    expect(initialRow.total).toBe(23)
+    expect(model.getFormulaFields().map(field => field.name)).toEqual(["subtotal", "total"])
+
+    model.patchRows(
+      [{ rowId: "r1", data: { price: 20 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+    const patchedRow = model.getRow(0)?.row as { subtotal?: number; total?: number }
+    expect(patchedRow.subtotal).toBe(40)
+    expect(patchedRow.total).toBe(43)
+
+    model.registerFormulaField({
+      name: "margin",
+      formula: "total / quantity",
+    })
+    const recomputedRow = model.getRow(0)?.row as { margin?: number }
+    expect(recomputedRow.margin).toBe(21.5)
+    expect(model.getFormulaFields().map(field => field.name)).toEqual(["subtotal", "total", "margin"])
+
+    model.dispose()
+  })
+
+  it("supports runtime formula function registry with rollback on invalid removal", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      doubled?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+    })
+
+    model.registerFormulaFunction("double", {
+      arity: 1,
+      compute: args => (args[0] ?? 0) * 2,
+    })
+    expect(model.getFormulaFunctionNames()).toEqual(["DOUBLE"])
+    expect(model.unregisterFormulaFunction("MISSING")).toBe(false)
+
+    model.registerFormulaField({
+      name: "doubled",
+      formula: "DOUBLE(price)",
+    })
+    expect((model.getRow(0)?.row as { doubled?: number }).doubled).toBe(20)
+    expect(model.getFormulaExecutionPlan()?.order).toEqual(["doubled"])
+
+    expect(() => model.unregisterFormulaFunction("DOUBLE")).toThrow(/Unknown function/i)
+    expect(model.getFormulaFunctionNames()).toEqual(["DOUBLE"])
+    expect((model.getRow(0)?.row as { doubled?: number }).doubled).toBe(20)
+
+    model.dispose()
+  })
+
+  it("supports formula chains that reference computed target fields", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      quantity: number
+      discount: number
+      gross?: number
+      net?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10, quantity: 2, discount: 3 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "grossFormula", field: "gross", formula: "price * quantity" },
+        { name: "netFormula", field: "net", formula: "gross - discount" },
+      ],
+    })
+
+    const initialRow = model.getRow(0)?.row as { gross?: number; net?: number }
+    expect(initialRow.gross).toBe(20)
+    expect(initialRow.net).toBe(17)
+
+    model.patchRows(
+      [{ rowId: "r1", data: { price: 12 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+
+    const patchedRow = model.getRow(0)?.row as { gross?: number; net?: number }
+    expect(patchedRow.gross).toBe(24)
+    expect(patchedRow.net).toBe(21)
+
+    model.dispose()
+  })
+
+  it("evaluates formula identifiers with nested object and array paths", () => {
+    const model = createClientRowModel<{
+      id: number
+      qty: number
+      order: {
+        unitPrice: number
+        items: Array<{ tax: number }>
+      }
+      total?: number
+    }>({
+      rows: [
+        {
+          row: {
+            id: 1,
+            qty: 2,
+            order: {
+              unitPrice: 10,
+              items: [{ tax: 3 }],
+            },
+          },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "order.unitPrice * qty + order.items.0.tax" },
+      ],
+    })
+
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(23)
+    model.patchRows(
+      [{ rowId: "r1", data: { qty: 3 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(33)
+
+    model.dispose()
+  })
+
+  it("detects cycles in initial formula fields referenced by target field", () => {
+    expect(() => {
+      createClientRowModel<{
+        id: number
+        left?: number
+        right?: number
+      }>({
+        rows: [
+          {
+            row: { id: 1, left: 1, right: 2 },
+            rowId: "r1",
+            originalIndex: 0,
+            displayIndex: 0,
+          },
+        ],
+        initialFormulaFields: [
+          { name: "leftFormula", field: "left", formula: "right + 1" },
+          { name: "rightFormula", field: "right", formula: "left + 1" },
+        ],
+      })
+    }).toThrow(/cycle detected/i)
+  })
+
+  it("exposes formula diagnostics in projection snapshot", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      quantity: number
+      tax: number
+      subtotal?: number
+      total?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10, quantity: 2, tax: 3 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "subtotal + tax" },
+        { name: "subtotal", formula: "price * quantity" },
+      ],
+    })
+
+    const formulaDiagnostics = model.getSnapshot().projection.formula
+    expect(formulaDiagnostics?.recomputedFields).toEqual(["subtotal", "total"])
+    expect(formulaDiagnostics?.runtimeErrorCount).toBe(0)
+    expect(formulaDiagnostics?.runtimeErrors).toEqual([])
+
+    model.dispose()
+  })
+
+  it("captures formula runtime errors in projection diagnostics and recovers after patch", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+      ratio?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10, qty: 0 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "ratio", formula: "price / qty" },
+      ],
+    })
+
+    const initialDiagnostics = model.getSnapshot().projection.formula
+    expect((model.getRow(0)?.row as { ratio?: number }).ratio).toBe(0)
+    expect(initialDiagnostics?.runtimeErrorCount).toBeGreaterThan(0)
+    expect(initialDiagnostics?.runtimeErrors[0]?.code).toBe("DIV_ZERO")
+    expect(initialDiagnostics?.runtimeErrors[0]?.formulaName).toBe("ratio")
+
+    model.patchRows(
+      [{ rowId: "r1", data: { qty: 2 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+
+    const patchedDiagnostics = model.getSnapshot().projection.formula
+    expect((model.getRow(0)?.row as { ratio?: number }).ratio).toBe(5)
+    expect(patchedDiagnostics?.runtimeErrorCount).toBe(0)
+    expect(patchedDiagnostics?.runtimeErrors).toEqual([])
+    expect(model.getSnapshot().projection.lastInvalidationReasons).toContain("computedChanged")
+
+    model.dispose()
+  })
+
   it("marks sort stale when patched fields affect computed sort keys", () => {
     const model = createClientRowModel<{
       id: number
@@ -2074,6 +2408,9 @@ describe("createClientRowModel", () => {
     expect(before?.recomputeVersion).toBeGreaterThan(0)
     expect(before?.staleStages).toEqual([])
     expect(before?.lastInvalidationReasons).toEqual(["sortChanged"])
+    expect(before?.lastRecomputeHadActual).toBe(true)
+    expect(before?.lastRecomputedStages).toContain("sort")
+    expect(before?.lastBlockedStages).toEqual([])
 
     model.patchRows(
       [{ rowId: "r1", data: { tested_at: 999 } }],
@@ -2084,6 +2421,9 @@ describe("createClientRowModel", () => {
     expect(staleSnapshot?.recomputeVersion).toBe(before?.recomputeVersion)
     expect(staleSnapshot?.staleStages).toContain("sort")
     expect(staleSnapshot?.lastInvalidationReasons).toContain("rowsPatched")
+    expect(staleSnapshot?.lastRecomputeHadActual).toBe(false)
+    expect(staleSnapshot?.lastRecomputedStages).toEqual([])
+    expect(staleSnapshot?.lastBlockedStages).toContain("sort")
 
     model.patchRows(
       [{ rowId: "r2", data: { tested_at: 5 } }],
@@ -2094,6 +2434,8 @@ describe("createClientRowModel", () => {
     expect(healedSnapshot?.recomputeVersion).toBeGreaterThan(staleSnapshot?.recomputeVersion ?? 0)
     expect(healedSnapshot?.staleStages).not.toContain("sort")
     expect(healedSnapshot?.lastInvalidationReasons).toContain("sortChanged")
+    expect(healedSnapshot?.lastRecomputeHadActual).toBe(true)
+    expect(healedSnapshot?.lastRecomputedStages).toContain("sort")
 
     model.dispose()
   })

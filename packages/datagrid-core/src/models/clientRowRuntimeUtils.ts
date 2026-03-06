@@ -8,17 +8,24 @@ export function applyRowDataPatch<T>(current: T, patch: Partial<T>): T {
   if (!isRecord(current) || !isRecord(patch)) {
     return patch as T
   }
-  let changed = false
-  const next = Object.create(Object.getPrototypeOf(current)) as Record<string, unknown>
-  Object.defineProperties(next, Object.getOwnPropertyDescriptors(current))
-  for (const [key, value] of Object.entries(patch as Record<string, unknown>)) {
-    if (Object.is(next[key], value)) {
+  const patchRecord = patch as Record<string, unknown>
+  let next: Record<string, unknown> | null = null
+  for (const key in patchRecord) {
+    if (!Object.prototype.hasOwnProperty.call(patchRecord, key)) {
       continue
     }
+    const value = patchRecord[key]
+    const baseline = (next ?? (current as Record<string, unknown>))[key]
+    if (Object.is(baseline, value)) {
+      continue
+    }
+    if (!next) {
+      next = Object.create(Object.getPrototypeOf(current)) as Record<string, unknown>
+      Object.defineProperties(next, Object.getOwnPropertyDescriptors(current))
+    }
     next[key] = value
-    changed = true
   }
-  return changed ? (next as T) : current
+  return next ? (next as T) : current
 }
 
 export function mergeRowPatch<T>(left: Partial<T>, right: Partial<T>): Partial<T> {

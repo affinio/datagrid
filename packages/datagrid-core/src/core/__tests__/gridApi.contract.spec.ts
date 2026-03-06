@@ -451,10 +451,12 @@ describe("data grid api facade contracts", () => {
       id: number
       price: number
       quantity: number
+      fee: number
       total?: number
+      grand?: number
     }>({
       rows: [
-        { row: { id: 1, price: 10, quantity: 2 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 1, price: 10, quantity: 2, fee: 1 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
       ],
     })
     const columnModel = createDataGridColumnModel({
@@ -469,16 +471,39 @@ describe("data grid api facade contracts", () => {
     const api = createDataGridApi({ core })
 
     expect(api.rows.hasComputedSupport()).toBe(true)
+    expect(api.rows.hasFormulaSupport()).toBe(true)
+    expect(api.rows.hasFormulaFunctionRegistrySupport()).toBe(true)
+    api.rows.registerFormulaFunction("double", {
+      arity: 1,
+      compute: args => (args[0] ?? 0) * 2,
+    })
+    expect(api.rows.getFormulaFunctionNames()).toEqual(["DOUBLE"])
     api.rows.registerComputedField({
       name: "total",
       deps: ["field:price", "field:quantity"],
       compute: ({ row }) => row.price * row.quantity,
     })
+    api.rows.registerFormulaField({
+      name: "grand",
+      formula: "total + fee",
+    })
+    api.rows.registerFormulaField({
+      name: "doubled",
+      formula: "DOUBLE(total)",
+    })
     expect(api.rows.getComputedFields().map(field => field.name)).toEqual(["total"])
+    expect(api.rows.getFormulaFields().map(field => field.name)).toEqual(["grand", "doubled"])
     expect((api.rows.get(0)?.row as { total?: number })?.total).toBe(20)
+    expect((api.rows.get(0)?.row as { grand?: number })?.grand).toBe(21)
+    expect((api.rows.get(0)?.row as { doubled?: number })?.doubled).toBe(40)
 
     api.rows.patch([{ rowId: "r1", data: { price: 15 } }], { recomputeSort: false })
     expect((api.rows.get(0)?.row as { total?: number })?.total).toBe(30)
+    expect((api.rows.get(0)?.row as { grand?: number })?.grand).toBe(31)
+    expect((api.rows.get(0)?.row as { doubled?: number })?.doubled).toBe(60)
+    expect(() => api.rows.unregisterFormulaFunction("DOUBLE")).toThrow(/Unknown function/i)
+    expect(api.rows.getFormulaFunctionNames()).toEqual(["DOUBLE"])
+    expect(api.rows.unregisterFormulaFunction("MISSING")).toBe(false)
     expect(api.rows.recomputeComputedFields()).toBe(0)
   })
 
@@ -513,6 +538,49 @@ describe("data grid api facade contracts", () => {
         compute: ({ row }) => row.score,
       })
     }).toThrow(/computed field capability/i)
+  })
+
+  it("reports missing formula field capability for row models without formula runtime", () => {
+    const clientRowModel = createClientRowModel({
+      rows: [{ row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 }],
+    })
+    const {
+      registerFormulaField: _omitRegisterFormulaField,
+      getFormulaFields: _omitGetFormulaFields,
+      registerFormulaFunction: _omitRegisterFormulaFunction,
+      unregisterFormulaFunction: _omitUnregisterFormulaFunction,
+      getFormulaFunctionNames: _omitGetFormulaFunctionNames,
+      getFormulaExecutionPlan: _omitGetFormulaExecutionPlan,
+      ...rowModelWithoutFormula
+    } = clientRowModel
+    const rowModel = rowModelWithoutFormula as unknown as DataGridRowModel<{ id: number; score: number }>
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.rows.hasFormulaSupport()).toBe(false)
+    expect(api.rows.hasFormulaFunctionRegistrySupport()).toBe(false)
+    expect(api.rows.getFormulaFields()).toEqual([])
+    expect(api.rows.getFormulaFunctionNames()).toEqual([])
+    expect(() => {
+      api.rows.registerFormulaField({
+        name: "score2",
+        formula: "score * 2",
+      })
+    }).toThrow(/formula field capability/i)
+    expect(() => {
+      api.rows.registerFormulaFunction("double", args => (args[0] ?? 0) * 2)
+    }).toThrow(/formula function registry capability/i)
+    expect(() => {
+      api.rows.unregisterFormulaFunction("double")
+    }).toThrow(/formula function registry capability/i)
   })
 
   it("reports missing patch capability for non-client row models and fails loudly", () => {
@@ -639,6 +707,69 @@ describe("data grid api facade contracts", () => {
     expect(diagnostics.compute?.configuredMode).toBe("worker")
     expect(diagnostics.derivedCache).not.toBeNull()
     expect(diagnostics.backpressure).toBeNull()
+    expect(api.diagnostics.getFormulaExplain()).toEqual({
+      executionPlan: null,
+      projectionFormula: null,
+      computeStage: null,
+    })
+  })
+
+  it("exposes formula explain diagnostics snapshot", () => {
+    const rowModel = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+      subtotal?: number
+      total?: number
+    }>({
+      rows: [
+        { row: { id: 1, price: 10, qty: 2 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      ],
+      initialFormulaFields: [
+        { name: "subtotal", formula: "price * qty" },
+        { name: "total", formula: "subtotal + 1" },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "total", label: "Total" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    const explain = api.diagnostics.getFormulaExplain()
+    expect(explain.executionPlan?.order).toEqual(["subtotal", "total"])
+    expect(explain.executionPlan?.levels).toEqual([["subtotal"], ["total"]])
+    expect(explain.executionPlan?.nodes).toEqual([
+      {
+        name: "subtotal",
+        field: "subtotal",
+        level: 0,
+        fieldDeps: ["price", "qty"],
+        computedDeps: [],
+        dependents: ["total"],
+      },
+      {
+        name: "total",
+        field: "total",
+        level: 1,
+        fieldDeps: ["subtotal"],
+        computedDeps: ["subtotal"],
+        dependents: [],
+      },
+    ])
+    expect(explain.projectionFormula?.recomputedFields).toEqual(["subtotal", "total"])
+    expect(explain.projectionFormula?.runtimeErrorCount).toBe(0)
+    expect(explain.computeStage?.rowsTouched).toBeGreaterThan(0)
+    expect(explain.computeStage?.changedRows).toBeGreaterThan(0)
+    expect(explain.computeStage?.fieldsTouched).toEqual(["subtotal", "total"])
+    expect(explain.computeStage?.skippedByObjectIs).toBeGreaterThanOrEqual(0)
+    expect(explain.computeStage?.dirtyRows).toBeGreaterThan(0)
+    expect(explain.computeStage?.dirtyNodes).toEqual(["subtotal", "total"])
   })
 
   it("reports compute namespace as unsupported when row model lacks compute capability", () => {

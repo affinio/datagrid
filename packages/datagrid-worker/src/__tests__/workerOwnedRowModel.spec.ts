@@ -93,6 +93,8 @@ interface BenchRow {
   id: number
   region: string
   revenue: number
+  qty?: number
+  total?: number
 }
 
 function buildRows(count: number): DataGridRowNodeInput<BenchRow>[] {
@@ -454,6 +456,65 @@ describe("worker-owned row model", () => {
     expect(diagnostics.fallbackCount).toBe(0)
 
     mirror.dispose()
+  })
+
+  it("supports formula registration through worker protocol and recomputes on patch", async () => {
+    const rows: DataGridRowNodeInput<BenchRow>[] = [
+      {
+        row: { id: 1, region: "AMER", revenue: 10, qty: 2 },
+        rowId: 1,
+        originalIndex: 0,
+        displayIndex: 0,
+      },
+    ]
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows,
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+
+    await flushMessages()
+    mirror.setViewportRange({ start: 0, end: 0 })
+    await flushMessages()
+
+    mirror.registerFormulaField({
+      name: "total",
+      formula: "revenue * qty",
+    })
+    await flushMessages()
+
+    expect(mirror.getFormulaFields().map(field => field.name)).toEqual(["total"])
+    expect(mirror.getFormulaExecutionPlan()).toEqual({
+      order: ["total"],
+      levels: [["total"]],
+      nodes: [
+        {
+          name: "total",
+          field: "total",
+          level: 0,
+          fieldDeps: ["revenue", "qty"],
+          computedDeps: [],
+          dependents: [],
+        },
+      ],
+    })
+    expect((mirror.getRow(0)?.row as { total?: number })?.total).toBe(20)
+
+    mirror.patchRows(
+      [{ rowId: 1, data: { revenue: 15 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+    await flushMessages()
+
+    expect((mirror.getRow(0)?.row as { total?: number })?.total).toBe(30)
+
+    mirror.dispose()
+    host.dispose()
   })
 
   it("rejects function-based aggregation model in worker-owned mode", async () => {
