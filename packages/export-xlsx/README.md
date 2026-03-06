@@ -38,6 +38,18 @@ import { writeFileSync } from "node:fs"
 writeFileSync("export.xlsx", Buffer.from(bytes))
 ```
 
+## Demo (realistic workbook)
+
+Generate a richer demo file (200 rows, formulas, totals, second metadata sheet):
+
+```bash
+pnpm --filter @affino/export-xlsx demo:generate
+```
+
+Output:
+
+- `packages/export-xlsx/artifacts/demo/export-xlsx-demo.xlsx`
+
 ## API
 
 - `writeXlsx(input)`

@@ -62,6 +62,7 @@ export type {
   DataGridComputedFieldSnapshot,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
+  DataGridFormulaValue,
   DataGridFormulaRuntimeErrorCode,
   DataGridFormulaRuntimeError,
   DataGridProjectionFormulaDiagnostics,
@@ -100,9 +101,11 @@ export {
 export {
   compileDataGridFormulaFieldDefinition,
   type DataGridCompiledFormulaField,
+  type DataGridCompiledFormulaBatchContext,
   type DataGridFormulaFunctionArity,
   type DataGridFormulaFunctionDefinition,
   type DataGridFormulaFunctionRegistry,
+  type DataGridFormulaCompileStrategy,
   type DataGridFormulaCompileOptions,
 } from "./formulaEngine.js"
 export {

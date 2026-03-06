@@ -475,7 +475,7 @@ describe("data grid api facade contracts", () => {
     expect(api.rows.hasFormulaFunctionRegistrySupport()).toBe(true)
     api.rows.registerFormulaFunction("double", {
       arity: 1,
-      compute: args => (args[0] ?? 0) * 2,
+      compute: args => Number(args[0] ?? 0) * 2,
     })
     expect(api.rows.getFormulaFunctionNames()).toEqual(["DOUBLE"])
     api.rows.registerComputedField({
@@ -576,7 +576,7 @@ describe("data grid api facade contracts", () => {
       })
     }).toThrow(/formula field capability/i)
     expect(() => {
-      api.rows.registerFormulaFunction("double", args => (args[0] ?? 0) * 2)
+      api.rows.registerFormulaFunction("double", args => Number(args[0] ?? 0) * 2)
     }).toThrow(/formula function registry capability/i)
     expect(() => {
       api.rows.unregisterFormulaFunction("double")
@@ -706,6 +706,14 @@ describe("data grid api facade contracts", () => {
     expect(diagnostics.rowModel.kind).toBe("client")
     expect(diagnostics.compute?.configuredMode).toBe("worker")
     expect(diagnostics.derivedCache).not.toBeNull()
+    expect(diagnostics.derivedCache?.sourceColumnCacheSize).toBeGreaterThanOrEqual(0)
+    expect(diagnostics.derivedCache?.sourceColumnCacheLimit).toBeNull()
+    expect(diagnostics.derivedCache?.sourceColumnCacheEvictions).toBeGreaterThanOrEqual(0)
+    if (diagnostics.derivedCache) {
+      diagnostics.derivedCache.sourceColumnCacheEvictions = 999
+    }
+    const diagnosticsAfterMutation = api.diagnostics.getAll()
+    expect(diagnosticsAfterMutation.derivedCache?.sourceColumnCacheEvictions).not.toBe(999)
     expect(diagnostics.backpressure).toBeNull()
     expect(api.diagnostics.getFormulaExplain()).toEqual({
       executionPlan: null,

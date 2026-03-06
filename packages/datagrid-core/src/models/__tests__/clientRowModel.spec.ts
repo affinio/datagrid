@@ -299,7 +299,7 @@ describe("createClientRowModel", () => {
 
     model.registerFormulaFunction("double", {
       arity: 1,
-      compute: args => (args[0] ?? 0) * 2,
+      compute: args => Number(args[0] ?? 0) * 2,
     })
     expect(model.getFormulaFunctionNames()).toEqual(["DOUBLE"])
     expect(model.unregisterFormulaFunction("MISSING")).toBe(false)
@@ -3098,6 +3098,51 @@ describe("createClientRowModel", () => {
     expect(scoreReadsByRowId.get("r2")).toBe(1)
 
     model.dispose()
+  })
+
+  it("enforces formula source column-cache max entries with LRU eviction diagnostics", () => {
+    const rows = Array.from({ length: 128 }, (_, index) => ({
+      row: {
+        id: index + 1,
+        a: 1,
+        b: 2,
+        c: 3,
+        d: 4,
+        e: 5,
+      },
+      rowId: `r${index + 1}`,
+      originalIndex: index,
+      displayIndex: index,
+    }))
+
+    const model = createClientRowModel({
+      rows,
+      formulaColumnCacheMaxColumns: 2,
+      initialFormulaFields: [
+        {
+          name: "total",
+          field: "total",
+          formula: "a + b + c + d + e",
+        },
+      ],
+    })
+
+    const firstRow = model.getRow(0)?.row as { total?: number } | undefined
+    expect(firstRow?.total).toBe(15)
+
+    const diagnostics = model.getDerivedCacheDiagnostics()
+    expect(diagnostics.sourceColumnCacheLimit).toBe(2)
+    expect(diagnostics.sourceColumnCacheSize).toBeLessThanOrEqual(2)
+    expect(diagnostics.sourceColumnCacheEvictions).toBeGreaterThan(0)
+
+    model.dispose()
+  })
+
+  it("validates formula column-cache max entries option", () => {
+    expect(() => createClientRowModel({
+      rows: [],
+      formulaColumnCacheMaxColumns: 0,
+    })).toThrow(/formulaColumnCacheMaxColumns/i)
   })
 
   it("reports sync compute diagnostics by default", () => {

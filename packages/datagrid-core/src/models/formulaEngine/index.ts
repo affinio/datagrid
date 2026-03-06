@@ -7,6 +7,6 @@ export type {
   DataGridFormulaFunctionDefinition,
   DataGridFormulaFunctionRegistry,
   DataGridFormulaRuntimeErrorPolicy,
-} from "./formulaEngine/index.js"
+} from "./core.js"
 
-export { compileDataGridFormulaFieldDefinition } from "./formulaEngine/index.js"
+export { compileDataGridFormulaFieldDefinition } from "./compile.js"

@@ -424,6 +424,13 @@ export interface DataGridFormulaFieldSnapshot {
   deps: readonly DataGridComputedDependencyToken[]
 }
 
+export type DataGridFormulaValue =
+  | number
+  | string
+  | boolean
+  | Date
+  | null
+
 export type DataGridFormulaRuntimeErrorCode =
   | "DIV_ZERO"
   | "FUNCTION_UNKNOWN"
@@ -518,9 +525,9 @@ export interface DataGridRowModel<T = unknown> {
     definition:
       | {
         arity?: number | { min: number; max?: number }
-        compute: (args: readonly number[]) => unknown
+        compute: (args: readonly DataGridFormulaValue[]) => unknown
       }
-      | ((args: readonly number[]) => unknown),
+      | ((args: readonly DataGridFormulaValue[]) => unknown),
   ): void
   unregisterFormulaFunction?(name: string): boolean
   getFormulaFunctionNames?(): readonly string[]

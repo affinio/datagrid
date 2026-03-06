@@ -8,6 +8,7 @@ import type {
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
   DataGridFormulaFunctionDefinition,
+  DataGridFormulaValue,
   DataGridFormulaExecutionPlanSnapshot,
   DataGridColumnDef,
   DataGridColumnHistogram,
@@ -148,7 +149,7 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   hasFormulaFunctionRegistrySupport(): boolean
   registerFormulaFunction(
     name: string,
-    definition: DataGridFormulaFunctionDefinition | ((args: readonly number[]) => unknown),
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
   ): void
   unregisterFormulaFunction(name: string): boolean
   getFormulaFunctionNames(): readonly string[]

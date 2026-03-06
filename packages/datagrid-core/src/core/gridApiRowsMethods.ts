@@ -7,6 +7,7 @@ import type {
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
   DataGridFormulaFunctionDefinition,
+  DataGridFormulaValue,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
@@ -77,7 +78,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   hasFormulaFunctionRegistrySupport: () => boolean
   registerFormulaFunction: (
     name: string,
-    definition: DataGridFormulaFunctionDefinition | ((args: readonly number[]) => unknown),
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
   ) => void
   unregisterFormulaFunction: (name: string) => boolean
   getFormulaFunctionNames: () => readonly string[]
@@ -276,7 +277,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     },
     registerFormulaFunction(
       name: string,
-      definition: DataGridFormulaFunctionDefinition | ((args: readonly number[]) => unknown),
+      definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
     ) {
       assertMutationsAllowed("register formula function")
       if (typeof rowModel.registerFormulaFunction !== "function") {

@@ -11,6 +11,7 @@
       <RouterLink class="sandbox__link" to="/vue/tree-grid">Vue Tree</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/pivot-grid">Vue Pivot</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/worker-grid">Vue Worker</RouterLink>
+      <RouterLink class="sandbox__link" to="/vue/formula-grid">Vue Formula</RouterLink>
       <RouterLink class="sandbox__link" to="/core/base-grid">Core Base</RouterLink>
     </nav>
 

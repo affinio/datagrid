@@ -129,6 +129,23 @@ function cloneFormulaComputeStageDiagnostics(
   }
 }
 
+function cloneDerivedCacheDiagnostics(
+  diagnostics: DataGridClientRowModelDerivedCacheDiagnostics,
+): DataGridClientRowModelDerivedCacheDiagnostics {
+  return {
+    revisions: { ...diagnostics.revisions },
+    filterPredicateHits: diagnostics.filterPredicateHits,
+    filterPredicateMisses: diagnostics.filterPredicateMisses,
+    sortValueHits: diagnostics.sortValueHits,
+    sortValueMisses: diagnostics.sortValueMisses,
+    groupValueHits: diagnostics.groupValueHits,
+    groupValueMisses: diagnostics.groupValueMisses,
+    sourceColumnCacheSize: diagnostics.sourceColumnCacheSize,
+    sourceColumnCacheLimit: diagnostics.sourceColumnCacheLimit,
+    sourceColumnCacheEvictions: diagnostics.sourceColumnCacheEvictions,
+  }
+}
+
 export function createDataGridApiDiagnosticsMethods<TRow = unknown>(
   input: CreateDataGridApiDiagnosticsMethodsInput<TRow>,
 ): DataGridApiDiagnosticsMethods {
@@ -160,7 +177,10 @@ export function createDataGridApiDiagnosticsMethods<TRow = unknown>(
           treeData: snapshot.treeDataDiagnostics ?? null,
         },
         compute: resolveComputeDiagnostics(),
-        derivedCache: getDerivedCacheDiagnostics?.getDerivedCacheDiagnostics() ?? null,
+        derivedCache: (() => {
+          const diagnostics = getDerivedCacheDiagnostics?.getDerivedCacheDiagnostics() ?? null
+          return diagnostics ? cloneDerivedCacheDiagnostics(diagnostics) : null
+        })(),
         backpressure: getBackpressureDiagnostics?.getBackpressureDiagnostics() ?? null,
       }
     },

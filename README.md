@@ -43,6 +43,12 @@ pnpm run bench:regression
 
 Baseline artifacts for performance and API checks are located in `docs/perf` and `docs/quality`.
 
+## Docs
+
+- Formula engine guide: `docs/datagrid-formula-engine-guide.md`
+- Formula benchmarks: `docs/benchmarks-formula-engine.md`
+- Compute/formula diagnostics: `docs/datagrid-state-events-compute-diagnostics.md`
+
 ## Scope
 
 The following are intentionally out of scope in this repository:
