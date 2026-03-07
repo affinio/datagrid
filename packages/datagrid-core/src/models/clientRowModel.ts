@@ -365,13 +365,22 @@ export function createClientRowModel<T>(
   let treeDataDiagnostics: DataGridTreeDataDiagnostics | null = treeData ? createEmptyTreeDataDiagnostics() : null
 
   const normalizeSourceRows = (inputRows: readonly DataGridRowNodeInput<T>[] | null | undefined): DataGridRowNode<T>[] => {
+    const cloneRowData = (value: T): T => {
+      if (!isRecord(value)) {
+        return value
+      }
+      const clone = Object.create(Object.getPrototypeOf(value)) as Record<string, unknown>
+      Object.defineProperties(clone, Object.getOwnPropertyDescriptors(value))
+      return clone as T
+    }
     const normalized = Array.isArray(inputRows)
       ? reindexSourceRows(inputRows.map((row, index) => {
           const normalizedRow = normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index)
+          const isolatedRowData = cloneRowData(normalizedRow.data)
           return {
             ...normalizedRow,
-            data: normalizedRow.data,
-            row: normalizedRow.data,
+            data: isolatedRowData,
+            row: isolatedRowData,
           }
         }))
       : []
@@ -479,6 +488,8 @@ export function createClientRowModel<T>(
   const formulaCyclePolicy: DataGridFormulaCyclePolicy = options.formulaCyclePolicy === "iterative"
     ? "iterative"
     : "error"
+  let computedSnapshotFieldList: readonly string[] = []
+  let computedSnapshotFieldsDirty = true
   const computedRegistry = createClientRowComputedRegistryRuntime<T>({
     projectionPolicy,
     initialFormulaFunctionRegistry: options.initialFormulaFunctionRegistry,
@@ -487,7 +498,9 @@ export function createClientRowModel<T>(
       return computedSnapshotRuntime.readFieldValue(rowNode, field, readBaseValue)
     },
     onFormulaRuntimeError: pushFormulaRuntimeError,
-    onComputedPlanChanged: () => {},
+    onComputedPlanChanged: () => {
+      computedSnapshotFieldsDirty = true
+    },
   })
   computedRegistryRef.current = computedRegistry
   const normalizeComputedName = computedRegistry.normalizeComputedName
@@ -499,9 +512,11 @@ export function createClientRowModel<T>(
   })
 
   const syncComputedSnapshotFields = (): boolean => {
-    return computedSnapshotRuntime.setComputedFields(
-      computedRegistry.getComputedEntryByIndex().map(entry => entry.field),
-    )
+    if (computedSnapshotFieldsDirty) {
+      computedSnapshotFieldList = computedRegistry.getComputedEntryByIndex().map(entry => entry.field)
+      computedSnapshotFieldsDirty = false
+    }
+    return computedSnapshotRuntime.setComputedFields(computedSnapshotFieldList)
   }
 
   const refreshMaterializedSourceRows = (

@@ -647,7 +647,7 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
-  it("surfaces columnar-vector runtime mode for branchy formulas", () => {
+  it("surfaces columnar-jit runtime mode for branchy formulas when JIT is available", () => {
     const model = createClientRowModel<{
       id: number
       price: number
@@ -678,7 +678,7 @@ describe("createClientRowModel", () => {
     expect(model.getFormulaComputeStageDiagnostics()?.nodes).toEqual([
       expect.objectContaining({
         name: "ratio",
-        runtimeMode: "columnar-vector",
+        runtimeMode: "columnar-jit",
       }),
     ])
 

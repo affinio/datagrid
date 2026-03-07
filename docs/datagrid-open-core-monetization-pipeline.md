@@ -61,6 +61,83 @@ Do not try to move to paid after release:
 - navigation
 - basic grouping/pivot runtime
 
+## Commercial candidate map
+
+Highest-value candidates:
+
+1. `advanced server data / SSRM v2`
+2. `advanced pivot`
+3. `diagnostics / devtools / profiler`
+4. `worker / ultra-perf runtime`
+5. `advanced tree data`
+6. `advanced filtering`
+7. `native Excel export`
+
+Good paid candidates:
+
+- `advanced server data`
+  - hierarchical stores
+  - block cache policy
+  - server grouping / pivot / tree stores
+  - remote filter-values
+  - streaming / partial refresh
+- `advanced pivot`
+  - high-cardinality optimization
+  - incremental pivot patch tiers
+  - premium pivot runtime perf
+  - pivot panels / pivot UX
+- `advanced tree data`
+  - huge hierarchy optimization
+  - server-backed tree
+  - advanced structural patch optimization
+  - lazy children loading
+- `diagnostics / devtools / profiler`
+  - projection inspector
+  - invalidation trace
+  - compute / pivot / tree profiler
+  - cache diagnostics
+  - explain tooling
+- `advanced filtering`
+  - filter builder UI
+  - saved filters
+  - remote distinct values
+  - enterprise filter presets / policies
+- `worker / ultra-perf runtime`
+  - worker compute orchestration
+  - background snapshot recompute
+  - premium fused / vector runtime tiers
+- `native Excel export`
+  - xlsx export
+  - import bridge if pursued
+
+Keep in OSS for adoption:
+
+- base tree data
+- base pivot runtime
+- base filtering DSL
+- base formulas
+- selection / clipboard / history / navigation
+
+Recommended package targets:
+
+- `@affino/datagrid-enterprise-server`
+- `@affino/datagrid-enterprise-pivot`
+- `@affino/datagrid-enterprise-tree`
+- `@affino/datagrid-enterprise-devtools`
+- `@affino/datagrid-enterprise-filtering`
+- `@affino/datagrid-enterprise-worker`
+- `@affino/datagrid-export-excel`
+
+Commercial prioritization checklist:
+
+1. [ ] Validate `advanced server data` as first enterprise moat.
+2. [ ] Validate `advanced pivot` as second enterprise moat.
+3. [ ] Validate `diagnostics/devtools` as third enterprise moat.
+4. [ ] Decide whether `advanced tree data` ships inside enterprise-core or as separate package.
+5. [ ] Decide whether `advanced filtering` is enterprise-core or enterprise-vue first.
+6. [ ] Decide whether premium worker/vector runtime is sold standalone or bundled into enterprise-core.
+7. [ ] Keep OSS story strong enough that adoption is not damaged.
+
 ## Phase 0: Boundary Freeze
 
 Goal: freeze what is allowed to be OSS forever vs what is allowed to become enterprise.
