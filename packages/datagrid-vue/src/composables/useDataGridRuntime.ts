@@ -14,12 +14,6 @@ import type {
   DataGridClientRowPatchOptions,
   DataGridColumnDef,
   DataGridColumnModelSnapshot,
-  DataGridPivotCellDrilldown,
-  DataGridPivotCellDrilldownInput,
-  DataGridPivotLayoutImportOptions,
-  DataGridPivotInteropSnapshot,
-  DataGridPivotLayoutSnapshot,
-  DataGridPivotSpec,
   DataGridRowNode,
   DataGridRowModel,
   DataGridRowModelSnapshot,
@@ -27,6 +21,14 @@ import type {
   DataGridSetStateOptions,
   DataGridUnifiedState,
 } from "@affino/datagrid-core"
+import type {
+  DataGridPivotCellDrilldown,
+  DataGridPivotCellDrilldownInput,
+  DataGridPivotLayoutImportOptions,
+  DataGridPivotInteropSnapshot,
+  DataGridPivotLayoutSnapshot,
+  DataGridPivotSpec,
+} from "@affino/datagrid-pivot"
 import {
   useDataGridRuntimeService,
   type CreateDataGridRuntimeOptions,

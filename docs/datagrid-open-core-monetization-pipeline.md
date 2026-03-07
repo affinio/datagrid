@@ -17,6 +17,7 @@ OSS packages:
 
 - `@affino/datagrid-core`
 - `@affino/datagrid-formula-engine`
+- `@affino/datagrid-pivot`
 - `@affino/datagrid-vue`
 - `@affino/datagrid-orchestration`
 - `@affino/datagrid-laravel`
@@ -26,6 +27,7 @@ Enterprise packages:
 
 - `@affino/datagrid-enterprise-core`
 - `@affino/datagrid-formula-engine-enterprise`
+- `@affino/datagrid-pivot-enterprise`
 - `@affino/datagrid-enterprise-vue`
 - `@affino/datagrid-enterprise-laravel`
 - `@affino/datagrid-enterprise-worker`
@@ -130,7 +132,7 @@ Recommended package targets:
 
 - `@affino/datagrid-formula-engine-enterprise`
 - `@affino/datagrid-enterprise-server`
-- `@affino/datagrid-enterprise-pivot`
+- `@affino/datagrid-pivot-enterprise`
 - `@affino/datagrid-enterprise-tree`
 - `@affino/datagrid-enterprise-devtools`
 - `@affino/datagrid-enterprise-filtering`
@@ -140,13 +142,14 @@ Recommended package targets:
 Commercial prioritization checklist:
 
 1. [x] Freeze `@affino/datagrid-formula-engine` as community-safe formula API boundary.
-2. [ ] Validate `advanced server data` as first enterprise moat.
-3. [ ] Validate `advanced pivot` as second enterprise moat.
-4. [ ] Validate `diagnostics/devtools` as third enterprise moat.
-5. [ ] Decide whether `advanced tree data` ships inside enterprise-core or as separate package.
-6. [ ] Decide whether `advanced filtering` is enterprise-core or enterprise-vue first.
-7. [ ] Decide whether premium worker/vector runtime is sold standalone or bundled into enterprise-core.
-8. [ ] Keep OSS story strong enough that adoption is not damaged.
+2. [x] Freeze `@affino/datagrid-pivot` as community-safe pivot API boundary.
+3. [ ] Validate `advanced server data` as first enterprise moat.
+4. [ ] Validate `advanced pivot` as second enterprise moat.
+5. [ ] Validate `diagnostics/devtools` as third enterprise moat.
+6. [ ] Decide whether `advanced tree data` ships inside enterprise-core or as separate package.
+7. [ ] Decide whether `advanced filtering` is enterprise-core or enterprise-vue first.
+8. [ ] Decide whether premium worker/vector runtime is sold standalone or bundled into enterprise-core.
+9. [ ] Keep OSS story strong enough that adoption is not damaged.
 
 ## Phase 0: Boundary Freeze
 
@@ -213,15 +216,18 @@ Checklist:
 
 1. [x] Add `packages/datagrid-formula-engine` as the first extracted OSS engine package.
 2. [x] Define community vs enterprise formula-engine boundary before first release.
-1. [ ] Create `packages/datagrid-enterprise-core`.
-2. [ ] Create `packages/datagrid-enterprise-vue`.
-3. [ ] Create `packages/datagrid-enterprise-laravel`.
-4. [ ] Create `packages/datagrid-enterprise-worker`.
-5. [x] Create `packages/datagrid-formula-engine-enterprise`.
-6. [ ] Create `packages/datagrid-export-excel`.
-7. [ ] Add workspace package manifests and build/type-check scripts.
-8. [ ] Add repository/homepage/license metadata.
-9. [ ] Add placeholder README files explaining OSS vs enterprise role.
+3. [x] Add `packages/datagrid-pivot` as community-safe pivot package boundary.
+4. [x] Define community vs enterprise pivot boundary before first release.
+5. [ ] Create `packages/datagrid-enterprise-core`.
+6. [ ] Create `packages/datagrid-enterprise-vue`.
+7. [ ] Create `packages/datagrid-enterprise-laravel`.
+8. [ ] Create `packages/datagrid-enterprise-worker`.
+9. [x] Create `packages/datagrid-formula-engine-enterprise`.
+10. [x] Create `packages/datagrid-pivot-enterprise`.
+11. [ ] Create `packages/datagrid-export-excel`.
+12. [ ] Add workspace package manifests and build/type-check scripts.
+13. [ ] Add repository/homepage/license metadata.
+14. [ ] Add placeholder README files explaining OSS vs enterprise role.
 
 Exit criteria:
 

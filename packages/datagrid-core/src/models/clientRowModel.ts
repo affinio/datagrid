@@ -1,17 +1,14 @@
 import {
   buildPaginationSnapshot,
   cloneGroupBySpec,
-  clonePivotSpec,
   normalizeRowNode,
   normalizeGroupBySpec,
   normalizePaginationInput,
-  normalizePivotSpec,
   normalizeTreeDataSpec,
   normalizeViewportRange,
   withResolvedRowIdentity,
   type DataGridGroupExpansionSnapshot,
   type DataGridPaginationInput,
-  type DataGridPivotCellDrilldownInput,
   type DataGridComputedFieldDefinition,
   type DataGridComputedFieldSnapshot,
   type DataGridFormulaCyclePolicy,
@@ -28,8 +25,6 @@ import {
   type DataGridSortAndFilterModelInput,
   type DataGridAggregationModel,
   type DataGridGroupBySpec,
-  type DataGridPivotColumn,
-  type DataGridPivotSpec,
   type DataGridProjectionFormulaDiagnostics,
   type DataGridRowId,
   type DataGridRowIdResolver,
@@ -44,6 +39,15 @@ import {
   type DataGridTreeDataSpec,
   type DataGridViewportRange,
 } from "./rowModel.js"
+import {
+  clonePivotSpec,
+  normalizePivotSpec,
+} from "@affino/datagrid-pivot"
+import type {
+  DataGridPivotCellDrilldownInput,
+  DataGridPivotColumn,
+  DataGridPivotSpec,
+} from "@affino/datagrid-pivot"
 import {
   createClientRowProjectionEngine,
   expandClientProjectionStages,

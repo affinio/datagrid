@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*",
+    "@affino/datagrid-pivot": "workspace:*",
     "@affino/datagrid-orchestration": "workspace:*"
   },
   "devDependencies": {

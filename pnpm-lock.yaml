@@ -74,6 +74,9 @@ importers:
       '@affino/datagrid-formula-engine':
         specifier: workspace:*
         version: link:../datagrid-formula-engine
+      '@affino/datagrid-pivot':
+        specifier: workspace:*
+        version: link:../datagrid-pivot
       '@affino/datagrid-plugins':
         specifier: workspace:*
         version: link:../datagrid-plugins
@@ -97,6 +100,9 @@ importers:
       '@affino/datagrid-orchestration':
         specifier: workspace:*
         version: link:../datagrid-orchestration
+      '@affino/datagrid-pivot':
+        specifier: workspace:*
+        version: link:../datagrid-pivot
     devDependencies:
       tsup:
         specifier: ^8.5.1
@@ -107,6 +113,14 @@ importers:
       '@affino/datagrid-core':
         specifier: workspace:*
         version: link:../datagrid-core
+
+  packages/datagrid-pivot: {}
+
+  packages/datagrid-pivot-enterprise:
+    dependencies:
+      '@affino/datagrid-pivot':
+        specifier: workspace:*
+        version: link:../datagrid-pivot
 
   packages/datagrid-plugins: {}
 
@@ -157,6 +171,9 @@ importers:
       '@affino/datagrid-orchestration':
         specifier: workspace:*
         version: link:../datagrid-orchestration
+      '@affino/datagrid-pivot':
+        specifier: workspace:*
+        version: link:../datagrid-pivot
       '@affino/menu-vue':
         specifier: ^2.1.1
         version: 2.1.1(@affino/menu-core@1.1.0)(vue@3.4.38(typescript@5.9.3))

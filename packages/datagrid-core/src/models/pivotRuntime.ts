@@ -1,22 +1,37 @@
 import {
   createDataGridAggregationEngine,
-  type DataGridAggregationFieldReader,
   type DataGridIncrementalAggregationLeafContribution,
   type DataGridIncrementalAggregationGroupState,
 } from "./aggregationEngine.js"
 import type {
   DataGridAggOp,
-  DataGridGroupExpansionSnapshot,
+  DataGridPivotApplyValuePatchInput,
   DataGridPivotColumn,
+  DataGridPivotFieldResolver,
+  DataGridPivotIncrementalPatchRow,
+  DataGridPivotProjectionResult,
+  DataGridPivotProjectRowsInput,
   DataGridPivotSpec,
+  DataGridPivotRuntime,
+  DataGridPivotRuntimeOptions,
+  DataGridPivotRuntimeValueSpec,
   DataGridRowNode,
-} from "./rowModel.js"
-
-interface DataGridPivotRuntimeValueSpec {
-  field: string
-  agg: DataGridAggOp
-  aggregateKey: string
-}
+} from "@affino/datagrid-pivot"
+import {
+  buildPivotIncrementalTouchedKeys,
+  comparePivotPathSegments,
+  createPivotFieldResolver,
+  createPivotAggregateKey,
+  createPivotAxisKey,
+  createPivotColumnId,
+  createPivotColumnLabel,
+  isSameLeafContribution,
+  isPivotPathPrefixOrEqual,
+  isSamePivotTouchedKeys,
+  normalizePivotAxisValue,
+  normalizePivotColumns,
+  serializePivotModelForIncrementalState,
+} from "@affino/datagrid-pivot"
 
 interface DataGridPivotRowPathSegment {
   field: string
@@ -43,15 +58,6 @@ interface DataGridPivotColumnKeyMeta {
   columnPath: readonly DataGridPivotColumnPathSegment[]
   subtotal: boolean
   grandTotal: boolean
-}
-
-interface DataGridPivotFieldResolver<T> {
-  field: string
-  read: (rowNode: DataGridRowNode<T>) => unknown
-}
-
-export interface DataGridPivotRuntimeOptions<T> {
-  readRowField?: DataGridAggregationFieldReader<T>
 }
 
 type DataGridPivotProjectionEntryKind = "group" | "detail" | "subtotal" | "grand-total"
@@ -89,139 +95,14 @@ interface DataGridPivotProjectionBuildResult<T> extends DataGridPivotProjectionR
   incrementalState: DataGridPivotIncrementalProjectionState<T> | null
 }
 
-export interface DataGridPivotProjectionResult<T> {
-  rows: DataGridRowNode<T>[]
-  columns: DataGridPivotColumn[]
-}
-
-export interface DataGridPivotProjectRowsInput<T> {
-  inputRows: readonly DataGridRowNode<T>[]
-  pivotModel: DataGridPivotSpec
-  normalizeFieldValue: (value: unknown) => string
-  expansionSnapshot?: DataGridGroupExpansionSnapshot | null
-}
-
-export interface DataGridPivotIncrementalPatchRow<T> {
-  previousRow: DataGridRowNode<T>
-  nextRow: DataGridRowNode<T>
-}
-
-export interface DataGridPivotApplyValuePatchInput<T> {
-  projectedRows: readonly DataGridRowNode<T>[]
-  pivotModel: DataGridPivotSpec
-  changedRows: readonly DataGridPivotIncrementalPatchRow<T>[]
-}
-
-export interface DataGridPivotRuntime<T> {
-  projectRows: (input: DataGridPivotProjectRowsInput<T>) => DataGridPivotProjectionResult<T>
-  applyValueOnlyPatch: (input: DataGridPivotApplyValuePatchInput<T>) => DataGridPivotProjectionResult<T> | null
-  normalizeColumns: (columns: readonly DataGridPivotColumn[]) => DataGridPivotColumn[]
-}
-
-function createPivotAxisKey(
-  prefix: "pivot:row:" | "pivot:column:" | "pivot:column-subtotal:" | "pivot:subtotal:" | "pivot:group:",
-  segments: readonly { field: string; value: string }[],
-): string {
-  let encoded = prefix
-  for (const segment of segments) {
-    encoded += `${segment.field.length}:${segment.field}${segment.value.length}:${segment.value}`
-  }
-  return encoded
-}
-
-function createPivotAggregateKey(spec: DataGridPivotRuntimeValueSpec): string {
-  return `pivot:agg:${spec.agg.length}:${spec.agg}${spec.field.length}:${spec.field}`
-}
-
-function createPivotColumnId(
-  columnKey: string,
-  valueSpec: DataGridPivotRuntimeValueSpec,
-): string {
-  return `pivot|${columnKey}|${createPivotAggregateKey(valueSpec)}`
-}
-
-function createPivotColumnLabel(
-  columnPath: readonly DataGridPivotColumnPathSegment[],
-  valueSpec: DataGridPivotRuntimeValueSpec,
-  options: { subtotal?: boolean; grandTotal?: boolean } = {},
-): string {
-  const axisLabel = options.grandTotal
-    ? "grand total"
-    : columnPath.length === 0
-    ? "total"
-    : columnPath.map(segment => `${segment.field}=${segment.value}`).join(" · ")
-  const subtotalLabel = options.subtotal ? " · subtotal" : ""
-  return `${axisLabel}${subtotalLabel} · ${valueSpec.agg}(${valueSpec.field})`
-}
-
-function normalizePivotAxisValue(
-  value: unknown,
-  normalizeFieldValue: (value: unknown) => string,
-): string {
-  if (value == null) {
-    return ""
-  }
-  const normalized = normalizeFieldValue(value)
-  return normalized == null ? "" : String(normalized)
-}
-
-const pivotPathValueCollator = new Intl.Collator(undefined, {
-  numeric: true,
-  sensitivity: "base",
-})
-
-function comparePivotPathSegments(
-  left: readonly { field: string; value: string }[],
-  right: readonly { field: string; value: string }[],
-): number {
-  const maxLength = Math.max(left.length, right.length)
-  for (let index = 0; index < maxLength; index += 1) {
-    const leftSegment = left[index]
-    const rightSegment = right[index]
-    if (!leftSegment && !rightSegment) {
-      return 0
-    }
-    if (!leftSegment) {
-      return -1
-    }
-    if (!rightSegment) {
-      return 1
-    }
-    const fieldComparison = leftSegment.field < rightSegment.field
-      ? -1
-      : leftSegment.field > rightSegment.field
-      ? 1
-      : 0
-    if (fieldComparison !== 0) {
-      return fieldComparison
-    }
-    const valueComparison = pivotPathValueCollator.compare(leftSegment.value, rightSegment.value)
-    if (valueComparison !== 0) {
-      return valueComparison
-    }
-  }
-  return 0
-}
-
-function isPivotPathPrefixOrEqual(
-  prefix: readonly { field: string; value: string }[],
-  candidate: readonly { field: string; value: string }[],
-): boolean {
-  if (prefix.length > candidate.length) {
-    return false
-  }
-  for (let index = 0; index < prefix.length; index += 1) {
-    const leftSegment = prefix[index]
-    const rightSegment = candidate[index]
-    if (!leftSegment || !rightSegment) {
-      return false
-    }
-    if (leftSegment.field !== rightSegment.field || leftSegment.value !== rightSegment.value) {
-      return false
-    }
-  }
-  return true
-}
+export type {
+  DataGridPivotRuntimeOptions,
+  DataGridPivotProjectionResult,
+  DataGridPivotProjectRowsInput,
+  DataGridPivotIncrementalPatchRow,
+  DataGridPivotApplyValuePatchInput,
+  DataGridPivotRuntime,
+} from "@affino/datagrid-pivot"
 
 function resolvePivotProjectionEntryRank(kind: DataGridPivotProjectionEntryKind): number {
   if (kind === "group") {
@@ -234,133 +115,6 @@ function resolvePivotProjectionEntryRank(kind: DataGridPivotProjectionEntryKind)
     return 2
   }
   return 3
-}
-
-function readByPathSegments(value: unknown, segments: readonly string[]): unknown {
-  if (segments.length === 0 || typeof value !== "object" || value === null) {
-    return undefined
-  }
-  let current: unknown = value
-  for (const segment of segments) {
-    if (Array.isArray(current)) {
-      const index = Number(segment)
-      if (!Number.isInteger(index) || index < 0 || index >= current.length) {
-        return undefined
-      }
-      current = current[index]
-      continue
-    }
-    if (typeof current !== "object" || current === null || !(segment in (current as Record<string, unknown>))) {
-      return undefined
-    }
-    current = (current as Record<string, unknown>)[segment]
-  }
-  return current
-}
-
-function createPivotFieldResolver<T>(
-  field: string,
-  readRowField?: DataGridAggregationFieldReader<T>,
-): DataGridPivotFieldResolver<T> | null {
-  const normalizedField = field.trim()
-  if (normalizedField.length === 0) {
-    return null
-  }
-  if (typeof readRowField === "function") {
-    return {
-      field: normalizedField,
-      read: (rowNode: DataGridRowNode<T>): unknown => readRowField(rowNode, normalizedField, normalizedField),
-    }
-  }
-  const segments = normalizedField.includes(".")
-    ? normalizedField.split(".").filter(Boolean)
-    : []
-  return {
-    field: normalizedField,
-    read: (rowNode: DataGridRowNode<T>): unknown => {
-      const source = rowNode.data as unknown
-      const directValue = typeof source === "object" && source !== null
-        ? (source as Record<string, unknown>)[normalizedField]
-        : undefined
-      if (typeof directValue !== "undefined") {
-        return directValue
-      }
-      if (segments.length === 0) {
-        return undefined
-      }
-      return readByPathSegments(source, segments)
-    },
-  }
-}
-
-function normalizePivotColumns(
-  columns: readonly DataGridPivotColumn[],
-): DataGridPivotColumn[] {
-  return columns.map(column => ({
-    id: column.id,
-    valueField: column.valueField,
-    agg: column.agg,
-    label: column.label,
-    ...(column.subtotal ? { subtotal: true } : {}),
-    ...(column.grandTotal ? { grandTotal: true } : {}),
-    columnPath: column.columnPath.map(segment => ({
-      field: segment.field,
-      value: segment.value,
-    })),
-  }))
-}
-
-function serializePivotModelForIncrementalState(pivotModel: DataGridPivotSpec): string {
-  return JSON.stringify({
-    rows: pivotModel.rows,
-    columns: pivotModel.columns,
-    values: pivotModel.values.map(value => ({ field: value.field, agg: value.agg })),
-    rowSubtotals: pivotModel.rowSubtotals === true,
-    columnSubtotals: pivotModel.columnSubtotals === true,
-    grandTotal: pivotModel.grandTotal === true,
-    columnGrandTotal: pivotModel.columnGrandTotal === true,
-    columnSubtotalPosition: pivotModel.columnSubtotalPosition === "before" ? "before" : "after",
-    columnGrandTotalPosition: pivotModel.columnGrandTotalPosition === "first" ? "first" : "last",
-  })
-}
-
-function isSameLeafContribution(
-  left: DataGridIncrementalAggregationLeafContribution,
-  right: DataGridIncrementalAggregationLeafContribution,
-): boolean {
-  const leftKeys = Object.keys(left)
-  const rightKeys = Object.keys(right)
-  if (leftKeys.length !== rightKeys.length) {
-    return false
-  }
-  for (const key of leftKeys) {
-    const leftValue = left[key]
-    const rightValue = right[key]
-    if (
-      typeof leftValue === "object" &&
-      leftValue !== null &&
-      typeof rightValue === "object" &&
-      rightValue !== null
-    ) {
-      const leftRecord = leftValue as Record<string, unknown>
-      const rightRecord = rightValue as Record<string, unknown>
-      const leftRecordKeys = Object.keys(leftRecord)
-      const rightRecordKeys = Object.keys(rightRecord)
-      if (leftRecordKeys.length !== rightRecordKeys.length) {
-        return false
-      }
-      for (const nestedKey of leftRecordKeys) {
-        if (leftRecord[nestedKey] !== rightRecord[nestedKey]) {
-          return false
-        }
-      }
-      continue
-    }
-    if (leftValue !== rightValue) {
-      return false
-    }
-  }
-  return true
 }
 
 interface DataGridPivotIncrementalTouchedKeys {
@@ -390,90 +144,6 @@ function toPivotRuntimeColumns(
       value: segment.value,
     })),
   }))
-}
-
-function buildPivotIncrementalTouchedKeys<T>(
-  row: DataGridRowNode<T>,
-  state: DataGridPivotIncrementalProjectionState<T>,
-): DataGridPivotIncrementalTouchedKeys | null {
-  if (row.kind !== "leaf") {
-    return null
-  }
-  const rowPath = state.rowFieldResolvers.map(resolver => ({
-    field: resolver.field,
-    value: normalizePivotAxisValue(resolver.read(row), state.normalizeFieldValue),
-  }))
-  const columnPath = state.columnFieldResolvers.map(resolver => ({
-    field: resolver.field,
-    value: normalizePivotAxisValue(resolver.read(row), state.normalizeFieldValue),
-  }))
-
-  const rowKey = createPivotAxisKey("pivot:row:", rowPath)
-  const rowEntryKeys: string[] = []
-  if (state.rowEntries.has(rowKey)) {
-    rowEntryKeys.push(rowKey)
-  }
-  if (rowPath.length > 1) {
-    for (let depth = 1; depth < rowPath.length; depth += 1) {
-      const groupPath = rowPath.slice(0, depth)
-      const groupKey = createPivotAxisKey("pivot:group:", groupPath)
-      if (state.rowEntries.has(groupKey)) {
-        rowEntryKeys.push(groupKey)
-      }
-      if (state.includeRowSubtotals) {
-        const subtotalKey = `${createPivotAxisKey("pivot:subtotal:", groupPath)}depth:${depth}`
-        if (state.rowEntries.has(subtotalKey)) {
-          rowEntryKeys.push(subtotalKey)
-        }
-      }
-    }
-  }
-  if (state.includeGrandTotal && state.rowEntries.has("pivot:grand-total")) {
-    rowEntryKeys.push("pivot:grand-total")
-  }
-
-  const columnKey = createPivotAxisKey("pivot:column:", columnPath)
-  const columnKeys: string[] = []
-  if (state.runtimeColumnsByColumnKey.has(columnKey)) {
-    columnKeys.push(columnKey)
-  }
-  if (state.includeColumnGrandTotal && state.runtimeColumnsByColumnKey.has(state.columnGrandTotalKey)) {
-    columnKeys.push(state.columnGrandTotalKey)
-  }
-  if (state.includeColumnSubtotals) {
-    for (let depth = 1; depth < columnPath.length; depth += 1) {
-      const subtotalColumnPath = columnPath.slice(0, depth)
-      const subtotalColumnKey = `${createPivotAxisKey("pivot:column-subtotal:", subtotalColumnPath)}depth:${depth}`
-      if (state.runtimeColumnsByColumnKey.has(subtotalColumnKey)) {
-        columnKeys.push(subtotalColumnKey)
-      }
-    }
-  }
-
-  return {
-    rowEntryKeys,
-    columnKeys,
-  }
-}
-
-function isSamePivotTouchedKeys(
-  left: DataGridPivotIncrementalTouchedKeys,
-  right: DataGridPivotIncrementalTouchedKeys,
-): boolean {
-  if (left.rowEntryKeys.length !== right.rowEntryKeys.length || left.columnKeys.length !== right.columnKeys.length) {
-    return false
-  }
-  for (let index = 0; index < left.rowEntryKeys.length; index += 1) {
-    if (left.rowEntryKeys[index] !== right.rowEntryKeys[index]) {
-      return false
-    }
-  }
-  for (let index = 0; index < left.columnKeys.length; index += 1) {
-    if (left.columnKeys[index] !== right.columnKeys[index]) {
-      return false
-    }
-  }
-  return true
 }
 
 function buildPivotProjectionRows<T>(

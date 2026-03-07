@@ -1,5 +1,6 @@
 import { preservePivotProjectionRowIdentity } from "./clientRowPivotProjectionUtils.js"
-import type { DataGridPivotColumn, DataGridPivotSpec, DataGridRowNode } from "./rowModel.js"
+import type { DataGridPivotColumn, DataGridPivotSpec } from "@affino/datagrid-pivot"
+import type { DataGridRowNode } from "./rowModel.js"
 import type { DataGridPivotIncrementalPatchRow, DataGridPivotRuntime } from "./pivotRuntime.js"
 
 export interface RunPivotProjectionStageParams<T> {

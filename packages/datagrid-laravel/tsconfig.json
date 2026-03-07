@@ -5,7 +5,15 @@
     "moduleResolution": "Bundler",
     "declaration": true,
     "emitDeclarationOnly": false,
-    "baseUrl": "../../"
+    "baseUrl": "../../",
+    "paths": {
+      "@affino/datagrid-pivot": [
+        "packages/datagrid-pivot/src/index.ts"
+      ],
+      "@affino/datagrid-pivot/*": [
+        "packages/datagrid-pivot/src/*"
+      ]
+    }
   },
   "include": [
     "resources/js/**/*.ts"

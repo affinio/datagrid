@@ -3,7 +3,7 @@ import {
   type CreateWritableSignal,
   type WritableSignal,
 } from "../runtime/signals"
-import type { DataGridPivotColumn } from "../models/rowModel"
+import type { DataGridPivotColumn } from "@affino/datagrid-pivot"
 
 export interface ServerRowModelFetchResult<T> {
   rows: T[]

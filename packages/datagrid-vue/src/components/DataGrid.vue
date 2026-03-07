@@ -29,10 +29,17 @@
       >
         <GridFeaturePanels />
         <GridHeader />
-        <GridBody
-          @row-select="handleRowSelect"
-          @cell-click="handleCellClick"
-        />
+        <div
+          ref="bodyViewportRef"
+          class="data-grid-body-viewport"
+          role="presentation"
+          @scroll="handleBodyScroll"
+        >
+          <GridBody
+            @row-select="handleRowSelect"
+            @cell-click="handleCellClick"
+          />
+        </div>
         <GridColumnMenu />
       </div>
     </slot>
@@ -49,7 +56,7 @@ import type {
   DataGridRowModelSnapshot,
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-core"
-import { computed, toRef, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from "vue"
 import {
   createDataGridFeatureRegistry,
   type DataGridExportContext,
@@ -102,6 +109,9 @@ interface DataGridColumnAutosizeOptions {
   charWidth?: number
   padding?: number
 }
+
+const DEFAULT_ROW_HEIGHT = 31
+const VIRTUAL_OVERSCAN_ROWS = 8
 
 const props = withDefaults(defineProps<{
   rows: readonly unknown[]
@@ -176,9 +186,70 @@ const viewModel = useDataGridViewModel(grid)
 const visibleColumns = computed(() => viewModel.visibleColumns.value)
 const visibleRows = computed(() => viewModel.visibleRows.value)
 const columnCount = computed(() => visibleColumns.value.length)
-const gridTemplate = computed(() => `repeat(${Math.max(1, columnCount.value)}, minmax(0, 1fr))`)
+const resolveColumnWidth = (column: { width: number | null; column: { width?: number } }): number => {
+  const explicitWidth = typeof column.width === "number" ? column.width : null
+  const fallbackWidth = typeof column.column.width === "number" ? column.column.width : null
+  return Math.max(56, Math.trunc(explicitWidth ?? fallbackWidth ?? 160))
+}
+
+const gridTemplate = computed(() => {
+  const columns = grid.runtime.columnSnapshot.value.visibleColumns
+  if (columns.length === 0) {
+    return "minmax(0, 1fr)"
+  }
+  return columns.map(column => `${resolveColumnWidth(column)}px`).join(" ")
+})
+
+const bodyViewportRef = ref<HTMLElement | null>(null)
+const scrollTop = ref(0)
+const viewportHeight = ref(0)
+const scrollLeft = ref(0)
+
+const syncViewportRange = (): void => {
+  const rowCount = Math.max(0, viewModel.rowSnapshot.value.rowCount)
+  if (rowCount === 0) {
+    grid.api.view.setViewportRange({ start: 0, end: 0 })
+    return
+  }
+
+  if (props.renderMode === "pagination") {
+    grid.api.view.setViewportRange({ start: 0, end: rowCount - 1 })
+    return
+  }
+
+  const visibleRowCapacity = Math.max(1, Math.ceil(viewportHeight.value / DEFAULT_ROW_HEIGHT))
+  const start = Math.max(0, Math.floor(scrollTop.value / DEFAULT_ROW_HEIGHT) - VIRTUAL_OVERSCAN_ROWS)
+  const end = Math.min(
+    rowCount - 1,
+    start + visibleRowCapacity + VIRTUAL_OVERSCAN_ROWS * 2 - 1,
+  )
+  grid.api.view.setViewportRange({ start, end })
+}
+
+const syncViewportMetrics = (): void => {
+  const element = bodyViewportRef.value
+  viewportHeight.value = Math.max(0, element?.clientHeight ?? 0)
+  scrollTop.value = Math.max(0, element?.scrollTop ?? 0)
+  scrollLeft.value = Math.max(0, element?.scrollLeft ?? 0)
+  syncViewportRange()
+}
+
+const handleBodyScroll = (event: Event): void => {
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) {
+    return
+  }
+  scrollTop.value = Math.max(0, target.scrollTop)
+  scrollLeft.value = Math.max(0, target.scrollLeft)
+  syncViewportRange()
+}
+
+let resizeObserver: ResizeObserver | null = null
+
 const gridLayoutStyle = computed(() => ({
   "--dg-grid-template": gridTemplate.value,
+  "--dg-row-height": `${DEFAULT_ROW_HEIGHT}px`,
+  "--dg-scroll-left": `${scrollLeft.value}px`,
 }))
 
 provideDataGridContext({
@@ -210,6 +281,9 @@ watch(
   () => props.renderMode,
   () => {
     syncPaginationState()
+    nextTick(() => {
+      syncViewportMetrics()
+    })
   },
   { immediate: true },
 )
@@ -218,9 +292,51 @@ watch(
   () => props.pagination,
   () => {
     syncPaginationState()
+    nextTick(() => {
+      syncViewportMetrics()
+    })
   },
   { immediate: true, deep: true },
 )
+
+watch(
+  () => viewModel.rowSnapshot.value.rowCount,
+  () => {
+    nextTick(() => {
+      syncViewportMetrics()
+    })
+  },
+  { immediate: true },
+)
+
+watch(
+  () => grid.runtime.columnSnapshot.value.visibleColumns.map(column => `${column.key}:${column.width ?? column.column.width ?? ""}`).join("|"),
+  () => {
+    nextTick(() => {
+      syncViewportMetrics()
+    })
+  },
+)
+
+onMounted(() => {
+  nextTick(() => {
+    syncViewportMetrics()
+  })
+
+  if (typeof ResizeObserver !== "undefined") {
+    resizeObserver = new ResizeObserver(() => {
+      syncViewportMetrics()
+    })
+    if (bodyViewportRef.value) {
+      resizeObserver.observe(bodyViewportRef.value)
+    }
+  }
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+})
 
 const slotVirtualWindow = computed(() => {
   const window = viewModel.virtualWindow.value
@@ -264,6 +380,8 @@ defineExpose({
   --dg-bg: #ffffff;
   --dg-fg: #1f2933;
   width: 100%;
+  height: 100%;
+  min-height: 320px;
   display: block;
   color: var(--dg-fg);
   background: var(--dg-bg);
@@ -271,8 +389,16 @@ defineExpose({
 
 .data-grid-layout {
   width: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.data-grid-body-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .data-grid--theme-light {

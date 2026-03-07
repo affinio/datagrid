@@ -1,11 +1,13 @@
 import type {
   DataGridColumnModel,
-  DataGridPivotColumn,
-  DataGridPivotSpec,
   DataGridRowModel,
   DataGridRowModelSnapshot,
   DataGridViewportRange,
 } from "../models"
+import type {
+  DataGridPivotColumn,
+  DataGridPivotSpec,
+} from "@affino/datagrid-pivot"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import type { DataGridTransactionSnapshot } from "./transactionService"
 import type {

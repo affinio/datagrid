@@ -19,6 +19,14 @@ If a Laravel integration needs direct formula-engine APIs, use:
 
 Keep Laravel grid/runtime integration through `@affino/datagrid-laravel`.
 
+## Pivot boundary
+
+If a Laravel integration needs direct pivot contracts or layout snapshot types, use:
+
+- [@affino/datagrid-pivot](/Users/anton/Projects/affinio/datagrid/packages/datagrid-pivot/README.md)
+
+Keep Laravel grid/runtime integration through `@affino/datagrid-laravel`.
+
 It re-exports a curated set of:
 
 - core row/column/filter helpers

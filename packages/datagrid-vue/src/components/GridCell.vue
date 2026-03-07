@@ -68,6 +68,8 @@ const handleClick = (event: MouseEvent): void => {
 <style scoped>
 .data-grid-cell {
   border: 1px solid var(--dg-border-color, #d7dde5);
+  min-height: var(--dg-row-height, 31px);
+  box-sizing: border-box;
   padding: 6px 8px;
   text-align: left;
   min-width: 0;

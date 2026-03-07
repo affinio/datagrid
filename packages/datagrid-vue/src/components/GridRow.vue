@@ -60,7 +60,8 @@ const handleCellClick = (columnKey: string, columnIndex: number) => {
 <style scoped>
 .data-grid-row {
   display: grid;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   grid-template-columns: var(--dg-grid-template);
 }
 </style>

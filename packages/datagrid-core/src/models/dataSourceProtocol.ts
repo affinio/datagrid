@@ -4,9 +4,6 @@ import type {
   DataGridGroupExpansionSnapshot,
   DataGridGroupBySpec,
   DataGridPaginationSnapshot,
-  DataGridPivotColumn,
-  DataGridPivotColumnPathSegment,
-  DataGridPivotSpec,
   DataGridRowId,
   DataGridRowGroupMeta,
   DataGridRowKind,
@@ -14,6 +11,11 @@ import type {
   DataGridSortState,
   DataGridViewportRange,
 } from "./rowModel.js"
+import type {
+  DataGridPivotColumn,
+  DataGridPivotColumnPathSegment,
+  DataGridPivotSpec,
+} from "@affino/datagrid-pivot"
 
 export type DataGridDataSourcePullPriority = "critical" | "normal" | "background"
 

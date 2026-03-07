@@ -1,9 +1,9 @@
 import type {
-  DataGridAggOp,
   DataGridAggregationColumnSpec,
   DataGridAggregationModel,
   DataGridRowNode,
 } from "./rowModel.js"
+import type { DataGridAggOp } from "@affino/datagrid-pivot"
 
 export interface DataGridAggregationFieldReader<T = unknown> {
   (rowNode: DataGridRowNode<T>, key: string, field?: string): unknown

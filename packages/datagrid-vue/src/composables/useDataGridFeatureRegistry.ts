@@ -43,13 +43,6 @@ import type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
-  DataGridPivotCellDrilldown,
-  DataGridPivotCellDrilldownInput,
-  DataGridPivotInteropSnapshot,
-  DataGridPivotLayoutImportOptions,
-  DataGridPivotLayoutSnapshot,
-  DataGridPivotSpec,
-  DataGridPivotValueSpec,
   DataGridProjectionStage,
   DataGridRowModelKind,
   DataGridSelectionSnapshot,
@@ -57,6 +50,15 @@ import type {
   DataGridSortDirection,
   DataGridSortState,
 } from "@affino/datagrid-core"
+import type {
+  DataGridPivotCellDrilldown,
+  DataGridPivotCellDrilldownInput,
+  DataGridPivotInteropSnapshot,
+  DataGridPivotLayoutImportOptions,
+  DataGridPivotLayoutSnapshot,
+  DataGridPivotSpec,
+  DataGridPivotValueSpec,
+} from "@affino/datagrid-pivot"
 import { computed, ref, type ComputedRef, type Ref } from "vue"
 
 export type DataGridFeatureName =

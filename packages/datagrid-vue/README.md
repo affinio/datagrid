@@ -19,6 +19,14 @@ If a Vue app needs direct formula-engine APIs, import them from:
 
 Do not import formula compile/graph helpers from `@affino/datagrid-core` directly in new integrations.
 
+## Pivot boundary
+
+If a Vue app needs direct pivot contracts, import them from:
+
+- [@affino/datagrid-pivot](/Users/anton/Projects/affinio/datagrid/packages/datagrid-pivot/README.md)
+
+Do not import pivot contracts from `@affino/datagrid-core` directly in new integrations.
+
 ## Runtime mode decision (Main thread vs Worker vs Server-side)
 
 | Scenario | Recommended mode | Why |

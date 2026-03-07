@@ -173,7 +173,8 @@
 </template>
 
 <script setup lang="ts">
-import type { DataGridAggOp, DataGridFilterSnapshot, DataGridPivotValueSpec } from "@affino/datagrid-core"
+import type { DataGridAggOp, DataGridFilterSnapshot } from "@affino/datagrid-core"
+import type { DataGridPivotValueSpec } from "@affino/datagrid-pivot"
 import { UiMenu, UiMenuContent, UiMenuLabel, UiMenuTrigger } from "@affino/menu-vue"
 import { computed, ref, watch, type ComputedRef, type Ref } from "vue"
 import { useFeature } from "../composables/useDataGridFeature"

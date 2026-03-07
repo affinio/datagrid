@@ -20,6 +20,8 @@ export type {
   DataGridPaginationSnapshot,
   DataGridGroupExpansionSnapshot,
   DataGridGroupBySpec,
+} from "./rowModel.js"
+export type {
   DataGridPivotSpec,
   DataGridPivotValueSpec,
   DataGridPivotColumn,
@@ -27,6 +29,8 @@ export type {
   DataGridPivotColumnSubtotalPosition,
   DataGridPivotColumnGrandTotalPosition,
   DataGridAggOp,
+} from "./pivotContracts.js"
+export type {
   DataGridAggregationColumnSpec,
   DataGridAggregationModel,
   DataGridTreeDataMode,

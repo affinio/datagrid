@@ -2,13 +2,10 @@ import {
   buildGroupExpansionSnapshot,
   buildPaginationSnapshot,
   cloneGroupBySpec,
-  clonePivotSpec,
   isSameGroupExpansionSnapshot,
   isSameGroupBySpec,
-  isSamePivotSpec,
   normalizePaginationInput,
   normalizeGroupBySpec,
-  normalizePivotSpec,
   normalizeRowNode,
   normalizeViewportRange,
   setGroupExpansionKey,
@@ -17,11 +14,9 @@ import {
   type DataGridPaginationInput,
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
-  type DataGridPivotSpec,
   type DataGridAggregationModel,
   type DataGridRowId,
   type DataGridRowNode,
-  type DataGridPivotColumn,
   type DataGridRowIdResolver,
   type DataGridRowModel,
   type DataGridRowModelListener,
@@ -30,6 +25,15 @@ import {
   type DataGridSortState,
   type DataGridViewportRange,
 } from "./rowModel.js"
+import {
+  clonePivotSpec,
+  isSamePivotSpec,
+  normalizePivotSpec,
+} from "@affino/datagrid-pivot"
+import type {
+  DataGridPivotColumn,
+  DataGridPivotSpec,
+} from "@affino/datagrid-pivot"
 import { cloneDataGridFilterSnapshot } from "./advancedFilter.js"
 import {
   clonePullAggregationModel,

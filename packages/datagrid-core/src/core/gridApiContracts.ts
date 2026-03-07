@@ -17,7 +17,6 @@ import type {
   DataGridColumnHistogramOptions,
   DataGridColumnPin,
   DataGridColumnModelSnapshot,
-  DataGridPivotColumn,
   DataGridColumnSnapshot,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
@@ -27,8 +26,6 @@ import type {
   DataGridGroupExpansionSnapshot,
   DataGridPaginationInput,
   DataGridPaginationSnapshot,
-  DataGridPivotCellDrilldown,
-  DataGridPivotCellDrilldownInput,
   DataGridProjectionDiagnostics,
   DataGridProjectionFormulaDiagnostics,
   DataGridFormulaComputeStageDiagnostics,
@@ -38,7 +35,6 @@ import type {
   DataGridFormulaExplainNode,
   DataGridFormulaNodeComputeDiagnostics,
   DataGridProjectionStage,
-  DataGridPivotSpec,
   DataGridRowId,
   DataGridRowModelKind,
   DataGridRowNodeInput,
@@ -49,6 +45,15 @@ import type {
   DataGridTreeDataDiagnostics,
   DataGridViewportRange,
 } from "../models"
+import type {
+  DataGridPivotCellDrilldown,
+  DataGridPivotCellDrilldownInput,
+  DataGridPivotColumn,
+  DataGridPivotInteropSnapshot,
+  DataGridPivotLayoutImportOptions,
+  DataGridPivotLayoutSnapshot,
+  DataGridPivotSpec,
+} from "@affino/datagrid-pivot"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import type {
   DataGridSelectionAggregationKind,
@@ -61,11 +66,6 @@ import type {
   DataGridCellRefreshRange,
   DataGridCellsRefreshListener,
 } from "./gridApiCellRefresh"
-import type {
-  DataGridPivotLayoutImportOptions,
-  DataGridPivotLayoutSnapshot,
-  DataGridPivotInteropSnapshot,
-} from "./gridApiPivotLayout"
 import type { DataGridCore } from "./gridCore"
 import type {
   DataGridTransactionInput,

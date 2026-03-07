@@ -27,6 +27,12 @@
       ],
       "@affino/datagrid-formula-engine/*": [
         "../datagrid-formula-engine/dist/*"
+      ],
+      "@affino/datagrid-pivot": [
+        "../datagrid-pivot/dist/index.d.ts"
+      ],
+      "@affino/datagrid-pivot/*": [
+        "../datagrid-pivot/dist/*"
       ]
     }
   },

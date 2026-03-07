@@ -4,8 +4,6 @@ import type {
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
   DataGridPaginationSnapshot,
-  DataGridPivotColumn,
-  DataGridPivotSpec,
   DataGridProjectionDiagnostics,
   DataGridProjectionStage,
   DataGridRowModelSnapshot,
@@ -13,6 +11,10 @@ import type {
   DataGridTreeDataDiagnostics,
   DataGridViewportRange,
 } from "./rowModel.js"
+import type {
+  DataGridPivotColumn,
+  DataGridPivotSpec,
+} from "@affino/datagrid-pivot"
 import type { DataGridClientRowRuntimeState, DataGridClientRowRuntimeStateStore } from "./clientRowRuntimeStateStore.js"
 
 export interface ClientRowSnapshotRuntimeContext<T> {

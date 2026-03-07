@@ -18,11 +18,14 @@ export {
   evaluateColumnPredicateFilter,
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,
+  serializeColumnValueToToken,
+} from "@affino/datagrid-core"
+
+export {
   normalizePivotSpec,
   clonePivotSpec,
   isSamePivotSpec,
-  serializeColumnValueToToken,
-} from "@affino/datagrid-core"
+} from "@affino/datagrid-pivot"
 
 export type {
   CreateDataGridCoreOptions,
@@ -90,16 +93,6 @@ export type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
-  DataGridPivotSpec,
-  DataGridPivotValueSpec,
-  DataGridPivotColumn,
-  DataGridPivotColumnPathSegment,
-  DataGridPivotCellDrilldownInput,
-  DataGridPivotCellDrilldown,
-  DataGridPivotLayoutColumnState,
-  DataGridPivotLayoutSnapshot,
-  DataGridPivotLayoutImportOptions,
-  DataGridPivotInteropSnapshot,
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
   DataGridDataSourceInvalidation,
@@ -149,6 +142,19 @@ export type {
   DataGridSortState,
   DataGridViewportRange,
 } from "@affino/datagrid-core"
+
+export type {
+  DataGridPivotSpec,
+  DataGridPivotValueSpec,
+  DataGridPivotColumn,
+  DataGridPivotColumnPathSegment,
+  DataGridPivotCellDrilldownInput,
+  DataGridPivotCellDrilldown,
+  DataGridPivotLayoutColumnState,
+  DataGridPivotLayoutSnapshot,
+  DataGridPivotLayoutImportOptions,
+  DataGridPivotInteropSnapshot,
+} from "@affino/datagrid-pivot"
 
 export type {
   DataGridTransactionSnapshot,

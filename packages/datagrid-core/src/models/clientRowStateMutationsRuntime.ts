@@ -1,9 +1,7 @@
 import {
   isSameGroupBySpec,
-  isSamePivotSpec,
   normalizeGroupBySpec,
   normalizePaginationInput,
-  normalizePivotSpec,
   normalizeViewportRange,
   setGroupExpansionKey,
   toggleGroupExpansionKey,
@@ -12,12 +10,16 @@ import {
   type DataGridGroupBySpec,
   type DataGridGroupExpansionSnapshot,
   type DataGridPaginationInput,
-  type DataGridPivotSpec,
   type DataGridSortAndFilterModelInput,
   type DataGridSortState,
   type DataGridProjectionInvalidationReason,
   type DataGridViewportRange,
 } from "./rowModel.js"
+import {
+  isSamePivotSpec,
+  normalizePivotSpec,
+} from "@affino/datagrid-pivot"
+import type { DataGridPivotSpec } from "@affino/datagrid-pivot"
 import { isSameFilterModel, isSameSortModel } from "./clientRowProjectionPrimitives.js"
 import { cloneAggregationModel, isSameAggregationModel } from "./clientRowModelHelpers.js"
 import type { DataGridClientProjectionStage } from "./clientRowProjectionEngine.js"
