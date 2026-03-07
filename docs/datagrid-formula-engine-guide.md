@@ -216,6 +216,8 @@ The scheduler now also groups same-level nodes by normalized dependency signatur
 
 For branchy formulas, the engine now also exposes vector columnar kernels. These kernels evaluate numeric/comparison subgraphs column-wise and use masked branch execution for `IF`, `IFS`, `COALESCE`, and logical short-circuit operators so inactive branches are not forced through generic row evaluation.
 
+Formula recompute now keeps base source rows immutable and stores computed field values in a snapshot-backed overlay. Materialized row reads resolve base fields first and then layer computed target fields from the overlay, so projection/filter/sort consumers still see a normal row shape without direct mutation of the underlying source row objects.
+
 ### CSP-safe execution mode
 
 For strict CSP environments, dynamic code generation can be disabled explicitly:

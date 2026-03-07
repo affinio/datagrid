@@ -131,10 +131,12 @@ import { createClientRowProjectionHandlersRuntime } from "./clientRowProjectionH
 import { createClientRowFormulaDiagnosticsRuntime } from "./clientRowFormulaDiagnosticsRuntime.js"
 import { createClientRowSourceColumnCacheRuntime } from "./clientRowSourceColumnCacheRuntime.js"
 import { createClientRowPatchComputedMergeRuntime } from "./clientRowPatchComputedMergeRuntime.js"
+import { createClientRowComputedSnapshotRuntime } from "./clientRowComputedSnapshotRuntime.js"
 import {
   createClientRowComputedRegistryRuntime,
   type ClientRowComputedRegistryRuntime,
 } from "./clientRowComputedRegistryRuntime.js"
+import { createCompiledDataGridRowDataReader } from "./clientRowComputedRegistryTokenResolverRuntime.js"
 import {
   createClientRowComputedExecutionRuntime,
   type ApplyComputedFieldsToSourceRowsOptions,
@@ -364,7 +366,14 @@ export function createClientRowModel<T>(
 
   const normalizeSourceRows = (inputRows: readonly DataGridRowNodeInput<T>[] | null | undefined): DataGridRowNode<T>[] => {
     const normalized = Array.isArray(inputRows)
-      ? reindexSourceRows(inputRows.map((row, index) => normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index)))
+      ? reindexSourceRows(inputRows.map((row, index) => {
+          const normalizedRow = normalizeRowNode(withResolvedRowIdentity(row, index, resolveRowId), index)
+          return {
+            ...normalizedRow,
+            data: normalizedRow.data,
+            row: normalizedRow.data,
+          }
+        }))
       : []
     if (!treeData) {
       return normalized
@@ -383,8 +392,9 @@ export function createClientRowModel<T>(
     throw new Error(message)
   }
 
-  let sourceRows: DataGridRowNode<T>[] = normalizeSourceRows(options.rows ?? [])
-  let sourceRowIndexById = buildRowIdPositionIndex(sourceRows)
+  let baseSourceRows: DataGridRowNode<T>[] = normalizeSourceRows(options.rows ?? [])
+  let sourceRows: readonly DataGridRowNode<T>[] = baseSourceRows
+  let sourceRowIndexById = buildRowIdPositionIndex(baseSourceRows)
   const runtimeStateStore = createClientRowRuntimeStateStore<T>()
   const runtimeState = runtimeStateStore.state
   let sortModel: readonly DataGridSortState[] = options.initialSortModel ? cloneSortModel(options.initialSortModel) : []
@@ -395,9 +405,15 @@ export function createClientRowModel<T>(
   let pivotModel: DataGridPivotSpec | null = normalizePivotSpec(options.initialPivotModel ?? null)
   let pivotColumns: DataGridPivotColumn[] = []
   let aggregationModel: DataGridAggregationModel<T> | null = cloneAggregationModel(options.initialAggregationModel ?? null)
-  const pivotRuntime = createPivotRuntime<T>()
-  const treeProjectionRuntime = createTreeProjectionRuntime<T>()
-  const aggregationEngine = createDataGridAggregationEngine<T>(aggregationModel)
+  const pivotRuntime = createPivotRuntime<T>({
+    readRowField: (row, key, field) => readProjectionRowField(row, key, field),
+  })
+  const treeProjectionRuntime = createTreeProjectionRuntime<T>({
+    resolveTreeDataRow: (rowNode) => computedSnapshotRuntime.materializeRow(rowNode).data,
+  })
+  const aggregationEngine = createDataGridAggregationEngine<T>(aggregationModel, {
+    readRowField: (row, key, field) => readProjectionRowField(row, key, field),
+  })
   let expansionExpandedByDefault = Boolean(treeData?.expandedByDefault ?? groupBy?.expandedByDefault)
   let pivotExpansionExpandedByDefault = true
   let paginationInput = normalizePaginationInput(options.initialPagination ?? null)
@@ -467,15 +483,51 @@ export function createClientRowModel<T>(
     projectionPolicy,
     initialFormulaFunctionRegistry: options.initialFormulaFunctionRegistry,
     formulaCyclePolicy,
+    resolveRowFieldValue: (rowNode, field, readBaseValue) => {
+      return computedSnapshotRuntime.readFieldValue(rowNode, field, readBaseValue)
+    },
     onFormulaRuntimeError: pushFormulaRuntimeError,
     onComputedPlanChanged: () => {},
   })
   computedRegistryRef.current = computedRegistry
   const normalizeComputedName = computedRegistry.normalizeComputedName
   const normalizeComputedTargetField = computedRegistry.normalizeComputedTargetField
+  const computedSnapshotRuntime = createClientRowComputedSnapshotRuntime<T>({
+    applyRowDataPatch,
+    getSourceRows: () => baseSourceRows,
+    getSourceRowIndexById: () => sourceRowIndexById,
+  })
+
+  const syncComputedSnapshotFields = (): boolean => {
+    return computedSnapshotRuntime.setComputedFields(
+      computedRegistry.getComputedEntryByIndex().map(entry => entry.field),
+    )
+  }
+
+  const refreshMaterializedSourceRows = (
+    changedRowIds?: readonly DataGridRowId[],
+  ): void => {
+    if (!changedRowIds || changedRowIds.length === 0) {
+      sourceRows = baseSourceRows
+      sourceRowIndexById = buildRowIdPositionIndex(baseSourceRows)
+      clearSourceColumnValuesCache()
+      return
+    }
+    const invalidatedRowIds: DataGridRowId[] = []
+    for (const rowId of changedRowIds) {
+      const rowIndex = sourceRowIndexById.get(rowId)
+      if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= baseSourceRows.length) {
+        continue
+      }
+      invalidatedRowIds.push(rowId)
+    }
+    if (invalidatedRowIds.length > 0) {
+      invalidateSourceColumnValuesByRowIds(invalidatedRowIds)
+    }
+  }
 
   const sourceColumnCacheRuntime = createClientRowSourceColumnCacheRuntime<T>({
-    getSourceRows: () => sourceRows,
+    getSourceRows: () => baseSourceRows,
     getSourceRowIndexById: () => sourceRowIndexById,
     maxColumns: formulaColumnCacheMaxColumns,
     setCacheSize: (size) => {
@@ -496,17 +548,48 @@ export function createClientRowModel<T>(
   ): void => {
     sourceColumnCacheRuntime.invalidateByRowIds(rowIds)
   }
+  const materializeBaseRowAtIndex = (rowIndex: number): DataGridRowNode<T> | undefined => {
+    if (rowIndex < 0 || rowIndex >= baseSourceRows.length) {
+      return undefined
+    }
+    const baseRow = baseSourceRows[rowIndex]
+    return baseRow ? computedSnapshotRuntime.materializeRow(baseRow) : undefined
+  }
+  const materializeOutputRow = (rowNode: DataGridRowNode<T> | undefined): DataGridRowNode<T> | undefined => {
+    if (!rowNode || rowNode.kind !== "leaf") {
+      return rowNode
+    }
+    return computedSnapshotRuntime.materializeRow(rowNode)
+  }
+  const materializeOutputRows = (rows: readonly DataGridRowNode<T>[]): DataGridRowNode<T>[] => {
+    const materializedRows = new Array<DataGridRowNode<T>>(rows.length)
+    for (let index = 0; index < rows.length; index += 1) {
+      materializedRows[index] = materializeOutputRow(rows[index]) as DataGridRowNode<T>
+    }
+    return materializedRows
+  }
+  const materializeOutputRowsInRange = (rows: readonly DataGridRowNode<T>[], start: number, end: number): DataGridRowNode<T>[] => {
+    if (end < start) {
+      return []
+    }
+    const length = end - start + 1
+    const materializedRows = new Array<DataGridRowNode<T>>(length)
+    let outputIndex = 0
+    for (let index = start; index <= end; index += 1) {
+      materializedRows[outputIndex] = materializeOutputRow(rows[index]) as DataGridRowNode<T>
+      outputIndex += 1
+    }
+    return materializedRows
+  }
   const computedExecutionRuntime = createClientRowComputedExecutionRuntime<T>({
     vectorBatchSize: DATAGRID_COMPUTE_VECTOR_BATCH_SIZE,
     isRecord,
     isColumnCacheParityVerificationEnabled: isDataGridColumnCacheParityVerificationEnabled,
     isFormulaRowRecomputeDiagnosticsEnabled: () => captureFormulaRowRecomputeDiagnostics,
     isFormulaExplainDiagnosticsEnabled: () => captureFormulaExplainDiagnostics,
-    getSourceRows: () => sourceRows,
-    setSourceRows: (rows) => {
-      sourceRows = rows
-      sourceRowIndexById = buildRowIdPositionIndex(sourceRows)
-    },
+    getSourceRows: () => baseSourceRows,
+    getSourceRowIndexById: () => sourceRowIndexById,
+    setSourceRows: () => {},
     resolveRowFieldReader: computedRegistry.resolveRowFieldReader,
     getComputedExecutionPlan: computedRegistry.getComputedExecutionPlan,
     getComputedOrder: computedRegistry.getComputedOrder,
@@ -531,7 +614,32 @@ export function createClientRowModel<T>(
   const applyComputedFieldsToSourceRows = (
     options: ApplyComputedFieldsToSourceRowsOptions = {},
   ): ApplyComputedFieldsToSourceRowsResult<T> => {
-    return computedExecutionRuntime.applyComputedFieldsToSourceRows(options)
+    const result = computedExecutionRuntime.applyComputedFieldsToSourceRows(options)
+    const fieldsChanged = syncComputedSnapshotFields()
+    const snapshotChanged = computedSnapshotRuntime.applyComputedUpdates(result.computedUpdatesByRowId)
+    if (fieldsChanged) {
+      refreshMaterializedSourceRows()
+    } else if (snapshotChanged || result.changed) {
+      const changedRowIds = result.changedRowIds.length > 0
+        ? result.changedRowIds
+        : Array.from(result.computedUpdatesByRowId.keys())
+      refreshMaterializedSourceRows(changedRowIds)
+    }
+    return result
+  }
+  const projectionRowFieldReaderCache = new Map<string, (row: DataGridRowNode<T>) => unknown>()
+  const readProjectionRowField = (row: DataGridRowNode<T>, key: string, field?: string): unknown => {
+    const resolvedField = field && field.trim().length > 0 ? field : key
+    if (!resolvedField) {
+      return undefined
+    }
+    let reader = projectionRowFieldReaderCache.get(resolvedField)
+    if (!reader) {
+      const readDataValue = createCompiledDataGridRowDataReader(resolvedField)
+      reader = (rowNode: DataGridRowNode<T>): unknown => readDataValue(rowNode.data as unknown)
+      projectionRowFieldReaderCache.set(resolvedField, reader)
+    }
+    return computedSnapshotRuntime.readFieldValue(row, resolvedField, reader)
   }
   const registerComputedFieldInternal = (
     definition: DataGridComputedFieldDefinition<T>,
@@ -649,10 +757,10 @@ export function createClientRowModel<T>(
       previousRowsById,
       resolveNextRowById: (rowId) => {
         const rowIndex = sourceRowIndexById.get(rowId)
-        if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= sourceRows.length) {
+        if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= baseSourceRows.length) {
           return undefined
         }
-        return sourceRows[rowIndex]
+        return baseSourceRows[rowIndex]
       },
       stageImpact: {
         affectsAggregation: changeSet.stageImpact.affectsAggregation,
@@ -685,7 +793,10 @@ export function createClientRowModel<T>(
       : ""
     if (ignoredColumnKey) {
       derivedCacheDiagnostics.filterPredicateMisses += 1
-      return createFilterPredicate(filterModel, { ignoreColumnFilterKey: ignoredColumnKey })
+      return createFilterPredicate(filterModel, {
+        ignoreColumnFilterKey: ignoredColumnKey,
+        readRowField: readProjectionRowField,
+      })
     }
 
     const filterKey = String(runtimeState.filterRevision)
@@ -695,7 +806,9 @@ export function createClientRowModel<T>(
           return cachedFilterPredicate as (rowNode: DataGridRowNode<T>) => boolean
         })()
       : (() => {
-          const next = createFilterPredicate(filterModel)
+          const next = createFilterPredicate(filterModel, {
+            readRowField: readProjectionRowField,
+          })
           cachedFilterPredicateKey = filterKey
           cachedFilterPredicate = next
           derivedCacheDiagnostics.filterPredicateMisses += 1
@@ -744,7 +857,7 @@ export function createClientRowModel<T>(
     },
     getSourceRows: () => sourceRows,
     buildSourceById: () => buildRowIdIndex(sourceRows),
-    readRowField,
+    readRowField: readProjectionRowField,
     normalizeText,
     computeStageExecutor: DATAGRID_NOOP_CLIENT_PROJECTION_COMPUTE_STAGE_EXECUTOR as DataGridClientProjectionComputeStageExecutor<T>,
     resolveFilterPredicate,
@@ -822,6 +935,42 @@ export function createClientRowModel<T>(
     resetGroupByIncrementalAggregationState,
   })
 
+  const canUseFlatIdentityProjectionRefresh = (): boolean => {
+    return !hasActiveFilterModel(filterModel)
+      && sortModel.length === 0
+      && treeData === null
+      && groupBy === null
+      && pivotModel === null
+      && !Boolean(aggregationModel && aggregationModel.columns.length > 0)
+      && pagination.enabled !== true
+  }
+
+  const commitFlatIdentityProjectionRefresh = (): void => {
+    const nextFlatRows = baseSourceRows as DataGridRowNode<T>[]
+    runtimeState.filteredRowsProjection = nextFlatRows
+    runtimeState.sortedRowsProjection = nextFlatRows
+    runtimeState.groupedRowsProjection = nextFlatRows
+    runtimeState.pivotedRowsProjection = nextFlatRows
+    runtimeState.aggregatedRowsProjection = nextFlatRows
+    runtimeState.paginatedRowsProjection = nextFlatRows
+    runtimeState.rows = nextFlatRows
+    pagination = buildPaginationSnapshot(nextFlatRows.length, paginationInput)
+    viewportRange = normalizeViewportRange(viewportRange, nextFlatRows.length)
+    runtimeStateStore.commitProjectionCycle(false)
+    derivedCacheDiagnostics.revisions.row = runtimeState.rowRevision
+    derivedCacheDiagnostics.revisions.sort = runtimeState.sortRevision
+    derivedCacheDiagnostics.revisions.filter = runtimeState.filterRevision
+    derivedCacheDiagnostics.revisions.group = runtimeState.groupRevision
+  }
+
+  const tryApplyFlatIdentityProjectionRefresh = (): boolean => {
+    if (!canUseFlatIdentityProjectionRefresh()) {
+      return false
+    }
+    commitFlatIdentityProjectionRefresh()
+    return true
+  }
+
   const projectionOrchestrator = createClientRowProjectionOrchestrator(
     projectionEngine,
     projectionHandlersRuntime.projectionStageHandlers,
@@ -895,6 +1044,9 @@ export function createClientRowModel<T>(
     ensureActive,
     emit,
     recomputeFromStage: (stage) => {
+      if (stage === "compute" && tryApplyFlatIdentityProjectionRefresh()) {
+        return
+      }
       computeRuntime.recomputeFromStage(stage)
     },
     setProjectionInvalidation: (reasons) => {
@@ -966,6 +1118,9 @@ export function createClientRowModel<T>(
     ensureActive,
     emit,
     recomputeFromProjectionEntryStage: () => {
+      if (tryApplyFlatIdentityProjectionRefresh()) {
+        return
+      }
       computeRuntime.recomputeFromStage("compute")
     },
     applyComputedFields: () => {
@@ -986,11 +1141,11 @@ export function createClientRowModel<T>(
     },
     resetGroupByIncrementalAggregationState,
     invalidateTreeProjectionCaches,
-    getSourceRows: () => sourceRows,
+    getSourceRows: () => baseSourceRows,
     setSourceRows: (rows) => {
-      sourceRows = rows
-      sourceRowIndexById = buildRowIdPositionIndex(sourceRows)
-      clearSourceColumnValuesCache()
+      baseSourceRows = rows
+      computedSnapshotRuntime.pruneRows(baseSourceRows)
+      refreshMaterializedSourceRows()
     },
     normalizeSourceRows,
     reindexSourceRows,
@@ -1012,7 +1167,15 @@ export function createClientRowModel<T>(
     commitFormulaComputeStageDiagnostics,
     commitFormulaRowRecomputeDiagnostics,
     mergeRowPatch,
-    getSourceRows: () => sourceRows,
+    getBaseSourceRows: () => baseSourceRows,
+    getMaterializedSourceRowAtIndex: materializeBaseRowAtIndex,
+    getSourceRowIndexById: () => sourceRowIndexById,
+    preparePatchedBaseRows: (rows, changedRowIds) => {
+      baseSourceRows = rows as DataGridRowNode<T>[]
+      // Row patches preserve row identity/order, so the snapshot overlay can
+      // stay index-aligned without a full prune/reindex pass.
+      refreshMaterializedSourceRows(changedRowIds)
+    },
   })
 
   const patchCoordinatorRuntime = createClientRowPatchCoordinatorRuntime<T>({
@@ -1023,10 +1186,15 @@ export function createClientRowModel<T>(
     },
     isDataGridRowId,
     applyRowDataPatch,
-    getSourceRows: () => sourceRows,
+    getSourceRows: () => baseSourceRows,
     getSourceRowIndexById: () => sourceRowIndexById,
     setSourceRows: (rows) => {
-      sourceRows = rows as DataGridRowNode<T>[]
+      if (rows === baseSourceRows) {
+        return
+      }
+      baseSourceRows = rows as DataGridRowNode<T>[]
+      computedSnapshotRuntime.pruneRows(baseSourceRows)
+      refreshMaterializedSourceRows()
     },
     getRowVersionById: () => rowVersionById,
     bumpRowRevision: () => {
@@ -1061,40 +1229,50 @@ export function createClientRowModel<T>(
       ) {
         return false
       }
+      if (computedRegistry.hasComputedFields()) {
+        const nextFlatRows = baseSourceRows as DataGridRowNode<T>[]
+        runtimeState.filteredRowsProjection = nextFlatRows
+        runtimeState.sortedRowsProjection = nextFlatRows
+        runtimeState.groupedRowsProjection = nextFlatRows
+        runtimeState.pivotedRowsProjection = nextFlatRows
+        runtimeState.aggregatedRowsProjection = nextFlatRows
+        runtimeState.paginatedRowsProjection = nextFlatRows
+        runtimeState.rows = nextFlatRows
+      } else {
+        const projectionRowsToPatch: DataGridRowNode<T>[][] = []
+        const registerProjectionRows = (rows: readonly DataGridRowNode<T>[]) => {
+          const mutableRows = rows as DataGridRowNode<T>[]
+          if (!projectionRowsToPatch.includes(mutableRows)) {
+            projectionRowsToPatch.push(mutableRows)
+          }
+        }
+        registerProjectionRows(runtimeState.filteredRowsProjection)
+        registerProjectionRows(runtimeState.sortedRowsProjection)
+        registerProjectionRows(runtimeState.groupedRowsProjection)
+        registerProjectionRows(runtimeState.pivotedRowsProjection)
+        registerProjectionRows(runtimeState.aggregatedRowsProjection)
+        registerProjectionRows(runtimeState.paginatedRowsProjection)
+        registerProjectionRows(runtimeState.rows)
 
-      const projectionRowsToPatch: DataGridRowNode<T>[][] = []
-      const registerProjectionRows = (rows: readonly DataGridRowNode<T>[]) => {
-        const mutableRows = rows as DataGridRowNode<T>[]
-        if (!projectionRowsToPatch.includes(mutableRows)) {
-          projectionRowsToPatch.push(mutableRows)
-        }
-      }
-      registerProjectionRows(runtimeState.filteredRowsProjection)
-      registerProjectionRows(runtimeState.sortedRowsProjection)
-      registerProjectionRows(runtimeState.groupedRowsProjection)
-      registerProjectionRows(runtimeState.pivotedRowsProjection)
-      registerProjectionRows(runtimeState.aggregatedRowsProjection)
-      registerProjectionRows(runtimeState.paginatedRowsProjection)
-      registerProjectionRows(runtimeState.rows)
-
-      for (const rowId of changedRowIds) {
-        const position = sourceRowIndexById.get(rowId) ?? -1
-        if (position < 0 || position >= sourceCount) {
-          continue
-        }
-        const nextRow = nextRowsById.get(rowId)
-        if (!nextRow) {
-          continue
-        }
-        for (const projectionRows of projectionRowsToPatch) {
-          const currentRow = projectionRows[position]
-          if (!currentRow || (currentRow.data === nextRow.data && currentRow.row === nextRow.row)) {
+        for (const rowId of changedRowIds) {
+          const position = sourceRowIndexById.get(rowId) ?? -1
+          if (position < 0 || position >= sourceCount) {
             continue
           }
-          projectionRows[position] = {
-            ...currentRow,
-            data: nextRow.data,
-            row: nextRow.row,
+          const nextRow = nextRowsById.get(rowId)
+          if (!nextRow) {
+            continue
+          }
+          for (const projectionRows of projectionRowsToPatch) {
+            const currentRow = projectionRows[position]
+            if (!currentRow || (currentRow.data === nextRow.data && currentRow.row === nextRow.row)) {
+              continue
+            }
+            projectionRows[position] = {
+              ...currentRow,
+              data: nextRow.data,
+              row: nextRow.row,
+            }
           }
         }
       }
@@ -1153,13 +1331,17 @@ export function createClientRowModel<T>(
     resetGroupByIncrementalAggregationState()
     invalidateTreeProjectionCaches()
     runtimeStateStore.setProjectionInvalidation(["computedChanged"])
-    computeRuntime.recomputeFromStage("compute")
+    if (!tryApplyFlatIdentityProjectionRefresh()) {
+      computeRuntime.recomputeFromStage("compute")
+    }
     emit()
     return computedResult.changedRowIds.length
   }
 
   runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
-  computeRuntime.recomputeFromStage("compute")
+  if (!tryApplyFlatIdentityProjectionRefresh()) {
+    computeRuntime.recomputeFromStage("compute")
+  }
 
   return {
     kind: "client",
@@ -1171,14 +1353,14 @@ export function createClientRowModel<T>(
       if (!Number.isFinite(index)) {
         return undefined
       }
-      return runtimeState.rows[Math.max(0, Math.trunc(index))]
+      return materializeOutputRow(runtimeState.rows[Math.max(0, Math.trunc(index))])
     },
     getRowsInRange(range: DataGridViewportRange) {
       const normalized = normalizeViewportRange(range, runtimeState.rows.length)
       if (runtimeState.rows.length === 0) {
         return []
       }
-      return runtimeState.rows.slice(normalized.start, normalized.end + 1)
+      return materializeOutputRowsInRange(runtimeState.rows, normalized.start, normalized.end)
     },
     setRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
       rowsMutationsRuntime.setRows(nextRows)
@@ -1190,13 +1372,13 @@ export function createClientRowModel<T>(
       if (nextRows.length === 0) {
         return
       }
-      rowsMutationsRuntime.setRows([...sourceRows, ...nextRows])
+      rowsMutationsRuntime.setRows([...baseSourceRows, ...nextRows])
     },
     prependRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
       if (nextRows.length === 0) {
         return
       }
-      rowsMutationsRuntime.setRows([...nextRows, ...sourceRows])
+      rowsMutationsRuntime.setRows([...nextRows, ...baseSourceRows])
     },
     patchRows(
       updates: readonly DataGridClientRowPatch<T>[],
@@ -1327,18 +1509,25 @@ export function createClientRowModel<T>(
     },
     getPivotCellDrilldown(input: DataGridPivotCellDrilldownInput) {
       ensureActive()
-      return resolveClientRowPivotCellDrilldown({
+      const drilldown = resolveClientRowPivotCellDrilldown({
         input,
         pivotModel,
         pivotColumns,
         aggregatedRowsProjection: runtimeState.aggregatedRowsProjection,
         pivotedRowsProjection: runtimeState.pivotedRowsProjection,
         groupedRowsProjection: runtimeState.groupedRowsProjection,
-        sourceRows,
+        sourceRows: baseSourceRows,
         isDataGridRowId,
         normalizePivotAxisValue,
-        readRowField: (row, key) => readRowField(row, key),
+        readRowField: (row, key) => readProjectionRowField(row, key),
       })
+      if (!drilldown) {
+        return null
+      }
+      return {
+        ...drilldown,
+        rows: materializeOutputRows(drilldown.rows),
+      }
     },
     setAggregationModel(nextAggregationModel: DataGridAggregationModel<T> | null) {
       stateMutationsRuntime.setAggregationModel(nextAggregationModel)
@@ -1355,21 +1544,26 @@ export function createClientRowModel<T>(
 
       const scope = options?.scope ?? "filtered"
       if (scope === "sourceAll") {
-        return buildColumnHistogram(sourceRows, normalizedColumnId, options)
+        return buildColumnHistogram(baseSourceRows, normalizedColumnId, options, readProjectionRowField)
       }
 
       if (options?.ignoreSelfFilter === true) {
         const filterPredicate = resolveFilterPredicate({ ignoreColumnFilterKey: normalizedColumnId })
         const rowsForHistogram: DataGridRowNode<T>[] = []
-        for (const row of sourceRows) {
+        for (const row of baseSourceRows) {
           if (filterPredicate(row)) {
             rowsForHistogram.push(row)
           }
         }
-        return buildColumnHistogram(rowsForHistogram, normalizedColumnId, options)
+        return buildColumnHistogram(rowsForHistogram, normalizedColumnId, options, readProjectionRowField)
       }
 
-      return buildColumnHistogram(runtimeState.filteredRowsProjection, normalizedColumnId, options)
+      return buildColumnHistogram(
+        runtimeState.filteredRowsProjection,
+        normalizedColumnId,
+        options,
+        readProjectionRowField,
+      )
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
       stateMutationsRuntime.setGroupExpansion(expansion)
@@ -1394,7 +1588,9 @@ export function createClientRowModel<T>(
       runtimeStateStore.setProjectionInvalidation(
         reason === "sort-change" ? ["sortChanged"] : ["manualRefresh"],
       )
-      computeRuntime.refresh()
+      if (!tryApplyFlatIdentityProjectionRefresh()) {
+        computeRuntime.refresh()
+      }
       emit()
     },
     subscribe(listener: DataGridRowModelListener<T>) {

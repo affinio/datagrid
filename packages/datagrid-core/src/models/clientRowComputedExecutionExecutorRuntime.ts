@@ -89,9 +89,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
   const touchedRowMarks = new Uint8Array(rowCount)
   const changedRowIndexes: number[] = []
   let touchedRowsCount = 0
-  const computedPatchByRowIndex = captureRowPatchMaps
-    ? new Map<number, Record<string, unknown>>()
-    : null
+  const computedPatchByRowIndex = new Map<number, Record<string, unknown>>()
   const previousRowByIndex = captureRowPatchMaps
     ? new Map<number, DataGridRowNode<T>>()
     : null
@@ -387,14 +385,12 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       }
       touchedComputedFields.add(computed.field)
 
-      if (computedPatchByRowIndex) {
-        let rowPatch = computedPatchByRowIndex.get(rowIndex)
-        if (!rowPatch) {
-          rowPatch = {}
-          computedPatchByRowIndex.set(rowIndex, rowPatch)
-        }
-        rowPatch[computed.field] = nextValue
+      let rowPatch = computedPatchByRowIndex.get(rowIndex)
+      if (!rowPatch) {
+        rowPatch = {}
+        computedPatchByRowIndex.set(rowIndex, rowPatch)
       }
+      rowPatch[computed.field] = nextValue
 
       let levelPatch = levelPatchByRowIndex.get(rowIndex)
       if (!levelPatch) {
@@ -860,17 +856,25 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
     const previousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
     const nextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
 
-    if (captureRowPatchMaps && computedPatchByRowIndex && previousRowByIndex && nextRowByIndex) {
+    for (const rowIndex of changedRowIndexes) {
+      const rowNode = sourceRowsBaseline[rowIndex]
+      if (!rowNode) {
+        continue
+      }
+      const rowId = rowNode.rowId
+      const computedPatch = computedPatchByRowIndex.get(rowIndex)
+      if (computedPatch) {
+        computedUpdatesByRowId.set(rowId, computedPatch as Partial<T>)
+      }
+    }
+
+    if (captureRowPatchMaps && previousRowByIndex && nextRowByIndex) {
       for (const rowIndex of changedRowIndexes) {
         const rowNode = sourceRowsBaseline[rowIndex]
         if (!rowNode) {
           continue
         }
         const rowId = rowNode.rowId
-        const computedPatch = computedPatchByRowIndex.get(rowIndex)
-        if (computedPatch) {
-          computedUpdatesByRowId.set(rowId, computedPatch as Partial<T>)
-        }
         const previousRow = previousRowByIndex.get(rowIndex)
         if (previousRow) {
           previousRowsById.set(rowId, previousRow)

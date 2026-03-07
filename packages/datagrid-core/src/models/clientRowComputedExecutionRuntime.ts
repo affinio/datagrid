@@ -57,6 +57,7 @@ export interface ApplyComputedFieldsToSourceRowsResult<T> {
   computedUpdatesByRowId: ReadonlyMap<DataGridRowId, Partial<T>>
   previousRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
   nextRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
+  nextSourceRows: readonly DataGridRowNode<T>[] | null
   formulaDiagnostics: DataGridProjectionFormulaDiagnostics
   computeStageDiagnostics: DataGridFormulaComputeStageDiagnostics
   rowRecomputeDiagnostics: DataGridFormulaRowRecomputeDiagnostics
@@ -84,6 +85,7 @@ export interface DataGridClientComputedExecutionRuntimeContext<T> {
   isFormulaExplainDiagnosticsEnabled: () => boolean
 
   getSourceRows: () => readonly DataGridRowNode<T>[]
+  getSourceRowIndexById: () => ReadonlyMap<DataGridRowId, number>
   setSourceRows: (rows: DataGridRowNode<T>[]) => void
   resolveRowFieldReader: (fieldInput: string) => ((rowNode: DataGridRowNode<T>) => unknown)
 
@@ -164,6 +166,7 @@ export function createClientRowComputedExecutionRuntime<T>(
         computedUpdatesByRowId: new Map<DataGridRowId, Partial<T>>(),
         previousRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
         nextRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
+        nextSourceRows: null,
         formulaDiagnostics: context.createEmptyFormulaDiagnostics(),
         computeStageDiagnostics: context.createEmptyFormulaComputeStageDiagnostics(),
         rowRecomputeDiagnostics: { rows: [] },
@@ -194,12 +197,55 @@ export function createClientRowComputedExecutionRuntime<T>(
       }
     }
 
-    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const candidateRowIndexes = (() => {
+      if (rowIds && rowIds.size > 0) {
+        const indexes: number[] = []
+        const seen = new Set<number>()
+        const sourceRowIndexById = context.getSourceRowIndexById()
+        for (const rowId of rowIds) {
+          const rowIndex = sourceRowIndexById.get(rowId)
+          if (
+            typeof rowIndex !== "number"
+            || rowIndex < 0
+            || rowIndex >= rowCount
+            || seen.has(rowIndex)
+          ) {
+            continue
+          }
+          seen.add(rowIndex)
+          indexes.push(rowIndex)
+        }
+        return indexes
+      }
+      if (options.changedFieldsByRowId && options.changedFieldsByRowId.size > 0) {
+        const indexes: number[] = []
+        const seen = new Set<number>()
+        const sourceRowIndexById = context.getSourceRowIndexById()
+        for (const rowId of options.changedFieldsByRowId.keys()) {
+          const rowIndex = sourceRowIndexById.get(rowId)
+          if (
+            typeof rowIndex !== "number"
+            || rowIndex < 0
+            || rowIndex >= rowCount
+            || seen.has(rowIndex)
+          ) {
+            continue
+          }
+          seen.add(rowIndex)
+          indexes.push(rowIndex)
+        }
+        return indexes
+      }
+      const indexes = new Array<number>(rowCount)
+      for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+        indexes[rowIndex] = rowIndex
+      }
+      return indexes
+    })()
+
+    for (const rowIndex of candidateRowIndexes) {
       const row = sourceRowsBaseline[rowIndex]
       if (!row) {
-        continue
-      }
-      if (rowIds && !rowIds.has(row.rowId)) {
         continue
       }
       if (!context.isRecord(row.data)) {
@@ -291,6 +337,7 @@ export function createClientRowComputedExecutionRuntime<T>(
         computedUpdatesByRowId: new Map<DataGridRowId, Partial<T>>(),
         previousRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
         nextRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
+        nextSourceRows: null,
         formulaDiagnostics: context.createEmptyFormulaDiagnostics(),
         computeStageDiagnostics: context.createEmptyFormulaComputeStageDiagnostics(),
         rowRecomputeDiagnostics: { rows: [] },
@@ -308,6 +355,7 @@ export function createClientRowComputedExecutionRuntime<T>(
         computedUpdatesByRowId: new Map<DataGridRowId, Partial<T>>(),
         previousRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
         nextRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
+        nextSourceRows: null,
         formulaDiagnostics: context.createEmptyFormulaDiagnostics(),
         computeStageDiagnostics: context.createEmptyFormulaComputeStageDiagnostics(),
         rowRecomputeDiagnostics: { rows: [] },
@@ -416,6 +464,7 @@ export function createClientRowComputedExecutionRuntime<T>(
       computedUpdatesByRowId: executionResult.computedUpdatesByRowId,
       previousRowsById: executionResult.previousRowsById,
       nextRowsById: executionResult.nextRowsById,
+      nextSourceRows: executionResult.nextSourceRows ?? null,
       formulaDiagnostics: diagnostics.formulaDiagnostics,
       computeStageDiagnostics: diagnostics.computeStageDiagnostics,
       rowRecomputeDiagnostics: diagnostics.rowRecomputeDiagnostics,

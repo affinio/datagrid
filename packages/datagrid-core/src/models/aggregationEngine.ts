@@ -5,6 +5,14 @@ import type {
   DataGridRowNode,
 } from "./rowModel.js"
 
+export interface DataGridAggregationFieldReader<T = unknown> {
+  (rowNode: DataGridRowNode<T>, key: string, field?: string): unknown
+}
+
+export interface DataGridAggregationEngineOptions<T = unknown> {
+  readRowField?: DataGridAggregationFieldReader<T>
+}
+
 function readByPathSegments(value: unknown, segments: readonly string[]): unknown {
   if (segments.length === 0 || typeof value !== "object" || value === null) {
     return undefined
@@ -30,10 +38,14 @@ function readByPathSegments(value: unknown, segments: readonly string[]): unknow
 function compileRowFieldReader<T>(
   key: string,
   field?: string,
+  readRowField?: DataGridAggregationFieldReader<T>,
 ): ((rowNode: DataGridRowNode<T>) => unknown) {
   const resolvedField = field && field.trim().length > 0 ? field.trim() : key.trim()
   if (!resolvedField) {
     return () => undefined
+  }
+  if (typeof readRowField === "function") {
+    return (rowNode: DataGridRowNode<T>): unknown => readRowField(rowNode, key, field)
   }
   const segments = resolvedField.includes(".")
     ? resolvedField.split(".").filter(Boolean)
@@ -170,13 +182,14 @@ function coerceForOp(
 
 function compileColumnSpec<T>(
   spec: DataGridAggregationColumnSpec<T>,
+  readRowField?: DataGridAggregationFieldReader<T>,
 ): DataGridCompiledAggregationColumn<T> | null {
   const key = spec.key.trim()
   if (key.length === 0) {
     return null
   }
   const op = spec.op
-  const readValue = compileRowFieldReader<T>(spec.key, spec.field)
+  const readValue = compileRowFieldReader<T>(spec.key, spec.field, readRowField)
 
   if (op === "custom") {
     const createState = typeof spec.createState === "function" ? spec.createState : (() => null)
@@ -428,13 +441,14 @@ function mergeStates<T>(
 
 function compileAggregationColumns<T>(
   model: DataGridAggregationModel<T> | null,
+  readRowField?: DataGridAggregationFieldReader<T>,
 ): readonly DataGridCompiledAggregationColumn<T>[] {
   if (!model || !Array.isArray(model.columns) || model.columns.length === 0) {
     return []
   }
   const compiled: DataGridCompiledAggregationColumn<T>[] = []
   for (const spec of model.columns) {
-    const column = compileColumnSpec(spec)
+    const column = compileColumnSpec(spec, readRowField)
     if (!column) {
       continue
     }
@@ -449,9 +463,10 @@ function isIncrementalAggregationOp(op: DataGridAggOp): boolean {
 
 export function createDataGridAggregationEngine<T>(
   initialModel: DataGridAggregationModel<T> | null = null,
+  options: DataGridAggregationEngineOptions<T> = {},
 ): DataGridAggregationEngine<T> {
   let model = initialModel
-  let compiledColumns = compileAggregationColumns(model)
+  let compiledColumns = compileAggregationColumns(model, options.readRowField)
   const isIncrementalSupported = (): boolean => {
     if (compiledColumns.length === 0) {
       return false
@@ -549,7 +564,7 @@ export function createDataGridAggregationEngine<T>(
   return {
     setModel(nextModel: DataGridAggregationModel<T> | null) {
       model = nextModel
-      compiledColumns = compileAggregationColumns(model)
+      compiledColumns = compileAggregationColumns(model, options.readRowField)
     },
     getModel: () => model,
     getCompiledColumns: () => compiledColumns,

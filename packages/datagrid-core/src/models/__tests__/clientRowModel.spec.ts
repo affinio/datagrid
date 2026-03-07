@@ -685,6 +685,44 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("keeps base rows immutable while exposing computed snapshot overlays", () => {
+    const baseRow = { id: 1, price: 10, qty: 2 }
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+      total?: number
+    }>({
+      rows: [
+        {
+          row: baseRow,
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "price * qty" },
+      ],
+    })
+
+    expect(baseRow).toEqual({ id: 1, price: 10, qty: 2 })
+    expect("total" in baseRow).toBe(false)
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(20)
+
+    model.patchRows(
+      [{ rowId: "r1", data: { price: 12 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+
+    expect(baseRow).toEqual({ id: 1, price: 10, qty: 2 })
+    expect("total" in baseRow).toBe(false)
+    expect((model.getRow(0)?.row as { price: number; total?: number }).price).toBe(12)
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(24)
+
+    model.dispose()
+  })
+
   it("evaluates formula identifiers with nested object and array paths", () => {
     const model = createClientRowModel<{
       id: number

@@ -328,7 +328,7 @@ function buildRows(rowCount, rng) {
     }
     mutableRows[index] = row
     rowNodes[index] = {
-      row,
+      row: { ...row },
       rowId: row.id,
       originalIndex: index,
       displayIndex: index,

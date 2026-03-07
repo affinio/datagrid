@@ -290,9 +290,9 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
       ? "columnar-fused"
       : columnarBatchEvaluator
         ? "columnar-jit"
-      : vectorColumnarBatchEvaluator
-        ? "columnar-vector"
-        : "columnar-ast"
+        : vectorColumnarBatchEvaluator
+          ? "columnar-vector"
+          : "columnar-ast"
 
     const evaluateWithRuntimePolicy = (
       evaluate: () => DataGridFormulaValue,

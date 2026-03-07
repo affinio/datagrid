@@ -145,8 +145,13 @@ function createDeferredComputedFieldReader<T>(options: {
 
 export function createComputedRegistryTokenResolverRuntime<T>(options: {
   state: ClientRowComputedRegistryRuntimeState<T>
+  resolveRowFieldValue?: (
+    rowNode: DataGridRowNode<T>,
+    field: string,
+    readBaseValue: (rowNode: DataGridRowNode<T>) => unknown,
+  ) => unknown
 }) {
-  const { state } = options
+  const { state, resolveRowFieldValue } = options
 
   const resolveComputedDependency = (
     value: DataGridComputedDependencyToken,
@@ -186,7 +191,12 @@ export function createComputedRegistryTokenResolverRuntime<T>(options: {
     }
     const readDataValue = createCompiledDataGridRowDataReader(field)
     const nextReader = (rowNode: DataGridRowNode<T>): unknown => {
-      return readDataValue(rowNode.data as unknown)
+      const readBaseValue = (inputRowNode: DataGridRowNode<T>): unknown => {
+        return readDataValue(inputRowNode.data as unknown)
+      }
+      return resolveRowFieldValue
+        ? resolveRowFieldValue(rowNode, field, readBaseValue)
+        : readBaseValue(rowNode)
     }
     state.rowFieldReaderCache.set(field, nextReader)
     return nextReader

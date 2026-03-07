@@ -64,14 +64,20 @@ export function remapRowsByIdentity<T>(
   inputRows: readonly DataGridRowNode<T>[],
   byId: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
 ): DataGridRowNode<T>[] {
+  let changed = false
   const remapped: DataGridRowNode<T>[] = []
   for (const row of inputRows) {
     const replacement = byId.get(row.rowId)
     if (replacement) {
       remapped.push(replacement)
+      if (replacement !== row) {
+        changed = true
+      }
+      continue
     }
+    changed = true
   }
-  return remapped
+  return changed ? remapped : (inputRows as DataGridRowNode<T>[])
 }
 
 export function preserveRowOrder<T>(
@@ -81,15 +87,23 @@ export function preserveRowOrder<T>(
   if (previousRows.length === 0) {
     return [...nextRows]
   }
+  if (previousRows === nextRows) {
+    return previousRows as DataGridRowNode<T>[]
+  }
   const nextById = buildRowIdIndex(nextRows)
   const seen = new Set<DataGridRowId>()
   const projected: DataGridRowNode<T>[] = []
+  let changed = previousRows.length !== nextRows.length
   for (const row of previousRows) {
     const candidate = nextById.get(row.rowId)
     if (!candidate || seen.has(candidate.rowId)) {
+      changed = true
       continue
     }
     projected.push(candidate)
+    if (candidate !== row || projected.length - 1 >= nextRows.length || nextRows[projected.length - 1] !== candidate) {
+      changed = true
+    }
     seen.add(candidate.rowId)
   }
   for (const row of nextRows) {
@@ -98,19 +112,22 @@ export function preserveRowOrder<T>(
     }
     projected.push(row)
     seen.add(row.rowId)
+    changed = true
   }
-  return projected
+  return changed ? projected : (previousRows as DataGridRowNode<T>[])
 }
 
 export function patchProjectedRowsByIdentity<T>(
   inputRows: readonly DataGridRowNode<T>[],
   byId: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
 ): DataGridRowNode<T>[] {
+  let changed = false
   const patched: DataGridRowNode<T>[] = []
   for (const row of inputRows) {
     const next = byId.get(row.rowId)
     if (!next) {
       patched.push(row)
+      changed = true
       continue
     }
     if (row.data === next.data && row.row === next.row) {
@@ -122,8 +139,9 @@ export function patchProjectedRowsByIdentity<T>(
       data: next.data,
       row: next.row,
     })
+    changed = true
   }
-  return patched
+  return changed ? patched : (inputRows as DataGridRowNode<T>[])
 }
 
 export function createRowVersionIndex<T>(rows: readonly DataGridRowNode<T>[]): Map<DataGridRowId, number> {
@@ -191,6 +209,21 @@ export function enforceCacheCap<K, V>(
 }
 
 export function assignDisplayIndexes<T>(rows: readonly DataGridRowNode<T>[]): DataGridRowNode<T>[] {
+  let requiresProjection = false
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    if (!row) {
+      requiresProjection = true
+      break
+    }
+    if (row.displayIndex !== index) {
+      requiresProjection = true
+      break
+    }
+  }
+  if (!requiresProjection) {
+    return rows as DataGridRowNode<T>[]
+  }
   const projected: DataGridRowNode<T>[] = []
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]

@@ -107,6 +107,7 @@ export interface TreeProjectRowsFromCacheInput<T> {
     next: DataGridIncrementalAggregationLeafContribution | null,
   ) => void
   finalizeGroupState?: (groupState: DataGridIncrementalAggregationGroupState) => Record<string, unknown>
+  resolveTreeDataRow?: (row: DataGridRowNode<T>) => T
 }
 
 export interface TreeProjectRowsFromCacheResult<T> {
@@ -152,6 +153,10 @@ export interface TreeProjectionRuntime<T> {
   ) => TreeParentProjectionCache<T>
   tryProjectPathSubtreeToggle: (input: TreePathSubtreeToggleInput<T>) => TreeProjectionResult<T> | null
   tryProjectParentSubtreeToggle: (input: TreeParentSubtreeToggleInput<T>) => TreeProjectionResult<T> | null
+}
+
+export interface TreeProjectionRuntimeOptions<T> {
+  resolveTreeDataRow?: (row: DataGridRowNode<T>) => T
 }
 
 function isDataGridRowId(value: unknown): value is DataGridRowId {
@@ -311,6 +316,7 @@ function buildTreePathProjectionCache<T>(
     next: DataGridIncrementalAggregationLeafContribution | null,
   ) => void,
   finalizeGroupState?: (groupState: DataGridIncrementalAggregationGroupState) => Record<string, unknown>,
+  resolveTreeDataRow?: (row: DataGridRowNode<T>) => T,
 ): TreePathProjectionCache<T> {
   const diagnostics: TreeProjectionDiagnostics = {
     orphans: 0,
@@ -344,7 +350,10 @@ function buildTreePathProjectionCache<T>(
 
   for (const row of inputRows) {
     const normalizedLeaf = normalizeLeafRow(row)
-    const path = normalizeTreePathSegments(treeData.getDataPath(normalizedLeaf.data, normalizedLeaf.sourceIndex))
+    const treeDataRow = resolveTreeDataRow
+      ? resolveTreeDataRow(normalizedLeaf)
+      : normalizedLeaf.data
+    const path = normalizeTreePathSegments(treeData.getDataPath(treeDataRow, normalizedLeaf.sourceIndex))
     const matches = rowMatchesFilter(normalizedLeaf)
     if (matches) {
       matchedLeafRowIds.add(normalizedLeaf.rowId)
@@ -671,6 +680,7 @@ function buildTreeParentProjectionCache<T>(
     next: DataGridIncrementalAggregationLeafContribution | null,
   ) => void,
   finalizeGroupState?: (groupState: DataGridIncrementalAggregationGroupState) => Record<string, unknown>,
+  resolveTreeDataRow?: (row: DataGridRowNode<T>) => T,
 ): TreeParentProjectionCache<T> {
   const diagnostics: TreeProjectionDiagnostics = {
     orphans: 0,
@@ -685,7 +695,10 @@ function buildTreeParentProjectionCache<T>(
 
   for (const row of inputRows) {
     const rowId = row.rowId
-    const resolved = treeData.getParentId(row.data, row.sourceIndex)
+    const treeDataRow = resolveTreeDataRow
+      ? resolveTreeDataRow(row)
+      : row.data
+    const resolved = treeData.getParentId(treeDataRow, row.sourceIndex)
     let parentId: DataGridRowId | null = resolved == null
       ? null
       : (isDataGridRowId(resolved) ? resolved : null)
@@ -1117,18 +1130,19 @@ function projectTreeDataRowsFromCache<T>(
       ? input.pathCacheState
       : {
           key: input.cacheKey,
-          cache: buildTreePathProjectionCache(
-            input.inputRows,
-            input.treeData,
-            input.rowMatchesFilter,
-            input.computeAggregates,
-            aggregationBasis,
-            input.createLeafContribution,
-            input.createEmptyGroupState,
-            input.applyContributionDelta,
-            input.finalizeGroupState,
-          ),
-        }
+        cache: buildTreePathProjectionCache(
+          input.inputRows,
+          input.treeData,
+          input.rowMatchesFilter,
+          input.computeAggregates,
+          aggregationBasis,
+          input.createLeafContribution,
+          input.createEmptyGroupState,
+          input.applyContributionDelta,
+          input.finalizeGroupState,
+          input.resolveTreeDataRow,
+        ),
+      }
     return {
       result: materializeTreePathProjection(
         nextPathCacheState.cache,
@@ -1155,6 +1169,7 @@ function projectTreeDataRowsFromCache<T>(
           input.createEmptyGroupState,
           input.applyContributionDelta,
           input.finalizeGroupState,
+          input.resolveTreeDataRow,
         ),
       }
   return {
@@ -1474,7 +1489,9 @@ function tryProjectTreeParentSubtreeToggle<T>(
   }
 }
 
-export function createTreeProjectionRuntime<T>(): TreeProjectionRuntime<T> {
+export function createTreeProjectionRuntime<T>(
+  options: TreeProjectionRuntimeOptions<T> = {},
+): TreeProjectionRuntime<T> {
   return {
     buildCacheKey: input => {
       return buildTreeProjectionCacheKey(
@@ -1484,7 +1501,10 @@ export function createTreeProjectionRuntime<T>(): TreeProjectionRuntime<T> {
         input.treeData,
       )
     },
-    projectRowsFromCache: projectTreeDataRowsFromCache,
+    projectRowsFromCache: input => projectTreeDataRowsFromCache({
+      ...input,
+      resolveTreeDataRow: options.resolveTreeDataRow,
+    }),
     patchPathCacheRowsByIdentity: patchTreePathProjectionCacheRowsByIdentity,
     patchParentCacheRowsByIdentity: patchTreeParentProjectionCacheRowsByIdentity,
     tryProjectPathSubtreeToggle: tryProjectTreePathSubtreeToggle,

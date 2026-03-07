@@ -18,7 +18,10 @@ export interface ClientRowPatchComputedMergeRuntimeContext<T> {
   commitFormulaComputeStageDiagnostics: (diagnostics: ApplyComputedFieldsToSourceRowsResult<T>["computeStageDiagnostics"]) => void
   commitFormulaRowRecomputeDiagnostics: (diagnostics: ApplyComputedFieldsToSourceRowsResult<T>["rowRecomputeDiagnostics"]) => void
   mergeRowPatch: (current: Partial<T>, patch: Partial<T>) => Partial<T>
-  getSourceRows: () => readonly DataGridRowNode<T>[]
+  getBaseSourceRows: () => readonly DataGridRowNode<T>[]
+  getMaterializedSourceRowAtIndex: (rowIndex: number) => DataGridRowNode<T> | undefined
+  getSourceRowIndexById: () => ReadonlyMap<DataGridRowId, number>
+  preparePatchedBaseRows: (rows: readonly DataGridRowNode<T>[], changedRowIds: readonly DataGridRowId[]) => void
 }
 
 export interface ClientRowPatchComputedMergeRuntime<T> {
@@ -33,6 +36,18 @@ export function createClientRowPatchComputedMergeRuntime<T>(
   const applyComputedFieldsToPatchResult = (
     patchResult: ApplyClientRowPatchUpdatesResult<T>,
   ): ApplyClientRowPatchUpdatesResult<T> => {
+    const sourceRowIndexById = context.getSourceRowIndexById()
+    const previousEffectiveRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
+    for (const rowId of patchResult.changedRowIds) {
+      const rowIndex = sourceRowIndexById.get(rowId)
+      const previousRow = typeof rowIndex === "number"
+        ? context.getMaterializedSourceRowAtIndex(rowIndex)
+        : undefined
+      if (previousRow) {
+        previousEffectiveRowsById.set(rowId, previousRow)
+      }
+    }
+    context.preparePatchedBaseRows(patchResult.nextSourceRows, patchResult.changedRowIds)
     context.invalidateSourceColumnValuesByRowIds(patchResult.changedRowIds)
     const changedFieldsByRowId = new Map<DataGridRowId, ReadonlySet<string>>()
     for (const [rowId, patch] of patchResult.changedUpdatesById.entries()) {
@@ -52,8 +67,23 @@ export function createClientRowPatchComputedMergeRuntime<T>(
     context.commitFormulaDiagnostics(computedResult.formulaDiagnostics)
     context.commitFormulaComputeStageDiagnostics(computedResult.computeStageDiagnostics)
     context.commitFormulaRowRecomputeDiagnostics(computedResult.rowRecomputeDiagnostics)
+    const materializedNextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
+    for (const rowId of patchResult.changedRowIds) {
+      const rowIndex = sourceRowIndexById.get(rowId)
+      const nextRow = typeof rowIndex === "number"
+        ? context.getMaterializedSourceRowAtIndex(rowIndex)
+        : undefined
+      if (nextRow) {
+        materializedNextRowsById.set(rowId, nextRow)
+      }
+    }
     if (!computedResult.changed) {
-      return patchResult
+      return {
+        ...patchResult,
+        nextSourceRows: context.getBaseSourceRows(),
+        previousRowsById: previousEffectiveRowsById,
+        nextRowsById: materializedNextRowsById,
+      }
     }
 
     const mergedChangedUpdatesById = new Map<DataGridRowId, Partial<T>>(patchResult.changedUpdatesById)
@@ -66,14 +96,14 @@ export function createClientRowPatchComputedMergeRuntime<T>(
       }
     }
 
-    const mergedPreviousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>(patchResult.previousRowsById)
+    const mergedPreviousRowsById = new Map<DataGridRowId, DataGridRowNode<T>>(previousEffectiveRowsById)
     for (const [rowId, previousRow] of computedResult.previousRowsById.entries()) {
       if (!mergedPreviousRowsById.has(rowId)) {
         mergedPreviousRowsById.set(rowId, previousRow)
       }
     }
 
-    const mergedNextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>(patchResult.nextRowsById)
+    const mergedNextRowsById = new Map<DataGridRowId, DataGridRowNode<T>>(materializedNextRowsById)
     for (const [rowId, nextRow] of computedResult.nextRowsById.entries()) {
       mergedNextRowsById.set(rowId, nextRow)
     }
@@ -84,7 +114,7 @@ export function createClientRowPatchComputedMergeRuntime<T>(
     }
 
     return {
-      nextSourceRows: context.getSourceRows(),
+      nextSourceRows: context.getBaseSourceRows(),
       changed: true,
       computedChanged: true,
       changedRowIds: Array.from(changedRowIdSet),

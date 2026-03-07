@@ -1,5 +1,6 @@
 import {
   createDataGridAggregationEngine,
+  type DataGridAggregationFieldReader,
   type DataGridIncrementalAggregationLeafContribution,
   type DataGridIncrementalAggregationGroupState,
 } from "./aggregationEngine.js"
@@ -47,6 +48,10 @@ interface DataGridPivotColumnKeyMeta {
 interface DataGridPivotFieldResolver<T> {
   field: string
   read: (rowNode: DataGridRowNode<T>) => unknown
+}
+
+export interface DataGridPivotRuntimeOptions<T> {
+  readRowField?: DataGridAggregationFieldReader<T>
 }
 
 type DataGridPivotProjectionEntryKind = "group" | "detail" | "subtotal" | "grand-total"
@@ -253,10 +258,19 @@ function readByPathSegments(value: unknown, segments: readonly string[]): unknow
   return current
 }
 
-function createPivotFieldResolver<T>(field: string): DataGridPivotFieldResolver<T> | null {
+function createPivotFieldResolver<T>(
+  field: string,
+  readRowField?: DataGridAggregationFieldReader<T>,
+): DataGridPivotFieldResolver<T> | null {
   const normalizedField = field.trim()
   if (normalizedField.length === 0) {
     return null
+  }
+  if (typeof readRowField === "function") {
+    return {
+      field: normalizedField,
+      read: (rowNode: DataGridRowNode<T>): unknown => readRowField(rowNode, normalizedField, normalizedField),
+    }
   }
   const segments = normalizedField.includes(".")
     ? normalizedField.split(".").filter(Boolean)
@@ -454,6 +468,7 @@ function isSamePivotTouchedKeys(
 
 function buildPivotProjectionRows<T>(
   input: DataGridPivotProjectRowsInput<T>,
+  options: DataGridPivotRuntimeOptions<T> = {},
 ): DataGridPivotProjectionBuildResult<T> {
   const { inputRows, pivotModel, normalizeFieldValue } = input
   if (inputRows.length === 0) {
@@ -483,10 +498,10 @@ function buildPivotProjectionRows<T>(
   })
   const canUseIncrementalPivotAggregation = pivotAggregationEngine.isIncrementalAggregationSupported()
   const rowFieldResolvers: DataGridPivotFieldResolver<T>[] = pivotModel.rows
-    .map(field => createPivotFieldResolver<T>(field))
+    .map(field => createPivotFieldResolver<T>(field, options.readRowField))
     .filter((resolver): resolver is DataGridPivotFieldResolver<T> => resolver !== null)
   const columnFieldResolvers: DataGridPivotFieldResolver<T>[] = pivotModel.columns
-    .map(field => createPivotFieldResolver<T>(field))
+    .map(field => createPivotFieldResolver<T>(field, options.readRowField))
     .filter((resolver): resolver is DataGridPivotFieldResolver<T> => resolver !== null)
   const includeRowSubtotals = pivotModel.rowSubtotals === true && rowFieldResolvers.length > 1
   const includeColumnSubtotals = pivotModel.columnSubtotals === true && columnFieldResolvers.length > 1
@@ -1068,7 +1083,9 @@ function buildPivotProjectionRows<T>(
   }
 }
 
-export function createPivotRuntime<T>(): DataGridPivotRuntime<T> {
+export function createPivotRuntime<T>(
+  options: DataGridPivotRuntimeOptions<T> = {},
+): DataGridPivotRuntime<T> {
   let incrementalState: DataGridPivotIncrementalProjectionState<T> | null = null
 
   const applyValueOnlyPatch = (input: DataGridPivotApplyValuePatchInput<T>): DataGridPivotProjectionResult<T> | null => {
@@ -1187,7 +1204,7 @@ export function createPivotRuntime<T>(): DataGridPivotRuntime<T> {
 
   return {
     projectRows: (input: DataGridPivotProjectRowsInput<T>): DataGridPivotProjectionResult<T> => {
-      const built = buildPivotProjectionRows(input)
+      const built = buildPivotProjectionRows(input, options)
       incrementalState = built.incrementalState
       return {
         rows: built.rows,

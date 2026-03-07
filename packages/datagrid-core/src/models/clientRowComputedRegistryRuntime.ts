@@ -73,6 +73,11 @@ export interface ClientRowComputedRegistryRuntimeContext<T> {
   projectionPolicy: DataGridProjectionPolicy
   initialFormulaFunctionRegistry?: DataGridFormulaFunctionRegistry
   formulaCyclePolicy?: DataGridFormulaCyclePolicy
+  resolveRowFieldValue?: (
+    rowNode: DataGridRowNode<T>,
+    field: string,
+    readBaseValue: (rowNode: DataGridRowNode<T>) => unknown,
+  ) => unknown
   onFormulaRuntimeError: (runtimeError: DataGridFormulaRuntimeError) => void
   onComputedPlanChanged: () => void
 }
@@ -208,7 +213,10 @@ export function createClientRowComputedRegistryRuntime<T>(
     computedDependentsByIndex: [],
   }
 
-  const tokenResolverRuntime = createComputedRegistryTokenResolverRuntime({ state })
+  const tokenResolverRuntime = createComputedRegistryTokenResolverRuntime({
+    state,
+    resolveRowFieldValue: context.resolveRowFieldValue,
+  })
   const executionPlanRuntime = createComputedRegistryExecutionPlanRuntime({
     state,
     formulaCyclePolicy,

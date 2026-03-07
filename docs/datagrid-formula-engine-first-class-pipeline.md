@@ -109,10 +109,11 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 
 ## Phase 6 — Calculation Snapshot Runtime
 
-- [ ] Block 18. Immutable Base Rows + Computed Snapshot Overlay
+- [x] Block 18. Immutable Base Rows + Computed Snapshot Overlay
   - Keep source/base rows immutable during formula recompute.
   - Materialize computed values into snapshot-backed column storage instead of patching row objects directly.
   - Read path must resolve `source field` vs `computed snapshot field` deterministically.
+  - Stabilization status: formula execution and source-column cache now read from `baseSourceRows`; filter, histogram, pivot drilldown, and aggregation reads go through overlay-aware projection readers; flat runtime/output rows now stay on base rows and materialize computed leaf rows on demand; flat no-stage runtime projections now share a single base-row array instead of cloning per stage; identity projection helpers now reuse existing arrays when remap/order/patch/display-index work is a no-op; fully flat pipelines can bypass projection-stage traversal and commit flat runtime state directly.
 - [ ] Block 19. Snapshot-Aware Runtime Integration
   - Replace direct `setSourceRows(nextRows)` compute mutation flow with atomic calculation snapshot swap where eligible.
   - Make worker-owned recompute able to publish a new calculation snapshot instead of row-object patches.
@@ -124,15 +125,15 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 
 ## Phase 6 Priority Order
 
-1. [ ] `S1` Immutable Base Rows + Computed Snapshot Overlay
+1. [x] `S1` Immutable Base Rows + Computed Snapshot Overlay
 2. [ ] `S2` Snapshot-Aware Runtime Integration
 3. [ ] `S3` Snapshot-Aware Undo / Debug / Collaboration
 
 ## Phase 6 Definition of Done
 
-- [ ] Formula recompute can complete without mutating base/source rows directly.
-- [ ] Computed values can live in snapshot-backed column storage.
-- [ ] Read path supports source + computed overlay deterministically.
+- [x] Formula recompute can complete without mutating base/source rows directly.
+- [x] Computed values can live in snapshot-backed column storage.
+- [x] Read path supports source + computed overlay deterministically.
 - [ ] Worker/main-thread runtime can atomically swap calculation snapshots.
 - [ ] Undo/debug flows can reference calculation snapshots without cloning full row objects.
 

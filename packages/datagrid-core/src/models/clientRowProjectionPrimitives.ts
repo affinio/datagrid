@@ -148,7 +148,10 @@ function normalizeColumnFilterEntries(
 
 export function createFilterPredicate<T>(
   filterModel: DataGridFilterSnapshot | null,
-  options: { ignoreColumnFilterKey?: string } = {},
+  options: {
+    ignoreColumnFilterKey?: string
+    readRowField?: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown
+  } = {},
 ): (rowNode: DataGridRowNode<T>) => boolean {
   if (!filterModel) {
     return () => true
@@ -157,6 +160,7 @@ export function createFilterPredicate<T>(
   const ignoredColumnKey = typeof options.ignoreColumnFilterKey === "string"
     ? options.ignoreColumnFilterKey.trim()
     : ""
+  const readField = options.readRowField ?? readRowField
 
   const effectiveFilterModel = (() => {
     if (!ignoredColumnKey) {
@@ -212,7 +216,7 @@ export function createFilterPredicate<T>(
 
   return (rowNode: DataGridRowNode<T>) => {
     for (const [key, filterEntry] of columnFilters) {
-      const candidate = readRowField(rowNode, key)
+      const candidate = readField(rowNode, key)
       if (filterEntry.kind === "valueSet") {
         const candidateToken = normalizeValueSetTokenForLookup(serializeColumnValueToToken(candidate))
         if (!filterEntry.valueTokenSet?.has(candidateToken)) {
@@ -227,7 +231,7 @@ export function createFilterPredicate<T>(
 
     if (advancedExpression) {
       return evaluateDataGridAdvancedFilterExpression(advancedExpression, condition => {
-        return readRowField(rowNode, condition.key, condition.field)
+        return readField(rowNode, condition.key, condition.field)
       })
     }
 
@@ -309,12 +313,13 @@ export function buildColumnHistogram<T>(
   rows: readonly DataGridRowNode<T>[],
   columnId: string,
   options?: DataGridColumnHistogramOptions,
+  readField: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown = readRowField,
 ): DataGridColumnHistogram {
   const key = String(columnId ?? "").trim()
   const entriesByToken = new Map<string, DataGridColumnHistogramEntry>()
 
   for (const row of rows) {
-    const value = readRowField(row, key)
+    const value = readField(row, key)
     const token = serializeColumnValueToToken(value)
     const current = entriesByToken.get(token)
     if (current) {
@@ -466,7 +471,7 @@ export function sortLeafRows<T>(
 ): DataGridRowNode<T>[] {
   const descriptors = Array.isArray(sortModel) ? sortModel.filter(Boolean) : []
   if (descriptors.length === 0) {
-    return [...rows]
+    return rows as DataGridRowNode<T>[]
   }
   const sortValuesByIndex = new Array<readonly unknown[]>(rows.length)
   for (let index = 0; index < rows.length; index += 1) {

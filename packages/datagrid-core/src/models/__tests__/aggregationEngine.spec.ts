@@ -172,6 +172,34 @@ describe("aggregationEngine", () => {
     })
   })
 
+  it("supports injected row field readers", () => {
+    const overlayByRowId = new Map<string, { value?: number | null }>([
+      ["r1", { value: 10 }],
+      ["r2", { value: 20 }],
+    ])
+    const engine = createDataGridAggregationEngine<MetricRow>({
+      columns: [
+        { key: "value", field: "value", op: "sum" },
+      ],
+    }, {
+      readRowField: (row, key, field) => {
+        const resolvedField = field && field.trim().length > 0 ? field : key
+        const overlay = overlayByRowId.get(String(row.rowId))
+        if (overlay && resolvedField === "value" && typeof overlay.value !== "undefined") {
+          return overlay.value
+        }
+        return row.data[resolvedField as keyof MetricRow]
+      },
+    })
+
+    expect(engine.computeAggregatesForLeaves([
+      createLeafRow("r1", 1, 0),
+      createLeafRow("r2", 2, 1),
+    ])).toEqual({
+      value: 30,
+    })
+  })
+
   it("computes grouped aggregates from pre-order grouped projection", () => {
     const engine = createDataGridAggregationEngine<MetricRow>({
       columns: [
