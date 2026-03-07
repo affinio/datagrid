@@ -1,4 +1,7 @@
-import type { DataGridFormulaExecutionPlanSnapshot } from "./formulaExecutionPlan.js"
+import type {
+  DataGridFormulaExecutionPlanSnapshot,
+  DataGridFormulaGraphSnapshot,
+} from "./formulaExecutionPlan.js"
 
 export type DataGridRowId = string | number
 export type DataGridRowIdResolver<T = unknown> = (row: T, index: number) => DataGridRowId
@@ -514,6 +517,27 @@ export interface DataGridFormulaDirtyCause {
   rows: number
 }
 
+export interface DataGridFormulaDirtyRowCause {
+  kind: "all" | "field" | "computed" | "context"
+  value?: string
+}
+
+export interface DataGridFormulaRowNodeRecomputeDiagnostics {
+  name: string
+  field: string
+  causes: readonly DataGridFormulaDirtyRowCause[]
+}
+
+export interface DataGridFormulaRowRecomputeDiagnosticsEntry {
+  rowId: DataGridRowId
+  sourceIndex: number
+  nodes: readonly DataGridFormulaRowNodeRecomputeDiagnostics[]
+}
+
+export interface DataGridFormulaRowRecomputeDiagnostics {
+  rows: readonly DataGridFormulaRowRecomputeDiagnosticsEntry[]
+}
+
 export interface DataGridFormulaNodeComputeDiagnostics {
   name: string
   field: string
@@ -607,7 +631,9 @@ export interface DataGridRowModel<T = unknown> {
   unregisterFormulaFunction?(name: string): boolean
   getFormulaFunctionNames?(): readonly string[]
   getFormulaExecutionPlan?(): DataGridFormulaExecutionPlanSnapshot | null
+  getFormulaGraph?(): DataGridFormulaGraphSnapshot | null
   getFormulaComputeStageDiagnostics?(): DataGridFormulaComputeStageDiagnostics | null
+  getFormulaRowRecomputeDiagnostics?(): DataGridFormulaRowRecomputeDiagnostics | null
   refresh(reason?: DataGridRowModelRefreshReason): Promise<void> | void
   subscribe(listener: DataGridRowModelListener<T>): () => void
   dispose(): void

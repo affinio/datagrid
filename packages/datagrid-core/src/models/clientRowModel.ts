@@ -20,6 +20,7 @@ import {
   type DataGridFormulaFieldSnapshot,
   type DataGridFormulaComputeStageDiagnostics,
   type DataGridFormulaIterativeCalculationOptions,
+  type DataGridFormulaRowRecomputeDiagnostics,
   type DataGridFormulaValue,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramOptions,
@@ -145,7 +146,9 @@ import {
   type DataGridFormulaFunctionRegistry,
 } from "./formulaEngine.js"
 import {
+  snapshotDataGridFormulaGraph,
   snapshotDataGridFormulaExecutionPlan,
+  type DataGridFormulaGraphSnapshot,
   type DataGridFormulaExecutionPlanSnapshot,
 } from "./formulaExecutionPlan.js"
 
@@ -191,6 +194,18 @@ export interface CreateClientRowModelOptions<T> {
    * `null`/`undefined` keeps cache unlimited.
    */
   formulaColumnCacheMaxColumns?: number | null
+  /**
+   * Captures verbose per-row formula recompute diagnostics.
+   * Disable for benchmarks or perf runs to reduce transient allocations.
+   * Default: `true`.
+   */
+  captureFormulaRowRecomputeDiagnostics?: boolean
+  /**
+   * Captures formula explain diagnostics (dirty causes per node/row).
+   * Disable for benchmarks or perf runs to reduce bookkeeping overhead.
+   * Default: `true`.
+   */
+  captureFormulaExplainDiagnostics?: boolean
 }
 
 export interface DataGridClientRowReorderInput {
@@ -248,7 +263,9 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
   unregisterFormulaFunction(name: string): boolean
   getFormulaFunctionNames(): readonly string[]
   getFormulaExecutionPlan(): DataGridFormulaExecutionPlanSnapshot | null
+  getFormulaGraph(): DataGridFormulaGraphSnapshot | null
   getFormulaComputeStageDiagnostics(): DataGridFormulaComputeStageDiagnostics | null
+  getFormulaRowRecomputeDiagnostics(): DataGridFormulaRowRecomputeDiagnostics | null
   reorderRows(input: DataGridClientRowReorderInput): boolean
   getComputeMode(): DataGridClientComputeMode
   switchComputeMode(mode: DataGridClientComputeMode): boolean
@@ -333,6 +350,8 @@ export function createClientRowModel<T>(
   const formulaColumnCacheMaxColumns = normalizeFormulaColumnCacheMaxColumns(
     options.formulaColumnCacheMaxColumns,
   )
+  const captureFormulaRowRecomputeDiagnostics = options.captureFormulaRowRecomputeDiagnostics !== false
+  const captureFormulaExplainDiagnostics = options.captureFormulaExplainDiagnostics !== false
   if (options.projectionPolicy && Array.isArray(options.fieldDependencies)) {
     for (const dependency of options.fieldDependencies) {
       projectionPolicy.dependencyGraph.registerDependency(
@@ -438,7 +457,9 @@ export function createClientRowModel<T>(
   const pushFormulaRuntimeError = formulaDiagnosticsRuntime.pushFormulaRuntimeError
   const commitFormulaDiagnostics = formulaDiagnosticsRuntime.commitFormulaDiagnostics
   const commitFormulaComputeStageDiagnostics = formulaDiagnosticsRuntime.commitFormulaComputeStageDiagnostics
+  const commitFormulaRowRecomputeDiagnostics = formulaDiagnosticsRuntime.commitFormulaRowRecomputeDiagnostics
   const getFormulaComputeStageDiagnosticsSnapshot = formulaDiagnosticsRuntime.getFormulaComputeStageDiagnosticsSnapshot
+  const getFormulaRowRecomputeDiagnosticsSnapshot = formulaDiagnosticsRuntime.getFormulaRowRecomputeDiagnosticsSnapshot
   const formulaCyclePolicy: DataGridFormulaCyclePolicy = options.formulaCyclePolicy === "iterative"
     ? "iterative"
     : "error"
@@ -479,6 +500,8 @@ export function createClientRowModel<T>(
     vectorBatchSize: DATAGRID_COMPUTE_VECTOR_BATCH_SIZE,
     isRecord,
     isColumnCacheParityVerificationEnabled: isDataGridColumnCacheParityVerificationEnabled,
+    isFormulaRowRecomputeDiagnosticsEnabled: () => captureFormulaRowRecomputeDiagnostics,
+    isFormulaExplainDiagnosticsEnabled: () => captureFormulaExplainDiagnostics,
     getSourceRows: () => sourceRows,
     setSourceRows: (rows) => {
       sourceRows = rows
@@ -949,6 +972,7 @@ export function createClientRowModel<T>(
       const computedResult = applyComputedFieldsToSourceRows()
       commitFormulaDiagnostics(computedResult.formulaDiagnostics)
       commitFormulaComputeStageDiagnostics(computedResult.computeStageDiagnostics)
+      commitFormulaRowRecomputeDiagnostics(computedResult.rowRecomputeDiagnostics)
       if (!computedResult.changed) {
         return
       }
@@ -986,6 +1010,7 @@ export function createClientRowModel<T>(
     applyComputedFieldsToSourceRows,
     commitFormulaDiagnostics,
     commitFormulaComputeStageDiagnostics,
+    commitFormulaRowRecomputeDiagnostics,
     mergeRowPatch,
     getSourceRows: () => sourceRows,
   })
@@ -1119,6 +1144,7 @@ export function createClientRowModel<T>(
     })
     commitFormulaDiagnostics(computedResult.formulaDiagnostics)
     commitFormulaComputeStageDiagnostics(computedResult.computeStageDiagnostics)
+    commitFormulaRowRecomputeDiagnostics(computedResult.rowRecomputeDiagnostics)
     if (!computedResult.changed) {
       return 0
     }
@@ -1225,8 +1251,18 @@ export function createClientRowModel<T>(
       }
       return snapshotDataGridFormulaExecutionPlan(computedExecutionPlan)
     },
+    getFormulaGraph() {
+      const computedExecutionPlan = computedRegistry.getComputedExecutionPlan()
+      if (computedExecutionPlan.order.length === 0) {
+        return null
+      }
+      return snapshotDataGridFormulaGraph(computedExecutionPlan)
+    },
     getFormulaComputeStageDiagnostics() {
       return getFormulaComputeStageDiagnosticsSnapshot()
+    },
+    getFormulaRowRecomputeDiagnostics() {
+      return getFormulaRowRecomputeDiagnosticsSnapshot()
     },
     recomputeComputedFields(rowIds?: readonly DataGridRowId[]) {
       ensureActive()
@@ -1426,6 +1462,7 @@ export function createClientRowModel<T>(
       formulaDiagnosticsRuntime.commitFormulaComputeStageDiagnostics(
         createEmptyFormulaComputeStageDiagnostics(),
       )
+      formulaDiagnosticsRuntime.commitFormulaRowRecomputeDiagnostics({ rows: [] })
       runtimeStateStore.setProjectionFormulaDiagnostics(null)
       invalidateTreeProjectionCaches()
       cachedFilterPredicate = null

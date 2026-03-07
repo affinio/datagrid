@@ -251,6 +251,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
         dependentDirtyRows.push(rowIndex)
         dirtyRuntime.markDirtyRowForNode(dependentIndex, rowIndex)
         dirtyRuntime.incrementCauseCount(dirtyRuntime.dirtyComputedCauseCountsByNode, dependentIndex, computedName)
+        dirtyRuntime.recordDirtyCauseForNodeRow(dependentIndex, rowIndex, "computed", computedName)
         dirtyRuntime.markDirtyNode(dependentIndex)
         dirtyRuntime.markDirtyRow(rowIndex)
         if (levelNodeIndexSet.has(dependentIndex)) {

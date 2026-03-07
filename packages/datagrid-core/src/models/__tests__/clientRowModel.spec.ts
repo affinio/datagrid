@@ -550,6 +550,91 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("exposes explicit formula graph and row-level recompute causes", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+      tax: number
+      subtotal?: number
+      total?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10, qty: 2, tax: 3 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "subtotal", formula: "price * qty" },
+        { name: "total", formula: "subtotal + tax" },
+      ],
+    })
+
+    expect(model.getFormulaGraph()).toEqual({
+      order: ["subtotal", "total"],
+      levels: [["subtotal"], ["total"]],
+      levelDetails: [
+        { index: 0, nodes: ["subtotal"] },
+        { index: 1, nodes: ["total"] },
+      ],
+      nodes: [
+        {
+          name: "subtotal",
+          field: "subtotal",
+          level: 0,
+          fieldDeps: ["price", "qty"],
+          computedDeps: [],
+          dependents: ["total"],
+        },
+        {
+          name: "total",
+          field: "total",
+          level: 1,
+          fieldDeps: ["subtotal", "tax"],
+          computedDeps: ["subtotal"],
+          dependents: [],
+        },
+      ],
+      edges: [
+        { from: "price", to: "subtotal", domain: "field", value: "price" },
+        { from: "qty", to: "subtotal", domain: "field", value: "qty" },
+        { from: "subtotal", to: "total", domain: "computed", value: "subtotal" },
+        { from: "tax", to: "total", domain: "field", value: "tax" },
+      ],
+    })
+
+    model.patchRows(
+      [{ rowId: "r1", data: { price: 12 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+
+    expect(model.getFormulaRowRecomputeDiagnostics()).toEqual({
+      rows: [
+        {
+          rowId: "r1",
+          sourceIndex: 0,
+          nodes: [
+            {
+              name: "subtotal",
+              field: "subtotal",
+              causes: [{ kind: "field", value: "price" }],
+            },
+            {
+              name: "total",
+              field: "total",
+              causes: [{ kind: "computed", value: "subtotal" }],
+            },
+          ],
+        },
+      ],
+    })
+
+    model.dispose()
+  })
+
   it("evaluates formula identifiers with nested object and array paths", () => {
     const model = createClientRowModel<{
       id: number

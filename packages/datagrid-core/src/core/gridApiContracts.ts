@@ -11,6 +11,7 @@ import type {
   DataGridFormulaFunctionDefinition,
   DataGridFormulaValue,
   DataGridFormulaExecutionPlanSnapshot,
+  DataGridFormulaGraphSnapshot,
   DataGridColumnDef,
   DataGridColumnHistogram,
   DataGridColumnHistogramOptions,
@@ -32,6 +33,7 @@ import type {
   DataGridProjectionFormulaDiagnostics,
   DataGridFormulaComputeStageDiagnostics,
   DataGridFormulaDirtyCause,
+  DataGridFormulaRowRecomputeDiagnostics,
   DataGridFormulaExplainDependency,
   DataGridFormulaExplainNode,
   DataGridFormulaNodeComputeDiagnostics,
@@ -264,8 +266,10 @@ export interface DataGridApiFormulaExplainEntry {
 
 export interface DataGridApiFormulaExplainSnapshot {
   executionPlan: DataGridFormulaExecutionPlanSnapshot | null
+  graph?: DataGridFormulaGraphSnapshot | null
   projectionFormula: DataGridProjectionFormulaDiagnostics | null
   computeStage: DataGridFormulaComputeStageDiagnostics | null
+  rowRecompute?: DataGridFormulaRowRecomputeDiagnostics | null
   formulas?: readonly DataGridApiFormulaExplainEntry[]
 }
 

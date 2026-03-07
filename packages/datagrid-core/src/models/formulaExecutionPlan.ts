@@ -26,10 +26,26 @@ export interface DataGridFormulaExecutionPlanNodeSnapshot {
   cycleGroup?: readonly string[]
 }
 
+export interface DataGridFormulaGraphEdgeSnapshot {
+  from: string
+  to: string
+  domain: DataGridFormulaExecutionDependencyDomain
+  value: string
+}
+
+export interface DataGridFormulaGraphLevelSnapshot {
+  index: number
+  nodes: readonly string[]
+  iterative?: boolean
+  cycleGroups?: readonly (readonly string[] )[]
+}
+
 export interface DataGridFormulaExecutionPlan {
   order: readonly string[]
   levels: readonly (readonly string[])[]
+  levelDetails: readonly DataGridFormulaGraphLevelSnapshot[]
   nodes: ReadonlyMap<string, DataGridFormulaExecutionPlanNodeSnapshot>
+  edges: readonly DataGridFormulaGraphEdgeSnapshot[]
   iterativeGroups: readonly (readonly string[])[]
   directByFields: (changedFields: ReadonlySet<string>) => ReadonlySet<string>
   affectedByFields: (changedFields: ReadonlySet<string>) => ReadonlySet<string>
@@ -40,6 +56,15 @@ export interface DataGridFormulaExecutionPlanSnapshot {
   order: readonly string[]
   levels: readonly (readonly string[])[]
   nodes: readonly DataGridFormulaExecutionPlanNodeSnapshot[]
+  iterativeGroups?: readonly (readonly string[] )[]
+}
+
+export interface DataGridFormulaGraphSnapshot {
+  order: readonly string[]
+  levels: readonly (readonly string[] )[]
+  levelDetails: readonly DataGridFormulaGraphLevelSnapshot[]
+  nodes: readonly DataGridFormulaExecutionPlanNodeSnapshot[]
+  edges: readonly DataGridFormulaGraphEdgeSnapshot[]
   iterativeGroups?: readonly (readonly string[] )[]
 }
 
@@ -323,6 +348,20 @@ export function createDataGridFormulaExecutionPlan(
   const levels = Array.from(levelBuckets.entries())
     .sort((left, right) => left[0] - right[0])
     .map(([, names]) => Object.freeze([...names]) as readonly string[])
+  const edges = Object.freeze(
+    order.flatMap((name) => {
+      const node = nodeByName.get(name)
+      if (!node) {
+        return []
+      }
+      return node.deps.map((dependency) => Object.freeze({
+        from: dependency.value,
+        to: name,
+        domain: dependency.domain,
+        value: dependency.value,
+      }))
+    }),
+  ) as readonly DataGridFormulaGraphEdgeSnapshot[]
 
   const nodes = new Map<string, DataGridFormulaExecutionPlanNodeSnapshot>()
   const dependentsByField = new Map<string, Set<string>>()
@@ -519,16 +558,47 @@ export function createDataGridFormulaExecutionPlan(
     return affectedNames
   }
 
+  const iterativeGroupSetByName = new Map<string, readonly string[]>()
+  for (const group of iterativeGroups) {
+    for (const name of group) {
+      iterativeGroupSetByName.set(name, group)
+    }
+  }
+  const levelDetails = Object.freeze(levels.map((level, index) => {
+    const cycleGroups = level
+      .map(name => iterativeGroupSetByName.get(name))
+      .filter((group, groupIndex, allGroups): group is readonly string[] => {
+        if (!group) {
+          return false
+        }
+        return allGroups.indexOf(group) === groupIndex
+      })
+    return Object.freeze({
+      index,
+      nodes: Object.freeze([...level]),
+      ...(cycleGroups.length > 0
+        ? {
+          iterative: true,
+          cycleGroups: Object.freeze(cycleGroups.map(group => Object.freeze([...group]) as readonly string[])),
+        }
+        : {}),
+    })
+  })) as readonly DataGridFormulaGraphLevelSnapshot[]
+
   return {
     order: Object.freeze([...order]),
     levels: Object.freeze([...levels]),
+    levelDetails,
     nodes,
+    edges,
     iterativeGroups: Object.freeze(iterativeGroups.map(group => Object.freeze([...group]) as readonly string[])),
     directByFields,
     affectedByFields,
     affectedByComputed,
   }
 }
+
+export const createDataGridFormulaGraph = createDataGridFormulaExecutionPlan
 
 export function snapshotDataGridFormulaExecutionPlan(
   plan: DataGridFormulaExecutionPlan,
@@ -566,6 +636,34 @@ export function snapshotDataGridFormulaExecutionPlan(
           plan.iterativeGroups.map(group => Object.freeze([...group]) as readonly string[]),
         ),
       }
+      : {}),
+  }
+}
+
+export function snapshotDataGridFormulaGraph(
+  plan: DataGridFormulaExecutionPlan,
+): DataGridFormulaGraphSnapshot {
+  const executionPlanSnapshot = snapshotDataGridFormulaExecutionPlan(plan)
+  return {
+    order: executionPlanSnapshot.order,
+    levels: executionPlanSnapshot.levels,
+    levelDetails: plan.levelDetails.map(level => ({
+      index: level.index,
+      nodes: [...level.nodes],
+      ...(level.iterative ? { iterative: true } : {}),
+      ...(level.cycleGroups
+        ? { cycleGroups: level.cycleGroups.map(group => [...group]) }
+        : {}),
+    })),
+    nodes: executionPlanSnapshot.nodes,
+    edges: plan.edges.map(edge => ({
+      from: edge.from,
+      to: edge.to,
+      domain: edge.domain,
+      value: edge.value,
+    })),
+    ...(executionPlanSnapshot.iterativeGroups
+      ? { iterativeGroups: executionPlanSnapshot.iterativeGroups.map(group => [...group]) }
       : {}),
   }
 }

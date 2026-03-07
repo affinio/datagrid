@@ -1,8 +1,11 @@
 import type {
   DataGridFormulaComputeStageDiagnostics,
   DataGridFormulaDirtyCause,
+  DataGridFormulaDirtyRowCause,
   DataGridFormulaNodeComputeDiagnostics,
   DataGridProjectionFormulaDiagnostics,
+  DataGridFormulaRowRecomputeDiagnostics,
+  DataGridRowNode,
 } from "./rowModel.js"
 import type { DataGridFormulaExecutionPlan } from "./formulaExecutionPlan.js"
 import type { DataGridRegisteredComputedField } from "./clientRowComputedExecutionRuntime.js"
@@ -15,26 +18,41 @@ export function createComputedExecutionDiagnostics<T>(options: {
   computedEntryByIndex: readonly DataGridRegisteredComputedField<T>[]
   computedExecutionPlan: DataGridFormulaExecutionPlan
   dirtyRuntime: DataGridComputedDirtyPropagationRuntime
+  sourceRowsBaseline: readonly DataGridRowNode<T>[]
   iterativeIterationCountByNode: Uint32Array
   iterativeConvergenceStateByNode: Uint8Array
   executionResult: DataGridComputedExecutionFinalizeResult<T>
   formulaCompileCacheDiagnostics: NonNullable<DataGridProjectionFormulaDiagnostics["compileCache"]>
   formulaRuntimeErrorsCollector: DataGridFormulaRuntimeErrorsCollector
+  includeRowRecomputeDiagnostics?: boolean
 }): {
   formulaDiagnostics: DataGridProjectionFormulaDiagnostics
   computeStageDiagnostics: DataGridFormulaComputeStageDiagnostics
+  rowRecomputeDiagnostics: DataGridFormulaRowRecomputeDiagnostics
 } {
   const {
     computedOrder,
     computedEntryByIndex,
     computedExecutionPlan,
     dirtyRuntime,
+    sourceRowsBaseline,
     iterativeIterationCountByNode,
     iterativeConvergenceStateByNode,
     executionResult,
     formulaCompileCacheDiagnostics,
     formulaRuntimeErrorsCollector,
+    includeRowRecomputeDiagnostics = true,
   } = options
+
+  const decodeRowCauseKey = (causeKey: string): DataGridFormulaDirtyRowCause => {
+    const separatorIndex = causeKey.indexOf("\u001f")
+    const kind = separatorIndex >= 0 ? causeKey.slice(0, separatorIndex) : causeKey
+    const value = separatorIndex >= 0 ? causeKey.slice(separatorIndex + 1) : ""
+    return {
+      kind: kind === "field" || kind === "computed" || kind === "context" ? kind : "all",
+      ...(value.length > 0 ? { value } : {}),
+    }
+  }
 
   const recomputedFields = computedOrder.filter(name => executionResult.recomputedFormulaFieldNames.has(name))
   const nodeCount = computedOrder.length
@@ -80,6 +98,64 @@ export function createComputedExecutionDiagnostics<T>(options: {
     }
   })
 
+  const rowRecomputeDiagnostics: DataGridFormulaRowRecomputeDiagnostics = includeRowRecomputeDiagnostics
+    ? (() => {
+      const rowsByIndex = new Map<number, {
+        rowId: DataGridRowNode<T>["rowId"]
+        sourceIndex: number
+        nodes: Array<{
+          name: string
+          field: string
+          causes: readonly DataGridFormulaDirtyRowCause[]
+        }>
+      }>()
+      for (let nodeIndex = 0; nodeIndex < computedOrder.length; nodeIndex += 1) {
+        const name = computedOrder[nodeIndex]
+        const computed = computedEntryByIndex[nodeIndex]
+        const rowCauseKeys = dirtyRuntime.dirtyRowCauseKeysByNode[nodeIndex]
+        if (!name || !computed || !rowCauseKeys || rowCauseKeys.size === 0) {
+          continue
+        }
+        const orderedRowIndexes = Array.from(rowCauseKeys.keys()).sort((left, right) => left - right)
+        for (const rowIndex of orderedRowIndexes) {
+          const rowNode = sourceRowsBaseline[rowIndex]
+          if (!rowNode) {
+            continue
+          }
+          const rowEntry = rowsByIndex.get(rowIndex) ?? {
+            rowId: rowNode.rowId,
+            sourceIndex: rowNode.sourceIndex,
+            nodes: [],
+          }
+          if (!rowsByIndex.has(rowIndex)) {
+            rowsByIndex.set(rowIndex, rowEntry)
+          }
+          const causeKeys = rowCauseKeys.get(rowIndex)
+          if (!causeKeys || causeKeys.size === 0) {
+            continue
+          }
+          rowEntry.nodes.push({
+            name,
+            field: computed.field,
+            causes: Array.from(causeKeys)
+              .sort((left, right) => left.localeCompare(right))
+              .map(decodeRowCauseKey),
+          })
+        }
+      }
+
+      return {
+        rows: Array.from(rowsByIndex.entries())
+          .sort((left, right) => left[0] - right[0])
+          .map(([, row]) => ({
+            rowId: row.rowId,
+            sourceIndex: row.sourceIndex,
+            nodes: row.nodes.sort((left, right) => left.name.localeCompare(right.name)),
+          })),
+      }
+    })()
+    : { rows: [] }
+
   return {
     formulaDiagnostics: {
       recomputedFields,
@@ -114,5 +190,6 @@ export function createComputedExecutionDiagnostics<T>(options: {
         return dirtyNodes
       })(),
     },
+    rowRecomputeDiagnostics,
   }
 }

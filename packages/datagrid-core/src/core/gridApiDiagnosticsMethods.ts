@@ -4,8 +4,10 @@ import type {
   DataGridDataSourceBackpressureDiagnostics,
   DataGridFormulaComputeStageDiagnostics,
   DataGridFormulaExecutionPlanSnapshot,
+  DataGridFormulaGraphSnapshot,
   DataGridFormulaFieldSnapshot,
   DataGridProjectionFormulaDiagnostics,
+  DataGridFormulaRowRecomputeDiagnostics,
   DataGridRowModel,
 } from "../models"
 import {
@@ -30,8 +32,16 @@ type FormulaPlanCapability = {
   getFormulaExecutionPlan: () => DataGridFormulaExecutionPlanSnapshot | null
 }
 
+type FormulaGraphCapability = {
+  getFormulaGraph: () => DataGridFormulaGraphSnapshot | null
+}
+
 type FormulaComputeDiagnosticsCapability = {
   getFormulaComputeStageDiagnostics: () => DataGridFormulaComputeStageDiagnostics | null
+}
+
+type FormulaRowRecomputeDiagnosticsCapability = {
+  getFormulaRowRecomputeDiagnostics: () => DataGridFormulaRowRecomputeDiagnostics | null
 }
 
 type FormulaFieldsCapability = {
@@ -96,6 +106,30 @@ function resolveFormulaComputeDiagnosticsCapability<TRow>(
   }
 }
 
+function resolveFormulaGraphCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): FormulaGraphCapability | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<FormulaGraphCapability>
+  if (typeof candidate.getFormulaGraph !== "function") {
+    return null
+  }
+  return {
+    getFormulaGraph: candidate.getFormulaGraph.bind(rowModel),
+  }
+}
+
+function resolveFormulaRowRecomputeDiagnosticsCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): FormulaRowRecomputeDiagnosticsCapability | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<FormulaRowRecomputeDiagnosticsCapability>
+  if (typeof candidate.getFormulaRowRecomputeDiagnostics !== "function") {
+    return null
+  }
+  return {
+    getFormulaRowRecomputeDiagnostics: candidate.getFormulaRowRecomputeDiagnostics.bind(rowModel),
+  }
+}
+
 function resolveFormulaFieldsCapability<TRow>(
   rowModel: DataGridRowModel<TRow>,
 ): FormulaFieldsCapability | null {
@@ -124,6 +158,37 @@ function cloneFormulaExecutionPlanSnapshot(
       ...(node.iterative ? { iterative: true } : {}),
       ...(node.cycleGroup ? { cycleGroup: [...node.cycleGroup] } : {}),
     })),
+    ...(snapshot.iterativeGroups
+      ? { iterativeGroups: snapshot.iterativeGroups.map(group => [...group]) }
+      : {}),
+  }
+}
+
+function cloneFormulaGraphSnapshot(
+  snapshot: DataGridFormulaGraphSnapshot,
+): DataGridFormulaGraphSnapshot {
+  return {
+    order: [...snapshot.order],
+    levels: snapshot.levels.map(level => [...level]),
+    levelDetails: snapshot.levelDetails.map(level => ({
+      index: level.index,
+      nodes: [...level.nodes],
+      ...(level.iterative ? { iterative: true } : {}),
+      ...(level.cycleGroups
+        ? { cycleGroups: level.cycleGroups.map(group => [...group]) }
+        : {}),
+    })),
+    nodes: snapshot.nodes.map(node => ({
+      name: node.name,
+      field: node.field,
+      level: node.level,
+      fieldDeps: [...node.fieldDeps],
+      computedDeps: [...node.computedDeps],
+      dependents: [...node.dependents],
+      ...(node.iterative ? { iterative: true } : {}),
+      ...(node.cycleGroup ? { cycleGroup: [...node.cycleGroup] } : {}),
+    })),
+    edges: snapshot.edges.map(edge => ({ ...edge })),
     ...(snapshot.iterativeGroups
       ? { iterativeGroups: snapshot.iterativeGroups.map(group => [...group]) }
       : {}),
@@ -174,6 +239,22 @@ function cloneFormulaComputeStageDiagnostics(
         })),
       }
       : {}),
+  }
+}
+
+function cloneFormulaRowRecomputeDiagnostics(
+  diagnostics: DataGridFormulaRowRecomputeDiagnostics,
+): DataGridFormulaRowRecomputeDiagnostics {
+  return {
+    rows: diagnostics.rows.map(row => ({
+      rowId: row.rowId,
+      sourceIndex: row.sourceIndex,
+      nodes: row.nodes.map(node => ({
+        name: node.name,
+        field: node.field,
+        causes: node.causes.map(cause => ({ ...cause })),
+      })),
+    })),
   }
 }
 
@@ -285,7 +366,9 @@ export function createDataGridApiDiagnosticsMethods<TRow = unknown>(
   const getDerivedCacheDiagnostics = resolveDerivedCacheCapability(rowModel)
   const getBackpressureDiagnostics = resolveBackpressureCapability(rowModel)
   const getFormulaPlan = resolveFormulaPlanCapability(rowModel)
+  const getFormulaGraph = resolveFormulaGraphCapability(rowModel)
   const getFormulaComputeDiagnostics = resolveFormulaComputeDiagnosticsCapability(rowModel)
+  const getFormulaRowRecomputeDiagnostics = resolveFormulaRowRecomputeDiagnosticsCapability(rowModel)
   const getFormulaFields = resolveFormulaFieldsCapability(rowModel)
 
   const resolveComputeDiagnostics = (): DataGridClientComputeDiagnostics | null => {
@@ -320,12 +403,17 @@ export function createDataGridApiDiagnosticsMethods<TRow = unknown>(
     getFormulaExplain() {
       const snapshot = rowModel.getSnapshot()
       const executionPlan = getFormulaPlan?.getFormulaExecutionPlan() ?? null
+      const graph = getFormulaGraph?.getFormulaGraph() ?? null
       const computeStageDiagnostics = getFormulaComputeDiagnostics?.getFormulaComputeStageDiagnostics() ?? null
+      const rowRecomputeDiagnostics = getFormulaRowRecomputeDiagnostics?.getFormulaRowRecomputeDiagnostics() ?? null
       const projectionFormula = snapshot.projection?.formula
         ? cloneProjectionFormulaDiagnostics(snapshot.projection.formula)
         : null
       const computeStage = computeStageDiagnostics
         ? cloneFormulaComputeStageDiagnostics(computeStageDiagnostics)
+        : null
+      const rowRecompute = rowRecomputeDiagnostics
+        ? cloneFormulaRowRecomputeDiagnostics(rowRecomputeDiagnostics)
         : null
       const formulaFields = getFormulaFields?.getFormulaFields() ?? []
       const formulas = buildFormulaExplainEntries(
@@ -336,8 +424,10 @@ export function createDataGridApiDiagnosticsMethods<TRow = unknown>(
       )
       return {
         executionPlan: executionPlan ? cloneFormulaExecutionPlanSnapshot(executionPlan) : null,
+        ...(graph ? { graph: cloneFormulaGraphSnapshot(graph) } : {}),
         projectionFormula,
         computeStage,
+        ...(rowRecompute ? { rowRecompute } : {}),
         ...(formulas.length > 0 ? { formulas } : {}),
       }
     },

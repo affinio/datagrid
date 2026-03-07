@@ -55,6 +55,15 @@ const BENCH_SCENARIOS = (process.env.BENCH_FORMULA_SCENARIOS ?? "small,medium,la
   .split(",")
   .map(value => value.trim().toLowerCase())
   .filter(value => value.length > 0 && value in SCENARIO_PRESETS)
+const BENCH_DAG_SHAPES = (process.env.BENCH_FORMULA_DAG_SHAPES ?? "uniform")
+  .split(",")
+  .map(value => value.trim().toLowerCase())
+  .filter(value => value.length > 0 && [
+    "uniform",
+    "fanout",
+    "chain",
+    "random",
+  ].includes(value))
 
 assertPositiveInteger(BENCH_FULL_RECOMPUTE_ITERATIONS, "BENCH_FORMULA_FULL_RECOMPUTE_ITERATIONS")
 assertPositiveInteger(BENCH_PATCH_ITERATIONS, "BENCH_FORMULA_PATCH_ITERATIONS")
@@ -69,6 +78,9 @@ if (BENCH_SEEDS.length === 0) {
 }
 if (BENCH_SCENARIOS.length === 0) {
   throw new Error("BENCH_FORMULA_SCENARIOS resolved to an empty scenario set.")
+}
+if (BENCH_DAG_SHAPES.length === 0) {
+  throw new Error("BENCH_FORMULA_DAG_SHAPES resolved to an empty DAG shape set.")
 }
 
 const BASE_FIELDS = Object.freeze([
@@ -328,7 +340,7 @@ function buildRows(rowCount, rng) {
   }
 }
 
-function buildFormulaDefinitions(formulaCount, requestedDepth) {
+function buildUniformFormulaDefinitions(formulaCount, requestedDepth) {
   const depth = Math.max(1, Math.min(requestedDepth, formulaCount))
   const levelCounts = new Array(depth).fill(0)
   for (let index = 0; index < formulaCount; index += 1) {
@@ -383,6 +395,139 @@ function buildFormulaDefinitions(formulaCount, requestedDepth) {
     definitions,
     depth,
   }
+}
+
+function buildFanoutFormulaDefinitions(formulaCount, requestedDepth) {
+  const depth = Math.max(2, Math.min(requestedDepth, formulaCount))
+  const rootCount = Math.max(1, Math.min(5, Math.ceil(formulaCount * 0.15)))
+  const definitions = []
+  const rootNames = []
+
+  for (let index = 0; index < rootCount; index += 1) {
+    const name = `f${index + 1}`
+    const variant = index % 4
+    const formula = variant === 0
+      ? "price * qty"
+      : variant === 1
+        ? "price + shipping"
+        : variant === 2
+          ? "(qty * taxRate) + shipping"
+          : "(orders - returns) + fee"
+    definitions.push({ name, field: name, formula })
+    rootNames.push(name)
+  }
+
+  const hubName = rootNames[0] ?? "f1"
+  for (let index = rootCount; index < formulaCount; index += 1) {
+    const numericIndex = index + 1
+    const name = `f${numericIndex}`
+    const baseField = BASE_FIELDS[index % BASE_FIELDS.length]
+    const secondaryRoot = rootNames[(index - rootCount + 1) % rootNames.length] ?? hubName
+    const formula = index % 3 === 0
+      ? `(${hubName} * 1.01) + ${baseField}`
+      : index % 3 === 1
+        ? `${hubName} + ${secondaryRoot}`
+        : `(${hubName} - ${secondaryRoot}) + ${baseField}`
+    definitions.push({ name, field: name, formula })
+  }
+
+  return {
+    definitions,
+    depth,
+  }
+}
+
+function buildChainFormulaDefinitions(formulaCount) {
+  const definitions = []
+  for (let index = 0; index < formulaCount; index += 1) {
+    const numericIndex = index + 1
+    const name = `f${numericIndex}`
+    let formula
+    if (index === 0) {
+      formula = "price * qty"
+    } else {
+      const parentName = `f${index}`
+      const baseField = BASE_FIELDS[index % BASE_FIELDS.length]
+      formula = index % 2 === 0
+        ? `(${parentName} * 1.01) + ${baseField}`
+        : `${parentName} + ${baseField}`
+    }
+    definitions.push({ name, field: name, formula })
+  }
+
+  return {
+    definitions,
+    depth: formulaCount,
+  }
+}
+
+function buildRandomFormulaDefinitions(formulaCount, requestedDepth, rng) {
+  const definitions = []
+  const nodeDepths = []
+  let maxDepth = 1
+
+  for (let index = 0; index < formulaCount; index += 1) {
+    const numericIndex = index + 1
+    const name = `f${numericIndex}`
+    let formula
+    let nodeDepth = 1
+
+    if (index < 3) {
+      const variant = index % 3
+      formula = variant === 0
+        ? "price * qty"
+        : variant === 1
+          ? "price + shipping"
+          : "(qty * taxRate) + shipping"
+    } else {
+      const useTwoComputedDeps = rng() > 0.45 && index >= 2
+      const leftIndex = randomInt(rng, 0, index - 1)
+      const leftName = `f${leftIndex + 1}`
+      const leftDepth = nodeDepths[leftIndex] ?? 1
+      if (useTwoComputedDeps) {
+        const rightIndex = randomInt(rng, 0, index - 1)
+        const rightName = `f${rightIndex + 1}`
+        const rightDepth = nodeDepths[rightIndex] ?? 1
+        formula = index % 2 === 0
+          ? `(${leftName} * 1.01) + ${rightName}`
+          : `${leftName} + ${rightName}`
+        nodeDepth = Math.max(leftDepth, rightDepth) + 1
+      } else {
+        const baseField = BASE_FIELDS[index % BASE_FIELDS.length]
+        formula = index % 2 === 0
+          ? `(${leftName} * 1.01) + ${baseField}`
+          : `${leftName} + ${baseField}`
+        nodeDepth = leftDepth + 1
+      }
+    }
+
+    definitions.push({ name, field: name, formula })
+    nodeDepths.push(nodeDepth)
+    maxDepth = Math.max(maxDepth, nodeDepth)
+  }
+
+  return {
+    definitions,
+    depth: Math.max(Math.min(maxDepth, formulaCount), Math.min(requestedDepth, formulaCount)),
+  }
+}
+
+function buildFormulaDefinitions(formulaCount, requestedDepth, dagShape, rng) {
+  switch (dagShape) {
+    case "fanout":
+      return buildFanoutFormulaDefinitions(formulaCount, requestedDepth)
+    case "chain":
+      return buildChainFormulaDefinitions(formulaCount)
+    case "random":
+      return buildRandomFormulaDefinitions(formulaCount, requestedDepth, rng)
+    case "uniform":
+    default:
+      return buildUniformFormulaDefinitions(formulaCount, requestedDepth)
+  }
+}
+
+function formatScenarioKey(scenarioName, dagShape) {
+  return `${scenarioName}/${dagShape}`
 }
 
 function countAffectedComputedNamesFromSnapshot(planSnapshot, changedFields) {
@@ -452,6 +597,7 @@ function createMarkdownSummary(summary) {
   lines.push("## Config")
   lines.push("")
   lines.push(`- Scenarios: ${summary.config.scenarios.join(", ")}`)
+  lines.push(`- DAG shapes: ${summary.config.dagShapes.join(", ")}`)
   lines.push(`- Seeds: ${summary.config.seeds.join(", ")}`)
   lines.push(`- Patch sizes: ${summary.config.patchSizes.join(", ")}`)
   lines.push(`- Full recompute iterations: ${summary.config.fullRecomputeIterations}`)
@@ -459,17 +605,17 @@ function createMarkdownSummary(summary) {
   lines.push("")
   lines.push("## Results")
   lines.push("")
-  lines.push(`| scenario | rows | formulas | depth | compile mean (ms) | init mean (ms) | full p95 (ms) | patch p95 (1) | patch p95 (100) | patch p95 (1000) | full eval/s | incr eval/s (${PERF_BUDGET_INCREMENTAL_PATCH_SIZE}) |`)
-  lines.push("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+  lines.push(`| scenario | shape | rows | formulas | depth | compile mean (ms) | init mean (ms) | full p95 (ms) | patch p95 (1) | patch p95 (100) | patch p95 (1000) | full eval/s | incr eval/s (${PERF_BUDGET_INCREMENTAL_PATCH_SIZE}) |`)
+  lines.push("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
 
-  for (const scenario of summary.aggregate.scenarios) {
+  for (const scenario of summary.aggregate.workloads) {
     const patchP95 = new Map(
       scenario.patch.map(entry => [entry.patchSize, entry.p95AcrossRunsMs.p95]),
     )
     const targetPatchSize = Math.min(PERF_BUDGET_INCREMENTAL_PATCH_SIZE, scenario.config.rows)
     const targetPatch = scenario.patch.find(entry => entry.patchSize === targetPatchSize)
     lines.push(
-      `| ${scenario.name} | ${scenario.config.rows} | ${scenario.config.formulas} | ${scenario.config.depth} | ${scenario.compileMs.mean.toFixed(3)} | ${scenario.initMs.mean.toFixed(3)} | ${scenario.fullRecomputeP95Ms.p95.toFixed(3)} | ${((patchP95.get(1) ?? 0)).toFixed(3)} | ${((patchP95.get(100) ?? 0)).toFixed(3)} | ${((patchP95.get(1000) ?? 0)).toFixed(3)} | ${scenario.fullEvaluationsPerSec.mean.toFixed(0)} | ${(targetPatch?.evaluationsPerSec.mean ?? 0).toFixed(0)} |`,
+      `| ${scenario.name} | ${scenario.dagShape} | ${scenario.config.rows} | ${scenario.config.formulas} | ${scenario.config.depth} | ${scenario.compileMs.mean.toFixed(3)} | ${scenario.initMs.mean.toFixed(3)} | ${scenario.fullRecomputeP95Ms.p95.toFixed(3)} | ${((patchP95.get(1) ?? 0)).toFixed(3)} | ${((patchP95.get(100) ?? 0)).toFixed(3)} | ${((patchP95.get(1000) ?? 0)).toFixed(3)} | ${scenario.fullEvaluationsPerSec.mean.toFixed(0)} | ${(targetPatch?.evaluationsPerSec.mean ?? 0).toFixed(0)} |`,
     )
   }
 
@@ -486,14 +632,19 @@ function createMarkdownSummary(summary) {
   return lines.join("\n")
 }
 
-async function runScenario({ scenarioName, seed, api }) {
+async function runScenario({ scenarioName, dagShape, seed, api }) {
   const scenarioConfig = SCENARIO_PRESETS[scenarioName]
   const rng = createRng(seed)
   const startedAt = performance.now()
   const heapStart = await sampleHeapUsed()
 
   const { mutableRows, rowNodes } = buildRows(scenarioConfig.rows, rng)
-  const { definitions, depth } = buildFormulaDefinitions(scenarioConfig.formulas, scenarioConfig.depth)
+  const { definitions, depth } = buildFormulaDefinitions(
+    scenarioConfig.formulas,
+    scenarioConfig.depth,
+    dagShape,
+    rng,
+  )
   const knownComputedNames = new Set(definitions.map(definition => definition.name))
   const knownComputedNameByField = new Map(
     definitions.map(definition => [definition.field, definition.name]),
@@ -527,6 +678,8 @@ async function runScenario({ scenarioName, seed, api }) {
   const model = api.createClientRowModel({
     rows: rowNodes,
     initialFormulaFields: definitions,
+    captureFormulaRowRecomputeDiagnostics: false,
+    captureFormulaExplainDiagnostics: false,
   })
   const initMs = performance.now() - initStart
 
@@ -643,6 +796,8 @@ async function runScenario({ scenarioName, seed, api }) {
   return {
     seed,
     scenario: scenarioName,
+    dagShape,
+    workloadKey: formatScenarioKey(scenarioName, dagShape),
     config: {
       rows: scenarioConfig.rows,
       formulas: scenarioConfig.formulas,
@@ -670,31 +825,36 @@ const varianceSkippedChecks = []
 
 console.log("\nAffino DataGrid Formula Engine Benchmark")
 console.log(
-  `scenarios=${BENCH_SCENARIOS.join(",")} seeds=${BENCH_SEEDS.join(",")} patchSizes=${BENCH_PATCH_SIZES.join(",")} fullIters=${BENCH_FULL_RECOMPUTE_ITERATIONS} patchIters=${BENCH_PATCH_ITERATIONS}`,
+  `scenarios=${BENCH_SCENARIOS.join(",")} dagShapes=${BENCH_DAG_SHAPES.join(",")} seeds=${BENCH_SEEDS.join(",")} patchSizes=${BENCH_PATCH_SIZES.join(",")} fullIters=${BENCH_FULL_RECOMPUTE_ITERATIONS} patchIters=${BENCH_PATCH_ITERATIONS}`,
 )
 
 for (const seed of BENCH_SEEDS) {
   for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
     for (const scenarioName of BENCH_SCENARIOS) {
-      await runScenario({
-        scenarioName,
-        seed: seed + (warmup + 1) * 997,
-        api,
-      })
+      for (const dagShape of BENCH_DAG_SHAPES) {
+        await runScenario({
+          scenarioName,
+          dagShape,
+          seed: seed + (warmup + 1) * 997,
+          api,
+        })
+      }
     }
   }
 
   for (const scenarioName of BENCH_SCENARIOS) {
-    const run = await runScenario({ scenarioName, seed, api })
-    results.push(run)
+    for (const dagShape of BENCH_DAG_SHAPES) {
+      const run = await runScenario({ scenarioName, dagShape, seed, api })
+      results.push(run)
 
-    const patchSummary = run.patch.map(entry => `${entry.patchSize}:${entry.durationMs.p95.toFixed(3)}ms`).join(" ")
-    const fullStrategies = Object.entries(run.fullRecomputeDiagnostics.strategyCounts)
-      .map(([strategy, count]) => `${strategy}:${count}`)
-      .join(",")
-    console.log(
-      `seed=${seed} scenario=${scenarioName} rows=${run.config.rows} formulas=${run.config.formulas} depth=${run.config.depthActual} compileMean=${run.compileMs.mean.toFixed(3)}ms init=${run.initMs.toFixed(3)}ms fullP95=${run.fullRecomputeMs.p95.toFixed(3)}ms fullEval/s=${run.fullEvaluationsPerSec.toFixed(0)} fullStrategy=[${fullStrategies}] fullDirtyRows=${run.fullRecomputeDiagnostics.dirtyRows.mean.toFixed(0)} fullSkipped=${run.fullRecomputeDiagnostics.skippedByObjectIs.mean.toFixed(0)} patchP95=[${patchSummary}] heapDelta=${run.heapDeltaMb.toFixed(2)}MB`,
-    )
+      const patchSummary = run.patch.map(entry => `${entry.patchSize}:${entry.durationMs.p95.toFixed(3)}ms`).join(" ")
+      const fullStrategies = Object.entries(run.fullRecomputeDiagnostics.strategyCounts)
+        .map(([strategy, count]) => `${strategy}:${count}`)
+        .join(",")
+      console.log(
+        `seed=${seed} scenario=${scenarioName} shape=${dagShape} rows=${run.config.rows} formulas=${run.config.formulas} depth=${run.config.depthActual} compileMean=${run.compileMs.mean.toFixed(3)}ms init=${run.initMs.toFixed(3)}ms fullP95=${run.fullRecomputeMs.p95.toFixed(3)}ms fullEval/s=${run.fullEvaluationsPerSec.toFixed(0)} fullStrategy=[${fullStrategies}] fullDirtyRows=${run.fullRecomputeDiagnostics.dirtyRows.mean.toFixed(0)} fullSkipped=${run.fullRecomputeDiagnostics.skippedByObjectIs.mean.toFixed(0)} patchP95=[${patchSummary}] heapDelta=${run.heapDeltaMb.toFixed(2)}MB`,
+      )
+    }
   }
 }
 
@@ -706,8 +866,14 @@ const getTargetPatchEntryForRun = run => {
   return run.patch.find(entry => entry.patchSize === targetPatchSize) ?? null
 }
 
-const aggregateByScenario = BENCH_SCENARIOS.map((scenarioName) => {
-  const scenarioRuns = results.filter(run => run.scenario === scenarioName)
+const workloadConfigs = BENCH_SCENARIOS.flatMap(
+  scenarioName => BENCH_DAG_SHAPES.map(dagShape => ({ scenarioName, dagShape })),
+)
+
+const aggregateByWorkload = workloadConfigs.map(({ scenarioName, dagShape }) => {
+  const scenarioRuns = results.filter(
+    run => run.scenario === scenarioName && run.dagShape === dagShape,
+  )
   const scenarioConfig = SCENARIO_PRESETS[scenarioName]
   const patchBySize = BENCH_PATCH_SIZES.map((patchSize) => {
     const matches = scenarioRuns
@@ -723,6 +889,8 @@ const aggregateByScenario = BENCH_SCENARIOS.map((scenarioName) => {
 
   return {
     name: scenarioName,
+    dagShape,
+    workloadKey: formatScenarioKey(scenarioName, dagShape),
     config: scenarioConfig,
     compileMs: stats(scenarioRuns.map(run => run.compileMs.mean)),
     initMs: stats(scenarioRuns.map(run => run.initMs)),
@@ -794,35 +962,46 @@ for (const aggregate of [
   }
 }
 
-for (const aggregate of aggregateByScenario) {
+for (const aggregate of aggregateByWorkload) {
   const scenarioFullBudget = resolveScenarioBudget(
     "PERF_BUDGET_MAX_FULL_RECOMPUTE_P95_MS",
-    aggregate.name,
-    PERF_BUDGET_MAX_FULL_RECOMPUTE_P95_MS,
+    `${aggregate.name}_${aggregate.dagShape}`,
+    resolveScenarioBudget(
+      "PERF_BUDGET_MAX_FULL_RECOMPUTE_P95_MS",
+      aggregate.name,
+      PERF_BUDGET_MAX_FULL_RECOMPUTE_P95_MS,
+    ),
   )
   if (
     Number.isFinite(scenarioFullBudget)
     && aggregate.fullRecomputeP95Ms.p95 > scenarioFullBudget
   ) {
     budgetErrors.push(
-      `scenario=${aggregate.name} full recompute p95 ${aggregate.fullRecomputeP95Ms.p95.toFixed(3)}ms exceeds ${scenarioFullBudget}ms`,
+      `scenario=${aggregate.name} shape=${aggregate.dagShape} full recompute p95 ${aggregate.fullRecomputeP95Ms.p95.toFixed(3)}ms exceeds ${scenarioFullBudget}ms`,
     )
   }
 
   const scenarioPatchBudget = resolveScenarioBudget(
     "PERF_BUDGET_MAX_PATCH_P95_MS",
-    aggregate.name,
-    PERF_BUDGET_MAX_PATCH_P95_MS,
+    `${aggregate.name}_${aggregate.dagShape}`,
+    Number.NaN,
   )
+  const resolvedScenarioPatchBudget = Number.isFinite(scenarioPatchBudget)
+    ? scenarioPatchBudget
+    : resolveScenarioBudget(
+      "PERF_BUDGET_MAX_PATCH_P95_MS",
+      aggregate.name,
+      PERF_BUDGET_MAX_PATCH_P95_MS,
+    )
   const targetPatchSize = resolveTargetPatchSizeForRows(aggregate.config.rows)
   const targetPatch = aggregate.patch.find(entry => entry.patchSize === targetPatchSize) ?? null
   if (
     targetPatch
-    && Number.isFinite(scenarioPatchBudget)
-    && targetPatch.p95AcrossRunsMs.p95 > scenarioPatchBudget
+    && Number.isFinite(resolvedScenarioPatchBudget)
+    && targetPatch.p95AcrossRunsMs.p95 > resolvedScenarioPatchBudget
   ) {
     budgetErrors.push(
-      `scenario=${aggregate.name} patch p95(size=${targetPatchSize}) ${targetPatch.p95AcrossRunsMs.p95.toFixed(3)}ms exceeds ${scenarioPatchBudget}ms`,
+      `scenario=${aggregate.name} shape=${aggregate.dagShape} patch p95(size=${targetPatchSize}) ${targetPatch.p95AcrossRunsMs.p95.toFixed(3)}ms exceeds ${resolvedScenarioPatchBudget}ms`,
     )
   }
 }
@@ -832,6 +1011,7 @@ const summary = {
   generatedAt: new Date().toISOString(),
   config: {
     scenarios: BENCH_SCENARIOS,
+    dagShapes: BENCH_DAG_SHAPES,
     seeds: BENCH_SEEDS,
     warmupRuns: BENCH_WARMUP_RUNS,
     fullRecomputeIterations: BENCH_FULL_RECOMPUTE_ITERATIONS,
@@ -859,7 +1039,8 @@ const summary = {
     patchP95Ms: patchP95AcrossAll,
     fullEvaluationsPerSec: fullEvaluationsPerSecAcrossAll,
     incrementalEvaluationsPerSec: incrementalEvaluationsPerSecAcrossAll,
-    scenarios: aggregateByScenario,
+    scenarios: aggregateByWorkload,
+    workloads: aggregateByWorkload,
   },
   runs: results,
   budgetErrors,

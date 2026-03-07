@@ -320,6 +320,17 @@ Inside row-model runtime, compiled formulas are integrated into a formula execut
   - affected by changed computed fields
 - Dirty propagation with deterministic order.
 
+The runtime now also exposes an explicit `FormulaGraph` snapshot:
+
+- `order`
+- `levels`
+- `levelDetails`
+- `nodes`
+- `edges`
+- `iterativeGroups`
+
+This gives tooling a stable, serializable DAG artifact separate from the lower-level runtime internals.
+
 This enables efficient patch handling: only impacted formulas and rows are recalculated.
 
 ## Practical API usage
@@ -439,6 +450,12 @@ Projection formula diagnostics now also expose optional compile-cache metrics:
 Internally, repeated formulas now reuse compiled artifacts by exact formula text, and compiled formulas carry a normalized `expressionHash` so structurally equivalent expressions can share identity even when their source text formatting differs.
 
 Execution now also prebuilds dependency reader tables per computed/formula node, so row-wise `get(...)`, batch readers, and columnar token columns reuse resolved field/computed/meta accessors instead of going back through generic token-string resolution on every read.
+
+For deeper debug visibility, client row-model runtime now also exposes:
+
+- `getFormulaGraph()` for a serializable DAG snapshot with edges and level metadata
+- `getFormulaRowRecomputeDiagnostics()` for row-scoped recompute visibility grouped by row and affected nodes
+- `api.diagnostics.getFormulaExplain().graph` and `api.diagnostics.getFormulaExplain().rowRecompute` for explain/debug tooling
 
 ## Why these principles were chosen
 

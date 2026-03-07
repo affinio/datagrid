@@ -16,6 +16,7 @@ export interface ClientRowPatchComputedMergeRuntimeContext<T> {
   ) => ApplyComputedFieldsToSourceRowsResult<T>
   commitFormulaDiagnostics: (diagnostics: ApplyComputedFieldsToSourceRowsResult<T>["formulaDiagnostics"]) => void
   commitFormulaComputeStageDiagnostics: (diagnostics: ApplyComputedFieldsToSourceRowsResult<T>["computeStageDiagnostics"]) => void
+  commitFormulaRowRecomputeDiagnostics: (diagnostics: ApplyComputedFieldsToSourceRowsResult<T>["rowRecomputeDiagnostics"]) => void
   mergeRowPatch: (current: Partial<T>, patch: Partial<T>) => Partial<T>
   getSourceRows: () => readonly DataGridRowNode<T>[]
 }
@@ -50,6 +51,7 @@ export function createClientRowPatchComputedMergeRuntime<T>(
     })
     context.commitFormulaDiagnostics(computedResult.formulaDiagnostics)
     context.commitFormulaComputeStageDiagnostics(computedResult.computeStageDiagnostics)
+    context.commitFormulaRowRecomputeDiagnostics(computedResult.rowRecomputeDiagnostics)
     if (!computedResult.changed) {
       return patchResult
     }

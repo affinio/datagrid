@@ -4,6 +4,10 @@ import type {
 } from "./rowModel.js"
 
 const DATAGRID_FORMULA_COLUMN_CACHE_NO_LIMIT = Number.POSITIVE_INFINITY
+const DATAGRID_SOURCE_COLUMN_CACHE_INVALIDATION_CLEAR_WORK_THRESHOLD = 2048
+const DATAGRID_SOURCE_COLUMN_CACHE_INVALIDATION_CLEAR_MIN_ROWS = 100_000
+const DATAGRID_SOURCE_COLUMN_CACHE_INVALIDATION_CLEAR_MIN_PATCH_ROWS = 64
+const DATAGRID_SOURCE_COLUMN_CACHE_INVALIDATION_CLEAR_MIN_FIELDS = 16
 
 export interface ClientRowSourceColumnCacheRuntimeContext<T> {
   getSourceRows: () => readonly DataGridRowNode<T>[]
@@ -96,6 +100,7 @@ export function createClientRowSourceColumnCacheRuntime<T>(
     if (sourceColumnValuesByField.size === 0 || rowIds.length === 0) {
       return
     }
+    const totalRows = context.getSourceRows().length
     const sourceRowIndexById = context.getSourceRowIndexById()
     const rowIndexes: number[] = []
     for (const rowId of rowIds) {
@@ -108,7 +113,19 @@ export function createClientRowSourceColumnCacheRuntime<T>(
     if (rowIndexes.length === 0) {
       return
     }
-    if (rowIndexes.length >= Math.max(1, Math.trunc(context.getSourceRows().length / 2))) {
+    const invalidationWork = rowIndexes.length * sourceColumnValuesByField.size
+    if (rowIndexes.length >= Math.max(1, Math.trunc(totalRows / 2))) {
+      clear()
+      return
+    }
+    if (
+      totalRows >= DATAGRID_SOURCE_COLUMN_CACHE_INVALIDATION_CLEAR_MIN_ROWS
+      && rowIndexes.length >= DATAGRID_SOURCE_COLUMN_CACHE_INVALIDATION_CLEAR_MIN_PATCH_ROWS
+      && sourceColumnValuesByField.size >= DATAGRID_SOURCE_COLUMN_CACHE_INVALIDATION_CLEAR_MIN_FIELDS
+      && invalidationWork >= DATAGRID_SOURCE_COLUMN_CACHE_INVALIDATION_CLEAR_WORK_THRESHOLD
+    ) {
+      // Large warmed caches are cheaper to rebuild than sparsely delete across
+      // many columns; keep medium/small tables on the targeted invalidation path.
       clear()
       return
     }

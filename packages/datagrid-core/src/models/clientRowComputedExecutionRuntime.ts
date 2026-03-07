@@ -5,6 +5,7 @@ import type {
   DataGridFormulaComputeStageDiagnostics,
   DataGridFormulaIterativeCalculationOptions,
   DataGridProjectionFormulaDiagnostics,
+  DataGridFormulaRowRecomputeDiagnostics,
   DataGridRowId,
   DataGridRowNode,
 } from "./rowModel.js"
@@ -57,6 +58,7 @@ export interface ApplyComputedFieldsToSourceRowsResult<T> {
   nextRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
   formulaDiagnostics: DataGridProjectionFormulaDiagnostics
   computeStageDiagnostics: DataGridFormulaComputeStageDiagnostics
+  rowRecomputeDiagnostics: DataGridFormulaRowRecomputeDiagnostics
 }
 
 export interface DataGridComputedColumnReadContext<T> {
@@ -77,6 +79,8 @@ export interface DataGridClientComputedExecutionRuntimeContext<T> {
   vectorBatchSize?: number
   isRecord: (value: unknown) => value is Record<string, unknown>
   isColumnCacheParityVerificationEnabled: () => boolean
+  isFormulaRowRecomputeDiagnosticsEnabled: () => boolean
+  isFormulaExplainDiagnosticsEnabled: () => boolean
 
   getSourceRows: () => readonly DataGridRowNode<T>[]
   setSourceRows: (rows: DataGridRowNode<T>[]) => void
@@ -161,6 +165,7 @@ export function createClientRowComputedExecutionRuntime<T>(
         nextRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
         formulaDiagnostics: context.createEmptyFormulaDiagnostics(),
         computeStageDiagnostics: context.createEmptyFormulaComputeStageDiagnostics(),
+        rowRecomputeDiagnostics: { rows: [] },
       }
     }
 
@@ -175,7 +180,11 @@ export function createClientRowComputedExecutionRuntime<T>(
     const hasExplicitChangedContexts = normalizedChangedContextKeys.length > 0
     const selectedRowIndexes: number[] = []
     const nodeCount = computedOrder.length
-    const dirtyRuntime = createDataGridComputedDirtyPropagationRuntime(nodeCount, rowCount)
+    const captureExplainDiagnostics = context.isFormulaExplainDiagnosticsEnabled()
+    const dirtyRuntime = createDataGridComputedDirtyPropagationRuntime(nodeCount, rowCount, {
+      captureCauseCounts: captureExplainDiagnostics,
+      captureRowCauseKeys: captureExplainDiagnostics && context.isFormulaRowRecomputeDiagnosticsEnabled(),
+    })
 
     const rootIndexesByContextKey = new Map<string, readonly number[]>()
     if (hasExplicitChangedContexts) {
@@ -217,6 +226,7 @@ export function createClientRowComputedExecutionRuntime<T>(
               dirtyRuntime.enqueueDirtyNodeRowIndex(nodeIndex, rowIndex)
             }
             dirtyRuntime.incrementCauseCount(dirtyRuntime.dirtyContextCauseCountsByNode, nodeIndex, contextKey)
+            dirtyRuntime.recordDirtyCauseForNodeRow(nodeIndex, rowIndex, "context", contextKey)
           }
         }
       }
@@ -265,6 +275,7 @@ export function createClientRowComputedExecutionRuntime<T>(
               dirtyRuntime.enqueueDirtyNodeRowIndex(nodeIndex, rowIndex)
           }
           dirtyRuntime.incrementCauseCount(dirtyRuntime.dirtyFieldCauseCountsByNode, nodeIndex, field)
+          dirtyRuntime.recordDirtyCauseForNodeRow(nodeIndex, rowIndex, "field", field)
         }
       }
       if (selected) {
@@ -281,6 +292,7 @@ export function createClientRowComputedExecutionRuntime<T>(
         nextRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
         formulaDiagnostics: context.createEmptyFormulaDiagnostics(),
         computeStageDiagnostics: context.createEmptyFormulaComputeStageDiagnostics(),
+        rowRecomputeDiagnostics: { rows: [] },
       }
     }
 
@@ -297,6 +309,7 @@ export function createClientRowComputedExecutionRuntime<T>(
         nextRowsById: new Map<DataGridRowId, DataGridRowNode<T>>(),
         formulaDiagnostics: context.createEmptyFormulaDiagnostics(),
         computeStageDiagnostics: context.createEmptyFormulaComputeStageDiagnostics(),
+        rowRecomputeDiagnostics: { rows: [] },
       }
     }
 
@@ -323,6 +336,7 @@ export function createClientRowComputedExecutionRuntime<T>(
         dirtyRuntime.dirtyAllRowsByNode[nodeIndex] = selectedRowIndexes.length
         for (const rowIndex of selectedRowIndexes) {
           dirtyRuntime.enqueueDirtyNodeRowIndex(nodeIndex, rowIndex)
+          dirtyRuntime.recordDirtyCauseForNodeRow(nodeIndex, rowIndex, "all")
         }
       }
     }
@@ -401,11 +415,13 @@ export function createClientRowComputedExecutionRuntime<T>(
       computedEntryByIndex,
       computedExecutionPlan,
       dirtyRuntime,
+      sourceRowsBaseline,
       iterativeIterationCountByNode,
       iterativeConvergenceStateByNode,
       executionResult,
       formulaCompileCacheDiagnostics: context.getFormulaCompileCacheDiagnostics(),
       formulaRuntimeErrorsCollector: executorRuntime.formulaRuntimeErrorsCollector,
+      includeRowRecomputeDiagnostics: context.isFormulaRowRecomputeDiagnosticsEnabled(),
     })
 
     return {
@@ -416,6 +432,7 @@ export function createClientRowComputedExecutionRuntime<T>(
       nextRowsById: executionResult.nextRowsById,
       formulaDiagnostics: diagnostics.formulaDiagnostics,
       computeStageDiagnostics: diagnostics.computeStageDiagnostics,
+      rowRecomputeDiagnostics: diagnostics.rowRecomputeDiagnostics,
     }
   }
 

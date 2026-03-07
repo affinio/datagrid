@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  snapshotDataGridFormulaGraph,
   createDataGridFormulaExecutionPlan,
   snapshotDataGridFormulaExecutionPlan,
 } from "../formulaExecutionPlan.js"
@@ -205,6 +206,66 @@ describe("formulaExecutionPlan", () => {
           computedDeps: ["total"],
           dependents: [],
         },
+      ],
+    })
+  })
+
+  it("builds an explicit formula graph snapshot with edges and level metadata", () => {
+    const plan = createDataGridFormulaExecutionPlan([
+      {
+        name: "total",
+        field: "total",
+        deps: [
+          { domain: "field", value: "price" },
+          { domain: "field", value: "qty" },
+        ],
+      },
+      {
+        name: "gross",
+        field: "gross",
+        deps: [
+          { domain: "computed", value: "total" },
+          { domain: "meta", value: "rowId" },
+        ],
+      },
+    ])
+
+    expect(snapshotDataGridFormulaGraph(plan)).toEqual({
+      order: ["total", "gross"],
+      levels: [["total"], ["gross"]],
+      levelDetails: [
+        {
+          index: 0,
+          nodes: ["total"],
+        },
+        {
+          index: 1,
+          nodes: ["gross"],
+        },
+      ],
+      nodes: [
+        {
+          name: "total",
+          field: "total",
+          level: 0,
+          fieldDeps: ["price", "qty"],
+          computedDeps: [],
+          dependents: ["gross"],
+        },
+        {
+          name: "gross",
+          field: "gross",
+          level: 1,
+          fieldDeps: ["total"],
+          computedDeps: ["total"],
+          dependents: [],
+        },
+      ],
+      edges: [
+        { from: "price", to: "total", domain: "field", value: "price" },
+        { from: "qty", to: "total", domain: "field", value: "qty" },
+        { from: "total", to: "gross", domain: "computed", value: "total" },
+        { from: "rowId", to: "gross", domain: "meta", value: "rowId" },
       ],
     })
   })

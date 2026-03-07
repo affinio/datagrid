@@ -1,5 +1,6 @@
 import type {
   DataGridFormulaComputeStageDiagnostics,
+  DataGridFormulaRowRecomputeDiagnostics,
   DataGridFormulaRuntimeError,
   DataGridProjectionFormulaDiagnostics,
 } from "./rowModel.js"
@@ -22,8 +23,26 @@ export interface ClientRowFormulaDiagnosticsRuntime {
   pushFormulaRuntimeError: (runtimeError: DataGridFormulaRuntimeError) => void
   commitFormulaDiagnostics: (diagnostics: DataGridProjectionFormulaDiagnostics) => void
   commitFormulaComputeStageDiagnostics: (diagnostics: DataGridFormulaComputeStageDiagnostics) => void
+  commitFormulaRowRecomputeDiagnostics: (diagnostics: DataGridFormulaRowRecomputeDiagnostics) => void
   getFormulaComputeStageDiagnosticsSnapshot: () => DataGridFormulaComputeStageDiagnostics | null
+  getFormulaRowRecomputeDiagnosticsSnapshot: () => DataGridFormulaRowRecomputeDiagnostics | null
   withRuntimeErrorsCollector: <TResult>(collector: DataGridFormulaRuntimeErrorsCollector, run: () => TResult) => TResult
+}
+
+function cloneFormulaRowRecomputeDiagnostics(
+  diagnostics: DataGridFormulaRowRecomputeDiagnostics,
+): DataGridFormulaRowRecomputeDiagnostics {
+  return {
+    rows: diagnostics.rows.map(row => ({
+      rowId: row.rowId,
+      sourceIndex: row.sourceIndex,
+      nodes: row.nodes.map(node => ({
+        name: node.name,
+        field: node.field,
+        causes: node.causes.map(cause => ({ ...cause })),
+      })),
+    })),
+  }
 }
 
 function cloneFormulaComputeStageDiagnostics(
@@ -64,6 +83,7 @@ export function createClientRowFormulaDiagnosticsRuntime(
   const runtimeErrorsPreviewLimit = context.runtimeErrorsPreviewLimit ?? 50
   let activeFormulaRuntimeErrorsCollector: DataGridFormulaRuntimeErrorsCollector | null = null
   let latestFormulaComputeStageDiagnostics: DataGridFormulaComputeStageDiagnostics | null = null
+  let latestFormulaRowRecomputeDiagnostics: DataGridFormulaRowRecomputeDiagnostics | null = null
 
   const createEmptyFormulaDiagnostics = (): DataGridProjectionFormulaDiagnostics => ({
     recomputedFields: [],
@@ -122,6 +142,21 @@ export function createClientRowFormulaDiagnosticsRuntime(
     return cloneFormulaComputeStageDiagnostics(latestFormulaComputeStageDiagnostics)
   }
 
+  const commitFormulaRowRecomputeDiagnostics = (
+    diagnostics: DataGridFormulaRowRecomputeDiagnostics,
+  ): void => {
+    latestFormulaRowRecomputeDiagnostics = context.hasComputedFields()
+      ? cloneFormulaRowRecomputeDiagnostics(diagnostics)
+      : null
+  }
+
+  const getFormulaRowRecomputeDiagnosticsSnapshot = (): DataGridFormulaRowRecomputeDiagnostics | null => {
+    if (!latestFormulaRowRecomputeDiagnostics) {
+      return null
+    }
+    return cloneFormulaRowRecomputeDiagnostics(latestFormulaRowRecomputeDiagnostics)
+  }
+
   const withRuntimeErrorsCollector = <TResult>(
     collector: DataGridFormulaRuntimeErrorsCollector,
     run: () => TResult,
@@ -141,7 +176,9 @@ export function createClientRowFormulaDiagnosticsRuntime(
     pushFormulaRuntimeError,
     commitFormulaDiagnostics,
     commitFormulaComputeStageDiagnostics,
+    commitFormulaRowRecomputeDiagnostics,
     getFormulaComputeStageDiagnosticsSnapshot,
+    getFormulaRowRecomputeDiagnosticsSnapshot,
     withRuntimeErrorsCollector,
   }
 }
