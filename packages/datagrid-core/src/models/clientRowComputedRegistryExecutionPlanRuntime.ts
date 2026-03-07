@@ -3,6 +3,8 @@ import {
 } from "./formulaExecutionPlan.js"
 import type {
   ClientRowComputedRegistryRuntimeState,
+  DataGridComputedTokenReader,
+  DataGridResolvedComputedDependency,
 } from "./clientRowComputedRegistryRuntime.js"
 import type {
   DataGridFormulaCyclePolicy,
@@ -23,15 +25,30 @@ export function createComputedRegistryExecutionPlanRuntime<T>(options: {
   formulaCyclePolicy: DataGridFormulaCyclePolicy
   onComputedPlanChanged: () => void
   resolveRowFieldReader: (fieldInput: string) => ((rowNode: DataGridRowNode<T>) => unknown)
+  createDependencyReader: (dependency: DataGridResolvedComputedDependency) => DataGridComputedTokenReader<T>
 }) {
   const {
     state,
     formulaCyclePolicy,
     onComputedPlanChanged,
     resolveRowFieldReader,
+    createDependencyReader,
   } = options
 
   const rebuildComputedOrder = (): void => {
+    for (const [name, entry] of state.computedFieldsByName) {
+      const dependencyReaders = Object.freeze(entry.deps.map(createDependencyReader))
+      const dependencyReaderByToken = new Map(entry.deps.map((dependency, index) => [
+        dependency.token,
+        dependencyReaders[index] ?? (() => undefined),
+      ]))
+      state.computedFieldsByName.set(name, {
+        ...entry,
+        dependencyReaders,
+        dependencyReaderByToken,
+      })
+    }
+
     state.computedExecutionPlan = createDataGridFormulaExecutionPlan(
       Array.from(state.computedFieldsByName.values()).map(entry => ({
         name: entry.name,

@@ -58,10 +58,11 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
   - Add compiled expression cache (`formula string -> compiled artifact`) inside registry compilation runtime.
   - Add normalized AST hash (`expressionHash`) for structurally equivalent formulas.
   - Expose compile-cache hit/miss/size metrics in projection formula diagnostics.
-- [ ] Block 14. Access Specialization (`Perf`)
+- [x] Block 14. Access Specialization (`Perf`)
   - Replace generic string-token hot path with `tokenIndex -> accessor` specialization.
   - Precompile nested path readers and common scalar slot readers.
   - Make JIT/batch evaluators consume accessor tables instead of raw token strings.
+  - Prebuild per-node dependency reader tables so row, batch, and columnar execution reuse resolved accessors instead of re-resolving tokens in hot loops.
 - [ ] Block 15. Formal Expression DAG Runtime (`Architecture`)
   - Promote current dependency planning/runtime into an explicit `FormulaGraph`.
   - Keep stable topological levels as a first-class execution artifact.
@@ -86,7 +87,7 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 ## Phase 5 Priority Order
 
 1. [x] `F1` Compile Reuse and Expression Identity
-2. [ ] `F2` Access Specialization
+2. [x] `F2` Access Specialization
 3. [ ] `F3` Formal Expression DAG Runtime
 4. [ ] `F4` Fused Batch Execution
 5. [ ] `F4.1` Batch-Major Level Execution
@@ -96,7 +97,7 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 ## Phase 5 Definition of Done
 
 - [ ] Repeated formulas compile once and reuse the same compiled artifact.
-- [ ] Hot execution path avoids string-token lookups.
+- [x] Hot execution path avoids string-token lookups.
 - [ ] Recompute is explicitly node-scoped and row-scoped.
 - [ ] Arithmetic dependency chains can execute as fused batches.
 - [ ] Runtime can execute hot levels in batch-major order (`level -> batch -> node`) where eligible.

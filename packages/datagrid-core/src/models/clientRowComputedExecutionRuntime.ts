@@ -30,6 +30,8 @@ export interface DataGridRegisteredComputedField<T> {
   compute: DataGridComputedFieldDefinition<T>["compute"]
   computeBatch?: DataGridCompiledFormulaField<T>["computeBatch"]
   computeBatchColumnar?: DataGridCompiledFormulaField<T>["computeBatchColumnar"]
+  dependencyReaders?: readonly DataGridComputedTokenReader<T>[]
+  dependencyReaderByToken?: ReadonlyMap<DataGridComputedDependencyToken, DataGridComputedTokenReader<T>>
 }
 
 export interface DataGridRegisteredFormulaField {
@@ -64,6 +66,12 @@ export interface DataGridComputedColumnReadContext<T> {
     rowNode: DataGridRowNode<T>,
   ) => unknown
 }
+
+export type DataGridComputedTokenReader<T> = (
+  rowNode: DataGridRowNode<T>,
+  rowIndex?: number,
+  columnReadContext?: DataGridComputedColumnReadContext<T>,
+) => unknown
 
 export interface DataGridClientComputedExecutionRuntimeContext<T> {
   vectorBatchSize?: number

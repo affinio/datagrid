@@ -116,6 +116,33 @@ function createComputedFieldReader<T>(
   )
 }
 
+function createDeferredComputedFieldReader<T>(options: {
+  computedName: string
+  state: ClientRowComputedRegistryRuntimeState<T>
+  resolveRowFieldReader: (fieldInput: string) => (rowNode: DataGridRowNode<T>) => unknown,
+}): DataGridComputedTokenReader<T> {
+  const { computedName, state, resolveRowFieldReader } = options
+  return (
+    rowNode: DataGridRowNode<T>,
+    rowIndex?: number,
+    columnReadContext?: DataGridComputedColumnReadContext<T>,
+  ) => {
+    const computedDependency = state.computedFieldsByName.get(computedName)
+    if (!computedDependency) {
+      return undefined
+    }
+    const field = computedDependency.field
+    if (
+      columnReadContext
+      && typeof rowIndex === "number"
+      && rowIndex >= 0
+    ) {
+      return columnReadContext.readFieldAtRow(field, rowIndex, rowNode)
+    }
+    return resolveRowFieldReader(field)(rowNode)
+  }
+}
+
 export function createComputedRegistryTokenResolverRuntime<T>(options: {
   state: ClientRowComputedRegistryRuntimeState<T>
 }) {
@@ -165,6 +192,29 @@ export function createComputedRegistryTokenResolverRuntime<T>(options: {
     return nextReader
   }
 
+  const createDependencyReader = (
+    dependency: DataGridResolvedComputedDependency,
+  ): DataGridComputedTokenReader<T> => {
+    if (dependency.domain === "meta") {
+      if (!isDataGridFormulaMetaField(dependency.value)) {
+        return () => undefined
+      }
+      const metaField = dependency.value
+      return (rowNode: DataGridRowNode<T>) => resolveDataGridFormulaMetaValue(rowNode, metaField)
+    }
+    if (dependency.domain === "computed") {
+      const computedDependency = state.computedFieldsByName.get(dependency.value)
+      return computedDependency
+        ? createComputedFieldReader(computedDependency, resolveRowFieldReader)
+        : createDeferredComputedFieldReader({
+            computedName: dependency.value,
+            state,
+            resolveRowFieldReader,
+          })
+    }
+    return createColumnAwareFieldReader(dependency.value, resolveRowFieldReader(dependency.value))
+  }
+
   const createTokenReader = (tokenInput: string): DataGridComputedTokenReader<T> => {
     if (!tokenInput.includes(":")) {
       const computedDependency = state.computedFieldsByName.get(tokenInput)
@@ -175,20 +225,7 @@ export function createComputedRegistryTokenResolverRuntime<T>(options: {
     }
 
     const dependency = resolveComputedDependency(tokenInput)
-    if (dependency.domain === "meta") {
-      if (!isDataGridFormulaMetaField(dependency.value)) {
-        return () => undefined
-      }
-      const metaField = dependency.value
-      return (rowNode: DataGridRowNode<T>) => resolveDataGridFormulaMetaValue(rowNode, metaField)
-    }
-    if (dependency.domain === "computed") {
-      return createComputedFieldReader(
-        state.computedFieldsByName.get(dependency.value),
-        resolveRowFieldReader,
-      )
-    }
-    return createColumnAwareFieldReader(dependency.value, resolveRowFieldReader(dependency.value))
+    return createDependencyReader(dependency)
   }
 
   const resolveComputedTokenValue = (
@@ -213,6 +250,7 @@ export function createComputedRegistryTokenResolverRuntime<T>(options: {
   }
 
   return {
+    createDependencyReader,
     resolveComputedDependency,
     resolveComputedTokenValue,
     resolveRowFieldReader,

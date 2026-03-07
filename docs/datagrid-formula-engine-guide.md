@@ -10,6 +10,7 @@ The engine is optimized for **deterministic behavior**, **incremental recompute*
 - Spreadsheet-like syntax (`=price * qty + tax`) with clear coercion rules.
 - Incremental graph execution (recompute only affected formula nodes).
 - Multiple execution paths (row-wise, batch, columnar) with safe fallback.
+- Hot-path dependency access is pre-specialized into reusable readers for field, computed, and meta dependencies.
 - Runtime diagnostics and explain snapshots for observability.
 
 ## Quick mental model
@@ -436,6 +437,8 @@ Projection formula diagnostics now also expose optional compile-cache metrics:
 - `compileCache.size`
 
 Internally, repeated formulas now reuse compiled artifacts by exact formula text, and compiled formulas carry a normalized `expressionHash` so structurally equivalent expressions can share identity even when their source text formatting differs.
+
+Execution now also prebuilds dependency reader tables per computed/formula node, so row-wise `get(...)`, batch readers, and columnar token columns reuse resolved field/computed/meta accessors instead of going back through generic token-string resolution on every read.
 
 ## Why these principles were chosen
 

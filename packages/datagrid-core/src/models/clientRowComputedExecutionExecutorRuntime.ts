@@ -11,6 +11,7 @@ import type {
   DataGridComputedColumnReadContext,
   DataGridRegisteredComputedField,
   DataGridRegisteredFormulaField,
+  DataGridComputedTokenReader,
 } from "./clientRowComputedExecutionRuntime.js"
 import type { DataGridComputedDirtyPropagationRuntime } from "./clientRowComputedExecutionDirtyPropagationRuntime.js"
 
@@ -92,6 +93,10 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
   let skippedByObjectIs = 0
   let activeComputeRowNode: DataGridRowNode<T> | null = null
   let activeComputeRowIndex = -1
+  let activeComputeDependencyReaderByToken: ReadonlyMap<
+    DataGridComputedDependencyToken,
+    DataGridComputedTokenReader<T>
+  > | null = null
   let effectiveRuntimeStrategy: "row" | "column-cache" = "column-cache"
   let forceRowReadFallback = false
   const verifyColumnCacheParity = context.isColumnCacheParityVerificationEnabled()
@@ -146,6 +151,16 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       if (!activeComputeRowNode) {
         return undefined
       }
+      if (typeof token === "string" && activeComputeDependencyReaderByToken) {
+        const dependencyReader = activeComputeDependencyReaderByToken.get(token)
+        if (dependencyReader) {
+          return dependencyReader(
+            activeComputeRowNode,
+            activeComputeRowIndex,
+            columnReadContext,
+          )
+        }
+      }
       return context.resolveComputedTokenValue(
         activeComputeRowNode,
         token,
@@ -182,6 +197,8 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
     }
     dirtyRuntime.dirtyRowIndexesByNode[nodeIndex] = undefined
     const dependentIndexes = computedDependentsByIndex[nodeIndex] ?? []
+    const dependencyReaders = computed.dependencyReaders ?? []
+    const dependencyReaderByToken = computed.dependencyReaderByToken ?? null
     const canUseBatchCompute = typeof computed.computeBatch === "function"
     const canUseColumnarBatchCompute = typeof computed.computeBatchColumnar === "function"
     const visitEpoch = nextNodeVisitEpoch()
@@ -317,12 +334,15 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
                 tokenColumn[contextIndex] = undefined
                 continue
               }
-              tokenColumn[contextIndex] = context.resolveComputedTokenValue(
-                rowNode,
-                dependency.token,
-                rowIndex,
-                columnReadContext,
-              )
+              const dependencyReader = dependencyReaders[tokenIndex]
+              tokenColumn[contextIndex] = dependencyReader
+                ? dependencyReader(rowNode, rowIndex, columnReadContext)
+                : context.resolveComputedTokenValue(
+                    rowNode,
+                    dependency.token,
+                    rowIndex,
+                    columnReadContext,
+                  )
             }
           }
           batchValues = computed.computeBatchColumnar?.(
@@ -343,12 +363,15 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
               ) {
                 return undefined
               }
-              return context.resolveComputedTokenValue(
-                rowNode,
-                dependency.token,
-                rowIndex,
-                columnReadContext,
-              )
+              const dependencyReader = dependencyReaders[tokenIndex]
+              return dependencyReader
+                ? dependencyReader(rowNode, rowIndex, columnReadContext)
+                : context.resolveComputedTokenValue(
+                    rowNode,
+                    dependency.token,
+                    rowIndex,
+                    columnReadContext,
+                  )
             },
           ) ?? []
         }
@@ -375,6 +398,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
         }
         activeComputeRowNode = workingRowNode
         activeComputeRowIndex = rowIndex
+        activeComputeDependencyReaderByToken = dependencyReaderByToken
         reusableComputeContext.row = workingRowNode.row
         reusableComputeContext.rowId = workingRowNode.rowId
         reusableComputeContext.sourceIndex = workingRowNode.sourceIndex
@@ -384,6 +408,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
         } finally {
           activeComputeRowNode = null
           activeComputeRowIndex = -1
+          activeComputeDependencyReaderByToken = null
         }
         applyComputedValueForRow(rowIndex, workingRowNode, nextValue)
       }

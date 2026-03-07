@@ -42,6 +42,8 @@ export interface DataGridRegisteredComputedField<T> {
   compute: DataGridComputedFieldDefinition<T>["compute"]
   computeBatch?: DataGridCompiledFormulaField<T>["computeBatch"]
   computeBatchColumnar?: DataGridCompiledFormulaField<T>["computeBatchColumnar"]
+  dependencyReaders?: readonly DataGridComputedTokenReader<T>[]
+  dependencyReaderByToken?: ReadonlyMap<DataGridComputedDependencyToken, DataGridComputedTokenReader<T>>
 }
 
 export interface DataGridRegisteredFormulaField {
@@ -108,6 +110,7 @@ export interface ClientRowComputedRegistryRuntime<T> {
   normalizeComputedName: (value: unknown) => string
   normalizeFormulaFunctionName: (value: unknown) => string
   normalizeComputedTargetField: (value: unknown, fallbackName: string) => string
+  createDependencyReader: (dependency: DataGridResolvedComputedDependency) => DataGridComputedTokenReader<T>
 
   resolveInitialComputedRegistrationOrder: (
     definitions: readonly DataGridComputedFieldDefinition<T>[],
@@ -210,6 +213,7 @@ export function createClientRowComputedRegistryRuntime<T>(
     formulaCyclePolicy,
     onComputedPlanChanged: context.onComputedPlanChanged,
     resolveRowFieldReader: tokenResolverRuntime.resolveRowFieldReader,
+    createDependencyReader: tokenResolverRuntime.createDependencyReader,
   })
   const formulaCompilationRuntime = createComputedRegistryFormulaCompilationRuntime({
     state,
@@ -304,5 +308,6 @@ export function createClientRowComputedRegistryRuntime<T>(
     resolveComputedRootIndexesForContextKeys: executionPlanRuntime.resolveComputedRootIndexesForContextKeys,
     resolveComputedTokenValue: tokenResolverRuntime.resolveComputedTokenValue,
     resolveRowFieldReader: tokenResolverRuntime.resolveRowFieldReader,
+    createDependencyReader: tokenResolverRuntime.createDependencyReader,
   }
 }
