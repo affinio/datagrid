@@ -68,15 +68,16 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
   - Keep stable topological levels as a first-class execution artifact.
   - Add explain/debug visibility for node-level and row-level recompute causes.
   - Expose serializable graph snapshots with edges and level metadata, plus row-level recompute diagnostics grouped by row and node.
-- [ ] Block 16. Fused Batch Execution (`Perf`)
+- [x] Block 16. Fused Batch Execution (`Perf`)
   - Compile arithmetic/comparison chains into tighter batched loops.
   - Avoid generic node dispatch inside hot recompute paths where graph shape is stable.
   - Keep deterministic fallback for unsupported/branch-heavy subgraphs.
-- [ ] Block 16.1. Batch-Major Level Execution (`Perf`)
+  - Prefer fused columnar kernels for eligible arithmetic/comparison formulas while preserving row-wise fallback on runtime faults.
+- [x] Block 16.1. Batch-Major Level Execution (`Perf`)
   - Switch hot execution order from `level -> node -> rows batch` toward `level -> rows batch -> node`.
   - Keep temporary row-batch state hot across multiple nodes inside the same level.
   - Use this as the default runtime shape for fused batch execution and future vector kernels.
-- [ ] Block 16.2. Dependency-Signature Group Execution (`Perf`)
+- [x] Block 16.2. Dependency-Signature Group Execution (`Perf`)
   - Group same-level nodes by normalized dependency signature before execution.
   - Preload shared dependency columns/readers once per batch and reuse them across grouped nodes.
   - Use shared-input scheduling to reduce repeated column reads and token resolution for formulas with overlapping inputs.
@@ -90,9 +91,9 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 1. [x] `F1` Compile Reuse and Expression Identity
 2. [x] `F2` Access Specialization
 3. [x] `F3` Formal Expression DAG Runtime
-4. [ ] `F4` Fused Batch Execution
-5. [ ] `F4.1` Batch-Major Level Execution
-6. [ ] `F4.2` Dependency-Signature Group Execution
+4. [x] `F4` Fused Batch Execution
+5. [x] `F4.1` Batch-Major Level Execution
+6. [x] `F4.2` Dependency-Signature Group Execution
 7. [ ] `F5` True Vector Kernels
 
 ## Phase 5 Definition of Done
@@ -100,9 +101,9 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 - [ ] Repeated formulas compile once and reuse the same compiled artifact.
 - [x] Hot execution path avoids string-token lookups.
 - [x] Recompute is explicitly node-scoped and row-scoped.
-- [ ] Arithmetic dependency chains can execute as fused batches.
-- [ ] Runtime can execute hot levels in batch-major order (`level -> batch -> node`) where eligible.
-- [ ] Same-level nodes with overlapping dependency signatures can reuse preloaded inputs within a batch.
+- [x] Arithmetic dependency chains can execute as fused batches.
+- [x] Runtime can execute hot levels in batch-major order (`level -> batch -> node`) where eligible.
+- [x] Same-level nodes with overlapping dependency signatures can reuse preloaded inputs within a batch.
 - [ ] Numeric-heavy workloads can opt into vector-kernel execution.
 - [ ] Diagnostics explain recompute causes, cache behavior, and runtime mode selection.
 

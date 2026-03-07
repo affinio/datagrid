@@ -95,6 +95,7 @@ export interface DataGridCompiledFormulaField<TRow = unknown> {
   identifiers: readonly string[]
   deps: readonly DataGridComputedDependencyToken[]
   contextKeys: readonly string[]
+  batchExecutionMode?: DataGridCompiledFormulaBatchExecutionMode
   compute: (context: DataGridComputedFieldComputeContext<TRow>) => DataGridFormulaValue
   computeBatch?: (
     contexts: readonly DataGridCompiledFormulaBatchContext<TRow>[],
@@ -126,6 +127,13 @@ export interface DataGridCompiledFormulaBatchContext<TRow = unknown> {
   rowId: DataGridRowId
   sourceIndex: number
 }
+
+export type DataGridCompiledFormulaBatchExecutionMode =
+  | "row"
+  | "batch"
+  | "columnar-ast"
+  | "columnar-jit"
+  | "columnar-fused"
 
 export interface DataGridFormulaSourceSpan {
   start: number

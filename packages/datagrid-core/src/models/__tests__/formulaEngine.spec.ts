@@ -1325,6 +1325,7 @@ describe("formulaEngine", () => {
     ]
     const result = compiled.computeBatchColumnar?.(contexts, tokenColumns) ?? []
 
+    expect(compiled.batchExecutionMode).toBe("columnar-fused")
     expect(result).toEqual([21, 26, 31])
   })
 
@@ -1359,8 +1360,20 @@ describe("formulaEngine", () => {
       [1, 2, 3],
     ]) ?? []
 
+    expect(compiled.batchExecutionMode).toBe("columnar-fused")
     expect(result).toEqual([21, 26, 31])
     expect(columnarResult).toEqual([21, 26, 31])
+  })
+
+  it("keeps non-fusable formulas on generic columnar paths", () => {
+    const compiled = compileDataGridFormulaFieldDefinition({
+      name: "sumTotal",
+      formula: "SUM(price, qty, tax)",
+    }, {
+      compileStrategy: "ast",
+    })
+
+    expect(compiled.batchExecutionMode).toBe("columnar-ast")
   })
 
   it("falls back to row-wise semantics when JIT batch hits runtime errors", () => {

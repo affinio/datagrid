@@ -73,6 +73,7 @@ export function createClientRowSnapshotRuntime<T>(
           field: node.field,
           dirty: node.dirty,
           touched: node.touched,
+          ...(node.runtimeMode ? { runtimeMode: node.runtimeMode } : {}),
           evaluations: node.evaluations,
           dirtyRows: node.dirtyRows,
           dirtyCauses: node.dirtyCauses.map(cause => ({ ...cause })),

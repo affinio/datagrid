@@ -84,6 +84,9 @@ export function createComputedExecutionDiagnostics<T>(options: {
       field: computed?.field ?? name,
       dirty: dirtyRuntime.dirtyNodeMarks[index] !== 0,
       touched: computed ? executionResult.touchedComputedFields.has(computed.field) : false,
+      ...(executionResult.nodeRuntimeModeByIndex[index]
+        ? { runtimeMode: executionResult.nodeRuntimeModeByIndex[index] }
+        : {}),
       evaluations: dirtyRuntime.evaluationCountByNode[index] ?? 0,
       dirtyRows: dirtyRuntime.dirtyRowCountByNode[index] ?? 0,
       dirtyCauses,

@@ -234,6 +234,7 @@ describe("createClientRowModel", () => {
           field: "total",
           dirty: true,
           touched: false,
+          runtimeMode: "row",
           evaluations: 1,
           dirtyRows: 1,
           dirtyCauses: [{ kind: "field", value: "price", rows: 1 }],
@@ -631,6 +632,17 @@ describe("createClientRowModel", () => {
         },
       ],
     })
+
+    expect(model.getFormulaComputeStageDiagnostics()?.nodes).toEqual([
+      expect.objectContaining({
+        name: "subtotal",
+        runtimeMode: "columnar-fused",
+      }),
+      expect.objectContaining({
+        name: "total",
+        runtimeMode: "columnar-fused",
+      }),
+    ])
 
     model.dispose()
   })

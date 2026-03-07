@@ -197,6 +197,7 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
     if (registeredComputedField) {
       state.computedFieldsByName.set(compiled.name, {
         ...registeredComputedField,
+        batchExecutionMode: compiled.batchExecutionMode,
         computeBatch: compiled.computeBatch,
         computeBatchColumnar: compiled.computeBatchColumnar,
       })

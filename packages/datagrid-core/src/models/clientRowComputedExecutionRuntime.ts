@@ -29,6 +29,7 @@ export interface DataGridRegisteredComputedField<T> {
   field: string
   deps: readonly DataGridResolvedComputedDependency[]
   compute: DataGridComputedFieldDefinition<T>["compute"]
+  batchExecutionMode?: DataGridCompiledFormulaField<T>["batchExecutionMode"]
   computeBatch?: DataGridCompiledFormulaField<T>["computeBatch"]
   computeBatchColumnar?: DataGridCompiledFormulaField<T>["computeBatchColumnar"]
   dependencyReaders?: readonly DataGridComputedTokenReader<T>[]
@@ -355,28 +356,13 @@ export function createClientRowComputedExecutionRuntime<T>(
 
         while (true) {
           levelIterationCount += 1
-          let queuedSameLevelWork = false
-
-          for (const nodeIndex of level) {
-            const computedName = computedOrder[nodeIndex]
-            const computed = computedEntryByIndex[nodeIndex]
-            const readComputedField = computedFieldReaderByIndex[nodeIndex]
-            if (!computedName || !computed || !readComputedField) {
-              continue
-            }
-            if (executorRuntime.executeNode(dirtyRuntime, {
-              nodeIndex,
-              computedName,
-              computed,
-              readComputedField,
-              levelNodeIndexSet,
-            })) {
-              queuedSameLevelWork = true
-            }
-          }
-
-          executorRuntime.flushLevelPatches()
-          executorRuntime.flushQueuedDependents(dirtyRuntime)
+          const queuedSameLevelWork = executorRuntime.executeLevel(dirtyRuntime, {
+            levelNodeIndexes: level,
+            levelNodeIndexSet,
+            computedOrder,
+            computedEntryByIndex,
+            computedFieldReaderByIndex,
+          })
 
           if (iterativeNodeIndexes.length === 0) {
             break

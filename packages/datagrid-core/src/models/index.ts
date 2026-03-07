@@ -138,6 +138,7 @@ export {
   isFormulaValueBlank,
   isFormulaValueEmptyText,
   type DataGridCompiledFormulaArtifact,
+  type DataGridCompiledFormulaBatchExecutionMode,
   type DataGridCompiledFormulaField,
   type DataGridCompiledFormulaBatchContext,
   type DataGridFormulaDiagnostic,

@@ -1,6 +1,7 @@
 export type {
   DataGridCompiledFormulaArtifact,
   DataGridCompiledFormulaBatchContext,
+  DataGridCompiledFormulaBatchExecutionMode,
   DataGridCompiledFormulaField,
   DataGridFormulaDiagnostic,
   DataGridFormulaExpressionAnalysis,

@@ -208,6 +208,12 @@ When registering a formula, the engine runs:
 
 If batch/columnar JIT path hits a runtime fault on some rows, engine falls back to row-wise semantics so non-failing rows still evaluate correctly.
 
+For arithmetic/comparison-heavy formulas, the engine now prefers fused columnar kernels when the AST is simple enough (identifiers, literals, unary numeric ops, arithmetic ops, and comparisons). This keeps execution on preloaded token columns and avoids generic per-row AST dispatch in the hot path.
+
+At runtime, hot formula levels now execute in batch-major order (`level -> batch -> node`) instead of draining one node across all batches before moving to the next node. That keeps the current row-batch hot while multiple same-level formulas run over it and lines up the scheduler with fused/columnar execution.
+
+The scheduler now also groups same-level nodes by normalized dependency signature inside each batch. When multiple batch/columnar formulas consume the same ordered dependency set, dependency columns are preloaded once for the shared batch input and reused across the grouped node executions. This reduces repeated dependency-reader calls and token resolution for overlapping hot formulas.
+
 ### CSP-safe execution mode
 
 For strict CSP environments, dynamic code generation can be disabled explicitly:
@@ -456,6 +462,16 @@ For deeper debug visibility, client row-model runtime now also exposes:
 - `getFormulaGraph()` for a serializable DAG snapshot with edges and level metadata
 - `getFormulaRowRecomputeDiagnostics()` for row-scoped recompute visibility grouped by row and affected nodes
 - `api.diagnostics.getFormulaExplain().graph` and `api.diagnostics.getFormulaExplain().rowRecompute` for explain/debug tooling
+
+Per-node compute-stage diagnostics can also expose `runtimeMode`, for example:
+
+- `row`
+- `batch`
+- `columnar-ast`
+- `columnar-jit`
+- `columnar-fused`
+
+This makes runtime mode selection observable when validating fused execution adoption.
 
 ## Why these principles were chosen
 

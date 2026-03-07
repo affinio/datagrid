@@ -40,6 +40,7 @@ export interface DataGridRegisteredComputedField<T> {
   field: string
   deps: readonly DataGridResolvedComputedDependency[]
   compute: DataGridComputedFieldDefinition<T>["compute"]
+  batchExecutionMode?: DataGridCompiledFormulaField<T>["batchExecutionMode"]
   computeBatch?: DataGridCompiledFormulaField<T>["computeBatch"]
   computeBatchColumnar?: DataGridCompiledFormulaField<T>["computeBatchColumnar"]
   dependencyReaders?: readonly DataGridComputedTokenReader<T>[]

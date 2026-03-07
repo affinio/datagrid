@@ -187,6 +187,7 @@ export function createComputedRegistryFormulaCompilationRuntime<T>(options: {
           field: compiled.field,
           deps: resolvedDeps,
           compute: compiled.compute,
+          batchExecutionMode: compiled.batchExecutionMode,
           computeBatch: compiled.computeBatch,
           computeBatchColumnar: compiled.computeBatchColumnar,
         })

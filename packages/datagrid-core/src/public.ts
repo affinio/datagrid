@@ -241,6 +241,7 @@ export {
   type DataGridCompiledFormulaArtifact,
   type DataGridCompiledFormulaField,
   type DataGridCompiledFormulaBatchContext,
+  type DataGridCompiledFormulaBatchExecutionMode,
   type DataGridFormulaExpressionAnalysis,
   type DataGridFormulaExecutionDependencyDomain,
   type DataGridFormulaExecutionDependency,

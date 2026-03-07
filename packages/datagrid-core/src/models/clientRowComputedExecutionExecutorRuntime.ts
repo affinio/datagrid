@@ -27,20 +27,38 @@ export interface DataGridComputedExecutionFinalizeResult<T> {
   computeEvaluationCount: number
   skippedByObjectIs: number
   effectiveRuntimeStrategy: "row" | "column-cache"
+  nodeRuntimeModeByIndex: readonly ("row" | "batch" | "columnar-ast" | "columnar-jit" | "columnar-fused" | undefined)[]
 }
 
 export interface DataGridComputedExecutorRuntime<T> {
   formulaRuntimeErrorsCollector: DataGridFormulaRuntimeErrorsCollector
-  executeNode: (dirtyRuntime: DataGridComputedDirtyPropagationRuntime, options: {
-    nodeIndex: number
-    computedName: string
-    computed: DataGridRegisteredComputedField<T>
-    readComputedField: (rowNode: DataGridRowNode<T>) => unknown
+  executeLevel: (dirtyRuntime: DataGridComputedDirtyPropagationRuntime, options: {
+    levelNodeIndexes: readonly number[]
     levelNodeIndexSet: ReadonlySet<number>
+    computedOrder: readonly string[]
+    computedEntryByIndex: readonly DataGridRegisteredComputedField<T>[]
+    computedFieldReaderByIndex: readonly ((rowNode: DataGridRowNode<T>) => unknown)[]
   }) => boolean
-  flushLevelPatches: () => void
-  flushQueuedDependents: (dirtyRuntime: DataGridComputedDirtyPropagationRuntime) => void
   finalize: () => DataGridComputedExecutionFinalizeResult<T>
+}
+
+interface DataGridPreparedComputedBatchInput<T> {
+  rowIndexes: readonly number[]
+  rowNodes: readonly DataGridRowNode<T>[]
+  contexts: readonly ({
+    row: T
+    rowId: DataGridRowId
+    sourceIndex: number
+  })[]
+  tokenColumns?: readonly (readonly unknown[])[]
+}
+
+interface DataGridScheduledNodeBatch<T> {
+  nodeIndex: number
+  computedName: string
+  computed: DataGridRegisteredComputedField<T>
+  readComputedField: (rowNode: DataGridRowNode<T>) => unknown
+  batchDirtyRowIndexes: readonly number[]
 }
 
 export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
@@ -91,6 +109,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
   }
   let computeEvaluationCount = 0
   let skippedByObjectIs = 0
+  const nodeRuntimeModeByIndex = new Array<"row" | "batch" | "columnar-ast" | "columnar-jit" | "columnar-fused" | undefined>(nodeCount)
   let activeComputeRowNode: DataGridRowNode<T> | null = null
   let activeComputeRowIndex = -1
   let activeComputeDependencyReaderByToken: ReadonlyMap<
@@ -170,11 +189,155 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
     },
   } satisfies DataGridComputedFieldComputeContext<T>
   const nextDirtyRowIndexesByNode = new Array<number[] | undefined>(nodeCount)
+  const sharedDependencySignatureByNodeIndex = new Array<string | null>(nodeCount)
   const levelPatchByRowIndex = new Map<number, Record<string, unknown>>()
   const levelPatchedRowIndexes: number[] = []
   const nextDirtyNodeIndexes: number[] = []
+  const levelDirtyRowMarks = new Int32Array(rowCount)
+  const levelDirtyRowBatchIndexByRow = new Int32Array(rowCount)
+  let levelDirtyRowEpoch = 0
 
-  const executeNodeWithDirtyRuntime = (
+  const nextLevelDirtyRowEpoch = (): number => {
+    levelDirtyRowEpoch += 1
+    if (levelDirtyRowEpoch >= 2_000_000_000) {
+      levelDirtyRowMarks.fill(0)
+      levelDirtyRowEpoch = 1
+    }
+    return levelDirtyRowEpoch
+  }
+
+  const createSharedDependencySignature = (
+    computed: DataGridRegisteredComputedField<T>,
+  ): string | null => {
+    const canUseBatchCompute = typeof computed.computeBatch === "function"
+    const canUseColumnarBatchCompute = typeof computed.computeBatchColumnar === "function"
+    if ((!canUseBatchCompute && !canUseColumnarBatchCompute) || computed.deps.length === 0) {
+      return null
+    }
+    return computed.deps.map(dependency => dependency.token).join("\u001f")
+  }
+
+  const computedEntryByIndex = context.getComputedEntryByIndex()
+  for (let nodeIndex = 0; nodeIndex < nodeCount; nodeIndex += 1) {
+    const computed = computedEntryByIndex[nodeIndex]
+    sharedDependencySignatureByNodeIndex[nodeIndex] = computed
+      ? createSharedDependencySignature(computed)
+      : null
+  }
+
+  const createPreparedBatchInput = (
+    rowIndexes: readonly number[],
+  ): DataGridPreparedComputedBatchInput<T> => {
+    const batchRowIndexes: number[] = []
+    const batchRowNodes: DataGridRowNode<T>[] = []
+    const batchContexts: Array<{ row: T; rowId: DataGridRowId; sourceIndex: number }> = []
+
+    for (const rowIndex of rowIndexes) {
+      if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= rowCount) {
+        continue
+      }
+      const sourceRow = sourceRowsBaseline[rowIndex]
+      if (!sourceRow || !context.isRecord(sourceRow.data)) {
+        continue
+      }
+      const workingRowNode = workingRowByIndex[rowIndex] ?? sourceRow
+      batchRowIndexes.push(rowIndex)
+      batchRowNodes.push(workingRowNode)
+      batchContexts.push({
+        row: workingRowNode.row,
+        rowId: workingRowNode.rowId,
+        sourceIndex: workingRowNode.sourceIndex,
+      })
+    }
+
+    return {
+      rowIndexes: batchRowIndexes,
+      rowNodes: batchRowNodes,
+      contexts: batchContexts,
+    }
+  }
+
+  const createPreparedTokenColumns = (
+    computed: DataGridRegisteredComputedField<T>,
+    dependencyReaders: readonly DataGridComputedTokenReader<T>[],
+    preparedBatchInput: DataGridPreparedComputedBatchInput<T>,
+  ): readonly unknown[][] => {
+    const tokenColumns = computed.deps.map<unknown[]>(() => [])
+    for (let tokenIndex = 0; tokenIndex < computed.deps.length; tokenIndex += 1) {
+      const dependency = computed.deps[tokenIndex]
+      const tokenColumn = tokenColumns[tokenIndex]
+      if (!dependency) {
+        continue
+      }
+      if (!tokenColumn) {
+        continue
+      }
+      tokenColumn.length = preparedBatchInput.rowIndexes.length
+      for (let contextIndex = 0; contextIndex < preparedBatchInput.rowIndexes.length; contextIndex += 1) {
+        const rowIndex = preparedBatchInput.rowIndexes[contextIndex]
+        const rowNode = preparedBatchInput.rowNodes[contextIndex]
+        if (typeof rowIndex !== "number" || !rowNode) {
+          tokenColumn[contextIndex] = undefined
+          continue
+        }
+        const dependencyReader = dependencyReaders[tokenIndex]
+        tokenColumn[contextIndex] = dependencyReader
+          ? dependencyReader(rowNode, rowIndex, columnReadContext)
+          : context.resolveComputedTokenValue(
+              rowNode,
+              dependency.token,
+              rowIndex,
+              columnReadContext,
+            )
+      }
+    }
+    return tokenColumns
+  }
+
+  const createSubsetPreparedBatchInput = (
+    sharedPreparedInput: DataGridPreparedComputedBatchInput<T>,
+    sharedTokenColumns: readonly (readonly unknown[])[],
+    rowIndexes: readonly number[],
+  ): DataGridPreparedComputedBatchInput<T> => {
+    const rowPositionByIndex = new Map<number, number>()
+    for (let index = 0; index < sharedPreparedInput.rowIndexes.length; index += 1) {
+      const rowIndex = sharedPreparedInput.rowIndexes[index]
+      if (typeof rowIndex === "number") {
+        rowPositionByIndex.set(rowIndex, index)
+      }
+    }
+
+    const subsetRowIndexes: number[] = []
+    const subsetRowNodes: DataGridRowNode<T>[] = []
+    const subsetContexts: Array<{ row: T; rowId: DataGridRowId; sourceIndex: number }> = []
+    const subsetTokenColumns = sharedTokenColumns.map<unknown[]>(() => [])
+    for (const rowIndex of rowIndexes) {
+      const rowPosition = rowPositionByIndex.get(rowIndex)
+      if (typeof rowPosition !== "number") {
+        continue
+      }
+      const rowNode = sharedPreparedInput.rowNodes[rowPosition]
+      const rowContext = sharedPreparedInput.contexts[rowPosition]
+      if (!rowNode || !rowContext) {
+        continue
+      }
+      subsetRowIndexes.push(rowIndex)
+      subsetRowNodes.push(rowNode)
+      subsetContexts.push(rowContext)
+      for (let tokenIndex = 0; tokenIndex < subsetTokenColumns.length; tokenIndex += 1) {
+        subsetTokenColumns[tokenIndex]?.push(sharedTokenColumns[tokenIndex]?.[rowPosition])
+      }
+    }
+
+    return {
+      rowIndexes: subsetRowIndexes,
+      rowNodes: subsetRowNodes,
+      contexts: subsetContexts,
+      tokenColumns: subsetTokenColumns,
+    }
+  }
+
+  const executeNodeDirtyRows = (
     dirtyRuntime: DataGridComputedDirtyPropagationRuntime,
     optionsForNode: {
       nodeIndex: number
@@ -182,6 +345,8 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       computed: DataGridRegisteredComputedField<T>
       readComputedField: (rowNode: DataGridRowNode<T>) => unknown
       levelNodeIndexSet: ReadonlySet<number>
+      nodeDirtyRowIndexes: readonly number[]
+      preparedBatchInput?: DataGridPreparedComputedBatchInput<T>
     },
   ): boolean => {
     const {
@@ -190,18 +355,17 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       computed,
       readComputedField,
       levelNodeIndexSet,
+      nodeDirtyRowIndexes,
+      preparedBatchInput,
     } = optionsForNode
-    const nodeDirtyRowIndexes = dirtyRuntime.dirtyRowIndexesByNode[nodeIndex]
     if (!nodeDirtyRowIndexes || nodeDirtyRowIndexes.length === 0) {
       return false
     }
-    dirtyRuntime.dirtyRowIndexesByNode[nodeIndex] = undefined
     const dependentIndexes = computedDependentsByIndex[nodeIndex] ?? []
     const dependencyReaders = computed.dependencyReaders ?? []
     const dependencyReaderByToken = computed.dependencyReaderByToken ?? null
     const canUseBatchCompute = typeof computed.computeBatch === "function"
     const canUseColumnarBatchCompute = typeof computed.computeBatchColumnar === "function"
-    const visitEpoch = nextNodeVisitEpoch()
     let evaluatedAtLeastOnce = false
     let queuedSameLevelWork = false
     const previousColumnValues = getColumnValuesForField(computed.field)
@@ -260,137 +424,80 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       }
     }
 
-    const batchRowIndexes: number[] = []
-    const batchRowNodes: DataGridRowNode<T>[] = []
-    const batchContexts: Array<{ row: T; rowId: DataGridRowId; sourceIndex: number }> = []
-    let reusableTokenColumns: Array<unknown[]> | null = null
+    const batchInput = preparedBatchInput ?? createPreparedBatchInput(nodeDirtyRowIndexes)
+    const batchRowIndexes = batchInput.rowIndexes
+    const batchRowNodes = batchInput.rowNodes
+    const batchContexts = batchInput.contexts
 
-    for (
-      let batchStart = 0;
-      batchStart < nodeDirtyRowIndexes.length;
-      batchStart += vectorBatchSize
-    ) {
-      const batchEnd = Math.min(nodeDirtyRowIndexes.length, batchStart + vectorBatchSize)
-      batchRowIndexes.length = 0
-      batchRowNodes.length = 0
-      batchContexts.length = 0
+    if (batchRowIndexes.length === 0) {
+      return false
+    }
 
-      for (let rowCursor = batchStart; rowCursor < batchEnd; rowCursor += 1) {
-        const rowIndex = nodeDirtyRowIndexes[rowCursor]
-        if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= rowCount) {
-          continue
-        }
-        if (nodeVisitMarks[rowIndex] === visitEpoch) {
-          continue
-        }
-        nodeVisitMarks[rowIndex] = visitEpoch
-        const sourceRow = sourceRowsBaseline[rowIndex]
-        if (!sourceRow || !context.isRecord(sourceRow.data)) {
-          continue
-        }
-
-        const workingRowNode = workingRowByIndex[rowIndex] ?? sourceRow
-        evaluatedAtLeastOnce = true
-        if (touchedRowMarks[rowIndex] === 0) {
-          touchedRowMarks[rowIndex] = 1
-          touchedRowsCount += 1
-        }
-        batchRowIndexes.push(rowIndex)
-        batchRowNodes.push(workingRowNode)
-        batchContexts.push({
-          row: workingRowNode.row,
-          rowId: workingRowNode.rowId,
-          sourceIndex: workingRowNode.sourceIndex,
-        })
+    evaluatedAtLeastOnce = true
+    for (const rowIndex of batchRowIndexes) {
+      if (touchedRowMarks[rowIndex] === 0) {
+        touchedRowMarks[rowIndex] = 1
+        touchedRowsCount += 1
       }
+    }
 
-      if (batchRowIndexes.length === 0) {
-        continue
-      }
+    computeEvaluationCount += batchRowIndexes.length
+    dirtyRuntime.evaluationCountByNode[nodeIndex] = (dirtyRuntime.evaluationCountByNode[nodeIndex] ?? 0) + batchRowIndexes.length
 
-      computeEvaluationCount += batchRowIndexes.length
-      dirtyRuntime.evaluationCountByNode[nodeIndex] = (dirtyRuntime.evaluationCountByNode[nodeIndex] ?? 0) + batchRowIndexes.length
-
-      if (canUseColumnarBatchCompute || canUseBatchCompute) {
-        let batchValues: readonly unknown[] = []
-        if (canUseColumnarBatchCompute) {
-          if (!reusableTokenColumns || reusableTokenColumns.length !== computed.deps.length) {
-            reusableTokenColumns = computed.deps.map(() => [])
-          }
-          for (let tokenIndex = 0; tokenIndex < computed.deps.length; tokenIndex += 1) {
+    if (canUseColumnarBatchCompute || canUseBatchCompute) {
+      let batchValues: readonly unknown[] = []
+      const preparedTokenColumns = batchInput.tokenColumns
+      if (canUseColumnarBatchCompute) {
+        nodeRuntimeModeByIndex[nodeIndex] = computed.batchExecutionMode ?? "columnar-ast"
+        const reusableTokenColumns = preparedTokenColumns
+          ?? createPreparedTokenColumns(computed, dependencyReaders, batchInput)
+        batchValues = computed.computeBatchColumnar?.(
+          batchContexts,
+          reusableTokenColumns,
+        ) ?? []
+      } else {
+        batchValues = computed.computeBatch?.(
+          batchContexts,
+          (contextIndex, tokenIndex) => {
+            if (preparedTokenColumns) {
+              return preparedTokenColumns[tokenIndex]?.[contextIndex]
+            }
+            const rowIndex = batchRowIndexes[contextIndex]
+            const rowNode = batchRowNodes[contextIndex]
             const dependency = computed.deps[tokenIndex]
-            if (!dependency) {
-              continue
+            if (
+              typeof rowIndex !== "number"
+              || !rowNode
+              || !dependency
+            ) {
+              return undefined
             }
-            let tokenColumn = reusableTokenColumns[tokenIndex]
-            if (!tokenColumn) {
-              tokenColumn = []
-              reusableTokenColumns[tokenIndex] = tokenColumn
-            }
-            tokenColumn.length = batchRowIndexes.length
-            for (let contextIndex = 0; contextIndex < batchRowIndexes.length; contextIndex += 1) {
-              const rowIndex = batchRowIndexes[contextIndex]
-              const rowNode = batchRowNodes[contextIndex]
-              if (typeof rowIndex !== "number" || !rowNode) {
-                tokenColumn[contextIndex] = undefined
-                continue
-              }
-              const dependencyReader = dependencyReaders[tokenIndex]
-              tokenColumn[contextIndex] = dependencyReader
-                ? dependencyReader(rowNode, rowIndex, columnReadContext)
-                : context.resolveComputedTokenValue(
-                    rowNode,
-                    dependency.token,
-                    rowIndex,
-                    columnReadContext,
-                  )
-            }
-          }
-          batchValues = computed.computeBatchColumnar?.(
-            batchContexts,
-            reusableTokenColumns,
-          ) ?? []
-        } else {
-          batchValues = computed.computeBatch?.(
-            batchContexts,
-            (contextIndex, tokenIndex) => {
-              const rowIndex = batchRowIndexes[contextIndex]
-              const rowNode = batchRowNodes[contextIndex]
-              const dependency = computed.deps[tokenIndex]
-              if (
-                typeof rowIndex !== "number"
-                || !rowNode
-                || !dependency
-              ) {
-                return undefined
-              }
-              const dependencyReader = dependencyReaders[tokenIndex]
-              return dependencyReader
-                ? dependencyReader(rowNode, rowIndex, columnReadContext)
-                : context.resolveComputedTokenValue(
-                    rowNode,
-                    dependency.token,
-                    rowIndex,
-                    columnReadContext,
-                  )
-            },
-          ) ?? []
-        }
-
-        for (let contextIndex = 0; contextIndex < batchRowIndexes.length; contextIndex += 1) {
-          const rowIndex = batchRowIndexes[contextIndex]
-          const rowNode = batchRowNodes[contextIndex]
-          if (typeof rowIndex !== "number" || !rowNode) {
-            continue
-          }
-          const nextValue = contextIndex < batchValues.length
-            ? batchValues[contextIndex]
-            : 0
-          applyComputedValueForRow(rowIndex, rowNode, nextValue)
-        }
-        continue
+            const dependencyReader = dependencyReaders[tokenIndex]
+            return dependencyReader
+              ? dependencyReader(rowNode, rowIndex, columnReadContext)
+              : context.resolveComputedTokenValue(
+                  rowNode,
+                  dependency.token,
+                  rowIndex,
+                  columnReadContext,
+                )
+          },
+        ) ?? []
+        nodeRuntimeModeByIndex[nodeIndex] = "batch"
       }
 
+      for (let contextIndex = 0; contextIndex < batchRowIndexes.length; contextIndex += 1) {
+        const rowIndex = batchRowIndexes[contextIndex]
+        const rowNode = batchRowNodes[contextIndex]
+        if (typeof rowIndex !== "number" || !rowNode) {
+          continue
+        }
+        const nextValue = contextIndex < batchValues.length
+          ? batchValues[contextIndex]
+          : 0
+        applyComputedValueForRow(rowIndex, rowNode, nextValue)
+      }
+    } else {
       for (let contextIndex = 0; contextIndex < batchRowIndexes.length; contextIndex += 1) {
         const rowIndex = batchRowIndexes[contextIndex]
         const workingRowNode = batchRowNodes[contextIndex]
@@ -399,6 +506,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
         }
         activeComputeRowNode = workingRowNode
         activeComputeRowIndex = rowIndex
+        nodeRuntimeModeByIndex[nodeIndex] = "row"
         activeComputeDependencyReaderByToken = dependencyReaderByToken
         reusableComputeContext.row = workingRowNode.row
         reusableComputeContext.rowId = workingRowNode.rowId
@@ -419,6 +527,257 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       recomputedFormulaFieldNames.add(computedName)
     }
 
+    return queuedSameLevelWork
+  }
+
+  const executeLevel = (
+    dirtyRuntime: DataGridComputedDirtyPropagationRuntime,
+    levelOptions: {
+      levelNodeIndexes: readonly number[]
+      levelNodeIndexSet: ReadonlySet<number>
+      computedOrder: readonly string[]
+      computedEntryByIndex: readonly DataGridRegisteredComputedField<T>[]
+      computedFieldReaderByIndex: readonly ((rowNode: DataGridRowNode<T>) => unknown)[]
+    },
+  ): boolean => {
+    const {
+      levelNodeIndexes,
+      levelNodeIndexSet,
+      computedOrder,
+      computedEntryByIndex,
+      computedFieldReaderByIndex,
+    } = levelOptions
+    if (levelNodeIndexes.length === 0) {
+      return false
+    }
+
+    const levelEpoch = nextLevelDirtyRowEpoch()
+    const levelDirtyRowIndexes: number[] = []
+    const levelDirtyRowIndexesByNodePosition = new Array<readonly number[] | undefined>(levelNodeIndexes.length)
+
+    for (let levelNodePosition = 0; levelNodePosition < levelNodeIndexes.length; levelNodePosition += 1) {
+      const nodeIndex = levelNodeIndexes[levelNodePosition]
+      if (typeof nodeIndex !== "number") {
+        continue
+      }
+      const nodeDirtyRowIndexes = dirtyRuntime.dirtyRowIndexesByNode[nodeIndex]
+      if (!nodeDirtyRowIndexes || nodeDirtyRowIndexes.length === 0) {
+        continue
+      }
+      levelDirtyRowIndexesByNodePosition[levelNodePosition] = nodeDirtyRowIndexes
+      dirtyRuntime.dirtyRowIndexesByNode[nodeIndex] = undefined
+      for (const rowIndex of nodeDirtyRowIndexes) {
+        if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= rowCount) {
+          continue
+        }
+        if (levelDirtyRowMarks[rowIndex] === levelEpoch) {
+          continue
+        }
+        levelDirtyRowMarks[rowIndex] = levelEpoch
+        levelDirtyRowIndexes.push(rowIndex)
+      }
+    }
+
+    if (levelDirtyRowIndexes.length === 0) {
+      return false
+    }
+
+    const batchCount = Math.ceil(levelDirtyRowIndexes.length / vectorBatchSize)
+    for (let index = 0; index < levelDirtyRowIndexes.length; index += 1) {
+      const rowIndex = levelDirtyRowIndexes[index]
+      if (typeof rowIndex !== "number") {
+        continue
+      }
+      levelDirtyRowBatchIndexByRow[rowIndex] = Math.trunc(index / vectorBatchSize)
+    }
+
+    const nodeDirtyRowIndexesByBatchPosition = new Array<Array<number[] | undefined> | undefined>(levelNodeIndexes.length)
+    for (let levelNodePosition = 0; levelNodePosition < levelNodeIndexes.length; levelNodePosition += 1) {
+      const nodeDirtyRowIndexes = levelDirtyRowIndexesByNodePosition[levelNodePosition]
+      if (!nodeDirtyRowIndexes || nodeDirtyRowIndexes.length === 0) {
+        continue
+      }
+      const visitEpoch = nextNodeVisitEpoch()
+      const batchesForNode = new Array<number[] | undefined>(batchCount)
+      let hasBatchRows = false
+      for (const rowIndex of nodeDirtyRowIndexes) {
+        if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= rowCount) {
+          continue
+        }
+        if (levelDirtyRowMarks[rowIndex] !== levelEpoch) {
+          continue
+        }
+        if (nodeVisitMarks[rowIndex] === visitEpoch) {
+          continue
+        }
+        nodeVisitMarks[rowIndex] = visitEpoch
+        const batchIndex = levelDirtyRowBatchIndexByRow[rowIndex]
+        if (typeof batchIndex !== "number" || batchIndex < 0) {
+          continue
+        }
+        let batchRows = batchesForNode[batchIndex]
+        if (!batchRows) {
+          batchRows = []
+          batchesForNode[batchIndex] = batchRows
+        }
+        batchRows.push(rowIndex)
+        hasBatchRows = true
+      }
+      if (hasBatchRows) {
+        nodeDirtyRowIndexesByBatchPosition[levelNodePosition] = batchesForNode
+      }
+    }
+
+    let queuedSameLevelWork = false
+    for (let batchIndex = 0; batchIndex < batchCount; batchIndex += 1) {
+      const scheduledNodeBatches: DataGridScheduledNodeBatch<T>[] = []
+      for (let levelNodePosition = 0; levelNodePosition < levelNodeIndexes.length; levelNodePosition += 1) {
+        const nodeIndex = levelNodeIndexes[levelNodePosition]
+        if (typeof nodeIndex !== "number") {
+          continue
+        }
+        const batchDirtyRowIndexes = nodeDirtyRowIndexesByBatchPosition[levelNodePosition]?.[batchIndex]
+        if (!batchDirtyRowIndexes || batchDirtyRowIndexes.length === 0) {
+          continue
+        }
+        const computedName = computedOrder[nodeIndex]
+        const computed = computedEntryByIndex[nodeIndex]
+        const readComputedField = computedFieldReaderByIndex[nodeIndex]
+        if (!computedName || !computed || !readComputedField) {
+          continue
+        }
+        scheduledNodeBatches.push({
+          nodeIndex,
+          computedName,
+          computed,
+          readComputedField,
+          batchDirtyRowIndexes,
+        })
+      }
+
+      if (scheduledNodeBatches.length <= 1) {
+        for (const scheduledNodeBatch of scheduledNodeBatches) {
+          if (executeNodeDirtyRows(dirtyRuntime, {
+            nodeIndex: scheduledNodeBatch.nodeIndex,
+            computedName: scheduledNodeBatch.computedName,
+            computed: scheduledNodeBatch.computed,
+            readComputedField: scheduledNodeBatch.readComputedField,
+            levelNodeIndexSet,
+            nodeDirtyRowIndexes: scheduledNodeBatch.batchDirtyRowIndexes,
+          })) {
+            queuedSameLevelWork = true
+          }
+        }
+        flushLevelPatches()
+        continue
+      }
+
+      const scheduledNodeBatchesBySignature = new Map<string, DataGridScheduledNodeBatch<T>[]>()
+      let hasSharedSignatureGroup = false
+      for (const scheduledNodeBatch of scheduledNodeBatches) {
+        const signature = sharedDependencySignatureByNodeIndex[scheduledNodeBatch.nodeIndex]
+        if (!signature) {
+          continue
+        }
+        const batchGroup = scheduledNodeBatchesBySignature.get(signature)
+        if (batchGroup) {
+          batchGroup.push(scheduledNodeBatch)
+          hasSharedSignatureGroup = true
+          continue
+        }
+        scheduledNodeBatchesBySignature.set(signature, [scheduledNodeBatch])
+      }
+
+      if (!hasSharedSignatureGroup) {
+        for (const scheduledNodeBatch of scheduledNodeBatches) {
+          if (executeNodeDirtyRows(dirtyRuntime, {
+            nodeIndex: scheduledNodeBatch.nodeIndex,
+            computedName: scheduledNodeBatch.computedName,
+            computed: scheduledNodeBatch.computed,
+            readComputedField: scheduledNodeBatch.readComputedField,
+            levelNodeIndexSet,
+            nodeDirtyRowIndexes: scheduledNodeBatch.batchDirtyRowIndexes,
+          })) {
+            queuedSameLevelWork = true
+          }
+        }
+        flushLevelPatches()
+        continue
+      }
+
+      const processedSharedSignatures = new Set<string>()
+      for (const scheduledNodeBatch of scheduledNodeBatches) {
+        const signature = sharedDependencySignatureByNodeIndex[scheduledNodeBatch.nodeIndex]
+        const scheduledBatchGroup = signature
+          ? scheduledNodeBatchesBySignature.get(signature)
+          : null
+        if (!signature || !scheduledBatchGroup || scheduledBatchGroup.length <= 1) {
+          if (executeNodeDirtyRows(dirtyRuntime, {
+            nodeIndex: scheduledNodeBatch.nodeIndex,
+            computedName: scheduledNodeBatch.computedName,
+            computed: scheduledNodeBatch.computed,
+            readComputedField: scheduledNodeBatch.readComputedField,
+            levelNodeIndexSet,
+            nodeDirtyRowIndexes: scheduledNodeBatch.batchDirtyRowIndexes,
+          })) {
+            queuedSameLevelWork = true
+          }
+          continue
+        }
+        if (processedSharedSignatures.has(signature)) {
+          continue
+        }
+        processedSharedSignatures.add(signature)
+
+        const sharedGroupRowIndexes: number[] = []
+        const seenGroupRowIndexes = new Set<number>()
+        for (const groupedNodeBatch of scheduledBatchGroup) {
+          for (const rowIndex of groupedNodeBatch.batchDirtyRowIndexes) {
+            if (seenGroupRowIndexes.has(rowIndex)) {
+              continue
+            }
+            seenGroupRowIndexes.add(rowIndex)
+            sharedGroupRowIndexes.push(rowIndex)
+          }
+        }
+
+        const sharedPreparedBatchInput = createPreparedBatchInput(sharedGroupRowIndexes)
+        const sharedDependencyReaders = scheduledBatchGroup[0]?.computed.dependencyReaders ?? []
+        const sharedTokenColumns = createPreparedTokenColumns(
+          scheduledBatchGroup[0]?.computed ?? scheduledNodeBatch.computed,
+          sharedDependencyReaders,
+          sharedPreparedBatchInput,
+        )
+
+        for (const groupedNodeBatch of scheduledBatchGroup) {
+          const preparedBatchInput = groupedNodeBatch.batchDirtyRowIndexes.length === sharedPreparedBatchInput.rowIndexes.length
+            && groupedNodeBatch.batchDirtyRowIndexes.every((rowIndex, rowIndexPosition) => rowIndex === sharedPreparedBatchInput.rowIndexes[rowIndexPosition])
+            ? {
+                ...sharedPreparedBatchInput,
+                tokenColumns: sharedTokenColumns,
+              }
+            : createSubsetPreparedBatchInput(
+                sharedPreparedBatchInput,
+                sharedTokenColumns,
+                groupedNodeBatch.batchDirtyRowIndexes,
+              )
+          if (executeNodeDirtyRows(dirtyRuntime, {
+            nodeIndex: groupedNodeBatch.nodeIndex,
+            computedName: groupedNodeBatch.computedName,
+            computed: groupedNodeBatch.computed,
+            readComputedField: groupedNodeBatch.readComputedField,
+            levelNodeIndexSet,
+            nodeDirtyRowIndexes: groupedNodeBatch.batchDirtyRowIndexes,
+            preparedBatchInput,
+          })) {
+            queuedSameLevelWork = true
+          }
+        }
+      }
+      flushLevelPatches()
+    }
+
+    flushQueuedDependents(dirtyRuntime)
     return queuedSameLevelWork
   }
 
@@ -535,14 +894,13 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       computeEvaluationCount,
       skippedByObjectIs,
       effectiveRuntimeStrategy,
+      nodeRuntimeModeByIndex,
     }
   }
 
   return {
     formulaRuntimeErrorsCollector,
-    executeNode: executeNodeWithDirtyRuntime,
-    flushLevelPatches,
-    flushQueuedDependents,
+    executeLevel,
     finalize,
   }
 }
