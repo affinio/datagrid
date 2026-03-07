@@ -134,6 +134,7 @@ export type DataGridCompiledFormulaBatchExecutionMode =
   | "columnar-ast"
   | "columnar-jit"
   | "columnar-fused"
+  | "columnar-vector"
 
 export interface DataGridFormulaSourceSpan {
   start: number

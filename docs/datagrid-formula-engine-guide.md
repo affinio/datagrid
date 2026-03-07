@@ -214,6 +214,8 @@ At runtime, hot formula levels now execute in batch-major order (`level -> batch
 
 The scheduler now also groups same-level nodes by normalized dependency signature inside each batch. When multiple batch/columnar formulas consume the same ordered dependency set, dependency columns are preloaded once for the shared batch input and reused across the grouped node executions. This reduces repeated dependency-reader calls and token resolution for overlapping hot formulas.
 
+For branchy formulas, the engine now also exposes vector columnar kernels. These kernels evaluate numeric/comparison subgraphs column-wise and use masked branch execution for `IF`, `IFS`, `COALESCE`, and logical short-circuit operators so inactive branches are not forced through generic row evaluation.
+
 ### CSP-safe execution mode
 
 For strict CSP environments, dynamic code generation can be disabled explicitly:
@@ -470,6 +472,7 @@ Per-node compute-stage diagnostics can also expose `runtimeMode`, for example:
 - `columnar-ast`
 - `columnar-jit`
 - `columnar-fused`
+- `columnar-vector`
 
 This makes runtime mode selection observable when validating fused execution adoption.
 

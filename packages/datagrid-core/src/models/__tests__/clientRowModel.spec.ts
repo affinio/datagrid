@@ -647,6 +647,44 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("surfaces columnar-vector runtime mode for branchy formulas", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+      ratio?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 12, qty: 0 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+        {
+          row: { id: 2, price: 10, qty: 2 },
+          rowId: "r2",
+          originalIndex: 1,
+          displayIndex: 1,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "ratio", formula: "IF(qty == 0, 0, price / qty)" },
+      ],
+    })
+
+    expect((model.getRow(0)?.row as { ratio?: number }).ratio).toBe(0)
+    expect((model.getRow(1)?.row as { ratio?: number }).ratio).toBe(5)
+    expect(model.getFormulaComputeStageDiagnostics()?.nodes).toEqual([
+      expect.objectContaining({
+        name: "ratio",
+        runtimeMode: "columnar-vector",
+      }),
+    ])
+
+    model.dispose()
+  })
+
   it("evaluates formula identifiers with nested object and array paths", () => {
     const model = createClientRowModel<{
       id: number

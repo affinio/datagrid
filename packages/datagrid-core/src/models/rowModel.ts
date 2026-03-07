@@ -543,7 +543,7 @@ export interface DataGridFormulaNodeComputeDiagnostics {
   field: string
   dirty: boolean
   touched: boolean
-  runtimeMode?: "row" | "batch" | "columnar-ast" | "columnar-jit" | "columnar-fused"
+  runtimeMode?: "row" | "batch" | "columnar-ast" | "columnar-jit" | "columnar-fused" | "columnar-vector"
   evaluations: number
   dirtyRows: number
   dirtyCauses: readonly DataGridFormulaDirtyCause[]

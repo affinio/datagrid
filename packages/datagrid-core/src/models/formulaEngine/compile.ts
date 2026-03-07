@@ -32,6 +32,7 @@ import {
 import {
   compileFormulaAstBatchEvaluatorJit,
   compileFormulaAstColumnarBatchEvaluatorFused,
+  compileFormulaAstColumnarBatchEvaluatorVector,
   compileFormulaAstColumnarBatchEvaluatorJit,
   compileFormulaAstEvaluator,
   compileFormulaAstEvaluatorJit,
@@ -223,6 +224,10 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
     analyzed.optimizedAst,
     resolveIdentifierTokenIndex,
   )
+  const vectorColumnarBatchEvaluator = compileFormulaAstColumnarBatchEvaluatorVector(
+    analyzed.optimizedAst,
+    resolveIdentifierTokenIndex,
+  )
   const tokenIndexEvaluator = compileFormulaAstTokenIndexEvaluator(
     analyzed.optimizedAst,
     analyzed.functionRegistry,
@@ -285,6 +290,8 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
       ? "columnar-fused"
       : columnarBatchEvaluator
         ? "columnar-jit"
+      : vectorColumnarBatchEvaluator
+        ? "columnar-vector"
         : "columnar-ast"
 
     const evaluateWithRuntimePolicy = (
@@ -431,6 +438,38 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
                 const chunkColumns = tokenColumns.map(column => (column ? column.slice(start, end) : []))
                 try {
                   const chunkResult = columnarBatchEvaluator(chunkLength, chunkColumns)
+                  for (let offset = 0; offset < chunkLength; offset += 1) {
+                    results[start + offset] = chunkResult[offset] ?? 0
+                  }
+                } catch {
+                  buildRowWiseResults(
+                    contexts,
+                    (contextIndex, tokenIndex) => {
+                      const column = tokenColumns[tokenIndex]
+                      return column ? column[contextIndex] : undefined
+                    },
+                    start,
+                    end,
+                    results,
+                  )
+                }
+              }
+              return results
+            }
+          }
+        }
+        if (vectorColumnarBatchEvaluator) {
+          try {
+            return vectorColumnarBatchEvaluator(contexts.length, tokenColumns)
+          } catch {
+            if (contexts.length > rowFallbackChunkSize) {
+              const results = new Array<DataGridFormulaValue>(contexts.length)
+              for (let start = 0; start < contexts.length; start += rowFallbackChunkSize) {
+                const end = Math.min(start + rowFallbackChunkSize, contexts.length)
+                const chunkLength = end - start
+                const chunkColumns = tokenColumns.map(column => (column ? column.slice(start, end) : []))
+                try {
+                  const chunkResult = vectorColumnarBatchEvaluator(chunkLength, chunkColumns)
                   for (let offset = 0; offset < chunkLength; offset += 1) {
                     results[start + offset] = chunkResult[offset] ?? 0
                   }

@@ -81,7 +81,7 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
   - Group same-level nodes by normalized dependency signature before execution.
   - Preload shared dependency columns/readers once per batch and reuse them across grouped nodes.
   - Use shared-input scheduling to reduce repeated column reads and token resolution for formulas with overlapping inputs.
-- [ ] Block 17. True Vector Kernels (`Perf`)
+- [x] Block 17. True Vector Kernels (`Perf`)
   - Add column-pointer/vector-kernel execution for numeric-heavy workloads.
   - Support masked fallback for branchy operators/functions (`IF`, `IFS`, `COALESCE`).
   - Make worker-oriented vector execution possible without changing formula contracts.
@@ -94,7 +94,7 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 4. [x] `F4` Fused Batch Execution
 5. [x] `F4.1` Batch-Major Level Execution
 6. [x] `F4.2` Dependency-Signature Group Execution
-7. [ ] `F5` True Vector Kernels
+7. [x] `F5` True Vector Kernels
 
 ## Phase 5 Definition of Done
 
@@ -104,8 +104,8 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 - [x] Arithmetic dependency chains can execute as fused batches.
 - [x] Runtime can execute hot levels in batch-major order (`level -> batch -> node`) where eligible.
 - [x] Same-level nodes with overlapping dependency signatures can reuse preloaded inputs within a batch.
-- [ ] Numeric-heavy workloads can opt into vector-kernel execution.
-- [ ] Diagnostics explain recompute causes, cache behavior, and runtime mode selection.
+- [x] Numeric-heavy workloads can opt into vector-kernel execution.
+- [x] Diagnostics explain recompute causes, cache behavior, and runtime mode selection.
 
 ## Phase 6 — Calculation Snapshot Runtime
 

@@ -60,6 +60,7 @@ describe("createDataGridComputedExecutionExecutorRuntime", () => {
     const context = {
       isRecord: (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null,
       isColumnCacheParityVerificationEnabled: () => false,
+      getComputedEntryByIndex: () => computedEntryByIndex,
       resolveComputedTokenValue: () => undefined,
       resolveRowFieldReader: (fieldInput: string) => {
         return (rowNode: DataGridRowNode<Row>) => (rowNode.data as Record<string, unknown>)[fieldInput]
@@ -175,6 +176,7 @@ describe("createDataGridComputedExecutionExecutorRuntime", () => {
     const context = {
       isRecord: (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null,
       isColumnCacheParityVerificationEnabled: () => false,
+      getComputedEntryByIndex: () => computedEntryByIndex,
       resolveComputedTokenValue: () => undefined,
       resolveRowFieldReader: (fieldInput: string) => {
         return (rowNode: DataGridRowNode<Row>) => (rowNode.data as Record<string, unknown>)[fieldInput]

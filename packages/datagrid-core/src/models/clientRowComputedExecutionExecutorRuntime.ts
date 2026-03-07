@@ -27,7 +27,7 @@ export interface DataGridComputedExecutionFinalizeResult<T> {
   computeEvaluationCount: number
   skippedByObjectIs: number
   effectiveRuntimeStrategy: "row" | "column-cache"
-  nodeRuntimeModeByIndex: readonly ("row" | "batch" | "columnar-ast" | "columnar-jit" | "columnar-fused" | undefined)[]
+  nodeRuntimeModeByIndex: readonly ("row" | "batch" | "columnar-ast" | "columnar-jit" | "columnar-fused" | "columnar-vector" | undefined)[]
 }
 
 export interface DataGridComputedExecutorRuntime<T> {
@@ -109,7 +109,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
   }
   let computeEvaluationCount = 0
   let skippedByObjectIs = 0
-  const nodeRuntimeModeByIndex = new Array<"row" | "batch" | "columnar-ast" | "columnar-jit" | "columnar-fused" | undefined>(nodeCount)
+  const nodeRuntimeModeByIndex = new Array<"row" | "batch" | "columnar-ast" | "columnar-jit" | "columnar-fused" | "columnar-vector" | undefined>(nodeCount)
   let activeComputeRowNode: DataGridRowNode<T> | null = null
   let activeComputeRowIndex = -1
   let activeComputeDependencyReaderByToken: ReadonlyMap<

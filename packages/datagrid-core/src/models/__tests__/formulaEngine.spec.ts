@@ -1376,6 +1376,54 @@ describe("formulaEngine", () => {
     expect(compiled.batchExecutionMode).toBe("columnar-ast")
   })
 
+  it("uses vector columnar kernels for branchy IF formulas", () => {
+    const compiled = compileDataGridFormulaFieldDefinition({
+      name: "safeRatio",
+      formula: "IF(qty == 0, 0, price / qty)",
+    }, {
+      compileStrategy: "ast",
+    })
+
+    const contexts = [
+      { row: {}, rowId: "r1", sourceIndex: 0 },
+      { row: {}, rowId: "r2", sourceIndex: 1 },
+      { row: {}, rowId: "r3", sourceIndex: 2 },
+    ]
+    const tokenColumns = [
+      [0, 2, 3],
+      [12, 10, 9],
+    ]
+    const result = compiled.computeBatchColumnar?.(contexts, tokenColumns) ?? []
+
+    expect(compiled.batchExecutionMode).toBe("columnar-vector")
+    expect(result).toEqual([0, 5, 3])
+  })
+
+  it("uses vector columnar kernels for COALESCE branch masks", () => {
+    const compiled = compileDataGridFormulaFieldDefinition({
+      name: "coalesced",
+      formula: "COALESCE(primary, fallback, 10 / qty)",
+    }, {
+      compileStrategy: "ast",
+      runtimeErrorPolicy: "coerce-zero",
+    })
+
+    const contexts = [
+      { row: {}, rowId: "r1", sourceIndex: 0 },
+      { row: {}, rowId: "r2", sourceIndex: 1 },
+      { row: {}, rowId: "r3", sourceIndex: 2 },
+    ]
+    const tokenColumns = [
+      [5, null, null],
+      [1, 7, null],
+      [0, 0, 2],
+    ]
+    const result = compiled.computeBatchColumnar?.(contexts, tokenColumns) ?? []
+
+    expect(compiled.batchExecutionMode).toBe("columnar-vector")
+    expect(result).toEqual([5, 7, 5])
+  })
+
   it("falls back to row-wise semantics when JIT batch hits runtime errors", () => {
     const runtimeErrors: string[] = []
     const compiled = compileDataGridFormulaFieldDefinition({
