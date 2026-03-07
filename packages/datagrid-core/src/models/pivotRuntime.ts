@@ -408,39 +408,51 @@ function buildPivotIncrementalTouchedKeys<T>(
     value: normalizePivotAxisValue(resolver.read(row), state.normalizeFieldValue),
   }))
 
-  const rowEntryKeys = new Set<string>()
-  const columnKeys = new Set<string>()
-
   const rowKey = createPivotAxisKey("pivot:row:", rowPath)
-  rowEntryKeys.add(rowKey)
+  const rowEntryKeys: string[] = []
+  if (state.rowEntries.has(rowKey)) {
+    rowEntryKeys.push(rowKey)
+  }
   if (rowPath.length > 1) {
     for (let depth = 1; depth < rowPath.length; depth += 1) {
       const groupPath = rowPath.slice(0, depth)
-      rowEntryKeys.add(createPivotAxisKey("pivot:group:", groupPath))
+      const groupKey = createPivotAxisKey("pivot:group:", groupPath)
+      if (state.rowEntries.has(groupKey)) {
+        rowEntryKeys.push(groupKey)
+      }
       if (state.includeRowSubtotals) {
-        rowEntryKeys.add(`${createPivotAxisKey("pivot:subtotal:", groupPath)}depth:${depth}`)
+        const subtotalKey = `${createPivotAxisKey("pivot:subtotal:", groupPath)}depth:${depth}`
+        if (state.rowEntries.has(subtotalKey)) {
+          rowEntryKeys.push(subtotalKey)
+        }
       }
     }
   }
-  if (state.includeGrandTotal) {
-    rowEntryKeys.add("pivot:grand-total")
+  if (state.includeGrandTotal && state.rowEntries.has("pivot:grand-total")) {
+    rowEntryKeys.push("pivot:grand-total")
   }
 
   const columnKey = createPivotAxisKey("pivot:column:", columnPath)
-  columnKeys.add(columnKey)
-  if (state.includeColumnGrandTotal) {
-    columnKeys.add(state.columnGrandTotalKey)
+  const columnKeys: string[] = []
+  if (state.runtimeColumnsByColumnKey.has(columnKey)) {
+    columnKeys.push(columnKey)
+  }
+  if (state.includeColumnGrandTotal && state.runtimeColumnsByColumnKey.has(state.columnGrandTotalKey)) {
+    columnKeys.push(state.columnGrandTotalKey)
   }
   if (state.includeColumnSubtotals) {
     for (let depth = 1; depth < columnPath.length; depth += 1) {
       const subtotalColumnPath = columnPath.slice(0, depth)
-      columnKeys.add(`${createPivotAxisKey("pivot:column-subtotal:", subtotalColumnPath)}depth:${depth}`)
+      const subtotalColumnKey = `${createPivotAxisKey("pivot:column-subtotal:", subtotalColumnPath)}depth:${depth}`
+      if (state.runtimeColumnsByColumnKey.has(subtotalColumnKey)) {
+        columnKeys.push(subtotalColumnKey)
+      }
     }
   }
 
   return {
-    rowEntryKeys: Array.from(rowEntryKeys).filter(entryKey => state.rowEntries.has(entryKey)),
-    columnKeys: Array.from(columnKeys).filter(columnKey => state.runtimeColumnsByColumnKey.has(columnKey)),
+    rowEntryKeys,
+    columnKeys,
   }
 }
 
@@ -451,15 +463,13 @@ function isSamePivotTouchedKeys(
   if (left.rowEntryKeys.length !== right.rowEntryKeys.length || left.columnKeys.length !== right.columnKeys.length) {
     return false
   }
-  const rightRowEntries = new Set<string>(right.rowEntryKeys)
-  for (const key of left.rowEntryKeys) {
-    if (!rightRowEntries.has(key)) {
+  for (let index = 0; index < left.rowEntryKeys.length; index += 1) {
+    if (left.rowEntryKeys[index] !== right.rowEntryKeys[index]) {
       return false
     }
   }
-  const rightColumns = new Set<string>(right.columnKeys)
-  for (const key of left.columnKeys) {
-    if (!rightColumns.has(key)) {
+  for (let index = 0; index < left.columnKeys.length; index += 1) {
+    if (left.columnKeys[index] !== right.columnKeys[index]) {
       return false
     }
   }
@@ -861,28 +871,6 @@ function buildPivotProjectionRows<T>(
     values.sort(compareEntryKeys)
   }
 
-  const buildAggregateRecordByColumnKey = (
-    rowEntry: DataGridPivotProjectionEntry<T>,
-  ): Map<string, Record<string, unknown>> => {
-    const result = new Map<string, Record<string, unknown>>()
-    if (canUseIncrementalPivotAggregation) {
-      const aggregateStates = rowEntry.columnAggregateStateByKey
-      if (aggregateStates) {
-        for (const [columnKey, groupState] of aggregateStates.entries()) {
-          result.set(columnKey, pivotAggregationEngine.finalizeGroupState(groupState))
-        }
-      }
-      return result
-    }
-    if (!rowEntry.columnBuckets) {
-      return result
-    }
-    for (const [columnKey, rows] of rowEntry.columnBuckets.entries()) {
-      result.set(columnKey, pivotAggregationEngine.computeAggregatesForLeaves(rows))
-    }
-    return result
-  }
-
   const buildPivotRowNode = (
     rowKey: string,
     rowEntry: DataGridPivotProjectionEntry<T>,
@@ -910,13 +898,23 @@ function buildPivotProjectionRows<T>(
       rowData.rowKey = rowKey
     }
 
-    const aggregatesByColumnKey = buildAggregateRecordByColumnKey(rowEntry)
     for (const columnKey of columnOrder) {
       const runtimeColumnsForKey = runtimeColumnsByColumnKey.get(columnKey)
       if (!runtimeColumnsForKey) {
         continue
       }
-      const aggregateRecord = aggregatesByColumnKey.get(columnKey)
+      let aggregateRecord: Record<string, unknown> | null = null
+      if (canUseIncrementalPivotAggregation) {
+        const groupState = rowEntry.columnAggregateStateByKey?.get(columnKey)
+        if (groupState) {
+          aggregateRecord = pivotAggregationEngine.finalizeGroupState(groupState)
+        }
+      } else {
+        const rows = rowEntry.columnBuckets?.get(columnKey)
+        if (rows) {
+          aggregateRecord = pivotAggregationEngine.computeAggregatesForLeaves(rows)
+        }
+      }
       for (const column of runtimeColumnsForKey) {
         rowData[column.id] = aggregateRecord?.[column.aggregateKey] ?? null
       }
