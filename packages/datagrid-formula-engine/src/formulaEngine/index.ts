@@ -48,4 +48,5 @@ export {
   coerceFormulaValueToBoolean,
   areFormulaValuesEqual,
   compareFormulaValues,
+  parseFormulaReferenceSegments,
 } from "./core.js"

@@ -2,6 +2,12 @@
 
 This guide explains how the Formula Engine works, why it is designed this way, and how to use it effectively in real projects.
 
+Canonical package boundary:
+
+- community API: `@affino/datagrid-formula-engine`
+- grid/runtime integration: `@affino/datagrid-core`
+- enterprise boundary doc: [/Users/anton/Projects/affinio/datagrid/docs/datagrid-formula-engine-community-vs-enterprise.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-formula-engine-community-vs-enterprise.md)
+
 ## Why this engine is strong
 
 The engine is optimized for **deterministic behavior**, **incremental recompute**, and **production safety**:

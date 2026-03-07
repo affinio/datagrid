@@ -11,6 +11,14 @@ Single source of truth for platform capabilities:
 
 - [DataGrid Feature Catalog](https://github.com/affinio/affinio/blob/main/docs/datagrid-feature-catalog.md)
 
+## Formula engine boundary
+
+If a Vue app needs direct formula-engine APIs, import them from:
+
+- [@affino/datagrid-formula-engine](/Users/anton/Projects/affinio/datagrid/packages/datagrid-formula-engine/README.md)
+
+Do not import formula compile/graph helpers from `@affino/datagrid-core` directly in new integrations.
+
 ## Runtime mode decision (Main thread vs Worker vs Server-side)
 
 | Scenario | Recommended mode | Why |

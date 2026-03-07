@@ -163,10 +163,10 @@ import {
   type ClientRowModel,
   type DataGridColumnDef,
   type DataGridFormulaComputeStageDiagnostics,
-  type DataGridFormulaExecutionPlanSnapshot,
   type DataGridRowId,
   type DataGridRowModel,
 } from "@affino/datagrid-core"
+import type { DataGridFormulaExecutionPlanSnapshot } from "@affino/datagrid-formula-engine"
 
 interface FormulaSandboxRow {
   id: number

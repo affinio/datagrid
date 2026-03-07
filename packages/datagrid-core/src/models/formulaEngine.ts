@@ -19,7 +19,7 @@ export type {
   DataGridFormulaRuntimeErrorPolicy,
   DataGridFormulaDiagnosticsResult,
   DataGridFormulaSourceSpan,
-} from "./formulaEngine/index.js"
+} from "@affino/datagrid-formula-engine"
 
 export {
   analyzeDataGridFormulaFieldDefinition,
@@ -39,10 +39,11 @@ export {
   normalizeFormulaValue,
   normalizeFormulaDiagnostic,
   parseDataGridFormulaExpression,
+  parseFormulaReferenceSegments,
   coerceFormulaValueToNumber,
   coerceFormulaValueToBoolean,
   areFormulaValuesEqual,
   compareFormulaValues,
   isFormulaValueBlank,
   isFormulaValueEmptyText,
-} from "./formulaEngine/index.js"
+} from "@affino/datagrid-formula-engine"

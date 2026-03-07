@@ -16,6 +16,7 @@ Principles:
 OSS packages:
 
 - `@affino/datagrid-core`
+- `@affino/datagrid-formula-engine`
 - `@affino/datagrid-vue`
 - `@affino/datagrid-orchestration`
 - `@affino/datagrid-laravel`
@@ -24,6 +25,7 @@ OSS packages:
 Enterprise packages:
 
 - `@affino/datagrid-enterprise-core`
+- `@affino/datagrid-formula-engine-enterprise`
 - `@affino/datagrid-enterprise-vue`
 - `@affino/datagrid-enterprise-laravel`
 - `@affino/datagrid-enterprise-worker`
@@ -35,7 +37,7 @@ Keep in OSS:
 
 - client row model
 - projection pipeline
-- formulas
+- base formulas
 - selection / history / clipboard / navigation
 - base grouping / pivot engine
 - base datasource contracts
@@ -45,6 +47,7 @@ Keep in OSS:
 Move to paid:
 
 - SSRM v2 / hierarchical stores / block cache policy
+- advanced formula runtime tiers
 - enterprise worker/performance runtime
 - native Excel export/import
 - advanced devtools / profiler / inspector
@@ -75,6 +78,11 @@ Highest-value candidates:
 
 Good paid candidates:
 
+- `advanced formula runtime`
+  - worker-owned formula execution
+  - premium vector / fused execution tiers
+  - formula profiler / explain tooling
+  - enterprise compute policies
 - `advanced server data`
   - hierarchical stores
   - block cache policy
@@ -120,6 +128,7 @@ Keep in OSS for adoption:
 
 Recommended package targets:
 
+- `@affino/datagrid-formula-engine-enterprise`
 - `@affino/datagrid-enterprise-server`
 - `@affino/datagrid-enterprise-pivot`
 - `@affino/datagrid-enterprise-tree`
@@ -130,13 +139,14 @@ Recommended package targets:
 
 Commercial prioritization checklist:
 
-1. [ ] Validate `advanced server data` as first enterprise moat.
-2. [ ] Validate `advanced pivot` as second enterprise moat.
-3. [ ] Validate `diagnostics/devtools` as third enterprise moat.
-4. [ ] Decide whether `advanced tree data` ships inside enterprise-core or as separate package.
-5. [ ] Decide whether `advanced filtering` is enterprise-core or enterprise-vue first.
-6. [ ] Decide whether premium worker/vector runtime is sold standalone or bundled into enterprise-core.
-7. [ ] Keep OSS story strong enough that adoption is not damaged.
+1. [x] Freeze `@affino/datagrid-formula-engine` as community-safe formula API boundary.
+2. [ ] Validate `advanced server data` as first enterprise moat.
+3. [ ] Validate `advanced pivot` as second enterprise moat.
+4. [ ] Validate `diagnostics/devtools` as third enterprise moat.
+5. [ ] Decide whether `advanced tree data` ships inside enterprise-core or as separate package.
+6. [ ] Decide whether `advanced filtering` is enterprise-core or enterprise-vue first.
+7. [ ] Decide whether premium worker/vector runtime is sold standalone or bundled into enterprise-core.
+8. [ ] Keep OSS story strong enough that adoption is not damaged.
 
 ## Phase 0: Boundary Freeze
 
@@ -147,7 +157,7 @@ Checklist:
 1. [ ] Freeze OSS adoption surface list.
 2. [ ] Freeze enterprise monetization surface list.
 3. [ ] Mark current exports as `keep OSS`, `move to enterprise`, or `needs decision`.
-4. [ ] Add package-boundary decision doc links to core/vue/laravel README files.
+4. [x] Add package-boundary decision doc links to core/vue/laravel README files.
 
 Exit criteria:
 
@@ -201,14 +211,17 @@ Goal: create additive package homes before moving expensive features.
 
 Checklist:
 
+1. [x] Add `packages/datagrid-formula-engine` as the first extracted OSS engine package.
+2. [x] Define community vs enterprise formula-engine boundary before first release.
 1. [ ] Create `packages/datagrid-enterprise-core`.
 2. [ ] Create `packages/datagrid-enterprise-vue`.
 3. [ ] Create `packages/datagrid-enterprise-laravel`.
 4. [ ] Create `packages/datagrid-enterprise-worker`.
-5. [ ] Create `packages/datagrid-export-excel`.
-6. [ ] Add workspace package manifests and build/type-check scripts.
-7. [ ] Add repository/homepage/license metadata.
-8. [ ] Add placeholder README files explaining OSS vs enterprise role.
+5. [x] Create `packages/datagrid-formula-engine-enterprise`.
+6. [ ] Create `packages/datagrid-export-excel`.
+7. [ ] Add workspace package manifests and build/type-check scripts.
+8. [ ] Add repository/homepage/license metadata.
+9. [ ] Add placeholder README files explaining OSS vs enterprise role.
 
 Exit criteria:
 

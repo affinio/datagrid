@@ -1,7 +1,11 @@
 import type { Component, Ref } from "vue"
 import type {
+  DataGridComputedFieldDefinition,
+  DataGridComputedFieldSnapshot,
   DataGridAdvancedFilterExpression,
   DataGridAdvancedFilterCondition,
+  DataGridApiFormulaExplainSnapshot,
+  DataGridApiRowsNamespace,
   DataGridColumnModelSnapshot,
   DataGridColumnPin,
   CreateDataGridCoreOptions,
@@ -21,6 +25,13 @@ import type {
   DataGridEventTier,
   DataGridEventSource,
   DataGridEventPhase,
+  DataGridFormulaComputeStageDiagnostics,
+  DataGridFormulaContextRecomputeRequest,
+  DataGridFormulaFieldDefinition,
+  DataGridFormulaFieldSnapshot,
+  DataGridFormulaRowRecomputeDiagnostics,
+  DataGridFormulaValue,
+  DataGridRowId,
 } from "@affino/datagrid-core"
 import type { DataGridTransactionSnapshot } from "@affino/datagrid-core/advanced"
 import type {
@@ -310,12 +321,55 @@ export interface AffinoDataGridCellRange {
   endColumn: number
 }
 
+export type AffinoDataGridFormulaExecutionPlanSnapshot = NonNullable<
+  DataGridApiFormulaExplainSnapshot["executionPlan"]
+>
+
+export type AffinoDataGridFormulaGraphSnapshot = NonNullable<NonNullable<
+  DataGridApiFormulaExplainSnapshot["graph"]
+>>
+
+export type AffinoDataGridFormulaFunctionRegistration = Parameters<
+  DataGridApiRowsNamespace["registerFormulaFunction"]
+>[1]
+
+export interface AffinoDataGridFormulaState<TRow = unknown> {
+  supported: Ref<boolean>
+  functionRegistrySupported: Ref<boolean>
+  computedFields: Ref<readonly DataGridComputedFieldSnapshot[]>
+  formulaFields: Ref<readonly DataGridFormulaFieldSnapshot[]>
+  computeStage: Ref<DataGridFormulaComputeStageDiagnostics | null>
+  rowRecompute: Ref<DataGridFormulaRowRecomputeDiagnostics | null>
+  executionPlan: Ref<AffinoDataGridFormulaExecutionPlanSnapshot | null>
+  graph: Ref<AffinoDataGridFormulaGraphSnapshot | null>
+  functionNames: Ref<readonly string[]>
+  refresh: () => {
+    computedFields: readonly DataGridComputedFieldSnapshot[]
+    formulaFields: readonly DataGridFormulaFieldSnapshot[]
+    computeStage: DataGridFormulaComputeStageDiagnostics | null
+    rowRecompute: DataGridFormulaRowRecomputeDiagnostics | null
+    executionPlan: AffinoDataGridFormulaExecutionPlanSnapshot | null
+    graph: AffinoDataGridFormulaGraphSnapshot | null
+    functionNames: readonly string[]
+  }
+  registerComputedField: (definition: DataGridComputedFieldDefinition<TRow>) => void
+  registerFormulaField: (definition: DataGridFormulaFieldDefinition) => void
+  recompute: (rowIds?: readonly DataGridRowId[]) => number
+  recomputeContext: (request: DataGridFormulaContextRecomputeRequest) => number
+  registerFunction: (
+    name: string,
+    definition: AffinoDataGridFormulaFunctionRegistration | ((args: readonly DataGridFormulaValue[]) => unknown),
+  ) => void
+  unregisterFunction: (name: string) => boolean
+}
+
 export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<TRow> {
   DataGrid: Component
   rows: Ref<readonly TRow[]>
   columns: Ref<readonly DataGridColumnDef[]>
   componentProps: Ref<{
     rows: readonly TRow[]
+    rowModel: DataGridRowModel<TRow>
     columns: readonly DataGridColumnDef[]
     services: UseAffinoDataGridOptions<TRow>["services"]
     startupOrder: UseAffinoDataGridOptions<TRow>["startupOrder"]
@@ -325,6 +379,7 @@ export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<
   setSortState: (nextState: readonly DataGridSortState[]) => void
   toggleColumnSort: (columnKey: string, directionCycle?: readonly DataGridSortDirection[]) => void
   clearSort: () => void
+  formulas: AffinoDataGridFormulaState<TRow>
   pagination: {
     snapshot: Ref<DataGridPaginationSnapshot>
     set: (pagination: DataGridPaginationInput | null) => void

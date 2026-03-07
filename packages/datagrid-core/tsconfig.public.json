@@ -21,6 +21,12 @@
       ],
       "@affino/datagrid-plugins/*": [
         "../datagrid-plugins/dist/*"
+      ],
+      "@affino/datagrid-formula-engine": [
+        "../datagrid-formula-engine/dist/index.d.ts"
+      ],
+      "@affino/datagrid-formula-engine/*": [
+        "../datagrid-formula-engine/dist/*"
       ]
     }
   },

@@ -7,7 +7,7 @@ import {
   isDataGridFormulaMetaField,
 } from "./rowModel.js"
 import { normalizeDataGridDependencyToken } from "./dependencyModel.js"
-import { parseFormulaReferenceSegments } from "./formulaEngine/core.js"
+import { parseFormulaReferenceSegments } from "./formulaEngine.js"
 import type {
   ClientRowComputedRegistryRuntimeState,
   DataGridComputedColumnReadContext,

@@ -11,6 +11,8 @@ const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/datagrid-plugins/*": "packages/datagrid-plugins/src/*",
   "@affino/datagrid-worker": "packages/datagrid-worker/src/index.ts",
   "@affino/datagrid-worker/*": "packages/datagrid-worker/src/*",
+  "@affino/datagrid-formula-engine": "packages/datagrid-formula-engine/src/index.ts",
+  "@affino/datagrid-formula-engine/*": "packages/datagrid-formula-engine/src/*",
   "@affino/datagrid-core/advanced": "packages/datagrid-core/src/advanced.ts",
   "@affino/datagrid-core/internal": "packages/datagrid-core/src/internal.ts",
   "@affino/datagrid-core": "packages/datagrid-core/src/index.ts",

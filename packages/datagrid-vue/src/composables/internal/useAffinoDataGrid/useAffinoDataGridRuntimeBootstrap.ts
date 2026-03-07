@@ -33,6 +33,7 @@ export interface UseAffinoDataGridRuntimeBootstrapResult<TRow> {
   columns: Ref<readonly DataGridColumnDef[]>
   runtime: UseDataGridRuntimeResult<TRow>
   internalSelectionSnapshot: Ref<DataGridSelectionSnapshot | null>
+  runtimeServices: UseDataGridRuntimeOptions<TRow>["services"]
 }
 
 export function useAffinoDataGridRuntimeBootstrap<TRow>(
@@ -106,5 +107,6 @@ export function useAffinoDataGridRuntimeBootstrap<TRow>(
     columns,
     runtime,
     internalSelectionSnapshot,
+    runtimeServices,
   }
 }

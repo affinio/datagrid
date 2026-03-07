@@ -4,9 +4,7 @@ import type {
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
   DataGridFormulaComputeStageDiagnostics,
-  DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
-  DataGridFormulaExecutionPlanSnapshot,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
@@ -23,6 +21,10 @@ import type {
   DataGridSortState,
   DataGridViewportRange,
 } from "@affino/datagrid-core"
+import type {
+  DataGridFormulaExecutionPlanSnapshot,
+  DataGridFormulaFieldDefinition,
+} from "@affino/datagrid-formula-engine"
 import type {
   DataGridWorkerMessageEvent,
   DataGridWorkerMessageSource,

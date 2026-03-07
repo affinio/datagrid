@@ -3,6 +3,7 @@ import CoreGridCard from "./components/CoreGridCard.vue"
 import VueFactoryBaseGridCard from "./components/VueFactoryBaseGridCard.vue"
 import VueFormulaGridCard from "./components/VueFormulaGridCard.vue"
 import VueGridCard from "./components/VueGridCard.vue"
+import VueShellGridCard from "./components/VueShellGridCard.vue"
 
 const routes = [
   {
@@ -36,6 +37,21 @@ const routes = [
   {
     path: "/vue/base-grid-factory",
     component: VueFactoryBaseGridCard,
+  },
+  {
+    path: "/vue/shell/base-grid",
+    component: VueShellGridCard,
+    props: { title: "Vue: Base Grid (Shell)", mode: "base" },
+  },
+  {
+    path: "/vue/shell/tree-grid",
+    component: VueShellGridCard,
+    props: { title: "Vue: Tree Grid (Shell)", mode: "tree" },
+  },
+  {
+    path: "/vue/shell/pivot-grid",
+    component: VueShellGridCard,
+    props: { title: "Vue: Pivot Grid (Shell)", mode: "pivot" },
   },
   {
     path: "/core/base-grid",

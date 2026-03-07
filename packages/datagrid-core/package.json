@@ -56,6 +56,7 @@
     "core"
   ],
   "dependencies": {
+    "@affino/datagrid-formula-engine": "workspace:*",
     "@affino/projection-engine": "workspace:*",
     "@affino/datagrid-plugins": "workspace:*"
   },

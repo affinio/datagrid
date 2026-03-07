@@ -11,6 +11,14 @@ Single source of truth for platform capabilities:
 
 - [DataGrid Feature Catalog](https://github.com/affinio/affinio/blob/main/docs/datagrid-feature-catalog.md)
 
+## Formula engine boundary
+
+If a Laravel integration needs direct formula-engine APIs, use:
+
+- [@affino/datagrid-formula-engine](/Users/anton/Projects/affinio/datagrid/packages/datagrid-formula-engine/README.md)
+
+Keep Laravel grid/runtime integration through `@affino/datagrid-laravel`.
+
 It re-exports a curated set of:
 
 - core row/column/filter helpers

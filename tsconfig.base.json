@@ -5,6 +5,8 @@
     "paths": {
       "@affino/datagrid-core": ["./packages/datagrid-core/src/index.ts"],
       "@affino/datagrid-core/*": ["./packages/datagrid-core/src/*"],
+      "@affino/datagrid-formula-engine": ["./packages/datagrid-formula-engine/src/index.ts"],
+      "@affino/datagrid-formula-engine/*": ["./packages/datagrid-formula-engine/src/*"],
       "@affino/datagrid-orchestration": ["./packages/datagrid-orchestration/src/index.ts"],
       "@affino/datagrid-orchestration/*": ["./packages/datagrid-orchestration/src/*"],
       "@affino/datagrid-theme": ["./packages/datagrid-theme/src/index.ts"],

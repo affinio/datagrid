@@ -8,6 +8,16 @@ Single source of truth for platform capabilities:
 
 - [DataGrid Feature Catalog](https://github.com/affinio/affinio/blob/main/docs/datagrid-feature-catalog.md)
 
+## Formula engine boundary
+
+Base formula APIs now have a dedicated package boundary:
+
+- community: [@affino/datagrid-formula-engine](/Users/anton/Projects/affinio/datagrid/packages/datagrid-formula-engine/README.md)
+- boundary doc: [/Users/anton/Projects/affinio/datagrid/docs/datagrid-formula-engine-community-vs-enterprise.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-formula-engine-community-vs-enterprise.md)
+
+Keep row-model orchestration and formula integration inside `@affino/datagrid-core`.
+Use `@affino/datagrid-formula-engine` for formula parsing/compile/graph APIs.
+
 ## Layer boundaries (Core vs Orchestration vs Adapter)
 
 - Keep in `@affino/datagrid-core`:

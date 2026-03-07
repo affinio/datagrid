@@ -9,7 +9,7 @@ import type {
   DataGridRowId,
   DataGridFormulaRuntimeError,
   DataGridFormulaRuntimeErrorCode,
-} from "../rowModel.js"
+} from "../coreTypes.js"
 
 export type DataGridFormulaFunctionArity = number | {
   min: number

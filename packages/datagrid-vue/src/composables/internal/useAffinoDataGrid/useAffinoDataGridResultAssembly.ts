@@ -23,6 +23,7 @@ export interface UseAffinoDataGridResultAssemblyOptions<TRow> {
 type UseAffinoDataGridAssembledBaseResult<TRow> = Omit<
   UseAffinoDataGridResult<TRow>,
   "DataGrid"
+  | "formulas"
   | "pagination"
   | "columnState"
   | "history"

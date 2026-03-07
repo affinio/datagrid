@@ -2,9 +2,15 @@ import { computed, onBeforeUnmount, ref, watch } from "vue"
 import type {
   DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterExpression,
+  DataGridApiFormulaExplainSnapshot,
   DataGridCellsRefreshBatch,
   DataGridColumnModelSnapshot,
+  DataGridComputedFieldSnapshot,
   DataGridPaginationSnapshot,
+  DataGridFormulaComputeStageDiagnostics,
+  DataGridFormulaFieldSnapshot,
+  DataGridFormulaRowRecomputeDiagnostics,
+  DataGridRowId,
 } from "@affino/datagrid-core"
 import type { DataGridTransactionSnapshot } from "@affino/datagrid-core/advanced"
 import type {
@@ -30,6 +36,8 @@ import {
   useAffinoDataGridPointerLifecycle,
 } from "./internal/useAffinoDataGrid"
 import type {
+  AffinoDataGridFormulaExecutionPlanSnapshot,
+  AffinoDataGridFormulaGraphSnapshot,
   AffinoDataGridActionId,
   AffinoDataGridActionResult,
   AffinoDataGridRunActionOptions,
@@ -390,6 +398,10 @@ export type {
   AffinoDataGridActionBindingOptions,
   AffinoDataGridCellCoord,
   AffinoDataGridCellRange,
+  AffinoDataGridFormulaExecutionPlanSnapshot,
+  AffinoDataGridFormulaFunctionRegistration,
+  AffinoDataGridFormulaGraphSnapshot,
+  AffinoDataGridFormulaState,
   UseAffinoDataGridResult,
   UseAffinoDataGridMinimalOptions,
   UseAffinoDataGridMinimalResult,
@@ -408,7 +420,7 @@ export function useAffinoDataGrid<TRow>(
     startupOrder: options.startupOrder,
     autoStart: options.autoStart,
   })
-  const { rows, columns, runtime, internalSelectionSnapshot } = runtimeBootstrap
+  const { rows, columns, runtime, internalSelectionSnapshot, runtimeServices } = runtimeBootstrap
   const normalizedFeatures = normalizeAffinoDataGridFeatures(options.features)
 
   const featureSuite = useAffinoDataGridFeatureSuite({
@@ -647,11 +659,44 @@ export function useAffinoDataGrid<TRow>(
 
   const componentProps = computed(() => ({
     rows: rows.value,
+    rowModel: runtime.rowModel,
     columns: columns.value,
-    services: options.services,
+    services: runtimeServices,
     startupOrder: options.startupOrder,
     autoStart: options.autoStart ?? true,
   }))
+
+  const formulaSupported = computed(() => runtime.api.rows.hasFormulaSupport())
+  const formulaFunctionRegistrySupported = computed(() => runtime.api.rows.hasFormulaFunctionRegistrySupport())
+  const computedFieldsSnapshot = ref<readonly DataGridComputedFieldSnapshot[]>([])
+  const formulaFieldsSnapshot = ref<readonly DataGridFormulaFieldSnapshot[]>([])
+  const formulaComputeStageSnapshot = ref<DataGridFormulaComputeStageDiagnostics | null>(null)
+  const formulaRowRecomputeSnapshot = ref<DataGridFormulaRowRecomputeDiagnostics | null>(null)
+  const formulaExecutionPlanSnapshot = ref<AffinoDataGridFormulaExecutionPlanSnapshot | null>(null)
+  const formulaGraphSnapshot = ref<AffinoDataGridFormulaGraphSnapshot | null>(null)
+  const formulaFunctionNamesSnapshot = ref<readonly string[]>([])
+
+  const refreshFormulaSnapshots = () => {
+    computedFieldsSnapshot.value = runtime.api.rows.getComputedFields()
+    formulaFieldsSnapshot.value = runtime.api.rows.getFormulaFields()
+    const formulaExplain: DataGridApiFormulaExplainSnapshot = runtime.api.diagnostics.getFormulaExplain()
+    formulaComputeStageSnapshot.value = formulaExplain.computeStage ?? null
+    formulaRowRecomputeSnapshot.value = formulaExplain.rowRecompute ?? null
+    formulaExecutionPlanSnapshot.value = formulaExplain.executionPlan ?? null
+    formulaGraphSnapshot.value = formulaExplain.graph ?? null
+    formulaFunctionNamesSnapshot.value = formulaFunctionRegistrySupported.value
+      ? [...runtime.api.rows.getFormulaFunctionNames()]
+      : []
+    return {
+      computedFields: computedFieldsSnapshot.value,
+      formulaFields: formulaFieldsSnapshot.value,
+      computeStage: formulaComputeStageSnapshot.value,
+      rowRecompute: formulaRowRecomputeSnapshot.value,
+      executionPlan: formulaExecutionPlanSnapshot.value,
+      graph: formulaGraphSnapshot.value,
+      functionNames: formulaFunctionNamesSnapshot.value,
+    }
+  }
 
   const rowReorderSupported = computed(() => runtime.rowModel.kind === "client")
   const rowReorderReason = computed<string | null>(() => {
@@ -1226,6 +1271,7 @@ export function useAffinoDataGrid<TRow>(
 
   const unsubscribeRowModel = runtime.rowModel.subscribe(nextSnapshot => {
     paginationSnapshot.value = clonePaginationSnapshot(nextSnapshot.pagination)
+    refreshFormulaSnapshots()
     statusBar.refresh()
     if (historySupported.value) {
       refreshHistorySnapshot()
@@ -1256,6 +1302,8 @@ export function useAffinoDataGrid<TRow>(
     unsubscribeColumnModel()
     unsubscribeCellRefresh()
   })
+
+  refreshFormulaSnapshots()
 
   const baseResult = assembleAffinoDataGridResult({
     runtime,
@@ -1782,6 +1830,45 @@ export function useAffinoDataGrid<TRow>(
   return {
     ...baseResult,
     DataGrid,
+    formulas: {
+      supported: formulaSupported,
+      functionRegistrySupported: formulaFunctionRegistrySupported,
+      computedFields: computedFieldsSnapshot,
+      formulaFields: formulaFieldsSnapshot,
+      computeStage: formulaComputeStageSnapshot,
+      rowRecompute: formulaRowRecomputeSnapshot,
+      executionPlan: formulaExecutionPlanSnapshot,
+      graph: formulaGraphSnapshot,
+      functionNames: formulaFunctionNamesSnapshot,
+      refresh: refreshFormulaSnapshots,
+      registerComputedField: definition => {
+        runtime.api.rows.registerComputedField(definition)
+        refreshFormulaSnapshots()
+      },
+      registerFormulaField: definition => {
+        runtime.api.rows.registerFormulaField(definition)
+        refreshFormulaSnapshots()
+      },
+      recompute: (rowIds?: readonly DataGridRowId[]) => {
+        const changed = runtime.api.rows.recomputeComputedFields(rowIds)
+        refreshFormulaSnapshots()
+        return changed
+      },
+      recomputeContext: request => {
+        const changed = runtime.api.rows.recomputeFormulaContext(request)
+        refreshFormulaSnapshots()
+        return changed
+      },
+      registerFunction: (name, definition) => {
+        runtime.api.rows.registerFormulaFunction(name, definition)
+        refreshFormulaSnapshots()
+      },
+      unregisterFunction: name => {
+        const removed = runtime.api.rows.unregisterFormulaFunction(name)
+        refreshFormulaSnapshots()
+        return removed
+      },
+    },
     actions: {
       ...baseResult.actions,
       runAction: runActionWithFeedback,

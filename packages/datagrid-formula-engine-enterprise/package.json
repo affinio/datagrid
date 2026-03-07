@@ -1,9 +1,9 @@
 {
-  "name": "@affino/datagrid-worker",
+  "name": "@affino/datagrid-formula-engine-enterprise",
   "version": "0.1.0",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
-  "description": "Worker transport protocol and postMessage bridge for Affino DataGrid compute runtime",
+  "description": "Enterprise formula runtime extensions for Affino DataGrid",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -17,26 +17,25 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "pnpm --filter @affino/datagrid-formula-engine build && tsc -p tsconfig.json",
-    "test": "vitest run --config vitest.config.ts"
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@affino/datagrid-core": "workspace:*",
     "@affino/datagrid-formula-engine": "workspace:*"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/affinio/affinio.git",
-    "directory": "packages/datagrid-worker"
+    "directory": "packages/datagrid-formula-engine-enterprise"
   },
-  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-worker#readme",
-  "license": "MIT",
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-formula-engine-enterprise#readme",
+  "license": "UNLICENSED",
   "keywords": [
     "datagrid",
-    "worker",
-    "postmessage",
-    "runtime",
-    "transport"
+    "formula",
+    "enterprise",
+    "compute",
+    "engine"
   ],
   "bugs": {
     "url": "https://github.com/affinio/affinio/issues"

@@ -3,7 +3,7 @@ import type {
   DataGridFormulaFieldDefinition,
   DataGridFormulaValue,
   DataGridRowId,
-} from "../rowModel.js"
+} from "../coreTypes.js"
 import {
   collectFormulaContextKeys,
   collectFormulaIdentifiers,

@@ -71,12 +71,23 @@ importers:
 
   packages/datagrid-core:
     dependencies:
+      '@affino/datagrid-formula-engine':
+        specifier: workspace:*
+        version: link:../datagrid-formula-engine
       '@affino/datagrid-plugins':
         specifier: workspace:*
         version: link:../datagrid-plugins
       '@affino/projection-engine':
         specifier: workspace:*
         version: link:../projection-engine
+
+  packages/datagrid-formula-engine: {}
+
+  packages/datagrid-formula-engine-enterprise:
+    dependencies:
+      '@affino/datagrid-formula-engine':
+        specifier: workspace:*
+        version: link:../datagrid-formula-engine
 
   packages/datagrid-laravel:
     dependencies:
@@ -104,6 +115,9 @@ importers:
       '@affino/datagrid-core':
         specifier: workspace:*
         version: link:../datagrid-core
+      '@affino/datagrid-formula-engine':
+        specifier: workspace:*
+        version: link:../datagrid-formula-engine
       '@affino/datagrid-orchestration':
         specifier: workspace:*
         version: link:../datagrid-orchestration
@@ -165,6 +179,9 @@ importers:
       '@affino/datagrid-core':
         specifier: workspace:*
         version: link:../datagrid-core
+      '@affino/datagrid-formula-engine':
+        specifier: workspace:*
+        version: link:../datagrid-formula-engine
 
   packages/export-xlsx:
     dependencies:

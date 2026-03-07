@@ -1,7 +1,7 @@
 import type {
   DataGridComputedDependencyToken,
   DataGridFormulaValue,
-} from "../rowModel.js"
+} from "../coreTypes.js"
 import {
   DATAGRID_DEFAULT_FORMULA_FUNCTIONS,
   DataGridFormulaEvaluationError,
