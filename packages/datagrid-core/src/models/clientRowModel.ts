@@ -30,6 +30,7 @@ import {
   type DataGridGroupBySpec,
   type DataGridPivotColumn,
   type DataGridPivotSpec,
+  type DataGridProjectionFormulaDiagnostics,
   type DataGridRowId,
   type DataGridRowIdResolver,
   type DataGridRowNode,
@@ -131,7 +132,10 @@ import { createClientRowProjectionHandlersRuntime } from "./clientRowProjectionH
 import { createClientRowFormulaDiagnosticsRuntime } from "./clientRowFormulaDiagnosticsRuntime.js"
 import { createClientRowSourceColumnCacheRuntime } from "./clientRowSourceColumnCacheRuntime.js"
 import { createClientRowPatchComputedMergeRuntime } from "./clientRowPatchComputedMergeRuntime.js"
-import { createClientRowComputedSnapshotRuntime } from "./clientRowComputedSnapshotRuntime.js"
+import {
+  createClientRowComputedSnapshotRuntime,
+  type ClientRowComputedRowBoundSnapshot,
+} from "./clientRowComputedSnapshotRuntime.js"
 import {
   createClientRowComputedRegistryRuntime,
   type ClientRowComputedRegistryRuntime,
@@ -241,6 +245,46 @@ export interface DataGridClientRowPatchOptions {
   signal?: AbortSignal | null
 }
 
+export interface DataGridCalculationSnapshotRestoreOptions {
+  emit?: boolean
+  rowBindingPolicy?: "strict" | "reconcile"
+}
+
+export interface DataGridCalculationSnapshot<T = unknown> {
+  kind: "client-calculation"
+  rowIds: readonly DataGridRowId[]
+  computedSnapshot: ClientRowComputedRowBoundSnapshot
+  modelSnapshot: DataGridRowModelSnapshot<T>
+  aggregationModel: DataGridAggregationModel<T> | null
+  formulaComputeStage: DataGridFormulaComputeStageDiagnostics | null
+  formulaRowRecompute: DataGridFormulaRowRecomputeDiagnostics | null
+}
+
+export interface DataGridCalculationHistoryEntry<T = unknown> {
+  id: number
+  label: string | null
+  snapshot: DataGridCalculationSnapshot<T>
+}
+
+export interface DataGridCalculationHistory<T = unknown> {
+  index: number
+  entries: readonly DataGridCalculationHistoryEntry<T>[]
+}
+
+export interface DataGridCalculationSnapshotInspection {
+  rowBindingPolicy: "strict" | "reconcile"
+  restorable: boolean
+  fullyBound: boolean
+  reordered: boolean
+  snapshotRowCount: number
+  currentRowCount: number
+  matchedRowCount: number
+  missingRowIds: readonly DataGridRowId[]
+  extraRowIds: readonly DataGridRowId[]
+  computedFields: readonly string[]
+  overlayValueCounts: Readonly<Record<string, number>>
+}
+
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
   replaceRows(rows: readonly DataGridRowNodeInput<T>[]): void
@@ -269,6 +313,19 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
   getFormulaComputeStageDiagnostics(): DataGridFormulaComputeStageDiagnostics | null
   getFormulaRowRecomputeDiagnostics(): DataGridFormulaRowRecomputeDiagnostics | null
   reorderRows(input: DataGridClientRowReorderInput): boolean
+  createCalculationSnapshot(): DataGridCalculationSnapshot<T>
+  restoreCalculationSnapshot(
+    snapshot: DataGridCalculationSnapshot<T>,
+    options?: DataGridCalculationSnapshotRestoreOptions,
+  ): boolean
+  inspectCalculationSnapshot(
+    snapshot: DataGridCalculationSnapshot<T>,
+    options?: Pick<DataGridCalculationSnapshotRestoreOptions, "rowBindingPolicy">,
+  ): DataGridCalculationSnapshotInspection
+  pushCalculationSnapshot(label?: string): DataGridCalculationHistoryEntry<T>
+  undoCalculationSnapshot(options?: DataGridCalculationSnapshotRestoreOptions): boolean
+  redoCalculationSnapshot(options?: DataGridCalculationSnapshotRestoreOptions): boolean
+  getCalculationSnapshotHistory(): DataGridCalculationHistory<T>
   getComputeMode(): DataGridClientComputeMode
   switchComputeMode(mode: DataGridClientComputeMode): boolean
   getDerivedCacheDiagnostics(): DataGridClientRowModelDerivedCacheDiagnostics
@@ -509,6 +566,176 @@ export function createClientRowModel<T>(
     applyRowDataPatch,
     getSourceRows: () => baseSourceRows,
     getSourceRowIndexById: () => sourceRowIndexById,
+  })
+  let calculationSnapshotHistoryEntries: DataGridCalculationHistoryEntry<T>[] = []
+  let calculationSnapshotHistoryIndex = -1
+  let calculationSnapshotHistorySequence = 0
+
+  const cloneFormulaDiagnostics = (
+    diagnostics: DataGridProjectionFormulaDiagnostics | null | undefined,
+  ): DataGridProjectionFormulaDiagnostics | null => {
+    if (!diagnostics) {
+      return null
+    }
+    return {
+      recomputedFields: [...diagnostics.recomputedFields],
+      runtimeErrorCount: diagnostics.runtimeErrorCount,
+      runtimeErrors: diagnostics.runtimeErrors.map(error => ({ ...error })),
+      ...(diagnostics.compileCache
+        ? {
+          compileCache: { ...diagnostics.compileCache },
+        }
+        : {}),
+    }
+  }
+
+  const buildCalculationSnapshot = (): DataGridCalculationSnapshot<T> => ({
+    kind: "client-calculation",
+    rowIds: baseSourceRows.map(row => row.rowId),
+    computedSnapshot: computedSnapshotRuntime.createRowBoundSnapshot(),
+    modelSnapshot: getSnapshot(),
+    aggregationModel: cloneAggregationModel(aggregationModel),
+    formulaComputeStage: getFormulaComputeStageDiagnosticsSnapshot(),
+    formulaRowRecompute: getFormulaRowRecomputeDiagnosticsSnapshot(),
+  })
+
+  const inspectCalculationSnapshot = (
+    snapshot: DataGridCalculationSnapshot<T>,
+    options: Pick<DataGridCalculationSnapshotRestoreOptions, "rowBindingPolicy"> = {},
+  ): DataGridCalculationSnapshotInspection => {
+    const rowBindingPolicy = options.rowBindingPolicy === "strict" ? "strict" : "reconcile"
+    const currentRowIds = baseSourceRows.map(row => row.rowId)
+    const currentRowIdSet = new Set<DataGridRowId>(currentRowIds)
+    const snapshotRowIdSet = new Set<DataGridRowId>(snapshot.rowIds)
+    const missingRowIds: DataGridRowId[] = []
+    const extraRowIds: DataGridRowId[] = []
+    let matchedRowCount = 0
+    for (const rowId of snapshot.rowIds) {
+      if (currentRowIdSet.has(rowId)) {
+        matchedRowCount += 1
+      } else {
+        missingRowIds.push(rowId)
+      }
+    }
+    for (const rowId of currentRowIds) {
+      if (!snapshotRowIdSet.has(rowId)) {
+        extraRowIds.push(rowId)
+      }
+    }
+    const reordered = snapshot.rowIds.length === currentRowIds.length
+      && snapshot.rowIds.some((rowId, index) => !Object.is(rowId, currentRowIds[index]))
+    const fullyBound = missingRowIds.length === 0
+    const restorable = rowBindingPolicy === "strict"
+      ? fullyBound && extraRowIds.length === 0 && !reordered
+      : true
+    const overlayValueCounts: Record<string, number> = {}
+    for (const [field, entries] of Object.entries(snapshot.computedSnapshot.overlayValuesByField ?? {})) {
+      overlayValueCounts[field] = Array.isArray(entries) ? entries.length : 0
+    }
+    return {
+      rowBindingPolicy,
+      restorable,
+      fullyBound,
+      reordered,
+      snapshotRowCount: snapshot.rowIds.length,
+      currentRowCount: currentRowIds.length,
+      matchedRowCount,
+      missingRowIds,
+      extraRowIds,
+      computedFields: [...snapshot.computedSnapshot.computedFields],
+      overlayValueCounts,
+    }
+  }
+
+  const commitCalculationSnapshotRestore = (
+    snapshot: DataGridCalculationSnapshot<T>,
+    options: DataGridCalculationSnapshotRestoreOptions = {},
+  ): boolean => {
+    const inspection = inspectCalculationSnapshot(snapshot, options)
+    if (!inspection.restorable) {
+      return false
+    }
+    if (inspection.rowBindingPolicy === "strict") {
+      if (inspection.snapshotRowCount !== inspection.currentRowCount || inspection.reordered) {
+        return false
+      }
+    }
+
+    syncComputedSnapshotFields()
+    computedSnapshotRuntime.replaceRowBoundSnapshot(snapshot.computedSnapshot)
+    refreshMaterializedSourceRows()
+
+    const restoredModelSnapshot = snapshot.modelSnapshot
+    sortModel = cloneSortModel(restoredModelSnapshot.sortModel)
+    filterModel = cloneFilterModel(restoredModelSnapshot.filterModel)
+    if (!treeData) {
+      groupBy = cloneGroupBySpec(restoredModelSnapshot.groupBy)
+      expansionExpandedByDefault = Boolean(restoredModelSnapshot.groupExpansion.expandedByDefault)
+      toggledGroupKeys.clear()
+      for (const groupKey of restoredModelSnapshot.groupExpansion.toggledGroupKeys) {
+        toggledGroupKeys.add(groupKey)
+      }
+    }
+    pivotModel = clonePivotSpec(restoredModelSnapshot.pivotModel ?? null)
+    pivotColumns = pivotRuntime.normalizeColumns(restoredModelSnapshot.pivotColumns ?? [])
+    pivotExpansionExpandedByDefault = true
+    toggledPivotGroupKeys.clear()
+    aggregationModel = cloneAggregationModel(snapshot.aggregationModel)
+    paginationInput = restoredModelSnapshot.pagination.enabled
+      ? normalizePaginationInput({
+        pageSize: restoredModelSnapshot.pagination.pageSize,
+        currentPage: restoredModelSnapshot.pagination.currentPage,
+      })
+      : normalizePaginationInput(null)
+    viewportRange = normalizeViewportRange(restoredModelSnapshot.viewportRange, runtimeState.rows.length)
+
+    formulaDiagnosticsRuntime.commitFormulaDiagnostics(
+      cloneFormulaDiagnostics(restoredModelSnapshot.projection?.formula ?? null) ?? createEmptyFormulaDiagnostics(),
+    )
+    commitFormulaComputeStageDiagnostics(snapshot.formulaComputeStage ?? createEmptyFormulaComputeStageDiagnostics())
+    commitFormulaRowRecomputeDiagnostics(snapshot.formulaRowRecompute ?? { rows: [] })
+
+    cachedFilterPredicateKey = "__none__"
+    cachedFilterPredicate = null
+    sortValueCache.clear()
+    sortValueCacheKey = "__none__"
+    groupValueCache.clear()
+    groupValueCacheKey = "__none__"
+    pendingPivotValuePatch = null
+    resetGroupByIncrementalAggregationState()
+    invalidateTreeProjectionCaches()
+
+    runtimeStateStore.setProjectionInvalidation(["computedChanged"])
+    if (!tryApplyFlatIdentityProjectionRefresh()) {
+      computeRuntime.refresh()
+    }
+    if (options.emit !== false) {
+      emit()
+    }
+    return true
+  }
+
+  const pushCalculationSnapshot = (label?: string): DataGridCalculationHistoryEntry<T> => {
+    const entry: DataGridCalculationHistoryEntry<T> = {
+      id: ++calculationSnapshotHistorySequence,
+      label: typeof label === "string" && label.trim().length > 0 ? label.trim() : null,
+      snapshot: buildCalculationSnapshot(),
+    }
+    if (calculationSnapshotHistoryIndex < calculationSnapshotHistoryEntries.length - 1) {
+      calculationSnapshotHistoryEntries = calculationSnapshotHistoryEntries.slice(0, calculationSnapshotHistoryIndex + 1)
+    }
+    calculationSnapshotHistoryEntries.push(entry)
+    calculationSnapshotHistoryIndex = calculationSnapshotHistoryEntries.length - 1
+    return entry
+  }
+
+  const getCalculationSnapshotHistory = (): DataGridCalculationHistory<T> => ({
+    index: calculationSnapshotHistoryIndex,
+    entries: calculationSnapshotHistoryEntries.map(entry => ({
+      id: entry.id,
+      label: entry.label,
+      snapshot: entry.snapshot,
+    })),
   })
 
   const syncComputedSnapshotFields = (): boolean => {
@@ -1491,6 +1718,52 @@ export function createClientRowModel<T>(
     },
     reorderRows(input: DataGridClientRowReorderInput) {
       return rowsMutationsRuntime.reorderRows(input)
+    },
+    createCalculationSnapshot() {
+      ensureActive()
+      return buildCalculationSnapshot()
+    },
+    restoreCalculationSnapshot(snapshot, options = {}) {
+      ensureActive()
+      return commitCalculationSnapshotRestore(snapshot, options)
+    },
+    inspectCalculationSnapshot(snapshot, options = {}) {
+      ensureActive()
+      return inspectCalculationSnapshot(snapshot, options)
+    },
+    pushCalculationSnapshot(label?: string) {
+      ensureActive()
+      return pushCalculationSnapshot(label)
+    },
+    undoCalculationSnapshot(options = {}) {
+      ensureActive()
+      if (calculationSnapshotHistoryIndex <= 0) {
+        return false
+      }
+      const nextIndex = calculationSnapshotHistoryIndex - 1
+      const entry = calculationSnapshotHistoryEntries[nextIndex]
+      if (!entry || !commitCalculationSnapshotRestore(entry.snapshot, options)) {
+        return false
+      }
+      calculationSnapshotHistoryIndex = nextIndex
+      return true
+    },
+    redoCalculationSnapshot(options = {}) {
+      ensureActive()
+      if (calculationSnapshotHistoryIndex >= calculationSnapshotHistoryEntries.length - 1) {
+        return false
+      }
+      const nextIndex = calculationSnapshotHistoryIndex + 1
+      const entry = calculationSnapshotHistoryEntries[nextIndex]
+      if (!entry || !commitCalculationSnapshotRestore(entry.snapshot, options)) {
+        return false
+      }
+      calculationSnapshotHistoryIndex = nextIndex
+      return true
+    },
+    getCalculationSnapshotHistory() {
+      ensureActive()
+      return getCalculationSnapshotHistory()
     },
     setViewportRange(range: DataGridViewportRange) {
       stateMutationsRuntime.setViewportRange(range)

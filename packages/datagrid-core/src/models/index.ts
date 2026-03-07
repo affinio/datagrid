@@ -188,6 +188,11 @@ export {
 
 export type {
   ClientRowModel,
+  DataGridCalculationHistory,
+  DataGridCalculationHistoryEntry,
+  DataGridCalculationSnapshot,
+  DataGridCalculationSnapshotInspection,
+  DataGridCalculationSnapshotRestoreOptions,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
   CreateClientRowModelOptions,

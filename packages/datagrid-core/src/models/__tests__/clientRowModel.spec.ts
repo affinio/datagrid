@@ -723,6 +723,156 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("exports and restores calculation snapshots for debug-style time travel", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+      total?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10, qty: 2 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "price * qty" },
+      ],
+    })
+
+    const initialSnapshot = model.createCalculationSnapshot()
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(20)
+
+    model.patchRows(
+      [{ rowId: "r1", data: { price: 12 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+
+    expect((model.getRow(0)?.row as { price: number; total?: number }).price).toBe(12)
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(24)
+
+    expect(model.restoreCalculationSnapshot(initialSnapshot, { emit: false })).toBe(true)
+    expect((model.getRow(0)?.row as { price: number; total?: number }).price).toBe(12)
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(20)
+
+    model.dispose()
+  })
+
+  it("supports calculation snapshot undo and redo history", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+      total?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10, qty: 2 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "price * qty" },
+      ],
+    })
+
+    const initialEntry = model.pushCalculationSnapshot("initial")
+    model.patchRows(
+      [{ rowId: "r1", data: { price: 12 } }],
+      { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
+    )
+    const patchedEntry = model.pushCalculationSnapshot("patched")
+
+    expect(initialEntry.label).toBe("initial")
+    expect(patchedEntry.label).toBe("patched")
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(24)
+    expect(model.undoCalculationSnapshot({ emit: false })).toBe(true)
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(20)
+    expect(model.redoCalculationSnapshot({ emit: false })).toBe(true)
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(24)
+    expect(model.getCalculationSnapshotHistory()).toEqual(
+      expect.objectContaining({
+        index: 1,
+        entries: expect.arrayContaining([
+          expect.objectContaining({ label: "initial" }),
+          expect.objectContaining({ label: "patched" }),
+        ]),
+      }),
+    )
+
+    model.dispose()
+  })
+
+  it("inspects snapshot binding and reconciles overlays after row reordering", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+      total?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10, qty: 2 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+        {
+          row: { id: 2, price: 7, qty: 3 },
+          rowId: "r2",
+          originalIndex: 1,
+          displayIndex: 1,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "total", formula: "price * qty" },
+      ],
+    })
+
+    const snapshot = model.createCalculationSnapshot()
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(20)
+    expect((model.getRow(1)?.row as { total?: number }).total).toBe(21)
+
+    expect(model.reorderRows({ fromIndex: 0, toIndex: 2 })).toBe(true)
+
+    const strictInspection = model.inspectCalculationSnapshot(snapshot, { rowBindingPolicy: "strict" })
+    expect(strictInspection).toEqual(
+      expect.objectContaining({
+        rowBindingPolicy: "strict",
+        restorable: false,
+        fullyBound: true,
+        reordered: true,
+        matchedRowCount: 2,
+        missingRowIds: [],
+        extraRowIds: [],
+        overlayValueCounts: { total: 2 },
+      }),
+    )
+    expect(model.restoreCalculationSnapshot(snapshot, { emit: false, rowBindingPolicy: "strict" })).toBe(false)
+
+    const reconcileInspection = model.inspectCalculationSnapshot(snapshot)
+    expect(reconcileInspection).toEqual(
+      expect.objectContaining({
+        rowBindingPolicy: "reconcile",
+        restorable: true,
+        fullyBound: true,
+        reordered: true,
+      }),
+    )
+    expect(model.restoreCalculationSnapshot(snapshot, { emit: false })).toBe(true)
+    expect((model.getRow(0)?.row as { id: number; total?: number }).id).toBe(2)
+    expect((model.getRow(0)?.row as { total?: number }).total).toBe(21)
+    expect((model.getRow(1)?.row as { id: number; total?: number }).id).toBe(1)
+    expect((model.getRow(1)?.row as { total?: number }).total).toBe(20)
+
+    model.dispose()
+  })
+
   it("evaluates formula identifiers with nested object and array paths", () => {
     const model = createClientRowModel<{
       id: number

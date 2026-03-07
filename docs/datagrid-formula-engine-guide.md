@@ -467,6 +467,15 @@ For deeper debug visibility, client row-model runtime now also exposes:
 - `getFormulaRowRecomputeDiagnostics()` for row-scoped recompute visibility grouped by row and affected nodes
 - `api.diagnostics.getFormulaExplain().graph` and `api.diagnostics.getFormulaExplain().rowRecompute` for explain/debug tooling
 
+Calculation snapshots are also first-class for undo/debug/collaboration-oriented flows:
+
+- `createCalculationSnapshot()` captures current computed overlay state plus row-model projection state
+- `restoreCalculationSnapshot(snapshot, { rowBindingPolicy })` restores a prior calculation snapshot
+- `inspectCalculationSnapshot(snapshot, { rowBindingPolicy })` reports whether a snapshot is strictly restorable or only reconcilable by `rowId`
+- `pushCalculationSnapshot(label)`, `undoCalculationSnapshot()`, and `redoCalculationSnapshot()` provide snapshot-stack history without cloning full materialized rows
+
+`rowBindingPolicy: "strict"` requires the same ordered row identity set. `rowBindingPolicy: "reconcile"` rebinds computed overlay values by `rowId`, which makes reordered/collaborative source edits inspectable and restorable when the affected rows still exist.
+
 Per-node compute-stage diagnostics can also expose `runtimeMode`, for example:
 
 - `row`

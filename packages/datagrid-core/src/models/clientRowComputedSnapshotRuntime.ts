@@ -9,6 +9,17 @@ export interface ClientRowComputedSnapshotRuntimeContext<T> {
   getSourceRowIndexById: () => ReadonlyMap<DataGridRowId, number>
 }
 
+export interface ClientRowComputedSnapshotValueEntry {
+  rowId: DataGridRowId
+  value: unknown
+}
+
+export interface ClientRowComputedRowBoundSnapshot {
+  computedFields: readonly string[]
+  overlayValuesByField: Readonly<Record<string, readonly ClientRowComputedSnapshotValueEntry[]>>
+  rowCount: number
+}
+
 export interface ClientRowComputedSnapshotRuntime<T> {
   clear: () => void
   setComputedFields: (fields: readonly string[]) => boolean
@@ -26,11 +37,13 @@ export interface ClientRowComputedSnapshotRuntime<T> {
     overlayValuesByField: Readonly<Record<string, readonly unknown[]>>
     rowCount: number
   }
+  createRowBoundSnapshot: () => ClientRowComputedRowBoundSnapshot
   replaceSnapshot: (snapshot: {
     computedFields: readonly string[]
     overlayValuesByField: Readonly<Record<string, readonly unknown[]>>
     rowCount: number
   }) => boolean
+  replaceRowBoundSnapshot: (snapshot: ClientRowComputedRowBoundSnapshot) => boolean
   readFieldValue: (
     row: DataGridRowNode<T>,
     field: string,
@@ -291,12 +304,69 @@ export function createClientRowComputedSnapshotRuntime<T>(
     return serializeState(snapshotState)
   }
 
+  const createRowBoundSnapshot = (): ClientRowComputedRowBoundSnapshot => {
+    const sourceRows = context.getSourceRows()
+    const overlayValuesByField: Record<string, readonly ClientRowComputedSnapshotValueEntry[]> = {}
+    for (const [field, values] of snapshotState.overlayValuesByField.entries()) {
+      const entries: ClientRowComputedSnapshotValueEntry[] = []
+      for (let rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
+        if (!(rowIndex in values)) {
+          continue
+        }
+        const rowId = sourceRows[rowIndex]?.rowId
+        if (typeof rowId === "undefined") {
+          continue
+        }
+        entries.push({
+          rowId,
+          value: values[rowIndex],
+        })
+      }
+      overlayValuesByField[field] = entries
+    }
+    return {
+      computedFields: Array.from(snapshotState.computedFields),
+      overlayValuesByField,
+      rowCount: sourceRows.length,
+    }
+  }
+
   const replaceSnapshot = (snapshot: {
     computedFields: readonly string[]
     overlayValuesByField: Readonly<Record<string, readonly unknown[]>>
     rowCount: number
   }): boolean => {
     snapshotState = deserializeState(snapshot)
+    return true
+  }
+
+  const replaceRowBoundSnapshot = (snapshot: ClientRowComputedRowBoundSnapshot): boolean => {
+    const nextState = createEmptyState()
+    setComputedFieldsInState(nextState, snapshot.computedFields)
+    const sourceRowIndexById = context.getSourceRowIndexById()
+    for (const [field, entries] of Object.entries(snapshot.overlayValuesByField ?? {})) {
+      const normalizedField = field.trim()
+      if (normalizedField.length === 0 || !nextState.computedFields.has(normalizedField)) {
+        continue
+      }
+      let values: unknown[] | null = null
+      for (const entry of entries ?? []) {
+        const rowIndex = sourceRowIndexById.get(entry.rowId)
+        if (typeof rowIndex !== "number" || rowIndex < 0) {
+          continue
+        }
+        if (!values) {
+          values = []
+        }
+        values[rowIndex] = entry.value
+      }
+      if (!values) {
+        continue
+      }
+      nextState.overlayValuesByField.set(normalizedField, values)
+    }
+    rebuildOverlayFieldCounts(nextState)
+    snapshotState = nextState
     return true
   }
 
@@ -362,7 +432,9 @@ export function createClientRowComputedSnapshotRuntime<T>(
     applyComputedUpdates,
     replaceWithPatchedSnapshot,
     createSnapshot,
+    createRowBoundSnapshot,
     replaceSnapshot,
+    replaceRowBoundSnapshot,
     readFieldValue,
     materializeRow,
     materializeRows,
