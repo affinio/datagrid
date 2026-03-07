@@ -139,6 +139,11 @@ describe("clientRowRuntimeStateStore", () => {
           sourceIndex: 0,
         },
       ],
+      compileCache: {
+        hits: 3,
+        misses: 2,
+        size: 2,
+      },
     })
 
     const diagnostics = store.getProjectionDiagnostics(() => [])
@@ -154,6 +159,11 @@ describe("clientRowRuntimeStateStore", () => {
           sourceIndex: 0,
         },
       ],
+      compileCache: {
+        hits: 3,
+        misses: 2,
+        size: 2,
+      },
     })
   })
 })

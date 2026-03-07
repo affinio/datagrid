@@ -34,6 +34,7 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
     },
   ) => DataGridCompiledFormulaField<T>
   recompileRegisteredFormulaFields: () => void
+  clearFormulaCompileArtifactCache: () => void
 }) {
   const {
     state,
@@ -45,6 +46,7 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
     rebuildComputedOrder,
     compileFormulaFieldDefinition,
     recompileRegisteredFormulaFields,
+    clearFormulaCompileArtifactCache,
   } = options
 
   const normalizeComputedName = (value: unknown): string => {
@@ -280,6 +282,7 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
 
     const previousRegistry = new Map(state.formulaFunctionRegistry)
     state.formulaFunctionRegistry.set(normalizedName, definition)
+    clearFormulaCompileArtifactCache()
     try {
       recompileRegisteredFormulaFields()
     } catch (error) {
@@ -287,6 +290,7 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
       for (const [entryName, entryDefinition] of previousRegistry) {
         state.formulaFunctionRegistry.set(entryName, entryDefinition)
       }
+      clearFormulaCompileArtifactCache()
       throw error
     }
   }
@@ -298,6 +302,7 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
     }
     const previousRegistry = new Map(state.formulaFunctionRegistry)
     state.formulaFunctionRegistry.delete(normalizedName)
+    clearFormulaCompileArtifactCache()
     try {
       recompileRegisteredFormulaFields()
     } catch (error) {
@@ -305,6 +310,7 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
       for (const [entryName, entryDefinition] of previousRegistry) {
         state.formulaFunctionRegistry.set(entryName, entryDefinition)
       }
+      clearFormulaCompileArtifactCache()
       throw error
     }
     return true
@@ -320,6 +326,9 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
     state.computedFieldNameByTargetField.clear()
     state.formulaFieldsByName.clear()
     state.formulaFunctionRegistry.clear()
+    clearFormulaCompileArtifactCache()
+    state.formulaCompileCacheHits = 0
+    state.formulaCompileCacheMisses = 0
     state.computedExecutionPlan = createDataGridFormulaExecutionPlan([], {
       cyclePolicy: formulaCyclePolicy,
     })

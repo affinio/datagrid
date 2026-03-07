@@ -5,12 +5,14 @@ import type {
   DataGridFormulaCyclePolicy,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
+  DataGridProjectionFormulaDiagnostics,
   DataGridFormulaRuntimeError,
   DataGridFormulaValue,
   DataGridRowNode,
 } from "./rowModel.js"
 import type { DataGridProjectionPolicy } from "./projectionPolicy.js"
 import type {
+  DataGridCompiledFormulaArtifact,
   DataGridCompiledFormulaField,
   DataGridFormulaFunctionDefinition,
   DataGridFormulaFunctionRegistry,
@@ -80,6 +82,10 @@ export interface ClientRowComputedRegistryRuntimeState<T> {
     string,
     DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown)
   >
+  formulaCompiledArtifactByExactKey: Map<string, DataGridCompiledFormulaArtifact<T>>
+  formulaCompiledArtifactByStructuralKey: Map<string, DataGridCompiledFormulaArtifact<T>>
+  formulaCompileCacheHits: number
+  formulaCompileCacheMisses: number
   computedExecutionPlan: DataGridFormulaExecutionPlan
   computedAffectedPlanCache: Map<string, readonly number[]>
   computedDirectFieldPlanCache: Map<string, readonly number[]>
@@ -151,6 +157,7 @@ export interface ClientRowComputedRegistryRuntime<T> {
   getComputedLevelIndexes: () => readonly (readonly number[])[]
   getComputedDependentsByIndex: () => readonly (readonly number[])[]
   getFormulaFieldsByName: () => ReadonlyMap<string, DataGridRegisteredFormulaField>
+  getFormulaCompileCacheDiagnostics: () => NonNullable<DataGridProjectionFormulaDiagnostics["compileCache"]>
 
   resolveComputedRootIndexes: (changedFields: ReadonlySet<string>) => readonly number[]
   resolveComputedRootIndexesForField: (changedField: string) => readonly number[]
@@ -177,6 +184,10 @@ export function createClientRowComputedRegistryRuntime<T>(
     computedFieldNameByTargetField: new Map<string, string>(),
     formulaFieldsByName: new Map<string, DataGridRegisteredFormulaField>(),
     formulaFunctionRegistry: new Map(),
+    formulaCompiledArtifactByExactKey: new Map<string, DataGridCompiledFormulaArtifact<T>>(),
+    formulaCompiledArtifactByStructuralKey: new Map<string, DataGridCompiledFormulaArtifact<T>>(),
+    formulaCompileCacheHits: 0,
+    formulaCompileCacheMisses: 0,
     computedExecutionPlan: createDataGridFormulaExecutionPlan([], {
       cyclePolicy: formulaCyclePolicy,
     }),
@@ -216,6 +227,7 @@ export function createClientRowComputedRegistryRuntime<T>(
     rebuildComputedOrder: executionPlanRuntime.rebuildComputedOrder,
     compileFormulaFieldDefinition: formulaCompilationRuntime.compileFormulaFieldDefinition,
     recompileRegisteredFormulaFields: formulaCompilationRuntime.recompileRegisteredFormulaFields,
+    clearFormulaCompileArtifactCache: formulaCompilationRuntime.clearFormulaCompileArtifactCache,
   })
 
   const getComputedFields = (): readonly DataGridComputedFieldSnapshot[] => {
@@ -280,6 +292,11 @@ export function createClientRowComputedRegistryRuntime<T>(
     getComputedLevelIndexes: () => state.computedLevelIndexes,
     getComputedDependentsByIndex: () => state.computedDependentsByIndex,
     getFormulaFieldsByName: () => state.formulaFieldsByName,
+    getFormulaCompileCacheDiagnostics: () => ({
+      hits: state.formulaCompileCacheHits,
+      misses: state.formulaCompileCacheMisses,
+      size: state.formulaCompiledArtifactByStructuralKey.size,
+    }),
 
     resolveComputedRootIndexes: executionPlanRuntime.resolveComputedRootIndexes,
     resolveComputedRootIndexesForField: executionPlanRuntime.resolveComputedRootIndexesForField,

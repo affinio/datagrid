@@ -429,6 +429,14 @@ const explain = api.diagnostics.getFormulaExplain()
 - dirty / recomputed / touched flags
 - dirty-cause visibility from the latest compute pass
 
+Projection formula diagnostics now also expose optional compile-cache metrics:
+
+- `compileCache.hits`
+- `compileCache.misses`
+- `compileCache.size`
+
+Internally, repeated formulas now reuse compiled artifacts by exact formula text, and compiled formulas carry a normalized `expressionHash` so structurally equivalent expressions can share identity even when their source text formatting differs.
+
 ## Why these principles were chosen
 
 - **Determinism first**: predictable behavior is critical for financial/reporting grids.

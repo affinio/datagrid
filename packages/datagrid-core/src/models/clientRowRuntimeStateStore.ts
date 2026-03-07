@@ -62,6 +62,11 @@ function cloneProjectionFormulaDiagnostics(
     recomputedFields: [...diagnostics.recomputedFields],
     runtimeErrorCount: diagnostics.runtimeErrorCount,
     runtimeErrors: [...diagnostics.runtimeErrors],
+    ...(diagnostics.compileCache
+      ? {
+        compileCache: { ...diagnostics.compileCache },
+      }
+      : {}),
   }
 }
 

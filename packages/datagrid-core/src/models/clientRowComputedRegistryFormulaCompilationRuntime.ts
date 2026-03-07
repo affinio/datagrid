@@ -6,7 +6,9 @@ import {
   isDataGridFormulaMetaField,
 } from "./rowModel.js"
 import {
-  compileDataGridFormulaFieldDefinition,
+  analyzeDataGridFormulaFieldDefinition,
+  bindCompiledFormulaArtifactToFieldDefinition,
+  compileDataGridFormulaFieldArtifact,
   type DataGridCompiledFormulaField,
   type DataGridFormulaFunctionRegistry,
 } from "./formulaEngine.js"
@@ -45,37 +47,75 @@ export function createComputedRegistryFormulaCompilationRuntime<T>(options: {
     return registry as DataGridFormulaFunctionRegistry
   }
 
+  const resolveDependencyToken = (
+    identifier: string,
+    compileOptions: CompileFormulaFieldOptions,
+  ): DataGridComputedDependencyToken => {
+    const normalizedIdentifier = identifier.trim()
+    if (normalizedIdentifier.startsWith("meta.")) {
+      const metaField = normalizedIdentifier.slice("meta.".length).trim()
+      if (isDataGridFormulaMetaField(metaField)) {
+        return `meta:${metaField}`
+      }
+    }
+    const knownByTargetField = (
+      state.computedFieldNameByTargetField.get(normalizedIdentifier)
+      ?? compileOptions.knownComputedNameByField?.get(normalizedIdentifier)
+    )
+    if (knownByTargetField) {
+      return `computed:${knownByTargetField}`
+    }
+    if (
+      state.computedFieldsByName.has(normalizedIdentifier)
+      || state.formulaFieldsByName.has(normalizedIdentifier)
+      || compileOptions.knownComputedNames?.has(normalizedIdentifier) === true
+    ) {
+      return `computed:${normalizedIdentifier}`
+    }
+    return `field:${normalizedIdentifier}`
+  }
+
+  const createCompileCacheStructuralKey = (
+    expressionHash: string,
+    deps: readonly DataGridComputedDependencyToken[],
+  ): string => {
+    return `${expressionHash}::${deps.join("\u001f")}`
+  }
+
+  const clearFormulaCompileArtifactCache = (): void => {
+    state.formulaCompiledArtifactByExactKey.clear()
+    state.formulaCompiledArtifactByStructuralKey.clear()
+  }
+
   const compileFormulaFieldDefinition = (
     definition: DataGridFormulaFieldDefinition,
     compileOptions: CompileFormulaFieldOptions = {},
   ): DataGridCompiledFormulaField<T> => {
-    return compileDataGridFormulaFieldDefinition<T>(definition, {
-      resolveDependencyToken: (identifier) => {
-        const normalizedIdentifier = identifier.trim()
-        if (normalizedIdentifier.startsWith("meta.")) {
-          const metaField = normalizedIdentifier.slice("meta.".length).trim()
-          if (isDataGridFormulaMetaField(metaField)) {
-            return `meta:${metaField}`
-          }
-        }
-        const knownByTargetField = (
-          state.computedFieldNameByTargetField.get(normalizedIdentifier)
-          ?? compileOptions.knownComputedNameByField?.get(normalizedIdentifier)
-        )
-        if (knownByTargetField) {
-          return `computed:${knownByTargetField}`
-        }
-        if (
-          state.computedFieldsByName.has(normalizedIdentifier)
-          || state.formulaFieldsByName.has(normalizedIdentifier)
-          || compileOptions.knownComputedNames?.has(normalizedIdentifier) === true
-        ) {
-          return `computed:${normalizedIdentifier}`
-        }
-        return `field:${normalizedIdentifier}`
-      },
+    const compileEngineOptions = {
+      resolveDependencyToken: (identifier: string) => resolveDependencyToken(identifier, compileOptions),
       onRuntimeError: context.onFormulaRuntimeError,
       functionRegistry: resolveFormulaFunctionRegistrySnapshot(),
+    }
+    const analysis = analyzeDataGridFormulaFieldDefinition(definition, compileEngineOptions)
+    const exactKey = analysis.formula
+    const structuralKey = createCompileCacheStructuralKey(analysis.expressionHash, analysis.deps)
+    const cachedArtifact = state.formulaCompiledArtifactByExactKey.get(exactKey)
+      ?? state.formulaCompiledArtifactByStructuralKey.get(structuralKey)
+
+    if (cachedArtifact) {
+      state.formulaCompileCacheHits += 1
+      state.formulaCompiledArtifactByExactKey.set(exactKey, cachedArtifact)
+      return bindCompiledFormulaArtifactToFieldDefinition(cachedArtifact, definition, {
+        onRuntimeError: context.onFormulaRuntimeError,
+      })
+    }
+
+    state.formulaCompileCacheMisses += 1
+    const artifact = compileDataGridFormulaFieldArtifact<T>(definition, compileEngineOptions)
+    state.formulaCompiledArtifactByExactKey.set(exactKey, artifact)
+    state.formulaCompiledArtifactByStructuralKey.set(structuralKey, artifact)
+    return bindCompiledFormulaArtifactToFieldDefinition(artifact, definition, {
+      onRuntimeError: context.onFormulaRuntimeError,
     })
   }
 
@@ -204,5 +244,6 @@ export function createComputedRegistryFormulaCompilationRuntime<T>(options: {
     compileRegisteredFormulaFields,
     applyCompiledFormulaFields,
     recompileRegisteredFormulaFields,
+    clearFormulaCompileArtifactCache,
   }
 }

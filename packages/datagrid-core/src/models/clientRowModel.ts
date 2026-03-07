@@ -493,6 +493,7 @@ export function createClientRowModel<T>(
     getComputedDependentsByIndex: computedRegistry.getComputedDependentsByIndex,
     getFormulaIterativeCalculationOptions: () => options.formulaIterativeCalculation ?? null,
     getFormulaFieldsByName: computedRegistry.getFormulaFieldsByName,
+    getFormulaCompileCacheDiagnostics: computedRegistry.getFormulaCompileCacheDiagnostics,
     resolveComputedRootIndexes: computedRegistry.resolveComputedRootIndexes,
     resolveComputedRootIndexesForField: computedRegistry.resolveComputedRootIndexesForField,
     resolveComputedRootIndexesForContext: computedRegistry.resolveComputedRootIndexesForContext,

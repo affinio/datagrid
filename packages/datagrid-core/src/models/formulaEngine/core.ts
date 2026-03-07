@@ -3,6 +3,7 @@ import type {
   DataGridFormulaArrayValue,
   DataGridComputedFieldComputeContext,
   DataGridFormulaErrorValue,
+  DataGridFormulaFieldDefinition,
   DataGridFormulaScalarValue,
   DataGridFormulaValue,
   DataGridRowId,
@@ -90,6 +91,7 @@ export interface DataGridCompiledFormulaField<TRow = unknown> {
   name: string
   field: string
   formula: string
+  expressionHash: string
   identifiers: readonly string[]
   deps: readonly DataGridComputedDependencyToken[]
   contextKeys: readonly string[]
@@ -102,6 +104,21 @@ export interface DataGridCompiledFormulaField<TRow = unknown> {
     contexts: readonly DataGridCompiledFormulaBatchContext<TRow>[],
     tokenColumns: readonly (readonly unknown[])[],
   ) => readonly DataGridFormulaValue[]
+}
+
+export interface DataGridFormulaExpressionAnalysis {
+  formula: string
+  expressionHash: string
+  identifiers: readonly string[]
+  deps: readonly DataGridComputedDependencyToken[]
+  contextKeys: readonly string[]
+}
+
+export interface DataGridCompiledFormulaArtifact<TRow = unknown> extends DataGridFormulaExpressionAnalysis {
+  bind: (
+    definition: DataGridFormulaFieldDefinition,
+    options?: Pick<DataGridFormulaCompileOptions, "runtimeErrorPolicy" | "onRuntimeError">,
+  ) => DataGridCompiledFormulaField<TRow>
 }
 
 export interface DataGridCompiledFormulaBatchContext<TRow = unknown> {

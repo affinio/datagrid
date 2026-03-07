@@ -54,10 +54,10 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 
 ## Phase 5 — Execution Engine Maturity
 
-- [ ] Block 13. Compile Reuse and Expression Identity (`Mixed`)
-  - Add compiled expression cache (`formula string -> compiled artifact`).
-  - Add normalized AST hash for structurally equivalent formulas.
-  - Expose cache hit/miss metrics in diagnostics.
+- [x] Block 13. Compile Reuse and Expression Identity (`Mixed`)
+  - Add compiled expression cache (`formula string -> compiled artifact`) inside registry compilation runtime.
+  - Add normalized AST hash (`expressionHash`) for structurally equivalent formulas.
+  - Expose compile-cache hit/miss/size metrics in projection formula diagnostics.
 - [ ] Block 14. Access Specialization (`Perf`)
   - Replace generic string-token hot path with `tokenIndex -> accessor` specialization.
   - Precompile nested path readers and common scalar slot readers.
@@ -85,7 +85,7 @@ Progression is intentionally ordered from cheapest/highest-leverage work to deep
 
 ## Phase 5 Priority Order
 
-1. [ ] `F1` Compile Reuse and Expression Identity
+1. [x] `F1` Compile Reuse and Expression Identity
 2. [ ] `F2` Access Specialization
 3. [ ] `F3` Formal Expression DAG Runtime
 4. [ ] `F4` Fused Batch Execution

@@ -501,6 +501,11 @@ export interface DataGridProjectionFormulaDiagnostics {
   recomputedFields: readonly string[]
   runtimeErrorCount: number
   runtimeErrors: readonly DataGridFormulaRuntimeError[]
+  compileCache?: {
+    hits: number
+    misses: number
+    size: number
+  }
 }
 
 export interface DataGridFormulaDirtyCause {

@@ -994,6 +994,40 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("reports compile cache hits for repeated formulas", () => {
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      left?: number
+      right?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1, price: 10 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "left", formula: "price * 2" },
+        { name: "right", formula: "price * 2" },
+      ],
+    })
+
+    expect(model.getSnapshot().projection.formula).toEqual(expect.objectContaining({
+      recomputedFields: ["left", "right"],
+      runtimeErrorCount: 0,
+      compileCache: expect.objectContaining({
+        misses: 1,
+        size: 1,
+      }),
+    }))
+    expect(model.getSnapshot().projection.formula?.compileCache?.hits).toBeGreaterThanOrEqual(1)
+
+    model.dispose()
+  })
+
   it("supports first-class meta dependencies in formula fields", () => {
     const model = createClientRowModel<{
       id: number

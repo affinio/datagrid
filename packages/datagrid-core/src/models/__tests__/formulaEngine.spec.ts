@@ -790,6 +790,20 @@ describe("formulaEngine", () => {
     expect(compiledAst.compute(context)).toBe(compiledJit.compute(context))
   })
 
+  it("assigns the same expression hash to structurally equivalent formulas", () => {
+    const direct = compileDataGridFormulaFieldDefinition({
+      name: "direct",
+      formula: "price + tax",
+    })
+
+    const grouped = compileDataGridFormulaFieldDefinition({
+      name: "grouped",
+      formula: "(price) + (tax)",
+    })
+
+    expect(direct.expressionHash).toBe(grouped.expressionHash)
+  })
+
   it("supports a CSP-safe compile path with dynamic code generation disabled", () => {
     const runtimeWithFunctionOverride = globalThis as typeof globalThis & {
       Function: FunctionConstructor

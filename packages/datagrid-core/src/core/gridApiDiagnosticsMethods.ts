@@ -137,6 +137,11 @@ function cloneProjectionFormulaDiagnostics(
     recomputedFields: [...diagnostics.recomputedFields],
     runtimeErrorCount: diagnostics.runtimeErrorCount,
     runtimeErrors: diagnostics.runtimeErrors.map(error => ({ ...error })),
+    ...(diagnostics.compileCache
+      ? {
+        compileCache: { ...diagnostics.compileCache },
+      }
+      : {}),
   }
 }
 

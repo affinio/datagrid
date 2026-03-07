@@ -82,6 +82,7 @@ export interface DataGridClientComputedExecutionRuntimeContext<T> {
   getComputedDependentsByIndex: () => readonly (readonly number[])[]
   getFormulaIterativeCalculationOptions: () => DataGridFormulaIterativeCalculationOptions | null
   getFormulaFieldsByName: () => ReadonlyMap<string, DataGridRegisteredFormulaField>
+  getFormulaCompileCacheDiagnostics: () => NonNullable<DataGridProjectionFormulaDiagnostics["compileCache"]>
 
   resolveComputedRootIndexes: (changedFields: ReadonlySet<string>) => readonly number[]
   resolveComputedRootIndexesForField: (changedField: string) => readonly number[]
@@ -395,6 +396,7 @@ export function createClientRowComputedExecutionRuntime<T>(
       iterativeIterationCountByNode,
       iterativeConvergenceStateByNode,
       executionResult,
+      formulaCompileCacheDiagnostics: context.getFormulaCompileCacheDiagnostics(),
       formulaRuntimeErrorsCollector: executorRuntime.formulaRuntimeErrorsCollector,
     })
 

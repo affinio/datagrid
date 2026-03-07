@@ -110,6 +110,9 @@ export {
 } from "./rowModel.js"
 
 export {
+  analyzeDataGridFormulaFieldDefinition,
+  bindCompiledFormulaArtifactToFieldDefinition,
+  compileDataGridFormulaFieldArtifact,
   compileDataGridFormulaFieldDefinition,
   collectFormulaContextKeys,
   explainDataGridFormulaExpression,
@@ -130,9 +133,11 @@ export {
   compareFormulaValues,
   isFormulaValueBlank,
   isFormulaValueEmptyText,
+  type DataGridCompiledFormulaArtifact,
   type DataGridCompiledFormulaField,
   type DataGridCompiledFormulaBatchContext,
   type DataGridFormulaDiagnostic,
+  type DataGridFormulaExpressionAnalysis,
   type DataGridFormulaExplainDependency,
   type DataGridFormulaExplainDependencyDomain,
   type DataGridFormulaExplainNode,

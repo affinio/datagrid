@@ -1,7 +1,9 @@
 export type {
+  DataGridCompiledFormulaArtifact,
   DataGridCompiledFormulaBatchContext,
   DataGridCompiledFormulaField,
   DataGridFormulaDiagnostic,
+  DataGridFormulaExpressionAnalysis,
   DataGridFormulaExplainDependency,
   DataGridFormulaExplainDependencyDomain,
   DataGridFormulaExplainNode,
@@ -19,6 +21,9 @@ export type {
 } from "./core.js"
 
 export {
+  analyzeDataGridFormulaFieldDefinition,
+  bindCompiledFormulaArtifactToFieldDefinition,
+  compileDataGridFormulaFieldArtifact,
   compileDataGridFormulaFieldDefinition,
 } from "./compile.js"
 

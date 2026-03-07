@@ -18,6 +18,7 @@ export function createComputedExecutionDiagnostics<T>(options: {
   iterativeIterationCountByNode: Uint32Array
   iterativeConvergenceStateByNode: Uint8Array
   executionResult: DataGridComputedExecutionFinalizeResult<T>
+  formulaCompileCacheDiagnostics: NonNullable<DataGridProjectionFormulaDiagnostics["compileCache"]>
   formulaRuntimeErrorsCollector: DataGridFormulaRuntimeErrorsCollector
 }): {
   formulaDiagnostics: DataGridProjectionFormulaDiagnostics
@@ -31,6 +32,7 @@ export function createComputedExecutionDiagnostics<T>(options: {
     iterativeIterationCountByNode,
     iterativeConvergenceStateByNode,
     executionResult,
+    formulaCompileCacheDiagnostics,
     formulaRuntimeErrorsCollector,
   } = options
 
@@ -83,6 +85,7 @@ export function createComputedExecutionDiagnostics<T>(options: {
       recomputedFields,
       runtimeErrorCount: formulaRuntimeErrorsCollector.runtimeErrorCount,
       runtimeErrors: formulaRuntimeErrorsCollector.runtimeErrors,
+      compileCache: { ...formulaCompileCacheDiagnostics },
     },
     computeStageDiagnostics: {
       strategy: executionResult.effectiveRuntimeStrategy,
