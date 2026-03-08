@@ -52,6 +52,17 @@ export type DataGridFormulaVectorColumnKernel = (
   tokenColumns: readonly (readonly unknown[])[],
 ) => DataGridFormulaValue[]
 
+export interface DataGridFormulaRowIndexSelection {
+  indexes: readonly number[]
+  count: number
+}
+
+function isFormulaRowIndexSelection(
+  rowIndexes: readonly number[] | DataGridFormulaRowIndexSelection,
+): rowIndexes is DataGridFormulaRowIndexSelection {
+  return !Array.isArray(rowIndexes)
+}
+
 export function createFormulaArrayFilled(
   contextsCount: number,
   value: DataGridFormulaValue,
@@ -65,12 +76,14 @@ export function createFormulaArrayFilled(
 
 export function sliceTokenColumnsByIndexes(
   tokenColumns: readonly (readonly unknown[])[],
-  rowIndexes: readonly number[],
+  rowIndexes: readonly number[] | DataGridFormulaRowIndexSelection,
 ): unknown[][] {
+  const indexes = isFormulaRowIndexSelection(rowIndexes) ? rowIndexes.indexes : rowIndexes
+  const count = isFormulaRowIndexSelection(rowIndexes) ? rowIndexes.count : rowIndexes.length
   return tokenColumns.map((column) => {
-    const subset = new Array<unknown>(rowIndexes.length)
-    for (let index = 0; index < rowIndexes.length; index += 1) {
-      const rowIndex = rowIndexes[index]
+    const subset = new Array<unknown>(count)
+    for (let index = 0; index < count; index += 1) {
+      const rowIndex = indexes[index]
       subset[index] = typeof rowIndex === "number" ? column?.[rowIndex] : undefined
     }
     return subset
@@ -80,12 +93,13 @@ export function sliceTokenColumnsByIndexes(
 export function evaluateVectorKernelForIndexes(
   kernel: DataGridFormulaVectorColumnKernel,
   tokenColumns: readonly (readonly unknown[])[],
-  rowIndexes: readonly number[],
+  rowIndexes: readonly number[] | DataGridFormulaRowIndexSelection,
 ): DataGridFormulaValue[] {
-  if (rowIndexes.length === 0) {
+  const count = isFormulaRowIndexSelection(rowIndexes) ? rowIndexes.count : rowIndexes.length
+  if (count === 0) {
     return []
   }
-  return kernel(rowIndexes.length, sliceTokenColumnsByIndexes(tokenColumns, rowIndexes))
+  return kernel(count, sliceTokenColumnsByIndexes(tokenColumns, rowIndexes))
 }
 
 export function createSequentialRowIndexes(contextsCount: number): number[] {
