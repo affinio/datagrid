@@ -55,7 +55,6 @@ import {
 import {
   type DataGridClientProjectionComputeStageExecutor,
 } from "./clientRowProjectionComputeStage.js"
-import type { DataGridClientComputeModule } from "./clientRowComputeModule.js"
 import { createClientRowComputeModuleHost } from "./clientRowComputeModule.js"
 import { createClientRowProjectionOrchestrator } from "./clientRowProjectionOrchestrator.js"
 import { DATAGRID_CLIENT_ALL_PROJECTION_STAGES } from "./projectionStages.js"
@@ -977,9 +976,8 @@ export function createClientRowModel<T>(
     resetGroupByIncrementalAggregationStateRuntime(groupByIncrementalAggregationState)
   }
 
-  let computeModules: readonly DataGridClientComputeModule<T>[] = []
   const computeModuleHost = createClientRowComputeModuleHost<T>({
-    getModules: () => computeModules,
+    getModules: () => [],
   })
 
   function patchRuntimeGroupAggregates(
@@ -1620,7 +1618,7 @@ export function createClientRowModel<T>(
     getFormulaRowRecomputeDiagnosticsSnapshot: getFormulaRowRecomputeDiagnosticsSnapshot,
     recomputeComputedFieldsAndRefresh,
   })
-  computeModules = [formulaComputeModule]
+  computeModuleHost.registerModule(formulaComputeModule)
 
   runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
   if (!tryApplyFlatIdentityProjectionRefresh()) {

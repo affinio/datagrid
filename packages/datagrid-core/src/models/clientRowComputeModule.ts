@@ -12,17 +12,24 @@ export interface CreateClientRowComputeModuleHostOptions<T> {
 
 export interface DataGridClientComputeModuleHost<T> {
   getModules: () => readonly DataGridClientComputeModule<T>[]
+  registerModule: (module: DataGridClientComputeModule<T>) => void
+  unregisterModule: (moduleId: string) => boolean
   getProjectionComputeStageExecutor: () => DataGridClientProjectionComputeStageExecutor<T>
 }
 
 export function createClientRowComputeModuleHost<T>(
   options: CreateClientRowComputeModuleHostOptions<T>,
 ): DataGridClientComputeModuleHost<T> {
+  let registeredModules: readonly DataGridClientComputeModule<T>[] | null = null
+  const resolveModules = (): readonly DataGridClientComputeModule<T>[] => (
+    registeredModules ?? options.getModules()
+  )
+
   const projectionComputeStageExecutor: DataGridClientProjectionComputeStageExecutor<T> = {
     execute(context) {
       let recomputed = false
       let refreshSourceById = false
-      for (const module of options.getModules()) {
+      for (const module of resolveModules()) {
         const executor = module.getProjectionComputeStageExecutor?.()
         if (!executor) {
           continue
@@ -46,7 +53,27 @@ export function createClientRowComputeModuleHost<T>(
   }
 
   return {
-    getModules: options.getModules,
+    getModules: resolveModules,
+    registerModule(module) {
+      const modules = resolveModules()
+      const existingIndex = modules.findIndex(candidate => candidate.id === module.id)
+      if (existingIndex < 0) {
+        registeredModules = [...modules, module]
+        return
+      }
+      const nextModules = modules.slice()
+      nextModules[existingIndex] = module
+      registeredModules = nextModules
+    },
+    unregisterModule(moduleId) {
+      const modules = resolveModules()
+      const nextModules = modules.filter(module => module.id !== moduleId)
+      if (nextModules.length === modules.length) {
+        return false
+      }
+      registeredModules = nextModules
+      return true
+    },
     getProjectionComputeStageExecutor: () => projectionComputeStageExecutor,
   }
 }
