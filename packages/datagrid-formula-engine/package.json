@@ -17,7 +17,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "find src \\( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' -o -name '*.d.ts.map' \\) -delete && tsc -p tsconfig.json",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {},

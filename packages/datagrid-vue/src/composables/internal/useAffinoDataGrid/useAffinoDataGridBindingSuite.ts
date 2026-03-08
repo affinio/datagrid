@@ -101,7 +101,50 @@ export function useAffinoDataGridBindingSuite<TRow>(
     runAction: options.runAction,
   })
 
+  const cellElementRegistry = new Map<string, HTMLElement>()
+  const headerElementRegistry = new Map<string, HTMLElement>()
+
+  const toCellRegistryKey = (rowKey: string, columnKey: string): string => `${rowKey}::${columnKey}`
+
+  const registerCellElement = (rowKey: string, columnKey: string, element: Element | null): void => {
+    const registryKey = toCellRegistryKey(rowKey, columnKey)
+    if (element instanceof HTMLElement) {
+      cellElementRegistry.set(registryKey, element)
+      return
+    }
+    cellElementRegistry.delete(registryKey)
+  }
+
+  const registerHeaderElement = (columnKey: string, element: Element | null): void => {
+    if (element instanceof HTMLElement) {
+      headerElementRegistry.set(columnKey, element)
+      return
+    }
+    headerElementRegistry.delete(columnKey)
+  }
+
+  const createHeaderCellBindings = (columnKey: string) => ({
+    ...contextMenuFeature.createHeaderCellBindings(columnKey),
+    ref: (element: Element | null) => {
+      registerHeaderElement(columnKey, element)
+    },
+  })
+
+  const createDataCellBindings = (params: Parameters<typeof contextMenuFeature.createDataCellBindings>[0]) => {
+    const rowKey = options.resolveRowKey(params.row, params.rowIndex)
+    return {
+      ...contextMenuFeature.createDataCellBindings(params),
+      ref: (element: Element | null) => {
+        registerCellElement(rowKey, params.columnKey, element)
+      },
+    }
+  }
+
   const findCellElement = (rowKey: string, columnKey: string): HTMLElement | null => {
+    const registered = cellElementRegistry.get(toCellRegistryKey(rowKey, columnKey))
+    if (registered) {
+      return registered
+    }
     if (typeof document === "undefined") {
       return null
     }
@@ -115,6 +158,10 @@ export function useAffinoDataGridBindingSuite<TRow>(
   }
 
   const findHeaderElement = (columnKey: string): HTMLElement | null => {
+    const registered = headerElementRegistry.get(columnKey)
+    if (registered) {
+      return registered
+    }
     if (typeof document === "undefined") {
       return null
     }
@@ -134,8 +181,10 @@ export function useAffinoDataGridBindingSuite<TRow>(
     createRowReorderBindings,
     createEditableCellBindings,
     createInlineEditorBindings,
+    ...contextMenuFeature,
+    createHeaderCellBindings,
+    createDataCellBindings,
     findCellElement,
     findHeaderElement,
-    ...contextMenuFeature,
   }
 }

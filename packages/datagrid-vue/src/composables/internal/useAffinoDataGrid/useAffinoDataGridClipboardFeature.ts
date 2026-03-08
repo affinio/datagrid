@@ -1,4 +1,4 @@
-import { computed, ref, type ComputedRef, type Ref } from "vue"
+import { ref, type Ref } from "vue"
 import type { AffinoDataGridRowMutationOptions } from "./useAffinoDataGridFeatureSuite"
 
 export interface AffinoClipboardFeatureInput<TRow> {
@@ -25,7 +25,7 @@ export interface UseAffinoDataGridClipboardFeatureOptions<TRow> {
 
 export interface UseAffinoDataGridClipboardFeatureResult<TRow> {
   clipboardEnabled: Ref<boolean>
-  lastCopiedText: ComputedRef<string>
+  lastCopiedText: Ref<string>
   copyText: (text: string) => Promise<boolean>
   readText: () => Promise<string>
   copyRows: (rows?: readonly TRow[]) => Promise<boolean>
@@ -76,7 +76,7 @@ export function useAffinoDataGridClipboardFeature<TRow>(
 ): UseAffinoDataGridClipboardFeatureResult<TRow> {
   const clipboardEnabled = ref(options.feature.enabled)
   const clipboardBuffer = ref("")
-  const lastCopiedText = computed(() => clipboardBuffer.value)
+  const lastCopiedText = clipboardBuffer
 
   const copyText = async (text: string): Promise<boolean> => {
     if (!clipboardEnabled.value) {

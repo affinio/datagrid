@@ -61,6 +61,17 @@ interface ResolvedProjectionGraph<Stage extends string> {
   stageSet: ReadonlySet<Stage>
 }
 
+function createStageNumberRecord<Stage extends string>(
+  stages: readonly Stage[],
+  initialValue: number,
+): Record<Stage, number> {
+  const record = Object.create(null) as Record<Stage, number>
+  for (const stage of stages) {
+    record[stage] = initialValue
+  }
+  return record
+}
+
 function isPreparedProjectionStageGraph<Stage extends string>(
   graph: ProjectionStageGraph<Stage> | PreparedProjectionStageGraph<Stage>,
 ): graph is PreparedProjectionStageGraph<Stage> {
@@ -160,19 +171,19 @@ function resolveProjectionGraph<Stage extends string>(
     visit(stage)
   }
 
-  const declarationIndex = new Map<Stage, number>()
+  const declarationIndex = createStageNumberRecord(declarationOrder, 0)
   declarationOrder.forEach((stage, index) => {
-    declarationIndex.set(stage, index)
+    declarationIndex[stage] = index
   })
 
-  const indegree = new Map<Stage, number>()
+  const indegree = createStageNumberRecord(declarationOrder, 0)
   for (const stage of declarationOrder) {
-    indegree.set(stage, dependencies[stage].length)
+    indegree[stage] = dependencies[stage].length
   }
 
-  const ready: Stage[] = declarationOrder.filter((stage) => (indegree.get(stage) ?? 0) === 0)
+  const ready: Stage[] = declarationOrder.filter((stage) => indegree[stage] === 0)
   ready.sort((left, right) => {
-    return (declarationIndex.get(left) ?? 0) - (declarationIndex.get(right) ?? 0)
+    return declarationIndex[left] - declarationIndex[right]
   })
 
   const stageOrder: Stage[] = []
@@ -183,14 +194,14 @@ function resolveProjectionGraph<Stage extends string>(
     }
     stageOrder.push(current)
     for (const dependent of dependents[current]) {
-      const nextIndegree = (indegree.get(dependent) ?? 0) - 1
-      indegree.set(dependent, nextIndegree)
+      const nextIndegree = indegree[dependent] - 1
+      indegree[dependent] = nextIndegree
       if (nextIndegree === 0) {
         ready.push(dependent)
       }
     }
     ready.sort((left, right) => {
-      return (declarationIndex.get(left) ?? 0) - (declarationIndex.get(right) ?? 0)
+      return declarationIndex[left] - declarationIndex[right]
     })
   }
 
@@ -198,14 +209,14 @@ function resolveProjectionGraph<Stage extends string>(
     throw new Error("[projection-engine] failed to compute topological order")
   }
 
-  const stageOrderIndex = new Map<Stage, number>()
+  const stageOrderIndex = createStageNumberRecord(stageOrder, 0)
   stageOrder.forEach((stage, index) => {
-    stageOrderIndex.set(stage, index)
+    stageOrderIndex[stage] = index
   })
 
   for (const stage of declarationOrder) {
     dependents[stage].sort((left, right) => {
-      return (stageOrderIndex.get(left) ?? 0) - (stageOrderIndex.get(right) ?? 0)
+      return stageOrderIndex[left] - stageOrderIndex[right]
     })
   }
 
@@ -233,7 +244,16 @@ function resolveProjectionGraph<Stage extends string>(
   for (const stage of declarationOrder) {
     readonlyDependents[stage] = Object.freeze([...dependents[stage]])
     const downstream = downstreamSets.get(stage)
-    const orderedDownstream = stageOrder.filter((candidate) => downstream?.has(candidate) ?? false)
+    const orderedDownstream: Stage[] = []
+    if (downstream) {
+      const stageStartIndex = stageOrderIndex[stage]
+      for (let index = stageStartIndex; index < stageOrder.length; index += 1) {
+        const candidate = stageOrder[index]
+        if (candidate !== undefined && downstream.has(candidate)) {
+          orderedDownstream.push(candidate)
+        }
+      }
+    }
     downstreamByStage[stage] = Object.freeze(orderedDownstream)
   }
 
@@ -302,13 +322,14 @@ export function createProjectionStageEngine<Stage extends string>(
   const prepared = resolved.prepared
   const stageSet = resolved.stageSet
   const dirtyStages = new Set<Stage>()
-  const requestedRevisions = new Map<Stage, number>()
-  const computedRevisions = new Map<Stage, number>()
-
-  for (const stage of prepared.stageOrder) {
-    requestedRevisions.set(stage, 0)
-    computedRevisions.set(stage, 0)
-  }
+  const stageOrderIndex = createStageNumberRecord(prepared.stageOrder, 0)
+  prepared.stageOrder.forEach((stage, index) => {
+    stageOrderIndex[stage] = index
+  })
+  const requestedRevisions = createStageNumberRecord(prepared.stageOrder, 0)
+  const computedRevisions = createStageNumberRecord(prepared.stageOrder, 0)
+  let dirtyStageIndexMin = Number.POSITIVE_INFINITY
+  let dirtyStageIndexMax = Number.NEGATIVE_INFINITY
 
   const requestStages = (
     stages: readonly Stage[],
@@ -333,9 +354,16 @@ export function createProjectionStageEngine<Stage extends string>(
         }
         visited.add(downstream)
         if (shouldTrackRequested) {
-          requestedRevisions.set(downstream, (requestedRevisions.get(downstream) ?? 0) + 1)
+          requestedRevisions[downstream] += 1
         }
         dirtyStages.add(downstream)
+        const downstreamIndex = stageOrderIndex[downstream]
+        if (downstreamIndex < dirtyStageIndexMin) {
+          dirtyStageIndexMin = downstreamIndex
+        }
+        if (downstreamIndex > dirtyStageIndexMax) {
+          dirtyStageIndexMax = downstreamIndex
+        }
       }
     }
   }
@@ -357,23 +385,40 @@ export function createProjectionStageEngine<Stage extends string>(
 
     const recomputedStages: Stage[] = []
     const nextDirtyStages = new Set<Stage>()
+    let nextDirtyStageIndexMin = Number.POSITIVE_INFINITY
+    let nextDirtyStageIndexMax = Number.NEGATIVE_INFINITY
     let hadActualRecompute = false
 
-    for (const stage of prepared.stageOrder) {
+    const recomputeStartIndex = Number.isFinite(dirtyStageIndexMin) ? dirtyStageIndexMin : 0
+    const recomputeEndIndex = Number.isFinite(dirtyStageIndexMax)
+      ? dirtyStageIndexMax
+      : prepared.stageOrder.length - 1
+
+    for (let stageIndex = recomputeStartIndex; stageIndex <= recomputeEndIndex; stageIndex += 1) {
+      const stage = prepared.stageOrder[stageIndex]
+      if (stage === undefined) {
+        continue
+      }
       if (!dirtyStages.has(stage)) {
         continue
       }
       const shouldRecompute = !blockedSet.has(stage)
       const recomputed = executeStage(stage, shouldRecompute)
       if (shouldRecompute && recomputed) {
-        computedRevisions.set(stage, requestedRevisions.get(stage) ?? 0)
+        computedRevisions[stage] = requestedRevisions[stage]
         recomputedStages.push(stage)
         hadActualRecompute = true
       }
-      const requestedRevision = requestedRevisions.get(stage) ?? 0
-      const computedRevision = computedRevisions.get(stage) ?? 0
+      const requestedRevision = requestedRevisions[stage]
+      const computedRevision = computedRevisions[stage]
       if (requestedRevision > computedRevision && (!shouldRecompute || !recomputed)) {
         nextDirtyStages.add(stage)
+        if (stageIndex < nextDirtyStageIndexMin) {
+          nextDirtyStageIndexMin = stageIndex
+        }
+        if (stageIndex > nextDirtyStageIndexMax) {
+          nextDirtyStageIndexMax = stageIndex
+        }
       }
     }
 
@@ -381,6 +426,8 @@ export function createProjectionStageEngine<Stage extends string>(
     for (const stage of nextDirtyStages) {
       dirtyStages.add(stage)
     }
+    dirtyStageIndexMin = nextDirtyStageIndexMin
+    dirtyStageIndexMax = nextDirtyStageIndexMax
 
     return {
       hadActualRecompute,
@@ -405,7 +452,7 @@ export function createProjectionStageEngine<Stage extends string>(
       return recompute(executeStage, recomputeOptions)
     },
     getStaleStages: () => prepared.stageOrder.filter((stage) => {
-      return (requestedRevisions.get(stage) ?? 0) > (computedRevisions.get(stage) ?? 0)
+      return requestedRevisions[stage] > computedRevisions[stage]
     }),
     expandStages: (stages: readonly Stage[]): ReadonlySet<Stage> => expandProjectionStages(stages, prepared),
   }

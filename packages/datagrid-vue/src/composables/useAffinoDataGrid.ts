@@ -973,6 +973,21 @@ export function useAffinoDataGrid<TRow>(
       return null
     }
 
+    const sourceRow = rows.value.find((candidateRow, sourceIndex) => (
+      resolveRowKey(candidateRow, sourceIndex) === targetKey
+    ))
+    if (
+      sourceRow
+      && typeof sourceRow === "object"
+      && Object.prototype.hasOwnProperty.call(sourceRow, columnKey)
+    ) {
+      const sourceValue = (sourceRow as Record<string, unknown>)[columnKey]
+      if (sourceValue == null) {
+        return ""
+      }
+      return String(sourceValue)
+    }
+
     const directNode = runtime.api.rows.get(directHit.rowIndex)
     let resolvedRow: unknown = directNode?.row
     if (!resolvedRow || String(directNode?.rowId ?? "") !== targetKey) {

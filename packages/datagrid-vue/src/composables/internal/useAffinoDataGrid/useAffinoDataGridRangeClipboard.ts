@@ -75,6 +75,22 @@ function isRecordRow(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object"
 }
 
+function resolveIntrinsicRowId(value: unknown): string | null {
+  if (!isRecordRow(value)) {
+    return null
+  }
+  const candidate = value as { rowId?: unknown; id?: unknown; key?: unknown }
+  for (const raw of [candidate.rowId, candidate.id, candidate.key]) {
+    if (typeof raw === "string" || typeof raw === "number") {
+      const normalized = String(raw).trim()
+      if (normalized.length > 0) {
+        return normalized
+      }
+    }
+  }
+  return null
+}
+
 function coerceStringDraftToCellValue(current: unknown, draft: string): unknown {
   if (typeof current === "number") {
     const parsed = Number(draft)
@@ -265,6 +281,10 @@ export function useAffinoDataGridRangeClipboard<TRow>(
   )
 
   const resolveSourceRowId = (row: TRow): string => {
+    const intrinsic = resolveIntrinsicRowId(row)
+    if (intrinsic) {
+      return intrinsic
+    }
     const direct = sourceRowIdMap.value.get(row)
     if (direct) {
       return direct
@@ -352,6 +372,7 @@ export function useAffinoDataGridRangeClipboard<TRow>(
     sourceRows: options.rows,
     setSourceRows(nextRows) {
       options.rows.value = nextRows
+      options.runtime.setRows(nextRows)
     },
     cloneRow: cloneRowForMutation,
     resolveRowId: resolveSourceRowId,
@@ -421,6 +442,7 @@ export function useAffinoDataGridRangeClipboard<TRow>(
     resolveSourceRowId: resolveSourceRowId,
     applySourceRows(nextRows) {
       options.rows.value = nextRows
+      options.runtime.setRows(nextRows)
     },
     resolveDisplayedRows: materializeDisplayRows,
     resolveDisplayedRowId(rowNode) {
