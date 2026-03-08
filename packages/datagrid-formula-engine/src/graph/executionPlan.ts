@@ -1,4 +1,4 @@
-import { parseFormulaReferenceSegments } from "./formulaEngine/core.js"
+import { parseFormulaReferenceSegments } from "../syntax/tokenizer.js"
 
 export type DataGridFormulaExecutionCyclePolicy = "error" | "iterative"
 

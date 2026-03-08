@@ -48,7 +48,7 @@ export type {
   DataGridFormulaRuntimeErrorPolicy,
   DataGridFormulaDiagnosticsResult,
   DataGridFormulaSourceSpan,
-} from "./formulaEngine/index.js"
+} from "./syntax/index.js"
 
 export type {
   DataGridFormulaExecutionDependencyDomain,
@@ -60,7 +60,7 @@ export type {
   DataGridFormulaExecutionPlanNodeSnapshot,
   DataGridFormulaExecutionPlan,
   DataGridFormulaExecutionPlanSnapshot,
-} from "./formulaExecutionPlan.js"
+} from "./graph/index.js"
 
 export {
   DATAGRID_FORMULA_META_FIELDS,
@@ -68,10 +68,6 @@ export {
 } from "./contracts.js"
 
 export {
-  analyzeDataGridFormulaFieldDefinition,
-  bindCompiledFormulaArtifactToFieldDefinition,
-  compileDataGridFormulaFieldArtifact,
-  compileDataGridFormulaFieldDefinition,
   collectFormulaContextKeys,
   explainDataGridFormulaExpression,
   explainDataGridFormulaFieldDefinition,
@@ -92,11 +88,18 @@ export {
   coerceFormulaValueToBoolean,
   areFormulaValuesEqual,
   compareFormulaValues,
-} from "./formulaEngine/index.js"
+} from "./syntax/index.js"
+
+export {
+  analyzeDataGridFormulaFieldDefinition,
+  bindCompiledFormulaArtifactToFieldDefinition,
+  compileDataGridFormulaFieldArtifact,
+  compileDataGridFormulaFieldDefinition,
+} from "./runtime/index.js"
 
 export {
   createDataGridFormulaGraph,
   createDataGridFormulaExecutionPlan,
   snapshotDataGridFormulaGraph,
   snapshotDataGridFormulaExecutionPlan,
-} from "./formulaExecutionPlan.js"
+} from "./graph/index.js"

@@ -175,7 +175,7 @@ export {
   type DataGridFormulaExecutionPlanNodeSnapshot,
   type DataGridFormulaExecutionPlan,
   type DataGridFormulaExecutionPlanSnapshot,
-} from "./formulaExecutionPlan.js"
+} from "@affino/datagrid-formula-engine"
 
 export {
   buildDataGridAdvancedFilterExpressionFromLegacyFilters,

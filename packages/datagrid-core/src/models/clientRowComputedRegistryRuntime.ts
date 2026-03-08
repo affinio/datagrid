@@ -21,7 +21,7 @@ import {
   createDataGridFormulaExecutionPlan,
   type DataGridFormulaExecutionDependencyDomain,
   type DataGridFormulaExecutionPlan,
-} from "./formulaExecutionPlan.js"
+} from "@affino/datagrid-formula-engine"
 import { createComputedRegistryExecutionPlanRuntime } from "./clientRowComputedRegistryExecutionPlanRuntime.js"
 import { createComputedRegistryFormulaCompilationRuntime } from "./clientRowComputedRegistryFormulaCompilationRuntime.js"
 import { createComputedRegistryRegistrationRuntime } from "./clientRowComputedRegistryRegistrationRuntime.js"

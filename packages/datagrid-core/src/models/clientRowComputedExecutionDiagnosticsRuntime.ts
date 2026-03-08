@@ -7,7 +7,7 @@ import type {
   DataGridFormulaRowRecomputeDiagnostics,
   DataGridRowNode,
 } from "./rowModel.js"
-import type { DataGridFormulaExecutionPlan } from "./formulaExecutionPlan.js"
+import type { DataGridFormulaExecutionPlan } from "@affino/datagrid-formula-engine"
 import type { DataGridRegisteredComputedField } from "./clientRowComputedExecutionRuntime.js"
 import type { DataGridComputedDirtyPropagationRuntime } from "./clientRowComputedExecutionDirtyPropagationRuntime.js"
 import type { DataGridComputedExecutionFinalizeResult } from "./clientRowComputedExecutionExecutorRuntime.js"

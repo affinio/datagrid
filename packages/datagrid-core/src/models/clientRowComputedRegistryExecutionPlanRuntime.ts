@@ -1,6 +1,6 @@
 import {
   createDataGridFormulaExecutionPlan,
-} from "./formulaExecutionPlan.js"
+} from "@affino/datagrid-formula-engine"
 import type {
   ClientRowComputedRegistryRuntimeState,
   DataGridComputedTokenReader,

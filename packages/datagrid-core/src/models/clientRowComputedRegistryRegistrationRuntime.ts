@@ -7,7 +7,7 @@ import type {
 import type { DataGridProjectionPolicy } from "./projectionPolicy.js"
 import {
   createDataGridFormulaExecutionPlan,
-} from "./formulaExecutionPlan.js"
+} from "@affino/datagrid-formula-engine"
 import type {
   DataGridCompiledFormulaField,
   DataGridFormulaFunctionDefinition,

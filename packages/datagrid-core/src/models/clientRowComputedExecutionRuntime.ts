@@ -11,7 +11,7 @@ import type {
 } from "./rowModel.js"
 import type { DataGridCompiledFormulaField } from "./formulaEngine.js"
 import type { DataGridFormulaRuntimeErrorsCollector } from "./clientRowFormulaDiagnosticsRuntime.js"
-import type { DataGridFormulaExecutionPlan } from "./formulaExecutionPlan.js"
+import type { DataGridFormulaExecutionPlan } from "@affino/datagrid-formula-engine"
 import { createDataGridComputedDirtyPropagationRuntime } from "./clientRowComputedExecutionDirtyPropagationRuntime.js"
 import { createDataGridComputedExecutionExecutorRuntime } from "./clientRowComputedExecutionExecutorRuntime.js"
 import { createComputedExecutionDiagnostics } from "./clientRowComputedExecutionDiagnosticsRuntime.js"

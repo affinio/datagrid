@@ -3,7 +3,7 @@ import {
   snapshotDataGridFormulaGraph,
   createDataGridFormulaExecutionPlan,
   snapshotDataGridFormulaExecutionPlan,
-} from "../formulaExecutionPlan.js"
+} from "@affino/datagrid-formula-engine"
 
 describe("formulaExecutionPlan", () => {
   it("builds deterministic topological order and levels", () => {

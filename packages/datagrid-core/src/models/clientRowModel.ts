@@ -160,7 +160,7 @@ import {
   snapshotDataGridFormulaExecutionPlan,
   type DataGridFormulaGraphSnapshot,
   type DataGridFormulaExecutionPlanSnapshot,
-} from "./formulaExecutionPlan.js"
+} from "@affino/datagrid-formula-engine"
 
 const DATAGRID_FORMULA_RUNTIME_ERRORS_PREVIEW_LIMIT = 50
 const DATAGRID_COMPUTE_VECTOR_BATCH_SIZE = 1024

@@ -1,7 +1,7 @@
 import type {
   DataGridFormulaExecutionPlanSnapshot,
   DataGridFormulaGraphSnapshot,
-} from "./formulaExecutionPlan.js"
+} from "@affino/datagrid-formula-engine"
 import type {
   DataGridAggOp,
   DataGridPivotColumn,

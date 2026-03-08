@@ -19,14 +19,14 @@ export type {
   DataGridFormulaRuntimeErrorPolicy,
   DataGridFormulaDiagnosticsResult,
   DataGridFormulaSourceSpan,
-} from "./core.js"
+} from "../syntax/index.js"
 
 export {
   analyzeDataGridFormulaFieldDefinition,
   bindCompiledFormulaArtifactToFieldDefinition,
   compileDataGridFormulaFieldArtifact,
   compileDataGridFormulaFieldDefinition,
-} from "./compile.js"
+} from "../runtime/compile.js"
 
 export {
   collectFormulaContextKeys,
@@ -49,4 +49,4 @@ export {
   areFormulaValuesEqual,
   compareFormulaValues,
   parseFormulaReferenceSegments,
-} from "./core.js"
+} from "../syntax/index.js"

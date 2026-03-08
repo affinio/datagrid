@@ -1,7 +1,7 @@
 import type {
   DataGridFormulaExecutionPlanSnapshot,
   DataGridFormulaGraphSnapshot,
-} from "./formulaExecutionPlan.js"
+} from "./graph/index.js"
 
 export type DataGridRowId = string | number
 

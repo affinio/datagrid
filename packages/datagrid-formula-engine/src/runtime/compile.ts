@@ -5,18 +5,6 @@ import type {
   DataGridRowId,
 } from "../coreTypes.js"
 import {
-  collectFormulaContextKeys,
-  collectFormulaIdentifiers,
-  createFormulaErrorValue,
-  foldFormulaConstants,
-  normalizeFormulaFieldName,
-  normalizeFormulaFunctionRegistry,
-  normalizeFormulaRuntimeError,
-  normalizeFormulaText,
-  parseFormula,
-  throwFormulaError,
-  tokenizeFormula,
-  validateFormulaFunctions,
   type DataGridCompiledFormulaBatchContext,
   type DataGridCompiledFormulaArtifact,
   type DataGridCompiledFormulaField,
@@ -26,9 +14,29 @@ import {
   type DataGridFormulaCompileOptions,
   type DataGridFormulaCompileStrategy,
   type DataGridFormulaEvaluator,
-  type DataGridFormulaAstNode,
   type DataGridFormulaRuntimeErrorPolicy,
-} from "./core.js"
+} from "../syntax/core.js"
+import {
+  collectFormulaContextKeys,
+  normalizeFormulaFieldName,
+  normalizeFormulaFunctionRegistry,
+  normalizeFormulaText,
+} from "../syntax/functions.js"
+import {
+  foldFormulaConstants,
+  collectFormulaIdentifiers,
+  validateFormulaFunctions,
+} from "../syntax/optimizer.js"
+import {
+  createFormulaErrorValue,
+  normalizeFormulaRuntimeError,
+} from "../syntax/values.js"
+import {
+  type DataGridFormulaAstNode,
+  throwFormulaError,
+} from "../syntax/ast.js"
+import { parseFormula } from "../syntax/parser.js"
+import { tokenizeFormula } from "../syntax/tokenizer.js"
 import {
   compileFormulaAstBatchEvaluatorJit,
   compileFormulaAstColumnarBatchEvaluatorFused,
