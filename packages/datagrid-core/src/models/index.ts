@@ -219,6 +219,19 @@ export type {
 export { createClientRowComputeRuntime } from "./clientRowComputeRuntime.js"
 
 export type {
+  DataGridClientComputeModule,
+  CreateClientRowComputeModuleHostOptions,
+  DataGridClientComputeModuleHost,
+} from "./clientRowComputeModule.js"
+export { createClientRowComputeModuleHost } from "./clientRowComputeModule.js"
+
+export type {
+  DataGridClientFormulaComputeModule,
+  CreateClientRowFormulaComputeModuleOptions,
+} from "./clientRowFormulaComputeModule.js"
+export { createClientRowFormulaComputeModule } from "./clientRowFormulaComputeModule.js"
+
+export type {
   DataGridClientProjectionComputeStageExecutionContext,
   DataGridClientProjectionComputeStageExecutionResult,
   DataGridClientProjectionComputeStageExecutor,

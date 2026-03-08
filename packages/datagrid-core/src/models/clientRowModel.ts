@@ -53,9 +53,10 @@ import {
   expandClientProjectionStages,
 } from "./clientRowProjectionEngine.js"
 import {
-  DATAGRID_NOOP_CLIENT_PROJECTION_COMPUTE_STAGE_EXECUTOR,
   type DataGridClientProjectionComputeStageExecutor,
 } from "./clientRowProjectionComputeStage.js"
+import type { DataGridClientComputeModule } from "./clientRowComputeModule.js"
+import { createClientRowComputeModuleHost } from "./clientRowComputeModule.js"
 import { createClientRowProjectionOrchestrator } from "./clientRowProjectionOrchestrator.js"
 import { DATAGRID_CLIENT_ALL_PROJECTION_STAGES } from "./projectionStages.js"
 import {
@@ -151,6 +152,7 @@ import {
   type ApplyComputedFieldsToSourceRowsResult,
 } from "./clientRowComputedExecutionRuntime.js"
 import { createClientRowComputedBootstrapRuntime } from "./clientRowComputedBootstrap.js"
+import { createClientRowFormulaComputeModule } from "./clientRowFormulaComputeModule.js"
 import {
   type DataGridFormulaFunctionDefinition,
   type DataGridFormulaFunctionRegistry,
@@ -975,6 +977,11 @@ export function createClientRowModel<T>(
     resetGroupByIncrementalAggregationStateRuntime(groupByIncrementalAggregationState)
   }
 
+  let computeModules: readonly DataGridClientComputeModule<T>[] = []
+  const computeModuleHost = createClientRowComputeModuleHost<T>({
+    getModules: () => computeModules,
+  })
+
   function patchRuntimeGroupAggregates(
     resolveAggregates: (groupKey: string) => Record<string, unknown> | undefined,
   ): void {
@@ -1105,7 +1112,7 @@ export function createClientRowModel<T>(
     buildSourceById: () => buildRowIdIndex(sourceRows),
     readRowField: readProjectionRowField,
     normalizeText,
-    computeStageExecutor: DATAGRID_NOOP_CLIENT_PROJECTION_COMPUTE_STAGE_EXECUTOR as DataGridClientProjectionComputeStageExecutor<T>,
+    computeStageExecutor: computeModuleHost.getProjectionComputeStageExecutor(),
     resolveFilterPredicate,
     getTreeData: () => treeData,
     getFilterModel: () => filterModel,
@@ -1556,12 +1563,12 @@ export function createClientRowModel<T>(
     patchTreeProjectionCacheRowsByIdentity,
   })
 
-  const recomputeComputedFieldsAndRefresh = (
+  function recomputeComputedFieldsAndRefresh(
     rowIds?: ReadonlySet<DataGridRowId>,
     options: {
       contextKeys?: ReadonlySet<string>
     } = {},
-  ): number => {
+  ): number {
     const computedResult = applyComputedFieldsToSourceRows({
       rowIds,
       changedContextKeys: options.contextKeys,
@@ -1583,6 +1590,37 @@ export function createClientRowModel<T>(
     emit()
     return computedResult.changedRowIds.length
   }
+
+  const formulaComputeModule = createClientRowFormulaComputeModule<T>({
+    ensureActive,
+    isDataGridRowId,
+    registerComputedFieldInternal,
+    registerFormulaFieldInternal,
+    getComputedFieldSnapshots,
+    getFormulaFieldSnapshots,
+    hasRegisteredFormulaFields: () => formulaFieldsByName.size > 0,
+    registerFormulaFunction: computedRegistry.registerFormulaFunction,
+    unregisterFormulaFunction: computedRegistry.unregisterFormulaFunction,
+    getFormulaFunctionNames: computedRegistry.getFormulaFunctionNames,
+    getFormulaExecutionPlanSnapshot: () => {
+      const computedExecutionPlan = computedRegistry.getComputedExecutionPlan()
+      if (computedExecutionPlan.order.length === 0) {
+        return null
+      }
+      return snapshotDataGridFormulaExecutionPlan(computedExecutionPlan)
+    },
+    getFormulaGraphSnapshot: () => {
+      const computedExecutionPlan = computedRegistry.getComputedExecutionPlan()
+      if (computedExecutionPlan.order.length === 0) {
+        return null
+      }
+      return snapshotDataGridFormulaGraph(computedExecutionPlan)
+    },
+    getFormulaComputeStageDiagnosticsSnapshot: getFormulaComputeStageDiagnosticsSnapshot,
+    getFormulaRowRecomputeDiagnosticsSnapshot: getFormulaRowRecomputeDiagnosticsSnapshot,
+    recomputeComputedFieldsAndRefresh,
+  })
+  computeModules = [formulaComputeModule]
 
   runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
   if (!tryApplyFlatIdentityProjectionRefresh()) {
@@ -1633,92 +1671,46 @@ export function createClientRowModel<T>(
       patchCoordinatorRuntime.patchRows(updates, options)
     },
     registerComputedField(definition: DataGridComputedFieldDefinition<T>) {
-      ensureActive()
-      registerComputedFieldInternal(definition)
-      void recomputeComputedFieldsAndRefresh()
+      formulaComputeModule.registerComputedField(definition)
     },
     registerFormulaField(definition: DataGridFormulaFieldDefinition) {
-      ensureActive()
-      registerFormulaFieldInternal(definition)
-      void recomputeComputedFieldsAndRefresh()
+      formulaComputeModule.registerFormulaField(definition)
     },
     getComputedFields() {
-      return getComputedFieldSnapshots()
+      return formulaComputeModule.getComputedFields()
     },
     getFormulaFields() {
-      return getFormulaFieldSnapshots()
+      return formulaComputeModule.getFormulaFields()
     },
     registerFormulaFunction(
       name: string,
       definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
     ) {
-      ensureActive()
-      computedRegistry.registerFormulaFunction(name, definition)
-      if (formulaFieldsByName.size > 0) {
-        void recomputeComputedFieldsAndRefresh()
-      }
+      formulaComputeModule.registerFormulaFunction(name, definition)
     },
     unregisterFormulaFunction(name: string) {
-      ensureActive()
-      const unregistered = computedRegistry.unregisterFormulaFunction(name)
-      if (!unregistered) {
-        return false
-      }
-      if (formulaFieldsByName.size > 0) {
-        void recomputeComputedFieldsAndRefresh()
-      }
-      return true
+      return formulaComputeModule.unregisterFormulaFunction(name)
     },
     getFormulaFunctionNames() {
-      return computedRegistry.getFormulaFunctionNames()
+      return formulaComputeModule.getFormulaFunctionNames()
     },
     getFormulaExecutionPlan() {
-      const computedExecutionPlan = computedRegistry.getComputedExecutionPlan()
-      if (computedExecutionPlan.order.length === 0) {
-        return null
-      }
-      return snapshotDataGridFormulaExecutionPlan(computedExecutionPlan)
+      return formulaComputeModule.getFormulaExecutionPlan()
     },
     getFormulaGraph() {
-      const computedExecutionPlan = computedRegistry.getComputedExecutionPlan()
-      if (computedExecutionPlan.order.length === 0) {
-        return null
-      }
-      return snapshotDataGridFormulaGraph(computedExecutionPlan)
+      return formulaComputeModule.getFormulaGraph()
     },
     getFormulaComputeStageDiagnostics() {
-      return getFormulaComputeStageDiagnosticsSnapshot()
+      return formulaComputeModule.getFormulaComputeStageDiagnostics()
     },
     getFormulaRowRecomputeDiagnostics() {
-      return getFormulaRowRecomputeDiagnosticsSnapshot()
+      return formulaComputeModule.getFormulaRowRecomputeDiagnostics()
     },
     recomputeComputedFields(rowIds?: readonly DataGridRowId[]) {
-      ensureActive()
-      const normalizedRowIds = Array.isArray(rowIds)
-        ? rowIds.filter(isDataGridRowId)
-        : []
-      return recomputeComputedFieldsAndRefresh(
-        normalizedRowIds.length > 0 ? new Set<DataGridRowId>(normalizedRowIds) : undefined,
-      )
+      return formulaComputeModule.recomputeComputedFields(rowIds)
     },
     recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest) {
-      ensureActive()
-      const contextKeys = Array.isArray(request.contextKeys)
-        ? request.contextKeys
-          .filter((value): value is string => typeof value === "string")
-          .map(value => value.trim())
-          .filter(value => value.length > 0)
-        : []
-      if (contextKeys.length === 0) {
-        return 0
-      }
-      const normalizedRowIds = Array.isArray(request.rowIds)
-        ? request.rowIds.filter(isDataGridRowId)
-        : []
-      return recomputeComputedFieldsAndRefresh(
-        normalizedRowIds.length > 0 ? new Set<DataGridRowId>(normalizedRowIds) : undefined,
-        { contextKeys: new Set<string>(contextKeys) },
-      )
+      return formulaComputeModule.recomputeFormulaContext(request)
     },
     reorderRows(input: DataGridClientRowReorderInput) {
       return rowsMutationsRuntime.reorderRows(input)
