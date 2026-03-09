@@ -58,18 +58,17 @@ Goal: identify what is truly missing vs what is already in core/adapter/app, the
 - Group projection and aggregate patching: `packages/datagrid-core/src/models/groupProjectionController.ts`, `packages/datagrid-core/src/models/clientRowProjectionAggregateStage.ts`
 - Unified state API: `packages/datagrid-core/src/core/gridApiStateMethods.ts`, `packages/datagrid-core/src/core/gridApiContracts.ts`
 - Runtime transactions: `packages/datagrid-core/src/core/gridApiTransactionMethods.ts`
-- App feature registry and current wrapper behavior: `packages/datagrid-vue/src/composables/useDataGridFeatureRegistry.ts`
-- Current app shell renderer: `packages/datagrid-vue/src/components/DataGrid.vue`, `GridHeader.vue`, `GridBody.vue`, `GridRow.vue`, `GridCell.vue`, `GridFeaturePanels.vue`, `GridColumnMenu.vue`
+- Current app runtime/table host: `packages/datagrid-vue-app/src/DataGrid.ts`, `DataGridRuntimeHost.ts`, `DataGridDefaultRenderer.ts`, `DataGridTableStage.vue`
 - Runtime default viewport fallback wiring: `packages/datagrid-orchestration/src/createDataGridRuntime.ts`
 - Quick filter helper scope: `packages/datagrid-orchestration/src/useDataGridQuickFilterActions.ts`
 
 ## Requested Capability Checklist (from product audit)
 
-| Requested capability | In `DataGridFeatureName` | App `<DataGrid />` wiring | Current note |
+| Requested capability | App `<DataGrid />` wiring | Current note |
 | --- | --- | --- | --- |
-| `sorting` | yes | yes | Header click + menu actions are wired. |
-| `columnPinning` | yes | partial | Wired via column menu; no drag pin UX. |
-| `columnVisibility` | yes | partial | Hide action wired; no full column chooser panel. |
+| `sorting` | yes | Header click is wired. |
+| `columnPinning` | partial | Column pin state is supported through declarative column state; no drag pin UX yet. |
+| `columnVisibility` | partial | Visibility is supported through declarative column state; no dedicated chooser panel yet. |
 | `columnAutosize` | yes | partial | Menu autosize action wired; no batch autosize UI. |
 | `columnMenu` | yes | yes | Built-in menu is backed by `@affino/menu-vue` primitives. |
 | `serverSideRowModel` | yes | partial | Works through `rowModel`/feature wiring, no high-level datasource props yet. |

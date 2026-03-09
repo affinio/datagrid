@@ -15,6 +15,7 @@ import {
   isFormulaValueEmptyText,
   isFormulaErrorValue,
   normalizeFormulaValue,
+  parseDataGridComputedDependencyToken,
   parseDataGridFormulaExpression,
 } from "../formula/formulaEngine.js"
 
@@ -108,6 +109,12 @@ describe("formulaEngine", () => {
     expect(missingFunction.diagnostics[0]).toMatchObject({
       severity: "error",
       span: { start: 0, end: 17 },
+    })
+
+    const invalidWindow = diagnoseDataGridFormulaExpression("SUM(price[+10:-5])")
+    expect(invalidWindow.ok).toBe(false)
+    expect(invalidWindow.diagnostics[0]).toMatchObject({
+      severity: "error",
     })
   })
 
@@ -297,6 +304,84 @@ describe("formulaEngine", () => {
         value: 'metrics."tax.rate"',
       },
     ])
+  })
+
+  it("parses row-aware references and emits row-aware dependency tokens", () => {
+    const parsed = parseDataGridFormulaExpression("balance[-1] + SUM(price[-2:0])")
+
+    expect(parsed.ast.kind).toBe("binary")
+    if (parsed.ast.kind === "binary") {
+      expect(parsed.ast.left).toMatchObject({
+        kind: "identifier",
+        name: "balance[-1]",
+        referenceName: "balance",
+        rowSelector: { kind: "relative", offset: -1 },
+      })
+    }
+
+    const compiled = compileDataGridFormulaFieldDefinition({
+      name: "moving",
+      formula: "balance[-1] + SUM(price[-2:0])",
+    }, {
+      resolveDependencyToken: identifier => {
+        if (identifier === "balance[-1]") {
+          return "computed:balance::row::relative:-1"
+        }
+        if (identifier === "price[-2:+0]") {
+          return "field:price::row::window:-2:0"
+        }
+        return `field:${identifier}`
+      },
+    })
+
+    expect(compiled.batchExecutionMode).toBe("row")
+    expect(compiled.deps).toEqual([
+      "computed:balance::row::relative:-1",
+      "field:price::row::window:-2:0",
+    ])
+    expect(parseDataGridComputedDependencyToken(compiled.deps[0] ?? "")).toEqual({
+      domain: "computed",
+      name: "balance",
+      rowDomain: { kind: "relative", offset: -1 },
+    })
+    expect(parseDataGridComputedDependencyToken(compiled.deps[1] ?? "")).toEqual({
+      domain: "field",
+      name: "price",
+      rowDomain: { kind: "window", startOffset: -2, endOffset: 0 },
+    })
+
+    const positiveOffsetParsed = parseDataGridFormulaExpression("price[+1] + SUM(price[-2:+0])")
+    expect(positiveOffsetParsed.ast.kind).toBe("binary")
+    if (positiveOffsetParsed.ast.kind === "binary") {
+      expect(positiveOffsetParsed.ast.left).toMatchObject({
+        kind: "identifier",
+        name: "price[+1]",
+        referenceName: "price",
+        rowSelector: { kind: "relative", offset: 1 },
+      })
+      expect(positiveOffsetParsed.ast.right).toMatchObject({
+        kind: "call",
+        args: [
+          {
+            kind: "identifier",
+            name: "price[-2:+0]",
+            referenceName: "price",
+            rowSelector: { kind: "window", startOffset: -2, endOffset: 0 },
+          },
+        ],
+      })
+    }
+
+    const currentCompiled = compileDataGridFormulaFieldDefinition({
+      name: "currentPrice",
+      formula: "price",
+    })
+    const relativeCompiled = compileDataGridFormulaFieldDefinition({
+      name: "nextPrice",
+      formula: "price[+1]",
+    })
+
+    expect(currentCompiled.expressionHash).not.toBe(relativeCompiled.expressionHash)
   })
 
   it("supports function calls and comparison operators", () => {

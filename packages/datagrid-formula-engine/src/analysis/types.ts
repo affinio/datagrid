@@ -3,6 +3,7 @@ import type {
   DataGridFormulaAstNode,
   DataGridFormulaDiagnostic,
   DataGridFormulaOperator,
+  DataGridFormulaRowSelector,
   DataGridFormulaSourceSpan,
   DataGridFormulaToken,
 } from "../syntax/types.js"
@@ -22,6 +23,7 @@ export interface DataGridFormulaExplainDependency {
   token: DataGridComputedDependencyToken
   domain: DataGridFormulaExplainDependencyDomain
   value: string
+  rowSelector?: DataGridFormulaRowSelector
 }
 
 export interface DataGridFormulaExplainNode {
@@ -30,6 +32,8 @@ export interface DataGridFormulaExplainNode {
   span: DataGridFormulaSourceSpan
   children: readonly DataGridFormulaExplainNode[]
   name?: string
+  referenceName?: string
+  rowSelector?: DataGridFormulaRowSelector
   operator?: DataGridFormulaOperator | "CALL"
   value?: DataGridFormulaValue
 }

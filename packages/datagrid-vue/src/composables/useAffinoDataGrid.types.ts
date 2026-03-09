@@ -1,4 +1,4 @@
-import type { Component, Ref } from "vue"
+import type { Ref } from "vue"
 import type {
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
@@ -364,7 +364,6 @@ export interface AffinoDataGridFormulaState<TRow = unknown> {
 }
 
 export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<TRow> {
-  DataGrid: Component
   rows: Ref<readonly TRow[]>
   columns: Ref<readonly DataGridColumnDef[]>
   componentProps: Ref<{

@@ -8,7 +8,7 @@ This document defines the stable, semver-safe entrypoints for common `@affino/da
 
 - Primary: `@affino/datagrid-vue`
 - Explicit alias: `@affino/datagrid-vue/stable`
-- Stable components: `@affino/datagrid-vue/components`
+- Declarative app layer: `@affino/datagrid-vue-app`
 
 `@affino/datagrid-vue` and `@affino/datagrid-vue/stable` are contract-equivalent.
 
@@ -17,12 +17,10 @@ This document defines the stable, semver-safe entrypoints for common `@affino/da
 - Runtime/base:
   - `createDataGridVueRuntime`
   - `useDataGridRuntime`
-  - `DataGrid`
   - Pivot utilities through `useDataGridRuntime`: `setPivotModel`, `getPivotModel`, `getPivotCellDrilldown`, `exportPivotLayout`, `importPivotLayout`, `exportPivotInterop`
 - Sugar API:
   - `useAffinoDataGrid`
   - `useAffinoDataGridUi`
-  - `AffinoDataGridSimple` (`@affino/datagrid-vue/components`)
 - Settings + overlays + a11y:
   - `useDataGridSettingsStore`
   - `createDataGridSettingsAdapter`
@@ -41,7 +39,7 @@ Advanced hooks are available only via:
 
 ```ts
 import { ref } from "vue"
-import { AffinoDataGridSimple } from "@affino/datagrid-vue/components"
+import { DataGrid } from "@affino/datagrid-vue-app"
 
 const rows = ref([
   { rowId: "1", service: "edge-gateway", owner: "NOC" },
@@ -52,13 +50,17 @@ const columns = [
   { key: "service", label: "Service", width: 220 },
   { key: "owner", label: "Owner", width: 180 },
 ]
+
+const columnState = ref(null)
+const gridState = ref(null)
 ```
 
 ```vue
-<AffinoDataGridSimple
-  v-model:rows="rows"
+<DataGrid
+  :rows="rows"
   :columns="columns"
-  :features="{ selection: true, clipboard: true, editing: true }"
+  v-model:column-state="columnState"
+  v-model:state="gridState"
 />
 ```
 
@@ -76,8 +78,6 @@ import { useAffinoDataGridUi } from "@affino/datagrid-vue"
   - `packages/datagrid-vue/src/composables/__tests__/useDataGridRuntime.contract.spec.ts`
   - `packages/datagrid-vue/src/composables/__tests__/useAffinoDataGrid.contract.spec.ts`
   - `packages/datagrid-vue/src/composables/__tests__/useAffinoDataGridUi.contract.spec.ts`
-  - `packages/datagrid-vue/src/components/__tests__/DataGrid.contract.spec.ts`
-  - `packages/datagrid-vue/src/components/__tests__/AffinoDataGridSimple.contract.spec.ts`
 - Run package contract suite:
   - `pnpm --filter @affino/datagrid-vue run test:contracts`
 

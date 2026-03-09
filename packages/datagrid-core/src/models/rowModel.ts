@@ -28,6 +28,9 @@ import type {
 } from "./formula/formulaContracts.js"
 export type {
   DataGridComputedDependencyToken,
+  DataGridFormulaReferenceDescriptor,
+  DataGridFormulaReferenceDomain,
+  DataGridFormulaReferenceRowDomain,
   DataGridFormulaMetaField,
   DataGridComputedFieldComputeContext,
   DataGridComputedFieldDefinition,
@@ -73,6 +76,8 @@ export {
 export {
   DATAGRID_FORMULA_META_FIELDS,
   isDataGridFormulaMetaField,
+  parseDataGridComputedDependencyToken,
+  serializeDataGridComputedDependencyToken,
 } from "./formula/formulaContracts.js"
 
 export type DataGridRowId = string | number

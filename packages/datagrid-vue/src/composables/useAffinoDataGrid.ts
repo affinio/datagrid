@@ -17,7 +17,6 @@ import type {
   DataGridContextMenuAction,
   DataGridContextMenuActionId,
 } from "./useDataGridContextMenu"
-import { DataGrid } from "../components/DataGrid"
 import {
   assembleAffinoDataGridResult,
   fallbackResolveRowKey,
@@ -1844,7 +1843,6 @@ export function useAffinoDataGrid<TRow>(
 
   return {
     ...baseResult,
-    DataGrid,
     formulas: {
       supported: formulaSupported,
       functionRegistrySupported: formulaFunctionRegistrySupported,

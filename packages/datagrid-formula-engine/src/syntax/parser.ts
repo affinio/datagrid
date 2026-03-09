@@ -6,6 +6,7 @@ import {
   createFormulaSourceSpan,
   throwFormulaError,
 } from "./ast.js"
+import { parseDataGridFormulaIdentifier } from "./tokenizer.js"
 
 export type {
   DataGridFormulaParseResult,
@@ -82,9 +83,12 @@ export function parseFormula(tokens: readonly DataGridFormulaToken[]): DataGridF
             span: createFormulaSourceSpan(token.position, token.end),
           }
         }
+        const parsedIdentifier = parseDataGridFormulaIdentifier(token.raw ?? token.value)
         return {
           kind: "identifier",
-          name: token.value,
+          name: parsedIdentifier.name,
+          referenceName: parsedIdentifier.referenceName,
+          rowSelector: parsedIdentifier.rowSelector,
           span: createFormulaSourceSpan(token.position, token.end),
         }
       }

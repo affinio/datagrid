@@ -1,9 +1,12 @@
 # @affino/datagrid-vue
 
-Vue adapter surface for `@affino/datagrid-core`.
+Vue adapter and headless foundation for `@affino/datagrid-core`.
 
-For normal Vue usage, install and import only `@affino/datagrid-vue`.
-`@affino/datagrid-core` and `@affino/datagrid-orchestration` are internal dependencies of this adapter.
+`@affino/datagrid-vue` is the adapter layer between Vue and the grid engine.
+`@affino/datagrid-core` and `@affino/datagrid-orchestration` remain internal dependencies of this package.
+
+If you want a declarative app-facing component, use
+[`@affino/datagrid-vue-app`](/Users/anton/Projects/affinio/datagrid/packages/datagrid-vue-app/README.md).
 
 ## Canonical Feature Catalog
 
@@ -74,8 +77,6 @@ Interpretation for integrators:
 - `useDataGridRuntime`
 - `useAffinoDataGrid`
 - `useAffinoDataGridUi`
-- `AffinoDataGridSimple`
-- `DataGrid`
 - `useDataGridSettingsStore`
 - `createDataGridSettingsAdapter`
 - `buildDataGridOverlayTransform`
@@ -100,6 +101,12 @@ import {
 const viewportSelector = DATA_GRID_SELECTORS.viewport
 const ownerCellSelector = dataGridCellSelector("owner")
 ```
+
+## App layer (`@affino/datagrid-vue-app`)
+
+Component-facing surface lives in the app package:
+
+- `DataGrid`
 
 ## Advanced API (`@affino/datagrid-vue/advanced`)
 
@@ -354,7 +361,7 @@ Recommended ownership:
 
 ```ts
 import { ref } from "vue"
-import { AffinoDataGridSimple } from "@affino/datagrid-vue/components"
+import { DataGrid } from "@affino/datagrid-vue-app"
 
 const rows = ref([
   { rowId: "1", service: "edge-gateway", owner: "NOC" },
@@ -365,18 +372,24 @@ const columns = [
   { key: "service", label: "Service", width: 220 },
   { key: "owner", label: "Owner", width: 180 },
 ]
+
+const columnState = ref(null)
+const gridState = ref(null)
 ```
 
 ```vue
-<AffinoDataGridSimple
-  v-model:rows="rows"
+<DataGrid
+  :rows="rows"
   :columns="columns"
-  :features="{ selection: true, clipboard: true, editing: true }"
+  :features="['selection', 'sorting', 'filterDsl', 'filterBuilderUI', 'columnMenu', 'cellEditors']"
+  v-model:column-state="columnState"
+  v-model:state="gridState"
 />
 ```
 
-- Includes pre-wired sort, row-selection, context-menu, clipboard and inline edit.
-- Emits `update:rows`, `update:status`, and `action` for app-level integration.
+- Uses the built-in app component with declarative feature wiring.
+- Supports state ownership with `v-model:column-state` and `v-model:state`.
+- Best fit when you want one canonical high-level component instead of separate "simple" and "advanced" component tiers.
 
 ## High-level sugar API
 

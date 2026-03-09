@@ -1,0 +1,169 @@
+import { nextTick, ref, type Ref } from "vue"
+import type { DataGridColumnSnapshot, DataGridRowNode } from "@affino/datagrid-core"
+import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
+import type { DataGridAppMode } from "./useDataGridAppControls"
+
+interface DataGridAppEditingCell {
+  rowId: string | number
+  columnKey: string
+}
+
+interface DataGridAppEditingCoord {
+  rowIndex: number
+  columnIndex: number
+  rowId: string | number
+}
+
+export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
+  mode: Ref<DataGridAppMode>
+  bodyViewportRef: Ref<HTMLElement | null>
+  visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
+  totalRows: Ref<number>
+  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api">
+  readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
+  resolveRowIndexById: (rowId: string | number) => number
+  applyCellSelection: (coord: DataGridAppEditingCoord) => void
+  ensureActiveCellVisible: (rowIndex: number, columnIndex: number) => void
+  captureRowsSnapshot: () => TSnapshot
+  recordEditTransaction: (beforeSnapshot: TSnapshot) => void
+}
+
+export interface UseDataGridAppInlineEditingResult<TRow> {
+  editingCell: Ref<DataGridAppEditingCell | null>
+  editingCellValue: Ref<string>
+  isEditingCell: (row: DataGridRowNode<TRow>, columnKey: string) => boolean
+  startInlineEdit: (row: DataGridRowNode<TRow>, columnKey: string) => void
+  commitInlineEdit: (moveToNextRowOrEvent?: boolean | FocusEvent) => void
+  cancelInlineEdit: () => void
+  handleEditorKeydown: (event: KeyboardEvent) => void
+}
+
+export function useDataGridAppInlineEditing<TRow, TSnapshot>(
+  options: UseDataGridAppInlineEditingOptions<TRow, TSnapshot>,
+): UseDataGridAppInlineEditingResult<TRow> {
+  const editingCell = ref<DataGridAppEditingCell | null>(null)
+  const editingCellValue = ref("")
+
+  const focusInlineEditor = (): void => {
+    void nextTick(() => {
+      const applyFocus = (): void => {
+        const editor = options.bodyViewportRef.value?.querySelector<HTMLInputElement>(".cell-editor-input")
+        if (!editor) {
+          return
+        }
+        editor.focus({ preventScroll: true })
+        const caretPosition = editor.value.length
+        editor.setSelectionRange(caretPosition, caretPosition)
+      }
+      applyFocus()
+      if (typeof window !== "undefined") {
+        window.requestAnimationFrame(() => {
+          applyFocus()
+        })
+      }
+    })
+  }
+
+  const clearInlineEdit = (): void => {
+    editingCell.value = null
+    editingCellValue.value = ""
+  }
+
+  const focusAfterInlineEdit = (
+    rowId: string | number,
+    columnKey: string,
+    moveToNextRow: boolean,
+  ): void => {
+    const columnIndex = options.visibleColumns.value.findIndex(column => column.key === columnKey)
+    if (columnIndex < 0) {
+      return
+    }
+    const currentRowIndex = options.resolveRowIndexById(rowId)
+    if (currentRowIndex < 0) {
+      return
+    }
+    const maxRowIndex = Math.max(0, options.totalRows.value - 1)
+    const nextRowIndex = moveToNextRow
+      ? Math.min(maxRowIndex, currentRowIndex + 1)
+      : currentRowIndex
+    const nextRowId = options.runtime.api.rows.get(nextRowIndex)?.rowId
+    if (nextRowId == null) {
+      return
+    }
+    options.applyCellSelection({
+      rowIndex: nextRowIndex,
+      columnIndex,
+      rowId: nextRowId,
+    })
+    void nextTick(() => {
+      options.ensureActiveCellVisible(nextRowIndex, columnIndex)
+    })
+  }
+
+  const startInlineEdit = (row: DataGridRowNode<TRow>, columnKey: string): void => {
+    if (options.mode.value !== "base" || row.kind === "group" || row.rowId == null) {
+      return
+    }
+    editingCell.value = {
+      rowId: row.rowId,
+      columnKey,
+    }
+    editingCellValue.value = options.readCell(row, columnKey)
+    focusInlineEditor()
+  }
+
+  const commitInlineEdit = (moveToNextRowOrEvent: boolean | FocusEvent = false): void => {
+    const currentEditingCell = editingCell.value
+    if (!currentEditingCell) {
+      return
+    }
+    const moveToNextRow = typeof moveToNextRowOrEvent === "boolean" ? moveToNextRowOrEvent : false
+    const beforeSnapshot = options.captureRowsSnapshot()
+    options.runtime.api.rows.applyEdits([
+      {
+        rowId: currentEditingCell.rowId,
+        data: {
+          [currentEditingCell.columnKey]: editingCellValue.value,
+        },
+      },
+    ])
+    options.recordEditTransaction(beforeSnapshot)
+    clearInlineEdit()
+    focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, moveToNextRow)
+  }
+
+  const cancelInlineEdit = (): void => {
+    const currentEditingCell = editingCell.value
+    clearInlineEdit()
+    if (!currentEditingCell) {
+      return
+    }
+    focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, false)
+  }
+
+  const handleEditorKeydown = (event: KeyboardEvent): void => {
+    if (event.key === "Enter") {
+      event.preventDefault()
+      commitInlineEdit(true)
+      return
+    }
+    if (event.key === "Escape") {
+      event.preventDefault()
+      cancelInlineEdit()
+    }
+  }
+
+  const isEditingCell = (row: DataGridRowNode<TRow>, columnKey: string): boolean => {
+    return editingCell.value?.rowId === row.rowId && editingCell.value?.columnKey === columnKey
+  }
+
+  return {
+    editingCell,
+    editingCellValue,
+    isEditingCell,
+    startInlineEdit,
+    commitInlineEdit,
+    cancelInlineEdit,
+    handleEditorKeydown,
+  }
+}

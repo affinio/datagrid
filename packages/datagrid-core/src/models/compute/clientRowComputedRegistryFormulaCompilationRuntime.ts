@@ -4,11 +4,13 @@ import type {
 } from "../rowModel.js"
 import {
   isDataGridFormulaMetaField,
+  serializeDataGridComputedDependencyToken,
 } from "../rowModel.js"
 import {
   analyzeDataGridFormulaFieldDefinition,
   bindCompiledFormulaArtifactToFieldDefinition,
   compileDataGridFormulaFieldArtifact,
+  parseDataGridFormulaIdentifier,
   type DataGridCompiledFormulaField,
   type DataGridFormulaFunctionRegistry,
 } from "../formula/formulaEngine.js"
@@ -51,11 +53,19 @@ export function createComputedRegistryFormulaCompilationRuntime<T>(options: {
     identifier: string,
     compileOptions: CompileFormulaFieldOptions,
   ): DataGridComputedDependencyToken => {
-    const normalizedIdentifier = identifier.trim()
+    const parsedIdentifier = parseDataGridFormulaIdentifier(identifier)
+    const normalizedIdentifier = parsedIdentifier.referenceName.trim()
+    const serializeToken = (domain: "field" | "computed" | "meta", name: string): DataGridComputedDependencyToken => {
+      return serializeDataGridComputedDependencyToken({
+        domain,
+        name,
+        rowDomain: parsedIdentifier.rowSelector,
+      })
+    }
     if (normalizedIdentifier.startsWith("meta.")) {
       const metaField = normalizedIdentifier.slice("meta.".length).trim()
       if (isDataGridFormulaMetaField(metaField)) {
-        return `meta:${metaField}`
+        return serializeToken("meta", metaField)
       }
     }
     const knownByTargetField = (
@@ -63,16 +73,16 @@ export function createComputedRegistryFormulaCompilationRuntime<T>(options: {
       ?? compileOptions.knownComputedNameByField?.get(normalizedIdentifier)
     )
     if (knownByTargetField) {
-      return `computed:${knownByTargetField}`
+      return serializeToken("computed", knownByTargetField)
     }
     if (
       state.computedFieldsByName.has(normalizedIdentifier)
       || state.formulaFieldsByName.has(normalizedIdentifier)
       || compileOptions.knownComputedNames?.has(normalizedIdentifier) === true
     ) {
-      return `computed:${normalizedIdentifier}`
+      return serializeToken("computed", normalizedIdentifier)
     }
-    return `field:${normalizedIdentifier}`
+    return serializeToken("field", normalizedIdentifier)
   }
 
   const createCompileCacheStructuralKey = (

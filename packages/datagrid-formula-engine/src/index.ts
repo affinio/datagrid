@@ -2,6 +2,9 @@
 // Keep this file as a curated boundary rather than another implementation layer.
 export type {
   DataGridComputedDependencyToken,
+  DataGridFormulaReferenceDescriptor,
+  DataGridFormulaReferenceDomain,
+  DataGridFormulaReferenceRowDomain,
   DataGridComputedFieldComputeContext,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
@@ -67,6 +70,8 @@ export type {
 export {
   DATAGRID_FORMULA_META_FIELDS,
   isDataGridFormulaMetaField,
+  parseDataGridComputedDependencyToken,
+  serializeDataGridComputedDependencyToken,
 } from "./contracts.js"
 
 export {
@@ -85,7 +90,9 @@ export {
   normalizeFormulaValue,
   normalizeFormulaDiagnostic,
   parseDataGridFormulaExpression,
+  parseDataGridFormulaIdentifier,
   parseFormulaReferenceSegments,
+  normalizeFormulaReference,
   coerceFormulaValueToNumber,
   coerceFormulaValueToBoolean,
   areFormulaValuesEqual,

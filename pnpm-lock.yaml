@@ -191,6 +191,15 @@ importers:
         specifier: workspace:*
         version: link:../datagrid-worker
 
+  packages/datagrid-vue-app:
+    dependencies:
+      '@affino/datagrid-vue':
+        specifier: workspace:*
+        version: link:../datagrid-vue
+      vue:
+        specifier: 3.4.38
+        version: 3.4.38(typescript@5.9.3)
+
   packages/datagrid-worker:
     dependencies:
       '@affino/datagrid-core':

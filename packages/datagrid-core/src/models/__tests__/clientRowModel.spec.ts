@@ -438,6 +438,76 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("supports row-aware relative and window formula references", () => {
+    const model = createClientRowModel<{
+      id: number
+      amount: number
+      price: number
+      balance?: number
+      moving?: number
+    }>({
+      formulaCyclePolicy: "iterative",
+      rows: [
+        {
+          row: { id: 1, amount: 10, price: 5 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+        {
+          row: { id: 2, amount: 4, price: 6 },
+          rowId: "r2",
+          originalIndex: 1,
+          displayIndex: 1,
+        },
+        {
+          row: { id: 3, amount: -3, price: 8 },
+          rowId: "r3",
+          originalIndex: 2,
+          displayIndex: 2,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "balance", formula: "amount + COALESCE(balance[-1], 0)" },
+        { name: "moving", formula: "SUM(price[-1:0])" },
+      ],
+    })
+
+    expect((model.getRow(0)?.row as { balance?: number; moving?: number }).balance).toBe(10)
+    expect((model.getRow(1)?.row as { balance?: number; moving?: number }).balance).toBe(14)
+    expect((model.getRow(2)?.row as { balance?: number; moving?: number }).balance).toBe(11)
+
+    expect((model.getRow(0)?.row as { moving?: number }).moving).toBe(5)
+    expect((model.getRow(1)?.row as { moving?: number }).moving).toBe(11)
+    expect((model.getRow(2)?.row as { moving?: number }).moving).toBe(14)
+
+    expect(model.getFormulaFields()).toEqual([
+      {
+        name: "balance",
+        field: "balance",
+        formula: "amount + COALESCE(balance[-1], 0)",
+        deps: ["field:amount", "computed:balance::row::relative:-1"],
+        contextKeys: [],
+      },
+      {
+        name: "moving",
+        field: "moving",
+        formula: "SUM(price[-1:0])",
+        deps: ["field:price::row::window:-1:0"],
+        contextKeys: [],
+      },
+    ])
+
+    expect(model.getFormulaComputeStageDiagnostics()?.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "balance", runtimeMode: "row", iterative: true }),
+        expect.objectContaining({ name: "moving", runtimeMode: "row" }),
+      ]),
+    )
+
+    model.dispose()
+  })
+
   it("recomputes contextual formula functions for targeted rows", () => {
     let rate = 2
     const model = createClientRowModel<{

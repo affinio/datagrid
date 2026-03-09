@@ -3,7 +3,7 @@
   "version": "0.3.2",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
-  "description": "Vue adapter and UI layer for @affino/datagrid-core",
+  "description": "Vue adapter and headless foundation for Affino DataGrid",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -44,10 +44,6 @@
     "./advanced/history": {
       "types": "./dist/advanced/history.d.ts",
       "import": "./dist/advanced/history.js"
-    },
-    "./components": {
-      "types": "./dist/components/index.d.ts",
-      "import": "./dist/components/index.js"
     },
     "./worker": {
       "types": "./dist/worker.d.ts",
@@ -107,7 +103,7 @@
     "vue",
     "adapter",
     "headless",
-    "ui"
+    "adapter"
   ],
   "bugs": {
     "url": "https://github.com/affinio/affinio/issues"

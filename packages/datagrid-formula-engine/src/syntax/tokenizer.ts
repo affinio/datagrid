@@ -1,15 +1,23 @@
 import type {
   DataGridFormulaOperator,
   DataGridFormulaReferenceSegment,
+  DataGridFormulaRowSelector,
   DataGridFormulaToken,
-} from "./analysis.js"
+} from "./types.js"
 import { createFormulaSourceSpan, throwFormulaError } from "./ast.js"
 
 export type {
   DataGridFormulaToken,
   DataGridFormulaOperator,
   DataGridFormulaReferenceSegment,
-} from "./analysis.js"
+  DataGridFormulaRowSelector,
+} from "./types.js"
+
+export interface DataGridParsedFormulaIdentifier {
+  name: string
+  referenceName: string
+  rowSelector: DataGridFormulaRowSelector
+}
 
 function readEscapedFormulaStringValue(
   input: string,
@@ -93,6 +101,100 @@ function normalizeFormulaReferenceSegments(
   segments: readonly DataGridFormulaReferenceSegment[],
 ): string {
   return segments.map(formatFormulaReferenceSegment).join(".")
+}
+
+export function normalizeFormulaReference(reference: string): string {
+  const normalized = reference.trim()
+  if (normalized.length === 0) {
+    return ""
+  }
+  const parsed = readFormulaReferenceAt(normalized, 0)
+  if (!parsed || parsed.end !== normalized.length) {
+    return normalized
+  }
+  return parsed.value
+}
+
+function looksLikeFormulaRowSelectorValue(value: string): boolean {
+  const normalized = value.trim()
+  return /^[+-]?\d+$/.test(normalized)
+    || /^[+-]?\d+\s*:\s*[+-]?\d+$/.test(normalized)
+}
+
+function parseFormulaRowSelectorValue(value: string): DataGridFormulaRowSelector | null {
+  const normalized = value.trim()
+  const windowMatch = /^([+-]?\d+)\s*:\s*([+-]?\d+)$/.exec(normalized)
+  if (windowMatch) {
+    const startOffset = Number(windowMatch[1])
+    const endOffset = Number(windowMatch[2])
+    if (startOffset > endOffset) {
+      return null
+    }
+    return {
+      kind: "window",
+      startOffset,
+      endOffset,
+    }
+  }
+  if (/^[+-]\d+$/.test(normalized)) {
+    return { kind: "relative", offset: Number(normalized) }
+  }
+  if (/^\d+$/.test(normalized)) {
+    return { kind: "absolute", rowIndex: Number(normalized) }
+  }
+  return null
+}
+
+function serializeFormulaRowSelector(selector: DataGridFormulaRowSelector): string {
+  if (selector.kind === "current") {
+    return ""
+  }
+  if (selector.kind === "absolute") {
+    return `[${selector.rowIndex}]`
+  }
+  if (selector.kind === "relative") {
+    return `[${selector.offset >= 0 ? `+${selector.offset}` : selector.offset}]`
+  }
+  const startOffset = selector.startOffset >= 0 ? `+${selector.startOffset}` : String(selector.startOffset)
+  const endOffset = selector.endOffset >= 0 ? `+${selector.endOffset}` : String(selector.endOffset)
+  return `[${startOffset}:${endOffset}]`
+}
+
+export function parseDataGridFormulaIdentifier(
+  reference: string,
+): DataGridParsedFormulaIdentifier {
+  const normalizedReference = reference.trim()
+  if (normalizedReference.length === 0) {
+    return {
+      name: "",
+      referenceName: "",
+      rowSelector: { kind: "current" },
+    }
+  }
+  const selectorMatch = /^(.*)\[([^\[\]]+)\]$/.exec(normalizedReference)
+  if (selectorMatch) {
+    const referenceName = normalizeFormulaReference(selectorMatch[1] ?? "")
+    const selectorValue = selectorMatch[2] ?? ""
+    const rowSelector = parseFormulaRowSelectorValue(selectorValue)
+    if (referenceName.length > 0 && rowSelector) {
+      return {
+        name: `${referenceName}${serializeFormulaRowSelector(rowSelector)}`,
+        referenceName,
+        rowSelector,
+      }
+    }
+    if (referenceName.length > 0 && looksLikeFormulaRowSelectorValue(selectorValue)) {
+      throwFormulaError(
+        `Invalid row selector '${selectorValue.trim()}' in reference '${normalizedReference}'.`,
+      )
+    }
+  }
+  const referenceName = normalizeFormulaReference(normalizedReference)
+  return {
+    name: referenceName,
+    referenceName,
+    rowSelector: { kind: "current" },
+  }
 }
 
 function readFormulaReferenceAt(
@@ -252,7 +354,7 @@ function readFormulaReferenceAt(
 export function parseFormulaReferenceSegments(
   reference: string,
 ): readonly DataGridFormulaReferenceSegment[] {
-  const normalized = reference.trim()
+  const normalized = normalizeFormulaReference(reference)
   if (normalized.length === 0) {
     return []
   }
@@ -331,7 +433,7 @@ export function tokenizeFormula(formula: string): readonly DataGridFormulaToken[
       tokens.push({ kind: "operator", value: keyword, position: start, end: cursor })
       return
     }
-    tokens.push({ kind: "identifier", value, position: start, end: cursor })
+    tokens.push({ kind: "identifier", value, raw: formula.slice(start, cursor), position: start, end: cursor })
   }
 
   while (cursor < formula.length) {

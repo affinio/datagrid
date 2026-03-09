@@ -31,11 +31,14 @@
 </template>
 
 <script setup lang="ts">
-import type { ColumnLayoutPanelItem, ColumnLayoutVisibilityPatch } from "./columnLayoutPanel.types"
+import type {
+  DataGridAppColumnLayoutPanelItem,
+  DataGridAppColumnLayoutVisibilityPatch,
+} from "@affino/datagrid-vue"
 
 withDefaults(defineProps<{
   isOpen: boolean
-  items: readonly ColumnLayoutPanelItem[]
+  items: readonly DataGridAppColumnLayoutPanelItem[]
   buttonLabel?: string
 }>(), {
   buttonLabel: "Columns",
@@ -43,7 +46,7 @@ withDefaults(defineProps<{
 
 const emit = defineEmits<{
   open: []
-  "toggle-visibility": [payload: ColumnLayoutVisibilityPatch]
+  "toggle-visibility": [payload: DataGridAppColumnLayoutVisibilityPatch]
   "move-up": [key: string]
   "move-down": [key: string]
   apply: []

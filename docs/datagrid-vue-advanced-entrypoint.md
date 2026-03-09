@@ -122,7 +122,5 @@ This document defines the explicit advanced namespace for power-user hooks in `@
 
 - Advanced/composable contract coverage lives in:
   - `packages/datagrid-vue/src/composables/__tests__/*.contract.spec.ts`
-- Component contract coverage lives in:
-  - `packages/datagrid-vue/src/components/__tests__/*.contract.spec.ts`
 - Run package contract suite:
   - `pnpm --filter @affino/datagrid-vue run test:contracts`

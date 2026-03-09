@@ -209,6 +209,8 @@ export {
   type DataGridFormulaCyclePolicy,
   type DataGridFormulaFieldDefinition,
   type DataGridFormulaFieldSnapshot,
+  type DataGridFormulaFunctionDefinition,
+  type DataGridFormulaFunctionRegistry,
   type DataGridFormulaArrayValue,
   type DataGridFormulaErrorValue,
   type DataGridFormulaIterativeCalculationOptions,

@@ -1,0 +1,344 @@
+import { computed, ref, type Ref } from "vue"
+import type { DataGridColumnSnapshot, DataGridRowNode, DataGridViewportRange } from "@affino/datagrid-core"
+import { resolveDataGridHeaderScrollSyncLeft } from "@affino/datagrid-orchestration"
+import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
+import type { DataGridAppMode, DataGridAppRowRenderMode } from "./useDataGridAppControls"
+
+type MaybeRef<T> = T | Ref<T>
+
+function resolveMaybeRef<T>(value: MaybeRef<T>): T {
+  if (typeof value === "object" && value !== null && "value" in value) {
+    return value.value as T
+  }
+  return value
+}
+
+export interface UseDataGridAppViewportOptions<TRow> {
+  runtime: Pick<UseDataGridRuntimeResult<TRow>, "syncRowsInRange" | "virtualWindow" | "api">
+  mode: MaybeRef<DataGridAppMode>
+  rowRenderMode: MaybeRef<DataGridAppRowRenderMode>
+  rowVirtualizationEnabled?: MaybeRef<boolean>
+  columnVirtualizationEnabled?: MaybeRef<boolean>
+  totalRows: Ref<number>
+  visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
+  normalizedBaseRowHeight: Ref<number>
+  columnWidths: Ref<Record<string, number>>
+  defaultColumnWidth?: number
+  indexColumnWidth?: number
+  rowOverscan?: MaybeRef<number>
+  columnOverscan?: MaybeRef<number>
+  measureVisibleRowHeights?: () => void
+}
+
+export interface UseDataGridAppViewportResult<TRow> {
+  headerViewportRef: Ref<HTMLElement | null>
+  bodyViewportRef: Ref<HTMLElement | null>
+  displayRows: Ref<readonly DataGridRowNode<TRow>[]>
+  renderedColumns: Ref<readonly DataGridColumnSnapshot[]>
+  viewportRowStart: Ref<number>
+  viewportRowEnd: Ref<number>
+  viewportColumnStart: Ref<number>
+  viewportColumnEnd: Ref<number>
+  topSpacerHeight: Ref<number>
+  bottomSpacerHeight: Ref<number>
+  leftColumnSpacerWidth: Ref<number>
+  rightColumnSpacerWidth: Ref<number>
+  mainTrackWidth: Ref<number>
+  gridContentStyle: Ref<Record<string, string>>
+  mainTrackStyle: Ref<Record<string, string>>
+  indexColumnStyle: Ref<Record<string, string>>
+  columnStyle: (key: string) => Record<string, string>
+  handleViewportScroll: (event: Event) => void
+  syncViewportFromDom: () => void
+  scheduleViewportSync: () => void
+  cancelScheduledViewportSync: () => void
+}
+
+export function useDataGridAppViewport<TRow>(
+  options: UseDataGridAppViewportOptions<TRow>,
+): UseDataGridAppViewportResult<TRow> {
+  const defaultColumnWidth = options.defaultColumnWidth ?? 140
+  const indexColumnWidth = options.indexColumnWidth ?? 72
+  const rowOverscan = computed(() => {
+    const value = options.rowOverscan == null ? 8 : resolveMaybeRef(options.rowOverscan)
+    return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 8
+  })
+  const columnOverscan = computed(() => {
+    const value = options.columnOverscan == null ? 2 : resolveMaybeRef(options.columnOverscan)
+    return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 2
+  })
+
+  const headerViewportRef = ref<HTMLElement | null>(null)
+  const bodyViewportRef = ref<HTMLElement | null>(null)
+  const displayRows = ref<readonly DataGridRowNode<TRow>[]>([])
+  const viewportScrollLeft = ref(0)
+  const viewportClientWidth = ref(0)
+  const viewportSyncRafHandle = ref<number | null>(null)
+  let lastViewportScrollTop = 0
+  const isPaginationMode = computed<boolean>(() => {
+    return resolveMaybeRef(options.mode) === "base" && resolveMaybeRef(options.rowRenderMode) === "pagination"
+  })
+
+  const viewportRowStart = computed<number>(() => {
+    if (isPaginationMode.value) {
+      return 0
+    }
+    return options.runtime.virtualWindow.value?.rowStart ?? 0
+  })
+  const viewportRowEnd = computed<number>(() => {
+    if (isPaginationMode.value) {
+      return Math.max(0, displayRows.value.length - 1)
+    }
+    return options.runtime.virtualWindow.value?.rowEnd ?? Math.max(0, options.totalRows.value - 1)
+  })
+
+  const topSpacerHeight = computed<number>(() => {
+    if (isPaginationMode.value) {
+      return 0
+    }
+    return Math.max(0, viewportRowStart.value * options.normalizedBaseRowHeight.value)
+  })
+
+  const bottomSpacerHeight = computed<number>(() => {
+    if (isPaginationMode.value) {
+      return 0
+    }
+    const total = options.totalRows.value
+    if (total <= 0) {
+      return 0
+    }
+    const afterCount = Math.max(0, total - (viewportRowEnd.value + 1))
+    return afterCount * options.normalizedBaseRowHeight.value
+  })
+
+  const mainTrackWidth = computed<number>(() => {
+    return options.visibleColumns.value.reduce((sum, column) => {
+      return sum + (options.columnWidths.value[column.key] ?? defaultColumnWidth)
+    }, 0)
+  })
+
+  const viewportColumnMetrics = computed(() => {
+    const columns = options.visibleColumns.value
+    const totalWidth = mainTrackWidth.value
+    if (!resolveMaybeRef(options.columnVirtualizationEnabled) || columns.length <= 0) {
+      return {
+        start: 0,
+        end: Math.max(0, columns.length - 1),
+        renderedColumns: columns,
+        leftSpacerWidth: 0,
+        rightSpacerWidth: 0,
+      }
+    }
+
+    const availableWidth = Math.max(0, viewportClientWidth.value - indexColumnWidth)
+    if (availableWidth <= 0) {
+      return {
+        start: 0,
+        end: Math.max(0, columns.length - 1),
+        renderedColumns: columns,
+        leftSpacerWidth: 0,
+        rightSpacerWidth: 0,
+      }
+    }
+
+    const scrollLeft = Math.max(0, viewportScrollLeft.value)
+    const viewportStartPx = scrollLeft
+    const viewportEndPx = scrollLeft + availableWidth
+
+    let runningWidth = 0
+    let visibleStart = 0
+    while (
+      visibleStart < columns.length
+      && runningWidth + (options.columnWidths.value[columns[visibleStart]?.key ?? ""] ?? defaultColumnWidth) <= viewportStartPx
+    ) {
+      runningWidth += options.columnWidths.value[columns[visibleStart]?.key ?? ""] ?? defaultColumnWidth
+      visibleStart += 1
+    }
+
+    if (visibleStart >= columns.length) {
+      const lastIndex = columns.length - 1
+      let leftSpacerWidth = 0
+      for (let index = 0; index < lastIndex; index += 1) {
+        leftSpacerWidth += options.columnWidths.value[columns[index]?.key ?? ""] ?? defaultColumnWidth
+      }
+      return {
+        start: lastIndex,
+        end: lastIndex,
+        renderedColumns: columns.slice(lastIndex, lastIndex + 1),
+        leftSpacerWidth,
+        rightSpacerWidth: 0,
+      }
+    }
+
+    let visibleEnd = visibleStart
+    let coveredWidth = runningWidth
+    while (visibleEnd < columns.length) {
+      coveredWidth += options.columnWidths.value[columns[visibleEnd]?.key ?? ""] ?? defaultColumnWidth
+      if (coveredWidth >= viewportEndPx) {
+        break
+      }
+      visibleEnd += 1
+    }
+
+    const start = Math.max(0, visibleStart - columnOverscan.value)
+    const end = Math.min(columns.length - 1, visibleEnd + columnOverscan.value)
+
+    let leftSpacerWidth = 0
+    for (let index = 0; index < start; index += 1) {
+      leftSpacerWidth += options.columnWidths.value[columns[index]?.key ?? ""] ?? defaultColumnWidth
+    }
+
+    let renderedWidth = 0
+    for (let index = start; index <= end; index += 1) {
+      renderedWidth += options.columnWidths.value[columns[index]?.key ?? ""] ?? defaultColumnWidth
+    }
+
+    const rightSpacerWidth = Math.max(0, totalWidth - leftSpacerWidth - renderedWidth)
+
+    return {
+      start,
+      end,
+      renderedColumns: columns.slice(start, end + 1),
+      leftSpacerWidth,
+      rightSpacerWidth,
+    }
+  })
+
+  const gridContentStyle = computed<Record<string, string>>(() => {
+    const width = indexColumnWidth + mainTrackWidth.value
+    const px = `${width}px`
+    return {
+      width: px,
+      minWidth: px,
+    }
+  })
+
+  const mainTrackStyle = computed<Record<string, string>>(() => {
+    const px = `${mainTrackWidth.value}px`
+    return {
+      width: px,
+      minWidth: px,
+    }
+  })
+
+  const indexColumnStyle = computed<Record<string, string>>(() => {
+    const px = `${indexColumnWidth}px`
+    return {
+      width: px,
+      minWidth: px,
+      maxWidth: px,
+      left: "0px",
+    }
+  })
+
+  const columnStyle = (key: string): Record<string, string> => {
+    const width = options.columnWidths.value[key] ?? defaultColumnWidth
+    const px = `${width}px`
+    return {
+      width: px,
+      minWidth: px,
+      maxWidth: px,
+    }
+  }
+
+  const resolveViewportRangeFromElement = (element: HTMLElement): DataGridViewportRange => {
+    const total = options.runtime.api.rows.getCount()
+    if (total <= 0) {
+      return { start: 0, end: 0 }
+    }
+    if (resolveMaybeRef(options.mode) === "base" && resolveMaybeRef(options.rowRenderMode) === "pagination") {
+      return { start: 0, end: total - 1 }
+    }
+    if (!resolveMaybeRef(options.rowVirtualizationEnabled)) {
+      return { start: 0, end: total - 1 }
+    }
+
+    const estimatedRowHeight = options.normalizedBaseRowHeight.value
+    const start = Math.max(0, Math.floor(element.scrollTop / estimatedRowHeight) - rowOverscan.value)
+    const visibleCount = Math.ceil(Math.max(1, element.clientHeight) / estimatedRowHeight) + rowOverscan.value * 2
+    const end = Math.min(total - 1, start + visibleCount - 1)
+    return { start, end }
+  }
+
+  const syncVisibleRows = (range: DataGridViewportRange): void => {
+    displayRows.value = options.runtime.syncRowsInRange(range)
+  }
+
+  const syncHeaderScrollLeftFromBody = (bodyScrollLeft: number): void => {
+    const headerViewport = headerViewportRef.value
+    if (!headerViewport) {
+      return
+    }
+    const nextHeaderScrollLeft = resolveDataGridHeaderScrollSyncLeft(headerViewport.scrollLeft, bodyScrollLeft)
+    if (headerViewport.scrollLeft !== nextHeaderScrollLeft) {
+      headerViewport.scrollLeft = nextHeaderScrollLeft
+    }
+  }
+
+  const handleViewportScroll = (event: Event): void => {
+    const element = event.target as HTMLElement
+    viewportScrollLeft.value = element.scrollLeft
+    viewportClientWidth.value = element.clientWidth
+    syncHeaderScrollLeftFromBody(element.scrollLeft)
+    if (element.scrollTop === lastViewportScrollTop) {
+      return
+    }
+    lastViewportScrollTop = element.scrollTop
+    syncVisibleRows(resolveViewportRangeFromElement(element))
+  }
+
+  const syncViewportFromDom = (): void => {
+    const element = bodyViewportRef.value
+    if (!element) {
+      return
+    }
+    lastViewportScrollTop = element.scrollTop
+    viewportScrollLeft.value = element.scrollLeft
+    viewportClientWidth.value = element.clientWidth
+    syncHeaderScrollLeftFromBody(element.scrollLeft)
+    syncVisibleRows(resolveViewportRangeFromElement(element))
+    options.measureVisibleRowHeights?.()
+  }
+
+  const scheduleViewportSync = (): void => {
+    if (viewportSyncRafHandle.value != null) {
+      return
+    }
+    viewportSyncRafHandle.value = window.requestAnimationFrame(() => {
+      viewportSyncRafHandle.value = null
+      syncViewportFromDom()
+    })
+  }
+
+  const cancelScheduledViewportSync = (): void => {
+    if (viewportSyncRafHandle.value == null) {
+      return
+    }
+    window.cancelAnimationFrame(viewportSyncRafHandle.value)
+    viewportSyncRafHandle.value = null
+  }
+
+  return {
+    headerViewportRef,
+    bodyViewportRef,
+    displayRows,
+    renderedColumns: computed(() => viewportColumnMetrics.value.renderedColumns),
+    viewportRowStart,
+    viewportRowEnd,
+    viewportColumnStart: computed(() => viewportColumnMetrics.value.start),
+    viewportColumnEnd: computed(() => viewportColumnMetrics.value.end),
+    topSpacerHeight,
+    bottomSpacerHeight,
+    leftColumnSpacerWidth: computed(() => viewportColumnMetrics.value.leftSpacerWidth),
+    rightColumnSpacerWidth: computed(() => viewportColumnMetrics.value.rightSpacerWidth),
+    mainTrackWidth,
+    gridContentStyle,
+    mainTrackStyle,
+    indexColumnStyle,
+    columnStyle,
+    handleViewportScroll,
+    syncViewportFromDom,
+    scheduleViewportSync,
+    cancelScheduledViewportSync,
+  }
+}

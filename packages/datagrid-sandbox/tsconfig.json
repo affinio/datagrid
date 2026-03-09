@@ -16,6 +16,9 @@
       "@affino/datagrid-vue/advanced": ["../datagrid-vue/src/advanced.ts"],
       "@affino/datagrid-vue": ["../datagrid-vue/src/index.ts"],
       "@affino/datagrid-vue/*": ["../datagrid-vue/src/*"],
+      "@affino/datagrid-vue-app": ["../datagrid-vue-app/src/index.ts"],
+      "@affino/datagrid-vue-app/internal": ["../datagrid-vue-app/src/internal.ts"],
+      "@affino/datagrid-vue-app/*": ["../datagrid-vue-app/src/*"],
       "@affino/datagrid-worker": ["../datagrid-worker/src/index.ts"],
       "@affino/datagrid-worker/*": ["../datagrid-worker/src/*"]
     }

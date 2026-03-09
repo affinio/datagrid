@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router"
 import CoreGridCard from "./components/CoreGridCard.vue"
-import VueFactoryBaseGridCard from "./components/VueFactoryBaseGridCard.vue"
 import VueFormulaGridCard from "./components/VueFormulaGridCard.vue"
 import VueGridCard from "./components/VueGridCard.vue"
 import VueShellGridCard from "./components/VueShellGridCard.vue"
@@ -13,7 +12,7 @@ const routes = [
   {
     path: "/vue/base-grid",
     component: VueGridCard,
-    props: { title: "Vue: Base Grid", mode: "base" },
+    props: { title: "Vue: Base Grid (Adapter)", mode: "base" },
   },
   {
     path: "/vue/tree-grid",
@@ -36,27 +35,27 @@ const routes = [
   },
   {
     path: "/vue/base-grid-factory",
-    component: VueFactoryBaseGridCard,
+    redirect: "/vue/shell/base-grid",
   },
   {
     path: "/vue/shell/base-grid",
     component: VueShellGridCard,
-    props: { title: "Vue: Base Grid (Shell)", mode: "base" },
+    props: { title: "Vue: Base Grid (Sugar)", mode: "base" },
   },
   {
     path: "/vue/shell/tree-grid",
     component: VueShellGridCard,
-    props: { title: "Vue: Tree Grid (Shell)", mode: "tree" },
+    props: { title: "Vue: Tree Grid (Sugar)", mode: "tree" },
   },
   {
     path: "/vue/shell/pivot-grid",
     component: VueShellGridCard,
-    props: { title: "Vue: Pivot Grid (Shell)", mode: "pivot" },
+    props: { title: "Vue: Pivot Grid (Sugar)", mode: "pivot" },
   },
   {
     path: "/core/base-grid",
     component: CoreGridCard,
-    props: { title: "Core: Base Grid" },
+    props: { title: "Core: Base Grid (Direct API)" },
   },
 ]
 

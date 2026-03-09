@@ -70,15 +70,15 @@
 
 <script setup lang="ts">
 import type {
-  AdvancedFilterClauseDraft,
-  AdvancedFilterClausePatch,
-  AdvancedFilterColumnOption,
-} from "./advancedFilterPanel.types"
+  DataGridAppAdvancedFilterClauseDraft,
+  DataGridAppAdvancedFilterClausePatch,
+  DataGridAppAdvancedFilterColumnOption,
+} from "@affino/datagrid-vue"
 
 withDefaults(defineProps<{
   isOpen: boolean
-  clauses: readonly AdvancedFilterClauseDraft[]
-  columns: readonly AdvancedFilterColumnOption[]
+  clauses: readonly DataGridAppAdvancedFilterClauseDraft[]
+  columns: readonly DataGridAppAdvancedFilterColumnOption[]
   buttonLabel?: string
 }>(), {
   buttonLabel: "Advanced filter",
@@ -90,10 +90,14 @@ const emit = defineEmits<{
   remove: [clauseId: number]
   apply: []
   cancel: []
-  "update-clause": [payload: AdvancedFilterClausePatch]
+  "update-clause": [payload: DataGridAppAdvancedFilterClausePatch]
 }>()
 
-const updateClause = (clauseId: number, field: AdvancedFilterClausePatch["field"], value: string): void => {
+const updateClause = (
+  clauseId: number,
+  field: DataGridAppAdvancedFilterClausePatch["field"],
+  value: string,
+): void => {
   emit("update-clause", { clauseId, field, value })
 }
 </script>

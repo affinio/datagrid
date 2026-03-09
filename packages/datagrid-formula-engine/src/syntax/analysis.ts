@@ -75,6 +75,7 @@ import {
   validateFormulaFunctions,
   foldFormulaConstants,
 } from "./optimizer.js"
+import { parseDataGridComputedDependencyToken as parseDependencyToken } from "../contracts.js"
 
 function dedupeFormulaIdentifiers(root: DataGridFormulaAstNode): readonly string[] {
   const references: string[] = []
@@ -96,6 +97,18 @@ function normalizeFormulaExplainDependency(
   identifier: string,
   token: DataGridComputedDependencyToken,
 ): DataGridFormulaExplainDependency {
+  const parsedToken = parseDependencyToken(token)
+  if (parsedToken) {
+    return {
+      identifier,
+      token,
+      domain: parsedToken.domain,
+      value: parsedToken.name,
+      ...(parsedToken.rowDomain.kind === "current"
+        ? null
+        : { rowSelector: parsedToken.rowDomain }),
+    }
+  }
   const normalizedToken = typeof token === "string" ? token.trim() : ""
   if (normalizedToken.startsWith("field:")) {
     return { identifier, token, domain: "field", value: normalizedToken.slice("field:".length) }
@@ -122,7 +135,15 @@ function createFormulaExplainNode(root: DataGridFormulaAstNode): DataGridFormula
     return { kind: root.kind, label: "literal", span: root.span, children: [], value: root.value }
   }
   if (root.kind === "identifier") {
-    return { kind: root.kind, label: root.name, span: root.span, children: [], name: root.name }
+    return {
+      kind: root.kind,
+      label: root.name,
+      span: root.span,
+      children: [],
+      name: root.name,
+      referenceName: root.referenceName,
+      rowSelector: root.rowSelector,
+    }
   }
   if (root.kind === "call") {
     return {

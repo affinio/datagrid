@@ -25,7 +25,6 @@ export default createWorkspaceVitestConfig(import.meta.url, {
     coverage: {
       reporter: ["text", "lcov"],
       include: [
-        "src/components/overlayRenderer.ts",
         "src/adapters/selectionControllerAdapter.ts",
         "src/adapters/selectionHeadlessAdapter.ts",
         "src/composables/selection/selectionGeometry.ts",

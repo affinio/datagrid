@@ -26,6 +26,12 @@ export interface DataGridFormulaDiagnostic {
   span: DataGridFormulaSourceSpan
 }
 
+export type DataGridFormulaRowSelector =
+  | { kind: "current" }
+  | { kind: "absolute"; rowIndex: number }
+  | { kind: "relative"; offset: number }
+  | { kind: "window"; startOffset: number; endOffset: number }
+
 export type DataGridFormulaOperator =
   | "+"
   | "-"
@@ -44,7 +50,7 @@ export type DataGridFormulaOperator =
 export type DataGridFormulaToken =
   | { kind: "number"; value: number; position: number; end: number }
   | { kind: "string"; value: string; position: number; end: number }
-  | { kind: "identifier"; value: string; position: number; end: number }
+  | { kind: "identifier"; value: string; raw?: string; position: number; end: number }
   | { kind: "operator"; value: DataGridFormulaOperator; position: number; end: number }
   | { kind: "comma"; position: number; end: number }
   | { kind: "paren"; value: "(" | ")"; position: number; end: number }
@@ -52,7 +58,13 @@ export type DataGridFormulaToken =
 export type DataGridFormulaAstNode =
   | { kind: "number"; value: number; span: DataGridFormulaSourceSpan }
   | { kind: "literal"; value: DataGridFormulaValue; span: DataGridFormulaSourceSpan }
-  | { kind: "identifier"; name: string; span: DataGridFormulaSourceSpan }
+  | {
+    kind: "identifier"
+    name: string
+    referenceName: string
+    rowSelector: DataGridFormulaRowSelector
+    span: DataGridFormulaSourceSpan
+  }
   | { kind: "call"; name: string; args: DataGridFormulaAstNode[]; span: DataGridFormulaSourceSpan }
   | { kind: "unary"; operator: "-" | "+" | "NOT"; value: DataGridFormulaAstNode; span: DataGridFormulaSourceSpan }
   | {

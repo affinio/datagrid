@@ -1,5 +1,8 @@
 export type {
   DataGridComputedDependencyToken,
+  DataGridFormulaReferenceDescriptor,
+  DataGridFormulaReferenceDomain,
+  DataGridFormulaReferenceRowDomain,
   DataGridComputedFieldComputeContext,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,

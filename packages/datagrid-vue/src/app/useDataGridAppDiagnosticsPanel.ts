@@ -1,0 +1,45 @@
+import { computed, shallowRef, type ComputedRef, type ShallowRef } from "vue"
+
+interface UseDataGridAppDiagnosticsPanelOptions<TSnapshot> {
+  readDiagnostics: () => TSnapshot | null
+}
+
+export interface UseDataGridAppDiagnosticsPanelResult<TSnapshot> {
+  isDiagnosticsPanelOpen: ComputedRef<boolean>
+  diagnosticsSnapshot: ComputedRef<TSnapshot | null>
+  openDiagnosticsPanel: () => void
+  closeDiagnosticsPanel: () => void
+  refreshDiagnosticsPanel: () => void
+}
+
+export function useDataGridAppDiagnosticsPanel<TSnapshot>(
+  options: UseDataGridAppDiagnosticsPanelOptions<TSnapshot>,
+): UseDataGridAppDiagnosticsPanelResult<TSnapshot> {
+  const isOpen: ShallowRef<boolean> = shallowRef(false)
+  const snapshot: ShallowRef<unknown> = shallowRef(null)
+
+  const refreshDiagnosticsPanel = (): void => {
+    snapshot.value = options.readDiagnostics()
+  }
+
+  const openDiagnosticsPanel = (): void => {
+    isOpen.value = true
+    refreshDiagnosticsPanel()
+  }
+
+  const closeDiagnosticsPanel = (): void => {
+    isOpen.value = false
+  }
+
+  const diagnosticsSnapshot: ComputedRef<TSnapshot | null> = computed(
+    () => snapshot.value as TSnapshot | null,
+  )
+
+  return {
+    isDiagnosticsPanelOpen: computed<boolean>(() => isOpen.value),
+    diagnosticsSnapshot,
+    openDiagnosticsPanel,
+    closeDiagnosticsPanel,
+    refreshDiagnosticsPanel,
+  }
+}

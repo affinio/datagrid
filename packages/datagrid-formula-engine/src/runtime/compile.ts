@@ -38,7 +38,7 @@ import {
   throwFormulaError,
 } from "../syntax/ast.js"
 import { parseFormula } from "../syntax/parser.js"
-import { tokenizeFormula } from "../syntax/tokenizer.js"
+import { parseDataGridFormulaIdentifier, tokenizeFormula } from "../syntax/tokenizer.js"
 import {
   compileFormulaAstBatchEvaluatorJit,
   compileFormulaAstColumnarBatchEvaluatorFused,
@@ -48,6 +48,22 @@ import {
   compileFormulaAstEvaluatorJit,
   compileFormulaAstTokenIndexEvaluator,
 } from "./evaluators.js"
+
+function hasRowAwareFormulaIdentifiers(root: DataGridFormulaAstNode): boolean {
+  if (root.kind === "identifier") {
+    return root.rowSelector.kind !== "current"
+  }
+  if (root.kind === "call") {
+    return root.args.some(hasRowAwareFormulaIdentifiers)
+  }
+  if (root.kind === "unary") {
+    return hasRowAwareFormulaIdentifiers(root.value)
+  }
+  if (root.kind === "binary") {
+    return hasRowAwareFormulaIdentifiers(root.left) || hasRowAwareFormulaIdentifiers(root.right)
+  }
+  return false
+}
 
 function serializeFormulaValue(value: DataGridFormulaValue): string {
   if (Array.isArray(value)) {
@@ -72,6 +88,19 @@ function serializeFormulaValue(value: DataGridFormulaValue): string {
   return `u:${String(value)}`
 }
 
+function serializeFormulaAstRowSelector(node: Extract<DataGridFormulaAstNode, { kind: "identifier" }>): string {
+  if (node.rowSelector.kind === "current") {
+    return "current"
+  }
+  if (node.rowSelector.kind === "absolute") {
+    return `absolute:${node.rowSelector.rowIndex}`
+  }
+  if (node.rowSelector.kind === "relative") {
+    return `relative:${node.rowSelector.offset}`
+  }
+  return `window:${node.rowSelector.startOffset}:${node.rowSelector.endOffset}`
+}
+
 function serializeFormulaAst(node: DataGridFormulaAstNode): string {
   switch (node.kind) {
     case "number":
@@ -79,7 +108,7 @@ function serializeFormulaAst(node: DataGridFormulaAstNode): string {
     case "literal":
       return `lit(${serializeFormulaValue(node.value)})`
     case "identifier":
-      return `id(${JSON.stringify(node.name)})`
+      return `id(${JSON.stringify(node.referenceName)}:${serializeFormulaAstRowSelector(node)})`
     case "call":
       return `call(${JSON.stringify(node.name)}:${node.args.map(arg => serializeFormulaAst(arg)).join(",")})`
     case "unary":
@@ -99,6 +128,10 @@ function hashFormulaAst(node: DataGridFormulaAstNode): string {
   return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`
 }
 
+function normalizeFormulaIdentifierKey(identifier: string): string {
+  return parseDataGridFormulaIdentifier(identifier).name.trim()
+}
+
 function analyzeFormulaExpression(
   formulaText: string,
   options: DataGridFormulaCompileOptions = {},
@@ -111,6 +144,7 @@ function analyzeFormulaExpression(
   deps: readonly DataGridComputedDependencyToken[]
   contextKeys: readonly string[]
   dependencyTokenByIdentifier: ReadonlyMap<string, DataGridComputedDependencyToken>
+  hasRowAwareIdentifiers: boolean
 } {
   const formula = normalizeFormulaText(formulaText)
   const tokens = tokenizeFormula(formula)
@@ -127,7 +161,7 @@ function analyzeFormulaExpression(
   const identifiers: string[] = []
   const seenIdentifiers = new Set<string>()
   for (const reference of references) {
-    const normalized = reference.trim()
+    const normalized = normalizeFormulaIdentifierKey(reference)
     if (normalized.length === 0 || seenIdentifiers.has(normalized)) {
       continue
     }
@@ -166,6 +200,7 @@ function analyzeFormulaExpression(
     deps,
     contextKeys,
     dependencyTokenByIdentifier,
+    hasRowAwareIdentifiers: hasRowAwareFormulaIdentifiers(optimizedAst),
   }
 }
 
@@ -230,14 +265,19 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
   let evaluator: DataGridFormulaEvaluator
   let batchEvaluator: DataGridFormulaBatchEvaluator | null = null
   let columnarBatchEvaluator: DataGridFormulaColumnarBatchEvaluator | null = null
-  const fusedColumnarBatchEvaluator = compileFormulaAstColumnarBatchEvaluatorFused(
-    analyzed.optimizedAst,
-    resolveIdentifierTokenIndex,
-  )
-  const vectorColumnarBatchEvaluator = compileFormulaAstColumnarBatchEvaluatorVector(
-    analyzed.optimizedAst,
-    resolveIdentifierTokenIndex,
-  )
+  const supportsBatchExecution = !analyzed.hasRowAwareIdentifiers
+  const fusedColumnarBatchEvaluator = supportsBatchExecution
+    ? compileFormulaAstColumnarBatchEvaluatorFused(
+        analyzed.optimizedAst,
+        resolveIdentifierTokenIndex,
+      )
+    : null
+  const vectorColumnarBatchEvaluator = supportsBatchExecution
+    ? compileFormulaAstColumnarBatchEvaluatorVector(
+        analyzed.optimizedAst,
+        resolveIdentifierTokenIndex,
+      )
+    : null
   const tokenIndexEvaluator = compileFormulaAstTokenIndexEvaluator(
     analyzed.optimizedAst,
     analyzed.functionRegistry,
@@ -248,7 +288,7 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
       `Failed to compile JIT evaluator: dynamic code generation is disabled. Use compileStrategy 'ast' or allowDynamicCodegen: true.`,
     )
   }
-  if (compileStrategy === "ast" || !allowDynamicCodegen) {
+  if (analyzed.hasRowAwareIdentifiers || compileStrategy === "ast" || !allowDynamicCodegen) {
     evaluator = compileFormulaAstEvaluator(
       analyzed.optimizedAst,
       analyzed.functionRegistry,
@@ -296,13 +336,15 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
     const name = normalizeFormulaFieldName(fieldDefinition.name, "Formula name")
     const field = normalizeFormulaFieldName(fieldDefinition.field ?? name, "Formula target field")
     const runtimeErrorPolicy: DataGridFormulaRuntimeErrorPolicy = bindOptions.runtimeErrorPolicy ?? "coerce-zero"
-    const batchExecutionMode = fusedColumnarBatchEvaluator
-      ? "columnar-fused"
-      : columnarBatchEvaluator
-        ? "columnar-jit"
-        : vectorColumnarBatchEvaluator
-          ? "columnar-vector"
-          : "columnar-ast"
+    const batchExecutionMode = analyzed.hasRowAwareIdentifiers
+      ? "row"
+      : fusedColumnarBatchEvaluator
+        ? "columnar-fused"
+        : columnarBatchEvaluator
+          ? "columnar-jit"
+          : vectorColumnarBatchEvaluator
+            ? "columnar-vector"
+            : "columnar-ast"
 
     const evaluateWithRuntimePolicy = (
       evaluate: () => DataGridFormulaValue,
@@ -364,7 +406,9 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
       return target
     }
 
-    const computeBatch: DataGridCompiledFormulaField<TRow>["computeBatch"] = (
+    const computeBatch: DataGridCompiledFormulaField<TRow>["computeBatch"] = analyzed.hasRowAwareIdentifiers
+      ? undefined
+      : (
       (contexts, readTokenByIndex) => {
         if (contexts.length === 0) {
           return []
@@ -399,7 +443,9 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
       }
     )
 
-    const computeBatchColumnar: DataGridCompiledFormulaField<TRow>["computeBatchColumnar"] = (
+    const computeBatchColumnar: DataGridCompiledFormulaField<TRow>["computeBatchColumnar"] = analyzed.hasRowAwareIdentifiers
+      ? undefined
+      : (
       (contexts, tokenColumns) => {
         if (contexts.length === 0) {
           return []

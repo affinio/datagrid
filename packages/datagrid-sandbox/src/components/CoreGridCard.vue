@@ -268,6 +268,12 @@ import {
   type DataGridSortState,
   type DataGridViewportRange,
 } from "@affino/datagrid-core"
+import {
+  useDataGridAppAdvancedFilterBuilder,
+  useDataGridAppColumnLayoutPanel,
+  useDataGridAppDiagnosticsPanel,
+  type DataGridAppAdvancedFilterColumnOption,
+} from "@affino/datagrid-vue"
 import { createGridSelectionRange, type GridSelectionContext, type GridSelectionPointLike } from "@affino/datagrid-core/advanced"
 import {
   resolveDataGridHeaderScrollSyncLeft,
@@ -298,9 +304,6 @@ import {
   toRowInputs,
   type CoreBaseRow,
 } from "../sandboxData"
-import { useAdvancedFilterBuilder } from "../composables/useAdvancedFilterBuilder"
-import { useColumnLayoutPanel } from "../composables/useColumnLayoutPanel"
-import { useDiagnosticsPanel } from "../composables/useDiagnosticsPanel"
 import AdvancedFilterPanel from "./AdvancedFilterPanel.vue"
 import ColumnLayoutPanel from "./ColumnLayoutPanel.vue"
 import DiagnosticsPanel from "./DiagnosticsPanel.vue"
@@ -360,8 +363,8 @@ const {
   updateAdvancedFilterClause,
   cancelAdvancedFilterPanel,
   applyAdvancedFilterPanel,
-} = useAdvancedFilterBuilder({
-  resolveColumns: () => visibleColumns.value.map(column => ({
+} = useDataGridAppAdvancedFilterBuilder({
+  resolveColumns: (): readonly DataGridAppAdvancedFilterColumnOption[] => visibleColumns.value.map(column => ({
     key: column.key,
     label: column.column.label ?? column.key,
   })),
@@ -761,7 +764,7 @@ const {
   moveColumnUp,
   moveColumnDown,
   updateColumnVisibility,
-} = useColumnLayoutPanel({
+} = useDataGridAppColumnLayoutPanel({
   resolveColumns: () => {
     void columnVersion.value
     const snapshot = api.columns.getSnapshot()
@@ -785,7 +788,7 @@ const {
   openDiagnosticsPanel,
   closeDiagnosticsPanel,
   refreshDiagnosticsPanel,
-} = useDiagnosticsPanel({
+} = useDataGridAppDiagnosticsPanel({
   readDiagnostics: () => api.diagnostics.getAll(),
 })
 const mainTrackWidth = computed<number>(() => {

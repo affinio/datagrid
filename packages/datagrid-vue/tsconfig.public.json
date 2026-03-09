@@ -29,7 +29,6 @@
     "src/dataGridSettingsAdapter.ts",
     "src/dataGridSettingsStore.ts",
     "src/runtime/**/*.ts",
-    "src/components/**/*.ts",
     "src/contracts/**/*.ts",
     "src/types/**/*.ts",
     "src/types/**/*.d.ts",
@@ -121,7 +120,6 @@
     "src/composables/useAffinoDataGridUi.ts",
     "src/composables/internal/useAffinoDataGrid/**/*.ts",
     "src/composables/**/*.ts",
-    "src/features/**/*.ts",
     "src/grid/**/*.ts"
   ],
   "exclude": [

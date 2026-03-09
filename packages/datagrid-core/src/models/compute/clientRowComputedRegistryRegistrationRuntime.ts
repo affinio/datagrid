@@ -155,6 +155,13 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
       if (dependency.domain === "meta") {
         continue
       }
+      if (
+        dependency.domain === "computed"
+        && dependency.value === name
+        && dependency.rowDomain.kind !== "current"
+      ) {
+        continue
+      }
       const sourceField = dependency.domain === "computed"
         ? state.computedFieldsByName.get(dependency.value)?.field
         : dependency.value

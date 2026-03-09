@@ -1,5 +1,6 @@
 import type {
   DataGridComputedDependencyToken,
+  DataGridFormulaReferenceRowDomain,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
   DataGridFormulaCyclePolicy,
@@ -33,6 +34,7 @@ export interface DataGridResolvedComputedDependency {
   token: DataGridComputedDependencyToken
   domain: ComputedDependencyDomain
   value: string
+  rowDomain: DataGridFormulaReferenceRowDomain
 }
 
 export interface DataGridRegisteredComputedField<T> {

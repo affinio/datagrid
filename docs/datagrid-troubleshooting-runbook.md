@@ -50,7 +50,6 @@ Checks:
 Relevant tests:
 - `packages/datagrid-core/src/selection/__tests__/coordinateSpace.contract.spec.ts`
 - `packages/datagrid-core/src/selection/__tests__/overlay.fill.geometry.contract.spec.ts`
-- `packages/datagrid-vue/src/components/__tests__/overlayRenderer.spec.ts`
 
 ## Symptom: Selection controller behaves differently after remount
 

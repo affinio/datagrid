@@ -1,5 +1,8 @@
 export type {
   DataGridComputedDependencyToken,
+  DataGridFormulaReferenceDescriptor,
+  DataGridFormulaReferenceDomain,
+  DataGridFormulaReferenceRowDomain,
   DataGridComputedFieldComputeContext,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
@@ -30,4 +33,6 @@ export type {
 export {
   DATAGRID_FORMULA_META_FIELDS,
   isDataGridFormulaMetaField,
+  parseDataGridComputedDependencyToken,
+  serializeDataGridComputedDependencyToken,
 } from "@affino/datagrid-formula-engine"

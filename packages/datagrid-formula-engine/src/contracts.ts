@@ -11,6 +11,144 @@ export type DataGridComputedDependencyToken =
   | `meta:${string}`
   | (string & {})
 
+export type DataGridFormulaReferenceDomain = "field" | "computed" | "meta"
+
+export type DataGridFormulaReferenceRowDomain =
+  | { kind: "current" }
+  | { kind: "absolute"; rowIndex: number }
+  | { kind: "relative"; offset: number }
+  | { kind: "window"; startOffset: number; endOffset: number }
+
+export interface DataGridFormulaReferenceDescriptor {
+  domain: DataGridFormulaReferenceDomain
+  name: string
+  rowDomain: DataGridFormulaReferenceRowDomain
+}
+
+const DATAGRID_FORMULA_ROW_TOKEN_SEPARATOR = "::row::"
+
+function normalizeDataGridFormulaReferenceName(value: string): string {
+  const normalized = value.trim()
+  if (normalized.length === 0) {
+    throw new Error("[DataGridFormula] Reference name must be non-empty.")
+  }
+  return normalized
+}
+
+function normalizeDataGridFormulaReferenceRowDomain(
+  rowDomain: DataGridFormulaReferenceRowDomain | undefined,
+): DataGridFormulaReferenceRowDomain {
+  if (!rowDomain || rowDomain.kind === "current") {
+    return { kind: "current" }
+  }
+  if (rowDomain.kind === "absolute") {
+    return { kind: "absolute", rowIndex: Math.trunc(rowDomain.rowIndex) }
+  }
+  if (rowDomain.kind === "relative") {
+    return { kind: "relative", offset: Math.trunc(rowDomain.offset) }
+  }
+  return {
+    kind: "window",
+    startOffset: Math.trunc(rowDomain.startOffset),
+    endOffset: Math.trunc(rowDomain.endOffset),
+  }
+}
+
+function serializeDataGridFormulaReferenceRowDomain(
+  rowDomain: DataGridFormulaReferenceRowDomain,
+): string | null {
+  if (rowDomain.kind === "current") {
+    return null
+  }
+  if (rowDomain.kind === "absolute") {
+    return `absolute:${rowDomain.rowIndex}`
+  }
+  if (rowDomain.kind === "relative") {
+    return `relative:${rowDomain.offset}`
+  }
+  return `window:${rowDomain.startOffset}:${rowDomain.endOffset}`
+}
+
+function parseDataGridFormulaReferenceRowDomain(
+  value: string,
+): DataGridFormulaReferenceRowDomain | null {
+  const normalized = value.trim()
+  if (normalized.startsWith("absolute:")) {
+    const rowIndex = Number(normalized.slice("absolute:".length))
+    if (Number.isInteger(rowIndex)) {
+      return { kind: "absolute", rowIndex }
+    }
+    return null
+  }
+  if (normalized.startsWith("relative:")) {
+    const offset = Number(normalized.slice("relative:".length))
+    if (Number.isInteger(offset)) {
+      return { kind: "relative", offset }
+    }
+    return null
+  }
+  if (normalized.startsWith("window:")) {
+    const payload = normalized.slice("window:".length)
+    const separatorIndex = payload.indexOf(":")
+    if (separatorIndex <= 0) {
+      return null
+    }
+    const startOffset = Number(payload.slice(0, separatorIndex))
+    const endOffset = Number(payload.slice(separatorIndex + 1))
+    if (Number.isInteger(startOffset) && Number.isInteger(endOffset)) {
+      return { kind: "window", startOffset, endOffset }
+    }
+    return null
+  }
+  return null
+}
+
+export function serializeDataGridComputedDependencyToken(
+  reference: DataGridFormulaReferenceDescriptor,
+): DataGridComputedDependencyToken {
+  const name = normalizeDataGridFormulaReferenceName(reference.name)
+  const rowDomain = normalizeDataGridFormulaReferenceRowDomain(reference.rowDomain)
+  const serializedRowDomain = serializeDataGridFormulaReferenceRowDomain(rowDomain)
+  if (!serializedRowDomain) {
+    return `${reference.domain}:${name}`
+  }
+  return `${reference.domain}:${name}${DATAGRID_FORMULA_ROW_TOKEN_SEPARATOR}${serializedRowDomain}`
+}
+
+export function parseDataGridComputedDependencyToken(
+  token: DataGridComputedDependencyToken,
+): DataGridFormulaReferenceDescriptor | null {
+  if (typeof token !== "string") {
+    return null
+  }
+  const normalized = token.trim()
+  const separatorIndex = normalized.indexOf(":")
+  if (separatorIndex <= 0) {
+    return null
+  }
+  const domain = normalized.slice(0, separatorIndex).trim()
+  if (domain !== "field" && domain !== "computed" && domain !== "meta") {
+    return null
+  }
+  const payload = normalized.slice(separatorIndex + 1)
+  const rowSeparatorIndex = payload.indexOf(DATAGRID_FORMULA_ROW_TOKEN_SEPARATOR)
+  if (rowSeparatorIndex < 0) {
+    return {
+      domain,
+      name: normalizeDataGridFormulaReferenceName(payload),
+      rowDomain: { kind: "current" },
+    }
+  }
+  const name = normalizeDataGridFormulaReferenceName(payload.slice(0, rowSeparatorIndex))
+  const rowDomain = parseDataGridFormulaReferenceRowDomain(
+    payload.slice(rowSeparatorIndex + DATAGRID_FORMULA_ROW_TOKEN_SEPARATOR.length),
+  )
+  if (!rowDomain) {
+    return null
+  }
+  return { domain, name, rowDomain }
+}
+
 export type DataGridFormulaMetaField =
   | "rowId"
   | "rowKey"
