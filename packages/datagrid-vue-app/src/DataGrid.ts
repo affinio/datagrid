@@ -27,6 +27,7 @@ import {
   type DataGridSortState,
   type DataGridUnifiedColumnState,
   type DataGridUnifiedState,
+  type UseDataGridRuntimeResult,
   useDataGridAppSelection,
 } from "@affino/datagrid-vue"
 import type {
@@ -38,6 +39,7 @@ import {
   resolveDataGridFormulaRowModelOptions,
   type DataGridAppColumnDef,
 } from "./dataGridFormulaOptions"
+import { type DataGridThemeProp } from "./dataGridTheme"
 import {
   resolveDataGridGroupBy,
   resolveDataGridPagination,
@@ -73,6 +75,17 @@ interface LowLevelGridExpose {
   start: () => Promise<void>
   stop: () => void
 }
+
+interface DataGridRuntimeHostSlotProps {
+  runtime: LowLevelGridExpose["runtime"]
+  rowModel: LowLevelGridExpose["rowModel"]
+  [key: string]: unknown
+}
+
+type DataGridDefaultRendererRuntime = Pick<
+  UseDataGridRuntimeResult<Record<string, unknown>>,
+  "api" | "syncRowsInRange" | "virtualWindow" | "columnSnapshot"
+>
 
 export default defineComponent({
   name: "DataGrid",
@@ -113,6 +126,10 @@ export default defineComponent({
     columns: {
       type: Array as PropType<readonly DataGridAppColumnDef[]>,
       default: () => [],
+    },
+    theme: {
+      type: [String, Object] as PropType<DataGridThemeProp>,
+      default: undefined,
     },
     aggregationModel: {
       type: Object as PropType<DataGridAggregationModel<unknown> | null | undefined>,
@@ -356,6 +373,7 @@ export default defineComponent({
           rows: props.rows,
           rowModel: resolvedRowModel.value,
           columns: resolvedColumns.value,
+          theme: props.theme,
           renderMode: resolvedRenderMode.value,
           pagination: resolvedPagination.value,
           plugins: props.plugins,
@@ -367,14 +385,14 @@ export default defineComponent({
         },
         slots.default
           ? {
-              default: slotProps => slots.default?.(slotProps),
+              default: (slotProps: DataGridRuntimeHostSlotProps) => slots.default?.(slotProps),
             }
           : {
-              default: slotProps => h(DataGridDefaultRenderer, {
+              default: (slotProps: DataGridRuntimeHostSlotProps) => h(DataGridDefaultRenderer, {
                 mode: inferredMode.value,
                 rows: props.rows as readonly Record<string, unknown>[],
-                runtime: slotProps.runtime,
-                runtimeRowModel: slotProps.rowModel,
+                runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
+                runtimeRowModel: slotProps.rowModel as { subscribe: (listener: () => void) => () => void },
                 sortModel: props.sortModel,
                 filterModel: props.filterModel,
                 groupBy: resolvedGroupBy.value,

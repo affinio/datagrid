@@ -13,7 +13,15 @@
     "verbatimModuleSyntax": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@affino/datagrid-theme": ["../datagrid-theme/dist/index.d.ts"],
+      "@affino/datagrid-theme/*": ["../datagrid-theme/dist/*"],
+      "@affino/datagrid-vue": ["../datagrid-vue/dist/index.d.ts"],
+      "@affino/datagrid-vue/*": ["../datagrid-vue/dist/*"]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts"],
+  "exclude": ["src/**/__tests__/**", "src/**/*.spec.ts", "src/**/*.test.ts"]
 }

@@ -1,5 +1,10 @@
 import { computed, nextTick, ref, type ComputedRef, type Ref } from "vue"
-import type { DataGridColumnSnapshot, DataGridRowNode, DataGridSelectionSnapshot } from "@affino/datagrid-vue"
+import type {
+  DataGridAppRowSnapshot,
+  DataGridColumnSnapshot,
+  DataGridRowNode,
+  DataGridSelectionSnapshot,
+} from "@affino/datagrid-vue"
 import {
   useDataGridAppActiveCellViewport,
   useDataGridAppCellSelection,
@@ -24,7 +29,7 @@ const MIN_COLUMN_WIDTH = 80
 const MIN_ROW_HEIGHT = 24
 const AUTO_RESIZE_SAMPLE_LIMIT = 400
 
-export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string, unknown>, TSnapshot> {
+export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string, unknown>> {
   mode: Ref<"base" | "tree" | "pivot" | "worker">
   rows: Ref<readonly TRow[]>
   runtime: Pick<
@@ -55,15 +60,10 @@ export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, 
   syncViewportFromDom: () => void
 }
 
-interface GridRowsSnapshot<TRow> {
-  rows: Array<{ rowId: string | number; row: TRow }>
-}
-
 export function useDataGridTableStageRuntime<
   TRow extends Record<string, unknown>,
-  TSnapshot extends GridRowsSnapshot<TRow> = GridRowsSnapshot<TRow>,
 >(
-  options: UseDataGridTableStageRuntimeOptions<TRow, TSnapshot>,
+  options: UseDataGridTableStageRuntimeOptions<TRow>,
 ): UseDataGridTableStageRuntimeResult<TRow> {
   const columnWidths = ref<Record<string, number>>({})
 
@@ -187,7 +187,7 @@ export function useDataGridTableStageRuntime<
     cutSelectedCells,
     isCellInPendingClipboardRange,
     isCellOnPendingClipboardEdge,
-  } = useDataGridAppClipboard<TRow, TSnapshot>({
+  } = useDataGridAppClipboard<TRow, DataGridAppRowSnapshot<TRow>>({
     mode: options.mode,
     runtime: options.runtime as never,
     totalRows: options.totalRows,
@@ -227,7 +227,7 @@ export function useDataGridTableStageRuntime<
     startInlineEdit,
     commitInlineEdit,
     handleEditorKeydown,
-  } = useDataGridAppInlineEditing<TRow, TSnapshot>({
+  } = useDataGridAppInlineEditing<TRow, DataGridAppRowSnapshot<TRow>>({
     mode: options.mode,
     bodyViewportRef,
     visibleColumns: options.visibleColumns,
@@ -265,7 +265,7 @@ export function useDataGridTableStageRuntime<
     isCellInFillPreview,
     isFillHandleCell,
     dispose: disposeInteractionController,
-  } = useDataGridAppInteractionController<TRow, TSnapshot>({
+  } = useDataGridAppInteractionController<TRow, DataGridAppRowSnapshot<TRow>>({
     mode: options.mode,
     runtime: options.runtime as never,
     totalRows: options.totalRows,
@@ -284,7 +284,9 @@ export function useDataGridTableStageRuntime<
     cloneRowData: options.cloneRowData,
     resolveRowIndexById,
     captureRowsSnapshot,
-    recordIntentTransaction,
+    recordIntentTransaction: (descriptor, beforeSnapshot) => {
+      void recordIntentTransaction(descriptor, beforeSnapshot)
+    },
     clearPendingClipboardOperation,
     copySelectedCells,
     pasteSelectedCells,

@@ -193,6 +193,9 @@ importers:
 
   packages/datagrid-vue-app:
     dependencies:
+      '@affino/datagrid-theme':
+        specifier: workspace:*
+        version: link:../datagrid-theme
       '@affino/datagrid-vue':
         specifier: workspace:*
         version: link:../datagrid-vue

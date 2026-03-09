@@ -1,5 +1,5 @@
 import { onBeforeUnmount, ref, type Ref } from "vue"
-import type { DataGridColumnDef, DataGridRowNodeInput } from "@affino/datagrid-core"
+import type { DataGridColumnDef, DataGridRowNodeInput, DataGridTreeDataFilterMode } from "@affino/datagrid-core"
 import type { DataGridPivotSpec } from "@affino/datagrid-pivot"
 import { useDataGridRuntime, type UseDataGridRuntimeOptions, type UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import {
@@ -27,7 +27,7 @@ export interface UseDataGridAppRuntimeOptions<TRow> {
   services?: UseDataGridRuntimeOptions<TRow>["services"]
   treeData?: {
     getDataPath: (row: TRow) => readonly string[]
-    filterMode?: "include-descendants" | "self-only"
+    filterMode?: DataGridTreeDataFilterMode
   }
   initialPivotModel?: DataGridPivotSpec | null
   worker?: {

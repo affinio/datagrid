@@ -37,7 +37,7 @@ function normalizeInitialSortState(
   if (Array.isArray(value)) {
     return value.map(entry => ({ key: entry.key, direction: entry.direction }))
   }
-  return [{ key: value.key, direction: value.direction }]
+  return [{ key: (value as DataGridAppSortModel).key, direction: (value as DataGridAppSortModel).direction }]
 }
 
 export interface UseDataGridAppControlsOptions<TRow, TPivotLayoutId extends string = string> {
@@ -137,7 +137,7 @@ export function useDataGridAppControls<TRow, TPivotLayoutId extends string = str
   const paginationPage = ref<number>(options.initialPaginationPage ?? 1)
   const baseRowHeight = ref<number>(options.initialBaseRowHeight ?? 31)
   const pivotViewMode = ref<DataGridAppPivotViewMode>(options.initialPivotViewMode ?? "pivot")
-  const pivotLayout = ref<TPivotLayoutId | null>(options.initialPivotLayout ?? null)
+  const pivotLayout = ref(options.initialPivotLayout as TPivotLayoutId | null) as Ref<TPivotLayoutId | null>
   const isRefreshCellsPanelOpen = ref(false)
   const refreshRowKeysInput = ref("")
   const refreshColumnKeysInput = ref("")
@@ -253,7 +253,10 @@ export function useDataGridAppControls<TRow, TPivotLayoutId extends string = str
     if (resolveMaybeRef(options.mode) !== "pivot") {
       return
     }
-    const nextPivotLayout = pivotLayout.value == null ? null : options.pivotLayouts?.[pivotLayout.value] ?? null
+    const activePivotLayoutId = pivotLayout.value as TPivotLayoutId | null
+    const nextPivotLayout = activePivotLayoutId == null
+      ? null
+      : (options.pivotLayouts?.[activePivotLayoutId] ?? null)
     runtime.api.pivot.setModel(pivotViewMode.value === "pivot" ? nextPivotLayout : null)
     runtime.api.rows.expandAllGroups()
     scheduleViewportSync()
@@ -301,6 +304,9 @@ export function useDataGridAppControls<TRow, TPivotLayoutId extends string = str
       return ""
     }
     const current = sortState.value[currentIndex]
+    if (!current) {
+      return ""
+    }
     const direction = current.direction === "asc" ? "↑" : "↓"
     return sortState.value.length > 1 ? `${direction}${currentIndex + 1}` : direction
   }

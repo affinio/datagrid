@@ -7,6 +7,10 @@ export type {
   DataGridDeclarativeFormulaOptions,
 } from "./dataGridFormulaOptions"
 export type {
+  DataGridThemePreset,
+  DataGridThemeProp,
+} from "./dataGridTheme"
+export type {
   DataGridGroupByProp,
   DataGridPaginationProp,
 } from "./dataGridPublicProps"
@@ -20,5 +24,9 @@ export type {
   DataGridFormulaFieldDefinition,
   DataGridFormulaFunctionRegistry,
 } from "@affino/datagrid-vue"
+export type {
+  DataGridStyleConfig,
+  DataGridThemeTokens,
+} from "@affino/datagrid-theme"
 
 export { default } from "./DataGrid"

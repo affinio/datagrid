@@ -1,4 +1,4 @@
-import { computed, ref, type Ref } from "vue"
+import { computed, ref, shallowRef, type Ref } from "vue"
 import type { DataGridColumnSnapshot, DataGridRowNode, DataGridViewportRange } from "@affino/datagrid-core"
 import { resolveDataGridHeaderScrollSyncLeft } from "@affino/datagrid-orchestration"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
@@ -70,7 +70,7 @@ export function useDataGridAppViewport<TRow>(
 
   const headerViewportRef = ref<HTMLElement | null>(null)
   const bodyViewportRef = ref<HTMLElement | null>(null)
-  const displayRows = ref<readonly DataGridRowNode<TRow>[]>([])
+  const displayRows = shallowRef<readonly DataGridRowNode<TRow>[]>([])
   const viewportScrollLeft = ref(0)
   const viewportClientWidth = ref(0)
   const viewportSyncRafHandle = ref<number | null>(null)

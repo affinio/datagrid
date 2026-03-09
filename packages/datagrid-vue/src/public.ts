@@ -29,6 +29,7 @@ export {
 
 export type {
   CreateDataGridCoreOptions,
+  DataGridCoreServiceRegistry,
   DataGridAggOp,
   DataGridAggregationModel,
   DataGridAdvancedFilterExpression,
@@ -131,7 +132,9 @@ export type {
   DataGridFormulaRowRecomputeDiagnostics,
   DataGridRowId,
   DataGridRowModel,
+  DataGridRowModelSnapshot,
   DataGridRowNode,
+  DataGridRowNodeInput,
   DataGridSettingsAdapter,
   DataGridSelectionAggregationKind,
   DataGridSelectionSnapshot,
@@ -143,6 +146,8 @@ export type {
   DataGridSortDirection,
   DataGridSortState,
   DataGridViewportRange,
+  ClientRowModel,
+  CreateClientRowModelOptions,
 } from "@affino/datagrid-core"
 
 export type {

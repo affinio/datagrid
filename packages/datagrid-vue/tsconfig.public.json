@@ -25,6 +25,7 @@
     "src/worker.ts",
     "src/advanced.ts",
     "src/advanced/**/*.ts",
+    "src/app/**/*.ts",
     "src/public.ts",
     "src/dataGridSettingsAdapter.ts",
     "src/dataGridSettingsStore.ts",

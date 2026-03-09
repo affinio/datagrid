@@ -55,6 +55,10 @@ export interface UseDataGridAppCellSelectionResult<TRow> {
 export function useDataGridAppCellSelection<TRow>(
   options: UseDataGridAppCellSelectionOptions<TRow>,
 ): UseDataGridAppCellSelectionResult<TRow> {
+  const resolveAnchorColumnIndex = (anchor: DataGridAppSelectionAnchorLike): number => {
+    return "columnIndex" in anchor ? anchor.columnIndex : anchor.colIndex
+  }
+
   const buildSelectionContext = () => {
     return {
       grid: {
@@ -225,7 +229,7 @@ export function useDataGridAppCellSelection<TRow>(
       : normalizedCoord
     const normalizedAnchor = normalizeCellCoord({
       rowIndex: rawAnchor.rowIndex,
-      columnIndex: rawAnchor.colIndex ?? rawAnchor.columnIndex ?? 0,
+      columnIndex: resolveAnchorColumnIndex(rawAnchor),
       rowId: normalizeRowId(rawAnchor.rowId),
     })
     if (!normalizedAnchor) {

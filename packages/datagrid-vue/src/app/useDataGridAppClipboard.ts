@@ -1,5 +1,5 @@
 import { ref, type Ref } from "vue"
-import type { DataGridColumnSnapshot, DataGridRowNode } from "@affino/datagrid-core"
+import type { DataGridClientRowPatch, DataGridColumnSnapshot, DataGridRowNode } from "@affino/datagrid-core"
 import type { DataGridCopyRange } from "../advanced"
 import { useDataGridClipboardBridge, useDataGridCopyRangeHelpers } from "../advanced"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
@@ -125,7 +125,11 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     }
 
     const beforeSnapshot = options.captureRowsSnapshot()
-    options.runtime.api.rows.applyEdits(Array.from(editsByRowId.entries(), ([rowId, data]) => ({ rowId, data })))
+    const updates: DataGridClientRowPatch<TRow>[] = Array.from(editsByRowId.entries(), ([rowId, data]) => ({
+      rowId,
+      data: data as Partial<TRow>,
+    }))
+    options.runtime.api.rows.applyEdits(updates)
     options.applySelectionRange(normalized)
     options.recordEditTransaction(beforeSnapshot)
     return editsByRowId.size

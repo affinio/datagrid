@@ -18,6 +18,15 @@
             <option v-for="option in COLUMN_MODE_OPTIONS" :key="option" :value="option">{{ option }}</option>
           </select>
         </label>
+        <label>
+          Theme
+          <select v-model="themePreset">
+            <option value="default">Default</option>
+            <option value="industrial">Industrial</option>
+            <option value="sugar">Sugar</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
         <label v-if="props.mode === 'base'">
           Group by
           <select v-model="groupByField">
@@ -159,6 +168,7 @@
         :page-size="paginationPageSize"
         :current-page="Math.max(0, paginationPage - 1)"
         :column-state="effectiveColumnState"
+        :theme="theme"
         :virtualization="virtualization"
         :row-height-mode="rowHeightMode"
         :base-row-height="baseRowHeight"
@@ -179,6 +189,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
 import { DataGrid } from "@affino/datagrid-vue-app"
+import { industrialNeutralTheme, sugarTheme, type DataGridStyleConfig } from "@affino/datagrid-theme"
 import { useDataGridAppAdvancedFilterBuilder } from "@affino/datagrid-vue"
 import type {
   DataGridAggregationModel,
@@ -234,6 +245,8 @@ interface ColumnLayoutDraft {
   order: string[]
   visibility: Record<string, boolean>
 }
+
+type ThemePreset = "default" | "industrial" | "sugar" | "custom"
 
 const props = defineProps<{
   title: string
@@ -348,6 +361,7 @@ const modeHint = computed(() => {
 
 const rowCount = ref<number>(10000)
 const columnCount = ref<number>(16)
+const themePreset = ref<ThemePreset>("sugar")
 const groupByField = ref("")
 const rowHeightMode = ref<"fixed" | "auto">("fixed")
 const rowRenderMode = ref<"virtualization" | "pagination">("virtualization")
@@ -419,6 +433,43 @@ const virtualization = computed(() => {
     rowOverscan: 8,
     columnOverscan: 2,
   }
+})
+const theme = computed<DataGridStyleConfig | "default">(() => {
+  if (themePreset.value === "industrial") {
+    return industrialNeutralTheme
+  }
+  if (themePreset.value === "sugar") {
+    return sugarTheme
+  }
+  if (themePreset.value === "custom") {
+    return {
+      ...sugarTheme,
+      tokens: {
+        ...(sugarTheme.tokens ?? {}),
+        gridFontFamily: '"IBM Plex Sans", "Segoe UI", system-ui, sans-serif',
+        gridFontSize: "0.82rem",
+        gridAccentStrong: "#b45309",
+        gridHeaderRowBackgroundColor: "#f4e8d5",
+        gridHeaderCellBackgroundColor: "#f4e8d5",
+        gridHeaderCellHoverBackgroundColor: "#eed6b0",
+        headerBackgroundColor: "#f4e8d5",
+        headerTextColor: "#6b3f10",
+        bodyRowBackgroundColor: "#fffdf8",
+        bodyRowHoverBackgroundColor: "#f7e8c7",
+        bodyCellBorderColor: "#ead7b5",
+        gridViewportBackground: "#fffaf0",
+        gridSelectionRangeBackgroundColor: "rgba(217, 119, 6, 0.18)",
+        gridSelectionFillPreviewBackgroundColor: "rgba(217, 119, 6, 0.12)",
+        gridSelectionHandleBackgroundColor: "#b45309",
+        gridSelectionHandleBorderColor: "#92400e",
+        gridSortIndicatorColor: "#b45309",
+        pinnedLeftBackgroundColor: "#fff7e8",
+        pinnedRightBackgroundColor: "#fff7e8",
+        pinnedBackgroundColor: "#fff7e8",
+      },
+    }
+  }
+  return "default"
 })
 
 const resolvedColumnState = computed(() => normalizeColumnState(columnState.value, columns.value))

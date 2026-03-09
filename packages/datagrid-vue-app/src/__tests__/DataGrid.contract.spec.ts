@@ -324,4 +324,27 @@ describe("DataGrid app facade contract", () => {
 
     wrapper.unmount()
   })
+
+  it("applies declarative theme tokens to the app root element", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        theme: {
+          tokens: {
+            gridAccentStrong: "#b45309",
+            gridHeaderCellBackgroundColor: "#f4e8d5",
+          },
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const rootElement = wrapper.find(".affino-datagrid-app-root").element as HTMLElement
+    expect(rootElement.style.getPropertyValue("--datagrid-accent-strong")).toBe("#b45309")
+    expect(rootElement.style.getPropertyValue("--datagrid-header-cell-bg")).toBe("#f4e8d5")
+
+    wrapper.unmount()
+  })
 })

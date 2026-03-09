@@ -42,9 +42,9 @@ export function resolveDataGridGroupBy(
     const fields = input
       .map(field => field.trim())
       .filter(field => field.length > 0)
-    return fields.length > 0 ? { fields, expandedByDefault: true } : null
+    return fields.length > 0 ? { fields: [...fields], expandedByDefault: true } : null
   }
-  return input
+  return input as DataGridGroupBySpec
 }
 
 export function resolveDataGridRenderMode(

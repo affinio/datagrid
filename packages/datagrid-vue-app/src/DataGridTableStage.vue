@@ -284,7 +284,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, type CSSProperties } from "vue"
 import type { DataGridTableStageProps } from "./dataGridTableStage.types"
 import { ensureDataGridAppStyles } from "./ensureDataGridAppStyles"
 
@@ -326,6 +326,9 @@ const rightPinnedOffsets = computed<Map<string, number>>(() => {
   let currentOffset = 0
   for (let index = pinnedRightColumns.value.length - 1; index >= 0; index -= 1) {
     const column = pinnedRightColumns.value[index]
+    if (!column) {
+      continue
+    }
     offsets.set(column.key, currentOffset)
     currentOffset += column.width ?? 140
   }
@@ -380,7 +383,7 @@ function pinnedColumnClass(columnKey: string): string {
   return ""
 }
 
-function pinnedColumnStyle(columnKey: string): Record<string, string> {
+function pinnedColumnStyle(columnKey: string): CSSProperties {
   const base = props.columnStyle(columnKey)
   const column = props.visibleColumns.find(entry => entry.key === columnKey)
   if (column?.pin === "left") {

@@ -203,15 +203,15 @@ export function useDataGridAppInteractionController<
     normalizeClipboardValue: value => String(value ?? ""),
     isEditableColumn: () => true,
     applyValueForMove: (row, columnKey, value) => {
-      row[columnKey] = value
+      ;(row as Record<string, unknown>)[columnKey] = value
       return true
     },
     clearValueForMove: (row, columnKey) => {
-      row[columnKey] = ""
+      ;(row as Record<string, unknown>)[columnKey] = ""
       return true
     },
     applyEditedValue: (row, columnKey, draft) => {
-      row[columnKey] = draft
+      ;(row as Record<string, unknown>)[columnKey] = draft
     },
     recomputeDerived: () => undefined,
     isCellWithinRange: (rowIndex, columnIndex, range) => {
@@ -544,7 +544,7 @@ export function useDataGridAppInteractionController<
     closeContextMenu: () => undefined,
     canUndo: options.canUndo,
     canRedo: options.canRedo,
-    runHistoryAction: options.runHistoryAction,
+    runHistoryAction: direction => Promise.resolve(options.runHistoryAction(direction) as string | null),
     setLastAction: () => undefined,
   })
 
@@ -554,7 +554,7 @@ export function useDataGridAppInteractionController<
     closeContextMenu: () => undefined,
     focusViewport,
     openContextMenuFromCurrentCell: () => undefined,
-    runHistoryAction: historyActionRunner.runHistoryAction,
+    runHistoryAction: direction => historyActionRunner.runHistoryAction(direction, "keyboard"),
     copySelection: options.copySelectedCells,
     pasteSelection: options.pasteSelectedCells,
     cutSelection: options.cutSelectedCells,

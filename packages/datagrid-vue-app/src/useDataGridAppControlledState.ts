@@ -1,5 +1,6 @@
 import { onBeforeUnmount, watch, type Ref } from "vue"
 import type {
+  DataGridApi,
   DataGridAggregationModel,
   DataGridRowModel,
   DataGridColumnModel,
@@ -20,46 +21,7 @@ import type {
   DataGridPivotSpec,
 } from "@affino/datagrid-vue"
 
-export interface DataGridAppControlledApi {
-  rows: {
-    setSortAndFilterModel: (input: {
-      sortModel?: readonly DataGridSortState[]
-      filterModel?: DataGridFilterSnapshot | null
-    }) => void
-    setGroupBy: (groupBy: DataGridGroupBySpec | null) => void
-    setAggregationModel: (aggregationModel: DataGridAggregationModel<unknown> | null) => void
-    expandAllGroups: () => void
-    collapseAllGroups: () => void
-  }
-  columns: {
-    getSnapshot: () => DataGridColumnModelSnapshot
-    setOrder: (keys: readonly string[]) => void
-    setVisibility: (key: string, visible: boolean) => void
-    setWidth: (key: string, width: number | null) => void
-    setPin: (key: string, pin: DataGridColumnPin) => void
-  }
-  pivot: {
-    setModel: (pivotModel: DataGridPivotSpec | null) => void
-    exportLayout: () => DataGridPivotLayoutSnapshot<unknown>
-    exportInterop: () => DataGridPivotInteropSnapshot<unknown> | null
-    importLayout: (
-      layout: DataGridPivotLayoutSnapshot<unknown>,
-      options?: DataGridPivotLayoutImportOptions,
-    ) => void
-  }
-  state: {
-    get: () => DataGridUnifiedState<unknown>
-    migrate: (
-      state: unknown,
-      options?: DataGridMigrateStateOptions,
-    ) => DataGridUnifiedState<unknown> | null
-    set: (state: DataGridUnifiedState<unknown>, options?: DataGridSetStateOptions) => void
-  }
-  view: {
-    setRowHeightMode: (mode: "fixed" | "auto") => void
-    setBaseRowHeight: (height: number) => void
-  }
-}
+export type DataGridAppControlledApi = DataGridApi<unknown>
 
 export interface DataGridAppControlledExpose {
   api: DataGridAppControlledApi
@@ -218,7 +180,7 @@ export function useDataGridAppControlledState(
       return
     }
     api.rows.setSortAndFilterModel({
-      sortModel: options.props.sortModel,
+      sortModel: options.props.sortModel ?? [],
       filterModel: options.props.filterModel ?? null,
     })
   }

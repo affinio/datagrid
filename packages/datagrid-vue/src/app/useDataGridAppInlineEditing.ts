@@ -124,7 +124,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         rowId: currentEditingCell.rowId,
         data: {
           [currentEditingCell.columnKey]: editingCellValue.value,
-        },
+        } as Partial<TRow>,
       },
     ])
     options.recordEditTransaction(beforeSnapshot)

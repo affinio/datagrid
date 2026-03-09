@@ -1,4 +1,5 @@
 import {
+  type Component,
   computed,
   defineComponent,
   h,
@@ -238,6 +239,9 @@ export default defineComponent({
         return ""
       }
       const current = sortState.value[currentIndex]
+      if (!current) {
+        return ""
+      }
       const direction = current.direction === "asc" ? "↑" : "↓"
       return sortState.value.length > 1 ? `${direction}${currentIndex + 1}` : direction
     }
@@ -280,6 +284,6 @@ export default defineComponent({
       cloneRowData,
     })
 
-    return () => h(DataGridTableStage, tableStageProps.value)
+    return () => h(DataGridTableStage as Component, tableStageProps.value)
   },
 })

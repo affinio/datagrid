@@ -59,7 +59,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
 export interface UseDataGridTableStageBindingsOptions<TRow extends Record<string, unknown>>
   extends Omit<{
     [K in keyof DataGridTableStageProps<TRow>]: DataGridMaybeRef<DataGridTableStageProps<TRow>[K]>
-  }, "headerViewportRef" | "bodyViewportRef" | "updateEditingCellValue"> {
+  }, "editingCellValue" | "headerViewportRef" | "bodyViewportRef" | "updateEditingCellValue"> {
   editingCellValueRef: Ref<string>
   headerViewportRef: Ref<HTMLElement | null>
   bodyViewportRef: Ref<HTMLElement | null>

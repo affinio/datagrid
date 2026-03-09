@@ -24,6 +24,7 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@affino/datagrid-theme": "workspace:*",
     "@affino/datagrid-vue": "workspace:*"
   },
   "peerDependencies": {

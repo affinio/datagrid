@@ -4,6 +4,7 @@ import {
   h,
   mergeProps,
   onBeforeUnmount,
+  ref,
   watch,
   type PropType,
   type VNode,
@@ -19,6 +20,10 @@ import type {
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-vue"
 import { useDataGridRuntime } from "@affino/datagrid-vue"
+import {
+  applyDataGridTheme,
+  type DataGridThemeProp,
+} from "./dataGridTheme"
 
 type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,
@@ -51,6 +56,10 @@ export default defineComponent({
       type: Array as PropType<readonly DataGridColumnDef[]>,
       default: () => [],
     },
+    theme: {
+      type: [String, Object] as PropType<DataGridThemeProp>,
+      default: undefined,
+    },
     plugins: {
       type: Array as PropType<readonly DataGridApiPluginDefinition<unknown>[]>,
       default: () => [],
@@ -78,6 +87,8 @@ export default defineComponent({
   },
   emits: ["cell-change", "selection-change"],
   setup(props, { attrs, slots, emit, expose }) {
+    const rootElementRef = ref<HTMLElement | null>(null)
+    let themeObserver: MutationObserver | null = null
     const runtime = useDataGridRuntime({
       rows: computed(() => props.rows),
       rowModel: props.rowModel,
@@ -116,6 +127,32 @@ export default defineComponent({
       { immediate: true, deep: true },
     )
 
+    if (typeof document !== "undefined") {
+      themeObserver = new MutationObserver(() => {
+        const rootElement = rootElementRef.value
+        if (!rootElement) {
+          return
+        }
+        applyDataGridTheme(rootElement, props.theme)
+      })
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class", "data-theme"],
+      })
+    }
+
+    watch(
+      [() => props.theme, rootElementRef],
+      () => {
+        const rootElement = rootElementRef.value
+        if (!rootElement) {
+          return
+        }
+        applyDataGridTheme(rootElement, props.theme)
+      },
+      { immediate: true, deep: true },
+    )
+
     const unsubscribeRowsChanged = runtime.api.events.on("rows:changed", payload => {
       emit("cell-change", payload as DataGridRowsChangedEvent)
     })
@@ -126,6 +163,8 @@ export default defineComponent({
     onBeforeUnmount(() => {
       unsubscribeRowsChanged()
       unsubscribeSelectionChanged()
+      themeObserver?.disconnect()
+      themeObserver = null
     })
 
     const slotVirtualWindow = computed(() => {
@@ -154,6 +193,7 @@ export default defineComponent({
     return (): VNode => h(
       "div",
       mergeProps(attrs, {
+        ref: rootElementRef,
         class: "affino-datagrid-app-root",
         style: {
           display: "flex",
