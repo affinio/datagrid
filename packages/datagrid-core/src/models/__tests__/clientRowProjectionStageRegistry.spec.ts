@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY,
   DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP,
-} from "../clientRowProjectionStageRegistry"
+} from "../projection/clientRowProjectionStageRegistry"
 
 describe("clientRowProjectionStageRegistry", () => {
   it("registers all projection stages in deterministic order", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { createServerBackedRowModel } from "../index"
-import type { ServerRowModel } from "../../serverRowModel/serverRowModel"
+import type { ServerRowModel } from "../server/serverRowModel.js"
 
 function createSource(count: number) {
   const rows = Array.from({ length: count }, (_, index) => ({ id: index }))

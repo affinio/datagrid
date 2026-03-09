@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
-import { createClientRowComputeRuntime } from "../clientRowComputeRuntime"
-import type { DataGridClientRowProjectionOrchestrator } from "../clientRowProjectionOrchestrator"
-import type { DataGridPatchProjectionExecutionPlan } from "../rowPatchAnalyzer"
+import { createClientRowComputeRuntime } from "../compute/clientRowComputeRuntime"
+import type { DataGridClientRowProjectionOrchestrator } from "../projection/clientRowProjectionOrchestrator"
+import type { DataGridPatchProjectionExecutionPlan } from "../mutation/rowPatchAnalyzer"
 
 function createOrchestratorMock(): DataGridClientRowProjectionOrchestrator<unknown> {
   return {

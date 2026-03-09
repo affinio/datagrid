@@ -1,3 +1,5 @@
+// Runtime evaluator entrypoints. Backend-specific implementation lives in
+// ../evaluators/* while this file stays a stable runtime-facing barrel.
 export {
   compileFormulaAstEvaluator,
   compileFormulaAstTokenIndexEvaluator,

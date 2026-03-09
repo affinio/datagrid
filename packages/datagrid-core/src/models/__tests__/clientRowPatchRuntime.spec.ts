@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { DataGridRowNode } from "../rowModel"
-import { applyClientRowPatchUpdates } from "../clientRowPatchRuntime"
+import { applyClientRowPatchUpdates } from "../mutation/clientRowPatchRuntime"
 
 interface RowShape {
   id: string

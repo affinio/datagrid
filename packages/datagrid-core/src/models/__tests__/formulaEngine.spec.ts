@@ -16,7 +16,7 @@ import {
   isFormulaErrorValue,
   normalizeFormulaValue,
   parseDataGridFormulaExpression,
-} from "../formulaEngine.js"
+} from "../formula/formulaEngine.js"
 
 describe("formulaEngine", () => {
   it("freezes null, blank, missing and zero semantics", () => {

@@ -1,3 +1,5 @@
+// JIT backend: lowers formula AST into generated JavaScript for row and batch
+// execution when a formula shape can be profitably compiled.
 import type { DataGridComputedDependencyToken } from "../coreTypes.js"
 import type {
   DataGridFormulaBatchEvaluator,

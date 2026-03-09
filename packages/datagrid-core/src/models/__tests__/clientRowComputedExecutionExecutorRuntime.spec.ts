@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { createDataGridComputedDirtyPropagationRuntime } from "../clientRowComputedExecutionDirtyPropagationRuntime"
-import { createDataGridComputedExecutionExecutorRuntime } from "../clientRowComputedExecutionExecutorRuntime"
+import { createDataGridComputedDirtyPropagationRuntime } from "../compute/clientRowComputedExecutionDirtyPropagationRuntime"
+import { createDataGridComputedExecutionExecutorRuntime } from "../compute/clientRowComputedExecutionExecutorRuntime"
 import type {
   DataGridClientComputedExecutionRuntimeContext,
   DataGridRegisteredComputedField,
-} from "../clientRowComputedExecutionRuntime"
+} from "../compute/clientRowComputedExecutionRuntime"
 import type { DataGridRowNode } from "../rowModel"
 
 describe("createDataGridComputedExecutionExecutorRuntime", () => {

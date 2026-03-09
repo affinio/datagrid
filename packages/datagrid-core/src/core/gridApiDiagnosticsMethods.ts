@@ -4,6 +4,7 @@ import type {
   DataGridDataSourceBackpressureDiagnostics,
   DataGridFormulaComputeStageDiagnostics,
   DataGridFormulaExecutionPlanSnapshot,
+  DataGridFormulaExplainResult,
   DataGridFormulaGraphSnapshot,
   DataGridFormulaFieldSnapshot,
   DataGridProjectionFormulaDiagnostics,
@@ -273,7 +274,21 @@ function buildFormulaExplainEntries(
   const recomputedFields = new Set(projectionFormula?.recomputedFields ?? [])
 
   return formulaFields.map((formulaField) => {
-    const explained = explainDataGridFormulaExpression(formulaField.formula)
+    const explained: DataGridFormulaExplainResult = (() => {
+      try {
+        return explainDataGridFormulaExpression(formulaField.formula)
+      } catch {
+        return {
+          formula: formulaField.formula,
+          tokens: [],
+          ast: null as never,
+          identifiers: [],
+          dependencies: [],
+          contextKeys: [],
+          tree: null as never,
+        }
+      }
+    })()
     const dependencies = explained.identifiers.map((identifier, index) => {
       const token = formulaField.deps[index] ?? `field:${identifier}`
       const normalizedToken = typeof token === "string" ? token.trim() : ""

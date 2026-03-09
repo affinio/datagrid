@@ -29,7 +29,7 @@ export type {
   DataGridPivotColumnSubtotalPosition,
   DataGridPivotColumnGrandTotalPosition,
   DataGridAggOp,
-} from "./pivotContracts.js"
+} from "./pivot/pivotContracts.js"
 export type {
   DataGridAggregationColumnSpec,
   DataGridAggregationModel,
@@ -103,9 +103,6 @@ export {
   isGroupExpanded,
   isSameGroupExpansionSnapshot,
   normalizeTreeDataSpec,
-  normalizePivotSpec,
-  clonePivotSpec,
-  isSamePivotSpec,
   setGroupExpansionKey,
   toggleGroupExpansionKey,
   normalizePaginationInput,
@@ -116,6 +113,12 @@ export {
   DATAGRID_FORMULA_META_FIELDS,
   isDataGridFormulaMetaField,
 } from "./rowModel.js"
+export {
+  normalizePivotSpec,
+  clonePivotSpec,
+  isSamePivotSpec,
+  normalizePivotAxisValue,
+} from "@affino/datagrid-pivot"
 
 export {
   analyzeDataGridFormulaFieldDefinition,
@@ -160,7 +163,7 @@ export {
   type DataGridFormulaCompileStrategy,
   type DataGridFormulaCompileOptions,
   type DataGridFormulaSourceSpan,
-} from "./formulaEngine.js"
+} from "./formula/formulaEngine.js"
 export {
   createDataGridFormulaGraph,
   createDataGridFormulaExecutionPlan,
@@ -183,20 +186,15 @@ export {
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,
   type DataGridAdvancedFilterResolver,
-} from "./advancedFilter.js"
+} from "./filters/advancedFilter.js"
 
 export {
   evaluateColumnPredicateFilter,
   serializeColumnValueToToken,
-} from "./columnFilterUtils.js"
+} from "./filters/columnFilterUtils.js"
 
 export type {
   ClientRowModel,
-  DataGridCalculationHistory,
-  DataGridCalculationHistoryEntry,
-  DataGridCalculationSnapshot,
-  DataGridCalculationSnapshotInspection,
-  DataGridCalculationSnapshotRestoreOptions,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
   CreateClientRowModelOptions,
@@ -204,6 +202,110 @@ export type {
   DataGridClientRowReorderInput,
 } from "./clientRowModel.js"
 export { createClientRowModel } from "./clientRowModel.js"
+export {
+  createClientRowDerivedCacheRuntime,
+  type ClientRowDerivedCacheRuntime,
+  type ClientRowDerivedCacheRuntimeContext,
+} from "./projection/clientRowDerivedCacheRuntime.js"
+export {
+  createClientRowRowVersionRuntime,
+  type ClientRowRowVersionRuntime,
+} from "./state/clientRowRowVersionRuntime.js"
+export {
+  createClientRowViewStateRuntime,
+  type ClientRowViewStateRuntime,
+  type CreateClientRowViewStateRuntimeOptions,
+} from "./state/clientRowViewStateRuntime.js"
+export {
+  createClientRowProjectionTransientStateRuntime,
+  type ClientRowProjectionTransientStateRuntime,
+  type CreateClientRowProjectionTransientStateRuntimeOptions,
+} from "./state/clientRowProjectionTransientStateRuntime.js"
+export {
+  createClientRowProjectionIntegrationHostRuntime,
+  type CreateClientRowProjectionIntegrationHostRuntimeOptions,
+  type DataGridClientRowProjectionIntegrationHostRuntime,
+} from "./host/clientRowProjectionIntegrationHostRuntime.js"
+export {
+  createClientRowProjectionHostRuntime,
+  type CreateClientRowProjectionHostRuntimeOptions,
+  type DataGridClientRowProjectionHostRuntime,
+} from "./host/clientRowProjectionHostRuntime.js"
+export {
+  createClientRowSourceStateRuntime,
+  type ClientRowSourceStateRuntime,
+  type CreateClientRowSourceStateRuntimeOptions,
+} from "./state/clientRowSourceStateRuntime.js"
+export {
+  createClientRowSourceNormalizationRuntime,
+  type CreateClientRowSourceNormalizationRuntimeOptions,
+  type DataGridClientRowSourceNormalizationRuntime,
+} from "./state/clientRowSourceNormalizationRuntime.js"
+export {
+  createClientRowSourceColumnHostRuntime,
+  type CreateClientRowSourceColumnHostRuntimeOptions,
+  type DataGridClientRowSourceColumnHostRuntime,
+} from "./host/clientRowSourceColumnHostRuntime.js"
+export type {
+  DataGridCalculationHistory,
+  DataGridCalculationHistoryEntry,
+  DataGridCalculationSnapshot,
+  DataGridCalculationSnapshotInspection,
+  DataGridCalculationSnapshotRestoreOptions,
+} from "./snapshot/clientRowCalculationSnapshotRuntime.js"
+export {
+  cloneProjectionFormulaDiagnostics,
+  createClientRowCalculationSnapshotRuntime,
+  type CreateClientRowCalculationSnapshotRuntimeOptions,
+  type DataGridClientRowCalculationSnapshotRuntime,
+} from "./snapshot/clientRowCalculationSnapshotRuntime.js"
+export {
+  createClientRowSnapshotHostRuntime,
+  type CreateClientRowSnapshotHostRuntimeOptions,
+  type DataGridClientRowSnapshotHostRuntime,
+} from "./host/clientRowSnapshotHostRuntime.js"
+export {
+  createClientRowMaterializationRuntime,
+  type CreateClientRowMaterializationRuntimeOptions,
+  type DataGridClientRowMaterializationRuntime,
+} from "./materialization/clientRowMaterializationRuntime.js"
+export {
+  createClientRowComputedSnapshotRuntime,
+  type ClientRowComputedRowBoundSnapshot,
+  type ClientRowComputedSnapshotRuntime,
+  type ClientRowComputedSnapshotRuntimeContext,
+  type ClientRowComputedSnapshotValueEntry,
+} from "./materialization/clientRowComputedSnapshotRuntime.js"
+export {
+  createClientRowTreePivotIntegrationRuntime,
+  type CreateClientRowTreePivotIntegrationRuntimeOptions,
+  type DataGridClientRowTreePivotIntegrationRuntime,
+} from "./projection/clientRowTreePivotIntegrationRuntime.js"
+export {
+  createClientRowExpansionHostRuntime,
+  type CreateClientRowExpansionHostRuntimeOptions,
+  type DataGridClientRowExpansionHostRuntime,
+} from "./host/clientRowExpansionHostRuntime.js"
+export {
+  createClientRowFlatIdentityProjectionRefreshRuntime,
+  type CreateClientRowFlatIdentityProjectionRefreshRuntimeOptions,
+  type DataGridClientRowFlatIdentityProjectionRefreshRuntime,
+} from "./projection/clientRowFlatIdentityProjectionRefreshRuntime.js"
+export {
+  createClientRowComputedSnapshotFieldsRuntime,
+  type ClientRowComputedSnapshotFieldsRuntime,
+  type CreateClientRowComputedSnapshotFieldsRuntimeOptions,
+} from "./materialization/clientRowComputedSnapshotFieldsRuntime.js"
+export {
+  createClientRowComputedFieldHostRuntime,
+  type ClientRowComputedFieldHostRuntime,
+  type CreateClientRowComputedFieldHostRuntimeOptions,
+} from "./host/clientRowComputedFieldHostRuntime.js"
+export {
+  createClientRowMutationHostRuntime,
+  type ClientRowMutationHostRuntime,
+  type CreateClientRowMutationHostRuntimeOptions,
+} from "./host/clientRowMutationHostRuntime.js"
 
 export type {
   DataGridClientComputeDiagnostics,
@@ -215,31 +317,41 @@ export type {
   DataGridClientComputeTransportResult,
   DataGridClientComputeRuntime,
   CreateClientRowComputeRuntimeOptions,
-} from "./clientRowComputeRuntime.js"
-export { createClientRowComputeRuntime } from "./clientRowComputeRuntime.js"
+} from "./compute/clientRowComputeRuntime.js"
+export { createClientRowComputeRuntime } from "./compute/clientRowComputeRuntime.js"
+export type {
+  ClientRowComputeHostRuntime,
+  CreateClientRowComputeHostRuntimeOptions,
+} from "./host/clientRowComputeHostRuntime.js"
+export { createClientRowComputeHostRuntime } from "./host/clientRowComputeHostRuntime.js"
 
 export type {
   DataGridClientComputeModule,
   CreateClientRowComputeModuleHostOptions,
   DataGridClientComputeModuleHost,
-} from "./clientRowComputeModule.js"
-export { createClientRowComputeModuleHost } from "./clientRowComputeModule.js"
+} from "./compute/clientRowComputeModule.js"
+export { createClientRowComputeModuleHost } from "./compute/clientRowComputeModule.js"
 
 export type {
   DataGridClientFormulaComputeModule,
   CreateClientRowFormulaComputeModuleOptions,
-} from "./clientRowFormulaComputeModule.js"
-export { createClientRowFormulaComputeModule } from "./clientRowFormulaComputeModule.js"
+} from "./compute/clientRowFormulaComputeModule.js"
+export { createClientRowFormulaComputeModule } from "./compute/clientRowFormulaComputeModule.js"
+export type {
+  ClientRowFormulaHostRuntime,
+  CreateClientRowFormulaHostRuntimeOptions,
+} from "./host/clientRowFormulaHostRuntime.js"
+export { createClientRowFormulaHostRuntime } from "./host/clientRowFormulaHostRuntime.js"
 
 export type {
   DataGridClientProjectionComputeStageExecutionContext,
   DataGridClientProjectionComputeStageExecutionResult,
   DataGridClientProjectionComputeStageExecutor,
-} from "./clientRowProjectionComputeStage.js"
+} from "./projection/clientRowProjectionComputeStage.js"
 export {
   DATAGRID_NOOP_CLIENT_PROJECTION_COMPUTE_STAGE_EXECUTOR,
   runDataGridClientProjectionComputeStageExecutor,
-} from "./clientRowProjectionComputeStage.js"
+} from "./projection/clientRowProjectionComputeStage.js"
 
 export type {
   DataGridDependencyTokenDomain,
@@ -251,13 +363,13 @@ export type {
   DataGridDependencyEdgeKind,
   DataGridDependencyEdge,
   CreateDataGridDependencyEdgeInput,
-} from "./dependencyModel.js"
+} from "./dependency/dependencyModel.js"
 export {
   isDataGridDependencyTokenDomain,
   normalizeDataGridDependencyToken,
   parseDataGridDependencyNode,
   createDataGridDependencyEdge,
-} from "./dependencyModel.js"
+} from "./dependency/dependencyModel.js"
 
 export type {
   DataGridDependencyKind,
@@ -266,8 +378,8 @@ export type {
   DataGridDependencyGraph,
   DataGridRegisterDependencyOptions,
   CreateDataGridDependencyGraphOptions,
-} from "./dependencyGraph.js"
-export { createDataGridDependencyGraph } from "./dependencyGraph.js"
+} from "./dependency/dependencyGraph.js"
+export { createDataGridDependencyGraph } from "./dependency/dependencyGraph.js"
 
 export type {
   DataGridClientPerformanceMode,
@@ -278,12 +390,12 @@ export type {
   DataGridResolvedProjectionCachePolicy,
   DataGridProjectionPolicy,
   CreateDataGridProjectionPolicyOptions,
-} from "./projectionPolicy.js"
+} from "./projection/projectionPolicy.js"
 export {
   DATAGRID_PROJECTION_CACHE_POLICY_MATRIX,
   createDataGridProjectionPolicy,
   resolveDataGridProjectionCachePolicy,
-} from "./projectionPolicy.js"
+} from "./projection/projectionPolicy.js"
 
 export type {
   CreateServerBackedRowModelOptions,
@@ -332,8 +444,8 @@ export type {
   DataGridDataSourcePushRemoveEvent,
   DataGridDataSourcePushUpsertEvent,
   DataGridDataSourceRowEntry,
-} from "./dataSourceProtocol.js"
-export { createDataGridServerPivotRowId } from "./dataSourceProtocol.js"
+} from "./server/dataSourceProtocol.js"
+export { createDataGridServerPivotRowId } from "./server/dataSourceProtocol.js"
 
 export type {
   CreateDataSourceBackedRowModelOptions,

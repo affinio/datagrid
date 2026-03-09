@@ -3,7 +3,7 @@ import {
   DATAGRID_PROJECTION_CACHE_POLICY_MATRIX,
   createDataGridProjectionPolicy,
   resolveDataGridProjectionCachePolicy,
-} from "../projectionPolicy"
+} from "../projection/projectionPolicy"
 
 describe("projectionPolicy", () => {
   it("maps performance modes to deterministic cache policy limits", () => {

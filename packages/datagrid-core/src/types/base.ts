@@ -1,6 +1,6 @@
 import type { DataGridColumn, DataGridColumnGroupDef } from "./column"
 import type { DataGridPluginDefinition } from "@affino/datagrid-plugins"
-import type { DataGridSettingsAdapter } from "../dataGridSettingsAdapter"
+import type { DataGridSettingsAdapter } from "../settings/dataGridSettingsAdapter.js"
 
 export type {
   DataGridColumn,
@@ -9,7 +9,7 @@ export type {
   DataGridColumnPin,
   DataGridColumnGroupDef,
 } from "./column"
-export type { DataGridSettingsAdapter } from "../dataGridSettingsAdapter"
+export type { DataGridSettingsAdapter } from "../settings/dataGridSettingsAdapter.js"
 
 export type DataGridRowId = string | number
 

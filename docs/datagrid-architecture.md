@@ -61,3 +61,91 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-vue`
 
 - Pipeline and closure log: `docs/archive/datagrid/checklists/datagrid-engine-9.5-pipeline-checklist.md`
 - Quality gates: `docs/datagrid-quality-gates.md`
+
+                          ┌──────────────────────────┐
+                          │        UI Layer          │
+                          │  Vue / React Adapter     │
+                          │                          │
+                          │  DataGrid Component      │
+                          │  Viewport Virtualization │
+                          │  Cell Rendering          │
+                          └────────────┬─────────────┘
+                                       │
+                                       │
+                          ┌────────────▼─────────────┐
+                          │        View State         │
+                          │                          │
+                          │  Selection               │
+                          │  Editing                 │
+                          │  Expansion               │
+                          │  Pagination              │
+                          │  Viewport                │
+                          └────────────┬─────────────┘
+                                       │
+                                       │
+                          ┌────────────▼─────────────┐
+                          │      Materialization     │
+                          │                          │
+                          │  Computed Overlay       │
+                          │  Row Assembly           │
+                          │  Snapshot Restore       │
+                          │  Undo / Redo            │
+                          └────────────┬─────────────┘
+                                       │
+                                       │
+                          ┌────────────▼─────────────┐
+                          │      Projection Engine    │
+                          │                          │
+                          │  Filter                  │
+                          │  Sort                    │
+                          │  Group                   │
+                          │  Pivot                   │
+                          │  Tree                    │
+                          │  Aggregation             │
+                          └────────────┬─────────────┘
+                                       │
+                                       │
+                          ┌────────────▼─────────────┐
+                          │       Compute Engine      │
+                          │                          │
+                          │  Compute Runtime         │
+                          │  Compute Modules         │
+                          │                          │
+                          │   • Formula Module       │
+                          │   • Aggregation Module   │
+                          │   • Pivot Module         │
+                          │   • Custom Modules       │
+                          └────────────┬─────────────┘
+                                       │
+                                       │
+                          ┌────────────▼─────────────┐
+                          │     Dependency Graph      │
+                          │                          │
+                          │  Field Dependencies      │
+                          │  Computed Dependencies   │
+                          │  Meta Dependencies       │
+                          │                          │
+                          │  DAG Execution Order     │
+                          └────────────┬─────────────┘
+                                       │
+                                       │
+                          ┌────────────▼─────────────┐
+                          │      Formula Engine       │
+                          │                          │
+                          │  Parser                  │
+                          │  AST                     │
+                          │  Compiler                │
+                          │  JIT / AST Evaluator     │
+                          │  Columnar Kernels        │
+                          │  Diagnostics / Explain   │
+                          └────────────┬─────────────┘
+                                       │
+                                       │
+                          ┌────────────▼─────────────┐
+                          │        Row Source         │
+                          │                          │
+                          │  Client Rows             │
+                          │  Server DataSource       │
+                          │  Streaming Updates       │
+                          │                          │
+                          └──────────────────────────┘

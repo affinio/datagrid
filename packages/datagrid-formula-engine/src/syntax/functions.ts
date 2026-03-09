@@ -1,3 +1,5 @@
+// Built-in formula functions and registry normalization. Formula semantics stay
+// here so compile/evaluator backends do not duplicate built-in behavior.
 import type {
   DataGridFormulaScalarValue,
   DataGridFormulaValue,

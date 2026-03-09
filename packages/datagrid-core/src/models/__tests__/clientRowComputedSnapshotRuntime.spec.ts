@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { buildRowIdPositionIndex } from "../clientRowRuntimeUtils"
 import { applyRowDataPatch } from "../clientRowRuntimeUtils"
-import { createClientRowComputedSnapshotRuntime } from "../clientRowComputedSnapshotRuntime"
+import { createClientRowComputedSnapshotRuntime } from "../materialization/clientRowComputedSnapshotRuntime"
 import type { DataGridRowNode } from "../rowModel"
 
 interface SnapshotRow {

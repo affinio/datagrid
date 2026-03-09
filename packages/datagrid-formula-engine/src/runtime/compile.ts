@@ -1,3 +1,5 @@
+// Compile pipeline from formula text/field definitions into executable artifacts.
+// This file owns mode selection and evaluator wiring, not syntax semantics.
 import type {
   DataGridComputedDependencyToken,
   DataGridFormulaFieldDefinition,

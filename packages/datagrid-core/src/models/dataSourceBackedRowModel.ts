@@ -34,14 +34,14 @@ import type {
   DataGridPivotColumn,
   DataGridPivotSpec,
 } from "@affino/datagrid-pivot"
-import { cloneDataGridFilterSnapshot } from "./advancedFilter.js"
+import { cloneDataGridFilterSnapshot } from "./filters/advancedFilter.js"
 import {
   clonePullAggregationModel,
   clonePivotColumnsSnapshot,
   isSamePivotColumnsSnapshot,
   isSamePullAggregationModel,
   normalizePivotColumnsFromUnknown,
-} from "./pullRowModelSerialization.js"
+} from "./server/pullRowModelSerialization.js"
 import type {
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
@@ -51,7 +51,7 @@ import type {
   DataGridDataSourceTreePullContext,
   DataGridDataSourcePushEvent,
   DataGridDataSourceRowEntry,
-} from "./dataSourceProtocol.js"
+} from "./server/dataSourceProtocol.js"
 
 export interface CreateDataSourceBackedRowModelOptions<T = unknown> {
   dataSource: DataGridDataSource<T>

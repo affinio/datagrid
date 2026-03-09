@@ -1,3 +1,5 @@
+// Recursive descent parser for the formula language. Diagnostics/explain
+// orchestration is re-exported here so syntax-facing consumers have one entrypoint.
 import type { DataGridFormulaAstNode } from "./ast.js"
 import type { DataGridFormulaToken } from "./tokenizer.js"
 import {

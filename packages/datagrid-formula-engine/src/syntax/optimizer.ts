@@ -1,3 +1,5 @@
+// Syntax-level normalization and static validation before runtime compilation.
+// This file owns identifier collection, function validation and constant folding.
 import type {
   DataGridFormulaAstNode,
   DataGridFormulaSourceSpan,

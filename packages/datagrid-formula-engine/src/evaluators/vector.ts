@@ -1,3 +1,6 @@
+// Vector backend: evaluates formulas over column batches directly. This path is
+// most useful for branch-heavy or column-oriented workloads where row-index
+// selections can be reused across a batch.
 import type { DataGridFormulaColumnarBatchEvaluator } from "../runtime/types.js"
 import { type DataGridFormulaAstNode } from "../syntax/ast.js"
 import { normalizeFormulaFunctionName } from "../syntax/functions.js"

@@ -1,3 +1,5 @@
+// Public package surface for the standalone formula engine.
+// Keep this file as a curated boundary rather than another implementation layer.
 export type {
   DataGridComputedDependencyToken,
   DataGridComputedFieldComputeContext,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { resolveClientProjectionInvalidationStages } from "../projectionStages"
+import { resolveClientProjectionInvalidationStages } from "../projection/projectionStages"
 
 describe("projectionStages invalidation mapping", () => {
   it("expands compute-root reasons to full stage chain", () => {

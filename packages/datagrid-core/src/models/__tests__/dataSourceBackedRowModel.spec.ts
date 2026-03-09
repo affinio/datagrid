@@ -9,7 +9,7 @@ import type {
   DataGridDataSourcePullRequest,
   DataGridDataSourcePullResult,
   DataGridDataSourcePushListener,
-} from "../dataSourceProtocol"
+} from "../server/dataSourceProtocol"
 
 interface PullCall {
   request: DataGridDataSourcePullRequest

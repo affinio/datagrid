@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
-import { createClientRowProjectionOrchestrator } from "../clientRowProjectionOrchestrator"
+import { createClientRowProjectionOrchestrator } from "../projection/clientRowProjectionOrchestrator"
 import type {
   DataGridClientProjectionEngine,
   DataGridClientProjectionStageHandlers,
-} from "../clientRowProjectionEngine"
+} from "../projection/clientRowProjectionEngine"
 
 describe("clientRowProjectionOrchestrator", () => {
   it("recomputeWithStagePlan performs refresh-pass request and blocked recompute", () => {

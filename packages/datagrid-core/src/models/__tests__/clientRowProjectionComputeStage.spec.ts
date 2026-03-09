@@ -3,7 +3,7 @@ import {
   DATAGRID_NOOP_CLIENT_PROJECTION_COMPUTE_STAGE_EXECUTOR,
   runDataGridClientProjectionComputeStageExecutor,
   type DataGridClientProjectionComputeStageExecutor,
-} from "../clientRowProjectionComputeStage"
+} from "../projection/clientRowProjectionComputeStage"
 
 describe("clientRowProjectionComputeStage", () => {
   it("uses default noop executor and preserves shouldRecompute flag", () => {

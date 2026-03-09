@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { createDataGridDependencyGraph } from "../dependencyGraph"
+import { createDataGridDependencyGraph } from "../dependency/dependencyGraph"
 import {
   analyzeRowPatchChangeSet,
   buildPatchProjectionExecutionPlan,
   collectAggregationModelFields,
   collectPivotModelFields,
   type DataGridPatchStageRule,
-} from "../rowPatchAnalyzer"
+} from "../mutation/rowPatchAnalyzer"
 
 describe("rowPatchAnalyzer change-set", () => {
   it("collects aggregation dependency fields from field/key descriptors", () => {

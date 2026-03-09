@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import { createClientRowModel, createDataGridColumnModel, createServerBackedRowModel } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
-import type { ServerRowModel } from "../../serverRowModel/serverRowModel"
+import type { ServerRowModel } from "../../models/server/serverRowModel.js"
 import type { VisibleRow } from "../../types"
 
 function buildRows(count: number): VisibleRow<{ id: number; value: string }>[] {

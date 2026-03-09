@@ -4,7 +4,7 @@ import {
   isDataGridDependencyTokenDomain,
   normalizeDataGridDependencyToken,
   parseDataGridDependencyNode,
-} from "../dependencyModel"
+} from "../dependency/dependencyModel"
 
 describe("dependencyModel", () => {
   it("normalizes dependency tokens into explicit domains", () => {

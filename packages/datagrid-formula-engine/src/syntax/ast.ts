@@ -1,3 +1,5 @@
+// AST and syntax primitive ownership lives here: nodes, source spans and
+// syntax/evaluation error wrappers shared by parser, optimizer and runtime.
 import type { DataGridFormulaRuntimeError } from "../coreTypes.js"
 import type {
   DataGridFormulaAstNode,

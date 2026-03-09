@@ -10,7 +10,7 @@ export {
   type DataGridSettingsAdapter,
   type DataGridGroupState,
   type DataGridPinPosition,
-} from "./dataGridSettingsAdapter.js"
+} from "./settings/dataGridSettingsAdapter.js"
 
 export {
   DATAGRID_ADVANCED_ENTRYPOINTS,
@@ -323,7 +323,7 @@ export {
   type ServerRowModel,
   type ServerRowModelOptions,
   type ServerRowModelFetchResult,
-} from "./serverRowModel/serverRowModel.js"
+} from "./models/server/serverRowModel.js"
 
 export {
   createDataGridColumnModel,

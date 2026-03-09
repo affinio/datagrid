@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildGroupedRowsProjection } from "../groupProjectionController"
+import { buildGroupedRowsProjection } from "../projection/groupProjectionController"
 import type { DataGridGroupExpansionSnapshot, DataGridRowNode } from "../rowModel"
 
 interface TeamRow {

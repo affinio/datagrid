@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createDataGridDependencyGraph } from "../dependencyGraph"
+import { createDataGridDependencyGraph } from "../dependency/dependencyGraph"
 
 describe("createDataGridDependencyGraph", () => {
   it("expands transitive field dependencies", () => {

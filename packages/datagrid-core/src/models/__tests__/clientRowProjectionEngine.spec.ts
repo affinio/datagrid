@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { createClientRowProjectionEngine } from "../clientRowProjectionEngine"
+import { createClientRowProjectionEngine } from "../projection/clientRowProjectionEngine"
 import type { DataGridRowNode } from "../rowModel"
 
 describe("clientRowProjectionEngine aggregate stage graph", () => {
