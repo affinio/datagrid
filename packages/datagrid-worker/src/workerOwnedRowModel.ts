@@ -286,6 +286,18 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
   const listeners = new Set<DataGridRowModelListener<T>>()
 
   const rangeKey = (range: DataGridViewportRange): string => `${range.start}:${range.end}`
+  const parseRangeKey = (key: string): DataGridViewportRange | null => {
+    const [startRaw, endRaw] = key.split(":")
+    const start = Number.parseInt(startRaw ?? "", 10)
+    const end = Number.parseInt(endRaw ?? "", 10)
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+      return null
+    }
+    return {
+      start,
+      end,
+    }
+  }
   const rangeContains = (
     container: DataGridViewportRange | null,
     target: DataGridViewportRange,
@@ -821,6 +833,29 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     return visibleRows[index - visibleRange.start]
   }
 
+  const readCachedRowByIndex = (index: number): DataGridRowNode<T> | undefined => {
+    const visibleRow = readVisibleRowByIndex(index)
+    if (visibleRow) {
+      return cloneRowNode(visibleRow)
+    }
+    for (let orderIndex = visibleWindowCacheOrder.length - 1; orderIndex >= 0; orderIndex -= 1) {
+      const key = visibleWindowCacheOrder[orderIndex]
+      if (!key) {
+        continue
+      }
+      const range = parseRangeKey(key)
+      if (!range || index < range.start || index > range.end) {
+        continue
+      }
+      const cachedRows = visibleWindowCache.get(key)
+      const cachedRow = cachedRows?.[index - range.start]
+      if (cachedRow) {
+        return cloneRowNode(cachedRow)
+      }
+    }
+    return undefined
+  }
+
   return {
     kind: "client",
     getSnapshot() {
@@ -853,9 +888,9 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       }
       const rows: DataGridRowNode<T>[] = []
       for (let index = range.start; index <= range.end; index += 1) {
-        const row = readVisibleRowByIndex(index)
+        const row = readCachedRowByIndex(index)
         if (row) {
-          rows.push(cloneRowNode(row))
+          rows.push(row)
         }
       }
       return rows

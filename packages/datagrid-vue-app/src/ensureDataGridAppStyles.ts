@@ -145,19 +145,19 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .grid-cell--clipboard-pending-top {
-  --clipboard-pending-top: #1d4ed8;
+  --clipboard-pending-top: var(--datagrid-selection-copied-border);
 }
 
 .grid-cell--clipboard-pending-right {
-  --clipboard-pending-right: #1d4ed8;
+  --clipboard-pending-right: var(--datagrid-selection-copied-border);
 }
 
 .grid-cell--clipboard-pending-bottom {
-  --clipboard-pending-bottom: #1d4ed8;
+  --clipboard-pending-bottom: var(--datagrid-selection-copied-border);
 }
 
 .grid-cell--clipboard-pending-left {
-  --clipboard-pending-left: #1d4ed8;
+  --clipboard-pending-left: var(--datagrid-selection-copied-border);
 }
 
 @keyframes grid-clipboard-ants {

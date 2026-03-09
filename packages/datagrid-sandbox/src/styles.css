@@ -87,9 +87,22 @@ body,
   min-width: 0;
 }
 
+.affino-datagrid-app-root.card {
+  color: var(--datagrid-text-color);
+  background: var(--datagrid-background-color);
+  border-color: var(--datagrid-glass-border);
+}
+
 .card__header h2 {
   margin: 0 0 8px;
   font-size: 16px;
+}
+
+.affino-datagrid-app-root .card__header h2,
+.affino-datagrid-app-root .card__footer,
+.affino-datagrid-app-root .meta,
+.affino-datagrid-app-root .mode-badge {
+  color: var(--datagrid-text-color);
 }
 
 .card__title-row {
@@ -125,6 +138,14 @@ body,
   border-radius: 6px;
   padding: 0 8px;
   background: #fff;
+}
+
+.affino-datagrid-app-root .controls select,
+.affino-datagrid-app-root .controls input,
+.affino-datagrid-app-root .controls button {
+  color: var(--datagrid-text-color);
+  background: var(--datagrid-header-cell-bg);
+  border-color: var(--datagrid-glass-border);
 }
 
 .controls button {

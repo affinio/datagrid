@@ -1,5 +1,8 @@
 <template>
-  <article class="card">
+  <article
+    ref="cardRootRef"
+    class="card affino-datagrid-app-root"
+  >
     <header class="card__header">
       <div class="card__title-row">
         <h2>{{ title }}</h2>
@@ -183,7 +186,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, ref, watchEffect } from "vue"
+import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
 import type {
   DataGridColumnSnapshot,
   DataGridAppAdvancedFilterColumnOption,
@@ -229,6 +233,16 @@ const props = defineProps<{
   title: string
   mode: Mode
 }>()
+
+const cardRootRef = ref<HTMLElement | null>(null)
+const sandboxThemeTokens = resolveGridThemeTokens(industrialNeutralTheme)
+
+watchEffect(() => {
+  if (!cardRootRef.value) {
+    return
+  }
+  applyGridTheme(cardRootRef.value, sandboxThemeTokens)
+})
 
 function resolveNearestOption(target: number, options: readonly number[]): number {
   if (!options.length) {

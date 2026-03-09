@@ -51,6 +51,8 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     toggleSortForColumn: unref(options.toggleSortForColumn),
     sortIndicator: unref(options.sortIndicator),
     setColumnFilterText: unref(options.setColumnFilterText),
+    handleHeaderWheel: unref(options.handleHeaderWheel),
+    handleHeaderScroll: unref(options.handleHeaderScroll),
     handleViewportScroll: unref(options.handleViewportScroll),
     rowClass: unref(options.rowClass),
     isRowAutosizeProbe: unref(options.isRowAutosizeProbe),

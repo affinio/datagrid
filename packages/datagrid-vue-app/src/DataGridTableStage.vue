@@ -1,6 +1,11 @@
 <template>
   <section class="grid-stage" :class="{ 'grid-stage--auto-row-height': mode === 'base' && rowHeightMode === 'auto' }">
-    <div :ref="headerViewportRef" class="grid-header-viewport">
+    <div
+      :ref="headerViewportRef"
+      class="grid-header-viewport"
+      @scroll="handleHeaderScroll"
+      @wheel="handleHeaderWheel"
+    >
       <div class="grid-header-row" :style="gridContentStyle">
         <div class="grid-cell grid-cell--header grid-cell--index" :style="indexColumnStyle">#</div>
         <div class="grid-main-track" :style="mainTrackStyle">

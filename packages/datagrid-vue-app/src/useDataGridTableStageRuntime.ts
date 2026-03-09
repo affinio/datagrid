@@ -361,6 +361,8 @@ export function useDataGridTableStageRuntime<
     toggleSortForColumn: options.toggleSortForColumn,
     sortIndicator: options.sortIndicator,
     setColumnFilterText: options.setColumnFilterText,
+    handleHeaderWheel,
+    handleHeaderScroll,
     handleViewportScroll,
     rowClass,
     isRowAutosizeProbe,
@@ -394,6 +396,40 @@ export function useDataGridTableStageRuntime<
       return
     }
     handleInteractionWindowMouseMove(event)
+  }
+
+  function handleHeaderWheel(event: WheelEvent): void {
+    const bodyViewport = bodyViewportRef.value
+    if (!bodyViewport) {
+      return
+    }
+
+    const horizontalDelta = Math.abs(event.deltaX) > 0 ? event.deltaX : (event.shiftKey ? event.deltaY : 0)
+    const verticalDelta = horizontalDelta === 0 ? event.deltaY : 0
+    if (horizontalDelta === 0 && verticalDelta === 0) {
+      return
+    }
+
+    event.preventDefault()
+    if (horizontalDelta !== 0) {
+      bodyViewport.scrollLeft += horizontalDelta
+    }
+    if (verticalDelta !== 0) {
+      bodyViewport.scrollTop += verticalDelta
+    }
+    syncViewportFromDom()
+  }
+
+  function handleHeaderScroll(event: Event): void {
+    const headerViewport = event.target as HTMLElement | null
+    const bodyViewport = bodyViewportRef.value
+    if (!headerViewport || !bodyViewport) {
+      return
+    }
+    if (bodyViewport.scrollLeft !== headerViewport.scrollLeft) {
+      bodyViewport.scrollLeft = headerViewport.scrollLeft
+    }
+    syncViewportFromDom()
   }
 
   const handleWindowMouseUp = (): void => {

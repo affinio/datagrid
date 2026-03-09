@@ -15,6 +15,14 @@
         </label>
 
         <label>
+          Group by
+          <select v-model="groupByField">
+            <option value="">None</option>
+            <option value="segment">Segment</option>
+          </select>
+        </label>
+
+        <label>
           Patch size
           <select v-model.number="patchSize">
             <option v-for="option in PATCH_OPTIONS" :key="option" :value="option">{{ option }}</option>
@@ -30,6 +38,7 @@
         <span>Rows in model: {{ rows.length }}</span>
         <span>Formulas: {{ formulaPlan?.order.length ?? 0 }}</span>
         <span>Levels: {{ formulaPlan?.levels.length ?? 0 }}</span>
+        <span>Grouping: {{ groupByField || "off" }}</span>
         <span>Last action: {{ lastAction }}</span>
       </div>
 
@@ -38,6 +47,7 @@
         <span>Rows touched: {{ computeStage?.rowsTouched ?? 0 }}</span>
         <span>Evaluations: {{ computeStage?.evaluations ?? 0 }}</span>
         <span>Dirty nodes: {{ dirtyNodesLabel }}</span>
+        <span v-if="selectionAggregatesLabel">Selection: {{ selectionAggregatesLabel }}</span>
       </div>
     </header>
 
@@ -47,10 +57,14 @@
         :rows="rows"
         :columns="columns"
         :client-row-model-options="clientRowModelOptions"
+        :group-by="groupBy"
+        :aggregation-model="aggregationModel"
+        theme="industrial-neutral"
         :formula-column-cache-max-columns="32"
         compute-mode="sync"
         virtualization
-        @cell-change="refreshDiagnostics"
+        @cell-change="handleGridCellChange"
+        @selection-change="syncSelectionAggregatesLabel"
       />
     </section>
 
@@ -64,11 +78,16 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue"
 import { DataGrid, type DataGridAppColumnDef } from "@affino/datagrid-vue-app"
-import type { DataGridFormulaComputeStageDiagnostics, DataGridRowId } from "@affino/datagrid-vue"
+import type {
+  DataGridAggregationModel,
+  DataGridFormulaComputeStageDiagnostics,
+  DataGridRowId,
+} from "@affino/datagrid-vue"
 
 interface FormulaSandboxRow {
   id: number
   product: string
+  segment: string
   price: number
   qty: number
   taxRate: number
@@ -110,6 +129,7 @@ interface PublicFormulaGridApi {
 
 interface PublicFormulaGridExpose {
   getApi: () => PublicFormulaGridApi | null
+  getSelectionAggregatesLabel: () => string
 }
 
 const ROW_OPTIONS = [100, 1_000, 5_000] as const
@@ -117,6 +137,7 @@ const PATCH_OPTIONS = [1, 10, 100] as const
 const columns: readonly DataGridAppColumnDef[] = [
   { key: "id", label: "ID" },
   { key: "product", label: "Product" },
+  { key: "segment", label: "Segment", width: 120 },
   { key: "price", label: "Price" },
   { key: "qty", label: "Qty" },
   { key: "taxRate", label: "Tax rate" },
@@ -130,15 +151,36 @@ const columns: readonly DataGridAppColumnDef[] = [
 ]
 
 const rowCount = ref<number>(1_000)
+const groupByField = ref<"" | "segment">("segment")
 const patchSize = ref<number>(10)
 const lastAction = ref<string>("init")
 const rows = ref<readonly FormulaSandboxRow[]>([])
 const gridRef = ref<PublicFormulaGridExpose | null>(null)
 const formulaPlan = ref<FormulaExplainSnapshot["executionPlan"]>(null)
 const computeStage = ref<DataGridFormulaComputeStageDiagnostics | null>(null)
+const selectionAggregatesLabel = ref("")
 const clientRowModelOptions = {
   resolveRowId: (row: unknown) => (row as FormulaSandboxRow).id,
 }
+const groupBy = computed(() => {
+  return groupByField.value ? groupByField.value : null
+})
+const aggregationModel = computed<DataGridAggregationModel<FormulaSandboxRow> | null>(() => {
+  if (!groupBy.value) {
+    return null
+  }
+  return {
+    columns: [
+      { key: "price", op: "sum" },
+      { key: "qty", op: "sum" },
+      { key: "subtotal", op: "sum" },
+      { key: "tax", op: "sum" },
+      { key: "total", op: "sum" },
+      { key: "margin", op: "sum" },
+    ],
+    basis: "filtered",
+  }
+})
 
 const dirtyNodesLabel = computed(() => {
   if (!computeStage.value || computeStage.value.dirtyNodes.length === 0) {
@@ -152,11 +194,13 @@ const randomNumber = (min: number, max: number): number => {
 }
 
 const buildRows = (count: number): readonly FormulaSandboxRow[] => {
+  const segments = ["Retail", "SMB", "Enterprise", "Channel"] as const
   const nextRows = new Array<FormulaSandboxRow>(count)
   for (let index = 0; index < count; index += 1) {
     nextRows[index] = {
       id: index + 1,
       product: `SKU-${index + 1}`,
+      segment: segments[index % segments.length] ?? "Retail",
       price: Math.round(randomNumber(20, 400) * 100) / 100,
       qty: Math.max(1, Math.trunc(randomNumber(1, 12))),
       taxRate: Math.round(randomNumber(0.02, 0.2) * 1000) / 1000,
@@ -180,9 +224,19 @@ const refreshDiagnostics = (): void => {
   computeStage.value = explain.computeStage
 }
 
+const syncSelectionAggregatesLabel = (): void => {
+  selectionAggregatesLabel.value = gridRef.value?.getSelectionAggregatesLabel() ?? ""
+}
+
+const handleGridCellChange = (): void => {
+  refreshDiagnostics()
+  syncSelectionAggregatesLabel()
+}
+
 const rebuildModel = (): void => {
   rows.value = buildRows(rowCount.value)
   lastAction.value = `rebuild:${rowCount.value}`
+  selectionAggregatesLabel.value = ""
   void nextTick(() => {
     refreshDiagnostics()
   })
@@ -236,6 +290,7 @@ watch(
   () => {
     void nextTick(() => {
       refreshDiagnostics()
+      syncSelectionAggregatesLabel()
     })
   },
 )

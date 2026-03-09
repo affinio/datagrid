@@ -6,7 +6,7 @@ Canonical package boundary:
 
 - community API: `@affino/datagrid-formula-engine`
 - grid/runtime integration: `@affino/datagrid-core`
-- enterprise boundary doc: [/Users/anton/Projects/affinio/datagrid/docs/datagrid-formula-engine-community-vs-enterprise.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-formula-engine-community-vs-enterprise.md)
+- enterprise boundary doc: [datagrid-formula-engine-community-vs-enterprise.md](datagrid-formula-engine-community-vs-enterprise.md)
 
 ## Why this engine is strong
 
@@ -71,43 +71,19 @@ Internally the engine canonicalizes these references so diagnostics and dependen
 
 ## Built-in functions
 
-Default function set:
+The default registry now ships with grouped numeric, logical, text, date/time, array, lookup, and conditional aggregate helpers.
 
-- `ABS(x)`
-- `ARRAY(...)`
-- `AVG(...)`
-- `CEIL(x)`
-- `CHOOSE(index, ...)`
-- `CONCAT(...)`
-- `COUNT(...)`
-- `DATE(year, month, day)`
-- `DAY(date)`
-- `FLOOR(x)`
-- `IF(condition, whenTrue, whenFalse)`
-- `IN(value, ...)`
-- `INDEX(array, index, fallback?)`
-- `IFS(cond1, value1, cond2, value2, ...)`
-- `COALESCE(v1, v2, ...)`
-- `LEN(x)`
-- `LEFT(text, count?)`
-- `LOWER(x)`
-- `MATCH(needle, array, matchMode?)`
-- `MID(text, start, count)`
-- `MIN(...)`
-- `MAX(...)`
-- `MOD(left, right)`
-- `MONTH(date)`
-- `POW(base, exponent)`
-- `RANGE(...)`
-- `RIGHT(text, count?)`
-- `ROUND(value, digits?)`
-- `SUM(...)`
-- `TRIM(x)`
-- `UPPER(x)`
-- `XLOOKUP(needle, lookupArray, returnArray, notFound?, matchMode?)`
-- `YEAR(date)`
+Examples from the current surface:
+
+- numeric/statistical: `SUM`, `AVG`, `AVERAGE`, `MEDIAN`, `PERCENTILE`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `STDEVS`, `STDEVP`, `NPV`
+- logical/predicate: `IF`, `IFS`, `COALESCE`, `COUNTIF`, `ISNUMBER`, `ISDATE`, `CONTAINS`, `HAS`, `IN`
+- text: `CONCAT`, `JOIN`, `LEFT`, `MID`, `RIGHT`, `SUBSTITUTE`, `VALUE`
+- date/time: `DATE`, `DATEONLY`, `TODAY`, `TIME`, `NETWORKDAYS`, `WORKDAY`, `WEEKDAY`, `YEARDAY`
+- arrays/lookups: `ARRAY`, `RANGE`, `INDEX`, `MATCH`, `XLOOKUP`, `DISTINCT`, `COLLECT`, `SUMIFS`, `AVERAGEIF`
 
 Function names are normalized to uppercase internally.
+
+For the full catalog, including a description and usage example for every built-in formula, see [datagrid-formula-engine-function-reference.md](datagrid-formula-engine-function-reference.md).
 
 ### Arrays, ranges, and lookup helpers
 

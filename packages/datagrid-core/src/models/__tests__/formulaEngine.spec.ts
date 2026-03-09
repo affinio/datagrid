@@ -1332,6 +1332,71 @@ describe("formulaEngine", () => {
     }
   })
 
+  it("supports third-wave logical, aggregate and calendar helpers", () => {
+    const strategies: Array<"ast" | "jit"> = ["ast", "jit"]
+
+    for (const compileStrategy of strategies) {
+      const logicalAggregate = compileDataGridFormulaFieldDefinition({
+        name: "logicalAggregate",
+        formula: "IF(ISNUMBER(price), COUNTIF(ARRAY('A', 'B', 'A'), 'A') + SUMIF(ARRAY(10, 20, 30), '>10') + IF(CONTAINS('sku', code), 1, 0), 0)",
+      }, { compileStrategy })
+
+      expect(
+        logicalAggregate.compute({
+          row: {},
+          rowId: `r-wave3-logic-${compileStrategy}`,
+          sourceIndex: 0,
+          get: token => {
+            if (token === "field:price") return 10
+            if (token === "field:code") return "SKU-1"
+            return null
+          },
+        }),
+      ).toBe(53)
+
+      const textAndDate = compileDataGridFormulaFieldDefinition({
+        name: "textAndDate",
+        formula: "CONCAT(JOIN(DISTINCT(ARRAY(region, region, code)), '|'), ':', WEEKDAY(DATEONLY(createdAt)), ':', YEARDAY(createdAt))",
+      }, { compileStrategy })
+
+      expect(
+        textAndDate.compute({
+          row: {},
+          rowId: `r-wave3-text-date-${compileStrategy}`,
+          sourceIndex: 1,
+          get: token => {
+            if (token === "field:region") return "EMEA"
+            if (token === "field:code") return "SKU-1"
+            if (token === "field:createdAt") return "2024-02-10T12:30:00.000Z"
+            return null
+          },
+        }),
+      ).toBe("EMEA|SKU-1:7:41")
+
+    }
+  })
+
+  it("constant-folds third-wave numeric helpers", () => {
+    const strategies: Array<"ast" | "jit"> = ["ast", "jit"]
+
+    for (const compileStrategy of strategies) {
+      const compiled = compileDataGridFormulaFieldDefinition({
+        name: "foldedWave3",
+        formula: "ROUNDUP(AVERAGEIF(ARRAY(10, 20, 30), '>10') / 7, 2) + SMALL(ARRAY(9, 1, 5), 2) + HEXTODEC(DECTOHEX(31))",
+      }, { compileStrategy })
+
+      expect(compiled.deps).toEqual([])
+      expect(
+        compiled.compute({
+          row: {},
+          rowId: `r-wave3-fold-${compileStrategy}`,
+          sourceIndex: 0,
+          get: () => null,
+        }),
+      ).toBe(39.58)
+    }
+  })
+
   it("supports JIT evaluator with escaped dependency token literals", () => {
     const escapedToken = "field:meta.\"price.with.quote\""
     const compiled = compileDataGridFormulaFieldDefinition({

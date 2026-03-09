@@ -91,6 +91,19 @@ export function useDataGridAppViewport<TRow>(
     }
     return options.runtime.virtualWindow.value?.rowEnd ?? Math.max(0, options.totalRows.value - 1)
   })
+  const renderedRowEnd = computed<number>(() => {
+    if (isPaginationMode.value) {
+      return Math.max(0, displayRows.value.length - 1)
+    }
+    if (!resolveMaybeRef(options.rowVirtualizationEnabled)) {
+      return Math.max(0, options.totalRows.value - 1)
+    }
+    const actualCount = displayRows.value.length
+    if (actualCount <= 0) {
+      return viewportRowStart.value - 1
+    }
+    return viewportRowStart.value + actualCount - 1
+  })
 
   const topSpacerHeight = computed<number>(() => {
     if (isPaginationMode.value) {
@@ -107,7 +120,7 @@ export function useDataGridAppViewport<TRow>(
     if (total <= 0) {
       return 0
     }
-    const afterCount = Math.max(0, total - (viewportRowEnd.value + 1))
+    const afterCount = Math.max(0, total - (renderedRowEnd.value + 1))
     return afterCount * options.normalizedBaseRowHeight.value
   })
 

@@ -30,6 +30,8 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   toggleSortForColumn: (columnKey: string, additive?: boolean) => void
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void
+  handleHeaderWheel: (event: WheelEvent) => void
+  handleHeaderScroll: (event: Event) => void
   handleViewportScroll: (event: Event) => void
   rowClass: (row: DataGridTableRow<TRow>) => string
   isRowAutosizeProbe: (row: DataGridTableRow<TRow>, rowOffset: number) => boolean

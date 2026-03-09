@@ -1,9 +1,7 @@
 import {
   applyGridTheme,
   defaultStyleConfig,
-  defaultThemeTokens,
   industrialNeutralTheme,
-  resolveGridThemeTokens,
   sugarTheme,
   type DataGridStyleConfig,
   type DataGridThemeTokens,
@@ -23,6 +21,55 @@ const DATA_GRID_THEME_PRESETS: Record<DataGridThemePreset, DataGridStyleConfig> 
   "industrial-neutral": industrialNeutralTheme,
   industrialNeutral: industrialNeutralTheme,
   sugar: sugarTheme,
+}
+
+function mergeTokenVariants(
+  base: DataGridStyleConfig["tokenVariants"],
+  override: DataGridStyleConfig["tokenVariants"],
+): DataGridStyleConfig["tokenVariants"] {
+  if (!base && !override) {
+    return undefined
+  }
+  const merged: NonNullable<DataGridStyleConfig["tokenVariants"]> = {
+    ...(base ?? {}),
+  }
+  for (const [variantKey, tokens] of Object.entries(override ?? {})) {
+    merged[variantKey] = {
+      ...(merged[variantKey] ?? {}),
+      ...tokens,
+    }
+  }
+  return merged
+}
+
+function mergeStyleConfigs(base: DataGridStyleConfig, override: DataGridStyleConfig): DataGridStyleConfig {
+  return {
+    ...base,
+    ...override,
+    grid: { ...(base.grid ?? {}), ...(override.grid ?? {}) },
+    header: { ...(base.header ?? {}), ...(override.header ?? {}) },
+    body: { ...(base.body ?? {}), ...(override.body ?? {}) },
+    group: { ...(base.group ?? {}), ...(override.group ?? {}) },
+    summary: { ...(base.summary ?? {}), ...(override.summary ?? {}) },
+    state: { ...(base.state ?? {}), ...(override.state ?? {}) },
+    tokens: { ...(base.tokens ?? {}), ...(override.tokens ?? {}) },
+    tokenVariants: mergeTokenVariants(base.tokenVariants, override.tokenVariants),
+  }
+}
+
+function resolveDocumentVariant(styleConfig: DataGridStyleConfig, doc?: Document): string | undefined {
+  if (!doc) {
+    return undefined
+  }
+  const datasetTheme = doc.documentElement?.dataset?.theme
+  if (datasetTheme && styleConfig.tokenVariants?.[datasetTheme]) {
+    return datasetTheme
+  }
+  const darkClass = styleConfig.documentDarkClass ?? "dark"
+  if (doc.documentElement?.classList?.contains(darkClass) && styleConfig.tokenVariants?.dark) {
+    return "dark"
+  }
+  return undefined
 }
 
 function isStyleConfig(input: unknown): input is DataGridStyleConfig {
@@ -50,19 +97,34 @@ function resolveThemeStyleConfig(theme: DataGridThemeProp): DataGridStyleConfig 
     return defaultStyleConfig
   }
   if (typeof theme === "string") {
+    if (theme === "sugar") {
+      return mergeStyleConfigs(industrialNeutralTheme, sugarTheme)
+    }
     return DATA_GRID_THEME_PRESETS[theme] ?? defaultStyleConfig
   }
   if (isStyleConfig(theme)) {
-    return theme
+    return mergeStyleConfigs(industrialNeutralTheme, theme)
   }
-  return {
+  return mergeStyleConfigs(industrialNeutralTheme, {
     tokens: theme,
-  }
+  })
 }
 
 export function resolveDataGridThemeTokens(theme: DataGridThemeProp): DataGridThemeTokens {
   const styleConfig = resolveThemeStyleConfig(theme)
-  return resolveGridThemeTokens(styleConfig)
+  const activeVariant = styleConfig?.inheritThemeFromDocument
+    ? resolveDocumentVariant(styleConfig, typeof document === "undefined" ? undefined : document)
+    : undefined
+  const resolvedVariant = activeVariant ?? styleConfig?.activeTokenVariant ?? styleConfig?.defaultTokenVariant
+  const variantTokens = resolvedVariant ? styleConfig?.tokenVariants?.[resolvedVariant] : undefined
+  const mergedStyleConfig = mergeStyleConfigs(
+    industrialNeutralTheme,
+    styleConfig ?? defaultStyleConfig,
+  )
+  return {
+    ...((mergedStyleConfig.tokens ?? {}) as Partial<DataGridThemeTokens>),
+    ...((resolvedVariant ? mergedStyleConfig.tokenVariants?.[resolvedVariant] : undefined) ?? {}),
+  } as DataGridThemeTokens
 }
 
 export function applyDataGridTheme(rootElement: HTMLElement, theme: DataGridThemeProp): DataGridThemeTokens {
@@ -72,5 +134,5 @@ export function applyDataGridTheme(rootElement: HTMLElement, theme: DataGridThem
 }
 
 export function clearDataGridTheme(rootElement: HTMLElement): void {
-  applyGridTheme(rootElement, defaultThemeTokens)
+  applyDataGridTheme(rootElement, "default")
 }

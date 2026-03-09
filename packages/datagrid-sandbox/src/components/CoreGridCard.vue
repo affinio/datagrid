@@ -1,5 +1,8 @@
 <template>
-  <article class="card">
+  <article
+    ref="cardRootRef"
+    class="card affino-datagrid-app-root"
+  >
     <header class="card__header">
       <h2>{{ title }}</h2>
       <div class="controls">
@@ -138,7 +141,12 @@
     </header>
 
     <section class="grid-stage" :class="{ 'grid-stage--auto-row-height': rowHeightMode === 'auto' }">
-      <div ref="headerViewportRef" class="grid-header-viewport">
+      <div
+        ref="headerViewportRef"
+        class="grid-header-viewport"
+        @scroll="handleHeaderScroll"
+        @wheel="handleHeaderWheel"
+      >
         <div class="grid-header-row" :style="gridContentStyle">
           <div class="grid-cell grid-cell--header grid-cell--index" :style="indexColumnStyle">#</div>
           <div class="grid-main-track" :style="mainTrackStyle">
@@ -253,7 +261,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue"
+import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
 import {
   createClientRowModel,
   createDataGridApi,
@@ -314,6 +323,16 @@ import ComputePolicyPanel from "./ComputePolicyPanel.vue"
 defineProps<{
   title: string
 }>()
+
+const cardRootRef = ref<HTMLElement | null>(null)
+const sandboxThemeTokens = resolveGridThemeTokens(industrialNeutralTheme)
+
+watchEffect(() => {
+  if (!cardRootRef.value) {
+    return
+  }
+  applyGridTheme(cardRootRef.value, sandboxThemeTokens)
+})
 
 type RowHeightMode = "fixed" | "auto"
 type RowRenderMode = "virtualization" | "pagination"
@@ -512,6 +531,38 @@ const handleViewportScroll = (event: Event): void => {
   }
   lastViewportScrollTop = element.scrollTop
   syncRangeRows(resolveViewportRangeFromElement(element))
+}
+
+const handleHeaderScroll = (event: Event): void => {
+  const headerViewport = event.target as HTMLElement | null
+  const bodyViewport = bodyViewportRef.value
+  if (!headerViewport || !bodyViewport) {
+    return
+  }
+  if (bodyViewport.scrollLeft !== headerViewport.scrollLeft) {
+    bodyViewport.scrollLeft = headerViewport.scrollLeft
+  }
+  syncViewportFromDom()
+}
+
+const handleHeaderWheel = (event: WheelEvent): void => {
+  const bodyViewport = bodyViewportRef.value
+  if (!bodyViewport) {
+    return
+  }
+  const horizontalDelta = Math.abs(event.deltaX) > 0 ? event.deltaX : (event.shiftKey ? event.deltaY : 0)
+  const verticalDelta = horizontalDelta === 0 ? event.deltaY : 0
+  if (horizontalDelta === 0 && verticalDelta === 0) {
+    return
+  }
+  event.preventDefault()
+  if (horizontalDelta !== 0) {
+    bodyViewport.scrollLeft += horizontalDelta
+  }
+  if (verticalDelta !== 0) {
+    bodyViewport.scrollTop += verticalDelta
+  }
+  syncViewportFromDom()
 }
 
 watch(rows, nextRows => {
