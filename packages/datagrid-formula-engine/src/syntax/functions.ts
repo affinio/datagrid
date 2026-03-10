@@ -108,7 +108,7 @@ export function normalizeFormulaFunctionRegistry(
 
   const registerEntry = (
     key: string,
-    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: import("../coreTypes.js").DataGridComputedFieldComputeContext<unknown>) => unknown),
     source: "default" | "user",
   ): void => {
     const normalizedName = normalizeFormulaFunctionName(key)
@@ -131,6 +131,10 @@ export function normalizeFormulaFunctionRegistry(
       name: normalizedName,
       arity: normalizeFormulaFunctionArity(runtimeDefinition.arity, normalizedName),
       contextKeys: normalizeFormulaContextKeys(runtimeDefinition.contextKeys),
+      resolveContextKeys: typeof runtimeDefinition.resolveContextKeys === "function"
+        ? runtimeDefinition.resolveContextKeys
+        : undefined,
+      requiresRuntimeContext: runtimeDefinition.requiresRuntimeContext === true,
       compute: runtimeDefinition.compute,
     })
   }
@@ -156,6 +160,9 @@ export function collectFormulaContextKeys(
     const functionDefinition = functionRegistry.get(functionName)
     if (functionDefinition) {
       output.push(...functionDefinition.contextKeys)
+      if (typeof functionDefinition.resolveContextKeys === "function") {
+        output.push(...functionDefinition.resolveContextKeys(root.args))
+      }
     }
     for (const arg of root.args) {
       collectFormulaContextKeys(arg, functionRegistry, output)

@@ -31,6 +31,7 @@ export interface DataGridColumnModel {
   getSnapshot(): DataGridColumnModelSnapshot
   getColumn(key: string): DataGridColumnSnapshot | undefined
   setColumns(columns: readonly DataGridColumnDef[]): void
+  batch?<TResult>(fn: () => TResult): TResult
   setColumnOrder(keys: readonly string[]): void
   setColumnVisibility(key: string, visible: boolean): void
   setColumnWidth(key: string, width: number | null): void
@@ -88,6 +89,8 @@ export function createDataGridColumnModel(
   let order: string[] = []
   let snapshotDirty = true
   let snapshotCache: DataGridColumnModelSnapshot | null = null
+  let batchDepth = 0
+  let emitPending = false
 
   function ensureActive() {
     if (disposed) {
@@ -140,6 +143,14 @@ export function createDataGridColumnModel(
     }
   }
 
+  function emitOrQueue() {
+    if (batchDepth > 0) {
+      emitPending = true
+      return
+    }
+    emit()
+  }
+
   function setColumnsValue(columns: readonly DataGridColumnDef[]) {
     columnsByKey.clear()
     order = []
@@ -169,7 +180,7 @@ export function createDataGridColumnModel(
       order.push(key)
     })
     markSnapshotDirty()
-    emit()
+    emitOrQueue()
   }
 
   setColumnsValue(Array.isArray(options.columns) ? options.columns : [])
@@ -194,6 +205,19 @@ export function createDataGridColumnModel(
     setColumns(columns: readonly DataGridColumnDef[]) {
       ensureActive()
       setColumnsValue(Array.isArray(columns) ? columns : [])
+    },
+    batch<TResult>(fn: () => TResult): TResult {
+      ensureActive()
+      batchDepth += 1
+      try {
+        return fn()
+      } finally {
+        batchDepth = Math.max(0, batchDepth - 1)
+        if (batchDepth === 0 && emitPending) {
+          emitPending = false
+          emit()
+        }
+      }
     },
     setColumnOrder(keys: readonly string[]) {
       ensureActive()
@@ -231,7 +255,7 @@ export function createDataGridColumnModel(
 
       order = nextOrder
       markSnapshotDirty()
-      emit()
+      emitOrQueue()
     },
     setColumnVisibility(key: string, visible: boolean) {
       ensureActive()
@@ -241,7 +265,7 @@ export function createDataGridColumnModel(
       }
       state.visible = visible
       markSnapshotDirty()
-      emit()
+      emitOrQueue()
     },
     setColumnWidth(key: string, width: number | null) {
       ensureActive()
@@ -255,7 +279,7 @@ export function createDataGridColumnModel(
       }
       state.width = nextWidth
       markSnapshotDirty()
-      emit()
+      emitOrQueue()
     },
     setColumnPin(key: string, pin: DataGridColumnPin) {
       ensureActive()
@@ -269,7 +293,7 @@ export function createDataGridColumnModel(
       }
       state.pin = nextPin
       markSnapshotDirty()
-      emit()
+      emitOrQueue()
     },
     subscribe(listener: DataGridColumnModelListener) {
       if (disposed) {

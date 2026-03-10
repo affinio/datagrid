@@ -96,8 +96,6 @@ export function useDataGridCellPointerDownRouter<
     options.setLastDragCoord(coord)
     options.setDragPointer({ clientX: event.clientX, clientY: event.clientY })
     options.applyCellSelection(coord, event.shiftKey, coord)
-    options.startInteractionAutoScroll()
-
     options.setLastAction(
       event.shiftKey
         ? `Extended selection to R${coord.rowIndex + 1} · ${columnKey}`

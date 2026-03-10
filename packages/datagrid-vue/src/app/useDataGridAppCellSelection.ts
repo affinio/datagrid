@@ -50,6 +50,13 @@ export interface UseDataGridAppCellSelectionResult<TRow> {
   ) => void
   clearCellSelection: () => void
   isCellSelected: (rowOffset: number, columnIndex: number) => boolean
+  isSelectionAnchorCell: (rowOffset: number, columnIndex: number) => boolean
+  shouldHighlightSelectedCell: (rowOffset: number, columnIndex: number) => boolean
+  isCellOnSelectionEdge: (
+    rowOffset: number,
+    columnIndex: number,
+    edge: "top" | "right" | "bottom" | "left",
+  ) => boolean
 }
 
 export function useDataGridAppCellSelection<TRow>(
@@ -281,17 +288,65 @@ export function useDataGridAppCellSelection<TRow>(
   }
 
   const isCellSelected = (rowOffset: number, columnIndex: number): boolean => {
+    const range = resolveSelectionRange()
+    if (!range) {
+      return false
+    }
+    const rowIndex = options.viewportRowStart.value + rowOffset
+    return (
+      rowIndex >= range.startRow
+      && rowIndex <= range.endRow
+      && columnIndex >= range.startColumn
+      && columnIndex <= range.endColumn
+    )
+  }
+
+  const isSelectionAnchorCell = (rowOffset: number, columnIndex: number): boolean => {
     const snapshot = options.selectionSnapshot.value
     if (!snapshot || snapshot.ranges.length === 0) {
       return false
     }
+    const activeIndex = snapshot.activeRangeIndex ?? 0
+    const range = snapshot.ranges[activeIndex] ?? snapshot.ranges[0]
+    if (!range?.anchor) {
+      return false
+    }
     const rowIndex = options.viewportRowStart.value + rowOffset
-    return snapshot.ranges.some(range => (
-      rowIndex >= range.startRow
-      && rowIndex <= range.endRow
-      && columnIndex >= range.startCol
-      && columnIndex <= range.endCol
-    ))
+    return rowIndex === range.anchor.rowIndex && columnIndex === range.anchor.colIndex
+  }
+
+  const shouldHighlightSelectedCell = (rowOffset: number, columnIndex: number): boolean => {
+    const range = resolveSelectionRange()
+    if (!range || !isCellSelected(rowOffset, columnIndex)) {
+      return false
+    }
+    const isSingleCell = range.startRow === range.endRow && range.startColumn === range.endColumn
+    if (isSingleCell) {
+      return false
+    }
+    return !isSelectionAnchorCell(rowOffset, columnIndex)
+  }
+
+  const isCellOnSelectionEdge = (
+    rowOffset: number,
+    columnIndex: number,
+    edge: "top" | "right" | "bottom" | "left",
+  ): boolean => {
+    const range = resolveSelectionRange()
+    if (!range || !isCellSelected(rowOffset, columnIndex)) {
+      return false
+    }
+    const rowIndex = options.viewportRowStart.value + rowOffset
+    switch (edge) {
+      case "top":
+        return rowIndex === range.startRow
+      case "right":
+        return columnIndex === range.endColumn
+      case "bottom":
+        return rowIndex === range.endRow
+      case "left":
+        return columnIndex === range.startColumn
+    }
   }
 
   return {
@@ -304,5 +359,8 @@ export function useDataGridAppCellSelection<TRow>(
     setCellSelection,
     clearCellSelection,
     isCellSelected,
+    isSelectionAnchorCell,
+    shouldHighlightSelectedCell,
+    isCellOnSelectionEdge,
   }
 }

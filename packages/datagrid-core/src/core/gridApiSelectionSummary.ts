@@ -1,4 +1,4 @@
-import type { DataGridColumnModel, DataGridRowModel } from "../models"
+import type { DataGridColumnModel, DataGridRowModel } from "../models/index.js"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import { createDataGridSelectionSummary } from "../selection/selectionSummary"
 import type { DataGridSelectionSummaryApiOptions } from "./gridApiContracts"

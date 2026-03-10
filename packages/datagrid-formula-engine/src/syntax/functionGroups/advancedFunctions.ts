@@ -5,12 +5,16 @@ import {
 } from "../values.js"
 import {
   collectFilteredValues,
+  collectFormulaTableValues,
   collectValuesFromArgs,
   computeAverage,
+  createFormulaTableContextKey,
   defineFormulaFunctions,
   expandFormulaValue,
   type FormulaCriterionEntry,
   formulaValueMatchesCriterion,
+  normalizeFormulaTableName,
+  resolveFormulaLiteralText,
   toDistinctFormulaValues,
   toNumericFormulaValues,
 } from "../functionHelpers.js"
@@ -124,6 +128,24 @@ export const DATAGRID_ADVANCED_FORMULA_FUNCTIONS = defineFormulaFunctions({
       }
       return toNumericFormulaValues(collectFilteredValues(sumRange, criteria))
         .reduce((sum, value) => sum + value, 0)
+    },
+  },
+  TABLE: {
+    arity: { min: 1, max: 2 },
+    requiresRuntimeContext: true,
+    resolveContextKeys: (args) => {
+      const literalTableName = resolveFormulaLiteralText(args[0])
+      return [literalTableName ? createFormulaTableContextKey(literalTableName) : "tables"]
+    },
+    compute: (args, context) => {
+      const tableName = normalizeFormulaTableName(args[0] ?? null)
+      if (tableName.length === 0) {
+        return Object.freeze([])
+      }
+      return collectFormulaTableValues(
+        context?.getContextValue?.(createFormulaTableContextKey(tableName)),
+        args[1],
+      )
     },
   },
   XLOOKUP: {

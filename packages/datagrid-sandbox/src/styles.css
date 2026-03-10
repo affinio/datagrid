@@ -659,6 +659,50 @@ body,
   background: #e3efff;
 }
 
+.grid-cell--selection-anchor {
+  background: inherit;
+}
+
+.grid-cell--selection-frame::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  z-index: 3;
+  background-image:
+    linear-gradient(var(--selection-top, transparent), var(--selection-top, transparent)),
+    linear-gradient(var(--selection-bottom, transparent), var(--selection-bottom, transparent)),
+    linear-gradient(var(--selection-left, transparent), var(--selection-left, transparent)),
+    linear-gradient(var(--selection-right, transparent), var(--selection-right, transparent));
+  background-repeat: no-repeat;
+  background-size:
+    calc(100% - 2px) 2px,
+    calc(100% - 2px) 2px,
+    2px calc(100% - 2px),
+    2px calc(100% - 2px);
+  background-position:
+    1px 1px,
+    1px calc(100% - 1px),
+    1px 1px,
+    calc(100% - 1px) 1px;
+}
+
+.grid-cell--selection-top {
+  --selection-top: #2563eb;
+}
+
+.grid-cell--selection-right {
+  --selection-right: #2563eb;
+}
+
+.grid-cell--selection-bottom {
+  --selection-bottom: #2563eb;
+}
+
+.grid-cell--selection-left {
+  --selection-left: #2563eb;
+}
+
 .grid-cell--fill-preview {
   background: #dbeafe;
 }

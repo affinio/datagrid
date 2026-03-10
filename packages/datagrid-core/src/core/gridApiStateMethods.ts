@@ -11,7 +11,7 @@ import type {
   DataGridSortAndFilterModelInput,
   DataGridSortState,
   DataGridViewportRange,
-} from "../models"
+} from "../models/index.js"
 import type {
   DataGridSelectionCapability,
   DataGridSortFilterBatchCapability,

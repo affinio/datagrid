@@ -1,4 +1,4 @@
-import { computed, nextTick, ref, type ComputedRef, type Ref } from "vue"
+import { computed, nextTick, ref, type ComputedRef, type CSSProperties, type Ref } from "vue"
 import type {
   DataGridAppRowSnapshot,
   DataGridColumnSnapshot,
@@ -16,6 +16,7 @@ import {
   useDataGridAppRowPresentation,
   useDataGridAppRowSizing,
   useDataGridAppRuntimeSync,
+  useDataGridSelectionOverlayOrchestration,
   useDataGridAppViewport,
   useDataGridAppViewportLifecycle,
 } from "@affino/datagrid-vue"
@@ -66,10 +67,20 @@ export function useDataGridTableStageRuntime<
   options: UseDataGridTableStageRuntimeOptions<TRow>,
 ): UseDataGridTableStageRuntimeResult<TRow> {
   const columnWidths = ref<Record<string, number>>({})
+  const orderedVisibleColumns = computed(() => {
+    const left = options.visibleColumns.value.filter(column => column.pin === "left")
+    const center = options.visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
+    const right = options.visibleColumns.value.filter(column => column.pin === "right")
+    return [...left, ...center, ...right]
+  })
+  const centerColumns = computed(() => (
+    orderedVisibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
+  ))
 
   const {
     headerViewportRef,
     bodyViewportRef,
+    viewportScrollTop,
     displayRows,
     renderedColumns,
     viewportRowStart,
@@ -93,11 +104,11 @@ export function useDataGridTableStageRuntime<
     rowVirtualizationEnabled: computed(() => options.virtualization.value.rows),
     columnVirtualizationEnabled: computed(() => options.virtualization.value.columns),
     totalRows: options.totalRows,
-    visibleColumns: options.visibleColumns,
+    visibleColumns: centerColumns,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
     columnWidths,
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
-    indexColumnWidth: INDEX_COLUMN_WIDTH,
+    indexColumnWidth: 0,
     rowOverscan: computed(() => options.virtualization.value.rowOverscan),
     columnOverscan: computed(() => options.virtualization.value.columnOverscan),
     measureVisibleRowHeights: () => measureVisibleRowHeights(),
@@ -120,6 +131,17 @@ export function useDataGridTableStageRuntime<
     syncViewport: () => syncViewportFromDom(),
   })
 
+  const selectionController = useDataGridAppCellSelection<TRow>({
+    mode: options.mode,
+    runtime: options.runtime as never,
+    totalRows: options.totalRows,
+    visibleColumns: orderedVisibleColumns,
+    viewportRowStart,
+    selectionSnapshot: options.selectionSnapshot,
+    selectionAnchor: options.selectionAnchor as never,
+    isEditingCell: (row, columnKey) => isEditingCell(row, columnKey),
+  })
+
   const {
     normalizeRowId,
     normalizeCellCoord,
@@ -130,15 +152,100 @@ export function useDataGridTableStageRuntime<
     setCellSelection,
     clearCellSelection,
     isCellSelected,
-  } = useDataGridAppCellSelection<TRow>({
-    mode: options.mode,
-    runtime: options.runtime as never,
-    totalRows: options.totalRows,
-    visibleColumns: options.visibleColumns,
-    viewportRowStart,
-    selectionSnapshot: options.selectionSnapshot,
-    selectionAnchor: options.selectionAnchor as never,
-    isEditingCell: (row, columnKey) => isEditingCell(row, columnKey),
+  } = selectionController
+  const isSelectionAnchorCell = selectionController.isSelectionAnchorCell ?? (() => false)
+  const shouldHighlightSelectedCell = selectionController.shouldHighlightSelectedCell
+    ?? ((rowOffset: number, columnIndex: number) => isCellSelected(rowOffset, columnIndex))
+  const isCellOnSelectionEdge = selectionController.isCellOnSelectionEdge
+    ?? (() => false)
+
+  const orderedColumns = computed(() => {
+    return orderedVisibleColumns.value.map(column => ({
+      pin: column.pin ?? "none",
+    }))
+  })
+
+  const orderedColumnMetrics = computed(() => {
+    const metrics: Array<{ start: number; end: number }> = []
+    let currentOffset = 0
+    for (const column of orderedVisibleColumns.value) {
+      const width = columnWidths.value[column.key] ?? column.width ?? DEFAULT_COLUMN_WIDTH
+      const start = currentOffset
+      currentOffset += width
+      metrics.push({ start, end: currentOffset })
+    }
+    return metrics
+  })
+
+  const cellSelectionRange = computed(() => {
+    const range = resolveSelectionRangeForClipboard()
+    if (!range) {
+      return null
+    }
+    return {
+      startRow: range.startRow,
+      endRow: range.endRow,
+      startColumn: range.startColumn,
+      endColumn: range.endColumn,
+    }
+  })
+
+  const resolveRowHeight = (rowIndex: number): number => {
+    return options.runtime.api.view.getRowHeightOverride(rowIndex) ?? options.normalizedBaseRowHeight.value
+  }
+
+  const resolveRowOffset = (rowIndex: number): number => {
+    if (rowIndex <= 0) {
+      return 0
+    }
+    let offset = 0
+    for (let index = 0; index < rowIndex; index += 1) {
+      offset += resolveRowHeight(index)
+    }
+    return offset
+  }
+
+  const {
+    cellSelectionOverlaySegments,
+  } = useDataGridSelectionOverlayOrchestration({
+    headerHeight: computed(() => 0),
+    rowHeight: 0,
+    resolveRowHeight,
+    resolveRowOffset,
+    orderedColumns,
+    orderedColumnMetrics,
+    cellSelectionRange,
+    fillPreviewRange: computed(() => null),
+      fillBaseRange: computed(() => null),
+      rangeMovePreviewRange: computed(() => null),
+      rangeMoveBaseRange: computed(() => null),
+      isRangeMoving: computed(() => false),
+      virtualWindow: computed(() => ({
+        rowTotal: options.totalRows.value,
+        colTotal: orderedVisibleColumns.value.length,
+      })),
+    })
+
+  const selectionOverlaySegments = computed<readonly { key: string; style: CSSProperties }[]>(() => {
+    const indexColumnWidth = INDEX_COLUMN_WIDTH
+    return cellSelectionOverlaySegments.value.map(segment => {
+      const left = Number.parseFloat(segment.style.left)
+      return {
+        key: segment.key,
+        style: {
+          top: segment.style.top,
+          left: `${(Number.isFinite(left) ? left : 0) + indexColumnWidth}px`,
+          width: segment.style.width,
+          height: segment.style.height,
+          position: "absolute",
+          border: "2px solid var(--datagrid-selection-copied-border)",
+          boxSizing: "border-box",
+          borderRadius: "1px",
+          pointerEvents: "none",
+          zIndex: 6,
+        } satisfies CSSProperties,
+      }
+    })
   })
 
   const resolveRowIndexById = (rowId: string | number): number => {
@@ -191,7 +298,7 @@ export function useDataGridTableStageRuntime<
     mode: options.mode,
     runtime: options.runtime as never,
     totalRows: options.totalRows,
-    visibleColumns: options.visibleColumns,
+    visibleColumns: orderedVisibleColumns,
     viewportRowStart,
     resolveSelectionRange: resolveSelectionRangeForClipboard,
     resolveCurrentCellCoord: resolveCurrentCellCoordForClipboard,
@@ -212,7 +319,7 @@ export function useDataGridTableStageRuntime<
     ensureKeyboardActiveCellVisible,
   } = useDataGridAppActiveCellViewport({
     bodyViewportRef,
-    visibleColumns: options.visibleColumns,
+    visibleColumns: orderedVisibleColumns,
     columnWidths,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
     indexColumnWidth: INDEX_COLUMN_WIDTH,
@@ -230,7 +337,7 @@ export function useDataGridTableStageRuntime<
   } = useDataGridAppInlineEditing<TRow, DataGridAppRowSnapshot<TRow>>({
     mode: options.mode,
     bodyViewportRef,
-    visibleColumns: options.visibleColumns,
+    visibleColumns: orderedVisibleColumns,
     totalRows: options.totalRows,
     runtime: options.runtime as never,
     readCell: (row, columnKey) => readCell(row, columnKey),
@@ -269,7 +376,7 @@ export function useDataGridTableStageRuntime<
     mode: options.mode,
     runtime: options.runtime as never,
     totalRows: options.totalRows,
-    visibleColumns: options.visibleColumns,
+    visibleColumns: orderedVisibleColumns,
     viewportRowStart,
     selectionSnapshot: options.selectionSnapshot,
     bodyViewportRef,
@@ -305,6 +412,46 @@ export function useDataGridTableStageRuntime<
     ensureKeyboardActiveCellVisible,
   })
 
+  const isViewportOwnedKeyboardEvent = (event: KeyboardEvent): boolean => {
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return false
+    }
+    return (
+      event.key.startsWith("Arrow")
+      || event.key === "Home"
+      || event.key === "End"
+      || event.key === "PageUp"
+      || event.key === "PageDown"
+      || event.key === "Tab"
+      || event.key === "Enter"
+      || event.key === " "
+      || event.key === "Spacebar"
+      || event.key === "F2"
+      || event.key === "Escape"
+      || event.key.length === 1
+    )
+  }
+
+  const handleViewportKeydown = (event: KeyboardEvent): void => {
+    if (isViewportOwnedKeyboardEvent(event)) {
+      event.preventDefault()
+    }
+    const activeCell = options.selectionSnapshot.value?.activeCell
+    if (!activeCell) {
+      return
+    }
+    const row = options.runtime.api.rows.get(activeCell.rowIndex)
+    if (!row) {
+      return
+    }
+    handleCellKeydown(
+      event,
+      row,
+      activeCell.rowIndex - viewportRowStart.value,
+      activeCell.colIndex,
+    )
+  }
+
   const {
     isColumnResizing,
     startResize,
@@ -313,7 +460,7 @@ export function useDataGridTableStageRuntime<
     stopColumnResize,
     dispose: disposeHeaderResize,
   } = useDataGridAppHeaderResize<TRow>({
-    visibleColumns: options.visibleColumns,
+    visibleColumns: orderedVisibleColumns,
     columnWidths,
     rows: options.rows,
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
@@ -341,7 +488,7 @@ export function useDataGridTableStageRuntime<
   } = useDataGridTableStageBindings<TRow>({
     mode: options.mode,
     rowHeightMode: options.rowHeightMode,
-    visibleColumns: options.visibleColumns,
+    visibleColumns: orderedVisibleColumns,
     renderedColumns,
     displayRows,
     columnFilterTextByKey: options.columnFilterTextByKey,
@@ -350,6 +497,8 @@ export function useDataGridTableStageRuntime<
     indexColumnStyle,
     topSpacerHeight,
     bottomSpacerHeight,
+    bodyScrollTop: viewportScrollTop,
+    selectionOverlaySegments,
     viewportRowStart,
     columnWindowStart: viewportColumnStart,
     leftColumnSpacerWidth,
@@ -364,6 +513,7 @@ export function useDataGridTableStageRuntime<
     handleHeaderWheel,
     handleHeaderScroll,
     handleViewportScroll,
+    handleViewportKeydown,
     rowClass,
     isRowAutosizeProbe,
     rowStyle,
@@ -374,6 +524,9 @@ export function useDataGridTableStageRuntime<
     startRowResize,
     autosizeRow,
     isCellSelected,
+    isSelectionAnchorCell,
+    shouldHighlightSelectedCell,
+    isCellOnSelectionEdge,
     isCellInFillPreview,
     isCellInPendingClipboardRange,
     isCellOnPendingClipboardEdge,

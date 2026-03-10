@@ -103,6 +103,7 @@ export interface DataGridClientComputedExecutionRuntimeContext<T> {
   resolveComputedRootIndexesForField: (changedField: string) => readonly number[]
   resolveComputedRootIndexesForContext: (contextKey: string) => readonly number[]
   resolveComputedRootIndexesForContextKeys: (contextKeys: ReadonlySet<string>) => readonly number[]
+  getFormulaContextValue: (key: string) => unknown
   resolveComputedTokenValue: (
     rowNode: DataGridRowNode<T>,
     token: DataGridComputedDependencyToken,

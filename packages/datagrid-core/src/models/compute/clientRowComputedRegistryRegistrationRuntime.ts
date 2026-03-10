@@ -272,7 +272,7 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
 
   const registerFormulaFunction = (
     name: string,
-    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: import("../rowModel.js").DataGridComputedFieldComputeContext<unknown>) => unknown),
   ): void => {
     const normalizedName = normalizeFormulaFunctionName(name)
     if (

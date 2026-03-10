@@ -8,7 +8,7 @@ import type {
   DataGridRowModel,
   DataGridRowNodeInput,
   DataGridSortAndFilterModelInput,
-} from "../models"
+} from "../models/index.js"
 import type {
   DataGridCoreSelectionService,
   DataGridCoreTransactionService,
@@ -30,6 +30,9 @@ export type DataGridRowsDataMutationCapability<TRow = unknown> = {
   replaceRows?: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   appendRows?: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   prependRows?: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+  insertRowsAt?: (index: number, rows: readonly DataGridRowNodeInput<TRow>[]) => boolean
+  insertRowsBefore?: (rowId: string | number, rows: readonly DataGridRowNodeInput<TRow>[]) => boolean
+  insertRowsAfter?: (rowId: string | number, rows: readonly DataGridRowNodeInput<TRow>[]) => boolean
 }
 
 export type DataGridSortFilterBatchCapability = {
@@ -164,6 +167,9 @@ export function resolveRowsDataMutationCapability<TRow>(
     replaceRows: typeof candidate.replaceRows === "function" ? candidate.replaceRows.bind(rowModel) : undefined,
     appendRows: typeof candidate.appendRows === "function" ? candidate.appendRows.bind(rowModel) : undefined,
     prependRows: typeof candidate.prependRows === "function" ? candidate.prependRows.bind(rowModel) : undefined,
+    insertRowsAt: typeof candidate.insertRowsAt === "function" ? candidate.insertRowsAt.bind(rowModel) : undefined,
+    insertRowsBefore: typeof candidate.insertRowsBefore === "function" ? candidate.insertRowsBefore.bind(rowModel) : undefined,
+    insertRowsAfter: typeof candidate.insertRowsAfter === "function" ? candidate.insertRowsAfter.bind(rowModel) : undefined,
   }
 }
 

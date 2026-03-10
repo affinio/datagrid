@@ -3,7 +3,7 @@ import type {
   DataGridColumnPin,
   DataGridRowId,
   DataGridRowModel,
-} from "../models"
+} from "../models/index.js"
 
 export interface DataGridCellRefreshOptions {
   immediate?: boolean

@@ -18,24 +18,86 @@ export interface UseDataGridAppActiveCellViewportResult {
 export function useDataGridAppActiveCellViewport(
   options: UseDataGridAppActiveCellViewportOptions,
 ): UseDataGridAppActiveCellViewportResult {
-  const indexColumnWidth = options.indexColumnWidth ?? 72
   const defaultColumnWidth = options.defaultColumnWidth ?? 140
 
-  const resolveColumnRenderWidth = (columnKey: string): number => {
-    return options.columnWidths.value[columnKey] ?? defaultColumnWidth
+  const resolveCellElement = (rowIndex: number, columnIndex: number): HTMLElement | null => {
+    const viewport = options.bodyViewportRef.value
+    if (!viewport) {
+      return null
+    }
+    const selector = `.grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`
+    const stageRoot = viewport.closest(".grid-stage")
+    const scopedRoot = stageRoot instanceof HTMLElement ? stageRoot : viewport.parentElement
+    return scopedRoot?.querySelector<HTMLElement>(selector) ?? null
   }
 
-  const resolvePinnedViewportInsets = (): { left: number; right: number } => {
-    const leftPinnedWidth = options.visibleColumns.value
-      .filter(column => column.pin === "left")
-      .reduce((sum, column) => sum + resolveColumnRenderWidth(column.key), 0)
-    const rightPinnedWidth = options.visibleColumns.value
-      .filter(column => column.pin === "right")
-      .reduce((sum, column) => sum + resolveColumnRenderWidth(column.key), 0)
-    return {
-      left: indexColumnWidth + leftPinnedWidth,
-      right: rightPinnedWidth,
+  const resolveColumnWidth = (column: DataGridColumnSnapshot): number => {
+    return options.columnWidths.value[column.key] ?? column.width ?? defaultColumnWidth
+  }
+
+  const ensureEstimatedRowVisible = (viewport: HTMLElement, rowIndex: number): void => {
+    const estimatedTop = Math.max(0, rowIndex * options.normalizedBaseRowHeight.value)
+    const estimatedBottom = estimatedTop + options.normalizedBaseRowHeight.value
+    const visibleTop = viewport.scrollTop
+    const visibleBottom = visibleTop + viewport.clientHeight
+
+    if (estimatedTop < visibleTop) {
+      viewport.scrollTop = estimatedTop
+      options.syncViewport()
+    } else if (estimatedBottom > visibleBottom) {
+      viewport.scrollTop = Math.max(0, estimatedBottom - viewport.clientHeight)
+      options.syncViewport()
     }
+  }
+
+  const resolveCenterColumnMetrics = (
+    columnIndex: number,
+  ): { start: number; end: number; totalWidth: number } | null => {
+    const targetColumn = options.visibleColumns.value[columnIndex]
+    if (!targetColumn || targetColumn.pin === "left" || targetColumn.pin === "right") {
+      return null
+    }
+
+    let currentOffset = 0
+    let totalWidth = 0
+    let targetStart: number | null = null
+    let targetEnd: number | null = null
+
+    for (const column of options.visibleColumns.value) {
+      if (column.pin === "left" || column.pin === "right") {
+        continue
+      }
+      const width = resolveColumnWidth(column)
+      if (column.key === targetColumn.key) {
+        targetStart = currentOffset
+        targetEnd = currentOffset + width
+      }
+      currentOffset += width
+      totalWidth += width
+    }
+
+    if (targetStart == null || targetEnd == null) {
+      return null
+    }
+
+    return {
+      start: targetStart,
+      end: targetEnd,
+      totalWidth,
+    }
+  }
+
+  const focusResolvedCellOrViewport = (
+    viewport: HTMLElement,
+    rowIndex: number,
+    columnIndex: number,
+  ): void => {
+    const targetCell = resolveCellElement(rowIndex, columnIndex)
+    if (targetCell) {
+      targetCell.focus({ preventScroll: true })
+      return
+    }
+    viewport.focus({ preventScroll: true })
   }
 
   const ensureKeyboardActiveCellVisible = (rowIndex: number, columnIndex: number): void => {
@@ -43,40 +105,35 @@ export function useDataGridAppActiveCellViewport(
     if (!viewport) {
       return
     }
-    const selector = `.grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`
-    let targetCell = viewport.querySelector<HTMLElement>(selector)
+    const targetColumn = options.visibleColumns.value[columnIndex]
+    ensureEstimatedRowVisible(viewport, rowIndex)
 
-    if (!targetCell) {
-      const estimatedTop = Math.max(0, rowIndex * options.normalizedBaseRowHeight.value)
-      const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-      const nextTop = Math.min(maxTop, estimatedTop)
-      if (viewport.scrollTop !== nextTop) {
-        viewport.scrollTop = nextTop
-        options.syncViewport()
-      }
-      targetCell = viewport.querySelector<HTMLElement>(selector)
-    }
-
-    if (!targetCell) {
+    if (targetColumn?.pin === "left" || targetColumn?.pin === "right") {
+      focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
       return
     }
 
-    targetCell.scrollIntoView({ block: "nearest", inline: "nearest" })
+    const centerMetrics = resolveCenterColumnMetrics(columnIndex)
+    if (centerMetrics) {
+      const visibleLeft = viewport.scrollLeft
+      const visibleRight = visibleLeft + viewport.clientWidth
+      const maxScrollLeft = Math.max(0, centerMetrics.totalWidth - viewport.clientWidth)
+      let nextScrollLeft = visibleLeft
 
-    const viewportRect = viewport.getBoundingClientRect()
-    const cellRect = targetCell.getBoundingClientRect()
-    const insets = resolvePinnedViewportInsets()
-    const visibleLeft = viewportRect.left + Math.max(0, insets.left)
-    const visibleRight = viewportRect.right - Math.max(0, insets.right)
+      if (centerMetrics.start < visibleLeft) {
+        nextScrollLeft = centerMetrics.start
+      } else if (centerMetrics.end > visibleRight) {
+        nextScrollLeft = centerMetrics.end - viewport.clientWidth
+      }
 
-    if (cellRect.left < visibleLeft) {
-      viewport.scrollLeft = Math.max(0, viewport.scrollLeft - (visibleLeft - cellRect.left))
-    } else if (cellRect.right > visibleRight) {
-      viewport.scrollLeft += cellRect.right - visibleRight
+      nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft))
+      if (Math.abs(nextScrollLeft - viewport.scrollLeft) >= 1) {
+        viewport.scrollLeft = nextScrollLeft
+        options.syncViewport()
+      }
     }
 
-    targetCell.focus({ preventScroll: true })
-    options.syncViewport()
+    focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
   }
 
   return {

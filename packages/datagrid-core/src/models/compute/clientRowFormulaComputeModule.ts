@@ -23,7 +23,7 @@ export interface DataGridClientFormulaComputeModule<T> extends DataGridClientCom
   getFormulaFields: () => readonly DataGridFormulaFieldSnapshot[]
   registerFormulaFunction: (
     name: string,
-    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: import("../rowModel.js").DataGridComputedFieldComputeContext<unknown>) => unknown),
   ) => void
   unregisterFormulaFunction: (name: string) => boolean
   getFormulaFunctionNames: () => readonly string[]
@@ -45,7 +45,7 @@ export interface CreateClientRowFormulaComputeModuleOptions<T> {
   hasRegisteredFormulaFields: () => boolean
   registerFormulaFunction: (
     name: string,
-    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: import("../rowModel.js").DataGridComputedFieldComputeContext<unknown>) => unknown),
   ) => void
   unregisterFormulaFunction: (name: string) => boolean
   getFormulaFunctionNames: () => readonly string[]

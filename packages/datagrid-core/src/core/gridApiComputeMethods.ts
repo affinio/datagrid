@@ -1,7 +1,7 @@
 import type {
   DataGridClientComputeDiagnostics,
   DataGridClientComputeMode,
-} from "../models"
+} from "../models/index.js"
 import {
   assertComputeCapability,
   type DataGridComputeCapability,

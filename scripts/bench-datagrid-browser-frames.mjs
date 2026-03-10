@@ -4,6 +4,7 @@ import { performance } from "node:perf_hooks"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { chromium } from "@playwright/test"
+import { ensureSandboxServer } from "./ensure-sandbox-server.mjs"
 
 const BENCH_BROWSER_BASE_URL = process.env.BENCH_BROWSER_BASE_URL ?? "http://127.0.0.1:4173"
 const BENCH_BROWSER_ROUTE = process.env.BENCH_BROWSER_ROUTE ?? "/vue/base-grid"
@@ -164,6 +165,8 @@ const startedAt = performance.now()
 console.log("\nAffino DataGrid Browser Frame Benchmark")
 console.log(`baseUrl=${BENCH_BROWSER_BASE_URL} route=${BENCH_BROWSER_ROUTE} sessions=${BENCH_BROWSER_SESSIONS} steps=${BENCH_BROWSER_SCROLL_STEPS}`)
 
+const sandboxServer = await ensureSandboxServer(BENCH_BROWSER_BASE_URL, BENCH_BROWSER_ROUTE, "browser-frames")
+
 const browser = await chromium.launch({
   headless: BENCH_BROWSER_HEADLESS,
   args: ["--disable-dev-shm-usage"],
@@ -194,6 +197,7 @@ try {
 } finally {
   await context.close()
   await browser.close()
+  await sandboxServer.stop()
 }
 
 const elapsedMs = performance.now() - startedAt

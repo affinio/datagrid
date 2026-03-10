@@ -76,11 +76,11 @@ const FACADES = [
 const DEMO_SCOPES = [
   {
     id: "demo-vue",
-    root: path.join(workspaceRoot, "demo-vue", "src"),
+    root: path.join(workspaceRoot, "packages", "datagrid-vue-app", "src"),
   },
   {
     id: "demo-laravel",
-    root: path.join(workspaceRoot, "demo-laravel", "resources", "js"),
+    root: path.join(workspaceRoot, "packages", "datagrid-laravel", "resources", "js"),
   },
 ]
 
@@ -124,13 +124,73 @@ function parseNamedSpecifiers(listText) {
     .filter(Boolean)
 }
 
-function collectExportsFromSource(text) {
+function collectDirectExports(text) {
   const names = []
   const exportBlockRegex = /export\s+(?:type\s+)?\{([\s\S]*?)\}\s+from\s+["'][^"']+["']/g
   for (const match of text.matchAll(exportBlockRegex)) {
     names.push(...parseNamedSpecifiers(match[1]))
   }
+  const directValueExportRegex = /export\s+(?:declare\s+)?(?:async\s+)?(?:const|function|class|let|var|enum)\s+([A-Za-z_$][\w$]*)/g
+  for (const match of text.matchAll(directValueExportRegex)) {
+    names.push(match[1])
+  }
+  const directTypeExportRegex = /export\s+type\s+([A-Za-z_$][\w$]*)/g
+  for (const match of text.matchAll(directTypeExportRegex)) {
+    names.push(match[1])
+  }
   return uniqueSorted(names)
+}
+
+async function resolveLocalModulePath(fromFile, specifier) {
+  if (!specifier.startsWith(".")) {
+    return null
+  }
+
+  const basePath = path.resolve(path.dirname(fromFile), specifier)
+  const candidates = [
+    basePath,
+    `${basePath}.ts`,
+    `${basePath}.js`,
+    `${basePath}.mts`,
+    `${basePath}.cts`,
+    path.join(basePath, "index.ts"),
+    path.join(basePath, "index.js"),
+    path.join(basePath, "index.mts"),
+    path.join(basePath, "index.cts"),
+  ]
+
+  for (const candidate of candidates) {
+    try {
+      await readFile(candidate, "utf8")
+      return candidate
+    } catch {}
+  }
+
+  return null
+}
+
+async function collectExportsFromSourceFile(sourceFile, visited = new Set()) {
+  const normalized = path.resolve(sourceFile)
+  if (visited.has(normalized)) {
+    return []
+  }
+  visited.add(normalized)
+
+  const text = await readFile(normalized, "utf8")
+  const names = new Set(collectDirectExports(text))
+  const exportStarRegex = /export\s+\*\s+from\s+["']([^"']+)["']/g
+
+  for (const match of text.matchAll(exportStarRegex)) {
+    const targetFile = await resolveLocalModulePath(normalized, match[1])
+    if (!targetFile) {
+      continue
+    }
+    for (const name of await collectExportsFromSourceFile(targetFile, visited)) {
+      names.add(name)
+    }
+  }
+
+  return uniqueSorted([...names])
 }
 
 function collectImportsBySpecifier(text) {
@@ -207,8 +267,7 @@ async function buildDemoImportIndex() {
 }
 
 async function buildFacadeSection(facade, demoImportIndex) {
-  const sourceText = await readFile(facade.sourceFile, "utf8")
-  const exportedSymbols = collectExportsFromSource(sourceText)
+  const exportedSymbols = await collectExportsFromSourceFile(facade.sourceFile)
 
   const usageRows = []
   for (const specifier of facade.importSpecifiers) {

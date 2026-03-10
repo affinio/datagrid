@@ -24,7 +24,12 @@ function compileFormulaAstEvaluatorForToken<TKey>(
   root: DataGridFormulaAstNode,
   functionRegistry: ReadonlyMap<string, DataGridFormulaFunctionRuntime>,
   resolveIdentifierToken: (identifier: string) => TKey | undefined,
+  getFunctionContext?: () => import("../coreTypes.js").DataGridComputedFieldComputeContext<unknown> | undefined,
 ): DataGridFormulaEvaluatorForToken<TKey> {
+  const compileChild = (node: DataGridFormulaAstNode): DataGridFormulaEvaluatorForToken<TKey> => {
+    return compileFormulaAstEvaluatorForToken(node, functionRegistry, resolveIdentifierToken, getFunctionContext)
+  }
+
   if (root.kind === "number") return () => root.value
   if (root.kind === "literal") return () => root.value
   if (root.kind === "identifier") {
@@ -41,9 +46,9 @@ function compileFormulaAstEvaluatorForToken<TKey>(
       )
     }
     if (normalizedFunctionName === "IF") {
-      const conditionEvaluator = compileFormulaAstEvaluatorForToken(root.args[0] ?? ZERO_FORMULA_NODE, functionRegistry, resolveIdentifierToken)
-      const trueEvaluator = compileFormulaAstEvaluatorForToken(root.args[1] ?? ZERO_FORMULA_NODE, functionRegistry, resolveIdentifierToken)
-      const falseEvaluator = compileFormulaAstEvaluatorForToken(root.args[2] ?? ZERO_FORMULA_NODE, functionRegistry, resolveIdentifierToken)
+      const conditionEvaluator = compileChild(root.args[0] ?? ZERO_FORMULA_NODE)
+      const trueEvaluator = compileChild(root.args[1] ?? ZERO_FORMULA_NODE)
+      const falseEvaluator = compileChild(root.args[2] ?? ZERO_FORMULA_NODE)
       return (readTokenValue) => {
         const conditionValue = conditionEvaluator(readTokenValue)
         if (isFormulaErrorValue(conditionValue)) return conditionValue
@@ -51,7 +56,7 @@ function compileFormulaAstEvaluatorForToken<TKey>(
       }
     }
     if (normalizedFunctionName === "IFS") {
-      const pairEvaluators = root.args.map(arg => compileFormulaAstEvaluatorForToken(arg, functionRegistry, resolveIdentifierToken))
+      const pairEvaluators = root.args.map(arg => compileChild(arg))
       return (readTokenValue) => {
         for (let index = 0; index < pairEvaluators.length; index += 2) {
           const conditionEvaluator = pairEvaluators[index]
@@ -65,7 +70,7 @@ function compileFormulaAstEvaluatorForToken<TKey>(
       }
     }
     if (normalizedFunctionName === "COALESCE") {
-      const argEvaluators = root.args.map(arg => compileFormulaAstEvaluatorForToken(arg, functionRegistry, resolveIdentifierToken))
+      const argEvaluators = root.args.map(arg => compileChild(arg))
       return (readTokenValue) => {
         for (const evaluator of argEvaluators) {
           const value = evaluator(readTokenValue)
@@ -74,7 +79,7 @@ function compileFormulaAstEvaluatorForToken<TKey>(
         return 0
       }
     }
-    const argEvaluators = root.args.map(arg => compileFormulaAstEvaluatorForToken(arg, functionRegistry, resolveIdentifierToken))
+    const argEvaluators = root.args.map(arg => compileChild(arg))
     return (readTokenValue) => {
       const args = new Array(argEvaluators.length)
       for (let index = 0; index < argEvaluators.length; index += 1) {
@@ -84,7 +89,7 @@ function compileFormulaAstEvaluatorForToken<TKey>(
       const formulaError = findFormulaErrorValue(args)
       if (formulaError) return formulaError
       try {
-        return normalizeFormulaValue(functionDefinition.compute(args))
+        return normalizeFormulaValue(functionDefinition.compute(args, getFunctionContext?.()))
       } catch (error) {
         throw new DataGridFormulaEvaluationError(
           createFormulaRuntimeError(
@@ -97,7 +102,7 @@ function compileFormulaAstEvaluatorForToken<TKey>(
     }
   }
   if (root.kind === "unary") {
-    const valueEvaluator = compileFormulaAstEvaluatorForToken(root.value, functionRegistry, resolveIdentifierToken)
+    const valueEvaluator = compileChild(root.value)
     return readTokenValue => {
       const value = valueEvaluator(readTokenValue)
       if (isFormulaErrorValue(value)) return value
@@ -106,8 +111,8 @@ function compileFormulaAstEvaluatorForToken<TKey>(
       return formulaNumberIsTruthy(value) ? 0 : 1
     }
   }
-  const leftEvaluator = compileFormulaAstEvaluatorForToken(root.left, functionRegistry, resolveIdentifierToken)
-  const rightEvaluator = compileFormulaAstEvaluatorForToken(root.right, functionRegistry, resolveIdentifierToken)
+  const leftEvaluator = compileChild(root.left)
+  const rightEvaluator = compileChild(root.right)
   if (root.operator === "AND") {
     return (readTokenValue) => {
       const left = leftEvaluator(readTokenValue)
@@ -153,8 +158,9 @@ export function compileFormulaAstEvaluator(
   root: DataGridFormulaAstNode,
   functionRegistry: ReadonlyMap<string, DataGridFormulaFunctionRuntime>,
   resolveIdentifierToken: (identifier: string) => DataGridComputedDependencyToken | undefined,
+  getFunctionContext?: () => import("../coreTypes.js").DataGridComputedFieldComputeContext<unknown> | undefined,
 ): DataGridFormulaEvaluator {
-  return compileFormulaAstEvaluatorForToken(root, functionRegistry, resolveIdentifierToken)
+  return compileFormulaAstEvaluatorForToken(root, functionRegistry, resolveIdentifierToken, getFunctionContext)
 }
 
 export function compileFormulaAstTokenIndexEvaluator(

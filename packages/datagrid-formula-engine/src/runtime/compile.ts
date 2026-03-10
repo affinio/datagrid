@@ -2,6 +2,7 @@
 // This file owns mode selection and evaluator wiring, not syntax semantics.
 import type {
   DataGridComputedDependencyToken,
+  DataGridComputedFieldComputeContext,
   DataGridFormulaFieldDefinition,
   DataGridFormulaValue,
   DataGridRowId,
@@ -61,6 +62,27 @@ function hasRowAwareFormulaIdentifiers(root: DataGridFormulaAstNode): boolean {
   }
   if (root.kind === "binary") {
     return hasRowAwareFormulaIdentifiers(root.left) || hasRowAwareFormulaIdentifiers(root.right)
+  }
+  return false
+}
+
+function hasRuntimeContextFormulaFunctions(
+  root: DataGridFormulaAstNode,
+  functionRegistry: ReturnType<typeof normalizeFormulaFunctionRegistry>,
+): boolean {
+  if (root.kind === "call") {
+    const functionDefinition = functionRegistry.get(root.name.trim().toUpperCase())
+    if (functionDefinition?.requiresRuntimeContext) {
+      return true
+    }
+    return root.args.some(arg => hasRuntimeContextFormulaFunctions(arg, functionRegistry))
+  }
+  if (root.kind === "unary") {
+    return hasRuntimeContextFormulaFunctions(root.value, functionRegistry)
+  }
+  if (root.kind === "binary") {
+    return hasRuntimeContextFormulaFunctions(root.left, functionRegistry)
+      || hasRuntimeContextFormulaFunctions(root.right, functionRegistry)
   }
   return false
 }
@@ -145,6 +167,7 @@ function analyzeFormulaExpression(
   contextKeys: readonly string[]
   dependencyTokenByIdentifier: ReadonlyMap<string, DataGridComputedDependencyToken>
   hasRowAwareIdentifiers: boolean
+  hasRuntimeContextFunctions: boolean
 } {
   const formula = normalizeFormulaText(formulaText)
   const tokens = tokenizeFormula(formula)
@@ -201,6 +224,7 @@ function analyzeFormulaExpression(
     contextKeys,
     dependencyTokenByIdentifier,
     hasRowAwareIdentifiers: hasRowAwareFormulaIdentifiers(optimizedAst),
+    hasRuntimeContextFunctions: hasRuntimeContextFormulaFunctions(optimizedAst, functionRegistry),
   }
 }
 
@@ -263,9 +287,10 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
   const allowDynamicCodegen = options.allowDynamicCodegen !== false
 
   let evaluator: DataGridFormulaEvaluator
+  let activeFunctionContext: DataGridComputedFieldComputeContext<TRow> | undefined
   let batchEvaluator: DataGridFormulaBatchEvaluator | null = null
   let columnarBatchEvaluator: DataGridFormulaColumnarBatchEvaluator | null = null
-  const supportsBatchExecution = !analyzed.hasRowAwareIdentifiers
+  const supportsBatchExecution = !analyzed.hasRowAwareIdentifiers && !analyzed.hasRuntimeContextFunctions
   const fusedColumnarBatchEvaluator = supportsBatchExecution
     ? compileFormulaAstColumnarBatchEvaluatorFused(
         analyzed.optimizedAst,
@@ -288,11 +313,12 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
       `Failed to compile JIT evaluator: dynamic code generation is disabled. Use compileStrategy 'ast' or allowDynamicCodegen: true.`,
     )
   }
-  if (analyzed.hasRowAwareIdentifiers || compileStrategy === "ast" || !allowDynamicCodegen) {
+  if (analyzed.hasRowAwareIdentifiers || analyzed.hasRuntimeContextFunctions || compileStrategy === "ast" || !allowDynamicCodegen) {
     evaluator = compileFormulaAstEvaluator(
       analyzed.optimizedAst,
       analyzed.functionRegistry,
       resolveIdentifierToken,
+      () => activeFunctionContext,
     )
   } else {
     try {
@@ -336,7 +362,7 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
     const name = normalizeFormulaFieldName(fieldDefinition.name, "Formula name")
     const field = normalizeFormulaFieldName(fieldDefinition.field ?? name, "Formula target field")
     const runtimeErrorPolicy: DataGridFormulaRuntimeErrorPolicy = bindOptions.runtimeErrorPolicy ?? "coerce-zero"
-    const batchExecutionMode = analyzed.hasRowAwareIdentifiers
+    const batchExecutionMode = analyzed.hasRowAwareIdentifiers || analyzed.hasRuntimeContextFunctions
       ? "row"
       : fusedColumnarBatchEvaluator
         ? "columnar-fused"
@@ -569,7 +595,14 @@ export function compileDataGridFormulaFieldArtifact<TRow = unknown>(
       computeBatch,
       computeBatchColumnar,
       compute: (context) => evaluateWithRuntimePolicy(
-        () => evaluator(token => context.get(token)),
+        () => {
+          activeFunctionContext = context
+          try {
+            return evaluator(token => context.get(token))
+          } finally {
+            activeFunctionContext = undefined
+          }
+        },
         {
           rowId: context.rowId,
           sourceIndex: context.sourceIndex,

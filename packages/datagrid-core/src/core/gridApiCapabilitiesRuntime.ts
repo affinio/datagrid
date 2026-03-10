@@ -1,4 +1,4 @@
-import type { DataGridRowModel } from "../models"
+import type { DataGridRowModel } from "../models/index.js"
 import type {
   DataGridCoreSelectionService,
   DataGridCoreTransactionService,

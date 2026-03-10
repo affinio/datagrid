@@ -195,6 +195,36 @@ describe("formulaEngine", () => {
     expect(compiled.contextKeys).toEqual(["pricing"])
   })
 
+  it("supports cross-table TABLE() formulas with per-table context keys", () => {
+    const explained = explainDataGridFormulaExpression(
+      "SUMIF(TABLE('orders', 'status'), 'Open', TABLE('orders', 'amount'))",
+    )
+
+    expect(explained.contextKeys).toEqual(["table:orders"])
+
+    const compiled = compileDataGridFormulaFieldDefinition({
+      name: "openRevenue",
+      formula: "SUMIF(TABLE('orders', 'status'), 'Open', TABLE('orders', 'amount')) + COUNTIF(TABLE('orders', 'customer.region'), 'EU')",
+    })
+
+    expect(compiled.contextKeys).toEqual(["table:orders"])
+    expect(
+      compiled.compute({
+        row: {},
+        rowId: "dashboard-1",
+        sourceIndex: 0,
+        get: () => 0,
+        getContextValue: key => key === "table:orders"
+          ? [
+              { status: "Open", amount: 10, customer: { region: "EU" } },
+              { status: "Closed", amount: 5, customer: { region: "US" } },
+              { status: "Open", amount: 20, customer: { region: "EU" } },
+            ]
+          : undefined,
+      }),
+    ).toBe(32)
+  })
+
   it("compiles arithmetic formula and evaluates with dependency tokens", () => {
     const compiled = compileDataGridFormulaFieldDefinition<{ price: number; quantity: number; tax: number }>({
       name: "total",

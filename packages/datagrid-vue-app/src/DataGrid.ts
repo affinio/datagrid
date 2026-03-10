@@ -23,6 +23,7 @@ import {
   type DataGridFormulaFieldDefinition,
   type DataGridFormulaFunctionRegistry,
   type DataGridRowModel,
+  type DataGridRowNodeInput,
   type DataGridSetStateOptions,
   type DataGridSortState,
   type DataGridUnifiedColumnState,
@@ -361,6 +362,18 @@ export default defineComponent({
       importPivotLayout: controlledState.importPivotLayout,
       expandAllGroups: controlledState.expandAllGroups,
       collapseAllGroups: controlledState.collapseAllGroups,
+      insertRowsAt: (index: number, rows: readonly DataGridRowNodeInput<unknown>[]) =>
+        dataGridRef.value?.api.rows.insertDataAt(index, rows) ?? false,
+      insertRowBefore: (rowId: string | number, rows: readonly DataGridRowNodeInput<unknown>[]) =>
+        dataGridRef.value?.api.rows.insertDataBefore(rowId, rows) ?? false,
+      insertRowAfter: (rowId: string | number, rows: readonly DataGridRowNodeInput<unknown>[]) =>
+        dataGridRef.value?.api.rows.insertDataAfter(rowId, rows) ?? false,
+      insertColumnsAt: (index: number, columns: readonly DataGridAppColumnDef[]) =>
+        dataGridRef.value?.api.columns.insertAt(index, columns) ?? false,
+      insertColumnBefore: (columnKey: string, columns: readonly DataGridAppColumnDef[]) =>
+        dataGridRef.value?.api.columns.insertBefore(columnKey, columns) ?? false,
+      insertColumnAfter: (columnKey: string, columns: readonly DataGridAppColumnDef[]) =>
+        dataGridRef.value?.api.columns.insertAfter(columnKey, columns) ?? false,
     })
 
     return (): VNode => {

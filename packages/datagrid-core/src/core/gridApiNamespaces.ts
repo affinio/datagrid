@@ -1,4 +1,8 @@
-import type { DataGridApi } from "./gridApiContracts"
+import type {
+  DataGridApi,
+  DataGridApiColumnsNamespace,
+  DataGridApiRowsNamespace,
+} from "./gridApiContracts"
 
 export interface DataGridApiMethodSet<TRow = unknown> {
   lifecycle: DataGridApi<TRow>["lifecycle"]
@@ -33,10 +37,14 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   getRow: DataGridApi<TRow>["rows"]["get"]
   getRowsInRange: DataGridApi<TRow>["rows"]["getRange"]
   hasDataMutationSupport: DataGridApi<TRow>["rows"]["hasDataMutationSupport"]
+  hasInsertSupport: DataGridApi<TRow>["rows"]["hasInsertSupport"]
   setData: DataGridApi<TRow>["rows"]["setData"]
   replaceData: DataGridApi<TRow>["rows"]["replaceData"]
   appendData: DataGridApi<TRow>["rows"]["appendData"]
   prependData: DataGridApi<TRow>["rows"]["prependData"]
+  insertDataAt: DataGridApi<TRow>["rows"]["insertDataAt"]
+  insertDataBefore: DataGridApi<TRow>["rows"]["insertDataBefore"]
+  insertDataAfter: DataGridApi<TRow>["rows"]["insertDataAfter"]
   getPaginationSnapshot: DataGridApi<TRow>["rows"]["getPagination"]
   setPagination: DataGridApi<TRow>["rows"]["setPagination"]
   setPageSize: DataGridApi<TRow>["rows"]["setPageSize"]
@@ -78,6 +86,9 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   getColumnModelSnapshot: DataGridApi<TRow>["columns"]["getSnapshot"]
   getColumn: DataGridApi<TRow>["columns"]["get"]
   setColumns: DataGridApi<TRow>["columns"]["setAll"]
+  insertColumnsAt: DataGridApi<TRow>["columns"]["insertAt"]
+  insertColumnsBefore: DataGridApi<TRow>["columns"]["insertBefore"]
+  insertColumnsAfter: DataGridApi<TRow>["columns"]["insertAfter"]
   setColumnOrder: DataGridApi<TRow>["columns"]["setOrder"]
   setColumnVisibility: DataGridApi<TRow>["columns"]["setVisibility"]
   setColumnWidth: DataGridApi<TRow>["columns"]["setWidth"]
@@ -123,6 +134,70 @@ export interface DataGridApiMethodSet<TRow = unknown> {
 export function createDataGridApiFromMethodSet<TRow = unknown>(
   methodSet: DataGridApiMethodSet<TRow>,
 ): DataGridApi<TRow> {
+  const rows: DataGridApiRowsNamespace<TRow> = {
+    getSnapshot: methodSet.getRowModelSnapshot,
+    getCount: methodSet.getRowCount,
+    get: methodSet.getRow,
+    getRange: methodSet.getRowsInRange,
+    hasDataMutationSupport: methodSet.hasDataMutationSupport,
+    hasInsertSupport: methodSet.hasInsertSupport,
+    setData: methodSet.setData,
+    replaceData: methodSet.replaceData,
+    appendData: methodSet.appendData,
+    prependData: methodSet.prependData,
+    insertDataAt: methodSet.insertDataAt,
+    insertDataBefore: methodSet.insertDataBefore,
+    insertDataAfter: methodSet.insertDataAfter,
+    getPagination: methodSet.getPaginationSnapshot,
+    setPagination: methodSet.setPagination,
+    setPageSize: methodSet.setPageSize,
+    setCurrentPage: methodSet.setCurrentPage,
+    setSortModel: methodSet.setSortModel,
+    setFilterModel: methodSet.setFilterModel,
+    setSortAndFilterModel: methodSet.setSortAndFilterModel,
+    setGroupBy: methodSet.setGroupBy,
+    setAggregationModel: methodSet.setAggregationModel,
+    getAggregationModel: methodSet.getAggregationModel,
+    setGroupExpansion: methodSet.setGroupExpansion,
+    toggleGroup: methodSet.toggleGroup,
+    expandGroup: methodSet.expandGroup,
+    collapseGroup: methodSet.collapseGroup,
+    expandAllGroups: methodSet.expandAllGroups,
+    collapseAllGroups: methodSet.collapseAllGroups,
+    hasPatchSupport: methodSet.hasPatchSupport,
+    hasComputedSupport: methodSet.hasComputedSupport,
+    registerComputedField: methodSet.registerComputedField,
+    getComputedFields: methodSet.getComputedFields,
+    recomputeComputedFields: methodSet.recomputeComputedFields,
+    hasFormulaSupport: methodSet.hasFormulaSupport,
+    registerFormulaField: methodSet.registerFormulaField,
+    getFormulaFields: methodSet.getFormulaFields,
+    recomputeFormulaContext: methodSet.recomputeFormulaContext,
+    hasFormulaFunctionRegistrySupport: methodSet.hasFormulaFunctionRegistrySupport,
+    registerFormulaFunction: methodSet.registerFormulaFunction,
+    unregisterFormulaFunction: methodSet.unregisterFormulaFunction,
+    getFormulaFunctionNames: methodSet.getFormulaFunctionNames,
+    patch: methodSet.patchRows,
+    applyEdits: methodSet.applyEdits,
+    setAutoReapply: methodSet.setAutoReapply,
+    getAutoReapply: methodSet.getAutoReapply,
+    batch: methodSet.batchRows,
+  }
+
+  const columns: DataGridApiColumnsNamespace = {
+    getSnapshot: methodSet.getColumnModelSnapshot,
+    get: methodSet.getColumn,
+    setAll: methodSet.setColumns,
+    insertAt: methodSet.insertColumnsAt,
+    insertBefore: methodSet.insertColumnsBefore,
+    insertAfter: methodSet.insertColumnsAfter,
+    setOrder: methodSet.setColumnOrder,
+    setVisibility: methodSet.setColumnVisibility,
+    setWidth: methodSet.setColumnWidth,
+    setPin: methodSet.setColumnPin,
+    getHistogram: methodSet.getColumnHistogram,
+  }
+
   return {
     lifecycle: methodSet.lifecycle,
     capabilities: methodSet.capabilities,
@@ -157,67 +232,14 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       undo: methodSet.undoTransaction,
       redo: methodSet.redoTransaction,
     },
-    rows: {
-      getSnapshot: methodSet.getRowModelSnapshot,
-      getCount: methodSet.getRowCount,
-      get: methodSet.getRow,
-      getRange: methodSet.getRowsInRange,
-      hasDataMutationSupport: methodSet.hasDataMutationSupport,
-      setData: methodSet.setData,
-      replaceData: methodSet.replaceData,
-      appendData: methodSet.appendData,
-      prependData: methodSet.prependData,
-      getPagination: methodSet.getPaginationSnapshot,
-      setPagination: methodSet.setPagination,
-      setPageSize: methodSet.setPageSize,
-      setCurrentPage: methodSet.setCurrentPage,
-      setSortModel: methodSet.setSortModel,
-      setFilterModel: methodSet.setFilterModel,
-      setSortAndFilterModel: methodSet.setSortAndFilterModel,
-      setGroupBy: methodSet.setGroupBy,
-      setAggregationModel: methodSet.setAggregationModel,
-      getAggregationModel: methodSet.getAggregationModel,
-      setGroupExpansion: methodSet.setGroupExpansion,
-      toggleGroup: methodSet.toggleGroup,
-      expandGroup: methodSet.expandGroup,
-      collapseGroup: methodSet.collapseGroup,
-      expandAllGroups: methodSet.expandAllGroups,
-      collapseAllGroups: methodSet.collapseAllGroups,
-      hasPatchSupport: methodSet.hasPatchSupport,
-      hasComputedSupport: methodSet.hasComputedSupport,
-      registerComputedField: methodSet.registerComputedField,
-      getComputedFields: methodSet.getComputedFields,
-      recomputeComputedFields: methodSet.recomputeComputedFields,
-      hasFormulaSupport: methodSet.hasFormulaSupport,
-      registerFormulaField: methodSet.registerFormulaField,
-      getFormulaFields: methodSet.getFormulaFields,
-      recomputeFormulaContext: methodSet.recomputeFormulaContext,
-      hasFormulaFunctionRegistrySupport: methodSet.hasFormulaFunctionRegistrySupport,
-      registerFormulaFunction: methodSet.registerFormulaFunction,
-      unregisterFormulaFunction: methodSet.unregisterFormulaFunction,
-      getFormulaFunctionNames: methodSet.getFormulaFunctionNames,
-      patch: methodSet.patchRows,
-      applyEdits: methodSet.applyEdits,
-      setAutoReapply: methodSet.setAutoReapply,
-      getAutoReapply: methodSet.getAutoReapply,
-      batch: methodSet.batchRows,
-    },
+    rows,
     data: {
       hasBackpressureControlSupport: methodSet.hasBackpressureControlSupport,
       pause: methodSet.pauseBackpressure,
       resume: methodSet.resumeBackpressure,
       flush: methodSet.flushBackpressure,
     },
-    columns: {
-      getSnapshot: methodSet.getColumnModelSnapshot,
-      get: methodSet.getColumn,
-      setAll: methodSet.setColumns,
-      setOrder: methodSet.setColumnOrder,
-      setVisibility: methodSet.setColumnVisibility,
-      setWidth: methodSet.setColumnWidth,
-      setPin: methodSet.setColumnPin,
-      getHistogram: methodSet.getColumnHistogram,
-    },
+    columns,
     view: {
       setViewportRange: methodSet.setViewportRange,
       setRowHeightMode: methodSet.setRowHeightMode,

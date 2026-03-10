@@ -277,6 +277,7 @@ async function runServerPivotInteropScenario(factories, seed) {
 
   const pullDurations = []
   const exportDurations = []
+  const setModelDurations = []
   const importDurations = []
   const drilldownDurations = []
   const interopRowCounts = []
@@ -363,7 +364,7 @@ async function runServerPivotInteropScenario(factories, seed) {
       end: Math.min(BENCH_VIEWPORT_SIZE - 1, Math.max(0, BENCH_ROW_COUNT - 1)),
     })
     await waitForPivotMaterialized(rowModel)
-    importDurations.push(performance.now() - importStart)
+    setModelDurations.push(performance.now() - importStart)
 
     const exportStart = performance.now()
     const interop = api.pivot.exportInterop()
@@ -400,6 +401,7 @@ async function runServerPivotInteropScenario(factories, seed) {
     elapsedMs,
     pullMs: stats(pullDurations),
     exportInteropMs: stats(exportDurations),
+    setModelMs: stats(setModelDurations),
     importLayoutMs: stats(importDurations),
     drilldownMs: stats(drilldownDurations),
     interopRowsMean: stats(interopRowCounts).mean,

@@ -198,6 +198,17 @@ export {
 } from "./composables/useDataGridOverlayScrollState"
 
 export {
+  useDataGridSelectionOverlayOrchestration,
+  type DataGridOverlayRange,
+  type DataGridOverlayColumnLike,
+  type DataGridOverlayColumnMetricLike,
+  type DataGridSelectionOverlayVirtualWindow,
+  type DataGridSelectionOverlaySegment,
+  type UseDataGridSelectionOverlayOrchestrationOptions,
+  type UseDataGridSelectionOverlayOrchestrationResult,
+} from "./composables/useDataGridSelectionOverlayOrchestration"
+
+export {
   useDataGridContextMenu,
   type DataGridContextMenuAction,
   type DataGridContextMenuActionId,

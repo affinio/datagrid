@@ -164,6 +164,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
     row: undefined as T,
     rowId: 0 as DataGridRowId,
     sourceIndex: 0,
+    getContextValue: (key: string) => context.getFormulaContextValue(key),
     get: (token: DataGridComputedDependencyToken) => {
       if (!activeComputeRowNode) {
         return undefined
@@ -253,6 +254,17 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       rowNodes: batchRowNodes,
       contexts: batchContexts,
     }
+  }
+
+  const shouldFlushNodeImmediately = (
+    computedName: string,
+    computed: DataGridRegisteredComputedField<T>,
+  ): boolean => {
+    const formulaField = formulaFieldsByName.get(computedName)
+    if (!formulaField || formulaField.contextKeys.length === 0) {
+      return false
+    }
+    return computed.batchExecutionMode === "row" && computed.deps.length === 0
   }
 
   const createPreparedTokenColumns = (
@@ -663,6 +675,9 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
           })) {
             queuedSameLevelWork = true
           }
+          if (shouldFlushNodeImmediately(scheduledNodeBatch.computedName, scheduledNodeBatch.computed)) {
+            flushLevelPatches()
+          }
         }
         flushLevelPatches()
         continue
@@ -696,6 +711,9 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
           })) {
             queuedSameLevelWork = true
           }
+          if (shouldFlushNodeImmediately(scheduledNodeBatch.computedName, scheduledNodeBatch.computed)) {
+            flushLevelPatches()
+          }
         }
         flushLevelPatches()
         continue
@@ -717,6 +735,9 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
             nodeDirtyRowIndexes: scheduledNodeBatch.batchDirtyRowIndexes,
           })) {
             queuedSameLevelWork = true
+          }
+          if (shouldFlushNodeImmediately(scheduledNodeBatch.computedName, scheduledNodeBatch.computed)) {
+            flushLevelPatches()
           }
           continue
         }

@@ -16,6 +16,7 @@ export interface UseDataGridPointerAutoScrollOptions {
   resolveRangeMovePointer: () => DataGridPointerCoordinates | null
   resolveFillPointer: () => DataGridPointerCoordinates | null
   resolveDragPointer: () => DataGridPointerCoordinates | null
+  resolveAllowHorizontalAutoScroll?: () => boolean
   resolveViewportElement: () => HTMLElement | null
   resolveHeaderHeight: () => number
   resolveAxisAutoScrollDelta: (pointer: number, min: number, max: number) => number
@@ -74,7 +75,10 @@ export function useDataGridPointerAutoScroll(
       const rect = viewport.getBoundingClientRect()
       const topBoundary = rect.top + options.resolveHeaderHeight()
       const deltaY = options.resolveAxisAutoScrollDelta(pointer.clientY, topBoundary, rect.bottom)
-      const deltaX = options.resolveAxisAutoScrollDelta(pointer.clientX, rect.left, rect.right)
+      const allowHorizontalAutoScroll = options.resolveAllowHorizontalAutoScroll?.() ?? true
+      const deltaX = !allowHorizontalAutoScroll || pointer.clientX < rect.left || pointer.clientX > rect.right
+        ? 0
+        : options.resolveAxisAutoScrollDelta(pointer.clientX, rect.left, rect.right)
 
       if (deltaX !== 0 || deltaY !== 0) {
         const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)

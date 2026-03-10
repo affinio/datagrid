@@ -1,10 +1,10 @@
 {
   "baselineSchemaVersion": 1,
   "benchmark": "datagrid-formula-engine",
-  "generatedAt": "2026-03-06T15:38:00.204Z",
+  "generatedAt": "2026-03-09T21:54:55.916Z",
   "source": {
-    "file": "artifacts/performance/bench-datagrid-formula-engine.assert-second.json",
-    "runGeneratedAt": "2026-03-06T15:38:00.204Z"
+    "file": "artifacts/performance/bench-datagrid-formula-engine.assert.json",
+    "runGeneratedAt": "2026-03-09T21:54:55.916Z"
   },
   "config": {
     "scenarios": [
@@ -40,12 +40,12 @@
     "varianceMinMeanMs": 0.5
   },
   "aggregate": {
-    "elapsedP95Ms": 47740.71800919999,
-    "heapDeltaP95Mb": 29.898997497558593,
-    "fullRecomputeP95Ms": 1424.1231804399856,
-    "patchP95Ms": 637.4776181600009,
-    "fullEvaluationsPerSecMean": 2678337.6233548885,
-    "incrementalEvaluationsPerSecMean": 105805.29473655547
+    "elapsedP95Ms": 15422.577880599998,
+    "heapDeltaP95Mb": 114.88551330566406,
+    "fullRecomputeP95Ms": 1397.3723854799996,
+    "patchP95Ms": 313.34063912000215,
+    "fullEvaluationsPerSecMean": 4263222.809846129,
+    "incrementalEvaluationsPerSecMean": 212586.29353995333
   },
   "scenarios": [
     {
@@ -55,25 +55,25 @@
         "formulas": 40,
         "depth": 4
       },
-      "compileMeanMs": 0.11813911110867696,
-      "initMeanMs": 37276.16977933332,
-      "fullRecomputeP95Ms": 1430.858886459992,
-      "fullEvaluationsPerSecMean": 2851170.834203519,
+      "compileMeanMs": 1.3914884444449047,
+      "initMeanMs": 6979.296698666666,
+      "fullRecomputeP95Ms": 1416.753738420001,
+      "fullEvaluationsPerSecMean": 4226304.658827791,
       "patch": [
         {
           "patchSize": 1,
-          "p95Ms": 15.182447979998832,
-          "evaluationsPerSecMean": 3504.943995420423
+          "p95Ms": 207.11035257999754,
+          "evaluationsPerSecMean": 204.66749811980625
         },
         {
           "patchSize": 100,
-          "p95Ms": 76.07394584000285,
-          "evaluationsPerSecMean": 53110.697002321336
+          "p95Ms": 207.72278576000303,
+          "evaluationsPerSecMean": 18828.222109171107
         },
         {
           "patchSize": 1000,
-          "p95Ms": 660.0363781399955,
-          "evaluationsPerSecMean": 60403.97264879153
+          "p95Ms": 328.90864538000295,
+          "evaluationsPerSecMean": 123405.76647529747
         }
       ]
     },
@@ -84,25 +84,25 @@
         "formulas": 20,
         "depth": 3
       },
-      "compileMeanMs": 0.07189355555601651,
-      "initMeanMs": 5997.436364666668,
-      "fullRecomputeP95Ms": 943.4553419800254,
-      "fullEvaluationsPerSecMean": 2324888.337243896,
+      "compileMeanMs": 1.0921269999982746,
+      "initMeanMs": 1661.367135999996,
+      "fullRecomputeP95Ms": 296.0856185799998,
+      "fullEvaluationsPerSecMean": 4169630.129099758,
       "patch": [
         {
           "patchSize": 1,
-          "p95Ms": 20.07863109997357,
-          "evaluationsPerSecMean": 3515.5951638238844
+          "p95Ms": 77.19964852000207,
+          "evaluationsPerSecMean": 410.5624877717681
         },
         {
           "patchSize": 100,
-          "p95Ms": 25.64601523999532,
-          "evaluationsPerSecMean": 85878.9456192187
+          "p95Ms": 50.184575119998264,
+          "evaluationsPerSecMean": 37762.20278248576
         },
         {
           "patchSize": 1000,
-          "p95Ms": 183.15747034000407,
-          "evaluationsPerSecMean": 104509.72793190704
+          "p95Ms": 101.63125788000266,
+          "evaluationsPerSecMean": 189742.828964803
         }
       ]
     },
@@ -113,25 +113,25 @@
         "formulas": 10,
         "depth": 2
       },
-      "compileMeanMs": 0.03580088888783292,
-      "initMeanMs": 447.50240399999893,
-      "fullRecomputeP95Ms": 52.868555479998754,
-      "fullEvaluationsPerSecMean": 2858953.698617251,
+      "compileMeanMs": 0.3743895555570715,
+      "initMeanMs": 170.45638300000064,
+      "fullRecomputeP95Ms": 31.638075199994926,
+      "fullEvaluationsPerSecMean": 4393733.6416108385,
       "patch": [
         {
           "patchSize": 1,
-          "p95Ms": 1.3556543599984434,
-          "evaluationsPerSecMean": 10444.684357492844
+          "p95Ms": 5.885576060001403,
+          "evaluationsPerSecMean": 2567.530024440373
         },
         {
           "patchSize": 100,
-          "p95Ms": 7.477405860000581,
-          "evaluationsPerSecMean": 136156.03713363668
+          "p95Ms": 6.006143720000837,
+          "evaluationsPerSecMean": 159408.89387125665
         },
         {
           "patchSize": 1000,
-          "p95Ms": 68.93000286000039,
-          "evaluationsPerSecMean": 152502.18362896785
+          "p95Ms": 30.526377480001972,
+          "evaluationsPerSecMean": 324610.28517975955
         }
       ]
     }

@@ -210,7 +210,13 @@
                 :key="`${String(row.rowId)}-${column.key}`"
                 class="grid-cell"
                 :class="{
-                  'grid-cell--selected': isCellSelected(rowOffset, columnIndex),
+                  'grid-cell--selected': shouldHighlightSelectedCell(rowOffset, columnIndex),
+                  'grid-cell--selection-anchor': isSelectionAnchorCell(rowOffset, columnIndex),
+                  'grid-cell--selection-frame': isCellSelected(rowOffset, columnIndex),
+                  'grid-cell--selection-top': isCellOnSelectionEdge(rowOffset, columnIndex, 'top'),
+                  'grid-cell--selection-right': isCellOnSelectionEdge(rowOffset, columnIndex, 'right'),
+                  'grid-cell--selection-bottom': isCellOnSelectionEdge(rowOffset, columnIndex, 'bottom'),
+                  'grid-cell--selection-left': isCellOnSelectionEdge(rowOffset, columnIndex, 'left'),
                   'grid-cell--fill-preview': isCellInFillPreview(rowOffset, columnIndex),
                   'grid-cell--clipboard-pending': isCellInPendingClipboardRange(rowOffset, columnIndex),
                   'grid-cell--clipboard-pending-top': isCellOnPendingClipboardEdge(rowOffset, columnIndex, 'top'),
@@ -2040,7 +2046,7 @@ const cellPointerDownRouter = useDataGridCellPointerDownRouter<
     if (!editingCell.value) {
       return false
     }
-    commitInlineEdit(false)
+    commitInlineEdit("stay")
     return true
   },
   resolveCellCoord: (row, columnKey) => {
@@ -2225,6 +2231,7 @@ const handleCellKeydown = (
   rowOffset: number,
   columnIndex: number,
 ): void => {
+  const isPrintableEditingKey = !event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1
   if (isFillDragging.value && event.key === "Escape") {
     event.preventDefault()
     fillSelectionLifecycle.stopFillSelection(false)
@@ -2249,6 +2256,14 @@ const handleCellKeydown = (
     return
   }
   if (cellNavigation.dispatchNavigation(event)) {
+    return
+  }
+  if (isPrintableEditingKey) {
+    event.preventDefault()
+    const columnKey = visibleColumns.value[columnIndex]?.key
+    if (columnKey) {
+      startInlineEdit(row, columnKey, { draftValue: event.key })
+    }
     return
   }
   if (event.key === " " || event.key === "Spacebar") {
@@ -2288,7 +2303,11 @@ const focusInlineEditor = (): void => {
   })
 }
 
-const startInlineEdit = (row: DataGridRowNode<CoreBaseRow>, columnKey: string): void => {
+const startInlineEdit = (
+  row: DataGridRowNode<CoreBaseRow>,
+  columnKey: string,
+  options: { draftValue?: string } = {},
+): void => {
   if (row.kind === "group" || row.rowId == null) {
     return
   }
@@ -2296,7 +2315,7 @@ const startInlineEdit = (row: DataGridRowNode<CoreBaseRow>, columnKey: string): 
     rowId: row.rowId,
     columnKey,
   }
-  editingCellValue.value = readCell(row, columnKey)
+  editingCellValue.value = options.draftValue ?? readCell(row, columnKey)
   focusInlineEditor()
 }
 
@@ -2308,7 +2327,7 @@ const clearInlineEdit = (): void => {
 const focusAfterInlineEdit = (
   rowId: string | number,
   columnKey: string,
-  moveToNextRow: boolean,
+  target: "stay" | "next" | "previous",
 ): void => {
   const columnIndex = visibleColumns.value.findIndex(column => column.key === columnKey)
   if (columnIndex < 0) {
@@ -2319,9 +2338,11 @@ const focusAfterInlineEdit = (
     return
   }
   const maxRowIndex = Math.max(0, totalRows.value - 1)
-  const nextRowIndex = moveToNextRow
+  const nextRowIndex = target === "next"
     ? Math.min(maxRowIndex, currentRowIndex + 1)
-    : currentRowIndex
+    : target === "previous"
+      ? Math.max(0, currentRowIndex - 1)
+      : currentRowIndex
   const nextRowId = normalizeRowId(api.rows.get(nextRowIndex)?.rowId)
   if (nextRowId == null) {
     return
@@ -2336,12 +2357,18 @@ const focusAfterInlineEdit = (
   })
 }
 
-const commitInlineEdit = (moveToNextRowOrEvent: boolean | FocusEvent = false): void => {
+const commitInlineEdit = (
+  targetOrEvent: "stay" | "next" | "previous" | boolean | FocusEvent = "stay",
+): void => {
   const currentEditingCell = editingCell.value
   if (!currentEditingCell) {
     return
   }
-  const moveToNextRow = typeof moveToNextRowOrEvent === "boolean" ? moveToNextRowOrEvent : false
+  const target = typeof targetOrEvent === "string"
+    ? targetOrEvent
+    : typeof targetOrEvent === "boolean"
+      ? (targetOrEvent ? "next" : "stay")
+      : "stay"
   const beforeSnapshot = captureRowsSnapshot()
   api.rows.applyEdits([
     {
@@ -2357,7 +2384,7 @@ const commitInlineEdit = (moveToNextRowOrEvent: boolean | FocusEvent = false): v
   }, beforeSnapshot)
   syncRangeRows(viewportRange.value)
   clearInlineEdit()
-  focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, moveToNextRow)
+  focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, target)
 }
 
 const cancelInlineEdit = (): void => {
@@ -2366,13 +2393,13 @@ const cancelInlineEdit = (): void => {
   if (!currentEditingCell) {
     return
   }
-  focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, false)
+  focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, "stay")
 }
 
 const handleEditorKeydown = (event: KeyboardEvent): void => {
   if (event.key === "Enter") {
     event.preventDefault()
-    commitInlineEdit(true)
+    commitInlineEdit(event.shiftKey ? "previous" : "next")
     return
   }
   if (event.key === "Escape") {
@@ -2422,17 +2449,65 @@ const handleWindowMouseUp = (): void => {
 }
 
 const isCellSelected = (rowOffset: number, columnIndex: number): boolean => {
+  const range = resolveSelectionRangeForClipboard()
+  if (!range) {
+    return false
+  }
+  const rowIndex = viewportRange.value.start + rowOffset
+  return (
+    rowIndex >= range.startRow
+    && rowIndex <= range.endRow
+    && columnIndex >= range.startColumn
+    && columnIndex <= range.endColumn
+  )
+}
+
+const isSelectionAnchorCell = (rowOffset: number, columnIndex: number): boolean => {
   const snapshot = selectionSnapshot.value
   if (!snapshot || snapshot.ranges.length === 0) {
     return false
   }
+  const activeIndex = snapshot.activeRangeIndex ?? 0
+  const range = snapshot.ranges[activeIndex] ?? snapshot.ranges[0]
+  if (!range?.anchor) {
+    return false
+  }
   const rowIndex = viewportRange.value.start + rowOffset
-  return snapshot.ranges.some(range => (
-    rowIndex >= range.startRow
-    && rowIndex <= range.endRow
-    && columnIndex >= range.startCol
-    && columnIndex <= range.endCol
-  ))
+  return rowIndex === range.anchor.rowIndex && columnIndex === range.anchor.colIndex
+}
+
+const shouldHighlightSelectedCell = (rowOffset: number, columnIndex: number): boolean => {
+  const range = resolveSelectionRangeForClipboard()
+  if (!range || !isCellSelected(rowOffset, columnIndex)) {
+    return false
+  }
+  const isSingleCell = range.startRow === range.endRow && range.startColumn === range.endColumn
+  if (isSingleCell) {
+    return false
+  }
+  return !isSelectionAnchorCell(rowOffset, columnIndex)
+}
+
+const isCellOnSelectionEdge = (
+  rowOffset: number,
+  columnIndex: number,
+  edge: PendingClipboardEdge,
+): boolean => {
+  const range = resolveSelectionRangeForClipboard()
+  if (!range || !isCellSelected(rowOffset, columnIndex)) {
+    return false
+  }
+  const rowIndex = viewportRange.value.start + rowOffset
+  if (edge === "top") {
+    return rowIndex === range.startRow
+  }
+  if (edge === "right") {
+    return columnIndex === range.endColumn
+  }
+  if (edge === "bottom") {
+    return rowIndex === range.endRow
+  }
+  return columnIndex === range.startColumn
 }
 
 const columnStyle = (key: string): Record<string, string> => {

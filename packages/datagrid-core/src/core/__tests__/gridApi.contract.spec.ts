@@ -693,6 +693,19 @@ describe("data grid api facade contracts", () => {
     expect(api.rows.getCount()).toBe(4)
     expect((api.rows.get(0)?.row as { id?: string })?.id).toBe("r00")
 
+    expect(api.rows.hasInsertSupport()).toBe(true)
+    api.rows.insertDataAt(1, [{ row: { id: "r05", score: 0.5 }, rowId: "r05", originalIndex: 1 }])
+    expect(api.rows.getCount()).toBe(5)
+    expect((api.rows.get(1)?.row as { id?: string })?.id).toBe("r05")
+
+    api.rows.insertDataBefore("r2", [{ row: { id: "r15", score: 1.5 }, rowId: "r15", originalIndex: 2 }])
+    expect(api.rows.getCount()).toBe(6)
+    expect((api.rows.get(3)?.row as { id?: string })?.id).toBe("r15")
+
+    api.rows.insertDataAfter("r2", [{ row: { id: "r25", score: 2.5 }, rowId: "r25", originalIndex: 4 }])
+    expect(api.rows.getCount()).toBe(7)
+    expect((api.rows.get(5)?.row as { id?: string })?.id).toBe("r25")
+
     api.rows.replaceData([{ row: { id: "rx", score: 9 }, rowId: "rx", originalIndex: 0 }])
     expect(api.rows.getCount()).toBe(1)
     expect((api.rows.get(0)?.row as { id?: string })?.id).toBe("rx")
@@ -722,10 +735,77 @@ describe("data grid api facade contracts", () => {
     const api = createDataGridApi({ core })
 
     expect(api.rows.hasDataMutationSupport()).toBe(false)
+    expect(api.rows.hasInsertSupport()).toBe(false)
     expect(() => api.rows.setData([])).toThrow(/setRows data mutation capability/i)
     expect(() => api.rows.replaceData([])).toThrow(/setRows data mutation capability/i)
     expect(() => api.rows.appendData([])).toThrow(/setRows data mutation capability/i)
     expect(() => api.rows.prependData([])).toThrow(/setRows data mutation capability/i)
+    expect(() => api.rows.insertDataAt(0, [])).toThrow(/insertRowsAt data mutation capability/i)
+    expect(() => api.rows.insertDataBefore(1, [])).toThrow(/insertRowsBefore data mutation capability/i)
+    expect(() => api.rows.insertDataAfter(1, [])).toThrow(/insertRowsAfter data mutation capability/i)
+  })
+
+  it("inserts columns through the columns namespace without losing existing layout state", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "id", label: "ID", width: 90 },
+        { key: "score", label: "Score", pin: "left" },
+      ],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.columns.insertAt(1, [{ key: "owner", label: "Owner", visible: false }])
+    expect(api.columns.getSnapshot().order).toEqual(["id", "owner", "score"])
+    expect(api.columns.get("owner")?.visible).toBe(false)
+    expect(api.columns.get("score")?.pin).toBe("left")
+
+    api.columns.insertBefore("id", [{ key: "prefix", label: "Prefix" }])
+    expect(api.columns.getSnapshot().order).toEqual(["prefix", "id", "owner", "score"])
+
+    api.columns.insertAfter("score", [{ key: "tail", label: "Tail", width: 180 }])
+    expect(api.columns.getSnapshot().order).toEqual(["prefix", "id", "owner", "score", "tail"])
+    expect(api.columns.get("tail")?.width).toBe(180)
+    expect(api.columns.get("id")?.width).toBe(90)
+  })
+
+  it("rejects duplicate rowId across rows mutation entrypoints", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(() => {
+      api.rows.insertDataAfter("r1", [
+        { row: { id: "r1-copy", score: 2 }, rowId: "r1", originalIndex: 1 },
+      ])
+    }).toThrow(/Duplicate rowId/)
+    expect(api.rows.getCount()).toBe(1)
+
+    expect(() => {
+      api.rows.setData([
+        { row: { id: "dup-a", score: 1 }, rowId: "dup", originalIndex: 0 },
+        { row: { id: "dup-b", score: 2 }, rowId: "dup", originalIndex: 1 },
+      ])
+    }).toThrow(/Duplicate rowId/)
+    expect(api.rows.getCount()).toBe(1)
   })
 
   it("exposes compute-mode control and diagnostics through dedicated namespaces", () => {

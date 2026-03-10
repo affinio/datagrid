@@ -185,6 +185,7 @@ export interface DataGridPivotLayoutColumnModelSnapshot {
 
 export interface DataGridPivotLayoutColumnModel {
   getSnapshot(): DataGridPivotLayoutColumnModelSnapshot
+  batch?<TResult>(fn: () => TResult): TResult
   setColumnOrder(order: readonly string[]): void
   setColumnVisibility(key: string, visible: boolean): void
   setColumnWidth(key: string, width: number | null): void

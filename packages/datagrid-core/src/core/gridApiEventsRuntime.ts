@@ -3,7 +3,7 @@ import type {
   DataGridRowModel,
   DataGridRowModelSnapshot,
   DataGridViewportRange,
-} from "../models"
+} from "../models/index.js"
 import type {
   DataGridPivotColumn,
   DataGridPivotSpec,

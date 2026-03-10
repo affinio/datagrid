@@ -5,6 +5,7 @@ import{
   cloneGroupBySpec,
   normalizePaginationInput,
   normalizeViewportRange,
+  type DataGridComputedFieldComputeContext,
   type DataGridGroupExpansionSnapshot,
   type DataGridPaginationInput,
   type DataGridComputedFieldDefinition,
@@ -219,6 +220,9 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
   replaceRows(rows: readonly DataGridRowNodeInput<T>[]): void
   appendRows(rows: readonly DataGridRowNodeInput<T>[]): void
   prependRows(rows: readonly DataGridRowNodeInput<T>[]): void
+  insertRowsAt(index: number, rows: readonly DataGridRowNodeInput<T>[]): boolean
+  insertRowsBefore(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]): boolean
+  insertRowsAfter(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]): boolean
   setSortAndFilterModel(input: DataGridSortAndFilterModelInput): void
   getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
   patchRows(
@@ -233,10 +237,13 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
   recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest): number
   registerFormulaFunction(
     name: string,
-    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<unknown>) => unknown),
   ): void
   unregisterFormulaFunction(name: string): boolean
   getFormulaFunctionNames(): readonly string[]
+  setFormulaTable(name: string, rows: readonly unknown[]): void
+  removeFormulaTable(name: string): boolean
+  getFormulaTableNames(): readonly string[]
   getFormulaExecutionPlan(): DataGridFormulaExecutionPlanSnapshot | null
   getFormulaGraph(): DataGridFormulaGraphSnapshot | null
   getFormulaComputeStageDiagnostics(): DataGridFormulaComputeStageDiagnostics | null
@@ -555,6 +562,7 @@ export function createClientRowModel<T>(
     resolveComputedRootIndexesForField: computedRegistry.resolveComputedRootIndexesForField,
     resolveComputedRootIndexesForContext: computedRegistry.resolveComputedRootIndexesForContext,
     resolveComputedRootIndexesForContextKeys: computedRegistry.resolveComputedRootIndexesForContextKeys,
+    getFormulaContextValue: computedRegistry.getFormulaContextValue,
     resolveComputedTokenValue: computedRegistry.resolveComputedTokenValue,
     getSourceColumnValues,
     clearSourceColumnValuesCache,
@@ -811,6 +819,9 @@ export function createClientRowModel<T>(
     recomputeComputedFieldsAndRefresh,
   })
 
+  const normalizeFormulaTableName = (value: unknown): string => String(value ?? "").trim().toLowerCase()
+  const createFormulaTableContextKey = (name: string): string => `table:${name}`
+
   runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
   if (!flatIdentityProjectionRefreshRuntime.tryApply()) {
     computeHostRuntime.recomputeFromStage("compute")
@@ -853,6 +864,15 @@ export function createClientRowModel<T>(
       }
       mutationHostRuntime.setRows([...nextRows, ...getBaseSourceRows()])
     },
+    insertRowsAt(index: number, nextRows: readonly DataGridRowNodeInput<T>[]) {
+      return mutationHostRuntime.insertRowsAt(index, nextRows)
+    },
+    insertRowsBefore(rowId: DataGridRowId, nextRows: readonly DataGridRowNodeInput<T>[]) {
+      return mutationHostRuntime.insertRowsBefore(rowId, nextRows)
+    },
+    insertRowsAfter(rowId: DataGridRowId, nextRows: readonly DataGridRowNodeInput<T>[]) {
+      return mutationHostRuntime.insertRowsAfter(rowId, nextRows)
+    },
     patchRows(
       updates: readonly DataGridClientRowPatch<T>[],
       options: DataGridClientRowPatchOptions = {},
@@ -873,7 +893,7 @@ export function createClientRowModel<T>(
     },
     registerFormulaFunction(
       name: string,
-      definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
+      definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<unknown>) => unknown),
     ) {
       formulaHostRuntime.resolveModule().registerFormulaFunction(name, definition)
     },
@@ -882,6 +902,36 @@ export function createClientRowModel<T>(
     },
     getFormulaFunctionNames() {
       return formulaHostRuntime.resolveModule().getFormulaFunctionNames()
+    },
+    setFormulaTable(name: string, rows: readonly unknown[]) {
+      ensureActive()
+      const normalizedName = normalizeFormulaTableName(name)
+      if (normalizedName.length === 0) {
+        throw new Error("[clientRowModel] Formula table name must be non-empty")
+      }
+      computedRegistry.setFormulaTable(normalizedName, rows)
+      void recomputeComputedFieldsAndRefresh(undefined, {
+        contextKeys: new Set<string>(["tables", createFormulaTableContextKey(normalizedName)]),
+      })
+    },
+    removeFormulaTable(name: string) {
+      ensureActive()
+      const normalizedName = normalizeFormulaTableName(name)
+      if (normalizedName.length === 0) {
+        return false
+      }
+      const removed = computedRegistry.removeFormulaTable(normalizedName)
+      if (!removed) {
+        return false
+      }
+      void recomputeComputedFieldsAndRefresh(undefined, {
+        contextKeys: new Set<string>(["tables", createFormulaTableContextKey(normalizedName)]),
+      })
+      return true
+    },
+    getFormulaTableNames() {
+      ensureActive()
+      return computedRegistry.getFormulaTableNames()
     },
     getFormulaExecutionPlan() {
       return formulaHostRuntime.resolveModule().getFormulaExecutionPlan()

@@ -582,6 +582,58 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("supports cross-table dashboard formulas via TABLE()", () => {
+    const model = createClientRowModel<{
+      id: number
+      openRevenue?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1 },
+          rowId: "dashboard",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+    })
+
+    model.registerFormulaField({
+      name: "openRevenue",
+      formula: "SUMIF(TABLE('orders', 'status'), 'Open', TABLE('orders', 'amount'))",
+    })
+
+    expect(model.getFormulaFields()).toEqual([
+      {
+        name: "openRevenue",
+        field: "openRevenue",
+        formula: "SUMIF(TABLE('orders', 'status'), 'Open', TABLE('orders', 'amount'))",
+        deps: [],
+        contextKeys: ["table:orders"],
+      },
+    ])
+
+    model.setFormulaTable("orders", [
+      { status: "Open", amount: 10, customer: { region: "EU" } },
+      { status: "Closed", amount: 5, customer: { region: "US" } },
+      { status: "Open", amount: 20, customer: { region: "EU" } },
+    ])
+
+    expect(model.getFormulaTableNames()).toEqual(["orders"])
+    expect((model.getRow(0)?.row as { openRevenue?: number }).openRevenue).toBe(30)
+
+    model.setFormulaTable("orders", [
+      { status: "Open", amount: 7, customer: { region: "EU" } },
+      { status: "Open", amount: 3, customer: { region: "APAC" } },
+    ])
+
+    expect((model.getRow(0)?.row as { openRevenue?: number }).openRevenue).toBe(10)
+    expect(model.removeFormulaTable("orders")).toBe(true)
+    expect((model.getRow(0)?.row as { openRevenue?: number }).openRevenue).toBe(0)
+    expect(model.getFormulaTableNames()).toEqual([])
+
+    model.dispose()
+  })
+
   it("supports formula chains that reference computed target fields", () => {
     const model = createClientRowModel<{
       id: number

@@ -1,4 +1,7 @@
-import type { DataGridFormulaValue } from "../coreTypes.js"
+import type {
+  DataGridComputedFieldComputeContext,
+  DataGridFormulaValue,
+} from "../coreTypes.js"
 
 export type DataGridFormulaFunctionArity = number | {
   min: number
@@ -8,11 +11,13 @@ export type DataGridFormulaFunctionArity = number | {
 export interface DataGridFormulaFunctionDefinition {
   arity?: DataGridFormulaFunctionArity
   contextKeys?: readonly string[]
-  compute: (args: readonly DataGridFormulaValue[]) => unknown
+  resolveContextKeys?: (args: readonly DataGridFormulaAstNode[]) => readonly string[]
+  requiresRuntimeContext?: boolean
+  compute: (args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<unknown>) => unknown
 }
 
 export type DataGridFormulaFunctionRegistry = Readonly<
-  Record<string, DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown)>
+  Record<string, DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<unknown>) => unknown)>
 >
 
 export interface DataGridFormulaSourceSpan {

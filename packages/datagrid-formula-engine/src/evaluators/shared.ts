@@ -41,6 +41,7 @@ export const NON_INLINEABLE_BUILTIN_FUNCTIONS = new Set<string>([
   "MIN",
   "RANGE",
   "SUM",
+  "TABLE",
   "XLOOKUP",
 ])
 

@@ -476,6 +476,17 @@ const resolvedColumnState = computed(() => normalizeColumnState(columnState.valu
 const effectiveColumnState = computed<DataGridUnifiedColumnState>(() => {
   const base = normalizeColumnState(columnState.value, columns.value)
   const pins: Record<string, DataGridColumnPin> = { ...base.pins }
+  for (const key of Object.keys(pins)) {
+    if (pins[key] === "left") {
+      pins[key] = "none"
+    }
+  }
+  const pinnedLeftKey = base.order.find(key => key === "id")
+    ?? base.order.find(key => key !== "updatedAt" && key !== "amount")
+    ?? null
+  if (pinnedLeftKey && pins[pinnedLeftKey] !== "left") {
+    pins[pinnedLeftKey] = "left"
+  }
   const pinnedRightKey = props.mode === "pivot"
     ? "amount"
     : props.mode === "tree"

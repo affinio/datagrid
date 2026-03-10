@@ -16,7 +16,7 @@ import {
 	type DataGridColumnModel,
 	type DataGridRowModel,
 	type DataGridViewportRange,
-} from "../models"
+} from "../models/index.js"
 import { BASE_ROW_HEIGHT, clamp } from "../utils/constants"
 import {
 	resolveColumnWidth as resolveColumnWidthDefault,

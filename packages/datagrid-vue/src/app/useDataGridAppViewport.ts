@@ -33,6 +33,7 @@ export interface UseDataGridAppViewportOptions<TRow> {
 export interface UseDataGridAppViewportResult<TRow> {
   headerViewportRef: Ref<HTMLElement | null>
   bodyViewportRef: Ref<HTMLElement | null>
+  viewportScrollTop: Ref<number>
   displayRows: Ref<readonly DataGridRowNode<TRow>[]>
   renderedColumns: Ref<readonly DataGridColumnSnapshot[]>
   viewportRowStart: Ref<number>
@@ -70,6 +71,7 @@ export function useDataGridAppViewport<TRow>(
 
   const headerViewportRef = ref<HTMLElement | null>(null)
   const bodyViewportRef = ref<HTMLElement | null>(null)
+  const viewportScrollTop = ref(0)
   const displayRows = shallowRef<readonly DataGridRowNode<TRow>[]>([])
   const viewportScrollLeft = ref(0)
   const viewportClientWidth = ref(0)
@@ -291,6 +293,7 @@ export function useDataGridAppViewport<TRow>(
   const handleViewportScroll = (event: Event): void => {
     const element = event.target as HTMLElement
     viewportScrollLeft.value = element.scrollLeft
+    viewportScrollTop.value = element.scrollTop
     viewportClientWidth.value = element.clientWidth
     syncHeaderScrollLeftFromBody(element.scrollLeft)
     if (element.scrollTop === lastViewportScrollTop) {
@@ -307,6 +310,7 @@ export function useDataGridAppViewport<TRow>(
     }
     lastViewportScrollTop = element.scrollTop
     viewportScrollLeft.value = element.scrollLeft
+    viewportScrollTop.value = element.scrollTop
     viewportClientWidth.value = element.clientWidth
     syncHeaderScrollLeftFromBody(element.scrollLeft)
     syncVisibleRows(resolveViewportRangeFromElement(element))
@@ -334,6 +338,7 @@ export function useDataGridAppViewport<TRow>(
   return {
     headerViewportRef,
     bodyViewportRef,
+    viewportScrollTop,
     displayRows,
     renderedColumns: computed(() => viewportColumnMetrics.value.renderedColumns),
     viewportRowStart,

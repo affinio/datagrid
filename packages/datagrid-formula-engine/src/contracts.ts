@@ -176,6 +176,7 @@ export interface DataGridComputedFieldComputeContext<T = unknown> {
   rowId: DataGridRowId
   sourceIndex: number
   get: (token: DataGridComputedDependencyToken) => unknown
+  getContextValue?: (key: string) => unknown
 }
 
 export interface DataGridComputedFieldDefinition<T = unknown> {
@@ -327,14 +328,17 @@ export interface DataGridFormulaRuntimeIntegration<T = unknown> {
   registerFormulaField?(definition: DataGridFormulaFieldDefinition): void
   getFormulaFields?(): readonly DataGridFormulaFieldSnapshot[]
   recomputeFormulaContext?(request: DataGridFormulaContextRecomputeRequest): number
+  setFormulaTable?(name: string, rows: readonly unknown[]): void
+  removeFormulaTable?(name: string): boolean
+  getFormulaTableNames?(): readonly string[]
   registerFormulaFunction?(
     name: string,
     definition:
       | {
         arity?: number | { min: number; max?: number }
-        compute: (args: readonly DataGridFormulaValue[]) => unknown
+        compute: (args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<T>) => unknown
       }
-      | ((args: readonly DataGridFormulaValue[]) => unknown),
+      | ((args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<T>) => unknown),
   ): void
   unregisterFormulaFunction?(name: string): boolean
   getFormulaFunctionNames?(): readonly string[]

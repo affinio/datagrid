@@ -16,6 +16,7 @@ import type {
   DataGridGroupExpansionSnapshot,
   DataGridPaginationInput,
   DataGridPivotSpec,
+  DataGridRowId,
   DataGridRowNodeInput,
   DataGridSortAndFilterModelInput,
   DataGridSortState,
@@ -30,6 +31,9 @@ export interface CreateClientRowMutationHostRuntimeOptions<T> {
 export interface ClientRowMutationHostRuntime<T> {
   setRows: (nextRows: readonly DataGridRowNodeInput<T>[]) => void
   reorderRows: (input: ClientRowRowsMutationsRuntimeReorderInput) => boolean
+  insertRowsAt: (index: number, rows: readonly DataGridRowNodeInput<T>[]) => boolean
+  insertRowsBefore: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]) => boolean
+  insertRowsAfter: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]) => boolean
   setViewportRange: (range: DataGridViewportRange) => void
   setPagination: (nextPagination: DataGridPaginationInput | null) => void
   setPageSize: (pageSize: number | null) => void
@@ -59,6 +63,9 @@ export function createClientRowMutationHostRuntime<T>(
   return {
     setRows: (nextRows) => rowsMutationsRuntime.setRows(nextRows),
     reorderRows: (input) => rowsMutationsRuntime.reorderRows(input),
+    insertRowsAt: (index, rows) => rowsMutationsRuntime.insertRowsAt(index, rows),
+    insertRowsBefore: (rowId, rows) => rowsMutationsRuntime.insertRowsBefore(rowId, rows),
+    insertRowsAfter: (rowId, rows) => rowsMutationsRuntime.insertRowsAfter(rowId, rows),
     setViewportRange: (range) => stateMutationsRuntime.setViewportRange(range),
     setPagination: (nextPagination) => stateMutationsRuntime.setPagination(nextPagination),
     setPageSize: (pageSize) => stateMutationsRuntime.setPageSize(pageSize),

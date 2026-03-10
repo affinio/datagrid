@@ -10,10 +10,10 @@ import type {
   DataGridProjectionFormulaDiagnostics,
   DataGridFormulaRowRecomputeDiagnostics,
   DataGridRowModel,
-} from "../models"
+} from "../models/index.js"
 import {
   explainDataGridFormulaExpression,
-} from "../models"
+} from "../models/index.js"
 import type {
   DataGridApiFormulaExplainEntry,
   DataGridApiDiagnosticsSnapshot,

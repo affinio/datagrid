@@ -32,6 +32,17 @@ function cloneSerializable<T>(value: T): T {
   }
 }
 
+function areSerializableValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) {
+    return true
+  }
+  try {
+    return JSON.stringify(left) === JSON.stringify(right)
+  } catch {
+    return false
+  }
+}
+
 function normalizePivotLayoutOrder(input: readonly string[] | undefined): string[] {
   if (!Array.isArray(input)) {
     return []
@@ -122,54 +133,60 @@ export function importPivotLayoutSnapshot<TRow = unknown>(
   if (!layout || typeof layout !== "object") {
     return
   }
+
+  const currentLayout = exportPivotLayoutSnapshot(rowModel, columnModel)
+  if (areSerializableValuesEqual(currentLayout, layout)) {
+    return
+  }
+
   if (options.applyColumnState !== false) {
-    const order = normalizePivotLayoutOrder(layout.columnState?.order)
-    if (order.length > 0) {
-      columnModel.setColumnOrder(order)
-    }
-    const visibility = layout.columnState?.visibility ?? {}
-    for (const [key, value] of Object.entries(visibility)) {
-      columnModel.setColumnVisibility(key, Boolean(value))
-    }
-    const widths = layout.columnState?.widths ?? {}
-    for (const [key, value] of Object.entries(widths)) {
-      const normalizedWidth = Number.isFinite(value)
-        ? Math.max(0, Math.trunc(value as number))
-        : null
-      columnModel.setColumnWidth(key, normalizedWidth)
-    }
-    const pins = layout.columnState?.pins ?? {}
-    for (const [key, value] of Object.entries(pins)) {
-      const normalizedPin = normalizePivotLayoutPin(value)
-      if (!normalizedPin) {
-        continue
+    const applyColumnState = () => {
+      const order = normalizePivotLayoutOrder(layout.columnState?.order)
+      if (order.length > 0) {
+        columnModel.setColumnOrder(order)
       }
-      columnModel.setColumnPin(key, normalizedPin)
+      const visibility = layout.columnState?.visibility ?? {}
+      for (const [key, value] of Object.entries(visibility)) {
+        columnModel.setColumnVisibility(key, Boolean(value))
+      }
+      const widths = layout.columnState?.widths ?? {}
+      for (const [key, value] of Object.entries(widths)) {
+        const normalizedWidth = Number.isFinite(value)
+          ? Math.max(0, Math.trunc(value as number))
+          : null
+        columnModel.setColumnWidth(key, normalizedWidth)
+      }
+      const pins = layout.columnState?.pins ?? {}
+      for (const [key, value] of Object.entries(pins)) {
+        const normalizedPin = normalizePivotLayoutPin(value)
+        if (!normalizedPin) {
+          continue
+        }
+        columnModel.setColumnPin(key, normalizedPin)
+      }
+    }
+
+    if (typeof columnModel.batch === "function") {
+      columnModel.batch(applyColumnState)
+    } else {
+      applyColumnState()
     }
   }
 
   const sortModel = Array.isArray(layout.sortModel)
-    ? cloneSerializable(layout.sortModel)
+    ? layout.sortModel
     : []
   const filterModel = layout.filterModel == null
     ? null
-    : cloneSerializable(layout.filterModel)
+    : layout.filterModel
   if (batchSortFilterCapability) {
     batchSortFilterCapability.setSortAndFilterModel({ sortModel, filterModel })
   } else {
     rowModel.setFilterModel(filterModel)
     rowModel.setSortModel(sortModel)
   }
-  rowModel.setGroupBy(layout.groupBy == null ? null : cloneSerializable(layout.groupBy))
-  rowModel.setPivotModel(layout.pivotModel == null ? null : cloneSerializable(layout.pivotModel))
-  rowModel.setAggregationModel(
-    layout.aggregationModel == null
-      ? null
-      : cloneSerializable(layout.aggregationModel),
-  )
-  rowModel.setGroupExpansion(
-    layout.groupExpansion == null
-      ? null
-      : cloneSerializable(layout.groupExpansion),
-  )
+  rowModel.setGroupBy(layout.groupBy ?? null)
+  rowModel.setPivotModel(layout.pivotModel ?? null)
+  rowModel.setAggregationModel(layout.aggregationModel ?? null)
+  rowModel.setGroupExpansion(layout.groupExpansion ?? null)
 }

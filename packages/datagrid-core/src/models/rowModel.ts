@@ -2,6 +2,7 @@ import type {
   DataGridFormulaExecutionPlanSnapshot,
   DataGridFormulaGraphSnapshot,
 } from "@affino/datagrid-formula-engine"
+import type { DataGridFormulaFunctionDefinition } from "./formula/formulaEngine.js"
 import type {
   DataGridAggOp,
   DataGridPivotColumn,
@@ -16,6 +17,7 @@ import type {
   DataGridPivotCellDrilldownInput,
 } from "@affino/datagrid-pivot"
 import type {
+  DataGridComputedFieldComputeContext,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
   DataGridFormulaContextRecomputeRequest,
@@ -449,14 +451,12 @@ export interface DataGridRowModel<T = unknown> {
   registerFormulaField?(definition: DataGridFormulaFieldDefinition): void
   getFormulaFields?(): readonly DataGridFormulaFieldSnapshot[]
   recomputeFormulaContext?(request: DataGridFormulaContextRecomputeRequest): number
+  setFormulaTable?(name: string, rows: readonly unknown[]): void
+  removeFormulaTable?(name: string): boolean
+  getFormulaTableNames?(): readonly string[]
   registerFormulaFunction?(
     name: string,
-    definition:
-      | {
-        arity?: number | { min: number; max?: number }
-        compute: (args: readonly DataGridFormulaValue[]) => unknown
-      }
-      | ((args: readonly DataGridFormulaValue[]) => unknown),
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<unknown>) => unknown),
   ): void
   unregisterFormulaFunction?(name: string): boolean
   getFormulaFunctionNames?(): readonly string[]

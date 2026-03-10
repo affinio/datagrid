@@ -1,7 +1,7 @@
 import type {
   DataGridColumnModel,
   DataGridRowModel,
-} from "../models"
+} from "../models/index.js"
 import type { DataGridApiPluginDefinition } from "./gridApiContracts"
 import type {
   DataGridCore,

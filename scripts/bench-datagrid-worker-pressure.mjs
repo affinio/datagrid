@@ -4,6 +4,7 @@ import { performance } from "node:perf_hooks"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { chromium } from "@playwright/test"
+import { ensureSandboxServer } from "./ensure-sandbox-server.mjs"
 
 const BENCH_BROWSER_BASE_URL = process.env.BENCH_BROWSER_BASE_URL ?? "http://127.0.0.1:4173"
 const BENCH_BROWSER_ROUTE_MAIN_THREAD = process.env.BENCH_BROWSER_ROUTE_MAIN_THREAD ?? "/vue/base-grid"
@@ -330,6 +331,12 @@ console.log(
   `baseUrl=${BENCH_BROWSER_BASE_URL} modes=${BENCH_WORKER_MODES.join(",")} sessions=${BENCH_SESSIONS} rows=${BENCH_ROW_COUNT}`,
 )
 
+const sandboxServer = await ensureSandboxServer(
+  BENCH_BROWSER_BASE_URL,
+  resolveRouteForMode(BENCH_WORKER_MODES[0]),
+  "worker-pressure",
+)
+
 const browser = await chromium.launch({
   headless: BENCH_HEADLESS,
   args: ["--disable-dev-shm-usage"],
@@ -357,6 +364,7 @@ try {
 } finally {
   await context.close()
   await browser.close()
+  await sandboxServer.stop()
 }
 
 const elapsedMs = performance.now() - startedAt

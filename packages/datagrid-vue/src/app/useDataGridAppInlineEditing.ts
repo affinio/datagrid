@@ -14,6 +14,12 @@ interface DataGridAppEditingCoord {
   rowId: string | number
 }
 
+type DataGridAppInlineEditCommitTarget = "stay" | "next" | "previous"
+
+interface DataGridAppInlineEditStartOptions {
+  draftValue?: string
+}
+
 export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
   mode: Ref<DataGridAppMode>
   bodyViewportRef: Ref<HTMLElement | null>
@@ -32,8 +38,12 @@ export interface UseDataGridAppInlineEditingResult<TRow> {
   editingCell: Ref<DataGridAppEditingCell | null>
   editingCellValue: Ref<string>
   isEditingCell: (row: DataGridRowNode<TRow>, columnKey: string) => boolean
-  startInlineEdit: (row: DataGridRowNode<TRow>, columnKey: string) => void
-  commitInlineEdit: (moveToNextRowOrEvent?: boolean | FocusEvent) => void
+  startInlineEdit: (
+    row: DataGridRowNode<TRow>,
+    columnKey: string,
+    options?: DataGridAppInlineEditStartOptions,
+  ) => void
+  commitInlineEdit: (targetOrEvent?: DataGridAppInlineEditCommitTarget | boolean | FocusEvent) => void
   cancelInlineEdit: () => void
   handleEditorKeydown: (event: KeyboardEvent) => void
 }
@@ -72,7 +82,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   const focusAfterInlineEdit = (
     rowId: string | number,
     columnKey: string,
-    moveToNextRow: boolean,
+    target: DataGridAppInlineEditCommitTarget,
   ): void => {
     const columnIndex = options.visibleColumns.value.findIndex(column => column.key === columnKey)
     if (columnIndex < 0) {
@@ -83,9 +93,11 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       return
     }
     const maxRowIndex = Math.max(0, options.totalRows.value - 1)
-    const nextRowIndex = moveToNextRow
+    const nextRowIndex = target === "next"
       ? Math.min(maxRowIndex, currentRowIndex + 1)
-      : currentRowIndex
+      : target === "previous"
+        ? Math.max(0, currentRowIndex - 1)
+        : currentRowIndex
     const nextRowId = options.runtime.api.rows.get(nextRowIndex)?.rowId
     if (nextRowId == null) {
       return
@@ -100,7 +112,11 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     })
   }
 
-  const startInlineEdit = (row: DataGridRowNode<TRow>, columnKey: string): void => {
+  const startInlineEdit = (
+    row: DataGridRowNode<TRow>,
+    columnKey: string,
+    startOptions: DataGridAppInlineEditStartOptions = {},
+  ): void => {
     if (options.mode.value !== "base" || row.kind === "group" || row.rowId == null) {
       return
     }
@@ -108,16 +124,22 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       rowId: row.rowId,
       columnKey,
     }
-    editingCellValue.value = options.readCell(row, columnKey)
+    editingCellValue.value = startOptions.draftValue ?? options.readCell(row, columnKey)
     focusInlineEditor()
   }
 
-  const commitInlineEdit = (moveToNextRowOrEvent: boolean | FocusEvent = false): void => {
+  const commitInlineEdit = (
+    targetOrEvent: DataGridAppInlineEditCommitTarget | boolean | FocusEvent = "stay",
+  ): void => {
     const currentEditingCell = editingCell.value
     if (!currentEditingCell) {
       return
     }
-    const moveToNextRow = typeof moveToNextRowOrEvent === "boolean" ? moveToNextRowOrEvent : false
+    const target = typeof targetOrEvent === "string"
+      ? targetOrEvent
+      : typeof targetOrEvent === "boolean"
+        ? (targetOrEvent ? "next" : "stay")
+        : "stay"
     const beforeSnapshot = options.captureRowsSnapshot()
     options.runtime.api.rows.applyEdits([
       {
@@ -129,7 +151,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     ])
     options.recordEditTransaction(beforeSnapshot)
     clearInlineEdit()
-    focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, moveToNextRow)
+    focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, target)
   }
 
   const cancelInlineEdit = (): void => {
@@ -138,13 +160,13 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     if (!currentEditingCell) {
       return
     }
-    focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, false)
+    focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, "stay")
   }
 
   const handleEditorKeydown = (event: KeyboardEvent): void => {
     if (event.key === "Enter") {
       event.preventDefault()
-      commitInlineEdit(true)
+      commitInlineEdit(event.shiftKey ? "previous" : "next")
       return
     }
     if (event.key === "Escape") {

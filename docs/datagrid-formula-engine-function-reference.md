@@ -141,11 +141,14 @@ Examples:
 | `RANGE(...)` | Alias-style array builder used for aggregate pipelines and row-aware windows. | `RANGE(price, tax, shipping)` |
 | `SUMIF(criteriaRange, criterion, sumRange?)` | Sums values whose paired criteria entries match. | `SUMIF(statuses, 'Open', amounts)` |
 | `SUMIFS(sumRange, criteriaRange1, criterion1, ...)` | Sums values only when every criterion pair matches the same position. | `SUMIFS(amounts, status, 'Open', region, 'EU')` |
+| `TABLE(name, fieldPath?)` | Reads a registered external table into a 1D formula array so dashboard formulas can aggregate across datasets. | `SUMIF(TABLE('orders', 'status'), 'Open', TABLE('orders', 'amount'))` |
 | `VLOOKUP(needle, values, columnNumber, exact?)` | Compatibility subset of `VLOOKUP`: exact-only lookup over a 1-dimensional array, with `columnNumber = 1` only. | `VLOOKUP('A', ARRAY('A', 'B', 'C'), 1, 0)` |
 | `XLOOKUP(needle, lookupValues, returnValues, notFound?, matchMode?)` | Returns the paired value from `returnValues` for an exact match in `lookupValues`. | `XLOOKUP(code, skuList, priceList, 0)` |
 
 ## Notes on current compatibility boundaries
 
+- `TABLE(...)` is the new cross-table primitive. In `ClientRowModel`, register datasets through `setFormulaTable(name, rows)` and invalidate them through `removeFormulaTable(name)`.
+- `TABLE(...)` is stable for single dashboard metrics and formula-engine level aggregation. Multi-metric same-level dashboard rows in `ClientRowModel` still need scheduler hardening before they can be treated as fully spreadsheet-class.
 - `IFERROR(...)` only replaces values that are already materialized as typed formula errors. It is not a full lazy spreadsheet-style error trap yet.
 - `MATCH(...)` and `XLOOKUP(...)` currently support exact matching only.
 - `VLOOKUP(...)` is intentionally narrow today and should be treated as a compatibility bridge rather than a full spreadsheet table lookup.

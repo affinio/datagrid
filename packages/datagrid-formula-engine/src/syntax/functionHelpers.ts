@@ -1,6 +1,7 @@
 import type {
+  DataGridFormulaAstNode,
   DataGridFormulaFunctionDefinition,
-} from "./analysis.js"
+} from "./types.js"
 import type {
   DataGridFormulaScalarValue,
   DataGridFormulaValue,
@@ -13,6 +14,7 @@ import {
   isFormulaErrorValue,
   isFormulaValuePresent,
 } from "./values.js"
+import { parseFormulaReferenceSegments } from "./tokenizer.js"
 
 export type {
   DataGridFormulaFunctionDefinition,
@@ -21,6 +23,42 @@ export type {
 export interface FormulaCriterionEntry {
   range: readonly DataGridFormulaScalarValue[]
   criterion: DataGridFormulaValue
+}
+
+export function normalizeFormulaTableName(value: DataGridFormulaValue): string {
+  if (Array.isArray(value)) {
+    return normalizeFormulaTableName(value[0] ?? null)
+  }
+  return String(value ?? "").trim().toLowerCase()
+}
+
+export function coerceFormulaValueToText(value: DataGridFormulaValue): string {
+  const scalar = coerceFormulaValueToScalar(value)
+  if (scalar === null || isFormulaErrorValue(scalar)) {
+    return ""
+  }
+  if (scalar instanceof Date) {
+    return Number.isNaN(scalar.getTime()) ? "" : scalar.toISOString()
+  }
+  return String(scalar)
+}
+
+export function createFormulaTableContextKey(tableName: string): string {
+  const normalized = tableName.trim().toLowerCase()
+  return normalized.length === 0 ? "tables" : `table:${normalized}`
+}
+
+export function resolveFormulaLiteralText(node: DataGridFormulaAstNode | undefined): string | null {
+  if (!node) {
+    return null
+  }
+  if (node.kind === "literal" && typeof node.value === "string") {
+    return node.value
+  }
+  if (node.kind === "number") {
+    return String(node.value)
+  }
+  return null
 }
 
 export function defineFormulaFunctions(
@@ -34,6 +72,76 @@ function coerceFormulaValueToScalar(value: DataGridFormulaValue): DataGridFormul
     return value[0] ?? null
   }
   return value as DataGridFormulaScalarValue
+}
+
+function coerceUnknownToFormulaScalar(value: unknown): DataGridFormulaScalarValue {
+  if (value === null || typeof value === "undefined") {
+    return null
+  }
+  if (isFormulaErrorValue(value)) {
+    return value
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0
+  }
+  if (typeof value === "string" || typeof value === "boolean") {
+    return value
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value
+  }
+  return null
+}
+
+function readNestedFormulaTableValue(
+  value: unknown,
+  segments: readonly (string | number)[],
+): unknown {
+  let current: unknown = value
+  for (const segment of segments) {
+    if (current === null || typeof current === "undefined") {
+      return null
+    }
+    if (Array.isArray(current) && typeof segment === "number") {
+      current = current[segment]
+      continue
+    }
+    if (typeof current === "object" && current !== null) {
+      current = (current as Record<string | number, unknown>)[segment]
+      continue
+    }
+    return null
+  }
+  return current
+}
+
+export function collectFormulaTableValues(
+  rowsInput: unknown,
+  fieldValue: DataGridFormulaValue | undefined,
+): readonly DataGridFormulaScalarValue[] {
+  if (!Array.isArray(rowsInput)) {
+    return Object.freeze([])
+  }
+  const field = typeof fieldValue === "undefined"
+    ? ""
+    : coerceFormulaValueToText(fieldValue).trim()
+  const path = field.length > 0 ? parseFormulaReferenceSegments(field) : []
+  const values: DataGridFormulaScalarValue[] = []
+
+  for (const row of rowsInput) {
+    const resolved = path.length > 0
+      ? readNestedFormulaTableValue(row, path)
+      : row
+    if (Array.isArray(resolved)) {
+      for (const entry of resolved) {
+        values.push(coerceUnknownToFormulaScalar(entry))
+      }
+      continue
+    }
+    values.push(coerceUnknownToFormulaScalar(resolved))
+  }
+
+  return Object.freeze(values)
 }
 
 export function expandFormulaValue(value: DataGridFormulaValue): readonly DataGridFormulaScalarValue[] {
@@ -248,7 +356,9 @@ export function computeMedian(values: readonly DataGridFormulaScalarValue[]): nu
   }
   const middle = Math.floor(numeric.length / 2)
   if (numeric.length % 2 === 0) {
-    return (numeric[middle - 1] + numeric[middle]) / 2
+    const left = numeric[middle - 1] ?? 0
+    const right = numeric[middle] ?? left
+    return (left + right) / 2
   }
   return numeric[middle] ?? 0
 }

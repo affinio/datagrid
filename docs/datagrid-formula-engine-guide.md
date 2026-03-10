@@ -104,6 +104,24 @@ Current contract:
 - lookup helpers currently support exact matching only (`matchMode = 0`)
 - colon spreadsheet ranges are still intentionally out of scope for this block
 
+### Cross-table dashboard formulas
+
+The engine now also supports external table reads through `TABLE(name, fieldPath?)`.
+
+Typical pattern:
+
+```ts
+"SUMIF(TABLE('orders', 'status'), 'Open', TABLE('orders', 'amount'))"
+```
+
+With `ClientRowModel`, register dashboard datasets through `setFormulaTable(name, rows)` and invalidate them with `removeFormulaTable(name)`.
+
+Current boundary:
+
+- formula-engine level cross-table aggregation is supported
+- single-metric dashboard rows in `ClientRowModel` are supported
+- multi-metric same-level dashboard rows still need scheduler hardening before they are fully spreadsheet-class
+
 ## Type and coercion rules (design contract)
 
 Formula values are normalized to:

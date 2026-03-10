@@ -2,6 +2,7 @@ import type {
   DataGridAggregationModel,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
+  DataGridComputedFieldComputeContext,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
   DataGridFormulaContextRecomputeRequest,
@@ -19,7 +20,7 @@ import type {
   DataGridSortAndFilterModelInput,
   DataGridSortState,
   DataGridViewportRange,
-} from "../models"
+} from "../models/index.js"
 import {
   assertPatchCapability,
   assertRowsDataMutationCapability,
@@ -64,10 +65,14 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   refresh: (options?: DataGridRowsRefreshOptions) => ReturnType<DataGridRowModel<TRow>["refresh"]>
   reapplyView: () => ReturnType<DataGridRowModel<TRow>["refresh"]>
   hasDataMutationSupport: () => boolean
+  hasInsertSupport: () => boolean
   setData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   replaceData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   appendData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   prependData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+  insertDataAt: (index: number, rows: readonly DataGridRowNodeInput<TRow>[]) => boolean
+  insertDataBefore: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<TRow>[]) => boolean
+  insertDataAfter: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<TRow>[]) => boolean
   hasPatchSupport: () => boolean
   hasComputedSupport: () => boolean
   registerComputedField: (definition: DataGridComputedFieldDefinition<TRow>) => void
@@ -80,7 +85,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   hasFormulaFunctionRegistrySupport: () => boolean
   registerFormulaFunction: (
     name: string,
-    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<unknown>) => unknown),
   ) => void
   unregisterFormulaFunction: (name: string) => boolean
   getFormulaFunctionNames: () => readonly string[]
@@ -207,6 +212,12 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     hasDataMutationSupport() {
       return getRowsDataMutationCapability() !== null
     },
+    hasInsertSupport() {
+      const capability = getRowsDataMutationCapability()
+      return typeof capability?.insertRowsAt === "function"
+        && typeof capability?.insertRowsBefore === "function"
+        && typeof capability?.insertRowsAfter === "function"
+    },
     setData(rows: readonly DataGridRowNodeInput<TRow>[]) {
       assertMutationsAllowed("set rows")
       const capability = assertRowsDataMutationCapability(getRowsDataMutationCapability())
@@ -236,6 +247,30 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
         throw new Error('[DataGridApi] rowModel does not implement prependRows data mutation capability.')
       }
       capability.prependRows(rows)
+    },
+    insertDataAt(index: number, rows: readonly DataGridRowNodeInput<TRow>[]) {
+      assertMutationsAllowed("insert rows")
+      const capability = getRowsDataMutationCapability()
+      if (typeof capability?.insertRowsAt !== "function") {
+        throw new Error('[DataGridApi] rowModel does not implement insertRowsAt data mutation capability.')
+      }
+      return capability.insertRowsAt(index, rows)
+    },
+    insertDataBefore(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<TRow>[]) {
+      assertMutationsAllowed("insert rows before")
+      const capability = getRowsDataMutationCapability()
+      if (typeof capability?.insertRowsBefore !== "function") {
+        throw new Error('[DataGridApi] rowModel does not implement insertRowsBefore data mutation capability.')
+      }
+      return capability.insertRowsBefore(rowId, rows)
+    },
+    insertDataAfter(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<TRow>[]) {
+      assertMutationsAllowed("insert rows after")
+      const capability = getRowsDataMutationCapability()
+      if (typeof capability?.insertRowsAfter !== "function") {
+        throw new Error('[DataGridApi] rowModel does not implement insertRowsAfter data mutation capability.')
+      }
+      return capability.insertRowsAfter(rowId, rows)
     },
     hasPatchSupport() {
       return getPatchCapability() !== null
@@ -286,7 +321,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     },
     registerFormulaFunction(
       name: string,
-      definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
+      definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<unknown>) => unknown),
     ) {
       assertMutationsAllowed("register formula function")
       if (typeof rowModel.registerFormulaFunction !== "function") {

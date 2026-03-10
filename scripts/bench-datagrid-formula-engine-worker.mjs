@@ -762,11 +762,15 @@ async function runScenarioMode({
     const fullRefreshEvaluations = []
     for (let iteration = 0; iteration < BENCH_FULL_REFRESH_ITERATIONS; iteration += 1) {
       const fullResult = await runtime.setRows(
-        materializeRowNodes(mutableRows),
+        rowNodes,
         scenarioConfig.rows * scenarioConfig.formulas,
       )
       fullRefreshDurations.push(fullResult.durationMs)
       fullRefreshEvaluations.push(fullResult.evaluations)
+      if (typeof globalThis.gc === "function") {
+        globalThis.gc()
+        await sleep(0)
+      }
     }
 
     const patchBenchmarks = []
@@ -809,6 +813,10 @@ async function runScenarioMode({
 
         patchDurations.push(patchResult.durationMs)
         patchEvaluationCounts.push(patchResult.evaluations)
+        if (typeof globalThis.gc === "function") {
+          globalThis.gc()
+          await sleep(0)
+        }
       }
 
       const durationStat = stats(patchDurations)

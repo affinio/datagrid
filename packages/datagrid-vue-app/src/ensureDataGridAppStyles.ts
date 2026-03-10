@@ -35,6 +35,34 @@ const DATA_GRID_APP_STYLES = `
   background: var(--datagrid-background-color);
 }
 
+.grid-header-shell,
+.grid-body-shell {
+  display: grid;
+  min-width: 0;
+}
+
+.grid-body-shell {
+  min-height: 0;
+}
+
+.grid-header-pane,
+.grid-body-pane {
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.grid-header-pane {
+  border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
+  background: var(--datagrid-header-row-bg);
+  z-index: 2;
+}
+
+.grid-body-pane {
+  background: var(--datagrid-viewport-bg);
+  min-height: 0;
+}
+
 .grid-header-viewport {
   overflow-x: hidden;
   overflow-y: hidden;
@@ -56,12 +84,20 @@ const DATA_GRID_APP_STYLES = `
   min-width: 100%;
 }
 
-.grid-body-content {
-  min-width: 100%;
+.grid-pane-track,
+.grid-center-track {
+  display: flex;
 }
 
-.grid-main-track {
-  display: flex;
+.grid-body-content {
+  min-width: 100%;
+  position: relative;
+}
+
+.grid-pane-content {
+  min-width: 100%;
+  position: relative;
+  will-change: transform;
 }
 
 .grid-column-spacer {
@@ -82,6 +118,7 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .grid-cell {
+  box-sizing: border-box;
   position: relative;
   border-bottom: var(--datagrid-row-divider-size) solid var(--datagrid-row-divider-color);
   border-right: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color);
@@ -113,6 +150,38 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-cell--selected {
   background: var(--datagrid-selection-range-bg);
+}
+
+.grid-cell--selection-anchor {
+  background: var(--datagrid-row-background-color);
+}
+
+.grid-cell--selection-anchor.grid-cell--selected {
+  background: var(--datagrid-row-background-color) !important;
+}
+
+.grid-cell--pinned-left.grid-cell--selection-anchor,
+.grid-cell--pinned-left.grid-cell--selection-anchor.grid-cell--selected {
+  background: var(--datagrid-pinned-left-bg) !important;
+}
+
+.grid-cell--pinned-right.grid-cell--selection-anchor,
+.grid-cell--pinned-right.grid-cell--selection-anchor.grid-cell--selected {
+  background: var(--datagrid-pinned-right-bg) !important;
+}
+
+.grid-selection-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.grid-selection-overlay__segment {
+  position: absolute;
+  border: 2px solid var(--datagrid-selection-copied-border);
+  box-sizing: border-box;
+  border-radius: 1px;
 }
 
 .grid-cell--fill-preview {
@@ -200,19 +269,16 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-cell--pinned-left,
 .grid-cell--pinned-right {
-  position: sticky;
-  z-index: 5;
   background: var(--datagrid-pinned-bg);
-}
-
-.grid-cell--header.grid-cell--pinned-left,
-.grid-cell--header.grid-cell--pinned-right {
-  z-index: 7;
 }
 
 .grid-cell--pinned-left {
   background: var(--datagrid-pinned-left-bg);
   box-shadow: var(--datagrid-pinned-left-shadow);
+}
+
+.grid-cell--index + .grid-cell--pinned-left {
+  box-shadow: none;
 }
 
 .grid-cell--pinned-right {
@@ -229,9 +295,6 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .grid-cell--index {
-  position: sticky;
-  left: 0;
-  z-index: 6;
   color: var(--datagrid-index-cell-text-color);
   background: var(--datagrid-index-cell-background-color);
   border-right: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color);
@@ -293,6 +356,11 @@ const DATA_GRID_APP_STYLES = `
 .col-filter {
   margin-top: 4px;
   padding-right: 8px;
+}
+
+.col-filter--index-spacer {
+  height: 22px;
+  pointer-events: none;
 }
 
 .col-filter-input {
@@ -359,15 +427,15 @@ const DATA_GRID_APP_STYLES = `
 .col-resize {
   position: absolute;
   top: 0;
-  right: -6px;
-  width: 12px;
-  min-width: 12px;
+  right: 0;
+  width: 10px;
+  min-width: 10px;
   height: 100%;
   border: 0;
   background: transparent;
   cursor: col-resize;
   padding: 0;
-  z-index: 2;
+  z-index: 4;
 }
 `
 
@@ -376,7 +444,11 @@ export function ensureDataGridAppStyles(): void {
     return
   }
 
-  if (document.getElementById(DATA_GRID_APP_STYLE_ID)) {
+  const existingStyle = document.getElementById(DATA_GRID_APP_STYLE_ID)
+  if (existingStyle instanceof HTMLStyleElement) {
+    if (existingStyle.textContent !== DATA_GRID_APP_STYLES) {
+      existingStyle.textContent = DATA_GRID_APP_STYLES
+    }
     return
   }
 

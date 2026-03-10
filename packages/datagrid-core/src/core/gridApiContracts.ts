@@ -125,10 +125,14 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   get(index: number): DataGridRowNode<TRow> | undefined
   getRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[]
   hasDataMutationSupport(): boolean
+  hasInsertSupport(): boolean
   setData(rows: readonly DataGridRowNodeInput<TRow>[]): void
   replaceData(rows: readonly DataGridRowNodeInput<TRow>[]): void
   appendData(rows: readonly DataGridRowNodeInput<TRow>[]): void
   prependData(rows: readonly DataGridRowNodeInput<TRow>[]): void
+  insertDataAt(index: number, rows: readonly DataGridRowNodeInput<TRow>[]): boolean
+  insertDataBefore(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<TRow>[]): boolean
+  insertDataAfter(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<TRow>[]): boolean
   getPagination(): DataGridPaginationSnapshot
   setPagination(pagination: DataGridPaginationInput | null): void
   setPageSize(pageSize: number | null): void
@@ -185,6 +189,9 @@ export interface DataGridApiColumnsNamespace {
   getSnapshot(): DataGridColumnModelSnapshot
   get(key: string): DataGridColumnSnapshot | undefined
   setAll(columns: DataGridColumnDef[]): void
+  insertAt(index: number, columns: readonly DataGridColumnDef[]): boolean
+  insertBefore(columnKey: string, columns: readonly DataGridColumnDef[]): boolean
+  insertAfter(columnKey: string, columns: readonly DataGridColumnDef[]): boolean
   setOrder(keys: readonly string[]): void
   setVisibility(key: string, visible: boolean): void
   setWidth(key: string, width: number | null): void

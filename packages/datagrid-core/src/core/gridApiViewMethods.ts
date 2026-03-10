@@ -2,7 +2,7 @@ import type {
   DataGridRowId,
   DataGridRowModel,
   DataGridViewportRange,
-} from "../models"
+} from "../models/index.js"
 import type {
   DataGridCellRefreshOptions,
   DataGridCellRefreshRange,

@@ -34,6 +34,7 @@ interface DataGridAppPointer {
 }
 
 type DataGridAppRowWithId<TRow> = TRow & { rowId: string | number }
+type DataGridAppPinnedOrigin = "left" | "right" | "center"
 
 export interface UseDataGridAppInteractionControllerOptions<
   TRow extends Record<string, unknown>,
@@ -80,8 +81,12 @@ export interface UseDataGridAppInteractionControllerOptions<
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
   syncViewport: () => void
   editingCell: Ref<{ rowId: string | number; columnKey: string } | null>
-  startInlineEdit: (row: DataGridRowNode<TRow>, columnKey: string) => void
-  commitInlineEdit: (moveToNextRow?: boolean) => void
+  startInlineEdit: (
+    row: DataGridRowNode<TRow>,
+    columnKey: string,
+    options?: { draftValue?: string },
+  ) => void
+  commitInlineEdit: (target?: "stay" | "next" | "previous") => void
   canUndo: () => boolean
   canRedo: () => boolean
   runHistoryAction: (direction: "undo" | "redo") => Promise<unknown> | unknown
@@ -112,6 +117,7 @@ export function useDataGridAppInteractionController<
   const isPointerSelectingCells = ref(false)
   const dragPointer = ref<DataGridAppPointer | null>(null)
   const lastDragCoord = ref<DataGridAppCellCoord | null>(null)
+  const dragSelectionOriginPin = ref<DataGridAppPinnedOrigin | null>(null)
   const isFillDragging = ref(false)
   const fillPointer = ref<DataGridAppPointer | null>(null)
   const fillBaseRange = ref<DataGridCopyRange | null>(null)
@@ -126,19 +132,34 @@ export function useDataGridAppInteractionController<
     options.bodyViewportRef.value?.focus({ preventScroll: true })
   }
 
+  const isPrintableEditingKey = (event: KeyboardEvent): boolean => {
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return false
+    }
+    return event.key.length === 1
+  }
+
   const restoreActiveCellFocus = (): void => {
     const activeCell = options.selectionSnapshot.value?.activeCell
-    if (!activeCell) {
-      focusViewport()
-      return
+    if (activeCell) {
+      options.ensureKeyboardActiveCellVisible(activeCell.rowIndex, activeCell.colIndex)
     }
-    options.ensureKeyboardActiveCellVisible(activeCell.rowIndex, activeCell.colIndex)
+    focusViewport()
   }
 
   const stopPointerSelection = (): void => {
     isPointerSelectingCells.value = false
     dragPointer.value = null
     lastDragCoord.value = null
+    dragSelectionOriginPin.value = null
+  }
+
+  const resolveColumnPin = (columnIndex: number): DataGridAppPinnedOrigin => {
+    const pin = options.visibleColumns.value[columnIndex]?.pin
+    if (pin === "left" || pin === "right") {
+      return pin
+    }
+    return "center"
   }
 
   const isCoordInsideRange = (coord: DataGridAppCellCoord, range: DataGridCopyRange): boolean => {
@@ -408,6 +429,12 @@ export function useDataGridAppInteractionController<
     resolveRangeMovePointer: () => rangeMovePointer.value,
     resolveFillPointer: () => fillPointer.value,
     resolveDragPointer: () => dragPointer.value,
+    resolveAllowHorizontalAutoScroll: () => {
+      if (!isPointerSelectingCells.value) {
+        return true
+      }
+      return dragSelectionOriginPin.value === null || dragSelectionOriginPin.value === "center"
+    },
     resolveViewportElement: () => options.bodyViewportRef.value,
     resolveHeaderHeight: () => 0,
     resolveAxisAutoScrollDelta: axisAutoScroll.resolveAxisAutoScrollDelta,
@@ -577,7 +604,7 @@ export function useDataGridAppInteractionController<
       if (!options.editingCell.value) {
         return false
       }
-      options.commitInlineEdit(false)
+      options.commitInlineEdit("stay")
       return true
     },
     resolveCellCoord: (row, columnKey) => {
@@ -648,6 +675,7 @@ export function useDataGridAppInteractionController<
     if (options.mode.value === "base") {
       const handled = cellPointerDownRouter.dispatchCellPointerDown(row, columnKey, event)
       if (handled) {
+        dragSelectionOriginPin.value = resolveColumnPin(columnIndex)
         const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
         target?.focus({ preventScroll: true })
         return
@@ -663,10 +691,10 @@ export function useDataGridAppInteractionController<
     }
     isPointerSelectingCells.value = true
     dragPointer.value = { clientX: event.clientX, clientY: event.clientY }
+    dragSelectionOriginPin.value = resolveColumnPin(columnIndex)
     const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
     target?.focus({ preventScroll: true })
     lastDragCoord.value = resolveCellCoordFromElement(target)
-    pointerAutoScroll.startInteractionAutoScroll()
   }
 
   const handleCellKeydown = (
@@ -704,6 +732,14 @@ export function useDataGridAppInteractionController<
     if (cellNavigation.dispatchNavigation(event)) {
       return
     }
+    if (isPrintableEditingKey(event)) {
+      event.preventDefault()
+      const columnKey = options.visibleColumns.value[columnIndex]?.key
+      if (columnKey) {
+        options.startInlineEdit(row, columnKey, { draftValue: event.key })
+      }
+      return
+    }
     if (event.key === " " || event.key === "Spacebar") {
       event.preventDefault()
       options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
@@ -732,6 +768,7 @@ export function useDataGridAppInteractionController<
       return
     }
     dragPointer.value = { clientX: event.clientX, clientY: event.clientY }
+    pointerAutoScroll.startInteractionAutoScroll()
     dragPointerSelection.applyDragSelectionFromPointer()
   }
 

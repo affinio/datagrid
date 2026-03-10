@@ -555,12 +555,21 @@ The component emits:
 - `getColumnState()`
 - `getColumnSnapshot()`
 - `applyColumnState(columnState)`
+- `insertColumnsAt(index, columns)`
+- `insertColumnBefore(columnKey, columns)`
+- `insertColumnAfter(columnKey, columns)`
 
 ### Grid state
 
 - `getState()`
 - `migrateState(state, options?)`
 - `applyState(state, options?)`
+
+### Row and column insertion
+
+- `insertRowsAt(index, rows)`
+- `insertRowBefore(rowId, rows)`
+- `insertRowAfter(rowId, rows)`
 
 ### Selection
 

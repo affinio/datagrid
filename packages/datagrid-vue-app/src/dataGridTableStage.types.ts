@@ -19,6 +19,11 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   indexColumnStyle: CSSProperties
   topSpacerHeight: number
   bottomSpacerHeight: number
+  bodyScrollTop: number
+  selectionOverlaySegments: ReadonlyArray<{
+    key: string
+    style: CSSProperties
+  }>
   viewportRowStart: number
   columnWindowStart: number
   leftColumnSpacerWidth: number
@@ -33,6 +38,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   handleHeaderWheel: (event: WheelEvent) => void
   handleHeaderScroll: (event: Event) => void
   handleViewportScroll: (event: Event) => void
+  handleViewportKeydown: (event: KeyboardEvent) => void
   rowClass: (row: DataGridTableRow<TRow>) => string
   isRowAutosizeProbe: (row: DataGridTableRow<TRow>, rowOffset: number) => boolean
   rowStyle: (row: DataGridTableRow<TRow>, rowOffset: number) => CSSProperties
@@ -43,6 +49,9 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   startRowResize: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
   autosizeRow: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
   isCellSelected: (rowOffset: number, columnIndex: number) => boolean
+  isSelectionAnchorCell: (rowOffset: number, columnIndex: number) => boolean
+  shouldHighlightSelectedCell: (rowOffset: number, columnIndex: number) => boolean
+  isCellOnSelectionEdge: (rowOffset: number, columnIndex: number, edge: DataGridPendingEdge) => boolean
   isCellInFillPreview: (rowOffset: number, columnIndex: number) => boolean
   isCellInPendingClipboardRange: (rowOffset: number, columnIndex: number) => boolean
   isCellOnPendingClipboardEdge: (rowOffset: number, columnIndex: number, edge: DataGridPendingEdge) => boolean

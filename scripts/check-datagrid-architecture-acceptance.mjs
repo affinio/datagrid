@@ -421,16 +421,15 @@ registerForbiddenTokenCheck(
     const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"))
     const paritySuiteScript = String(pkg?.scripts?.["test:e2e:datagrid:parity"] ?? "")
     const requiredSpecs = [
-      "tests/e2e/datagrid.regression.spec.ts",
-      "tests/e2e/datagrid.interactions.spec.ts",
-      "tests/e2e/laravel-datagrid.spec.ts",
-      "tests/e2e/laravel-datagrid-interactions.spec.ts",
+      "e2e/sandbox-grid.spec.ts",
+      "e2e/sandbox-interactions.spec.ts",
+      "e2e/sandbox-tree-pivot.spec.ts",
     ]
     const missingSpecs = requiredSpecs.filter((specPath) => !paritySuiteScript.includes(specPath))
     registerConditionCheck(
       paritySuiteId,
       missingSpecs.length === 0,
-      "Parity e2e suite includes both Vue and Laravel datagrid specs",
+      "Parity e2e suite includes the current sandbox datagrid parity specs",
       missingSpecs.length === 0
         ? "ok"
         : `missing parity specs in test:e2e:datagrid:parity: ${missingSpecs.join(", ")}`,

@@ -4,6 +4,7 @@ import type {
   DataGridRowNode,
   DataGridRowNodeInput,
 } from "../rowModel.js"
+import { findDuplicateRowIds } from "../clientRowModelHelpers.js"
 
 export interface ClientRowRowsMutationsRuntimeContext<T> {
   ensureActive: () => void
@@ -39,27 +40,56 @@ export interface ClientRowRowsMutationsRuntimeReorderInput {
 export interface ClientRowRowsMutationsRuntime<T> {
   setRows: (nextRows: readonly DataGridRowNodeInput<T>[]) => void
   reorderRows: (input: ClientRowRowsMutationsRuntimeReorderInput) => boolean
+  insertRowsAt: (index: number, rows: readonly DataGridRowNodeInput<T>[]) => boolean
+  insertRowsBefore: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]) => boolean
+  insertRowsAfter: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]) => boolean
 }
 
 export function createClientRowRowsMutationsRuntime<T>(
   context: ClientRowRowsMutationsRuntimeContext<T>,
 ): ClientRowRowsMutationsRuntime<T> {
+  const commitSourceRows = (nextSourceRows: readonly DataGridRowNode<T>[]): void => {
+    const duplicateRowIds = findDuplicateRowIds(nextSourceRows)
+    if (duplicateRowIds.length > 0) {
+      throw new Error(
+        `[DataGridRows] Duplicate rowId detected (${duplicateRowIds.map(value => String(value)).join(", ")}).`,
+      )
+    }
+    context.setRowVersionById(
+      context.rebuildRowVersionIndex(context.getRowVersionById(), nextSourceRows),
+    )
+    context.setSourceRows(context.reindexSourceRows(nextSourceRows))
+    context.applyComputedFields?.()
+    context.pruneSortCacheRows(nextSourceRows)
+    context.bumpRowRevision()
+    context.resetGroupByIncrementalAggregationState()
+    context.invalidateTreeProjectionCaches()
+    context.setProjectionInvalidation(["rowsChanged"])
+    context.recomputeFromProjectionEntryStage()
+    context.emit()
+  }
+
+  const insertRowsAt = (index: number, rows: readonly DataGridRowNodeInput<T>[]): boolean => {
+    context.ensureActive()
+    const normalizedRows = context.normalizeSourceRows(rows ?? [])
+    if (normalizedRows.length === 0) {
+      return false
+    }
+    const sourceRows = context.getSourceRows()
+    const nextRows = sourceRows.slice()
+    const safeIndex = Number.isFinite(index)
+      ? Math.max(0, Math.min(nextRows.length, Math.trunc(index)))
+      : nextRows.length
+    nextRows.splice(safeIndex, 0, ...normalizedRows)
+    commitSourceRows(nextRows)
+    return true
+  }
+
   return {
     setRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
       context.ensureActive()
       const nextSourceRows = context.normalizeSourceRows(nextRows ?? [])
-      context.setRowVersionById(
-        context.rebuildRowVersionIndex(context.getRowVersionById(), nextSourceRows),
-      )
-      context.setSourceRows(nextSourceRows)
-      context.applyComputedFields?.()
-      context.pruneSortCacheRows(nextSourceRows)
-      context.bumpRowRevision()
-      context.resetGroupByIncrementalAggregationState()
-      context.invalidateTreeProjectionCaches()
-      context.setProjectionInvalidation(["rowsChanged"])
-      context.recomputeFromProjectionEntryStage()
-      context.emit()
+      commitSourceRows(nextSourceRows)
     },
     reorderRows(input: ClientRowRowsMutationsRuntimeReorderInput): boolean {
       context.ensureActive()
@@ -82,14 +112,27 @@ export function createClientRowRowsMutationsRuntime<T>(
       }
       const adjustedTarget = toIndexRaw > fromIndex ? Math.max(0, toIndexRaw - moved.length) : toIndexRaw
       rows.splice(adjustedTarget, 0, ...moved)
-      context.setSourceRows(context.reindexSourceRows(rows))
-      context.applyComputedFields?.()
-      context.bumpRowRevision()
-      context.invalidateTreeProjectionCaches()
-      context.setProjectionInvalidation(["rowsChanged"])
-      context.recomputeFromProjectionEntryStage()
-      context.emit()
+      commitSourceRows(rows)
       return true
+    },
+    insertRowsAt,
+    insertRowsBefore(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]): boolean {
+      context.ensureActive()
+      const sourceRows = context.getSourceRows()
+      const targetIndex = sourceRows.findIndex(row => row.rowId === rowId)
+      if (targetIndex < 0) {
+        return false
+      }
+      return insertRowsAt(targetIndex, rows)
+    },
+    insertRowsAfter(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]): boolean {
+      context.ensureActive()
+      const sourceRows = context.getSourceRows()
+      const targetIndex = sourceRows.findIndex(row => row.rowId === rowId)
+      if (targetIndex < 0) {
+        return false
+      }
+      return insertRowsAt(targetIndex + 1, rows)
     },
   }
 }

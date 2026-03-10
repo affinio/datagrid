@@ -1,4 +1,4 @@
-import type { DataGridColumnModel, DataGridEditModel, DataGridRowModel, DataGridViewportRange } from "../models"
+import type { DataGridColumnModel, DataGridEditModel, DataGridRowModel, DataGridViewportRange } from "../models/index.js"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import type {
   DataGridTransactionInput,

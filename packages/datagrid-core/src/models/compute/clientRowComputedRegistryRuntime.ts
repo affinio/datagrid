@@ -90,8 +90,9 @@ export interface ClientRowComputedRegistryRuntimeState<T> {
   formulaFieldsByName: Map<string, DataGridRegisteredFormulaField>
   formulaFunctionRegistry: Map<
     string,
-    DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown)
+    DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: import("../rowModel.js").DataGridComputedFieldComputeContext<unknown>) => unknown)
   >
+  formulaTablesByName: Map<string, readonly unknown[]>
   formulaCompiledArtifactByExactKey: Map<string, DataGridCompiledFormulaArtifact<T>>
   formulaCompiledArtifactByStructuralKey: Map<string, DataGridCompiledFormulaArtifact<T>>
   formulaCompileCacheHits: number
@@ -150,10 +151,14 @@ export interface ClientRowComputedRegistryRuntime<T> {
 
   registerFormulaFunction: (
     name: string,
-    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[]) => unknown),
+    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: import("../rowModel.js").DataGridComputedFieldComputeContext<unknown>) => unknown),
   ) => void
   unregisterFormulaFunction: (name: string) => boolean
   getFormulaFunctionNames: () => readonly string[]
+  setFormulaTable: (name: string, rows: readonly unknown[]) => void
+  removeFormulaTable: (name: string) => boolean
+  getFormulaTableNames: () => readonly string[]
+  getFormulaContextValue: (key: string) => unknown
 
   recompileRegisteredFormulaFields: () => void
   rebuildComputedPlan: () => void
@@ -195,6 +200,7 @@ export function createClientRowComputedRegistryRuntime<T>(
     computedFieldNameByTargetField: new Map<string, string>(),
     formulaFieldsByName: new Map<string, DataGridRegisteredFormulaField>(),
     formulaFunctionRegistry: new Map(),
+    formulaTablesByName: new Map<string, readonly unknown[]>(),
     formulaCompiledArtifactByExactKey: new Map<string, DataGridCompiledFormulaArtifact<T>>(),
     formulaCompiledArtifactByStructuralKey: new Map<string, DataGridCompiledFormulaArtifact<T>>(),
     formulaCompileCacheHits: 0,
@@ -274,6 +280,37 @@ export function createClientRowComputedRegistryRuntime<T>(
     }))
   }
 
+  const normalizeFormulaTableName = (value: unknown): string => String(value ?? "").trim().toLowerCase()
+
+  const setFormulaTable = (name: string, rows: readonly unknown[]): void => {
+    const normalizedName = normalizeFormulaTableName(name)
+    if (normalizedName.length === 0) {
+      throw new Error("[DataGridFormula] Formula table name must be non-empty.")
+    }
+    state.formulaTablesByName.set(normalizedName, Object.freeze([...rows]))
+  }
+
+  const removeFormulaTable = (name: string): boolean => {
+    const normalizedName = normalizeFormulaTableName(name)
+    if (normalizedName.length === 0) {
+      return false
+    }
+    return state.formulaTablesByName.delete(normalizedName)
+  }
+
+  const getFormulaTableNames = (): readonly string[] => {
+    return Array.from(state.formulaTablesByName.keys())
+      .sort((left, right) => left.localeCompare(right))
+  }
+
+  const getFormulaContextValue = (key: string): unknown => {
+    const normalizedKey = String(key ?? "").trim().toLowerCase()
+    if (!normalizedKey.startsWith("table:")) {
+      return undefined
+    }
+    return state.formulaTablesByName.get(normalizedKey.slice("table:".length))
+  }
+
   return {
     clear: registrationRuntime.clear,
     hasComputedFields: () => state.computedOrder.length > 0,
@@ -293,6 +330,10 @@ export function createClientRowComputedRegistryRuntime<T>(
     registerFormulaFunction: registrationRuntime.registerFormulaFunction,
     unregisterFormulaFunction: registrationRuntime.unregisterFormulaFunction,
     getFormulaFunctionNames: registrationRuntime.getFormulaFunctionNames,
+    setFormulaTable,
+    removeFormulaTable,
+    getFormulaTableNames,
+    getFormulaContextValue,
 
     recompileRegisteredFormulaFields: formulaCompilationRuntime.recompileRegisteredFormulaFields,
     rebuildComputedPlan: executionPlanRuntime.rebuildComputedPlan,

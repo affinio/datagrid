@@ -16,7 +16,9 @@ export interface DataGridFormulaFunctionRuntime {
   name: string
   arity?: DataGridFormulaFunctionArity
   contextKeys: readonly string[]
-  compute: (args: readonly DataGridFormulaValue[]) => unknown
+  resolveContextKeys?: (args: readonly DataGridFormulaAstNode[]) => readonly string[]
+  requiresRuntimeContext: boolean
+  compute: (args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<unknown>) => unknown
 }
 
 export type DataGridFormulaRuntimeErrorPolicy = "coerce-zero" | "throw" | "error-value"
