@@ -1,4 +1,4 @@
-import { computed, nextTick, ref, type ComputedRef, type CSSProperties, type Ref } from "vue"
+import { computed, nextTick, ref, type ComputedRef, type Ref } from "vue"
 import type {
   DataGridAppRowSnapshot,
   DataGridColumnSnapshot,
@@ -6,6 +6,7 @@ import type {
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-vue"
 import {
+  createDataGridAppRowHeightMetrics,
   useDataGridAppActiveCellViewport,
   useDataGridAppCellSelection,
   useDataGridAppClipboard,
@@ -16,7 +17,6 @@ import {
   useDataGridAppRowPresentation,
   useDataGridAppRowSizing,
   useDataGridAppRuntimeSync,
-  useDataGridSelectionOverlayOrchestration,
   useDataGridAppViewport,
   useDataGridAppViewportLifecycle,
 } from "@affino/datagrid-vue"
@@ -76,11 +76,19 @@ export function useDataGridTableStageRuntime<
   const centerColumns = computed(() => (
     orderedVisibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
   ))
+  const resolveColumnWidth = (column: DataGridColumnSnapshot): number => {
+    return columnWidths.value[column.key] ?? column.width ?? DEFAULT_COLUMN_WIDTH
+  }
+  const rowHeightMetrics = createDataGridAppRowHeightMetrics({
+    totalRows: () => options.totalRows.value,
+    resolveBaseRowHeight: () => options.normalizedBaseRowHeight.value,
+    resolveRowHeightOverride: rowIndex => options.runtime.api.view.getRowHeightOverride(rowIndex),
+    resolveRowHeightVersion: () => options.runtime.api.view.getRowHeightVersion(),
+  })
 
   const {
     headerViewportRef,
     bodyViewportRef,
-    viewportScrollTop,
     displayRows,
     renderedColumns,
     viewportRowStart,
@@ -112,6 +120,10 @@ export function useDataGridTableStageRuntime<
     rowOverscan: computed(() => options.virtualization.value.rowOverscan),
     columnOverscan: computed(() => options.virtualization.value.columnOverscan),
     measureVisibleRowHeights: () => measureVisibleRowHeights(),
+    resolveRowHeight: rowHeightMetrics.resolveRowHeight,
+    resolveRowOffset: rowHeightMetrics.resolveRowOffset,
+    resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
+    resolveTotalRowHeight: rowHeightMetrics.resolveTotalHeight,
   })
 
   const {
@@ -158,95 +170,6 @@ export function useDataGridTableStageRuntime<
     ?? ((rowOffset: number, columnIndex: number) => isCellSelected(rowOffset, columnIndex))
   const isCellOnSelectionEdge = selectionController.isCellOnSelectionEdge
     ?? (() => false)
-
-  const orderedColumns = computed(() => {
-    return orderedVisibleColumns.value.map(column => ({
-      pin: column.pin ?? "none",
-    }))
-  })
-
-  const orderedColumnMetrics = computed(() => {
-    const metrics: Array<{ start: number; end: number }> = []
-    let currentOffset = 0
-    for (const column of orderedVisibleColumns.value) {
-      const width = columnWidths.value[column.key] ?? column.width ?? DEFAULT_COLUMN_WIDTH
-      const start = currentOffset
-      currentOffset += width
-      metrics.push({ start, end: currentOffset })
-    }
-    return metrics
-  })
-
-  const cellSelectionRange = computed(() => {
-    const range = resolveSelectionRangeForClipboard()
-    if (!range) {
-      return null
-    }
-    return {
-      startRow: range.startRow,
-      endRow: range.endRow,
-      startColumn: range.startColumn,
-      endColumn: range.endColumn,
-    }
-  })
-
-  const resolveRowHeight = (rowIndex: number): number => {
-    return options.runtime.api.view.getRowHeightOverride(rowIndex) ?? options.normalizedBaseRowHeight.value
-  }
-
-  const resolveRowOffset = (rowIndex: number): number => {
-    if (rowIndex <= 0) {
-      return 0
-    }
-    let offset = 0
-    for (let index = 0; index < rowIndex; index += 1) {
-      offset += resolveRowHeight(index)
-    }
-    return offset
-  }
-
-  const {
-    cellSelectionOverlaySegments,
-  } = useDataGridSelectionOverlayOrchestration({
-    headerHeight: computed(() => 0),
-    rowHeight: 0,
-    resolveRowHeight,
-    resolveRowOffset,
-    orderedColumns,
-    orderedColumnMetrics,
-    cellSelectionRange,
-    fillPreviewRange: computed(() => null),
-      fillBaseRange: computed(() => null),
-      rangeMovePreviewRange: computed(() => null),
-      rangeMoveBaseRange: computed(() => null),
-      isRangeMoving: computed(() => false),
-      virtualWindow: computed(() => ({
-        rowTotal: options.totalRows.value,
-        colTotal: orderedVisibleColumns.value.length,
-      })),
-    })
-
-  const selectionOverlaySegments = computed<readonly { key: string; style: CSSProperties }[]>(() => {
-    const indexColumnWidth = INDEX_COLUMN_WIDTH
-    return cellSelectionOverlaySegments.value.map(segment => {
-      const left = Number.parseFloat(segment.style.left)
-      return {
-        key: segment.key,
-        style: {
-          top: segment.style.top,
-          left: `${(Number.isFinite(left) ? left : 0) + indexColumnWidth}px`,
-          width: segment.style.width,
-          height: segment.style.height,
-          position: "absolute",
-          border: "2px solid var(--datagrid-selection-copied-border)",
-          boxSizing: "border-box",
-          borderRadius: "1px",
-          pointerEvents: "none",
-          zIndex: 6,
-        } satisfies CSSProperties,
-      }
-    })
-  })
 
   const resolveRowIndexById = (rowId: string | number): number => {
     const count = options.runtime.api.rows.getCount()
@@ -322,6 +245,8 @@ export function useDataGridTableStageRuntime<
     visibleColumns: orderedVisibleColumns,
     columnWidths,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
+    resolveRowHeight: rowHeightMetrics.resolveRowHeight,
+    resolveRowOffset: rowHeightMetrics.resolveRowOffset,
     indexColumnWidth: INDEX_COLUMN_WIDTH,
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
     syncViewport: () => syncViewportFromDom(),
@@ -380,6 +305,9 @@ export function useDataGridTableStageRuntime<
     viewportRowStart,
     selectionSnapshot: options.selectionSnapshot,
     bodyViewportRef,
+    resolveColumnWidth,
+    resolveRowHeight: rowHeightMetrics.resolveRowHeight,
+    resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
     normalizeRowId,
     normalizeCellCoord,
     resolveSelectionRange: resolveSelectionRangeForClipboard,
@@ -497,8 +425,6 @@ export function useDataGridTableStageRuntime<
     indexColumnStyle,
     topSpacerHeight,
     bottomSpacerHeight,
-    bodyScrollTop: viewportScrollTop,
-    selectionOverlaySegments,
     viewportRowStart,
     columnWindowStart: viewportColumnStart,
     leftColumnSpacerWidth,

@@ -77,6 +77,7 @@ export interface DataGridCoreViewportService extends DataGridCoreService {
   measureRowHeight?(): void
   setRowHeightOverride?(rowIndex: number, height: number | null): void
   getRowHeightOverride?(rowIndex: number): number | null
+  getRowHeightVersion?(): number
   clearRowHeightOverrides?(): void
 }
 

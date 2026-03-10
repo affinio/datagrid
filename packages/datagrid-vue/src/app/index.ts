@@ -19,6 +19,12 @@ export {
 } from "./useDataGridAppModeMeta"
 
 export {
+  createDataGridAppRowHeightMetrics,
+  type DataGridAppRowHeightMetrics,
+  type DataGridAppRowHeightMetricsOptions,
+} from "./dataGridRowHeightMetrics"
+
+export {
   useDataGridAppClipboard,
   type DataGridAppPendingClipboardEdge,
   type DataGridAppPendingClipboardOperation,

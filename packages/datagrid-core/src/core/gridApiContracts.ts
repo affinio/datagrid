@@ -206,6 +206,7 @@ export interface DataGridApiViewNamespace {
   measureRowHeight(): void
   setRowHeightOverride(rowIndex: number, height: number | null): void
   getRowHeightOverride(rowIndex: number): number | null
+  getRowHeightVersion(): number
   clearRowHeightOverrides(): void
   refresh(options?: DataGridRefreshOptions): Promise<void> | void
   reapply(): Promise<void> | void

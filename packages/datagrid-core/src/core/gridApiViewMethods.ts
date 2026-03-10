@@ -30,6 +30,7 @@ export interface DataGridApiViewMethods {
   measureRowHeight: () => void
   setRowHeightOverride: (rowIndex: number, height: number | null) => void
   getRowHeightOverride: (rowIndex: number) => number | null
+  getRowHeightVersion: () => number
   clearRowHeightOverrides: () => void
   refreshCellsByRowKeys: (
     rowKeys: readonly DataGridRowId[],
@@ -121,6 +122,13 @@ export function createDataGridApiViewMethods<TRow = unknown>(
         }
       }
       return rowHeightOverrideFallback.get(normalizedIndex) ?? null
+    },
+    getRowHeightVersion() {
+      const viewportService = getViewportService()
+      if (typeof viewportService?.getRowHeightVersion === "function") {
+        return viewportService.getRowHeightVersion()
+      }
+      return rowHeightOverrideFallback.size
     },
     clearRowHeightOverrides() {
       rowHeightOverrideFallback.clear()

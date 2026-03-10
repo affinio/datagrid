@@ -133,4 +133,29 @@ describe("useDataGridCellVisibilityScroller contract", () => {
     expect(viewport.scrollLeft).toBe(120)
     expect(setScrollPosition).toHaveBeenLastCalledWith({ top: 0, left: 120 })
   })
+
+  it("uses row offsets and row spans when variable row heights are provided", () => {
+    const viewport = createViewport(0, 0, 120, 120)
+    const setScrollPosition = vi.fn()
+    const rowOffsets = [0, 30, 90, 120]
+    const rowHeights = [30, 60, 30, 45]
+    const scroller = useDataGridCellVisibilityScroller<Coord, Metric>({
+      resolveViewportElement: () => viewport,
+      resolveColumnMetric: () => ({ start: 0, end: 100 }),
+      resolveVirtualWindow: () => ({
+        rowTotal: 4,
+        colTotal: 1,
+      }),
+      resolveHeaderHeight: () => 0,
+      resolveRowHeight: () => 30,
+      resolveRowOffset: rowIndex => rowOffsets[rowIndex] ?? 0,
+      resolveRowHeightAtIndex: rowIndex => rowHeights[rowIndex] ?? 30,
+      setScrollPosition,
+    })
+
+    scroller.ensureCellVisible({ rowIndex: 3, columnIndex: 0 })
+
+    expect(viewport.scrollTop).toBe(45)
+    expect(setScrollPosition).toHaveBeenLastCalledWith({ top: 45, left: 0 })
+  })
 })

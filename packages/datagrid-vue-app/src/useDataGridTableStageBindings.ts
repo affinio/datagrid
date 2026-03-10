@@ -40,8 +40,6 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     indexColumnStyle: unref(options.indexColumnStyle),
     topSpacerHeight: unref(options.topSpacerHeight),
     bottomSpacerHeight: unref(options.bottomSpacerHeight),
-    bodyScrollTop: unref(options.bodyScrollTop),
-    selectionOverlaySegments: unref(options.selectionOverlaySegments),
     viewportRowStart: unref(options.viewportRowStart),
     columnWindowStart: unref(options.columnWindowStart),
     leftColumnSpacerWidth: unref(options.leftColumnSpacerWidth),

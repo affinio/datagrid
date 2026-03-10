@@ -321,6 +321,12 @@ export {
 } from "./runtime/createDataGridVueRuntime"
 
 export {
+  createDataGridAppRowHeightMetrics,
+  type DataGridAppRowHeightMetrics,
+  type DataGridAppRowHeightMetricsOptions,
+} from "./app/dataGridRowHeightMetrics"
+
+export {
   useDataGridAppModeMeta,
   useDataGridAppClipboard,
   useDataGridAppFill,

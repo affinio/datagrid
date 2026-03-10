@@ -39,7 +39,7 @@ describe("useDataGridCellPointerDownRouter contract", () => {
     )
   })
 
-  it("starts drag selection flow for regular cell pointer-down", () => {
+  it("starts drag selection flow for regular cell pointer-down without eager auto-scroll", () => {
     const setDragSelecting = vi.fn()
     const setLastDragCoord = vi.fn()
     const setDragPointer = vi.fn()
@@ -79,7 +79,7 @@ describe("useDataGridCellPointerDownRouter contract", () => {
     expect(setLastDragCoord).toHaveBeenCalledWith({ rowIndex: 1, columnIndex: 2 })
     expect(setDragPointer).toHaveBeenCalledWith({ clientX: 12, clientY: 19 })
     expect(applyCellSelection).toHaveBeenCalledWith({ rowIndex: 1, columnIndex: 2 }, true, { rowIndex: 1, columnIndex: 2 })
-    expect(startInteractionAutoScroll).toHaveBeenCalledTimes(1)
+    expect(startInteractionAutoScroll).not.toHaveBeenCalled()
     expect(setLastAction).toHaveBeenCalledWith("Extended selection to R2 · service")
   })
 

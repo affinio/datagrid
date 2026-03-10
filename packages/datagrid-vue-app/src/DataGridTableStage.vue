@@ -342,7 +342,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch, type ComponentPublicInstance, type CSSProperties } from "vue"
+import { computed, onBeforeUnmount, ref, type ComponentPublicInstance, type CSSProperties } from "vue"
 import type {
   DataGridColumnSnapshot,
 } from "@affino/datagrid-vue"
@@ -548,14 +548,6 @@ function handleLinkedViewportWheel(event: WheelEvent): void {
 function handleBodyViewportWheel(event: WheelEvent): void {
   managedWheelScroll.onBodyViewportWheel(event)
 }
-
-watch(
-  () => props.bodyScrollTop,
-  scrollTop => {
-    linkedPaneScrollSync.syncNow(scrollTop)
-  },
-  { immediate: true },
-)
 
 onBeforeUnmount(() => {
   linkedPaneScrollSync.reset()

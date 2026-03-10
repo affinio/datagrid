@@ -19,11 +19,6 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   indexColumnStyle: CSSProperties
   topSpacerHeight: number
   bottomSpacerHeight: number
-  bodyScrollTop: number
-  selectionOverlaySegments: ReadonlyArray<{
-    key: string
-    style: CSSProperties
-  }>
   viewportRowStart: number
   columnWindowStart: number
   leftColumnSpacerWidth: number

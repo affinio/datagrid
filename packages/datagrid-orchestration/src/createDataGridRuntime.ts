@@ -50,6 +50,7 @@ export function createDataGridRuntime<TRow = unknown>(
   let viewportRange: DataGridViewportRange = { start: 0, end: 0 }
   let virtualizationEnabled = true
   const rowHeightOverrides = new Map<number, number>()
+  let rowHeightVersion = 0
 
   const defaultViewportService: DataGridCoreServiceRegistry["viewport"] & {
     setVirtualizationEnabled: (enabled: boolean) => void
@@ -74,6 +75,7 @@ export function createDataGridRuntime<TRow = unknown>(
     },
     setBaseRowHeight() {
       // No-op in headless default runtime.
+      rowHeightVersion += 1
     },
     measureRowHeight() {
       // No-op in headless default runtime.
@@ -84,12 +86,14 @@ export function createDataGridRuntime<TRow = unknown>(
       }
       if (height == null) {
         rowHeightOverrides.delete(rowIndex)
+        rowHeightVersion += 1
         return
       }
       if (!Number.isFinite(height)) {
         return
       }
       rowHeightOverrides.set(rowIndex, Math.max(1, Math.trunc(height)))
+      rowHeightVersion += 1
     },
     getRowHeightOverride(rowIndex) {
       if (!Number.isInteger(rowIndex) || rowIndex < 0) {
@@ -97,8 +101,12 @@ export function createDataGridRuntime<TRow = unknown>(
       }
       return rowHeightOverrides.get(rowIndex) ?? null
     },
+    getRowHeightVersion() {
+      return rowHeightVersion
+    },
     clearRowHeightOverrides() {
       rowHeightOverrides.clear()
+      rowHeightVersion += 1
     },
   }
 

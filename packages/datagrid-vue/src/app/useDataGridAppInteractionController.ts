@@ -13,6 +13,7 @@ import {
   useDataGridFillSelectionLifecycle,
   useDataGridHistoryActionRunner,
   useDataGridKeyboardCommandRouter,
+  useDataGridPointerCellCoordResolver,
   useDataGridPointerAutoScroll,
   useDataGridPointerPreviewRouter,
   useDataGridRangeMoveLifecycle,
@@ -47,6 +48,9 @@ export interface UseDataGridAppInteractionControllerOptions<
   viewportRowStart: Ref<number>
   selectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   bodyViewportRef: Ref<HTMLElement | null>
+  resolveColumnWidth: (column: DataGridColumnSnapshot) => number
+  resolveRowHeight: (rowIndex: number) => number
+  resolveRowIndexAtOffset: (offset: number) => number
   normalizeRowId: (value: unknown) => string | number | null
   normalizeCellCoord: (coord: DataGridAppCellCoord) => DataGridAppCellCoord | null
   resolveSelectionRange: () => DataGridCopyRange | null
@@ -295,12 +299,53 @@ export function useDataGridAppInteractionController<
     })
   }
 
+  const pointerCellCoordResolver = useDataGridPointerCellCoordResolver<DataGridAppCellCoord>({
+    resolveViewportElement: () => {
+      const bodyViewport = options.bodyViewportRef.value
+      const bodyShell = bodyViewport?.closest(".grid-body-shell")
+      if (!(bodyViewport instanceof HTMLElement) || !(bodyShell instanceof HTMLElement)) {
+        return bodyViewport
+      }
+      return {
+        scrollTop: bodyViewport.scrollTop,
+        scrollLeft: bodyViewport.scrollLeft,
+        getBoundingClientRect: bodyShell.getBoundingClientRect.bind(bodyShell),
+      } as unknown as HTMLElement
+    },
+    resolveColumnMetrics: () => {
+      let currentOffset = 0
+      return options.visibleColumns.value.map((column, columnIndex) => {
+        const width = options.resolveColumnWidth(column)
+        const start = currentOffset
+        currentOffset += width
+        return {
+          columnIndex,
+          start,
+          end: currentOffset,
+          width,
+        }
+      })
+    },
+    resolveColumns: () => options.visibleColumns.value,
+    resolveVirtualWindow: () => ({
+      rowTotal: options.totalRows.value,
+      colTotal: options.visibleColumns.value.length,
+    }),
+    resolveHeaderHeight: () => 0,
+    resolveRowHeight: () => options.resolveRowHeight(0),
+    resolveRowIndexAtOffset: offset => options.resolveRowIndexAtOffset(offset),
+    resolveNearestNavigableColumnIndex: columnIndex => {
+      const lastColumnIndex = Math.max(0, options.visibleColumns.value.length - 1)
+      return Math.max(0, Math.min(lastColumnIndex, columnIndex))
+    },
+    normalizeCellCoord: coord => options.normalizeCellCoord({
+      ...coord,
+      rowId: options.runtime.api.rows.get(coord.rowIndex)?.rowId ?? null,
+    }),
+  })
+
   const resolveCellCoordFromPointer = (clientX: number, clientY: number): DataGridAppCellCoord | null => {
-    const target = document.elementFromPoint(clientX, clientY)
-    const cell = target instanceof HTMLElement
-      ? target.closest(".grid-cell[data-row-index][data-column-index]") as HTMLElement | null
-      : null
-    return resolveCellCoordFromElement(cell)
+    return pointerCellCoordResolver.resolveCellCoordFromPointer(clientX, clientY)
   }
 
   const cellNavigation = useDataGridCellNavigation<DataGridAppCellCoord>({

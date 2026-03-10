@@ -126,6 +126,47 @@ describe("useDataGridPointerCellCoordResolver contract", () => {
     expect(resolver.resolveCellCoordFromPointer(590, 120)?.columnIndex).toBe(3)
   })
 
+  it("uses row offset resolver and preserves left/center/right hit-zones in a split-pane layout", () => {
+    const viewport = createViewport({ left: 100, top: 50, width: 360, height: 260 }, 0, 140)
+    const resolver = useDataGridPointerCellCoordResolver<Coord>({
+      resolveViewportElement: () => viewport,
+      resolveVirtualWindow: () => ({
+        rowTotal: 50,
+        colTotal: 4,
+      }),
+      resolveColumnMetrics: () => [
+        { columnIndex: 0, start: 0, end: 80, width: 80 },
+        { columnIndex: 1, start: 80, end: 220, width: 140 },
+        { columnIndex: 2, start: 220, end: 360, width: 140 },
+        { columnIndex: 3, start: 360, end: 480, width: 120 },
+      ],
+      resolveColumns: () => [{ pin: "left" }, { pin: null }, { pin: null }, { pin: "right" }],
+      resolveHeaderHeight: () => 24,
+      resolveRowHeight: () => 30,
+      resolveRowIndexAtOffset: offset => {
+        if (offset < 28) return 0
+        if (offset < 96) return 1
+        if (offset < 132) return 2
+        return 3
+      },
+      resolveNearestNavigableColumnIndex: index => index,
+      normalizeCellCoord: coord => coord,
+    })
+
+    expect(resolver.resolveCellCoordFromPointer(110, 180)).toEqual({
+      rowIndex: 2,
+      columnIndex: 0,
+    })
+    expect(resolver.resolveCellCoordFromPointer(250, 180)).toEqual({
+      rowIndex: 2,
+      columnIndex: 2,
+    })
+    expect(resolver.resolveCellCoordFromPointer(450, 180)).toEqual({
+      rowIndex: 2,
+      columnIndex: 3,
+    })
+  })
+
   it("clamps absolute X to available metrics and resolves last column fallback", () => {
     const resolver = useDataGridPointerCellCoordResolver<Coord>({
       resolveViewportElement: () => null,

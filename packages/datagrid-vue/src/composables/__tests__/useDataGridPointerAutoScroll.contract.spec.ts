@@ -141,6 +141,51 @@ describe("useDataGridPointerAutoScroll contract", () => {
     expect(raf.handles().length).toBe(0)
   })
 
+  it("suppresses horizontal auto-scroll when pinned-origin policy disables it", () => {
+    const raf = createRafHarness()
+    const setScrollPosition = vi.fn()
+    const applyDragSelectionFromPointer = vi.fn()
+    const viewport = {
+      scrollTop: 100,
+      scrollLeft: 120,
+      scrollHeight: 2000,
+      clientHeight: 400,
+      scrollWidth: 1800,
+      clientWidth: 500,
+      getBoundingClientRect: () => ({ top: 100, bottom: 500, left: 50, right: 550 }),
+    } as unknown as HTMLElement
+
+    const composable = useDataGridPointerAutoScroll({
+      resolveInteractionState: () => ({ isDragSelecting: true, isFillDragging: false, isRangeMoving: false }),
+      resolveRangeMovePointer: () => null,
+      resolveFillPointer: () => null,
+      resolveDragPointer: () => ({ clientX: 546, clientY: 496 }),
+      resolveAllowHorizontalAutoScroll: () => false,
+      resolveViewportElement: () => viewport,
+      resolveHeaderHeight: () => 32,
+      resolveAxisAutoScrollDelta(pointer, min, max) {
+        if (pointer < min + 20) return -10
+        if (pointer > max - 20) return 10
+        return 0
+      },
+      setScrollPosition,
+      applyRangeMovePreviewFromPointer: vi.fn(),
+      applyFillPreviewFromPointer: vi.fn(),
+      applyDragSelectionFromPointer,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    composable.startInteractionAutoScroll()
+    const [frame] = raf.handles()
+    raf.run(frame ?? -1)
+
+    expect(viewport.scrollTop).toBe(110)
+    expect(viewport.scrollLeft).toBe(120)
+    expect(setScrollPosition).toHaveBeenCalledWith({ top: 110, left: 120 })
+    expect(applyDragSelectionFromPointer).toHaveBeenCalledTimes(1)
+  })
+
   it("disposes scheduled frame explicitly", () => {
     const raf = createRafHarness()
     const composable = useDataGridPointerAutoScroll({

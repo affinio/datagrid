@@ -28,6 +28,10 @@ export interface UseDataGridAppViewportOptions<TRow> {
   rowOverscan?: MaybeRef<number>
   columnOverscan?: MaybeRef<number>
   measureVisibleRowHeights?: () => void
+  resolveRowHeight?: (rowIndex: number) => number
+  resolveRowOffset?: (rowIndex: number) => number
+  resolveRowIndexAtOffset?: (offset: number) => number
+  resolveTotalRowHeight?: () => number
 }
 
 export interface UseDataGridAppViewportResult<TRow> {
@@ -111,6 +115,9 @@ export function useDataGridAppViewport<TRow>(
     if (isPaginationMode.value) {
       return 0
     }
+    if (typeof options.resolveRowOffset === "function") {
+      return Math.max(0, options.resolveRowOffset(viewportRowStart.value))
+    }
     return Math.max(0, viewportRowStart.value * options.normalizedBaseRowHeight.value)
   })
 
@@ -121,6 +128,13 @@ export function useDataGridAppViewport<TRow>(
     const total = options.totalRows.value
     if (total <= 0) {
       return 0
+    }
+    if (
+      typeof options.resolveRowOffset === "function"
+      && typeof options.resolveTotalRowHeight === "function"
+    ) {
+      const renderedBottom = options.resolveRowOffset(renderedRowEnd.value + 1)
+      return Math.max(0, options.resolveTotalRowHeight() - renderedBottom)
     }
     const afterCount = Math.max(0, total - (renderedRowEnd.value + 1))
     return afterCount * options.normalizedBaseRowHeight.value
@@ -266,6 +280,16 @@ export function useDataGridAppViewport<TRow>(
     }
     if (!resolveMaybeRef(options.rowVirtualizationEnabled)) {
       return { start: 0, end: total - 1 }
+    }
+
+    if (typeof options.resolveRowIndexAtOffset === "function") {
+      const start = Math.max(0, options.resolveRowIndexAtOffset(element.scrollTop) - rowOverscan.value)
+      const visibleBottomOffset = Math.max(0, element.scrollTop + Math.max(1, element.clientHeight) - 1)
+      const end = Math.min(
+        total - 1,
+        options.resolveRowIndexAtOffset(visibleBottomOffset) + rowOverscan.value,
+      )
+      return { start, end }
     }
 
     const estimatedRowHeight = options.normalizedBaseRowHeight.value

@@ -6,6 +6,8 @@ export interface UseDataGridAppActiveCellViewportOptions {
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   columnWidths: Ref<Record<string, number>>
   normalizedBaseRowHeight: Ref<number>
+  resolveRowHeight?: (rowIndex: number) => number
+  resolveRowOffset?: (rowIndex: number) => number
   indexColumnWidth?: number
   defaultColumnWidth?: number
   syncViewport: () => void
@@ -36,8 +38,14 @@ export function useDataGridAppActiveCellViewport(
   }
 
   const ensureEstimatedRowVisible = (viewport: HTMLElement, rowIndex: number): void => {
-    const estimatedTop = Math.max(0, rowIndex * options.normalizedBaseRowHeight.value)
-    const estimatedBottom = estimatedTop + options.normalizedBaseRowHeight.value
+    const estimatedTop = typeof options.resolveRowOffset === "function"
+      ? Math.max(0, options.resolveRowOffset(rowIndex))
+      : Math.max(0, rowIndex * options.normalizedBaseRowHeight.value)
+    const estimatedBottom = estimatedTop + (
+      typeof options.resolveRowHeight === "function"
+        ? options.resolveRowHeight(rowIndex)
+        : options.normalizedBaseRowHeight.value
+    )
     const visibleTop = viewport.scrollTop
     const visibleBottom = visibleTop + viewport.clientHeight
 
