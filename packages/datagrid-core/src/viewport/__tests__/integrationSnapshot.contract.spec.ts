@@ -58,6 +58,17 @@ function createRows(count: number, startIndex = 0): VisibleRow[] {
   return rows
 }
 
+function toColumnModelInputs(columns: readonly DataGridColumn[]) {
+  return columns.map(({ visible, pin, width, ...column }) => ({
+    ...column,
+    initialState: {
+      visible,
+      pin,
+      width,
+    },
+  }))
+}
+
 describe("viewport integration snapshot contract", () => {
   it("exposes deterministic pinned/overlay/viewport state through public snapshot", () => {
     const columns: DataGridColumn[] = [
@@ -68,7 +79,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "e", label: "E", pin: "right", width: 130, minWidth: 80, maxWidth: 220, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(300) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 800,
       clientHeight: 520,
@@ -158,7 +169,7 @@ describe("viewport integration snapshot contract", () => {
   it("returns immutable-by-copy snapshots across repeated refresh", () => {
     const rowModel = createClientRowModel({ rows: createRows(120) })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "value", label: "Value", width: 180, pin: "none", visible: true }],
+      columns: [{ key: "value", label: "Value", initialState: { width: 180, pin: "none", visible: true } }],
     })
     const containerMetrics = createMeasuredElement({
       clientWidth: 720,
@@ -248,7 +259,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "pin-right", label: "Pin Right", pin: "right", width: 160, minWidth: 100, maxWidth: 260, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(120) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 920,
       clientHeight: 480,
@@ -318,7 +329,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "d", label: "D", pin: "right", width: 120, minWidth: 80, maxWidth: 240, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(600) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 840,
       clientHeight: 500,
@@ -397,7 +408,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "d", label: "D", pin: "right", width: 120, minWidth: 80, maxWidth: 240, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(800) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 860,
       clientHeight: 540,
@@ -480,7 +491,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "c", label: "C", pin: "right", width: 120, minWidth: 80, maxWidth: 240, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(200) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 760,
       clientHeight: 460,
@@ -544,7 +555,7 @@ describe("viewport integration snapshot contract", () => {
       visible: true,
     }))
     const rowModel = createClientRowModel({ rows: createRows(900) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 900,
       clientHeight: 520,
@@ -625,7 +636,7 @@ describe("viewport integration snapshot contract", () => {
       visible: true,
     }))
     const rowModel = createClientRowModel({ rows: createRows(1200) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 920,
       clientHeight: 540,
@@ -698,7 +709,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "c", label: "C", pin: "right", width: 120, minWidth: 80, maxWidth: 240, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(220) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 760,
       clientHeight: 460,
@@ -784,7 +795,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "b", label: "B", pin: "none", width: 140, minWidth: 80, maxWidth: 240, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(180) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 720,
       clientHeight: 420,
@@ -863,7 +874,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "c", label: "C", pin: "none", width: 130, minWidth: 80, maxWidth: 260, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(180) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 760,
       clientHeight: 420,
@@ -943,7 +954,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "b", label: "B", pin: "none", width: 140, minWidth: 80, maxWidth: 240, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(320) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 760,
       clientHeight: 420,
@@ -1013,7 +1024,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "b", label: "B", pin: "none", width: 140, minWidth: 80, maxWidth: 240, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(320) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 760,
       clientHeight: 420,
@@ -1087,7 +1098,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "b", label: "B", pin: "none", width: 140, minWidth: 80, maxWidth: 240, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(320) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 760,
       clientHeight: 420,
@@ -1177,7 +1188,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "c", label: "C", pin: "none", width: 130, minWidth: 80, maxWidth: 260, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(320) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 780,
       clientHeight: 430,
@@ -1292,7 +1303,7 @@ describe("viewport integration snapshot contract", () => {
       { key: "c", label: "C", pin: "none", width: 130, minWidth: 80, maxWidth: 260, visible: true },
     ]
     const rowModel = createClientRowModel({ rows: createRows(320) })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 780,
       clientHeight: 430,

@@ -1,9 +1,8 @@
 <template>
-  <UiMenu ref="menuRef" :callbacks="menuCallbacks">
-    <UiMenuTrigger as-child trigger="contextmenu">
+  <UiMenu ref="menuRef" :callbacks="menuCallbacks" :options="rootMenuOptions">
+    <UiMenuTrigger as-child trigger="both">
       <slot
         :open="open"
-        :toggle-from-button="toggleFromButton"
       />
     </UiMenuTrigger>
 
@@ -11,6 +10,7 @@
       class-name="ui-menu-content datagrid-column-menu__panel"
       align="start"
       :gutter="6"
+      :style="menuThemeVars"
       data-affino-menu-root
       data-datagrid-column-menu-panel="true"
     >
@@ -50,7 +50,7 @@
 
       <UiMenuSeparator />
 
-      <UiSubMenu>
+      <UiSubMenu :options="submenuOptions">
         <UiSubMenuTrigger
           class="datagrid-column-menu__item datagrid-column-menu__item--submenu"
           data-datagrid-column-menu-action="pin-submenu"
@@ -58,7 +58,10 @@
           <span>Pin column</span>
         </UiSubMenuTrigger>
 
-        <UiSubMenuContent class-name="ui-submenu-content datagrid-column-menu__submenu-panel">
+        <UiSubMenuContent
+          class-name="ui-submenu-content datagrid-column-menu__submenu-panel"
+          :style="menuThemeVars"
+        >
           <UiMenuItem
             class="datagrid-column-menu__item"
             data-datagrid-column-menu-action="pin-left"
@@ -88,52 +91,89 @@
         </UiSubMenuContent>
       </UiSubMenu>
 
-      <template v-if="filterEnabled">
-        <UiMenuSeparator />
+      <UiMenuSeparator v-if="filterEnabled" />
 
-        <section class="datagrid-column-menu__section" @mousedown.stop @click.stop>
-          <div class="datagrid-column-menu__section-head">
-            <span>Filter by value</span>
-            <button
-              type="button"
-              class="datagrid-column-menu__link"
-              data-datagrid-column-menu-action="clear-filter"
-              :disabled="!filterActive"
-              @click="handleClearFilter"
-            >
-              Clear
-            </button>
-          </div>
+      <section
+        v-if="filterEnabled"
+        class="datagrid-column-menu__section datagrid-column-menu__section--filter"
+        @mousedown.stop
+        @click.stop
+      >
+        <div class="datagrid-column-menu__section-head">
+          <span class="datagrid-column-menu__section-title">Filter by value</span>
+          <button
+            type="button"
+            class="datagrid-column-menu__link"
+            data-datagrid-column-menu-action="clear-filter"
+            :disabled="!filterActive"
+            @click="handleClearFilter"
+          >
+            Clear filter
+          </button>
+        </div>
 
+        <input
+          v-model="query"
+          class="datagrid-column-menu__search"
+          type="search"
+          placeholder="Search values"
+          @mousedown.stop
+          @click.stop
+          @keydown.stop
+        />
+
+        <label
+          v-if="hasSearchQuery"
+          class="datagrid-column-menu__merge-toggle"
+          data-datagrid-column-menu-action="add-current-selection"
+        >
           <input
-            v-model="query"
-            class="datagrid-column-menu__search"
-            type="search"
-            placeholder="Search values"
-            @mousedown.stop
-            @click.stop
-            @keydown.stop
+            type="checkbox"
+            :checked="addCurrentSelectionToFilter"
+            @change="toggleAddCurrentSelectionToFilter"
           />
+          <span>Add current selection to filter</span>
+        </label>
 
-          <div class="datagrid-column-menu__summary">
-            {{ draftSelectedTokens.length }} / {{ valueEntries.length }} selected
-          </div>
+        <UiMenuSeparator class="datagrid-column-menu__section-separator" />
 
+        <div class="datagrid-column-menu__toolbar">
           <button
             type="button"
             class="datagrid-column-menu__link"
             data-datagrid-column-menu-action="select-all-values"
-            :disabled="valueEntries.length === 0"
+            :disabled="valueEntries.length === 0 || isAllValuesSelected"
             @click="selectAllValues"
           >
             Select all
           </button>
+          <button
+            type="button"
+            class="datagrid-column-menu__link"
+            data-datagrid-column-menu-action="clear-all-values"
+            :disabled="draftSelectedTokens.length === 0"
+            @click="clearAllValues"
+          >
+            Clear all
+          </button>
+          <div class="datagrid-column-menu__summary">
+            {{ appliedSelectedCount }} / {{ appliedSelectableCount }} selected
+          </div>
+        </div>
 
-          <div class="datagrid-column-menu__values">
+        <div class="datagrid-column-menu__values">
+          <div
+            class="datagrid-column-menu__values-list"
+            role="listbox"
+            aria-multiselectable="true"
+            :aria-label="`Filter values for ${columnLabel}`"
+          >
             <label
               v-for="entry in visibleValues"
               :key="entry.token"
               class="datagrid-column-menu__value"
+              role="option"
+              :aria-selected="selectedTokenSet.has(entry.token)"
             >
               <input
                 type="checkbox"
@@ -148,30 +188,44 @@
               No matching values
             </div>
           </div>
+        </div>
 
-          <div v-if="hiddenMatchCount > 0" class="datagrid-column-menu__summary">
-            Showing first {{ visibleValues.length }} matches
-          </div>
+        <div v-if="hiddenMatchCount > 0" class="datagrid-column-menu__summary">
+          Showing first {{ visibleValues.length }} values. Use search to filter all {{ matchedValues.length }}.
+        </div>
 
-          <div class="datagrid-column-menu__footer">
-            <button
-              type="button"
-              class="datagrid-column-menu__apply"
-              data-datagrid-column-menu-action="apply-filter"
-              :disabled="!canApplyFilter"
-              @click="handleApplyFilter"
-            >
-              Apply
-            </button>
-          </div>
-        </section>
-      </template>
+        <div v-if="appliedFilterTokens.length === 0" class="datagrid-column-menu__hint">
+          Select at least one value to apply the filter.
+        </div>
+
+        <UiMenuSeparator class="datagrid-column-menu__section-separator" />
+
+        <div class="datagrid-column-menu__footer">
+          <button
+            type="button"
+            class="datagrid-column-menu__button datagrid-column-menu__button--secondary"
+            data-datagrid-column-menu-action="cancel-filter"
+            @click="closeMenu"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="datagrid-column-menu__button datagrid-column-menu__button--primary"
+            data-datagrid-column-menu-action="apply-filter"
+            :disabled="!canApplyFilter"
+            @click="handleApplyFilter"
+          >
+            Apply
+          </button>
+        </div>
+      </section>
     </UiMenuContent>
   </UiMenu>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, inject, ref, watch } from "vue"
 import { serializeColumnValueToToken } from "@affino/datagrid-vue"
 import {
   UiMenu,
@@ -184,7 +238,9 @@ import {
   UiSubMenuContent,
   UiSubMenuTrigger,
   type MenuCallbacks,
+  type MenuOptions,
 } from "@affino/menu-vue"
+import { dataGridAppRootElementKey } from "./dataGridAppContext"
 
 type DataGridColumnPin = "left" | "right" | "none"
 
@@ -224,44 +280,105 @@ const emit = defineEmits<{
 }>()
 
 const menuRef = ref<UiMenuRef | null>(null)
+const rootElementRef = inject(dataGridAppRootElementKey, ref<HTMLElement | null>(null))
 const open = ref(false)
 const query = ref("")
+const addCurrentSelectionToFilter = ref(false)
 const valueEntries = ref<readonly DataGridColumnMenuValueEntry[]>([])
 const draftSelectedTokens = ref<readonly string[]>([])
+const menuThemeVars = ref<Record<string, string>>({})
 
 const selectedTokenSet = computed(() => new Set(draftSelectedTokens.value))
+const hasSearchQuery = computed(() => query.value.trim().length > 0)
 
-const visibleValues = computed(() => {
+const matchedValues = computed(() => {
   const normalizedQuery = query.value.trim().toLowerCase()
-  const matched = normalizedQuery.length > 0
+  return normalizedQuery.length > 0
     ? valueEntries.value.filter(entry => entry.searchText.includes(normalizedQuery))
     : valueEntries.value
-  return matched.slice(0, props.maxFilterValues)
+})
+
+const visibleValues = computed(() => {
+  if (hasSearchQuery.value) {
+    return matchedValues.value
+  }
+  return matchedValues.value.slice(0, props.maxFilterValues)
 })
 
 const hiddenMatchCount = computed(() => {
-  const normalizedQuery = query.value.trim().toLowerCase()
-  const matchedCount = normalizedQuery.length > 0
-    ? valueEntries.value.filter(entry => entry.searchText.includes(normalizedQuery)).length
-    : valueEntries.value.length
-  return Math.max(0, matchedCount - visibleValues.value.length)
+  if (hasSearchQuery.value) {
+    return 0
+  }
+  return Math.max(0, matchedValues.value.length - visibleValues.value.length)
 })
+
+const appliedFilterTokens = computed(() => {
+  if (hasSearchQuery.value && !addCurrentSelectionToFilter.value) {
+    const visibleTokenSet = new Set(visibleValues.value.map(entry => entry.token))
+    return draftSelectedTokens.value.filter(token => visibleTokenSet.has(token))
+  }
+  return draftSelectedTokens.value
+})
+
+const appliedSelectableCount = computed(() => (
+  hasSearchQuery.value
+    ? addCurrentSelectionToFilter.value
+      ? valueEntries.value.length
+      : visibleValues.value.length
+    : valueEntries.value.length
+))
+
+const appliedSelectedCount = computed(() => appliedFilterTokens.value.length)
+
+const isAllValuesSelected = computed(() => (
+  valueEntries.value.length > 0
+  && draftSelectedTokens.value.length === valueEntries.value.length
+))
 
 const canApplyFilter = computed(() => (
   props.filterEnabled
   && valueEntries.value.length > 0
-  && draftSelectedTokens.value.length > 0
+  && appliedFilterTokens.value.length > 0
 ))
+
+const rootMenuOptions: MenuOptions = {
+  mousePrediction: {},
+  loopFocus: true,
+  closeOnSelect: true,
+  openDelay: 0,
+  closeDelay: 90,
+}
+
+const submenuOptions: MenuOptions = {
+  mousePrediction: {},
+  loopFocus: true,
+  closeOnSelect: true,
+  openDelay: 0,
+  closeDelay: 120,
+}
 
 const menuCallbacks: MenuCallbacks = {
   onOpen: () => {
     open.value = true
+    syncMenuThemeVars()
     resetFilterDraft()
   },
   onClose: () => {
     open.value = false
   },
 }
+
+watch(hasSearchQuery, value => {
+  if (!value) {
+    addCurrentSelectionToFilter.value = false
+  }
+})
+
+watch(rootElementRef, () => {
+  if (open.value) {
+    syncMenuThemeVars()
+  }
+})
 
 function normalizeColumnMenuToken(token: string): string {
   return token.startsWith("string:")
@@ -309,37 +426,35 @@ function closeMenu(): void {
   menuRef.value?.controller?.close("programmatic")
 }
 
-function toggleFromButton(event: MouseEvent): void {
-  const controller = menuRef.value?.controller
-  if (!controller) {
+function syncMenuThemeVars(): void {
+  const rootElement = rootElementRef.value
+  if (!rootElement || typeof window === "undefined") {
+    menuThemeVars.value = {}
     return
   }
-  if (open.value) {
-    controller.close("pointer")
-    return
+  const computedStyle = window.getComputedStyle(rootElement)
+  menuThemeVars.value = {
+    "--datagrid-column-menu-bg": computedStyle.getPropertyValue("--datagrid-column-menu-bg").trim(),
+    "--datagrid-column-menu-border": computedStyle.getPropertyValue("--datagrid-column-menu-border").trim(),
+    "--datagrid-column-menu-shadow": computedStyle.getPropertyValue("--datagrid-column-menu-shadow").trim(),
+    "--datagrid-column-menu-item-hover-bg": computedStyle.getPropertyValue("--datagrid-column-menu-item-hover-bg").trim(),
+    "--datagrid-column-menu-muted-text": computedStyle.getPropertyValue("--datagrid-column-menu-muted-text").trim(),
+    "--datagrid-column-menu-focus-ring": computedStyle.getPropertyValue("--datagrid-column-menu-focus-ring").trim(),
+    "--datagrid-column-menu-search-border": computedStyle.getPropertyValue("--datagrid-column-menu-search-border").trim(),
+    "--datagrid-column-menu-search-bg": computedStyle.getPropertyValue("--datagrid-column-menu-search-bg").trim(),
+    "--datagrid-text-primary": computedStyle.getPropertyValue("--datagrid-text-primary").trim(),
+    "--datagrid-sort-indicator-color": computedStyle.getPropertyValue("--datagrid-sort-indicator-color").trim(),
+    "--datagrid-accent-strong": computedStyle.getPropertyValue("--datagrid-accent-strong").trim(),
+    "--datagrid-filter-trigger-border": computedStyle.getPropertyValue("--datagrid-filter-trigger-border").trim(),
+    "--datagrid-editor-bg": computedStyle.getPropertyValue("--datagrid-editor-bg").trim(),
+    "--datagrid-glass-border": computedStyle.getPropertyValue("--datagrid-glass-border").trim(),
+    "--datagrid-background-color": computedStyle.getPropertyValue("--datagrid-background-color").trim(),
   }
-  const target = event.currentTarget instanceof HTMLElement
-    ? event.currentTarget
-    : null
-  const rect = target?.getBoundingClientRect()
-  controller.setAnchor(rect
-    ? {
-        x: rect.left,
-        y: rect.bottom,
-        width: rect.width,
-        height: rect.height,
-      }
-    : {
-        x: event.clientX,
-        y: event.clientY,
-        width: 0,
-        height: 0,
-      })
-  controller.open("pointer")
 }
 
 function resetFilterDraft(): void {
   query.value = ""
+  addCurrentSelectionToFilter.value = false
   if (!props.filterEnabled) {
     valueEntries.value = []
     draftSelectedTokens.value = []
@@ -371,14 +486,22 @@ function selectAllValues(): void {
   draftSelectedTokens.value = valueEntries.value.map(entry => entry.token)
 }
 
+function clearAllValues(): void {
+  draftSelectedTokens.value = []
+}
+
+function toggleAddCurrentSelectionToFilter(event: Event): void {
+  addCurrentSelectionToFilter.value = (event.target as HTMLInputElement).checked
+}
+
 function handleApplyFilter(): void {
   if (!canApplyFilter.value) {
     return
   }
-  if (draftSelectedTokens.value.length === valueEntries.value.length) {
+  if (appliedFilterTokens.value.length === valueEntries.value.length) {
     emit("clear-filter")
   } else {
-    emit("apply-filter", [...draftSelectedTokens.value])
+    emit("apply-filter", [...appliedFilterTokens.value])
   }
   closeMenu()
 }

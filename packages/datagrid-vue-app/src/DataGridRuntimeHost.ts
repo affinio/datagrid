@@ -4,6 +4,7 @@ import {
   h,
   mergeProps,
   onBeforeUnmount,
+  provide,
   ref,
   watch,
   type PropType,
@@ -24,6 +25,7 @@ import {
   applyDataGridTheme,
   type DataGridThemeProp,
 } from "./dataGridTheme"
+import { dataGridAppRootElementKey } from "./dataGridAppContext"
 
 type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,
@@ -88,6 +90,7 @@ export default defineComponent({
   emits: ["cell-change", "selection-change"],
   setup(props, { attrs, slots, emit, expose }) {
     const rootElementRef = ref<HTMLElement | null>(null)
+    provide(dataGridAppRootElementKey, rootElementRef)
     let themeObserver: MutationObserver | null = null
     const runtime = useDataGridRuntime({
       rows: computed(() => props.rows),

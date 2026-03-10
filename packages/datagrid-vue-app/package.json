@@ -21,7 +21,9 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "type-check": "tsc -p tsconfig.json --noEmit"
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
+    "test": "pnpm run type-check && pnpm run test:unit"
   },
   "dependencies": {
     "@affino/datagrid-theme": "workspace:*",

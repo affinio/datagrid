@@ -4,7 +4,7 @@ test.describe("sandbox tree + pivot flows (adapted from affinio tree/pivot e2e)"
   test("tree expand/collapse updates model deterministically", async ({ page }) => {
     await page.goto("/vue/tree-grid")
 
-    await expect(page.locator(".row--group").first()).toBeVisible()
+    await expect(page.locator(".grid-row.row--group").first()).toBeVisible()
 
     const before = await rowsInModel(page)
     await page.getByRole("button", { name: "Collapse all" }).click()
@@ -17,14 +17,14 @@ test.describe("sandbox tree + pivot flows (adapted from affinio tree/pivot e2e)"
   test("pivot layout switch rewires grouped view and keeps pivot rows styled", async ({ page }) => {
     await page.goto("/vue/pivot-grid")
 
-    const firstPivotRowCell = page.locator("tr.row--pivot td").first()
+    const firstPivotRowCell = page.locator(".grid-row.row--pivot .grid-cell").first()
     await expect(firstPivotRowCell).toBeVisible()
-    const beforeHeaders = await headerLabels(page)
+    const beforePivotColumns = await pivotColumnsCount(page)
 
-    await selectControlOption(page, "Pivot layout", "Status × Region (Count)")
+    await selectControlOption(page, "Pivot layout", "Channel × Status (Deals Σ)")
 
-    await expect.poll(async () => (await headerLabels(page)).join("|")).not.toBe(beforeHeaders.join("|"))
-    await expect(page.locator("tr.row--pivot").first()).toBeVisible()
+    await expect.poll(async () => pivotColumnsCount(page)).not.toBe(beforePivotColumns)
+    await expect(page.locator(".grid-row.row--pivot").first()).toBeVisible()
 
     const pivotColumns = await pivotColumnsCount(page)
     expect(pivotColumns).toBeGreaterThan(0)
@@ -50,11 +50,3 @@ async function pivotColumnsCount(page: Page): Promise<number> {
   return match ? Number(match[1]) : 0
 }
 
-async function readText(locator: Locator): Promise<string> {
-  return (await locator.textContent())?.trim() ?? ""
-}
-
-async function headerLabels(page: Page): Promise<string[]> {
-  const labels = await page.locator(".grid-table thead th").allTextContents()
-  return labels.map(label => label.trim()).filter(Boolean)
-}

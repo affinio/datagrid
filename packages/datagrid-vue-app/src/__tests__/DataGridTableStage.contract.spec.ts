@@ -16,27 +16,29 @@ function createColumns(): readonly DataGridColumnSnapshot[] {
   ] as unknown as readonly DataGridColumnSnapshot[]
 }
 
-function createRows(): readonly DataGridTableRow<DemoRow>[] {
-  return [
-    {
-      rowId: "r1",
-      data: {
-        left: "L1",
-        centerA: "A1",
-        centerB: "B1",
-        right: "R1",
-      },
+function createRows(count = 1): readonly DataGridTableRow<DemoRow>[] {
+  return Array.from({ length: count }, (_unused, index) => ({
+    rowId: `r${index + 1}`,
+    data: {
+      left: `L${index + 1}`,
+      centerA: `A${index + 1}`,
+      centerB: `B${index + 1}`,
+      right: `R${index + 1}`,
     },
-  ] as unknown as readonly DataGridTableRow<DemoRow>[]
+  })) as unknown as readonly DataGridTableRow<DemoRow>[]
 }
 
 function createStageProps(
   isCellSelected: (rowOffset: number, columnIndex: number) => boolean,
   options?: {
     selectionRange?: DataGridOverlayRange | null
+    selectionAnchorCell?: { rowIndex: number; columnIndex: number } | null
     fillPreviewRange?: DataGridOverlayRange | null
     rangeMovePreviewRange?: DataGridOverlayRange | null
     isRangeMoving?: boolean
+    rowHover?: boolean
+    stripedRows?: boolean
+    rowCount?: number
     isCellInFillPreview?: (rowOffset: number, columnIndex: number) => boolean
     isFillHandleCell?: (rowOffset: number, columnIndex: number) => boolean
     startFillHandleDrag?: () => void
@@ -44,11 +46,13 @@ function createStageProps(
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = createColumns()
   const renderedColumns = visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
-  const rows = createRows()
+  const rows = createRows(options?.rowCount ?? 1)
 
   return {
     mode: "base",
     rowHeightMode: "fixed",
+    rowHover: options?.rowHover ?? false,
+    stripedRows: options?.stripedRows ?? false,
     visibleColumns,
     renderedColumns,
     displayRows: rows,
@@ -64,6 +68,7 @@ function createStageProps(
     rightColumnSpacerWidth: 0,
     editingCellValue: "",
     selectionRange: options?.selectionRange ?? { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+    selectionAnchorCell: options?.selectionAnchorCell ?? { rowIndex: 0, columnIndex: 0 },
     fillPreviewRange: options?.fillPreviewRange ?? null,
     rangeMovePreviewRange: options?.rangeMovePreviewRange ?? null,
     isRangeMoving: options?.isRangeMoving ?? false,
@@ -239,6 +244,52 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps the anchor cell unfilled even if upstream selection highlighting includes it", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...createStageProps(
+          (rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 0 && columnIndex <= 1,
+          {
+            selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 },
+          },
+        ),
+        shouldHighlightSelectedCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 0 && columnIndex <= 1,
+      },
+    })
+
+    const anchorCell = wrapper.find('[data-row-index="0"][data-column-index="0"]')
+    const siblingCell = wrapper.find('[data-row-index="0"][data-column-index="1"]')
+
+    expect(anchorCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(anchorCell.classes()).not.toContain("grid-cell--selected")
+    expect(siblingCell.classes()).toContain("grid-cell--selected")
+
+    wrapper.unmount()
+  })
+
+  it("uses the explicit anchor cell for visual highlighting instead of range start", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 0 && columnIndex <= 1,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
+        },
+      ),
+    })
+
+    const startCell = wrapper.find('[data-row-index="0"][data-column-index="0"]')
+    const anchorCell = wrapper.find('[data-row-index="0"][data-column-index="1"]')
+
+    expect(startCell.classes()).toContain("grid-cell--selected")
+    expect(anchorCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(anchorCell.classes()).not.toContain("grid-cell--selected")
+
+    wrapper.unmount()
+  })
+
   it("restores focus to the anchor cell when fill preview ends", async () => {
     const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
       callback(0)
@@ -297,6 +348,73 @@ describe("DataGridTableStage contract", () => {
 
     expect(document.activeElement).toBe(anchorCell.element)
     expect(startFillHandleDrag).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("renders header menu triggers when menu callbacks are present even without the explicit flag", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...createStageProps(
+          (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+          {
+            selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          },
+        ),
+        columnMenuEnabled: false,
+        sourceRows: [{ left: "L1", centerA: "A1", centerB: "B1", right: "R1" }],
+        applyColumnMenuSort: () => undefined,
+        applyColumnMenuPin: () => undefined,
+        applyColumnMenuFilter: () => undefined,
+        clearColumnMenuFilter: () => undefined,
+      },
+    })
+
+    expect(wrapper.find('[data-datagrid-column-menu-trigger="true"]').exists()).toBe(true)
+    expect(wrapper.find('[data-datagrid-column-menu-button="true"]').exists()).toBe(true)
+    expect(wrapper.find('.col-menu-bar-trigger').exists()).toBe(false)
+    expect(wrapper.find('.col-filter-input').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("mirrors row hover across pinned and center panes when rowHover is enabled", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowHover: true,
+      }),
+    })
+
+    await wrapper.find(".grid-body-viewport .grid-row").trigger("mouseenter")
+
+    expect(wrapper.find(".grid-body-pane--left .grid-row").classes()).toContain("grid-row--hovered")
+    expect(wrapper.find(".grid-body-viewport .grid-row").classes()).toContain("grid-row--hovered")
+    expect(wrapper.find(".grid-body-pane--right .grid-row").classes()).toContain("grid-row--hovered")
+
+    await wrapper.find(".grid-body-shell").trigger("mouseleave")
+
+    expect(wrapper.find(".grid-body-pane--left .grid-row").classes()).not.toContain("grid-row--hovered")
+
+    wrapper.unmount()
+  })
+
+  it("marks alternating visible rows as striped when stripedRows is enabled", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        stripedRows: true,
+        rowCount: 2,
+        selectionRange: null,
+        selectionAnchorCell: null,
+      }),
+    })
+
+    expect(wrapper.findAll(".grid-body-pane--left .grid-row")[0]?.classes()).not.toContain("grid-row--striped")
+    expect(wrapper.findAll(".grid-body-pane--left .grid-row")[1]?.classes()).toContain("grid-row--striped")
+    expect(wrapper.findAll(".grid-body-viewport .grid-row")[1]?.classes()).toContain("grid-row--striped")
+    expect(wrapper.findAll(".grid-body-pane--right .grid-row")[1]?.classes()).toContain("grid-row--striped")
 
     wrapper.unmount()
   })

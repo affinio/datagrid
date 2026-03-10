@@ -27,7 +27,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await runLongVerticalSession(viewport)
     await expect.poll(async () => viewportRangeStart(page)).toBeGreaterThan(before)
 
-    await expect(page.locator(".grid-table tbody tr").nth(1)).toBeVisible()
+    await expect(page.locator(".grid-body-viewport .grid-row").nth(1)).toBeVisible()
   })
 })
 

@@ -10,7 +10,9 @@
         <label>
           Rows
           <select v-model.number="rowCount">
-            <option v-for="option in ROW_OPTIONS" :key="option" :value="option">{{ option }}</option>
+            <option v-for="option in ROW_OPTIONS" :key="option" :value="option">
+              {{ option }}
+            </option>
           </select>
         </label>
 
@@ -25,12 +27,22 @@
         <label>
           Patch size
           <select v-model.number="patchSize">
-            <option v-for="option in PATCH_OPTIONS" :key="option" :value="option">{{ option }}</option>
+            <option
+              v-for="option in PATCH_OPTIONS"
+              :key="option"
+              :value="option"
+            >
+              {{ option }}
+            </option>
           </select>
         </label>
 
-        <button type="button" @click="applyRandomPatch">Patch random rows</button>
-        <button type="button" @click="recomputeFormulas">Recompute formulas</button>
+        <button type="button" @click="applyRandomPatch">
+          Patch random rows
+        </button>
+        <button type="button" @click="recomputeFormulas">
+          Recompute formulas
+        </button>
         <button type="button" @click="rebuildModel">Rebuild model</button>
       </div>
 
@@ -47,7 +59,9 @@
         <span>Rows touched: {{ computeStage?.rowsTouched ?? 0 }}</span>
         <span>Evaluations: {{ computeStage?.evaluations ?? 0 }}</span>
         <span>Dirty nodes: {{ dirtyNodesLabel }}</span>
-        <span v-if="selectionAggregatesLabel">Selection: {{ selectionAggregatesLabel }}</span>
+        <span v-if="selectionAggregatesLabel"
+          >Selection: {{ selectionAggregatesLabel }}</span
+        >
       </div>
     </header>
 
@@ -76,126 +90,244 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue"
-import { DataGrid, type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
+import { computed, nextTick, ref, watch } from "vue";
+import {
+  DataGrid,
+  type DataGridAppColumnInput,
+} from "@affino/datagrid-vue-app";
 import type {
   DataGridAggregationModel,
   DataGridFormulaComputeStageDiagnostics,
   DataGridRowId,
-} from "@affino/datagrid-vue"
+} from "@affino/datagrid-vue";
 
 interface FormulaSandboxRow {
-  id: number
-  product: string
-  segment: string
-  price: number
-  qty: number
-  taxRate: number
-  shipping: number
-  discount: number
-  cost: number
-  subtotal?: number
-  tax?: number
-  total?: number
-  margin?: number
+  id: number;
+  product: string;
+  segment: string;
+  price: number;
+  qty: number;
+  taxRate: number;
+  shipping: number;
+  discount: number;
+  cost: number;
+  subtotal?: number;
+  tax?: number;
+  total?: number;
+  margin?: number;
 }
 
 interface FormulaExplainSnapshot {
   executionPlan: {
-    order: readonly string[]
-    levels: readonly unknown[]
-  } | null
-  computeStage: DataGridFormulaComputeStageDiagnostics | null
+    order: readonly string[];
+    levels: readonly unknown[];
+  } | null;
+  computeStage: DataGridFormulaComputeStageDiagnostics | null;
 }
 
 interface PublicFormulaGridApi {
   rows: {
-    getCount: () => number
-    get: (index: number) => { rowId: DataGridRowId; kind?: string; data?: FormulaSandboxRow } | undefined
+    getCount: () => number;
+    get: (
+      index: number,
+    ) =>
+      | { rowId: DataGridRowId; kind?: string; data?: FormulaSandboxRow }
+      | undefined;
     patch: (
-      updates: readonly { rowId: DataGridRowId; data: Partial<FormulaSandboxRow> }[],
+      updates: readonly {
+        rowId: DataGridRowId;
+        data: Partial<FormulaSandboxRow>;
+      }[],
       options?: {
-        recomputeFilter?: boolean
-        recomputeSort?: boolean
-        recomputeGroup?: boolean
+        recomputeFilter?: boolean;
+        recomputeSort?: boolean;
+        recomputeGroup?: boolean;
       },
-    ) => void
-    recomputeComputedFields: (rowIds?: readonly DataGridRowId[]) => number
-  }
+    ) => void;
+    recomputeComputedFields: (rowIds?: readonly DataGridRowId[]) => number;
+  };
   diagnostics: {
-    getFormulaExplain: () => FormulaExplainSnapshot
-  }
+    getFormulaExplain: () => FormulaExplainSnapshot;
+  };
 }
 
 interface PublicFormulaGridExpose {
-  getApi: () => PublicFormulaGridApi | null
-  getSelectionAggregatesLabel: () => string
+  getApi: () => PublicFormulaGridApi | null;
+  getSelectionAggregatesLabel: () => string;
 }
 
-const ROW_OPTIONS = [100, 1_000, 5_000] as const
-const PATCH_OPTIONS = [1, 10, 100] as const
+const ROW_OPTIONS = [100, 1_000, 5_000] as const;
+const PATCH_OPTIONS = [1, 10, 100] as const;
 const columns: readonly DataGridAppColumnInput[] = [
-  { key: "id", label: "ID", dataType: "number", initialState: { width: 88, pin: "left" }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true } },
-  { key: "product", label: "Product", initialState: { width: 180 }, capabilities: { sortable: true, filterable: true } },
-  { key: "segment", label: "Segment", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
-  { key: "price", label: "Price", dataType: "currency", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0 } },
-  { key: "qty", label: "Qty", dataType: "number", initialState: { width: 90 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0 } },
-  { key: "taxRate", label: "Tax rate", dataType: "percent", initialState: { width: 100 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true }, constraints: { min: 0, max: 1 } },
-  { key: "shipping", label: "Shipping", dataType: "currency", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true }, constraints: { min: 0 } },
-  { key: "discount", label: "Discount", dataType: "currency", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true }, constraints: { min: 0 } },
-  { key: "cost", label: "Cost", dataType: "currency", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true }, constraints: { min: 0 } },
-  { key: "subtotal", label: "Subtotal", dataType: "currency", initialState: { width: 118 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, formula: "price * qty" },
-  { key: "tax", label: "Tax", dataType: "currency", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, formula: "subtotal * taxRate" },
-  { key: "total", label: "Total", dataType: "currency", initialState: { width: 118 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, formula: "subtotal + tax + shipping - discount" },
-  { key: "margin", label: "Margin", dataType: "currency", initialState: { width: 118 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, formula: "total - cost" },
-]
+  {
+    key: "id",
+    label: "ID",
+    dataType: "number",
+    initialState: { width: 88, pin: "left" },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true },
+  },
+  {
+    key: "product",
+    label: "Product",
+    initialState: { width: 180 },
+    capabilities: { sortable: true, filterable: true },
+  },
+  {
+    key: "segment",
+    label: "Segment",
+    initialState: { width: 120 },
+    capabilities: { sortable: true, filterable: true, groupable: true },
+  },
+  {
+    key: "price",
+    label: "Price",
+    dataType: "currency",
+    initialState: { width: 110 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: {
+      sortable: true,
+      filterable: true,
+      editable: true,
+      aggregatable: true,
+    },
+    constraints: { min: 0 },
+  },
+  {
+    key: "qty",
+    label: "Qty",
+    dataType: "number",
+    initialState: { width: 90 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: {
+      sortable: true,
+      filterable: true,
+      editable: true,
+      aggregatable: true,
+    },
+    constraints: { min: 0 },
+  },
+  {
+    key: "taxRate",
+    label: "Tax rate",
+    dataType: "percent",
+    initialState: { width: 100 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, editable: true },
+    constraints: { min: 0, max: 1 },
+  },
+  {
+    key: "shipping",
+    label: "Shipping",
+    dataType: "currency",
+    initialState: { width: 110 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, editable: true },
+    constraints: { min: 0 },
+  },
+  {
+    key: "discount",
+    label: "Discount",
+    dataType: "currency",
+    initialState: { width: 110 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, editable: true },
+    constraints: { min: 0 },
+  },
+  {
+    key: "cost",
+    label: "Cost",
+    dataType: "currency",
+    initialState: { width: 110 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, editable: true },
+    constraints: { min: 0 },
+  },
+  {
+    key: "subtotal",
+    label: "Subtotal",
+    dataType: "currency",
+    initialState: { width: 118 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, aggregatable: true },
+    formula: "price * qty",
+  },
+  {
+    key: "tax",
+    label: "Tax",
+    dataType: "currency",
+    initialState: { width: 110 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, aggregatable: true },
+    formula: "subtotal * taxRate",
+  },
+  {
+    key: "total",
+    label: "Total",
+    dataType: "currency",
+    initialState: { width: 118 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, aggregatable: true },
+    formula: "subtotal + tax + shipping - discount",
+  },
+  {
+    key: "margin",
+    label: "Margin",
+    dataType: "currency",
+    initialState: { width: 118 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, aggregatable: true },
+    formula: "total - cost",
+  },
+];
 
-const rowCount = ref<number>(1_000)
-const groupByField = ref<"" | "segment">("segment")
-const patchSize = ref<number>(10)
-const lastAction = ref<string>("init")
-const rows = ref<readonly FormulaSandboxRow[]>([])
-const gridRef = ref<PublicFormulaGridExpose | null>(null)
-const formulaPlan = ref<FormulaExplainSnapshot["executionPlan"]>(null)
-const computeStage = ref<DataGridFormulaComputeStageDiagnostics | null>(null)
-const selectionAggregatesLabel = ref("")
+const rowCount = ref<number>(1_000);
+const groupByField = ref<"" | "segment">("segment");
+const patchSize = ref<number>(10);
+const lastAction = ref<string>("init");
+const rows = ref<readonly FormulaSandboxRow[]>([]);
+const gridRef = ref<PublicFormulaGridExpose | null>(null);
+const formulaPlan = ref<FormulaExplainSnapshot["executionPlan"]>(null);
+const computeStage = ref<DataGridFormulaComputeStageDiagnostics | null>(null);
+const selectionAggregatesLabel = ref("");
 const clientRowModelOptions = {
   resolveRowId: (row: unknown) => (row as FormulaSandboxRow).id,
-}
+};
 const groupBy = computed(() => {
-  return groupByField.value ? groupByField.value : null
-})
-const aggregationModel = computed<DataGridAggregationModel<FormulaSandboxRow> | null>(() => {
-  if (!groupBy.value) {
-    return null
-  }
-  return {
-    columns: [
-      { key: "price", op: "sum" },
-      { key: "qty", op: "sum" },
-      { key: "subtotal", op: "sum" },
-      { key: "tax", op: "sum" },
-      { key: "total", op: "sum" },
-      { key: "margin", op: "sum" },
-    ],
-    basis: "filtered",
-  }
-})
+  return groupByField.value ? groupByField.value : null;
+});
+const aggregationModel =
+  computed<DataGridAggregationModel<FormulaSandboxRow> | null>(() => {
+    if (!groupBy.value) {
+      return null;
+    }
+    return {
+      columns: [
+        { key: "price", op: "sum" },
+        { key: "qty", op: "sum" },
+        { key: "subtotal", op: "sum" },
+        { key: "tax", op: "sum" },
+        { key: "total", op: "sum" },
+        { key: "margin", op: "sum" },
+      ],
+      basis: "filtered",
+    };
+  });
 
 const dirtyNodesLabel = computed(() => {
   if (!computeStage.value || computeStage.value.dirtyNodes.length === 0) {
-    return "—"
+    return "—";
   }
-  return computeStage.value.dirtyNodes.join(", ")
-})
+  return computeStage.value.dirtyNodes.join(", ");
+});
 
 const randomNumber = (min: number, max: number): number => {
-  return min + Math.random() * (max - min)
-}
+  return min + Math.random() * (max - min);
+};
 
 const buildRows = (count: number): readonly FormulaSandboxRow[] => {
-  const segments = ["Retail", "SMB", "Enterprise", "Channel"] as const
-  const nextRows = new Array<FormulaSandboxRow>(count)
+  const segments = ["Retail", "SMB", "Enterprise", "Channel"] as const;
+  const nextRows = new Array<FormulaSandboxRow>(count);
   for (let index = 0; index < count; index += 1) {
     nextRows[index] = {
       id: index + 1,
@@ -207,95 +339,99 @@ const buildRows = (count: number): readonly FormulaSandboxRow[] => {
       shipping: Math.round(randomNumber(0, 25) * 100) / 100,
       discount: Math.round(randomNumber(0, 20) * 100) / 100,
       cost: Math.round(randomNumber(10, 250) * 100) / 100,
-    }
+    };
   }
-  return nextRows
-}
+  return nextRows;
+};
 
 const refreshDiagnostics = (): void => {
-  const api = gridRef.value?.getApi()
+  const api = gridRef.value?.getApi();
   if (!api) {
-    formulaPlan.value = null
-    computeStage.value = null
-    return
+    formulaPlan.value = null;
+    computeStage.value = null;
+    return;
   }
-  const explain = api.diagnostics.getFormulaExplain()
-  formulaPlan.value = explain.executionPlan
-  computeStage.value = explain.computeStage
-}
+  const explain = api.diagnostics.getFormulaExplain();
+  formulaPlan.value = explain.executionPlan;
+  computeStage.value = explain.computeStage;
+};
 
 const syncSelectionAggregatesLabel = (): void => {
-  selectionAggregatesLabel.value = gridRef.value?.getSelectionAggregatesLabel() ?? ""
-}
+  selectionAggregatesLabel.value =
+    gridRef.value?.getSelectionAggregatesLabel() ?? "";
+};
 
 const handleGridCellChange = (): void => {
-  refreshDiagnostics()
-  syncSelectionAggregatesLabel()
-}
+  refreshDiagnostics();
+  syncSelectionAggregatesLabel();
+};
 
 const rebuildModel = (): void => {
-  rows.value = buildRows(rowCount.value)
-  lastAction.value = `rebuild:${rowCount.value}`
-  selectionAggregatesLabel.value = ""
+  rows.value = buildRows(rowCount.value);
+  lastAction.value = `rebuild:${rowCount.value}`;
+  selectionAggregatesLabel.value = "";
   void nextTick(() => {
-    refreshDiagnostics()
-  })
-}
+    refreshDiagnostics();
+  });
+};
 
 const applyRandomPatch = (): void => {
-  const api = gridRef.value?.getApi()
+  const api = gridRef.value?.getApi();
   if (!api || rows.value.length === 0) {
-    return
+    return;
   }
-  const updatesById = new Map<DataGridRowId, Partial<FormulaSandboxRow>>()
-  const totalRows = api.rows.getCount()
-  const patchCount = Math.min(patchSize.value, totalRows)
+  const updatesById = new Map<DataGridRowId, Partial<FormulaSandboxRow>>();
+  const totalRows = api.rows.getCount();
+  const patchCount = Math.min(patchSize.value, totalRows);
   for (let index = 0; index < patchCount; index += 1) {
-    const rowIndex = Math.floor(Math.random() * totalRows)
-    const rowNode = api.rows.get(rowIndex)
-    const current = rowNode?.data
+    const rowIndex = Math.floor(Math.random() * totalRows);
+    const rowNode = api.rows.get(rowIndex);
+    const current = rowNode?.data;
     if (!rowNode || !current || rowNode.kind === "group") {
-      continue
+      continue;
     }
     updatesById.set(rowNode.rowId, {
       price: Math.round((current.price + randomNumber(-5, 5)) * 100) / 100,
       qty: Math.max(1, current.qty + Math.trunc(randomNumber(-1, 2))),
-      shipping: Math.max(0, Math.round((current.shipping + randomNumber(-2, 2)) * 100) / 100),
-    })
+      shipping: Math.max(
+        0,
+        Math.round((current.shipping + randomNumber(-2, 2)) * 100) / 100,
+      ),
+    });
   }
   api.rows.patch(
     Array.from(updatesById.entries()).map(([rowId, data]) => ({ rowId, data })),
     { recomputeFilter: false, recomputeSort: false, recomputeGroup: false },
-  )
-  lastAction.value = `patch:${updatesById.size}`
-  refreshDiagnostics()
-}
+  );
+  lastAction.value = `patch:${updatesById.size}`;
+  refreshDiagnostics();
+};
 
 const recomputeFormulas = (): void => {
-  const api = gridRef.value?.getApi()
+  const api = gridRef.value?.getApi();
   if (!api) {
-    return
+    return;
   }
-  const recomputedRows = api.rows.recomputeComputedFields()
-  lastAction.value = `recompute:${recomputedRows}`
-  refreshDiagnostics()
-}
+  const recomputedRows = api.rows.recomputeComputedFields();
+  lastAction.value = `recompute:${recomputedRows}`;
+  refreshDiagnostics();
+};
 
 watch(rowCount, () => {
-  rebuildModel()
-})
+  rebuildModel();
+});
 
 watch(
   () => gridRef.value,
   () => {
     void nextTick(() => {
-      refreshDiagnostics()
-      syncSelectionAggregatesLabel()
-    })
+      refreshDiagnostics();
+      syncSelectionAggregatesLabel();
+    });
   },
-)
+);
 
-rebuildModel()
+rebuildModel();
 </script>
 
 <style scoped>

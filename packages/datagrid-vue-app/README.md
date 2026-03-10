@@ -113,6 +113,8 @@ Enable the built-in header menu with one prop:
   :rows="rows"
   :columns="columns"
   column-menu
+  row-hover
+  striped-rows
 />
 ```
 
@@ -179,6 +181,8 @@ Affino DataGrid works well for:
 - `columns`
 - `theme`
 - `column-menu`
+- `row-hover`
+- `striped-rows`
 - `row-height-mode`
 - `base-row-height`
 

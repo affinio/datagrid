@@ -33,6 +33,7 @@ const AUTO_RESIZE_SAMPLE_LIMIT = 400
 export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string, unknown>> {
   mode: Ref<"base" | "tree" | "pivot" | "worker">
   rows: Ref<readonly TRow[]>
+  sourceRows?: Ref<readonly TRow[]>
   runtime: Pick<
     import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>,
     "api" | "syncRowsInRange" | "virtualWindow"
@@ -52,6 +53,15 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   toggleSortForColumn: (columnKey: string, additive?: boolean) => void
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void
+  columnMenuEnabled?: Ref<boolean>
+  columnMenuMaxFilterValues?: Ref<number>
+  isColumnFilterActive?: (columnKey: string) => boolean
+  resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
+  resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
+  applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
+  applyColumnMenuPin?: (columnKey: string, pin: import("@affino/datagrid-vue").DataGridColumnPin) => void
+  applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
+  clearColumnMenuFilter?: (columnKey: string) => void
   applyRowHeightSettings: () => void
   cloneRowData: (row: TRow) => TRow
 }
@@ -170,6 +180,27 @@ export function useDataGridTableStageRuntime<
     ?? ((rowOffset: number, columnIndex: number) => isCellSelected(rowOffset, columnIndex))
   const isCellOnSelectionEdge = selectionController.isCellOnSelectionEdge
     ?? (() => false)
+  const selectionAnchorCell = computed(() => {
+    const snapshot = options.selectionSnapshot.value
+    if (!snapshot || snapshot.ranges.length === 0) {
+      return null
+    }
+    const activeIndex = snapshot.activeRangeIndex ?? 0
+    const anchor = snapshot.ranges[activeIndex]?.anchor ?? snapshot.ranges[0]?.anchor ?? null
+    if (
+      !anchor
+      || typeof anchor.rowIndex !== "number"
+      || typeof anchor.colIndex !== "number"
+      || !Number.isFinite(anchor.rowIndex)
+      || !Number.isFinite(anchor.colIndex)
+    ) {
+      return null
+    }
+    return {
+      rowIndex: Math.trunc(anchor.rowIndex),
+      columnIndex: Math.trunc(anchor.colIndex),
+    }
+  })
 
   const resolveRowIndexById = (rowId: string | number): number => {
     const count = options.runtime.api.rows.getCount()
@@ -206,18 +237,7 @@ export function useDataGridTableStageRuntime<
     firstColumnKey: options.firstColumnKey,
   })
 
-  const {
-    normalizeClipboardRange,
-    applyClipboardEdits,
-    rangesEqual,
-    buildFillMatrixFromRange,
-    clearPendingClipboardOperation,
-    copySelectedCells,
-    pasteSelectedCells,
-    cutSelectedCells,
-    isCellInPendingClipboardRange,
-    isCellOnPendingClipboardEdge,
-  } = useDataGridAppClipboard<TRow, DataGridAppRowSnapshot<TRow>>({
+  const clipboard = useDataGridAppClipboard<TRow, DataGridAppRowSnapshot<TRow>>({
     mode: options.mode,
     runtime: options.runtime as never,
     totalRows: options.totalRows,
@@ -237,6 +257,19 @@ export function useDataGridTableStageRuntime<
     readCell: (row, columnKey) => readCell(row, columnKey),
     syncViewport: () => syncViewportFromDom(),
   })
+
+  const {
+    normalizeClipboardRange,
+    applyClipboardEdits,
+    rangesEqual,
+    buildFillMatrixFromRange,
+    clearPendingClipboardOperation,
+    copySelectedCells,
+    pasteSelectedCells,
+    cutSelectedCells,
+    isCellInPendingClipboardRange,
+    isCellOnPendingClipboardEdge,
+  } = clipboard
 
   const {
     ensureKeyboardActiveCellVisible,
@@ -448,6 +481,7 @@ export function useDataGridTableStageRuntime<
     visibleColumns: orderedVisibleColumns,
     renderedColumns,
     displayRows,
+    sourceRows: options.sourceRows ?? options.rows,
     columnFilterTextByKey: options.columnFilterTextByKey,
     gridContentStyle,
     mainTrackStyle,
@@ -460,6 +494,7 @@ export function useDataGridTableStageRuntime<
     rightColumnSpacerWidth,
     editingCellValueRef: editingCellValue,
     selectionRange,
+    selectionAnchorCell,
     fillPreviewRange,
     rangeMovePreviewRange,
     isRangeMoving,
@@ -469,6 +504,15 @@ export function useDataGridTableStageRuntime<
     toggleSortForColumn: options.toggleSortForColumn,
     sortIndicator: options.sortIndicator,
     setColumnFilterText: options.setColumnFilterText,
+    columnMenuEnabled: options.columnMenuEnabled,
+    columnMenuMaxFilterValues: options.columnMenuMaxFilterValues,
+    isColumnFilterActive: options.isColumnFilterActive,
+    resolveColumnMenuSortDirection: options.resolveColumnMenuSortDirection,
+    resolveColumnMenuSelectedTokens: options.resolveColumnMenuSelectedTokens,
+    applyColumnMenuSort: options.applyColumnMenuSort,
+    applyColumnMenuPin: options.applyColumnMenuPin,
+    applyColumnMenuFilter: options.applyColumnMenuFilter,
+    clearColumnMenuFilter: options.clearColumnMenuFilter,
     handleHeaderWheel,
     handleHeaderScroll,
     handleViewportScroll,

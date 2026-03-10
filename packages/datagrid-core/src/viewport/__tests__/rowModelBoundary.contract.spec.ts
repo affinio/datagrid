@@ -81,7 +81,7 @@ describe("table viewport row-model boundary", () => {
     const rows = buildRows(120)
     const clientModel = createClientRowModel({ rows })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "value", label: "Value", width: 180 }],
+      columns: [{ key: "value", label: "Value", initialState: { width: 180 } }],
     })
     const calls: Array<{ start: number; end: number }> = []
     let rangeReads = 0
@@ -130,7 +130,7 @@ describe("table viewport row-model boundary", () => {
     const rows = buildRows(150)
     const clientModel = createClientRowModel({ rows })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "value", label: "Value", width: 200 }],
+      columns: [{ key: "value", label: "Value", initialState: { width: 200 } }],
     })
     const { source, fetchBlock } = createServerModelStub(rows)
     const serverBackedModel = createServerBackedRowModel({ source })
@@ -168,7 +168,7 @@ describe("table viewport row-model boundary", () => {
     const { source, fetchBlock } = createServerModelStub(rows)
     const serverBackedModel = createServerBackedRowModel({ source })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "value", label: "Value", width: 180 }],
+      columns: [{ key: "value", label: "Value", initialState: { width: 180 } }],
     })
     const { container, header, cleanup } = mountLayoutNodes()
 

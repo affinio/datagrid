@@ -19,7 +19,8 @@ import type {
 } from "@affino/datagrid-vue"
 import {
   cloneDataGridFilterSnapshot,
-  useDataGridAppSelection,
+  type GridSelectionPointLike,
+  type DataGridRowId,
 } from "@affino/datagrid-vue"
 import DataGridTableStage from "./DataGridTableStage.vue"
 import type { DataGridColumnMenuOptions } from "./dataGridColumnMenu"
@@ -149,6 +150,18 @@ export default defineComponent({
       type: Object as PropType<{ subscribe: (listener: () => void) => () => void }>,
       required: true,
     },
+    selectionSnapshot: {
+      type: Object as PropType<Ref<import("@affino/datagrid-vue").DataGridSelectionSnapshot | null>>,
+      required: true,
+    },
+    selectionAnchor: {
+      type: Object as PropType<Ref<GridSelectionPointLike<DataGridRowId> | null>>,
+      required: true,
+    },
+    syncSelectionSnapshotFromRuntime: {
+      type: Function as PropType<() => void>,
+      required: true,
+    },
     sortModel: {
       type: Array as PropType<readonly DataGridSortState[] | undefined>,
       default: undefined,
@@ -185,6 +198,14 @@ export default defineComponent({
       type: Number,
       default: 31,
     },
+    rowHover: {
+      type: Boolean,
+      default: false,
+    },
+    stripedRows: {
+      type: Boolean,
+      default: false,
+    },
   },
   setup(props) {
     const rowVersion = ref(0)
@@ -220,7 +241,10 @@ export default defineComponent({
 
     const modeRef = computed(() => props.mode)
     const rowsRef = computed(() => props.rows)
-    const totalRows = computed(() => props.runtime.api.rows.getCount())
+    const totalRows = computed(() => {
+      void rowVersion.value
+      return props.runtime.api.rows.getSnapshot().rowCount
+    })
     const visibleColumns = computed(() => props.runtime.columnSnapshot.value.visibleColumns)
     const rowHeightMode = ref(props.rowHeightMode)
     const normalizedBaseRowHeight = computed(() => normalizeBaseRowHeight(props.baseRowHeight))
@@ -232,17 +256,6 @@ export default defineComponent({
         rowHeightMode.value = nextMode
       },
     )
-
-    const {
-      selectionSnapshot,
-      selectionAnchor,
-      syncSelectionSnapshotFromRuntime,
-    } = useDataGridAppSelection<Record<string, unknown>>({
-      mode: modeRef as Ref<DataGridMode>,
-      resolveRuntime: () => props.runtime,
-      visibleColumns,
-      totalRows,
-    })
 
     const isColumnFilterActive = (columnKey: string): boolean => {
       const entry = filterModelState.value.columnFilters?.[columnKey]
@@ -389,6 +402,7 @@ export default defineComponent({
     } = useDataGridTableStageRuntime<Record<string, unknown>>({
       mode: modeRef as Ref<DataGridMode>,
       rows: rowsRef,
+      sourceRows: rowsRef,
       runtime: props.runtime,
       rowVersion,
       totalRows,
@@ -396,15 +410,24 @@ export default defineComponent({
       rowRenderMode: computed(() => props.renderMode),
       rowHeightMode,
       normalizedBaseRowHeight,
-      selectionSnapshot,
-      selectionAnchor,
-      syncSelectionSnapshotFromRuntime,
+      selectionSnapshot: props.selectionSnapshot,
+      selectionAnchor: props.selectionAnchor,
+      syncSelectionSnapshotFromRuntime: props.syncSelectionSnapshotFromRuntime,
       firstColumnKey,
       columnFilterTextByKey,
       virtualization: computed(() => props.virtualization),
       toggleSortForColumn,
       sortIndicator,
       setColumnFilterText,
+      columnMenuEnabled: computed(() => props.columnMenu.enabled),
+      columnMenuMaxFilterValues: computed(() => props.columnMenu.maxFilterValues),
+      isColumnFilterActive,
+      resolveColumnMenuSortDirection,
+      resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
+      applyColumnMenuSort,
+      applyColumnMenuPin,
+      applyColumnMenuFilter,
+      clearColumnMenuFilter,
       applyRowHeightSettings,
       cloneRowData,
     })
@@ -414,6 +437,8 @@ export default defineComponent({
       sourceRows: props.rows,
       columnMenuEnabled: props.columnMenu.enabled,
       columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
+      rowHover: props.rowHover,
+      stripedRows: props.stripedRows,
       isColumnFilterActive,
       resolveColumnMenuSortDirection,
       resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,

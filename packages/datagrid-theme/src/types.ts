@@ -131,6 +131,14 @@ export interface DataGridThemeTokens {
   gridCopyMenuShadowColor: string
   gridCopyMenuItemHoverBorderColor: string
   gridCopyMenuItemHoverBackgroundColor: string
+  gridColumnMenuBorderColor: string
+  gridColumnMenuBackgroundColor: string
+  gridColumnMenuShadowColor: string
+  gridColumnMenuItemHoverBackgroundColor: string
+  gridColumnMenuMutedTextColor: string
+  gridColumnMenuFocusRingColor: string
+  gridColumnMenuSearchBorderColor: string
+  gridColumnMenuSearchBackgroundColor: string
 }
 
 export interface DataGridResolvedStyleConfig {

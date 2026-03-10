@@ -62,6 +62,7 @@ function createControllerHarness(options: {
   shellWidth?: number
   shellHeight?: number
   indexColumnWidth?: number
+  resolveRowIndexAtOffset?: (offset: number) => number
   mode?: "base" | "tree" | "pivot" | "worker"
 } = {}) {
   const rowCount = options.rowCount ?? 1
@@ -73,14 +74,121 @@ function createControllerHarness(options: {
     shellHeight: options.shellHeight,
   })
   const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
-  const applyCellSelectionByCoord = vi.fn()
-  const applySelectionRange = vi.fn()
-  const rows = Array.from({ length: rowCount }, (_, rowIndex) => ({
+  let selectionAnchor: { rowIndex: number; columnIndex: number; rowId: string | number | null } | null = null
+  let rows = Array.from({ length: rowCount }, (_, rowIndex) => ({
     rowId: `r${rowIndex + 1}`,
     kind: "data",
     data: {},
   })) as unknown as DataGridRowNode<DemoRow>[]
   const row = rows[0]!
+  const buildRangeSnapshot = (options: {
+    anchor: { rowIndex: number; columnIndex: number; rowId: string | number | null }
+    focus: { rowIndex: number; columnIndex: number; rowId: string | number | null }
+    activeCell?: { rowIndex: number; columnIndex: number; rowId: string | number | null }
+  }): DataGridSelectionSnapshot => {
+    const startRow = Math.min(options.anchor.rowIndex, options.focus.rowIndex)
+    const endRow = Math.max(options.anchor.rowIndex, options.focus.rowIndex)
+    const startCol = Math.min(options.anchor.columnIndex, options.focus.columnIndex)
+    const endCol = Math.max(options.anchor.columnIndex, options.focus.columnIndex)
+    const activeCell = options.activeCell ?? options.focus
+    return {
+      activeRangeIndex: 0,
+      activeCell: {
+        rowIndex: activeCell.rowIndex,
+        colIndex: activeCell.columnIndex,
+        rowId: activeCell.rowId,
+      },
+      ranges: [{
+        startRow,
+        endRow,
+        startCol,
+        endCol,
+        startRowId: rows[startRow]?.rowId ?? null,
+        endRowId: rows[endRow]?.rowId ?? null,
+        anchor: {
+          rowIndex: options.anchor.rowIndex,
+          colIndex: options.anchor.columnIndex,
+          rowId: options.anchor.rowId,
+        },
+        focus: {
+          rowIndex: options.focus.rowIndex,
+          colIndex: options.focus.columnIndex,
+          rowId: options.focus.rowId,
+        },
+      }],
+    }
+  }
+  const syncSelectionState = (snapshot: DataGridSelectionSnapshot | null): void => {
+    selectionSnapshot.value = snapshot
+    const activeRange = snapshot?.ranges[snapshot.activeRangeIndex ?? 0] ?? snapshot?.ranges[0] ?? null
+    selectionAnchor = activeRange?.anchor
+      ? {
+          rowIndex: activeRange.anchor.rowIndex,
+          columnIndex: activeRange.anchor.colIndex,
+          rowId: activeRange.anchor.rowId ?? null,
+        }
+      : null
+  }
+  const setSelectionSnapshot = vi.fn((snapshot: DataGridSelectionSnapshot | null) => {
+    syncSelectionState(snapshot)
+  })
+  const applySelectionRange = vi.fn((range: {
+    startRow: number
+    endRow: number
+    startColumn: number
+    endColumn: number
+  }) => {
+    setSelectionSnapshot(buildRangeSnapshot({
+      anchor: {
+        rowIndex: range.startRow,
+        columnIndex: range.startColumn,
+        rowId: rows[range.startRow]?.rowId ?? null,
+      },
+      focus: {
+        rowIndex: range.endRow,
+        columnIndex: range.endColumn,
+        rowId: rows[range.endRow]?.rowId ?? null,
+      },
+    }))
+  })
+  const applyCellSelectionByCoord = vi.fn((coord: {
+    rowIndex: number
+    columnIndex: number
+    rowId: string | number | null
+  }, extend: boolean, fallbackAnchor?: {
+    rowIndex: number
+    columnIndex?: number
+    colIndex?: number
+    rowId: string | number | null
+  }) => {
+    const anchor = extend
+      ? (selectionAnchor ?? {
+          rowIndex: fallbackAnchor?.rowIndex ?? coord.rowIndex,
+          columnIndex: fallbackAnchor?.columnIndex ?? fallbackAnchor?.colIndex ?? coord.columnIndex,
+          rowId: fallbackAnchor?.rowId ?? coord.rowId,
+        })
+      : {
+          rowIndex: coord.rowIndex,
+          columnIndex: coord.columnIndex,
+          rowId: coord.rowId,
+        }
+    setSelectionSnapshot(buildRangeSnapshot({
+      anchor,
+      focus: {
+        rowIndex: coord.rowIndex,
+        columnIndex: coord.columnIndex,
+        rowId: coord.rowId,
+      },
+    }))
+  })
+  const setCellSelection = vi.fn((nextRow: DataGridRowNode<DemoRow>, rowOffset: number, columnIndex: number, extend: boolean) => {
+    applyCellSelectionByCoord({
+      rowIndex: rowOffset,
+      columnIndex,
+      rowId: nextRow.rowId ?? null,
+    }, extend)
+  })
+  const ensureKeyboardActiveCellVisible = vi.fn()
 
   const controller = useDataGridAppInteractionController<DemoRow, readonly DemoRow[]>({
     mode: ref(mode),
@@ -88,10 +196,18 @@ function createControllerHarness(options: {
       api: {
         rows: {
           get: (rowIndex: number) => rows[rowIndex] ?? null,
-          getCount: () => rowCount,
+          getCount: () => rows.length,
+          setData: (nextRows: Array<{ rowId: string | number; row: DemoRow }>) => {
+            rows = nextRows.map(nextRow => ({
+              rowId: nextRow.rowId,
+              kind: "data",
+              data: nextRow.row,
+            })) as unknown as DataGridRowNode<DemoRow>[]
+          },
         },
         selection: {
           hasSupport: () => true,
+          setSnapshot: setSelectionSnapshot,
         },
       },
     } as never,
@@ -113,7 +229,7 @@ function createControllerHarness(options: {
     indexColumnWidth: options.indexColumnWidth ?? 0,
     resolveColumnWidth: column => column.width ?? 2,
     resolveRowHeight: () => 24,
-    resolveRowIndexAtOffset: () => 0,
+    resolveRowIndexAtOffset: options.resolveRowIndexAtOffset ?? (() => 0),
     normalizeRowId: value => (typeof value === "string" || typeof value === "number" ? value : null),
     normalizeCellCoord: coord => coord,
     resolveSelectionRange: () => {
@@ -132,12 +248,15 @@ function createControllerHarness(options: {
     },
     applySelectionRange,
     applyCellSelectionByCoord,
-    setCellSelection: vi.fn(),
+    setCellSelection,
     clearCellSelection: vi.fn(),
     readCell: vi.fn(() => ""),
     cloneRowData: rowData => ({ ...rowData }),
-    resolveRowIndexById: () => 0,
-    captureRowsSnapshot: vi.fn(() => []),
+    resolveRowIndexById: rowId => rows.findIndex(nextRow => nextRow.rowId === rowId),
+    captureRowsSnapshot: vi.fn(() => rows.map(nextRow => ({
+      rowId: String(nextRow.rowId),
+      ...(nextRow.data as DemoRow),
+    }))),
     recordIntentTransaction: vi.fn(),
     clearPendingClipboardOperation: vi.fn(() => false),
     copySelectedCells: vi.fn(async () => false),
@@ -154,7 +273,7 @@ function createControllerHarness(options: {
     canUndo: () => false,
     canRedo: () => false,
     runHistoryAction: vi.fn(),
-    ensureKeyboardActiveCellVisible: vi.fn(),
+    ensureKeyboardActiveCellVisible,
   })
 
   return {
@@ -164,6 +283,8 @@ function createControllerHarness(options: {
     selectionSnapshot,
     applyCellSelectionByCoord,
     applySelectionRange,
+    setSelectionSnapshot,
+    ensureKeyboardActiveCellVisible,
   }
 }
 
@@ -249,7 +370,7 @@ describe("useDataGridAppInteractionController contract", () => {
   })
 
   it("keeps drag selection in the current column until the pointer actually crosses the boundary", () => {
-    const { controller, row, applyCellSelectionByCoord } = createControllerHarness({
+    const { controller, row, applyCellSelectionByCoord, selectionSnapshot } = createControllerHarness({
       rowCount: 3,
       columnWidths: [100, 100],
       shellWidth: 272,
@@ -270,11 +391,14 @@ describe("useDataGridAppInteractionController contract", () => {
     }))
 
     expect(controller.isPointerSelectingCells.value).toBe(true)
-    expect(applyCellSelectionByCoord).toHaveBeenLastCalledWith(
-      expect.objectContaining({ rowIndex: 0, columnIndex: 0 }),
-      true,
-      undefined,
-    )
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 0,
+      endCol: 0,
+      anchor: { rowIndex: 0, colIndex: 0 },
+      focus: { rowIndex: 0, colIndex: 0 },
+    })
 
     controller.handleWindowMouseMove(new MouseEvent("mousemove", {
       buttons: 1,
@@ -282,11 +406,84 @@ describe("useDataGridAppInteractionController contract", () => {
       clientY: 40,
     }))
 
-    expect(applyCellSelectionByCoord).toHaveBeenLastCalledWith(
-      expect.objectContaining({ rowIndex: 0, columnIndex: 1 }),
-      true,
-      undefined,
-    )
+    expect(applyCellSelectionByCoord).toHaveBeenCalled()
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 0,
+      endCol: 1,
+      anchor: { rowIndex: 0, colIndex: 0 },
+      focus: { rowIndex: 0, colIndex: 1 },
+    })
+  })
+
+  it("prefers the actual DOM cell under the pointer before geometry fallback during drag selection", () => {
+    const { controller, row, selectionSnapshot } = createControllerHarness({
+      rowCount: 3,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      indexColumnWidth: 72,
+    })
+    const anchorCell = createCell(0, 0)
+    document.body.appendChild(anchorCell)
+    const elementFromPointSpy = vi.spyOn(document, "elementFromPoint").mockReturnValue(anchorCell)
+    const pointerDown = createMouseEvent("mousedown", anchorCell, {
+      button: 0,
+      clientX: 120,
+      clientY: 10,
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 173,
+      clientY: 40,
+    }))
+
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 0,
+      endCol: 0,
+      anchor: { rowIndex: 0, colIndex: 0 },
+      focus: { rowIndex: 0, colIndex: 0 },
+    })
+
+    elementFromPointSpy.mockRestore()
+  })
+
+  it("restores the active cell to the anchor after pointer range selection ends", async () => {
+    const { controller, row, selectionSnapshot, ensureKeyboardActiveCellVisible } = createControllerHarness({
+      rowCount: 6,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      indexColumnWidth: 72,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(5, Math.floor(offset / 24))),
+    })
+    const anchorCell = createCell(0, 0)
+    const focusCell = createCell(3, 0)
+    document.body.appendChild(anchorCell)
+    document.body.appendChild(focusCell)
+    const pointerDown = createMouseEvent("mousedown", anchorCell, {
+      button: 0,
+      clientX: 120,
+      clientY: 10,
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 120,
+      clientY: 90,
+    }))
+
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({ rowIndex: 3, colIndex: 0 })
+
+    controller.handleWindowMouseUp()
+    await nextTick()
+
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({ rowIndex: 0, colIndex: 0 })
+    expect(ensureKeyboardActiveCellVisible).toHaveBeenCalledWith(0, 0)
   })
 
   it("maps ctrl+a to select all filtered rows and visible columns", () => {
@@ -308,6 +505,58 @@ describe("useDataGridAppInteractionController contract", () => {
       endRow: 2,
       startColumn: 0,
       endColumn: 3,
+    })
+  })
+
+  it("continues plain keyboard navigation from the anchor after a shift-extended range", () => {
+    const { controller, row, selectionSnapshot, setSelectionSnapshot } = createControllerHarness({
+      rowCount: 6,
+      columnCount: 3,
+    })
+
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    })
+
+    controller.handleCellKeydown(new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      shiftKey: true,
+      cancelable: true,
+    }), row, 0, 0)
+
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 1,
+      startCol: 0,
+      endCol: 0,
+      anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+    })
+
+    controller.handleCellKeydown(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      cancelable: true,
+    }), row, 0, 0)
+
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({ rowIndex: 0, colIndex: 1, rowId: "r1" })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 1,
+      endCol: 1,
+      anchor: { rowIndex: 0, colIndex: 1, rowId: "r1" },
+      focus: { rowIndex: 0, colIndex: 1, rowId: "r1" },
     })
   })
 
@@ -350,6 +599,63 @@ describe("useDataGridAppInteractionController contract", () => {
     )
   })
 
+  it("keeps the moved range selected and only returns the active cell to the new anchor", () => {
+    const {
+      controller,
+      row,
+      selectionSnapshot,
+      applyCellSelectionByCoord,
+    } = createControllerHarness({
+      rowCount: 6,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      shellHeight: 160,
+      indexColumnWidth: 72,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(5, Math.floor(offset / 24))),
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      }],
+    }
+
+    const anchorCell = createCell(0, 0)
+    const pointerDown = createMouseEvent("mousedown", anchorCell, {
+      button: 0,
+      clientX: 120,
+      clientY: 10,
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 120,
+      clientY: 82,
+    }))
+    controller.handleWindowMouseUp()
+
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 3,
+      endRow: 4,
+      startCol: 0,
+      endCol: 0,
+      anchor: { rowIndex: 3, colIndex: 0, rowId: "r4" },
+      focus: { rowIndex: 4, colIndex: 0, rowId: "r5" },
+    })
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({ rowIndex: 3, colIndex: 0, rowId: "r4" })
+    expect(applyCellSelectionByCoord).not.toHaveBeenCalled()
+  })
+
   it("starts fill preview downward on fill-handle press before pointer movement", () => {
     const { controller, selectionSnapshot } = createControllerHarness({
       rowCount: 3,
@@ -387,14 +693,16 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
-  it("restores viewport focus after fill-handle apply", async () => {
+  it("restores focus to the anchor cell after fill-handle apply", async () => {
     const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => {
       return 1
     })
-    const { controller, selectionSnapshot, bodyViewport } = createControllerHarness({
+    const { controller, selectionSnapshot, bodyViewport, ensureKeyboardActiveCellVisible } = createControllerHarness({
       rowCount: 3,
       columnCount: 2,
     })
+    const anchorCell = createCell(0, 0)
+    bodyViewport.parentElement?.appendChild(anchorCell)
     selectionSnapshot.value = {
       activeRangeIndex: 0,
       activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
@@ -418,12 +726,146 @@ describe("useDataGridAppInteractionController contract", () => {
       cancelable: true,
     }))
 
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      }],
+    }
+
     const focusCallsBeforeMouseUp = vi.mocked(bodyViewport.focus).mock.calls.length
+    const ensureCallsBeforeMouseUp = ensureKeyboardActiveCellVisible.mock.calls.length
 
     controller.handleWindowMouseUp()
     await nextTick()
 
-    expect(vi.mocked(bodyViewport.focus).mock.calls.length).toBeGreaterThanOrEqual(focusCallsBeforeMouseUp + 2)
+    expect(ensureKeyboardActiveCellVisible.mock.calls.length).toBeGreaterThan(ensureCallsBeforeMouseUp)
+    expect(ensureKeyboardActiveCellVisible).toHaveBeenCalledWith(0, 0)
+    expect(vi.mocked(bodyViewport.focus).mock.calls.length).toBe(focusCallsBeforeMouseUp)
+
+    rafSpy.mockRestore()
+  })
+
+  it("restores the active cell to the fill origin anchor after fill-handle apply", async () => {
+    const { controller, selectionSnapshot } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      }],
+    }
+
+    controller.handleWindowMouseUp()
+    await nextTick()
+
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 1,
+      startCol: 0,
+      endCol: 0,
+    })
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({ rowIndex: 0, colIndex: 0, rowId: "r1" })
+  })
+
+  it("prefers the selection anchor over the active cell when restoring focus after fill-handle apply", async () => {
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 1)
+    const { controller, selectionSnapshot, bodyViewport, ensureKeyboardActiveCellVisible } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+    })
+    const anchorCell = createCell(0, 0)
+    const focusCell = createCell(0, 1)
+    bodyViewport.parentElement?.appendChild(anchorCell)
+    bodyViewport.parentElement?.appendChild(focusCell)
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 1, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 1,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 1, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 1,
+        startRowId: "r1",
+        endRowId: "r2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+      }],
+    }
+
+    const ensureCallsBeforeMouseUp = ensureKeyboardActiveCellVisible.mock.calls.length
+
+    controller.handleWindowMouseUp()
+    await nextTick()
+
+    expect(ensureKeyboardActiveCellVisible.mock.calls.length).toBeGreaterThan(ensureCallsBeforeMouseUp)
+    expect(ensureKeyboardActiveCellVisible).toHaveBeenCalledWith(0, 0)
 
     rafSpy.mockRestore()
   })

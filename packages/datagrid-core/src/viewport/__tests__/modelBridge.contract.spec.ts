@@ -82,7 +82,7 @@ describe("table viewport model bridge service", () => {
   it("emits axis-scoped invalidation reasons for row and column updates", () => {
     const rowModel = createClientRowModel({ rows: buildRows(3) })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "value", label: "Value", width: 160 }],
+      columns: [{ key: "value", label: "Value", initialState: { width: 160 } }],
     })
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
@@ -136,7 +136,7 @@ describe("table viewport model bridge service", () => {
       },
     })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "value", label: "Value", width: 160 }],
+      columns: [{ key: "value", label: "Value", initialState: { width: 160 } }],
     })
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
@@ -171,7 +171,7 @@ describe("table viewport model bridge service", () => {
   it("does not emit bridge invalidation for viewport-only row model updates", () => {
     const rowModel = createClientRowModel({ rows: buildRows(24) })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "value", label: "Value", width: 160 }],
+      columns: [{ key: "value", label: "Value", initialState: { width: 160 } }],
     })
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
@@ -205,7 +205,7 @@ describe("table viewport model bridge service", () => {
       rows: buildRows(6),
     })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "value", label: "Value", width: 160 }],
+      columns: [{ key: "value", label: "Value", initialState: { width: 160 } }],
     })
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
@@ -244,7 +244,7 @@ describe("table viewport model bridge service", () => {
       rows: buildRows(12),
     })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "value", label: "Value", width: 160 }],
+      columns: [{ key: "value", label: "Value", initialState: { width: 160 } }],
     })
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()

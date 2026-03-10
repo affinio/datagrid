@@ -133,4 +133,12 @@ export const THEME_TOKEN_VARIABLE_MAP: Record<keyof DataGridThemeTokens, string>
   gridCopyMenuShadowColor: "--datagrid-copy-menu-shadow",
   gridCopyMenuItemHoverBorderColor: "--datagrid-copy-menu-item-hover-border",
   gridCopyMenuItemHoverBackgroundColor: "--datagrid-copy-menu-item-hover-bg",
+  gridColumnMenuBorderColor: "--datagrid-column-menu-border",
+  gridColumnMenuBackgroundColor: "--datagrid-column-menu-bg",
+  gridColumnMenuShadowColor: "--datagrid-column-menu-shadow",
+  gridColumnMenuItemHoverBackgroundColor: "--datagrid-column-menu-item-hover-bg",
+  gridColumnMenuMutedTextColor: "--datagrid-column-menu-muted-text",
+  gridColumnMenuFocusRingColor: "--datagrid-column-menu-focus-ring",
+  gridColumnMenuSearchBorderColor: "--datagrid-column-menu-search-border",
+  gridColumnMenuSearchBackgroundColor: "--datagrid-column-menu-search-bg",
 }

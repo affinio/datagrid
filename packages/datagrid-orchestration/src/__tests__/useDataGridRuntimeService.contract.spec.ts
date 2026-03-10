@@ -78,7 +78,7 @@ describe("useDataGridRuntimeService contract", () => {
         { rowId: "r1", team: "A", year: 2024, revenue: 10 },
         { rowId: "r2", team: "A", year: 2025, revenue: 20 },
       ],
-      columns: [{ key: "team", label: "Team", width: 180 }],
+      columns: [{ key: "team", label: "Team", initialState: { width: 180 } }],
     })
 
     expect(runtime.getColumnSnapshot().columns.map(column => column.key)).toEqual(["team"])

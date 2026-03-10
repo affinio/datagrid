@@ -54,6 +54,17 @@ function createColumns(count: number): DataGridColumn[] {
   return columns
 }
 
+function toColumnModelInputs(columns: readonly DataGridColumn[]) {
+  return columns.map(({ visible, pin, width, ...column }) => ({
+    ...column,
+    initialState: {
+      visible,
+      pin,
+      width,
+    },
+  }))
+}
+
 function createRows(count: number): VisibleRow[] {
   const rows: VisibleRow[] = new Array(count)
   for (let index = 0; index < count; index += 1) {
@@ -79,7 +90,7 @@ function createControllerHarness() {
   const rows = createRows(50_000)
   const columns = createColumns(260)
   const rowModel = createClientRowModel({ rows })
-  const columnModel = createDataGridColumnModel({ columns })
+  const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
   const containerMetrics = createMeasuredElement({
     clientWidth: 1180,
     clientHeight: 700,

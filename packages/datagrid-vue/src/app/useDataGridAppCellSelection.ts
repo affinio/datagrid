@@ -70,6 +70,31 @@ export function useDataGridAppCellSelection<TRow>(
     return "columnIndex" in anchor ? anchor.columnIndex : anchor.colIndex
   }
 
+  const resolveSelectionAnchorCoord = (): { rowIndex: number; columnIndex: number } | null => {
+    const explicitAnchor = options.selectionAnchor.value
+    if (explicitAnchor) {
+      return {
+        rowIndex: explicitAnchor.rowIndex,
+        columnIndex: resolveAnchorColumnIndex(explicitAnchor),
+      }
+    }
+
+    const snapshot = options.selectionSnapshot.value
+    if (!snapshot || snapshot.ranges.length === 0) {
+      return null
+    }
+    const activeIndex = snapshot.activeRangeIndex ?? 0
+    const range = snapshot.ranges[activeIndex] ?? snapshot.ranges[0]
+    if (!range?.anchor) {
+      return null
+    }
+
+    return {
+      rowIndex: range.anchor.rowIndex,
+      columnIndex: range.anchor.colIndex,
+    }
+  }
+
   const buildSelectionContext = () => {
     return {
       grid: {
@@ -306,17 +331,12 @@ export function useDataGridAppCellSelection<TRow>(
   }
 
   const isSelectionAnchorCell = (rowOffset: number, columnIndex: number): boolean => {
-    const snapshot = options.selectionSnapshot.value
-    if (!snapshot || snapshot.ranges.length === 0) {
-      return false
-    }
-    const activeIndex = snapshot.activeRangeIndex ?? 0
-    const range = snapshot.ranges[activeIndex] ?? snapshot.ranges[0]
-    if (!range?.anchor) {
+    const anchor = resolveSelectionAnchorCoord()
+    if (!anchor) {
       return false
     }
     const rowIndex = options.viewportRowStart.value + rowOffset
-    return rowIndex === range.anchor.rowIndex && columnIndex === range.anchor.colIndex
+    return rowIndex === anchor.rowIndex && columnIndex === anchor.columnIndex
   }
 
   const shouldHighlightSelectedCell = (rowOffset: number, columnIndex: number): boolean => {

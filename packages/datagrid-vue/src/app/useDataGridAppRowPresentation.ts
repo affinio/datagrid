@@ -35,11 +35,12 @@ export function useDataGridAppRowPresentation<TRow extends Record<string, unknow
     if (row.kind === "group") {
       const level = Math.max(0, row.groupMeta?.level ?? 0)
       const indent = "· ".repeat(level)
+      const caret = row.state.expanded ? "▾" : "▸"
       const isGroupLabelColumn = options.mode.value === "tree"
         ? key === "name"
         : key === options.firstColumnKey.value
       if (isGroupLabelColumn) {
-        return `${indent}▸ ${String(row.groupMeta?.groupField ?? "group")}: ${String(row.groupMeta?.groupValue ?? row.rowId)} (${row.groupMeta?.childrenCount ?? 0})`
+        return `${indent}${caret} ${String(row.groupMeta?.groupField ?? "group")}: ${String(row.groupMeta?.groupValue ?? row.rowId)} (${row.groupMeta?.childrenCount ?? 0})`
       }
       if (options.mode.value === "tree") {
         return ""

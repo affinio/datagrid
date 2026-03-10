@@ -101,7 +101,7 @@ describe("viewport auto row-height contract", () => {
       resolveRowId: row => row.rowId,
     })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "message", label: "Message", width: 300, pin: "none", visible: true }],
+      columns: [{ key: "message", label: "Message", initialState: { width: 300, pin: "none", visible: true } }],
     })
 
     const containerMetrics = createMeasuredElement({
@@ -184,7 +184,7 @@ describe("viewport auto row-height contract", () => {
       resolveRowId: row => row.rowId,
     })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "message", label: "Message", width: 320, pin: "none", visible: true }],
+      columns: [{ key: "message", label: "Message", initialState: { width: 320, pin: "none", visible: true } }],
     })
 
     const containerMetrics = createMeasuredElement({

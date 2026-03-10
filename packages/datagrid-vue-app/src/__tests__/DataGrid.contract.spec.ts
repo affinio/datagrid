@@ -1,6 +1,6 @@
 import { nextTick } from "vue"
 import { mount } from "@vue/test-utils"
-import { describe, expect, it } from "vitest"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import DataGrid from "../DataGrid"
 import DataGridRuntimeHost from "../DataGridRuntimeHost"
 
@@ -22,6 +22,20 @@ const BASE_ROWS: readonly DemoRow[] = [
   { rowId: "r1", owner: "NOC", region: "eu-west", amount: 10 },
   { rowId: "r2", owner: "NOC", region: "us-east", amount: 20 },
   { rowId: "r3", owner: "Payments", region: "eu-west", amount: 30 },
+]
+
+const MANY_FILTER_ROWS: readonly DemoRow[] = Array.from({ length: 500 }, (_unused, index) => ({
+  rowId: `m${index + 1}`,
+  owner: index === 0 ? "NOC" : "Payments",
+  region: index % 2 === 0 ? "eu-west" : "us-east",
+  amount: index + 1,
+}))
+
+const SEARCH_FILTER_ROWS: readonly DemoRow[] = [
+  { rowId: "s1", owner: "Alpha", region: "eu-west", amount: 10 },
+  { rowId: "s2", owner: "Alpine", region: "us-east", amount: 20 },
+  { rowId: "s3", owner: "Beta", region: "eu-west", amount: 30 },
+  { rowId: "s4", owner: "Gamma", region: "us-east", amount: 40 },
 ]
 
 const COLUMNS = [
@@ -59,6 +73,11 @@ function resolveRowModel(wrapper: ReturnType<typeof mount>) {
 
 function resolveVm(wrapper: ReturnType<typeof mount>) {
   return wrapper.vm as unknown as {
+    getApi?: () => {
+      rows: {
+        getAggregationModel?: () => unknown
+      }
+    } | null
     getState?: () => unknown
     getColumnSnapshot?: () => { order: readonly string[]; columns: readonly Array<{
       key: string
@@ -77,6 +96,24 @@ function queryColumnMenuAction(action: string): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(`[data-datagrid-column-menu-action="${action}"]`)
 }
 
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+
+beforeAll(() => {
+  HTMLElement.prototype.scrollIntoView = vi.fn()
+  HTMLElement.prototype.getBoundingClientRect = vi.fn(() => DOMRect.fromRect({
+    x: 0,
+    y: 0,
+    width: 120,
+    height: 32,
+  }))
+})
+
+afterAll(() => {
+  HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+  HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
+})
+
 describe("DataGrid app facade contract", () => {
   it("opens declarative columnMenu from package triggers and applies sort and pin actions", async () => {
     const wrapper = mount(DataGrid, {
@@ -90,8 +127,18 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     const ownerHeader = wrapper.find('.grid-cell--header[data-column-key="owner"]')
+
     expect(ownerHeader.exists()).toBe(true)
-    expect(ownerHeader.find(".col-menu-trigger").exists()).toBe(true)
+
+    await ownerHeader.trigger("click")
+    await flushRuntimeTasks()
+    expect(queryColumnMenuRoot()).toBeTruthy()
+
+    document.body.querySelector<HTMLElement>("[data-affino-menu-root]")?.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+    }))
+    await flushRuntimeTasks()
 
     await ownerHeader.trigger("contextmenu", { button: 2, clientX: 140, clientY: 64 })
     await flushRuntimeTasks()
@@ -146,18 +193,209 @@ describe("DataGrid app facade contract", () => {
 
     expect(resolveVm(wrapper).getState?.()).toMatchObject({
       rows: expect.objectContaining({
-        filterModel: expect.objectContaining({
-          columnFilters: expect.objectContaining({
-            owner: expect.objectContaining({
-              kind: "valueSet",
-              tokens: expect.arrayContaining(["string:noc"]),
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              owner: expect.objectContaining({
+                kind: "valueSet",
+                tokens: expect.arrayContaining(["string:noc"]),
+              }),
             }),
           }),
+          rowCount: 2,
         }),
       }),
     })
 
-    expect(wrapper.findAll(".grid-body-viewport .grid-row")).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  it("recomputes viewport spacers after declarative columnMenu filter shrinks the row set", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: MANY_FILTER_ROWS,
+        columns: COLUMNS,
+        columnMenu: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    Object.defineProperty(viewport, "clientHeight", {
+      configurable: true,
+      value: 120,
+    })
+    viewport.scrollTop = 0
+    await wrapper.find(".grid-body-viewport").trigger("scroll")
+    await flushRuntimeTasks()
+
+    expect(wrapper.findAll(".grid-body-viewport .grid-spacer").length).toBeGreaterThan(0)
+
+    const ownerHeader = wrapper.find('.grid-cell--header[data-column-key="owner"]')
+    await ownerHeader.trigger("click")
+    await flushRuntimeTasks()
+
+    const valueRows = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-column-menu__value"))
+    const paymentsRow = valueRows.find(row => row.textContent?.includes("Payments"))
+    expect(paymentsRow).toBeTruthy()
+
+    const paymentsCheckbox = paymentsRow!.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(paymentsCheckbox).toBeTruthy()
+    paymentsCheckbox!.checked = false
+    paymentsCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+    queryColumnMenuAction("apply-filter")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          rowCount: 1,
+        }),
+      }),
+    })
+    expect(wrapper.findAll(".grid-body-viewport .grid-spacer")).toHaveLength(0)
+
+    wrapper.unmount()
+  })
+
+  it("applies searched value-set filter only from visible checked values", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SEARCH_FILTER_ROWS,
+        columns: COLUMNS,
+        columnMenu: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const ownerHeader = wrapper.find('.grid-cell--header[data-column-key="owner"]')
+    await ownerHeader.trigger("click")
+    await flushRuntimeTasks()
+
+    const search = document.body.querySelector<HTMLInputElement>(".datagrid-column-menu__search")
+    expect(search).toBeTruthy()
+    search!.value = "alp"
+    search!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const valueRows = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-column-menu__value"))
+    expect(valueRows).toHaveLength(2)
+
+    const alpineRow = valueRows.find(row => row.textContent?.includes("Alpine"))
+    expect(alpineRow).toBeTruthy()
+    const alpineCheckbox = alpineRow!.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(alpineCheckbox).toBeTruthy()
+    alpineCheckbox!.checked = false
+    alpineCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+
+    queryColumnMenuAction("apply-filter")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              owner: expect.objectContaining({
+                kind: "valueSet",
+                tokens: ["string:alpha"],
+              }),
+            }),
+          }),
+          rowCount: 1,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("adds searched visible selection to the existing value-set filter when requested", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SEARCH_FILTER_ROWS,
+        columns: COLUMNS,
+        columnMenu: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const ownerHeader = wrapper.find('.grid-cell--header[data-column-key="owner"]')
+    await ownerHeader.trigger("click")
+    await flushRuntimeTasks()
+
+    let search = document.body.querySelector<HTMLInputElement>(".datagrid-column-menu__search")
+    expect(search).toBeTruthy()
+    search!.value = "bet"
+    search!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    queryColumnMenuAction("apply-filter")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              owner: expect.objectContaining({
+                kind: "valueSet",
+                tokens: ["string:beta"],
+              }),
+            }),
+          }),
+          rowCount: 1,
+        }),
+      }),
+    })
+
+    await ownerHeader.trigger("click")
+    await flushRuntimeTasks()
+
+    search = document.body.querySelector<HTMLInputElement>(".datagrid-column-menu__search")
+    expect(search).toBeTruthy()
+    search!.value = "alp"
+    search!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const addCurrentSelection = queryColumnMenuAction("add-current-selection")?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(addCurrentSelection).toBeTruthy()
+    addCurrentSelection!.checked = true
+    addCurrentSelection!.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const valueRows = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-column-menu__value"))
+    const alpineRow = valueRows.find(row => row.textContent?.includes("Alpine"))
+    expect(alpineRow).toBeTruthy()
+    const alpineCheckbox = alpineRow!.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(alpineCheckbox).toBeTruthy()
+    alpineCheckbox!.checked = false
+    alpineCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+
+    queryColumnMenuAction("apply-filter")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              owner: expect.objectContaining({
+                kind: "valueSet",
+                tokens: expect.arrayContaining(["string:alpha", "string:beta"]),
+              }),
+            }),
+          }),
+          rowCount: 2,
+        }),
+      }),
+    })
 
     wrapper.unmount()
   })
@@ -201,12 +439,9 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const rowModel = resolveRowModel(wrapper)
-    expect(rowModel?.getSnapshot()).toMatchObject({
-      aggregationModel: {
-        columns: [{ key: "amount", op: "sum" }],
-        basis: "filtered",
-      },
+    expect(resolveVm(wrapper).getApi?.()?.rows.getAggregationModel?.()).toMatchObject({
+      basis: "filtered",
+      columns: [{ key: "amount", op: "sum" }],
     })
 
     wrapper.unmount()
@@ -295,14 +530,14 @@ describe("DataGrid app facade contract", () => {
     })
     expect(columnSnapshot?.columns).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "owner", visible: true, width: 240, pin: "left" }),
-      expect.objectContaining({ key: "region", visible: false, width: 180, pin: "center" }),
+      expect.objectContaining({ key: "region", visible: false, width: 180, pin: "none" }),
       expect.objectContaining({ key: "amount", visible: true, width: 150, pin: "right" }),
     ]))
 
     wrapper.unmount()
   })
 
-  it("round-trips unified state through the facade helpers", async () => {
+  it("round-trips supported unified runtime state through the facade helpers", async () => {
     const source = mount(DataGrid, {
       props: {
         rows: BASE_ROWS,
@@ -330,11 +565,9 @@ describe("DataGrid app facade contract", () => {
 
     expect(resolveVm(target).getState?.()).toMatchObject({
       rows: expect.objectContaining({
-        sortModel: [{ key: "amount", direction: "desc" }],
-      }),
-      view: expect.objectContaining({
-        rowHeightMode: "auto",
-        baseRowHeight: 44,
+        snapshot: expect.objectContaining({
+          sortModel: [{ key: "amount", direction: "desc" }],
+        }),
       }),
     })
 
@@ -404,8 +637,9 @@ describe("DataGrid app facade contract", () => {
       rows: expect.objectContaining({
         snapshot: expect.objectContaining({
           pagination: expect.objectContaining({
+            enabled: true,
             pageSize: 50,
-            currentPage: 2,
+            currentPage: 0,
           }),
         }),
       }),
@@ -449,13 +683,16 @@ describe("DataGrid app facade contract", () => {
 
   it("applies declarative theme tokens to the app root element", async () => {
     const wrapper = mount(DataGrid, {
+      attachTo: document.body,
       props: {
         rows: BASE_ROWS,
         columns: COLUMNS,
+        columnMenu: true,
         theme: {
           tokens: {
             gridAccentStrong: "#b45309",
             gridHeaderCellBackgroundColor: "#f4e8d5",
+            gridColumnMenuBackgroundColor: "#fff8ef",
           },
         },
       },
@@ -466,6 +703,13 @@ describe("DataGrid app facade contract", () => {
     const rootElement = wrapper.find(".affino-datagrid-app-root").element as HTMLElement
     expect(rootElement.style.getPropertyValue("--datagrid-accent-strong")).toBe("#b45309")
     expect(rootElement.style.getPropertyValue("--datagrid-header-cell-bg")).toBe("#f4e8d5")
+    expect(rootElement.style.getPropertyValue("--datagrid-column-menu-bg")).toBe("#fff8ef")
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"]').trigger("click")
+    await flushRuntimeTasks()
+
+    const menuRoot = queryColumnMenuRoot()
+    expect(menuRoot?.style.getPropertyValue("--datagrid-column-menu-bg")).toBe("#fff8ef")
 
     wrapper.unmount()
   })

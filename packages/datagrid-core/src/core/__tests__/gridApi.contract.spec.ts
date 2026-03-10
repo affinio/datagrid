@@ -751,8 +751,8 @@ describe("data grid api facade contracts", () => {
     })
     const columnModel = createDataGridColumnModel({
       columns: [
-        { key: "id", label: "ID", width: 90 },
-        { key: "score", label: "Score", pin: "left" },
+        { key: "id", label: "ID", initialState: { width: 90 } },
+        { key: "score", label: "Score", initialState: { pin: "left" } },
       ],
     })
     const core = createDataGridCore({
@@ -763,7 +763,7 @@ describe("data grid api facade contracts", () => {
     })
     const api = createDataGridApi({ core })
 
-    api.columns.insertAt(1, [{ key: "owner", label: "Owner", visible: false }])
+    api.columns.insertAt(1, [{ key: "owner", label: "Owner", initialState: { visible: false } }])
     expect(api.columns.getSnapshot().order).toEqual(["id", "owner", "score"])
     expect(api.columns.get("owner")?.visible).toBe(false)
     expect(api.columns.get("score")?.pin).toBe("left")
@@ -771,7 +771,7 @@ describe("data grid api facade contracts", () => {
     api.columns.insertBefore("id", [{ key: "prefix", label: "Prefix" }])
     expect(api.columns.getSnapshot().order).toEqual(["prefix", "id", "owner", "score"])
 
-    api.columns.insertAfter("score", [{ key: "tail", label: "Tail", width: 180 }])
+    api.columns.insertAfter("score", [{ key: "tail", label: "Tail", initialState: { width: 180 } }])
     expect(api.columns.getSnapshot().order).toEqual(["prefix", "id", "owner", "score", "tail"])
     expect(api.columns.get("tail")?.width).toBe(180)
     expect(api.columns.get("id")?.width).toBe(90)
@@ -1495,8 +1495,8 @@ describe("data grid api facade contracts", () => {
     })
     const columnModel = createDataGridColumnModel({
       columns: [
-        { key: "tested_at", label: "Tested At", pin: "left" },
-        { key: "control", label: "Control", pin: "right" },
+        { key: "tested_at", label: "Tested At", initialState: { pin: "left" } },
+        { key: "control", label: "Control", initialState: { pin: "right" } },
       ],
     })
     const core = createDataGridCore({
@@ -1673,9 +1673,9 @@ describe("data grid api facade contracts", () => {
     })
     const columnModel = createDataGridColumnModel({
       columns: [
-        { key: "id", label: "ID", width: 90 },
-        { key: "owner", label: "Owner", width: 160 },
-        { key: "status", label: "Status", width: 140 },
+        { key: "id", label: "ID", initialState: { width: 90 } },
+        { key: "owner", label: "Owner", initialState: { width: 160 } },
+        { key: "status", label: "Status", initialState: { width: 140 } },
       ],
     })
     let selectionSnapshot: DataGridSelectionSnapshot | null = null
@@ -1972,9 +1972,9 @@ describe("data grid api facade contracts", () => {
     })
     const columnModel = createDataGridColumnModel({
       columns: [
-        { key: "id", label: "ID", width: 90 },
-        { key: "owner", label: "Owner", width: 160 },
-        { key: "status", label: "Status", width: 140 },
+        { key: "id", label: "ID", initialState: { width: 90 } },
+        { key: "owner", label: "Owner", initialState: { width: 160 } },
+        { key: "status", label: "Status", initialState: { width: 140 } },
       ],
     })
     let selectionSnapshot: DataGridSelectionSnapshot | null = null

@@ -84,6 +84,14 @@ const lightUiTokens: Partial<DataGridThemeTokens> = {
   gridCopyMenuShadowColor: toRgba(palette.gray400, 0.2),
   gridCopyMenuItemHoverBorderColor: toRgba(palette.blue400, 0.4),
   gridCopyMenuItemHoverBackgroundColor: toRgba(palette.blue200, 0.4),
+  gridColumnMenuBorderColor: toRgba(palette.gray400, 0.55),
+  gridColumnMenuBackgroundColor: toRgba(palette.white, 0.985),
+  gridColumnMenuShadowColor: toRgba(palette.slate500, 0.18),
+  gridColumnMenuItemHoverBackgroundColor: toRgba(palette.blue200, 0.32),
+  gridColumnMenuMutedTextColor: toRgba(palette.slate700, 0.72),
+  gridColumnMenuFocusRingColor: toRgba(palette.blue500, 0.24),
+  gridColumnMenuSearchBorderColor: toRgba(palette.gray400, 0.58),
+  gridColumnMenuSearchBackgroundColor: toRgba(palette.white, 1),
 }
 
 const darkUiTokens: Partial<DataGridThemeTokens> = {
@@ -168,6 +176,14 @@ const darkUiTokens: Partial<DataGridThemeTokens> = {
   gridCopyMenuShadowColor: toRgba(palette.black, 0.35),
   gridCopyMenuItemHoverBorderColor: toRgba(palette.blue300, 0.4),
   gridCopyMenuItemHoverBackgroundColor: toRgba(palette.slate700, 0.8),
+  gridColumnMenuBorderColor: toRgba(palette.slate500, 0.52),
+  gridColumnMenuBackgroundColor: toRgba(palette.slate850, 0.985),
+  gridColumnMenuShadowColor: toRgba(palette.black, 0.32),
+  gridColumnMenuItemHoverBackgroundColor: toRgba(palette.blue400, 0.18),
+  gridColumnMenuMutedTextColor: toRgba(palette.gray300, 0.72),
+  gridColumnMenuFocusRingColor: toRgba(palette.blue400, 0.28),
+  gridColumnMenuSearchBorderColor: toRgba(palette.slate500, 0.65),
+  gridColumnMenuSearchBackgroundColor: toRgba(palette.slate800, 0.98),
 }
 
 /**

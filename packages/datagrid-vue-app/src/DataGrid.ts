@@ -233,6 +233,14 @@ export default defineComponent({
       type: Number,
       default: 31,
     },
+    rowHover: {
+      type: Boolean,
+      default: false,
+    },
+    stripedRows: {
+      type: Boolean,
+      default: false,
+    },
   },
   emits: [
     "cell-change",
@@ -300,6 +308,9 @@ export default defineComponent({
     const visibleColumns = computed(() => dataGridRef.value?.api.columns.getSnapshot().visibleColumns ?? [])
     const totalRows = computed(() => dataGridRef.value?.api.rows.getCount() ?? 0)
     const {
+      selectionSnapshot,
+      selectionAnchor,
+      syncSelectionSnapshotFromRuntime,
       runtimeServices,
       selectionAggregatesLabel,
     } = useDataGridAppSelection<unknown>({
@@ -417,6 +428,9 @@ export default defineComponent({
                 rows: props.rows as readonly Record<string, unknown>[],
                 runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
                 runtimeRowModel: slotProps.rowModel as { subscribe: (listener: () => void) => () => void },
+                selectionSnapshot,
+                selectionAnchor,
+                syncSelectionSnapshotFromRuntime,
                 sortModel: props.sortModel,
                 filterModel: props.filterModel,
                 groupBy: resolvedGroupBy.value,
@@ -426,6 +440,8 @@ export default defineComponent({
                 columnMenu: resolvedColumnMenu.value,
                 rowHeightMode: props.rowHeightMode,
                 baseRowHeight: props.baseRowHeight,
+                rowHover: props.rowHover,
+                stripedRows: props.stripedRows,
               }),
             },
       )

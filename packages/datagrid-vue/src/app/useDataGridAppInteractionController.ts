@@ -130,6 +130,7 @@ export function useDataGridAppInteractionController<
   }
 
   const isPointerSelectingCells = ref(false)
+  const keyboardNavigationExtendsSelection = ref(false)
   const dragPointer = ref<DataGridAppPointer | null>(null)
   const lastDragCoord = ref<DataGridAppCellCoord | null>(null)
   const dragSelectionOriginPin = ref<DataGridAppPinnedOrigin | null>(null)
@@ -141,6 +142,7 @@ export function useDataGridAppInteractionController<
   const fillPointer = ref<DataGridAppPointer | null>(null)
   const fillBaseRange = ref<DataGridCopyRange | null>(null)
   const fillPreviewRange = ref<DataGridCopyRange | null>(null)
+  const fillOriginFocusCoord = ref<DataGridAppCellCoord | null>(null)
   const isRangeMoving = ref(false)
   const pendingRangeMove = ref(false)
   const pendingRangeMoveCoord = ref<DataGridAppCellCoord | null>(null)
@@ -161,11 +163,16 @@ export function useDataGridAppInteractionController<
     return event.key.length === 1
   }
 
-  const restoreActiveCellFocus = (): void => {
+  const restoreActiveCellFocus = (preferredCoord: DataGridAppCellCoord | null = null): void => {
     const applyFocus = (): void => {
+      if (preferredCoord) {
+        options.ensureKeyboardActiveCellVisible(preferredCoord.rowIndex, preferredCoord.columnIndex)
+        return
+      }
       const activeCell = options.selectionSnapshot.value?.activeCell
       if (activeCell) {
         options.ensureKeyboardActiveCellVisible(activeCell.rowIndex, activeCell.colIndex)
+        return
       }
       focusViewport()
     }
@@ -329,19 +336,7 @@ export function useDataGridAppInteractionController<
       return isCoordInsideRange({ rowIndex, columnIndex, rowId: null }, range)
     },
     setSelectionFromRange: (range, activePosition) => {
-      options.applySelectionRange(range)
-      if (activePosition !== "start") {
-        return
-      }
-      const normalized = options.normalizeClipboardRange(range)
-      if (!normalized) {
-        return
-      }
-      options.applyCellSelectionByCoord({
-        rowIndex: normalized.startRow,
-        columnIndex: normalized.startColumn,
-        rowId: options.runtime.api.rows.get(normalized.startRow)?.rowId ?? null,
-      }, false)
+      applySelectionRangeWithActivePosition(range, activePosition)
     },
     recordIntent: (descriptor, beforeSnapshot) => {
       void options.recordIntentTransaction({
@@ -447,11 +442,45 @@ export function useDataGridAppInteractionController<
   })
 
   const resolveCellCoordFromPointer = (clientX: number, clientY: number): DataGridAppCellCoord | null => {
+    if (typeof document !== "undefined" && typeof document.elementFromPoint === "function") {
+      const pointerTarget = document.elementFromPoint(clientX, clientY)
+      const pointerCell = pointerTarget instanceof HTMLElement
+        ? pointerTarget.closest<HTMLElement>(".grid-cell[data-row-index][data-column-index]")
+        : null
+      const domResolvedCoord = resolveCellCoordFromElement(pointerCell)
+      if (domResolvedCoord) {
+        return domResolvedCoord
+      }
+    }
     return pointerCellCoordResolver.resolveCellCoordFromPointer(clientX, clientY)
+  }
+
+  const resolveSelectionFocusCoord = (): DataGridAppCellCoord | null => {
+    const snapshot = options.selectionSnapshot.value
+    const activeRange = snapshot?.ranges[snapshot.activeRangeIndex ?? 0] ?? snapshot?.ranges[0] ?? null
+    const focus = activeRange?.focus
+    if (!focus) {
+      return null
+    }
+    return options.normalizeCellCoord({
+      rowIndex: focus.rowIndex,
+      columnIndex: focus.colIndex,
+      rowId: options.normalizeRowId(focus.rowId),
+    })
   }
 
   const cellNavigation = useDataGridCellNavigation<DataGridAppCellCoord>({
     resolveCurrentCellCoord: () => {
+      if (keyboardNavigationExtendsSelection.value) {
+        const focusCoord = resolveSelectionFocusCoord()
+        if (focusCoord) {
+          return focusCoord
+        }
+      }
+      const anchorCoord = resolveSelectionAnchorCoord()
+      if (anchorCoord) {
+        return anchorCoord
+      }
       const activeCell = options.selectionSnapshot.value?.activeCell
       if (!activeCell) {
         return null
@@ -625,8 +654,124 @@ export function useDataGridAppInteractionController<
   })
 
   const stopFillSelection = (commit: boolean): void => {
+    const preferredFocusCoord = fillOriginFocusCoord.value
     fillSelectionLifecycle.stopFillSelection(commit)
-    restoreActiveCellFocus()
+    const restoredCoord = preferredFocusCoord
+      ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
+      : null
+    fillOriginFocusCoord.value = null
+    restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
+  }
+
+  const resolveSelectionAnchorCoord = (): DataGridAppCellCoord | null => {
+    const snapshot = options.selectionSnapshot.value
+    const activeRange = snapshot?.ranges[snapshot.activeRangeIndex ?? 0] ?? snapshot?.ranges[0] ?? null
+    const anchor = activeRange?.anchor
+    if (!anchor) {
+      return null
+    }
+    return options.normalizeCellCoord({
+      rowIndex: anchor.rowIndex,
+      columnIndex: anchor.colIndex,
+      rowId: options.normalizeRowId(anchor.rowId),
+    })
+  }
+
+  const restoreSelectionActiveCellToAnchor = (): DataGridAppCellCoord | null => {
+    const snapshot = options.selectionSnapshot.value
+    const activeRangeIndex = snapshot?.activeRangeIndex ?? 0
+    const activeRange = snapshot?.ranges[activeRangeIndex] ?? snapshot?.ranges[0] ?? null
+    const anchor = activeRange?.anchor
+    if (!snapshot || !anchor) {
+      return null
+    }
+    const nextSnapshot = {
+      ...snapshot,
+      activeCell: {
+        rowIndex: anchor.rowIndex,
+        colIndex: anchor.colIndex,
+        rowId: anchor.rowId ?? null,
+      },
+    }
+    options.selectionSnapshot.value = nextSnapshot
+    options.runtime.api.selection.setSnapshot(nextSnapshot)
+    return options.normalizeCellCoord({
+      rowIndex: anchor.rowIndex,
+      columnIndex: anchor.colIndex,
+      rowId: options.normalizeRowId(anchor.rowId),
+    })
+  }
+
+  const restoreSelectionActiveCellToCoord = (
+    coord: DataGridAppCellCoord | null,
+  ): DataGridAppCellCoord | null => {
+    const snapshot = options.selectionSnapshot.value
+    const normalizedCoord = coord ? options.normalizeCellCoord(coord) : null
+    if (!snapshot || !normalizedCoord) {
+      return null
+    }
+    const nextSnapshot = {
+      ...snapshot,
+      activeCell: {
+        rowIndex: normalizedCoord.rowIndex,
+        colIndex: normalizedCoord.columnIndex,
+        rowId: normalizedCoord.rowId ?? null,
+      },
+    }
+    options.selectionSnapshot.value = nextSnapshot
+    options.runtime.api.selection.setSnapshot(nextSnapshot)
+    return normalizedCoord
+  }
+
+  const applySelectionRangeWithActivePosition = (
+    range: DataGridCopyRange,
+    activePosition: "start" | "end",
+  ): void => {
+    options.applySelectionRange(range)
+    if (activePosition !== "start") {
+      return
+    }
+    const snapshot = options.selectionSnapshot.value
+    const activeRangeIndex = snapshot?.activeRangeIndex ?? 0
+    const activeRange = snapshot?.ranges[activeRangeIndex] ?? snapshot?.ranges[0] ?? null
+    const anchor = activeRange?.anchor
+    if (!snapshot || !anchor) {
+      return
+    }
+    const nextSnapshot = {
+      ...snapshot,
+      activeCell: {
+        rowIndex: anchor.rowIndex,
+        colIndex: anchor.colIndex,
+        rowId: anchor.rowId ?? null,
+      },
+    }
+    options.selectionSnapshot.value = nextSnapshot
+    options.runtime.api.selection.setSnapshot(nextSnapshot)
+  }
+
+  const resolveFillOriginFocusCoord = (): DataGridAppCellCoord | null => {
+    const anchorCoord = resolveSelectionAnchorCoord()
+    if (anchorCoord) {
+      return anchorCoord
+    }
+    const activeCell = options.selectionSnapshot.value?.activeCell
+    if (activeCell) {
+      return options.normalizeCellCoord({
+        rowIndex: activeCell.rowIndex,
+        columnIndex: activeCell.colIndex,
+        rowId: options.normalizeRowId(activeCell.rowId),
+      })
+    }
+    const range = options.resolveSelectionRange()
+    if (!range) {
+      return null
+    }
+    return options.normalizeCellCoord({
+      rowIndex: range.startRow,
+      columnIndex: range.startColumn,
+      rowId: options.runtime.api.rows.get(range.startRow)?.rowId ?? null,
+    })
   }
 
   const rangeMoveLifecycle = useDataGridRangeMoveLifecycle({
@@ -855,7 +1000,10 @@ export function useDataGridAppInteractionController<
     if (options.mode.value !== "base") {
       return
     }
-    fillHandleStart.onSelectionHandleMouseDown(event)
+    const originCoord = resolveFillOriginFocusCoord()
+    if (fillHandleStart.onSelectionHandleMouseDown(event)) {
+      fillOriginFocusCoord.value = originCoord
+    }
   }
 
   const handleCellMouseDown = (
@@ -949,7 +1097,10 @@ export function useDataGridAppInteractionController<
       }
       return
     }
-    if (cellNavigation.dispatchNavigation(event)) {
+    keyboardNavigationExtendsSelection.value = event.shiftKey
+    const navigationHandled = cellNavigation.dispatchNavigation(event)
+    keyboardNavigationExtendsSelection.value = false
+    if (navigationHandled) {
       return
     }
     if (isPrintableEditingKey(event)) {
@@ -1022,6 +1173,10 @@ export function useDataGridAppInteractionController<
     }
     if (isFillDragging.value) {
       stopFillSelection(true)
+    }
+    if (isPointerSelectingCells.value) {
+      const anchorCoord = restoreSelectionActiveCellToAnchor()
+      restoreActiveCellFocus(anchorCoord)
     }
     stopPointerSelection()
     pointerAutoScroll.stopAutoScrollFrameIfIdle()

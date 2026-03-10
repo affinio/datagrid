@@ -13,9 +13,9 @@
             <div class="col-head">
               <span>#</span>
             </div>
-            <div v-if="!props.columnMenuEnabled" class="col-filter col-filter--index-spacer" aria-hidden="true" />
+            <div v-if="!hasColumnMenu()" class="col-filter col-filter--index-spacer" aria-hidden="true" />
           </div>
-          <template v-if="props.columnMenuEnabled">
+          <template v-if="hasColumnMenu()">
             <DataGridColumnMenu
               v-for="column in pinnedLeftColumns"
               :key="`header-left-${column.key}`"
@@ -33,7 +33,7 @@
               @pin="applyColumnMenuPinSafe(column.key, $event)"
               @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
               @clear-filter="clearColumnMenuFilterSafe(column.key)"
-              v-slot="{ open, toggleFromButton }"
+              v-slot="{ open }"
             >
               <div
                 class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
@@ -49,14 +49,6 @@
                   <span>{{ column.column.label ?? column.key }}</span>
                   <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
                   <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
-                  <button
-                    type="button"
-                    class="col-menu-trigger"
-                    aria-label="Open column menu"
-                    @click.stop="toggleFromButton"
-                  >
-                    ...
-                  </button>
                   <button
                     type="button"
                     class="col-resize"
@@ -118,7 +110,7 @@
             class="grid-column-spacer"
             :style="spacerStyle(leftColumnSpacerWidth)"
           />
-          <template v-if="props.columnMenuEnabled">
+          <template v-if="hasColumnMenu()">
             <DataGridColumnMenu
               v-for="column in renderedColumns"
               :key="`header-${column.key}`"
@@ -136,7 +128,7 @@
               @pin="applyColumnMenuPinSafe(column.key, $event)"
               @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
               @clear-filter="clearColumnMenuFilterSafe(column.key)"
-              v-slot="{ open, toggleFromButton }"
+              v-slot="{ open }"
             >
               <div
                 class="grid-cell grid-cell--header grid-cell--header-sortable"
@@ -152,14 +144,6 @@
                   <span>{{ column.column.label ?? column.key }}</span>
                   <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
                   <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
-                  <button
-                    type="button"
-                    class="col-menu-trigger"
-                    aria-label="Open column menu"
-                    @click.stop="toggleFromButton"
-                  >
-                    ...
-                  </button>
                   <button
                     type="button"
                     class="col-resize"
@@ -216,7 +200,7 @@
 
       <div class="grid-header-pane grid-header-pane--right" :style="rightPaneStyle" @wheel="handleLinkedViewportWheel">
         <div class="grid-header-row grid-pane-track" :style="rightTrackStyle">
-          <template v-if="props.columnMenuEnabled">
+          <template v-if="hasColumnMenu()">
             <DataGridColumnMenu
               v-for="column in pinnedRightColumns"
               :key="`header-right-${column.key}`"
@@ -234,7 +218,7 @@
               @pin="applyColumnMenuPinSafe(column.key, $event)"
               @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
               @clear-filter="clearColumnMenuFilterSafe(column.key)"
-              v-slot="{ open, toggleFromButton }"
+              v-slot="{ open }"
             >
               <div
                 class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
@@ -250,14 +234,6 @@
                   <span>{{ column.column.label ?? column.key }}</span>
                   <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
                   <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
-                  <button
-                    type="button"
-                    class="col-menu-trigger"
-                    aria-label="Open column menu"
-                    @click.stop="toggleFromButton"
-                  >
-                    ...
-                  </button>
                   <button
                     type="button"
                     class="col-resize"
@@ -308,7 +284,7 @@
       </div>
     </div>
 
-    <div class="grid-body-shell" :style="paneLayoutStyle">
+    <div class="grid-body-shell" :style="paneLayoutStyle" @mouseleave="clearHoveredRow">
       <div
         class="grid-body-pane grid-body-pane--left"
         :style="leftPaneStyle"
@@ -320,9 +296,10 @@
             v-for="(row, rowOffset) in displayRows"
             :key="`${String(row.rowId)}-left-row`"
             class="grid-row"
-            :class="[rowClass(row), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
+            :class="[rowClass(row), rowStateClasses(rowOffset), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
             :style="paneRowStyle(row, rowOffset, leftPaneWidth)"
             @click="toggleGroupRow(row)"
+            @mouseenter="setHoveredRow(rowOffset)"
           >
             <div class="grid-cell grid-cell--index" :style="resolvedIndexColumnStyle">
               {{ rowIndexLabel(row, rowOffset) }}
@@ -340,11 +317,13 @@
               :key="`${String(row.rowId)}-left-${column.key}`"
               class="grid-cell grid-cell--pinned-left"
               :class="cellStateClasses(row, rowOffset, columnIndexByKey(column.key))"
-              :style="[columnStyle(column.key), bodyCellPresentationStyle(column)]"
+              :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key))]"
               :data-row-index="viewportRowStart + rowOffset"
               :data-column-index="columnIndexByKey(column.key)"
               :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
+              @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
+              @mouseleave="clearRangeMoveHandleHover"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
               @dblclick.stop="startInlineEditIfAllowed(row, column)"
             >
@@ -411,9 +390,10 @@
             v-for="(row, rowOffset) in displayRows"
             :key="String(row.rowId)"
             class="grid-row"
-            :class="[rowClass(row), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
+            :class="[rowClass(row), rowStateClasses(rowOffset), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
             :style="rowStyle(row, rowOffset)"
             @click="toggleGroupRow(row)"
+            @mouseenter="setHoveredRow(rowOffset)"
           >
             <div class="grid-center-track" :style="mainTrackStyle">
               <div
@@ -426,11 +406,13 @@
                 :key="`${String(row.rowId)}-${column.key}`"
                 class="grid-cell"
                 :class="cellStateClasses(row, rowOffset, columnIndexByKey(column.key))"
-                :style="[columnStyle(column.key), bodyCellPresentationStyle(column)]"
+                :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key))]"
                 :data-row-index="viewportRowStart + rowOffset"
                 :data-column-index="columnIndexByKey(column.key)"
                 :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
                 @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
+                @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
+                @mouseleave="clearRangeMoveHandleHover"
                 @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
                 @dblclick.stop="startInlineEditIfAllowed(row, column)"
               >
@@ -500,20 +482,23 @@
             v-for="(row, rowOffset) in displayRows"
             :key="`${String(row.rowId)}-right-row`"
             class="grid-row"
-            :class="[rowClass(row), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
+            :class="[rowClass(row), rowStateClasses(rowOffset), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
             :style="paneRowStyle(row, rowOffset, rightPaneWidth)"
             @click="toggleGroupRow(row)"
+            @mouseenter="setHoveredRow(rowOffset)"
           >
             <div
               v-for="column in pinnedRightColumns"
               :key="`${String(row.rowId)}-right-${column.key}`"
               class="grid-cell grid-cell--pinned-right"
               :class="cellStateClasses(row, rowOffset, columnIndexByKey(column.key))"
-              :style="[columnStyle(column.key), bodyCellPresentationStyle(column)]"
+              :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key))]"
               :data-row-index="viewportRowStart + rowOffset"
               :data-column-index="columnIndexByKey(column.key)"
               :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
+              @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
+              @mouseleave="clearRangeMoveHandleHover"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
               @dblclick.stop="startInlineEditIfAllowed(row, column)"
             >
@@ -608,12 +593,23 @@ type OverlaySegment = {
 }
 
 type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>["selectionRange"]>
+const RANGE_MOVE_HANDLE_HOVER_EDGE_PX = 6
 
 const columnMenuMaxFilterValues = computed(() => (
   typeof props.columnMenuMaxFilterValues === "number"
     ? props.columnMenuMaxFilterValues
     : 250
 ))
+
+function hasColumnMenu(): boolean {
+  if (props.columnMenuEnabled === true) {
+    return true
+  }
+  return typeof props.applyColumnMenuSort === "function"
+    || typeof props.applyColumnMenuPin === "function"
+    || typeof props.applyColumnMenuFilter === "function"
+    || typeof props.clearColumnMenuFilter === "function"
+}
 
 function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
   if (value instanceof HTMLElement) {
@@ -668,6 +664,22 @@ function headerCellPresentationStyle(column: TableColumn): CSSProperties {
 function bodyCellPresentationStyle(column: TableColumn): CSSProperties {
   const textAlign = resolveTextAlign(column.column.presentation?.align)
   return textAlign ? { textAlign } : {}
+}
+
+function bodyCellSelectionStyle(column: TableColumn, rowOffset: number, columnIndex: number): CSSProperties {
+  if (isVisualSelectionAnchorCell(rowOffset, columnIndex)) {
+    if (column.pin === "left") {
+      return { background: "var(--datagrid-pinned-left-bg)" }
+    }
+    if (column.pin === "right") {
+      return { background: "var(--datagrid-pinned-right-bg)" }
+    }
+    return { background: "var(--datagrid-row-background-color)" }
+  }
+  if (shouldHighlightSelectedCellVisual(rowOffset, columnIndex)) {
+    return { background: "var(--datagrid-selection-range-bg)" }
+  }
+  return {}
 }
 
 function handleSortColumnClick(column: TableColumn, additive: boolean): void {
@@ -726,7 +738,7 @@ function startInlineEditIfAllowed(row: TableRow, column: TableColumn): void {
 }
 
 function cellTabIndex(rowOffset: number, columnIndex: number): number {
-  return isSelectionAnchorCellSafe(rowOffset, columnIndex) ? 0 : -1
+  return isVisualSelectionAnchorCell(rowOffset, columnIndex) ? 0 : -1
 }
 
 function handleFillHandleMouseDown(event: MouseEvent): void {
@@ -743,7 +755,33 @@ function isCellSelectedSafe(rowOffset: number, columnIndex: number): boolean {
     : false
 }
 
+function resolveVisualSelectionAnchorCell(): { rowIndex: number; columnIndex: number } | null {
+  return props.selectionAnchorCell ?? null
+}
+
+function isVisualSelectionAnchorCell(rowOffset: number, columnIndex: number): boolean {
+  const anchorCell = resolveVisualSelectionAnchorCell()
+  return Boolean(
+    anchorCell
+    && props.viewportRowStart + rowOffset === anchorCell.rowIndex
+    && columnIndex === anchorCell.columnIndex,
+  )
+}
+
+function shouldHighlightSelectedCellVisual(rowOffset: number, columnIndex: number): boolean {
+  if (!isCellSelectedSafe(rowOffset, columnIndex)) {
+    return false
+  }
+  if (isVisualSelectionAnchorCell(rowOffset, columnIndex)) {
+    return false
+  }
+  return !isSingleSelectedCell.value
+}
+
 function isSelectionAnchorCellSafe(rowOffset: number, columnIndex: number): boolean {
+  if (isVisualSelectionAnchorCell(rowOffset, columnIndex)) {
+    return true
+  }
   const evaluate = props.isSelectionAnchorCell
   return typeof evaluate === "function"
     ? evaluate(rowOffset, columnIndex)
@@ -842,6 +880,109 @@ const rightPaneStyle = computed<CSSProperties>(() => ({
 const bodyViewportEl = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
+const hoveredRangeMoveHandleCell = ref<{ rowIndex: number; columnIndex: number } | null>(null)
+const hoveredRowIndex = ref<number | null>(null)
+
+function clearRangeMoveHandleHover(): void {
+  hoveredRangeMoveHandleCell.value = null
+}
+
+function clearHoveredRow(): void {
+  hoveredRowIndex.value = null
+}
+
+function resolveAbsoluteRowIndex(rowOffset: number): number {
+  return props.viewportRowStart + rowOffset
+}
+
+function setHoveredRow(rowOffset: number): void {
+  if (!props.rowHover) {
+    return
+  }
+  hoveredRowIndex.value = resolveAbsoluteRowIndex(rowOffset)
+}
+
+function isHoveredRow(rowOffset: number): boolean {
+  return props.rowHover === true && hoveredRowIndex.value === resolveAbsoluteRowIndex(rowOffset)
+}
+
+function isStripedRow(rowOffset: number): boolean {
+  return props.stripedRows === true && resolveAbsoluteRowIndex(rowOffset) % 2 === 1
+}
+
+function rowStateClasses(rowOffset: number): Record<string, boolean> {
+  return {
+    "grid-row--hoverable": props.rowHover === true,
+    "grid-row--hovered": isHoveredRow(rowOffset),
+    "grid-row--striped": isStripedRow(rowOffset),
+  }
+}
+
+function isCellOnSelectionEdgeSafe(
+  rowOffset: number,
+  columnIndex: number,
+  edge: "top" | "right" | "bottom" | "left",
+): boolean {
+  const evaluate = props.isCellOnSelectionEdge
+  return typeof evaluate === "function"
+    ? evaluate(rowOffset, columnIndex, edge)
+    : false
+}
+
+function isNearRangeMoveSelectionEdge(
+  event: MouseEvent,
+  rowOffset: number,
+  columnIndex: number,
+): boolean {
+  if (props.mode !== "base" || isRangeMoving.value || !props.selectionRange) {
+    return false
+  }
+  if (!isCellSelectedSafe(rowOffset, columnIndex)) {
+    return false
+  }
+  const cell = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  if (!cell) {
+    return false
+  }
+  const rect = cell.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) {
+    return false
+  }
+  const edgeThreshold = Math.max(
+    1,
+    Math.min(
+      RANGE_MOVE_HANDLE_HOVER_EDGE_PX,
+      Math.floor(rect.width / 2),
+      Math.floor(rect.height / 2),
+    ),
+  )
+  const offsetX = event.clientX - rect.left
+  const offsetY = event.clientY - rect.top
+  return (
+    (offsetY <= edgeThreshold && isCellOnSelectionEdgeSafe(rowOffset, columnIndex, "top"))
+    || (rect.height - offsetY <= edgeThreshold && isCellOnSelectionEdgeSafe(rowOffset, columnIndex, "bottom"))
+    || (offsetX <= edgeThreshold && isCellOnSelectionEdgeSafe(rowOffset, columnIndex, "left"))
+    || (rect.width - offsetX <= edgeThreshold && isCellOnSelectionEdgeSafe(rowOffset, columnIndex, "right"))
+  )
+}
+
+function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: number): void {
+  if (!isNearRangeMoveSelectionEdge(event, rowOffset, columnIndex)) {
+    clearRangeMoveHandleHover()
+    return
+  }
+  hoveredRangeMoveHandleCell.value = {
+    rowIndex: resolveAbsoluteRowIndex(rowOffset),
+    columnIndex,
+  }
+}
+
+function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boolean {
+  return (
+    hoveredRangeMoveHandleCell.value?.rowIndex === resolveAbsoluteRowIndex(rowOffset)
+    && hoveredRangeMoveHandleCell.value?.columnIndex === columnIndex
+  )
+}
 
 function resolveVisibleAnchorCellPosition(): { rowIndex: number; columnIndex: number } | null {
   for (let rowOffset = 0; rowOffset < props.displayRows.length; rowOffset += 1) {
@@ -850,7 +991,7 @@ function resolveVisibleAnchorCellPosition(): { rowIndex: number; columnIndex: nu
         continue
       }
       return {
-        rowIndex: props.viewportRowStart + rowOffset,
+        rowIndex: resolveAbsoluteRowIndex(rowOffset),
         columnIndex,
       }
     }
@@ -1083,18 +1224,11 @@ function columnIndexByKey(columnKey: string): number {
 }
 
 function isSelectionAnchorCell(rowOffset: number, columnIndex: number): boolean {
-  return isSelectionAnchorCellSafe(rowOffset, columnIndex)
+  return isVisualSelectionAnchorCell(rowOffset, columnIndex)
 }
 
 function shouldHighlightSelectedCell(rowOffset: number, columnIndex: number): boolean {
-  const isSelected = isCellSelectedSafe(rowOffset, columnIndex)
-  if (!isSelected) {
-    return false
-  }
-  if (isSelectionAnchorCell(rowOffset, columnIndex)) {
-    return false
-  }
-  return !isSingleSelectedCell.value
+  return shouldHighlightSelectedCellVisual(rowOffset, columnIndex)
 }
 
 function paneRowStyle(row: TableRow, rowOffset: number, paneWidth: number): CSSProperties {
@@ -1473,9 +1607,11 @@ const hasVisibleSelectionOverlay = computed(() => (
 
 function cellStateClasses(row: TableRow, rowOffset: number, columnIndex: number): Record<string, boolean> {
   const columnKey = props.visibleColumns[columnIndex]?.key ?? ""
+  const isAnchorCell = isVisualSelectionAnchorCell(rowOffset, columnIndex)
   return {
-    "grid-cell--selected": shouldHighlightSelectedCell(rowOffset, columnIndex),
-    "grid-cell--selection-anchor": isSelectionAnchorCell(rowOffset, columnIndex),
+    "grid-cell--selected": !isAnchorCell && shouldHighlightSelectedCellVisual(rowOffset, columnIndex),
+    "grid-cell--selection-anchor": isAnchorCell,
+    "grid-cell--range-move-handle-hover": isRangeMoveHandleHoverCell(rowOffset, columnIndex),
     "grid-cell--fill-preview": isCellInFillPreviewSafe(rowOffset, columnIndex),
     "grid-cell--clipboard-pending": isCellInPendingClipboardRangeSafe(rowOffset, columnIndex),
     "grid-cell--clipboard-pending-top": isCellOnPendingClipboardEdgeSafe(rowOffset, columnIndex, "top"),

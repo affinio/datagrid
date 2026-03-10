@@ -54,6 +54,17 @@ function createColumns(count: number): DataGridColumn[] {
   return columns
 }
 
+function toColumnModelInputs(columns: readonly DataGridColumn[]) {
+  return columns.map(({ visible, pin, width, ...column }) => ({
+    ...column,
+    initialState: {
+      visible,
+      pin,
+      width,
+    },
+  }))
+}
+
 function createRows(count: number): VisibleRow[] {
   const rows: VisibleRow[] = new Array(count)
   for (let index = 0; index < count; index += 1) {
@@ -72,7 +83,7 @@ describe("horizontal virtualization stress contract", () => {
     const columns = createColumns(520)
     const rows = createRows(100_000)
     const rowModel = createClientRowModel({ rows })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 1440,
       clientHeight: 820,
@@ -118,7 +129,7 @@ describe("horizontal virtualization stress contract", () => {
     const columns = createColumns(520)
     const rows = createRows(100_000)
     const rowModel = createClientRowModel({ rows })
-    const columnModel = createDataGridColumnModel({ columns })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 1440,
       clientHeight: 820,

@@ -569,8 +569,8 @@ describe("useAffinoDataGrid contract", () => {
       })),
     )
     const columns = [
-      { key: "tested_at", label: "Tested At", pin: "left" as const },
-      { key: "control", label: "Control", pin: "right" as const },
+      { key: "tested_at", label: "Tested At", initialState: { pin: "left" as const } },
+      { key: "control", label: "Control", initialState: { pin: "right" as const } },
     ]
 
     let grid: ReturnType<typeof useAffinoDataGrid<RefreshRow>> | null = null

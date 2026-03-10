@@ -131,4 +131,12 @@ export const defaultThemeTokens: DataGridThemeTokens = {
   gridCopyMenuShadowColor: toRgba("#030712", 0.58),
   gridCopyMenuItemHoverBorderColor: toRgba(palette.sky300, 0.4),
   gridCopyMenuItemHoverBackgroundColor: toRgba(palette.midnight830, 0.96),
+  gridColumnMenuBorderColor: toRgba(palette.sky300, 0.28),
+  gridColumnMenuBackgroundColor: toRgba("#09101c", 0.98),
+  gridColumnMenuShadowColor: toRgba("#030712", 0.44),
+  gridColumnMenuItemHoverBackgroundColor: toRgba(palette.sky500, 0.12),
+  gridColumnMenuMutedTextColor: toRgba(palette.gray200, 0.64),
+  gridColumnMenuFocusRingColor: toRgba(palette.sky500, 0.26),
+  gridColumnMenuSearchBorderColor: toRgba(palette.steel200, 0.32),
+  gridColumnMenuSearchBackgroundColor: toRgba("#0c1421", 0.98),
 }

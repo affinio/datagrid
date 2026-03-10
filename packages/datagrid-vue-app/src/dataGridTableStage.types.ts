@@ -11,10 +11,16 @@ export type DataGridPendingEdge = "top" | "right" | "bottom" | "left"
 export type DataGridTableRow<TRow extends Record<string, unknown>> = DataGridRowNode<TRow>
 export type DataGridElementRefHandler = (value: Element | ComponentPublicInstance | null) => void
 export type DataGridMaybeRef<T> = T | Ref<T>
+export interface DataGridTableStageAnchorCell {
+  rowIndex: number
+  columnIndex: number
+}
 
 export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   mode: DataGridTableMode
   rowHeightMode: "fixed" | "auto"
+  rowHover?: boolean
+  stripedRows?: boolean
   visibleColumns: readonly DataGridColumnSnapshot[]
   renderedColumns: readonly DataGridColumnSnapshot[]
   displayRows: readonly DataGridTableRow<TRow>[]
@@ -31,6 +37,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   rightColumnSpacerWidth: number
   editingCellValue: string
   selectionRange: DataGridOverlayRange | null
+  selectionAnchorCell?: DataGridTableStageAnchorCell | null
   fillPreviewRange: DataGridOverlayRange | null
   rangeMovePreviewRange: DataGridOverlayRange | null
   isRangeMoving: boolean

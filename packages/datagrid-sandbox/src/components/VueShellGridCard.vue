@@ -9,13 +9,25 @@
         <label>
           Rows
           <select v-model.number="rowCount">
-            <option v-for="option in ROW_MODE_OPTIONS" :key="option" :value="option">{{ option }}</option>
+            <option
+              v-for="option in ROW_MODE_OPTIONS"
+              :key="option"
+              :value="option"
+            >
+              {{ option }}
+            </option>
           </select>
         </label>
         <label>
           Cols
           <select v-model.number="columnCount">
-            <option v-for="option in COLUMN_MODE_OPTIONS" :key="option" :value="option">{{ option }}</option>
+            <option
+              v-for="option in COLUMN_MODE_OPTIONS"
+              :key="option"
+              :value="option"
+            >
+              {{ option }}
+            </option>
           </select>
         </label>
         <label>
@@ -31,7 +43,11 @@
           Group by
           <select v-model="groupByField">
             <option value="">None</option>
-            <option v-for="column in columns" :key="`group-by-${column.key}`" :value="column.key">
+            <option
+              v-for="column in columns"
+              :key="`group-by-${column.key}`"
+              :value="column.key"
+            >
               {{ column.label ?? column.key }}
             </option>
           </select>
@@ -78,6 +94,14 @@
             step="1"
           />
         </label>
+        <label>
+          <input v-model="rowHover" type="checkbox" />
+          Row hover
+        </label>
+        <label>
+          <input v-model="stripedRows" type="checkbox" />
+          Striped rows
+        </label>
         <label v-if="props.mode === 'pivot'">
           Pivot view
           <select v-model="pivotViewMode">
@@ -88,16 +112,25 @@
         <label v-if="props.mode === 'pivot' && pivotViewMode === 'pivot'">
           Pivot layout
           <select v-model="pivotLayout">
-            <option value="department-month-revenue">Department × Month (Revenue Σ)</option>
-            <option value="channel-status-deals">Channel × Status (Deals Σ)</option>
-            <option value="month-channel-margin">Month × Channel (Margin Avg)</option>
+            <option value="department-month-revenue">
+              Department × Month (Revenue Σ)
+            </option>
+            <option value="channel-status-deals">
+              Channel × Status (Deals Σ)
+            </option>
+            <option value="month-channel-margin">
+              Month × Channel (Margin Avg)
+            </option>
           </select>
         </label>
         <label v-if="props.mode === 'pivot' && pivotViewMode === 'pivot'">
           <input v-model="hideUnusedPivotSourceColumns" type="checkbox" />
           Hide unused source columns
         </label>
-        <div v-if="props.mode === 'tree' || props.mode === 'pivot'" class="group-actions">
+        <div
+          v-if="props.mode === 'tree' || props.mode === 'pivot'"
+          class="group-actions"
+        >
           <button type="button" @click="expandAllGroups">Expand all</button>
           <button type="button" @click="collapseAllGroups">Collapse all</button>
         </div>
@@ -173,6 +206,8 @@
         :virtualization="virtualization"
         :row-height-mode="rowHeightMode"
         :base-row-height="baseRowHeight"
+        :row-hover="rowHover"
+        :striped-rows="stripedRows"
         @cell-change="syncSelectionAggregatesLabel"
         @selection-change="syncSelectionAggregatesLabel"
         @update:column-state="handleColumnStateUpdate"
@@ -181,17 +216,24 @@
     </section>
 
     <footer class="card__footer">
-      Public app package demo: <code>import { DataGrid } from "@affino/datagrid-vue-app"</code>
-      <span v-if="selectionAggregatesLabel"> {{ selectionAggregatesLabel }}</span>
+      Public app package demo:
+      <code>import { DataGrid } from "@affino/datagrid-vue-app"</code>
+      <span v-if="selectionAggregatesLabel">
+        {{ selectionAggregatesLabel }}</span
+      >
     </footer>
   </article>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
-import { industrialNeutralTheme, sugarTheme, type DataGridStyleConfig } from "@affino/datagrid-theme"
-import { useDataGridAppAdvancedFilterBuilder } from "@affino/datagrid-vue"
+import { computed, ref, watch } from "vue";
+import { DataGrid } from "@affino/datagrid-vue-app";
+import {
+  industrialNeutralTheme,
+  sugarTheme,
+  type DataGridStyleConfig,
+} from "@affino/datagrid-theme";
+import { useDataGridAppAdvancedFilterBuilder } from "@affino/datagrid-vue";
 import type {
   DataGridAggregationModel,
   DataGridAdvancedFilterExpression,
@@ -206,53 +248,62 @@ import type {
   DataGridSelectionSummarySnapshot,
   DataGridUnifiedColumnState,
   DataGridUnifiedState,
-} from "@affino/datagrid-vue"
+} from "@affino/datagrid-vue";
 import {
   buildVueColumns,
   buildVueRows,
   COLUMN_MODE_OPTIONS,
   ROW_MODE_OPTIONS,
   type VueTreeRow,
-} from "../sandboxData"
-import AdvancedFilterPanel from "./AdvancedFilterPanel.vue"
-import ColumnLayoutPanel from "./ColumnLayoutPanel.vue"
-import PivotAdvancedPanel from "./PivotAdvancedPanel.vue"
-import StatePanel from "./StatePanel.vue"
+} from "../sandboxData";
+import AdvancedFilterPanel from "./AdvancedFilterPanel.vue";
+import ColumnLayoutPanel from "./ColumnLayoutPanel.vue";
+import PivotAdvancedPanel from "./PivotAdvancedPanel.vue";
+import StatePanel from "./StatePanel.vue";
 
-type Mode = "base" | "tree" | "pivot"
-type PivotLayoutId = "department-month-revenue" | "channel-status-deals" | "month-channel-margin"
-type PivotViewMode = "pivot" | "table"
+type Mode = "base" | "tree" | "pivot";
+type PivotLayoutId =
+  | "department-month-revenue"
+  | "channel-status-deals"
+  | "month-channel-margin";
+type PivotViewMode = "pivot" | "table";
 
 interface PublicDataGridExpose {
-  getApi: () => unknown | null
-  getColumnState: () => DataGridUnifiedColumnState | null
-  getSelectionAggregatesLabel: () => string
-  getSelectionSummary: () => DataGridSelectionSummarySnapshot | null
-  applyColumnState: (columnState: DataGridUnifiedColumnState) => boolean
-  getState: () => DataGridUnifiedState<unknown> | null
-  migrateState: (state: unknown, options?: unknown) => DataGridUnifiedState<unknown> | null
-  applyState: (state: DataGridUnifiedState<unknown>, options?: unknown) => boolean
-  exportPivotLayout: () => DataGridPivotLayoutSnapshot<unknown> | null
-  exportPivotInterop: () => DataGridPivotInteropSnapshot<unknown> | null
+  getApi: () => unknown | null;
+  getColumnState: () => DataGridUnifiedColumnState | null;
+  getSelectionAggregatesLabel: () => string;
+  getSelectionSummary: () => DataGridSelectionSummarySnapshot | null;
+  applyColumnState: (columnState: DataGridUnifiedColumnState) => boolean;
+  getState: () => DataGridUnifiedState<unknown> | null;
+  migrateState: (
+    state: unknown,
+    options?: unknown,
+  ) => DataGridUnifiedState<unknown> | null;
+  applyState: (
+    state: DataGridUnifiedState<unknown>,
+    options?: unknown,
+  ) => boolean;
+  exportPivotLayout: () => DataGridPivotLayoutSnapshot<unknown> | null;
+  exportPivotInterop: () => DataGridPivotInteropSnapshot<unknown> | null;
   importPivotLayout: (
     layout: DataGridPivotLayoutSnapshot<unknown>,
     options?: DataGridPivotLayoutImportOptions,
-  ) => boolean
-  expandAllGroups: () => void
-  collapseAllGroups: () => void
+  ) => boolean;
+  expandAllGroups: () => void;
+  collapseAllGroups: () => void;
 }
 
 interface ColumnLayoutDraft {
-  order: string[]
-  visibility: Record<string, boolean>
+  order: string[];
+  visibility: Record<string, boolean>;
 }
 
-type ThemePreset = "default" | "industrial" | "sugar" | "custom"
+type ThemePreset = "default" | "industrial" | "sugar" | "custom";
 
 const props = defineProps<{
-  title: string
-  mode: Mode
-}>()
+  title: string;
+  mode: Mode;
+}>();
 
 const PIVOT_LAYOUTS: Record<PivotLayoutId, DataGridPivotSpec> = {
   "department-month-revenue": {
@@ -270,78 +321,83 @@ const PIVOT_LAYOUTS: Record<PivotLayoutId, DataGridPivotSpec> = {
     columns: ["channel"],
     values: [{ field: "marginPct", agg: "avg" }],
   },
-}
+};
 
 function serializePretty(value: unknown): string {
-  return JSON.stringify(value, null, 2)
+  return JSON.stringify(value, null, 2);
 }
 
 function parseJson(value: string): unknown | null {
-  const trimmed = value.trim()
+  const trimmed = value.trim();
   if (!trimmed) {
-    return null
+    return null;
   }
   try {
-    return JSON.parse(trimmed)
+    return JSON.parse(trimmed);
   } catch {
-    return null
+    return null;
   }
 }
 
-function buildBaseColumnState(columns: readonly DataGridColumnInput[]): DataGridUnifiedColumnState {
-  const visibility: Record<string, boolean> = {}
-  const widths: Record<string, number | null> = {}
-  const pins: Record<string, DataGridColumnPin> = {}
+function buildBaseColumnState(
+  columns: readonly DataGridColumnInput[],
+): DataGridUnifiedColumnState {
+  const visibility: Record<string, boolean> = {};
+  const widths: Record<string, number | null> = {};
+  const pins: Record<string, DataGridColumnPin> = {};
 
   for (const column of columns) {
-    visibility[column.key] = column.initialState?.visible !== false
-    widths[column.key] = typeof column.initialState?.width === "number" ? column.initialState.width : null
-    pins[column.key] = column.initialState?.pin ?? "none"
+    visibility[column.key] = column.initialState?.visible !== false;
+    widths[column.key] =
+      typeof column.initialState?.width === "number"
+        ? column.initialState.width
+        : null;
+    pins[column.key] = column.initialState?.pin ?? "none";
   }
 
   return {
-    order: columns.map(column => column.key),
+    order: columns.map((column) => column.key),
     visibility,
     widths,
     pins,
-  }
+  };
 }
 
 function normalizeColumnState(
   state: DataGridUnifiedColumnState | null | undefined,
   columns: readonly DataGridColumnInput[],
 ): DataGridUnifiedColumnState {
-  const source = buildBaseColumnState(columns)
+  const source = buildBaseColumnState(columns);
   const base = {
     order: [...source.order],
     visibility: { ...source.visibility },
     widths: { ...source.widths },
     pins: { ...source.pins },
-  }
+  };
   if (!state) {
-    return base
+    return base;
   }
 
-  const knownKeys = new Set(base.order)
+  const knownKeys = new Set(base.order);
   const nextOrder = [
-    ...state.order.filter(key => knownKeys.has(key)),
-    ...base.order.filter(key => !state.order.includes(key)),
-  ]
+    ...state.order.filter((key) => knownKeys.has(key)),
+    ...base.order.filter((key) => !state.order.includes(key)),
+  ];
 
   for (const key of base.order) {
     if (state.visibility[key] !== undefined) {
-      base.visibility[key] = state.visibility[key] ?? true
+      base.visibility[key] = state.visibility[key] ?? true;
     }
     if (state.widths[key] !== undefined) {
-      base.widths[key] = state.widths[key] ?? null
+      base.widths[key] = state.widths[key] ?? null;
     }
     if (state.pins[key] !== undefined) {
-      base.pins[key] = state.pins[key] ?? "none"
+      base.pins[key] = state.pins[key] ?? "none";
     }
   }
 
-  base.order = nextOrder
-  return base
+  base.order = nextOrder;
+  return base;
 }
 
 const modeBadge = computed(() => {
@@ -349,74 +405,80 @@ const modeBadge = computed(() => {
     ? "Sugar / Tree"
     : props.mode === "pivot"
       ? "Sugar / Pivot"
-      : "Sugar / Base"
-})
+      : "Sugar / Base";
+});
 
 const modeHint = computed(() => {
   return props.mode === "tree"
     ? "Public component with tree-data row model options."
     : props.mode === "pivot"
       ? "Public component with declarative pivot model."
-      : "Public component with declarative rows, columns and view state."
-})
+      : "Public component with declarative rows, columns and view state.";
+});
 
-const rowCount = ref<number>(10000)
-const columnCount = ref<number>(16)
-const themePreset = ref<ThemePreset>("sugar")
-const groupByField = ref("")
-const rowHeightMode = ref<"fixed" | "auto">("fixed")
-const rowRenderMode = ref<"virtualization" | "pagination">("virtualization")
-const paginationPageSize = ref(100)
-const paginationPage = ref(1)
-const baseRowHeight = ref(31)
-const pivotViewMode = ref<PivotViewMode>("pivot")
-const pivotLayout = ref<PivotLayoutId>("department-month-revenue")
-const hideUnusedPivotSourceColumns = ref(true)
-const gridRef = ref<PublicDataGridExpose | null>(null)
+const rowCount = ref<number>(10000);
+const columnCount = ref<number>(16);
+const themePreset = ref<ThemePreset>("sugar");
+const groupByField = ref("");
+const rowHeightMode = ref<"fixed" | "auto">("fixed");
+const rowRenderMode = ref<"virtualization" | "pagination">("virtualization");
+const paginationPageSize = ref(100);
+const paginationPage = ref(1);
+const baseRowHeight = ref(31);
+const rowHover = ref(true);
+const stripedRows = ref(true);
+const pivotViewMode = ref<PivotViewMode>("pivot");
+const pivotLayout = ref<PivotLayoutId>("department-month-revenue");
+const hideUnusedPivotSourceColumns = ref(true);
+const gridRef = ref<PublicDataGridExpose | null>(null);
 
-const isColumnLayoutPanelOpen = ref(false)
-const columnLayoutDraft = ref<ColumnLayoutDraft | null>(null)
-const isStatePanelOpen = ref(false)
-const stateImportText = ref("")
-const stateOutputText = ref("")
-const isPivotAdvancedPanelOpen = ref(false)
-const pivotAdvancedImportText = ref("")
-const pivotAdvancedOutputText = ref("")
-const columnState = ref<DataGridUnifiedColumnState | null>(null)
-const stateModel = ref<DataGridUnifiedState<unknown> | null>(null)
-const selectionAggregatesLabel = ref("")
+const isColumnLayoutPanelOpen = ref(false);
+const columnLayoutDraft = ref<ColumnLayoutDraft | null>(null);
+const isStatePanelOpen = ref(false);
+const stateImportText = ref("");
+const stateOutputText = ref("");
+const isPivotAdvancedPanelOpen = ref(false);
+const pivotAdvancedImportText = ref("");
+const pivotAdvancedOutputText = ref("");
+const columnState = ref<DataGridUnifiedColumnState | null>(null);
+const stateModel = ref<DataGridUnifiedState<unknown> | null>(null);
+const selectionAggregatesLabel = ref("");
 
-const rows = computed(() => buildVueRows(props.mode, rowCount.value, columnCount.value))
-const columns = computed(() => buildVueColumns(props.mode, columnCount.value))
+const rows = computed(() =>
+  buildVueRows(props.mode, rowCount.value, columnCount.value),
+);
+const columns = computed(() => buildVueColumns(props.mode, columnCount.value));
 const groupBy = computed(() => {
   if (props.mode !== "base" || !groupByField.value.trim()) {
-    return null
+    return null;
   }
-  return groupByField.value.trim()
-})
-const aggregationModel = computed<DataGridAggregationModel<unknown> | null>(() => {
-  if (props.mode !== "base" || !groupBy.value) {
-    return null
-  }
-  return {
-    columns: [
-      { key: "amount", op: "sum" },
-      { key: "qty", op: "sum" },
-    ],
-    basis: "filtered",
-  }
-})
+  return groupByField.value.trim();
+});
+const aggregationModel = computed<DataGridAggregationModel<unknown> | null>(
+  () => {
+    if (props.mode !== "base" || !groupBy.value) {
+      return null;
+    }
+    return {
+      columns: [
+        { key: "amount", op: "sum" },
+        { key: "qty", op: "sum" },
+      ],
+      basis: "filtered",
+    };
+  },
+);
 const pivotModel = computed(() => {
   return props.mode === "pivot" && pivotViewMode.value === "pivot"
     ? (PIVOT_LAYOUTS[pivotLayout.value] ?? null)
-    : null
-})
+    : null;
+});
 const pagination = computed<boolean>(() => {
-  return props.mode === "base" && rowRenderMode.value === "pagination"
-})
+  return props.mode === "base" && rowRenderMode.value === "pagination";
+});
 const clientRowModelOptions = computed(() => {
   if (props.mode !== "tree") {
-    return undefined
+    return undefined;
   }
   return {
     initialTreeData: {
@@ -425,40 +487,52 @@ const clientRowModelOptions = computed(() => {
       expandedByDefault: true,
       filterMode: "include-descendants" as const,
     },
-  }
-})
+  };
+});
 const virtualization = computed(() => {
   return {
     rows: props.mode !== "base" || rowRenderMode.value !== "pagination",
     columns: true,
     rowOverscan: 8,
     columnOverscan: 2,
-  }
-})
+  };
+});
 const theme = computed<DataGridStyleConfig | "default">(() => {
   if (themePreset.value === "industrial") {
-    return industrialNeutralTheme
+    return industrialNeutralTheme;
   }
   if (themePreset.value === "sugar") {
-    return sugarTheme
+    return sugarTheme;
   }
   if (themePreset.value === "custom") {
     return {
       ...sugarTheme,
+      inheritThemeFromDocument: false,
+      defaultTokenVariant: "light",
+      activeTokenVariant: "light",
       tokens: {
         ...(sugarTheme.tokens ?? {}),
         gridFontFamily: '"IBM Plex Sans", "Segoe UI", system-ui, sans-serif',
         gridFontSize: "0.82rem",
+        gridTextColor: "#6b7280",
+        gridTextPrimary: "#2b2216",
+        gridTextMuted: "rgba(85, 60, 28, 0.72)",
+        gridTextSoft: "rgba(107, 78, 43, 0.58)",
         gridAccentStrong: "#b45309",
         gridHeaderRowBackgroundColor: "#f4e8d5",
         gridHeaderCellBackgroundColor: "#f4e8d5",
         gridHeaderCellHoverBackgroundColor: "#eed6b0",
         headerBackgroundColor: "#f4e8d5",
         headerTextColor: "#6b3f10",
+        gridGlassBorder: "#e6cfaa",
         bodyRowBackgroundColor: "#fffdf8",
         bodyRowHoverBackgroundColor: "#f7e8c7",
         bodyCellBorderColor: "#ead7b5",
         gridViewportBackground: "#fffaf0",
+        gridEditorBackgroundColor: "#fffaf0",
+        gridEditorBorderColor: "#d8b98b",
+        gridFilterTriggerBorderColor: "#d7b98e",
+        gridFilterTriggerBackgroundColor: "#fff8ee",
         gridSelectionRangeBackgroundColor: "rgba(217, 119, 6, 0.18)",
         gridSelectionFillPreviewBackgroundColor: "rgba(217, 119, 6, 0.12)",
         gridSelectionHandleBackgroundColor: "#b45309",
@@ -467,78 +541,97 @@ const theme = computed<DataGridStyleConfig | "default">(() => {
         pinnedLeftBackgroundColor: "#fff7e8",
         pinnedRightBackgroundColor: "#fff7e8",
         pinnedBackgroundColor: "#fff7e8",
+        gridColumnMenuBackgroundColor: "#fffaf2",
+        gridColumnMenuBorderColor: "#dcc09a",
+        gridColumnMenuShadowColor: "rgba(120, 84, 32, 0.18)",
+        gridColumnMenuItemHoverBackgroundColor: "#f6e5c7",
+        gridColumnMenuMutedTextColor: "rgba(110, 82, 43, 0.78)",
+        gridColumnMenuFocusRingColor: "rgba(217, 119, 6, 0.22)",
+        gridColumnMenuSearchBorderColor: "#d2b488",
+        gridColumnMenuSearchBackgroundColor: "#fffdf8",
       },
-    }
+    };
   }
-  return "default"
-})
+  return "default";
+});
 
-const resolvedColumnState = computed(() => normalizeColumnState(columnState.value, columns.value))
+const resolvedColumnState = computed(() =>
+  normalizeColumnState(columnState.value, columns.value),
+);
 const effectiveColumnState = computed<DataGridUnifiedColumnState>(() => {
-  const base = normalizeColumnState(columnState.value, columns.value)
-  const pins: Record<string, DataGridColumnPin> = { ...base.pins }
+  const base = normalizeColumnState(columnState.value, columns.value);
+  const pins: Record<string, DataGridColumnPin> = { ...base.pins };
   for (const key of Object.keys(pins)) {
     if (pins[key] === "left") {
-      pins[key] = "none"
+      pins[key] = "none";
     }
   }
-  const pinnedLeftKey = base.order.find(key => key === "id")
-    ?? base.order.find(key => key !== "updatedAt" && key !== "amount")
-    ?? null
+  const pinnedLeftKey =
+    base.order.find((key) => key === "id") ??
+    base.order.find((key) => key !== "updatedAt" && key !== "amount") ??
+    null;
   if (pinnedLeftKey && pins[pinnedLeftKey] !== "left") {
-    pins[pinnedLeftKey] = "left"
+    pins[pinnedLeftKey] = "left";
   }
-  const pinnedRightKey = props.mode === "pivot"
-    ? "amount"
-    : props.mode === "tree"
+  const pinnedRightKey =
+    props.mode === "pivot"
       ? "amount"
-      : "updatedAt"
+      : props.mode === "tree"
+        ? "amount"
+        : "updatedAt";
   if (pins[pinnedRightKey] !== "right") {
-    pins[pinnedRightKey] = "right"
+    pins[pinnedRightKey] = "right";
   }
-  if (props.mode !== "pivot" || pivotViewMode.value !== "pivot" || !hideUnusedPivotSourceColumns.value) {
+  if (
+    props.mode !== "pivot" ||
+    pivotViewMode.value !== "pivot" ||
+    !hideUnusedPivotSourceColumns.value
+  ) {
     return {
       order: [...base.order],
       visibility: { ...base.visibility },
       widths: { ...base.widths },
       pins,
-    }
+    };
   }
-  const order = [...base.order]
-  const visibility: Record<string, boolean> = { ...base.visibility }
-  const labelColumnKey = PIVOT_LAYOUTS[pivotLayout.value]?.rows[0] ?? columns.value[0]?.key ?? "name"
+  const order = [...base.order];
+  const visibility: Record<string, boolean> = { ...base.visibility };
+  const labelColumnKey =
+    PIVOT_LAYOUTS[pivotLayout.value]?.rows[0] ??
+    columns.value[0]?.key ??
+    "name";
   for (const key of order) {
-    visibility[key] = key === labelColumnKey
+    visibility[key] = key === labelColumnKey;
   }
   return {
     order,
     visibility,
     widths: { ...base.widths },
     pins,
-  }
-})
+  };
+});
 const resolvedColumnLayoutDraft = computed<ColumnLayoutDraft>(() => {
   if (columnLayoutDraft.value) {
-    return columnLayoutDraft.value
+    return columnLayoutDraft.value;
   }
   return {
     order: [...effectiveColumnState.value.order],
     visibility: { ...effectiveColumnState.value.visibility },
-  }
-})
+  };
+});
 
 const columnLayoutPanelItems = computed(() => {
   return resolvedColumnLayoutDraft.value.order.map((key, index, order) => {
-    const column = columns.value.find(entry => entry.key === key)
+    const column = columns.value.find((entry) => entry.key === key);
     return {
       key,
       label: column?.label ?? key,
       visible: resolvedColumnLayoutDraft.value.visibility[key] ?? true,
       canMoveUp: index > 0,
       canMoveDown: index < order.length - 1,
-    }
-  })
-})
+    };
+  });
+});
 
 const {
   isAdvancedFilterPanelOpen,
@@ -554,85 +647,103 @@ const {
 } = useDataGridAppAdvancedFilterBuilder({
   resolveColumns: (): readonly DataGridAppAdvancedFilterColumnOption[] => {
     const visibleKeys = new Set(
-      resolvedColumnState.value.order.filter(key => resolvedColumnState.value.visibility[key] ?? true),
-    )
+      resolvedColumnState.value.order.filter(
+        (key) => resolvedColumnState.value.visibility[key] ?? true,
+      ),
+    );
     return columns.value
-      .filter(column => visibleKeys.has(column.key))
-      .map(column => ({
+      .filter((column) => visibleKeys.has(column.key))
+      .map((column) => ({
         key: column.key,
         label: column.label ?? column.key,
-      }))
+      }));
   },
-})
+});
 
 const filterModel = computed<DataGridFilterSnapshot | null>(() => {
-  const advancedExpression = appliedAdvancedFilterExpression.value as DataGridAdvancedFilterExpression | null
+  const advancedExpression =
+    appliedAdvancedFilterExpression.value as DataGridAdvancedFilterExpression | null;
   if (!advancedExpression) {
-    return null
+    return null;
   }
   return {
     columnFilters: {},
     advancedFilters: {},
     advancedExpression,
-  }
-})
+  };
+});
 
 const shouldHideUnusedPivotSourceColumns = computed(() => {
-  return props.mode === "pivot"
-    && pivotViewMode.value === "pivot"
-    && hideUnusedPivotSourceColumns.value
-})
+  return (
+    props.mode === "pivot" &&
+    pivotViewMode.value === "pivot" &&
+    hideUnusedPivotSourceColumns.value
+  );
+});
 
-watch(columns, nextColumns => {
-  columnState.value = normalizeColumnState(columnState.value, nextColumns)
-  if (groupByField.value && !nextColumns.some(column => column.key === groupByField.value)) {
-    groupByField.value = ""
-  }
-  selectionAggregatesLabel.value = ""
-}, { immediate: true })
+watch(
+  columns,
+  (nextColumns) => {
+    columnState.value = normalizeColumnState(columnState.value, nextColumns);
+    if (
+      groupByField.value &&
+      !nextColumns.some((column) => column.key === groupByField.value)
+    ) {
+      groupByField.value = "";
+    }
+    selectionAggregatesLabel.value = "";
+  },
+  { immediate: true },
+);
 
-const handleColumnStateUpdate = (nextState: DataGridUnifiedColumnState): void => {
-  const normalizedNextState = normalizeColumnState(nextState, columns.value)
+const handleColumnStateUpdate = (
+  nextState: DataGridUnifiedColumnState,
+): void => {
+  const normalizedNextState = normalizeColumnState(nextState, columns.value);
   if (!shouldHideUnusedPivotSourceColumns.value) {
-    columnState.value = normalizedNextState
-    return
+    columnState.value = normalizedNextState;
+    return;
   }
-  const persistedState = normalizeColumnState(columnState.value, columns.value)
+  const persistedState = normalizeColumnState(columnState.value, columns.value);
   columnState.value = {
     order: [...normalizedNextState.order],
     widths: { ...normalizedNextState.widths },
     pins: { ...normalizedNextState.pins },
     visibility: { ...persistedState.visibility },
-  }
-}
+  };
+};
 
 const handleStateUpdate = (nextState: DataGridUnifiedState<unknown>): void => {
-  stateModel.value = nextState
-}
+  stateModel.value = nextState;
+};
 
 const syncSelectionAggregatesLabel = (): void => {
-  selectionAggregatesLabel.value = gridRef.value?.getSelectionAggregatesLabel() ?? ""
-}
+  selectionAggregatesLabel.value =
+    gridRef.value?.getSelectionAggregatesLabel() ?? "";
+};
 
 const openColumnLayoutPanel = (): void => {
   columnLayoutDraft.value = {
     order: [...resolvedColumnState.value.order],
     visibility: { ...resolvedColumnState.value.visibility },
-  }
-  isColumnLayoutPanelOpen.value = true
-}
+  };
+  isColumnLayoutPanelOpen.value = true;
+};
 
 const cancelColumnLayoutPanel = (): void => {
-  columnLayoutDraft.value = null
-  isColumnLayoutPanelOpen.value = false
-}
+  columnLayoutDraft.value = null;
+  isColumnLayoutPanelOpen.value = false;
+};
 
-const updateColumnVisibility = (payload: { key: string; visible: boolean }): void => {
+const updateColumnVisibility = (payload: {
+  key: string;
+  visible: boolean;
+}): void => {
   if (!columnLayoutDraft.value) {
-    openColumnLayoutPanel()
+    openColumnLayoutPanel();
   }
   if (!columnLayoutDraft.value) {
-    return
+    return;
   }
   columnLayoutDraft.value = {
     ...columnLayoutDraft.value,
@@ -640,112 +751,120 @@ const updateColumnVisibility = (payload: { key: string; visible: boolean }): voi
       ...columnLayoutDraft.value.visibility,
       [payload.key]: payload.visible,
     },
-  }
-}
+  };
+};
 
 const moveColumn = (key: string, direction: -1 | 1): void => {
   if (!columnLayoutDraft.value) {
-    openColumnLayoutPanel()
+    openColumnLayoutPanel();
   }
-  const draft = columnLayoutDraft.value
+  const draft = columnLayoutDraft.value;
   if (!draft) {
-    return
+    return;
   }
-  const currentIndex = draft.order.indexOf(key)
+  const currentIndex = draft.order.indexOf(key);
   if (currentIndex < 0) {
-    return
+    return;
   }
-  const nextIndex = currentIndex + direction
+  const nextIndex = currentIndex + direction;
   if (nextIndex < 0 || nextIndex >= draft.order.length) {
-    return
+    return;
   }
-  const nextOrder = [...draft.order]
-  const [moved] = nextOrder.splice(currentIndex, 1)
+  const nextOrder = [...draft.order];
+  const [moved] = nextOrder.splice(currentIndex, 1);
   if (typeof moved !== "string") {
-    return
+    return;
   }
-  nextOrder.splice(nextIndex, 0, moved)
+  nextOrder.splice(nextIndex, 0, moved);
   columnLayoutDraft.value = {
     ...draft,
     order: nextOrder,
-  }
-}
+  };
+};
 
 const moveColumnUp = (key: string): void => {
-  moveColumn(key, -1)
-}
+  moveColumn(key, -1);
+};
 
 const moveColumnDown = (key: string): void => {
-  moveColumn(key, 1)
-}
+  moveColumn(key, 1);
+};
 
 const applyColumnLayoutPanel = (): void => {
-  const draft = columnLayoutDraft.value
+  const draft = columnLayoutDraft.value;
   if (!draft) {
-    return
+    return;
   }
-  const nextState = normalizeColumnState(columnState.value, columns.value)
-  nextState.order = [...draft.order]
-  nextState.visibility = { ...nextState.visibility, ...draft.visibility }
-  columnState.value = nextState
-  gridRef.value?.applyColumnState(nextState)
-  cancelColumnLayoutPanel()
-}
+  const nextState = normalizeColumnState(columnState.value, columns.value);
+  nextState.order = [...draft.order];
+  nextState.visibility = { ...nextState.visibility, ...draft.visibility };
+  columnState.value = nextState;
+  gridRef.value?.applyColumnState(nextState);
+  cancelColumnLayoutPanel();
+};
 
 const exportStatePayload = (): void => {
-  stateOutputText.value = serializePretty(gridRef.value?.getState() ?? stateModel.value)
-}
+  stateOutputText.value = serializePretty(
+    gridRef.value?.getState() ?? stateModel.value,
+  );
+};
 
 const migrateStatePayload = (): void => {
-  const parsed = parseJson(stateImportText.value)
+  const parsed = parseJson(stateImportText.value);
   if (!parsed) {
-    return
+    return;
   }
-  const migrated = gridRef.value?.migrateState(parsed) ?? null
+  const migrated = gridRef.value?.migrateState(parsed) ?? null;
   if (!migrated) {
-    return
+    return;
   }
-  stateOutputText.value = serializePretty(migrated)
-}
+  stateOutputText.value = serializePretty(migrated);
+};
 
 const applyStatePayload = (): void => {
-  const parsed = parseJson(stateImportText.value)
+  const parsed = parseJson(stateImportText.value);
   if (!parsed) {
-    return
+    return;
   }
-  const migrated = gridRef.value?.migrateState(parsed) ?? null
+  const migrated = gridRef.value?.migrateState(parsed) ?? null;
   if (!migrated) {
-    return
+    return;
   }
   if (gridRef.value?.applyState(migrated)) {
-    stateModel.value = migrated
-    stateOutputText.value = serializePretty(migrated)
+    stateModel.value = migrated;
+    stateOutputText.value = serializePretty(migrated);
   }
-}
+};
 
 const exportPivotLayout = (): void => {
-  pivotAdvancedOutputText.value = serializePretty(gridRef.value?.exportPivotLayout() ?? null)
-}
+  pivotAdvancedOutputText.value = serializePretty(
+    gridRef.value?.exportPivotLayout() ?? null,
+  );
+};
 
 const exportPivotInterop = (): void => {
-  pivotAdvancedOutputText.value = serializePretty(gridRef.value?.exportPivotInterop() ?? null)
-}
+  pivotAdvancedOutputText.value = serializePretty(
+    gridRef.value?.exportPivotInterop() ?? null,
+  );
+};
 
 const importPivotLayout = (): void => {
-  const parsed = parseJson(pivotAdvancedImportText.value)
+  const parsed = parseJson(pivotAdvancedImportText.value);
   if (!parsed) {
-    return
+    return;
   }
-  gridRef.value?.importPivotLayout(parsed as DataGridPivotLayoutSnapshot<unknown>)
-}
+  gridRef.value?.importPivotLayout(
+    parsed as DataGridPivotLayoutSnapshot<unknown>,
+  );
+};
 
 const expandAllGroups = (): void => {
-  gridRef.value?.expandAllGroups()
-}
+  gridRef.value?.expandAllGroups();
+};
 
 const collapseAllGroups = (): void => {
-  gridRef.value?.collapseAllGroups()
-}
+  gridRef.value?.collapseAllGroups();
+};
 </script>
 
 <style scoped>

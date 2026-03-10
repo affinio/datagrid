@@ -12,7 +12,7 @@ describe("grid core state-engine composition contract", () => {
       rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "id", width: 120 }],
+      columns: [{ key: "id", initialState: { width: 120 } }],
     })
     const editModel = createDataGridEditModel()
     const log: string[] = []

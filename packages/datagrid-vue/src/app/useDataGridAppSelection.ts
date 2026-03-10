@@ -35,6 +35,10 @@ export interface UseDataGridAppSelectionResult<TRow> {
 
 const aggregateNumberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 })
 
+function normalizeRowId(value: unknown): DataGridRowId | null {
+  return typeof value === "string" || typeof value === "number" ? value : null
+}
+
 function formatAggregateNumber(value: number | null): string {
   if (value == null || !Number.isFinite(value)) {
     return "—"
@@ -48,14 +52,32 @@ export function useDataGridAppSelection<TRow>(
   const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
   const selectionAnchor = ref<GridSelectionPointLike<DataGridRowId> | null>(null)
 
+  const syncSelectionState = (snapshot: DataGridSelectionSnapshot | null): void => {
+    selectionSnapshot.value = snapshot
+    if (!snapshot || snapshot.ranges.length === 0) {
+      selectionAnchor.value = null
+      return
+    }
+    const activeIndex = snapshot.activeRangeIndex ?? 0
+    const activeRange = snapshot.ranges[activeIndex] ?? snapshot.ranges[0] ?? null
+    const anchor = activeRange?.anchor ?? null
+    selectionAnchor.value = anchor
+      ? {
+          rowIndex: anchor.rowIndex,
+          colIndex: anchor.colIndex,
+          rowId: normalizeRowId(anchor.rowId),
+        }
+      : null
+  }
+
   const selectionService: NonNullable<UseDataGridRuntimeOptions<TRow>["services"]>["selection"] = {
     name: "selection",
     getSelectionSnapshot: () => selectionSnapshot.value,
     setSelectionSnapshot: snapshot => {
-      selectionSnapshot.value = snapshot
+      syncSelectionState(snapshot)
     },
     clearSelection: () => {
-      selectionSnapshot.value = null
+      syncSelectionState(null)
     },
   }
 
@@ -65,9 +87,11 @@ export function useDataGridAppSelection<TRow>(
 
   const syncSelectionSnapshotFromRuntime = (): void => {
     const runtime = options.resolveRuntime?.() ?? null
-    selectionSnapshot.value = runtime?.api.selection.hasSupport()
-      ? runtime.api.selection.getSnapshot()
-      : null
+    syncSelectionState(
+      runtime?.api.selection.hasSupport()
+        ? runtime.api.selection.getSnapshot()
+        : null,
+    )
   }
 
   const selectionAggregates = computed<{

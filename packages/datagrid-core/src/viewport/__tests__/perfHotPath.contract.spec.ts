@@ -53,6 +53,17 @@ function createColumns(count: number): DataGridColumn[] {
   return columns
 }
 
+function toColumnModelInputs(columns: readonly DataGridColumn[]) {
+  return columns.map(({ visible, pin, width, ...column }) => ({
+    ...column,
+    initialState: {
+      visible,
+      pin,
+      width,
+    },
+  }))
+}
+
 function createRows(count: number): VisibleRow[] {
   const rows: VisibleRow[] = new Array(count)
   for (let index = 0; index < count; index += 1) {
@@ -69,7 +80,7 @@ function createRows(count: number): VisibleRow[] {
 describe("viewport perf hot-path contracts", () => {
   it("reuses visibleRows arrays through bounded snapshot pool under scroll churn", () => {
     const rowModel = createClientRowModel({ rows: createRows(10_000) })
-    const columnModel = createDataGridColumnModel({ columns: createColumns(24) })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(createColumns(24)) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 1280,
       clientHeight: 760,
@@ -122,7 +133,7 @@ describe("viewport perf hot-path contracts", () => {
 
   it("does not emit redundant onRows callbacks for stable frame signature", () => {
     const rowModel = createClientRowModel({ rows: createRows(1_200) })
-    const columnModel = createDataGridColumnModel({ columns: createColumns(12) })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(createColumns(12)) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 1024,
       clientHeight: 640,
@@ -167,4 +178,3 @@ describe("viewport perf hot-path contracts", () => {
     columnModel.dispose()
   })
 })
-

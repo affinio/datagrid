@@ -500,8 +500,49 @@ const {
   cloneRowData,
 })
 syncViewportFromDom = syncViewportFromDomRuntime
+
+const resolveColumnMenuSortDirection = (columnKey: string): "asc" | "desc" | null => {
+  return sortState.value.find(entry => entry.key === columnKey)?.direction ?? null
+}
+
+const isColumnFilterActive = (columnKey: string): boolean => {
+  return String(columnFilterTextByKey.value[columnKey] ?? "").trim().length > 0
+}
+
+const applyColumnMenuSort = (columnKey: string, direction: "asc" | "desc" | null): void => {
+  sortState.value = direction === null
+    ? sortState.value.filter(entry => entry.key !== columnKey)
+    : [{ key: columnKey, direction }]
+  applySortAndFilter()
+}
+
+const applyColumnMenuPin = (columnKey: string, pin: "left" | "right" | "none"): void => {
+  runtime.api.columns.setPin(columnKey, pin)
+  syncViewportFromDom()
+}
+
+const applyColumnMenuFilter = (_columnKey: string, _tokens: readonly string[]): void => {
+  // Adapter demo currently exposes text filters through the legacy control flow only.
+}
+
+const clearColumnMenuFilter = (columnKey: string): void => {
+  setColumnFilterText(columnKey, "")
+}
+
 const tableStagePropsForView = computed<Record<string, unknown>>(() => {
-  return tableStageProps.value as unknown as Record<string, unknown>
+  return {
+    ...(tableStageProps.value as unknown as Record<string, unknown>),
+    sourceRows: rows.value,
+    columnMenuEnabled: true,
+    columnMenuMaxFilterValues: 250,
+    isColumnFilterActive,
+    resolveColumnMenuSortDirection,
+    resolveColumnMenuSelectedTokens: () => [],
+    applyColumnMenuSort,
+    applyColumnMenuPin,
+    applyColumnMenuFilter,
+    clearColumnMenuFilter,
+  }
 })
 const displayRows = computed(() => tableStageProps.value.displayRows)
 const viewportRowStart = computed(() => tableStageProps.value.viewportRowStart)

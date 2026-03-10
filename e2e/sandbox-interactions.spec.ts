@@ -2,13 +2,14 @@ import { expect, type Locator, type Page, test } from "@playwright/test"
 
 test.describe("sandbox interaction contracts (adapted from affinio datagrid interactions)", () => {
   test("filter updates row model and recovers on clear", async ({ page }) => {
-    await page.goto("/vue/base-grid")
+    await page.goto("/core/base-grid")
 
     const before = await rowsInModel(page)
     expect(before).toBeGreaterThan(0)
 
-    const filterInput = page.locator('.controls label:has-text("Filter name") input').first()
-    await filterInput.fill("Item 999")
+    const filterInput = page.locator(".col-filter-input").nth(1)
+    await expect(filterInput).toBeVisible()
+    await filterInput.fill("CoreEvent 999")
 
     await expect.poll(async () => rowsInModel(page)).toBeLessThan(before)
 
@@ -19,20 +20,24 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   test("sort control changes first visible row deterministically", async ({ page }) => {
     await page.goto("/vue/base-grid")
 
-    const firstNameBefore = await firstDataCellText(page, 1)
+    const firstNameBefore = await cellTextByViewportCoord(page, 0, 1)
 
-    const sortSelect = page.locator('.controls label:has-text("Sort") select').first()
-    await sortSelect.selectOption("amount-desc")
-    await nudgeViewport(page)
+    const amountMenuButton = page.locator('.grid-cell--header[data-column-key="amount"] [data-datagrid-column-menu-button="true"]').first()
+    await expect(amountMenuButton).toBeVisible()
+    await amountMenuButton.click()
+    await page.locator('[data-datagrid-column-menu-action="sort-desc"]').click()
 
-    await expect.poll(async () => firstDataCellText(page, 1)).not.toBe(firstNameBefore)
+    await expect.poll(async () => cellTextByViewportCoord(page, 0, 1)).not.toBe(firstNameBefore)
   })
 
   test("column resize handle changes header width", async ({ page }) => {
     await page.goto("/vue/base-grid")
 
-    const firstHeader = page.locator(".grid-table thead th").first()
+    const firstHeader = page.locator('.grid-cell--header[data-column-key="name"]').first()
     const resizeHandle = firstHeader.locator(".col-resize")
+
+    await expect(firstHeader).toBeVisible()
+    await expect(resizeHandle).toBeVisible()
 
     const before = await boundingBox(firstHeader)
     await dragResizeHandle(page, resizeHandle, 80)
@@ -44,7 +49,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   test("tree group row click toggles expansion", async ({ page }) => {
     await page.goto("/vue/tree-grid")
 
-    const groupRow = page.locator("tr.row--group").first()
+    const groupRow = page.locator(".grid-row.row--group").first()
     await expect(groupRow).toBeVisible()
 
     const before = await rowsInModel(page)
@@ -66,9 +71,8 @@ async function rowsInModel(page: Page): Promise<number> {
   return match ? Number(match[1]) : 0
 }
 
-async function firstDataCellText(page: Page, columnIndex: number): Promise<string> {
-  const row = page.locator(".grid-table tbody tr").filter({ has: page.locator("td:nth-child(2)") }).first()
-  const cell = row.locator("td").nth(columnIndex)
+async function cellTextByViewportCoord(page: Page, rowIndex: number, columnIndex: number): Promise<string> {
+  const cell = page.locator(`.grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`).first()
   return (await cell.textContent())?.trim() ?? ""
 }
 
@@ -80,14 +84,6 @@ async function dragResizeHandle(page: Page, handle: Locator, deltaX: number): Pr
   await page.mouse.down()
   await page.mouse.move(startX + deltaX, startY)
   await page.mouse.up()
-}
-
-async function nudgeViewport(page: Page): Promise<void> {
-  const viewport = page.locator(".table-wrap").first()
-  await viewport.evaluate(element => {
-    element.scrollTop = Math.max(0, element.scrollTop + 1)
-    element.dispatchEvent(new Event("scroll"))
-  })
 }
 
 async function boundingBox(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {

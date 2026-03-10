@@ -48,6 +48,14 @@ const lightTokens: Partial<DataGridThemeTokens> = {
   gridStickyBackgroundColor: toRgba(palette.gray100, 0.98),
   gridStickyShadowColor: toRgba(palette.gray400, 0.28),
   gridHeaderStickyBackgroundColor: toRgba(palette.gray100, 0.98),
+  gridColumnMenuBorderColor: toRgba(palette.gray300, 0.82),
+  gridColumnMenuBackgroundColor: toRgba(palette.white, 0.99),
+  gridColumnMenuShadowColor: toRgba(palette.gray400, 0.16),
+  gridColumnMenuItemHoverBackgroundColor: toRgba(palette.blue300, 0.18),
+  gridColumnMenuMutedTextColor: toRgba(palette.slate700, 0.72),
+  gridColumnMenuFocusRingColor: toRgba(palette.blue500, 0.22),
+  gridColumnMenuSearchBorderColor: toRgba(palette.gray400, 0.72),
+  gridColumnMenuSearchBackgroundColor: toRgba(palette.gray50, 0.98),
 }
 
 const darkTokens: Partial<DataGridThemeTokens> = {
@@ -96,6 +104,14 @@ const darkTokens: Partial<DataGridThemeTokens> = {
   gridStickyBackgroundColor: toRgba(palette.slate850, 0.98),
   gridStickyShadowColor: toRgba(palette.slate500, 0.35),
   gridHeaderStickyBackgroundColor: toRgba(palette.slate850, 0.98),
+  gridColumnMenuBorderColor: toRgba(palette.slate600, 0.66),
+  gridColumnMenuBackgroundColor: toRgba(palette.midnight950, 0.985),
+  gridColumnMenuShadowColor: toRgba(palette.black, 0.34),
+  gridColumnMenuItemHoverBackgroundColor: toRgba(palette.blue400, 0.2),
+  gridColumnMenuMutedTextColor: toRgba(palette.gray300, 0.72),
+  gridColumnMenuFocusRingColor: toRgba(palette.blue400, 0.26),
+  gridColumnMenuSearchBorderColor: toRgba(palette.slate500, 0.72),
+  gridColumnMenuSearchBackgroundColor: toRgba(palette.slate850, 0.98),
 }
 
 export const sugarTheme: DataGridStyleConfig = {

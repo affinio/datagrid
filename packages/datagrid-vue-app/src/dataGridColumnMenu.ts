@@ -11,7 +11,7 @@ export type DataGridColumnMenuProp =
     }
   | null
 
-const DEFAULT_MAX_FILTER_VALUES = 250
+const DEFAULT_MAX_FILTER_VALUES = 120
 
 export function resolveDataGridColumnMenu(
   input: DataGridColumnMenuProp | undefined,

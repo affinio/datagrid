@@ -116,14 +116,15 @@ export function resolveDataGridThemeTokens(theme: DataGridThemeProp): DataGridTh
     ? resolveDocumentVariant(styleConfig, typeof document === "undefined" ? undefined : document)
     : undefined
   const resolvedVariant = activeVariant ?? styleConfig?.activeTokenVariant ?? styleConfig?.defaultTokenVariant
-  const variantTokens = resolvedVariant ? styleConfig?.tokenVariants?.[resolvedVariant] : undefined
   const mergedStyleConfig = mergeStyleConfigs(
     industrialNeutralTheme,
     styleConfig ?? defaultStyleConfig,
   )
+  const variantTokens = resolvedVariant ? mergedStyleConfig.tokenVariants?.[resolvedVariant] : undefined
   return {
-    ...((mergedStyleConfig.tokens ?? {}) as Partial<DataGridThemeTokens>),
     ...((resolvedVariant ? mergedStyleConfig.tokenVariants?.[resolvedVariant] : undefined) ?? {}),
+    ...((mergedStyleConfig.tokens ?? {}) as Partial<DataGridThemeTokens>),
+    ...((styleConfig?.tokens ?? {}) as Partial<DataGridThemeTokens>),
   } as DataGridThemeTokens
 }
 

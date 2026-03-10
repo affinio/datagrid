@@ -242,7 +242,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       return false
     }
     if (pendingOperation === "cut" && pendingSourceRange && rangesEqual(pendingSourceRange, normalizedTargetRange)) {
-      clearPendingClipboardOperation(true)
+      clearPendingClipboardOperation(false)
       void trigger
       return true
     }
@@ -254,8 +254,9 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       return false
     }
     if (pendingOperation !== "none") {
-      clearPendingClipboardOperation(true)
+      clearPendingClipboardOperation(false)
     }
+    options.applySelectionRange(normalizedTargetRange)
     options.syncViewport()
     void trigger
     return true
