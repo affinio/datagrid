@@ -1,5 +1,6 @@
 import type {
   DataGridColumnDef,
+  DataGridColumnInput,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
   DataGridColumnModelSnapshot,
@@ -52,7 +53,7 @@ export interface UseDataGridRuntimeServiceResult<TRow = unknown> extends DataGri
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
   ) => void
-  setColumns: (columns: readonly DataGridColumnDef[]) => void
+  setColumns: (columns: readonly DataGridColumnInput[]) => void
   start: () => Promise<void>
   stop: () => void
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
@@ -138,24 +139,32 @@ function stableSerializeUnknown(value: unknown): string {
   return `{${entries.join(",")}}`
 }
 
-function cloneColumnDef(column: DataGridColumnDef): DataGridColumnDef {
+function cloneColumnInput(column: DataGridColumnInput): DataGridColumnInput {
   return {
     ...column,
+    initialState: column.initialState ? { ...column.initialState } : undefined,
+    presentation: column.presentation ? { ...column.presentation } : undefined,
+    capabilities: column.capabilities ? { ...column.capabilities } : undefined,
+    constraints: column.constraints ? { ...column.constraints } : undefined,
     meta: column.meta ? { ...column.meta } : undefined,
   }
 }
 
-function serializeBaseColumnsSignature(columns: readonly DataGridColumnDef[]): string {
+function serializeBaseColumnsSignature(columns: readonly DataGridColumnInput[]): string {
   return columns
     .map((column) => {
       return [
         column.key,
+        column.field ?? "",
         column.label ?? "",
-        column.width ?? "",
+        column.dataType ?? "",
         column.minWidth ?? "",
         column.maxWidth ?? "",
-        column.visible === false ? "0" : "1",
-        column.pin ?? "none",
+        stableSerializeUnknown(column.presentation ?? null),
+        stableSerializeUnknown(column.capabilities ?? null),
+        stableSerializeUnknown(column.constraints ?? null),
+        typeof column.valueGetter === "function" ? "getter:1" : "getter:0",
+        typeof column.valueSetter === "function" ? "setter:1" : "setter:0",
         stableSerializeUnknown(column.meta ?? null),
       ].join("|")
     })
@@ -183,8 +192,6 @@ function createPivotColumnDef(column: DataGridPivotColumn): DataGridColumnDef {
   return {
     key: column.id,
     label: column.label,
-    visible: true,
-    pin: "none",
     meta: {
       affinoPivot: true,
       valueField: column.valueField,
@@ -216,30 +223,32 @@ function buildColumnStateByKey(snapshot: DataGridColumnModelSnapshot): Map<strin
 }
 
 function applyPersistedColumnState(
-  column: DataGridColumnDef,
+  column: DataGridColumnInput,
   state: ColumnStateSnapshot | undefined,
-): DataGridColumnDef {
+): DataGridColumnInput {
   if (!state) {
     return column
   }
   return {
     ...column,
-    visible: state.visible,
-    pin: state.pin,
-    width: state.width,
+    initialState: {
+      visible: state.visible,
+      pin: state.pin,
+      width: state.width,
+    },
   }
 }
 
 function buildEffectiveColumns(
-  baseColumns: readonly DataGridColumnDef[],
+  baseColumns: readonly DataGridColumnInput[],
   pivotColumns: readonly DataGridPivotColumn[],
   stateByKey: ReadonlyMap<string, ColumnStateSnapshot>,
-): DataGridColumnDef[] {
+): DataGridColumnInput[] {
   const seen = new Set<string>()
-  const effective: DataGridColumnDef[] = []
+  const effective: DataGridColumnInput[] = []
 
   for (const baseColumn of baseColumns) {
-    const normalized = cloneColumnDef(baseColumn)
+    const normalized = cloneColumnInput(baseColumn)
     if (!normalized.key || seen.has(normalized.key)) {
       continue
     }
@@ -264,8 +273,8 @@ export function useDataGridRuntimeService<TRow = unknown>(
 ): UseDataGridRuntimeServiceResult<TRow> {
   const runtime = createDataGridRuntime(options)
   const { rowModel, columnModel, core, api } = runtime
-  let baseColumns: DataGridColumnDef[] = Array.isArray(options.columns)
-    ? options.columns.map(cloneColumnDef)
+  let baseColumns: DataGridColumnInput[] = Array.isArray(options.columns)
+    ? options.columns.map(cloneColumnInput)
     : []
   let lastColumnsSyncSignature = ""
 
@@ -400,9 +409,9 @@ export function useDataGridRuntimeService<TRow = unknown>(
     recomputeVirtualWindow()
   }
 
-  function setColumns(columns: readonly DataGridColumnDef[]) {
+  function setColumns(columns: readonly DataGridColumnInput[]) {
     baseColumns = Array.isArray(columns)
-      ? columns.map(cloneColumnDef)
+      ? columns.map(cloneColumnInput)
       : []
     syncColumnsFromRowPivot(true)
     recomputeVirtualWindow()

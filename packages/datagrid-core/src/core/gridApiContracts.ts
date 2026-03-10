@@ -13,6 +13,7 @@ import type {
   DataGridFormulaExecutionPlanSnapshot,
   DataGridFormulaGraphSnapshot,
   DataGridColumnDef,
+  DataGridColumnInput,
   DataGridColumnHistogram,
   DataGridColumnHistogramOptions,
   DataGridColumnPin,
@@ -188,10 +189,10 @@ export interface DataGridApiDataNamespace {
 export interface DataGridApiColumnsNamespace {
   getSnapshot(): DataGridColumnModelSnapshot
   get(key: string): DataGridColumnSnapshot | undefined
-  setAll(columns: DataGridColumnDef[]): void
-  insertAt(index: number, columns: readonly DataGridColumnDef[]): boolean
-  insertBefore(columnKey: string, columns: readonly DataGridColumnDef[]): boolean
-  insertAfter(columnKey: string, columns: readonly DataGridColumnDef[]): boolean
+  setAll(columns: DataGridColumnInput[]): void
+  insertAt(index: number, columns: readonly DataGridColumnInput[]): boolean
+  insertBefore(columnKey: string, columns: readonly DataGridColumnInput[]): boolean
+  insertAfter(columnKey: string, columns: readonly DataGridColumnInput[]): boolean
   setOrder(keys: readonly string[]): void
   setVisibility(key: string, visible: boolean): void
   setWidth(key: string, width: number | null): void

@@ -2023,6 +2023,19 @@ const keyboardCommandRouter = useDataGridKeyboardCommandRouter({
     bodyViewportRef.value?.focus({ preventScroll: true })
   },
   openContextMenuFromCurrentCell: () => undefined,
+  selectAllCells: () => {
+    const lastRow = totalRows.value - 1
+    const lastColumn = visibleColumns.value.length - 1
+    if (lastRow < 0 || lastColumn < 0) {
+      return
+    }
+    applyClipboardSelectionRange({
+      startRow: 0,
+      endRow: lastRow,
+      startColumn: 0,
+      endColumn: lastColumn,
+    })
+  },
   runHistoryAction: historyActionRunner.runHistoryAction,
   copySelection: copySelectedCells,
   pasteSelection: pasteSelectedCells,

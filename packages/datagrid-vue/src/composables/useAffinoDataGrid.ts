@@ -62,13 +62,22 @@ function cloneColumnModelSnapshot(
 ): DataGridColumnModelSnapshot {
   const columns = snapshot.columns.map(column => ({
     ...column,
+    state: { ...column.state },
     column: { ...column.column },
   }))
+  const byKey = Object.fromEntries(columns.map(column => [column.key, column]))
   const visibleColumnKeys = new Set(snapshot.visibleColumns.map(column => column.key))
+  const pinnedLeftKeys = new Set(snapshot.pinnedLeftColumns.map(column => column.key))
+  const centerKeys = new Set(snapshot.centerColumns.map(column => column.key))
+  const pinnedRightKeys = new Set(snapshot.pinnedRightColumns.map(column => column.key))
   return {
     columns,
     order: [...snapshot.order],
     visibleColumns: columns.filter(column => visibleColumnKeys.has(column.key)),
+    byKey,
+    pinnedLeftColumns: columns.filter(column => pinnedLeftKeys.has(column.key)),
+    centerColumns: columns.filter(column => centerKeys.has(column.key)),
+    pinnedRightColumns: columns.filter(column => pinnedRightKeys.has(column.key)),
   }
 }
 
@@ -1603,7 +1612,7 @@ export function useAffinoDataGrid<TRow>(
       name: "columnResize",
       args: [{
         key: state.columnKey,
-        width: Number(column?.width ?? column?.column.width ?? state.startWidth),
+        width: Number(column?.width ?? state.startWidth),
       }],
       source: "pointer",
       phase: "end",
@@ -1619,7 +1628,7 @@ export function useAffinoDataGrid<TRow>(
     }
     const startWidth = Number.isFinite(column.width)
       ? Number(column.width)
-      : Number(column.column.width ?? 160)
+      : 160
     columnResizeState.value = {
       columnKey,
       startX: event.clientX,
@@ -1657,7 +1666,7 @@ export function useAffinoDataGrid<TRow>(
         event.preventDefault()
         const direction = event.key === "ArrowRight" ? 1 : -1
         const current = runtime.api.columns.get(columnKey)
-        const currentWidth = Number(current?.width ?? current?.column.width ?? 160)
+        const currentWidth = Number(current?.width ?? 160)
         runtime.api.columns.setWidth(columnKey, Math.max(56, currentWidth + direction * 12))
       }
     },

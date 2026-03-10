@@ -1,6 +1,6 @@
 import type { Ref } from "vue"
 import type { DataGridSortState } from "@affino/datagrid-core"
-import type { DataGridColumnDef } from "@affino/datagrid-core"
+import type { DataGridColumnInput } from "@affino/datagrid-core"
 
 export interface UseAffinoDataGridActionRunnerOptions {
   selectedRowKeySet: Ref<Set<string>>
@@ -14,7 +14,7 @@ export interface UseAffinoDataGridActionRunnerOptions {
   setSortState: (nextState: readonly DataGridSortState[]) => void
   clearSort: () => void
   resolveRows: () => readonly unknown[]
-  resolveColumns: () => readonly DataGridColumnDef[]
+  resolveColumns: () => readonly DataGridColumnInput[]
   setColumnWidth: (columnKey: string, width: number) => void
   isFilteringEnabled: () => boolean
   runFilterAction?: (columnKey: string) => boolean

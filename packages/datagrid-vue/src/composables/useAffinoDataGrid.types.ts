@@ -9,7 +9,7 @@ import type {
   DataGridColumnModelSnapshot,
   DataGridColumnPin,
   CreateDataGridCoreOptions,
-  DataGridColumnDef,
+  DataGridColumnInput,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
@@ -80,13 +80,13 @@ export interface AffinoDataGridEditingFeature<TRow> {
       columnKey: string
       value: unknown
       rows: readonly TRow[]
-      columns: readonly DataGridColumnDef[]
+      columns: readonly DataGridColumnInput[]
     }) => readonly { label: string; value: unknown }[]
     primitive?: "affino-listbox" | "affino-menu"
   }
   onCommit?: (session: AffinoDataGridEditSession, context: {
     rows: readonly TRow[]
-    columns: readonly DataGridColumnDef[]
+    columns: readonly DataGridColumnInput[]
   }) => void | Promise<void>
 }
 
@@ -280,7 +280,7 @@ export interface AffinoDataGridFilteringHelpers {
 
 export interface UseAffinoDataGridOptions<TRow> {
   rows: MaybeRef<readonly TRow[]>
-  columns: MaybeRef<readonly DataGridColumnDef[]>
+  columns: MaybeRef<readonly DataGridColumnInput[]>
   rowModel?: DataGridRowModel<TRow>
   workerOwnedRowModelOptions?: UseDataGridRuntimeOptions<TRow>["workerOwnedRowModelOptions"]
   clientRowModelOptions?: UseDataGridRuntimeOptions<TRow>["clientRowModelOptions"]
@@ -365,11 +365,11 @@ export interface AffinoDataGridFormulaState<TRow = unknown> {
 
 export interface UseAffinoDataGridResult<TRow> extends UseDataGridRuntimeResult<TRow> {
   rows: Ref<readonly TRow[]>
-  columns: Ref<readonly DataGridColumnDef[]>
+  columns: Ref<readonly DataGridColumnInput[]>
   componentProps: Ref<{
     rows: readonly TRow[]
     rowModel: DataGridRowModel<TRow>
-    columns: readonly DataGridColumnDef[]
+    columns: readonly DataGridColumnInput[]
     services: UseAffinoDataGridOptions<TRow>["services"]
     startupOrder: UseAffinoDataGridOptions<TRow>["startupOrder"]
     autoStart: boolean

@@ -1,5 +1,5 @@
 import { mount } from "@vue/test-utils"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-vue"
 import type { DataGridTableRow, DataGridTableStageProps } from "../dataGridTableStage.types"
 import DataGridTableStage from "../DataGridTableStage.vue"

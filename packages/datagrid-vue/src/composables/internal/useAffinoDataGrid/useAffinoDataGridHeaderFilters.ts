@@ -2,7 +2,7 @@ import { ref, type Ref } from "vue"
 import type {
   DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterExpression,
-  DataGridColumnDef,
+  DataGridColumnInput,
 } from "@affino/datagrid-core"
 import type {
   AffinoDataGridFilteringHelpers,
@@ -56,7 +56,7 @@ export interface UseAffinoDataGridHeaderFiltersOptions<TRow> {
   enabled: boolean
   maxUniqueValues: number
   rows: Ref<readonly TRow[]>
-  columns: Ref<readonly DataGridColumnDef[]>
+  columns: Ref<readonly DataGridColumnInput[]>
   featureSuite: UseAffinoDataGridFeatureSuiteResult<TRow>
   filteringHelpers: AffinoDataGridFilteringHelpers
   stableSerialize: (value: unknown) => string
@@ -122,7 +122,7 @@ export function useAffinoDataGridHeaderFilters<TRow>(
     type: "text",
   })
 
-  const resolveColumnByKey = (columnKey: string): DataGridColumnDef | null => (
+  const resolveColumnByKey = (columnKey: string): DataGridColumnInput | null => (
     options.columns.value.find(column => column.key === columnKey) ?? null
   )
 

@@ -68,8 +68,22 @@ const rows = [
 const columns = [
   { key: "owner", label: "Owner" },
   { key: "region", label: "Region" },
-  { key: "amount", label: "Amount", width: 140 },
-  { key: "qty", label: "Qty", width: 96 },
+  {
+    key: "amount",
+    label: "Amount",
+    dataType: "currency",
+    initialState: { width: 140 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, aggregatable: true },
+  },
+  {
+    key: "qty",
+    label: "Qty",
+    dataType: "number",
+    initialState: { width: 96 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, aggregatable: true },
+  },
 ]
 </script>
 

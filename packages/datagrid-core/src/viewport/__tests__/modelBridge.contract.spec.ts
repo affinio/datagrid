@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
-import type { DataGridColumnDef } from "../../models"
+import type { DataGridColumnInput } from "../../models"
 import type { VisibleRow } from "../../types"
 import {
   createDataGridViewportModelBridgeService,
@@ -27,9 +27,9 @@ describe("table viewport model bridge service", () => {
     }
     const columnModel = createDataGridColumnModel({
       columns: [
-        { key: "id", label: "ID", width: 120, pin: "left" },
-        { key: "value", label: "Value", width: 200, visible: true },
-        { key: "hidden", label: "Hidden", visible: false, width: 80 },
+        { key: "id", label: "ID", initialState: { width: 120, pin: "left" } },
+        { key: "value", label: "Value", initialState: { width: 200, visible: true } },
+        { key: "hidden", label: "Hidden", initialState: { visible: false, width: 80 } },
       ],
     })
     const onInvalidate = vi.fn()
@@ -280,12 +280,14 @@ describe("table viewport model bridge service", () => {
 
   it("serves row access by index without full materialization", () => {
     const rows = buildRows(100_000)
-    const columns: DataGridColumnDef[] = Array.from({ length: 520 }, (_, index) => ({
+    const columns: DataGridColumnInput[] = Array.from({ length: 520 }, (_, index) => ({
       key: `col_${index}`,
       label: `Column ${index}`,
-      width: 90 + (index % 5) * 10,
-      pin: index < 2 ? "left" : index > 516 ? "right" : "none",
-      visible: true,
+      initialState: {
+        width: 90 + (index % 5) * 10,
+        pin: index < 2 ? "left" : index > 516 ? "right" : "none",
+        visible: true,
+      },
     }))
     const rowModel = createClientRowModel({ rows })
     const rowCalls: number[] = []
@@ -514,7 +516,11 @@ describe("table viewport model bridge service", () => {
   it("maps headless column defs to datagrid columns at viewport boundary", () => {
     const rowModel = createClientRowModel()
     const columnModel = createDataGridColumnModel({
-      columns: [{ key: "id", width: 96, pin: "left", meta: { isSystem: true, stickyLeft: true } }],
+      columns: [{
+        key: "id",
+        initialState: { width: 96, pin: "left" },
+        meta: { isSystem: true, stickyLeft: true },
+      }],
     })
     const fallbackRowModel = createClientRowModel()
     const fallbackColumnModel = createDataGridColumnModel()
@@ -546,11 +552,13 @@ describe("table viewport model bridge service", () => {
     const rowModel = createClientRowModel()
     const legacyColumn = {
       key: "legacy",
-      width: 100,
-      pin: "left",
+      initialState: {
+        width: 100,
+        pin: "left",
+      },
       isSystem: true,
       stickyLeft: true,
-    } as unknown as DataGridColumnDef
+    } as unknown as DataGridColumnInput
     const columnModel = createDataGridColumnModel({
       columns: [legacyColumn],
     })
@@ -567,6 +575,79 @@ describe("table viewport model bridge service", () => {
     const columns = bridge.materializeColumns()
     expect((columns[0] as unknown as { isSystem?: boolean }).isSystem).toBe(true)
     expect((columns[0] as unknown as { stickyLeft?: boolean }).stickyLeft).toBe(true)
+
+    bridge.dispose()
+    rowModel.dispose()
+    fallbackRowModel.dispose()
+    columnModel.dispose()
+    fallbackColumnModel.dispose()
+  })
+
+  it("flattens nested semantic column contracts into viewport columns", () => {
+    const rowModel = createClientRowModel()
+    const columnModel = createDataGridColumnModel({
+      columns: [{
+        key: "amount",
+        field: "billing.amount",
+        label: "Amount",
+        initialState: { width: 128 },
+        dataType: "currency",
+        presentation: {
+          align: "right",
+          headerAlign: "center",
+        },
+        capabilities: {
+          editable: true,
+          sortable: true,
+          filterable: false,
+          aggregatable: true,
+        },
+        constraints: {
+          min: 0,
+          max: 50_000,
+        },
+      }],
+    })
+    const fallbackRowModel = createClientRowModel()
+    const fallbackColumnModel = createDataGridColumnModel()
+    const bridge = createDataGridViewportModelBridgeService({
+      initialRowModel: rowModel,
+      initialColumnModel: columnModel,
+      fallbackRowModel,
+      fallbackColumnModel,
+      onInvalidate: (_reason) => {},
+    })
+
+    const column = bridge.materializeColumns()[0]
+    expect(column).toMatchObject({
+      key: "amount",
+      field: "billing.amount",
+      label: "Amount",
+      width: 128,
+      dataType: "currency",
+      align: "right",
+      headerAlign: "center",
+      editable: true,
+      sortable: true,
+      filterable: false,
+      aggregatable: true,
+      min: 0,
+      max: 50_000,
+    })
+    expect(column?.presentation).toEqual({
+      align: "right",
+      headerAlign: "center",
+    })
+    expect(column?.capabilities).toEqual({
+      editable: true,
+      sortable: true,
+      filterable: false,
+      aggregatable: true,
+    })
+    expect(column?.constraints).toEqual({
+      min: 0,
+      max: 50_000,
+    })
 
     bridge.dispose()
     rowModel.dispose()

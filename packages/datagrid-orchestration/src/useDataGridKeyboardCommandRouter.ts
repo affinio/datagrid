@@ -4,6 +4,7 @@ export interface UseDataGridKeyboardCommandRouterOptions {
   closeContextMenu: () => void
   focusViewport: () => void
   openContextMenuFromCurrentCell: () => void
+  selectAllCells: (trigger: "keyboard") => void
   runHistoryAction: (direction: "undo" | "redo", trigger: "keyboard") => Promise<boolean>
   copySelection: (trigger: "keyboard") => Promise<boolean>
   pasteSelection: (trigger: "keyboard") => Promise<boolean>
@@ -86,6 +87,12 @@ export function useDataGridKeyboardCommandRouter(
     if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
       prevent(event)
       options.openContextMenuFromCurrentCell()
+      return true
+    }
+
+    if (primaryModifierPressed && !event.altKey && !event.shiftKey && key === "a") {
+      prevent(event)
+      options.selectAllCells("keyboard")
       return true
     }
 

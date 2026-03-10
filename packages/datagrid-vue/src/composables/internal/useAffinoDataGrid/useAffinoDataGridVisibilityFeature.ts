@@ -1,5 +1,5 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from "vue"
-import type { DataGridColumnDef } from "@affino/datagrid-core"
+import type { DataGridColumnInput } from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../../useDataGridRuntime"
 
 export interface AffinoVisibilityFeatureInput {
@@ -14,7 +14,7 @@ export interface NormalizedAffinoVisibilityFeature {
 
 export interface UseAffinoDataGridVisibilityFeatureOptions<TRow> {
   runtime: UseDataGridRuntimeResult<TRow>
-  columns: Ref<readonly DataGridColumnDef[]>
+  columns: Ref<readonly DataGridColumnInput[]>
   feature: NormalizedAffinoVisibilityFeature
 }
 

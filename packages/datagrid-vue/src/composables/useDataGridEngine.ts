@@ -1,7 +1,7 @@
 import type {
   CreateDataGridCoreOptions,
   DataGridApiPluginDefinition,
-  DataGridColumnDef,
+  DataGridColumnInput,
   DataGridCoreServiceRegistry,
   DataGridRowModel,
 } from "@affino/datagrid-core"
@@ -19,7 +19,7 @@ type DataGridRuntimeOverrides = Omit<
 export interface UseDataGridEngineOptions<TRow = unknown> {
   rows: MaybeRef<readonly TRow[]>
   rowModel?: DataGridRowModel<TRow>
-  columns: MaybeRef<readonly DataGridColumnDef[]>
+  columns: MaybeRef<readonly DataGridColumnInput[]>
   plugins?: readonly DataGridApiPluginDefinition<TRow>[]
   services?: DataGridRuntimeOverrides
   startupOrder?: CreateDataGridCoreOptions["startupOrder"]

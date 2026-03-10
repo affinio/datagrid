@@ -1,6 +1,6 @@
 import { ref, type Ref } from "vue"
 import type {
-  DataGridColumnDef,
+  DataGridColumnInput,
   DataGridCoreTransactionService,
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-core"
@@ -19,7 +19,7 @@ interface AffinoDataGridMutationSnapshot<TRow> {
 
 export interface UseAffinoDataGridRuntimeBootstrapOptions<TRow> {
   rows: MaybeRef<readonly TRow[]>
-  columns: MaybeRef<readonly DataGridColumnDef[]>
+  columns: MaybeRef<readonly DataGridColumnInput[]>
   rowModel?: UseDataGridRuntimeOptions<TRow>["rowModel"]
   workerOwnedRowModelOptions?: UseDataGridRuntimeOptions<TRow>["workerOwnedRowModelOptions"]
   clientRowModelOptions?: UseDataGridRuntimeOptions<TRow>["clientRowModelOptions"]
@@ -30,7 +30,7 @@ export interface UseAffinoDataGridRuntimeBootstrapOptions<TRow> {
 
 export interface UseAffinoDataGridRuntimeBootstrapResult<TRow> {
   rows: Ref<readonly TRow[]>
-  columns: Ref<readonly DataGridColumnDef[]>
+  columns: Ref<readonly DataGridColumnInput[]>
   runtime: UseDataGridRuntimeResult<TRow>
   internalSelectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   runtimeServices: UseDataGridRuntimeOptions<TRow>["services"]

@@ -1,18 +1,72 @@
 export type DataGridColumnPin = "left" | "right" | "none"
 
-export interface DataGridColumnDef {
+export type DataGridColumnDataType =
+  | "text"
+  | "number"
+  | "boolean"
+  | "date"
+  | "datetime"
+  | "currency"
+  | "percent"
+
+export interface DataGridColumnPresentation {
+  align?: "left" | "center" | "right"
+  headerAlign?: "left" | "center" | "right"
+}
+
+export interface DataGridColumnCapabilities {
+  editable?: boolean
+  sortable?: boolean
+  filterable?: boolean
+  groupable?: boolean
+  pivotable?: boolean
+  aggregatable?: boolean
+}
+
+export type DataGridColumnConstraintValue = number | Date | string
+
+export interface DataGridColumnConstraints {
+  min?: DataGridColumnConstraintValue
+  max?: DataGridColumnConstraintValue
+}
+
+export interface DataGridColumnValueAccessors<TRow = unknown> {
+  valueGetter?: (row: TRow) => unknown
+  valueSetter?: (row: TRow, value: unknown) => void
+}
+
+export interface DataGridColumnDef<TRow = unknown> extends DataGridColumnValueAccessors<TRow> {
   key: string
+  field?: Extract<keyof TRow, string> | string
   label?: string
-  width?: number
   minWidth?: number
   maxWidth?: number
+  dataType?: DataGridColumnDataType
+  presentation?: DataGridColumnPresentation
+  capabilities?: DataGridColumnCapabilities
+  constraints?: DataGridColumnConstraints
+  meta?: Record<string, unknown>
+}
+
+export interface DataGridColumnState {
+  visible: boolean
+  pin: DataGridColumnPin
+  width: number | null
+}
+
+export interface DataGridColumnInitialState {
   visible?: boolean
   pin?: DataGridColumnPin
-  meta?: Record<string, unknown>
+  width?: number | null
+}
+
+export interface DataGridColumnInput<TRow = unknown> extends DataGridColumnDef<TRow> {
+  initialState?: DataGridColumnInitialState
 }
 
 export interface DataGridColumnSnapshot {
   key: string
+  state: Readonly<DataGridColumnState>
   visible: boolean
   pin: DataGridColumnPin
   width: number | null
@@ -23,6 +77,10 @@ export interface DataGridColumnModelSnapshot {
   columns: readonly DataGridColumnSnapshot[]
   order: readonly string[]
   visibleColumns: readonly DataGridColumnSnapshot[]
+  byKey: Readonly<Record<string, DataGridColumnSnapshot>>
+  pinnedLeftColumns: readonly DataGridColumnSnapshot[]
+  centerColumns: readonly DataGridColumnSnapshot[]
+  pinnedRightColumns: readonly DataGridColumnSnapshot[]
 }
 
 export type DataGridColumnModelListener = (snapshot: DataGridColumnModelSnapshot) => void
@@ -30,7 +88,7 @@ export type DataGridColumnModelListener = (snapshot: DataGridColumnModelSnapshot
 export interface DataGridColumnModel {
   getSnapshot(): DataGridColumnModelSnapshot
   getColumn(key: string): DataGridColumnSnapshot | undefined
-  setColumns(columns: readonly DataGridColumnDef[]): void
+  setColumns(columns: readonly DataGridColumnInput[]): void
   batch?<TResult>(fn: () => TResult): TResult
   setColumnOrder(keys: readonly string[]): void
   setColumnVisibility(key: string, visible: boolean): void
@@ -41,17 +99,15 @@ export interface DataGridColumnModel {
 }
 
 export interface CreateDataGridColumnModelOptions {
-  columns?: readonly DataGridColumnDef[]
+  columns?: readonly DataGridColumnInput[]
 }
 
 interface MutableColumnState {
   column: DataGridColumnDef
-  visible: boolean
-  pin: DataGridColumnPin
-  width: number | null
+  state: DataGridColumnState
 }
 
-function normalizePin(pin: DataGridColumnDef["pin"] | DataGridColumnPin | undefined): DataGridColumnPin {
+function normalizePin(pin: DataGridColumnPin | undefined): DataGridColumnPin {
   if (pin === "left" || pin === "right") {
     return pin
   }
@@ -59,6 +115,22 @@ function normalizePin(pin: DataGridColumnDef["pin"] | DataGridColumnPin | undefi
 }
 
 function normalizeWidth(width: number | undefined | null): number | null {
+  if (width == null) {
+    return null
+  }
+  if (!Number.isFinite(width)) {
+    return null
+  }
+  if ((width as number) <= 0) {
+    return 0
+  }
+  return Math.trunc(width as number)
+}
+
+function normalizeWidthConstraint(width: number | undefined): number | null {
+  if (width == null) {
+    return null
+  }
   if (!Number.isFinite(width)) {
     return null
   }
@@ -78,6 +150,61 @@ function normalizeColumnKey(key: unknown, index: number): string {
     )
   }
   return normalized
+}
+
+function clampWidthToDefinition(width: number | null, column: DataGridColumnDef): number | null {
+  if (width == null) {
+    return null
+  }
+  const minWidth = normalizeWidthConstraint(column.minWidth) ?? 0
+  const maxWidth = normalizeWidthConstraint(column.maxWidth)
+  const clampedMin = Math.max(0, minWidth)
+  const clampedMax = maxWidth == null ? Number.POSITIVE_INFINITY : Math.max(clampedMin, maxWidth)
+  return Math.max(clampedMin, Math.min(clampedMax, width))
+}
+
+function cloneObjectRecord<TValue extends Record<string, unknown> | undefined>(value: TValue): TValue {
+  if (!value || typeof value !== "object") {
+    return value
+  }
+  return { ...value } as TValue
+}
+
+function freezeColumnDefinition<TRow = unknown>(column: DataGridColumnDef<TRow>): DataGridColumnDef<TRow> {
+  const normalized: DataGridColumnDef<TRow> = {
+    ...column,
+    presentation: column.presentation ? Object.freeze({ ...column.presentation }) : undefined,
+    capabilities: column.capabilities ? Object.freeze({ ...column.capabilities }) : undefined,
+    constraints: column.constraints ? Object.freeze({ ...column.constraints }) : undefined,
+    meta: cloneObjectRecord(column.meta),
+  }
+  if (normalized.meta) {
+    Object.freeze(normalized.meta)
+  }
+  return Object.freeze(normalized)
+}
+
+function resolveInitialColumnState(column: DataGridColumnInput, definition: DataGridColumnDef): DataGridColumnState {
+  const initialState = column.initialState
+  const visible = initialState?.visible ?? true
+  const pin = normalizePin(initialState?.pin)
+  const normalizedWidth = normalizeWidth(initialState?.width)
+  return Object.freeze({
+    visible: visible !== false,
+    pin,
+    width: clampWidthToDefinition(normalizedWidth, definition),
+  })
+}
+
+function createColumnSnapshot(key: string, state: MutableColumnState): DataGridColumnSnapshot {
+  return Object.freeze({
+    key,
+    state: state.state,
+    visible: state.state.visible,
+    pin: state.state.pin,
+    width: state.state.width,
+    column: state.column,
+  })
 }
 
 export function createDataGridColumnModel(
@@ -103,27 +230,33 @@ export function createDataGridColumnModel(
       return snapshotCache
     }
 
+    const byKey: Record<string, DataGridColumnSnapshot> = {}
     const columns = order
       .map(key => {
         const state = columnsByKey.get(key)
         if (!state) {
           return null
         }
-        return {
-          key,
-          visible: state.visible,
-          pin: state.pin,
-          width: state.width,
-          column: state.column,
-        } satisfies DataGridColumnSnapshot
+        const snapshot = createColumnSnapshot(key, state)
+        byKey[key] = snapshot
+        return snapshot
       })
       .filter((entry): entry is DataGridColumnSnapshot => entry !== null)
 
-    snapshotCache = {
-      columns,
-      order: [...order],
-      visibleColumns: columns.filter(column => column.visible),
-    }
+    const visibleColumns = columns.filter(column => column.state.visible)
+    const pinnedLeftColumns = columns.filter(column => column.state.visible && column.state.pin === "left")
+    const pinnedRightColumns = columns.filter(column => column.state.visible && column.state.pin === "right")
+    const centerColumns = columns.filter(column => column.state.visible && column.state.pin === "none")
+
+    snapshotCache = Object.freeze({
+      columns: Object.freeze(columns),
+      order: Object.freeze([...order]),
+      visibleColumns: Object.freeze(visibleColumns),
+      byKey: Object.freeze(byKey),
+      pinnedLeftColumns: Object.freeze(pinnedLeftColumns),
+      centerColumns: Object.freeze(centerColumns),
+      pinnedRightColumns: Object.freeze(pinnedRightColumns),
+    })
     snapshotDirty = false
     return snapshotCache
   }
@@ -151,7 +284,7 @@ export function createDataGridColumnModel(
     emit()
   }
 
-  function setColumnsValue(columns: readonly DataGridColumnDef[]) {
+  function setColumnsValue(columns: readonly DataGridColumnInput[]) {
     columnsByKey.clear()
     order = []
     const seen = new Set<string>()
@@ -168,14 +301,18 @@ export function createDataGridColumnModel(
         )
       }
       seen.add(key)
-      const normalizedColumn: DataGridColumnDef = key === column.key
-        ? column
-        : { ...column, key }
+      const {
+        initialState: _initialState,
+        ...rawDefinition
+      } = column
+      const normalizedColumn = freezeColumnDefinition(
+        key === column.key
+          ? rawDefinition as DataGridColumnDef
+          : { ...rawDefinition, key } as DataGridColumnDef,
+      )
       columnsByKey.set(key, {
         column: normalizedColumn,
-        visible: column.visible !== false,
-        pin: normalizePin(column.pin),
-        width: normalizeWidth(column.width),
+        state: resolveInitialColumnState(column, normalizedColumn),
       })
       order.push(key)
     })
@@ -190,19 +327,9 @@ export function createDataGridColumnModel(
       return materializeSnapshot()
     },
     getColumn(key: string) {
-      const state = columnsByKey.get(key)
-      if (!state) {
-        return undefined
-      }
-      return {
-        key,
-        visible: state.visible,
-        pin: state.pin,
-        width: state.width,
-        column: state.column,
-      }
+      return materializeSnapshot().byKey[key]
     },
-    setColumns(columns: readonly DataGridColumnDef[]) {
+    setColumns(columns: readonly DataGridColumnInput[]) {
       ensureActive()
       setColumnsValue(Array.isArray(columns) ? columns : [])
     },
@@ -260,10 +387,13 @@ export function createDataGridColumnModel(
     setColumnVisibility(key: string, visible: boolean) {
       ensureActive()
       const state = columnsByKey.get(key)
-      if (!state || state.visible === visible) {
+      if (!state || state.state.visible === visible) {
         return
       }
-      state.visible = visible
+      state.state = Object.freeze({
+        ...state.state,
+        visible,
+      })
       markSnapshotDirty()
       emitOrQueue()
     },
@@ -273,11 +403,14 @@ export function createDataGridColumnModel(
       if (!state) {
         return
       }
-      const nextWidth = normalizeWidth(width)
-      if (state.width === nextWidth) {
+      const nextWidth = clampWidthToDefinition(normalizeWidth(width), state.column)
+      if (state.state.width === nextWidth) {
         return
       }
-      state.width = nextWidth
+      state.state = Object.freeze({
+        ...state.state,
+        width: nextWidth,
+      })
       markSnapshotDirty()
       emitOrQueue()
     },
@@ -288,10 +421,13 @@ export function createDataGridColumnModel(
         return
       }
       const nextPin = normalizePin(pin)
-      if (state.pin === nextPin) {
+      if (state.state.pin === nextPin) {
         return
       }
-      state.pin = nextPin
+      state.state = Object.freeze({
+        ...state.state,
+        pin: nextPin,
+      })
       markSnapshotDirty()
       emitOrQueue()
     },

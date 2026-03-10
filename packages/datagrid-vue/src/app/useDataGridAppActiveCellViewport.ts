@@ -21,6 +21,7 @@ export function useDataGridAppActiveCellViewport(
   options: UseDataGridAppActiveCellViewportOptions,
 ): UseDataGridAppActiveCellViewportResult {
   const defaultColumnWidth = options.defaultColumnWidth ?? 140
+  const visibilityMarginPx = 2
 
   const resolveCellElement = (rowIndex: number, columnIndex: number): HTMLElement | null => {
     const viewport = options.bodyViewportRef.value
@@ -108,6 +109,38 @@ export function useDataGridAppActiveCellViewport(
     viewport.focus({ preventScroll: true })
   }
 
+  const ensureCenterCellVisibleByDomRect = (
+    viewport: HTMLElement,
+    rowIndex: number,
+    columnIndex: number,
+  ): boolean => {
+    const targetCell = resolveCellElement(rowIndex, columnIndex)
+    if (!targetCell) {
+      return false
+    }
+
+    const viewportRect = viewport.getBoundingClientRect()
+    const targetRect = targetCell.getBoundingClientRect()
+    const visibleLeft = viewportRect.left + visibilityMarginPx
+    const visibleRight = viewportRect.right - visibilityMarginPx
+    let nextScrollLeft = viewport.scrollLeft
+
+    if (targetRect.left < visibleLeft) {
+      nextScrollLeft += targetRect.left - visibleLeft
+    } else if (targetRect.right > visibleRight) {
+      nextScrollLeft += targetRect.right - visibleRight
+    }
+
+    nextScrollLeft = Math.max(0, nextScrollLeft)
+    if (Math.abs(nextScrollLeft - viewport.scrollLeft) < 1) {
+      return true
+    }
+
+    viewport.scrollLeft = nextScrollLeft
+    options.syncViewport()
+    return true
+  }
+
   const ensureKeyboardActiveCellVisible = (rowIndex: number, columnIndex: number): void => {
     const viewport = options.bodyViewportRef.value
     if (!viewport) {
@@ -121,23 +154,27 @@ export function useDataGridAppActiveCellViewport(
       return
     }
 
-    const centerMetrics = resolveCenterColumnMetrics(columnIndex)
-    if (centerMetrics) {
-      const visibleLeft = viewport.scrollLeft
-      const visibleRight = visibleLeft + viewport.clientWidth
-      const maxScrollLeft = Math.max(0, centerMetrics.totalWidth - viewport.clientWidth)
-      let nextScrollLeft = visibleLeft
+    const usedDomScrollAlignment = ensureCenterCellVisibleByDomRect(viewport, rowIndex, columnIndex)
 
-      if (centerMetrics.start < visibleLeft) {
-        nextScrollLeft = centerMetrics.start
-      } else if (centerMetrics.end > visibleRight) {
-        nextScrollLeft = centerMetrics.end - viewport.clientWidth
-      }
+    if (!usedDomScrollAlignment) {
+      const centerMetrics = resolveCenterColumnMetrics(columnIndex)
+      if (centerMetrics) {
+        const visibleLeft = viewport.scrollLeft
+        const visibleRight = visibleLeft + viewport.clientWidth
+        const maxScrollLeft = Math.max(0, centerMetrics.totalWidth - viewport.clientWidth)
+        let nextScrollLeft = visibleLeft
 
-      nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft))
-      if (Math.abs(nextScrollLeft - viewport.scrollLeft) >= 1) {
-        viewport.scrollLeft = nextScrollLeft
-        options.syncViewport()
+        if (centerMetrics.start < visibleLeft) {
+          nextScrollLeft = centerMetrics.start
+        } else if (centerMetrics.end > visibleRight) {
+          nextScrollLeft = centerMetrics.end - viewport.clientWidth
+        }
+
+        nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft))
+        if (Math.abs(nextScrollLeft - viewport.scrollLeft) >= 1) {
+          viewport.scrollLeft = nextScrollLeft
+          options.syncViewport()
+        }
       }
     }
 

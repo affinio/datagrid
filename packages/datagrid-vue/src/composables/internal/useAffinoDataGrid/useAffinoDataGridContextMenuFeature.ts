@@ -1,5 +1,5 @@
 import type { Ref } from "vue"
-import type { DataGridColumnDef } from "@affino/datagrid-core"
+import type { DataGridColumnInput } from "@affino/datagrid-core"
 import {
   useDataGridContextMenu,
   type DataGridContextMenuAction,
@@ -54,7 +54,7 @@ export interface UseAffinoDataGridContextMenuFeatureOptions<
   TActionId extends string,
   TActionResult,
 > {
-  columns: Ref<readonly DataGridColumnDef[]>
+  columns: Ref<readonly DataGridColumnInput[]>
   resolveRowKey: (row: TRow, index: number) => string
   createHeaderSortBindings: (columnKey: string) => HeaderSortBindings
   createHeaderReorderBindings: (columnKey: string) => HeaderReorderBindings

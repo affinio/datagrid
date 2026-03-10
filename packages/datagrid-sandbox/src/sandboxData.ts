@@ -1,4 +1,4 @@
-import type { DataGridColumnDef, DataGridRowNodeInput } from "@affino/datagrid-core"
+import type { DataGridColumnInput, DataGridRowNodeInput } from "@affino/datagrid-core"
 
 export interface VueBaseRow {
   rowId: string
@@ -89,12 +89,19 @@ const OWNERS = ["team-red", "team-blue", "team-green"]
 export const ROW_MODE_OPTIONS = [1000, 10000, 50000, 100000, 200000] as const
 export const COLUMN_MODE_OPTIONS = [8, 16, 32] as const
 
-function appendExtraColumns(base: DataGridColumnDef[], columnCount: number): DataGridColumnDef[] {
+function appendExtraColumns(base: DataGridColumnInput[], columnCount: number): DataGridColumnInput[] {
   const columns = [...base]
   const extraCount = Math.max(0, columnCount - columns.length)
   for (let index = 0; index < extraCount; index += 1) {
     const key = `extra_${index + 1}`
-    columns.push({ key, label: `Extra ${index + 1}` })
+    columns.push({
+      key,
+      label: `Extra ${index + 1}`,
+      initialState: { width: 120 + ((index % 3) * 12) },
+      dataType: index % 2 === 0 ? "text" : "number",
+      presentation: index % 2 === 0 ? undefined : { align: "right", headerAlign: "right" },
+      capabilities: { sortable: true, filterable: true },
+    })
   }
   return columns
 }
@@ -106,63 +113,63 @@ function fillExtraFields(row: Record<string, unknown>, rowIndex: number, columnC
   }
 }
 
-export function buildVueColumns(mode: "base" | "tree" | "pivot" | "worker", columnCount: number): DataGridColumnDef[] {
-  const baseColumns: DataGridColumnDef[] = mode === "tree"
+export function buildVueColumns(mode: "base" | "tree" | "pivot" | "worker", columnCount: number): DataGridColumnInput[] {
+  const baseColumns: DataGridColumnInput[] = mode === "tree"
     ? [
-        { key: "id", label: "ID" },
-        { key: "name", label: "Node" },
-        { key: "parentTeam", label: "Team" },
-        { key: "squad", label: "Squad" },
-        { key: "assignee", label: "Assignee" },
-        { key: "severity", label: "Severity" },
-        { key: "status", label: "Status" },
-        { key: "amount", label: "Cost" },
+        { key: "id", label: "ID", dataType: "number", initialState: { width: 92, pin: "left" }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true } },
+        { key: "name", label: "Node", initialState: { width: 220, pin: "left" }, capabilities: { sortable: true, filterable: true } },
+        { key: "parentTeam", label: "Team", initialState: { width: 150 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+        { key: "squad", label: "Squad", initialState: { width: 150 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+        { key: "assignee", label: "Assignee", initialState: { width: 150 }, capabilities: { sortable: true, filterable: true } },
+        { key: "severity", label: "Severity", initialState: { width: 110 }, capabilities: { sortable: true, filterable: true } },
+        { key: "status", label: "Status", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
+        { key: "amount", label: "Cost", dataType: "currency", initialState: { width: 132 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
       ]
     : mode === "pivot"
       ? [
-          { key: "id", label: "ID" },
-          { key: "name", label: "Deal" },
-          { key: "department", label: "Department" },
-          { key: "month", label: "Month" },
-          { key: "channel", label: "Channel" },
-          { key: "status", label: "Status" },
-          { key: "amount", label: "Revenue" },
-          { key: "deals", label: "Deals" },
+          { key: "id", label: "ID", dataType: "number", initialState: { width: 92, pin: "left" }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true } },
+          { key: "name", label: "Deal", initialState: { width: 220 }, capabilities: { sortable: true, filterable: true } },
+          { key: "department", label: "Department", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+          { key: "month", label: "Month", dataType: "date", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+          { key: "channel", label: "Channel", initialState: { width: 130 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+          { key: "status", label: "Status", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
+          { key: "amount", label: "Revenue", dataType: "currency", initialState: { width: 140 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
+          { key: "deals", label: "Deals", dataType: "number", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
         ]
       : mode === "worker"
         ? [
-            { key: "id", label: "ID" },
-            { key: "name", label: "Task" },
-            { key: "queue", label: "Queue" },
-            { key: "shard", label: "Shard" },
-            { key: "latencyMs", label: "Latency ms" },
-            { key: "retries", label: "Retries" },
-            { key: "status", label: "Status" },
-            { key: "amount", label: "Weight" },
+            { key: "id", label: "ID", dataType: "number", initialState: { width: 92, pin: "left" }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true } },
+            { key: "name", label: "Task", initialState: { width: 220 }, capabilities: { sortable: true, filterable: true } },
+            { key: "queue", label: "Queue", initialState: { width: 130 }, capabilities: { sortable: true, filterable: true } },
+            { key: "shard", label: "Shard", initialState: { width: 130 }, capabilities: { sortable: true, filterable: true } },
+            { key: "latencyMs", label: "Latency ms", dataType: "number", initialState: { width: 130 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true }, constraints: { min: 0 } },
+            { key: "retries", label: "Retries", dataType: "number", initialState: { width: 100 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true }, constraints: { min: 0 } },
+            { key: "status", label: "Status", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
+            { key: "amount", label: "Weight", dataType: "number", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
           ]
         : [
-            { key: "id", label: "ID" },
-            { key: "name", label: "Item" },
-            { key: "region", label: "Region" },
-            { key: "category", label: "Category" },
-            { key: "status", label: "Status" },
-            { key: "amount", label: "Amount" },
-            { key: "qty", label: "Qty" },
-            { key: "updatedAt", label: "Updated" },
+            { key: "id", label: "ID", dataType: "number", initialState: { width: 92, pin: "left" }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true } },
+            { key: "name", label: "Item", initialState: { width: 220 }, capabilities: { sortable: true, filterable: true } },
+            { key: "region", label: "Region", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+            { key: "category", label: "Category", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+            { key: "status", label: "Status", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
+            { key: "amount", label: "Amount", dataType: "currency", initialState: { width: 140 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0, max: 100_000 } },
+            { key: "qty", label: "Qty", dataType: "number", initialState: { width: 100 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0, max: 10_000 } },
+            { key: "updatedAt", label: "Updated", dataType: "date", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true } },
           ]
 
   return appendExtraColumns(baseColumns, columnCount)
 }
 
-export function buildCoreColumns(columnCount: number): DataGridColumnDef[] {
+export function buildCoreColumns(columnCount: number): DataGridColumnInput[] {
   return appendExtraColumns([
-    { key: "id", label: "ID" },
-    { key: "name", label: "Event" },
-    { key: "source", label: "Source" },
-    { key: "owner", label: "Owner" },
-    { key: "status", label: "Status" },
-    { key: "amount", label: "Score" },
-    { key: "updatedAt", label: "Updated" },
+    { key: "id", label: "ID", dataType: "number", initialState: { width: 92, pin: "left" }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true } },
+    { key: "name", label: "Event", initialState: { width: 220 }, capabilities: { sortable: true, filterable: true } },
+    { key: "source", label: "Source", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+    { key: "owner", label: "Owner", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+    { key: "status", label: "Status", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
+    { key: "amount", label: "Score", dataType: "number", initialState: { width: 120 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
+    { key: "updatedAt", label: "Updated", dataType: "date", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true } },
   ], columnCount)
 }
 

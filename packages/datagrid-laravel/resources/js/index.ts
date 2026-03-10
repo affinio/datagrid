@@ -30,6 +30,8 @@ export type {
   DataGridAdvancedFilterExpression,
   DataGridAdvancedFilterCondition,
   DataGridColumnDef,
+  DataGridColumnInput,
+  DataGridColumnInitialState,
   DataGridColumnModelSnapshot,
   DataGridColumnPin,
   DataGridClientRowPatch,

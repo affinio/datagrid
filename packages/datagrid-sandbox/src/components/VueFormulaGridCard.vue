@@ -77,7 +77,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue"
-import { DataGrid, type DataGridAppColumnDef } from "@affino/datagrid-vue-app"
+import { DataGrid, type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
 import type {
   DataGridAggregationModel,
   DataGridFormulaComputeStageDiagnostics,
@@ -134,20 +134,20 @@ interface PublicFormulaGridExpose {
 
 const ROW_OPTIONS = [100, 1_000, 5_000] as const
 const PATCH_OPTIONS = [1, 10, 100] as const
-const columns: readonly DataGridAppColumnDef[] = [
-  { key: "id", label: "ID" },
-  { key: "product", label: "Product" },
-  { key: "segment", label: "Segment", width: 120 },
-  { key: "price", label: "Price" },
-  { key: "qty", label: "Qty" },
-  { key: "taxRate", label: "Tax rate" },
-  { key: "shipping", label: "Shipping" },
-  { key: "discount", label: "Discount" },
-  { key: "cost", label: "Cost" },
-  { key: "subtotal", label: "Subtotal", formula: "price * qty" },
-  { key: "tax", label: "Tax", formula: "subtotal * taxRate" },
-  { key: "total", label: "Total", formula: "subtotal + tax + shipping - discount" },
-  { key: "margin", label: "Margin", formula: "total - cost" },
+const columns: readonly DataGridAppColumnInput[] = [
+  { key: "id", label: "ID", dataType: "number", initialState: { width: 88, pin: "left" }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true } },
+  { key: "product", label: "Product", initialState: { width: 180 }, capabilities: { sortable: true, filterable: true } },
+  { key: "segment", label: "Segment", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+  { key: "price", label: "Price", dataType: "currency", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0 } },
+  { key: "qty", label: "Qty", dataType: "number", initialState: { width: 90 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0 } },
+  { key: "taxRate", label: "Tax rate", dataType: "percent", initialState: { width: 100 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true }, constraints: { min: 0, max: 1 } },
+  { key: "shipping", label: "Shipping", dataType: "currency", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true }, constraints: { min: 0 } },
+  { key: "discount", label: "Discount", dataType: "currency", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true }, constraints: { min: 0 } },
+  { key: "cost", label: "Cost", dataType: "currency", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true }, constraints: { min: 0 } },
+  { key: "subtotal", label: "Subtotal", dataType: "currency", initialState: { width: 118 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, formula: "price * qty" },
+  { key: "tax", label: "Tax", dataType: "currency", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, formula: "subtotal * taxRate" },
+  { key: "total", label: "Total", dataType: "currency", initialState: { width: 118 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, formula: "subtotal + tax + shipping - discount" },
+  { key: "margin", label: "Margin", dataType: "currency", initialState: { width: 118 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, formula: "total - cost" },
 ]
 
 const rowCount = ref<number>(1_000)

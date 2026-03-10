@@ -360,12 +360,36 @@ export function useDataGridTableStageRuntime<
     )
   }
 
+  const isViewportSelectAllKeyboardEvent = (event: KeyboardEvent): boolean => {
+    return (event.ctrlKey || event.metaKey)
+      && !event.altKey
+      && !event.shiftKey
+      && event.key.toLowerCase() === "a"
+  }
+
+  const selectAllVisibleCells = (): void => {
+    const lastRowIndex = options.totalRows.value - 1
+    const lastColumnIndex = orderedVisibleColumns.value.length - 1
+    if (lastRowIndex < 0 || lastColumnIndex < 0) {
+      return
+    }
+    applyClipboardSelectionRange({
+      startRow: 0,
+      endRow: lastRowIndex,
+      startColumn: 0,
+      endColumn: lastColumnIndex,
+    })
+  }
+
   const handleViewportKeydown = (event: KeyboardEvent): void => {
-    if (isViewportOwnedKeyboardEvent(event)) {
+    if (isViewportOwnedKeyboardEvent(event) || isViewportSelectAllKeyboardEvent(event)) {
       event.preventDefault()
     }
     const activeCell = options.selectionSnapshot.value?.activeCell
     if (!activeCell) {
+      if (isViewportSelectAllKeyboardEvent(event)) {
+        selectAllVisibleCells()
+      }
       return
     }
     const row = options.runtime.api.rows.get(activeCell.rowIndex)

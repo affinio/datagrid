@@ -12,7 +12,7 @@ import type {
   DataGridAggregationModel,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
-  DataGridColumnDef,
+  DataGridColumnInput,
   DataGridColumnModelSnapshot,
   DataGridRowNode,
   DataGridRowModel,
@@ -74,7 +74,7 @@ export interface UseDataGridRuntimeOptions<TRow = unknown> {
   }
   plugins?: readonly DataGridApiPluginDefinition<TRow>[]
   clientRowModelOptions?: CreateDataGridRuntimeOptions<TRow>["clientRowModelOptions"]
-  columns: MaybeRef<readonly DataGridColumnDef[]>
+  columns: MaybeRef<readonly DataGridColumnInput[]>
   services?: DataGridRuntimeOverrides
   startupOrder?: CreateDataGridCoreOptions["startupOrder"]
   autoStart?: boolean

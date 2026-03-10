@@ -1,5 +1,5 @@
 import { ref, type Ref } from "vue"
-import type { DataGridColumnDef } from "@affino/datagrid-core"
+import type { DataGridColumnInput } from "@affino/datagrid-core"
 
 export type AffinoEditingMode = "cell" | "row"
 
@@ -23,12 +23,12 @@ export interface AffinoEditingFeatureInput<TRow> {
       columnKey: string
       value: unknown
       rows: readonly TRow[]
-      columns: readonly DataGridColumnDef[]
+      columns: readonly DataGridColumnInput[]
     }) => readonly { label: string; value: unknown }[]
   }
   onCommit?: (session: AffinoEditingSession, context: {
     rows: readonly TRow[]
-    columns: readonly DataGridColumnDef[]
+    columns: readonly DataGridColumnInput[]
   }) => void | Promise<void>
 }
 
@@ -46,7 +46,7 @@ export interface NormalizedAffinoEditingFeature<TRow> {
 
 export interface UseAffinoDataGridEditingFeatureOptions<TRow> {
   rows: Ref<readonly TRow[]>
-  columns: Ref<readonly DataGridColumnDef[]>
+  columns: Ref<readonly DataGridColumnInput[]>
   feature: NormalizedAffinoEditingFeature<TRow>
 }
 

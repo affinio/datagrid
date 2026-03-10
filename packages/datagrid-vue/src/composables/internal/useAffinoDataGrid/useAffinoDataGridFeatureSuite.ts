@@ -1,5 +1,5 @@
 import { type Ref } from "vue"
-import type { DataGridColumnDef, DataGridSelectionSnapshot } from "@affino/datagrid-core"
+import type { DataGridColumnInput, DataGridSelectionSnapshot } from "@affino/datagrid-core"
 import type { DataGridTransactionAffectedRange } from "@affino/datagrid-core/advanced"
 import type { UseDataGridRuntimeResult } from "../../useDataGridRuntime"
 import {
@@ -38,7 +38,7 @@ import type { NormalizedAffinoDataGridFeatures } from "./useAffinoDataGridFeatur
 
 export interface UseAffinoDataGridFeatureSuiteOptions<TRow> {
   rows: Ref<readonly TRow[]>
-  columns: Ref<readonly DataGridColumnDef[]>
+  columns: Ref<readonly DataGridColumnInput[]>
   runtime: UseDataGridRuntimeResult<TRow>
   normalizedFeatures: NormalizedAffinoDataGridFeatures<TRow>
   fallbackResolveRowKey: (row: TRow, index: number) => string

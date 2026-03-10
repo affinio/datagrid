@@ -38,7 +38,7 @@ export function useDataGridAppHeaderResize<TRow>(
   const headerResize = useDataGridHeaderResizeOrchestration<TRow>({
     resolveColumnBaseWidth: (columnKey) => {
       const snapshot = options.visibleColumns.value.find(column => column.key === columnKey)
-      return snapshot?.column.width ?? defaultColumnWidth
+      return snapshot?.width ?? defaultColumnWidth
     },
     resolveColumnLabel: (columnKey) => {
       return options.visibleColumns.value.find(column => column.key === columnKey)?.column.label ?? columnKey

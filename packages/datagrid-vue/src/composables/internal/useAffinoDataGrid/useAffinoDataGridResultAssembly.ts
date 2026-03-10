@@ -1,5 +1,5 @@
 import type { Ref } from "vue"
-import type { DataGridColumnDef } from "@affino/datagrid-core"
+import type { DataGridColumnInput } from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../../useDataGridRuntime"
 import type { UseAffinoDataGridFeatureSuiteResult } from "./useAffinoDataGridFeatureSuite"
 import type { UseAffinoDataGridBindingSuiteResult } from "./useAffinoDataGridBindingSuite"
@@ -8,7 +8,7 @@ import type { UseAffinoDataGridResult } from "../../useAffinoDataGrid.types"
 export interface UseAffinoDataGridResultAssemblyOptions<TRow> {
   runtime: UseDataGridRuntimeResult<TRow>
   rows: Ref<readonly TRow[]>
-  columns: Ref<readonly DataGridColumnDef[]>
+  columns: Ref<readonly DataGridColumnInput[]>
   componentProps: UseAffinoDataGridResult<TRow>["componentProps"]
   sort: Pick<
     UseAffinoDataGridResult<TRow>,

@@ -1,4 +1,27 @@
 import type { ColumnMetric as CoreColumnMetric } from "../virtualization/columnSnapshot"
+import type {
+  DataGridColumnCapabilities,
+  DataGridColumnConstraintValue,
+  DataGridColumnConstraints,
+  DataGridColumnDataType,
+  DataGridColumnInitialState,
+  DataGridColumnInput,
+  DataGridColumnPresentation,
+  DataGridColumnState,
+  DataGridColumnValueAccessors,
+} from "../models/columnModel.js"
+
+export type {
+  DataGridColumnCapabilities,
+  DataGridColumnConstraintValue,
+  DataGridColumnConstraints,
+  DataGridColumnDataType,
+  DataGridColumnInitialState,
+  DataGridColumnInput,
+  DataGridColumnPresentation,
+  DataGridColumnState,
+  DataGridColumnValueAccessors,
+} from "../models/columnModel.js"
 
 /**
  * Column related structural types live in this dedicated module so that runtime utilities
@@ -10,9 +33,11 @@ export type DataGridColumnEditor = "text" | "select" | "number" | "checkbox" | "
 
 export type DataGridColumnPin = "left" | "right" | "none"
 
-export interface DataGridColumn {
+export interface DataGridColumn extends DataGridColumnValueAccessors<any> {
   key: string
+  field?: string
   label: string
+  dataType?: DataGridColumnDataType | string
   width?: number
   minWidth?: number
   maxWidth?: number
@@ -28,6 +53,11 @@ export interface DataGridColumn {
   editable?: boolean
   validator?: (value: unknown, row: any) => boolean | string
   filterType?: "set" | "text" | "number" | "date"
+  presentation?: DataGridColumnPresentation
+  capabilities?: DataGridColumnCapabilities
+  constraints?: DataGridColumnConstraints
+  min?: number | Date | string
+  max?: number | Date | string
   /**
    * Canonical pin state contract used by runtime and adapters.
    */

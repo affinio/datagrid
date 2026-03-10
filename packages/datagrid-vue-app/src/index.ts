@@ -3,7 +3,7 @@ import DataGridComponent from "./DataGrid"
 
 export const DataGrid: Component = DataGridComponent
 export type {
-  DataGridAppColumnDef,
+  DataGridAppColumnInput,
   DataGridDeclarativeFormulaOptions,
 } from "./dataGridFormulaOptions"
 export type {

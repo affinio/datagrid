@@ -95,11 +95,32 @@ Detailed treeData contract, policies, and migration examples:
 
 `DataGridColumnModel` is the canonical ownership boundary for column state.
 
-Headless `DataGridColumnDef` contract:
+Headless contracts:
 
-- canonical fields only: `key`, `label`, `width`, `minWidth`, `maxWidth`, `visible`, `pin`
+- `DataGridColumnDef` = immutable definition only:
+  - `key`, `field`, `label`, `minWidth`, `maxWidth`, `dataType`, `presentation`, `capabilities`, `constraints`, `meta`
+- `DataGridColumnInput` = authored input:
+  - `DataGridColumnDef` + optional `initialState`
+- `DataGridColumnState` = runtime mutable state:
+  - `visible`, `pin`, `width`
 - UI-only fields (`isSystem`, `sticky*`, legacy pin fields) are not part of the core contract
 - adapter-specific payload is allowed only through `meta` (opaque boundary channel)
+
+Authored state must be nested under `initialState`:
+
+```ts
+const columns = [
+  {
+    key: "amount",
+    label: "Amount",
+    dataType: "currency",
+    initialState: { width: 140, pin: "right" },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true, aggregatable: true },
+    constraints: { min: 0 },
+  },
+]
+```
 
 Core API:
 
@@ -115,6 +136,8 @@ Snapshot guarantees:
 
 - deterministic order output
 - `visibleColumns` is derived from canonical state
+- `byKey`, `pinnedLeftColumns`, `centerColumns`, `pinnedRightColumns` are derived snapshot indexes/segments
+- snapshots are structurally frozen
 
 Dynamic visibility contract:
 

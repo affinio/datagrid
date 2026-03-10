@@ -5,8 +5,17 @@ import type { DataGridSettingsAdapter } from "../settings/dataGridSettingsAdapte
 export type {
   DataGridColumn,
   DataGridColumnAlignment,
+  DataGridColumnCapabilities,
+  DataGridColumnConstraintValue,
+  DataGridColumnConstraints,
+  DataGridColumnDataType,
   DataGridColumnEditor,
+  DataGridColumnInitialState,
+  DataGridColumnInput,
   DataGridColumnPin,
+  DataGridColumnPresentation,
+  DataGridColumnState,
+  DataGridColumnValueAccessors,
   DataGridColumnGroupDef,
 } from "./column"
 export type { DataGridSettingsAdapter } from "../settings/dataGridSettingsAdapter.js"

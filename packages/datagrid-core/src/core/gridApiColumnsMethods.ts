@@ -2,6 +2,7 @@ import type {
   DataGridColumnDef,
   DataGridColumnHistogram,
   DataGridColumnHistogramOptions,
+  DataGridColumnInput,
   DataGridColumnModel,
   DataGridColumnPin,
 } from "../models/index.js"
@@ -10,10 +11,10 @@ import type { DataGridColumnHistogramCapability } from "./gridApiCapabilities"
 export interface DataGridApiColumnsMethods {
   getColumnModelSnapshot: () => ReturnType<DataGridColumnModel["getSnapshot"]>
   getColumn: (key: string) => ReturnType<DataGridColumnModel["getColumn"]>
-  setColumns: (columns: DataGridColumnDef[]) => void
-  insertColumnsAt: (index: number, columns: readonly DataGridColumnDef[]) => boolean
-  insertColumnsBefore: (columnKey: string, columns: readonly DataGridColumnDef[]) => boolean
-  insertColumnsAfter: (columnKey: string, columns: readonly DataGridColumnDef[]) => boolean
+  setColumns: (columns: DataGridColumnInput[]) => void
+  insertColumnsAt: (index: number, columns: readonly DataGridColumnInput[]) => boolean
+  insertColumnsBefore: (columnKey: string, columns: readonly DataGridColumnInput[]) => boolean
+  insertColumnsAfter: (columnKey: string, columns: readonly DataGridColumnInput[]) => boolean
   setColumnOrder: (keys: readonly string[]) => void
   setColumnVisibility: (key: string, visible: boolean) => void
   setColumnWidth: (key: string, width: number | null) => void
@@ -30,19 +31,21 @@ export function createDataGridApiColumnsMethods(
   input: CreateDataGridApiColumnsMethodsInput,
 ): DataGridApiColumnsMethods {
   const { columnModel, getColumnHistogramCapability } = input
-  const normalizeInsertedColumns = (columns: readonly DataGridColumnDef[]): DataGridColumnDef[] => {
+  const normalizeInsertedColumns = (columns: readonly DataGridColumnInput[]): DataGridColumnInput[] => {
     return Array.isArray(columns) ? columns.filter(Boolean) : []
   }
-  const materializeColumnDefsFromSnapshot = (): DataGridColumnDef[] => {
+  const materializeColumnDefsFromSnapshot = (): DataGridColumnInput[] => {
     const snapshot = columnModel.getSnapshot()
     return snapshot.columns.map(column => ({
       ...column.column,
-      visible: column.visible,
-      pin: column.pin,
-      width: column.width ?? undefined,
+      initialState: {
+        visible: column.visible,
+        pin: column.pin,
+        width: column.width,
+      },
     }))
   }
-  const insertColumnsAt = (index: number, columns: readonly DataGridColumnDef[]): boolean => {
+  const insertColumnsAt = (index: number, columns: readonly DataGridColumnInput[]): boolean => {
     const nextColumns = normalizeInsertedColumns(columns)
     if (nextColumns.length === 0) {
       return false
@@ -64,13 +67,13 @@ export function createDataGridApiColumnsMethods(
     getColumn(key: string) {
       return columnModel.getColumn(key)
     },
-    setColumns(columns: DataGridColumnDef[]) {
+    setColumns(columns: DataGridColumnInput[]) {
       columnModel.setColumns(columns)
     },
-    insertColumnsAt(index: number, columns: readonly DataGridColumnDef[]) {
+    insertColumnsAt(index: number, columns: readonly DataGridColumnInput[]) {
       return insertColumnsAt(index, columns)
     },
-    insertColumnsBefore(columnKey: string, columns: readonly DataGridColumnDef[]) {
+    insertColumnsBefore(columnKey: string, columns: readonly DataGridColumnInput[]) {
       const snapshot = columnModel.getSnapshot()
       const targetIndex = snapshot.order.indexOf(columnKey)
       if (targetIndex < 0) {
@@ -78,7 +81,7 @@ export function createDataGridApiColumnsMethods(
       }
       return insertColumnsAt(targetIndex, columns)
     },
-    insertColumnsAfter(columnKey: string, columns: readonly DataGridColumnDef[]) {
+    insertColumnsAfter(columnKey: string, columns: readonly DataGridColumnInput[]) {
       const snapshot = columnModel.getSnapshot()
       const targetIndex = snapshot.order.indexOf(columnKey)
       if (targetIndex < 0) {

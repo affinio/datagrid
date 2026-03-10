@@ -13,8 +13,8 @@
             v-for="column in pinnedLeftColumns"
             :key="`header-left-${column.key}`"
             class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
-            :style="columnStyle(column.key)"
-            @click="toggleSortForColumn(column.key, $event.shiftKey)"
+            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+            @click="handleSortColumnClick(column, $event.shiftKey)"
           >
             <div class="col-head">
               <span>{{ column.column.label ?? column.key }}</span>
@@ -32,6 +32,7 @@
               <input
                 class="col-filter-input"
                 :value="columnFilterTextByKey[column.key] ?? ''"
+                :disabled="!isColumnFilterable(column)"
                 placeholder="Filter..."
                 @mousedown.stop
                 @keydown.stop
@@ -58,8 +59,8 @@
             v-for="column in renderedColumns"
             :key="`header-${column.key}`"
             class="grid-cell grid-cell--header grid-cell--header-sortable"
-            :style="columnStyle(column.key)"
-            @click="toggleSortForColumn(column.key, $event.shiftKey)"
+            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+            @click="handleSortColumnClick(column, $event.shiftKey)"
           >
             <div class="col-head">
               <span>{{ column.column.label ?? column.key }}</span>
@@ -77,6 +78,7 @@
               <input
                 class="col-filter-input"
                 :value="columnFilterTextByKey[column.key] ?? ''"
+                :disabled="!isColumnFilterable(column)"
                 placeholder="Filter..."
                 @mousedown.stop
                 @keydown.stop
@@ -98,8 +100,8 @@
             v-for="column in pinnedRightColumns"
             :key="`header-right-${column.key}`"
             class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
-            :style="columnStyle(column.key)"
-            @click="toggleSortForColumn(column.key, $event.shiftKey)"
+            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+            @click="handleSortColumnClick(column, $event.shiftKey)"
           >
             <div class="col-head">
               <span>{{ column.column.label ?? column.key }}</span>
@@ -117,6 +119,7 @@
               <input
                 class="col-filter-input"
                 :value="columnFilterTextByKey[column.key] ?? ''"
+                :disabled="!isColumnFilterable(column)"
                 placeholder="Filter..."
                 @mousedown.stop
                 @keydown.stop
@@ -160,16 +163,16 @@
               :key="`${String(row.rowId)}-left-${column.key}`"
               class="grid-cell grid-cell--pinned-left"
               :class="cellStateClasses(row, rowOffset, columnIndexByKey(column.key))"
-              :style="columnStyle(column.key)"
+              :style="[columnStyle(column.key), bodyCellPresentationStyle(column)]"
               :data-row-index="viewportRowStart + rowOffset"
               :data-column-index="columnIndexByKey(column.key)"
               tabindex="-1"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
-              @dblclick.stop="startInlineEdit(row, column.key)"
+              @dblclick.stop="startInlineEditIfAllowed(row, column)"
             >
               <button
-                v-if="mode === 'base' && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
+                v-if="mode === 'base' && isColumnEditable(column) && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
                 type="button"
                 class="cell-fill-handle"
                 aria-label="Fill handle"
@@ -177,7 +180,7 @@
                 @mousedown.stop.prevent="startFillHandleDrag($event)"
               />
               <input
-                v-if="isEditingCellSafe(row, column.key)"
+                v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
                 class="cell-editor-input"
                 :value="editingCellValue"
                 @mousedown.stop
@@ -230,16 +233,16 @@
                 :key="`${String(row.rowId)}-${column.key}`"
                 class="grid-cell"
                 :class="cellStateClasses(row, rowOffset, columnIndexByKey(column.key))"
-                :style="columnStyle(column.key)"
+                :style="[columnStyle(column.key), bodyCellPresentationStyle(column)]"
                 :data-row-index="viewportRowStart + rowOffset"
                 :data-column-index="columnIndexByKey(column.key)"
                 tabindex="-1"
                 @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
                 @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
-                @dblclick.stop="startInlineEdit(row, column.key)"
+                @dblclick.stop="startInlineEditIfAllowed(row, column)"
               >
                 <button
-                  v-if="mode === 'base' && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
+                  v-if="mode === 'base' && isColumnEditable(column) && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
                   type="button"
                   class="cell-fill-handle"
                   aria-label="Fill handle"
@@ -247,7 +250,7 @@
                   @mousedown.stop.prevent="startFillHandleDrag($event)"
                 />
                 <input
-                  v-if="isEditingCellSafe(row, column.key)"
+                  v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
                   class="cell-editor-input"
                   :value="editingCellValue"
                   @mousedown.stop
@@ -297,16 +300,16 @@
               :key="`${String(row.rowId)}-right-${column.key}`"
               class="grid-cell grid-cell--pinned-right"
               :class="cellStateClasses(row, rowOffset, columnIndexByKey(column.key))"
-              :style="columnStyle(column.key)"
+              :style="[columnStyle(column.key), bodyCellPresentationStyle(column)]"
               :data-row-index="viewportRowStart + rowOffset"
               :data-column-index="columnIndexByKey(column.key)"
               tabindex="-1"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
-              @dblclick.stop="startInlineEdit(row, column.key)"
+              @dblclick.stop="startInlineEditIfAllowed(row, column)"
             >
               <button
-                v-if="mode === 'base' && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
+                v-if="mode === 'base' && isColumnEditable(column) && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
                 type="button"
                 class="cell-fill-handle"
                 aria-label="Fill handle"
@@ -314,7 +317,7 @@
                 @mousedown.stop.prevent="startFillHandleDrag($event)"
               />
               <input
-                v-if="isEditingCellSafe(row, column.key)"
+                v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
                 class="cell-editor-input"
                 :value="editingCellValue"
                 @mousedown.stop
@@ -358,6 +361,19 @@ ensureDataGridAppStyles()
 const props = defineProps<DataGridTableStageProps<Record<string, unknown>>>()
 
 type TableRow = DataGridTableRow<Record<string, unknown>>
+type TableColumn = DataGridColumnSnapshot & {
+  column: DataGridColumnSnapshot["column"] & {
+    presentation?: {
+      align?: "left" | "center" | "right"
+      headerAlign?: "left" | "center" | "right"
+    }
+    capabilities?: {
+      editable?: boolean
+      sortable?: boolean
+      filterable?: boolean
+    }
+  }
+}
 
 type OverlaySegment = {
   key: string
@@ -384,9 +400,53 @@ function parsePixelValue(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-function resolveColumnWidth(column: DataGridColumnSnapshot): number {
+function resolveColumnWidth(column: TableColumn): number {
   const style = props.columnStyle(column.key)
   return parsePixelValue(style.width ?? style.minWidth ?? column.width, column.width ?? 140)
+}
+
+function resolveTextAlign(value: unknown): CSSProperties["textAlign"] | undefined {
+  return value === "left" || value === "center" || value === "right"
+    ? value
+    : undefined
+}
+
+function isColumnEditable(column: TableColumn): boolean {
+  return column.column.capabilities?.editable !== false
+}
+
+function isColumnSortable(column: TableColumn): boolean {
+  return column.column.capabilities?.sortable !== false
+}
+
+function isColumnFilterable(column: TableColumn): boolean {
+  return column.column.capabilities?.filterable !== false
+}
+
+function headerCellPresentationStyle(column: TableColumn): CSSProperties {
+  const textAlign = resolveTextAlign(
+    column.column.presentation?.headerAlign ?? column.column.presentation?.align,
+  )
+  return textAlign ? { textAlign } : {}
+}
+
+function bodyCellPresentationStyle(column: TableColumn): CSSProperties {
+  const textAlign = resolveTextAlign(column.column.presentation?.align)
+  return textAlign ? { textAlign } : {}
+}
+
+function handleSortColumnClick(column: TableColumn, additive: boolean): void {
+  if (!isColumnSortable(column)) {
+    return
+  }
+  props.toggleSortForColumn(column.key, additive)
+}
+
+function startInlineEditIfAllowed(row: TableRow, column: TableColumn): void {
+  if (!isColumnEditable(column)) {
+    return
+  }
+  props.startInlineEdit(row, column.key)
 }
 
 function isCellSelectedSafe(rowOffset: number, columnIndex: number): boolean {

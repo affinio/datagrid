@@ -1,13 +1,16 @@
 import type {
   CreateClientRowModelOptions,
   DataGridClientComputeMode,
-  DataGridColumnDef,
+  DataGridColumnInput,
   DataGridComputedFieldDefinition,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFunctionRegistry,
 } from "@affino/datagrid-vue"
 
-export interface DataGridAppColumnDef extends DataGridColumnDef {
+/**
+ * High-level authored column contract for `@affino/datagrid-vue-app`.
+ */
+export interface DataGridAppColumnInput extends DataGridColumnInput {
   formula?: string | null
 }
 
@@ -21,7 +24,7 @@ export interface DataGridDeclarativeFormulaOptions<TRow = unknown> {
 
 export interface ResolveDataGridFormulaRowModelOptionsInput<TRow = unknown>
   extends DataGridDeclarativeFormulaOptions<TRow> {
-  columns?: readonly DataGridAppColumnDef[] | null | undefined
+  columns?: readonly DataGridAppColumnInput[] | null | undefined
   clientRowModelOptions?: Omit<CreateClientRowModelOptions<TRow>, "rows"> | undefined
 }
 
@@ -44,8 +47,8 @@ function cloneComputedFields<TRow>(
 }
 
 function cloneColumns(
-  columns: readonly DataGridAppColumnDef[] | null | undefined,
-): readonly DataGridColumnDef[] {
+  columns: readonly DataGridAppColumnInput[] | null | undefined,
+): readonly DataGridColumnInput[] {
   if (!columns || columns.length === 0) {
     return []
   }
@@ -53,7 +56,7 @@ function cloneColumns(
 }
 
 function extractEmbeddedFormulas(
-  columns: readonly DataGridAppColumnDef[] | null | undefined,
+  columns: readonly DataGridAppColumnInput[] | null | undefined,
 ): readonly DataGridFormulaFieldDefinition[] {
   if (!columns || columns.length === 0) {
     return []
@@ -88,8 +91,8 @@ function mergeFormulaDefinitions(
 }
 
 export function resolveDataGridColumns(
-  columns: readonly DataGridAppColumnDef[] | null | undefined,
-): readonly DataGridColumnDef[] {
+  columns: readonly DataGridAppColumnInput[] | null | undefined,
+): readonly DataGridColumnInput[] {
   return cloneColumns(columns)
 }
 

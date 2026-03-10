@@ -53,7 +53,8 @@ export function createDataGridAppRowHeightMetrics(
     prefixOffsets[0] = 0
     for (let rowIndex = 0; rowIndex < totalRows; rowIndex += 1) {
       const override = options.resolveRowHeightOverride(rowIndex)
-      prefixOffsets[rowIndex + 1] = prefixOffsets[rowIndex] + normalizeRowHeight(override ?? baseRowHeight)
+      const previousOffset = prefixOffsets[rowIndex] ?? 0
+      prefixOffsets[rowIndex + 1] = previousOffset + normalizeRowHeight(override ?? baseRowHeight)
     }
 
     cachedMetrics = {
@@ -71,7 +72,9 @@ export function createDataGridAppRowHeightMetrics(
       return metrics.baseRowHeight
     }
     const normalizedIndex = Math.max(0, Math.min(metrics.totalRows - 1, Math.trunc(rowIndex)))
-    return metrics.prefixOffsets[normalizedIndex + 1] - metrics.prefixOffsets[normalizedIndex]
+    const start = metrics.prefixOffsets[normalizedIndex] ?? 0
+    const end = metrics.prefixOffsets[normalizedIndex + 1] ?? (start + metrics.baseRowHeight)
+    return end - start
   }
 
   const resolveRowOffset = (rowIndex: number): number => {
@@ -80,7 +83,7 @@ export function createDataGridAppRowHeightMetrics(
       return 0
     }
     const normalizedIndex = Math.max(0, Math.min(metrics.totalRows, Math.trunc(rowIndex)))
-    return metrics.prefixOffsets[normalizedIndex]
+    return metrics.prefixOffsets[normalizedIndex] ?? 0
   }
 
   const resolveRowIndexAtOffset = (offset: number): number => {
@@ -88,13 +91,17 @@ export function createDataGridAppRowHeightMetrics(
     if (metrics.totalRows <= 0) {
       return 0
     }
-    const clampedOffset = Math.max(0, Math.min(metrics.prefixOffsets[metrics.totalRows] - 1, offset))
+    const totalHeight = metrics.prefixOffsets[metrics.totalRows] ?? 0
+    if (totalHeight <= 0) {
+      return 0
+    }
+    const clampedOffset = Math.max(0, Math.min(totalHeight - 1, offset))
     let low = 0
     let high = metrics.totalRows - 1
     while (low <= high) {
       const middle = Math.floor((low + high) / 2)
-      const rowStart = metrics.prefixOffsets[middle]
-      const rowEnd = metrics.prefixOffsets[middle + 1]
+      const rowStart = metrics.prefixOffsets[middle] ?? 0
+      const rowEnd = metrics.prefixOffsets[middle + 1] ?? totalHeight
       if (clampedOffset < rowStart) {
         high = middle - 1
         continue

@@ -16,7 +16,23 @@ import type {
 } from "../models/rowModel"
 
 const DEFAULT_ROW_ENTRY_CACHE_LIMIT = 1024
-const CORE_COLUMN_KEYS = new Set(["key", "label", "width", "minWidth", "maxWidth", "visible", "pin", "meta"])
+const CORE_COLUMN_KEYS = new Set([
+  "key",
+  "field",
+  "label",
+  "dataType",
+  "width",
+  "minWidth",
+  "maxWidth",
+  "visible",
+  "pin",
+  "presentation",
+  "capabilities",
+  "constraints",
+  "valueGetter",
+  "valueSetter",
+  "meta",
+])
 
 function areSortModelsEqual(
   left: readonly DataGridSortState[] | null | undefined,
@@ -400,18 +416,50 @@ export function createDataGridViewportModelBridgeService<TRow = unknown>(
       columnDef.meta && typeof columnDef.meta === "object"
         ? (columnDef.meta as Record<string, unknown>)
         : undefined
+    const presentation =
+      columnDef.presentation && typeof columnDef.presentation === "object"
+        ? { ...columnDef.presentation }
+        : undefined
+    const capabilities =
+      columnDef.capabilities && typeof columnDef.capabilities === "object"
+        ? { ...columnDef.capabilities }
+        : undefined
+    const constraints =
+      columnDef.constraints && typeof columnDef.constraints === "object"
+        ? { ...columnDef.constraints }
+        : undefined
+    const field = typeof columnDef.field === "string" && columnDef.field.trim().length > 0
+      ? columnDef.field.trim()
+      : undefined
     const label = typeof columnDef.label === "string" ? columnDef.label : snapshotColumn.key
-    const widthValue = snapshotColumn.width == null ? columnDef.width : snapshotColumn.width
+    const widthValue = snapshotColumn.width
     const normalizedWidth = Number.isFinite(widthValue as number) ? (widthValue as number) : undefined
 
     return {
       ...legacyPassthrough,
       ...(meta ?? {}),
       key: snapshotColumn.key,
+      ...(field ? { field } : {}),
       label,
+      ...(columnDef.dataType ? { dataType: columnDef.dataType } : {}),
       visible: snapshotColumn.visible,
       pin: snapshotColumn.pin,
       width: normalizedWidth,
+      ...(presentation ? { presentation } : {}),
+      ...(presentation?.align ? { align: presentation.align } : {}),
+      ...(presentation?.headerAlign ? { headerAlign: presentation.headerAlign } : {}),
+      ...(capabilities ? { capabilities } : {}),
+      ...(typeof capabilities?.editable === "boolean" ? { editable: capabilities.editable } : {}),
+      ...(typeof capabilities?.sortable === "boolean" ? { sortable: capabilities.sortable } : {}),
+      ...(typeof capabilities?.filterable === "boolean" ? { filterable: capabilities.filterable } : {}),
+      ...(typeof capabilities?.groupable === "boolean" ? { groupable: capabilities.groupable } : {}),
+      ...(typeof capabilities?.pivotable === "boolean" ? { pivotable: capabilities.pivotable } : {}),
+      ...(typeof capabilities?.aggregatable === "boolean" ? { aggregatable: capabilities.aggregatable } : {}),
+      ...(constraints ? { constraints } : {}),
+      ...(typeof constraints?.min !== "undefined" ? { min: constraints.min } : {}),
+      ...(typeof constraints?.max !== "undefined" ? { max: constraints.max } : {}),
+      ...(typeof columnDef.valueGetter === "function" ? { valueGetter: columnDef.valueGetter } : {}),
+      ...(typeof columnDef.valueSetter === "function" ? { valueSetter: columnDef.valueSetter } : {}),
     }
   }
 
@@ -532,7 +580,7 @@ export function createDataGridViewportModelBridgeService<TRow = unknown>(
 
       const columnDef: DataGridColumnDef = snapshotColumn.column
       const label = typeof columnDef.label === "string" ? columnDef.label : snapshotColumn.key
-      const widthValue = snapshotColumn.width == null ? columnDef.width : snapshotColumn.width
+      const widthValue = snapshotColumn.width
       const normalizedWidth = Number.isFinite(widthValue as number) ? (widthValue as number) : undefined
       const previous = columnProjectionCache.get(snapshotColumn.key)
       const canReuse = Boolean(previous) &&

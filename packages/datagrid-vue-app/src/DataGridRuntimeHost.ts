@@ -12,7 +12,7 @@ import {
 import type {
   CreateDataGridCoreOptions,
   DataGridApiPluginDefinition,
-  DataGridColumnDef,
+  DataGridColumnInput,
   DataGridCoreServiceRegistry,
   DataGridPaginationInput,
   DataGridRowModel,
@@ -53,7 +53,7 @@ export default defineComponent({
       default: undefined,
     },
     columns: {
-      type: Array as PropType<readonly DataGridColumnDef[]>,
+      type: Array as PropType<readonly DataGridColumnInput[]>,
       default: () => [],
     },
     theme: {

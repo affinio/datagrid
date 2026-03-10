@@ -195,7 +195,7 @@ import type {
   DataGridAggregationModel,
   DataGridAdvancedFilterExpression,
   DataGridAppAdvancedFilterColumnOption,
-  DataGridColumnDef,
+  DataGridColumnInput,
   DataGridColumnPin,
   DataGridFilterSnapshot,
   DataGridPivotInteropSnapshot,
@@ -287,15 +287,15 @@ function parseJson(value: string): unknown | null {
   }
 }
 
-function buildBaseColumnState(columns: readonly DataGridColumnDef[]): DataGridUnifiedColumnState {
+function buildBaseColumnState(columns: readonly DataGridColumnInput[]): DataGridUnifiedColumnState {
   const visibility: Record<string, boolean> = {}
   const widths: Record<string, number | null> = {}
   const pins: Record<string, DataGridColumnPin> = {}
 
   for (const column of columns) {
-    visibility[column.key] = true
-    widths[column.key] = typeof column.width === "number" ? column.width : null
-    pins[column.key] = "none"
+    visibility[column.key] = column.initialState?.visible !== false
+    widths[column.key] = typeof column.initialState?.width === "number" ? column.initialState.width : null
+    pins[column.key] = column.initialState?.pin ?? "none"
   }
 
   return {
@@ -308,7 +308,7 @@ function buildBaseColumnState(columns: readonly DataGridColumnDef[]): DataGridUn
 
 function normalizeColumnState(
   state: DataGridUnifiedColumnState | null | undefined,
-  columns: readonly DataGridColumnDef[],
+  columns: readonly DataGridColumnInput[],
 ): DataGridUnifiedColumnState {
   const source = buildBaseColumnState(columns)
   const base = {

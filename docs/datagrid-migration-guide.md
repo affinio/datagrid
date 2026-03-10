@@ -38,6 +38,28 @@ Migration rule:
 - Use canonical `pin` only.
 - Do not rely on legacy pin fields in runtime or adapter input.
 
+## Column Authored Input Migration (Required)
+
+New contract split:
+
+- `DataGridColumnDef` = immutable definition
+- `DataGridColumnInput` = definition + `initialState`
+- `DataGridColumnState` = runtime mutable state
+
+Required move for authored columns:
+
+```ts
+// before
+{ key: "amount", label: "Amount", width: 140, pin: "right", visible: true }
+
+// after
+{
+   key: "amount",
+   label: "Amount",
+   initialState: { width: 140, pin: "right", visible: true },
+}
+```
+
 ## Recommended Migration Steps
 
 1. Move imports from `.tmp/ui-table/*` to package-root imports.

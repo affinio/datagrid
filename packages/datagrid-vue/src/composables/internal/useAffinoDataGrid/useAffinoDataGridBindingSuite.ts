@@ -1,5 +1,5 @@
 import type { Ref } from "vue"
-import type { DataGridColumnDef, DataGridSortDirection } from "@affino/datagrid-core"
+import type { DataGridColumnInput, DataGridSortDirection } from "@affino/datagrid-core"
 import {
   useAffinoDataGridBaseBindings,
   type UseAffinoDataGridBaseBindingsResult,
@@ -17,7 +17,7 @@ import type {
 } from "../../useAffinoDataGrid.types"
 
 export interface UseAffinoDataGridBindingSuiteOptions<TRow> {
-  columns: Ref<readonly DataGridColumnDef[]>
+  columns: Ref<readonly DataGridColumnInput[]>
   resolveColumnOrder: () => readonly string[]
   setColumnOrder: (keys: readonly string[]) => void
   resolveRowOrder: () => readonly string[]

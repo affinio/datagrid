@@ -38,7 +38,7 @@ import DataGridDefaultRenderer from "./DataGridDefaultRenderer"
 import {
   resolveDataGridColumns,
   resolveDataGridFormulaRowModelOptions,
-  type DataGridAppColumnDef,
+  type DataGridAppColumnInput,
 } from "./dataGridFormulaOptions"
 import { type DataGridThemeProp } from "./dataGridTheme"
 import {
@@ -125,7 +125,7 @@ export default defineComponent({
       default: undefined,
     },
     columns: {
-      type: Array as PropType<readonly DataGridAppColumnDef[]>,
+      type: Array as PropType<readonly DataGridAppColumnInput[]>,
       default: () => [],
     },
     theme: {
@@ -336,7 +336,6 @@ export default defineComponent({
 
     const handleSelectionChange = (payload: unknown): void => {
       emit("selection-change", payload)
-      controlledState.emitSnapshotUpdates()
     }
 
     onBeforeUnmount(() => {
@@ -368,11 +367,11 @@ export default defineComponent({
         dataGridRef.value?.api.rows.insertDataBefore(rowId, rows) ?? false,
       insertRowAfter: (rowId: string | number, rows: readonly DataGridRowNodeInput<unknown>[]) =>
         dataGridRef.value?.api.rows.insertDataAfter(rowId, rows) ?? false,
-      insertColumnsAt: (index: number, columns: readonly DataGridAppColumnDef[]) =>
+      insertColumnsAt: (index: number, columns: readonly DataGridAppColumnInput[]) =>
         dataGridRef.value?.api.columns.insertAt(index, columns) ?? false,
-      insertColumnBefore: (columnKey: string, columns: readonly DataGridAppColumnDef[]) =>
+      insertColumnBefore: (columnKey: string, columns: readonly DataGridAppColumnInput[]) =>
         dataGridRef.value?.api.columns.insertBefore(columnKey, columns) ?? false,
-      insertColumnAfter: (columnKey: string, columns: readonly DataGridAppColumnDef[]) =>
+      insertColumnAfter: (columnKey: string, columns: readonly DataGridAppColumnInput[]) =>
         dataGridRef.value?.api.columns.insertAfter(columnKey, columns) ?? false,
     })
 

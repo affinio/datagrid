@@ -47,8 +47,8 @@ const rows = ref([
 ])
 
 const columns = [
-  { key: "service", label: "Service", width: 220 },
-  { key: "owner", label: "Owner", width: 180 },
+  { key: "service", label: "Service", initialState: { width: 220 } },
+  { key: "owner", label: "Owner", initialState: { width: 180 } },
 ]
 
 const columnState = ref(null)

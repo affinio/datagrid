@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { createClientRowModel, createDataGridColumnModel } from "../index"
 import type { DataGridFilterSnapshot, DataGridRowModelSnapshot, DataGridRowNodeInput, DataGridSortState } from "../rowModel"
-import type { DataGridColumnDef, DataGridColumnModelSnapshot } from "../columnModel"
+import type { DataGridColumnInput, DataGridColumnModelSnapshot } from "../columnModel"
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -16,11 +16,11 @@ function buildRowInputs(count: number): DataGridRowNodeInput<{ id: number; value
   }))
 }
 
-function buildColumns(): DataGridColumnDef[] {
+function buildColumns(): DataGridColumnInput[] {
   return [
-    { key: "id", width: 120, pin: "left", meta: { isSystem: true } },
-    { key: "value", width: 200, pin: "none", meta: { formatter: "text" } },
-    { key: "owner", width: 180, pin: "none" },
+    { key: "id", initialState: { width: 120, pin: "left" }, meta: { isSystem: true } },
+    { key: "value", initialState: { width: 200, pin: "none" }, meta: { formatter: "text" } },
+    { key: "owner", initialState: { width: 180, pin: "none" } },
   ]
 }
 

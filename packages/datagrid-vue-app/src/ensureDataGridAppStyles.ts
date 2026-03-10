@@ -77,6 +77,15 @@ const DATA_GRID_APP_STYLES = `
   background: var(--datagrid-viewport-bg);
 }
 
+.grid-body-viewport:focus,
+.grid-body-viewport:focus-visible,
+.grid-header-viewport:focus,
+.grid-header-viewport:focus-visible,
+.grid-stage:focus,
+.grid-stage:focus-visible {
+  outline: none;
+}
+
 .grid-header-row,
 .grid-row {
   display: flex;

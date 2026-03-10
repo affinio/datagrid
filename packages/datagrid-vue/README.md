@@ -222,7 +222,7 @@ import { useDataGridRuntime } from "@affino/datagrid-vue"
 
 const rows = ref([])
 const columns = ref([
-  { key: "service", label: "Service", width: 220 },
+  { key: "service", label: "Service", initialState: { width: 220 } },
 ])
 
 const { api, columnSnapshot } = useDataGridRuntime({
@@ -369,8 +369,8 @@ const rows = ref([
 ])
 
 const columns = [
-  { key: "service", label: "Service", width: 220 },
-  { key: "owner", label: "Owner", width: 180 },
+  { key: "service", label: "Service", initialState: { width: 220 } },
+  { key: "owner", label: "Owner", initialState: { width: 180 } },
 ]
 
 const columnState = ref(null)
@@ -403,9 +403,12 @@ const rows = ref([
 ])
 
 const columns = ref([
-  { key: "service", label: "Service", width: 220 },
-  { key: "owner", label: "Owner", width: 180 },
+  { key: "service", label: "Service", initialState: { width: 220 } },
+  { key: "owner", label: "Owner", initialState: { width: 180 } },
 ])
+
+Authored columns now use `DataGridColumnInput`.
+Put mutable layout defaults in `initialState`, for example `initialState.width`, `initialState.pin`, `initialState.visible`.
 
 const grid = useAffinoDataGrid({
   rows,

@@ -11,6 +11,7 @@ describe("useDataGridKeyboardCommandRouter contract", () => {
     const copySelection = vi.fn(async () => true)
     const pasteSelection = vi.fn(async () => true)
     const cutSelection = vi.fn(async () => true)
+    const selectAllCells = vi.fn()
 
     const router = useDataGridKeyboardCommandRouter({
       isRangeMoving: () => false,
@@ -18,6 +19,7 @@ describe("useDataGridKeyboardCommandRouter contract", () => {
       closeContextMenu: vi.fn(),
       focusViewport: vi.fn(),
       openContextMenuFromCurrentCell: vi.fn(),
+      selectAllCells,
       runHistoryAction,
       copySelection,
       pasteSelection,
@@ -50,6 +52,11 @@ describe("useDataGridKeyboardCommandRouter contract", () => {
     const cutEvent = createEvent("x", { ctrlKey: true })
     expect(router.dispatchKeyboardCommands(cutEvent)).toBe(true)
     expect(cutSelection).toHaveBeenCalledWith("keyboard")
+
+    const selectAllEvent = createEvent("a", { metaKey: true })
+    expect(router.dispatchKeyboardCommands(selectAllEvent)).toBe(true)
+    expect(selectAllEvent.defaultPrevented).toBe(true)
+    expect(selectAllCells).toHaveBeenCalledWith("keyboard")
   })
 
   it("handles range-moving and context menu guards with focus/escape semantics", () => {
@@ -68,6 +75,7 @@ describe("useDataGridKeyboardCommandRouter contract", () => {
       closeContextMenu,
       focusViewport,
       openContextMenuFromCurrentCell,
+      selectAllCells: vi.fn(),
       runHistoryAction: vi.fn(async () => true),
       copySelection: vi.fn(async () => true),
       pasteSelection: vi.fn(async () => true),

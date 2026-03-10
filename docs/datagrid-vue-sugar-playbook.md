@@ -21,16 +21,17 @@ Closure source of truth: `docs/archive/datagrid/checklists/datagrid-vue-sugar-id
 ```ts
 import { ref } from "vue"
 import { useAffinoDataGrid } from "@affino/datagrid-vue"
+import type { DataGridColumnInput } from "@affino/datagrid-core"
 
 const rows = ref([
   { rowId: "1", service: "edge-gateway", owner: "NOC", region: "eu-west" },
   { rowId: "2", service: "billing-api", owner: "Payments", region: "us-east" },
 ])
 
-const columns = ref([
-  { key: "service", label: "Service", width: 220 },
-  { key: "owner", label: "Owner", width: 180 },
-  { key: "region", label: "Region", width: 140 },
+const columns = ref<DataGridColumnInput[]>([
+  { key: "service", label: "Service", initialState: { width: 220 } },
+  { key: "owner", label: "Owner", initialState: { width: 180 } },
+  { key: "region", label: "Region", initialState: { width: 140 } },
 ])
 
 const grid = useAffinoDataGrid({
@@ -63,16 +64,19 @@ Row identity contract (required):
 ```ts
 import { ref } from "vue"
 import { useAffinoDataGrid } from "@affino/datagrid-vue"
-import type { DataGridAdvancedFilterExpression } from "@affino/datagrid-core"
+import type { DataGridAdvancedFilterExpression, DataGridColumnInput } from "@affino/datagrid-core"
 
 const rows = ref<IncidentRow[]>(seedRows)
-const columns = ref([
-  { key: "service", label: "Service", width: 220 },
-  { key: "owner", label: "Owner", width: 180 },
-  { key: "region", label: "Region", width: 140 },
-  { key: "severity", label: "Severity", width: 120 },
-  { key: "latencyMs", label: "Latency", width: 120 },
+const columns = ref<DataGridColumnInput[]>([
+  { key: "service", label: "Service", initialState: { width: 220 }, capabilities: { sortable: true, filterable: true } },
+  { key: "owner", label: "Owner", initialState: { width: 180 }, capabilities: { sortable: true, filterable: true } },
+  { key: "region", label: "Region", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+  { key: "severity", label: "Severity", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
+  { key: "latencyMs", label: "Latency", dataType: "number", initialState: { width: 120 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true } },
 ])
+
+`useAffinoDataGrid()` consumes authored columns as `DataGridColumnInput[]`.
+Mutable layout state (`visible`, `pin`, `width`) belongs in `initialState` and later lives in runtime column state, not in `DataGridColumnDef`.
 
 const grid = useAffinoDataGrid({
   rows,

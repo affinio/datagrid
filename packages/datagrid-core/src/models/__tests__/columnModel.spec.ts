@@ -6,7 +6,7 @@ describe("createDataGridColumnModel", () => {
     const model = createDataGridColumnModel({
       columns: [
         { key: "a", label: "A" },
-        { key: "b", label: "B", visible: false },
+        { key: "b", label: "B", initialState: { visible: false } },
         { key: "c", label: "C" },
       ],
     })
@@ -43,7 +43,7 @@ describe("createDataGridColumnModel", () => {
     const model = createDataGridColumnModel({
       columns: [
         { key: "id" },
-        { key: "status", pin: "right", width: 120 },
+        { key: "status", initialState: { pin: "right", width: 120 } },
       ],
     })
 
@@ -68,6 +68,115 @@ describe("createDataGridColumnModel", () => {
       align: "left",
       formatter: "text",
     })
+    model.dispose()
+  })
+
+  it("preserves nested semantic column contracts", () => {
+    const model = createDataGridColumnModel({
+      columns: [
+        {
+          key: "amount",
+          field: "billing.amount",
+          label: "Amount",
+          dataType: "currency",
+          presentation: {
+            align: "right",
+            headerAlign: "center",
+          },
+          capabilities: {
+            editable: true,
+            sortable: true,
+            filterable: true,
+            aggregatable: true,
+          },
+          constraints: {
+            min: 0,
+            max: 10_000,
+          },
+        },
+      ],
+    })
+
+    const column = model.getColumn("amount")
+    expect(column?.column.field).toBe("billing.amount")
+    expect(column?.column.dataType).toBe("currency")
+    expect(column?.column.presentation).toEqual({
+      align: "right",
+      headerAlign: "center",
+    })
+    expect(column?.column.capabilities).toEqual({
+      editable: true,
+      sortable: true,
+      filterable: true,
+      aggregatable: true,
+    })
+    expect(column?.column.constraints).toEqual({
+      min: 0,
+      max: 10_000,
+    })
+    model.dispose()
+  })
+
+  it("separates immutable definitions from runtime state and freezes snapshots", () => {
+    const model = createDataGridColumnModel({
+      columns: [
+        {
+          key: "amount",
+          label: "Amount",
+          minWidth: 100,
+          maxWidth: 160,
+          initialState: {
+            visible: false,
+            pin: "left",
+            width: 220,
+          },
+        },
+        {
+          key: "name",
+          label: "Name",
+        },
+      ],
+    })
+
+    const snapshot = model.getSnapshot()
+    const amount = snapshot.byKey.amount
+
+    expect(amount?.column).toEqual({
+      key: "amount",
+      label: "Amount",
+      minWidth: 100,
+      maxWidth: 160,
+    })
+    expect(amount?.state).toEqual({
+      visible: false,
+      pin: "left",
+      width: 160,
+    })
+    expect(Object.isFrozen(snapshot)).toBe(true)
+    expect(Object.isFrozen(snapshot.columns)).toBe(true)
+    expect(Object.isFrozen(snapshot.order)).toBe(true)
+    expect(Object.isFrozen(snapshot.byKey)).toBe(true)
+    expect(Object.isFrozen(amount ?? {})).toBe(true)
+    expect(Object.isFrozen(amount?.column ?? {})).toBe(true)
+    expect(Object.isFrozen(amount?.state ?? {})).toBe(true)
+    expect(snapshot.pinnedLeftColumns.map(column => column.key)).toEqual([])
+    expect(snapshot.centerColumns.map(column => column.key)).toEqual(["name"])
+    expect(snapshot.pinnedRightColumns).toEqual([])
+
+    model.dispose()
+  })
+
+  it("clamps runtime widths against definition constraints", () => {
+    const model = createDataGridColumnModel({
+      columns: [{ key: "amount", minWidth: 120, maxWidth: 240 }],
+    })
+
+    model.setColumnWidth("amount", 20)
+    expect(model.getColumn("amount")?.width).toBe(120)
+
+    model.setColumnWidth("amount", 480)
+    expect(model.getColumn("amount")?.width).toBe(240)
+
     model.dispose()
   })
 

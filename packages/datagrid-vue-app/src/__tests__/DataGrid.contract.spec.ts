@@ -2,6 +2,7 @@ import { nextTick } from "vue"
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
 import DataGrid from "../DataGrid"
+import DataGridRuntimeHost from "../DataGridRuntimeHost"
 
 interface DemoRow {
   rowId: string
@@ -261,6 +262,35 @@ describe("DataGrid app facade contract", () => {
 
     const updates = wrapper.emitted("update:state") ?? []
     expect(updates.length).toBeGreaterThan(0)
+
+    wrapper.unmount()
+  })
+
+  it("does not emit unified state updates for selection-only changes", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const initialUpdateCount = (wrapper.emitted("update:state") ?? []).length
+    const runtimeHost = wrapper.findComponent(DataGridRuntimeHost)
+
+    runtimeHost.vm.$emit("selection-change", {
+      snapshot: {
+        activeCell: { rowIndex: 0, columnIndex: 0 },
+        anchorCell: { rowIndex: 0, columnIndex: 0 },
+        ranges: [{ startRow: 0, endRow: 2, startCol: 0, endCol: 2 }],
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect((wrapper.emitted("update:state") ?? []).length).toBe(initialUpdateCount)
+    expect((wrapper.emitted("selection-change") ?? []).length).toBe(1)
 
     wrapper.unmount()
   })

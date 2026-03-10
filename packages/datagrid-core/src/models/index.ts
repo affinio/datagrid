@@ -404,12 +404,21 @@ export type {
 export { createServerBackedRowModel } from "./serverBackedRowModel.js"
 
 export type {
+  DataGridColumnCapabilities,
+  DataGridColumnConstraintValue,
+  DataGridColumnConstraints,
+  DataGridColumnDataType,
   DataGridColumnDef,
+  DataGridColumnInitialState,
+  DataGridColumnInput,
   DataGridColumnModel,
   DataGridColumnModelListener,
   DataGridColumnModelSnapshot,
   DataGridColumnPin,
+  DataGridColumnPresentation,
   DataGridColumnSnapshot,
+  DataGridColumnState,
+  DataGridColumnValueAccessors,
   CreateDataGridColumnModelOptions,
 } from "./columnModel.js"
 export { createDataGridColumnModel } from "./columnModel.js"

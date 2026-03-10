@@ -37,6 +37,8 @@ interface DataGridAppPointer {
 type DataGridAppRowWithId<TRow> = TRow & { rowId: string | number }
 type DataGridAppPinnedOrigin = "left" | "right" | "center"
 
+const DRAG_SELECTION_POINTER_THRESHOLD_PX = 4
+
 export interface UseDataGridAppInteractionControllerOptions<
   TRow extends Record<string, unknown>,
   TSnapshot,
@@ -122,11 +124,17 @@ export function useDataGridAppInteractionController<
   const dragPointer = ref<DataGridAppPointer | null>(null)
   const lastDragCoord = ref<DataGridAppCellCoord | null>(null)
   const dragSelectionOriginPin = ref<DataGridAppPinnedOrigin | null>(null)
+  const pendingDragSelection = ref(false)
+  const pendingDragPointerStart = ref<DataGridAppPointer | null>(null)
+  const pendingDragCoord = ref<DataGridAppCellCoord | null>(null)
   const isFillDragging = ref(false)
   const fillPointer = ref<DataGridAppPointer | null>(null)
   const fillBaseRange = ref<DataGridCopyRange | null>(null)
   const fillPreviewRange = ref<DataGridCopyRange | null>(null)
   const isRangeMoving = ref(false)
+  const pendingRangeMove = ref(false)
+  const pendingRangeMoveCoord = ref<DataGridAppCellCoord | null>(null)
+  const pendingRangeMovePointerStart = ref<DataGridAppPointer | null>(null)
   const rangeMovePointer = ref<DataGridAppPointer | null>(null)
   const rangeMoveBaseRange = ref<DataGridCopyRange | null>(null)
   const rangeMoveOrigin = ref<DataGridAppCellCoord | null>(null)
@@ -151,11 +159,25 @@ export function useDataGridAppInteractionController<
     focusViewport()
   }
 
+  const clearPendingDragSelection = (): void => {
+    pendingDragSelection.value = false
+    pendingDragPointerStart.value = null
+    pendingDragCoord.value = null
+  }
+
+  const clearPendingRangeMove = (): void => {
+    pendingRangeMove.value = false
+    pendingRangeMoveCoord.value = null
+    pendingRangeMovePointerStart.value = null
+  }
+
   const stopPointerSelection = (): void => {
     isPointerSelectingCells.value = false
     dragPointer.value = null
     lastDragCoord.value = null
     dragSelectionOriginPin.value = null
+    clearPendingDragSelection()
+    clearPendingRangeMove()
   }
 
   const resolveColumnPin = (columnIndex: number): DataGridAppPinnedOrigin => {
@@ -164,6 +186,46 @@ export function useDataGridAppInteractionController<
       return pin
     }
     return "center"
+  }
+
+  const shouldActivateDragSelection = (pointer: DataGridAppPointer): boolean => {
+    const startPointer = pendingDragPointerStart.value
+    if (!startPointer) {
+      return false
+    }
+    const deltaX = Math.abs(pointer.clientX - startPointer.clientX)
+    const deltaY = Math.abs(pointer.clientY - startPointer.clientY)
+    return Math.max(deltaX, deltaY) >= DRAG_SELECTION_POINTER_THRESHOLD_PX
+  }
+
+  const shouldActivateRangeMove = (pointer: DataGridAppPointer): boolean => {
+    const startPointer = pendingRangeMovePointerStart.value
+    if (!startPointer) {
+      return false
+    }
+    const deltaX = Math.abs(pointer.clientX - startPointer.clientX)
+    const deltaY = Math.abs(pointer.clientY - startPointer.clientY)
+    return Math.max(deltaX, deltaY) >= DRAG_SELECTION_POINTER_THRESHOLD_PX
+  }
+
+  const activatePendingDragSelection = (pointer: DataGridAppPointer): boolean => {
+    if (!pendingDragSelection.value || !pendingDragCoord.value) {
+      return false
+    }
+    isPointerSelectingCells.value = true
+    dragPointer.value = pointer
+    lastDragCoord.value = pendingDragCoord.value
+    clearPendingDragSelection()
+    return true
+  }
+
+  const activatePendingRangeMove = (pointer: DataGridAppPointer): boolean => {
+    const coord = pendingRangeMoveCoord.value
+    if (!pendingRangeMove.value || !coord) {
+      return false
+    }
+    clearPendingRangeMove()
+    return rangeMoveStart.startRangeMove(coord, pointer)
   }
 
   const isCoordInsideRange = (coord: DataGridAppCellCoord, range: DataGridCopyRange): boolean => {
@@ -626,6 +688,23 @@ export function useDataGridAppInteractionController<
     closeContextMenu: () => undefined,
     focusViewport,
     openContextMenuFromCurrentCell: () => undefined,
+    selectAllCells: () => {
+      if (options.mode.value !== "base") {
+        return
+      }
+      const lastRowIndex = options.totalRows.value - 1
+      const lastColumnIndex = options.visibleColumns.value.length - 1
+      if (lastRowIndex < 0 || lastColumnIndex < 0) {
+        return
+      }
+      options.applySelectionRange({
+        startRow: 0,
+        endRow: lastRowIndex,
+        startColumn: 0,
+        endColumn: lastColumnIndex,
+      })
+      focusViewport()
+    },
     runHistoryAction: direction => historyActionRunner.runHistoryAction(direction, "keyboard"),
     copySelection: options.copySelectedCells,
     pasteSelection: options.pasteSelectedCells,
@@ -682,13 +761,16 @@ export function useDataGridAppInteractionController<
       stopFillSelection(commit)
     },
     setDragSelecting: value => {
-      isPointerSelectingCells.value = value
+      pendingDragSelection.value = value
+      if (!value) {
+        clearPendingDragSelection()
+      }
     },
     setLastDragCoord: coord => {
-      lastDragCoord.value = coord
+      pendingDragCoord.value = coord
     },
     setDragPointer: pointer => {
-      dragPointer.value = pointer
+      pendingDragPointerStart.value = pointer
     },
     applyCellSelection: (coord, extend, fallbackAnchor) => {
       options.applyCellSelectionByCoord(coord, extend, fallbackAnchor)
@@ -716,12 +798,36 @@ export function useDataGridAppInteractionController<
     if (!columnKey) {
       return
     }
+    const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+    const rowIndex = options.viewportRowStart.value + rowOffset
+    const coord = options.normalizeCellCoord({
+      rowIndex,
+      columnIndex,
+      rowId: row.rowId ?? null,
+    })
+    const currentRange = options.resolveSelectionRange()
+
+    if (
+      options.mode.value === "base"
+      && event.button === 0
+      && !event.shiftKey
+      && coord
+      && currentRange
+      && isCoordInsideRange(coord, currentRange)
+    ) {
+      event.preventDefault()
+      focusViewport()
+      pendingRangeMove.value = true
+      pendingRangeMoveCoord.value = coord
+      pendingRangeMovePointerStart.value = { clientX: event.clientX, clientY: event.clientY }
+      target?.focus({ preventScroll: true })
+      return
+    }
 
     if (options.mode.value === "base") {
       const handled = cellPointerDownRouter.dispatchCellPointerDown(row, columnKey, event)
       if (handled) {
         dragSelectionOriginPin.value = resolveColumnPin(columnIndex)
-        const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
         target?.focus({ preventScroll: true })
         return
       }
@@ -734,12 +840,11 @@ export function useDataGridAppInteractionController<
     if (options.mode.value !== "base") {
       return
     }
-    isPointerSelectingCells.value = true
-    dragPointer.value = { clientX: event.clientX, clientY: event.clientY }
+    pendingDragSelection.value = true
+    pendingDragPointerStart.value = { clientX: event.clientX, clientY: event.clientY }
     dragSelectionOriginPin.value = resolveColumnPin(columnIndex)
-    const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
     target?.focus({ preventScroll: true })
-    lastDragCoord.value = resolveCellCoordFromElement(target)
+    pendingDragCoord.value = resolveCellCoordFromElement(target)
   }
 
   const handleCellKeydown = (
@@ -799,6 +904,17 @@ export function useDataGridAppInteractionController<
   }
 
   const handleWindowMouseMove = (event: MouseEvent): void => {
+    const pointer = { clientX: event.clientX, clientY: event.clientY }
+    if (pendingRangeMove.value && !isRangeMoving.value) {
+      if (!shouldActivateRangeMove(pointer)) {
+        return
+      }
+      if (activatePendingRangeMove(pointer)) {
+        rangeMovePointer.value = pointer
+        pointerPreviewRouter.applyRangeMovePreviewFromPointer()
+        return
+      }
+    }
     if (isRangeMoving.value) {
       rangeMovePointer.value = { clientX: event.clientX, clientY: event.clientY }
       pointerPreviewRouter.applyRangeMovePreviewFromPointer()
@@ -809,15 +925,28 @@ export function useDataGridAppInteractionController<
       pointerPreviewRouter.applyFillPreviewFromPointer()
       return
     }
+    if (pendingDragSelection.value && !isPointerSelectingCells.value) {
+      if (!shouldActivateDragSelection(pointer)) {
+        return
+      }
+      activatePendingDragSelection(pointer)
+    }
     if (!isPointerSelectingCells.value) {
       return
     }
-    dragPointer.value = { clientX: event.clientX, clientY: event.clientY }
+    dragPointer.value = pointer
     pointerAutoScroll.startInteractionAutoScroll()
     dragPointerSelection.applyDragSelectionFromPointer()
   }
 
   const handleWindowMouseUp = (): void => {
+    if (pendingRangeMove.value && !isRangeMoving.value) {
+      const coord = pendingRangeMoveCoord.value
+      clearPendingRangeMove()
+      if (coord) {
+        options.applyCellSelectionByCoord(coord, false)
+      }
+    }
     if (isRangeMoving.value) {
       rangeMoveLifecycle.stopRangeMove(true)
     }
