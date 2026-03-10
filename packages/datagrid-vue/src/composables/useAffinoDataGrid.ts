@@ -47,8 +47,6 @@ import type {
   AffinoDataGridSetFilterValueMode,
   UseAffinoDataGridOptions,
   UseAffinoDataGridResult,
-  UseAffinoDataGridMinimalOptions,
-  UseAffinoDataGridMinimalResult,
 } from "./useAffinoDataGrid.types"
 
 function clonePaginationSnapshot(
@@ -456,7 +454,6 @@ export function useAffinoDataGrid<TRow>(
     cutSelectedRows,
     pasteRowsAppend,
     editingEnabled,
-    editingEnum,
     enumEditorEnabled,
     enumEditorPrimitive,
     resolveEnumEditorOptions,

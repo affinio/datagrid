@@ -9,7 +9,6 @@ import type {
 import {
   areFormulaValuesEqual,
   compareFormulaValues,
-  coerceFormulaValueToBoolean,
   coerceFormulaValueToNumber,
   isFormulaErrorValue,
   isFormulaValuePresent,

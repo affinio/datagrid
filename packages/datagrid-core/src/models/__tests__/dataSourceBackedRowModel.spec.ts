@@ -11,9 +11,9 @@ import type {
   DataGridDataSourcePushListener,
 } from "../server/dataSourceProtocol"
 
-interface PullCall {
+interface PullCall<TRow> {
   request: DataGridDataSourcePullRequest
-  resolve: (result: DataGridDataSourcePullResult<{ id: number; value: string }>) => void
+  resolve: (result: DataGridDataSourcePullResult<TRow>) => void
   reject: (reason?: unknown) => void
 }
 
@@ -23,11 +23,11 @@ function flushMicrotasks(): Promise<void> {
 
 describe("createDataSourceBackedRowModel", () => {
   it("enforces abort-first backpressure under viewport overload", async () => {
-    const calls: PullCall[] = []
+    const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       pull(request) {
         return new Promise((resolve, reject) => {
-          const call: PullCall = {
+          const call: PullCall<{ id: number; value: string }> = {
             request,
             resolve,
             reject,
@@ -86,11 +86,11 @@ describe("createDataSourceBackedRowModel", () => {
   })
 
   it("coalesces identical inflight viewport pulls instead of spawning duplicate requests", async () => {
-    const calls: PullCall[] = []
+    const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       pull(request) {
         return new Promise((resolve, reject) => {
-          const call: PullCall = {
+          const call: PullCall<{ id: number; value: string }> = {
             request,
             resolve,
             reject,
@@ -139,11 +139,11 @@ describe("createDataSourceBackedRowModel", () => {
   })
 
   it("coalesces subset viewport demand when broader inflight range already covers it", async () => {
-    const calls: PullCall[] = []
+    const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       pull(request) {
         return new Promise((resolve, reject) => {
-          const call: PullCall = {
+          const call: PullCall<{ id: number; value: string }> = {
             request,
             resolve,
             reject,
@@ -189,11 +189,11 @@ describe("createDataSourceBackedRowModel", () => {
   })
 
   it("defers lower-priority invalidation pull while critical viewport pull is inflight", async () => {
-    const calls: PullCall[] = []
+    const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       pull(request) {
         return new Promise((resolve, reject) => {
-          const call: PullCall = {
+          const call: PullCall<{ id: number; value: string }> = {
             request,
             resolve,
             reject,
@@ -258,11 +258,11 @@ describe("createDataSourceBackedRowModel", () => {
   })
 
   it("preempts lower-priority inflight pull when critical viewport demand arrives", async () => {
-    const calls: PullCall[] = []
+    const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       pull(request) {
         return new Promise((resolve, reject) => {
-          const call: PullCall = {
+          const call: PullCall<{ id: number; value: string }> = {
             request,
             resolve,
             reject,
@@ -312,11 +312,11 @@ describe("createDataSourceBackedRowModel", () => {
   })
 
   it("collapses repeated deferred invalidation pulls into single pending request", async () => {
-    const calls: PullCall[] = []
+    const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       pull(request) {
         return new Promise((resolve, reject) => {
-          const call: PullCall = {
+          const call: PullCall<{ id: number; value: string }> = {
             request,
             resolve,
             reject,
@@ -383,11 +383,11 @@ describe("createDataSourceBackedRowModel", () => {
   })
 
   it("propagates group-by state into pull request and issues group-change pull", async () => {
-    const calls: PullCall[] = []
+    const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       pull(request) {
         return new Promise((resolve, reject) => {
-          const call: PullCall = {
+          const call: PullCall<{ id: number; value: string }> = {
             request,
             resolve,
             reject,
@@ -509,11 +509,11 @@ describe("createDataSourceBackedRowModel", () => {
   })
 
   it("keeps only last pull active under sustained viewport churn", async () => {
-    const calls: PullCall[] = []
+    const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       pull(request) {
         return new Promise((resolve, reject) => {
-          const call: PullCall = {
+          const call: PullCall<{ id: number; value: string }> = {
             request,
             resolve,
             reject,
@@ -810,7 +810,7 @@ describe("createDataSourceBackedRowModel", () => {
   })
 
   it("sends pivot+pagination context and reuses cursor across pulls", async () => {
-    const calls: PullCall[] = []
+    const calls: PullCall<{ id: number; value: number; region: string; year: number }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: number; region: string; year: number }> = {
       pull(request) {
         return new Promise((resolve, reject) => {
@@ -877,7 +877,7 @@ describe("createDataSourceBackedRowModel", () => {
   })
 
   it("keeps pivot column metadata when server returns partial upsert/pull payloads", async () => {
-    const calls: PullCall[] = []
+    const calls: PullCall<{ id: number; value: number; region: string; year: number }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: number; region: string; year: number }> = {
       pull(request) {
         return new Promise((resolve, reject) => {

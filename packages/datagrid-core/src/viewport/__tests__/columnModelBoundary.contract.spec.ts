@@ -4,7 +4,7 @@ import {
   createDataGridColumnModel,
 } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
-import type { VisibleRow } from "../../types"
+import type { DataGridColumnInput, VisibleRow } from "../../types"
 
 function buildRows(count: number): VisibleRow<{ id: number; value: string }>[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -42,12 +42,13 @@ describe("table viewport column-model boundary", () => {
   it("takes order/visibility/pin/width from DataGridColumnModel", () => {
     const rows = buildRows(120)
     const rowModel = createClientRowModel({ rows })
+    const columns: DataGridColumnInput[] = [
+      { key: "a", label: "A", initialState: { width: 120 } },
+      { key: "b", label: "B", initialState: { width: 140 } },
+      { key: "c", label: "C", initialState: { width: 160 } },
+    ]
     const columnModel = createDataGridColumnModel({
-      columns: [
-        { key: "a", label: "A", width: 120 },
-        { key: "b", label: "B", width: 140 },
-        { key: "c", label: "C", width: 160 },
-      ],
+      columns,
     })
     columnModel.setColumnOrder(["c", "a", "b"])
     columnModel.setColumnVisibility("b", false)
@@ -80,17 +81,19 @@ describe("table viewport column-model boundary", () => {
   it("supports switching to another column model at runtime", () => {
     const rows = buildRows(60)
     const rowModel = createClientRowModel({ rows })
+    const firstColumns: DataGridColumnInput[] = [
+      { key: "x", label: "X", initialState: { width: 120 } },
+      { key: "y", label: "Y", initialState: { width: 120 } },
+    ]
     const firstModel = createDataGridColumnModel({
-      columns: [
-        { key: "x", label: "X", width: 120 },
-        { key: "y", label: "Y", width: 120 },
-      ],
+      columns: firstColumns,
     })
+    const secondColumns: DataGridColumnInput[] = [
+      { key: "y", label: "Y", initialState: { width: 180, pin: "right" } },
+      { key: "z", label: "Z", initialState: { width: 220 } },
+    ]
     const secondModel = createDataGridColumnModel({
-      columns: [
-        { key: "y", label: "Y", width: 180, pin: "right" },
-        { key: "z", label: "Z", width: 220 },
-      ],
+      columns: secondColumns,
     })
 
     const { container, header, cleanup } = mountLayoutNodes()
@@ -106,10 +109,7 @@ describe("table viewport column-model boundary", () => {
     expect(controller.derived.columns.visibleColumns.value.map(column => column.key)).toContain("x")
 
     controller.setColumnModel(secondModel)
-    secondModel.setColumns([
-      { key: "y", label: "Y", width: 180, pin: "right" },
-      { key: "z", label: "Z", width: 220 },
-    ])
+    secondModel.setColumns(secondColumns)
     controller.setViewportMetrics({ containerWidth: 900, containerHeight: 420, headerHeight: 40 })
     controller.refresh(true)
     controller.refresh(true)

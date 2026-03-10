@@ -192,7 +192,7 @@ export interface DataGridPivotLayoutColumnModel {
   setColumnPin(key: string, pin: DataGridColumnPin): void
 }
 
-export interface DataGridPivotLayoutRowModelSnapshot<TRow = unknown> {
+export interface DataGridPivotLayoutRowModelSnapshot {
   rowCount: number
   sortModel: readonly DataGridSortState[]
   filterModel: DataGridFilterSnapshot | null
@@ -202,7 +202,7 @@ export interface DataGridPivotLayoutRowModelSnapshot<TRow = unknown> {
 }
 
 export interface DataGridPivotLayoutRowModel<TRow = unknown> {
-  getSnapshot(): DataGridPivotLayoutRowModelSnapshot<TRow>
+  getSnapshot(): DataGridPivotLayoutRowModelSnapshot
   getPivotModel(): import("./contracts.js").DataGridPivotSpec | null
   getAggregationModel(): DataGridAggregationModel<TRow> | null
   getRowsInRange(range: { start: number; end: number }): readonly DataGridRowNode<TRow>[]

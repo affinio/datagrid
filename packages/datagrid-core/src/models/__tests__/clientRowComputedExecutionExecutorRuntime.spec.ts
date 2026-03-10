@@ -24,6 +24,12 @@ describe("createDataGridComputedExecutionExecutorRuntime", () => {
       originalIndex: index,
       displayIndex: index,
       kind: "leaf",
+      state: {
+        selected: false,
+        group: false,
+        pinned: "none",
+        expanded: false,
+      },
     }))
     const columnValuesByField = new Map<string, unknown[]>()
     const getFieldValues = (field: string): unknown[] => {
@@ -129,6 +135,12 @@ describe("createDataGridComputedExecutionExecutorRuntime", () => {
       originalIndex: index,
       displayIndex: index,
       kind: "leaf",
+      state: {
+        selected: false,
+        group: false,
+        pinned: "none",
+        expanded: false,
+      },
     }))
     const columnValuesByField = new Map<string, unknown[]>()
     const getFieldValues = (field: string): unknown[] => {

@@ -6,11 +6,7 @@ import type { DataGridFormulaFunctionDefinition } from "./formula/formulaEngine.
 import type {
   DataGridAggOp,
   DataGridPivotColumn,
-  DataGridPivotColumnGrandTotalPosition,
-  DataGridPivotColumnPathSegment,
-  DataGridPivotColumnSubtotalPosition,
   DataGridPivotSpec,
-  DataGridPivotValueSpec,
 } from "./pivot/pivotContracts.js"
 import type {
   DataGridPivotCellDrilldown,
@@ -60,10 +56,12 @@ export type {
 export type {
   DataGridAggOp,
   DataGridPivotColumn,
+  DataGridPivotSpec,
+} from "./pivot/pivotContracts.js"
+export type {
   DataGridPivotColumnGrandTotalPosition,
   DataGridPivotColumnPathSegment,
   DataGridPivotColumnSubtotalPosition,
-  DataGridPivotSpec,
   DataGridPivotValueSpec,
 } from "./pivot/pivotContracts.js"
 export type {
@@ -353,6 +351,7 @@ export interface DataGridRowNode<T = unknown> {
 }
 
 export interface DataGridRowModelSnapshot<T = unknown> {
+  readonly __rowType__?: T | undefined
   revision?: number
   kind: DataGridRowModelKind
   rowCount: number
@@ -396,6 +395,36 @@ export type DataGridProjectionInvalidationReason =
   | "paginationChanged"
   | "manualRefresh"
 
+export type DataGridProjectionStageTimes = Partial<Record<DataGridProjectionStage, number>>
+
+export interface DataGridProjectionPerformanceDiagnostics {
+  totalTime: number
+  stageTimes: DataGridProjectionStageTimes
+}
+
+export interface DataGridProjectionMemoryDiagnostics {
+  rowIndexBytes: number
+  sortBufferBytes: number
+  groupBuckets: number
+  pivotCells: number
+}
+
+export interface DataGridProjectionRowCounts {
+  source: number
+  afterCompute: number
+  afterFilter: number
+  afterSort: number
+  afterGroup: number
+  afterPivot: number
+  afterAggregate: number
+  afterPaginate: number
+  visible: number
+}
+
+export interface DataGridProjectionPipelineDiagnostics {
+  rowCounts: DataGridProjectionRowCounts
+}
+
 export interface DataGridProjectionDiagnostics {
   version: number
   cycleVersion?: number
@@ -406,6 +435,9 @@ export interface DataGridProjectionDiagnostics {
   lastRecomputeHadActual?: boolean
   lastRecomputedStages?: readonly DataGridProjectionStage[]
   lastBlockedStages?: readonly DataGridProjectionStage[]
+  performance?: DataGridProjectionPerformanceDiagnostics
+  memory?: DataGridProjectionMemoryDiagnostics
+  pipeline?: DataGridProjectionPipelineDiagnostics
   formula?: DataGridProjectionFormulaDiagnostics
   computeStage?: DataGridFormulaComputeStageDiagnostics
 }

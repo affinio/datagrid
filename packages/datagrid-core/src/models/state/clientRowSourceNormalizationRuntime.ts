@@ -2,7 +2,6 @@ import { findDuplicateRowIds } from "../clientRowModelHelpers.js"
 import { reindexSourceRows } from "../clientRowRuntimeUtils.js"
 import {
   normalizeRowNode,
-  type DataGridRowId,
   type DataGridRowIdResolver,
   type DataGridRowNode,
   type DataGridRowNodeInput,

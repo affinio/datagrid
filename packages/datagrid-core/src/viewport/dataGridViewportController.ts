@@ -62,7 +62,6 @@ import {
 import type {
 	ViewportMetricsSnapshot,
 	LayoutMeasurementSnapshot,
-	ImperativeWindowUpdatePayload,
 	DataGridViewportImperativeCallbacks,
 	DataGridViewportControllerOptions,
 	DataGridVirtualWindowSnapshot,
@@ -80,7 +79,6 @@ import {
 export type {
 	ViewportMetricsSnapshot,
 	LayoutMeasurementSnapshot,
-	ImperativeWindowUpdatePayload,
 	ImperativeColumnUpdatePayload,
 	ImperativeRowUpdatePayload,
 	ImperativeScrollSyncPayload,
@@ -92,6 +90,8 @@ export type {
 	ViewportSyncTargets,
 	ViewportSyncState,
 } from "./dataGridViewportTypes"
+
+export type { ImperativeWindowUpdatePayload } from "./dataGridViewportTypes"
 import {
 	createDefaultHostEnvironment,
 	createMonotonicClock,

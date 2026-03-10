@@ -91,6 +91,8 @@ export function createClientRowModelSnapshotBootstrap<T>(
   const snapshotRuntime = createClientRowSnapshotRuntime<T>({
     runtimeState: options.runtimeState,
     runtimeStateStore: options.runtimeStateStore,
+    getSourceRowCount: () => options.getBaseSourceRows().length,
+    getSourceRowIndexSize: () => options.getBaseSourceRows().length,
     getStaleStages: options.getStaleStages,
     getFormulaComputeStageDiagnostics: options.getFormulaComputeStageDiagnostics,
     getViewportRange: options.getViewportRange,

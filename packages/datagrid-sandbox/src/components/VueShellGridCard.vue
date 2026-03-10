@@ -135,16 +135,6 @@
           <button type="button" @click="collapseAllGroups">Collapse all</button>
         </div>
       </div>
-      <ColumnLayoutPanel
-        :is-open="isColumnLayoutPanelOpen"
-        :items="columnLayoutPanelItems"
-        @open="openColumnLayoutPanel"
-        @toggle-visibility="updateColumnVisibility"
-        @move-up="moveColumnUp"
-        @move-down="moveColumnDown"
-        @apply="applyColumnLayoutPanel"
-        @cancel="cancelColumnLayoutPanel"
-      />
       <StatePanel
         :is-open="isStatePanelOpen"
         :import-text="stateImportText"
@@ -169,17 +159,6 @@
         @import-layout="importPivotLayout"
         @clear-import="pivotAdvancedImportText = ''"
       />
-      <AdvancedFilterPanel
-        :is-open="isAdvancedFilterPanelOpen"
-        :clauses="advancedFilterDraftClauses"
-        :columns="advancedFilterColumns"
-        @open="openAdvancedFilterPanel"
-        @add="addAdvancedFilterClause"
-        @remove="removeAdvancedFilterClause"
-        @update-clause="updateAdvancedFilterClause"
-        @apply="applyAdvancedFilterPanel"
-        @cancel="cancelAdvancedFilterPanel"
-      />
       <div class="meta">
         <span>Rows: {{ rows.length }}</span>
         <span>Columns: {{ columns.length }}</span>
@@ -193,11 +172,13 @@
         :rows="rows"
         :columns="columns"
         column-menu
+        column-layout
+        diagnostics
+        advanced-filter
+        aggregations
         :client-row-model-options="clientRowModelOptions"
         :group-by="groupBy"
-        :aggregation-model="aggregationModel"
         :pivot-model="pivotModel"
-        :filter-model="filterModel"
         :pagination="pagination"
         :page-size="paginationPageSize"
         :current-page="Math.max(0, paginationPage - 1)"
@@ -233,14 +214,9 @@ import {
   sugarTheme,
   type DataGridStyleConfig,
 } from "@affino/datagrid-theme";
-import { useDataGridAppAdvancedFilterBuilder } from "@affino/datagrid-vue";
 import type {
-  DataGridAggregationModel,
-  DataGridAdvancedFilterExpression,
-  DataGridAppAdvancedFilterColumnOption,
   DataGridColumnInput,
   DataGridColumnPin,
-  DataGridFilterSnapshot,
   DataGridPivotInteropSnapshot,
   DataGridPivotLayoutImportOptions,
   DataGridPivotLayoutSnapshot,
@@ -256,8 +232,6 @@ import {
   ROW_MODE_OPTIONS,
   type VueTreeRow,
 } from "../sandboxData";
-import AdvancedFilterPanel from "./AdvancedFilterPanel.vue";
-import ColumnLayoutPanel from "./ColumnLayoutPanel.vue";
 import PivotAdvancedPanel from "./PivotAdvancedPanel.vue";
 import StatePanel from "./StatePanel.vue";
 
@@ -291,11 +265,6 @@ interface PublicDataGridExpose {
   ) => boolean;
   expandAllGroups: () => void;
   collapseAllGroups: () => void;
-}
-
-interface ColumnLayoutDraft {
-  order: string[];
-  visibility: Record<string, boolean>;
 }
 
 type ThemePreset = "default" | "industrial" | "sugar" | "custom";
@@ -432,8 +401,6 @@ const pivotLayout = ref<PivotLayoutId>("department-month-revenue");
 const hideUnusedPivotSourceColumns = ref(true);
 const gridRef = ref<PublicDataGridExpose | null>(null);
 
-const isColumnLayoutPanelOpen = ref(false);
-const columnLayoutDraft = ref<ColumnLayoutDraft | null>(null);
 const isStatePanelOpen = ref(false);
 const stateImportText = ref("");
 const stateOutputText = ref("");
@@ -454,20 +421,6 @@ const groupBy = computed(() => {
   }
   return groupByField.value.trim();
 });
-const aggregationModel = computed<DataGridAggregationModel<unknown> | null>(
-  () => {
-    if (props.mode !== "base" || !groupBy.value) {
-      return null;
-    }
-    return {
-      columns: [
-        { key: "amount", op: "sum" },
-        { key: "qty", op: "sum" },
-      ],
-      basis: "filtered",
-    };
-  },
-);
 const pivotModel = computed(() => {
   return props.mode === "pivot" && pivotViewMode.value === "pivot"
     ? (PIVOT_LAYOUTS[pivotLayout.value] ?? null)
@@ -555,9 +508,6 @@ const theme = computed<DataGridStyleConfig | "default">(() => {
   return "default";
 });
 
-const resolvedColumnState = computed(() =>
-  normalizeColumnState(columnState.value, columns.value),
-);
 const effectiveColumnState = computed<DataGridUnifiedColumnState>(() => {
   const base = normalizeColumnState(columnState.value, columns.value);
   const pins: Record<string, DataGridColumnPin> = { ...base.pins };
@@ -610,69 +560,6 @@ const effectiveColumnState = computed<DataGridUnifiedColumnState>(() => {
     pins,
   };
 });
-const resolvedColumnLayoutDraft = computed<ColumnLayoutDraft>(() => {
-  if (columnLayoutDraft.value) {
-    return columnLayoutDraft.value;
-  }
-  return {
-    order: [...effectiveColumnState.value.order],
-    visibility: { ...effectiveColumnState.value.visibility },
-  };
-});
-
-const columnLayoutPanelItems = computed(() => {
-  return resolvedColumnLayoutDraft.value.order.map((key, index, order) => {
-    const column = columns.value.find((entry) => entry.key === key);
-    return {
-      key,
-      label: column?.label ?? key,
-      visible: resolvedColumnLayoutDraft.value.visibility[key] ?? true,
-      canMoveUp: index > 0,
-      canMoveDown: index < order.length - 1,
-    };
-  });
-});
-
-const {
-  isAdvancedFilterPanelOpen,
-  advancedFilterDraftClauses,
-  advancedFilterColumns,
-  appliedAdvancedFilterExpression,
-  openAdvancedFilterPanel,
-  addAdvancedFilterClause,
-  removeAdvancedFilterClause,
-  updateAdvancedFilterClause,
-  cancelAdvancedFilterPanel,
-  applyAdvancedFilterPanel,
-} = useDataGridAppAdvancedFilterBuilder({
-  resolveColumns: (): readonly DataGridAppAdvancedFilterColumnOption[] => {
-    const visibleKeys = new Set(
-      resolvedColumnState.value.order.filter(
-        (key) => resolvedColumnState.value.visibility[key] ?? true,
-      ),
-    );
-    return columns.value
-      .filter((column) => visibleKeys.has(column.key))
-      .map((column) => ({
-        key: column.key,
-        label: column.label ?? column.key,
-      }));
-  },
-});
-
-const filterModel = computed<DataGridFilterSnapshot | null>(() => {
-  const advancedExpression =
-    appliedAdvancedFilterExpression.value as DataGridAdvancedFilterExpression | null;
-  if (!advancedExpression) {
-    return null;
-  }
-  return {
-    columnFilters: {},
-    advancedFilters: {},
-    advancedExpression,
-  };
-});
-
 const shouldHideUnusedPivotSourceColumns = computed(() => {
   return (
     props.mode === "pivot" &&
@@ -720,87 +607,6 @@ const handleStateUpdate = (nextState: DataGridUnifiedState<unknown>): void => {
 const syncSelectionAggregatesLabel = (): void => {
   selectionAggregatesLabel.value =
     gridRef.value?.getSelectionAggregatesLabel() ?? "";
-};
-
-const openColumnLayoutPanel = (): void => {
-  columnLayoutDraft.value = {
-    order: [...resolvedColumnState.value.order],
-    visibility: { ...resolvedColumnState.value.visibility },
-  };
-  isColumnLayoutPanelOpen.value = true;
-};
-
-const cancelColumnLayoutPanel = (): void => {
-  columnLayoutDraft.value = null;
-  isColumnLayoutPanelOpen.value = false;
-};
-
-const updateColumnVisibility = (payload: {
-  key: string;
-  visible: boolean;
-}): void => {
-  if (!columnLayoutDraft.value) {
-    openColumnLayoutPanel();
-  }
-  if (!columnLayoutDraft.value) {
-    return;
-  }
-  columnLayoutDraft.value = {
-    ...columnLayoutDraft.value,
-    visibility: {
-      ...columnLayoutDraft.value.visibility,
-      [payload.key]: payload.visible,
-    },
-  };
-};
-
-const moveColumn = (key: string, direction: -1 | 1): void => {
-  if (!columnLayoutDraft.value) {
-    openColumnLayoutPanel();
-  }
-  const draft = columnLayoutDraft.value;
-  if (!draft) {
-    return;
-  }
-  const currentIndex = draft.order.indexOf(key);
-  if (currentIndex < 0) {
-    return;
-  }
-  const nextIndex = currentIndex + direction;
-  if (nextIndex < 0 || nextIndex >= draft.order.length) {
-    return;
-  }
-  const nextOrder = [...draft.order];
-  const [moved] = nextOrder.splice(currentIndex, 1);
-  if (typeof moved !== "string") {
-    return;
-  }
-  nextOrder.splice(nextIndex, 0, moved);
-  columnLayoutDraft.value = {
-    ...draft,
-    order: nextOrder,
-  };
-};
-
-const moveColumnUp = (key: string): void => {
-  moveColumn(key, -1);
-};
-
-const moveColumnDown = (key: string): void => {
-  moveColumn(key, 1);
-};
-
-const applyColumnLayoutPanel = (): void => {
-  const draft = columnLayoutDraft.value;
-  if (!draft) {
-    return;
-  }
-  const nextState = normalizeColumnState(columnState.value, columns.value);
-  nextState.order = [...draft.order];
-  nextState.visibility = { ...nextState.visibility, ...draft.visibility };
-  columnState.value = nextState;
-  gridRef.value?.applyColumnState(nextState);
-  cancelColumnLayoutPanel();
 };
 
 const exportStatePayload = (): void => {

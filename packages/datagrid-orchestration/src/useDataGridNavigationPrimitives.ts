@@ -18,7 +18,6 @@ export interface DataGridNavigationPrimitiveColumn {
 
 export interface UseDataGridNavigationPrimitivesOptions<
   TCoord extends DataGridNavigationPrimitiveCoord = DataGridNavigationPrimitiveCoord,
-  TRange extends DataGridNavigationPrimitiveRange = DataGridNavigationPrimitiveRange,
   TColumn extends DataGridNavigationPrimitiveColumn = DataGridNavigationPrimitiveColumn,
 > {
   resolveColumns: () => readonly TColumn[]
@@ -61,7 +60,7 @@ export function useDataGridNavigationPrimitives<
   TRange extends DataGridNavigationPrimitiveRange = DataGridNavigationPrimitiveRange,
   TColumn extends DataGridNavigationPrimitiveColumn = DataGridNavigationPrimitiveColumn,
 >(
-  options: UseDataGridNavigationPrimitivesOptions<TCoord, TRange, TColumn>,
+  options: UseDataGridNavigationPrimitivesOptions<TCoord, TColumn>,
 ): UseDataGridNavigationPrimitivesResult<TCoord, TRange> {
   function resolveRowIndex(row: DataGridRowNode<unknown>): number {
     const candidate = [row.displayIndex, row.sourceIndex, row.originalIndex].find(Number.isFinite) ?? 0

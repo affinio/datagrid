@@ -10,14 +10,6 @@ import type {
 import { type DataGridFormulaAstNode } from "../syntax/ast.js"
 import { normalizeFormulaFunctionName } from "../syntax/functions.js"
 import {
-  areFormulaValuesEqual,
-  compareFormulaValues,
-  coerceFormulaValueToBoolean,
-  coerceFormulaValueToNumber,
-  formulaNumberIsTruthy,
-  isFormulaValuePresent,
-} from "../syntax/values.js"
-import {
   buildJitReadValueBody,
   canInlineBuiltinFunction,
   createFormulaJitRuntimeHelpers,

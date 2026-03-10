@@ -96,6 +96,22 @@ function queryColumnMenuAction(action: string): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(`[data-datagrid-column-menu-action="${action}"]`)
 }
 
+function queryAdvancedFilterRoot(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>(".datagrid-advanced-filter")
+}
+
+function queryColumnLayoutRoot(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>(".datagrid-column-layout")
+}
+
+function queryDiagnosticsRoot(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>(".datagrid-diagnostics")
+}
+
+function queryAggregationsRoot(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>(".datagrid-aggregations")
+}
+
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
 const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
 
@@ -291,6 +307,7 @@ describe("DataGrid app facade contract", () => {
     expect(alpineCheckbox).toBeTruthy()
     alpineCheckbox!.checked = false
     alpineCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
 
     queryColumnMenuAction("apply-filter")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
@@ -371,12 +388,13 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     const valueRows = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-column-menu__value"))
-    const alpineRow = valueRows.find(row => row.textContent?.includes("Alpine"))
-    expect(alpineRow).toBeTruthy()
-    const alpineCheckbox = alpineRow!.querySelector<HTMLInputElement>('input[type="checkbox"]')
-    expect(alpineCheckbox).toBeTruthy()
-    alpineCheckbox!.checked = false
-    alpineCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+    const alphaRow = valueRows.find(row => row.textContent?.includes("Alpha"))
+    expect(alphaRow).toBeTruthy()
+    const alphaCheckbox = alphaRow!.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(alphaCheckbox).toBeTruthy()
+    alphaCheckbox!.checked = true
+    alphaCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
 
     queryColumnMenuAction("apply-filter")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
@@ -395,6 +413,186 @@ describe("DataGrid app facade contract", () => {
           rowCount: 2,
         }),
       }),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("opens declarative advancedFilter and applies the built-in clause expression", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        advancedFilter: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = wrapper.findAll(".datagrid-app-toolbar__button").find(candidate => (
+      candidate.text().includes("Advanced filter")
+    ))
+    expect(trigger).toBeTruthy()
+    await trigger!.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryAdvancedFilterRoot()
+    expect(popover).toBeTruthy()
+
+    const valueInput = popover!.querySelector<HTMLInputElement>('input[type="text"]')
+    expect(valueInput).toBeTruthy()
+    valueInput!.value = "NOC"
+    valueInput!.dispatchEvent(new Event("input", { bubbles: true }))
+
+    popover!.querySelector<HTMLElement>(".datagrid-advanced-filter__primary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            advancedExpression: expect.objectContaining({
+              kind: "condition",
+              key: "owner",
+              operator: "contains",
+              value: "NOC",
+            }),
+          }),
+          rowCount: 2,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("opens declarative columnLayout and applies visibility and order changes", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnLayout: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = wrapper.find(".datagrid-app-toolbar__button")
+    expect(trigger.exists()).toBe(true)
+
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryColumnLayoutRoot()
+    expect(popover).toBeTruthy()
+
+    const rows = Array.from(popover!.querySelectorAll<HTMLElement>(".datagrid-column-layout__row"))
+    const ownerRow = rows.find(row => row.textContent?.includes("Owner"))
+    const regionRow = rows.find(row => row.textContent?.includes("Region"))
+    expect(ownerRow).toBeTruthy()
+    expect(regionRow).toBeTruthy()
+
+    const regionUp = regionRow!.querySelectorAll<HTMLButtonElement>(".datagrid-column-layout__icon-button")[0]
+    expect(regionUp).toBeTruthy()
+    regionUp!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const ownerCheckbox = ownerRow!.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(ownerCheckbox).toBeTruthy()
+    ownerCheckbox!.checked = false
+    ownerCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    popover!.querySelector<HTMLElement>(".datagrid-column-layout__primary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getColumnSnapshot?.()).toMatchObject({
+      order: ["region", "owner", "amount"],
+      columns: expect.arrayContaining([
+        expect.objectContaining({ key: "owner", visible: false }),
+        expect.objectContaining({ key: "region", visible: true }),
+      ]),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("opens declarative diagnostics and renders the runtime snapshot", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        diagnostics: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = wrapper.find(".datagrid-app-toolbar__button")
+    expect(trigger.exists()).toBe(true)
+
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryDiagnosticsRoot()
+    expect(popover).toBeTruthy()
+    expect(popover?.textContent).toContain("Runtime snapshot")
+    expect(popover?.textContent).toContain("rowModel")
+
+    wrapper.unmount()
+  })
+
+  it("opens declarative aggregations and applies the runtime aggregation model", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: [
+          { key: "owner", label: "Owner" },
+          { key: "amount", label: "Amount", dataType: "number", capabilities: { aggregatable: true } },
+        ],
+        aggregations: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = wrapper.find(".datagrid-app-toolbar__button")
+    expect(trigger.exists()).toBe(true)
+
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryAggregationsRoot()
+    expect(popover).toBeTruthy()
+
+    const amountCheckbox = popover?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(amountCheckbox).toBeTruthy()
+    amountCheckbox!.checked = true
+    amountCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const amountOp = popover?.querySelector<HTMLSelectElement>(".datagrid-aggregations__op")
+    expect(amountOp).toBeTruthy()
+    amountOp!.value = "sum"
+    amountOp!.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    popover!.querySelector<HTMLElement>(".datagrid-aggregations__primary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getApi?.()?.rows.getAggregationModel?.()).toMatchObject({
+      basis: "filtered",
+      columns: [{ key: "amount", op: "sum" }],
     })
 
     wrapper.unmount()

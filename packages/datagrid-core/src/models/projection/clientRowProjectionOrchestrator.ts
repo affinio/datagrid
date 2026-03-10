@@ -14,6 +14,7 @@ export interface DataGridClientProjectionStagePlan {
 }
 
 export interface DataGridClientRowProjectionOrchestrator<T> {
+  readonly __genericMarker__?: T | undefined
   recomputeFromStage: (
     stage: DataGridClientProjectionStage,
     options?: DataGridClientProjectionRecomputeOptions,

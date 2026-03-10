@@ -1223,14 +1223,6 @@ function columnIndexByKey(columnKey: string): number {
   return visibleColumnIndexByKey.value.get(columnKey) ?? 0
 }
 
-function isSelectionAnchorCell(rowOffset: number, columnIndex: number): boolean {
-  return isVisualSelectionAnchorCell(rowOffset, columnIndex)
-}
-
-function shouldHighlightSelectedCell(rowOffset: number, columnIndex: number): boolean {
-  return shouldHighlightSelectedCellVisual(rowOffset, columnIndex)
-}
-
 function paneRowStyle(row: TableRow, rowOffset: number, paneWidth: number): CSSProperties {
   return {
     ...props.rowStyle(row, rowOffset),
@@ -1597,12 +1589,6 @@ const rightMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
     backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
     borderStyle: "dashed",
   })
-))
-
-const hasVisibleSelectionOverlay = computed(() => (
-  leftSelectionOverlaySegments.value.length > 0
-  || centerSelectionOverlaySegments.value.length > 0
-  || rightSelectionOverlaySegments.value.length > 0
 ))
 
 function cellStateClasses(row: TableRow, rowOffset: number, columnIndex: number): Record<string, boolean> {

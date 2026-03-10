@@ -24,7 +24,7 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   syncViewport: () => void
 }
 
-export interface UseDataGridAppClipboardResult<TRow> {
+export interface UseDataGridAppClipboardResult {
   pendingClipboardOperation: Ref<DataGridAppPendingClipboardOperation>
   pendingClipboardRange: Ref<DataGridCopyRange | null>
   normalizeClipboardRange: (range: DataGridCopyRange) => DataGridCopyRange | null
@@ -45,7 +45,7 @@ export interface UseDataGridAppClipboardResult<TRow> {
 
 export function useDataGridAppClipboard<TRow, TSnapshot>(
   options: UseDataGridAppClipboardOptions<TRow, TSnapshot>,
-): UseDataGridAppClipboardResult<TRow> {
+): UseDataGridAppClipboardResult {
   const copiedSelectionRange = ref<DataGridCopyRange | null>(null)
   const lastCopiedPayload = ref("")
   const pendingClipboardOperation = ref<DataGridAppPendingClipboardOperation>("none")

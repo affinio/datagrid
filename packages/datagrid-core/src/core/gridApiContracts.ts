@@ -12,7 +12,6 @@ import type {
   DataGridFormulaValue,
   DataGridFormulaExecutionPlanSnapshot,
   DataGridFormulaGraphSnapshot,
-  DataGridColumnDef,
   DataGridColumnInput,
   DataGridColumnHistogram,
   DataGridColumnHistogramOptions,

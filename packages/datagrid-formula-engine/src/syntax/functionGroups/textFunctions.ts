@@ -96,7 +96,7 @@ export const DATAGRID_TEXT_FORMULA_FUNCTIONS = defineFormulaFunctions({
         return text.split(oldText).join(newText)
       }
       let seen = 0
-      return text.split(oldText).join("\u0000").split("\u0000").reduce((result, part, index, parts) => {
+      return text.split(oldText).join("\u0000").split("\u0000").reduce((result, part, index) => {
         if (index === 0) {
           return part
         }

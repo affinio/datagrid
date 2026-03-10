@@ -161,6 +161,7 @@
         :is-open="isAdvancedFilterPanelOpen"
         :clauses="advancedFilterDraftClauses"
         :columns="advancedFilterColumns"
+        :theme-tokens="sandboxThemeTokens"
         @open="openAdvancedFilterPanel"
         @add="addAdvancedFilterClause"
         @remove="removeAdvancedFilterClause"
@@ -192,7 +193,6 @@ import type {
   DataGridColumnSnapshot,
   DataGridAppAdvancedFilterColumnOption,
   DataGridPivotSpec,
-  DataGridSelectionSnapshot,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import { DataGridTableStage, useDataGridTableStageRuntime } from "../../../datagrid-vue-app/src/internal"
@@ -393,10 +393,7 @@ const {
   toggleSortForColumn,
   sortIndicator,
   applySortAndFilter,
-  applyGroupBy,
-  applyPaginationSettings,
   applyRowHeightSettings,
-  applyPivotConfiguration,
   openRefreshCellsPanel,
   closeRefreshCellsPanel,
   refreshCellsByRowKeys,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { DataGridColumn, VisibleRow } from "../../types"
+import type { DataGridColumn, DataGridColumnInput, VisibleRow } from "../../types"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
 
@@ -53,9 +53,15 @@ function createColumns(count: number): DataGridColumn[] {
   return columns
 }
 
-function toColumnModelInputs(columns: readonly DataGridColumn[]) {
-  return columns.map(({ visible, pin, width, ...column }) => ({
-    ...column,
+function toColumnModelInputs(columns: readonly DataGridColumn[]): DataGridColumnInput[] {
+  return columns.map(({ key, field, label, minWidth, maxWidth, valueGetter, valueSetter, visible, pin, width }) => ({
+    key,
+    field,
+    label,
+    minWidth,
+    maxWidth,
+    valueGetter,
+    valueSetter,
     initialState: {
       visible,
       pin,

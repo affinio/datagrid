@@ -38,7 +38,7 @@ describe("useDataGridAppSelection contract", () => {
     expect(selection.selectionSnapshot.value).toStrictEqual(runtimeSnapshot)
     expect(selection.selectionAnchor.value).toEqual({ rowIndex: 0, colIndex: 0, rowId: "r1" })
 
-    selection.selectionService.clearSelection()
+    selection.selectionService.clearSelection!()
     expect(selection.selectionSnapshot.value).toBeNull()
     expect(selection.selectionAnchor.value).toBeNull()
   })

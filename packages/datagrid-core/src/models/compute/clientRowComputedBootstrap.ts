@@ -49,6 +49,7 @@ export interface ClientRowComputedBootstrapRuntimeContext<T> {
 }
 
 export interface ClientRowComputedBootstrapRuntime<T> {
+  readonly __genericMarker__?: T | undefined
   bootstrapInitialComputedAndFormulaFields: () => void
 }
 

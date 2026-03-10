@@ -133,6 +133,11 @@ export type {
   DataGridPaginationInput,
   DataGridPaginationSnapshot,
   DataGridProjectionDiagnostics,
+  DataGridProjectionMemoryDiagnostics,
+  DataGridProjectionPerformanceDiagnostics,
+  DataGridProjectionPipelineDiagnostics,
+  DataGridProjectionRowCounts,
+  DataGridProjectionStageTimes,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
   DataGridFormulaFunctionDefinition,
@@ -174,6 +179,7 @@ export type {
 
 export type {
   DataGridTransactionSnapshot,
+  GridSelectionPointLike,
 } from "@affino/datagrid-core/advanced"
 
 export type {

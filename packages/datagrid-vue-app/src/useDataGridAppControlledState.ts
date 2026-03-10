@@ -4,7 +4,6 @@ import type {
   DataGridAggregationModel,
   DataGridRowModel,
   DataGridColumnModel,
-  DataGridColumnModelSnapshot,
   DataGridColumnPin,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,

@@ -11,8 +11,6 @@ import {
   type DataGridRowNode,
   type DataGridSortState,
   type DataGridTreeDataResolvedSpec,
-  type DataGridTreeDataSpec,
-  type DataGridViewportRange,
 } from "../rowModel.js"
 import {
   normalizePivotSpec,

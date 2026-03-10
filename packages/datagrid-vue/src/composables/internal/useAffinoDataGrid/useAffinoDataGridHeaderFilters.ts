@@ -1,6 +1,5 @@
 import { ref, type Ref } from "vue"
 import type {
-  DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterExpression,
   DataGridColumnInput,
 } from "@affino/datagrid-core"

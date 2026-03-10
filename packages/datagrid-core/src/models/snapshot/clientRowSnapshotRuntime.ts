@@ -20,6 +20,8 @@ import type { DataGridClientRowRuntimeState, DataGridClientRowRuntimeStateStore 
 export interface ClientRowSnapshotRuntimeContext<T> {
   runtimeState: DataGridClientRowRuntimeState<T>
   runtimeStateStore: Pick<DataGridClientRowRuntimeStateStore<T>, "getProjectionDiagnostics">
+  getSourceRowCount: () => number
+  getSourceRowIndexSize: () => number
   getStaleStages: () => readonly DataGridProjectionStage[]
   getFormulaComputeStageDiagnostics?: () => DataGridFormulaComputeStageDiagnostics | null
 
@@ -89,7 +91,12 @@ export function createClientRowSnapshotRuntime<T>(
   })
 
   const getProjectionDiagnostics = (): DataGridProjectionDiagnostics => {
-    const base = context.runtimeStateStore.getProjectionDiagnostics(context.getStaleStages)
+    const base = context.runtimeStateStore.getProjectionDiagnostics(
+      context.getStaleStages,
+      context.getSourceRowCount(),
+      context.getSourceRowIndexSize(),
+      context.getPivotColumns().length,
+    )
     const computeStage = context.getFormulaComputeStageDiagnostics?.() ?? null
     if (!computeStage) {
       return base

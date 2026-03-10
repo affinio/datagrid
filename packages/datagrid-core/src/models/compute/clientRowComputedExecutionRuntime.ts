@@ -1,7 +1,6 @@
 import type {
   DataGridComputedDependencyToken,
   DataGridComputedFieldDefinition,
-  DataGridComputedFieldComputeContext,
   DataGridFormulaComputeStageDiagnostics,
   DataGridFormulaIterativeCalculationOptions,
   DataGridProjectionFormulaDiagnostics,

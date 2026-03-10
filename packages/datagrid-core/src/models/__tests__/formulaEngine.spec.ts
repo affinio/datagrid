@@ -518,7 +518,7 @@ describe("formulaEngine", () => {
       compileStrategy: "jit",
       functionRegistry: {
         sum: {
-          compute: args => args.reduce((acc, value) => acc + Number(value ?? 0), 100),
+          compute: args => args.reduce<number>((acc, value) => acc + Number(value ?? 0), 100),
         },
       },
       onFunctionOverride: functionName => {

@@ -35,7 +35,9 @@ export interface DataGridClientProjectionStageHandlers<T> extends DataGridClient
 
 export type DataGridClientProjectionRecomputeOptions = ProjectionRecomputeOptions<DataGridClientProjectionStage>
 
-export type DataGridClientProjectionFinalizeMeta = ProjectionRecomputeMeta<DataGridClientProjectionStage>
+export type DataGridClientProjectionFinalizeMeta = ProjectionRecomputeMeta<DataGridClientProjectionStage> & {
+  stageTimes?: Partial<Record<DataGridClientProjectionStage, number>>
+}
 
 export type DataGridClientProjectionRequestOptions = ProjectionRequestOptions
 
@@ -58,6 +60,17 @@ export interface DataGridClientProjectionEngine<T> {
   getStaleStages: () => readonly DataGridClientProjectionStage[]
 }
 
+function getNow(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now()
+  }
+  return Date.now()
+}
+
+function roundStageTiming(value: number): number {
+  return Math.round(value * 1000) / 1000
+}
+
 export function createClientRowProjectionEngine<T>(): DataGridClientProjectionEngine<T> {
   const projection = createProjectionStageEngine<DataGridClientProjectionStage>({
     nodes: DATAGRID_CLIENT_PREPARED_PROJECTION_GRAPH.nodes,
@@ -75,6 +88,7 @@ export function createClientRowProjectionEngine<T>(): DataGridClientProjectionEn
 
     let sourceById = handlers.buildSourceById()
     let filteredRowIds: ReadonlySet<DataGridRowId> = handlers.getCurrentFilteredRowIds()
+    const stageTimes: Partial<Record<DataGridClientProjectionStage, number>> = {}
     const stageRuntimeContext: DataGridClientProjectionStageRuntimeContext<T> = {
       getSourceById: () => sourceById,
       refreshSourceById: () => {
@@ -89,13 +103,19 @@ export function createClientRowProjectionEngine<T>(): DataGridClientProjectionEn
     }
 
     const meta = projection.recompute((stage: DataGridClientProjectionStage, shouldRecompute: boolean) => {
-      return DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP[stage]
+      const startedAt = getNow()
+      const recomputed = DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP[stage]
         .compute(stageRuntimeContext, shouldRecompute)
+      stageTimes[stage] = roundStageTiming(getNow() - startedAt)
+      return recomputed
     }, options)
     if (!meta) {
       return
     }
-    handlers.finalizeProjectionRecompute(meta)
+    handlers.finalizeProjectionRecompute({
+      ...meta,
+      stageTimes,
+    })
   }
 
   const recomputeFromStage = (

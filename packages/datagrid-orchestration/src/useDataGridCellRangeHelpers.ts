@@ -13,7 +13,6 @@ export interface DataGridCellRange {
 export interface UseDataGridCellRangeHelpersOptions<
   TRow,
   TCoord extends DataGridCellRangeCoord = DataGridCellRangeCoord,
-  TRange extends DataGridCellRange = DataGridCellRange,
 > {
   resolveRowsLength: () => number
   resolveFirstNavigableColumnIndex: () => number
@@ -43,7 +42,7 @@ export function useDataGridCellRangeHelpers<
   TCoord extends DataGridCellRangeCoord = DataGridCellRangeCoord,
   TRange extends DataGridCellRange = DataGridCellRange,
 >(
-  options: UseDataGridCellRangeHelpersOptions<TRow, TCoord, TRange>,
+  options: UseDataGridCellRangeHelpersOptions<TRow, TCoord>,
 ): UseDataGridCellRangeHelpersResult<TRow, TCoord, TRange> {
   const isColumnSelectable = options.isColumnSelectable ?? (() => true)
 

@@ -11,6 +11,22 @@ export type {
   DataGridThemeProp,
 } from "./dataGridTheme"
 export type {
+  DataGridAdvancedFilterOptions,
+  DataGridAdvancedFilterProp,
+} from "./dataGridAdvancedFilter"
+export type {
+  DataGridColumnLayoutOptions,
+  DataGridColumnLayoutProp,
+} from "./dataGridColumnLayout"
+export type {
+  DataGridDiagnosticsOptions,
+  DataGridDiagnosticsProp,
+} from "./dataGridDiagnostics"
+export type {
+  DataGridAggregationsOptions,
+  DataGridAggregationsProp,
+} from "./dataGridAggregations"
+export type {
   DataGridColumnMenuOptions,
   DataGridColumnMenuProp,
 } from "./dataGridColumnMenu"

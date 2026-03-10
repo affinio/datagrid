@@ -10,19 +10,36 @@ import {
   type Ref,
 } from "vue"
 import type {
+  DataGridAggOp,
+  DataGridAggregationModel,
   DataGridColumnPin,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridPivotSpec,
+  DataGridAppColumnLayoutDraftColumn,
   DataGridSortState,
+  DataGridAppAdvancedFilterColumnOption,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import {
   cloneDataGridFilterSnapshot,
   type GridSelectionPointLike,
   type DataGridRowId,
+  type DataGridApiDiagnosticsSnapshot,
+  useDataGridAppAdvancedFilterBuilder,
+  useDataGridAppColumnLayoutPanel,
+  useDataGridAppDiagnosticsPanel,
 } from "@affino/datagrid-vue"
+import DataGridAdvancedFilterPopover from "./DataGridAdvancedFilterPopover.vue"
+import DataGridAggregationsPopover from "./DataGridAggregationsPopover.vue"
+import DataGridColumnLayoutPopover from "./DataGridColumnLayoutPopover.vue"
+import DataGridDiagnosticsPopover from "./DataGridDiagnosticsPopover.vue"
+import DataGridModuleHost, { type DataGridAppToolbarModule } from "./DataGridModuleHost"
 import DataGridTableStage from "./DataGridTableStage.vue"
+import type { DataGridAdvancedFilterOptions } from "./dataGridAdvancedFilter"
+import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "./dataGridAggregations"
+import type { DataGridColumnLayoutOptions } from "./dataGridColumnLayout"
+import type { DataGridDiagnosticsOptions } from "./dataGridDiagnostics"
 import type { DataGridColumnMenuOptions } from "./dataGridColumnMenu"
 import type { DataGridVirtualizationOptions } from "./dataGridVirtualization"
 import { useDataGridTableStageRuntime } from "./useDataGridTableStageRuntime"
@@ -131,6 +148,53 @@ function cloneRowData<TRow>(row: TRow): TRow {
   return row
 }
 
+function cloneAggregationModelState<TRow>(
+  model: DataGridAggregationModel<TRow> | null | undefined,
+): DataGridAggregationModel<TRow> | null {
+  if (!model) {
+    return null
+  }
+  return {
+    columns: model.columns.map(column => ({ ...column })),
+    basis: model.basis === "source" ? "source" : "filtered",
+  }
+}
+
+const NUMERIC_AGG_OPS: readonly DataGridAggOp[] = [
+  "sum",
+  "avg",
+  "min",
+  "max",
+  "count",
+  "countNonNull",
+  "first",
+  "last",
+]
+const ORDERED_AGG_OPS: readonly DataGridAggOp[] = [
+  "min",
+  "max",
+  "count",
+  "countNonNull",
+  "first",
+  "last",
+]
+const BASIC_AGG_OPS: readonly DataGridAggOp[] = [
+  "count",
+  "countNonNull",
+  "first",
+  "last",
+]
+
+function resolveAllowedAggregationOps(dataType: string | undefined): readonly DataGridAggOp[] {
+  if (dataType === "number" || dataType === "currency" || dataType === "percent") {
+    return NUMERIC_AGG_OPS
+  }
+  if (dataType === "date" || dataType === "datetime") {
+    return ORDERED_AGG_OPS
+  }
+  return BASIC_AGG_OPS
+}
+
 export default defineComponent({
   name: "DataGridDefaultRenderer",
   props: {
@@ -190,6 +254,22 @@ export default defineComponent({
       type: Object as PropType<DataGridColumnMenuOptions>,
       required: true,
     },
+    columnLayout: {
+      type: Object as PropType<DataGridColumnLayoutOptions>,
+      required: true,
+    },
+    diagnostics: {
+      type: Object as PropType<DataGridDiagnosticsOptions>,
+      required: true,
+    },
+    aggregations: {
+      type: Object as PropType<DataGridAggregationsOptions>,
+      required: true,
+    },
+    advancedFilter: {
+      type: Object as PropType<DataGridAdvancedFilterOptions>,
+      required: true,
+    },
     rowHeightMode: {
       type: String as PropType<"fixed" | "auto">,
       default: "fixed",
@@ -246,9 +326,111 @@ export default defineComponent({
       return props.runtime.api.rows.getSnapshot().rowCount
     })
     const visibleColumns = computed(() => props.runtime.columnSnapshot.value.visibleColumns)
+    const allColumns = computed(() => props.runtime.columnSnapshot.value.columns ?? [])
+    const advancedFilterColumns = computed<readonly DataGridAppAdvancedFilterColumnOption[]>(() => {
+      return visibleColumns.value
+        .filter(column => column.visible !== false)
+        .map(column => ({
+          key: column.key,
+          label: column.column.label ?? column.key,
+        }))
+    })
+    const columnLayoutDraftColumns = computed<readonly DataGridAppColumnLayoutDraftColumn[]>(() => {
+      return allColumns.value.map(column => ({
+        key: column.key,
+        label: column.column.label ?? column.key,
+        visible: column.visible !== false,
+      }))
+    })
+    const aggregatableColumns = computed(() => {
+      return allColumns.value
+        .filter(column => column.column.capabilities?.aggregatable === true)
+        .map(column => ({
+          key: column.key,
+          label: column.column.label ?? column.key,
+          allowedOps: resolveAllowedAggregationOps(column.column.dataType),
+        }))
+    })
     const rowHeightMode = ref(props.rowHeightMode)
     const normalizedBaseRowHeight = computed(() => normalizeBaseRowHeight(props.baseRowHeight))
     const firstColumnKey = computed<string>(() => visibleColumns.value[0]?.key ?? "name")
+    const {
+      isColumnLayoutPanelOpen,
+      columnLayoutPanelItems,
+      openColumnLayoutPanel,
+      cancelColumnLayoutPanel,
+      applyColumnLayoutPanel,
+      moveColumnUp,
+      moveColumnDown,
+      updateColumnVisibility,
+    } = useDataGridAppColumnLayoutPanel({
+      resolveColumns: () => columnLayoutDraftColumns.value,
+      applyColumnLayout: payload => {
+        props.runtime.api.columns.setOrder(payload.order)
+        for (const [columnKey, visible] of Object.entries(payload.visibilityByKey)) {
+          props.runtime.api.columns.setVisibility(columnKey, visible)
+        }
+      },
+    })
+    const {
+      isDiagnosticsPanelOpen,
+      diagnosticsSnapshot,
+      openDiagnosticsPanel,
+      closeDiagnosticsPanel,
+      refreshDiagnosticsPanel,
+    } = useDataGridAppDiagnosticsPanel<DataGridApiDiagnosticsSnapshot>({
+      readDiagnostics: () => props.runtime.api.diagnostics.getAll(),
+    })
+    const {
+      isAdvancedFilterPanelOpen,
+      advancedFilterDraftClauses,
+      appliedAdvancedFilterExpression,
+      openAdvancedFilterPanel,
+      addAdvancedFilterClause,
+      removeAdvancedFilterClause,
+      updateAdvancedFilterClause,
+      cancelAdvancedFilterPanel,
+      applyAdvancedFilterPanel,
+    } = useDataGridAppAdvancedFilterBuilder({
+      resolveColumns: () => advancedFilterColumns.value,
+    })
+    const isAggregationsPanelOpen = ref(false)
+    const aggregationDraftModel = ref<DataGridAggregationModel<Record<string, unknown>> | null>(null)
+    const currentAggregationModel = computed<DataGridAggregationModel<Record<string, unknown>> | null>(() => {
+      void rowVersion.value
+      return cloneAggregationModelState(props.runtime.api.rows.getAggregationModel())
+    })
+    const aggregationPanelItems = computed<readonly DataGridAggregationPanelItem[]>(() => {
+      const enabledByKey = new Map<string, DataGridAggOp>(
+        (aggregationDraftModel.value?.columns ?? []).map(column => [column.key, column.op]),
+      )
+      return aggregatableColumns.value.map(column => {
+        const firstAllowedOp = column.allowedOps[0] ?? "count"
+        const currentOp = enabledByKey.get(column.key)
+        const normalizedOp = currentOp && column.allowedOps.includes(currentOp) ? currentOp : firstAllowedOp
+        return {
+          key: column.key,
+          label: column.label,
+          enabled: enabledByKey.has(column.key),
+          op: normalizedOp,
+          allowedOps: column.allowedOps,
+        }
+      })
+    })
+    const aggregationBasis = computed<"filtered" | "source">(() => {
+      return aggregationDraftModel.value?.basis === "source" ? "source" : "filtered"
+    })
+
+    watch(
+      currentAggregationModel,
+      nextModel => {
+        if (isAggregationsPanelOpen.value) {
+          return
+        }
+        aggregationDraftModel.value = cloneAggregationModelState(nextModel)
+      },
+      { immediate: true, deep: true },
+    )
 
     watch(
       () => props.rowHeightMode,
@@ -280,12 +462,29 @@ export default defineComponent({
         key: entry.key,
         direction: entry.direction,
       }))
+      const advancedExpression = props.advancedFilter.enabled
+        ? appliedAdvancedFilterExpression.value
+        : (filterModelState.value.advancedExpression ?? null)
 
       props.runtime.api.rows.setSortAndFilterModel({
         sortModel: nextSortModel,
-        filterModel: pruneFilterModel(filterModelState.value),
+        filterModel: pruneFilterModel({
+          ...filterModelState.value,
+          advancedExpression,
+        }),
       })
     }
+
+    watch(
+      appliedAdvancedFilterExpression,
+      () => {
+        if (!props.advancedFilter.enabled) {
+          return
+        }
+        applySortAndFilter()
+      },
+      { deep: true },
+    )
 
     const toggleSortForColumn = (columnKey: string, additive = false): void => {
       const currentIndex = sortState.value.findIndex(entry => entry.key === columnKey)
@@ -350,6 +549,83 @@ export default defineComponent({
     const applyRowHeightSettings = (): void => {
       props.runtime.api.view.setRowHeightMode(rowHeightMode.value)
       props.runtime.api.view.setBaseRowHeight(normalizedBaseRowHeight.value)
+    }
+
+    const openAggregationsPanel = (): void => {
+      aggregationDraftModel.value = cloneAggregationModelState(currentAggregationModel.value)
+      isAggregationsPanelOpen.value = true
+    }
+
+    const cancelAggregationsPanel = (): void => {
+      aggregationDraftModel.value = cloneAggregationModelState(currentAggregationModel.value)
+      isAggregationsPanelOpen.value = false
+    }
+
+    const clearAggregationsPanel = (): void => {
+      aggregationDraftModel.value = null
+    }
+
+    const updateAggregationBasis = (basis: "filtered" | "source"): void => {
+      aggregationDraftModel.value = {
+        basis,
+        columns: aggregationDraftModel.value?.columns ?? [],
+      }
+    }
+
+    const toggleAggregationColumn = (key: string, enabled: boolean): void => {
+      const column = aggregatableColumns.value.find(candidate => candidate.key === key)
+      if (!column) {
+        return
+      }
+      const existingColumns = aggregationDraftModel.value?.columns ?? []
+      if (!enabled) {
+        const nextColumns = existingColumns.filter(candidate => candidate.key !== key)
+        aggregationDraftModel.value = nextColumns.length > 0
+          ? { basis: aggregationBasis.value, columns: nextColumns }
+          : null
+        return
+      }
+      const existing = existingColumns.find(candidate => candidate.key === key)
+      const nextColumn = existing ?? {
+        key,
+        op: column.allowedOps[0] ?? "count",
+      }
+      aggregationDraftModel.value = {
+        basis: aggregationBasis.value,
+        columns: [
+          ...existingColumns.filter(candidate => candidate.key !== key),
+          nextColumn,
+        ],
+      }
+    }
+
+    const updateAggregationOp = (key: string, op: string): void => {
+      const column = aggregatableColumns.value.find(candidate => candidate.key === key)
+      if (!column || !column.allowedOps.includes(op as DataGridAggOp)) {
+        return
+      }
+      const nextColumns = (aggregationDraftModel.value?.columns ?? []).map(candidate => {
+        if (candidate.key !== key) {
+          return candidate
+        }
+        return {
+          ...candidate,
+          op: op as DataGridAggOp,
+        }
+      })
+      aggregationDraftModel.value = {
+        basis: aggregationBasis.value,
+        columns: nextColumns,
+      }
+    }
+
+    const applyAggregationsPanel = (): void => {
+      const nextModel = aggregationDraftModel.value && aggregationDraftModel.value.columns.length > 0
+        ? aggregationDraftModel.value
+        : null
+      props.runtime.api.rows.setAggregationModel(nextModel)
+      aggregationDraftModel.value = cloneAggregationModelState(nextModel)
+      isAggregationsPanelOpen.value = false
     }
 
     const resolveColumnMenuSortDirection = (columnKey: string): "asc" | "desc" | null => {
@@ -431,21 +707,104 @@ export default defineComponent({
       applyRowHeightSettings,
       cloneRowData,
     })
-
-    return () => h(DataGridTableStage as Component, {
-      ...tableStageProps.value,
-      sourceRows: props.rows,
-      columnMenuEnabled: props.columnMenu.enabled,
-      columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
-      rowHover: props.rowHover,
-      stripedRows: props.stripedRows,
-      isColumnFilterActive,
-      resolveColumnMenuSortDirection,
-      resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
-      applyColumnMenuSort,
-      applyColumnMenuPin,
-      applyColumnMenuFilter,
-      clearColumnMenuFilter,
+    const toolbarModules = computed<readonly DataGridAppToolbarModule[]>(() => {
+      const modules: DataGridAppToolbarModule[] = []
+      if (props.columnLayout.enabled) {
+        modules.push({
+          key: "column-layout",
+          component: DataGridColumnLayoutPopover as Component,
+          props: {
+            isOpen: isColumnLayoutPanelOpen.value,
+            items: columnLayoutPanelItems.value,
+            buttonLabel: props.columnLayout.buttonLabel,
+            active: false,
+            onOpen: openColumnLayoutPanel,
+            onToggleVisibility: updateColumnVisibility,
+            onMoveUp: moveColumnUp,
+            onMoveDown: moveColumnDown,
+            onApply: applyColumnLayoutPanel,
+            onCancel: cancelColumnLayoutPanel,
+          },
+        })
+      }
+      if (props.diagnostics.enabled) {
+        modules.push({
+          key: "diagnostics",
+          component: DataGridDiagnosticsPopover as Component,
+          props: {
+            isOpen: isDiagnosticsPanelOpen.value,
+            snapshot: diagnosticsSnapshot.value,
+            buttonLabel: props.diagnostics.buttonLabel,
+            active: isDiagnosticsPanelOpen.value,
+            onOpen: openDiagnosticsPanel,
+            onClose: closeDiagnosticsPanel,
+            onRefresh: refreshDiagnosticsPanel,
+          },
+        })
+      }
+      if (props.advancedFilter.enabled) {
+        modules.push({
+          key: "advanced-filter",
+          component: DataGridAdvancedFilterPopover as Component,
+          props: {
+            isOpen: isAdvancedFilterPanelOpen.value,
+            clauses: advancedFilterDraftClauses.value,
+            columns: advancedFilterColumns.value,
+            buttonLabel: props.advancedFilter.buttonLabel,
+            active: appliedAdvancedFilterExpression.value != null,
+            onOpen: openAdvancedFilterPanel,
+            onAdd: addAdvancedFilterClause,
+            onRemove: removeAdvancedFilterClause,
+            onUpdateClause: updateAdvancedFilterClause,
+            onApply: applyAdvancedFilterPanel,
+            onCancel: cancelAdvancedFilterPanel,
+          },
+        })
+      }
+      if (props.aggregations.enabled && props.mode !== "pivot") {
+        modules.push({
+          key: "aggregations",
+          component: DataGridAggregationsPopover as Component,
+          props: {
+            isOpen: isAggregationsPanelOpen.value,
+            basis: aggregationBasis.value,
+            items: aggregationPanelItems.value,
+            buttonLabel: props.aggregations.buttonLabel,
+            active: isAggregationsPanelOpen.value || Boolean(currentAggregationModel.value?.columns.length),
+            onOpen: openAggregationsPanel,
+            onUpdateBasis: updateAggregationBasis,
+            onToggleColumn: toggleAggregationColumn,
+            onUpdateOp: updateAggregationOp,
+            onClear: clearAggregationsPanel,
+            onApply: applyAggregationsPanel,
+            onCancel: cancelAggregationsPanel,
+          },
+        })
+      }
+      return modules
     })
+
+    return () => h("div", {
+      class: "datagrid-app-layout",
+    }, [
+      h(DataGridModuleHost as Component, {
+        modules: toolbarModules.value,
+      }),
+      h(DataGridTableStage as Component, {
+        ...tableStageProps.value,
+        sourceRows: props.rows,
+        columnMenuEnabled: props.columnMenu.enabled,
+        columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
+        rowHover: props.rowHover,
+        stripedRows: props.stripedRows,
+        isColumnFilterActive,
+        resolveColumnMenuSortDirection,
+        resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
+        applyColumnMenuSort,
+        applyColumnMenuPin,
+        applyColumnMenuFilter,
+        clearColumnMenuFilter,
+      }),
+    ])
   },
 })

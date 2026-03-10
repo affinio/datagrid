@@ -109,13 +109,17 @@ Result:
 Enable the built-in header menu with one prop:
 
 ```vue
-<DataGrid
-  :rows="rows"
-  :columns="columns"
-  column-menu
-  row-hover
-  striped-rows
-/>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    column-menu
+    column-layout
+    diagnostics
+    advanced-filter
+    aggregations
+    row-hover
+    striped-rows
+  />
 ```
 
 Out of the box this wires:
@@ -123,6 +127,10 @@ Out of the box this wires:
 - sort ascending / descending / clear
 - pin column submenu (`left`, `right`, `none`)
 - value-set filter picker with search + apply/clear
+- column order / visibility popover
+- diagnostics popover
+- clause-based advanced filter popover
+- aggregation model popover
 
 ## Features
 
@@ -181,6 +189,10 @@ Affino DataGrid works well for:
 - `columns`
 - `theme`
 - `column-menu`
+- `column-layout`
+- `diagnostics`
+- `advanced-filter`
+- `aggregations`
 - `row-hover`
 - `striped-rows`
 - `row-height-mode`

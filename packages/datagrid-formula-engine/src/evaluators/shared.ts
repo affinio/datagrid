@@ -1,7 +1,6 @@
 // Shared evaluator helpers used by multiple execution backends. Only keep code
 // here when it is genuinely backend-neutral.
 import type {
-  DataGridComputedDependencyToken,
   DataGridFormulaValue,
 } from "../coreTypes.js"
 import { type DataGridFormulaFunctionRuntime } from "../runtime/types.js"

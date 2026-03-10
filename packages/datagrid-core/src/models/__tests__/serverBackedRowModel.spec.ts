@@ -4,7 +4,7 @@ import type { ServerRowModel } from "../server/serverRowModel.js"
 
 function createSource(count: number) {
   const rows = Array.from({ length: count }, (_, index) => ({ id: index }))
-  const fetchBlock = vi.fn(async () => {})
+  const fetchBlock = vi.fn(async (_startIndex: number) => {})
   const reset = vi.fn()
 
   const source: ServerRowModel<{ id: number }> = {
@@ -219,7 +219,7 @@ describe("createServerBackedRowModel", () => {
     const { source, fetchBlock } = createSource(40)
     const pendingResolves: Array<() => void> = []
     fetchBlock.mockImplementation(
-      () =>
+      (_startIndex: number) =>
         new Promise<void>(resolve => {
           pendingResolves.push(resolve)
         }),
@@ -572,7 +572,9 @@ describe("createServerBackedRowModel", () => {
     })
 
     const before = model.getSnapshot().revision ?? 0
-    onUpdate?.()
+    expect(onUpdate).toBeTruthy()
+    const notify = onUpdate!
+    notify()
     const after = model.getSnapshot().revision ?? 0
     expect(after).toBeGreaterThan(before)
     model.dispose()

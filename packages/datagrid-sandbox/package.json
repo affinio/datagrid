@@ -15,6 +15,7 @@
     "@affino/datagrid-orchestration": "workspace:*",
     "@affino/datagrid-vue": "workspace:*",
     "@affino/datagrid-worker": "workspace:*",
+    "@affino/popover-vue": "^1.1.0",
     "vue": "3.4.38",
     "vue-router": "^4.5.1"
   },

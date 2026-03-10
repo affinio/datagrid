@@ -110,6 +110,7 @@ export function createClientRowModelComputeBootstrap<T>(
           hadActualRecompute: meta.hadActualRecompute,
           recomputedStages: meta.recomputedStages,
           blockedStages: meta.blockedStages,
+          stageTimes: meta.stageTimes,
         })
       },
       getSourceRows: options.getSourceRowsState,

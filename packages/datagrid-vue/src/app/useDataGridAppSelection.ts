@@ -27,7 +27,7 @@ export interface UseDataGridAppSelectionOptions<TRow> {
 export interface UseDataGridAppSelectionResult<TRow> {
   selectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   selectionAnchor: Ref<GridSelectionPointLike<DataGridRowId> | null>
-  selectionService: NonNullable<UseDataGridRuntimeOptions<TRow>["services"]>["selection"]
+  selectionService: NonNullable<NonNullable<UseDataGridRuntimeOptions<TRow>["services"]>["selection"]>
   runtimeServices: Pick<NonNullable<UseDataGridRuntimeOptions<TRow>["services"]>, "selection">
   selectionAggregatesLabel: Ref<string>
   syncSelectionSnapshotFromRuntime: () => void
@@ -70,7 +70,7 @@ export function useDataGridAppSelection<TRow>(
       : null
   }
 
-  const selectionService: NonNullable<UseDataGridRuntimeOptions<TRow>["services"]>["selection"] = {
+  const selectionService: NonNullable<NonNullable<UseDataGridRuntimeOptions<TRow>["services"]>["selection"]> = {
     name: "selection",
     getSelectionSnapshot: () => selectionSnapshot.value,
     setSelectionSnapshot: snapshot => {

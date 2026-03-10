@@ -1383,18 +1383,23 @@ describe("createClientRowModel", () => {
       ],
     })
 
-    const formulaDiagnostics = model.getSnapshot().projection.formula
-    const computeStageDiagnostics = model.getSnapshot().projection.computeStage
-    expect(formulaDiagnostics?.recomputedFields).toEqual(["subtotal", "total"])
-    expect(formulaDiagnostics?.runtimeErrorCount).toBe(0)
-    expect(formulaDiagnostics?.runtimeErrors).toEqual([])
-    expect(computeStageDiagnostics?.rowsTouched).toBe(1)
-    expect(computeStageDiagnostics?.changedRows).toBe(1)
-    expect(computeStageDiagnostics?.fieldsTouched).toEqual(["subtotal", "total"])
-    expect(computeStageDiagnostics?.evaluations).toBe(2)
-    expect(computeStageDiagnostics?.skippedByObjectIs).toBe(0)
-    expect(computeStageDiagnostics?.dirtyRows).toBe(1)
-    expect(computeStageDiagnostics?.dirtyNodes).toEqual(["subtotal", "total"])
+    const snapshot = model.getSnapshot()
+    expect(snapshot.projection).toBeTruthy()
+    const projection = snapshot.projection!
+    expect(projection.formula).toBeTruthy()
+    expect(projection.computeStage).toBeTruthy()
+    const formulaDiagnostics = projection.formula!
+    const computeStageDiagnostics = projection.computeStage!
+    expect(formulaDiagnostics.recomputedFields).toEqual(["subtotal", "total"])
+    expect(formulaDiagnostics.runtimeErrorCount).toBe(0)
+    expect(formulaDiagnostics.runtimeErrors).toEqual([])
+    expect(computeStageDiagnostics.rowsTouched).toBe(1)
+    expect(computeStageDiagnostics.changedRows).toBe(1)
+    expect(computeStageDiagnostics.fieldsTouched).toEqual(["subtotal", "total"])
+    expect(computeStageDiagnostics.evaluations).toBe(2)
+    expect(computeStageDiagnostics.skippedByObjectIs).toBe(0)
+    expect(computeStageDiagnostics.dirtyRows).toBe(1)
+    expect(computeStageDiagnostics.dirtyNodes).toEqual(["subtotal", "total"])
 
     model.dispose()
   })
@@ -1419,22 +1424,37 @@ describe("createClientRowModel", () => {
       ],
     })
 
-    const initialDiagnostics = model.getSnapshot().projection.formula
-    expect((model.getRow(0)?.row as { ratio?: number }).ratio).toBe(0)
-    expect(initialDiagnostics?.runtimeErrorCount).toBeGreaterThan(0)
-    expect(initialDiagnostics?.runtimeErrors[0]?.code).toBe("DIV_ZERO")
-    expect(initialDiagnostics?.runtimeErrors[0]?.formulaName).toBe("ratio")
+    const initialSnapshot = model.getSnapshot()
+    const initialRow = model.getRow(0)
+    expect(initialSnapshot.projection).toBeTruthy()
+    expect(initialRow).toBeTruthy()
+    const initialProjection = initialSnapshot.projection!
+    expect(initialProjection.formula).toBeTruthy()
+    const initialDiagnostics = initialProjection.formula!
+    const ratioRow = initialRow!.row as { ratio?: number }
+    expect(ratioRow.ratio).toBe(0)
+    expect(initialDiagnostics.runtimeErrorCount).toBeGreaterThan(0)
+    expect(initialDiagnostics.runtimeErrors[0]?.code).toBe("DIV_ZERO")
+    expect(initialDiagnostics.runtimeErrors[0]?.formulaName).toBe("ratio")
 
     model.patchRows(
       [{ rowId: "r1", data: { qty: 2 } }],
       { recomputeSort: false, recomputeFilter: false, recomputeGroup: false },
     )
 
-    const patchedDiagnostics = model.getSnapshot().projection.formula
-    expect((model.getRow(0)?.row as { ratio?: number }).ratio).toBe(5)
-    expect(patchedDiagnostics?.runtimeErrorCount).toBe(0)
-    expect(patchedDiagnostics?.runtimeErrors).toEqual([])
-    expect(model.getSnapshot().projection.lastInvalidationReasons).toContain("computedChanged")
+    const patchedSnapshot = model.getSnapshot()
+    const patchedRowNode = model.getRow(0)
+    expect(patchedSnapshot.projection).toBeTruthy()
+    expect(patchedRowNode).toBeTruthy()
+    const patchedProjection = patchedSnapshot.projection!
+    expect(patchedProjection.formula).toBeTruthy()
+    expect(patchedProjection.lastInvalidationReasons).toBeTruthy()
+    const patchedDiagnostics = patchedProjection.formula!
+    const patchedRow = patchedRowNode!.row as { ratio?: number }
+    expect(patchedRow.ratio).toBe(5)
+    expect(patchedDiagnostics.runtimeErrorCount).toBe(0)
+    expect(patchedDiagnostics.runtimeErrors).toEqual([])
+    expect(patchedProjection.lastInvalidationReasons!).toContain("computedChanged")
 
     model.dispose()
   })
@@ -1460,7 +1480,13 @@ describe("createClientRowModel", () => {
       ],
     })
 
-    expect(model.getSnapshot().projection.formula).toEqual(expect.objectContaining({
+    const compileSnapshot = model.getSnapshot()
+    expect(compileSnapshot.projection).toBeTruthy()
+    const compileProjection = compileSnapshot.projection!
+    expect(compileProjection.formula).toBeTruthy()
+    const compileDiagnostics = compileProjection.formula!
+
+    expect(compileDiagnostics).toEqual(expect.objectContaining({
       recomputedFields: ["left", "right"],
       runtimeErrorCount: 0,
       compileCache: expect.objectContaining({
@@ -1468,7 +1494,7 @@ describe("createClientRowModel", () => {
         size: 1,
       }),
     }))
-    expect(model.getSnapshot().projection.formula?.compileCache?.hits).toBeGreaterThanOrEqual(1)
+    expect(compileDiagnostics.compileCache?.hits).toBeGreaterThanOrEqual(1)
 
     model.dispose()
   })
@@ -3462,6 +3488,23 @@ describe("createClientRowModel", () => {
     expect(before?.lastRecomputeHadActual).toBe(true)
     expect(before?.lastRecomputedStages).toContain("sort")
     expect(before?.lastBlockedStages).toEqual([])
+    expect(before?.pipeline?.rowCounts).toEqual({
+      source: 2,
+      afterCompute: 2,
+      afterFilter: 2,
+      afterSort: 2,
+      afterGroup: 2,
+      afterPivot: 2,
+      afterAggregate: 2,
+      afterPaginate: 2,
+      visible: 2,
+    })
+    expect(before?.performance?.totalTime).toBeGreaterThanOrEqual(0)
+    expect(before?.performance?.stageTimes.sort).toBeGreaterThanOrEqual(0)
+    expect(before?.memory?.rowIndexBytes).toBe(64)
+    expect(before?.memory?.sortBufferBytes).toBe(64)
+    expect(before?.memory?.groupBuckets).toBe(0)
+    expect(before?.memory?.pivotCells).toBe(0)
 
     model.patchRows(
       [{ rowId: "r1", data: { tested_at: 999 } }],

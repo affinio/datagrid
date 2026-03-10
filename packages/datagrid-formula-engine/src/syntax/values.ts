@@ -6,9 +6,6 @@ import type {
   DataGridFormulaArrayValue,
   DataGridFormulaValue,
 } from "../coreTypes.js"
-import type {
-  DataGridFormulaRuntimeErrorPolicy,
-} from "./analysis.js"
 import {
   DataGridFormulaEvaluationError,
 } from "./ast.js"

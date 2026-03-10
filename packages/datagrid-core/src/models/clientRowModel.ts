@@ -39,26 +39,18 @@ import{
 import {
   clonePivotSpec,
   normalizePivotAxisValue,
-  normalizePivotSpec,
 } from "@affino/datagrid-pivot"
 import type {
   DataGridPivotCellDrilldownInput,
-  DataGridPivotColumn,
   DataGridPivotSpec,
 } from "@affino/datagrid-pivot"
 import { expandClientProjectionStages } from "./projection/clientRowProjectionEngine.js"
-import {
-  type DataGridClientProjectionComputeStageExecutor,
-} from "./projection/clientRowProjectionComputeStage.js"
 import { DATAGRID_CLIENT_ALL_PROJECTION_STAGES } from "./projection/projectionStages.js"
 import {
   type DataGridClientComputeDiagnostics,
   type DataGridClientComputeMode,
   type DataGridClientComputeTransport,
 } from "./compute/clientRowComputeRuntime.js"
-import {
-  type DataGridPatchChangeSet,
-} from "./mutation/rowPatchAnalyzer.js"
 import type { DataGridClientPerformanceMode, DataGridProjectionPolicy } from "./projection/projectionPolicy.js"
 import { createClientRowLifecycle } from "./clientRowLifecycle.js"
 import { createClientRowComputedSnapshotFieldsRuntime } from "./materialization/clientRowComputedSnapshotFieldsRuntime.js"
@@ -66,13 +58,10 @@ import type { ClientRowComputedSnapshotFieldsRuntime } from "./materialization/c
 import {
   buildColumnHistogram,
   createFilterPredicate,
-  hasActiveFilterModel,
   normalizeText,
-  readRowField,
 } from "./projection/clientRowProjectionPrimitives.js"
 import {
   applyRowDataPatch,
-  buildRowIdIndex,
   mergeRowPatch,
 } from "./clientRowRuntimeUtils.js"
 import type { DataGridFieldDependency } from "./dependency/dependencyGraph.js"
@@ -81,7 +70,6 @@ import { createClientRowSourceColumnHostRuntime } from "./host/clientRowSourceCo
 import { createClientRowFormulaDiagnosticsRuntime } from "./compute/clientRowFormulaDiagnosticsRuntime.js"
 import { createClientRowSourceColumnCacheRuntime } from "./materialization/clientRowSourceColumnCacheRuntime.js"
 import { createClientRowMaterializationRuntime } from "./materialization/clientRowMaterializationRuntime.js"
-import { areSameAggregateRecords } from "./clientRowModelHelpers.js"
 import { cloneAggregationModel } from "./clientRowModelHelpers.js"
 import { createClientRowRowVersionRuntime } from "./state/clientRowRowVersionRuntime.js"
 import {
@@ -110,7 +98,6 @@ import {
   type ApplyComputedFieldsToSourceRowsOptions,
   type ApplyComputedFieldsToSourceRowsResult,
 } from "./compute/clientRowComputedExecutionRuntime.js"
-import type { DataGridClientFormulaComputeModule } from "./compute/clientRowFormulaComputeModule.js"
 import {
   type DataGridFormulaFunctionDefinition,
   type DataGridFormulaFunctionRegistry,
@@ -307,7 +294,6 @@ export function createClientRowModel<T>(
   const {
     cloneSortModel,
     cloneFilterModel,
-    resolveRowId,
     treeData,
     projectionPolicy,
     formulaColumnCacheMaxColumns,
@@ -413,8 +399,6 @@ export function createClientRowModel<T>(
     },
   })
   computedRegistryRef.current = computedRegistry
-  const normalizeComputedName = computedRegistry.normalizeComputedName
-  const normalizeComputedTargetField = computedRegistry.normalizeComputedTargetField
   const computedSnapshotRuntime = createClientRowComputedSnapshotRuntime<T>({
     applyRowDataPatch,
     getSourceRows: () => getBaseSourceRows(),
@@ -647,7 +631,6 @@ export function createClientRowModel<T>(
   const {
     computeModuleHost,
     projectionIntegrationHostRuntime,
-    projectionHostRuntime,
     flatIdentityProjectionRefreshRuntime,
     computeHostRuntime,
   } = computeBootstrap
@@ -686,7 +669,6 @@ export function createClientRowModel<T>(
   })
 
   const {
-    calculationSnapshotRuntime,
     snapshotHostRuntime,
   } = snapshotBootstrap
 

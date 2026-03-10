@@ -85,7 +85,7 @@ export function useDataGridRangeMutationEngine<
       resolveRowId: options.resolveSourceRowId,
       cloneRow: row => ({ ...row }) as TRow,
     })
-    const { sourceById, mutableById, getMutableRow } = rowStore
+    const { mutableById, getMutableRow } = rowStore
     const needsRecompute = new Set<string>()
     const moveEntries: Array<{
       sourceRowId: string

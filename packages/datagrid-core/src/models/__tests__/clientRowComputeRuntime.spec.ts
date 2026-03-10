@@ -2,14 +2,17 @@ import { describe, expect, it, vi } from "vitest"
 import { createClientRowComputeRuntime } from "../compute/clientRowComputeRuntime"
 import type { DataGridClientRowProjectionOrchestrator } from "../projection/clientRowProjectionOrchestrator"
 import type { DataGridPatchProjectionExecutionPlan } from "../mutation/rowPatchAnalyzer"
+import type { DataGridProjectionStage } from "../rowModel"
 
 function createOrchestratorMock(): DataGridClientRowProjectionOrchestrator<unknown> {
+  const staleStages: readonly DataGridProjectionStage[] = ["filter"]
+
   return {
     recomputeFromStage: vi.fn(),
     recomputeWithStagePlan: vi.fn(),
     recomputeWithExecutionPlan: vi.fn(),
     refresh: vi.fn(),
-    getStaleStages: vi.fn(() => ["filter"]),
+    getStaleStages: vi.fn(() => staleStages),
   }
 }
 

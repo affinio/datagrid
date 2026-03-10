@@ -63,11 +63,13 @@ describe("pivotRuntime incremental patching", () => {
     })
 
     expect(patched).not.toBeNull()
-    const amer = patched!.rows.find(row => String((row.row as Record<string, unknown>).region ?? "") === "AMER")
-    const emea = patched!.rows.find(row => String((row.row as Record<string, unknown>).region ?? "") === "EMEA")
+    const amer = patched!.rows.find(row => String((row.row as unknown as Record<string, unknown>).region ?? "") === "AMER")
+    const emea = patched!.rows.find(row => String((row.row as unknown as Record<string, unknown>).region ?? "") === "EMEA")
     expect(amer).toBeDefined()
     expect(emea).toBeDefined()
-    expect((amer!.row as Record<string, unknown>)[String(yearColumnId)]).toBe(100)
-    expect((emea!.row as Record<string, unknown>)[String(yearColumnId)]).toBe(20)
+    const amerRow = amer!.row as unknown as Record<string, unknown>
+    const emeaRow = emea!.row as unknown as Record<string, unknown>
+    expect(amerRow[String(yearColumnId)]).toBe(100)
+    expect(emeaRow[String(yearColumnId)]).toBe(20)
   })
 })

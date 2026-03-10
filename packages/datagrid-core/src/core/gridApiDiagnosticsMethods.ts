@@ -21,7 +21,7 @@ import type {
 } from "./gridApiContracts"
 import type { DataGridComputeCapability } from "./gridApiCapabilities"
 
-type DerivedCacheCapability<TRow = unknown> = {
+type DerivedCacheCapability = {
   getDerivedCacheDiagnostics: () => DataGridClientRowModelDerivedCacheDiagnostics
 }
 
@@ -61,8 +61,8 @@ export interface CreateDataGridApiDiagnosticsMethodsInput<TRow = unknown> {
 
 function resolveDerivedCacheCapability<TRow>(
   rowModel: DataGridRowModel<TRow>,
-): DerivedCacheCapability<TRow> | null {
-  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DerivedCacheCapability<TRow>>
+): DerivedCacheCapability | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DerivedCacheCapability>
   if (typeof candidate.getDerivedCacheDiagnostics !== "function") {
     return null
   }

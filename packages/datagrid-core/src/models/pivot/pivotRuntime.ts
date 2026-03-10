@@ -8,10 +8,8 @@ import type {
   DataGridPivotApplyValuePatchInput,
   DataGridPivotColumn,
   DataGridPivotFieldResolver,
-  DataGridPivotIncrementalPatchRow,
   DataGridPivotProjectionResult,
   DataGridPivotProjectRowsInput,
-  DataGridPivotSpec,
   DataGridPivotRuntime,
   DataGridPivotRuntimeOptions,
   DataGridPivotRuntimeValueSpec,
@@ -21,7 +19,6 @@ import {
   buildPivotIncrementalTouchedKeys,
   comparePivotPathSegments,
   createPivotFieldResolver,
-  createPivotAggregateKey,
   createPivotAxisKey,
   createPivotColumnId,
   createPivotColumnLabel,
@@ -99,10 +96,11 @@ export type {
   DataGridPivotRuntimeOptions,
   DataGridPivotProjectionResult,
   DataGridPivotProjectRowsInput,
-  DataGridPivotIncrementalPatchRow,
   DataGridPivotApplyValuePatchInput,
   DataGridPivotRuntime,
 } from "@affino/datagrid-pivot"
+
+export type { DataGridPivotIncrementalPatchRow } from "@affino/datagrid-pivot"
 
 function resolvePivotProjectionEntryRank(kind: DataGridPivotProjectionEntryKind): number {
   if (kind === "group") {
@@ -115,35 +113,6 @@ function resolvePivotProjectionEntryRank(kind: DataGridPivotProjectionEntryKind)
     return 2
   }
   return 3
-}
-
-interface DataGridPivotIncrementalTouchedKeys {
-  rowEntryKeys: readonly string[]
-  columnKeys: readonly string[]
-}
-
-function toPivotRuntimeColumns(
-  runtimeColumns: readonly DataGridPivotRuntimeColumn[],
-): DataGridPivotColumn[] {
-  return runtimeColumns.map(column => ({
-    id: column.id,
-    valueField: column.valueField,
-    agg: column.agg,
-    label: createPivotColumnLabel(column.columnPath, {
-      field: column.valueField,
-      agg: column.agg,
-      aggregateKey: column.aggregateKey,
-    }, {
-      subtotal: column.subtotal,
-      grandTotal: column.grandTotal,
-    }),
-    ...(column.subtotal ? { subtotal: true } : {}),
-    ...(column.grandTotal ? { grandTotal: true } : {}),
-    columnPath: column.columnPath.map(segment => ({
-      field: segment.field,
-      value: segment.value,
-    })),
-  }))
 }
 
 function buildPivotProjectionRows<T>(

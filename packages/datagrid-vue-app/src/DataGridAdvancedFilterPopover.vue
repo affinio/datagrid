@@ -1,0 +1,252 @@
+<template>
+  <button
+    :ref="floating.triggerRef"
+    type="button"
+    class="datagrid-app-toolbar__button"
+    :class="{ 'datagrid-app-toolbar__button--active': active }"
+    :style="overlayThemeVars"
+    v-bind="triggerProps"
+  >
+    {{ buttonLabel }}
+  </button>
+
+  <Teleport :to="popoverTeleportTarget">
+    <section
+      v-if="popoverOpen"
+      :ref="floating.contentRef"
+      class="datagrid-advanced-filter"
+      :style="[popoverContentStyle, overlayThemeVars]"
+      v-bind="contentProps"
+    >
+      <header class="datagrid-advanced-filter__header">
+        <div>
+          <div class="datagrid-advanced-filter__eyebrow">Advanced filter</div>
+          <h3 class="datagrid-advanced-filter__title">Build clause-based filter</h3>
+        </div>
+        <button type="button" class="datagrid-advanced-filter__ghost" @click="emit('cancel')">
+          Close
+        </button>
+      </header>
+
+      <div class="datagrid-advanced-filter__rows">
+        <div
+          v-for="(clause, clauseIndex) in clauses"
+          :key="clause.id"
+          class="datagrid-advanced-filter__row"
+        >
+          <label class="datagrid-advanced-filter__field datagrid-advanced-filter__field--join">
+            <span class="datagrid-advanced-filter__label">Join</span>
+            <select
+              :value="clause.join"
+              :disabled="clauseIndex === 0"
+              aria-label="Join operator"
+              @change="updateClause(clause.id, 'join', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="and">AND</option>
+              <option value="or">OR</option>
+            </select>
+          </label>
+
+          <label class="datagrid-advanced-filter__field">
+            <span class="datagrid-advanced-filter__label">Column</span>
+            <select
+              :value="clause.columnKey"
+              :data-advanced-filter-autofocus="clauseIndex === 0 ? 'true' : null"
+              aria-label="Column"
+              @change="updateClause(clause.id, 'columnKey', ($event.target as HTMLSelectElement).value)"
+            >
+              <option
+                v-for="column in columns"
+                :key="`advanced-filter-column-${column.key}`"
+                :value="column.key"
+              >
+                {{ column.label }}
+              </option>
+            </select>
+          </label>
+
+          <label class="datagrid-advanced-filter__field">
+            <span class="datagrid-advanced-filter__label">Operator</span>
+            <select
+              :value="clause.operator"
+              aria-label="Condition operator"
+              @change="updateClause(clause.id, 'operator', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="contains">Contains</option>
+              <option value="equals">Equals</option>
+              <option value="not-equals">Not equals</option>
+              <option value="starts-with">Starts with</option>
+              <option value="ends-with">Ends with</option>
+              <option value="gt">&gt;</option>
+              <option value="gte">&gt;=</option>
+              <option value="lt">&lt;</option>
+              <option value="lte">&lt;=</option>
+            </select>
+          </label>
+
+          <label class="datagrid-advanced-filter__field datagrid-advanced-filter__field--value">
+            <span class="datagrid-advanced-filter__label">Value</span>
+            <input
+              :value="clause.value"
+              type="text"
+              placeholder="Value"
+              aria-label="Condition value"
+              @input="updateClause(clause.id, 'value', ($event.target as HTMLInputElement).value)"
+            />
+          </label>
+
+          <div class="datagrid-advanced-filter__row-actions">
+            <button
+              type="button"
+              class="datagrid-advanced-filter__ghost datagrid-advanced-filter__ghost--danger"
+              :disabled="clauses.length <= 1"
+              @click="emit('remove', clause.id)"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <footer class="datagrid-advanced-filter__footer">
+        <button type="button" class="datagrid-advanced-filter__secondary" @click="emit('add')">
+          Add clause
+        </button>
+        <div class="datagrid-advanced-filter__footer-actions">
+          <button type="button" class="datagrid-advanced-filter__secondary" @click="emit('cancel')">
+            Cancel
+          </button>
+          <button type="button" class="datagrid-advanced-filter__primary" @click="emit('apply')">
+            Apply
+          </button>
+        </div>
+      </footer>
+    </section>
+  </Teleport>
+</template>
+
+<script setup lang="ts">
+import { computed, inject, nextTick, ref, watch } from "vue"
+import {
+  useFloatingPopover,
+  usePopoverController,
+} from "@affino/popover-vue"
+import type {
+  DataGridAppAdvancedFilterClauseDraft,
+  DataGridAppAdvancedFilterClausePatch,
+  DataGridAppAdvancedFilterColumnOption,
+} from "@affino/datagrid-vue"
+import { dataGridAppRootElementKey } from "./dataGridAppContext"
+import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
+
+const props = withDefaults(defineProps<{
+  isOpen: boolean
+  clauses: readonly DataGridAppAdvancedFilterClauseDraft[]
+  columns: readonly DataGridAppAdvancedFilterColumnOption[]
+  buttonLabel?: string
+  active?: boolean
+}>(), {
+  buttonLabel: "Advanced filter",
+  active: false,
+})
+
+const emit = defineEmits<{
+  open: []
+  add: []
+  remove: [clauseId: number]
+  apply: []
+  cancel: []
+  "update-clause": [payload: DataGridAppAdvancedFilterClausePatch]
+}>()
+
+const rootElementRef = inject(dataGridAppRootElementKey, ref<HTMLElement | null>(null))
+const overlayThemeVars = ref<Record<string, string>>({})
+
+const controller = usePopoverController(
+  {
+    id: "advanced-filter",
+    role: "dialog",
+    closeOnEscape: true,
+    closeOnInteractOutside: true,
+  },
+  {
+    onOpen: () => {
+      if (!props.isOpen) {
+        emit("open")
+      }
+      syncOverlayThemeVars()
+    },
+    onClose: () => {
+      if (props.isOpen) {
+        emit("cancel")
+      }
+    },
+  },
+)
+
+const floating = useFloatingPopover(controller, {
+  placement: "bottom",
+  align: "start",
+  gutter: 10,
+  viewportPadding: 12,
+  zIndex: 180,
+  lockScroll: false,
+  returnFocus: true,
+})
+
+const triggerProps = computed(() => controller.getTriggerProps({ role: "dialog" }))
+const contentProps = computed(() => controller.getContentProps({ role: "dialog", tabIndex: -1 }))
+const popoverOpen = computed(() => controller.state.value.open)
+const popoverContentStyle = computed(() => floating.contentStyle.value)
+const popoverTeleportTarget = computed(() => floating.teleportTarget.value)
+
+watch(
+  () => props.isOpen,
+  async (open) => {
+    if (open) {
+      syncOverlayThemeVars()
+      if (!controller.state.value.open) {
+        controller.open("programmatic")
+      }
+      await nextTick()
+      const firstField = floating.contentRef.value?.querySelector<HTMLElement>('[data-advanced-filter-autofocus="true"]')
+      firstField?.focus({ preventScroll: true })
+      await floating.updatePosition()
+      return
+    }
+    if (controller.state.value.open) {
+      controller.close("programmatic")
+    }
+  },
+  { immediate: true },
+)
+
+watch(rootElementRef, () => {
+  if (controller.state.value.open) {
+    syncOverlayThemeVars()
+  }
+})
+
+watch(
+  () => props.clauses.length,
+  async () => {
+    if (!controller.state.value.open) {
+      return
+    }
+    await nextTick()
+    await floating.updatePosition()
+  },
+)
+
+function syncOverlayThemeVars(): void {
+  overlayThemeVars.value = readDataGridOverlayThemeVars(rootElementRef.value)
+}
+
+function updateClause(
+  clauseId: number,
+  field: DataGridAppAdvancedFilterClausePatch["field"],
+  value: string,
+): void {
+  emit("update-clause", { clauseId, field, value })
+}
+</script>

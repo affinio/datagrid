@@ -15,6 +15,7 @@ export interface CreateClientRowComputeHostRuntimeOptions<T>
   extends CreateClientRowComputeRuntimeOptions<T> {}
 
 export interface ClientRowComputeHostRuntime<T> {
+  readonly __genericMarker__?: T | undefined
   recomputeFromStage(
     stage: DataGridClientProjectionStage,
     options?: DataGridClientProjectionRecomputeOptions,

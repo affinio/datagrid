@@ -56,9 +56,7 @@ export interface UseDataGridClipboardMutationsOptions<
   ) => Promise<void>
 }
 
-export interface UseDataGridClipboardMutationsResult<
-  TRange extends DataGridClipboardRange = DataGridClipboardRange,
-> {
+export interface UseDataGridClipboardMutationsResult {
   pasteSelection: (trigger: "keyboard" | "context-menu") => Promise<boolean>
   clearCurrentSelection: (trigger: "keyboard" | "context-menu") => Promise<boolean>
   cutSelection: (trigger: "keyboard" | "context-menu") => Promise<boolean>
@@ -72,7 +70,7 @@ export function useDataGridClipboardMutations<
   TSnapshot = unknown,
 >(
   options: UseDataGridClipboardMutationsOptions<TRow, TColumnKey, TRange, TCoord, TSnapshot>,
-): UseDataGridClipboardMutationsResult<TRange> {
+): UseDataGridClipboardMutationsResult {
   function resolvePasteStartCoord(): TCoord | null {
     const selected = options.resolveCopyRange()
     if (selected) {

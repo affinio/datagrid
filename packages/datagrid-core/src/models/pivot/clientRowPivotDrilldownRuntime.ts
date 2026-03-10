@@ -1,6 +1,5 @@
 import type {
   DataGridPivotCellDrilldown,
-  DataGridPivotCellDrilldownInput,
   ResolvePivotCellDrilldownInput,
 } from "@affino/datagrid-pivot"
 import {

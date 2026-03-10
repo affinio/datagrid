@@ -29,7 +29,6 @@ export interface DataGridCellVisibilityVirtualWindow {
 }
 
 export interface UseDataGridCellVisibilityScrollerOptions<
-  TCoord extends DataGridCellVisibilityCoord,
   TMetric extends DataGridCellVisibilityColumnMetric = DataGridCellVisibilityColumnMetric,
 > {
   resolveViewportElement: () => HTMLElement | null
@@ -52,7 +51,7 @@ export function useDataGridCellVisibilityScroller<
   TCoord extends DataGridCellVisibilityCoord,
   TMetric extends DataGridCellVisibilityColumnMetric = DataGridCellVisibilityColumnMetric,
 >(
-  options: UseDataGridCellVisibilityScrollerOptions<TCoord, TMetric>,
+  options: UseDataGridCellVisibilityScrollerOptions<TMetric>,
 ): UseDataGridCellVisibilityScrollerResult<TCoord> {
   function ensureCellVisible(coord: TCoord) {
     const virtualWindow = options.resolveVirtualWindow()

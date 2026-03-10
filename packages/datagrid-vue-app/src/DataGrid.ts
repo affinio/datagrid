@@ -49,6 +49,26 @@ import {
   type DataGridPaginationProp,
 } from "./dataGridPublicProps"
 import {
+  resolveDataGridAdvancedFilter,
+  type DataGridAdvancedFilterOptions,
+  type DataGridAdvancedFilterProp,
+} from "./dataGridAdvancedFilter"
+import {
+  resolveDataGridColumnLayout,
+  type DataGridColumnLayoutOptions,
+  type DataGridColumnLayoutProp,
+} from "./dataGridColumnLayout"
+import {
+  resolveDataGridDiagnostics,
+  type DataGridDiagnosticsOptions,
+  type DataGridDiagnosticsProp,
+} from "./dataGridDiagnostics"
+import {
+  resolveDataGridAggregations,
+  type DataGridAggregationsOptions,
+  type DataGridAggregationsProp,
+} from "./dataGridAggregations"
+import {
   resolveDataGridColumnMenu,
   type DataGridColumnMenuOptions,
   type DataGridColumnMenuProp,
@@ -155,6 +175,22 @@ export default defineComponent({
     },
     columnMenu: {
       type: [Boolean, Object] as PropType<DataGridColumnMenuProp | undefined>,
+      default: undefined,
+    },
+    columnLayout: {
+      type: [Boolean, Object] as PropType<DataGridColumnLayoutProp | undefined>,
+      default: undefined,
+    },
+    diagnostics: {
+      type: [Boolean, Object] as PropType<DataGridDiagnosticsProp | undefined>,
+      default: undefined,
+    },
+    aggregations: {
+      type: [Boolean, Object] as PropType<DataGridAggregationsProp | undefined>,
+      default: undefined,
+    },
+    advancedFilter: {
+      type: [Boolean, Object] as PropType<DataGridAdvancedFilterProp | undefined>,
       default: undefined,
     },
     pageSize: {
@@ -269,6 +305,18 @@ export default defineComponent({
     })
     const resolvedColumnMenu = computed<DataGridColumnMenuOptions>(() => {
       return resolveDataGridColumnMenu(props.columnMenu)
+    })
+    const resolvedColumnLayout = computed<DataGridColumnLayoutOptions>(() => {
+      return resolveDataGridColumnLayout(props.columnLayout)
+    })
+    const resolvedDiagnostics = computed<DataGridDiagnosticsOptions>(() => {
+      return resolveDataGridDiagnostics(props.diagnostics)
+    })
+    const resolvedAggregations = computed<DataGridAggregationsOptions>(() => {
+      return resolveDataGridAggregations(props.aggregations)
+    })
+    const resolvedAdvancedFilter = computed<DataGridAdvancedFilterOptions>(() => {
+      return resolveDataGridAdvancedFilter(props.advancedFilter)
     })
     const resolvedGroupBy = computed(() => {
       return resolveDataGridGroupBy(props.groupBy)
@@ -438,6 +486,10 @@ export default defineComponent({
                 renderMode: resolvedRenderMode.value,
                 virtualization: resolvedVirtualization.value,
                 columnMenu: resolvedColumnMenu.value,
+                columnLayout: resolvedColumnLayout.value,
+                diagnostics: resolvedDiagnostics.value,
+                aggregations: resolvedAggregations.value,
+                advancedFilter: resolvedAdvancedFilter.value,
                 rowHeightMode: props.rowHeightMode,
                 baseRowHeight: props.baseRowHeight,
                 rowHover: props.rowHover,

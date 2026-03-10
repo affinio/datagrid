@@ -126,6 +126,7 @@
         :is-open="isAdvancedFilterPanelOpen"
         :clauses="advancedFilterDraftClauses"
         :columns="advancedFilterColumns"
+        :theme-tokens="sandboxThemeTokens"
         @open="openAdvancedFilterPanel"
         @add="addAdvancedFilterClause"
         @remove="removeAdvancedFilterClause"

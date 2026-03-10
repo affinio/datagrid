@@ -48,10 +48,10 @@ describe("table viewport model bridge property contract", () => {
       const columnModel = createDataGridColumnModel({
         columns: [{ key: "value", label: "Value", initialState: { width: 180 } }],
       })
-      const fallbackRowModel = createClientRowModel()
+      const fallbackRowModel = createClientRowModel<BridgeRow>()
       const fallbackColumnModel = createDataGridColumnModel()
 
-      const bridge = createDataGridViewportModelBridgeService({
+      const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
         initialRowModel: rowModel,
         initialColumnModel: columnModel,
         fallbackRowModel,

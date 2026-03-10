@@ -57,7 +57,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc -p tsconfig.public.json",
+    "build": "pnpm --filter @affino/datagrid-core build && pnpm --filter @affino/datagrid-orchestration build && pnpm --filter @affino/datagrid-worker build && tsc -p tsconfig.public.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "type-check:public": "node ./scripts/type-check-public.mjs",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",

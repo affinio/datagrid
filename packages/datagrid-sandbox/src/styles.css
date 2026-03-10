@@ -159,47 +159,6 @@ body,
   cursor: pointer;
 }
 
-.advanced-filter-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 8px;
-  padding: 8px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #f8fafc;
-}
-
-.advanced-filter-panel__row {
-  display: grid;
-  grid-template-columns: 100px minmax(120px, 1fr) 140px minmax(120px, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.advanced-filter-panel__row select,
-.advanced-filter-panel__row input,
-.advanced-filter-panel__row button,
-.advanced-filter-panel__actions button {
-  height: 30px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 0 8px;
-  background: #fff;
-  color: #1f2937;
-  font-size: 12px;
-}
-
-.advanced-filter-panel__row button,
-.advanced-filter-panel__actions button {
-  cursor: pointer;
-}
-
-.advanced-filter-panel__actions {
-  display: flex;
-  gap: 8px;
-}
-
 .column-layout-panel-trigger {
   height: 30px;
   padding: 0 10px;

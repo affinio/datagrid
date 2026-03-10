@@ -241,6 +241,7 @@ import {
   type MenuOptions,
 } from "@affino/menu-vue"
 import { dataGridAppRootElementKey } from "./dataGridAppContext"
+import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 
 type DataGridColumnPin = "left" | "right" | "none"
 
@@ -427,29 +428,7 @@ function closeMenu(): void {
 }
 
 function syncMenuThemeVars(): void {
-  const rootElement = rootElementRef.value
-  if (!rootElement || typeof window === "undefined") {
-    menuThemeVars.value = {}
-    return
-  }
-  const computedStyle = window.getComputedStyle(rootElement)
-  menuThemeVars.value = {
-    "--datagrid-column-menu-bg": computedStyle.getPropertyValue("--datagrid-column-menu-bg").trim(),
-    "--datagrid-column-menu-border": computedStyle.getPropertyValue("--datagrid-column-menu-border").trim(),
-    "--datagrid-column-menu-shadow": computedStyle.getPropertyValue("--datagrid-column-menu-shadow").trim(),
-    "--datagrid-column-menu-item-hover-bg": computedStyle.getPropertyValue("--datagrid-column-menu-item-hover-bg").trim(),
-    "--datagrid-column-menu-muted-text": computedStyle.getPropertyValue("--datagrid-column-menu-muted-text").trim(),
-    "--datagrid-column-menu-focus-ring": computedStyle.getPropertyValue("--datagrid-column-menu-focus-ring").trim(),
-    "--datagrid-column-menu-search-border": computedStyle.getPropertyValue("--datagrid-column-menu-search-border").trim(),
-    "--datagrid-column-menu-search-bg": computedStyle.getPropertyValue("--datagrid-column-menu-search-bg").trim(),
-    "--datagrid-text-primary": computedStyle.getPropertyValue("--datagrid-text-primary").trim(),
-    "--datagrid-sort-indicator-color": computedStyle.getPropertyValue("--datagrid-sort-indicator-color").trim(),
-    "--datagrid-accent-strong": computedStyle.getPropertyValue("--datagrid-accent-strong").trim(),
-    "--datagrid-filter-trigger-border": computedStyle.getPropertyValue("--datagrid-filter-trigger-border").trim(),
-    "--datagrid-editor-bg": computedStyle.getPropertyValue("--datagrid-editor-bg").trim(),
-    "--datagrid-glass-border": computedStyle.getPropertyValue("--datagrid-glass-border").trim(),
-    "--datagrid-background-color": computedStyle.getPropertyValue("--datagrid-background-color").trim(),
-  }
+  menuThemeVars.value = readDataGridOverlayThemeVars(rootElementRef.value)
 }
 
 function resetFilterDraft(): void {

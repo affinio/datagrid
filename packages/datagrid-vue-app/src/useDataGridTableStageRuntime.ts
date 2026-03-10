@@ -2,7 +2,6 @@ import { computed, nextTick, ref, type ComputedRef, type Ref } from "vue"
 import type {
   DataGridAppRowSnapshot,
   DataGridColumnSnapshot,
-  DataGridRowNode,
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-vue"
 import {

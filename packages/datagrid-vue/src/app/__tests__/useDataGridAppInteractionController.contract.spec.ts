@@ -1,9 +1,13 @@
 import { nextTick, ref } from "vue"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { DataGridColumnSnapshot, DataGridRowNode, DataGridSelectionSnapshot } from "@affino/datagrid-core"
+import type { DataGridColumnSnapshot, DataGridRowId, DataGridRowNode, DataGridSelectionSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppInteractionController } from "../useDataGridAppInteractionController"
 
 type DemoRow = Record<string, unknown>
+
+function normalizeRowId(value: unknown): DataGridRowId | null {
+  return typeof value === "string" || typeof value === "number" ? value : null
+}
 
 function createBodyViewport(options: { shellWidth?: number; shellHeight?: number } = {}): HTMLElement {
   const shellWidth = options.shellWidth ?? 120
@@ -125,7 +129,7 @@ function createControllerHarness(options: {
       ? {
           rowIndex: activeRange.anchor.rowIndex,
           columnIndex: activeRange.anchor.colIndex,
-          rowId: activeRange.anchor.rowId ?? null,
+          rowId: normalizeRowId(activeRange.anchor.rowId),
         }
       : null
   }
@@ -159,7 +163,7 @@ function createControllerHarness(options: {
     rowIndex: number
     columnIndex?: number
     colIndex?: number
-    rowId: string | number | null
+    rowId?: string | number | null
   }) => {
     const anchor = extend
       ? (selectionAnchor ?? {
@@ -230,7 +234,7 @@ function createControllerHarness(options: {
     resolveColumnWidth: column => column.width ?? 2,
     resolveRowHeight: () => 24,
     resolveRowIndexAtOffset: options.resolveRowIndexAtOffset ?? (() => 0),
-    normalizeRowId: value => (typeof value === "string" || typeof value === "number" ? value : null),
+    normalizeRowId,
     normalizeCellCoord: coord => coord,
     resolveSelectionRange: () => {
       const activeRange = selectionSnapshot.value?.ranges[selectionSnapshot.value.activeRangeIndex ?? 0]

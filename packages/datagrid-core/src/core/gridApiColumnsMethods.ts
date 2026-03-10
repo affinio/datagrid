@@ -1,5 +1,4 @@
 import type {
-  DataGridColumnDef,
   DataGridColumnHistogram,
   DataGridColumnHistogramOptions,
   DataGridColumnInput,

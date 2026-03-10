@@ -43,7 +43,7 @@ describe("data grid api facade contracts", () => {
       },
     })
 
-    const api = createDataGridApi({ core }) as Record<string, unknown>
+    const api = createDataGridApi({ core }) as unknown as Record<string, unknown>
     expect(typeof api.rows).toBe("object")
     expect(typeof api.columns).toBe("object")
     expect(typeof api.view).toBe("object")
@@ -481,7 +481,10 @@ describe("data grid api facade contracts", () => {
     api.rows.registerComputedField({
       name: "total",
       deps: ["field:price", "field:quantity"],
-      compute: ({ row }) => row.price * row.quantity,
+      compute: context => {
+        const row = context.row as { price: number; quantity: number }
+        return row.price * row.quantity
+      },
     })
     api.rows.registerFormulaField({
       name: "grand",
@@ -535,7 +538,10 @@ describe("data grid api facade contracts", () => {
       api.rows.registerComputedField({
         name: "score2",
         deps: ["field:score"],
-        compute: ({ row }) => row.score,
+        compute: context => {
+          const row = context.row as { score: number }
+          return row.score
+        },
       })
     }).toThrow(/computed field capability/i)
   })
@@ -834,6 +840,8 @@ describe("data grid api facade contracts", () => {
     const diagnostics = api.diagnostics.getAll()
     expect(diagnostics.rowModel.kind).toBe("client")
     expect(diagnostics.compute?.configuredMode).toBe("worker")
+    expect(diagnostics.rowModel.projection?.pipeline?.rowCounts.source).toBe(1)
+    expect(diagnostics.rowModel.projection?.pipeline?.rowCounts.visible).toBe(1)
     expect(diagnostics.derivedCache).not.toBeNull()
     expect(diagnostics.derivedCache?.sourceColumnCacheSize).toBeGreaterThanOrEqual(0)
     expect(diagnostics.derivedCache?.sourceColumnCacheLimit).toBeNull()
