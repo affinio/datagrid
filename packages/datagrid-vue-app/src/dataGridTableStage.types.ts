@@ -1,5 +1,10 @@
 import type { ComponentPublicInstance, CSSProperties, Ref } from "vue"
-import type { DataGridColumnSnapshot, DataGridRowNode } from "@affino/datagrid-vue"
+import type {
+  DataGridColumnPin,
+  DataGridColumnSnapshot,
+  DataGridOverlayRange,
+  DataGridRowNode,
+} from "@affino/datagrid-vue"
 
 export type DataGridTableMode = "base" | "tree" | "pivot" | "worker"
 export type DataGridPendingEdge = "top" | "right" | "bottom" | "left"
@@ -13,6 +18,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   visibleColumns: readonly DataGridColumnSnapshot[]
   renderedColumns: readonly DataGridColumnSnapshot[]
   displayRows: readonly DataGridTableRow<TRow>[]
+  sourceRows?: readonly TRow[]
   columnFilterTextByKey: Readonly<Record<string, string>>
   gridContentStyle: CSSProperties
   mainTrackStyle: CSSProperties
@@ -24,12 +30,25 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   leftColumnSpacerWidth: number
   rightColumnSpacerWidth: number
   editingCellValue: string
+  selectionRange: DataGridOverlayRange | null
+  fillPreviewRange: DataGridOverlayRange | null
+  rangeMovePreviewRange: DataGridOverlayRange | null
+  isRangeMoving: boolean
   headerViewportRef: DataGridElementRefHandler
   bodyViewportRef: DataGridElementRefHandler
   columnStyle: (key: string) => CSSProperties
   toggleSortForColumn: (columnKey: string, additive?: boolean) => void
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void
+  columnMenuEnabled?: boolean
+  columnMenuMaxFilterValues?: number
+  isColumnFilterActive?: (columnKey: string) => boolean
+  resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
+  resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
+  applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
+  applyColumnMenuPin?: (columnKey: string, pin: DataGridColumnPin) => void
+  applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
+  clearColumnMenuFilter?: (columnKey: string) => void
   handleHeaderWheel: (event: WheelEvent) => void
   handleHeaderScroll: (event: Event) => void
   handleViewportScroll: (event: Event) => void

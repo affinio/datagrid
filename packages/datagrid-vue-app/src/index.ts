@@ -11,6 +11,10 @@ export type {
   DataGridThemeProp,
 } from "./dataGridTheme"
 export type {
+  DataGridColumnMenuOptions,
+  DataGridColumnMenuProp,
+} from "./dataGridColumnMenu"
+export type {
   DataGridGroupByProp,
   DataGridPaginationProp,
 } from "./dataGridPublicProps"

@@ -1,4 +1,4 @@
-import { nextTick, ref, type Ref } from "vue"
+import { computed, nextTick, ref, type ComputedRef, type Ref } from "vue"
 import type {
   DataGridColumnSnapshot,
   DataGridRowNode,
@@ -50,6 +50,7 @@ export interface UseDataGridAppInteractionControllerOptions<
   viewportRowStart: Ref<number>
   selectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   bodyViewportRef: Ref<HTMLElement | null>
+  indexColumnWidth?: number
   resolveColumnWidth: (column: DataGridColumnSnapshot) => number
   resolveRowHeight: (rowIndex: number) => number
   resolveRowIndexAtOffset: (offset: number) => number
@@ -102,6 +103,10 @@ export interface UseDataGridAppInteractionControllerOptions<
 export interface UseDataGridAppInteractionControllerResult<TRow> {
   isPointerSelectingCells: Ref<boolean>
   isFillDragging: Ref<boolean>
+  fillPreviewRange: Ref<DataGridCopyRange | null>
+  isRangeMoving: Ref<boolean>
+  selectionRange: ComputedRef<DataGridCopyRange | null>
+  rangeMovePreviewRange: Ref<DataGridCopyRange | null>
   stopPointerSelection: () => void
   stopFillSelection: (commit: boolean) => void
   startFillHandleDrag: (event: MouseEvent) => void
@@ -120,6 +125,10 @@ export function useDataGridAppInteractionController<
 >(
   options: UseDataGridAppInteractionControllerOptions<TRow, TSnapshot>,
 ): UseDataGridAppInteractionControllerResult<TRow> {
+  const supportsCellSelectionMode = (): boolean => {
+    return options.mode.value === "base" || options.mode.value === "worker"
+  }
+
   const isPointerSelectingCells = ref(false)
   const dragPointer = ref<DataGridAppPointer | null>(null)
   const lastDragCoord = ref<DataGridAppCellCoord | null>(null)
@@ -128,6 +137,7 @@ export function useDataGridAppInteractionController<
   const pendingDragPointerStart = ref<DataGridAppPointer | null>(null)
   const pendingDragCoord = ref<DataGridAppCellCoord | null>(null)
   const isFillDragging = ref(false)
+  const fillDragStartPointer = ref<DataGridAppPointer | null>(null)
   const fillPointer = ref<DataGridAppPointer | null>(null)
   const fillBaseRange = ref<DataGridCopyRange | null>(null)
   const fillPreviewRange = ref<DataGridCopyRange | null>(null)
@@ -152,11 +162,23 @@ export function useDataGridAppInteractionController<
   }
 
   const restoreActiveCellFocus = (): void => {
-    const activeCell = options.selectionSnapshot.value?.activeCell
-    if (activeCell) {
-      options.ensureKeyboardActiveCellVisible(activeCell.rowIndex, activeCell.colIndex)
+    const applyFocus = (): void => {
+      const activeCell = options.selectionSnapshot.value?.activeCell
+      if (activeCell) {
+        options.ensureKeyboardActiveCellVisible(activeCell.rowIndex, activeCell.colIndex)
+      }
+      focusViewport()
     }
-    focusViewport()
+
+    applyFocus()
+    void nextTick(() => {
+      applyFocus()
+      if (typeof window !== "undefined") {
+        window.requestAnimationFrame(() => {
+          applyFocus()
+        })
+      }
+    })
   }
 
   const clearPendingDragSelection = (): void => {
@@ -170,6 +192,8 @@ export function useDataGridAppInteractionController<
     pendingRangeMoveCoord.value = null
     pendingRangeMovePointerStart.value = null
   }
+
+  const selectionRange = computed(() => options.resolveSelectionRange())
 
   const stopPointerSelection = (): void => {
     isPointerSelectingCells.value = false
@@ -371,7 +395,23 @@ export function useDataGridAppInteractionController<
       return {
         scrollTop: bodyViewport.scrollTop,
         scrollLeft: bodyViewport.scrollLeft,
-        getBoundingClientRect: bodyShell.getBoundingClientRect.bind(bodyShell),
+        getBoundingClientRect: () => {
+          const rect = bodyShell.getBoundingClientRect()
+          const indexInset = Math.max(0, Math.min(options.indexColumnWidth ?? 0, rect.width))
+          const width = Math.max(0, rect.width - indexInset)
+          const left = rect.left + indexInset
+          return {
+            left,
+            top: rect.top,
+            width,
+            height: rect.height,
+            right: left + width,
+            bottom: rect.bottom,
+            x: left,
+            y: rect.top,
+            toJSON: () => ({}),
+          }
+        },
       } as unknown as HTMLElement
     },
     resolveColumnMetrics: () => {
@@ -485,6 +525,7 @@ export function useDataGridAppInteractionController<
 
   const pointerPreviewRouter = useDataGridPointerPreviewRouter<DataGridAppCellCoord, DataGridCopyRange>({
     isFillDragging: () => isFillDragging.value,
+    resolveFillDragStartPointer: () => fillDragStartPointer.value,
     resolveFillPointer: () => fillPointer.value,
     resolveFillBaseRange: () => fillBaseRange.value,
     resolveFillPreviewRange: () => fillPreviewRange.value,
@@ -500,10 +541,11 @@ export function useDataGridAppInteractionController<
       rangeMovePreviewRange.value = options.normalizeClipboardRange(range)
     },
     resolveCellCoordFromPointer,
-    buildExtendedRange: (baseRange, coord) => {
+    buildExtendedRange: (baseRange, coord, fillAxis) => {
       const rowDistance = Math.abs(coord.rowIndex - baseRange.endRow)
       const columnDistance = Math.abs(coord.columnIndex - baseRange.endColumn)
-      if (rowDistance >= columnDistance) {
+      const resolvedFillAxis = fillAxis ?? (rowDistance >= columnDistance ? "vertical" : "horizontal")
+      if (resolvedFillAxis === "vertical") {
         return options.normalizeClipboardRange({
           startRow: Math.min(baseRange.startRow, coord.rowIndex),
           endRow: Math.max(baseRange.endRow, coord.rowIndex),
@@ -564,6 +606,9 @@ export function useDataGridAppInteractionController<
     setFillDragging: value => {
       isFillDragging.value = value
     },
+    clearFillDragStartPointer: () => {
+      fillDragStartPointer.value = null
+    },
     clearFillPointer: () => {
       fillPointer.value = null
     },
@@ -581,9 +626,7 @@ export function useDataGridAppInteractionController<
 
   const stopFillSelection = (commit: boolean): void => {
     fillSelectionLifecycle.stopFillSelection(commit)
-    void nextTick(() => {
-      restoreActiveCellFocus()
-    })
+    restoreActiveCellFocus()
   }
 
   const rangeMoveLifecycle = useDataGridRangeMoveLifecycle({
@@ -642,6 +685,30 @@ export function useDataGridAppInteractionController<
 
   const fillHandleStart = useDataGridFillHandleStart<DataGridCopyRange>({
     resolveSelectionRange: options.resolveSelectionRange,
+    resolveInitialFillPreviewRange: range => {
+      const normalizedRange = options.normalizeClipboardRange(range)
+      if (!normalizedRange) {
+        return null
+      }
+      const lastRowIndex = Math.max(0, options.totalRows.value - 1)
+      if (normalizedRange.endRow < lastRowIndex) {
+        return options.normalizeClipboardRange({
+          startRow: normalizedRange.startRow,
+          endRow: normalizedRange.endRow + 1,
+          startColumn: normalizedRange.startColumn,
+          endColumn: normalizedRange.endColumn,
+        })
+      }
+      if (normalizedRange.startRow > 0) {
+        return options.normalizeClipboardRange({
+          startRow: normalizedRange.startRow - 1,
+          endRow: normalizedRange.endRow,
+          startColumn: normalizedRange.startColumn,
+          endColumn: normalizedRange.endColumn,
+        })
+      }
+      return normalizedRange
+    },
     focusViewport,
     stopRangeMove: commit => {
       rangeMoveLifecycle.stopRangeMove(commit)
@@ -660,6 +727,9 @@ export function useDataGridAppInteractionController<
     },
     setFillPreviewRange: range => {
       fillPreviewRange.value = range ? options.normalizeClipboardRange(range) : null
+    },
+    setFillDragStartPointer: pointer => {
+      fillDragStartPointer.value = pointer
     },
     setFillPointer: pointer => {
       fillPointer.value = pointer
@@ -689,7 +759,7 @@ export function useDataGridAppInteractionController<
     focusViewport,
     openContextMenuFromCurrentCell: () => undefined,
     selectAllCells: () => {
-      if (options.mode.value !== "base") {
+      if (!supportsCellSelectionMode()) {
         return
       }
       const lastRowIndex = options.totalRows.value - 1
@@ -824,7 +894,7 @@ export function useDataGridAppInteractionController<
       return
     }
 
-    if (options.mode.value === "base") {
+    if (supportsCellSelectionMode()) {
       const handled = cellPointerDownRouter.dispatchCellPointerDown(row, columnKey, event)
       if (handled) {
         dragSelectionOriginPin.value = resolveColumnPin(columnIndex)
@@ -837,7 +907,7 @@ export function useDataGridAppInteractionController<
       return
     }
     options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
-    if (options.mode.value !== "base") {
+    if (!supportsCellSelectionMode()) {
       return
     }
     pendingDragSelection.value = true
@@ -858,7 +928,7 @@ export function useDataGridAppInteractionController<
       stopFillSelection(false)
       return
     }
-    if (options.mode.value !== "base") {
+    if (!supportsCellSelectionMode()) {
       return
     }
     if (!isRangeMoving.value && event.key === "Escape" && options.clearPendingClipboardOperation(true, true)) {
@@ -960,6 +1030,10 @@ export function useDataGridAppInteractionController<
   return {
     isPointerSelectingCells,
     isFillDragging,
+    fillPreviewRange,
+    isRangeMoving,
+    selectionRange,
+    rangeMovePreviewRange,
     stopPointerSelection: () => {
       stopPointerSelection()
       pointerAutoScroll.stopAutoScrollFrameIfIdle()

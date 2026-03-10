@@ -503,20 +503,42 @@ export function useAffinoDataGridRangeClipboard<TRow>(
   const rangeMoveEnabled = ref(options.interactions.moveEnabled)
   const rangePointerMode = ref<"idle" | "fill" | "move">("idle")
   const isRangePointerActive = ref(false)
+  const fillPreviewAxisLock = ref<"vertical" | "horizontal" | null>(null)
+  const fillPreviewHorizontalAxisBiasColumns = 1
 
   const clearRangePreviews = (): void => {
+    fillPreviewAxisLock.value = null
     setFillPreviewRange(null)
     setRangeMovePreviewRange(null)
+  }
+
+  const resolveFillPreviewAxis = (
+    baseRange: InternalCellRange,
+    rowIndex: number,
+    columnIndex: number,
+  ): "vertical" | "horizontal" => {
+    if (fillPreviewAxisLock.value) {
+      return fillPreviewAxisLock.value
+    }
+    const rowOutsideBase = rowIndex < baseRange.startRow || rowIndex > baseRange.endRow
+    if (rowOutsideBase) {
+      return "vertical"
+    }
+    const columnOutsideBase = columnIndex < baseRange.startColumn || columnIndex > baseRange.endColumn
+    if (columnOutsideBase) {
+      const rowDistance = Math.max(0, Math.max(baseRange.startRow - rowIndex, rowIndex - baseRange.endRow))
+      const columnDistance = Math.max(0, Math.max(baseRange.startColumn - columnIndex, columnIndex - baseRange.endColumn))
+      return columnDistance > rowDistance + fillPreviewHorizontalAxisBiasColumns ? "horizontal" : "vertical"
+    }
+    return "vertical"
   }
 
   const computeFillPreview = (
     baseRange: InternalCellRange,
     rowIndex: number,
     columnIndex: number,
+    fillAxis: "vertical" | "horizontal",
   ): InternalCellRange => {
-    const rowDistance = Math.abs(rowIndex - baseRange.endRow)
-    const columnDistance = Math.abs(columnIndex - baseRange.endColumn)
-    const fillAxis = rowDistance >= columnDistance ? "vertical" : "horizontal"
     if (fillAxis === "vertical") {
       return normalizeCellRange({
         startRow: Math.min(baseRange.startRow, rowIndex),
@@ -558,7 +580,12 @@ export function useAffinoDataGridRangeClipboard<TRow>(
       return
     }
     if (rangePointerMode.value === "fill" && rangeFillEnabled.value) {
-      setFillPreviewRange(computeFillPreview(baseRange, rowIndex, columnIndex))
+      const fillAxis = resolveFillPreviewAxis(baseRange, rowIndex, columnIndex)
+      const preview = computeFillPreview(baseRange, rowIndex, columnIndex, fillAxis)
+      if (!areCellRangesEqual(preview, baseRange)) {
+        fillPreviewAxisLock.value = fillAxis
+      }
+      setFillPreviewRange(preview)
       return
     }
     if (rangePointerMode.value === "move" && rangeMoveEnabled.value) {
@@ -573,6 +600,7 @@ export function useAffinoDataGridRangeClipboard<TRow>(
     const mode = rangePointerMode.value
     isRangePointerActive.value = false
     rangePointerMode.value = "idle"
+    fillPreviewAxisLock.value = null
     if (!apply) {
       clearRangePreviews()
       return
@@ -602,6 +630,9 @@ export function useAffinoDataGridRangeClipboard<TRow>(
     const columnIndex = options.resolveVisibleColumnIndex(params.columnKey)
     if (columnIndex < 0 || !normalizeCellRange(options.cellSelectionRange.value)) {
       return false
+    }
+    if (mode === "fill") {
+      fillPreviewAxisLock.value = null
     }
     rangePointerMode.value = mode
     isRangePointerActive.value = true

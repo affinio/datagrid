@@ -1,6 +1,7 @@
 export interface UseDataGridFillSelectionLifecycleOptions<TRange = { startRow: number; endRow: number; startColumn: number; endColumn: number }> {
   applyFillPreview: () => void
   setFillDragging: (value: boolean) => void
+  clearFillDragStartPointer: () => void
   clearFillPointer: () => void
   clearFillBaseRange: () => void
   clearFillPreviewRange: () => void
@@ -20,6 +21,7 @@ export function useDataGridFillSelectionLifecycle<TRange = { startRow: number; e
       options.applyFillPreview()
     }
     options.setFillDragging(false)
+    options.clearFillDragStartPointer()
     options.clearFillPointer()
     options.clearFillBaseRange()
     options.clearFillPreviewRange()

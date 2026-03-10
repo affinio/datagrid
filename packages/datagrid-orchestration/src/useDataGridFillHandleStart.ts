@@ -9,6 +9,7 @@ export interface UseDataGridFillHandleStartOptions<
   TRange extends DataGridFillHandleStartRange = DataGridFillHandleStartRange,
 > {
   resolveSelectionRange: () => TRange | null
+  resolveInitialFillPreviewRange?: (range: TRange) => TRange | null
   focusViewport: () => void
   stopRangeMove: (applyPreview: boolean) => void
   setDragSelecting: (value: boolean) => void
@@ -16,6 +17,7 @@ export interface UseDataGridFillHandleStartOptions<
   setFillDragging: (value: boolean) => void
   setFillBaseRange: (range: TRange | null) => void
   setFillPreviewRange: (range: TRange | null) => void
+  setFillDragStartPointer: (pointer: { clientX: number; clientY: number } | null) => void
   setFillPointer: (pointer: { clientX: number; clientY: number } | null) => void
   startInteractionAutoScroll: () => void
   setLastAction: (message: string) => void
@@ -38,6 +40,8 @@ export function useDataGridFillHandleStart<
     if (!currentRange) {
       return false
     }
+    const initialPreviewRange = options.resolveInitialFillPreviewRange?.(currentRange) ?? currentRange
+    const pointer = { clientX: event.clientX, clientY: event.clientY }
 
     event.preventDefault()
     event.stopPropagation()
@@ -47,8 +51,9 @@ export function useDataGridFillHandleStart<
     options.setDragPointer(null)
     options.setFillDragging(true)
     options.setFillBaseRange({ ...currentRange })
-    options.setFillPreviewRange({ ...currentRange })
-    options.setFillPointer({ clientX: event.clientX, clientY: event.clientY })
+    options.setFillPreviewRange(initialPreviewRange ? { ...initialPreviewRange } : null)
+    options.setFillDragStartPointer(pointer)
+    options.setFillPointer(pointer)
     options.startInteractionAutoScroll()
     options.setLastAction("Fill handle active")
     return true

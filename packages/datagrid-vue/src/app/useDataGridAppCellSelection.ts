@@ -62,6 +62,10 @@ export interface UseDataGridAppCellSelectionResult<TRow> {
 export function useDataGridAppCellSelection<TRow>(
   options: UseDataGridAppCellSelectionOptions<TRow>,
 ): UseDataGridAppCellSelectionResult<TRow> {
+  const supportsCellSelectionMode = (): boolean => {
+    return options.mode.value === "base" || options.mode.value === "worker"
+  }
+
   const resolveAnchorColumnIndex = (anchor: DataGridAppSelectionAnchorLike): number => {
     return "columnIndex" in anchor ? anchor.columnIndex : anchor.colIndex
   }
@@ -223,7 +227,7 @@ export function useDataGridAppCellSelection<TRow>(
     extend: boolean,
     fallbackAnchor?: DataGridAppSelectionAnchorLike,
   ): void => {
-    if (options.mode.value !== "base" || !options.runtime.api.selection.hasSupport()) {
+    if (!supportsCellSelectionMode() || !options.runtime.api.selection.hasSupport()) {
       return
     }
     const normalizedCoord = normalizeCellCoord(coord)

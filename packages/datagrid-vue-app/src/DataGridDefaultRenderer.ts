@@ -10,15 +10,19 @@ import {
   type Ref,
 } from "vue"
 import type {
+  DataGridColumnPin,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridPivotSpec,
-  DataGridSelectionSnapshot,
   DataGridSortState,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
-import { useDataGridAppSelection } from "@affino/datagrid-vue"
+import {
+  cloneDataGridFilterSnapshot,
+  useDataGridAppSelection,
+} from "@affino/datagrid-vue"
 import DataGridTableStage from "./DataGridTableStage.vue"
+import type { DataGridColumnMenuOptions } from "./dataGridColumnMenu"
 import type { DataGridVirtualizationOptions } from "./dataGridVirtualization"
 import { useDataGridTableStageRuntime } from "./useDataGridTableStageRuntime"
 
@@ -41,6 +45,68 @@ function resolveInitialSortState(sortModel: readonly DataGridSortState[] | undef
     key: entry.key,
     direction: entry.direction,
   }))
+}
+
+function createEmptyFilterModel(): DataGridFilterSnapshot {
+  return {
+    columnFilters: {},
+    advancedFilters: {},
+    advancedExpression: null,
+  }
+}
+
+function cloneFilterModelState(
+  filterModel: DataGridFilterSnapshot | null | undefined,
+): DataGridFilterSnapshot {
+  return cloneDataGridFilterSnapshot(filterModel ?? createEmptyFilterModel()) ?? createEmptyFilterModel()
+}
+
+function normalizeColumnMenuToken(token: string): string {
+  return token.startsWith("string:")
+    ? `string:${token.slice("string:".length).toLowerCase()}`
+    : token
+}
+
+function pruneFilterModel(filterModel: DataGridFilterSnapshot): DataGridFilterSnapshot | null {
+  const columnFilters: DataGridFilterSnapshot["columnFilters"] = {}
+  for (const [columnKey, entry] of Object.entries(filterModel.columnFilters ?? {})) {
+    if (entry.kind === "valueSet") {
+      const tokens = Array.from(new Set(
+        (entry.tokens ?? [])
+          .map(token => normalizeColumnMenuToken(String(token ?? "")))
+          .filter(token => token.length > 0),
+      ))
+      if (tokens.length === 0) {
+        continue
+      }
+      columnFilters[columnKey] = {
+        kind: "valueSet",
+        tokens,
+      }
+      continue
+    }
+    columnFilters[columnKey] = {
+      kind: "predicate",
+      operator: entry.operator,
+      value: entry.value,
+      value2: entry.value2,
+      caseSensitive: entry.caseSensitive,
+    }
+  }
+  const advancedFilters = { ...(filterModel.advancedFilters ?? {}) }
+  const advancedExpression = filterModel.advancedExpression ?? null
+  if (
+    Object.keys(columnFilters).length === 0
+    && Object.keys(advancedFilters).length === 0
+    && !advancedExpression
+  ) {
+    return null
+  }
+  return {
+    columnFilters,
+    advancedFilters,
+    advancedExpression,
+  }
 }
 
 function resolveInitialFilterTexts(filterModel: DataGridFilterSnapshot | null | undefined): Record<string, string> {
@@ -107,6 +173,10 @@ export default defineComponent({
       type: Object as PropType<DataGridVirtualizationOptions>,
       required: true,
     },
+    columnMenu: {
+      type: Object as PropType<DataGridColumnMenuOptions>,
+      required: true,
+    },
     rowHeightMode: {
       type: String as PropType<"fixed" | "auto">,
       default: "fixed",
@@ -119,7 +189,10 @@ export default defineComponent({
   setup(props) {
     const rowVersion = ref(0)
     const sortState = ref<SortToggleState[]>(resolveInitialSortState(props.sortModel))
-    const columnFilterTextByKey = ref<Record<string, string>>(resolveInitialFilterTexts(props.filterModel))
+    const filterModelState = ref<DataGridFilterSnapshot>(cloneFilterModelState(props.filterModel))
+    const columnFilterTextByKey = computed<Record<string, string>>(() => (
+      resolveInitialFilterTexts(filterModelState.value)
+    ))
 
     const unsubscribeRowModel = props.runtimeRowModel.subscribe(() => {
       rowVersion.value += 1
@@ -140,7 +213,7 @@ export default defineComponent({
     watch(
       () => props.filterModel,
       nextFilterModel => {
-        columnFilterTextByKey.value = resolveInitialFilterTexts(nextFilterModel)
+        filterModelState.value = cloneFilterModelState(nextFilterModel)
       },
       { deep: true },
     )
@@ -171,35 +244,33 @@ export default defineComponent({
       totalRows,
     })
 
+    const isColumnFilterActive = (columnKey: string): boolean => {
+      const entry = filterModelState.value.columnFilters?.[columnKey]
+      if (!entry) {
+        return false
+      }
+      return entry.kind === "valueSet"
+        ? entry.tokens.length > 0
+        : true
+    }
+
+    const resolveCurrentValueFilterTokens = (columnKey: string): readonly string[] => {
+      const entry = filterModelState.value.columnFilters?.[columnKey]
+      if (!entry || entry.kind !== "valueSet") {
+        return []
+      }
+      return entry.tokens.map(token => normalizeColumnMenuToken(String(token ?? "")))
+    }
+
     const applySortAndFilter = (): void => {
       const nextSortModel: readonly DataGridSortState[] = sortState.value.map(entry => ({
         key: entry.key,
         direction: entry.direction,
       }))
 
-      const nextColumnFilters: DataGridFilterSnapshot["columnFilters"] = {}
-      for (const [columnKey, rawValue] of Object.entries(columnFilterTextByKey.value)) {
-        const value = rawValue.trim()
-        if (!value) {
-          continue
-        }
-        nextColumnFilters[columnKey] = {
-          kind: "predicate",
-          operator: "contains",
-          value,
-          caseSensitive: false,
-        }
-      }
-
       props.runtime.api.rows.setSortAndFilterModel({
         sortModel: nextSortModel,
-        filterModel: Object.keys(nextColumnFilters).length > 0
-          ? {
-              columnFilters: nextColumnFilters,
-              advancedFilters: {},
-              advancedExpression: null,
-            }
-          : null,
+        filterModel: pruneFilterModel(filterModelState.value),
       })
     }
 
@@ -247,16 +318,70 @@ export default defineComponent({
     }
 
     const setColumnFilterText = (columnKey: string, value: string): void => {
-      columnFilterTextByKey.value = {
-        ...columnFilterTextByKey.value,
-        [columnKey]: value,
+      const nextFilterModel = cloneFilterModelState(filterModelState.value)
+      const normalizedValue = value.trim()
+      if (!normalizedValue) {
+        delete nextFilterModel.columnFilters[columnKey]
+      } else {
+        nextFilterModel.columnFilters[columnKey] = {
+          kind: "predicate",
+          operator: "contains",
+          value: normalizedValue,
+          caseSensitive: false,
+        }
       }
+      filterModelState.value = nextFilterModel
       applySortAndFilter()
     }
 
     const applyRowHeightSettings = (): void => {
       props.runtime.api.view.setRowHeightMode(rowHeightMode.value)
       props.runtime.api.view.setBaseRowHeight(normalizedBaseRowHeight.value)
+    }
+
+    const resolveColumnMenuSortDirection = (columnKey: string): "asc" | "desc" | null => {
+      return sortState.value.find(entry => entry.key === columnKey)?.direction ?? null
+    }
+
+    const applyColumnMenuSort = (columnKey: string, direction: "asc" | "desc" | null): void => {
+      const targetColumn = visibleColumns.value.find(column => column.key === columnKey)
+      if (!targetColumn || targetColumn.column.capabilities?.sortable === false) {
+        return
+      }
+      sortState.value = direction === null
+        ? sortState.value.filter(entry => entry.key !== columnKey)
+        : [{ key: columnKey, direction }]
+      applySortAndFilter()
+    }
+
+    const applyColumnMenuPin = (columnKey: string, pin: DataGridColumnPin): void => {
+      props.runtime.api.columns.setPin(columnKey, pin)
+    }
+
+    const applyColumnMenuFilter = (columnKey: string, tokens: readonly string[]): void => {
+      const normalizedTokens = Array.from(new Set(
+        tokens
+          .map(token => normalizeColumnMenuToken(String(token ?? "")))
+          .filter(token => token.length > 0),
+      ))
+      if (normalizedTokens.length === 0) {
+        clearColumnMenuFilter(columnKey)
+        return
+      }
+      const nextFilterModel = cloneFilterModelState(filterModelState.value)
+      nextFilterModel.columnFilters[columnKey] = {
+        kind: "valueSet",
+        tokens: normalizedTokens,
+      }
+      filterModelState.value = nextFilterModel
+      applySortAndFilter()
+    }
+
+    const clearColumnMenuFilter = (columnKey: string): void => {
+      const nextFilterModel = cloneFilterModelState(filterModelState.value)
+      delete nextFilterModel.columnFilters[columnKey]
+      filterModelState.value = nextFilterModel
+      applySortAndFilter()
     }
 
     const {
@@ -284,6 +409,18 @@ export default defineComponent({
       cloneRowData,
     })
 
-    return () => h(DataGridTableStage as Component, tableStageProps.value)
+    return () => h(DataGridTableStage as Component, {
+      ...tableStageProps.value,
+      sourceRows: props.rows,
+      columnMenuEnabled: props.columnMenu.enabled,
+      columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
+      isColumnFilterActive,
+      resolveColumnMenuSortDirection,
+      resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
+      applyColumnMenuSort,
+      applyColumnMenuPin,
+      applyColumnMenuFilter,
+      clearColumnMenuFilter,
+    })
   },
 })

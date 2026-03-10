@@ -1256,6 +1256,7 @@ type PendingClipboardOperation = "none" | "copy" | "cut"
 const pendingClipboardOperation = ref<PendingClipboardOperation>("none")
 const pendingClipboardRange = ref<DataGridCopyRange | null>(null)
 const isFillDragging = ref(false)
+const fillDragStartPointer = ref<{ clientX: number; clientY: number } | null>(null)
 const fillPointer = ref<{ clientX: number; clientY: number } | null>(null)
 const fillBaseRange = ref<DataGridCopyRange | null>(null)
 const fillPreviewRange = ref<DataGridCopyRange | null>(null)
@@ -1827,6 +1828,7 @@ const dragPointerSelection = useDataGridDragPointerSelection<SandboxCellCoord>({
 
 const pointerPreviewRouter = useDataGridPointerPreviewRouter<SandboxCellCoord, DataGridCopyRange>({
   isFillDragging: () => isFillDragging.value,
+  resolveFillDragStartPointer: () => fillDragStartPointer.value,
   resolveFillPointer: () => fillPointer.value,
   resolveFillBaseRange: () => fillBaseRange.value,
   resolveFillPreviewRange: () => fillPreviewRange.value,
@@ -1842,10 +1844,11 @@ const pointerPreviewRouter = useDataGridPointerPreviewRouter<SandboxCellCoord, D
     rangeMovePreviewRange.value = normalizeClipboardRange(range)
   },
   resolveCellCoordFromPointer,
-  buildExtendedRange: (baseRange, coord) => {
+  buildExtendedRange: (baseRange, coord, fillAxis) => {
     const rowDistance = Math.abs(coord.rowIndex - baseRange.endRow)
     const columnDistance = Math.abs(coord.columnIndex - baseRange.endColumn)
-    if (rowDistance >= columnDistance) {
+    const resolvedFillAxis = fillAxis ?? (rowDistance >= columnDistance ? "vertical" : "horizontal")
+    if (resolvedFillAxis === "vertical") {
       return normalizeClipboardRange({
         startRow: Math.min(baseRange.startRow, coord.rowIndex),
         endRow: Math.max(baseRange.endRow, coord.rowIndex),
@@ -1899,6 +1902,9 @@ const fillSelectionLifecycle = useDataGridFillSelectionLifecycle<DataGridCopyRan
   applyFillPreview,
   setFillDragging: (value) => {
     isFillDragging.value = value
+  },
+  clearFillDragStartPointer: () => {
+    fillDragStartPointer.value = null
   },
   clearFillPointer: () => {
     fillPointer.value = null
@@ -1973,6 +1979,30 @@ const rangeMoveStart = useDataGridRangeMoveStart<SandboxCellCoord, DataGridCopyR
 
 const fillHandleStart = useDataGridFillHandleStart<DataGridCopyRange>({
   resolveSelectionRange: resolveSelectionRangeForClipboard,
+  resolveInitialFillPreviewRange: (range) => {
+    const normalizedRange = normalizeClipboardRange(range)
+    if (!normalizedRange) {
+      return null
+    }
+    const lastRowIndex = Math.max(0, api.rows.getCount() - 1)
+    if (normalizedRange.endRow < lastRowIndex) {
+      return normalizeClipboardRange({
+        startRow: normalizedRange.startRow,
+        endRow: normalizedRange.endRow + 1,
+        startColumn: normalizedRange.startColumn,
+        endColumn: normalizedRange.endColumn,
+      })
+    }
+    if (normalizedRange.startRow > 0) {
+      return normalizeClipboardRange({
+        startRow: normalizedRange.startRow - 1,
+        endRow: normalizedRange.endRow,
+        startColumn: normalizedRange.startColumn,
+        endColumn: normalizedRange.endColumn,
+      })
+    }
+    return normalizedRange
+  },
   focusViewport: () => {
     bodyViewportRef.value?.focus({ preventScroll: true })
   },
@@ -1993,6 +2023,9 @@ const fillHandleStart = useDataGridFillHandleStart<DataGridCopyRange>({
   },
   setFillPreviewRange: (range) => {
     fillPreviewRange.value = range ? normalizeClipboardRange(range) : null
+  },
+  setFillDragStartPointer: (pointer) => {
+    fillDragStartPointer.value = pointer
   },
   setFillPointer: (pointer) => {
     fillPointer.value = pointer
@@ -2114,7 +2147,7 @@ const cellPointerDownRouter = useDataGridCellPointerDownRouter<
 const headerResize = useDataGridHeaderResizeOrchestration<CoreBaseRow>({
   resolveColumnBaseWidth: (columnKey) => {
     const snapshot = visibleColumns.value.find(column => column.key === columnKey)
-    return snapshot?.column.width ?? DEFAULT_COLUMN_WIDTH
+    return snapshot?.width ?? DEFAULT_COLUMN_WIDTH
   },
   resolveColumnLabel: (columnKey) => {
     return visibleColumns.value.find(column => column.key === columnKey)?.column.label ?? columnKey

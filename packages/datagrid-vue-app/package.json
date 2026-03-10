@@ -25,7 +25,8 @@
   },
   "dependencies": {
     "@affino/datagrid-theme": "workspace:*",
-    "@affino/datagrid-vue": "workspace:*"
+    "@affino/datagrid-vue": "workspace:*",
+    "@affino/menu-vue": "^2.1.1"
   },
   "peerDependencies": {
     "vue": "^3.3.0"

@@ -1,20 +1,22 @@
-import { ref } from "vue"
+import { nextTick, ref } from "vue"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { DataGridColumnSnapshot, DataGridRowNode } from "@affino/datagrid-core"
+import type { DataGridColumnSnapshot, DataGridRowNode, DataGridSelectionSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppInteractionController } from "../useDataGridAppInteractionController"
 
 type DemoRow = Record<string, unknown>
 
-function createBodyViewport(): HTMLElement {
+function createBodyViewport(options: { shellWidth?: number; shellHeight?: number } = {}): HTMLElement {
+  const shellWidth = options.shellWidth ?? 120
+  const shellHeight = options.shellHeight ?? 120
   const shell = document.createElement("div")
   shell.className = "grid-body-shell"
   shell.getBoundingClientRect = () => ({
     left: 0,
     top: 0,
-    width: 120,
-    height: 120,
-    right: 120,
-    bottom: 120,
+    width: shellWidth,
+    height: shellHeight,
+    right: shellWidth,
+    bottom: shellHeight,
     x: 0,
     y: 0,
     toJSON: () => ({}),
@@ -24,8 +26,8 @@ function createBodyViewport(): HTMLElement {
   viewport.className = "grid-body-viewport"
   Object.defineProperty(viewport, "scrollTop", { configurable: true, writable: true, value: 0 })
   Object.defineProperty(viewport, "scrollLeft", { configurable: true, writable: true, value: 0 })
-  Object.defineProperty(viewport, "clientWidth", { configurable: true, value: 120 })
-  Object.defineProperty(viewport, "clientHeight", { configurable: true, value: 120 })
+  Object.defineProperty(viewport, "clientWidth", { configurable: true, value: shellWidth })
+  Object.defineProperty(viewport, "clientHeight", { configurable: true, value: shellHeight })
   viewport.focus = vi.fn()
 
   shell.appendChild(viewport)
@@ -53,11 +55,24 @@ function createMouseEvent(
   return event
 }
 
-function createControllerHarness(options: { rowCount?: number; columnCount?: number } = {}) {
+function createControllerHarness(options: {
+  rowCount?: number
+  columnCount?: number
+  columnWidths?: readonly number[]
+  shellWidth?: number
+  shellHeight?: number
+  indexColumnWidth?: number
+  mode?: "base" | "tree" | "pivot" | "worker"
+} = {}) {
   const rowCount = options.rowCount ?? 1
-  const columnCount = options.columnCount ?? 2
-  const bodyViewport = createBodyViewport()
-  const selectionSnapshot = ref(null)
+  const columnWidths = options.columnWidths ?? Array.from({ length: options.columnCount ?? 2 }, () => 2)
+  const columnCount = options.columnCount ?? columnWidths.length
+  const mode = options.mode ?? "base"
+  const bodyViewport = createBodyViewport({
+    shellWidth: options.shellWidth,
+    shellHeight: options.shellHeight,
+  })
+  const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
   const applyCellSelectionByCoord = vi.fn()
   const applySelectionRange = vi.fn()
   const rows = Array.from({ length: rowCount }, (_, rowIndex) => ({
@@ -68,7 +83,7 @@ function createControllerHarness(options: { rowCount?: number; columnCount?: num
   const row = rows[0]!
 
   const controller = useDataGridAppInteractionController<DemoRow, readonly DemoRow[]>({
-    mode: ref("base"),
+    mode: ref(mode),
     runtime: {
       api: {
         rows: {
@@ -84,7 +99,7 @@ function createControllerHarness(options: { rowCount?: number; columnCount?: num
     visibleColumns: ref(
       Array.from({ length: columnCount }, (_, columnIndex) => ({
         key: String.fromCharCode(97 + columnIndex),
-        width: 2,
+        width: columnWidths[columnIndex] ?? 2,
         pin: "center",
         column: {
           key: String.fromCharCode(97 + columnIndex),
@@ -95,12 +110,26 @@ function createControllerHarness(options: { rowCount?: number; columnCount?: num
     viewportRowStart: ref(0),
     selectionSnapshot,
     bodyViewportRef: ref(bodyViewport),
+    indexColumnWidth: options.indexColumnWidth ?? 0,
     resolveColumnWidth: column => column.width ?? 2,
     resolveRowHeight: () => 24,
     resolveRowIndexAtOffset: () => 0,
     normalizeRowId: value => (typeof value === "string" || typeof value === "number" ? value : null),
     normalizeCellCoord: coord => coord,
-    resolveSelectionRange: () => null,
+    resolveSelectionRange: () => {
+      const activeRange = selectionSnapshot.value?.ranges[selectionSnapshot.value.activeRangeIndex ?? 0]
+        ?? selectionSnapshot.value?.ranges[0]
+        ?? null
+      if (!activeRange) {
+        return null
+      }
+      return {
+        startRow: activeRange.startRow,
+        endRow: activeRange.endRow,
+        startColumn: activeRange.startCol,
+        endColumn: activeRange.endCol,
+      }
+    },
     applySelectionRange,
     applyCellSelectionByCoord,
     setCellSelection: vi.fn(),
@@ -192,6 +221,74 @@ describe("useDataGridAppInteractionController contract", () => {
     )
   })
 
+  it("enables worker-mode drag selection like base mode", () => {
+    const { controller, row, applyCellSelectionByCoord } = createControllerHarness({
+      mode: "worker",
+    })
+    const cell = createCell(0, 0)
+    const pointerDown = createMouseEvent("mousedown", cell, {
+      button: 0,
+      clientX: 1,
+      clientY: 10,
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 6,
+      clientY: 10,
+    }))
+
+    expect(controller.isPointerSelectingCells.value).toBe(true)
+    expect(applyCellSelectionByCoord).toHaveBeenCalledTimes(2)
+    expect(applyCellSelectionByCoord).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rowIndex: 0, columnIndex: 1 }),
+      true,
+      undefined,
+    )
+  })
+
+  it("keeps drag selection in the current column until the pointer actually crosses the boundary", () => {
+    const { controller, row, applyCellSelectionByCoord } = createControllerHarness({
+      rowCount: 3,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      indexColumnWidth: 72,
+    })
+    const cell = createCell(0, 0)
+    const pointerDown = createMouseEvent("mousedown", cell, {
+      button: 0,
+      clientX: 120,
+      clientY: 10,
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 169,
+      clientY: 40,
+    }))
+
+    expect(controller.isPointerSelectingCells.value).toBe(true)
+    expect(applyCellSelectionByCoord).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rowIndex: 0, columnIndex: 0 }),
+      true,
+      undefined,
+    )
+
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 173,
+      clientY: 40,
+    }))
+
+    expect(applyCellSelectionByCoord).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rowIndex: 0, columnIndex: 1 }),
+      true,
+      undefined,
+    )
+  })
+
   it("maps ctrl+a to select all filtered rows and visible columns", () => {
     const { controller, row, applySelectionRange } = createControllerHarness({
       rowCount: 3,
@@ -251,5 +348,83 @@ describe("useDataGridAppInteractionController contract", () => {
       expect.objectContaining({ rowIndex: 0, columnIndex: 1 }),
       false,
     )
+  })
+
+  it("starts fill preview downward on fill-handle press before pointer movement", () => {
+    const { controller, selectionSnapshot } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+    })
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(controller.isFillDragging.value).toBe(true)
+    expect(controller.fillPreviewRange.value).toEqual({
+      startRow: 0,
+      endRow: 1,
+      startColumn: 0,
+      endColumn: 0,
+    })
+  })
+
+  it("restores viewport focus after fill-handle apply", async () => {
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => {
+      return 1
+    })
+    const { controller, selectionSnapshot, bodyViewport } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+    })
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    const focusCallsBeforeMouseUp = vi.mocked(bodyViewport.focus).mock.calls.length
+
+    controller.handleWindowMouseUp()
+    await nextTick()
+
+    expect(vi.mocked(bodyViewport.focus).mock.calls.length).toBeGreaterThanOrEqual(focusCallsBeforeMouseUp + 2)
+
+    rafSpy.mockRestore()
   })
 })

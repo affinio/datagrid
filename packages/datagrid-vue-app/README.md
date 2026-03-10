@@ -104,6 +104,24 @@ Result:
 - keyboard navigation
 - selection
 
+## Declarative Column Menu
+
+Enable the built-in header menu with one prop:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  column-menu
+/>
+```
+
+Out of the box this wires:
+
+- sort ascending / descending / clear
+- pin column submenu (`left`, `right`, `none`)
+- value-set filter picker with search + apply/clear
+
 ## Features
 
 Rendering:
@@ -160,6 +178,7 @@ Affino DataGrid works well for:
 - `rows`
 - `columns`
 - `theme`
+- `column-menu`
 - `row-height-mode`
 - `base-row-height`
 

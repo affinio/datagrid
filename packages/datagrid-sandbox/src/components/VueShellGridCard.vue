@@ -159,6 +159,7 @@
         ref="gridRef"
         :rows="rows"
         :columns="columns"
+        column-menu
         :client-row-model-options="clientRowModelOptions"
         :group-by="groupBy"
         :aggregation-model="aggregationModel"
@@ -576,6 +577,12 @@ const filterModel = computed<DataGridFilterSnapshot | null>(() => {
   }
 })
 
+const shouldHideUnusedPivotSourceColumns = computed(() => {
+  return props.mode === "pivot"
+    && pivotViewMode.value === "pivot"
+    && hideUnusedPivotSourceColumns.value
+})
+
 watch(columns, nextColumns => {
   columnState.value = normalizeColumnState(columnState.value, nextColumns)
   if (groupByField.value && !nextColumns.some(column => column.key === groupByField.value)) {
@@ -585,7 +592,18 @@ watch(columns, nextColumns => {
 }, { immediate: true })
 
 const handleColumnStateUpdate = (nextState: DataGridUnifiedColumnState): void => {
-  columnState.value = normalizeColumnState(nextState, columns.value)
+  const normalizedNextState = normalizeColumnState(nextState, columns.value)
+  if (!shouldHideUnusedPivotSourceColumns.value) {
+    columnState.value = normalizedNextState
+    return
+  }
+  const persistedState = normalizeColumnState(columnState.value, columns.value)
+  columnState.value = {
+    order: [...normalizedNextState.order],
+    widths: { ...normalizedNextState.widths },
+    pins: { ...normalizedNextState.pins },
+    visibility: { ...persistedState.visibility },
+  }
 }
 
 const handleStateUpdate = (nextState: DataGridUnifiedState<unknown>): void => {

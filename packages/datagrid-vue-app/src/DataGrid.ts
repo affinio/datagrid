@@ -48,6 +48,11 @@ import {
   type DataGridGroupByProp,
   type DataGridPaginationProp,
 } from "./dataGridPublicProps"
+import {
+  resolveDataGridColumnMenu,
+  type DataGridColumnMenuOptions,
+  type DataGridColumnMenuProp,
+} from "./dataGridColumnMenu"
 import { type DataGridVirtualizationProp, resolveDataGridVirtualization } from "./dataGridVirtualization"
 import DataGridRuntimeHost from "./DataGridRuntimeHost"
 import {
@@ -146,6 +151,10 @@ export default defineComponent({
     },
     pagination: {
       type: [Boolean, Object] as PropType<DataGridPaginationProp | undefined>,
+      default: undefined,
+    },
+    columnMenu: {
+      type: [Boolean, Object] as PropType<DataGridColumnMenuProp | undefined>,
       default: undefined,
     },
     pageSize: {
@@ -249,6 +258,9 @@ export default defineComponent({
         props.pageSize,
         props.currentPage,
       )
+    })
+    const resolvedColumnMenu = computed<DataGridColumnMenuOptions>(() => {
+      return resolveDataGridColumnMenu(props.columnMenu)
     })
     const resolvedGroupBy = computed(() => {
       return resolveDataGridGroupBy(props.groupBy)
@@ -411,6 +423,7 @@ export default defineComponent({
                 pivotModel: props.pivotModel,
                 renderMode: resolvedRenderMode.value,
                 virtualization: resolvedVirtualization.value,
+                columnMenu: resolvedColumnMenu.value,
                 rowHeightMode: props.rowHeightMode,
                 baseRowHeight: props.baseRowHeight,
               }),

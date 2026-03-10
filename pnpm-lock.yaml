@@ -199,6 +199,9 @@ importers:
       '@affino/datagrid-vue':
         specifier: workspace:*
         version: link:../datagrid-vue
+      '@affino/menu-vue':
+        specifier: ^2.1.1
+        version: 2.1.1(@affino/menu-core@1.1.0)(vue@3.4.38(typescript@5.9.3))
       vue:
         specifier: 3.4.38
         version: 3.4.38(typescript@5.9.3)

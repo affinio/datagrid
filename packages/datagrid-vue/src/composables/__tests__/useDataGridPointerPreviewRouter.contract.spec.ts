@@ -22,6 +22,7 @@ describe("useDataGridPointerPreviewRouter contract", () => {
 
     const router = useDataGridPointerPreviewRouter<Coord, Range>({
       isFillDragging: () => true,
+      resolveFillDragStartPointer: () => null,
       resolveFillPointer: () => ({ clientX: 10, clientY: 20 }),
       resolveFillBaseRange: () => ({ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }),
       resolveFillPreviewRange: () => fillPreview,
@@ -60,6 +61,7 @@ describe("useDataGridPointerPreviewRouter contract", () => {
 
     const router = useDataGridPointerPreviewRouter<Coord, Range>({
       isFillDragging: () => true,
+      resolveFillDragStartPointer: () => null,
       resolveFillPointer: () => ({ clientX: 10, clientY: 20 }),
       resolveFillBaseRange: () => ({ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }),
       resolveFillPreviewRange: () => unchanged,
@@ -80,6 +82,140 @@ describe("useDataGridPointerPreviewRouter contract", () => {
     expect(setFillPreviewRange).not.toHaveBeenCalled()
   })
 
+  it("keeps the initial fill preview until the pointer moves away from the press point", () => {
+    const setFillPreviewRange = vi.fn()
+    const initialPreview = { startRow: 1, endRow: 2, startColumn: 1, endColumn: 1 }
+
+    const router = useDataGridPointerPreviewRouter<Coord, Range>({
+      isFillDragging: () => true,
+      resolveFillDragStartPointer: () => ({ clientX: 10, clientY: 20 }),
+      resolveFillPointer: () => ({ clientX: 10, clientY: 20 }),
+      resolveFillBaseRange: () => ({ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }),
+      resolveFillPreviewRange: () => initialPreview,
+      setFillPreviewRange,
+      isRangeMoving: () => false,
+      resolveRangeMovePointer: () => null,
+      resolveRangeMoveBaseRange: () => null,
+      resolveRangeMoveOrigin: () => null,
+      resolveRangeMovePreviewRange: () => null,
+      setRangeMovePreviewRange: vi.fn(),
+      resolveCellCoordFromPointer: () => ({ rowIndex: 1, columnIndex: 2 }),
+      buildExtendedRange: () => ({ startRow: 1, endRow: 1, startColumn: 1, endColumn: 2 }),
+      normalizeSelectionRange: range => range,
+      rangesEqual: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    })
+
+    router.applyFillPreviewFromPointer()
+
+    expect(setFillPreviewRange).not.toHaveBeenCalled()
+  })
+
+  it("prefers vertical fill when pointer movement is downward even if the pointer resolves into the next column", () => {
+    const setFillPreviewRange = vi.fn()
+    const buildExtendedRange = vi.fn((base: Range, coord: Coord, fillAxis?: "vertical" | "horizontal") => {
+      if (fillAxis === "vertical") {
+        return {
+          startRow: Math.min(base.startRow, coord.rowIndex),
+          endRow: Math.max(base.endRow, coord.rowIndex),
+          startColumn: base.startColumn,
+          endColumn: base.endColumn,
+        }
+      }
+      return {
+        startRow: base.startRow,
+        endRow: base.endRow,
+        startColumn: Math.min(base.startColumn, coord.columnIndex),
+        endColumn: Math.max(base.endColumn, coord.columnIndex),
+      }
+    })
+
+    const router = useDataGridPointerPreviewRouter<Coord, Range>({
+      isFillDragging: () => true,
+      resolveFillDragStartPointer: () => ({ clientX: 10, clientY: 10 }),
+      resolveFillPointer: () => ({ clientX: 16, clientY: 42 }),
+      resolveFillBaseRange: () => ({ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }),
+      resolveFillPreviewRange: () => null,
+      setFillPreviewRange,
+      isRangeMoving: () => false,
+      resolveRangeMovePointer: () => null,
+      resolveRangeMoveBaseRange: () => null,
+      resolveRangeMoveOrigin: () => null,
+      resolveRangeMovePreviewRange: () => null,
+      setRangeMovePreviewRange: vi.fn(),
+      resolveCellCoordFromPointer: () => ({ rowIndex: 4, columnIndex: 2 }),
+      buildExtendedRange,
+      normalizeSelectionRange: range => range,
+      rangesEqual: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    })
+
+    router.applyFillPreviewFromPointer()
+
+    expect(buildExtendedRange).toHaveBeenCalledWith(
+      { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+      { rowIndex: 4, columnIndex: 2 },
+      "vertical",
+    )
+    expect(setFillPreviewRange).toHaveBeenCalledWith({
+      startRow: 1,
+      endRow: 4,
+      startColumn: 1,
+      endColumn: 1,
+    })
+  })
+
+  it("keeps fill vertical when horizontal drift is only slightly larger than vertical movement", () => {
+    const setFillPreviewRange = vi.fn()
+    const buildExtendedRange = vi.fn((base: Range, coord: Coord, fillAxis?: "vertical" | "horizontal") => {
+      if (fillAxis === "vertical") {
+        return {
+          startRow: Math.min(base.startRow, coord.rowIndex),
+          endRow: Math.max(base.endRow, coord.rowIndex),
+          startColumn: base.startColumn,
+          endColumn: base.endColumn,
+        }
+      }
+      return {
+        startRow: base.startRow,
+        endRow: base.endRow,
+        startColumn: Math.min(base.startColumn, coord.columnIndex),
+        endColumn: Math.max(base.endColumn, coord.columnIndex),
+      }
+    })
+
+    const router = useDataGridPointerPreviewRouter<Coord, Range>({
+      isFillDragging: () => true,
+      resolveFillDragStartPointer: () => ({ clientX: 10, clientY: 10 }),
+      resolveFillPointer: () => ({ clientX: 22, clientY: 14 }),
+      resolveFillBaseRange: () => ({ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }),
+      resolveFillPreviewRange: () => null,
+      setFillPreviewRange,
+      isRangeMoving: () => false,
+      resolveRangeMovePointer: () => null,
+      resolveRangeMoveBaseRange: () => null,
+      resolveRangeMoveOrigin: () => null,
+      resolveRangeMovePreviewRange: () => null,
+      setRangeMovePreviewRange: vi.fn(),
+      resolveCellCoordFromPointer: () => ({ rowIndex: 2, columnIndex: 2 }),
+      buildExtendedRange,
+      normalizeSelectionRange: range => range,
+      rangesEqual: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    })
+
+    router.applyFillPreviewFromPointer()
+
+    expect(buildExtendedRange).toHaveBeenCalledWith(
+      { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+      { rowIndex: 2, columnIndex: 2 },
+      "vertical",
+    )
+    expect(setFillPreviewRange).toHaveBeenCalledWith({
+      startRow: 1,
+      endRow: 2,
+      startColumn: 1,
+      endColumn: 1,
+    })
+  })
+
   it("updates range-move preview from pointer delta", () => {
     let previewRange: Range | null = { startRow: 5, endRow: 5, startColumn: 5, endColumn: 5 }
     const setRangeMovePreviewRange = vi.fn((next: Range) => {
@@ -88,6 +224,7 @@ describe("useDataGridPointerPreviewRouter contract", () => {
 
     const router = useDataGridPointerPreviewRouter<Coord, Range>({
       isFillDragging: () => false,
+      resolveFillDragStartPointer: () => null,
       resolveFillPointer: () => null,
       resolveFillBaseRange: () => null,
       resolveFillPreviewRange: () => null,
@@ -119,6 +256,7 @@ describe("useDataGridPointerPreviewRouter contract", () => {
 
     const router = useDataGridPointerPreviewRouter<Coord, Range>({
       isFillDragging: () => false,
+      resolveFillDragStartPointer: () => null,
       resolveFillPointer: () => null,
       resolveFillBaseRange: () => null,
       resolveFillPreviewRange: () => null,

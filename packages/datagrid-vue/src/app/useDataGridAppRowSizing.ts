@@ -30,6 +30,10 @@ export function useDataGridAppRowSizing<TRow>(
   const measuringRowKey = ref<string | null>(null)
   const rowResizeState = ref<{ rowKey: string; startY: number; startBase: number } | null>(null)
 
+  const shouldUseFixedRowHeight = (): boolean => {
+    return options.rowHeightMode.value === "fixed"
+  }
+
   const resolveRenderedRowKey = (row: DataGridRowNode<TRow>, rowOffset: number): string => {
     if (row.rowId != null) {
       return String(row.rowId)
@@ -44,7 +48,7 @@ export function useDataGridAppRowSizing<TRow>(
 
   const rowStyle = (row: DataGridRowNode<TRow>, rowOffset: number): Record<string, string> => {
     void rowHeightRenderRevision.value
-    if (options.mode.value !== "base" || options.rowHeightMode.value !== "fixed") {
+    if (!shouldUseFixedRowHeight()) {
       return {}
     }
     const rowKey = resolveRenderedRowKey(row, rowOffset)

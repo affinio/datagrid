@@ -12,6 +12,7 @@ describe("useDataGridFillHandleStart contract", () => {
       setFillDragging: vi.fn(),
       setFillBaseRange: vi.fn(),
       setFillPreviewRange: vi.fn(),
+      setFillDragStartPointer: vi.fn(),
       setFillPointer: vi.fn(),
       startInteractionAutoScroll: vi.fn(),
       setLastAction: vi.fn(),
@@ -29,6 +30,7 @@ describe("useDataGridFillHandleStart contract", () => {
     const setFillDragging = vi.fn()
     const setFillBaseRange = vi.fn()
     const setFillPreviewRange = vi.fn()
+    const setFillDragStartPointer = vi.fn()
     const setFillPointer = vi.fn()
     const startInteractionAutoScroll = vi.fn()
     const setLastAction = vi.fn()
@@ -45,6 +47,7 @@ describe("useDataGridFillHandleStart contract", () => {
       setFillDragging,
       setFillBaseRange,
       setFillPreviewRange,
+      setFillDragStartPointer,
       setFillPointer,
       startInteractionAutoScroll,
       setLastAction,
@@ -68,8 +71,40 @@ describe("useDataGridFillHandleStart contract", () => {
     expect(setFillDragging).toHaveBeenCalledWith(true)
     expect(setFillBaseRange).toHaveBeenCalledWith(range)
     expect(setFillPreviewRange).toHaveBeenCalledWith(range)
+    expect(setFillDragStartPointer).toHaveBeenCalledWith({ clientX: 42, clientY: 84 })
     expect(setFillPointer).toHaveBeenCalledWith({ clientX: 42, clientY: 84 })
     expect(startInteractionAutoScroll).toHaveBeenCalledTimes(1)
     expect(setLastAction).toHaveBeenCalledWith("Fill handle active")
+  })
+
+  it("uses the provided initial fill preview range on pointer down", () => {
+    const initialPreview = { startRow: 1, endRow: 3, startColumn: 3, endColumn: 4 }
+    const setFillPreviewRange = vi.fn()
+
+    const start = useDataGridFillHandleStart({
+      resolveSelectionRange: () => ({ startRow: 1, endRow: 2, startColumn: 3, endColumn: 4 }),
+      resolveInitialFillPreviewRange: () => initialPreview,
+      focusViewport: vi.fn(),
+      stopRangeMove: vi.fn(),
+      setDragSelecting: vi.fn(),
+      setDragPointer: vi.fn(),
+      setFillDragging: vi.fn(),
+      setFillBaseRange: vi.fn(),
+      setFillPreviewRange,
+      setFillDragStartPointer: vi.fn(),
+      setFillPointer: vi.fn(),
+      startInteractionAutoScroll: vi.fn(),
+      setLastAction: vi.fn(),
+    })
+
+    start.onSelectionHandleMouseDown({
+      button: 0,
+      clientX: 1,
+      clientY: 2,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as MouseEvent)
+
+    expect(setFillPreviewRange).toHaveBeenCalledWith(initialPreview)
   })
 })

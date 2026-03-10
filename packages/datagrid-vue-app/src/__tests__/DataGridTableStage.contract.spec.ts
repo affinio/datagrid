@@ -1,6 +1,7 @@
 import { mount } from "@vue/test-utils"
-import { afterEach, describe, expect, it } from "vitest"
-import type { DataGridColumnSnapshot } from "@affino/datagrid-vue"
+import { nextTick } from "vue"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import type { DataGridColumnSnapshot, DataGridOverlayRange } from "@affino/datagrid-vue"
 import type { DataGridTableRow, DataGridTableStageProps } from "../dataGridTableStage.types"
 import DataGridTableStage from "../DataGridTableStage.vue"
 
@@ -31,6 +32,15 @@ function createRows(): readonly DataGridTableRow<DemoRow>[] {
 
 function createStageProps(
   isCellSelected: (rowOffset: number, columnIndex: number) => boolean,
+  options?: {
+    selectionRange?: DataGridOverlayRange | null
+    fillPreviewRange?: DataGridOverlayRange | null
+    rangeMovePreviewRange?: DataGridOverlayRange | null
+    isRangeMoving?: boolean
+    isCellInFillPreview?: (rowOffset: number, columnIndex: number) => boolean
+    isFillHandleCell?: (rowOffset: number, columnIndex: number) => boolean
+    startFillHandleDrag?: () => void
+  },
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = createColumns()
   const renderedColumns = visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
@@ -53,6 +63,10 @@ function createStageProps(
     leftColumnSpacerWidth: 0,
     rightColumnSpacerWidth: 0,
     editingCellValue: "",
+    selectionRange: options?.selectionRange ?? { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+    fillPreviewRange: options?.fillPreviewRange ?? null,
+    rangeMovePreviewRange: options?.rangeMovePreviewRange ?? null,
+    isRangeMoving: options?.isRangeMoving ?? false,
     headerViewportRef: () => undefined,
     bodyViewportRef: () => undefined,
     columnStyle: key => {
@@ -80,15 +94,15 @@ function createStageProps(
     isSelectionAnchorCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
     shouldHighlightSelectedCell: (rowOffset, columnIndex) => isCellSelected(rowOffset, columnIndex) && !(rowOffset === 0 && columnIndex === 0),
     isCellOnSelectionEdge: () => false,
-    isCellInFillPreview: () => false,
+    isCellInFillPreview: options?.isCellInFillPreview ?? (() => false),
     isCellInPendingClipboardRange: () => false,
     isCellOnPendingClipboardEdge: () => false,
     isEditingCell: () => false,
     handleCellMouseDown: () => undefined,
     handleCellKeydown: () => undefined,
     startInlineEdit: () => undefined,
-    isFillHandleCell: () => false,
-    startFillHandleDrag: () => undefined,
+    isFillHandleCell: options?.isFillHandleCell ?? (() => false),
+    startFillHandleDrag: options?.startFillHandleDrag ?? (() => undefined),
     updateEditingCellValue: () => undefined,
     handleEditorKeydown: () => undefined,
     commitInlineEdit: () => undefined,
@@ -104,7 +118,12 @@ describe("DataGridTableStage contract", () => {
   it("keeps overlay borders visually continuous across left, center and right panes", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
-      props: createStageProps((rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 0 && columnIndex <= 3),
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 0 && columnIndex <= 3,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 3 },
+        },
+      ),
     })
 
     const leftSegment = wrapper.find(".grid-body-pane--left .grid-selection-overlay__segment")
@@ -125,7 +144,12 @@ describe("DataGridTableStage contract", () => {
   it("keeps center-to-right selection continuous without creating a fake left segment", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
-      props: createStageProps((rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 2 && columnIndex <= 3),
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 2 && columnIndex <= 3,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 2, endColumn: 3 },
+        },
+      ),
     })
 
     expect(wrapper.find(".grid-body-pane--left .grid-selection-overlay__segment").exists()).toBe(false)
@@ -137,6 +161,142 @@ describe("DataGridTableStage contract", () => {
     expect(rightSegment.exists()).toBe(true)
     expect(centerSegment.attributes("style")).toContain("border-right-width: 0px;")
     expect(rightSegment.attributes("style")).toContain("border-left-width: 0px;")
+
+    wrapper.unmount()
+  })
+
+  it("renders a continuous move-preview overlay from center into pinned-right", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 1 && columnIndex <= 2,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 2 },
+          rangeMovePreviewRange: { startRow: 0, endRow: 0, startColumn: 2, endColumn: 3 },
+          isRangeMoving: true,
+        },
+      ),
+    })
+
+    expect(wrapper.classes()).toContain("grid-stage--range-moving")
+
+    const centerSegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment--move-preview")
+    const rightSegment = wrapper.find(".grid-body-pane--right .grid-selection-overlay__segment--move-preview")
+
+    expect(centerSegment.exists()).toBe(true)
+    expect(rightSegment.exists()).toBe(true)
+    expect(centerSegment.attributes("style")).toContain("border-right-width: 0px;")
+    expect(rightSegment.attributes("style")).toContain("border-left-width: 0px;")
+
+    wrapper.unmount()
+  })
+
+  it("renders a single fill-preview rectangle across the selected range and preview cells", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 1 && columnIndex <= 2,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 2 },
+          isCellInFillPreview: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 3,
+        },
+      ),
+    })
+
+    const allCenterSegments = wrapper.findAll(".grid-body-viewport .grid-selection-overlay__segment")
+    const allRightSegments = wrapper.findAll(".grid-body-pane--right .grid-selection-overlay__segment")
+    const centerFillSegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment--fill-preview")
+    const rightSegment = wrapper.find(".grid-body-pane--right .grid-selection-overlay__segment--fill-preview")
+
+    expect(allCenterSegments).toHaveLength(1)
+    expect(allRightSegments).toHaveLength(1)
+    expect(centerFillSegment.exists()).toBe(true)
+    expect(rightSegment.exists()).toBe(true)
+    expect(centerFillSegment.attributes("style")).toContain("border-right-width: 0px;")
+    expect(rightSegment.attributes("style")).toContain("border-left-width: 0px;")
+
+    wrapper.unmount()
+  })
+
+  it("renders overlay borders from selected cells without cell-edge fallback classes", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
+        {
+          selectionRange: null,
+        },
+      ),
+    })
+
+    const overlaySegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment")
+    const selectedCell = wrapper.find('[data-row-index="0"][data-column-index="1"]')
+
+    expect(overlaySegment.exists()).toBe(true)
+    expect(selectedCell.classes()).not.toContain("grid-cell--selection-edge")
+    expect(selectedCell.classes().filter(name => name.startsWith("grid-cell--selection-edge-"))).toHaveLength(0)
+
+    wrapper.unmount()
+  })
+
+  it("restores focus to the anchor cell when fill preview ends", async () => {
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      callback(0)
+      return 1
+    })
+
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          fillPreviewRange: { startRow: 0, endRow: 1, startColumn: 0, endColumn: 0 },
+          isCellInFillPreview: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        },
+      ),
+    })
+
+    const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    viewport.focus()
+
+    await wrapper.setProps({ fillPreviewRange: null })
+    await nextTick()
+
+    const anchorCell = wrapper.find('[data-row-index="0"][data-column-index="0"]').element as HTMLElement
+    expect(document.activeElement).toBe(anchorCell)
+
+    rafSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  it("keeps the anchor cell focused when pressing the fill handle", async () => {
+    const startFillHandleDrag = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          isFillHandleCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+          startFillHandleDrag,
+        },
+      ),
+    })
+
+    const anchorCell = wrapper.find('[data-row-index="0"][data-column-index="0"]')
+    const fillHandle = wrapper.find(".cell-fill-handle")
+
+    expect(anchorCell.attributes("tabindex")).toBe("0")
+
+    await fillHandle.trigger("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    })
+
+    expect(document.activeElement).toBe(anchorCell.element)
+    expect(startFillHandleDrag).toHaveBeenCalledTimes(1)
 
     wrapper.unmount()
   })

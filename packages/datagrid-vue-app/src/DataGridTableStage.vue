@@ -1,5 +1,11 @@
 <template>
-  <section class="grid-stage" :class="{ 'grid-stage--auto-row-height': mode === 'base' && rowHeightMode === 'auto' }">
+  <section
+    class="grid-stage"
+    :class="{
+      'grid-stage--auto-row-height': mode === 'base' && rowHeightMode === 'auto',
+      'grid-stage--range-moving': isRangeMoving,
+    }"
+  >
     <div class="grid-header-shell" :style="paneLayoutStyle">
       <div class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="handleLinkedViewportWheel">
         <div class="grid-header-row grid-pane-track" :style="leftTrackStyle">
@@ -7,39 +13,96 @@
             <div class="col-head">
               <span>#</span>
             </div>
-            <div class="col-filter col-filter--index-spacer" aria-hidden="true" />
+            <div v-if="!props.columnMenuEnabled" class="col-filter col-filter--index-spacer" aria-hidden="true" />
           </div>
-          <div
-            v-for="column in pinnedLeftColumns"
-            :key="`header-left-${column.key}`"
-            class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
-            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
-            @click="handleSortColumnClick(column, $event.shiftKey)"
-          >
-            <div class="col-head">
-              <span>{{ column.column.label ?? column.key }}</span>
-              <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
-              <button
-                type="button"
-                class="col-resize"
-                aria-label="Resize column"
-                @mousedown.stop.prevent="startResize($event, column.key)"
-                @dblclick.stop="handleResizeDoubleClick($event, column.key)"
-                @click.stop
-              />
+          <template v-if="props.columnMenuEnabled">
+            <DataGridColumnMenu
+              v-for="column in pinnedLeftColumns"
+              :key="`header-left-${column.key}`"
+              :rows="props.sourceRows ?? []"
+              :column-key="column.key"
+              :column-label="column.column.label ?? column.key"
+              :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
+              :sort-enabled="isColumnSortable(column)"
+              :pin="column.pin"
+              :filter-enabled="isColumnFilterable(column)"
+              :filter-active="isColumnFilterActiveSafe(column.key)"
+              :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
+              :max-filter-values="columnMenuMaxFilterValues"
+              @sort="applyColumnMenuSortSafe(column.key, $event)"
+              @pin="applyColumnMenuPinSafe(column.key, $event)"
+              @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
+              @clear-filter="clearColumnMenuFilterSafe(column.key)"
+              v-slot="{ open, toggleFromButton }"
+            >
+              <div
+                class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
+                :class="{
+                  'grid-cell--header-menu-enabled': true,
+                  'grid-cell--header-menu-open': open,
+                }"
+                :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+                :data-column-key="column.key"
+                data-datagrid-column-menu-trigger="true"
+              >
+                <div class="col-head">
+                  <span>{{ column.column.label ?? column.key }}</span>
+                  <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
+                  <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
+                  <button
+                    type="button"
+                    class="col-menu-trigger"
+                    aria-label="Open column menu"
+                    @click.stop="toggleFromButton"
+                  >
+                    ...
+                  </button>
+                  <button
+                    type="button"
+                    class="col-resize"
+                    aria-label="Resize column"
+                    @mousedown.stop.prevent="startResize($event, column.key)"
+                    @dblclick.stop="handleResizeDoubleClick($event, column.key)"
+                    @click.stop
+                  />
+                </div>
+              </div>
+            </DataGridColumnMenu>
+          </template>
+          <template v-else>
+            <div
+              v-for="column in pinnedLeftColumns"
+              :key="`header-left-${column.key}`"
+              class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
+              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+              :data-column-key="column.key"
+              @click="handleHeaderColumnClick(column, $event.shiftKey)"
+            >
+              <div class="col-head">
+                <span>{{ column.column.label ?? column.key }}</span>
+                <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
+                <button
+                  type="button"
+                  class="col-resize"
+                  aria-label="Resize column"
+                  @mousedown.stop.prevent="startResize($event, column.key)"
+                  @dblclick.stop="handleResizeDoubleClick($event, column.key)"
+                  @click.stop
+                />
+              </div>
+              <div class="col-filter" @click.stop>
+                <input
+                  class="col-filter-input"
+                  :value="columnFilterTextByKey[column.key] ?? ''"
+                  :disabled="!isColumnFilterable(column)"
+                  placeholder="Filter..."
+                  @mousedown.stop
+                  @keydown.stop
+                  @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
+                />
+              </div>
             </div>
-            <div class="col-filter" @click.stop>
-              <input
-                class="col-filter-input"
-                :value="columnFilterTextByKey[column.key] ?? ''"
-                :disabled="!isColumnFilterable(column)"
-                placeholder="Filter..."
-                @mousedown.stop
-                @keydown.stop
-                @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
-              />
-            </div>
-          </div>
+          </template>
         </div>
       </div>
 
@@ -55,37 +118,94 @@
             class="grid-column-spacer"
             :style="spacerStyle(leftColumnSpacerWidth)"
           />
-          <div
-            v-for="column in renderedColumns"
-            :key="`header-${column.key}`"
-            class="grid-cell grid-cell--header grid-cell--header-sortable"
-            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
-            @click="handleSortColumnClick(column, $event.shiftKey)"
-          >
-            <div class="col-head">
-              <span>{{ column.column.label ?? column.key }}</span>
-              <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
-              <button
-                type="button"
-                class="col-resize"
-                aria-label="Resize column"
-                @mousedown.stop.prevent="startResize($event, column.key)"
-                @dblclick.stop="handleResizeDoubleClick($event, column.key)"
-                @click.stop
-              />
+          <template v-if="props.columnMenuEnabled">
+            <DataGridColumnMenu
+              v-for="column in renderedColumns"
+              :key="`header-${column.key}`"
+              :rows="props.sourceRows ?? []"
+              :column-key="column.key"
+              :column-label="column.column.label ?? column.key"
+              :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
+              :sort-enabled="isColumnSortable(column)"
+              :pin="column.pin"
+              :filter-enabled="isColumnFilterable(column)"
+              :filter-active="isColumnFilterActiveSafe(column.key)"
+              :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
+              :max-filter-values="columnMenuMaxFilterValues"
+              @sort="applyColumnMenuSortSafe(column.key, $event)"
+              @pin="applyColumnMenuPinSafe(column.key, $event)"
+              @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
+              @clear-filter="clearColumnMenuFilterSafe(column.key)"
+              v-slot="{ open, toggleFromButton }"
+            >
+              <div
+                class="grid-cell grid-cell--header grid-cell--header-sortable"
+                :class="{
+                  'grid-cell--header-menu-enabled': true,
+                  'grid-cell--header-menu-open': open,
+                }"
+                :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+                :data-column-key="column.key"
+                data-datagrid-column-menu-trigger="true"
+              >
+                <div class="col-head">
+                  <span>{{ column.column.label ?? column.key }}</span>
+                  <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
+                  <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
+                  <button
+                    type="button"
+                    class="col-menu-trigger"
+                    aria-label="Open column menu"
+                    @click.stop="toggleFromButton"
+                  >
+                    ...
+                  </button>
+                  <button
+                    type="button"
+                    class="col-resize"
+                    aria-label="Resize column"
+                    @mousedown.stop.prevent="startResize($event, column.key)"
+                    @dblclick.stop="handleResizeDoubleClick($event, column.key)"
+                    @click.stop
+                  />
+                </div>
+              </div>
+            </DataGridColumnMenu>
+          </template>
+          <template v-else>
+            <div
+              v-for="column in renderedColumns"
+              :key="`header-${column.key}`"
+              class="grid-cell grid-cell--header grid-cell--header-sortable"
+              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+              :data-column-key="column.key"
+              @click="handleHeaderColumnClick(column, $event.shiftKey)"
+            >
+              <div class="col-head">
+                <span>{{ column.column.label ?? column.key }}</span>
+                <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
+                <button
+                  type="button"
+                  class="col-resize"
+                  aria-label="Resize column"
+                  @mousedown.stop.prevent="startResize($event, column.key)"
+                  @dblclick.stop="handleResizeDoubleClick($event, column.key)"
+                  @click.stop
+                />
+              </div>
+              <div class="col-filter" @click.stop>
+                <input
+                  class="col-filter-input"
+                  :value="columnFilterTextByKey[column.key] ?? ''"
+                  :disabled="!isColumnFilterable(column)"
+                  placeholder="Filter..."
+                  @mousedown.stop
+                  @keydown.stop
+                  @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
+                />
+              </div>
             </div>
-            <div class="col-filter" @click.stop>
-              <input
-                class="col-filter-input"
-                :value="columnFilterTextByKey[column.key] ?? ''"
-                :disabled="!isColumnFilterable(column)"
-                placeholder="Filter..."
-                @mousedown.stop
-                @keydown.stop
-                @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
-              />
-            </div>
-          </div>
+          </template>
           <div
             v-if="rightColumnSpacerWidth > 0"
             class="grid-column-spacer"
@@ -96,37 +216,94 @@
 
       <div class="grid-header-pane grid-header-pane--right" :style="rightPaneStyle" @wheel="handleLinkedViewportWheel">
         <div class="grid-header-row grid-pane-track" :style="rightTrackStyle">
-          <div
-            v-for="column in pinnedRightColumns"
-            :key="`header-right-${column.key}`"
-            class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
-            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
-            @click="handleSortColumnClick(column, $event.shiftKey)"
-          >
-            <div class="col-head">
-              <span>{{ column.column.label ?? column.key }}</span>
-              <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
-              <button
-                type="button"
-                class="col-resize"
-                aria-label="Resize column"
-                @mousedown.stop.prevent="startResize($event, column.key)"
-                @dblclick.stop="handleResizeDoubleClick($event, column.key)"
-                @click.stop
-              />
+          <template v-if="props.columnMenuEnabled">
+            <DataGridColumnMenu
+              v-for="column in pinnedRightColumns"
+              :key="`header-right-${column.key}`"
+              :rows="props.sourceRows ?? []"
+              :column-key="column.key"
+              :column-label="column.column.label ?? column.key"
+              :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
+              :sort-enabled="isColumnSortable(column)"
+              :pin="column.pin"
+              :filter-enabled="isColumnFilterable(column)"
+              :filter-active="isColumnFilterActiveSafe(column.key)"
+              :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
+              :max-filter-values="columnMenuMaxFilterValues"
+              @sort="applyColumnMenuSortSafe(column.key, $event)"
+              @pin="applyColumnMenuPinSafe(column.key, $event)"
+              @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
+              @clear-filter="clearColumnMenuFilterSafe(column.key)"
+              v-slot="{ open, toggleFromButton }"
+            >
+              <div
+                class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
+                :class="{
+                  'grid-cell--header-menu-enabled': true,
+                  'grid-cell--header-menu-open': open,
+                }"
+                :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+                :data-column-key="column.key"
+                data-datagrid-column-menu-trigger="true"
+              >
+                <div class="col-head">
+                  <span>{{ column.column.label ?? column.key }}</span>
+                  <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
+                  <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
+                  <button
+                    type="button"
+                    class="col-menu-trigger"
+                    aria-label="Open column menu"
+                    @click.stop="toggleFromButton"
+                  >
+                    ...
+                  </button>
+                  <button
+                    type="button"
+                    class="col-resize"
+                    aria-label="Resize column"
+                    @mousedown.stop.prevent="startResize($event, column.key)"
+                    @dblclick.stop="handleResizeDoubleClick($event, column.key)"
+                    @click.stop
+                  />
+                </div>
+              </div>
+            </DataGridColumnMenu>
+          </template>
+          <template v-else>
+            <div
+              v-for="column in pinnedRightColumns"
+              :key="`header-right-${column.key}`"
+              class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
+              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+              :data-column-key="column.key"
+              @click="handleHeaderColumnClick(column, $event.shiftKey)"
+            >
+              <div class="col-head">
+                <span>{{ column.column.label ?? column.key }}</span>
+                <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
+                <button
+                  type="button"
+                  class="col-resize"
+                  aria-label="Resize column"
+                  @mousedown.stop.prevent="startResize($event, column.key)"
+                  @dblclick.stop="handleResizeDoubleClick($event, column.key)"
+                  @click.stop
+                />
+              </div>
+              <div class="col-filter" @click.stop>
+                <input
+                  class="col-filter-input"
+                  :value="columnFilterTextByKey[column.key] ?? ''"
+                  :disabled="!isColumnFilterable(column)"
+                  placeholder="Filter..."
+                  @mousedown.stop
+                  @keydown.stop
+                  @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
+                />
+              </div>
             </div>
-            <div class="col-filter" @click.stop>
-              <input
-                class="col-filter-input"
-                :value="columnFilterTextByKey[column.key] ?? ''"
-                :disabled="!isColumnFilterable(column)"
-                placeholder="Filter..."
-                @mousedown.stop
-                @keydown.stop
-                @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
-              />
-            </div>
-          </div>
+          </template>
         </div>
       </div>
     </div>
@@ -166,7 +343,7 @@
               :style="[columnStyle(column.key), bodyCellPresentationStyle(column)]"
               :data-row-index="viewportRowStart + rowOffset"
               :data-column-index="columnIndexByKey(column.key)"
-              tabindex="-1"
+              :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
               @dblclick.stop="startInlineEditIfAllowed(row, column)"
@@ -177,7 +354,7 @@
                 class="cell-fill-handle"
                 aria-label="Fill handle"
                 tabindex="-1"
-                @mousedown.stop.prevent="startFillHandleDrag($event)"
+                @mousedown.stop.prevent="handleFillHandleMouseDown($event)"
               />
               <input
                 v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
@@ -198,6 +375,22 @@
               v-for="segment in leftSelectionOverlaySegments"
               :key="segment.key"
               class="grid-selection-overlay__segment"
+              :style="segment.style"
+            />
+          </div>
+          <div v-if="leftFillPreviewOverlaySegments.length > 0" class="grid-selection-overlay" aria-hidden="true">
+            <div
+              v-for="segment in leftFillPreviewOverlaySegments"
+              :key="segment.key"
+              class="grid-selection-overlay__segment grid-selection-overlay__segment--fill-preview"
+              :style="segment.style"
+            />
+          </div>
+          <div v-if="leftMovePreviewOverlaySegments.length > 0" class="grid-selection-overlay" aria-hidden="true">
+            <div
+              v-for="segment in leftMovePreviewOverlaySegments"
+              :key="segment.key"
+              class="grid-selection-overlay__segment grid-selection-overlay__segment--move-preview"
               :style="segment.style"
             />
           </div>
@@ -236,7 +429,7 @@
                 :style="[columnStyle(column.key), bodyCellPresentationStyle(column)]"
                 :data-row-index="viewportRowStart + rowOffset"
                 :data-column-index="columnIndexByKey(column.key)"
-                tabindex="-1"
+                :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
                 @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
                 @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
                 @dblclick.stop="startInlineEditIfAllowed(row, column)"
@@ -247,7 +440,7 @@
                   class="cell-fill-handle"
                   aria-label="Fill handle"
                   tabindex="-1"
-                  @mousedown.stop.prevent="startFillHandleDrag($event)"
+                  @mousedown.stop.prevent="handleFillHandleMouseDown($event)"
                 />
                 <input
                   v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
@@ -277,6 +470,22 @@
               :style="segment.style"
             />
           </div>
+          <div v-if="centerFillPreviewOverlaySegments.length > 0" class="grid-selection-overlay" aria-hidden="true">
+            <div
+              v-for="segment in centerFillPreviewOverlaySegments"
+              :key="segment.key"
+              class="grid-selection-overlay__segment grid-selection-overlay__segment--fill-preview"
+              :style="segment.style"
+            />
+          </div>
+          <div v-if="centerMovePreviewOverlaySegments.length > 0" class="grid-selection-overlay" aria-hidden="true">
+            <div
+              v-for="segment in centerMovePreviewOverlaySegments"
+              :key="segment.key"
+              class="grid-selection-overlay__segment grid-selection-overlay__segment--move-preview"
+              :style="segment.style"
+            />
+          </div>
         </div>
       </div>
 
@@ -303,7 +512,7 @@
               :style="[columnStyle(column.key), bodyCellPresentationStyle(column)]"
               :data-row-index="viewportRowStart + rowOffset"
               :data-column-index="columnIndexByKey(column.key)"
-              tabindex="-1"
+              :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
               @dblclick.stop="startInlineEditIfAllowed(row, column)"
@@ -314,7 +523,7 @@
                 class="cell-fill-handle"
                 aria-label="Fill handle"
                 tabindex="-1"
-                @mousedown.stop.prevent="startFillHandleDrag($event)"
+                @mousedown.stop.prevent="handleFillHandleMouseDown($event)"
               />
               <input
                 v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
@@ -338,6 +547,22 @@
               :style="segment.style"
             />
           </div>
+          <div v-if="rightFillPreviewOverlaySegments.length > 0" class="grid-selection-overlay" aria-hidden="true">
+            <div
+              v-for="segment in rightFillPreviewOverlaySegments"
+              :key="segment.key"
+              class="grid-selection-overlay__segment grid-selection-overlay__segment--fill-preview"
+              :style="segment.style"
+            />
+          </div>
+          <div v-if="rightMovePreviewOverlaySegments.length > 0" class="grid-selection-overlay" aria-hidden="true">
+            <div
+              v-for="segment in rightMovePreviewOverlaySegments"
+              :key="segment.key"
+              class="grid-selection-overlay__segment grid-selection-overlay__segment--move-preview"
+              :style="segment.style"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -345,14 +570,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, type ComponentPublicInstance, type CSSProperties } from "vue"
+import { computed, nextTick, onBeforeUnmount, ref, watch, type ComponentPublicInstance, type CSSProperties } from "vue"
 import type {
+  DataGridColumnPin,
   DataGridColumnSnapshot,
 } from "@affino/datagrid-vue"
 import {
   useDataGridLinkedPaneScrollSync,
   useDataGridManagedWheelScroll,
 } from "@affino/datagrid-vue/advanced"
+import DataGridColumnMenu from "./DataGridColumnMenu.vue"
 import type { DataGridTableRow, DataGridTableStageProps } from "./dataGridTableStage.types"
 import { ensureDataGridAppStyles } from "./ensureDataGridAppStyles"
 
@@ -379,6 +606,14 @@ type OverlaySegment = {
   key: string
   style: CSSProperties
 }
+
+type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>["selectionRange"]>
+
+const columnMenuMaxFilterValues = computed(() => (
+  typeof props.columnMenuMaxFilterValues === "number"
+    ? props.columnMenuMaxFilterValues
+    : 250
+))
 
 function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
   if (value instanceof HTMLElement) {
@@ -442,11 +677,63 @@ function handleSortColumnClick(column: TableColumn, additive: boolean): void {
   props.toggleSortForColumn(column.key, additive)
 }
 
+function isColumnFilterActiveSafe(columnKey: string): boolean {
+  const evaluate = props.isColumnFilterActive
+  return typeof evaluate === "function"
+    ? evaluate(columnKey)
+    : false
+}
+
+function resolveColumnMenuSortDirectionSafe(columnKey: string): "asc" | "desc" | null {
+  const resolve = props.resolveColumnMenuSortDirection
+  return typeof resolve === "function"
+    ? resolve(columnKey)
+    : null
+}
+
+function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string[] {
+  const resolve = props.resolveColumnMenuSelectedTokens
+  return typeof resolve === "function"
+    ? resolve(columnKey)
+    : []
+}
+
+function applyColumnMenuSortSafe(columnKey: string, direction: "asc" | "desc" | null): void {
+  props.applyColumnMenuSort?.(columnKey, direction)
+}
+
+function applyColumnMenuPinSafe(columnKey: string, pin: DataGridColumnPin): void {
+  props.applyColumnMenuPin?.(columnKey, pin)
+}
+
+function applyColumnMenuFilterSafe(columnKey: string, tokens: readonly string[]): void {
+  props.applyColumnMenuFilter?.(columnKey, tokens)
+}
+
+function clearColumnMenuFilterSafe(columnKey: string): void {
+  props.clearColumnMenuFilter?.(columnKey)
+}
+
+function handleHeaderColumnClick(column: TableColumn, additive: boolean): void {
+  handleSortColumnClick(column, additive)
+}
+
 function startInlineEditIfAllowed(row: TableRow, column: TableColumn): void {
   if (!isColumnEditable(column)) {
     return
   }
   props.startInlineEdit(row, column.key)
+}
+
+function cellTabIndex(rowOffset: number, columnIndex: number): number {
+  return isSelectionAnchorCellSafe(rowOffset, columnIndex) ? 0 : -1
+}
+
+function handleFillHandleMouseDown(event: MouseEvent): void {
+  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const cell = handle?.closest<HTMLElement>(".grid-cell")
+  cell?.focus({ preventScroll: true })
+  props.startFillHandleDrag(event)
 }
 
 function isCellSelectedSafe(rowOffset: number, columnIndex: number): boolean {
@@ -523,6 +810,8 @@ const resolvedIndexColumnStyle = computed<CSSProperties>(() => {
   }
 })
 
+const isRangeMoving = computed(() => props.isRangeMoving)
+
 const pinnedLeftColumns = computed(() => props.visibleColumns.filter(column => column.pin === "left"))
 const pinnedRightColumns = computed(() => props.visibleColumns.filter(column => column.pin === "right"))
 
@@ -554,10 +843,71 @@ const bodyViewportEl = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
 
+function resolveVisibleAnchorCellPosition(): { rowIndex: number; columnIndex: number } | null {
+  for (let rowOffset = 0; rowOffset < props.displayRows.length; rowOffset += 1) {
+    for (let columnIndex = 0; columnIndex < props.visibleColumns.length; columnIndex += 1) {
+      if (!isSelectionAnchorCellSafe(rowOffset, columnIndex)) {
+        continue
+      }
+      return {
+        rowIndex: props.viewportRowStart + rowOffset,
+        columnIndex,
+      }
+    }
+  }
+  return null
+}
+
+function resolveVisibleCellElement(rowIndex: number, columnIndex: number): HTMLElement | null {
+  const selector = `.grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`
+  for (const root of [leftPaneContentRef.value, bodyViewportEl.value, rightPaneContentRef.value]) {
+    const match = root?.querySelector<HTMLElement>(selector)
+    if (match) {
+      return match
+    }
+  }
+  return null
+}
+
+function focusVisibleAnchorCell(): void {
+  const anchorCell = resolveVisibleAnchorCellPosition()
+  if (!anchorCell) {
+    bodyViewportEl.value?.focus({ preventScroll: true })
+    return
+  }
+  const cellElement = resolveVisibleCellElement(anchorCell.rowIndex, anchorCell.columnIndex)
+  if (cellElement) {
+    cellElement.focus({ preventScroll: true })
+    return
+  }
+  bodyViewportEl.value?.focus({ preventScroll: true })
+}
+
+function restoreAnchorCellFocus(): void {
+  focusVisibleAnchorCell()
+  void nextTick(() => {
+    focusVisibleAnchorCell()
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        focusVisibleAnchorCell()
+      })
+    }
+  })
+}
+
 function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
   bodyViewportEl.value = resolveElementRef(value)
   props.bodyViewportRef(value)
 }
+
+watch(
+  () => props.fillPreviewRange,
+  (nextRange, previousRange) => {
+    if (previousRange && !nextRange) {
+      restoreAnchorCellFocus()
+    }
+  },
+)
 
 const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
   resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
@@ -684,13 +1034,48 @@ const visibleSelectionBounds = computed(() => {
   }
 })
 
-const isSingleVisibleSelectedCell = computed(() => {
-  const bounds = visibleSelectionBounds.value
-  if (!bounds) {
+const visibleFillPreviewBounds = computed(() => {
+  let startRowOffset: number | null = null
+  let endRowOffset: number | null = null
+  let startColumnIndex: number | null = null
+  let endColumnIndex: number | null = null
+
+  for (let rowOffset = 0; rowOffset < props.displayRows.length; rowOffset += 1) {
+    for (let columnIndex = 0; columnIndex < props.visibleColumns.length; columnIndex += 1) {
+      if (!isCellInFillPreviewSafe(rowOffset, columnIndex)) {
+        continue
+      }
+      startRowOffset ??= rowOffset
+      endRowOffset = rowOffset
+      startColumnIndex = startColumnIndex == null ? columnIndex : Math.min(startColumnIndex, columnIndex)
+      endColumnIndex = endColumnIndex == null ? columnIndex : Math.max(endColumnIndex, columnIndex)
+    }
+  }
+
+  if (
+    startRowOffset == null
+    || endRowOffset == null
+    || startColumnIndex == null
+    || endColumnIndex == null
+  ) {
+    return null
+  }
+
+  return {
+    startRowOffset,
+    endRowOffset,
+    startColumnIndex,
+    endColumnIndex,
+  }
+})
+
+const isSingleSelectedCell = computed(() => {
+  const range = props.selectionRange
+  if (!range) {
     return false
   }
-  return bounds.startRowOffset === bounds.endRowOffset
-    && bounds.startColumnIndex === bounds.endColumnIndex
+  return range.startRow === range.endRow
+    && range.startColumn === range.endColumn
 })
 
 function columnIndexByKey(columnKey: string): number {
@@ -709,7 +1094,7 @@ function shouldHighlightSelectedCell(rowOffset: number, columnIndex: number): bo
   if (isSelectionAnchorCell(rowOffset, columnIndex)) {
     return false
   }
-  return !isSingleVisibleSelectedCell.value
+  return !isSingleSelectedCell.value
 }
 
 function paneRowStyle(row: TableRow, rowOffset: number, paneWidth: number): CSSProperties {
@@ -732,12 +1117,60 @@ function spacerStyle(width: number): CSSProperties {
 
 const pinnedContentStyle = computed<CSSProperties>(() => ({}))
 
-function resolveSelectionOverlayMetrics() {
-  const bounds = visibleSelectionBounds.value
-  if (!bounds) {
+function rangesEqual(left: OverlayRange | null, right: OverlayRange | null): boolean {
+  if (!left || !right) {
+    return false
+  }
+  return left.startRow === right.startRow
+    && left.endRow === right.endRow
+    && left.startColumn === right.startColumn
+    && left.endColumn === right.endColumn
+}
+
+function resolveVisibleRangeBounds(range: OverlayRange | null) {
+  if (!range || props.displayRows.length === 0 || props.visibleColumns.length === 0) {
     return null
   }
 
+  const visibleRowStart = props.viewportRowStart
+  const visibleRowEnd = visibleRowStart + props.displayRows.length - 1
+  const visibleColumnStart = 0
+  const visibleColumnEnd = props.visibleColumns.length - 1
+
+  const startRowIndex = Math.max(range.startRow, visibleRowStart)
+  const endRowIndex = Math.min(range.endRow, visibleRowEnd)
+  const startColumnIndex = Math.max(range.startColumn, visibleColumnStart)
+  const endColumnIndex = Math.min(range.endColumn, visibleColumnEnd)
+
+  if (startRowIndex > endRowIndex || startColumnIndex > endColumnIndex) {
+    return null
+  }
+
+  const startRowOffset = startRowIndex - visibleRowStart
+  const endRowOffset = endRowIndex - visibleRowStart
+  const startMetric = rowMetrics.value[startRowOffset]
+  const endMetric = rowMetrics.value[endRowOffset]
+  if (!startMetric || !endMetric) {
+    return null
+  }
+
+  return {
+    startRowOffset,
+    endRowOffset,
+    startColumnIndex,
+    endColumnIndex,
+  }
+}
+
+function resolveOverlayMetrics(bounds: {
+  startRowOffset: number
+  endRowOffset: number
+  startColumnIndex: number
+  endColumnIndex: number
+} | null) {
+  if (!bounds) {
+    return null
+  }
   const startMetric = rowMetrics.value[bounds.startRowOffset]
   const endMetric = rowMetrics.value[bounds.endRowOffset]
   if (!startMetric || !endMetric) {
@@ -745,9 +1178,37 @@ function resolveSelectionOverlayMetrics() {
   }
 
   return {
-    bounds,
+    ...bounds,
     top: startMetric.top,
     height: Math.max(1, (endMetric.top + endMetric.height) - startMetric.top),
+  }
+}
+
+function mergeOverlayBounds(
+  left: {
+    startRowOffset: number
+    endRowOffset: number
+    startColumnIndex: number
+    endColumnIndex: number
+  } | null,
+  right: {
+    startRowOffset: number
+    endRowOffset: number
+    startColumnIndex: number
+    endColumnIndex: number
+  } | null,
+) {
+  if (!left) {
+    return right
+  }
+  if (!right) {
+    return left
+  }
+  return {
+    startRowOffset: Math.min(left.startRowOffset, right.startRowOffset),
+    endRowOffset: Math.max(left.endRowOffset, right.endRowOffset),
+    startColumnIndex: Math.min(left.startColumnIndex, right.startColumnIndex),
+    endColumnIndex: Math.max(left.endColumnIndex, right.endColumnIndex),
   }
 }
 
@@ -760,6 +1221,9 @@ function buildOverlaySegment(
   options?: {
     omitLeftBorder?: boolean
     omitRightBorder?: boolean
+    borderColor?: string
+    backgroundColor?: string
+    borderStyle?: "solid" | "dashed"
   },
 ): OverlaySegment {
   return {
@@ -770,9 +1234,10 @@ function buildOverlaySegment(
       left: `${left}px`,
       width: `${Math.max(1, width)}px`,
       height: `${Math.max(1, height)}px`,
-      border: "2px solid var(--datagrid-selection-copied-border)",
+      border: `2px ${options?.borderStyle ?? "solid"} ${options?.borderColor ?? "var(--datagrid-selection-overlay-border)"}`,
       borderLeftWidth: options?.omitLeftBorder ? "0px" : "2px",
       borderRightWidth: options?.omitRightBorder ? "0px" : "2px",
+      background: options?.backgroundColor ?? "transparent",
       boxSizing: "border-box",
       borderTopLeftRadius: options?.omitLeftBorder ? "0px" : "1px",
       borderBottomLeftRadius: options?.omitLeftBorder ? "0px" : "1px",
@@ -784,93 +1249,104 @@ function buildOverlaySegment(
   }
 }
 
-const leftSelectionOverlaySegments = computed<OverlaySegment[]>(() => {
-  const metrics = resolveSelectionOverlayMetrics()
+function buildPaneOverlaySegments(
+  metrics: {
+    startRowOffset: number
+    endRowOffset: number
+    startColumnIndex: number
+    endColumnIndex: number
+    top: number
+    height: number
+  } | null,
+  pane: "left" | "center" | "right",
+  keyPrefix: string,
+  options?: {
+    borderColor?: string
+    backgroundColor?: string
+    borderStyle?: "solid" | "dashed"
+  },
+): OverlaySegment[] {
   if (!metrics) {
     return []
   }
 
-  const selectedColumns = pinnedLeftColumns.value.filter(column => {
-    const index = columnIndexByKey(column.key)
-    return index >= metrics.bounds.startColumnIndex && index <= metrics.bounds.endColumnIndex
-  })
-  if (selectedColumns.length === 0) {
-    return []
-  }
-
-  let left = indexColumnWidthPx.value
-  for (const column of pinnedLeftColumns.value) {
-    if (column.key === selectedColumns[0]?.key) {
-      break
+  if (pane === "left") {
+    const selectedColumns = pinnedLeftColumns.value.filter(column => {
+      const index = columnIndexByKey(column.key)
+      return index >= metrics.startColumnIndex && index <= metrics.endColumnIndex
+    })
+    if (selectedColumns.length === 0) {
+      return []
     }
-    left += resolveColumnWidth(column)
-  }
 
-  const width = selectedColumns.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
-  const lastSelectedIndex = columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
-  return [
-    buildOverlaySegment(
-      `selection-left-${metrics.bounds.startRowOffset}-${metrics.bounds.endRowOffset}`,
-      metrics.top,
-      left,
-      width,
-      metrics.height,
-      {
-        omitRightBorder: metrics.bounds.endColumnIndex > lastSelectedIndex,
-      },
-    ),
-  ]
-})
-
-const centerSelectionOverlaySegments = computed<OverlaySegment[]>(() => {
-  const metrics = resolveSelectionOverlayMetrics()
-  if (!metrics) {
-    return []
-  }
-
-  const selectedColumns = props.renderedColumns.filter(column => {
-    const index = columnIndexByKey(column.key)
-    return index >= metrics.bounds.startColumnIndex && index <= metrics.bounds.endColumnIndex
-  })
-  if (selectedColumns.length === 0) {
-    return []
-  }
-
-  let left = props.leftColumnSpacerWidth
-  for (const column of props.renderedColumns) {
-    if (column.key === selectedColumns[0]?.key) {
-      break
+    let left = indexColumnWidthPx.value
+    for (const column of pinnedLeftColumns.value) {
+      if (column.key === selectedColumns[0]?.key) {
+        break
+      }
+      left += resolveColumnWidth(column)
     }
-    left += resolveColumnWidth(column)
+
+    const width = selectedColumns.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
+    const lastSelectedIndex = columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
+    return [
+      buildOverlaySegment(
+        `${keyPrefix}-left-${metrics.startRowOffset}-${metrics.endRowOffset}`,
+        metrics.top,
+        left,
+        width,
+        metrics.height,
+        {
+          omitRightBorder: metrics.endColumnIndex > lastSelectedIndex,
+          borderColor: options?.borderColor,
+          backgroundColor: options?.backgroundColor,
+          borderStyle: options?.borderStyle,
+        },
+      ),
+    ]
   }
 
-  const width = selectedColumns.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
-  const firstSelectedIndex = columnIndexByKey(selectedColumns[0]?.key ?? "")
-  const lastSelectedIndex = columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
-  return [
-    buildOverlaySegment(
-      `selection-center-${metrics.bounds.startRowOffset}-${metrics.bounds.endRowOffset}`,
-      metrics.top,
-      left,
-      width,
-      metrics.height,
-      {
-        omitLeftBorder: metrics.bounds.startColumnIndex < firstSelectedIndex,
-        omitRightBorder: metrics.bounds.endColumnIndex > lastSelectedIndex,
-      },
-    ),
-  ]
-})
+  if (pane === "center") {
+    const selectedColumns = props.renderedColumns.filter(column => {
+      const index = columnIndexByKey(column.key)
+      return index >= metrics.startColumnIndex && index <= metrics.endColumnIndex
+    })
+    if (selectedColumns.length === 0) {
+      return []
+    }
 
-const rightSelectionOverlaySegments = computed<OverlaySegment[]>(() => {
-  const metrics = resolveSelectionOverlayMetrics()
-  if (!metrics) {
-    return []
+    let left = props.leftColumnSpacerWidth
+    for (const column of props.renderedColumns) {
+      if (column.key === selectedColumns[0]?.key) {
+        break
+      }
+      left += resolveColumnWidth(column)
+    }
+
+    const width = selectedColumns.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
+    const firstSelectedIndex = columnIndexByKey(selectedColumns[0]?.key ?? "")
+    const lastSelectedIndex = columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
+    return [
+      buildOverlaySegment(
+        `${keyPrefix}-center-${metrics.startRowOffset}-${metrics.endRowOffset}`,
+        metrics.top,
+        left,
+        width,
+        metrics.height,
+        {
+          omitLeftBorder: metrics.startColumnIndex < firstSelectedIndex,
+          omitRightBorder: metrics.endColumnIndex > lastSelectedIndex,
+          borderColor: options?.borderColor,
+          backgroundColor: options?.backgroundColor,
+          borderStyle: options?.borderStyle,
+        },
+      ),
+    ]
   }
 
   const selectedColumns = pinnedRightColumns.value.filter(column => {
     const index = columnIndexByKey(column.key)
-    return index >= metrics.bounds.startColumnIndex && index <= metrics.bounds.endColumnIndex
+    return index >= metrics.startColumnIndex && index <= metrics.endColumnIndex
   })
   if (selectedColumns.length === 0) {
     return []
@@ -888,17 +1364,112 @@ const rightSelectionOverlaySegments = computed<OverlaySegment[]>(() => {
   const firstSelectedIndex = columnIndexByKey(selectedColumns[0]?.key ?? "")
   return [
     buildOverlaySegment(
-      `selection-right-${metrics.bounds.startRowOffset}-${metrics.bounds.endRowOffset}`,
+      `${keyPrefix}-right-${metrics.startRowOffset}-${metrics.endRowOffset}`,
       metrics.top,
       left,
       width,
       metrics.height,
       {
-        omitLeftBorder: metrics.bounds.startColumnIndex < firstSelectedIndex,
+        omitLeftBorder: metrics.startColumnIndex < firstSelectedIndex,
+        borderColor: options?.borderColor,
+        backgroundColor: options?.backgroundColor,
+        borderStyle: options?.borderStyle,
       },
     ),
   ]
+}
+
+const normalizedMovePreviewRange = computed<OverlayRange | null>(() => {
+  if (!props.isRangeMoving || !props.rangeMovePreviewRange) {
+    return null
+  }
+  return rangesEqual(props.rangeMovePreviewRange, props.selectionRange)
+    ? null
+    : props.rangeMovePreviewRange
 })
+
+const visibleCombinedFillPreviewBounds = computed(() => (
+  mergeOverlayBounds(visibleSelectionBounds.value, visibleFillPreviewBounds.value)
+))
+const visibleSelectionOverlayMetrics = computed(() => {
+  if (visibleFillPreviewBounds.value) {
+    return null
+  }
+  return resolveOverlayMetrics(visibleSelectionBounds.value)
+})
+const visibleFillPreviewOverlayMetrics = computed(() => resolveOverlayMetrics(visibleCombinedFillPreviewBounds.value))
+const visibleMovePreviewOverlayMetrics = computed(() => (
+  resolveOverlayMetrics(resolveVisibleRangeBounds(normalizedMovePreviewRange.value))
+))
+
+const leftSelectionOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visibleSelectionOverlayMetrics.value, "left", "selection", {
+    borderColor: "var(--datagrid-selection-overlay-border)",
+  })
+))
+
+const centerSelectionOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visibleSelectionOverlayMetrics.value, "center", "selection", {
+    borderColor: "var(--datagrid-selection-overlay-border)",
+  })
+))
+
+const rightSelectionOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visibleSelectionOverlayMetrics.value, "right", "selection", {
+    borderColor: "var(--datagrid-selection-overlay-border)",
+  })
+))
+
+const leftFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visibleFillPreviewOverlayMetrics.value, "left", "fill-preview", {
+    borderColor: "var(--datagrid-selection-overlay-fill-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
+  })
+))
+
+const centerFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visibleFillPreviewOverlayMetrics.value, "center", "fill-preview", {
+    borderColor: "var(--datagrid-selection-overlay-fill-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
+  })
+))
+
+const rightFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visibleFillPreviewOverlayMetrics.value, "right", "fill-preview", {
+    borderColor: "var(--datagrid-selection-overlay-fill-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
+  })
+))
+
+const leftMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visibleMovePreviewOverlayMetrics.value, "left", "move-preview", {
+    borderColor: "var(--datagrid-selection-overlay-move-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
+    borderStyle: "dashed",
+  })
+))
+
+const centerMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visibleMovePreviewOverlayMetrics.value, "center", "move-preview", {
+    borderColor: "var(--datagrid-selection-overlay-move-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
+    borderStyle: "dashed",
+  })
+))
+
+const rightMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visibleMovePreviewOverlayMetrics.value, "right", "move-preview", {
+    borderColor: "var(--datagrid-selection-overlay-move-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
+    borderStyle: "dashed",
+  })
+))
+
+const hasVisibleSelectionOverlay = computed(() => (
+  leftSelectionOverlaySegments.value.length > 0
+  || centerSelectionOverlaySegments.value.length > 0
+  || rightSelectionOverlaySegments.value.length > 0
+))
 
 function cellStateClasses(row: TableRow, rowOffset: number, columnIndex: number): Record<string, boolean> {
   const columnKey = props.visibleColumns[columnIndex]?.key ?? ""
