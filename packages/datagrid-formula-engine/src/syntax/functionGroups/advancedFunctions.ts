@@ -1,10 +1,13 @@
 import {
   type DataGridFormulaValue,
+  type DataGridFormulaScalarValue,
   areFormulaValuesEqual,
   coerceFormulaValueToNumber,
+  compareFormulaValues,
 } from "../values.js"
 import {
   collectFilteredValues,
+  collectFormulaTableRelatedValues,
   collectFormulaTableValues,
   collectValuesFromArgs,
   computeAverage,
@@ -15,9 +18,51 @@ import {
   formulaValueMatchesCriterion,
   normalizeFormulaTableName,
   resolveFormulaLiteralText,
+  stringifyFormulaScalarValue,
   toDistinctFormulaValues,
   toNumericFormulaValues,
 } from "../functionHelpers.js"
+function resolveFormulaRelationAggregateMethod(value: DataGridFormulaValue): string {
+  if (Array.isArray(value)) {
+    return resolveFormulaRelationAggregateMethod(value[0] ?? "")
+  }
+  return String(value ?? "").trim().toLowerCase()
+}
+
+function computeFormulaRelationRollupValue(
+  values: readonly DataGridFormulaScalarValue[],
+  methodValue: DataGridFormulaValue,
+  emptyValue: DataGridFormulaValue | undefined,
+): DataGridFormulaValue {
+  const method = resolveFormulaRelationAggregateMethod(methodValue)
+  switch (method) {
+    case "count":
+      return values.length
+    case "sum":
+      return toNumericFormulaValues(values).reduce((sum, value) => sum + value, 0)
+    case "avg":
+    case "average":
+      return computeAverage(values)
+    case "min":
+      if (values.length === 0) {
+        return emptyValue ?? 0
+      }
+      return [...values].sort((left, right) => compareFormulaValues(left, right))[0] ?? (emptyValue ?? 0)
+    case "max":
+      if (values.length === 0) {
+        return emptyValue ?? 0
+      }
+      return [...values].sort((left, right) => compareFormulaValues(right, left))[0] ?? (emptyValue ?? 0)
+    case "join":
+      return values
+        .map(value => stringifyFormulaScalarValue(value))
+        .filter(value => value.length > 0)
+        .join(", ")
+    case "first":
+    default:
+      return values[0] ?? (emptyValue ?? null)
+  }
+}
 
 export const DATAGRID_ADVANCED_FORMULA_FUNCTIONS = defineFormulaFunctions({
   ARRAY: {
@@ -146,6 +191,48 @@ export const DATAGRID_ADVANCED_FORMULA_FUNCTIONS = defineFormulaFunctions({
         context?.getContextValue?.(createFormulaTableContextKey(tableName)),
         args[1],
       )
+    },
+  },
+  RELATED: {
+    arity: { min: 4, max: 5 },
+    requiresRuntimeContext: true,
+    resolveContextKeys: (args) => {
+      const literalTableName = resolveFormulaLiteralText(args[0])
+      return [literalTableName ? createFormulaTableContextKey(literalTableName) : "tables"]
+    },
+    compute: (args, context) => {
+      const tableName = normalizeFormulaTableName(args[0] ?? null)
+      if (tableName.length === 0) {
+        return args[4] ?? null
+      }
+      const values = collectFormulaTableRelatedValues(
+        context?.getContextValue?.(createFormulaTableContextKey(tableName)),
+        args[2],
+        args[1] ?? null,
+        args[3],
+      )
+      return values[0] ?? (args[4] ?? null)
+    },
+  },
+  ROLLUP: {
+    arity: { min: 5, max: 6 },
+    requiresRuntimeContext: true,
+    resolveContextKeys: (args) => {
+      const literalTableName = resolveFormulaLiteralText(args[0])
+      return [literalTableName ? createFormulaTableContextKey(literalTableName) : "tables"]
+    },
+    compute: (args, context) => {
+      const tableName = normalizeFormulaTableName(args[0] ?? null)
+      if (tableName.length === 0) {
+        return args[5] ?? 0
+      }
+      const values = collectFormulaTableRelatedValues(
+        context?.getContextValue?.(createFormulaTableContextKey(tableName)),
+        args[1],
+        args[2] ?? null,
+        args[3],
+      )
+      return computeFormulaRelationRollupValue(values, args[4] ?? "first", args[5])
     },
   },
   XLOOKUP: {

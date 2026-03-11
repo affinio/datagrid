@@ -20,10 +20,39 @@ export type {
   DataGridFormulaFunctionDefinition,
 }
 
+interface ResolvedFormulaTableRowsInput<Row = unknown> {
+  cacheKey: object
+  rows: readonly Row[]
+  resolveRow?: (row: Row, index: number) => unknown
+}
+
+const formulaTableLookupIndexCache = new WeakMap<object, Map<string, Map<string, readonly unknown[]>>>()
+
 function isFormulaTableRowsSource(value: unknown): value is DataGridFormulaTableRowsSource {
   return typeof value === "object"
     && value !== null
     && Array.isArray((value as { rows?: unknown }).rows)
+}
+
+function resolveFormulaTableRowsInput(
+  rowsInput: unknown,
+): ResolvedFormulaTableRowsInput | null {
+  if (Array.isArray(rowsInput)) {
+    return {
+      cacheKey: rowsInput,
+      rows: rowsInput,
+    }
+  }
+  if (isFormulaTableRowsSource(rowsInput)) {
+    return {
+      cacheKey: rowsInput,
+      rows: rowsInput.rows,
+      resolveRow: typeof rowsInput.resolveRow === "function"
+        ? rowsInput.resolveRow
+        : undefined,
+    }
+  }
+  return null
 }
 
 export interface FormulaCriterionEntry {
@@ -99,6 +128,27 @@ function coerceUnknownToFormulaScalar(value: unknown): DataGridFormulaScalarValu
   return null
 }
 
+function normalizeFormulaLookupKey(value: unknown): string | null {
+  const scalar = coerceUnknownToFormulaScalar(value)
+  if (scalar === null || isFormulaErrorValue(scalar)) {
+    return null
+  }
+  if (scalar instanceof Date) {
+    return Number.isNaN(scalar.getTime()) ? null : `n:${scalar.getTime()}`
+  }
+  if (typeof scalar === "number") {
+    return `n:${Number.isFinite(scalar) ? scalar : 0}`
+  }
+  if (typeof scalar === "boolean") {
+    return `n:${scalar ? 1 : 0}`
+  }
+  const numeric = scalar.trim().length > 0 ? Number(scalar) : Number.NaN
+  if (Number.isFinite(numeric)) {
+    return `n:${numeric}`
+  }
+  return `s:${scalar}`
+}
+
 function readNestedFormulaTableValue(
   value: unknown,
   segments: readonly (string | number)[],
@@ -121,35 +171,49 @@ function readNestedFormulaTableValue(
   return current
 }
 
+function resolveFormulaTableFieldSegments(
+  fieldValue: DataGridFormulaValue | undefined,
+): readonly (string | number)[] {
+  const field = typeof fieldValue === "undefined"
+    ? ""
+    : coerceFormulaValueToText(fieldValue).trim()
+  return field.length > 0 ? parseFormulaReferenceSegments(field) : []
+}
+
+function resolveFormulaTableRowValue<Row>(
+  input: ResolvedFormulaTableRowsInput<Row>,
+  row: Row,
+  index: number,
+): unknown {
+  return input.resolveRow
+    ? input.resolveRow(row, index)
+    : row
+}
+
+function resolveFormulaTableFieldValue(
+  rowValue: unknown,
+  path: readonly (string | number)[],
+): unknown {
+  return path.length > 0
+    ? readNestedFormulaTableValue(rowValue, path)
+    : rowValue
+}
+
 export function collectFormulaTableValues(
   rowsInput: unknown,
   fieldValue: DataGridFormulaValue | undefined,
 ): readonly DataGridFormulaScalarValue[] {
-  const rows = Array.isArray(rowsInput)
-    ? rowsInput
-    : isFormulaTableRowsSource(rowsInput)
-      ? rowsInput.rows
-      : null
-  if (!rows) {
+  const input = resolveFormulaTableRowsInput(rowsInput)
+  if (!input) {
     return Object.freeze([])
   }
-  const resolveRow = isFormulaTableRowsSource(rowsInput) && typeof rowsInput.resolveRow === "function"
-    ? rowsInput.resolveRow
-    : undefined
-  const field = typeof fieldValue === "undefined"
-    ? ""
-    : coerceFormulaValueToText(fieldValue).trim()
-  const path = field.length > 0 ? parseFormulaReferenceSegments(field) : []
+  const path = resolveFormulaTableFieldSegments(fieldValue)
   const values: DataGridFormulaScalarValue[] = []
 
-  for (let index = 0; index < rows.length; index += 1) {
-    const row = rows[index]
-    const rowValue = resolveRow
-      ? resolveRow(row, index)
-      : row
-    const resolved = path.length > 0
-      ? readNestedFormulaTableValue(rowValue, path)
-      : rowValue
+  for (let index = 0; index < input.rows.length; index += 1) {
+    const row = input.rows[index]
+    const rowValue = resolveFormulaTableRowValue(input, row, index)
+    const resolved = resolveFormulaTableFieldValue(rowValue, path)
     if (Array.isArray(resolved)) {
       for (const entry of resolved) {
         values.push(coerceUnknownToFormulaScalar(entry))
@@ -159,6 +223,77 @@ export function collectFormulaTableValues(
     values.push(coerceUnknownToFormulaScalar(resolved))
   }
 
+  return Object.freeze(values)
+}
+
+export function findFormulaTableRelatedRows(
+  rowsInput: unknown,
+  keyFieldValue: DataGridFormulaValue | undefined,
+  lookupValue: DataGridFormulaValue,
+): readonly unknown[] {
+  const input = resolveFormulaTableRowsInput(rowsInput)
+  if (!input) {
+    return Object.freeze([])
+  }
+  const lookupKey = normalizeFormulaLookupKey(Array.isArray(lookupValue) ? lookupValue[0] ?? null : lookupValue)
+  if (lookupKey === null) {
+    return Object.freeze([])
+  }
+  const keyPath = resolveFormulaTableFieldSegments(keyFieldValue)
+  const cacheFieldKey = keyPath.length === 0
+    ? ""
+    : keyPath.map(segment => String(segment)).join(".")
+  let indexesByField = formulaTableLookupIndexCache.get(input.cacheKey)
+  if (!indexesByField) {
+    indexesByField = new Map<string, Map<string, readonly unknown[]>>()
+    formulaTableLookupIndexCache.set(input.cacheKey, indexesByField)
+  }
+  let lookupIndex = indexesByField.get(cacheFieldKey)
+  if (!lookupIndex) {
+    const nextLookupIndex = new Map<string, unknown[]>()
+    for (let index = 0; index < input.rows.length; index += 1) {
+      const row = input.rows[index]
+      const rowValue = resolveFormulaTableRowValue(input, row, index)
+      const keyValue = resolveFormulaTableFieldValue(rowValue, keyPath)
+      const normalizedKey = normalizeFormulaLookupKey(keyValue)
+      if (normalizedKey === null) {
+        continue
+      }
+      const bucket = nextLookupIndex.get(normalizedKey)
+      if (bucket) {
+        bucket.push(rowValue)
+        continue
+      }
+      nextLookupIndex.set(normalizedKey, [rowValue])
+    }
+    lookupIndex = new Map<string, readonly unknown[]>(nextLookupIndex)
+    indexesByField.set(cacheFieldKey, lookupIndex)
+  }
+  return lookupIndex.get(lookupKey) ?? Object.freeze([])
+}
+
+export function collectFormulaTableRelatedValues(
+  rowsInput: unknown,
+  keyFieldValue: DataGridFormulaValue | undefined,
+  lookupValue: DataGridFormulaValue,
+  returnFieldValue: DataGridFormulaValue | undefined,
+): readonly DataGridFormulaScalarValue[] {
+  const relatedRows = findFormulaTableRelatedRows(rowsInput, keyFieldValue, lookupValue)
+  if (relatedRows.length === 0) {
+    return Object.freeze([])
+  }
+  const returnPath = resolveFormulaTableFieldSegments(returnFieldValue)
+  const values: DataGridFormulaScalarValue[] = []
+  for (const relatedRow of relatedRows) {
+    const resolved = resolveFormulaTableFieldValue(relatedRow, returnPath)
+    if (Array.isArray(resolved)) {
+      for (const entry of resolved) {
+        values.push(coerceUnknownToFormulaScalar(entry))
+      }
+      continue
+    }
+    values.push(coerceUnknownToFormulaScalar(resolved))
+  }
   return Object.freeze(values)
 }
 

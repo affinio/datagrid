@@ -29,7 +29,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc -p tsconfig.public.json && node ./scripts/fix-esm-specifiers.mjs",
+    "build": "tsc -b tsconfig.public.json && node ./scripts/fix-esm-specifiers.mjs",
     "type-check": "node ./scripts/type-check.mjs",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:file": "vitest run --config vitest.config.ts",

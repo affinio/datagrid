@@ -43,5 +43,11 @@
     "src/**/__tests__/**",
     "src/**/*.spec.ts",
     "src/**/*.test.ts"
+  ],
+  "references": [
+    { "path": "../datagrid-formula-engine" },
+    { "path": "../datagrid-pivot" },
+    { "path": "../projection-engine" },
+    { "path": "../datagrid-plugins" }
   ]
 }

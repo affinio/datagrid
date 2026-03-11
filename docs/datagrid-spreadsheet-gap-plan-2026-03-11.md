@@ -72,6 +72,28 @@ Still missing in this area:
 - sheet duplication / workbook snapshot / workbook history semantics
 - conflict policy for workbook-managed aliases vs external manual formula tables
 
+### 2.5. Relation-aware formula helpers
+
+Needed:
+
+- keyed lookup helpers on top of workbook tables
+- efficient index reuse for cross-sheet parent/child lookups
+- path from spreadsheet tables toward database-like relations
+
+Status:
+
+- `2026-03-11`: fourth core block implemented
+  - added `RELATED(table, localValue, tableKeyField, returnField, notFound?)`
+  - added `ROLLUP(table, tableKeyField, localValue, aggregateField, method, empty?)`
+  - added lazy per-table lookup index cache keyed by `table source + key field`
+  - kept dependency scheduling workbook-safe by using literal table names in function context keys
+
+Still missing in this area:
+
+- named relation registry / relation metadata on top of raw table names
+- relation-direction metadata and diagnostics
+- query-like sugar such as `WHERE customer_id = Customers.id`
+
 ### 3. Spreadsheet editing model
 
 Current grid editing is cell-value oriented.
@@ -91,13 +113,21 @@ Status:
   - added extracted reference spans with stable color indexes and resolved target row indexes
   - added formula reference formatter + click-insert helper for canonical and Smartsheet-style output
   - added `createDataGridSpreadsheetFormulaEditorModel()` for formula bar / inline editor session state
+- `2026-03-11`: sheet runtime block implemented
+  - added `createDataGridSpreadsheetSheetModel()` with per-cell raw input persistence
+  - added per-cell formula execution using the existing formula-engine as a single-cell evaluator
+  - added cell dependency closure recompute for row-aware references like `=[price]@row + [tax]5`
+  - added formula-table context support in sheet cells for `TABLE`, `RELATED`, `ROLLUP`
+  - added sheet/row/column/cell style scopes plus style copy/apply across cells
+  - added sheet benchmark for value patch -> per-cell formula recompute
 
 Still missing in this area:
 
-- sheet-level cell formula persistence/execution model (per-cell formulas, not just editor state)
 - integration with selection/cell-click orchestration in `datagrid-vue-app`
 - reverse mapping from target cells back to reference spans for hover/focus interactions
 - edit transactions that preserve raw input separately from computed display payload
+- row/column insert-remove semantics with reference shifting and fill/autofill semantics
+- spreadsheet workbook model that hosts multiple per-cell sheets directly, rather than only row-model workbook tables
 
 ### 4. Style system
 
@@ -134,6 +164,6 @@ Needed:
 After the workbook graph refactor, the next high-leverage core block is:
 
 - add sheet-level per-cell formula execution/persistence model
-- add relation registry + keyed lookup helpers (`RELATED`, `ROLLUP`) before query-like grammar
+- add named relation registry on top of `RELATED` / `ROLLUP`
 - connect spreadsheet editor model to selection-driven reference insertion in `datagrid-vue-app`
 - add sheet-qualified reference grammar on top of the parser profile layer

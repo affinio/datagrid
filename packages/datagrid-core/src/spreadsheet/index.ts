@@ -15,6 +15,23 @@ export type {
   DataGridSpreadsheetInsertFormulaReferenceResult,
   DataGridSpreadsheetTextSelection,
 } from "./formulaEditorModel.js"
+export type {
+  CreateDataGridSpreadsheetSheetModelOptions,
+  DataGridSpreadsheetCellInputPatch,
+  DataGridSpreadsheetCellSnapshot,
+  DataGridSpreadsheetCellStylePatch,
+  DataGridSpreadsheetColumnInput,
+  DataGridSpreadsheetColumnSnapshot,
+  DataGridSpreadsheetFormulaCellSnapshot,
+  DataGridSpreadsheetFormulaTableBinding,
+  DataGridSpreadsheetFormulaTablePatch,
+  DataGridSpreadsheetRowInput,
+  DataGridSpreadsheetRowSnapshot,
+  DataGridSpreadsheetSheetListener,
+  DataGridSpreadsheetSheetModel,
+  DataGridSpreadsheetSheetSnapshot,
+  DataGridSpreadsheetStyle,
+} from "./sheetModel.js"
 
 export {
   analyzeDataGridSpreadsheetCellInput,
@@ -23,3 +40,4 @@ export {
   insertDataGridSpreadsheetFormulaReference,
   resolveDataGridSpreadsheetActiveFormulaReference,
 } from "./formulaEditorModel.js"
+export { createDataGridSpreadsheetSheetModel } from "./sheetModel.js"
