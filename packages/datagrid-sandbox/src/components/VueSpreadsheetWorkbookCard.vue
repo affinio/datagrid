@@ -140,6 +140,10 @@
             Workbook-wide aggregates stay on
             <code>TABLE('orders', 'total')</code>, because direct refs do not replace dynamic table scans.
           </p>
+          <p>
+            Click any column header to open the standard menu, then test sort, value filters, and the
+            shared <strong>Advanced filter</strong> toolbar on the active sheet.
+          </p>
         </section>
 
         <section class="spreadsheet-panel">
@@ -174,11 +178,190 @@
         </section>
       </aside>
 
-      <section
-        class="grid-host spreadsheet-grid-host"
-        @mousedown.capture="handleGridPointerDownCapture"
-      >
-        <DataGridTableStageLoose v-bind="tableStagePropsForView" />
+      <section class="spreadsheet-grid-shell">
+        <div class="spreadsheet-grid-toolbar">
+          <div class="datagrid-app-toolbar">
+            <div class="datagrid-app-toolbar__group">
+              <DataGridAdvancedFilterPopover
+                :is-open="isAdvancedFilterPanelOpen"
+                :clauses="advancedFilterDraftClauses"
+                :columns="advancedFilterColumns"
+                :applied-filter-summary-items="activeFilterSummaryItems"
+                :has-any-filters="hasActiveFilters"
+                :active="hasActiveFilters"
+                button-label="Advanced filter"
+                @open="openAdvancedFilterPanel"
+                @add="addAdvancedFilterClause"
+                @remove="removeAdvancedFilterClause"
+                @update-clause="updateAdvancedFilterClause"
+                @apply="applyAdvancedFilterPanel"
+                @cancel="cancelAdvancedFilterPanel"
+                @reset-all="resetAllFilters"
+              />
+              <button
+                type="button"
+                class="datagrid-app-toolbar__button"
+                :class="{ 'datagrid-app-toolbar__button--active': isDiagnosticsPanelOpen }"
+                @click="isDiagnosticsPanelOpen = !isDiagnosticsPanelOpen"
+              >
+                Formula diagnostics
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="spreadsheet-grid-stage">
+          <section
+            class="grid-host spreadsheet-grid-host"
+            @mousedown.capture="handleGridPointerDownCapture"
+          >
+            <DataGridTableStageLoose v-bind="tableStagePropsForView" />
+          </section>
+
+          <aside
+            class="spreadsheet-diagnostics-drawer"
+            :class="{ 'spreadsheet-diagnostics-drawer--open': isDiagnosticsPanelOpen }"
+            aria-label="Formula diagnostics"
+          >
+            <div class="spreadsheet-diagnostics-drawer__header">
+              <div>
+                <div class="spreadsheet-diagnostic-label">Formula diagnostics</div>
+                <h3>Spreadsheet runtime</h3>
+              </div>
+              <button
+                type="button"
+                class="spreadsheet-action"
+                @click="isDiagnosticsPanelOpen = false"
+              >
+                Close
+              </button>
+            </div>
+
+            <div class="spreadsheet-diagnostics-drawer__body">
+              <div class="spreadsheet-diagnostic-metrics">
+                <div class="spreadsheet-diagnostic-metric">
+                  <span>Last recalc</span>
+                  <strong>{{ lastSpreadsheetOperationLabel }}</strong>
+                  <small>{{ lastSpreadsheetOperationDurationLabel }}</small>
+                </div>
+                <div class="spreadsheet-diagnostic-metric">
+                  <span>Workbook sync</span>
+                  <strong>{{ workbookSyncSummary.passCount }} pass{{ workbookSyncSummary.passCount === 1 ? "" : "es" }}</strong>
+                  <small>{{ workbookSyncSummary.converged ? "converged" : "not converged" }}</small>
+                </div>
+                <div class="spreadsheet-diagnostic-metric">
+                  <span>Formula cells</span>
+                  <strong>{{ workbookFormulaTotals.formulaCells }}</strong>
+                  <small>{{ workbookFormulaTotals.errorCells }} errors across workbook</small>
+                </div>
+                <div class="spreadsheet-diagnostic-metric">
+                  <span>Active formula</span>
+                  <strong>{{ activeFormulaSummary.referenceCount }} refs</strong>
+                  <small>{{ activeFormulaSummary.crossSheetReferenceCount }} cross-sheet · {{ activeFormulaSummary.diagnosticCount }} diagnostics</small>
+                </div>
+              </div>
+
+              <div class="spreadsheet-diagnostic-block">
+                <span class="spreadsheet-diagnostic-label">Active cell</span>
+                <div class="spreadsheet-selection-hint">
+                  {{ activeFormulaSummary.cellLabel }} · {{ activeFormulaSummary.kindLabel }} · {{ activeFormulaSummary.validityLabel }}
+                </div>
+              </div>
+
+              <div class="spreadsheet-diagnostic-block">
+                <span class="spreadsheet-diagnostic-label">Sheet runtime</span>
+                <div class="spreadsheet-diagnostic-chip-list">
+                  <span class="spreadsheet-diagnostic-chip">Rows {{ activeSheetStats?.rowCount ?? 0 }}</span>
+                  <span class="spreadsheet-diagnostic-chip">Cols {{ activeSheetStats?.columnCount ?? 0 }}</span>
+                  <span class="spreadsheet-diagnostic-chip">Formulas {{ activeSheetStats?.formulaCellCount ?? 0 }}</span>
+                  <span class="spreadsheet-diagnostic-chip">Errors {{ activeSheetStats?.errorCellCount ?? 0 }}</span>
+                  <span class="spreadsheet-diagnostic-chip">Revision {{ activeSheetStats?.revision ?? 0 }}</span>
+                </div>
+              </div>
+
+              <div class="spreadsheet-diagnostic-block">
+                <span class="spreadsheet-diagnostic-label">Formula references</span>
+                <div v-if="activeFormulaReferenceItems.length > 0" class="spreadsheet-diagnostic-chip-list">
+                  <span
+                    v-for="item in activeFormulaReferenceItems"
+                    :key="item"
+                    class="spreadsheet-diagnostic-chip"
+                  >
+                    {{ item }}
+                  </span>
+                </div>
+                <div v-else class="spreadsheet-empty-state">No parsed references in the active formula</div>
+              </div>
+
+              <div class="spreadsheet-diagnostic-block">
+                <span class="spreadsheet-diagnostic-label">Formula issues</span>
+                <div v-if="activeFormulaDiagnosticItems.length > 0" class="spreadsheet-diagnostic-list">
+                  <div
+                    v-for="item in activeFormulaDiagnosticItems"
+                    :key="item"
+                    class="spreadsheet-diagnostic-list__item"
+                  >
+                    {{ item }}
+                  </div>
+                </div>
+                <div v-else class="spreadsheet-empty-state">No formula diagnostics</div>
+              </div>
+
+              <div class="spreadsheet-diagnostic-block">
+                <span class="spreadsheet-diagnostic-label">View state</span>
+                <div class="spreadsheet-diagnostic-chip-list">
+                  <span class="spreadsheet-diagnostic-chip">Visible rows {{ totalRows }}</span>
+                  <span class="spreadsheet-diagnostic-chip">Filters {{ activeFilterSummaryItems.length }}</span>
+                  <span class="spreadsheet-diagnostic-chip">Sort keys {{ sortSummaryItems.length }}</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <section class="spreadsheet-grid-actions">
+          <div class="spreadsheet-grid-actions__copy">
+            Open <strong>Summary</strong>, then use these actions to watch direct refs rewrite across rename,
+            row insert/remove, and sheet removal.
+          </div>
+          <div class="spreadsheet-style-actions">
+            <button
+              type="button"
+              class="spreadsheet-action"
+              :disabled="workbook.getSheet('orders') == null"
+              @click="toggleOrdersSheetName"
+            >
+              Rename Orders
+            </button>
+            <button
+              type="button"
+              class="spreadsheet-action"
+              :disabled="workbook.getSheet('orders') == null"
+              @click="insertOrderRowAtTop"
+            >
+              Insert order row
+            </button>
+            <button
+              type="button"
+              class="spreadsheet-action"
+              :disabled="(workbook.getSheet('orders')?.sheetModel.getSnapshot().rowCount ?? 0) < 1"
+              @click="removeFirstOrderRow"
+            >
+              Remove first order
+            </button>
+            <button
+              type="button"
+              class="spreadsheet-action"
+              :disabled="workbook.getSheet('orders') == null"
+              @click="removeOrdersSheet"
+            >
+              Remove Orders sheet
+            </button>
+            <button type="button" class="spreadsheet-action" @click="resetDemoWorkbook">
+              Reset demo
+            </button>
+          </div>
+        </section>
       </section>
     </section>
 
@@ -190,12 +373,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, watchEffect } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch, watchEffect } from "vue"
 import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
 import {
   createDataGridSpreadsheetFormulaEditorModel,
   createDataGridSpreadsheetWorkbookModel,
   type DataGridColumnInput,
+  type DataGridFilterSnapshot,
   type DataGridRowId,
   type DataGridSelectionSnapshot,
   type DataGridSpreadsheetCellAddress,
@@ -206,12 +390,20 @@ import {
 } from "@affino/datagrid-core"
 import { createGridSelectionRange, type GridSelectionContext, type GridSelectionPointLike } from "@affino/datagrid-core/advanced"
 import {
+  cloneDataGridFilterSnapshot,
+  useDataGridAppAdvancedFilterBuilder,
   useDataGridAppSelection,
   useDataGridRuntime,
   type DataGridColumnSnapshot,
+  type DataGridSortState,
   type UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
-import { DataGridTableStage, useDataGridTableStageRuntime } from "../../../datagrid-vue-app/src/internal"
+import {
+  DataGridTableStage,
+  dataGridAppRootElementKey,
+  useDataGridTableStageRuntime,
+} from "../../../datagrid-vue-app/src/internal"
+import DataGridAdvancedFilterPopover from "../../../datagrid-vue-app/src/DataGridAdvancedFilterPopover.vue"
 
 const DataGridTableStageLoose = DataGridTableStage as unknown as new () => {
   $props: Record<string, unknown>
@@ -246,6 +438,14 @@ type ReferenceLegendEntry = {
   targetsLabel: string
   style: Readonly<Record<string, string>>
 }
+
+interface SortToggleState {
+  key: string
+  direction: "asc" | "desc"
+}
+
+type DataGridColumnFilterEntry = DataGridFilterSnapshot["columnFilters"][string]
+type DataGridAdvancedExpressionEntry = NonNullable<DataGridFilterSnapshot["advancedExpression"]>
 
 const SPREADSHEET_REFERENCE_OPTIONS = {
   syntax: "smartsheet" as const,
@@ -320,6 +520,8 @@ const numberFormatter = new Intl.NumberFormat("en-GB", {
 const cardRootRef = ref<HTMLElement | null>(null)
 const formulaInputRef = ref<HTMLTextAreaElement | null>(null)
 const sandboxThemeTokens = resolveGridThemeTokens(industrialNeutralTheme)
+
+provide(dataGridAppRootElementKey, cardRootRef)
 
 watchEffect(() => {
   if (!cardRootRef.value) {
@@ -417,6 +619,8 @@ function createDemoWorkbookModel(): DataGridSpreadsheetWorkbookModel {
   return workbook
 }
 
+const INITIAL_ORDER_SEED = 1011
+
 function cloneRowData<TRow,>(row: TRow): TRow {
   if (typeof globalThis.structuredClone === "function") {
     return globalThis.structuredClone(row)
@@ -425,6 +629,166 @@ function cloneRowData<TRow,>(row: TRow): TRow {
     return { ...(row as Record<string, unknown>) } as TRow
   }
   return row
+}
+
+function createEmptyFilterModel(): DataGridFilterSnapshot {
+  return {
+    columnFilters: {},
+    advancedFilters: {},
+    advancedExpression: null,
+  }
+}
+
+function cloneFilterModelState(
+  filterModel: DataGridFilterSnapshot | null | undefined,
+): DataGridFilterSnapshot {
+  return cloneDataGridFilterSnapshot(filterModel ?? createEmptyFilterModel()) ?? createEmptyFilterModel()
+}
+
+function normalizeColumnMenuToken(token: string): string {
+  return token.startsWith("string:")
+    ? `string:${token.slice("string:".length).toLowerCase()}`
+    : token
+}
+
+function resolveInitialFilterTexts(filterModel: DataGridFilterSnapshot | null | undefined): Record<string, string> {
+  const result: Record<string, string> = {}
+  const columnFilters = filterModel?.columnFilters ?? {}
+  for (const [columnKey, filter] of Object.entries(columnFilters)) {
+    if (filter?.kind === "predicate" && typeof filter.value === "string") {
+      result[columnKey] = filter.value
+    }
+  }
+  return result
+}
+
+function formatFilterDisplayValue(value: unknown): string {
+  if (value == null) {
+    return "blank"
+  }
+  if (value instanceof Date) {
+    return value.toISOString()
+  }
+  if (typeof value === "string") {
+    return `"${value}"`
+  }
+  return String(value)
+}
+
+function formatColumnFilterOperator(operator: string): string {
+  switch (operator) {
+    case "contains":
+      return "contains"
+    case "startsWith":
+    case "starts-with":
+      return "starts with"
+    case "endsWith":
+    case "ends-with":
+      return "ends with"
+    case "equals":
+      return "="
+    case "notEquals":
+    case "not-equals":
+      return "!="
+    case "gt":
+      return ">"
+    case "gte":
+      return ">="
+    case "lt":
+      return "<"
+    case "lte":
+      return "<="
+    case "between":
+      return "between"
+    case "isEmpty":
+    case "is-empty":
+      return "is empty"
+    case "notEmpty":
+    case "not-empty":
+      return "is not empty"
+    case "isNull":
+    case "is-null":
+      return "is null"
+    case "notNull":
+    case "not-null":
+      return "is not null"
+    default:
+      return operator
+  }
+}
+
+function decodeColumnFilterToken(token: string): string {
+  const normalized = String(token ?? "")
+  if (normalized === "null") {
+    return "(Blanks)"
+  }
+  const separatorIndex = normalized.indexOf(":")
+  if (separatorIndex < 0) {
+    return normalized
+  }
+  const kind = normalized.slice(0, separatorIndex)
+  const payload = normalized.slice(separatorIndex + 1)
+  if (
+    kind === "string"
+    || kind === "number"
+    || kind === "boolean"
+    || kind === "bigint"
+    || kind === "date"
+    || kind === "repr"
+    || kind === "json"
+  ) {
+    return payload
+  }
+  return normalized
+}
+
+function formatColumnFilterSummary(label: string, filter: DataGridColumnFilterEntry): string {
+  if (filter.kind === "valueSet") {
+    if (filter.tokens.length === 1) {
+      return `${label}: ${decodeColumnFilterToken(filter.tokens[0] ?? "")}`
+    }
+    return `${label}: ${filter.tokens.length} values`
+  }
+  if (filter.operator === "between") {
+    return `${label} between ${formatFilterDisplayValue(filter.value)} and ${formatFilterDisplayValue(filter.value2)}`
+  }
+  if (
+    filter.operator === "isEmpty"
+    || filter.operator === "notEmpty"
+    || filter.operator === "isNull"
+    || filter.operator === "notNull"
+  ) {
+    return `${label} ${formatColumnFilterOperator(filter.operator)}`
+  }
+  return `${label} ${formatColumnFilterOperator(filter.operator)} ${formatFilterDisplayValue(filter.value)}`
+}
+
+function formatAdvancedExpressionSummary(
+  expression: DataGridAdvancedExpressionEntry,
+  resolveColumnLabel: (columnKey: string) => string,
+): string {
+  if (expression.kind === "condition") {
+    const label = resolveColumnLabel(expression.key)
+    if (expression.operator === "between") {
+      return `${label} between ${formatFilterDisplayValue(expression.value)} and ${formatFilterDisplayValue(expression.value2)}`
+    }
+    if (
+      expression.operator === "isEmpty"
+      || expression.operator === "notEmpty"
+      || expression.operator === "isNull"
+      || expression.operator === "notNull"
+    ) {
+      return `${label} ${formatColumnFilterOperator(expression.operator)}`
+    }
+    return `${label} ${formatColumnFilterOperator(expression.operator)} ${formatFilterDisplayValue(expression.value)}`
+  }
+  if (expression.kind === "not") {
+    return `NOT (${formatAdvancedExpressionSummary(expression.child, resolveColumnLabel)})`
+  }
+  return expression.children
+    .map(child => formatAdvancedExpressionSummary(child, resolveColumnLabel))
+    .filter(part => part.length > 0)
+    .join(` ${expression.operator.toUpperCase()} `)
 }
 
 function makeLocalCellKey(rowIndex: number, columnKey: string): string {
@@ -561,11 +925,35 @@ function resolveColumnAlignment(columnKey: string): "left" | "center" | "right" 
   return "left"
 }
 
-const workbook = createDemoWorkbookModel()
+function resolveColumnDataType(columnKey: string): "text" | "number" {
+  const normalized = columnKey.toLowerCase()
+  if (
+    normalized === "qty"
+    || normalized === "price"
+    || normalized === "total"
+    || normalized === "value"
+    || normalized === "customerid"
+    || normalized === "orderscount"
+    || normalized === "totalspend"
+    || normalized === "id"
+  ) {
+    return "number"
+  }
+  return "text"
+}
+
+let workbook = createDemoWorkbookModel()
+let nextOrderSeed = INITIAL_ORDER_SEED
 const workbookSnapshot = shallowRef(workbook.getSnapshot())
 const workbookRevision = ref(0)
 const copiedStyle = ref<DataGridSpreadsheetStyle | null>(null)
 const isFormulaBarFocused = ref(false)
+const isDiagnosticsPanelOpen = ref(false)
+const lastSpreadsheetOperation = ref<{
+  label: string
+  durationMs: number
+  at: number
+} | null>(null)
 
 const editorModel = createDataGridSpreadsheetFormulaEditorModel({
   outputSyntax: "smartsheet",
@@ -595,17 +983,78 @@ let suppressNextSelectionSync = false
 let formulaBlurTimer: number | null = null
 let unsubscribeRuntimeRows = () => {}
 let unsubscribeActiveSheet = () => {}
+let unsubscribeWorkbook = () => {}
 let preserveFormulaFocusFromGridPointer = false
 let allowFormulaBlur = false
 const activeSheetRenderRevision = ref(0)
 
-const unsubscribeWorkbook = workbook.subscribe(snapshot => {
-  workbookSnapshot.value = snapshot
-  workbookRevision.value += 1
-})
 const unsubscribeEditor = editorModel.subscribe(snapshot => {
   editorSnapshot.value = snapshot
 })
+
+function syncWorkbookState(): void {
+  workbookSnapshot.value = workbook.getSnapshot()
+  workbookRevision.value += 1
+}
+
+function bindWorkbookSubscription(): void {
+  unsubscribeWorkbook()
+  unsubscribeWorkbook = workbook.subscribe(snapshot => {
+    workbookSnapshot.value = snapshot
+    workbookRevision.value += 1
+  })
+}
+
+function readSpreadsheetClock(): number {
+  return typeof globalThis.performance?.now === "function"
+    ? globalThis.performance.now()
+    : Date.now()
+}
+
+function recordSpreadsheetOperation(label: string, startedAt: number): void {
+  lastSpreadsheetOperation.value = {
+    label,
+    durationMs: Math.max(0, readSpreadsheetClock() - startedAt),
+    at: Date.now(),
+  }
+}
+
+function measureSpreadsheetOperation<TResult>(label: string, run: () => TResult): TResult {
+  const startedAt = readSpreadsheetClock()
+  const result = run()
+  recordSpreadsheetOperation(label, startedAt)
+  return result
+}
+
+function applySpreadsheetCellInput(
+  handle: DataGridSpreadsheetWorkbookSheetHandle | null,
+  cell: DataGridSpreadsheetCellAddress,
+  input: string,
+  label: string,
+): void {
+  if (!handle) {
+    return
+  }
+  measureSpreadsheetOperation(label, () => {
+    handle.sheetModel.setCellInput(cell, input)
+  })
+}
+
+function buildDemoOrderRow(orderNumber: number) {
+  return {
+    id: `order-${orderNumber}`,
+    cells: {
+      orderId: `SO-${orderNumber}`,
+      customerId: 1,
+      item: "Inserted scenario",
+      status: "Draft",
+      qty: 9,
+      price: 99,
+      total: "=[qty]@row * [price]@row",
+      customerName: "=RELATED('customers', [customerId]@row, 'id', 'name', '')",
+    },
+  }
+}
 
 onBeforeUnmount(() => {
   if (formulaBlurTimer !== null && typeof window !== "undefined") {
@@ -618,6 +1067,68 @@ onBeforeUnmount(() => {
   editorModel.dispose()
   workbook.dispose()
 })
+
+function resetDemoWorkbook(): void {
+  unsubscribeActiveSheet()
+  unsubscribeWorkbook()
+  workbook.dispose()
+  workbook = measureSpreadsheetOperation("Reset workbook", () => createDemoWorkbookModel())
+  nextOrderSeed = INITIAL_ORDER_SEED
+  copiedStyle.value = null
+  sortState.value = []
+  filterModelState.value = createEmptyFilterModel()
+  clearAdvancedFilterPanel()
+  bindWorkbookSubscription()
+  syncWorkbookState()
+  runtimeRowVersion.value += 1
+  editorModel.clear()
+  applySortAndFilter()
+  void nextTick(() => {
+    const nextSheetId = workbook.getSnapshot().activeSheetId ?? workbook.getSheets()[0]?.id ?? null
+    if (nextSheetId) {
+      openSheet(nextSheetId)
+    }
+    syncEditorCellDisplay()
+  })
+}
+
+function toggleOrdersSheetName(): void {
+  const ordersSheet = workbook.getSheet("orders")
+  if (!ordersSheet) {
+    return
+  }
+  measureSpreadsheetOperation("Rename sheet", () => {
+    workbook.renameSheet("orders", ordersSheet.name === "Orders" ? "Revenue Plan" : "Orders")
+  })
+}
+
+function insertOrderRowAtTop(): void {
+  const ordersSheet = workbook.getSheet("orders")
+  if (!ordersSheet) {
+    return
+  }
+  const nextOrderNumber = nextOrderSeed
+  nextOrderSeed += 1
+  measureSpreadsheetOperation("Insert row", () => {
+    ordersSheet.sheetModel.insertRowsAt(0, [buildDemoOrderRow(nextOrderNumber)])
+  })
+}
+
+function removeFirstOrderRow(): void {
+  const ordersSheet = workbook.getSheet("orders")
+  if (!ordersSheet) {
+    return
+  }
+  measureSpreadsheetOperation("Remove row", () => {
+    ordersSheet.sheetModel.removeRowsAt(0, 1)
+  })
+}
+
+function removeOrdersSheet(): void {
+  measureSpreadsheetOperation("Remove sheet", () => {
+    workbook.removeSheet("orders")
+  })
+}
 
 const activeSheetHandle = computed<DataGridSpreadsheetWorkbookSheetHandle | null>(() => {
   const activeSheetId = workbookSnapshot.value.activeSheetId
@@ -633,7 +1144,7 @@ const activeSheetStats = computed(() => {
 })
 
 watch(
-  () => activeSheetHandle.value?.id ?? "",
+  () => `${workbookRevision.value}:${activeSheetHandle.value?.id ?? ""}`,
   () => {
     unsubscribeActiveSheet()
     const handle = activeSheetHandle.value
@@ -703,6 +1214,7 @@ const gridColumns = computed<readonly DataGridColumnInput[]>(() => {
     return {
       key: column.key,
       label: column.title,
+      dataType: resolveColumnDataType(column.key),
       initialState: {
         width: resolveColumnWidth(column.key, column.title),
       },
@@ -712,8 +1224,8 @@ const gridColumns = computed<readonly DataGridColumnInput[]>(() => {
       },
       capabilities: {
         editable: false,
-        sortable: false,
-        filterable: false,
+        sortable: true,
+        filterable: true,
       },
     }
   })
@@ -723,7 +1235,6 @@ const gridMode = computed(() => "base" as const)
 const rowRenderMode = computed(() => "virtualization" as const)
 const rowHeightMode = computed(() => "fixed" as const)
 const baseRowHeight = computed(() => 34)
-const columnFilterTextByKey = ref<Record<string, string>>({})
 const virtualization = computed(() => ({
   rows: true,
   columns: true,
@@ -733,6 +1244,40 @@ const virtualization = computed(() => ({
 
 const visibleColumns = computed<readonly DataGridColumnSnapshot[]>(() => runtimeRef?.columnSnapshot.value.visibleColumns ?? [])
 const totalRows = computed(() => runtimeRef?.api.rows.getCount() ?? 0)
+const sortState = ref<SortToggleState[]>([])
+const filterModelState = ref<DataGridFilterSnapshot>(createEmptyFilterModel())
+const columnFilterTextByKey = computed<Record<string, string>>(() => (
+  resolveInitialFilterTexts(filterModelState.value)
+))
+const columnLabelByKey = computed(() => {
+  const map = new Map<string, string>()
+  for (const column of activeSheetView.value.columns) {
+    map.set(column.key, column.title)
+  }
+  return map
+})
+const advancedFilterColumns = computed(() => {
+  return visibleColumns.value
+    .filter(column => column.visible !== false)
+    .map(column => ({
+      key: column.key,
+      label: column.column.label ?? column.key,
+    }))
+})
+const {
+  isAdvancedFilterPanelOpen,
+  advancedFilterDraftClauses,
+  appliedAdvancedFilterExpression,
+  openAdvancedFilterPanel,
+  addAdvancedFilterClause,
+  removeAdvancedFilterClause,
+  updateAdvancedFilterClause,
+  cancelAdvancedFilterPanel,
+  applyAdvancedFilterPanel,
+  clearAdvancedFilterPanel,
+} = useDataGridAppAdvancedFilterBuilder({
+  resolveColumns: () => advancedFilterColumns.value,
+})
 
 const {
   selectionSnapshot,
@@ -769,11 +1314,189 @@ watch(
   { immediate: true },
 )
 
+const resolveColumnLabel = (columnKey: string): string => {
+  return columnLabelByKey.value.get(columnKey) ?? columnKey
+}
+
+const activeFilterSummaryItems = computed<readonly string[]>(() => {
+  const items: string[] = []
+
+  for (const [columnKey, entry] of Object.entries(filterModelState.value.columnFilters ?? {})) {
+    if (!entry) {
+      continue
+    }
+    items.push(formatColumnFilterSummary(resolveColumnLabel(columnKey), entry))
+  }
+
+  if (appliedAdvancedFilterExpression.value) {
+    items.push(`Advanced: ${formatAdvancedExpressionSummary(appliedAdvancedFilterExpression.value, resolveColumnLabel)}`)
+  }
+
+  return Object.freeze(items)
+})
+
+const hasActiveFilters = computed(() => activeFilterSummaryItems.value.length > 0)
+const sortSummaryItems = computed<readonly string[]>(() => {
+  return Object.freeze(sortState.value.map((entry, index) => (
+    `${index + 1}. ${resolveColumnLabel(entry.key)} ${entry.direction === "asc" ? "ASC" : "DESC"}`
+  )))
+})
+
+function applySortAndFilter(label = "Recompute filtered view"): void {
+  const nextSortModel: readonly DataGridSortState[] = sortState.value.map(entry => ({
+    key: entry.key,
+    direction: entry.direction,
+  }))
+
+  measureSpreadsheetOperation(label, () => {
+    runtimeBundle.api.rows.setSortAndFilterModel({
+      sortModel: nextSortModel,
+      filterModel: cloneDataGridFilterSnapshot({
+        ...filterModelState.value,
+        advancedExpression: appliedAdvancedFilterExpression.value ?? null,
+      }),
+    })
+  })
+}
+
+function isColumnFilterActive(columnKey: string): boolean {
+  const entry = filterModelState.value.columnFilters?.[columnKey]
+  if (!entry) {
+    return false
+  }
+  return entry.kind === "valueSet"
+    ? entry.tokens.length > 0
+    : true
+}
+
+function resolveCurrentValueFilterTokens(columnKey: string): readonly string[] {
+  const entry = filterModelState.value.columnFilters?.[columnKey]
+  if (!entry || entry.kind !== "valueSet") {
+    return []
+  }
+  return entry.tokens.map(token => normalizeColumnMenuToken(String(token ?? "")))
+}
+
+function toggleSortForColumn(columnKey: string, additive = false): void {
+  const currentIndex = sortState.value.findIndex(entry => entry.key === columnKey)
+  const current = currentIndex >= 0 ? sortState.value[currentIndex] : null
+
+  if (!current) {
+    const nextEntry: SortToggleState = { key: columnKey, direction: "asc" }
+    sortState.value = additive ? [...sortState.value, nextEntry] : [nextEntry]
+    applySortAndFilter("Sort column")
+    return
+  }
+
+  if (current.direction === "asc") {
+    const nextEntry: SortToggleState = { key: columnKey, direction: "desc" }
+    sortState.value = additive
+      ? sortState.value.map(entry => (entry.key === columnKey ? nextEntry : entry))
+      : [nextEntry]
+    applySortAndFilter("Sort column")
+    return
+  }
+
+  sortState.value = additive
+    ? sortState.value.filter(entry => entry.key !== columnKey)
+    : []
+  applySortAndFilter("Sort column")
+}
+
+function sortIndicator(columnKey: string): string {
+  const currentIndex = sortState.value.findIndex(entry => entry.key === columnKey)
+  if (currentIndex < 0) {
+    return ""
+  }
+  const current = sortState.value[currentIndex]
+  if (!current) {
+    return ""
+  }
+  const direction = current.direction === "asc" ? "↑" : "↓"
+  return sortState.value.length > 1 ? `${direction}${currentIndex + 1}` : direction
+}
+
+function setColumnFilterText(columnKey: string, value: string): void {
+  const nextFilterModel = cloneFilterModelState(filterModelState.value)
+  const normalizedValue = value.trim()
+  if (!normalizedValue) {
+    delete nextFilterModel.columnFilters[columnKey]
+  } else {
+    nextFilterModel.columnFilters[columnKey] = {
+      kind: "predicate",
+      operator: "contains",
+      value: normalizedValue,
+      caseSensitive: false,
+    }
+  }
+  filterModelState.value = nextFilterModel
+  applySortAndFilter("Type header filter")
+}
+
+function resolveColumnMenuSortDirection(columnKey: string): "asc" | "desc" | null {
+  return sortState.value.find(entry => entry.key === columnKey)?.direction ?? null
+}
+
+function applyColumnMenuSort(columnKey: string, direction: "asc" | "desc" | null): void {
+  sortState.value = direction === null ? [] : [{ key: columnKey, direction }]
+  applySortAndFilter("Column menu sort")
+}
+
+function applyColumnMenuFilter(columnKey: string, tokens: readonly string[]): void {
+  const normalizedTokens = Array.from(new Set(
+    tokens
+      .map(token => normalizeColumnMenuToken(String(token ?? "")))
+      .filter(token => token.length > 0),
+  ))
+  const nextFilterModel = cloneFilterModelState(filterModelState.value)
+  if (normalizedTokens.length === 0) {
+    delete nextFilterModel.columnFilters[columnKey]
+  } else {
+    nextFilterModel.columnFilters[columnKey] = {
+      kind: "valueSet",
+      tokens: normalizedTokens,
+    }
+  }
+  filterModelState.value = nextFilterModel
+  applySortAndFilter("Column menu filter")
+}
+
+function clearColumnMenuFilter(columnKey: string): void {
+  const nextFilterModel = cloneFilterModelState(filterModelState.value)
+  delete nextFilterModel.columnFilters[columnKey]
+  filterModelState.value = nextFilterModel
+  applySortAndFilter("Clear column filter")
+}
+
+function resetAllFilters(): void {
+  filterModelState.value = createEmptyFilterModel()
+  clearAdvancedFilterPanel()
+  applySortAndFilter("Reset filters")
+}
+
+watch(
+  appliedAdvancedFilterExpression,
+  () => {
+    applySortAndFilter("Apply advanced filter")
+  },
+  { deep: true },
+)
+
+watch(
+  () => workbookSnapshot.value.activeSheetId,
+  () => {
+    sortState.value = []
+    filterModelState.value = createEmptyFilterModel()
+    clearAdvancedFilterPanel()
+    applySortAndFilter("Reset sheet view")
+  },
+)
+
 onMounted(() => {
+  bindWorkbookSubscription()
   void nextTick(() => {
     workbook.sync()
-    workbookSnapshot.value = workbook.getSnapshot()
-    workbookRevision.value += 1
+    syncWorkbookState()
     runtimeRowVersion.value += 1
     syncEditorCellDisplay()
   })
@@ -803,9 +1526,20 @@ const {
   firstColumnKey,
   columnFilterTextByKey,
   virtualization,
-  toggleSortForColumn: () => {},
-  sortIndicator: () => "",
-  setColumnFilterText: () => {},
+  toggleSortForColumn,
+  sortIndicator,
+  setColumnFilterText,
+  columnMenuEnabled: computed(() => true),
+  columnMenuMaxFilterValues: computed(() => 200),
+  isColumnFilterActive,
+  resolveColumnMenuSortDirection,
+  resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
+  applyColumnMenuSort,
+  applyColumnMenuPin: (columnKey, pin) => {
+    runtimeBundle.api.columns.setPin(columnKey, pin)
+  },
+  applyColumnMenuFilter,
+  clearColumnMenuFilter,
   applyRowHeightSettings: () => {},
   cloneRowData,
 })
@@ -862,16 +1596,61 @@ const visibleColumnIndexByKey = computed(() => {
   return indexByKey
 })
 
+function resolveSpreadsheetRuntimeRow(
+  visualRowIndex: number,
+): { rowId: DataGridRowId; sourceRowIndex: number } | null {
+  const rowNode = runtimeBundle.api.rows.get(visualRowIndex)
+  if (!rowNode || rowNode.kind === "group") {
+    return null
+  }
+  const rowData = rowNode.data as SpreadsheetGridRow | undefined
+  if (!rowData || typeof rowData.__rowIndex !== "number") {
+    return null
+  }
+  return {
+    rowId: rowNode.rowId,
+    sourceRowIndex: rowData.__rowIndex,
+  }
+}
+
+function resolveVisualRowIndexForCell(cell: DataGridSpreadsheetCellAddress | null): number | null {
+  if (!cell) {
+    return null
+  }
+  const rowCount = runtimeBundle.api.rows.getCount()
+  for (let visualRowIndex = 0; visualRowIndex < rowCount; visualRowIndex += 1) {
+    const row = resolveSpreadsheetRuntimeRow(visualRowIndex)
+    if (row?.rowId === (cell.rowId ?? null)) {
+      return visualRowIndex
+    }
+  }
+  return null
+}
+
+function resolveFirstVisibleCellAddress(columnKey: string): DataGridSpreadsheetCellAddress | null {
+  const currentSheet = activeSheetHandle.value
+  const firstRow = resolveSpreadsheetRuntimeRow(0)
+  if (!currentSheet || !firstRow) {
+    return null
+  }
+  return {
+    sheetId: currentSheet.id,
+    rowId: firstRow.rowId,
+    rowIndex: firstRow.sourceRowIndex,
+    columnKey,
+  }
+}
+
 function applySingleCellSelection(cell: DataGridSpreadsheetCellAddress): void {
   const columnIndex = visibleColumnIndexByKey.value.get(cell.columnKey)
-  if (columnIndex == null) {
+  const visualRowIndex = resolveVisualRowIndexForCell(cell)
+  if (columnIndex == null || visualRowIndex == null) {
     return
   }
-  const rowNode = runtimeBundle.api.rows.get(cell.rowIndex)
   const anchor = {
-    rowIndex: cell.rowIndex,
+    rowIndex: visualRowIndex,
     colIndex: columnIndex,
-    rowId: rowNode?.rowId ?? cell.rowId ?? null,
+    rowId: cell.rowId ?? null,
   }
   const range = createGridSelectionRange(anchor, anchor, resolveSelectionContext())
   runtimeBundle.api.selection.setSnapshot(buildSelectionSnapshot(range, anchor))
@@ -963,7 +1742,7 @@ function openEditorCell(
 
   if (options.draftInput != null) {
     const handle = resolveSheetHandle(nextCell.sheetId)
-    handle?.sheetModel.setCellInput(nextCell, rawInput)
+    applySpreadsheetCellInput(handle, nextCell, rawInput, "Start formula edit")
     syncEditorCellDisplay()
   }
 
@@ -979,25 +1758,26 @@ function resolveSelectedGridCell(): DataGridSpreadsheetCellAddress | null {
     return null
   }
   const columnKey = visibleColumns.value[activeCell.colIndex]?.key
-  const rowNode = runtimeBundle.api.rows.get(activeCell.rowIndex)
-  if (!columnKey || !rowNode || rowNode.kind === "group") {
+  const row = resolveSpreadsheetRuntimeRow(activeCell.rowIndex)
+  if (!columnKey || !row) {
     return null
   }
   return {
     sheetId: currentSheet.id,
-    rowId: rowNode.rowId,
-    rowIndex: activeCell.rowIndex,
+    rowId: row.rowId,
+    rowIndex: row.sourceRowIndex,
     columnKey,
   }
 }
 
 function focusGridCell(cell: DataGridSpreadsheetCellAddress): void {
   const columnIndex = visibleColumnIndexByKey.value.get(cell.columnKey)
-  if (columnIndex == null) {
+  const visualRowIndex = resolveVisualRowIndexForCell(cell)
+  if (columnIndex == null || visualRowIndex == null) {
     return
   }
   void nextTick(() => {
-    const selector = `.spreadsheet-grid-host .grid-cell[data-row-index="${cell.rowIndex}"][data-column-index="${columnIndex}"]`
+    const selector = `.spreadsheet-grid-host .grid-cell[data-row-index="${visualRowIndex}"][data-column-index="${columnIndex}"]`
     const element = cardRootRef.value?.querySelector<HTMLElement>(selector)
     element?.focus({ preventScroll: true })
   })
@@ -1025,7 +1805,7 @@ function insertReferenceFromCell(targetCell: DataGridSpreadsheetCellAddress): vo
     rowIndex: targetCell.rowIndex,
   })
   const handle = resolveSheetHandle(activeCell.sheetId)
-  handle?.sheetModel.setCellInput(activeCell, editorSnapshot.value.rawInput)
+  applySpreadsheetCellInput(handle, activeCell, editorSnapshot.value.rawInput, "Insert formula reference")
   syncEditorCellDisplay()
 }
 
@@ -1077,7 +1857,7 @@ function handleFormulaInput(event: Event): void {
     end: target.selectionEnd ?? target.selectionStart ?? target.value.length,
   })
   const handle = resolveSheetHandle(activeCell.sheetId)
-  handle?.sheetModel.setCellInput(activeCell, target.value)
+  applySpreadsheetCellInput(handle, activeCell, target.value, "Apply formula edit")
   syncEditorCellDisplay()
 }
 
@@ -1156,16 +1936,16 @@ function resolveCellAddressFromOffsets(
   columnIndex: number,
 ): DataGridSpreadsheetCellAddress | null {
   const currentSheet = activeSheetHandle.value
-  const rowIndex = tableStageProps.value.viewportRowStart + rowOffset
-  const rowNode = runtimeBundle.api.rows.get(rowIndex)
+  const visualRowIndex = tableStageProps.value.viewportRowStart + rowOffset
+  const row = resolveSpreadsheetRuntimeRow(visualRowIndex)
   const columnKey = visibleColumns.value[columnIndex]?.key
-  if (!currentSheet || !rowNode || rowNode.kind === "group" || !columnKey) {
+  if (!currentSheet || !row || !columnKey) {
     return null
   }
   return {
     sheetId: currentSheet.id,
-    rowId: rowNode.rowId,
-    rowIndex,
+    rowId: row.rowId,
+    rowIndex: row.sourceRowIndex,
     columnKey,
   }
 }
@@ -1236,9 +2016,9 @@ function collectSelectedAddresses(): readonly DataGridSpreadsheetCellAddress[] {
     const endRow = Math.max(range.startRow, range.endRow)
     const startColumn = Math.min(range.startCol, range.endCol)
     const endColumn = Math.max(range.startCol, range.endCol)
-    for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
-      const rowNode = runtimeBundle.api.rows.get(rowIndex)
-      if (!rowNode || rowNode.kind === "group") {
+    for (let visualRowIndex = startRow; visualRowIndex <= endRow; visualRowIndex += 1) {
+      const row = resolveSpreadsheetRuntimeRow(visualRowIndex)
+      if (!row) {
         continue
       }
       for (let columnIndex = startColumn; columnIndex <= endColumn; columnIndex += 1) {
@@ -1248,8 +2028,8 @@ function collectSelectedAddresses(): readonly DataGridSpreadsheetCellAddress[] {
         }
         const address = {
           sheetId: currentSheet.id,
-          rowId: rowNode.rowId,
-          rowIndex,
+          rowId: row.rowId,
+          rowIndex: row.sourceRowIndex,
           columnKey,
         }
         const scopedKey = makeScopedCellKey(address)
@@ -1442,7 +2222,7 @@ function resolveSpreadsheetCellStyle(
 const tableStagePropsForView = computed<Record<string, unknown>>(() => ({
   ...(tableStageProps.value as unknown as Record<string, unknown>),
   sourceRows: gridRows.value,
-  columnMenuEnabled: false,
+  columnMenuEnabled: true,
   isEditingCell: () => false,
   startInlineEdit: handleGridInlineEditRequest,
   handleCellKeydown: handleGridCellKeydown,
@@ -1553,6 +2333,76 @@ const activeDiagnosticMessage = computed(() => {
   return typeof errorValue?.message === "string" ? errorValue.message : ""
 })
 
+const workbookSyncSummary = computed(() => workbookSnapshot.value.sync)
+
+const workbookFormulaTotals = computed(() => {
+  return workbookSnapshot.value.sheets.reduce((acc, sheet) => ({
+    formulaCells: acc.formulaCells + sheet.formulaCellCount,
+    errorCells: acc.errorCells + sheet.errorCellCount,
+  }), {
+    formulaCells: 0,
+    errorCells: 0,
+  })
+})
+
+const lastSpreadsheetOperationLabel = computed(() => {
+  if (!lastSpreadsheetOperation.value) {
+    return "No measured recalcs"
+  }
+  return lastSpreadsheetOperation.value.label
+})
+
+const lastSpreadsheetOperationDurationLabel = computed(() => {
+  if (!lastSpreadsheetOperation.value) {
+    return "Waiting for an edit"
+  }
+  const durationMs = lastSpreadsheetOperation.value.durationMs
+  return `${durationMs < 10 ? durationMs.toFixed(2) : durationMs.toFixed(1)} ms`
+})
+
+const activeFormulaSummary = computed(() => {
+  const analysis = editorSnapshot.value.analysis
+  const referenceCount = analysis.references.length
+  const crossSheetReferenceCount = analysis.references.filter(reference => (
+    typeof reference.sheetReference === "string" && reference.sheetReference.trim().length > 0
+  )).length
+  const diagnosticCount = analysis.diagnostics.length
+  return {
+    kindLabel: analysis.kind === "formula" ? "formula" : analysis.kind,
+    validityLabel: analysis.kind !== "formula"
+      ? "not a formula"
+      : analysis.isFormulaValid
+        ? "valid"
+        : "invalid",
+    referenceCount,
+    crossSheetReferenceCount,
+    diagnosticCount,
+    cellLabel: activeCellBadge.value,
+  }
+})
+
+const activeFormulaReferenceItems = computed<readonly string[]>(() => {
+  return Object.freeze(editorSnapshot.value.analysis.references.slice(0, 8).map(reference => {
+    const scope = reference.sheetReference ? `${reference.sheetReference}!` : ""
+    const rows = reference.targetRowIndexes.length > 0
+      ? reference.targetRowIndexes.map(rowIndex => `r${rowIndex + 1}`).join(", ")
+      : "out of range"
+    return `${scope}${reference.referenceName} -> ${rows}`
+  }))
+})
+
+const activeFormulaDiagnosticItems = computed<readonly string[]>(() => {
+  const items = editorSnapshot.value.analysis.diagnostics.map(diagnostic => diagnostic.message).filter(Boolean)
+  if (
+    items.length === 0
+    && activeCellSnapshot.value?.errorValue
+    && typeof (activeCellSnapshot.value.errorValue as { message?: unknown }).message === "string"
+  ) {
+    return Object.freeze([(activeCellSnapshot.value.errorValue as { message: string }).message])
+  }
+  return Object.freeze(items.slice(0, 6))
+})
+
 const selectedRangeLabel = computed(() => {
   const snapshot = selectionSnapshot.value
   if (!snapshot || snapshot.ranges.length === 0) {
@@ -1569,6 +2419,7 @@ const selectedRangeLabel = computed(() => {
 
 watch(
   () => [
+    workbookRevision.value,
     workbookSnapshot.value.activeSheetId,
     totalRows.value,
     visibleColumns.value.map(column => column.key).join("|"),
@@ -1581,16 +2432,13 @@ watch(
     const currentEditorCell = editorSnapshot.value.activeCell
     const nextCell = currentEditorCell
       && currentEditorCell.sheetId === currentSheet.id
-      && currentEditorCell.rowIndex < totalRows.value
+      && resolveVisualRowIndexForCell(currentEditorCell) != null
       && visibleColumnIndexByKey.value.has(currentEditorCell.columnKey)
       ? currentEditorCell
-      : {
-          sheetId: currentSheet.id,
-          rowId: activeSheetView.value.rowSnapshots[0]?.id ?? null,
-          rowIndex: 0,
-          columnKey: visibleColumns.value[0]?.key ?? activeSheetView.value.columns[0]?.key ?? "",
-        }
-    if (!nextCell.columnKey) {
+      : resolveFirstVisibleCellAddress(
+          visibleColumns.value[0]?.key ?? activeSheetView.value.columns[0]?.key ?? "",
+        )
+    if (!nextCell || !nextCell.columnKey) {
       return
     }
     openEditorCell(nextCell)
@@ -1821,11 +2669,12 @@ function moveCaretToReference(referenceKey: string): void {
 
 .spreadsheet-layout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 272px minmax(0, 1fr);
   gap: 12px;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
+  align-items: stretch;
 }
 
 .spreadsheet-sidebar {
@@ -1833,13 +2682,16 @@ function moveCaretToReference(referenceKey: string): void {
   flex-direction: column;
   gap: 12px;
   min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .spreadsheet-panel {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--spreadsheet-border);
   border-radius: 16px;
   background: var(--spreadsheet-panel-bg);
@@ -1853,7 +2705,7 @@ function moveCaretToReference(referenceKey: string): void {
 .spreadsheet-panel p {
   margin: 0;
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 1.45;
   color: var(--spreadsheet-ink-soft);
 }
 
@@ -1882,6 +2734,166 @@ function moveCaretToReference(referenceKey: string): void {
 .spreadsheet-empty-state,
 .spreadsheet-selection-summary,
 .spreadsheet-selection-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--spreadsheet-ink-soft);
+}
+
+.spreadsheet-diagnostic-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.spreadsheet-diagnostic-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border: 1px solid var(--spreadsheet-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  color: var(--spreadsheet-ink-soft);
+}
+
+.spreadsheet-diagnostic-metric strong {
+  color: var(--spreadsheet-accent);
+  font-size: 14px;
+}
+
+.spreadsheet-diagnostic-metric small {
+  font-size: 11px;
+  color: var(--spreadsheet-ink-soft);
+}
+
+.spreadsheet-diagnostic-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spreadsheet-diagnostic-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--spreadsheet-ink-soft);
+}
+
+.spreadsheet-diagnostic-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.spreadsheet-diagnostic-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--spreadsheet-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  font: 500 12px/1.2 ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+  color: var(--spreadsheet-accent);
+}
+
+.spreadsheet-diagnostic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.spreadsheet-diagnostic-list__item {
+  padding: 8px 10px;
+  border: 1px solid var(--spreadsheet-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--spreadsheet-ink-soft);
+}
+
+.spreadsheet-grid-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.spreadsheet-grid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.spreadsheet-grid-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.spreadsheet-diagnostics-drawer {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  bottom: 14px;
+  width: min(360px, calc(100vw - 56px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(10px);
+  overflow: auto;
+  transform: translateX(calc(100% + 24px));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 160ms ease, opacity 160ms ease;
+  z-index: 4;
+}
+
+.spreadsheet-diagnostics-drawer--open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.spreadsheet-diagnostics-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.spreadsheet-diagnostics-drawer__header h3 {
+  margin: 2px 0 0;
+  font-size: 16px;
+  color: var(--spreadsheet-accent);
+}
+
+.spreadsheet-diagnostics-drawer__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.spreadsheet-grid-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--spreadsheet-border);
+  border-radius: 16px;
+  background: var(--spreadsheet-panel-bg);
+}
+
+.spreadsheet-grid-actions__copy {
   font-size: 12px;
   line-height: 1.5;
   color: var(--spreadsheet-ink-soft);
@@ -1941,6 +2953,18 @@ function moveCaretToReference(referenceKey: string): void {
 
   .spreadsheet-sidebar {
     order: 2;
+  }
+
+  .spreadsheet-grid-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .spreadsheet-diagnostics-drawer {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: auto;
   }
 }
 </style>

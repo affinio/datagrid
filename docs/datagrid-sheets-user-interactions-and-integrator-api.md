@@ -1,6 +1,6 @@
 # DataGrid Sheets Baseline: User Interactions + Integrator API
 
-Updated: `2026-02-09`
+Updated: `2026-03-11`
 Scope: `/datagrid` demo baseline and `@affino/datagrid-core` integration contract.
 
 ## 1) End-User Interactions (Behavior Contract)
@@ -20,7 +20,10 @@ Scope: `/datagrid` demo baseline and `@affino/datagrid-core` integration contrac
 - Double-click editable cell: inline edit mode.
 - Enum-like cells: open value picker from in-cell trigger.
 - `Enter`: commit edit; `Escape`: cancel; `Tab`: commit and move.
-- Fill handle: drag from range-end handle to repeat source pattern (editable columns only; non-editable cells are skipped).
+- Fill handle: drag from range-end handle to extend the fill range (editable columns only; non-editable cells are skipped).
+- Double-click fill handle: apply the current selection down to the last row in the active projection.
+- Post-fill action menu: after fill commit, the user can switch the last fill between `Series` and `Copy`; the change reapplies to the whole last fill range, while the menu stays pinned inside the visible viewport area.
+- Default fill behavior: numeric source matrices default to `Series`; non-numeric values default to `Copy`.
 - Move range: drag selection border to move values (editable columns only; non-editable cells are blocked).
 
 ### Clipboard and context menu
@@ -86,6 +89,53 @@ const core = createDataGridCore({
 const api = createDataGridApi({ core })
 await api.start()
 ```
+
+### Recommended Vue app integration
+
+For the canonical Vue UI path, use `DataGrid` from `@affino/datagrid-vue-app`.
+No extra prop is required to enable the fill handle in base table mode.
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue-app"
+
+const rows = [
+  { id: 1, sku: "A-100", month: 1, amount: 120 },
+  { id: 2, sku: "A-100", month: 2, amount: 150 },
+]
+
+const columns = [
+  { key: "sku", label: "SKU", capabilities: { editable: false } },
+  { key: "month", label: "Month" },
+  { key: "amount", label: "Amount" },
+]
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :client-row-model-options="{ resolveRowId: row => row.id }"
+  />
+</template>
+```
+
+Notes:
+
+- Fill handle is surfaced only in base table mode.
+- Set `capabilities.editable = false` on columns that must stay read-only.
+- The built-in UI supports drag-fill, double-click fill-down, and post-fill `Series` / `Copy` reapply.
+
+### Custom Vue renderer path
+
+If you are composing your own renderer, use the app-layer hooks exported from `@affino/datagrid-vue`:
+
+- `useDataGridAppSelection`
+- `useDataGridAppClipboard`
+- `useDataGridAppFill`
+- `useDataGridAppInteractionController`
+
+Do not use the removed `useAffinoDataGrid*` wrappers.
 
 ### Required integration rules
 

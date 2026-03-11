@@ -1,6 +1,6 @@
 # DataGrid Feature Catalog
 
-Updated: 2026-03-03
+Updated: 2026-03-11
 
 This is the canonical feature inventory for Affino DataGrid.
 Use it as a single decision sheet to understand whether the platform fits your product requirements.
@@ -52,7 +52,7 @@ Use it as a single decision sheet to understand whether the platform fits your p
 | Virtualization | Horizontal virtualization (columns) | Core + Adapter | all | Deterministic horizontal windowing with pinned column support. |
 | Columns | Visibility, order, sizing, pinning | Core + Adapter | all | Canonical column model (`pin` contract, snapshots, state updates). |
 | Selection | Row and cell/range selection | Core + Adapter | all | Anchor/focus/range model and overlay transform contracts. |
-| Selection | Fill handle + drag-fill | Core + Adapter | main-thread, worker-owned | Spreadsheet-like fill interaction primitives. |
+| Selection | Fill handle + drag-fill | Core + Adapter + App | main-thread, worker-owned | Spreadsheet-like fill interaction primitives, including drag-fill, double-click fill-down, and post-fill `Series` / `Copy` reapply in app facades. |
 | Selection | Range move / drag-move | Core + Adapter | main-thread, worker-owned | Move selected ranges with deterministic lifecycle hooks. |
 | Clipboard | Copy/cut/paste orchestration | Core + Adapter | main-thread, worker-owned | Clipboard bridge/mutation policy and selection-aware operations. |
 | Reordering | Client row reorder mutation (`rowModel.reorderRows`) | Core + Adapter | main-thread, worker-owned | Officially row-model-scoped in current stable facade; adapters may wrap it, `api.rows` alias is not yet part of semver contract. |

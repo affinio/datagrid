@@ -27,6 +27,7 @@ export interface UseDataGridAppAdvancedFilterBuilderResult {
   updateAdvancedFilterClause: (patch: DataGridAppAdvancedFilterClausePatch) => void
   cancelAdvancedFilterPanel: () => void
   applyAdvancedFilterPanel: () => void
+  clearAdvancedFilterPanel: () => void
 }
 
 export function useDataGridAppAdvancedFilterBuilder(
@@ -170,6 +171,12 @@ export function useDataGridAppAdvancedFilterBuilder(
     isPanelOpen.value = false
   }
 
+  const clearAdvancedFilterPanel = (): void => {
+    appliedClauses.value = []
+    draftClauses.value = [createClause()]
+    isPanelOpen.value = false
+  }
+
   return {
     isAdvancedFilterPanelOpen: computed(() => isPanelOpen.value),
     advancedFilterDraftClauses: computed(() => draftClauses.value),
@@ -181,5 +188,6 @@ export function useDataGridAppAdvancedFilterBuilder(
     updateAdvancedFilterClause,
     cancelAdvancedFilterPanel,
     applyAdvancedFilterPanel,
+    clearAdvancedFilterPanel,
   }
 }

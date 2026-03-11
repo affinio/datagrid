@@ -116,6 +116,57 @@ const DATA_GRID_APP_STYLES = `
   overflow: hidden;
 }
 
+.datagrid-advanced-filter__applied {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--datagrid-accent-strong) 14%, var(--datagrid-column-menu-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 6%, var(--datagrid-column-menu-bg));
+}
+
+.datagrid-advanced-filter__applied-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.datagrid-advanced-filter__applied-title {
+  color: var(--datagrid-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.datagrid-advanced-filter__applied-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.datagrid-advanced-filter__applied-chip,
+.datagrid-advanced-filter__applied-empty {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.datagrid-advanced-filter__applied-chip {
+  border: 1px solid color-mix(in srgb, var(--datagrid-accent-strong) 18%, var(--datagrid-filter-trigger-border));
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 10%, var(--datagrid-editor-bg));
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-advanced-filter__applied-empty {
+  border: 1px dashed var(--datagrid-filter-trigger-border);
+  color: var(--datagrid-text-secondary);
+}
+
 .datagrid-column-layout__header,
 .datagrid-column-layout__footer,
 .datagrid-column-layout__visibility,
@@ -466,6 +517,7 @@ const DATA_GRID_APP_STYLES = `
   overflow-y: hidden;
   border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
   background: var(--datagrid-header-row-bg);
+  overscroll-behavior-x: contain;
 }
 
 .grid-body-viewport {
@@ -473,6 +525,7 @@ const DATA_GRID_APP_STYLES = `
   min-width: 0;
   min-height: 0;
   background: var(--datagrid-viewport-bg);
+  overscroll-behavior-x: contain;
 }
 
 .grid-body-viewport:focus,

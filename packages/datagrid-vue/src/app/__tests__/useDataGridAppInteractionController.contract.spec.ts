@@ -732,7 +732,6 @@ describe("useDataGridAppInteractionController contract", () => {
     }
 
     controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
-            endRow: 0,
       clientX: 10,
       clientY: 10,
       bubbles: true,

@@ -1314,17 +1314,17 @@ const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
 const managedWheelScroll = useDataGridManagedWheelScroll({
   resolveBodyViewport: () => bodyViewportEl.value,
   resolveMainViewport: () => bodyViewportEl.value,
-  setHandledScrollTop: value => {
+  setHandledScrollTop: (value: number) => {
     if (bodyViewportEl.value) {
       bodyViewportEl.value.scrollTop = value
     }
   },
-  setHandledScrollLeft: value => {
+  setHandledScrollLeft: (value: number) => {
     if (bodyViewportEl.value) {
       bodyViewportEl.value.scrollLeft = value
     }
   },
-  syncLinkedScroll: scrollTop => {
+  syncLinkedScroll: (scrollTop: number) => {
     linkedPaneScrollSync.syncNow(scrollTop)
   },
   scheduleLinkedScrollSyncLoop: linkedPaneScrollSync.scheduleSyncLoop,

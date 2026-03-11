@@ -50,7 +50,7 @@ Out of the box (through this package):
 
 - Client row model: sorting, filtering, grouping, pagination, viewport range.
 - Pivot: row/column/value axes, generated pivot columns, subtotals and grand totals, layout export/import, drilldown.
-- Selection/range engine: anchor/focus/range, fill handle, drag-move, clipboard workflows.
+- Selection/range engine: anchor/focus/range, fill handle, drag-fill, double-click fill-down, drag-move, clipboard workflows.
 - Editing flow: patch-based updates, Excel-like freeze/reapply control (`applyEdits`, `reapplyView`, `autoReapply`).
 - Context menu and keyboard orchestration primitives.
 - Runtime snapshots/revisions for deterministic integration and tests.
@@ -105,6 +105,36 @@ const ownerCellSelector = dataGridCellSelector("owner")
 Component-facing surface lives in the app package:
 
 - `DataGrid`
+
+`DataGrid` is also the supported out-of-the-box fill-handle integration:
+
+- drag-fill from the selection corner
+- double-click fill-down to the last row in the current projection
+- post-fill `Series` / `Copy` reapply menu pinned to the visible viewport area
+
+No legacy sugar wrapper is required for this path.
+
+## Spreadsheet Fill Integration For Custom Renderers
+
+If you are building your own renderer instead of using `DataGrid`, use the current app-layer hooks exported from `@affino/datagrid-vue`.
+
+Recommended composition:
+
+- `useDataGridAppSelection` for selection ownership
+- `useDataGridAppClipboard` for copy/cut/paste state and fill source matrices
+- `useDataGridAppFill` for applying fill ranges with `copy` / `series` behavior
+- `useDataGridAppInteractionController` for the integrated pointer/keyboard flow, including fill-handle drag, double-click fill-down, and reapplying the last fill behavior
+
+```ts
+import {
+  useDataGridAppClipboard,
+  useDataGridAppFill,
+  useDataGridAppInteractionController,
+  useDataGridAppSelection,
+} from "@affino/datagrid-vue"
+```
+
+Use this path instead of the removed `useAffinoDataGrid*` wrappers.
 
 ## Advanced API (`@affino/datagrid-vue/advanced`)
 

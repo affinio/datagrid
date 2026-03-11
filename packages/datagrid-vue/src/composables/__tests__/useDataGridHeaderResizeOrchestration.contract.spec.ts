@@ -153,6 +153,47 @@ describe("useDataGridHeaderResizeOrchestration contract", () => {
     expect(orchestration.activeColumnResize.value).toBeNull()
   })
 
+  it("prefers the rendered header-cell width on resize start when DOM width differs from model width", () => {
+    const applyColumnWidth = vi.fn()
+    const orchestration = useDataGridHeaderResizeOrchestration<Row>({
+      resolveColumnBaseWidth: () => 120,
+      resolveColumnLabel: () => "Service",
+      resolveRowsForAutoSize: () => [],
+      resolveCellText: () => "",
+      resolveColumnWidthOverride: () => null,
+      resolveColumnMinWidth: () => 110,
+      applyColumnWidth,
+      isColumnResizable: () => true,
+      isFillDragging: () => false,
+      stopFillSelection: vi.fn(),
+      isDragSelecting: () => false,
+      stopDragSelection: vi.fn(),
+      setLastAction: vi.fn(),
+      autoSizeSampleLimit: 260,
+      autoSizeCharWidth: 7.2,
+      autoSizeHorizontalPadding: 28,
+      autoSizeMaxWidth: 640,
+      resizeApplyMode: "sync",
+    })
+
+    orchestration.onHeaderResizeHandleMouseDown("service", {
+      button: 0,
+      clientX: 100,
+      currentTarget: {
+        closest: () => ({
+          getBoundingClientRect: () => ({ width: 168 }),
+        }),
+      },
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as MouseEvent)
+
+    expect(orchestration.activeColumnResize.value?.startWidth).toBe(168)
+
+    orchestration.applyColumnResizeFromPointer(130)
+    expect(applyColumnWidth).toHaveBeenLastCalledWith("service", 198)
+  })
+
   it("coalesces live resize updates in raf mode and flushes latest width", () => {
     const applyColumnWidth = vi.fn()
     const frameQueue: FrameRequestCallback[] = []

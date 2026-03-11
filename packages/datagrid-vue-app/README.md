@@ -123,6 +123,60 @@ Result:
 - keyboard navigation
 - selection
 
+## Spreadsheet Fill Handle
+
+`DataGrid` includes spreadsheet-style fill interactions in base table mode without any extra feature flag.
+
+- Drag the fill handle from the active selection corner to extend the fill range.
+- Double-click the fill handle to fill the selected range down to the last row in the current projection.
+- After a fill is applied, a floating action chip stays inside the visible viewport so the user can reapply the last fill as `Series` or `Copy`.
+- Default behavior is inferred from the source matrix: numeric sequences default to `Series`, everything else defaults to `Copy`.
+- Fill writes only into editable cells. Mark read-only columns with `capabilities: { editable: false }`.
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue-app"
+
+const rows = [
+  { id: 1, sku: "A-100", month: 1, amount: 120 },
+  { id: 2, sku: "A-100", month: 2, amount: 150 },
+  { id: 3, sku: "A-100", month: 3, amount: 0 },
+]
+
+const columns = [
+  {
+    key: "sku",
+    label: "SKU",
+    capabilities: { editable: false },
+  },
+  {
+    key: "month",
+    label: "Month",
+    capabilities: { editable: true },
+  },
+  {
+    key: "amount",
+    label: "Amount",
+    capabilities: { editable: true },
+  },
+]
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :client-row-model-options="{ resolveRowId: row => row.id }"
+  />
+</template>
+```
+
+Recommended usage:
+
+- Keep identifier, formula-result, and derived columns read-only.
+- Use fill for base table editing flows; it is not surfaced in pivot/tree/worker stage modes.
+- Prefer `@affino/datagrid-vue-app` for the built-in UX; custom renderers should use the app hooks exported from `@affino/datagrid-vue`.
+
 ## Declarative Column Menu
 
 Enable the built-in header menu with one prop:

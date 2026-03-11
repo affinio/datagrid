@@ -61,6 +61,8 @@ const gridState = ref(null)
 />
 ```
 
+This app-layer path is also the supported spreadsheet fill integration: the default renderer exposes fill-handle drag-fill, double-click fill-down, and the post-fill `Series` / `Copy` menu in base table mode.
+
 ## If You Need More Control
 
 ```ts

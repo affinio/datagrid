@@ -475,6 +475,77 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("renders applied filter summary and resets all filters from one action", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: true,
+        advancedFilter: true,
+        filterModel: {
+          columnFilters: {
+            owner: {
+              kind: "predicate",
+              operator: "contains",
+              value: "NOC",
+              caseSensitive: false,
+            },
+          },
+          advancedFilters: {
+            region: {
+              type: "text",
+              clauses: [
+                {
+                  operator: "equals",
+                  value: "eu-west",
+                },
+              ],
+            },
+          },
+          advancedExpression: null,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = wrapper.findAll(".datagrid-app-toolbar__button").find(candidate => (
+      candidate.text().includes("Advanced filter")
+    ))
+    expect(trigger).toBeTruthy()
+    await trigger!.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryAdvancedFilterRoot()
+    expect(popover).toBeTruthy()
+    expect(popover?.textContent).toContain('Owner contains "NOC"')
+    expect(popover?.textContent).toContain('Advanced: Region = "eu-west"')
+
+    popover?.querySelector<HTMLElement>('[data-datagrid-advanced-filter-action="reset-all"]')?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: null,
+          rowCount: 3,
+        }),
+      }),
+    })
+
+    const reopenedTrigger = wrapper.findAll(".datagrid-app-toolbar__button").find(candidate => (
+      candidate.text().includes("Advanced filter")
+    ))
+    await reopenedTrigger!.trigger("click")
+    await flushRuntimeTasks()
+    expect(queryAdvancedFilterRoot()?.textContent).toContain("No filters applied")
+
+    wrapper.unmount()
+  })
+
   it("opens declarative columnLayout and applies visibility and order changes", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

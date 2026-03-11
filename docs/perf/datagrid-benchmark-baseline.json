@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-02-21T23:55:00.000Z",
+  "generatedAt": "2026-03-11T15:36:39.010Z",
   "sourceReport": "artifacts/performance/datagrid-benchmark-report.json",
   "defaults": {
     "maxDurationDriftPct": 120,
@@ -49,8 +49,8 @@
       "maxAggregateHeapDriftPct": 180
     },
     "row-models": {
-      "durationMs": 3255,
-      "aggregateElapsedMs": 566.9831872400002,
+      "durationMs": 18977,
+      "aggregateElapsedMs": 3134.99943536,
       "aggregateHeapMb": 134.26998138427734,
       "maxDurationDriftPct": 420,
       "maxAggregateElapsedDriftPct": 420,

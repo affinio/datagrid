@@ -24,9 +24,6 @@ const FACADES = [
     importSpecifiers: ["@affino/datagrid-vue"],
     requiredSymbols: [
       "useDataGridRuntime",
-      "useAffinoDataGrid",
-      "useAffinoDataGridMinimal",
-      "useAffinoDataGridUi",
       "createDataGridVueRuntime",
       "createClientRowModel",
       "createDataGridColumnModel",

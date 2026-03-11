@@ -194,6 +194,92 @@ describe("useDataGridManagedWheelScroll contract", () => {
     expect(event.stopPropagation).not.toHaveBeenCalled()
   })
 
+  it("retains horizontal boundary wheel events by default to block browser navigation", () => {
+    const state = {
+      top: 100,
+      left: 0,
+    }
+    const bodyViewport = {
+      get scrollTop() { return state.top },
+      scrollHeight: 1000,
+      clientHeight: 200,
+    }
+    const mainViewport = {
+      get scrollLeft() { return state.left },
+      scrollWidth: 1000,
+      clientWidth: 200,
+    }
+
+    const lifecycle = useDataGridManagedWheelScroll({
+      resolveWheelMode: () => "managed",
+      resolveBodyViewport: () => bodyViewport,
+      resolveMainViewport: () => mainViewport,
+      setHandledScrollTop(value) {
+        state.top = value
+      },
+      setHandledScrollLeft(value) {
+        state.left = value
+      },
+    })
+
+    const event = {
+      deltaX: -36,
+      deltaY: 0,
+      deltaMode: 0,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as WheelEvent
+
+    lifecycle.onBodyViewportWheel(event)
+
+    expect(state.left).toBe(0)
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(event.stopPropagation).toHaveBeenCalledTimes(1)
+  })
+
+  it("still releases horizontal boundary wheel events when propagation policy explicitly asks for release", () => {
+    const state = {
+      top: 100,
+      left: 0,
+    }
+    const bodyViewport = {
+      get scrollTop() { return state.top },
+      scrollHeight: 1000,
+      clientHeight: 200,
+    }
+    const mainViewport = {
+      get scrollLeft() { return state.left },
+      scrollWidth: 1000,
+      clientWidth: 200,
+    }
+
+    const lifecycle = useDataGridManagedWheelScroll({
+      resolveWheelMode: () => "managed",
+      resolveBodyViewport: () => bodyViewport,
+      resolveMainViewport: () => mainViewport,
+      resolveWheelPropagationMode: () => "release-at-boundary-when-unconsumed",
+      setHandledScrollTop(value) {
+        state.top = value
+      },
+      setHandledScrollLeft(value) {
+        state.left = value
+      },
+    })
+
+    const event = {
+      deltaX: -36,
+      deltaY: 0,
+      deltaMode: 0,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as WheelEvent
+
+    lifecycle.onBodyViewportWheel(event)
+
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(event.stopPropagation).not.toHaveBeenCalled()
+  })
+
   it("allows explicit propagation callback to extend mode policy", () => {
     const state = {
       top: 10,

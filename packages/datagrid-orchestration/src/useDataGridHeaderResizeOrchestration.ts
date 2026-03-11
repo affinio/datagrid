@@ -43,6 +43,33 @@ export interface UseDataGridHeaderResizeOrchestrationResult {
   dispose: () => void
 }
 
+interface ResizeEventTargetLike {
+  closest?: (selector: string) => ResizeDomRectHostLike | null
+  getBoundingClientRect?: () => { width?: number } | null | undefined
+}
+
+interface ResizeDomRectHostLike {
+  getBoundingClientRect?: () => { width?: number } | null | undefined
+}
+
+function readResizeHostWidth(candidate: ResizeDomRectHostLike | null | undefined): number | null {
+  const rect = candidate?.getBoundingClientRect?.()
+  const width = rect?.width
+  return typeof width === "number" && Number.isFinite(width) && width > 0 ? width : null
+}
+
+function resolveRenderedColumnWidthFromEvent(event: MouseEvent): number | null {
+  const target = event.currentTarget as ResizeEventTargetLike | null | undefined
+  if (!target) {
+    return null
+  }
+  const cellWidth = readResizeHostWidth(target.closest?.(".grid-cell") ?? null)
+  if (cellWidth !== null) {
+    return cellWidth
+  }
+  return readResizeHostWidth(target)
+}
+
 export function useDataGridHeaderResizeOrchestration<TRow>(
   options: UseDataGridHeaderResizeOrchestrationOptions<TRow>,
 ): UseDataGridHeaderResizeOrchestrationResult {
@@ -185,7 +212,7 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
     }
     cancelPendingResizeFrame()
     pendingResizeClientX = null
-    const startWidth = resolveColumnCurrentWidth(columnKey)
+    const startWidth = resolveRenderedColumnWidthFromEvent(event) ?? resolveColumnCurrentWidth(columnKey)
     setActiveColumnResize({
       columnKey,
       startClientX: event.clientX,

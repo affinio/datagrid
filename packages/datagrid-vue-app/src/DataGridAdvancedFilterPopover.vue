@@ -28,6 +28,37 @@
         </button>
       </header>
 
+      <section class="datagrid-advanced-filter__applied">
+        <div class="datagrid-advanced-filter__applied-head">
+          <div>
+            <div class="datagrid-advanced-filter__eyebrow">Applied on table</div>
+            <div class="datagrid-advanced-filter__applied-title">Current filters</div>
+          </div>
+          <button
+            type="button"
+            class="datagrid-advanced-filter__ghost"
+            :disabled="!hasAnyFilters"
+            data-datagrid-advanced-filter-action="reset-all"
+            @click="emit('reset-all')"
+          >
+            Reset all filters
+          </button>
+        </div>
+
+        <div v-if="appliedFilterSummaryItems.length > 0" class="datagrid-advanced-filter__applied-list">
+          <span
+            v-for="(item, index) in appliedFilterSummaryItems"
+            :key="`applied-filter-${index}`"
+            class="datagrid-advanced-filter__applied-chip"
+          >
+            {{ item }}
+          </span>
+        </div>
+        <div v-else class="datagrid-advanced-filter__applied-empty">
+          No filters applied
+        </div>
+      </section>
+
       <div class="datagrid-advanced-filter__rows">
         <div
           v-for="(clause, clauseIndex) in clauses"
@@ -143,9 +174,13 @@ const props = withDefaults(defineProps<{
   isOpen: boolean
   clauses: readonly DataGridAppAdvancedFilterClauseDraft[]
   columns: readonly DataGridAppAdvancedFilterColumnOption[]
+  appliedFilterSummaryItems?: readonly string[]
+  hasAnyFilters?: boolean
   buttonLabel?: string
   active?: boolean
 }>(), {
+  appliedFilterSummaryItems: () => [],
+  hasAnyFilters: false,
   buttonLabel: "Advanced filter",
   active: false,
 })
@@ -156,6 +191,7 @@ const emit = defineEmits<{
   remove: [clauseId: number]
   apply: []
   cancel: []
+  "reset-all": []
   "update-clause": [payload: DataGridAppAdvancedFilterClausePatch]
 }>()
 

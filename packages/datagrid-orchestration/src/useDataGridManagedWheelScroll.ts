@@ -145,7 +145,8 @@ export function useDataGridManagedWheelScroll(
     const shouldPropagateByMode = resolveDataGridWheelPropagationDecision(result, resolveWheelPropagationMode())
     const shouldPropagateByOverride = options.resolveShouldPropagateWheelEvent?.(result) ?? false
     const shouldPropagate = shouldPropagateByMode || shouldPropagateByOverride
-    if (result.handled && resolvePreventDefaultWhenHandled() && !shouldPropagate) {
+    const shouldRetainEventOwnership = result.handled || result.atBoundaryX
+    if (shouldRetainEventOwnership && resolvePreventDefaultWhenHandled() && !shouldPropagate) {
       event.preventDefault()
       if (resolveStopImmediatePropagation() && typeof event.stopImmediatePropagation === "function") {
         event.stopImmediatePropagation()
