@@ -41,6 +41,7 @@ export type {
   CreateDataGridSpreadsheetWorkbookModelOptions,
   DataGridSpreadsheetWorkbookListener,
   DataGridSpreadsheetWorkbookModel,
+  DataGridSpreadsheetWorkbookDataSheetInput,
   DataGridSpreadsheetWorkbookSheetHandle,
   DataGridSpreadsheetWorkbookSheetInput,
   DataGridSpreadsheetWorkbookSheetSnapshot,
@@ -48,7 +49,23 @@ export type {
   DataGridSpreadsheetWorkbookState,
   DataGridSpreadsheetWorkbookSnapshot,
   DataGridSpreadsheetWorkbookSyncSnapshot,
+  DataGridSpreadsheetWorkbookViewSheetInput,
 } from "./workbookModel.js"
+export type {
+  DataGridSpreadsheetViewAggregation,
+  DataGridSpreadsheetViewFilterClause,
+  DataGridSpreadsheetViewFilterStep,
+  DataGridSpreadsheetViewGroupByField,
+  DataGridSpreadsheetViewGroupStep,
+  DataGridSpreadsheetViewProjectColumn,
+  DataGridSpreadsheetViewProjectStep,
+  DataGridSpreadsheetViewSortField,
+  DataGridSpreadsheetViewSortStep,
+  DataGridSpreadsheetViewStep,
+  DataGridSpreadsheetWorkbookSheetKind,
+  DataGridSpreadsheetWorkbookViewDefinition,
+  DataGridSpreadsheetWorkbookViewSheetModelOptions,
+} from "./viewPipeline.js"
 
 export {
   analyzeDataGridSpreadsheetCellInput,

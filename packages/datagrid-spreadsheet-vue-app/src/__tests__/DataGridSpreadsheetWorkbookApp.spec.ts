@@ -91,6 +91,23 @@ function createWorkbookModel(): DataGridSpreadsheetWorkbookModel {
         },
       },
       {
+        id: "orders-by-customer",
+        name: "Orders by customer",
+        kind: "view",
+        sourceSheetId: "orders",
+        pipeline: [
+          {
+            type: "group",
+            by: [{ key: "total", label: "Total bucket" }],
+            aggregations: [{ key: "revenue", field: "total", agg: "sum", label: "Revenue" }],
+          },
+          {
+            type: "sort",
+            fields: [{ key: "revenue", direction: "desc" }],
+          },
+        ],
+      },
+      {
         id: "summary",
         name: "Summary",
         sheetModelOptions: {
@@ -151,6 +168,25 @@ function readSummaryMetricState(workbook: DataGridSpreadsheetWorkbookModel): {
   return {
     metricRawInput: metricCell?.rawInput ?? null,
     metricDisplayValue: metricCell?.displayValue ?? null,
+  }
+}
+
+function readViewRevenueState(workbook: DataGridSpreadsheetWorkbookModel): {
+  rowCount: number
+  revenueRawInput: string | null
+  revenueDisplayValue: unknown
+} {
+  const viewSheet = workbook.getSheet("orders-by-customer")
+  const revenueCell = viewSheet?.sheetModel.getCell({
+    sheetId: "orders-by-customer",
+    rowId: "group:total=1680",
+    rowIndex: 0,
+    columnKey: "revenue",
+  })
+  return {
+    rowCount: viewSheet?.sheetModel.getSnapshot().rowCount ?? 0,
+    revenueRawInput: revenueCell?.rawInput ?? null,
+    revenueDisplayValue: revenueCell?.displayValue ?? null,
   }
 }
 
@@ -381,6 +417,52 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     expect(readSummaryMetricState(workbook)).toEqual({
       metricRawInput: "Orders 1 + 2",
       metricDisplayValue: "Orders 1 + 2",
+    })
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("keeps derived view sheets read-only while still rendering them in the workbook shell", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const viewTab = wrapper.findAll("button").find(button => button.text().includes("Orders by customer"))
+    expect(viewTab).toBeDefined()
+
+    await viewTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    expect((formulaInput.element as HTMLTextAreaElement).readOnly).toBe(true)
+    expect(wrapper.find(".cell-fill-handle").exists()).toBe(false)
+    expect(readViewRevenueState(workbook)).toEqual({
+      rowCount: 2,
+      revenueRawInput: "1680",
+      revenueDisplayValue: 1680,
+    })
+
+    await formulaInput.setValue("9999")
+    await flushUiAndTimers()
+
+    expect(readViewRevenueState(workbook)).toEqual({
+      rowCount: 2,
+      revenueRawInput: "1680",
+      revenueDisplayValue: 1680,
     })
 
     wrapper.unmount()

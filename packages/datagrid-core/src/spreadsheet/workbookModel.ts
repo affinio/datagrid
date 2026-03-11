@@ -10,14 +10,37 @@ import {
   type DataGridSpreadsheetSheetState,
 } from "./sheetModel.js"
 import { formatDataGridSpreadsheetFormulaReference } from "./formulaEditorModel.js"
+import {
+  materializeDataGridSpreadsheetViewSheet,
+  type DataGridSpreadsheetWorkbookSheetKind,
+  type DataGridSpreadsheetWorkbookViewDefinition,
+  type DataGridSpreadsheetWorkbookViewSheetModelOptions,
+  type DataGridSpreadsheetViewStep,
+} from "./viewPipeline.js"
 
-export interface DataGridSpreadsheetWorkbookSheetInput {
+export interface DataGridSpreadsheetWorkbookDataSheetInput {
   id?: string
   name: string
+  kind?: "data"
   sheetModel?: DataGridSpreadsheetSheetModel
   sheetModelOptions?: Omit<CreateDataGridSpreadsheetSheetModelOptions, "sheetId" | "sheetName">
   ownSheetModel?: boolean
 }
+
+export interface DataGridSpreadsheetWorkbookViewSheetInput {
+  id?: string
+  name: string
+  kind: "view"
+  sourceSheetId: string
+  pipeline: readonly DataGridSpreadsheetViewStep[]
+  sheetModel?: DataGridSpreadsheetSheetModel
+  sheetModelOptions?: DataGridSpreadsheetWorkbookViewSheetModelOptions
+  ownSheetModel?: boolean
+}
+
+export type DataGridSpreadsheetWorkbookSheetInput =
+  | DataGridSpreadsheetWorkbookDataSheetInput
+  | DataGridSpreadsheetWorkbookViewSheetInput
 
 export interface CreateDataGridSpreadsheetWorkbookModelOptions {
   sheets?: readonly DataGridSpreadsheetWorkbookSheetInput[]
@@ -29,6 +52,9 @@ export interface DataGridSpreadsheetWorkbookSheetHandle {
   id: string
   name: string
   aliases: readonly string[]
+  kind: DataGridSpreadsheetWorkbookSheetKind
+  readOnly: boolean
+  viewDefinition: DataGridSpreadsheetWorkbookViewDefinition | null
   sheetModel: DataGridSpreadsheetSheetModel
 }
 
@@ -55,6 +81,8 @@ export interface DataGridSpreadsheetWorkbookSnapshot {
 export interface DataGridSpreadsheetWorkbookSheetStateExport {
   id: string
   name: string
+  kind: DataGridSpreadsheetWorkbookSheetKind
+  viewDefinition: DataGridSpreadsheetWorkbookViewDefinition | null
   sheetState: DataGridSpreadsheetSheetState
 }
 
@@ -90,6 +118,9 @@ interface SpreadsheetWorkbookSheetState {
   id: string
   name: string
   aliases: readonly string[]
+  kind: DataGridSpreadsheetWorkbookSheetKind
+  viewDefinition: DataGridSpreadsheetWorkbookViewDefinition | null
+  viewSheetModelOptions: DataGridSpreadsheetWorkbookViewSheetModelOptions | null
   sheetModel: DataGridSpreadsheetSheetModel
   owned: boolean
   unsubscribe: (() => void) | null
@@ -214,6 +245,79 @@ function resolveSpreadsheetWorkbookSyncMaxPasses(
   return Math.max(4, sheetCount * 2)
 }
 
+function cloneSpreadsheetWorkbookViewStep(
+  step: DataGridSpreadsheetViewStep,
+): DataGridSpreadsheetViewStep {
+  switch (step.type) {
+    case "filter":
+      return Object.freeze({
+        type: "filter",
+        mode: step.mode,
+        clauses: Object.freeze(step.clauses.map(clause => Object.freeze({ ...clause }))),
+      })
+    case "sort":
+      return Object.freeze({
+        type: "sort",
+        fields: Object.freeze(step.fields.map(field => (
+          typeof field === "string" ? field : Object.freeze({ ...field })
+        ))),
+      })
+    case "project":
+      return Object.freeze({
+        type: "project",
+        columns: Object.freeze(step.columns.map(column => (
+          typeof column === "string" ? column : Object.freeze({ ...column })
+        ))),
+      })
+    case "group":
+      return Object.freeze({
+        type: "group",
+        by: Object.freeze(step.by.map(field => (
+          typeof field === "string" ? field : Object.freeze({ ...field })
+        ))),
+        aggregations: Object.freeze(step.aggregations.map(aggregation => Object.freeze({ ...aggregation }))),
+      })
+    default:
+      return step
+  }
+}
+
+function normalizeSpreadsheetWorkbookViewDefinition(
+  input: Pick<DataGridSpreadsheetWorkbookViewSheetInput, "sourceSheetId" | "pipeline">,
+): DataGridSpreadsheetWorkbookViewDefinition {
+  return Object.freeze({
+    sourceSheetId: normalizeSpreadsheetWorkbookSheetId(input.sourceSheetId),
+    pipeline: Object.freeze((input.pipeline ?? []).map(cloneSpreadsheetWorkbookViewStep)),
+  })
+}
+
+function normalizeSpreadsheetWorkbookViewSheetModelOptions(
+  options: DataGridSpreadsheetWorkbookViewSheetModelOptions | null | undefined,
+): DataGridSpreadsheetWorkbookViewSheetModelOptions | null {
+  if (!options) {
+    return null
+  }
+  return {
+    sheetStyle: options.sheetStyle ?? null,
+    functionRegistry: options.functionRegistry,
+    referenceParserOptions: options.referenceParserOptions,
+    runtimeErrorPolicy: options.runtimeErrorPolicy ?? "error-value",
+    resolveContextValue: options.resolveContextValue,
+  }
+}
+
+function resolveSpreadsheetWorkbookViewSheetModelOptionsFromState(
+  state: DataGridSpreadsheetSheetState,
+): DataGridSpreadsheetWorkbookViewSheetModelOptions {
+  return {
+    sheetStyle: state.sheetStyle ?? null,
+    functionRegistry: state.functionRegistry,
+    referenceParserOptions: state.referenceParserOptions,
+    runtimeErrorPolicy: state.runtimeErrorPolicy,
+    resolveContextValue: state.resolveContextValue,
+  }
+}
+
 function areSpreadsheetWorkbookStringListsEqual(
   left: readonly string[],
   right: readonly string[],
@@ -281,6 +385,9 @@ function createSpreadsheetWorkbookSheetHandle(
     id: sheet.id,
     name: sheet.name,
     aliases: sheet.aliases,
+    kind: sheet.kind,
+    readOnly: sheet.kind === "view",
+    viewDefinition: sheet.viewDefinition,
     sheetModel: sheet.sheetModel,
   }
 }
@@ -309,6 +416,8 @@ function createSpreadsheetWorkbookSheetStateExport(
   return {
     id: sheet.id,
     name: sheet.name,
+    kind: sheet.kind,
+    viewDefinition: sheet.viewDefinition,
     sheetState: {
       ...sheetState,
       sheetId: sheet.id,
@@ -699,6 +808,12 @@ export function createDataGridSpreadsheetWorkbookModel(
 
     for (const targetSheet of sheets) {
       const dependencySheetIds = new Set<string>()
+      if (targetSheet.viewDefinition) {
+        const sourceSheet = sheetsById.get(targetSheet.viewDefinition.sourceSheetId)
+        if (sourceSheet && sourceSheet.id !== targetSheet.id) {
+          dependencySheetIds.add(sourceSheet.id)
+        }
+      }
       if (targetSheet.formulaUsesAllTables) {
         for (const sourceSheet of sheets) {
           if (sourceSheet.id !== targetSheet.id) {
@@ -882,6 +997,44 @@ export function createDataGridSpreadsheetWorkbookModel(
     return true
   }
 
+  const materializeWorkbookViewSheets = (
+    scheduledComponents: readonly (readonly string[])[],
+    graph: SpreadsheetWorkbookDependencyGraph,
+  ): void => {
+    for (const componentSheetIds of scheduledComponents) {
+      if (componentSheetIds.length === 0) {
+        continue
+      }
+      const componentIsCyclic = componentSheetIds.length > 1 || componentSheetIds.some(sheetId => (
+        graph.dependencySheetIdsBySheetId.get(sheetId)?.includes(sheetId) ?? false
+      ))
+      const cycleMessage = componentIsCyclic
+        ? `Circular view dependency detected: ${componentSheetIds
+          .map(sheetId => sheetsById.get(sheetId)?.name ?? sheetId)
+          .join(" -> ")}`
+        : null
+
+      for (const sheetId of componentSheetIds) {
+        const targetSheet = sheetsById.get(sheetId)
+        if (!targetSheet || targetSheet.kind !== "view" || !targetSheet.viewDefinition) {
+          continue
+        }
+        const nextState = materializeDataGridSpreadsheetViewSheet({
+          sheetId: targetSheet.id,
+          sheetName: targetSheet.name,
+          sourceSheetId: targetSheet.viewDefinition.sourceSheetId,
+          sourceSheetModel: sheetsById.get(targetSheet.viewDefinition.sourceSheetId)?.sheetModel ?? null,
+          pipeline: targetSheet.viewDefinition.pipeline,
+          sheetModelOptions: targetSheet.viewSheetModelOptions,
+          errorMessage: cycleMessage,
+        })
+        if (targetSheet.sheetModel.restoreState(nextState)) {
+          invalidateSheetExportCache(targetSheet)
+        }
+      }
+    }
+  }
+
   const syncSheetComponent = (
     componentSheetIds: readonly string[],
     graph: SpreadsheetWorkbookDependencyGraph,
@@ -896,6 +1049,9 @@ export function createDataGridSpreadsheetWorkbookModel(
       if (!targetSheet) {
         return { passCount: 0, converged: true }
       }
+      if (targetSheet.kind === "view") {
+        return { passCount: 0, converged: true }
+      }
       applyManagedTablePatch(
         targetSheet,
         graph.dependencySheetIdsBySheetId.get(targetSheet.id) ?? Object.freeze([]),
@@ -908,11 +1064,13 @@ export function createDataGridSpreadsheetWorkbookModel(
 
     for (let passIndex = 0; passIndex < maxPasses; passIndex += 1) {
       let changed = false
+      let mutableSheetVisited = false
       for (const sheetId of componentSheetIds) {
         const targetSheet = sheetsById.get(sheetId)
-        if (!targetSheet) {
+        if (!targetSheet || targetSheet.kind === "view") {
           continue
         }
+        mutableSheetVisited = true
         if (
           applyManagedTablePatch(
             targetSheet,
@@ -924,6 +1082,12 @@ export function createDataGridSpreadsheetWorkbookModel(
         if (targetSheet.sheetModel.recompute()) {
           invalidateSheetExportCache(targetSheet)
           changed = true
+        }
+      }
+      if (!mutableSheetVisited) {
+        return {
+          passCount: 0,
+          converged: true,
         }
       }
       if (!changed) {
@@ -970,6 +1134,7 @@ export function createDataGridSpreadsheetWorkbookModel(
       resolvedGraphState.graph.dependencySheetIdsBySheetId,
       resolvedGraphState.sheetOrderById,
     )
+    materializeWorkbookViewSheets(scheduledComponents, resolvedGraphState.graph)
 
     let passCount = 0
     let converged = true
@@ -1044,6 +1209,12 @@ export function createDataGridSpreadsheetWorkbookModel(
 
     const aliases = buildSpreadsheetWorkbookSheetAliases(id, name)
     assertSheetAliasesAvailable(id, aliases)
+    const kind: DataGridSpreadsheetWorkbookSheetKind = input.kind === "view" ? "view" : "data"
+    const dataSheetInput = kind === "data" ? input as DataGridSpreadsheetWorkbookDataSheetInput : null
+    const viewSheetInput = kind === "view" ? input as DataGridSpreadsheetWorkbookViewSheetInput : null
+    const viewDefinition = viewSheetInput
+      ? normalizeSpreadsheetWorkbookViewDefinition(viewSheetInput)
+      : null
 
     const providedSheetModel = input.sheetModel
     if (providedSheetModel) {
@@ -1061,24 +1232,46 @@ export function createDataGridSpreadsheetWorkbookModel(
       }
     }
 
-    if (!providedSheetModel && !input.sheetModelOptions) {
+    if (!providedSheetModel && !input.sheetModelOptions && kind !== "view") {
       throw new Error(
         `[DataGridSpreadsheetWorkbook] sheet '${name}' must provide sheetModel or sheetModelOptions.`,
       )
     }
 
-    const sheetModel = providedSheetModel ?? createDataGridSpreadsheetSheetModel({
-      ...input.sheetModelOptions!,
-      sheetId: id,
-      sheetName: name,
-      resolveSheetReference: (sheetReference) => {
-        const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
-        if (normalizedAlias.length === 0) {
-          return null
-        }
-        return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
-      },
-    })
+    const viewSheetModelOptions = kind === "view"
+      ? normalizeSpreadsheetWorkbookViewSheetModelOptions(
+        viewSheetInput?.sheetModelOptions
+          ?? (providedSheetModel ? resolveSpreadsheetWorkbookViewSheetModelOptionsFromState(providedSheetModel.exportState()) : null),
+      )
+      : null
+
+    const sheetModel = providedSheetModel ?? (
+      kind === "view"
+        ? createSheetModelFromExportState(
+          materializeDataGridSpreadsheetViewSheet({
+            sheetId: id,
+            sheetName: name,
+            sourceSheetId: viewDefinition?.sourceSheetId ?? "",
+            sourceSheetModel: viewDefinition ? (sheetsById.get(viewDefinition.sourceSheetId)?.sheetModel ?? null) : null,
+            pipeline: viewDefinition?.pipeline ?? Object.freeze([]),
+            sheetModelOptions: viewSheetModelOptions,
+          }),
+          id,
+          name,
+        )
+        : createDataGridSpreadsheetSheetModel({
+          ...dataSheetInput!.sheetModelOptions!,
+          sheetId: id,
+          sheetName: name,
+          resolveSheetReference: (sheetReference) => {
+            const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
+            if (normalizedAlias.length === 0) {
+              return null
+            }
+            return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
+          },
+        })
+    )
 
     const formulaDependencyState = resolveSpreadsheetWorkbookSheetFormulaDependencyState(sheetModel)
     const sheetSnapshot = sheetModel.getSnapshot()
@@ -1086,6 +1279,9 @@ export function createDataGridSpreadsheetWorkbookModel(
       id,
       name,
       aliases,
+      kind,
+      viewDefinition,
+      viewSheetModelOptions,
       sheetModel,
       owned: providedSheetModel ? input.ownSheetModel === true : true,
       unsubscribe: null,
@@ -1388,9 +1584,28 @@ export function createDataGridSpreadsheetWorkbookModel(
           nextId,
           nextName,
         )
+        if (nextSheet.kind === "view") {
+          if (!nextSheet.viewDefinition) {
+            throw new Error(
+              `[DataGridSpreadsheetWorkbook] view sheet '${nextId}' is missing its definition during restore.`,
+            )
+          }
+          attachSheet(createSheetState({
+            id: nextId,
+            name: nextName,
+            kind: "view",
+            sourceSheetId: nextSheet.viewDefinition.sourceSheetId,
+            pipeline: nextSheet.viewDefinition.pipeline,
+            sheetModel: restoredSheetModel,
+            sheetModelOptions: resolveSpreadsheetWorkbookViewSheetModelOptionsFromState(nextSheet.sheetState),
+            ownSheetModel: true,
+          }))
+          continue
+        }
         attachSheet(createSheetState({
           id: nextId,
           name: nextName,
+          kind: "data",
           sheetModel: restoredSheetModel,
           ownSheetModel: true,
         }))

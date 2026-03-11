@@ -21,8 +21,13 @@
           <code>ROLLUP('orders', ...)</code>.
         </p>
         <p>
+          <strong>Orders by customer</strong> is now a read-only derived view sheet:
+          grouped, aggregated, and sorted from <code>orders</code> with automatic recompute.
+        </p>
+        <p>
           Workbook-wide aggregates stay on
-          <code>TABLE('orders', 'total')</code>, because direct refs do not replace dynamic table scans.
+          <code>TABLE('orders', 'total')</code> or <code>TABLE('orders-by-customer', 'revenue')</code>,
+          because direct refs do not replace dynamic table scans.
         </p>
         <p>
           Click any column header to open the standard menu, then test sort, value filters, and the
@@ -34,8 +39,8 @@
     <template #gridActions="{ runWorkbookIntent }">
       <div class="spreadsheet-demo-actions">
         <div class="spreadsheet-demo-actions__copy">
-          Open <strong>Summary</strong>, then use these actions to watch direct refs rewrite across rename,
-          row insert/remove, and sheet removal.
+          Open <strong>Summary</strong> or <strong>Orders by customer</strong>, then use these actions to watch
+          source-sheet edits rewrite direct refs and rematerialize the derived view.
         </div>
         <div class="spreadsheet-demo-actions__buttons">
           <button

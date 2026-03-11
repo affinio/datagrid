@@ -165,6 +165,7 @@ export interface DataGridSpreadsheetSheetModel {
   getColumns(): readonly DataGridSpreadsheetColumnSnapshot[]
   getRows(): readonly DataGridSpreadsheetRowSnapshot[]
   exportState(): DataGridSpreadsheetSheetState
+  restoreState(state: DataGridSpreadsheetSheetState): boolean
   getCell(cell: DataGridSpreadsheetCellAddress): DataGridSpreadsheetCellSnapshot | null
   getCellById(rowId: DataGridRowId, columnKey: string): DataGridSpreadsheetCellSnapshot | null
   getCellDisplayValue(cell: DataGridSpreadsheetCellAddress): unknown
@@ -280,6 +281,97 @@ function areSpreadsheetStylesEqual(
     }
   }
   return true
+}
+
+function areSpreadsheetColumnSnapshotsEqual(
+  left: readonly DataGridSpreadsheetColumnSnapshot[],
+  right: readonly DataGridSpreadsheetColumnSnapshot[],
+): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftColumn = left[index]
+    const rightColumn = right[index]
+    if (
+      !leftColumn
+      || !rightColumn
+      || leftColumn.key !== rightColumn.key
+      || leftColumn.title !== rightColumn.title
+      || !areSpreadsheetStylesEqual(leftColumn.style, rightColumn.style)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+function areSpreadsheetFormulaTableBindingsEqual(
+  left: readonly DataGridSpreadsheetFormulaTableBinding[],
+  right: readonly DataGridSpreadsheetFormulaTableBinding[],
+): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftBinding = left[index]
+    const rightBinding = right[index]
+    if (
+      !leftBinding
+      || !rightBinding
+      || leftBinding.name !== rightBinding.name
+      || leftBinding.source !== rightBinding.source
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+function areSpreadsheetSheetStateRowsEqual(
+  left: readonly DataGridSpreadsheetSheetStateRow[],
+  right: readonly DataGridSpreadsheetSheetStateRow[],
+): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let rowIndex = 0; rowIndex < left.length; rowIndex += 1) {
+    const leftRow = left[rowIndex]
+    const rightRow = right[rowIndex]
+    if (
+      !leftRow
+      || !rightRow
+      || leftRow.id !== rightRow.id
+      || !areSpreadsheetStylesEqual(leftRow.style, rightRow.style)
+      || leftRow.cells.length !== rightRow.cells.length
+    ) {
+      return false
+    }
+    for (let cellIndex = 0; cellIndex < leftRow.cells.length; cellIndex += 1) {
+      const leftCell = leftRow.cells[cellIndex]
+      const rightCell = rightRow.cells[cellIndex]
+      if (
+        !leftCell
+        || !rightCell
+        || leftCell.columnKey !== rightCell.columnKey
+        || leftCell.rawInput !== rightCell.rawInput
+        || !areSpreadsheetStylesEqual(leftCell.style, rightCell.style)
+      ) {
+        return false
+      }
+    }
+  }
+  return true
+}
+
+function areSpreadsheetSheetStatesEquivalent(
+  left: DataGridSpreadsheetSheetState,
+  right: DataGridSpreadsheetSheetState,
+): boolean {
+  return areSpreadsheetColumnSnapshotsEqual(left.columns, right.columns)
+    && areSpreadsheetSheetStateRowsEqual(left.rows, right.rows)
+    && areSpreadsheetStylesEqual(left.sheetStyle, right.sheetStyle)
+    && areSpreadsheetFormulaTableBindingsEqual(left.formulaTables, right.formulaTables)
 }
 
 function mergeSpreadsheetStyles(
@@ -1585,6 +1677,129 @@ export function createDataGridSpreadsheetSheetModel(
         runtimeErrorPolicy,
         resolveContextValue: options.resolveContextValue,
       }
+    },
+    restoreState(state) {
+      ensureActive()
+      const nextState: DataGridSpreadsheetSheetState = {
+        sheetId,
+        sheetName,
+        columns: Object.freeze((state.columns ?? []).map(column => ({
+          key: normalizeColumnKey(column.key),
+          title: normalizeColumnTitle(column.title, column.key),
+          style: normalizeSpreadsheetStyle(column.style),
+        }))),
+        rows: Object.freeze((state.rows ?? []).map((row, rowIndex) => Object.freeze({
+          id: normalizeRowId(row.id, rowIndex),
+          style: normalizeSpreadsheetStyle(row.style),
+          cells: Object.freeze((row.cells ?? [])
+            .map(cell => ({
+              columnKey: normalizeColumnKey(cell.columnKey),
+              rawInput: normalizeCellRawInput(cell.rawInput),
+              style: normalizeSpreadsheetStyle(cell.style),
+            }))
+            .filter(cell => cell.rawInput.length > 0 || cell.style != null)),
+        }))),
+        sheetStyle: normalizeSpreadsheetStyle(state.sheetStyle),
+        formulaTables: Object.freeze((state.formulaTables ?? []).map(binding => ({
+          name: String(binding.name ?? ""),
+          source: binding.source,
+        }))),
+        functionRegistry,
+        referenceParserOptions,
+        runtimeErrorPolicy,
+        resolveContextValue: options.resolveContextValue,
+      }
+
+      if (nextState.columns.length === 0) {
+        throw new Error("[DataGridSpreadsheetSheet] columns must be non-empty.")
+      }
+
+      const currentState = this.exportState()
+      if (areSpreadsheetSheetStatesEquivalent(currentState, nextState)) {
+        return false
+      }
+
+      columns.length = 0
+      columnIndexByKey.clear()
+      for (const column of nextState.columns) {
+        if (columnIndexByKey.has(column.key)) {
+          throw new Error(`[DataGridSpreadsheetSheet] duplicate column key '${column.key}'.`)
+        }
+        columnIndexByKey.set(column.key, columns.length)
+        columns.push({
+          key: column.key,
+          title: column.title,
+          style: column.style,
+        })
+      }
+
+      rows.length = 0
+      rowIndexById.clear()
+      const reservedRowIds = new Set<DataGridRowId>()
+      for (let rowIndex = 0; rowIndex < nextState.rows.length; rowIndex += 1) {
+        const row = nextState.rows[rowIndex]
+        if (!row) {
+          continue
+        }
+        if (reservedRowIds.has(row.id)) {
+          throw new Error(`[DataGridSpreadsheetSheet] duplicate row id '${String(row.id)}'.`)
+        }
+        reservedRowIds.add(row.id)
+        const resolvedData = Object.create(null) as Record<string, unknown>
+        for (const column of columns) {
+          resolvedData[column.key] = null
+        }
+        rows.push({
+          id: row.id,
+          rowIndex,
+          style: row.style,
+          resolvedData,
+        })
+        rowIndexById.set(row.id, rowIndex)
+      }
+      nextSyntheticRowId = rows.length + 1
+
+      rawInputByCellKey.clear()
+      cellStyleByCellKey.clear()
+      for (let rowIndex = 0; rowIndex < nextState.rows.length; rowIndex += 1) {
+        const row = nextState.rows[rowIndex]
+        if (!row) {
+          continue
+        }
+        for (const cell of row.cells) {
+          if (!columnIndexByKey.has(cell.columnKey)) {
+            continue
+          }
+          const cellKey = makeCellKey(rowIndex, cell.columnKey)
+          if (cell.rawInput.length > 0) {
+            rawInputByCellKey.set(cellKey, cell.rawInput)
+          }
+          if (cell.style != null) {
+            cellStyleByCellKey.set(cellKey, cell.style)
+          }
+        }
+      }
+
+      formulaTablesByContextKey.clear()
+      for (const binding of nextState.formulaTables) {
+        formulaTablesByContextKey.set(resolveFormulaTableContextKey(binding.name), binding.source)
+      }
+
+      sheetStyle = nextState.sheetStyle
+      analysisByCellKey.clear()
+      formulaCellByKey.clear()
+      dependentsByCellKey.clear()
+      lastRowMutation = null
+      formulaStructureRevision += 1
+      styleRevision += 1
+      revision += 1
+      const baseValuesChanged = rebuildFormulaState()
+      const formulaValuesChanged = applyFormulaEvaluation(null)
+      if (baseValuesChanged || formulaValuesChanged) {
+        valueRevision += 1
+      }
+      emit()
+      return true
     },
     getCell(cell) {
       return readCellSnapshot(resolveCellKey(cell))

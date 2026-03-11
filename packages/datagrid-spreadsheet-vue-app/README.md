@@ -18,6 +18,7 @@ Public export:
 
 - workbook tabs
 - formula bar
+- derived read-only view sheets backed by workbook materialization
 - active-sheet sort and filter surface
 - reference map
 - formula diagnostics drawer
@@ -47,6 +48,7 @@ const workbook = createDataGridSpreadsheetWorkbookModel({
           allowSheetQualifiedReferences: true,
         },
         columns: [
+          { key: "customerName", title: "Customer" },
           { key: "qty", title: "Qty" },
           { key: "price", title: "Price" },
           { key: "total", title: "Total" },
@@ -55,16 +57,37 @@ const workbook = createDataGridSpreadsheetWorkbookModel({
           {
             id: "order-1",
             cells: {
+              customerName: "Atlas Labs",
               qty: 4,
               price: 120,
               total: "=[qty]@row * [price]@row",
             },
           },
         ],
+        },
       },
-    },
-  ],
-})
+      {
+        id: "orders-by-customer",
+        name: "Orders by customer",
+        kind: "view",
+        sourceSheetId: "orders",
+        pipeline: [
+          {
+            type: "group",
+            by: [{ key: "customerName", label: "Customer" }],
+            aggregations: [
+              { key: "ordersCount", agg: "count", label: "Orders" },
+              { key: "revenue", field: "total", agg: "sum", label: "Revenue" },
+            ],
+          },
+          {
+            type: "sort",
+            fields: [{ key: "revenue", direction: "desc" }],
+          },
+        ],
+      },
+    ],
+  })
 
 workbook.sync()
 </script>
@@ -91,6 +114,8 @@ Use slots to inject product-specific copy or controls without forking the workbo
 `gridActions` receives:
 
 - `workbookModel`
+- `activeSheet`
+- `activeSheetReadOnly`
 - `measureOperation(label, run)`
 - `runWorkbookIntent(descriptor, run)`
 
@@ -99,6 +124,9 @@ Use `runWorkbookIntent(...)` for external workbook mutations such as rename shee
 ## Notes
 
 - The workbook model remains the source of truth.
+- View sheets are declared in the workbook with `kind: "view"`, `sourceSheetId`, and a declarative `pipeline`.
+- View sheets are rendered as read-only in the app shell, but they still fully support selection, copy, sort, filter, and diagnostics.
+- Direct refs into a view sheet are still address-based links to the current materialized result; use `TABLE(...)` when you need dynamic scans over the full derived table.
 - Sort and filter are view concerns on the active sheet; cell edits and fill still commit through `sheetModel`.
 - Undo and redo restore workbook state, not generic rendered row snapshots.
 - Direct cross-sheet refs, rename rewrites, and structural row rewrites come from `@affino/datagrid-core`, not this package.

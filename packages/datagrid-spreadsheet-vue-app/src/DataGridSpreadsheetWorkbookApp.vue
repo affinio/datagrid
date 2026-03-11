@@ -16,27 +16,32 @@
             :key="sheet.id"
             type="button"
             class="spreadsheet-tab"
-            :class="{ 'spreadsheet-tab--active': sheet.id === workbookSnapshot.activeSheetId }"
+            :class="{
+              'spreadsheet-tab--active': sheet.id === workbookSnapshot.activeSheetId,
+              'spreadsheet-tab--readonly': sheet.readOnly,
+            }"
             :aria-pressed="sheet.id === workbookSnapshot.activeSheetId"
             @click="openSheet(sheet.id)"
           >
             <span class="spreadsheet-tab__name">{{ sheet.name }}</span>
-            <span class="spreadsheet-tab__meta">{{ sheet.formulaCellCount }} fx</span>
+            <span class="spreadsheet-tab__meta">
+              {{ sheet.kind === "view" ? "view" : `${sheet.formulaCellCount} fx` }}
+            </span>
           </button>
         </div>
 
         <div class="spreadsheet-toolbar__actions">
           <div v-if="props.styleActions" class="spreadsheet-style-actions">
-            <button type="button" class="spreadsheet-action" @click="void applyStylePreset('ocean')">
+            <button type="button" class="spreadsheet-action" :disabled="activeSheetReadOnly" @click="void applyStylePreset('ocean')">
               Accent
             </button>
-            <button type="button" class="spreadsheet-action" @click="void applyStylePreset('mint')">
+            <button type="button" class="spreadsheet-action" :disabled="activeSheetReadOnly" @click="void applyStylePreset('mint')">
               Success
             </button>
-            <button type="button" class="spreadsheet-action" @click="void applyStylePreset('amber')">
+            <button type="button" class="spreadsheet-action" :disabled="activeSheetReadOnly" @click="void applyStylePreset('amber')">
               Highlight
             </button>
-            <button type="button" class="spreadsheet-action" @click="void clearSelectedStyles()">
+            <button type="button" class="spreadsheet-action" :disabled="activeSheetReadOnly" @click="void clearSelectedStyles()">
               Clear style
             </button>
             <button type="button" class="spreadsheet-action" @click="copyStyleFromActiveCell">
@@ -45,7 +50,7 @@
             <button
               type="button"
               class="spreadsheet-action"
-              :disabled="copiedStyle == null"
+              :disabled="copiedStyle == null || activeSheetReadOnly"
               @click="void pasteStyleToSelection()"
             >
               Paste style
@@ -73,9 +78,16 @@
         </div>
       </div>
 
-      <div class="spreadsheet-formula-shell" :class="{ 'spreadsheet-formula-shell--focused': isFormulaBarFocused }">
+      <div
+        class="spreadsheet-formula-shell"
+        :class="{
+          'spreadsheet-formula-shell--focused': isFormulaBarFocused,
+          'spreadsheet-formula-shell--readonly': activeSheetReadOnly,
+        }"
+      >
         <div class="spreadsheet-formula-address">
-          {{ activeCellBadge }}
+          <span>{{ activeCellBadge }}</span>
+          <span v-if="activeSheetReadOnly" class="spreadsheet-formula-address__badge">View</span>
         </div>
 
         <div class="spreadsheet-formula-main">
@@ -83,8 +95,9 @@
             ref="formulaInputRef"
             class="spreadsheet-formula-input"
             :value="editorSnapshot.rawInput"
+            :readonly="activeSheetReadOnly"
             spellcheck="false"
-            :placeholder="props.formulaPlaceholder"
+            :placeholder="formulaInputPlaceholder"
             @focus="handleFormulaFocus"
             @blur="handleFormulaBlur"
             @input="handleFormulaInput"
@@ -110,6 +123,9 @@
         </div>
 
         <div class="spreadsheet-formula-state">
+          <div v-if="activeSheetReadOnly" class="spreadsheet-formula-readonly">
+            Derived view from <strong>{{ activeSheetViewSourceLabel }}</strong>. Edit the source sheet to recompute.
+          </div>
           <div class="spreadsheet-formula-value">
             <span class="spreadsheet-formula-state__label">Display</span>
             <span>{{ activeCellDisplayLabel }}</span>
@@ -331,6 +347,8 @@
           <slot
             name="gridActions"
             :workbook-model="workbook"
+            :active-sheet="activeSheetHandle"
+            :active-sheet-read-only="activeSheetReadOnly"
             :measure-operation="measureSpreadsheetOperation"
             :run-workbook-intent="runWorkbookIntent"
           />
@@ -1128,6 +1146,21 @@ const activeSheetStats = computed(() => {
   return workbookSnapshot.value.sheets.find(sheet => sheet.id === activeSheetId) ?? null
 })
 
+const activeSheetReadOnly = computed(() => activeSheetHandle.value?.readOnly === true)
+const activeSheetViewSourceLabel = computed(() => {
+  void workbookRevision.value
+  const sourceSheetId = activeSheetHandle.value?.viewDefinition?.sourceSheetId ?? null
+  if (!sourceSheetId) {
+    return "source sheet"
+  }
+  return workbook.getSheet(sourceSheetId)?.name ?? sourceSheetId
+})
+const formulaInputPlaceholder = computed(() => (
+  activeSheetReadOnly.value
+    ? `Derived view from ${activeSheetViewSourceLabel.value}. Edit the source sheet to recompute.`
+    : props.formulaPlaceholder
+))
+
 watch(
   () => `${workbookRevision.value}:${activeSheetHandle.value?.id ?? ""}`,
   () => {
@@ -1208,7 +1241,7 @@ const gridColumns = computed<readonly DataGridColumnInput[]>(() => {
         headerAlign: align,
       },
       capabilities: {
-        editable: true,
+        editable: !activeSheetReadOnly.value,
         sortable: true,
         filterable: true,
       },
@@ -1697,6 +1730,9 @@ function applySpreadsheetGridEdits(
   matrix: string[][],
   options: { recordHistory?: boolean } = {},
 ): number {
+  if (activeSheetReadOnly.value) {
+    return 0
+  }
   const handle = activeSheetHandle.value
   if (!handle) {
     return 0
@@ -1777,6 +1813,9 @@ function applySpreadsheetGridEdits(
 }
 
 function applySpreadsheetRangeMove(baseRange: DataGridCopyRange, targetRange: DataGridCopyRange): boolean {
+  if (activeSheetReadOnly.value) {
+    return false
+  }
   const handle = activeSheetHandle.value
   if (!handle) {
     return false
@@ -2140,6 +2179,10 @@ function handleFormulaInput(event: Event): void {
   if (!target || !activeCell) {
     return
   }
+  if (activeSheetReadOnly.value) {
+    target.value = editorSnapshot.value.rawInput
+    return
+  }
   ensureFormulaEditHistorySession(activeCell)
   editorModel.setInput(target.value)
   editorModel.setSelection({
@@ -2230,6 +2273,9 @@ function isPrintableEditingKey(event: KeyboardEvent): boolean {
 }
 
 function beginGridEdit(cell: DataGridSpreadsheetCellAddress, draftInput?: string): void {
+  if (activeSheetReadOnly.value) {
+    return
+  }
   openEditorCell(cell, {
     focus: true,
     draftInput: draftInput ?? null,
@@ -2263,12 +2309,12 @@ function handleGridCellKeydown(
   columnIndex: number,
 ): void {
   const targetCell = resolveCellAddressFromOffsets(rowOffset, columnIndex)
-  if (targetCell && (event.key === "Enter" || event.key === "F2")) {
+  if (!activeSheetReadOnly.value && targetCell && (event.key === "Enter" || event.key === "F2")) {
     event.preventDefault()
     beginGridEdit(targetCell)
     return
   }
-  if (targetCell && isPrintableEditingKey(event)) {
+  if (!activeSheetReadOnly.value && targetCell && isPrintableEditingKey(event)) {
     event.preventDefault()
     beginGridEdit(targetCell, event.key)
     return
@@ -2278,12 +2324,12 @@ function handleGridCellKeydown(
 
 function handleGridViewportKeydown(event: KeyboardEvent): void {
   const targetCell = resolveSelectedGridCell()
-  if (targetCell && (event.key === "Enter" || event.key === "F2")) {
+  if (!activeSheetReadOnly.value && targetCell && (event.key === "Enter" || event.key === "F2")) {
     event.preventDefault()
     beginGridEdit(targetCell)
     return
   }
-  if (targetCell && isPrintableEditingKey(event)) {
+  if (!activeSheetReadOnly.value && targetCell && isPrintableEditingKey(event)) {
     event.preventDefault()
     beginGridEdit(targetCell, event.key)
     return
@@ -2295,6 +2341,9 @@ function handleGridInlineEditRequest(
   row: { rowId: DataGridRowId; data?: SpreadsheetGridRow },
   columnKey: string,
 ): void {
+  if (activeSheetReadOnly.value) {
+    return
+  }
   const currentSheet = activeSheetHandle.value
   const rowData = row.data as SpreadsheetGridRow | undefined
   if (!currentSheet || !rowData) {
@@ -2352,6 +2401,9 @@ function collectSelectedAddresses(): readonly DataGridSpreadsheetCellAddress[] {
 }
 
 async function applyStylePreset(presetId: SpreadsheetStylePresetId): Promise<void> {
+  if (activeSheetReadOnly.value) {
+    return
+  }
   const currentSheet = activeSheetHandle.value
   if (!currentSheet) {
     return
@@ -2370,6 +2422,9 @@ async function applyStylePreset(presetId: SpreadsheetStylePresetId): Promise<voi
 }
 
 async function clearSelectedStyles(): Promise<void> {
+  if (activeSheetReadOnly.value) {
+    return
+  }
   const currentSheet = activeSheetHandle.value
   if (!currentSheet) {
     return
@@ -2393,6 +2448,9 @@ function copyStyleFromActiveCell(): void {
 }
 
 async function pasteStyleToSelection(): Promise<void> {
+  if (activeSheetReadOnly.value) {
+    return
+  }
   const currentSheet = activeSheetHandle.value
   if (!currentSheet || copiedStyle.value == null) {
     return
@@ -2936,6 +2994,10 @@ function moveCaretToReference(referenceKey: string): void {
   color: #f8fafc;
 }
 
+.spreadsheet-tab--readonly {
+  border-style: dashed;
+}
+
 .spreadsheet-tab__name {
   font-weight: 600;
 }
@@ -2981,15 +3043,35 @@ function moveCaretToReference(referenceKey: string): void {
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.28);
 }
 
+.spreadsheet-formula-shell--readonly {
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.96));
+}
+
 .spreadsheet-formula-address {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   min-height: 44px;
   padding: 0 12px;
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.06);
   color: var(--spreadsheet-accent);
   font-weight: 600;
+}
+
+.spreadsheet-formula-address__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .spreadsheet-formula-main {
@@ -3009,6 +3091,12 @@ function moveCaretToReference(referenceKey: string): void {
   background: rgba(255, 255, 255, 0.84);
   color: var(--datagrid-text-color);
   font: 500 13px/1.5 ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+}
+
+.spreadsheet-formula-input[readonly] {
+  background: rgba(248, 250, 252, 0.9);
+  color: var(--spreadsheet-ink-soft);
+  cursor: default;
 }
 
 .spreadsheet-formula-preview {
@@ -3043,6 +3131,15 @@ function moveCaretToReference(referenceKey: string): void {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.spreadsheet-formula-readonly {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .spreadsheet-formula-state__label {

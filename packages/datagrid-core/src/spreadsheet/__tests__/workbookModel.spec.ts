@@ -459,6 +459,310 @@ describe("createDataGridSpreadsheetWorkbookModel", () => {
     workbook.dispose()
   })
 
+  it("materializes grouped view sheets and recomputes them from source edits", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerName" }, { key: "status" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerName: "Atlas", status: "Won", total: 100 } },
+              { id: "order-2", cells: { customerName: "Atlas", status: "Active", total: 260 } },
+              { id: "order-3", cells: { customerName: "Northwind", status: "Won", total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "orders-by-customer",
+          name: "Orders by customer",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "group",
+              by: [{ key: "customerName", label: "Customer" }],
+              aggregations: [
+                { key: "ordersCount", agg: "count", label: "Orders" },
+                { key: "revenue", field: "total", agg: "sum", label: "Revenue" },
+              ],
+            },
+            {
+              type: "sort",
+              fields: [{ key: "revenue", direction: "desc" }],
+            },
+          ],
+        },
+      ],
+    })
+
+    const viewSheet = workbook.getSheet("orders-by-customer")
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+
+    expect(viewSheet?.kind).toBe("view")
+    expect(viewSheet?.readOnly).toBe(true)
+    expect(viewSheet?.viewDefinition?.sourceSheetId).toBe("orders")
+    expect(viewSheet?.sheetModel.getCell({
+      sheetId: "orders-by-customer",
+      rowId: "group:customerName=Atlas",
+      rowIndex: 0,
+      columnKey: "revenue",
+    })?.displayValue).toBe(360)
+    expect(viewSheet?.sheetModel.getCell({
+      sheetId: "orders-by-customer",
+      rowId: "group:customerName=Northwind",
+      rowIndex: 1,
+      columnKey: "revenue",
+    })?.displayValue).toBe(200)
+
+    expect(ordersSheet?.setCellInput({
+      sheetId: "orders",
+      rowId: "order-3",
+      rowIndex: 2,
+      columnKey: "total",
+    }, 420)).toBe(true)
+
+    expect(viewSheet?.sheetModel.getCell({
+      sheetId: "orders-by-customer",
+      rowId: "group:customerName=Northwind",
+      rowIndex: 0,
+      columnKey: "customerName",
+    })?.displayValue).toBe("Northwind")
+    expect(viewSheet?.sheetModel.getCell({
+      sheetId: "orders-by-customer",
+      rowId: "group:customerName=Northwind",
+      rowIndex: 0,
+      columnKey: "revenue",
+    })?.displayValue).toBe(420)
+
+    workbook.dispose()
+  })
+
+  it("supports chained view sheets", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerName" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerName: "Atlas", total: 360 } },
+              { id: "order-2", cells: { customerName: "Northwind", total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "orders-by-customer",
+          name: "Orders by customer",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "group",
+              by: [{ key: "customerName", label: "Customer" }],
+              aggregations: [{ key: "revenue", field: "total", agg: "sum", label: "Revenue" }],
+            },
+          ],
+        },
+        {
+          id: "enterprise-customers",
+          name: "Enterprise customers",
+          kind: "view",
+          sourceSheetId: "orders-by-customer",
+          pipeline: [
+            {
+              type: "filter",
+              clauses: [{ key: "revenue", operator: "gte", value: 300 }],
+            },
+            {
+              type: "sort",
+              fields: [{ key: "revenue", direction: "desc" }],
+            },
+            {
+              type: "project",
+              columns: [
+                { key: "customerName", label: "Customer" },
+                { key: "revenue", label: "Revenue" },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+
+    const enterpriseView = workbook.getSheet("enterprise-customers")?.sheetModel
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+
+    expect(enterpriseView?.getSnapshot().rowCount).toBe(1)
+    expect(enterpriseView?.getCell({
+      sheetId: "enterprise-customers",
+      rowId: "group:customerName=Atlas",
+      rowIndex: 0,
+      columnKey: "customerName",
+    })?.displayValue).toBe("Atlas")
+
+    expect(ordersSheet?.setCellInput({
+      sheetId: "orders",
+      rowId: "order-2",
+      rowIndex: 1,
+      columnKey: "total",
+    }, 420)).toBe(true)
+
+    expect(enterpriseView?.getSnapshot().rowCount).toBe(2)
+    expect(enterpriseView?.getCell({
+      sheetId: "enterprise-customers",
+      rowId: "group:customerName=Northwind",
+      rowIndex: 0,
+      columnKey: "customerName",
+    })?.displayValue).toBe("Northwind")
+
+    workbook.dispose()
+  })
+
+  it("materializes missing view sources as readable error sheets", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders-by-customer",
+          name: "Orders by customer",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "group",
+              by: [{ key: "customerName" }],
+              aggregations: [{ key: "revenue", field: "total", agg: "sum" }],
+            },
+          ],
+        },
+      ],
+    })
+
+    const viewSheet = workbook.getSheet("orders-by-customer")?.sheetModel
+
+    expect(viewSheet?.getSnapshot().rowCount).toBe(1)
+    expect(viewSheet?.getCell({
+      sheetId: "orders-by-customer",
+      rowId: "orders-by-customer-error",
+      rowIndex: 0,
+      columnKey: "status",
+    })?.displayValue).toBe("Error")
+    expect(viewSheet?.getCell({
+      sheetId: "orders-by-customer",
+      rowId: "orders-by-customer-error",
+      rowIndex: 0,
+      columnKey: "message",
+    })?.displayValue).toBe("Source sheet 'orders' is missing.")
+
+    workbook.dispose()
+  })
+
+  it("turns circular view dependencies into readable error sheets", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "view-a",
+          name: "View A",
+          kind: "view",
+          sourceSheetId: "view-b",
+          pipeline: [
+            {
+              type: "project",
+              columns: ["message"],
+            },
+          ],
+        },
+        {
+          id: "view-b",
+          name: "View B",
+          kind: "view",
+          sourceSheetId: "view-a",
+          pipeline: [
+            {
+              type: "project",
+              columns: ["message"],
+            },
+          ],
+        },
+      ],
+    })
+
+    const viewA = workbook.getSheet("view-a")?.sheetModel
+    const viewB = workbook.getSheet("view-b")?.sheetModel
+
+    expect(viewA?.getCell({
+      sheetId: "view-a",
+      rowId: "view-a-error",
+      rowIndex: 0,
+      columnKey: "message",
+    })?.displayValue).toContain("Circular view dependency detected")
+    expect(viewB?.getCell({
+      sheetId: "view-b",
+      rowId: "view-b-error",
+      rowIndex: 0,
+      columnKey: "message",
+    })?.displayValue).toContain("Circular view dependency detected")
+
+    workbook.dispose()
+  })
+
+  it("restores exported state with derived view definitions intact", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerName" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerName: "Atlas", total: 100 } },
+              { id: "order-2", cells: { customerName: "Northwind", total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "orders-by-customer",
+          name: "Orders by customer",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "group",
+              by: [{ key: "customerName" }],
+              aggregations: [{ key: "revenue", field: "total", agg: "sum" }],
+            },
+          ],
+        },
+      ],
+    })
+
+    const exportedState = workbook.exportState()
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+
+    expect(ordersSheet?.setCellInput({
+      sheetId: "orders",
+      rowId: "order-2",
+      rowIndex: 1,
+      columnKey: "total",
+    }, 420)).toBe(true)
+    expect(workbook.restoreState(exportedState)).toBe(true)
+
+    const restoredViewSheet = workbook.getSheet("orders-by-customer")
+
+    expect(restoredViewSheet?.kind).toBe("view")
+    expect(restoredViewSheet?.viewDefinition?.sourceSheetId).toBe("orders")
+    expect(restoredViewSheet?.sheetModel.getCell({
+      sheetId: "orders-by-customer",
+      rowId: "group:customerName=Northwind",
+      rowIndex: 1,
+      columnKey: "revenue",
+    })?.displayValue).toBe(200)
+
+    workbook.dispose()
+  })
+
   it("restores workbook state after structural and formula rewrites", () => {
     const workbook = createDataGridSpreadsheetWorkbookModel({
       sheets: [

@@ -90,6 +90,37 @@ export function createSpreadsheetDemoWorkbookModel(): DataGridSpreadsheetWorkboo
         },
       },
       {
+        id: "orders-by-customer",
+        name: "Orders by customer",
+        kind: "view",
+        sourceSheetId: "orders",
+        sheetModelOptions: {
+          sheetStyle: {
+            background: "rgba(240, 253, 250, 0.9)",
+          },
+        },
+        pipeline: [
+          {
+            type: "group",
+            by: [
+              { key: "customerName", label: "Customer" },
+              { key: "status", label: "Status" },
+            ],
+            aggregations: [
+              { key: "ordersCount", agg: "count", label: "Orders" },
+              { key: "revenue", field: "total", agg: "sum", label: "Revenue" },
+            ],
+          },
+          {
+            type: "sort",
+            fields: [
+              { key: "revenue", direction: "desc" },
+              { key: "customerName", direction: "asc" },
+            ],
+          },
+        ],
+      },
+      {
         id: "summary",
         name: "Summary",
         sheetModelOptions: {
@@ -106,7 +137,8 @@ export function createSpreadsheetDemoWorkbookModel(): DataGridSpreadsheetWorkboo
             { id: "summary-1", cells: { metric: "Orders 1 + 2", value: "=orders![total]1 + orders![total]2", note: "Direct cross-sheet absolute refs. Edit the first two Orders totals and this cell follows them." }, style: { background: "rgba(59, 130, 246, 0.08)" } },
             { id: "summary-2", cells: { metric: "Customer 1 name", value: "=customers![name]1", note: "Direct text ref across sheets without TABLE() or RELATED()." } },
             { id: "summary-3", cells: { metric: "Gross sales", value: "=SUM(TABLE('orders', 'total'))", note: "Workbook-wide aggregate still uses TABLE() because direct refs are fixed-address links." } },
-            { id: "summary-4", cells: { metric: "Top customer spend", value: "=MAX(TABLE('customers', 'totalSpend'))", note: "ROLLUP output on Customers reused downstream through TABLE()." } },
+            { id: "summary-4", cells: { metric: "Top customer from view", value: "='orders by customer'![customerName]1", note: "Direct ref into the first row of a derived view sheet." } },
+            { id: "summary-5", cells: { metric: "Top customer spend", value: "=MAX(TABLE('orders-by-customer', 'revenue'))", note: "Derived view output also participates in TABLE() scans like a regular sheet." } },
           ],
         },
       },
