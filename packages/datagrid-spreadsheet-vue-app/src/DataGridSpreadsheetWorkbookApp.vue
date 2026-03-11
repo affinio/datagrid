@@ -27,16 +27,16 @@
 
         <div class="spreadsheet-toolbar__actions">
           <div v-if="props.styleActions" class="spreadsheet-style-actions">
-            <button type="button" class="spreadsheet-action" @click="applyStylePreset('ocean')">
+            <button type="button" class="spreadsheet-action" @click="void applyStylePreset('ocean')">
               Accent
             </button>
-            <button type="button" class="spreadsheet-action" @click="applyStylePreset('mint')">
+            <button type="button" class="spreadsheet-action" @click="void applyStylePreset('mint')">
               Success
             </button>
-            <button type="button" class="spreadsheet-action" @click="applyStylePreset('amber')">
+            <button type="button" class="spreadsheet-action" @click="void applyStylePreset('amber')">
               Highlight
             </button>
-            <button type="button" class="spreadsheet-action" @click="clearSelectedStyles">
+            <button type="button" class="spreadsheet-action" @click="void clearSelectedStyles()">
               Clear style
             </button>
             <button type="button" class="spreadsheet-action" @click="copyStyleFromActiveCell">
@@ -46,9 +46,27 @@
               type="button"
               class="spreadsheet-action"
               :disabled="copiedStyle == null"
-              @click="pasteStyleToSelection"
+              @click="void pasteStyleToSelection()"
             >
               Paste style
+            </button>
+          </div>
+          <div class="spreadsheet-history-actions">
+            <button
+              type="button"
+              class="spreadsheet-action"
+              :disabled="!canUndoWorkbookHistory"
+              @click="void handleWorkbookHistoryAction('undo')"
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              class="spreadsheet-action"
+              :disabled="!canRedoWorkbookHistory"
+              @click="void handleWorkbookHistoryAction('redo')"
+            >
+              Redo
             </button>
           </div>
           <slot name="header-actions" />
@@ -314,6 +332,7 @@
             name="gridActions"
             :workbook-model="workbook"
             :measure-operation="measureSpreadsheetOperation"
+            :run-workbook-intent="runWorkbookIntent"
           />
         </section>
       </section>
@@ -341,6 +360,7 @@ import {
   type DataGridSpreadsheetStyle,
   type DataGridSpreadsheetWorkbookModel,
   type DataGridSpreadsheetWorkbookSheetHandle,
+  type DataGridSpreadsheetWorkbookState,
 } from "@affino/datagrid-core"
 import { createGridSelectionRange, type GridSelectionContext, type GridSelectionPointLike } from "@affino/datagrid-core/advanced"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
@@ -359,6 +379,7 @@ import {
   dataGridAppRootElementKey,
   useDataGridTableStageRuntime,
 } from "../../datagrid-vue-app/src/internal"
+import { useDataGridSpreadsheetWorkbookHistory } from "./useDataGridSpreadsheetWorkbookHistory"
 
 const DataGridTableStageLoose = DataGridTableStage as unknown as new () => {
   $props: Record<string, unknown>
@@ -398,6 +419,12 @@ type SpreadsheetGridRow = {
 }
 
 type SpreadsheetStylePresetId = "ocean" | "mint" | "amber"
+
+type SpreadsheetWorkbookIntentDescriptor = {
+  intent: string
+  label: string
+  affectedRange?: DataGridCopyRange | null
+}
 
 type FormulaPreviewSegment =
   | {
@@ -839,11 +866,22 @@ const workbookRevision = ref(0)
 const copiedStyle = ref<DataGridSpreadsheetStyle | null>(null)
 const isFormulaBarFocused = ref(false)
 const isDiagnosticsPanelOpen = ref(false)
+const pendingFormulaEditHistory = ref<{
+  cellKey: string
+  beforeSnapshot: DataGridSpreadsheetWorkbookState
+  changed: boolean
+} | null>(null)
 const lastSpreadsheetOperation = ref<{
   label: string
   durationMs: number
   at: number
 } | null>(null)
+const workbookHistory = useDataGridSpreadsheetWorkbookHistory({
+  workbookModel: workbook,
+})
+const hasPendingFormulaEditHistory = computed(() => pendingFormulaEditHistory.value?.changed === true)
+const canUndoWorkbookHistory = computed(() => hasPendingFormulaEditHistory.value || workbookHistory.canUndo.value)
+const canRedoWorkbookHistory = computed(() => workbookHistory.canRedo.value)
 
 const editorModel = createDataGridSpreadsheetFormulaEditorModel({
   outputSyntax: "smartsheet",
@@ -916,21 +954,125 @@ function measureSpreadsheetOperation<TResult>(label: string, run: () => TResult)
   return result
 }
 
+async function measureSpreadsheetOperationAsync<TResult>(
+  label: string,
+  run: () => Promise<TResult> | TResult,
+): Promise<TResult> {
+  const startedAt = readSpreadsheetClock()
+  try {
+    return await run()
+  } finally {
+    recordSpreadsheetOperation(label, startedAt)
+  }
+}
+
 function applySpreadsheetCellInput(
   handle: DataGridSpreadsheetWorkbookSheetHandle | null,
   cell: DataGridSpreadsheetCellAddress,
   input: string,
   label: string,
-): void {
+): boolean {
   if (!handle) {
+    return false
+  }
+  let applied = false
+  measureSpreadsheetOperation(label, () => {
+    applied = handle.sheetModel.setCellInput(cell, input)
+  })
+  return applied
+}
+
+function ensureFormulaEditHistorySession(cell: DataGridSpreadsheetCellAddress): void {
+  const cellKey = makeScopedCellKey(cell)
+  const currentSession = pendingFormulaEditHistory.value
+  if (currentSession?.cellKey === cellKey) {
     return
   }
-  measureSpreadsheetOperation(label, () => {
-    handle.sheetModel.setCellInput(cell, input)
+  if (currentSession?.changed) {
+    void workbookHistory.recordIntentTransaction({
+      intent: "edit",
+      label: "Cell edit",
+    }, currentSession.beforeSnapshot)
+  }
+  pendingFormulaEditHistory.value = {
+    cellKey,
+    beforeSnapshot: workbookHistory.captureSnapshot(),
+    changed: false,
+  }
+}
+
+function markFormulaEditHistoryChanged(): void {
+  if (!pendingFormulaEditHistory.value) {
+    return
+  }
+  pendingFormulaEditHistory.value = {
+    ...pendingFormulaEditHistory.value,
+    changed: true,
+  }
+}
+
+async function commitPendingFormulaEditHistory(): Promise<string | null> {
+  const currentSession = pendingFormulaEditHistory.value
+  pendingFormulaEditHistory.value = null
+  if (!currentSession?.changed) {
+    return null
+  }
+  return workbookHistory.recordIntentTransaction({
+    intent: "edit",
+    label: "Cell edit",
+  }, currentSession.beforeSnapshot)
+}
+
+function syncSpreadsheetAfterHistoryRestore(): void {
+  syncWorkbookState()
+  activeSheetRenderRevision.value += 1
+  runtimeRowVersion.value += 1
+  void nextTick(() => {
+    const activeCell = editorSnapshot.value.activeCell
+    if (activeCell && resolveCellSnapshot(activeCell)) {
+      syncEditorCellDisplay()
+      restoreEditorCellSelection()
+      return
+    }
+    const fallbackCell = resolveFirstVisibleCellAddress(firstColumnKey.value)
+    if (!fallbackCell) {
+      return
+    }
+    openEditorCell(fallbackCell)
+    restoreEditorCellSelection()
   })
 }
 
+async function runWorkbookIntent(
+  descriptor: SpreadsheetWorkbookIntentDescriptor,
+  run: () => boolean,
+): Promise<boolean> {
+  await commitPendingFormulaEditHistory()
+  const beforeSnapshot = workbookHistory.captureSnapshot()
+  let applied = false
+  measureSpreadsheetOperation(descriptor.label, () => {
+    applied = run()
+  })
+  if (applied) {
+    await workbookHistory.recordIntentTransaction(descriptor, beforeSnapshot)
+  }
+  return applied
+}
+
+async function handleWorkbookHistoryAction(direction: "undo" | "redo"): Promise<void> {
+  await commitPendingFormulaEditHistory()
+  const committedId = await measureSpreadsheetOperationAsync(
+    direction === "undo" ? "Undo workbook edit" : "Redo workbook edit",
+    () => workbookHistory.runHistoryAction(direction),
+  )
+  if (!committedId) {
+    return
+  }
+  syncSpreadsheetAfterHistoryRestore()
+}
+
 onBeforeUnmount(() => {
+  pendingFormulaEditHistory.value = null
   if (formulaBlurTimer !== null && typeof window !== "undefined") {
     window.clearTimeout(formulaBlurTimer)
   }
@@ -939,6 +1081,7 @@ onBeforeUnmount(() => {
   unsubscribeEditor()
   unsubscribeWorkbook()
   editorModel.dispose()
+  workbookHistory.dispose()
 })
 
 const activeSheetHandle = computed<DataGridSpreadsheetWorkbookSheetHandle | null>(() => {
@@ -1304,9 +1447,11 @@ watch(
 )
 
 function rebindWorkbookModel(nextWorkbook: DataGridSpreadsheetWorkbookModel): void {
+  pendingFormulaEditHistory.value = null
   unsubscribeActiveSheet()
   unsubscribeWorkbook()
   workbook = nextWorkbook
+  workbookHistory.rebindWorkbook(nextWorkbook)
   copiedStyle.value = null
   sortState.value = []
   filterModelState.value = createEmptyFilterModel()
@@ -1392,6 +1537,28 @@ const {
   cloneRowData,
   applyClipboardEdits: applySpreadsheetGridEdits,
   buildFillMatrixFromRange: buildSpreadsheetFillMatrixFromRange,
+  history: {
+    captureSnapshot: () => workbookHistory.captureSnapshot(),
+    recordIntentTransaction: (descriptor, beforeSnapshot) => {
+      void workbookHistory.recordIntentTransaction(
+        descriptor,
+        beforeSnapshot as DataGridSpreadsheetWorkbookState,
+      )
+    },
+    canUndo: () => workbookHistory.canUndo.value,
+    canRedo: () => workbookHistory.canRedo.value,
+    runHistoryAction: async direction => {
+      await commitPendingFormulaEditHistory()
+      const committedId = await measureSpreadsheetOperationAsync(
+        direction === "undo" ? "Undo workbook edit" : "Redo workbook edit",
+        () => workbookHistory.runHistoryAction(direction),
+      )
+      if (committedId) {
+        syncSpreadsheetAfterHistoryRestore()
+      }
+      return committedId
+    },
+  },
 })
 
 function resolveSelectionContext(): GridSelectionContext<DataGridRowId> {
@@ -1675,6 +1842,13 @@ function openEditorCell(
     ...cell,
     sheetId: cell.sheetId ?? activeSheetHandle.value?.id ?? null,
   }
+  const previousActiveCell = editorSnapshot.value.activeCell
+  if (
+    previousActiveCell
+    && makeScopedCellKey(previousActiveCell) !== makeScopedCellKey(nextCell)
+  ) {
+    void commitPendingFormulaEditHistory()
+  }
   const snapshot = resolveCellSnapshot(nextCell)
   const rawInput = options.draftInput != null ? options.draftInput : snapshot?.rawInput ?? ""
   const selection = options.selectAll
@@ -1689,7 +1863,10 @@ function openEditorCell(
 
   if (options.draftInput != null) {
     const handle = resolveSheetHandle(nextCell.sheetId)
-    applySpreadsheetCellInput(handle, nextCell, rawInput, "Start formula edit")
+    ensureFormulaEditHistorySession(nextCell)
+    if (applySpreadsheetCellInput(handle, nextCell, rawInput, "Start formula edit")) {
+      markFormulaEditHistoryChanged()
+    }
     syncEditorCellDisplay()
   }
 
@@ -1760,12 +1937,15 @@ function insertReferenceFromCell(targetCell: DataGridSpreadsheetCellAddress): vo
   if (!activeCell) {
     return
   }
+  ensureFormulaEditHistorySession(activeCell)
   editorModel.insertReference({
     referenceName: targetCell.columnKey,
     rowIndex: targetCell.rowIndex,
   })
   const handle = resolveSheetHandle(activeCell.sheetId)
-  applySpreadsheetCellInput(handle, activeCell, editorSnapshot.value.rawInput, "Insert formula reference")
+  if (applySpreadsheetCellInput(handle, activeCell, editorSnapshot.value.rawInput, "Insert formula reference")) {
+    markFormulaEditHistoryChanged()
+  }
   syncEditorCellDisplay()
 }
 
@@ -1811,13 +1991,17 @@ function handleFormulaInput(event: Event): void {
   if (!target || !activeCell) {
     return
   }
+  ensureFormulaEditHistorySession(activeCell)
   editorModel.setInput(target.value)
   editorModel.setSelection({
     start: target.selectionStart ?? target.value.length,
     end: target.selectionEnd ?? target.selectionStart ?? target.value.length,
   })
   const handle = resolveSheetHandle(activeCell.sheetId)
-  applySpreadsheetCellInput(handle, activeCell, target.value, "Apply formula edit")
+  const applied = applySpreadsheetCellInput(handle, activeCell, target.value, "Apply formula edit")
+  if (applied) {
+    markFormulaEditHistoryChanged()
+  }
   syncEditorCellDisplay()
 }
 
@@ -1860,10 +2044,23 @@ function handleFormulaBlur(): void {
     allowFormulaBlur = false
     isFormulaBarFocused.value = false
     formulaBlurTimer = null
+    void commitPendingFormulaEditHistory()
   }, 0)
 }
 
 function handleFormulaKeydown(event: KeyboardEvent): void {
+  const lowerKey = event.key.toLowerCase()
+  const primaryModifierPressed = event.metaKey || event.ctrlKey
+  if (primaryModifierPressed && !event.altKey && lowerKey === "z") {
+    event.preventDefault()
+    void handleWorkbookHistoryAction(event.shiftKey ? "redo" : "undo")
+    return
+  }
+  if (primaryModifierPressed && !event.altKey && !event.shiftKey && lowerKey === "y") {
+    event.preventDefault()
+    void handleWorkbookHistoryAction("redo")
+    return
+  }
   if (event.key === "Escape") {
     event.preventDefault()
     allowFormulaBlur = true
@@ -2005,7 +2202,7 @@ function collectSelectedAddresses(): readonly DataGridSpreadsheetCellAddress[] {
   return addresses
 }
 
-function applyStylePreset(presetId: SpreadsheetStylePresetId): void {
+async function applyStylePreset(presetId: SpreadsheetStylePresetId): Promise<void> {
   const currentSheet = activeSheetHandle.value
   if (!currentSheet) {
     return
@@ -2014,13 +2211,16 @@ function applyStylePreset(presetId: SpreadsheetStylePresetId): void {
   if (targets.length === 0) {
     return
   }
-  currentSheet.sheetModel.setCellStyles(targets.map(cell => ({
+  await runWorkbookIntent({
+    intent: "style",
+    label: "Apply cell style",
+  }, () => currentSheet.sheetModel.setCellStyles(targets.map(cell => ({
     cell,
     style: STYLE_PRESETS[presetId],
-  })))
+  }))))
 }
 
-function clearSelectedStyles(): void {
+async function clearSelectedStyles(): Promise<void> {
   const currentSheet = activeSheetHandle.value
   if (!currentSheet) {
     return
@@ -2029,10 +2229,13 @@ function clearSelectedStyles(): void {
   if (targets.length === 0) {
     return
   }
-  currentSheet.sheetModel.setCellStyles(targets.map(cell => ({
+  await runWorkbookIntent({
+    intent: "style",
+    label: "Clear cell style",
+  }, () => currentSheet.sheetModel.setCellStyles(targets.map(cell => ({
     cell,
     style: null,
-  })))
+  }))))
 }
 
 function copyStyleFromActiveCell(): void {
@@ -2040,7 +2243,7 @@ function copyStyleFromActiveCell(): void {
   copiedStyle.value = cell?.style ?? null
 }
 
-function pasteStyleToSelection(): void {
+async function pasteStyleToSelection(): Promise<void> {
   const currentSheet = activeSheetHandle.value
   if (!currentSheet || copiedStyle.value == null) {
     return
@@ -2049,10 +2252,13 @@ function pasteStyleToSelection(): void {
   if (targets.length === 0) {
     return
   }
-  currentSheet.sheetModel.setCellStyles(targets.map(cell => ({
+  await runWorkbookIntent({
+    intent: "style",
+    label: "Paste cell style",
+  }, () => currentSheet.sheetModel.setCellStyles(targets.map(cell => ({
     cell,
     style: copiedStyle.value,
-  })))
+  }))))
 }
 
 const referenceHighlightByCellKey = computed(() => {
@@ -2590,7 +2796,8 @@ function moveCaretToReference(referenceKey: string): void {
   opacity: 0.72;
 }
 
-.spreadsheet-style-actions {
+.spreadsheet-style-actions,
+.spreadsheet-history-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;

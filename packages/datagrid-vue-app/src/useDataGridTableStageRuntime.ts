@@ -66,11 +66,23 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   cloneRowData: (row: TRow) => TRow
   applyClipboardEdits?: (range: DataGridCopyRange, matrix: string[][]) => number
   buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
+  history?: DataGridTableStageHistoryAdapter
 }
 
 export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, unknown>> {
   tableStageProps: ComputedRef<DataGridTableStageProps<TRow>>
   syncViewportFromDom: () => void
+}
+
+export interface DataGridTableStageHistoryAdapter {
+  captureSnapshot: () => unknown
+  recordIntentTransaction: (
+    descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
+    beforeSnapshot: unknown,
+  ) => void | Promise<void>
+  canUndo: () => boolean
+  canRedo: () => boolean
+  runHistoryAction: (direction: "undo" | "redo") => Promise<string | null>
 }
 
 export function useDataGridTableStageRuntime<
@@ -214,18 +226,53 @@ export function useDataGridTableStageRuntime<
     return -1
   }
 
-  const {
-    captureRowsSnapshot,
-    canUndo,
-    canRedo,
-    runHistoryAction,
-    recordIntentTransaction,
-    dispose: disposeIntentHistory,
-  } = useDataGridAppIntentHistory<TRow>({
-    runtime: options.runtime as never,
-    cloneRowData: options.cloneRowData,
-    syncViewport: () => syncViewportFromDom(),
-  })
+  const internalIntentHistory = options.history
+    ? null
+    : useDataGridAppIntentHistory<TRow>({
+      runtime: options.runtime as never,
+      cloneRowData: options.cloneRowData,
+      syncViewport: () => syncViewportFromDom(),
+    })
+
+  const captureHistorySnapshot = (): unknown => {
+    if (options.history) {
+      return options.history.captureSnapshot()
+    }
+    return internalIntentHistory?.captureRowsSnapshot() ?? null
+  }
+
+  const recordHistoryIntentTransaction = (
+    descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
+    beforeSnapshot: unknown,
+  ): void => {
+    if (options.history) {
+      void options.history.recordIntentTransaction(descriptor, beforeSnapshot)
+      return
+    }
+    void internalIntentHistory?.recordIntentTransaction(
+      descriptor,
+      beforeSnapshot as DataGridAppRowSnapshot<TRow>,
+    )
+  }
+
+  const canUndoHistory = (): boolean => {
+    return options.history ? options.history.canUndo() : (internalIntentHistory?.canUndo.value ?? false)
+  }
+
+  const canRedoHistory = (): boolean => {
+    return options.history ? options.history.canRedo() : (internalIntentHistory?.canRedo.value ?? false)
+  }
+
+  const runHistoryAction = (direction: "undo" | "redo"): Promise<string | null> => {
+    if (options.history) {
+      return options.history.runHistoryAction(direction)
+    }
+    return internalIntentHistory?.runHistoryAction(direction) ?? Promise.resolve(null)
+  }
+
+  const disposeIntentHistory = (): void => {
+    internalIntentHistory?.dispose()
+  }
 
   const {
     rowIndexLabel,
@@ -239,7 +286,7 @@ export function useDataGridTableStageRuntime<
     firstColumnKey: options.firstColumnKey,
   })
 
-  const clipboard = useDataGridAppClipboard<TRow, DataGridAppRowSnapshot<TRow>>({
+  const clipboard = useDataGridAppClipboard<TRow, unknown>({
     mode: options.mode,
     runtime: options.runtime as never,
     totalRows: options.totalRows,
@@ -249,9 +296,9 @@ export function useDataGridTableStageRuntime<
     resolveCurrentCellCoord: resolveCurrentCellCoordForClipboard,
     applySelectionRange: applyClipboardSelectionRange,
     clearCellSelection,
-    captureRowsSnapshot,
+    captureRowsSnapshot: captureHistorySnapshot,
     recordEditTransaction: beforeSnapshot => {
-      void recordIntentTransaction({
+      recordHistoryIntentTransaction({
         intent: "edit",
         label: "Cell edit",
       }, beforeSnapshot)
@@ -296,7 +343,7 @@ export function useDataGridTableStageRuntime<
     startInlineEdit,
     commitInlineEdit,
     handleEditorKeydown,
-  } = useDataGridAppInlineEditing<TRow, DataGridAppRowSnapshot<TRow>>({
+  } = useDataGridAppInlineEditing<TRow, unknown>({
     mode: options.mode,
     bodyViewportRef,
     visibleColumns: orderedVisibleColumns,
@@ -310,9 +357,9 @@ export function useDataGridTableStageRuntime<
     ensureActiveCellVisible: (rowIndex, columnIndex) => {
       ensureKeyboardActiveCellVisible(rowIndex, columnIndex)
     },
-    captureRowsSnapshot,
+    captureRowsSnapshot: captureHistorySnapshot,
     recordEditTransaction: beforeSnapshot => {
-      void recordIntentTransaction({
+      recordHistoryIntentTransaction({
         intent: "edit",
         label: "Cell edit",
       }, beforeSnapshot)
@@ -341,7 +388,7 @@ export function useDataGridTableStageRuntime<
     isCellInFillPreview,
     isFillHandleCell,
     dispose: disposeInteractionController,
-  } = useDataGridAppInteractionController<TRow, DataGridAppRowSnapshot<TRow>>({
+  } = useDataGridAppInteractionController<TRow, unknown>({
     mode: options.mode,
     runtime: options.runtime as never,
     totalRows: options.totalRows,
@@ -363,9 +410,9 @@ export function useDataGridTableStageRuntime<
     readCell: (row, columnKey) => readCell(row, columnKey),
     cloneRowData: options.cloneRowData,
     resolveRowIndexById,
-    captureRowsSnapshot,
+    captureRowsSnapshot: captureHistorySnapshot,
     recordIntentTransaction: (descriptor, beforeSnapshot) => {
-      void recordIntentTransaction(descriptor, beforeSnapshot)
+      recordHistoryIntentTransaction(descriptor, beforeSnapshot)
     },
     clearPendingClipboardOperation,
     copySelectedCells,
@@ -379,8 +426,8 @@ export function useDataGridTableStageRuntime<
     editingCell: editingCellRef,
     startInlineEdit,
     commitInlineEdit,
-    canUndo: () => canUndo.value,
-    canRedo: () => canRedo.value,
+    canUndo: canUndoHistory,
+    canRedo: canRedoHistory,
     runHistoryAction,
     ensureKeyboardActiveCellVisible,
   })

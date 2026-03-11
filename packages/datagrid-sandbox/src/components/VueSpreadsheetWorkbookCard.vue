@@ -31,7 +31,7 @@
       </section>
     </template>
 
-    <template #gridActions="{ measureOperation }">
+    <template #gridActions="{ runWorkbookIntent }">
       <div class="spreadsheet-demo-actions">
         <div class="spreadsheet-demo-actions__copy">
           Open <strong>Summary</strong>, then use these actions to watch direct refs rewrite across rename,
@@ -42,7 +42,7 @@
             type="button"
             class="spreadsheet-demo-action"
             :disabled="workbookModel.getSheet('orders') == null"
-            @click="toggleOrdersSheetName(measureOperation)"
+            @click="void toggleOrdersSheetName(runWorkbookIntent)"
           >
             Rename Orders
           </button>
@@ -50,7 +50,7 @@
             type="button"
             class="spreadsheet-demo-action"
             :disabled="workbookModel.getSheet('orders') == null"
-            @click="insertOrderRowAtTop(measureOperation)"
+            @click="void insertOrderRowAtTop(runWorkbookIntent)"
           >
             Insert order row
           </button>
@@ -58,7 +58,7 @@
             type="button"
             class="spreadsheet-demo-action"
             :disabled="(workbookModel.getSheet('orders')?.sheetModel.getSnapshot().rowCount ?? 0) < 1"
-            @click="removeFirstOrderRow(measureOperation)"
+            @click="void removeFirstOrderRow(runWorkbookIntent)"
           >
             Remove first order
           </button>
@@ -66,7 +66,7 @@
             type="button"
             class="spreadsheet-demo-action"
             :disabled="workbookModel.getSheet('orders') == null"
-            @click="removeOrdersSheet(measureOperation)"
+            @click="void removeOrdersSheet(runWorkbookIntent)"
           >
             Remove Orders sheet
           </button>
@@ -93,7 +93,10 @@ import {
   createSpreadsheetDemoWorkbookModel,
 } from "./spreadsheetDemoWorkbook"
 
-type MeasureOperation = <TResult>(label: string, run: () => TResult) => TResult
+type RunWorkbookIntent = (
+  descriptor: { intent: string; label: string },
+  run: () => boolean,
+) => Promise<boolean>
 
 const workbookModel = shallowRef<DataGridSpreadsheetWorkbookModel>(createSpreadsheetDemoWorkbookModel())
 let nextOrderSeed = INITIAL_ORDER_SEED
@@ -105,42 +108,49 @@ function resetDemoWorkbook(): void {
   previousWorkbook.dispose()
 }
 
-function toggleOrdersSheetName(measureOperation: MeasureOperation): void {
+async function toggleOrdersSheetName(runWorkbookIntent: RunWorkbookIntent): Promise<void> {
   const ordersSheet = workbookModel.value.getSheet("orders")
   if (!ordersSheet) {
     return
   }
-  measureOperation("Rename sheet", () => {
-    workbookModel.value.renameSheet("orders", ordersSheet.name === "Orders" ? "Revenue Plan" : "Orders")
-  })
+  await runWorkbookIntent({
+    intent: "rename-sheet",
+    label: "Rename sheet",
+  }, () => workbookModel.value.renameSheet(
+    "orders",
+    ordersSheet.name === "Orders" ? "Revenue Plan" : "Orders",
+  ))
 }
 
-function insertOrderRowAtTop(measureOperation: MeasureOperation): void {
+async function insertOrderRowAtTop(runWorkbookIntent: RunWorkbookIntent): Promise<void> {
   const ordersSheet = workbookModel.value.getSheet("orders")
   if (!ordersSheet) {
     return
   }
   const nextOrderNumber = nextOrderSeed
   nextOrderSeed += 1
-  measureOperation("Insert row", () => {
-    ordersSheet.sheetModel.insertRowsAt(0, [buildSpreadsheetDemoOrderRow(nextOrderNumber)])
-  })
+  await runWorkbookIntent({
+    intent: "insert-row",
+    label: "Insert row",
+  }, () => ordersSheet.sheetModel.insertRowsAt(0, [buildSpreadsheetDemoOrderRow(nextOrderNumber)]))
 }
 
-function removeFirstOrderRow(measureOperation: MeasureOperation): void {
+async function removeFirstOrderRow(runWorkbookIntent: RunWorkbookIntent): Promise<void> {
   const ordersSheet = workbookModel.value.getSheet("orders")
   if (!ordersSheet) {
     return
   }
-  measureOperation("Remove row", () => {
-    ordersSheet.sheetModel.removeRowsAt(0, 1)
-  })
+  await runWorkbookIntent({
+    intent: "remove-row",
+    label: "Remove row",
+  }, () => ordersSheet.sheetModel.removeRowsAt(0, 1))
 }
 
-function removeOrdersSheet(measureOperation: MeasureOperation): void {
-  measureOperation("Remove sheet", () => {
-    workbookModel.value.removeSheet("orders")
-  })
+async function removeOrdersSheet(runWorkbookIntent: RunWorkbookIntent): Promise<void> {
+  await runWorkbookIntent({
+    intent: "remove-sheet",
+    label: "Remove sheet",
+  }, () => workbookModel.value.removeSheet("orders"))
 }
 
 onBeforeUnmount(() => {

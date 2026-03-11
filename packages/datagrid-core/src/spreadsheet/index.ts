@@ -32,6 +32,9 @@ export type {
   DataGridSpreadsheetSheetRowMutation,
   DataGridSpreadsheetSheetRowMutationKind,
   DataGridSpreadsheetSheetSnapshot,
+  DataGridSpreadsheetSheetState,
+  DataGridSpreadsheetSheetStateCell,
+  DataGridSpreadsheetSheetStateRow,
   DataGridSpreadsheetStyle,
 } from "./sheetModel.js"
 export type {
@@ -41,6 +44,8 @@ export type {
   DataGridSpreadsheetWorkbookSheetHandle,
   DataGridSpreadsheetWorkbookSheetInput,
   DataGridSpreadsheetWorkbookSheetSnapshot,
+  DataGridSpreadsheetWorkbookSheetStateExport,
+  DataGridSpreadsheetWorkbookState,
   DataGridSpreadsheetWorkbookSnapshot,
   DataGridSpreadsheetWorkbookSyncSnapshot,
 } from "./workbookModel.js"

@@ -60,6 +60,12 @@ async function flushUi(): Promise<void> {
   await nextTick()
 }
 
+async function flushUiAndTimers(): Promise<void> {
+  await flushUi()
+  await new Promise(resolve => setTimeout(resolve, 0))
+  await flushUi()
+}
+
 function createWorkbookModel(): DataGridSpreadsheetWorkbookModel {
   const workbook = createDataGridSpreadsheetWorkbookModel({
     activeSheetId: "orders",
@@ -108,6 +114,29 @@ function createWorkbookModel(): DataGridSpreadsheetWorkbookModel {
   return workbook
 }
 
+function readOrdersRowState(workbook: DataGridSpreadsheetWorkbookModel): {
+  qtyRawInput: string | null
+  totalValue: unknown
+} {
+  const ordersSheet = workbook.getSheet("orders")
+  const qtyCell = ordersSheet?.sheetModel.getCell({
+    sheetId: "orders",
+    rowId: "order-1",
+    rowIndex: 0,
+    columnKey: "qty",
+  })
+  const totalCell = ordersSheet?.sheetModel.getCell({
+    sheetId: "orders",
+    rowId: "order-1",
+    rowIndex: 0,
+    columnKey: "total",
+  })
+  return {
+    qtyRawInput: qtyCell?.rawInput ?? null,
+    totalValue: totalCell?.displayValue ?? null,
+  }
+}
+
 describe("DataGridSpreadsheetWorkbookApp", () => {
   beforeAll(() => {
     class ResizeObserverStub {
@@ -149,14 +178,70 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
       },
     })
 
-    await flushUi()
-    await flushUi()
+    await flushUiAndTimers()
 
     const text = wrapper.text()
 
     expect(text).toContain("Revenue workbook")
     expect(text).toContain("1680")
     expect(wrapper.find(".cell-fill-handle").exists()).toBe(true)
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("undos and redoes workbook edits from the formula bar", async () => {
+    const workbook = createWorkbookModel()
+
+    expect(readOrdersRowState(workbook).totalValue).toBe(1680)
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("9")
+    await flushUiAndTimers()
+
+    expect(readOrdersRowState(workbook)).toEqual({
+      qtyRawInput: "9",
+      totalValue: 3780,
+    })
+
+    const buttons = wrapper.findAll("button")
+    const undoButton = buttons.find(button => button.text() === "Undo")
+    const redoButton = buttons.find(button => button.text() === "Redo")
+
+    expect(undoButton).toBeDefined()
+    expect(redoButton).toBeDefined()
+
+    await undoButton!.trigger("click")
+    await flushUiAndTimers()
+
+    expect(readOrdersRowState(workbook)).toEqual({
+      qtyRawInput: "4",
+      totalValue: 1680,
+    })
+
+    await redoButton!.trigger("click")
+    await flushUiAndTimers()
+
+    expect(readOrdersRowState(workbook)).toEqual({
+      qtyRawInput: "9",
+      totalValue: 3780,
+    })
 
     wrapper.unmount()
     workbook.dispose()

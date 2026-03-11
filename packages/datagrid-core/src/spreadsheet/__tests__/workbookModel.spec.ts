@@ -458,4 +458,78 @@ describe("createDataGridSpreadsheetWorkbookModel", () => {
 
     workbook.dispose()
   })
+
+  it("restores workbook state after structural and formula rewrites", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "total" }],
+            rows: [
+              { id: "order-1", cells: { total: 100 } },
+              { id: "order-2", cells: { total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "summary",
+          name: "Summary",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "value" }],
+            rows: [
+              {
+                id: "summary-1",
+                cells: {
+                  value: "=orders![total]1 + orders![total]2",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const summarySheet = workbook.getSheet("summary")?.sheetModel
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+    workbook.setActiveSheet("summary")
+    summarySheet?.setCellStyle(
+      {
+        sheetId: "summary",
+        rowId: "summary-1",
+        rowIndex: 0,
+        columnKey: "value",
+      },
+      { backgroundColor: "salmon" },
+    )
+
+    const exportedState = workbook.exportState()
+
+    expect(ordersSheet?.insertRowsAt(0, [{ id: "order-0", cells: { total: 50 } }])).toBe(true)
+    expect(workbook.renameSheet("orders", "Revenue Plan")).toBe(true)
+    expect(workbook.removeSheet("orders")).toBe(true)
+
+    expect(workbook.restoreState(exportedState)).toBe(true)
+
+    const restoredSummarySheet = workbook.getSheet("summary")?.sheetModel
+    const restoredOrdersSheet = workbook.getSheet("orders")?.sheetModel
+    const restoredSummaryCell = restoredSummarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-1",
+      rowIndex: 0,
+      columnKey: "value",
+    })
+
+    expect(workbook.getActiveSheetId()).toBe("summary")
+    expect(workbook.getSheet("orders")?.name).toBe("Orders")
+    expect(restoredOrdersSheet?.getSnapshot().rowCount).toBe(2)
+    expect(restoredSummaryCell?.rawInput).toBe("=orders![total]1 + orders![total]2")
+    expect(restoredSummaryCell?.displayValue).toBe(300)
+    expect(restoredSummaryCell?.ownStyle).toEqual({ backgroundColor: "salmon" })
+
+    workbook.dispose()
+  })
 })

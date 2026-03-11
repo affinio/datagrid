@@ -7,6 +7,7 @@ import {
   type CreateDataGridSpreadsheetSheetModelOptions,
   type DataGridSpreadsheetSheetModel,
   type DataGridSpreadsheetSheetRowMutation,
+  type DataGridSpreadsheetSheetState,
 } from "./sheetModel.js"
 import { formatDataGridSpreadsheetFormulaReference } from "./formulaEditorModel.js"
 
@@ -51,12 +52,25 @@ export interface DataGridSpreadsheetWorkbookSnapshot {
   sync: DataGridSpreadsheetWorkbookSyncSnapshot
 }
 
+export interface DataGridSpreadsheetWorkbookSheetStateExport {
+  id: string
+  name: string
+  sheetState: DataGridSpreadsheetSheetState
+}
+
+export interface DataGridSpreadsheetWorkbookState {
+  activeSheetId: string | null
+  sheets: readonly DataGridSpreadsheetWorkbookSheetStateExport[]
+}
+
 export type DataGridSpreadsheetWorkbookListener = (
   snapshot: DataGridSpreadsheetWorkbookSnapshot,
 ) => void
 
 export interface DataGridSpreadsheetWorkbookModel {
   getSnapshot(): DataGridSpreadsheetWorkbookSnapshot
+  exportState(): DataGridSpreadsheetWorkbookState
+  restoreState(state: DataGridSpreadsheetWorkbookState): boolean
   getSheets(): readonly DataGridSpreadsheetWorkbookSheetHandle[]
   getSheet(sheetId: string): DataGridSpreadsheetWorkbookSheetHandle | null
   getActiveSheetId(): string | null
@@ -282,6 +296,29 @@ function createSpreadsheetWorkbookSheetSnapshot(
     columnCount: snapshot.columnCount,
     formulaCellCount: snapshot.formulaCellCount,
     errorCellCount: snapshot.errorCellCount,
+  }
+}
+
+function createSpreadsheetWorkbookSheetStateExport(
+  sheet: SpreadsheetWorkbookSheetState,
+): DataGridSpreadsheetWorkbookSheetStateExport {
+  const sheetState = sheet.sheetModel.exportState()
+  const managedAliases = new Set(
+    [...sheet.managedTableAliases].map(alias => normalizeSpreadsheetWorkbookAlias(alias)),
+  )
+  return {
+    id: sheet.id,
+    name: sheet.name,
+    sheetState: {
+      ...sheetState,
+      sheetId: sheet.id,
+      sheetName: sheet.name,
+      formulaTables: Object.freeze(
+        sheetState.formulaTables.filter(binding => !managedAliases.has(
+          normalizeSpreadsheetWorkbookAlias(binding.name),
+        )),
+      ),
+    },
   }
 }
 
@@ -526,6 +563,69 @@ export function createDataGridSpreadsheetWorkbookModel(
 
   const invalidateWorkbookGraphState = (): void => {
     graphState = null
+  }
+
+  const createSheetModelFromExportState = (
+    state: DataGridSpreadsheetSheetState,
+    sheetId: string,
+    sheetName: string,
+  ): DataGridSpreadsheetSheetModel => {
+    const cellStylePatches: Array<{
+      cell: Parameters<DataGridSpreadsheetSheetModel["setCellStyle"]>[0]
+      style: Parameters<DataGridSpreadsheetSheetModel["setCellStyle"]>[1]
+    }> = []
+    const rows = state.rows.map((row, rowIndex) => {
+      const cells: Record<string, string> = {}
+      for (const cell of row.cells) {
+        cells[cell.columnKey] = cell.rawInput
+        if (cell.style != null) {
+          cellStylePatches.push({
+            cell: {
+              sheetId,
+              rowId: row.id,
+              rowIndex,
+              columnKey: cell.columnKey,
+            },
+            style: cell.style,
+          })
+        }
+      }
+      return {
+        id: row.id,
+        style: row.style,
+        cells,
+      }
+    })
+
+    const sheetModel = createDataGridSpreadsheetSheetModel({
+      sheetId,
+      sheetName,
+      columns: state.columns.map(column => ({
+        key: column.key,
+        title: column.title,
+        style: column.style,
+      })),
+      rows,
+      sheetStyle: state.sheetStyle,
+      formulaTables: state.formulaTables,
+      functionRegistry: state.functionRegistry,
+      referenceParserOptions: state.referenceParserOptions,
+      runtimeErrorPolicy: state.runtimeErrorPolicy,
+      resolveContextValue: state.resolveContextValue,
+      resolveSheetReference: (sheetReference) => {
+        const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
+        if (normalizedAlias.length === 0) {
+          return null
+        }
+        return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
+      },
+    })
+
+    if (cellStylePatches.length > 0) {
+      sheetModel.setCellStyles(cellStylePatches)
+    }
+
+    return sheetModel
   }
 
   const createAliasToSheetMap = (): Map<string, SpreadsheetWorkbookSheetState> => {
@@ -1010,6 +1110,14 @@ export function createDataGridSpreadsheetWorkbookModel(
     }
   }
 
+  function exportState(): DataGridSpreadsheetWorkbookState {
+    ensureActive()
+    return {
+      activeSheetId,
+      sheets: Object.freeze(sheets.map(createSpreadsheetWorkbookSheetStateExport)),
+    }
+  }
+
   const attachSheet = (sheet: SpreadsheetWorkbookSheetState): void => {
     sheets.push(sheet)
     sheetsById.set(sheet.id, sheet)
@@ -1250,6 +1358,57 @@ export function createDataGridSpreadsheetWorkbookModel(
 
   return {
     getSnapshot,
+    exportState,
+    restoreState(state) {
+      ensureActive()
+      const nextSheets = Array.isArray(state.sheets) ? state.sheets : []
+
+      for (const sheet of sheets) {
+        sheet.unsubscribe?.()
+        sheet.unsubscribe = null
+        if (sheet.owned) {
+          sheet.sheetModel.dispose()
+        }
+      }
+      sheets.length = 0
+      sheetsById.clear()
+      invalidateWorkbookGraphState()
+      activeSheetId = null
+      lastSync = {
+        passCount: 0,
+        converged: true,
+        maxPasses: 0,
+      }
+
+      for (const nextSheet of nextSheets) {
+        const nextName = normalizeSpreadsheetWorkbookSheetName(nextSheet.name)
+        const nextId = normalizeSpreadsheetWorkbookSheetId(nextSheet.id)
+        const restoredSheetModel = createSheetModelFromExportState(
+          nextSheet.sheetState,
+          nextId,
+          nextName,
+        )
+        attachSheet(createSheetState({
+          id: nextId,
+          name: nextName,
+          sheetModel: restoredSheetModel,
+          ownSheetModel: true,
+        }))
+      }
+
+      const normalizedActiveSheetId = typeof state.activeSheetId === "string" && state.activeSheetId.trim().length > 0
+        ? normalizeSpreadsheetWorkbookSheetId(state.activeSheetId)
+        : null
+
+      if (normalizedActiveSheetId && sheetsById.has(normalizedActiveSheetId)) {
+        activeSheetId = normalizedActiveSheetId
+      } else {
+        activeSheetId = sheets[0]?.id ?? null
+      }
+
+      runSync({ structural: true })
+      return true
+    },
     getSheets() {
       ensureActive()
       return Object.freeze(sheets.map(createSpreadsheetWorkbookSheetHandle))

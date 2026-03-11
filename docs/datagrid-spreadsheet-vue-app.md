@@ -25,9 +25,12 @@ For workbook-backed grids:
 
 This package is the layer that translates the reusable grid surface into workbook-safe behavior.
 
+It also owns workbook-scoped undo/redo, so formula edits, fill handle operations, style changes, and external sheet mutations all replay against workbook state instead of generic row snapshots.
+
 ## Public Surface
 
 - `DataGridSpreadsheetWorkbookApp`
+- `useDataGridSpreadsheetWorkbookHistory`
 
 Core prop:
 
@@ -56,5 +59,6 @@ Slots:
 
 - `workbookModel`
 - `measureOperation(label, run)`
+- `runWorkbookIntent(descriptor, run)`
 
-Use that slot for product-specific buttons such as sheet rename, row insertion, or demo reset while still reporting the action in the diagnostics drawer.
+Use `runWorkbookIntent(...)` for product-specific workbook mutations such as sheet rename, row insertion, or sheet removal so they participate in the same undo/redo stack as formula-bar edits.

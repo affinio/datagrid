@@ -12,6 +12,7 @@ This package is the user-facing spreadsheet app layer.
 Public export:
 
 - `DataGridSpreadsheetWorkbookApp`
+- `useDataGridSpreadsheetWorkbookHistory`
 
 ## What It Owns
 
@@ -22,6 +23,7 @@ Public export:
 - formula diagnostics drawer
 - style copy/paste controls
 - spreadsheet-aware fill / paste path that writes through `sheetModel`, not generic row patches
+- workbook-scoped undo / redo across formula edits, fill / paste, styles, and structural workbook mutations
 
 ## Quick Start
 
@@ -86,8 +88,17 @@ Use slots to inject product-specific copy or controls without forking the workbo
 - `gridActions`
 - `footer`
 
+`gridActions` receives:
+
+- `workbookModel`
+- `measureOperation(label, run)`
+- `runWorkbookIntent(descriptor, run)`
+
+Use `runWorkbookIntent(...)` for external workbook mutations such as rename sheet, insert/remove row, or remove sheet so they join the same undo/redo stack as formula-bar edits.
+
 ## Notes
 
 - The workbook model remains the source of truth.
 - Sort and filter are view concerns on the active sheet; cell edits and fill still commit through `sheetModel`.
+- Undo and redo restore workbook state, not generic rendered row snapshots.
 - Direct cross-sheet refs, rename rewrites, and structural row rewrites come from `@affino/datagrid-core`, not this package.

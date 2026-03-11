@@ -76,6 +76,31 @@ export interface DataGridSpreadsheetFormulaCellSnapshot {
   dependencies: readonly DataGridSpreadsheetCellAddress[]
 }
 
+export interface DataGridSpreadsheetSheetStateCell {
+  columnKey: string
+  rawInput: string
+  style: DataGridSpreadsheetStyle | null
+}
+
+export interface DataGridSpreadsheetSheetStateRow {
+  id: DataGridRowId
+  style: DataGridSpreadsheetStyle | null
+  cells: readonly DataGridSpreadsheetSheetStateCell[]
+}
+
+export interface DataGridSpreadsheetSheetState {
+  sheetId: string | null
+  sheetName: string | null
+  columns: readonly DataGridSpreadsheetColumnSnapshot[]
+  rows: readonly DataGridSpreadsheetSheetStateRow[]
+  sheetStyle: DataGridSpreadsheetStyle | null
+  formulaTables: readonly DataGridSpreadsheetFormulaTableBinding[]
+  functionRegistry?: DataGridFormulaFunctionRegistry
+  referenceParserOptions?: DataGridFormulaReferenceParserOptions
+  runtimeErrorPolicy: DataGridFormulaRuntimeErrorPolicy
+  resolveContextValue?: (key: string) => unknown
+}
+
 export interface DataGridSpreadsheetCellSnapshot {
   address: DataGridSpreadsheetCellAddress
   rawInput: string
@@ -139,6 +164,7 @@ export interface DataGridSpreadsheetSheetModel {
   getSheetName(): string | null
   getColumns(): readonly DataGridSpreadsheetColumnSnapshot[]
   getRows(): readonly DataGridSpreadsheetRowSnapshot[]
+  exportState(): DataGridSpreadsheetSheetState
   getCell(cell: DataGridSpreadsheetCellAddress): DataGridSpreadsheetCellSnapshot | null
   getCellById(rowId: DataGridRowId, columnKey: string): DataGridSpreadsheetCellSnapshot | null
   getCellDisplayValue(cell: DataGridSpreadsheetCellAddress): unknown
@@ -340,6 +366,13 @@ function cloneSpreadsheetSheetRowMutation(
 function resolveFormulaTableContextKey(name: string): string {
   const normalized = name.trim().toLowerCase()
   return normalized.length === 0 ? "tables" : `table:${normalized}`
+}
+
+function resolveFormulaTableBindingName(contextKey: string): string {
+  if (contextKey === "tables") {
+    return ""
+  }
+  return contextKey.startsWith("table:") ? contextKey.slice("table:".length) : contextKey
 }
 
 function normalizeSpreadsheetSheetReferenceAlias(value: unknown): string {
@@ -1506,6 +1539,52 @@ export function createDataGridSpreadsheetSheetModel(
         rowIndex: row.rowIndex,
         style: row.style,
       })))
+    },
+    exportState() {
+      ensureActive()
+      return {
+        sheetId,
+        sheetName,
+        columns: Object.freeze(columns.map(column => ({
+          key: column.key,
+          title: column.title,
+          style: column.style,
+        }))),
+        rows: Object.freeze(rows.map(row => {
+          const cells: DataGridSpreadsheetSheetStateCell[] = []
+          for (const column of columns) {
+            const cellKey = makeCellKey(row.rowIndex, column.key)
+            const rawInput = rawInputByCellKey.get(cellKey) ?? ""
+            const style = getCellOwnStyle(cellKey)
+            if (rawInput.length === 0 && style == null) {
+              continue
+            }
+            cells.push({
+              columnKey: column.key,
+              rawInput,
+              style,
+            })
+          }
+          return Object.freeze({
+            id: row.id,
+            style: row.style,
+            cells: Object.freeze(cells),
+          })
+        })),
+        sheetStyle,
+        formulaTables: Object.freeze(
+          [...formulaTablesByContextKey.entries()]
+            .map(([contextKey, source]) => ({
+              name: resolveFormulaTableBindingName(contextKey),
+              source,
+            }))
+            .sort((left, right) => left.name.localeCompare(right.name)),
+        ),
+        functionRegistry,
+        referenceParserOptions,
+        runtimeErrorPolicy,
+        resolveContextValue: options.resolveContextValue,
+      }
     },
     getCell(cell) {
       return readCellSnapshot(resolveCellKey(cell))

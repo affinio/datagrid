@@ -3,4 +3,5 @@ import DataGridSpreadsheetWorkbookAppComponent from "./DataGridSpreadsheetWorkbo
 
 export const DataGridSpreadsheetWorkbookApp: Component = DataGridSpreadsheetWorkbookAppComponent
 
+export * from "./useDataGridSpreadsheetWorkbookHistory"
 export { default } from "./DataGridSpreadsheetWorkbookApp.vue"
