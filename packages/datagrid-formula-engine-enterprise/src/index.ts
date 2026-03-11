@@ -1,4 +1,19 @@
 export * from "@affino/datagrid-formula-engine"
+export {
+  DATAGRID_ENTERPRISE_FORMULA_PACKS,
+  DATAGRID_FINANCE_FORMULA_FUNCTIONS,
+  listDataGridEnterpriseFormulaPackNames,
+  mergeDataGridFormulaFunctionRegistries,
+  resolveDataGridEnterpriseFormulaFunctions,
+} from "./formulaPacks"
+export type {
+  DataGridEnterpriseFormulaPackName,
+} from "./formulaPacks"
+
+export interface DataGridFormulaEnterpriseRuntimeConfig {
+  computeMode?: "sync" | "worker"
+  formulaColumnCacheMaxColumns?: number | null
+}
 
 /**
  * Enterprise formula runtime surface is intentionally additive.

@@ -104,10 +104,6 @@ function queryColumnLayoutRoot(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(".datagrid-column-layout")
 }
 
-function queryDiagnosticsRoot(): HTMLElement | null {
-  return document.body.querySelector<HTMLElement>(".datagrid-diagnostics")
-}
-
 function queryAggregationsRoot(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(".datagrid-aggregations")
 }
@@ -131,6 +127,16 @@ afterAll(() => {
 })
 
 describe("DataGrid app facade contract", () => {
+  it("does not expose enterprise-only props on the community facade", () => {
+    const publicProps = Object.keys((DataGrid as unknown as { props?: Record<string, unknown> }).props ?? {})
+
+    expect(publicProps).not.toContain("licenseKey")
+    expect(publicProps).not.toContain("diagnostics")
+    expect(publicProps).not.toContain("formulaRuntime")
+    expect(publicProps).not.toContain("formulaPacks")
+    expect(publicProps).not.toContain("performance")
+  })
+
   it("opens declarative columnMenu from package triggers and applies sort and pin actions", async () => {
     const wrapper = mount(DataGrid, {
       props: {
@@ -523,32 +529,6 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
-  it("opens declarative diagnostics and renders the runtime snapshot", async () => {
-    const wrapper = mount(DataGrid, {
-      attachTo: document.body,
-      props: {
-        rows: BASE_ROWS,
-        columns: COLUMNS,
-        diagnostics: true,
-      },
-    })
-
-    await flushRuntimeTasks()
-
-    const trigger = wrapper.find(".datagrid-app-toolbar__button")
-    expect(trigger.exists()).toBe(true)
-
-    await trigger.trigger("click")
-    await flushRuntimeTasks()
-
-    const popover = queryDiagnosticsRoot()
-    expect(popover).toBeTruthy()
-    expect(popover?.textContent).toContain("Runtime snapshot")
-    expect(popover?.textContent).toContain("rowModel")
-
-    wrapper.unmount()
-  })
-
   it("opens declarative aggregations and applies the runtime aggregation model", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
@@ -858,7 +838,6 @@ describe("DataGrid app facade contract", () => {
         clientRowModelOptions: {
           resolveRowId: (row: FormulaRow) => row.id,
         },
-        formulaColumnCacheMaxColumns: 8,
       },
     })
 

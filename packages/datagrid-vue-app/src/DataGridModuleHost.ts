@@ -6,6 +6,11 @@ export interface DataGridAppToolbarModule {
   props?: Record<string, unknown>
 }
 
+export interface DataGridAppInspectorPanel {
+  component: Component
+  props?: Record<string, unknown>
+}
+
 export default defineComponent({
   name: "DataGridModuleHost",
   props: {

@@ -71,6 +71,22 @@ const FACADES = [
       "evaluateDataGridAdvancedFilterExpression",
     ],
   },
+  {
+    id: "laravel-app",
+    label: "@affino/datagrid-laravel-app",
+    sourceFile: path.join(workspaceRoot, "packages", "datagrid-laravel-app", "src", "index.ts"),
+    importSpecifiers: ["@affino/datagrid-laravel-app"],
+    requiredSymbols: [
+      "createDataGridRuntime",
+      "buildDataGridColumnLayers",
+      "resolveDataGridLayerTrackTemplate",
+      "useDataGridColumnLayoutOrchestration",
+      "useDataGridManagedWheelScroll",
+      "resolveDataGridHeaderLayerViewportGeometry",
+      "resolveDataGridHeaderScrollSyncLeft",
+      "evaluateDataGridAdvancedFilterExpression",
+    ],
+  },
 ]
 
 const DEMO_SCOPES = [
@@ -81,6 +97,10 @@ const DEMO_SCOPES = [
   {
     id: "demo-laravel",
     root: path.join(workspaceRoot, "packages", "datagrid-laravel", "resources", "js"),
+  },
+  {
+    id: "demo-laravel-app",
+    root: path.join(workspaceRoot, "packages", "datagrid-laravel-app", "src"),
   },
 ]
 

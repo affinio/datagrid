@@ -171,6 +171,7 @@
         ref="gridRef"
         :rows="rows"
         :columns="columns"
+        license-key="affino-dg-v1:enterprise:sandbox-demo:2099-12-31:all:0HTTHMS"
         column-menu
         column-layout
         diagnostics
@@ -197,8 +198,8 @@
     </section>
 
     <footer class="card__footer">
-      Public app package demo:
-      <code>import { DataGrid } from "@affino/datagrid-vue-app"</code>
+      Enterprise app package demo:
+      <code>import { DataGrid } from "@affino/datagrid-vue-app-enterprise"</code>
       <span v-if="selectionAggregatesLabel">
         {{ selectionAggregatesLabel }}</span
       >
@@ -208,7 +209,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { DataGrid } from "@affino/datagrid-vue-app";
+import { DataGrid } from "@affino/datagrid-vue-app-enterprise";
 import {
   industrialNeutralTheme,
   sugarTheme,

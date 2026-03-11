@@ -17,6 +17,7 @@ Community package keeps the base formula engine:
 Enterprise package is reserved for higher-cost runtime layers:
 
 - worker-owned formula execution
+- premium formula packs
 - premium vector / fused runtime tiers
 - profiler / explain tooling
 - enterprise compute policies

@@ -1,6 +1,5 @@
 import type {
   CreateClientRowModelOptions,
-  DataGridClientComputeMode,
   DataGridColumnInput,
   DataGridComputedFieldDefinition,
   DataGridFormulaFieldDefinition,
@@ -18,14 +17,24 @@ export interface DataGridDeclarativeFormulaOptions<TRow = unknown> {
   formulas?: readonly DataGridFormulaFieldDefinition[] | null
   computedFields?: readonly DataGridComputedFieldDefinition<TRow>[] | null
   formulaFunctions?: DataGridFormulaFunctionRegistry | null
-  computeMode?: DataGridClientComputeMode | null
+}
+
+export type DataGridAppClientRowModelOptions<TRow = unknown> = Omit<
+  CreateClientRowModelOptions<TRow>,
+  "rows" | "computeMode" | "workerPatchDispatchThreshold" | "formulaColumnCacheMaxColumns"
+>
+
+export interface DataGridAppEnterpriseFormulaRuntimeOptions {
+  computeMode?: "sync" | "worker"
+  workerPatchDispatchThreshold?: number | null
   formulaColumnCacheMaxColumns?: number | null
 }
 
 export interface ResolveDataGridFormulaRowModelOptionsInput<TRow = unknown>
   extends DataGridDeclarativeFormulaOptions<TRow> {
   columns?: readonly DataGridAppColumnInput[] | null | undefined
-  clientRowModelOptions?: Omit<CreateClientRowModelOptions<TRow>, "rows"> | undefined
+  clientRowModelOptions?: DataGridAppClientRowModelOptions<TRow> | undefined
+  enterpriseClientRowModelOptions?: DataGridAppEnterpriseFormulaRuntimeOptions | undefined
 }
 
 function cloneFormulas(
@@ -100,12 +109,11 @@ export function resolveDataGridFormulaRowModelOptions<TRow = unknown>(
   input: ResolveDataGridFormulaRowModelOptionsInput<TRow>,
 ): Omit<CreateClientRowModelOptions<TRow>, "rows"> | undefined {
   const baseOptions = input.clientRowModelOptions
+  const enterpriseOptions = input.enterpriseClientRowModelOptions
   const embeddedFormulas = extractEmbeddedFormulas(input.columns)
   const hasFormulaProp = input.formulas !== undefined
   const hasComputedFieldsProp = input.computedFields !== undefined
   const hasFormulaFunctionsProp = input.formulaFunctions !== undefined
-  const hasComputeModeProp = input.computeMode !== undefined
-  const hasFormulaColumnCacheProp = input.formulaColumnCacheMaxColumns !== undefined
   const hasEmbeddedFormulas = embeddedFormulas.length > 0
 
   const initialFormulaFields = hasFormulaProp || hasEmbeddedFormulas
@@ -113,22 +121,21 @@ export function resolveDataGridFormulaRowModelOptions<TRow = unknown>(
     : undefined
   const initialComputedFields = hasComputedFieldsProp ? cloneComputedFields(input.computedFields) : undefined
   const initialFormulaFunctionRegistry = hasFormulaFunctionsProp ? (input.formulaFunctions ?? {}) : undefined
-  const computeMode = hasComputeModeProp ? (input.computeMode ?? undefined) : undefined
-  const formulaColumnCacheMaxColumns = hasFormulaColumnCacheProp
-    ? (input.formulaColumnCacheMaxColumns ?? undefined)
-    : undefined
 
   const hasFormulaOverrides = Boolean(
     hasEmbeddedFormulas
     || hasFormulaProp
     || hasComputedFieldsProp
     || hasFormulaFunctionsProp
-    || hasComputeModeProp
-    || hasFormulaColumnCacheProp,
   )
 
   if (!baseOptions && !hasFormulaOverrides) {
-    return undefined
+    if (!enterpriseOptions) {
+      return undefined
+    }
+    return {
+      ...enterpriseOptions,
+    }
   }
 
   return {
@@ -136,7 +143,12 @@ export function resolveDataGridFormulaRowModelOptions<TRow = unknown>(
     ...(hasComputedFieldsProp ? { initialComputedFields } : {}),
     ...(hasFormulaProp || hasEmbeddedFormulas ? { initialFormulaFields } : {}),
     ...(hasFormulaFunctionsProp ? { initialFormulaFunctionRegistry } : {}),
-    ...(hasComputeModeProp ? { computeMode } : {}),
-    ...(hasFormulaColumnCacheProp ? { formulaColumnCacheMaxColumns } : {}),
+    ...(enterpriseOptions?.computeMode ? { computeMode: enterpriseOptions.computeMode } : {}),
+    ...(enterpriseOptions?.workerPatchDispatchThreshold !== undefined
+      ? { workerPatchDispatchThreshold: enterpriseOptions.workerPatchDispatchThreshold }
+      : {}),
+    ...(enterpriseOptions?.formulaColumnCacheMaxColumns !== undefined
+      ? { formulaColumnCacheMaxColumns: enterpriseOptions.formulaColumnCacheMaxColumns }
+      : {}),
   }
 }

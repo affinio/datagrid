@@ -1,0 +1,43 @@
+{
+  "name": "@affino/datagrid-laravel-app",
+  "version": "0.1.0",
+  "description": "Application-facing Laravel facade for Affino DataGrid",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "pnpm --filter @affino/datagrid-laravel build && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@affino/datagrid-laravel": "workspace:*"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-laravel-app"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-laravel-app#readme",
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "keywords": [
+    "affino",
+    "laravel",
+    "livewire",
+    "datagrid",
+    "app",
+    "facade"
+  ]
+}

@@ -70,12 +70,17 @@
         ref="gridRef"
         :rows="rows"
         :columns="columns"
+        license-key="affino-dg-v1:enterprise:sandbox-demo:2099-12-31:all:0HTTHMS"
+        diagnostics
+        formula-packs
+        performance="balanced"
+        :formula-runtime="{
+          formulaColumnCacheMaxColumns: 32,
+        }"
         :client-row-model-options="clientRowModelOptions"
         :group-by="groupBy"
         :aggregation-model="aggregationModel"
         theme="industrial-neutral"
-        :formula-column-cache-max-columns="32"
-        compute-mode="sync"
         virtualization
         @cell-change="handleGridCellChange"
         @selection-change="syncSelectionAggregatesLabel"
@@ -83,7 +88,8 @@
     </section>
 
     <footer class="card__footer">
-      Formula chain:
+      Enterprise formula demo:
+      <code>diagnostics + formula-packs + performance + formula-runtime</code>
       <span>{{ formulaPlan?.order.join(" -> ") || "—" }}</span>
     </footer>
   </article>
@@ -94,7 +100,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import {
   DataGrid,
   type DataGridAppColumnInput,
-} from "@affino/datagrid-vue-app";
+} from "@affino/datagrid-vue-app-enterprise";
 import type {
   DataGridAggregationModel,
   DataGridFormulaComputeStageDiagnostics,
@@ -115,6 +121,7 @@ interface FormulaSandboxRow {
   tax?: number;
   total?: number;
   margin?: number;
+  marginPct?: number;
 }
 
 interface FormulaExplainSnapshot {
@@ -278,6 +285,15 @@ const columns: readonly DataGridAppColumnInput[] = [
     presentation: { align: "right", headerAlign: "right" },
     capabilities: { sortable: true, filterable: true, aggregatable: true },
     formula: "total - cost",
+  },
+  {
+    key: "marginPct",
+    label: "Margin %",
+    dataType: "percent",
+    initialState: { width: 108 },
+    presentation: { align: "right", headerAlign: "right" },
+    capabilities: { sortable: true, filterable: true },
+    formula: "SAFE_DIVIDE(total - cost, total, 0)",
   },
 ];
 

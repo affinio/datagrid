@@ -25,21 +25,20 @@ import {
   cloneDataGridFilterSnapshot,
   type GridSelectionPointLike,
   type DataGridRowId,
-  type DataGridApiDiagnosticsSnapshot,
   useDataGridAppAdvancedFilterBuilder,
   useDataGridAppColumnLayoutPanel,
-  useDataGridAppDiagnosticsPanel,
 } from "@affino/datagrid-vue"
 import DataGridAdvancedFilterPopover from "./DataGridAdvancedFilterPopover.vue"
 import DataGridAggregationsPopover from "./DataGridAggregationsPopover.vue"
 import DataGridColumnLayoutPopover from "./DataGridColumnLayoutPopover.vue"
-import DataGridDiagnosticsPopover from "./DataGridDiagnosticsPopover.vue"
-import DataGridModuleHost, { type DataGridAppToolbarModule } from "./DataGridModuleHost"
+import DataGridModuleHost, {
+  type DataGridAppInspectorPanel,
+  type DataGridAppToolbarModule,
+} from "./DataGridModuleHost"
 import DataGridTableStage from "./DataGridTableStage.vue"
 import type { DataGridAdvancedFilterOptions } from "./dataGridAdvancedFilter"
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "./dataGridAggregations"
 import type { DataGridColumnLayoutOptions } from "./dataGridColumnLayout"
-import type { DataGridDiagnosticsOptions } from "./dataGridDiagnostics"
 import type { DataGridColumnMenuOptions } from "./dataGridColumnMenu"
 import type { DataGridVirtualizationOptions } from "./dataGridVirtualization"
 import { useDataGridTableStageRuntime } from "./useDataGridTableStageRuntime"
@@ -258,10 +257,6 @@ export default defineComponent({
       type: Object as PropType<DataGridColumnLayoutOptions>,
       required: true,
     },
-    diagnostics: {
-      type: Object as PropType<DataGridDiagnosticsOptions>,
-      required: true,
-    },
     aggregations: {
       type: Object as PropType<DataGridAggregationsOptions>,
       required: true,
@@ -285,6 +280,14 @@ export default defineComponent({
     stripedRows: {
       type: Boolean,
       default: false,
+    },
+    toolbarModules: {
+      type: Array as PropType<readonly DataGridAppToolbarModule[]>,
+      default: () => [],
+    },
+    inspectorPanel: {
+      type: Object as PropType<DataGridAppInspectorPanel | null>,
+      default: null,
     },
   },
   setup(props) {
@@ -371,15 +374,6 @@ export default defineComponent({
           props.runtime.api.columns.setVisibility(columnKey, visible)
         }
       },
-    })
-    const {
-      isDiagnosticsPanelOpen,
-      diagnosticsSnapshot,
-      openDiagnosticsPanel,
-      closeDiagnosticsPanel,
-      refreshDiagnosticsPanel,
-    } = useDataGridAppDiagnosticsPanel<DataGridApiDiagnosticsSnapshot>({
-      readDiagnostics: () => props.runtime.api.diagnostics.getAll(),
     })
     const {
       isAdvancedFilterPanelOpen,
@@ -727,21 +721,6 @@ export default defineComponent({
           },
         })
       }
-      if (props.diagnostics.enabled) {
-        modules.push({
-          key: "diagnostics",
-          component: DataGridDiagnosticsPopover as Component,
-          props: {
-            isOpen: isDiagnosticsPanelOpen.value,
-            snapshot: diagnosticsSnapshot.value,
-            buttonLabel: props.diagnostics.buttonLabel,
-            active: isDiagnosticsPanelOpen.value,
-            onOpen: openDiagnosticsPanel,
-            onClose: closeDiagnosticsPanel,
-            onRefresh: refreshDiagnosticsPanel,
-          },
-        })
-      }
       if (props.advancedFilter.enabled) {
         modules.push({
           key: "advanced-filter",
@@ -781,7 +760,7 @@ export default defineComponent({
           },
         })
       }
-      return modules
+      return [...modules, ...props.toolbarModules]
     })
 
     return () => h("div", {
@@ -790,21 +769,38 @@ export default defineComponent({
       h(DataGridModuleHost as Component, {
         modules: toolbarModules.value,
       }),
-      h(DataGridTableStage as Component, {
-        ...tableStageProps.value,
-        sourceRows: props.rows,
-        columnMenuEnabled: props.columnMenu.enabled,
-        columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
-        rowHover: props.rowHover,
-        stripedRows: props.stripedRows,
-        isColumnFilterActive,
-        resolveColumnMenuSortDirection,
-        resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
-        applyColumnMenuSort,
-        applyColumnMenuPin,
-        applyColumnMenuFilter,
-        clearColumnMenuFilter,
-      }),
+      h("div", {
+        class: "datagrid-app-workspace",
+      }, [
+        h("div", {
+          class: "datagrid-app-stage",
+        }, [
+          h(DataGridTableStage as Component, {
+            ...tableStageProps.value,
+            sourceRows: props.rows,
+            columnMenuEnabled: props.columnMenu.enabled,
+            columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
+            rowHover: props.rowHover,
+            stripedRows: props.stripedRows,
+            isColumnFilterActive,
+            resolveColumnMenuSortDirection,
+            resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
+            applyColumnMenuSort,
+            applyColumnMenuPin,
+            applyColumnMenuFilter,
+            clearColumnMenuFilter,
+          }),
+        ]),
+        props.inspectorPanel
+          ? h("aside", {
+            class: "datagrid-app-inspector-shell",
+          }, [
+            h(props.inspectorPanel.component, {
+              ...(props.inspectorPanel.props ?? {}),
+            }),
+          ])
+          : null,
+      ]),
     ])
   },
 })

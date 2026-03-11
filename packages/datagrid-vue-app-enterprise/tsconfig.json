@@ -18,12 +18,15 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@affino/datagrid-theme": ["../datagrid-theme/dist/index.d.ts"],
-      "@affino/datagrid-theme/*": ["../datagrid-theme/dist/*"],
+      "@affino/datagrid-vue-app": ["../datagrid-vue-app/dist/index.d.ts"],
+      "@affino/datagrid-vue-app/*": ["../datagrid-vue-app/dist/*"],
+      "@affino/datagrid-vue-app/internal": ["../datagrid-vue-app/dist/internal.d.ts"],
+      "@affino/datagrid-diagnostics-enterprise": ["../datagrid-diagnostics-enterprise/dist/index.d.ts"],
+      "@affino/datagrid-formula-engine-enterprise": ["../datagrid-formula-engine-enterprise/dist/index.d.ts"],
       "@affino/datagrid-vue": ["../datagrid-vue/dist/index.d.ts"],
       "@affino/datagrid-vue/*": ["../datagrid-vue/dist/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts"],
   "exclude": ["src/**/__tests__/**", "src/**/*.spec.ts", "src/**/*.test.ts"]
 }

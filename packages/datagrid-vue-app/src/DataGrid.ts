@@ -9,12 +9,10 @@ import {
   type VNode,
 } from "vue"
 import {
-  type CreateClientRowModelOptions,
   type CreateDataGridCoreOptions,
   type DataGridApi,
   type DataGridApiPluginDefinition,
   type DataGridAggregationModel,
-  type DataGridClientComputeMode,
   type DataGridColumnModel,
   type DataGridColumnPin,
   type DataGridComputedFieldDefinition,
@@ -38,6 +36,7 @@ import DataGridDefaultRenderer from "./DataGridDefaultRenderer"
 import {
   resolveDataGridColumns,
   resolveDataGridFormulaRowModelOptions,
+  type DataGridAppClientRowModelOptions,
   type DataGridAppColumnInput,
 } from "./dataGridFormulaOptions"
 import { type DataGridThemeProp } from "./dataGridTheme"
@@ -58,11 +57,6 @@ import {
   type DataGridColumnLayoutOptions,
   type DataGridColumnLayoutProp,
 } from "./dataGridColumnLayout"
-import {
-  resolveDataGridDiagnostics,
-  type DataGridDiagnosticsOptions,
-  type DataGridDiagnosticsProp,
-} from "./dataGridDiagnostics"
 import {
   resolveDataGridAggregations,
   type DataGridAggregationsOptions,
@@ -105,6 +99,7 @@ interface LowLevelGridExpose {
 interface DataGridRuntimeHostSlotProps {
   runtime: LowLevelGridExpose["runtime"]
   rowModel: LowLevelGridExpose["rowModel"]
+  defaultRendererProps?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -126,7 +121,7 @@ export default defineComponent({
       default: undefined,
     },
     clientRowModelOptions: {
-      type: Object as PropType<Omit<CreateClientRowModelOptions<unknown>, "rows"> | undefined>,
+      type: Object as PropType<DataGridAppClientRowModelOptions<unknown> | undefined>,
       default: undefined,
     },
     computedFields: {
@@ -139,14 +134,6 @@ export default defineComponent({
     },
     formulaFunctions: {
       type: Object as PropType<DataGridFormulaFunctionRegistry | null | undefined>,
-      default: undefined,
-    },
-    computeMode: {
-      type: String as PropType<DataGridClientComputeMode | null | undefined>,
-      default: undefined,
-    },
-    formulaColumnCacheMaxColumns: {
-      type: Number as PropType<number | null | undefined>,
       default: undefined,
     },
     columns: {
@@ -179,10 +166,6 @@ export default defineComponent({
     },
     columnLayout: {
       type: [Boolean, Object] as PropType<DataGridColumnLayoutProp | undefined>,
-      default: undefined,
-    },
-    diagnostics: {
-      type: [Boolean, Object] as PropType<DataGridDiagnosticsProp | undefined>,
       default: undefined,
     },
     aggregations: {
@@ -309,9 +292,6 @@ export default defineComponent({
     const resolvedColumnLayout = computed<DataGridColumnLayoutOptions>(() => {
       return resolveDataGridColumnLayout(props.columnLayout)
     })
-    const resolvedDiagnostics = computed<DataGridDiagnosticsOptions>(() => {
-      return resolveDataGridDiagnostics(props.diagnostics)
-    })
     const resolvedAggregations = computed<DataGridAggregationsOptions>(() => {
       return resolveDataGridAggregations(props.aggregations)
     })
@@ -331,8 +311,6 @@ export default defineComponent({
         computedFields: props.computedFields,
         formulas: props.formulas,
         formulaFunctions: props.formulaFunctions,
-        computeMode: props.computeMode,
-        formulaColumnCacheMaxColumns: props.formulaColumnCacheMaxColumns,
       })
     })
     const resolvedColumns = computed(() => resolveDataGridColumns(props.columns))
@@ -447,6 +425,29 @@ export default defineComponent({
     })
 
     return (): VNode => {
+      const defaultRendererProps = {
+        mode: inferredMode.value,
+        rows: props.rows as readonly Record<string, unknown>[],
+        runtime: dataGridRef.value?.runtime ?? null,
+        runtimeRowModel: dataGridRef.value?.rowModel ?? null,
+        selectionSnapshot,
+        selectionAnchor,
+        syncSelectionSnapshotFromRuntime,
+        sortModel: props.sortModel,
+        filterModel: props.filterModel,
+        groupBy: resolvedGroupBy.value,
+        pivotModel: props.pivotModel,
+        renderMode: resolvedRenderMode.value,
+        virtualization: resolvedVirtualization.value,
+        columnMenu: resolvedColumnMenu.value,
+        columnLayout: resolvedColumnLayout.value,
+        aggregations: resolvedAggregations.value,
+        advancedFilter: resolvedAdvancedFilter.value,
+        rowHeightMode: props.rowHeightMode,
+        baseRowHeight: props.baseRowHeight,
+        rowHover: props.rowHover,
+        stripedRows: props.stripedRows,
+      }
       return h(
         DataGridRuntimeHost,
         {
@@ -468,32 +469,20 @@ export default defineComponent({
         },
         slots.default
           ? {
-              default: (slotProps: DataGridRuntimeHostSlotProps) => slots.default?.(slotProps),
+              default: (slotProps: DataGridRuntimeHostSlotProps) => slots.default?.({
+                ...slotProps,
+                defaultRendererProps: {
+                  ...defaultRendererProps,
+                  runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
+                  runtimeRowModel: slotProps.rowModel as { subscribe: (listener: () => void) => () => void },
+                },
+              }),
             }
           : {
               default: (slotProps: DataGridRuntimeHostSlotProps) => h(DataGridDefaultRenderer, {
-                mode: inferredMode.value,
-                rows: props.rows as readonly Record<string, unknown>[],
+                ...defaultRendererProps,
                 runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
                 runtimeRowModel: slotProps.rowModel as { subscribe: (listener: () => void) => () => void },
-                selectionSnapshot,
-                selectionAnchor,
-                syncSelectionSnapshotFromRuntime,
-                sortModel: props.sortModel,
-                filterModel: props.filterModel,
-                groupBy: resolvedGroupBy.value,
-                pivotModel: props.pivotModel,
-                renderMode: resolvedRenderMode.value,
-                virtualization: resolvedVirtualization.value,
-                columnMenu: resolvedColumnMenu.value,
-                columnLayout: resolvedColumnLayout.value,
-                diagnostics: resolvedDiagnostics.value,
-                aggregations: resolvedAggregations.value,
-                advancedFilter: resolvedAdvancedFilter.value,
-                rowHeightMode: props.rowHeightMode,
-                baseRowHeight: props.baseRowHeight,
-                rowHover: props.rowHover,
-                stripedRows: props.stripedRows,
               }),
             },
       )

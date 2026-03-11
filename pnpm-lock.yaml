@@ -84,6 +84,18 @@ importers:
         specifier: workspace:*
         version: link:../projection-engine
 
+  packages/datagrid-diagnostics-enterprise:
+    dependencies:
+      '@affino/datagrid-vue-app':
+        specifier: workspace:*
+        version: link:../datagrid-vue-app
+      '@affino/popover-vue':
+        specifier: ^1.1.0
+        version: 1.1.0(vue@3.4.38(typescript@5.9.3))
+      vue:
+        specifier: 3.4.38
+        version: 3.4.38(typescript@5.9.3)
+
   packages/datagrid-formula-engine: {}
 
   packages/datagrid-formula-engine-enterprise:
@@ -138,6 +150,12 @@ importers:
       '@affino/datagrid-vue':
         specifier: workspace:*
         version: link:../datagrid-vue
+      '@affino/datagrid-vue-app':
+        specifier: workspace:*
+        version: link:../datagrid-vue-app
+      '@affino/datagrid-vue-app-enterprise':
+        specifier: workspace:*
+        version: link:../datagrid-vue-app-enterprise
       '@affino/datagrid-worker':
         specifier: workspace:*
         version: link:../datagrid-worker
@@ -208,6 +226,24 @@ importers:
       '@affino/popover-vue':
         specifier: ^1.1.0
         version: 1.1.0(vue@3.4.38(typescript@5.9.3))
+      vue:
+        specifier: 3.4.38
+        version: 3.4.38(typescript@5.9.3)
+
+  packages/datagrid-vue-app-enterprise:
+    dependencies:
+      '@affino/datagrid-diagnostics-enterprise':
+        specifier: workspace:*
+        version: link:../datagrid-diagnostics-enterprise
+      '@affino/datagrid-formula-engine-enterprise':
+        specifier: workspace:*
+        version: link:../datagrid-formula-engine-enterprise
+      '@affino/datagrid-vue':
+        specifier: workspace:*
+        version: link:../datagrid-vue
+      '@affino/datagrid-vue-app':
+        specifier: workspace:*
+        version: link:../datagrid-vue-app
       vue:
         specifier: 3.4.38
         version: 3.4.38(typescript@5.9.3)

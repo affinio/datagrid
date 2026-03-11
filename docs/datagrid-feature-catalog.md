@@ -10,6 +10,7 @@ Use it as a single decision sheet to understand whether the platform fits your p
 - Scope:
   - `Core` means implemented in `@affino/datagrid-core`.
   - `Adapter` means surfaced through framework adapters (`@affino/datagrid-vue`, `@affino/datagrid-laravel`).
+  - `App` means surfaced through app-facing framework facades (`@affino/datagrid-vue-app`, `@affino/datagrid-laravel-app`).
   - `Backend` means contract exists client-side, but behavior is implemented by your server/data source.
 - Runtime mode:
   - `main-thread` for simpler/smaller workloads.
@@ -99,5 +100,7 @@ Use it as a single decision sheet to understand whether the platform fits your p
 | `@affino/datagrid` | App teams | Stable application-facing DataGrid facade. |
 | `@affino/datagrid-core` | Headless/platform engineers | Stable community-safe core contracts and client row-model primitives. |
 | `@affino/datagrid-vue` | Vue teams | Community-safe Vue adapter surface. |
+| `@affino/datagrid-vue-app` | Vue app teams | App-facing Vue facade with opinionated install path. |
 | `@affino/datagrid-laravel` | Laravel/Livewire teams | Community-safe Laravel facade. |
+| `@affino/datagrid-laravel-app` | Laravel app teams | App-facing Laravel facade with future opinionated DX boundary. |
 | `@affino/datagrid-vue/advanced` | Power users | Low-level interaction/layout primitives for custom renderer wiring. |

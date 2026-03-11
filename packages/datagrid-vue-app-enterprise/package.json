@@ -1,0 +1,52 @@
+{
+  "name": "@affino/datagrid-vue-app-enterprise",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Enterprise app facade for Affino DataGrid Vue",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "pnpm --filter @affino/datagrid-vue build && pnpm --filter @affino/datagrid-vue-app build && pnpm --filter @affino/datagrid-diagnostics-enterprise build && pnpm --filter @affino/datagrid-formula-engine-enterprise build && tsc -p tsconfig.json",
+    "type-check": "pnpm --filter @affino/datagrid-vue build && pnpm --filter @affino/datagrid-vue-app build && pnpm --filter @affino/datagrid-diagnostics-enterprise build && pnpm --filter @affino/datagrid-formula-engine-enterprise build && tsc -p tsconfig.json --noEmit",
+    "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
+    "test": "pnpm run type-check && pnpm run test:unit"
+  },
+  "dependencies": {
+    "@affino/datagrid-diagnostics-enterprise": "workspace:*",
+    "@affino/datagrid-formula-engine-enterprise": "workspace:*",
+    "@affino/datagrid-vue": "workspace:*",
+    "@affino/datagrid-vue-app": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-vue-app-enterprise"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-vue-app-enterprise#readme",
+  "license": "UNLICENSED",
+  "keywords": [
+    "datagrid",
+    "vue",
+    "app",
+    "enterprise",
+    "grid"
+  ],
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  }
+}

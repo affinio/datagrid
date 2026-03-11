@@ -9,11 +9,30 @@ Declarative Vue component layer for Affino DataGrid.
 `@affino/datagrid-vue-app` is the app-facing package.
 It depends on [`@affino/datagrid-vue`](/Users/anton/Projects/affinio/datagrid/packages/datagrid-vue/README.md), which remains the adapter and headless foundation between Vue and the grid engine.
 
+Boundary doc:
+
+- [/Users/anton/Projects/affinio/datagrid/docs/datagrid-vue-app-community-vs-enterprise.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-vue-app-community-vs-enterprise.md)
+
 Public export:
 
 - `DataGrid`
 
 The package ships its own runtime table-stage styles, so the default renderer does not depend on sandbox CSS.
+
+## Planned enterprise surface
+
+This package stays community-first and intentionally useful on its own.
+
+Planned additive enterprise app layer:
+
+- `@affino/datagrid-vue-app-enterprise`
+
+Reserved enterprise candidates:
+
+- diagnostics / profiler / explain panels
+- advanced formula runtime controls
+- performance / worker app presets
+- license-gated enterprise app features
 
 ## Why Affino DataGrid?
 
@@ -114,7 +133,6 @@ Enable the built-in header menu with one prop:
     :columns="columns"
     column-menu
     column-layout
-    diagnostics
     advanced-filter
     aggregations
     row-hover
@@ -128,7 +146,6 @@ Out of the box this wires:
 - pin column submenu (`left`, `right`, `none`)
 - value-set filter picker with search + apply/clear
 - column order / visibility popover
-- diagnostics popover
 - clause-based advanced filter popover
 - aggregation model popover
 
@@ -190,7 +207,6 @@ Affino DataGrid works well for:
 - `theme`
 - `column-menu`
 - `column-layout`
-- `diagnostics`
 - `advanced-filter`
 - `aggregations`
 - `row-hover`
@@ -209,8 +225,6 @@ Affino DataGrid works well for:
 - embedded formulas on `columns`
 - `formulas`
 - `formula-functions`
-- `compute-mode`
-- `formula-column-cache-max-columns`
 
 ### View modes
 
@@ -258,7 +272,6 @@ Recommended sugar: embed formulas in `columns`.
     { key: 'total', label: 'Total', formula: 'subtotal + tax' },
   ]"
   :client-row-model-options="{ resolveRowId: row => row.id }"
-  compute-mode="sync"
 />
 ```
 

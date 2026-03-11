@@ -19,10 +19,6 @@ export type {
   DataGridColumnLayoutProp,
 } from "./dataGridColumnLayout"
 export type {
-  DataGridDiagnosticsOptions,
-  DataGridDiagnosticsProp,
-} from "./dataGridDiagnostics"
-export type {
   DataGridAggregationsOptions,
   DataGridAggregationsProp,
 } from "./dataGridAggregations"

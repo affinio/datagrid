@@ -58,6 +58,7 @@ const FILE_GROUPS = [
       "docs-site/datagrid/laravel-integration.md",
       "docs-site/datagrid-ru/laravel-integration.md",
       "packages/datagrid-laravel/README.md",
+      "packages/datagrid-laravel-app/README.md",
     ],
     rules: [
       {
