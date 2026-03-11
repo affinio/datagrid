@@ -3,6 +3,7 @@ import CoreGridCard from "./components/CoreGridCard.vue"
 import VueFormulaGridCard from "./components/VueFormulaGridCard.vue"
 import VueGridCard from "./components/VueGridCard.vue"
 import VueShellGridCard from "./components/VueShellGridCard.vue"
+import VueSpreadsheetWorkbookCard from "./components/VueSpreadsheetWorkbookCard.vue"
 
 const routes = [
   {
@@ -32,6 +33,10 @@ const routes = [
   {
     path: "/vue/formula-grid",
     component: VueFormulaGridCard,
+  },
+  {
+    path: "/vue/spreadsheet-workbook",
+    component: VueSpreadsheetWorkbookCard,
   },
   {
     path: "/vue/base-grid-factory",

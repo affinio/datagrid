@@ -64,6 +64,11 @@ Status:
   - added lazy workbook table exports and batched formula-table patching to avoid `map + freeze + clone` on every inter-sheet sync
   - added cached workbook graph state with invalidation on structural/formula changes instead of rebuilding graph on every sync
   - switched workbook export invalidation to explicit source/formula structure revisions instead of relying on array identity
+- `2026-03-11`: spreadsheet workbook host implemented
+  - added `createDataGridSpreadsheetWorkbookModel()`
+  - spreadsheet sheets now auto-sync as `TABLE()` / `RELATED()` / `ROLLUP()` sources by `sheet.id` and `sheet.name`
+  - reused downstream dependency-graph scheduling and SCC-aware sync for per-cell sheets
+  - workbook export wrappers now rotate by `getTableSourceRevision()` so relation lookup caches do not stay stale across sheet updates
 
 Still missing in this area:
 
@@ -127,7 +132,6 @@ Still missing in this area:
 - reverse mapping from target cells back to reference spans for hover/focus interactions
 - edit transactions that preserve raw input separately from computed display payload
 - row/column insert-remove semantics with reference shifting and fill/autofill semantics
-- spreadsheet workbook model that hosts multiple per-cell sheets directly, rather than only row-model workbook tables
 
 ### 4. Style system
 
@@ -140,6 +144,19 @@ Needed:
 - conditional style rules
 - style application ranges and column defaults
 
+Status:
+
+- `2026-03-11`: spreadsheet style showcase path implemented in sandbox
+  - added per-cell style/class hooks to `DataGridTableStage`
+  - spreadsheet sheets can now project resolved sheet/column/row/cell styles into the grid stage
+  - added style presets plus copy/paste style flow in the workbook demo
+
+Still missing in this area:
+
+- conditional style rules over formula predicates
+- workbook-level named style presets/themes
+- clipboard payloads that preserve style + raw formula together across sheets/workbooks
+
 ### 5. Spreadsheet UI shell
 
 Needed:
@@ -149,6 +166,22 @@ Needed:
 - named color overlays for active formula references
 - reference builder interactions on top of selection engine
 - clipboard modes that preserve formula/style payloads
+
+Status:
+
+- `2026-03-11`: first spreadsheet shell landed in `datagrid-sandbox`
+  - added multi-sheet workbook tabs on top of `createDataGridSpreadsheetWorkbookModel()`
+  - added live formula bar on top of `createDataGridSpreadsheetFormulaEditorModel()`
+  - added click-to-insert Smartsheet-style refs from the grid while formula editing is active
+  - added color-matched formula preview spans and referenced-cell highlights in the stage
+  - added workbook showcase sheets for `TABLE`, `RELATED`, `ROLLUP`, and row-aware refs
+
+Still missing in this area:
+
+- extraction into reusable `datagrid-vue-app` spreadsheet shell primitives instead of sandbox-only wiring
+- reverse-hover from target cell back into formula spans
+- sheet-qualified cross-sheet cell ref grammar in the editor UX
+- clipboard/history semantics for raw formula + style payloads
 
 ## Recommended build order
 

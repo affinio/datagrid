@@ -673,7 +673,7 @@ export function createDataGridSpreadsheetSheetModel(
         compiled = compileDataGridFormulaFieldDefinition<Record<string, unknown>>({
           name: cellKey,
           field: address.columnKey,
-          formula: rawInput,
+          formula: analysis.formula ?? rawInput,
         }, {
           functionRegistry,
           referenceParserOptions,
@@ -1034,8 +1034,10 @@ export function createDataGridSpreadsheetSheetModel(
   }
 
   const initialBaseValuesChanged = rebuildFormulaState()
-  if (initialBaseValuesChanged || applyFormulaEvaluation(null)) {
+  const initialFormulaValuesChanged = applyFormulaEvaluation(null)
+  if (initialBaseValuesChanged || initialFormulaValuesChanged) {
     valueRevision += 1
+    revision += 1
   }
 
   function readCellSnapshot(cellKey: string): DataGridSpreadsheetCellSnapshot | null {
@@ -1159,6 +1161,9 @@ export function createDataGridSpreadsheetSheetModel(
         throw new Error(`[DataGridSpreadsheetSheet] unknown column '${normalizedColumnKey}'.`)
       }
       const column = columns[columnIndex]
+      if (!column) {
+        throw new Error(`[DataGridSpreadsheetSheet] unknown column '${normalizedColumnKey}'.`)
+      }
       const nextStyle = normalizeSpreadsheetStyle(style)
       if (areSpreadsheetStylesEqual(column.style, nextStyle)) {
         return false
@@ -1176,6 +1181,9 @@ export function createDataGridSpreadsheetSheetModel(
         throw new Error(`[DataGridSpreadsheetSheet] unknown row '${String(rowId)}'.`)
       }
       const row = rows[rowIndex]
+      if (!row) {
+        throw new Error(`[DataGridSpreadsheetSheet] unknown row '${String(rowId)}'.`)
+      }
       const nextStyle = normalizeSpreadsheetStyle(style)
       if (areSpreadsheetStylesEqual(row.style, nextStyle)) {
         return false

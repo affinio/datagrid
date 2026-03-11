@@ -32,6 +32,16 @@ export type {
   DataGridSpreadsheetSheetSnapshot,
   DataGridSpreadsheetStyle,
 } from "./sheetModel.js"
+export type {
+  CreateDataGridSpreadsheetWorkbookModelOptions,
+  DataGridSpreadsheetWorkbookListener,
+  DataGridSpreadsheetWorkbookModel,
+  DataGridSpreadsheetWorkbookSheetHandle,
+  DataGridSpreadsheetWorkbookSheetInput,
+  DataGridSpreadsheetWorkbookSheetSnapshot,
+  DataGridSpreadsheetWorkbookSnapshot,
+  DataGridSpreadsheetWorkbookSyncSnapshot,
+} from "./workbookModel.js"
 
 export {
   analyzeDataGridSpreadsheetCellInput,
@@ -41,3 +51,4 @@ export {
   resolveDataGridSpreadsheetActiveFormulaReference,
 } from "./formulaEditorModel.js"
 export { createDataGridSpreadsheetSheetModel } from "./sheetModel.js"
+export { createDataGridSpreadsheetWorkbookModel } from "./workbookModel.js"

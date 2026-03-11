@@ -58,6 +58,7 @@
     "bench:datagrid:formula-parser": "node --experimental-specifier-resolution=node ./scripts/bench-datagrid-formula-parser.mjs",
     "bench:datagrid:formula-relations": "node --experimental-specifier-resolution=node ./scripts/bench-datagrid-formula-relations.mjs",
     "bench:datagrid:spreadsheet-sheet": "node --experimental-specifier-resolution=node ./scripts/bench-datagrid-spreadsheet-sheet.mjs",
+    "bench:datagrid:spreadsheet-workbook": "node --experimental-specifier-resolution=node ./scripts/bench-datagrid-spreadsheet-workbook.mjs",
     "bench:datagrid:workbook-sync": "node --experimental-specifier-resolution=node ./scripts/bench-datagrid-workbook-sync.mjs",
     "bench:datagrid:formula-engine:worker": "node --max-old-space-size=4096 --expose-gc --experimental-specifier-resolution=node ./scripts/bench-datagrid-formula-engine-worker.mjs",
     "bench:datagrid:formula-engine:worker:assert": "BENCH_OUTPUT_JSON=artifacts/performance/bench-datagrid-formula-engine-worker.assert.json BENCH_OUTPUT_MARKDOWN=artifacts/performance/bench-datagrid-formula-engine-worker.assert.md BENCH_SEEDS=1337,7331,2026 BENCH_WARMUP_RUNS=0 BENCH_FORMULA_RUNTIME_MODES=main-thread,worker-owned BENCH_FORMULA_SCENARIOS=small,medium,large BENCH_FORMULA_PATCH_SIZES=1,100,1000 BENCH_FORMULA_FULL_REFRESH_ITERATIONS=3 BENCH_FORMULA_PATCH_ITERATIONS=5 BENCH_FORMULA_COMPILE_ITERATIONS=3 PERF_BUDGET_TOTAL_MS=240000 PERF_BUDGET_MAX_HEAP_DELTA_MB=500 node --max-old-space-size=4096 --expose-gc --experimental-specifier-resolution=node ./scripts/bench-datagrid-formula-engine-worker.mjs",

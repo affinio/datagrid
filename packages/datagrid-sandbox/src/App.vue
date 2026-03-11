@@ -15,6 +15,7 @@
       <RouterLink class="sandbox__link" to="/vue/shell/pivot-grid">Vue Pivot (Sugar)</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/worker-grid">Vue Worker</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/formula-grid">Vue Formula</RouterLink>
+      <RouterLink class="sandbox__link" to="/vue/spreadsheet-workbook">Vue Spreadsheet</RouterLink>
     </nav>
 
     <section class="sandbox__route">

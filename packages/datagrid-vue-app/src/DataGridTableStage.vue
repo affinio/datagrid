@@ -316,8 +316,8 @@
               v-for="column in pinnedLeftColumns"
               :key="`${String(row.rowId)}-left-${column.key}`"
               class="grid-cell grid-cell--pinned-left"
-              :class="cellStateClasses(row, rowOffset, columnIndexByKey(column.key))"
-              :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key))]"
+              :class="[cellStateClasses(row, rowOffset, columnIndexByKey(column.key)), resolveCellCustomClass(row, rowOffset, column, columnIndexByKey(column.key))]"
+              :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key)), resolveCellCustomStyle(row, rowOffset, column, columnIndexByKey(column.key))]"
               :data-row-index="viewportRowStart + rowOffset"
               :data-column-index="columnIndexByKey(column.key)"
               :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
@@ -405,8 +405,8 @@
                 v-for="column in renderedColumns"
                 :key="`${String(row.rowId)}-${column.key}`"
                 class="grid-cell"
-                :class="cellStateClasses(row, rowOffset, columnIndexByKey(column.key))"
-                :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key))]"
+                :class="[cellStateClasses(row, rowOffset, columnIndexByKey(column.key)), resolveCellCustomClass(row, rowOffset, column, columnIndexByKey(column.key))]"
+                :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key)), resolveCellCustomStyle(row, rowOffset, column, columnIndexByKey(column.key))]"
                 :data-row-index="viewportRowStart + rowOffset"
                 :data-column-index="columnIndexByKey(column.key)"
                 :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
@@ -491,8 +491,8 @@
               v-for="column in pinnedRightColumns"
               :key="`${String(row.rowId)}-right-${column.key}`"
               class="grid-cell grid-cell--pinned-right"
-              :class="cellStateClasses(row, rowOffset, columnIndexByKey(column.key))"
-              :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key))]"
+              :class="[cellStateClasses(row, rowOffset, columnIndexByKey(column.key)), resolveCellCustomClass(row, rowOffset, column, columnIndexByKey(column.key))]"
+              :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key)), resolveCellCustomStyle(row, rowOffset, column, columnIndexByKey(column.key))]"
               :data-row-index="viewportRowStart + rowOffset"
               :data-column-index="columnIndexByKey(column.key)"
               :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
@@ -680,6 +680,24 @@ function bodyCellSelectionStyle(column: TableColumn, rowOffset: number, columnIn
     return { background: "var(--datagrid-selection-range-bg)" }
   }
   return {}
+}
+
+function resolveCellCustomClass(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+) {
+  return props.cellClass?.(row, rowOffset, column, columnIndex) ?? null
+}
+
+function resolveCellCustomStyle(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): CSSProperties {
+  return props.cellStyle?.(row, rowOffset, column, columnIndex) ?? {}
 }
 
 function handleSortColumnClick(column: TableColumn, additive: boolean): void {

@@ -11,6 +11,11 @@ export type DataGridPendingEdge = "top" | "right" | "bottom" | "left"
 export type DataGridTableRow<TRow extends Record<string, unknown>> = DataGridRowNode<TRow>
 export type DataGridElementRefHandler = (value: Element | ComponentPublicInstance | null) => void
 export type DataGridMaybeRef<T> = T | Ref<T>
+export type DataGridTableStageCellClass =
+  | string
+  | readonly string[]
+  | Readonly<Record<string, boolean>>
+
 export interface DataGridTableStageAnchorCell {
   rowIndex: number
   columnIndex: number
@@ -69,6 +74,18 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   handleResizeDoubleClick: (event: MouseEvent, columnKey: string) => void
   startRowResize: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
   autosizeRow: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
+  cellClass?: (
+    row: DataGridTableRow<TRow>,
+    rowOffset: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ) => DataGridTableStageCellClass | null | undefined
+  cellStyle?: (
+    row: DataGridTableRow<TRow>,
+    rowOffset: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ) => CSSProperties | null | undefined
   isCellSelected: (rowOffset: number, columnIndex: number) => boolean
   isSelectionAnchorCell: (rowOffset: number, columnIndex: number) => boolean
   shouldHighlightSelectedCell: (rowOffset: number, columnIndex: number) => boolean

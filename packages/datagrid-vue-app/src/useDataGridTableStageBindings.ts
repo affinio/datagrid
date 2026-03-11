@@ -79,6 +79,8 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     handleResizeDoubleClick: unref(options.handleResizeDoubleClick),
     startRowResize: unref(options.startRowResize),
     autosizeRow: unref(options.autosizeRow),
+    cellClass: unref(options.cellClass),
+    cellStyle: unref(options.cellStyle),
     isCellSelected: unref(options.isCellSelected),
     isSelectionAnchorCell: unref(options.isSelectionAnchorCell),
     shouldHighlightSelectedCell: unref(options.shouldHighlightSelectedCell),
