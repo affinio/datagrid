@@ -88,9 +88,14 @@ export interface UseDataGridAppInteractionControllerOptions<
   pasteSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   cutSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   normalizeClipboardRange: (range: DataGridCopyRange) => DataGridCopyRange | null
-  applyClipboardEdits: (range: DataGridCopyRange, matrix: string[][]) => number
+  applyClipboardEdits: (
+    range: DataGridCopyRange,
+    matrix: string[][],
+    options?: { recordHistory?: boolean },
+  ) => number
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
+  applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean
   syncViewport: () => void
   editingCell: Ref<{ rowId: string | number; columnKey: string } | null>
   startInlineEdit: (
@@ -803,7 +808,14 @@ export function useDataGridAppInteractionController<
   }
 
   const rangeMoveLifecycle = useDataGridRangeMoveLifecycle({
-    applyRangeMove: () => rangeMutationEngine.applyRangeMove(),
+    applyRangeMove: () => {
+      const baseRange = rangeMoveBaseRange.value
+      const targetRange = rangeMovePreviewRange.value
+      if (options.applyRangeMove && baseRange && targetRange) {
+        return options.applyRangeMove(baseRange, targetRange)
+      }
+      return rangeMutationEngine.applyRangeMove()
+    },
     setRangeMoving: value => {
       isRangeMoving.value = value
     },

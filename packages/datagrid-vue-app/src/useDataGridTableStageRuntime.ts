@@ -64,8 +64,13 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   clearColumnMenuFilter?: (columnKey: string) => void
   applyRowHeightSettings: () => void
   cloneRowData: (row: TRow) => TRow
-  applyClipboardEdits?: (range: DataGridCopyRange, matrix: string[][]) => number
+  applyClipboardEdits?: (
+    range: DataGridCopyRange,
+    matrix: string[][],
+    options?: { recordHistory?: boolean },
+  ) => number
   buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
+  applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean
   history?: DataGridTableStageHistoryAdapter
 }
 
@@ -422,6 +427,7 @@ export function useDataGridTableStageRuntime<
     applyClipboardEdits,
     rangesEqual,
     buildFillMatrixFromRange,
+    applyRangeMove: options.applyRangeMove,
     syncViewport: () => syncViewportFromDom(),
     editingCell: editingCellRef,
     startInlineEdit,

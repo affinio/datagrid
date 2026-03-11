@@ -880,7 +880,36 @@ const workbookHistory = useDataGridSpreadsheetWorkbookHistory({
   workbookModel: workbook,
 })
 const hasPendingFormulaEditHistory = computed(() => pendingFormulaEditHistory.value?.changed === true)
-const canUndoWorkbookHistory = computed(() => hasPendingFormulaEditHistory.value || workbookHistory.canUndo.value)
+const pendingWorkbookHistoryCommitCount = ref(0)
+let pendingWorkbookHistoryTail: Promise<void> = Promise.resolve()
+
+function trackWorkbookHistoryCommit<T>(promise: Promise<T>): Promise<T> {
+  pendingWorkbookHistoryCommitCount.value += 1
+  const trackedPromise = promise.finally(() => {
+    pendingWorkbookHistoryCommitCount.value = Math.max(0, pendingWorkbookHistoryCommitCount.value - 1)
+  })
+  pendingWorkbookHistoryTail = pendingWorkbookHistoryTail
+    .catch(() => undefined)
+    .then(() => trackedPromise.then(() => undefined, () => undefined))
+  return trackedPromise
+}
+
+function recordWorkbookHistoryTransaction(
+  descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
+  beforeSnapshot: DataGridSpreadsheetWorkbookState,
+): Promise<string | null> {
+  return trackWorkbookHistoryCommit(workbookHistory.recordIntentTransaction(descriptor, beforeSnapshot))
+}
+
+async function flushPendingWorkbookHistoryTransactions(): Promise<void> {
+  await pendingWorkbookHistoryTail
+}
+
+const canUndoWorkbookHistory = computed(() => (
+  hasPendingFormulaEditHistory.value
+  || pendingWorkbookHistoryCommitCount.value > 0
+  || workbookHistory.canUndo.value
+))
 const canRedoWorkbookHistory = computed(() => workbookHistory.canRedo.value)
 
 const editorModel = createDataGridSpreadsheetFormulaEditorModel({
@@ -989,7 +1018,7 @@ function ensureFormulaEditHistorySession(cell: DataGridSpreadsheetCellAddress): 
     return
   }
   if (currentSession?.changed) {
-    void workbookHistory.recordIntentTransaction({
+    void recordWorkbookHistoryTransaction({
       intent: "edit",
       label: "Cell edit",
     }, currentSession.beforeSnapshot)
@@ -1017,7 +1046,7 @@ async function commitPendingFormulaEditHistory(): Promise<string | null> {
   if (!currentSession?.changed) {
     return null
   }
-  return workbookHistory.recordIntentTransaction({
+  return recordWorkbookHistoryTransaction({
     intent: "edit",
     label: "Cell edit",
   }, currentSession.beforeSnapshot)
@@ -1030,7 +1059,7 @@ function syncSpreadsheetAfterHistoryRestore(): void {
   void nextTick(() => {
     const activeCell = editorSnapshot.value.activeCell
     if (activeCell && resolveCellSnapshot(activeCell)) {
-      syncEditorCellDisplay()
+      syncEditorCellDisplay({ forceRawInput: true })
       restoreEditorCellSelection()
       return
     }
@@ -1047,6 +1076,7 @@ async function runWorkbookIntent(
   descriptor: SpreadsheetWorkbookIntentDescriptor,
   run: () => boolean,
 ): Promise<boolean> {
+  await flushPendingWorkbookHistoryTransactions()
   await commitPendingFormulaEditHistory()
   const beforeSnapshot = workbookHistory.captureSnapshot()
   let applied = false
@@ -1054,12 +1084,13 @@ async function runWorkbookIntent(
     applied = run()
   })
   if (applied) {
-    await workbookHistory.recordIntentTransaction(descriptor, beforeSnapshot)
+    await recordWorkbookHistoryTransaction(descriptor, beforeSnapshot)
   }
   return applied
 }
 
 async function handleWorkbookHistoryAction(direction: "undo" | "redo"): Promise<void> {
+  await flushPendingWorkbookHistoryTransactions()
   await commitPendingFormulaEditHistory()
   const committedId = await measureSpreadsheetOperationAsync(
     direction === "undo" ? "Undo workbook edit" : "Redo workbook edit",
@@ -1537,17 +1568,23 @@ const {
   cloneRowData,
   applyClipboardEdits: applySpreadsheetGridEdits,
   buildFillMatrixFromRange: buildSpreadsheetFillMatrixFromRange,
+  applyRangeMove: applySpreadsheetRangeMove,
   history: {
     captureSnapshot: () => workbookHistory.captureSnapshot(),
     recordIntentTransaction: (descriptor, beforeSnapshot) => {
-      void workbookHistory.recordIntentTransaction(
+      void recordWorkbookHistoryTransaction(
         descriptor,
         beforeSnapshot as DataGridSpreadsheetWorkbookState,
       )
     },
-    canUndo: () => workbookHistory.canUndo.value,
+    canUndo: () => (
+      hasPendingFormulaEditHistory.value
+      || pendingWorkbookHistoryCommitCount.value > 0
+      || workbookHistory.canUndo.value
+    ),
     canRedo: () => workbookHistory.canRedo.value,
     runHistoryAction: async direction => {
+      await flushPendingWorkbookHistoryTransactions()
       await commitPendingFormulaEditHistory()
       const committedId = await measureSpreadsheetOperationAsync(
         direction === "undo" ? "Undo workbook edit" : "Redo workbook edit",
@@ -1655,11 +1692,16 @@ function buildSpreadsheetFillMatrixFromRange(range: DataGridCopyRange): string[]
   return matrix
 }
 
-function applySpreadsheetGridEdits(range: DataGridCopyRange, matrix: string[][]): number {
+function applySpreadsheetGridEdits(
+  range: DataGridCopyRange,
+  matrix: string[][],
+  options: { recordHistory?: boolean } = {},
+): number {
   const handle = activeSheetHandle.value
   if (!handle) {
     return 0
   }
+  const beforeSnapshot = options.recordHistory === false ? null : workbookHistory.captureSnapshot()
   const matrixHeight = Math.max(1, matrix.length)
   const matrixWidth = Math.max(1, matrix[0]?.length ?? 1)
   const patches: Array<{ cell: DataGridSpreadsheetCellAddress; rawInput: string }> = []
@@ -1700,6 +1742,13 @@ function applySpreadsheetGridEdits(range: DataGridCopyRange, matrix: string[][])
     applied = handle.sheetModel.setCellInputs(patches)
   })
   if (applied) {
+    if (beforeSnapshot) {
+      void recordWorkbookHistoryTransaction({
+        intent: "edit",
+        label: "Cell edit",
+        affectedRange: range,
+      }, beforeSnapshot)
+    }
     const anchor = {
       rowIndex: range.startRow,
       colIndex: range.startColumn,
@@ -1725,6 +1774,106 @@ function applySpreadsheetGridEdits(range: DataGridCopyRange, matrix: string[][])
     runtimeBundle.api.selection.setSnapshot(nextSnapshot)
   }
   return applied ? affectedRowIds.size : 0
+}
+
+function applySpreadsheetRangeMove(baseRange: DataGridCopyRange, targetRange: DataGridCopyRange): boolean {
+  const handle = activeSheetHandle.value
+  if (!handle) {
+    return false
+  }
+  const beforeSnapshot = workbookHistory.captureSnapshot()
+  const sourceMatrix = buildSpreadsheetFillMatrixFromRange(baseRange)
+  const patches: Array<{ cell: DataGridSpreadsheetCellAddress; rawInput: string }> = []
+  let changedCells = 0
+
+  for (let visualRowIndex = baseRange.startRow; visualRowIndex <= baseRange.endRow; visualRowIndex += 1) {
+    const row = resolveSpreadsheetRuntimeRow(visualRowIndex)
+    if (!row) {
+      continue
+    }
+    for (let columnIndex = baseRange.startColumn; columnIndex <= baseRange.endColumn; columnIndex += 1) {
+      const columnKey = visibleColumns.value[columnIndex]?.key
+      if (!columnKey) {
+        continue
+      }
+      patches.push({
+        cell: {
+          sheetId: handle.id,
+          rowId: row.rowId,
+          rowIndex: row.sourceRowIndex,
+          columnKey,
+        },
+        rawInput: "",
+      })
+    }
+  }
+
+  for (let visualRowIndex = targetRange.startRow; visualRowIndex <= targetRange.endRow; visualRowIndex += 1) {
+    const row = resolveSpreadsheetRuntimeRow(visualRowIndex)
+    if (!row) {
+      continue
+    }
+    for (let columnIndex = targetRange.startColumn; columnIndex <= targetRange.endColumn; columnIndex += 1) {
+      const columnKey = visibleColumns.value[columnIndex]?.key
+      if (!columnKey) {
+        continue
+      }
+      const rowOffset = visualRowIndex - targetRange.startRow
+      const columnOffset = columnIndex - targetRange.startColumn
+      patches.push({
+        cell: {
+          sheetId: handle.id,
+          rowId: row.rowId,
+          rowIndex: row.sourceRowIndex,
+          columnKey,
+        },
+        rawInput: sourceMatrix[rowOffset]?.[columnOffset] ?? "",
+      })
+      changedCells += 1
+    }
+  }
+
+  if (patches.length === 0 || changedCells === 0) {
+    return false
+  }
+
+  let applied = false
+  measureSpreadsheetOperation("Move cells", () => {
+    applied = handle.sheetModel.setCellInputs(patches)
+  })
+  if (!applied) {
+    return false
+  }
+
+  const anchor = {
+    rowIndex: targetRange.startRow,
+    colIndex: targetRange.startColumn,
+    rowId: runtimeBundle.api.rows.get(targetRange.startRow)?.rowId ?? null,
+  }
+  const focus = {
+    rowIndex: targetRange.endRow,
+    colIndex: targetRange.endColumn,
+    rowId: runtimeBundle.api.rows.get(targetRange.endRow)?.rowId ?? null,
+  }
+  const nextRange = createGridSelectionRange(anchor, focus, resolveSelectionContext())
+  const nextSnapshot = buildSelectionSnapshot(nextRange, {
+    rowIndex: nextRange.anchor.rowIndex,
+    colIndex: nextRange.anchor.colIndex,
+    rowId: nextRange.anchor.rowId ?? null,
+  })
+  selectionAnchor.value = {
+    rowIndex: nextRange.anchor.rowIndex,
+    colIndex: nextRange.anchor.colIndex,
+    rowId: nextRange.anchor.rowId ?? null,
+  }
+  selectionSnapshot.value = nextSnapshot
+  runtimeBundle.api.selection.setSnapshot(nextSnapshot)
+  void recordWorkbookHistoryTransaction({
+    intent: "move",
+    label: `Move ${changedCells} cells`,
+    affectedRange: targetRange,
+  }, beforeSnapshot)
+  return true
 }
 
 function resolveVisualRowIndexForCell(cell: DataGridSpreadsheetCellAddress | null): number | null {
@@ -1814,7 +1963,7 @@ function focusFormulaBar(selection?: { start: number; end: number }): void {
   })
 }
 
-function syncEditorCellDisplay(): void {
+function syncEditorCellDisplay(options: { forceRawInput?: boolean } = {}): void {
   const activeCell = editorSnapshot.value.activeCell
   if (!activeCell) {
     return
@@ -1823,7 +1972,7 @@ function syncEditorCellDisplay(): void {
   if (!cell) {
     return
   }
-  if (!isFormulaBarFocused.value && cell.rawInput !== editorSnapshot.value.rawInput) {
+  if ((options.forceRawInput || !isFormulaBarFocused.value) && cell.rawInput !== editorSnapshot.value.rawInput) {
     editorModel.setInput(cell.rawInput)
   }
   editorModel.setDisplayValue(cell.displayValue)

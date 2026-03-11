@@ -825,6 +825,7 @@ describe("useDataGridAppInteractionController contract", () => {
       baseRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
       previewRange: { startRow: 0, endRow: 3, startColumn: 0, endColumn: 0 },
       behavior: "series",
+      allowBehaviorToggle: true,
     }
 
     const applied = controller.applyLastFillBehavior("copy")

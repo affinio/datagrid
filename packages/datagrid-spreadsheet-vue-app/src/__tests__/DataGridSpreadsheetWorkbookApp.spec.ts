@@ -137,6 +137,23 @@ function readOrdersRowState(workbook: DataGridSpreadsheetWorkbookModel): {
   }
 }
 
+function readSummaryMetricState(workbook: DataGridSpreadsheetWorkbookModel): {
+  metricRawInput: string | null
+  metricDisplayValue: unknown
+} {
+  const summarySheet = workbook.getSheet("summary")
+  const metricCell = summarySheet?.sheetModel.getCell({
+    sheetId: "summary",
+    rowId: "summary-1",
+    rowIndex: 0,
+    columnKey: "metric",
+  })
+  return {
+    metricRawInput: metricCell?.rawInput ?? null,
+    metricDisplayValue: metricCell?.displayValue ?? null,
+  }
+}
+
 describe("DataGridSpreadsheetWorkbookApp", () => {
   beforeAll(() => {
     class ResizeObserverStub {
@@ -219,6 +236,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
       qtyRawInput: "9",
       totalValue: 3780,
     })
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("9")
 
     const buttons = wrapper.findAll("button")
     const undoButton = buttons.find(button => button.text() === "Undo")
@@ -234,6 +252,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
       qtyRawInput: "4",
       totalValue: 1680,
     })
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("4")
 
     await redoButton!.trigger("click")
     await flushUiAndTimers()
@@ -241,6 +260,127 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     expect(readOrdersRowState(workbook)).toEqual({
       qtyRawInput: "9",
       totalValue: 3780,
+    })
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("9")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("undos and redoes plain value edits on non-formula cells", async () => {
+    const workbook = createWorkbookModel()
+
+    expect(readSummaryMetricState(workbook)).toEqual({
+      metricRawInput: "Orders 1 + 2",
+      metricDisplayValue: "Orders 1 + 2",
+    })
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("Updated summary label")
+    await flushUiAndTimers()
+
+    expect(readSummaryMetricState(workbook)).toEqual({
+      metricRawInput: "Updated summary label",
+      metricDisplayValue: "Updated summary label",
+    })
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("Updated summary label")
+
+    const buttons = wrapper.findAll("button")
+    const undoButton = buttons.find(button => button.text() === "Undo")
+    const redoButton = buttons.find(button => button.text() === "Redo")
+
+    expect(undoButton).toBeDefined()
+    expect(redoButton).toBeDefined()
+
+    await undoButton!.trigger("click")
+    await flushUiAndTimers()
+
+    expect(readSummaryMetricState(workbook)).toEqual({
+      metricRawInput: "Orders 1 + 2",
+      metricDisplayValue: "Orders 1 + 2",
+    })
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("Orders 1 + 2")
+
+    await redoButton!.trigger("click")
+    await flushUiAndTimers()
+
+    expect(readSummaryMetricState(workbook)).toEqual({
+      metricRawInput: "Updated summary label",
+      metricDisplayValue: "Updated summary label",
+    })
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("Updated summary label")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("undos pending plain value edits from the grid keyboard shortcut", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("Keyboard undo label")
+
+    expect(readSummaryMetricState(workbook)).toEqual({
+      metricRawInput: "Keyboard undo label",
+      metricDisplayValue: "Keyboard undo label",
+    })
+
+    await formulaInput.trigger("keydown", { key: "Enter" })
+    await flushUi()
+
+    const activeGridCell = wrapper.find('.spreadsheet-grid-host .grid-cell[data-row-index="0"][data-column-index="0"]')
+    expect(activeGridCell.exists()).toBe(true)
+
+    await activeGridCell.trigger("keydown", { key: "z", ctrlKey: true })
+    await flushUiAndTimers()
+
+    expect(readSummaryMetricState(workbook)).toEqual({
+      metricRawInput: "Orders 1 + 2",
+      metricDisplayValue: "Orders 1 + 2",
     })
 
     wrapper.unmount()
