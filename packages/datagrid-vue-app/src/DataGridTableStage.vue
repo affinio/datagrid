@@ -1135,6 +1135,29 @@ function resolveVisibleRowElement(rowIndex: number): HTMLElement | null {
   return null
 }
 
+function resolveRelativeCellRect(cell: { rowIndex: number; columnIndex: number } | null): {
+  left: number
+  right: number
+  top: number
+  bottom: number
+} | null {
+  if (!cell) {
+    return null
+  }
+  const cellElement = resolveVisibleCellElement(cell.rowIndex, cell.columnIndex)
+  const shellRect = bodyShellRef.value?.getBoundingClientRect()
+  if (!cellElement || !shellRect) {
+    return null
+  }
+  const cellRect = cellElement.getBoundingClientRect()
+  return {
+    left: cellRect.left - shellRect.left,
+    right: cellRect.right - shellRect.left,
+    top: cellRect.top - shellRect.top,
+    bottom: cellRect.bottom - shellRect.top,
+  }
+}
+
 function focusVisibleAnchorCell(): void {
   const anchorCell = resolveVisibleAnchorCellPosition()
   if (!anchorCell) {
@@ -1207,15 +1230,38 @@ function resolveVisibleFillActionAnchorCell(): { rowIndex: number; columnIndex: 
   const range = props.selectionRange
   const selectionRowStart = range ? Math.min(range.startRow, range.endRow) : anchorCell.rowIndex
   const selectionRowEnd = range ? Math.max(range.startRow, range.endRow) : anchorCell.rowIndex
+  const selectionColumnStart = range ? Math.min(range.startColumn, range.endColumn) : anchorCell.columnIndex
+  const selectionColumnEnd = range ? Math.max(range.startColumn, range.endColumn) : anchorCell.columnIndex
   const clampedRowStart = Math.max(selectionRowStart, visibleRowStart)
   const clampedRowEnd = Math.min(selectionRowEnd, visibleRowEnd)
   const rowIndex = clampedRowStart <= clampedRowEnd
     ? clamp(anchorCell.rowIndex, clampedRowStart, clampedRowEnd)
     : anchorCell.rowIndex
 
+  const visibleCenterColumnKeys = new Set(props.renderedColumns.map(column => column.key))
+  const visibleColumnIndexes = props.visibleColumns
+    .map((column, columnIndex) => ({ column, columnIndex }))
+    .filter(({ column, columnIndex }) => {
+      if (columnIndex < selectionColumnStart || columnIndex > selectionColumnEnd) {
+        return false
+      }
+      return column.pin === "left"
+        || column.pin === "right"
+        || visibleCenterColumnKeys.has(column.key)
+    })
+    .map(({ columnIndex }) => columnIndex)
+
+  const columnIndex = visibleColumnIndexes.length > 0
+    ? clamp(
+        anchorCell.columnIndex,
+        visibleColumnIndexes[0] ?? anchorCell.columnIndex,
+        visibleColumnIndexes[visibleColumnIndexes.length - 1] ?? anchorCell.columnIndex,
+      )
+    : anchorCell.columnIndex
+
   return {
     rowIndex,
-    columnIndex: anchorCell.columnIndex,
+    columnIndex,
   }
 }
 
@@ -1223,6 +1269,14 @@ function resolveFloatingFillActionLeft(): number | null {
   const anchorCell = resolveVisibleFillActionAnchorCell() ?? props.fillActionAnchorCell
   if (!anchorCell) {
     return null
+  }
+  const relativeCellRect = resolveRelativeCellRect(anchorCell)
+  if (relativeCellRect) {
+    return clamp(
+      relativeCellRect.right - FILL_ACTION_TRIGGER_SIZE_PX,
+      FILL_ACTION_VIEWPORT_MARGIN_PX,
+      leftPaneWidth.value + effectiveBodyViewportWidth.value + rightPaneWidth.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX,
+    )
   }
   const column = props.visibleColumns[anchorCell.columnIndex]
   if (!column) {
@@ -1285,6 +1339,10 @@ function resolveFloatingFillActionTop(): number {
   const targetCell = resolveVisibleFillActionAnchorCell()
   if (anchorCell && targetCell && anchorCell.rowIndex !== targetCell.rowIndex) {
     return viewportBottom
+  }
+  const relativeCellRect = resolveRelativeCellRect(targetCell)
+  if (relativeCellRect) {
+    return clamp(relativeCellRect.bottom - FILL_ACTION_TRIGGER_SIZE_PX, viewportTop, viewportBottom)
   }
   const shellRect = bodyShellRef.value?.getBoundingClientRect()
   const rowElement = targetCell ? resolveVisibleRowElement(targetCell.rowIndex) : null

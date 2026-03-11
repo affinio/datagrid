@@ -129,6 +129,7 @@ async function applyViewportLayoutMetrics(
     viewportTop: number
     viewportHeight: number
     rowBottomsByIndex?: Record<number, number>
+    cellRectsByCoord?: Record<string, { left: number; top: number; width: number; height: number }>
   },
 ): Promise<void> {
   const shell = wrapper.find(".grid-body-shell").element as HTMLElement
@@ -181,6 +182,25 @@ async function applyViewportLayoutMetrics(
       bottom: rowBottom,
       width: 120,
       height: 31,
+      toJSON: () => ({}),
+    }) as DOMRect
+  }
+
+  for (const [coord, rect] of Object.entries(options.cellRectsByCoord ?? {})) {
+    const [rowIndexText, columnIndexText] = coord.split(":")
+    const cell = wrapper.find(`.grid-cell[data-row-index="${rowIndexText}"][data-column-index="${columnIndexText}"]`).element as HTMLElement | undefined
+    if (!cell) {
+      continue
+    }
+    cell.getBoundingClientRect = () => ({
+      x: rect.left,
+      y: rect.top,
+      left: rect.left,
+      top: rect.top,
+      right: rect.left + rect.width,
+      bottom: rect.top + rect.height,
+      width: rect.width,
+      height: rect.height,
       toJSON: () => ({}),
     }) as DOMRect
   }
@@ -523,9 +543,48 @@ describe("DataGridTableStage contract", () => {
       rowBottomsByIndex: {
         2: 84,
       },
+      cellRectsByCoord: {
+        "2:1": { left: 150, top: 53, width: 120, height: 31 },
+      },
     })
 
     expect(wrapper.find(".grid-fill-action--floating").attributes("style")).toContain("top: 70px;")
+    expect(wrapper.find(".grid-fill-action--floating").attributes("style")).toContain("left: 256px;")
+
+    wrapper.unmount()
+  })
+
+  it("positions the fill action next to the last visible selected column when the end column is out of view", async () => {
+    const baseProps = createStageProps(
+      (rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 1 && columnIndex <= 2,
+      {
+        selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 2 },
+        fillActionAnchorCell: { rowIndex: 0, columnIndex: 2 },
+        fillActionBehavior: "series",
+      },
+    )
+
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...baseProps,
+        renderedColumns: baseProps.renderedColumns.filter(column => column.key === "centerA"),
+        rightColumnSpacerWidth: 130,
+      },
+    })
+
+    await applyViewportLayoutMetrics(wrapper, {
+      viewportTop: 12,
+      viewportHeight: 100,
+      rowBottomsByIndex: {
+        0: 43,
+      },
+      cellRectsByCoord: {
+        "0:1": { left: 160, top: 12, width: 120, height: 31 },
+      },
+    })
+
+    expect(wrapper.find(".grid-fill-action--floating").attributes("style")).toContain("left: 266px;")
 
     wrapper.unmount()
   })
