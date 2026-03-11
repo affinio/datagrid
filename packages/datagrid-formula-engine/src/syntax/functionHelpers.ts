@@ -3,6 +3,7 @@ import type {
   DataGridFormulaFunctionDefinition,
 } from "./types.js"
 import type {
+  DataGridFormulaTableRowsSource,
   DataGridFormulaScalarValue,
   DataGridFormulaValue,
 } from "../coreTypes.js"
@@ -17,6 +18,12 @@ import { parseFormulaReferenceSegments } from "./tokenizer.js"
 
 export type {
   DataGridFormulaFunctionDefinition,
+}
+
+function isFormulaTableRowsSource(value: unknown): value is DataGridFormulaTableRowsSource {
+  return typeof value === "object"
+    && value !== null
+    && Array.isArray((value as { rows?: unknown }).rows)
 }
 
 export interface FormulaCriterionEntry {
@@ -118,19 +125,31 @@ export function collectFormulaTableValues(
   rowsInput: unknown,
   fieldValue: DataGridFormulaValue | undefined,
 ): readonly DataGridFormulaScalarValue[] {
-  if (!Array.isArray(rowsInput)) {
+  const rows = Array.isArray(rowsInput)
+    ? rowsInput
+    : isFormulaTableRowsSource(rowsInput)
+      ? rowsInput.rows
+      : null
+  if (!rows) {
     return Object.freeze([])
   }
+  const resolveRow = isFormulaTableRowsSource(rowsInput) && typeof rowsInput.resolveRow === "function"
+    ? rowsInput.resolveRow
+    : undefined
   const field = typeof fieldValue === "undefined"
     ? ""
     : coerceFormulaValueToText(fieldValue).trim()
   const path = field.length > 0 ? parseFormulaReferenceSegments(field) : []
   const values: DataGridFormulaScalarValue[] = []
 
-  for (const row of rowsInput) {
-    const resolved = path.length > 0
-      ? readNestedFormulaTableValue(row, path)
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    const rowValue = resolveRow
+      ? resolveRow(row, index)
       : row
+    const resolved = path.length > 0
+      ? readNestedFormulaTableValue(rowValue, path)
+      : rowValue
     if (Array.isArray(resolved)) {
       for (const entry of resolved) {
         values.push(coerceUnknownToFormulaScalar(entry))

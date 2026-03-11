@@ -8,6 +8,11 @@ import {
 import type { VisibleRow } from "../../types"
 import type { DataGridRowNodeInput } from "../rowModel"
 
+const projectionStageTimer = <TResult>(_stage: string, run: () => TResult) => ({
+  result: run(),
+  duration: 0,
+})
+
 function buildRows(count: number): VisibleRow<{ id: number }>[] {
   return Array.from({ length: count }, (_, index) => ({
     row: { id: index },
@@ -502,6 +507,63 @@ describe("createClientRowModel", () => {
       expect.arrayContaining([
         expect.objectContaining({ name: "balance", runtimeMode: "row", iterative: true }),
         expect.objectContaining({ name: "moving", runtimeMode: "row" }),
+      ]),
+    )
+
+    model.dispose()
+  })
+
+  it("supports smartsheet-style parser options in client row-model formulas", () => {
+    const model = createClientRowModel<{
+      id: number
+      amount: number
+      mirrored?: number
+    }>({
+      formulaReferenceParserOptions: {
+        syntax: "smartsheet",
+      },
+      rows: [
+        {
+          row: { id: 1, amount: 10 },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+        {
+          row: { id: 2, amount: 4 },
+          rowId: "r2",
+          originalIndex: 1,
+          displayIndex: 1,
+        },
+        {
+          row: { id: 3, amount: -3 },
+          rowId: "r3",
+          originalIndex: 2,
+          displayIndex: 2,
+        },
+      ],
+      initialFormulaFields: [
+        { name: "mirrored", formula: "=[amount]@row + [amount]1" },
+      ],
+    })
+
+    expect((model.getRow(0)?.row as { mirrored?: number }).mirrored).toBe(20)
+    expect((model.getRow(1)?.row as { mirrored?: number }).mirrored).toBe(14)
+    expect((model.getRow(2)?.row as { mirrored?: number }).mirrored).toBe(7)
+
+    expect(model.getFormulaFields()).toEqual([
+      {
+        name: "mirrored",
+        field: "mirrored",
+        formula: "[amount]@row + [amount]1",
+        deps: ["field:amount", "field:amount::row::absolute:0"],
+        contextKeys: [],
+      },
+    ])
+
+    expect(model.getFormulaComputeStageDiagnostics()?.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "mirrored", runtimeMode: "row" }),
       ]),
     )
 
@@ -3476,6 +3538,7 @@ describe("createClientRowModel", () => {
         { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
       ],
+      projectionStageTimer,
     })
 
     model.setSortModel([{ key: "tested_at", direction: "asc" }])

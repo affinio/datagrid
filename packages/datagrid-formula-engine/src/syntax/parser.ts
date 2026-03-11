@@ -83,7 +83,7 @@ export function parseFormula(tokens: readonly DataGridFormulaToken[]): DataGridF
             span: createFormulaSourceSpan(token.position, token.end),
           }
         }
-        const parsedIdentifier = parseDataGridFormulaIdentifier(token.raw ?? token.value)
+        const parsedIdentifier = parseDataGridFormulaIdentifier(token.value)
         return {
           kind: "identifier",
           name: parsedIdentifier.name,

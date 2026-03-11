@@ -16,6 +16,7 @@ import {
   isFormulaErrorValue,
   normalizeFormulaValue,
   parseDataGridComputedDependencyToken,
+  parseDataGridFormulaIdentifier,
   parseDataGridFormulaExpression,
 } from "../formula/formulaEngine.js"
 
@@ -412,6 +413,73 @@ describe("formulaEngine", () => {
     })
 
     expect(currentCompiled.expressionHash).not.toBe(relativeCompiled.expressionHash)
+  })
+
+  it("supports smartsheet-style current-row and absolute-row selectors via parser options", () => {
+    expect(parseDataGridFormulaIdentifier("[gross margin]@row", {
+      syntax: "smartsheet",
+    })).toEqual({
+      name: '"gross margin"',
+      referenceName: '"gross margin"',
+      rowSelector: { kind: "current" },
+    })
+
+    const parsed = parseDataGridFormulaExpression("=[price]@row + [qty]5", {
+      referenceParserOptions: {
+        syntax: "smartsheet",
+      },
+    })
+
+    expect(parsed.ast.kind).toBe("binary")
+    if (parsed.ast.kind === "binary") {
+      expect(parsed.ast.left).toMatchObject({
+        kind: "identifier",
+        name: "price",
+        referenceName: "price",
+        rowSelector: { kind: "current" },
+      })
+      expect(parsed.ast.right).toMatchObject({
+        kind: "identifier",
+        name: "qty[4]",
+        referenceName: "qty",
+        rowSelector: { kind: "absolute", rowIndex: 4 },
+      })
+    }
+
+    const compiled = compileDataGridFormulaFieldDefinition({
+      name: "smartsheetTotal",
+      formula: "=[price]@row + [qty]5",
+    }, {
+      referenceParserOptions: {
+        syntax: "smartsheet",
+      },
+      resolveDependencyToken: identifier => {
+        if (identifier === "qty[4]") {
+          return "field:qty::row::absolute:4"
+        }
+        return `field:${identifier}`
+      },
+    })
+
+    expect(compiled.batchExecutionMode).toBe("row")
+    expect(compiled.deps).toEqual([
+      "field:price",
+      "field:qty::row::absolute:4",
+    ])
+    expect(parseDataGridComputedDependencyToken(compiled.deps[1] ?? "")).toEqual({
+      domain: "field",
+      name: "qty",
+      rowDomain: { kind: "absolute", rowIndex: 4 },
+    })
+
+    const invalid = diagnoseDataGridFormulaExpression("=[price]0", {
+      referenceParserOptions: {
+        syntax: "smartsheet",
+      },
+    })
+
+    expect(invalid.ok).toBe(false)
+    expect(invalid.diagnostics[0]?.message).toContain("must be >= 1")
   })
 
   it("supports function calls and comparison operators", () => {

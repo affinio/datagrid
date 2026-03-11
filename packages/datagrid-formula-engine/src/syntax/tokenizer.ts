@@ -1,6 +1,8 @@
 import type {
   DataGridFormulaOperator,
+  DataGridFormulaReferenceParserOptions,
   DataGridFormulaReferenceSegment,
+  DataGridFormulaReferenceSyntax,
   DataGridFormulaRowSelector,
   DataGridFormulaToken,
 } from "./types.js"
@@ -17,6 +19,18 @@ export interface DataGridParsedFormulaIdentifier {
   name: string
   referenceName: string
   rowSelector: DataGridFormulaRowSelector
+}
+
+interface ResolvedDataGridFormulaReferenceParserOptions {
+  syntax: DataGridFormulaReferenceSyntax
+  smartsheetAbsoluteRowBase: 0 | 1
+}
+
+interface DataGridReadFormulaIdentifierResult {
+  value: string
+  referenceName: string
+  rowSelector: DataGridFormulaRowSelector
+  end: number
 }
 
 function readEscapedFormulaStringValue(
@@ -103,6 +117,29 @@ function normalizeFormulaReferenceSegments(
   return segments.map(formatFormulaReferenceSegment).join(".")
 }
 
+function resolveFormulaReferenceParserOptions(
+  options: DataGridFormulaReferenceParserOptions | undefined,
+): ResolvedDataGridFormulaReferenceParserOptions {
+  const syntax = options?.syntax ?? "canonical"
+  return {
+    syntax,
+    smartsheetAbsoluteRowBase: options?.smartsheetAbsoluteRowBase === 0 ? 0 : 1,
+  }
+}
+
+function supportsSmartsheetFormulaReferenceSyntax(
+  syntax: DataGridFormulaReferenceSyntax,
+): boolean {
+  return syntax === "smartsheet" || syntax === "auto"
+}
+
+function serializeParsedFormulaIdentifier(
+  referenceName: string,
+  rowSelector: DataGridFormulaRowSelector,
+): string {
+  return `${referenceName}${serializeFormulaRowSelector(rowSelector)}`
+}
+
 export function normalizeFormulaReference(reference: string): string {
   const normalized = reference.trim()
   if (normalized.length === 0) {
@@ -158,43 +195,6 @@ function serializeFormulaRowSelector(selector: DataGridFormulaRowSelector): stri
   const startOffset = selector.startOffset >= 0 ? `+${selector.startOffset}` : String(selector.startOffset)
   const endOffset = selector.endOffset >= 0 ? `+${selector.endOffset}` : String(selector.endOffset)
   return `[${startOffset}:${endOffset}]`
-}
-
-export function parseDataGridFormulaIdentifier(
-  reference: string,
-): DataGridParsedFormulaIdentifier {
-  const normalizedReference = reference.trim()
-  if (normalizedReference.length === 0) {
-    return {
-      name: "",
-      referenceName: "",
-      rowSelector: { kind: "current" },
-    }
-  }
-  const selectorMatch = /^(.*)\[([^\[\]]+)\]$/.exec(normalizedReference)
-  if (selectorMatch) {
-    const referenceName = normalizeFormulaReference(selectorMatch[1] ?? "")
-    const selectorValue = selectorMatch[2] ?? ""
-    const rowSelector = parseFormulaRowSelectorValue(selectorValue)
-    if (referenceName.length > 0 && rowSelector) {
-      return {
-        name: `${referenceName}${serializeFormulaRowSelector(rowSelector)}`,
-        referenceName,
-        rowSelector,
-      }
-    }
-    if (referenceName.length > 0 && looksLikeFormulaRowSelectorValue(selectorValue)) {
-      throwFormulaError(
-        `Invalid row selector '${selectorValue.trim()}' in reference '${normalizedReference}'.`,
-      )
-    }
-  }
-  const referenceName = normalizeFormulaReference(normalizedReference)
-  return {
-    name: referenceName,
-    referenceName,
-    rowSelector: { kind: "current" },
-  }
 }
 
 function readFormulaReferenceAt(
@@ -351,6 +351,325 @@ function readFormulaReferenceAt(
   }
 }
 
+function isFormulaReferenceBoundary(character: string | undefined): boolean {
+  return typeof character !== "string"
+    || character === " "
+    || character === "\t"
+    || character === "\n"
+    || character === "\r"
+    || character === "+"
+    || character === "-"
+    || character === "*"
+    || character === "/"
+    || character === ","
+    || character === "("
+    || character === ")"
+    || character === ">"
+    || character === "<"
+    || character === "="
+    || character === "!"
+}
+
+function readCanonicalTrailingFormulaRowSelectorAt(
+  input: string,
+  start: number,
+): {
+  rowSelector: DataGridFormulaRowSelector
+  end: number
+} | null {
+  if (input[start] !== "[") {
+    return null
+  }
+  const bracketStart = start
+  let cursor = start + 1
+  while (cursor < input.length && input[cursor] !== "]") {
+    cursor += 1
+  }
+  if (input[cursor] !== "]") {
+    throwFormulaError(
+      `Missing ']' for reference starting at position ${bracketStart + 1}.`,
+      createFormulaSourceSpan(bracketStart, cursor),
+    )
+  }
+  const selectorValue = input.slice(start + 1, cursor).trim()
+  const rowSelector = parseFormulaRowSelectorValue(selectorValue)
+  if (rowSelector) {
+    const end = cursor + 1
+    if (!isFormulaReferenceBoundary(input[end])) {
+      return null
+    }
+    return {
+      rowSelector,
+      end,
+    }
+  }
+  if (looksLikeFormulaRowSelectorValue(selectorValue) && isFormulaReferenceBoundary(input[cursor + 1])) {
+    throwFormulaError(
+      `Invalid row selector '${selectorValue}' in reference '${input.slice(0, cursor + 1).trim()}'.`,
+      createFormulaSourceSpan(bracketStart, cursor + 1),
+    )
+  }
+  return null
+}
+
+function readSmartsheetTrailingFormulaRowSelectorAt(
+  input: string,
+  start: number,
+  options: ResolvedDataGridFormulaReferenceParserOptions,
+): {
+  rowSelector: DataGridFormulaRowSelector
+  end: number
+} | null {
+  const current = input[start]
+  if (current === "@") {
+    const keyword = input.slice(start, start + 4).toLowerCase()
+    if (keyword !== "@row") {
+      return null
+    }
+    return {
+      rowSelector: { kind: "current" },
+      end: start + 4,
+    }
+  }
+  if (!(current && current >= "0" && current <= "9")) {
+    return null
+  }
+  let cursor = start + 1
+  while (cursor < input.length) {
+    const next = input[cursor]
+    if (!(next && next >= "0" && next <= "9")) {
+      break
+    }
+    cursor += 1
+  }
+  const rowNumber = Number(input.slice(start, cursor))
+  if (!Number.isInteger(rowNumber)) {
+    return null
+  }
+  if (options.smartsheetAbsoluteRowBase === 1 && rowNumber <= 0) {
+    throwFormulaError(
+      `Smartsheet row selector '${input.slice(start, cursor)}' must be >= 1.`,
+      createFormulaSourceSpan(start, cursor),
+    )
+  }
+  return {
+    rowSelector: {
+      kind: "absolute",
+      rowIndex: rowNumber - options.smartsheetAbsoluteRowBase,
+    },
+    end: cursor,
+  }
+}
+
+function readFormulaIdentifierAt(
+  input: string,
+  start: number,
+  options: DataGridFormulaReferenceParserOptions | undefined,
+): DataGridReadFormulaIdentifierResult | null {
+  const parserOptions = resolveFormulaReferenceParserOptions(options)
+  let cursor = start
+  const segments: DataGridFormulaReferenceSegment[] = []
+  let expectSegment = true
+
+  const pushSimpleSegment = (): boolean => {
+    if (!isFormulaReferenceIdentifierStart(input[cursor])) {
+      return false
+    }
+    const segmentStart = cursor
+    cursor += 1
+    while (cursor < input.length && isFormulaReferenceIdentifierPart(input[cursor])) {
+      cursor += 1
+    }
+    segments.push(input.slice(segmentStart, cursor))
+    expectSegment = false
+    return true
+  }
+
+  const pushNumericSegment = (): boolean => {
+    const current = input[cursor]
+    if (!(current && current >= "0" && current <= "9")) {
+      return false
+    }
+    const segmentStart = cursor
+    cursor += 1
+    while (cursor < input.length) {
+      const next = input[cursor]
+      if (!(next && next >= "0" && next <= "9")) {
+        break
+      }
+      cursor += 1
+    }
+    const parsedIndex = Number(input.slice(segmentStart, cursor))
+    segments.push(parsedIndex)
+    expectSegment = false
+    return true
+  }
+
+  const pushQuotedSegment = (): boolean => {
+    const current = input[cursor]
+    if (current !== "'" && current !== '"') {
+      return false
+    }
+    const parsed = readEscapedFormulaStringValue(input, cursor, current)
+    segments.push(parsed.value)
+    cursor = parsed.end
+    expectSegment = false
+    return true
+  }
+
+  const pushBracketSegment = (): boolean => {
+    if (input[cursor] !== "[") {
+      return false
+    }
+    const bracketStart = cursor
+    cursor += 1
+    while (cursor < input.length && /\s/.test(input[cursor] ?? "")) {
+      cursor += 1
+    }
+    if (cursor >= input.length) {
+      throwFormulaError(
+        `Missing ']' for reference starting at position ${bracketStart + 1}.`,
+        createFormulaSourceSpan(bracketStart, cursor),
+      )
+    }
+
+    let segmentValue: string
+    const current = input[cursor]
+    if (current === "'" || current === '"') {
+      const parsed = readEscapedFormulaStringValue(input, cursor, current)
+      segmentValue = parsed.value
+      cursor = parsed.end
+      while (cursor < input.length && /\s/.test(input[cursor] ?? "")) {
+        cursor += 1
+      }
+      if (input[cursor] !== "]") {
+        throwFormulaError(
+          `Missing ']' for reference starting at position ${bracketStart + 1}.`,
+          createFormulaSourceSpan(bracketStart, cursor),
+        )
+      }
+    } else {
+      const valueStart = cursor
+      while (cursor < input.length && input[cursor] !== "]") {
+        cursor += 1
+      }
+      if (input[cursor] !== "]") {
+        throwFormulaError(
+          `Missing ']' for reference starting at position ${bracketStart + 1}.`,
+          createFormulaSourceSpan(bracketStart, cursor),
+        )
+      }
+      segmentValue = input.slice(valueStart, cursor).trim()
+      if (segmentValue.length === 0) {
+        throwFormulaError(
+          `Empty bracket reference at position ${bracketStart + 1}.`,
+          createFormulaSourceSpan(bracketStart, cursor + 1),
+        )
+      }
+    }
+
+    const parsedIndex = Number(segmentValue)
+    if (String(parsedIndex) === segmentValue && Number.isInteger(parsedIndex) && parsedIndex >= 0) {
+      segments.push(parsedIndex)
+    } else {
+      segments.push(segmentValue)
+    }
+    cursor += 1
+    expectSegment = false
+    return true
+  }
+
+  while (cursor < input.length) {
+    if (expectSegment) {
+      if (pushSimpleSegment() || pushNumericSegment() || pushQuotedSegment() || pushBracketSegment()) {
+        continue
+      }
+      break
+    }
+    const current = input[cursor]
+    if (current === ".") {
+      cursor += 1
+      expectSegment = true
+      continue
+    }
+    if (current === "[") {
+      if (segments.length > 0) {
+        const rowSelector = readCanonicalTrailingFormulaRowSelectorAt(input, cursor)
+        if (rowSelector) {
+          const referenceName = normalizeFormulaReferenceSegments(segments)
+          return {
+            value: serializeParsedFormulaIdentifier(referenceName, rowSelector.rowSelector),
+            referenceName,
+            rowSelector: rowSelector.rowSelector,
+            end: rowSelector.end,
+          }
+        }
+      }
+      expectSegment = true
+      continue
+    }
+    break
+  }
+
+  if (segments.length === 0) {
+    return null
+  }
+  if (expectSegment) {
+    throwFormulaError(
+      `Incomplete reference at position ${cursor + 1}.`,
+      createFormulaSourceSpan(start, Math.max(start + 1, cursor)),
+    )
+  }
+
+  const referenceName = normalizeFormulaReferenceSegments(segments)
+  if (supportsSmartsheetFormulaReferenceSyntax(parserOptions.syntax)) {
+    const smartsheetSelector = readSmartsheetTrailingFormulaRowSelectorAt(input, cursor, parserOptions)
+    if (smartsheetSelector && isFormulaReferenceBoundary(input[smartsheetSelector.end])) {
+      return {
+        value: serializeParsedFormulaIdentifier(referenceName, smartsheetSelector.rowSelector),
+        referenceName,
+        rowSelector: smartsheetSelector.rowSelector,
+        end: smartsheetSelector.end,
+      }
+    }
+  }
+
+  return {
+    value: referenceName,
+    referenceName,
+    rowSelector: { kind: "current" },
+    end: cursor,
+  }
+}
+
+export function parseDataGridFormulaIdentifier(
+  reference: string,
+  options: DataGridFormulaReferenceParserOptions = {},
+): DataGridParsedFormulaIdentifier {
+  const normalizedReference = reference.trim()
+  if (normalizedReference.length === 0) {
+    return {
+      name: "",
+      referenceName: "",
+      rowSelector: { kind: "current" },
+    }
+  }
+  const parsed = readFormulaIdentifierAt(normalizedReference, 0, options)
+  if (parsed && parsed.end === normalizedReference.length) {
+    return {
+      name: parsed.value,
+      referenceName: parsed.referenceName,
+      rowSelector: parsed.rowSelector,
+    }
+  }
+  const referenceName = normalizeFormulaReference(normalizedReference)
+  return {
+    name: referenceName,
+    referenceName,
+    rowSelector: { kind: "current" },
+  }
+}
+
 export function parseFormulaReferenceSegments(
   reference: string,
 ): readonly DataGridFormulaReferenceSegment[] {
@@ -379,7 +698,10 @@ export function parseFormulaReferenceSegments(
   )
 }
 
-export function tokenizeFormula(formula: string): readonly DataGridFormulaToken[] {
+export function tokenizeFormula(
+  formula: string,
+  options: DataGridFormulaReferenceParserOptions = {},
+): readonly DataGridFormulaToken[] {
   const tokens: DataGridFormulaToken[] = []
   let cursor = 0
 
@@ -422,7 +744,7 @@ export function tokenizeFormula(formula: string): readonly DataGridFormulaToken[
 
   const pushIdentifier = (): void => {
     const start = cursor
-    const parsed = readFormulaReferenceAt(formula, cursor)
+    const parsed = readFormulaIdentifierAt(formula, cursor, options)
     if (!parsed) {
       throwFormulaError(`Unexpected token '${formula[cursor]}' at position ${cursor + 1}.`, createFormulaSourceSpan(cursor, cursor + 1))
     }

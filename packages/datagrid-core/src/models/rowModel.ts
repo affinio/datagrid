@@ -19,6 +19,7 @@ import type {
   DataGridFormulaContextRecomputeRequest,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
+  DataGridFormulaTableSource,
   DataGridFormulaValue,
   DataGridFormulaComputeStageDiagnostics,
   DataGridFormulaRowRecomputeDiagnostics,
@@ -27,14 +28,17 @@ import type {
 export type {
   DataGridComputedDependencyToken,
   DataGridFormulaReferenceDescriptor,
+  DataGridFormulaReferenceParserOptions,
   DataGridFormulaReferenceDomain,
   DataGridFormulaReferenceRowDomain,
+  DataGridFormulaRowSelector,
   DataGridFormulaMetaField,
   DataGridComputedFieldComputeContext,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
+  DataGridFormulaTableSource,
   DataGridFormulaContextRecomputeRequest,
   DataGridFormulaCyclePolicy,
   DataGridFormulaIterativeCalculationOptions,
@@ -53,6 +57,7 @@ export type {
   DataGridFormulaNodeComputeDiagnostics,
   DataGridFormulaComputeStageDiagnostics,
 } from "./formula/formulaContracts.js"
+export type { DataGridFormulaTableRowsSource } from "./formula/formulaContracts.js"
 export type {
   DataGridAggOp,
   DataGridPivotColumn,
@@ -397,6 +402,16 @@ export type DataGridProjectionInvalidationReason =
 
 export type DataGridProjectionStageTimes = Partial<Record<DataGridProjectionStage, number>>
 
+export interface DataGridProjectionStageTimerResult<TResult = unknown> {
+  result: TResult
+  duration: number
+}
+
+export type DataGridProjectionStageTimer = <TResult>(
+  stage: DataGridProjectionStage,
+  run: () => TResult,
+) => DataGridProjectionStageTimerResult<TResult>
+
 export interface DataGridProjectionPerformanceDiagnostics {
   totalTime: number
   stageTimes: DataGridProjectionStageTimes
@@ -451,6 +466,16 @@ export interface DataGridTreeDataDiagnostics {
 
 export type DataGridRowModelListener<T = unknown> = (snapshot: DataGridRowModelSnapshot<T>) => void
 
+export interface DataGridFormulaTableBinding {
+  name: string
+  rows: DataGridFormulaTableSource
+}
+
+export interface DataGridFormulaTablePatch {
+  set?: readonly DataGridFormulaTableBinding[]
+  remove?: readonly string[]
+}
+
 export interface DataGridRowModel<T = unknown> {
   readonly kind: DataGridRowModelKind
   getSnapshot(): DataGridRowModelSnapshot<T>
@@ -483,7 +508,8 @@ export interface DataGridRowModel<T = unknown> {
   registerFormulaField?(definition: DataGridFormulaFieldDefinition): void
   getFormulaFields?(): readonly DataGridFormulaFieldSnapshot[]
   recomputeFormulaContext?(request: DataGridFormulaContextRecomputeRequest): number
-  setFormulaTable?(name: string, rows: readonly unknown[]): void
+  setFormulaTable?(name: string, rows: DataGridFormulaTableSource): void
+  patchFormulaTables?(patch: DataGridFormulaTablePatch): boolean
   removeFormulaTable?(name: string): boolean
   getFormulaTableNames?(): readonly string[]
   registerFormulaFunction?(

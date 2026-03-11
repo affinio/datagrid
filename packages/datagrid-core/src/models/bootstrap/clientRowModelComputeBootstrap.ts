@@ -5,6 +5,7 @@ import type {
   DataGridPaginationInput,
   DataGridPaginationSnapshot,
   DataGridPivotColumn,
+  DataGridProjectionStageTimer,
   DataGridRowNode,
   DataGridSortState,
   DataGridTreeDataResolvedSpec,
@@ -79,6 +80,7 @@ export interface CreateClientRowModelComputeBootstrapOptions<T> {
   workerPatchDispatchThreshold: number | null
   computeTransport: DataGridClientComputeTransport | null
   computeMode: DataGridClientComputeMode | undefined
+  projectionStageTimer?: DataGridProjectionStageTimer
   groupByIncrementalAggregationState: ReturnType<ClientRowProjectionTransientStateRuntime["getGroupByIncrementalAggregationState"]>
 }
 
@@ -103,6 +105,7 @@ export function createClientRowModelComputeBootstrap<T>(
   })
 
   const projectionHostRuntime = createClientRowProjectionHostRuntime<T>({
+    projectionStageTimer: options.projectionStageTimer,
     handlersContext: {
       runtimeState: options.runtimeState,
       commitProjectionCycle: (meta) => {

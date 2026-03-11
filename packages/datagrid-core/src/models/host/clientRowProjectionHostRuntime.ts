@@ -2,6 +2,7 @@
 // handlers and orchestrator so the main row-model host does not construct them inline.
 import {
   createClientRowProjectionEngine,
+  type CreateClientRowProjectionEngineOptions,
   type DataGridClientProjectionEngine,
 } from "../projection/clientRowProjectionEngine.js"
 import {
@@ -16,6 +17,7 @@ import {
 
 export interface CreateClientRowProjectionHostRuntimeOptions<T> {
   handlersContext: ClientRowProjectionHandlersRuntimeContext<T>
+  projectionStageTimer?: CreateClientRowProjectionEngineOptions["stageTimer"]
 }
 
 export interface DataGridClientRowProjectionHostRuntime<T> {
@@ -27,7 +29,9 @@ export interface DataGridClientRowProjectionHostRuntime<T> {
 export function createClientRowProjectionHostRuntime<T>(
   options: CreateClientRowProjectionHostRuntimeOptions<T>,
 ): DataGridClientRowProjectionHostRuntime<T> {
-  const projectionEngine = createClientRowProjectionEngine<T>()
+  const projectionEngine = createClientRowProjectionEngine<T>({
+    stageTimer: options.projectionStageTimer,
+  })
   const projectionHandlersRuntime = createClientRowProjectionHandlersRuntime<T>(options.handlersContext)
   const projectionOrchestrator = createClientRowProjectionOrchestrator(
     projectionEngine,

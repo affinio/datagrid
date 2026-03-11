@@ -9,6 +9,7 @@ import type {
   DataGridFormulaAstNode,
   DataGridFormulaFunctionArity,
   DataGridFormulaFunctionRegistry,
+  DataGridFormulaReferenceParserOptions,
   DataGridFormulaToken,
 } from "../syntax/types.js"
 
@@ -27,6 +28,7 @@ export type DataGridFormulaCompileStrategy = "auto" | "ast" | "jit"
 export interface DataGridFormulaCompileOptions {
   resolveDependencyToken?: (identifier: string) => DataGridComputedDependencyToken
   functionRegistry?: DataGridFormulaFunctionRegistry
+  referenceParserOptions?: DataGridFormulaReferenceParserOptions
   onFunctionOverride?: (functionName: string) => void
   runtimeErrorPolicy?: DataGridFormulaRuntimeErrorPolicy
   onRuntimeError?: (error: DataGridFormulaRuntimeError) => void

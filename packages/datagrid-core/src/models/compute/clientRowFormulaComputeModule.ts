@@ -37,6 +37,8 @@ export interface DataGridClientFormulaComputeModule<T> extends DataGridClientCom
 
 export interface CreateClientRowFormulaComputeModuleOptions<T> {
   ensureActive: () => void
+  emit?: () => void
+  onFormulaStructureChanged?: () => void
   isDataGridRowId: (value: unknown) => value is DataGridRowId
   registerComputedFieldInternal: (definition: DataGridComputedFieldDefinition<T>) => void
   registerFormulaFieldInternal: (definition: DataGridFormulaFieldDefinition) => void
@@ -62,6 +64,12 @@ export interface CreateClientRowFormulaComputeModuleOptions<T> {
 export function createClientRowFormulaComputeModule<T>(
   options: CreateClientRowFormulaComputeModuleOptions<T>,
 ): DataGridClientFormulaComputeModule<T> {
+  const emitIfNoRowChange = (changedRowCount: number): void => {
+    if (changedRowCount === 0) {
+      options.emit?.()
+    }
+  }
+
   return {
     id: "formula",
     registerComputedField(definition) {
@@ -72,7 +80,8 @@ export function createClientRowFormulaComputeModule<T>(
     registerFormulaField(definition) {
       options.ensureActive()
       options.registerFormulaFieldInternal(definition)
-      void options.recomputeComputedFieldsAndRefresh()
+      options.onFormulaStructureChanged?.()
+      emitIfNoRowChange(options.recomputeComputedFieldsAndRefresh())
     },
     getComputedFields() {
       return options.getComputedFieldSnapshots()
@@ -84,7 +93,8 @@ export function createClientRowFormulaComputeModule<T>(
       options.ensureActive()
       options.registerFormulaFunction(name, definition)
       if (options.hasRegisteredFormulaFields()) {
-        void options.recomputeComputedFieldsAndRefresh()
+        options.onFormulaStructureChanged?.()
+        emitIfNoRowChange(options.recomputeComputedFieldsAndRefresh())
       }
     },
     unregisterFormulaFunction(name) {
@@ -94,7 +104,8 @@ export function createClientRowFormulaComputeModule<T>(
         return false
       }
       if (options.hasRegisteredFormulaFields()) {
-        void options.recomputeComputedFieldsAndRefresh()
+        options.onFormulaStructureChanged?.()
+        emitIfNoRowChange(options.recomputeComputedFieldsAndRefresh())
       }
       return true
     },

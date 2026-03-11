@@ -105,6 +105,7 @@ export function createComputedRegistryFormulaCompilationRuntime<T>(options: {
       resolveDependencyToken: (identifier: string) => resolveDependencyToken(identifier, compileOptions),
       onRuntimeError: context.onFormulaRuntimeError,
       functionRegistry: resolveFormulaFunctionRegistrySnapshot(),
+      referenceParserOptions: context.formulaReferenceParserOptions,
     }
     const analysis = analyzeDataGridFormulaFieldDefinition(definition, compileEngineOptions)
     const exactKey = analysis.formula

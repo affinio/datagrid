@@ -3,6 +3,7 @@ export type {
   DataGridCompiledFormulaBatchContext,
   DataGridCompiledFormulaBatchExecutionMode,
   DataGridCompiledFormulaField,
+  DataGridFormulaAstNode,
   DataGridFormulaDiagnostic,
   DataGridFormulaExpressionAnalysis,
   DataGridFormulaExplainDependency,
@@ -16,10 +17,18 @@ export type {
   DataGridFormulaFunctionDefinition,
   DataGridFormulaFunctionRegistry,
   DataGridFormulaParseResult,
+  DataGridFormulaReferenceParserOptions,
+  DataGridFormulaReferenceSyntax,
+  DataGridFormulaRowSelector,
   DataGridFormulaRuntimeErrorPolicy,
   DataGridFormulaDiagnosticsResult,
   DataGridFormulaSourceSpan,
 } from "../syntax/index.js"
+
+export type {
+  DataGridFormulaTableRowsSource,
+  DataGridFormulaTableSource,
+} from "../coreTypes.js"
 
 export {
   analyzeDataGridFormulaFieldDefinition,
@@ -44,6 +53,7 @@ export {
   normalizeFormulaValue,
   normalizeFormulaDiagnostic,
   parseDataGridFormulaExpression,
+  parseDataGridFormulaIdentifier,
   coerceFormulaValueToNumber,
   coerceFormulaValueToBoolean,
   areFormulaValuesEqual,

@@ -31,6 +31,17 @@ export interface DataGridFormulaDiagnostic {
   span: DataGridFormulaSourceSpan
 }
 
+export type DataGridFormulaReferenceSyntax = "canonical" | "smartsheet" | "auto"
+
+export interface DataGridFormulaReferenceParserOptions {
+  syntax?: DataGridFormulaReferenceSyntax
+  /**
+   * External absolute row-number base for syntaxes that use human row labels.
+   * Smartsheet-style references are 1-based by default.
+   */
+  smartsheetAbsoluteRowBase?: 0 | 1
+}
+
 export type DataGridFormulaRowSelector =
   | { kind: "current" }
   | { kind: "absolute"; rowIndex: number }

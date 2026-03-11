@@ -176,20 +176,23 @@ function dedupeFormulaContextKeys(
   return Object.freeze(Array.from(new Set(contextKeys.map(key => key.trim()).filter(key => key.length > 0))))
 }
 
-export function parseDataGridFormulaExpression(formula: string): DataGridFormulaParseResult {
+export function parseDataGridFormulaExpression(
+  formula: string,
+  options: Pick<DataGridFormulaCompileOptions, "referenceParserOptions"> = {},
+): DataGridFormulaParseResult {
   const normalizedFormula = normalizeFormulaText(formula)
-  const tokens = tokenizeFormula(normalizedFormula)
+  const tokens = tokenizeFormula(normalizedFormula, options.referenceParserOptions)
   const ast = parseFormula(tokens)
   return { formula: normalizedFormula, tokens, ast }
 }
 
 export function diagnoseDataGridFormulaExpression(
   formula: string,
-  options: Pick<DataGridFormulaCompileOptions, "functionRegistry" | "onFunctionOverride"> = {},
+  options: Pick<DataGridFormulaCompileOptions, "functionRegistry" | "onFunctionOverride" | "referenceParserOptions"> = {},
 ): DataGridFormulaDiagnosticsResult {
   const normalizedFormula = normalizeFormulaText(formula)
   try {
-    const tokens = tokenizeFormula(normalizedFormula)
+    const tokens = tokenizeFormula(normalizedFormula, options.referenceParserOptions)
     const ast = parseFormula(tokens)
     const functionRegistry = normalizeFormulaFunctionRegistry(options.functionRegistry, {
       onFunctionOverride: options.onFunctionOverride,
@@ -203,10 +206,10 @@ export function diagnoseDataGridFormulaExpression(
 
 export function explainDataGridFormulaExpression(
   formula: string,
-  options: Pick<DataGridFormulaCompileOptions, "resolveDependencyToken" | "functionRegistry" | "onFunctionOverride"> = {},
+  options: Pick<DataGridFormulaCompileOptions, "resolveDependencyToken" | "functionRegistry" | "onFunctionOverride" | "referenceParserOptions"> = {},
 ): DataGridFormulaExplainResult {
   const normalizedFormula = normalizeFormulaText(formula)
-  const tokens = tokenizeFormula(normalizedFormula)
+  const tokens = tokenizeFormula(normalizedFormula, options.referenceParserOptions)
   const ast = parseFormula(tokens)
   const optimizedAst = foldFormulaConstants(ast)
   const identifiers = dedupeFormulaIdentifiers(optimizedAst)

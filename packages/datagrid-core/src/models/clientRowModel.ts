@@ -14,6 +14,9 @@ import{
   type DataGridFormulaContextRecomputeRequest,
   type DataGridFormulaFieldDefinition,
   type DataGridFormulaFieldSnapshot,
+  type DataGridFormulaTablePatch,
+  type DataGridFormulaTableSource,
+  type DataGridFormulaReferenceParserOptions,
   type DataGridFormulaComputeStageDiagnostics,
   type DataGridFormulaIterativeCalculationOptions,
   type DataGridFormulaRowRecomputeDiagnostics,
@@ -24,6 +27,7 @@ import{
   type DataGridSortAndFilterModelInput,
   type DataGridAggregationModel,
   type DataGridGroupBySpec,
+  type DataGridProjectionStageTimer,
   type DataGridRowId,
   type DataGridRowIdResolver,
   type DataGridRowNode,
@@ -141,6 +145,7 @@ export interface CreateClientRowModelOptions<T> {
   initialComputedFields?: readonly DataGridComputedFieldDefinition<T>[]
   initialFormulaFields?: readonly DataGridFormulaFieldDefinition[]
   initialFormulaFunctionRegistry?: DataGridFormulaFunctionRegistry
+  formulaReferenceParserOptions?: DataGridFormulaReferenceParserOptions
   formulaCyclePolicy?: DataGridFormulaCyclePolicy
   formulaIterativeCalculation?: DataGridFormulaIterativeCalculationOptions
   computeMode?: DataGridClientComputeMode
@@ -169,6 +174,7 @@ export interface CreateClientRowModelOptions<T> {
    * Default: `true`.
    */
   captureFormulaExplainDiagnostics?: boolean
+  projectionStageTimer?: DataGridProjectionStageTimer
 }
 
 export interface DataGridClientRowReorderInput {
@@ -203,6 +209,9 @@ export interface DataGridClientRowPatchOptions {
 }
 
 export interface ClientRowModel<T> extends DataGridRowModel<T> {
+  getSourceRows(): readonly DataGridRowNode<T>[]
+  getSourceRowsRevision(): number
+  getFormulaStructureRevision(): number
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
   replaceRows(rows: readonly DataGridRowNodeInput<T>[]): void
   appendRows(rows: readonly DataGridRowNodeInput<T>[]): void
@@ -228,7 +237,8 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
   ): void
   unregisterFormulaFunction(name: string): boolean
   getFormulaFunctionNames(): readonly string[]
-  setFormulaTable(name: string, rows: readonly unknown[]): void
+  setFormulaTable(name: string, rows: DataGridFormulaTableSource): void
+  patchFormulaTables(patch: DataGridFormulaTablePatch): boolean
   removeFormulaTable(name: string): boolean
   getFormulaTableNames(): readonly string[]
   getFormulaExecutionPlan(): DataGridFormulaExecutionPlanSnapshot | null
@@ -389,6 +399,7 @@ export function createClientRowModel<T>(
   const computedRegistry = createClientRowComputedRegistryRuntime<T>({
     projectionPolicy,
     initialFormulaFunctionRegistry: options.initialFormulaFunctionRegistry,
+    formulaReferenceParserOptions: options.formulaReferenceParserOptions,
     formulaCyclePolicy,
     resolveRowFieldValue: (rowNode, field, readBaseValue) => {
       return computedSnapshotRuntime.readFieldValue(rowNode, field, readBaseValue)
@@ -520,6 +531,27 @@ export function createClientRowModel<T>(
   const materializeBaseRowAtIndex = (rowIndex: number): DataGridRowNode<T> | null => {
     return materializationRuntime.materializeBaseRowAtIndex(rowIndex) ?? null
   }
+  let materializedSourceRowsCacheRevision = -1
+  let materializedSourceRowsCache: readonly DataGridRowNode<T>[] = []
+  let formulaStructureRevision = 0
+  const getMaterializedSourceRows = (): readonly DataGridRowNode<T>[] => {
+    if (materializedSourceRowsCacheRevision === runtimeState.rowRevision) {
+      return materializedSourceRowsCache
+    }
+    const baseSourceRows = getBaseSourceRows()
+    if (baseSourceRows.length === 0) {
+      materializedSourceRowsCache = []
+      materializedSourceRowsCacheRevision = runtimeState.rowRevision
+      return materializedSourceRowsCache
+    }
+    const materializedRows = new Array<DataGridRowNode<T>>(baseSourceRows.length)
+    for (let index = 0; index < baseSourceRows.length; index += 1) {
+      materializedRows[index] = materializeBaseRowAtIndex(index) ?? baseSourceRows[index] as DataGridRowNode<T>
+    }
+    materializedSourceRowsCache = materializedRows
+    materializedSourceRowsCacheRevision = runtimeState.rowRevision
+    return materializedSourceRowsCache
+  }
   const materializeOutputRow = materializationRuntime.materializeOutputRow
   const materializeOutputRows = materializationRuntime.materializeOutputRows
   const materializeOutputRowsInRange = materializationRuntime.materializeOutputRowsInRange
@@ -625,6 +657,7 @@ export function createClientRowModel<T>(
     workerPatchDispatchThreshold: options.workerPatchDispatchThreshold ?? null,
     computeTransport: options.computeTransport ?? null,
     computeMode: options.computeMode,
+    projectionStageTimer: options.projectionStageTimer,
     groupByIncrementalAggregationState,
   })
 
@@ -773,6 +806,10 @@ export function createClientRowModel<T>(
   const formulaHostRuntime = createClientRowFormulaHostRuntime<T>({
     computeModuleHost,
     ensureActive,
+    emit,
+    onFormulaStructureChanged: () => {
+      formulaStructureRevision += 1
+    },
     isDataGridRowId,
     registerComputedFieldInternal: computedFieldHostRuntime.registerComputedFieldInternal,
     registerFormulaFieldInternal: computedFieldHostRuntime.registerFormulaFieldInternal,
@@ -804,6 +841,52 @@ export function createClientRowModel<T>(
   const normalizeFormulaTableName = (value: unknown): string => String(value ?? "").trim().toLowerCase()
   const createFormulaTableContextKey = (name: string): string => `table:${name}`
 
+  const applyFormulaTablePatch = (patch: DataGridFormulaTablePatch): boolean => {
+    ensureActive()
+    const contextKeys = new Set<string>()
+    let changed = false
+
+    if (Array.isArray(patch.remove)) {
+      for (const name of patch.remove) {
+        const normalizedName = normalizeFormulaTableName(name)
+        if (normalizedName.length === 0) {
+          continue
+        }
+        if (!computedRegistry.removeFormulaTable(normalizedName)) {
+          continue
+        }
+        contextKeys.add("tables")
+        contextKeys.add(createFormulaTableContextKey(normalizedName))
+        changed = true
+      }
+    }
+
+    if (Array.isArray(patch.set)) {
+      for (const entry of patch.set) {
+        if (!entry) {
+          continue
+        }
+        const normalizedName = normalizeFormulaTableName(entry.name)
+        if (normalizedName.length === 0) {
+          throw new Error("[clientRowModel] Formula table name must be non-empty")
+        }
+        if (!computedRegistry.setFormulaTable(normalizedName, entry.rows)) {
+          continue
+        }
+        contextKeys.add("tables")
+        contextKeys.add(createFormulaTableContextKey(normalizedName))
+        changed = true
+      }
+    }
+
+    if (!changed) {
+      return false
+    }
+
+    void recomputeComputedFieldsAndRefresh(undefined, { contextKeys })
+    return true
+  }
+
   runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
   if (!flatIdentityProjectionRefreshRuntime.tryApply()) {
     computeHostRuntime.recomputeFromStage("compute")
@@ -812,6 +895,18 @@ export function createClientRowModel<T>(
   return {
     kind: "client",
     getSnapshot,
+    getSourceRows() {
+      ensureActive()
+      return getMaterializedSourceRows()
+    },
+    getSourceRowsRevision() {
+      ensureActive()
+      return runtimeState.rowRevision
+    },
+    getFormulaStructureRevision() {
+      ensureActive()
+      return formulaStructureRevision
+    },
     getRowCount() {
       return runtimeState.rows.length
     },
@@ -885,31 +980,18 @@ export function createClientRowModel<T>(
     getFormulaFunctionNames() {
       return formulaHostRuntime.resolveModule().getFormulaFunctionNames()
     },
-    setFormulaTable(name: string, rows: readonly unknown[]) {
-      ensureActive()
-      const normalizedName = normalizeFormulaTableName(name)
-      if (normalizedName.length === 0) {
-        throw new Error("[clientRowModel] Formula table name must be non-empty")
-      }
-      computedRegistry.setFormulaTable(normalizedName, rows)
-      void recomputeComputedFieldsAndRefresh(undefined, {
-        contextKeys: new Set<string>(["tables", createFormulaTableContextKey(normalizedName)]),
+    setFormulaTable(name: string, rows: DataGridFormulaTableSource) {
+      applyFormulaTablePatch({
+        set: [{ name, rows }],
       })
     },
+    patchFormulaTables(patch: DataGridFormulaTablePatch) {
+      return applyFormulaTablePatch(patch)
+    },
     removeFormulaTable(name: string) {
-      ensureActive()
-      const normalizedName = normalizeFormulaTableName(name)
-      if (normalizedName.length === 0) {
-        return false
-      }
-      const removed = computedRegistry.removeFormulaTable(normalizedName)
-      if (!removed) {
-        return false
-      }
-      void recomputeComputedFieldsAndRefresh(undefined, {
-        contextKeys: new Set<string>(["tables", createFormulaTableContextKey(normalizedName)]),
+      return applyFormulaTablePatch({
+        remove: [name],
       })
-      return true
     },
     getFormulaTableNames() {
       ensureActive()
@@ -1110,6 +1192,8 @@ export function createClientRowModel<T>(
       runtimeState.pivotedRowsProjection = []
       runtimeState.aggregatedRowsProjection = []
       runtimeState.paginatedRowsProjection = []
+      materializedSourceRowsCache = []
+      materializedSourceRowsCacheRevision = -1
       resetPivotColumns()
       rowVersionRuntime.clear()
       projectionIntegrationHostRuntime.resetGroupByIncrementalAggregationState()

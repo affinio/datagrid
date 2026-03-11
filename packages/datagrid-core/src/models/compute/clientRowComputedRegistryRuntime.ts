@@ -6,8 +6,10 @@ import type {
   DataGridFormulaCyclePolicy,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
+  DataGridFormulaReferenceParserOptions,
   DataGridProjectionFormulaDiagnostics,
   DataGridFormulaRuntimeError,
+  DataGridFormulaTableSource,
   DataGridFormulaValue,
   DataGridRowNode,
 } from "../rowModel.js"
@@ -74,6 +76,7 @@ export type DataGridComputedTokenReader<T> = (
 export interface ClientRowComputedRegistryRuntimeContext<T> {
   projectionPolicy: DataGridProjectionPolicy
   initialFormulaFunctionRegistry?: DataGridFormulaFunctionRegistry
+  formulaReferenceParserOptions?: DataGridFormulaReferenceParserOptions
   formulaCyclePolicy?: DataGridFormulaCyclePolicy
   resolveRowFieldValue?: (
     rowNode: DataGridRowNode<T>,
@@ -92,7 +95,7 @@ export interface ClientRowComputedRegistryRuntimeState<T> {
     string,
     DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: import("../rowModel.js").DataGridComputedFieldComputeContext<unknown>) => unknown)
   >
-  formulaTablesByName: Map<string, readonly unknown[]>
+  formulaTablesByName: Map<string, DataGridFormulaTableSource>
   formulaCompiledArtifactByExactKey: Map<string, DataGridCompiledFormulaArtifact<T>>
   formulaCompiledArtifactByStructuralKey: Map<string, DataGridCompiledFormulaArtifact<T>>
   formulaCompileCacheHits: number
@@ -155,7 +158,7 @@ export interface ClientRowComputedRegistryRuntime<T> {
   ) => void
   unregisterFormulaFunction: (name: string) => boolean
   getFormulaFunctionNames: () => readonly string[]
-  setFormulaTable: (name: string, rows: readonly unknown[]) => void
+  setFormulaTable: (name: string, rows: DataGridFormulaTableSource) => boolean
   removeFormulaTable: (name: string) => boolean
   getFormulaTableNames: () => readonly string[]
   getFormulaContextValue: (key: string) => unknown
@@ -200,7 +203,7 @@ export function createClientRowComputedRegistryRuntime<T>(
     computedFieldNameByTargetField: new Map<string, string>(),
     formulaFieldsByName: new Map<string, DataGridRegisteredFormulaField>(),
     formulaFunctionRegistry: new Map(),
-    formulaTablesByName: new Map<string, readonly unknown[]>(),
+    formulaTablesByName: new Map<string, DataGridFormulaTableSource>(),
     formulaCompiledArtifactByExactKey: new Map<string, DataGridCompiledFormulaArtifact<T>>(),
     formulaCompiledArtifactByStructuralKey: new Map<string, DataGridCompiledFormulaArtifact<T>>(),
     formulaCompileCacheHits: 0,
@@ -282,12 +285,21 @@ export function createClientRowComputedRegistryRuntime<T>(
 
   const normalizeFormulaTableName = (value: unknown): string => String(value ?? "").trim().toLowerCase()
 
-  const setFormulaTable = (name: string, rows: readonly unknown[]): void => {
+  const normalizeFormulaTableRows = (rows: DataGridFormulaTableSource): DataGridFormulaTableSource => {
+    return Array.isArray(rows) ? Object.freeze([...rows]) : rows
+  }
+
+  const setFormulaTable = (name: string, rows: DataGridFormulaTableSource): boolean => {
     const normalizedName = normalizeFormulaTableName(name)
     if (normalizedName.length === 0) {
       throw new Error("[DataGridFormula] Formula table name must be non-empty.")
     }
-    state.formulaTablesByName.set(normalizedName, Object.freeze([...rows]))
+    const normalizedRows = normalizeFormulaTableRows(rows)
+    if (state.formulaTablesByName.get(normalizedName) === normalizedRows) {
+      return false
+    }
+    state.formulaTablesByName.set(normalizedName, normalizedRows)
+    return true
   }
 
   const removeFormulaTable = (name: string): boolean => {

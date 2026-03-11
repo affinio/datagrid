@@ -7,6 +7,7 @@ import {
   type ProjectionRequestOptions,
 } from "@affino/projection-engine"
 import type {
+  DataGridProjectionStageTimer,
   DataGridRowId,
 } from "../rowModel.js"
 import {
@@ -60,18 +61,17 @@ export interface DataGridClientProjectionEngine<T> {
   getStaleStages: () => readonly DataGridClientProjectionStage[]
 }
 
-function getNow(): number {
-  if (typeof performance !== "undefined" && typeof performance.now === "function") {
-    return performance.now()
-  }
-  return Date.now()
+export interface CreateClientRowProjectionEngineOptions {
+  stageTimer?: DataGridProjectionStageTimer
 }
 
 function roundStageTiming(value: number): number {
   return Math.round(value * 1000) / 1000
 }
 
-export function createClientRowProjectionEngine<T>(): DataGridClientProjectionEngine<T> {
+export function createClientRowProjectionEngine<T>(
+  engineOptions: CreateClientRowProjectionEngineOptions = {},
+): DataGridClientProjectionEngine<T> {
   const projection = createProjectionStageEngine<DataGridClientProjectionStage>({
     nodes: DATAGRID_CLIENT_PREPARED_PROJECTION_GRAPH.nodes,
     preparedGraph: DATAGRID_CLIENT_PREPARED_PROJECTION_GRAPH,
@@ -103,11 +103,16 @@ export function createClientRowProjectionEngine<T>(): DataGridClientProjectionEn
     }
 
     const meta = projection.recompute((stage: DataGridClientProjectionStage, shouldRecompute: boolean) => {
-      const startedAt = getNow()
-      const recomputed = DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP[stage]
+      const computeStage = () => DATAGRID_CLIENT_PROJECTION_STAGE_REGISTRY_MAP[stage]
         .compute(stageRuntimeContext, shouldRecompute)
-      stageTimes[stage] = roundStageTiming(getNow() - startedAt)
-      return recomputed
+      if (!engineOptions.stageTimer) {
+        return computeStage()
+      }
+      const measured = engineOptions.stageTimer(stage, computeStage)
+      if (Number.isFinite(measured.duration)) {
+        stageTimes[stage] = roundStageTiming(Math.max(0, measured.duration))
+      }
+      return measured.result
     }, options)
     if (!meta) {
       return

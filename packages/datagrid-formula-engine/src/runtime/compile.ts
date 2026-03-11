@@ -170,7 +170,7 @@ function analyzeFormulaExpression(
   hasRuntimeContextFunctions: boolean
 } {
   const formula = normalizeFormulaText(formulaText)
-  const tokens = tokenizeFormula(formula)
+  const tokens = tokenizeFormula(formula, options.referenceParserOptions)
   const ast = parseFormula(tokens)
   const functionRegistry = normalizeFormulaFunctionRegistry(options.functionRegistry, {
     onFunctionOverride: options.onFunctionOverride,

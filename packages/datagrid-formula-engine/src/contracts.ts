@@ -206,6 +206,15 @@ export interface DataGridFormulaFieldSnapshot {
   contextKeys: readonly string[]
 }
 
+export interface DataGridFormulaTableRowsSource<Row = unknown> {
+  rows: readonly Row[]
+  resolveRow?: (row: Row, index: number) => unknown
+}
+
+export type DataGridFormulaTableSource =
+  | readonly unknown[]
+  | DataGridFormulaTableRowsSource
+
 export interface DataGridFormulaContextRecomputeRequest {
   contextKeys: readonly string[]
   rowIds?: readonly DataGridRowId[]

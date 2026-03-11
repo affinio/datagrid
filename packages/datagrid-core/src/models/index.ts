@@ -64,8 +64,11 @@ export type {
   DataGridProjectionPipelineDiagnostics,
   DataGridProjectionRowCounts,
   DataGridProjectionStage,
+  DataGridProjectionStageTimer,
+  DataGridProjectionStageTimerResult,
   DataGridProjectionStageTimes,
   DataGridComputedDependencyToken,
+  DataGridFormulaRowSelector,
   DataGridFormulaMetaField,
   DataGridComputedFieldComputeContext,
   DataGridComputedFieldDefinition,
@@ -74,6 +77,10 @@ export type {
   DataGridFormulaCyclePolicy,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
+  DataGridFormulaTableBinding,
+  DataGridFormulaTablePatch,
+  DataGridFormulaTableRowsSource,
+  DataGridFormulaTableSource,
   DataGridFormulaArrayValue,
   DataGridFormulaErrorValue,
   DataGridFormulaIterativeCalculationOptions,
@@ -207,6 +214,17 @@ export type {
   DataGridClientRowReorderInput,
 } from "./clientRowModel.js"
 export { createClientRowModel } from "./clientRowModel.js"
+export type {
+  ClientWorkbookModel,
+  CreateClientWorkbookModelOptions,
+  DataGridWorkbookListener,
+  DataGridWorkbookSheetHandle,
+  DataGridWorkbookSheetInput,
+  DataGridWorkbookSheetSnapshot,
+  DataGridWorkbookSnapshot,
+  DataGridWorkbookSyncSnapshot,
+} from "./clientWorkbookModel.js"
+export { createClientWorkbookModel } from "./clientWorkbookModel.js"
 export {
   createClientRowDerivedCacheRuntime,
   type ClientRowDerivedCacheRuntime,

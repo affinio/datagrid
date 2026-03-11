@@ -7,6 +7,32 @@ import {
   type DataGridRowNodeInput,
 } from "@affino/datagrid-vue"
 
+function getProjectionStageNow(): number {
+  const performanceApi = globalThis.performance
+  if (performanceApi && typeof performanceApi.now === "function") {
+    return performanceApi.now()
+  }
+  return Date.now()
+}
+
+const defaultProjectionStageTimer: NonNullable<CreateClientRowModelOptions<unknown>["projectionStageTimer"]> = (_stage, run) => {
+  const startedAt = getProjectionStageNow()
+  const result = run()
+  return {
+    result,
+    duration: Math.max(0, getProjectionStageNow() - startedAt),
+  }
+}
+
+function resolveClientRowModelOptions(
+  value: Omit<CreateClientRowModelOptions<unknown>, "rows"> | undefined,
+): Omit<CreateClientRowModelOptions<unknown>, "rows"> {
+  return {
+    projectionStageTimer: defaultProjectionStageTimer,
+    ...(value ?? {}),
+  }
+}
+
 export interface UseDataGridAppRowModelOptions {
   rows: Ref<readonly unknown[]>
   rowModel: Ref<DataGridRowModel<unknown> | undefined>
@@ -30,7 +56,7 @@ export function useDataGridAppRowModel(
       ? null
       : createClientRowModel<unknown>({
           rows: options.rows.value as readonly DataGridRowNodeInput<unknown>[],
-          ...(options.clientRowModelOptions.value ?? {}),
+          ...resolveClientRowModelOptions(options.clientRowModelOptions.value),
         }),
   )
 
@@ -50,7 +76,7 @@ export function useDataGridAppRowModel(
     disposeOwnedRowModel(internalRowModel.value)
     internalRowModel.value = createClientRowModel<unknown>({
       rows: options.rows.value as readonly DataGridRowNodeInput<unknown>[],
-      ...(options.clientRowModelOptions.value ?? {}),
+      ...resolveClientRowModelOptions(options.clientRowModelOptions.value),
     })
     dataGridInstanceKey.value += 1
     options.onOwnedRowModelRecreated?.()

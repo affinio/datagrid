@@ -11,6 +11,8 @@ export type {
   DataGridFormulaCyclePolicy,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
+  DataGridFormulaTableRowsSource,
+  DataGridFormulaTableSource,
   DataGridFormulaArrayValue,
   DataGridFormulaErrorValue,
   DataGridFormulaIterativeCalculationOptions,
