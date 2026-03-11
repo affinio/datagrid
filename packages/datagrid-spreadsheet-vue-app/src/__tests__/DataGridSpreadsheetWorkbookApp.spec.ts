@@ -468,4 +468,97 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     wrapper.unmount()
     workbook.dispose()
   })
+
+  it("renders workbook diagnostics for direct refs into unstable derived sheets", async () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      activeSheetId: "summary",
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            referenceParserOptions: {
+              syntax: "smartsheet",
+              smartsheetAbsoluteRowBase: 1,
+              allowSheetQualifiedReferences: true,
+            },
+            columns: [
+              { key: "customerName", title: "Customer" },
+              { key: "quarter", title: "Quarter" },
+              { key: "total", title: "Total" },
+            ],
+            rows: [
+              { id: "order-1", cells: { customerName: "Atlas", quarter: "Q1", total: 100 } },
+            ],
+          },
+        },
+        {
+          id: "orders-pivot",
+          name: "Orders pivot",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "pivot",
+              spec: {
+                rows: ["customerName"],
+                columns: ["quarter"],
+                values: [{ field: "total", agg: "sum" }],
+              },
+            },
+          ],
+        },
+        {
+          id: "summary",
+          name: "Summary",
+          sheetModelOptions: {
+            referenceParserOptions: {
+              syntax: "smartsheet",
+              smartsheetAbsoluteRowBase: 1,
+              allowSheetQualifiedReferences: true,
+            },
+            columns: [{ key: "value", title: "Value" }],
+            rows: [
+              {
+                id: "summary-1",
+                cells: {
+                  value: "=orders-pivot![customerName]1",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const diagnosticsButton = wrapper.findAll("button").find(button => button.text().includes("Formula diagnostics"))
+    expect(diagnosticsButton).toBeDefined()
+
+    await diagnosticsButton!.trigger("click")
+    await flushUiAndTimers()
+
+    const text = wrapper.text()
+
+    expect(text).toContain("Workbook issues")
+    expect(text).toContain("summary -> orders-pivot")
+    expect(text).toContain("Prefer TABLE('orders-pivot', ...)")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
 })

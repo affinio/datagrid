@@ -2,6 +2,7 @@ import type {
   DataGridFormulaTableRowsSource,
   DataGridFormulaTableSource,
 } from "../models/formula/formulaContracts.js"
+import type { DataGridRowId } from "../models/rowModel.js"
 import {
   createDataGridSpreadsheetSheetModel,
   type CreateDataGridSpreadsheetSheetModelOptions,
@@ -11,7 +12,8 @@ import {
 } from "./sheetModel.js"
 import { formatDataGridSpreadsheetFormulaReference } from "./formulaEditorModel.js"
 import {
-  materializeDataGridSpreadsheetViewSheet,
+  materializeDataGridSpreadsheetViewSheetResult,
+  type DataGridSpreadsheetViewMaterializationDiagnostic,
   type DataGridSpreadsheetWorkbookSheetKind,
   type DataGridSpreadsheetWorkbookViewDefinition,
   type DataGridSpreadsheetWorkbookViewSheetModelOptions,
@@ -72,10 +74,31 @@ export interface DataGridSpreadsheetWorkbookSyncSnapshot {
   maxPasses: number
 }
 
+export type DataGridSpreadsheetWorkbookDiagnosticSeverity = "warning" | "error"
+
+export type DataGridSpreadsheetWorkbookDiagnosticCode =
+  | "derived-direct-reference-unstable"
+  | "derived-view-cycle"
+  | "derived-view-source-missing"
+  | "derived-view-join-sheet-missing"
+  | "derived-view-join-ambiguous-match"
+  | "derived-view-materialization-failed"
+
+export interface DataGridSpreadsheetWorkbookDiagnostic {
+  code: DataGridSpreadsheetWorkbookDiagnosticCode
+  severity: DataGridSpreadsheetWorkbookDiagnosticSeverity
+  sheetId: string
+  rowId: DataGridRowId | null
+  columnKey: string | null
+  relatedSheetId: string | null
+  message: string
+}
+
 export interface DataGridSpreadsheetWorkbookSnapshot {
   activeSheetId: string | null
   sheets: readonly DataGridSpreadsheetWorkbookSheetSnapshot[]
   sync: DataGridSpreadsheetWorkbookSyncSnapshot
+  diagnostics: readonly DataGridSpreadsheetWorkbookDiagnostic[]
 }
 
 export interface DataGridSpreadsheetWorkbookSheetStateExport {
@@ -133,6 +156,7 @@ interface SpreadsheetWorkbookSheetState {
   managedTableAliases: Set<string>
   appliedTableRowsByAlias: Map<string, SpreadsheetWorkbookTableSource>
   lastHandledRowMutationRevision: number
+  viewDiagnostics: readonly DataGridSpreadsheetViewMaterializationDiagnostic[]
 }
 
 interface SpreadsheetWorkbookDependencyGraph {
@@ -269,6 +293,21 @@ function cloneSpreadsheetWorkbookViewStep(
           typeof column === "string" ? column : Object.freeze({ ...column })
         ))),
       })
+    case "join":
+      return Object.freeze({
+        type: "join",
+        sheetId: normalizeSpreadsheetWorkbookSheetId(step.sheetId),
+        mode: step.mode === "inner" ? "inner" : "left",
+        on: Object.freeze({
+          leftKey: String(step.on.leftKey ?? ""),
+          rightKey: String(step.on.rightKey ?? ""),
+        }),
+        select: Object.freeze(step.select.map(column => (
+          typeof column === "string" ? column : Object.freeze({ ...column })
+        ))),
+        ...(step.multiMatch === "explode" ? { multiMatch: "explode" } : {}),
+        ...(step.multiMatch === "error" ? { multiMatch: "error" } : {}),
+      })
     case "group":
       return Object.freeze({
         type: "group",
@@ -277,9 +316,51 @@ function cloneSpreadsheetWorkbookViewStep(
         ))),
         aggregations: Object.freeze(step.aggregations.map(aggregation => Object.freeze({ ...aggregation }))),
       })
+    case "pivot":
+      return {
+        type: "pivot",
+        spec: {
+          rows: [...step.spec.rows],
+          columns: [...step.spec.columns],
+          values: step.spec.values.map(value => ({ ...value })),
+          ...(step.spec.rowSubtotals ? { rowSubtotals: true } : {}),
+          ...(step.spec.columnSubtotals ? { columnSubtotals: true } : {}),
+          ...(step.spec.columnGrandTotal ? { columnGrandTotal: true } : {}),
+          ...(step.spec.columnSubtotalPosition
+            ? { columnSubtotalPosition: step.spec.columnSubtotalPosition }
+            : {}),
+          ...(step.spec.columnGrandTotalPosition
+            ? { columnGrandTotalPosition: step.spec.columnGrandTotalPosition }
+            : {}),
+          ...(step.spec.grandTotal ? { grandTotal: true } : {}),
+        },
+      }
     default:
       return step
   }
+}
+
+function collectSpreadsheetWorkbookViewDependencySheetIds(
+  viewDefinition: DataGridSpreadsheetWorkbookViewDefinition,
+): readonly string[] {
+  const dependencySheetIds = new Set<string>([viewDefinition.sourceSheetId])
+  for (const step of viewDefinition.pipeline) {
+    if (step.type !== "join") {
+      continue
+    }
+    dependencySheetIds.add(normalizeSpreadsheetWorkbookSheetId(step.sheetId))
+  }
+  return Object.freeze(
+    sheetsOrderStableDependencyIds([...dependencySheetIds]),
+  )
+}
+
+function sheetsOrderStableDependencyIds(
+  sheetIds: readonly string[],
+): readonly string[] {
+  return Object.freeze(
+    [...new Set(sheetIds)].sort((left, right) => left.localeCompare(right)),
+  )
 }
 
 function normalizeSpreadsheetWorkbookViewDefinition(
@@ -429,6 +510,124 @@ function createSpreadsheetWorkbookSheetStateExport(
       ),
     },
   }
+}
+
+function collectSpreadsheetWorkbookDerivedInstabilityReasons(
+  viewDefinition: DataGridSpreadsheetWorkbookViewDefinition | null,
+): readonly string[] {
+  if (!viewDefinition) {
+    return Object.freeze([])
+  }
+  const reasons = new Set<string>()
+  for (const step of viewDefinition.pipeline) {
+    if (step.type === "pivot") {
+      reasons.add("pivot materialization")
+    }
+    if (step.type === "join") {
+      reasons.add("join enrichment")
+    }
+  }
+  return Object.freeze([...reasons])
+}
+
+function collectSpreadsheetWorkbookDiagnostics(
+  sheets: readonly SpreadsheetWorkbookSheetState[],
+  aliasToSheet: ReadonlyMap<string, SpreadsheetWorkbookSheetState>,
+): readonly DataGridSpreadsheetWorkbookDiagnostic[] {
+  const diagnostics: DataGridSpreadsheetWorkbookDiagnostic[] = []
+  const seenKeys = new Set<string>()
+
+  const materializationCodeMap = new Map<string, DataGridSpreadsheetWorkbookDiagnosticCode>([
+    ["cycle", "derived-view-cycle"],
+    ["source-missing", "derived-view-source-missing"],
+    ["join-sheet-missing", "derived-view-join-sheet-missing"],
+    ["join-ambiguous-match", "derived-view-join-ambiguous-match"],
+    ["materialization-failed", "derived-view-materialization-failed"],
+  ])
+
+  for (const sheet of sheets) {
+    for (const diagnostic of sheet.viewDiagnostics) {
+      const workbookCode = materializationCodeMap.get(diagnostic.code) ?? "derived-view-materialization-failed"
+      const diagnosticKey = [
+        sheet.id,
+        workbookCode,
+        diagnostic.relatedSheetId ?? "",
+        diagnostic.message,
+      ].join("|")
+      if (seenKeys.has(diagnosticKey)) {
+        continue
+      }
+      seenKeys.add(diagnosticKey)
+      diagnostics.push({
+        code: workbookCode,
+        severity: "error",
+        sheetId: sheet.id,
+        rowId: null,
+        columnKey: null,
+        relatedSheetId: diagnostic.relatedSheetId ?? null,
+        message: diagnostic.message,
+      })
+    }
+  }
+
+  for (const sheet of sheets) {
+    for (const formulaCell of sheet.sheetModel.getFormulaCells()) {
+      const cellSnapshot = sheet.sheetModel.getCell(formulaCell.address)
+      for (const reference of cellSnapshot?.analysis.references ?? []) {
+        const normalizedAlias = normalizeSpreadsheetWorkbookAlias(reference.sheetReference)
+        if (normalizedAlias.length === 0) {
+          continue
+        }
+        const relatedSheet = aliasToSheet.get(normalizedAlias)
+        if (!relatedSheet || relatedSheet.id === sheet.id) {
+          continue
+        }
+        const instabilityReasons = collectSpreadsheetWorkbookDerivedInstabilityReasons(
+          relatedSheet.viewDefinition,
+        )
+        if (instabilityReasons.length === 0) {
+          continue
+        }
+        const diagnosticKey = [
+          sheet.id,
+          formulaCell.address.rowId,
+          formulaCell.address.columnKey,
+          relatedSheet.id,
+          "derived-direct-reference-unstable",
+        ].join("|")
+        if (seenKeys.has(diagnosticKey)) {
+          continue
+        }
+        seenKeys.add(diagnosticKey)
+        diagnostics.push({
+          code: "derived-direct-reference-unstable",
+          severity: "warning",
+          sheetId: sheet.id,
+          rowId: formulaCell.address.rowId ?? null,
+          columnKey: formulaCell.address.columnKey ?? null,
+          relatedSheetId: relatedSheet.id,
+          message: `Direct reference to derived sheet '${relatedSheet.name}' is address-based and may shift after ${instabilityReasons.join(" + ")}. Prefer TABLE('${relatedSheet.id}', ...) for scans over the full derived result.`,
+        })
+      }
+    }
+  }
+
+  diagnostics.sort((left, right) => {
+    if (left.severity !== right.severity) {
+      return left.severity === "error" ? -1 : 1
+    }
+    if (left.sheetId !== right.sheetId) {
+      return left.sheetId.localeCompare(right.sheetId)
+    }
+    if (left.rowId !== right.rowId) {
+      return String(left.rowId).localeCompare(String(right.rowId))
+    }
+    if (left.columnKey !== right.columnKey) {
+      return (left.columnKey ?? "").localeCompare(right.columnKey ?? "")
+    }
+    return (left.relatedSheetId ?? "").localeCompare(right.relatedSheetId ?? "")
+  })
+  return Object.freeze(diagnostics)
 }
 
 function computeSpreadsheetWorkbookStronglyConnectedComponents(
@@ -809,9 +1008,11 @@ export function createDataGridSpreadsheetWorkbookModel(
     for (const targetSheet of sheets) {
       const dependencySheetIds = new Set<string>()
       if (targetSheet.viewDefinition) {
-        const sourceSheet = sheetsById.get(targetSheet.viewDefinition.sourceSheetId)
-        if (sourceSheet && sourceSheet.id !== targetSheet.id) {
-          dependencySheetIds.add(sourceSheet.id)
+        for (const dependencySheetId of collectSpreadsheetWorkbookViewDependencySheetIds(targetSheet.viewDefinition)) {
+          const sourceSheet = sheetsById.get(dependencySheetId)
+          if (sourceSheet && sourceSheet.id !== targetSheet.id) {
+            dependencySheetIds.add(sourceSheet.id)
+          }
         }
       }
       if (targetSheet.formulaUsesAllTables) {
@@ -1019,16 +1220,18 @@ export function createDataGridSpreadsheetWorkbookModel(
         if (!targetSheet || targetSheet.kind !== "view" || !targetSheet.viewDefinition) {
           continue
         }
-        const nextState = materializeDataGridSpreadsheetViewSheet({
+        const nextState = materializeDataGridSpreadsheetViewSheetResult({
           sheetId: targetSheet.id,
           sheetName: targetSheet.name,
           sourceSheetId: targetSheet.viewDefinition.sourceSheetId,
           sourceSheetModel: sheetsById.get(targetSheet.viewDefinition.sourceSheetId)?.sheetModel ?? null,
+          resolveSheetModel: (sheetId) => sheetsById.get(sheetId)?.sheetModel ?? null,
           pipeline: targetSheet.viewDefinition.pipeline,
           sheetModelOptions: targetSheet.viewSheetModelOptions,
           errorMessage: cycleMessage,
         })
-        if (targetSheet.sheetModel.restoreState(nextState)) {
+        targetSheet.viewDiagnostics = nextState.diagnostics
+        if (targetSheet.sheetModel.restoreState(nextState.sheetState)) {
           invalidateSheetExportCache(targetSheet)
         }
       }
@@ -1245,17 +1448,22 @@ export function createDataGridSpreadsheetWorkbookModel(
       )
       : null
 
+    const initialViewResult = kind === "view" && !providedSheetModel
+      ? materializeDataGridSpreadsheetViewSheetResult({
+        sheetId: id,
+        sheetName: name,
+        sourceSheetId: viewDefinition?.sourceSheetId ?? "",
+        sourceSheetModel: viewDefinition ? (sheetsById.get(viewDefinition.sourceSheetId)?.sheetModel ?? null) : null,
+        resolveSheetModel: (sheetId) => sheetsById.get(sheetId)?.sheetModel ?? null,
+        pipeline: viewDefinition?.pipeline ?? Object.freeze([]),
+        sheetModelOptions: viewSheetModelOptions,
+      })
+      : null
+
     const sheetModel = providedSheetModel ?? (
       kind === "view"
         ? createSheetModelFromExportState(
-          materializeDataGridSpreadsheetViewSheet({
-            sheetId: id,
-            sheetName: name,
-            sourceSheetId: viewDefinition?.sourceSheetId ?? "",
-            sourceSheetModel: viewDefinition ? (sheetsById.get(viewDefinition.sourceSheetId)?.sheetModel ?? null) : null,
-            pipeline: viewDefinition?.pipeline ?? Object.freeze([]),
-            sheetModelOptions: viewSheetModelOptions,
-          }),
+          initialViewResult!.sheetState,
           id,
           name,
         )
@@ -1294,15 +1502,18 @@ export function createDataGridSpreadsheetWorkbookModel(
       managedTableAliases: new Set<string>(),
       appliedTableRowsByAlias: new Map<string, SpreadsheetWorkbookTableSource>(),
       lastHandledRowMutationRevision: sheetSnapshot.lastRowMutation?.revision ?? 0,
+      viewDiagnostics: initialViewResult?.diagnostics ?? Object.freeze([]),
     }
   }
 
   function getSnapshot(): DataGridSpreadsheetWorkbookSnapshot {
     ensureActive()
+    const aliasToSheet = graphState?.aliasToSheet ?? createAliasToSheetMap()
     return {
       activeSheetId,
       sheets: Object.freeze(sheets.map(createSpreadsheetWorkbookSheetSnapshot)),
       sync: { ...lastSync },
+      diagnostics: collectSpreadsheetWorkbookDiagnostics(sheets, aliasToSheet),
     }
   }
 

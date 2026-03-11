@@ -25,8 +25,17 @@
           grouped, aggregated, and sorted from <code>orders</code> with automatic recompute.
         </p>
         <p>
+          <strong>Orders enriched</strong> shows the new workbook-level <code>join</code> step:
+          <code>orders</code> enriched from <code>customers</code> into a materialized read-only sheet.
+        </p>
+        <p>
+          <strong>Orders pivot</strong> shows the spreadsheet <code>pivot</code> step:
+          customer rows with generated measure columns materialized from <code>orders</code>.
+        </p>
+        <p>
           Workbook-wide aggregates stay on
-          <code>TABLE('orders', 'total')</code> or <code>TABLE('orders-by-customer', 'revenue')</code>,
+          <code>TABLE('orders', 'total')</code>, <code>TABLE('orders-by-customer', 'revenue')</code>, or
+          <code>TABLE('orders-pivot', ...)</code>,
           because direct refs do not replace dynamic table scans.
         </p>
         <p>
@@ -39,8 +48,8 @@
     <template #gridActions="{ runWorkbookIntent }">
       <div class="spreadsheet-demo-actions">
         <div class="spreadsheet-demo-actions__copy">
-          Open <strong>Summary</strong> or <strong>Orders by customer</strong>, then use these actions to watch
-          source-sheet edits rewrite direct refs and rematerialize the derived view.
+          Open <strong>Orders by customer</strong>, <strong>Orders enriched</strong>, or <strong>Orders pivot</strong>,
+          then use these actions to watch source-sheet edits rematerialize grouped, joined, and pivoted workbook views.
         </div>
         <div class="spreadsheet-demo-actions__buttons">
           <button

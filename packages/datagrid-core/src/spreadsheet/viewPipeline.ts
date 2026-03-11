@@ -1,9 +1,14 @@
 import type {
   DataGridAggOp,
   DataGridColumnPredicateOperator,
+  DataGridPivotColumn,
+  DataGridPivotSpec,
   DataGridRowId,
+  DataGridRowNode,
   DataGridSortDirection,
 } from "../models/rowModel.js"
+import { createPivotRuntime, normalizePivotSpec } from "../models/index.js"
+import { createPivotAxisKey, createPivotColumnId, createPivotColumnLabel } from "@affino/datagrid-pivot"
 import type {
   CreateDataGridSpreadsheetSheetModelOptions,
   DataGridSpreadsheetColumnSnapshot,
@@ -49,6 +54,24 @@ export interface DataGridSpreadsheetViewProjectStep {
   columns: readonly (string | DataGridSpreadsheetViewProjectColumn)[]
 }
 
+export interface DataGridSpreadsheetViewJoinColumn {
+  key: string
+  as?: string
+  label?: string
+}
+
+export interface DataGridSpreadsheetViewJoinStep {
+  type: "join"
+  sheetId: string
+  mode?: "left" | "inner"
+  on: {
+    leftKey: string
+    rightKey: string
+  }
+  select: readonly (string | DataGridSpreadsheetViewJoinColumn)[]
+  multiMatch?: "first" | "error" | "explode"
+}
+
 export interface DataGridSpreadsheetViewGroupByField {
   key: string
   as?: string
@@ -68,11 +91,18 @@ export interface DataGridSpreadsheetViewGroupStep {
   aggregations: readonly DataGridSpreadsheetViewAggregation[]
 }
 
+export interface DataGridSpreadsheetViewPivotStep {
+  type: "pivot"
+  spec: DataGridPivotSpec
+}
+
 export type DataGridSpreadsheetViewStep =
   | DataGridSpreadsheetViewFilterStep
   | DataGridSpreadsheetViewSortStep
   | DataGridSpreadsheetViewProjectStep
+  | DataGridSpreadsheetViewJoinStep
   | DataGridSpreadsheetViewGroupStep
+  | DataGridSpreadsheetViewPivotStep
 
 export interface DataGridSpreadsheetWorkbookViewDefinition {
   sourceSheetId: string
@@ -89,9 +119,28 @@ export interface MaterializeDataGridSpreadsheetViewSheetOptions {
   sheetName: string
   sourceSheetId: string
   sourceSheetModel: DataGridSpreadsheetSheetModel | null
+  resolveSheetModel?: (sheetId: string) => DataGridSpreadsheetSheetModel | null
   pipeline: readonly DataGridSpreadsheetViewStep[]
   sheetModelOptions?: DataGridSpreadsheetWorkbookViewSheetModelOptions | null
   errorMessage?: string | null
+}
+
+export type DataGridSpreadsheetViewMaterializationDiagnosticCode =
+  | "cycle"
+  | "source-missing"
+  | "join-sheet-missing"
+  | "join-ambiguous-match"
+  | "materialization-failed"
+
+export interface DataGridSpreadsheetViewMaterializationDiagnostic {
+  code: DataGridSpreadsheetViewMaterializationDiagnosticCode
+  message: string
+  relatedSheetId?: string | null
+}
+
+export interface MaterializeDataGridSpreadsheetViewSheetResult {
+  sheetState: DataGridSpreadsheetSheetState
+  diagnostics: readonly DataGridSpreadsheetViewMaterializationDiagnostic[]
 }
 
 interface SpreadsheetViewColumnState {
@@ -110,6 +159,13 @@ interface SpreadsheetViewDataset {
   rows: readonly SpreadsheetViewRowState[]
 }
 
+interface SpreadsheetPivotColumnState {
+  key: string
+  title: string
+  source: "row" | "value"
+  value?: DataGridPivotColumn
+}
+
 const NUMERIC_AGGREGATIONS = new Set<Exclude<DataGridAggOp, "custom">>([
   "sum",
   "avg",
@@ -118,6 +174,22 @@ const NUMERIC_AGGREGATIONS = new Set<Exclude<DataGridAggOp, "custom">>([
   "min",
   "max",
 ])
+
+class DataGridSpreadsheetViewMaterializationError extends Error {
+  readonly code: DataGridSpreadsheetViewMaterializationDiagnosticCode
+  readonly relatedSheetId: string | null
+
+  constructor(
+    code: DataGridSpreadsheetViewMaterializationDiagnosticCode,
+    message: string,
+    relatedSheetId: string | null = null,
+  ) {
+    super(message)
+    this.name = "DataGridSpreadsheetViewMaterializationError"
+    this.code = code
+    this.relatedSheetId = relatedSheetId
+  }
+}
 
 function normalizeColumnKey(value: unknown, label: string): string {
   const normalized = String(value ?? "").trim()
@@ -163,6 +235,47 @@ function normalizeOutputValue(value: unknown): string {
 function normalizeTextComparisonValue(value: unknown, caseSensitive = false): string {
   const normalized = String(value ?? "")
   return caseSensitive ? normalized : normalized.toLowerCase()
+}
+
+function normalizePivotFieldValue(value: unknown): string {
+  if (value == null) {
+    return ""
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? "" : value.toISOString()
+  }
+  return String(value)
+}
+
+function createJoinLookupKey(value: unknown): string {
+  if (value == null) {
+    return "null:"
+  }
+  if (value instanceof Date) {
+    return `date:${Number.isNaN(value.getTime()) ? "" : value.toISOString()}`
+  }
+  switch (typeof value) {
+    case "string":
+      return `string:${value}`
+    case "number":
+      return `number:${Number.isFinite(value) ? value : ""}`
+    case "boolean":
+      return `boolean:${value ? "1" : "0"}`
+    case "bigint":
+      return `bigint:${String(value)}`
+    default:
+      return `other:${String(value)}`
+  }
+}
+
+function createJoinExplodedRowId(
+  leftRowId: DataGridRowId,
+  rightRowId: DataGridRowId | null,
+  matchIndex: number,
+): string {
+  const encodedLeft = String(leftRowId)
+  const encodedRight = rightRowId == null ? "null" : String(rightRowId)
+  return `join:${encodedLeft.length}:${encodedLeft}|${encodedRight.length}:${encodedRight}|${matchIndex}`
 }
 
 function normalizeOrderedValue(value: unknown): number | string | boolean | null {
@@ -427,6 +540,138 @@ function applyProjectStep(
   }
 }
 
+function normalizeJoinColumns(
+  columns: readonly (string | DataGridSpreadsheetViewJoinColumn)[],
+): readonly DataGridSpreadsheetViewJoinColumn[] {
+  return columns.map(column => (
+    typeof column === "string"
+      ? { key: normalizeColumnKey(column, "join select column") }
+      : {
+        key: normalizeColumnKey(column.key, "join select column"),
+        as: column.as ? normalizeColumnKey(column.as, "join select alias") : undefined,
+        label: column.label,
+      }
+  ))
+}
+
+function applyJoinStep(
+  dataset: SpreadsheetViewDataset,
+  step: DataGridSpreadsheetViewJoinStep,
+  resolveSheetModel: ((sheetId: string) => DataGridSpreadsheetSheetModel | null) | undefined,
+): SpreadsheetViewDataset {
+  if (typeof resolveSheetModel !== "function") {
+    throw new DataGridSpreadsheetViewMaterializationError(
+      "materialization-failed",
+      "[DataGridSpreadsheetView] join step requires a workbook sheet resolver.",
+    )
+  }
+  const rightSheetId = normalizeColumnKey(step.sheetId, "join sheet id")
+  const rightSheetModel = resolveSheetModel(rightSheetId)
+  if (!rightSheetModel) {
+    throw new DataGridSpreadsheetViewMaterializationError(
+      "join-sheet-missing",
+      `[DataGridSpreadsheetView] join sheet '${rightSheetId}' is missing.`,
+      rightSheetId,
+    )
+  }
+
+  const leftKey = normalizeColumnKey(step.on.leftKey, "join left key")
+  const rightKey = normalizeColumnKey(step.on.rightKey, "join right key")
+  const mode = step.mode === "inner" ? "inner" : "left"
+  const multiMatch = step.multiMatch === "error"
+    ? "error"
+    : step.multiMatch === "explode"
+      ? "explode"
+      : "first"
+  const selections = normalizeJoinColumns(step.select)
+  if (selections.length === 0) {
+    throw new Error("[DataGridSpreadsheetView] join step must select at least one right-side column.")
+  }
+
+  const leftColumnsByKey = new Map(dataset.columns.map(column => [column.key, column]))
+  const rightDataset = createDatasetFromSheetModel(rightSheetModel)
+  const rightColumnsByKey = new Map(rightDataset.columns.map(column => [column.key, column]))
+  const outputColumns: SpreadsheetViewColumnState[] = [...dataset.columns]
+  const joinOutputKeys = new Set<string>(dataset.columns.map(column => column.key))
+
+  for (const selection of selections) {
+    const key = selection.as ?? selection.key
+    if (joinOutputKeys.has(key)) {
+      throw new Error(`[DataGridSpreadsheetView] join output column '${key}' collides with an existing column.`)
+    }
+    const rightColumn = rightColumnsByKey.get(selection.key)
+    outputColumns.push({
+      key,
+      title: normalizeColumnTitle(selection.label, rightColumn?.title ?? key),
+      style: rightColumn?.style ?? null,
+    })
+    joinOutputKeys.add(key)
+  }
+
+  if (!leftColumnsByKey.has(leftKey)) {
+    throw new Error(`[DataGridSpreadsheetView] join left key '${leftKey}' does not exist.`)
+  }
+  if (!rightColumnsByKey.has(rightKey)) {
+    throw new Error(`[DataGridSpreadsheetView] join right key '${rightKey}' does not exist on '${rightSheetId}'.`)
+  }
+
+  const rightRowsByLookupKey = new Map<string, SpreadsheetViewRowState[]>()
+  for (const row of rightDataset.rows) {
+    const lookupKey = createJoinLookupKey(row.values[rightKey])
+    const rows = rightRowsByLookupKey.get(lookupKey)
+    if (rows) {
+      rows.push(row)
+    } else {
+      rightRowsByLookupKey.set(lookupKey, [row])
+    }
+  }
+
+  const rows: SpreadsheetViewRowState[] = []
+  for (const row of dataset.rows) {
+    const matches = rightRowsByLookupKey.get(createJoinLookupKey(row.values[leftKey])) ?? []
+    if (matches.length > 1 && multiMatch === "error") {
+      throw new DataGridSpreadsheetViewMaterializationError(
+        "join-ambiguous-match",
+        `[DataGridSpreadsheetView] join '${rightSheetId}' produced multiple matches for ${leftKey}=${normalizeOutputValue(row.values[leftKey])}.`,
+        rightSheetId,
+      )
+    }
+    if (multiMatch === "explode") {
+      const fanoutMatches = matches.length > 0 ? matches : (mode === "left" ? [null] : [])
+      for (let matchIndex = 0; matchIndex < fanoutMatches.length; matchIndex += 1) {
+        const match = fanoutMatches[matchIndex]
+        const values: Record<string, unknown> = { ...row.values }
+        for (const selection of selections) {
+          values[selection.as ?? selection.key] = match?.values[selection.key] ?? null
+        }
+        rows.push({
+          id: createJoinExplodedRowId(row.id, match?.id ?? null, matchIndex),
+          values,
+        })
+      }
+      continue
+    }
+
+    const match = matches[0] ?? null
+    if (!match && mode === "inner") {
+      continue
+    }
+    const values: Record<string, unknown> = { ...row.values }
+    for (const selection of selections) {
+      values[selection.as ?? selection.key] = match?.values[selection.key] ?? null
+    }
+    rows.push({
+      id: row.id,
+      values,
+    })
+  }
+
+  return {
+    columns: outputColumns,
+    rows,
+  }
+}
+
 function normalizeGroupByFields(
   fields: readonly (string | DataGridSpreadsheetViewGroupByField)[],
 ): readonly DataGridSpreadsheetViewGroupByField[] {
@@ -578,6 +823,165 @@ function applyGroupStep(
   }
 }
 
+function createPivotLeafRow(
+  row: SpreadsheetViewRowState,
+  index: number,
+): DataGridRowNode<Record<string, unknown>> {
+  return {
+    kind: "leaf",
+    data: row.values,
+    row: row.values,
+    rowKey: row.id,
+    rowId: row.id,
+    sourceIndex: index,
+    originalIndex: index,
+    displayIndex: index,
+    state: {
+      selected: false,
+      group: false,
+      pinned: "none",
+      expanded: false,
+    },
+  }
+}
+
+function buildPivotFallbackValueColumns(
+  step: DataGridSpreadsheetViewPivotStep,
+): readonly DataGridPivotColumn[] {
+  const normalizedSpec = normalizePivotSpec(step.spec)
+  if (!normalizedSpec || normalizedSpec.columns.length > 0) {
+    return Object.freeze([])
+  }
+  const baseColumnKey = createPivotAxisKey("pivot:column:", [])
+  return Object.freeze(normalizedSpec.values.map(value => ({
+    id: createPivotColumnId(baseColumnKey, {
+      field: value.field,
+      agg: value.agg,
+      aggregateKey: `v:${value.agg}:${value.field}`,
+    }),
+    valueField: value.field,
+    agg: value.agg,
+    label: createPivotColumnLabel([], {
+      field: value.field,
+      agg: value.agg,
+      aggregateKey: `v:${value.agg}:${value.field}`,
+    }),
+    columnPath: Object.freeze([]),
+  })))
+}
+
+function formatPivotValueLabel(
+  valueField: string,
+  agg: DataGridAggOp,
+  sourceColumnsByKey: ReadonlyMap<string, SpreadsheetViewColumnState>,
+): string {
+  const fieldTitle = sourceColumnsByKey.get(valueField)?.title ?? valueField
+  if (agg === "sum") {
+    return fieldTitle
+  }
+  return `${agg.toUpperCase()} ${fieldTitle}`
+}
+
+function formatPivotColumnTitle(
+  column: DataGridPivotColumn,
+  normalizedSpec: DataGridPivotSpec,
+  sourceColumnsByKey: ReadonlyMap<string, SpreadsheetViewColumnState>,
+): string {
+  const valueLabel = formatPivotValueLabel(column.valueField, column.agg, sourceColumnsByKey)
+  const pathValues = column.columnPath.map(segment => segment.value).filter(value => value.length > 0)
+  const hasSingleValueMetric = normalizedSpec.values.length === 1
+
+  if (column.grandTotal) {
+    return hasSingleValueMetric ? "Total" : `Total ${valueLabel}`
+  }
+  if (column.subtotal) {
+    const subtotalBase = pathValues.length > 0 ? pathValues.join(" / ") : "Subtotal"
+    return hasSingleValueMetric ? `${subtotalBase} subtotal` : `${subtotalBase} subtotal ${valueLabel}`
+  }
+  if (pathValues.length === 0) {
+    return hasSingleValueMetric ? valueLabel : `Total ${valueLabel}`
+  }
+  const pathLabel = pathValues.join(" / ")
+  return hasSingleValueMetric ? pathLabel : `${pathLabel} ${valueLabel}`
+}
+
+function applyPivotStep(
+  dataset: SpreadsheetViewDataset,
+  step: DataGridSpreadsheetViewPivotStep,
+): SpreadsheetViewDataset {
+  const normalizedSpec = normalizePivotSpec(step.spec)
+  if (!normalizedSpec) {
+    throw new Error("[DataGridSpreadsheetView] pivot step must include at least one value aggregation.")
+  }
+
+  const sourceColumnsByKey = new Map(dataset.columns.map(column => [column.key, column]))
+  const runtime = createPivotRuntime<Record<string, unknown>>()
+  const projection = runtime.projectRows({
+    inputRows: dataset.rows.map(createPivotLeafRow),
+    pivotModel: normalizedSpec,
+    normalizeFieldValue: normalizePivotFieldValue,
+  })
+  const pivotColumns = projection.columns.length > 0
+    ? projection.columns
+    : buildPivotFallbackValueColumns(step)
+
+  const materializedColumns: SpreadsheetPivotColumnState[] = [
+    ...normalizedSpec.rows.map(rowKey => {
+      const sourceColumn = sourceColumnsByKey.get(rowKey)
+      return {
+        key: rowKey,
+        title: sourceColumn?.title ?? rowKey,
+        source: "row" as const,
+      }
+    }),
+    ...pivotColumns.map(column => ({
+      key: column.id,
+      title: formatPivotColumnTitle(column, normalizedSpec, sourceColumnsByKey),
+      source: "value" as const,
+      value: column,
+    })),
+  ]
+
+  if (materializedColumns.length === 0) {
+    throw new Error("[DataGridSpreadsheetView] pivot step did not produce any columns.")
+  }
+
+  const columns: SpreadsheetViewColumnState[] = materializedColumns.map(column => {
+    if (column.source === "row") {
+      const sourceColumn = sourceColumnsByKey.get(column.key)
+      return {
+        key: column.key,
+        title: column.title,
+        style: sourceColumn?.style ?? null,
+      }
+    }
+    return {
+      key: column.key,
+      title: column.title,
+      style: column.value && column.value.agg !== "custom" && NUMERIC_AGGREGATIONS.has(column.value.agg)
+        ? Object.freeze({ textAlign: "right" })
+        : null,
+    }
+  })
+
+  const rows: SpreadsheetViewRowState[] = projection.rows.map(row => {
+    const rowRecord = row.row as Record<string, unknown>
+    const values: Record<string, unknown> = {}
+    for (const column of materializedColumns) {
+      values[column.key] = rowRecord[column.key] ?? null
+    }
+    return {
+      id: row.rowId,
+      values,
+    }
+  })
+
+  return {
+    columns,
+    rows,
+  }
+}
+
 function datasetToSheetState(
   dataset: SpreadsheetViewDataset,
   options: {
@@ -650,24 +1054,42 @@ export function createDataGridSpreadsheetViewErrorState(
   return datasetToSheetState(dataset, options)
 }
 
-export function materializeDataGridSpreadsheetViewSheet(
+export function materializeDataGridSpreadsheetViewSheetResult(
   options: MaterializeDataGridSpreadsheetViewSheetOptions,
-): DataGridSpreadsheetSheetState {
+): MaterializeDataGridSpreadsheetViewSheetResult {
   if (options.errorMessage) {
-    return createDataGridSpreadsheetViewErrorState({
-      sheetId: options.sheetId,
-      sheetName: options.sheetName,
-      message: options.errorMessage,
-      sheetModelOptions: options.sheetModelOptions,
-    })
+    return {
+      sheetState: createDataGridSpreadsheetViewErrorState({
+        sheetId: options.sheetId,
+        sheetName: options.sheetName,
+        message: options.errorMessage,
+        sheetModelOptions: options.sheetModelOptions,
+      }),
+      diagnostics: Object.freeze([
+        {
+          code: "cycle",
+          message: options.errorMessage,
+          relatedSheetId: null,
+        },
+      ]),
+    }
   }
   if (!options.sourceSheetModel) {
-    return createDataGridSpreadsheetViewErrorState({
-      sheetId: options.sheetId,
-      sheetName: options.sheetName,
-      message: `Source sheet '${options.sourceSheetId}' is missing.`,
-      sheetModelOptions: options.sheetModelOptions,
-    })
+    return {
+      sheetState: createDataGridSpreadsheetViewErrorState({
+        sheetId: options.sheetId,
+        sheetName: options.sheetName,
+        message: `Source sheet '${options.sourceSheetId}' is missing.`,
+        sheetModelOptions: options.sheetModelOptions,
+      }),
+      diagnostics: Object.freeze([
+        {
+          code: "source-missing",
+          message: `Source sheet '${options.sourceSheetId}' is missing.`,
+          relatedSheetId: options.sourceSheetId,
+        },
+      ]),
+    }
   }
 
   try {
@@ -683,21 +1105,50 @@ export function materializeDataGridSpreadsheetViewSheet(
         case "project":
           dataset = applyProjectStep(dataset, step)
           break
+        case "join":
+          dataset = applyJoinStep(dataset, step, options.resolveSheetModel)
+          break
         case "group":
           dataset = applyGroupStep(dataset, step)
+          break
+        case "pivot":
+          dataset = applyPivotStep(dataset, step)
           break
         default:
           throw new Error("[DataGridSpreadsheetView] unsupported pipeline step.")
       }
     }
-    return datasetToSheetState(dataset, options)
+    return {
+      sheetState: datasetToSheetState(dataset, options),
+      diagnostics: Object.freeze([]),
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "[DataGridSpreadsheetView] materialization failed."
-    return createDataGridSpreadsheetViewErrorState({
-      sheetId: options.sheetId,
-      sheetName: options.sheetName,
-      message,
-      sheetModelOptions: options.sheetModelOptions,
-    })
+    const diagnostic = error instanceof DataGridSpreadsheetViewMaterializationError
+      ? {
+        code: error.code,
+        message,
+        relatedSheetId: error.relatedSheetId,
+      }
+      : {
+        code: "materialization-failed" as const,
+        message,
+        relatedSheetId: null,
+      }
+    return {
+      sheetState: createDataGridSpreadsheetViewErrorState({
+        sheetId: options.sheetId,
+        sheetName: options.sheetName,
+        message,
+        sheetModelOptions: options.sheetModelOptions,
+      }),
+      diagnostics: Object.freeze([diagnostic]),
+    }
   }
+}
+
+export function materializeDataGridSpreadsheetViewSheet(
+  options: MaterializeDataGridSpreadsheetViewSheetOptions,
+): DataGridSpreadsheetSheetState {
+  return materializeDataGridSpreadsheetViewSheetResult(options).sheetState
 }

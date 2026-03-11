@@ -621,6 +621,625 @@ describe("createDataGridSpreadsheetWorkbookModel", () => {
     workbook.dispose()
   })
 
+  it("materializes left join view sheets and recomputes them from right-side edits", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerId" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerId: 1, total: 100 } },
+              { id: "order-2", cells: { customerId: 2, total: 200 } },
+              { id: "order-3", cells: { customerId: 3, total: 300 } },
+            ],
+          },
+        },
+        {
+          id: "customers",
+          name: "Customers",
+          sheetModelOptions: {
+            columns: [{ key: "id" }, { key: "name" }, { key: "tier" }],
+            rows: [
+              { id: "customer-1", cells: { id: 1, name: "Atlas", tier: "Enterprise" } },
+              { id: "customer-2", cells: { id: 2, name: "Northwind", tier: "SMB" } },
+            ],
+          },
+        },
+        {
+          id: "orders-enriched",
+          name: "Orders enriched",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "join",
+              sheetId: "customers",
+              on: { leftKey: "customerId", rightKey: "id" },
+              select: [
+                { key: "name", as: "customerName", label: "Customer" },
+                { key: "tier", label: "Tier" },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+
+    const viewSheet = workbook.getSheet("orders-enriched")?.sheetModel
+    const customersSheet = workbook.getSheet("customers")?.sheetModel
+
+    expect(viewSheet?.getSnapshot().rowCount).toBe(3)
+    expect(viewSheet?.getCell({
+      sheetId: "orders-enriched",
+      rowId: "order-1",
+      rowIndex: 0,
+      columnKey: "customerName",
+    })?.displayValue).toBe("Atlas")
+    expect(viewSheet?.getCell({
+      sheetId: "orders-enriched",
+      rowId: "order-3",
+      rowIndex: 2,
+      columnKey: "customerName",
+    })?.displayValue).toBeNull()
+
+    expect(customersSheet?.setCellInput({
+      sheetId: "customers",
+      rowId: "customer-2",
+      rowIndex: 1,
+      columnKey: "tier",
+    }, "Enterprise")).toBe(true)
+
+    expect(viewSheet?.getCell({
+      sheetId: "orders-enriched",
+      rowId: "order-2",
+      rowIndex: 1,
+      columnKey: "tier",
+    })?.displayValue).toBe("Enterprise")
+
+    workbook.dispose()
+  })
+
+  it("supports inner join view sheets", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerId" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerId: 1, total: 100 } },
+              { id: "order-2", cells: { customerId: 99, total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "customers",
+          name: "Customers",
+          sheetModelOptions: {
+            columns: [{ key: "id" }, { key: "name" }],
+            rows: [
+              { id: "customer-1", cells: { id: 1, name: "Atlas" } },
+            ],
+          },
+        },
+        {
+          id: "matched-orders",
+          name: "Matched orders",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "join",
+              sheetId: "customers",
+              mode: "inner",
+              on: { leftKey: "customerId", rightKey: "id" },
+              select: [{ key: "name", as: "customerName" }],
+            },
+          ],
+        },
+      ],
+    })
+
+    const matchedOrders = workbook.getSheet("matched-orders")?.sheetModel
+
+    expect(matchedOrders?.getSnapshot().rowCount).toBe(1)
+    expect(matchedOrders?.getCell({
+      sheetId: "matched-orders",
+      rowId: "order-1",
+      rowIndex: 0,
+      columnKey: "customerName",
+    })?.displayValue).toBe("Atlas")
+
+    workbook.dispose()
+  })
+
+  it("supports explode join view sheets with stable generated row ids", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerId" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerId: 1, total: 100 } },
+              { id: "order-2", cells: { customerId: 2, total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "contacts",
+          name: "Contacts",
+          sheetModelOptions: {
+            columns: [{ key: "customerId" }, { key: "contactName" }],
+            rows: [
+              { id: "contact-1", cells: { customerId: 1, contactName: "Ada" } },
+              { id: "contact-2", cells: { customerId: 1, contactName: "Bea" } },
+              { id: "contact-3", cells: { customerId: 2, contactName: "Cy" } },
+            ],
+          },
+        },
+        {
+          id: "orders-with-contacts",
+          name: "Orders with contacts",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "join",
+              sheetId: "contacts",
+              on: { leftKey: "customerId", rightKey: "customerId" },
+              select: [{ key: "contactName" }],
+              multiMatch: "explode",
+            },
+          ],
+        },
+      ],
+    })
+
+    const viewSheet = workbook.getSheet("orders-with-contacts")?.sheetModel
+    const rows = viewSheet?.getRows() ?? []
+
+    expect(rows).toHaveLength(3)
+    expect(rows.map(row => row.id)).toEqual([
+      "join:7:order-1|9:contact-1|0",
+      "join:7:order-1|9:contact-2|1",
+      "join:7:order-2|9:contact-3|0",
+    ])
+    expect(viewSheet?.getCell({
+      sheetId: "orders-with-contacts",
+      rowId: "join:7:order-1|9:contact-1|0",
+      rowIndex: 0,
+      columnKey: "contactName",
+    })?.displayValue).toBe("Ada")
+    expect(viewSheet?.getCell({
+      sheetId: "orders-with-contacts",
+      rowId: "join:7:order-1|9:contact-2|1",
+      rowIndex: 1,
+      columnKey: "contactName",
+    })?.displayValue).toBe("Bea")
+
+    workbook.dispose()
+  })
+
+  it("supports chained view sheets after join enrichment", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerId" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerId: 1, total: 100 } },
+              { id: "order-2", cells: { customerId: 2, total: 220 } },
+            ],
+          },
+        },
+        {
+          id: "customers",
+          name: "Customers",
+          sheetModelOptions: {
+            columns: [{ key: "id" }, { key: "name" }, { key: "segment" }],
+            rows: [
+              { id: "customer-1", cells: { id: 1, name: "Atlas", segment: "ENT" } },
+              { id: "customer-2", cells: { id: 2, name: "Northwind", segment: "SMB" } },
+            ],
+          },
+        },
+        {
+          id: "orders-enriched",
+          name: "Orders enriched",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "join",
+              sheetId: "customers",
+              on: { leftKey: "customerId", rightKey: "id" },
+              select: [
+                { key: "name", as: "customerName" },
+                { key: "segment" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "enterprise-orders",
+          name: "Enterprise orders",
+          kind: "view",
+          sourceSheetId: "orders-enriched",
+          pipeline: [
+            {
+              type: "filter",
+              clauses: [{ key: "segment", operator: "equals", value: "ENT" }],
+            },
+            {
+              type: "project",
+              columns: ["customerName", "total"],
+            },
+          ],
+        },
+      ],
+    })
+
+    const enterpriseOrders = workbook.getSheet("enterprise-orders")?.sheetModel
+    const customersSheet = workbook.getSheet("customers")?.sheetModel
+
+    expect(enterpriseOrders?.getSnapshot().rowCount).toBe(1)
+    expect(enterpriseOrders?.getCell({
+      sheetId: "enterprise-orders",
+      rowId: "order-1",
+      rowIndex: 0,
+      columnKey: "customerName",
+    })?.displayValue).toBe("Atlas")
+
+    expect(customersSheet?.setCellInput({
+      sheetId: "customers",
+      rowId: "customer-2",
+      rowIndex: 1,
+      columnKey: "segment",
+    }, "ENT")).toBe(true)
+
+    expect(enterpriseOrders?.getSnapshot().rowCount).toBe(2)
+    expect(enterpriseOrders?.getCell({
+      sheetId: "enterprise-orders",
+      rowId: "order-2",
+      rowIndex: 1,
+      columnKey: "customerName",
+    })?.displayValue).toBe("Northwind")
+
+    workbook.dispose()
+  })
+
+  it("materializes ambiguous join matches as readable error sheets when multiMatch is strict", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerId" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerId: 1, total: 100 } },
+            ],
+          },
+        },
+        {
+          id: "customers",
+          name: "Customers",
+          sheetModelOptions: {
+            columns: [{ key: "id" }, { key: "name" }],
+            rows: [
+              { id: "customer-1", cells: { id: 1, name: "Atlas" } },
+              { id: "customer-2", cells: { id: 1, name: "Atlas duplicate" } },
+            ],
+          },
+        },
+        {
+          id: "orders-enriched",
+          name: "Orders enriched",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "join",
+              sheetId: "customers",
+              on: { leftKey: "customerId", rightKey: "id" },
+              select: [{ key: "name", as: "customerName" }],
+              multiMatch: "error",
+            },
+          ],
+        },
+      ],
+    })
+
+    const viewSheet = workbook.getSheet("orders-enriched")?.sheetModel
+
+    expect(viewSheet?.getSnapshot().rowCount).toBe(1)
+    expect(viewSheet?.getCell({
+      sheetId: "orders-enriched",
+      rowId: "orders-enriched-error",
+      rowIndex: 0,
+      columnKey: "status",
+    })?.displayValue).toBe("Error")
+    expect(viewSheet?.getCell({
+      sheetId: "orders-enriched",
+      rowId: "orders-enriched-error",
+      rowIndex: 0,
+      columnKey: "message",
+    })?.displayValue).toContain("multiple matches")
+    expect(workbook.getSnapshot().diagnostics).toEqual([
+      expect.objectContaining({
+        code: "derived-view-join-ambiguous-match",
+        severity: "error",
+        sheetId: "orders-enriched",
+        relatedSheetId: "customers",
+      }),
+    ])
+
+    workbook.dispose()
+  })
+
+  it("surfaces workbook diagnostics when a join dependency sheet is missing", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerId" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerId: 1, total: 100 } },
+            ],
+          },
+        },
+        {
+          id: "orders-enriched",
+          name: "Orders enriched",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "join",
+              sheetId: "customers",
+              on: { leftKey: "customerId", rightKey: "id" },
+              select: [{ key: "name", as: "customerName" }],
+            },
+          ],
+        },
+      ],
+    })
+
+    const diagnostics = workbook.getSnapshot().diagnostics
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "derived-view-join-sheet-missing",
+        severity: "error",
+        sheetId: "orders-enriched",
+        relatedSheetId: "customers",
+      }),
+    ])
+
+    workbook.dispose()
+  })
+
+  it("exposes workbook diagnostics for direct refs into unstable join and pivot view sheets", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "customerId" }, { key: "customerName" }, { key: "quarter" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerId: 1, customerName: "Atlas", quarter: "Q1", total: 100 } },
+              { id: "order-2", cells: { customerId: 2, customerName: "Northwind", quarter: "Q2", total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "customers",
+          name: "Customers",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "id" }, { key: "segment" }],
+            rows: [
+              { id: "customer-1", cells: { id: 1, segment: "ENT" } },
+              { id: "customer-2", cells: { id: 2, segment: "SMB" } },
+            ],
+          },
+        },
+        {
+          id: "orders-enriched",
+          name: "Orders enriched",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "join",
+              sheetId: "customers",
+              on: { leftKey: "customerId", rightKey: "id" },
+              select: [{ key: "segment" }],
+            },
+          ],
+        },
+        {
+          id: "orders-pivot",
+          name: "Orders pivot",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "pivot",
+              spec: {
+                rows: ["customerName"],
+                columns: ["quarter"],
+                values: [{ field: "total", agg: "sum" }],
+              },
+            },
+          ],
+        },
+        {
+          id: "summary",
+          name: "Summary",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "joinRef" }, { key: "pivotRef" }],
+            rows: [
+              {
+                id: "summary-1",
+                cells: {
+                  joinRef: "=orders-enriched![segment]1",
+                  pivotRef: "=orders-pivot![customerName]1",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const diagnostics = workbook.getSnapshot().diagnostics
+
+    expect(diagnostics).toHaveLength(2)
+    expect(diagnostics.map(diagnostic => diagnostic.code)).toEqual([
+      "derived-direct-reference-unstable",
+      "derived-direct-reference-unstable",
+    ])
+    expect(diagnostics.map(diagnostic => diagnostic.relatedSheetId)).toEqual([
+      "orders-enriched",
+      "orders-pivot",
+    ])
+    expect(diagnostics.every(diagnostic => diagnostic.sheetId === "summary")).toBe(true)
+    expect(diagnostics[0]?.message).toContain("Prefer TABLE(")
+
+    workbook.dispose()
+  })
+
+  it("materializes pivot view sheets and recomputes them from source edits", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerName" }, { key: "quarter" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerName: "Atlas", quarter: "Q1", total: 100 } },
+              { id: "order-2", cells: { customerName: "Atlas", quarter: "Q2", total: 260 } },
+              { id: "order-3", cells: { customerName: "Northwind", quarter: "Q1", total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "orders-pivot",
+          name: "Orders pivot",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "pivot",
+              spec: {
+                rows: ["customerName"],
+                columns: ["quarter"],
+                values: [{ field: "total", agg: "sum" }],
+              },
+            },
+          ],
+        },
+      ],
+    })
+
+    const pivotSheet = workbook.getSheet("orders-pivot")?.sheetModel
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+    const pivotColumns = pivotSheet?.getColumns() ?? []
+    const q1Column = pivotColumns.find(column => column.title === "Q1")
+    const q2Column = pivotColumns.find(column => column.title === "Q2")
+    const atlasRow = pivotSheet?.getRows().find(row => (
+      pivotSheet.getCell({
+        sheetId: "orders-pivot",
+        rowId: row.id,
+        rowIndex: row.rowIndex,
+        columnKey: "customerName",
+      })?.displayValue === "Atlas"
+    ))
+    const northwindRow = pivotSheet?.getRows().find(row => (
+      pivotSheet.getCell({
+        sheetId: "orders-pivot",
+        rowId: row.id,
+        rowIndex: row.rowIndex,
+        columnKey: "customerName",
+      })?.displayValue === "Northwind"
+    ))
+
+    expect(pivotColumns.map(column => column.title)).toEqual([
+      "customerName",
+      "Q1",
+      "Q2",
+    ])
+    expect(atlasRow).toBeDefined()
+    expect(northwindRow).toBeDefined()
+    expect(q1Column?.style).toEqual({ textAlign: "right" })
+    expect(pivotSheet?.getCell({
+      sheetId: "orders-pivot",
+      rowId: atlasRow!.id,
+      rowIndex: atlasRow!.rowIndex,
+      columnKey: q1Column!.key,
+    })?.displayValue).toBe(100)
+    expect(pivotSheet?.getCell({
+      sheetId: "orders-pivot",
+      rowId: atlasRow!.id,
+      rowIndex: atlasRow!.rowIndex,
+      columnKey: q2Column!.key,
+    })?.displayValue).toBe(260)
+    expect(pivotSheet?.getCell({
+      sheetId: "orders-pivot",
+      rowId: northwindRow!.id,
+      rowIndex: northwindRow!.rowIndex,
+      columnKey: q1Column!.key,
+    })?.displayValue).toBe(200)
+
+    expect(ordersSheet?.setCellInput({
+      sheetId: "orders",
+      rowId: "order-3",
+      rowIndex: 2,
+      columnKey: "quarter",
+    }, "Q2")).toBe(true)
+
+    const refreshedQ1Column = pivotSheet?.getColumns().find(column => column.title === "Q1")
+    const refreshedQ2Column = pivotSheet?.getColumns().find(column => column.title === "Q2")
+    const refreshedNorthwindRow = pivotSheet?.getRows().find(row => (
+      pivotSheet.getCell({
+        sheetId: "orders-pivot",
+        rowId: row.id,
+        rowIndex: row.rowIndex,
+        columnKey: "customerName",
+      })?.displayValue === "Northwind"
+    ))
+
+    expect(refreshedNorthwindRow).toBeDefined()
+    expect(pivotSheet?.getCell({
+      sheetId: "orders-pivot",
+      rowId: refreshedNorthwindRow!.id,
+      rowIndex: refreshedNorthwindRow!.rowIndex,
+      columnKey: refreshedQ1Column!.key,
+    })?.displayValue).toBeNull()
+    expect(pivotSheet?.getCell({
+      sheetId: "orders-pivot",
+      rowId: refreshedNorthwindRow!.id,
+      rowIndex: refreshedNorthwindRow!.rowIndex,
+      columnKey: refreshedQ2Column!.key,
+    })?.displayValue).toBe(200)
+
+    workbook.dispose()
+  })
+
   it("materializes missing view sources as readable error sheets", () => {
     const workbook = createDataGridSpreadsheetWorkbookModel({
       sheets: [
@@ -655,6 +1274,14 @@ describe("createDataGridSpreadsheetWorkbookModel", () => {
       rowIndex: 0,
       columnKey: "message",
     })?.displayValue).toBe("Source sheet 'orders' is missing.")
+    expect(workbook.getSnapshot().diagnostics).toEqual([
+      expect.objectContaining({
+        code: "derived-view-source-missing",
+        severity: "error",
+        sheetId: "orders-by-customer",
+        relatedSheetId: "orders",
+      }),
+    ])
 
     workbook.dispose()
   })
@@ -704,6 +1331,10 @@ describe("createDataGridSpreadsheetWorkbookModel", () => {
       rowIndex: 0,
       columnKey: "message",
     })?.displayValue).toContain("Circular view dependency detected")
+    expect(workbook.getSnapshot().diagnostics.map(diagnostic => diagnostic.code)).toEqual([
+      "derived-view-cycle",
+      "derived-view-cycle",
+    ])
 
     workbook.dispose()
   })
@@ -758,6 +1389,208 @@ describe("createDataGridSpreadsheetWorkbookModel", () => {
       rowId: "group:customerName=Northwind",
       rowIndex: 1,
       columnKey: "revenue",
+    })?.displayValue).toBe(200)
+
+    workbook.dispose()
+  })
+
+  it("restores exported state with join view definitions intact", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerId" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerId: 1, total: 100 } },
+              { id: "order-2", cells: { customerId: 2, total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "customers",
+          name: "Customers",
+          sheetModelOptions: {
+            columns: [{ key: "id" }, { key: "name" }],
+            rows: [
+              { id: "customer-1", cells: { id: 1, name: "Atlas" } },
+              { id: "customer-2", cells: { id: 2, name: "Northwind" } },
+            ],
+          },
+        },
+        {
+          id: "orders-enriched",
+          name: "Orders enriched",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "join",
+              sheetId: "customers",
+              on: { leftKey: "customerId", rightKey: "id" },
+              select: [{ key: "name", as: "customerName" }],
+            },
+          ],
+        },
+      ],
+    })
+
+    const exportedState = workbook.exportState()
+    const customersSheet = workbook.getSheet("customers")?.sheetModel
+
+    expect(customersSheet?.setCellInput({
+      sheetId: "customers",
+      rowId: "customer-2",
+      rowIndex: 1,
+      columnKey: "name",
+    }, "Changed")).toBe(true)
+    expect(workbook.restoreState(exportedState)).toBe(true)
+
+    const restoredJoinSheet = workbook.getSheet("orders-enriched")
+
+    expect(restoredJoinSheet?.kind).toBe("view")
+    expect(restoredJoinSheet?.viewDefinition?.sourceSheetId).toBe("orders")
+    expect(restoredJoinSheet?.sheetModel.getCell({
+      sheetId: "orders-enriched",
+      rowId: "order-2",
+      rowIndex: 1,
+      columnKey: "customerName",
+    })?.displayValue).toBe("Northwind")
+
+    workbook.dispose()
+  })
+
+  it("restores exported state with explode join view definitions intact", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerId" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerId: 1, total: 100 } },
+            ],
+          },
+        },
+        {
+          id: "contacts",
+          name: "Contacts",
+          sheetModelOptions: {
+            columns: [{ key: "customerId" }, { key: "contactName" }],
+            rows: [
+              { id: "contact-1", cells: { customerId: 1, contactName: "Ada" } },
+              { id: "contact-2", cells: { customerId: 1, contactName: "Bea" } },
+            ],
+          },
+        },
+        {
+          id: "orders-with-contacts",
+          name: "Orders with contacts",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "join",
+              sheetId: "contacts",
+              on: { leftKey: "customerId", rightKey: "customerId" },
+              select: [{ key: "contactName" }],
+              multiMatch: "explode",
+            },
+          ],
+        },
+      ],
+    })
+
+    const exportedState = workbook.exportState()
+    const contactsSheet = workbook.getSheet("contacts")?.sheetModel
+
+    expect(contactsSheet?.setCellInput({
+      sheetId: "contacts",
+      rowId: "contact-2",
+      rowIndex: 1,
+      columnKey: "contactName",
+    }, "Changed")).toBe(true)
+    expect(workbook.restoreState(exportedState)).toBe(true)
+
+    const restoredJoinSheet = workbook.getSheet("orders-with-contacts")?.sheetModel
+
+    expect(restoredJoinSheet?.getSnapshot().rowCount).toBe(2)
+    expect(restoredJoinSheet?.getCell({
+      sheetId: "orders-with-contacts",
+      rowId: "join:7:order-1|9:contact-2|1",
+      rowIndex: 1,
+      columnKey: "contactName",
+    })?.displayValue).toBe("Bea")
+
+    workbook.dispose()
+  })
+
+  it("restores exported state with pivot view definitions intact", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            columns: [{ key: "customerName" }, { key: "quarter" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerName: "Atlas", quarter: "Q1", total: 100 } },
+              { id: "order-2", cells: { customerName: "Northwind", quarter: "Q2", total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "orders-pivot",
+          name: "Orders pivot",
+          kind: "view",
+          sourceSheetId: "orders",
+          pipeline: [
+            {
+              type: "pivot",
+              spec: {
+                rows: ["customerName"],
+                columns: ["quarter"],
+                values: [{ field: "total", agg: "sum" }],
+              },
+            },
+          ],
+        },
+      ],
+    })
+
+    const exportedState = workbook.exportState()
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+
+    expect(ordersSheet?.setCellInput({
+      sheetId: "orders",
+      rowId: "order-2",
+      rowIndex: 1,
+      columnKey: "total",
+    }, 420)).toBe(true)
+    expect(workbook.restoreState(exportedState)).toBe(true)
+
+    const restoredPivotSheet = workbook.getSheet("orders-pivot")
+    const restoredQ2Column = restoredPivotSheet?.sheetModel.getColumns().find(column => (
+      column.title === "Q2"
+    ))
+    const restoredNorthwindRow = restoredPivotSheet?.sheetModel.getRows().find(row => (
+      restoredPivotSheet.sheetModel.getCell({
+        sheetId: "orders-pivot",
+        rowId: row.id,
+        rowIndex: row.rowIndex,
+        columnKey: "customerName",
+      })?.displayValue === "Northwind"
+    ))
+
+    expect(restoredPivotSheet?.kind).toBe("view")
+    expect(restoredPivotSheet?.viewDefinition?.sourceSheetId).toBe("orders")
+    expect(restoredPivotSheet?.sheetModel.getCell({
+      sheetId: "orders-pivot",
+      rowId: restoredNorthwindRow!.id,
+      rowIndex: restoredNorthwindRow!.rowIndex,
+      columnKey: restoredQ2Column!.key,
     })?.displayValue).toBe(200)
 
     workbook.dispose()

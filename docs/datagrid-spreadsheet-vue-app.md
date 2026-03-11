@@ -59,7 +59,9 @@ Current first-wave pipeline steps:
 - `filter`
 - `sort`
 - `project`
+- `join`
 - `group`
+- `pivot`
 
 View sheets rematerialize automatically during workbook sync. In the app shell they are read-only, but users can still:
 
@@ -68,7 +70,11 @@ View sheets rematerialize automatically during workbook sync. In the app shell t
 - sort and filter the active materialized view
 - use diagnostics
 
+The diagnostics drawer now also surfaces workbook-level derived-view warnings and failures, including direct sheet-qualified refs into `join`/`pivot` materialized sheets when those refs are address-based and may drift after rematerialization, plus cycle/missing-source/ambiguous-join materialization errors.
+
 Direct refs into view sheets still target the current materialized row addresses. For dynamic scans across the whole derived result, prefer `TABLE('view-id', 'columnKey')`.
+
+`join` now supports lookup-style materialization (`multiMatch: "first"`), strict duplicate rejection (`"error"`), and fanout row explosion (`"explode"`). In explode mode the derived sheet emits stable generated row ids so multiple matches from the right-side sheet can coexist in one materialized result.
 
 ## Public Surface
 

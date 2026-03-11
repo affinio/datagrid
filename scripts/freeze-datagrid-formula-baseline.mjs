@@ -159,8 +159,8 @@ function runCheckMode(baselinePath, candidateBaseline) {
   const baseline = readJson(baselinePath)
   assertSameScenarioShape(baseline, candidateBaseline)
 
-  const maxSlowdownPct = normalizePct(process.env.FORMULA_BASELINE_MAX_SLOWDOWN_PCT ?? 35)
-  const maxThroughputDropPct = normalizePct(process.env.FORMULA_BASELINE_MAX_THROUGHPUT_DROP_PCT ?? 25)
+  const maxSlowdownPct = normalizePct(process.env.FORMULA_BASELINE_MAX_SLOWDOWN_PCT ?? 20)
+  const maxThroughputDropPct = normalizePct(process.env.FORMULA_BASELINE_MAX_THROUGHPUT_DROP_PCT ?? 15)
   const failures = []
 
   const checkSlowMetric = (label, current, expected) => {

@@ -121,6 +121,60 @@ export function createSpreadsheetDemoWorkbookModel(): DataGridSpreadsheetWorkboo
         ],
       },
       {
+        id: "orders-enriched",
+        name: "Orders enriched",
+        kind: "view",
+        sourceSheetId: "orders",
+        sheetModelOptions: {
+          sheetStyle: {
+            background: "rgba(255, 247, 237, 0.9)",
+          },
+        },
+        pipeline: [
+          {
+            type: "join",
+            sheetId: "customers",
+            on: {
+              leftKey: "customerId",
+              rightKey: "id",
+            },
+            select: [
+              { key: "region", label: "Region" },
+              { key: "tier", label: "Tier" },
+            ],
+          },
+          {
+            type: "sort",
+            fields: [
+              { key: "tier", direction: "asc" },
+              { key: "total", direction: "desc" },
+            ],
+          },
+        ],
+      },
+      {
+        id: "orders-pivot",
+        name: "Orders pivot",
+        kind: "view",
+        sourceSheetId: "orders",
+        sheetModelOptions: {
+          sheetStyle: {
+            background: "rgba(239, 246, 255, 0.92)",
+          },
+        },
+        pipeline: [
+          {
+            type: "pivot",
+            spec: {
+              rows: ["customerName"],
+              columns: ["status"],
+              values: [{ field: "total", agg: "sum" }],
+              columnGrandTotal: true,
+            },
+          },
+        ],
+      },
+      {
         id: "summary",
         name: "Summary",
         sheetModelOptions: {
@@ -139,6 +193,8 @@ export function createSpreadsheetDemoWorkbookModel(): DataGridSpreadsheetWorkboo
             { id: "summary-3", cells: { metric: "Gross sales", value: "=SUM(TABLE('orders', 'total'))", note: "Workbook-wide aggregate still uses TABLE() because direct refs are fixed-address links." } },
             { id: "summary-4", cells: { metric: "Top customer from view", value: "='orders by customer'![customerName]1", note: "Direct ref into the first row of a derived view sheet." } },
             { id: "summary-5", cells: { metric: "Top customer spend", value: "=MAX(TABLE('orders-by-customer', 'revenue'))", note: "Derived view output also participates in TABLE() scans like a regular sheet." } },
+            { id: "summary-6", cells: { metric: "First enriched tier", value: "=orders-enriched![tier]1", note: "Direct ref into the join-derived sheet. Open Orders enriched to inspect the materialized join columns." } },
+            { id: "summary-7", cells: { metric: "Won revenue in pivot", value: "=MAX(TABLE('orders-pivot', 'pivot|pivot:column:6:status3:Won|pivot:agg:3:sum5:total'))", note: "Spreadsheet pivot is materialized as a view sheet with generated measure column ids." } },
           ],
         },
       },

@@ -39,6 +39,9 @@ export type {
 } from "./sheetModel.js"
 export type {
   CreateDataGridSpreadsheetWorkbookModelOptions,
+  DataGridSpreadsheetWorkbookDiagnostic,
+  DataGridSpreadsheetWorkbookDiagnosticCode,
+  DataGridSpreadsheetWorkbookDiagnosticSeverity,
   DataGridSpreadsheetWorkbookListener,
   DataGridSpreadsheetWorkbookModel,
   DataGridSpreadsheetWorkbookDataSheetInput,
@@ -57,6 +60,9 @@ export type {
   DataGridSpreadsheetViewFilterStep,
   DataGridSpreadsheetViewGroupByField,
   DataGridSpreadsheetViewGroupStep,
+  DataGridSpreadsheetViewJoinColumn,
+  DataGridSpreadsheetViewJoinStep,
+  DataGridSpreadsheetViewPivotStep,
   DataGridSpreadsheetViewProjectColumn,
   DataGridSpreadsheetViewProjectStep,
   DataGridSpreadsheetViewSortField,

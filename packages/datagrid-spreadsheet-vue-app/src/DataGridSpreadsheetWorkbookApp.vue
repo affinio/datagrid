@@ -279,6 +279,11 @@
                   <small>{{ workbookFormulaTotals.errorCells }} errors across workbook</small>
                 </div>
                 <div class="spreadsheet-diagnostic-metric">
+                  <span>Workbook issues</span>
+                  <strong>{{ workbookDiagnostics.length }}</strong>
+                  <small>{{ workbookWarningDiagnostics.length }} warnings across workbook</small>
+                </div>
+                <div class="spreadsheet-diagnostic-metric">
                   <span>Active formula</span>
                   <strong>{{ activeFormulaSummary.referenceCount }} refs</strong>
                   <small>{{ activeFormulaSummary.crossSheetReferenceCount }} cross-sheet · {{ activeFormulaSummary.diagnosticCount }} diagnostics</small>
@@ -329,6 +334,20 @@
                   </div>
                 </div>
                 <div v-else class="spreadsheet-empty-state">No formula diagnostics</div>
+              </div>
+
+              <div class="spreadsheet-diagnostic-block">
+                <span class="spreadsheet-diagnostic-label">Workbook issues</span>
+                <div v-if="workbookDiagnosticItems.length > 0" class="spreadsheet-diagnostic-list">
+                  <div
+                    v-for="item in workbookDiagnosticItems"
+                    :key="item"
+                    class="spreadsheet-diagnostic-list__item"
+                  >
+                    {{ item }}
+                  </div>
+                </div>
+                <div v-else class="spreadsheet-empty-state">No workbook diagnostics</div>
               </div>
 
               <div class="spreadsheet-diagnostic-block">
@@ -2718,6 +2737,12 @@ const workbookFormulaTotals = computed(() => {
   })
 })
 
+const workbookDiagnostics = computed(() => Object.freeze(workbookSnapshot.value.diagnostics ?? []))
+
+const workbookWarningDiagnostics = computed(() => Object.freeze(
+  workbookDiagnostics.value.filter(diagnostic => diagnostic.severity === "warning"),
+))
+
 const lastSpreadsheetOperationLabel = computed(() => {
   if (!lastSpreadsheetOperation.value) {
     return "No measured recalcs"
@@ -2774,6 +2799,15 @@ const activeFormulaDiagnosticItems = computed<readonly string[]>(() => {
     return Object.freeze([(activeCellSnapshot.value.errorValue as { message: string }).message])
   }
   return Object.freeze(items.slice(0, 6))
+})
+
+const workbookDiagnosticItems = computed<readonly string[]>(() => {
+  return Object.freeze(workbookDiagnostics.value.slice(0, 6).map(diagnostic => {
+    const scope = diagnostic.relatedSheetId
+      ? `${diagnostic.sheetId} -> ${diagnostic.relatedSheetId}`
+      : diagnostic.sheetId
+    return `${scope}: ${diagnostic.message}`
+  }))
 })
 
 const selectedRangeLabel = computed(() => {

@@ -131,6 +131,7 @@ export {
   isSamePivotSpec,
   normalizePivotAxisValue,
 } from "@affino/datagrid-pivot"
+export { createPivotRuntime } from "./pivot/pivotRuntime.js"
 
 export {
   analyzeDataGridFormulaFieldDefinition,

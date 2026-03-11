@@ -116,6 +116,34 @@ function resolveScenarioBudget(baseKey, scenarioName, fallback = Number.POSITIVE
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+function resolveScenarioPatchBudget(baseKey, options) {
+  const {
+    scenarioName,
+    dagShape,
+    patchSize,
+    fallback = Number.NaN,
+  } = options
+
+  const candidates = [
+    `${baseKey}_${String(scenarioName).toUpperCase()}_${String(dagShape).toUpperCase()}_PATCH_${patchSize}`,
+    `${baseKey}_${String(scenarioName).toUpperCase()}_PATCH_${patchSize}`,
+    `${baseKey}_PATCH_${patchSize}`,
+  ]
+
+  for (const key of candidates) {
+    const raw = process.env[key]
+    if (typeof raw !== "string" || raw.trim().length === 0) {
+      continue
+    }
+    const parsed = Number.parseFloat(raw)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+
+  return fallback
+}
+
 function quantile(values, q) {
   if (!values.length) {
     return 0
@@ -994,14 +1022,20 @@ for (const aggregate of aggregateByWorkload) {
       PERF_BUDGET_MAX_PATCH_P95_MS,
     )
   const targetPatchSize = resolveTargetPatchSizeForRows(aggregate.config.rows)
-  const targetPatch = aggregate.patch.find(entry => entry.patchSize === targetPatchSize) ?? null
-  if (
-    targetPatch
-    && Number.isFinite(resolvedScenarioPatchBudget)
-    && targetPatch.p95AcrossRunsMs.p95 > resolvedScenarioPatchBudget
-  ) {
+  for (const patchEntry of aggregate.patch) {
+    const patchBudget = resolveScenarioPatchBudget("PERF_BUDGET_MAX_PATCH_P95_MS", {
+      scenarioName: aggregate.name,
+      dagShape: aggregate.dagShape,
+      patchSize: patchEntry.patchSize,
+      fallback: patchEntry.patchSize === targetPatchSize
+        ? resolvedScenarioPatchBudget
+        : Number.NaN,
+    })
+    if (!Number.isFinite(patchBudget) || patchEntry.p95AcrossRunsMs.p95 <= patchBudget) {
+      continue
+    }
     budgetErrors.push(
-      `scenario=${aggregate.name} shape=${aggregate.dagShape} patch p95(size=${targetPatchSize}) ${targetPatch.p95AcrossRunsMs.p95.toFixed(3)}ms exceeds ${resolvedScenarioPatchBudget}ms`,
+      `scenario=${aggregate.name} shape=${aggregate.dagShape} patch p95(size=${patchEntry.patchSize}) ${patchEntry.p95AcrossRunsMs.p95.toFixed(3)}ms exceeds ${patchBudget}ms`,
     )
   }
 }
