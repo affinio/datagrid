@@ -115,11 +115,6 @@
     "src/composables/useDataGridRuntime.ts",
     "src/composables/selectionOverlayTransform.ts",
     "src/composables/useDataGridOverlayScrollState.ts",
-    "src/composables/useAffinoDataGrid.ts",
-    "src/composables/useAffinoDataGrid.types.ts",
-    "src/composables/useAffinoDataGridMinimal.ts",
-    "src/composables/useAffinoDataGridUi.ts",
-    "src/composables/internal/useAffinoDataGrid/**/*.ts",
     "src/composables/**/*.ts",
     "src/grid/**/*.ts"
   ],

@@ -18,9 +18,6 @@ This document defines the stable, semver-safe entrypoints for common `@affino/da
   - `createDataGridVueRuntime`
   - `useDataGridRuntime`
   - Pivot utilities through `useDataGridRuntime`: `setPivotModel`, `getPivotModel`, `getPivotCellDrilldown`, `exportPivotLayout`, `importPivotLayout`, `exportPivotInterop`
-- Sugar API:
-  - `useAffinoDataGrid`
-  - `useAffinoDataGridUi`
 - Settings + overlays + a11y:
   - `useDataGridSettingsStore`
   - `createDataGridSettingsAdapter`
@@ -67,17 +64,15 @@ const gridState = ref(null)
 ## If You Need More Control
 
 ```ts
-import { useAffinoDataGridUi } from "@affino/datagrid-vue"
+import { useDataGridRuntime } from "@affino/datagrid-vue"
 ```
 
-`useAffinoDataGridUi` keeps sugar ergonomics, but exposes explicit action/binding APIs for custom table UIs.
+Use `useDataGridRuntime` for headless runtime ownership. Build interaction/UI behavior with `@affino/datagrid-vue-app` or `@affino/datagrid-vue/advanced` hooks.
 
 ## Contract Guard
 
 - Stable/runtime contract coverage lives in:
   - `packages/datagrid-vue/src/composables/__tests__/useDataGridRuntime.contract.spec.ts`
-  - `packages/datagrid-vue/src/composables/__tests__/useAffinoDataGrid.contract.spec.ts`
-  - `packages/datagrid-vue/src/composables/__tests__/useAffinoDataGridUi.contract.spec.ts`
 - Run package contract suite:
   - `pnpm --filter @affino/datagrid-vue run test:contracts`
 

@@ -320,12 +320,15 @@ export function useDataGridTableStageRuntime<
     isPointerSelectingCells,
     isFillDragging,
     fillPreviewRange,
+    lastAppliedFill,
     isRangeMoving,
     selectionRange,
     rangeMovePreviewRange,
     stopPointerSelection,
     stopFillSelection,
     startFillHandleDrag,
+    startFillHandleDoubleClick,
+    applyLastFillBehavior,
     handleCellMouseDown,
     handleCellKeydown,
     handleWindowMouseMove: handleInteractionWindowMouseMove,
@@ -376,6 +379,23 @@ export function useDataGridTableStageRuntime<
     runHistoryAction,
     ensureKeyboardActiveCellVisible,
   })
+
+  const fillActionAnchorCell = computed(() => {
+    const session = lastAppliedFill.value
+    const activeSelectionRange = selectionRange.value
+    if (!session || !activeSelectionRange || isFillDragging.value) {
+      return null
+    }
+    if (!rangesEqual(session.previewRange, activeSelectionRange)) {
+      return null
+    }
+    return {
+      rowIndex: session.previewRange.endRow,
+      columnIndex: session.previewRange.endColumn,
+    }
+  })
+
+  const fillActionBehavior = computed(() => lastAppliedFill.value?.behavior ?? null)
 
   const isViewportOwnedKeyboardEvent = (event: KeyboardEvent): boolean => {
     if (event.ctrlKey || event.metaKey || event.altKey) {
@@ -538,6 +558,10 @@ export function useDataGridTableStageRuntime<
     startInlineEdit,
     isFillHandleCell,
     startFillHandleDrag,
+    startFillHandleDoubleClick,
+    fillActionAnchorCell,
+    fillActionBehavior,
+    applyFillActionBehavior: applyLastFillBehavior,
     handleEditorKeydown,
     commitInlineEdit: () => {
       commitInlineEdit()

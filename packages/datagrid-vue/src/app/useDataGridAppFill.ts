@@ -1,21 +1,39 @@
 import type { Ref } from "vue"
-import type { DataGridCopyRange } from "../advanced"
+import {
+  buildDataGridFillMatrix,
+  resolveDataGridDefaultFillBehavior,
+  type DataGridCopyRange,
+  type DataGridFillBehavior,
+} from "../advanced"
 import type { DataGridAppMode } from "./useDataGridAppControls"
+
+export interface DataGridAppAppliedFillSession {
+  baseRange: DataGridCopyRange
+  previewRange: DataGridCopyRange
+  behavior: DataGridFillBehavior
+}
 
 export interface UseDataGridAppFillOptions {
   mode: Ref<DataGridAppMode>
   viewportRowStart: Ref<number>
   fillBaseRange: Ref<DataGridCopyRange | null>
   fillPreviewRange: Ref<DataGridCopyRange | null>
+  activeFillBehavior: Ref<DataGridFillBehavior | null>
   resolveSelectionRange: () => DataGridCopyRange | null
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
   applyClipboardEdits: (range: DataGridCopyRange, matrix: string[][]) => number
+  setLastAppliedFillSession: (session: DataGridAppAppliedFillSession | null) => void
   syncViewport: () => void
 }
 
 export interface UseDataGridAppFillResult {
-  applyFillPreview: () => void
+  applyFillPreview: (behavior?: DataGridFillBehavior) => boolean
+  applyFillRange: (
+    baseRange: DataGridCopyRange,
+    previewRange: DataGridCopyRange,
+    behavior?: DataGridFillBehavior,
+  ) => boolean
   isCellInFillPreview: (rowOffset: number, columnIndex: number) => boolean
   isFillHandleCell: (rowOffset: number, columnIndex: number) => boolean
 }
@@ -23,20 +41,51 @@ export interface UseDataGridAppFillResult {
 export function useDataGridAppFill(
   options: UseDataGridAppFillOptions,
 ): UseDataGridAppFillResult {
-  const applyFillPreview = (): void => {
-    const baseRange = options.fillBaseRange.value
-    const previewRange = options.fillPreviewRange.value
-    if (!baseRange || !previewRange || options.rangesEqual(baseRange, previewRange)) {
-      return
+  const applyFillRange = (
+    baseRange: DataGridCopyRange,
+    previewRange: DataGridCopyRange,
+    behaviorOverride?: DataGridFillBehavior,
+  ): boolean => {
+    if (options.rangesEqual(baseRange, previewRange)) {
+      return false
     }
-    const matrix = options.buildFillMatrixFromRange(baseRange)
-    if (!matrix.length) {
-      return
+    const sourceMatrix = options.buildFillMatrixFromRange(baseRange)
+    if (!sourceMatrix.length) {
+      return false
     }
+    const behavior = behaviorOverride
+      ?? options.activeFillBehavior.value
+      ?? resolveDataGridDefaultFillBehavior({
+        baseRange,
+        previewRange,
+        sourceMatrix,
+      })
+    const matrix = buildDataGridFillMatrix({
+      baseRange,
+      previewRange,
+      sourceMatrix,
+      behavior,
+    })
     const appliedRows = options.applyClipboardEdits(previewRange, matrix)
     if (appliedRows > 0) {
+      options.setLastAppliedFillSession({
+        baseRange: { ...baseRange },
+        previewRange: { ...previewRange },
+        behavior,
+      })
       options.syncViewport()
+      return true
     }
+    return false
+  }
+
+  const applyFillPreview = (behavior?: DataGridFillBehavior): boolean => {
+    const baseRange = options.fillBaseRange.value
+    const previewRange = options.fillPreviewRange.value
+    if (!baseRange || !previewRange) {
+      return false
+    }
+    return applyFillRange(baseRange, previewRange, behavior)
   }
 
   const isCellInFillPreview = (rowOffset: number, columnIndex: number): boolean => {
@@ -84,6 +133,7 @@ export function useDataGridAppFill(
 
   return {
     applyFillPreview,
+    applyFillRange,
     isCellInFillPreview,
     isFillHandleCell,
   }

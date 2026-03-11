@@ -284,7 +284,7 @@
       </div>
     </div>
 
-    <div class="grid-body-shell" :style="paneLayoutStyle" @mouseleave="clearHoveredRow">
+    <div ref="bodyShellRef" class="grid-body-shell" :style="paneLayoutStyle" @mouseleave="clearHoveredRow">
       <div
         class="grid-body-pane grid-body-pane--left"
         :style="leftPaneStyle"
@@ -334,6 +334,7 @@
                 aria-label="Fill handle"
                 tabindex="-1"
                 @mousedown.stop.prevent="handleFillHandleMouseDown($event)"
+                @dblclick.stop.prevent="handleFillHandleDoubleClick($event)"
               />
               <input
                 v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
@@ -423,6 +424,7 @@
                   aria-label="Fill handle"
                   tabindex="-1"
                   @mousedown.stop.prevent="handleFillHandleMouseDown($event)"
+                  @dblclick.stop.prevent="handleFillHandleDoubleClick($event)"
                 />
                 <input
                   v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
@@ -509,6 +511,7 @@
                 aria-label="Fill handle"
                 tabindex="-1"
                 @mousedown.stop.prevent="handleFillHandleMouseDown($event)"
+                @dblclick.stop.prevent="handleFillHandleDoubleClick($event)"
               />
               <input
                 v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
@@ -550,12 +553,57 @@
           </div>
         </div>
       </div>
+
+      <div
+        v-if="floatingFillActionStyle"
+        class="grid-fill-action grid-fill-action--floating"
+        :style="floatingFillActionStyle"
+      >
+        <button
+          type="button"
+          class="grid-fill-action__trigger"
+          aria-label="Fill options"
+          aria-haspopup="menu"
+          :aria-expanded="fillActionMenuOpen ? 'true' : 'false'"
+          tabindex="-1"
+          @mousedown.stop
+          @click.stop="toggleFloatingFillActionMenu($event)"
+        >
+          v
+        </button>
+        <div
+          v-if="fillActionMenuOpen"
+          class="grid-fill-action__menu"
+          role="menu"
+        >
+          <button
+            type="button"
+            class="grid-fill-action__item"
+            :class="{ 'grid-fill-action__item--active': props.fillActionBehavior === 'series' }"
+            role="menuitemradio"
+            :aria-checked="props.fillActionBehavior === 'series' ? 'true' : 'false'"
+            @click.stop="selectFillActionBehavior('series')"
+          >
+            Series
+          </button>
+          <button
+            type="button"
+            class="grid-fill-action__item"
+            :class="{ 'grid-fill-action__item--active': props.fillActionBehavior === 'copy' }"
+            role="menuitemradio"
+            :aria-checked="props.fillActionBehavior === 'copy' ? 'true' : 'false'"
+            @click.stop="selectFillActionBehavior('copy')"
+          >
+            Copy
+          </button>
+        </div>
+      </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch, type ComponentPublicInstance, type CSSProperties } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties } from "vue"
 import type {
   DataGridColumnPin,
   DataGridColumnSnapshot,
@@ -594,6 +642,9 @@ type OverlaySegment = {
 
 type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>["selectionRange"]>
 const RANGE_MOVE_HANDLE_HOVER_EDGE_PX = 6
+const FILL_ACTION_ROOT_SELECTOR = ".grid-fill-action"
+const FILL_ACTION_TRIGGER_SIZE_PX = 14
+const FILL_ACTION_VIEWPORT_MARGIN_PX = 8
 
 const columnMenuMaxFilterValues = computed(() => (
   typeof props.columnMenuMaxFilterValues === "number"
@@ -760,10 +811,49 @@ function cellTabIndex(rowOffset: number, columnIndex: number): number {
 }
 
 function handleFillHandleMouseDown(event: MouseEvent): void {
+  fillActionMenuOpen.value = false
   const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   const cell = handle?.closest<HTMLElement>(".grid-cell")
   cell?.focus({ preventScroll: true })
   props.startFillHandleDrag(event)
+}
+
+function handleFillHandleDoubleClick(event: MouseEvent): void {
+  fillActionMenuOpen.value = false
+  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const cell = handle?.closest<HTMLElement>(".grid-cell")
+  cell?.focus({ preventScroll: true })
+  props.startFillHandleDoubleClick(event)
+}
+
+function focusFillActionAnchorCell(): void {
+  const anchorCell = props.fillActionAnchorCell
+  if (!anchorCell) {
+    bodyViewportEl.value?.focus({ preventScroll: true })
+    return
+  }
+  const cellElement = resolveVisibleCellElement(anchorCell.rowIndex, anchorCell.columnIndex)
+  if (cellElement) {
+    cellElement.focus({ preventScroll: true })
+    return
+  }
+  bodyViewportEl.value?.focus({ preventScroll: true })
+}
+
+function toggleFloatingFillActionMenu(event: MouseEvent): void {
+  if (!floatingFillActionStyle.value) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  focusFillActionAnchorCell()
+  fillActionMenuOpen.value = !fillActionMenuOpen.value
+}
+
+function selectFillActionBehavior(behavior: "copy" | "series"): void {
+  props.applyFillActionBehavior(behavior)
+  fillActionMenuOpen.value = false
+  focusFillActionAnchorCell()
 }
 
 function isCellSelectedSafe(rowOffset: number, columnIndex: number): boolean {
@@ -896,10 +986,16 @@ const rightPaneStyle = computed<CSSProperties>(() => ({
 }))
 
 const bodyViewportEl = ref<HTMLElement | null>(null)
+const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
 const hoveredRangeMoveHandleCell = ref<{ rowIndex: number; columnIndex: number } | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
+const fillActionMenuOpen = ref(false)
+const bodyViewportScrollLeft = ref(0)
+const bodyViewportClientWidth = ref(0)
+const bodyViewportClientHeight = ref(0)
+const bodyViewportTopOffset = ref(0)
 
 function clearRangeMoveHandleHover(): void {
   hoveredRangeMoveHandleCell.value = null
@@ -1057,7 +1153,111 @@ function restoreAnchorCellFocus(): void {
 function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
   bodyViewportEl.value = resolveElementRef(value)
   props.bodyViewportRef(value)
+  syncBodyViewportMetrics()
 }
+
+function syncBodyViewportMetrics(): void {
+  const viewport = bodyViewportEl.value
+  const shell = bodyShellRef.value
+  if (!viewport || !shell) {
+    return
+  }
+  const viewportRect = viewport.getBoundingClientRect()
+  const shellRect = shell.getBoundingClientRect()
+  bodyViewportScrollLeft.value = viewport.scrollLeft
+  bodyViewportClientWidth.value = viewport.clientWidth
+  bodyViewportClientHeight.value = viewport.clientHeight
+  bodyViewportTopOffset.value = Math.max(0, viewportRect.top - shellRect.top)
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (max < min) {
+    return min
+  }
+  return Math.min(Math.max(value, min), max)
+}
+
+const centerColumns = computed(() => props.visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right"))
+
+const effectiveBodyViewportWidth = computed(() => {
+  return bodyViewportClientWidth.value > 0
+    ? bodyViewportClientWidth.value
+    : parsePixelValue(props.gridContentStyle.width ?? props.gridContentStyle.minWidth, 0)
+})
+
+function resolveFloatingFillActionLeft(): number | null {
+  const anchorCell = props.fillActionAnchorCell
+  if (!anchorCell) {
+    return null
+  }
+  const column = props.visibleColumns[anchorCell.columnIndex]
+  if (!column) {
+    return null
+  }
+
+  if (column.pin === "left") {
+    let cellRight = indexColumnWidthPx.value
+    for (const pinnedColumn of pinnedLeftColumns.value) {
+      cellRight += resolveColumnWidth(pinnedColumn)
+      if (pinnedColumn.key === column.key) {
+        break
+      }
+    }
+    return clamp(
+      cellRight - FILL_ACTION_TRIGGER_SIZE_PX,
+      FILL_ACTION_VIEWPORT_MARGIN_PX,
+      Math.max(FILL_ACTION_VIEWPORT_MARGIN_PX, leftPaneWidth.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX),
+    )
+  }
+
+  if (column.pin === "right") {
+    let cellRight = leftPaneWidth.value + effectiveBodyViewportWidth.value
+    for (const pinnedColumn of pinnedRightColumns.value) {
+      cellRight += resolveColumnWidth(pinnedColumn)
+      if (pinnedColumn.key === column.key) {
+        break
+      }
+    }
+    const rightPaneStart = leftPaneWidth.value + effectiveBodyViewportWidth.value
+    return clamp(
+      cellRight - FILL_ACTION_TRIGGER_SIZE_PX,
+      rightPaneStart + FILL_ACTION_VIEWPORT_MARGIN_PX,
+      Math.max(
+        rightPaneStart + FILL_ACTION_VIEWPORT_MARGIN_PX,
+        rightPaneStart + rightPaneWidth.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX,
+      ),
+    )
+  }
+
+  let cellRight = leftPaneWidth.value - bodyViewportScrollLeft.value
+  for (const centerColumn of centerColumns.value) {
+    cellRight += resolveColumnWidth(centerColumn)
+    if (centerColumn.key === column.key) {
+      break
+    }
+  }
+  const viewportLeft = leftPaneWidth.value + FILL_ACTION_VIEWPORT_MARGIN_PX
+  const viewportRight = leftPaneWidth.value + effectiveBodyViewportWidth.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX
+  return clamp(cellRight - FILL_ACTION_TRIGGER_SIZE_PX, viewportLeft, viewportRight)
+}
+
+const floatingFillActionStyle = computed<CSSProperties | null>(() => {
+  if (!props.fillActionAnchorCell) {
+    return null
+  }
+  const left = resolveFloatingFillActionLeft()
+  if (left == null) {
+    return null
+  }
+  const top = bodyViewportTopOffset.value + Math.max(
+    0,
+    bodyViewportClientHeight.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX,
+  )
+  return {
+    left: `${left}px`,
+    top: `${top}px`,
+  }
+})
 
 watch(
   () => props.fillPreviewRange,
@@ -1067,6 +1267,43 @@ watch(
     }
   },
 )
+
+watch(
+  () => props.fillActionAnchorCell
+    ? `${props.fillActionAnchorCell.rowIndex}:${props.fillActionAnchorCell.columnIndex}`
+    : "",
+  () => {
+    fillActionMenuOpen.value = false
+  },
+)
+
+watch(fillActionMenuOpen, (open, _previous, onCleanup) => {
+  if (!open || typeof window === "undefined") {
+    return
+  }
+
+  const handlePointerDown = (event: MouseEvent) => {
+    const target = event.target instanceof HTMLElement ? event.target : null
+    if (target?.closest(FILL_ACTION_ROOT_SELECTOR)) {
+      return
+    }
+    fillActionMenuOpen.value = false
+  }
+
+  const handleKeydown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      fillActionMenuOpen.value = false
+      focusFillActionAnchorCell()
+    }
+  }
+
+  window.addEventListener("mousedown", handlePointerDown, true)
+  window.addEventListener("keydown", handleKeydown)
+  onCleanup(() => {
+    window.removeEventListener("mousedown", handlePointerDown, true)
+    window.removeEventListener("keydown", handleKeydown)
+  })
+})
 
 const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
   resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
@@ -1108,6 +1345,7 @@ function handleCenterViewportScroll(event: Event): void {
     return
   }
   linkedPaneScrollSync.onSourceScroll(element.scrollTop)
+  syncBodyViewportMetrics()
 }
 
 function handleLinkedViewportWheel(event: WheelEvent): void {
@@ -1121,6 +1359,16 @@ function handleBodyViewportWheel(event: WheelEvent): void {
 onBeforeUnmount(() => {
   linkedPaneScrollSync.reset()
   managedWheelScroll.reset()
+  if (typeof window !== "undefined") {
+    window.removeEventListener("resize", syncBodyViewportMetrics)
+  }
+})
+
+onMounted(() => {
+  syncBodyViewportMetrics()
+  if (typeof window !== "undefined") {
+    window.addEventListener("resize", syncBodyViewportMetrics)
+  }
 })
 
 const leftTrackStyle = computed<CSSProperties>(() => ({

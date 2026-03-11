@@ -17,6 +17,7 @@ export type {
 
 export interface DataGridParsedFormulaIdentifier {
   name: string
+  sheetReference: string | null
   referenceName: string
   rowSelector: DataGridFormulaRowSelector
 }
@@ -24,10 +25,12 @@ export interface DataGridParsedFormulaIdentifier {
 interface ResolvedDataGridFormulaReferenceParserOptions {
   syntax: DataGridFormulaReferenceSyntax
   smartsheetAbsoluteRowBase: 0 | 1
+  allowSheetQualifiedReferences: boolean
 }
 
 interface DataGridReadFormulaIdentifierResult {
   value: string
+  sheetReference: string | null
   referenceName: string
   rowSelector: DataGridFormulaRowSelector
   end: number
@@ -117,6 +120,10 @@ function normalizeFormulaReferenceSegments(
   return segments.map(formatFormulaReferenceSegment).join(".")
 }
 
+function normalizeFormulaSheetReference(reference: string): string {
+  return reference.trim()
+}
+
 function resolveFormulaReferenceParserOptions(
   options: DataGridFormulaReferenceParserOptions | undefined,
 ): ResolvedDataGridFormulaReferenceParserOptions {
@@ -124,6 +131,7 @@ function resolveFormulaReferenceParserOptions(
   return {
     syntax,
     smartsheetAbsoluteRowBase: options?.smartsheetAbsoluteRowBase === 0 ? 0 : 1,
+    allowSheetQualifiedReferences: options?.allowSheetQualifiedReferences === true,
   }
 }
 
@@ -133,11 +141,21 @@ function supportsSmartsheetFormulaReferenceSyntax(
   return syntax === "smartsheet" || syntax === "auto"
 }
 
+function formatFormulaSheetReference(reference: string): string {
+  const normalized = normalizeFormulaSheetReference(reference)
+  if (/^[A-Za-z_$][A-Za-z0-9_$.-]*$/.test(normalized)) {
+    return normalized
+  }
+  return `'${normalized.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
+}
+
 function serializeParsedFormulaIdentifier(
+  sheetReference: string | null,
   referenceName: string,
   rowSelector: DataGridFormulaRowSelector,
 ): string {
-  return `${referenceName}${serializeFormulaRowSelector(rowSelector)}`
+  const prefix = sheetReference ? `${formatFormulaSheetReference(sheetReference)}!` : ""
+  return `${prefix}${referenceName}${serializeFormulaRowSelector(rowSelector)}`
 }
 
 export function normalizeFormulaReference(reference: string): string {
@@ -461,7 +479,7 @@ function readSmartsheetTrailingFormulaRowSelectorAt(
   }
 }
 
-function readFormulaIdentifierAt(
+function readLocalFormulaIdentifierAt(
   input: string,
   start: number,
   options: DataGridFormulaReferenceParserOptions | undefined,
@@ -598,7 +616,8 @@ function readFormulaIdentifierAt(
         if (rowSelector) {
           const referenceName = normalizeFormulaReferenceSegments(segments)
           return {
-            value: serializeParsedFormulaIdentifier(referenceName, rowSelector.rowSelector),
+            value: serializeParsedFormulaIdentifier(null, referenceName, rowSelector.rowSelector),
+            sheetReference: null,
             referenceName,
             rowSelector: rowSelector.rowSelector,
             end: rowSelector.end,
@@ -626,7 +645,8 @@ function readFormulaIdentifierAt(
     const smartsheetSelector = readSmartsheetTrailingFormulaRowSelectorAt(input, cursor, parserOptions)
     if (smartsheetSelector && isFormulaReferenceBoundary(input[smartsheetSelector.end])) {
       return {
-        value: serializeParsedFormulaIdentifier(referenceName, smartsheetSelector.rowSelector),
+        value: serializeParsedFormulaIdentifier(null, referenceName, smartsheetSelector.rowSelector),
+        sheetReference: null,
         referenceName,
         rowSelector: smartsheetSelector.rowSelector,
         end: smartsheetSelector.end,
@@ -636,10 +656,87 @@ function readFormulaIdentifierAt(
 
   return {
     value: referenceName,
+    sheetReference: null,
     referenceName,
     rowSelector: { kind: "current" },
     end: cursor,
   }
+}
+
+function readFormulaSheetReferenceAt(
+  input: string,
+  start: number,
+): {
+  sheetReference: string
+  end: number
+} | null {
+  const current = input[start]
+  if (!current) {
+    return null
+  }
+  if (current === "'" || current === '"') {
+    const parsed = readEscapedFormulaStringValue(input, start, current)
+    const sheetReference = normalizeFormulaSheetReference(parsed.value)
+    return sheetReference.length === 0
+      ? null
+      : {
+          sheetReference,
+          end: parsed.end,
+        }
+  }
+  if (!isFormulaReferenceIdentifierStart(current)) {
+    return null
+  }
+  let cursor = start + 1
+  while (cursor < input.length) {
+    const next = input[cursor]
+    if (
+      !next
+      || !(
+        isFormulaReferenceIdentifierPart(next)
+        || next === "-"
+        || next === "."
+      )
+    ) {
+      break
+    }
+    cursor += 1
+  }
+  const sheetReference = normalizeFormulaSheetReference(input.slice(start, cursor))
+  return sheetReference.length === 0
+    ? null
+    : {
+        sheetReference,
+        end: cursor,
+      }
+}
+
+function readFormulaIdentifierAt(
+  input: string,
+  start: number,
+  options: DataGridFormulaReferenceParserOptions | undefined,
+): DataGridReadFormulaIdentifierResult | null {
+  const parserOptions = resolveFormulaReferenceParserOptions(options)
+  if (parserOptions.allowSheetQualifiedReferences) {
+    const sheetReference = readFormulaSheetReferenceAt(input, start)
+    if (sheetReference && input[sheetReference.end] === "!") {
+      const nested = readLocalFormulaIdentifierAt(input, sheetReference.end + 1, parserOptions)
+      if (nested) {
+        return {
+          value: serializeParsedFormulaIdentifier(
+            sheetReference.sheetReference,
+            nested.referenceName,
+            nested.rowSelector,
+          ),
+          sheetReference: sheetReference.sheetReference,
+          referenceName: nested.referenceName,
+          rowSelector: nested.rowSelector,
+          end: nested.end,
+        }
+      }
+    }
+  }
+  return readLocalFormulaIdentifierAt(input, start, parserOptions)
 }
 
 export function parseDataGridFormulaIdentifier(
@@ -650,6 +747,7 @@ export function parseDataGridFormulaIdentifier(
   if (normalizedReference.length === 0) {
     return {
       name: "",
+      sheetReference: null,
       referenceName: "",
       rowSelector: { kind: "current" },
     }
@@ -658,6 +756,7 @@ export function parseDataGridFormulaIdentifier(
   if (parsed && parsed.end === normalizedReference.length) {
     return {
       name: parsed.value,
+      sheetReference: parsed.sheetReference,
       referenceName: parsed.referenceName,
       rowSelector: parsed.rowSelector,
     }
@@ -665,6 +764,7 @@ export function parseDataGridFormulaIdentifier(
   const referenceName = normalizeFormulaReference(normalizedReference)
   return {
     name: referenceName,
+    sheetReference: null,
     referenceName,
     rowSelector: { kind: "current" },
   }
@@ -703,6 +803,7 @@ export function tokenizeFormula(
   options: DataGridFormulaReferenceParserOptions = {},
 ): readonly DataGridFormulaToken[] {
   const tokens: DataGridFormulaToken[] = []
+  const parserOptions = resolveFormulaReferenceParserOptions(options)
   let cursor = 0
 
   const isDigitAt = (index: number): boolean => {
@@ -744,7 +845,7 @@ export function tokenizeFormula(
 
   const pushIdentifier = (): void => {
     const start = cursor
-    const parsed = readFormulaIdentifierAt(formula, cursor, options)
+    const parsed = readFormulaIdentifierAt(formula, cursor, parserOptions)
     if (!parsed) {
       throwFormulaError(`Unexpected token '${formula[cursor]}' at position ${cursor + 1}.`, createFormulaSourceSpan(cursor, cursor + 1))
     }
@@ -766,6 +867,16 @@ export function tokenizeFormula(
     if (current === " " || current === "\t" || current === "\n" || current === "\r") {
       cursor += 1
       continue
+    }
+    if (
+      (current === "'" || current === '"')
+      && parserOptions.allowSheetQualifiedReferences
+    ) {
+      const sheetReference = readFormulaSheetReferenceAt(formula, cursor)
+      if (sheetReference && formula[sheetReference.end] === "!" && readLocalFormulaIdentifierAt(formula, sheetReference.end + 1, parserOptions)) {
+        pushIdentifier()
+        continue
+      }
     }
     if (current === "'" || current === '"') {
       pushString(current)

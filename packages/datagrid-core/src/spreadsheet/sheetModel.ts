@@ -17,6 +17,7 @@ import type {
 } from "../models/formula/formulaContracts.js"
 import {
   analyzeDataGridSpreadsheetCellInput,
+  rewriteDataGridSpreadsheetFormulaReferences,
   type DataGridSpreadsheetCellAddress,
   type DataGridSpreadsheetCellInputAnalysis,
   type DataGridSpreadsheetCellInputKind,
@@ -88,6 +89,15 @@ export interface DataGridSpreadsheetCellSnapshot {
   style: DataGridSpreadsheetStyle | null
 }
 
+export type DataGridSpreadsheetSheetRowMutationKind = "insert" | "remove"
+
+export interface DataGridSpreadsheetSheetRowMutation {
+  revision: number
+  kind: DataGridSpreadsheetSheetRowMutationKind
+  index: number
+  count: number
+}
+
 export interface DataGridSpreadsheetSheetSnapshot {
   revision: number
   valueRevision: number
@@ -99,6 +109,7 @@ export interface DataGridSpreadsheetSheetSnapshot {
   errorCellCount: number
   sheetId: string | null
   sheetName: string | null
+  lastRowMutation: DataGridSpreadsheetSheetRowMutation | null
 }
 
 export type DataGridSpreadsheetSheetListener = (
@@ -116,6 +127,10 @@ export interface CreateDataGridSpreadsheetSheetModelOptions {
   referenceParserOptions?: DataGridFormulaReferenceParserOptions
   runtimeErrorPolicy?: DataGridFormulaRuntimeErrorPolicy
   resolveContextValue?: (key: string) => unknown
+  resolveSheetReference?: (
+    sheetReference: string,
+    currentSheetId: string | null,
+  ) => DataGridSpreadsheetSheetModel | null | undefined
 }
 
 export interface DataGridSpreadsheetSheetModel {
@@ -130,9 +145,14 @@ export interface DataGridSpreadsheetSheetModel {
   getFormulaCells(): readonly DataGridSpreadsheetFormulaCellSnapshot[]
   getTableSource(): DataGridFormulaTableSource
   getTableSourceRevision(): number
+  recompute(): boolean
   setCellInput(cell: DataGridSpreadsheetCellAddress, rawInput: unknown): boolean
   setCellInputs(patches: readonly DataGridSpreadsheetCellInputPatch[]): boolean
   clearCell(cell: DataGridSpreadsheetCellAddress): boolean
+  insertRowsAt(index: number, rows?: readonly DataGridSpreadsheetRowInput[]): boolean
+  removeRowsAt(index: number, count?: number): boolean
+  insertRowsBefore(rowId: DataGridRowId, rows?: readonly DataGridSpreadsheetRowInput[]): boolean
+  insertRowsAfter(rowId: DataGridRowId, rows?: readonly DataGridSpreadsheetRowInput[]): boolean
   setSheetStyle(style: DataGridSpreadsheetStyle | null): boolean
   setColumnStyle(columnKey: string, style: DataGridSpreadsheetStyle | null): boolean
   setRowStyle(rowId: DataGridRowId, style: DataGridSpreadsheetStyle | null): boolean
@@ -304,9 +324,26 @@ function cloneCellAddress(address: DataGridSpreadsheetCellAddress): DataGridSpre
   }
 }
 
+function cloneSpreadsheetSheetRowMutation(
+  mutation: DataGridSpreadsheetSheetRowMutation | null,
+): DataGridSpreadsheetSheetRowMutation | null {
+  return mutation
+    ? {
+      revision: mutation.revision,
+      kind: mutation.kind,
+      index: mutation.index,
+      count: mutation.count,
+    }
+    : null
+}
+
 function resolveFormulaTableContextKey(name: string): string {
   const normalized = name.trim().toLowerCase()
   return normalized.length === 0 ? "tables" : `table:${normalized}`
+}
+
+function normalizeSpreadsheetSheetReferenceAlias(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase()
 }
 
 function resolveFormulaTargetRowIndexes(
@@ -415,6 +452,43 @@ export function createDataGridSpreadsheetSheetModel(
       resolvedData,
     })
   }
+  let nextSyntheticRowId = rows.length + 1
+
+  function createUniqueRowId(
+    rowInput: DataGridSpreadsheetRowInput | null | undefined,
+    reservedRowIds: Pick<ReadonlySet<DataGridRowId>, "has"> = rowIndexById,
+  ): DataGridRowId {
+    if (typeof rowInput?.id === "string" || typeof rowInput?.id === "number") {
+      if (reservedRowIds.has(rowInput.id)) {
+        throw new Error(`[DataGridSpreadsheetSheet] duplicate row id '${String(rowInput.id)}'.`)
+      }
+      return rowInput.id
+    }
+    while (reservedRowIds.has(`row-${nextSyntheticRowId}`) || reservedRowIds.has(nextSyntheticRowId)) {
+      nextSyntheticRowId += 1
+    }
+    const rowId = `row-${nextSyntheticRowId}`
+    nextSyntheticRowId += 1
+    return rowId
+  }
+
+  function createSpreadsheetRowState(
+    rowInput: DataGridSpreadsheetRowInput | null | undefined,
+    rowIndex: number,
+    reservedRowIds: Pick<ReadonlySet<DataGridRowId>, "has"> = rowIndexById,
+  ): SpreadsheetRowState {
+    const rowId = createUniqueRowId(rowInput, reservedRowIds)
+    const resolvedData = Object.create(null) as Record<string, unknown>
+    for (const column of columns) {
+      resolvedData[column.key] = null
+    }
+    return {
+      id: rowId,
+      rowIndex,
+      style: normalizeSpreadsheetStyle(rowInput?.style),
+      resolvedData,
+    }
+  }
 
   const rawInputByCellKey = new Map<string, string>()
   const analysisByCellKey = new Map<string, DataGridSpreadsheetCellInputAnalysis>()
@@ -457,6 +531,8 @@ export function createDataGridSpreadsheetSheetModel(
   let valueRevision = 0
   let formulaStructureRevision = 0
   let styleRevision = 0
+  let rowMutationRevision = 0
+  let lastRowMutation: DataGridSpreadsheetSheetRowMutation | null = null
   let sheetStyle = normalizeSpreadsheetStyle(options.sheetStyle)
   const listeners = new Set<DataGridSpreadsheetSheetListener>()
 
@@ -485,6 +561,7 @@ export function createDataGridSpreadsheetSheetModel(
       errorCellCount,
       sheetId,
       sheetName,
+      lastRowMutation: cloneSpreadsheetSheetRowMutation(lastRowMutation),
     }
   }
 
@@ -555,9 +632,89 @@ export function createDataGridSpreadsheetSheetModel(
     return analyzeDataGridSpreadsheetCellInput(getRawInput(cellKey), {
       currentRowIndex: rowIndex,
       rowCount: rows.length,
+      resolveReferenceRowCount: reference => resolveReferencedSheetModel(reference.sheetReference)?.getSnapshot().rowCount ?? rows.length,
       functionRegistry,
       referenceParserOptions,
     })
+  }
+
+  function isCurrentSheetReference(sheetReference: string | null | undefined): boolean {
+    const normalizedReference = normalizeSpreadsheetSheetReferenceAlias(sheetReference)
+    if (normalizedReference.length === 0) {
+      return true
+    }
+    return normalizedReference === normalizeSpreadsheetSheetReferenceAlias(sheetId)
+      || normalizedReference === normalizeSpreadsheetSheetReferenceAlias(sheetName)
+  }
+
+  function resolveReferencedSheetModel(
+    sheetReference: string | null | undefined,
+  ): DataGridSpreadsheetSheetModel | null {
+    if (isCurrentSheetReference(sheetReference)) {
+      return null
+    }
+    const normalizedReference = String(sheetReference ?? "").trim()
+    if (normalizedReference.length === 0) {
+      return null
+    }
+    return options.resolveSheetReference?.(normalizedReference, sheetId) ?? null
+  }
+
+  function createMissingSheetReferenceError(
+    sheetReference: string | null | undefined,
+  ): DataGridFormulaErrorValue {
+    const normalizedReference = String(sheetReference ?? "").trim()
+    return createFormulaErrorValue({
+      code: "EVAL_ERROR",
+      message: normalizedReference.length > 0
+        ? `Unknown sheet reference '${normalizedReference}'.`
+        : "Unknown sheet reference.",
+    })
+  }
+
+  function buildRuntimeAnalysis(
+    analysis: DataGridSpreadsheetCellInputAnalysis,
+  ): DataGridSpreadsheetCellInputAnalysis {
+    if (analysis.references.length === 0) {
+      return analysis
+    }
+    const diagnostics = [...analysis.diagnostics]
+    let changed = false
+    for (const reference of analysis.references) {
+      if (
+        !reference.sheetReference
+        || isCurrentSheetReference(reference.sheetReference)
+        || resolveReferencedSheetModel(reference.sheetReference)
+      ) {
+        continue
+      }
+      diagnostics.push({
+        severity: "error",
+        message: `Unknown sheet reference '${reference.sheetReference}'.`,
+        span: { ...reference.span },
+      })
+      changed = true
+    }
+    if (!changed) {
+      return analysis
+    }
+    return {
+      ...analysis,
+      diagnostics: Object.freeze(diagnostics),
+      isFormulaValid: false,
+    }
+  }
+
+  function rebuildRowIndexState(): void {
+    rowIndexById.clear()
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex]
+      if (!row) {
+        continue
+      }
+      row.rowIndex = rowIndex
+      rowIndexById.set(row.id, rowIndex)
+    }
   }
 
   function setResolvedCellValue(cellKey: string, value: unknown): boolean {
@@ -615,6 +772,9 @@ export function createDataGridSpreadsheetSheetModel(
     const dependencies: DataGridSpreadsheetCellAddress[] = []
     const seenDependencyKeys = new Set<string>()
     for (const reference of analysis.references) {
+      if (!isCurrentSheetReference(reference.sheetReference)) {
+        continue
+      }
       for (const targetRowIndex of reference.targetRowIndexes) {
         const row = rows[targetRowIndex]
         if (!row) {
@@ -655,6 +815,7 @@ export function createDataGridSpreadsheetSheetModel(
       const analysis = analyzeDataGridSpreadsheetCellInput(rawInput, {
         currentRowIndex: address.rowIndex,
         rowCount: rows.length,
+        resolveReferenceRowCount: reference => resolveReferencedSheetModel(reference.sheetReference)?.getSnapshot().rowCount ?? rows.length,
         functionRegistry,
         referenceParserOptions,
       })
@@ -719,13 +880,31 @@ export function createDataGridSpreadsheetSheetModel(
         if (parsed.referenceName.length === 0) {
           return null
         }
+        const hasExplicitExternalSheetReference = normalizeSpreadsheetSheetReferenceAlias(parsed.sheetReference).length > 0
+          && !isCurrentSheetReference(parsed.sheetReference)
+        const referencedSheetModel = resolveReferencedSheetModel(parsed.sheetReference)
+        if (hasExplicitExternalSheetReference && !referencedSheetModel) {
+          return createMissingSheetReferenceError(parsed.sheetReference)
+        }
+        const targetRowCount = referencedSheetModel?.getSnapshot().rowCount ?? rows.length
         const targetRowIndexes = resolveFormulaTargetRowIndexes(
           parsed.rowSelector,
           formulaCell.address.rowIndex,
-          rows.length,
+          targetRowCount,
         )
         if (targetRowIndexes.length === 0) {
           return parsed.rowSelector.kind === "window" ? Object.freeze([]) : null
+        }
+        if (referencedSheetModel) {
+          const resolvedValues = targetRowIndexes.map(targetRowIndex => referencedSheetModel.getCellDisplayValue({
+            sheetId: referencedSheetModel.getSheetId(),
+            rowId: null,
+            rowIndex: targetRowIndex,
+            columnKey: parsed.referenceName,
+          }))
+          return parsed.rowSelector.kind === "window"
+            ? Object.freeze(resolvedValues)
+            : (resolvedValues[0] ?? null)
         }
         const resolvedValues = targetRowIndexes.map((targetRowIndex) => {
           const targetCellKey = makeCellKey(targetRowIndex, parsed.referenceName)
@@ -876,6 +1055,7 @@ export function createDataGridSpreadsheetSheetModel(
     const analysis = analyzeDataGridSpreadsheetCellInput(rawInput, {
       currentRowIndex: rowIndex,
       rowCount: rows.length,
+      resolveReferenceRowCount: reference => resolveReferencedSheetModel(reference.sheetReference)?.getSnapshot().rowCount ?? rows.length,
       functionRegistry,
       referenceParserOptions,
     })
@@ -1033,6 +1213,240 @@ export function createDataGridSpreadsheetSheetModel(
     return true
   }
 
+  function rewriteFormulaForInsertedRows(
+    rawInput: string,
+    rowIndex: number,
+    insertIndex: number,
+    insertedRowCount: number,
+  ): string {
+    return rewriteDataGridSpreadsheetFormulaReferences(rawInput, reference => {
+      if (!isCurrentSheetReference(reference.sheetReference)) {
+        return null
+      }
+      if (reference.rowSelector.kind !== "absolute" || reference.rowSelector.rowIndex < insertIndex) {
+        return null
+      }
+      return {
+        sheetReference: reference.sheetReference,
+        referenceName: reference.referenceName,
+        rowSelector: {
+          kind: "absolute",
+          rowIndex: reference.rowSelector.rowIndex + insertedRowCount,
+        },
+      }
+    }, {
+      currentRowIndex: rowIndex,
+      rowCount: rows.length,
+      functionRegistry,
+      referenceParserOptions,
+    })
+  }
+
+  function rewriteFormulaForRemovedRows(
+    rawInput: string,
+    rowIndex: number,
+    removeIndex: number,
+    removedRowCount: number,
+  ): string {
+    return rewriteDataGridSpreadsheetFormulaReferences(rawInput, reference => {
+      if (!isCurrentSheetReference(reference.sheetReference)) {
+        return null
+      }
+      if (reference.rowSelector.kind !== "absolute") {
+        return null
+      }
+      if (reference.rowSelector.rowIndex < removeIndex) {
+        return null
+      }
+      if (reference.rowSelector.rowIndex >= removeIndex + removedRowCount) {
+        return {
+          sheetReference: reference.sheetReference,
+          referenceName: reference.referenceName,
+          rowSelector: {
+            kind: "absolute",
+            rowIndex: reference.rowSelector.rowIndex - removedRowCount,
+          },
+        }
+      }
+      return {
+        rawText: "#REF!",
+      }
+    }, {
+      currentRowIndex: rowIndex,
+      rowCount: rows.length,
+      functionRegistry,
+      referenceParserOptions,
+    })
+  }
+
+  function insertRowsAt(
+    index: number,
+    nextRows: readonly DataGridSpreadsheetRowInput[] = [{}],
+  ): boolean {
+    ensureActive()
+    const normalizedIndex = Math.max(0, Math.min(rows.length, Math.trunc(index)))
+    if (!Array.isArray(nextRows) || nextRows.length === 0) {
+      return false
+    }
+
+    const existingRawInputEntries = [...rawInputByCellKey.entries()]
+    const existingStyleEntries = [...cellStyleByCellKey.entries()]
+    const reservedRowIds = new Set<DataGridRowId>(rows.map(row => row.id))
+    const insertedRowStates = nextRows.map((rowInput, offset) => {
+      const rowState = createSpreadsheetRowState(rowInput, normalizedIndex + offset, reservedRowIds)
+      reservedRowIds.add(rowState.id)
+      return rowState
+    })
+
+    rows.splice(normalizedIndex, 0, ...insertedRowStates)
+    rebuildRowIndexState()
+
+    rawInputByCellKey.clear()
+    for (const [cellKey, rawInput] of existingRawInputEntries) {
+      const separatorIndex = cellKey.indexOf("\u001f")
+      if (separatorIndex < 0) {
+        continue
+      }
+      const previousRowIndex = Number(cellKey.slice(0, separatorIndex))
+      const columnKey = cellKey.slice(separatorIndex + 1)
+      const nextRowIndex = previousRowIndex >= normalizedIndex
+        ? previousRowIndex + insertedRowStates.length
+        : previousRowIndex
+      rawInputByCellKey.set(
+        makeCellKey(nextRowIndex, columnKey),
+        rewriteFormulaForInsertedRows(rawInput, nextRowIndex, normalizedIndex, insertedRowStates.length),
+      )
+    }
+
+    for (let offset = 0; offset < insertedRowStates.length; offset += 1) {
+      const rowInput = nextRows[offset]
+      const row = insertedRowStates[offset]
+      if (!rowInput?.cells || !row) {
+        continue
+      }
+      for (const [columnKeyInput, cellValue] of Object.entries(rowInput.cells)) {
+        const columnKey = normalizeColumnKey(columnKeyInput)
+        if (!columnIndexByKey.has(columnKey)) {
+          continue
+        }
+        const rawInput = normalizeCellRawInput(cellValue)
+        if (rawInput.trim().length === 0) {
+          continue
+        }
+        rawInputByCellKey.set(makeCellKey(row.rowIndex, columnKey), rawInput)
+      }
+    }
+
+    cellStyleByCellKey.clear()
+    for (const [cellKey, style] of existingStyleEntries) {
+      const separatorIndex = cellKey.indexOf("\u001f")
+      if (separatorIndex < 0) {
+        continue
+      }
+      const previousRowIndex = Number(cellKey.slice(0, separatorIndex))
+      const columnKey = cellKey.slice(separatorIndex + 1)
+      const nextRowIndex = previousRowIndex >= normalizedIndex
+        ? previousRowIndex + insertedRowStates.length
+        : previousRowIndex
+      cellStyleByCellKey.set(makeCellKey(nextRowIndex, columnKey), style)
+    }
+
+    analysisByCellKey.clear()
+    formulaStructureRevision += 1
+    rowMutationRevision += 1
+    lastRowMutation = {
+      revision: rowMutationRevision,
+      kind: "insert",
+      index: normalizedIndex,
+      count: insertedRowStates.length,
+    }
+    revision += 1
+    const baseValuesChanged = rebuildFormulaState()
+    const formulaValuesChanged = applyFormulaEvaluation(null)
+    if (baseValuesChanged || formulaValuesChanged) {
+      valueRevision += 1
+    }
+    emit()
+    return true
+  }
+
+  function removeRowsAt(
+    index: number,
+    count = 1,
+  ): boolean {
+    ensureActive()
+    const normalizedIndex = Math.max(0, Math.min(rows.length, Math.trunc(index)))
+    const normalizedCount = Math.max(0, Math.trunc(count))
+    if (normalizedCount === 0 || normalizedIndex >= rows.length) {
+      return false
+    }
+    const removedRowCount = Math.min(normalizedCount, rows.length - normalizedIndex)
+    if (removedRowCount === 0) {
+      return false
+    }
+
+    const existingRawInputEntries = [...rawInputByCellKey.entries()]
+    const existingStyleEntries = [...cellStyleByCellKey.entries()]
+
+    rows.splice(normalizedIndex, removedRowCount)
+    rebuildRowIndexState()
+
+    rawInputByCellKey.clear()
+    for (const [cellKey, rawInput] of existingRawInputEntries) {
+      const separatorIndex = cellKey.indexOf("\u001f")
+      if (separatorIndex < 0) {
+        continue
+      }
+      const previousRowIndex = Number(cellKey.slice(0, separatorIndex))
+      if (previousRowIndex >= normalizedIndex && previousRowIndex < normalizedIndex + removedRowCount) {
+        continue
+      }
+      const columnKey = cellKey.slice(separatorIndex + 1)
+      const nextRowIndex = previousRowIndex >= normalizedIndex + removedRowCount
+        ? previousRowIndex - removedRowCount
+        : previousRowIndex
+      rawInputByCellKey.set(
+        makeCellKey(nextRowIndex, columnKey),
+        rewriteFormulaForRemovedRows(rawInput, nextRowIndex, normalizedIndex, removedRowCount),
+      )
+    }
+
+    cellStyleByCellKey.clear()
+    for (const [cellKey, style] of existingStyleEntries) {
+      const separatorIndex = cellKey.indexOf("\u001f")
+      if (separatorIndex < 0) {
+        continue
+      }
+      const previousRowIndex = Number(cellKey.slice(0, separatorIndex))
+      if (previousRowIndex >= normalizedIndex && previousRowIndex < normalizedIndex + removedRowCount) {
+        continue
+      }
+      const columnKey = cellKey.slice(separatorIndex + 1)
+      const nextRowIndex = previousRowIndex >= normalizedIndex + removedRowCount
+        ? previousRowIndex - removedRowCount
+        : previousRowIndex
+      cellStyleByCellKey.set(makeCellKey(nextRowIndex, columnKey), style)
+    }
+
+    analysisByCellKey.clear()
+    formulaStructureRevision += 1
+    rowMutationRevision += 1
+    lastRowMutation = {
+      revision: rowMutationRevision,
+      kind: "remove",
+      index: normalizedIndex,
+      count: removedRowCount,
+    }
+    revision += 1
+    const baseValuesChanged = rebuildFormulaState()
+    const formulaValuesChanged = applyFormulaEvaluation(null)
+    if (baseValuesChanged || formulaValuesChanged) {
+      valueRevision += 1
+    }
+    emit()
+    return true
+  }
+
   const initialBaseValuesChanged = rebuildFormulaState()
   const initialFormulaValuesChanged = applyFormulaEvaluation(null)
   if (initialBaseValuesChanged || initialFormulaValuesChanged) {
@@ -1049,7 +1463,7 @@ export function createDataGridSpreadsheetSheetModel(
     if (!row) {
       return null
     }
-    const analysis = getAnalysis(cellKey, address.rowIndex)
+    const analysis = buildRuntimeAnalysis(getAnalysis(cellKey, address.rowIndex))
     const formulaCell = formulaCellByKey.get(cellKey)
     const displayValue = row.resolvedData[address.columnKey] ?? null
     const errorValue = isFormulaErrorValue(displayValue)
@@ -1134,12 +1548,40 @@ export function createDataGridSpreadsheetSheetModel(
     getTableSourceRevision() {
       return valueRevision
     },
+    recompute() {
+      ensureActive()
+      if (!applyFormulaEvaluation(null)) {
+        return false
+      }
+      valueRevision += 1
+      revision += 1
+      emit()
+      return true
+    },
     setCellInput(cell, rawInput) {
       return setCellInputs([{ cell, rawInput }])
     },
     setCellInputs,
     clearCell(cell) {
       return setCellInputs([{ cell, rawInput: "" }])
+    },
+    insertRowsAt,
+    removeRowsAt,
+    insertRowsBefore(rowId, nextRows = [{}]) {
+      ensureActive()
+      const rowIndex = rowIndexById.get(rowId)
+      if (typeof rowIndex !== "number") {
+        throw new Error(`[DataGridSpreadsheetSheet] unknown row '${String(rowId)}'.`)
+      }
+      return insertRowsAt(rowIndex, nextRows)
+    },
+    insertRowsAfter(rowId, nextRows = [{}]) {
+      ensureActive()
+      const rowIndex = rowIndexById.get(rowId)
+      if (typeof rowIndex !== "number") {
+        throw new Error(`[DataGridSpreadsheetSheet] unknown row '${String(rowId)}'.`)
+      }
+      return insertRowsAt(rowIndex + 1, nextRows)
     },
     setSheetStyle(style) {
       ensureActive()

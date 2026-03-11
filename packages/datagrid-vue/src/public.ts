@@ -290,46 +290,6 @@ export {
 } from "./contracts/dataGridSelectors"
 
 export {
-  useAffinoDataGrid,
-  type AffinoDataGridEditMode,
-  type AffinoDataGridEditSession,
-  type AffinoDataGridActionId,
-  type AffinoDataGridRunActionOptions,
-  type AffinoDataGridActionResult,
-  type AffinoDataGridActionBindingOptions,
-  type AffinoDataGridSelectionFeature,
-  type AffinoDataGridClipboardFeature,
-  type AffinoDataGridEditingFeature,
-  type AffinoDataGridFilteringFeature,
-  type AffinoDataGridSummaryFeature,
-  type AffinoDataGridVisibilityFeature,
-  type AffinoDataGridTreeFeature,
-  type AffinoDataGridFilterMergeMode,
-  type AffinoDataGridSetFilterValueMode,
-  type AffinoDataGridFilteringHelpers,
-  type AffinoDataGridFeatures,
-  type AffinoDataGridFormulaExecutionPlanSnapshot,
-  type AffinoDataGridFormulaFunctionRegistration,
-  type AffinoDataGridFormulaGraphSnapshot,
-  type AffinoDataGridFormulaState,
-  type UseAffinoDataGridOptions,
-  type UseAffinoDataGridResult,
-  type UseAffinoDataGridMinimalOptions,
-  type UseAffinoDataGridMinimalResult,
-} from "./composables/useAffinoDataGrid"
-
-export {
-  useAffinoDataGridMinimal,
-} from "./composables/useAffinoDataGridMinimal"
-
-export {
-  useAffinoDataGridUi,
-  type AffinoDataGridUiToolbarAction,
-  type UseAffinoDataGridUiOptions,
-  type UseAffinoDataGridUiResult,
-} from "./composables/useAffinoDataGridUi"
-
-export {
   createDataGridVueRuntime,
   type CreateDataGridVueRuntimeOptions,
   type DataGridVueRuntime,

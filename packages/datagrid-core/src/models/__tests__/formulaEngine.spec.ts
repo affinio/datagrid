@@ -420,6 +420,7 @@ describe("formulaEngine", () => {
       syntax: "smartsheet",
     })).toEqual({
       name: '"gross margin"',
+      sheetReference: null,
       referenceName: '"gross margin"',
       rowSelector: { kind: "current" },
     })
@@ -480,6 +481,43 @@ describe("formulaEngine", () => {
 
     expect(invalid.ok).toBe(false)
     expect(invalid.diagnostics[0]?.message).toContain("must be >= 1")
+  })
+
+  it("supports sheet-qualified smartsheet references when enabled", () => {
+    expect(parseDataGridFormulaIdentifier("orders![qty]5", {
+      syntax: "smartsheet",
+      allowSheetQualifiedReferences: true,
+    })).toEqual({
+      name: "orders!qty[4]",
+      sheetReference: "orders",
+      referenceName: "qty",
+      rowSelector: { kind: "absolute", rowIndex: 4 },
+    })
+
+    const parsed = parseDataGridFormulaExpression("=orders![price]1 + 'Revenue Plan'![qty]2", {
+      referenceParserOptions: {
+        syntax: "smartsheet",
+        allowSheetQualifiedReferences: true,
+      },
+    })
+
+    expect(parsed.ast.kind).toBe("binary")
+    if (parsed.ast.kind === "binary") {
+      expect(parsed.ast.left).toMatchObject({
+        kind: "identifier",
+        name: "orders!price[0]",
+        sheetReference: "orders",
+        referenceName: "price",
+        rowSelector: { kind: "absolute", rowIndex: 0 },
+      })
+      expect(parsed.ast.right).toMatchObject({
+        kind: "identifier",
+        name: "'Revenue Plan'!qty[1]",
+        sheetReference: "Revenue Plan",
+        referenceName: "qty",
+        rowSelector: { kind: "absolute", rowIndex: 1 },
+      })
+    }
   })
 
   it("supports function calls and comparison operators", () => {

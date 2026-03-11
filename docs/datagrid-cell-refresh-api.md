@@ -23,7 +23,7 @@ api.view.refreshCellsByRanges([{ rowKey, columnKeys }], options?)
 
 ## Vue adapter notes
 
-`@affino/datagrid-vue` exposes these methods through `api` (`defineExpose` + `useAffinoDataGrid` result).
+`@affino/datagrid-vue` exposes these methods through the runtime `api` surface, including `useDataGridRuntime` and the `@affino/datagrid-vue-app` component stack.
 
 The adapter applies best-effort targeted DOM patch for visible cells and emits `affino-datagrid:cell-refresh` per refreshed cell.
 

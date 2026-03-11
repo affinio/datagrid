@@ -32,6 +32,7 @@ export interface DataGridFormulaExplainNode {
   span: DataGridFormulaSourceSpan
   children: readonly DataGridFormulaExplainNode[]
   name?: string
+  sheetReference?: string | null
   referenceName?: string
   rowSelector?: DataGridFormulaRowSelector
   operator?: DataGridFormulaOperator | "CALL"

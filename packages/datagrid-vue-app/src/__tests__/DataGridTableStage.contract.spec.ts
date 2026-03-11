@@ -42,6 +42,10 @@ function createStageProps(
     isCellInFillPreview?: (rowOffset: number, columnIndex: number) => boolean
     isFillHandleCell?: (rowOffset: number, columnIndex: number) => boolean
     startFillHandleDrag?: () => void
+    startFillHandleDoubleClick?: () => void
+    fillActionAnchorCell?: { rowIndex: number; columnIndex: number } | null
+    fillActionBehavior?: "copy" | "series" | null
+    applyFillActionBehavior?: (behavior: "copy" | "series") => void
   },
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = createColumns()
@@ -108,6 +112,10 @@ function createStageProps(
     startInlineEdit: () => undefined,
     isFillHandleCell: options?.isFillHandleCell ?? (() => false),
     startFillHandleDrag: options?.startFillHandleDrag ?? (() => undefined),
+    startFillHandleDoubleClick: options?.startFillHandleDoubleClick ?? (() => undefined),
+    fillActionAnchorCell: options?.fillActionAnchorCell ?? null,
+    fillActionBehavior: options?.fillActionBehavior ?? null,
+    applyFillActionBehavior: options?.applyFillActionBehavior ?? (() => undefined),
     updateEditingCellValue: () => undefined,
     handleEditorKeydown: () => undefined,
     commitInlineEdit: () => undefined,
@@ -348,6 +356,77 @@ describe("DataGridTableStage contract", () => {
 
     expect(document.activeElement).toBe(anchorCell.element)
     expect(startFillHandleDrag).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("routes fill-handle double click to fill-down behavior", async () => {
+    const startFillHandleDoubleClick = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          isFillHandleCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+          startFillHandleDoubleClick,
+        },
+      ),
+    })
+
+    await wrapper.find(".cell-fill-handle").trigger("dblclick", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    })
+
+    expect(startFillHandleDoubleClick).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("shows fill action menu and reapplies the selected behavior", async () => {
+    const applyFillActionBehavior = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          fillActionAnchorCell: { rowIndex: 0, columnIndex: 0 },
+          fillActionBehavior: "series",
+          applyFillActionBehavior,
+        },
+      ),
+    })
+
+    expect(wrapper.find(".grid-fill-action__menu").exists()).toBe(false)
+
+    await wrapper.find(".grid-fill-action__trigger").trigger("click")
+    expect(wrapper.find(".grid-fill-action__menu").exists()).toBe(true)
+
+    await wrapper.findAll(".grid-fill-action__item")[1]?.trigger("click")
+    expect(applyFillActionBehavior).toHaveBeenCalledWith("copy")
+    expect(wrapper.find(".grid-fill-action__menu").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("keeps the fill action trigger visible when the filled anchor row is outside the viewport", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          rowCount: 1,
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          fillActionAnchorCell: { rowIndex: 999, columnIndex: 1 },
+          fillActionBehavior: "series",
+        },
+      ),
+    })
+
+    expect(wrapper.find(".grid-fill-action__trigger").exists()).toBe(true)
 
     wrapper.unmount()
   })

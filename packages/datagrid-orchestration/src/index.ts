@@ -242,6 +242,14 @@ export {
 } from "./useDataGridEnumTrigger"
 
 export {
+  type DataGridFillBehavior,
+  type DataGridFillBehaviorRange,
+  type ResolveDataGridFillBehaviorOptions,
+  buildDataGridFillMatrix,
+  resolveDataGridDefaultFillBehavior,
+} from "./dataGridFillBehavior"
+
+export {
   type DataGridFillHandleStartRange,
   type UseDataGridFillHandleStartOptions,
   type UseDataGridFillHandleStartResult,

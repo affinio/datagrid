@@ -6,7 +6,9 @@ import {
   createDataGridSpreadsheetSheetModel,
   type CreateDataGridSpreadsheetSheetModelOptions,
   type DataGridSpreadsheetSheetModel,
+  type DataGridSpreadsheetSheetRowMutation,
 } from "./sheetModel.js"
+import { formatDataGridSpreadsheetFormulaReference } from "./formulaEditorModel.js"
 
 export interface DataGridSpreadsheetWorkbookSheetInput {
   id?: string
@@ -82,8 +84,10 @@ interface SpreadsheetWorkbookSheetState {
   formulaStructureRevision: number
   formulaUsesAllTables: boolean
   formulaTableDependencyAliases: readonly string[]
+  formulaReferenceDependencyAliases: readonly string[]
   managedTableAliases: Set<string>
   appliedTableRowsByAlias: Map<string, SpreadsheetWorkbookTableSource>
+  lastHandledRowMutationRevision: number
 }
 
 interface SpreadsheetWorkbookDependencyGraph {
@@ -106,6 +110,7 @@ interface SpreadsheetWorkbookSheetFormulaDependencyState {
   revision: number
   usesAllTables: boolean
   tableDependencyAliases: readonly string[]
+  referenceDependencyAliases: readonly string[]
 }
 
 interface SpreadsheetWorkbookComponentSyncResult {
@@ -143,6 +148,14 @@ function normalizeSpreadsheetWorkbookSheetId(value: unknown): string {
 
 function normalizeSpreadsheetWorkbookAlias(value: unknown): string {
   return String(value ?? "").trim().toLowerCase()
+}
+
+function resolveSpreadsheetWorkbookReferenceOutputSyntax(text: string): "canonical" | "smartsheet" {
+  const normalized = String(text ?? "").trim()
+  const localReferenceText = normalized.includes("!")
+    ? normalized.slice(normalized.lastIndexOf("!") + 1)
+    : normalized
+  return localReferenceText.startsWith("[") ? "smartsheet" : "canonical"
 }
 
 function buildSpreadsheetWorkbookSheetAliases(id: string, name: string): readonly string[] {
@@ -207,6 +220,7 @@ function resolveSpreadsheetWorkbookSheetFormulaDependencyState(
 ): SpreadsheetWorkbookSheetFormulaDependencyState {
   const snapshot = sheetModel.getSnapshot()
   const tableDependencyAliases = new Set<string>()
+  const referenceDependencyAliases = new Set<string>()
   let usesAllTables = false
 
   for (const formulaCell of sheetModel.getFormulaCells()) {
@@ -224,6 +238,14 @@ function resolveSpreadsheetWorkbookSheetFormulaDependencyState(
       }
       tableDependencyAliases.add(normalizedAlias)
     }
+    const cellSnapshot = sheetModel.getCell(formulaCell.address)
+    for (const reference of cellSnapshot?.analysis.references ?? []) {
+      const normalizedAlias = normalizeSpreadsheetWorkbookAlias(reference.sheetReference)
+      if (normalizedAlias.length === 0) {
+        continue
+      }
+      referenceDependencyAliases.add(normalizedAlias)
+    }
   }
 
   return {
@@ -231,6 +253,9 @@ function resolveSpreadsheetWorkbookSheetFormulaDependencyState(
     usesAllTables,
     tableDependencyAliases: Object.freeze(
       [...tableDependencyAliases].sort((left, right) => left.localeCompare(right)),
+    ),
+    referenceDependencyAliases: Object.freeze(
+      [...referenceDependencyAliases].sort((left, right) => left.localeCompare(right)),
     ),
   }
 }
@@ -425,6 +450,7 @@ export function createDataGridSpreadsheetWorkbookModel(
 ): DataGridSpreadsheetWorkbookModel {
   let disposed = false
   let syncInProgress = false
+  let referenceRewriteInProgress = false
   let activeSheetId: string | null = null
   let graphState: SpreadsheetWorkbookGraphState | null = null
   let lastSync: DataGridSpreadsheetWorkbookSyncSnapshot = {
@@ -550,9 +576,14 @@ export function createDataGridSpreadsheetWorkbookModel(
         sheet.formulaTableDependencyAliases,
         nextState.tableDependencyAliases,
       )
+      || !areSpreadsheetWorkbookStringListsEqual(
+        sheet.formulaReferenceDependencyAliases,
+        nextState.referenceDependencyAliases,
+      )
     sheet.formulaStructureRevision = nextState.revision
     sheet.formulaUsesAllTables = nextState.usesAllTables
     sheet.formulaTableDependencyAliases = nextState.tableDependencyAliases
+    sheet.formulaReferenceDependencyAliases = nextState.referenceDependencyAliases
     return changed
   }
 
@@ -576,6 +607,13 @@ export function createDataGridSpreadsheetWorkbookModel(
         }
       } else {
         for (const alias of targetSheet.formulaTableDependencyAliases) {
+          const sourceSheet = aliasToSheet.get(alias)
+          if (!sourceSheet || sourceSheet.id === targetSheet.id) {
+            continue
+          }
+          dependencySheetIds.add(sourceSheet.id)
+        }
+        for (const alias of targetSheet.formulaReferenceDependencyAliases) {
           const sourceSheet = aliasToSheet.get(alias)
           if (!sourceSheet || sourceSheet.id === targetSheet.id) {
             continue
@@ -762,6 +800,9 @@ export function createDataGridSpreadsheetWorkbookModel(
         targetSheet,
         graph.dependencySheetIdsBySheetId.get(targetSheet.id) ?? Object.freeze([]),
       )
+      if (targetSheet.sheetModel.recompute()) {
+        invalidateSheetExportCache(targetSheet)
+      }
       return { passCount: 1, converged: true }
     }
 
@@ -778,6 +819,10 @@ export function createDataGridSpreadsheetWorkbookModel(
             graph.dependencySheetIdsBySheetId.get(targetSheet.id) ?? Object.freeze([]),
           )
         ) {
+          changed = true
+        }
+        if (targetSheet.sheetModel.recompute()) {
+          invalidateSheetExportCache(targetSheet)
           changed = true
         }
       }
@@ -859,13 +904,27 @@ export function createDataGridSpreadsheetWorkbookModel(
   }
 
   const subscribeToSheet = (sheet: SpreadsheetWorkbookSheetState): void => {
-    sheet.unsubscribe = sheet.sheetModel.subscribe(() => {
+    sheet.unsubscribe = sheet.sheetModel.subscribe(snapshot => {
       reconcileSheetExportCache(sheet)
-      if (disposed || syncInProgress) {
+      if (disposed || syncInProgress || referenceRewriteInProgress) {
         return
       }
+      const dirtySheetIds = new Set<string>([sheet.id])
+      const rowMutation = snapshot.lastRowMutation
+      if (rowMutation && rowMutation.revision > sheet.lastHandledRowMutationRevision) {
+        referenceRewriteInProgress = true
+        try {
+          const rewrittenSheetIds = rewriteWorkbookSheetRowMutation(sheet, rowMutation)
+          for (const rewrittenSheetId of rewrittenSheetIds) {
+            dirtySheetIds.add(rewrittenSheetId)
+          }
+        } finally {
+          referenceRewriteInProgress = false
+        }
+        sheet.lastHandledRowMutationRevision = rowMutation.revision
+      }
       runSync({
-        dirtySheetIds: new Set<string>([sheet.id]),
+        dirtySheetIds,
       })
     })
   }
@@ -912,9 +971,17 @@ export function createDataGridSpreadsheetWorkbookModel(
       ...input.sheetModelOptions!,
       sheetId: id,
       sheetName: name,
+      resolveSheetReference: (sheetReference) => {
+        const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
+        if (normalizedAlias.length === 0) {
+          return null
+        }
+        return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
+      },
     })
 
     const formulaDependencyState = resolveSpreadsheetWorkbookSheetFormulaDependencyState(sheetModel)
+    const sheetSnapshot = sheetModel.getSnapshot()
     return {
       id,
       name,
@@ -927,8 +994,10 @@ export function createDataGridSpreadsheetWorkbookModel(
       formulaStructureRevision: formulaDependencyState.revision,
       formulaUsesAllTables: formulaDependencyState.usesAllTables,
       formulaTableDependencyAliases: formulaDependencyState.tableDependencyAliases,
+      formulaReferenceDependencyAliases: formulaDependencyState.referenceDependencyAliases,
       managedTableAliases: new Set<string>(),
       appliedTableRowsByAlias: new Map<string, SpreadsheetWorkbookTableSource>(),
+      lastHandledRowMutationRevision: sheetSnapshot.lastRowMutation?.revision ?? 0,
     }
   }
 
@@ -969,6 +1038,214 @@ export function createDataGridSpreadsheetWorkbookModel(
 
   if (sheets.length > 0) {
     runSync({ structural: true })
+  }
+
+  const rewriteWorkbookSheetReferenceAlias = (
+    previousAlias: string,
+    nextAlias: string,
+  ): boolean => {
+    if (
+      previousAlias.length === 0
+      || nextAlias.length === 0
+      || previousAlias === nextAlias
+    ) {
+      return false
+    }
+    let changed = false
+    for (const sheet of sheets) {
+      const patches: Array<{
+        cell: Parameters<DataGridSpreadsheetSheetModel["setCellInput"]>[0]
+        rawInput: string
+      }> = []
+      for (const formulaCell of sheet.sheetModel.getFormulaCells()) {
+        const cellSnapshot = sheet.sheetModel.getCell(formulaCell.address)
+        if (!cellSnapshot || cellSnapshot.analysis.references.length === 0) {
+          continue
+        }
+        let nextRawInput = cellSnapshot.rawInput
+        let cellChanged = false
+        const references = [...cellSnapshot.analysis.references].sort((left, right) => right.span.start - left.span.start)
+        for (const reference of references) {
+          if (normalizeSpreadsheetWorkbookAlias(reference.sheetReference) !== previousAlias) {
+            continue
+          }
+          const replacement = formatDataGridSpreadsheetFormulaReference({
+            sheetReference: nextAlias,
+            referenceName: reference.referenceName,
+            rowSelector: reference.rowSelector,
+          }, {
+            currentRowIndex: formulaCell.address.rowIndex,
+            outputSyntax: resolveSpreadsheetWorkbookReferenceOutputSyntax(reference.text),
+          })
+          if (replacement === reference.text) {
+            continue
+          }
+          nextRawInput = `${nextRawInput.slice(0, reference.span.start)}${replacement}${nextRawInput.slice(reference.span.end)}`
+          cellChanged = true
+        }
+        if (!cellChanged || nextRawInput === cellSnapshot.rawInput) {
+          continue
+        }
+        patches.push({
+          cell: formulaCell.address,
+          rawInput: nextRawInput,
+        })
+      }
+      if (patches.length === 0) {
+        continue
+      }
+      if (sheet.sheetModel.setCellInputs(patches)) {
+        changed = true
+      }
+    }
+    return changed
+  }
+
+  const rewriteWorkbookSheetRowMutation = (
+    sourceSheet: SpreadsheetWorkbookSheetState,
+    mutation: DataGridSpreadsheetSheetRowMutation,
+  ): ReadonlySet<string> => {
+    if (mutation.count < 1) {
+      return new Set<string>()
+    }
+    const changedSheetIds = new Set<string>()
+    const sourceAliases = new Set(sourceSheet.aliases.map(alias => normalizeSpreadsheetWorkbookAlias(alias)))
+
+    for (const targetSheet of sheets) {
+      if (targetSheet.id === sourceSheet.id) {
+        continue
+      }
+      const patches: Array<{
+        cell: Parameters<DataGridSpreadsheetSheetModel["setCellInput"]>[0]
+        rawInput: string
+      }> = []
+      for (const formulaCell of targetSheet.sheetModel.getFormulaCells()) {
+        const cellSnapshot = targetSheet.sheetModel.getCell(formulaCell.address)
+        if (!cellSnapshot || cellSnapshot.analysis.references.length === 0) {
+          continue
+        }
+        let nextRawInput = cellSnapshot.rawInput
+        let cellChanged = false
+        const references = [...cellSnapshot.analysis.references].sort((left, right) => right.span.start - left.span.start)
+        for (const reference of references) {
+          if (!sourceAliases.has(normalizeSpreadsheetWorkbookAlias(reference.sheetReference))) {
+            continue
+          }
+          if (reference.rowSelector.kind !== "absolute") {
+            continue
+          }
+
+          let replacement = reference.text
+          if (mutation.kind === "insert") {
+            if (reference.rowSelector.rowIndex < mutation.index) {
+              continue
+            }
+            replacement = formatDataGridSpreadsheetFormulaReference({
+              sheetReference: reference.sheetReference,
+              referenceName: reference.referenceName,
+              rowSelector: {
+                kind: "absolute",
+                rowIndex: reference.rowSelector.rowIndex + mutation.count,
+              },
+            }, {
+              currentRowIndex: formulaCell.address.rowIndex,
+              outputSyntax: resolveSpreadsheetWorkbookReferenceOutputSyntax(reference.text),
+            })
+          } else {
+            if (reference.rowSelector.rowIndex < mutation.index) {
+              continue
+            }
+            if (reference.rowSelector.rowIndex >= mutation.index + mutation.count) {
+              replacement = formatDataGridSpreadsheetFormulaReference({
+                sheetReference: reference.sheetReference,
+                referenceName: reference.referenceName,
+                rowSelector: {
+                  kind: "absolute",
+                  rowIndex: reference.rowSelector.rowIndex - mutation.count,
+                },
+              }, {
+                currentRowIndex: formulaCell.address.rowIndex,
+                outputSyntax: resolveSpreadsheetWorkbookReferenceOutputSyntax(reference.text),
+              })
+            } else {
+              replacement = "#REF!"
+            }
+          }
+
+          if (replacement === reference.text) {
+            continue
+          }
+          nextRawInput = `${nextRawInput.slice(0, reference.span.start)}${replacement}${nextRawInput.slice(reference.span.end)}`
+          cellChanged = true
+        }
+        if (!cellChanged || nextRawInput === cellSnapshot.rawInput) {
+          continue
+        }
+        patches.push({
+          cell: formulaCell.address,
+          rawInput: nextRawInput,
+        })
+      }
+      if (patches.length === 0) {
+        continue
+      }
+      if (targetSheet.sheetModel.setCellInputs(patches)) {
+        changedSheetIds.add(targetSheet.id)
+      }
+    }
+
+    return changedSheetIds
+  }
+
+  const invalidateWorkbookSheetReferences = (
+    removedAliases: readonly string[],
+  ): ReadonlySet<string> => {
+    const normalizedRemovedAliases = new Set(
+      removedAliases
+        .map(alias => normalizeSpreadsheetWorkbookAlias(alias))
+        .filter(alias => alias.length > 0),
+    )
+    if (normalizedRemovedAliases.size === 0) {
+      return new Set<string>()
+    }
+
+    const changedSheetIds = new Set<string>()
+    for (const targetSheet of sheets) {
+      const patches: Array<{
+        cell: Parameters<DataGridSpreadsheetSheetModel["setCellInput"]>[0]
+        rawInput: string
+      }> = []
+      for (const formulaCell of targetSheet.sheetModel.getFormulaCells()) {
+        const cellSnapshot = targetSheet.sheetModel.getCell(formulaCell.address)
+        if (!cellSnapshot || cellSnapshot.analysis.references.length === 0) {
+          continue
+        }
+        let nextRawInput = cellSnapshot.rawInput
+        let cellChanged = false
+        const references = [...cellSnapshot.analysis.references].sort((left, right) => right.span.start - left.span.start)
+        for (const reference of references) {
+          if (!normalizedRemovedAliases.has(normalizeSpreadsheetWorkbookAlias(reference.sheetReference))) {
+            continue
+          }
+          nextRawInput = `${nextRawInput.slice(0, reference.span.start)}#REF!${nextRawInput.slice(reference.span.end)}`
+          cellChanged = true
+        }
+        if (!cellChanged || nextRawInput === cellSnapshot.rawInput) {
+          continue
+        }
+        patches.push({
+          cell: formulaCell.address,
+          rawInput: nextRawInput,
+        })
+      }
+      if (patches.length === 0) {
+        continue
+      }
+      if (targetSheet.sheetModel.setCellInputs(patches)) {
+        changedSheetIds.add(targetSheet.id)
+      }
+    }
+    return changedSheetIds
   }
 
   return {
@@ -1016,6 +1293,7 @@ export function createDataGridSpreadsheetWorkbookModel(
       if (!sheet) {
         return false
       }
+      const removedAliases = sheet.aliases
       sheet.unsubscribe?.()
       sheet.unsubscribe = null
       sheetsById.delete(sheetId)
@@ -1026,10 +1304,16 @@ export function createDataGridSpreadsheetWorkbookModel(
       if (activeSheetId === sheetId) {
         activeSheetId = sheets[0]?.id ?? null
       }
+      invalidateWorkbookGraphState()
+      referenceRewriteInProgress = true
+      try {
+        invalidateWorkbookSheetReferences(removedAliases)
+      } finally {
+        referenceRewriteInProgress = false
+      }
       if (sheet.owned) {
         sheet.sheetModel.dispose()
       }
-      invalidateWorkbookGraphState()
       runSync({ structural: true })
       return true
     },
@@ -1056,6 +1340,10 @@ export function createDataGridSpreadsheetWorkbookModel(
         sheet.aliases = previousAliases
         throw error
       }
+      rewriteWorkbookSheetReferenceAlias(
+        normalizeSpreadsheetWorkbookAlias(previousName),
+        normalizeSpreadsheetWorkbookAlias(nextName),
+      )
       invalidateWorkbookGraphState()
       runSync({ structural: true })
       return true

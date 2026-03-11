@@ -205,7 +205,6 @@ export interface DataGridSelectionSnapshot {
   ranges: DataGridSelectionSnapshotRange[]
   activeRangeIndex: number
   activeCell: DataGridSelectionPoint | null
-  clone(): DataGridSelectionSnapshot
 }
 
 export interface DataGridSelectedCell<T = any> {

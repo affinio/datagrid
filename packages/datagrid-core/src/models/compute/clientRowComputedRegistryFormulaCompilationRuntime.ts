@@ -53,7 +53,7 @@ export function createComputedRegistryFormulaCompilationRuntime<T>(options: {
     identifier: string,
     compileOptions: CompileFormulaFieldOptions,
   ): DataGridComputedDependencyToken => {
-    const parsedIdentifier = parseDataGridFormulaIdentifier(identifier)
+    const parsedIdentifier = parseDataGridFormulaIdentifier(identifier, context.formulaReferenceParserOptions)
     const normalizedIdentifier = parsedIdentifier.referenceName.trim()
     const serializeToken = (domain: "field" | "computed" | "meta", name: string): DataGridComputedDependencyToken => {
       return serializeDataGridComputedDependencyToken({

@@ -29,6 +29,8 @@ export type {
   DataGridSpreadsheetRowSnapshot,
   DataGridSpreadsheetSheetListener,
   DataGridSpreadsheetSheetModel,
+  DataGridSpreadsheetSheetRowMutation,
+  DataGridSpreadsheetSheetRowMutationKind,
   DataGridSpreadsheetSheetSnapshot,
   DataGridSpreadsheetStyle,
 } from "./sheetModel.js"
@@ -48,6 +50,7 @@ export {
   createDataGridSpreadsheetFormulaEditorModel,
   formatDataGridSpreadsheetFormulaReference,
   insertDataGridSpreadsheetFormulaReference,
+  rewriteDataGridSpreadsheetFormulaReferences,
   resolveDataGridSpreadsheetActiveFormulaReference,
 } from "./formulaEditorModel.js"
 export { createDataGridSpreadsheetSheetModel } from "./sheetModel.js"

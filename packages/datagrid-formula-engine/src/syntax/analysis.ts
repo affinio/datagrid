@@ -135,6 +135,7 @@ function createFormulaExplainNode(root: DataGridFormulaAstNode): DataGridFormula
       span: root.span,
       children: [],
       name: root.name,
+      sheetReference: root.sheetReference,
       referenceName: root.referenceName,
       rowSelector: root.rowSelector,
     }
@@ -182,7 +183,7 @@ export function parseDataGridFormulaExpression(
 ): DataGridFormulaParseResult {
   const normalizedFormula = normalizeFormulaText(formula)
   const tokens = tokenizeFormula(normalizedFormula, options.referenceParserOptions)
-  const ast = parseFormula(tokens)
+  const ast = parseFormula(tokens, options.referenceParserOptions)
   return { formula: normalizedFormula, tokens, ast }
 }
 
@@ -193,7 +194,7 @@ export function diagnoseDataGridFormulaExpression(
   const normalizedFormula = normalizeFormulaText(formula)
   try {
     const tokens = tokenizeFormula(normalizedFormula, options.referenceParserOptions)
-    const ast = parseFormula(tokens)
+    const ast = parseFormula(tokens, options.referenceParserOptions)
     const functionRegistry = normalizeFormulaFunctionRegistry(options.functionRegistry, {
       onFunctionOverride: options.onFunctionOverride,
     })
@@ -210,7 +211,7 @@ export function explainDataGridFormulaExpression(
 ): DataGridFormulaExplainResult {
   const normalizedFormula = normalizeFormulaText(formula)
   const tokens = tokenizeFormula(normalizedFormula, options.referenceParserOptions)
-  const ast = parseFormula(tokens)
+  const ast = parseFormula(tokens, options.referenceParserOptions)
   const optimizedAst = foldFormulaConstants(ast)
   const identifiers = dedupeFormulaIdentifiers(optimizedAst)
   const functionRegistry = normalizeFormulaFunctionRegistry(options.functionRegistry, {

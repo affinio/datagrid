@@ -5,12 +5,10 @@ Package: `@affino/datagrid-vue`
 
 ## Current Stable Contract
 
-As of this baseline, the stable public adapter API covers runtime, sugar integration, settings persistence, deterministic overlay transforms, and app-shell foundations:
+As of this baseline, the stable public adapter API covers runtime, settings persistence, deterministic overlay transforms, and app-shell foundations:
 
 - `createDataGridVueRuntime`
 - `useDataGridRuntime`
-- `useAffinoDataGrid`
-- `useAffinoDataGridUi`
 - `createDataGridSettingsAdapter`
 - `useDataGridSettingsStore`
 - `buildDataGridOverlayTransform`

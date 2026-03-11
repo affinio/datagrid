@@ -5,6 +5,7 @@ import type {
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-core"
 import {
+  resolveDataGridDefaultFillBehavior,
   useDataGridAxisAutoScrollDelta,
   useDataGridCellNavigation,
   useDataGridCellPointerDownRouter,
@@ -20,9 +21,13 @@ import {
   useDataGridRangeMoveStart,
   useDataGridRangeMutationEngine,
   type DataGridCopyRange,
+  type DataGridFillBehavior,
 } from "../advanced"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
-import { useDataGridAppFill } from "./useDataGridAppFill"
+import {
+  useDataGridAppFill,
+  type DataGridAppAppliedFillSession,
+} from "./useDataGridAppFill"
 import type {
   DataGridAppCellCoord,
   DataGridAppSelectionAnchorLike,
@@ -104,12 +109,15 @@ export interface UseDataGridAppInteractionControllerResult<TRow> {
   isPointerSelectingCells: Ref<boolean>
   isFillDragging: Ref<boolean>
   fillPreviewRange: Ref<DataGridCopyRange | null>
+  lastAppliedFill: Ref<DataGridAppAppliedFillSession | null>
   isRangeMoving: Ref<boolean>
   selectionRange: ComputedRef<DataGridCopyRange | null>
   rangeMovePreviewRange: Ref<DataGridCopyRange | null>
   stopPointerSelection: () => void
   stopFillSelection: (commit: boolean) => void
   startFillHandleDrag: (event: MouseEvent) => void
+  startFillHandleDoubleClick: (event: MouseEvent) => void
+  applyLastFillBehavior: (behavior: DataGridFillBehavior) => boolean
   handleCellMouseDown: (event: MouseEvent, row: DataGridRowNode<TRow>, rowOffset: number, columnIndex: number) => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridRowNode<TRow>, rowOffset: number, columnIndex: number) => void
   handleWindowMouseMove: (event: MouseEvent) => void
@@ -142,6 +150,8 @@ export function useDataGridAppInteractionController<
   const fillPointer = ref<DataGridAppPointer | null>(null)
   const fillBaseRange = ref<DataGridCopyRange | null>(null)
   const fillPreviewRange = ref<DataGridCopyRange | null>(null)
+  const activeFillBehavior = ref<DataGridFillBehavior | null>(null)
+  const lastAppliedFill = ref<DataGridAppAppliedFillSession | null>(null)
   const fillOriginFocusCoord = ref<DataGridAppCellCoord | null>(null)
   const isRangeMoving = ref(false)
   const pendingRangeMove = ref(false)
@@ -350,6 +360,7 @@ export function useDataGridAppInteractionController<
 
   const {
     applyFillPreview,
+    applyFillRange,
     isCellInFillPreview,
     isFillHandleCell,
   } = useDataGridAppFill({
@@ -357,12 +368,29 @@ export function useDataGridAppInteractionController<
     viewportRowStart: options.viewportRowStart,
     fillBaseRange,
     fillPreviewRange,
+    activeFillBehavior,
     resolveSelectionRange: options.resolveSelectionRange,
     rangesEqual: options.rangesEqual,
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,
     applyClipboardEdits: options.applyClipboardEdits,
+    setLastAppliedFillSession: session => {
+      lastAppliedFill.value = session
+      activeFillBehavior.value = session?.behavior ?? activeFillBehavior.value
+    },
     syncViewport: options.syncViewport,
   })
+
+  const applyCommittedFillRange = (
+    baseRange: DataGridCopyRange,
+    previewRange: DataGridCopyRange,
+    behavior?: DataGridFillBehavior,
+  ): boolean => {
+    const applied = applyFillRange(baseRange, previewRange, behavior)
+    if (applied && behavior) {
+      activeFillBehavior.value = behavior
+    }
+    return applied
+  }
 
   const resolveCellCoordFromElement = (element: HTMLElement | null): DataGridAppCellCoord | null => {
     if (!element) {
@@ -830,30 +858,6 @@ export function useDataGridAppInteractionController<
 
   const fillHandleStart = useDataGridFillHandleStart<DataGridCopyRange>({
     resolveSelectionRange: options.resolveSelectionRange,
-    resolveInitialFillPreviewRange: range => {
-      const normalizedRange = options.normalizeClipboardRange(range)
-      if (!normalizedRange) {
-        return null
-      }
-      const lastRowIndex = Math.max(0, options.totalRows.value - 1)
-      if (normalizedRange.endRow < lastRowIndex) {
-        return options.normalizeClipboardRange({
-          startRow: normalizedRange.startRow,
-          endRow: normalizedRange.endRow + 1,
-          startColumn: normalizedRange.startColumn,
-          endColumn: normalizedRange.endColumn,
-        })
-      }
-      if (normalizedRange.startRow > 0) {
-        return options.normalizeClipboardRange({
-          startRow: normalizedRange.startRow - 1,
-          endRow: normalizedRange.endRow,
-          startColumn: normalizedRange.startColumn,
-          endColumn: normalizedRange.endColumn,
-        })
-      }
-      return normalizedRange
-    },
     focusViewport,
     stopRangeMove: commit => {
       rangeMoveLifecycle.stopRangeMove(commit)
@@ -1004,6 +1008,59 @@ export function useDataGridAppInteractionController<
     if (fillHandleStart.onSelectionHandleMouseDown(event)) {
       fillOriginFocusCoord.value = originCoord
     }
+  }
+
+  const startFillHandleDoubleClick = (event: MouseEvent): void => {
+    if (options.mode.value !== "base") {
+      return
+    }
+    const baseRange = options.resolveSelectionRange()
+    if (!baseRange) {
+      return
+    }
+    const lastRowIndex = Math.max(0, options.totalRows.value - 1)
+    const previewRange = options.normalizeClipboardRange({
+      startRow: baseRange.startRow,
+      endRow: lastRowIndex,
+      startColumn: baseRange.startColumn,
+      endColumn: baseRange.endColumn,
+    })
+    if (!previewRange || options.rangesEqual(baseRange, previewRange)) {
+      return
+    }
+    const sourceMatrix = options.buildFillMatrixFromRange(baseRange)
+    const behavior = activeFillBehavior.value ?? resolveDataGridDefaultFillBehavior({
+      baseRange,
+      previewRange,
+      sourceMatrix,
+    })
+    const preferredFocusCoord = resolveFillOriginFocusCoord()
+    event.preventDefault()
+    event.stopPropagation()
+    if (applyCommittedFillRange(baseRange, previewRange, behavior)) {
+      activeFillBehavior.value = behavior
+      const restoredCoord = preferredFocusCoord
+        ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
+        : null
+      restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
+    }
+  }
+
+  const applyLastFillBehavior = (behavior: DataGridFillBehavior): boolean => {
+    const session = lastAppliedFill.value
+    if (!session) {
+      return false
+    }
+    const preferredFocusCoord = resolveFillOriginFocusCoord()
+    const applied = applyCommittedFillRange(session.baseRange, session.previewRange, behavior)
+    if (applied) {
+      activeFillBehavior.value = behavior
+      const restoredCoord = preferredFocusCoord
+        ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
+        : null
+      restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
+    }
+    return applied
   }
 
   const handleCellMouseDown = (
@@ -1186,6 +1243,7 @@ export function useDataGridAppInteractionController<
     isPointerSelectingCells,
     isFillDragging,
     fillPreviewRange,
+    lastAppliedFill,
     isRangeMoving,
     selectionRange,
     rangeMovePreviewRange,
@@ -1195,6 +1253,8 @@ export function useDataGridAppInteractionController<
     },
     stopFillSelection,
     startFillHandleDrag,
+    startFillHandleDoubleClick,
+    applyLastFillBehavior,
     handleCellMouseDown,
     handleCellKeydown,
     handleWindowMouseMove,

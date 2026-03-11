@@ -125,16 +125,20 @@
         <section class="spreadsheet-panel">
           <h3>Workbook demo</h3>
           <p>
-            <strong>Orders</strong> uses Smartsheet-style refs like
+            <strong>Summary</strong> now leads with direct cross-sheet refs like
+            <code>=orders![total]1 + orders![total]2</code>.
+          </p>
+          <p>
+            <strong>Orders</strong> still uses Smartsheet-style row refs like
             <code>=[qty]@row * [price]@row</code>.
           </p>
           <p>
-            <strong>Customers</strong> rolls up order totals through
+            <strong>Customers</strong> still needs
             <code>ROLLUP('orders', ...)</code>.
           </p>
           <p>
-            <strong>Summary</strong> aggregates cross-sheet values through
-            <code>TABLE('orders', 'total')</code>.
+            Workbook-wide aggregates stay on
+            <code>TABLE('orders', 'total')</code>, because direct refs do not replace dynamic table scans.
           </p>
         </section>
 
@@ -246,6 +250,7 @@ type ReferenceLegendEntry = {
 const SPREADSHEET_REFERENCE_OPTIONS = {
   syntax: "smartsheet" as const,
   smartsheetAbsoluteRowBase: 1 as const,
+  allowSheetQualifiedReferences: true as const,
 }
 
 const REFERENCE_PALETTE = [
@@ -399,10 +404,10 @@ function createDemoWorkbookModel(): DataGridSpreadsheetWorkbookModel {
             { key: "note", title: "Why it matters", style: { color: "#475569" } },
           ],
           rows: [
-            { id: "summary-1", cells: { metric: "Gross sales", value: "=SUM(TABLE('orders', 'total'))", note: "Edit qty or price in Orders and this cell recomputes." }, style: { background: "rgba(59, 130, 246, 0.08)" } },
-            { id: "summary-2", cells: { metric: "Largest order", value: "=MAX(TABLE('orders', 'total'))", note: "Workbook-level aggregation via TABLE()." } },
-            { id: "summary-3", cells: { metric: "Tracked customers", value: "=COUNT(TABLE('customers', 'id'))", note: "Cross-sheet total on the Customers table." } },
-            { id: "summary-4", cells: { metric: "Top customer spend", value: "=MAX(TABLE('customers', 'totalSpend'))", note: "Nested relation output reused downstream." } },
+            { id: "summary-1", cells: { metric: "Orders 1 + 2", value: "=orders![total]1 + orders![total]2", note: "Direct cross-sheet absolute refs. Edit the first two Orders totals and this cell follows them." }, style: { background: "rgba(59, 130, 246, 0.08)" } },
+            { id: "summary-2", cells: { metric: "Customer 1 name", value: "=customers![name]1", note: "Direct text ref across sheets without TABLE() or RELATED()." } },
+            { id: "summary-3", cells: { metric: "Gross sales", value: "=SUM(TABLE('orders', 'total'))", note: "Workbook-wide aggregate still uses TABLE() because direct refs are fixed-address links." } },
+            { id: "summary-4", cells: { metric: "Top customer spend", value: "=MAX(TABLE('customers', 'totalSpend'))", note: "ROLLUP output on Customers reused downstream through TABLE()." } },
           ],
         },
       },
@@ -570,6 +575,17 @@ const editorModel = createDataGridSpreadsheetFormulaEditorModel({
       return workbook.getActiveSheet()?.sheetModel.getSnapshot().rowCount ?? 0
     }
     return workbook.getSheet(cell.sheetId)?.sheetModel.getSnapshot().rowCount ?? 0
+  },
+  resolveReferenceRowCount: (reference, activeCell) => {
+    if (reference.sheetReference) {
+      const normalizedAlias = reference.sheetReference.trim().toLowerCase()
+      const targetSheet = workbook.getSheets().find(sheet => sheet.aliases.includes(normalizedAlias))
+      return targetSheet?.sheetModel.getSnapshot().rowCount ?? null
+    }
+    if (!activeCell?.sheetId) {
+      return workbook.getActiveSheet()?.sheetModel.getSnapshot().rowCount ?? 0
+    }
+    return workbook.getSheet(activeCell.sheetId)?.sheetModel.getSnapshot().rowCount ?? null
   },
 })
 const editorSnapshot = shallowRef(editorModel.getSnapshot())
@@ -834,9 +850,6 @@ function buildSelectionSnapshot(
       rowIndex: activeCell.rowIndex,
       colIndex: activeCell.colIndex,
       rowId: activeCell.rowId ?? null,
-    },
-    clone() {
-      return buildSelectionSnapshot(range, activeCell)
     },
   }
 }

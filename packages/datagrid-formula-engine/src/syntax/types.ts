@@ -40,6 +40,11 @@ export interface DataGridFormulaReferenceParserOptions {
    * Smartsheet-style references are 1-based by default.
    */
   smartsheetAbsoluteRowBase?: 0 | 1
+  /**
+   * Enables sheet-qualified identifiers such as `orders!price` or `'Q1 Plan'![Amount]5`.
+   * Off by default so non-spreadsheet formula surfaces keep their current grammar.
+   */
+  allowSheetQualifiedReferences?: boolean
 }
 
 export type DataGridFormulaRowSelector =
@@ -77,6 +82,7 @@ export type DataGridFormulaAstNode =
   | {
     kind: "identifier"
     name: string
+    sheetReference: string | null
     referenceName: string
     rowSelector: DataGridFormulaRowSelector
     span: DataGridFormulaSourceSpan

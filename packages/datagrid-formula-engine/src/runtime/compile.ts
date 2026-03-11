@@ -130,7 +130,7 @@ function serializeFormulaAst(node: DataGridFormulaAstNode): string {
     case "literal":
       return `lit(${serializeFormulaValue(node.value)})`
     case "identifier":
-      return `id(${JSON.stringify(node.referenceName)}:${serializeFormulaAstRowSelector(node)})`
+      return `id(${JSON.stringify(node.sheetReference ?? "")}:${JSON.stringify(node.referenceName)}:${serializeFormulaAstRowSelector(node)})`
     case "call":
       return `call(${JSON.stringify(node.name)}:${node.args.map(arg => serializeFormulaAst(arg)).join(",")})`
     case "unary":
@@ -150,8 +150,11 @@ function hashFormulaAst(node: DataGridFormulaAstNode): string {
   return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`
 }
 
-function normalizeFormulaIdentifierKey(identifier: string): string {
-  return parseDataGridFormulaIdentifier(identifier).name.trim()
+function normalizeFormulaIdentifierKey(
+  identifier: string,
+  referenceParserOptions: DataGridFormulaCompileOptions["referenceParserOptions"],
+): string {
+  return parseDataGridFormulaIdentifier(identifier, referenceParserOptions).name.trim()
 }
 
 function analyzeFormulaExpression(
@@ -171,7 +174,7 @@ function analyzeFormulaExpression(
 } {
   const formula = normalizeFormulaText(formulaText)
   const tokens = tokenizeFormula(formula, options.referenceParserOptions)
-  const ast = parseFormula(tokens)
+  const ast = parseFormula(tokens, options.referenceParserOptions)
   const functionRegistry = normalizeFormulaFunctionRegistry(options.functionRegistry, {
     onFunctionOverride: options.onFunctionOverride,
   })
@@ -184,7 +187,7 @@ function analyzeFormulaExpression(
   const identifiers: string[] = []
   const seenIdentifiers = new Set<string>()
   for (const reference of references) {
-    const normalized = normalizeFormulaIdentifierKey(reference)
+    const normalized = normalizeFormulaIdentifierKey(reference, options.referenceParserOptions)
     if (normalized.length === 0 || seenIdentifiers.has(normalized)) {
       continue
     }

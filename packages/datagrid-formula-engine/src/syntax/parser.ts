@@ -2,6 +2,7 @@
 // orchestration is re-exported here so syntax-facing consumers have one entrypoint.
 import type { DataGridFormulaAstNode } from "./ast.js"
 import type { DataGridFormulaToken } from "./tokenizer.js"
+import type { DataGridFormulaReferenceParserOptions } from "./types.js"
 import {
   createFormulaSourceSpan,
   throwFormulaError,
@@ -24,7 +25,10 @@ export {
   explainDataGridFormulaFieldDefinition,
 } from "./analysis.js"
 
-export function parseFormula(tokens: readonly DataGridFormulaToken[]): DataGridFormulaAstNode {
+export function parseFormula(
+  tokens: readonly DataGridFormulaToken[],
+  referenceParserOptions: DataGridFormulaReferenceParserOptions = {},
+): DataGridFormulaAstNode {
   let cursor = 0
 
   const peek = (): DataGridFormulaToken | undefined => tokens[cursor]
@@ -83,10 +87,11 @@ export function parseFormula(tokens: readonly DataGridFormulaToken[]): DataGridF
             span: createFormulaSourceSpan(token.position, token.end),
           }
         }
-        const parsedIdentifier = parseDataGridFormulaIdentifier(token.value)
+        const parsedIdentifier = parseDataGridFormulaIdentifier(token.value, referenceParserOptions)
         return {
           kind: "identifier",
           name: parsedIdentifier.name,
+          sheetReference: parsedIdentifier.sheetReference,
           referenceName: parsedIdentifier.referenceName,
           rowSelector: parsedIdentifier.rowSelector,
           span: createFormulaSourceSpan(token.position, token.end),

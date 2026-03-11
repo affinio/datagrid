@@ -193,6 +193,8 @@ function createControllerHarness(options: {
     }, extend)
   })
   const ensureKeyboardActiveCellVisible = vi.fn()
+  const applyClipboardEdits = vi.fn(() => 0)
+  const buildFillMatrixFromRange = vi.fn(() => [[""]])
 
   const controller = useDataGridAppInteractionController<DemoRow, readonly DemoRow[]>({
     mode: ref(mode),
@@ -267,9 +269,9 @@ function createControllerHarness(options: {
     pasteSelectedCells: vi.fn(async () => false),
     cutSelectedCells: vi.fn(async () => false),
     normalizeClipboardRange: range => range,
-    applyClipboardEdits: vi.fn(() => 0),
+    applyClipboardEdits,
     rangesEqual: (left, right) => JSON.stringify(left) === JSON.stringify(right),
-    buildFillMatrixFromRange: vi.fn(() => [[""]]),
+    buildFillMatrixFromRange,
     syncViewport: vi.fn(),
     editingCell: ref(null),
     startInlineEdit: vi.fn(),
@@ -289,6 +291,8 @@ function createControllerHarness(options: {
     applySelectionRange,
     setSelectionSnapshot,
     ensureKeyboardActiveCellVisible,
+    applyClipboardEdits,
+    buildFillMatrixFromRange,
   }
 }
 
@@ -430,6 +434,13 @@ describe("useDataGridAppInteractionController contract", () => {
     })
     const anchorCell = createCell(0, 0)
     document.body.appendChild(anchorCell)
+    if (typeof document.elementFromPoint !== "function") {
+      Object.defineProperty(document, "elementFromPoint", {
+        configurable: true,
+        writable: true,
+        value: vi.fn(),
+      })
+    }
     const elementFromPointSpy = vi.spyOn(document, "elementFromPoint").mockReturnValue(anchorCell)
     const pointerDown = createMouseEvent("mousedown", anchorCell, {
       button: 0,
@@ -545,7 +556,7 @@ describe("useDataGridAppInteractionController contract", () => {
       startCol: 0,
       endCol: 0,
       anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
-      focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      focus: { rowIndex: 1, colIndex: 0 },
     })
 
     controller.handleCellKeydown(new KeyboardEvent("keydown", {
@@ -660,7 +671,7 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(applyCellSelectionByCoord).not.toHaveBeenCalled()
   })
 
-  it("starts fill preview downward on fill-handle press before pointer movement", () => {
+  it("starts fill drag from the current range without extending preview before pointer movement", () => {
     const { controller, selectionSnapshot } = createControllerHarness({
       rowCount: 3,
       columnCount: 2,
@@ -691,10 +702,105 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(controller.isFillDragging.value).toBe(true)
     expect(controller.fillPreviewRange.value).toEqual({
       startRow: 0,
-      endRow: 1,
+      endRow: 0,
       startColumn: 0,
       endColumn: 0,
     })
+  })
+
+  it("fills to the last row on fill-handle double click", () => {
+    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
+      rowCount: 4,
+      columnCount: 2,
+    })
+
+    applyClipboardEdits.mockReturnValue(4)
+    buildFillMatrixFromRange.mockReturnValue([["1"]])
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+            endRow: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(buildFillMatrixFromRange).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 0,
+    })
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 3,
+      startColumn: 0,
+      endColumn: 0,
+    }, [["1"], ["2"], ["3"], ["4"]])
+    expect(controller.lastAppliedFill.value).toMatchObject({
+      behavior: "series",
+      previewRange: {
+        startRow: 0,
+        endRow: 3,
+        startColumn: 0,
+        endColumn: 0,
+      },
+    })
+  })
+
+  it("reapplies the last fill with an explicit behavior override", () => {
+    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
+      rowCount: 4,
+      columnCount: 2,
+    })
+
+    applyClipboardEdits.mockReturnValue(4)
+    buildFillMatrixFromRange.mockReturnValue([["1"]])
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 3,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r4",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 3, colIndex: 0, rowId: "r4" },
+      }],
+    }
+
+    controller.lastAppliedFill.value = {
+      baseRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+      previewRange: { startRow: 0, endRow: 3, startColumn: 0, endColumn: 0 },
+      behavior: "series",
+    }
+
+    const applied = controller.applyLastFillBehavior("copy")
+
+    expect(applied).toBe(true)
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 3,
+      startColumn: 0,
+      endColumn: 0,
+    }, [["1"], ["1"], ["1"], ["1"]])
+    expect(controller.lastAppliedFill.value).toMatchObject({ behavior: "copy" })
   })
 
   it("restores focus to the anchor cell after fill-handle apply", async () => {

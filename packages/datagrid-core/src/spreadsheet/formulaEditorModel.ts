@@ -27,6 +27,7 @@ export interface DataGridSpreadsheetTextSelection {
 }
 
 export interface DataGridSpreadsheetFormulaReferenceInput {
+  sheetReference?: string | null
   referenceName: string
   rowIndex?: number | null
   rowSelector?: DataGridFormulaRowSelector | null
@@ -38,6 +39,7 @@ export interface DataGridSpreadsheetFormulaReferenceSpan {
   colorIndex: number
   text: string
   identifier: string
+  sheetReference: string | null
   referenceName: string
   rowSelector: DataGridFormulaRowSelector
   span: DataGridFormulaSourceSpan
@@ -58,6 +60,9 @@ export interface DataGridSpreadsheetCellInputAnalysis {
 export interface AnalyzeDataGridSpreadsheetCellInputOptions {
   currentRowIndex?: number | null
   rowCount?: number | null
+  resolveReferenceRowCount?: (
+    reference: Pick<DataGridSpreadsheetFormulaReferenceSpan, "sheetReference" | "referenceName" | "rowSelector">,
+  ) => number | null | undefined
   functionRegistry?: DataGridFormulaFunctionRegistry
   referenceParserOptions?: DataGridFormulaReferenceParserOptions
 }
@@ -106,6 +111,10 @@ export interface CreateDataGridSpreadsheetFormulaEditorModelOptions {
   referenceParserOptions?: DataGridFormulaReferenceParserOptions
   outputSyntax?: DataGridSpreadsheetFormulaReferenceOutputSyntax
   resolveRowCount?: (cell: DataGridSpreadsheetCellAddress | null) => number | null | undefined
+  resolveReferenceRowCount?: (
+    reference: Pick<DataGridSpreadsheetFormulaReferenceSpan, "sheetReference" | "referenceName" | "rowSelector">,
+    activeCell: DataGridSpreadsheetCellAddress | null,
+  ) => number | null | undefined
 }
 
 export interface DataGridSpreadsheetFormulaEditorModel {
@@ -348,6 +357,17 @@ function formatCanonicalReferenceName(referenceName: string): string {
   return `"${normalized.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
 }
 
+function formatFormulaSheetReference(sheetReference: string): string {
+  const normalized = String(sheetReference ?? "").trim()
+  if (normalized.length === 0) {
+    throw new Error("[DataGridSpreadsheet] sheetReference must be non-empty when provided.")
+  }
+  if (/^[A-Za-z_$][A-Za-z0-9_$.-]*$/.test(normalized)) {
+    return normalized
+  }
+  return `'${normalized.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
+}
+
 function formatCanonicalRowSelector(
   rowSelector: DataGridFormulaRowSelector,
 ): string {
@@ -366,6 +386,7 @@ function formatCanonicalRowSelector(
 }
 
 function formatSmartsheetReference(
+  sheetReference: string | null | undefined,
   referenceName: string,
   rowSelector: DataGridFormulaRowSelector,
   options: Pick<DataGridSpreadsheetFormatFormulaReferenceOptions, "referenceParserOptions">,
@@ -377,14 +398,17 @@ function formatSmartsheetReference(
   if (normalized.includes("]")) {
     throw new Error("[DataGridSpreadsheet] Smartsheet reference names cannot contain ']'.")
   }
-  if (rowSelector.kind === "current") {
-    return `[${normalized}]@row`
-  }
-  if (rowSelector.kind !== "absolute") {
+  if (rowSelector.kind !== "current" && rowSelector.kind !== "absolute") {
     throw new Error("[DataGridSpreadsheet] Smartsheet output syntax currently supports only current-row and absolute-row references.")
   }
   const base = options.referenceParserOptions?.smartsheetAbsoluteRowBase === 0 ? 0 : 1
-  return `[${normalized}]${rowSelector.rowIndex + base}`
+  const referenceText = rowSelector.kind === "current"
+    ? `[${normalized}]@row`
+    : `[${normalized}]${rowSelector.rowIndex + base}`
+  const prefix = typeof sheetReference === "string" && sheetReference.trim().length > 0
+    ? `${formatFormulaSheetReference(sheetReference)}!`
+    : ""
+  return `${prefix}${referenceText}`
 }
 
 function resolveFormulaReferenceOutputSyntax(
@@ -521,19 +545,25 @@ export function analyzeDataGridSpreadsheetCellInput(
     visitFormulaIdentifierNodes(parsedAst, (node) => {
       const span = shiftFormulaSpan(node.span, preparedFormula.expressionStart)
       const rowSelector = cloneFormulaRowSelector(node.rowSelector)
+      const sheetReference = node.sheetReference ?? null
       references.push({
         key: `${references.length}:${node.name}:${span.start}:${span.end}`,
         index: references.length,
         colorIndex: references.length,
         text: normalizedRawInput.slice(span.start, span.end),
         identifier: node.name,
+        sheetReference,
         referenceName: node.referenceName,
         rowSelector,
         span,
         targetRowIndexes: resolveTargetRowIndexes(
           rowSelector,
           options.currentRowIndex,
-          options.rowCount,
+          options.resolveReferenceRowCount?.({
+            sheetReference,
+            referenceName: node.referenceName,
+            rowSelector,
+          }) ?? options.rowCount,
         ),
       })
     })
@@ -576,9 +606,12 @@ export function formatDataGridSpreadsheetFormulaReference(
   const rowSelector = resolveFormulaReferenceRowSelector(reference, options.currentRowIndex)
   const outputSyntax = resolveFormulaReferenceOutputSyntax(options)
   if (outputSyntax === "smartsheet") {
-    return formatSmartsheetReference(reference.referenceName, rowSelector, options)
+    return formatSmartsheetReference(reference.sheetReference, reference.referenceName, rowSelector, options)
   }
-  return `${formatCanonicalReferenceName(reference.referenceName)}${formatCanonicalRowSelector(rowSelector)}`
+  const prefix = typeof reference.sheetReference === "string" && reference.sheetReference.trim().length > 0
+    ? `${formatFormulaSheetReference(reference.sheetReference)}!`
+    : ""
+  return `${prefix}${formatCanonicalReferenceName(reference.referenceName)}${formatCanonicalRowSelector(rowSelector)}`
 }
 
 export function insertDataGridSpreadsheetFormulaReference(
@@ -616,6 +649,57 @@ export function insertDataGridSpreadsheetFormulaReference(
     },
     insertedText,
   }
+}
+
+function resolveFormulaReferenceOutputSyntaxFromText(
+  text: string,
+  options: Pick<DataGridSpreadsheetFormatFormulaReferenceOptions, "referenceParserOptions"> = {},
+): DataGridSpreadsheetFormulaReferenceOutputSyntax {
+  const normalized = String(text ?? "").trim()
+  const localReferenceText = normalized.includes("!")
+    ? normalized.slice(normalized.lastIndexOf("!") + 1)
+    : normalized
+  if (localReferenceText.startsWith("[")) {
+    return "smartsheet"
+  }
+  return resolveFormulaReferenceOutputSyntax(options)
+}
+
+export function rewriteDataGridSpreadsheetFormulaReferences(
+  rawInput: string,
+  rewrite: (
+    reference: DataGridSpreadsheetFormulaReferenceSpan,
+  ) => DataGridSpreadsheetFormulaReferenceInput | { rawText: string } | null,
+  options: AnalyzeDataGridSpreadsheetCellInputOptions = {},
+): string {
+  const normalizedRawInput = String(rawInput ?? "")
+  const analysis = analyzeDataGridSpreadsheetCellInput(normalizedRawInput, options)
+  if (analysis.kind !== "formula" || analysis.references.length === 0) {
+    return normalizedRawInput
+  }
+
+  let nextInput = normalizedRawInput
+  let changed = false
+  const references = [...analysis.references].sort((left, right) => right.span.start - left.span.start)
+  for (const reference of references) {
+    const replacementReference = rewrite(reference)
+    if (!replacementReference) {
+      continue
+    }
+    const replacement = "rawText" in replacementReference
+      ? String(replacementReference.rawText ?? "")
+      : formatDataGridSpreadsheetFormulaReference(replacementReference, {
+        currentRowIndex: options.currentRowIndex,
+        outputSyntax: resolveFormulaReferenceOutputSyntaxFromText(reference.text, options),
+        referenceParserOptions: options.referenceParserOptions,
+      })
+    if (replacement === reference.text) {
+      continue
+    }
+    nextInput = `${nextInput.slice(0, reference.span.start)}${replacement}${nextInput.slice(reference.span.end)}`
+    changed = true
+  }
+  return changed ? nextInput : normalizedRawInput
 }
 
 export function resolveDataGridSpreadsheetActiveFormulaReference(
@@ -658,6 +742,7 @@ export function createDataGridSpreadsheetFormulaEditorModel(
   const computeAnalysis = (): DataGridSpreadsheetCellInputAnalysis => analyzeDataGridSpreadsheetCellInput(rawInput, {
     currentRowIndex: activeCell?.rowIndex ?? null,
     rowCount: options.resolveRowCount?.(activeCell) ?? null,
+    resolveReferenceRowCount: reference => options.resolveReferenceRowCount?.(reference, activeCell) ?? null,
     functionRegistry: options.functionRegistry,
     referenceParserOptions: options.referenceParserOptions,
   })

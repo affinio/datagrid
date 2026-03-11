@@ -22,7 +22,7 @@ Goal: identify what is truly missing vs what is already in core/adapter/app, the
 | Locale-aware sortable policy (configurable) | partial | partial | missing | configurable comparator policy missing |
 | Natural sorting | missing | missing | missing | core extension required |
 | Filter DSL / advanced expressions | present | present | present (`filterDsl`) | none |
-| Column filter UI | present (filter model only) | partial (legacy `useAffinoDataGrid` header filters + `filterBuilderUI`) | partial (JSON builder shell) | production-grade per-column UX still missing |
+| Column filter UI | present (filter model only) | partial (`filterBuilderUI` and headless runtime primitives) | partial (JSON builder shell) | production-grade per-column UX still missing |
 | Quick filter / global search model | missing (only generic filter model) | partial (`useDataGridQuickFilterActions` = clear action only) | missing | core + app design missing |
 | Saved filters / presets | missing | missing | missing | state model + UI missing |
 | Selection range/cell/row | present | present | present | none |

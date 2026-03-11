@@ -5,6 +5,7 @@ import type {
   DataGridOverlayRange,
   DataGridRowNode,
 } from "@affino/datagrid-vue"
+import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
 
 export type DataGridTableMode = "base" | "tree" | "pivot" | "worker"
 export type DataGridPendingEdge = "top" | "right" | "bottom" | "left"
@@ -99,6 +100,10 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   startInlineEdit: (row: DataGridTableRow<TRow>, columnKey: string) => void
   isFillHandleCell: (rowOffset: number, columnIndex: number) => boolean
   startFillHandleDrag: (event: MouseEvent) => void
+  startFillHandleDoubleClick: (event: MouseEvent) => void
+  fillActionAnchorCell?: DataGridTableStageAnchorCell | null
+  fillActionBehavior?: DataGridFillBehavior | null
+  applyFillActionBehavior: (behavior: DataGridFillBehavior) => void
   updateEditingCellValue: (value: string) => void
   handleEditorKeydown: (event: KeyboardEvent) => void
   commitInlineEdit: () => void

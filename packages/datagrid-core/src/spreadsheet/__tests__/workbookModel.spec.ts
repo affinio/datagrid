@@ -9,6 +9,11 @@ const SPREADSHEET_REFERENCE_OPTIONS = {
   smartsheetAbsoluteRowBase: 1 as const,
 }
 
+const SHEET_QUALIFIED_REFERENCE_OPTIONS = {
+  ...SPREADSHEET_REFERENCE_OPTIONS,
+  allowSheetQualifiedReferences: true as const,
+}
+
 describe("createDataGridSpreadsheetWorkbookModel", () => {
   it("computes cross-sheet formula values immediately on workbook creation", () => {
     const workbook = createDataGridSpreadsheetWorkbookModel({
@@ -201,6 +206,255 @@ describe("createDataGridSpreadsheetWorkbookModel", () => {
     expect(ordersSheet.getCell({ sheetId: "orders", rowId: "order-1", rowIndex: 0, columnKey: "customerName" })?.displayValue).toBe("Atlas")
     expect(customersSheet.getCell({ sheetId: "customers", rowId: "customer-1", rowIndex: 0, columnKey: "totalSpend" })?.displayValue).toBe(100)
     expect(summarySheet.getCell({ sheetId: "summary", rowId: "summary-1", rowIndex: 0, columnKey: "value" })?.displayValue).toBe(100)
+
+    workbook.dispose()
+  })
+
+  it("computes and rewrites sheet-qualified references across workbook renames", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "total" }],
+            rows: [
+              {
+                id: "order-1",
+                cells: {
+                  total: 100,
+                },
+              },
+              {
+                id: "order-2",
+                cells: {
+                  total: 200,
+                },
+              },
+            ],
+          },
+        },
+        {
+          id: "summary",
+          name: "Summary",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "value" }],
+            rows: [
+              {
+                id: "summary-1",
+                cells: {
+                  value: "=orders![total]1 + orders![total]2",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const summarySheet = workbook.getSheet("summary")?.sheetModel
+    const initialCell = summarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-1",
+      rowIndex: 0,
+      columnKey: "value",
+    })
+
+    expect(initialCell?.displayValue).toBe(300)
+    expect(initialCell?.analysis.references.map(reference => reference.sheetReference)).toEqual([
+      "orders",
+      "orders",
+    ])
+
+    expect(workbook.renameSheet("orders", "Revenue Plan")).toBe(true)
+
+    const rewrittenCell = summarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-1",
+      rowIndex: 0,
+      columnKey: "value",
+    })
+
+    expect(workbook.getSheet("orders")?.name).toBe("Revenue Plan")
+    expect(rewrittenCell?.rawInput).toBe("='revenue plan'![total]1 + 'revenue plan'![total]2")
+    expect(rewrittenCell?.displayValue).toBe(300)
+    expect(rewrittenCell?.analysis.references.map(reference => reference.sheetReference)).toEqual([
+      "revenue plan",
+      "revenue plan",
+    ])
+
+    workbook.dispose()
+  })
+
+  it("rewrites cross-sheet absolute references when source rows are inserted", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "total" }],
+            rows: [
+              { id: "order-1", cells: { total: 100 } },
+              { id: "order-2", cells: { total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "summary",
+          name: "Summary",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "value" }],
+            rows: [
+              {
+                id: "summary-1",
+                cells: {
+                  value: "=orders![total]2",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+    const summarySheet = workbook.getSheet("summary")?.sheetModel
+
+    expect(ordersSheet?.insertRowsAt(0, [{ id: "order-0", cells: { total: 50 } }])).toBe(true)
+
+    const summaryCell = summarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-1",
+      rowIndex: 0,
+      columnKey: "value",
+    })
+
+    expect(summaryCell?.rawInput).toBe("=orders![total]3")
+    expect(summaryCell?.displayValue).toBe(200)
+
+    workbook.dispose()
+  })
+
+  it("rewrites and invalidates cross-sheet absolute references when source rows are removed", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "total" }],
+            rows: [
+              { id: "order-1", cells: { total: 100 } },
+              { id: "order-2", cells: { total: 200 } },
+              { id: "order-3", cells: { total: 300 } },
+            ],
+          },
+        },
+        {
+          id: "summary",
+          name: "Summary",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "value" }],
+            rows: [
+              {
+                id: "summary-1",
+                cells: {
+                  value: "=orders![total]2",
+                },
+              },
+              {
+                id: "summary-2",
+                cells: {
+                  value: "=orders![total]3",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+    const summarySheet = workbook.getSheet("summary")?.sheetModel
+
+    expect(ordersSheet?.removeRowsAt(1)).toBe(true)
+
+    const invalidatedCell = summarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-1",
+      rowIndex: 0,
+      columnKey: "value",
+    })
+    const shiftedCell = summarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-2",
+      rowIndex: 1,
+      columnKey: "value",
+    })
+
+    expect(invalidatedCell?.rawInput).toBe("=#REF!")
+    expect(invalidatedCell?.analysis.isFormulaValid).toBe(false)
+    expect(invalidatedCell?.errorValue).not.toBeNull()
+    expect(shiftedCell?.rawInput).toBe("=orders![total]2")
+    expect(shiftedCell?.displayValue).toBe(300)
+
+    workbook.dispose()
+  })
+
+  it("invalidates direct references when a referenced sheet is removed", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "total" }],
+            rows: [
+              { id: "order-1", cells: { total: 100 } },
+            ],
+          },
+        },
+        {
+          id: "summary",
+          name: "Summary",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "value" }],
+            rows: [
+              {
+                id: "summary-1",
+                cells: {
+                  value: "=orders![total]1",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const summarySheet = workbook.getSheet("summary")?.sheetModel
+
+    expect(workbook.removeSheet("orders")).toBe(true)
+
+    const invalidatedCell = summarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-1",
+      rowIndex: 0,
+      columnKey: "value",
+    })
+
+    expect(invalidatedCell?.rawInput).toBe("=#REF!")
+    expect(invalidatedCell?.analysis.isFormulaValid).toBe(false)
+    expect(invalidatedCell?.errorValue).not.toBeNull()
 
     workbook.dispose()
   })
