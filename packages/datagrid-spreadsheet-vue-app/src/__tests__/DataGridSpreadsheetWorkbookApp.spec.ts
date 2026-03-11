@@ -1,8 +1,9 @@
-// @vitest-environment jsdom
-
 import { mount } from "@vue/test-utils"
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { defineComponent, h, nextTick } from "vue"
+import { createDataGridSpreadsheetWorkbookModel, type DataGridSpreadsheetWorkbookModel } from "@affino/datagrid-core"
+
+import DataGridSpreadsheetWorkbookApp from "../DataGridSpreadsheetWorkbookApp.vue"
 
 vi.mock("@affino/popover-vue", async () => {
   const { ref } = await import("vue")
@@ -59,20 +60,55 @@ async function flushUi(): Promise<void> {
   await nextTick()
 }
 
-async function mountWorkbookCard() {
-  const { default: VueSpreadsheetWorkbookCard } = await import("./VueSpreadsheetWorkbookCard.vue")
-
-  return mount(VueSpreadsheetWorkbookCard, {
-    attachTo: document.body,
-    global: {
-      stubs: {
-        teleport: true,
+function createWorkbookModel(): DataGridSpreadsheetWorkbookModel {
+  const workbook = createDataGridSpreadsheetWorkbookModel({
+    activeSheetId: "orders",
+    sheets: [
+      {
+        id: "orders",
+        name: "Orders",
+        sheetModelOptions: {
+          referenceParserOptions: {
+            syntax: "smartsheet",
+            smartsheetAbsoluteRowBase: 1,
+            allowSheetQualifiedReferences: true,
+          },
+          columns: [
+            { key: "qty", title: "Qty" },
+            { key: "price", title: "Price" },
+            { key: "total", title: "Total" },
+          ],
+          rows: [
+            { id: "order-1", cells: { qty: 4, price: 420, total: "=[qty]@row * [price]@row" } },
+            { id: "order-2", cells: { qty: 2, price: 780, total: "=[qty]@row * [price]@row" } },
+          ],
+        },
       },
-    },
+      {
+        id: "summary",
+        name: "Summary",
+        sheetModelOptions: {
+          referenceParserOptions: {
+            syntax: "smartsheet",
+            smartsheetAbsoluteRowBase: 1,
+            allowSheetQualifiedReferences: true,
+          },
+          columns: [
+            { key: "metric", title: "Metric" },
+            { key: "value", title: "Value" },
+          ],
+          rows: [
+            { id: "summary-1", cells: { metric: "Orders 1 + 2", value: "=orders![total]1 + orders![total]2" } },
+          ],
+        },
+      },
+    ],
   })
+  workbook.sync()
+  return workbook
 }
 
-describe("VueSpreadsheetWorkbookCard", () => {
+describe("DataGridSpreadsheetWorkbookApp", () => {
   beforeAll(() => {
     class ResizeObserverStub {
       observe(): void {}
@@ -97,59 +133,32 @@ describe("VueSpreadsheetWorkbookCard", () => {
     document.body.innerHTML = ""
   })
 
-  it("renders workbook formula values on initial mount", async () => {
-    const wrapper = await mountWorkbookCard()
+  it("renders workbook values and a fill handle", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
 
     await flushUi()
     await flushUi()
 
     const text = wrapper.text()
 
-    expect(text).toContain("Atlas Labs")
-    expect(text).toContain("Northwind")
+    expect(text).toContain("Revenue workbook")
     expect(text).toContain("1680")
-    expect(text).toContain("1560")
-
-    wrapper.unmount()
-  })
-
-  it("renders a fill handle for the active spreadsheet selection", async () => {
-    const wrapper = await mountWorkbookCard()
-
-    await flushUi()
-    await flushUi()
-
     expect(wrapper.find(".cell-fill-handle").exists()).toBe(true)
 
     wrapper.unmount()
-  })
-
-  it("keeps the fill action overlay visible after spreadsheet fill apply while formula editing stays active", async () => {
-    const wrapper = await mountWorkbookCard()
-
-    await flushUi()
-    await flushUi()
-
-    const formulaInput = wrapper.find(".spreadsheet-formula-input")
-    expect(formulaInput.exists()).toBe(true)
-
-    await formulaInput.trigger("focus")
-    await formulaInput.setValue("=1+1")
-    await flushUi()
-
-    const fillHandle = wrapper.find(".cell-fill-handle")
-    expect(fillHandle.exists()).toBe(true)
-
-    await fillHandle.trigger("dblclick", {
-      button: 0,
-      clientX: 8,
-      clientY: 8,
-    })
-    await flushUi()
-    await flushUi()
-
-    expect(wrapper.find(".grid-fill-action").exists()).toBe(true)
-
-    wrapper.unmount()
+    workbook.dispose()
   })
 })

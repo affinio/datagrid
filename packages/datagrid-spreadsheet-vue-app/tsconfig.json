@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@affino/datagrid-core": ["../datagrid-core/src/index.ts"],
+      "@affino/datagrid-core/*": ["../datagrid-core/src/*"],
+      "@affino/datagrid-theme": ["../datagrid-theme/src/index.ts"],
+      "@affino/datagrid-theme/*": ["../datagrid-theme/src/*"],
+      "@affino/datagrid-vue": ["../datagrid-vue/src/index.ts"],
+      "@affino/datagrid-vue/*": ["../datagrid-vue/src/*"],
+      "@affino/datagrid-vue-app": ["../datagrid-vue-app/src/index.ts"],
+      "@affino/datagrid-vue-app/internal": ["../datagrid-vue-app/src/internal.ts"],
+      "@affino/datagrid-vue-app/*": ["../datagrid-vue-app/src/*"]
+    }
+  },
+  "include": ["src/**/*", "vite.config.ts"],
+  "exclude": ["src/**/__tests__/**", "src/**/*.spec.ts", "src/**/*.test.ts"]
+}

@@ -15,6 +15,8 @@
       "@affino/datagrid-pivot/*": ["../datagrid-pivot/src/*"],
       "@affino/datagrid-orchestration": ["../datagrid-orchestration/src/index.ts"],
       "@affino/datagrid-orchestration/*": ["../datagrid-orchestration/src/*"],
+      "@affino/datagrid-spreadsheet-vue-app": ["../datagrid-spreadsheet-vue-app/src/index.ts"],
+      "@affino/datagrid-spreadsheet-vue-app/*": ["../datagrid-spreadsheet-vue-app/src/*"],
       "@affino/datagrid-vue/advanced": ["../datagrid-vue/src/advanced.ts"],
       "@affino/datagrid-vue": ["../datagrid-vue/src/index.ts"],
       "@affino/datagrid-vue/*": ["../datagrid-vue/src/*"],

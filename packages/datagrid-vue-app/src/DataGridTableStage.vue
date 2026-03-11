@@ -1124,6 +1124,17 @@ function resolveVisibleCellElement(rowIndex: number, columnIndex: number): HTMLE
   return null
 }
 
+function resolveVisibleRowElement(rowIndex: number): HTMLElement | null {
+  const selector = `.grid-cell[data-row-index="${rowIndex}"]`
+  for (const root of [leftPaneContentRef.value, bodyViewportEl.value, rightPaneContentRef.value]) {
+    const match = root?.querySelector<HTMLElement>(selector)
+    if (match) {
+      return match
+    }
+  }
+  return null
+}
+
 function focusVisibleAnchorCell(): void {
   const anchorCell = resolveVisibleAnchorCellPosition()
   if (!anchorCell) {
@@ -1185,8 +1196,31 @@ const effectiveBodyViewportWidth = computed(() => {
     : parsePixelValue(props.gridContentStyle.width ?? props.gridContentStyle.minWidth, 0)
 })
 
-function resolveFloatingFillActionLeft(): number | null {
+function resolveVisibleFillActionAnchorCell(): { rowIndex: number; columnIndex: number } | null {
   const anchorCell = props.fillActionAnchorCell
+  if (!anchorCell) {
+    return null
+  }
+
+  const visibleRowStart = props.viewportRowStart
+  const visibleRowEnd = props.viewportRowStart + Math.max(0, props.displayRows.length - 1)
+  const range = props.selectionRange
+  const selectionRowStart = range ? Math.min(range.startRow, range.endRow) : anchorCell.rowIndex
+  const selectionRowEnd = range ? Math.max(range.startRow, range.endRow) : anchorCell.rowIndex
+  const clampedRowStart = Math.max(selectionRowStart, visibleRowStart)
+  const clampedRowEnd = Math.min(selectionRowEnd, visibleRowEnd)
+  const rowIndex = clampedRowStart <= clampedRowEnd
+    ? clamp(anchorCell.rowIndex, clampedRowStart, clampedRowEnd)
+    : anchorCell.rowIndex
+
+  return {
+    rowIndex,
+    columnIndex: anchorCell.columnIndex,
+  }
+}
+
+function resolveFloatingFillActionLeft(): number | null {
+  const anchorCell = resolveVisibleFillActionAnchorCell() ?? props.fillActionAnchorCell
   if (!anchorCell) {
     return null
   }
@@ -1241,6 +1275,27 @@ function resolveFloatingFillActionLeft(): number | null {
   return clamp(cellRight - FILL_ACTION_TRIGGER_SIZE_PX, viewportLeft, viewportRight)
 }
 
+function resolveFloatingFillActionTop(): number {
+  const viewportTop = bodyViewportTopOffset.value + FILL_ACTION_VIEWPORT_MARGIN_PX
+  const viewportBottom = bodyViewportTopOffset.value + Math.max(
+    0,
+    bodyViewportClientHeight.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX,
+  )
+  const anchorCell = props.fillActionAnchorCell
+  const targetCell = resolveVisibleFillActionAnchorCell()
+  if (anchorCell && targetCell && anchorCell.rowIndex !== targetCell.rowIndex) {
+    return viewportBottom
+  }
+  const shellRect = bodyShellRef.value?.getBoundingClientRect()
+  const rowElement = targetCell ? resolveVisibleRowElement(targetCell.rowIndex) : null
+  if (!shellRect || !rowElement) {
+    return viewportBottom
+  }
+  const rowRect = rowElement.getBoundingClientRect()
+  const rowBottom = rowRect.bottom - shellRect.top - FILL_ACTION_TRIGGER_SIZE_PX
+  return clamp(rowBottom, viewportTop, viewportBottom)
+}
+
 const floatingFillActionStyle = computed<CSSProperties | null>(() => {
   if (!props.fillActionAnchorCell) {
     return null
@@ -1249,10 +1304,7 @@ const floatingFillActionStyle = computed<CSSProperties | null>(() => {
   if (left == null) {
     return null
   }
-  const top = bodyViewportTopOffset.value + Math.max(
-    0,
-    bodyViewportClientHeight.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX,
-  )
+  const top = resolveFloatingFillActionTop()
   return {
     left: `${left}px`,
     top: `${top}px`,

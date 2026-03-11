@@ -1,0 +1,50 @@
+{
+  "name": "@affino/datagrid-spreadsheet-vue-app",
+  "version": "0.1.0",
+  "description": "Spreadsheet workbook app shell for Affino DataGrid",
+  "type": "module",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "vite build && vue-tsc -p tsconfig.json --declaration --emitDeclarationOnly --outDir dist",
+    "type-check": "vue-tsc -p tsconfig.json --noEmit",
+    "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
+    "test": "pnpm run type-check && pnpm run test:unit"
+  },
+  "dependencies": {
+    "@affino/datagrid-core": "workspace:*",
+    "@affino/datagrid-theme": "workspace:*",
+    "@affino/datagrid-vue": "workspace:*",
+    "@affino/datagrid-vue-app": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-spreadsheet-vue-app"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-spreadsheet-vue-app#readme",
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "keywords": [
+    "datagrid",
+    "spreadsheet",
+    "vue",
+    "workbook"
+  ]
+}

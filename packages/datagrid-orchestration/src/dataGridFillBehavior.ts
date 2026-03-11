@@ -15,6 +15,13 @@ export interface ResolveDataGridFillBehaviorOptions<
   sourceMatrix: readonly (readonly string[])[]
 }
 
+interface ParsedSeriesSeed {
+  prefix: string
+  numericValue: number
+  fractionLength: number
+  integerPadWidth: number
+}
+
 type DataGridFillAxis = "vertical" | "horizontal" | "none"
 
 function resolveFillAxis<TRange extends DataGridFillBehaviorRange>(
@@ -32,7 +39,7 @@ function resolveFillAxis<TRange extends DataGridFillBehaviorRange>(
   return "none"
 }
 
-function parseFiniteNumber(value: string | undefined): number | null {
+function parseSeriesSeed(value: string | undefined): ParsedSeriesSeed | null {
   if (typeof value !== "string") {
     return null
   }
@@ -40,25 +47,121 @@ function parseFiniteNumber(value: string | undefined): number | null {
   if (normalized.length === 0) {
     return null
   }
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) ? parsed : null
+  const match = normalized.match(/^(.*?)(-?\d+(?:\.\d+)?)$/)
+  if (!match) {
+    return null
+  }
+  const prefix = match[1] ?? ""
+  const numericText = match[2] ?? ""
+  const numericValue = Number(numericText)
+  if (!Number.isFinite(numericValue)) {
+    return null
+  }
+  const fractionLength = numericText.includes(".")
+    ? numericText.split(".")[1]?.length ?? 0
+    : 0
+  const integerText = fractionLength > 0
+    ? (numericText.split(".")[0] ?? "")
+    : numericText
+  const signlessIntegerText = integerText.startsWith("-")
+    ? integerText.slice(1)
+    : integerText
+  const integerPadWidth = fractionLength === 0
+    && signlessIntegerText.length > 1
+    && signlessIntegerText.startsWith("0")
+    ? signlessIntegerText.length
+    : 0
+  return {
+    prefix,
+    numericValue,
+    fractionLength,
+    integerPadWidth,
+  }
 }
 
-function formatSeriesValue(value: number, template: string | undefined): string {
-  if (!Number.isFinite(value)) {
-    return template ?? ""
+function resolveSeriesSeeds(sequence: readonly (string | undefined)[]): readonly ParsedSeriesSeed[] | null {
+  if (sequence.length === 0) {
+    return null
   }
-  const normalizedTemplate = typeof template === "string" ? template.trim() : ""
-  const fractionLength = normalizedTemplate.includes(".")
-    ? normalizedTemplate.split(".")[1]?.length ?? 0
-    : 0
-  if (fractionLength > 0) {
-    return value.toFixed(fractionLength)
+  const parsedSeeds = sequence.map(parseSeriesSeed)
+  if (parsedSeeds.some(seed => seed == null)) {
+    return null
+  }
+  const firstSeed = parsedSeeds[0]
+  if (!firstSeed) {
+    return null
+  }
+  for (const seed of parsedSeeds) {
+    if (!seed) {
+      return null
+    }
+    if (seed.prefix !== firstSeed.prefix) {
+      return null
+    }
+    if (seed.fractionLength !== firstSeed.fractionLength) {
+      return null
+    }
+    if (seed.integerPadWidth !== firstSeed.integerPadWidth) {
+      return null
+    }
+  }
+  return parsedSeeds as readonly ParsedSeriesSeed[]
+}
+
+function formatSeriesValue(value: number, template: ParsedSeriesSeed | null, fallback: string | undefined): string {
+  if (!Number.isFinite(value) || !template) {
+    return fallback ?? ""
+  }
+  if (template.fractionLength > 0) {
+    return `${template.prefix}${value.toFixed(template.fractionLength)}`
   }
   if (Number.isInteger(value)) {
-    return String(value)
+    const sign = value < 0 ? "-" : ""
+    const absoluteValue = Math.abs(value)
+    const integerText = template.integerPadWidth > 0
+      ? String(absoluteValue).padStart(template.integerPadWidth, "0")
+      : String(absoluteValue)
+    return `${template.prefix}${sign}${integerText}`
   }
-  return String(value)
+  return `${template.prefix}${String(value)}`
+}
+
+function supportsSeriesFill<TRange extends DataGridFillBehaviorRange>(
+  baseRange: TRange,
+  previewRange: TRange,
+  sourceMatrix: readonly (readonly string[])[],
+): boolean {
+  const axis = resolveFillAxis(baseRange, previewRange)
+  if (axis === "none" || sourceMatrix.length === 0) {
+    return false
+  }
+
+  if (axis === "vertical") {
+    const sourceHeight = Math.max(1, sourceMatrix.length)
+    const sourceWidth = Math.max(1, sourceMatrix[0]?.length ?? 1)
+    for (let columnOffset = 0; columnOffset < sourceWidth; columnOffset += 1) {
+      const sequence = Array.from(
+        { length: sourceHeight },
+        (_unused, rowOffset) => sourceMatrix[rowOffset]?.[columnOffset],
+      )
+      if (!resolveSeriesSeeds(sequence)) {
+        return false
+      }
+    }
+    return true
+  }
+
+  const sourceWidth = Math.max(1, sourceMatrix[0]?.length ?? 1)
+  for (let rowOffset = 0; rowOffset < sourceMatrix.length; rowOffset += 1) {
+    const sequence = Array.from(
+      { length: sourceWidth },
+      (_unused, columnOffset) => sourceMatrix[rowOffset]?.[columnOffset],
+    )
+    if (!resolveSeriesSeeds(sequence)) {
+      return false
+    }
+  }
+  return true
 }
 
 function createCopyMatrix<TRange extends DataGridFillBehaviorRange>(
@@ -99,19 +202,20 @@ function buildSeriesMatrix<TRange extends DataGridFillBehaviorRange>(
     const sourceHeight = Math.max(1, sourceMatrix.length)
     for (let columnOffset = 0; columnOffset < (matrix[0]?.length ?? 0); columnOffset += 1) {
       const sequence = Array.from({ length: sourceHeight }, (_unused, rowOffset) => sourceMatrix[rowOffset]?.[columnOffset] ?? "")
-      const numericSequence = sequence.map(parseFiniteNumber)
-      if (numericSequence.some(value => value == null)) {
+      const seriesSeeds = resolveSeriesSeeds(sequence)
+      if (!seriesSeeds) {
         continue
       }
-      const firstValue = numericSequence[0] ?? 0
-      const lastValue = numericSequence[numericSequence.length - 1] ?? 0
-      const step = numericSequence.length >= 2
-        ? lastValue - (numericSequence[numericSequence.length - 2] ?? lastValue)
+      const firstValue = seriesSeeds[0]?.numericValue ?? 0
+      const lastValue = seriesSeeds[seriesSeeds.length - 1]?.numericValue ?? 0
+      const step = seriesSeeds.length >= 2
+        ? lastValue - (seriesSeeds[seriesSeeds.length - 2]?.numericValue ?? lastValue)
         : 1
-      const reverseStep = numericSequence.length >= 2
-        ? (numericSequence[1] ?? firstValue) - firstValue
+      const reverseStep = seriesSeeds.length >= 2
+        ? (seriesSeeds[1]?.numericValue ?? firstValue) - firstValue
         : 1
-      const template = sequence[sequence.length - 1] ?? sequence[0] ?? ""
+      const lastTemplate = seriesSeeds[seriesSeeds.length - 1] ?? seriesSeeds[0] ?? null
+      const firstTemplate = seriesSeeds[0] ?? null
 
       for (let rowOffset = 0; rowOffset < matrix.length; rowOffset += 1) {
         const absoluteRow = previewRange.startRow + rowOffset
@@ -120,11 +224,19 @@ function buildSeriesMatrix<TRange extends DataGridFillBehaviorRange>(
         }
         if (absoluteRow > baseRange.endRow) {
           const distance = absoluteRow - baseRange.endRow
-          matrix[rowOffset]![columnOffset] = formatSeriesValue(lastValue + step * distance, template)
+          matrix[rowOffset]![columnOffset] = formatSeriesValue(
+            lastValue + step * distance,
+            lastTemplate,
+            sequence[sequence.length - 1] ?? sequence[0] ?? "",
+          )
           continue
         }
         const distance = baseRange.startRow - absoluteRow
-        matrix[rowOffset]![columnOffset] = formatSeriesValue(firstValue - reverseStep * distance, sequence[0])
+        matrix[rowOffset]![columnOffset] = formatSeriesValue(
+          firstValue - reverseStep * distance,
+          firstTemplate,
+          sequence[0],
+        )
       }
     }
     return matrix
@@ -133,19 +245,20 @@ function buildSeriesMatrix<TRange extends DataGridFillBehaviorRange>(
   const sourceWidth = Math.max(1, sourceMatrix[0]?.length ?? 1)
   for (let rowOffset = 0; rowOffset < matrix.length; rowOffset += 1) {
     const sequence = Array.from({ length: sourceWidth }, (_unused, columnOffset) => sourceMatrix[rowOffset % Math.max(1, sourceMatrix.length)]?.[columnOffset] ?? "")
-    const numericSequence = sequence.map(parseFiniteNumber)
-    if (numericSequence.some(value => value == null)) {
+    const seriesSeeds = resolveSeriesSeeds(sequence)
+    if (!seriesSeeds) {
       continue
     }
-    const firstValue = numericSequence[0] ?? 0
-    const lastValue = numericSequence[numericSequence.length - 1] ?? 0
-    const step = numericSequence.length >= 2
-      ? lastValue - (numericSequence[numericSequence.length - 2] ?? lastValue)
+    const firstValue = seriesSeeds[0]?.numericValue ?? 0
+    const lastValue = seriesSeeds[seriesSeeds.length - 1]?.numericValue ?? 0
+    const step = seriesSeeds.length >= 2
+      ? lastValue - (seriesSeeds[seriesSeeds.length - 2]?.numericValue ?? lastValue)
       : 1
-    const reverseStep = numericSequence.length >= 2
-      ? (numericSequence[1] ?? firstValue) - firstValue
+    const reverseStep = seriesSeeds.length >= 2
+      ? (seriesSeeds[1]?.numericValue ?? firstValue) - firstValue
       : 1
-    const template = sequence[sequence.length - 1] ?? sequence[0] ?? ""
+    const lastTemplate = seriesSeeds[seriesSeeds.length - 1] ?? seriesSeeds[0] ?? null
+    const firstTemplate = seriesSeeds[0] ?? null
 
     for (let columnOffset = 0; columnOffset < matrix[rowOffset]!.length; columnOffset += 1) {
       const absoluteColumn = previewRange.startColumn + columnOffset
@@ -154,11 +267,19 @@ function buildSeriesMatrix<TRange extends DataGridFillBehaviorRange>(
       }
       if (absoluteColumn > baseRange.endColumn) {
         const distance = absoluteColumn - baseRange.endColumn
-        matrix[rowOffset]![columnOffset] = formatSeriesValue(lastValue + step * distance, template)
+        matrix[rowOffset]![columnOffset] = formatSeriesValue(
+          lastValue + step * distance,
+          lastTemplate,
+          sequence[sequence.length - 1] ?? sequence[0] ?? "",
+        )
         continue
       }
       const distance = baseRange.startColumn - absoluteColumn
-      matrix[rowOffset]![columnOffset] = formatSeriesValue(firstValue - reverseStep * distance, sequence[0])
+      matrix[rowOffset]![columnOffset] = formatSeriesValue(
+        firstValue - reverseStep * distance,
+        firstTemplate,
+        sequence[0],
+      )
     }
   }
 
@@ -170,33 +291,17 @@ export function resolveDataGridDefaultFillBehavior<
 >(
   options: ResolveDataGridFillBehaviorOptions<TRange>,
 ): DataGridFillBehavior {
-  const axis = resolveFillAxis(options.baseRange, options.previewRange)
-  if (axis === "none" || options.sourceMatrix.length === 0) {
-    return "copy"
-  }
+  return supportsSeriesFill(options.baseRange, options.previewRange, options.sourceMatrix)
+    ? "series"
+    : "copy"
+}
 
-  if (axis === "vertical") {
-    const sourceHeight = Math.max(1, options.sourceMatrix.length)
-    const sourceWidth = Math.max(1, options.sourceMatrix[0]?.length ?? 1)
-    for (let columnOffset = 0; columnOffset < sourceWidth; columnOffset += 1) {
-      for (let rowOffset = 0; rowOffset < sourceHeight; rowOffset += 1) {
-        if (parseFiniteNumber(options.sourceMatrix[rowOffset]?.[columnOffset]) == null) {
-          return "copy"
-        }
-      }
-    }
-    return "series"
-  }
-
-  const sourceWidth = Math.max(1, options.sourceMatrix[0]?.length ?? 1)
-  for (const rowValues of options.sourceMatrix) {
-    for (let columnOffset = 0; columnOffset < sourceWidth; columnOffset += 1) {
-      if (parseFiniteNumber(rowValues?.[columnOffset]) == null) {
-        return "copy"
-      }
-    }
-  }
-  return "series"
+export function canToggleDataGridFillBehavior<
+  TRange extends DataGridFillBehaviorRange = DataGridFillBehaviorRange,
+>(
+  options: ResolveDataGridFillBehaviorOptions<TRange>,
+): boolean {
+  return supportsSeriesFill(options.baseRange, options.previewRange, options.sourceMatrix)
 }
 
 export function buildDataGridFillMatrix<

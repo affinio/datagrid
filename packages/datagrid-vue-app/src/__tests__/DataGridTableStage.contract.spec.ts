@@ -123,6 +123,72 @@ function createStageProps(
   }
 }
 
+async function applyViewportLayoutMetrics(
+  wrapper: ReturnType<typeof mount<typeof DataGridTableStage>>,
+  options: {
+    viewportTop: number
+    viewportHeight: number
+    rowBottomsByIndex?: Record<number, number>
+  },
+): Promise<void> {
+  const shell = wrapper.find(".grid-body-shell").element as HTMLElement
+  const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+
+  Object.defineProperty(viewport, "clientHeight", {
+    configurable: true,
+    value: options.viewportHeight,
+  })
+  Object.defineProperty(viewport, "clientWidth", {
+    configurable: true,
+    value: 250,
+  })
+
+  shell.getBoundingClientRect = () => ({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 420,
+    bottom: 220,
+    width: 420,
+    height: 220,
+    toJSON: () => ({}),
+  }) as DOMRect
+
+  viewport.getBoundingClientRect = () => ({
+    x: 72,
+    y: options.viewportTop,
+    left: 72,
+    top: options.viewportTop,
+    right: 322,
+    bottom: options.viewportTop + options.viewportHeight,
+    width: 250,
+    height: options.viewportHeight,
+    toJSON: () => ({}),
+  }) as DOMRect
+
+  for (const [rowIndexText, rowBottom] of Object.entries(options.rowBottomsByIndex ?? {})) {
+    const rowCell = wrapper.find(`.grid-cell[data-row-index="${rowIndexText}"]`).element as HTMLElement | undefined
+    if (!rowCell) {
+      continue
+    }
+    rowCell.getBoundingClientRect = () => ({
+      x: 72,
+      y: rowBottom - 31,
+      left: 72,
+      top: rowBottom - 31,
+      right: 192,
+      bottom: rowBottom,
+      width: 120,
+      height: 31,
+      toJSON: () => ({}),
+    }) as DOMRect
+  }
+
+  window.dispatchEvent(new Event("resize"))
+  await nextTick()
+}
+
 afterEach(() => {
   document.body.innerHTML = ""
 })
@@ -418,15 +484,48 @@ describe("DataGridTableStage contract", () => {
       props: createStageProps(
         (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
         {
-          rowCount: 1,
-          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          rowCount: 3,
+          selectionRange: { startRow: 0, endRow: 999, startColumn: 0, endColumn: 0 },
           fillActionAnchorCell: { rowIndex: 999, columnIndex: 1 },
           fillActionBehavior: "series",
         },
       ),
     })
 
+    await applyViewportLayoutMetrics(wrapper, {
+      viewportTop: 12,
+      viewportHeight: 100,
+    })
+
     expect(wrapper.find(".grid-fill-action__trigger").exists()).toBe(true)
+    expect(wrapper.find(".grid-fill-action--floating").attributes("style")).toContain("top: 90px;")
+
+    wrapper.unmount()
+  })
+
+  it("positions the fill action next to the last visible selected row when the end cell is in view", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset >= 0 && rowOffset <= 2 && columnIndex === 1,
+        {
+          rowCount: 3,
+          selectionRange: { startRow: 0, endRow: 2, startColumn: 1, endColumn: 1 },
+          fillActionAnchorCell: { rowIndex: 2, columnIndex: 1 },
+          fillActionBehavior: "series",
+        },
+      ),
+    })
+
+    await applyViewportLayoutMetrics(wrapper, {
+      viewportTop: 12,
+      viewportHeight: 100,
+      rowBottomsByIndex: {
+        2: 84,
+      },
+    })
+
+    expect(wrapper.find(".grid-fill-action--floating").attributes("style")).toContain("top: 70px;")
 
     wrapper.unmount()
   })

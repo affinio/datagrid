@@ -34,6 +34,8 @@ const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/datagrid-vue-app/internal": "packages/datagrid-vue-app/src/internal.ts",
   "@affino/datagrid-vue-app": "packages/datagrid-vue-app/src/index.ts",
   "@affino/datagrid-vue-app/*": "packages/datagrid-vue-app/src/*",
+  "@affino/datagrid-spreadsheet-vue-app": "packages/datagrid-spreadsheet-vue-app/src/index.ts",
+  "@affino/datagrid-spreadsheet-vue-app/*": "packages/datagrid-spreadsheet-vue-app/src/*",
   "@affino/datagrid-laravel": "packages/datagrid-laravel/resources/js/index.ts",
   "@affino/datagrid-laravel/*": "packages/datagrid-laravel/resources/js/*",
 }

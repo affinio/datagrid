@@ -1,6 +1,7 @@
 import type { Ref } from "vue"
 import {
   buildDataGridFillMatrix,
+  canToggleDataGridFillBehavior,
   resolveDataGridDefaultFillBehavior,
   type DataGridCopyRange,
   type DataGridFillBehavior,
@@ -11,6 +12,7 @@ export interface DataGridAppAppliedFillSession {
   baseRange: DataGridCopyRange
   previewRange: DataGridCopyRange
   behavior: DataGridFillBehavior
+  allowBehaviorToggle: boolean
 }
 
 export interface UseDataGridAppFillOptions {
@@ -72,6 +74,11 @@ export function useDataGridAppFill(
         baseRange: { ...baseRange },
         previewRange: { ...previewRange },
         behavior,
+        allowBehaviorToggle: canToggleDataGridFillBehavior({
+          baseRange,
+          previewRange,
+          sourceMatrix,
+        }),
       })
       options.syncViewport()
       return true

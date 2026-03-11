@@ -758,6 +758,43 @@ describe("useDataGridAppInteractionController contract", () => {
         startColumn: 0,
         endColumn: 0,
       },
+      allowBehaviorToggle: true,
+    })
+  })
+
+  it("marks plain-text fills as not offering a fill behavior toggle", () => {
+    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
+      rowCount: 4,
+      columnCount: 1,
+    })
+
+    applyClipboardEdits.mockReturnValue(4)
+    buildFillMatrixFromRange.mockReturnValue([["Atlas"]])
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(controller.lastAppliedFill.value).toMatchObject({
+      behavior: "copy",
+      allowBehaviorToggle: false,
     })
   })
 

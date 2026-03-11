@@ -4,6 +4,7 @@ import type {
   DataGridColumnSnapshot,
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-vue"
+import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import {
   createDataGridAppRowHeightMetrics,
   useDataGridAppActiveCellViewport,
@@ -63,6 +64,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   clearColumnMenuFilter?: (columnKey: string) => void
   applyRowHeightSettings: () => void
   cloneRowData: (row: TRow) => TRow
+  applyClipboardEdits?: (range: DataGridCopyRange, matrix: string[][]) => number
+  buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
 }
 
 export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, unknown>> {
@@ -255,6 +258,8 @@ export function useDataGridTableStageRuntime<
     },
     readCell: (row, columnKey) => readCell(row, columnKey),
     syncViewport: () => syncViewportFromDom(),
+    applyClipboardEdits: options.applyClipboardEdits,
+    buildFillMatrixFromRange: options.buildFillMatrixFromRange,
   })
 
   const {
@@ -384,6 +389,9 @@ export function useDataGridTableStageRuntime<
     const session = lastAppliedFill.value
     const activeSelectionRange = selectionRange.value
     if (!session || !activeSelectionRange || isFillDragging.value) {
+      return null
+    }
+    if (session.allowBehaviorToggle === false) {
       return null
     }
     if (!rangesEqual(session.previewRange, activeSelectionRange)) {

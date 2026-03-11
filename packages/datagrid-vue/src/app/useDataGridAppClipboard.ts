@@ -22,6 +22,8 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   recordEditTransaction: (beforeSnapshot: TSnapshot) => void
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
   syncViewport: () => void
+  applyClipboardEdits?: (range: DataGridCopyRange, matrix: string[][]) => number
+  buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
 }
 
 export interface UseDataGridAppClipboardResult {
@@ -92,7 +94,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     readClipboardText: async () => lastCopiedPayload.value,
   })
 
-  const applyClipboardEdits = (range: DataGridCopyRange, matrix: string[][]): number => {
+  const applyClipboardEdits = options.applyClipboardEdits ?? ((range: DataGridCopyRange, matrix: string[][]): number => {
     const normalized = normalizeClipboardRange(range)
     if (!normalized) {
       return 0
@@ -133,7 +135,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     options.applySelectionRange(normalized)
     options.recordEditTransaction(beforeSnapshot)
     return editsByRowId.size
-  }
+  })
 
   const rangesEqual = (left: DataGridCopyRange | null, right: DataGridCopyRange | null): boolean => {
     if (!left || !right) {
@@ -147,7 +149,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     )
   }
 
-  const buildFillMatrixFromRange = (range: DataGridCopyRange): string[][] => {
+  const buildFillMatrixFromRange = options.buildFillMatrixFromRange ?? ((range: DataGridCopyRange): string[][] => {
     const matrix: string[][] = []
     for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
       const row = options.runtime.api.rows.get(rowIndex)
@@ -163,7 +165,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       matrix.push(rowValues)
     }
     return matrix
-  }
+  })
 
   const clearPendingClipboardOperation = (
     clearSelection: boolean,
