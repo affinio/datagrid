@@ -233,6 +233,13 @@ function normalizeOutputValue(value: unknown): string {
   return String(value)
 }
 
+function createMaterializedCellRawInput(value: unknown): string {
+  if (typeof value !== "string") {
+    return ""
+  }
+  return value.trimStart().startsWith("=") ? normalizeOutputValue(value) : ""
+}
+
 function normalizeTextComparisonValue(value: unknown, caseSensitive = false): string {
   const normalized = String(value ?? "")
   return caseSensitive ? normalized : normalized.toLowerCase()
@@ -1020,7 +1027,7 @@ function datasetToSheetState(
       style: null,
       cells: Object.freeze(dataset.columns.map(column => ({
         columnKey: column.key,
-        rawInput: normalizeOutputValue(row.values[column.key]),
+        rawInput: createMaterializedCellRawInput(row.values[column.key]),
         resolvedValue: row.values[column.key],
         style: null,
       }))),

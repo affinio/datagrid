@@ -390,10 +390,10 @@ function isTypedPlainSpreadsheetSheetState(
   state: DataGridSpreadsheetSheetState,
 ): boolean {
   return state.rows.length > 0 && state.rows.every(row => row.cells.every(cell => (
-    cell.style == null
-    && typeof cell.resolvedValue !== "undefined"
-    && !String(cell.rawInput ?? "").trimStart().startsWith("=")
-  )))
+      cell.style == null
+      && typeof cell.resolvedValue !== "undefined"
+      && !String(cell.rawInput ?? "").trimStart().startsWith("=")
+    )))
 }
 
 function mergeSpreadsheetStyles(
@@ -2110,7 +2110,11 @@ export function createDataGridSpreadsheetSheetModel(
               resolvedValue: cell.resolvedValue,
               style: normalizeSpreadsheetStyle(cell.style),
             }))
-            .filter(cell => cell.rawInput.length > 0 || cell.style != null)),
+            .filter(cell => (
+              cell.rawInput.length > 0
+              || typeof cell.resolvedValue !== "undefined"
+              || cell.style != null
+            ))),
         }))),
         sheetStyle: normalizeSpreadsheetStyle(state.sheetStyle),
         formulaTables: Object.freeze((state.formulaTables ?? []).map(binding => ({
