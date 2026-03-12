@@ -1,4 +1,10 @@
 export type {
+  DataGridSpreadsheetDerivedSheetRuntime,
+  DataGridSpreadsheetDerivedSheetRuntimeColumn,
+  DataGridSpreadsheetDerivedSheetRuntimeDiagnostic,
+  DataGridSpreadsheetDerivedSheetRuntimeRow,
+} from "./derivedSheetRuntime.js"
+export type {
   AnalyzeDataGridSpreadsheetCellInputOptions,
   CreateDataGridSpreadsheetFormulaEditorModelOptions,
   DataGridSpreadsheetCellAddress,
@@ -23,6 +29,7 @@ export type {
   DataGridSpreadsheetColumnInput,
   DataGridSpreadsheetColumnSnapshot,
   DataGridSpreadsheetFormulaCellSnapshot,
+  DataGridSpreadsheetFormulaStructuralPatch,
   DataGridSpreadsheetFormulaTableBinding,
   DataGridSpreadsheetFormulaTablePatch,
   DataGridSpreadsheetRowInput,

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest"
 import {
   analyzeDataGridSpreadsheetCellInput,
   createDataGridSpreadsheetCellFormulaModel,
+  createDataGridSpreadsheetCellFormulaRuntimeModel,
   mapDataGridSpreadsheetCellFormulaModelReferences,
+  mapDataGridSpreadsheetCellFormulaRuntimeModelBindings,
   renderDataGridSpreadsheetCellFormulaModel,
+  renderDataGridSpreadsheetCellFormulaRuntimeModel,
 } from "../formulaEditorModel.js"
 
 const SPREADSHEET_REFERENCE_OPTIONS = {
@@ -120,5 +123,95 @@ describe("spreadsheet formula model helpers", () => {
         allowSheetQualifiedReferences: true,
       },
     })).toBe("=orders![qty]3 + customers![tier]2 + [price]@row")
+  })
+
+  it("mutates runtime bindings separately from editor spans and preserves rendered text parity", () => {
+    const analysis = analyzeDataGridSpreadsheetCellInput("=orders![qty]2 + [price]@row", {
+      currentRowIndex: 0,
+      referenceParserOptions: {
+        ...SPREADSHEET_REFERENCE_OPTIONS,
+        allowSheetQualifiedReferences: true,
+      },
+    })
+    const model = createDataGridSpreadsheetCellFormulaModel(analysis, {
+      referenceParserOptions: {
+        ...SPREADSHEET_REFERENCE_OPTIONS,
+        allowSheetQualifiedReferences: true,
+      },
+    })
+    const runtimeModel = createDataGridSpreadsheetCellFormulaRuntimeModel(analysis)
+
+    expect(model).not.toBeNull()
+    expect(runtimeModel).not.toBeNull()
+
+    const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(runtimeModel!, (binding) => {
+      if (binding.kind !== "reference" || binding.sheetReference !== "orders") {
+        return null
+      }
+      return {
+        sheetReference: binding.sheetReference,
+        referenceName: binding.referenceName,
+        rowSelector: {
+          kind: "absolute",
+          rowIndex: 2,
+        },
+      }
+    }, {
+      currentRowIndex: 0,
+      referenceParserOptions: {
+        ...SPREADSHEET_REFERENCE_OPTIONS,
+        allowSheetQualifiedReferences: true,
+      },
+    })
+
+    expect(renderDataGridSpreadsheetCellFormulaRuntimeModel(nextRuntimeModel, model!, {
+      currentRowIndex: 0,
+      referenceParserOptions: {
+        ...SPREADSHEET_REFERENCE_OPTIONS,
+        allowSheetQualifiedReferences: true,
+      },
+    })).toBe("=orders![qty]3 + [price]@row")
+  })
+
+  it("renders runtime invalid bindings as #REF! while keeping editor model untouched", () => {
+    const analysis = analyzeDataGridSpreadsheetCellInput("=orders![qty]2 + [price]@row", {
+      currentRowIndex: 0,
+      referenceParserOptions: {
+        ...SPREADSHEET_REFERENCE_OPTIONS,
+        allowSheetQualifiedReferences: true,
+      },
+    })
+    const model = createDataGridSpreadsheetCellFormulaModel(analysis, {
+      referenceParserOptions: {
+        ...SPREADSHEET_REFERENCE_OPTIONS,
+        allowSheetQualifiedReferences: true,
+      },
+    })
+    const runtimeModel = createDataGridSpreadsheetCellFormulaRuntimeModel(analysis)
+
+    expect(model).not.toBeNull()
+    expect(runtimeModel).not.toBeNull()
+
+    const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(runtimeModel!, (binding) => {
+      if (binding.kind !== "reference" || binding.sheetReference !== "orders") {
+        return null
+      }
+      return { kind: "invalid" }
+    }, {
+      currentRowIndex: 0,
+      referenceParserOptions: {
+        ...SPREADSHEET_REFERENCE_OPTIONS,
+        allowSheetQualifiedReferences: true,
+      },
+    })
+
+    expect(renderDataGridSpreadsheetCellFormulaRuntimeModel(nextRuntimeModel, model!, {
+      currentRowIndex: 0,
+      referenceParserOptions: {
+        ...SPREADSHEET_REFERENCE_OPTIONS,
+        allowSheetQualifiedReferences: true,
+      },
+    })).toBe("=#REF! + [price]@row")
+    expect(model!.rawInput).toBe("=orders![qty]2 + [price]@row")
   })
 })

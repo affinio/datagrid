@@ -66,6 +66,50 @@ async function flushUiAndTimers(): Promise<void> {
   await flushUi()
 }
 
+async function selectGridCell(
+  wrapper: ReturnType<typeof mount>,
+  rowIndex: number,
+  columnIndex: number,
+): Promise<void> {
+  const cell = wrapper.find(`.spreadsheet-grid-host .grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`)
+  expect(cell.exists()).toBe(true)
+  await cell.trigger("mousedown", {
+    button: 0,
+    clientX: 16,
+    clientY: 16,
+  })
+  window.dispatchEvent(new MouseEvent("mouseup", {
+    bubbles: true,
+    button: 0,
+    clientX: 16,
+    clientY: 16,
+  }))
+  await flushUiAndTimers()
+}
+
+async function copySelectedGridCell(
+  wrapper: ReturnType<typeof mount>,
+  rowIndex: number,
+  columnIndex: number,
+): Promise<void> {
+  const cell = findGridCell(wrapper, rowIndex, columnIndex)
+  expect(cell.exists()).toBe(true)
+  ;(cell.element as HTMLElement).focus()
+  await cell.trigger("keydown", {
+    key: "c",
+    ctrlKey: true,
+  })
+  await flushUiAndTimers()
+}
+
+function findGridCell(
+  wrapper: ReturnType<typeof mount>,
+  rowIndex: number,
+  columnIndex: number,
+) {
+  return wrapper.find(`.spreadsheet-grid-host .grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`)
+}
+
 function createWorkbookModel(): DataGridSpreadsheetWorkbookModel {
   const workbook = createDataGridSpreadsheetWorkbookModel({
     activeSheetId: "orders",
@@ -243,6 +287,87 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     workbook.dispose()
   })
 
+  it("syncs the formula bar on the first grid click after mount", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("4")
+
+    await selectGridCell(wrapper, 0, 1)
+
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("420")
+    expect(wrapper.text()).toContain("Orders / price / row 1")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("copies formula cells as display values when clipboardCopyMode is display", async () => {
+    const workbook = createWorkbookModel()
+    let clipboardPayload = ""
+    const originalClipboard = navigator.clipboard
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn(async (payload: string) => {
+          clipboardPayload = payload
+        }),
+        readText: vi.fn(async () => clipboardPayload),
+      },
+    })
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+        clipboardCopyMode: "display",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    try {
+      await flushUiAndTimers()
+
+      const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+      expect(summaryTab).toBeDefined()
+
+      await summaryTab!.trigger("click")
+      await flushUiAndTimers()
+      await selectGridCell(wrapper, 0, 1)
+      await copySelectedGridCell(wrapper, 0, 1)
+
+      expect(clipboardPayload).toBe("3240")
+    } finally {
+      wrapper.unmount()
+      workbook.dispose()
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
+
   it("undos and redoes workbook edits from the formula bar", async () => {
     const workbook = createWorkbookModel()
 
@@ -418,6 +543,139 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
       metricRawInput: "Orders 1 + 2",
       metricDisplayValue: "Orders 1 + 2",
     })
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("shows compose mode guidance while editing a formula", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=")
+    await flushUiAndTimers()
+
+    expect(wrapper.text()).toContain("Pick refs")
+    expect(wrapper.text()).toContain("Caret ready for a cell reference")
+    expect(wrapper.text()).toContain("Reference compose")
+    expect(wrapper.text()).toContain("Cancel")
+    expect(wrapper.text()).toContain("Apply")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("restores the edited cell selection after inserting a formula reference from the grid", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=")
+    await flushUiAndTimers()
+
+    await selectGridCell(wrapper, 0, 1)
+
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=[price]@row")
+    expect(wrapper.text()).toContain("Orders / qty / row 1")
+
+    const editedCell = findGridCell(wrapper, 0, 0)
+    const referenceCell = findGridCell(wrapper, 0, 1)
+
+    expect(editedCell.classes()).toContain("spreadsheet-cell--active")
+    expect(referenceCell.classes()).not.toContain("spreadsheet-cell--active")
+    expect(referenceCell.classes()).toContain("spreadsheet-cell--reference")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("cancels formula bar edits and restores the pre-edit cell state", async () => {
+    const workbook = createWorkbookModel()
+
+    expect(readSummaryMetricState(workbook)).toEqual({
+      metricRawInput: "Orders 1 + 2",
+      metricDisplayValue: "Orders 1 + 2",
+    })
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("Temporary summary label")
+    await flushUiAndTimers()
+
+    expect(readSummaryMetricState(workbook)).toEqual({
+      metricRawInput: "Temporary summary label",
+      metricDisplayValue: "Temporary summary label",
+    })
+
+    const cancelButton = wrapper.findAll("button").find(button => button.text() === "Cancel")
+    expect(cancelButton).toBeDefined()
+
+    await cancelButton!.trigger("click")
+    await flushUiAndTimers()
+
+    expect(readSummaryMetricState(workbook)).toEqual({
+      metricRawInput: "Orders 1 + 2",
+      metricDisplayValue: "Orders 1 + 2",
+    })
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("Orders 1 + 2")
 
     wrapper.unmount()
     workbook.dispose()

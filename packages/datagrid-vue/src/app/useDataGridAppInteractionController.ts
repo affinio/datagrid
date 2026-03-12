@@ -913,6 +913,33 @@ export function useDataGridAppInteractionController<
     setLastAction: () => undefined,
   })
 
+  const clearSelectedCells = async (trigger: "keyboard" | "context-menu" = "keyboard"): Promise<boolean> => {
+    if (!supportsCellSelectionMode()) {
+      return false
+    }
+    const rawRange = options.resolveSelectionRange()
+    const range = rawRange ? options.normalizeClipboardRange(rawRange) : null
+    if (!range) {
+      return false
+    }
+    const beforeSnapshot = options.captureRowsSnapshot()
+    options.clearPendingClipboardOperation(false)
+    const applied = options.applyClipboardEdits(range, [[""]], { recordHistory: false })
+    if (applied <= 0) {
+      return false
+    }
+    const clearedCellCount = (range.endRow - range.startRow + 1) * (range.endColumn - range.startColumn + 1)
+    options.applySelectionRange(range)
+    options.syncViewport()
+    void options.recordIntentTransaction({
+      intent: "clear",
+      label: `Clear ${clearedCellCount} cells`,
+      affectedRange: range,
+    }, beforeSnapshot)
+    void trigger
+    return true
+  }
+
   const keyboardCommandRouter = useDataGridKeyboardCommandRouter({
     isRangeMoving: () => isRangeMoving.value,
     isContextMenuVisible: () => false,
@@ -940,6 +967,7 @@ export function useDataGridAppInteractionController<
     copySelection: options.copySelectedCells,
     pasteSelection: options.pasteSelectedCells,
     cutSelection: options.cutSelectedCells,
+    clearCurrentSelection: clearSelectedCells,
     stopRangeMove: commit => {
       rangeMoveLifecycle.stopRangeMove(commit)
     },

@@ -1287,7 +1287,11 @@ const clipboardBridge = useDataGridClipboardBridge<DataGridRowNode<CoreBaseRow>,
   readClipboardText: async () => lastCopiedPayload.value,
 })
 
-const applyClipboardEdits = (range: DataGridCopyRange, matrix: string[][]): number => {
+const applyClipboardEdits = (
+  range: DataGridCopyRange,
+  matrix: string[][],
+  options: { recordHistory?: boolean } = {},
+): number => {
   const normalized = normalizeClipboardRange(range)
   if (!normalized) {
     return 0
@@ -1319,14 +1323,16 @@ const applyClipboardEdits = (range: DataGridCopyRange, matrix: string[][]): numb
     return 0
   }
 
-  const beforeSnapshot = captureRowsSnapshot()
+  const beforeSnapshot = options.recordHistory === false ? null : captureRowsSnapshot()
   api.rows.applyEdits(Array.from(editsByRowId.entries(), ([rowId, data]) => ({ rowId, data })))
   syncRangeRows(viewportRange.value)
   applyClipboardSelectionRange(normalized)
-  void intentHistory.recordIntentTransaction({
-    intent: "edit",
-    label: "Cell edit",
-  }, beforeSnapshot)
+  if (beforeSnapshot) {
+    void intentHistory.recordIntentTransaction({
+      intent: "edit",
+      label: "Cell edit",
+    }, beforeSnapshot)
+  }
   return editsByRowId.size
 }
 
@@ -1470,6 +1476,28 @@ const pasteSelectedCells = async (trigger: "keyboard" | "context-menu" = "keyboa
 
 const cutSelectedCells = async (trigger: "keyboard" | "context-menu" = "keyboard"): Promise<boolean> => {
   return stageClipboardOperation("cut", trigger)
+}
+
+const clearSelectedCells = async (trigger: "keyboard" | "context-menu" = "keyboard"): Promise<boolean> => {
+  const rawRange = resolveSelectionRangeForClipboard()
+  const range = rawRange ? normalizeClipboardRange(rawRange) : null
+  if (!range) {
+    return false
+  }
+  const beforeSnapshot = captureRowsSnapshot()
+  clearPendingClipboardOperation(false)
+  const applied = applyClipboardEdits(range, [[""]], { recordHistory: false })
+  if (applied <= 0) {
+    return false
+  }
+  const clearedCellCount = (range.endRow - range.startRow + 1) * (range.endColumn - range.startColumn + 1)
+  void intentHistory.recordIntentTransaction({
+    intent: "clear",
+    label: `Clear ${clearedCellCount} cells`,
+    affectedRange: range,
+  }, beforeSnapshot)
+  void trigger
+  return true
 }
 
 const normalizeRowId = (value: unknown): string | number | null => {
@@ -2074,6 +2102,7 @@ const keyboardCommandRouter = useDataGridKeyboardCommandRouter({
   copySelection: copySelectedCells,
   pasteSelection: pasteSelectedCells,
   cutSelection: cutSelectedCells,
+  clearCurrentSelection: clearSelectedCells,
   stopRangeMove: (commit) => {
     rangeMoveLifecycle.stopRangeMove(commit)
   },

@@ -9,6 +9,7 @@ export interface UseDataGridKeyboardCommandRouterOptions {
   copySelection: (trigger: "keyboard") => Promise<boolean>
   pasteSelection: (trigger: "keyboard") => Promise<boolean>
   cutSelection: (trigger: "keyboard") => Promise<boolean>
+  clearCurrentSelection: (trigger: "keyboard") => Promise<boolean>
   stopRangeMove: (commit: boolean) => void
   setLastAction: (message: string) => void
 }
@@ -109,6 +110,12 @@ export function useDataGridKeyboardCommandRouter(
     if (primaryModifierPressed && !event.altKey && key === "x") {
       prevent(event)
       void options.cutSelection("keyboard")
+      return true
+    }
+
+    if (!primaryModifierPressed && !event.altKey && !event.shiftKey && (event.key === "Delete" || event.key === "Backspace")) {
+      prevent(event)
+      void options.clearCurrentSelection("keyboard")
       return true
     }
 

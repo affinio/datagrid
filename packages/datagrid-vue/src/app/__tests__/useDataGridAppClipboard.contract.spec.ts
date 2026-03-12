@@ -9,7 +9,9 @@ type DemoRow = {
   c: string
 }
 
-function createClipboardHarness() {
+function createClipboardHarness(options: {
+  readClipboardCell?: (row: { data: DemoRow }, columnKey: string) => string
+} = {}) {
   const rows = ref<DemoRow[]>([
     { rowId: "r1", a: "A1", b: "B1", c: "C1" },
     { rowId: "r2", a: "A2", b: "B2", c: "C2" },
@@ -59,6 +61,7 @@ function createClipboardHarness() {
     captureRowsSnapshot: () => rows.value.map(row => ({ ...row })),
     recordEditTransaction: () => undefined,
     readCell: (row, columnKey) => String((row.data as DemoRow)[columnKey as keyof DemoRow] ?? ""),
+    readClipboardCell: options.readClipboardCell,
     syncViewport: () => undefined,
   })
 
@@ -178,6 +181,43 @@ describe("useDataGridAppClipboard contract", () => {
       expect(applied).toBe(true)
       expect(readText).toHaveBeenCalledTimes(1)
       expect(rows.value[2]).toMatchObject({ a: "X", b: "Y" })
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
+
+  it("uses the clipboard-specific cell serializer when provided", async () => {
+    const { clipboard } = createClipboardHarness({
+      readClipboardCell: (_row, columnKey) => {
+        if (columnKey === "a") {
+          return "=[price]@row"
+        }
+        if (columnKey === "b") {
+          return "=SUM([qty]@row, [price]@row)"
+        }
+        return ""
+      },
+    })
+    const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)
+    const originalClipboard = navigator.clipboard
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+        readText: vi.fn<() => Promise<string>>().mockResolvedValue(""),
+      },
+    })
+
+    try {
+      await clipboard.copySelectedCells("keyboard")
+
+      expect(writeText).toHaveBeenCalledWith(
+        "=[price]@row\t=SUM([qty]@row, [price]@row)\n=[price]@row\t=SUM([qty]@row, [price]@row)",
+      )
     } finally {
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,

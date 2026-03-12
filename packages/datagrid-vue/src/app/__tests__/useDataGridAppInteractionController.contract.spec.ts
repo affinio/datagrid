@@ -195,6 +195,9 @@ function createControllerHarness(options: {
   const ensureKeyboardActiveCellVisible = vi.fn()
   const applyClipboardEdits = vi.fn(() => 0)
   const buildFillMatrixFromRange = vi.fn(() => [[""]])
+  const recordIntentTransaction = vi.fn()
+  const clearPendingClipboardOperation = vi.fn(() => false)
+  const syncViewport = vi.fn()
 
   const controller = useDataGridAppInteractionController<DemoRow, readonly DemoRow[]>({
     mode: ref(mode),
@@ -263,8 +266,8 @@ function createControllerHarness(options: {
       rowId: String(nextRow.rowId),
       ...(nextRow.data as DemoRow),
     }))),
-    recordIntentTransaction: vi.fn(),
-    clearPendingClipboardOperation: vi.fn(() => false),
+    recordIntentTransaction,
+    clearPendingClipboardOperation,
     copySelectedCells: vi.fn(async () => false),
     pasteSelectedCells: vi.fn(async () => false),
     cutSelectedCells: vi.fn(async () => false),
@@ -272,7 +275,7 @@ function createControllerHarness(options: {
     applyClipboardEdits,
     rangesEqual: (left, right) => JSON.stringify(left) === JSON.stringify(right),
     buildFillMatrixFromRange,
-    syncViewport: vi.fn(),
+    syncViewport,
     editingCell: ref(null),
     startInlineEdit: vi.fn(),
     commitInlineEdit: vi.fn(),
@@ -293,6 +296,9 @@ function createControllerHarness(options: {
     ensureKeyboardActiveCellVisible,
     applyClipboardEdits,
     buildFillMatrixFromRange,
+    clearPendingClipboardOperation,
+    recordIntentTransaction,
+    syncViewport,
   }
 }
 
@@ -521,6 +527,63 @@ describe("useDataGridAppInteractionController contract", () => {
       startColumn: 0,
       endColumn: 3,
     })
+  })
+
+  it("clears the selected range on Delete and records a clear intent", () => {
+    const {
+      controller,
+      row,
+      setSelectionSnapshot,
+      applyClipboardEdits,
+      clearPendingClipboardOperation,
+      recordIntentTransaction,
+      syncViewport,
+    } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 3,
+    })
+    applyClipboardEdits.mockReturnValue(2)
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 1,
+        startRowId: "r1",
+        endRowId: "r2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+      }],
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "Delete",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(clearPendingClipboardOperation).toHaveBeenCalledWith(false)
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 1,
+      startColumn: 0,
+      endColumn: 1,
+    }, [[""]], { recordHistory: false })
+    expect(recordIntentTransaction).toHaveBeenCalledWith({
+      intent: "clear",
+      label: "Clear 4 cells",
+      affectedRange: {
+        startRow: 0,
+        endRow: 1,
+        startColumn: 0,
+        endColumn: 1,
+      },
+    }, expect.any(Array))
+    expect(syncViewport).toHaveBeenCalled()
   })
 
   it("continues plain keyboard navigation from the anchor after a shift-extended range", () => {

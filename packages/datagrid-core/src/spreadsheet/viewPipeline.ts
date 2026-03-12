@@ -17,6 +17,10 @@ import type {
   DataGridSpreadsheetStyle,
 } from "./sheetModel.js"
 import type { DataGridFormulaTableRowsSource, DataGridFormulaTableSource } from "../models/formula/formulaContracts.js"
+import {
+  createDataGridSpreadsheetDerivedSheetRuntime,
+  type DataGridSpreadsheetDerivedSheetRuntime,
+} from "./derivedSheetRuntime.js"
 
 export type DataGridSpreadsheetWorkbookSheetKind = "data" | "view"
 
@@ -141,6 +145,12 @@ export interface DataGridSpreadsheetViewMaterializationDiagnostic {
 
 export interface MaterializeDataGridSpreadsheetViewSheetResult {
   sheetState: DataGridSpreadsheetSheetState
+  derivedRuntime: DataGridSpreadsheetDerivedSheetRuntime
+  diagnostics: readonly DataGridSpreadsheetViewMaterializationDiagnostic[]
+}
+
+export interface MaterializeDataGridSpreadsheetViewRuntimeResult {
+  derivedRuntime: DataGridSpreadsheetDerivedSheetRuntime
   diagnostics: readonly DataGridSpreadsheetViewMaterializationDiagnostic[]
 }
 
@@ -175,6 +185,7 @@ const NUMERIC_AGGREGATIONS = new Set<Exclude<DataGridAggOp, "custom">>([
   "min",
   "max",
 ])
+const EMPTY_DIAGNOSTICS = Object.freeze([]) as readonly DataGridSpreadsheetViewMaterializationDiagnostic[]
 
 class DataGridSpreadsheetViewMaterializationError extends Error {
   readonly code: DataGridSpreadsheetViewMaterializationDiagnosticCode
@@ -1041,15 +1052,31 @@ function datasetToSheetState(
   }
 }
 
-export function createDataGridSpreadsheetViewErrorState(
+function datasetToDerivedSheetRuntime(
+  dataset: SpreadsheetViewDataset,
+  diagnostics: readonly DataGridSpreadsheetViewMaterializationDiagnostic[] = EMPTY_DIAGNOSTICS,
+): DataGridSpreadsheetDerivedSheetRuntime {
+  return createDataGridSpreadsheetDerivedSheetRuntime({
+    columns: dataset.columns.map(column => ({
+      key: column.key,
+      title: column.title,
+      style: column.style,
+    })),
+    rows: dataset.rows.map(row => ({
+      id: row.id,
+      values: dataset.columns.map(column => row.values[column.key]),
+    })),
+    diagnostics,
+  })
+}
+
+function createDataGridSpreadsheetViewErrorDataset(
   options: {
     sheetId: string
-    sheetName: string
     message: string
-    sheetModelOptions?: DataGridSpreadsheetWorkbookViewSheetModelOptions | null
   },
-): DataGridSpreadsheetSheetState {
-  const dataset: SpreadsheetViewDataset = {
+): SpreadsheetViewDataset {
+  return {
     columns: Object.freeze([
       {
         key: "status",
@@ -1072,44 +1099,70 @@ export function createDataGridSpreadsheetViewErrorState(
       },
     ]),
   }
-  return datasetToSheetState(dataset, options)
 }
 
 export function materializeDataGridSpreadsheetViewSheetResult(
   options: MaterializeDataGridSpreadsheetViewSheetOptions,
 ): MaterializeDataGridSpreadsheetViewSheetResult {
-  if (options.errorMessage) {
-    return {
-      sheetState: createDataGridSpreadsheetViewErrorState({
-        sheetId: options.sheetId,
-        sheetName: options.sheetName,
-        message: options.errorMessage,
-        sheetModelOptions: options.sheetModelOptions,
+  const runtimeResult = materializeDataGridSpreadsheetViewRuntimeResult(options)
+  return {
+    sheetState: datasetToSheetState({
+      columns: runtimeResult.derivedRuntime.columns,
+      rows: runtimeResult.derivedRuntime.rows.map(row => {
+        const values: Record<string, unknown> = {}
+        for (let columnIndex = 0; columnIndex < runtimeResult.derivedRuntime.columns.length; columnIndex += 1) {
+          const column = runtimeResult.derivedRuntime.columns[columnIndex]
+          if (!column) {
+            continue
+          }
+          values[column.key] = row.values[columnIndex]
+        }
+        return {
+          id: row.id,
+          values,
+        }
       }),
-      diagnostics: Object.freeze([
-        {
-          code: "cycle",
-          message: options.errorMessage,
-          relatedSheetId: null,
-        },
-      ]),
+    }, options),
+    derivedRuntime: runtimeResult.derivedRuntime,
+    diagnostics: runtimeResult.diagnostics,
+  }
+}
+
+export function materializeDataGridSpreadsheetViewRuntimeResult(
+  options: MaterializeDataGridSpreadsheetViewSheetOptions,
+): MaterializeDataGridSpreadsheetViewRuntimeResult {
+  if (options.errorMessage) {
+    const diagnostics = Object.freeze([
+      {
+        code: "cycle" as const,
+        message: options.errorMessage,
+        relatedSheetId: null,
+      },
+    ])
+    const errorDataset = createDataGridSpreadsheetViewErrorDataset({
+      sheetId: options.sheetId,
+      message: options.errorMessage,
+    })
+    return {
+      derivedRuntime: datasetToDerivedSheetRuntime(errorDataset, diagnostics),
+      diagnostics,
     }
   }
   if (!options.sourceSheetModel) {
-    return {
-      sheetState: createDataGridSpreadsheetViewErrorState({
-        sheetId: options.sheetId,
-        sheetName: options.sheetName,
+    const diagnostics = Object.freeze([
+      {
+        code: "source-missing" as const,
         message: `Source sheet '${options.sourceSheetId}' is missing.`,
-        sheetModelOptions: options.sheetModelOptions,
-      }),
-      diagnostics: Object.freeze([
-        {
-          code: "source-missing",
-          message: `Source sheet '${options.sourceSheetId}' is missing.`,
-          relatedSheetId: options.sourceSheetId,
-        },
-      ]),
+        relatedSheetId: options.sourceSheetId,
+      },
+    ])
+    const errorDataset = createDataGridSpreadsheetViewErrorDataset({
+      sheetId: options.sheetId,
+      message: `Source sheet '${options.sourceSheetId}' is missing.`,
+    })
+    return {
+      derivedRuntime: datasetToDerivedSheetRuntime(errorDataset, diagnostics),
+      diagnostics,
     }
   }
 
@@ -1140,8 +1193,8 @@ export function materializeDataGridSpreadsheetViewSheetResult(
       }
     }
     return {
-      sheetState: datasetToSheetState(dataset, options),
-      diagnostics: Object.freeze([]),
+      derivedRuntime: datasetToDerivedSheetRuntime(dataset),
+      diagnostics: EMPTY_DIAGNOSTICS,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "[DataGridSpreadsheetView] materialization failed."
@@ -1156,20 +1209,14 @@ export function materializeDataGridSpreadsheetViewSheetResult(
         message,
         relatedSheetId: null,
       }
+    const diagnostics = Object.freeze([diagnostic])
+    const errorDataset = createDataGridSpreadsheetViewErrorDataset({
+      sheetId: options.sheetId,
+      message,
+    })
     return {
-      sheetState: createDataGridSpreadsheetViewErrorState({
-        sheetId: options.sheetId,
-        sheetName: options.sheetName,
-        message,
-        sheetModelOptions: options.sheetModelOptions,
-      }),
-      diagnostics: Object.freeze([diagnostic]),
+      derivedRuntime: datasetToDerivedSheetRuntime(errorDataset, diagnostics),
+      diagnostics,
     }
   }
-}
-
-export function materializeDataGridSpreadsheetViewSheet(
-  options: MaterializeDataGridSpreadsheetViewSheetOptions,
-): DataGridSpreadsheetSheetState {
-  return materializeDataGridSpreadsheetViewSheetResult(options).sheetState
 }

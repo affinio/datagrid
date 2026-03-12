@@ -82,15 +82,48 @@
         class="spreadsheet-formula-shell"
         :class="{
           'spreadsheet-formula-shell--focused': isFormulaBarFocused,
+          'spreadsheet-formula-shell--reference-mode': isFormulaReferenceMode,
           'spreadsheet-formula-shell--readonly': activeSheetReadOnly,
         }"
       >
         <div class="spreadsheet-formula-address">
-          <span>{{ activeCellBadge }}</span>
-          <span v-if="activeSheetReadOnly" class="spreadsheet-formula-address__badge">View</span>
+          <div class="spreadsheet-formula-address__copy">
+            <span class="spreadsheet-formula-address__label">Active cell</span>
+            <strong>{{ activeCellBadge }}</strong>
+          </div>
+          <span class="spreadsheet-formula-address__badge">{{ formulaModeLabel }}</span>
         </div>
 
         <div class="spreadsheet-formula-main">
+          <div class="spreadsheet-formula-toolbar">
+            <div class="spreadsheet-formula-toolbar__copy">
+              <span class="spreadsheet-formula-toolbar__fx">fx</span>
+              <div class="spreadsheet-formula-toolbar__text">
+                <strong>{{ formulaModeLabel }}</strong>
+                <span>{{ formulaModeHint }}</span>
+              </div>
+            </div>
+
+            <div v-if="!activeSheetReadOnly" class="spreadsheet-formula-toolbar__actions">
+              <button
+                type="button"
+                class="spreadsheet-action spreadsheet-action--subtle"
+                @mousedown.prevent
+                @click="handleFormulaCancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="spreadsheet-action spreadsheet-action--primary"
+                @mousedown.prevent
+                @click="handleFormulaCommit"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+
           <textarea
             ref="formulaInputRef"
             class="spreadsheet-formula-input"
@@ -120,6 +153,11 @@
               <span v-else class="spreadsheet-formula-token">{{ segment.text }}</span>
             </template>
           </div>
+
+          <div v-if="isFormulaReferenceMode" class="spreadsheet-formula-caption">
+            <span class="spreadsheet-formula-caption__label">Selection</span>
+            <span>{{ formulaSelectionSummary }}</span>
+          </div>
         </div>
 
         <div class="spreadsheet-formula-state">
@@ -131,8 +169,12 @@
             <span>{{ activeCellDisplayLabel }}</span>
           </div>
           <div class="spreadsheet-formula-value">
+            <span class="spreadsheet-formula-state__label">Mode</span>
+            <span>{{ formulaStateSummary }}</span>
+          </div>
+          <div class="spreadsheet-formula-value">
             <span class="spreadsheet-formula-state__label">Refs</span>
-            <span>{{ editorSnapshot.analysis.references.length }}</span>
+            <span>{{ formulaReferenceSummary }}</span>
           </div>
           <div
             v-if="activeDiagnosticMessage"
@@ -191,7 +233,7 @@
             {{ selectedRangeLabel }}
           </div>
           <div class="spreadsheet-selection-hint">
-            While the formula bar is focused, clicking another cell inserts a reference instead of changing the edited cell.
+            {{ selectionHintMessage }}
           </div>
         </section>
 
@@ -390,6 +432,7 @@ import {
   createDataGridSpreadsheetFormulaEditorModel,
   type DataGridColumnInput,
   type DataGridFilterSnapshot,
+  type DataGridRowNode,
   type DataGridRowId,
   type DataGridSelectionSnapshot,
   type DataGridSpreadsheetCellAddress,
@@ -428,6 +471,7 @@ export interface DataGridSpreadsheetWorkbookAppProps {
   subtitle?: string | null
   badgeLabel?: string | null
   formulaPlaceholder?: string
+  clipboardCopyMode?: "formula" | "display" | "smart"
   footerText?: string | null
   styleActions?: boolean
   advancedFilter?: boolean
@@ -441,6 +485,7 @@ const props = withDefaults(defineProps<DataGridSpreadsheetWorkbookAppProps>(), {
   subtitle: null,
   badgeLabel: "Spreadsheet",
   formulaPlaceholder: "Type a value or formula. Try = [qty]@row * [price]@row and click cells.",
+  clipboardCopyMode: "smart",
   footerText: null,
   styleActions: true,
   advancedFilter: true,
@@ -973,12 +1018,13 @@ const editorModel = createDataGridSpreadsheetFormulaEditorModel({
 const editorSnapshot = shallowRef(editorModel.getSnapshot())
 
 let runtimeRef: Pick<UseDataGridRuntimeResult<SpreadsheetGridRow>, "api" | "columnSnapshot"> | null = null
-let suppressNextSelectionSync = false
+let suppressNextSelectionSyncForCellKey: string | null = null
 let formulaBlurTimer: number | null = null
+let pendingSelectionRestoreTimer: number | null = null
 let unsubscribeRuntimeRows = () => {}
 let unsubscribeActiveSheet = () => {}
 let unsubscribeWorkbook = () => {}
-let preserveFormulaFocusFromGridPointer = false
+const preserveFormulaFocusFromGridPointer = ref(false)
 let allowFormulaBlur = false
 const activeSheetRenderRevision = ref(0)
 
@@ -1089,7 +1135,7 @@ async function commitPendingFormulaEditHistory(): Promise<string | null> {
   }, currentSession.beforeSnapshot)
 }
 
-function syncSpreadsheetAfterHistoryRestore(): void {
+function syncSpreadsheetAfterHistoryRestore(options: { focusGrid?: boolean } = {}): void {
   syncWorkbookState()
   activeSheetRenderRevision.value += 1
   runtimeRowVersion.value += 1
@@ -1097,7 +1143,7 @@ function syncSpreadsheetAfterHistoryRestore(): void {
     const activeCell = editorSnapshot.value.activeCell
     if (activeCell && resolveCellSnapshot(activeCell)) {
       syncEditorCellDisplay({ forceRawInput: true })
-      restoreEditorCellSelection()
+      restoreEditorCellSelection({ focusGrid: options.focusGrid })
       return
     }
     const fallbackCell = resolveFirstVisibleCellAddress(firstColumnKey.value)
@@ -1105,7 +1151,7 @@ function syncSpreadsheetAfterHistoryRestore(): void {
       return
     }
     openEditorCell(fallbackCell)
-    restoreEditorCellSelection()
+    restoreEditorCellSelection({ focusGrid: options.focusGrid })
   })
 }
 
@@ -1144,6 +1190,7 @@ onBeforeUnmount(() => {
   if (formulaBlurTimer !== null && typeof window !== "undefined") {
     window.clearTimeout(formulaBlurTimer)
   }
+  clearPendingSelectionRestoreTimer()
   unsubscribeRuntimeRows()
   unsubscribeActiveSheet()
   unsubscribeEditor()
@@ -1618,6 +1665,7 @@ const {
   clearColumnMenuFilter,
   applyRowHeightSettings: () => {},
   cloneRowData,
+  readClipboardCell: (row, columnKey) => readSpreadsheetClipboardCell(row, columnKey),
   applyClipboardEdits: applySpreadsheetGridEdits,
   buildFillMatrixFromRange: buildSpreadsheetFillMatrixFromRange,
   applyRangeMove: applySpreadsheetRangeMove,
@@ -1728,6 +1776,30 @@ function resolveSpreadsheetCellSnapshotByVisualCoord(
     return null
   }
   return activeSheetView.value.cellsByKey.get(makeLocalCellKey(row.sourceRowIndex, columnKey)) ?? null
+}
+
+function readSpreadsheetClipboardCell(
+  row: DataGridRowNode<SpreadsheetGridRow>,
+  columnKey: string,
+): string {
+  const rowData = row.kind === "group" ? null : (row.data as SpreadsheetGridRow | undefined)
+  const rowIndex = typeof rowData?.__rowIndex === "number" ? rowData.__rowIndex : null
+  if (rowIndex == null) {
+    return ""
+  }
+  const cell = activeSheetView.value.cellsByKey.get(makeLocalCellKey(rowIndex, columnKey)) ?? null
+  if (!cell) {
+    return ""
+  }
+  if (props.clipboardCopyMode === "formula") {
+    return cell.rawInput ?? ""
+  }
+  if (props.clipboardCopyMode === "display") {
+    return String(formatGridValue(cell) ?? "")
+  }
+  return cell.inputKind === "formula"
+    ? (cell.rawInput ?? "")
+    : String(formatGridValue(cell) ?? "")
 }
 
 function buildSpreadsheetFillMatrixFromRange(range: DataGridCopyRange): string[][] {
@@ -2021,6 +2093,20 @@ function focusFormulaBar(selection?: { start: number; end: number }): void {
   })
 }
 
+function clearFormulaBlurTimer(): void {
+  if (formulaBlurTimer !== null && typeof window !== "undefined") {
+    window.clearTimeout(formulaBlurTimer)
+    formulaBlurTimer = null
+  }
+}
+
+function clearPendingSelectionRestoreTimer(): void {
+  if (pendingSelectionRestoreTimer !== null && typeof window !== "undefined") {
+    window.clearTimeout(pendingSelectionRestoreTimer)
+    pendingSelectionRestoreTimer = null
+  }
+}
+
 function syncEditorCellDisplay(options: { forceRawInput?: boolean } = {}): void {
   const activeCell = editorSnapshot.value.activeCell
   if (!activeCell) {
@@ -2132,10 +2218,51 @@ function restoreEditorCellSelection(options: { focusGrid?: boolean } = {}): void
   if (!activeCell) {
     return
   }
-  suppressNextSelectionSync = true
+  suppressNextSelectionSyncForCellKey = makeScopedCellKey(activeCell)
   applySingleCellSelection(activeCell)
   if (options.focusGrid) {
     focusGridCell(activeCell)
+  }
+}
+
+function scheduleEditorCellSelectionRestore(options: {
+  focusGrid?: boolean
+  refocusFormula?: boolean
+} = {}): void {
+  clearPendingSelectionRestoreTimer()
+
+  const runRestore = () => {
+    pendingSelectionRestoreTimer = null
+    restoreEditorCellSelection({ focusGrid: options.focusGrid })
+    if (options.refocusFormula) {
+      focusFormulaBar(editorSnapshot.value.selection)
+    }
+  }
+
+  if (typeof window === "undefined") {
+    void nextTick(runRestore)
+    return
+  }
+
+  pendingSelectionRestoreTimer = window.setTimeout(runRestore, 0)
+}
+
+function resolveReferenceInsertionSelection(): { start: number; end: number } | null {
+  const selection = editorSnapshot.value.selection
+  if (selection.start !== selection.end) {
+    return selection
+  }
+  const activeReference = activeFormulaReference.value
+  if (!activeReference) {
+    return null
+  }
+  const caret = selection.start
+  if (caret < activeReference.span.start || caret > activeReference.span.end) {
+    return null
+  }
+  return {
+    start: activeReference.span.start,
+    end: activeReference.span.end,
   }
 }
 
@@ -2145,6 +2272,10 @@ function insertReferenceFromCell(targetCell: DataGridSpreadsheetCellAddress): vo
     return
   }
   ensureFormulaEditHistorySession(activeCell)
+  const replacementSelection = resolveReferenceInsertionSelection()
+  if (replacementSelection) {
+    editorModel.setSelection(replacementSelection)
+  }
   editorModel.insertReference({
     referenceName: targetCell.columnKey,
     rowIndex: targetCell.rowIndex,
@@ -2217,10 +2348,7 @@ function handleFormulaInput(event: Event): void {
 }
 
 function handleFormulaFocus(): void {
-  if (formulaBlurTimer !== null && typeof window !== "undefined") {
-    window.clearTimeout(formulaBlurTimer)
-    formulaBlurTimer = null
-  }
+  clearFormulaBlurTimer()
   allowFormulaBlur = false
   isFormulaBarFocused.value = true
   syncFormulaSelectionFromDom()
@@ -2233,11 +2361,12 @@ function shouldPreserveFormulaFocusForGridInteraction(): boolean {
 }
 
 function handleGridPointerDownCapture(): void {
-  preserveFormulaFocusFromGridPointer = shouldPreserveFormulaFocusForGridInteraction()
+  preserveFormulaFocusFromGridPointer.value = shouldPreserveFormulaFocusForGridInteraction()
 }
 
 function handleFormulaBlur(): void {
   if (typeof window === "undefined") {
+    clearPendingSelectionRestoreTimer()
     if (allowFormulaBlur) {
       allowFormulaBlur = false
     }
@@ -2245,18 +2374,48 @@ function handleFormulaBlur(): void {
     return
   }
   formulaBlurTimer = window.setTimeout(() => {
-    if (preserveFormulaFocusFromGridPointer && !allowFormulaBlur) {
-      preserveFormulaFocusFromGridPointer = false
+    if (preserveFormulaFocusFromGridPointer.value && !allowFormulaBlur) {
+      preserveFormulaFocusFromGridPointer.value = false
       formulaBlurTimer = null
       focusFormulaBar(editorSnapshot.value.selection)
       return
     }
-    preserveFormulaFocusFromGridPointer = false
+    preserveFormulaFocusFromGridPointer.value = false
     allowFormulaBlur = false
     isFormulaBarFocused.value = false
     formulaBlurTimer = null
     void commitPendingFormulaEditHistory()
   }, 0)
+}
+
+function handleFormulaCommit(): void {
+  clearPendingSelectionRestoreTimer()
+  preserveFormulaFocusFromGridPointer.value = false
+  allowFormulaBlur = true
+  restoreEditorCellSelection({ focusGrid: true })
+  formulaInputRef.value?.blur()
+}
+
+function handleFormulaCancel(): void {
+  clearFormulaBlurTimer()
+  clearPendingSelectionRestoreTimer()
+  preserveFormulaFocusFromGridPointer.value = false
+
+  const currentSession = pendingFormulaEditHistory.value
+  pendingFormulaEditHistory.value = null
+  allowFormulaBlur = true
+
+  if (currentSession?.changed) {
+    measureSpreadsheetOperation("Cancel formula edit", () => {
+      workbook.restoreState(currentSession.beforeSnapshot)
+    })
+    formulaInputRef.value?.blur()
+    syncSpreadsheetAfterHistoryRestore({ focusGrid: true })
+    return
+  }
+
+  restoreEditorCellSelection({ focusGrid: true })
+  formulaInputRef.value?.blur()
 }
 
 function handleFormulaKeydown(event: KeyboardEvent): void {
@@ -2274,16 +2433,12 @@ function handleFormulaKeydown(event: KeyboardEvent): void {
   }
   if (event.key === "Escape") {
     event.preventDefault()
-    allowFormulaBlur = true
-    restoreEditorCellSelection({ focusGrid: true })
-    formulaInputRef.value?.blur()
+    handleFormulaCancel()
     return
   }
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault()
-    allowFormulaBlur = true
-    restoreEditorCellSelection({ focusGrid: true })
-    formulaInputRef.value?.blur()
+    handleFormulaCommit()
   }
 }
 
@@ -2581,7 +2736,7 @@ function resolveSpreadsheetCellStyle(
     ? {
         boxShadow: mergeBoxShadow(
           referenceStyle.boxShadow,
-          "inset 0 0 0 1px rgba(15, 23, 42, 0.75)",
+          "inset 0 0 0 1px var(--datagrid-selection-overlay-border)",
           "0 0 0 1px rgba(255, 255, 255, 0.95)",
         ),
       }
@@ -2692,6 +2847,17 @@ const referenceLegend = computed<readonly ReferenceLegendEntry[]>(() => {
   }))
 })
 
+const activeFormulaReference = computed(() => (
+  editorSnapshot.value.analysis.references.find(reference => reference.key === editorSnapshot.value.activeReferenceKey) ?? null
+))
+
+const isFormulaReferenceMode = computed(() => (
+  !activeSheetReadOnly.value
+  && editorSnapshot.value.analysis.kind === "formula"
+  && editorSnapshot.value.activeCell != null
+  && (isFormulaBarFocused.value || preserveFormulaFocusFromGridPointer.value)
+))
+
 const activeCellSnapshot = computed(() => {
   void workbookRevision.value
   return resolveCellSnapshot(editorSnapshot.value.activeCell)
@@ -2723,6 +2889,57 @@ const activeDiagnosticMessage = computed(() => {
   }
   const errorValue = activeCellSnapshot.value?.errorValue as { message?: unknown } | null | undefined
   return typeof errorValue?.message === "string" ? errorValue.message : ""
+})
+
+const formulaModeLabel = computed(() => {
+  if (activeSheetReadOnly.value) {
+    return "View only"
+  }
+  if (isFormulaReferenceMode.value) {
+    return activeFormulaReference.value ? "Replace ref" : "Pick refs"
+  }
+  if (isFormulaBarFocused.value) {
+    return "Editing"
+  }
+  return "Selection"
+})
+
+const formulaModeHint = computed(() => {
+  if (activeSheetReadOnly.value) {
+    return `Derived from ${activeSheetViewSourceLabel.value}. Edit the source sheet to recompute.`
+  }
+  if (isFormulaReferenceMode.value && activeFormulaReference.value) {
+    return `Click a cell to replace ${activeFormulaReference.value.text}. Enter applies. Escape reverts.`
+  }
+  if (isFormulaReferenceMode.value) {
+    return "Click cells to inject references at the caret. Drag the grid selection first if you want a range preview."
+  }
+  if (isFormulaBarFocused.value) {
+    return "Edit raw values directly or start with = to build a formula without leaving the keyboard."
+  }
+  return "Select a cell, press Enter or F2 to edit, and use the grid to compose formulas like Sheets or Smartsheet."
+})
+
+const formulaStateSummary = computed(() => {
+  if (activeSheetReadOnly.value) {
+    return "Derived sheet"
+  }
+  if (isFormulaReferenceMode.value) {
+    return "Reference compose"
+  }
+  if (isFormulaBarFocused.value) {
+    return editorSnapshot.value.analysis.kind === "formula" ? "Formula edit" : "Cell edit"
+  }
+  return "Grid selection"
+})
+
+const formulaReferenceSummary = computed(() => {
+  const count = editorSnapshot.value.analysis.references.length
+  if (count === 0) {
+    return "None"
+  }
+  const activeReferenceText = activeFormulaReference.value?.text
+  return activeReferenceText ? `${count} total · ${activeReferenceText}` : String(count)
 })
 
 const workbookSyncSummary = computed(() => workbookSnapshot.value.sync)
@@ -2824,6 +3041,26 @@ const selectedRangeLabel = computed(() => {
   return `${rowSpan} row${rowSpan === 1 ? "" : "s"} × ${columnSpan} column${columnSpan === 1 ? "" : "s"}`
 })
 
+const formulaSelectionSummary = computed(() => {
+  if (isFormulaReferenceMode.value && activeFormulaReference.value) {
+    return `Replacing ${activeFormulaReference.value.text}`
+  }
+  if (isFormulaReferenceMode.value) {
+    return "Caret ready for a cell reference"
+  }
+  return selectedRangeLabel.value
+})
+
+const selectionHintMessage = computed(() => {
+  if (activeSheetReadOnly.value) {
+    return `This sheet is derived from ${activeSheetViewSourceLabel.value} and cannot be edited here.`
+  }
+  if (isFormulaReferenceMode.value) {
+    return formulaModeHint.value
+  }
+  return "Grid selection drives styling, fill, copy, and active-cell focus. Start a formula to turn cell clicks into reference picking."
+})
+
 watch(
   () => [
     workbookRevision.value,
@@ -2866,24 +3103,25 @@ watch(
     if (!nextCell) {
       return
     }
-    if (suppressNextSelectionSync) {
-      suppressNextSelectionSync = false
-      return
+    const nextCellKey = makeScopedCellKey(nextCell)
+    if (suppressNextSelectionSyncForCellKey) {
+      const shouldSuppress = suppressNextSelectionSyncForCellKey === nextCellKey
+      suppressNextSelectionSyncForCellKey = null
+      if (shouldSuppress) {
+        return
+      }
     }
     if (hasExpandedGridSelection()) {
       return
     }
     if (
-      isFormulaBarFocused.value
+      isFormulaReferenceMode.value
       && editorSnapshot.value.analysis.kind === "formula"
       && editorSnapshot.value.activeCell
       && !areCellsEqual(nextCell, editorSnapshot.value.activeCell)
     ) {
       insertReferenceFromCell(nextCell)
-      void nextTick(() => {
-        restoreEditorCellSelection()
-        focusFormulaBar(editorSnapshot.value.selection)
-      })
+      scheduleEditorCellSelectionRestore({ refocusFormula: true })
       return
     }
     if (!areCellsEqual(nextCell, editorSnapshot.value.activeCell)) {
@@ -3058,6 +3296,16 @@ function moveCaretToReference(referenceKey: string): void {
   cursor: pointer;
 }
 
+.spreadsheet-action--subtle {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.spreadsheet-action--primary {
+  border-color: rgba(37, 99, 235, 0.36);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(37, 99, 235, 0.92));
+  color: #f8fafc;
+}
+
 .spreadsheet-action:disabled {
   opacity: 0.45;
   cursor: default;
@@ -3077,21 +3325,45 @@ function moveCaretToReference(referenceKey: string): void {
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.28);
 }
 
+.spreadsheet-formula-shell--reference-mode {
+  border-color: rgba(37, 99, 235, 0.34);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.18), 0 18px 38px rgba(37, 99, 235, 0.08);
+}
+
 .spreadsheet-formula-shell--readonly {
   background: linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.96));
 }
 
 .spreadsheet-formula-address {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   min-height: 44px;
-  padding: 0 12px;
+  padding: 12px;
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.06);
   color: var(--spreadsheet-accent);
-  font-weight: 600;
+}
+
+.spreadsheet-formula-address__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.spreadsheet-formula-address__copy strong {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.spreadsheet-formula-address__label {
+  font-size: 11px;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--spreadsheet-ink-soft);
 }
 
 .spreadsheet-formula-address__badge {
@@ -3113,6 +3385,59 @@ function moveCaretToReference(referenceKey: string): void {
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+}
+
+.spreadsheet-formula-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.spreadsheet-formula-toolbar__copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.spreadsheet-formula-toolbar__fx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 64, 175, 0.9));
+  color: #f8fafc;
+  font: 700 14px/1.1 "IBM Plex Sans", "Segoe UI", sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.spreadsheet-formula-toolbar__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.spreadsheet-formula-toolbar__text strong {
+  font-size: 13px;
+  color: var(--spreadsheet-accent);
+}
+
+.spreadsheet-formula-toolbar__text span {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--spreadsheet-ink-soft);
+}
+
+.spreadsheet-formula-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .spreadsheet-formula-input {
@@ -3142,6 +3467,23 @@ function moveCaretToReference(referenceKey: string): void {
   font: 500 12px/1.5 ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.spreadsheet-formula-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--spreadsheet-ink-soft);
+}
+
+.spreadsheet-formula-caption__label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .spreadsheet-formula-token--reference {
@@ -3470,6 +3812,15 @@ function moveCaretToReference(referenceKey: string): void {
 @media (max-width: 1200px) {
   .spreadsheet-formula-shell {
     grid-template-columns: 1fr;
+  }
+
+  .spreadsheet-formula-toolbar {
+    flex-direction: column;
+  }
+
+  .spreadsheet-formula-toolbar__actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .spreadsheet-layout {

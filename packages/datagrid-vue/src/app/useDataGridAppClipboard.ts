@@ -21,6 +21,7 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   captureRowsSnapshot: () => TSnapshot
   recordEditTransaction: (beforeSnapshot: TSnapshot) => void
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
+  readClipboardCell?: (row: DataGridRowNode<TRow>, columnKey: string) => string
   syncViewport: () => void
   applyClipboardEdits?: (
     range: DataGridCopyRange,
@@ -93,7 +94,11 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     resolveCopyRange: copyRangeHelpers.resolveCopyRange,
     getRowAtIndex: rowIndex => options.runtime.api.rows.get(rowIndex),
     getColumnKeyAtIndex: columnIndex => options.visibleColumns.value[columnIndex]?.key ?? null,
-    getCellValue: (row, columnKey) => options.readCell(row, columnKey),
+    getCellValue: (row, columnKey) => (
+      options.readClipboardCell
+        ? options.readClipboardCell(row, columnKey)
+        : options.readCell(row, columnKey)
+    ),
     setLastAction: () => undefined,
     closeContextMenu: () => undefined,
   })

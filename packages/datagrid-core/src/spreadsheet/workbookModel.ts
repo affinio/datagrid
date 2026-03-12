@@ -6,15 +6,23 @@ import type { DataGridRowId } from "../models/rowModel.js"
 import {
   createDataGridSpreadsheetSheetModel,
   type CreateDataGridSpreadsheetSheetModelOptions,
+  type DataGridSpreadsheetFormulaStructuralPatch,
   type DataGridSpreadsheetSheetModel,
   type DataGridSpreadsheetSheetRowMutation,
   type DataGridSpreadsheetSheetState,
 } from "./sheetModel.js"
 import {
+  createDataGridSpreadsheetDerivedSheetModel,
+  type CreateDataGridSpreadsheetDerivedSheetModelOptions,
+  type DataGridSpreadsheetDerivedSheetModel,
+} from "./derivedSheetModel.js"
+import {
   createDataGridSpreadsheetCellFormulaModel,
-  rewriteDataGridSpreadsheetCellFormulaModelReferences,
+  createDataGridSpreadsheetCellFormulaRuntimeModel,
+  mapDataGridSpreadsheetCellFormulaRuntimeModelBindings,
 } from "./formulaEditorModel.js"
 import {
+  materializeDataGridSpreadsheetViewRuntimeResult,
   materializeDataGridSpreadsheetViewSheetResult,
   type DataGridSpreadsheetViewMaterializationDiagnostic,
   type DataGridSpreadsheetWorkbookSheetKind,
@@ -22,6 +30,10 @@ import {
   type DataGridSpreadsheetWorkbookViewSheetModelOptions,
   type DataGridSpreadsheetViewStep,
 } from "./viewPipeline.js"
+import {
+  createDataGridSpreadsheetDerivedSheetRuntime,
+  type DataGridSpreadsheetDerivedSheetRuntime,
+} from "./derivedSheetRuntime.js"
 
 export interface DataGridSpreadsheetWorkbookDataSheetInput {
   id?: string
@@ -160,6 +172,8 @@ interface SpreadsheetWorkbookSheetState {
   appliedTableRowsByAlias: Map<string, SpreadsheetWorkbookTableSource>
   lastHandledRowMutationRevision: number
   viewDiagnostics: readonly DataGridSpreadsheetViewMaterializationDiagnostic[]
+  derivedRuntime: DataGridSpreadsheetDerivedSheetRuntime | null
+  derivedSheetModel: DataGridSpreadsheetDerivedSheetModel | null
 }
 
 interface SpreadsheetWorkbookDependencyGraph {
@@ -493,7 +507,7 @@ function createSpreadsheetWorkbookSheetStateExport(
     ? {
       sheetId: sheet.id,
       sheetName: sheet.name,
-      columns: Object.freeze(sheet.sheetModel.getColumns().map(column => ({
+      columns: Object.freeze((sheet.derivedRuntime?.columns ?? Object.freeze([])).map(column => ({
         key: column.key,
         title: column.title,
         style: column.style,
@@ -885,15 +899,58 @@ export function createDataGridSpreadsheetWorkbookModel(
   const getSheetExportTableSource = (
     sheet: SpreadsheetWorkbookSheetState,
   ): SpreadsheetWorkbookTableSource => {
-    const tableSourceRevision = sheet.sheetModel.getTableSourceRevision()
+    const tableSourceRevision = sheet.kind === "view"
+      ? (sheet.derivedRuntime?.revision ?? sheet.sheetModel.getTableSourceRevision())
+      : sheet.sheetModel.getTableSourceRevision()
     if (sheet.exportedTableRevision === tableSourceRevision && sheet.exportedTableSource) {
       return sheet.exportedTableSource
     }
-    const exportedTableSource = wrapSheetTableSource(sheet.sheetModel.getTableSource())
+    const exportedTableSource = sheet.kind === "view" && sheet.derivedRuntime
+      ? {
+        rows: sheet.derivedRuntime.rows,
+        resolveRow: (row: unknown) => {
+          const runtimeRow = row as DataGridSpreadsheetDerivedSheetRuntime["rows"][number]
+          const values: Record<string, unknown> = {}
+          for (let columnIndex = 0; columnIndex < sheet.derivedRuntime!.columns.length; columnIndex += 1) {
+            const column = sheet.derivedRuntime!.columns[columnIndex]
+            if (!column) {
+              continue
+            }
+            values[column.key] = runtimeRow.values[columnIndex]
+          }
+          return values
+        },
+      }
+      : wrapSheetTableSource(sheet.sheetModel.getTableSource())
     sheet.exportedTableRevision = tableSourceRevision
     sheet.exportedTableSource = exportedTableSource
     return exportedTableSource
   }
+
+  const createDerivedSheetModelOptions = (
+    sheetId: string,
+    sheetName: string,
+    sheetModelOptions: DataGridSpreadsheetWorkbookViewSheetModelOptions | null,
+  ): CreateDataGridSpreadsheetDerivedSheetModelOptions => ({
+    sheetId,
+    sheetName,
+    sheetStyle: sheetModelOptions?.sheetStyle ?? null,
+    referenceParserOptions: sheetModelOptions?.referenceParserOptions,
+    runtimeErrorPolicy: sheetModelOptions?.runtimeErrorPolicy ?? "error-value",
+    functionRegistry: sheetModelOptions?.functionRegistry,
+    resolveContextValue: sheetModelOptions?.resolveContextValue,
+  })
+
+  const createEmptyDerivedRuntimeFromSheetState = (
+    state: DataGridSpreadsheetSheetState,
+  ): DataGridSpreadsheetDerivedSheetRuntime => createDataGridSpreadsheetDerivedSheetRuntime({
+    columns: state.columns.map(column => ({
+      key: column.key,
+      title: column.title,
+      style: column.style ?? null,
+    })),
+    rows: Object.freeze([]),
+  })
 
   const invalidateWorkbookGraphState = (): void => {
     graphState = null
@@ -1277,18 +1334,44 @@ export function createDataGridSpreadsheetWorkbookModel(
         if (!targetSheet || targetSheet.kind !== "view" || !targetSheet.viewDefinition) {
           continue
         }
-        const nextState = materializeDataGridSpreadsheetViewSheetResult({
-          sheetId: targetSheet.id,
-          sheetName: targetSheet.name,
-          sourceSheetId: targetSheet.viewDefinition.sourceSheetId,
-          sourceSheetModel: sheetsById.get(targetSheet.viewDefinition.sourceSheetId)?.sheetModel ?? null,
-          resolveSheetModel: (sheetId) => sheetsById.get(sheetId)?.sheetModel ?? null,
-          pipeline: targetSheet.viewDefinition.pipeline,
-          sheetModelOptions: targetSheet.viewSheetModelOptions,
-          errorMessage: cycleMessage,
-        })
-        targetSheet.viewDiagnostics = nextState.diagnostics
-        if (targetSheet.sheetModel.restoreState(nextState.sheetState)) {
+        let viewSheetChanged = false
+        if (targetSheet.derivedSheetModel) {
+          const nextState = materializeDataGridSpreadsheetViewRuntimeResult({
+            sheetId: targetSheet.id,
+            sheetName: targetSheet.name,
+            sourceSheetId: targetSheet.viewDefinition.sourceSheetId,
+            sourceSheetModel: sheetsById.get(targetSheet.viewDefinition.sourceSheetId)?.sheetModel ?? null,
+            resolveSheetModel: (sheetId) => sheetsById.get(sheetId)?.sheetModel ?? null,
+            pipeline: targetSheet.viewDefinition.pipeline,
+            sheetModelOptions: targetSheet.viewSheetModelOptions,
+            errorMessage: cycleMessage,
+          })
+          targetSheet.viewDiagnostics = nextState.diagnostics
+          targetSheet.derivedRuntime = nextState.derivedRuntime
+          viewSheetChanged = targetSheet.derivedSheetModel.replaceRuntime(
+            nextState.derivedRuntime,
+            createDerivedSheetModelOptions(
+              targetSheet.id,
+              targetSheet.name,
+              targetSheet.viewSheetModelOptions,
+            ),
+          )
+        } else {
+          const nextState = materializeDataGridSpreadsheetViewSheetResult({
+            sheetId: targetSheet.id,
+            sheetName: targetSheet.name,
+            sourceSheetId: targetSheet.viewDefinition.sourceSheetId,
+            sourceSheetModel: sheetsById.get(targetSheet.viewDefinition.sourceSheetId)?.sheetModel ?? null,
+            resolveSheetModel: (sheetId) => sheetsById.get(sheetId)?.sheetModel ?? null,
+            pipeline: targetSheet.viewDefinition.pipeline,
+            sheetModelOptions: targetSheet.viewSheetModelOptions,
+            errorMessage: cycleMessage,
+          })
+          targetSheet.viewDiagnostics = nextState.diagnostics
+          targetSheet.derivedRuntime = nextState.derivedRuntime
+          viewSheetChanged = targetSheet.sheetModel.restoreState(nextState.sheetState)
+        }
+        if (viewSheetChanged) {
           invalidateSheetExportCache(targetSheet)
         }
       }
@@ -1456,6 +1539,10 @@ export function createDataGridSpreadsheetWorkbookModel(
 
   const createSheetState = (
     input: DataGridSpreadsheetWorkbookSheetInput,
+    options: {
+      initialDerivedRuntime?: DataGridSpreadsheetDerivedSheetRuntime | null
+      deferInitialViewMaterialization?: boolean
+    } = {},
   ): SpreadsheetWorkbookSheetState => {
     const existingIds = new Set<string>(sheets.map(sheet => sheet.id))
     const name = normalizeSpreadsheetWorkbookSheetName(input.name)
@@ -1505,8 +1592,8 @@ export function createDataGridSpreadsheetWorkbookModel(
       )
       : null
 
-    const initialViewResult = kind === "view" && !providedSheetModel
-      ? materializeDataGridSpreadsheetViewSheetResult({
+    const initialViewResult = kind === "view" && !providedSheetModel && !options.deferInitialViewMaterialization
+      ? materializeDataGridSpreadsheetViewRuntimeResult({
         sheetId: id,
         sheetName: name,
         sourceSheetId: viewDefinition?.sourceSheetId ?? "",
@@ -1517,15 +1604,26 @@ export function createDataGridSpreadsheetWorkbookModel(
       })
       : null
 
-    const sheetModel = providedSheetModel ?? (
-      kind === "view"
-        ? createSheetModelFromExportState(
-          initialViewResult!.sheetState,
-          id,
-          name,
-          viewSheetModelOptions,
-        )
-        : createDataGridSpreadsheetSheetModel({
+    const initialDerivedRuntime = kind === "view"
+      ? (
+        options.initialDerivedRuntime
+          ?? initialViewResult?.derivedRuntime
+          ?? createDataGridSpreadsheetDerivedSheetRuntime({
+            columns: Object.freeze([]),
+            rows: Object.freeze([]),
+          })
+      )
+      : null
+
+    const derivedSheetModel = kind === "view" && !providedSheetModel
+      ? createDataGridSpreadsheetDerivedSheetModel(
+        initialDerivedRuntime!,
+        createDerivedSheetModelOptions(id, name, viewSheetModelOptions),
+      )
+      : null
+
+    const sheetModel = providedSheetModel ?? derivedSheetModel ?? (
+      createDataGridSpreadsheetSheetModel({
           ...dataSheetInput!.sheetModelOptions!,
           sheetId: id,
           sheetName: name,
@@ -1536,7 +1634,7 @@ export function createDataGridSpreadsheetWorkbookModel(
             }
             return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
           },
-        })
+      })
     )
 
     const formulaDependencyState = resolveSpreadsheetWorkbookSheetFormulaDependencyState(sheetModel)
@@ -1561,6 +1659,8 @@ export function createDataGridSpreadsheetWorkbookModel(
       appliedTableRowsByAlias: new Map<string, SpreadsheetWorkbookTableSource>(),
       lastHandledRowMutationRevision: sheetSnapshot.lastRowMutation?.revision ?? 0,
       viewDiagnostics: initialViewResult?.diagnostics ?? Object.freeze([]),
+      derivedRuntime: initialDerivedRuntime,
+      derivedSheetModel,
     }
   }
 
@@ -1626,20 +1726,22 @@ export function createDataGridSpreadsheetWorkbookModel(
     }
     let changed = false
     for (const sheet of sheets) {
-      const patches: Array<{
-        cell: Parameters<DataGridSpreadsheetSheetModel["setCellInput"]>[0]
-        rawInput: string
-      }> = []
+      const patches: DataGridSpreadsheetFormulaStructuralPatch[] = []
       for (const formulaCell of sheet.sheetModel.getFormulaCells()) {
         const cellSnapshot = sheet.sheetModel.getCell(formulaCell.address)
         if (!cellSnapshot || cellSnapshot.analysis.references.length === 0) {
           continue
         }
         const formulaModel = createDataGridSpreadsheetCellFormulaModel(cellSnapshot.analysis)
-        if (!formulaModel) {
+        const formulaRuntime = createDataGridSpreadsheetCellFormulaRuntimeModel(cellSnapshot.analysis)
+        if (!formulaModel || !formulaRuntime) {
           continue
         }
-        const nextRawInput = rewriteDataGridSpreadsheetCellFormulaModelReferences(formulaModel, (reference) => {
+        const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(formulaRuntime, (binding) => {
+          if (binding.kind !== "reference") {
+            return null
+          }
+          const reference = binding
           if (normalizeSpreadsheetWorkbookAlias(reference.sheetReference) !== previousAlias) {
             return null
           }
@@ -1647,23 +1749,23 @@ export function createDataGridSpreadsheetWorkbookModel(
             sheetReference: nextAlias,
             referenceName: reference.referenceName,
             rowSelector: reference.rowSelector,
-            outputSyntax: reference.outputSyntax,
           }
         }, {
           currentRowIndex: formulaCell.address.rowIndex,
         })
-        if (nextRawInput === cellSnapshot.rawInput) {
+        if (nextRuntimeModel === formulaRuntime) {
           continue
         }
         patches.push({
           cell: formulaCell.address,
-          rawInput: nextRawInput,
+          formulaModel,
+          formulaRuntime: nextRuntimeModel,
         })
       }
       if (patches.length === 0) {
         continue
       }
-      if (sheet.sheetModel.setCellInputs(patches)) {
+      if (sheet.sheetModel.applyFormulaStructuralPatches(patches)) {
         changed = true
       }
     }
@@ -1684,20 +1786,22 @@ export function createDataGridSpreadsheetWorkbookModel(
       if (targetSheet.id === sourceSheet.id) {
         continue
       }
-      const patches: Array<{
-        cell: Parameters<DataGridSpreadsheetSheetModel["setCellInput"]>[0]
-        rawInput: string
-      }> = []
+      const patches: DataGridSpreadsheetFormulaStructuralPatch[] = []
       for (const formulaCell of targetSheet.sheetModel.getFormulaCells()) {
         const cellSnapshot = targetSheet.sheetModel.getCell(formulaCell.address)
         if (!cellSnapshot || cellSnapshot.analysis.references.length === 0) {
           continue
         }
         const formulaModel = createDataGridSpreadsheetCellFormulaModel(cellSnapshot.analysis)
-        if (!formulaModel) {
+        const formulaRuntime = createDataGridSpreadsheetCellFormulaRuntimeModel(cellSnapshot.analysis)
+        if (!formulaModel || !formulaRuntime) {
           continue
         }
-        const nextRawInput = rewriteDataGridSpreadsheetCellFormulaModelReferences(formulaModel, (reference) => {
+        const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(formulaRuntime, (binding) => {
+          if (binding.kind !== "reference") {
+            return null
+          }
+          const reference = binding
           if (!sourceAliases.has(normalizeSpreadsheetWorkbookAlias(reference.sheetReference))) {
             return null
           }
@@ -1715,7 +1819,6 @@ export function createDataGridSpreadsheetWorkbookModel(
                 kind: "absolute",
                 rowIndex: reference.rowSelector.rowIndex + mutation.count,
               },
-              outputSyntax: reference.outputSyntax,
             }
           }
           if (reference.rowSelector.rowIndex < mutation.index) {
@@ -1729,27 +1832,27 @@ export function createDataGridSpreadsheetWorkbookModel(
                 kind: "absolute",
                 rowIndex: reference.rowSelector.rowIndex - mutation.count,
               },
-              outputSyntax: reference.outputSyntax,
             }
           }
           return {
-            rawText: "#REF!",
+            kind: "invalid",
           }
         }, {
           currentRowIndex: formulaCell.address.rowIndex,
         })
-        if (nextRawInput === cellSnapshot.rawInput) {
+        if (nextRuntimeModel === formulaRuntime) {
           continue
         }
         patches.push({
           cell: formulaCell.address,
-          rawInput: nextRawInput,
+          formulaModel,
+          formulaRuntime: nextRuntimeModel,
         })
       }
       if (patches.length === 0) {
         continue
       }
-      if (targetSheet.sheetModel.setCellInputs(patches)) {
+      if (targetSheet.sheetModel.applyFormulaStructuralPatches(patches)) {
         changedSheetIds.add(targetSheet.id)
       }
     }
@@ -1835,32 +1938,31 @@ export function createDataGridSpreadsheetWorkbookModel(
       for (const nextSheet of nextSheets) {
         const nextName = normalizeSpreadsheetWorkbookSheetName(nextSheet.name)
         const nextId = normalizeSpreadsheetWorkbookSheetId(nextSheet.id)
-        const restoredSheetModel = createSheetModelFromExportState(
-          nextSheet.sheetState,
-          nextId,
-          nextName,
-          nextSheet.kind === "view"
-            ? resolveSpreadsheetWorkbookViewSheetModelOptionsFromState(nextSheet.sheetState)
-            : null,
-        )
         if (nextSheet.kind === "view") {
           if (!nextSheet.viewDefinition) {
             throw new Error(
               `[DataGridSpreadsheetWorkbook] view sheet '${nextId}' is missing its definition during restore.`,
             )
           }
+          const viewSheetModelOptions = resolveSpreadsheetWorkbookViewSheetModelOptionsFromState(nextSheet.sheetState)
           attachSheet(createSheetState({
             id: nextId,
             name: nextName,
             kind: "view",
             sourceSheetId: nextSheet.viewDefinition.sourceSheetId,
             pipeline: nextSheet.viewDefinition.pipeline,
-            sheetModel: restoredSheetModel,
-            sheetModelOptions: resolveSpreadsheetWorkbookViewSheetModelOptionsFromState(nextSheet.sheetState),
-            ownSheetModel: true,
+            sheetModelOptions: viewSheetModelOptions,
+          }, {
+            deferInitialViewMaterialization: true,
+            initialDerivedRuntime: createEmptyDerivedRuntimeFromSheetState(nextSheet.sheetState),
           }))
           continue
         }
+        const restoredSheetModel = createSheetModelFromExportState(
+          nextSheet.sheetState,
+          nextId,
+          nextName,
+        )
         attachSheet(createSheetState({
           id: nextId,
           name: nextName,

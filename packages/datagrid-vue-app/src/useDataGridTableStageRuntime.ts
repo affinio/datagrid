@@ -64,6 +64,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   clearColumnMenuFilter?: (columnKey: string) => void
   applyRowHeightSettings: () => void
   cloneRowData: (row: TRow) => TRow
+  readClipboardCell?: (row: import("@affino/datagrid-core").DataGridRowNode<TRow>, columnKey: string) => string
   applyClipboardEdits?: (
     range: DataGridCopyRange,
     matrix: string[][],
@@ -309,6 +310,9 @@ export function useDataGridTableStageRuntime<
       }, beforeSnapshot)
     },
     readCell: (row, columnKey) => readCell(row, columnKey),
+    readClipboardCell: options.readClipboardCell
+      ? (row, columnKey) => options.readClipboardCell?.(row, columnKey) ?? ""
+      : undefined,
     syncViewport: () => syncViewportFromDom(),
     applyClipboardEdits: options.applyClipboardEdits,
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,

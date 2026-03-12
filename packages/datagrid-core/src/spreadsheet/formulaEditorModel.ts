@@ -77,11 +77,39 @@ export interface DataGridSpreadsheetCellFormulaModel {
   diagnostics: readonly DataGridFormulaDiagnostic[]
 }
 
+export type DataGridSpreadsheetFormulaReferenceBinding =
+  | {
+    key: string
+    index: number
+    kind: "reference"
+    sheetReference: string | null
+    referenceName: string
+    rowSelector: DataGridFormulaRowSelector
+  }
+  | {
+    key: string
+    index: number
+    kind: "invalid"
+  }
+
+export interface DataGridSpreadsheetCellFormulaRuntimeModel {
+  formula: string
+  bindings: readonly DataGridSpreadsheetFormulaReferenceBinding[]
+  isFormulaValid: boolean
+  diagnostics: readonly DataGridFormulaDiagnostic[]
+}
+
 export type DataGridSpreadsheetFormulaReferenceModelReplacement =
   | (DataGridSpreadsheetFormulaReferenceInput & {
     outputSyntax?: DataGridSpreadsheetFormulaReferenceOutputSyntax
   })
   | { rawText: string }
+
+export type DataGridSpreadsheetFormulaReferenceBindingReplacement =
+  | (DataGridSpreadsheetFormulaReferenceInput & {
+    kind?: "reference"
+  })
+  | { kind: "invalid" }
 
 export interface DataGridSpreadsheetCellFormulaModelMutationOptions {
   currentRowIndex?: number | null
@@ -253,6 +281,15 @@ function cloneFormulaRowSelector(
     startOffset: rowSelector.startOffset,
     endOffset: rowSelector.endOffset,
   }
+}
+
+function cloneSpreadsheetFormulaDiagnostics(
+  diagnostics: readonly DataGridFormulaDiagnostic[],
+): readonly DataGridFormulaDiagnostic[] {
+  return Object.freeze(diagnostics.map(diagnostic => Object.freeze({
+    ...diagnostic,
+    span: { ...diagnostic.span },
+  })))
 }
 
 function createSpreadsheetFormulaDiagnostic(
@@ -718,10 +755,28 @@ export function createDataGridSpreadsheetCellFormulaModel(
       rawText: null,
     }))),
     isFormulaValid: analysis.isFormulaValid,
-    diagnostics: Object.freeze(analysis.diagnostics.map(diagnostic => Object.freeze({
-      ...diagnostic,
-      span: { ...diagnostic.span },
+    diagnostics: cloneSpreadsheetFormulaDiagnostics(analysis.diagnostics),
+  })
+}
+
+export function createDataGridSpreadsheetCellFormulaRuntimeModel(
+  analysis: DataGridSpreadsheetCellInputAnalysis,
+): DataGridSpreadsheetCellFormulaRuntimeModel | null {
+  if (analysis.kind !== "formula") {
+    return null
+  }
+  return Object.freeze({
+    formula: analysis.formula ?? "",
+    bindings: Object.freeze(analysis.references.map(reference => Object.freeze({
+      key: reference.key,
+      index: reference.index,
+      kind: "reference" as const,
+      sheetReference: reference.sheetReference,
+      referenceName: reference.referenceName,
+      rowSelector: cloneFormulaRowSelector(reference.rowSelector),
     }))),
+    isFormulaValid: analysis.isFormulaValid,
+    diagnostics: cloneSpreadsheetFormulaDiagnostics(analysis.diagnostics),
   })
 }
 
@@ -746,6 +801,78 @@ export function renderDataGridSpreadsheetCellFormulaModel(
     nextInput = `${nextInput.slice(0, reference.span.start)}${replacement}${nextInput.slice(reference.span.end)}`
   }
   return nextInput
+}
+
+export function mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(
+  model: DataGridSpreadsheetCellFormulaRuntimeModel,
+  mutate: (
+    binding: DataGridSpreadsheetFormulaReferenceBinding,
+  ) => DataGridSpreadsheetFormulaReferenceBindingReplacement | null,
+  options: DataGridSpreadsheetCellFormulaModelMutationOptions = {},
+): DataGridSpreadsheetCellFormulaRuntimeModel {
+  let changed = false
+  const nextBindings = model.bindings.map((binding) => {
+    const replacement = mutate(binding)
+    if (!replacement) {
+      return binding
+    }
+    changed = true
+    if (replacement.kind === "invalid") {
+      return Object.freeze({
+        key: binding.key,
+        index: binding.index,
+        kind: "invalid" as const,
+      })
+    }
+    return Object.freeze({
+      key: binding.key,
+      index: binding.index,
+      kind: "reference" as const,
+      sheetReference: replacement.sheetReference ?? null,
+      referenceName: replacement.referenceName,
+      rowSelector: cloneFormulaRowSelector(
+        resolveFormulaReferenceRowSelector(replacement, options.currentRowIndex),
+      ),
+    })
+  })
+  if (!changed) {
+    return model
+  }
+  return Object.freeze({
+    ...model,
+    bindings: Object.freeze(nextBindings),
+  })
+}
+
+export function renderDataGridSpreadsheetCellFormulaRuntimeModel(
+  runtimeModel: DataGridSpreadsheetCellFormulaRuntimeModel,
+  presentationModel: DataGridSpreadsheetCellFormulaModel,
+  options: DataGridSpreadsheetCellFormulaModelMutationOptions = {},
+): string {
+  const bindingsByIndex = new Map(runtimeModel.bindings.map(binding => [binding.index, binding]))
+  const nextReferences = presentationModel.references.map((reference) => {
+    const binding = bindingsByIndex.get(reference.index)
+    if (!binding || binding.key !== reference.key) {
+      return reference
+    }
+    if (binding.kind === "invalid") {
+      return Object.freeze({
+        ...reference,
+        rawText: "#REF!",
+      })
+    }
+    return Object.freeze({
+      ...reference,
+      sheetReference: binding.sheetReference,
+      referenceName: binding.referenceName,
+      rowSelector: cloneFormulaRowSelector(binding.rowSelector),
+      rawText: null,
+    })
+  })
+  return renderDataGridSpreadsheetCellFormulaModel({
+    ...presentationModel,
+    references: Object.freeze(nextReferences),
+  }, options)
 }
 
 export function mapDataGridSpreadsheetCellFormulaModelReferences(

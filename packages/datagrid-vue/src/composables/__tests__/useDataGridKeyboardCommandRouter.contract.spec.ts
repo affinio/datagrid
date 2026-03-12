@@ -11,6 +11,7 @@ describe("useDataGridKeyboardCommandRouter contract", () => {
     const copySelection = vi.fn(async () => true)
     const pasteSelection = vi.fn(async () => true)
     const cutSelection = vi.fn(async () => true)
+    const clearCurrentSelection = vi.fn(async () => true)
     const selectAllCells = vi.fn()
 
     const router = useDataGridKeyboardCommandRouter({
@@ -24,6 +25,7 @@ describe("useDataGridKeyboardCommandRouter contract", () => {
       copySelection,
       pasteSelection,
       cutSelection,
+      clearCurrentSelection,
       stopRangeMove: vi.fn(),
       setLastAction: vi.fn(),
     })
@@ -53,6 +55,16 @@ describe("useDataGridKeyboardCommandRouter contract", () => {
     expect(router.dispatchKeyboardCommands(cutEvent)).toBe(true)
     expect(cutSelection).toHaveBeenCalledWith("keyboard")
 
+    const deleteEvent = createEvent("Delete")
+    expect(router.dispatchKeyboardCommands(deleteEvent)).toBe(true)
+    expect(deleteEvent.defaultPrevented).toBe(true)
+    expect(clearCurrentSelection).toHaveBeenCalledWith("keyboard")
+
+    const backspaceEvent = createEvent("Backspace")
+    expect(router.dispatchKeyboardCommands(backspaceEvent)).toBe(true)
+    expect(backspaceEvent.defaultPrevented).toBe(true)
+    expect(clearCurrentSelection).toHaveBeenCalledTimes(2)
+
     const selectAllEvent = createEvent("a", { metaKey: true })
     expect(router.dispatchKeyboardCommands(selectAllEvent)).toBe(true)
     expect(selectAllEvent.defaultPrevented).toBe(true)
@@ -80,6 +92,7 @@ describe("useDataGridKeyboardCommandRouter contract", () => {
       copySelection: vi.fn(async () => true),
       pasteSelection: vi.fn(async () => true),
       cutSelection: vi.fn(async () => true),
+      clearCurrentSelection: vi.fn(async () => true),
       stopRangeMove,
       setLastAction,
     })
