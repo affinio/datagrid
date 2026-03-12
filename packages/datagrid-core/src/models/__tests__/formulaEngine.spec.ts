@@ -422,6 +422,7 @@ describe("formulaEngine", () => {
       name: '"gross margin"',
       sheetReference: null,
       referenceName: '"gross margin"',
+      rangeReferenceName: null,
       rowSelector: { kind: "current" },
     })
 
@@ -491,6 +492,7 @@ describe("formulaEngine", () => {
       name: "orders!qty[4]",
       sheetReference: "orders",
       referenceName: "qty",
+      rangeReferenceName: null,
       rowSelector: { kind: "absolute", rowIndex: 4 },
     })
 
@@ -518,6 +520,88 @@ describe("formulaEngine", () => {
         rowSelector: { kind: "absolute", rowIndex: 1 },
       })
     }
+  })
+
+  it("supports rectangular smartsheet ranges", () => {
+    expect(parseDataGridFormulaIdentifier("[qty]2:[qty]5", {
+      syntax: "smartsheet",
+    })).toEqual({
+      name: "qty[1..4]",
+      sheetReference: null,
+      referenceName: "qty",
+      rangeReferenceName: null,
+      rowSelector: { kind: "absolute-window", startRowIndex: 1, endRowIndex: 4 },
+    })
+
+    expect(parseDataGridFormulaIdentifier("[qty]2:[total]5", {
+      syntax: "smartsheet",
+    })).toEqual({
+      name: "qty:total[1..4]",
+      sheetReference: null,
+      referenceName: "qty",
+      rangeReferenceName: "total",
+      rowSelector: { kind: "absolute-window", startRowIndex: 1, endRowIndex: 4 },
+    })
+
+    const parsed = parseDataGridFormulaExpression("=SUM([qty]2:[qty]5)", {
+      referenceParserOptions: {
+        syntax: "smartsheet",
+      },
+    })
+
+    expect(parsed.ast.kind).toBe("call")
+    if (parsed.ast.kind === "call") {
+      expect(parsed.ast.args[0]).toMatchObject({
+        kind: "identifier",
+        name: "qty[1..4]",
+        referenceName: "qty",
+        rangeReferenceName: null,
+        rowSelector: { kind: "absolute-window", startRowIndex: 1, endRowIndex: 4 },
+      })
+    }
+
+    const rectangular = parseDataGridFormulaExpression("=SUM([qty]2:[total]5)", {
+      referenceParserOptions: {
+        syntax: "smartsheet",
+      },
+    })
+
+    expect(rectangular.ast.kind).toBe("call")
+    if (rectangular.ast.kind === "call") {
+      expect(rectangular.ast.args[0]).toMatchObject({
+        kind: "identifier",
+        name: "qty:total[1..4]",
+        referenceName: "qty",
+        rangeReferenceName: "total",
+        rowSelector: { kind: "absolute-window", startRowIndex: 1, endRowIndex: 4 },
+      })
+    }
+
+    const compiled = compileDataGridFormulaFieldDefinition({
+      name: "smartsheetRangeTotal",
+      formula: "=SUM([qty]2:[total]5)",
+    }, {
+      referenceParserOptions: {
+        syntax: "smartsheet",
+      },
+      resolveDependencyToken: identifier => {
+        if (identifier === "qty:total[1..4]") {
+          return "field:qty:total[1..4]::row::absolute-window:1:4"
+        }
+        return `field:${identifier}`
+      },
+    })
+
+    expect(compiled.deps).toEqual(["field:qty:total[1..4]::row::absolute-window:1:4"])
+
+    const invalid = diagnoseDataGridFormulaExpression("=SUM([qty]5:[total]2)", {
+      referenceParserOptions: {
+        syntax: "smartsheet",
+      },
+    })
+
+    expect(invalid.ok).toBe(false)
+    expect(invalid.diagnostics[0]?.message).toContain("range start must be <= range end")
   })
 
   it("supports function calls and comparison operators", () => {

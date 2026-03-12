@@ -28,6 +28,7 @@ import {
   type DataGridSpreadsheetCellInputKind,
   type DataGridSpreadsheetFormulaReferenceSpan,
 } from "./formulaEditorModel.js"
+import { isTypedPlainSpreadsheetSheetState } from "./sheetStateGuards.js"
 
 export type DataGridSpreadsheetStyle = Readonly<Record<string, unknown>>
 
@@ -397,16 +398,6 @@ function areSpreadsheetSheetStatesEquivalent(
     && areSpreadsheetFormulaTableBindingsEqual(left.formulaTables, right.formulaTables)
 }
 
-function isTypedPlainSpreadsheetSheetState(
-  state: DataGridSpreadsheetSheetState,
-): boolean {
-  return state.rows.length > 0 && state.rows.every(row => row.cells.every(cell => (
-      cell.style == null
-      && typeof cell.resolvedValue !== "undefined"
-      && !String(cell.rawInput ?? "").trimStart().startsWith("=")
-    )))
-}
-
 function mergeSpreadsheetStyles(
   sheetStyle: DataGridSpreadsheetStyle | null,
   columnStyle: DataGridSpreadsheetStyle | null,
@@ -523,6 +514,12 @@ function resolveFormulaTargetRowIndexes(
   }
   if (rowSelector.kind === "absolute") {
     pushRowIndex(rowSelector.rowIndex)
+    return Object.freeze(targetIndexes)
+  }
+  if (rowSelector.kind === "absolute-window") {
+    for (let rowIndex = rowSelector.startRowIndex; rowIndex <= rowSelector.endRowIndex; rowIndex += 1) {
+      pushRowIndex(rowIndex)
+    }
     return Object.freeze(targetIndexes)
   }
   if (rowSelector.kind === "relative") {
@@ -1078,22 +1075,47 @@ export function createDataGridSpreadsheetSheetModel(
   ): readonly DataGridSpreadsheetCellAddress[] {
     const dependencies: DataGridSpreadsheetCellAddress[] = []
     const seenDependencyKeys = new Set<string>()
+
+    const resolveColumnKeysForReference = (
+      startColumnKey: string,
+      endColumnKey: string | null | undefined,
+      availableColumns: readonly { key: string }[],
+    ): readonly string[] => {
+      if (!endColumnKey || endColumnKey === startColumnKey) {
+        return Object.freeze([startColumnKey])
+      }
+      const startIndex = availableColumns.findIndex(column => column.key === startColumnKey)
+      const endIndex = availableColumns.findIndex(column => column.key === endColumnKey)
+      if (startIndex < 0 || endIndex < 0) {
+        return Object.freeze([startColumnKey])
+      }
+      const [from, to] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex]
+      return Object.freeze(availableColumns.slice(from, to + 1).map(column => column.key))
+    }
+
     for (const reference of analysis.references) {
       if (!isCurrentSheetReference(reference.sheetReference)) {
         continue
       }
+      const targetColumnKeys = resolveColumnKeysForReference(
+        reference.referenceName,
+        reference.rangeReferenceName,
+        columns,
+      )
       for (const targetRowIndex of reference.targetRowIndexes) {
         const row = rows[targetRowIndex]
         if (!row) {
           continue
         }
-        const dependencyAddress = createCellAddress(sheetId, row, reference.referenceName)
-        const dependencyKey = makeCellKey(dependencyAddress.rowIndex, dependencyAddress.columnKey)
-        if (seenDependencyKeys.has(dependencyKey)) {
-          continue
+        for (const targetColumnKey of targetColumnKeys) {
+          const dependencyAddress = createCellAddress(sheetId, row, targetColumnKey)
+          const dependencyKey = makeCellKey(dependencyAddress.rowIndex, dependencyAddress.columnKey)
+          if (seenDependencyKeys.has(dependencyKey)) {
+            continue
+          }
+          seenDependencyKeys.add(dependencyKey)
+          dependencies.push(dependencyAddress)
         }
-        seenDependencyKeys.add(dependencyKey)
-        dependencies.push(dependencyAddress)
       }
     }
     dependencies.sort(compareCellAddresses)
@@ -1435,6 +1457,24 @@ export function createDataGridSpreadsheetSheetModel(
     visiting: Set<string>,
   ): DataGridComputedFieldComputeContext<Record<string, unknown>> {
     const row = rows[formulaCell.address.rowIndex]
+
+    const resolveColumnKeysForRange = (
+      startColumnKey: string,
+      endColumnKey: string | null | undefined,
+      availableColumns: readonly { key: string }[],
+    ): readonly string[] => {
+      if (!endColumnKey || endColumnKey === startColumnKey) {
+        return Object.freeze([startColumnKey])
+      }
+      const startIndex = availableColumns.findIndex(column => column.key === startColumnKey)
+      const endIndex = availableColumns.findIndex(column => column.key === endColumnKey)
+      if (startIndex < 0 || endIndex < 0) {
+        return Object.freeze([startColumnKey])
+      }
+      const [from, to] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex]
+      return Object.freeze(availableColumns.slice(from, to + 1).map(column => column.key))
+    }
+
     return {
       row: row ? createResolvedRowData(row) : {},
       rowId: row?.id ?? formulaCell.address.rowIndex,
@@ -1459,32 +1499,49 @@ export function createDataGridSpreadsheetSheetModel(
           formulaCell.address.rowIndex,
           targetRowCount,
         )
+        const isRangeReference = parsed.rowSelector.kind === "window"
+          || parsed.rowSelector.kind === "absolute-window"
+          || (typeof parsed.rangeReferenceName === "string" && parsed.rangeReferenceName.trim().length > 0)
         if (targetRowIndexes.length === 0) {
-          return parsed.rowSelector.kind === "window" ? Object.freeze([]) : null
+          return isRangeReference
+            ? Object.freeze([])
+            : null
         }
         if (referencedSheetModel) {
-          const resolvedValues = targetRowIndexes.map(targetRowIndex => referencedSheetModel.getCellDisplayValue({
-            sheetId: referencedSheetModel.getSheetId(),
-            rowId: null,
-            rowIndex: targetRowIndex,
-            columnKey: parsed.referenceName,
-          }))
-          return parsed.rowSelector.kind === "window"
+          const targetColumnKeys = resolveColumnKeysForRange(
+            parsed.referenceName,
+            parsed.rangeReferenceName,
+            referencedSheetModel.getColumns(),
+          )
+          const resolvedValues = targetRowIndexes.flatMap(targetRowIndex => targetColumnKeys.map(columnKey => (
+            referencedSheetModel.getCellDisplayValue({
+              sheetId: referencedSheetModel.getSheetId(),
+              rowId: null,
+              rowIndex: targetRowIndex,
+              columnKey,
+            })
+          )))
+          return isRangeReference
             ? Object.freeze(resolvedValues)
             : (resolvedValues[0] ?? null)
         }
-        const resolvedValues = targetRowIndexes.map((targetRowIndex) => {
-          const targetCellKey = makeCellKey(targetRowIndex, parsed.referenceName)
+        const targetColumnKeys = resolveColumnKeysForRange(
+          parsed.referenceName,
+          parsed.rangeReferenceName,
+          columns,
+        )
+        const resolvedValues = targetRowIndexes.flatMap((targetRowIndex) => targetColumnKeys.map((columnKey) => {
+          const targetCellKey = makeCellKey(targetRowIndex, columnKey)
           const targetFormulaCell = formulaCellByKey.get(targetCellKey)
           if (targetFormulaCell) {
             if (dirtyFormulaKeys && !dirtyFormulaKeys.has(targetCellKey) && !cache.has(targetCellKey)) {
-              return getResolvedCellValue(rows[targetRowIndex], parsed.referenceName)
+              return getResolvedCellValue(rows[targetRowIndex], columnKey)
             }
             return evaluateFormulaCell(targetFormulaCell, dirtyFormulaKeys, cache, visiting)
           }
-          return getResolvedCellValue(rows[targetRowIndex], parsed.referenceName)
-        })
-        return parsed.rowSelector.kind === "window"
+          return getResolvedCellValue(rows[targetRowIndex], columnKey)
+        }))
+        return isRangeReference
           ? Object.freeze(resolvedValues)
           : (resolvedValues[0] ?? null)
       },
@@ -1897,15 +1954,37 @@ export function createDataGridSpreadsheetSheetModel(
       if (!isCurrentSheetReference(reference.sheetReference)) {
         return null
       }
-      if (reference.rowSelector.kind !== "absolute" || reference.rowSelector.rowIndex < insertIndex) {
+      if (reference.rowSelector.kind === "absolute") {
+        if (reference.rowSelector.rowIndex < insertIndex) {
+          return null
+        }
+        return {
+          sheetReference: reference.sheetReference,
+          referenceName: reference.referenceName,
+          rangeReferenceName: reference.rangeReferenceName,
+          rowSelector: {
+            kind: "absolute",
+            rowIndex: reference.rowSelector.rowIndex + insertedRowCount,
+          },
+        }
+      }
+      if (reference.rowSelector.kind !== "absolute-window") {
         return null
       }
+      if (reference.rowSelector.endRowIndex < insertIndex) {
+        return null
+      }
+      const shiftWholeRange = reference.rowSelector.startRowIndex >= insertIndex
       return {
         sheetReference: reference.sheetReference,
         referenceName: reference.referenceName,
+        rangeReferenceName: reference.rangeReferenceName,
         rowSelector: {
-          kind: "absolute",
-          rowIndex: reference.rowSelector.rowIndex + insertedRowCount,
+          kind: "absolute-window",
+          startRowIndex: shiftWholeRange
+            ? reference.rowSelector.startRowIndex + insertedRowCount
+            : reference.rowSelector.startRowIndex,
+          endRowIndex: reference.rowSelector.endRowIndex + insertedRowCount,
         },
       }
     }, {
@@ -1932,24 +2011,67 @@ export function createDataGridSpreadsheetSheetModel(
       if (!isCurrentSheetReference(reference.sheetReference)) {
         return null
       }
-      if (reference.rowSelector.kind !== "absolute") {
+      if (reference.rowSelector.kind === "absolute") {
+        if (reference.rowSelector.rowIndex < removeIndex) {
+          return null
+        }
+        if (reference.rowSelector.rowIndex >= removeIndex + removedRowCount) {
+          return {
+            sheetReference: reference.sheetReference,
+            referenceName: reference.referenceName,
+            rangeReferenceName: reference.rangeReferenceName,
+            rowSelector: {
+              kind: "absolute",
+              rowIndex: reference.rowSelector.rowIndex - removedRowCount,
+            },
+          }
+        }
+        return {
+          kind: "invalid",
+        }
+      }
+      if (reference.rowSelector.kind !== "absolute-window") {
         return null
       }
-      if (reference.rowSelector.rowIndex < removeIndex) {
-        return null
+      const survivingIndexes: number[] = []
+      for (
+        let targetRowIndex = reference.rowSelector.startRowIndex;
+        targetRowIndex <= reference.rowSelector.endRowIndex;
+        targetRowIndex += 1
+      ) {
+        if (targetRowIndex < removeIndex) {
+          survivingIndexes.push(targetRowIndex)
+          continue
+        }
+        if (targetRowIndex >= removeIndex + removedRowCount) {
+          survivingIndexes.push(targetRowIndex - removedRowCount)
+        }
       }
-      if (reference.rowSelector.rowIndex >= removeIndex + removedRowCount) {
+      if (survivingIndexes.length === 0) {
+        return {
+          kind: "invalid",
+        }
+      }
+      if (survivingIndexes.length === 1) {
         return {
           sheetReference: reference.sheetReference,
           referenceName: reference.referenceName,
+          rangeReferenceName: reference.rangeReferenceName,
           rowSelector: {
             kind: "absolute",
-            rowIndex: reference.rowSelector.rowIndex - removedRowCount,
+            rowIndex: survivingIndexes[0]!,
           },
         }
       }
       return {
-        kind: "invalid",
+        sheetReference: reference.sheetReference,
+        referenceName: reference.referenceName,
+        rangeReferenceName: reference.rangeReferenceName,
+        rowSelector: {
+          kind: "absolute-window",
+          startRowIndex: survivingIndexes[0]!,
+          endRowIndex: survivingIndexes[survivingIndexes.length - 1]!,
+        },
       }
     }, {
       currentRowIndex: rowIndex,
@@ -1967,8 +2089,10 @@ export function createDataGridSpreadsheetSheetModel(
     return runtimeModel.bindings.some(binding => (
       binding.kind === "reference"
       && isCurrentSheetReference(binding.sheetReference)
-      && binding.rowSelector.kind === "absolute"
-      && binding.rowSelector.rowIndex >= rowIndex
+      && (
+        (binding.rowSelector.kind === "absolute" && binding.rowSelector.rowIndex >= rowIndex)
+        || (binding.rowSelector.kind === "absolute-window" && binding.rowSelector.endRowIndex >= rowIndex)
+      )
     ))
   }
 
@@ -2509,11 +2633,14 @@ export function createDataGridSpreadsheetSheetModel(
         [...formulaCellByKey.values()]
           .map((formulaCell) => {
             const formulaModel = formulaModelByCellKey.get(formulaCell.key)
+            const formulaRuntime = formulaRuntimeByCellKey.get(formulaCell.key)
             return {
               address: cloneCellAddress(formulaCell.address),
               formula: formulaModel?.formula ?? formulaCell.analysis.formula ?? "",
               contextKeys: formulaCell.contextKeys,
               dependencies: formulaCell.dependencies,
+              formulaModel: formulaModel ?? null,
+              formulaRuntime: formulaRuntime ?? null,
             }
           })
           .sort((left, right) => compareCellAddresses(left.address, right.address)),

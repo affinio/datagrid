@@ -226,4 +226,66 @@ describe("createDataGridSpreadsheetSheetModel", () => {
 
     sheet.dispose()
   })
+
+  it("evaluates smartsheet same-column ranges and rewrites them across row mutations", () => {
+    const sheet = createDataGridSpreadsheetSheetModel({
+      sheetId: "orders",
+      sheetName: "Orders",
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+      columns: [{ key: "qty" }, { key: "windowTotal" }],
+      rows: [
+        { id: "row-1", cells: { qty: 10 } },
+        { id: "row-2", cells: { qty: 20 } },
+        { id: "row-3", cells: { qty: 30 } },
+        { id: "row-4", cells: { qty: 40, windowTotal: "=SUM([qty]2:[qty]4)" } },
+      ],
+    })
+
+    const formulaCell = (rowIndex: number) => sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-4",
+      rowIndex,
+      columnKey: "windowTotal",
+    })
+
+    expect(formulaCell(3)?.rawInput).toBe("=SUM([qty]2:[qty]4)")
+    expect(formulaCell(3)?.displayValue).toBe(90)
+
+    expect(sheet.insertRowsAt(2, [{ id: "row-2-5", cells: { qty: 5 } }])).toBe(true)
+    expect(formulaCell(4)?.rawInput).toBe("=SUM([qty]2:[qty]5)")
+    expect(formulaCell(4)?.displayValue).toBe(95)
+
+    expect(sheet.removeRowsAt(1, 2)).toBe(true)
+    expect(formulaCell(2)?.rawInput).toBe("=SUM([qty]2:[qty]3)")
+    expect(formulaCell(2)?.displayValue).toBe(70)
+
+    sheet.dispose()
+  })
+
+  it("evaluates rectangular smartsheet ranges across rows and columns", () => {
+    const sheet = createDataGridSpreadsheetSheetModel({
+      sheetId: "orders",
+      sheetName: "Orders",
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+      columns: [{ key: "qty" }, { key: "price" }, { key: "total" }, { key: "grand" }],
+      rows: [
+        { id: "row-1", cells: { qty: 1, price: 10, total: 10 } },
+        { id: "row-2", cells: { qty: 2, price: 20, total: 40 } },
+        { id: "row-3", cells: { qty: 3, price: 30, total: 90 } },
+        { id: "row-4", cells: { grand: "=SUM([qty]2:[total]3)" } },
+      ],
+    })
+
+    const cell = sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-4",
+      rowIndex: 3,
+      columnKey: "grand",
+    })
+
+    expect(cell?.rawInput).toBe("=SUM([qty]2:[total]3)")
+    expect(cell?.displayValue).toBe(185)
+
+    sheet.dispose()
+  })
 })

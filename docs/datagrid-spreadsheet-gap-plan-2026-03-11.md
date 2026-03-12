@@ -35,9 +35,18 @@ Status:
 
 Still missing in this area:
 
-- Smartsheet range refs
+- richer editing semantics on top of range refs
 - cross-sheet reference grammar
 - parser profile registry for Excel/A1 and custom enterprise dialects
+
+Update:
+
+- `2026-03-12`: added Smartsheet absolute ranges like `[Amount]2:[Amount]5` and rectangular refs like `[Amount]2:[Total]5`
+  - introduced an absolute-window row selector in the formula engine/runtime contract
+  - added end-column metadata in parser/AST/reference analysis so rectangular ranges survive normalization
+  - spreadsheet parser now normalizes range refs into canonical IR without leaking Smartsheet syntax into runtime
+  - evaluation, dependency tracking, and row insert/remove rewrite now preserve rectangular ranges
+  - workbook shell highlighting now expands manual rectangular refs across the full column span
 
 ### 2. Workbook / multi-sheet core model
 

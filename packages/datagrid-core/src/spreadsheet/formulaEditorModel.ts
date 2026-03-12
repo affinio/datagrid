@@ -29,6 +29,7 @@ export interface DataGridSpreadsheetTextSelection {
 export interface DataGridSpreadsheetFormulaReferenceInput {
   sheetReference?: string | null
   referenceName: string
+  rangeReferenceName?: string | null
   rowIndex?: number | null
   rowSelector?: DataGridFormulaRowSelector | null
 }
@@ -41,6 +42,7 @@ export interface DataGridSpreadsheetFormulaReferenceSpan {
   identifier: string
   sheetReference: string | null
   referenceName: string
+  rangeReferenceName: string | null
   rowSelector: DataGridFormulaRowSelector
   span: DataGridFormulaSourceSpan
   targetRowIndexes: readonly number[]
@@ -64,6 +66,7 @@ export interface DataGridSpreadsheetFormulaReferenceModel {
   span: DataGridFormulaSourceSpan
   sheetReference: string | null
   referenceName: string
+  rangeReferenceName: string | null
   rowSelector: DataGridFormulaRowSelector
   outputSyntax: DataGridSpreadsheetFormulaReferenceOutputSyntax
   rawText?: string | null
@@ -84,6 +87,7 @@ export type DataGridSpreadsheetFormulaReferenceBinding =
     kind: "reference"
     sheetReference: string | null
     referenceName: string
+    rangeReferenceName: string | null
     rowSelector: DataGridFormulaRowSelector
   }
   | {
@@ -120,7 +124,7 @@ export interface AnalyzeDataGridSpreadsheetCellInputOptions {
   currentRowIndex?: number | null
   rowCount?: number | null
   resolveReferenceRowCount?: (
-    reference: Pick<DataGridSpreadsheetFormulaReferenceSpan, "sheetReference" | "referenceName" | "rowSelector">,
+    reference: Pick<DataGridSpreadsheetFormulaReferenceSpan, "sheetReference" | "referenceName" | "rangeReferenceName" | "rowSelector">,
   ) => number | null | undefined
   functionRegistry?: DataGridFormulaFunctionRegistry
   referenceParserOptions?: DataGridFormulaReferenceParserOptions
@@ -171,7 +175,7 @@ export interface CreateDataGridSpreadsheetFormulaEditorModelOptions {
   outputSyntax?: DataGridSpreadsheetFormulaReferenceOutputSyntax
   resolveRowCount?: (cell: DataGridSpreadsheetCellAddress | null) => number | null | undefined
   resolveReferenceRowCount?: (
-    reference: Pick<DataGridSpreadsheetFormulaReferenceSpan, "sheetReference" | "referenceName" | "rowSelector">,
+    reference: Pick<DataGridSpreadsheetFormulaReferenceSpan, "sheetReference" | "referenceName" | "rangeReferenceName" | "rowSelector">,
     activeCell: DataGridSpreadsheetCellAddress | null,
   ) => number | null | undefined
 }
@@ -273,6 +277,13 @@ function cloneFormulaRowSelector(
   if (rowSelector.kind === "absolute") {
     return { kind: "absolute", rowIndex: rowSelector.rowIndex }
   }
+  if (rowSelector.kind === "absolute-window") {
+    return {
+      kind: "absolute-window",
+      startRowIndex: rowSelector.startRowIndex,
+      endRowIndex: rowSelector.endRowIndex,
+    }
+  }
   if (rowSelector.kind === "relative") {
     return { kind: "relative", offset: rowSelector.offset }
   }
@@ -361,6 +372,17 @@ function resolveTargetRowIndexes(
     const target = clampRowIndex(rowSelector.rowIndex)
     return Object.freeze(target === null ? [] : [target])
   }
+  if (rowSelector.kind === "absolute-window") {
+    const targetRowIndexes: number[] = []
+    for (let rowIndex = rowSelector.startRowIndex; rowIndex <= rowSelector.endRowIndex; rowIndex += 1) {
+      const target = clampRowIndex(rowIndex)
+      if (target === null) {
+        continue
+      }
+      targetRowIndexes.push(target)
+    }
+    return Object.freeze(targetRowIndexes)
+  }
   if (normalizedCurrentRowIndex === null) {
     return Object.freeze([])
   }
@@ -445,6 +467,9 @@ function formatCanonicalRowSelector(
   if (rowSelector.kind === "absolute") {
     return `[${rowSelector.rowIndex}]`
   }
+  if (rowSelector.kind === "absolute-window") {
+    return `[${rowSelector.startRowIndex}..${rowSelector.endRowIndex}]`
+  }
   if (rowSelector.kind === "relative") {
     return `[${rowSelector.offset >= 0 ? `+${rowSelector.offset}` : rowSelector.offset}]`
   }
@@ -456,6 +481,7 @@ function formatCanonicalRowSelector(
 function formatSmartsheetReference(
   sheetReference: string | null | undefined,
   referenceName: string,
+  rangeReferenceName: string | null | undefined,
   rowSelector: DataGridFormulaRowSelector,
   options: Pick<DataGridSpreadsheetFormatFormulaReferenceOptions, "referenceParserOptions">,
 ): string {
@@ -466,13 +492,22 @@ function formatSmartsheetReference(
   if (normalized.includes("]")) {
     throw new Error("[DataGridSpreadsheet] Smartsheet reference names cannot contain ']'.")
   }
-  if (rowSelector.kind !== "current" && rowSelector.kind !== "absolute") {
-    throw new Error("[DataGridSpreadsheet] Smartsheet output syntax currently supports only current-row and absolute-row references.")
+  if (
+    rowSelector.kind !== "current"
+    && rowSelector.kind !== "absolute"
+    && rowSelector.kind !== "absolute-window"
+  ) {
+    throw new Error("[DataGridSpreadsheet] Smartsheet output syntax currently supports only current-row, absolute-row, and same-column range references.")
   }
   const base = options.referenceParserOptions?.smartsheetAbsoluteRowBase === 0 ? 0 : 1
+  const normalizedRangeReference = typeof rangeReferenceName === "string" && rangeReferenceName.trim().length > 0
+    ? rangeReferenceName.trim()
+    : normalized
   const referenceText = rowSelector.kind === "current"
     ? `[${normalized}]@row`
-    : `[${normalized}]${rowSelector.rowIndex + base}`
+    : rowSelector.kind === "absolute"
+      ? `[${normalized}]${rowSelector.rowIndex + base}`
+      : `[${normalized}]${rowSelector.startRowIndex + base}:[${normalizedRangeReference}]${rowSelector.endRowIndex + base}`
   const prefix = typeof sheetReference === "string" && sheetReference.trim().length > 0
     ? `${formatFormulaSheetReference(sheetReference)}!`
     : ""
@@ -622,6 +657,7 @@ export function analyzeDataGridSpreadsheetCellInput(
         identifier: node.name,
         sheetReference,
         referenceName: node.referenceName,
+        rangeReferenceName: node.rangeReferenceName ?? null,
         rowSelector,
         span,
         targetRowIndexes: resolveTargetRowIndexes(
@@ -630,6 +666,7 @@ export function analyzeDataGridSpreadsheetCellInput(
           options.resolveReferenceRowCount?.({
             sheetReference,
             referenceName: node.referenceName,
+            rangeReferenceName: node.rangeReferenceName ?? null,
             rowSelector,
           }) ?? options.rowCount,
         ),
@@ -674,12 +711,21 @@ export function formatDataGridSpreadsheetFormulaReference(
   const rowSelector = resolveFormulaReferenceRowSelector(reference, options.currentRowIndex)
   const outputSyntax = resolveFormulaReferenceOutputSyntax(options)
   if (outputSyntax === "smartsheet") {
-    return formatSmartsheetReference(reference.sheetReference, reference.referenceName, rowSelector, options)
+    return formatSmartsheetReference(
+      reference.sheetReference,
+      reference.referenceName,
+      reference.rangeReferenceName ?? null,
+      rowSelector,
+      options,
+    )
   }
   const prefix = typeof reference.sheetReference === "string" && reference.sheetReference.trim().length > 0
     ? `${formatFormulaSheetReference(reference.sheetReference)}!`
     : ""
-  return `${prefix}${formatCanonicalReferenceName(reference.referenceName)}${formatCanonicalRowSelector(rowSelector)}`
+  const localReference = reference.rangeReferenceName
+    ? `${formatCanonicalReferenceName(reference.referenceName)}:${formatCanonicalReferenceName(reference.rangeReferenceName)}`
+    : formatCanonicalReferenceName(reference.referenceName)
+  return `${prefix}${localReference}${formatCanonicalRowSelector(rowSelector)}`
 }
 
 export function insertDataGridSpreadsheetFormulaReference(
@@ -750,6 +796,7 @@ export function createDataGridSpreadsheetCellFormulaModel(
       span: { ...reference.span },
       sheetReference: reference.sheetReference,
       referenceName: reference.referenceName,
+      rangeReferenceName: reference.rangeReferenceName,
       rowSelector: cloneFormulaRowSelector(reference.rowSelector),
       outputSyntax: resolveFormulaReferenceOutputSyntaxFromText(reference.text, options),
       rawText: null,
@@ -773,6 +820,7 @@ export function createDataGridSpreadsheetCellFormulaRuntimeModel(
       kind: "reference" as const,
       sheetReference: reference.sheetReference,
       referenceName: reference.referenceName,
+      rangeReferenceName: reference.rangeReferenceName,
       rowSelector: cloneFormulaRowSelector(reference.rowSelector),
     }))),
     isFormulaValid: analysis.isFormulaValid,
@@ -792,6 +840,7 @@ export function renderDataGridSpreadsheetCellFormulaModel(
       : formatDataGridSpreadsheetFormulaReference({
         sheetReference: reference.sheetReference,
         referenceName: reference.referenceName,
+        rangeReferenceName: reference.rangeReferenceName,
         rowSelector: reference.rowSelector,
       }, {
         currentRowIndex: options.currentRowIndex,
@@ -830,6 +879,7 @@ export function mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(
       kind: "reference" as const,
       sheetReference: replacement.sheetReference ?? null,
       referenceName: replacement.referenceName,
+      rangeReferenceName: replacement.rangeReferenceName ?? null,
       rowSelector: cloneFormulaRowSelector(
         resolveFormulaReferenceRowSelector(replacement, options.currentRowIndex),
       ),
@@ -865,6 +915,7 @@ export function renderDataGridSpreadsheetCellFormulaRuntimeModel(
       ...reference,
       sheetReference: binding.sheetReference,
       referenceName: binding.referenceName,
+      rangeReferenceName: binding.rangeReferenceName,
       rowSelector: cloneFormulaRowSelector(binding.rowSelector),
       rawText: null,
     })
@@ -899,6 +950,7 @@ export function mapDataGridSpreadsheetCellFormulaModelReferences(
       ...reference,
       sheetReference: replacement.sheetReference ?? null,
       referenceName: replacement.referenceName,
+      rangeReferenceName: replacement.rangeReferenceName ?? null,
       rowSelector: cloneFormulaRowSelector(
         resolveFormulaReferenceRowSelector(replacement, options.currentRowIndex),
       ),
@@ -949,6 +1001,7 @@ export function rewriteDataGridSpreadsheetCellFormulaModelReferences(
       ...reference,
       sheetReference: replacement.sheetReference ?? null,
       referenceName: replacement.referenceName,
+      rangeReferenceName: replacement.rangeReferenceName ?? null,
       rowSelector: cloneFormulaRowSelector(
         resolveFormulaReferenceRowSelector(replacement, options.currentRowIndex),
       ),

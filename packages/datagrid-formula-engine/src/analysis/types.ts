@@ -34,6 +34,7 @@ export interface DataGridFormulaExplainNode {
   name?: string
   sheetReference?: string | null
   referenceName?: string
+  rangeReferenceName?: string | null
   rowSelector?: DataGridFormulaRowSelector
   operator?: DataGridFormulaOperator | "CALL"
   value?: DataGridFormulaValue

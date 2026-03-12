@@ -626,6 +626,441 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     workbook.dispose()
   })
 
+  it("lets users drag the active formula reference to another cell", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=")
+    await flushUiAndTimers()
+
+    await selectGridCell(wrapper, 0, 1)
+
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=[price]@row")
+    expect(wrapper.find(".spreadsheet-formula-reference-overlay").exists()).toBe(true)
+
+    const dragHandle = wrapper.get(".spreadsheet-formula-reference-handle--top-left")
+    await dragHandle.trigger("mousedown", {
+      button: 0,
+      clientX: 8,
+      clientY: 8,
+    })
+
+    await findGridCell(wrapper, 1, 2).trigger("mousemove", {
+      clientX: 24,
+      clientY: 24,
+    })
+    window.dispatchEvent(new MouseEvent("mouseup", {
+      bubbles: true,
+      button: 0,
+      clientX: 24,
+      clientY: 24,
+    }))
+    await flushUiAndTimers()
+
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=[total]2")
+    expect(wrapper.find(".spreadsheet-formula-reference-overlay").exists()).toBe(true)
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("lets users resize a rectangular formula reference from the overlay handles", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=SUM([qty]1:[price]2)")
+    await flushUiAndTimers()
+
+    expect(wrapper.find(".spreadsheet-formula-reference-overlay").exists()).toBe(true)
+
+    const dragHandle = wrapper.get(".spreadsheet-formula-reference-handle--bottom-right")
+    await dragHandle.trigger("mousedown", {
+      button: 0,
+      clientX: 24,
+      clientY: 24,
+    })
+
+    await findGridCell(wrapper, 1, 2).trigger("mousemove", {
+      clientX: 40,
+      clientY: 24,
+    })
+    window.dispatchEvent(new MouseEvent("mouseup", {
+      bubbles: true,
+      button: 0,
+      clientX: 40,
+      clientY: 24,
+    }))
+    await flushUiAndTimers()
+
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=SUM([qty]1:[total]2)")
+    expect(wrapper.find(".spreadsheet-formula-reference-overlay").exists()).toBe(true)
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("inserts cross-sheet references after switching sheets during formula editing", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=")
+    await flushUiAndTimers()
+
+    const ordersTab = wrapper.findAll("button").find(button => button.text().includes("Orders") && !button.text().includes("customer"))
+    expect(ordersTab).toBeDefined()
+    await ordersTab!.trigger("click")
+    await flushUiAndTimers()
+
+    await selectGridCell(wrapper, 0, 2)
+
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=orders![total]1")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("lets users drag an existing cross-sheet reference while viewing the target sheet", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=orders![price]1")
+    await flushUiAndTimers()
+
+    const ordersTab = wrapper.findAll("button").find(button => button.text().includes("Orders") && !button.text().includes("customer"))
+    expect(ordersTab).toBeDefined()
+    await ordersTab!.trigger("click")
+    await flushUiAndTimers()
+
+    expect(wrapper.find(".spreadsheet-formula-reference-overlay").exists()).toBe(true)
+
+    const dragHandle = wrapper.get(".spreadsheet-formula-reference-handle--top-left")
+    await dragHandle.trigger("mousedown", {
+      button: 0,
+      clientX: 8,
+      clientY: 8,
+    })
+
+    await findGridCell(wrapper, 1, 2).trigger("mousemove", {
+      clientX: 24,
+      clientY: 24,
+    })
+    window.dispatchEvent(new MouseEvent("mouseup", {
+      bubbles: true,
+      button: 0,
+      clientX: 24,
+      clientY: 24,
+    }))
+    await flushUiAndTimers()
+
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=orders![total]2")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("highlights the target sheet tab for an active cross-sheet formula reference", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=orders![price]1")
+    await flushUiAndTimers()
+
+    const ordersTab = wrapper.findAll(".spreadsheet-tab").find(button => button.text().includes("Orders") && !button.text().includes("customer"))
+    expect(ordersTab).toBeDefined()
+    expect(ordersTab!.attributes("data-reference-target")).toBe("true")
+    expect(ordersTab!.classes()).toContain("spreadsheet-tab--reference-target")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("navigates to the target sheet when clicking a cross-sheet reference chip", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=orders![price]1")
+    await flushUiAndTimers()
+
+    const referenceChip = wrapper.findAll(".spreadsheet-reference-chip").find(button => button.text().includes("orders![price]1"))
+    expect(referenceChip).toBeDefined()
+    await referenceChip!.trigger("click")
+    await flushUiAndTimers()
+
+    const ordersTab = wrapper.findAll(".spreadsheet-tab").find(button => button.text().includes("Orders") && !button.text().includes("customer"))
+    expect(ordersTab).toBeDefined()
+    expect(ordersTab!.classes()).toContain("spreadsheet-tab--active")
+
+    expect(wrapper.find(".spreadsheet-formula-reference-overlay").exists()).toBe(true)
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=orders![price]1")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("reveals the full target range when clicking a cross-sheet range reference chip", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=SUM(orders![qty]1:[price]2)")
+    await flushUiAndTimers()
+
+    const referenceChip = wrapper.findAll(".spreadsheet-reference-chip").find(button => button.text().includes("orders![qty]1:[price]2"))
+    expect(referenceChip).toBeDefined()
+    await referenceChip!.trigger("click")
+    await flushUiAndTimers()
+
+    const ordersTab = wrapper.findAll(".spreadsheet-tab").find(button => button.text().includes("Orders") && !button.text().includes("customer"))
+    expect(ordersTab).toBeDefined()
+    expect(ordersTab!.classes()).toContain("spreadsheet-tab--active")
+
+    expect(findGridCell(wrapper, 0, 0).classes()).toContain("spreadsheet-cell--reference")
+    expect(findGridCell(wrapper, 1, 1).classes()).toContain("spreadsheet-cell--reference")
+    expect(wrapper.find(".spreadsheet-formula-reference-overlay").exists()).toBe(true)
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=SUM(orders![qty]1:[price]2)")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("previews the target tab when hovering a cross-sheet reference chip", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=orders![price]1 + [value]@row")
+    await flushUiAndTimers()
+
+    const ordersTab = wrapper.findAll(".spreadsheet-tab").find(button => button.text().includes("Orders") && !button.text().includes("customer"))
+    expect(ordersTab).toBeDefined()
+    expect(ordersTab!.attributes("data-reference-target")).toBe("false")
+
+    const referenceChip = wrapper.findAll(".spreadsheet-reference-chip").find(button => button.text().includes("orders![price]1"))
+    expect(referenceChip).toBeDefined()
+    await referenceChip!.trigger("mouseenter")
+    await flushUiAndTimers()
+
+    expect(ordersTab!.attributes("data-reference-target")).toBe("true")
+    expect(ordersTab!.classes()).toContain("spreadsheet-tab--reference-target")
+
+    await referenceChip!.trigger("mouseleave")
+    await flushUiAndTimers()
+
+    expect(ordersTab!.attributes("data-reference-target")).toBe("false")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("temporarily reveals a cross-sheet target on hover and restores the origin sheet on leave", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const summaryTab = wrapper.findAll("button").find(button => button.text().includes("Summary"))
+    expect(summaryTab).toBeDefined()
+    await summaryTab!.trigger("click")
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=SUM(orders![qty]1:[price]2)")
+    await flushUiAndTimers()
+
+    const referenceChip = wrapper.findAll(".spreadsheet-reference-chip").find(button => button.text().includes("orders![qty]1:[price]2"))
+    expect(referenceChip).toBeDefined()
+
+    await referenceChip!.trigger("mouseenter")
+    await new Promise(resolve => setTimeout(resolve, 150))
+    await flushUiAndTimers()
+
+    const ordersTab = wrapper.findAll(".spreadsheet-tab").find(button => button.text().includes("Orders") && !button.text().includes("customer"))
+    expect(ordersTab).toBeDefined()
+    expect(ordersTab!.classes()).toContain("spreadsheet-tab--active")
+    expect(findGridCell(wrapper, 0, 0).classes()).toContain("spreadsheet-cell--reference")
+    expect(findGridCell(wrapper, 1, 1).classes()).toContain("spreadsheet-cell--reference")
+
+    await referenceChip!.trigger("mouseleave")
+    await flushUiAndTimers()
+
+    const refreshedSummaryTab = wrapper.findAll(".spreadsheet-tab").find(button => button.text().includes("Summary"))
+    expect(refreshedSummaryTab).toBeDefined()
+    expect(refreshedSummaryTab!.classes()).toContain("spreadsheet-tab--active")
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=SUM(orders![qty]1:[price]2)")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
   it("cancels formula bar edits and restores the pre-edit cell state", async () => {
     const workbook = createWorkbookModel()
 
@@ -681,6 +1116,47 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     workbook.dispose()
   })
 
+  it("autocompletes formula functions from the known registry", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    const formulaInputElement = formulaInput.element as HTMLTextAreaElement
+
+    await formulaInput.trigger("focus")
+    formulaInputElement.value = "=su"
+    formulaInputElement.setSelectionRange(3, 3)
+    await formulaInput.trigger("input")
+    await flushUiAndTimers()
+
+    expect(wrapper.find('[data-spreadsheet-formula-autocomplete="true"]').exists()).toBe(true)
+    expect(wrapper.find('[data-formula-autocomplete-item="SUM"]').exists()).toBe(true)
+
+    await formulaInput.trigger("keydown", { key: "Enter" })
+    await flushUiAndTimers()
+
+    expect(formulaInputElement.value).toBe("=SUM()")
+    expect(formulaInputElement.selectionStart).toBe(5)
+    expect(formulaInputElement.selectionEnd).toBe(5)
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
   it("keeps derived view sheets read-only while still rendering them in the workbook shell", async () => {
     const workbook = createWorkbookModel()
 
@@ -710,7 +1186,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     expect(wrapper.find(".cell-fill-handle").exists()).toBe(false)
     expect(readViewRevenueState(workbook)).toEqual({
       rowCount: 2,
-      revenueRawInput: "1680",
+      revenueRawInput: "",
       revenueDisplayValue: 1680,
     })
 
@@ -719,7 +1195,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
 
     expect(readViewRevenueState(workbook)).toEqual({
       rowCount: 2,
-      revenueRawInput: "1680",
+      revenueRawInput: "",
       revenueDisplayValue: 1680,
     })
 

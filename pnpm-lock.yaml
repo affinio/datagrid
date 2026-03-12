@@ -193,6 +193,9 @@ importers:
       '@affino/datagrid-core':
         specifier: workspace:*
         version: link:../datagrid-core
+      '@affino/datagrid-formula-engine':
+        specifier: workspace:*
+        version: link:../datagrid-formula-engine
       '@affino/datagrid-theme':
         specifier: workspace:*
         version: link:../datagrid-theme
@@ -202,6 +205,9 @@ importers:
       '@affino/datagrid-vue-app':
         specifier: workspace:*
         version: link:../datagrid-vue-app
+      '@affino/menu-vue':
+        specifier: ^2.1.1
+        version: 2.1.1(@affino/menu-core@1.1.0)(vue@3.4.38(typescript@5.9.3))
       vue:
         specifier: 3.4.38
         version: 3.4.38(typescript@5.9.3)

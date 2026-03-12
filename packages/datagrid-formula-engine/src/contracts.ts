@@ -16,6 +16,7 @@ export type DataGridFormulaReferenceDomain = "field" | "computed" | "meta"
 export type DataGridFormulaReferenceRowDomain =
   | { kind: "current" }
   | { kind: "absolute"; rowIndex: number }
+  | { kind: "absolute-window"; startRowIndex: number; endRowIndex: number }
   | { kind: "relative"; offset: number }
   | { kind: "window"; startOffset: number; endOffset: number }
 
@@ -44,6 +45,13 @@ function normalizeDataGridFormulaReferenceRowDomain(
   if (rowDomain.kind === "absolute") {
     return { kind: "absolute", rowIndex: Math.trunc(rowDomain.rowIndex) }
   }
+  if (rowDomain.kind === "absolute-window") {
+    return {
+      kind: "absolute-window",
+      startRowIndex: Math.trunc(rowDomain.startRowIndex),
+      endRowIndex: Math.trunc(rowDomain.endRowIndex),
+    }
+  }
   if (rowDomain.kind === "relative") {
     return { kind: "relative", offset: Math.trunc(rowDomain.offset) }
   }
@@ -62,6 +70,9 @@ function serializeDataGridFormulaReferenceRowDomain(
   }
   if (rowDomain.kind === "absolute") {
     return `absolute:${rowDomain.rowIndex}`
+  }
+  if (rowDomain.kind === "absolute-window") {
+    return `absolute-window:${rowDomain.startRowIndex}:${rowDomain.endRowIndex}`
   }
   if (rowDomain.kind === "relative") {
     return `relative:${rowDomain.offset}`
@@ -84,6 +95,19 @@ function parseDataGridFormulaReferenceRowDomain(
     const offset = Number(normalized.slice("relative:".length))
     if (Number.isInteger(offset)) {
       return { kind: "relative", offset }
+    }
+    return null
+  }
+  if (normalized.startsWith("absolute-window:")) {
+    const payload = normalized.slice("absolute-window:".length)
+    const separatorIndex = payload.indexOf(":")
+    if (separatorIndex <= 0) {
+      return null
+    }
+    const startRowIndex = Number(payload.slice(0, separatorIndex))
+    const endRowIndex = Number(payload.slice(separatorIndex + 1))
+    if (Number.isInteger(startRowIndex) && Number.isInteger(endRowIndex)) {
+      return { kind: "absolute-window", startRowIndex, endRowIndex }
     }
     return null
   }

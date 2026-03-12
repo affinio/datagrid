@@ -117,6 +117,9 @@ function serializeFormulaAstRowSelector(node: Extract<DataGridFormulaAstNode, { 
   if (node.rowSelector.kind === "absolute") {
     return `absolute:${node.rowSelector.rowIndex}`
   }
+  if (node.rowSelector.kind === "absolute-window") {
+    return `absolute-window:${node.rowSelector.startRowIndex}:${node.rowSelector.endRowIndex}`
+  }
   if (node.rowSelector.kind === "relative") {
     return `relative:${node.rowSelector.offset}`
   }
@@ -130,7 +133,7 @@ function serializeFormulaAst(node: DataGridFormulaAstNode): string {
     case "literal":
       return `lit(${serializeFormulaValue(node.value)})`
     case "identifier":
-      return `id(${JSON.stringify(node.sheetReference ?? "")}:${JSON.stringify(node.referenceName)}:${serializeFormulaAstRowSelector(node)})`
+      return `id(${JSON.stringify(node.sheetReference ?? "")}:${JSON.stringify(node.referenceName)}:${JSON.stringify(node.rangeReferenceName ?? "")}:${serializeFormulaAstRowSelector(node)})`
     case "call":
       return `call(${JSON.stringify(node.name)}:${node.args.map(arg => serializeFormulaAst(arg)).join(",")})`
     case "unary":

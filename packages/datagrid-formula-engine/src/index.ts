@@ -81,6 +81,8 @@ export {
 } from "./contracts.js"
 
 export {
+  DATAGRID_DEFAULT_FORMULA_FUNCTIONS,
+  normalizeFormulaFunctionRegistry,
   collectFormulaContextKeys,
   explainDataGridFormulaExpression,
   explainDataGridFormulaFieldDefinition,

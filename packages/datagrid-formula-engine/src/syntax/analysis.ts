@@ -137,6 +137,7 @@ function createFormulaExplainNode(root: DataGridFormulaAstNode): DataGridFormula
       name: root.name,
       sheetReference: root.sheetReference,
       referenceName: root.referenceName,
+      rangeReferenceName: root.rangeReferenceName ?? null,
       rowSelector: root.rowSelector,
     }
   }

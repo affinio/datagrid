@@ -93,6 +93,7 @@ export function parseFormula(
           name: parsedIdentifier.name,
           sheetReference: parsedIdentifier.sheetReference,
           referenceName: parsedIdentifier.referenceName,
+          rangeReferenceName: parsedIdentifier.rangeReferenceName,
           rowSelector: parsedIdentifier.rowSelector,
           span: createFormulaSourceSpan(token.position, token.end),
         }

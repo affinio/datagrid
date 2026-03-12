@@ -19,6 +19,7 @@ export interface DataGridParsedFormulaIdentifier {
   name: string
   sheetReference: string | null
   referenceName: string
+  rangeReferenceName: string | null
   rowSelector: DataGridFormulaRowSelector
 }
 
@@ -32,6 +33,7 @@ interface DataGridReadFormulaIdentifierResult {
   value: string
   sheetReference: string | null
   referenceName: string
+  rangeReferenceName: string | null
   rowSelector: DataGridFormulaRowSelector
   end: number
 }
@@ -152,10 +154,14 @@ function formatFormulaSheetReference(reference: string): string {
 function serializeParsedFormulaIdentifier(
   sheetReference: string | null,
   referenceName: string,
+  rangeReferenceName: string | null,
   rowSelector: DataGridFormulaRowSelector,
 ): string {
   const prefix = sheetReference ? `${formatFormulaSheetReference(sheetReference)}!` : ""
-  return `${prefix}${referenceName}${serializeFormulaRowSelector(rowSelector)}`
+  const localReference = rangeReferenceName && rangeReferenceName !== referenceName
+    ? `${referenceName}:${rangeReferenceName}`
+    : referenceName
+  return `${prefix}${localReference}${serializeFormulaRowSelector(rowSelector)}`
 }
 
 export function normalizeFormulaReference(reference: string): string {
@@ -173,11 +179,25 @@ export function normalizeFormulaReference(reference: string): string {
 function looksLikeFormulaRowSelectorValue(value: string): boolean {
   const normalized = value.trim()
   return /^[+-]?\d+$/.test(normalized)
+    || /^\d+\s*\.\.\s*\d+$/.test(normalized)
     || /^[+-]?\d+\s*:\s*[+-]?\d+$/.test(normalized)
 }
 
 function parseFormulaRowSelectorValue(value: string): DataGridFormulaRowSelector | null {
   const normalized = value.trim()
+  const absoluteWindowMatch = /^(\d+)\s*\.\.\s*(\d+)$/.exec(normalized)
+  if (absoluteWindowMatch) {
+    const startRowIndex = Number(absoluteWindowMatch[1])
+    const endRowIndex = Number(absoluteWindowMatch[2])
+    if (startRowIndex > endRowIndex) {
+      return null
+    }
+    return {
+      kind: "absolute-window",
+      startRowIndex,
+      endRowIndex,
+    }
+  }
   const windowMatch = /^([+-]?\d+)\s*:\s*([+-]?\d+)$/.exec(normalized)
   if (windowMatch) {
     const startOffset = Number(windowMatch[1])
@@ -206,6 +226,9 @@ function serializeFormulaRowSelector(selector: DataGridFormulaRowSelector): stri
   }
   if (selector.kind === "absolute") {
     return `[${selector.rowIndex}]`
+  }
+  if (selector.kind === "absolute-window") {
+    return `[${selector.startRowIndex}..${selector.endRowIndex}]`
   }
   if (selector.kind === "relative") {
     return `[${selector.offset >= 0 ? `+${selector.offset}` : selector.offset}]`
@@ -369,6 +392,23 @@ function readFormulaReferenceAt(
   }
 }
 
+function readFormulaReferenceNameAt(
+  input: string,
+  start: number,
+): {
+  referenceName: string
+  end: number
+} | null {
+  const parsed = readFormulaReferenceAt(input, start)
+  if (!parsed) {
+    return null
+  }
+  return {
+    referenceName: parsed.value,
+    end: parsed.end,
+  }
+}
+
 function isFormulaReferenceBoundary(character: string | undefined): boolean {
   return typeof character !== "string"
     || character === " "
@@ -433,8 +473,10 @@ function readCanonicalTrailingFormulaRowSelectorAt(
 function readSmartsheetTrailingFormulaRowSelectorAt(
   input: string,
   start: number,
+  referenceName: string,
   options: ResolvedDataGridFormulaReferenceParserOptions,
 ): {
+  rangeReferenceName: string | null
   rowSelector: DataGridFormulaRowSelector
   end: number
 } | null {
@@ -445,37 +487,96 @@ function readSmartsheetTrailingFormulaRowSelectorAt(
       return null
     }
     return {
+      rangeReferenceName: null,
       rowSelector: { kind: "current" },
       end: start + 4,
     }
   }
-  if (!(current && current >= "0" && current <= "9")) {
+  const readAbsoluteRowSelector = (selectorStart: number): { rowIndex: number; end: number } | null => {
+    const selectorCurrent = input[selectorStart]
+    if (!(selectorCurrent && selectorCurrent >= "0" && selectorCurrent <= "9")) {
+      return null
+    }
+    let selectorCursor = selectorStart + 1
+    while (selectorCursor < input.length) {
+      const next = input[selectorCursor]
+      if (!(next && next >= "0" && next <= "9")) {
+        break
+      }
+      selectorCursor += 1
+    }
+    const rowNumber = Number(input.slice(selectorStart, selectorCursor))
+    if (!Number.isInteger(rowNumber)) {
+      return null
+    }
+    if (options.smartsheetAbsoluteRowBase === 1 && rowNumber <= 0) {
+      throwFormulaError(
+        `Smartsheet row selector '${input.slice(selectorStart, selectorCursor)}' must be >= 1.`,
+        createFormulaSourceSpan(selectorStart, selectorCursor),
+      )
+    }
+    return {
+      rowIndex: rowNumber - options.smartsheetAbsoluteRowBase,
+      end: selectorCursor,
+    }
+  }
+
+  const absoluteSelector = readAbsoluteRowSelector(start)
+  if (!absoluteSelector) {
     return null
   }
-  let cursor = start + 1
-  while (cursor < input.length) {
-    const next = input[cursor]
-    if (!(next && next >= "0" && next <= "9")) {
-      break
+
+  let cursor = absoluteSelector.end
+  if (input[cursor] !== ":") {
+    return {
+      rangeReferenceName: null,
+      rowSelector: {
+        kind: "absolute",
+        rowIndex: absoluteSelector.rowIndex,
+      },
+      end: absoluteSelector.end,
     }
+  }
+
+  cursor += 1
+  while (cursor < input.length && /\s/.test(input[cursor] ?? "")) {
     cursor += 1
   }
-  const rowNumber = Number(input.slice(start, cursor))
-  if (!Number.isInteger(rowNumber)) {
-    return null
+
+  let rangeReferenceName: string | null = null
+  if (input[cursor] === "[") {
+    const rangeReference = readFormulaReferenceNameAt(input, cursor)
+    if (!rangeReference) {
+      throwFormulaError(
+        `Invalid Smartsheet range reference '${input.slice(start, cursor + 1)}'.`,
+        createFormulaSourceSpan(start, cursor + 1),
+      )
+    }
+    rangeReferenceName = rangeReference.referenceName === referenceName ? null : rangeReference.referenceName
+    cursor = rangeReference.end
   }
-  if (options.smartsheetAbsoluteRowBase === 1 && rowNumber <= 0) {
+
+  const rangeEndSelector = readAbsoluteRowSelector(cursor)
+  if (!rangeEndSelector) {
     throwFormulaError(
-      `Smartsheet row selector '${input.slice(start, cursor)}' must be >= 1.`,
-      createFormulaSourceSpan(start, cursor),
+      `Invalid Smartsheet range reference '${input.slice(start, Math.max(start + 1, cursor + 1))}'.`,
+      createFormulaSourceSpan(start, Math.max(start + 1, cursor + 1)),
+    )
+  }
+  if (rangeEndSelector.rowIndex < absoluteSelector.rowIndex) {
+    throwFormulaError(
+      `Smartsheet range start must be <= range end.`,
+      createFormulaSourceSpan(start, rangeEndSelector.end),
     )
   }
   return {
+    rangeReferenceName,
     rowSelector: {
-      kind: "absolute",
-      rowIndex: rowNumber - options.smartsheetAbsoluteRowBase,
+      kind: "absolute-window",
+      startRowIndex: absoluteSelector.rowIndex,
+      endRowIndex: rangeEndSelector.rowIndex,
     },
-    end: cursor,
+    end: rangeEndSelector.end,
   }
 }
 
@@ -616,9 +717,10 @@ function readLocalFormulaIdentifierAt(
         if (rowSelector) {
           const referenceName = normalizeFormulaReferenceSegments(segments)
           return {
-            value: serializeParsedFormulaIdentifier(null, referenceName, rowSelector.rowSelector),
+            value: serializeParsedFormulaIdentifier(null, referenceName, null, rowSelector.rowSelector),
             sheetReference: null,
             referenceName,
+            rangeReferenceName: null,
             rowSelector: rowSelector.rowSelector,
             end: rowSelector.end,
           }
@@ -641,13 +743,52 @@ function readLocalFormulaIdentifierAt(
   }
 
   const referenceName = normalizeFormulaReferenceSegments(segments)
-  if (supportsSmartsheetFormulaReferenceSyntax(parserOptions.syntax)) {
-    const smartsheetSelector = readSmartsheetTrailingFormulaRowSelectorAt(input, cursor, parserOptions)
-    if (smartsheetSelector && isFormulaReferenceBoundary(input[smartsheetSelector.end])) {
+  if (input[cursor] === ":") {
+    const rangeReference = readLocalFormulaIdentifierAt(input, cursor + 1, parserOptions)
+    if (!rangeReference) {
+      throwFormulaError(
+        `Incomplete range reference at position ${cursor + 1}.`,
+        createFormulaSourceSpan(start, Math.max(start + 1, cursor + 1)),
+      )
+    }
+    if (rangeReference.rangeReferenceName) {
+      throwFormulaError(
+        `Nested range references are not supported.`,
+        createFormulaSourceSpan(start, rangeReference.end),
+      )
+    }
+    return {
+      value: serializeParsedFormulaIdentifier(null, referenceName, rangeReference.referenceName, rangeReference.rowSelector),
+      sheetReference: null,
+      referenceName,
+      rangeReferenceName: rangeReference.referenceName,
+      rowSelector: rangeReference.rowSelector,
+      end: rangeReference.end,
+    }
+  }
+
+  if (input[cursor] === "[") {
+    const rowSelector = readCanonicalTrailingFormulaRowSelectorAt(input, cursor)
+    if (rowSelector) {
       return {
-        value: serializeParsedFormulaIdentifier(null, referenceName, smartsheetSelector.rowSelector),
+        value: serializeParsedFormulaIdentifier(null, referenceName, null, rowSelector.rowSelector),
         sheetReference: null,
         referenceName,
+        rangeReferenceName: null,
+        rowSelector: rowSelector.rowSelector,
+        end: rowSelector.end,
+      }
+    }
+  }
+
+  if (supportsSmartsheetFormulaReferenceSyntax(parserOptions.syntax)) {
+    const smartsheetSelector = readSmartsheetTrailingFormulaRowSelectorAt(input, cursor, referenceName, parserOptions)
+    if (smartsheetSelector && isFormulaReferenceBoundary(input[smartsheetSelector.end])) {
+      return {
+        value: serializeParsedFormulaIdentifier(null, referenceName, smartsheetSelector.rangeReferenceName, smartsheetSelector.rowSelector),
+        sheetReference: null,
+        referenceName,
+        rangeReferenceName: smartsheetSelector.rangeReferenceName,
         rowSelector: smartsheetSelector.rowSelector,
         end: smartsheetSelector.end,
       }
@@ -658,6 +799,7 @@ function readLocalFormulaIdentifierAt(
     value: referenceName,
     sheetReference: null,
     referenceName,
+    rangeReferenceName: null,
     rowSelector: { kind: "current" },
     end: cursor,
   }
@@ -726,10 +868,12 @@ function readFormulaIdentifierAt(
           value: serializeParsedFormulaIdentifier(
             sheetReference.sheetReference,
             nested.referenceName,
+            nested.rangeReferenceName,
             nested.rowSelector,
           ),
           sheetReference: sheetReference.sheetReference,
           referenceName: nested.referenceName,
+          rangeReferenceName: nested.rangeReferenceName,
           rowSelector: nested.rowSelector,
           end: nested.end,
         }
@@ -749,6 +893,7 @@ export function parseDataGridFormulaIdentifier(
       name: "",
       sheetReference: null,
       referenceName: "",
+      rangeReferenceName: null,
       rowSelector: { kind: "current" },
     }
   }
@@ -758,6 +903,7 @@ export function parseDataGridFormulaIdentifier(
       name: parsed.value,
       sheetReference: parsed.sheetReference,
       referenceName: parsed.referenceName,
+      rangeReferenceName: parsed.rangeReferenceName,
       rowSelector: parsed.rowSelector,
     }
   }
@@ -766,6 +912,7 @@ export function parseDataGridFormulaIdentifier(
     name: referenceName,
     sheetReference: null,
     referenceName,
+    rangeReferenceName: null,
     rowSelector: { kind: "current" },
   }
 }

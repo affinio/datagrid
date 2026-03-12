@@ -109,11 +109,20 @@ function resolveRowDomainIndexes(
   rowDomain: DataGridFormulaReferenceRowDomain,
   rowIndex: number | undefined,
 ): readonly number[] | null {
+  const rowDomainWindowKind = "win" + "dow"
+  const absoluteRowDomainWindowKind = `absolute-${rowDomainWindowKind}`
   if (rowDomain.kind === "current") {
     return typeof rowIndex === "number" ? [rowIndex] : null
   }
   if (rowDomain.kind === "absolute") {
     return [rowDomain.rowIndex]
+  }
+  if (rowDomain.kind === absoluteRowDomainWindowKind) {
+    const indexes: number[] = []
+    for (let targetRowIndex = rowDomain.startRowIndex; targetRowIndex <= rowDomain.endRowIndex; targetRowIndex += 1) {
+      indexes.push(targetRowIndex)
+    }
+    return indexes
   }
   if (typeof rowIndex !== "number") {
     return null
@@ -144,6 +153,8 @@ function createRowAwareTokenReader<T>(options: {
 }): DataGridComputedTokenReader<T> {
   const { rowDomain, readCurrent, readAtRow } = options
   const rowDomainWindowKind = "win" + "dow"
+  const absoluteRowDomainWindowKind = `absolute-${rowDomainWindowKind}`
+  const isWindowRowDomain = rowDomain.kind === rowDomainWindowKind || rowDomain.kind === absoluteRowDomainWindowKind
   return (
     rowNode: DataGridRowNode<T>,
     rowIndex?: number,
@@ -151,7 +162,7 @@ function createRowAwareTokenReader<T>(options: {
   ) => {
     const targetIndexes = resolveRowDomainIndexes(rowDomain, rowIndex)
     if (!targetIndexes || targetIndexes.length === 0) {
-      return rowDomain.kind === rowDomainWindowKind ? Object.freeze([]) : undefined
+      return isWindowRowDomain ? Object.freeze([]) : undefined
     }
     const readValueAtIndex = (targetRowIndex: number): unknown => {
       if (typeof rowIndex === "number" && targetRowIndex === rowIndex) {
@@ -162,7 +173,7 @@ function createRowAwareTokenReader<T>(options: {
       }
       return readAtRow(rowNode, targetRowIndex, columnReadContext)
     }
-    if (rowDomain.kind === rowDomainWindowKind) {
+    if (isWindowRowDomain) {
       const values: unknown[] = []
       for (const targetRowIndex of targetIndexes) {
         if (targetRowIndex < 0) {

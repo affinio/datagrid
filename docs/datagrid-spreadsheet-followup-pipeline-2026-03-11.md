@@ -15,7 +15,6 @@ Remaining work after the 2026-03-11 direct-reference/core-worksheet increment.
 
 ## P2 Formula and Parser Surface
 
-- Smartsheet range refs.
 - Parser profile registry for Excel/A1 and additional dialects.
 - Public diagnostics surface for bad cross-sheet refs and relation metadata.
 - Named relation registry on top of `RELATED()` / `ROLLUP()`.
@@ -25,6 +24,7 @@ Remaining work after the 2026-03-11 direct-reference/core-worksheet increment.
 
 - Move the spreadsheet shell out of sandbox and into `datagrid-vue-app`.
 - Cross-sheet click-to-insert UX instead of local-ref-only insertion behavior.
+- Range resize/stretch editing on top of the new rectangular range grammar/runtime.
 - Reverse hover and preview: target cell to formula span and cross-tab highlighting.
 - Raw-input-preserving edit transaction flow through app/runtime.
 - Clipboard and history payloads that preserve raw formula plus style across sheets/workbooks.

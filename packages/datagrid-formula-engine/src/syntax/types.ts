@@ -50,6 +50,7 @@ export interface DataGridFormulaReferenceParserOptions {
 export type DataGridFormulaRowSelector =
   | { kind: "current" }
   | { kind: "absolute"; rowIndex: number }
+  | { kind: "absolute-window"; startRowIndex: number; endRowIndex: number }
   | { kind: "relative"; offset: number }
   | { kind: "window"; startOffset: number; endOffset: number }
 
@@ -84,6 +85,7 @@ export type DataGridFormulaAstNode =
     name: string
     sheetReference: string | null
     referenceName: string
+    rangeReferenceName?: string | null
     rowSelector: DataGridFormulaRowSelector
     span: DataGridFormulaSourceSpan
   }

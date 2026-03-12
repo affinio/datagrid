@@ -34,6 +34,14 @@ import {
   createDataGridSpreadsheetDerivedSheetRuntime,
   type DataGridSpreadsheetDerivedSheetRuntime,
 } from "./derivedSheetRuntime.js"
+import {
+  createSpreadsheetWorkbookRestoreDescriptor,
+  hydrateSpreadsheetWorkbookDataSheetModel,
+  createSpreadsheetWorkbookSheetStateExport,
+  normalizeSpreadsheetWorkbookViewSheetModelOptions,
+  resolveSpreadsheetWorkbookViewSheetModelOptionsFromState,
+  type SpreadsheetWorkbookSheetStateExportPayload,
+} from "./workbookPersistence.js"
 
 export interface DataGridSpreadsheetWorkbookDataSheetInput {
   id?: string
@@ -381,37 +389,6 @@ function normalizeSpreadsheetWorkbookViewDefinition(
   })
 }
 
-function normalizeSpreadsheetWorkbookViewSheetModelOptions(
-  options: DataGridSpreadsheetWorkbookViewSheetModelOptions | null | undefined,
-): DataGridSpreadsheetWorkbookViewSheetModelOptions | null {
-  if (!options) {
-    return {
-      rawInputRetention: "formula-only",
-    }
-  }
-  return {
-    sheetStyle: options.sheetStyle ?? null,
-    functionRegistry: options.functionRegistry,
-    referenceParserOptions: options.referenceParserOptions,
-    runtimeErrorPolicy: options.runtimeErrorPolicy ?? "error-value",
-    rawInputRetention: options.rawInputRetention ?? "formula-only",
-    resolveContextValue: options.resolveContextValue,
-  }
-}
-
-function resolveSpreadsheetWorkbookViewSheetModelOptionsFromState(
-  state: DataGridSpreadsheetSheetState,
-): DataGridSpreadsheetWorkbookViewSheetModelOptions {
-  return {
-    sheetStyle: state.sheetStyle ?? null,
-    functionRegistry: state.functionRegistry,
-    referenceParserOptions: state.referenceParserOptions,
-    runtimeErrorPolicy: state.runtimeErrorPolicy,
-    rawInputRetention: "formula-only",
-    resolveContextValue: state.resolveContextValue,
-  }
-}
-
 function areSpreadsheetWorkbookStringListsEqual(
   left: readonly string[],
   right: readonly string[],
@@ -498,58 +475,6 @@ function createSpreadsheetWorkbookSheetSnapshot(
     formulaCellCount: snapshot.formulaCellCount,
     errorCellCount: snapshot.errorCellCount,
   }
-}
-
-function createSpreadsheetWorkbookSheetStateExport(
-  sheet: SpreadsheetWorkbookSheetState,
-): DataGridSpreadsheetWorkbookSheetStateExport {
-  const sheetState = sheet.kind === "view"
-    ? {
-      sheetId: sheet.id,
-      sheetName: sheet.name,
-      columns: Object.freeze((sheet.derivedRuntime?.columns ?? Object.freeze([])).map(column => ({
-        key: column.key,
-        title: column.title,
-        style: column.style,
-      }))),
-      rows: Object.freeze([]),
-      sheetStyle: sheet.viewSheetModelOptions?.sheetStyle ?? null,
-      formulaTables: Object.freeze([]),
-      functionRegistry: sheet.viewSheetModelOptions?.functionRegistry,
-      referenceParserOptions: sheet.viewSheetModelOptions?.referenceParserOptions,
-      runtimeErrorPolicy: sheet.viewSheetModelOptions?.runtimeErrorPolicy ?? "error-value",
-      resolveContextValue: sheet.viewSheetModelOptions?.resolveContextValue,
-    }
-    : sheet.sheetModel.exportState()
-  const managedAliases = new Set(
-    [...sheet.managedTableAliases].map(alias => normalizeSpreadsheetWorkbookAlias(alias)),
-  )
-  return {
-    id: sheet.id,
-    name: sheet.name,
-    kind: sheet.kind,
-    viewDefinition: sheet.viewDefinition,
-    sheetState: {
-      ...sheetState,
-      sheetId: sheet.id,
-      sheetName: sheet.name,
-      formulaTables: Object.freeze(
-        sheetState.formulaTables.filter(binding => !managedAliases.has(
-          normalizeSpreadsheetWorkbookAlias(binding.name),
-        )),
-      ),
-    },
-  }
-}
-
-function isTypedPlainSpreadsheetSheetState(
-  state: DataGridSpreadsheetSheetState,
-): boolean {
-  return state.rows.length > 0 && state.rows.every(row => row.cells.every(cell => (
-    cell.style == null
-    && typeof cell.resolvedValue !== "undefined"
-    && !String(cell.rawInput ?? "").trimStart().startsWith("=")
-  )))
 }
 
 function collectSpreadsheetWorkbookDerivedInstabilityReasons(
@@ -941,113 +866,8 @@ export function createDataGridSpreadsheetWorkbookModel(
     resolveContextValue: sheetModelOptions?.resolveContextValue,
   })
 
-  const createEmptyDerivedRuntimeFromSheetState = (
-    state: DataGridSpreadsheetSheetState,
-  ): DataGridSpreadsheetDerivedSheetRuntime => createDataGridSpreadsheetDerivedSheetRuntime({
-    columns: state.columns.map(column => ({
-      key: column.key,
-      title: column.title,
-      style: column.style ?? null,
-    })),
-    rows: Object.freeze([]),
-  })
-
   const invalidateWorkbookGraphState = (): void => {
     graphState = null
-  }
-
-  const createSheetModelFromExportState = (
-    state: DataGridSpreadsheetSheetState,
-    sheetId: string,
-    sheetName: string,
-    sheetModelOptions: DataGridSpreadsheetWorkbookViewSheetModelOptions | null = null,
-  ): DataGridSpreadsheetSheetModel => {
-    if (isTypedPlainSpreadsheetSheetState(state)) {
-      const sheetModel = createDataGridSpreadsheetSheetModel({
-        sheetId,
-        sheetName,
-        columns: state.columns.map(column => ({
-          key: column.key,
-          title: column.title,
-          style: column.style,
-        })),
-        rows: [],
-        sheetStyle: state.sheetStyle,
-        formulaTables: state.formulaTables,
-        functionRegistry: sheetModelOptions?.functionRegistry ?? state.functionRegistry,
-        referenceParserOptions: sheetModelOptions?.referenceParserOptions ?? state.referenceParserOptions,
-        runtimeErrorPolicy: sheetModelOptions?.runtimeErrorPolicy ?? state.runtimeErrorPolicy,
-        rawInputRetention: sheetModelOptions?.rawInputRetention,
-        resolveContextValue: sheetModelOptions?.resolveContextValue ?? state.resolveContextValue,
-        resolveSheetReference: (sheetReference) => {
-          const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
-          if (normalizedAlias.length === 0) {
-            return null
-          }
-          return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
-        },
-      })
-      sheetModel.restoreState(state)
-      return sheetModel
-    }
-
-    const cellStylePatches: Array<{
-      cell: Parameters<DataGridSpreadsheetSheetModel["setCellStyle"]>[0]
-      style: Parameters<DataGridSpreadsheetSheetModel["setCellStyle"]>[1]
-    }> = []
-    const rows = state.rows.map((row, rowIndex) => {
-      const cells: Record<string, string> = {}
-      for (const cell of row.cells) {
-        cells[cell.columnKey] = cell.rawInput
-        if (cell.style != null) {
-          cellStylePatches.push({
-            cell: {
-              sheetId,
-              rowId: row.id,
-              rowIndex,
-              columnKey: cell.columnKey,
-            },
-            style: cell.style,
-          })
-        }
-      }
-      return {
-        id: row.id,
-        style: row.style,
-        cells,
-      }
-    })
-
-    const sheetModel = createDataGridSpreadsheetSheetModel({
-      sheetId,
-      sheetName,
-      columns: state.columns.map(column => ({
-        key: column.key,
-        title: column.title,
-        style: column.style,
-      })),
-      rows,
-      sheetStyle: state.sheetStyle,
-      formulaTables: state.formulaTables,
-      functionRegistry: sheetModelOptions?.functionRegistry ?? state.functionRegistry,
-      referenceParserOptions: sheetModelOptions?.referenceParserOptions ?? state.referenceParserOptions,
-      runtimeErrorPolicy: sheetModelOptions?.runtimeErrorPolicy ?? state.runtimeErrorPolicy,
-      rawInputRetention: sheetModelOptions?.rawInputRetention,
-      resolveContextValue: sheetModelOptions?.resolveContextValue ?? state.resolveContextValue,
-      resolveSheetReference: (sheetReference) => {
-        const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
-        if (normalizedAlias.length === 0) {
-          return null
-        }
-        return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
-      },
-    })
-
-    if (cellStylePatches.length > 0) {
-      sheetModel.setCellStyles(cellStylePatches)
-    }
-
-    return sheetModel
   }
 
   const createAliasToSheetMap = (): Map<string, SpreadsheetWorkbookSheetState> => {
@@ -1478,7 +1298,6 @@ export function createDataGridSpreadsheetWorkbookModel(
       resolvedGraphState.sheetOrderById,
     )
     materializeWorkbookViewSheets(scheduledComponents, resolvedGraphState.graph)
-
     let passCount = 0
     let converged = true
 
@@ -1651,7 +1470,7 @@ export function createDataGridSpreadsheetWorkbookModel(
       unsubscribe: null,
       exportedTableRevision: -1,
       exportedTableSource: null,
-      formulaStructureRevision: formulaDependencyState.revision,
+      formulaStructureRevision: sheetSnapshot.formulaStructureRevision,
       formulaUsesAllTables: formulaDependencyState.usesAllTables,
       formulaTableDependencyAliases: formulaDependencyState.tableDependencyAliases,
       formulaReferenceDependencyAliases: formulaDependencyState.referenceDependencyAliases,
@@ -1679,7 +1498,33 @@ export function createDataGridSpreadsheetWorkbookModel(
     ensureActive()
     return {
       activeSheetId,
-      sheets: Object.freeze(sheets.map(createSpreadsheetWorkbookSheetStateExport)),
+      sheets: Object.freeze(sheets.map((sheet): SpreadsheetWorkbookSheetStateExportPayload => (
+        sheet.kind === "view"
+          ? createSpreadsheetWorkbookSheetStateExport({
+            id: sheet.id,
+            name: sheet.name,
+            kind: "view",
+            viewDefinition: sheet.viewDefinition!,
+            viewSheetModelOptions: sheet.viewSheetModelOptions,
+            derivedRuntime: sheet.derivedRuntime!,
+            sheetState: null,
+            runtimeManagedFormulaTableAliases: new Set(
+              [...sheet.managedTableAliases].map(alias => normalizeSpreadsheetWorkbookAlias(alias)),
+            ),
+          })
+          : createSpreadsheetWorkbookSheetStateExport({
+            id: sheet.id,
+            name: sheet.name,
+            kind: "data",
+            viewDefinition: null,
+            viewSheetModelOptions: null,
+            derivedRuntime: null,
+            sheetState: sheet.sheetModel.exportState(),
+            runtimeManagedFormulaTableAliases: new Set(
+              [...sheet.managedTableAliases].map(alias => normalizeSpreadsheetWorkbookAlias(alias)),
+            ),
+          })
+      ))),
     }
   }
 
@@ -1748,6 +1593,7 @@ export function createDataGridSpreadsheetWorkbookModel(
           return {
             sheetReference: nextAlias,
             referenceName: reference.referenceName,
+            rangeReferenceName: reference.rangeReferenceName,
             rowSelector: reference.rowSelector,
           }
         }, {
@@ -1805,37 +1651,102 @@ export function createDataGridSpreadsheetWorkbookModel(
           if (!sourceAliases.has(normalizeSpreadsheetWorkbookAlias(reference.sheetReference))) {
             return null
           }
-          if (reference.rowSelector.kind !== "absolute") {
-            return null
-          }
           if (mutation.kind === "insert") {
-            if (reference.rowSelector.rowIndex < mutation.index) {
+            if (reference.rowSelector.kind === "absolute") {
+              if (reference.rowSelector.rowIndex < mutation.index) {
+                return null
+              }
+              return {
+                sheetReference: reference.sheetReference,
+                referenceName: reference.referenceName,
+                rangeReferenceName: reference.rangeReferenceName,
+                rowSelector: {
+                  kind: "absolute",
+                  rowIndex: reference.rowSelector.rowIndex + mutation.count,
+                },
+              }
+            }
+            if (reference.rowSelector.kind !== "absolute-window") {
               return null
             }
+            if (reference.rowSelector.endRowIndex < mutation.index) {
+              return null
+            }
+            const shiftWholeRange = reference.rowSelector.startRowIndex >= mutation.index
             return {
               sheetReference: reference.sheetReference,
               referenceName: reference.referenceName,
+              rangeReferenceName: reference.rangeReferenceName,
               rowSelector: {
-                kind: "absolute",
-                rowIndex: reference.rowSelector.rowIndex + mutation.count,
+                kind: "absolute-window",
+                startRowIndex: shiftWholeRange
+                  ? reference.rowSelector.startRowIndex + mutation.count
+                  : reference.rowSelector.startRowIndex,
+                endRowIndex: reference.rowSelector.endRowIndex + mutation.count,
               },
             }
           }
-          if (reference.rowSelector.rowIndex < mutation.index) {
+          if (reference.rowSelector.kind === "absolute") {
+            if (reference.rowSelector.rowIndex < mutation.index) {
+              return null
+            }
+            if (reference.rowSelector.rowIndex >= mutation.index + mutation.count) {
+              return {
+                sheetReference: reference.sheetReference,
+                referenceName: reference.referenceName,
+                rangeReferenceName: reference.rangeReferenceName,
+                rowSelector: {
+                  kind: "absolute",
+                  rowIndex: reference.rowSelector.rowIndex - mutation.count,
+                },
+              }
+            }
+            return {
+              kind: "invalid",
+            }
+          }
+          if (reference.rowSelector.kind !== "absolute-window") {
             return null
           }
-          if (reference.rowSelector.rowIndex >= mutation.index + mutation.count) {
+          const survivingIndexes: number[] = []
+          for (
+            let targetRowIndex = reference.rowSelector.startRowIndex;
+            targetRowIndex <= reference.rowSelector.endRowIndex;
+            targetRowIndex += 1
+          ) {
+            if (targetRowIndex < mutation.index) {
+              survivingIndexes.push(targetRowIndex)
+              continue
+            }
+            if (targetRowIndex >= mutation.index + mutation.count) {
+              survivingIndexes.push(targetRowIndex - mutation.count)
+            }
+          }
+          if (survivingIndexes.length === 0) {
+            return {
+              kind: "invalid",
+            }
+          }
+          if (survivingIndexes.length === 1) {
             return {
               sheetReference: reference.sheetReference,
               referenceName: reference.referenceName,
+              rangeReferenceName: reference.rangeReferenceName,
               rowSelector: {
                 kind: "absolute",
-                rowIndex: reference.rowSelector.rowIndex - mutation.count,
+                rowIndex: survivingIndexes[0]!,
               },
             }
           }
           return {
-            kind: "invalid",
+            sheetReference: reference.sheetReference,
+            referenceName: reference.referenceName,
+            rangeReferenceName: reference.rangeReferenceName,
+            rowSelector: {
+              kind: "absolute-window",
+              startRowIndex: survivingIndexes[0]!,
+              endRowIndex: survivingIndexes[survivingIndexes.length - 1]!,
+            },
           }
         }, {
           currentRowIndex: formulaCell.address.rowIndex,
@@ -1917,6 +1828,13 @@ export function createDataGridSpreadsheetWorkbookModel(
     restoreState(state) {
       ensureActive()
       const nextSheets = Array.isArray(state.sheets) ? state.sheets : []
+      const restoreDescriptors = nextSheets.map(nextSheet => createSpreadsheetWorkbookRestoreDescriptor(
+        nextSheet,
+        {
+          normalizeSheetId: normalizeSpreadsheetWorkbookSheetId,
+          normalizeSheetName: normalizeSpreadsheetWorkbookSheetName,
+        },
+      ))
 
       for (const sheet of sheets) {
         sheet.unsubscribe?.()
@@ -1935,37 +1853,37 @@ export function createDataGridSpreadsheetWorkbookModel(
         maxPasses: 0,
       }
 
-      for (const nextSheet of nextSheets) {
-        const nextName = normalizeSpreadsheetWorkbookSheetName(nextSheet.name)
-        const nextId = normalizeSpreadsheetWorkbookSheetId(nextSheet.id)
+      for (const nextSheet of restoreDescriptors) {
         if (nextSheet.kind === "view") {
-          if (!nextSheet.viewDefinition) {
-            throw new Error(
-              `[DataGridSpreadsheetWorkbook] view sheet '${nextId}' is missing its definition during restore.`,
-            )
-          }
-          const viewSheetModelOptions = resolveSpreadsheetWorkbookViewSheetModelOptionsFromState(nextSheet.sheetState)
           attachSheet(createSheetState({
-            id: nextId,
-            name: nextName,
+            id: nextSheet.id,
+            name: nextSheet.name,
             kind: "view",
-            sourceSheetId: nextSheet.viewDefinition.sourceSheetId,
-            pipeline: nextSheet.viewDefinition.pipeline,
-            sheetModelOptions: viewSheetModelOptions,
+            sourceSheetId: nextSheet.viewDefinition!.sourceSheetId,
+            pipeline: nextSheet.viewDefinition!.pipeline,
+            sheetModelOptions: nextSheet.viewSheetModelOptions!,
           }, {
             deferInitialViewMaterialization: true,
-            initialDerivedRuntime: createEmptyDerivedRuntimeFromSheetState(nextSheet.sheetState),
+            initialDerivedRuntime: nextSheet.initialDerivedRuntime!,
           }))
           continue
         }
-        const restoredSheetModel = createSheetModelFromExportState(
-          nextSheet.sheetState,
-          nextId,
-          nextName,
-        )
+        const restoredSheetModel = hydrateSpreadsheetWorkbookDataSheetModel({
+          sheetState: nextSheet.sheetState,
+          sheetModelOptions: null,
+          sheetId: nextSheet.id,
+          sheetName: nextSheet.name,
+          resolveSheetReference: (sheetReference) => {
+            const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
+            if (normalizedAlias.length === 0) {
+              return null
+            }
+            return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
+          },
+        })
         attachSheet(createSheetState({
-          id: nextId,
-          name: nextName,
+          id: nextSheet.id,
+          name: nextSheet.name,
           kind: "data",
           sheetModel: restoredSheetModel,
           ownSheetModel: true,

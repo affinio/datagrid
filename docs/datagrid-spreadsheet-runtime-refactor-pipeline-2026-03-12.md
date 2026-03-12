@@ -25,6 +25,12 @@ Reference run: `artifacts/performance/bench-datagrid-spreadsheet-workbook.assert
 - `restore p95`: `1662.038 ms`
 - `heap p95`: `417.776 MB`
 
+Working note:
+
+- Current benchmark budgets are provisional directional gates, not externally validated SLAs.
+- Accept improvements by comparison to the latest stable checkpoint, not by budget pass/fail alone.
+- Tighten budgets only after we lock a reference workload and target machine profile.
+
 ## Working Rules
 
 - One block in progress at a time.
@@ -210,6 +216,12 @@ Block close criteria:
 
 Objective: stop treating restore as full runtime reconstruction of everything.
 
+- [x] Defer initial formula evaluation while hydrating restored data sheets; let workbook sync evaluate once after all sheets are attached.
+- [x] Materialize view components during scheduled sync traversal instead of eagerly materializing all views before mutable sheets recompute.
+- [x] Extract workbook persistence helpers into a dedicated module so export/import logic stops living inline inside `workbookModel.ts`.
+- [x] Normalize persisted workbook sheets into restore descriptors before attach/hydrate logic runs.
+- [x] Move data-sheet restore hydration into the persistence layer so workbook restore stays orchestration-only.
+- [x] Seed restore-time workbook dependency metadata from persisted formulas so data-sheet formula runtime can hydrate on first recompute instead of during attach.
 - [ ] Split document persistence from runtime caches.
 - [ ] Persistent document state should contain only:
   - [ ] sheet metadata

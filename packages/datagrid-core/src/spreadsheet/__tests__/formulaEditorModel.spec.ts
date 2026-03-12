@@ -214,4 +214,75 @@ describe("spreadsheet formula model helpers", () => {
     })).toBe("=#REF! + [price]@row")
     expect(model!.rawInput).toBe("=orders![qty]2 + [price]@row")
   })
+
+  it("renders smartsheet same-column ranges from rewritten references", () => {
+    const analysis = analyzeDataGridSpreadsheetCellInput("=SUM([qty]2:[qty]4)", {
+      currentRowIndex: 0,
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+    })
+    const model = createDataGridSpreadsheetCellFormulaModel(analysis, {
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+    })
+
+    expect(model).not.toBeNull()
+
+    const nextModel = mapDataGridSpreadsheetCellFormulaModelReferences(model!, (reference) => {
+      if (reference.referenceName !== "qty") {
+        return null
+      }
+      return {
+        sheetReference: reference.sheetReference,
+        referenceName: reference.referenceName,
+        rowSelector: {
+          kind: "absolute-window",
+          startRowIndex: 2,
+          endRowIndex: 5,
+        },
+      }
+    }, {
+      currentRowIndex: 0,
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+    })
+
+    expect(renderDataGridSpreadsheetCellFormulaModel(nextModel, {
+      currentRowIndex: 0,
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+    })).toBe("=SUM([qty]3:[qty]6)")
+  })
+
+  it("renders rectangular smartsheet ranges from rewritten references", () => {
+    const analysis = analyzeDataGridSpreadsheetCellInput("=SUM([qty]2:[total]4)", {
+      currentRowIndex: 0,
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+    })
+    const model = createDataGridSpreadsheetCellFormulaModel(analysis, {
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+    })
+
+    expect(model).not.toBeNull()
+
+    const nextModel = mapDataGridSpreadsheetCellFormulaModelReferences(model!, (reference) => {
+      if (reference.referenceName !== "qty") {
+        return null
+      }
+      return {
+        sheetReference: reference.sheetReference,
+        referenceName: "price",
+        rangeReferenceName: "margin",
+        rowSelector: {
+          kind: "absolute-window",
+          startRowIndex: 1,
+          endRowIndex: 2,
+        },
+      }
+    }, {
+      currentRowIndex: 0,
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+    })
+
+    expect(renderDataGridSpreadsheetCellFormulaModel(nextModel, {
+      currentRowIndex: 0,
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+    })).toBe("=SUM([price]2:[margin]3)")
+  })
 })
