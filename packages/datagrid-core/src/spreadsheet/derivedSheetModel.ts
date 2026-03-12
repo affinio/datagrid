@@ -10,6 +10,7 @@ import type {
   DataGridSpreadsheetCellSnapshot,
   DataGridSpreadsheetCellStylePatch,
   DataGridSpreadsheetFormulaCellSnapshot,
+  DataGridSpreadsheetFormulaStructuralCellSnapshot,
   DataGridSpreadsheetFormulaStructuralPatch,
   DataGridSpreadsheetFormulaTablePatch,
   DataGridSpreadsheetRowInput,
@@ -20,6 +21,7 @@ import type {
 } from "./sheetModel.js"
 
 const EMPTY_FORMULA_CELLS = Object.freeze([]) as readonly DataGridSpreadsheetFormulaCellSnapshot[]
+const EMPTY_STRUCTURAL_FORMULA_CELLS = Object.freeze([]) as readonly DataGridSpreadsheetFormulaStructuralCellSnapshot[]
 
 export interface CreateDataGridSpreadsheetDerivedSheetModelOptions {
   sheetId: string | null
@@ -360,6 +362,10 @@ export function createDataGridSpreadsheetDerivedSheetModel(
     getFormulaCells() {
       ensureActive()
       return EMPTY_FORMULA_CELLS
+    },
+    getFormulaStructuralCells() {
+      ensureActive()
+      return EMPTY_STRUCTURAL_FORMULA_CELLS
     },
     getTableSource() {
       ensureActive()

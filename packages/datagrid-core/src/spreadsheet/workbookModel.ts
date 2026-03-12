@@ -17,8 +17,6 @@ import {
   type DataGridSpreadsheetDerivedSheetModel,
 } from "./derivedSheetModel.js"
 import {
-  createDataGridSpreadsheetCellFormulaModel,
-  createDataGridSpreadsheetCellFormulaRuntimeModel,
   mapDataGridSpreadsheetCellFormulaRuntimeModelBindings,
 } from "./formulaEditorModel.js"
 import {
@@ -1593,17 +1591,11 @@ export function createDataGridSpreadsheetWorkbookModel(
     let changed = false
     for (const sheet of sheets) {
       const patches: DataGridSpreadsheetFormulaStructuralPatch[] = []
-      for (const formulaCell of sheet.sheetModel.getFormulaCells()) {
-        const cellSnapshot = sheet.sheetModel.getCell(formulaCell.address)
-        if (!cellSnapshot || cellSnapshot.analysis.references.length === 0) {
+      for (const formulaCell of sheet.sheetModel.getFormulaStructuralCells()) {
+        if (formulaCell.formulaRuntime.bindings.length === 0) {
           continue
         }
-        const formulaModel = createDataGridSpreadsheetCellFormulaModel(cellSnapshot.analysis)
-        const formulaRuntime = createDataGridSpreadsheetCellFormulaRuntimeModel(cellSnapshot.analysis)
-        if (!formulaModel || !formulaRuntime) {
-          continue
-        }
-        const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(formulaRuntime, (binding) => {
+        const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(formulaCell.formulaRuntime, (binding) => {
           if (binding.kind !== "reference") {
             return null
           }
@@ -1620,12 +1612,12 @@ export function createDataGridSpreadsheetWorkbookModel(
         }, {
           currentRowIndex: formulaCell.address.rowIndex,
         })
-        if (nextRuntimeModel === formulaRuntime) {
+        if (nextRuntimeModel === formulaCell.formulaRuntime) {
           continue
         }
         patches.push({
           cell: formulaCell.address,
-          formulaModel,
+          formulaModel: formulaCell.formulaModel,
           formulaRuntime: nextRuntimeModel,
         })
       }
@@ -1654,17 +1646,11 @@ export function createDataGridSpreadsheetWorkbookModel(
         continue
       }
       const patches: DataGridSpreadsheetFormulaStructuralPatch[] = []
-      for (const formulaCell of targetSheet.sheetModel.getFormulaCells()) {
-        const cellSnapshot = targetSheet.sheetModel.getCell(formulaCell.address)
-        if (!cellSnapshot || cellSnapshot.analysis.references.length === 0) {
+      for (const formulaCell of targetSheet.sheetModel.getFormulaStructuralCells()) {
+        if (formulaCell.formulaRuntime.bindings.length === 0) {
           continue
         }
-        const formulaModel = createDataGridSpreadsheetCellFormulaModel(cellSnapshot.analysis)
-        const formulaRuntime = createDataGridSpreadsheetCellFormulaRuntimeModel(cellSnapshot.analysis)
-        if (!formulaModel || !formulaRuntime) {
-          continue
-        }
-        const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(formulaRuntime, (binding) => {
+        const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(formulaCell.formulaRuntime, (binding) => {
           if (binding.kind !== "reference") {
             return null
           }
@@ -1772,12 +1758,12 @@ export function createDataGridSpreadsheetWorkbookModel(
         }, {
           currentRowIndex: formulaCell.address.rowIndex,
         })
-        if (nextRuntimeModel === formulaRuntime) {
+        if (nextRuntimeModel === formulaCell.formulaRuntime) {
           continue
         }
         patches.push({
           cell: formulaCell.address,
-          formulaModel,
+          formulaModel: formulaCell.formulaModel,
           formulaRuntime: nextRuntimeModel,
         })
       }

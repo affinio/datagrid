@@ -83,6 +83,11 @@ export interface DataGridSpreadsheetFormulaCellSnapshot {
   dependencies: readonly DataGridSpreadsheetCellAddress[]
 }
 
+export interface DataGridSpreadsheetFormulaStructuralCellSnapshot extends DataGridSpreadsheetFormulaCellSnapshot {
+  formulaModel: DataGridSpreadsheetCellFormulaModel
+  formulaRuntime: DataGridSpreadsheetCellFormulaRuntimeModel
+}
+
 export interface DataGridSpreadsheetSheetStateCell {
   columnKey: string
   rawInput: string
@@ -185,6 +190,7 @@ export interface DataGridSpreadsheetSheetModel {
   getCellById(rowId: DataGridRowId, columnKey: string): DataGridSpreadsheetCellSnapshot | null
   getCellDisplayValue(cell: DataGridSpreadsheetCellAddress): unknown
   getFormulaCells(): readonly DataGridSpreadsheetFormulaCellSnapshot[]
+  getFormulaStructuralCells(): readonly DataGridSpreadsheetFormulaStructuralCellSnapshot[]
   getTableSource(): DataGridFormulaTableSource
   getTableSourceRevision(): number
   recompute(): boolean
@@ -2496,12 +2502,8 @@ export function createDataGridSpreadsheetSheetModel(
         lastRowMutation = null
         formulaStructureRevision += 1
         styleRevision += 1
+        valueRevision += 1
         revision += 1
-        const baseValuesChanged = rebuildFormulaState()
-        const formulaValuesChanged = applyFormulaEvaluation(null)
-        if (baseValuesChanged || formulaValuesChanged) {
-          valueRevision += 1
-        }
         emit()
         return true
       }
@@ -2669,6 +2671,20 @@ export function createDataGridSpreadsheetSheetModel(
               dependencies: formulaCell.dependencies,
             }
           })
+          .sort((left, right) => compareCellAddresses(left.address, right.address)),
+      )
+    },
+    getFormulaStructuralCells() {
+      return Object.freeze(
+        [...formulaCellByKey.values()]
+          .map((formulaCell) => ({
+            address: cloneCellAddress(formulaCell.address),
+            formula: formulaCell.formulaModel.formula ?? formulaCell.analysis.formula ?? "",
+            contextKeys: formulaCell.contextKeys,
+            dependencies: formulaCell.dependencies,
+            formulaModel: formulaCell.formulaModel,
+            formulaRuntime: formulaCell.formulaRuntime,
+          }))
           .sort((left, right) => compareCellAddresses(left.address, right.address)),
       )
     },

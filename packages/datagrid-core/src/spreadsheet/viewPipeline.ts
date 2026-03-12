@@ -167,39 +167,25 @@ export interface DataGridSpreadsheetViewJoinStageState {
   stageKey: string
   rightSheetId: string
   rightSheetRevision: number
-  rowsByLookupKey: ReadonlyMap<string, readonly {
-    id: DataGridRowId
-    values: Record<string, unknown>
-  }[]>
+  selectedColumnKeys: readonly string[]
+  rowsByLookupKey: ReadonlyMap<string, readonly SpreadsheetViewRowState[]>
 }
 
 export interface DataGridSpreadsheetViewGroupStageStateBucket {
   groupId: string
-  rowsById: ReadonlyMap<DataGridRowId, {
-    id: DataGridRowId
-    values: Record<string, unknown>
-  }>
-  outputRow: {
-    id: DataGridRowId
-    values: Record<string, unknown>
-  }
+  rowsById: ReadonlyMap<DataGridRowId, SpreadsheetViewRowState>
+  outputRow: SpreadsheetViewRowState
 }
 
 export interface DataGridSpreadsheetViewGroupStageState {
   stageKey: string
-  sourceRowsById: ReadonlyMap<DataGridRowId, {
-    id: DataGridRowId
-    values: Record<string, unknown>
-  }>
+  sourceRowsById: ReadonlyMap<DataGridRowId, SpreadsheetViewRowState>
   bucketsByGroupId: ReadonlyMap<string, DataGridSpreadsheetViewGroupStageStateBucket>
 }
 
 export interface DataGridSpreadsheetViewPivotStageState {
   stageKey: string
-  sourceRowsById: ReadonlyMap<DataGridRowId, {
-    id: DataGridRowId
-    values: Record<string, unknown>
-  }>
+  sourceRowsById: ReadonlyMap<DataGridRowId, SpreadsheetViewRowState>
   leafRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<Record<string, unknown>>>
 }
 
@@ -313,6 +299,23 @@ function cloneSpreadsheetViewValues(
   source: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> {
   return { ...source }
+}
+
+function shallowSpreadsheetViewValuesEqual(
+  left: Readonly<Record<string, unknown>>,
+  right: Readonly<Record<string, unknown>>,
+): boolean {
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) {
+    return false
+  }
+  for (const key of leftKeys) {
+    if (!Object.is(left[key], right[key])) {
+      return false
+    }
+  }
+  return true
 }
 
 function normalizePivotFieldValue(value: unknown): string {
@@ -666,31 +669,31 @@ function createJoinStageState(
   selections: readonly DataGridSpreadsheetViewJoinColumn[],
   stageKey: string,
 ): DataGridSpreadsheetViewJoinStageState {
-  const rightSheetSnapshot = rightSheetModel.getSnapshot()
   const rightDataset = createDatasetFromSheetModel(rightSheetModel)
   const rowsByLookupKey = new Map<string, SpreadsheetViewRowState[]>()
+  const selectedColumnKeys = selections.map(selection => selection.key)
   for (const row of rightDataset.rows) {
-    const projectedValues = createSpreadsheetViewValues()
-    projectedValues[rightKey] = row.values[rightKey] ?? null
-    for (const selection of selections) {
-      projectedValues[selection.key] = row.values[selection.key] ?? null
-    }
-    const projectedRow: SpreadsheetViewRowState = {
-      id: row.id,
-      values: projectedValues,
-    }
     const lookupKey = createJoinLookupKey(row.values[rightKey])
+    const matchValues = createSpreadsheetViewValues()
+    for (const columnKey of selectedColumnKeys) {
+      matchValues[columnKey] = row.values[columnKey] ?? null
+    }
+    const matchRow: SpreadsheetViewRowState = {
+      id: row.id,
+      values: matchValues,
+    }
     const matches = rowsByLookupKey.get(lookupKey)
     if (matches) {
-      matches.push(projectedRow)
+      matches.push(matchRow)
     } else {
-      rowsByLookupKey.set(lookupKey, [projectedRow])
+      rowsByLookupKey.set(lookupKey, [matchRow])
     }
   }
   return {
     stageKey,
     rightSheetId,
-    rightSheetRevision: rightSheetSnapshot.revision,
+    rightSheetRevision: rightSheetModel.getSnapshot().revision,
+    selectedColumnKeys: Object.freeze([...selectedColumnKeys]),
     rowsByLookupKey,
   }
 }
@@ -849,41 +852,16 @@ function createGroupStageKey(
   ].join("|")
 }
 
-function areGroupRelevantRowsEqual(
-  left: SpreadsheetViewRowState | undefined,
-  right: SpreadsheetViewRowState | undefined,
-  fields: readonly DataGridSpreadsheetViewGroupByField[],
-  aggregations: readonly DataGridSpreadsheetViewAggregation[],
-): boolean {
-  if (!left || !right) {
-    return false
-  }
-  for (const field of fields) {
-    if (!Object.is(left.values[field.key], right.values[field.key])) {
-      return false
-    }
-  }
-  for (const aggregation of aggregations) {
-    if (!aggregation.field) {
-      continue
-    }
-    if (!Object.is(left.values[aggregation.field], right.values[aggregation.field])) {
-      return false
-    }
-  }
-  return true
-}
-
 function createGroupOutputRow(
   groupId: string,
-  anchorRow: SpreadsheetViewRowState,
+  anchorValues: Record<string, unknown>,
   groupRows: readonly SpreadsheetViewRowState[],
   groupFields: readonly DataGridSpreadsheetViewGroupByField[],
   aggregations: readonly DataGridSpreadsheetViewAggregation[],
 ): SpreadsheetViewRowState {
   const values = createSpreadsheetViewValues()
   for (const field of groupFields) {
-    values[field.as ?? field.key] = anchorRow.values[field.key] ?? null
+    values[field.as ?? field.key] = anchorValues[field.key] ?? null
   }
   for (const aggregation of aggregations) {
     const key = normalizeColumnKey(aggregation.key, "aggregation key")
@@ -989,7 +967,7 @@ function applyGroupStep(
   }
 
   const previousState = previousGroupStageStatesByKey?.get(stageKey)
-  const nextSourceRowsById = new Map(dataset.rows.map(row => [row.id, row]))
+  const nextSourceRowsById = new Map<DataGridRowId, SpreadsheetViewRowState>()
   type MutableGroupBucketState = {
     groupId: string
     rowsById: Map<DataGridRowId, SpreadsheetViewRowState>
@@ -1009,31 +987,38 @@ function applyGroupStep(
     : new Map<string, MutableGroupBucketState>()
   const affectedGroupIds = new Set<string>()
 
+  for (const row of dataset.rows) {
+    nextSourceRowsById.set(row.id, row)
+  }
+
   if (previousState) {
     for (const [rowId, previousRow] of previousState.sourceRowsById.entries()) {
       const nextRow = nextSourceRowsById.get(rowId)
-      if (areGroupRelevantRowsEqual(previousRow, nextRow, groupFields, step.aggregations)) {
+      if (nextRow && shallowSpreadsheetViewValuesEqual(nextRow.values, previousRow.values)) {
         continue
       }
-      const previousGroupId = buildGroupRowId(groupFields, previousRow)
-      const previousBucket = nextBucketsByGroupId.get(previousGroupId)
+      const previousBucket = nextBucketsByGroupId.get(buildGroupRowId(groupFields, previousRow))
       previousBucket?.rowsById.delete(rowId)
-      affectedGroupIds.add(previousGroupId)
+      affectedGroupIds.add(buildGroupRowId(groupFields, previousRow))
     }
   }
 
   for (const row of dataset.rows) {
-    const previousRow = previousState?.sourceRowsById.get(row.id)
-    if (areGroupRelevantRowsEqual(previousRow, row, groupFields, step.aggregations)) {
+    const nextRow = nextSourceRowsById.get(row.id)
+    if (!nextRow) {
       continue
     }
-    const groupId = buildGroupRowId(groupFields, row)
+    const previousRow = previousState?.sourceRowsById.get(row.id)
+    if (previousRow && shallowSpreadsheetViewValuesEqual(previousRow.values, nextRow.values)) {
+      continue
+    }
+    const groupId = buildGroupRowId(groupFields, nextRow)
     const bucket = nextBucketsByGroupId.get(groupId) ?? {
       groupId,
       rowsById: new Map<DataGridRowId, SpreadsheetViewRowState>(),
       outputRow: null,
     }
-    bucket.rowsById.set(row.id, row)
+    bucket.rowsById.set(row.id, nextRow)
     nextBucketsByGroupId.set(groupId, bucket)
     affectedGroupIds.add(groupId)
   }
@@ -1044,20 +1029,20 @@ function applyGroupStep(
       nextBucketsByGroupId.delete(groupId)
       continue
     }
-    let anchorRow: SpreadsheetViewRowState | null = null
+    let anchorValues: Record<string, unknown> | null = null
     for (const row of dataset.rows) {
       if (bucket.rowsById.has(row.id)) {
-        anchorRow = row
+        anchorValues = bucket.rowsById.get(row.id)?.values ?? null
         break
       }
     }
-    if (!anchorRow) {
+    if (!anchorValues) {
       nextBucketsByGroupId.delete(groupId)
       continue
     }
     bucket.outputRow = createGroupOutputRow(
       groupId,
-      anchorRow,
+      anchorValues,
       [...bucket.rowsById.values()],
       groupFields,
       step.aggregations,
@@ -1185,32 +1170,6 @@ function createPivotStageKey(
   return JSON.stringify(normalizedSpec)
 }
 
-function arePivotRelevantRowsEqual(
-  left: SpreadsheetViewRowState | undefined,
-  right: SpreadsheetViewRowState | undefined,
-  normalizedSpec: DataGridPivotSpec,
-): boolean {
-  if (!left || !right) {
-    return false
-  }
-  for (const field of normalizedSpec.rows) {
-    if (!Object.is(left.values[field], right.values[field])) {
-      return false
-    }
-  }
-  for (const field of normalizedSpec.columns) {
-    if (!Object.is(left.values[field], right.values[field])) {
-      return false
-    }
-  }
-  for (const value of normalizedSpec.values) {
-    if (!Object.is(left.values[value.field], right.values[value.field])) {
-      return false
-    }
-  }
-  return true
-}
-
 function applyPivotStep(
   dataset: SpreadsheetViewDataset,
   step: DataGridSpreadsheetViewPivotStep,
@@ -1225,16 +1184,18 @@ function applyPivotStep(
   const sourceColumnsByKey = new Map(dataset.columns.map(column => [column.key, column]))
   const stageKey = createPivotStageKey(normalizedSpec)
   const previousState = previousPivotStageStatesByKey?.get(stageKey)
-  const nextSourceRowsById = new Map(dataset.rows.map(row => [row.id, row]))
+  const nextSourceRowsById = new Map<DataGridRowId, SpreadsheetViewRowState>()
   const nextLeafRowsById = new Map<DataGridRowId, DataGridRowNode<Record<string, unknown>>>()
   const runtime = createPivotRuntime<Record<string, unknown>>()
   const projection = runtime.projectRows({
     inputRows: dataset.rows.map((row, index) => {
+      nextSourceRowsById.set(row.id, row)
       const previousRow = previousState?.sourceRowsById.get(row.id)
       const previousLeafRow = previousState?.leafRowsById.get(row.id)
       const leafRow = previousLeafRow
         && previousLeafRow.sourceIndex === index
-        && arePivotRelevantRowsEqual(previousRow, row, normalizedSpec)
+        && previousRow
+        && shallowSpreadsheetViewValuesEqual(previousRow.values, row.values)
         ? previousLeafRow
         : createPivotLeafRow(row, index)
       nextLeafRowsById.set(row.id, leafRow)
