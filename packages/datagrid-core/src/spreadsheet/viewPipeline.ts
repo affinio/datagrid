@@ -128,6 +128,9 @@ export interface MaterializeDataGridSpreadsheetViewSheetOptions {
   pipeline: readonly DataGridSpreadsheetViewStep[]
   sheetModelOptions?: DataGridSpreadsheetWorkbookViewSheetModelOptions | null
   errorMessage?: string | null
+  previousJoinStageStatesByKey?: ReadonlyMap<string, DataGridSpreadsheetViewJoinStageState>
+  previousGroupStageStatesByKey?: ReadonlyMap<string, DataGridSpreadsheetViewGroupStageState>
+  previousPivotStageStatesByKey?: ReadonlyMap<string, DataGridSpreadsheetViewPivotStageState>
 }
 
 export type DataGridSpreadsheetViewMaterializationDiagnosticCode =
@@ -147,11 +150,57 @@ export interface MaterializeDataGridSpreadsheetViewSheetResult {
   sheetState: DataGridSpreadsheetSheetState
   derivedRuntime: DataGridSpreadsheetDerivedSheetRuntime
   diagnostics: readonly DataGridSpreadsheetViewMaterializationDiagnostic[]
+  joinStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewJoinStageState>
+  groupStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewGroupStageState>
+  pivotStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewPivotStageState>
 }
 
 export interface MaterializeDataGridSpreadsheetViewRuntimeResult {
   derivedRuntime: DataGridSpreadsheetDerivedSheetRuntime
   diagnostics: readonly DataGridSpreadsheetViewMaterializationDiagnostic[]
+  joinStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewJoinStageState>
+  groupStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewGroupStageState>
+  pivotStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewPivotStageState>
+}
+
+export interface DataGridSpreadsheetViewJoinStageState {
+  stageKey: string
+  rightSheetId: string
+  rightSheetRevision: number
+  rowsByLookupKey: ReadonlyMap<string, readonly {
+    id: DataGridRowId
+    values: Record<string, unknown>
+  }[]>
+}
+
+export interface DataGridSpreadsheetViewGroupStageStateBucket {
+  groupId: string
+  rowsById: ReadonlyMap<DataGridRowId, {
+    id: DataGridRowId
+    values: Record<string, unknown>
+  }>
+  outputRow: {
+    id: DataGridRowId
+    values: Record<string, unknown>
+  }
+}
+
+export interface DataGridSpreadsheetViewGroupStageState {
+  stageKey: string
+  sourceRowsById: ReadonlyMap<DataGridRowId, {
+    id: DataGridRowId
+    values: Record<string, unknown>
+  }>
+  bucketsByGroupId: ReadonlyMap<string, DataGridSpreadsheetViewGroupStageStateBucket>
+}
+
+export interface DataGridSpreadsheetViewPivotStageState {
+  stageKey: string
+  sourceRowsById: ReadonlyMap<DataGridRowId, {
+    id: DataGridRowId
+    values: Record<string, unknown>
+  }>
+  leafRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<Record<string, unknown>>>
 }
 
 interface SpreadsheetViewColumnState {
@@ -589,10 +638,69 @@ function normalizeJoinColumns(
   ))
 }
 
+function createJoinStageKey(
+  step: DataGridSpreadsheetViewJoinStep,
+  selections: readonly DataGridSpreadsheetViewJoinColumn[],
+): string {
+  const encodedSelections = selections
+    .map(selection => `${selection.key}->${selection.as ?? selection.key}`)
+    .join("\u001f")
+  return [
+    normalizeColumnKey(step.sheetId, "join sheet id"),
+    normalizeColumnKey(step.on.leftKey, "join left key"),
+    normalizeColumnKey(step.on.rightKey, "join right key"),
+    step.mode === "inner" ? "inner" : "left",
+    step.multiMatch === "error"
+      ? "error"
+      : step.multiMatch === "explode"
+        ? "explode"
+        : "first",
+    encodedSelections,
+  ].join("|")
+}
+
+function createJoinStageState(
+  rightSheetId: string,
+  rightSheetModel: DataGridSpreadsheetSheetModel,
+  rightKey: string,
+  selections: readonly DataGridSpreadsheetViewJoinColumn[],
+  stageKey: string,
+): DataGridSpreadsheetViewJoinStageState {
+  const rightSheetSnapshot = rightSheetModel.getSnapshot()
+  const rightDataset = createDatasetFromSheetModel(rightSheetModel)
+  const rowsByLookupKey = new Map<string, SpreadsheetViewRowState[]>()
+  for (const row of rightDataset.rows) {
+    const projectedValues = createSpreadsheetViewValues()
+    projectedValues[rightKey] = row.values[rightKey] ?? null
+    for (const selection of selections) {
+      projectedValues[selection.key] = row.values[selection.key] ?? null
+    }
+    const projectedRow: SpreadsheetViewRowState = {
+      id: row.id,
+      values: projectedValues,
+    }
+    const lookupKey = createJoinLookupKey(row.values[rightKey])
+    const matches = rowsByLookupKey.get(lookupKey)
+    if (matches) {
+      matches.push(projectedRow)
+    } else {
+      rowsByLookupKey.set(lookupKey, [projectedRow])
+    }
+  }
+  return {
+    stageKey,
+    rightSheetId,
+    rightSheetRevision: rightSheetSnapshot.revision,
+    rowsByLookupKey,
+  }
+}
+
 function applyJoinStep(
   dataset: SpreadsheetViewDataset,
   step: DataGridSpreadsheetViewJoinStep,
   resolveSheetModel: ((sheetId: string) => DataGridSpreadsheetSheetModel | null) | undefined,
+  previousJoinStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewJoinStageState> | undefined,
+  nextJoinStageStatesByKey: Map<string, DataGridSpreadsheetViewJoinStageState>,
 ): SpreadsheetViewDataset {
   if (typeof resolveSheetModel !== "function") {
     throw new DataGridSpreadsheetViewMaterializationError(
@@ -619,13 +727,13 @@ function applyJoinStep(
       ? "explode"
       : "first"
   const selections = normalizeJoinColumns(step.select)
+  const joinStageKey = createJoinStageKey(step, selections)
   if (selections.length === 0) {
     throw new Error("[DataGridSpreadsheetView] join step must select at least one right-side column.")
   }
 
   const leftColumnsByKey = new Map(dataset.columns.map(column => [column.key, column]))
-  const rightDataset = createDatasetFromSheetModel(rightSheetModel)
-  const rightColumnsByKey = new Map(rightDataset.columns.map(column => [column.key, column]))
+  const rightColumnsByKey = new Map(rightSheetModel.getColumns().map(column => [column.key, column]))
   const outputColumns: SpreadsheetViewColumnState[] = [...dataset.columns]
   const joinOutputKeys = new Set<string>(dataset.columns.map(column => column.key))
 
@@ -650,20 +758,18 @@ function applyJoinStep(
     throw new Error(`[DataGridSpreadsheetView] join right key '${rightKey}' does not exist on '${rightSheetId}'.`)
   }
 
-  const rightRowsByLookupKey = new Map<string, SpreadsheetViewRowState[]>()
-  for (const row of rightDataset.rows) {
-    const lookupKey = createJoinLookupKey(row.values[rightKey])
-    const rows = rightRowsByLookupKey.get(lookupKey)
-    if (rows) {
-      rows.push(row)
-    } else {
-      rightRowsByLookupKey.set(lookupKey, [row])
-    }
-  }
+  const cachedJoinStageState = previousJoinStageStatesByKey?.get(joinStageKey)
+  const rightSheetRevision = rightSheetModel.getSnapshot().revision
+  const nextJoinStageState = cachedJoinStageState
+    && cachedJoinStageState.rightSheetId === rightSheetId
+    && cachedJoinStageState.rightSheetRevision === rightSheetRevision
+      ? cachedJoinStageState
+      : createJoinStageState(rightSheetId, rightSheetModel, rightKey, selections, joinStageKey)
+  nextJoinStageStatesByKey.set(joinStageKey, nextJoinStageState)
 
   const rows: SpreadsheetViewRowState[] = []
   for (const row of dataset.rows) {
-    const matches = rightRowsByLookupKey.get(createJoinLookupKey(row.values[leftKey])) ?? []
+    const matches = nextJoinStageState.rowsByLookupKey.get(createJoinLookupKey(row.values[leftKey])) ?? []
     if (matches.length > 1 && multiMatch === "error") {
       throw new DataGridSpreadsheetViewMaterializationError(
         "join-ambiguous-match",
@@ -731,6 +837,64 @@ function buildGroupRowId(
   return `group:${fields.map(field => `${field.as ?? field.key}=${normalizeOutputValue(row.values[field.key])}`).join("\u001f")}`
 }
 
+function createGroupStageKey(
+  fields: readonly DataGridSpreadsheetViewGroupByField[],
+  aggregations: readonly DataGridSpreadsheetViewAggregation[],
+): string {
+  return [
+    fields.map(field => `${field.key}->${field.as ?? field.key}`).join("\u001f"),
+    aggregations.map(aggregation => (
+      `${normalizeColumnKey(aggregation.key, "aggregation key")}:${aggregation.agg}:${aggregation.field ?? ""}`
+    )).join("\u001f"),
+  ].join("|")
+}
+
+function areGroupRelevantRowsEqual(
+  left: SpreadsheetViewRowState | undefined,
+  right: SpreadsheetViewRowState | undefined,
+  fields: readonly DataGridSpreadsheetViewGroupByField[],
+  aggregations: readonly DataGridSpreadsheetViewAggregation[],
+): boolean {
+  if (!left || !right) {
+    return false
+  }
+  for (const field of fields) {
+    if (!Object.is(left.values[field.key], right.values[field.key])) {
+      return false
+    }
+  }
+  for (const aggregation of aggregations) {
+    if (!aggregation.field) {
+      continue
+    }
+    if (!Object.is(left.values[aggregation.field], right.values[aggregation.field])) {
+      return false
+    }
+  }
+  return true
+}
+
+function createGroupOutputRow(
+  groupId: string,
+  anchorRow: SpreadsheetViewRowState,
+  groupRows: readonly SpreadsheetViewRowState[],
+  groupFields: readonly DataGridSpreadsheetViewGroupByField[],
+  aggregations: readonly DataGridSpreadsheetViewAggregation[],
+): SpreadsheetViewRowState {
+  const values = createSpreadsheetViewValues()
+  for (const field of groupFields) {
+    values[field.as ?? field.key] = anchorRow.values[field.key] ?? null
+  }
+  for (const aggregation of aggregations) {
+    const key = normalizeColumnKey(aggregation.key, "aggregation key")
+    values[key] = aggregateGroupValues(groupRows, aggregation)
+  }
+  return {
+    id: groupId,
+    values,
+  }
+}
+
 function aggregateGroupValues(
   rows: readonly SpreadsheetViewRowState[],
   aggregation: DataGridSpreadsheetViewAggregation,
@@ -790,23 +954,15 @@ function aggregateGroupValues(
 function applyGroupStep(
   dataset: SpreadsheetViewDataset,
   step: DataGridSpreadsheetViewGroupStep,
+  previousGroupStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewGroupStageState> | undefined,
+  nextGroupStageStatesByKey: Map<string, DataGridSpreadsheetViewGroupStageState>,
 ): SpreadsheetViewDataset {
   const groupFields = normalizeGroupByFields(step.by)
   if (groupFields.length === 0 && step.aggregations.length === 0) {
     throw new Error("[DataGridSpreadsheetView] group step must include fields or aggregations.")
   }
   const sourceColumnsByKey = new Map(dataset.columns.map(column => [column.key, column]))
-  const groups = new Map<string, SpreadsheetViewRowState[]>()
-
-  for (const row of dataset.rows) {
-    const groupId = buildGroupRowId(groupFields, row)
-    const rows = groups.get(groupId)
-    if (rows) {
-      rows.push(row)
-    } else {
-      groups.set(groupId, [row])
-    }
-  }
+  const stageKey = createGroupStageKey(groupFields, step.aggregations)
 
   const columns: SpreadsheetViewColumnState[] = []
   for (const field of groupFields) {
@@ -829,28 +985,111 @@ function applyGroupStep(
           ...(aggregation.agg === "sum" ? { fontWeight: 600 } : {}),
         })
         : null,
-    })
+      })
+  }
+
+  const previousState = previousGroupStageStatesByKey?.get(stageKey)
+  const nextSourceRowsById = new Map(dataset.rows.map(row => [row.id, row]))
+  type MutableGroupBucketState = {
+    groupId: string
+    rowsById: Map<DataGridRowId, SpreadsheetViewRowState>
+    outputRow: SpreadsheetViewRowState | null
+  }
+  const nextBucketsByGroupId = previousState
+    ? new Map(
+      [...previousState.bucketsByGroupId.entries()].map(([groupId, bucket]) => [
+        groupId,
+        {
+          groupId: bucket.groupId,
+          rowsById: new Map(bucket.rowsById),
+          outputRow: bucket.outputRow,
+        },
+      ]),
+    )
+    : new Map<string, MutableGroupBucketState>()
+  const affectedGroupIds = new Set<string>()
+
+  if (previousState) {
+    for (const [rowId, previousRow] of previousState.sourceRowsById.entries()) {
+      const nextRow = nextSourceRowsById.get(rowId)
+      if (areGroupRelevantRowsEqual(previousRow, nextRow, groupFields, step.aggregations)) {
+        continue
+      }
+      const previousGroupId = buildGroupRowId(groupFields, previousRow)
+      const previousBucket = nextBucketsByGroupId.get(previousGroupId)
+      previousBucket?.rowsById.delete(rowId)
+      affectedGroupIds.add(previousGroupId)
+    }
+  }
+
+  for (const row of dataset.rows) {
+    const previousRow = previousState?.sourceRowsById.get(row.id)
+    if (areGroupRelevantRowsEqual(previousRow, row, groupFields, step.aggregations)) {
+      continue
+    }
+    const groupId = buildGroupRowId(groupFields, row)
+    const bucket = nextBucketsByGroupId.get(groupId) ?? {
+      groupId,
+      rowsById: new Map<DataGridRowId, SpreadsheetViewRowState>(),
+      outputRow: null,
+    }
+    bucket.rowsById.set(row.id, row)
+    nextBucketsByGroupId.set(groupId, bucket)
+    affectedGroupIds.add(groupId)
+  }
+
+  for (const groupId of affectedGroupIds) {
+    const bucket = nextBucketsByGroupId.get(groupId)
+    if (!bucket || bucket.rowsById.size === 0) {
+      nextBucketsByGroupId.delete(groupId)
+      continue
+    }
+    let anchorRow: SpreadsheetViewRowState | null = null
+    for (const row of dataset.rows) {
+      if (bucket.rowsById.has(row.id)) {
+        anchorRow = row
+        break
+      }
+    }
+    if (!anchorRow) {
+      nextBucketsByGroupId.delete(groupId)
+      continue
+    }
+    bucket.outputRow = createGroupOutputRow(
+      groupId,
+      anchorRow,
+      [...bucket.rowsById.values()],
+      groupFields,
+      step.aggregations,
+    )
   }
 
   const rows: SpreadsheetViewRowState[] = []
-  for (const [groupId, groupRows] of groups.entries()) {
-    const firstRow = groupRows[0]
-    if (!firstRow) {
+  const finalizedBucketsByGroupId = new Map<string, DataGridSpreadsheetViewGroupStageStateBucket>()
+  const seenGroupIds = new Set<string>()
+  for (const row of dataset.rows) {
+    const groupId = buildGroupRowId(groupFields, row)
+    if (seenGroupIds.has(groupId)) {
       continue
     }
-    const values = createSpreadsheetViewValues()
-    for (const field of groupFields) {
-      values[field.as ?? field.key] = firstRow.values[field.key] ?? null
+    seenGroupIds.add(groupId)
+    const bucket = nextBucketsByGroupId.get(groupId)
+    if (!bucket?.outputRow) {
+      continue
     }
-    for (const aggregation of step.aggregations) {
-      const key = normalizeColumnKey(aggregation.key, "aggregation key")
-      values[key] = aggregateGroupValues(groupRows, aggregation)
-    }
-    rows.push({
-      id: groupId,
-      values,
+    rows.push(bucket.outputRow)
+    finalizedBucketsByGroupId.set(groupId, {
+      groupId: bucket.groupId,
+      rowsById: bucket.rowsById,
+      outputRow: bucket.outputRow,
     })
   }
+
+  nextGroupStageStatesByKey.set(stageKey, {
+    stageKey,
+    sourceRowsById: nextSourceRowsById,
+    bucketsByGroupId: finalizedBucketsByGroupId,
+  })
 
   return {
     columns,
@@ -940,9 +1179,43 @@ function formatPivotColumnTitle(
   return hasSingleValueMetric ? pathLabel : `${pathLabel} ${valueLabel}`
 }
 
+function createPivotStageKey(
+  normalizedSpec: DataGridPivotSpec,
+): string {
+  return JSON.stringify(normalizedSpec)
+}
+
+function arePivotRelevantRowsEqual(
+  left: SpreadsheetViewRowState | undefined,
+  right: SpreadsheetViewRowState | undefined,
+  normalizedSpec: DataGridPivotSpec,
+): boolean {
+  if (!left || !right) {
+    return false
+  }
+  for (const field of normalizedSpec.rows) {
+    if (!Object.is(left.values[field], right.values[field])) {
+      return false
+    }
+  }
+  for (const field of normalizedSpec.columns) {
+    if (!Object.is(left.values[field], right.values[field])) {
+      return false
+    }
+  }
+  for (const value of normalizedSpec.values) {
+    if (!Object.is(left.values[value.field], right.values[value.field])) {
+      return false
+    }
+  }
+  return true
+}
+
 function applyPivotStep(
   dataset: SpreadsheetViewDataset,
   step: DataGridSpreadsheetViewPivotStep,
+  previousPivotStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewPivotStageState> | undefined,
+  nextPivotStageStatesByKey: Map<string, DataGridSpreadsheetViewPivotStageState>,
 ): SpreadsheetViewDataset {
   const normalizedSpec = normalizePivotSpec(step.spec)
   if (!normalizedSpec) {
@@ -950,9 +1223,23 @@ function applyPivotStep(
   }
 
   const sourceColumnsByKey = new Map(dataset.columns.map(column => [column.key, column]))
+  const stageKey = createPivotStageKey(normalizedSpec)
+  const previousState = previousPivotStageStatesByKey?.get(stageKey)
+  const nextSourceRowsById = new Map(dataset.rows.map(row => [row.id, row]))
+  const nextLeafRowsById = new Map<DataGridRowId, DataGridRowNode<Record<string, unknown>>>()
   const runtime = createPivotRuntime<Record<string, unknown>>()
   const projection = runtime.projectRows({
-    inputRows: dataset.rows.map(createPivotLeafRow),
+    inputRows: dataset.rows.map((row, index) => {
+      const previousRow = previousState?.sourceRowsById.get(row.id)
+      const previousLeafRow = previousState?.leafRowsById.get(row.id)
+      const leafRow = previousLeafRow
+        && previousLeafRow.sourceIndex === index
+        && arePivotRelevantRowsEqual(previousRow, row, normalizedSpec)
+        ? previousLeafRow
+        : createPivotLeafRow(row, index)
+      nextLeafRowsById.set(row.id, leafRow)
+      return leafRow
+    }),
     pivotModel: normalizedSpec,
     normalizeFieldValue: normalizePivotFieldValue,
   })
@@ -1005,6 +1292,12 @@ function applyPivotStep(
       id: row.rowId,
       values: rowRecord,
     }
+  })
+
+  nextPivotStageStatesByKey.set(stageKey, {
+    stageKey,
+    sourceRowsById: nextSourceRowsById,
+    leafRowsById: nextLeafRowsById,
   })
 
   return {
@@ -1125,6 +1418,9 @@ export function materializeDataGridSpreadsheetViewSheetResult(
     }, options),
     derivedRuntime: runtimeResult.derivedRuntime,
     diagnostics: runtimeResult.diagnostics,
+    joinStageStatesByKey: runtimeResult.joinStageStatesByKey,
+    groupStageStatesByKey: runtimeResult.groupStageStatesByKey,
+    pivotStageStatesByKey: runtimeResult.pivotStageStatesByKey,
   }
 }
 
@@ -1146,6 +1442,9 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
     return {
       derivedRuntime: datasetToDerivedSheetRuntime(errorDataset, diagnostics),
       diagnostics,
+      joinStageStatesByKey: new Map(),
+      groupStageStatesByKey: new Map(),
+      pivotStageStatesByKey: new Map(),
     }
   }
   if (!options.sourceSheetModel) {
@@ -1163,11 +1462,17 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
     return {
       derivedRuntime: datasetToDerivedSheetRuntime(errorDataset, diagnostics),
       diagnostics,
+      joinStageStatesByKey: new Map(),
+      groupStageStatesByKey: new Map(),
+      pivotStageStatesByKey: new Map(),
     }
   }
 
   try {
     let dataset = createDatasetFromSheetModel(options.sourceSheetModel)
+    const nextJoinStageStatesByKey = new Map<string, DataGridSpreadsheetViewJoinStageState>()
+    const nextGroupStageStatesByKey = new Map<string, DataGridSpreadsheetViewGroupStageState>()
+    const nextPivotStageStatesByKey = new Map<string, DataGridSpreadsheetViewPivotStageState>()
     for (const step of options.pipeline) {
       switch (step.type) {
         case "filter":
@@ -1180,13 +1485,29 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
           dataset = applyProjectStep(dataset, step)
           break
         case "join":
-          dataset = applyJoinStep(dataset, step, options.resolveSheetModel)
+          dataset = applyJoinStep(
+            dataset,
+            step,
+            options.resolveSheetModel,
+            options.previousJoinStageStatesByKey,
+            nextJoinStageStatesByKey,
+          )
           break
         case "group":
-          dataset = applyGroupStep(dataset, step)
+          dataset = applyGroupStep(
+            dataset,
+            step,
+            options.previousGroupStageStatesByKey,
+            nextGroupStageStatesByKey,
+          )
           break
         case "pivot":
-          dataset = applyPivotStep(dataset, step)
+          dataset = applyPivotStep(
+            dataset,
+            step,
+            options.previousPivotStageStatesByKey,
+            nextPivotStageStatesByKey,
+          )
           break
         default:
           throw new Error("[DataGridSpreadsheetView] unsupported pipeline step.")
@@ -1195,6 +1516,9 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
     return {
       derivedRuntime: datasetToDerivedSheetRuntime(dataset),
       diagnostics: EMPTY_DIAGNOSTICS,
+      joinStageStatesByKey: nextJoinStageStatesByKey,
+      groupStageStatesByKey: nextGroupStageStatesByKey,
+      pivotStageStatesByKey: nextPivotStageStatesByKey,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "[DataGridSpreadsheetView] materialization failed."
@@ -1217,6 +1541,9 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
     return {
       derivedRuntime: datasetToDerivedSheetRuntime(errorDataset, diagnostics),
       diagnostics,
+      joinStageStatesByKey: new Map(),
+      groupStageStatesByKey: new Map(),
+      pivotStageStatesByKey: new Map(),
     }
   }
 }

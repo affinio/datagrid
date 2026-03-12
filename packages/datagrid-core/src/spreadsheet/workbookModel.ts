@@ -24,7 +24,10 @@ import {
 import {
   materializeDataGridSpreadsheetViewRuntimeResult,
   materializeDataGridSpreadsheetViewSheetResult,
+  type DataGridSpreadsheetViewGroupStageState,
+  type DataGridSpreadsheetViewJoinStageState,
   type DataGridSpreadsheetViewMaterializationDiagnostic,
+  type DataGridSpreadsheetViewPivotStageState,
   type DataGridSpreadsheetWorkbookSheetKind,
   type DataGridSpreadsheetWorkbookViewDefinition,
   type DataGridSpreadsheetWorkbookViewSheetModelOptions,
@@ -182,6 +185,9 @@ interface SpreadsheetWorkbookSheetState {
   viewDiagnostics: readonly DataGridSpreadsheetViewMaterializationDiagnostic[]
   derivedRuntime: DataGridSpreadsheetDerivedSheetRuntime | null
   derivedSheetModel: DataGridSpreadsheetDerivedSheetModel | null
+  viewJoinStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewJoinStageState>
+  viewGroupStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewGroupStageState>
+  viewPivotStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewPivotStageState>
 }
 
 interface SpreadsheetWorkbookDependencyGraph {
@@ -1165,9 +1171,15 @@ export function createDataGridSpreadsheetWorkbookModel(
             pipeline: targetSheet.viewDefinition.pipeline,
             sheetModelOptions: targetSheet.viewSheetModelOptions,
             errorMessage: cycleMessage,
+            previousJoinStageStatesByKey: targetSheet.viewJoinStageStatesByKey,
+            previousGroupStageStatesByKey: targetSheet.viewGroupStageStatesByKey,
+            previousPivotStageStatesByKey: targetSheet.viewPivotStageStatesByKey,
           })
           targetSheet.viewDiagnostics = nextState.diagnostics
           targetSheet.derivedRuntime = nextState.derivedRuntime
+          targetSheet.viewJoinStageStatesByKey = nextState.joinStageStatesByKey
+          targetSheet.viewGroupStageStatesByKey = nextState.groupStageStatesByKey
+          targetSheet.viewPivotStageStatesByKey = nextState.pivotStageStatesByKey
           viewSheetChanged = targetSheet.derivedSheetModel.replaceRuntime(
             nextState.derivedRuntime,
             createDerivedSheetModelOptions(
@@ -1186,9 +1198,15 @@ export function createDataGridSpreadsheetWorkbookModel(
             pipeline: targetSheet.viewDefinition.pipeline,
             sheetModelOptions: targetSheet.viewSheetModelOptions,
             errorMessage: cycleMessage,
+            previousJoinStageStatesByKey: targetSheet.viewJoinStageStatesByKey,
+            previousGroupStageStatesByKey: targetSheet.viewGroupStageStatesByKey,
+            previousPivotStageStatesByKey: targetSheet.viewPivotStageStatesByKey,
           })
           targetSheet.viewDiagnostics = nextState.diagnostics
           targetSheet.derivedRuntime = nextState.derivedRuntime
+          targetSheet.viewJoinStageStatesByKey = nextState.joinStageStatesByKey
+          targetSheet.viewGroupStageStatesByKey = nextState.groupStageStatesByKey
+          targetSheet.viewPivotStageStatesByKey = nextState.pivotStageStatesByKey
           viewSheetChanged = targetSheet.sheetModel.restoreState(nextState.sheetState)
         }
         if (viewSheetChanged) {
@@ -1480,6 +1498,9 @@ export function createDataGridSpreadsheetWorkbookModel(
       viewDiagnostics: initialViewResult?.diagnostics ?? Object.freeze([]),
       derivedRuntime: initialDerivedRuntime,
       derivedSheetModel,
+      viewJoinStageStatesByKey: initialViewResult?.joinStageStatesByKey ?? new Map(),
+      viewGroupStageStatesByKey: initialViewResult?.groupStageStatesByKey ?? new Map(),
+      viewPivotStageStatesByKey: initialViewResult?.pivotStageStatesByKey ?? new Map(),
     }
   }
 
