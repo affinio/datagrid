@@ -1,9 +1,11 @@
 import type { DataGridRowId } from "../models/rowModel.js"
 import {
-  compileDataGridFormulaFieldDefinition,
+  bindCompiledFormulaArtifactToFieldDefinition,
+  compileDataGridFormulaFieldArtifact,
   createFormulaErrorValue,
   isFormulaErrorValue,
   parseDataGridFormulaIdentifier,
+  type DataGridCompiledFormulaArtifact,
   type DataGridCompiledFormulaField,
   type DataGridFormulaFunctionRegistry,
   type DataGridFormulaReferenceParserOptions,
@@ -191,6 +193,7 @@ export interface DataGridSpreadsheetSheetModel {
   getCellDisplayValue(cell: DataGridSpreadsheetCellAddress): unknown
   getFormulaCells(): readonly DataGridSpreadsheetFormulaCellSnapshot[]
   getFormulaStructuralCells(): readonly DataGridSpreadsheetFormulaStructuralCellSnapshot[]
+  getFormulaStructuralCellsBySheetAliases(sheetAliases: readonly string[]): readonly DataGridSpreadsheetFormulaStructuralCellSnapshot[]
   getTableSource(): DataGridFormulaTableSource
   getTableSourceRevision(): number
   recompute(): boolean
@@ -250,10 +253,24 @@ interface SpreadsheetFormulaStateMaps {
 
 const EMPTY_DIAGNOSTICS = Object.freeze([]) as readonly []
 const EMPTY_DEPENDENCIES = Object.freeze([]) as readonly DataGridSpreadsheetCellAddress[]
+const COMPILED_FORMULA_REFERENCE_TOKEN_PREFIX = "__spreadsheet_ref_"
 
 function normalizeSheetIdentity(value: unknown): string | null {
   const normalized = String(value ?? "").trim()
   return normalized.length === 0 ? null : normalized
+}
+
+function createCompiledFormulaReferenceToken(index: number): string {
+  return `${COMPILED_FORMULA_REFERENCE_TOKEN_PREFIX}${index}`
+}
+
+function resolveCompiledFormulaReferenceTokenIndex(token: string): number | null {
+  if (!token.startsWith(COMPILED_FORMULA_REFERENCE_TOKEN_PREFIX)) {
+    return null
+  }
+  const suffix = token.slice(COMPILED_FORMULA_REFERENCE_TOKEN_PREFIX.length)
+  const index = Number.parseInt(suffix, 10)
+  return Number.isInteger(index) && index >= 0 ? index : null
 }
 
 function normalizeColumnKey(value: unknown): string {
@@ -699,6 +716,9 @@ export function createDataGridSpreadsheetSheetModel(
   const formulaCellByKey = new Map<string, SpreadsheetFormulaCellState>()
   const dependentsByCellKey = new Map<string, Set<string>>()
   const formulaTablesByContextKey = new Map<string, DataGridFormulaTableSource>()
+  const compiledFormulaArtifactByExactFormula = new Map<string, DataGridCompiledFormulaArtifact<Record<string, unknown>>>()
+  let formulaStructuralReferenceIndexRevision = -1
+  let formulaStructuralCellKeysBySheetAlias = new Map<string, readonly string[]>()
   const tableSource = {
     rows,
     resolveRow: (row: unknown) => createResolvedRowData(row as SpreadsheetRowState),
@@ -769,6 +789,65 @@ export function createDataGridSpreadsheetSheetModel(
       sheetName,
       lastRowMutation: cloneSpreadsheetSheetRowMutation(lastRowMutation),
     }
+  }
+
+  function createFormulaStructuralCellSnapshot(
+    formulaCell: SpreadsheetFormulaCellState,
+  ): DataGridSpreadsheetFormulaStructuralCellSnapshot {
+    return {
+      address: cloneCellAddress(formulaCell.address),
+      formula: formulaCell.formulaModel.formula ?? formulaCell.analysis.formula ?? "",
+      contextKeys: formulaCell.contextKeys,
+      dependencies: formulaCell.dependencies,
+      formulaModel: formulaCell.formulaModel,
+      formulaRuntime: formulaCell.formulaRuntime,
+    }
+  }
+
+  function createCompiledFormulaTemplate(
+    formulaModel: DataGridSpreadsheetCellFormulaModel,
+  ): string {
+    let nextFormula = formulaModel.rawInput
+    const references = [...formulaModel.references].sort((left, right) => right.span.start - left.span.start)
+    for (const reference of references) {
+      nextFormula = `${nextFormula.slice(0, reference.span.start)}${createCompiledFormulaReferenceToken(reference.index)}${nextFormula.slice(reference.span.end)}`
+    }
+    return nextFormula
+  }
+
+  function resolveFormulaStructuralReferenceIndex(): ReadonlyMap<string, readonly string[]> {
+    if (formulaStructuralReferenceIndexRevision === formulaStructureRevision) {
+      return formulaStructuralCellKeysBySheetAlias
+    }
+
+    const nextIndex = new Map<string, Set<string>>()
+    for (const formulaCell of formulaCellByKey.values()) {
+      const aliases = new Set<string>()
+      for (const binding of formulaCell.formulaRuntime.bindings) {
+        if (binding.kind !== "reference") {
+          continue
+        }
+        const normalizedAlias = normalizeSpreadsheetSheetReferenceAlias(binding.sheetReference)
+        if (normalizedAlias.length === 0 || isCurrentSheetReference(binding.sheetReference)) {
+          continue
+        }
+        aliases.add(normalizedAlias)
+      }
+      for (const alias of aliases) {
+        const existing = nextIndex.get(alias)
+        if (existing) {
+          existing.add(formulaCell.key)
+          continue
+        }
+        nextIndex.set(alias, new Set([formulaCell.key]))
+      }
+    }
+
+    formulaStructuralCellKeysBySheetAlias = new Map(
+      [...nextIndex.entries()].map(([alias, cellKeys]) => [alias, Object.freeze([...cellKeys])]),
+    )
+    formulaStructuralReferenceIndexRevision = formulaStructureRevision
+    return formulaStructuralCellKeysBySheetAlias
   }
 
   function emit(): void {
@@ -1251,16 +1330,37 @@ export function createDataGridSpreadsheetSheetModel(
     )))
     let compiled = compiledOverride
     if (!compiled && analysis.isFormulaValid) {
-      compiled = compileDataGridFormulaFieldDefinition<Record<string, unknown>>({
-        name: cellKey,
-        field: address.columnKey,
-        formula: analysis.formula ?? analysis.rawInput,
-      }, {
-        functionRegistry,
-        referenceParserOptions,
-        runtimeErrorPolicy,
-        resolveDependencyToken: identifier => identifier,
-      })
+      const compiledFormulaTemplate = createCompiledFormulaTemplate(formulaModel)
+      const cachedArtifact = compiledFormulaArtifactByExactFormula.get(compiledFormulaTemplate)
+      if (cachedArtifact) {
+        compiled = bindCompiledFormulaArtifactToFieldDefinition<Record<string, unknown>>(cachedArtifact, {
+          name: cellKey,
+          field: address.columnKey,
+          formula: compiledFormulaTemplate,
+        }, {
+          runtimeErrorPolicy,
+        })
+      } else {
+        const artifact = compileDataGridFormulaFieldArtifact<Record<string, unknown>>({
+          name: cellKey,
+          field: address.columnKey,
+          formula: compiledFormulaTemplate,
+        }, {
+          compileStrategy: "ast",
+          functionRegistry,
+          referenceParserOptions,
+          runtimeErrorPolicy,
+          resolveDependencyToken: identifier => identifier,
+        })
+        compiledFormulaArtifactByExactFormula.set(compiledFormulaTemplate, artifact)
+        compiled = bindCompiledFormulaArtifactToFieldDefinition<Record<string, unknown>>(artifact, {
+          name: cellKey,
+          field: address.columnKey,
+          formula: compiledFormulaTemplate,
+        }, {
+          runtimeErrorPolicy,
+        })
+      }
     }
     return {
       key: cellKey,
@@ -1500,6 +1600,7 @@ export function createDataGridSpreadsheetSheetModel(
     visiting: Set<string>,
   ): DataGridComputedFieldComputeContext<Record<string, unknown>> {
     const row = rows[formulaCell.address.rowIndex]
+    const formulaRuntimeBindingByIndex = new Map(formulaCell.formulaRuntime.bindings.map(binding => [binding.index, binding]))
 
     const resolveColumnKeysForRange = (
       startColumnKey: string,
@@ -1525,6 +1626,75 @@ export function createDataGridSpreadsheetSheetModel(
       get: (token: string) => {
         if (typeof token !== "string") {
           return null
+        }
+        const compiledReferenceBindingIndex = resolveCompiledFormulaReferenceTokenIndex(token)
+        const compiledReferenceBinding = compiledReferenceBindingIndex == null
+          ? null
+          : formulaRuntimeBindingByIndex.get(compiledReferenceBindingIndex)
+        if (compiledReferenceBinding) {
+          if (compiledReferenceBinding.kind !== "reference") {
+            return createFormulaErrorValue({
+              code: "EVAL_ERROR",
+              message: "Invalid spreadsheet reference.",
+            })
+          }
+          const hasExplicitExternalSheetReference = normalizeSpreadsheetSheetReferenceAlias(compiledReferenceBinding.sheetReference).length > 0
+            && !isCurrentSheetReference(compiledReferenceBinding.sheetReference)
+          const referencedSheetModel = resolveReferencedSheetModel(compiledReferenceBinding.sheetReference)
+          if (hasExplicitExternalSheetReference && !referencedSheetModel) {
+            return createMissingSheetReferenceError(compiledReferenceBinding.sheetReference)
+          }
+          const targetRowCount = referencedSheetModel?.getSnapshot().rowCount ?? rows.length
+          const targetRowIndexes = resolveFormulaTargetRowIndexes(
+            compiledReferenceBinding.rowSelector,
+            formulaCell.address.rowIndex,
+            targetRowCount,
+          )
+          const isRangeReference = compiledReferenceBinding.rowSelector.kind === "window"
+            || compiledReferenceBinding.rowSelector.kind === "absolute-window"
+            || (typeof compiledReferenceBinding.rangeReferenceName === "string" && compiledReferenceBinding.rangeReferenceName.trim().length > 0)
+          if (targetRowIndexes.length === 0) {
+            return isRangeReference
+              ? Object.freeze([])
+              : null
+          }
+          if (referencedSheetModel) {
+            const targetColumnKeys = resolveColumnKeysForRange(
+              compiledReferenceBinding.referenceName,
+              compiledReferenceBinding.rangeReferenceName,
+              referencedSheetModel.getColumns(),
+            )
+            const resolvedValues = targetRowIndexes.flatMap(targetRowIndex => targetColumnKeys.map(columnKey => (
+              referencedSheetModel.getCellDisplayValue({
+                sheetId: referencedSheetModel.getSheetId(),
+                rowId: null,
+                rowIndex: targetRowIndex,
+                columnKey,
+              })
+            )))
+            return isRangeReference
+              ? Object.freeze(resolvedValues)
+              : (resolvedValues[0] ?? null)
+          }
+          const targetColumnKeys = resolveColumnKeysForRange(
+            compiledReferenceBinding.referenceName,
+            compiledReferenceBinding.rangeReferenceName,
+            columns,
+          )
+          const resolvedValues = targetRowIndexes.flatMap((targetRowIndex) => targetColumnKeys.map((columnKey) => {
+            const targetCellKey = makeCellKey(targetRowIndex, columnKey)
+            const targetFormulaCell = formulaCellByKey.get(targetCellKey)
+            if (targetFormulaCell) {
+              if (dirtyFormulaKeys && !dirtyFormulaKeys.has(targetCellKey) && !cache.has(targetCellKey)) {
+                return getResolvedCellValue(rows[targetRowIndex], columnKey)
+              }
+              return evaluateFormulaCell(targetFormulaCell, dirtyFormulaKeys, cache, visiting)
+            }
+            return getResolvedCellValue(rows[targetRowIndex], columnKey)
+          }))
+          return isRangeReference
+            ? Object.freeze(resolvedValues)
+            : (resolvedValues[0] ?? null)
         }
         const parsed = parseDataGridFormulaIdentifier(token, referenceParserOptions)
         if (parsed.referenceName.length === 0) {
@@ -2677,14 +2847,36 @@ export function createDataGridSpreadsheetSheetModel(
     getFormulaStructuralCells() {
       return Object.freeze(
         [...formulaCellByKey.values()]
-          .map((formulaCell) => ({
-            address: cloneCellAddress(formulaCell.address),
-            formula: formulaCell.formulaModel.formula ?? formulaCell.analysis.formula ?? "",
-            contextKeys: formulaCell.contextKeys,
-            dependencies: formulaCell.dependencies,
-            formulaModel: formulaCell.formulaModel,
-            formulaRuntime: formulaCell.formulaRuntime,
-          }))
+          .map(createFormulaStructuralCellSnapshot)
+          .sort((left, right) => compareCellAddresses(left.address, right.address)),
+      )
+    },
+    getFormulaStructuralCellsBySheetAliases(sheetAliases) {
+      if (!Array.isArray(sheetAliases) || sheetAliases.length === 0 || formulaCellByKey.size === 0) {
+        return Object.freeze([])
+      }
+
+      const structuralIndex = resolveFormulaStructuralReferenceIndex()
+      const candidateCellKeys = new Set<string>()
+      for (const sheetAlias of sheetAliases) {
+        const normalizedAlias = normalizeSpreadsheetSheetReferenceAlias(sheetAlias)
+        if (normalizedAlias.length === 0) {
+          continue
+        }
+        for (const cellKey of structuralIndex.get(normalizedAlias) ?? []) {
+          candidateCellKeys.add(cellKey)
+        }
+      }
+
+      if (candidateCellKeys.size === 0) {
+        return Object.freeze([])
+      }
+
+      return Object.freeze(
+        [...candidateCellKeys]
+          .map(cellKey => formulaCellByKey.get(cellKey))
+          .filter((formulaCell): formulaCell is SpreadsheetFormulaCellState => formulaCell != null)
+          .map(createFormulaStructuralCellSnapshot)
           .sort((left, right) => compareCellAddresses(left.address, right.address)),
       )
     },

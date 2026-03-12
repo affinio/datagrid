@@ -1640,13 +1640,14 @@ export function createDataGridSpreadsheetWorkbookModel(
     }
     const changedSheetIds = new Set<string>()
     const sourceAliases = new Set(sourceSheet.aliases.map(alias => normalizeSpreadsheetWorkbookAlias(alias)))
+    const orderedSourceAliases = Object.freeze([...sourceAliases])
 
     for (const targetSheet of sheets) {
       if (targetSheet.id === sourceSheet.id) {
         continue
       }
       const patches: DataGridSpreadsheetFormulaStructuralPatch[] = []
-      for (const formulaCell of targetSheet.sheetModel.getFormulaStructuralCells()) {
+      for (const formulaCell of targetSheet.sheetModel.getFormulaStructuralCellsBySheetAliases(orderedSourceAliases)) {
         if (formulaCell.formulaRuntime.bindings.length === 0) {
           continue
         }

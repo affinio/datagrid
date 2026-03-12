@@ -367,6 +367,10 @@ export function createDataGridSpreadsheetDerivedSheetModel(
       ensureActive()
       return EMPTY_STRUCTURAL_FORMULA_CELLS
     },
+    getFormulaStructuralCellsBySheetAliases() {
+      ensureActive()
+      return EMPTY_STRUCTURAL_FORMULA_CELLS
+    },
     getTableSource() {
       ensureActive()
       return createDerivedRuntimeTableSource(runtime)
