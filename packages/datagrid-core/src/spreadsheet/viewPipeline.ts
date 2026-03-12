@@ -16,6 +16,7 @@ import type {
   DataGridSpreadsheetSheetState,
   DataGridSpreadsheetStyle,
 } from "./sheetModel.js"
+import type { DataGridFormulaTableRowsSource, DataGridFormulaTableSource } from "../models/formula/formulaContracts.js"
 
 export type DataGridSpreadsheetWorkbookSheetKind = "data" | "view"
 
@@ -237,6 +238,16 @@ function normalizeTextComparisonValue(value: unknown, caseSensitive = false): st
   return caseSensitive ? normalized : normalized.toLowerCase()
 }
 
+function createSpreadsheetViewValues(): Record<string, unknown> {
+  return {}
+}
+
+function cloneSpreadsheetViewValues(
+  source: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  return { ...source }
+}
+
 function normalizePivotFieldValue(value: unknown): string {
   if (value == null) {
     return ""
@@ -411,22 +422,28 @@ function matchesFilterClause(
   }
 }
 
+function isSpreadsheetViewTableRowsSource(
+  value: DataGridFormulaTableSource,
+): value is DataGridFormulaTableRowsSource {
+  return !Array.isArray(value) && typeof value === "object" && value !== null && "rows" in value
+}
+
 function createDatasetFromSheetModel(sheetModel: DataGridSpreadsheetSheetModel): SpreadsheetViewDataset {
   const columns = sheetModel.getColumns().map(column => ({
     key: column.key,
     title: column.title,
     style: column.style,
   }))
-  const rows = sheetModel.getRows().map(row => {
-    const values: Record<string, unknown> = {}
-    for (const column of columns) {
-      values[column.key] = sheetModel.getCell({
-        sheetId: sheetModel.getSheetId(),
-        rowId: row.id,
-        rowIndex: row.rowIndex,
-        columnKey: column.key,
-      })?.displayValue ?? null
-    }
+  const tableSource = sheetModel.getTableSource()
+  const sourceRows = isSpreadsheetViewTableRowsSource(tableSource) ? tableSource.rows : tableSource
+  const resolveRow = isSpreadsheetViewTableRowsSource(tableSource) && typeof tableSource.resolveRow === "function"
+    ? tableSource.resolveRow
+    : ((row: unknown) => row as Record<string, unknown>)
+  const rows = sheetModel.getRows().map((row, rowIndex) => {
+    const sourceRow = sourceRows[rowIndex]
+    const values = sourceRow
+      ? resolveRow(sourceRow, rowIndex) as Record<string, unknown>
+      : createSpreadsheetViewValues()
     return {
       id: row.id,
       values,
@@ -525,7 +542,7 @@ function applyProjectStep(
     }
   })
   const rows = dataset.rows.map(row => {
-    const values: Record<string, unknown> = {}
+    const values = createSpreadsheetViewValues()
     for (const projection of projections) {
       values[projection.as ?? projection.key] = row.values[projection.key] ?? null
     }
@@ -640,7 +657,7 @@ function applyJoinStep(
       const fanoutMatches = matches.length > 0 ? matches : (mode === "left" ? [null] : [])
       for (let matchIndex = 0; matchIndex < fanoutMatches.length; matchIndex += 1) {
         const match = fanoutMatches[matchIndex]
-        const values: Record<string, unknown> = { ...row.values }
+        const values = cloneSpreadsheetViewValues(row.values)
         for (const selection of selections) {
           values[selection.as ?? selection.key] = match?.values[selection.key] ?? null
         }
@@ -656,7 +673,7 @@ function applyJoinStep(
     if (!match && mode === "inner") {
       continue
     }
-    const values: Record<string, unknown> = { ...row.values }
+    const values = cloneSpreadsheetViewValues(row.values)
     for (const selection of selections) {
       values[selection.as ?? selection.key] = match?.values[selection.key] ?? null
     }
@@ -803,7 +820,7 @@ function applyGroupStep(
     if (!firstRow) {
       continue
     }
-    const values: Record<string, unknown> = {}
+    const values = createSpreadsheetViewValues()
     for (const field of groupFields) {
       values[field.as ?? field.key] = firstRow.values[field.key] ?? null
     }
@@ -966,13 +983,9 @@ function applyPivotStep(
 
   const rows: SpreadsheetViewRowState[] = projection.rows.map(row => {
     const rowRecord = row.row as Record<string, unknown>
-    const values: Record<string, unknown> = {}
-    for (const column of materializedColumns) {
-      values[column.key] = rowRecord[column.key] ?? null
-    }
     return {
       id: row.rowId,
-      values,
+      values: rowRecord,
     }
   })
 

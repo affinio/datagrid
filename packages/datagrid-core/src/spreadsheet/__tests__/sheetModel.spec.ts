@@ -122,6 +122,77 @@ describe("createDataGridSpreadsheetSheetModel", () => {
     sheet.dispose()
   })
 
+  it("preserves shifted row-relative formulas across row inserts and removals", () => {
+    const sheet = createDataGridSpreadsheetSheetModel({
+      sheetId: "orders",
+      sheetName: "Orders",
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+      columns: [{ key: "qty" }, { key: "price" }, { key: "total" }],
+      rows: [
+        {
+          id: "row-1",
+          cells: {
+            qty: 2,
+            price: 10,
+            total: "=[qty]@row * [price]@row",
+          },
+        },
+        {
+          id: "row-2",
+          cells: {
+            qty: 3,
+            price: 7,
+            total: "=[qty]@row * [price]@row",
+          },
+        },
+      ],
+    })
+
+    expect(sheet.insertRowsAt(0, [{
+      id: "row-0",
+      cells: {
+        qty: 5,
+        price: 4,
+        total: "=[qty]@row * [price]@row",
+      },
+    }])).toBe(true)
+
+    expect(sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-0",
+      rowIndex: 0,
+      columnKey: "total",
+    })?.displayValue).toBe(20)
+    expect(sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-1",
+      rowIndex: 1,
+      columnKey: "total",
+    })?.displayValue).toBe(20)
+    expect(sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-2",
+      rowIndex: 2,
+      columnKey: "total",
+    })?.displayValue).toBe(21)
+
+    expect(sheet.removeRowsAt(0, 1)).toBe(true)
+    expect(sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-1",
+      rowIndex: 0,
+      columnKey: "total",
+    })?.displayValue).toBe(20)
+    expect(sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-2",
+      rowIndex: 1,
+      columnKey: "total",
+    })?.displayValue).toBe(21)
+
+    sheet.dispose()
+  })
+
   it("surfaces missing sheet-qualified references as errors instead of falling back to the local sheet", () => {
     const sheet = createDataGridSpreadsheetSheetModel({
       sheetId: "summary",

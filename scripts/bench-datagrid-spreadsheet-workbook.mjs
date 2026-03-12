@@ -142,6 +142,11 @@ function formatMb(value) {
   return `${value.toFixed(3)} MB`
 }
 
+function formatBytes(value) {
+  const numeric = Number(value) || 0
+  return `${formatCount(numeric)} B (${(numeric / (1024 * 1024)).toFixed(3)} MB)`
+}
+
 function formatCount(value) {
   return Number.isInteger(value) ? `${value}` : value.toFixed(2)
 }
@@ -536,6 +541,98 @@ function summarizeScope(samples) {
   }
 }
 
+function summarizeWorkbookShape(workbook) {
+  const workbookSnapshot = workbook.getSnapshot()
+  const workbookState = workbook.exportState()
+  const stateBySheetId = new Map(workbookState.sheets.map(sheet => [sheet.id, sheet]))
+
+  const sheets = workbookSnapshot.sheets
+    .map((sheetSnapshot) => {
+      const handle = workbook.getSheet(sheetSnapshot.id)
+      const exportedSheet = stateBySheetId.get(sheetSnapshot.id)
+      const stateCellCount = exportedSheet
+        ? exportedSheet.sheetState.rows.reduce((sum, row) => sum + row.cells.length, 0)
+        : 0
+      const sheetStateBytes = exportedSheet
+        ? Buffer.byteLength(JSON.stringify(exportedSheet.sheetState), "utf8")
+        : 0
+      return {
+        id: sheetSnapshot.id,
+        name: sheetSnapshot.name,
+        kind: handle?.kind ?? "data",
+        rowCount: sheetSnapshot.rowCount,
+        columnCount: sheetSnapshot.columnCount,
+        formulaCellCount: sheetSnapshot.formulaCellCount,
+        errorCellCount: sheetSnapshot.errorCellCount,
+        estimatedCellCount: sheetSnapshot.rowCount * sheetSnapshot.columnCount,
+        stateRowCount: exportedSheet?.sheetState.rows.length ?? 0,
+        stateCellCount,
+        sheetStateBytes,
+      }
+    })
+    .sort((left, right) => right.sheetStateBytes - left.sheetStateBytes)
+
+  const totals = sheets.reduce((acc, sheet) => ({
+    estimatedCellCount: acc.estimatedCellCount + sheet.estimatedCellCount,
+    stateCellCount: acc.stateCellCount + sheet.stateCellCount,
+    sheetStateBytes: acc.sheetStateBytes + sheet.sheetStateBytes,
+  }), {
+    estimatedCellCount: 0,
+    stateCellCount: 0,
+    sheetStateBytes: 0,
+  })
+
+  return {
+    sheets,
+    totals,
+    topByBytes: sheets.slice(0, 6),
+    topByEstimatedCells: [...sheets]
+      .sort((left, right) => right.estimatedCellCount - left.estimatedCellCount)
+      .slice(0, 6),
+  }
+}
+
+function aggregateWorkbookShape(runSummaries) {
+  const statsBySheetId = new Map()
+
+  for (const run of runSummaries) {
+    for (const sheet of run.workbookSync.shapeSummary.sheets) {
+      const current = statsBySheetId.get(sheet.id) ?? {
+        id: sheet.id,
+        name: sheet.name,
+        kind: sheet.kind,
+        rowCount: [],
+        columnCount: [],
+        formulaCellCount: [],
+        estimatedCellCount: [],
+        stateCellCount: [],
+        sheetStateBytes: [],
+      }
+      current.rowCount.push(sheet.rowCount)
+      current.columnCount.push(sheet.columnCount)
+      current.formulaCellCount.push(sheet.formulaCellCount)
+      current.estimatedCellCount.push(sheet.estimatedCellCount)
+      current.stateCellCount.push(sheet.stateCellCount)
+      current.sheetStateBytes.push(sheet.sheetStateBytes)
+      statsBySheetId.set(sheet.id, current)
+    }
+  }
+
+  return [...statsBySheetId.values()]
+    .map(entry => ({
+      id: entry.id,
+      name: entry.name,
+      kind: entry.kind,
+      rowCount: pickStats(entry.rowCount),
+      columnCount: pickStats(entry.columnCount),
+      formulaCellCount: pickStats(entry.formulaCellCount),
+      estimatedCellCount: pickStats(entry.estimatedCellCount),
+      stateCellCount: pickStats(entry.stateCellCount),
+      sheetStateBytes: pickStats(entry.sheetStateBytes),
+    }))
+    .sort((left, right) => right.sheetStateBytes.p95 - left.sheetStateBytes.p95)
+}
+
 async function discoverPivotMeasureColumnKey(api) {
   const probeInput = createWorkbookInput("total", BENCH_SEEDS[0] ?? BENCH_SEED)
   const summarySheet = probeInput.sheets.find(sheet => sheet.id === "summary")
@@ -579,6 +676,7 @@ function measureWorkbookSync(api, pivotMeasureColumnKey, seed) {
     const explodeSheet = workbook.getSheet("orders-contacts")?.sheetModel
     const generatedPivotColumns = pivotSheet?.getColumns().filter(column => column.key.startsWith("pivot|")).length ?? 0
     const summaryPivotValue = readSummaryValue(workbook, "summary-5")
+    const shapeSummary = summarizeWorkbookShape(workbook)
 
     return {
       elapsedMs,
@@ -589,6 +687,7 @@ function measureWorkbookSync(api, pivotMeasureColumnKey, seed) {
       generatedPivotColumns,
       explodeRowCount: explodeSheet?.getSnapshot().rowCount ?? 0,
       summaryPivotValue: Number(summaryPivotValue) || 0,
+      shapeSummary,
     }
   } finally {
     workbook.dispose()
@@ -875,6 +974,8 @@ function aggregateRuns(runSummaries) {
   const syncDiagnostics = []
   const pivotColumns = []
   const explodeRows = []
+  const syncShapeStateBytes = []
+  const syncShapeEstimatedCells = []
 
   const rematerializationElapsed = []
   const rematerializationPassCount = []
@@ -902,6 +1003,8 @@ function aggregateRuns(runSummaries) {
     syncDiagnostics.push(run.workbookSync.diagnosticsCount)
     pivotColumns.push(run.workbookSync.generatedPivotColumns)
     explodeRows.push(run.workbookSync.explodeRowCount)
+    syncShapeStateBytes.push(run.workbookSync.shapeSummary.totals.sheetStateBytes)
+    syncShapeEstimatedCells.push(run.workbookSync.shapeSummary.totals.estimatedCellCount)
 
     rematerializationElapsed.push(run.rematerialization.elapsedMs.p95)
     rematerializationPassCount.push(run.rematerialization.passCount.p95)
@@ -931,6 +1034,9 @@ function aggregateRuns(runSummaries) {
       diagnosticsCount: pickStats(syncDiagnostics),
       generatedPivotColumns: pickStats(pivotColumns),
       explodeRowCount: pickStats(explodeRows),
+      totalSheetStateBytes: pickStats(syncShapeStateBytes),
+      totalEstimatedCells: pickStats(syncShapeEstimatedCells),
+      topSheetsByStateBytes: aggregateWorkbookShape(runSummaries),
     },
     rematerialization: {
       elapsedMs: stats(rematerializationElapsed),
@@ -1063,11 +1169,20 @@ function createMarkdownSummary(summary) {
     "## Aggregate",
     "",
     `- workbook.sync() p95: ${formatMs(summary.aggregate.workbookSync.elapsedMs.p95)} | pass p95 ${formatCount(summary.aggregate.workbookSync.passCount.p95)} | heap p95 ${formatMb(summary.aggregate.workbookSync.heapDeltaMb.p95)}`,
+    `- workbook shape p95: state bytes ${formatBytes(summary.aggregate.workbookSync.totalSheetStateBytes.p95)} | estimated cells ${formatCount(summary.aggregate.workbookSync.totalEstimatedCells.p95)}`,
     `- rematerialization p95: ${formatMs(summary.aggregate.rematerialization.elapsedMs.p95)} | scope p95 ${formatCount(summary.aggregate.rematerialization.scope.p95)} sheets`,
     `- cross-sheet recompute p95: ${formatMs(summary.aggregate.crossSheet.elapsedMs.p95)} | scope p95 ${formatCount(summary.aggregate.crossSheet.scope.p95)} sheets`,
     `- insert rewrite p95: ${formatMs(summary.aggregate.directRefRewrite.insertElapsedMs.p95)} | remove rewrite p95: ${formatMs(summary.aggregate.directRefRewrite.removeElapsedMs.p95)}`,
-    `- export p95: ${formatMs(summary.aggregate.exportRestore.exportMs.p95)} | restore p95: ${formatMs(summary.aggregate.exportRestore.restoreMs.p95)} | snapshot bytes p95 ${formatCount(summary.aggregate.exportRestore.snapshotBytes.p95)}`,
+    `- export p95: ${formatMs(summary.aggregate.exportRestore.exportMs.p95)} | restore p95: ${formatMs(summary.aggregate.exportRestore.restoreMs.p95)} | snapshot bytes p95 ${formatBytes(summary.aggregate.exportRestore.snapshotBytes.p95)}`,
     `- generated pivot columns p95: ${formatCount(summary.aggregate.workbookSync.generatedPivotColumns.p95)} | explode rows p95: ${formatCount(summary.aggregate.workbookSync.explodeRowCount.p95)}`,
+    "",
+    "## Top Sheets",
+    "",
+    ...summary.aggregate.workbookSync.topSheetsByStateBytes
+      .slice(0, 6)
+      .map(sheet => (
+        `- ${sheet.id} (${sheet.kind}) rows=${formatCount(sheet.rowCount.p95)} cols=${formatCount(sheet.columnCount.p95)} estimatedCells=${formatCount(sheet.estimatedCellCount.p95)} stateCells=${formatCount(sheet.stateCellCount.p95)} sheetStateBytes=${formatBytes(sheet.sheetStateBytes.p95)}`
+      )),
     "",
     ...(summary.budgetErrors.length > 0
       ? [

@@ -10,7 +10,10 @@ import {
   type DataGridSpreadsheetSheetRowMutation,
   type DataGridSpreadsheetSheetState,
 } from "./sheetModel.js"
-import { formatDataGridSpreadsheetFormulaReference } from "./formulaEditorModel.js"
+import {
+  createDataGridSpreadsheetCellFormulaModel,
+  rewriteDataGridSpreadsheetCellFormulaModelReferences,
+} from "./formulaEditorModel.js"
 import {
   materializeDataGridSpreadsheetViewSheetResult,
   type DataGridSpreadsheetViewMaterializationDiagnostic,
@@ -219,14 +222,6 @@ function normalizeSpreadsheetWorkbookAlias(value: unknown): string {
   return String(value ?? "").trim().toLowerCase()
 }
 
-function resolveSpreadsheetWorkbookReferenceOutputSyntax(text: string): "canonical" | "smartsheet" {
-  const normalized = String(text ?? "").trim()
-  const localReferenceText = normalized.includes("!")
-    ? normalized.slice(normalized.lastIndexOf("!") + 1)
-    : normalized
-  return localReferenceText.startsWith("[") ? "smartsheet" : "canonical"
-}
-
 function buildSpreadsheetWorkbookSheetAliases(id: string, name: string): readonly string[] {
   const aliases = new Set<string>()
   const idAlias = normalizeSpreadsheetWorkbookAlias(id)
@@ -376,13 +371,16 @@ function normalizeSpreadsheetWorkbookViewSheetModelOptions(
   options: DataGridSpreadsheetWorkbookViewSheetModelOptions | null | undefined,
 ): DataGridSpreadsheetWorkbookViewSheetModelOptions | null {
   if (!options) {
-    return null
+    return {
+      rawInputRetention: "formula-only",
+    }
   }
   return {
     sheetStyle: options.sheetStyle ?? null,
     functionRegistry: options.functionRegistry,
     referenceParserOptions: options.referenceParserOptions,
     runtimeErrorPolicy: options.runtimeErrorPolicy ?? "error-value",
+    rawInputRetention: options.rawInputRetention ?? "formula-only",
     resolveContextValue: options.resolveContextValue,
   }
 }
@@ -395,6 +393,7 @@ function resolveSpreadsheetWorkbookViewSheetModelOptionsFromState(
     functionRegistry: state.functionRegistry,
     referenceParserOptions: state.referenceParserOptions,
     runtimeErrorPolicy: state.runtimeErrorPolicy,
+    rawInputRetention: "formula-only",
     resolveContextValue: state.resolveContextValue,
   }
 }
@@ -877,6 +876,7 @@ export function createDataGridSpreadsheetWorkbookModel(
     state: DataGridSpreadsheetSheetState,
     sheetId: string,
     sheetName: string,
+    sheetModelOptions: DataGridSpreadsheetWorkbookViewSheetModelOptions | null = null,
   ): DataGridSpreadsheetSheetModel => {
     const cellStylePatches: Array<{
       cell: Parameters<DataGridSpreadsheetSheetModel["setCellStyle"]>[0]
@@ -916,10 +916,11 @@ export function createDataGridSpreadsheetWorkbookModel(
       rows,
       sheetStyle: state.sheetStyle,
       formulaTables: state.formulaTables,
-      functionRegistry: state.functionRegistry,
-      referenceParserOptions: state.referenceParserOptions,
-      runtimeErrorPolicy: state.runtimeErrorPolicy,
-      resolveContextValue: state.resolveContextValue,
+      functionRegistry: sheetModelOptions?.functionRegistry ?? state.functionRegistry,
+      referenceParserOptions: sheetModelOptions?.referenceParserOptions ?? state.referenceParserOptions,
+      runtimeErrorPolicy: sheetModelOptions?.runtimeErrorPolicy ?? state.runtimeErrorPolicy,
+      rawInputRetention: sheetModelOptions?.rawInputRetention,
+      resolveContextValue: sheetModelOptions?.resolveContextValue ?? state.resolveContextValue,
       resolveSheetReference: (sheetReference) => {
         const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
         if (normalizedAlias.length === 0) {
@@ -1466,6 +1467,7 @@ export function createDataGridSpreadsheetWorkbookModel(
           initialViewResult!.sheetState,
           id,
           name,
+          viewSheetModelOptions,
         )
         : createDataGridSpreadsheetSheetModel({
           ...dataSheetInput!.sheetModelOptions!,
@@ -1577,28 +1579,24 @@ export function createDataGridSpreadsheetWorkbookModel(
         if (!cellSnapshot || cellSnapshot.analysis.references.length === 0) {
           continue
         }
-        let nextRawInput = cellSnapshot.rawInput
-        let cellChanged = false
-        const references = [...cellSnapshot.analysis.references].sort((left, right) => right.span.start - left.span.start)
-        for (const reference of references) {
+        const formulaModel = createDataGridSpreadsheetCellFormulaModel(cellSnapshot.analysis)
+        if (!formulaModel) {
+          continue
+        }
+        const nextRawInput = rewriteDataGridSpreadsheetCellFormulaModelReferences(formulaModel, (reference) => {
           if (normalizeSpreadsheetWorkbookAlias(reference.sheetReference) !== previousAlias) {
-            continue
+            return null
           }
-          const replacement = formatDataGridSpreadsheetFormulaReference({
+          return {
             sheetReference: nextAlias,
             referenceName: reference.referenceName,
             rowSelector: reference.rowSelector,
-          }, {
-            currentRowIndex: formulaCell.address.rowIndex,
-            outputSyntax: resolveSpreadsheetWorkbookReferenceOutputSyntax(reference.text),
-          })
-          if (replacement === reference.text) {
-            continue
+            outputSyntax: reference.outputSyntax,
           }
-          nextRawInput = `${nextRawInput.slice(0, reference.span.start)}${replacement}${nextRawInput.slice(reference.span.end)}`
-          cellChanged = true
-        }
-        if (!cellChanged || nextRawInput === cellSnapshot.rawInput) {
+        }, {
+          currentRowIndex: formulaCell.address.rowIndex,
+        })
+        if (nextRawInput === cellSnapshot.rawInput) {
           continue
         }
         patches.push({
@@ -1639,61 +1637,52 @@ export function createDataGridSpreadsheetWorkbookModel(
         if (!cellSnapshot || cellSnapshot.analysis.references.length === 0) {
           continue
         }
-        let nextRawInput = cellSnapshot.rawInput
-        let cellChanged = false
-        const references = [...cellSnapshot.analysis.references].sort((left, right) => right.span.start - left.span.start)
-        for (const reference of references) {
+        const formulaModel = createDataGridSpreadsheetCellFormulaModel(cellSnapshot.analysis)
+        if (!formulaModel) {
+          continue
+        }
+        const nextRawInput = rewriteDataGridSpreadsheetCellFormulaModelReferences(formulaModel, (reference) => {
           if (!sourceAliases.has(normalizeSpreadsheetWorkbookAlias(reference.sheetReference))) {
-            continue
+            return null
           }
           if (reference.rowSelector.kind !== "absolute") {
-            continue
+            return null
           }
-
-          let replacement = reference.text
           if (mutation.kind === "insert") {
             if (reference.rowSelector.rowIndex < mutation.index) {
-              continue
+              return null
             }
-            replacement = formatDataGridSpreadsheetFormulaReference({
+            return {
               sheetReference: reference.sheetReference,
               referenceName: reference.referenceName,
               rowSelector: {
                 kind: "absolute",
                 rowIndex: reference.rowSelector.rowIndex + mutation.count,
               },
-            }, {
-              currentRowIndex: formulaCell.address.rowIndex,
-              outputSyntax: resolveSpreadsheetWorkbookReferenceOutputSyntax(reference.text),
-            })
-          } else {
-            if (reference.rowSelector.rowIndex < mutation.index) {
-              continue
-            }
-            if (reference.rowSelector.rowIndex >= mutation.index + mutation.count) {
-              replacement = formatDataGridSpreadsheetFormulaReference({
-                sheetReference: reference.sheetReference,
-                referenceName: reference.referenceName,
-                rowSelector: {
-                  kind: "absolute",
-                  rowIndex: reference.rowSelector.rowIndex - mutation.count,
-                },
-              }, {
-                currentRowIndex: formulaCell.address.rowIndex,
-                outputSyntax: resolveSpreadsheetWorkbookReferenceOutputSyntax(reference.text),
-              })
-            } else {
-              replacement = "#REF!"
+              outputSyntax: reference.outputSyntax,
             }
           }
-
-          if (replacement === reference.text) {
-            continue
+          if (reference.rowSelector.rowIndex < mutation.index) {
+            return null
           }
-          nextRawInput = `${nextRawInput.slice(0, reference.span.start)}${replacement}${nextRawInput.slice(reference.span.end)}`
-          cellChanged = true
-        }
-        if (!cellChanged || nextRawInput === cellSnapshot.rawInput) {
+          if (reference.rowSelector.rowIndex >= mutation.index + mutation.count) {
+            return {
+              sheetReference: reference.sheetReference,
+              referenceName: reference.referenceName,
+              rowSelector: {
+                kind: "absolute",
+                rowIndex: reference.rowSelector.rowIndex - mutation.count,
+              },
+              outputSyntax: reference.outputSyntax,
+            }
+          }
+          return {
+            rawText: "#REF!",
+          }
+        }, {
+          currentRowIndex: formulaCell.address.rowIndex,
+        })
+        if (nextRawInput === cellSnapshot.rawInput) {
           continue
         }
         patches.push({
@@ -1794,6 +1783,9 @@ export function createDataGridSpreadsheetWorkbookModel(
           nextSheet.sheetState,
           nextId,
           nextName,
+          nextSheet.kind === "view"
+            ? resolveSpreadsheetWorkbookViewSheetModelOptionsFromState(nextSheet.sheetState)
+            : null,
         )
         if (nextSheet.kind === "view") {
           if (!nextSheet.viewDefinition) {

@@ -57,6 +57,37 @@ export interface DataGridSpreadsheetCellInputAnalysis {
   isFormulaValid: boolean
 }
 
+export interface DataGridSpreadsheetFormulaReferenceModel {
+  key: string
+  index: number
+  text: string
+  span: DataGridFormulaSourceSpan
+  sheetReference: string | null
+  referenceName: string
+  rowSelector: DataGridFormulaRowSelector
+  outputSyntax: DataGridSpreadsheetFormulaReferenceOutputSyntax
+  rawText?: string | null
+}
+
+export interface DataGridSpreadsheetCellFormulaModel {
+  rawInput: string
+  formula: string
+  references: readonly DataGridSpreadsheetFormulaReferenceModel[]
+  isFormulaValid: boolean
+  diagnostics: readonly DataGridFormulaDiagnostic[]
+}
+
+export type DataGridSpreadsheetFormulaReferenceModelReplacement =
+  | (DataGridSpreadsheetFormulaReferenceInput & {
+    outputSyntax?: DataGridSpreadsheetFormulaReferenceOutputSyntax
+  })
+  | { rawText: string }
+
+export interface DataGridSpreadsheetCellFormulaModelMutationOptions {
+  currentRowIndex?: number | null
+  referenceParserOptions?: DataGridFormulaReferenceParserOptions
+}
+
 export interface AnalyzeDataGridSpreadsheetCellInputOptions {
   currentRowIndex?: number | null
   rowCount?: number | null
@@ -663,6 +694,151 @@ function resolveFormulaReferenceOutputSyntaxFromText(
     return "smartsheet"
   }
   return resolveFormulaReferenceOutputSyntax(options)
+}
+
+export function createDataGridSpreadsheetCellFormulaModel(
+  analysis: DataGridSpreadsheetCellInputAnalysis,
+  options: Pick<DataGridSpreadsheetFormatFormulaReferenceOptions, "referenceParserOptions"> = {},
+): DataGridSpreadsheetCellFormulaModel | null {
+  if (analysis.kind !== "formula") {
+    return null
+  }
+  return Object.freeze({
+    rawInput: analysis.rawInput,
+    formula: analysis.formula ?? "",
+    references: Object.freeze(analysis.references.map(reference => Object.freeze({
+      key: reference.key,
+      index: reference.index,
+      text: reference.text,
+      span: { ...reference.span },
+      sheetReference: reference.sheetReference,
+      referenceName: reference.referenceName,
+      rowSelector: cloneFormulaRowSelector(reference.rowSelector),
+      outputSyntax: resolveFormulaReferenceOutputSyntaxFromText(reference.text, options),
+      rawText: null,
+    }))),
+    isFormulaValid: analysis.isFormulaValid,
+    diagnostics: Object.freeze(analysis.diagnostics.map(diagnostic => Object.freeze({
+      ...diagnostic,
+      span: { ...diagnostic.span },
+    }))),
+  })
+}
+
+export function renderDataGridSpreadsheetCellFormulaModel(
+  model: DataGridSpreadsheetCellFormulaModel,
+  options: DataGridSpreadsheetCellFormulaModelMutationOptions = {},
+): string {
+  let nextInput = model.rawInput
+  const references = [...model.references].sort((left, right) => right.span.start - left.span.start)
+  for (const reference of references) {
+    const replacement = reference.rawText != null
+      ? String(reference.rawText)
+      : formatDataGridSpreadsheetFormulaReference({
+        sheetReference: reference.sheetReference,
+        referenceName: reference.referenceName,
+        rowSelector: reference.rowSelector,
+      }, {
+        currentRowIndex: options.currentRowIndex,
+        outputSyntax: reference.outputSyntax,
+        referenceParserOptions: options.referenceParserOptions,
+      })
+    nextInput = `${nextInput.slice(0, reference.span.start)}${replacement}${nextInput.slice(reference.span.end)}`
+  }
+  return nextInput
+}
+
+export function mapDataGridSpreadsheetCellFormulaModelReferences(
+  model: DataGridSpreadsheetCellFormulaModel,
+  mutate: (
+    reference: DataGridSpreadsheetFormulaReferenceModel,
+  ) => DataGridSpreadsheetFormulaReferenceModelReplacement | null,
+  options: DataGridSpreadsheetCellFormulaModelMutationOptions = {},
+): DataGridSpreadsheetCellFormulaModel {
+  let changed = false
+  const nextReferences = model.references.map((reference) => {
+    const replacement = mutate(reference)
+    if (!replacement) {
+      return reference
+    }
+    changed = true
+    if ("rawText" in replacement) {
+      return Object.freeze({
+        ...reference,
+        rawText: String(replacement.rawText ?? ""),
+      })
+    }
+    return Object.freeze({
+      ...reference,
+      sheetReference: replacement.sheetReference ?? null,
+      referenceName: replacement.referenceName,
+      rowSelector: cloneFormulaRowSelector(
+        resolveFormulaReferenceRowSelector(replacement, options.currentRowIndex),
+      ),
+      outputSyntax: replacement.outputSyntax ?? reference.outputSyntax,
+      rawText: null,
+    })
+  })
+  if (!changed) {
+    return model
+  }
+  const nextRawInput = renderDataGridSpreadsheetCellFormulaModel(
+    {
+      ...model,
+      references: Object.freeze(nextReferences),
+    },
+    options,
+  )
+  const nextAnalysis = analyzeDataGridSpreadsheetCellInput(nextRawInput, {
+    currentRowIndex: options.currentRowIndex,
+    referenceParserOptions: options.referenceParserOptions,
+  })
+  return createDataGridSpreadsheetCellFormulaModel(nextAnalysis, {
+    referenceParserOptions: options.referenceParserOptions,
+  }) ?? model
+}
+
+export function rewriteDataGridSpreadsheetCellFormulaModelReferences(
+  model: DataGridSpreadsheetCellFormulaModel,
+  mutate: (
+    reference: DataGridSpreadsheetFormulaReferenceModel,
+  ) => DataGridSpreadsheetFormulaReferenceModelReplacement | null,
+  options: DataGridSpreadsheetCellFormulaModelMutationOptions = {},
+): string {
+  let changed = false
+  const nextReferences = model.references.map((reference) => {
+    const replacement = mutate(reference)
+    if (!replacement) {
+      return reference
+    }
+    changed = true
+    if ("rawText" in replacement) {
+      return Object.freeze({
+        ...reference,
+        rawText: String(replacement.rawText ?? ""),
+      })
+    }
+    return Object.freeze({
+      ...reference,
+      sheetReference: replacement.sheetReference ?? null,
+      referenceName: replacement.referenceName,
+      rowSelector: cloneFormulaRowSelector(
+        resolveFormulaReferenceRowSelector(replacement, options.currentRowIndex),
+      ),
+      outputSyntax: replacement.outputSyntax ?? reference.outputSyntax,
+      rawText: null,
+    })
+  })
+  if (!changed) {
+    return model.rawInput
+  }
+  return renderDataGridSpreadsheetCellFormulaModel(
+    {
+      ...model,
+      references: Object.freeze(nextReferences),
+    },
+    options,
+  )
 }
 
 export function rewriteDataGridSpreadsheetFormulaReferences(
