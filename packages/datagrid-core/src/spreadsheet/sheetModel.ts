@@ -1792,6 +1792,17 @@ export function createDataGridSpreadsheetSheetModel(
     })
   }
 
+  function hasCurrentSheetAbsoluteReferencesAtOrAfter(
+    model: DataGridSpreadsheetCellFormulaModel,
+    rowIndex: number,
+  ): boolean {
+    return model.references.some(reference => (
+      isCurrentSheetReference(reference.sheetReference)
+      && reference.rowSelector.kind === "absolute"
+      && reference.rowSelector.rowIndex >= rowIndex
+    ))
+  }
+
   function insertRowsAt(
     index: number,
     nextRows: readonly DataGridSpreadsheetRowInput[] = [{}],
@@ -1821,12 +1832,16 @@ export function createDataGridSpreadsheetSheetModel(
       const nextRowIndex = previousRowIndex >= normalizedIndex
         ? previousRowIndex + insertedRowStates.length
         : previousRowIndex
+      const formulaModel = previousFormulaModels.get(previousFormulaCell.key)
+        ?? formulaModelByCellKey.get(previousFormulaCell.key)
+        ?? createDataGridSpreadsheetCellFormulaModel(previousFormulaCell.analysis, {
+          referenceParserOptions,
+        })!
+      if (!hasCurrentSheetAbsoluteReferencesAtOrAfter(formulaModel, normalizedIndex)) {
+        continue
+      }
       const rewrittenRawInput = rewriteFormulaModelForInsertedRows(
-        previousFormulaModels.get(previousFormulaCell.key)
-          ?? formulaModelByCellKey.get(previousFormulaCell.key)
-          ?? createDataGridSpreadsheetCellFormulaModel(previousFormulaCell.analysis, {
-            referenceParserOptions,
-          })!,
+        formulaModel,
         nextRowIndex,
         normalizedIndex,
         insertedRowStates.length,
@@ -1915,12 +1930,16 @@ export function createDataGridSpreadsheetSheetModel(
       const nextRowIndex = previousRowIndex >= normalizedIndex + removedRowCount
         ? previousRowIndex - removedRowCount
         : previousRowIndex
+      const formulaModel = previousFormulaModels.get(previousFormulaCell.key)
+        ?? formulaModelByCellKey.get(previousFormulaCell.key)
+        ?? createDataGridSpreadsheetCellFormulaModel(previousFormulaCell.analysis, {
+          referenceParserOptions,
+        })!
+      if (!hasCurrentSheetAbsoluteReferencesAtOrAfter(formulaModel, normalizedIndex)) {
+        continue
+      }
       const rewrittenRawInput = rewriteFormulaModelForRemovedRows(
-        previousFormulaModels.get(previousFormulaCell.key)
-          ?? formulaModelByCellKey.get(previousFormulaCell.key)
-          ?? createDataGridSpreadsheetCellFormulaModel(previousFormulaCell.analysis, {
-            referenceParserOptions,
-          })!,
+        formulaModel,
         nextRowIndex,
         normalizedIndex,
         removedRowCount,
