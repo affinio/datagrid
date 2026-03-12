@@ -228,6 +228,8 @@ interface SpreadsheetFormulaCellState {
   key: string
   address: DataGridSpreadsheetCellAddress
   analysis: DataGridSpreadsheetCellInputAnalysis
+  formulaModel: DataGridSpreadsheetCellFormulaModel
+  formulaRuntime: DataGridSpreadsheetCellFormulaRuntimeModel
   compiled: DataGridCompiledFormulaField<Record<string, unknown>> | null
   dependencies: readonly DataGridSpreadsheetCellAddress[]
   dependencyKeys: readonly string[]
@@ -236,8 +238,6 @@ interface SpreadsheetFormulaCellState {
 
 interface SpreadsheetFormulaStateMaps {
   analysisByCellKey: Map<string, DataGridSpreadsheetCellInputAnalysis>
-  formulaModelByCellKey: Map<string, DataGridSpreadsheetCellFormulaModel>
-  formulaRuntimeByCellKey: Map<string, DataGridSpreadsheetCellFormulaRuntimeModel>
   formulaCellByKey: Map<string, SpreadsheetFormulaCellState>
   dependentsByCellKey: Map<string, Set<string>>
 }
@@ -689,8 +689,6 @@ export function createDataGridSpreadsheetSheetModel(
 
   const rawInputByRowIndex: Array<Map<string, string>> = rows.map(() => new Map())
   const analysisByCellKey = new Map<string, DataGridSpreadsheetCellInputAnalysis>()
-  const formulaModelByCellKey = new Map<string, DataGridSpreadsheetCellFormulaModel>()
-  const formulaRuntimeByCellKey = new Map<string, DataGridSpreadsheetCellFormulaRuntimeModel>()
   const cellStyleByRowIndex: Array<Map<string, DataGridSpreadsheetStyle>> = rows.map(() => new Map())
   const formulaCellByKey = new Map<string, SpreadsheetFormulaCellState>()
   const dependentsByCellKey = new Map<string, Set<string>>()
@@ -1212,10 +1210,32 @@ export function createDataGridSpreadsheetSheetModel(
     }
   }
 
+  function canPreserveMovedFormulaValueOnInsert(
+    formulaCell: SpreadsheetFormulaCellState,
+    insertIndex: number,
+  ): boolean {
+    for (const reference of formulaCell.analysis.references) {
+      if (!isCurrentSheetReference(reference.sheetReference)) {
+        continue
+      }
+      if (reference.rowSelector.kind !== "relative") {
+        return false
+      }
+      for (const targetRowIndex of reference.targetRowIndexes) {
+        if (targetRowIndex < insertIndex) {
+          return false
+        }
+      }
+    }
+    return true
+  }
+
   function createFormulaCellState(
     cellKey: string,
     address: DataGridSpreadsheetCellAddress,
     analysis: DataGridSpreadsheetCellInputAnalysis,
+    formulaModel: DataGridSpreadsheetCellFormulaModel,
+    formulaRuntime: DataGridSpreadsheetCellFormulaRuntimeModel,
     compiledOverride: DataGridCompiledFormulaField<Record<string, unknown>> | null = null,
   ): SpreadsheetFormulaCellState {
     const dependencies = collectDependencyAddresses(analysis)
@@ -1240,6 +1260,8 @@ export function createDataGridSpreadsheetSheetModel(
       key: cellKey,
       address,
       analysis,
+      formulaModel,
+      formulaRuntime,
       compiled: analysis.isFormulaValid ? compiled : null,
       dependencies,
       dependencyKeys,
@@ -1249,13 +1271,9 @@ export function createDataGridSpreadsheetSheetModel(
 
   function registerFormulaCellStateInMaps(
     maps: SpreadsheetFormulaStateMaps,
-    formulaModel: DataGridSpreadsheetCellFormulaModel,
-    formulaRuntime: DataGridSpreadsheetCellFormulaRuntimeModel,
     formulaCellState: SpreadsheetFormulaCellState,
   ): void {
     maps.analysisByCellKey.set(formulaCellState.key, formulaCellState.analysis)
-    maps.formulaModelByCellKey.set(formulaCellState.key, formulaModel)
-    maps.formulaRuntimeByCellKey.set(formulaCellState.key, formulaRuntime)
     maps.formulaCellByKey.set(formulaCellState.key, formulaCellState)
     for (const dependencyKey of formulaCellState.dependencyKeys) {
       setDependentLinkInMap(maps.dependentsByCellKey, dependencyKey, formulaCellState.key)
@@ -1268,14 +1286,6 @@ export function createDataGridSpreadsheetSheetModel(
     analysisByCellKey.clear()
     for (const [cellKey, analysis] of maps.analysisByCellKey) {
       analysisByCellKey.set(cellKey, analysis)
-    }
-    formulaModelByCellKey.clear()
-    for (const [cellKey, formulaModel] of maps.formulaModelByCellKey) {
-      formulaModelByCellKey.set(cellKey, formulaModel)
-    }
-    formulaRuntimeByCellKey.clear()
-    for (const [cellKey, formulaRuntime] of maps.formulaRuntimeByCellKey) {
-      formulaRuntimeByCellKey.set(cellKey, formulaRuntime)
     }
     formulaCellByKey.clear()
     for (const [cellKey, formulaCellState] of maps.formulaCellByKey) {
@@ -1290,8 +1300,6 @@ export function createDataGridSpreadsheetSheetModel(
   function buildFullFormulaStateMaps(): SpreadsheetFormulaStateMaps {
     const maps: SpreadsheetFormulaStateMaps = {
       analysisByCellKey: new Map(),
-      formulaModelByCellKey: new Map(),
-      formulaRuntimeByCellKey: new Map(),
       formulaCellByKey: new Map(),
       dependentsByCellKey: new Map(),
     }
@@ -1314,9 +1322,7 @@ export function createDataGridSpreadsheetSheetModel(
       }
       registerFormulaCellStateInMaps(
         maps,
-        formulaModel,
-        formulaRuntime,
-        createFormulaCellState(cellKey, address, analysis),
+        createFormulaCellState(cellKey, address, analysis, formulaModel, formulaRuntime),
       )
     }
 
@@ -1333,14 +1339,18 @@ export function createDataGridSpreadsheetSheetModel(
     previousFormulaCells: readonly SpreadsheetFormulaCellState[],
     previousFormulaModels: ReadonlyMap<string, DataGridSpreadsheetCellFormulaModel>,
     previousFormulaRuntimeModels: ReadonlyMap<string, DataGridSpreadsheetCellFormulaRuntimeModel>,
-  ): boolean {
+    previousFormulaValues: ReadonlyMap<string, unknown>,
+  ): {
+    baseValuesChanged: boolean
+    dirtyFormulaKeys: ReadonlySet<string>
+  } {
     const maps: SpreadsheetFormulaStateMaps = {
       analysisByCellKey: new Map(),
-      formulaModelByCellKey: new Map(),
-      formulaRuntimeByCellKey: new Map(),
       formulaCellByKey: new Map(),
       dependentsByCellKey: new Map(),
     }
+    const dirtyFormulaKeys = new Set<string>()
+    const preservedFormulaValues = new Map<string, unknown>()
 
     for (const previousFormulaCell of previousFormulaCells) {
       const previousRowIndex = previousFormulaCell.address.rowIndex
@@ -1388,15 +1398,32 @@ export function createDataGridSpreadsheetSheetModel(
       }
       registerFormulaCellStateInMaps(
         maps,
-        formulaModel,
-        formulaRuntime,
         createFormulaCellState(
           nextCellKey,
           createCellAddress(sheetId, nextRow, previousFormulaCell.address.columnKey),
           analysis,
+          formulaModel,
+          formulaRuntime,
           rawInputChanged ? null : previousFormulaCell.compiled,
         ),
       )
+      if (rawInputChanged) {
+        dirtyFormulaKeys.add(nextCellKey)
+        continue
+      }
+      if (nextRowIndex !== previousRowIndex) {
+        if (
+          mutation.kind === "insert"
+          && canPreserveMovedFormulaValueOnInsert(previousFormulaCell, mutation.index)
+        ) {
+          preservedFormulaValues.set(
+            nextCellKey,
+            previousFormulaValues.get(previousFormulaCell.key),
+          )
+          continue
+        }
+        dirtyFormulaKeys.add(nextCellKey)
+      }
     }
 
     if (mutation.kind === "insert") {
@@ -1429,20 +1456,30 @@ export function createDataGridSpreadsheetSheetModel(
           }
           registerFormulaCellStateInMaps(
             maps,
-            formulaModel,
-            formulaRuntime,
             createFormulaCellState(
               cellKey,
               createCellAddress(sheetId, row, columnKey),
               analysis,
+              formulaModel,
+              formulaRuntime,
             ),
           )
+          dirtyFormulaKeys.add(cellKey)
         }
       }
     }
 
     applyFormulaStateMaps(maps)
-    return refreshAllBaseCellValues()
+    let baseValuesChanged = refreshAllBaseCellValues()
+    for (const [cellKey, preservedValue] of preservedFormulaValues) {
+      if (setResolvedCellValue(cellKey, preservedValue)) {
+        baseValuesChanged = true
+      }
+    }
+    return {
+      baseValuesChanged,
+      dirtyFormulaKeys: dirtyFormulaKeys,
+    }
   }
 
   function rebuildFormulaState(): boolean {
@@ -1679,21 +1716,8 @@ export function createDataGridSpreadsheetSheetModel(
     const analysis = analyzeCellInput(rawInput, rowIndex)
     if (analysis.kind !== "formula") {
       analysisByCellKey.delete(cellKey)
-      formulaModelByCellKey.delete(cellKey)
-      formulaRuntimeByCellKey.delete(cellKey)
     } else {
       analysisByCellKey.set(cellKey, analysis)
-      const formulaModel = createDataGridSpreadsheetCellFormulaModel(analysis, {
-        referenceParserOptions,
-      })
-      const formulaRuntime = createDataGridSpreadsheetCellFormulaRuntimeModel(analysis)
-      if (formulaModel && formulaRuntime) {
-        formulaModelByCellKey.set(cellKey, formulaModel)
-        formulaRuntimeByCellKey.set(cellKey, formulaRuntime)
-      } else {
-        formulaModelByCellKey.delete(cellKey)
-        formulaRuntimeByCellKey.delete(cellKey)
-      }
     }
     return analysis
   }
@@ -1824,13 +1848,13 @@ export function createDataGridSpreadsheetSheetModel(
       }
 
       analysisByCellKey.set(cellKey, nextAnalysis)
-      formulaModelByCellKey.set(cellKey, nextFormulaModel)
-      formulaRuntimeByCellKey.set(cellKey, nextFormulaRuntime)
 
       const nextFormulaCell = createFormulaCellState(
         cellKey,
         address,
         nextAnalysis,
+        nextFormulaModel,
+        nextFormulaRuntime,
         null,
       )
       formulaCellByKey.set(cellKey, nextFormulaCell)
@@ -2107,8 +2131,12 @@ export function createDataGridSpreadsheetSheetModel(
     }
 
     const previousFormulaCells = [...formulaCellByKey.values()]
-    const previousFormulaModels = new Map(formulaModelByCellKey)
-    const previousFormulaRuntimeModels = new Map(formulaRuntimeByCellKey)
+    const previousFormulaModels = new Map(previousFormulaCells.map(cell => [cell.key, cell.formulaModel]))
+    const previousFormulaRuntimeModels = new Map(previousFormulaCells.map(cell => [cell.key, cell.formulaRuntime]))
+    const previousFormulaValues = new Map(previousFormulaCells.map(cell => [
+      cell.key,
+      getResolvedCellValue(rows[cell.address.rowIndex], cell.address.columnKey),
+    ]))
     const reservedRowIds = new Set<DataGridRowId>(rows.map(row => row.id))
     const insertedRowStates = nextRows.map((rowInput, offset) => {
       const rowState = createSpreadsheetRowState(rowInput, normalizedIndex + offset, reservedRowIds)
@@ -2127,12 +2155,10 @@ export function createDataGridSpreadsheetSheetModel(
         ? previousRowIndex + insertedRowStates.length
         : previousRowIndex
       const formulaModel = previousFormulaModels.get(previousFormulaCell.key)
-        ?? formulaModelByCellKey.get(previousFormulaCell.key)
         ?? createDataGridSpreadsheetCellFormulaModel(previousFormulaCell.analysis, {
           referenceParserOptions,
         })!
       const formulaRuntime = previousFormulaRuntimeModels.get(previousFormulaCell.key)
-        ?? formulaRuntimeByCellKey.get(previousFormulaCell.key)
         ?? createDataGridSpreadsheetCellFormulaRuntimeModel(previousFormulaCell.analysis)
       if (!formulaRuntime || !hasCurrentSheetAbsoluteReferencesAtOrAfter(formulaRuntime, normalizedIndex)) {
         continue
@@ -2183,14 +2209,17 @@ export function createDataGridSpreadsheetSheetModel(
       count: insertedRowStates.length,
     }
     revision += 1
-    const baseValuesChanged = rebuildFormulaStateAfterRowMutation({
+    const rebuildResult = rebuildFormulaStateAfterRowMutation({
       kind: "insert",
       index: normalizedIndex,
       count: insertedRowStates.length,
       insertedRows: nextRows,
-    }, previousFormulaCells, previousFormulaModels, previousFormulaRuntimeModels)
-    const formulaValuesChanged = applyFormulaEvaluation(null)
-    if (baseValuesChanged || formulaValuesChanged) {
+    }, previousFormulaCells, previousFormulaModels, previousFormulaRuntimeModels, previousFormulaValues)
+    const dirtyFormulaKeys = rebuildResult.dirtyFormulaKeys.size > 0
+      ? collectDependentFormulaClosure(rebuildResult.dirtyFormulaKeys)
+      : null
+    const formulaValuesChanged = applyFormulaEvaluation(dirtyFormulaKeys)
+    if (rebuildResult.baseValuesChanged || formulaValuesChanged) {
       valueRevision += 1
     }
     emit()
@@ -2213,8 +2242,12 @@ export function createDataGridSpreadsheetSheetModel(
     }
 
     const previousFormulaCells = [...formulaCellByKey.values()]
-    const previousFormulaModels = new Map(formulaModelByCellKey)
-    const previousFormulaRuntimeModels = new Map(formulaRuntimeByCellKey)
+    const previousFormulaModels = new Map(previousFormulaCells.map(cell => [cell.key, cell.formulaModel]))
+    const previousFormulaRuntimeModels = new Map(previousFormulaCells.map(cell => [cell.key, cell.formulaRuntime]))
+    const previousFormulaValues = new Map(previousFormulaCells.map(cell => [
+      cell.key,
+      getResolvedCellValue(rows[cell.address.rowIndex], cell.address.columnKey),
+    ]))
 
     rows.splice(normalizedIndex, removedRowCount)
     rawInputByRowIndex.splice(normalizedIndex, removedRowCount)
@@ -2230,12 +2263,10 @@ export function createDataGridSpreadsheetSheetModel(
         ? previousRowIndex - removedRowCount
         : previousRowIndex
       const formulaModel = previousFormulaModels.get(previousFormulaCell.key)
-        ?? formulaModelByCellKey.get(previousFormulaCell.key)
         ?? createDataGridSpreadsheetCellFormulaModel(previousFormulaCell.analysis, {
           referenceParserOptions,
         })!
       const formulaRuntime = previousFormulaRuntimeModels.get(previousFormulaCell.key)
-        ?? formulaRuntimeByCellKey.get(previousFormulaCell.key)
         ?? createDataGridSpreadsheetCellFormulaRuntimeModel(previousFormulaCell.analysis)
       if (!formulaRuntime || !hasCurrentSheetAbsoluteReferencesAtOrAfter(formulaRuntime, normalizedIndex)) {
         continue
@@ -2263,13 +2294,16 @@ export function createDataGridSpreadsheetSheetModel(
       count: removedRowCount,
     }
     revision += 1
-    const baseValuesChanged = rebuildFormulaStateAfterRowMutation({
+    const rebuildResult = rebuildFormulaStateAfterRowMutation({
       kind: "remove",
       index: normalizedIndex,
       count: removedRowCount,
-    }, previousFormulaCells, previousFormulaModels, previousFormulaRuntimeModels)
-    const formulaValuesChanged = applyFormulaEvaluation(null)
-    if (baseValuesChanged || formulaValuesChanged) {
+    }, previousFormulaCells, previousFormulaModels, previousFormulaRuntimeModels, previousFormulaValues)
+    const dirtyFormulaKeys = rebuildResult.dirtyFormulaKeys.size > 0
+      ? collectDependentFormulaClosure(rebuildResult.dirtyFormulaKeys)
+      : null
+    const formulaValuesChanged = applyFormulaEvaluation(dirtyFormulaKeys)
+    if (rebuildResult.baseValuesChanged || formulaValuesChanged) {
       valueRevision += 1
     }
     emit()
@@ -2457,8 +2491,6 @@ export function createDataGridSpreadsheetSheetModel(
 
         sheetStyle = normalizeSpreadsheetStyle(state.sheetStyle)
         analysisByCellKey.clear()
-        formulaModelByCellKey.clear()
-        formulaRuntimeByCellKey.clear()
         formulaCellByKey.clear()
         dependentsByCellKey.clear()
         lastRowMutation = null
@@ -2589,8 +2621,6 @@ export function createDataGridSpreadsheetSheetModel(
 
       sheetStyle = nextState.sheetStyle
       analysisByCellKey.clear()
-      formulaModelByCellKey.clear()
-      formulaRuntimeByCellKey.clear()
       formulaCellByKey.clear()
       dependentsByCellKey.clear()
       lastRowMutation = null
@@ -2632,15 +2662,11 @@ export function createDataGridSpreadsheetSheetModel(
       return Object.freeze(
         [...formulaCellByKey.values()]
           .map((formulaCell) => {
-            const formulaModel = formulaModelByCellKey.get(formulaCell.key)
-            const formulaRuntime = formulaRuntimeByCellKey.get(formulaCell.key)
             return {
               address: cloneCellAddress(formulaCell.address),
-              formula: formulaModel?.formula ?? formulaCell.analysis.formula ?? "",
+              formula: formulaCell.formulaModel.formula ?? formulaCell.analysis.formula ?? "",
               contextKeys: formulaCell.contextKeys,
               dependencies: formulaCell.dependencies,
-              formulaModel: formulaModel ?? null,
-              formulaRuntime: formulaRuntime ?? null,
             }
           })
           .sort((left, right) => compareCellAddresses(left.address, right.address)),
@@ -2779,8 +2805,6 @@ export function createDataGridSpreadsheetSheetModel(
       listeners.clear()
       rawInputByRowIndex.length = 0
       analysisByCellKey.clear()
-      formulaModelByCellKey.clear()
-      formulaRuntimeByCellKey.clear()
       cellStyleByRowIndex.length = 0
       formulaCellByKey.clear()
       dependentsByCellKey.clear()
