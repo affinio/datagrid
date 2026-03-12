@@ -1021,6 +1021,7 @@ function datasetToSheetState(
       cells: Object.freeze(dataset.columns.map(column => ({
         columnKey: column.key,
         rawInput: normalizeOutputValue(row.values[column.key]),
+        resolvedValue: row.values[column.key],
         style: null,
       }))),
     }))),

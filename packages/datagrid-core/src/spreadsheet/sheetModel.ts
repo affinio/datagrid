@@ -82,6 +82,7 @@ export interface DataGridSpreadsheetFormulaCellSnapshot {
 export interface DataGridSpreadsheetSheetStateCell {
   columnKey: string
   rawInput: string
+  resolvedValue?: unknown
   style: DataGridSpreadsheetStyle | null
 }
 
@@ -383,6 +384,16 @@ function areSpreadsheetSheetStatesEquivalent(
     && areSpreadsheetSheetStateRowsEqual(left.rows, right.rows)
     && areSpreadsheetStylesEqual(left.sheetStyle, right.sheetStyle)
     && areSpreadsheetFormulaTableBindingsEqual(left.formulaTables, right.formulaTables)
+}
+
+function isTypedPlainSpreadsheetSheetState(
+  state: DataGridSpreadsheetSheetState,
+): boolean {
+  return state.rows.length > 0 && state.rows.every(row => row.cells.every(cell => (
+    cell.style == null
+    && typeof cell.resolvedValue !== "undefined"
+    && !String(cell.rawInput ?? "").trimStart().startsWith("=")
+  )))
 }
 
 function mergeSpreadsheetStyles(
@@ -2096,6 +2107,7 @@ export function createDataGridSpreadsheetSheetModel(
             .map(cell => ({
               columnKey: normalizeColumnKey(cell.columnKey),
               rawInput: normalizeCellRawInput(cell.rawInput),
+              resolvedValue: cell.resolvedValue,
               style: normalizeSpreadsheetStyle(cell.style),
             }))
             .filter(cell => cell.rawInput.length > 0 || cell.style != null)),
@@ -2115,9 +2127,11 @@ export function createDataGridSpreadsheetSheetModel(
         throw new Error("[DataGridSpreadsheetSheet] columns must be non-empty.")
       }
 
-      const currentState = this.exportState()
-      if (areSpreadsheetSheetStatesEquivalent(currentState, nextState)) {
-        return false
+      if (!isTypedPlainSpreadsheetSheetState(nextState)) {
+        const currentState = this.exportState()
+        if (areSpreadsheetSheetStatesEquivalent(currentState, nextState)) {
+          return false
+        }
       }
 
       columns.length = 0
@@ -2171,6 +2185,8 @@ export function createDataGridSpreadsheetSheetModel(
           }
           if (shouldRetainRawInput(cell.rawInput)) {
             setStoredRawInput(rowIndex, cell.columnKey, cell.rawInput)
+          } else if (typeof cell.resolvedValue !== "undefined") {
+            setResolvedCellValueOnRow(rows[rowIndex], cell.columnKey, cell.resolvedValue)
           } else {
             syncNonRetainedRawInputToResolvedValue(rowIndex, cell.columnKey, cell.rawInput)
           }

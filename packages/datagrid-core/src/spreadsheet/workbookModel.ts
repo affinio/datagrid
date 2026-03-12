@@ -528,6 +528,16 @@ function createSpreadsheetWorkbookSheetStateExport(
   }
 }
 
+function isTypedPlainSpreadsheetSheetState(
+  state: DataGridSpreadsheetSheetState,
+): boolean {
+  return state.rows.length > 0 && state.rows.every(row => row.cells.every(cell => (
+    cell.style == null
+    && typeof cell.resolvedValue !== "undefined"
+    && !String(cell.rawInput ?? "").trimStart().startsWith("=")
+  )))
+}
+
 function collectSpreadsheetWorkbookDerivedInstabilityReasons(
   viewDefinition: DataGridSpreadsheetWorkbookViewDefinition | null,
 ): readonly string[] {
@@ -895,6 +905,35 @@ export function createDataGridSpreadsheetWorkbookModel(
     sheetName: string,
     sheetModelOptions: DataGridSpreadsheetWorkbookViewSheetModelOptions | null = null,
   ): DataGridSpreadsheetSheetModel => {
+    if (isTypedPlainSpreadsheetSheetState(state)) {
+      const sheetModel = createDataGridSpreadsheetSheetModel({
+        sheetId,
+        sheetName,
+        columns: state.columns.map(column => ({
+          key: column.key,
+          title: column.title,
+          style: column.style,
+        })),
+        rows: [],
+        sheetStyle: state.sheetStyle,
+        formulaTables: state.formulaTables,
+        functionRegistry: sheetModelOptions?.functionRegistry ?? state.functionRegistry,
+        referenceParserOptions: sheetModelOptions?.referenceParserOptions ?? state.referenceParserOptions,
+        runtimeErrorPolicy: sheetModelOptions?.runtimeErrorPolicy ?? state.runtimeErrorPolicy,
+        rawInputRetention: sheetModelOptions?.rawInputRetention,
+        resolveContextValue: sheetModelOptions?.resolveContextValue ?? state.resolveContextValue,
+        resolveSheetReference: (sheetReference) => {
+          const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
+          if (normalizedAlias.length === 0) {
+            return null
+          }
+          return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
+        },
+      })
+      sheetModel.restoreState(state)
+      return sheetModel
+    }
+
     const cellStylePatches: Array<{
       cell: Parameters<DataGridSpreadsheetSheetModel["setCellStyle"]>[0]
       style: Parameters<DataGridSpreadsheetSheetModel["setCellStyle"]>[1]
