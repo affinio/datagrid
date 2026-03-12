@@ -96,10 +96,6 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     getCellValue: (row, columnKey) => options.readCell(row, columnKey),
     setLastAction: () => undefined,
     closeContextMenu: () => undefined,
-    writeClipboardText: async payload => {
-      lastCopiedPayload.value = payload
-    },
-    readClipboardText: async () => lastCopiedPayload.value,
   })
 
   const applyClipboardEdits = options.applyClipboardEdits ?? ((

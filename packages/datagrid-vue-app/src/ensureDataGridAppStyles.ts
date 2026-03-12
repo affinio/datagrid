@@ -18,6 +18,8 @@ const DATA_GRID_APP_STYLES = `
   --datagrid-row-selected-background-color: transparent;
   --datagrid-row-selected-range-bg: transparent;
   --datagrid-row-selected-sticky-bg: transparent;
+  --datagrid-selection-copied-contrast: color-mix(in srgb, var(--datagrid-background-color) 84%, var(--datagrid-text-color));
+  --datagrid-selection-copied-glow: color-mix(in srgb, var(--datagrid-selection-copied-border) 38%, transparent);
 }
 
 .datagrid-app-layout {
@@ -695,9 +697,9 @@ const DATA_GRID_APP_STYLES = `
 .grid-cell--clipboard-pending::after {
   content: "";
   position: absolute;
-  inset: -1px;
+  inset: -2px;
   pointer-events: none;
-  z-index: 4;
+  z-index: 7;
   background-image:
     repeating-linear-gradient(90deg, var(--clipboard-pending-top, transparent) 0 6px, transparent 6px 12px),
     repeating-linear-gradient(90deg, var(--clipboard-pending-bottom, transparent) 0 6px, transparent 6px 12px),
@@ -705,15 +707,19 @@ const DATA_GRID_APP_STYLES = `
     repeating-linear-gradient(0deg, var(--clipboard-pending-right, transparent) 0 6px, transparent 6px 12px);
   background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
   background-size:
-    calc(100% - 2px) 1px,
-    calc(100% - 2px) 1px,
-    1px calc(100% - 2px),
-    1px calc(100% - 2px);
+    calc(100% - 4px) 2px,
+    calc(100% - 4px) 2px,
+    2px calc(100% - 4px),
+    2px calc(100% - 4px);
   background-position:
-    1px 1px,
-    1px calc(100% - 1px),
-    1px 1px,
-    calc(100% - 1px) 1px;
+    2px 2px,
+    2px calc(100% - 2px),
+    2px 2px,
+    calc(100% - 2px) 2px;
+  box-shadow:
+    0 0 0 1px var(--datagrid-selection-copied-contrast),
+    0 0 0 2px var(--datagrid-selection-copied-glow);
+  border-radius: 2px;
   animation: grid-clipboard-ants 0.7s linear infinite;
 }
 
@@ -736,17 +742,17 @@ const DATA_GRID_APP_STYLES = `
 @keyframes grid-clipboard-ants {
   from {
     background-position:
-      1px 1px,
-      1px calc(100% - 1px),
-      1px 1px,
-      calc(100% - 1px) 1px;
+      2px 2px,
+      2px calc(100% - 2px),
+      2px 2px,
+      calc(100% - 2px) 2px;
   }
   to {
     background-position:
-      13px 1px,
-      -11px calc(100% - 1px),
-      1px 13px,
-      calc(100% - 1px) -11px;
+      14px 2px,
+      -10px calc(100% - 2px),
+      2px 14px,
+      calc(100% - 2px) -10px;
   }
 }
 
