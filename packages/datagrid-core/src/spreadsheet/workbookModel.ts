@@ -489,7 +489,24 @@ function createSpreadsheetWorkbookSheetSnapshot(
 function createSpreadsheetWorkbookSheetStateExport(
   sheet: SpreadsheetWorkbookSheetState,
 ): DataGridSpreadsheetWorkbookSheetStateExport {
-  const sheetState = sheet.sheetModel.exportState()
+  const sheetState = sheet.kind === "view"
+    ? {
+      sheetId: sheet.id,
+      sheetName: sheet.name,
+      columns: Object.freeze(sheet.sheetModel.getColumns().map(column => ({
+        key: column.key,
+        title: column.title,
+        style: column.style,
+      }))),
+      rows: Object.freeze([]),
+      sheetStyle: sheet.viewSheetModelOptions?.sheetStyle ?? null,
+      formulaTables: Object.freeze([]),
+      functionRegistry: sheet.viewSheetModelOptions?.functionRegistry,
+      referenceParserOptions: sheet.viewSheetModelOptions?.referenceParserOptions,
+      runtimeErrorPolicy: sheet.viewSheetModelOptions?.runtimeErrorPolicy ?? "error-value",
+      resolveContextValue: sheet.viewSheetModelOptions?.resolveContextValue,
+    }
+    : sheet.sheetModel.exportState()
   const managedAliases = new Set(
     [...sheet.managedTableAliases].map(alias => normalizeSpreadsheetWorkbookAlias(alias)),
   )
