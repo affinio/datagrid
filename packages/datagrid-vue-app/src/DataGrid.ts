@@ -21,6 +21,7 @@ import {
   type DataGridFilterSnapshot,
   type DataGridFormulaFieldDefinition,
   type DataGridFormulaFunctionRegistry,
+  type DataGridRowSelectionSnapshot,
   type DataGridRowModel,
   type DataGridRowNodeInput,
   type DataGridSetStateOptions,
@@ -28,6 +29,7 @@ import {
   type DataGridUnifiedColumnState,
   type DataGridUnifiedState,
   type UseDataGridRuntimeResult,
+  useDataGridAppRowSelection,
   useDataGridAppSelection,
 } from "@affino/datagrid-vue"
 import type {
@@ -360,9 +362,23 @@ export default defineComponent({
       visibleColumns,
       totalRows,
     })
+    const {
+      rowSelectionSnapshot,
+      syncRowSelectionSnapshotFromRuntime,
+      reconcileRowSelectionFromRuntime,
+      runtimeServices: rowSelectionRuntimeServices,
+    } = useDataGridAppRowSelection<unknown>({
+      resolveRuntime: () => dataGridRef.value,
+    })
     const resolvedServices = computed<DataGridRuntimeOverrides>(() => ({
       ...(props.services ?? {}),
-      ...(runtimeServices as DataGridRuntimeOverrides),
+      ...(runtimeServices as Omit<DataGridRuntimeOverrides, "selection">),
+      selection: {
+        ...(props.services?.selection ?? {}),
+        ...(runtimeServices.selection ?? {}),
+        ...(rowSelectionRuntimeServices.selection ?? {}),
+        name: "selection",
+      },
     }))
     const {
       dataGridInstanceKey,
@@ -394,6 +410,7 @@ export default defineComponent({
     })
 
     const handleCellChange = (payload: unknown): void => {
+      reconcileRowSelectionFromRuntime()
       emit("cell-change", payload)
       controlledState.emitSnapshotUpdates()
     }
@@ -401,6 +418,14 @@ export default defineComponent({
     const handleSelectionChange = (payload: unknown): void => {
       emit("selection-change", payload)
     }
+
+    watch(
+      rowSelectionSnapshot,
+      (snapshot: DataGridRowSelectionSnapshot | null) => {
+        emit("row-select", snapshot)
+      },
+      { deep: true },
+    )
 
     watch(
       () => props.viewMode,
@@ -463,7 +488,9 @@ export default defineComponent({
         runtimeRowModel: dataGridRef.value?.rowModel ?? null,
         selectionSnapshot,
         selectionAnchor,
+        rowSelectionSnapshot,
         syncSelectionSnapshotFromRuntime,
+        syncRowSelectionSnapshotFromRuntime,
         sortModel: props.sortModel,
         filterModel: props.filterModel,
         groupBy: resolvedGroupBy.value,

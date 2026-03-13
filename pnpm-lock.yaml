@@ -77,6 +77,9 @@ importers:
 
   packages/datagrid-core:
     dependencies:
+      '@affino/datagrid-format':
+        specifier: workspace:*
+        version: link:../datagrid-format
       '@affino/datagrid-formula-engine':
         specifier: workspace:*
         version: link:../datagrid-formula-engine
@@ -98,6 +101,12 @@ importers:
       vue:
         specifier: 3.4.38
         version: 3.4.38(typescript@5.9.3)
+
+  packages/datagrid-format:
+    devDependencies:
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@25.3.1)(jiti@2.6.1)(jsdom@28.1.0)(lightningcss@1.31.1)(terser@5.46.0)
 
   packages/datagrid-formula-engine: {}
 

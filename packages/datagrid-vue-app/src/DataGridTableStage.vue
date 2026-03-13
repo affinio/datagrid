@@ -18,8 +18,27 @@
       <div class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="handleLinkedViewportWheel">
         <canvas ref="leftHeaderChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
         <div class="grid-header-row grid-pane-track" :style="leftTrackStyle">
-          <div class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header" :style="resolvedIndexColumnStyle">
-            <div class="col-head">
+          <div
+            v-if="shouldShowRowSelection()"
+            class="grid-cell grid-cell--header grid-cell--index grid-cell--row-select grid-cell--row-select-header"
+            :style="resolvedRowSelectionColumnStyle"
+          >
+            <div class="col-head col-head--row-select">
+              <input
+                class="grid-row-select-checkbox"
+                type="checkbox"
+                aria-label="Select visible rows"
+                :checked="isAllVisibleRowsSelectedSafe()"
+                :indeterminate.prop="isSomeVisibleRowsSelectedSafe() && !isAllVisibleRowsSelectedSafe()"
+                @mousedown.stop
+                @click.stop
+                @change="handleSelectAllVisibleRowsChangeSafe"
+              />
+            </div>
+            <div v-if="!hasColumnMenu()" class="col-filter col-filter--index-spacer" aria-hidden="true" />
+          </div>
+          <div class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header" :style="resolvedRowIndexColumnStyle">
+            <div class="col-head col-head--index">
               <span>#</span>
             </div>
             <div v-if="!hasColumnMenu()" class="col-filter col-filter--index-spacer" aria-hidden="true" />
@@ -313,12 +332,33 @@
             v-for="(row, rowOffset) in displayRows"
             :key="`${String(row.rowId)}-left-row`"
             class="grid-row"
-            :class="[rowClass(row), rowStateClasses(rowOffset), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
+            :class="[rowClass(row), rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
             :style="paneRowStyle(row, rowOffset, leftPaneWidth)"
-            @click="toggleGroupRow(row)"
+            @click="handleRowContainerClick(row)"
             @mouseenter="setHoveredRow(rowOffset)"
           >
-            <div class="grid-cell grid-cell--index" :style="resolvedIndexColumnStyle" @click.stop="handleGroupCellClick(row)">
+            <div
+              v-if="shouldShowRowSelection()"
+              class="grid-cell grid-cell--index grid-cell--row-select"
+              :style="resolvedRowSelectionColumnStyle"
+            >
+              <input
+                v-if="row.kind !== 'group'"
+                class="grid-row-select-checkbox"
+                type="checkbox"
+                :aria-label="`Select row ${String(row.rowId)}`"
+                :checked="isRowCheckboxSelectedSafe(row)"
+                @mousedown.stop
+                @click.stop
+                @change="handleRowCheckboxChangeSafe(row, $event)"
+              />
+            </div>
+            <div
+              class="grid-cell grid-cell--index grid-cell--index-number"
+              :class="{ 'grid-cell--index-selected': isFullRowSelectionSafe(rowOffset) }"
+              :style="resolvedRowIndexColumnStyle"
+              @click.stop="handleRowIndexClickSafe(row, rowOffset, $event)"
+            >
               {{ rowIndexLabel(row, rowOffset) }}
               <button
                 v-if="mode === 'base'"
@@ -339,7 +379,7 @@
               :data-column-index="columnIndexByKey(column.key)"
               :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
-              @click.stop="handleGroupCellClick(row)"
+              @click.stop="handleBodyCellClick(row)"
               @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
               @mouseleave="clearRangeMoveHandleHover"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
@@ -364,7 +404,7 @@
                 @keydown.stop="handleEditorKeydown"
                 @blur="commitInlineEdit"
               />
-              <template v-else>{{ readCell(row, column.key) }}</template>
+              <template v-else>{{ readDisplayCell(row, column.key) }}</template>
             </div>
           </div>
           <div v-if="bottomSpacerHeight > 0" class="grid-spacer" :style="{ height: `${bottomSpacerHeight}px` }" />
@@ -409,9 +449,9 @@
             v-for="(row, rowOffset) in displayRows"
             :key="String(row.rowId)"
             class="grid-row"
-            :class="[rowClass(row), rowStateClasses(rowOffset), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
+            :class="[rowClass(row), rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
             :style="rowStyle(row, rowOffset)"
-            @click="toggleGroupRow(row)"
+            @click="handleRowContainerClick(row)"
             @mouseenter="setHoveredRow(rowOffset)"
           >
             <div class="grid-center-track" :style="mainTrackStyle">
@@ -430,7 +470,7 @@
                 :data-column-index="columnIndexByKey(column.key)"
                 :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
                 @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
-                @click.stop="handleGroupCellClick(row)"
+                @click.stop="handleBodyCellClick(row)"
                 @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
                 @mouseleave="clearRangeMoveHandleHover"
                 @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
@@ -455,7 +495,7 @@
                   @keydown.stop="handleEditorKeydown"
                   @blur="commitInlineEdit"
                 />
-                <template v-else>{{ readCell(row, column.key) }}</template>
+                <template v-else>{{ readDisplayCell(row, column.key) }}</template>
               </div>
               <div
                 v-if="rightColumnSpacerWidth > 0"
@@ -504,9 +544,9 @@
             v-for="(row, rowOffset) in displayRows"
             :key="`${String(row.rowId)}-right-row`"
             class="grid-row"
-            :class="[rowClass(row), rowStateClasses(rowOffset), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
+            :class="[rowClass(row), rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }]"
             :style="paneRowStyle(row, rowOffset, rightPaneWidth)"
-            @click="toggleGroupRow(row)"
+            @click="handleRowContainerClick(row)"
             @mouseenter="setHoveredRow(rowOffset)"
           >
             <div
@@ -519,7 +559,7 @@
               :data-column-index="columnIndexByKey(column.key)"
               :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
-              @click.stop="handleGroupCellClick(row)"
+              @click.stop="handleBodyCellClick(row)"
               @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
               @mouseleave="clearRangeMoveHandleHover"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
@@ -544,7 +584,7 @@
                 @keydown.stop="handleEditorKeydown"
                 @blur="commitInlineEdit"
               />
-              <template v-else>{{ readCell(row, column.key) }}</template>
+              <template v-else>{{ readDisplayCell(row, column.key) }}</template>
             </div>
           </div>
           <div v-if="bottomSpacerHeight > 0" class="grid-spacer" :style="{ height: `${bottomSpacerHeight}px` }" />
@@ -962,6 +1002,7 @@ function isFillHandleCellSafe(rowOffset: number, columnIndex: number): boolean {
 }
 
 const DEFAULT_INDEX_COLUMN_WIDTH = 72
+const DEFAULT_ROW_SELECTION_COLUMN_WIDTH = 36
 
 const indexColumnWidthPx = computed(() => {
   const width = parsePixelValue(
@@ -971,14 +1012,38 @@ const indexColumnWidthPx = computed(() => {
   return width > 0 ? width : DEFAULT_INDEX_COLUMN_WIDTH
 })
 
-const resolvedIndexColumnStyle = computed<CSSProperties>(() => {
-  const width = `${indexColumnWidthPx.value}px`
+const rowSelectionColumnWidthPx = computed(() => {
+  if (!shouldShowRowSelection()) {
+    return 0
+  }
+  return Math.min(
+    DEFAULT_ROW_SELECTION_COLUMN_WIDTH,
+    Math.max(0, indexColumnWidthPx.value - DEFAULT_INDEX_COLUMN_WIDTH),
+  )
+})
+
+const rowIndexColumnWidthPx = computed(() => {
+  return Math.max(DEFAULT_INDEX_COLUMN_WIDTH, indexColumnWidthPx.value - rowSelectionColumnWidthPx.value)
+})
+
+const resolvedRowSelectionColumnStyle = computed<CSSProperties>(() => {
+  const width = `${rowSelectionColumnWidthPx.value}px`
   return {
     ...props.indexColumnStyle,
     width,
     minWidth: width,
     maxWidth: width,
     left: "0px",
+  }
+})
+
+const resolvedRowIndexColumnStyle = computed<CSSProperties>(() => {
+  const width = `${rowIndexColumnWidthPx.value}px`
+  return {
+    ...props.indexColumnStyle,
+    width,
+    minWidth: width,
+    maxWidth: width,
   }
 })
 
@@ -1075,12 +1140,70 @@ function isStripedRow(rowOffset: number): boolean {
   return props.stripedRows === true && resolveAbsoluteRowIndex(rowOffset) % 2 === 1
 }
 
-function rowStateClasses(rowOffset: number): Record<string, boolean> {
+function shouldShowRowSelection(): boolean {
+  return typeof props.handleRowCheckboxChange === "function"
+}
+
+function isAllVisibleRowsSelectedSafe(): boolean {
+  return props.allVisibleRowsSelected === true
+}
+
+function isSomeVisibleRowsSelectedSafe(): boolean {
+  return props.someVisibleRowsSelected === true
+}
+
+function isRowFocusedSafe(row: TableRow): boolean {
+  return typeof props.isRowFocused === "function" ? props.isRowFocused(row) : false
+}
+
+function isRowCheckboxSelectedSafe(row: TableRow): boolean {
+  return typeof props.isRowCheckboxSelected === "function" ? props.isRowCheckboxSelected(row) : false
+}
+
+function handleSelectAllVisibleRowsChangeSafe(event: Event): void {
+  props.handleSelectAllVisibleRowsChange?.((event.target as HTMLInputElement).checked)
+}
+
+function handleRowCheckboxChangeSafe(row: TableRow, event: Event): void {
+  props.handleRowCheckboxChange?.(row, (event.target as HTMLInputElement).checked)
+}
+
+function handleRowClickSafe(row: TableRow): void {
+  props.handleRowClick?.(row)
+}
+
+function handleRowIndexClickSafe(row: TableRow, rowOffset: number, event: MouseEvent): void {
+  props.handleRowIndexClick?.(row, rowOffset, event.shiftKey)
+}
+
+function handleRowContainerClick(row: TableRow): void {
+  handleRowClickSafe(row)
+  if (row.kind === "group") {
+    props.toggleGroupRow(row)
+  }
+}
+
+function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boolean> {
   return {
     "grid-row--hoverable": props.rowHover === true,
     "grid-row--hovered": isHoveredRow(rowOffset),
     "grid-row--striped": isStripedRow(rowOffset),
+    "grid-row--focused": isRowFocusedSafe(row),
+    "grid-row--checkbox-selected": isRowCheckboxSelectedSafe(row),
   }
+}
+
+function isFullRowSelectionSafe(rowOffset: number): boolean {
+  const range = props.selectionRange
+  const lastColumnIndex = props.visibleColumns.length - 1
+  if (!range || lastColumnIndex < 0) {
+    return false
+  }
+  const rowIndex = resolveAbsoluteRowIndex(rowOffset)
+  return rowIndex >= range.startRow
+    && rowIndex <= range.endRow
+    && range.startColumn === 0
+    && range.endColumn >= lastColumnIndex
 }
 
 function isCellOnSelectionEdgeSafe(
@@ -1143,10 +1266,22 @@ function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: 
 }
 
 function handleGroupCellClick(row: TableRow): void {
+  handleRowClickSafe(row)
   if (row.kind !== "group") {
     return
   }
   props.toggleGroupRow(row)
+}
+
+function handleBodyCellClick(row: TableRow): void {
+  handleGroupCellClick(row)
+}
+
+function readDisplayCell(row: TableRow, columnKey: string): string {
+  if (typeof props.readDisplayCell === "function") {
+    return props.readDisplayCell(row, columnKey)
+  }
+  return props.readCell(row, columnKey)
 }
 
 function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boolean {

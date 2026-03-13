@@ -10,6 +10,12 @@
     "moduleResolution": "bundler",
     "noUncheckedIndexedAccess": false,
     "paths": {
+      "@affino/datagrid-format": [
+        "../datagrid-format/dist/index.d.ts"
+      ],
+      "@affino/datagrid-format/*": [
+        "../datagrid-format/dist/*"
+      ],
       "@affino/projection-engine": [
         "../projection-engine/dist/index.d.ts"
       ],
@@ -45,6 +51,7 @@
     "src/**/*.test.ts"
   ],
   "references": [
+    { "path": "../datagrid-format" },
     { "path": "../datagrid-formula-engine" },
     { "path": "../datagrid-pivot" },
     { "path": "../projection-engine" },

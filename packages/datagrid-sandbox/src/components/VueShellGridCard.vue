@@ -426,6 +426,73 @@ function normalizeColumnState(
   return base;
 }
 
+function applySandboxColumnOrder(
+  state: DataGridUnifiedColumnState,
+  preferredKeys: readonly string[],
+): DataGridUnifiedColumnState {
+  const knownKeys = new Set(state.order);
+  const preferredOrder = preferredKeys.filter((key) => knownKeys.has(key));
+  if (preferredOrder.length === 0) {
+    return state;
+  }
+  return {
+    order: [
+      ...preferredOrder,
+      ...state.order.filter((key) => !preferredOrder.includes(key)),
+    ],
+    visibility: { ...state.visibility },
+    widths: { ...state.widths },
+    pins: { ...state.pins },
+  };
+}
+
+function createBaseShowcaseColumnState(
+  columns: readonly DataGridColumnInput[],
+  existingState: DataGridUnifiedColumnState | null | undefined,
+): DataGridUnifiedColumnState {
+  const normalized = normalizeColumnState(existingState, columns);
+  const ordered = applySandboxColumnOrder(normalized, [
+    "id",
+    "name",
+    "amount",
+    "start",
+    "end",
+    "updatedAt",
+    "region",
+    "category",
+    "status",
+    "progress",
+    "dependencies",
+    "baselineStart",
+    "baselineEnd",
+    "critical",
+  ]);
+  return {
+    order: [...ordered.order],
+    visibility: {
+      ...ordered.visibility,
+      amount: true,
+      start: true,
+      end: true,
+      updatedAt: true,
+      progress: true,
+      dependencies: true,
+      baselineStart: true,
+      baselineEnd: true,
+      critical: true,
+    },
+    widths: { ...ordered.widths },
+    pins: {
+      ...ordered.pins,
+      id: "left",
+      name: "left",
+      amount: "none",
+      start: "none",
+      end: "right",
+    },
+  };
+}
+
 const rowCount = ref<number>(10000);
 const columnCount = ref<number>(16);
 const themePreset = ref<ThemePreset>("sugar");
@@ -720,6 +787,7 @@ watch(
     baseRowHeight.value = 31;
     rowHover.value = true;
     stripedRows.value = true;
+    columnState.value = createBaseShowcaseColumnState(columns.value, columnState.value);
   },
   { immediate: true },
 );
@@ -739,7 +807,10 @@ watch(
 watch(
   columns,
   (nextColumns) => {
-    columnState.value = normalizeColumnState(columnState.value, nextColumns);
+    columnState.value =
+      props.mode === "base" && columnState.value == null
+        ? createBaseShowcaseColumnState(nextColumns, columnState.value)
+        : normalizeColumnState(columnState.value, nextColumns);
     if (
       groupByField.value &&
       !nextColumns.some((column) => column.key === groupByField.value)

@@ -1,11 +1,14 @@
 import type { Ref } from "vue"
-import type { DataGridRowNode } from "@affino/datagrid-core"
+import {
+  formatDataGridCellValue,
+  type DataGridRowNode,
+} from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type { DataGridAppMode } from "./index"
 
 export interface UseDataGridAppRowPresentationOptions<TRow extends Record<string, unknown>> {
   mode: Ref<DataGridAppMode>
-  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api">
+  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "columnSnapshot">
   viewportRowStart: Ref<number>
   firstColumnKey: Ref<string>
 }
@@ -13,6 +16,7 @@ export interface UseDataGridAppRowPresentationOptions<TRow extends Record<string
 export interface UseDataGridAppRowPresentationResult<TRow extends Record<string, unknown>> {
   rowIndexLabel: (row: DataGridRowNode<TRow>, rowOffset: number) => string
   readCell: (row: DataGridRowNode<TRow>, key: string) => string
+  readDisplayCell: (row: DataGridRowNode<TRow>, key: string) => string
   rowClass: (row: DataGridRowNode<TRow>) => string
   toggleGroupRow: (row: DataGridRowNode<TRow>) => void
 }
@@ -29,6 +33,10 @@ export function useDataGridAppRowPresentation<TRow extends Record<string, unknow
       return String(sourceId)
     }
     return String(options.viewportRowStart.value + rowOffset + 1)
+  }
+
+  const resolveColumnDef = (key: string) => {
+    return options.runtime.columnSnapshot.value.byKey[key]?.column
   }
 
   const readCell = (row: DataGridRowNode<TRow>, key: string): string => {
@@ -51,6 +59,28 @@ export function useDataGridAppRowPresentation<TRow extends Record<string, unknow
     }
     const value = (row.data as Record<string, unknown>)[key]
     return value == null ? "" : String(value)
+  }
+
+  const readDisplayCell = (row: DataGridRowNode<TRow>, key: string): string => {
+    if (row.kind === "group") {
+      const level = Math.max(0, row.groupMeta?.level ?? 0)
+      const indent = "· ".repeat(level)
+      const caret = row.state.expanded ? "▾" : "▸"
+      const isGroupLabelColumn = options.mode.value === "tree"
+        ? key === "name"
+        : key === options.firstColumnKey.value
+      if (isGroupLabelColumn) {
+        return `${indent}${caret} ${String(row.groupMeta?.groupField ?? "group")}: ${String(row.groupMeta?.groupValue ?? row.rowId)} (${row.groupMeta?.childrenCount ?? 0})`
+      }
+      if (options.mode.value === "tree") {
+        return ""
+      }
+      const groupValue = (row.data as Record<string, unknown>)[key]
+        ?? row.groupMeta?.aggregates?.[key]
+      return formatDataGridCellValue(groupValue, resolveColumnDef(key))
+    }
+    const value = (row.data as Record<string, unknown>)[key]
+    return formatDataGridCellValue(value, resolveColumnDef(key))
   }
 
   const rowClass = (row: DataGridRowNode<TRow>): string => {
@@ -84,6 +114,7 @@ export function useDataGridAppRowPresentation<TRow extends Record<string, unknow
   return {
     rowIndexLabel,
     readCell,
+    readDisplayCell,
     rowClass,
     toggleGroupRow,
   }

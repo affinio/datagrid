@@ -82,6 +82,19 @@ describe("createDataGridColumnModel", () => {
           presentation: {
             align: "right",
             headerAlign: "center",
+            numberFormat: {
+              locale: "en-GB",
+              style: "currency",
+              currency: "GBP",
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            },
+            dateTimeFormat: {
+              locale: "en-GB",
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+            },
           },
           capabilities: {
             editable: true,
@@ -103,6 +116,19 @@ describe("createDataGridColumnModel", () => {
     expect(column?.column.presentation).toEqual({
       align: "right",
       headerAlign: "center",
+      numberFormat: {
+        locale: "en-GB",
+        style: "currency",
+        currency: "GBP",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      },
+      dateTimeFormat: {
+        locale: "en-GB",
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+      },
     })
     expect(column?.column.capabilities).toEqual({
       editable: true,

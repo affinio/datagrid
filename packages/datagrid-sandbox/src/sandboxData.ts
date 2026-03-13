@@ -4,19 +4,19 @@ export interface VueBaseRow {
   rowId: string
   id: number
   name: string
-  status: string
   amount: number
+  start: Date
+  end: Date
+  updatedAt: string
+  status: string
   region: string
   category: string
   qty: number
-  start: Date
-  end: Date
   baselineStart: Date
   baselineEnd: Date
   progress: number
   dependencies: string[]
   critical: boolean
-  updatedAt: string
   [key: string]: unknown
 }
 
@@ -130,17 +130,17 @@ export function buildVueColumns(mode: "base" | "tree" | "pivot" | "worker", colu
         { key: "assignee", label: "Assignee", initialState: { width: 150 }, capabilities: { sortable: true, filterable: true } },
         { key: "severity", label: "Severity", initialState: { width: 110 }, capabilities: { sortable: true, filterable: true } },
         { key: "status", label: "Status", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
-        { key: "amount", label: "Cost", dataType: "currency", initialState: { width: 132 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
+        { key: "amount", label: "Cost", dataType: "currency", initialState: { width: 132 }, presentation: { align: "right", headerAlign: "right", numberFormat: { locale: "en-GB", style: "currency", currency: "GBP", minimumFractionDigits: 2, maximumFractionDigits: 2 } }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
       ]
     : mode === "pivot"
       ? [
           { key: "id", label: "ID", dataType: "number", initialState: { width: 92, pin: "left" }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true } },
           { key: "name", label: "Deal", initialState: { width: 220 }, capabilities: { sortable: true, filterable: true } },
           { key: "department", label: "Department", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, groupable: true } },
-          { key: "month", label: "Month", dataType: "date", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
+          { key: "month", label: "Month", dataType: "date", initialState: { width: 120 }, presentation: { dateTimeFormat: { locale: "en-GB", year: "numeric", month: "short" } }, capabilities: { sortable: true, filterable: true, groupable: true } },
           { key: "channel", label: "Channel", initialState: { width: 130 }, capabilities: { sortable: true, filterable: true, groupable: true } },
           { key: "status", label: "Status", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
-          { key: "amount", label: "Revenue", dataType: "currency", initialState: { width: 140 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
+          { key: "amount", label: "Revenue", dataType: "currency", initialState: { width: 140 }, presentation: { align: "right", headerAlign: "right", numberFormat: { locale: "en-GB", style: "currency", currency: "GBP", minimumFractionDigits: 2, maximumFractionDigits: 2 } }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
           { key: "deals", label: "Deals", dataType: "number", initialState: { width: 110 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
         ]
       : mode === "worker"
@@ -157,14 +157,15 @@ export function buildVueColumns(mode: "base" | "tree" | "pivot" | "worker", colu
         : [
             { key: "id", label: "ID", dataType: "number", initialState: { width: 92, pin: "left" }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true } },
             { key: "name", label: "Task", initialState: { width: 220 }, capabilities: { sortable: true, filterable: true } },
+            { key: "amount", label: "Amount", dataType: "currency", initialState: { width: 140 }, presentation: { align: "right", headerAlign: "right", numberFormat: { locale: "en-GB", style: "currency", currency: "GBP", minimumFractionDigits: 2, maximumFractionDigits: 2 } }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0, max: 100_000 } },
+            { key: "start", label: "Start", dataType: "date", initialState: { width: 140 }, presentation: { dateTimeFormat: { locale: "en-GB", year: "numeric", month: "short", day: "2-digit" } }, capabilities: { sortable: true, filterable: true, editable: true } },
+            { key: "end", label: "End", dataType: "date", initialState: { width: 140 }, presentation: { dateTimeFormat: { locale: "en-GB", year: "numeric", month: "short", day: "2-digit" } }, capabilities: { sortable: true, filterable: true, editable: true } },
+            { key: "updatedAt", label: "Updated", dataType: "datetime", initialState: { width: 168 }, presentation: { dateTimeFormat: { locale: "en-GB", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "UTC" } }, capabilities: { sortable: true, filterable: true } },
             { key: "region", label: "Region", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
             { key: "category", label: "Category", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
             { key: "status", label: "Status", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
-            { key: "amount", label: "Amount", dataType: "currency", initialState: { width: 140 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0, max: 100_000 } },
-            { key: "start", label: "Start", dataType: "date", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, editable: true } },
-            { key: "end", label: "End", dataType: "date", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, editable: true } },
-            { key: "baselineStart", label: "Baseline Start", dataType: "date", initialState: { width: 152 }, capabilities: { sortable: true, filterable: true, editable: true } },
-            { key: "baselineEnd", label: "Baseline End", dataType: "date", initialState: { width: 152 }, capabilities: { sortable: true, filterable: true, editable: true } },
+            { key: "baselineStart", label: "Baseline Start", dataType: "date", initialState: { width: 152 }, presentation: { dateTimeFormat: { locale: "en-GB", year: "numeric", month: "short", day: "2-digit" } }, capabilities: { sortable: true, filterable: true, editable: true } },
+            { key: "baselineEnd", label: "Baseline End", dataType: "date", initialState: { width: 152 }, presentation: { dateTimeFormat: { locale: "en-GB", year: "numeric", month: "short", day: "2-digit" } }, capabilities: { sortable: true, filterable: true, editable: true } },
             { key: "progress", label: "% Complete", dataType: "number", initialState: { width: 120 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true }, constraints: { min: 0, max: 100 } },
             { key: "dependencies", label: "Predecessors", initialState: { width: 150 }, capabilities: { sortable: true, filterable: true, editable: true } },
             { key: "critical", label: "Critical", dataType: "boolean", initialState: { width: 108 }, capabilities: { sortable: true, filterable: true, editable: true } },
@@ -180,8 +181,8 @@ export function buildCoreColumns(columnCount: number): DataGridColumnInput[] {
     { key: "source", label: "Source", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
     { key: "owner", label: "Owner", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, groupable: true } },
     { key: "status", label: "Status", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
-    { key: "amount", label: "Score", dataType: "number", initialState: { width: 120 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
-    { key: "updatedAt", label: "Updated", dataType: "date", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true } },
+    { key: "amount", label: "Score", dataType: "number", initialState: { width: 120 }, presentation: { align: "right", headerAlign: "right", numberFormat: { locale: "en-GB", style: "decimal", minimumFractionDigits: 0, maximumFractionDigits: 2 } }, capabilities: { sortable: true, filterable: true, aggregatable: true }, constraints: { min: 0 } },
+    { key: "updatedAt", label: "Updated", dataType: "date", initialState: { width: 140 }, presentation: { dateTimeFormat: { locale: "en-GB", year: "numeric", month: "short", day: "2-digit" } }, capabilities: { sortable: true, filterable: true } },
   ], columnCount)
 }
 
@@ -222,7 +223,7 @@ export function buildCoreRows(rowCount: number, columnCount: number): CoreBaseRo
 
 function buildBaseRows(rowCount: number, columnCount: number): VueBaseRow[] {
   const rows: VueBaseRow[] = new Array(rowCount)
-  const baseColumnsLength = 13
+  const baseColumnsLength = 14
 
   for (let index = 0; index < rowCount; index += 1) {
     const region = REGIONS[index % REGIONS.length] ?? "Unknown"
@@ -253,19 +254,19 @@ function buildBaseRows(rowCount: number, columnCount: number): VueBaseRow[] {
       rowId: `base-${index + 1}`,
       id: index + 1,
       name: `Task ${index + 1}`,
-      status,
       amount: (index % 500) * 3 + (index % 17),
+      start: new Date(Date.UTC(2026, 2, 1 + startOffsetDays)),
+      end: new Date(Date.UTC(2026, 2, 1 + startOffsetDays + durationDays)),
+      updatedAt: `2026-03-${String((index % 28) + 1).padStart(2, "0")}T${String((index * 3) % 24).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}:00.000Z`,
+      status,
       region,
       category,
       qty: (index % 20) + 1,
-      start: new Date(Date.UTC(2026, 2, 1 + startOffsetDays)),
-      end: new Date(Date.UTC(2026, 2, 1 + startOffsetDays + durationDays)),
       baselineStart: new Date(Date.UTC(2026, 2, 1 + startOffsetDays - baselineLeadDays)),
       baselineEnd: new Date(Date.UTC(2026, 2, 1 + startOffsetDays + durationDays - baselineLagDays)),
       progress: (index * 13) % 101,
       dependencies,
       critical: durationDays >= 10 || index % 9 === 0,
-      updatedAt: `2026-03-${String((index % 28) + 1).padStart(2, "0")}`,
     }
     fillExtraFields(row, index, columnCount, baseColumnsLength)
     rows[index] = row

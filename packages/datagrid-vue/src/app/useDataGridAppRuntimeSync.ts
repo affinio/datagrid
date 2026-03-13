@@ -12,6 +12,7 @@ export interface UseDataGridAppRuntimeSyncOptions<TRow> {
   rowHeightMode: Ref<DataGridAppRowHeightMode>
   normalizedBaseRowHeight: Ref<number>
   syncSelectionSnapshotFromRuntime: () => void
+  syncRowSelectionSnapshotFromRuntime?: () => void
   syncViewport: () => void
   scheduleViewportSync: () => void
   measureVisibleRowHeights: () => void
@@ -21,6 +22,8 @@ export interface UseDataGridAppRuntimeSyncOptions<TRow> {
 export function useDataGridAppRuntimeSync<TRow>(
   options: UseDataGridAppRuntimeSyncOptions<TRow>,
 ): void {
+  const syncRowSelectionSnapshotFromRuntime = options.syncRowSelectionSnapshotFromRuntime ?? (() => undefined)
+
   watch(options.rows, () => {
     if (options.mode.value === "pivot") {
       options.runtime.api.rows.expandAllGroups()
@@ -32,12 +35,14 @@ export function useDataGridAppRuntimeSync<TRow>(
 
   watch(options.totalRows, () => {
     options.syncSelectionSnapshotFromRuntime()
+    syncRowSelectionSnapshotFromRuntime()
     void nextTick(() => {
       options.syncViewport()
     })
   })
 
   watch(options.rowVersion, () => {
+    syncRowSelectionSnapshotFromRuntime()
     options.scheduleViewportSync()
   })
 

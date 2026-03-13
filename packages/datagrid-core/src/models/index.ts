@@ -432,12 +432,14 @@ export type {
   DataGridColumnConstraintValue,
   DataGridColumnConstraints,
   DataGridColumnDataType,
+  DataGridColumnDateTimeFormatOptions,
   DataGridColumnDef,
   DataGridColumnInitialState,
   DataGridColumnInput,
   DataGridColumnModel,
   DataGridColumnModelListener,
   DataGridColumnModelSnapshot,
+  DataGridColumnNumberFormatOptions,
   DataGridColumnPin,
   DataGridColumnPresentation,
   DataGridColumnSnapshot,
@@ -446,6 +448,7 @@ export type {
   CreateDataGridColumnModelOptions,
 } from "./columnModel.js"
 export { createDataGridColumnModel } from "./columnModel.js"
+export { formatDataGridCellValue } from "../columns/formatting.js"
 
 export type {
   CreateDataGridEditModelOptions,

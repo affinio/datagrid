@@ -1,17 +1,20 @@
+import type {
+  DataGridColumnDateTimeFormatOptions,
+  DataGridColumnNumberFormatOptions,
+  DataGridFormatDataType,
+} from "@affino/datagrid-format"
+
+export type { DataGridColumnDateTimeFormatOptions, DataGridColumnNumberFormatOptions } from "@affino/datagrid-format"
+
 export type DataGridColumnPin = "left" | "right" | "none"
 
-export type DataGridColumnDataType =
-  | "text"
-  | "number"
-  | "boolean"
-  | "date"
-  | "datetime"
-  | "currency"
-  | "percent"
+export type DataGridColumnDataType = DataGridFormatDataType
 
 export interface DataGridColumnPresentation {
   align?: "left" | "center" | "right"
   headerAlign?: "left" | "center" | "right"
+  numberFormat?: DataGridColumnNumberFormatOptions
+  dateTimeFormat?: DataGridColumnDateTimeFormatOptions
 }
 
 export interface DataGridColumnCapabilities {

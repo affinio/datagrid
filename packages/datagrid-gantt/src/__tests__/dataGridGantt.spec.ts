@@ -25,7 +25,7 @@ interface DemoRow {
   task: string
   start: Date
   end: Date
-  progress: number
+  progress?: number
   dependencies?: string[]
   baselineStart?: Date
   baselineEnd?: Date
@@ -490,7 +490,7 @@ describe("datagrid-gantt runtime", () => {
       rowIndex: 1,
       label: "Target",
       dependencies: ["source"],
-      dependencyRefs: [{ taskId: "source", type: "FS", raw: "source" }],
+      dependencyRefs: [{ taskId: "source", type: "FS" as const, raw: "source" }],
       critical: false,
       criticalSource: null,
       milestone: false,
@@ -571,7 +571,7 @@ describe("datagrid-gantt runtime", () => {
       rowIndex: 1,
       label: "Target tight",
       dependencies: ["source-tight"],
-      dependencyRefs: [{ taskId: "source-tight", type: "FS", raw: "source-tight" }],
+      dependencyRefs: [{ taskId: "source-tight", type: "FS" as const, raw: "source-tight" }],
       critical: false,
       criticalSource: null,
       milestone: false,
@@ -651,7 +651,7 @@ describe("datagrid-gantt runtime", () => {
       rowIndex: 1,
       label: "Target FF",
       dependencies: ["source-ff:FF"],
-      dependencyRefs: [{ taskId: "source-ff", type: "FF", raw: "source-ff:FF" }],
+      dependencyRefs: [{ taskId: "source-ff", type: "FF" as const, raw: "source-ff:FF" }],
       critical: false,
       criticalSource: null,
       milestone: false,
@@ -764,7 +764,7 @@ describe("datagrid-gantt runtime", () => {
       rowIndex: 2,
       label: "Target",
       dependencies: ["task-10"],
-      dependencyRefs: [{ taskId: "task-10", type: "FS", raw: "task-10" }],
+      dependencyRefs: [{ taskId: "task-10", type: "FS" as const, raw: "task-10" }],
       critical: false,
       criticalSource: null,
       milestone: false,

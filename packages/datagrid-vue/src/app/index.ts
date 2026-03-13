@@ -133,6 +133,12 @@ export {
 } from "./useDataGridAppSelection"
 
 export {
+  useDataGridAppRowSelection,
+  type UseDataGridAppRowSelectionOptions,
+  type UseDataGridAppRowSelectionResult,
+} from "./useDataGridAppRowSelection"
+
+export {
   useDataGridAppRowSizing,
   type UseDataGridAppRowSizingOptions,
   type UseDataGridAppRowSizingResult,

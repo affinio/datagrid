@@ -2,6 +2,8 @@ import { computed, nextTick, ref, type ComputedRef, type Ref } from "vue"
 import type {
   DataGridAppRowSnapshot,
   DataGridColumnSnapshot,
+  DataGridRowId,
+  DataGridRowSelectionSnapshot,
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-vue"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
@@ -26,6 +28,7 @@ import type { DataGridTableStageProps } from "./dataGridTableStage.types"
 
 const DEFAULT_COLUMN_WIDTH = 140
 const INDEX_COLUMN_WIDTH = 72
+const ROW_SELECTION_COLUMN_WIDTH = 36
 const MIN_COLUMN_WIDTH = 80
 const MIN_ROW_HEIGHT = 24
 const AUTO_RESIZE_SAMPLE_LIMIT = 400
@@ -36,7 +39,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   sourceRows?: Ref<readonly TRow[]>
   runtime: Pick<
     import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>,
-    "api" | "syncRowsInRange" | "virtualWindow"
+    "api" | "syncRowsInRange" | "virtualWindow" | "columnSnapshot"
   >
   rowVersion: Ref<number>
   totalRows: Ref<number>
@@ -47,6 +50,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   selectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   selectionAnchor: Ref<unknown>
   syncSelectionSnapshotFromRuntime: () => void
+  rowSelectionSnapshot: Ref<DataGridRowSelectionSnapshot | null>
+  syncRowSelectionSnapshotFromRuntime?: () => void
   firstColumnKey: Ref<string>
   columnFilterTextByKey: Ref<Record<string, string>>
   virtualization: Ref<DataGridVirtualizationOptions>
@@ -96,6 +101,9 @@ export function useDataGridTableStageRuntime<
 >(
   options: UseDataGridTableStageRuntimeOptions<TRow>,
 ): UseDataGridTableStageRuntimeResult<TRow> {
+  const syncRowSelectionSnapshotFromRuntime = options.syncRowSelectionSnapshotFromRuntime ?? (() => undefined)
+  const rowSelectionSnapshotRef = options.rowSelectionSnapshot ?? ref<DataGridRowSelectionSnapshot | null>(null)
+
   const columnWidths = ref<Record<string, number>>({})
   const orderedVisibleColumns = computed(() => {
     const left = options.visibleColumns.value.filter(column => column.pin === "left")
@@ -222,6 +230,108 @@ export function useDataGridTableStageRuntime<
     }
   })
 
+  const rowSelectionSet = computed(() => new Set(rowSelectionSnapshotRef.value?.selectedRows ?? []))
+  const hasRowSelectionSupport = computed(() => options.runtime.api.rowSelection.hasSupport())
+  const systemColumnWidth = computed(() => {
+    return hasRowSelectionSupport.value
+      ? INDEX_COLUMN_WIDTH + ROW_SELECTION_COLUMN_WIDTH
+      : INDEX_COLUMN_WIDTH
+  })
+  const systemIndexColumnStyle = computed(() => {
+    const width = `${systemColumnWidth.value}px`
+    return {
+      ...indexColumnStyle.value,
+      width,
+      minWidth: width,
+      maxWidth: width,
+    }
+  })
+
+  const isRowFocused = (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>): boolean => {
+    return row.rowId != null && rowSelectionSnapshotRef.value?.focusedRow === row.rowId
+  }
+
+  const isRowCheckboxSelected = (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>): boolean => {
+    return row.kind !== "group" && row.rowId != null && rowSelectionSet.value.has(row.rowId)
+  }
+
+  const resolveVisibleSelectableRowIds = (): DataGridRowId[] => {
+    return displayRows.value.flatMap(row => {
+      if (row.kind === "group" || row.rowId == null) {
+        return []
+      }
+      return [row.rowId]
+    })
+  }
+
+  const areAllVisibleRowsSelected = computed(() => {
+    const rowIds = resolveVisibleSelectableRowIds()
+    return rowIds.length > 0 && rowIds.every(rowId => rowSelectionSet.value.has(rowId))
+  })
+
+  const areSomeVisibleRowsSelected = computed(() => {
+    const rowIds = resolveVisibleSelectableRowIds()
+    return rowIds.some(rowId => rowSelectionSet.value.has(rowId))
+  })
+
+  const focusRow = (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>): void => {
+    if (row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
+      return
+    }
+    options.runtime.api.rowSelection.setFocusedRow(row.rowId)
+  }
+
+  const setRowCheckboxSelected = (
+    row: import("@affino/datagrid-vue").DataGridRowNode<TRow>,
+    selected: boolean,
+  ): void => {
+    if (row.kind === "group" || row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
+      return
+    }
+    options.runtime.api.rowSelection.setSelected(row.rowId, selected)
+  }
+
+  const setVisibleRowsSelected = (selected: boolean): void => {
+    if (!options.runtime.api.rowSelection.hasSupport()) {
+      return
+    }
+    const rowIds = resolveVisibleSelectableRowIds()
+    if (selected) {
+      options.runtime.api.rowSelection.selectRows(rowIds)
+      return
+    }
+    options.runtime.api.rowSelection.deselectRows(rowIds)
+  }
+
+  const selectRowRange = (
+    row: import("@affino/datagrid-vue").DataGridRowNode<TRow>,
+    rowOffset: number,
+    extend: boolean,
+  ): void => {
+    focusRow(row)
+    const lastColumnIndex = orderedVisibleColumns.value.length - 1
+    if (lastColumnIndex < 0) {
+      return
+    }
+    const rowIndex = viewportRowStart.value + rowOffset
+    if (!extend) {
+      applyClipboardSelectionRange({
+        startRow: rowIndex,
+        endRow: rowIndex,
+        startColumn: 0,
+        endColumn: lastColumnIndex,
+      })
+      return
+    }
+    const anchorRowIndex = selectionAnchorCell.value?.rowIndex ?? rowIndex
+    applyClipboardSelectionRange({
+      startRow: Math.min(anchorRowIndex, rowIndex),
+      endRow: Math.max(anchorRowIndex, rowIndex),
+      startColumn: 0,
+      endColumn: lastColumnIndex,
+    })
+  }
+
   const resolveRowIndexById = (rowId: string | number): number => {
     const count = options.runtime.api.rows.getCount()
     for (let rowIndex = 0; rowIndex < count; rowIndex += 1) {
@@ -283,6 +393,7 @@ export function useDataGridTableStageRuntime<
   const {
     rowIndexLabel,
     readCell,
+    readDisplayCell,
     rowClass,
     toggleGroupRow,
   } = useDataGridAppRowPresentation<TRow>({
@@ -340,7 +451,7 @@ export function useDataGridTableStageRuntime<
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
     resolveRowHeight: rowHeightMetrics.resolveRowHeight,
     resolveRowOffset: rowHeightMetrics.resolveRowOffset,
-    indexColumnWidth: INDEX_COLUMN_WIDTH,
+    indexColumnWidth: systemColumnWidth.value,
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
     syncViewport: () => syncViewportFromDom(),
   })
@@ -405,7 +516,7 @@ export function useDataGridTableStageRuntime<
     viewportRowStart,
     selectionSnapshot: options.selectionSnapshot,
     bodyViewportRef,
-    indexColumnWidth: INDEX_COLUMN_WIDTH,
+    indexColumnWidth: systemColumnWidth.value,
     resolveColumnWidth,
     resolveRowHeight: rowHeightMetrics.resolveRowHeight,
     resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
@@ -569,7 +680,7 @@ export function useDataGridTableStageRuntime<
     columnFilterTextByKey: options.columnFilterTextByKey,
     gridContentStyle,
     mainTrackStyle,
-    indexColumnStyle,
+    indexColumnStyle: systemIndexColumnStyle,
     topSpacerHeight,
     bottomSpacerHeight,
     viewportRowStart,
@@ -604,6 +715,14 @@ export function useDataGridTableStageRuntime<
     rowClass,
     isRowAutosizeProbe,
     rowStyle,
+    isRowFocused,
+    isRowCheckboxSelected,
+    allVisibleRowsSelected: areAllVisibleRowsSelected,
+    someVisibleRowsSelected: areSomeVisibleRowsSelected,
+    handleRowClick: focusRow,
+    handleRowIndexClick: selectRowRange,
+    handleRowCheckboxChange: setRowCheckboxSelected,
+    handleSelectAllVisibleRowsChange: setVisibleRowsSelected,
     toggleGroupRow,
     rowIndexLabel,
     startResize,
@@ -632,6 +751,7 @@ export function useDataGridTableStageRuntime<
       commitInlineEdit()
     },
     readCell,
+    readDisplayCell,
   })
 
   const handleWindowMouseMove = (event: MouseEvent): void => {
@@ -690,6 +810,7 @@ export function useDataGridTableStageRuntime<
     rowHeightMode: options.rowHeightMode,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
     syncSelectionSnapshotFromRuntime: options.syncSelectionSnapshotFromRuntime,
+    syncRowSelectionSnapshotFromRuntime,
     syncViewport: syncViewportFromDom,
     scheduleViewportSync,
     measureVisibleRowHeights,
@@ -704,6 +825,7 @@ export function useDataGridTableStageRuntime<
     cancelScheduledViewportSync,
     onAfterMount: () => {
       options.syncSelectionSnapshotFromRuntime()
+      syncRowSelectionSnapshotFromRuntime()
       void nextTick(() => {
         options.applyRowHeightSettings()
         syncViewportFromDom()

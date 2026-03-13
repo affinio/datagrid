@@ -24,7 +24,7 @@
     "test:e2e:sandbox": "playwright test",
     "test:e2e:sandbox:headed": "playwright test --headed",
     "test:e2e:critical": "playwright test e2e/sandbox-grid.spec.ts e2e/sandbox-interactions.spec.ts",
-    "test:datagrid:unit": "pnpm --filter @affino/datagrid-core test:unit && pnpm --filter @affino/datagrid-chrome test && pnpm --filter @affino/datagrid-gantt test && pnpm --filter @affino/datagrid-worker test && pnpm --filter @affino/datagrid-vue test:unit && pnpm --filter @affino/datagrid-orchestration test:unit",
+    "test:datagrid:unit": "pnpm --filter @affino/datagrid-core test:unit && pnpm --filter @affino/datagrid-format test && pnpm --filter @affino/datagrid-chrome test && pnpm --filter @affino/datagrid-gantt test && pnpm --filter @affino/datagrid-worker test && pnpm --filter @affino/datagrid-vue test:unit && pnpm --filter @affino/datagrid-orchestration test:unit",
     "test:datagrid:integration": "pnpm --filter @affino/datagrid-core test:integration && pnpm --filter @affino/datagrid-vue test:integration",
     "test:datagrid:contracts": "pnpm --filter @affino/datagrid-core test:contracts && pnpm --filter @affino/datagrid-vue test:contracts && pnpm --filter @affino/datagrid-orchestration test:contracts",
     "test:datagrid:regressions": "pnpm --filter @affino/datagrid-core test:regressions",

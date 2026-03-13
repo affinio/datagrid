@@ -115,12 +115,38 @@ const columns = [
     label: "Amount",
     dataType: "currency",
     initialState: { width: 140, pin: "right" },
-    presentation: { align: "right", headerAlign: "right" },
+    presentation: {
+      align: "right",
+      headerAlign: "right",
+      numberFormat: {
+        locale: "en-GB",
+        style: "currency",
+        currency: "GBP",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      },
+    },
     capabilities: { sortable: true, filterable: true, aggregatable: true },
     constraints: { min: 0 },
   },
+  {
+    key: "start",
+    label: "Start",
+    dataType: "date",
+    initialState: { width: 140 },
+    presentation: {
+      dateTimeFormat: {
+        locale: "en-GB",
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+      },
+    },
+  },
 ]
 ```
+
+`presentation.numberFormat` and `presentation.dateTimeFormat` affect display formatting only. Raw cell values remain unchanged for editing, clipboard and data patches. The shared headless implementation lives in `@affino/datagrid-format`.
 
 Core API:
 

@@ -11,6 +11,8 @@ export type {
   DataGridColumnCapabilities,
   DataGridColumnConstraints,
   DataGridColumnDataType,
+  DataGridColumnDateTimeFormatOptions,
+  DataGridColumnNumberFormatOptions,
   DataGridColumnPresentation,
   DataGridColumnValueAccessors,
 } from "../models/columnModel.js"

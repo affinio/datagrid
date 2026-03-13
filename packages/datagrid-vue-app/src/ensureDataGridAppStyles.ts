@@ -1028,7 +1028,8 @@ const DATA_GRID_APP_STYLES = `
   box-shadow: var(--datagrid-pinned-left-shadow);
 }
 
-.grid-cell--index + .grid-cell--pinned-left {
+.grid-cell--index + .grid-cell--pinned-left,
+.grid-cell--row-select + .grid-cell--index + .grid-cell--pinned-left {
   box-shadow: none;
 }
 
@@ -1067,6 +1068,21 @@ const DATA_GRID_APP_STYLES = `
   background: var(--datagrid-index-cell-background-color);
 }
 
+.grid-cell--row-select {
+  justify-content: center;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.grid-cell--index-number {
+  cursor: pointer;
+}
+
+.grid-cell--index-selected {
+  background: var(--datagrid-selection-range-bg);
+  box-shadow: inset 0 0 0 1px var(--datagrid-selection-border-color);
+}
+
 .grid-row .grid-cell--index {
   background: var(--datagrid-index-cell-background-color);
 }
@@ -1075,6 +1091,24 @@ const DATA_GRID_APP_STYLES = `
   font-weight: 600;
   cursor: pointer;
   color: var(--datagrid-group-row-text-color);
+}
+
+.grid-row-select-checkbox {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--datagrid-accent-strong);
+  cursor: pointer;
+}
+
+.grid-row--checkbox-selected .grid-cell,
+.grid-row--checkbox-selected .grid-cell--index {
+  background: var(--datagrid-row-selected-background-color);
+}
+
+.grid-row--focused .grid-cell,
+.grid-row--focused .grid-cell--index {
+  background: var(--datagrid-row-selected-background-color);
 }
 
 .grid-row--hoverable.grid-row--hovered .grid-cell,
@@ -1093,6 +1127,12 @@ const DATA_GRID_APP_STYLES = `
   gap: 6px;
   min-width: 0;
   padding-right: 8px;
+}
+
+.col-head--row-select,
+.col-head--index {
+  justify-content: center;
+  padding-right: 0;
 }
 
 .col-head > span {
@@ -1751,6 +1791,20 @@ const DATA_GRID_APP_STYLES = `
   color: var(--datagrid-text-primary);
   background: var(--datagrid-editor-bg);
   outline: none;
+  caret-color: var(--datagrid-selection-handle-border);
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+}
+
+.cell-editor-input::selection {
+  color: var(--datagrid-text-primary);
+  background: color-mix(in srgb, var(--datagrid-selection-active-border) 28%, white);
+}
+
+.cell-editor-input::-moz-selection {
+  color: var(--datagrid-text-primary);
+  background: color-mix(in srgb, var(--datagrid-selection-active-border) 28%, white);
 }
 
 .grid-cell--editing {

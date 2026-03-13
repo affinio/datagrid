@@ -77,6 +77,7 @@ export {
   type DataGridApplyEditsOptions,
   type DataGridApiMutationControlOptions,
   type DataGridApiPivotNamespace,
+  type DataGridApiRowSelectionNamespace,
   type DataGridApiSelectionNamespace,
   type DataGridApiTransactionNamespace,
   type DataGridApiRowsNamespace,
@@ -124,6 +125,21 @@ export {
   type GridSelectionSnapshot,
   type GridSelectionSnapshotRange,
 } from "./selection/snapshot.js"
+
+export {
+  clearDataGridRowFocus,
+  clearDataGridSelectedRows,
+  dataGridRowSelectionSnapshotsEqual,
+  deselectDataGridRows,
+  isDataGridRowSelected,
+  normalizeDataGridRowSelectionSnapshot,
+  reconcileDataGridRowSelectionSnapshot,
+  replaceDataGridSelectedRows,
+  selectDataGridRows,
+  setDataGridRowFocused,
+  setDataGridRowSelected,
+  type DataGridRowSelectionSnapshot,
+} from "./selection/rowSelection.js"
 
 export {
   createDataGridSelectionSummary,
@@ -425,16 +441,19 @@ export {
 
 export {
   createDataGridColumnModel,
+  formatDataGridCellValue,
   type DataGridColumnCapabilities,
   type DataGridColumnConstraintValue,
   type DataGridColumnConstraints,
   type DataGridColumnDataType,
+  type DataGridColumnDateTimeFormatOptions,
   type DataGridColumnDef,
   type DataGridColumnInitialState,
   type DataGridColumnInput,
   type DataGridColumnModel,
   type DataGridColumnModelSnapshot,
   type DataGridColumnModelListener,
+  type DataGridColumnNumberFormatOptions,
   type DataGridColumnSnapshot,
   type DataGridColumnPin,
   type DataGridColumnPresentation,

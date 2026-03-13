@@ -32,6 +32,7 @@ import {
 } from "./gridApiNamespaces"
 import { createDataGridApiPivotMethods } from "./gridApiPivotMethods"
 import { createDataGridApiRowsMethods } from "./gridApiRowsMethods"
+import { createDataGridApiRowSelectionMethods } from "./gridApiRowSelectionMethods"
 import { createDataGridApiSelectionMethods } from "./gridApiSelectionMethods"
 import { buildDataGridSelectionSummary } from "./gridApiSelectionSummary"
 import { createDataGridApiStateMethods } from "./gridApiStateMethods"
@@ -51,6 +52,7 @@ export type {
   DataGridApiMutationControlOptions,
   DataGridApiPivotNamespace,
   DataGridApiSelectionNamespace,
+  DataGridApiRowSelectionNamespace,
   DataGridApiTransactionNamespace,
   DataGridApiRowsNamespace,
   DataGridApiDataNamespace,
@@ -133,6 +135,7 @@ export function createDataGridApi<TRow = unknown>(
   const {
     capabilities,
     getSelectionCapability,
+    getRowSelectionCapability,
     getTransactionCapability,
     getPatchCapability,
     getRowsDataMutationCapability,
@@ -262,14 +265,20 @@ export function createDataGridApi<TRow = unknown>(
         options,
       }),
   })
+  const rowSelectionMethods = createDataGridApiRowSelectionMethods({
+    getRowSelectionCapability,
+    onChanged: snapshot => eventsRuntime.emitRowSelectionChanged(snapshot),
+  })
   const stateMethods = createDataGridApiStateMethods<TRow>({
     rowModel,
     columnModel,
     getSelectionCapability,
+    getRowSelectionCapability,
     getTransactionCapability,
     getSortFilterBatchCapability,
     setViewportRange: viewMethods.setViewportRange,
     onSelectionChanged: snapshot => eventsRuntime.emitSelectionChanged(snapshot),
+    onRowSelectionChanged: snapshot => eventsRuntime.emitRowSelectionChanged(snapshot),
     onStateImported: state => eventsRuntime.emitStateImported(state),
   })
   const policyMethods = createDataGridApiPolicyMethods({
@@ -321,6 +330,7 @@ export function createDataGridApi<TRow = unknown>(
     ...policyMethods,
     ...transactionMethods,
     ...selectionMethods,
+    ...rowSelectionMethods,
     ...stateMethods,
     beginTransactionBatch: (label?: string) =>
       runGuardedSync("transaction.beginBatch", () => transactionMethods.beginTransactionBatch(label)),

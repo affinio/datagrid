@@ -101,6 +101,9 @@ function resolveRowModel(wrapper: ReturnType<typeof mount>) {
 function resolveVm(wrapper: ReturnType<typeof mount>) {
   return wrapper.vm as unknown as {
     getApi?: () => {
+      rowSelection: {
+        getSnapshot?: () => unknown
+      }
       rows: {
         getAggregationModel?: () => unknown
       }
@@ -755,6 +758,45 @@ describe("DataGrid app facade contract", () => {
     expect(resolveVm(wrapper).getApi?.()?.rows.getAggregationModel?.()).toMatchObject({
       basis: "filtered",
       columns: [{ key: "amount", op: "sum" }],
+    })
+
+    wrapper.unmount()
+  })
+
+  it("keeps row focus independent from checkbox row selection", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const bodyRows = wrapper.findAll(".grid-body-viewport .grid-row")
+    expect(bodyRows).toHaveLength(3)
+
+    await bodyRows[1]!.trigger("click")
+    await flushRuntimeTasks()
+
+    const leftPaneRows = wrapper.findAll(".grid-body-pane--left .grid-row")
+    expect(leftPaneRows).toHaveLength(3)
+
+    const firstRowCheckbox = leftPaneRows[0]!.find('.grid-cell--row-select input[type="checkbox"]')
+    expect(firstRowCheckbox.exists()).toBe(true)
+    ;(firstRowCheckbox.element as HTMLInputElement).checked = true
+    await firstRowCheckbox.trigger("change")
+    await flushRuntimeTasks()
+
+    expect(bodyRows[0]!.classes()).toContain("grid-row--checkbox-selected")
+    expect(bodyRows[0]!.classes()).not.toContain("grid-row--focused")
+    expect(bodyRows[1]!.classes()).toContain("grid-row--focused")
+    expect(bodyRows[1]!.classes()).not.toContain("grid-row--checkbox-selected")
+
+    expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()).toEqual({
+      focusedRow: "r2",
+      selectedRows: ["r1"],
     })
 
     wrapper.unmount()

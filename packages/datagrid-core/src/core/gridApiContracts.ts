@@ -55,6 +55,7 @@ import type {
   DataGridPivotSpec,
 } from "@affino/datagrid-pivot"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
+import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
 import type {
   DataGridSelectionAggregationKind,
   DataGridSelectionSummaryColumnConfig,
@@ -104,6 +105,21 @@ export interface DataGridApiSelectionNamespace<TRow = unknown> {
   setSnapshot(snapshot: DataGridSelectionSnapshot): void
   clear(): void
   summarize(options?: DataGridSelectionSummaryApiOptions<TRow>): DataGridSelectionSummarySnapshot | null
+}
+
+export interface DataGridApiRowSelectionNamespace {
+  hasSupport(): boolean
+  getSnapshot(): DataGridRowSelectionSnapshot | null
+  setSnapshot(snapshot: DataGridRowSelectionSnapshot): void
+  clear(): void
+  getFocusedRow(): DataGridRowId | null
+  setFocusedRow(rowId: DataGridRowId | null): void
+  getSelectedRows(): readonly DataGridRowId[]
+  isSelected(rowId: DataGridRowId): boolean
+  setSelected(rowId: DataGridRowId, selected: boolean): void
+  selectRows(rowIds: Iterable<DataGridRowId>): void
+  deselectRows(rowIds: Iterable<DataGridRowId>): void
+  clearSelectedRows(): void
 }
 
 export interface DataGridApiTransactionNamespace {
@@ -341,6 +357,7 @@ export interface DataGridUnifiedState<TRow = unknown> {
   rows: DataGridUnifiedRowsState<TRow>
   columns: DataGridUnifiedColumnState
   selection: DataGridSelectionSnapshot | null
+  rowSelection: DataGridRowSelectionSnapshot | null
   transaction: DataGridTransactionSnapshot | null
 }
 
@@ -378,6 +395,10 @@ export interface DataGridApiProjectionRecomputedEvent<TRow = unknown> {
 
 export interface DataGridApiSelectionChangedEvent {
   snapshot: DataGridSelectionSnapshot | null
+}
+
+export interface DataGridApiRowSelectionChangedEvent {
+  snapshot: DataGridRowSelectionSnapshot | null
 }
 
 export interface DataGridApiPivotChangedEvent {
@@ -429,6 +450,7 @@ export interface DataGridApiEventMap<TRow = unknown> {
   "columns:changed": DataGridApiColumnsChangedEvent
   "projection:recomputed": DataGridApiProjectionRecomputedEvent<TRow>
   "selection:changed": DataGridApiSelectionChangedEvent
+  "row-selection:changed": DataGridApiRowSelectionChangedEvent
   "pivot:changed": DataGridApiPivotChangedEvent
   "transaction:changed": DataGridApiTransactionChangedEvent
   "viewport:changed": DataGridApiViewportChangedEvent<TRow>
@@ -477,6 +499,7 @@ export interface DataGridApiCapabilities {
   readonly backpressureControl: boolean
   readonly compute: boolean
   readonly selection: boolean
+  readonly rowSelection: boolean
   readonly transaction: boolean
   readonly histogram: boolean
   readonly sortFilterBatch: boolean
@@ -487,6 +510,7 @@ export interface DataGridApi<TRow = unknown> {
   readonly capabilities: DataGridApiCapabilities
   readonly pivot: DataGridApiPivotNamespace<TRow>
   readonly selection: DataGridApiSelectionNamespace<TRow>
+  readonly rowSelection: DataGridApiRowSelectionNamespace
   readonly transaction: DataGridApiTransactionNamespace
   readonly rows: DataGridApiRowsNamespace<TRow>
   readonly data: DataGridApiDataNamespace

@@ -120,6 +120,7 @@ function createStageProps(
     handleEditorKeydown: () => undefined,
     commitInlineEdit: () => undefined,
     readCell: (row, columnKey) => String((row.data as Record<string, unknown>)[columnKey] ?? ""),
+    readDisplayCell: (row, columnKey) => String((row.data as Record<string, unknown>)[columnKey] ?? ""),
   }
 }
 
@@ -651,6 +652,34 @@ describe("DataGridTableStage contract", () => {
     expect(wrapper.findAll(".grid-body-pane--left .grid-row")[1]?.classes()).toContain("grid-row--striped")
     expect(wrapper.findAll(".grid-body-viewport .grid-row")[1]?.classes()).toContain("grid-row--striped")
     expect(wrapper.findAll(".grid-body-pane--right .grid-row")[1]?.classes()).toContain("grid-row--striped")
+
+    wrapper.unmount()
+  })
+
+  it("separates row checkbox column from the row-number cell and routes number clicks to full-row selection", async () => {
+    const handleRowIndexClick = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...createStageProps(() => false, {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 3 },
+        }),
+        indexColumnStyle: { width: "108px", minWidth: "108px", maxWidth: "108px", left: "0px" },
+        handleRowIndexClick,
+        handleRowCheckboxChange: () => undefined,
+        handleSelectAllVisibleRowsChange: () => undefined,
+      },
+    })
+
+    expect(wrapper.find(".grid-cell--row-select-header").exists()).toBe(true)
+    expect(wrapper.find(".grid-body-pane--left .grid-cell--row-select input[type='checkbox']").exists()).toBe(true)
+
+    const indexCell = wrapper.find(".grid-body-pane--left .grid-cell--index-number")
+    expect(indexCell.classes()).toContain("grid-cell--index-selected")
+
+    await indexCell.trigger("click", { shiftKey: true })
+
+    expect(handleRowIndexClick).toHaveBeenCalledWith(expect.objectContaining({ rowId: "r1" }), 0, true)
 
     wrapper.unmount()
   })

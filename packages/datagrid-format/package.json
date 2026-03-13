@@ -1,0 +1,45 @@
+{
+  "name": "@affino/datagrid-format",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Headless cell formatting engine for Affino DataGrid",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src/__tests__/runtime.spec.ts --config ./vitest.config.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-format"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-format#readme",
+  "license": "MIT",
+  "keywords": [
+    "datagrid",
+    "format",
+    "formatter",
+    "headless",
+    "intl"
+  ],
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  },
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/index.js"
+}

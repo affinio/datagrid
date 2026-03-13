@@ -528,6 +528,7 @@ import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import {
   cloneDataGridFilterSnapshot,
   useDataGridAppAdvancedFilterBuilder,
+  useDataGridAppRowSelection,
   useDataGridAppSelection,
   useDataGridRuntime,
   type DataGridColumnSnapshot,
@@ -1691,10 +1692,24 @@ const {
   totalRows,
 })
 
+const {
+  rowSelectionSnapshot,
+  syncRowSelectionSnapshotFromRuntime,
+  runtimeServices: rowSelectionRuntimeServices,
+} = useDataGridAppRowSelection<SpreadsheetGridRow>({
+  resolveRuntime: () => (runtimeRef ? { api: runtimeRef.api } : null),
+})
+
 const runtimeBundle = useDataGridRuntime<SpreadsheetGridRow>({
   rows: gridRows,
   columns: gridColumns,
-  services: runtimeServices,
+  services: {
+    selection: {
+      ...(runtimeServices.selection ?? {}),
+      ...(rowSelectionRuntimeServices.selection ?? {}),
+      name: "selection",
+    },
+  },
   clientRowModelOptions: {
     resolveRowId: row => row.id,
   },
@@ -1965,6 +1980,8 @@ const {
   selectionSnapshot,
   selectionAnchor,
   syncSelectionSnapshotFromRuntime,
+  rowSelectionSnapshot,
+  syncRowSelectionSnapshotFromRuntime,
   firstColumnKey,
   columnFilterTextByKey,
   virtualization,

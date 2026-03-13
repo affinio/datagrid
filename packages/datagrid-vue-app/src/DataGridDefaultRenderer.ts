@@ -25,6 +25,7 @@ import {
   cloneDataGridFilterSnapshot,
   type GridSelectionPointLike,
   type DataGridRowId,
+  type DataGridRowSelectionSnapshot,
   useDataGridAppAdvancedFilterBuilder,
   useDataGridAppColumnLayoutPanel,
 } from "@affino/datagrid-vue"
@@ -385,9 +386,17 @@ export default defineComponent({
       type: Object as PropType<Ref<GridSelectionPointLike<DataGridRowId> | null>>,
       required: true,
     },
+    rowSelectionSnapshot: {
+      type: Object as PropType<Ref<DataGridRowSelectionSnapshot | null>>,
+      required: true,
+    },
     syncSelectionSnapshotFromRuntime: {
       type: Function as PropType<() => void>,
       required: true,
+    },
+    syncRowSelectionSnapshotFromRuntime: {
+      type: Function as PropType<() => void>,
+      default: () => undefined,
     },
     sortModel: {
       type: Array as PropType<readonly DataGridSortState[] | undefined>,
@@ -903,7 +912,9 @@ export default defineComponent({
       normalizedBaseRowHeight,
       selectionSnapshot: props.selectionSnapshot,
       selectionAnchor: props.selectionAnchor,
+      rowSelectionSnapshot: props.rowSelectionSnapshot,
       syncSelectionSnapshotFromRuntime: props.syncSelectionSnapshotFromRuntime,
+      syncRowSelectionSnapshotFromRuntime: props.syncRowSelectionSnapshotFromRuntime,
       firstColumnKey,
       columnFilterTextByKey,
       virtualization: computed(() => props.virtualization),

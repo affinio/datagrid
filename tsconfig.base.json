@@ -11,6 +11,8 @@
       "@affino/datagrid-formula-engine/*": ["./packages/datagrid-formula-engine/src/*"],
       "@affino/datagrid-formula-engine-enterprise": ["./packages/datagrid-formula-engine-enterprise/src/index.ts"],
       "@affino/datagrid-formula-engine-enterprise/*": ["./packages/datagrid-formula-engine-enterprise/src/*"],
+      "@affino/datagrid-format": ["./packages/datagrid-format/src/index.ts"],
+      "@affino/datagrid-format/*": ["./packages/datagrid-format/src/*"],
       "@affino/datagrid-chrome": ["./packages/datagrid-chrome/src/index.ts"],
       "@affino/datagrid-chrome/*": ["./packages/datagrid-chrome/src/*"],
       "@affino/datagrid-gantt": ["./packages/datagrid-gantt/src/index.ts"],

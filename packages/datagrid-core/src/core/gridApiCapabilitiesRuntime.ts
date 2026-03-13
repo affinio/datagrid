@@ -9,6 +9,7 @@ import {
   type DataGridComputeCapability,
   type DataGridRowsDataMutationCapability,
   type DataGridPatchCapability,
+  type DataGridRowSelectionCapability,
   type DataGridSelectionCapability,
   type DataGridSortFilterBatchCapability,
   type DataGridTransactionCapability,
@@ -16,6 +17,7 @@ import {
   resolveColumnHistogramCapability,
   resolveComputeCapability,
   resolvePatchCapability,
+  resolveRowSelectionCapability,
   resolveRowsDataMutationCapability,
   resolveSelectionCapability,
   resolveSortFilterBatchCapability,
@@ -28,6 +30,7 @@ export interface DataGridApiCapabilityFlags {
   readonly backpressureControl: boolean
   readonly compute: boolean
   readonly selection: boolean
+  readonly rowSelection: boolean
   readonly transaction: boolean
   readonly histogram: boolean
   readonly sortFilterBatch: boolean
@@ -36,6 +39,7 @@ export interface DataGridApiCapabilityFlags {
 export interface DataGridApiCapabilityRuntime<TRow = unknown> {
   capabilities: DataGridApiCapabilityFlags
   getSelectionCapability: () => DataGridSelectionCapability | null
+  getRowSelectionCapability: () => DataGridRowSelectionCapability | null
   getTransactionCapability: () => DataGridTransactionCapability | null
   getPatchCapability: () => DataGridPatchCapability<TRow> | null
   getRowsDataMutationCapability: () => DataGridRowsDataMutationCapability<TRow> | null
@@ -70,6 +74,9 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
 ): DataGridApiCapabilityRuntime<TRow> {
   const getSelectionCapability = createLazyResolver<DataGridSelectionCapability | null>(() =>
     resolveSelectionCapability(input.getSelectionService()),
+  )
+  const getRowSelectionCapability = createLazyResolver<DataGridRowSelectionCapability | null>(() =>
+    resolveRowSelectionCapability(input.getSelectionService()),
   )
   const getTransactionCapability = createLazyResolver<DataGridTransactionCapability | null>(() =>
     resolveTransactionCapability(input.getTransactionService()),
@@ -109,6 +116,9 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
     get selection() {
       return getSelectionCapability() !== null
     },
+    get rowSelection() {
+      return getRowSelectionCapability() !== null
+    },
     get transaction() {
       return getTransactionCapability() !== null
     },
@@ -123,6 +133,7 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
   return {
     capabilities,
     getSelectionCapability,
+    getRowSelectionCapability,
     getTransactionCapability,
     getPatchCapability,
     getRowsDataMutationCapability,

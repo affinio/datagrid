@@ -73,6 +73,14 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     rowClass: unref(options.rowClass),
     isRowAutosizeProbe: unref(options.isRowAutosizeProbe),
     rowStyle: unref(options.rowStyle),
+    isRowFocused: unref(options.isRowFocused),
+    isRowCheckboxSelected: unref(options.isRowCheckboxSelected),
+    allVisibleRowsSelected: unref(options.allVisibleRowsSelected),
+    someVisibleRowsSelected: unref(options.someVisibleRowsSelected),
+    handleRowClick: unref(options.handleRowClick),
+    handleRowIndexClick: unref(options.handleRowIndexClick),
+    handleRowCheckboxChange: unref(options.handleRowCheckboxChange),
+    handleSelectAllVisibleRowsChange: unref(options.handleSelectAllVisibleRowsChange),
     toggleGroupRow: unref(options.toggleGroupRow),
     rowIndexLabel: unref(options.rowIndexLabel),
     startResize: unref(options.startResize),
@@ -102,6 +110,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     handleEditorKeydown: unref(options.handleEditorKeydown),
     commitInlineEdit: unref(options.commitInlineEdit),
     readCell: unref(options.readCell),
+    readDisplayCell: unref(options.readDisplayCell),
   }))
 
   return {

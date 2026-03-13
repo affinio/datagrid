@@ -92,15 +92,47 @@ const columns = [
     label: "Amount",
     dataType: "currency",
     initialState: { width: 140 },
-    presentation: { align: "right", headerAlign: "right" },
+    presentation: {
+      align: "right",
+      headerAlign: "right",
+      numberFormat: {
+        locale: "en-GB",
+        style: "currency",
+        currency: "GBP",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      },
+    },
     capabilities: { sortable: true, filterable: true, aggregatable: true },
+  },
+  {
+    key: "start",
+    label: "Start",
+    dataType: "date",
+    initialState: { width: 128 },
+    presentation: {
+      dateTimeFormat: {
+        locale: "en-GB",
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+      },
+    },
   },
   {
     key: "qty",
     label: "Qty",
     dataType: "number",
     initialState: { width: 96 },
-    presentation: { align: "right", headerAlign: "right" },
+    presentation: {
+      align: "right",
+      headerAlign: "right",
+      numberFormat: {
+        locale: "en-GB",
+        style: "decimal",
+        maximumFractionDigits: 1,
+      },
+    },
     capabilities: { sortable: true, filterable: true, aggregatable: true },
   },
 ]
@@ -122,6 +154,9 @@ Result:
 - sorting and filtering
 - keyboard navigation
 - selection
+
+`presentation.numberFormat` and `presentation.dateTimeFormat` are display-only. Editing, clipboard and patch flows continue to use the raw cell value.
+The shared formatter implementation lives in `@affino/datagrid-format`, so the same column formatting rules can be reused by other adapters.
 
 ## Spreadsheet Fill Handle
 

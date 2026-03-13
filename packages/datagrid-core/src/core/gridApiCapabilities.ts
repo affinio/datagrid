@@ -18,6 +18,23 @@ export type DataGridSelectionCapability = Required<
   Pick<DataGridCoreSelectionService, "getSelectionSnapshot" | "setSelectionSnapshot" | "clearSelection">
 >
 
+export type DataGridRowSelectionCapability = Required<
+  Pick<
+    DataGridCoreSelectionService,
+    | "getRowSelectionSnapshot"
+    | "setRowSelectionSnapshot"
+    | "clearRowSelection"
+    | "getFocusedRow"
+    | "setFocusedRow"
+    | "getSelectedRows"
+    | "isRowSelected"
+    | "setRowSelected"
+    | "selectRows"
+    | "deselectRows"
+    | "clearSelectedRows"
+  >
+>
+
 export type DataGridPatchCapability<TRow = unknown> = {
   patchRows: (
     updates: readonly DataGridClientRowPatch<TRow>[],
@@ -90,6 +107,42 @@ export function resolveSelectionCapability(
   }
 }
 
+export function resolveRowSelectionCapability(
+  service: DataGridCoreSelectionService | null,
+): DataGridRowSelectionCapability | null {
+  if (!service) {
+    return null
+  }
+  if (
+    typeof service.getRowSelectionSnapshot !== "function"
+    || typeof service.setRowSelectionSnapshot !== "function"
+    || typeof service.clearRowSelection !== "function"
+    || typeof service.getFocusedRow !== "function"
+    || typeof service.setFocusedRow !== "function"
+    || typeof service.getSelectedRows !== "function"
+    || typeof service.isRowSelected !== "function"
+    || typeof service.setRowSelected !== "function"
+    || typeof service.selectRows !== "function"
+    || typeof service.deselectRows !== "function"
+    || typeof service.clearSelectedRows !== "function"
+  ) {
+    return null
+  }
+  return {
+    getRowSelectionSnapshot: service.getRowSelectionSnapshot,
+    setRowSelectionSnapshot: service.setRowSelectionSnapshot,
+    clearRowSelection: service.clearRowSelection,
+    getFocusedRow: service.getFocusedRow,
+    setFocusedRow: service.setFocusedRow,
+    getSelectedRows: service.getSelectedRows,
+    isRowSelected: service.isRowSelected,
+    setRowSelected: service.setRowSelected,
+    selectRows: service.selectRows,
+    deselectRows: service.deselectRows,
+    clearSelectedRows: service.clearSelectedRows,
+  }
+}
+
 export function resolveTransactionCapability(
   service: DataGridCoreTransactionService | null,
 ): DataGridTransactionCapability | null {
@@ -128,6 +181,15 @@ export function assertSelectionCapability(
 ): DataGridSelectionCapability {
   if (!capability) {
     throw new Error('[DataGridApi] "selection" service is present but does not implement selection capabilities.')
+  }
+  return capability
+}
+
+export function assertRowSelectionCapability(
+  capability: DataGridRowSelectionCapability | null,
+): DataGridRowSelectionCapability {
+  if (!capability) {
+    throw new Error('[DataGridApi] "selection" service is present but does not implement rowSelection capabilities.')
   }
   return capability
 }

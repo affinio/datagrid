@@ -13,10 +13,12 @@ import type {
   DataGridViewportRange,
 } from "../models/index.js"
 import type {
+  DataGridRowSelectionCapability,
   DataGridSelectionCapability,
   DataGridSortFilterBatchCapability,
   DataGridTransactionCapability,
 } from "./gridApiCapabilities"
+import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
 import type {
   DataGridMigrateStateOptions,
   DataGridSetStateOptions,
@@ -34,10 +36,12 @@ export interface CreateDataGridApiStateMethodsInput<TRow = unknown> {
   rowModel: DataGridRowModel<TRow>
   columnModel: DataGridColumnModel
   getSelectionCapability: () => DataGridSelectionCapability | null
+  getRowSelectionCapability: () => DataGridRowSelectionCapability | null
   getTransactionCapability: () => DataGridTransactionCapability | null
   getSortFilterBatchCapability: () => DataGridSortFilterBatchCapability | null
   setViewportRange: (range: DataGridViewportRange) => void
   onSelectionChanged?: (snapshot: DataGridSelectionSnapshot | null) => void
+  onRowSelectionChanged?: (snapshot: DataGridRowSelectionSnapshot | null) => void
   onStateImported?: (state: DataGridUnifiedState<TRow>) => void
 }
 
@@ -141,10 +145,12 @@ export function createDataGridApiStateMethods<TRow = unknown>(
     rowModel,
     columnModel,
     getSelectionCapability,
+    getRowSelectionCapability,
     getTransactionCapability,
     getSortFilterBatchCapability,
     setViewportRange,
     onSelectionChanged,
+    onRowSelectionChanged,
     onStateImported,
   } = input
 
@@ -195,6 +201,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
           pins,
         },
         selection: cloneSerializable(getSelectionCapability()?.getSelectionSnapshot() ?? null),
+        rowSelection: cloneSerializable(getRowSelectionCapability()?.getRowSelectionSnapshot() ?? null),
         transaction: cloneSerializable(getTransactionCapability()?.getTransactionSnapshot() ?? null),
       }
     },
@@ -269,6 +276,19 @@ export function createDataGridApiStateMethods<TRow = unknown>(
           }
         } else if (options.strict && migratedState.selection) {
           throw new Error("[DataGridApi] Cannot restore selection state without selection capability.")
+        }
+
+        const rowSelectionCapability = getRowSelectionCapability()
+        if (rowSelectionCapability) {
+          if (migratedState.rowSelection) {
+            rowSelectionCapability.setRowSelectionSnapshot(cloneSerializable(migratedState.rowSelection))
+            onRowSelectionChanged?.(rowSelectionCapability.getRowSelectionSnapshot())
+          } else {
+            rowSelectionCapability.clearRowSelection()
+            onRowSelectionChanged?.(rowSelectionCapability.getRowSelectionSnapshot())
+          }
+        } else if (options.strict && migratedState.rowSelection) {
+          throw new Error("[DataGridApi] Cannot restore rowSelection state without rowSelection capability.")
         }
       }
 

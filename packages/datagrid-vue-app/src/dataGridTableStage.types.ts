@@ -69,6 +69,14 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   rowClass: (row: DataGridTableRow<TRow>) => string
   isRowAutosizeProbe: (row: DataGridTableRow<TRow>, rowOffset: number) => boolean
   rowStyle: (row: DataGridTableRow<TRow>, rowOffset: number) => CSSProperties
+  isRowFocused?: (row: DataGridTableRow<TRow>) => boolean
+  isRowCheckboxSelected?: (row: DataGridTableRow<TRow>) => boolean
+  allVisibleRowsSelected?: boolean
+  someVisibleRowsSelected?: boolean
+  handleRowClick?: (row: DataGridTableRow<TRow>) => void
+  handleRowIndexClick?: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean) => void
+  handleRowCheckboxChange?: (row: DataGridTableRow<TRow>, selected: boolean) => void
+  handleSelectAllVisibleRowsChange?: (selected: boolean) => void
   toggleGroupRow: (row: DataGridTableRow<TRow>) => void
   rowIndexLabel: (row: DataGridTableRow<TRow>, rowOffset: number) => string
   startResize: (event: MouseEvent, columnKey: string) => void
@@ -108,6 +116,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   handleEditorKeydown: (event: KeyboardEvent) => void
   commitInlineEdit: () => void
   readCell: (row: DataGridTableRow<TRow>, columnKey: string) => string
+  readDisplayCell: (row: DataGridTableRow<TRow>, columnKey: string) => string
 }
 
 export interface UseDataGridTableStageBindingsOptions<TRow extends Record<string, unknown>>

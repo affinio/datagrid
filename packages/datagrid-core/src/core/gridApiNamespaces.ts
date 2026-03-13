@@ -22,6 +22,18 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   setSelectionSnapshot: DataGridApi<TRow>["selection"]["setSnapshot"]
   clearSelection: DataGridApi<TRow>["selection"]["clear"]
   summarizeSelection: DataGridApi<TRow>["selection"]["summarize"]
+  hasRowSelectionSupport: DataGridApi<TRow>["rowSelection"]["hasSupport"]
+  getRowSelectionSnapshot: DataGridApi<TRow>["rowSelection"]["getSnapshot"]
+  setRowSelectionSnapshot: DataGridApi<TRow>["rowSelection"]["setSnapshot"]
+  clearRowSelection: DataGridApi<TRow>["rowSelection"]["clear"]
+  getFocusedRow: DataGridApi<TRow>["rowSelection"]["getFocusedRow"]
+  setFocusedRow: DataGridApi<TRow>["rowSelection"]["setFocusedRow"]
+  getSelectedRows: DataGridApi<TRow>["rowSelection"]["getSelectedRows"]
+  isRowSelected: DataGridApi<TRow>["rowSelection"]["isSelected"]
+  setRowSelected: DataGridApi<TRow>["rowSelection"]["setSelected"]
+  selectRows: DataGridApi<TRow>["rowSelection"]["selectRows"]
+  deselectRows: DataGridApi<TRow>["rowSelection"]["deselectRows"]
+  clearSelectedRows: DataGridApi<TRow>["rowSelection"]["clearSelectedRows"]
   hasTransactionSupport: DataGridApi<TRow>["transaction"]["hasSupport"]
   getTransactionSnapshot: DataGridApi<TRow>["transaction"]["getSnapshot"]
   beginTransactionBatch: DataGridApi<TRow>["transaction"]["beginBatch"]
@@ -220,6 +232,20 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       setSnapshot: methodSet.setSelectionSnapshot,
       clear: methodSet.clearSelection,
       summarize: methodSet.summarizeSelection,
+    },
+    rowSelection: {
+      hasSupport: methodSet.hasRowSelectionSupport,
+      getSnapshot: methodSet.getRowSelectionSnapshot,
+      setSnapshot: methodSet.setRowSelectionSnapshot,
+      clear: methodSet.clearRowSelection,
+      getFocusedRow: methodSet.getFocusedRow,
+      setFocusedRow: methodSet.setFocusedRow,
+      getSelectedRows: methodSet.getSelectedRows,
+      isSelected: methodSet.isRowSelected,
+      setSelected: methodSet.setRowSelected,
+      selectRows: methodSet.selectRows,
+      deselectRows: methodSet.deselectRows,
+      clearSelectedRows: methodSet.clearSelectedRows,
     },
     transaction: {
       hasSupport: methodSet.hasTransactionSupport,
