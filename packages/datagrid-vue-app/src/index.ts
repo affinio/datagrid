@@ -36,9 +36,23 @@ export type {
 } from "./dataGridVirtualization"
 export type {
   DataGridAppViewMode,
+  DataGridGanttDependencyRef,
+  DataGridGanttDependencyType,
   DataGridGanttOptions,
   DataGridGanttProp,
   DataGridGanttZoomLevel,
+  DataGridResolvedWorkingCalendar,
+  DataGridTimelineHorizontalAlign,
+  DataGridTimelineLine,
+  DataGridTimelineModel,
+  DataGridTimelineRange,
+  DataGridTimelineRenderModels,
+  DataGridTimelineSegment,
+  DataGridTimelineSpan,
+  DataGridTimelineViewport,
+  DataGridWorkingCalendar,
+  BuildDataGridTimelineRenderModelsInput,
+  ResolveDataGridTimelineRangeInput,
 } from "./dataGridGantt"
 export type {
   DataGridClientComputeMode,

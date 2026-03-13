@@ -210,6 +210,7 @@ Rendering:
 - virtualized rows and columns
 - pagination
 - tree data
+- gantt view
 
 Data computation:
 
@@ -231,6 +232,110 @@ Customization:
 - theme presets
 - token overrides
 - plugins and services
+
+## Gantt View
+
+`@affino/datagrid-vue-app` includes a split table + timeline gantt mode.
+
+The gantt renderer is intentionally not a separate task system.
+It reads the same row cells already used by the grid and renders only the current visible rows.
+
+Typical source columns:
+
+- `task`
+- `start`
+- `end`
+- `baselineStart`
+- `baselineEnd`
+- `% complete`
+- `predecessors`
+
+Predecessors can stay simple (`task-1`) or include a dependency type:
+
+- `task-1`
+- `task-1:SS`
+- `task-1->FF`
+- `12FS`
+
+Minimal example:
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue-app"
+
+const rows = [
+  {
+    id: "task-1",
+    task: "Plan rollout",
+    start: new Date("2026-03-02T00:00:00.000Z"),
+    end: new Date("2026-03-06T00:00:00.000Z"),
+    progress: 35,
+    baselineStart: new Date("2026-03-01T00:00:00.000Z"),
+    baselineEnd: new Date("2026-03-05T00:00:00.000Z"),
+    dependencies: [],
+  },
+  {
+    id: "task-2",
+    task: "Launch",
+    start: new Date("2026-03-09T00:00:00.000Z"),
+    end: new Date("2026-03-10T00:00:00.000Z"),
+    progress: 0,
+    baselineStart: new Date("2026-03-08T00:00:00.000Z"),
+    baselineEnd: new Date("2026-03-09T00:00:00.000Z"),
+    dependencies: ["task-1:FS"],
+  },
+]
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="[
+      { key: 'task', label: 'Task' },
+      { key: 'start', label: 'Start', dataType: 'date' },
+      { key: 'end', label: 'End', dataType: 'date' },
+      { key: 'baselineStart', label: 'Baseline Start', dataType: 'date' },
+      { key: 'baselineEnd', label: 'Baseline End', dataType: 'date' },
+      { key: 'progress', label: '% Complete', dataType: 'number' },
+      { key: 'dependencies', label: 'Predecessors' },
+    ]"
+    view-mode="gantt"
+    :gantt="{
+      idKey: 'id',
+      labelKey: 'task',
+      startKey: 'start',
+      endKey: 'end',
+      baselineStartKey: 'baselineStart',
+      baselineEndKey: 'baselineEnd',
+      progressKey: 'progress',
+      dependencyKey: 'dependencies',
+      computedCriticalPath: true,
+      zoomLevel: 'week',
+      workingCalendar: {
+        workingWeekdays: [1, 2, 3, 4, 5],
+      },
+    }"
+  />
+</template>
+```
+
+Current gantt capabilities:
+
+- canvas timeline renderer
+- dependency lines and dependency selection
+- drag move / resize writing back to row cells
+- baseline bars from row cells
+- baseline variance markers
+- dependency types (`FS`, `SS`, `FF`, `SF`)
+- milestones
+- progress overlay
+- working calendar and holiday shading
+- summary bars for visible group rows
+- computed critical path highlighting
+
+Reference:
+
+- [/Users/anton/Projects/affinio/datagrid/docs/datagrid-gantt.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-gantt.md)
 
 ## Comparison
 

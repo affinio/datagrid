@@ -52,6 +52,7 @@ const DATA_GRID_APP_STYLES = `
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   flex: 1 1 auto;
+  position: relative;
   width: 100%;
   min-width: 0;
   min-height: 0;
@@ -73,6 +74,41 @@ const DATA_GRID_APP_STYLES = `
   border-right-width: 0;
 }
 
+.datagrid-gantt-stage__splitter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  padding: 0;
+  z-index: 5;
+  touch-action: none;
+}
+
+.datagrid-gantt-stage__splitter::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 50%;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--datagrid-glass-border) 78%, transparent);
+  transform: translateX(-50%);
+}
+
+.datagrid-gantt-stage__splitter:hover::before,
+.datagrid-gantt-stage__splitter:focus-visible::before {
+  background: var(--datagrid-accent-strong);
+}
+
+.datagrid-gantt-stage__splitter:focus,
+.datagrid-gantt-stage__splitter:focus-visible {
+  outline: none;
+}
+
 .datagrid-gantt-stage__timeline {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -86,6 +122,7 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .datagrid-gantt-stage__timeline-header {
+  position: relative;
   min-width: 0;
   border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
   background: var(--datagrid-header-row-bg);
@@ -119,7 +156,7 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .datagrid-gantt-timeline__viewport--header {
-  height: 48px;
+  height: 100%;
 }
 
 .datagrid-gantt-timeline__viewport--body {
@@ -141,6 +178,7 @@ const DATA_GRID_APP_STYLES = `
   width: 100%;
   height: 100%;
   display: block;
+  z-index: 1;
 }
 
 .datagrid-gantt-timeline__canvas--header {
@@ -159,6 +197,10 @@ const DATA_GRID_APP_STYLES = `
 
   .datagrid-gantt-stage__table {
     min-width: 0;
+  }
+
+  .datagrid-gantt-stage__splitter {
+    display: none;
   }
 
   .datagrid-gantt-stage__table > .grid-stage {

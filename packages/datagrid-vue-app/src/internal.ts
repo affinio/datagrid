@@ -5,7 +5,11 @@ export { default as DataGridGanttStage } from "./DataGridGanttStage.vue"
 export { default as DataGridModuleHost } from "./DataGridModuleHost"
 export { default as DataGridAdvancedFilterPopover } from "./DataGridAdvancedFilterPopover.vue"
 export { default as DataGridTableStage } from "./DataGridTableStage.vue"
-export { normalizeDataGridGanttOptions } from "./dataGridGantt"
+export {
+  buildDataGridTimelineRenderModels,
+  normalizeDataGridGanttOptions,
+  resolveDataGridTimelineRange,
+} from "./dataGridGantt"
 export { resolveDataGridFormulaRowModelOptions } from "./dataGridFormulaOptions"
 export { useDataGridAppRowModel } from "./useDataGridAppRowModel"
 export { useDataGridTableStageBindings } from "./useDataGridTableStageBindings"
@@ -32,13 +36,29 @@ export type {
   DataGridAppViewMode,
   DataGridGanttBarFrame,
   DataGridGanttBarLayout,
+  DataGridGanttCriticalTaskNode,
   DataGridGanttDependencyPath,
+  DataGridGanttDependencyRef,
+  DataGridGanttDependencyType,
+  DataGridGanttHorizontalAlign,
   DataGridGanttOptions,
   DataGridGanttProp,
   DataGridGanttRowEditPatch,
   DataGridGanttTimelineState,
   DataGridGanttZoomLevel,
   DataGridResolvedGanttOptions,
+  DataGridResolvedWorkingCalendar,
+  DataGridTimelineHorizontalAlign,
+  DataGridTimelineLine,
+  DataGridTimelineModel,
+  DataGridTimelineRange,
+  DataGridTimelineRenderModels,
+  DataGridTimelineSegment,
+  DataGridTimelineSpan,
+  DataGridTimelineViewport,
+  DataGridWorkingCalendar,
+  BuildDataGridTimelineRenderModelsInput,
+  ResolveDataGridTimelineRangeInput,
 } from "./dataGridGantt"
 export type {
   UseDataGridAppRowModelOptions,

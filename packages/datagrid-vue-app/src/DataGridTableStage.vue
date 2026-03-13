@@ -7,7 +7,7 @@
       'grid-stage--range-moving': isRangeMoving,
     }"
   >
-    <div class="grid-header-shell" :style="paneLayoutStyle">
+    <div ref="headerShellEl" class="grid-header-shell" :style="paneLayoutStyle">
       <div class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="handleLinkedViewportWheel">
         <div class="grid-header-row grid-pane-track" :style="leftTrackStyle">
           <div class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header" :style="resolvedIndexColumnStyle">
@@ -302,7 +302,7 @@
             @click="toggleGroupRow(row)"
             @mouseenter="setHoveredRow(rowOffset)"
           >
-            <div class="grid-cell grid-cell--index" :style="resolvedIndexColumnStyle">
+            <div class="grid-cell grid-cell--index" :style="resolvedIndexColumnStyle" @click.stop="handleGroupCellClick(row)">
               {{ rowIndexLabel(row, rowOffset) }}
               <button
                 v-if="mode === 'base'"
@@ -323,6 +323,7 @@
               :data-column-index="columnIndexByKey(column.key)"
               :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
+              @click.stop="handleGroupCellClick(row)"
               @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
               @mouseleave="clearRangeMoveHandleHover"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
@@ -413,6 +414,7 @@
                 :data-column-index="columnIndexByKey(column.key)"
                 :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
                 @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
+                @click.stop="handleGroupCellClick(row)"
                 @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
                 @mouseleave="clearRangeMoveHandleHover"
                 @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
@@ -500,6 +502,7 @@
               :data-column-index="columnIndexByKey(column.key)"
               :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
+              @click.stop="handleGroupCellClick(row)"
               @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
               @mouseleave="clearRangeMoveHandleHover"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
@@ -987,6 +990,7 @@ const rightPaneStyle = computed<CSSProperties>(() => ({
 }))
 
 const stageRootEl = ref<HTMLElement | null>(null)
+const headerShellEl = ref<HTMLElement | null>(null)
 const bodyViewportEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
@@ -1091,6 +1095,13 @@ function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: 
     rowIndex: resolveAbsoluteRowIndex(rowOffset),
     columnIndex,
   }
+}
+
+function handleGroupCellClick(row: TableRow): void {
+  if (row.kind !== "group") {
+    return
+  }
+  props.toggleGroupRow(row)
 }
 
 function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boolean {
@@ -1988,6 +1999,7 @@ function cellStateClasses(row: TableRow, rowOffset: number, columnIndex: number)
 
 defineExpose({
   getStageRootElement: () => stageRootEl.value,
+  getHeaderElement: () => headerShellEl.value,
   getBodyViewportElement: () => bodyViewportEl.value,
 })
 </script>

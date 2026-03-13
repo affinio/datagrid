@@ -187,6 +187,8 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(true)
+    expect(wrapper.find(".datagrid-gantt-stage__splitter").exists()).toBe(true)
+    expect((wrapper.find(".datagrid-gantt-stage__timeline-header").element as HTMLElement).style.height).not.toBe("")
     expect(resolveVm(wrapper).getView?.()).toBe("gantt")
 
     resolveVm(wrapper).setView?.("table")
