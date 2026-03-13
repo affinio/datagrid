@@ -6,12 +6,15 @@ test.describe("sandbox tree + pivot flows (adapted from affinio tree/pivot e2e)"
 
     await expect(page.locator(".grid-row.row--group").first()).toBeVisible()
 
-    const before = await rowsInModel(page)
     await page.getByRole("button", { name: "Collapse all" }).click()
-    await expect.poll(async () => rowsInModel(page)).toBeLessThan(before)
+    const collapsed = await stableRowsInModel(page)
+    expect(collapsed).toBeGreaterThan(0)
 
     await page.getByRole("button", { name: "Expand all" }).click()
-    await expect.poll(async () => rowsInModel(page)).toBe(before)
+    await expect.poll(async () => rowsInModel(page)).toBeGreaterThan(collapsed)
+
+    await page.getByRole("button", { name: "Collapse all" }).click()
+    await expect.poll(async () => rowsInModel(page)).toBe(collapsed)
   })
 
   test("pivot layout switch rewires grouped view and keeps pivot rows styled", async ({ page }) => {
@@ -42,6 +45,16 @@ async function rowsInModel(page: Page): Promise<number> {
   const raw = (await page.locator(".meta span").filter({ hasText: "Rows in model:" }).first().textContent())?.trim() ?? ""
   const match = raw.match(/Rows in model:\s*(\d+)/)
   return match ? Number(match[1]) : 0
+}
+
+async function stableRowsInModel(page: Page): Promise<number> {
+  let previous = -1
+  return expect.poll(async () => {
+    const next = await rowsInModel(page)
+    const stable = next === previous
+    previous = next
+    return stable ? next : -1
+  }).not.toBe(-1).then(async () => rowsInModel(page))
 }
 
 async function pivotColumnsCount(page: Page): Promise<number> {

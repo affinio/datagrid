@@ -3,6 +3,7 @@
     ref="stageRootEl"
     class="grid-stage"
     :class="{
+      'grid-stage--canvas-chrome': true,
       'grid-stage--auto-row-height': mode === 'base' && rowHeightMode === 'auto',
       'grid-stage--range-moving': isRangeMoving,
     }"
@@ -286,11 +287,18 @@
     </div>
 
     <div ref="bodyShellRef" class="grid-body-shell" :style="paneLayoutStyle" @mouseleave="clearHoveredRow">
+      <canvas
+        ref="centerChromeCanvasEl"
+        class="grid-chrome-canvas grid-chrome-canvas--center-shell"
+        :style="centerChromeCanvasStyle"
+        aria-hidden="true"
+      />
       <div
         class="grid-body-pane grid-body-pane--left"
         :style="leftPaneStyle"
         @wheel="handleLinkedViewportWheel"
       >
+        <canvas ref="leftChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
         <div ref="leftPaneContentRef" class="grid-pane-content" :style="pinnedContentStyle">
           <div v-if="topSpacerHeight > 0" class="grid-spacer" :style="{ height: `${topSpacerHeight}px` }" />
           <div
@@ -481,6 +489,7 @@
         :style="rightPaneStyle"
         @wheel="handleLinkedViewportWheel"
       >
+        <canvas ref="rightChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
         <div ref="rightPaneContentRef" class="grid-pane-content" :style="pinnedContentStyle">
           <div v-if="topSpacerHeight > 0" class="grid-spacer" :style="{ height: `${topSpacerHeight}px` }" />
           <div
@@ -989,19 +998,31 @@ const rightPaneStyle = computed<CSSProperties>(() => ({
   maxWidth: `${rightPaneWidth.value}px`,
 }))
 
+const centerChromeCanvasStyle = computed<CSSProperties>(() => ({
+  left: `${leftPaneWidth.value}px`,
+  width: `${Math.max(0, bodyViewportClientWidth.value)}px`,
+  height: `${Math.max(0, bodyViewportClientHeight.value)}px`,
+}))
+
 const stageRootEl = ref<HTMLElement | null>(null)
 const headerShellEl = ref<HTMLElement | null>(null)
 const bodyViewportEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
+const leftChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const centerChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const rightChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const hoveredRangeMoveHandleCell = ref<{ rowIndex: number; columnIndex: number } | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
 const fillActionMenuOpen = ref(false)
+const bodyViewportScrollTop = ref(0)
 const bodyViewportScrollLeft = ref(0)
 const bodyViewportClientWidth = ref(0)
 const bodyViewportClientHeight = ref(0)
 const bodyViewportTopOffset = ref(0)
+let gridChromeAnimationFrame = 0
+let gridChromeResizeObserver: ResizeObserver | null = null
 
 function clearRangeMoveHandleHover(): void {
   hoveredRangeMoveHandleCell.value = null
@@ -1201,6 +1222,8 @@ function captureBodyViewportRef(value: Element | ComponentPublicInstance | null)
   bodyViewportEl.value = resolveElementRef(value)
   props.bodyViewportRef(value)
   syncBodyViewportMetrics()
+  connectGridChromeResizeObserver()
+  scheduleGridChromeRedraw()
 }
 
 function syncBodyViewportMetrics(): void {
@@ -1211,10 +1234,210 @@ function syncBodyViewportMetrics(): void {
   }
   const viewportRect = viewport.getBoundingClientRect()
   const shellRect = shell.getBoundingClientRect()
+  bodyViewportScrollTop.value = viewport.scrollTop
   bodyViewportScrollLeft.value = viewport.scrollLeft
   bodyViewportClientWidth.value = viewport.clientWidth
   bodyViewportClientHeight.value = viewport.clientHeight
   bodyViewportTopOffset.value = Math.max(0, viewportRect.top - shellRect.top)
+}
+
+function resolveGridChromeDevicePixelRatio(): number {
+  if (typeof window === "undefined") {
+    return 1
+  }
+  return Math.max(1, window.devicePixelRatio || 1)
+}
+
+function resolveGridChromeColor(variableName: string, fallback: string): string {
+  const root = stageRootEl.value
+  if (!root || typeof window === "undefined") {
+    return fallback
+  }
+  const value = window.getComputedStyle(root).getPropertyValue(variableName).trim()
+  return value || fallback
+}
+
+function resolveGridChromeLineWidth(variableName: string, fallback: number): number {
+  const root = stageRootEl.value
+  if (!root || typeof window === "undefined") {
+    return fallback
+  }
+  const value = Number.parseFloat(window.getComputedStyle(root).getPropertyValue(variableName))
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function prepareGridChromeCanvas(
+  canvas: HTMLCanvasElement | null,
+  width: number,
+  height: number,
+): CanvasRenderingContext2D | null {
+  if (!canvas || width <= 0 || height <= 0) {
+    if (canvas) {
+      const context = canvas.getContext("2d")
+      context?.clearRect(0, 0, canvas.width, canvas.height)
+    }
+    return null
+  }
+  const dpr = resolveGridChromeDevicePixelRatio()
+  const pixelWidth = Math.max(1, Math.round(width * dpr))
+  const pixelHeight = Math.max(1, Math.round(height * dpr))
+  if (canvas.width !== pixelWidth) {
+    canvas.width = pixelWidth
+  }
+  if (canvas.height !== pixelHeight) {
+    canvas.height = pixelHeight
+  }
+  const context = canvas.getContext("2d")
+  if (!context) {
+    return null
+  }
+  context.setTransform(dpr, 0, 0, dpr, 0, 0)
+  context.clearRect(0, 0, width, height)
+  return context
+}
+
+function drawGridChromeHorizontalLines(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  scrollTop: number,
+  rowDividerColor: string,
+  rowDividerWidth: number,
+): void {
+  if (width <= 0 || height <= 0 || rowDividerWidth <= 0) {
+    return
+  }
+  context.save()
+  context.strokeStyle = rowDividerColor
+  context.lineWidth = rowDividerWidth
+  context.beginPath()
+  for (const metric of rowMetrics.value) {
+    const y = Math.round((metric.top + metric.height) - scrollTop) - 0.5
+    if (y < -rowDividerWidth || y > height + rowDividerWidth) {
+      continue
+    }
+    context.moveTo(0, y)
+    context.lineTo(width, y)
+  }
+  context.stroke()
+  context.restore()
+}
+
+function drawGridChromeVerticalLines(
+  context: CanvasRenderingContext2D,
+  height: number,
+  scrollLeft: number,
+  widths: readonly number[],
+  columnDividerColor: string,
+  columnDividerWidth: number,
+  offset = 0,
+): void {
+  if (height <= 0 || columnDividerWidth <= 0 || widths.length === 0) {
+    return
+  }
+  context.save()
+  context.strokeStyle = columnDividerColor
+  context.lineWidth = columnDividerWidth
+  context.beginPath()
+  let currentX = offset
+  for (const width of widths) {
+    currentX += width
+    const x = Math.round(currentX - scrollLeft) - 0.5
+    context.moveTo(x, 0)
+    context.lineTo(x, height)
+  }
+  context.stroke()
+  context.restore()
+}
+
+function drawGridChromeCanvas(): void {
+  gridChromeAnimationFrame = 0
+  const viewportHeight = bodyViewportClientHeight.value
+  const scrollTop = bodyViewportScrollTop.value
+  const scrollLeft = bodyViewportScrollLeft.value
+  const rowDividerColor = resolveGridChromeColor("--datagrid-row-divider-color", "rgba(0, 0, 0, 0.08)")
+  const columnDividerColor = resolveGridChromeColor("--datagrid-column-divider-color", "rgba(0, 0, 0, 0.08)")
+  const rowDividerWidth = resolveGridChromeLineWidth("--datagrid-row-divider-size", 1)
+  const columnDividerWidth = resolveGridChromeLineWidth("--datagrid-column-divider-size", 1)
+
+  const leftContext = prepareGridChromeCanvas(leftChromeCanvasEl.value, leftPaneWidth.value, viewportHeight)
+  if (leftContext) {
+    drawGridChromeHorizontalLines(leftContext, leftPaneWidth.value, viewportHeight, scrollTop, rowDividerColor, rowDividerWidth)
+    drawGridChromeVerticalLines(
+      leftContext,
+      viewportHeight,
+      0,
+      [
+        indexColumnWidthPx.value,
+        ...pinnedLeftColumns.value.map(resolveColumnWidth),
+      ],
+      columnDividerColor,
+      columnDividerWidth,
+    )
+  }
+
+  const centerContext = prepareGridChromeCanvas(centerChromeCanvasEl.value, bodyViewportClientWidth.value, viewportHeight)
+  if (centerContext) {
+    drawGridChromeHorizontalLines(centerContext, bodyViewportClientWidth.value, viewportHeight, scrollTop, rowDividerColor, rowDividerWidth)
+    const centerWidths = [
+      props.leftColumnSpacerWidth,
+      ...props.renderedColumns.map(resolveColumnWidth),
+      props.rightColumnSpacerWidth,
+    ].filter(width => width > 0)
+    drawGridChromeVerticalLines(
+      centerContext,
+      viewportHeight,
+      scrollLeft,
+      centerWidths,
+      columnDividerColor,
+      columnDividerWidth,
+    )
+  }
+
+  const rightContext = prepareGridChromeCanvas(rightChromeCanvasEl.value, rightPaneWidth.value, viewportHeight)
+  if (rightContext) {
+    drawGridChromeHorizontalLines(rightContext, rightPaneWidth.value, viewportHeight, scrollTop, rowDividerColor, rowDividerWidth)
+    drawGridChromeVerticalLines(
+      rightContext,
+      viewportHeight,
+      0,
+      pinnedRightColumns.value.map(resolveColumnWidth),
+      columnDividerColor,
+      columnDividerWidth,
+    )
+  }
+}
+
+function scheduleGridChromeRedraw(): void {
+  if (typeof window === "undefined") {
+    drawGridChromeCanvas()
+    return
+  }
+  if (gridChromeAnimationFrame !== 0) {
+    return
+  }
+  gridChromeAnimationFrame = window.requestAnimationFrame(() => {
+    drawGridChromeCanvas()
+  })
+}
+
+function connectGridChromeResizeObserver(): void {
+  if (typeof ResizeObserver === "undefined") {
+    return
+  }
+  if (!gridChromeResizeObserver) {
+    gridChromeResizeObserver = new ResizeObserver(() => {
+      syncBodyViewportMetrics()
+      scheduleGridChromeRedraw()
+    })
+  }
+  gridChromeResizeObserver.disconnect()
+  if (bodyViewportEl.value) {
+    gridChromeResizeObserver.observe(bodyViewportEl.value)
+  }
+  if (bodyShellRef.value) {
+    gridChromeResizeObserver.observe(bodyShellRef.value)
+  }
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -1469,6 +1692,7 @@ function handleCenterViewportScroll(event: Event): void {
   }
   linkedPaneScrollSync.onSourceScroll(element.scrollTop)
   syncBodyViewportMetrics()
+  scheduleGridChromeRedraw()
 }
 
 function handleLinkedViewportWheel(event: WheelEvent): void {
@@ -1482,6 +1706,12 @@ function handleBodyViewportWheel(event: WheelEvent): void {
 onBeforeUnmount(() => {
   linkedPaneScrollSync.reset()
   managedWheelScroll.reset()
+  if (gridChromeAnimationFrame !== 0 && typeof window !== "undefined") {
+    window.cancelAnimationFrame(gridChromeAnimationFrame)
+    gridChromeAnimationFrame = 0
+  }
+  gridChromeResizeObserver?.disconnect()
+  gridChromeResizeObserver = null
   if (typeof window !== "undefined") {
     window.removeEventListener("resize", syncBodyViewportMetrics)
   }
@@ -1489,6 +1719,8 @@ onBeforeUnmount(() => {
 
 onMounted(() => {
   syncBodyViewportMetrics()
+  connectGridChromeResizeObserver()
+  scheduleGridChromeRedraw()
   if (typeof window !== "undefined") {
     window.addEventListener("resize", syncBodyViewportMetrics)
   }
@@ -1520,6 +1752,44 @@ const rowMetrics = computed(() => {
   })
   return metrics
 })
+
+const rowMetricsSignature = computed(() => (
+  rowMetrics.value.map(metric => `${metric.top}:${metric.height}`).join("|")
+))
+
+const leftChromeColumnsSignature = computed(() => (
+  [
+    indexColumnWidthPx.value,
+    ...pinnedLeftColumns.value.map(resolveColumnWidth),
+  ].join("|")
+))
+
+const centerChromeColumnsSignature = computed(() => (
+  [
+    props.leftColumnSpacerWidth,
+    ...props.renderedColumns.map(resolveColumnWidth),
+    props.rightColumnSpacerWidth,
+  ].join("|")
+))
+
+const rightChromeColumnsSignature = computed(() => (
+  pinnedRightColumns.value.map(resolveColumnWidth).join("|")
+))
+
+watch(
+  () => [
+    leftPaneWidth.value,
+    rightPaneWidth.value,
+    rowMetricsSignature.value,
+    leftChromeColumnsSignature.value,
+    centerChromeColumnsSignature.value,
+    rightChromeColumnsSignature.value,
+  ].join("|"),
+  () => {
+    syncBodyViewportMetrics()
+    scheduleGridChromeRedraw()
+  },
+)
 
 function resolveVisibleRowMetricsFromDom(): readonly { top: number; height: number }[] {
   const viewport = bodyViewportEl.value
@@ -1762,14 +2032,18 @@ function buildOverlaySegment(
     borderStyle?: "solid" | "dashed"
   },
 ): OverlaySegment {
+  const topBleed = 1
+  const bottomBleed = 1
+  const leftBleed = options?.omitLeftBorder ? 0 : 1
+  const rightBleed = options?.omitRightBorder ? 0 : 1
   return {
     key,
     style: {
       position: "absolute",
-      top: `${top}px`,
-      left: `${left}px`,
-      width: `${Math.max(1, width)}px`,
-      height: `${Math.max(1, height)}px`,
+      top: `${top - topBleed}px`,
+      left: `${left - leftBleed}px`,
+      width: `${Math.max(1, width + leftBleed + rightBleed)}px`,
+      height: `${Math.max(1, height + topBleed + bottomBleed)}px`,
       border: `2px ${options?.borderStyle ?? "solid"} ${options?.borderColor ?? "var(--datagrid-selection-overlay-border)"}`,
       borderLeftWidth: options?.omitLeftBorder ? "0px" : "2px",
       borderRightWidth: options?.omitRightBorder ? "0px" : "2px",

@@ -642,14 +642,26 @@ const DATA_GRID_APP_STYLES = `
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   flex: 1 1 auto;
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 0;
   min-width: 0;
-  border: 1px solid var(--datagrid-glass-border);
+  border: 0;
   border-radius: 8px;
   overflow: hidden;
   background: var(--datagrid-background-color);
+}
+
+.grid-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid var(--datagrid-glass-border);
+  border-radius: inherit;
+  box-sizing: border-box;
+  z-index: 8;
 }
 
 .grid-header-shell,
@@ -659,6 +671,7 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .grid-body-shell {
+  position: relative;
   min-height: 0;
 }
 
@@ -667,6 +680,16 @@ const DATA_GRID_APP_STYLES = `
   min-width: 0;
   overflow: hidden;
   position: relative;
+}
+
+.grid-header-pane--left,
+.grid-body-pane--left {
+  border-right: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color);
+}
+
+.grid-header-pane--right,
+.grid-body-pane--right {
+  border-left: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color);
 }
 
 .grid-header-pane {
@@ -690,6 +713,7 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-body-viewport {
   overflow: auto;
+  position: relative;
   min-width: 0;
   min-height: 0;
   background: var(--datagrid-viewport-bg);
@@ -720,12 +744,29 @@ const DATA_GRID_APP_STYLES = `
 .grid-body-content {
   min-width: 100%;
   position: relative;
+  z-index: 1;
 }
 
 .grid-pane-content {
   min-width: 100%;
   position: relative;
+  z-index: 1;
   will-change: transform;
+}
+
+.grid-chrome-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.grid-chrome-canvas--center-shell {
+  top: 0;
+  bottom: auto;
 }
 
 .grid-column-spacer {
@@ -761,6 +802,12 @@ const DATA_GRID_APP_STYLES = `
   user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;
+}
+
+.grid-stage--canvas-chrome .grid-body-shell .grid-cell,
+.grid-stage--canvas-chrome .grid-body-shell .grid-cell--index {
+  border-bottom-color: transparent;
+  border-right-color: transparent;
 }
 
 .grid-cell:focus,
@@ -1003,6 +1050,10 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-row .grid-cell--index {
   background: var(--datagrid-index-cell-background-color);
+}
+
+.grid-stage--canvas-chrome .grid-body-shell .grid-cell--index {
+  border-right-color: transparent;
 }
 
 .grid-row--striped .grid-cell,
