@@ -1374,6 +1374,78 @@ export function createDataGridSpreadsheetSheetModel(
     return true
   }
 
+  function shiftFormulaAnalysisByRowOffset(
+    analysis: DataGridSpreadsheetCellInputAnalysis,
+    rowOffset: number,
+  ): DataGridSpreadsheetCellInputAnalysis {
+    if (analysis.kind !== "formula" || analysis.references.length === 0 || rowOffset === 0) {
+      return analysis
+    }
+
+    let changed = false
+    const nextReferences = analysis.references.map((reference): DataGridSpreadsheetFormulaReferenceSpan => {
+      if (
+        reference.rowSelector.kind !== "current"
+        && reference.rowSelector.kind !== "relative"
+        && reference.rowSelector.kind !== "window"
+      ) {
+        return reference
+      }
+      const nextTargetRowIndexes = Object.freeze(reference.targetRowIndexes.map(targetRowIndex => targetRowIndex + rowOffset))
+      if (arraysEqual(reference.targetRowIndexes, nextTargetRowIndexes)) {
+        return reference
+      }
+      changed = true
+      return Object.freeze({
+        ...reference,
+        targetRowIndexes: nextTargetRowIndexes,
+      })
+    })
+
+    if (!changed) {
+      return analysis
+    }
+    return {
+      ...analysis,
+      references: Object.freeze(nextReferences),
+    }
+  }
+
+  function relocateFormulaCellState(
+    formulaCell: SpreadsheetFormulaCellState,
+    nextCellKey: string,
+    nextRow: SpreadsheetRowState,
+    rowOffset: number,
+  ): SpreadsheetFormulaCellState {
+    const nextAddress = createCellAddress(sheetId, nextRow, formulaCell.address.columnKey)
+    const nextAnalysis = shiftFormulaAnalysisByRowOffset(formulaCell.analysis, rowOffset)
+    const nextDependencies = Object.freeze(
+      formulaCell.dependencies
+        .map((dependency) => {
+          const dependencyRow = rows[dependency.rowIndex + rowOffset]
+          if (!dependencyRow) {
+            return null
+          }
+          return createCellAddress(sheetId, dependencyRow, dependency.columnKey)
+        })
+        .filter((dependency): dependency is DataGridSpreadsheetCellAddress => dependency != null),
+    )
+    return {
+      key: nextCellKey,
+      address: nextAddress,
+      analysis: nextAnalysis,
+      formulaModel: formulaCell.formulaModel,
+      formulaRuntime: formulaCell.formulaRuntime,
+      compiled: formulaCell.compiled,
+      dependencies: nextDependencies,
+      dependencyKeys: Object.freeze(nextDependencies.map(dependency => makeCellKey(
+        dependency.rowIndex,
+        dependency.columnKey,
+      ))),
+      contextKeys: formulaCell.contextKeys,
+    }
+  }
+
   function createFormulaCellState(
     cellKey: string,
     address: DataGridSpreadsheetCellAddress,
@@ -1531,6 +1603,7 @@ export function createDataGridSpreadsheetSheetModel(
       const nextRowIndex = previousRowIndex >= mutation.index
         ? previousRowIndex + (mutation.kind === "insert" ? mutation.count : -mutation.count)
         : previousRowIndex
+      const rowOffset = nextRowIndex - previousRowIndex
       const nextRow = rows[nextRowIndex]
       if (!nextRow) {
         continue
@@ -1541,6 +1614,24 @@ export function createDataGridSpreadsheetSheetModel(
         continue
       }
       const rawInputChanged = nextRawInput !== previousFormulaCell.analysis.rawInput
+      if (
+        !rawInputChanged
+        && rowOffset !== 0
+        && (
+          (mutation.kind === "insert" && canPreserveMovedFormulaValueOnInsert(previousFormulaCell, mutation.index))
+          || (mutation.kind === "remove" && canPreserveMovedFormulaValueOnRemove(previousFormulaCell, mutation.index, mutation.count))
+        )
+      ) {
+        registerFormulaCellStateInMaps(
+          maps,
+          relocateFormulaCellState(previousFormulaCell, nextCellKey, nextRow, rowOffset),
+        )
+        preservedFormulaValues.set(
+          nextCellKey,
+          previousFormulaValues.get(previousFormulaCell.key),
+        )
+        continue
+      }
       const analysis = rawInputChanged
         ? analyzeCellInput(nextRawInput, nextRowIndex)
         : retargetFormulaAnalysis(previousFormulaCell.analysis, nextRowIndex)
@@ -1581,26 +1672,6 @@ export function createDataGridSpreadsheetSheetModel(
         continue
       }
       if (nextRowIndex !== previousRowIndex) {
-        if (
-          mutation.kind === "insert"
-          && canPreserveMovedFormulaValueOnInsert(previousFormulaCell, mutation.index)
-        ) {
-          preservedFormulaValues.set(
-            nextCellKey,
-            previousFormulaValues.get(previousFormulaCell.key),
-          )
-          continue
-        }
-        if (
-          mutation.kind === "remove"
-          && canPreserveMovedFormulaValueOnRemove(previousFormulaCell, mutation.index, mutation.count)
-        ) {
-          preservedFormulaValues.set(
-            nextCellKey,
-            previousFormulaValues.get(previousFormulaCell.key),
-          )
-          continue
-        }
         dirtyFormulaKeys.add(nextCellKey)
       }
     }
