@@ -718,6 +718,7 @@ export function createDataGridSpreadsheetSheetModel(
   const dependentsByCellKey = new Map<string, Set<string>>()
   const formulaTablesByContextKey = new Map<string, DataGridFormulaTableSource>()
   const compiledFormulaArtifactByExactFormula = new Map<string, DataGridCompiledFormulaArtifact<Record<string, unknown>>>()
+  const reusableCurrentRowFormulaAnalysisByRawInput = new Map<string, DataGridSpreadsheetCellInputAnalysis>()
   let formulaStructuralReferenceIndexRevision = -1
   let formulaStructuralCellKeysBySheetAlias = new Map<string, readonly string[]>()
   const tableSource = {
@@ -1237,6 +1238,17 @@ export function createDataGridSpreadsheetSheetModel(
     rawInput: string,
     rowIndex: number,
   ): DataGridSpreadsheetCellInputAnalysis {
+    const cachedAnalysis = reusableCurrentRowFormulaAnalysisByRawInput.get(rawInput)
+    if (cachedAnalysis) {
+      return {
+        ...cachedAnalysis,
+        references: Object.freeze(cachedAnalysis.references.map(reference => Object.freeze({
+          ...reference,
+          targetRowIndexes: Object.freeze([rowIndex]),
+        }))),
+      }
+    }
+
     return analyzeDataGridSpreadsheetCellInput(rawInput, {
       currentRowIndex: rowIndex,
       rowCount: rows.length,
@@ -1244,6 +1256,25 @@ export function createDataGridSpreadsheetSheetModel(
       functionRegistry,
       referenceParserOptions,
     })
+  }
+
+  function cacheReusableCurrentRowFormulaAnalysis(
+    analysis: DataGridSpreadsheetCellInputAnalysis,
+  ): void {
+    if (
+      analysis.kind !== "formula"
+      || !analysis.isFormulaValid
+      || analysis.diagnostics.length > 0
+      || analysis.references.length === 0
+    ) {
+      return
+    }
+    for (const reference of analysis.references) {
+      if (!isCurrentSheetReference(reference.sheetReference) || reference.rowSelector.kind !== "current") {
+        return
+      }
+    }
+    reusableCurrentRowFormulaAnalysisByRawInput.set(analysis.rawInput, analysis)
   }
 
   function arraysEqual(
@@ -1304,11 +1335,38 @@ export function createDataGridSpreadsheetSheetModel(
       if (!isCurrentSheetReference(reference.sheetReference)) {
         continue
       }
-      if (reference.rowSelector.kind !== "relative") {
+      if (
+        reference.rowSelector.kind !== "current"
+        && reference.rowSelector.kind !== "relative"
+      ) {
         return false
       }
       for (const targetRowIndex of reference.targetRowIndexes) {
         if (targetRowIndex < insertIndex) {
+          return false
+        }
+      }
+    }
+    return true
+  }
+
+  function canPreserveMovedFormulaValueOnRemove(
+    formulaCell: SpreadsheetFormulaCellState,
+    removeIndex: number,
+    removedRowCount: number,
+  ): boolean {
+    for (const reference of formulaCell.analysis.references) {
+      if (!isCurrentSheetReference(reference.sheetReference)) {
+        continue
+      }
+      if (
+        reference.rowSelector.kind !== "current"
+        && reference.rowSelector.kind !== "relative"
+      ) {
+        return false
+      }
+      for (const targetRowIndex of reference.targetRowIndexes) {
+        if (targetRowIndex < removeIndex + removedRowCount) {
           return false
         }
       }
@@ -1417,6 +1475,7 @@ export function createDataGridSpreadsheetSheetModel(
         continue
       }
       const analysis = analyzeCellInput(rawInput, address.rowIndex)
+      cacheReusableCurrentRowFormulaAnalysis(analysis)
       if (analysis.kind !== "formula") {
         continue
       }
@@ -1485,6 +1544,9 @@ export function createDataGridSpreadsheetSheetModel(
       const analysis = rawInputChanged
         ? analyzeCellInput(nextRawInput, nextRowIndex)
         : retargetFormulaAnalysis(previousFormulaCell.analysis, nextRowIndex)
+      if (rawInputChanged) {
+        cacheReusableCurrentRowFormulaAnalysis(analysis)
+      }
       if (analysis.kind !== "formula") {
         continue
       }
@@ -1529,6 +1591,16 @@ export function createDataGridSpreadsheetSheetModel(
           )
           continue
         }
+        if (
+          mutation.kind === "remove"
+          && canPreserveMovedFormulaValueOnRemove(previousFormulaCell, mutation.index, mutation.count)
+        ) {
+          preservedFormulaValues.set(
+            nextCellKey,
+            previousFormulaValues.get(previousFormulaCell.key),
+          )
+          continue
+        }
         dirtyFormulaKeys.add(nextCellKey)
       }
     }
@@ -1550,6 +1622,7 @@ export function createDataGridSpreadsheetSheetModel(
             continue
           }
           const analysis = analyzeCellInput(getStoredRawInput(rowIndex, columnKey)!, rowIndex)
+          cacheReusableCurrentRowFormulaAnalysis(analysis)
           if (analysis.kind !== "formula") {
             continue
           }
