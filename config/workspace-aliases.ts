@@ -23,6 +23,8 @@ const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/datagrid-core/*": "packages/datagrid-core/src/*",
   "@affino/datagrid-orchestration": "packages/datagrid-orchestration/src/index.ts",
   "@affino/datagrid-orchestration/*": "packages/datagrid-orchestration/src/*",
+  "@affino/datagrid-gantt": "packages/datagrid-gantt/src/index.ts",
+  "@affino/datagrid-gantt/*": "packages/datagrid-gantt/src/*",
   "@affino/datagrid-vue/advanced": "packages/datagrid-vue/src/advanced.ts",
   "@affino/datagrid-vue/worker": "packages/datagrid-vue/src/worker.ts",
   "@affino/datagrid-vue": "packages/datagrid-vue/src/index.ts",
