@@ -719,6 +719,7 @@ export function createDataGridSpreadsheetSheetModel(
   const formulaTablesByContextKey = new Map<string, DataGridFormulaTableSource>()
   const compiledFormulaArtifactByExactFormula = new Map<string, DataGridCompiledFormulaArtifact<Record<string, unknown>>>()
   const reusableCurrentRowFormulaAnalysisByRawInput = new Map<string, DataGridSpreadsheetCellInputAnalysis>()
+  const reusableCurrentRowFormulaTemplateByKey = new Map<string, SpreadsheetFormulaCellState>()
   let formulaStructuralReferenceIndexRevision = -1
   let formulaStructuralCellKeysBySheetAlias = new Map<string, readonly string[]>()
   const tableSource = {
@@ -1261,20 +1262,36 @@ export function createDataGridSpreadsheetSheetModel(
   function cacheReusableCurrentRowFormulaAnalysis(
     analysis: DataGridSpreadsheetCellInputAnalysis,
   ): void {
+    if (!isReusableCurrentRowFormulaAnalysis(analysis)) {
+      return
+    }
+    reusableCurrentRowFormulaAnalysisByRawInput.set(analysis.rawInput, analysis)
+  }
+
+  function isReusableCurrentRowFormulaAnalysis(
+    analysis: DataGridSpreadsheetCellInputAnalysis,
+  ): analysis is DataGridSpreadsheetCellInputAnalysis & { kind: "formula" } {
     if (
       analysis.kind !== "formula"
       || !analysis.isFormulaValid
       || analysis.diagnostics.length > 0
       || analysis.references.length === 0
     ) {
-      return
+      return false
     }
     for (const reference of analysis.references) {
       if (!isCurrentSheetReference(reference.sheetReference) || reference.rowSelector.kind !== "current") {
-        return
+        return false
       }
     }
-    reusableCurrentRowFormulaAnalysisByRawInput.set(analysis.rawInput, analysis)
+    return true
+  }
+
+  function makeReusableCurrentRowFormulaTemplateKey(
+    rawInput: string,
+    columnKey: string,
+  ): string {
+    return `${columnKey}\u0000${rawInput}`
   }
 
   function arraysEqual(
@@ -1551,6 +1568,24 @@ export function createDataGridSpreadsheetSheetModel(
       if (analysis.kind !== "formula") {
         continue
       }
+      const reusableTemplateKey = isReusableCurrentRowFormulaAnalysis(analysis)
+        ? makeReusableCurrentRowFormulaTemplateKey(analysis.rawInput, address.columnKey)
+        : null
+      const reusableTemplate = reusableTemplateKey
+        ? reusableCurrentRowFormulaTemplateByKey.get(reusableTemplateKey)
+        : null
+      if (reusableTemplate) {
+        registerFormulaCellStateInMaps(
+          maps,
+          relocateFormulaCellState(
+            reusableTemplate,
+            cellKey,
+            rows[address.rowIndex]!,
+            address.rowIndex - reusableTemplate.address.rowIndex,
+          ),
+        )
+        continue
+      }
       const formulaModel = createDataGridSpreadsheetCellFormulaModel(analysis, {
         referenceParserOptions,
       })
@@ -1558,10 +1593,11 @@ export function createDataGridSpreadsheetSheetModel(
       if (!formulaModel || !formulaRuntime) {
         continue
       }
-      registerFormulaCellStateInMaps(
-        maps,
-        createFormulaCellState(cellKey, address, analysis, formulaModel, formulaRuntime),
-      )
+      const formulaCellState = createFormulaCellState(cellKey, address, analysis, formulaModel, formulaRuntime)
+      registerFormulaCellStateInMaps(maps, formulaCellState)
+      if (reusableTemplateKey) {
+        reusableCurrentRowFormulaTemplateByKey.set(reusableTemplateKey, formulaCellState)
+      }
     }
 
     return maps
@@ -1697,24 +1733,44 @@ export function createDataGridSpreadsheetSheetModel(
           if (analysis.kind !== "formula") {
             continue
           }
+          const reusableTemplateKey = isReusableCurrentRowFormulaAnalysis(analysis)
+            ? makeReusableCurrentRowFormulaTemplateKey(analysis.rawInput, columnKey)
+            : null
+          const reusableTemplate = reusableTemplateKey
+            ? reusableCurrentRowFormulaTemplateByKey.get(reusableTemplateKey)
+            : null
+          const row = rows[rowIndex]
+          if (reusableTemplate && row) {
+            registerFormulaCellStateInMaps(
+              maps,
+              relocateFormulaCellState(
+                reusableTemplate,
+                cellKey,
+                row,
+                rowIndex - reusableTemplate.address.rowIndex,
+              ),
+            )
+            dirtyFormulaKeys.add(cellKey)
+            continue
+          }
           const formulaModel = createDataGridSpreadsheetCellFormulaModel(analysis, {
             referenceParserOptions,
           })
           const formulaRuntime = createDataGridSpreadsheetCellFormulaRuntimeModel(analysis)
-          const row = rows[rowIndex]
           if (!formulaModel || !formulaRuntime || !row) {
             continue
           }
-          registerFormulaCellStateInMaps(
-            maps,
-            createFormulaCellState(
-              cellKey,
-              createCellAddress(sheetId, row, columnKey),
-              analysis,
-              formulaModel,
-              formulaRuntime,
-            ),
+          const formulaCellState = createFormulaCellState(
+            cellKey,
+            createCellAddress(sheetId, row, columnKey),
+            analysis,
+            formulaModel,
+            formulaRuntime,
           )
+          registerFormulaCellStateInMaps(maps, formulaCellState)
+          if (reusableTemplateKey) {
+            reusableCurrentRowFormulaTemplateByKey.set(reusableTemplateKey, formulaCellState)
+          }
           dirtyFormulaKeys.add(cellKey)
         }
       }
