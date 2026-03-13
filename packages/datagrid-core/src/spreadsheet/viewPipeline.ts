@@ -169,6 +169,8 @@ export interface DataGridSpreadsheetViewJoinStageState {
   rightSheetRevision: number
   selectedColumnKeys: readonly string[]
   rowsByLookupKey: ReadonlyMap<string, readonly SpreadsheetViewRowState[]>
+  sourceRowsById: ReadonlyMap<DataGridRowId, SpreadsheetViewRowState>
+  outputRowsBySourceRowId: ReadonlyMap<DataGridRowId, readonly SpreadsheetViewRowState[]>
 }
 
 export interface DataGridSpreadsheetViewGroupStageStateBucket {
@@ -695,6 +697,8 @@ function createJoinStageState(
     rightSheetRevision: rightSheetModel.getSnapshot().revision,
     selectedColumnKeys: Object.freeze([...selectedColumnKeys]),
     rowsByLookupKey,
+    sourceRowsById: new Map(),
+    outputRowsBySourceRowId: new Map(),
   }
 }
 
@@ -763,15 +767,32 @@ function applyJoinStep(
 
   const cachedJoinStageState = previousJoinStageStatesByKey?.get(joinStageKey)
   const rightSheetRevision = rightSheetModel.getSnapshot().revision
-  const nextJoinStageState = cachedJoinStageState
+  const reusableJoinStageState = cachedJoinStageState
     && cachedJoinStageState.rightSheetId === rightSheetId
     && cachedJoinStageState.rightSheetRevision === rightSheetRevision
       ? cachedJoinStageState
-      : createJoinStageState(rightSheetId, rightSheetModel, rightKey, selections, joinStageKey)
-  nextJoinStageStatesByKey.set(joinStageKey, nextJoinStageState)
+      : null
+  const nextJoinStageState = reusableJoinStageState
+    ?? createJoinStageState(rightSheetId, rightSheetModel, rightKey, selections, joinStageKey)
+
+  const nextSourceRowsById = new Map<DataGridRowId, SpreadsheetViewRowState>()
+  const nextOutputRowsBySourceRowId = new Map<DataGridRowId, readonly SpreadsheetViewRowState[]>()
 
   const rows: SpreadsheetViewRowState[] = []
   for (const row of dataset.rows) {
+    nextSourceRowsById.set(row.id, row)
+    const previousRow = reusableJoinStageState?.sourceRowsById.get(row.id)
+    const cachedOutputRows = reusableJoinStageState?.outputRowsBySourceRowId.get(row.id)
+    if (
+      previousRow
+      && cachedOutputRows
+      && shallowSpreadsheetViewValuesEqual(previousRow.values, row.values)
+    ) {
+      nextOutputRowsBySourceRowId.set(row.id, cachedOutputRows)
+      rows.push(...cachedOutputRows)
+      continue
+    }
+
     const matches = nextJoinStageState.rowsByLookupKey.get(createJoinLookupKey(row.values[leftKey])) ?? []
     if (matches.length > 1 && multiMatch === "error") {
       throw new DataGridSpreadsheetViewMaterializationError(
@@ -782,33 +803,46 @@ function applyJoinStep(
     }
     if (multiMatch === "explode") {
       const fanoutMatches = matches.length > 0 ? matches : (mode === "left" ? [null] : [])
+      const outputRows: SpreadsheetViewRowState[] = []
       for (let matchIndex = 0; matchIndex < fanoutMatches.length; matchIndex += 1) {
         const match = fanoutMatches[matchIndex]
         const values = cloneSpreadsheetViewValues(row.values)
         for (const selection of selections) {
           values[selection.as ?? selection.key] = match?.values[selection.key] ?? null
         }
-        rows.push({
+        outputRows.push({
           id: createJoinExplodedRowId(row.id, match?.id ?? null, matchIndex),
           values,
         })
       }
+      const frozenOutputRows = Object.freeze(outputRows)
+      nextOutputRowsBySourceRowId.set(row.id, frozenOutputRows)
+      rows.push(...frozenOutputRows)
       continue
     }
 
     const match = matches[0] ?? null
     if (!match && mode === "inner") {
+      nextOutputRowsBySourceRowId.set(row.id, Object.freeze([]))
       continue
     }
     const values = cloneSpreadsheetViewValues(row.values)
     for (const selection of selections) {
       values[selection.as ?? selection.key] = match?.values[selection.key] ?? null
     }
-    rows.push({
+    const outputRows = Object.freeze([{
       id: row.id,
       values,
-    })
+    }])
+    nextOutputRowsBySourceRowId.set(row.id, outputRows)
+    rows.push(...outputRows)
   }
+
+  nextJoinStageStatesByKey.set(joinStageKey, {
+    ...nextJoinStageState,
+    sourceRowsById: nextSourceRowsById,
+    outputRowsBySourceRowId: nextOutputRowsBySourceRowId,
+  })
 
   return {
     columns: outputColumns,

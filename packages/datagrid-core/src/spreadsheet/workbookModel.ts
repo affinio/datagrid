@@ -1843,6 +1843,9 @@ export function createDataGridSpreadsheetWorkbookModel(
           normalizeSheetName: normalizeSpreadsheetWorkbookSheetName,
         },
       ))
+      const normalizedActiveSheetId = typeof state.activeSheetId === "string" && state.activeSheetId.trim().length > 0
+        ? normalizeSpreadsheetWorkbookSheetId(state.activeSheetId)
+        : null
 
       for (const sheet of sheets) {
         sheet.unsubscribe?.()
@@ -1897,10 +1900,6 @@ export function createDataGridSpreadsheetWorkbookModel(
           ownSheetModel: true,
         }))
       }
-
-      const normalizedActiveSheetId = typeof state.activeSheetId === "string" && state.activeSheetId.trim().length > 0
-        ? normalizeSpreadsheetWorkbookSheetId(state.activeSheetId)
-        : null
 
       if (normalizedActiveSheetId && sheetsById.has(normalizedActiveSheetId)) {
         activeSheetId = normalizedActiveSheetId

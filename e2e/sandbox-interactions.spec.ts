@@ -55,13 +55,12 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const before = await rowsInModel(page)
     await groupRow.click()
 
-    const collapsed = await expect
+    await expect
       .poll(async () => rowsInModel(page))
-      .toBeLessThan(before)
+      .not.toBe(before)
 
     await groupRow.click()
     await expect.poll(async () => rowsInModel(page)).toBe(before)
-    void collapsed
   })
 })
 

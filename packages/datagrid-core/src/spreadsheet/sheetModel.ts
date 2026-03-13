@@ -185,6 +185,7 @@ export interface DataGridSpreadsheetSheetModel {
   getSheetId(): string | null
   getSheetName(): string | null
   getColumns(): readonly DataGridSpreadsheetColumnSnapshot[]
+  getRowCount(): number
   getRows(): readonly DataGridSpreadsheetRowSnapshot[]
   exportState(): DataGridSpreadsheetSheetState
   restoreState(state: DataGridSpreadsheetSheetState): boolean
@@ -1239,7 +1240,7 @@ export function createDataGridSpreadsheetSheetModel(
     return analyzeDataGridSpreadsheetCellInput(rawInput, {
       currentRowIndex: rowIndex,
       rowCount: rows.length,
-      resolveReferenceRowCount: reference => resolveReferencedSheetModel(reference.sheetReference)?.getSnapshot().rowCount ?? rows.length,
+      resolveReferenceRowCount: reference => resolveReferencedSheetModel(reference.sheetReference)?.getRowCount() ?? rows.length,
       functionRegistry,
       referenceParserOptions,
     })
@@ -1270,7 +1271,7 @@ export function createDataGridSpreadsheetSheetModel(
 
     let changed = false
     const nextReferences = analysis.references.map((reference): DataGridSpreadsheetFormulaReferenceSpan => {
-      const targetRowCount = resolveReferencedSheetModel(reference.sheetReference)?.getSnapshot().rowCount ?? rows.length
+      const targetRowCount = resolveReferencedSheetModel(reference.sheetReference)?.getRowCount() ?? rows.length
       const nextTargetRowIndexes = resolveFormulaTargetRowIndexes(
         reference.rowSelector,
         rowIndex,
@@ -1644,7 +1645,7 @@ export function createDataGridSpreadsheetSheetModel(
           if (hasExplicitExternalSheetReference && !referencedSheetModel) {
             return createMissingSheetReferenceError(compiledReferenceBinding.sheetReference)
           }
-          const targetRowCount = referencedSheetModel?.getSnapshot().rowCount ?? rows.length
+          const targetRowCount = referencedSheetModel?.getRowCount() ?? rows.length
           const targetRowIndexes = resolveFormulaTargetRowIndexes(
             compiledReferenceBinding.rowSelector,
             formulaCell.address.rowIndex,
@@ -1706,7 +1707,7 @@ export function createDataGridSpreadsheetSheetModel(
         if (hasExplicitExternalSheetReference && !referencedSheetModel) {
           return createMissingSheetReferenceError(parsed.sheetReference)
         }
-        const targetRowCount = referencedSheetModel?.getSnapshot().rowCount ?? rows.length
+        const targetRowCount = referencedSheetModel?.getRowCount() ?? rows.length
         const targetRowIndexes = resolveFormulaTargetRowIndexes(
           parsed.rowSelector,
           formulaCell.address.rowIndex,
@@ -2538,6 +2539,9 @@ export function createDataGridSpreadsheetSheetModel(
         title: column.title,
         style: column.style,
       })))
+    },
+    getRowCount() {
+      return rows.length
     },
     getRows() {
       return Object.freeze(rows.map(row => ({

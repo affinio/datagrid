@@ -302,6 +302,10 @@ export function createDataGridSpreadsheetDerivedSheetModel(
       ensureActive()
       return runtime.columns
     },
+    getRowCount() {
+      ensureActive()
+      return runtime.rows.length
+    },
     getRows() {
       ensureActive()
       return Object.freeze(runtime.rows.map((row, rowIndex) => ({
