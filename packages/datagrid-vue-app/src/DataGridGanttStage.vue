@@ -113,6 +113,7 @@ interface DataGridTableStageExpose {
   getBodyViewportElement: () => HTMLElement | null
   getHeaderElement: () => HTMLElement | null
   getStageRootElement: () => HTMLElement | null
+  getVisibleRowMetrics: () => readonly { top: number; height: number }[]
 }
 
 interface ActiveDragState {
@@ -465,6 +466,15 @@ function resolveRowHeight(rowIndex: number): number {
   return props.runtime.api.view.getRowHeightOverride(rowIndex) ?? props.baseRowHeight
 }
 
+const rowHeightVersion = computed(() => props.runtime.api.view.getRowHeightVersion())
+
+const visibleRowMetrics = computed(() => {
+  void rowHeightVersion.value
+  void displayRowsSignature.value
+  const metrics = tableStageRef.value?.getVisibleRowMetrics() ?? []
+  return metrics
+})
+
 const timelineState = computed(() => {
   if (!props.gantt) {
     return null
@@ -492,8 +502,10 @@ const visibleBars = computed<readonly DataGridGanttBarLayout<Record<string, unkn
     return []
   }
   void props.rowVersion
+  void rowHeightVersion.value
   return buildDataGridGanttVisibleBars({
     rows: props.table.displayRows as readonly DataGridRowNode<Record<string, unknown>>[],
+    rowMetrics: visibleRowMetrics.value,
     viewportRowStart: props.table.viewportRowStart,
     scrollTop: tableScrollTop.value,
     topSpacerHeight: props.table.topSpacerHeight,
@@ -511,15 +523,12 @@ const visibleBars = computed<readonly DataGridGanttBarLayout<Record<string, unkn
 
 const visibleRowDividerYs = computed<readonly number[]>(() => {
   void props.rowVersion
+  void rowHeightVersion.value
   const dividerYs: number[] = []
-  let currentY = props.table.topSpacerHeight - tableScrollTop.value
   const viewportHeight = Math.max(tableViewportHeight.value, 0)
 
-  props.table.displayRows.forEach((_row, rowOffset) => {
-    const rowIndex = props.table.viewportRowStart + rowOffset
-    const rowHeight = Math.max(1, resolveRowHeight(rowIndex) || props.baseRowHeight)
-    currentY += rowHeight
-    const dividerY = Math.round(currentY) + 0.5
+  visibleRowMetrics.value.forEach(metric => {
+    const dividerY = Math.round(metric.top - tableScrollTop.value + metric.height) + 0.5
     if (dividerY >= -1 && dividerY <= viewportHeight + 1) {
       dividerYs.push(dividerY)
     }
@@ -1558,10 +1567,12 @@ watch(
     props.table.viewportRowStart,
     ganttConfigSignature.value,
     props.rowVersion,
+    rowHeightVersion.value,
   ],
   () => {
     void nextTick(() => {
       attachTableViewport()
+      syncTableViewportMetrics()
       syncTimelineViewportMetrics()
       syncTimelineScrollBounds()
       autoFocusTimelineViewport()
@@ -1583,6 +1594,7 @@ watch(
     visibleBarsSignature.value,
     visibleRowDividerSignature.value,
     timelineStateSignature.value,
+    rowHeightVersion.value,
     props.table.viewportRowStart,
     props.table.topSpacerHeight,
     tableScrollTop.value,

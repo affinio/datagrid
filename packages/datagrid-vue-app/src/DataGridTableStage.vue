@@ -1521,6 +1521,27 @@ const rowMetrics = computed(() => {
   return metrics
 })
 
+function resolveVisibleRowMetricsFromDom(): readonly { top: number; height: number }[] {
+  const viewport = bodyViewportEl.value
+  if (!viewport) {
+    return rowMetrics.value
+  }
+  const viewportRect = viewport.getBoundingClientRect()
+  const rowElements = Array.from(
+    viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row"),
+  )
+  if (rowElements.length !== props.displayRows.length) {
+    return rowMetrics.value
+  }
+  return rowElements.map(rowElement => {
+    const rowRect = rowElement.getBoundingClientRect()
+    return {
+      top: viewport.scrollTop + (rowRect.top - viewportRect.top),
+      height: rowRect.height,
+    }
+  })
+}
+
 const visibleColumnIndexByKey = computed(() => {
   const indexByKey = new Map<string, number>()
   props.visibleColumns.forEach((column, index) => {
@@ -2001,5 +2022,6 @@ defineExpose({
   getStageRootElement: () => stageRootEl.value,
   getHeaderElement: () => headerShellEl.value,
   getBodyViewportElement: () => bodyViewportEl.value,
+  getVisibleRowMetrics: () => resolveVisibleRowMetricsFromDom(),
 })
 </script>

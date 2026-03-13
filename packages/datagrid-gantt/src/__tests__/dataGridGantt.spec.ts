@@ -333,7 +333,7 @@ describe("datagrid-gantt runtime", () => {
     expect(bars[0]!.endMs).toBe(Date.parse("2026-03-18T00:00:00.000Z"))
     expect(bars[0]!.progress).toBe(0)
     expect(bars[0]!.dependencies).toEqual([])
-    expect(bars[0]!.height).toBeGreaterThan(bars[1]!.height)
+    expect(bars[0]!.height).toBe(bars[1]!.height)
     expect(bars[0]!.baselineStartMs).toBeNull()
   })
 

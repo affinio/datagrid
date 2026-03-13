@@ -200,6 +200,7 @@ export interface DataGridGanttRowReader<TRow = unknown> {
 
 export interface BuildDataGridGanttVisibleBarsInput<TRow = unknown> {
   rows: readonly DataGridRowNode<TRow>[]
+  rowMetrics?: readonly { top: number; height: number }[]
   viewportRowStart: number
   scrollTop: number
   topSpacerHeight: number

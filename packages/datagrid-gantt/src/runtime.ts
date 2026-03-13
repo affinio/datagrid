@@ -490,17 +490,19 @@ export function buildDataGridGanttVisibleBars<TRow>(
 
   input.rows.forEach((row, rowOffset) => {
     const rowIndex = input.viewportRowStart + rowOffset
-    const rowHeight = Math.max(1, input.resolveRowHeight(rowIndex) || input.baseRowHeight)
+    const metric = input.rowMetrics?.[rowOffset]
+    const rowHeight = Math.max(1, metric?.height ?? (input.resolveRowHeight(rowIndex) || input.baseRowHeight))
+    const rowTop = metric?.top ?? currentY
     rowContexts.push({
       row,
       rowIndex,
       rowId: row.rowId == null ? String(rowIndex) : String(row.rowId),
       rowUpdateId: row.rowId == null ? rowIndex : row.rowId,
       rowHeight,
-      y: currentY + Math.max(0, (rowHeight - rowBarHeight) / 2),
+      y: (rowTop - input.scrollTop) + Math.max(0, (rowHeight - rowBarHeight) / 2),
       resolvedRow: readResolvedRow(row),
     })
-    currentY += rowHeight
+    currentY = rowTop + rowHeight
   })
 
   const summaryRangesByRowId = new Map<string, { startMs: number; endMs: number }>()
@@ -572,10 +574,8 @@ export function buildDataGridGanttVisibleBars<TRow>(
 
     const summary = context.row.kind === "group" && summaryRange != null
     const computedCritical = input.criticalTaskIds?.has(context.resolvedRow.taskId || context.rowId) ?? false
-    const height = summary
-      ? Math.max(rowBarHeight, Math.min(context.rowHeight, rowBarHeight + 4))
-      : rowBarHeight
-    const y = context.y - ((height - rowBarHeight) / 2)
+    const height = rowBarHeight
+    const y = context.y
     if (y + height < 0 || y > input.viewportHeight) {
       continue
     }
