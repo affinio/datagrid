@@ -151,11 +151,19 @@ export interface DataGridResolvedStyleConfig {
   tokens: DataGridThemeTokens
 }
 
+/**
+ * Optional class-name hooks retained for adapter compatibility.
+ * Modern DataGrid styling should prefer token-driven theming over class slots.
+ */
 export interface DataGridStyleSection {
   wrapper?: string
   container?: string
 }
 
+/**
+ * Optional class-name hooks retained for adapter compatibility.
+ * Modern DataGrid styling should prefer token-driven theming over class slots.
+ */
 export interface DataGridHeaderStyle {
   row?: string
   cell?: string
@@ -163,6 +171,10 @@ export interface DataGridHeaderStyle {
   indexCell?: string
 }
 
+/**
+ * Optional class-name hooks retained for adapter compatibility.
+ * Modern DataGrid styling should prefer token-driven theming over class slots.
+ */
 export interface DataGridBodyStyle {
   row?: string
   cell?: string
@@ -170,18 +182,30 @@ export interface DataGridBodyStyle {
   indexCell?: string
 }
 
+/**
+ * Optional class-name hooks retained for adapter compatibility.
+ * Modern DataGrid styling should prefer token-driven theming over class slots.
+ */
 export interface DataGridGroupStyle {
   row?: string
   cell?: string
   caret?: string
 }
 
+/**
+ * Optional class-name hooks retained for adapter compatibility.
+ * Modern DataGrid styling should prefer token-driven theming over class slots.
+ */
 export interface DataGridSummaryStyle {
   row?: string
   cell?: string
   labelCell?: string
 }
 
+/**
+ * Optional class-name hooks retained for adapter compatibility.
+ * Modern DataGrid styling should prefer token-driven theming over class slots.
+ */
 export interface DataGridStateStyle {
   selectedRow?: string
 }
@@ -189,11 +213,29 @@ export interface DataGridStateStyle {
 export type DataGridThemeTokenVariants = Record<string, Partial<DataGridThemeTokens>>
 
 export interface DataGridStyleConfig {
+  /**
+   * Legacy/compatibility class hooks. Token-driven styling is the preferred path.
+   */
   grid?: DataGridStyleSection
+  /**
+   * Legacy/compatibility class hooks. Token-driven styling is the preferred path.
+   */
   header?: DataGridHeaderStyle
+  /**
+   * Legacy/compatibility class hooks. Token-driven styling is the preferred path.
+   */
   body?: DataGridBodyStyle
+  /**
+   * Legacy/compatibility class hooks. Token-driven styling is the preferred path.
+   */
   group?: DataGridGroupStyle
+  /**
+   * Legacy/compatibility class hooks. Token-driven styling is the preferred path.
+   */
   summary?: DataGridSummaryStyle
+  /**
+   * Legacy/compatibility class hooks. Token-driven styling is the preferred path.
+   */
   state?: DataGridStateStyle
   tokens?: Partial<DataGridThemeTokens>
   tokenVariants?: DataGridThemeTokenVariants

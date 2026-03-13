@@ -1,7 +1,7 @@
 <template>
   <article
     ref="cardRootRef"
-    class="card affino-datagrid-app-root"
+    class="card affino-datagrid-app-root sandbox-core-grid"
   >
     <header class="card__header">
       <h2>{{ title }}</h2>

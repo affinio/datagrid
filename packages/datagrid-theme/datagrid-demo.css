@@ -1,3 +1,6 @@
+/* Demo-only stylesheet asset for legacy/demo surfaces.
+   Modern DataGrid app renderers should prefer token-driven theming plus renderer-owned styles. */
+
 .datagrid-sr-only {
   position: absolute;
   width: 1px;

@@ -2,6 +2,7 @@ import {
   applyGridTheme,
   defaultStyleConfig,
   industrialNeutralTheme,
+  resolveGridThemeTokens,
   sugarTheme,
   type DataGridStyleConfig,
   type DataGridThemeTokens,
@@ -57,21 +58,6 @@ function mergeStyleConfigs(base: DataGridStyleConfig, override: DataGridStyleCon
   }
 }
 
-function resolveDocumentVariant(styleConfig: DataGridStyleConfig, doc?: Document): string | undefined {
-  if (!doc) {
-    return undefined
-  }
-  const datasetTheme = doc.documentElement?.dataset?.theme
-  if (datasetTheme && styleConfig.tokenVariants?.[datasetTheme]) {
-    return datasetTheme
-  }
-  const darkClass = styleConfig.documentDarkClass ?? "dark"
-  if (doc.documentElement?.classList?.contains(darkClass) && styleConfig.tokenVariants?.dark) {
-    return "dark"
-  }
-  return undefined
-}
-
 function isStyleConfig(input: unknown): input is DataGridStyleConfig {
   if (!input || typeof input !== "object") {
     return false
@@ -98,33 +84,23 @@ function resolveThemeStyleConfig(theme: DataGridThemeProp): DataGridStyleConfig 
   }
   if (typeof theme === "string") {
     if (theme === "sugar") {
-      return mergeStyleConfigs(industrialNeutralTheme, sugarTheme)
+      return mergeStyleConfigs(defaultStyleConfig, sugarTheme)
     }
     return DATA_GRID_THEME_PRESETS[theme] ?? defaultStyleConfig
   }
   if (isStyleConfig(theme)) {
-    return mergeStyleConfigs(industrialNeutralTheme, theme)
+    return mergeStyleConfigs(defaultStyleConfig, theme)
   }
-  return mergeStyleConfigs(industrialNeutralTheme, {
+  return mergeStyleConfigs(defaultStyleConfig, {
     tokens: theme,
   })
 }
 
 export function resolveDataGridThemeTokens(theme: DataGridThemeProp): DataGridThemeTokens {
   const styleConfig = resolveThemeStyleConfig(theme)
-  const activeVariant = styleConfig?.inheritThemeFromDocument
-    ? resolveDocumentVariant(styleConfig, typeof document === "undefined" ? undefined : document)
-    : undefined
-  const resolvedVariant = activeVariant ?? styleConfig?.activeTokenVariant ?? styleConfig?.defaultTokenVariant
-  const mergedStyleConfig = mergeStyleConfigs(
-    industrialNeutralTheme,
-    styleConfig ?? defaultStyleConfig,
-  )
-  return {
-    ...((resolvedVariant ? mergedStyleConfig.tokenVariants?.[resolvedVariant] : undefined) ?? {}),
-    ...((mergedStyleConfig.tokens ?? {}) as Partial<DataGridThemeTokens>),
-    ...((styleConfig?.tokens ?? {}) as Partial<DataGridThemeTokens>),
-  } as DataGridThemeTokens
+  return resolveGridThemeTokens(styleConfig ?? defaultStyleConfig, {
+    document: typeof document === "undefined" ? undefined : document,
+  })
 }
 
 export function applyDataGridTheme(rootElement: HTMLElement, theme: DataGridThemeProp): DataGridThemeTokens {

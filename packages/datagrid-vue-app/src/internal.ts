@@ -1,4 +1,8 @@
 export { dataGridAppRootElementKey } from "./dataGridAppContext"
+export {
+  buildDataGridChromePaneModel,
+  buildDataGridChromeRenderModel,
+} from "@affino/datagrid-chrome"
 export { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 export { default as DataGridDefaultRenderer } from "./DataGridDefaultRenderer"
 export { default as DataGridGanttStage } from "./DataGridGanttStage.vue"
@@ -18,6 +22,17 @@ export type {
   DataGridAppInspectorPanel,
   DataGridAppToolbarModule,
 } from "./DataGridModuleHost"
+export type {
+  BuildDataGridChromePaneModelInput,
+  BuildDataGridChromeRenderModelInput,
+  DataGridChromeBand,
+  DataGridChromeLine,
+  DataGridChromePaneModel,
+  DataGridChromeRenderModel,
+  DataGridChromeRowBand,
+  DataGridChromeRowMetric,
+  DataGridChromeVisibleRange,
+} from "@affino/datagrid-chrome"
 export type {
   DataGridAppClientRowModelOptions,
   DataGridAppColumnInput,

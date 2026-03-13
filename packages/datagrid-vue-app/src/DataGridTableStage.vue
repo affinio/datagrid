@@ -9,7 +9,14 @@
     }"
   >
     <div ref="headerShellEl" class="grid-header-shell" :style="paneLayoutStyle">
+      <canvas
+        ref="centerHeaderChromeCanvasEl"
+        class="grid-chrome-canvas grid-chrome-canvas--header-center"
+        :style="centerHeaderChromeCanvasStyle"
+        aria-hidden="true"
+      />
       <div class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="handleLinkedViewportWheel">
+        <canvas ref="leftHeaderChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
         <div class="grid-header-row grid-pane-track" :style="leftTrackStyle">
           <div class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header" :style="resolvedIndexColumnStyle">
             <div class="col-head">
@@ -201,6 +208,7 @@
       </div>
 
       <div class="grid-header-pane grid-header-pane--right" :style="rightPaneStyle" @wheel="handleLinkedViewportWheel">
+        <canvas ref="rightHeaderChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
         <div class="grid-header-row grid-pane-track" :style="rightTrackStyle">
           <template v-if="hasColumnMenu()">
             <DataGridColumnMenu
@@ -625,6 +633,11 @@ import {
   useDataGridLinkedPaneScrollSync,
   useDataGridManagedWheelScroll,
 } from "@affino/datagrid-vue/advanced"
+import {
+  buildDataGridChromeRenderModel,
+  type DataGridChromePaneModel,
+  type DataGridChromeRowBand,
+} from "@affino/datagrid-chrome"
 import DataGridColumnMenu from "./DataGridColumnMenu.vue"
 import type { DataGridTableRow, DataGridTableStageProps } from "./dataGridTableStage.types"
 import { ensureDataGridAppStyles } from "./ensureDataGridAppStyles"
@@ -998,6 +1011,12 @@ const rightPaneStyle = computed<CSSProperties>(() => ({
   maxWidth: `${rightPaneWidth.value}px`,
 }))
 
+const centerHeaderChromeCanvasStyle = computed<CSSProperties>(() => ({
+  left: `${leftPaneWidth.value}px`,
+  width: `${Math.max(0, headerViewportClientWidth.value)}px`,
+  height: `${Math.max(0, headerShellHeight.value)}px`,
+}))
+
 const centerChromeCanvasStyle = computed<CSSProperties>(() => ({
   left: `${leftPaneWidth.value}px`,
   width: `${Math.max(0, bodyViewportClientWidth.value)}px`,
@@ -1010,12 +1029,17 @@ const bodyViewportEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
+const leftHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const centerHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const rightHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const leftChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const centerChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const hoveredRangeMoveHandleCell = ref<{ rowIndex: number; columnIndex: number } | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
 const fillActionMenuOpen = ref(false)
+const headerShellHeight = ref(0)
+const headerViewportClientWidth = ref(0)
 const bodyViewportScrollTop = ref(0)
 const bodyViewportScrollLeft = ref(0)
 const bodyViewportClientWidth = ref(0)
@@ -1169,6 +1193,10 @@ function resolveVisibleRowElement(rowIndex: number): HTMLElement | null {
   return null
 }
 
+function resolveHeaderViewportElement(): HTMLElement | null {
+  return headerShellEl.value?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
+}
+
 function resolveRelativeCellRect(cell: { rowIndex: number; columnIndex: number } | null): {
   left: number
   right: number
@@ -1239,6 +1267,8 @@ function syncBodyViewportMetrics(): void {
   bodyViewportClientWidth.value = viewport.clientWidth
   bodyViewportClientHeight.value = viewport.clientHeight
   bodyViewportTopOffset.value = Math.max(0, viewportRect.top - shellRect.top)
+  headerShellHeight.value = headerShellEl.value?.getBoundingClientRect().height ?? 0
+  headerViewportClientWidth.value = resolveHeaderViewportElement()?.clientWidth ?? bodyViewportClientWidth.value
 }
 
 function resolveGridChromeDevicePixelRatio(): number {
@@ -1298,53 +1328,113 @@ function prepareGridChromeCanvas(
 
 function drawGridChromeHorizontalLines(
   context: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  scrollTop: number,
+  pane: DataGridChromePaneModel,
   rowDividerColor: string,
   rowDividerWidth: number,
 ): void {
-  if (width <= 0 || height <= 0 || rowDividerWidth <= 0) {
+  if (pane.width <= 0 || pane.height <= 0 || rowDividerWidth <= 0) {
     return
   }
   context.save()
   context.strokeStyle = rowDividerColor
   context.lineWidth = rowDividerWidth
   context.beginPath()
-  for (const metric of rowMetrics.value) {
-    const y = Math.round((metric.top + metric.height) - scrollTop) - 0.5
-    if (y < -rowDividerWidth || y > height + rowDividerWidth) {
+  for (const line of pane.horizontalLines) {
+    const y = Math.round(line.position) - 0.5
+    if (y < -rowDividerWidth || y > pane.height + rowDividerWidth) {
       continue
     }
     context.moveTo(0, y)
-    context.lineTo(width, y)
+    context.lineTo(pane.width, y)
   }
   context.stroke()
   context.restore()
 }
 
+function resolveGridChromeBandColor(kind: string): string {
+  switch (kind) {
+    case "base":
+      return resolveGridChromeColor(
+        "--datagrid-row-band-base-bg",
+        "rgba(255, 255, 255, 1)",
+      )
+    case "striped":
+      return resolveGridChromeColor(
+        "--datagrid-row-band-striped-bg",
+        "rgba(59, 130, 246, 0.06)",
+      )
+    case "group":
+      return resolveGridChromeColor(
+        "--datagrid-row-band-group-bg",
+        "rgba(59, 130, 246, 0.08)",
+      )
+    case "tree":
+      return resolveGridChromeColor(
+        "--datagrid-row-band-tree-bg",
+        "rgba(59, 130, 246, 0.12)",
+      )
+    case "pivot":
+      return resolveGridChromeColor(
+        "--datagrid-row-band-pivot-bg",
+        "rgba(59, 130, 246, 0.1)",
+      )
+    case "pivot-group":
+      return resolveGridChromeColor(
+        "--datagrid-row-band-pivot-group-bg",
+        "rgba(59, 130, 246, 0.14)",
+      )
+    default:
+      return ""
+  }
+}
+
+function drawGridChromeBands(
+  context: CanvasRenderingContext2D,
+  pane: DataGridChromePaneModel,
+): void {
+  if (pane.width <= 0 || pane.height <= 0 || pane.bands.length === 0) {
+    return
+  }
+  context.save()
+  for (const band of pane.bands) {
+    const fillStyle = resolveGridChromeBandColor(band.kind)
+    if (!fillStyle) {
+      continue
+    }
+    const top = Math.round(band.top)
+    const height = Math.max(1, Math.round(band.height))
+    const clippedTop = Math.max(0, top)
+    const clippedBottom = Math.min(pane.height, top + height)
+    const clippedHeight = clippedBottom - clippedTop
+    if (clippedHeight <= 0) {
+      continue
+    }
+    context.fillStyle = fillStyle
+    context.fillRect(0, clippedTop, pane.width, clippedHeight)
+  }
+  context.restore()
+}
+
 function drawGridChromeVerticalLines(
   context: CanvasRenderingContext2D,
-  height: number,
-  scrollLeft: number,
-  widths: readonly number[],
+  pane: DataGridChromePaneModel,
   columnDividerColor: string,
   columnDividerWidth: number,
-  offset = 0,
 ): void {
-  if (height <= 0 || columnDividerWidth <= 0 || widths.length === 0) {
+  if (pane.height <= 0 || columnDividerWidth <= 0 || pane.verticalLines.length === 0) {
     return
   }
   context.save()
   context.strokeStyle = columnDividerColor
   context.lineWidth = columnDividerWidth
   context.beginPath()
-  let currentX = offset
-  for (const width of widths) {
-    currentX += width
-    const x = Math.round(currentX - scrollLeft) - 0.5
+  for (const line of pane.verticalLines) {
+    const x = Math.round(line.position) - 0.5
+    if (x < -columnDividerWidth || x > pane.width + columnDividerWidth) {
+      continue
+    }
     context.moveTo(x, 0)
-    context.lineTo(x, height)
+    context.lineTo(x, pane.height)
   }
   context.stroke()
   context.restore()
@@ -1352,59 +1442,60 @@ function drawGridChromeVerticalLines(
 
 function drawGridChromeCanvas(): void {
   gridChromeAnimationFrame = 0
-  const viewportHeight = bodyViewportClientHeight.value
-  const scrollTop = bodyViewportScrollTop.value
-  const scrollLeft = bodyViewportScrollLeft.value
+  const headerRenderModel = headerChromeRenderModel.value
+  const renderModel = chromeRenderModel.value
   const rowDividerColor = resolveGridChromeColor("--datagrid-row-divider-color", "rgba(0, 0, 0, 0.08)")
   const columnDividerColor = resolveGridChromeColor("--datagrid-column-divider-color", "rgba(0, 0, 0, 0.08)")
+  const headerColumnDividerColor = resolveGridChromeColor("--datagrid-header-column-divider-color", columnDividerColor)
   const rowDividerWidth = resolveGridChromeLineWidth("--datagrid-row-divider-size", 1)
   const columnDividerWidth = resolveGridChromeLineWidth("--datagrid-column-divider-size", 1)
 
-  const leftContext = prepareGridChromeCanvas(leftChromeCanvasEl.value, leftPaneWidth.value, viewportHeight)
+  const leftHeaderContext = prepareGridChromeCanvas(
+    leftHeaderChromeCanvasEl.value,
+    headerRenderModel.left.width,
+    headerRenderModel.left.height,
+  )
+  if (leftHeaderContext) {
+    drawGridChromeVerticalLines(leftHeaderContext, headerRenderModel.left, headerColumnDividerColor, columnDividerWidth)
+  }
+
+  const centerHeaderContext = prepareGridChromeCanvas(
+    centerHeaderChromeCanvasEl.value,
+    headerRenderModel.center.width,
+    headerRenderModel.center.height,
+  )
+  if (centerHeaderContext) {
+    drawGridChromeVerticalLines(centerHeaderContext, headerRenderModel.center, headerColumnDividerColor, columnDividerWidth)
+  }
+
+  const rightHeaderContext = prepareGridChromeCanvas(
+    rightHeaderChromeCanvasEl.value,
+    headerRenderModel.right.width,
+    headerRenderModel.right.height,
+  )
+  if (rightHeaderContext) {
+    drawGridChromeVerticalLines(rightHeaderContext, headerRenderModel.right, headerColumnDividerColor, columnDividerWidth)
+  }
+
+  const leftContext = prepareGridChromeCanvas(leftChromeCanvasEl.value, renderModel.left.width, renderModel.left.height)
   if (leftContext) {
-    drawGridChromeHorizontalLines(leftContext, leftPaneWidth.value, viewportHeight, scrollTop, rowDividerColor, rowDividerWidth)
-    drawGridChromeVerticalLines(
-      leftContext,
-      viewportHeight,
-      0,
-      [
-        indexColumnWidthPx.value,
-        ...pinnedLeftColumns.value.map(resolveColumnWidth),
-      ],
-      columnDividerColor,
-      columnDividerWidth,
-    )
+    drawGridChromeBands(leftContext, renderModel.left)
+    drawGridChromeHorizontalLines(leftContext, renderModel.left, rowDividerColor, rowDividerWidth)
+    drawGridChromeVerticalLines(leftContext, renderModel.left, columnDividerColor, columnDividerWidth)
   }
 
-  const centerContext = prepareGridChromeCanvas(centerChromeCanvasEl.value, bodyViewportClientWidth.value, viewportHeight)
+  const centerContext = prepareGridChromeCanvas(centerChromeCanvasEl.value, renderModel.center.width, renderModel.center.height)
   if (centerContext) {
-    drawGridChromeHorizontalLines(centerContext, bodyViewportClientWidth.value, viewportHeight, scrollTop, rowDividerColor, rowDividerWidth)
-    const centerWidths = [
-      props.leftColumnSpacerWidth,
-      ...props.renderedColumns.map(resolveColumnWidth),
-      props.rightColumnSpacerWidth,
-    ].filter(width => width > 0)
-    drawGridChromeVerticalLines(
-      centerContext,
-      viewportHeight,
-      scrollLeft,
-      centerWidths,
-      columnDividerColor,
-      columnDividerWidth,
-    )
+    drawGridChromeBands(centerContext, renderModel.center)
+    drawGridChromeHorizontalLines(centerContext, renderModel.center, rowDividerColor, rowDividerWidth)
+    drawGridChromeVerticalLines(centerContext, renderModel.center, columnDividerColor, columnDividerWidth)
   }
 
-  const rightContext = prepareGridChromeCanvas(rightChromeCanvasEl.value, rightPaneWidth.value, viewportHeight)
+  const rightContext = prepareGridChromeCanvas(rightChromeCanvasEl.value, renderModel.right.width, renderModel.right.height)
   if (rightContext) {
-    drawGridChromeHorizontalLines(rightContext, rightPaneWidth.value, viewportHeight, scrollTop, rowDividerColor, rowDividerWidth)
-    drawGridChromeVerticalLines(
-      rightContext,
-      viewportHeight,
-      0,
-      pinnedRightColumns.value.map(resolveColumnWidth),
-      columnDividerColor,
-      columnDividerWidth,
-    )
+    drawGridChromeBands(rightContext, renderModel.right)
+    drawGridChromeHorizontalLines(rightContext, renderModel.right, rowDividerColor, rowDividerWidth)
+    drawGridChromeVerticalLines(rightContext, renderModel.right, columnDividerColor, columnDividerWidth)
   }
 }
 
@@ -1438,7 +1529,61 @@ function connectGridChromeResizeObserver(): void {
   if (bodyShellRef.value) {
     gridChromeResizeObserver.observe(bodyShellRef.value)
   }
+  if (headerShellEl.value) {
+    gridChromeResizeObserver.observe(headerShellEl.value)
+  }
+  const headerViewport = resolveHeaderViewportElement()
+  if (headerViewport) {
+    gridChromeResizeObserver.observe(headerViewport)
+  }
 }
+
+const chromeRenderModel = computed(() => (
+  buildDataGridChromeRenderModel({
+    rowMetrics: rowMetrics.value,
+    rowBands: rowBands.value,
+    scrollTop: bodyViewportScrollTop.value,
+    leftPaneWidth: leftPaneWidth.value,
+    centerPaneWidth: bodyViewportClientWidth.value,
+    rightPaneWidth: rightPaneWidth.value,
+    viewportHeight: bodyViewportClientHeight.value,
+    leftColumnWidths: [
+      indexColumnWidthPx.value,
+      ...pinnedLeftColumns.value.map(resolveColumnWidth),
+    ],
+    centerColumnWidths: [
+      props.leftColumnSpacerWidth,
+      ...props.renderedColumns.map(resolveColumnWidth),
+      props.rightColumnSpacerWidth,
+    ].filter(width => width > 0),
+    rightColumnWidths: pinnedRightColumns.value.map(resolveColumnWidth),
+    centerScrollLeft: bodyViewportScrollLeft.value,
+  })
+))
+
+const headerChromeRenderModel = computed(() => (
+  buildDataGridChromeRenderModel({
+    rowMetrics: headerShellHeight.value > 0
+      ? [{ top: 0, height: headerShellHeight.value }]
+      : [],
+    scrollTop: 0,
+    leftPaneWidth: leftPaneWidth.value,
+    centerPaneWidth: headerViewportClientWidth.value,
+    rightPaneWidth: rightPaneWidth.value,
+    viewportHeight: headerShellHeight.value,
+    leftColumnWidths: [
+      indexColumnWidthPx.value,
+      ...pinnedLeftColumns.value.map(resolveColumnWidth),
+    ],
+    centerColumnWidths: [
+      props.leftColumnSpacerWidth,
+      ...props.renderedColumns.map(resolveColumnWidth),
+      props.rightColumnSpacerWidth,
+    ].filter(width => width > 0),
+    rightColumnWidths: pinnedRightColumns.value.map(resolveColumnWidth),
+    centerScrollLeft: bodyViewportScrollLeft.value,
+  })
+))
 
 function clamp(value: number, min: number, max: number): number {
   if (max < min) {
@@ -1757,6 +1902,46 @@ const rowMetricsSignature = computed(() => (
   rowMetrics.value.map(metric => `${metric.top}:${metric.height}`).join("|")
 ))
 
+function resolveChromeRowBandKind(row: TableRow, rowOffset: number): string | null {
+  const className = props.rowClass(row)
+  if (className.includes("row--group") && className.includes("row--pivot")) {
+    return "pivot-group"
+  }
+  if (className.includes("row--group")) {
+    return "group"
+  }
+  if (className.includes("row--tree")) {
+    return "tree"
+  }
+  if (className.includes("row--pivot")) {
+    return "pivot"
+  }
+  if (isStripedRow(rowOffset)) {
+    return "striped"
+  }
+  return "base"
+}
+
+const rowBands = computed<readonly DataGridChromeRowBand[]>(() => (
+  props.displayRows.flatMap((row, rowOffset) => {
+    const metric = rowMetrics.value[rowOffset]
+    const kind = resolveChromeRowBandKind(row, rowOffset)
+    if (!metric || !kind) {
+      return []
+    }
+    return [{
+      rowIndex: rowOffset,
+      top: metric.top,
+      height: metric.height,
+      kind,
+    }]
+  })
+))
+
+const rowBandsSignature = computed(() => (
+  rowBands.value.map(band => `${band.kind}:${band.top}:${band.height}`).join("|")
+))
+
 const leftChromeColumnsSignature = computed(() => (
   [
     indexColumnWidthPx.value,
@@ -1781,6 +1966,7 @@ watch(
     leftPaneWidth.value,
     rightPaneWidth.value,
     rowMetricsSignature.value,
+    rowBandsSignature.value,
     leftChromeColumnsSignature.value,
     centerChromeColumnsSignature.value,
     rightChromeColumnsSignature.value,
@@ -2030,12 +2216,16 @@ function buildOverlaySegment(
     borderColor?: string
     backgroundColor?: string
     borderStyle?: "solid" | "dashed"
+    topBleed?: number
+    bottomBleed?: number
+    leftBleed?: number
+    rightBleed?: number
   },
 ): OverlaySegment {
-  const topBleed = 1
-  const bottomBleed = 1
-  const leftBleed = options?.omitLeftBorder ? 0 : 1
-  const rightBleed = options?.omitRightBorder ? 0 : 1
+  const topBleed = Math.max(0, options?.topBleed ?? 1)
+  const bottomBleed = Math.max(0, options?.bottomBleed ?? 1)
+  const leftBleed = options?.omitLeftBorder ? 0 : Math.max(0, options?.leftBleed ?? 1)
+  const rightBleed = options?.omitRightBorder ? 0 : Math.max(0, options?.rightBleed ?? 1)
   return {
     key,
     style: {
@@ -2080,6 +2270,10 @@ function buildPaneOverlaySegments(
     return []
   }
 
+  const viewportHeight = Math.max(0, bodyViewportClientHeight.value)
+  const topBleed = metrics.top <= 0 ? 0 : 1
+  const bottomBleed = viewportHeight > 0 && metrics.top + metrics.height >= viewportHeight ? 0 : 1
+
   if (pane === "left") {
     const selectedColumns = pinnedLeftColumns.value.filter(column => {
       const index = columnIndexByKey(column.key)
@@ -2099,6 +2293,9 @@ function buildPaneOverlaySegments(
 
     const width = selectedColumns.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
     const lastSelectedIndex = columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
+    const paneWidth = leftPaneWidth.value
+    const leftBleed = left <= 0 ? 0 : 1
+    const rightBleed = paneWidth > 0 && left + width >= paneWidth ? 0 : 1
     return [
       buildOverlaySegment(
         `${keyPrefix}-left-${metrics.startRowOffset}-${metrics.endRowOffset}`,
@@ -2108,6 +2305,10 @@ function buildPaneOverlaySegments(
         metrics.height,
         {
           omitRightBorder: metrics.endColumnIndex > lastSelectedIndex,
+          topBleed,
+          bottomBleed,
+          leftBleed,
+          rightBleed,
           borderColor: options?.borderColor,
           backgroundColor: options?.backgroundColor,
           borderStyle: options?.borderStyle,
@@ -2136,6 +2337,12 @@ function buildPaneOverlaySegments(
     const width = selectedColumns.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
     const firstSelectedIndex = columnIndexByKey(selectedColumns[0]?.key ?? "")
     const lastSelectedIndex = columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
+    const contentWidth = Math.max(
+      0,
+      parsePixelValue(props.gridContentStyle.width ?? props.gridContentStyle.minWidth, 0),
+    )
+    const leftBleed = left <= 0 ? 0 : 1
+    const rightBleed = contentWidth > 0 && left + width >= contentWidth ? 0 : 1
     return [
       buildOverlaySegment(
         `${keyPrefix}-center-${metrics.startRowOffset}-${metrics.endRowOffset}`,
@@ -2146,6 +2353,10 @@ function buildPaneOverlaySegments(
         {
           omitLeftBorder: metrics.startColumnIndex < firstSelectedIndex,
           omitRightBorder: metrics.endColumnIndex > lastSelectedIndex,
+          topBleed,
+          bottomBleed,
+          leftBleed,
+          rightBleed,
           borderColor: options?.borderColor,
           backgroundColor: options?.backgroundColor,
           borderStyle: options?.borderStyle,
@@ -2172,6 +2383,9 @@ function buildPaneOverlaySegments(
 
   const width = selectedColumns.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
   const firstSelectedIndex = columnIndexByKey(selectedColumns[0]?.key ?? "")
+  const paneWidth = rightPaneWidth.value
+  const leftBleed = left <= 0 ? 0 : 1
+  const rightBleed = paneWidth > 0 && left + width >= paneWidth ? 0 : 1
   return [
     buildOverlaySegment(
       `${keyPrefix}-right-${metrics.startRowOffset}-${metrics.endRowOffset}`,
@@ -2181,6 +2395,10 @@ function buildPaneOverlaySegments(
       metrics.height,
       {
         omitLeftBorder: metrics.startColumnIndex < firstSelectedIndex,
+        topBleed,
+        bottomBleed,
+        leftBleed,
+        rightBleed,
         borderColor: options?.borderColor,
         backgroundColor: options?.backgroundColor,
         borderStyle: options?.borderStyle,

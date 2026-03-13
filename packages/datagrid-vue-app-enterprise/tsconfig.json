@@ -18,6 +18,8 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
+      "@affino/datagrid-chrome": ["../datagrid-chrome/dist/index.d.ts"],
+      "@affino/datagrid-chrome/*": ["../datagrid-chrome/dist/*"],
       "@affino/datagrid-gantt": ["../datagrid-gantt/dist/index.d.ts"],
       "@affino/datagrid-gantt/*": ["../datagrid-gantt/dist/*"],
       "@affino/datagrid-vue-app": ["../datagrid-vue-app/dist/index.d.ts"],

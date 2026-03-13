@@ -11,6 +11,17 @@ export type {
   DataGridThemeProp,
 } from "@affino/datagrid-vue-app"
 export type {
+  BuildDataGridChromePaneModelInput,
+  BuildDataGridChromeRenderModelInput,
+  DataGridChromeBand,
+  DataGridChromeLine,
+  DataGridChromePaneModel,
+  DataGridChromeRenderModel,
+  DataGridChromeRowBand,
+  DataGridChromeRowMetric,
+  DataGridChromeVisibleRange,
+} from "@affino/datagrid-vue-app"
+export type {
   DataGridAdvancedFilterOptions,
   DataGridAdvancedFilterProp,
 } from "@affino/datagrid-vue-app"
@@ -95,5 +106,9 @@ export {
   resolveAffinoDataGridEnterpriseLicense,
   summarizeAffinoDataGridEnterpriseLicense,
 } from "./dataGridEnterpriseLicense"
+export {
+  buildDataGridChromePaneModel,
+  buildDataGridChromeRenderModel,
+} from "@affino/datagrid-vue-app"
 
 export { default } from "./DataGrid"

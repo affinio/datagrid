@@ -12,7 +12,7 @@ Theme presets, tokens, and utilities live in `@affino/datagrid-theme`. The headl
   - Tokens + CSS variable map.
   - Theme utilities (`applyGridTheme`, `resolveGridThemeTokens`, `mergeThemeTokens`).
   - Presets (e.g. `industrialNeutralTheme`).
-  - Demo stylesheet `datagrid-demo.css`.
+  - Demo-only stylesheet asset `datagrid-demo.css`.
 - `@affino/datagrid-core`
   - Runtime/state/viewport/data model logic.
   - No theme presets or CSS ownership.
@@ -22,6 +22,8 @@ Theme presets, tokens, and utilities live in `@affino/datagrid-theme`. The headl
 
 - Runtime + adapters import theme helpers from `@affino/datagrid-theme`.
 - Plugin contracts are owned by `@affino/datagrid-plugins`.
+- Prefer token-driven theming over class-based style slots.
+- `datagrid-demo.css` is a demo asset, not the styling foundation for the modern Vue app renderer.
 
 ## Rationale
 

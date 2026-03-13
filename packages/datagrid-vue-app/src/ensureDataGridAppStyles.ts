@@ -18,6 +18,13 @@ const DATA_GRID_APP_STYLES = `
   --datagrid-row-selected-background-color: transparent;
   --datagrid-row-selected-range-bg: transparent;
   --datagrid-row-selected-sticky-bg: transparent;
+  --datagrid-row-band-base-bg: var(--datagrid-row-background-color);
+  --datagrid-row-band-striped-bg: color-mix(in srgb, var(--datagrid-row-background-color) 94%, var(--datagrid-accent-strong) 6%);
+  --datagrid-row-band-group-bg: var(--datagrid-group-row-background-color);
+  --datagrid-row-band-tree-bg: color-mix(in srgb, var(--datagrid-row-background-color) 82%, var(--datagrid-accent-strong) 18%);
+  --datagrid-row-band-pivot-bg: color-mix(in srgb, var(--datagrid-row-background-color) 88%, var(--datagrid-accent-strong) 12%);
+  --datagrid-row-band-pivot-group-bg: color-mix(in srgb, var(--datagrid-group-row-background-color) 78%, var(--datagrid-accent-strong) 22%);
+  --datagrid-header-column-divider-color: var(--datagrid-column-divider-color);
   --datagrid-selection-copied-contrast: color-mix(in srgb, var(--datagrid-background-color) 84%, var(--datagrid-text-color));
   --datagrid-selection-copied-glow: color-mix(in srgb, var(--datagrid-selection-copied-border) 38%, transparent);
 }
@@ -141,7 +148,7 @@ const DATA_GRID_APP_STYLES = `
   justify-content: center;
   height: 100%;
   padding: 24px;
-  color: var(--datagrid-text-secondary);
+  color: var(--datagrid-text-muted);
   font-size: 13px;
   text-align: center;
 }
@@ -332,7 +339,7 @@ const DATA_GRID_APP_STYLES = `
 
 .datagrid-advanced-filter__applied-empty {
   border: 1px dashed var(--datagrid-filter-trigger-border);
-  color: var(--datagrid-text-secondary);
+  color: var(--datagrid-text-muted);
 }
 
 .datagrid-column-layout__header,
@@ -670,6 +677,11 @@ const DATA_GRID_APP_STYLES = `
   min-width: 0;
 }
 
+.grid-header-shell {
+  position: relative;
+  background: var(--datagrid-header-row-bg);
+}
+
 .grid-body-shell {
   position: relative;
   min-height: 0;
@@ -704,6 +716,7 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .grid-header-viewport {
+  position: relative;
   overflow-x: hidden;
   overflow-y: hidden;
   border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
@@ -734,6 +747,8 @@ const DATA_GRID_APP_STYLES = `
   display: flex;
   width: max-content;
   min-width: 100%;
+  position: relative;
+  z-index: 4;
 }
 
 .grid-pane-track,
@@ -744,13 +759,13 @@ const DATA_GRID_APP_STYLES = `
 .grid-body-content {
   min-width: 100%;
   position: relative;
-  z-index: 1;
+  z-index: 4;
 }
 
 .grid-pane-content {
   min-width: 100%;
   position: relative;
-  z-index: 1;
+  z-index: 4;
   will-change: transform;
 }
 
@@ -767,6 +782,15 @@ const DATA_GRID_APP_STYLES = `
 .grid-chrome-canvas--center-shell {
   top: 0;
   bottom: auto;
+}
+
+.grid-chrome-canvas--header-center {
+  top: 0;
+  bottom: auto;
+}
+
+.grid-header-shell .grid-chrome-canvas {
+  z-index: 5;
 }
 
 .grid-column-spacer {
@@ -788,9 +812,10 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-cell {
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   position: relative;
-  border-bottom: var(--datagrid-row-divider-size) solid var(--datagrid-row-divider-color);
-  border-right: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color);
   padding: var(--datagrid-body-cell-padding-y) var(--datagrid-body-cell-padding-x);
   text-align: left;
   white-space: nowrap;
@@ -805,9 +830,14 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .grid-stage--canvas-chrome .grid-body-shell .grid-cell,
-.grid-stage--canvas-chrome .grid-body-shell .grid-cell--index {
-  border-bottom-color: transparent;
-  border-right-color: transparent;
+.grid-stage--canvas-chrome .grid-body-shell .grid-cell--index,
+.grid-stage--canvas-chrome .grid-header-shell .grid-cell,
+.grid-stage--canvas-chrome .grid-header-shell .grid-cell--index {
+  background: transparent;
+}
+
+.grid-stage--canvas-chrome .grid-header-viewport {
+  background: transparent;
 }
 
 .grid-cell:focus,
@@ -850,29 +880,19 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .grid-cell--selection-edge-top {
-  --selection-edge-top: 2px solid var(--datagrid-selection-overlay-border);
+  --selection-edge-top: 2px solid var(--datagrid-selection-handle-border);
 }
 
 .grid-cell--selection-edge-right {
-  --selection-edge-right: 2px solid var(--datagrid-selection-overlay-border);
+  --selection-edge-right: 2px solid var(--datagrid-selection-handle-border);
 }
 
 .grid-cell--selection-edge-bottom {
-  --selection-edge-bottom: 2px solid var(--datagrid-selection-overlay-border);
+  --selection-edge-bottom: 2px solid var(--datagrid-selection-handle-border);
 }
 
 .grid-cell--selection-edge-left {
-  --selection-edge-left: 2px solid var(--datagrid-selection-overlay-border);
-}
-
-.affino-datagrid-app-root .grid-cell--pinned-left.grid-cell--selection-anchor,
-.affino-datagrid-app-root .grid-cell--pinned-left.grid-cell--selection-anchor.grid-cell--selected {
-  background: var(--datagrid-pinned-left-bg) !important;
-}
-
-.affino-datagrid-app-root .grid-cell--pinned-right.grid-cell--selection-anchor,
-.affino-datagrid-app-root .grid-cell--pinned-right.grid-cell--selection-anchor.grid-cell--selected {
-  background: var(--datagrid-pinned-right-bg) !important;
+  --selection-edge-left: 2px solid var(--datagrid-selection-handle-border);
 }
 
 .grid-selection-overlay {
@@ -884,7 +904,7 @@ const DATA_GRID_APP_STYLES = `
 
 .affino-datagrid-app-root .grid-selection-overlay__segment {
   position: absolute;
-  border: 2px solid var(--datagrid-selection-copied-border);
+  border: 2px solid var(--datagrid-selection-handle-border);
   box-sizing: border-box;
   border-radius: 1px;
   background: transparent !important;
@@ -1045,51 +1065,16 @@ const DATA_GRID_APP_STYLES = `
 .grid-cell--index {
   color: var(--datagrid-index-cell-text-color);
   background: var(--datagrid-index-cell-background-color);
-  border-right: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color);
 }
 
 .grid-row .grid-cell--index {
   background: var(--datagrid-index-cell-background-color);
 }
 
-.grid-stage--canvas-chrome .grid-body-shell .grid-cell--index {
-  border-right-color: transparent;
-}
-
-.grid-row--striped .grid-cell,
-.grid-row--striped .grid-cell--index {
-  background: color-mix(in srgb, var(--datagrid-row-background-color) 94%, var(--datagrid-accent-strong) 6%);
-}
-
 .grid-row.row--group .grid-cell {
   font-weight: 600;
   cursor: pointer;
   color: var(--datagrid-group-row-text-color);
-  background: var(--datagrid-group-row-background-color);
-}
-
-.grid-row.row--tree .grid-cell {
-  background: color-mix(in srgb, var(--datagrid-row-background-color) 82%, var(--datagrid-accent-strong) 18%);
-}
-
-.grid-row.row--tree .grid-cell--index {
-  background: color-mix(in srgb, var(--datagrid-index-cell-background-color) 82%, var(--datagrid-accent-strong) 18%);
-}
-
-.grid-row.row--pivot .grid-cell {
-  background: color-mix(in srgb, var(--datagrid-row-background-color) 88%, var(--datagrid-accent-strong) 12%);
-}
-
-.grid-row.row--pivot .grid-cell--index {
-  background: color-mix(in srgb, var(--datagrid-index-cell-background-color) 88%, var(--datagrid-accent-strong) 12%);
-}
-
-.grid-row.row--group.row--pivot .grid-cell {
-  background: color-mix(in srgb, var(--datagrid-group-row-background-color) 78%, var(--datagrid-accent-strong) 22%);
-}
-
-.grid-row.row--group.row--pivot .grid-cell--index {
-  background: color-mix(in srgb, var(--datagrid-index-cell-background-color) 76%, var(--datagrid-accent-strong) 24%);
 }
 
 .grid-row--hoverable.grid-row--hovered .grid-cell,
@@ -1776,12 +1761,12 @@ const DATA_GRID_APP_STYLES = `
 
 .cell-fill-handle {
   position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 6px;
-  height: 6px;
+  right: -3px;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
   border: 1px solid var(--datagrid-selection-handle-border);
-  border-radius: 1px;
+  border-radius: 2px;
   background: var(--datagrid-selection-handle-bg);
   padding: 0;
   cursor: crosshair;

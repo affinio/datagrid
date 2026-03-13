@@ -69,6 +69,12 @@ importers:
         specifier: ^3.2.5
         version: 3.2.5(typescript@5.9.3)
 
+  packages/datagrid-chrome:
+    devDependencies:
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@25.3.1)(jiti@2.6.1)(jsdom@28.1.0)(lightningcss@1.31.1)(terser@5.46.0)
+
   packages/datagrid-core:
     dependencies:
       '@affino/datagrid-formula-engine':
@@ -254,6 +260,9 @@ importers:
 
   packages/datagrid-vue-app:
     dependencies:
+      '@affino/datagrid-chrome':
+        specifier: workspace:*
+        version: link:../datagrid-chrome
       '@affino/datagrid-gantt':
         specifier: workspace:*
         version: link:../datagrid-gantt

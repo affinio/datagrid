@@ -525,7 +525,7 @@ body,
   margin-bottom: 0;
 }
 
-.table-wrap {
+.sandbox-core-grid .table-wrap {
   overflow: auto;
   flex: 1;
   min-height: 0;
@@ -534,7 +534,7 @@ body,
   border-radius: 0;
 }
 
-.grid-stage {
+.sandbox-core-grid .grid-stage {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
@@ -545,47 +545,47 @@ body,
   background: #fff;
 }
 
-.grid-header-viewport {
+.sandbox-core-grid .grid-header-viewport {
   overflow-x: hidden;
   overflow-y: hidden;
   border-bottom: 1px solid #f1f5f9;
   background: #f8fafc;
 }
 
-.grid-body-viewport {
+.sandbox-core-grid .grid-body-viewport {
   overflow: auto;
   min-width: 0;
   min-height: 0;
 }
 
-.grid-header-row,
-.grid-row {
+.sandbox-core-grid .grid-header-row,
+.sandbox-core-grid .grid-row {
   display: flex;
   width: max-content;
   min-width: 100%;
 }
 
-.grid-body-content {
+.sandbox-core-grid .grid-body-content {
   min-width: 100%;
 }
 
-.grid-main-track {
+.sandbox-core-grid .grid-main-track {
   display: flex;
 }
 
-.grid-stage--auto-row-height .grid-body-content .grid-cell {
+.sandbox-core-grid .grid-stage--auto-row-height .grid-body-content .grid-cell {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
 }
 
-.grid-row--autosize-probe .grid-cell {
+.sandbox-core-grid .grid-row--autosize-probe .grid-cell {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
 }
 
-.grid-cell {
+.sandbox-core-grid .grid-cell {
   position: relative;
   border-bottom: 1px solid #f1f5f9;
   border-right: 1px solid #f1f5f9;
@@ -601,28 +601,28 @@ body,
   -moz-user-select: none;
 }
 
-.grid-cell:focus,
-.grid-cell:focus-visible {
+.sandbox-core-grid .grid-cell:focus,
+.sandbox-core-grid .grid-cell:focus-visible {
   outline: none;
 }
 
-.grid-cell::selection {
+.sandbox-core-grid .grid-cell::selection {
   background: transparent;
 }
 
-.grid-cell::-moz-selection {
+.sandbox-core-grid .grid-cell::-moz-selection {
   background: transparent;
 }
 
-.grid-cell--selected {
+.sandbox-core-grid .grid-cell--selected {
   background: #e3efff;
 }
 
-.grid-cell--selection-anchor {
+.sandbox-core-grid .grid-cell--selection-anchor {
   background: inherit;
 }
 
-.grid-cell--selection-frame::before {
+.sandbox-core-grid .grid-cell--selection-frame::before {
   content: "";
   position: absolute;
   inset: -1px;
@@ -646,27 +646,27 @@ body,
     calc(100% - 1px) 1px;
 }
 
-.grid-cell--selection-top {
+.sandbox-core-grid .grid-cell--selection-top {
   --selection-top: #2563eb;
 }
 
-.grid-cell--selection-right {
+.sandbox-core-grid .grid-cell--selection-right {
   --selection-right: #2563eb;
 }
 
-.grid-cell--selection-bottom {
+.sandbox-core-grid .grid-cell--selection-bottom {
   --selection-bottom: #2563eb;
 }
 
-.grid-cell--selection-left {
+.sandbox-core-grid .grid-cell--selection-left {
   --selection-left: #2563eb;
 }
 
-.grid-cell--fill-preview {
+.sandbox-core-grid .grid-cell--fill-preview {
   background: #dbeafe;
 }
 
-.grid-cell--clipboard-pending::after {
+.sandbox-core-grid .grid-cell--clipboard-pending::after {
   content: "";
   position: absolute;
   inset: -1px;
@@ -691,19 +691,19 @@ body,
   animation: grid-clipboard-ants 0.7s linear infinite;
 }
 
-.grid-cell--clipboard-pending-top {
+.sandbox-core-grid .grid-cell--clipboard-pending-top {
   --clipboard-pending-top: #1d4ed8;
 }
 
-.grid-cell--clipboard-pending-right {
+.sandbox-core-grid .grid-cell--clipboard-pending-right {
   --clipboard-pending-right: #1d4ed8;
 }
 
-.grid-cell--clipboard-pending-bottom {
+.sandbox-core-grid .grid-cell--clipboard-pending-bottom {
   --clipboard-pending-bottom: #1d4ed8;
 }
 
-.grid-cell--clipboard-pending-left {
+.sandbox-core-grid .grid-cell--clipboard-pending-left {
   --clipboard-pending-left: #1d4ed8;
 }
 
@@ -724,7 +724,7 @@ body,
   }
 }
 
-.grid-cell--header {
+.sandbox-core-grid .grid-cell--header {
   background: #f8fafc;
   font-weight: 600;
   position: relative;
@@ -732,11 +732,11 @@ body,
   overflow: visible;
 }
 
-.grid-cell--header-sortable {
+.sandbox-core-grid .grid-cell--header-sortable {
   cursor: pointer;
 }
 
-.sort-indicator {
+.sandbox-core-grid .sort-indicator {
   width: 12px;
   text-align: center;
   color: #64748b;
@@ -744,7 +744,7 @@ body,
   margin-left: auto;
 }
 
-.grid-cell--index {
+.sandbox-core-grid .grid-cell--index {
   position: sticky;
   left: 0;
   z-index: 6;
@@ -752,44 +752,44 @@ body,
   border-right: 1px solid #e2e8f0;
 }
 
-.grid-row .grid-cell--index {
+.sandbox-core-grid .grid-row .grid-cell--index {
   background: #fff;
 }
 
-.grid-row.row--group .grid-cell {
+.sandbox-core-grid .grid-row.row--group .grid-cell {
   font-weight: 600;
   cursor: pointer;
 }
 
-.grid-row.row--tree .grid-cell {
+.sandbox-core-grid .grid-row.row--tree .grid-cell {
   background: #f0fdf4;
 }
 
-.grid-row.row--tree .grid-cell--index {
+.sandbox-core-grid .grid-row.row--tree .grid-cell--index {
   background: #f0fdf4;
 }
 
-.grid-row.row--pivot .grid-cell {
+.sandbox-core-grid .grid-row.row--pivot .grid-cell {
   background: #f7fbff;
 }
 
-.grid-row.row--pivot .grid-cell--index {
+.sandbox-core-grid .grid-row.row--pivot .grid-cell--index {
   background: #f7fbff;
 }
 
-.grid-row.row--group.row--pivot .grid-cell {
+.sandbox-core-grid .grid-row.row--group.row--pivot .grid-cell {
   background: #e3efff;
 }
 
-.grid-row.row--group.row--pivot .grid-cell--index {
+.sandbox-core-grid .grid-row.row--group.row--pivot .grid-cell--index {
   background: #e3efff;
 }
 
-.grid-spacer {
+.sandbox-core-grid .grid-spacer {
   width: 1px;
 }
 
-.col-head {
+.sandbox-core-grid .col-head {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -798,17 +798,17 @@ body,
   padding-right: 8px;
 }
 
-.col-head > span {
+.sandbox-core-grid .col-head > span {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.col-filter {
+.sandbox-core-grid .col-filter {
   margin-top: 4px;
   padding-right: 8px;
 }
 
-.col-filter-input {
+.sandbox-core-grid .col-filter-input {
   width: 100%;
   min-width: 0;
   height: 22px;
@@ -819,7 +819,7 @@ body,
   background: #fff;
 }
 
-.cell-editor-input {
+.sandbox-core-grid .cell-editor-input {
   display: block;
   width: 100%;
   min-width: 0;
@@ -834,11 +834,11 @@ body,
   outline: none;
 }
 
-.grid-cell--editing {
+.sandbox-core-grid .grid-cell--editing {
   padding: 0;
 }
 
-.cell-fill-handle {
+.sandbox-core-grid .cell-fill-handle {
   position: absolute;
   right: -2px;
   bottom: -2px;
@@ -852,7 +852,7 @@ body,
   z-index: 3;
 }
 
-.row-resize-handle {
+.sandbox-core-grid .row-resize-handle {
   position: absolute;
   left: 0;
   right: 0;
@@ -865,7 +865,7 @@ body,
   z-index: 4;
 }
 
-.col-resize {
+.sandbox-core-grid .col-resize {
   position: absolute;
   top: 0;
   right: -6px;

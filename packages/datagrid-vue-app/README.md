@@ -337,6 +337,28 @@ Reference:
 
 - [/Users/anton/Projects/affinio/datagrid/docs/datagrid-gantt.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-gantt.md)
 
+## Table Chrome Engine
+
+The default table renderer uses [`@affino/datagrid-chrome`](/Users/anton/Projects/affinio/datagrid/packages/datagrid-chrome/src/index.ts) for shared headless table chrome geometry.
+
+That engine derives:
+
+- row divider positions
+- column divider positions
+- row background bands for striped / group / tree / pivot states
+- pinned left / center / right pane line projection
+
+It also accepts optional visible row / column range hints, so future adapters can clip chrome geometry earlier when they already know viewport index windows.
+
+Vue still owns the browser-specific work:
+
+- DOM measurement
+- scroll wiring
+- `ResizeObserver`
+- canvas drawing
+
+That split keeps the table renderer reusable across frameworks without duplicating pane math.
+
 ## Comparison
 
 | Feature | Affino DataGrid | Simple Table | Spreadsheet |
