@@ -37,6 +37,43 @@ export interface ResolveDataGridFormulaRowModelOptionsInput<TRow = unknown>
   enterpriseClientRowModelOptions?: DataGridAppEnterpriseFormulaRuntimeOptions | undefined
 }
 
+const CLIENT_ROW_MODEL_OPTIONS_CACHE = new WeakMap<
+  object,
+  DataGridAppClientRowModelOptions<unknown>
+>()
+const MERGED_ROW_MODEL_OPTIONS_CACHE = new WeakMap<
+  object,
+  WeakMap<object, Omit<CreateClientRowModelOptions<unknown>, "rows">>
+>()
+
+function cloneClientRowModelOptions<TRow>(
+  options: DataGridAppClientRowModelOptions<TRow> | undefined,
+): DataGridAppClientRowModelOptions<TRow> | undefined {
+  if (!options) {
+    return undefined
+  }
+  const cached = CLIENT_ROW_MODEL_OPTIONS_CACHE.get(options as object)
+  if (cached) {
+    return cached as DataGridAppClientRowModelOptions<TRow>
+  }
+  const normalizedExpandedByDefault = options.initialTreeData?.expandedByDefault ?? false
+  if (options.initialTreeData?.expandedByDefault === normalizedExpandedByDefault) {
+    CLIENT_ROW_MODEL_OPTIONS_CACHE.set(options as object, options as DataGridAppClientRowModelOptions<unknown>)
+    return options
+  }
+  const cloned: DataGridAppClientRowModelOptions<TRow> = {
+    ...options,
+  }
+  if (options.initialTreeData) {
+    cloned.initialTreeData = {
+      ...options.initialTreeData,
+      expandedByDefault: normalizedExpandedByDefault,
+    }
+  }
+  CLIENT_ROW_MODEL_OPTIONS_CACHE.set(options as object, cloned as DataGridAppClientRowModelOptions<unknown>)
+  return cloned
+}
+
 function cloneFormulas(
   formulas: readonly DataGridFormulaFieldDefinition[] | null | undefined,
 ): readonly DataGridFormulaFieldDefinition[] {
@@ -108,7 +145,7 @@ export function resolveDataGridColumns(
 export function resolveDataGridFormulaRowModelOptions<TRow = unknown>(
   input: ResolveDataGridFormulaRowModelOptionsInput<TRow>,
 ): Omit<CreateClientRowModelOptions<TRow>, "rows"> | undefined {
-  const baseOptions = input.clientRowModelOptions
+  const baseOptions = cloneClientRowModelOptions(input.clientRowModelOptions)
   const enterpriseOptions = input.enterpriseClientRowModelOptions
   const embeddedFormulas = extractEmbeddedFormulas(input.columns)
   const hasFormulaProp = input.formulas !== undefined
@@ -135,6 +172,35 @@ export function resolveDataGridFormulaRowModelOptions<TRow = unknown>(
     }
     return {
       ...enterpriseOptions,
+    }
+  }
+
+  if (!hasFormulaOverrides) {
+    if (baseOptions && !enterpriseOptions) {
+      return baseOptions
+    }
+    if (!baseOptions && enterpriseOptions) {
+      return enterpriseOptions
+    }
+    if (baseOptions && enterpriseOptions) {
+      let byEnterprise = MERGED_ROW_MODEL_OPTIONS_CACHE.get(baseOptions as object)
+      if (!byEnterprise) {
+        byEnterprise = new WeakMap<object, Omit<CreateClientRowModelOptions<unknown>, "rows">>()
+        MERGED_ROW_MODEL_OPTIONS_CACHE.set(baseOptions as object, byEnterprise)
+      }
+      const cached = byEnterprise.get(enterpriseOptions as object)
+      if (cached) {
+        return cached as Omit<CreateClientRowModelOptions<TRow>, "rows">
+      }
+      const merged = {
+        ...baseOptions,
+        ...enterpriseOptions,
+      }
+      byEnterprise.set(
+        enterpriseOptions as object,
+        merged as Omit<CreateClientRowModelOptions<unknown>, "rows">,
+      )
+      return merged
     }
   }
 

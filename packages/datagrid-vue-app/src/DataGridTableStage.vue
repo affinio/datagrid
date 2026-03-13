@@ -1,5 +1,6 @@
 <template>
   <section
+    ref="stageRootEl"
     class="grid-stage"
     :class="{
       'grid-stage--auto-row-height': mode === 'base' && rowHeightMode === 'auto',
@@ -985,6 +986,7 @@ const rightPaneStyle = computed<CSSProperties>(() => ({
   maxWidth: `${rightPaneWidth.value}px`,
 }))
 
+const stageRootEl = ref<HTMLElement | null>(null)
 const bodyViewportEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
@@ -1983,4 +1985,9 @@ function cellStateClasses(row: TableRow, rowOffset: number, columnIndex: number)
     "grid-cell--editing": isEditingCellSafe(row, columnKey),
   }
 }
+
+defineExpose({
+  getStageRootElement: () => stageRootEl.value,
+  getBodyViewportElement: () => bodyViewportEl.value,
+})
 </script>

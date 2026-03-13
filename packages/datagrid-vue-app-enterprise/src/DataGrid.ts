@@ -406,6 +406,8 @@ export default defineComponent({
       getColumnSnapshot: () => (dataGridRef.value as { getColumnSnapshot?: () => unknown } | null)?.getColumnSnapshot?.() ?? null,
       getSelectionAggregatesLabel: () => (dataGridRef.value as { getSelectionAggregatesLabel?: () => unknown } | null)?.getSelectionAggregatesLabel?.() ?? null,
       getSelectionSummary: () => (dataGridRef.value as { getSelectionSummary?: () => unknown } | null)?.getSelectionSummary?.() ?? null,
+      getView: () => (dataGridRef.value as { getView?: () => unknown } | null)?.getView?.() ?? null,
+      setView: (...args: unknown[]) => (dataGridRef.value as { setView?: (...values: unknown[]) => unknown } | null)?.setView?.(...args) ?? null,
       applyColumnState: (...args: unknown[]) => (dataGridRef.value as { applyColumnState?: (...values: unknown[]) => unknown } | null)?.applyColumnState?.(...args) ?? null,
       getState: () => (dataGridRef.value as { getState?: () => unknown } | null)?.getState?.() ?? null,
       migrateState: (...args: unknown[]) => (dataGridRef.value as { migrateState?: (...values: unknown[]) => unknown } | null)?.migrateState?.(...args) ?? null,

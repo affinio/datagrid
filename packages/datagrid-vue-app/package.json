@@ -20,12 +20,13 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "type-check": "pnpm --filter @affino/datagrid-vue build && tsc -p tsconfig.json --noEmit",
+    "build": "pnpm --filter @affino/datagrid-gantt build && pnpm --filter @affino/datagrid-vue build && tsc -p tsconfig.json",
+    "type-check": "pnpm --filter @affino/datagrid-gantt build && pnpm --filter @affino/datagrid-vue build && tsc -p tsconfig.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
     "test": "pnpm run type-check && pnpm run test:unit"
   },
   "dependencies": {
+    "@affino/datagrid-gantt": "workspace:*",
     "@affino/datagrid-theme": "workspace:*",
     "@affino/datagrid-vue": "workspace:*",
     "@affino/menu-vue": "^2.1.1",

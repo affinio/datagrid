@@ -22,7 +22,7 @@ export function useDataGridAppRuntimeSync<TRow>(
   options: UseDataGridAppRuntimeSyncOptions<TRow>,
 ): void {
   watch(options.rows, () => {
-    if (options.mode.value === "tree" || options.mode.value === "pivot") {
+    if (options.mode.value === "pivot") {
       options.runtime.api.rows.expandAllGroups()
     }
     void nextTick(() => {

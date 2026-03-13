@@ -35,6 +35,12 @@ export type {
   DataGridVirtualizationProp,
 } from "./dataGridVirtualization"
 export type {
+  DataGridAppViewMode,
+  DataGridGanttOptions,
+  DataGridGanttProp,
+  DataGridGanttZoomLevel,
+} from "./dataGridGantt"
+export type {
   DataGridClientComputeMode,
   DataGridComputedFieldDefinition,
   DataGridFormulaFieldDefinition,

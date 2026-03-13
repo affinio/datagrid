@@ -66,6 +66,21 @@
             <option value="pagination">Pagination</option>
           </select>
         </label>
+        <label v-if="props.mode === 'base'">
+          View
+          <select v-model="viewMode">
+            <option value="table">Table</option>
+            <option value="gantt">Gantt</option>
+          </select>
+        </label>
+        <label v-if="props.mode === 'base' && viewMode === 'gantt'">
+          Zoom
+          <select v-model="ganttZoomLevel">
+            <option value="day">Day</option>
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+          </select>
+        </label>
         <label v-if="props.mode === 'base' && rowRenderMode === 'pagination'">
           Page size
           <select v-model.number="paginationPageSize">
@@ -184,6 +199,8 @@
         :page-size="paginationPageSize"
         :current-page="Math.max(0, paginationPage - 1)"
         :column-state="effectiveColumnState"
+        :view-mode="viewMode"
+        :gantt="ganttOptions"
         :theme="theme"
         :virtualization="virtualization"
         :row-height-mode="rowHeightMode"
@@ -193,6 +210,7 @@
         @cell-change="syncSelectionAggregatesLabel"
         @selection-change="syncSelectionAggregatesLabel"
         @update:column-state="handleColumnStateUpdate"
+        @update:view-mode="handleViewModeUpdate"
         @update:state="handleStateUpdate"
       />
     </section>
@@ -209,7 +227,12 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { DataGrid } from "@affino/datagrid-vue-app-enterprise";
+import {
+  DataGrid,
+  type DataGridAppViewMode,
+  type DataGridGanttOptions,
+  type DataGridGanttZoomLevel,
+} from "@affino/datagrid-vue-app-enterprise";
 import {
   industrialNeutralTheme,
   sugarTheme,
@@ -248,6 +271,8 @@ interface PublicDataGridExpose {
   getColumnState: () => DataGridUnifiedColumnState | null;
   getSelectionAggregatesLabel: () => string;
   getSelectionSummary: () => DataGridSelectionSummarySnapshot | null;
+  getView: () => DataGridAppViewMode | null;
+  setView: (mode: DataGridAppViewMode) => void;
   applyColumnState: (columnState: DataGridUnifiedColumnState) => boolean;
   getState: () => DataGridUnifiedState<unknown> | null;
   migrateState: (
@@ -273,6 +298,7 @@ type ThemePreset = "default" | "industrial" | "sugar" | "custom";
 const props = defineProps<{
   title: string;
   mode: Mode;
+  initialViewMode?: DataGridAppViewMode;
 }>();
 
 const PIVOT_LAYOUTS: Record<PivotLayoutId, DataGridPivotSpec> = {
@@ -370,22 +396,6 @@ function normalizeColumnState(
   return base;
 }
 
-const modeBadge = computed(() => {
-  return props.mode === "tree"
-    ? "Sugar / Tree"
-    : props.mode === "pivot"
-      ? "Sugar / Pivot"
-      : "Sugar / Base";
-});
-
-const modeHint = computed(() => {
-  return props.mode === "tree"
-    ? "Public component with tree-data row model options."
-    : props.mode === "pivot"
-      ? "Public component with declarative pivot model."
-      : "Public component with declarative rows, columns and view state.";
-});
-
 const rowCount = ref<number>(10000);
 const columnCount = ref<number>(16);
 const themePreset = ref<ThemePreset>("sugar");
@@ -394,6 +404,8 @@ const rowHeightMode = ref<"fixed" | "auto">("fixed");
 const rowRenderMode = ref<"virtualization" | "pagination">("virtualization");
 const paginationPageSize = ref(100);
 const paginationPage = ref(1);
+const viewMode = ref<DataGridAppViewMode>("table");
+const ganttZoomLevel = ref<DataGridGanttZoomLevel>("week");
 const baseRowHeight = ref(31);
 const rowHover = ref(true);
 const stripedRows = ref(true);
@@ -401,6 +413,26 @@ const pivotViewMode = ref<PivotViewMode>("pivot");
 const pivotLayout = ref<PivotLayoutId>("department-month-revenue");
 const hideUnusedPivotSourceColumns = ref(true);
 const gridRef = ref<PublicDataGridExpose | null>(null);
+
+const modeBadge = computed(() => {
+  return props.mode === "tree"
+    ? "Sugar / Tree"
+    : props.mode === "pivot"
+      ? "Sugar / Pivot"
+      : viewMode.value === "gantt"
+        ? "Sugar / Base + Gantt"
+        : "Sugar / Base";
+});
+
+const modeHint = computed(() => {
+  return props.mode === "tree"
+    ? "Public component with tree-data row model options."
+    : props.mode === "pivot"
+      ? "Public component with declarative pivot model."
+      : viewMode.value === "gantt"
+        ? "Public component in split grid plus timeline mode over the same visible rows."
+        : "Public component with declarative rows, columns and view state.";
+});
 
 const isStatePanelOpen = ref(false);
 const stateImportText = ref("");
@@ -441,6 +473,23 @@ const clientRowModelOptions = computed(() => {
       expandedByDefault: true,
       filterMode: "include-descendants" as const,
     },
+  };
+});
+const ganttOptions = computed<DataGridGanttOptions | undefined>(() => {
+  if (props.mode !== "base") {
+    return undefined;
+  }
+  return {
+    idKey: "rowId",
+    labelKey: "name",
+    startKey: "start",
+    endKey: "end",
+    progressKey: "progress",
+    dependencyKey: "dependencies",
+    criticalKey: "critical",
+    zoomLevel: ganttZoomLevel.value,
+    paneWidth: 720,
+    rowBarHeight: Math.max(12, Math.min(baseRowHeight.value - 10, 22)),
   };
 });
 const virtualization = computed(() => {
@@ -529,7 +578,7 @@ const effectiveColumnState = computed<DataGridUnifiedColumnState>(() => {
       ? "amount"
       : props.mode === "tree"
         ? "amount"
-        : "updatedAt";
+        : "end";
   if (pins[pinnedRightKey] !== "right") {
     pins[pinnedRightKey] = "right";
   }
@@ -570,6 +619,14 @@ const shouldHideUnusedPivotSourceColumns = computed(() => {
 });
 
 watch(
+  () => props.initialViewMode,
+  (nextViewMode) => {
+    viewMode.value = nextViewMode === "gantt" ? "gantt" : "table";
+  },
+  { immediate: true },
+);
+
+watch(
   columns,
   (nextColumns) => {
     columnState.value = normalizeColumnState(columnState.value, nextColumns);
@@ -603,6 +660,10 @@ const handleColumnStateUpdate = (
 
 const handleStateUpdate = (nextState: DataGridUnifiedState<unknown>): void => {
   stateModel.value = nextState;
+};
+
+const handleViewModeUpdate = (nextViewMode: DataGridAppViewMode): void => {
+  viewMode.value = nextViewMode === "gantt" ? "gantt" : "table";
 };
 
 const syncSelectionAggregatesLabel = (): void => {

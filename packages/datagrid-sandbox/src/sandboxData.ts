@@ -9,6 +9,11 @@ export interface VueBaseRow {
   region: string
   category: string
   qty: number
+  start: Date
+  end: Date
+  progress: number
+  dependencies: string[]
+  critical: boolean
   updatedAt: string
   [key: string]: unknown
 }
@@ -149,13 +154,13 @@ export function buildVueColumns(mode: "base" | "tree" | "pivot" | "worker", colu
           ]
         : [
             { key: "id", label: "ID", dataType: "number", initialState: { width: 92, pin: "left" }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true } },
-            { key: "name", label: "Item", initialState: { width: 220 }, capabilities: { sortable: true, filterable: true } },
+            { key: "name", label: "Task", initialState: { width: 220 }, capabilities: { sortable: true, filterable: true } },
             { key: "region", label: "Region", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
             { key: "category", label: "Category", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true, groupable: true } },
             { key: "status", label: "Status", initialState: { width: 120 }, capabilities: { sortable: true, filterable: true } },
             { key: "amount", label: "Amount", dataType: "currency", initialState: { width: 140 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0, max: 100_000 } },
-            { key: "qty", label: "Qty", dataType: "number", initialState: { width: 100 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0, max: 10_000 } },
-            { key: "updatedAt", label: "Updated", dataType: "date", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true } },
+            { key: "start", label: "Start", dataType: "date", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, editable: true } },
+            { key: "end", label: "End", dataType: "date", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, editable: true } },
           ]
 
   return appendExtraColumns(baseColumns, columnCount)
@@ -216,15 +221,29 @@ function buildBaseRows(rowCount: number, columnCount: number): VueBaseRow[] {
     const region = REGIONS[index % REGIONS.length] ?? "Unknown"
     const category = CATEGORIES[index % CATEGORIES.length] ?? "X"
     const status = STATUSES[index % STATUSES.length] ?? "new"
+    const startOffsetDays = (index * 3) % 120
+    const durationDays = 2 + (index % 12)
+    const dependencies: string[] = []
+    if (index > 0 && index % 3 !== 0) {
+      dependencies.push(`base-${index}`)
+    }
+    if (index > 2 && index % 11 === 0) {
+      dependencies.push(`base-${index - 2}`)
+    }
     const row: VueBaseRow = {
       rowId: `base-${index + 1}`,
       id: index + 1,
-      name: `Item ${index + 1}`,
+      name: `Task ${index + 1}`,
       status,
       amount: (index % 500) * 3 + (index % 17),
       region,
       category,
       qty: (index % 20) + 1,
+      start: new Date(Date.UTC(2026, 2, 1 + startOffsetDays)),
+      end: new Date(Date.UTC(2026, 2, 1 + startOffsetDays + durationDays)),
+      progress: (index * 13) % 101,
+      dependencies,
+      critical: durationDays >= 10 || index % 9 === 0,
       updatedAt: `2026-03-${String((index % 28) + 1).padStart(2, "0")}`,
     }
     fillExtraFields(row, index, columnCount, baseColumnsLength)

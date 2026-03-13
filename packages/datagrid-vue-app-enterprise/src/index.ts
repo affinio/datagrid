@@ -35,6 +35,12 @@ export type {
   DataGridVirtualizationProp,
 } from "@affino/datagrid-vue-app"
 export type {
+  DataGridAppViewMode,
+  DataGridGanttOptions,
+  DataGridGanttProp,
+  DataGridGanttZoomLevel,
+} from "@affino/datagrid-vue-app"
+export type {
   DataGridClientComputeMode,
   DataGridComputedFieldDefinition,
   DataGridFormulaFieldDefinition,

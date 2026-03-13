@@ -1,0 +1,48 @@
+{
+  "name": "@affino/datagrid-gantt",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Headless Gantt projection engine for Affino DataGrid",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/datagrid-gantt"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-gantt#readme",
+  "license": "MIT",
+  "keywords": [
+    "datagrid",
+    "gantt",
+    "timeline",
+    "engine",
+    "headless"
+  ],
+  "dependencies": {
+    "@affino/datagrid-core": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  },
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/index.js"
+}

@@ -56,6 +56,33 @@ const FORMULA_COLUMNS = [
   { key: "subtotal", label: "Subtotal" },
 ] as const
 
+const GANTT_ROWS = [
+  {
+    rowId: "g1",
+    id: "g1",
+    task: "Discovery",
+    start: new Date("2026-03-10T00:00:00.000Z"),
+    end: new Date("2026-03-14T00:00:00.000Z"),
+    progress: 0.5,
+  },
+  {
+    rowId: "g2",
+    id: "g2",
+    task: "Delivery",
+    start: new Date("2026-03-14T00:00:00.000Z"),
+    end: new Date("2026-03-20T00:00:00.000Z"),
+    progress: 0.2,
+    dependencies: ["g1"],
+  },
+] as const
+
+const GANTT_COLUMNS = [
+  { key: "task", label: "Task", width: 220 },
+  { key: "start", label: "Start", width: 140 },
+  { key: "end", label: "End", width: 140 },
+  { key: "progress", label: "Progress", width: 120 },
+] as const
+
 async function flushRuntimeTasks() {
   await nextTick()
   await Promise.resolve()
@@ -78,6 +105,8 @@ function resolveVm(wrapper: ReturnType<typeof mount>) {
         getAggregationModel?: () => unknown
       }
     } | null
+    getView?: () => "table" | "gantt"
+    setView?: (mode: "table" | "gantt") => void
     getState?: () => unknown
     getColumnSnapshot?: () => { order: readonly string[]; columns: readonly Array<{
       key: string
@@ -135,6 +164,39 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).not.toContain("formulaRuntime")
     expect(publicProps).not.toContain("formulaPacks")
     expect(publicProps).not.toContain("performance")
+  })
+
+  it("switches between table and gantt view modes through the public facade", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: GANTT_ROWS,
+        columns: GANTT_COLUMNS,
+        viewMode: "gantt",
+        gantt: {
+          startKey: "start",
+          endKey: "end",
+          progressKey: "progress",
+          dependencyKey: "dependencies",
+          labelKey: "task",
+          idKey: "id",
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(true)
+    expect(resolveVm(wrapper).getView?.()).toBe("gantt")
+
+    resolveVm(wrapper).setView?.("table")
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getView?.()).toBe("table")
+    expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(false)
+    expect(wrapper.find(".grid-stage").exists()).toBe(true)
+
+    wrapper.unmount()
   })
 
   it("opens declarative columnMenu from package triggers and applies sort and pin actions", async () => {

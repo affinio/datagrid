@@ -48,6 +48,15 @@ const routes = [
     props: { title: "Vue: Base Grid (Sugar)", mode: "base" },
   },
   {
+    path: "/vue/shell/gantt-grid",
+    component: VueShellGridCard,
+    props: {
+      title: "Vue: Gantt Grid (Sugar)",
+      mode: "base",
+      initialViewMode: "gantt",
+    },
+  },
+  {
     path: "/vue/shell/tree-grid",
     component: VueShellGridCard,
     props: { title: "Vue: Tree Grid (Sugar)", mode: "tree" },

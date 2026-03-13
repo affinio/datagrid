@@ -9,6 +9,7 @@
       <RouterLink class="sandbox__link" to="/core/base-grid">Core Base (Direct API)</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/base-grid">Vue Base (Adapter)</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/shell/base-grid">Vue Base (Sugar)</RouterLink>
+      <RouterLink class="sandbox__link" to="/vue/shell/gantt-grid">Vue Gantt (Sugar)</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/tree-grid">Vue Tree</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/shell/tree-grid">Vue Tree (Sugar)</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/pivot-grid">Vue Pivot</RouterLink>

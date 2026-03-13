@@ -28,6 +28,16 @@ interface FinanceRow {
   grossMargin?: number
 }
 
+interface GanttRow {
+  rowId: string
+  name: string
+  start: Date
+  end: Date
+  progress: number
+  dependencies?: string[]
+  critical?: boolean
+}
+
 const BASE_ROWS: readonly DemoRow[] = [
   { rowId: "r1", owner: "NOC", region: "eu-west", amount: 10 },
   { rowId: "r2", owner: "NOC", region: "us-east", amount: 20 },
@@ -64,6 +74,31 @@ const FINANCE_COLUMNS = [
   { key: "grossMargin", label: "Gross margin", formula: "SAFE_DIVIDE(revenue - cost, revenue, 0)" },
 ] as const
 
+const GANTT_ROWS: readonly GanttRow[] = [
+  {
+    rowId: "task-a",
+    name: "Discovery",
+    start: new Date("2026-03-01T00:00:00.000Z"),
+    end: new Date("2026-03-04T00:00:00.000Z"),
+    progress: 40,
+    critical: true,
+  },
+  {
+    rowId: "task-b",
+    name: "Implementation",
+    start: new Date("2026-03-05T00:00:00.000Z"),
+    end: new Date("2026-03-10T00:00:00.000Z"),
+    progress: 20,
+    dependencies: ["task-a"],
+  },
+] as const
+
+const GANTT_COLUMNS = [
+  { key: "name", label: "Task" },
+  { key: "start", label: "Start" },
+  { key: "end", label: "End" },
+] as const
+
 const ALL_FEATURES_LICENSE = createAffinoDataGridEnterpriseLicenseKey({
   customer: "enterprise-demo",
   expiresAt: "2099-12-31",
@@ -93,6 +128,10 @@ async function flushRuntimeTasks() {
   await nextTick()
   await Promise.resolve()
   await nextTick()
+}
+
+function resolveVm<T>(wrapper: ReturnType<typeof mount>): T {
+  return wrapper.vm as unknown as T
 }
 
 function queryDiagnosticsRoot(): HTMLElement | null {
@@ -136,6 +175,39 @@ afterAll(() => {
 })
 
 describe("DataGrid enterprise facade contract", () => {
+  it("passes gantt view facade through the enterprise wrapper", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: GANTT_ROWS,
+        columns: GANTT_COLUMNS,
+        viewMode: "gantt",
+        gantt: {
+          idKey: "rowId",
+          labelKey: "name",
+          startKey: "start",
+          endKey: "end",
+          progressKey: "progress",
+          dependencyKey: "dependencies",
+          criticalKey: "critical",
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(true)
+    expect(resolveVm<{ getView?: () => "table" | "gantt" | null }>(wrapper).getView?.()).toBe("gantt")
+
+    resolveVm<{ setView?: (mode: "table" | "gantt") => void }>(wrapper).setView?.("table")
+    await flushRuntimeTasks()
+
+    expect(resolveVm<{ getView?: () => "table" | "gantt" | null }>(wrapper).getView?.()).toBe("table")
+    expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
   it("opens enterprise diagnostics when a license key is present", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

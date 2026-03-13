@@ -5,6 +5,7 @@ import {
   onBeforeUnmount,
   ref,
   toRef,
+  watch,
   type PropType,
   type VNode,
 } from "vue"
@@ -74,6 +75,10 @@ import {
   type UseDataGridAppControlledStateOptions,
 } from "./useDataGridAppControlledState"
 import { useDataGridAppRowModel } from "./useDataGridAppRowModel"
+import type {
+  DataGridAppViewMode,
+  DataGridGanttProp,
+} from "./dataGridGantt"
 
 type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,
@@ -260,6 +265,14 @@ export default defineComponent({
       type: Boolean,
       default: false,
     },
+    viewMode: {
+      type: String as PropType<DataGridAppViewMode | undefined>,
+      default: undefined,
+    },
+    gantt: {
+      type: [Boolean, Object] as PropType<DataGridGanttProp | undefined>,
+      default: undefined,
+    },
   },
   emits: [
     "cell-change",
@@ -270,11 +283,13 @@ export default defineComponent({
     "update:hiddenColumnKeys",
     "update:columnWidths",
     "update:columnPins",
+    "update:viewMode",
     "update:state",
     "ready",
   ],
   setup(props, { attrs, slots, emit, expose }) {
     const dataGridRef = ref<LowLevelGridExpose | null>(null)
+    const currentViewMode = ref<DataGridAppViewMode>("table")
     const resolvedRenderMode = computed(() => {
       return resolveDataGridRenderMode(props.renderMode, props.pagination)
     })
@@ -387,6 +402,20 @@ export default defineComponent({
       emit("selection-change", payload)
     }
 
+    watch(
+      () => props.viewMode,
+      nextViewMode => {
+        currentViewMode.value = nextViewMode === "gantt" ? "gantt" : "table"
+      },
+      { immediate: true },
+    )
+
+    const setView = (nextViewMode: DataGridAppViewMode): void => {
+      const normalized = nextViewMode === "gantt" ? "gantt" : "table"
+      currentViewMode.value = normalized
+      emit("update:viewMode", normalized)
+    }
+
     onBeforeUnmount(() => {
       controlledState.dispose()
     })
@@ -401,6 +430,8 @@ export default defineComponent({
       getColumnSnapshot: () => dataGridRef.value?.api.columns.getSnapshot() ?? null,
       getSelectionAggregatesLabel: () => selectionAggregatesLabel.value,
       getSelectionSummary: () => dataGridRef.value?.api.selection.summarize() ?? null,
+      getView: () => currentViewMode.value,
+      setView,
       applyColumnState: controlledState.applyColumnState,
       getState: controlledState.getState,
       migrateState: controlledState.migrateState,
@@ -447,6 +478,8 @@ export default defineComponent({
         baseRowHeight: props.baseRowHeight,
         rowHover: props.rowHover,
         stripedRows: props.stripedRows,
+        viewMode: currentViewMode.value,
+        gantt: props.gantt,
       }
       return h(
         DataGridRuntimeHost,

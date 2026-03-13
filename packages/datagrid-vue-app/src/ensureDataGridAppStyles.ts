@@ -48,6 +48,130 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
 }
 
+.datagrid-gantt-stage {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.datagrid-gantt-stage__table,
+.datagrid-gantt-stage__timeline {
+  min-width: 0;
+  min-height: 0;
+}
+
+.datagrid-gantt-stage__table {
+  display: flex;
+  min-width: 280px;
+}
+
+.datagrid-gantt-stage__table > .grid-stage {
+  border-radius: 8px 0 0 8px;
+  border-right-width: 0;
+}
+
+.datagrid-gantt-stage__timeline {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--datagrid-glass-border);
+  border-left-width: 1px;
+  border-radius: 0 8px 8px 0;
+  overflow: hidden;
+  background: var(--datagrid-background-color);
+}
+
+.datagrid-gantt-stage__timeline-header {
+  min-width: 0;
+  border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
+  background: var(--datagrid-header-row-bg);
+}
+
+.datagrid-gantt-stage__timeline-body {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--datagrid-viewport-bg);
+}
+
+.datagrid-gantt-stage__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  color: var(--datagrid-text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.datagrid-gantt-timeline__viewport {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
+
+.datagrid-gantt-timeline__viewport--header {
+  height: 48px;
+}
+
+.datagrid-gantt-timeline__viewport--body {
+  height: 100%;
+}
+
+.datagrid-gantt-timeline__viewport:focus,
+.datagrid-gantt-timeline__viewport:focus-visible {
+  outline: none;
+}
+
+.datagrid-gantt-timeline__track-spacer {
+  min-height: 1px;
+}
+
+.datagrid-gantt-timeline__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.datagrid-gantt-timeline__canvas--header {
+  pointer-events: none;
+}
+
+.datagrid-gantt-timeline__canvas--body {
+  touch-action: none;
+}
+
+@media (max-width: 960px) {
+  .datagrid-gantt-stage {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(280px, 42vh) minmax(280px, 1fr);
+  }
+
+  .datagrid-gantt-stage__table {
+    min-width: 0;
+  }
+
+  .datagrid-gantt-stage__table > .grid-stage {
+    border-radius: 8px 8px 0 0;
+    border-right-width: 1px;
+    border-bottom-width: 0;
+  }
+
+  .datagrid-gantt-stage__timeline {
+    border-radius: 0 0 8px 8px;
+  }
+}
+
 .datagrid-app-inspector-shell {
   display: flex;
   flex: 0 0 min(480px, 42vw);

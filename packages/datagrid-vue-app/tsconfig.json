@@ -20,6 +20,8 @@
     "paths": {
       "@affino/datagrid-core": ["../datagrid-core/dist/src/index.d.ts"],
       "@affino/datagrid-core/*": ["../datagrid-core/dist/src/*"],
+      "@affino/datagrid-gantt": ["../datagrid-gantt/dist/index.d.ts"],
+      "@affino/datagrid-gantt/*": ["../datagrid-gantt/dist/*"],
       "@affino/datagrid-orchestration": ["../datagrid-orchestration/dist/src/index.d.ts"],
       "@affino/datagrid-orchestration/*": ["../datagrid-orchestration/dist/src/*"],
       "@affino/datagrid-theme": ["../datagrid-theme/dist/index.d.ts"],

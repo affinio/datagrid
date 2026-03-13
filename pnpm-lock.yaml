@@ -101,6 +101,16 @@ importers:
         specifier: workspace:*
         version: link:../datagrid-formula-engine
 
+  packages/datagrid-gantt:
+    dependencies:
+      '@affino/datagrid-core':
+        specifier: workspace:*
+        version: link:../datagrid-core
+    devDependencies:
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@25.3.1)(jiti@2.6.1)(jsdom@28.1.0)(lightningcss@1.31.1)(terser@5.46.0)
+
   packages/datagrid-laravel:
     dependencies:
       '@affino/datagrid-core':
@@ -244,6 +254,9 @@ importers:
 
   packages/datagrid-vue-app:
     dependencies:
+      '@affino/datagrid-gantt':
+        specifier: workspace:*
+        version: link:../datagrid-gantt
       '@affino/datagrid-theme':
         specifier: workspace:*
         version: link:../datagrid-theme

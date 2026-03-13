@@ -35,11 +35,17 @@ import DataGridModuleHost, {
   type DataGridAppInspectorPanel,
   type DataGridAppToolbarModule,
 } from "./DataGridModuleHost"
+import DataGridGanttStage from "./DataGridGanttStage.vue"
 import DataGridTableStage from "./DataGridTableStage.vue"
 import type { DataGridAdvancedFilterOptions } from "./dataGridAdvancedFilter"
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "./dataGridAggregations"
 import type { DataGridColumnLayoutOptions } from "./dataGridColumnLayout"
 import type { DataGridColumnMenuOptions } from "./dataGridColumnMenu"
+import {
+  normalizeDataGridGanttOptions,
+  type DataGridAppViewMode,
+  type DataGridGanttProp,
+} from "./dataGridGantt"
 import type { DataGridVirtualizationOptions } from "./dataGridVirtualization"
 import { useDataGridTableStageRuntime } from "./useDataGridTableStageRuntime"
 
@@ -439,6 +445,14 @@ export default defineComponent({
       type: Boolean,
       default: false,
     },
+    viewMode: {
+      type: String as PropType<DataGridAppViewMode>,
+      default: "table",
+    },
+    gantt: {
+      type: [Boolean, Object] as PropType<DataGridGanttProp | undefined>,
+      default: undefined,
+    },
     toolbarModules: {
       type: Array as PropType<readonly DataGridAppToolbarModule[]>,
       default: () => [],
@@ -514,6 +528,7 @@ export default defineComponent({
     })
     const rowHeightMode = ref(props.rowHeightMode)
     const normalizedBaseRowHeight = computed(() => normalizeBaseRowHeight(props.baseRowHeight))
+    const resolvedGanttOptions = computed(() => normalizeDataGridGanttOptions(props.gantt))
     const firstColumnKey = computed<string>(() => visibleColumns.value[0]?.key ?? "name")
     const columnLabelByKey = computed(() => {
       const map = new Map<string, string>()
@@ -984,21 +999,43 @@ export default defineComponent({
         h("div", {
           class: "datagrid-app-stage",
         }, [
-          h(DataGridTableStage as Component, {
-            ...tableStageProps.value,
-            sourceRows: props.rows,
-            columnMenuEnabled: props.columnMenu.enabled,
-            columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
-            rowHover: props.rowHover,
-            stripedRows: props.stripedRows,
-            isColumnFilterActive,
-            resolveColumnMenuSortDirection,
-            resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
-            applyColumnMenuSort,
-            applyColumnMenuPin,
-            applyColumnMenuFilter,
-            clearColumnMenuFilter,
-          }),
+          props.viewMode === "gantt"
+            ? h(DataGridGanttStage as Component, {
+              table: {
+                ...tableStageProps.value,
+                sourceRows: props.rows,
+                columnMenuEnabled: props.columnMenu.enabled,
+                columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
+                rowHover: props.rowHover,
+                stripedRows: props.stripedRows,
+                isColumnFilterActive,
+                resolveColumnMenuSortDirection,
+                resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
+                applyColumnMenuSort,
+                applyColumnMenuPin,
+                applyColumnMenuFilter,
+                clearColumnMenuFilter,
+              },
+              runtime: props.runtime,
+              gantt: resolvedGanttOptions.value,
+              baseRowHeight: normalizedBaseRowHeight.value,
+              rowVersion: rowVersion.value,
+            })
+            : h(DataGridTableStage as Component, {
+              ...tableStageProps.value,
+              sourceRows: props.rows,
+              columnMenuEnabled: props.columnMenu.enabled,
+              columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
+              rowHover: props.rowHover,
+              stripedRows: props.stripedRows,
+              isColumnFilterActive,
+              resolveColumnMenuSortDirection,
+              resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
+              applyColumnMenuSort,
+              applyColumnMenuPin,
+              applyColumnMenuFilter,
+              clearColumnMenuFilter,
+            }),
         ]),
         props.inspectorPanel
           ? h("aside", {
