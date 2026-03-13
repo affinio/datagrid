@@ -4,6 +4,39 @@ Framework-agnostic orchestration primitives shared by DataGrid adapters.
 
 This package contains pure TypeScript logic (state commands, interaction policies, transformation helpers) that should be reused by Vue/Laravel/React adapters.
 
+## Source structure
+
+Public orchestration surface is organized by domain chapters under `src/`:
+
+- `accessibility`
+- `cells`
+- `clipboard`
+- `columns`
+- `contextMenu`
+- `editing`
+- `fill`
+- `grouping`
+- `headers`
+- `history`
+- `navigation`
+- `pointer`
+- `rows`
+- `runtime`
+- `scrolling`
+- `selection`
+- `viewport`
+- `contracts`
+
+Internal implementation details live under `src/internal/`.
+
+The intended layering inside the package is:
+
+- public domain modules: adapter-facing orchestration entrypoints and stable exports
+- internal pure helpers: deterministic state transitions, calculations, contracts, kernels
+- internal browser helpers: narrow access points for browser-specific APIs such as animation-frame and clipboard
+
+This keeps public APIs stable while allowing the internal orchestration logic to be decomposed into smaller pure modules.
+
 ## Canonical Feature Catalog
 
 Single source of truth for platform capabilities:
@@ -15,6 +48,13 @@ Single source of truth for platform capabilities:
 - `@affino/datagrid-core`: data/row/column runtime and deterministic model contracts.
 - `@affino/datagrid-orchestration`: adapter-agnostic interaction policies and UI orchestration primitives.
 - `@affino/datagrid-vue`: Vue bindings, refs, templates and framework lifecycle wiring.
+
+## Design rules
+
+- Keep adapter-facing modules thin: orchestration files should mostly coordinate policies, not bury low-level math or state machines.
+- Prefer pure helpers for deterministic behavior: selection, pointer, viewport and context-menu state transitions should remain testable without DOM wiring.
+- Keep browser access narrow: `requestAnimationFrame`, clipboard, and similar browser APIs should flow through dedicated internal helpers instead of being scattered across domains.
+- Preserve public API stability: when a pure helper is extracted internally, public exports should remain compatible unless there is an explicit breaking-change decision.
 
 ## New orchestration primitives
 
@@ -89,3 +129,13 @@ scrollIdleGate.runWhenScrollIdle(() => {
 	recomputeSelectionSummary()
 })
 ```
+
+## Validation
+
+Package validation is expected to run all of the following:
+
+- `pnpm --filter @affino/datagrid-orchestration type-check:public`
+- `pnpm --filter @affino/datagrid-orchestration test:unit`
+- `pnpm --filter @affino/datagrid-orchestration test:contracts`
+
+The package `test` script chains the same checks by default.

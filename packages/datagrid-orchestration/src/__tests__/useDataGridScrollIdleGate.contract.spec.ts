@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { useDataGridScrollIdleGate } from "../useDataGridScrollIdleGate"
+import { useDataGridScrollIdleGate } from "../scrolling/useDataGridScrollIdleGate"
 
 describe("useDataGridScrollIdleGate contract", () => {
   it("runs callback immediately when idle", () => {

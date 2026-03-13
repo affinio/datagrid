@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { useDataGridRuntimeService } from "../useDataGridRuntimeService"
+import { useDataGridRuntimeService } from "../runtime/useDataGridRuntimeService"
 
 interface Row {
   rowId: string

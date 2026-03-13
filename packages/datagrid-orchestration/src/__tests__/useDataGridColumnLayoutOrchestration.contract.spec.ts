@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { useDataGridColumnLayoutOrchestration } from "../useDataGridColumnLayoutOrchestration"
+import { useDataGridColumnLayoutOrchestration } from "../columns/useDataGridColumnLayoutOrchestration"
 
 interface Column {
   key: string

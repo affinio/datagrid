@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { useDataGridInlineEditorFocus } from "../useDataGridInlineEditorFocus"
+import { useDataGridInlineEditorFocus } from "../editing/useDataGridInlineEditorFocus"
 
 describe("useDataGridInlineEditorFocus contract", () => {
   it("focuses and selects input editors", async () => {

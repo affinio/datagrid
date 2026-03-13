@@ -1,0 +1,163 @@
+import { resolveAnimationFrameScheduler } from "../internal/browserAnimationFrame"
+
+export type DataGridLinkedPaneSyncMode = "direct-transform" | "css-var"
+
+export interface UseDataGridLinkedPaneScrollSyncOptions {
+  resolveSourceScrollTop: () => number
+  mode?: DataGridLinkedPaneSyncMode
+  resolvePaneElements?: () => readonly (HTMLElement | null | undefined)[]
+  resolveCssVarHost?: () => HTMLElement | null
+  cssVarName?: string
+  clearOnReset?: boolean
+  requestAnimationFrame?: (callback: FrameRequestCallback) => number
+  cancelAnimationFrame?: (handle: number) => void
+}
+
+export interface UseDataGridLinkedPaneScrollSyncResult {
+  syncNow: (scrollTop?: number) => number
+  onSourceScroll: (scrollTop?: number) => void
+  scheduleSyncLoop: () => void
+  cancelSyncLoop: () => void
+  isSyncLoopScheduled: () => boolean
+  getLastAppliedScrollTop: () => number
+  reset: () => void
+}
+
+export function useDataGridLinkedPaneScrollSync(
+  options: UseDataGridLinkedPaneScrollSyncOptions,
+): UseDataGridLinkedPaneScrollSyncResult {
+  const mode = options.mode ?? "direct-transform"
+  const cssVarName = options.cssVarName ?? "--ui-affino-linked-scroll-top"
+  const clearOnReset = options.clearOnReset ?? true
+  const scheduler = resolveAnimationFrameScheduler({
+    requestAnimationFrame: options.requestAnimationFrame,
+    cancelAnimationFrame: options.cancelAnimationFrame,
+  })
+
+  let syncFrame: number | null = null
+  let lastAppliedScrollTop = Number.NaN
+  let pendingScrollTop: number | null = null
+
+  function normalizeScrollTop(value: number): number {
+    return Math.max(0, Number.isFinite(value) ? value : 0)
+  }
+
+  function resolvePaneElements(): readonly (HTMLElement | null | undefined)[] {
+    return options.resolvePaneElements?.() ?? []
+  }
+
+  function applyDirectTransform(scrollTop: number): void {
+    const transform = `translate3d(0, ${-scrollTop}px, 0)`
+    resolvePaneElements().forEach((element) => {
+      if (!element) {
+        return
+      }
+      if (element.style.transform !== transform) {
+        element.style.transform = transform
+      }
+    })
+  }
+
+  function applyCssVar(scrollTop: number): void {
+    const host = options.resolveCssVarHost?.()
+    if (!host) {
+      return
+    }
+    const value = `${-scrollTop}px`
+    if (host.style.getPropertyValue(cssVarName) !== value) {
+      host.style.setProperty(cssVarName, value)
+    }
+  }
+
+  function clearAppliedState(): void {
+    if (mode === "css-var") {
+      options.resolveCssVarHost?.()?.style.removeProperty(cssVarName)
+      return
+    }
+    resolvePaneElements().forEach((element) => {
+      element?.style.removeProperty("transform")
+    })
+  }
+
+  function apply(scrollTop: number): number {
+    const normalizedTop = normalizeScrollTop(scrollTop)
+    if (normalizedTop === lastAppliedScrollTop) {
+      return normalizedTop
+    }
+    lastAppliedScrollTop = normalizedTop
+    if (mode === "css-var") {
+      applyCssVar(normalizedTop)
+    } else {
+      applyDirectTransform(normalizedTop)
+    }
+    return normalizedTop
+  }
+
+  function syncNow(scrollTop = options.resolveSourceScrollTop()): number {
+    return apply(scrollTop)
+  }
+
+  function flushPendingSourceScroll(): void {
+    if (pendingScrollTop === null) {
+      return
+    }
+    const nextTop = pendingScrollTop
+    pendingScrollTop = null
+    apply(nextTop)
+  }
+
+  function onSourceScroll(scrollTop = options.resolveSourceScrollTop()): void {
+    pendingScrollTop = normalizeScrollTop(scrollTop)
+    if (syncFrame !== null) {
+      return
+    }
+    syncFrame = scheduler.requestFrame(() => {
+      syncFrame = null
+      flushPendingSourceScroll()
+    })
+  }
+
+  function runSyncLoop(): void {
+    syncFrame = null
+    flushPendingSourceScroll()
+    const sourceTop = normalizeScrollTop(options.resolveSourceScrollTop())
+    apply(sourceTop)
+    const shouldContinue = pendingScrollTop !== null || sourceTop !== lastAppliedScrollTop
+    if (shouldContinue) {
+      scheduleSyncLoop()
+    }
+  }
+
+  function scheduleSyncLoop(): void {
+    if (syncFrame !== null) {
+      return
+    }
+    syncFrame = scheduler.requestFrame(runSyncLoop)
+  }
+
+  function cancelSyncLoop(): void {
+    if (syncFrame === null) {
+      return
+    }
+    scheduler.cancelFrame(syncFrame)
+    syncFrame = null
+  }
+
+  function reset(): void {
+    cancelSyncLoop()
+    lastAppliedScrollTop = Number.NaN
+    if (clearOnReset) {
+      clearAppliedState()
+    }
+  }
+
+  return {
+    syncNow,
+    onSourceScroll,
+    scheduleSyncLoop,
+    cancelSyncLoop,
+    isSyncLoopScheduled: () => syncFrame !== null,
+    getLastAppliedScrollTop: () => lastAppliedScrollTop,
+    reset,
+  }
+}

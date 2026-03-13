@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { useDataGridPointerCellCoordResolver } from "../useDataGridPointerCellCoordResolver"
+import { useDataGridPointerCellCoordResolver } from "../pointer/useDataGridPointerCellCoordResolver"
 
 interface Coord {
   rowIndex: number

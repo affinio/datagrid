@@ -3,7 +3,7 @@ import {
   buildDataGridFillMatrix,
   canToggleDataGridFillBehavior,
   resolveDataGridDefaultFillBehavior,
-} from "../dataGridFillBehavior"
+} from "../fill/dataGridFillBehavior"
 
 describe("dataGridFillBehavior", () => {
   it("detects numeric vertical fills as series by default", () => {

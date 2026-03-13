@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
-import { useDataGridManagedTouchScroll } from "../useDataGridManagedTouchScroll"
-import { useDataGridManagedWheelScroll } from "../useDataGridManagedWheelScroll"
+import { useDataGridManagedTouchScroll } from "../scrolling/useDataGridManagedTouchScroll"
+import { useDataGridManagedWheelScroll } from "../scrolling/useDataGridManagedWheelScroll"
 
 function createTouch(identifier: number, clientX: number, clientY: number): Touch {
   return { identifier, clientX, clientY } as unknown as Touch

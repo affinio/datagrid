@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { useDataGridCellCoordNormalizer } from "../useDataGridCellCoordNormalizer"
+import { useDataGridCellCoordNormalizer } from "../cells/useDataGridCellCoordNormalizer"
 
 describe("useDataGridCellCoordNormalizer contract", () => {
   it("clamps coordinate into current row/column bounds", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { useDataGridScrollPerfTelemetry } from "../useDataGridScrollPerfTelemetry"
+import { useDataGridScrollPerfTelemetry } from "../scrolling/useDataGridScrollPerfTelemetry"
 
 describe("useDataGridScrollPerfTelemetry contract", () => {
   it("reports good quality for stable frame cadence", () => {

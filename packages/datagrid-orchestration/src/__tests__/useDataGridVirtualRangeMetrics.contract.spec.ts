@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   computeDataGridVirtualRange,
   useDataGridVirtualRangeMetrics,
-} from "../useDataGridVirtualRangeMetrics"
+} from "../viewport/useDataGridVirtualRangeMetrics"
 
 describe("useDataGridVirtualRangeMetrics contract", () => {
   it("computes range from canonical virtualWindow", () => {

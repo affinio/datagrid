@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { useDataGridPointerModifierPolicy } from "../useDataGridPointerModifierPolicy"
+import { useDataGridPointerModifierPolicy } from "../pointer/useDataGridPointerModifierPolicy"
 
 describe("useDataGridPointerModifierPolicy contract", () => {
   it("treats alt/ctrl/meta as range-move modifier", () => {

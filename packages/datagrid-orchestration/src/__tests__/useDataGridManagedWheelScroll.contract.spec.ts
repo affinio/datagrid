@@ -3,7 +3,7 @@ import {
   resolveDataGridWheelPropagationDecision,
   resolveDataGridWheelAxisPolicy,
   useDataGridManagedWheelScroll,
-} from "../useDataGridManagedWheelScroll"
+} from "../scrolling/useDataGridManagedWheelScroll"
 
 describe("useDataGridManagedWheelScroll contract", () => {
   it("uses vertical axis by default on close deltas", () => {

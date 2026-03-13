@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import {
   type DataGridCellRefreshRange,
   useDataGridCellRefreshBatcher,
-} from "../useDataGridCellRefreshBatcher"
+} from "../runtime/useDataGridCellRefreshBatcher"
 
 describe("useDataGridCellRefreshBatcher contract", () => {
   it("respects maxBatchSize and drains pending ranges across flushes", () => {

@@ -3,7 +3,7 @@ import {
   createDataGridMutableRowStore,
   forEachDataGridRangeCell,
   getDataGridRangeWidth,
-} from "../dataGridRangeMutationKernel"
+} from "../selection/dataGridRangeMutationKernel"
 
 interface Row {
   rowId: string

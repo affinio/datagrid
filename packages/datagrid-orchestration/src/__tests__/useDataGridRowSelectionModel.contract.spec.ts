@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { useDataGridRowSelectionModel } from "../useDataGridRowSelectionModel"
+import { useDataGridRowSelectionModel } from "../selection/useDataGridRowSelectionModel"
 
 describe("useDataGridRowSelectionModel contract", () => {
   it("applies anchor + shift range on filtered rows", () => {

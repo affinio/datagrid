@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { useDataGridHistoryActionRunner } from "../useDataGridHistoryActionRunner"
+import { useDataGridHistoryActionRunner } from "../history/useDataGridHistoryActionRunner"
 
 describe("useDataGridHistoryActionRunner contract", () => {
   it("returns false when undo/redo stacks are empty", async () => {

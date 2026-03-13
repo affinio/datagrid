@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { useDataGridSelectionComparators } from "../useDataGridSelectionComparators"
+import { useDataGridSelectionComparators } from "../selection/useDataGridSelectionComparators"
 
 describe("useDataGridSelectionComparators contract", () => {
   it("compares cell coordinates only when both values exist", () => {

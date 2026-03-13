@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { useDataGridLinkedPaneScrollSync } from "../useDataGridLinkedPaneScrollSync"
+import { useDataGridLinkedPaneScrollSync } from "../scrolling/useDataGridLinkedPaneScrollSync"
 
 describe("useDataGridLinkedPaneScrollSync contract", () => {
   it("applies direct transform sync to linked panes", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { useDataGridQuickFilterActions } from "../useDataGridQuickFilterActions"
+import { useDataGridQuickFilterActions } from "../rows/useDataGridQuickFilterActions"
 
 describe("useDataGridQuickFilterActions contract", () => {
   it("clears non-empty query and reports action", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { useDataGridCellVisibilityScroller } from "../useDataGridCellVisibilityScroller"
+import { useDataGridCellVisibilityScroller } from "../cells/useDataGridCellVisibilityScroller"
 
 interface Coord {
   rowIndex: number

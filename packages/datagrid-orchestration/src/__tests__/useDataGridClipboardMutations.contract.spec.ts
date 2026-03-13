@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest"
 import {
   useDataGridClipboardMutations,
   type DataGridClipboardCoord,
-} from "../useDataGridClipboardMutations"
-import type { DataGridClipboardRange } from "../useDataGridClipboardBridge"
+} from "../clipboard/useDataGridClipboardMutations"
+import type { DataGridClipboardRange } from "../clipboard/useDataGridClipboardBridge"
 
 interface TestRow {
   rowId: string

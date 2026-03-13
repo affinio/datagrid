@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { useDataGridSelectionOverlayOrchestration } from "../useDataGridSelectionOverlayOrchestration"
+import { useDataGridSelectionOverlayOrchestration } from "../selection/useDataGridSelectionOverlayOrchestration"
 
 describe("useDataGridSelectionOverlayOrchestration contract", () => {
   it("renders only scroll segment when range spans pinned-left and scroll columns", () => {

@@ -26,7 +26,7 @@
     "type-check:public": "tsc -p tsconfig.public.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
     "test:contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract\" --passWithNoTests",
-    "test": "npm run type-check"
+    "test": "pnpm run type-check && pnpm run test:unit && pnpm run test:contracts"
   },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*"
