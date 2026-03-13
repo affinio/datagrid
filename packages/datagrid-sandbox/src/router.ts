@@ -51,9 +51,10 @@ const routes = [
     path: "/vue/shell/gantt-grid",
     component: VueShellGridCard,
     props: {
-      title: "Vue: Gantt Grid (Sugar)",
+      title: "Vue: Enterprise Gantt Showcase",
       mode: "base",
       initialViewMode: "gantt",
+      ganttShowcase: true,
     },
   },
   {

@@ -11,6 +11,8 @@ export interface VueBaseRow {
   qty: number
   start: Date
   end: Date
+  baselineStart: Date
+  baselineEnd: Date
   progress: number
   dependencies: string[]
   critical: boolean
@@ -161,6 +163,11 @@ export function buildVueColumns(mode: "base" | "tree" | "pivot" | "worker", colu
             { key: "amount", label: "Amount", dataType: "currency", initialState: { width: 140 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true, aggregatable: true }, constraints: { min: 0, max: 100_000 } },
             { key: "start", label: "Start", dataType: "date", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, editable: true } },
             { key: "end", label: "End", dataType: "date", initialState: { width: 140 }, capabilities: { sortable: true, filterable: true, editable: true } },
+            { key: "baselineStart", label: "Baseline Start", dataType: "date", initialState: { width: 152 }, capabilities: { sortable: true, filterable: true, editable: true } },
+            { key: "baselineEnd", label: "Baseline End", dataType: "date", initialState: { width: 152 }, capabilities: { sortable: true, filterable: true, editable: true } },
+            { key: "progress", label: "% Complete", dataType: "number", initialState: { width: 120 }, presentation: { align: "right", headerAlign: "right" }, capabilities: { sortable: true, filterable: true, editable: true }, constraints: { min: 0, max: 100 } },
+            { key: "dependencies", label: "Predecessors", initialState: { width: 150 }, capabilities: { sortable: true, filterable: true, editable: true } },
+            { key: "critical", label: "Critical", dataType: "boolean", initialState: { width: 108 }, capabilities: { sortable: true, filterable: true, editable: true } },
           ]
 
   return appendExtraColumns(baseColumns, columnCount)
@@ -215,7 +222,7 @@ export function buildCoreRows(rowCount: number, columnCount: number): CoreBaseRo
 
 function buildBaseRows(rowCount: number, columnCount: number): VueBaseRow[] {
   const rows: VueBaseRow[] = new Array(rowCount)
-  const baseColumnsLength = 8
+  const baseColumnsLength = 13
 
   for (let index = 0; index < rowCount; index += 1) {
     const region = REGIONS[index % REGIONS.length] ?? "Unknown"
@@ -224,12 +231,24 @@ function buildBaseRows(rowCount: number, columnCount: number): VueBaseRow[] {
     const startOffsetDays = (index * 3) % 120
     const durationDays = 2 + (index % 12)
     const dependencies: string[] = []
-    if (index > 0 && index % 3 !== 0) {
-      dependencies.push(`base-${index}`)
+    const previousRegionTaskId = index + 1 - REGIONS.length
+    if (previousRegionTaskId >= 1) {
+      dependencies.push(
+        index % 7 === 0
+          ? `${previousRegionTaskId}:SS`
+          : index % 5 === 0
+            ? `${previousRegionTaskId}FF`
+            : String(previousRegionTaskId),
+      )
     }
     if (index > 2 && index % 11 === 0) {
-      dependencies.push(`base-${index - 2}`)
+      dependencies.push(index % 2 === 0 ? `${index - 2}FF` : String(index - 2))
     }
+    if (index > 5 && index % 17 === 0) {
+      dependencies.push(`${index - 5}->SF`)
+    }
+    const baselineLeadDays = (index % 4) + 1
+    const baselineLagDays = index % 3
     const row: VueBaseRow = {
       rowId: `base-${index + 1}`,
       id: index + 1,
@@ -241,6 +260,8 @@ function buildBaseRows(rowCount: number, columnCount: number): VueBaseRow[] {
       qty: (index % 20) + 1,
       start: new Date(Date.UTC(2026, 2, 1 + startOffsetDays)),
       end: new Date(Date.UTC(2026, 2, 1 + startOffsetDays + durationDays)),
+      baselineStart: new Date(Date.UTC(2026, 2, 1 + startOffsetDays - baselineLeadDays)),
+      baselineEnd: new Date(Date.UTC(2026, 2, 1 + startOffsetDays + durationDays - baselineLagDays)),
       progress: (index * 13) % 101,
       dependencies,
       critical: durationDays >= 10 || index % 9 === 0,

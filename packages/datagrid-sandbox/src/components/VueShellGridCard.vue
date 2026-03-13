@@ -143,7 +143,7 @@
           Hide unused source columns
         </label>
         <div
-          v-if="props.mode === 'tree' || props.mode === 'pivot'"
+          v-if="props.mode === 'tree' || props.mode === 'pivot' || (props.mode === 'base' && groupByField)"
           class="group-actions"
         >
           <button type="button" @click="expandAllGroups">Expand all</button>
@@ -178,6 +178,35 @@
         <span>Rows: {{ rows.length }}</span>
         <span>Columns: {{ columns.length }}</span>
         <span>{{ modeHint }}</span>
+      </div>
+      <div
+        v-if="props.ganttShowcase && viewMode === 'gantt'"
+        class="gantt-legend"
+      >
+        <span class="gantt-legend__item">
+          <span class="gantt-legend__swatch gantt-legend__swatch--bar" />
+          Actual task
+        </span>
+        <span class="gantt-legend__item">
+          <span class="gantt-legend__swatch gantt-legend__swatch--baseline" />
+          Baseline plan
+        </span>
+        <span class="gantt-legend__item">
+          <span class="gantt-legend__swatch gantt-legend__swatch--critical" />
+          Critical task
+        </span>
+        <span class="gantt-legend__item">
+          <span class="gantt-legend__swatch gantt-legend__swatch--variance" />
+          Variance marker
+        </span>
+        <span class="gantt-legend__item">
+          <span class="gantt-legend__swatch gantt-legend__swatch--today" />
+          Today
+        </span>
+        <span class="gantt-legend__item">
+          <span class="gantt-legend__swatch gantt-legend__swatch--summary" />
+          Summary bar
+        </span>
       </div>
     </header>
 
@@ -226,7 +255,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import {
   DataGrid,
   type DataGridAppViewMode,
@@ -299,6 +328,7 @@ const props = defineProps<{
   title: string;
   mode: Mode;
   initialViewMode?: DataGridAppViewMode;
+  ganttShowcase?: boolean;
 }>();
 
 const PIVOT_LAYOUTS: Record<PivotLayoutId, DataGridPivotSpec> = {
@@ -430,7 +460,9 @@ const modeHint = computed(() => {
     : props.mode === "pivot"
       ? "Public component with declarative pivot model."
       : viewMode.value === "gantt"
-        ? "Public component in split grid plus timeline mode over the same visible rows."
+        ? props.ganttShowcase
+          ? "Enterprise gantt showcase over the same row model: baseline, typed predecessors, summaries and computed critical path."
+          : "Public component in split grid plus timeline mode over the same visible rows."
         : "Public component with declarative rows, columns and view state.";
 });
 
@@ -480,15 +512,25 @@ const ganttOptions = computed<DataGridGanttOptions | undefined>(() => {
     return undefined;
   }
   return {
-    idKey: "rowId",
+    idKey: "id",
     labelKey: "name",
     startKey: "start",
     endKey: "end",
+    baselineStartKey: "baselineStart",
+    baselineEndKey: "baselineEnd",
     progressKey: "progress",
     dependencyKey: "dependencies",
     criticalKey: "critical",
+    computedCriticalPath: true,
     zoomLevel: ganttZoomLevel.value,
-    paneWidth: 720,
+    paneWidth: props.ganttShowcase ? 760 : 720,
+    rangePaddingDays: props.ganttShowcase ? 2 : 0,
+    workingCalendar: props.ganttShowcase
+      ? {
+          workingWeekdays: [1, 2, 3, 4, 5],
+          holidays: ["2026-05-25T00:00:00.000Z"],
+        }
+      : undefined,
     rowBarHeight: Math.max(12, Math.min(baseRowHeight.value - 10, 22)),
   };
 });
@@ -627,6 +669,39 @@ watch(
 );
 
 watch(
+  () => props.ganttShowcase,
+  (enabled) => {
+    if (!enabled || props.mode !== "base") {
+      return;
+    }
+    viewMode.value = "gantt";
+    themePreset.value = "sugar";
+    rowCount.value = 1000;
+    columnCount.value = Math.max(columnCount.value, 16);
+    groupByField.value = "region";
+    ganttZoomLevel.value = "week";
+    rowRenderMode.value = "virtualization";
+    rowHeightMode.value = "fixed";
+    baseRowHeight.value = 31;
+    rowHover.value = true;
+    stripedRows.value = true;
+  },
+  { immediate: true },
+);
+
+watch(
+  [gridRef, groupByField, viewMode],
+  async ([grid, groupField, mode]) => {
+    if (!props.ganttShowcase || !grid || !groupField || mode !== "gantt") {
+      return;
+    }
+    await nextTick();
+    grid.expandAllGroups();
+  },
+  { immediate: true },
+);
+
+watch(
   columns,
   (nextColumns) => {
     columnState.value = normalizeColumnState(columnState.value, nextColumns);
@@ -736,6 +811,85 @@ const collapseAllGroups = (): void => {
 </script>
 
 <style scoped>
+.gantt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.gantt-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: rgba(15, 23, 42, 0.82);
+}
+
+.gantt-legend__swatch {
+  display: inline-block;
+  width: 24px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.gantt-legend__swatch--bar {
+  background: #2563eb;
+}
+
+.gantt-legend__swatch--baseline {
+  background: rgba(100, 116, 139, 0.34);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.gantt-legend__swatch--critical {
+  background: #2563eb;
+  border: 2px solid #dc2626;
+}
+
+.gantt-legend__swatch--variance {
+  height: 2px;
+  border-radius: 0;
+  background: rgba(220, 38, 38, 0.62);
+  position: relative;
+}
+
+.gantt-legend__swatch--variance::before,
+.gantt-legend__swatch--variance::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 10px;
+  background: rgba(220, 38, 38, 0.62);
+}
+
+.gantt-legend__swatch--variance::before {
+  left: 0;
+}
+
+.gantt-legend__swatch--variance::after {
+  right: 0;
+}
+
+.gantt-legend__swatch--today {
+  width: 2px;
+  height: 16px;
+  border-radius: 0;
+  background: #2563eb;
+}
+
+.gantt-legend__swatch--summary {
+  background: rgba(37, 99, 235, 0.16);
+  border: 2px solid rgba(37, 99, 235, 0.82);
+}
+
 .grid-host {
   display: flex;
   flex: 1 1 auto;
