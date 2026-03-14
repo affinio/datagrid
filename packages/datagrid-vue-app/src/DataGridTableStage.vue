@@ -5,6 +5,7 @@
     :class="{
       'grid-stage--canvas-chrome': true,
       'grid-stage--auto-row-height': mode === 'base' && rowHeightMode === 'auto',
+      'grid-stage--fill-dragging': props.isFillDragging,
       'grid-stage--range-moving': isRangeMoving,
     }"
   >
@@ -386,7 +387,7 @@
               @dblclick.stop="startInlineEditIfAllowed(row, column)"
             >
               <button
-                v-if="mode === 'base' && isColumnEditable(column) && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
+                v-if="mode === 'base' && isCellEditableSafe(row, rowOffset, column, columnIndexByKey(column.key)) && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
                 type="button"
                 class="cell-fill-handle"
                 aria-label="Fill handle"
@@ -395,7 +396,7 @@
                 @dblclick.stop.prevent="handleFillHandleDoubleClick($event)"
               />
               <input
-                v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
+                v-if="isCellEditableSafe(row, rowOffset, column, columnIndexByKey(column.key)) && isEditingCellSafe(row, column.key)"
                 class="cell-editor-input"
                 :value="editingCellValue"
                 @mousedown.stop
@@ -477,7 +478,7 @@
                 @dblclick.stop="startInlineEditIfAllowed(row, column)"
               >
                 <button
-                  v-if="mode === 'base' && isColumnEditable(column) && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
+                  v-if="mode === 'base' && isCellEditableSafe(row, rowOffset, column, columnIndexByKey(column.key)) && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
                   type="button"
                   class="cell-fill-handle"
                   aria-label="Fill handle"
@@ -486,7 +487,7 @@
                   @dblclick.stop.prevent="handleFillHandleDoubleClick($event)"
                 />
                 <input
-                  v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
+                  v-if="isCellEditableSafe(row, rowOffset, column, columnIndexByKey(column.key)) && isEditingCellSafe(row, column.key)"
                   class="cell-editor-input"
                   :value="editingCellValue"
                   @mousedown.stop
@@ -566,7 +567,7 @@
               @dblclick.stop="startInlineEditIfAllowed(row, column)"
             >
               <button
-                v-if="mode === 'base' && isColumnEditable(column) && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
+                v-if="mode === 'base' && isCellEditableSafe(row, rowOffset, column, columnIndexByKey(column.key)) && isFillHandleCellSafe(rowOffset, columnIndexByKey(column.key)) && !isEditingCellSafe(row, column.key)"
                 type="button"
                 class="cell-fill-handle"
                 aria-label="Fill handle"
@@ -575,7 +576,7 @@
                 @dblclick.stop.prevent="handleFillHandleDoubleClick($event)"
               />
               <input
-                v-if="isColumnEditable(column) && isEditingCellSafe(row, column.key)"
+                v-if="isCellEditableSafe(row, rowOffset, column, columnIndexByKey(column.key)) && isEditingCellSafe(row, column.key)"
                 class="cell-editor-input"
                 :value="editingCellValue"
                 @mousedown.stop
@@ -711,6 +712,7 @@ const RANGE_MOVE_HANDLE_HOVER_EDGE_PX = 6
 const FILL_ACTION_ROOT_SELECTOR = ".grid-fill-action"
 const FILL_ACTION_TRIGGER_SIZE_PX = 14
 const FILL_ACTION_VIEWPORT_MARGIN_PX = 8
+const FILL_ACTION_HANDLE_CLEARANCE_PX = 10
 
 const columnMenuMaxFilterValues = computed(() => (
   typeof props.columnMenuMaxFilterValues === "number"
@@ -866,7 +868,9 @@ function handleHeaderColumnClick(column: TableColumn, additive: boolean): void {
 }
 
 function startInlineEditIfAllowed(row: TableRow, column: TableColumn): void {
-  if (!isColumnEditable(column)) {
+  const rowOffset = props.displayRows.findIndex(candidate => candidate === row)
+  const columnIndex = columnIndexByKey(column.key)
+  if (rowOffset < 0 || !isCellEditableSafe(row, rowOffset, column, columnIndex)) {
     return
   }
   props.startInlineEdit(row, column.key)
@@ -994,6 +998,18 @@ function isEditingCellSafe(row: TableRow, columnKey: string): boolean {
     : false
 }
 
+function isCellEditableSafe(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): boolean {
+  const evaluate = props.isCellEditable
+  return typeof evaluate === "function"
+    ? evaluate(row, rowOffset, column, columnIndex)
+    : isColumnEditable(column)
+}
+
 function isFillHandleCellSafe(rowOffset: number, columnIndex: number): boolean {
   const evaluate = props.isFillHandleCell
   return typeof evaluate === "function"
@@ -1110,8 +1126,55 @@ const bodyViewportScrollLeft = ref(0)
 const bodyViewportClientWidth = ref(0)
 const bodyViewportClientHeight = ref(0)
 const bodyViewportTopOffset = ref(0)
+const GLOBAL_FILL_DRAG_CURSOR_CLASS = "datagrid-fill-drag-cursor"
+const restoreBodyCursor = ref<string | null>(null)
+const restoreDocumentCursor = ref<string | null>(null)
 let gridChromeAnimationFrame = 0
 let gridChromeResizeObserver: ResizeObserver | null = null
+
+function syncGlobalFillDragCursor(active: boolean): void {
+  if (typeof document === "undefined") {
+    return
+  }
+  const body = document.body
+  const root = document.documentElement
+  if (!body || !root) {
+    return
+  }
+  if (active) {
+    if (restoreBodyCursor.value == null) {
+      restoreBodyCursor.value = body.style.cursor
+    }
+    if (restoreDocumentCursor.value == null) {
+      restoreDocumentCursor.value = root.style.cursor
+    }
+    root.classList.add(GLOBAL_FILL_DRAG_CURSOR_CLASS)
+    body.classList.add(GLOBAL_FILL_DRAG_CURSOR_CLASS)
+    root.style.setProperty("cursor", "crosshair", "important")
+    body.style.setProperty("cursor", "crosshair", "important")
+    return
+  }
+  root.classList.remove(GLOBAL_FILL_DRAG_CURSOR_CLASS)
+  body.classList.remove(GLOBAL_FILL_DRAG_CURSOR_CLASS)
+  if (restoreDocumentCursor.value != null) {
+    if (restoreDocumentCursor.value) {
+      root.style.setProperty("cursor", restoreDocumentCursor.value)
+    }
+    else {
+      root.style.removeProperty("cursor")
+    }
+    restoreDocumentCursor.value = null
+  }
+  if (restoreBodyCursor.value != null) {
+    if (restoreBodyCursor.value) {
+      body.style.setProperty("cursor", restoreBodyCursor.value)
+    }
+    else {
+      body.style.removeProperty("cursor")
+    }
+    restoreBodyCursor.value = null
+  }
+}
 
 function clearRangeMoveHandleHover(): void {
   hoveredRangeMoveHandleCell.value = null
@@ -1255,6 +1318,10 @@ function isNearRangeMoveSelectionEdge(
 }
 
 function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: number): void {
+  if (props.isFillDragging) {
+    clearRangeMoveHandleHover()
+    return
+  }
   if (!isNearRangeMoveSelectionEdge(event, rowOffset, columnIndex)) {
     clearRangeMoveHandleHover()
     return
@@ -1285,6 +1352,9 @@ function readDisplayCell(row: TableRow, columnKey: string): string {
 }
 
 function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boolean {
+  if (props.isFillDragging) {
+    return false
+  }
   return (
     hoveredRangeMoveHandleCell.value?.rowIndex === resolveAbsoluteRowIndex(rowOffset)
     && hoveredRangeMoveHandleCell.value?.columnIndex === columnIndex
@@ -1849,7 +1919,10 @@ function resolveFloatingFillActionTop(): number {
   const viewportTop = bodyViewportTopOffset.value + FILL_ACTION_VIEWPORT_MARGIN_PX
   const viewportBottom = bodyViewportTopOffset.value + Math.max(
     0,
-    bodyViewportClientHeight.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX,
+    bodyViewportClientHeight.value
+      - FILL_ACTION_TRIGGER_SIZE_PX
+      - FILL_ACTION_VIEWPORT_MARGIN_PX
+      - FILL_ACTION_HANDLE_CLEARANCE_PX,
   )
   const anchorCell = props.fillActionAnchorCell
   const targetCell = resolveVisibleFillActionAnchorCell()
@@ -1858,7 +1931,11 @@ function resolveFloatingFillActionTop(): number {
   }
   const relativeCellRect = resolveRelativeCellRect(targetCell)
   if (relativeCellRect) {
-    return clamp(relativeCellRect.bottom - FILL_ACTION_TRIGGER_SIZE_PX, viewportTop, viewportBottom)
+    return clamp(
+      relativeCellRect.bottom - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_HANDLE_CLEARANCE_PX,
+      viewportTop,
+      viewportBottom,
+    )
   }
   const shellRect = bodyShellRef.value?.getBoundingClientRect()
   const rowElement = targetCell ? resolveVisibleRowElement(targetCell.rowIndex) : null
@@ -1866,7 +1943,7 @@ function resolveFloatingFillActionTop(): number {
     return viewportBottom
   }
   const rowRect = rowElement.getBoundingClientRect()
-  const rowBottom = rowRect.bottom - shellRect.top - FILL_ACTION_TRIGGER_SIZE_PX
+  const rowBottom = rowRect.bottom - shellRect.top - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_HANDLE_CLEARANCE_PX
   return clamp(rowBottom, viewportTop, viewportBottom)
 }
 
@@ -1903,6 +1980,15 @@ watch(
   },
 )
 
+watch(
+  () => props.isFillDragging,
+  active => {
+    if (active) {
+      clearRangeMoveHandleHover()
+    }
+  },
+)
+
 watch(fillActionMenuOpen, (open, _previous, onCleanup) => {
   if (!open || typeof window === "undefined") {
     return
@@ -1930,6 +2016,14 @@ watch(fillActionMenuOpen, (open, _previous, onCleanup) => {
     window.removeEventListener("keydown", handleKeydown)
   })
 })
+
+watch(
+  () => props.isFillDragging,
+  active => {
+    syncGlobalFillDragCursor(active)
+  },
+  { immediate: true },
+)
 
 const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
   resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
@@ -1984,6 +2078,7 @@ function handleBodyViewportWheel(event: WheelEvent): void {
 }
 
 onBeforeUnmount(() => {
+  syncGlobalFillDragCursor(false)
   linkedPaneScrollSync.reset()
   managedWheelScroll.reset()
   if (gridChromeAnimationFrame !== 0 && typeof window !== "undefined") {

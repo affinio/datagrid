@@ -22,6 +22,12 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   recordEditTransaction: (beforeSnapshot: TSnapshot) => void
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
   readClipboardCell?: (row: DataGridRowNode<TRow>, columnKey: string) => string
+  isCellEditable: (
+    row: DataGridRowNode<TRow>,
+    rowIndex: number,
+    columnKey: string,
+    columnIndex: number,
+  ) => boolean
   syncViewport: () => void
   applyClipboardEdits?: (
     range: DataGridCopyRange,
@@ -124,6 +130,9 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       for (let columnIndex = normalized.startColumn; columnIndex <= normalized.endColumn; columnIndex += 1) {
         const columnKey = options.visibleColumns.value[columnIndex]?.key
         if (!columnKey) {
+          continue
+        }
+        if (!options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
           continue
         }
         const rowOffset = rowIndex - normalized.startRow

@@ -44,6 +44,18 @@ const COLUMNS = [
   { key: "amount", label: "Amount", width: 140 },
 ] as const
 
+const EDITABLE_COLUMNS = [
+  { key: "owner", label: "Owner", width: 180, capabilities: { editable: true } },
+  { key: "region", label: "Region", width: 160 },
+  { key: "amount", label: "Amount", width: 140 },
+] as const
+
+const READONLY_OWNER_COLUMNS = [
+  { key: "owner", label: "Owner", width: 180, capabilities: { editable: false } },
+  { key: "region", label: "Region", width: 160 },
+  { key: "amount", label: "Amount", width: 140 },
+] as const
+
 const FORMULA_ROWS: readonly FormulaRow[] = [
   { id: 1, price: 12, qty: 3 },
   { id: 2, price: 5, qty: 4 },
@@ -140,6 +152,10 @@ function queryAggregationsRoot(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(".datagrid-aggregations")
 }
 
+function queryBodyCell(wrapper: ReturnType<typeof mount>, rowIndex: number, columnIndex: number) {
+  return wrapper.find(`.grid-body-viewport .grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`)
+}
+
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
 const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
 
@@ -167,6 +183,102 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).not.toContain("formulaRuntime")
     expect(publicProps).not.toContain("formulaPacks")
     expect(publicProps).not.toContain("performance")
+    expect(publicProps).toContain("isCellEditable")
+  })
+
+  it("keeps a column editable cell read-only when the public predicate returns false", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        isCellEditable: ({ rowId }: { rowId: string }) => rowId !== "r1",
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    expect(cell.exists()).toBe(true)
+
+    await cell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("opens inline editing when the column is editable and the public predicate returns true", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        isCellEditable: () => true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it("keeps a cell read-only when the column is explicitly non-editable even if the predicate returns true", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: READONLY_OWNER_COLUMNS,
+        isCellEditable: () => true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("does not start keyboard editing for a blocked cell through the public predicate", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        isCellEditable: ({ rowId }: { rowId: string }) => rowId !== "r1",
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    })
+    await flushRuntimeTasks()
+    await cell.trigger("keydown", {
+      key: "Enter",
+      cancelable: true,
+    })
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(false)
+
+    wrapper.unmount()
   })
 
   it("switches between table and gantt view modes through the public facade", async () => {

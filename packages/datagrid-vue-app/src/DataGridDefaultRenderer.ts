@@ -40,6 +40,7 @@ import DataGridGanttStage from "./DataGridGanttStage.vue"
 import DataGridTableStage from "./DataGridTableStage.vue"
 import type { DataGridAdvancedFilterOptions } from "./dataGridAdvancedFilter"
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "./dataGridAggregations"
+import type { DataGridCellEditablePredicate } from "./dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "./dataGridColumnLayout"
 import type { DataGridColumnMenuOptions } from "./dataGridColumnMenu"
 import {
@@ -453,6 +454,10 @@ export default defineComponent({
     stripedRows: {
       type: Boolean,
       default: false,
+    },
+    isCellEditable: {
+      type: Function as PropType<DataGridCellEditablePredicate<Record<string, unknown>> | undefined>,
+      default: undefined,
     },
     viewMode: {
       type: String as PropType<DataGridAppViewMode>,
@@ -932,6 +937,7 @@ export default defineComponent({
       clearColumnMenuFilter,
       applyRowHeightSettings,
       cloneRowData,
+      isCellEditable: props.isCellEditable,
     })
     const toolbarModules = computed<readonly DataGridAppToolbarModule[]>(() => {
       const modules: DataGridAppToolbarModule[] = []

@@ -919,6 +919,23 @@ const DATA_GRID_APP_STYLES = `
   cursor: grabbing;
 }
 
+.grid-stage--fill-dragging,
+.grid-stage--fill-dragging *,
+.grid-stage--fill-dragging .grid-body-shell,
+.grid-stage--fill-dragging .grid-body-shell .grid-cell,
+.grid-stage--fill-dragging .grid-body-viewport,
+.grid-stage--fill-dragging .grid-cell--range-move-handle-hover,
+.grid-stage--fill-dragging .cell-fill-handle {
+  cursor: crosshair !important;
+}
+
+html.datagrid-fill-drag-cursor,
+html.datagrid-fill-drag-cursor *,
+body.datagrid-fill-drag-cursor,
+body.datagrid-fill-drag-cursor * {
+  cursor: crosshair !important;
+}
+
 .affino-datagrid-app-root .grid-cell--range-move-handle-hover {
   cursor: grab !important;
 }
@@ -1828,6 +1845,22 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .grid-fill-action {
+  --datagrid-fill-action-border: var(--datagrid-column-menu-border, var(--datagrid-copy-menu-border));
+  --datagrid-fill-action-bg: color-mix(
+    in srgb,
+    var(--datagrid-column-menu-bg, var(--datagrid-copy-menu-bg)) 92%,
+    var(--datagrid-editor-bg) 8%
+  );
+  --datagrid-fill-action-shadow: var(--datagrid-column-menu-shadow, var(--datagrid-copy-menu-shadow));
+  --datagrid-fill-action-hover-bg: color-mix(
+    in srgb,
+    var(--datagrid-column-menu-item-hover-bg, var(--datagrid-copy-menu-item-hover-bg)) 82%,
+    var(--datagrid-fill-action-bg) 18%
+  );
+  --datagrid-fill-action-hover-border: var(
+    --datagrid-copy-menu-item-hover-border,
+    color-mix(in srgb, var(--datagrid-accent-strong) 20%, var(--datagrid-fill-action-border))
+  );
   position: absolute;
   display: inline-flex;
   align-items: flex-end;
@@ -1840,8 +1873,8 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-fill-action__trigger,
 .grid-fill-action__item {
-  border: 1px solid var(--datagrid-copy-menu-border);
-  background: var(--datagrid-copy-menu-bg);
+  border: 1px solid var(--datagrid-fill-action-border);
+  background: var(--datagrid-fill-action-bg);
   color: var(--datagrid-text-primary);
   font: inherit;
 }
@@ -1855,11 +1888,12 @@ const DATA_GRID_APP_STYLES = `
   height: 14px;
   padding: 0;
   border-radius: 999px;
-  box-shadow: 0 6px 16px var(--datagrid-copy-menu-shadow);
+  box-shadow: 0 6px 16px var(--datagrid-fill-action-shadow);
   font-size: 9px;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
+  backdrop-filter: blur(10px);
 }
 
 .grid-fill-action__menu {
@@ -1870,10 +1904,11 @@ const DATA_GRID_APP_STYLES = `
   flex-direction: column;
   min-width: 88px;
   padding: 4px;
-  border: 1px solid var(--datagrid-copy-menu-border);
+  border: 1px solid var(--datagrid-fill-action-border);
   border-radius: 10px;
-  background: var(--datagrid-copy-menu-bg);
-  box-shadow: 0 14px 28px var(--datagrid-copy-menu-shadow);
+  background: var(--datagrid-fill-action-bg);
+  box-shadow: 0 14px 28px var(--datagrid-fill-action-shadow);
+  backdrop-filter: blur(12px);
 }
 
 .grid-fill-action__item {
@@ -1889,8 +1924,8 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-fill-action__item:hover,
 .grid-fill-action__item--active {
-  border-color: var(--datagrid-copy-menu-item-hover-border);
-  background: var(--datagrid-copy-menu-item-hover-bg);
+  border-color: var(--datagrid-fill-action-hover-border);
+  background: var(--datagrid-fill-action-hover-bg);
 }
 
 .grid-fill-action__trigger:focus,

@@ -11,6 +11,7 @@ type DemoRow = {
 
 function createClipboardHarness(options: {
   readClipboardCell?: (row: { data: DemoRow }, columnKey: string) => string
+  isCellEditable?: (row: { data: DemoRow; rowId: string }, rowIndex: number, columnKey: string, columnIndex: number) => boolean
 } = {}) {
   const rows = ref<DemoRow[]>([
     { rowId: "r1", a: "A1", b: "B1", c: "C1" },
@@ -62,6 +63,14 @@ function createClipboardHarness(options: {
     recordEditTransaction: () => undefined,
     readCell: (row, columnKey) => String((row.data as DemoRow)[columnKey as keyof DemoRow] ?? ""),
     readClipboardCell: options.readClipboardCell,
+    isCellEditable: (row, rowIndex, columnKey, columnIndex) => {
+      return options.isCellEditable?.(
+        { data: row.data as DemoRow, rowId: String(row.rowId) },
+        rowIndex,
+        columnKey,
+        columnIndex,
+      ) ?? true
+    },
     syncViewport: () => undefined,
   })
 
@@ -142,6 +151,7 @@ describe("useDataGridAppClipboard contract", () => {
       captureRowsSnapshot: () => rows.value.map(row => ({ ...row })),
       recordEditTransaction,
       readCell: (row, columnKey) => String((row.data as DemoRow)[columnKey as keyof DemoRow] ?? ""),
+      isCellEditable: () => true,
       syncViewport: () => undefined,
     })
 
@@ -224,5 +234,21 @@ describe("useDataGridAppClipboard contract", () => {
         value: originalClipboard,
       })
     }
+  })
+
+  it("skips blocked cells when applying clipboard edits", () => {
+    const { clipboard, rows } = createClipboardHarness({
+      isCellEditable: (_row, rowIndex, columnKey) => !(rowIndex === 0 && columnKey === "b"),
+    })
+
+    const applied = clipboard.applyClipboardEdits({
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 1,
+    }, [["X", "Y"]])
+
+    expect(applied).toBe(1)
+    expect(rows.value[0]).toEqual({ rowId: "r1", a: "X", b: "B1", c: "C1" })
   })
 })

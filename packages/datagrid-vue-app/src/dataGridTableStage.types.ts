@@ -46,6 +46,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   selectionAnchorCell?: DataGridTableStageAnchorCell | null
   fillPreviewRange: DataGridOverlayRange | null
   rangeMovePreviewRange: DataGridOverlayRange | null
+  isFillDragging: boolean
   isRangeMoving: boolean
   headerViewportRef: DataGridElementRefHandler
   bodyViewportRef: DataGridElementRefHandler
@@ -103,6 +104,12 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   isCellInPendingClipboardRange: (rowOffset: number, columnIndex: number) => boolean
   isCellOnPendingClipboardEdge: (rowOffset: number, columnIndex: number, edge: DataGridPendingEdge) => boolean
   isEditingCell: (row: DataGridTableRow<TRow>, columnKey: string) => boolean
+  isCellEditable: (
+    row: DataGridTableRow<TRow>,
+    rowOffset: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ) => boolean
   handleCellMouseDown: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number, columnIndex: number) => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableRow<TRow>, rowOffset: number, columnIndex: number) => void
   startInlineEdit: (row: DataGridTableRow<TRow>, columnKey: string) => void

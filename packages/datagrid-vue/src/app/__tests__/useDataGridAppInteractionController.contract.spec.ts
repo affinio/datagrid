@@ -62,12 +62,14 @@ function createMouseEvent(
 function createControllerHarness(options: {
   rowCount?: number
   columnCount?: number
+  rowData?: readonly DemoRow[]
   columnWidths?: readonly number[]
   shellWidth?: number
   shellHeight?: number
   indexColumnWidth?: number
   resolveRowIndexAtOffset?: (offset: number) => number
   mode?: "base" | "tree" | "pivot" | "worker"
+  isCellEditable?: (rowIndex: number, columnIndex: number) => boolean
 } = {}) {
   const rowCount = options.rowCount ?? 1
   const columnWidths = options.columnWidths ?? Array.from({ length: options.columnCount ?? 2 }, () => 2)
@@ -82,7 +84,7 @@ function createControllerHarness(options: {
   let rows = Array.from({ length: rowCount }, (_, rowIndex) => ({
     rowId: `r${rowIndex + 1}`,
     kind: "data",
-    data: {},
+    data: options.rowData?.[rowIndex] ?? {},
   })) as unknown as DataGridRowNode<DemoRow>[]
   const row = rows[0]!
   const buildRangeSnapshot = (options: {
@@ -198,6 +200,7 @@ function createControllerHarness(options: {
   const recordIntentTransaction = vi.fn()
   const clearPendingClipboardOperation = vi.fn(() => false)
   const syncViewport = vi.fn()
+  const startInlineEdit = vi.fn()
 
   const controller = useDataGridAppInteractionController<DemoRow, readonly DemoRow[]>({
     mode: ref(mode),
@@ -259,7 +262,11 @@ function createControllerHarness(options: {
     applyCellSelectionByCoord,
     setCellSelection,
     clearCellSelection: vi.fn(),
-    readCell: vi.fn(() => ""),
+    readCell: vi.fn((nextRow, columnKey) => {
+      const value = (nextRow.data as Record<string, unknown>)?.[columnKey]
+      return value == null ? "" : String(value)
+    }),
+    isCellEditable: (_row, rowIndex, _columnKey, columnIndex) => options.isCellEditable?.(rowIndex, columnIndex) ?? true,
     cloneRowData: rowData => ({ ...rowData }),
     resolveRowIndexById: rowId => rows.findIndex(nextRow => nextRow.rowId === rowId),
     captureRowsSnapshot: vi.fn(() => rows.map(nextRow => ({
@@ -277,7 +284,7 @@ function createControllerHarness(options: {
     buildFillMatrixFromRange,
     syncViewport,
     editingCell: ref(null),
-    startInlineEdit: vi.fn(),
+    startInlineEdit,
     commitInlineEdit: vi.fn(),
     canUndo: () => false,
     canRedo: () => false,
@@ -299,6 +306,7 @@ function createControllerHarness(options: {
     clearPendingClipboardOperation,
     recordIntentTransaction,
     syncViewport,
+    startInlineEdit,
   }
 }
 
@@ -527,6 +535,22 @@ describe("useDataGridAppInteractionController contract", () => {
       startColumn: 0,
       endColumn: 3,
     })
+  })
+
+  it("does not start keyboard editing for a blocked cell", () => {
+    const { controller, row, startInlineEdit } = createControllerHarness({
+      isCellEditable: () => false,
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "Enter",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(startInlineEdit).not.toHaveBeenCalled()
   })
 
   it("clears the selected range on Delete and records a clear intent", () => {
@@ -771,13 +795,20 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
-  it("fills to the last row on fill-handle double click", () => {
+  it("fills down on fill-handle double click only through contiguous empty cells", () => {
     const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
-      rowCount: 4,
+      rowCount: 5,
       columnCount: 2,
+      rowData: [
+        { a: "1" },
+        {},
+        {},
+        { a: "stop" },
+        {},
+      ],
     })
 
-    applyClipboardEdits.mockReturnValue(4)
+    applyClipboardEdits.mockReturnValue(3)
     buildFillMatrixFromRange.mockReturnValue([["1"]])
     selectionSnapshot.value = {
       activeRangeIndex: 0,
@@ -809,15 +840,15 @@ describe("useDataGridAppInteractionController contract", () => {
     })
     expect(applyClipboardEdits).toHaveBeenCalledWith({
       startRow: 0,
-      endRow: 3,
+      endRow: 2,
       startColumn: 0,
       endColumn: 0,
-    }, [["1"], ["2"], ["3"], ["4"]])
+    }, [["1"], ["2"], ["3"]])
     expect(controller.lastAppliedFill.value).toMatchObject({
       behavior: "series",
       previewRange: {
         startRow: 0,
-        endRow: 3,
+        endRow: 2,
         startColumn: 0,
         endColumn: 0,
       },
@@ -825,6 +856,106 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
+  it("clears the removed tail when a repeated fill drag shrinks back toward the base range", () => {
+    const elementFromPointSpy = vi.spyOn(document, "elementFromPoint")
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
+      rowCount: 5,
+      columnCount: 1,
+      columnWidths: [24],
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(4, Math.floor(offset / 24))),
+    })
+
+    applyClipboardEdits.mockReturnValue(1)
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 3, colIndex: 0, rowId: "r4" },
+      ranges: [{
+        startRow: 0,
+        endRow: 3,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r4",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 3, colIndex: 0, rowId: "r4" },
+      }],
+    }
+    controller.lastAppliedFill.value = {
+      baseRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+      previewRange: { startRow: 0, endRow: 3, startColumn: 0, endColumn: 0 },
+      behavior: "series",
+      allowBehaviorToggle: true,
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 82,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    elementFromPointSpy.mockReturnValue(createCell(2, 0))
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 10,
+      clientY: 58,
+      bubbles: true,
+      cancelable: true,
+    }))
+    controller.handleWindowMouseUp()
+
+    expect(applyClipboardEdits).toHaveBeenNthCalledWith(1, {
+      startRow: 3,
+      endRow: 3,
+      startColumn: 0,
+      endColumn: 0,
+    }, [[""]], { recordHistory: false })
+    expect(controller.lastAppliedFill.value).toMatchObject({
+      previewRange: {
+        startRow: 0,
+        endRow: 2,
+        startColumn: 0,
+        endColumn: 0,
+      },
+    })
+
+    elementFromPointSpy.mockRestore()
+  })
+
+
+  it("does not apply fill-down from a blocked anchor cell", () => {
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
+      rowCount: 4,
+      columnCount: 2,
+      isCellEditable: () => false,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(controller.lastAppliedFill.value).toBeNull()
+  })
   it("marks plain-text fills as not offering a fill behavior toggle", () => {
     const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
       rowCount: 4,
@@ -1018,6 +1149,73 @@ describe("useDataGridAppInteractionController contract", () => {
       endCol: 0,
     })
     expect(selectionSnapshot.value?.activeCell).toMatchObject({ rowIndex: 0, colIndex: 0, rowId: "r1" })
+  })
+
+  it("restarts fill-handle drag from the last applied fill base range so the filled selection can shrink", () => {
+    const elementFromPointSpy = vi.spyOn(document, "elementFromPoint")
+    const { controller, selectionSnapshot } = createControllerHarness({
+      rowCount: 5,
+      columnCount: 1,
+      columnWidths: [24],
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(4, Math.floor(offset / 24))),
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 3, colIndex: 0, rowId: "r4" },
+      ranges: [{
+        startRow: 0,
+        endRow: 3,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r4",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 3, colIndex: 0, rowId: "r4" },
+      }],
+    }
+    controller.lastAppliedFill.value = {
+      baseRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+      previewRange: { startRow: 0, endRow: 3, startColumn: 0, endColumn: 0 },
+      behavior: "series",
+      allowBehaviorToggle: true,
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 82,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    const targetCell = createCell(2, 0)
+    elementFromPointSpy.mockReturnValue(targetCell)
+
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 10,
+      clientY: 58,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(controller.selectionRange.value).toEqual({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 0,
+    })
+    expect(controller.fillPreviewRange.value).toEqual({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 0,
+    })
+    expect(controller.isFillHandleCell(2, 0)).toBe(true)
+    expect(controller.isFillHandleCell(0, 0)).toBe(false)
+
+    elementFromPointSpy.mockRestore()
   })
 
   it("prefers the selection anchor over the active cell when restoring focus after fill-handle apply", async () => {

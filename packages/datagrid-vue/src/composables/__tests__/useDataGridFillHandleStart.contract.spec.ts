@@ -107,4 +107,35 @@ describe("useDataGridFillHandleStart contract", () => {
 
     expect(setFillPreviewRange).toHaveBeenCalledWith(initialPreview)
   })
+
+  it("uses the provided initial fill base range on pointer down", () => {
+    const initialBase = { startRow: 1, endRow: 1, startColumn: 3, endColumn: 4 }
+    const setFillBaseRange = vi.fn()
+
+    const start = useDataGridFillHandleStart({
+      resolveSelectionRange: () => ({ startRow: 1, endRow: 3, startColumn: 3, endColumn: 4 }),
+      resolveInitialFillBaseRange: () => initialBase,
+      focusViewport: vi.fn(),
+      stopRangeMove: vi.fn(),
+      setDragSelecting: vi.fn(),
+      setDragPointer: vi.fn(),
+      setFillDragging: vi.fn(),
+      setFillBaseRange,
+      setFillPreviewRange: vi.fn(),
+      setFillDragStartPointer: vi.fn(),
+      setFillPointer: vi.fn(),
+      startInteractionAutoScroll: vi.fn(),
+      setLastAction: vi.fn(),
+    })
+
+    start.onSelectionHandleMouseDown({
+      button: 0,
+      clientX: 1,
+      clientY: 2,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as MouseEvent)
+
+    expect(setFillBaseRange).toHaveBeenCalledWith(initialBase)
+  })
 })

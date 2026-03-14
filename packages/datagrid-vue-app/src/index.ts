@@ -7,6 +7,10 @@ export type {
   DataGridDeclarativeFormulaOptions,
 } from "./dataGridFormulaOptions"
 export type {
+  DataGridCellEditablePredicate,
+  DataGridCellEditablePredicateContext,
+} from "./dataGridEditability"
+export type {
   DataGridThemePreset,
   DataGridThemeProp,
 } from "./dataGridTheme"

@@ -22,6 +22,7 @@ import {
   useDataGridAppViewport,
   useDataGridAppViewportLifecycle,
 } from "@affino/datagrid-vue"
+import type { DataGridCellEditablePredicate } from "./dataGridEditability"
 import type { DataGridVirtualizationOptions } from "./dataGridVirtualization"
 import { useDataGridTableStageBindings } from "./useDataGridTableStageBindings"
 import type { DataGridTableStageProps } from "./dataGridTableStage.types"
@@ -77,6 +78,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   ) => number
   buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
   applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean
+  isCellEditable?: DataGridCellEditablePredicate<TRow>
   history?: DataGridTableStageHistoryAdapter
 }
 
@@ -115,6 +117,57 @@ export function useDataGridTableStageRuntime<
   ))
   const resolveColumnWidth = (column: DataGridColumnSnapshot): number => {
     return column.width ?? DEFAULT_COLUMN_WIDTH
+  }
+  const isColumnEditable = (column: DataGridColumnSnapshot): boolean => {
+    return column.column.capabilities?.editable !== false
+  }
+  const isCellEditable = (
+    row: import("@affino/datagrid-vue").DataGridRowNode<TRow>,
+    rowIndex: number,
+    column: DataGridColumnSnapshot,
+  ): boolean => {
+    if (row.kind === "group" || row.rowId == null || !isColumnEditable(column)) {
+      return false
+    }
+    if (!options.isCellEditable) {
+      return true
+    }
+    return options.isCellEditable({
+      row: row.data as TRow,
+      rowId: row.rowId,
+      rowIndex,
+      column: column.column,
+      columnKey: column.key,
+    })
+  }
+  const resolveEditableColumn = (
+    columnKey: string,
+    columnIndex: number,
+  ): { column: DataGridColumnSnapshot; columnIndex: number } | null => {
+    const columnAtIndex = orderedVisibleColumns.value[columnIndex]
+    if (columnAtIndex?.key === columnKey) {
+      return { column: columnAtIndex, columnIndex }
+    }
+    const resolvedColumnIndex = orderedVisibleColumns.value.findIndex(column => column.key === columnKey)
+    if (resolvedColumnIndex < 0) {
+      return null
+    }
+    return {
+      column: orderedVisibleColumns.value[resolvedColumnIndex] as DataGridColumnSnapshot,
+      columnIndex: resolvedColumnIndex,
+    }
+  }
+  const isCellEditableByKey = (
+    row: import("@affino/datagrid-vue").DataGridRowNode<TRow>,
+    rowIndex: number,
+    columnKey: string,
+    columnIndex: number,
+  ): boolean => {
+    const resolved = resolveEditableColumn(columnKey, columnIndex)
+    if (!resolved) {
+      return false
+    }
+    return isCellEditable(row, rowIndex, resolved.column)
   }
   const rowHeightMetrics = createDataGridAppRowHeightMetrics({
     totalRows: () => options.totalRows.value,
@@ -200,12 +253,12 @@ export function useDataGridTableStageRuntime<
     applyCellSelectionByCoord,
     setCellSelection,
     clearCellSelection,
-    isCellSelected,
+    isCellSelected: isCommittedCellSelected,
   } = selectionController
-  const isSelectionAnchorCell = selectionController.isSelectionAnchorCell ?? (() => false)
-  const shouldHighlightSelectedCell = selectionController.shouldHighlightSelectedCell
-    ?? ((rowOffset: number, columnIndex: number) => isCellSelected(rowOffset, columnIndex))
-  const isCellOnSelectionEdge = selectionController.isCellOnSelectionEdge
+  const isCommittedSelectionAnchorCell = selectionController.isSelectionAnchorCell ?? (() => false)
+  const shouldHighlightCommittedSelectedCell = selectionController.shouldHighlightSelectedCell
+    ?? ((rowOffset: number, columnIndex: number) => isCommittedCellSelected(rowOffset, columnIndex))
+  const isCommittedCellOnSelectionEdge = selectionController.isCellOnSelectionEdge
     ?? (() => false)
   const selectionAnchorCell = computed(() => {
     const snapshot = options.selectionSnapshot.value
@@ -423,6 +476,7 @@ export function useDataGridTableStageRuntime<
     readClipboardCell: options.readClipboardCell
       ? (row, columnKey) => options.readClipboardCell?.(row, columnKey) ?? ""
       : undefined,
+    isCellEditable: isCellEditableByKey,
     syncViewport: () => syncViewportFromDom(),
     applyClipboardEdits: options.applyClipboardEdits,
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,
@@ -476,6 +530,7 @@ export function useDataGridTableStageRuntime<
     ensureActiveCellVisible: (rowIndex, columnIndex) => {
       ensureKeyboardActiveCellVisible(rowIndex, columnIndex)
     },
+    isCellEditable: isCellEditableByKey,
     captureRowsSnapshot: captureHistorySnapshot,
     recordEditTransaction: beforeSnapshot => {
       recordHistoryIntentTransaction({
@@ -493,7 +548,7 @@ export function useDataGridTableStageRuntime<
     fillPreviewRange,
     lastAppliedFill,
     isRangeMoving,
-    selectionRange,
+    selectionRange: interactionSelectionRange,
     rangeMovePreviewRange,
     stopPointerSelection,
     stopFillSelection,
@@ -527,6 +582,7 @@ export function useDataGridTableStageRuntime<
     setCellSelection,
     clearCellSelection,
     readCell: (row, columnKey) => readCell(row, columnKey),
+    isCellEditable: isCellEditableByKey,
     cloneRowData: options.cloneRowData,
     resolveRowIndexById,
     captureRowsSnapshot: captureHistorySnapshot,
@@ -669,6 +725,86 @@ export function useDataGridTableStageRuntime<
     },
   })
 
+  const selectionRange = computed(() => (
+    interactionSelectionRange.value ?? resolveSelectionRangeForClipboard()
+  ))
+
+  const resolveVisualSelectionRange = (): DataGridCopyRange | null => selectionRange.value
+
+  const isVisualFillSelectionActive = (): boolean => {
+    return options.mode.value === "base" && isFillDragging.value && Boolean(fillPreviewRange.value)
+  }
+
+  const isCellWithinRange = (
+    range: DataGridCopyRange,
+    rowOffset: number,
+    columnIndex: number,
+  ): boolean => {
+    const rowIndex = viewportRowStart.value + rowOffset
+    return (
+      rowIndex >= range.startRow
+      && rowIndex <= range.endRow
+      && columnIndex >= range.startColumn
+      && columnIndex <= range.endColumn
+    )
+  }
+
+  const isSelectionAnchorCell = (rowOffset: number, columnIndex: number): boolean => {
+    if (selectionAnchorCell.value) {
+      return selectionAnchorCell.value.rowIndex === viewportRowStart.value + rowOffset
+        && selectionAnchorCell.value.columnIndex === columnIndex
+    }
+    return isCommittedSelectionAnchorCell(rowOffset, columnIndex)
+  }
+
+  const isCellSelected = (rowOffset: number, columnIndex: number): boolean => {
+    if (!isVisualFillSelectionActive()) {
+      return isCommittedCellSelected(rowOffset, columnIndex)
+    }
+    const range = resolveVisualSelectionRange()
+    return range ? isCellWithinRange(range, rowOffset, columnIndex) : false
+  }
+
+  const shouldHighlightSelectedCell = (rowOffset: number, columnIndex: number): boolean => {
+    if (!isVisualFillSelectionActive()) {
+      return shouldHighlightCommittedSelectedCell(rowOffset, columnIndex)
+    }
+    const range = resolveVisualSelectionRange()
+    if (!range || !isCellWithinRange(range, rowOffset, columnIndex)) {
+      return false
+    }
+    const isSingleCell = range.startRow === range.endRow && range.startColumn === range.endColumn
+    if (isSingleCell) {
+      return false
+    }
+    return !isSelectionAnchorCell(rowOffset, columnIndex)
+  }
+
+  const isCellOnSelectionEdge = (
+    rowOffset: number,
+    columnIndex: number,
+    edge: "top" | "right" | "bottom" | "left",
+  ): boolean => {
+    if (!isVisualFillSelectionActive()) {
+      return isCommittedCellOnSelectionEdge(rowOffset, columnIndex, edge)
+    }
+    const range = resolveVisualSelectionRange()
+    if (!range || !isCellWithinRange(range, rowOffset, columnIndex)) {
+      return false
+    }
+    const rowIndex = viewportRowStart.value + rowOffset
+    switch (edge) {
+      case "top":
+        return rowIndex === range.startRow
+      case "right":
+        return columnIndex === range.endColumn
+      case "bottom":
+        return rowIndex === range.endRow
+      case "left":
+        return columnIndex === range.startColumn
+    }
+  }
+
   const {
     tableStageProps,
   } = useDataGridTableStageBindings<TRow>({
@@ -693,6 +829,7 @@ export function useDataGridTableStageRuntime<
     selectionAnchorCell,
     fillPreviewRange,
     rangeMovePreviewRange,
+    isFillDragging,
     isRangeMoving,
     headerViewportRef,
     bodyViewportRef,
@@ -738,6 +875,10 @@ export function useDataGridTableStageRuntime<
     isCellInPendingClipboardRange,
     isCellOnPendingClipboardEdge,
     isEditingCell,
+    isCellEditable: (row, rowOffset, column, columnIndex) => {
+      void columnIndex
+      return isCellEditable(row, viewportRowStart.value + rowOffset, column)
+    },
     handleCellMouseDown,
     handleCellKeydown,
     startInlineEdit,

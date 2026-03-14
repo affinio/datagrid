@@ -9,6 +9,7 @@ export interface UseDataGridFillHandleStartOptions<
   TRange extends DataGridFillHandleStartRange = DataGridFillHandleStartRange,
 > {
   resolveSelectionRange: () => TRange | null
+  resolveInitialFillBaseRange?: (range: TRange) => TRange | null
   resolveInitialFillPreviewRange?: (range: TRange) => TRange | null
   focusViewport: () => void
   stopRangeMove: (applyPreview: boolean) => void
@@ -40,6 +41,7 @@ export function useDataGridFillHandleStart<
     if (!currentRange) {
       return false
     }
+    const initialBaseRange = options.resolveInitialFillBaseRange?.(currentRange) ?? currentRange
     const initialPreviewRange = options.resolveInitialFillPreviewRange?.(currentRange) ?? currentRange
     const pointer = { clientX: event.clientX, clientY: event.clientY }
 
@@ -50,7 +52,7 @@ export function useDataGridFillHandleStart<
     options.setDragSelecting(false)
     options.setDragPointer(null)
     options.setFillDragging(true)
-    options.setFillBaseRange({ ...currentRange })
+    options.setFillBaseRange(initialBaseRange ? { ...initialBaseRange } : null)
     options.setFillPreviewRange(initialPreviewRange ? { ...initialPreviewRange } : null)
     options.setFillDragStartPointer(pointer)
     options.setFillPointer(pointer)

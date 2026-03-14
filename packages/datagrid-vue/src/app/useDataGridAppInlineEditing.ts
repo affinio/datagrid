@@ -30,6 +30,12 @@ export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
   resolveRowIndexById: (rowId: string | number) => number
   applyCellSelection: (coord: DataGridAppEditingCoord) => void
   ensureActiveCellVisible: (rowIndex: number, columnIndex: number) => void
+  isCellEditable: (
+    row: DataGridRowNode<TRow>,
+    rowIndex: number,
+    columnKey: string,
+    columnIndex: number,
+  ) => boolean
   captureRowsSnapshot: () => TSnapshot
   recordEditTransaction: (beforeSnapshot: TSnapshot) => void
 }
@@ -118,6 +124,11 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     startOptions: DataGridAppInlineEditStartOptions = {},
   ): void => {
     if (options.mode.value !== "base" || row.kind === "group" || row.rowId == null) {
+      return
+    }
+    const rowIndex = options.resolveRowIndexById(row.rowId)
+    const columnIndex = options.visibleColumns.value.findIndex(column => column.key === columnKey)
+    if (rowIndex < 0 || columnIndex < 0 || !options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
       return
     }
     editingCell.value = {

@@ -35,10 +35,12 @@ function createStageProps(
     selectionAnchorCell?: { rowIndex: number; columnIndex: number } | null
     fillPreviewRange?: DataGridOverlayRange | null
     rangeMovePreviewRange?: DataGridOverlayRange | null
+    isFillDragging?: boolean
     isRangeMoving?: boolean
     rowHover?: boolean
     stripedRows?: boolean
     rowCount?: number
+    isCellOnSelectionEdge?: (rowOffset: number, columnIndex: number, edge: "top" | "right" | "bottom" | "left") => boolean
     isCellInFillPreview?: (rowOffset: number, columnIndex: number) => boolean
     isFillHandleCell?: (rowOffset: number, columnIndex: number) => boolean
     startFillHandleDrag?: () => void
@@ -46,6 +48,14 @@ function createStageProps(
     fillActionAnchorCell?: { rowIndex: number; columnIndex: number } | null
     fillActionBehavior?: "copy" | "series" | null
     applyFillActionBehavior?: (behavior: "copy" | "series") => void
+    isCellEditable?: (
+      row: DataGridTableRow<DemoRow>,
+      rowOffset: number,
+      column: DataGridColumnSnapshot,
+      columnIndex: number,
+    ) => boolean
+    isEditingCell?: (row: DataGridTableRow<DemoRow>, columnKey: string) => boolean
+    startInlineEdit?: (row: DataGridTableRow<DemoRow>, columnKey: string) => void
   },
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = createColumns()
@@ -75,6 +85,7 @@ function createStageProps(
     selectionAnchorCell: options?.selectionAnchorCell ?? { rowIndex: 0, columnIndex: 0 },
     fillPreviewRange: options?.fillPreviewRange ?? null,
     rangeMovePreviewRange: options?.rangeMovePreviewRange ?? null,
+    isFillDragging: options?.isFillDragging ?? false,
     isRangeMoving: options?.isRangeMoving ?? false,
     headerViewportRef: () => undefined,
     bodyViewportRef: () => undefined,
@@ -102,14 +113,15 @@ function createStageProps(
     isCellSelected,
     isSelectionAnchorCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
     shouldHighlightSelectedCell: (rowOffset, columnIndex) => isCellSelected(rowOffset, columnIndex) && !(rowOffset === 0 && columnIndex === 0),
-    isCellOnSelectionEdge: () => false,
+    isCellOnSelectionEdge: options?.isCellOnSelectionEdge ?? (() => false),
     isCellInFillPreview: options?.isCellInFillPreview ?? (() => false),
     isCellInPendingClipboardRange: () => false,
     isCellOnPendingClipboardEdge: () => false,
-    isEditingCell: () => false,
+    isEditingCell: options?.isEditingCell ?? (() => false),
+    isCellEditable: options?.isCellEditable ?? (() => true),
     handleCellMouseDown: () => undefined,
     handleCellKeydown: () => undefined,
-    startInlineEdit: () => undefined,
+    startInlineEdit: options?.startInlineEdit ?? (() => undefined),
     isFillHandleCell: options?.isFillHandleCell ?? (() => false),
     startFillHandleDrag: options?.startFillHandleDrag ?? (() => undefined),
     startFillHandleDoubleClick: options?.startFillHandleDoubleClick ?? (() => undefined),
@@ -287,6 +299,70 @@ describe("DataGridTableStage contract", () => {
     expect(rightSegment.exists()).toBe(true)
     expect(centerSegment.attributes("style")).toContain("border-right-width: 0px;")
     expect(rightSegment.attributes("style")).toContain("border-left-width: 0px;")
+
+    wrapper.unmount()
+  })
+
+  it("applies the fill-dragging class when active", () => {
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          isFillDragging: true,
+        },
+      ),
+    })
+
+    expect(wrapper.classes()).toContain("grid-stage--fill-dragging")
+
+    wrapper.unmount()
+  })
+
+  it("forces the global cursor to crosshair while fill dragging", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          isFillDragging: true,
+        },
+      ),
+    })
+
+    expect(document.body.style.cursor).toBe("crosshair")
+    expect(document.documentElement.style.cursor).toBe("crosshair")
+    expect(document.body.classList.contains("datagrid-fill-drag-cursor")).toBe(true)
+    expect(document.documentElement.classList.contains("datagrid-fill-drag-cursor")).toBe(true)
+
+    await wrapper.setProps({ isFillDragging: false })
+
+    expect(document.body.style.cursor).toBe("")
+    expect(document.documentElement.style.cursor).toBe("")
+    expect(document.body.classList.contains("datagrid-fill-drag-cursor")).toBe(false)
+    expect(document.documentElement.classList.contains("datagrid-fill-drag-cursor")).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("does not activate range-move hover while fill dragging", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          isFillDragging: true,
+          isCellOnSelectionEdge: () => true,
+        },
+      ),
+    })
+
+    const cell = wrapper.find('[data-row-index="0"][data-column-index="0"]')
+
+    await cell.trigger("mousemove", {
+      clientX: 1,
+      clientY: 1,
+    })
+
+    expect(cell.classes()).not.toContain("grid-cell--range-move-handle-hover")
 
     wrapper.unmount()
   })
@@ -472,6 +548,24 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("does not render the fill handle for a non-editable anchor cell", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          isFillHandleCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+          isCellEditable: () => false,
+        },
+      ),
+    })
+
+    expect(wrapper.find(".cell-fill-handle").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
   it("shows fill action menu and reapplies the selected behavior", async () => {
     const applyFillActionBehavior = vi.fn()
     const wrapper = mount(DataGridTableStage, {
@@ -519,7 +613,7 @@ describe("DataGridTableStage contract", () => {
     })
 
     expect(wrapper.find(".grid-fill-action__trigger").exists()).toBe(true)
-    expect(wrapper.find(".grid-fill-action--floating").attributes("style")).toContain("top: 90px;")
+    expect(wrapper.find(".grid-fill-action--floating").attributes("style")).toContain("top: 80px;")
 
     wrapper.unmount()
   })
@@ -549,7 +643,7 @@ describe("DataGridTableStage contract", () => {
       },
     })
 
-    expect(wrapper.find(".grid-fill-action--floating").attributes("style")).toContain("top: 70px;")
+    expect(wrapper.find(".grid-fill-action--floating").attributes("style")).toContain("top: 60px;")
     expect(wrapper.find(".grid-fill-action--floating").attributes("style")).toContain("left: 256px;")
 
     wrapper.unmount()

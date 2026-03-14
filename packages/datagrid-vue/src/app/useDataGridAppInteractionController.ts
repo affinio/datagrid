@@ -5,6 +5,8 @@ import type {
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-core"
 import {
+  buildDataGridFillMatrix,
+  canToggleDataGridFillBehavior,
   resolveDataGridDefaultFillBehavior,
   useDataGridAxisAutoScrollDelta,
   useDataGridCellNavigation,
@@ -76,6 +78,12 @@ export interface UseDataGridAppInteractionControllerOptions<
   ) => void
   clearCellSelection: () => void
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
+  isCellEditable: (
+    row: DataGridRowNode<TRow>,
+    rowIndex: number,
+    columnKey: string,
+    columnIndex: number,
+  ) => boolean
   cloneRowData: (row: TRow) => TRow
   resolveRowIndexById: (rowId: string | number) => number
   captureRowsSnapshot: () => TSnapshot
@@ -157,6 +165,7 @@ export function useDataGridAppInteractionController<
   const fillPreviewRange = ref<DataGridCopyRange | null>(null)
   const activeFillBehavior = ref<DataGridFillBehavior | null>(null)
   const lastAppliedFill = ref<DataGridAppAppliedFillSession | null>(null)
+  const activeRestartFillSession = ref<DataGridAppAppliedFillSession | null>(null)
   const fillOriginFocusCoord = ref<DataGridAppCellCoord | null>(null)
   const isRangeMoving = ref(false)
   const pendingRangeMove = ref(false)
@@ -215,7 +224,12 @@ export function useDataGridAppInteractionController<
     pendingRangeMovePointerStart.value = null
   }
 
-  const selectionRange = computed(() => options.resolveSelectionRange())
+  const selectionRange = computed(() => {
+    if (isFillDragging.value && fillPreviewRange.value) {
+      return fillPreviewRange.value
+    }
+    return options.resolveSelectionRange()
+  })
 
   const stopPointerSelection = (): void => {
     isPointerSelectingCells.value = false
@@ -364,13 +378,13 @@ export function useDataGridAppInteractionController<
   })
 
   const {
-    applyFillPreview,
     applyFillRange,
     isCellInFillPreview,
     isFillHandleCell,
   } = useDataGridAppFill({
     mode: options.mode,
     viewportRowStart: options.viewportRowStart,
+    isFillDragging,
     fillBaseRange,
     fillPreviewRange,
     activeFillBehavior,
@@ -378,6 +392,14 @@ export function useDataGridAppInteractionController<
     rangesEqual: options.rangesEqual,
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,
     applyClipboardEdits: options.applyClipboardEdits,
+    isCellEditableAt: (rowIndex, columnIndex) => {
+      const row = options.runtime.api.rows.get(rowIndex)
+      const columnKey = options.visibleColumns.value[columnIndex]?.key
+      if (!row || !columnKey) {
+        return false
+      }
+      return options.isCellEditable(row, rowIndex, columnKey, columnIndex)
+    },
     setLastAppliedFillSession: session => {
       lastAppliedFill.value = session
       activeFillBehavior.value = session?.behavior ?? activeFillBehavior.value
@@ -390,6 +412,119 @@ export function useDataGridAppInteractionController<
     previewRange: DataGridCopyRange,
     behavior?: DataGridFillBehavior,
   ): boolean => {
+    const resolveRemovedFillRange = (
+      previousRange: DataGridCopyRange,
+      nextRange: DataGridCopyRange,
+    ): DataGridCopyRange | null => {
+      if (options.rangesEqual(previousRange, nextRange)) {
+        return null
+      }
+      const nextWithinPrevious = (
+        nextRange.startRow >= previousRange.startRow
+        && nextRange.endRow <= previousRange.endRow
+        && nextRange.startColumn >= previousRange.startColumn
+        && nextRange.endColumn <= previousRange.endColumn
+      )
+      if (!nextWithinPrevious) {
+        return null
+      }
+      if (
+        previousRange.startColumn === nextRange.startColumn
+        && previousRange.endColumn === nextRange.endColumn
+      ) {
+        if (previousRange.startRow === nextRange.startRow && previousRange.endRow > nextRange.endRow) {
+          return {
+            startRow: nextRange.endRow + 1,
+            endRow: previousRange.endRow,
+            startColumn: previousRange.startColumn,
+            endColumn: previousRange.endColumn,
+          }
+        }
+        if (previousRange.endRow === nextRange.endRow && previousRange.startRow < nextRange.startRow) {
+          return {
+            startRow: previousRange.startRow,
+            endRow: nextRange.startRow - 1,
+            startColumn: previousRange.startColumn,
+            endColumn: previousRange.endColumn,
+          }
+        }
+      }
+      if (
+        previousRange.startRow === nextRange.startRow
+        && previousRange.endRow === nextRange.endRow
+      ) {
+        if (previousRange.startColumn === nextRange.startColumn && previousRange.endColumn > nextRange.endColumn) {
+          return {
+            startRow: previousRange.startRow,
+            endRow: previousRange.endRow,
+            startColumn: nextRange.endColumn + 1,
+            endColumn: previousRange.endColumn,
+          }
+        }
+        if (previousRange.endColumn === nextRange.endColumn && previousRange.startColumn < nextRange.startColumn) {
+          return {
+            startRow: previousRange.startRow,
+            endRow: previousRange.endRow,
+            startColumn: previousRange.startColumn,
+            endColumn: nextRange.startColumn - 1,
+          }
+        }
+      }
+      return null
+    }
+
+    const restartSession = activeRestartFillSession.value
+    if (restartSession && options.rangesEqual(restartSession.baseRange, baseRange)) {
+      const removedRange = resolveRemovedFillRange(restartSession.previewRange, previewRange)
+      if (removedRange) {
+        const beforeSnapshot = options.captureRowsSnapshot()
+        const sourceMatrix = options.buildFillMatrixFromRange(baseRange)
+        const resolvedBehavior = behavior
+          ?? activeFillBehavior.value
+          ?? restartSession.behavior
+          ?? resolveDataGridDefaultFillBehavior({
+            baseRange,
+            previewRange,
+            sourceMatrix,
+          })
+
+        options.applyClipboardEdits(removedRange, [["" ]], { recordHistory: false })
+
+        if (options.rangesEqual(baseRange, previewRange)) {
+          options.applySelectionRange(baseRange)
+          lastAppliedFill.value = null
+        } else {
+          options.applyClipboardEdits(previewRange, buildDataGridFillMatrix({
+            baseRange,
+            previewRange,
+            sourceMatrix,
+            behavior: resolvedBehavior,
+          }), { recordHistory: false })
+          lastAppliedFill.value = {
+            baseRange: { ...baseRange },
+            previewRange: { ...previewRange },
+            behavior: resolvedBehavior,
+            allowBehaviorToggle: canToggleDataGridFillBehavior({
+              baseRange,
+              previewRange,
+              sourceMatrix,
+            }),
+          }
+        }
+
+        options.syncViewport()
+        void options.recordIntentTransaction({
+          intent: "fill",
+          label: "Fill cells",
+          affectedRange: previewRange,
+        }, beforeSnapshot)
+        if (behavior) {
+          activeFillBehavior.value = behavior
+        }
+        return true
+      }
+    }
+
     const applied = applyFillRange(baseRange, previewRange, behavior)
     if (applied && behavior) {
       activeFillBehavior.value = behavior
@@ -664,7 +799,14 @@ export function useDataGridAppInteractionController<
   })
 
   const fillSelectionLifecycle = useDataGridFillSelectionLifecycle<DataGridCopyRange>({
-    applyFillPreview,
+    applyFillPreview: () => {
+      const baseRange = fillBaseRange.value
+      const previewRange = fillPreviewRange.value
+      if (!baseRange || !previewRange) {
+        return
+      }
+      applyCommittedFillRange(baseRange, previewRange)
+    },
     setFillDragging: value => {
       isFillDragging.value = value
     },
@@ -689,6 +831,7 @@ export function useDataGridAppInteractionController<
   const stopFillSelection = (commit: boolean): void => {
     const preferredFocusCoord = fillOriginFocusCoord.value
     fillSelectionLifecycle.stopFillSelection(commit)
+    activeRestartFillSession.value = null
     const restoredCoord = preferredFocusCoord
       ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
       : null
@@ -807,6 +950,18 @@ export function useDataGridAppInteractionController<
     })
   }
 
+  const resolveRestartableFillSession = (
+    currentRange: DataGridCopyRange,
+  ): DataGridAppAppliedFillSession | null => {
+    const session = lastAppliedFill.value
+    if (!session) {
+      return null
+    }
+    return options.rangesEqual(currentRange, session.previewRange)
+      ? session
+      : null
+  }
+
   const rangeMoveLifecycle = useDataGridRangeMoveLifecycle({
     applyRangeMove: () => {
       const baseRange = rangeMoveBaseRange.value
@@ -870,6 +1025,12 @@ export function useDataGridAppInteractionController<
 
   const fillHandleStart = useDataGridFillHandleStart<DataGridCopyRange>({
     resolveSelectionRange: options.resolveSelectionRange,
+    resolveInitialFillBaseRange: currentRange => {
+      return resolveRestartableFillSession(currentRange)?.baseRange ?? currentRange
+    },
+    resolveInitialFillPreviewRange: currentRange => {
+      return resolveRestartableFillSession(currentRange)?.previewRange ?? currentRange
+    },
     focusViewport,
     stopRangeMove: commit => {
       rangeMoveLifecycle.stopRangeMove(commit)
@@ -1044,8 +1205,19 @@ export function useDataGridAppInteractionController<
     if (options.mode.value !== "base") {
       return
     }
+    const baseRange = options.resolveSelectionRange()
+    const anchorRow = baseRange ? options.runtime.api.rows.get(baseRange.endRow) : null
+    const anchorColumnKey = baseRange ? options.visibleColumns.value[baseRange.endColumn]?.key : null
+    if (!baseRange || !anchorRow || !anchorColumnKey) {
+      return
+    }
+    if (!options.isCellEditable(anchorRow, baseRange.endRow, anchorColumnKey, baseRange.endColumn)) {
+      return
+    }
     const originCoord = resolveFillOriginFocusCoord()
+    const restartSession = resolveRestartableFillSession(baseRange)
     if (fillHandleStart.onSelectionHandleMouseDown(event)) {
+      activeRestartFillSession.value = restartSession
       fillOriginFocusCoord.value = originCoord
     }
   }
@@ -1058,13 +1230,33 @@ export function useDataGridAppInteractionController<
     if (!baseRange) {
       return
     }
-    const lastRowIndex = Math.max(0, options.totalRows.value - 1)
-    const previewRange = options.normalizeClipboardRange({
-      startRow: baseRange.startRow,
-      endRow: lastRowIndex,
-      startColumn: baseRange.startColumn,
-      endColumn: baseRange.endColumn,
-    })
+    const anchorRow = options.runtime.api.rows.get(baseRange.endRow)
+    const anchorColumnKey = options.visibleColumns.value[baseRange.endColumn]?.key
+    if (!anchorRow || !anchorColumnKey) {
+      return
+    }
+    if (!options.isCellEditable(anchorRow, baseRange.endRow, anchorColumnKey, baseRange.endColumn)) {
+      return
+    }
+    let lastEmptyRowIndex = baseRange.endRow
+    for (let rowIndex = baseRange.endRow + 1; rowIndex < options.totalRows.value; rowIndex += 1) {
+      const row = options.runtime.api.rows.get(rowIndex)
+      if (!row || row.kind === "group") {
+        break
+      }
+      if (options.readCell(row, anchorColumnKey) !== "") {
+        break
+      }
+      lastEmptyRowIndex = rowIndex
+    }
+    const previewRange = lastEmptyRowIndex > baseRange.endRow
+      ? options.normalizeClipboardRange({
+        startRow: baseRange.startRow,
+        endRow: lastEmptyRowIndex,
+        startColumn: baseRange.startColumn,
+        endColumn: baseRange.endColumn,
+      })
+      : null
     if (!previewRange || options.rangesEqual(baseRange, previewRange)) {
       return
     }
@@ -1168,6 +1360,7 @@ export function useDataGridAppInteractionController<
     rowOffset: number,
     columnIndex: number,
   ): void => {
+    const rowIndex = options.viewportRowStart.value + rowOffset
     if (isFillDragging.value && event.key === "Escape") {
       event.preventDefault()
       stopFillSelection(false)
@@ -1189,7 +1382,7 @@ export function useDataGridAppInteractionController<
     if (event.key === "Enter") {
       event.preventDefault()
       const columnKey = options.visibleColumns.value[columnIndex]?.key
-      if (columnKey) {
+      if (columnKey && options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
         options.startInlineEdit(row, columnKey)
       }
       return
@@ -1203,7 +1396,7 @@ export function useDataGridAppInteractionController<
     if (isPrintableEditingKey(event)) {
       event.preventDefault()
       const columnKey = options.visibleColumns.value[columnIndex]?.key
-      if (columnKey) {
+      if (columnKey && options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
         options.startInlineEdit(row, columnKey, { draftValue: event.key })
       }
       return
@@ -1215,7 +1408,7 @@ export function useDataGridAppInteractionController<
     if (event.key === "F2") {
       event.preventDefault()
       const columnKey = options.visibleColumns.value[columnIndex]?.key
-      if (columnKey) {
+      if (columnKey && options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
         options.startInlineEdit(row, columnKey)
       }
     }

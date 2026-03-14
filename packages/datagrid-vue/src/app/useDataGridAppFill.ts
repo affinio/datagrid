@@ -18,6 +18,7 @@ export interface DataGridAppAppliedFillSession {
 export interface UseDataGridAppFillOptions {
   mode: Ref<DataGridAppMode>
   viewportRowStart: Ref<number>
+  isFillDragging: Ref<boolean>
   fillBaseRange: Ref<DataGridCopyRange | null>
   fillPreviewRange: Ref<DataGridCopyRange | null>
   activeFillBehavior: Ref<DataGridFillBehavior | null>
@@ -25,6 +26,7 @@ export interface UseDataGridAppFillOptions {
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
   applyClipboardEdits: (range: DataGridCopyRange, matrix: string[][]) => number
+  isCellEditableAt: (rowIndex: number, columnIndex: number) => boolean
   setLastAppliedFillSession: (session: DataGridAppAppliedFillSession | null) => void
   syncViewport: () => void
 }
@@ -130,12 +132,16 @@ export function useDataGridAppFill(
     if (options.mode.value !== "base") {
       return false
     }
-    const range = options.resolveSelectionRange()
+    const range = options.isFillDragging.value && options.fillPreviewRange.value
+      ? options.fillPreviewRange.value
+      : options.resolveSelectionRange()
     if (!range) {
       return false
     }
     const rowIndex = options.viewportRowStart.value + rowOffset
-    return rowIndex === range.endRow && columnIndex === range.endColumn
+    return rowIndex === range.endRow
+      && columnIndex === range.endColumn
+      && options.isCellEditableAt(rowIndex, columnIndex)
   }
 
   return {

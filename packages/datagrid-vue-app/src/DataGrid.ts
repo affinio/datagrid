@@ -77,6 +77,7 @@ import {
   type UseDataGridAppControlledStateOptions,
 } from "./useDataGridAppControlledState"
 import { useDataGridAppRowModel } from "./useDataGridAppRowModel"
+import type { DataGridCellEditablePredicate } from "./dataGridEditability"
 import type {
   DataGridAppViewMode,
   DataGridGanttProp,
@@ -266,6 +267,10 @@ export default defineComponent({
     stripedRows: {
       type: Boolean,
       default: false,
+    },
+    isCellEditable: {
+      type: Function as PropType<DataGridCellEditablePredicate<Record<string, unknown>> | undefined>,
+      default: undefined,
     },
     viewMode: {
       type: String as PropType<DataGridAppViewMode | undefined>,
@@ -505,6 +510,7 @@ export default defineComponent({
         baseRowHeight: props.baseRowHeight,
         rowHover: props.rowHover,
         stripedRows: props.stripedRows,
+        isCellEditable: props.isCellEditable,
         viewMode: currentViewMode.value,
         gantt: props.gantt,
       }
