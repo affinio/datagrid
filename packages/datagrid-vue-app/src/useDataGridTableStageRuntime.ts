@@ -104,7 +104,6 @@ export function useDataGridTableStageRuntime<
   const syncRowSelectionSnapshotFromRuntime = options.syncRowSelectionSnapshotFromRuntime ?? (() => undefined)
   const rowSelectionSnapshotRef = options.rowSelectionSnapshot ?? ref<DataGridRowSelectionSnapshot | null>(null)
 
-  const columnWidths = ref<Record<string, number>>({})
   const orderedVisibleColumns = computed(() => {
     const left = options.visibleColumns.value.filter(column => column.pin === "left")
     const center = options.visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
@@ -115,7 +114,7 @@ export function useDataGridTableStageRuntime<
     orderedVisibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
   ))
   const resolveColumnWidth = (column: DataGridColumnSnapshot): number => {
-    return columnWidths.value[column.key] ?? column.width ?? DEFAULT_COLUMN_WIDTH
+    return column.width ?? DEFAULT_COLUMN_WIDTH
   }
   const rowHeightMetrics = createDataGridAppRowHeightMetrics({
     totalRows: () => options.totalRows.value,
@@ -152,7 +151,7 @@ export function useDataGridTableStageRuntime<
     totalRows: options.totalRows,
     visibleColumns: centerColumns,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
-    columnWidths,
+    resolveColumnWidth,
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
     indexColumnWidth: 0,
     rowOverscan: computed(() => options.virtualization.value.rowOverscan),
@@ -447,7 +446,7 @@ export function useDataGridTableStageRuntime<
   } = useDataGridAppActiveCellViewport({
     bodyViewportRef,
     visibleColumns: orderedVisibleColumns,
-    columnWidths,
+    resolveColumnWidth,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
     resolveRowHeight: rowHeightMetrics.resolveRowHeight,
     resolveRowOffset: rowHeightMetrics.resolveRowOffset,
@@ -646,8 +645,10 @@ export function useDataGridTableStageRuntime<
     dispose: disposeHeaderResize,
   } = useDataGridAppHeaderResize<TRow>({
     visibleColumns: orderedVisibleColumns,
-    columnWidths,
     rows: options.rows,
+    persistColumnWidth: (columnKey, width) => {
+      options.runtime.api.columns.setWidth(columnKey, width)
+    },
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
     minColumnWidth: MIN_COLUMN_WIDTH,
     autoSizeSampleLimit: AUTO_RESIZE_SAMPLE_LIMIT,

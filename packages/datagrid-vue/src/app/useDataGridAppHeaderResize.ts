@@ -4,8 +4,8 @@ import { useDataGridHeaderResizeOrchestration } from "../advanced"
 
 export interface UseDataGridAppHeaderResizeOptions<TRow> {
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
-  columnWidths: Ref<Record<string, number>>
   rows: Ref<readonly TRow[]>
+  persistColumnWidth?: (columnKey: string, width: number) => void
   defaultColumnWidth?: number
   minColumnWidth?: number
   autoSizeSampleLimit?: number
@@ -45,13 +45,12 @@ export function useDataGridAppHeaderResize<TRow>(
     },
     resolveRowsForAutoSize: () => options.rows.value,
     resolveCellText: (row, columnKey) => options.readCellText(row, columnKey),
-    resolveColumnWidthOverride: (columnKey) => options.columnWidths.value[columnKey] ?? null,
+    resolveColumnWidthOverride: (columnKey) => {
+      return options.visibleColumns.value.find(column => column.key === columnKey)?.width ?? null
+    },
     resolveColumnMinWidth: () => minColumnWidth,
     applyColumnWidth: (columnKey, width) => {
-      options.columnWidths.value = {
-        ...options.columnWidths.value,
-        [columnKey]: width,
-      }
+      options.persistColumnWidth?.(columnKey, width)
     },
     isColumnResizable: (columnKey) => options.visibleColumns.value.some(column => column.key === columnKey),
     isFillDragging: () => options.isFillDragging(),
@@ -79,7 +78,7 @@ export function useDataGridAppHeaderResize<TRow>(
   }
 
   const resolveColumnRenderWidth = (columnKey: string): number => {
-    return options.columnWidths.value[columnKey] ?? defaultColumnWidth
+    return options.visibleColumns.value.find(column => column.key === columnKey)?.width ?? defaultColumnWidth
   }
 
   return {

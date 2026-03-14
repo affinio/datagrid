@@ -22,7 +22,8 @@ export interface UseDataGridAppViewportOptions<TRow> {
   totalRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   normalizedBaseRowHeight: Ref<number>
-  columnWidths: Ref<Record<string, number>>
+  columnWidths?: Ref<Record<string, number>>
+  resolveColumnWidth?: (column: DataGridColumnSnapshot) => number
   defaultColumnWidth?: number
   indexColumnWidth?: number
   rowOverscan?: MaybeRef<number>
@@ -64,6 +65,21 @@ export function useDataGridAppViewport<TRow>(
 ): UseDataGridAppViewportResult<TRow> {
   const defaultColumnWidth = options.defaultColumnWidth ?? 140
   const indexColumnWidth = options.indexColumnWidth ?? 72
+  const snapshotColumnWidths = computed<Record<string, number>>(() => {
+    return Object.fromEntries(
+      options.visibleColumns.value.map(column => [column.key, column.width ?? defaultColumnWidth]),
+    )
+  })
+  const resolveColumnWidth = (column: DataGridColumnSnapshot | undefined): number => {
+    if (!column) {
+      return defaultColumnWidth
+    }
+    const resolvedWidth = options.resolveColumnWidth?.(column)
+    if (typeof resolvedWidth === "number" && Number.isFinite(resolvedWidth)) {
+      return resolvedWidth
+    }
+    return options.columnWidths?.value[column.key] ?? snapshotColumnWidths.value[column.key] ?? defaultColumnWidth
+  }
   const rowOverscan = computed(() => {
     const value = options.rowOverscan == null ? 8 : resolveMaybeRef(options.rowOverscan)
     return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 8
@@ -142,7 +158,7 @@ export function useDataGridAppViewport<TRow>(
 
   const mainTrackWidth = computed<number>(() => {
     return options.visibleColumns.value.reduce((sum, column) => {
-      return sum + (options.columnWidths.value[column.key] ?? defaultColumnWidth)
+      return sum + resolveColumnWidth(column)
     }, 0)
   })
 
@@ -178,9 +194,9 @@ export function useDataGridAppViewport<TRow>(
     let visibleStart = 0
     while (
       visibleStart < columns.length
-      && runningWidth + (options.columnWidths.value[columns[visibleStart]?.key ?? ""] ?? defaultColumnWidth) <= viewportStartPx
+      && runningWidth + resolveColumnWidth(columns[visibleStart]) <= viewportStartPx
     ) {
-      runningWidth += options.columnWidths.value[columns[visibleStart]?.key ?? ""] ?? defaultColumnWidth
+      runningWidth += resolveColumnWidth(columns[visibleStart])
       visibleStart += 1
     }
 
@@ -188,7 +204,7 @@ export function useDataGridAppViewport<TRow>(
       const lastIndex = columns.length - 1
       let leftSpacerWidth = 0
       for (let index = 0; index < lastIndex; index += 1) {
-        leftSpacerWidth += options.columnWidths.value[columns[index]?.key ?? ""] ?? defaultColumnWidth
+        leftSpacerWidth += resolveColumnWidth(columns[index])
       }
       return {
         start: lastIndex,
@@ -202,7 +218,7 @@ export function useDataGridAppViewport<TRow>(
     let visibleEnd = visibleStart
     let coveredWidth = runningWidth
     while (visibleEnd < columns.length) {
-      coveredWidth += options.columnWidths.value[columns[visibleEnd]?.key ?? ""] ?? defaultColumnWidth
+      coveredWidth += resolveColumnWidth(columns[visibleEnd])
       if (coveredWidth >= viewportEndPx) {
         break
       }
@@ -214,12 +230,12 @@ export function useDataGridAppViewport<TRow>(
 
     let leftSpacerWidth = 0
     for (let index = 0; index < start; index += 1) {
-      leftSpacerWidth += options.columnWidths.value[columns[index]?.key ?? ""] ?? defaultColumnWidth
+      leftSpacerWidth += resolveColumnWidth(columns[index])
     }
 
     let renderedWidth = 0
     for (let index = start; index <= end; index += 1) {
-      renderedWidth += options.columnWidths.value[columns[index]?.key ?? ""] ?? defaultColumnWidth
+      renderedWidth += resolveColumnWidth(columns[index])
     }
 
     const rightSpacerWidth = Math.max(0, totalWidth - leftSpacerWidth - renderedWidth)
@@ -261,7 +277,8 @@ export function useDataGridAppViewport<TRow>(
   })
 
   const columnStyle = (key: string): Record<string, string> => {
-    const width = options.columnWidths.value[key] ?? defaultColumnWidth
+    const column = options.visibleColumns.value.find(candidate => candidate.key === key)
+    const width = resolveColumnWidth(column)
     const px = `${width}px`
     return {
       width: px,

@@ -4,7 +4,8 @@ import type { DataGridColumnSnapshot } from "@affino/datagrid-core"
 export interface UseDataGridAppActiveCellViewportOptions {
   bodyViewportRef: Ref<HTMLElement | null>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
-  columnWidths: Ref<Record<string, number>>
+  columnWidths?: Ref<Record<string, number>>
+  resolveColumnWidth?: (column: DataGridColumnSnapshot) => number
   normalizedBaseRowHeight: Ref<number>
   resolveRowHeight?: (rowIndex: number) => number
   resolveRowOffset?: (rowIndex: number) => number
@@ -35,7 +36,11 @@ export function useDataGridAppActiveCellViewport(
   }
 
   const resolveColumnWidth = (column: DataGridColumnSnapshot): number => {
-    return options.columnWidths.value[column.key] ?? column.width ?? defaultColumnWidth
+    const resolvedWidth = options.resolveColumnWidth?.(column)
+    if (typeof resolvedWidth === "number" && Number.isFinite(resolvedWidth)) {
+      return resolvedWidth
+    }
+    return options.columnWidths?.value[column.key] ?? column.width ?? defaultColumnWidth
   }
 
   const ensureEstimatedRowVisible = (viewport: HTMLElement, rowIndex: number): void => {
