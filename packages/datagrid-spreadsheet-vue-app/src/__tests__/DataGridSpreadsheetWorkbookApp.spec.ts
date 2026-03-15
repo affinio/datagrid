@@ -317,6 +317,50 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     workbook.dispose()
   })
 
+  it("shows the cell formattedValue in the formula state display preview", async () => {
+    const workbook = createWorkbookModel()
+    const activeSheet = workbook.getSheet("orders")
+    const originalGetCell = activeSheet?.sheetModel.getCell.bind(activeSheet.sheetModel)
+    if (activeSheet && originalGetCell) {
+      activeSheet.sheetModel.getCell = (cell) => {
+        const snapshot = originalGetCell(cell)
+        if (
+          snapshot
+          && cell.rowIndex === 0
+          && cell.columnKey === "qty"
+        ) {
+          return {
+            ...snapshot,
+            displayValue: 4,
+            formattedValue: "FOUR",
+          }
+        }
+        return snapshot
+      }
+    }
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const displayValues = wrapper.findAll(".spreadsheet-formula-value")
+    expect(displayValues[0]?.text()).toContain("FOUR")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
   it("copies formula cells as display values when clipboardCopyMode is display", async () => {
     const workbook = createWorkbookModel()
     let clipboardPayload = ""
@@ -358,6 +402,71 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
       await copySelectedGridCell(wrapper, 0, 1)
 
       expect(clipboardPayload).toBe("3240")
+    } finally {
+      wrapper.unmount()
+      workbook.dispose()
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
+
+  it("copies spreadsheet display text from formattedValue in display clipboard mode", async () => {
+    const workbook = createWorkbookModel()
+    const activeSheet = workbook.getSheet("orders")
+    const originalGetCell = activeSheet?.sheetModel.getCell.bind(activeSheet.sheetModel)
+    if (activeSheet && originalGetCell) {
+      activeSheet.sheetModel.getCell = (cell) => {
+        const snapshot = originalGetCell(cell)
+        if (
+          snapshot
+          && cell.rowIndex === 0
+          && cell.columnKey === "qty"
+        ) {
+          return {
+            ...snapshot,
+            displayValue: 4,
+            formattedValue: "FOUR",
+          }
+        }
+        return snapshot
+      }
+    }
+
+    let clipboardPayload = ""
+    const originalClipboard = navigator.clipboard
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn(async (payload: string) => {
+          clipboardPayload = payload
+        }),
+        readText: vi.fn(async () => clipboardPayload),
+      },
+    })
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+        clipboardCopyMode: "display",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    try {
+      await flushUiAndTimers()
+      await selectGridCell(wrapper, 0, 0)
+      await copySelectedGridCell(wrapper, 0, 0)
+
+      expect(clipboardPayload).toBe("FOUR")
     } finally {
       wrapper.unmount()
       workbook.dispose()

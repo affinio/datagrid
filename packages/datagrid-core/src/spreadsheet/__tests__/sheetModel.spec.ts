@@ -122,6 +122,35 @@ describe("createDataGridSpreadsheetSheetModel", () => {
     sheet.dispose()
   })
 
+  it("exposes a stable formattedValue alongside the raw computed displayValue", () => {
+    const sheet = createDataGridSpreadsheetSheetModel({
+      sheetId: "orders",
+      sheetName: "Orders",
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+      columns: [{ key: "approved" }],
+      rows: [
+        {
+          id: "row-1",
+          cells: {
+            approved: true,
+          },
+        },
+      ],
+    })
+
+    const cell = sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-1",
+      rowIndex: 0,
+      columnKey: "approved",
+    })
+
+    expect(cell?.displayValue).toBe(true)
+    expect(cell?.formattedValue).toBe("TRUE")
+
+    sheet.dispose()
+  })
+
   it("preserves shifted row-relative formulas across row inserts and removals", () => {
     const sheet = createDataGridSpreadsheetSheetModel({
       sheetId: "orders",

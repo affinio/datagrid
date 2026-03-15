@@ -33,9 +33,13 @@ export interface DataGridColumnDateTimeFormatOptions {
   timeZoneName?: Intl.DateTimeFormatOptions["timeZoneName"]
 }
 
+export interface DataGridColumnFormat {
+  number?: DataGridColumnNumberFormatOptions
+  dateTime?: DataGridColumnDateTimeFormatOptions
+}
+
 export interface DataGridColumnFormatPresentation {
-  numberFormat?: DataGridColumnNumberFormatOptions
-  dateTimeFormat?: DataGridColumnDateTimeFormatOptions
+  format?: DataGridColumnFormat
 }
 
 export interface DataGridCellFormatColumnLike<TRow = unknown> {

@@ -1,4 +1,5 @@
 import type { ColumnMetric as CoreColumnMetric } from "../virtualization/columnSnapshot"
+import type { DataGridCellTypeId } from "../cells/runtime.js"
 import type {
   DataGridColumnCapabilities,
   DataGridColumnConstraints,
@@ -12,6 +13,8 @@ export type {
   DataGridColumnConstraints,
   DataGridColumnDataType,
   DataGridColumnDateTimeFormatOptions,
+  DataGridColumnFormat,
+  DataGridColumnOption,
   DataGridColumnNumberFormatOptions,
   DataGridColumnPresentation,
   DataGridColumnValueAccessors,
@@ -30,8 +33,6 @@ export type {
  */
 export type DataGridColumnAlignment = "left" | "center" | "right"
 
-export type DataGridColumnEditor = "text" | "select" | "number" | "checkbox" | "none"
-
 export type DataGridColumnPin = "left" | "right" | "none"
 
 export interface DataGridColumn extends DataGridColumnValueAccessors<any> {
@@ -39,6 +40,7 @@ export interface DataGridColumn extends DataGridColumnValueAccessors<any> {
   field?: string
   label: string
   dataType?: DataGridColumnDataType | string
+  cellType?: DataGridCellTypeId | string
   width?: number
   minWidth?: number
   maxWidth?: number
@@ -46,15 +48,12 @@ export interface DataGridColumn extends DataGridColumnValueAccessors<any> {
   resizable?: boolean
   sortable?: boolean
   visible?: boolean
-  editor?: DataGridColumnEditor | string
-  align?: DataGridColumnAlignment | string
-  headerAlign?: DataGridColumnAlignment | string
-  options?: { label: string; value: any }[] | ((row: any) => { label: string; value: any }[])
+  accessor?: (row: any) => unknown
   placeholder?: string
   editable?: boolean
   validator?: (value: unknown, row: any) => boolean | string
   filterType?: "set" | "text" | "number" | "date"
-  presentation?: DataGridColumnPresentation
+  presentation?: DataGridColumnPresentation<any>
   capabilities?: DataGridColumnCapabilities
   constraints?: DataGridColumnConstraints
   min?: number | Date | string

@@ -30,14 +30,15 @@
 
       <label class="datagrid-aggregations__basis">
         <span class="datagrid-aggregations__label">Basis</span>
-        <select
+        <DataGridFilterableCombobox
+          class="datagrid-aggregations__select"
           :value="basis"
+          :options="basisOptions"
+          :inline-panel="true"
+          :open-on-mount="false"
           data-aggregations-autofocus="true"
-          @change="emit('update-basis', ($event.target as HTMLSelectElement).value as 'filtered' | 'source')"
-        >
-          <option value="filtered">Filtered rows</option>
-          <option value="source">Source rows</option>
-        </select>
+          @commit="emit('update-basis', $event as 'filtered' | 'source')"
+        />
       </label>
 
       <div v-if="items.length > 0" class="datagrid-aggregations__list">
@@ -55,20 +56,15 @@
             <span class="datagrid-aggregations__row-label">{{ item.label }}</span>
           </label>
 
-          <select
+          <DataGridFilterableCombobox
             class="datagrid-aggregations__op"
             :value="item.op"
+            :options="buildAggOpOptions(item.allowedOps)"
+            :inline-panel="true"
+            :open-on-mount="false"
             :disabled="!item.enabled"
-            @change="emit('update-op', item.key, ($event.target as HTMLSelectElement).value)"
-          >
-            <option
-              v-for="op in item.allowedOps"
-              :key="`${item.key}-${op}`"
-              :value="op"
-            >
-              {{ formatAggOp(op) }}
-            </option>
-          </select>
+            @commit="emit('update-op', item.key, $event)"
+          />
         </div>
       </div>
 
@@ -100,9 +96,16 @@ import {
   usePopoverController,
 } from "@affino/popover-vue"
 import type { DataGridAggOp } from "@affino/datagrid-vue"
+import DataGridFilterableCombobox from "./DataGridFilterableCombobox.vue"
 import type { DataGridAggregationPanelItem } from "./dataGridAggregations"
 import { dataGridAppRootElementKey } from "./dataGridAppContext"
+import type { DataGridFilterableComboboxOption } from "./dataGridFilterableCombobox"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
+
+const basisOptions: readonly DataGridFilterableComboboxOption[] = Object.freeze([
+  { value: "filtered", label: "Filtered rows" },
+  { value: "source", label: "Source rows" },
+])
 
 const props = withDefaults(defineProps<{
   isOpen: boolean
@@ -213,5 +216,12 @@ function formatAggOp(op: DataGridAggOp): string {
     return "Count non-null"
   }
   return op.charAt(0).toUpperCase() + op.slice(1)
+}
+
+function buildAggOpOptions(ops: readonly DataGridAggOp[]): readonly DataGridFilterableComboboxOption[] {
+  return ops.map(op => ({
+    value: op,
+    label: formatAggOp(op),
+  }))
 }
 </script>

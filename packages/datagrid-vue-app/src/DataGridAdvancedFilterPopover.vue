@@ -67,52 +67,43 @@
         >
           <label class="datagrid-advanced-filter__field datagrid-advanced-filter__field--join">
             <span class="datagrid-advanced-filter__label">Join</span>
-            <select
+            <DataGridFilterableCombobox
+              class="datagrid-advanced-filter__select"
               :value="clause.join"
+              :options="JOIN_OPTIONS"
+              :inline-panel="true"
+              :open-on-mount="false"
               :disabled="clauseIndex === 0"
               aria-label="Join operator"
-              @change="updateClause(clause.id, 'join', ($event.target as HTMLSelectElement).value)"
-            >
-              <option value="and">AND</option>
-              <option value="or">OR</option>
-            </select>
+              @commit="updateClause(clause.id, 'join', $event)"
+            />
           </label>
 
           <label class="datagrid-advanced-filter__field">
             <span class="datagrid-advanced-filter__label">Column</span>
-            <select
+            <DataGridFilterableCombobox
+              class="datagrid-advanced-filter__select"
               :value="clause.columnKey"
+              :options="columnOptions"
+              :inline-panel="true"
+              :open-on-mount="false"
               :data-advanced-filter-autofocus="clauseIndex === 0 ? 'true' : null"
               aria-label="Column"
-              @change="updateClause(clause.id, 'columnKey', ($event.target as HTMLSelectElement).value)"
-            >
-              <option
-                v-for="column in columns"
-                :key="`advanced-filter-column-${column.key}`"
-                :value="column.key"
-              >
-                {{ column.label }}
-              </option>
-            </select>
+              @commit="updateClause(clause.id, 'columnKey', $event)"
+            />
           </label>
 
           <label class="datagrid-advanced-filter__field">
             <span class="datagrid-advanced-filter__label">Operator</span>
-            <select
+            <DataGridFilterableCombobox
+              class="datagrid-advanced-filter__select"
               :value="clause.operator"
+              :options="OPERATOR_OPTIONS"
+              :inline-panel="true"
+              :open-on-mount="false"
               aria-label="Condition operator"
-              @change="updateClause(clause.id, 'operator', ($event.target as HTMLSelectElement).value)"
-            >
-              <option value="contains">Contains</option>
-              <option value="equals">Equals</option>
-              <option value="not-equals">Not equals</option>
-              <option value="starts-with">Starts with</option>
-              <option value="ends-with">Ends with</option>
-              <option value="gt">&gt;</option>
-              <option value="gte">&gt;=</option>
-              <option value="lt">&lt;</option>
-              <option value="lte">&lt;=</option>
-            </select>
+              @commit="updateClause(clause.id, 'operator', $event)"
+            />
           </label>
 
           <label class="datagrid-advanced-filter__field datagrid-advanced-filter__field--value">
@@ -167,8 +158,27 @@ import type {
   DataGridAppAdvancedFilterClausePatch,
   DataGridAppAdvancedFilterColumnOption,
 } from "@affino/datagrid-vue"
+import DataGridFilterableCombobox from "./DataGridFilterableCombobox.vue"
 import { dataGridAppRootElementKey } from "./dataGridAppContext"
+import type { DataGridFilterableComboboxOption } from "./dataGridFilterableCombobox"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
+
+const JOIN_OPTIONS: readonly DataGridFilterableComboboxOption[] = Object.freeze([
+  { value: "and", label: "AND" },
+  { value: "or", label: "OR" },
+])
+
+const OPERATOR_OPTIONS: readonly DataGridFilterableComboboxOption[] = Object.freeze([
+  { value: "contains", label: "Contains" },
+  { value: "equals", label: "Equals" },
+  { value: "not-equals", label: "Not equals" },
+  { value: "starts-with", label: "Starts with" },
+  { value: "ends-with", label: "Ends with" },
+  { value: "gt", label: ">" },
+  { value: "gte", label: ">=" },
+  { value: "lt", label: "<" },
+  { value: "lte", label: "<=" },
+])
 
 const props = withDefaults(defineProps<{
   isOpen: boolean
@@ -235,6 +245,12 @@ const contentProps = computed(() => controller.getContentProps({ role: "dialog",
 const popoverOpen = computed(() => controller.state.value.open)
 const popoverContentStyle = computed(() => floating.contentStyle.value)
 const popoverTeleportTarget = computed(() => floating.teleportTarget.value)
+const columnOptions = computed<readonly DataGridFilterableComboboxOption[]>(() => {
+  return props.columns.map(column => ({
+    value: column.key,
+    label: column.label,
+  }))
+})
 
 watch(
   () => props.isOpen,

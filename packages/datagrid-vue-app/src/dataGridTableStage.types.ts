@@ -76,8 +76,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   someVisibleRowsSelected?: boolean
   handleRowClick?: (row: DataGridTableRow<TRow>) => void
   handleRowIndexClick?: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean) => void
-  handleRowCheckboxChange?: (row: DataGridTableRow<TRow>, selected: boolean) => void
-  handleSelectAllVisibleRowsChange?: (selected: boolean) => void
+  handleToggleAllVisibleRows?: () => void
   toggleGroupRow: (row: DataGridTableRow<TRow>) => void
   rowIndexLabel: (row: DataGridTableRow<TRow>, rowOffset: number) => string
   startResize: (event: MouseEvent, columnKey: string) => void
@@ -111,6 +110,12 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
     columnIndex: number,
   ) => boolean
   handleCellMouseDown: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number, columnIndex: number) => void
+  handleCellClick: (
+    row: DataGridTableRow<TRow>,
+    rowOffset: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ) => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableRow<TRow>, rowOffset: number, columnIndex: number) => void
   startInlineEdit: (row: DataGridTableRow<TRow>, columnKey: string) => void
   isFillHandleCell: (rowOffset: number, columnIndex: number) => boolean
@@ -121,7 +126,8 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>> {
   applyFillActionBehavior: (behavior: DataGridFillBehavior) => void
   updateEditingCellValue: (value: string) => void
   handleEditorKeydown: (event: KeyboardEvent) => void
-  commitInlineEdit: () => void
+  commitInlineEdit: (target?: "stay" | "next" | "previous") => void
+  cancelInlineEdit: () => void
   readCell: (row: DataGridTableRow<TRow>, columnKey: string) => string
   readDisplayCell: (row: DataGridTableRow<TRow>, columnKey: string) => string
 }

@@ -195,13 +195,14 @@ import type {
   DataGridPivotSpec,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
-import { DataGridTableStage, useDataGridTableStageRuntime } from "../../../datagrid-vue-app/src/internal"
+import { DataGridTableStage, useDataGridTableStageRuntime } from "@affino/datagrid-vue-app/internal"
 import {
   useDataGridAppAdvancedFilterBuilder,
   useDataGridAppColumnLayoutPanel,
   useDataGridAppControls,
   useDataGridAppDiagnosticsPanel,
   useDataGridAppModeMeta,
+  useDataGridAppRowSelection,
   useDataGridAppRuntime,
   useDataGridAppSelection,
 } from "@affino/datagrid-vue"
@@ -316,7 +317,7 @@ const totalRows = computed(() => {
 const {
   selectionSnapshot,
   selectionAnchor,
-  runtimeServices,
+  selectionService,
   selectionAggregatesLabel,
   syncSelectionSnapshotFromRuntime,
 } = useDataGridAppSelection<VueSandboxRow>({
@@ -325,6 +326,19 @@ const {
   visibleColumns,
   totalRows,
 })
+const {
+  rowSelectionSnapshot,
+  selectionService: rowSelectionService,
+  syncRowSelectionSnapshotFromRuntime,
+} = useDataGridAppRowSelection<VueSandboxRow>({
+  resolveRuntime: () => (runtimeRef ? { api: runtimeRef.api } : null),
+})
+const runtimeServices = {
+  selection: {
+    ...selectionService,
+    ...rowSelectionService,
+  },
+}
 
 const {
   runtime,
@@ -487,6 +501,8 @@ const {
   selectionSnapshot,
   selectionAnchor,
   syncSelectionSnapshotFromRuntime,
+  rowSelectionSnapshot,
+  syncRowSelectionSnapshotFromRuntime,
   firstColumnKey,
   columnFilterTextByKey,
   virtualization,

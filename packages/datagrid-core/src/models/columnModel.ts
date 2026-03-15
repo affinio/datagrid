@@ -1,20 +1,25 @@
-import type {
-  DataGridColumnDateTimeFormatOptions,
-  DataGridColumnNumberFormatOptions,
-  DataGridFormatDataType,
-} from "@affino/datagrid-format"
+import type { DataGridColumnFormat, DataGridFormatDataType } from "@affino/datagrid-format"
+import type { DataGridCellTypeId } from "../cells/runtime.js"
 
-export type { DataGridColumnDateTimeFormatOptions, DataGridColumnNumberFormatOptions } from "@affino/datagrid-format"
+export type {
+  DataGridColumnDateTimeFormatOptions,
+  DataGridColumnFormat,
+  DataGridColumnNumberFormatOptions,
+} from "@affino/datagrid-format"
 
 export type DataGridColumnPin = "left" | "right" | "none"
 
 export type DataGridColumnDataType = DataGridFormatDataType
 
-export interface DataGridColumnPresentation {
+export type DataGridColumnOptionsResult = readonly unknown[] | Promise<readonly unknown[]>
+
+export type DataGridColumnOptionsSource<TRow = unknown> = readonly unknown[] | ((row: TRow) => DataGridColumnOptionsResult)
+
+export interface DataGridColumnPresentation<TRow = unknown> {
   align?: "left" | "center" | "right"
   headerAlign?: "left" | "center" | "right"
-  numberFormat?: DataGridColumnNumberFormatOptions
-  dateTimeFormat?: DataGridColumnDateTimeFormatOptions
+  format?: DataGridColumnFormat
+  options?: DataGridColumnOptionsSource<TRow>
 }
 
 export interface DataGridColumnCapabilities {
@@ -34,8 +39,14 @@ export interface DataGridColumnConstraints {
 }
 
 export interface DataGridColumnValueAccessors<TRow = unknown> {
+  accessor?: (row: TRow) => unknown
   valueGetter?: (row: TRow) => unknown
   valueSetter?: (row: TRow, value: unknown) => void
+}
+
+export interface DataGridColumnOption {
+  label: string
+  value: unknown
 }
 
 export interface DataGridColumnDef<TRow = unknown> extends DataGridColumnValueAccessors<TRow> {
@@ -45,9 +56,11 @@ export interface DataGridColumnDef<TRow = unknown> extends DataGridColumnValueAc
   minWidth?: number
   maxWidth?: number
   dataType?: DataGridColumnDataType
-  presentation?: DataGridColumnPresentation
+  presentation?: DataGridColumnPresentation<TRow>
   capabilities?: DataGridColumnCapabilities
   constraints?: DataGridColumnConstraints
+  cellType?: DataGridCellTypeId | string
+  placeholder?: string
   meta?: Record<string, unknown>
 }
 
@@ -109,6 +122,13 @@ interface MutableColumnState {
   column: DataGridColumnDef
   state: DataGridColumnState
 }
+
+interface CachedNormalizedColumnDefinition {
+  normalizedKey: string
+  definition: DataGridColumnDef<any>
+}
+
+const normalizedColumnDefinitionCache = new WeakMap<object, CachedNormalizedColumnDefinition>()
 
 function normalizePin(pin: DataGridColumnPin | undefined): DataGridColumnPin {
   if (pin === "left" || pin === "right") {
@@ -173,18 +193,139 @@ function cloneObjectRecord<TValue extends Record<string, unknown> | undefined>(v
   return { ...value } as TValue
 }
 
+function normalizeCellTypeId(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined
+  }
+  const normalized = value.trim()
+  return normalized.length > 0 ? normalized : undefined
+}
+
+function inferColumnCellType<TRow>(column: DataGridColumnDef<TRow>): string | undefined {
+  const explicitCellType = normalizeCellTypeId(column.cellType)
+  if (explicitCellType) {
+    return explicitCellType
+  }
+  if (column.presentation?.options) {
+    return "select"
+  }
+  switch (column.dataType) {
+    case "boolean":
+      return "checkbox"
+    case "number":
+      return "number"
+    case "currency":
+      return "currency"
+    case "percent":
+      return "percent"
+    case "date":
+    case "datetime":
+      return "date"
+    default:
+      return undefined
+  }
+}
+
+function freezeColumnFormat(format: DataGridColumnFormat | undefined): DataGridColumnFormat | undefined {
+  if (!format) {
+    return undefined
+  }
+  const number = format.number ? Object.freeze({ ...format.number }) : undefined
+  const dateTime = format.dateTime ? Object.freeze({ ...format.dateTime }) : undefined
+  if (!number && !dateTime) {
+    return undefined
+  }
+  return Object.freeze({
+    ...(number ? { number } : {}),
+    ...(dateTime ? { dateTime } : {}),
+  })
+}
+
+function freezeColumnOptionsSource<TRow>(
+  options: DataGridColumnOptionsSource<TRow> | undefined,
+): DataGridColumnOptionsSource<TRow> | undefined {
+  if (!options) {
+    return undefined
+  }
+  return Array.isArray(options) ? Object.freeze([...options]) : options
+}
+
+function normalizeColumnPresentation<TRow>(
+  column: DataGridColumnDef<TRow>,
+  cellType: string | undefined,
+): DataGridColumnPresentation<TRow> | undefined {
+  const presentation = column.presentation
+  const format = freezeColumnFormat({
+    ...(presentation?.format?.number || cellType === "percent"
+      ? {
+          number: presentation?.format?.number ?? { style: "percent" },
+        }
+      : {}),
+    ...(presentation?.format?.dateTime
+      ? {
+          dateTime: presentation?.format?.dateTime,
+        }
+      : {}),
+  })
+  const options = freezeColumnOptionsSource(presentation?.options)
+  if (!presentation?.align && !presentation?.headerAlign && !format && !options) {
+    return undefined
+  }
+  return Object.freeze({
+    ...(presentation?.align ? { align: presentation.align } : {}),
+    ...(presentation?.headerAlign ? { headerAlign: presentation.headerAlign } : {}),
+    ...(format ? { format } : {}),
+    ...(options ? { options } : {}),
+  })
+}
+
+function resolveNormalizedValueGetter<TRow>(column: DataGridColumnDef<TRow>): ((row: TRow) => unknown) | undefined {
+  return typeof column.accessor === "function"
+    ? column.accessor
+    : column.valueGetter
+}
+
 function freezeColumnDefinition<TRow = unknown>(column: DataGridColumnDef<TRow>): DataGridColumnDef<TRow> {
+  if (typeof column === "object" && column !== null) {
+    const cached = normalizedColumnDefinitionCache.get(column as object)
+    if (cached && cached.normalizedKey === column.key) {
+      return cached.definition as DataGridColumnDef<TRow>
+    }
+  }
+
+  const normalizedCellType = inferColumnCellType(column)
+  const normalizedPresentation = normalizeColumnPresentation(column, normalizedCellType)
+  const normalizedValueGetter = resolveNormalizedValueGetter(column)
+  const {
+    initialState: _initialState,
+    presentation: _presentation,
+    capabilities,
+    constraints,
+    meta,
+    cellType: _cellType,
+    accessor: _accessor,
+    ...rest
+  } = column as DataGridColumnDef<TRow> & { currency?: unknown; editor?: unknown; initialState?: unknown }
   const normalized: DataGridColumnDef<TRow> = {
-    ...column,
-    presentation: column.presentation ? Object.freeze({ ...column.presentation }) : undefined,
-    capabilities: column.capabilities ? Object.freeze({ ...column.capabilities }) : undefined,
-    constraints: column.constraints ? Object.freeze({ ...column.constraints }) : undefined,
-    meta: cloneObjectRecord(column.meta),
+    ...rest,
+    ...(typeof normalizedValueGetter === "function" ? { valueGetter: normalizedValueGetter } : {}),
+    cellType: normalizedCellType,
+    presentation: normalizedPresentation,
+    capabilities: capabilities ? Object.freeze({ ...capabilities }) : undefined,
+    constraints: constraints ? Object.freeze({ ...constraints }) : undefined,
+    meta: cloneObjectRecord(meta),
   }
   if (normalized.meta) {
     Object.freeze(normalized.meta)
   }
-  return Object.freeze(normalized)
+  const frozen = Object.freeze(normalized)
+  if (typeof column === "object" && column !== null) {
+    normalizedColumnDefinitionCache.set(column as object, {
+      normalizedKey: column.key,
+      definition: frozen,
+    })
+  }
+  return frozen
 }
 
 function resolveInitialColumnState(column: DataGridColumnInput, definition: DataGridColumnDef): DataGridColumnState {
@@ -304,14 +445,10 @@ export function createDataGridColumnModel(
         )
       }
       seen.add(key)
-      const {
-        initialState: _initialState,
-        ...rawDefinition
-      } = column
       const normalizedColumn = freezeColumnDefinition(
         key === column.key
-          ? rawDefinition as DataGridColumnDef
-          : { ...rawDefinition, key } as DataGridColumnDef,
+          ? column as DataGridColumnDef
+          : { ...column, key } as DataGridColumnDef,
       )
       columnsByKey.set(key, {
         column: normalizedColumn,

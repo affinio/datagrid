@@ -56,6 +56,81 @@ const READONLY_OWNER_COLUMNS = [
   { key: "amount", label: "Amount", width: 140 },
 ] as const
 
+const CHECKBOX_COLUMNS = [
+  { key: "approved", label: "Approved", width: 140, cellType: "checkbox", capabilities: { editable: true } },
+] as const
+
+const CHECKBOX_ROWS = [
+  { rowId: "c1", approved: true },
+] as const
+
+const SELECT_COLUMNS = [
+  {
+    key: "stage",
+    label: "Stage",
+    width: 160,
+    cellType: "select",
+    capabilities: { editable: true },
+    presentation: {
+      options: [
+        { value: "backlog", label: "Backlog" },
+        { value: "planned", label: "Planned" },
+        { value: "done", label: "Done" },
+      ],
+    },
+  },
+] as const
+
+const SELECT_ROWS = [
+  { rowId: "s1", stage: "backlog" },
+] as const
+
+const RANKED_SELECT_COLUMNS = [
+  {
+    key: "stage",
+    label: "Stage",
+    width: 180,
+    cellType: "select",
+    capabilities: { editable: true },
+    presentation: {
+      options: [
+        { value: "planned", label: "Planned" },
+        { value: "plan-review", label: "Plan Review" },
+        { value: "backplanned", label: "Backplanned" },
+      ],
+    },
+  },
+] as const
+
+const ASYNC_SELECT_ROWS = [
+  { rowId: "a1", stage: "review" },
+] as const
+
+const CURRENCY_EDIT_COLUMNS = [
+  {
+    key: "amount",
+    label: "Amount",
+    width: 160,
+    cellType: "currency",
+    capabilities: { editable: true },
+    presentation: {
+      format: {
+        number: {
+          locale: "en-GB",
+          style: "currency",
+          currency: "GBP",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        },
+      },
+    },
+  },
+] as const
+
+const CURRENCY_EDIT_ROWS = [
+  { rowId: "money-1", amount: 10 },
+] as const
+
 const FORMULA_ROWS: readonly FormulaRow[] = [
   { id: 1, price: 12, qty: 3 },
   { id: 2, price: 5, qty: 4 },
@@ -132,6 +207,13 @@ function resolveVm(wrapper: ReturnType<typeof mount>) {
   }
 }
 
+function resolveRowAt<TValue extends Record<string, unknown>>(wrapper: ReturnType<typeof mount>, index: number): TValue | null {
+  const rowModel = resolveRowModel(wrapper) as {
+    getRow?: (rowIndex: number) => { row?: TValue } | undefined
+  } | null
+  return rowModel?.getRow?.(index)?.row ?? null
+}
+
 function queryColumnMenuRoot(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>("[data-affino-menu-root]")
 }
@@ -153,7 +235,9 @@ function queryAggregationsRoot(): HTMLElement | null {
 }
 
 function queryBodyCell(wrapper: ReturnType<typeof mount>, rowIndex: number, columnIndex: number) {
-  return wrapper.find(`.grid-body-viewport .grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`)
+  const hasRowSelectionColumn = wrapper.find(".grid-body-pane--left .grid-cell--row-selection").exists()
+  const resolvedColumnIndex = hasRowSelectionColumn ? columnIndex + 1 : columnIndex
+  return wrapper.find(`.grid-body-viewport .grid-cell[data-row-index="${rowIndex}"][data-column-index="${resolvedColumnIndex}"]`)
 }
 
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
@@ -272,7 +356,6 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
     await cell.trigger("keydown", {
       key: "Enter",
-      cancelable: true,
     })
     await flushRuntimeTasks()
 
@@ -625,7 +708,7 @@ describe("DataGrid app facade contract", () => {
     const popover = queryAdvancedFilterRoot()
     expect(popover).toBeTruthy()
 
-    const valueInput = popover!.querySelector<HTMLInputElement>('input[type="text"]')
+    const valueInput = popover!.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
     expect(valueInput).toBeTruthy()
     valueInput!.value = "NOC"
     valueInput!.dispatchEvent(new Event("input", { bubbles: true }))
@@ -809,10 +892,16 @@ describe("DataGrid app facade contract", () => {
     amountCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
     await flushRuntimeTasks()
 
-    const amountOp = popover?.querySelector<HTMLSelectElement>(".datagrid-aggregations__op")
+    const amountOp = popover?.querySelector<HTMLInputElement>(".datagrid-aggregations__op")
     expect(amountOp).toBeTruthy()
-    amountOp!.value = "sum"
-    amountOp!.dispatchEvent(new Event("change", { bubbles: true }))
+    amountOp!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const sumOption = Array.from(popover!.querySelectorAll<HTMLButtonElement>(".datagrid-cell-combobox__option")).find(
+      option => option.textContent?.includes("Sum"),
+    )
+    expect(sumOption).toBeTruthy()
+    sumOption!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
 
     popover!.querySelector<HTMLElement>(".datagrid-aggregations__primary")?.dispatchEvent(
@@ -895,21 +984,179 @@ describe("DataGrid app facade contract", () => {
     const leftPaneRows = wrapper.findAll(".grid-body-pane--left .grid-row")
     expect(leftPaneRows).toHaveLength(3)
 
-    const firstRowCheckbox = leftPaneRows[0]!.find('.grid-cell--row-select input[type="checkbox"]')
+    const firstRowCheckbox = leftPaneRows[0]!.find('.grid-cell--row-selection[role="checkbox"]')
     expect(firstRowCheckbox.exists()).toBe(true)
-    ;(firstRowCheckbox.element as HTMLInputElement).checked = true
-    await firstRowCheckbox.trigger("change")
+    expect(firstRowCheckbox.attributes("aria-checked")).toBe("false")
+    await firstRowCheckbox.trigger("click")
     await flushRuntimeTasks()
 
-    expect(bodyRows[0]!.classes()).toContain("grid-row--checkbox-selected")
-    expect(bodyRows[0]!.classes()).not.toContain("grid-row--focused")
-    expect(bodyRows[1]!.classes()).toContain("grid-row--focused")
-    expect(bodyRows[1]!.classes()).not.toContain("grid-row--checkbox-selected")
+    const refreshedBodyRows = wrapper.findAll(".grid-body-viewport .grid-row")
+    expect(refreshedBodyRows[0]!.classes()).toContain("grid-row--checkbox-selected")
+    expect(refreshedBodyRows[0]!.classes()).not.toContain("grid-row--focused")
+    expect(refreshedBodyRows[1]!.classes()).toContain("grid-row--focused")
+    expect(refreshedBodyRows[1]!.classes()).not.toContain("grid-row--checkbox-selected")
 
     expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()).toEqual({
       focusedRow: "r2",
       selectedRows: ["r1"],
     })
+
+    wrapper.unmount()
+  })
+
+  it("renders checkbox cell types and toggles them on click without entering edit mode", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: CHECKBOX_ROWS,
+        columns: CHECKBOX_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = wrapper.find('.grid-body-viewport .grid-cell--checkbox[role="checkbox"]')
+    expect(cell.find(".grid-checkbox-indicator--checked").exists()).toBe(true)
+
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(false)
+    expect(resolveRowAt<{ approved: boolean }>(wrapper, 0)).toMatchObject({ approved: false })
+    const uncheckedCell = wrapper.find('.grid-body-viewport .grid-cell--checkbox[role="checkbox"]')
+    expect(uncheckedCell.find(".grid-checkbox-indicator").exists()).toBe(true)
+    expect(uncheckedCell.find(".grid-checkbox-indicator--checked").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("opens select cells as a filterable combobox and commits only after option selection", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SELECT_ROWS,
+        columns: SELECT_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    expect(cell.text()).toContain("Backlog")
+
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
+    expect(editor.exists()).toBe(true)
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(false)
+    expect(document.body.querySelector(".cell-editor-select")).toBeNull()
+
+    const inputElement = editor.element as HTMLInputElement
+    inputElement.value = "pla"
+    inputElement.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const options = [...document.body.querySelectorAll<HTMLButtonElement>(".datagrid-cell-combobox__option")]
+    expect(options).toHaveLength(1)
+    expect(options[0]?.textContent).toContain("Planned")
+    expect(resolveRowAt<{ stage: string }>(wrapper, 0)).toMatchObject({ stage: "backlog" })
+
+    options[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(queryBodyCell(wrapper, 0, 0).text()).toContain("Planned")
+    expect(resolveRowAt<{ stage: string }>(wrapper, 0)).toMatchObject({ stage: "planned" })
+
+    wrapper.unmount()
+  })
+
+  it("ranks select matches as exact and prefix matches before contains matches", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SELECT_ROWS,
+        columns: RANKED_SELECT_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
+    const inputElement = editor.element as HTMLInputElement
+    inputElement.value = "pla"
+    inputElement.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const options = [...document.body.querySelectorAll<HTMLButtonElement>(".datagrid-cell-combobox__option")]
+    expect(options.map(option => option.textContent?.replace(/\s+Selected\s*/g, "").trim())).toEqual([
+      "Planned",
+      "Plan Review",
+      "Backplanned",
+    ])
+
+    wrapper.unmount()
+  })
+
+  it("loads async select options and commits the active option on Tab", async () => {
+    const asyncOptions = vi.fn(async () => {
+      await Promise.resolve()
+      return [
+        { value: "backlog", label: "Backlog" },
+        { value: "review", label: "Review" },
+        { value: "done", label: "Done" },
+      ]
+    })
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: ASYNC_SELECT_ROWS,
+        columns: [
+          {
+            key: "stage",
+            label: "Stage",
+            width: 160,
+            cellType: "select",
+            capabilities: { editable: true },
+            presentation: {
+              options: asyncOptions,
+            },
+          },
+        ],
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    expect(cell.text()).toContain("review")
+
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
+    expect(editor.exists()).toBe(true)
+    expect(asyncOptions).toHaveBeenCalled()
+
+    const inputElement = editor.element as HTMLInputElement
+    inputElement.value = "rev"
+    inputElement.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const options = [...document.body.querySelectorAll<HTMLButtonElement>(".datagrid-cell-combobox__option")]
+    expect(options).toHaveLength(1)
+    expect(options[0]?.textContent).toContain("Review")
+
+    inputElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveRowAt<{ stage: string }>(wrapper, 0)).toMatchObject({ stage: "review" })
+    expect(queryBodyCell(wrapper, 0, 0).text()).toContain("Review")
 
     wrapper.unmount()
   })
@@ -1176,6 +1423,34 @@ describe("DataGrid app facade contract", () => {
 
     const menuRoot = queryColumnMenuRoot()
     expect(menuRoot?.style.getPropertyValue("--datagrid-column-menu-bg")).toBe("#fff8ef")
+
+    wrapper.unmount()
+  })
+
+  it("parses typed currency edits before committing them to the row model", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: CURRENCY_EDIT_ROWS,
+        columns: CURRENCY_EDIT_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+
+    await editor.setValue("£1,200.50")
+    await editor.trigger("blur")
+    await flushRuntimeTasks()
+
+    expect(queryBodyCell(wrapper, 0, 0).text()).toContain("£1,200.50")
+    expect(resolveRowAt<{ amount: number }>(wrapper, 0)).toMatchObject({ amount: 1200.5 })
 
     wrapper.unmount()
   })

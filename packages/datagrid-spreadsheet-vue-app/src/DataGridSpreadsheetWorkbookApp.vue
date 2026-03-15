@@ -726,10 +726,6 @@ const STYLE_PRESETS: Record<SpreadsheetStylePresetId, DataGridSpreadsheetStyle> 
   }),
 }
 
-const numberFormatter = new Intl.NumberFormat("en-GB", {
-  maximumFractionDigits: 2,
-})
-
 const formulaAutocompleteMenuOptions: MenuOptions = {
   mousePrediction: {},
   loopFocus: true,
@@ -1021,20 +1017,7 @@ function resolvePalette(index: number) {
   return REFERENCE_PALETTE[index % REFERENCE_PALETTE.length] ?? REFERENCE_PALETTE[0]
 }
 
-function formatPreviewValue(value: unknown): string {
-  if (value == null || value === "") {
-    return "—"
-  }
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return numberFormatter.format(value)
-  }
-  if (typeof value === "boolean") {
-    return value ? "TRUE" : "FALSE"
-  }
-  return String(value)
-}
-
-function formatGridValue(cell: DataGridSpreadsheetCellSnapshot | null): unknown {
+function resolveGridCellValue(cell: DataGridSpreadsheetCellSnapshot | null): unknown {
   if (!cell) {
     return ""
   }
@@ -1049,6 +1032,16 @@ function formatGridValue(cell: DataGridSpreadsheetCellSnapshot | null): unknown 
     return value
   }
   return String(value)
+}
+
+function resolveCellDisplayText(cell: DataGridSpreadsheetCellSnapshot | null): string {
+  if (!cell) {
+    return ""
+  }
+  if (cell.errorValue) {
+    return "#ERROR"
+  }
+  return cell.formattedValue
 }
 
 function formatCellReferenceLabel(
@@ -1595,7 +1588,7 @@ const activeSheetView = computed(() => {
       if (cell) {
         cellsByKey.set(makeLocalCellKey(row.rowIndex, column.key), cell)
       }
-      materializedRow[column.key] = formatGridValue(cell)
+      materializedRow[column.key] = resolveGridCellValue(cell)
     }
     rows.push(materializedRow)
   }
@@ -2131,11 +2124,11 @@ function readSpreadsheetClipboardCell(
     return cell.rawInput ?? ""
   }
   if (props.clipboardCopyMode === "display") {
-    return String(formatGridValue(cell) ?? "")
+    return resolveCellDisplayText(cell)
   }
   return cell.inputKind === "formula"
     ? (cell.rawInput ?? "")
-    : String(formatGridValue(cell) ?? "")
+    : String(resolveGridCellValue(cell) ?? "")
 }
 
 function buildSpreadsheetFillMatrixFromRange(range: DataGridCopyRange): string[][] {
@@ -3963,7 +3956,7 @@ const activeCellDisplayLabel = computed(() => {
   if (activeCell.errorValue) {
     return "#ERROR"
   }
-  return formatPreviewValue(activeCell.displayValue)
+  return activeCell.formattedValue || "—"
 })
 
 const activeDiagnosticMessage = computed(() => {

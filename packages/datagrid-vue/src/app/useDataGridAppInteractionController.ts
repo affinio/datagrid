@@ -5,6 +5,10 @@ import type {
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-core"
 import {
+  resolveDataGridCellKeyboardAction,
+  toggleDataGridCellValue,
+} from "@affino/datagrid-core"
+import {
   buildDataGridFillMatrix,
   canToggleDataGridFillBehavior,
   resolveDataGridDefaultFillBehavior,
@@ -78,6 +82,12 @@ export interface UseDataGridAppInteractionControllerOptions<
   ) => void
   clearCellSelection: () => void
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
+  handleToggleCellAction?: (
+    row: DataGridRowNode<TRow>,
+    rowIndex: number,
+    columnIndex: number,
+    column: DataGridColumnSnapshot,
+  ) => boolean
   isCellEditable: (
     row: DataGridRowNode<TRow>,
     rowIndex: number,
@@ -185,6 +195,45 @@ export function useDataGridAppInteractionController<
       return false
     }
     return event.key.length === 1
+  }
+
+  const applyDirectCellEdit = (
+    row: DataGridRowNode<TRow>,
+    rowIndex: number,
+    columnIndex: number,
+    columnKey: string,
+    nextValue: unknown,
+    label: string,
+  ): boolean => {
+    if (row.kind === "group" || row.rowId == null) {
+      return false
+    }
+    const beforeSnapshot = options.captureRowsSnapshot()
+    options.runtime.api.rows.applyEdits([
+      {
+        rowId: row.rowId,
+        data: {
+          [columnKey]: nextValue,
+        } as Partial<TRow>,
+      },
+    ])
+    void options.recordIntentTransaction({
+      intent: "edit",
+      label,
+      affectedRange: {
+        startRow: rowIndex,
+        endRow: rowIndex,
+        startColumn: columnIndex,
+        endColumn: columnIndex,
+      },
+    }, beforeSnapshot)
+    options.syncViewport()
+    restoreActiveCellFocus({
+      rowIndex,
+      columnIndex,
+      rowId: row.rowId,
+    })
+    return true
   }
 
   const restoreActiveCellFocus = (preferredCoord: DataGridAppCellCoord | null = null): void => {
@@ -1379,11 +1428,43 @@ export function useDataGridAppInteractionController<
     if (keyboardCommandRouter.dispatchKeyboardCommands(event)) {
       return
     }
-    if (event.key === "Enter") {
+    const columnSnapshot = options.visibleColumns.value[columnIndex]
+    const columnKey = columnSnapshot?.key
+    const editable = Boolean(columnKey) && options.isCellEditable(row, rowIndex, columnKey as string, columnIndex)
+    const printable = isPrintableEditingKey(event)
+    const keyboardAction = columnSnapshot && columnKey
+      ? resolveDataGridCellKeyboardAction({
+        column: columnSnapshot.column,
+        row: row.kind !== "group" ? row.data : undefined,
+        editable,
+        key: event.key,
+        printable,
+      })
+      : "none"
+
+    if (keyboardAction === "toggle" && columnSnapshot && columnKey) {
       event.preventDefault()
-      const columnKey = options.visibleColumns.value[columnIndex]?.key
-      if (columnKey && options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
-        options.startInlineEdit(row, columnKey)
+      options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
+      if (options.handleToggleCellAction?.(row, rowIndex, columnIndex, columnSnapshot)) {
+        return
+      }
+      applyDirectCellEdit(
+        row,
+        rowIndex,
+        columnIndex,
+        columnKey,
+        toggleDataGridCellValue({
+          column: columnSnapshot.column,
+          row: row.kind !== "group" ? row.data : undefined,
+        }),
+        `Toggle ${columnKey}`,
+      )
+      return
+    }
+    if ((keyboardAction === "startEdit" || keyboardAction === "openSelect") && columnKey) {
+      event.preventDefault()
+      if (editable) {
+        options.startInlineEdit(row, columnKey, printable ? { draftValue: event.key } : undefined)
       }
       return
     }
@@ -1393,24 +1474,9 @@ export function useDataGridAppInteractionController<
     if (navigationHandled) {
       return
     }
-    if (isPrintableEditingKey(event)) {
-      event.preventDefault()
-      const columnKey = options.visibleColumns.value[columnIndex]?.key
-      if (columnKey && options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
-        options.startInlineEdit(row, columnKey, { draftValue: event.key })
-      }
-      return
-    }
     if (event.key === " " || event.key === "Spacebar") {
       event.preventDefault()
       options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
-    }
-    if (event.key === "F2") {
-      event.preventDefault()
-      const columnKey = options.visibleColumns.value[columnIndex]?.key
-      if (columnKey && options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
-        options.startInlineEdit(row, columnKey)
-      }
     }
   }
 

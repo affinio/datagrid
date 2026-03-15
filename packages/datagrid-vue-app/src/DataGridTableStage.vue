@@ -19,25 +19,6 @@
       <div class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="handleLinkedViewportWheel">
         <canvas ref="leftHeaderChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
         <div class="grid-header-row grid-pane-track" :style="leftTrackStyle">
-          <div
-            v-if="shouldShowRowSelection()"
-            class="grid-cell grid-cell--header grid-cell--index grid-cell--row-select grid-cell--row-select-header"
-            :style="resolvedRowSelectionColumnStyle"
-          >
-            <div class="col-head col-head--row-select">
-              <input
-                class="grid-row-select-checkbox"
-                type="checkbox"
-                aria-label="Select visible rows"
-                :checked="isAllVisibleRowsSelectedSafe()"
-                :indeterminate.prop="isSomeVisibleRowsSelectedSafe() && !isAllVisibleRowsSelectedSafe()"
-                @mousedown.stop
-                @click.stop
-                @change="handleSelectAllVisibleRowsChangeSafe"
-              />
-            </div>
-            <div v-if="!hasColumnMenu()" class="col-filter col-filter--index-spacer" aria-hidden="true" />
-          </div>
           <div class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header" :style="resolvedRowIndexColumnStyle">
             <div class="col-head col-head--index">
               <span>#</span>
@@ -45,38 +26,111 @@
             <div v-if="!hasColumnMenu()" class="col-filter col-filter--index-spacer" aria-hidden="true" />
           </div>
           <template v-if="hasColumnMenu()">
-            <DataGridColumnMenu
-              v-for="column in pinnedLeftColumns"
-              :key="`header-left-${column.key}`"
-              :rows="props.sourceRows ?? []"
-              :column-key="column.key"
-              :column-label="column.column.label ?? column.key"
-              :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
-              :sort-enabled="isColumnSortable(column)"
-              :pin="column.pin"
-              :filter-enabled="isColumnFilterable(column)"
-              :filter-active="isColumnFilterActiveSafe(column.key)"
-              :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
-              :max-filter-values="columnMenuMaxFilterValues"
-              @sort="applyColumnMenuSortSafe(column.key, $event)"
-              @pin="applyColumnMenuPinSafe(column.key, $event)"
-              @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
-              @clear-filter="clearColumnMenuFilterSafe(column.key)"
-              v-slot="{ open }"
-            >
+            <template v-for="column in pinnedLeftColumns" :key="`header-left-${column.key}`">
               <div
-                class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
-                :class="{
-                  'grid-cell--header-menu-enabled': true,
-                  'grid-cell--header-menu-open': open,
-                }"
+                v-if="isRowSelectionColumn(column)"
+                class="grid-cell grid-cell--header grid-cell--pinned-left grid-cell--checkbox grid-cell--row-selection"
                 :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
                 :data-column-key="column.key"
-                data-datagrid-column-menu-trigger="true"
+              >
+                <div class="col-head col-head--index">
+                  <button
+                    class="grid-checkbox-trigger"
+                    :class="headerCheckboxIndicatorClass()"
+                    type="button"
+                    role="checkbox"
+                    aria-label="Select visible rows"
+                    :aria-checked="resolveHeaderRowSelectionAriaChecked()"
+                    @mousedown.stop
+                    @click.stop
+                    @click="handleToggleAllVisibleRowsSafe"
+                  >
+                    <span class="grid-checkbox-indicator" :class="headerCheckboxIndicatorClass()" aria-hidden="true">
+                      <span class="grid-checkbox-indicator__mark" :class="headerCheckboxMarkClass()" />
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <DataGridColumnMenu
+                v-else
+                :rows="props.sourceRows ?? []"
+                :column-key="column.key"
+                :column-label="column.column.label ?? column.key"
+                :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
+                :sort-enabled="isColumnSortable(column)"
+                :pin="column.pin"
+                :filter-enabled="isColumnFilterable(column)"
+                :filter-active="isColumnFilterActiveSafe(column.key)"
+                :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
+                :max-filter-values="columnMenuMaxFilterValues"
+                @sort="applyColumnMenuSortSafe(column.key, $event)"
+                @pin="applyColumnMenuPinSafe(column.key, $event)"
+                @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
+                @clear-filter="clearColumnMenuFilterSafe(column.key)"
+                v-slot="{ open }"
+              >
+                <div
+                  class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
+                  :class="{
+                    'grid-cell--header-menu-enabled': true,
+                    'grid-cell--header-menu-open': open,
+                  }"
+                  :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+                  :data-column-key="column.key"
+                  data-datagrid-column-menu-trigger="true"
+                >
+                  <div class="col-head">
+                    <span>{{ column.column.label ?? column.key }}</span>
+                    <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
+                    <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
+                    <button
+                      type="button"
+                      class="col-resize"
+                      aria-label="Resize column"
+                      @mousedown.stop.prevent="startResize($event, column.key)"
+                      @dblclick.stop="handleResizeDoubleClick($event, column.key)"
+                      @click.stop
+                    />
+                  </div>
+                </div>
+              </DataGridColumnMenu>
+            </template>
+          </template>
+          <template v-else>
+            <template v-for="column in pinnedLeftColumns" :key="`header-left-${column.key}`">
+              <div
+                v-if="isRowSelectionColumn(column)"
+                class="grid-cell grid-cell--header grid-cell--pinned-left grid-cell--checkbox grid-cell--row-selection"
+                :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+                :data-column-key="column.key"
+              >
+                <div class="col-head col-head--index">
+                  <button
+                    class="grid-checkbox-trigger"
+                    :class="headerCheckboxIndicatorClass()"
+                    type="button"
+                    role="checkbox"
+                    aria-label="Select visible rows"
+                    :aria-checked="resolveHeaderRowSelectionAriaChecked()"
+                    @mousedown.stop
+                    @click.stop
+                    @click="handleToggleAllVisibleRowsSafe"
+                  >
+                    <span class="grid-checkbox-indicator" :class="headerCheckboxIndicatorClass()" aria-hidden="true">
+                      <span class="grid-checkbox-indicator__mark" :class="headerCheckboxMarkClass()" />
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div
+                v-else
+                class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
+                :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+                :data-column-key="column.key"
+                @click="handleHeaderColumnClick(column, $event.shiftKey)"
               >
                 <div class="col-head">
                   <span>{{ column.column.label ?? column.key }}</span>
-                  <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
                   <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
                   <button
                     type="button"
@@ -87,42 +141,19 @@
                     @click.stop
                   />
                 </div>
+                <div class="col-filter" @click.stop>
+                  <input
+                    class="col-filter-input"
+                    :value="columnFilterTextByKey[column.key] ?? ''"
+                    :disabled="!isColumnFilterable(column)"
+                    placeholder="Filter..."
+                    @mousedown.stop
+                    @keydown.stop
+                    @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
+                  />
+                </div>
               </div>
-            </DataGridColumnMenu>
-          </template>
-          <template v-else>
-            <div
-              v-for="column in pinnedLeftColumns"
-              :key="`header-left-${column.key}`"
-              class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
-              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
-              :data-column-key="column.key"
-              @click="handleHeaderColumnClick(column, $event.shiftKey)"
-            >
-              <div class="col-head">
-                <span>{{ column.column.label ?? column.key }}</span>
-                <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
-                <button
-                  type="button"
-                  class="col-resize"
-                  aria-label="Resize column"
-                  @mousedown.stop.prevent="startResize($event, column.key)"
-                  @dblclick.stop="handleResizeDoubleClick($event, column.key)"
-                  @click.stop
-                />
-              </div>
-              <div class="col-filter" @click.stop>
-                <input
-                  class="col-filter-input"
-                  :value="columnFilterTextByKey[column.key] ?? ''"
-                  :disabled="!isColumnFilterable(column)"
-                  placeholder="Filter..."
-                  @mousedown.stop
-                  @keydown.stop
-                  @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
-                />
-              </div>
-            </div>
+            </template>
           </template>
         </div>
       </div>
@@ -339,22 +370,6 @@
             @mouseenter="setHoveredRow(rowOffset)"
           >
             <div
-              v-if="shouldShowRowSelection()"
-              class="grid-cell grid-cell--index grid-cell--row-select"
-              :style="resolvedRowSelectionColumnStyle"
-            >
-              <input
-                v-if="row.kind !== 'group'"
-                class="grid-row-select-checkbox"
-                type="checkbox"
-                :aria-label="`Select row ${String(row.rowId)}`"
-                :checked="isRowCheckboxSelectedSafe(row)"
-                @mousedown.stop
-                @click.stop
-                @change="handleRowCheckboxChangeSafe(row, $event)"
-              />
-            </div>
-            <div
               class="grid-cell grid-cell--index grid-cell--index-number"
               :class="{ 'grid-cell--index-selected': isFullRowSelectionSafe(rowOffset) }"
               :style="resolvedRowIndexColumnStyle"
@@ -374,13 +389,15 @@
               v-for="column in pinnedLeftColumns"
               :key="`${String(row.rowId)}-left-${column.key}`"
               class="grid-cell grid-cell--pinned-left"
-              :class="[cellStateClasses(row, rowOffset, columnIndexByKey(column.key)), resolveCellCustomClass(row, rowOffset, column, columnIndexByKey(column.key))]"
+              :class="[builtInCellClasses(row, column), cellStateClasses(row, rowOffset, columnIndexByKey(column.key)), resolveCellCustomClass(row, rowOffset, column, columnIndexByKey(column.key))]"
               :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key)), resolveCellCustomStyle(row, rowOffset, column, columnIndexByKey(column.key))]"
               :data-row-index="viewportRowStart + rowOffset"
               :data-column-index="columnIndexByKey(column.key)"
               :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
+              :role="checkboxCellRole(row, column)"
+              :aria-checked="checkboxCellAriaChecked(row, column)"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
-              @click.stop="handleBodyCellClick(row)"
+              @click.stop="handleBodyCellClick(row, rowOffset, column, columnIndexByKey(column.key))"
               @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
               @mouseleave="clearRangeMoveHandleHover"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
@@ -395,17 +412,31 @@
                 @mousedown.stop.prevent="handleFillHandleMouseDown($event)"
                 @dblclick.stop.prevent="handleFillHandleDoubleClick($event)"
               />
+              <DataGridCellComboboxEditor
+                v-if="isSelectEditorCell(row, rowOffset, column, columnIndexByKey(column.key))"
+                :value="editingCellValue"
+                :options="resolveSelectEditorOptions(row, column)"
+                :load-options="resolveSelectEditorOptionsLoader(row, column)"
+                @commit="handleSelectEditorCommit"
+                @cancel="handleSelectEditorCancel"
+                @options-resolved="handleSelectEditorOptionsResolved(row, column, $event)"
+              />
               <input
-                v-if="isCellEditableSafe(row, rowOffset, column, columnIndexByKey(column.key)) && isEditingCellSafe(row, column.key)"
-                class="cell-editor-input"
+                v-else-if="isTextEditorCell(row, rowOffset, column, columnIndexByKey(column.key))"
+                class="cell-editor-control cell-editor-input"
                 :value="editingCellValue"
                 @mousedown.stop
                 @click.stop
                 @input="updateEditingCellValue(($event.target as HTMLInputElement).value)"
                 @keydown.stop="handleEditorKeydown"
-                @blur="commitInlineEdit"
+                @blur="handleTextEditorBlur"
               />
-              <template v-else>{{ readDisplayCell(row, column.key) }}</template>
+              <template v-else-if="shouldRenderCheckboxCell(row, column)">
+                <span class="grid-checkbox-indicator" :class="checkboxIndicatorClass(row, column)" aria-hidden="true">
+                  <span class="grid-checkbox-indicator__mark" :class="checkboxIndicatorMarkClass(row, column)" />
+                </span>
+              </template>
+              <template v-else>{{ readResolvedDisplayCell(row, column) }}</template>
             </div>
           </div>
           <div v-if="bottomSpacerHeight > 0" class="grid-spacer" :style="{ height: `${bottomSpacerHeight}px` }" />
@@ -465,13 +496,15 @@
                 v-for="column in renderedColumns"
                 :key="`${String(row.rowId)}-${column.key}`"
                 class="grid-cell"
-                :class="[cellStateClasses(row, rowOffset, columnIndexByKey(column.key)), resolveCellCustomClass(row, rowOffset, column, columnIndexByKey(column.key))]"
+                :class="[builtInCellClasses(row, column), cellStateClasses(row, rowOffset, columnIndexByKey(column.key)), resolveCellCustomClass(row, rowOffset, column, columnIndexByKey(column.key))]"
                 :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key)), resolveCellCustomStyle(row, rowOffset, column, columnIndexByKey(column.key))]"
                 :data-row-index="viewportRowStart + rowOffset"
                 :data-column-index="columnIndexByKey(column.key)"
                 :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
+                :role="checkboxCellRole(row, column)"
+                :aria-checked="checkboxCellAriaChecked(row, column)"
                 @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
-                @click.stop="handleBodyCellClick(row)"
+                @click.stop="handleBodyCellClick(row, rowOffset, column, columnIndexByKey(column.key))"
                 @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
                 @mouseleave="clearRangeMoveHandleHover"
                 @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
@@ -486,17 +519,31 @@
                   @mousedown.stop.prevent="handleFillHandleMouseDown($event)"
                   @dblclick.stop.prevent="handleFillHandleDoubleClick($event)"
                 />
+                <DataGridCellComboboxEditor
+                  v-if="isSelectEditorCell(row, rowOffset, column, columnIndexByKey(column.key))"
+                  :value="editingCellValue"
+                  :options="resolveSelectEditorOptions(row, column)"
+                  :load-options="resolveSelectEditorOptionsLoader(row, column)"
+                  @commit="handleSelectEditorCommit"
+                  @cancel="handleSelectEditorCancel"
+                  @options-resolved="handleSelectEditorOptionsResolved(row, column, $event)"
+                />
                 <input
-                  v-if="isCellEditableSafe(row, rowOffset, column, columnIndexByKey(column.key)) && isEditingCellSafe(row, column.key)"
-                  class="cell-editor-input"
+                  v-else-if="isTextEditorCell(row, rowOffset, column, columnIndexByKey(column.key))"
+                  class="cell-editor-control cell-editor-input"
                   :value="editingCellValue"
                   @mousedown.stop
                   @click.stop
                   @input="updateEditingCellValue(($event.target as HTMLInputElement).value)"
                   @keydown.stop="handleEditorKeydown"
-                  @blur="commitInlineEdit"
+                  @blur="handleTextEditorBlur"
                 />
-                <template v-else>{{ readDisplayCell(row, column.key) }}</template>
+                <template v-else-if="shouldRenderCheckboxCell(row, column)">
+                  <span class="grid-checkbox-indicator" :class="checkboxIndicatorClass(row, column)" aria-hidden="true">
+                    <span class="grid-checkbox-indicator__mark" :class="checkboxIndicatorMarkClass(row, column)" />
+                  </span>
+                </template>
+                <template v-else>{{ readResolvedDisplayCell(row, column) }}</template>
               </div>
               <div
                 v-if="rightColumnSpacerWidth > 0"
@@ -554,13 +601,15 @@
               v-for="column in pinnedRightColumns"
               :key="`${String(row.rowId)}-right-${column.key}`"
               class="grid-cell grid-cell--pinned-right"
-              :class="[cellStateClasses(row, rowOffset, columnIndexByKey(column.key)), resolveCellCustomClass(row, rowOffset, column, columnIndexByKey(column.key))]"
+              :class="[builtInCellClasses(row, column), cellStateClasses(row, rowOffset, columnIndexByKey(column.key)), resolveCellCustomClass(row, rowOffset, column, columnIndexByKey(column.key))]"
               :style="[columnStyle(column.key), bodyCellPresentationStyle(column), bodyCellSelectionStyle(column, rowOffset, columnIndexByKey(column.key)), resolveCellCustomStyle(row, rowOffset, column, columnIndexByKey(column.key))]"
               :data-row-index="viewportRowStart + rowOffset"
               :data-column-index="columnIndexByKey(column.key)"
               :tabindex="cellTabIndex(rowOffset, columnIndexByKey(column.key))"
+              :role="checkboxCellRole(row, column)"
+              :aria-checked="checkboxCellAriaChecked(row, column)"
               @mousedown.prevent.stop="handleCellMouseDown($event, row, rowOffset, columnIndexByKey(column.key))"
-              @click.stop="handleBodyCellClick(row)"
+              @click.stop="handleBodyCellClick(row, rowOffset, column, columnIndexByKey(column.key))"
               @mousemove="handleCellMouseMove($event, rowOffset, columnIndexByKey(column.key))"
               @mouseleave="clearRangeMoveHandleHover"
               @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndexByKey(column.key))"
@@ -575,17 +624,31 @@
                 @mousedown.stop.prevent="handleFillHandleMouseDown($event)"
                 @dblclick.stop.prevent="handleFillHandleDoubleClick($event)"
               />
+              <DataGridCellComboboxEditor
+                v-if="isSelectEditorCell(row, rowOffset, column, columnIndexByKey(column.key))"
+                :value="editingCellValue"
+                :options="resolveSelectEditorOptions(row, column)"
+                :load-options="resolveSelectEditorOptionsLoader(row, column)"
+                @commit="handleSelectEditorCommit"
+                @cancel="handleSelectEditorCancel"
+                @options-resolved="handleSelectEditorOptionsResolved(row, column, $event)"
+              />
               <input
-                v-if="isCellEditableSafe(row, rowOffset, column, columnIndexByKey(column.key)) && isEditingCellSafe(row, column.key)"
-                class="cell-editor-input"
+                v-else-if="isTextEditorCell(row, rowOffset, column, columnIndexByKey(column.key))"
+                class="cell-editor-control cell-editor-input"
                 :value="editingCellValue"
                 @mousedown.stop
                 @click.stop
                 @input="updateEditingCellValue(($event.target as HTMLInputElement).value)"
                 @keydown.stop="handleEditorKeydown"
-                @blur="commitInlineEdit"
+                @blur="handleTextEditorBlur"
               />
-              <template v-else>{{ readDisplayCell(row, column.key) }}</template>
+              <template v-else-if="shouldRenderCheckboxCell(row, column)">
+                <span class="grid-checkbox-indicator" :class="checkboxIndicatorClass(row, column)" aria-hidden="true">
+                  <span class="grid-checkbox-indicator__mark" :class="checkboxIndicatorMarkClass(row, column)" />
+                </span>
+              </template>
+              <template v-else>{{ readResolvedDisplayCell(row, column) }}</template>
             </div>
           </div>
           <div v-if="bottomSpacerHeight > 0" class="grid-spacer" :style="{ height: `${bottomSpacerHeight}px` }" />
@@ -666,6 +729,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties } from "vue"
+import { buildDataGridCellRenderModel } from "@affino/datagrid-core"
 import type {
   DataGridColumnPin,
   DataGridColumnSnapshot,
@@ -679,8 +743,10 @@ import {
   type DataGridChromePaneModel,
   type DataGridChromeRowBand,
 } from "@affino/datagrid-chrome"
+import DataGridCellComboboxEditor from "./DataGridCellComboboxEditor.vue"
 import DataGridColumnMenu from "./DataGridColumnMenu.vue"
 import type { DataGridTableRow, DataGridTableStageProps } from "./dataGridTableStage.types"
+import type { DataGridFilterableComboboxOption } from "./dataGridFilterableCombobox"
 import { ensureDataGridAppStyles } from "./ensureDataGridAppStyles"
 
 ensureDataGridAppStyles()
@@ -707,6 +773,13 @@ type OverlaySegment = {
   style: CSSProperties
 }
 
+type SelectEditorOption = {
+  label: string
+  value: string
+}
+
+type SelectEditorOptionsLoader = (query: string) => Promise<readonly SelectEditorOption[]>
+
 type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>["selectionRange"]>
 const RANGE_MOVE_HANDLE_HOVER_EDGE_PX = 6
 const FILL_ACTION_ROOT_SELECTOR = ".grid-fill-action"
@@ -719,6 +792,8 @@ const columnMenuMaxFilterValues = computed(() => (
     ? props.columnMenuMaxFilterValues
     : 250
 ))
+
+const asyncSelectOptionCache = ref(new Map<string, readonly SelectEditorOption[]>())
 
 function hasColumnMenu(): boolean {
   if (props.columnMenuEnabled === true) {
@@ -759,6 +834,17 @@ function resolveTextAlign(value: unknown): CSSProperties["textAlign"] | undefine
   return value === "left" || value === "center" || value === "right"
     ? value
     : undefined
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object"
+}
+
+function isPromiseLike<TValue>(value: unknown): value is PromiseLike<TValue> {
+  return typeof value === "object"
+    && value !== null
+    && "then" in value
+    && typeof (value as { then?: unknown }).then === "function"
 }
 
 function isColumnEditable(column: TableColumn): boolean {
@@ -871,6 +957,23 @@ function startInlineEditIfAllowed(row: TableRow, column: TableColumn): void {
   const rowOffset = props.displayRows.findIndex(candidate => candidate === row)
   const columnIndex = columnIndexByKey(column.key)
   if (rowOffset < 0 || !isCellEditableSafe(row, rowOffset, column, columnIndex)) {
+    return
+  }
+  props.startInlineEdit(row, column.key)
+}
+
+function openSelectEditorOnClickIfAllowed(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): void {
+  if (
+    row.kind === "group"
+    || isEditingCellSafe(row, column.key)
+    || !isCellEditableSafe(row, rowOffset, column, columnIndex)
+    || resolveCellEditorMode(row, column) !== "select"
+  ) {
     return
   }
   props.startInlineEdit(row, column.key)
@@ -1018,7 +1121,6 @@ function isFillHandleCellSafe(rowOffset: number, columnIndex: number): boolean {
 }
 
 const DEFAULT_INDEX_COLUMN_WIDTH = 72
-const DEFAULT_ROW_SELECTION_COLUMN_WIDTH = 36
 
 const indexColumnWidthPx = computed(() => {
   const width = parsePixelValue(
@@ -1028,33 +1130,8 @@ const indexColumnWidthPx = computed(() => {
   return width > 0 ? width : DEFAULT_INDEX_COLUMN_WIDTH
 })
 
-const rowSelectionColumnWidthPx = computed(() => {
-  if (!shouldShowRowSelection()) {
-    return 0
-  }
-  return Math.min(
-    DEFAULT_ROW_SELECTION_COLUMN_WIDTH,
-    Math.max(0, indexColumnWidthPx.value - DEFAULT_INDEX_COLUMN_WIDTH),
-  )
-})
-
-const rowIndexColumnWidthPx = computed(() => {
-  return Math.max(DEFAULT_INDEX_COLUMN_WIDTH, indexColumnWidthPx.value - rowSelectionColumnWidthPx.value)
-})
-
-const resolvedRowSelectionColumnStyle = computed<CSSProperties>(() => {
-  const width = `${rowSelectionColumnWidthPx.value}px`
-  return {
-    ...props.indexColumnStyle,
-    width,
-    minWidth: width,
-    maxWidth: width,
-    left: "0px",
-  }
-})
-
 const resolvedRowIndexColumnStyle = computed<CSSProperties>(() => {
-  const width = `${rowIndexColumnWidthPx.value}px`
+  const width = `${indexColumnWidthPx.value}px`
   return {
     ...props.indexColumnStyle,
     width,
@@ -1203,10 +1280,6 @@ function isStripedRow(rowOffset: number): boolean {
   return props.stripedRows === true && resolveAbsoluteRowIndex(rowOffset) % 2 === 1
 }
 
-function shouldShowRowSelection(): boolean {
-  return typeof props.handleRowCheckboxChange === "function"
-}
-
 function isAllVisibleRowsSelectedSafe(): boolean {
   return props.allVisibleRowsSelected === true
 }
@@ -1223,12 +1296,247 @@ function isRowCheckboxSelectedSafe(row: TableRow): boolean {
   return typeof props.isRowCheckboxSelected === "function" ? props.isRowCheckboxSelected(row) : false
 }
 
-function handleSelectAllVisibleRowsChangeSafe(event: Event): void {
-  props.handleSelectAllVisibleRowsChange?.((event.target as HTMLInputElement).checked)
+function isCheckboxColumn(column: TableColumn): boolean {
+  return column.column.cellType === "checkbox"
 }
 
-function handleRowCheckboxChangeSafe(row: TableRow, event: Event): void {
-  props.handleRowCheckboxChange?.(row, (event.target as HTMLInputElement).checked)
+function isRowSelectionColumn(column: TableColumn): boolean {
+  return column.column.meta?.rowSelection === true
+}
+
+function shouldRenderCheckboxCell(row: TableRow, column: TableColumn): boolean {
+  return row.kind !== "group" && isCheckboxColumn(column)
+}
+
+function checkboxValueIsChecked(row: TableRow, column: TableColumn): boolean {
+  const value = props.readCell(row, column.key).trim().toLowerCase()
+  return value === "true" || value === "1" || value === "yes" || value === "on"
+}
+
+function builtInCellClasses(row: TableRow, column: TableColumn): Record<string, boolean> {
+  return {
+    "grid-cell--checkbox": shouldRenderCheckboxCell(row, column),
+    "grid-cell--row-selection": isRowSelectionColumn(column),
+  }
+}
+
+function checkboxCellRole(row: TableRow, column: TableColumn): "checkbox" | undefined {
+  return shouldRenderCheckboxCell(row, column) ? "checkbox" : undefined
+}
+
+function checkboxCellAriaChecked(row: TableRow, column: TableColumn): "true" | "false" | undefined {
+  return shouldRenderCheckboxCell(row, column)
+    ? (checkboxValueIsChecked(row, column) ? "true" : "false")
+    : undefined
+}
+
+function resolveHeaderRowSelectionAriaChecked(): "true" | "false" | "mixed" {
+  if (isAllVisibleRowsSelectedSafe()) {
+    return "true"
+  }
+  if (isSomeVisibleRowsSelectedSafe()) {
+    return "mixed"
+  }
+  return "false"
+}
+
+function headerCheckboxIndicatorClass(): Record<string, boolean> {
+  return {
+    "grid-checkbox-indicator--checked": isAllVisibleRowsSelectedSafe(),
+    "grid-checkbox-indicator--mixed": isSomeVisibleRowsSelectedSafe() && !isAllVisibleRowsSelectedSafe(),
+  }
+}
+
+function headerCheckboxMarkClass(): Record<string, boolean> {
+  return {
+    "grid-checkbox-indicator__mark--checked": isAllVisibleRowsSelectedSafe(),
+    "grid-checkbox-indicator__mark--mixed": isSomeVisibleRowsSelectedSafe() && !isAllVisibleRowsSelectedSafe(),
+  }
+}
+
+function checkboxIndicatorClass(row: TableRow, column: TableColumn): Record<string, boolean> {
+  return {
+    "grid-checkbox-indicator--checked": checkboxValueIsChecked(row, column),
+  }
+}
+
+function checkboxIndicatorMarkClass(row: TableRow, column: TableColumn): Record<string, boolean> {
+  return {
+    "grid-checkbox-indicator__mark--checked": checkboxValueIsChecked(row, column),
+  }
+}
+
+function resolveCellEditorMode(row: TableRow, column: TableColumn): "none" | "text" | "select" {
+  return buildDataGridCellRenderModel({
+    column: column.column,
+    row: row.kind !== "group" ? row.data : undefined,
+    editable: true,
+  }).editorMode
+}
+
+function normalizeSelectEditorOption(option: unknown): SelectEditorOption {
+  if (option && typeof option === "object" && "label" in option) {
+    const record = option as { label?: unknown; value?: unknown }
+    const label = String(record.label ?? "")
+    return {
+      label,
+      value: String(record.value ?? label),
+    }
+  }
+  return {
+    label: String(option ?? ""),
+    value: String(option ?? ""),
+  }
+}
+
+function buildSelectEditorCacheKey(row: TableRow, columnKey: string): string | null {
+  if (row.kind === "group") {
+    return null
+  }
+  return `${String(row.rowId)}::${columnKey}`
+}
+
+function readCachedSelectEditorOptions(row: TableRow, columnKey: string): readonly SelectEditorOption[] {
+  const cacheKey = buildSelectEditorCacheKey(row, columnKey)
+  if (!cacheKey) {
+    return []
+  }
+  return asyncSelectOptionCache.value.get(cacheKey) ?? []
+}
+
+function readRowCellValue(row: TableRow, column: TableColumn): unknown {
+  if (row.kind === "group") {
+    return undefined
+  }
+  if (typeof column.column.accessor === "function") {
+    return column.column.accessor(row.data)
+  }
+  if (typeof column.column.valueGetter === "function") {
+    return column.column.valueGetter(row.data)
+  }
+  const field = typeof column.column.field === "string" && column.column.field.length > 0
+    ? column.column.field
+    : column.key
+  return isRecord(row.data) ? row.data[field] : undefined
+}
+
+function resolveSelectEditorOptionsSource(row: TableRow, column: TableColumn): unknown {
+  const source = column.column.presentation?.options
+  return typeof source === "function"
+    ? (row.kind !== "group" ? source(row.data) : [])
+    : source
+}
+
+function resolveSelectEditorOptions(row: TableRow, column: TableColumn): readonly SelectEditorOption[] {
+  const resolved = resolveSelectEditorOptionsSource(row, column)
+  if (Array.isArray(resolved)) {
+    return resolved.map(normalizeSelectEditorOption)
+  }
+  if (isPromiseLike<readonly unknown[]>(resolved)) {
+    return readCachedSelectEditorOptions(row, column.key)
+  }
+  return []
+}
+
+function resolveSelectEditorOptionsLoader(
+  row: TableRow,
+  column: TableColumn,
+): SelectEditorOptionsLoader | undefined {
+  if (row.kind === "group") {
+    return undefined
+  }
+  const resolvedSource = resolveSelectEditorOptionsSource(row, column)
+  if (!isPromiseLike<readonly unknown[]>(resolvedSource)) {
+    return undefined
+  }
+  return async (_query: string) => {
+    const resolved = resolveSelectEditorOptionsSource(row, column)
+    if (isPromiseLike<readonly unknown[]>(resolved)) {
+      const loaded = await resolved
+      return Array.isArray(loaded) ? loaded.map(normalizeSelectEditorOption) : []
+    }
+    return Array.isArray(resolved) ? resolved.map(normalizeSelectEditorOption) : []
+  }
+}
+
+function handleSelectEditorOptionsResolved(
+  row: TableRow,
+  column: TableColumn,
+  options: ReadonlyArray<DataGridFilterableComboboxOption>,
+): void {
+  const cacheKey = buildSelectEditorCacheKey(row, column.key)
+  if (!cacheKey) {
+    return
+  }
+  const currentOptions = asyncSelectOptionCache.value.get(cacheKey)
+  if (
+    currentOptions
+    && currentOptions.length === options.length
+    && currentOptions.every((option, index) => (
+      option.value === options[index]?.value && option.label === options[index]?.label
+    ))
+  ) {
+    return
+  }
+  const nextCache = new Map(asyncSelectOptionCache.value)
+  nextCache.set(cacheKey, [...options])
+  asyncSelectOptionCache.value = nextCache
+}
+
+function readResolvedDisplayCell(row: TableRow, column: TableColumn): string {
+  const displayValue = props.readDisplayCell(row, column.key)
+  if (row.kind === "group" || resolveCellEditorMode(row, column) !== "select") {
+    return displayValue
+  }
+  const cachedOptions = readCachedSelectEditorOptions(row, column.key)
+  if (cachedOptions.length === 0) {
+    return displayValue
+  }
+  const rawValue = readRowCellValue(row, column)
+  const match = cachedOptions.find(option => option.value === String(rawValue ?? ""))
+  return match?.label ?? displayValue
+}
+
+function isSelectEditorCell(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): boolean {
+  return isCellEditableSafe(row, rowOffset, column, columnIndex)
+    && isEditingCellSafe(row, column.key)
+    && resolveCellEditorMode(row, column) === "select"
+}
+
+function isTextEditorCell(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): boolean {
+  return isCellEditableSafe(row, rowOffset, column, columnIndex)
+    && isEditingCellSafe(row, column.key)
+    && resolveCellEditorMode(row, column) !== "select"
+}
+
+function handleSelectEditorCommit(
+  value: string,
+  target: "stay" | "next" | "previous" = "stay",
+): void {
+  props.updateEditingCellValue(value)
+  props.commitInlineEdit(target)
+}
+
+function handleSelectEditorCancel(): void {
+  props.cancelInlineEdit()
+}
+
+function handleTextEditorBlur(): void {
+  props.commitInlineEdit()
+}
+
+function handleToggleAllVisibleRowsSafe(): void {
+  props.handleToggleAllVisibleRows?.()
 }
 
 function handleRowClickSafe(row: TableRow): void {
@@ -1322,33 +1630,42 @@ function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: 
     clearRangeMoveHandleHover()
     return
   }
-  if (!isNearRangeMoveSelectionEdge(event, rowOffset, columnIndex)) {
-    clearRangeMoveHandleHover()
+  if (isNearRangeMoveSelectionEdge(event, rowOffset, columnIndex)) {
+    hoveredRangeMoveHandleCell.value = {
+      rowIndex: resolveAbsoluteRowIndex(rowOffset),
+      columnIndex,
+    }
     return
   }
-  hoveredRangeMoveHandleCell.value = {
-    rowIndex: resolveAbsoluteRowIndex(rowOffset),
-    columnIndex,
-  }
+  clearRangeMoveHandleHover()
 }
 
 function handleGroupCellClick(row: TableRow): void {
-  handleRowClickSafe(row)
   if (row.kind !== "group") {
     return
   }
   props.toggleGroupRow(row)
 }
 
-function handleBodyCellClick(row: TableRow): void {
-  handleGroupCellClick(row)
-}
-
-function readDisplayCell(row: TableRow, columnKey: string): string {
-  if (typeof props.readDisplayCell === "function") {
-    return props.readDisplayCell(row, columnKey)
+function handleBodyCellClick(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): void {
+  if (isRowSelectionColumn(column)) {
+    if (row.kind === "group") {
+      return
+    }
+    props.handleCellClick(row, rowOffset, column, columnIndex)
+    return
   }
-  return props.readCell(row, columnKey)
+  handleGroupCellClick(row)
+  if (row.kind === "group") {
+    return
+  }
+  props.handleCellClick(row, rowOffset, column, columnIndex)
+  openSelectEditorOnClickIfAllowed(row, rowOffset, column, columnIndex)
 }
 
 function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boolean {
@@ -1435,21 +1752,21 @@ function focusVisibleAnchorCell(): void {
   if (cellElement) {
     cellElement.focus({ preventScroll: true })
     return
-  }
+    }
   bodyViewportEl.value?.focus({ preventScroll: true })
 }
 
-function restoreAnchorCellFocus(): void {
-  focusVisibleAnchorCell()
-  void nextTick(() => {
+  function restoreAnchorCellFocus(): void {
     focusVisibleAnchorCell()
-    if (typeof window !== "undefined") {
-      window.requestAnimationFrame(() => {
-        focusVisibleAnchorCell()
-      })
-    }
-  })
-}
+    void nextTick(() => {
+      focusVisibleAnchorCell()
+      if (typeof window !== "undefined") {
+        window.requestAnimationFrame(() => {
+          focusVisibleAnchorCell()
+        })
+      }
+    })
+  }
 
 function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
   bodyViewportEl.value = resolveElementRef(value)

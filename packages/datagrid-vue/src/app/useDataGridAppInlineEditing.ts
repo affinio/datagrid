@@ -1,5 +1,9 @@
 import { nextTick, ref, type Ref } from "vue"
-import type { DataGridColumnSnapshot, DataGridRowNode } from "@affino/datagrid-core"
+import {
+  parseDataGridCellDraftValue,
+  type DataGridColumnSnapshot,
+  type DataGridRowNode,
+} from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type { DataGridAppMode } from "./useDataGridAppControls"
 
@@ -63,13 +67,21 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   const focusInlineEditor = (): void => {
     void nextTick(() => {
       const applyFocus = (): void => {
-        const editor = options.bodyViewportRef.value?.querySelector<HTMLInputElement>(".cell-editor-input")
+        const editor = options.bodyViewportRef.value?.querySelector<HTMLInputElement | HTMLSelectElement>(
+          ".cell-editor-control",
+        )
         if (!editor) {
           return
         }
         editor.focus({ preventScroll: true })
-        const caretPosition = editor.value.length
-        editor.setSelectionRange(caretPosition, caretPosition)
+        if (editor instanceof HTMLInputElement) {
+          const caretPosition = editor.value.length
+          editor.setSelectionRange(caretPosition, caretPosition)
+          return
+        }
+        if (editor instanceof HTMLSelectElement && typeof editor.showPicker === "function") {
+          editor.showPicker()
+        }
       }
       applyFocus()
       if (typeof window !== "undefined") {
@@ -152,11 +164,21 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         ? (targetOrEvent ? "next" : "stay")
         : "stay"
     const beforeSnapshot = options.captureRowsSnapshot()
+    const rowIndex = options.resolveRowIndexById(currentEditingCell.rowId)
+    const rowNode = rowIndex >= 0 ? options.runtime.api.rows.get(rowIndex) : null
+    const columnSnapshot = options.visibleColumns.value.find(column => column.key === currentEditingCell.columnKey)
+    const parsedValue = columnSnapshot
+      ? parseDataGridCellDraftValue({
+        column: columnSnapshot.column,
+        row: rowNode && rowNode.kind !== "group" ? rowNode.data : undefined,
+        draft: editingCellValue.value,
+      })
+      : editingCellValue.value
     options.runtime.api.rows.applyEdits([
       {
         rowId: currentEditingCell.rowId,
         data: {
-          [currentEditingCell.columnKey]: editingCellValue.value,
+          [currentEditingCell.columnKey]: parsedValue,
         } as Partial<TRow>,
       },
     ])

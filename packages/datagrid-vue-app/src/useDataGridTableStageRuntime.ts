@@ -1,4 +1,9 @@
 import { computed, nextTick, ref, type ComputedRef, type Ref } from "vue"
+import {
+  buildDataGridCellRenderModel,
+  resolveDataGridCellClickAction,
+  toggleDataGridCellValue,
+} from "@affino/datagrid-core"
 import type {
   DataGridAppRowSnapshot,
   DataGridColumnSnapshot,
@@ -33,6 +38,7 @@ const ROW_SELECTION_COLUMN_WIDTH = 36
 const MIN_COLUMN_WIDTH = 80
 const MIN_ROW_HEIGHT = 24
 const AUTO_RESIZE_SAMPLE_LIMIT = 400
+const ROW_SELECTION_COLUMN_KEY = "__datagrid_row_selection__"
 
 export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string, unknown>> {
   mode: Ref<"base" | "tree" | "pivot" | "worker">
@@ -105,12 +111,57 @@ export function useDataGridTableStageRuntime<
 ): UseDataGridTableStageRuntimeResult<TRow> {
   const syncRowSelectionSnapshotFromRuntime = options.syncRowSelectionSnapshotFromRuntime ?? (() => undefined)
   const rowSelectionSnapshotRef = options.rowSelectionSnapshot ?? ref<DataGridRowSelectionSnapshot | null>(null)
+  const hasRowSelectionSupport = computed(() => options.runtime.api.rowSelection.hasSupport())
+
+  const rowSelectionColumn = computed<DataGridColumnSnapshot | null>(() => {
+    if (!hasRowSelectionSupport.value) {
+      return null
+    }
+    return {
+      key: ROW_SELECTION_COLUMN_KEY,
+      state: {
+        visible: true,
+        pin: "left",
+        width: ROW_SELECTION_COLUMN_WIDTH,
+      },
+      visible: true,
+      pin: "left",
+      width: ROW_SELECTION_COLUMN_WIDTH,
+      column: {
+        key: ROW_SELECTION_COLUMN_KEY,
+        label: "",
+        cellType: "checkbox",
+        minWidth: ROW_SELECTION_COLUMN_WIDTH,
+        maxWidth: ROW_SELECTION_COLUMN_WIDTH,
+        capabilities: {
+          editable: true,
+          sortable: false,
+          filterable: false,
+          groupable: false,
+          pivotable: false,
+          aggregatable: false,
+        },
+        presentation: {
+          align: "center",
+          headerAlign: "center",
+        },
+        meta: {
+          isSystem: true,
+          rowSelection: true,
+        },
+      },
+    }
+  })
+
+  const isRowSelectionColumnKey = (columnKey: string): boolean => columnKey === ROW_SELECTION_COLUMN_KEY
+  const isRowSelectionColumn = (column: DataGridColumnSnapshot): boolean => isRowSelectionColumnKey(column.key)
 
   const orderedVisibleColumns = computed(() => {
+    const selectionColumn = rowSelectionColumn.value
     const left = options.visibleColumns.value.filter(column => column.pin === "left")
     const center = options.visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
     const right = options.visibleColumns.value.filter(column => column.pin === "right")
-    return [...left, ...center, ...right]
+    return selectionColumn ? [selectionColumn, ...left, ...center, ...right] : [...left, ...center, ...right]
   })
   const centerColumns = computed(() => (
     orderedVisibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
@@ -126,6 +177,9 @@ export function useDataGridTableStageRuntime<
     rowIndex: number,
     column: DataGridColumnSnapshot,
   ): boolean => {
+    if (isRowSelectionColumn(column)) {
+      return row.kind !== "group" && row.rowId != null
+    }
     if (row.kind === "group" || row.rowId == null || !isColumnEditable(column)) {
       return false
     }
@@ -283,14 +337,8 @@ export function useDataGridTableStageRuntime<
   })
 
   const rowSelectionSet = computed(() => new Set(rowSelectionSnapshotRef.value?.selectedRows ?? []))
-  const hasRowSelectionSupport = computed(() => options.runtime.api.rowSelection.hasSupport())
-  const systemColumnWidth = computed(() => {
-    return hasRowSelectionSupport.value
-      ? INDEX_COLUMN_WIDTH + ROW_SELECTION_COLUMN_WIDTH
-      : INDEX_COLUMN_WIDTH
-  })
-  const systemIndexColumnStyle = computed(() => {
-    const width = `${systemColumnWidth.value}px`
+  const stageIndexColumnStyle = computed(() => {
+    const width = `${INDEX_COLUMN_WIDTH}px`
     return {
       ...indexColumnStyle.value,
       width,
@@ -305,6 +353,25 @@ export function useDataGridTableStageRuntime<
 
   const isRowCheckboxSelected = (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>): boolean => {
     return row.kind !== "group" && row.rowId != null && rowSelectionSet.value.has(row.rowId)
+  }
+
+  const readRowSelectionValue = (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>): boolean => {
+    return isRowCheckboxSelected(row)
+  }
+
+  const readRowSelectionCell = (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>): string => {
+    return readRowSelectionValue(row) ? "true" : "false"
+  }
+
+  const readRowSelectionDisplayCell = (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>): string => {
+    const column = rowSelectionColumn.value?.column
+    if (!column || row.kind === "group") {
+      return ""
+    }
+    return buildDataGridCellRenderModel({
+      column,
+      value: readRowSelectionValue(row),
+    }).displayValue
   }
 
   const resolveVisibleSelectableRowIds = (): DataGridRowId[] => {
@@ -333,22 +400,21 @@ export function useDataGridTableStageRuntime<
     options.runtime.api.rowSelection.setFocusedRow(row.rowId)
   }
 
-  const setRowCheckboxSelected = (
+  const toggleRowCheckboxSelected = (
     row: import("@affino/datagrid-vue").DataGridRowNode<TRow>,
-    selected: boolean,
   ): void => {
     if (row.kind === "group" || row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
       return
     }
-    options.runtime.api.rowSelection.setSelected(row.rowId, selected)
+    options.runtime.api.rowSelection.setSelected(row.rowId, !rowSelectionSet.value.has(row.rowId))
   }
 
-  const setVisibleRowsSelected = (selected: boolean): void => {
+  const toggleVisibleRowsSelected = (): void => {
     if (!options.runtime.api.rowSelection.hasSupport()) {
       return
     }
     const rowIds = resolveVisibleSelectableRowIds()
-    if (selected) {
+    if (!areAllVisibleRowsSelected.value) {
       options.runtime.api.rowSelection.selectRows(rowIds)
       return
     }
@@ -455,6 +521,71 @@ export function useDataGridTableStageRuntime<
     firstColumnKey: options.firstColumnKey,
   })
 
+  const readStageCell = (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>, columnKey: string): string => {
+    if (isRowSelectionColumnKey(columnKey)) {
+      return readRowSelectionCell(row)
+    }
+    return readCell(row, columnKey)
+  }
+
+  const readStageDisplayCell = (
+    row: import("@affino/datagrid-vue").DataGridRowNode<TRow>,
+    columnKey: string,
+  ): string => {
+    if (isRowSelectionColumnKey(columnKey)) {
+      return readRowSelectionDisplayCell(row)
+    }
+    return readDisplayCell(row, columnKey)
+  }
+
+  const handleCellClick = (
+    row: import("@affino/datagrid-core").DataGridRowNode<TRow>,
+    rowOffset: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ): void => {
+    if (isRowSelectionColumn(column)) {
+      toggleRowCheckboxSelected(row)
+      return
+    }
+    const rowIndex = viewportRowStart.value + rowOffset
+    const editable = isCellEditableByKey(row, rowIndex, column.key, columnIndex)
+    const clickAction = resolveDataGridCellClickAction({
+      column: column.column,
+      row: row.kind !== "group" ? row.data : undefined,
+      editable,
+    })
+    if (clickAction !== "toggle") {
+      return
+    }
+    if (row.kind === "group" || row.rowId == null) {
+      return
+    }
+    const beforeSnapshot = captureHistorySnapshot()
+    options.runtime.api.rows.applyEdits([
+      {
+        rowId: row.rowId,
+        data: {
+          [column.key]: toggleDataGridCellValue({
+            column: column.column,
+            row: row.data,
+          }),
+        } as Partial<TRow>,
+      },
+    ])
+    recordHistoryIntentTransaction({
+      intent: "edit",
+      label: `Toggle ${column.key}`,
+      affectedRange: {
+        startRow: rowIndex,
+        endRow: rowIndex,
+        startColumn: columnIndex,
+        endColumn: columnIndex,
+      },
+    }, beforeSnapshot)
+    syncViewportFromDom()
+  }
+
   const clipboard = useDataGridAppClipboard<TRow, unknown>({
     mode: options.mode,
     runtime: options.runtime as never,
@@ -472,7 +603,7 @@ export function useDataGridTableStageRuntime<
         label: "Cell edit",
       }, beforeSnapshot)
     },
-    readCell: (row, columnKey) => readCell(row, columnKey),
+    readCell: (row, columnKey) => readStageCell(row, columnKey),
     readClipboardCell: options.readClipboardCell
       ? (row, columnKey) => options.readClipboardCell?.(row, columnKey) ?? ""
       : undefined,
@@ -504,7 +635,7 @@ export function useDataGridTableStageRuntime<
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
     resolveRowHeight: rowHeightMetrics.resolveRowHeight,
     resolveRowOffset: rowHeightMetrics.resolveRowOffset,
-    indexColumnWidth: systemColumnWidth.value,
+    indexColumnWidth: INDEX_COLUMN_WIDTH,
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
     syncViewport: () => syncViewportFromDom(),
   })
@@ -515,6 +646,7 @@ export function useDataGridTableStageRuntime<
     isEditingCell,
     startInlineEdit,
     commitInlineEdit,
+    cancelInlineEdit,
     handleEditorKeydown,
   } = useDataGridAppInlineEditing<TRow, unknown>({
     mode: options.mode,
@@ -522,7 +654,7 @@ export function useDataGridTableStageRuntime<
     visibleColumns: orderedVisibleColumns,
     totalRows: options.totalRows,
     runtime: options.runtime as never,
-    readCell: (row, columnKey) => readCell(row, columnKey),
+    readCell: (row, columnKey) => readStageCell(row, columnKey),
     resolveRowIndexById,
     applyCellSelection: coord => {
       applyCellSelectionByCoord(coord, false)
@@ -570,7 +702,7 @@ export function useDataGridTableStageRuntime<
     viewportRowStart,
     selectionSnapshot: options.selectionSnapshot,
     bodyViewportRef,
-    indexColumnWidth: systemColumnWidth.value,
+    indexColumnWidth: INDEX_COLUMN_WIDTH,
     resolveColumnWidth,
     resolveRowHeight: rowHeightMetrics.resolveRowHeight,
     resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
@@ -581,7 +713,7 @@ export function useDataGridTableStageRuntime<
     applyCellSelectionByCoord,
     setCellSelection,
     clearCellSelection,
-    readCell: (row, columnKey) => readCell(row, columnKey),
+    readCell: (row, columnKey) => readStageCell(row, columnKey),
     isCellEditable: isCellEditableByKey,
     cloneRowData: options.cloneRowData,
     resolveRowIndexById,
@@ -606,6 +738,15 @@ export function useDataGridTableStageRuntime<
     canRedo: canRedoHistory,
     runHistoryAction,
     ensureKeyboardActiveCellVisible,
+    handleToggleCellAction: (row, rowIndex, columnIndex, column) => {
+      if (!isRowSelectionColumn(column)) {
+        return false
+      }
+      void rowIndex
+      void columnIndex
+      toggleRowCheckboxSelected(row)
+      return true
+    },
   })
 
   const fillActionAnchorCell = computed(() => {
@@ -817,7 +958,7 @@ export function useDataGridTableStageRuntime<
     columnFilterTextByKey: options.columnFilterTextByKey,
     gridContentStyle,
     mainTrackStyle,
-    indexColumnStyle: systemIndexColumnStyle,
+    indexColumnStyle: stageIndexColumnStyle,
     topSpacerHeight,
     bottomSpacerHeight,
     viewportRowStart,
@@ -859,8 +1000,7 @@ export function useDataGridTableStageRuntime<
     someVisibleRowsSelected: areSomeVisibleRowsSelected,
     handleRowClick: focusRow,
     handleRowIndexClick: selectRowRange,
-    handleRowCheckboxChange: setRowCheckboxSelected,
-    handleSelectAllVisibleRowsChange: setVisibleRowsSelected,
+    handleToggleAllVisibleRows: toggleVisibleRowsSelected,
     toggleGroupRow,
     rowIndexLabel,
     startResize,
@@ -880,6 +1020,7 @@ export function useDataGridTableStageRuntime<
       return isCellEditable(row, viewportRowStart.value + rowOffset, column)
     },
     handleCellMouseDown,
+    handleCellClick,
     handleCellKeydown,
     startInlineEdit,
     isFillHandleCell,
@@ -889,11 +1030,10 @@ export function useDataGridTableStageRuntime<
     fillActionBehavior,
     applyFillActionBehavior: applyLastFillBehavior,
     handleEditorKeydown,
-    commitInlineEdit: () => {
-      commitInlineEdit()
-    },
-    readCell,
-    readDisplayCell,
+    commitInlineEdit,
+    cancelInlineEdit,
+    readCell: readStageCell,
+    readDisplayCell: readStageDisplayCell,
   })
 
   const handleWindowMouseMove = (event: MouseEvent): void => {

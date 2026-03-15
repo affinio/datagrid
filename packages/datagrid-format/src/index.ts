@@ -1,6 +1,7 @@
 export type {
   DataGridCellFormatColumnLike,
   DataGridColumnDateTimeFormatOptions,
+  DataGridColumnFormat,
   DataGridColumnFormatPresentation,
   DataGridColumnNumberFormatOptions,
   DataGridFormatDataType,

@@ -5,13 +5,16 @@
 // Curated core facade exports so Vue consumers can stay on @affino/datagrid-vue
 // for common configuration/state/filter/sort/row-model typing and helper functions.
 export {
+  buildDataGridCellRenderModel,
   createClientRowModel,
   createDataSourceBackedRowModel,
   createServerBackedRowModel,
   createServerRowModel,
   createDataGridServerPivotRowId,
+  createDataGridCellTypeRegistry,
   createDataGridColumnModel,
   formatDataGridCellValue,
+  parseDataGridCellDraftValue,
   createDataGridSelectionSummary,
   createInMemoryDataGridSettingsAdapter,
   buildDataGridAdvancedFilterExpressionFromLegacyFilters,
@@ -19,7 +22,11 @@ export {
   evaluateColumnPredicateFilter,
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,
+  resolveDataGridCellClickAction,
+  resolveDataGridCellKeyboardAction,
+  resolveDataGridCellType,
   serializeColumnValueToToken,
+  toggleDataGridCellValue,
 } from "@affino/datagrid-core"
 
 export {
@@ -80,6 +87,7 @@ export type {
   DataGridColumnDef,
   DataGridColumnInitialState,
   DataGridColumnInput,
+  DataGridColumnOption,
   DataGridColumnNumberFormatOptions,
   DataGridColumnModelSnapshot,
   DataGridColumnPin,
@@ -88,6 +96,16 @@ export type {
   DataGridColumnStateSnapshot,
   DataGridColumnState,
   DataGridColumnValueAccessors,
+  BuildDataGridCellRenderModelOptions,
+  CreateDataGridCellTypeRegistryOptions,
+  DataGridCellClickAction,
+  DataGridCellEditorMode,
+  DataGridCellKeyboardAction,
+  DataGridCellRenderModel,
+  DataGridCellTypeDefinition,
+  DataGridCellTypeId,
+  DataGridCellTypeOption,
+  DataGridCellTypeRegistry,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
   DataGridClientComputeMode,

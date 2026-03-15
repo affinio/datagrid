@@ -10,7 +10,7 @@ export type {
   DataGridColumnConstraints,
   DataGridColumnDataType,
   DataGridColumnDateTimeFormatOptions,
-  DataGridColumnEditor,
+  DataGridColumnFormat,
   DataGridColumnInitialState,
   DataGridColumnInput,
   DataGridColumnNumberFormatOptions,

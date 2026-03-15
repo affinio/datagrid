@@ -57,6 +57,16 @@ function normalizeOutputValue(value: unknown): string {
   return String(value)
 }
 
+function formatDerivedCellPreviewValue(value: unknown): string {
+  if (value == null || value === "") {
+    return ""
+  }
+  if (typeof value === "boolean") {
+    return value ? "TRUE" : "FALSE"
+  }
+  return normalizeOutputValue(value)
+}
+
 function createMaterializedCellRawInput(value: unknown): string {
   if (typeof value !== "string") {
     return ""
@@ -215,6 +225,7 @@ export function createDataGridSpreadsheetDerivedSheetModel(
       rawInput,
       inputKind: analysis.kind,
       formula: null,
+      formattedValue: formatDerivedCellPreviewValue(value),
       displayValue: value,
       errorValue: null,
       analysis,

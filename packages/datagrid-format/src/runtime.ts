@@ -39,11 +39,24 @@ function normalizeNumberFormatOptions(
   return normalized
 }
 
-function resolveFormatterCacheKey(
+function stringifyCachePart(value: string | number | boolean | undefined): string {
+  return value == null ? "" : String(value)
+}
+
+function buildNumberFormatterCacheKey(
   locale: string | undefined,
-  options: Intl.NumberFormatOptions | Intl.DateTimeFormatOptions,
+  options: Intl.NumberFormatOptions,
 ): string {
-  return JSON.stringify([locale ?? "", options])
+  return [
+    locale ?? "",
+    stringifyCachePart(options.style),
+    stringifyCachePart(options.currency),
+    stringifyCachePart(options.currencyDisplay),
+    stringifyCachePart(options.useGrouping),
+    stringifyCachePart(options.minimumFractionDigits),
+    stringifyCachePart(options.maximumFractionDigits),
+    stringifyCachePart(options.minimumIntegerDigits),
+  ].join("|")
 }
 
 function resolveNumberFormatter(
@@ -53,7 +66,7 @@ function resolveNumberFormatter(
     ? options.locale.trim()
     : undefined
   const normalizedOptions = normalizeNumberFormatOptions(options)
-  const cacheKey = resolveFormatterCacheKey(locale, normalizedOptions)
+  const cacheKey = buildNumberFormatterCacheKey(locale, normalizedOptions)
   const cached = numberFormatterCache.get(cacheKey)
   if (cached) {
     return cached
@@ -103,6 +116,26 @@ function normalizeDateTimeFormatOptions(
   return normalized
 }
 
+function buildDateTimeFormatterCacheKey(
+  locale: string | undefined,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  return [
+    locale ?? "",
+    stringifyCachePart(options.timeZone),
+    stringifyCachePart(options.hour12),
+    stringifyCachePart(options.weekday),
+    stringifyCachePart(options.era),
+    stringifyCachePart(options.year),
+    stringifyCachePart(options.month),
+    stringifyCachePart(options.day),
+    stringifyCachePart(options.hour),
+    stringifyCachePart(options.minute),
+    stringifyCachePart(options.second),
+    stringifyCachePart(options.timeZoneName),
+  ].join("|")
+}
+
 function resolveDateTimeFormatter(
   options: DataGridColumnDateTimeFormatOptions,
 ): Intl.DateTimeFormat {
@@ -110,7 +143,7 @@ function resolveDateTimeFormatter(
     ? options.locale.trim()
     : undefined
   const normalizedOptions = normalizeDateTimeFormatOptions(options)
-  const cacheKey = resolveFormatterCacheKey(locale, normalizedOptions)
+  const cacheKey = buildDateTimeFormatterCacheKey(locale, normalizedOptions)
   const cached = dateTimeFormatterCache.get(cacheKey)
   if (cached) {
     return cached
@@ -188,7 +221,7 @@ export function formatDataGridCellValue<TRow = unknown>(
     return ""
   }
 
-  const numberFormat = column?.presentation?.numberFormat
+  const numberFormat = column?.presentation?.format?.number
   if (numberFormat) {
     const numericValue = coerceFiniteNumber(value)
     if (numericValue != null) {
@@ -196,7 +229,7 @@ export function formatDataGridCellValue<TRow = unknown>(
     }
   }
 
-  const dateTimeFormat = column?.presentation?.dateTimeFormat
+  const dateTimeFormat = column?.presentation?.format?.dateTime
     ?? resolveDefaultDataGridDateTimeFormat(column?.dataType)
   if (dateTimeFormat) {
     const dateValue = coerceDateValue(value)

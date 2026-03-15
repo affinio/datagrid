@@ -10,6 +10,8 @@ const DATA_GRID_APP_STYLES = `
   font-size: var(--datagrid-font-size);
   color: var(--datagrid-text-color);
   background: var(--datagrid-background-color);
+  --datagrid-surface-elevated-color: color-mix(in srgb, var(--datagrid-background-color) 92%, white 8%);
+  --datagrid-selection-border-color: color-mix(in srgb, var(--datagrid-text-color) 22%, transparent);
   --datagrid-selection-range-bg: color-mix(in srgb, var(--datagrid-accent-strong) 12%, transparent);
   --datagrid-selection-anchor-bg: transparent;
   --datagrid-selection-overlay-bg: transparent;
@@ -534,7 +536,7 @@ const DATA_GRID_APP_STYLES = `
   color: var(--datagrid-column-menu-muted-text);
 }
 
-.datagrid-aggregations__basis select,
+.datagrid-aggregations__select,
 .datagrid-aggregations__op,
 .datagrid-aggregations__ghost,
 .datagrid-aggregations__secondary,
@@ -547,13 +549,13 @@ const DATA_GRID_APP_STYLES = `
   font: inherit;
 }
 
-.datagrid-aggregations__basis select,
+.datagrid-aggregations__select,
 .datagrid-aggregations__op {
   padding: 0 11px;
 }
 
-.datagrid-aggregations__basis select:focus,
-.datagrid-aggregations__basis select:focus-visible,
+.datagrid-aggregations__select:focus,
+.datagrid-aggregations__select:focus-visible,
 .datagrid-aggregations__op:focus,
 .datagrid-aggregations__op:focus-visible,
 .datagrid-aggregations__ghost:focus,
@@ -1046,7 +1048,7 @@ body.datagrid-fill-drag-cursor * {
 }
 
 .grid-cell--index + .grid-cell--pinned-left,
-.grid-cell--row-select + .grid-cell--index + .grid-cell--pinned-left {
+.grid-cell--index + .grid-cell--row-selection + .grid-cell--pinned-left {
   box-shadow: none;
 }
 
@@ -1085,7 +1087,7 @@ body.datagrid-fill-drag-cursor * {
   background: var(--datagrid-index-cell-background-color);
 }
 
-.grid-cell--row-select {
+.grid-cell--checkbox {
   justify-content: center;
   padding-left: 8px;
   padding-right: 8px;
@@ -1110,12 +1112,67 @@ body.datagrid-fill-drag-cursor * {
   color: var(--datagrid-group-row-text-color);
 }
 
-.grid-row-select-checkbox {
-  width: 14px;
-  height: 14px;
+.grid-checkbox-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   margin: 0;
-  accent-color: var(--datagrid-accent-strong);
+  padding: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
+}
+
+.grid-checkbox-trigger:focus-visible {
+  outline: 2px solid var(--datagrid-accent-strong);
+  outline-offset: 1px;
+}
+
+.grid-checkbox-indicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--datagrid-selection-border-color, color-mix(in srgb, var(--datagrid-text-color) 22%, transparent));
+  border-radius: 4px;
+  background: var(--datagrid-surface-elevated-color, color-mix(in srgb, var(--datagrid-background-color) 92%, white 8%));
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.grid-checkbox-indicator--checked,
+.grid-checkbox-indicator--mixed {
+  border-color: color-mix(in srgb, var(--datagrid-checkbox-accent, var(--datagrid-accent-strong)) 72%, var(--datagrid-selection-border-color, color-mix(in srgb, var(--datagrid-text-color) 22%, transparent)));
+  background: color-mix(in srgb, var(--datagrid-checkbox-accent, var(--datagrid-accent-strong)) 14%, var(--datagrid-surface-elevated-color, color-mix(in srgb, var(--datagrid-background-color) 92%, white 8%)));
+}
+
+.grid-checkbox-indicator__mark {
+  display: block;
+  opacity: 0;
+}
+
+.grid-checkbox-indicator__mark--checked {
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid var(--datagrid-checkbox-accent, var(--datagrid-accent-strong));
+  border-bottom: 2px solid var(--datagrid-checkbox-accent, var(--datagrid-accent-strong));
+  transform: translateY(-1px) rotate(-45deg);
+  opacity: 1;
+}
+
+.grid-checkbox-indicator__mark--mixed {
+  width: 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--datagrid-checkbox-accent, var(--datagrid-accent-strong));
+  opacity: 1;
+}
+
+.grid-cell--checkbox[role="checkbox"]:focus-visible .grid-checkbox-indicator {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--datagrid-accent-strong) 28%, transparent);
 }
 
 .grid-row--checkbox-selected .grid-cell,
@@ -1677,7 +1734,7 @@ body.datagrid-fill-drag-cursor * {
   color: var(--datagrid-column-menu-muted-text);
 }
 
-.datagrid-advanced-filter__field select,
+.datagrid-advanced-filter__select,
 .datagrid-advanced-filter__field input,
 .datagrid-advanced-filter__primary,
 .datagrid-advanced-filter__secondary,
@@ -1690,7 +1747,7 @@ body.datagrid-fill-drag-cursor * {
   font: inherit;
 }
 
-.datagrid-advanced-filter__field select,
+.datagrid-advanced-filter__select,
 .datagrid-advanced-filter__field input {
   width: 100%;
   min-width: 0;
@@ -1702,9 +1759,9 @@ body.datagrid-fill-drag-cursor * {
   opacity: 1;
 }
 
-.datagrid-advanced-filter__field select:focus,
+.datagrid-advanced-filter__select:focus,
 .datagrid-advanced-filter__field input:focus,
-.datagrid-advanced-filter__field select:focus-visible,
+.datagrid-advanced-filter__select:focus-visible,
 .datagrid-advanced-filter__field input:focus-visible,
 .datagrid-advanced-filter__primary:focus,
 .datagrid-advanced-filter__primary:focus-visible,
@@ -1794,7 +1851,7 @@ body.datagrid-fill-drag-cursor * {
   }
 }
 
-.cell-editor-input {
+.cell-editor-control {
   display: block;
   width: 100%;
   min-width: 0;
@@ -1814,12 +1871,116 @@ body.datagrid-fill-drag-cursor * {
   -moz-user-select: text;
 }
 
-.cell-editor-input::selection {
+.cell-editor-input {
+  appearance: none;
+}
+
+.datagrid-cell-combobox {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.datagrid-cell-combobox::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid var(--datagrid-text-muted);
+  border-bottom: 2px solid var(--datagrid-text-muted);
+  transform: translateY(-65%) rotate(45deg);
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.datagrid-cell-combobox__input {
+  padding-right: 32px;
+  appearance: none;
+}
+
+.datagrid-cell-combobox__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--datagrid-column-menu-border);
+  border-radius: 12px;
+  background: var(--datagrid-column-menu-bg);
+  box-shadow: 0 18px 40px var(--datagrid-column-menu-shadow);
+  overflow: auto;
+}
+
+.datagrid-cell-combobox__panel--inline {
+  position: absolute;
+}
+
+.datagrid-cell-combobox__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+  width: 100%;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--datagrid-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.datagrid-cell-combobox__option:hover,
+.datagrid-cell-combobox__option--active {
+  border-color: color-mix(in srgb, var(--datagrid-accent-strong) 18%, transparent);
+  background: var(--datagrid-column-menu-item-hover-bg);
+}
+
+.datagrid-cell-combobox__option--selected {
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 12%, transparent);
+}
+
+.datagrid-cell-combobox__option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datagrid-cell-combobox__option-state,
+.datagrid-cell-combobox__empty {
+  color: var(--datagrid-text-muted);
+  font-size: 12px;
+}
+
+.datagrid-cell-combobox__empty {
+  padding: 8px 10px;
+}
+
+.cell-editor-select {
+  appearance: none;
+  padding-right: 28px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--datagrid-text-muted) 50%),
+    linear-gradient(135deg, var(--datagrid-text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 1px),
+    calc(100% - 11px) calc(50% - 1px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.cell-editor-control::selection {
   color: var(--datagrid-text-primary);
   background: color-mix(in srgb, var(--datagrid-selection-active-border) 28%, white);
 }
 
-.cell-editor-input::-moz-selection {
+.cell-editor-control::-moz-selection {
   color: var(--datagrid-text-primary);
   background: color-mix(in srgb, var(--datagrid-selection-active-border) 28%, white);
 }

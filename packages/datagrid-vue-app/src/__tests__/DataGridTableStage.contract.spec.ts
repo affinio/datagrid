@@ -16,6 +16,21 @@ function createColumns(): readonly DataGridColumnSnapshot[] {
   ] as unknown as readonly DataGridColumnSnapshot[]
 }
 
+function createRowSelectionColumn(): DataGridColumnSnapshot {
+  return {
+    key: "__datagrid_row_selection__",
+    pin: "left",
+    width: 36,
+    column: {
+      key: "__datagrid_row_selection__",
+      label: "",
+      cellType: "checkbox",
+      capabilities: { editable: true, sortable: false, filterable: false },
+      meta: { rowSelection: true },
+    },
+  } as unknown as DataGridColumnSnapshot
+}
+
 function createRows(count = 1): readonly DataGridTableRow<DemoRow>[] {
   return Array.from({ length: count }, (_unused, index) => ({
     rowId: `r${index + 1}`,
@@ -54,11 +69,18 @@ function createStageProps(
       column: DataGridColumnSnapshot,
       columnIndex: number,
     ) => boolean
+    handleCellClick?: (
+      row: DataGridTableRow<DemoRow>,
+      rowOffset: number,
+      column: DataGridColumnSnapshot,
+      columnIndex: number,
+    ) => void
     isEditingCell?: (row: DataGridTableRow<DemoRow>, columnKey: string) => boolean
     startInlineEdit?: (row: DataGridTableRow<DemoRow>, columnKey: string) => void
+    visibleColumns?: readonly DataGridColumnSnapshot[]
   },
 ): DataGridTableStageProps<DemoRow> {
-  const visibleColumns = createColumns()
+  const visibleColumns = options?.visibleColumns ?? createColumns()
   const renderedColumns = visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
   const rows = createRows(options?.rowCount ?? 1)
 
@@ -120,6 +142,7 @@ function createStageProps(
     isEditingCell: options?.isEditingCell ?? (() => false),
     isCellEditable: options?.isCellEditable ?? (() => true),
     handleCellMouseDown: () => undefined,
+    handleCellClick: options?.handleCellClick ?? (() => undefined),
     handleCellKeydown: () => undefined,
     startInlineEdit: options?.startInlineEdit ?? (() => undefined),
     isFillHandleCell: options?.isFillHandleCell ?? (() => false),
@@ -439,6 +462,27 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("dispatches body cell clicks through the stage handler", async () => {
+    const handleCellClick = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        handleCellClick,
+      }),
+    })
+
+    await nextTick()
+
+    await wrapper.find('.grid-cell[data-row-index="0"][data-column-index="0"]').trigger("click")
+
+    expect(handleCellClick).toHaveBeenCalledTimes(1)
+    expect(handleCellClick).toHaveBeenCalledWith(
+      expect.objectContaining({ rowId: "r1" }),
+      0,
+      expect.objectContaining({ key: "left" }),
+      0,
+    )
+  })
+
   it("uses the explicit anchor cell for visual highlighting instead of range start", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
@@ -752,21 +796,29 @@ describe("DataGridTableStage contract", () => {
 
   it("separates row checkbox column from the row-number cell and routes number clicks to full-row selection", async () => {
     const handleRowIndexClick = vi.fn()
+    const visibleColumns = [createRowSelectionColumn(), ...createColumns()] as const
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: {
         ...createStageProps(() => false, {
-          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 3 },
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 4 },
+          visibleColumns,
         }),
         indexColumnStyle: { width: "108px", minWidth: "108px", maxWidth: "108px", left: "0px" },
         handleRowIndexClick,
-        handleRowCheckboxChange: () => undefined,
-        handleSelectAllVisibleRowsChange: () => undefined,
+        readCell: (row, columnKey) => {
+          if (columnKey === "__datagrid_row_selection__") {
+            return row.rowId === "r1" ? "false" : "true"
+          }
+          return columnKey
+        },
+        handleToggleAllVisibleRows: () => undefined,
+        isRowCheckboxSelected: row => row.rowId === "r1",
       },
     })
 
-    expect(wrapper.find(".grid-cell--row-select-header").exists()).toBe(true)
-    expect(wrapper.find(".grid-body-pane--left .grid-cell--row-select input[type='checkbox']").exists()).toBe(true)
+    expect(wrapper.find(".grid-header-pane--left .grid-cell--row-selection").exists()).toBe(true)
+    expect(wrapper.find(".grid-body-pane--left .grid-cell--row-selection[role='checkbox']").exists()).toBe(true)
 
     const indexCell = wrapper.find(".grid-body-pane--left .grid-cell--index-number")
     expect(indexCell.classes()).toContain("grid-cell--index-selected")

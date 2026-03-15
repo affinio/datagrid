@@ -178,6 +178,26 @@ export {
   type DataGridFormulaSourceSpan,
 } from "./formula/formulaEngine.js"
 export {
+  buildDataGridCellRenderModel,
+  createDataGridCellTypeRegistry,
+  parseDataGridCellDraftValue,
+  resolveDataGridCellClickAction,
+  resolveDataGridCellKeyboardAction,
+  resolveDataGridCellType,
+  toggleDataGridCellValue,
+  type BuildDataGridCellRenderModelOptions,
+  type CreateDataGridCellTypeRegistryOptions,
+  type DataGridCellClickAction,
+  type DataGridCellEditorMode,
+  type DataGridCellKeyboardAction,
+  type DataGridCellRenderModel,
+  type DataGridCellTypeDefinition,
+  type DataGridCellTypeId,
+  type DataGridCellTypeOption,
+  type DataGridCellTypeRegistry,
+} from "../cells/index.js"
+
+export {
   createDataGridFormulaGraph,
   createDataGridFormulaExecutionPlan,
   snapshotDataGridFormulaGraph,
@@ -434,8 +454,10 @@ export type {
   DataGridColumnDataType,
   DataGridColumnDateTimeFormatOptions,
   DataGridColumnDef,
+  DataGridColumnFormat,
   DataGridColumnInitialState,
   DataGridColumnInput,
+  DataGridColumnOption,
   DataGridColumnModel,
   DataGridColumnModelListener,
   DataGridColumnModelSnapshot,

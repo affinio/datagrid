@@ -1,6 +1,6 @@
 import type { Ref } from "vue"
 import {
-  formatDataGridCellValue,
+  buildDataGridCellRenderModel,
   type DataGridRowNode,
 } from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
@@ -77,10 +77,25 @@ export function useDataGridAppRowPresentation<TRow extends Record<string, unknow
       }
       const groupValue = (row.data as Record<string, unknown>)[key]
         ?? row.groupMeta?.aggregates?.[key]
-      return formatDataGridCellValue(groupValue, resolveColumnDef(key))
+        const column = resolveColumnDef(key)
+        if (!column) {
+          return groupValue == null ? "" : String(groupValue)
+        }
+        return buildDataGridCellRenderModel({
+          column,
+          value: groupValue,
+        }).displayValue
     }
     const value = (row.data as Record<string, unknown>)[key]
-    return formatDataGridCellValue(value, resolveColumnDef(key))
+      const column = resolveColumnDef(key)
+      if (!column) {
+        return value == null ? "" : String(value)
+      }
+      return buildDataGridCellRenderModel({
+        column,
+        row: row.data,
+        value,
+      }).displayValue
   }
 
   const rowClass = (row: DataGridRowNode<TRow>): string => {

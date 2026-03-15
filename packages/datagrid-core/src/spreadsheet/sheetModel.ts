@@ -121,6 +121,7 @@ export interface DataGridSpreadsheetCellSnapshot {
   rawInput: string
   inputKind: DataGridSpreadsheetCellInputKind
   formula: string | null
+  formattedValue: string
   displayValue: unknown
   errorValue: DataGridFormulaErrorValue | null
   analysis: DataGridSpreadsheetCellInputAnalysis
@@ -219,6 +220,25 @@ export interface DataGridSpreadsheetSheetModel {
   patchFormulaTables(patch: DataGridSpreadsheetFormulaTablePatch): boolean
   subscribe(listener: DataGridSpreadsheetSheetListener): () => void
   dispose(): void
+}
+
+function formatSpreadsheetCellPreviewValue(value: unknown): string {
+  if (value == null || value === "") {
+    return ""
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : ""
+  }
+  if (typeof value === "boolean") {
+    return value ? "TRUE" : "FALSE"
+  }
+  if (typeof value === "bigint") {
+    return String(value)
+  }
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : ""
+  }
+  return String(value)
 }
 
 interface SpreadsheetColumnState {
@@ -2711,11 +2731,15 @@ export function createDataGridSpreadsheetSheetModel(
       : (formulaCell && formulaCell.analysis.diagnostics.length > 0
         ? createFormulaDiagnosticError(formulaCell.analysis)
         : null)
+    const formattedValue = errorValue
+      ? "#ERROR"
+      : formatSpreadsheetCellPreviewValue(displayValue)
     return {
       address,
       rawInput: getRawInput(cellKey),
       inputKind: analysis.kind,
       formula: analysis.formula,
+      formattedValue,
       displayValue,
       errorValue,
       analysis,

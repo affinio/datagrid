@@ -82,18 +82,20 @@ describe("createDataGridColumnModel", () => {
           presentation: {
             align: "right",
             headerAlign: "center",
-            numberFormat: {
-              locale: "en-GB",
-              style: "currency",
-              currency: "GBP",
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            },
-            dateTimeFormat: {
-              locale: "en-GB",
-              year: "numeric",
-              month: "short",
-              day: "2-digit",
+            format: {
+              number: {
+                locale: "en-GB",
+                style: "currency",
+                currency: "GBP",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              },
+              dateTime: {
+                locale: "en-GB",
+                year: "numeric",
+                month: "short",
+                day: "2-digit",
+              },
             },
           },
           capabilities: {
@@ -113,21 +115,24 @@ describe("createDataGridColumnModel", () => {
     const column = model.getColumn("amount")
     expect(column?.column.field).toBe("billing.amount")
     expect(column?.column.dataType).toBe("currency")
+    expect(column?.column.cellType).toBe("currency")
     expect(column?.column.presentation).toEqual({
       align: "right",
       headerAlign: "center",
-      numberFormat: {
-        locale: "en-GB",
-        style: "currency",
-        currency: "GBP",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      },
-      dateTimeFormat: {
-        locale: "en-GB",
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
+      format: {
+        number: {
+          locale: "en-GB",
+          style: "currency",
+          currency: "GBP",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        },
+        dateTime: {
+          locale: "en-GB",
+          year: "numeric",
+          month: "short",
+          day: "2-digit",
+        },
       },
     })
     expect(column?.column.capabilities).toEqual({
@@ -140,6 +145,66 @@ describe("createDataGridColumnModel", () => {
       min: 0,
       max: 10_000,
     })
+    model.dispose()
+  })
+
+  it("normalizes implicit semantic inputs into canonical cellType", () => {
+    const model = createDataGridColumnModel({
+      columns: [
+        { key: "approved", dataType: "boolean" },
+        {
+          key: "status",
+          presentation: {
+            options: ["Pending", "Approved"],
+          },
+        },
+        { key: "ratio", dataType: "percent" },
+      ],
+    })
+
+    const snapshot = model.getSnapshot()
+    expect(snapshot.byKey.approved?.column.cellType).toBe("checkbox")
+    expect(snapshot.byKey.status?.column.cellType).toBe("select")
+    expect(snapshot.byKey.status?.column.presentation).toEqual({
+      options: ["Pending", "Approved"],
+    })
+    expect(snapshot.byKey.ratio?.column.cellType).toBe("percent")
+    expect(snapshot.byKey.ratio?.column.presentation).toEqual({
+      format: {
+        number: {
+          style: "percent",
+        },
+      },
+    })
+
+    model.dispose()
+  })
+
+  it("reuses cached normalized columns when immutable inputs are reused", () => {
+    const amountColumn = {
+      key: "amount",
+      label: "Amount",
+      dataType: "currency" as const,
+      presentation: {
+        align: "right" as const,
+        format: {
+          number: {
+            locale: "en-GB",
+            style: "currency" as const,
+            currency: "GBP",
+          },
+        },
+      },
+    }
+    const model = createDataGridColumnModel({
+      columns: [amountColumn],
+    })
+
+    const firstDefinition = model.getColumn("amount")?.column
+    model.setColumns([amountColumn])
+    const secondDefinition = model.getColumn("amount")?.column
+
+    expect(secondDefinition).toBe(firstDefinition)
     model.dispose()
   })
 
