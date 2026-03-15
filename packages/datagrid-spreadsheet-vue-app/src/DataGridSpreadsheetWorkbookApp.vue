@@ -3447,7 +3447,7 @@ function resolveCellAddressFromOffsets(
   columnIndex: number,
 ): DataGridSpreadsheetCellAddress | null {
   const currentSheet = activeSheetHandle.value
-  const visualRowIndex = tableStageProps.value.viewportRowStart + rowOffset
+  const visualRowIndex = tableStageProps.value.viewport.viewportRowStart + rowOffset
   const row = resolveSpreadsheetRuntimeRow(visualRowIndex)
   const columnKey = visibleColumns.value[columnIndex]?.key
   if (!currentSheet || !row || !columnKey) {
@@ -3478,7 +3478,7 @@ function handleGridCellKeydown(
     beginGridEdit(targetCell, event.key)
     return
   }
-  tableStageProps.value.handleCellKeydown(event, row as never, rowOffset, columnIndex)
+  tableStageProps.value.interaction.handleCellKeydown(event, row as never, rowOffset, columnIndex)
 }
 
 function handleGridViewportKeydown(event: KeyboardEvent): void {
@@ -3493,7 +3493,7 @@ function handleGridViewportKeydown(event: KeyboardEvent): void {
     beginGridEdit(targetCell, event.key)
     return
   }
-  tableStageProps.value.handleViewportKeydown(event)
+  tableStageProps.value.viewport.handleViewportKeydown(event)
 }
 
 function handleGridInlineEditRequest(
@@ -3773,17 +3773,35 @@ function resolveSpreadsheetCellStyle(
 
 const tableStagePropsForView = computed<Record<string, unknown>>(() => ({
   ...(tableStageProps.value as unknown as Record<string, unknown>),
-  sourceRows: gridRows.value,
-  columnMenuEnabled: true,
-  isEditingCell: () => false,
-  startInlineEdit: handleGridInlineEditRequest,
-  handleCellKeydown: handleGridCellKeydown,
-  handleViewportKeydown: handleGridViewportKeydown,
-  handleEditorKeydown: () => {},
-  commitInlineEdit: () => {},
-  editingCellValue: "",
-  cellClass: resolveSpreadsheetCellClass,
-  cellStyle: resolveSpreadsheetCellStyle,
+  rows: {
+    ...tableStageProps.value.rows,
+    sourceRows: gridRows.value,
+  },
+  columns: {
+    ...tableStageProps.value.columns,
+    columnMenuEnabled: true,
+  },
+  editing: {
+    ...tableStageProps.value.editing,
+    editingCellValue: "",
+    isEditingCell: () => false,
+    startInlineEdit: handleGridInlineEditRequest,
+    handleEditorKeydown: () => {},
+    commitInlineEdit: () => {},
+  },
+  cells: {
+    ...tableStageProps.value.cells,
+    cellClass: resolveSpreadsheetCellClass,
+    cellStyle: resolveSpreadsheetCellStyle,
+  },
+  interaction: {
+    ...tableStageProps.value.interaction,
+    handleCellKeydown: handleGridCellKeydown,
+  },
+  viewport: {
+    ...tableStageProps.value.viewport,
+    handleViewportKeydown: handleGridViewportKeydown,
+  },
 }))
 
 const formulaPreviewSegments = computed<readonly FormulaPreviewSegment[]>(() => {

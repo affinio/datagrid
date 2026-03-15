@@ -22,6 +22,7 @@ type DataGridAppInlineEditCommitTarget = "stay" | "next" | "previous"
 
 interface DataGridAppInlineEditStartOptions {
   draftValue?: string
+  openOnMount?: boolean
 }
 
 export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
@@ -47,6 +48,8 @@ export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
 export interface UseDataGridAppInlineEditingResult<TRow> {
   editingCell: Ref<DataGridAppEditingCell | null>
   editingCellValue: Ref<string>
+  editingCellInitialFilter: Ref<string>
+  editingCellOpenOnMount: Ref<boolean>
   isEditingCell: (row: DataGridRowNode<TRow>, columnKey: string) => boolean
   startInlineEdit: (
     row: DataGridRowNode<TRow>,
@@ -63,6 +66,8 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
 ): UseDataGridAppInlineEditingResult<TRow> {
   const editingCell = ref<DataGridAppEditingCell | null>(null)
   const editingCellValue = ref("")
+  const editingCellInitialFilter = ref("")
+  const editingCellOpenOnMount = ref(false)
 
   const focusInlineEditor = (): void => {
     void nextTick(() => {
@@ -95,6 +100,8 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   const clearInlineEdit = (): void => {
     editingCell.value = null
     editingCellValue.value = ""
+    editingCellInitialFilter.value = ""
+    editingCellOpenOnMount.value = false
   }
 
   const focusAfterInlineEdit = (
@@ -148,6 +155,8 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       columnKey,
     }
     editingCellValue.value = startOptions.draftValue ?? options.readCell(row, columnKey)
+    editingCellInitialFilter.value = startOptions.draftValue ?? ""
+    editingCellOpenOnMount.value = startOptions.openOnMount === true
     focusInlineEditor()
   }
 
@@ -215,6 +224,8 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   return {
     editingCell,
     editingCellValue,
+    editingCellInitialFilter,
+    editingCellOpenOnMount,
     isEditingCell,
     startInlineEdit,
     commitInlineEdit,

@@ -95,12 +95,16 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   disabled?: boolean
   openOnMount?: boolean
+  initialFilter?: string
+  openOnFocus?: boolean
   inlinePanel?: boolean
 }>(), {
   options: () => [],
   placeholder: "Type to filter",
   disabled: false,
   openOnMount: true,
+  initialFilter: "",
+  openOnFocus: true,
   inlinePanel: false,
 })
 
@@ -120,7 +124,7 @@ const panelStyle = ref<Record<string, string>>({})
 const inputText = ref("")
 const isLoading = ref(false)
 const remoteOptions = ref<ReadonlyArray<DataGridFilterableComboboxOption>>([])
-const state = ref(createDataGridCellComboboxState({ open: true }))
+const state = ref(createDataGridCellComboboxState({ open: false }))
 const panelId = `datagrid-filterable-combobox-${Math.random().toString(36).slice(2, 10)}`
 let requestId = 0
 
@@ -186,6 +190,10 @@ function syncThemeVars(): void {
 
 function syncInputTextFromValue(): void {
   inputText.value = selectedOption.value?.label ?? props.value
+}
+
+function syncInputTextFromInitialFilter(): void {
+  inputText.value = props.initialFilter
 }
 
 function syncActiveIndex(preferSelected: boolean): void {
@@ -288,7 +296,15 @@ function openCombobox(): void {
     updatePanelPosition()
     scrollActiveOptionIntoView()
     inputEl.value?.focus({ preventScroll: true })
-    inputEl.value?.select()
+    if (!inputEl.value) {
+      return
+    }
+    if (state.value.filter.length > 0) {
+      const caretPosition = inputEl.value.value.length
+      inputEl.value.setSelectionRange(caretPosition, caretPosition)
+      return
+    }
+    inputEl.value.select()
   })
   if (props.loadOptions) {
     void refreshRemoteOptions(state.value.filter)
@@ -320,7 +336,9 @@ function setActiveIndex(optionIndex: number): void {
 }
 
 function handleInputFocus(): void {
-  openCombobox()
+  if (props.openOnFocus) {
+    openCombobox()
+  }
 }
 
 function handleInputClick(): void {
@@ -424,7 +442,12 @@ watch(() => props.disabled, disabled => {
 
 onMounted(() => {
   syncThemeVars()
-  syncInputTextFromValue()
+  if (props.initialFilter.length > 0) {
+    state.value = setDataGridCellComboboxFilter(state.value, props.initialFilter)
+    syncInputTextFromInitialFilter()
+  } else {
+    syncInputTextFromValue()
+  }
   if (props.openOnMount) {
     openCombobox()
   }

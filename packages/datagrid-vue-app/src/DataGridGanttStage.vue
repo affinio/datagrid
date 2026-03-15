@@ -147,6 +147,9 @@ const props = defineProps<{
   rowVersion: number
 }>()
 
+const tableRows = computed(() => props.table.rows)
+const tableViewport = computed(() => props.table.viewport)
+
 const stageRootRef = ref<HTMLElement | null>(null)
 const tableStageRef = ref<DataGridTableStageExpose | null>(null)
 const timelineHeaderViewportRef = ref<HTMLElement | null>(null)
@@ -504,14 +507,14 @@ const visibleBars = computed<readonly DataGridGanttBarLayout<Record<string, unkn
   void props.rowVersion
   void rowHeightVersion.value
   return buildDataGridGanttVisibleBars({
-    rows: props.table.displayRows as readonly DataGridRowNode<Record<string, unknown>>[],
+    rows: tableRows.value.displayRows as readonly DataGridRowNode<Record<string, unknown>>[],
     rowMetrics: visibleRowMetrics.value,
-    viewportRowStart: props.table.viewportRowStart,
+    viewportRowStart: tableViewport.value.viewportRowStart,
     scrollTop: tableScrollTop.value,
-    topSpacerHeight: props.table.topSpacerHeight,
+    topSpacerHeight: tableViewport.value.topSpacerHeight,
     viewportHeight: Math.max(
       tableViewportHeight.value,
-      props.table.displayRows.length * props.baseRowHeight,
+      tableRows.value.displayRows.length * props.baseRowHeight,
     ),
     baseRowHeight: props.baseRowHeight,
     resolveRowHeight,
@@ -582,7 +585,7 @@ const selectedDependencyRowIds = computed(() => {
   ])
 })
 
-const displayRowsSignature = computed(() => props.table.displayRows
+const displayRowsSignature = computed(() => tableRows.value.displayRows
   .map((row, index) => `${row.rowId == null ? index : String(row.rowId)}`)
   .join("|"))
 
@@ -1562,9 +1565,9 @@ watch(
 watch(
   () => [
     displayRowsSignature.value,
-    props.table.displayRows.length,
-    props.table.topSpacerHeight,
-    props.table.viewportRowStart,
+    tableRows.value.displayRows.length,
+    tableViewport.value.topSpacerHeight,
+    tableViewport.value.viewportRowStart,
     ganttConfigSignature.value,
     props.rowVersion,
     rowHeightVersion.value,
@@ -1595,8 +1598,8 @@ watch(
     visibleRowDividerSignature.value,
     timelineStateSignature.value,
     rowHeightVersion.value,
-    props.table.viewportRowStart,
-    props.table.topSpacerHeight,
+    tableViewport.value.viewportRowStart,
+    tableViewport.value.topSpacerHeight,
     tableScrollTop.value,
     tableViewportHeight.value,
     timelineScrollLeft.value,

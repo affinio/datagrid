@@ -4,6 +4,9 @@
     :options="options"
     :load-options="loadOptions"
     :placeholder="placeholder"
+    :initial-filter="initialFilter"
+    :open-on-mount="openOnMount"
+    :open-on-focus="false"
     @commit="handleCommit"
     @cancel="emit('cancel')"
     @options-resolved="handleOptionsResolved"
@@ -21,6 +24,8 @@ defineProps<{
   options?: ReadonlyArray<DataGridFilterableComboboxOption>
   loadOptions?: (query: string) => Promise<ReadonlyArray<DataGridFilterableComboboxOption>>
   placeholder?: string
+  initialFilter?: string
+  openOnMount?: boolean
 }>()
 
 const emit = defineEmits<{

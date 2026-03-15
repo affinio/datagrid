@@ -119,7 +119,7 @@ export interface UseDataGridAppInteractionControllerOptions<
   startInlineEdit: (
     row: DataGridRowNode<TRow>,
     columnKey: string,
-    options?: { draftValue?: string },
+    options?: { draftValue?: string; openOnMount?: boolean },
   ) => void
   commitInlineEdit: (target?: "stay" | "next" | "previous") => void
   canUndo: () => boolean
@@ -1464,7 +1464,16 @@ export function useDataGridAppInteractionController<
     if ((keyboardAction === "startEdit" || keyboardAction === "openSelect") && columnKey) {
       event.preventDefault()
       if (editable) {
-        options.startInlineEdit(row, columnKey, printable ? { draftValue: event.key } : undefined)
+        options.startInlineEdit(
+          row,
+          columnKey,
+          printable || keyboardAction === "openSelect"
+            ? {
+              draftValue: printable ? event.key : undefined,
+              openOnMount: true,
+            }
+            : undefined,
+        )
       }
       return
     }

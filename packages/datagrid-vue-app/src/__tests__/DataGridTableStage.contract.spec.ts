@@ -20,7 +20,7 @@ function createRowSelectionColumn(): DataGridColumnSnapshot {
   return {
     key: "__datagrid_row_selection__",
     pin: "left",
-    width: 36,
+    width: 108,
     column: {
       key: "__datagrid_row_selection__",
       label: "",
@@ -76,7 +76,12 @@ function createStageProps(
       columnIndex: number,
     ) => void
     isEditingCell?: (row: DataGridTableRow<DemoRow>, columnKey: string) => boolean
-    startInlineEdit?: (row: DataGridTableRow<DemoRow>, columnKey: string) => void
+    startInlineEdit?: (
+      row: DataGridTableRow<DemoRow>,
+      columnKey: string,
+      options?: { draftValue?: string; openOnMount?: boolean },
+    ) => void
+    cancelInlineEdit?: () => void
     visibleColumns?: readonly DataGridColumnSnapshot[]
   },
 ): DataGridTableStageProps<DemoRow> {
@@ -87,75 +92,94 @@ function createStageProps(
   return {
     mode: "base",
     rowHeightMode: "fixed",
-    rowHover: options?.rowHover ?? false,
-    stripedRows: options?.stripedRows ?? false,
-    visibleColumns,
-    renderedColumns,
-    displayRows: rows,
-    columnFilterTextByKey: {},
-    gridContentStyle: { width: "250px", minWidth: "250px" },
-    mainTrackStyle: { width: "250px", minWidth: "250px" },
-    indexColumnStyle: { width: "72px", minWidth: "72px", maxWidth: "72px", left: "0px" },
-    topSpacerHeight: 0,
-    bottomSpacerHeight: 0,
-    viewportRowStart: 0,
-    columnWindowStart: 0,
-    leftColumnSpacerWidth: 0,
-    rightColumnSpacerWidth: 0,
-    editingCellValue: "",
-    selectionRange: options?.selectionRange ?? { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
-    selectionAnchorCell: options?.selectionAnchorCell ?? { rowIndex: 0, columnIndex: 0 },
-    fillPreviewRange: options?.fillPreviewRange ?? null,
-    rangeMovePreviewRange: options?.rangeMovePreviewRange ?? null,
-    isFillDragging: options?.isFillDragging ?? false,
-    isRangeMoving: options?.isRangeMoving ?? false,
-    headerViewportRef: () => undefined,
-    bodyViewportRef: () => undefined,
-    columnStyle: key => {
-      const column = visibleColumns.find(candidate => candidate.key === key)
-      const width = `${column?.width ?? 140}px`
-      return { width, minWidth: width, maxWidth: width }
+    layout: {
+      gridContentStyle: { width: "250px", minWidth: "250px" },
+      mainTrackStyle: { width: "250px", minWidth: "250px" },
+      indexColumnStyle: { width: "72px", minWidth: "72px", maxWidth: "72px", left: "0px" },
+      columnStyle: key => {
+        const column = visibleColumns.find(candidate => candidate.key === key)
+        const width = `${column?.width ?? 140}px`
+        return { width, minWidth: width, maxWidth: width }
+      },
     },
-    toggleSortForColumn: () => undefined,
-    sortIndicator: () => "",
-    setColumnFilterText: () => undefined,
-    handleHeaderWheel: () => undefined,
-    handleHeaderScroll: () => undefined,
-    handleViewportScroll: () => undefined,
-    handleViewportKeydown: () => undefined,
-    rowClass: () => "",
-    isRowAutosizeProbe: () => false,
-    rowStyle: () => ({ height: "31px", minHeight: "31px" }),
-    toggleGroupRow: () => undefined,
-    rowIndexLabel: () => "1",
-    startResize: () => undefined,
-    handleResizeDoubleClick: () => undefined,
-    startRowResize: () => undefined,
-    autosizeRow: () => undefined,
-    isCellSelected,
-    isSelectionAnchorCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
-    shouldHighlightSelectedCell: (rowOffset, columnIndex) => isCellSelected(rowOffset, columnIndex) && !(rowOffset === 0 && columnIndex === 0),
-    isCellOnSelectionEdge: options?.isCellOnSelectionEdge ?? (() => false),
-    isCellInFillPreview: options?.isCellInFillPreview ?? (() => false),
-    isCellInPendingClipboardRange: () => false,
-    isCellOnPendingClipboardEdge: () => false,
-    isEditingCell: options?.isEditingCell ?? (() => false),
-    isCellEditable: options?.isCellEditable ?? (() => true),
-    handleCellMouseDown: () => undefined,
-    handleCellClick: options?.handleCellClick ?? (() => undefined),
-    handleCellKeydown: () => undefined,
-    startInlineEdit: options?.startInlineEdit ?? (() => undefined),
-    isFillHandleCell: options?.isFillHandleCell ?? (() => false),
-    startFillHandleDrag: options?.startFillHandleDrag ?? (() => undefined),
-    startFillHandleDoubleClick: options?.startFillHandleDoubleClick ?? (() => undefined),
-    fillActionAnchorCell: options?.fillActionAnchorCell ?? null,
-    fillActionBehavior: options?.fillActionBehavior ?? null,
-    applyFillActionBehavior: options?.applyFillActionBehavior ?? (() => undefined),
-    updateEditingCellValue: () => undefined,
-    handleEditorKeydown: () => undefined,
-    commitInlineEdit: () => undefined,
-    readCell: (row, columnKey) => String((row.data as Record<string, unknown>)[columnKey] ?? ""),
-    readDisplayCell: (row, columnKey) => String((row.data as Record<string, unknown>)[columnKey] ?? ""),
+    viewport: {
+      topSpacerHeight: 0,
+      bottomSpacerHeight: 0,
+      viewportRowStart: 0,
+      columnWindowStart: 0,
+      leftColumnSpacerWidth: 0,
+      rightColumnSpacerWidth: 0,
+      headerViewportRef: () => undefined,
+      bodyViewportRef: () => undefined,
+      handleHeaderWheel: () => undefined,
+      handleHeaderScroll: () => undefined,
+      handleViewportScroll: () => undefined,
+      handleViewportKeydown: () => undefined,
+    },
+    columns: {
+      visibleColumns,
+      renderedColumns,
+      columnFilterTextByKey: {},
+      toggleSortForColumn: () => undefined,
+      sortIndicator: () => "",
+      setColumnFilterText: () => undefined,
+      startResize: () => undefined,
+      handleResizeDoubleClick: () => undefined,
+    },
+    rows: {
+      displayRows: rows,
+      rowHover: options?.rowHover ?? false,
+      stripedRows: options?.stripedRows ?? false,
+      rowClass: () => "",
+      isRowAutosizeProbe: () => false,
+      rowStyle: () => ({ height: "31px", minHeight: "31px" }),
+      toggleGroupRow: () => undefined,
+      rowIndexLabel: () => "1",
+      startRowResize: () => undefined,
+      autosizeRow: () => undefined,
+    },
+    selection: {
+      selectionRange: options?.selectionRange ?? { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+      selectionAnchorCell: options?.selectionAnchorCell ?? { rowIndex: 0, columnIndex: 0 },
+      fillPreviewRange: options?.fillPreviewRange ?? null,
+      rangeMovePreviewRange: options?.rangeMovePreviewRange ?? null,
+      isFillDragging: options?.isFillDragging ?? false,
+      isRangeMoving: options?.isRangeMoving ?? false,
+      fillActionAnchorCell: options?.fillActionAnchorCell ?? null,
+      fillActionBehavior: options?.fillActionBehavior ?? null,
+      applyFillActionBehavior: options?.applyFillActionBehavior ?? (() => undefined),
+      isFillHandleCell: options?.isFillHandleCell ?? (() => false),
+      startFillHandleDrag: options?.startFillHandleDrag ?? (() => undefined),
+      startFillHandleDoubleClick: options?.startFillHandleDoubleClick ?? (() => undefined),
+    },
+    editing: {
+      editingCellValue: "",
+      editingCellInitialFilter: "",
+      editingCellOpenOnMount: false,
+      isEditingCell: options?.isEditingCell ?? (() => false),
+      startInlineEdit: options?.startInlineEdit ?? (() => undefined),
+      updateEditingCellValue: () => undefined,
+      handleEditorKeydown: () => undefined,
+      commitInlineEdit: () => undefined,
+      cancelInlineEdit: options?.cancelInlineEdit ?? (() => undefined),
+    },
+    cells: {
+      isCellSelected,
+      isSelectionAnchorCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+      shouldHighlightSelectedCell: (rowOffset, columnIndex) => isCellSelected(rowOffset, columnIndex) && !(rowOffset === 0 && columnIndex === 0),
+      isCellOnSelectionEdge: options?.isCellOnSelectionEdge ?? (() => false),
+      isCellInFillPreview: options?.isCellInFillPreview ?? (() => false),
+      isCellInPendingClipboardRange: () => false,
+      isCellOnPendingClipboardEdge: () => false,
+      isCellEditable: options?.isCellEditable ?? (() => true),
+      readCell: (row, columnKey) => String((row.data as Record<string, unknown>)[columnKey] ?? ""),
+      readDisplayCell: (row, columnKey) => String((row.data as Record<string, unknown>)[columnKey] ?? ""),
+    },
+    interaction: {
+      handleCellMouseDown: () => undefined,
+      handleCellClick: options?.handleCellClick ?? (() => undefined),
+      handleCellKeydown: () => undefined,
+    },
   }
 }
 
@@ -356,7 +380,12 @@ describe("DataGridTableStage contract", () => {
     expect(document.body.classList.contains("datagrid-fill-drag-cursor")).toBe(true)
     expect(document.documentElement.classList.contains("datagrid-fill-drag-cursor")).toBe(true)
 
-    await wrapper.setProps({ isFillDragging: false })
+    await wrapper.setProps({
+      selection: {
+        ...wrapper.props().selection,
+        isFillDragging: false,
+      },
+    })
 
     expect(document.body.style.cursor).toBe("")
     expect(document.documentElement.style.cursor).toBe("")
@@ -526,7 +555,12 @@ describe("DataGridTableStage contract", () => {
     const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
     viewport.focus()
 
-    await wrapper.setProps({ fillPreviewRange: null })
+    await wrapper.setProps({
+      selection: {
+        ...wrapper.props().selection,
+        fillPreviewRange: null,
+      },
+    })
     await nextTick()
 
     const anchorCell = wrapper.find('[data-row-index="0"][data-column-index="0"]').element as HTMLElement
@@ -707,8 +741,14 @@ describe("DataGridTableStage contract", () => {
       attachTo: document.body,
       props: {
         ...baseProps,
-        renderedColumns: baseProps.renderedColumns.filter(column => column.key === "centerA"),
-        rightColumnSpacerWidth: 130,
+        columns: {
+          ...baseProps.columns,
+          renderedColumns: baseProps.columns.renderedColumns.filter(column => column.key === "centerA"),
+        },
+        viewport: {
+          ...baseProps.viewport,
+          rightColumnSpacerWidth: 130,
+        },
       },
     })
 
@@ -729,21 +769,28 @@ describe("DataGridTableStage contract", () => {
   })
 
   it("renders header menu triggers when menu callbacks are present even without the explicit flag", () => {
+    const baseProps = createStageProps(
+      (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+      {
+        selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+      },
+    )
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: {
-        ...createStageProps(
-          (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
-          {
-            selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
-          },
-        ),
-        columnMenuEnabled: false,
-        sourceRows: [{ left: "L1", centerA: "A1", centerB: "B1", right: "R1" }],
-        applyColumnMenuSort: () => undefined,
-        applyColumnMenuPin: () => undefined,
-        applyColumnMenuFilter: () => undefined,
-        clearColumnMenuFilter: () => undefined,
+        ...baseProps,
+        columns: {
+          ...baseProps.columns,
+          columnMenuEnabled: false,
+          applyColumnMenuSort: () => undefined,
+          applyColumnMenuPin: () => undefined,
+          applyColumnMenuFilter: () => undefined,
+          clearColumnMenuFilter: () => undefined,
+        },
+        rows: {
+          ...baseProps.rows,
+          sourceRows: [{ left: "L1", centerA: "A1", centerB: "B1", right: "R1" }],
+        },
       },
     })
 
@@ -797,23 +844,33 @@ describe("DataGridTableStage contract", () => {
   it("separates row checkbox column from the row-number cell and routes number clicks to full-row selection", async () => {
     const handleRowIndexClick = vi.fn()
     const visibleColumns = [createRowSelectionColumn(), ...createColumns()] as const
+    const baseProps = createStageProps(() => false, {
+      selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 4 },
+      visibleColumns,
+    })
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: {
-        ...createStageProps(() => false, {
-          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 4 },
-          visibleColumns,
-        }),
-        indexColumnStyle: { width: "108px", minWidth: "108px", maxWidth: "108px", left: "0px" },
-        handleRowIndexClick,
-        readCell: (row, columnKey) => {
-          if (columnKey === "__datagrid_row_selection__") {
-            return row.rowId === "r1" ? "false" : "true"
-          }
-          return columnKey
+        ...baseProps,
+        layout: {
+          ...baseProps.layout,
+          indexColumnStyle: { width: "108px", minWidth: "108px", maxWidth: "108px", left: "0px" },
         },
-        handleToggleAllVisibleRows: () => undefined,
-        isRowCheckboxSelected: row => row.rowId === "r1",
+        rows: {
+          ...baseProps.rows,
+          handleRowIndexClick,
+          handleToggleAllVisibleRows: () => undefined,
+          isRowCheckboxSelected: row => row.rowId === "r1",
+        },
+        cells: {
+          ...baseProps.cells,
+          readCell: (row, columnKey) => {
+            if (columnKey === "__datagrid_row_selection__") {
+              return row.rowId === "r1" ? "false" : "true"
+            }
+            return columnKey
+          },
+        },
       },
     })
 

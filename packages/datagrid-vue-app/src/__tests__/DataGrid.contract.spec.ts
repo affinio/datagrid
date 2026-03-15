@@ -1030,7 +1030,7 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
-  it("opens select cells as a filterable combobox and commits only after option selection", async () => {
+  it("keeps select cells closed on single click and opens them on double click", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
       props: {
@@ -1045,6 +1045,11 @@ describe("DataGrid app facade contract", () => {
     expect(cell.text()).toContain("Backlog")
 
     await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".datagrid-cell-combobox__input").exists()).toBe(false)
+
+    await cell.trigger("dblclick")
     await flushRuntimeTasks()
 
     const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
@@ -1071,6 +1076,31 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("opens a focused select cell on Enter", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SELECT_ROWS,
+        columns: SELECT_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".datagrid-cell-combobox__input").exists()).toBe(false)
+
+    await cell.trigger("keydown", { key: "Enter" })
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".datagrid-cell-combobox__input").exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it("ranks select matches as exact and prefix matches before contains matches", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
@@ -1083,7 +1113,7 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     const cell = queryBodyCell(wrapper, 0, 0)
-    await cell.trigger("click")
+    await cell.trigger("dblclick")
     await flushRuntimeTasks()
 
     const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
@@ -1098,6 +1128,39 @@ describe("DataGrid app facade contract", () => {
       "Plan Review",
       "Backplanned",
     ])
+
+    wrapper.unmount()
+  })
+
+  it("starts select filtering from the first typed character and commits on option selection", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SELECT_ROWS,
+        columns: SELECT_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    await cell.trigger("keydown", { key: "p" })
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
+    expect(editor.exists()).toBe(true)
+    expect((editor.element as HTMLInputElement).value).toBe("p")
+
+    const options = [...document.body.querySelectorAll<HTMLButtonElement>(".datagrid-cell-combobox__option")]
+    expect(options[0]?.textContent).toContain("Planned")
+
+    options[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveRowAt<{ stage: string }>(wrapper, 0)).toMatchObject({ stage: "planned" })
 
     wrapper.unmount()
   })
@@ -1137,6 +1200,11 @@ describe("DataGrid app facade contract", () => {
     expect(cell.text()).toContain("review")
 
     await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".datagrid-cell-combobox__input").exists()).toBe(false)
+
+    await cell.trigger("keydown", { key: "Enter" })
     await flushRuntimeTasks()
 
     const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")

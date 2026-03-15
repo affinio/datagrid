@@ -34,7 +34,7 @@ import type { DataGridTableStageProps } from "./dataGridTableStage.types"
 
 const DEFAULT_COLUMN_WIDTH = 140
 const INDEX_COLUMN_WIDTH = 72
-const ROW_SELECTION_COLUMN_WIDTH = 36
+const ROW_SELECTION_COLUMN_WIDTH = 108
 const MIN_COLUMN_WIDTH = 80
 const MIN_ROW_HEIGHT = 24
 const AUTO_RESIZE_SAMPLE_LIMIT = 400
@@ -169,6 +169,16 @@ export function useDataGridTableStageRuntime<
   const resolveColumnWidth = (column: DataGridColumnSnapshot): number => {
     return column.width ?? DEFAULT_COLUMN_WIDTH
   }
+  const stageColumnStyle = (columnKey: string): Record<string, string> => {
+    const column = orderedVisibleColumns.value.find(candidate => candidate.key === columnKey)
+    const width = column ? resolveColumnWidth(column) : DEFAULT_COLUMN_WIDTH
+    const px = `${width}px`
+    return {
+      width: px,
+      minWidth: px,
+      maxWidth: px,
+    }
+  }
   const isColumnEditable = (column: DataGridColumnSnapshot): boolean => {
     return column.column.capabilities?.editable !== false
   }
@@ -244,7 +254,7 @@ export function useDataGridTableStageRuntime<
     gridContentStyle,
     mainTrackStyle,
     indexColumnStyle,
-    columnStyle,
+    columnStyle: _viewportColumnStyle,
     handleViewportScroll,
     syncViewportFromDom,
     scheduleViewportSync,
@@ -643,6 +653,8 @@ export function useDataGridTableStageRuntime<
   const {
     editingCell,
     editingCellValue,
+    editingCellInitialFilter,
+    editingCellOpenOnMount,
     isEditingCell,
     startInlineEdit,
     commitInlineEdit,
@@ -966,6 +978,8 @@ export function useDataGridTableStageRuntime<
     leftColumnSpacerWidth,
     rightColumnSpacerWidth,
     editingCellValueRef: editingCellValue,
+    editingCellInitialFilter,
+    editingCellOpenOnMount,
     selectionRange,
     selectionAnchorCell,
     fillPreviewRange,
@@ -974,7 +988,7 @@ export function useDataGridTableStageRuntime<
     isRangeMoving,
     headerViewportRef,
     bodyViewportRef,
-    columnStyle,
+    columnStyle: stageColumnStyle,
     toggleSortForColumn: options.toggleSortForColumn,
     sortIndicator: options.sortIndicator,
     setColumnFilterText: options.setColumnFilterText,

@@ -1,7 +1,15 @@
 import { computed, unref, type ComputedRef, type Ref } from "vue"
 import type {
   DataGridElementRefHandler,
+  DataGridTableStageCellsSection,
+  DataGridTableStageColumnsSection,
+  DataGridTableStageEditingSection,
+  DataGridTableStageInteractionSection,
+  DataGridTableStageLayoutSection,
   DataGridTableStageProps,
+  DataGridTableStageRowsSection,
+  DataGridTableStageSelectionSection,
+  DataGridTableStageViewportSection,
   UseDataGridTableStageBindingsOptions,
 } from "./dataGridTableStage.types"
 
@@ -28,33 +36,32 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     options.editingCellValueRef.value = value
   }
 
-  const tableStageProps = computed<DataGridTableStageProps<TRow>>(() => ({
-    mode: unref(options.mode),
-    rowHeightMode: unref(options.rowHeightMode),
-    visibleColumns: unref(options.visibleColumns),
-    renderedColumns: unref(options.renderedColumns),
-    displayRows: unref(options.displayRows),
-    sourceRows: unref(options.sourceRows),
-    columnFilterTextByKey: unref(options.columnFilterTextByKey),
+  const layoutSection = computed<DataGridTableStageLayoutSection>(() => ({
     gridContentStyle: unref(options.gridContentStyle),
     mainTrackStyle: unref(options.mainTrackStyle),
     indexColumnStyle: unref(options.indexColumnStyle),
+    columnStyle: unref(options.columnStyle),
+  }))
+
+  const viewportSection = computed<DataGridTableStageViewportSection>(() => ({
     topSpacerHeight: unref(options.topSpacerHeight),
     bottomSpacerHeight: unref(options.bottomSpacerHeight),
     viewportRowStart: unref(options.viewportRowStart),
     columnWindowStart: unref(options.columnWindowStart),
     leftColumnSpacerWidth: unref(options.leftColumnSpacerWidth),
     rightColumnSpacerWidth: unref(options.rightColumnSpacerWidth),
-    editingCellValue: options.editingCellValueRef.value,
-    selectionRange: unref(options.selectionRange),
-    selectionAnchorCell: unref(options.selectionAnchorCell),
-    fillPreviewRange: unref(options.fillPreviewRange),
-    rangeMovePreviewRange: unref(options.rangeMovePreviewRange),
-    isFillDragging: unref(options.isFillDragging),
-    isRangeMoving: unref(options.isRangeMoving),
     headerViewportRef: captureHeaderViewportRef,
     bodyViewportRef: captureBodyViewportRef,
-    columnStyle: unref(options.columnStyle),
+    handleHeaderWheel: unref(options.handleHeaderWheel),
+    handleHeaderScroll: unref(options.handleHeaderScroll),
+    handleViewportScroll: unref(options.handleViewportScroll),
+    handleViewportKeydown: unref(options.handleViewportKeydown),
+  }))
+
+  const columnsSection = computed<DataGridTableStageColumnsSection>(() => ({
+    visibleColumns: unref(options.visibleColumns),
+    renderedColumns: unref(options.renderedColumns),
+    columnFilterTextByKey: unref(options.columnFilterTextByKey),
     toggleSortForColumn: unref(options.toggleSortForColumn),
     sortIndicator: unref(options.sortIndicator),
     setColumnFilterText: unref(options.setColumnFilterText),
@@ -67,10 +74,15 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     applyColumnMenuPin: unref(options.applyColumnMenuPin),
     applyColumnMenuFilter: unref(options.applyColumnMenuFilter),
     clearColumnMenuFilter: unref(options.clearColumnMenuFilter),
-    handleHeaderWheel: unref(options.handleHeaderWheel),
-    handleHeaderScroll: unref(options.handleHeaderScroll),
-    handleViewportScroll: unref(options.handleViewportScroll),
-    handleViewportKeydown: unref(options.handleViewportKeydown),
+    startResize: unref(options.startResize),
+    handleResizeDoubleClick: unref(options.handleResizeDoubleClick),
+  }))
+
+  const rowsSection = computed<DataGridTableStageRowsSection<TRow>>(() => ({
+    displayRows: unref(options.displayRows),
+    sourceRows: unref(options.sourceRows),
+    rowHover: unref(options.rowHover),
+    stripedRows: unref(options.stripedRows),
     rowClass: unref(options.rowClass),
     isRowAutosizeProbe: unref(options.isRowAutosizeProbe),
     rowStyle: unref(options.rowStyle),
@@ -83,10 +95,38 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     handleToggleAllVisibleRows: unref(options.handleToggleAllVisibleRows),
     toggleGroupRow: unref(options.toggleGroupRow),
     rowIndexLabel: unref(options.rowIndexLabel),
-    startResize: unref(options.startResize),
-    handleResizeDoubleClick: unref(options.handleResizeDoubleClick),
     startRowResize: unref(options.startRowResize),
     autosizeRow: unref(options.autosizeRow),
+  }))
+
+  const selectionSection = computed<DataGridTableStageSelectionSection>(() => ({
+    selectionRange: unref(options.selectionRange),
+    selectionAnchorCell: unref(options.selectionAnchorCell),
+    fillPreviewRange: unref(options.fillPreviewRange),
+    rangeMovePreviewRange: unref(options.rangeMovePreviewRange),
+    isFillDragging: unref(options.isFillDragging),
+    isRangeMoving: unref(options.isRangeMoving),
+    fillActionAnchorCell: unref(options.fillActionAnchorCell),
+    fillActionBehavior: unref(options.fillActionBehavior),
+    applyFillActionBehavior: unref(options.applyFillActionBehavior),
+    isFillHandleCell: unref(options.isFillHandleCell),
+    startFillHandleDrag: unref(options.startFillHandleDrag),
+    startFillHandleDoubleClick: unref(options.startFillHandleDoubleClick),
+  }))
+
+  const editingSection = computed<DataGridTableStageEditingSection<TRow>>(() => ({
+    editingCellValue: options.editingCellValueRef.value,
+    editingCellInitialFilter: unref(options.editingCellInitialFilter),
+    editingCellOpenOnMount: unref(options.editingCellOpenOnMount),
+    isEditingCell: unref(options.isEditingCell),
+    startInlineEdit: unref(options.startInlineEdit),
+    updateEditingCellValue,
+    handleEditorKeydown: unref(options.handleEditorKeydown),
+    commitInlineEdit: unref(options.commitInlineEdit),
+    cancelInlineEdit: unref(options.cancelInlineEdit),
+  }))
+
+  const cellsSection = computed<DataGridTableStageCellsSection<TRow>>(() => ({
     cellClass: unref(options.cellClass),
     cellStyle: unref(options.cellStyle),
     isCellSelected: unref(options.isCellSelected),
@@ -96,24 +136,28 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     isCellInFillPreview: unref(options.isCellInFillPreview),
     isCellInPendingClipboardRange: unref(options.isCellInPendingClipboardRange),
     isCellOnPendingClipboardEdge: unref(options.isCellOnPendingClipboardEdge),
-    isEditingCell: unref(options.isEditingCell),
     isCellEditable: unref(options.isCellEditable),
+    readCell: unref(options.readCell),
+    readDisplayCell: unref(options.readDisplayCell),
+  }))
+
+  const interactionSection = computed<DataGridTableStageInteractionSection<TRow>>(() => ({
     handleCellMouseDown: unref(options.handleCellMouseDown),
     handleCellClick: unref(options.handleCellClick),
     handleCellKeydown: unref(options.handleCellKeydown),
-    startInlineEdit: unref(options.startInlineEdit),
-    isFillHandleCell: unref(options.isFillHandleCell),
-    startFillHandleDrag: unref(options.startFillHandleDrag),
-    startFillHandleDoubleClick: unref(options.startFillHandleDoubleClick),
-    fillActionAnchorCell: unref(options.fillActionAnchorCell),
-    fillActionBehavior: unref(options.fillActionBehavior),
-    applyFillActionBehavior: unref(options.applyFillActionBehavior),
-    updateEditingCellValue,
-    handleEditorKeydown: unref(options.handleEditorKeydown),
-    commitInlineEdit: unref(options.commitInlineEdit),
-    cancelInlineEdit: unref(options.cancelInlineEdit),
-    readCell: unref(options.readCell),
-    readDisplayCell: unref(options.readDisplayCell),
+  }))
+
+  const tableStageProps = computed<DataGridTableStageProps<TRow>>(() => ({
+    mode: unref(options.mode),
+    rowHeightMode: unref(options.rowHeightMode),
+    layout: layoutSection.value,
+    viewport: viewportSection.value,
+    columns: columnsSection.value,
+    rows: rowsSection.value,
+    selection: selectionSection.value,
+    editing: editingSection.value,
+    cells: cellsSection.value,
+    interaction: interactionSection.value,
   }))
 
   return {

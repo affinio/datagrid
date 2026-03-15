@@ -5,7 +5,7 @@
     :class="{
       'grid-stage--canvas-chrome': true,
       'grid-stage--auto-row-height': mode === 'base' && rowHeightMode === 'auto',
-      'grid-stage--fill-dragging': props.isFillDragging,
+      'grid-stage--fill-dragging': isFillDragging,
       'grid-stage--range-moving': isRangeMoving,
     }"
   >
@@ -53,7 +53,7 @@
               </div>
               <DataGridColumnMenu
                 v-else
-                :rows="props.sourceRows ?? []"
+                :rows="sourceRows"
                 :column-key="column.key"
                 :column-label="column.column.label ?? column.key"
                 :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
@@ -174,7 +174,7 @@
             <DataGridColumnMenu
               v-for="column in renderedColumns"
               :key="`header-${column.key}`"
-              :rows="props.sourceRows ?? []"
+                :rows="sourceRows"
               :column-key="column.key"
               :column-label="column.column.label ?? column.key"
               :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
@@ -265,7 +265,7 @@
             <DataGridColumnMenu
               v-for="column in pinnedRightColumns"
               :key="`header-right-${column.key}`"
-              :rows="props.sourceRows ?? []"
+                :rows="sourceRows"
               :column-key="column.key"
               :column-label="column.column.label ?? column.key"
               :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
@@ -414,9 +414,11 @@
               />
               <DataGridCellComboboxEditor
                 v-if="isSelectEditorCell(row, rowOffset, column, columnIndexByKey(column.key))"
-                :value="editingCellValue"
+                :value="resolveSelectEditorValue(row, column)"
                 :options="resolveSelectEditorOptions(row, column)"
                 :load-options="resolveSelectEditorOptionsLoader(row, column)"
+                :initial-filter="editingCellInitialFilter"
+                :open-on-mount="editingCellOpenOnMount"
                 @commit="handleSelectEditorCommit"
                 @cancel="handleSelectEditorCancel"
                 @options-resolved="handleSelectEditorOptionsResolved(row, column, $event)"
@@ -521,9 +523,11 @@
                 />
                 <DataGridCellComboboxEditor
                   v-if="isSelectEditorCell(row, rowOffset, column, columnIndexByKey(column.key))"
-                  :value="editingCellValue"
+                  :value="resolveSelectEditorValue(row, column)"
                   :options="resolveSelectEditorOptions(row, column)"
                   :load-options="resolveSelectEditorOptionsLoader(row, column)"
+                  :initial-filter="editingCellInitialFilter"
+                  :open-on-mount="editingCellOpenOnMount"
                   @commit="handleSelectEditorCommit"
                   @cancel="handleSelectEditorCancel"
                   @options-resolved="handleSelectEditorOptionsResolved(row, column, $event)"
@@ -626,9 +630,11 @@
               />
               <DataGridCellComboboxEditor
                 v-if="isSelectEditorCell(row, rowOffset, column, columnIndexByKey(column.key))"
-                :value="editingCellValue"
+                :value="resolveSelectEditorValue(row, column)"
                 :options="resolveSelectEditorOptions(row, column)"
                 :load-options="resolveSelectEditorOptionsLoader(row, column)"
+                :initial-filter="editingCellInitialFilter"
+                :open-on-mount="editingCellOpenOnMount"
                 @commit="handleSelectEditorCommit"
                 @cancel="handleSelectEditorCancel"
                 @options-resolved="handleSelectEditorOptionsResolved(row, column, $event)"
@@ -704,9 +710,9 @@
           <button
             type="button"
             class="grid-fill-action__item"
-            :class="{ 'grid-fill-action__item--active': props.fillActionBehavior === 'series' }"
+            :class="{ 'grid-fill-action__item--active': fillActionBehavior === 'series' }"
             role="menuitemradio"
-            :aria-checked="props.fillActionBehavior === 'series' ? 'true' : 'false'"
+            :aria-checked="fillActionBehavior === 'series' ? 'true' : 'false'"
             @click.stop="selectFillActionBehavior('series')"
           >
             Series
@@ -714,9 +720,9 @@
           <button
             type="button"
             class="grid-fill-action__item"
-            :class="{ 'grid-fill-action__item--active': props.fillActionBehavior === 'copy' }"
+            :class="{ 'grid-fill-action__item--active': fillActionBehavior === 'copy' }"
             role="menuitemradio"
-            :aria-checked="props.fillActionBehavior === 'copy' ? 'true' : 'false'"
+            :aria-checked="fillActionBehavior === 'copy' ? 'true' : 'false'"
             @click.stop="selectFillActionBehavior('copy')"
           >
             Copy
@@ -728,7 +734,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType } from "vue"
 import { buildDataGridCellRenderModel } from "@affino/datagrid-core"
 import type {
   DataGridColumnPin,
@@ -745,13 +751,157 @@ import {
 } from "@affino/datagrid-chrome"
 import DataGridCellComboboxEditor from "./DataGridCellComboboxEditor.vue"
 import DataGridColumnMenu from "./DataGridColumnMenu.vue"
-import type { DataGridTableRow, DataGridTableStageProps } from "./dataGridTableStage.types"
+import type {
+  DataGridTableRow,
+  DataGridTableStageProps,
+} from "./dataGridTableStage.types"
 import type { DataGridFilterableComboboxOption } from "./dataGridFilterableCombobox"
 import { ensureDataGridAppStyles } from "./ensureDataGridAppStyles"
 
 ensureDataGridAppStyles()
 
-const props = defineProps<DataGridTableStageProps<Record<string, unknown>>>()
+const props = defineProps({
+  mode: {
+    type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["mode"]>,
+    required: true,
+  },
+  rowHeightMode: {
+    type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["rowHeightMode"]>,
+    required: true,
+  },
+  layout: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["layout"]>,
+    required: true,
+  },
+  viewport: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["viewport"]>,
+    required: true,
+  },
+  columns: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["columns"]>,
+    required: true,
+  },
+  rows: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["rows"]>,
+    required: true,
+  },
+  selection: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["selection"]>,
+    required: true,
+  },
+  editing: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["editing"]>,
+    required: true,
+  },
+  cells: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["cells"]>,
+    required: true,
+  },
+  interaction: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["interaction"]>,
+    required: true,
+  },
+})
+
+const layout = computed(() => props.layout)
+const viewport = computed(() => props.viewport)
+const columns = computed(() => props.columns)
+const rows = computed(() => props.rows)
+const selection = computed(() => props.selection)
+const editing = computed(() => props.editing)
+const cells = computed(() => props.cells)
+const interaction = computed(() => props.interaction)
+
+const sourceRows = computed(() => rows.value.sourceRows ?? [])
+const visibleColumns = computed(() => columns.value.visibleColumns)
+const renderedColumns = computed(() => columns.value.renderedColumns)
+const displayRows = computed(() => rows.value.displayRows)
+const selectionRange = computed(() => selection.value.selectionRange)
+const isFillDragging = computed(() => selection.value.isFillDragging)
+const fillActionBehavior = computed(() => selection.value.fillActionBehavior)
+const gridContentStyle = computed(() => layout.value.gridContentStyle)
+const mainTrackStyle = computed(() => layout.value.mainTrackStyle)
+const topSpacerHeight = computed(() => viewport.value.topSpacerHeight)
+const bottomSpacerHeight = computed(() => viewport.value.bottomSpacerHeight)
+const leftColumnSpacerWidth = computed(() => viewport.value.leftColumnSpacerWidth)
+const rightColumnSpacerWidth = computed(() => viewport.value.rightColumnSpacerWidth)
+const viewportRowStart = computed(() => viewport.value.viewportRowStart)
+const columnFilterTextByKey = computed(() => columns.value.columnFilterTextByKey)
+const editingCellValue = computed(() => editing.value.editingCellValue)
+const editingCellInitialFilter = computed(() => editing.value.editingCellInitialFilter)
+const editingCellOpenOnMount = computed(() => editing.value.editingCellOpenOnMount)
+
+function columnStyle(key: string): CSSProperties {
+  return layout.value.columnStyle(key)
+}
+
+function sortIndicator(columnKey: string): string {
+  return columns.value.sortIndicator(columnKey)
+}
+
+function startResize(event: MouseEvent, columnKey: string): void {
+  columns.value.startResize(event, columnKey)
+}
+
+function handleResizeDoubleClick(event: MouseEvent, columnKey: string): void {
+  columns.value.handleResizeDoubleClick(event, columnKey)
+}
+
+function setColumnFilterText(columnKey: string, value: string): void {
+  columns.value.setColumnFilterText(columnKey, value)
+}
+
+function headerViewportRef(value: Element | ComponentPublicInstance | null): void {
+  viewport.value.headerViewportRef(value)
+}
+
+function handleHeaderScroll(event: Event): void {
+  viewport.value.handleHeaderScroll(event)
+}
+
+function handleViewportKeydown(event: KeyboardEvent): void {
+  viewport.value.handleViewportKeydown(event)
+}
+
+function rowClass(row: TableRow): string {
+  return rows.value.rowClass(row)
+}
+
+function isRowAutosizeProbe(row: TableRow, rowOffset: number): boolean {
+  return rows.value.isRowAutosizeProbe(row, rowOffset)
+}
+
+function rowStyle(row: TableRow, rowOffset: number): CSSProperties {
+  return rows.value.rowStyle(row, rowOffset)
+}
+
+function rowIndexLabel(row: TableRow, rowOffset: number): string {
+  return rows.value.rowIndexLabel(row, rowOffset)
+}
+
+function startRowResize(event: MouseEvent, row: TableRow, rowOffset: number): void {
+  rows.value.startRowResize(event, row, rowOffset)
+}
+
+function autosizeRow(event: MouseEvent, row: TableRow, rowOffset: number): void {
+  rows.value.autosizeRow(event, row, rowOffset)
+}
+
+function updateEditingCellValue(value: string): void {
+  editing.value.updateEditingCellValue(value)
+}
+
+function handleEditorKeydown(event: KeyboardEvent): void {
+  editing.value.handleEditorKeydown(event)
+}
+
+function handleCellMouseDown(event: MouseEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
+  interaction.value.handleCellMouseDown(event, row, rowOffset, columnIndex)
+}
+
+function handleCellKeydown(event: KeyboardEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
+  interaction.value.handleCellKeydown(event, row, rowOffset, columnIndex)
+}
 
 type TableRow = DataGridTableRow<Record<string, unknown>>
 type TableColumn = DataGridColumnSnapshot & {
@@ -780,7 +930,7 @@ type SelectEditorOption = {
 
 type SelectEditorOptionsLoader = (query: string) => Promise<readonly SelectEditorOption[]>
 
-type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>["selectionRange"]>
+type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>["selection"]["selectionRange"]>
 const RANGE_MOVE_HANDLE_HOVER_EDGE_PX = 6
 const FILL_ACTION_ROOT_SELECTOR = ".grid-fill-action"
 const FILL_ACTION_TRIGGER_SIZE_PX = 14
@@ -788,21 +938,21 @@ const FILL_ACTION_VIEWPORT_MARGIN_PX = 8
 const FILL_ACTION_HANDLE_CLEARANCE_PX = 10
 
 const columnMenuMaxFilterValues = computed(() => (
-  typeof props.columnMenuMaxFilterValues === "number"
-    ? props.columnMenuMaxFilterValues
+  typeof columns.value.columnMenuMaxFilterValues === "number"
+    ? columns.value.columnMenuMaxFilterValues
     : 250
 ))
 
 const asyncSelectOptionCache = ref(new Map<string, readonly SelectEditorOption[]>())
 
 function hasColumnMenu(): boolean {
-  if (props.columnMenuEnabled === true) {
+  if (columns.value.columnMenuEnabled === true) {
     return true
   }
-  return typeof props.applyColumnMenuSort === "function"
-    || typeof props.applyColumnMenuPin === "function"
-    || typeof props.applyColumnMenuFilter === "function"
-    || typeof props.clearColumnMenuFilter === "function"
+  return typeof columns.value.applyColumnMenuSort === "function"
+    || typeof columns.value.applyColumnMenuPin === "function"
+    || typeof columns.value.applyColumnMenuFilter === "function"
+    || typeof columns.value.clearColumnMenuFilter === "function"
 }
 
 function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
@@ -826,7 +976,7 @@ function parsePixelValue(value: unknown, fallback: number): number {
 }
 
 function resolveColumnWidth(column: TableColumn): number {
-  const style = props.columnStyle(column.key)
+  const style = layout.value.columnStyle(column.key)
   return parsePixelValue(style.width ?? style.minWidth ?? column.width, column.width ?? 140)
 }
 
@@ -893,7 +1043,7 @@ function resolveCellCustomClass(
   column: TableColumn,
   columnIndex: number,
 ) {
-  return props.cellClass?.(row, rowOffset, column, columnIndex) ?? null
+  return cells.value.cellClass?.(row, rowOffset, column, columnIndex) ?? null
 }
 
 function resolveCellCustomStyle(
@@ -902,51 +1052,51 @@ function resolveCellCustomStyle(
   column: TableColumn,
   columnIndex: number,
 ): CSSProperties {
-  return props.cellStyle?.(row, rowOffset, column, columnIndex) ?? {}
+  return cells.value.cellStyle?.(row, rowOffset, column, columnIndex) ?? {}
 }
 
 function handleSortColumnClick(column: TableColumn, additive: boolean): void {
   if (!isColumnSortable(column)) {
     return
   }
-  props.toggleSortForColumn(column.key, additive)
+  columns.value.toggleSortForColumn(column.key, additive)
 }
 
 function isColumnFilterActiveSafe(columnKey: string): boolean {
-  const evaluate = props.isColumnFilterActive
+  const evaluate = columns.value.isColumnFilterActive
   return typeof evaluate === "function"
     ? evaluate(columnKey)
     : false
 }
 
 function resolveColumnMenuSortDirectionSafe(columnKey: string): "asc" | "desc" | null {
-  const resolve = props.resolveColumnMenuSortDirection
+  const resolve = columns.value.resolveColumnMenuSortDirection
   return typeof resolve === "function"
     ? resolve(columnKey)
     : null
 }
 
 function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string[] {
-  const resolve = props.resolveColumnMenuSelectedTokens
+  const resolve = columns.value.resolveColumnMenuSelectedTokens
   return typeof resolve === "function"
     ? resolve(columnKey)
     : []
 }
 
 function applyColumnMenuSortSafe(columnKey: string, direction: "asc" | "desc" | null): void {
-  props.applyColumnMenuSort?.(columnKey, direction)
+  columns.value.applyColumnMenuSort?.(columnKey, direction)
 }
 
 function applyColumnMenuPinSafe(columnKey: string, pin: DataGridColumnPin): void {
-  props.applyColumnMenuPin?.(columnKey, pin)
+  columns.value.applyColumnMenuPin?.(columnKey, pin)
 }
 
 function applyColumnMenuFilterSafe(columnKey: string, tokens: readonly string[]): void {
-  props.applyColumnMenuFilter?.(columnKey, tokens)
+  columns.value.applyColumnMenuFilter?.(columnKey, tokens)
 }
 
 function clearColumnMenuFilterSafe(columnKey: string): void {
-  props.clearColumnMenuFilter?.(columnKey)
+  columns.value.clearColumnMenuFilter?.(columnKey)
 }
 
 function handleHeaderColumnClick(column: TableColumn, additive: boolean): void {
@@ -954,29 +1104,18 @@ function handleHeaderColumnClick(column: TableColumn, additive: boolean): void {
 }
 
 function startInlineEditIfAllowed(row: TableRow, column: TableColumn): void {
-  const rowOffset = props.displayRows.findIndex(candidate => candidate === row)
+  const rowOffset = displayRows.value.findIndex(candidate => candidate === row)
   const columnIndex = columnIndexByKey(column.key)
   if (rowOffset < 0 || !isCellEditableSafe(row, rowOffset, column, columnIndex)) {
     return
   }
-  props.startInlineEdit(row, column.key)
-}
-
-function openSelectEditorOnClickIfAllowed(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): void {
-  if (
-    row.kind === "group"
-    || isEditingCellSafe(row, column.key)
-    || !isCellEditableSafe(row, rowOffset, column, columnIndex)
-    || resolveCellEditorMode(row, column) !== "select"
-  ) {
-    return
-  }
-  props.startInlineEdit(row, column.key)
+  editing.value.startInlineEdit(
+    row,
+    column.key,
+    resolveCellEditorMode(row, column) === "select"
+      ? { openOnMount: true }
+      : undefined,
+  )
 }
 
 function cellTabIndex(rowOffset: number, columnIndex: number): number {
@@ -988,7 +1127,7 @@ function handleFillHandleMouseDown(event: MouseEvent): void {
   const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   const cell = handle?.closest<HTMLElement>(".grid-cell")
   cell?.focus({ preventScroll: true })
-  props.startFillHandleDrag(event)
+  selection.value.startFillHandleDrag(event)
 }
 
 function handleFillHandleDoubleClick(event: MouseEvent): void {
@@ -996,11 +1135,11 @@ function handleFillHandleDoubleClick(event: MouseEvent): void {
   const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   const cell = handle?.closest<HTMLElement>(".grid-cell")
   cell?.focus({ preventScroll: true })
-  props.startFillHandleDoubleClick(event)
+  selection.value.startFillHandleDoubleClick(event)
 }
 
 function focusFillActionAnchorCell(): void {
-  const anchorCell = props.fillActionAnchorCell
+  const anchorCell = selection.value.fillActionAnchorCell
   if (!anchorCell) {
     bodyViewportEl.value?.focus({ preventScroll: true })
     return
@@ -1024,27 +1163,27 @@ function toggleFloatingFillActionMenu(event: MouseEvent): void {
 }
 
 function selectFillActionBehavior(behavior: "copy" | "series"): void {
-  props.applyFillActionBehavior(behavior)
+  selection.value.applyFillActionBehavior(behavior)
   fillActionMenuOpen.value = false
   focusFillActionAnchorCell()
 }
 
 function isCellSelectedSafe(rowOffset: number, columnIndex: number): boolean {
-  const evaluate = props.isCellSelected
+  const evaluate = cells.value.isCellSelected
   return typeof evaluate === "function"
     ? evaluate(rowOffset, columnIndex)
     : false
 }
 
 function resolveVisualSelectionAnchorCell(): { rowIndex: number; columnIndex: number } | null {
-  return props.selectionAnchorCell ?? null
+  return selection.value.selectionAnchorCell ?? null
 }
 
 function isVisualSelectionAnchorCell(rowOffset: number, columnIndex: number): boolean {
   const anchorCell = resolveVisualSelectionAnchorCell()
   return Boolean(
     anchorCell
-    && props.viewportRowStart + rowOffset === anchorCell.rowIndex
+    && viewport.value.viewportRowStart + rowOffset === anchorCell.rowIndex
     && columnIndex === anchorCell.columnIndex,
   )
 }
@@ -1063,21 +1202,21 @@ function isSelectionAnchorCellSafe(rowOffset: number, columnIndex: number): bool
   if (isVisualSelectionAnchorCell(rowOffset, columnIndex)) {
     return true
   }
-  const evaluate = props.isSelectionAnchorCell
+  const evaluate = cells.value.isSelectionAnchorCell
   return typeof evaluate === "function"
     ? evaluate(rowOffset, columnIndex)
     : false
 }
 
 function isCellInFillPreviewSafe(rowOffset: number, columnIndex: number): boolean {
-  const evaluate = props.isCellInFillPreview
+  const evaluate = cells.value.isCellInFillPreview
   return typeof evaluate === "function"
     ? evaluate(rowOffset, columnIndex)
     : false
 }
 
 function isCellInPendingClipboardRangeSafe(rowOffset: number, columnIndex: number): boolean {
-  const evaluate = props.isCellInPendingClipboardRange
+  const evaluate = cells.value.isCellInPendingClipboardRange
   return typeof evaluate === "function"
     ? evaluate(rowOffset, columnIndex)
     : false
@@ -1088,14 +1227,14 @@ function isCellOnPendingClipboardEdgeSafe(
   columnIndex: number,
   edge: "top" | "right" | "bottom" | "left",
 ): boolean {
-  const evaluate = props.isCellOnPendingClipboardEdge
+  const evaluate = cells.value.isCellOnPendingClipboardEdge
   return typeof evaluate === "function"
     ? evaluate(rowOffset, columnIndex, edge)
     : false
 }
 
 function isEditingCellSafe(row: TableRow, columnKey: string): boolean {
-  const evaluate = props.isEditingCell
+  const evaluate = editing.value.isEditingCell
   return typeof evaluate === "function"
     ? evaluate(row, columnKey)
     : false
@@ -1107,14 +1246,14 @@ function isCellEditableSafe(
   column: TableColumn,
   columnIndex: number,
 ): boolean {
-  const evaluate = props.isCellEditable
+  const evaluate = cells.value.isCellEditable
   return typeof evaluate === "function"
     ? evaluate(row, rowOffset, column, columnIndex)
     : isColumnEditable(column)
 }
 
 function isFillHandleCellSafe(rowOffset: number, columnIndex: number): boolean {
-  const evaluate = props.isFillHandleCell
+  const evaluate = selection.value.isFillHandleCell
   return typeof evaluate === "function"
     ? evaluate(rowOffset, columnIndex)
     : false
@@ -1124,7 +1263,7 @@ const DEFAULT_INDEX_COLUMN_WIDTH = 72
 
 const indexColumnWidthPx = computed(() => {
   const width = parsePixelValue(
-    props.indexColumnStyle.width ?? props.indexColumnStyle.minWidth,
+    layout.value.indexColumnStyle.width ?? layout.value.indexColumnStyle.minWidth,
     DEFAULT_INDEX_COLUMN_WIDTH,
   )
   return width > 0 ? width : DEFAULT_INDEX_COLUMN_WIDTH
@@ -1133,17 +1272,17 @@ const indexColumnWidthPx = computed(() => {
 const resolvedRowIndexColumnStyle = computed<CSSProperties>(() => {
   const width = `${indexColumnWidthPx.value}px`
   return {
-    ...props.indexColumnStyle,
+    ...layout.value.indexColumnStyle,
     width,
     minWidth: width,
     maxWidth: width,
   }
 })
 
-const isRangeMoving = computed(() => props.isRangeMoving)
+const isRangeMoving = computed(() => selection.value.isRangeMoving)
 
-const pinnedLeftColumns = computed(() => props.visibleColumns.filter(column => column.pin === "left"))
-const pinnedRightColumns = computed(() => props.visibleColumns.filter(column => column.pin === "right"))
+const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
+const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
 
 const leftPaneWidth = computed(() => {
   return indexColumnWidthPx.value + pinnedLeftColumns.value.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
@@ -1262,38 +1401,38 @@ function clearHoveredRow(): void {
 }
 
 function resolveAbsoluteRowIndex(rowOffset: number): number {
-  return props.viewportRowStart + rowOffset
+  return viewport.value.viewportRowStart + rowOffset
 }
 
 function setHoveredRow(rowOffset: number): void {
-  if (!props.rowHover) {
+  if (!rows.value.rowHover) {
     return
   }
   hoveredRowIndex.value = resolveAbsoluteRowIndex(rowOffset)
 }
 
 function isHoveredRow(rowOffset: number): boolean {
-  return props.rowHover === true && hoveredRowIndex.value === resolveAbsoluteRowIndex(rowOffset)
+  return rows.value.rowHover === true && hoveredRowIndex.value === resolveAbsoluteRowIndex(rowOffset)
 }
 
 function isStripedRow(rowOffset: number): boolean {
-  return props.stripedRows === true && resolveAbsoluteRowIndex(rowOffset) % 2 === 1
+  return rows.value.stripedRows === true && resolveAbsoluteRowIndex(rowOffset) % 2 === 1
 }
 
 function isAllVisibleRowsSelectedSafe(): boolean {
-  return props.allVisibleRowsSelected === true
+  return rows.value.allVisibleRowsSelected === true
 }
 
 function isSomeVisibleRowsSelectedSafe(): boolean {
-  return props.someVisibleRowsSelected === true
+  return rows.value.someVisibleRowsSelected === true
 }
 
 function isRowFocusedSafe(row: TableRow): boolean {
-  return typeof props.isRowFocused === "function" ? props.isRowFocused(row) : false
+  return typeof rows.value.isRowFocused === "function" ? rows.value.isRowFocused(row) : false
 }
 
 function isRowCheckboxSelectedSafe(row: TableRow): boolean {
-  return typeof props.isRowCheckboxSelected === "function" ? props.isRowCheckboxSelected(row) : false
+  return typeof rows.value.isRowCheckboxSelected === "function" ? rows.value.isRowCheckboxSelected(row) : false
 }
 
 function isCheckboxColumn(column: TableColumn): boolean {
@@ -1309,7 +1448,7 @@ function shouldRenderCheckboxCell(row: TableRow, column: TableColumn): boolean {
 }
 
 function checkboxValueIsChecked(row: TableRow, column: TableColumn): boolean {
-  const value = props.readCell(row, column.key).trim().toLowerCase()
+  const value = cells.value.readCell(row, column.key).trim().toLowerCase()
   return value === "true" || value === "1" || value === "yes" || value === "on"
 }
 
@@ -1317,6 +1456,7 @@ function builtInCellClasses(row: TableRow, column: TableColumn): Record<string, 
   return {
     "grid-cell--checkbox": shouldRenderCheckboxCell(row, column),
     "grid-cell--row-selection": isRowSelectionColumn(column),
+    "grid-cell--select": row.kind !== "group" && resolveCellEditorMode(row, column) === "select",
   }
 }
 
@@ -1484,7 +1624,7 @@ function handleSelectEditorOptionsResolved(
 }
 
 function readResolvedDisplayCell(row: TableRow, column: TableColumn): string {
-  const displayValue = props.readDisplayCell(row, column.key)
+  const displayValue = cells.value.readDisplayCell(row, column.key)
   if (row.kind === "group" || resolveCellEditorMode(row, column) !== "select") {
     return displayValue
   }
@@ -1495,6 +1635,11 @@ function readResolvedDisplayCell(row: TableRow, column: TableColumn): string {
   const rawValue = readRowCellValue(row, column)
   const match = cachedOptions.find(option => option.value === String(rawValue ?? ""))
   return match?.label ?? displayValue
+}
+
+function resolveSelectEditorValue(row: TableRow, column: TableColumn): string {
+  const rawValue = readRowCellValue(row, column)
+  return rawValue == null ? "" : String(rawValue)
 }
 
 function isSelectEditorCell(
@@ -1523,40 +1668,40 @@ function handleSelectEditorCommit(
   value: string,
   target: "stay" | "next" | "previous" = "stay",
 ): void {
-  props.updateEditingCellValue(value)
-  props.commitInlineEdit(target)
+  editing.value.updateEditingCellValue(value)
+  editing.value.commitInlineEdit(target)
 }
 
 function handleSelectEditorCancel(): void {
-  props.cancelInlineEdit()
+  editing.value.cancelInlineEdit()
 }
 
 function handleTextEditorBlur(): void {
-  props.commitInlineEdit()
+  editing.value.commitInlineEdit()
 }
 
 function handleToggleAllVisibleRowsSafe(): void {
-  props.handleToggleAllVisibleRows?.()
+  rows.value.handleToggleAllVisibleRows?.()
 }
 
 function handleRowClickSafe(row: TableRow): void {
-  props.handleRowClick?.(row)
+  rows.value.handleRowClick?.(row)
 }
 
 function handleRowIndexClickSafe(row: TableRow, rowOffset: number, event: MouseEvent): void {
-  props.handleRowIndexClick?.(row, rowOffset, event.shiftKey)
+  rows.value.handleRowIndexClick?.(row, rowOffset, event.shiftKey)
 }
 
 function handleRowContainerClick(row: TableRow): void {
   handleRowClickSafe(row)
   if (row.kind === "group") {
-    props.toggleGroupRow(row)
+    rows.value.toggleGroupRow(row)
   }
 }
 
 function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boolean> {
   return {
-    "grid-row--hoverable": props.rowHover === true,
+    "grid-row--hoverable": rows.value.rowHover === true,
     "grid-row--hovered": isHoveredRow(rowOffset),
     "grid-row--striped": isStripedRow(rowOffset),
     "grid-row--focused": isRowFocusedSafe(row),
@@ -1565,8 +1710,8 @@ function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boole
 }
 
 function isFullRowSelectionSafe(rowOffset: number): boolean {
-  const range = props.selectionRange
-  const lastColumnIndex = props.visibleColumns.length - 1
+  const range = selectionRange.value
+  const lastColumnIndex = visibleColumns.value.length - 1
   if (!range || lastColumnIndex < 0) {
     return false
   }
@@ -1582,7 +1727,7 @@ function isCellOnSelectionEdgeSafe(
   columnIndex: number,
   edge: "top" | "right" | "bottom" | "left",
 ): boolean {
-  const evaluate = props.isCellOnSelectionEdge
+  const evaluate = cells.value.isCellOnSelectionEdge
   return typeof evaluate === "function"
     ? evaluate(rowOffset, columnIndex, edge)
     : false
@@ -1593,7 +1738,7 @@ function isNearRangeMoveSelectionEdge(
   rowOffset: number,
   columnIndex: number,
 ): boolean {
-  if (props.mode !== "base" || isRangeMoving.value || !props.selectionRange) {
+  if (props.mode !== "base" || isRangeMoving.value || !selectionRange.value) {
     return false
   }
   if (!isCellSelectedSafe(rowOffset, columnIndex)) {
@@ -1626,7 +1771,7 @@ function isNearRangeMoveSelectionEdge(
 }
 
 function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: number): void {
-  if (props.isFillDragging) {
+  if (isFillDragging.value) {
     clearRangeMoveHandleHover()
     return
   }
@@ -1644,7 +1789,7 @@ function handleGroupCellClick(row: TableRow): void {
   if (row.kind !== "group") {
     return
   }
-  props.toggleGroupRow(row)
+  rows.value.toggleGroupRow(row)
 }
 
 function handleBodyCellClick(
@@ -1657,19 +1802,18 @@ function handleBodyCellClick(
     if (row.kind === "group") {
       return
     }
-    props.handleCellClick(row, rowOffset, column, columnIndex)
+    interaction.value.handleCellClick(row, rowOffset, column, columnIndex)
     return
   }
   handleGroupCellClick(row)
   if (row.kind === "group") {
     return
   }
-  props.handleCellClick(row, rowOffset, column, columnIndex)
-  openSelectEditorOnClickIfAllowed(row, rowOffset, column, columnIndex)
+  interaction.value.handleCellClick(row, rowOffset, column, columnIndex)
 }
 
 function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boolean {
-  if (props.isFillDragging) {
+  if (isFillDragging.value) {
     return false
   }
   return (
@@ -1679,8 +1823,8 @@ function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boo
 }
 
 function resolveVisibleAnchorCellPosition(): { rowIndex: number; columnIndex: number } | null {
-  for (let rowOffset = 0; rowOffset < props.displayRows.length; rowOffset += 1) {
-    for (let columnIndex = 0; columnIndex < props.visibleColumns.length; columnIndex += 1) {
+  for (let rowOffset = 0; rowOffset < displayRows.value.length; rowOffset += 1) {
+    for (let columnIndex = 0; columnIndex < visibleColumns.value.length; columnIndex += 1) {
       if (!isSelectionAnchorCellSafe(rowOffset, columnIndex)) {
         continue
       }
@@ -1770,7 +1914,7 @@ function focusVisibleAnchorCell(): void {
 
 function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
   bodyViewportEl.value = resolveElementRef(value)
-  props.bodyViewportRef(value)
+  viewport.value.bodyViewportRef(value)
   syncBodyViewportMetrics()
   connectGridChromeResizeObserver()
   scheduleGridChromeRedraw()
@@ -2074,9 +2218,9 @@ const chromeRenderModel = computed(() => (
       ...pinnedLeftColumns.value.map(resolveColumnWidth),
     ],
     centerColumnWidths: [
-      props.leftColumnSpacerWidth,
-      ...props.renderedColumns.map(resolveColumnWidth),
-      props.rightColumnSpacerWidth,
+      viewport.value.leftColumnSpacerWidth,
+      ...renderedColumns.value.map(resolveColumnWidth),
+      viewport.value.rightColumnSpacerWidth,
     ].filter(width => width > 0),
     rightColumnWidths: pinnedRightColumns.value.map(resolveColumnWidth),
     centerScrollLeft: bodyViewportScrollLeft.value,
@@ -2098,9 +2242,9 @@ const headerChromeRenderModel = computed(() => (
       ...pinnedLeftColumns.value.map(resolveColumnWidth),
     ],
     centerColumnWidths: [
-      props.leftColumnSpacerWidth,
-      ...props.renderedColumns.map(resolveColumnWidth),
-      props.rightColumnSpacerWidth,
+      viewport.value.leftColumnSpacerWidth,
+      ...renderedColumns.value.map(resolveColumnWidth),
+      viewport.value.rightColumnSpacerWidth,
     ].filter(width => width > 0),
     rightColumnWidths: pinnedRightColumns.value.map(resolveColumnWidth),
     centerScrollLeft: bodyViewportScrollLeft.value,
@@ -2114,23 +2258,23 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
-const centerColumns = computed(() => props.visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right"))
+const centerColumns = computed(() => visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right"))
 
 const effectiveBodyViewportWidth = computed(() => {
   return bodyViewportClientWidth.value > 0
     ? bodyViewportClientWidth.value
-    : parsePixelValue(props.gridContentStyle.width ?? props.gridContentStyle.minWidth, 0)
+    : parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0)
 })
 
 function resolveVisibleFillActionAnchorCell(): { rowIndex: number; columnIndex: number } | null {
-  const anchorCell = props.fillActionAnchorCell
+  const anchorCell = selection.value.fillActionAnchorCell
   if (!anchorCell) {
     return null
   }
 
-  const visibleRowStart = props.viewportRowStart
-  const visibleRowEnd = props.viewportRowStart + Math.max(0, props.displayRows.length - 1)
-  const range = props.selectionRange
+  const visibleRowStart = viewport.value.viewportRowStart
+  const visibleRowEnd = viewport.value.viewportRowStart + Math.max(0, displayRows.value.length - 1)
+  const range = selectionRange.value
   const selectionRowStart = range ? Math.min(range.startRow, range.endRow) : anchorCell.rowIndex
   const selectionRowEnd = range ? Math.max(range.startRow, range.endRow) : anchorCell.rowIndex
   const selectionColumnStart = range ? Math.min(range.startColumn, range.endColumn) : anchorCell.columnIndex
@@ -2141,8 +2285,8 @@ function resolveVisibleFillActionAnchorCell(): { rowIndex: number; columnIndex: 
     ? clamp(anchorCell.rowIndex, clampedRowStart, clampedRowEnd)
     : anchorCell.rowIndex
 
-  const visibleCenterColumnKeys = new Set(props.renderedColumns.map(column => column.key))
-  const visibleColumnIndexes = props.visibleColumns
+  const visibleCenterColumnKeys = new Set(renderedColumns.value.map(column => column.key))
+  const visibleColumnIndexes = visibleColumns.value
     .map((column, columnIndex) => ({ column, columnIndex }))
     .filter(({ column, columnIndex }) => {
       if (columnIndex < selectionColumnStart || columnIndex > selectionColumnEnd) {
@@ -2169,7 +2313,7 @@ function resolveVisibleFillActionAnchorCell(): { rowIndex: number; columnIndex: 
 }
 
 function resolveFloatingFillActionLeft(): number | null {
-  const anchorCell = resolveVisibleFillActionAnchorCell() ?? props.fillActionAnchorCell
+  const anchorCell = resolveVisibleFillActionAnchorCell() ?? selection.value.fillActionAnchorCell
   if (!anchorCell) {
     return null
   }
@@ -2181,7 +2325,7 @@ function resolveFloatingFillActionLeft(): number | null {
       leftPaneWidth.value + effectiveBodyViewportWidth.value + rightPaneWidth.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX,
     )
   }
-  const column = props.visibleColumns[anchorCell.columnIndex]
+  const column = visibleColumns.value[anchorCell.columnIndex]
   if (!column) {
     return null
   }
@@ -2241,7 +2385,7 @@ function resolveFloatingFillActionTop(): number {
       - FILL_ACTION_VIEWPORT_MARGIN_PX
       - FILL_ACTION_HANDLE_CLEARANCE_PX,
   )
-  const anchorCell = props.fillActionAnchorCell
+  const anchorCell = selection.value.fillActionAnchorCell
   const targetCell = resolveVisibleFillActionAnchorCell()
   if (anchorCell && targetCell && anchorCell.rowIndex !== targetCell.rowIndex) {
     return viewportBottom
@@ -2265,7 +2409,7 @@ function resolveFloatingFillActionTop(): number {
 }
 
 const floatingFillActionStyle = computed<CSSProperties | null>(() => {
-  if (!props.fillActionAnchorCell) {
+  if (!selection.value.fillActionAnchorCell) {
     return null
   }
   const left = resolveFloatingFillActionLeft()
@@ -2280,7 +2424,7 @@ const floatingFillActionStyle = computed<CSSProperties | null>(() => {
 })
 
 watch(
-  () => props.fillPreviewRange,
+  () => selection.value.fillPreviewRange,
   (nextRange, previousRange) => {
     if (previousRange && !nextRange) {
       restoreAnchorCellFocus()
@@ -2289,8 +2433,8 @@ watch(
 )
 
 watch(
-  () => props.fillActionAnchorCell
-    ? `${props.fillActionAnchorCell.rowIndex}:${props.fillActionAnchorCell.columnIndex}`
+  () => selection.value.fillActionAnchorCell
+    ? `${selection.value.fillActionAnchorCell.rowIndex}:${selection.value.fillActionAnchorCell.columnIndex}`
     : "",
   () => {
     fillActionMenuOpen.value = false
@@ -2298,7 +2442,7 @@ watch(
 )
 
 watch(
-  () => props.isFillDragging,
+  () => selection.value.isFillDragging,
   active => {
     if (active) {
       clearRangeMoveHandleHover()
@@ -2335,7 +2479,7 @@ watch(fillActionMenuOpen, (open, _previous, onCleanup) => {
 })
 
 watch(
-  () => props.isFillDragging,
+  () => selection.value.isFillDragging,
   active => {
     syncGlobalFillDragCursor(active)
   },
@@ -2371,12 +2515,12 @@ const managedWheelScroll = useDataGridManagedWheelScroll({
     if (!bodyViewport) {
       return
     }
-    props.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
+    viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
   },
 })
 
 function handleCenterViewportScroll(event: Event): void {
-  props.handleViewportScroll(event)
+  viewport.value.handleViewportScroll(event)
   const element = event.target as HTMLElement | null
   if (!element) {
     return
@@ -2432,9 +2576,9 @@ const rightTrackStyle = computed<CSSProperties>(() => ({
 
 const rowMetrics = computed(() => {
   const metrics: Array<{ top: number; height: number }> = []
-  let currentTop = props.topSpacerHeight
-  props.displayRows.forEach((row, rowOffset) => {
-    const style = props.rowStyle(row, rowOffset)
+  let currentTop = viewport.value.topSpacerHeight
+  displayRows.value.forEach((row, rowOffset) => {
+    const style = rows.value.rowStyle(row, rowOffset)
     const height = parsePixelValue(style.height ?? style.minHeight, 31)
     metrics.push({
       top: currentTop,
@@ -2450,7 +2594,7 @@ const rowMetricsSignature = computed(() => (
 ))
 
 function resolveChromeRowBandKind(row: TableRow, rowOffset: number): string | null {
-  const className = props.rowClass(row)
+  const className = rows.value.rowClass(row)
   if (className.includes("row--group") && className.includes("row--pivot")) {
     return "pivot-group"
   }
@@ -2470,7 +2614,7 @@ function resolveChromeRowBandKind(row: TableRow, rowOffset: number): string | nu
 }
 
 const rowBands = computed<readonly DataGridChromeRowBand[]>(() => (
-  props.displayRows.flatMap((row, rowOffset) => {
+  displayRows.value.flatMap((row, rowOffset) => {
     const metric = rowMetrics.value[rowOffset]
     const kind = resolveChromeRowBandKind(row, rowOffset)
     if (!metric || !kind) {
@@ -2498,9 +2642,9 @@ const leftChromeColumnsSignature = computed(() => (
 
 const centerChromeColumnsSignature = computed(() => (
   [
-    props.leftColumnSpacerWidth,
-    ...props.renderedColumns.map(resolveColumnWidth),
-    props.rightColumnSpacerWidth,
+    viewport.value.leftColumnSpacerWidth,
+    ...renderedColumns.value.map(resolveColumnWidth),
+    viewport.value.rightColumnSpacerWidth,
   ].join("|")
 ))
 
@@ -2533,7 +2677,7 @@ function resolveVisibleRowMetricsFromDom(): readonly { top: number; height: numb
   const rowElements = Array.from(
     viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row"),
   )
-  if (rowElements.length !== props.displayRows.length) {
+  if (rowElements.length !== displayRows.value.length) {
     return rowMetrics.value
   }
   return rowElements.map(rowElement => {
@@ -2547,7 +2691,7 @@ function resolveVisibleRowMetricsFromDom(): readonly { top: number; height: numb
 
 const visibleColumnIndexByKey = computed(() => {
   const indexByKey = new Map<string, number>()
-  props.visibleColumns.forEach((column, index) => {
+  visibleColumns.value.forEach((column, index) => {
     indexByKey.set(column.key, index)
   })
   return indexByKey
@@ -2559,8 +2703,8 @@ const visibleSelectionBounds = computed(() => {
   let startColumnIndex: number | null = null
   let endColumnIndex: number | null = null
 
-  for (let rowOffset = 0; rowOffset < props.displayRows.length; rowOffset += 1) {
-    for (let columnIndex = 0; columnIndex < props.visibleColumns.length; columnIndex += 1) {
+  for (let rowOffset = 0; rowOffset < displayRows.value.length; rowOffset += 1) {
+    for (let columnIndex = 0; columnIndex < visibleColumns.value.length; columnIndex += 1) {
       if (!isCellSelectedSafe(rowOffset, columnIndex)) {
         continue
       }
@@ -2594,8 +2738,8 @@ const visibleFillPreviewBounds = computed(() => {
   let startColumnIndex: number | null = null
   let endColumnIndex: number | null = null
 
-  for (let rowOffset = 0; rowOffset < props.displayRows.length; rowOffset += 1) {
-    for (let columnIndex = 0; columnIndex < props.visibleColumns.length; columnIndex += 1) {
+  for (let rowOffset = 0; rowOffset < displayRows.value.length; rowOffset += 1) {
+    for (let columnIndex = 0; columnIndex < visibleColumns.value.length; columnIndex += 1) {
       if (!isCellInFillPreviewSafe(rowOffset, columnIndex)) {
         continue
       }
@@ -2624,7 +2768,7 @@ const visibleFillPreviewBounds = computed(() => {
 })
 
 const isSingleSelectedCell = computed(() => {
-  const range = props.selectionRange
+  const range = selectionRange.value
   if (!range) {
     return false
   }
@@ -2638,7 +2782,7 @@ function columnIndexByKey(columnKey: string): number {
 
 function paneRowStyle(row: TableRow, rowOffset: number, paneWidth: number): CSSProperties {
   return {
-    ...props.rowStyle(row, rowOffset),
+    ...rows.value.rowStyle(row, rowOffset),
     width: `${paneWidth}px`,
     minWidth: `${paneWidth}px`,
     maxWidth: `${paneWidth}px`,
@@ -2667,14 +2811,14 @@ function rangesEqual(left: OverlayRange | null, right: OverlayRange | null): boo
 }
 
 function resolveVisibleRangeBounds(range: OverlayRange | null) {
-  if (!range || props.displayRows.length === 0 || props.visibleColumns.length === 0) {
+  if (!range || displayRows.value.length === 0 || visibleColumns.value.length === 0) {
     return null
   }
 
-  const visibleRowStart = props.viewportRowStart
-  const visibleRowEnd = visibleRowStart + props.displayRows.length - 1
+  const visibleRowStart = viewport.value.viewportRowStart
+  const visibleRowEnd = visibleRowStart + displayRows.value.length - 1
   const visibleColumnStart = 0
-  const visibleColumnEnd = props.visibleColumns.length - 1
+  const visibleColumnEnd = visibleColumns.value.length - 1
 
   const startRowIndex = Math.max(range.startRow, visibleRowStart)
   const endRowIndex = Math.min(range.endRow, visibleRowEnd)
@@ -2865,7 +3009,7 @@ function buildPaneOverlaySegments(
   }
 
   if (pane === "center") {
-    const selectedColumns = props.renderedColumns.filter(column => {
+    const selectedColumns = renderedColumns.value.filter(column => {
       const index = columnIndexByKey(column.key)
       return index >= metrics.startColumnIndex && index <= metrics.endColumnIndex
     })
@@ -2873,8 +3017,8 @@ function buildPaneOverlaySegments(
       return []
     }
 
-    let left = props.leftColumnSpacerWidth
-    for (const column of props.renderedColumns) {
+    let left = viewport.value.leftColumnSpacerWidth
+    for (const column of renderedColumns.value) {
       if (column.key === selectedColumns[0]?.key) {
         break
       }
@@ -2886,7 +3030,7 @@ function buildPaneOverlaySegments(
     const lastSelectedIndex = columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
     const contentWidth = Math.max(
       0,
-      parsePixelValue(props.gridContentStyle.width ?? props.gridContentStyle.minWidth, 0),
+      parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0),
     )
     const leftBleed = left <= 0 ? 0 : 1
     const rightBleed = contentWidth > 0 && left + width >= contentWidth ? 0 : 1
@@ -2955,12 +3099,12 @@ function buildPaneOverlaySegments(
 }
 
 const normalizedMovePreviewRange = computed<OverlayRange | null>(() => {
-  if (!props.isRangeMoving || !props.rangeMovePreviewRange) {
+  if (!selection.value.isRangeMoving || !selection.value.rangeMovePreviewRange) {
     return null
   }
-  return rangesEqual(props.rangeMovePreviewRange, props.selectionRange)
+  return rangesEqual(selection.value.rangeMovePreviewRange, selectionRange.value)
     ? null
-    : props.rangeMovePreviewRange
+    : selection.value.rangeMovePreviewRange
 })
 
 const visibleCombinedFillPreviewBounds = computed(() => (
@@ -3041,7 +3185,7 @@ const rightMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
 ))
 
 function cellStateClasses(row: TableRow, rowOffset: number, columnIndex: number): Record<string, boolean> {
-  const columnKey = props.visibleColumns[columnIndex]?.key ?? ""
+  const columnKey = visibleColumns.value[columnIndex]?.key ?? ""
   const isAnchorCell = isVisualSelectionAnchorCell(rowOffset, columnIndex)
   return {
     "grid-cell--selected": !isAnchorCell && shouldHighlightSelectedCellVisual(rowOffset, columnIndex),

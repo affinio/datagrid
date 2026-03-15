@@ -1901,6 +1901,32 @@ body.datagrid-fill-drag-cursor * {
   appearance: none;
 }
 
+.grid-cell--select:not(.grid-cell--editing) {
+  position: relative;
+  padding-right: 28px;
+}
+
+.grid-cell--select:not(.grid-cell--editing)::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--datagrid-text-muted);
+  border-bottom: 2px solid var(--datagrid-text-muted);
+  transform: translateY(-65%) rotate(45deg);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.grid-cell--select:not(.grid-cell--editing):hover::after,
+.grid-cell--select.grid-cell--selection-anchor:not(.grid-cell--editing)::after,
+.grid-cell--select:not(.grid-cell--editing):focus-visible::after {
+  opacity: 0.85;
+}
+
 .datagrid-cell-combobox__panel {
   display: flex;
   flex-direction: column;

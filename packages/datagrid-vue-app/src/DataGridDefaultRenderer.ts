@@ -939,6 +939,27 @@ export default defineComponent({
       cloneRowData,
       isCellEditable: props.isCellEditable,
     })
+    const stageProps = computed(() => ({
+      ...tableStageProps.value,
+      columns: {
+        ...tableStageProps.value.columns,
+        columnMenuEnabled: props.columnMenu.enabled,
+        columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
+        isColumnFilterActive,
+        resolveColumnMenuSortDirection,
+        resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
+        applyColumnMenuSort,
+        applyColumnMenuPin,
+        applyColumnMenuFilter,
+        clearColumnMenuFilter,
+      },
+      rows: {
+        ...tableStageProps.value.rows,
+        sourceRows: props.rows,
+        rowHover: props.rowHover,
+        stripedRows: props.stripedRows,
+      },
+    }))
     const toolbarModules = computed<readonly DataGridAppToolbarModule[]>(() => {
       const modules: DataGridAppToolbarModule[] = []
       if (props.columnLayout.enabled) {
@@ -1018,40 +1039,14 @@ export default defineComponent({
         }, [
           props.viewMode === "gantt"
             ? h(DataGridGanttStage as Component, {
-              table: {
-                ...tableStageProps.value,
-                sourceRows: props.rows,
-                columnMenuEnabled: props.columnMenu.enabled,
-                columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
-                rowHover: props.rowHover,
-                stripedRows: props.stripedRows,
-                isColumnFilterActive,
-                resolveColumnMenuSortDirection,
-                resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
-                applyColumnMenuSort,
-                applyColumnMenuPin,
-                applyColumnMenuFilter,
-                clearColumnMenuFilter,
-              },
+              table: stageProps.value,
               runtime: props.runtime,
               gantt: resolvedGanttOptions.value,
               baseRowHeight: normalizedBaseRowHeight.value,
               rowVersion: rowVersion.value,
             })
             : h(DataGridTableStage as Component, {
-              ...tableStageProps.value,
-              sourceRows: props.rows,
-              columnMenuEnabled: props.columnMenu.enabled,
-              columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
-              rowHover: props.rowHover,
-              stripedRows: props.stripedRows,
-              isColumnFilterActive,
-              resolveColumnMenuSortDirection,
-              resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
-              applyColumnMenuSort,
-              applyColumnMenuPin,
-              applyColumnMenuFilter,
-              clearColumnMenuFilter,
+              ...stageProps.value,
             }),
         ]),
         props.inspectorPanel
