@@ -96,6 +96,7 @@ export function useDataGridAppViewport<TRow>(
   const viewportScrollLeft = ref(0)
   const viewportClientWidth = ref(0)
   const viewportSyncRafHandle = ref<number | null>(null)
+  let lastSyncedRange: DataGridViewportRange | null = null
   let lastViewportScrollTop = 0
   const isPaginationMode = computed<boolean>(() => {
     return resolveMaybeRef(options.mode) === "base" && resolveMaybeRef(options.rowRenderMode) === "pagination"
@@ -316,8 +317,20 @@ export function useDataGridAppViewport<TRow>(
     return { start, end }
   }
 
-  const syncVisibleRows = (range: DataGridViewportRange): void => {
+  const syncVisibleRows = (range: DataGridViewportRange, force = false): void => {
+    if (
+      !force
+      && lastSyncedRange
+      && lastSyncedRange.start === range.start
+      && lastSyncedRange.end === range.end
+    ) {
+      return
+    }
     displayRows.value = options.runtime.syncRowsInRange(range)
+    lastSyncedRange = {
+      start: range.start,
+      end: range.end,
+    }
   }
 
   const syncHeaderScrollLeftFromBody = (bodyScrollLeft: number): void => {
@@ -354,7 +367,7 @@ export function useDataGridAppViewport<TRow>(
     viewportScrollTop.value = element.scrollTop
     viewportClientWidth.value = element.clientWidth
     syncHeaderScrollLeftFromBody(element.scrollLeft)
-    syncVisibleRows(resolveViewportRangeFromElement(element))
+    syncVisibleRows(resolveViewportRangeFromElement(element), true)
     options.measureVisibleRowHeights?.()
   }
 

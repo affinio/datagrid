@@ -1098,18 +1098,22 @@ function captureRightPaneContentRef(value: Element | ComponentPublicInstance | n
   rightPaneContentRef.value = resolveElementRef(value)
 }
 
+function syncBodyViewportScrollState(viewport: HTMLElement): void {
+  bodyViewportScrollTop.value = viewport.scrollTop
+  bodyViewportScrollLeft.value = viewport.scrollLeft
+  bodyViewportClientWidth.value = viewport.clientWidth
+  bodyViewportClientHeight.value = viewport.clientHeight
+}
+
 function syncBodyViewportMetrics(): void {
   const viewport = bodyViewportEl.value
   const shell = bodyShellRef.value
   if (!viewport || !shell) {
     return
   }
+  syncBodyViewportScrollState(viewport)
   const viewportRect = viewport.getBoundingClientRect()
   const shellRect = shell.getBoundingClientRect()
-  bodyViewportScrollTop.value = viewport.scrollTop
-  bodyViewportScrollLeft.value = viewport.scrollLeft
-  bodyViewportClientWidth.value = viewport.clientWidth
-  bodyViewportClientHeight.value = viewport.clientHeight
   bodyViewportTopOffset.value = Math.max(0, viewportRect.top - shellRect.top)
   headerShellHeight.value = headerShellEl.value?.getBoundingClientRect().height ?? 0
   headerViewportClientWidth.value = resolveHeaderViewportElement()?.clientWidth ?? bodyViewportClientWidth.value
@@ -1704,7 +1708,7 @@ function handleCenterViewportScroll(event: Event): void {
     return
   }
   linkedPaneScrollSync.onSourceScroll(element.scrollTop)
-  syncBodyViewportMetrics()
+  syncBodyViewportScrollState(element)
   scheduleGridChromeRedraw()
 }
 
