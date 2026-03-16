@@ -177,7 +177,7 @@
       </div>
     </header>
 
-    <DataGridTableStageLoose v-bind="tableStagePropsForView" />
+    <DataGridTableStageLoose v-bind="tableStageProps" :stage-context="tableStageContextForView" />
 
     <footer class="card__footer">
       Rendered {{ displayRows.length }} / {{ totalRows }} rows. {{ modeHint }}
@@ -195,7 +195,11 @@ import type {
   DataGridPivotSpec,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
-import { DataGridTableStage, useDataGridTableStageRuntime } from "@affino/datagrid-vue-app/internal"
+import {
+  DataGridTableStage,
+  createDataGridTableStageContext,
+  useDataGridTableStageRuntime,
+} from "@affino/datagrid-vue-app/internal"
 import {
   useDataGridAppAdvancedFilterBuilder,
   useDataGridAppColumnLayoutPanel,
@@ -542,28 +546,37 @@ const clearColumnMenuFilter = (columnKey: string): void => {
   setColumnFilterText(columnKey, "")
 }
 
-const tableStagePropsForView = computed<Record<string, unknown>>(() => {
-  const baseProps = tableStageProps.value
-  return {
-    ...(baseProps as unknown as Record<string, unknown>),
-    rows: {
-      ...baseProps.rows,
-      sourceRows: rows.value,
-    },
-    columns: {
-      ...baseProps.columns,
-      columnMenuEnabled: true,
-      columnMenuMaxFilterValues: 250,
-      isColumnFilterActive,
-      resolveColumnMenuSortDirection,
-      resolveColumnMenuSelectedTokens: () => [],
-      applyColumnMenuSort,
-      applyColumnMenuPin,
-      applyColumnMenuFilter,
-      clearColumnMenuFilter,
-    },
-  }
+const tableStageColumnsForView = computed(() => ({
+  ...tableStageProps.value.columns,
+  columnMenuEnabled: true,
+  columnMenuMaxFilterValues: 250,
+  isColumnFilterActive,
+  resolveColumnMenuSortDirection,
+  resolveColumnMenuSelectedTokens: () => [],
+  applyColumnMenuSort,
+  applyColumnMenuPin,
+  applyColumnMenuFilter,
+  clearColumnMenuFilter,
+}))
+
+const tableStageRowsForView = computed(() => ({
+  ...tableStageProps.value.rows,
+  sourceRows: rows.value,
+}))
+
+const tableStageContextForView = createDataGridTableStageContext<VueSandboxRow>({
+  mode: computed(() => tableStageProps.value.mode),
+  rowHeightMode: computed(() => tableStageProps.value.rowHeightMode),
+  layout: computed(() => tableStageProps.value.layout),
+  viewport: computed(() => tableStageProps.value.viewport),
+  columns: tableStageColumnsForView,
+  rows: tableStageRowsForView,
+  selection: computed(() => tableStageProps.value.selection),
+  editing: computed(() => tableStageProps.value.editing),
+  cells: computed(() => tableStageProps.value.cells),
+  interaction: computed(() => tableStageProps.value.interaction),
 })
+
 const displayRows = computed(() => tableStageProps.value.rows.displayRows)
 const viewportRowStart = computed(() => tableStageProps.value.viewport.viewportRowStart)
 const viewportRowEnd = computed(() => {

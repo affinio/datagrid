@@ -3,7 +3,7 @@ import { ref } from "vue"
 import { describe, expect, it, vi } from "vitest"
 import { useDataGridAppRowPresentation } from "../useDataGridAppRowPresentation"
 
-function createRuntimeColumnSnapshot(columns: readonly Array<Record<string, unknown>>) {
+function createRuntimeColumnSnapshot(columns: readonly Record<string, unknown>[]) {
   const model = createDataGridColumnModel({
     columns: columns as never,
   })

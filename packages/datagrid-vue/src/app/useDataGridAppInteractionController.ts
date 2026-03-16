@@ -9,9 +9,12 @@ import {
   toggleDataGridCellValue,
 } from "@affino/datagrid-core"
 import {
+  type DataGridFillBehavior,
   buildDataGridFillMatrix,
   canToggleDataGridFillBehavior,
   resolveDataGridDefaultFillBehavior,
+} from "../composables/dataGridFillBehavior"
+import {
   useDataGridAxisAutoScrollDelta,
   useDataGridCellNavigation,
   useDataGridCellPointerDownRouter,
@@ -27,7 +30,6 @@ import {
   useDataGridRangeMoveStart,
   useDataGridRangeMutationEngine,
   type DataGridCopyRange,
-  type DataGridFillBehavior,
 } from "../advanced"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import {

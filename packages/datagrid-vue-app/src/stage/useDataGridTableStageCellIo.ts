@@ -1,8 +1,8 @@
 import {
   resolveDataGridCellClickAction,
   toggleDataGridCellValue,
-} from "@affino/datagrid-core"
-import type { DataGridColumnSnapshot } from "@affino/datagrid-vue"
+  type DataGridColumnSnapshot,
+} from "@affino/datagrid-vue"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import type { DataGridTableRow } from "./dataGridTableStage.types"
 

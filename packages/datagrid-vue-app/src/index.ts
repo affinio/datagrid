@@ -15,17 +15,6 @@ export type {
   DataGridThemeProp,
 } from "./theme/dataGridTheme"
 export type {
-  BuildDataGridChromePaneModelInput,
-  BuildDataGridChromeRenderModelInput,
-  DataGridChromeBand,
-  DataGridChromeLine,
-  DataGridChromePaneModel,
-  DataGridChromeRenderModel,
-  DataGridChromeRowBand,
-  DataGridChromeRowMetric,
-  DataGridChromeVisibleRange,
-} from "@affino/datagrid-chrome"
-export type {
   DataGridAdvancedFilterOptions,
   DataGridAdvancedFilterProp,
 } from "./config/dataGridAdvancedFilter"
@@ -69,19 +58,5 @@ export type {
   BuildDataGridTimelineRenderModelsInput,
   ResolveDataGridTimelineRangeInput,
 } from "./gantt/dataGridGantt"
-export type {
-  DataGridClientComputeMode,
-  DataGridComputedFieldDefinition,
-  DataGridFormulaFieldDefinition,
-  DataGridFormulaFunctionRegistry,
-} from "@affino/datagrid-vue"
-export type {
-  DataGridStyleConfig,
-  DataGridThemeTokens,
-} from "@affino/datagrid-theme"
-export {
-  buildDataGridChromePaneModel,
-  buildDataGridChromeRenderModel,
-} from "@affino/datagrid-chrome"
 
 export { default } from "./DataGrid"

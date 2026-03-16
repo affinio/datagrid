@@ -18,4 +18,8 @@ export * from "../composables/useDataGridCellRangeHelpers"
 export * from "../composables/useDataGridNavigationPrimitives"
 export * from "../composables/useDataGridMutationSnapshot"
 export * from "../composables/useDataGridKeyboardCommandRouter"
-export * from "../composables/dataGridFillBehavior"
+export type {
+	DataGridFillBehavior,
+	DataGridFillBehaviorRange,
+	ResolveDataGridFillBehaviorOptions,
+} from "../composables/dataGridFillBehavior"

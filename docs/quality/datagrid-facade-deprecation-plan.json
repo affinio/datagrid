@@ -1,0 +1,161 @@
+{
+  "generatedFor": "datagrid facade required-but-unused exports",
+  "policy": {
+    "allowedStatuses": ["keep", "deprecate"],
+    "deprecationRequires": ["deprecatedIn", "removeIn", "replacement", "rationale"]
+  },
+  "facades": {
+    "@affino/datagrid-vue": {
+      "createDataGridVueRuntime": {
+        "status": "keep",
+        "rationale": "Runtime bootstrap entrypoint must remain stable for external integrators even though workspace demos do not import it."
+      },
+      "createDataGridColumnModel": {
+        "status": "keep",
+        "rationale": "Low-level column model constructor is part of the supported composition surface for headless consumers."
+      },
+      "createDataGridSelectionSummary": {
+        "status": "keep",
+        "rationale": "Selection summary helper is still part of the stable public utility surface and should not be removed without an explicit replacement cycle."
+      },
+      "createInMemoryDataGridSettingsAdapter": {
+        "status": "keep",
+        "rationale": "Default settings adapter constructor remains a valid public integration path outside workspace demos."
+      },
+      "evaluateDataGridAdvancedFilterExpression": {
+        "status": "keep",
+        "rationale": "Advanced-filter evaluation is a documented public helper and remains part of the stable filter contract."
+      }
+    },
+    "@affino/datagrid-vue/advanced": {
+      "resolveDataGridHeaderLayerViewportGeometry": {
+        "status": "keep",
+        "rationale": "Header viewport geometry remains a documented integration primitive and is still required by downstream non-demo consumers."
+      },
+      "resolveDataGridHeaderScrollSyncLeft": {
+        "status": "keep",
+        "rationale": "Header scroll sync math is still part of the supported advanced integration contract."
+      },
+      "createDataGridViewportController": {
+        "status": "keep",
+        "rationale": "Viewport controller is referenced by migration guidance and remains a supported advanced integration primitive."
+      }
+    },
+    "@affino/datagrid-vue-app": {
+      "DataGrid": {
+        "status": "keep",
+        "rationale": "Component default/root export is the canonical community app entrypoint and is required regardless of local demo import coverage."
+      }
+    },
+    "@affino/datagrid-laravel": {
+      "createDataGridRuntime": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import createDataGridVueRuntime from @affino/datagrid-vue when headless runtime control is required.",
+        "rationale": "Laravel facade should converge toward integration-focused exports instead of re-exporting the full runtime bootstrap surface."
+      },
+      "buildDataGridColumnLayers": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import buildDataGridColumnLayers from @affino/datagrid-orchestration directly for low-level layout composition.",
+        "rationale": "This is orchestration-layer functionality, not Laravel-specific facade API."
+      },
+      "resolveDataGridLayerTrackTemplate": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import resolveDataGridLayerTrackTemplate from @affino/datagrid-orchestration directly.",
+        "rationale": "This helper belongs to orchestration and should not remain on the Laravel stable facade long term."
+      },
+      "useDataGridColumnLayoutOrchestration": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import useDataGridColumnLayoutOrchestration from @affino/datagrid-vue/advanced or use app-level column layout APIs.",
+        "rationale": "This exposes non-Laravel advanced orchestration surface through the Laravel facade."
+      },
+      "useDataGridManagedWheelScroll": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import useDataGridManagedWheelScroll from @affino/datagrid-vue/advanced directly when needed.",
+        "rationale": "This is advanced viewport interaction infrastructure rather than Laravel integration API."
+      },
+      "resolveDataGridHeaderLayerViewportGeometry": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import resolveDataGridHeaderLayerViewportGeometry from @affino/datagrid-vue/advanced directly.",
+        "rationale": "Advanced header geometry helpers should not stay on the Laravel facade once a direct advanced entrypoint exists."
+      },
+      "resolveDataGridHeaderScrollSyncLeft": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import resolveDataGridHeaderScrollSyncLeft from @affino/datagrid-vue/advanced directly.",
+        "rationale": "Advanced scroll synchronization should move to the advanced facade."
+      },
+      "evaluateDataGridAdvancedFilterExpression": {
+        "status": "keep",
+        "rationale": "Filter evaluation is still a valid Laravel integration helper for server/client parity checks."
+      }
+    },
+    "@affino/datagrid-laravel-app": {
+      "createDataGridRuntime": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import createDataGridVueRuntime from @affino/datagrid-vue when headless runtime control is required.",
+        "rationale": "Laravel app facade should not remain a passthrough for full runtime bootstrap."
+      },
+      "buildDataGridColumnLayers": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import buildDataGridColumnLayers from @affino/datagrid-orchestration directly.",
+        "rationale": "This is orchestration functionality, not Laravel app-specific API."
+      },
+      "resolveDataGridLayerTrackTemplate": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import resolveDataGridLayerTrackTemplate from @affino/datagrid-orchestration directly.",
+        "rationale": "This helper belongs to orchestration, not the Laravel app facade."
+      },
+      "useDataGridColumnLayoutOrchestration": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import useDataGridColumnLayoutOrchestration from @affino/datagrid-vue/advanced or use higher-level app APIs.",
+        "rationale": "This advanced hook should not stay on the Laravel app facade long term."
+      },
+      "useDataGridManagedWheelScroll": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import useDataGridManagedWheelScroll from @affino/datagrid-vue/advanced directly.",
+        "rationale": "This is advanced viewport infrastructure, not Laravel app-level API."
+      },
+      "resolveDataGridHeaderLayerViewportGeometry": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import resolveDataGridHeaderLayerViewportGeometry from @affino/datagrid-vue/advanced directly.",
+        "rationale": "Advanced header geometry should move off the Laravel app facade."
+      },
+      "resolveDataGridHeaderScrollSyncLeft": {
+        "status": "deprecate",
+        "deprecatedIn": "0.3.3",
+        "removeIn": "0.4.0",
+        "replacement": "Import resolveDataGridHeaderScrollSyncLeft from @affino/datagrid-vue/advanced directly.",
+        "rationale": "Advanced scroll synchronization should live on the advanced facade."
+      },
+      "evaluateDataGridAdvancedFilterExpression": {
+        "status": "keep",
+        "rationale": "Filter evaluation remains useful at the Laravel app layer for parity/integration checks."
+      }
+    }
+  }
+}

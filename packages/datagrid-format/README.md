@@ -26,12 +26,14 @@ import { formatDataGridCellValue } from "@affino/datagrid-format"
 
 const display = formatDataGridCellValue(1234.5, {
   presentation: {
-    numberFormat: {
-      locale: "en-GB",
-      style: "currency",
-      currency: "GBP",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+    format: {
+      number: {
+        locale: "en-GB",
+        style: "currency",
+        currency: "GBP",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      },
     },
   },
 })
@@ -41,11 +43,25 @@ const display = formatDataGridCellValue(1234.5, {
 
 The engine is designed to back DataGrid column presentation:
 
-- `presentation.numberFormat`
-- `presentation.dateTimeFormat`
+- `presentation.format.number`
+- `presentation.format.dateTime`
+- fallback date presets via `dataType: "date" | "datetime"`
 
 These affect display only.
 Raw values should continue to flow through editing, clipboard, and patch pipelines unchanged.
+
+```ts
+import { formatDataGridCellValue } from "@affino/datagrid-format"
+
+const dateLabel = formatDataGridCellValue("2026-03-01T00:00:00.000Z", {
+  dataType: "date",
+})
+```
+
+## Public API
+
+- `formatDataGridCellValue(value, column)` formats numbers, currency, percent, date, and datetime display values.
+- `resolveDefaultDataGridDateTimeFormat(dataType)` returns the built-in readable preset for `date` and `datetime` columns.
 
 ## Architecture
 

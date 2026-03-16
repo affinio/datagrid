@@ -25,7 +25,7 @@
                   :class="headerCheckboxIndicatorClass()"
                   type="button"
                   role="checkbox"
-                  aria-label="Select visible rows"
+                  aria-label="Select all filtered rows"
                   :aria-checked="resolveHeaderRowSelectionAriaChecked()"
                   @mousedown.stop
                   @click.stop
@@ -96,7 +96,7 @@
                   :class="headerCheckboxIndicatorClass()"
                   type="button"
                   role="checkbox"
-                  aria-label="Select visible rows"
+                  aria-label="Select all filtered rows"
                   :aria-checked="resolveHeaderRowSelectionAriaChecked()"
                   @mousedown.stop
                   @click.stop

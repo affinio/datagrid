@@ -9,6 +9,10 @@ function isDataGridRowId(value: unknown): value is DataGridRowId {
   return typeof value === "string" || typeof value === "number"
 }
 
+function getDataGridRowIdSignature(rowId: DataGridRowId): string {
+  return `${typeof rowId}:${String(rowId)}`
+}
+
 export function normalizeDataGridRowSelectionSnapshot(
   snapshot: DataGridRowSelectionSnapshot | null | undefined,
 ): DataGridRowSelectionSnapshot {
@@ -25,7 +29,7 @@ export function normalizeDataGridRowSelectionSnapshot(
     if (!isDataGridRowId(rowId)) {
       continue
     }
-    const signature = `${typeof rowId}:${String(rowId)}`
+    const signature = getDataGridRowIdSignature(rowId)
     if (seen.has(signature)) {
       continue
     }
@@ -119,10 +123,16 @@ export function selectDataGridRows(
 ): DataGridRowSelectionSnapshot {
   const normalized = normalizeDataGridRowSelectionSnapshot(snapshot)
   const nextSelectedRows = [...normalized.selectedRows]
+  const seen = new Set(normalized.selectedRows.map(getDataGridRowIdSignature))
   for (const rowId of rowIds) {
-    if (!isDataGridRowId(rowId) || nextSelectedRows.includes(rowId)) {
+    if (!isDataGridRowId(rowId)) {
       continue
     }
+    const signature = getDataGridRowIdSignature(rowId)
+    if (seen.has(signature)) {
+      continue
+    }
+    seen.add(signature)
     nextSelectedRows.push(rowId)
   }
   return {

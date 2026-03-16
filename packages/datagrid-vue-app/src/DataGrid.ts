@@ -28,12 +28,10 @@ import {
   type DataGridSortState,
   type DataGridUnifiedColumnState,
   type DataGridUnifiedState,
+  type DataGridPivotSpec,
   type UseDataGridRuntimeResult,
   useDataGridAppRowSelection,
   useDataGridAppSelection,
-} from "@affino/datagrid-vue"
-import type {
-  DataGridPivotSpec,
 } from "@affino/datagrid-vue"
 import DataGridDefaultRenderer from "./host/DataGridDefaultRenderer"
 import {
@@ -88,6 +86,58 @@ type DataGridRuntimeOverrides = Omit<
   "rowModel" | "columnModel" | "viewport"
 > & {
   viewport?: DataGridCoreServiceRegistry["viewport"]
+}
+
+type DataGridSelectionService = NonNullable<DataGridRuntimeOverrides["selection"]>
+
+function composeSelectionLifecycle(
+  hook: "init" | "start" | "stop" | "dispose",
+  services: readonly (DataGridSelectionService | undefined)[],
+): DataGridSelectionService[typeof hook] {
+  const handlers = services
+    .map(service => service?.[hook])
+    .filter((handler): handler is NonNullable<DataGridSelectionService[typeof hook]> => typeof handler === "function")
+  if (handlers.length === 0) {
+    return undefined
+  }
+  return async context => {
+    for (const handler of handlers) {
+      await handler(context)
+    }
+  }
+}
+
+function composeSelectionService(options: {
+  userSelectionService?: DataGridSelectionService
+  cellSelectionService: DataGridSelectionService
+  rowSelectionService: DataGridSelectionService
+}): DataGridSelectionService {
+  const {
+    userSelectionService,
+    cellSelectionService,
+    rowSelectionService,
+  } = options
+  return {
+    name: "selection",
+    init: composeSelectionLifecycle("init", [userSelectionService, cellSelectionService, rowSelectionService]),
+    start: composeSelectionLifecycle("start", [userSelectionService, cellSelectionService, rowSelectionService]),
+    stop: composeSelectionLifecycle("stop", [userSelectionService, cellSelectionService, rowSelectionService]),
+    dispose: composeSelectionLifecycle("dispose", [userSelectionService, cellSelectionService, rowSelectionService]),
+    getSelectionSnapshot: cellSelectionService.getSelectionSnapshot,
+    setSelectionSnapshot: cellSelectionService.setSelectionSnapshot,
+    clearSelection: cellSelectionService.clearSelection,
+    getRowSelectionSnapshot: rowSelectionService.getRowSelectionSnapshot,
+    setRowSelectionSnapshot: rowSelectionService.setRowSelectionSnapshot,
+    clearRowSelection: rowSelectionService.clearRowSelection,
+    getFocusedRow: rowSelectionService.getFocusedRow,
+    setFocusedRow: rowSelectionService.setFocusedRow,
+    getSelectedRows: rowSelectionService.getSelectedRows,
+    isRowSelected: rowSelectionService.isRowSelected,
+    setRowSelected: rowSelectionService.setRowSelected,
+    selectRows: rowSelectionService.selectRows,
+    deselectRows: rowSelectionService.deselectRows,
+    clearSelectedRows: rowSelectionService.clearSelectedRows,
+  }
 }
 
 interface LowLevelGridExpose {
@@ -336,14 +386,53 @@ export default defineComponent({
       })
     })
     const resolvedColumns = computed(() => resolveDataGridColumns(props.columns))
-    const controlledProps = new Proxy(props, {
-      get(target, key, receiver) {
-        if (key === "groupBy") {
-          return resolvedGroupBy.value
-        }
-        return Reflect.get(target, key, receiver)
+    const controlledProps: UseDataGridAppControlledStateOptions["props"] = {
+      get state() {
+        return props.state
       },
-    }) as UseDataGridAppControlledStateOptions["props"]
+      get stateOptions() {
+        return props.stateOptions
+      },
+      get columnState() {
+        return props.columnState
+      },
+      get columnOrder() {
+        return props.columnOrder
+      },
+      get hiddenColumnKeys() {
+        return props.hiddenColumnKeys
+      },
+      get columnWidths() {
+        return props.columnWidths
+      },
+      get columnPins() {
+        return props.columnPins
+      },
+      get sortModel() {
+        return props.sortModel
+      },
+      get filterModel() {
+        return props.filterModel
+      },
+      get groupBy() {
+        return resolvedGroupBy.value
+      },
+      get aggregationModel() {
+        return props.aggregationModel
+      },
+      get pivotModel() {
+        return props.pivotModel
+      },
+      get rowHeightMode() {
+        return props.rowHeightMode
+      },
+      get baseRowHeight() {
+        return props.baseRowHeight
+      },
+      get columns() {
+        return props.columns
+      },
+    }
     const inferredMode = computed<"base" | "tree" | "pivot">(() => {
       if (props.pivotModel) {
         return "pivot"
@@ -359,7 +448,7 @@ export default defineComponent({
       selectionSnapshot,
       selectionAnchor,
       syncSelectionSnapshotFromRuntime,
-      runtimeServices,
+      selectionService,
       selectionAggregatesLabel,
     } = useDataGridAppSelection<unknown>({
       mode: computed(() => inferredMode.value),
@@ -371,19 +460,17 @@ export default defineComponent({
       rowSelectionSnapshot,
       syncRowSelectionSnapshotFromRuntime,
       reconcileRowSelectionFromRuntime,
-      runtimeServices: rowSelectionRuntimeServices,
+      selectionService: rowSelectionService,
     } = useDataGridAppRowSelection<unknown>({
       resolveRuntime: () => dataGridRef.value,
     })
     const resolvedServices = computed<DataGridRuntimeOverrides>(() => ({
       ...(props.services ?? {}),
-      ...(runtimeServices as Omit<DataGridRuntimeOverrides, "selection">),
-      selection: {
-        ...(props.services?.selection ?? {}),
-        ...(runtimeServices.selection ?? {}),
-        ...(rowSelectionRuntimeServices.selection ?? {}),
-        name: "selection",
-      },
+      selection: composeSelectionService({
+        userSelectionService: props.services?.selection,
+        cellSelectionService: selectionService,
+        rowSelectionService,
+      }),
     }))
     const {
       dataGridInstanceKey,

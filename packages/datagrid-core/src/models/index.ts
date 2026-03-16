@@ -32,6 +32,7 @@ export type {
 } from "./pivot/pivotContracts.js"
 export type {
   DataGridAggregationColumnSpec,
+  DataGridAggregationColumnSpecAnyState,
   DataGridAggregationModel,
   DataGridTreeDataMode,
   DataGridTreeDataFilterMode,

@@ -7,6 +7,7 @@ export type DataGridSortDirection = "asc" | "desc"
 export interface DataGridSortState {
   key: string
   field?: string
+  dependencyFields?: readonly string[]
   direction: DataGridSortDirection
 }
 
@@ -113,20 +114,26 @@ export interface DataGridGroupExpansionSnapshot {
 
 export type DataGridColumnPin = "left" | "right" | "none"
 
-export interface DataGridAggregationColumnSpec<T = unknown> {
+type DataGridAggregationStateHandler<TState, TArgs extends readonly unknown[] = readonly [], TResult = void> = {
+  bivarianceHack(state: TState, ...args: TArgs): TResult
+}["bivarianceHack"]
+
+export interface DataGridAggregationColumnSpec<T = unknown, TState = unknown> {
   key: string
   field?: string
   op: DataGridAggOp
-  createState?: () => unknown
-  add?: (state: unknown, value: unknown, row: DataGridRowNode<T>) => void
-  merge?: (state: unknown, childState: unknown) => void
-  remove?: (state: unknown, value: unknown, row: DataGridRowNode<T>) => void
-  finalize?: (state: unknown) => unknown
+  createState?: () => TState
+  add?: DataGridAggregationStateHandler<TState, [value: unknown, row: DataGridRowNode<T>]>
+  merge?: DataGridAggregationStateHandler<TState, [childState: TState]>
+  remove?: DataGridAggregationStateHandler<TState, [value: unknown, row: DataGridRowNode<T>]>
+  finalize?: DataGridAggregationStateHandler<TState, [], unknown>
   coerce?: (value: unknown) => number | string | null
 }
 
+export type DataGridAggregationColumnSpecAnyState<T = unknown> = DataGridAggregationColumnSpec<T, unknown>
+
 export interface DataGridAggregationModel<T = unknown> {
-  columns: readonly DataGridAggregationColumnSpec<T>[]
+  columns: readonly DataGridAggregationColumnSpecAnyState<T>[]
   basis?: "filtered" | "source"
 }
 

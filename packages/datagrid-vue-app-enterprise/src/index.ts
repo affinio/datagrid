@@ -20,7 +20,7 @@ export type {
   DataGridChromeRowBand,
   DataGridChromeRowMetric,
   DataGridChromeVisibleRange,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-chrome"
 export type {
   DataGridAdvancedFilterOptions,
   DataGridAdvancedFilterProp,
@@ -70,11 +70,11 @@ export type {
   DataGridComputedFieldDefinition,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFunctionRegistry,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue"
 export type {
   DataGridStyleConfig,
   DataGridThemeTokens,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-theme"
 export type {
   DataGridDiagnosticsOptions,
   DataGridDiagnosticsProp,
@@ -109,6 +109,6 @@ export {
 export {
   buildDataGridChromePaneModel,
   buildDataGridChromeRenderModel,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-chrome"
 
 export { default } from "./DataGrid"

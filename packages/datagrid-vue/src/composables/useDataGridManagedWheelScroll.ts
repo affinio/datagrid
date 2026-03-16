@@ -8,8 +8,5 @@ export {
   type DataGridManagedWheelMainViewport,
   type UseDataGridManagedWheelScrollOptions,
   type UseDataGridManagedWheelScrollResult,
-  normalizeDataGridWheelDelta,
-  resolveDataGridWheelAxisPolicy,
-  resolveDataGridWheelPropagationDecision,
   useDataGridManagedWheelScroll,
 } from "@affino/datagrid-orchestration"

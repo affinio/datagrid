@@ -157,9 +157,6 @@ import {
 } from "@affino/datagrid-vue/advanced/layout"
 ```
 
-- `useDataGridViewportBridge`
-- `useDataGridHeaderOrchestration`
-- `createDataGridHeaderBindings`
 - `createDataGridViewportController`
 - `useDataGridCellPointerDownRouter`
 - `useDataGridCellPointerHoverRouter`
@@ -235,12 +232,9 @@ import {
 - `useDataGridPointerModifierPolicy`
 - `useDataGridHistoryActionRunner`
 - `useDataGridInlineEditorFocus`
-- `useDataGridRowSelectionFacade`
-- `useDataGridFindReplaceFacade`
 - `useDataGridClipboardBridge`
 - `useDataGridClipboardMutations`
 - `useDataGridIntentHistory`
-- `setsEqual`
 
 ## Quick start
 

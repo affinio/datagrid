@@ -9,8 +9,13 @@ import type {
   DataGridPivotSpec,
 } from "./pivot/pivotContracts.js"
 import type {
+  DataGridFilterSnapshot,
+  DataGridGroupBySpec,
+  DataGridGroupExpansionSnapshot,
   DataGridPivotCellDrilldown,
   DataGridPivotCellDrilldownInput,
+  DataGridSortAndFilterModelInput,
+  DataGridSortState,
 } from "@affino/datagrid-pivot"
 import type {
   DataGridComputedFieldComputeContext,
@@ -70,8 +75,26 @@ export type {
   DataGridPivotValueSpec,
 } from "./pivot/pivotContracts.js"
 export type {
+  DataGridAdvancedFilter,
+  DataGridAdvancedFilterCondition,
+  DataGridAdvancedFilterConditionType,
+  DataGridAdvancedFilterExpression,
+  DataGridAdvancedFilterGroup,
+  DataGridAdvancedFilterNot,
+  DataGridColumnFilter,
+  DataGridColumnFilterSnapshotEntry,
+  DataGridColumnPredicateFilter,
+  DataGridColumnPredicateOperator,
+  DataGridColumnValueSetFilter,
+  DataGridFilterClause,
+  DataGridFilterSnapshot,
+  DataGridGroupBySpec,
+  DataGridGroupExpansionSnapshot,
   DataGridPivotCellDrilldown,
   DataGridPivotCellDrilldownInput,
+  DataGridSortAndFilterModelInput,
+  DataGridSortDirection,
+  DataGridSortState,
 } from "@affino/datagrid-pivot"
 export {
   normalizePivotSpec,
@@ -87,102 +110,6 @@ export {
 
 export type DataGridRowId = string | number
 export type DataGridRowIdResolver<T = unknown> = (row: T, index: number) => DataGridRowId
-
-export type DataGridSortDirection = "asc" | "desc"
-
-export interface DataGridSortState {
-  key: string
-  field?: string
-  dependencyFields?: readonly string[]
-  direction: DataGridSortDirection
-}
-
-export interface DataGridFilterClause {
-  operator: string
-  value: unknown
-  value2?: unknown
-  join?: "and" | "or"
-}
-
-export interface DataGridAdvancedFilter {
-  type: "text" | "number" | "date" | "set"
-  clauses: DataGridFilterClause[]
-}
-
-export type DataGridAdvancedFilterConditionType =
-  | "text"
-  | "number"
-  | "date"
-  | "set"
-  | "boolean"
-
-export interface DataGridAdvancedFilterCondition {
-  kind: "condition"
-  key: string
-  field?: string
-  type?: DataGridAdvancedFilterConditionType
-  operator: string
-  value?: unknown
-  value2?: unknown
-}
-
-export interface DataGridAdvancedFilterGroup {
-  kind: "group"
-  operator: "and" | "or"
-  children: DataGridAdvancedFilterExpression[]
-}
-
-export interface DataGridAdvancedFilterNot {
-  kind: "not"
-  child: DataGridAdvancedFilterExpression
-}
-
-export type DataGridAdvancedFilterExpression =
-  | DataGridAdvancedFilterCondition
-  | DataGridAdvancedFilterGroup
-  | DataGridAdvancedFilterNot
-
-export interface DataGridFilterSnapshot {
-  columnFilters: Record<string, DataGridColumnFilterSnapshotEntry>
-  advancedFilters: Record<string, DataGridAdvancedFilter>
-  advancedExpression?: DataGridAdvancedFilterExpression | null
-}
-
-export interface DataGridColumnValueSetFilter {
-  kind: "valueSet"
-  tokens: string[]
-}
-
-export type DataGridColumnPredicateOperator =
-  | "contains"
-  | "startsWith"
-  | "endsWith"
-  | "equals"
-  | "notEquals"
-  | "gt"
-  | "gte"
-  | "lt"
-  | "lte"
-  | "between"
-  | "isEmpty"
-  | "notEmpty"
-  | "isNull"
-  | "notNull"
-
-export interface DataGridColumnPredicateFilter {
-  kind: "predicate"
-  operator: DataGridColumnPredicateOperator
-  value?: unknown
-  value2?: unknown
-  caseSensitive?: boolean
-}
-
-export type DataGridColumnFilter =
-  | DataGridColumnValueSetFilter
-  | DataGridColumnPredicateFilter
-
-export type DataGridColumnFilterSnapshotEntry = DataGridColumnFilter
-
 export interface DataGridColumnHistogramEntry {
   token: string
   value: unknown
@@ -199,35 +126,26 @@ export interface DataGridColumnHistogramOptions {
   orderBy?: "countDesc" | "valueAsc"
 }
 
-export interface DataGridSortAndFilterModelInput {
-  sortModel: readonly DataGridSortState[]
-  filterModel: DataGridFilterSnapshot | null
-}
+type DataGridAggregationStateHandler<TState, TArgs extends readonly unknown[] = readonly [], TResult = void> = {
+  bivarianceHack(state: TState, ...args: TArgs): TResult
+}["bivarianceHack"]
 
-export interface DataGridGroupBySpec {
-  fields: string[]
-  expandedByDefault?: boolean
-}
-
-export interface DataGridGroupExpansionSnapshot {
-  expandedByDefault: boolean
-  toggledGroupKeys: readonly string[]
-}
-
-export interface DataGridAggregationColumnSpec<T = unknown> {
+export interface DataGridAggregationColumnSpec<T = unknown, TState = unknown> {
   key: string
   field?: string
   op: DataGridAggOp
-  createState?: () => unknown
-  add?: (state: unknown, value: unknown, row: DataGridRowNode<T>) => void
-  merge?: (state: unknown, childState: unknown) => void
-  remove?: (state: unknown, value: unknown, row: DataGridRowNode<T>) => void
-  finalize?: (state: unknown) => unknown
+  createState?: () => TState
+  add?: DataGridAggregationStateHandler<TState, [value: unknown, row: DataGridRowNode<T>]>
+  merge?: DataGridAggregationStateHandler<TState, [childState: TState]>
+  remove?: DataGridAggregationStateHandler<TState, [value: unknown, row: DataGridRowNode<T>]>
+  finalize?: DataGridAggregationStateHandler<TState, [], unknown>
   coerce?: (value: unknown) => number | string | null
 }
 
+export type DataGridAggregationColumnSpecAnyState<T = unknown> = DataGridAggregationColumnSpec<T, unknown>
+
 export interface DataGridAggregationModel<T = unknown> {
-  columns: readonly DataGridAggregationColumnSpec<T>[]
+  columns: readonly DataGridAggregationColumnSpecAnyState<T>[]
   basis?: "filtered" | "source"
 }
 

@@ -1,9 +1,9 @@
-import { buildDataGridCellRenderModel } from "@affino/datagrid-core"
 import type {
   DataGridColumnSnapshot,
   DataGridRowId,
   DataGridRowSelectionSnapshot,
 } from "@affino/datagrid-vue"
+import { buildDataGridCellRenderModel } from "@affino/datagrid-vue"
 import { computed, type ComputedRef, type Ref } from "vue"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import type {
@@ -68,22 +68,26 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     }).displayValue
   }
 
-  const resolveVisibleSelectableRowIds = (): DataGridRowId[] => {
-    return options.displayRows.value.flatMap(row => {
-      if (row.kind === "group" || row.rowId == null) {
-        return []
+  const selectableRowIds = computed<DataGridRowId[]>(() => {
+    const rowCount = options.runtime.api.rows.getCount()
+    const rowIds: DataGridRowId[] = []
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      const row = options.runtime.api.rows.get(rowIndex)
+      if (!row || row.kind === "group" || row.rowId == null) {
+        continue
       }
-      return [row.rowId]
-    })
-  }
+      rowIds.push(row.rowId)
+    }
+    return rowIds
+  })
 
   const areAllVisibleRowsSelected = computed(() => {
-    const rowIds = resolveVisibleSelectableRowIds()
+    const rowIds = selectableRowIds.value
     return rowIds.length > 0 && rowIds.every(rowId => rowSelectionSet.value.has(rowId))
   })
 
   const areSomeVisibleRowsSelected = computed(() => {
-    const rowIds = resolveVisibleSelectableRowIds()
+    const rowIds = selectableRowIds.value
     return rowIds.some(rowId => rowSelectionSet.value.has(rowId))
   })
 
@@ -105,7 +109,7 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     if (!options.runtime.api.rowSelection.hasSupport()) {
       return
     }
-    const rowIds = resolveVisibleSelectableRowIds()
+    const rowIds = selectableRowIds.value
     if (!areAllVisibleRowsSelected.value) {
       options.runtime.api.rowSelection.selectRows(rowIds)
       return

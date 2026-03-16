@@ -80,7 +80,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType } from "vue"
-import { buildDataGridCellRenderModel } from "@affino/datagrid-core"
+import { buildDataGridCellRenderModel } from "@affino/datagrid-vue"
 import {
   useDataGridLinkedPaneScrollSync,
   useDataGridManagedWheelScroll,

@@ -22,6 +22,8 @@
       "@affino/datagrid-chrome/*": ["../datagrid-chrome/dist/*"],
       "@affino/datagrid-gantt": ["../datagrid-gantt/dist/index.d.ts"],
       "@affino/datagrid-gantt/*": ["../datagrid-gantt/dist/*"],
+      "@affino/datagrid-theme": ["../datagrid-theme/dist/index.d.ts"],
+      "@affino/datagrid-theme/*": ["../datagrid-theme/dist/*"],
       "@affino/datagrid-vue-app": ["../datagrid-vue-app/dist/index.d.ts"],
       "@affino/datagrid-vue-app/*": ["../datagrid-vue-app/dist/*"],
       "@affino/datagrid-vue-app/internal": ["../datagrid-vue-app/dist/internal.d.ts"],

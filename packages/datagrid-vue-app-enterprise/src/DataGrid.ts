@@ -23,8 +23,8 @@ import type {
   DataGridComputedFieldDefinition,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFunctionRegistry,
-  DataGridVirtualizationProp,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue"
+import type { DataGridVirtualizationProp } from "@affino/datagrid-vue-app"
 import type { DataGridRowModel } from "@affino/datagrid-vue"
 import DataGridEnterpriseRenderer from "./DataGridEnterpriseRenderer"
 import {

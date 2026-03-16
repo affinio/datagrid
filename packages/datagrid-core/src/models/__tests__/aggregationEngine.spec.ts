@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest"
 import { createDataGridAggregationEngine } from "../aggregationEngine"
-import type { DataGridRowNode } from "../rowModel"
+import type { DataGridAggregationColumnSpec, DataGridRowNode } from "../rowModel"
 
 interface MetricRow {
   id: string
   value: number | null
   nested?: { value?: number | null }
+}
+
+interface TotalState {
+  total: number
 }
 
 function createLeafRow(
@@ -120,27 +124,29 @@ describe("aggregationEngine", () => {
   })
 
   it("supports custom aggregation lifecycle handlers", () => {
+    const customScoreColumn: DataGridAggregationColumnSpec<MetricRow, TotalState> = {
+      key: "customScore",
+      field: "value",
+      op: "custom",
+      createState: () => ({ total: 0 }),
+      add: (state, value) => {
+        const candidate = Number(value)
+        if (Number.isFinite(candidate)) {
+          state.total += candidate
+        }
+      },
+      remove: (state, value) => {
+        const candidate = Number(value)
+        if (Number.isFinite(candidate)) {
+          state.total -= candidate
+        }
+      },
+      finalize: state => state.total * 2,
+    }
+
     const engine = createDataGridAggregationEngine<MetricRow>({
       columns: [
-        {
-          key: "customScore",
-          field: "value",
-          op: "custom",
-          createState: () => ({ total: 0 }),
-          add: (state, value) => {
-            const candidate = Number(value)
-            if (Number.isFinite(candidate)) {
-              ;(state as { total: number }).total += candidate
-            }
-          },
-          remove: (state, value) => {
-            const candidate = Number(value)
-            if (Number.isFinite(candidate)) {
-              ;(state as { total: number }).total -= candidate
-            }
-          },
-          finalize: state => (state as { total: number }).total * 2,
-        },
+        customScoreColumn,
       ],
     })
 
@@ -247,24 +253,26 @@ describe("aggregationEngine", () => {
   })
 
   it("supports grouped aggregation with custom merge lifecycle", () => {
+    const customSumColumn: DataGridAggregationColumnSpec<MetricRow, TotalState> = {
+      key: "customSum",
+      field: "value",
+      op: "custom",
+      createState: () => ({ total: 0 }),
+      add: (state, value) => {
+        const numeric = Number(value)
+        if (Number.isFinite(numeric)) {
+          state.total += numeric
+        }
+      },
+      merge: (state, childState) => {
+        state.total += childState.total
+      },
+      finalize: state => state.total,
+    }
+
     const engine = createDataGridAggregationEngine<MetricRow>({
       columns: [
-        {
-          key: "customSum",
-          field: "value",
-          op: "custom",
-          createState: () => ({ total: 0 }),
-          add: (state, value) => {
-            const numeric = Number(value)
-            if (Number.isFinite(numeric)) {
-              ;(state as { total: number }).total += numeric
-            }
-          },
-          merge: (state, childState) => {
-            ;(state as { total: number }).total += (childState as { total: number }).total
-          },
-          finalize: state => (state as { total: number }).total,
-        },
+        customSumColumn,
       ],
     })
 
@@ -280,21 +288,23 @@ describe("aggregationEngine", () => {
   })
 
   it("falls back to additive stack path when custom merge is not provided", () => {
+    const customSumColumn: DataGridAggregationColumnSpec<MetricRow, TotalState> = {
+      key: "customSum",
+      field: "value",
+      op: "custom",
+      createState: () => ({ total: 0 }),
+      add: (state, value) => {
+        const numeric = Number(value)
+        if (Number.isFinite(numeric)) {
+          state.total += numeric
+        }
+      },
+      finalize: state => state.total,
+    }
+
     const engine = createDataGridAggregationEngine<MetricRow>({
       columns: [
-        {
-          key: "customSum",
-          field: "value",
-          op: "custom",
-          createState: () => ({ total: 0 }),
-          add: (state, value) => {
-            const numeric = Number(value)
-            if (Number.isFinite(numeric)) {
-              ;(state as { total: number }).total += numeric
-            }
-          },
-          finalize: state => (state as { total: number }).total,
-        },
+        customSumColumn,
       ],
     })
 

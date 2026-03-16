@@ -492,7 +492,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch, watchEffect } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch, watchEffect, type Ref } from "vue"
 import {
   DATAGRID_DEFAULT_FORMULA_FUNCTIONS,
   type DataGridFormulaFunctionRegistry,
@@ -511,10 +511,13 @@ import {
 import {
   createDataGridSpreadsheetFormulaEditorModel,
   rewriteDataGridSpreadsheetFormulaReferences,
+  type DataGridApi,
   type DataGridColumnInput,
+  type DataGridColumnModelSnapshot,
   type DataGridFilterSnapshot,
   type DataGridRowNode,
   type DataGridRowId,
+  type DataGridRowModel,
   type DataGridSelectionSnapshot,
   type DataGridSpreadsheetCellAddress,
   type DataGridSpreadsheetCellSnapshot,
@@ -541,8 +544,8 @@ import {
   createDataGridTableStageContext,
   dataGridAppRootElementKey,
   useDataGridTableStageRuntime,
-} from "../../datagrid-vue-app/src/internal"
-import type { DataGridTableStageProps } from "../../datagrid-vue-app/src/internal"
+} from "@affino/datagrid-vue-app/internal"
+import type { DataGridTableStageProps } from "@affino/datagrid-vue-app/internal"
 import { useDataGridSpreadsheetWorkbookHistory } from "./useDataGridSpreadsheetWorkbookHistory"
 
 const DataGridTableStageLoose = DataGridTableStage as unknown as new () => {
@@ -1298,7 +1301,6 @@ const isFormulaAutocompleteVisible = computed(() => (
   && formulaAutocompleteSuggestions.value.length > 0
 ))
 
-let runtimeRef: Pick<UseDataGridRuntimeResult<SpreadsheetGridRow>, "api" | "columnSnapshot"> | null = null
 let suppressNextSelectionSyncForCellKey: string | null = null
 let formulaBlurTimer: number | null = null
 let pendingSelectionRestoreTimer: number | null = null
@@ -1308,6 +1310,17 @@ let unsubscribeWorkbook = () => {}
 const preserveFormulaFocusFromGridPointer = ref(false)
 let allowFormulaBlur = false
 const activeSheetRenderRevision = ref(0)
+
+interface SpreadsheetRuntimeHandle {
+  api: DataGridApi<SpreadsheetGridRow>
+  rowModel: DataGridRowModel<SpreadsheetGridRow>
+  columnSnapshot: Ref<DataGridColumnModelSnapshot>
+  virtualWindow: UseDataGridRuntimeResult<SpreadsheetGridRow>["virtualWindow"]
+  syncRowsInRange: UseDataGridRuntimeResult<SpreadsheetGridRow>["syncRowsInRange"]
+  setRows: UseDataGridRuntimeResult<SpreadsheetGridRow>["setRows"]
+}
+
+let runtimeRef: Pick<SpreadsheetRuntimeHandle, "api" | "columnSnapshot"> | null = null
 
 const unsubscribeEditor = editorModel.subscribe(snapshot => {
   editorSnapshot.value = snapshot
@@ -1706,9 +1719,9 @@ const runtimeBundle = useDataGridRuntime<SpreadsheetGridRow>({
     },
   },
   clientRowModelOptions: {
-    resolveRowId: row => row.id,
+    resolveRowId: (row: SpreadsheetGridRow) => row.id,
   },
-})
+}) as unknown as SpreadsheetRuntimeHandle
 
 runtimeRef = runtimeBundle
 const runtimeRowVersion = ref(0)

@@ -266,6 +266,7 @@ export {
   type DataGridPivotColumnGrandTotalPosition,
   type DataGridAggOp,
   type DataGridAggregationColumnSpec,
+  type DataGridAggregationColumnSpecAnyState,
   type DataGridAggregationModel,
   type DataGridTreeDataMode,
   type DataGridTreeDataFilterMode,

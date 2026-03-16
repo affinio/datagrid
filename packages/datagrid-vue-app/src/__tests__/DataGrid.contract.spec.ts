@@ -1004,6 +1004,93 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("composes user selection lifecycle hooks with grid and row-selection capabilities", async () => {
+    const log: string[] = []
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        services: {
+          selection: {
+            name: "selection",
+            init: () => {
+              log.push("init:user-selection")
+            },
+            start: () => {
+              log.push("start:user-selection")
+            },
+            stop: () => {
+              log.push("stop:user-selection")
+            },
+            dispose: () => {
+              log.push("dispose:user-selection")
+            },
+          },
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        hasSupport?: () => boolean
+        getSnapshot?: () => unknown
+        setSnapshot?: (snapshot: unknown) => void
+      }
+      rowSelection?: {
+        hasSupport?: () => boolean
+        getSnapshot?: () => unknown
+        setFocusedRow?: (rowId: string | number | null) => void
+      }
+    } | null
+
+    expect(log).toContain("init:user-selection")
+    expect(log).toContain("start:user-selection")
+    expect(api?.selection?.hasSupport?.()).toBe(true)
+    expect(api?.rowSelection?.hasSupport?.()).toBe(true)
+
+    api?.selection?.setSnapshot?.({
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 0,
+          startCol: 0,
+          endCol: 0,
+          startRowId: "r1",
+          endRowId: "r1",
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+    })
+
+    const leftPaneRows = wrapper.findAll(".grid-body-pane--left .grid-row")
+    const firstRowCheckbox = leftPaneRows[0]!.find('.grid-cell--row-selection[role="checkbox"]')
+    await firstRowCheckbox.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(api?.selection?.getSnapshot?.()).not.toBeNull()
+    expect(api?.rowSelection?.getSnapshot?.()).toEqual({
+      focusedRow: null,
+      selectedRows: ["r1"],
+    })
+
+    api?.rowSelection?.setFocusedRow?.("r1")
+
+    expect(api?.rowSelection?.getSnapshot?.()).toEqual({
+      focusedRow: "r1",
+      selectedRows: ["r1"],
+    })
+
+    wrapper.unmount()
+
+    expect(log).toContain("stop:user-selection")
+  })
+
   it("renders checkbox cell types and toggles them on click without entering edit mode", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

@@ -13,6 +13,12 @@ const REPORT_PATH = path.join(
   "quality",
   "datagrid-facade-coverage-report.json",
 )
+const DEPRECATION_PLAN_PATH = path.join(
+  workspaceRoot,
+  "docs",
+  "quality",
+  "datagrid-facade-deprecation-plan.json",
+)
 
 const checkMode = process.argv.includes("--check")
 
@@ -39,7 +45,6 @@ const FACADES = [
     importSpecifiers: ["@affino/datagrid-vue/advanced"],
     requiredSymbols: [
       "useDataGridManagedWheelScroll",
-      "useDataGridColumnLayoutOrchestration",
       "resolveDataGridHeaderLayerViewportGeometry",
       "resolveDataGridHeaderScrollSyncLeft",
       "createDataGridViewportController",
@@ -109,6 +114,34 @@ const FORBIDDEN_IMPORT_SPECIFIERS = [
 
 function uniqueSorted(values) {
   return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b))
+}
+
+async function loadDeprecationPlan() {
+  const text = await readFile(DEPRECATION_PLAN_PATH, "utf8")
+  return JSON.parse(text)
+}
+
+function validatePlanEntry(symbol, entry, policy) {
+  if (!entry || typeof entry !== "object") {
+    return `${symbol}: missing entry`
+  }
+  if (!policy.allowedStatuses.includes(entry.status)) {
+    return `${symbol}: invalid status ${String(entry.status)}`
+  }
+  if (typeof entry.rationale !== "string" || entry.rationale.trim().length === 0) {
+    return `${symbol}: missing rationale`
+  }
+  if (entry.status === "deprecate") {
+    for (const field of policy.deprecationRequires) {
+      if (field === "rationale") {
+        continue
+      }
+      if (typeof entry[field] !== "string" || entry[field].trim().length === 0) {
+        return `${symbol}: missing ${field}`
+      }
+    }
+  }
+  return null
 }
 
 async function walkFiles(rootDir) {
@@ -283,7 +316,7 @@ async function buildDemoImportIndex() {
   return { index, forbidden }
 }
 
-async function buildFacadeSection(facade, demoImportIndex) {
+async function buildFacadeSection(facade, demoImportIndex, deprecationPlan) {
   const exportedSymbols = await collectExportsFromSourceFile(facade.sourceFile)
 
   const usageRows = []
@@ -312,6 +345,16 @@ async function buildFacadeSection(facade, demoImportIndex) {
     ]),
   )
 
+  const facadePlan = deprecationPlan.facades?.[facade.label] ?? {}
+  const planEntries = Object.fromEntries(
+    requiredUnused.map(symbol => [symbol, facadePlan[symbol] ?? null]),
+  )
+  const planValidationErrors = requiredUnused
+    .map(symbol => validatePlanEntry(symbol, planEntries[symbol], deprecationPlan.policy))
+    .filter(Boolean)
+  const keep = requiredUnused.filter(symbol => planEntries[symbol]?.status === "keep")
+  const deprecate = requiredUnused.filter(symbol => planEntries[symbol]?.status === "deprecate")
+
   return {
     id: facade.id,
     label: facade.label,
@@ -326,12 +369,19 @@ async function buildFacadeSection(facade, demoImportIndex) {
     requiredUnused,
     missingRequired,
     usageBySymbol,
+    requiredUnusedPlan: {
+      keep,
+      deprecate,
+      entries: planEntries,
+      validationErrors: planValidationErrors,
+    },
   }
 }
 
 function printSummary(report) {
   console.log("DataGrid Facade Coverage")
   console.log(`report: ${REPORT_PATH}`)
+  console.log(`deprecation plan: ${DEPRECATION_PLAN_PATH}`)
   console.log("")
 
   for (const facade of report.facades) {
@@ -346,6 +396,11 @@ function printSummary(report) {
     console.log(`- required but unused: ${facade.requiredUnused.length}`)
     if (facade.requiredUnused.length > 0) {
       console.log(`  unused-required -> ${facade.requiredUnused.join(", ")}`)
+      console.log(`  keep -> ${facade.requiredUnusedPlan.keep.join(", ") || "none"}`)
+      console.log(`  deprecate -> ${facade.requiredUnusedPlan.deprecate.join(", ") || "none"}`)
+    }
+    if (facade.requiredUnusedPlan.validationErrors.length > 0) {
+      console.log(`  plan-errors -> ${facade.requiredUnusedPlan.validationErrors.join("; ")}`)
     }
     console.log(`- unused exports: ${facade.unusedSymbols.length}`)
     console.log("")
@@ -359,23 +414,26 @@ function printSummary(report) {
 }
 
 async function main() {
+  const deprecationPlan = await loadDeprecationPlan()
   const demoIndex = await buildDemoImportIndex()
   const facades = []
   for (const facade of FACADES) {
-    facades.push(await buildFacadeSection(facade, demoIndex.index))
+    facades.push(await buildFacadeSection(facade, demoIndex.index, deprecationPlan))
   }
 
   const failedFacades = facades
-    .filter(facade => facade.missingRequired.length > 0)
+    .filter(facade => facade.missingRequired.length > 0 || facade.requiredUnusedPlan.validationErrors.length > 0)
     .map(facade => ({
       id: facade.id,
       label: facade.label,
       missingRequired: facade.missingRequired,
+      planValidationErrors: facade.requiredUnusedPlan.validationErrors,
     }))
 
   const report = {
     generatedAt: new Date().toISOString(),
     workspaceRoot,
+    deprecationPlanFile: path.relative(workspaceRoot, DEPRECATION_PLAN_PATH),
     facades,
     forbiddenDemoImports: demoIndex.forbidden,
     checks: {
@@ -396,7 +454,12 @@ async function main() {
 
   const errors = []
   for (const facade of failedFacades) {
-    errors.push(`[${facade.id}] missing required exports: ${facade.missingRequired.join(", ")}`)
+    if (facade.missingRequired.length > 0) {
+      errors.push(`[${facade.id}] missing required exports: ${facade.missingRequired.join(", ")}`)
+    }
+    if (facade.planValidationErrors.length > 0) {
+      errors.push(`[${facade.id}] invalid deprecation plan: ${facade.planValidationErrors.join(", ")}`)
+    }
   }
   for (const hit of demoIndex.forbidden) {
     errors.push(`[forbidden-demo-import] ${hit.file}: ${hit.specifiers.join(", ")}`)

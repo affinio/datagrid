@@ -107,6 +107,14 @@ interface AvgState {
   count: number
 }
 
+interface NumericValueState {
+  value: number
+}
+
+interface ComparableValueState {
+  value: unknown
+}
+
 interface FirstState {
   hasValue: boolean
   value: unknown
@@ -117,16 +125,55 @@ interface LastState {
   value: unknown
 }
 
-export interface DataGridCompiledAggregationColumn<T = unknown> {
+interface DataGridIncrementalCounterMap {
+  [key: string]: number | AvgState | undefined
+}
+
+function toAvgState(state: unknown): AvgState {
+  return state as AvgState
+}
+
+function createEmptyAvgState(): AvgState {
+  return { sum: 0, count: 0 }
+}
+
+function resolveAvgStateOrEmpty(value: unknown): AvgState {
+  return value == null ? createEmptyAvgState() : toAvgState(value)
+}
+
+function readIncrementalCounterValue(value: unknown): number {
+  return Number(value ?? 0)
+}
+
+type DataGridCompiledAggregationStateHandler<TState, TArgs extends readonly unknown[] = readonly [], TResult = void> = {
+  bivarianceHack(state: TState, ...args: TArgs): TResult
+}["bivarianceHack"]
+
+type DataGridBuiltInAggregationOp = Exclude<DataGridAggOp, "custom">
+
+interface DataGridBuiltInAggregationStateMap {
+  sum: NumericValueState
+  avg: AvgState
+  count: NumericValueState
+  countNonNull: NumericValueState
+  min: ComparableValueState
+  max: ComparableValueState
+  first: FirstState
+  last: LastState
+}
+
+export interface DataGridCompiledAggregationColumn<T = unknown, TState = unknown> {
   key: string
   op: DataGridAggOp
   readValue: (row: DataGridRowNode<T>) => unknown
-  createState: () => unknown
-  add: (state: unknown, value: unknown, row: DataGridRowNode<T>) => void
-  merge?: (state: unknown, childState: unknown) => void
-  remove?: (state: unknown, value: unknown, row: DataGridRowNode<T>) => void
-  finalize: (state: unknown) => unknown
+  createState: () => TState
+  add: DataGridCompiledAggregationStateHandler<TState, [value: unknown, row: DataGridRowNode<T>]>
+  merge?: DataGridCompiledAggregationStateHandler<TState, [childState: TState]>
+  remove?: DataGridCompiledAggregationStateHandler<TState, [value: unknown, row: DataGridRowNode<T>]>
+  finalize: DataGridCompiledAggregationStateHandler<TState, [], unknown>
 }
+
+export type DataGridCompiledAggregationColumnAnyState<T = unknown> = DataGridCompiledAggregationColumn<T, unknown>
 
 export type DataGridIncrementalAggregationLeafContribution = Readonly<Record<string, unknown>>
 export type DataGridIncrementalAggregationGroupState = Record<string, unknown>
@@ -134,7 +181,7 @@ export type DataGridIncrementalAggregationGroupState = Record<string, unknown>
 export interface DataGridAggregationEngine<T = unknown> {
   setModel: (model: DataGridAggregationModel<T> | null) => void
   getModel: () => DataGridAggregationModel<T> | null
-  getCompiledColumns: () => readonly DataGridCompiledAggregationColumn<T>[]
+  getCompiledColumns: () => readonly DataGridCompiledAggregationColumnAnyState<T>[]
   isIncrementalAggregationSupported: () => boolean
   createEmptyGroupState: () => DataGridIncrementalAggregationGroupState | null
   createLeafContribution: (row: DataGridRowNode<T>) => DataGridIncrementalAggregationLeafContribution | null
@@ -180,10 +227,56 @@ function coerceForOp(
   return value
 }
 
-function compileColumnSpec<T>(
-  spec: DataGridAggregationColumnSpec<T>,
+function compileBuiltInColumn<T, TOp extends DataGridBuiltInAggregationOp>(input: {
+  key: string
+  op: TOp
+  readValue: (row: DataGridRowNode<T>) => unknown
+  createState: () => DataGridBuiltInAggregationStateMap[TOp]
+  add: DataGridCompiledAggregationStateHandler<
+    DataGridBuiltInAggregationStateMap[TOp],
+    [value: unknown, row: DataGridRowNode<T>]
+  >
+  merge: DataGridCompiledAggregationStateHandler<
+    DataGridBuiltInAggregationStateMap[TOp],
+    [childState: DataGridBuiltInAggregationStateMap[TOp]]
+  >
+  finalize: DataGridCompiledAggregationStateHandler<
+    DataGridBuiltInAggregationStateMap[TOp],
+    [],
+    unknown
+  >
+}): DataGridCompiledAggregationColumnAnyState<T> {
+  const {
+    key,
+    op,
+    readValue,
+    createState,
+    add,
+    merge,
+    finalize,
+  } = input
+  return {
+    key,
+    op,
+    readValue,
+    createState,
+    add: (state: unknown, value: unknown, row: DataGridRowNode<T>) => {
+      add(state as DataGridBuiltInAggregationStateMap[TOp], value, row)
+    },
+    merge: (state: unknown, childState: unknown) => {
+      merge(
+        state as DataGridBuiltInAggregationStateMap[TOp],
+        childState as DataGridBuiltInAggregationStateMap[TOp],
+      )
+    },
+    finalize: (state: unknown) => finalize(state as DataGridBuiltInAggregationStateMap[TOp]),
+  }
+}
+
+function compileColumnSpec<T, TState>(
+  spec: DataGridAggregationColumnSpec<T, TState>,
   readRowField?: DataGridAggregationFieldReader<T>,
-): DataGridCompiledAggregationColumn<T> | null {
+): DataGridCompiledAggregationColumnAnyState<T> | null {
   const key = spec.key.trim()
   if (key.length === 0) {
     return null
@@ -192,25 +285,31 @@ function compileColumnSpec<T>(
   const readValue = compileRowFieldReader<T>(spec.key, spec.field, readRowField)
 
   if (op === "custom") {
-    const createState = typeof spec.createState === "function" ? spec.createState : (() => null)
-    const add = typeof spec.add === "function" ? spec.add : (() => {})
-    const finalize = typeof spec.finalize === "function" ? spec.finalize : ((state: unknown) => state)
+    const createState = typeof spec.createState === "function"
+      ? (() => spec.createState!())
+      : (() => null)
+    const add = typeof spec.add === "function"
+      ? ((state: unknown, value: unknown, row: DataGridRowNode<T>) => spec.add!(state as TState, value, row))
+      : (() => {})
+    const finalize = typeof spec.finalize === "function"
+      ? ((state: unknown) => spec.finalize!(state as TState))
+      : ((state: unknown) => state)
     const merge = typeof spec.merge === "function" ? spec.merge : undefined
     return {
       key,
       op,
       readValue,
       createState,
-      add: (state: unknown, value: unknown, row: DataGridRowNode<T>) => {
-        add(state, value, row)
-      },
+      add,
       merge: merge
         ? ((state: unknown, childState: unknown) => {
-            merge(state, childState)
+            merge(state as TState, childState as TState)
           })
         : undefined,
-      remove: spec.remove,
-      finalize: (state: unknown) => finalize(state),
+      remove: typeof spec.remove === "function"
+        ? ((state: unknown, value: unknown, row: DataGridRowNode<T>) => spec.remove!(state as TState, value, row))
+        : undefined,
+      finalize,
     }
   }
 
@@ -219,180 +318,172 @@ function compileColumnSpec<T>(
     return coerceForOp(op, raw, spec.coerce)
   }
 
-  let createBuiltInState: () => unknown
-  let addBuiltInValue: (state: unknown, value: unknown) => void
-  let mergeBuiltInState: (state: unknown, childState: unknown) => void
-  let finalize: (state: unknown) => unknown
-
   switch (op) {
     case "sum":
-      createBuiltInState = () => ({ value: 0 })
-      addBuiltInValue = (state, value) => {
-        const candidate = normalizeNumber(value)
-        if (candidate != null) {
-          ;(state as { value: number }).value += candidate
-        }
-      }
-      mergeBuiltInState = (state, childState) => {
-        ;(state as { value: number }).value += (childState as { value: number }).value
-      }
-      finalize = state => (state as { value: number }).value
-      break
+      return compileBuiltInColumn({
+        key,
+        op,
+        readValue: readAggregatedValue,
+        createState: () => ({ value: 0 }),
+        add: (state, value) => {
+          const candidate = normalizeNumber(value)
+          if (candidate != null) {
+            state.value += candidate
+          }
+        },
+        merge: (state, childState) => {
+          state.value += childState.value
+        },
+        finalize: state => state.value,
+      })
     case "avg":
-      createBuiltInState = () => ({ sum: 0, count: 0 } satisfies AvgState)
-      addBuiltInValue = (state, value) => {
-        const candidate = normalizeNumber(value)
-        if (candidate != null) {
-          const avgState = state as AvgState
-          avgState.sum += candidate
-          avgState.count += 1
-        }
-      }
-      mergeBuiltInState = (state, childState) => {
-        const target = state as AvgState
-        const child = childState as AvgState
-        target.sum += child.sum
-        target.count += child.count
-      }
-      finalize = state => {
-        const avgState = state as AvgState
-        return avgState.count > 0 ? avgState.sum / avgState.count : null
-      }
-      break
+      return compileBuiltInColumn({
+        key,
+        op,
+        readValue: readAggregatedValue,
+        createState: createEmptyAvgState,
+        add: (state, value) => {
+          const candidate = normalizeNumber(value)
+          if (candidate != null) {
+            state.sum += candidate
+            state.count += 1
+          }
+        },
+        merge: (state, childState) => {
+          state.sum += childState.sum
+          state.count += childState.count
+        },
+        finalize: state => state.count > 0 ? state.sum / state.count : null,
+      })
     case "count":
-      createBuiltInState = () => ({ value: 0 })
-      addBuiltInValue = (state) => {
-        ;(state as { value: number }).value += 1
-      }
-      mergeBuiltInState = (state, childState) => {
-        ;(state as { value: number }).value += (childState as { value: number }).value
-      }
-      finalize = state => (state as { value: number }).value
-      break
+      return compileBuiltInColumn({
+        key,
+        op,
+        readValue: readAggregatedValue,
+        createState: () => ({ value: 0 }),
+        add: state => {
+          state.value += 1
+        },
+        merge: (state, childState) => {
+          state.value += childState.value
+        },
+        finalize: state => state.value,
+      })
     case "countNonNull":
-      createBuiltInState = () => ({ value: 0 })
-      addBuiltInValue = (state, value) => {
-        // countNonNull is intentionally evaluated after `coerce`/readValue normalization.
-        if (value != null) {
-          ;(state as { value: number }).value += 1
-        }
-      }
-      mergeBuiltInState = (state, childState) => {
-        ;(state as { value: number }).value += (childState as { value: number }).value
-      }
-      finalize = state => (state as { value: number }).value
-      break
+      return compileBuiltInColumn({
+        key,
+        op,
+        readValue: readAggregatedValue,
+        createState: () => ({ value: 0 }),
+        add: (state, value) => {
+          if (value != null) {
+            state.value += 1
+          }
+        },
+        merge: (state, childState) => {
+          state.value += childState.value
+        },
+        finalize: state => state.value,
+      })
     case "min":
-      createBuiltInState = () => ({ value: null as unknown })
-      addBuiltInValue = (state, value) => {
-        if (value == null) {
-          return
-        }
-        const current = state as { value: unknown }
-        if (current.value == null || compareUnknown(value, current.value) < 0) {
-          current.value = value
-        }
-      }
-      mergeBuiltInState = (state, childState) => {
-        const childValue = (childState as { value: unknown }).value
-        if (childValue == null) {
-          return
-        }
-        const current = state as { value: unknown }
-        if (current.value == null || compareUnknown(childValue, current.value) < 0) {
-          current.value = childValue
-        }
-      }
-      finalize = state => (state as { value: unknown }).value ?? null
-      break
+      return compileBuiltInColumn({
+        key,
+        op,
+        readValue: readAggregatedValue,
+        createState: () => ({ value: null }),
+        add: (state, value) => {
+          if (value == null) {
+            return
+          }
+          if (state.value == null || compareUnknown(value, state.value) < 0) {
+            state.value = value
+          }
+        },
+        merge: (state, childState) => {
+          if (childState.value == null) {
+            return
+          }
+          if (state.value == null || compareUnknown(childState.value, state.value) < 0) {
+            state.value = childState.value
+          }
+        },
+        finalize: state => state.value ?? null,
+      })
     case "max":
-      createBuiltInState = () => ({ value: null as unknown })
-      addBuiltInValue = (state, value) => {
-        if (value == null) {
-          return
-        }
-        const current = state as { value: unknown }
-        if (current.value == null || compareUnknown(value, current.value) > 0) {
-          current.value = value
-        }
-      }
-      mergeBuiltInState = (state, childState) => {
-        const childValue = (childState as { value: unknown }).value
-        if (childValue == null) {
-          return
-        }
-        const current = state as { value: unknown }
-        if (current.value == null || compareUnknown(childValue, current.value) > 0) {
-          current.value = childValue
-        }
-      }
-      finalize = state => (state as { value: unknown }).value ?? null
-      break
+      return compileBuiltInColumn({
+        key,
+        op,
+        readValue: readAggregatedValue,
+        createState: () => ({ value: null }),
+        add: (state, value) => {
+          if (value == null) {
+            return
+          }
+          if (state.value == null || compareUnknown(value, state.value) > 0) {
+            state.value = value
+          }
+        },
+        merge: (state, childState) => {
+          if (childState.value == null) {
+            return
+          }
+          if (state.value == null || compareUnknown(childState.value, state.value) > 0) {
+            state.value = childState.value
+          }
+        },
+        finalize: state => state.value ?? null,
+      })
     case "first":
-      createBuiltInState = () => ({ hasValue: false, value: undefined } satisfies FirstState)
-      addBuiltInValue = (state, value) => {
-        const firstState = state as FirstState
-        if (!firstState.hasValue) {
-          firstState.hasValue = true
-          firstState.value = value
-        }
-      }
-      mergeBuiltInState = (state, childState) => {
-        const target = state as FirstState
-        const child = childState as FirstState
-        if (!target.hasValue && child.hasValue) {
-          target.hasValue = true
-          target.value = child.value
-        }
-      }
-      finalize = state => {
-        const firstState = state as FirstState
-        return firstState.hasValue ? firstState.value : null
-      }
-      break
+      return compileBuiltInColumn({
+        key,
+        op,
+        readValue: readAggregatedValue,
+        createState: () => ({ hasValue: false, value: undefined }),
+        add: (state, value) => {
+          if (!state.hasValue) {
+            state.hasValue = true
+            state.value = value
+          }
+        },
+        merge: (state, childState) => {
+          if (!state.hasValue && childState.hasValue) {
+            state.hasValue = true
+            state.value = childState.value
+          }
+        },
+        finalize: state => state.hasValue ? state.value : null,
+      })
     case "last":
-      createBuiltInState = () => ({ hasValue: false, value: undefined } satisfies LastState)
-      addBuiltInValue = (state, value) => {
-        const lastState = state as LastState
-        lastState.hasValue = true
-        lastState.value = value
-      }
-      mergeBuiltInState = (state, childState) => {
-        const target = state as LastState
-        const child = childState as LastState
-        if (child.hasValue) {
-          target.hasValue = true
-          target.value = child.value
-        }
-      }
-      finalize = state => {
-        const lastState = state as LastState
-        return lastState.hasValue ? lastState.value : null
-      }
-      break
+      return compileBuiltInColumn({
+        key,
+        op,
+        readValue: readAggregatedValue,
+        createState: () => ({ hasValue: false, value: undefined }),
+        add: (state, value) => {
+          state.hasValue = true
+          state.value = value
+        },
+        merge: (state, childState) => {
+          if (childState.hasValue) {
+            state.hasValue = true
+            state.value = childState.value
+          }
+        },
+        finalize: state => state.hasValue ? state.value : null,
+      })
     default:
       return null
-  }
-
-  return {
-    key,
-    op,
-    readValue: readAggregatedValue,
-    createState: createBuiltInState,
-    add: (state: unknown, value: unknown, _row: DataGridRowNode<T>) => addBuiltInValue(state, value),
-    merge: (state: unknown, childState: unknown) => mergeBuiltInState(state, childState),
-    finalize,
   }
 }
 
 function createStates<T>(
-  columns: readonly DataGridCompiledAggregationColumn<T>[],
+  columns: readonly DataGridCompiledAggregationColumnAnyState<T>[],
 ): unknown[] {
   return columns.map(column => column.createState())
 }
 
 function finalizeStates<T>(
-  columns: readonly DataGridCompiledAggregationColumn<T>[],
+  columns: readonly DataGridCompiledAggregationColumnAnyState<T>[],
   states: readonly unknown[],
 ): Record<string, unknown> {
   const aggregates: Record<string, unknown> = {}
@@ -408,7 +499,7 @@ function finalizeStates<T>(
 }
 
 function addLeafToStates<T>(
-  columns: readonly DataGridCompiledAggregationColumn<T>[],
+  columns: readonly DataGridCompiledAggregationColumnAnyState<T>[],
   states: readonly unknown[],
   row: DataGridRowNode<T>,
 ): void {
@@ -424,7 +515,7 @@ function addLeafToStates<T>(
 }
 
 function mergeStates<T>(
-  columns: readonly DataGridCompiledAggregationColumn<T>[],
+  columns: readonly DataGridCompiledAggregationColumnAnyState<T>[],
   targetStates: readonly unknown[],
   childStates: readonly unknown[],
 ): void {
@@ -442,11 +533,11 @@ function mergeStates<T>(
 function compileAggregationColumns<T>(
   model: DataGridAggregationModel<T> | null,
   readRowField?: DataGridAggregationFieldReader<T>,
-): readonly DataGridCompiledAggregationColumn<T>[] {
+): readonly DataGridCompiledAggregationColumnAnyState<T>[] {
   if (!model || !Array.isArray(model.columns) || model.columns.length === 0) {
     return []
   }
-  const compiled: DataGridCompiledAggregationColumn<T>[] = []
+  const compiled: DataGridCompiledAggregationColumnAnyState<T>[] = []
   for (const spec of model.columns) {
     const column = compileColumnSpec(spec, readRowField)
     if (!column) {
@@ -481,7 +572,7 @@ export function createDataGridAggregationEngine<T>(
     const state: DataGridIncrementalAggregationGroupState = {}
     for (const column of compiledColumns) {
       if (column.op === "avg") {
-        state[column.key] = { sum: 0, count: 0 } satisfies AvgState
+        state[column.key] = createEmptyAvgState()
       } else {
         state[column.key] = 0
       }
@@ -495,7 +586,7 @@ export function createDataGridAggregationEngine<T>(
     if (!isIncrementalSupported() || row.kind !== "leaf") {
       return null
     }
-    const contribution: Record<string, unknown> = {}
+    const contribution: DataGridIncrementalCounterMap = {}
     for (const column of compiledColumns) {
       const value = column.readValue(row)
       if (column.op === "sum") {
@@ -512,7 +603,7 @@ export function createDataGridAggregationEngine<T>(
       }
       const numeric = normalizeNumber(value)
       contribution[column.key] = numeric == null
-        ? ({ sum: 0, count: 0 } satisfies AvgState)
+        ? createEmptyAvgState()
         : ({ sum: numeric, count: 1 } satisfies AvgState)
     }
     return contribution
@@ -528,17 +619,17 @@ export function createDataGridAggregationEngine<T>(
     }
     for (const column of compiledColumns) {
       if (column.op === "avg") {
-        const target = (groupState[column.key] ?? { sum: 0, count: 0 }) as AvgState
-        const previousValue = (previous?.[column.key] ?? { sum: 0, count: 0 }) as AvgState
-        const nextValue = (next?.[column.key] ?? { sum: 0, count: 0 }) as AvgState
+        const target = resolveAvgStateOrEmpty(groupState[column.key])
+        const previousValue = resolveAvgStateOrEmpty(previous?.[column.key])
+        const nextValue = resolveAvgStateOrEmpty(next?.[column.key])
         target.sum += (nextValue.sum ?? 0) - (previousValue.sum ?? 0)
         target.count += (nextValue.count ?? 0) - (previousValue.count ?? 0)
         groupState[column.key] = target
         continue
       }
-      const current = Number(groupState[column.key] ?? 0)
-      const previousValue = Number(previous?.[column.key] ?? 0)
-      const nextValue = Number(next?.[column.key] ?? 0)
+      const current = readIncrementalCounterValue(groupState[column.key])
+      const previousValue = readIncrementalCounterValue(previous?.[column.key])
+      const nextValue = readIncrementalCounterValue(next?.[column.key])
       groupState[column.key] = current + (nextValue - previousValue)
     }
   }
@@ -552,11 +643,11 @@ export function createDataGridAggregationEngine<T>(
     const aggregates: Record<string, unknown> = {}
     for (const column of compiledColumns) {
       if (column.op === "avg") {
-        const state = (groupState[column.key] ?? { sum: 0, count: 0 }) as AvgState
+        const state = resolveAvgStateOrEmpty(groupState[column.key])
         aggregates[column.key] = state.count > 0 ? state.sum / state.count : null
         continue
       }
-      aggregates[column.key] = Number(groupState[column.key] ?? 0)
+      aggregates[column.key] = readIncrementalCounterValue(groupState[column.key])
     }
     return aggregates
   }

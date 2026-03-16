@@ -1,8 +1,4 @@
 export {
-  setsEqual,
-} from "@affino/datagrid-orchestration"
-
-export {
   createGridSelectionContextFromFlattenedRows,
   createGridSelectionRange,
   applyGroupSelectionPolicy,

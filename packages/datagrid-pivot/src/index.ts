@@ -9,10 +9,23 @@ export type {
 } from "./contracts.js"
 
 export type {
+  DataGridAdvancedFilter,
+  DataGridAdvancedFilterCondition,
+  DataGridAdvancedFilterConditionType,
+  DataGridAdvancedFilterExpression,
+  DataGridAdvancedFilterGroup,
+  DataGridAdvancedFilterNot,
   DataGridAggregationModel,
   DataGridAggregationColumnSpec,
+  DataGridAggregationColumnSpecAnyState,
   DataGridAggregationFieldReader,
+  DataGridColumnFilter,
+  DataGridColumnFilterSnapshotEntry,
+  DataGridColumnPredicateFilter,
+  DataGridColumnPredicateOperator,
+  DataGridColumnValueSetFilter,
   DataGridColumnPin,
+  DataGridFilterClause,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
@@ -23,6 +36,7 @@ export type {
   DataGridPivotLayoutRowModelSnapshot,
   DataGridRowId,
   DataGridRowNode,
+  DataGridSortDirection,
   DataGridSortState,
   DataGridSortAndFilterModelInput,
 } from "./coreTypes.js"

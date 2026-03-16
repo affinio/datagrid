@@ -293,12 +293,18 @@ importers:
 
   packages/datagrid-vue-app-enterprise:
     dependencies:
+      '@affino/datagrid-chrome':
+        specifier: workspace:*
+        version: link:../datagrid-chrome
       '@affino/datagrid-diagnostics-enterprise':
         specifier: workspace:*
         version: link:../datagrid-diagnostics-enterprise
       '@affino/datagrid-formula-engine-enterprise':
         specifier: workspace:*
         version: link:../datagrid-formula-engine-enterprise
+      '@affino/datagrid-theme':
+        specifier: workspace:*
+        version: link:../datagrid-theme
       '@affino/datagrid-vue':
         specifier: workspace:*
         version: link:../datagrid-vue

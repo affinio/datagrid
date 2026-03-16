@@ -1,10 +1,12 @@
 import type { Ref } from "vue"
 import {
+  type DataGridFillBehavior,
   buildDataGridFillMatrix,
   canToggleDataGridFillBehavior,
   resolveDataGridDefaultFillBehavior,
+} from "../composables/dataGridFillBehavior"
+import {
   type DataGridCopyRange,
-  type DataGridFillBehavior,
 } from "../advanced"
 import type { DataGridAppMode } from "./useDataGridAppControls"
 

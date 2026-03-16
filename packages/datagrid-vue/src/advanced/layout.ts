@@ -10,7 +10,6 @@ export type {
 export * from "../composables/useDataGridHeaderLayerOrchestration"
 export * from "../composables/useDataGridViewportMeasureScheduler"
 export * from "../composables/useDataGridVisibleRowsSyncScheduler"
-export * from "../composables/useDataGridColumnLayoutOrchestration"
 export * from "../composables/useDataGridViewportScrollLifecycle"
 export * from "../composables/useDataGridLinkedPaneScrollSync"
 export * from "../composables/useDataGridResizeClickGuard"

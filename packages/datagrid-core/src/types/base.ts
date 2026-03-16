@@ -1,5 +1,9 @@
 import type { DataGridColumn, DataGridColumnGroupDef } from "./column"
 import type { DataGridPluginDefinition } from "@affino/datagrid-plugins"
+import type {
+  DataGridFilterSnapshot,
+  DataGridSortState,
+} from "@affino/datagrid-pivot"
 import type { DataGridSettingsAdapter } from "../settings/dataGridSettingsAdapter.js"
 
 export type {
@@ -20,6 +24,23 @@ export type {
   DataGridColumnValueAccessors,
   DataGridColumnGroupDef,
 } from "./column"
+export type {
+  DataGridAdvancedFilter,
+  DataGridAdvancedFilterCondition,
+  DataGridAdvancedFilterConditionType,
+  DataGridAdvancedFilterExpression,
+  DataGridAdvancedFilterGroup,
+  DataGridAdvancedFilterNot,
+  DataGridColumnFilter,
+  DataGridColumnFilterSnapshotEntry,
+  DataGridColumnPredicateFilter,
+  DataGridColumnPredicateOperator,
+  DataGridColumnValueSetFilter,
+  DataGridFilterClause,
+  DataGridFilterSnapshot,
+  DataGridSortDirection,
+  DataGridSortState,
+} from "@affino/datagrid-pivot"
 export type { DataGridSettingsAdapter } from "../settings/dataGridSettingsAdapter.js"
 
 export type DataGridRowId = string | number
@@ -58,100 +79,6 @@ export type DataGridLazyLoader = (
   | void
   | DataGridServerLoadResult
   | any[]
-
-export type DataGridSortDirection = "asc" | "desc"
-
-export interface DataGridSortState {
-  key: string
-  field?: string
-  direction: DataGridSortDirection
-}
-
-export interface DataGridFilterClause {
-  operator: string
-  value: any
-  value2?: any
-  join?: "and" | "or"
-}
-
-export interface DataGridAdvancedFilter {
-  type: "text" | "number" | "date" | "set"
-  clauses: DataGridFilterClause[]
-}
-
-export type DataGridAdvancedFilterConditionType =
-  | "text"
-  | "number"
-  | "date"
-  | "set"
-  | "boolean"
-
-export interface DataGridAdvancedFilterCondition {
-  kind: "condition"
-  key: string
-  field?: string
-  type?: DataGridAdvancedFilterConditionType
-  operator: string
-  value?: unknown
-  value2?: unknown
-}
-
-export interface DataGridAdvancedFilterGroup {
-  kind: "group"
-  operator: "and" | "or"
-  children: DataGridAdvancedFilterExpression[]
-}
-
-export interface DataGridAdvancedFilterNot {
-  kind: "not"
-  child: DataGridAdvancedFilterExpression
-}
-
-export type DataGridAdvancedFilterExpression =
-  | DataGridAdvancedFilterCondition
-  | DataGridAdvancedFilterGroup
-  | DataGridAdvancedFilterNot
-
-export interface DataGridColumnValueSetFilter {
-  kind: "valueSet"
-  tokens: string[]
-}
-
-export type DataGridColumnPredicateOperator =
-  | "contains"
-  | "startsWith"
-  | "endsWith"
-  | "equals"
-  | "notEquals"
-  | "gt"
-  | "gte"
-  | "lt"
-  | "lte"
-  | "between"
-  | "isEmpty"
-  | "notEmpty"
-  | "isNull"
-  | "notNull"
-
-export interface DataGridColumnPredicateFilter {
-  kind: "predicate"
-  operator: DataGridColumnPredicateOperator
-  value?: unknown
-  value2?: unknown
-  caseSensitive?: boolean
-}
-
-export type DataGridColumnFilter =
-  | DataGridColumnValueSetFilter
-  | DataGridColumnPredicateFilter
-
-export type DataGridColumnFilterSnapshotEntry = DataGridColumnFilter
-
-export interface DataGridFilterSnapshot {
-  columnFilters: Record<string, DataGridColumnFilterSnapshotEntry>
-  advancedFilters: Record<string, DataGridAdvancedFilter>
-  advancedExpression?: DataGridAdvancedFilterExpression | null
-}
 
 export interface DataGridServerFilterOptionRequest {
   columnKey: string

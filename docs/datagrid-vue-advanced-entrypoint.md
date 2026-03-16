@@ -19,9 +19,6 @@ This document defines the explicit advanced namespace for power-user hooks in `@
 
 ## Advanced Surface
 
-- `useDataGridViewportBridge`
-- `useDataGridHeaderOrchestration`
-- `createDataGridHeaderBindings`
 - `createDataGridViewportController`
 - `useDataGridCellPointerDownRouter`
 - `useDataGridCellPointerHoverRouter`
@@ -97,12 +94,9 @@ This document defines the explicit advanced namespace for power-user hooks in `@
 - `useDataGridPointerModifierPolicy`
 - `useDataGridHistoryActionRunner`
 - `useDataGridInlineEditorFocus`
-- `useDataGridRowSelectionFacade`
-- `useDataGridFindReplaceFacade`
 - `useDataGridClipboardBridge`
 - `useDataGridClipboardMutations`
 - `useDataGridIntentHistory`
-- `setsEqual`
 
 ## Boundary Rule
 

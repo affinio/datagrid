@@ -1,7 +1,7 @@
 import type {
   DataGridClientComputeMode,
-  DataGridVirtualizationProp,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue"
+import type { DataGridVirtualizationProp } from "@affino/datagrid-vue-app"
 
 export type DataGridPerformancePresetName = "balanced" | "throughput"
   | "formulaHeavy"

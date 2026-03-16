@@ -18,14 +18,16 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "pnpm --filter @affino/datagrid-vue build && pnpm --filter @affino/datagrid-vue-app build && pnpm --filter @affino/datagrid-diagnostics-enterprise build && pnpm --filter @affino/datagrid-formula-engine-enterprise build && tsc -p tsconfig.json",
-    "type-check": "pnpm --filter @affino/datagrid-vue build && pnpm --filter @affino/datagrid-vue-app build && pnpm --filter @affino/datagrid-diagnostics-enterprise build && pnpm --filter @affino/datagrid-formula-engine-enterprise build && tsc -p tsconfig.json --noEmit",
+    "build": "pnpm --filter @affino/datagrid-theme build && pnpm --filter @affino/datagrid-vue build && pnpm --filter @affino/datagrid-vue-app build && pnpm --filter @affino/datagrid-diagnostics-enterprise build && pnpm --filter @affino/datagrid-formula-engine-enterprise build && tsc -p tsconfig.json",
+    "type-check": "pnpm --filter @affino/datagrid-theme build && pnpm --filter @affino/datagrid-vue build && pnpm --filter @affino/datagrid-vue-app build && pnpm --filter @affino/datagrid-diagnostics-enterprise build && pnpm --filter @affino/datagrid-formula-engine-enterprise build && tsc -p tsconfig.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
     "test": "pnpm run type-check && pnpm run test:unit"
   },
   "dependencies": {
+    "@affino/datagrid-chrome": "workspace:*",
     "@affino/datagrid-diagnostics-enterprise": "workspace:*",
     "@affino/datagrid-formula-engine-enterprise": "workspace:*",
+    "@affino/datagrid-theme": "workspace:*",
     "@affino/datagrid-vue": "workspace:*",
     "@affino/datagrid-vue-app": "workspace:*"
   },

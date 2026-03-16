@@ -39,6 +39,8 @@ export type {
   CreateDataGridCoreOptions,
   DataGridCoreServiceRegistry,
   DataGridAggOp,
+  DataGridAggregationColumnSpec,
+  DataGridAggregationColumnSpecAnyState,
   DataGridAggregationModel,
   DataGridAdvancedFilterExpression,
   DataGridAdvancedFilterCondition,
