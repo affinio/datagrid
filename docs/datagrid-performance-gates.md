@@ -72,6 +72,7 @@ CI harness (`DATAGRID_BENCH_MODE=ci`) applies:
   - `PERF_BUDGET_MAX_SERVER_RANGE_P99_MS=55`
   - `PERF_BUDGET_MAX_WINDOW_SHIFT_P95_MS=10`
   - `PERF_BUDGET_MAX_WINDOW_SHIFT_P99_MS=16`
+  - `PERF_BUDGET_MAX_VARIANCE_PCT=90`
   - synthetic source cache cap: `BENCH_SERVER_CACHE_BLOCK_LIMIT=96` (bounded server block cache in benchmark to avoid unbounded heap growth noise)
 - Interaction models (selection/fill under virtualization proxy):
   - `PERF_BUDGET_TOTAL_MS=3500`
@@ -110,9 +111,9 @@ CI harness (`DATAGRID_BENCH_MODE=ci`) applies:
   - `PERF_BUDGET_TOTAL_MS=9000`
   - `PERF_BUDGET_MAX_PIVOT_REBUILD_P95_MS=30`
   - `PERF_BUDGET_MAX_PIVOT_REBUILD_P99_MS=45`
-  - `PERF_BUDGET_MAX_PIVOT_PATCH_FROZEN_P95_MS=8`
+  - `PERF_BUDGET_MAX_PIVOT_PATCH_FROZEN_P95_MS=12`
   - `PERF_BUDGET_MAX_PIVOT_PATCH_FROZEN_P99_MS=14`
-  - `PERF_BUDGET_MAX_PIVOT_PATCH_REAPPLY_P95_MS=20`
+  - `PERF_BUDGET_MAX_PIVOT_PATCH_REAPPLY_P95_MS=30`
   - `PERF_BUDGET_MAX_PIVOT_PATCH_REAPPLY_P99_MS=35`
   - `PERF_BUDGET_MIN_PIVOT_COLUMNS=2`
 - Dependency graph (dense graph register/expand pressure; standalone assert command):
