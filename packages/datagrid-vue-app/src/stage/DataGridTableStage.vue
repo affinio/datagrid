@@ -2375,14 +2375,16 @@ const rightMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
   })
 ))
 
-const pinnedPaneRenderApi = computed<DataGridTableStagePinnedPaneRenderApi>(() => ({
+const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   handleLinkedViewportWheel,
   rowStateClasses,
   paneRowStyle,
   handleRowContainerClick,
   setHoveredRow,
   isFullRowSelectionSafe,
-  rowIndexColumnStyle: resolvedRowIndexColumnStyle.value,
+  get rowIndexColumnStyle() {
+    return resolvedRowIndexColumnStyle.value
+  },
   handleRowIndexClickSafe,
   builtInCellClasses,
   cellStateClasses,
@@ -2421,12 +2423,14 @@ const pinnedPaneRenderApi = computed<DataGridTableStagePinnedPaneRenderApi>(() =
   checkboxIndicatorClass,
   checkboxIndicatorMarkClass,
   readResolvedDisplayCell,
-}))
+}
 
-const centerPaneRenderApi = computed<DataGridTableStageCenterPaneRenderApi>(() => ({
+const centerPaneRenderApi: DataGridTableStageCenterPaneRenderApi = {
   handleCenterViewportScroll,
   handleBodyViewportWheel,
-  handleViewportKeydown: viewport.value.handleViewportKeydown,
+  handleViewportKeydown(event) {
+    viewport.value.handleViewportKeydown(event)
+  },
   rowStateClasses,
   handleRowContainerClick,
   setHoveredRow,
@@ -2468,7 +2472,7 @@ const centerPaneRenderApi = computed<DataGridTableStageCenterPaneRenderApi>(() =
   checkboxIndicatorClass,
   checkboxIndicatorMarkClass,
   readResolvedDisplayCell,
-}))
+}
 
 const leftPinnedPane = computed<DataGridTableStagePinnedPaneProps>(() => ({
   side: "left" as const,
