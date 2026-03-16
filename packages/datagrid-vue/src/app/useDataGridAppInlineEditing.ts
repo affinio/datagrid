@@ -18,7 +18,7 @@ interface DataGridAppEditingCoord {
   rowId: string | number
 }
 
-type DataGridAppInlineEditCommitTarget = "stay" | "next" | "previous"
+type DataGridAppInlineEditCommitTarget = "stay" | "next" | "previous" | "below" | "above"
 
 interface DataGridAppInlineEditStartOptions {
   draftValue?: string
@@ -117,23 +117,90 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     if (currentRowIndex < 0) {
       return
     }
+    const resolveAdjacentEditableCoord = (
+      direction: 1 | -1,
+    ): DataGridAppEditingCoord | null => {
+      const columnCount = options.visibleColumns.value.length
+      if (columnCount === 0) {
+        return null
+      }
+      if (direction > 0) {
+        for (let rowIndex = currentRowIndex; rowIndex < options.totalRows.value; rowIndex += 1) {
+          const startColumnIndex = rowIndex === currentRowIndex ? columnIndex + 1 : 0
+          const row = options.runtime.api.rows.get(rowIndex)
+          if (!row) {
+            continue
+          }
+          for (let candidateColumnIndex = startColumnIndex; candidateColumnIndex < columnCount; candidateColumnIndex += 1) {
+            const candidateColumnKey = options.visibleColumns.value[candidateColumnIndex]?.key
+            if (
+              candidateColumnKey
+              && options.isCellEditable(row, rowIndex, candidateColumnKey, candidateColumnIndex)
+            ) {
+              return {
+                rowIndex,
+                columnIndex: candidateColumnIndex,
+                rowId: row.rowId,
+              }
+            }
+          }
+        }
+        return null
+      }
+      for (let rowIndex = currentRowIndex; rowIndex >= 0; rowIndex -= 1) {
+        const startColumnIndex = rowIndex === currentRowIndex ? columnIndex - 1 : columnCount - 1
+        const row = options.runtime.api.rows.get(rowIndex)
+        if (!row) {
+          continue
+        }
+        for (let candidateColumnIndex = startColumnIndex; candidateColumnIndex >= 0; candidateColumnIndex -= 1) {
+          const candidateColumnKey = options.visibleColumns.value[candidateColumnIndex]?.key
+          if (
+            candidateColumnKey
+            && options.isCellEditable(row, rowIndex, candidateColumnKey, candidateColumnIndex)
+          ) {
+            return {
+              rowIndex,
+              columnIndex: candidateColumnIndex,
+              rowId: row.rowId,
+            }
+          }
+        }
+      }
+      return null
+    }
     const maxRowIndex = Math.max(0, options.totalRows.value - 1)
-    const nextRowIndex = target === "next"
-      ? Math.min(maxRowIndex, currentRowIndex + 1)
+    const nextCoord = target === "next"
+      ? resolveAdjacentEditableCoord(1)
       : target === "previous"
-        ? Math.max(0, currentRowIndex - 1)
-        : currentRowIndex
-    const nextRowId = options.runtime.api.rows.get(nextRowIndex)?.rowId
-    if (nextRowId == null) {
+        ? resolveAdjacentEditableCoord(-1)
+        : target === "below"
+          ? {
+            rowIndex: Math.min(maxRowIndex, currentRowIndex + 1),
+            columnIndex,
+            rowId: options.runtime.api.rows.get(Math.min(maxRowIndex, currentRowIndex + 1))?.rowId ?? rowId,
+          }
+          : target === "above"
+            ? {
+              rowIndex: Math.max(0, currentRowIndex - 1),
+              columnIndex,
+              rowId: options.runtime.api.rows.get(Math.max(0, currentRowIndex - 1))?.rowId ?? rowId,
+            }
+            : {
+              rowIndex: currentRowIndex,
+              columnIndex,
+              rowId,
+            }
+    if (nextCoord?.rowId == null) {
       return
     }
     options.applyCellSelection({
-      rowIndex: nextRowIndex,
-      columnIndex,
-      rowId: nextRowId,
+      rowIndex: nextCoord.rowIndex,
+      columnIndex: nextCoord.columnIndex,
+      rowId: nextCoord.rowId,
     })
     void nextTick(() => {
-      options.ensureActiveCellVisible(nextRowIndex, columnIndex)
+      options.ensureActiveCellVisible(nextCoord.rowIndex, nextCoord.columnIndex)
     })
   }
 
@@ -206,9 +273,14 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   }
 
   const handleEditorKeydown = (event: KeyboardEvent): void => {
-    if (event.key === "Enter") {
+    if (event.key === "Tab") {
       event.preventDefault()
       commitInlineEdit(event.shiftKey ? "previous" : "next")
+      return
+    }
+    if (event.key === "Enter") {
+      event.preventDefault()
+      commitInlineEdit(event.shiftKey ? "above" : "below")
       return
     }
     if (event.key === "Escape") {

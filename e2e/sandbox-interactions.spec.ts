@@ -63,13 +63,39 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await groupRow.click()
     await expect.poll(async () => rowsInModel(page)).toBe(before)
   })
+
+  test("inline editor Tab keeps focus inside grid and advances to the next editable cell", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/gantt-grid")
+
+    const editableCell = page.locator('.grid-row:not(.row--group) .grid-cell[data-column-index="2"]').first()
+    await expect(editableCell).toBeVisible({ timeout: 20_000 })
+
+    const sourceRowIndex = await editableCell.getAttribute("data-row-index")
+    expect(sourceRowIndex).not.toBeNull()
+
+    await editableCell.dblclick()
+
+    const editor = editableCell.locator("input.cell-editor-input").first()
+    await expect(editor).toBeVisible({ timeout: 20_000 })
+    await editor.press("Tab")
+
+    await expect.poll(async () => activeGridCellCoord(page)).toEqual({
+      rowIndex: sourceRowIndex,
+      columnIndex: "3",
+    })
+  })
 })
 
 async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   await page.goto(route)
   await page.waitForLoadState("domcontentloaded")
   await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined)
-  await expect(page.locator(".meta span").filter({ hasText: "Rows in model:" }).first()).toBeVisible({ timeout: 20_000 })
+  const rowsMeta = page.locator(".meta span").filter({ hasText: "Rows in model:" }).first()
+  try {
+    await expect(rowsMeta).toBeVisible({ timeout: 10_000 })
+  } catch {
+    await expect(page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()).toBeVisible({ timeout: 20_000 })
+  }
 }
 
 async function rowsInModel(page: Page): Promise<number> {
@@ -81,6 +107,17 @@ async function rowsInModel(page: Page): Promise<number> {
 async function cellTextByViewportCoord(page: Page, rowIndex: number, columnIndex: number): Promise<string> {
   const cell = page.locator(`.grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`).first()
   return (await cell.textContent())?.trim() ?? ""
+}
+
+async function activeGridCellCoord(page: Page): Promise<{ rowIndex: string | null; columnIndex: string | null }> {
+  return await page.evaluate(() => {
+    const activeElement = document.activeElement
+    const cell = activeElement?.closest?.(".grid-cell")
+    return {
+      rowIndex: cell?.getAttribute("data-row-index") ?? null,
+      columnIndex: cell?.getAttribute("data-column-index") ?? null,
+    }
+  })
 }
 
 async function dragResizeHandle(page: Page, handle: Locator, deltaX: number): Promise<void> {
