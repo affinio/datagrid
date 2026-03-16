@@ -704,28 +704,6 @@ const theme = computed<DataGridStyleConfig | "default">(() => {
 
 const effectiveColumnState = computed<DataGridUnifiedColumnState>(() => {
   const base = normalizeColumnState(columnState.value, columns.value);
-  const pins: Record<string, DataGridColumnPin> = { ...base.pins };
-  for (const key of Object.keys(pins)) {
-    if (pins[key] === "left") {
-      pins[key] = "none";
-    }
-  }
-  const pinnedLeftKey =
-    base.order.find((key) => key === "id") ??
-    base.order.find((key) => key !== "updatedAt" && key !== "amount") ??
-    null;
-  if (pinnedLeftKey && pins[pinnedLeftKey] !== "left") {
-    pins[pinnedLeftKey] = "left";
-  }
-  const pinnedRightKey =
-    props.mode === "pivot"
-      ? "amount"
-      : props.mode === "tree"
-        ? "amount"
-        : "end";
-  if (pins[pinnedRightKey] !== "right") {
-    pins[pinnedRightKey] = "right";
-  }
   if (
     props.mode !== "pivot" ||
     pivotViewMode.value !== "pivot" ||
@@ -735,7 +713,7 @@ const effectiveColumnState = computed<DataGridUnifiedColumnState>(() => {
       order: [...base.order],
       visibility: { ...base.visibility },
       widths: { ...base.widths },
-      pins,
+      pins: { ...base.pins },
     };
   }
   const order = [...base.order];
@@ -751,7 +729,7 @@ const effectiveColumnState = computed<DataGridUnifiedColumnState>(() => {
     order,
     visibility,
     widths: { ...base.widths },
-    pins,
+    pins: { ...base.pins },
   };
 });
 const shouldHideUnusedPivotSourceColumns = computed(() => {

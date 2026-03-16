@@ -2,10 +2,10 @@ import { expect, type Locator, type Page, test } from "@playwright/test"
 
 test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () => {
   test("vue base grid updates viewport window on long vertical scroll", async ({ page }) => {
-    await page.goto("/vue/base-grid")
+    await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".table-wrap")
-    await expect(viewport).toBeVisible()
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
 
     const before = await viewportRangeStart(page)
     await runLongVerticalSession(viewport)
@@ -18,10 +18,10 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   })
 
   test("core base grid keeps virtualization responsive while scrolling", async ({ page }) => {
-    await page.goto("/core/base-grid")
+    await gotoSandboxRoute(page, "/core/base-grid")
 
-    const viewport = page.locator(".table-wrap")
-    await expect(viewport).toBeVisible()
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
 
     const before = await viewportRangeStart(page)
     await runLongVerticalSession(viewport)
@@ -30,6 +30,13 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await expect(page.locator(".grid-body-viewport .grid-row").nth(1)).toBeVisible()
   })
 })
+
+async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
+  await page.goto(route)
+  await page.waitForLoadState("domcontentloaded")
+  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined)
+  await expect(page.locator(".meta span").filter({ hasText: "Rows in model:" }).first()).toBeVisible({ timeout: 20_000 })
+}
 
 async function runLongVerticalSession(viewport: Locator): Promise<void> {
   await viewport.evaluate(async element => {

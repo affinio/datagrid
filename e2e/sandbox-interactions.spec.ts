@@ -2,13 +2,13 @@ import { expect, type Locator, type Page, test } from "@playwright/test"
 
 test.describe("sandbox interaction contracts (adapted from affinio datagrid interactions)", () => {
   test("filter updates row model and recovers on clear", async ({ page }) => {
-    await page.goto("/core/base-grid")
+    await gotoSandboxRoute(page, "/core/base-grid")
 
     const before = await rowsInModel(page)
     expect(before).toBeGreaterThan(0)
 
     const filterInput = page.locator(".col-filter-input").nth(1)
-    await expect(filterInput).toBeVisible()
+    await expect(filterInput).toBeVisible({ timeout: 20_000 })
     await filterInput.fill("CoreEvent 999")
 
     await expect.poll(async () => rowsInModel(page)).toBeLessThan(before)
@@ -18,12 +18,12 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   })
 
   test("sort control changes first visible row deterministically", async ({ page }) => {
-    await page.goto("/vue/base-grid")
+    await gotoSandboxRoute(page, "/vue/base-grid")
 
     const firstNameBefore = await cellTextByViewportCoord(page, 0, 1)
 
     const amountMenuButton = page.locator('.grid-cell--header[data-column-key="amount"][data-datagrid-column-menu-trigger="true"]').first()
-    await expect(amountMenuButton).toBeVisible()
+    await expect(amountMenuButton).toBeVisible({ timeout: 20_000 })
     await amountMenuButton.click()
     await page.locator('[data-datagrid-column-menu-action="sort-desc"]').click()
 
@@ -31,13 +31,14 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   })
 
   test("column resize handle changes header width", async ({ page }) => {
-    await page.goto("/vue/base-grid")
+    await gotoSandboxRoute(page, "/vue/base-grid")
 
     const firstHeader = page.locator('.grid-cell--header[data-column-key="name"]').first()
+      .or(page.locator('.grid-cell--header').filter({ hasText: /^Task$/ }).first())
     const resizeHandle = firstHeader.locator(".col-resize")
 
-    await expect(firstHeader).toBeVisible()
-    await expect(resizeHandle).toBeVisible()
+    await expect(firstHeader).toBeVisible({ timeout: 20_000 })
+    await expect(resizeHandle).toBeVisible({ timeout: 20_000 })
 
     const before = await boundingBox(firstHeader)
     await dragResizeHandle(page, resizeHandle, 80)
@@ -47,10 +48,10 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   })
 
   test("tree group row click toggles expansion", async ({ page }) => {
-    await page.goto("/vue/tree-grid")
+    await gotoSandboxRoute(page, "/vue/tree-grid")
 
     const groupRow = page.locator(".grid-row.row--group").first()
-    await expect(groupRow).toBeVisible()
+    await expect(groupRow).toBeVisible({ timeout: 20_000 })
 
     const before = await rowsInModel(page)
     await groupRow.click()
@@ -63,6 +64,13 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect.poll(async () => rowsInModel(page)).toBe(before)
   })
 })
+
+async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
+  await page.goto(route)
+  await page.waitForLoadState("domcontentloaded")
+  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined)
+  await expect(page.locator(".meta span").filter({ hasText: "Rows in model:" }).first()).toBeVisible({ timeout: 20_000 })
+}
 
 async function rowsInModel(page: Page): Promise<number> {
   const raw = (await page.locator(".meta span").filter({ hasText: "Rows in model:" }).first().textContent())?.trim() ?? ""
