@@ -2,6 +2,7 @@
 
 import { performance } from "node:perf_hooks"
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs"
+import { spawnSync } from "node:child_process"
 import { dirname, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 
@@ -245,6 +246,11 @@ async function loadFactory() {
   const allowStaleDist = process.env.BENCH_ALLOW_STALE_DIST === "1"
   const enforceFreshDist = process.env.BENCH_ENFORCE_FRESH_DIST === "1"
   let lastError = null
+
+  if (!candidates.some(candidate => existsSync(candidate))) {
+    ensureDatagridCoreBuildArtifacts()
+  }
+
   for (const candidate of candidates) {
     if (!existsSync(candidate)) {
       continue
@@ -274,6 +280,21 @@ async function loadFactory() {
     throw new Error(`Failed to load createClientRowModel: ${String(lastError)}`)
   }
   throw new Error("Unable to locate datagrid-core build artifacts. Run `pnpm --filter @affino/datagrid-core build`.")
+}
+
+function ensureDatagridCoreBuildArtifacts() {
+  // eslint-disable-next-line no-console
+  console.warn("[bench] datagrid-core build artifacts are missing. Building @affino/datagrid-core before continuing...")
+  const result = spawnSync("pnpm", ["--filter", "@affino/datagrid-core", "build"], {
+    cwd: resolve("."),
+    env: process.env,
+    stdio: "inherit",
+  })
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to build @affino/datagrid-core before benchmark (exit ${String(result.status ?? result.signal ?? "unknown")}).`,
+    )
+  }
 }
 
 function collectVisibleGroupKeys(model, limit = TREE_GROUP_KEY_SAMPLE_LIMIT) {

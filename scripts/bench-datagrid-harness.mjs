@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { mkdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 
 const mode = process.env.DATAGRID_BENCH_MODE === "ci" ? "ci" : "local"
 const failFast = process.env.BENCH_FAIL_FAST !== "false"
@@ -317,6 +317,8 @@ const tasks = [
   },
 ]
 
+ensureBenchmarkBuildArtifacts(tasks)
+
 const results = []
 let hasFailure = false
 
@@ -367,6 +369,40 @@ function runTask(command, args, env) {
       finalize(code ?? 1, signal)
     })
   })
+}
+
+function ensureBenchmarkBuildArtifacts(tasks) {
+  const needsDatagridCoreBuild = tasks.some(task => [
+    "datasource-churn",
+    "derived-cache",
+    "pivot-workload",
+    "tree-workload",
+    "row-models",
+  ].includes(task.id))
+
+  if (!needsDatagridCoreBuild) {
+    return
+  }
+
+  const coreDistCandidates = [
+    resolve("packages/datagrid-core/dist/src/models/index.js"),
+    resolve("packages/datagrid-core/dist/src/public.js"),
+  ]
+  if (coreDistCandidates.some(candidate => existsSync(candidate))) {
+    return
+  }
+
+  console.warn("[bench] datagrid-core build artifacts are missing. Building @affino/datagrid-core before running harness tasks...")
+  const result = spawnSync("pnpm", ["--filter", "@affino/datagrid-core", "build"], {
+    cwd: resolve("."),
+    env: process.env,
+    stdio: "inherit",
+  })
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to build @affino/datagrid-core before benchmark harness (exit ${String(result.status ?? result.signal ?? "unknown")}).`,
+    )
+  }
 }
 
 for (const task of tasks) {
