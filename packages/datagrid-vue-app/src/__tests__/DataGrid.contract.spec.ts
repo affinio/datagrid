@@ -2,7 +2,7 @@ import { nextTick } from "vue"
 import { mount } from "@vue/test-utils"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import DataGrid from "../DataGrid"
-import DataGridRuntimeHost from "../DataGridRuntimeHost"
+import DataGridRuntimeHost from "../host/DataGridRuntimeHost"
 
 interface DemoRow {
   rowId: string

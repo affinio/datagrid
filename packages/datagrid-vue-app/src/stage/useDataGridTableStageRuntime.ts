@@ -1,0 +1,710 @@
+import { computed, nextTick, ref, type ComputedRef, type Ref } from "vue"
+import type {
+  DataGridColumnSnapshot,
+  DataGridRowSelectionSnapshot,
+  DataGridSelectionSnapshot,
+} from "@affino/datagrid-vue"
+import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
+import {
+  createDataGridAppRowHeightMetrics,
+  useDataGridAppActiveCellViewport,
+  useDataGridAppCellSelection,
+  useDataGridAppClipboard,
+  useDataGridAppHeaderResize,
+  useDataGridAppInlineEditing,
+  useDataGridAppInteractionController,
+  useDataGridAppRowPresentation,
+  useDataGridAppRowSizing,
+  useDataGridAppRuntimeSync,
+  useDataGridAppViewport,
+  useDataGridAppViewportLifecycle,
+} from "@affino/datagrid-vue"
+import type { DataGridCellEditablePredicate } from "../dataGridEditability"
+import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
+import type { DataGridTableStageContext } from "./dataGridTableStageContext"
+import { useDataGridTableStageBindings } from "./useDataGridTableStageBindings"
+import { useDataGridTableStageCellIo } from "./useDataGridTableStageCellIo"
+import { useDataGridTableStageColumns } from "./useDataGridTableStageColumns"
+import { useDataGridTableStageFillAction } from "./useDataGridTableStageFillAction"
+import type { DataGridTableStageHistoryAdapter } from "./useDataGridTableStageHistory"
+import { useDataGridTableStageHistory } from "./useDataGridTableStageHistory"
+import { useDataGridTableStageRowSelection } from "./useDataGridTableStageRowSelection"
+import { useDataGridTableStageScrollSync } from "./useDataGridTableStageScrollSync"
+import { useDataGridTableStageViewportKeyboard } from "./useDataGridTableStageViewportKeyboard"
+import { useDataGridTableStageVisualSelection } from "./useDataGridTableStageVisualSelection"
+import type { DataGridTableStageProps } from "./dataGridTableStage.types"
+
+const DEFAULT_COLUMN_WIDTH = 140
+const INDEX_COLUMN_WIDTH = 72
+const MIN_COLUMN_WIDTH = 80
+const MIN_ROW_HEIGHT = 24
+const AUTO_RESIZE_SAMPLE_LIMIT = 400
+
+export type { DataGridTableStageHistoryAdapter } from "./useDataGridTableStageHistory"
+
+export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string, unknown>> {
+  mode: Ref<"base" | "tree" | "pivot" | "worker">
+  rows: Ref<readonly TRow[]>
+  sourceRows?: Ref<readonly TRow[]>
+  runtime: Pick<
+    import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>,
+    "api" | "syncRowsInRange" | "virtualWindow" | "columnSnapshot"
+  >
+  rowVersion: Ref<number>
+  totalRows: Ref<number>
+  visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
+  rowRenderMode: Ref<"virtualization" | "pagination">
+  rowHeightMode: Ref<"fixed" | "auto">
+  normalizedBaseRowHeight: Ref<number>
+  selectionSnapshot: Ref<DataGridSelectionSnapshot | null>
+  selectionAnchor: Ref<unknown>
+  syncSelectionSnapshotFromRuntime: () => void
+  rowSelectionSnapshot: Ref<DataGridRowSelectionSnapshot | null>
+  syncRowSelectionSnapshotFromRuntime?: () => void
+  firstColumnKey: Ref<string>
+  columnFilterTextByKey: Ref<Record<string, string>>
+  virtualization: Ref<DataGridVirtualizationOptions>
+  toggleSortForColumn: (columnKey: string, additive?: boolean) => void
+  sortIndicator: (columnKey: string) => string
+  setColumnFilterText: (columnKey: string, value: string) => void
+  columnMenuEnabled?: Ref<boolean>
+  columnMenuMaxFilterValues?: Ref<number>
+  isColumnFilterActive?: (columnKey: string) => boolean
+  resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
+  resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
+  applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
+  applyColumnMenuPin?: (columnKey: string, pin: import("@affino/datagrid-vue").DataGridColumnPin) => void
+  applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
+  clearColumnMenuFilter?: (columnKey: string) => void
+  applyRowHeightSettings: () => void
+  cloneRowData: (row: TRow) => TRow
+  readClipboardCell?: (row: import("@affino/datagrid-core").DataGridRowNode<TRow>, columnKey: string) => string
+  applyClipboardEdits?: (
+    range: DataGridCopyRange,
+    matrix: string[][],
+    options?: { recordHistory?: boolean },
+  ) => number
+  buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
+  applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean
+  isCellEditable?: DataGridCellEditablePredicate<TRow>
+  history?: DataGridTableStageHistoryAdapter
+}
+
+export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, unknown>> {
+  tableStageProps: ComputedRef<DataGridTableStageProps<TRow>>
+  tableStageContext: DataGridTableStageContext<TRow>
+  syncViewportFromDom: () => void
+}
+
+export function useDataGridTableStageRuntime<
+  TRow extends Record<string, unknown>,
+>(
+  options: UseDataGridTableStageRuntimeOptions<TRow>,
+): UseDataGridTableStageRuntimeResult<TRow> {
+  const syncRowSelectionSnapshotFromRuntime = options.syncRowSelectionSnapshotFromRuntime ?? (() => undefined)
+  const rowSelectionSnapshotRef = options.rowSelectionSnapshot ?? ref<DataGridRowSelectionSnapshot | null>(null)
+  const columnService = useDataGridTableStageColumns<TRow>({
+    runtime: options.runtime,
+    visibleColumns: options.visibleColumns,
+    isCellEditable: options.isCellEditable,
+  })
+  const {
+    orderedVisibleColumns,
+    centerColumns,
+    resolveColumnWidth,
+    isRowSelectionColumnKey,
+    isRowSelectionColumn,
+    isCellEditable,
+    isCellEditableByKey,
+    rowSelectionColumn,
+  } = columnService
+
+  const rowHeightMetrics = createDataGridAppRowHeightMetrics({
+    totalRows: () => options.totalRows.value,
+    resolveBaseRowHeight: () => options.normalizedBaseRowHeight.value,
+    resolveRowHeightOverride: rowIndex => options.runtime.api.view.getRowHeightOverride(rowIndex),
+    resolveRowHeightVersion: () => options.runtime.api.view.getRowHeightVersion(),
+  })
+
+  let isEditingCellForSelection: (
+    row: import("@affino/datagrid-vue").DataGridRowNode<TRow>,
+    columnKey: string,
+  ) => boolean = () => false
+
+  const {
+    headerViewportRef,
+    bodyViewportRef,
+    displayRows,
+    renderedColumns,
+    viewportRowStart,
+    viewportColumnStart,
+    topSpacerHeight,
+    bottomSpacerHeight,
+    leftColumnSpacerWidth,
+    rightColumnSpacerWidth,
+    gridContentStyle,
+    mainTrackStyle,
+    indexColumnStyle,
+    columnStyle: _viewportColumnStyle,
+    handleViewportScroll,
+    syncViewportFromDom,
+    scheduleViewportSync,
+    cancelScheduledViewportSync,
+  } = useDataGridAppViewport<TRow>({
+    runtime: options.runtime as never,
+    mode: options.mode,
+    rowRenderMode: options.rowRenderMode,
+    rowVirtualizationEnabled: computed(() => options.virtualization.value.rows),
+    columnVirtualizationEnabled: computed(() => options.virtualization.value.columns),
+    totalRows: options.totalRows,
+    visibleColumns: centerColumns,
+    normalizedBaseRowHeight: options.normalizedBaseRowHeight,
+    resolveColumnWidth,
+    defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
+    indexColumnWidth: 0,
+    rowOverscan: computed(() => options.virtualization.value.rowOverscan),
+    columnOverscan: computed(() => options.virtualization.value.columnOverscan),
+    measureVisibleRowHeights: () => measureVisibleRowHeights(),
+    resolveRowHeight: rowHeightMetrics.resolveRowHeight,
+    resolveRowOffset: rowHeightMetrics.resolveRowOffset,
+    resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
+    resolveTotalRowHeight: rowHeightMetrics.resolveTotalHeight,
+  })
+
+  const {
+    rowStyle,
+    isRowAutosizeProbe,
+    measureVisibleRowHeights,
+    startRowResize,
+    autosizeRow,
+    dispose: disposeRowSizing,
+  } = useDataGridAppRowSizing<TRow>({
+    mode: options.mode,
+    rowHeightMode: options.rowHeightMode,
+    normalizedBaseRowHeight: options.normalizedBaseRowHeight,
+    viewportRowStart,
+    runtime: options.runtime as never,
+    minRowHeight: MIN_ROW_HEIGHT,
+    syncViewport: () => syncViewportFromDom(),
+  })
+
+  const selectionController = useDataGridAppCellSelection<TRow>({
+    mode: options.mode,
+    runtime: options.runtime as never,
+    totalRows: options.totalRows,
+    visibleColumns: orderedVisibleColumns,
+    viewportRowStart,
+    selectionSnapshot: options.selectionSnapshot,
+    selectionAnchor: options.selectionAnchor as never,
+    isEditingCell: (row, columnKey): boolean => isEditingCellForSelection(row, columnKey),
+  })
+
+  const {
+    normalizeRowId,
+    normalizeCellCoord,
+    resolveSelectionRange: resolveSelectionRangeForClipboard,
+    resolveCurrentCellCoord: resolveCurrentCellCoordForClipboard,
+    applySelectionRange: applyClipboardSelectionRange,
+    applyCellSelectionByCoord,
+    setCellSelection,
+    clearCellSelection,
+    isCellSelected: isCommittedCellSelected,
+  } = selectionController
+  const isCommittedSelectionAnchorCell = selectionController.isSelectionAnchorCell ?? (() => false)
+  const shouldHighlightCommittedSelectedCell = selectionController.shouldHighlightSelectedCell
+    ?? ((rowOffset: number, columnIndex: number) => isCommittedCellSelected(rowOffset, columnIndex))
+  const isCommittedCellOnSelectionEdge = selectionController.isCellOnSelectionEdge
+    ?? (() => false)
+  const selectionAnchorCell = computed(() => {
+    const snapshot = options.selectionSnapshot.value
+    if (!snapshot || snapshot.ranges.length === 0) {
+      return null
+    }
+    const activeIndex = snapshot.activeRangeIndex ?? 0
+    const anchor = snapshot.ranges[activeIndex]?.anchor ?? snapshot.ranges[0]?.anchor ?? null
+    if (
+      !anchor
+      || typeof anchor.rowIndex !== "number"
+      || typeof anchor.colIndex !== "number"
+      || !Number.isFinite(anchor.rowIndex)
+      || !Number.isFinite(anchor.colIndex)
+    ) {
+      return null
+    }
+    return {
+      rowIndex: Math.trunc(anchor.rowIndex),
+      columnIndex: Math.trunc(anchor.colIndex),
+    }
+  })
+
+  const rowSelectionService = useDataGridTableStageRowSelection<TRow>({
+    runtime: options.runtime,
+    rowSelectionColumn,
+    orderedVisibleColumns,
+    displayRows,
+    rowSelectionSnapshot: rowSelectionSnapshotRef,
+    viewportRowStart,
+    selectionAnchorCell,
+    applySelectionRange: applyClipboardSelectionRange,
+  })
+  const {
+    readRowSelectionCell,
+    readRowSelectionDisplayCell,
+    toggleRowCheckboxSelected,
+  } = rowSelectionService
+
+  const stageIndexColumnStyle = computed(() => {
+    const width = `${INDEX_COLUMN_WIDTH}px`
+    return {
+      ...indexColumnStyle.value,
+      width,
+      minWidth: width,
+      maxWidth: width,
+    }
+  })
+
+  const resolveRowIndexById = (rowId: string | number): number => {
+    const count = options.runtime.api.rows.getCount()
+    for (let rowIndex = 0; rowIndex < count; rowIndex += 1) {
+      if (options.runtime.api.rows.get(rowIndex)?.rowId === rowId) {
+        return rowIndex
+      }
+    }
+    return -1
+  }
+
+  const historyService = useDataGridTableStageHistory<TRow>({
+    runtime: options.runtime,
+    cloneRowData: options.cloneRowData,
+    syncViewport: () => syncViewportFromDom(),
+    history: options.history,
+  })
+  const {
+    captureHistorySnapshot,
+    recordHistoryIntentTransaction,
+    canUndoHistory,
+    canRedoHistory,
+    runHistoryAction,
+  } = historyService
+
+  const {
+    rowIndexLabel,
+    readCell,
+    readDisplayCell,
+    rowClass,
+    toggleGroupRow,
+  } = useDataGridAppRowPresentation<TRow>({
+    mode: options.mode,
+    runtime: options.runtime as never,
+    viewportRowStart,
+    firstColumnKey: options.firstColumnKey,
+  })
+
+  const cellIoService = useDataGridTableStageCellIo<TRow>({
+    runtime: options.runtime,
+    viewportRowStart,
+    isRowSelectionColumnKey,
+    isRowSelectionColumn,
+    isCellEditableByKey,
+    readRowSelectionCell,
+    readRowSelectionDisplayCell,
+    readCell,
+    readDisplayCell,
+    toggleRowCheckboxSelected,
+    captureHistorySnapshot,
+    recordHistoryIntentTransaction,
+    syncViewport: () => syncViewportFromDom(),
+  })
+  const {
+    readStageCell,
+  } = cellIoService
+
+  const clipboard = useDataGridAppClipboard<TRow, unknown>({
+    mode: options.mode,
+    runtime: options.runtime as never,
+    totalRows: options.totalRows,
+    visibleColumns: orderedVisibleColumns,
+    viewportRowStart,
+    resolveSelectionRange: resolveSelectionRangeForClipboard,
+    resolveCurrentCellCoord: resolveCurrentCellCoordForClipboard,
+    applySelectionRange: applyClipboardSelectionRange,
+    clearCellSelection,
+    captureRowsSnapshot: captureHistorySnapshot,
+    recordEditTransaction: beforeSnapshot => {
+      recordHistoryIntentTransaction({
+        intent: "edit",
+        label: "Cell edit",
+      }, beforeSnapshot)
+    },
+    readCell: (row, columnKey) => readStageCell(row, columnKey),
+    readClipboardCell: options.readClipboardCell
+      ? (row, columnKey) => options.readClipboardCell?.(row, columnKey) ?? ""
+      : undefined,
+    isCellEditable: isCellEditableByKey,
+    syncViewport: () => syncViewportFromDom(),
+    applyClipboardEdits: options.applyClipboardEdits,
+    buildFillMatrixFromRange: options.buildFillMatrixFromRange,
+  })
+
+  const {
+    normalizeClipboardRange,
+    applyClipboardEdits,
+    rangesEqual,
+    buildFillMatrixFromRange,
+    clearPendingClipboardOperation,
+    copySelectedCells,
+    pasteSelectedCells,
+    cutSelectedCells,
+    isCellInPendingClipboardRange,
+    isCellOnPendingClipboardEdge,
+  } = clipboard
+
+  const {
+    ensureKeyboardActiveCellVisible,
+  } = useDataGridAppActiveCellViewport({
+    bodyViewportRef,
+    visibleColumns: orderedVisibleColumns,
+    resolveColumnWidth,
+    normalizedBaseRowHeight: options.normalizedBaseRowHeight,
+    resolveRowHeight: rowHeightMetrics.resolveRowHeight,
+    resolveRowOffset: rowHeightMetrics.resolveRowOffset,
+    indexColumnWidth: INDEX_COLUMN_WIDTH,
+    defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
+    syncViewport: () => syncViewportFromDom(),
+  })
+
+  const {
+    editingCell,
+    editingCellValue,
+    editingCellInitialFilter,
+    editingCellOpenOnMount,
+    isEditingCell,
+    startInlineEdit,
+    commitInlineEdit,
+    cancelInlineEdit,
+    handleEditorKeydown,
+  } = useDataGridAppInlineEditing<TRow, unknown>({
+    mode: options.mode,
+    bodyViewportRef,
+    visibleColumns: orderedVisibleColumns,
+    totalRows: options.totalRows,
+    runtime: options.runtime as never,
+    readCell: (row, columnKey) => readStageCell(row, columnKey),
+    resolveRowIndexById,
+    applyCellSelection: coord => {
+      applyCellSelectionByCoord(coord, false)
+    },
+    ensureActiveCellVisible: (rowIndex, columnIndex) => {
+      ensureKeyboardActiveCellVisible(rowIndex, columnIndex)
+    },
+    isCellEditable: isCellEditableByKey,
+    captureRowsSnapshot: captureHistorySnapshot,
+    recordEditTransaction: beforeSnapshot => {
+      recordHistoryIntentTransaction({
+        intent: "edit",
+        label: "Cell edit",
+      }, beforeSnapshot)
+    },
+  })
+
+  isEditingCellForSelection = isEditingCell
+
+  const editingCellRef = computed(() => editingCell.value)
+
+  const {
+    isPointerSelectingCells,
+    isFillDragging,
+    fillPreviewRange,
+    lastAppliedFill,
+    isRangeMoving,
+    selectionRange: interactionSelectionRange,
+    rangeMovePreviewRange,
+    stopPointerSelection,
+    stopFillSelection,
+    startFillHandleDrag,
+    startFillHandleDoubleClick,
+    applyLastFillBehavior,
+    handleCellMouseDown,
+    handleCellKeydown,
+    handleWindowMouseMove: handleInteractionWindowMouseMove,
+    handleWindowMouseUp: handleInteractionWindowMouseUp,
+    isCellInFillPreview,
+    isFillHandleCell,
+    dispose: disposeInteractionController,
+  } = useDataGridAppInteractionController<TRow, unknown>({
+    mode: options.mode,
+    runtime: options.runtime as never,
+    totalRows: options.totalRows,
+    visibleColumns: orderedVisibleColumns,
+    viewportRowStart,
+    selectionSnapshot: options.selectionSnapshot,
+    bodyViewportRef,
+    indexColumnWidth: INDEX_COLUMN_WIDTH,
+    resolveColumnWidth,
+    resolveRowHeight: rowHeightMetrics.resolveRowHeight,
+    resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
+    normalizeRowId,
+    normalizeCellCoord,
+    resolveSelectionRange: resolveSelectionRangeForClipboard,
+    applySelectionRange: applyClipboardSelectionRange,
+    applyCellSelectionByCoord,
+    setCellSelection,
+    clearCellSelection,
+    readCell: (row, columnKey) => readStageCell(row, columnKey),
+    isCellEditable: isCellEditableByKey,
+    cloneRowData: options.cloneRowData,
+    resolveRowIndexById,
+    captureRowsSnapshot: captureHistorySnapshot,
+    recordIntentTransaction: (descriptor, beforeSnapshot) => {
+      recordHistoryIntentTransaction(descriptor, beforeSnapshot)
+    },
+    clearPendingClipboardOperation,
+    copySelectedCells,
+    pasteSelectedCells,
+    cutSelectedCells,
+    normalizeClipboardRange,
+    applyClipboardEdits,
+    rangesEqual,
+    buildFillMatrixFromRange,
+    applyRangeMove: options.applyRangeMove,
+    syncViewport: () => syncViewportFromDom(),
+    editingCell: editingCellRef,
+    startInlineEdit,
+    commitInlineEdit,
+    canUndo: canUndoHistory,
+    canRedo: canRedoHistory,
+    runHistoryAction,
+    ensureKeyboardActiveCellVisible,
+    handleToggleCellAction: (row, rowIndex, columnIndex, column) => {
+      if (!isRowSelectionColumn(column)) {
+        return false
+      }
+      void rowIndex
+      void columnIndex
+      toggleRowCheckboxSelected(row)
+      return true
+    },
+  })
+
+  const viewportKeyboardService = useDataGridTableStageViewportKeyboard<TRow>({
+    runtime: options.runtime,
+    selectionSnapshot: options.selectionSnapshot,
+    totalRows: options.totalRows,
+    orderedVisibleColumns,
+    viewportRowStart,
+    applySelectionRange: applyClipboardSelectionRange,
+    handleCellKeydown,
+  })
+  const {
+    isColumnResizing,
+    startResize,
+    handleResizeDoubleClick,
+    applyColumnResizeFromPointer,
+    stopColumnResize,
+    dispose: disposeHeaderResize,
+  } = useDataGridAppHeaderResize<TRow>({
+    visibleColumns: orderedVisibleColumns,
+    rows: options.rows,
+    persistColumnWidth: (columnKey, width) => {
+      options.runtime.api.columns.setWidth(columnKey, width)
+    },
+    defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
+    minColumnWidth: MIN_COLUMN_WIDTH,
+    autoSizeSampleLimit: AUTO_RESIZE_SAMPLE_LIMIT,
+    autoSizeCharWidth: 7.2,
+    autoSizeHorizontalPadding: 42,
+    autoSizeMaxWidth: 640,
+    isFillDragging: () => isFillDragging.value,
+    stopFillSelection: () => {
+      stopFillSelection(false)
+    },
+    isDragSelecting: () => isPointerSelectingCells.value,
+    stopDragSelection: () => {
+      stopPointerSelection()
+    },
+    readCellText: (row, columnKey) => {
+      const value = (row as Record<string, unknown>)[columnKey]
+      return value == null ? "" : String(value)
+    },
+  })
+
+
+  const visualSelectionService = useDataGridTableStageVisualSelection({
+    mode: options.mode,
+    viewportRowStart,
+    selectionAnchorCell,
+    fillPreviewRange,
+    isFillDragging,
+    interactionSelectionRange,
+    resolveCommittedSelectionRange: resolveSelectionRangeForClipboard,
+    isCommittedSelectionAnchorCell,
+    isCommittedCellSelected,
+    shouldHighlightCommittedSelectedCell,
+    isCommittedCellOnSelectionEdge,
+  })
+  const { selectionRange } = visualSelectionService
+
+  const fillActionService = useDataGridTableStageFillAction({
+    lastAppliedFill,
+    selectionRange,
+    isFillDragging,
+  })
+
+  const scrollSyncService = useDataGridTableStageScrollSync({
+    bodyViewportRef,
+    isColumnResizing,
+    applyColumnResizeFromPointer,
+    stopColumnResize,
+    handleInteractionWindowMouseMove,
+    handleInteractionWindowMouseUp,
+    syncViewport: syncViewportFromDom,
+  })
+
+  const stageServices = {
+    columns: columnService,
+    rowSelection: rowSelectionService,
+    history: historyService,
+    cellIo: cellIoService,
+    viewportKeyboard: viewportKeyboardService,
+    visualSelection: visualSelectionService,
+    fillAction: fillActionService,
+    scrollSync: scrollSyncService,
+  } as const
+
+  const {
+    tableStageProps,
+    tableStageContext,
+  } = useDataGridTableStageBindings<TRow>({
+    mode: options.mode,
+    rowHeightMode: options.rowHeightMode,
+    visibleColumns: orderedVisibleColumns,
+    renderedColumns,
+    displayRows,
+    sourceRows: options.sourceRows ?? options.rows,
+    columnFilterTextByKey: options.columnFilterTextByKey,
+    gridContentStyle,
+    mainTrackStyle,
+    indexColumnStyle: stageIndexColumnStyle,
+    topSpacerHeight,
+    bottomSpacerHeight,
+    viewportRowStart,
+    columnWindowStart: viewportColumnStart,
+    leftColumnSpacerWidth,
+    rightColumnSpacerWidth,
+    editingCellValueRef: editingCellValue,
+    editingCellInitialFilter,
+    editingCellOpenOnMount,
+    selectionRange,
+    selectionAnchorCell,
+    fillPreviewRange,
+    rangeMovePreviewRange,
+    isFillDragging,
+    isRangeMoving,
+    headerViewportRef,
+    bodyViewportRef,
+    columnStyle: stageServices.columns.stageColumnStyle,
+    toggleSortForColumn: options.toggleSortForColumn,
+    sortIndicator: options.sortIndicator,
+    setColumnFilterText: options.setColumnFilterText,
+    columnMenuEnabled: options.columnMenuEnabled,
+    columnMenuMaxFilterValues: options.columnMenuMaxFilterValues,
+    isColumnFilterActive: options.isColumnFilterActive,
+    resolveColumnMenuSortDirection: options.resolveColumnMenuSortDirection,
+    resolveColumnMenuSelectedTokens: options.resolveColumnMenuSelectedTokens,
+    applyColumnMenuSort: options.applyColumnMenuSort,
+    applyColumnMenuPin: options.applyColumnMenuPin,
+    applyColumnMenuFilter: options.applyColumnMenuFilter,
+    clearColumnMenuFilter: options.clearColumnMenuFilter,
+    handleHeaderWheel: stageServices.scrollSync.handleHeaderWheel,
+    handleHeaderScroll: stageServices.scrollSync.handleHeaderScroll,
+    handleViewportScroll,
+    handleViewportKeydown: stageServices.viewportKeyboard.handleViewportKeydown,
+    rowClass,
+    isRowAutosizeProbe,
+    rowStyle,
+    isRowFocused: stageServices.rowSelection.isRowFocused,
+    isRowCheckboxSelected: stageServices.rowSelection.isRowCheckboxSelected,
+    allVisibleRowsSelected: stageServices.rowSelection.areAllVisibleRowsSelected,
+    someVisibleRowsSelected: stageServices.rowSelection.areSomeVisibleRowsSelected,
+    handleRowClick: stageServices.rowSelection.focusRow,
+    handleRowIndexClick: stageServices.rowSelection.selectRowRange,
+    handleToggleAllVisibleRows: stageServices.rowSelection.toggleVisibleRowsSelected,
+    toggleGroupRow,
+    rowIndexLabel,
+    startResize,
+    handleResizeDoubleClick,
+    startRowResize,
+    autosizeRow,
+    isCellSelected: stageServices.visualSelection.isCellSelected,
+    isSelectionAnchorCell: stageServices.visualSelection.isSelectionAnchorCell,
+    shouldHighlightSelectedCell: stageServices.visualSelection.shouldHighlightSelectedCell,
+    isCellOnSelectionEdge: stageServices.visualSelection.isCellOnSelectionEdge,
+    isCellInFillPreview,
+    isCellInPendingClipboardRange,
+    isCellOnPendingClipboardEdge,
+    isEditingCell,
+    isCellEditable: (row, rowOffset, column, columnIndex) => {
+      void columnIndex
+      return isCellEditable(row, viewportRowStart.value + rowOffset, column)
+    },
+    handleCellMouseDown,
+    handleCellClick: stageServices.cellIo.handleCellClick,
+    handleCellKeydown,
+    startInlineEdit,
+    isFillHandleCell,
+    startFillHandleDrag,
+    startFillHandleDoubleClick,
+    fillActionAnchorCell: stageServices.fillAction.fillActionAnchorCell,
+    fillActionBehavior: stageServices.fillAction.fillActionBehavior,
+    applyFillActionBehavior: applyLastFillBehavior,
+    handleEditorKeydown,
+    commitInlineEdit,
+    cancelInlineEdit,
+    readCell: stageServices.cellIo.readStageCell,
+    readDisplayCell: stageServices.cellIo.readStageDisplayCell,
+  })
+
+  useDataGridAppRuntimeSync({
+    mode: options.mode,
+    rows: options.rows,
+    runtime: options.runtime as never,
+    totalRows: options.totalRows,
+    rowVersion: options.rowVersion,
+    rowHeightMode: options.rowHeightMode,
+    normalizedBaseRowHeight: options.normalizedBaseRowHeight,
+    syncSelectionSnapshotFromRuntime: options.syncSelectionSnapshotFromRuntime,
+    syncRowSelectionSnapshotFromRuntime,
+    syncViewport: syncViewportFromDom,
+    scheduleViewportSync,
+    measureVisibleRowHeights,
+    applyRowHeightSettings: options.applyRowHeightSettings,
+  })
+
+  useDataGridAppViewportLifecycle({
+    bodyViewportRef,
+    syncViewport: syncViewportFromDom,
+    handleWindowMouseMove: stageServices.scrollSync.handleWindowMouseMove,
+    handleWindowMouseUp: stageServices.scrollSync.handleWindowMouseUp,
+    cancelScheduledViewportSync,
+    onAfterMount: () => {
+      options.syncSelectionSnapshotFromRuntime()
+      syncRowSelectionSnapshotFromRuntime()
+      void nextTick(() => {
+        options.applyRowHeightSettings()
+        syncViewportFromDom()
+      })
+    },
+    dispose: [
+      disposeRowSizing,
+      disposeHeaderResize,
+      disposeInteractionController,
+      stageServices.history.disposeIntentHistory,
+    ],
+  })
+
+  return {
+    tableStageProps,
+    tableStageContext,
+    syncViewportFromDom,
+  }
+}

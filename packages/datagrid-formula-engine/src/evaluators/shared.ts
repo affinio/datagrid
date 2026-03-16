@@ -9,6 +9,7 @@ import {
   DataGridFormulaEvaluationError,
   createFormulaSourceSpan,
   type DataGridFormulaAstNode,
+  type DataGridFormulaOperator,
 } from "../syntax/ast.js"
 import {
   areFormulaValuesEqual,
@@ -17,6 +18,8 @@ import {
   compareFormulaValues,
   createFormulaRuntimeError,
   findFormulaErrorValue,
+  formulaNumberIsTruthy,
+  isFormulaErrorValue,
   isFormulaValuePresent,
   normalizeFormulaValue,
 } from "../syntax/values.js"
@@ -53,6 +56,28 @@ export type DataGridFormulaVectorColumnKernel = (
   contextsCount: number,
   tokenColumns: readonly (readonly unknown[])[],
 ) => DataGridFormulaValue[]
+
+export function createFormulaConstantColumnKernel(
+  value: DataGridFormulaValue,
+): DataGridFormulaVectorColumnKernel {
+  return (contextsCount) => createFormulaArrayFilled(contextsCount, value)
+}
+
+export function createFormulaIdentifierColumnKernel(
+  tokenIndex: number | undefined,
+): DataGridFormulaVectorColumnKernel {
+  if (typeof tokenIndex !== "number") {
+    return (contextsCount) => createFormulaArrayFilled(contextsCount, null)
+  }
+  return (contextsCount, tokenColumns) => {
+    const output = new Array<DataGridFormulaValue>(contextsCount)
+    const column = tokenColumns[tokenIndex]
+    for (let contextIndex = 0; contextIndex < contextsCount; contextIndex += 1) {
+      output[contextIndex] = normalizeFormulaValue(column ? column[contextIndex] : undefined)
+    }
+    return output
+  }
+}
 
 export interface DataGridFormulaRowIndexSelection {
   indexes: readonly number[]
@@ -110,6 +135,107 @@ export function createSequentialRowIndexes(contextsCount: number): number[] {
     rowIndexes[index] = index
   }
   return rowIndexes
+}
+
+export function evaluateFormulaUnaryOperator(
+  operator: "-" | "+" | "NOT",
+  value: DataGridFormulaValue,
+): DataGridFormulaValue {
+  if (isFormulaErrorValue(value)) {
+    return value
+  }
+  if (operator === "-") {
+    return -coerceFormulaValueToNumber(value)
+  }
+  if (operator === "+") {
+    return coerceFormulaValueToNumber(value)
+  }
+  return formulaNumberIsTruthy(value) ? 0 : 1
+}
+
+export function evaluateFormulaBinaryOperator(
+  operator: DataGridFormulaOperator,
+  left: DataGridFormulaValue,
+  right: DataGridFormulaValue,
+): DataGridFormulaValue {
+  const formulaError = findFormulaErrorValue([left, right])
+  if (formulaError) {
+    return formulaError
+  }
+  if (operator === "+") {
+    return coerceFormulaValueToNumber(left) + coerceFormulaValueToNumber(right)
+  }
+  if (operator === "-") {
+    return coerceFormulaValueToNumber(left) - coerceFormulaValueToNumber(right)
+  }
+  if (operator === "*") {
+    return coerceFormulaValueToNumber(left) * coerceFormulaValueToNumber(right)
+  }
+  if (operator === "/") {
+    const divisor = coerceFormulaValueToNumber(right)
+    if (divisor === 0) {
+      throw new DataGridFormulaEvaluationError(
+        createFormulaRuntimeError(
+          "DIV_ZERO",
+          "Division by zero.",
+          { operator: "/" },
+        ),
+      )
+    }
+    return coerceFormulaValueToNumber(left) / divisor
+  }
+  if (operator === ">") {
+    return compareFormulaValues(left, right) > 0 ? 1 : 0
+  }
+  if (operator === "<") {
+    return compareFormulaValues(left, right) < 0 ? 1 : 0
+  }
+  if (operator === ">=") {
+    return compareFormulaValues(left, right) >= 0 ? 1 : 0
+  }
+  if (operator === "<=") {
+    return compareFormulaValues(left, right) <= 0 ? 1 : 0
+  }
+  if (operator === "==") {
+    return areFormulaValuesEqual(left, right) ? 1 : 0
+  }
+  if (operator === "!=") {
+    return areFormulaValuesEqual(left, right) ? 0 : 1
+  }
+  throw new Error(`Unsupported non-scalar binary operator '${operator}'.`)
+}
+
+export function createFormulaUnaryColumnKernel(
+  valueKernel: DataGridFormulaVectorColumnKernel,
+  operator: "-" | "+" | "NOT",
+): DataGridFormulaVectorColumnKernel {
+  return (contextsCount, tokenColumns) => {
+    const values = valueKernel(contextsCount, tokenColumns)
+    const output = new Array<DataGridFormulaValue>(contextsCount)
+    for (let contextIndex = 0; contextIndex < contextsCount; contextIndex += 1) {
+      const value = values[contextIndex] ?? null
+      output[contextIndex] = evaluateFormulaUnaryOperator(operator, value)
+    }
+    return output
+  }
+}
+
+export function createFormulaBinaryColumnKernel(
+  leftKernel: DataGridFormulaVectorColumnKernel,
+  rightKernel: DataGridFormulaVectorColumnKernel,
+  operator: DataGridFormulaOperator,
+): DataGridFormulaVectorColumnKernel {
+  return (contextsCount, tokenColumns) => {
+    const leftValues = leftKernel(contextsCount, tokenColumns)
+    const rightValues = rightKernel(contextsCount, tokenColumns)
+    const output = new Array<DataGridFormulaValue>(contextsCount)
+    for (let contextIndex = 0; contextIndex < contextsCount; contextIndex += 1) {
+      const left = leftValues[contextIndex] ?? null
+      const right = rightValues[contextIndex] ?? null
+      output[contextIndex] = evaluateFormulaBinaryOperator(operator, left, right)
+    }
+    return output
+  }
 }
 
 export interface DataGridFormulaJitRuntimeHelpers {

@@ -457,12 +457,37 @@ describe("DataGridTableStage contract", () => {
       ),
     })
 
-    const overlaySegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment")
     const selectedCell = wrapper.find('[data-row-index="0"][data-column-index="1"]')
 
-    expect(overlaySegment.exists()).toBe(true)
+    expect(wrapper.find(".grid-body-viewport .grid-selection-overlay__segment").exists()).toBe(false)
     expect(selectedCell.classes()).not.toContain("grid-cell--selection-edge")
     expect(selectedCell.classes().filter(name => name.startsWith("grid-cell--selection-edge-"))).toHaveLength(0)
+
+    wrapper.unmount()
+  })
+
+  it("updates the center overlay when selection changes after mount", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        () => false,
+        {
+          selectionRange: null,
+        },
+      ),
+    })
+
+    expect(wrapper.find(".grid-body-viewport .grid-selection-overlay__segment").exists()).toBe(false)
+
+    await wrapper.setProps(createStageProps(
+      (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
+      {
+        selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+      },
+    ))
+    await nextTick()
+
+    expect(wrapper.find(".grid-body-viewport .grid-selection-overlay__segment").exists()).toBe(false)
 
     wrapper.unmount()
   })
@@ -530,6 +555,28 @@ describe("DataGridTableStage contract", () => {
     expect(startCell.classes()).toContain("grid-cell--selected")
     expect(anchorCell.classes()).toContain("grid-cell--selection-anchor")
     expect(anchorCell.classes()).not.toContain("grid-cell--selected")
+
+    wrapper.unmount()
+  })
+
+  it("uses the selected cell as the visual anchor for single-cell selections", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 2 },
+        },
+      ),
+    })
+
+    const selectedCell = wrapper.find('[data-row-index="0"][data-column-index="1"]')
+    const staleAnchorCell = wrapper.find('[data-row-index="0"][data-column-index="2"]')
+
+    expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--single-cell-selection")
+    expect(selectedCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(staleAnchorCell.classes()).not.toContain("grid-cell--selection-anchor")
 
     wrapper.unmount()
   })

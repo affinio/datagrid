@@ -159,7 +159,7 @@ import type {
   DataGridAppAdvancedFilterColumnOption,
 } from "@affino/datagrid-vue"
 import DataGridFilterableCombobox from "./DataGridFilterableCombobox.vue"
-import { dataGridAppRootElementKey } from "./dataGridAppContext"
+import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import type { DataGridFilterableComboboxOption } from "./dataGridFilterableCombobox"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 

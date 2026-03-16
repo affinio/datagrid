@@ -35,43 +35,43 @@ import {
 import type {
   DataGridPivotSpec,
 } from "@affino/datagrid-vue"
-import DataGridDefaultRenderer from "./DataGridDefaultRenderer"
+import DataGridDefaultRenderer from "./host/DataGridDefaultRenderer"
 import {
   resolveDataGridColumns,
   resolveDataGridFormulaRowModelOptions,
   type DataGridAppClientRowModelOptions,
   type DataGridAppColumnInput,
-} from "./dataGridFormulaOptions"
-import { type DataGridThemeProp } from "./dataGridTheme"
+} from "./config/dataGridFormulaOptions"
+import { type DataGridThemeProp } from "./theme/dataGridTheme"
 import {
   resolveDataGridGroupBy,
   resolveDataGridPagination,
   resolveDataGridRenderMode,
   type DataGridGroupByProp,
   type DataGridPaginationProp,
-} from "./dataGridPublicProps"
+} from "./config/dataGridPublicProps"
 import {
   resolveDataGridAdvancedFilter,
   type DataGridAdvancedFilterOptions,
   type DataGridAdvancedFilterProp,
-} from "./dataGridAdvancedFilter"
+} from "./config/dataGridAdvancedFilter"
 import {
   resolveDataGridColumnLayout,
   type DataGridColumnLayoutOptions,
   type DataGridColumnLayoutProp,
-} from "./dataGridColumnLayout"
+} from "./config/dataGridColumnLayout"
 import {
   resolveDataGridAggregations,
   type DataGridAggregationsOptions,
   type DataGridAggregationsProp,
-} from "./dataGridAggregations"
+} from "./config/dataGridAggregations"
 import {
   resolveDataGridColumnMenu,
   type DataGridColumnMenuOptions,
   type DataGridColumnMenuProp,
-} from "./dataGridColumnMenu"
-import { type DataGridVirtualizationProp, resolveDataGridVirtualization } from "./dataGridVirtualization"
-import DataGridRuntimeHost from "./DataGridRuntimeHost"
+} from "./overlays/dataGridColumnMenu"
+import { type DataGridVirtualizationProp, resolveDataGridVirtualization } from "./config/dataGridVirtualization"
+import DataGridRuntimeHost from "./host/DataGridRuntimeHost"
 import {
   useDataGridAppControlledState,
   type UseDataGridAppControlledStateOptions,
@@ -81,7 +81,7 @@ import type { DataGridCellEditablePredicate } from "./dataGridEditability"
 import type {
   DataGridAppViewMode,
   DataGridGanttProp,
-} from "./dataGridGantt"
+} from "./gantt/dataGridGantt"
 
 type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,

@@ -240,7 +240,7 @@ import {
   type MenuCallbacks,
   type MenuOptions,
 } from "@affino/menu-vue"
-import { dataGridAppRootElementKey } from "./dataGridAppContext"
+import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 
 type DataGridColumnPin = "left" | "right" | "none"

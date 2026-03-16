@@ -5,7 +5,7 @@ export const DataGrid: Component = DataGridComponent
 export type {
   DataGridAppColumnInput,
   DataGridDeclarativeFormulaOptions,
-} from "./dataGridFormulaOptions"
+} from "./config/dataGridFormulaOptions"
 export type {
   DataGridCellEditablePredicate,
   DataGridCellEditablePredicateContext,
@@ -13,7 +13,7 @@ export type {
 export type {
   DataGridThemePreset,
   DataGridThemeProp,
-} from "./dataGridTheme"
+} from "./theme/dataGridTheme"
 export type {
   BuildDataGridChromePaneModelInput,
   BuildDataGridChromeRenderModelInput,
@@ -28,27 +28,27 @@ export type {
 export type {
   DataGridAdvancedFilterOptions,
   DataGridAdvancedFilterProp,
-} from "./dataGridAdvancedFilter"
+} from "./config/dataGridAdvancedFilter"
 export type {
   DataGridColumnLayoutOptions,
   DataGridColumnLayoutProp,
-} from "./dataGridColumnLayout"
+} from "./config/dataGridColumnLayout"
 export type {
   DataGridAggregationsOptions,
   DataGridAggregationsProp,
-} from "./dataGridAggregations"
+} from "./config/dataGridAggregations"
 export type {
   DataGridColumnMenuOptions,
   DataGridColumnMenuProp,
-} from "./dataGridColumnMenu"
+} from "./overlays/dataGridColumnMenu"
 export type {
   DataGridGroupByProp,
   DataGridPaginationProp,
-} from "./dataGridPublicProps"
+} from "./config/dataGridPublicProps"
 export type {
   DataGridVirtualizationOptions,
   DataGridVirtualizationProp,
-} from "./dataGridVirtualization"
+} from "./config/dataGridVirtualization"
 export type {
   DataGridAppViewMode,
   DataGridGanttDependencyRef,
@@ -68,7 +68,7 @@ export type {
   DataGridWorkingCalendar,
   BuildDataGridTimelineRenderModelsInput,
   ResolveDataGridTimelineRangeInput,
-} from "./dataGridGantt"
+} from "./gantt/dataGridGantt"
 export type {
   DataGridClientComputeMode,
   DataGridComputedFieldDefinition,

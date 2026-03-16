@@ -72,7 +72,7 @@
 
 <script setup lang="ts">
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch, type StyleValue } from "vue"
-import { dataGridAppRootElementKey } from "./dataGridAppContext"
+import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 import {
   activateDataGridCellComboboxIndex,

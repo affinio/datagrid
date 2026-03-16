@@ -543,27 +543,34 @@ const clearColumnMenuFilter = (columnKey: string): void => {
 }
 
 const tableStagePropsForView = computed<Record<string, unknown>>(() => {
+  const baseProps = tableStageProps.value
   return {
-    ...(tableStageProps.value as unknown as Record<string, unknown>),
-    sourceRows: rows.value,
-    columnMenuEnabled: true,
-    columnMenuMaxFilterValues: 250,
-    isColumnFilterActive,
-    resolveColumnMenuSortDirection,
-    resolveColumnMenuSelectedTokens: () => [],
-    applyColumnMenuSort,
-    applyColumnMenuPin,
-    applyColumnMenuFilter,
-    clearColumnMenuFilter,
+    ...(baseProps as unknown as Record<string, unknown>),
+    rows: {
+      ...baseProps.rows,
+      sourceRows: rows.value,
+    },
+    columns: {
+      ...baseProps.columns,
+      columnMenuEnabled: true,
+      columnMenuMaxFilterValues: 250,
+      isColumnFilterActive,
+      resolveColumnMenuSortDirection,
+      resolveColumnMenuSelectedTokens: () => [],
+      applyColumnMenuSort,
+      applyColumnMenuPin,
+      applyColumnMenuFilter,
+      clearColumnMenuFilter,
+    },
   }
 })
-const displayRows = computed(() => tableStageProps.value.displayRows)
-const viewportRowStart = computed(() => tableStageProps.value.viewportRowStart)
+const displayRows = computed(() => tableStageProps.value.rows.displayRows)
+const viewportRowStart = computed(() => tableStageProps.value.viewport.viewportRowStart)
 const viewportRowEnd = computed(() => {
-  const count = tableStageProps.value.displayRows.length
+  const count = displayRows.value.length
   if (count <= 0) {
-    return tableStageProps.value.viewportRowStart
+    return viewportRowStart.value
   }
-  return tableStageProps.value.viewportRowStart + count - 1
+  return viewportRowStart.value + count - 1
 })
 </script>

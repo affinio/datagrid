@@ -5,25 +5,21 @@ import type { DataGridFormulaColumnarBatchEvaluator } from "../runtime/types.js"
 import { type DataGridFormulaAstNode } from "../syntax/ast.js"
 import { normalizeFormulaFunctionName } from "../syntax/functions.js"
 import {
-  areFormulaValuesEqual,
-  coerceFormulaValueToNumber,
-  compareFormulaValues,
-  createFormulaRuntimeError,
-  findFormulaErrorValue,
   formulaNumberIsTruthy,
   isFormulaErrorValue,
   isFormulaValuePresent,
-  normalizeFormulaValue,
 } from "../syntax/values.js"
 import {
-  createFormulaArrayFilled,
+  createFormulaBinaryColumnKernel,
+  createFormulaConstantColumnKernel,
+  createFormulaIdentifierColumnKernel,
+  createFormulaUnaryColumnKernel,
   createSequentialRowIndexes,
   evaluateVectorKernelForIndexes,
   type DataGridFormulaRowIndexSelection,
   type DataGridFormulaVectorColumnKernel,
   ZERO_FORMULA_NODE,
 } from "./shared.js"
-import { DataGridFormulaEvaluationError } from "../syntax/ast.js"
 
 function createRowIndexBuffer(contextsCount: number): number[] {
   return new Array<number>(contextsCount)
@@ -41,51 +37,20 @@ export function compileFormulaAstVectorColumnKernel(
   resolveIdentifierTokenIndex: (identifier: string) => number | undefined,
 ): DataGridFormulaVectorColumnKernel | null {
   if (root.kind === "number") {
-    return (contextsCount) => createFormulaArrayFilled(contextsCount, root.value)
+    return createFormulaConstantColumnKernel(root.value)
   }
   if (root.kind === "literal") {
-    return (contextsCount) => createFormulaArrayFilled(contextsCount, root.value)
+    return createFormulaConstantColumnKernel(root.value)
   }
   if (root.kind === "identifier") {
-    const tokenIndex = resolveIdentifierTokenIndex(root.name)
-    if (typeof tokenIndex !== "number") {
-      return (contextsCount) => createFormulaArrayFilled(contextsCount, null)
-    }
-    return (contextsCount, tokenColumns) => {
-      const output = new Array(contextsCount)
-      const column = tokenColumns[tokenIndex]
-      for (let contextIndex = 0; contextIndex < contextsCount; contextIndex += 1) {
-        output[contextIndex] = normalizeFormulaValue(column ? column[contextIndex] : undefined)
-      }
-      return output
-    }
+    return createFormulaIdentifierColumnKernel(resolveIdentifierTokenIndex(root.name))
   }
   if (root.kind === "unary") {
     const valueKernel = compileFormulaAstVectorColumnKernel(root.value, resolveIdentifierTokenIndex)
     if (!valueKernel) {
       return null
     }
-    return (contextsCount, tokenColumns) => {
-      const values = valueKernel(contextsCount, tokenColumns)
-      const output = new Array(contextsCount)
-      for (let contextIndex = 0; contextIndex < contextsCount; contextIndex += 1) {
-        const value = values[contextIndex] ?? null
-        if (isFormulaErrorValue(value)) {
-          output[contextIndex] = value
-          continue
-        }
-        if (root.operator === "-") {
-          output[contextIndex] = -coerceFormulaValueToNumber(value)
-          continue
-        }
-        if (root.operator === "+") {
-          output[contextIndex] = coerceFormulaValueToNumber(value)
-          continue
-        }
-        output[contextIndex] = formulaNumberIsTruthy(value) ? 0 : 1
-      }
-      return output
-    }
+    return createFormulaUnaryColumnKernel(valueKernel, root.operator)
   }
   if (root.kind === "call") {
     const normalizedFunctionName = normalizeFormulaFunctionName(root.name)
@@ -150,7 +115,7 @@ export function compileFormulaAstVectorColumnKernel(
           const conditionKernel = pairKernels[index]
           const valueKernel = pairKernels[index + 1] ?? compileFormulaAstVectorColumnKernel(ZERO_FORMULA_NODE, resolveIdentifierTokenIndex)
           if (!conditionKernel || !valueKernel) {
-            return createFormulaArrayFilled(contextsCount, 0)
+            return createFormulaConstantColumnKernel(0)(contextsCount, tokenColumns)
           }
           const conditionValues = evaluateVectorKernelForIndexes(
             conditionKernel,
@@ -299,38 +264,7 @@ export function compileFormulaAstVectorColumnKernel(
     }
   }
 
-  return (contextsCount, tokenColumns) => {
-    const leftValues = leftKernel(contextsCount, tokenColumns)
-    const rightValues = rightKernel(contextsCount, tokenColumns)
-    const output = new Array(contextsCount)
-    for (let contextIndex = 0; contextIndex < contextsCount; contextIndex += 1) {
-      const left = leftValues[contextIndex] ?? null
-      const right = rightValues[contextIndex] ?? null
-      const formulaError = findFormulaErrorValue([left, right])
-      if (formulaError) {
-        output[contextIndex] = formulaError
-        continue
-      }
-      if (root.operator === "+") { output[contextIndex] = coerceFormulaValueToNumber(left) + coerceFormulaValueToNumber(right); continue }
-      if (root.operator === "-") { output[contextIndex] = coerceFormulaValueToNumber(left) - coerceFormulaValueToNumber(right); continue }
-      if (root.operator === "*") { output[contextIndex] = coerceFormulaValueToNumber(left) * coerceFormulaValueToNumber(right); continue }
-      if (root.operator === "/") {
-        const divisor = coerceFormulaValueToNumber(right)
-        if (divisor === 0) {
-          throw new DataGridFormulaEvaluationError(createFormulaRuntimeError("DIV_ZERO", "Division by zero.", { operator: "/" }))
-        }
-        output[contextIndex] = coerceFormulaValueToNumber(left) / divisor
-        continue
-      }
-      if (root.operator === ">") { output[contextIndex] = compareFormulaValues(left, right) > 0 ? 1 : 0; continue }
-      if (root.operator === "<") { output[contextIndex] = compareFormulaValues(left, right) < 0 ? 1 : 0; continue }
-      if (root.operator === ">=") { output[contextIndex] = compareFormulaValues(left, right) >= 0 ? 1 : 0; continue }
-      if (root.operator === "<=") { output[contextIndex] = compareFormulaValues(left, right) <= 0 ? 1 : 0; continue }
-      if (root.operator === "==") { output[contextIndex] = areFormulaValuesEqual(left, right) ? 1 : 0; continue }
-      output[contextIndex] = areFormulaValuesEqual(left, right) ? 0 : 1
-    }
-    return output
-  }
+  return createFormulaBinaryColumnKernel(leftKernel, rightKernel, root.operator)
 }
 
 export function compileFormulaAstColumnarBatchEvaluatorVector(

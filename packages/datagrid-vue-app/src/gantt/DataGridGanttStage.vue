@@ -70,8 +70,8 @@ import {
   type CSSProperties,
 } from "vue"
 import type { DataGridRowNode, UseDataGridRuntimeResult } from "@affino/datagrid-vue"
-import DataGridTableStage from "./DataGridTableStage.vue"
-import type { DataGridTableStageProps } from "./dataGridTableStage.types"
+import DataGridTableStage from "../stage/DataGridTableStage.vue"
+import type { DataGridTableStageProps } from "../stage/dataGridTableStage.types"
 import type {
   DataGridResolvedGanttOptions,
   DataGridGanttBarLayout,
@@ -105,7 +105,7 @@ import {
   hitTestDataGridGanttDependencyPath,
   resolveDataGridGanttDependencyPathKey,
 } from "./dataGridGanttDependencySelection"
-import { ensureDataGridAppStyles } from "./ensureDataGridAppStyles"
+import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 
 ensureDataGridAppStyles()
 

@@ -3,25 +3,48 @@ export {
   buildDataGridChromePaneModel,
   buildDataGridChromeRenderModel,
 } from "@affino/datagrid-chrome"
-export { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
-export { default as DataGridDefaultRenderer } from "./DataGridDefaultRenderer"
-export { default as DataGridGanttStage } from "./DataGridGanttStage.vue"
-export { default as DataGridModuleHost } from "./DataGridModuleHost"
-export { default as DataGridAdvancedFilterPopover } from "./DataGridAdvancedFilterPopover.vue"
-export { default as DataGridTableStage } from "./DataGridTableStage.vue"
+export { readDataGridOverlayThemeVars } from "./overlays/dataGridOverlayThemeVars"
+export { default as DataGridDefaultRenderer } from "./host/DataGridDefaultRenderer"
+export { default as DataGridGanttStage } from "./gantt/DataGridGanttStage.vue"
+export { default as DataGridModuleHost } from "./host/DataGridModuleHost"
+export { default as DataGridAdvancedFilterPopover } from "./overlays/DataGridAdvancedFilterPopover.vue"
+export { default as DataGridTableStage } from "./stage/DataGridTableStage.vue"
 export {
   buildDataGridTimelineRenderModels,
   normalizeDataGridGanttOptions,
   resolveDataGridTimelineRange,
-} from "./dataGridGantt"
-export { resolveDataGridFormulaRowModelOptions } from "./dataGridFormulaOptions"
+} from "./gantt/dataGridGantt"
+export { resolveDataGridFormulaRowModelOptions } from "./config/dataGridFormulaOptions"
+export {
+  createDataGridTableStageContext,
+  createDataGridTableStageContextFromProps,
+  dataGridTableStageContextKey,
+  provideDataGridTableStageContext,
+  useDataGridTableStageCellsSection,
+  useDataGridTableStageColumnsSection,
+  useDataGridTableStageContext,
+  useDataGridTableStageEditingSection,
+  useDataGridTableStageInteractionSection,
+  useDataGridTableStageLayoutSection,
+  useDataGridTableStageMode,
+  useDataGridTableStageRowHeightMode,
+  useDataGridTableStageRowsSection,
+  useDataGridTableStageSection,
+  useDataGridTableStageSelectionSection,
+  useDataGridTableStageViewportSection,
+} from "./stage/dataGridTableStageContext"
+export type {
+  AnyDataGridTableStageContext,
+  DataGridTableStageContextSource,
+  DataGridTableStageSectionKey,
+} from "./stage/dataGridTableStageContext"
 export { useDataGridAppRowModel } from "./useDataGridAppRowModel"
-export { useDataGridTableStageBindings } from "./useDataGridTableStageBindings"
-export { useDataGridTableStageRuntime } from "./useDataGridTableStageRuntime"
+export { useDataGridTableStageBindings } from "./stage/useDataGridTableStageBindings"
+export { useDataGridTableStageRuntime } from "./stage/useDataGridTableStageRuntime"
 export type {
   DataGridAppInspectorPanel,
   DataGridAppToolbarModule,
-} from "./DataGridModuleHost"
+} from "./host/DataGridModuleHost"
 export type {
   BuildDataGridChromePaneModelInput,
   BuildDataGridChromeRenderModelInput,
@@ -38,15 +61,16 @@ export type {
   DataGridAppColumnInput,
   DataGridAppEnterpriseFormulaRuntimeOptions,
   ResolveDataGridFormulaRowModelOptionsInput,
-} from "./dataGridFormulaOptions"
+} from "./config/dataGridFormulaOptions"
 export type {
   DataGridElementRefHandler,
   DataGridPendingEdge,
   DataGridTableMode,
   DataGridTableRow,
+  DataGridTableStageSectionedProps,
   DataGridTableStageProps,
   UseDataGridTableStageBindingsOptions,
-} from "./dataGridTableStage.types"
+} from "./stage/dataGridTableStage.types"
 export type {
   DataGridAppViewMode,
   DataGridGanttBarFrame,
@@ -74,7 +98,7 @@ export type {
   DataGridWorkingCalendar,
   BuildDataGridTimelineRenderModelsInput,
   ResolveDataGridTimelineRangeInput,
-} from "./dataGridGantt"
+} from "./gantt/dataGridGantt"
 export type {
   UseDataGridAppRowModelOptions,
   UseDataGridAppRowModelResult,

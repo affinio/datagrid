@@ -97,8 +97,8 @@ import {
 } from "@affino/popover-vue"
 import type { DataGridAggOp } from "@affino/datagrid-vue"
 import DataGridFilterableCombobox from "./DataGridFilterableCombobox.vue"
-import type { DataGridAggregationPanelItem } from "./dataGridAggregations"
-import { dataGridAppRootElementKey } from "./dataGridAppContext"
+import type { DataGridAggregationPanelItem } from "../config/dataGridAggregations"
+import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import type { DataGridFilterableComboboxOption } from "./dataGridFilterableCombobox"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 

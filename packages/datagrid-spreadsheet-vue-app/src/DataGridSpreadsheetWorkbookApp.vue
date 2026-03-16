@@ -328,7 +328,7 @@
             @mousedown.capture="handleGridPointerDownCapture"
             @mousemove.capture="handleFormulaReferenceDragMove"
           >
-            <DataGridTableStageLoose v-bind="tableStagePropsForView" />
+            <DataGridTableStageLoose v-bind="tableStagePropsForView" :stage-context="tableStageContextForView" />
           </section>
 
           <div
@@ -538,9 +538,11 @@ import {
 import {
   DataGridAdvancedFilterPopover,
   DataGridTableStage,
+  createDataGridTableStageContext,
   dataGridAppRootElementKey,
   useDataGridTableStageRuntime,
 } from "../../datagrid-vue-app/src/internal"
+import type { DataGridTableStageProps } from "../../datagrid-vue-app/src/internal"
 import { useDataGridSpreadsheetWorkbookHistory } from "./useDataGridSpreadsheetWorkbookHistory"
 
 const DataGridTableStageLoose = DataGridTableStage as unknown as new () => {
@@ -2079,6 +2081,21 @@ const visibleColumnIndexByKey = computed(() => {
   return indexByKey
 })
 
+const stageVisibleColumnIndexByKey = computed(() => {
+  const indexByKey = new Map<string, number>()
+  tableStagePropsForView.value.columns.visibleColumns.forEach((column, index) => {
+    indexByKey.set(column.key, index)
+  })
+  return indexByKey
+})
+
+function resolveSpreadsheetColumnKeyFromStageIndex(columnIndex: number): string | null {
+  const columnKey = tableStagePropsForView.value.columns.visibleColumns[columnIndex]?.key
+  return columnKey && visibleColumnIndexByKey.value.has(columnKey)
+    ? columnKey
+    : null
+}
+
 function resolveSpreadsheetRuntimeRow(
   visualRowIndex: number,
 ): { rowId: DataGridRowId; sourceRowIndex: number } | null {
@@ -2136,7 +2153,7 @@ function buildSpreadsheetFillMatrixFromRange(range: DataGridCopyRange): string[]
   for (let visualRowIndex = range.startRow; visualRowIndex <= range.endRow; visualRowIndex += 1) {
     const rowValues: string[] = []
     for (let columnIndex = range.startColumn; columnIndex <= range.endColumn; columnIndex += 1) {
-      const columnKey = visibleColumns.value[columnIndex]?.key
+      const columnKey = resolveSpreadsheetColumnKeyFromStageIndex(columnIndex)
       const cell = columnKey ? resolveSpreadsheetCellSnapshotByVisualCoord(visualRowIndex, columnKey) : null
       rowValues.push(cell?.rawInput ?? "")
     }
@@ -2169,7 +2186,7 @@ function applySpreadsheetGridEdits(
       continue
     }
     for (let columnIndex = range.startColumn; columnIndex <= range.endColumn; columnIndex += 1) {
-      const columnKey = visibleColumns.value[columnIndex]?.key
+      const columnKey = resolveSpreadsheetColumnKeyFromStageIndex(columnIndex)
       if (!columnKey) {
         continue
       }
@@ -2251,7 +2268,7 @@ function applySpreadsheetRangeMove(baseRange: DataGridCopyRange, targetRange: Da
       continue
     }
     for (let columnIndex = baseRange.startColumn; columnIndex <= baseRange.endColumn; columnIndex += 1) {
-      const columnKey = visibleColumns.value[columnIndex]?.key
+      const columnKey = resolveSpreadsheetColumnKeyFromStageIndex(columnIndex)
       if (!columnKey) {
         continue
       }
@@ -2273,7 +2290,7 @@ function applySpreadsheetRangeMove(baseRange: DataGridCopyRange, targetRange: Da
       continue
     }
     for (let columnIndex = targetRange.startColumn; columnIndex <= targetRange.endColumn; columnIndex += 1) {
-      const columnKey = visibleColumns.value[columnIndex]?.key
+      const columnKey = resolveSpreadsheetColumnKeyFromStageIndex(columnIndex)
       if (!columnKey) {
         continue
       }
@@ -2371,9 +2388,9 @@ function applyCellRangeSelection(
   anchorCell: DataGridSpreadsheetCellAddress,
   focusCell: DataGridSpreadsheetCellAddress,
 ): void {
-  const anchorColumnIndex = visibleColumnIndexByKey.value.get(anchorCell.columnKey)
+  const anchorColumnIndex = stageVisibleColumnIndexByKey.value.get(anchorCell.columnKey)
   const anchorVisualRowIndex = resolveVisualRowIndexForCell(anchorCell)
-  const focusColumnIndex = visibleColumnIndexByKey.value.get(focusCell.columnKey)
+  const focusColumnIndex = stageVisibleColumnIndexByKey.value.get(focusCell.columnKey)
   const focusVisualRowIndex = resolveVisualRowIndexForCell(focusCell)
   if (
     anchorColumnIndex == null
@@ -2536,7 +2553,7 @@ function resolveSelectedGridCell(): DataGridSpreadsheetCellAddress | null {
   if (!currentSheet || !activeCell) {
     return null
   }
-  const columnKey = visibleColumns.value[activeCell.colIndex]?.key
+  const columnKey = resolveSpreadsheetColumnKeyFromStageIndex(activeCell.colIndex)
   const row = resolveSpreadsheetRuntimeRow(activeCell.rowIndex)
   if (!columnKey || !row) {
     return null
@@ -2576,7 +2593,7 @@ function resolveGridCellElement(cell: DataGridSpreadsheetCellAddress | null): HT
   if (!cell) {
     return null
   }
-  const columnIndex = visibleColumnIndexByKey.value.get(cell.columnKey)
+  const columnIndex = stageVisibleColumnIndexByKey.value.get(cell.columnKey)
   const visualRowIndex = resolveVisualRowIndexForCell(cell)
   if (columnIndex == null || visualRowIndex == null) {
     return null
@@ -2592,7 +2609,7 @@ function resolveSpreadsheetCellAddressFromEventTarget(target: EventTarget | null
   }
   const visualRowIndex = Number.parseInt(cellElement.dataset.rowIndex ?? "", 10)
   const columnIndex = Number.parseInt(cellElement.dataset.columnIndex ?? "", 10)
-  const columnKey = visibleColumns.value[columnIndex]?.key
+  const columnKey = resolveSpreadsheetColumnKeyFromStageIndex(columnIndex)
   const row = Number.isInteger(visualRowIndex) ? resolveSpreadsheetRuntimeRow(visualRowIndex) : null
   const currentSheet = activeSheetHandle.value
   if (!currentSheet || !row || !columnKey) {
@@ -3449,7 +3466,7 @@ function resolveCellAddressFromOffsets(
   const currentSheet = activeSheetHandle.value
   const visualRowIndex = tableStageProps.value.viewport.viewportRowStart + rowOffset
   const row = resolveSpreadsheetRuntimeRow(visualRowIndex)
-  const columnKey = visibleColumns.value[columnIndex]?.key
+  const columnKey = resolveSpreadsheetColumnKeyFromStageIndex(columnIndex)
   if (!currentSheet || !row || !columnKey) {
     return null
   }
@@ -3536,7 +3553,7 @@ function collectSelectedAddresses(): readonly DataGridSpreadsheetCellAddress[] {
         continue
       }
       for (let columnIndex = startColumn; columnIndex <= endColumn; columnIndex += 1) {
-        const columnKey = visibleColumns.value[columnIndex]?.key
+        const columnKey = resolveSpreadsheetColumnKeyFromStageIndex(columnIndex)
         if (!columnKey) {
           continue
         }
@@ -3723,27 +3740,11 @@ function resolveSpreadsheetCellStyle(
   const referenceHighlight = typeof rowIndex === "number"
     ? referenceHighlightByCellKey.value.get(makeLocalCellKey(rowIndex, column.key))
     : null
-  const isActiveCell = areCellsEqual(editorSnapshot.value.activeCell, {
-    sheetId: activeSheetHandle.value?.id ?? null,
-    rowId: row.rowId,
-    rowIndex: rowIndex ?? -1,
-    columnKey: column.key,
-  })
 
   const referenceStyle = referenceHighlight
     ? {
         backgroundColor: referenceHighlight.active ? referenceHighlight.palette.solid : referenceHighlight.palette.soft,
         boxShadow: `inset 0 0 0 2px ${referenceHighlight.palette.border}`,
-      }
-    : {}
-
-  const activeStyle = isActiveCell
-    ? {
-        boxShadow: mergeBoxShadow(
-          referenceStyle.boxShadow,
-          "inset 0 0 0 1px var(--datagrid-selection-overlay-border)",
-          "0 0 0 1px rgba(255, 255, 255, 0.95)",
-        ),
       }
     : {}
 
@@ -3764,15 +3765,17 @@ function resolveSpreadsheetCellStyle(
     ...(baseStyle.boxShadow ? { boxShadow: String(baseStyle.boxShadow) } : {}),
     ...(referenceStyle.backgroundColor ? { backgroundColor: referenceStyle.backgroundColor } : {}),
     ...(referenceStyle.boxShadow ? { boxShadow: referenceStyle.boxShadow } : {}),
-    ...(activeStyle.boxShadow ? { boxShadow: activeStyle.boxShadow } : {}),
     ...(errorStyle.backgroundColor ? { backgroundColor: errorStyle.backgroundColor } : {}),
     ...(errorStyle.color ? { color: errorStyle.color } : {}),
     ...(errorStyle.boxShadow ? { boxShadow: errorStyle.boxShadow } : {}),
   }
 }
 
-const tableStagePropsForView = computed<Record<string, unknown>>(() => ({
-  ...(tableStageProps.value as unknown as Record<string, unknown>),
+const tableStagePropsForView = computed<DataGridTableStageProps<SpreadsheetGridRow>>(() => ({
+  mode: tableStageProps.value.mode,
+  rowHeightMode: tableStageProps.value.rowHeightMode,
+  layout: tableStageProps.value.layout,
+  selection: tableStageProps.value.selection,
   rows: {
     ...tableStageProps.value.rows,
     sourceRows: gridRows.value,
@@ -3803,6 +3806,19 @@ const tableStagePropsForView = computed<Record<string, unknown>>(() => ({
     handleViewportKeydown: handleGridViewportKeydown,
   },
 }))
+
+const tableStageContextForView = createDataGridTableStageContext<SpreadsheetGridRow>({
+  mode: computed(() => tableStagePropsForView.value.mode),
+  rowHeightMode: computed(() => tableStagePropsForView.value.rowHeightMode),
+  layout: computed(() => tableStagePropsForView.value.layout),
+  viewport: computed(() => tableStagePropsForView.value.viewport),
+  columns: computed(() => tableStagePropsForView.value.columns),
+  rows: computed(() => tableStagePropsForView.value.rows),
+  selection: computed(() => tableStagePropsForView.value.selection),
+  editing: computed(() => tableStagePropsForView.value.editing),
+  cells: computed(() => tableStagePropsForView.value.cells),
+  interaction: computed(() => tableStagePropsForView.value.interaction),
+})
 
 const formulaPreviewSegments = computed<readonly FormulaPreviewSegment[]>(() => {
   const rawInput = editorSnapshot.value.rawInput
