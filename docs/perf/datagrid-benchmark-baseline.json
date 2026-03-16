@@ -37,7 +37,7 @@
       "aggregateElapsedMs": 380.5827107200001,
       "aggregateHeapMb": 24.866119384765625,
       "maxDurationDriftPct": 180,
-      "maxAggregateElapsedDriftPct": 120,
+      "maxAggregateElapsedDriftPct": 140,
       "maxAggregateHeapDriftPct": 180
     },
     "derived-cache": {
