@@ -368,13 +368,142 @@ export function resolveDataGridGanttTimelineState<TRow>(
   rows: DataGridGanttRowReader<TRow>,
   options: DataGridResolvedGanttOptions,
 ): DataGridGanttTimelineState {
+  return resolveDataGridGanttAnalysis(rows, options).timeline
+}
+
+function resolveDataGridGanttCriticalTaskIdsFromTaskNodes(
+  taskNodes: Map<string, DataGridGanttCriticalTaskNode>,
+  taskIdByRowId: Map<string, string>,
+): ReadonlySet<string> {
+  const successorIdsByTaskId = new Map<string, string[]>()
+  const predecessorIdsByTaskId = new Map<string, string[]>()
+  const indegreeByTaskId = new Map<string, number>()
+
+  for (const taskId of taskNodes.keys()) {
+    successorIdsByTaskId.set(taskId, [])
+    predecessorIdsByTaskId.set(taskId, [])
+    indegreeByTaskId.set(taskId, 0)
+  }
+
+  for (const node of taskNodes.values()) {
+    const predecessors = predecessorIdsByTaskId.get(node.taskId)
+    const uniquePredecessors = new Set<string>()
+    for (const dependency of node.dependencyRefs) {
+      if (dependency.type !== "FS") {
+        continue
+      }
+      const dependencyId = dependency.taskId
+      const predecessorTaskId = taskNodes.has(dependencyId)
+        ? dependencyId
+        : (taskIdByRowId.get(dependencyId) ?? null)
+      if (!predecessorTaskId || predecessorTaskId === node.taskId || uniquePredecessors.has(predecessorTaskId)) {
+        continue
+      }
+      uniquePredecessors.add(predecessorTaskId)
+      predecessors?.push(predecessorTaskId)
+      successorIdsByTaskId.get(predecessorTaskId)?.push(node.taskId)
+      indegreeByTaskId.set(node.taskId, (indegreeByTaskId.get(node.taskId) ?? 0) + 1)
+    }
+  }
+
+  const queue = Array.from(taskNodes.keys()).filter(taskId => (indegreeByTaskId.get(taskId) ?? 0) === 0)
+  const topologicalOrder: string[] = []
+  for (let index = 0; index < queue.length; index += 1) {
+    const taskId = queue[index]
+    if (!taskId) {
+      continue
+    }
+    topologicalOrder.push(taskId)
+    for (const successorTaskId of successorIdsByTaskId.get(taskId) ?? []) {
+      const nextIndegree = (indegreeByTaskId.get(successorTaskId) ?? 0) - 1
+      indegreeByTaskId.set(successorTaskId, nextIndegree)
+      if (nextIndegree === 0) {
+        queue.push(successorTaskId)
+      }
+    }
+  }
+
+  if (topologicalOrder.length !== taskNodes.size) {
+    return new Set<string>()
+  }
+
+  const earliestStartByTaskId = new Map<string, number>()
+  const earliestFinishByTaskId = new Map<string, number>()
+  let projectEndMs = Number.NEGATIVE_INFINITY
+
+  for (const taskId of topologicalOrder) {
+    const node = taskNodes.get(taskId)
+    if (!node) {
+      continue
+    }
+    const durationMs = Math.max(0, node.endMs - node.startMs)
+    const predecessorFinishMs = (predecessorIdsByTaskId.get(taskId) ?? []).reduce((maxFinish, predecessorTaskId) => {
+      return Math.max(maxFinish, earliestFinishByTaskId.get(predecessorTaskId) ?? Number.NEGATIVE_INFINITY)
+    }, Number.NEGATIVE_INFINITY)
+    const earliestStartMs = Math.max(
+      node.startMs,
+      Number.isFinite(predecessorFinishMs) ? predecessorFinishMs : node.startMs,
+    )
+    const earliestFinishMs = earliestStartMs + durationMs
+    earliestStartByTaskId.set(taskId, earliestStartMs)
+    earliestFinishByTaskId.set(taskId, earliestFinishMs)
+    projectEndMs = Math.max(projectEndMs, earliestFinishMs, node.endMs)
+  }
+
+  if (!Number.isFinite(projectEndMs)) {
+    return new Set<string>()
+  }
+
+  const latestStartByTaskId = new Map<string, number>()
+
+  for (let index = topologicalOrder.length - 1; index >= 0; index -= 1) {
+    const taskId = topologicalOrder[index]
+    const node = taskNodes.get(taskId)
+    if (!node) {
+      continue
+    }
+    const durationMs = Math.max(0, node.endMs - node.startMs)
+    const successorStartMs = (successorIdsByTaskId.get(taskId) ?? []).reduce((minStart, successorTaskId) => {
+      return Math.min(minStart, latestStartByTaskId.get(successorTaskId) ?? Number.POSITIVE_INFINITY)
+    }, Number.POSITIVE_INFINITY)
+    const latestFinishMs = Number.isFinite(successorStartMs) ? successorStartMs : projectEndMs
+    latestStartByTaskId.set(taskId, latestFinishMs - durationMs)
+  }
+
+  const criticalTaskIds = new Set<string>()
+  const slackEpsilonMs = 60 * 1000
+
+  for (const taskId of topologicalOrder) {
+    const earliestStartMs = earliestStartByTaskId.get(taskId)
+    const latestStartMs = latestStartByTaskId.get(taskId)
+    if (earliestStartMs == null || latestStartMs == null) {
+      continue
+    }
+    if (Math.abs(latestStartMs - earliestStartMs) <= slackEpsilonMs) {
+      criticalTaskIds.add(taskId)
+    }
+  }
+
+  return criticalTaskIds
+}
+
+function resolveDataGridGanttAnalysisInternal<TRow>(
+  rows: DataGridGanttRowReader<TRow>,
+  options: DataGridResolvedGanttOptions,
+  computeCriticalPath: boolean,
+): {
+  timeline: DataGridGanttTimelineState
+  criticalTaskIds: ReadonlySet<string>
+} {
   const readResolvedRow = createResolvedGanttRowSnapshotReader(options)
   const explicitStartMs = resolveDataGridGanttDateMs(options.timelineStart)
   const explicitEndMs = resolveDataGridGanttDateMs(options.timelineEnd)
   let minMs = explicitStartMs
   let maxMs = explicitEndMs
+  const taskNodes = new Map<string, DataGridGanttCriticalTaskNode>()
+  const taskIdByRowId = new Map<string, string>()
 
-  if (explicitStartMs == null || explicitEndMs == null) {
+  if (explicitStartMs == null || explicitEndMs == null || computeCriticalPath) {
     const count = rows.getCount()
     for (let index = 0; index < count; index += 1) {
       const row = rows.get(index)
@@ -398,6 +527,22 @@ export function resolveDataGridGanttTimelineState<TRow>(
       if (explicitEndMs == null) {
         maxMs = maxMs == null ? boundedEnd : Math.max(maxMs, boundedEnd)
       }
+
+      if (computeCriticalPath) {
+        if (row.kind === "group" || boundedEnd < boundedStart) {
+          continue
+        }
+        const taskId = resolvedRow.taskId || (row.rowId == null ? String(index) : String(row.rowId))
+        const rowId = row.rowId == null ? String(index) : String(row.rowId)
+        taskNodes.set(taskId, {
+          taskId,
+          rowId,
+          startMs: boundedStart,
+          endMs: boundedEnd,
+          dependencyRefs: resolvedRow.dependencyRefs,
+        })
+        taskIdByRowId.set(rowId, taskId)
+      }
     }
   }
 
@@ -409,12 +554,27 @@ export function resolveDataGridGanttTimelineState<TRow>(
   })
 
   return {
-    startMs: range.startMs,
-    endMs: range.endMs,
-    pixelsPerDay: options.pixelsPerDay,
-    totalWidth: range.totalWidth,
-    zoomLevel: options.zoomLevel,
+    timeline: {
+      startMs: range.startMs,
+      endMs: range.endMs,
+      pixelsPerDay: options.pixelsPerDay,
+      totalWidth: range.totalWidth,
+      zoomLevel: options.zoomLevel,
+    },
+    criticalTaskIds: computeCriticalPath
+      ? resolveDataGridGanttCriticalTaskIdsFromTaskNodes(taskNodes, taskIdByRowId)
+      : new Set<string>(),
   }
+}
+
+export function resolveDataGridGanttAnalysis<TRow>(
+  rows: DataGridGanttRowReader<TRow>,
+  options: DataGridResolvedGanttOptions,
+): {
+  timeline: DataGridGanttTimelineState
+  criticalTaskIds: ReadonlySet<string>
+} {
+  return resolveDataGridGanttAnalysisInternal(rows, options, options.computedCriticalPath === true)
 }
 
 export function resolveDataGridGanttRangeFrame(
@@ -485,7 +645,7 @@ export function buildDataGridGanttVisibleBars<TRow>(
     y: number
     resolvedRow: DataGridResolvedGanttRowSnapshot
   }> = []
-  let currentY = input.topSpacerHeight - input.scrollTop
+  let currentY = input.topSpacerHeight
   const rowBarHeight = input.options.rowBarHeight
 
   input.rows.forEach((row, rowOffset) => {
@@ -624,144 +784,7 @@ export function resolveDataGridGanttCriticalTaskIds<TRow>(
   rows: DataGridGanttRowReader<TRow>,
   options: DataGridResolvedGanttOptions,
 ): ReadonlySet<string> {
-  const readResolvedRow = createResolvedGanttRowSnapshotReader(options)
-  const taskNodes = new Map<string, DataGridGanttCriticalTaskNode>()
-  const taskIdByRowId = new Map<string, string>()
-  const successorIdsByTaskId = new Map<string, string[]>()
-  const predecessorIdsByTaskId = new Map<string, string[]>()
-  const indegreeByTaskId = new Map<string, number>()
-
-  for (let index = 0; index < rows.getCount(); index += 1) {
-    const row = rows.get(index)
-    if (!row || row.kind === "group") {
-      continue
-    }
-    const resolvedRow = readResolvedRow(row)
-    if (resolvedRow.startMs == null || resolvedRow.endMs == null || resolvedRow.endMs < resolvedRow.startMs) {
-      continue
-    }
-    const taskId = resolvedRow.taskId || (row.rowId == null ? String(index) : String(row.rowId))
-    const rowId = row.rowId == null ? String(index) : String(row.rowId)
-      taskNodes.set(taskId, {
-        taskId,
-        rowId,
-        startMs: resolvedRow.startMs,
-        endMs: resolvedRow.endMs,
-        dependencyRefs: resolvedRow.dependencyRefs,
-      })
-    taskIdByRowId.set(rowId, taskId)
-    successorIdsByTaskId.set(taskId, [])
-    predecessorIdsByTaskId.set(taskId, [])
-    indegreeByTaskId.set(taskId, 0)
-  }
-
-  if (taskNodes.size === 0) {
-    return new Set<string>()
-  }
-
-  for (const node of taskNodes.values()) {
-    const predecessors = predecessorIdsByTaskId.get(node.taskId)
-    const uniquePredecessors = new Set<string>()
-    for (const dependency of node.dependencyRefs) {
-      if (dependency.type !== "FS") {
-        continue
-      }
-      const dependencyId = dependency.taskId
-      const predecessorTaskId = taskNodes.has(dependencyId)
-        ? dependencyId
-        : (taskIdByRowId.get(dependencyId) ?? null)
-      if (!predecessorTaskId || predecessorTaskId === node.taskId || uniquePredecessors.has(predecessorTaskId)) {
-        continue
-      }
-      uniquePredecessors.add(predecessorTaskId)
-      predecessors?.push(predecessorTaskId)
-      successorIdsByTaskId.get(predecessorTaskId)?.push(node.taskId)
-      indegreeByTaskId.set(node.taskId, (indegreeByTaskId.get(node.taskId) ?? 0) + 1)
-    }
-  }
-
-  const queue = Array.from(taskNodes.keys()).filter(taskId => (indegreeByTaskId.get(taskId) ?? 0) === 0)
-  const topologicalOrder: string[] = []
-  for (let index = 0; index < queue.length; index += 1) {
-    const taskId = queue[index]
-    if (!taskId) {
-      continue
-    }
-    topologicalOrder.push(taskId)
-    for (const successorTaskId of successorIdsByTaskId.get(taskId) ?? []) {
-      const nextIndegree = (indegreeByTaskId.get(successorTaskId) ?? 0) - 1
-      indegreeByTaskId.set(successorTaskId, nextIndegree)
-      if (nextIndegree === 0) {
-        queue.push(successorTaskId)
-      }
-    }
-  }
-
-  if (topologicalOrder.length !== taskNodes.size) {
-    return new Set<string>()
-  }
-
-  const earliestStartByTaskId = new Map<string, number>()
-  const earliestFinishByTaskId = new Map<string, number>()
-  let projectEndMs = Number.NEGATIVE_INFINITY
-
-  for (const taskId of topologicalOrder) {
-    const node = taskNodes.get(taskId)
-    if (!node) {
-      continue
-    }
-    const durationMs = Math.max(0, node.endMs - node.startMs)
-    const predecessorFinishMs = (predecessorIdsByTaskId.get(taskId) ?? []).reduce((maxFinish, predecessorTaskId) => {
-      return Math.max(maxFinish, earliestFinishByTaskId.get(predecessorTaskId) ?? Number.NEGATIVE_INFINITY)
-    }, Number.NEGATIVE_INFINITY)
-    const earliestStartMs = Math.max(
-      node.startMs,
-      Number.isFinite(predecessorFinishMs) ? predecessorFinishMs : node.startMs,
-    )
-    const earliestFinishMs = earliestStartMs + durationMs
-    earliestStartByTaskId.set(taskId, earliestStartMs)
-    earliestFinishByTaskId.set(taskId, earliestFinishMs)
-    projectEndMs = Math.max(projectEndMs, earliestFinishMs, node.endMs)
-  }
-
-  if (!Number.isFinite(projectEndMs)) {
-    return new Set<string>()
-  }
-
-  const latestStartByTaskId = new Map<string, number>()
-  const latestFinishByTaskId = new Map<string, number>()
-
-  for (let index = topologicalOrder.length - 1; index >= 0; index -= 1) {
-    const taskId = topologicalOrder[index]
-    const node = taskNodes.get(taskId)
-    if (!node) {
-      continue
-    }
-    const durationMs = Math.max(0, node.endMs - node.startMs)
-    const successorStartMs = (successorIdsByTaskId.get(taskId) ?? []).reduce((minStart, successorTaskId) => {
-      return Math.min(minStart, latestStartByTaskId.get(successorTaskId) ?? Number.POSITIVE_INFINITY)
-    }, Number.POSITIVE_INFINITY)
-    const latestFinishMs = Number.isFinite(successorStartMs) ? successorStartMs : projectEndMs
-    const latestStartMs = latestFinishMs - durationMs
-    latestFinishByTaskId.set(taskId, latestFinishMs)
-    latestStartByTaskId.set(taskId, latestStartMs)
-  }
-
-  const criticalTaskIds = new Set<string>()
-  const slackEpsilonMs = 60 * 1000
-
-  for (const taskId of topologicalOrder) {
-    const earliestStartMs = earliestStartByTaskId.get(taskId)
-    const latestStartMs = latestStartByTaskId.get(taskId)
-    if (earliestStartMs == null || latestStartMs == null) {
-      continue
-    }
-    if (Math.abs(latestStartMs - earliestStartMs) <= slackEpsilonMs) {
-      criticalTaskIds.add(taskId)
-    }
-  }
-
-  return criticalTaskIds
+  return resolveDataGridGanttAnalysisInternal(rows, options, true).criticalTaskIds
 }
 
 export function buildDataGridGanttDependencyPaths<TRow>(

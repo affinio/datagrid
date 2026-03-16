@@ -9,6 +9,7 @@ import {
   hitTestDataGridGanttBar,
   normalizeDataGridGanttOptions,
   resolveDataGridWorkingCalendar,
+  resolveDataGridGanttAnalysis,
   resolveDataGridGanttDateOffset,
   resolveDataGridGanttCriticalTaskIds,
   resolveDataGridGanttDependencyRefs,
@@ -120,6 +121,76 @@ describe("datagrid-gantt runtime", () => {
 
     expect(new Date(timeline.startMs).toISOString()).toBe("2026-03-08T00:00:00.000Z")
     expect(new Date(timeline.endMs).toISOString()).toBe("2026-03-15T00:00:00.000Z")
+  })
+
+  it("skips row-model scanning when explicit timeline bounds are provided and computed critical path is disabled", () => {
+    const options = normalizeDataGridGanttOptions({
+      timelineStart: "2026-03-01T00:00:00.000Z",
+      timelineEnd: "2026-03-31T00:00:00.000Z",
+      computedCriticalPath: false,
+    })
+    expect(options).toBeTruthy()
+
+    let getCountCalls = 0
+    let getCalls = 0
+    const analysis = resolveDataGridGanttAnalysis({
+      getCount: () => {
+        getCountCalls += 1
+        return 999
+      },
+      get: () => {
+        getCalls += 1
+        return null
+      },
+    }, options!)
+
+    expect(new Date(analysis.timeline.startMs).toISOString()).toBe("2026-03-01T00:00:00.000Z")
+    expect(new Date(analysis.timeline.endMs).toISOString()).toBe("2026-03-31T00:00:00.000Z")
+    expect(analysis.criticalTaskIds.size).toBe(0)
+    expect(getCountCalls).toBe(0)
+    expect(getCalls).toBe(0)
+  })
+
+  it("derives timeline bounds and computed critical path in a single row scan", () => {
+    const options = normalizeDataGridGanttOptions({
+      computedCriticalPath: true,
+    })
+    expect(options).toBeTruthy()
+
+    const rows = [
+      buildRow("task-a", {
+        id: "task-a",
+        task: "Task A",
+        start: new Date("2026-03-01T00:00:00.000Z"),
+        end: new Date("2026-03-03T00:00:00.000Z"),
+      }),
+      buildRow("task-b", {
+        id: "task-b",
+        task: "Task B",
+        start: new Date("2026-03-03T00:00:00.000Z"),
+        end: new Date("2026-03-05T00:00:00.000Z"),
+        dependencies: ["task-a:FS"],
+      }),
+    ]
+    let getCountCalls = 0
+    let getCalls = 0
+
+    const analysis = resolveDataGridGanttAnalysis({
+      getCount: () => {
+        getCountCalls += 1
+        return rows.length
+      },
+      get: index => {
+        getCalls += 1
+        return rows[index]
+      },
+    }, options!)
+
+    expect(getCountCalls).toBe(1)
+    expect(getCalls).toBe(rows.length)
+    expect(Array.from(analysis.criticalTaskIds).sort()).toEqual(["task-a", "task-b"])
+    expect(new Date(analysis.timeline.startMs).toISOString()).toBe("2026-03-01T00:00:00.000Z")
+    expect(new Date(analysis.timeline.endMs).toISOString()).toBe("2026-03-05T00:00:00.000Z")
   })
 
   it("builds visible bars from rendered rows only and aligns them to scroll offset", () => {

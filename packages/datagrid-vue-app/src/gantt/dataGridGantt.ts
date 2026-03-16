@@ -23,6 +23,7 @@ export {
   resolveDataGridGanttProgress,
   resolveDataGridGanttRangeFrame,
   resolveDataGridGanttSnapDays,
+  resolveDataGridGanttAnalysis,
   resolveDataGridGanttCriticalTaskIds,
   resolveDataGridGanttScrollLeftForDate,
   resolveDataGridGanttTimelineState,

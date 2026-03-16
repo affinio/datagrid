@@ -51,6 +51,7 @@ export {
   resolveDataGridGanttRangeFrame,
   resolveDataGridGanttSnapDays,
   resolveDataGridGanttCriticalTaskIds,
+  resolveDataGridGanttAnalysis,
   resolveDataGridGanttScrollLeftForDate,
   resolveDataGridGanttTimelineState,
   snapDataGridGanttDateMs,

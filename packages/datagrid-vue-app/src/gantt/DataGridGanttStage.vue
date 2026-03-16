@@ -86,11 +86,10 @@ import {
   buildDataGridGanttVisibleBars,
   clampDataGridTimelineScrollLeft,
   hitTestDataGridGanttBar,
+  resolveDataGridGanttAnalysis,
   resolveDataGridGanttRangeFrame,
-  resolveDataGridGanttCriticalTaskIds,
   resolveDataGridTimelineDateToPixel,
   resolveDataGridTimelineScrollLeftForDate,
-  resolveDataGridGanttTimelineState,
 } from "./dataGridGantt"
 import { resolveDataGridGanttWheelIntent } from "./dataGridGanttWheel"
 import {
@@ -138,6 +137,7 @@ const DEFAULT_HEADER_HEIGHT_PX = 48
 const TIMELINE_SEGMENT_BUFFER_PX = 240
 const DRAG_AUTO_SCROLL_EDGE_PX = 40
 const DRAG_AUTO_SCROLL_MAX_STEP_PX = 24
+const EMPTY_CRITICAL_TASK_IDS = new Set<string>()
 
 const props = defineProps<{
   table: DataGridTableStageProps<Record<string, unknown>>
@@ -496,33 +496,41 @@ function resolveRowHeight(rowIndex: number): number {
 const rowHeightVersion = computed(() => props.runtime.api.view.getRowHeightVersion())
 
 const visibleRowMetrics = computed(() => {
-  void rowHeightVersion.value
   void displayRowsSignature.value
-  const metrics = tableStageRef.value?.getVisibleRowMetrics() ?? []
-  return metrics
+  void rowHeightVersion.value
+
+  if (props.table.rowHeightMode !== "auto") {
+    const metrics: Array<{ top: number; height: number }> = []
+    let currentTop = tableViewport.value.topSpacerHeight
+    for (let rowOffset = 0; rowOffset < tableRows.value.displayRows.length; rowOffset += 1) {
+      const rowIndex = tableViewport.value.viewportRowStart + rowOffset
+      const height = Math.max(1, resolveRowHeight(rowIndex))
+      metrics.push({
+        top: currentTop,
+        height,
+      })
+      currentTop += height
+    }
+    return metrics
+  }
+
+  return tableStageRef.value?.getVisibleRowMetrics() ?? []
 })
 
-const timelineState = computed(() => {
+const ganttAnalysis = computed(() => {
   if (!props.gantt) {
     return null
   }
   void props.rowVersion
-  return resolveDataGridGanttTimelineState({
+  return resolveDataGridGanttAnalysis({
     getCount: () => props.runtime.api.rows.getCount(),
     get: index => props.runtime.api.rows.get(index),
   }, props.gantt)
 })
 
-const criticalTaskIds = computed<ReadonlySet<string>>(() => {
-  if (!props.gantt?.computedCriticalPath) {
-    return new Set<string>()
-  }
-  void props.rowVersion
-  return resolveDataGridGanttCriticalTaskIds({
-    getCount: () => props.runtime.api.rows.getCount(),
-    get: index => props.runtime.api.rows.get(index),
-  }, props.gantt)
-})
+const timelineState = computed(() => ganttAnalysis.value?.timeline ?? null)
+
+const criticalTaskIds = computed<ReadonlySet<string>>(() => ganttAnalysis.value?.criticalTaskIds ?? EMPTY_CRITICAL_TASK_IDS)
 
 const visibleBars = computed<readonly DataGridGanttBarLayout<Record<string, unknown>>[]>(() => {
   if (!props.gantt || !timelineState.value) {
@@ -1621,9 +1629,6 @@ watch(
   () => [
     visibleBarsSignature.value,
     visibleRowDividerSignature.value,
-    rowHeightVersion.value,
-    tableViewport.value.viewportRowStart,
-    tableViewport.value.topSpacerHeight,
     tableScrollTop.value,
     tableViewportHeight.value,
   ],
