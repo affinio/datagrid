@@ -5,6 +5,8 @@ import { fileURLToPath, URL } from "node:url"
 const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/projection-engine": "packages/projection-engine/src/index.ts",
   "@affino/projection-engine/*": "packages/projection-engine/src/*",
+  "@affino/datagrid-format": "packages/datagrid-format/src/index.ts",
+  "@affino/datagrid-format/*": "packages/datagrid-format/src/*",
   "@affino/datagrid-theme": "packages/datagrid-theme/src/index.ts",
   "@affino/datagrid-theme/*": "packages/datagrid-theme/src/*",
   "@affino/datagrid-plugins": "packages/datagrid-plugins/src/index.ts",
