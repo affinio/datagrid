@@ -102,6 +102,7 @@ export function createClientRowModelStateBootstrap<T>(
     resolveRowId,
     treeDataEnabled: Boolean(treeData),
     projectionTransientStateRuntime,
+    isolateInputRows: options.isolateInputRows !== false,
   })
   const initialBaseSourceRows: DataGridRowNode<T>[] = sourceNormalizationRuntime.normalizeSourceRows(options.rows ?? [])
   const sourceStateRuntime = createClientRowSourceStateRuntime<T>({

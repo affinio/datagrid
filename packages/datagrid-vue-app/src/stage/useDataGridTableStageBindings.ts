@@ -68,6 +68,8 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     sortIndicator: unref(options.sortIndicator),
     setColumnFilterText: unref(options.setColumnFilterText),
     columnMenuEnabled: unref(options.columnMenuEnabled),
+    columnMenuValueFilterEnabled: unref(options.columnMenuValueFilterEnabled),
+    columnMenuValueFilterRowLimit: unref(options.columnMenuValueFilterRowLimit),
     columnMenuMaxFilterValues: unref(options.columnMenuMaxFilterValues),
     isColumnFilterActive: unref(options.isColumnFilterActive),
     resolveColumnMenuSortDirection: unref(options.resolveColumnMenuSortDirection),

@@ -21,6 +21,18 @@
             <option v-for="option in COLUMN_MODE_OPTIONS" :key="option" :value="option">{{ option }}</option>
           </select>
         </label>
+        <label>
+          Value filter
+          <select v-model.number="valueFilterRowLimit">
+            <option
+              v-for="option in VALUE_FILTER_LIMIT_OPTIONS"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
         <label v-if="props.mode !== 'pivot'">
           Group by
           <select v-model="groupByField">
@@ -177,7 +189,7 @@
       </div>
     </header>
 
-    <DataGridTableStageLoose ref="tableStageRef" v-bind="tableStageProps" :stage-context="tableStageContextForView" />
+    <DataGridTableStageLoose ref="tableStageRef" v-bind="tableStagePropsForView" :stage-context="tableStageContextForView" />
 
     <footer class="card__footer">
       Rendered {{ displayRows.length }} / {{ totalRows }} rows. {{ modeHint }}
@@ -548,6 +560,15 @@ function resolveInitialRowCount(): number {
 
 const rowCount = ref<number>(resolveInitialRowCount())
 const columnCount = ref<number>(16)
+const VALUE_FILTER_LIMIT_OPTIONS = [
+  { value: 0, label: "Off" },
+  { value: 10_000, label: "Up to 10k" },
+  { value: 50_000, label: "Up to 50k" },
+  { value: 100_000, label: "Up to 100k" },
+  { value: 200_000, label: "Up to 200k" },
+  { value: Number.MAX_SAFE_INTEGER, label: "Never disable" },
+] as const
+const valueFilterRowLimit = ref<number>(100_000)
 
 const PIVOT_LAYOUTS: Record<PivotLayoutId, DataGridPivotSpec> = {
   "department-month-revenue": {
@@ -626,6 +647,9 @@ const {
   mode: computed(() => props.mode),
   rows,
   columns,
+  clientRowModelOptions: {
+    isolateInputRows: false,
+  },
   services: runtimeServices,
   treeData: {
     getDataPath: row => (row as VueTreeRow).path,
@@ -764,6 +788,13 @@ const {
       ...(runtimeDiagnostics && typeof runtimeDiagnostics === "object"
         ? runtimeDiagnostics as unknown as Record<string, unknown>
         : { runtimeDiagnostics }),
+      sandboxPolicy: {
+        rowCount: rowCount.value,
+        columnCount: columnCount.value,
+        valueFilterRowLimit: valueFilterRowLimit.value,
+        valueFilterEnabled: columnMenuValueFilterEnabled.value,
+        stageSourceRowsEnabled: columnMenuValueFilterEnabled.value,
+      },
       sandboxPerf: sandboxPerfTelemetry.read(),
     }
   },
@@ -774,12 +805,21 @@ const virtualization = computed(() => ({
   rowOverscan: props.mode === "worker" ? 3 : 8,
   columnOverscan: props.mode === "worker" ? 1 : 2,
 }))
+const columnMenuValueFilterEnabled = computed(() => {
+  return props.mode !== "worker"
+    && valueFilterRowLimit.value > 0
+    && rowCount.value <= valueFilterRowLimit.value
+})
+const stageSourceRows = computed<readonly VueSandboxRow[]>(() => (
+  columnMenuValueFilterEnabled.value ? rows.value : []
+))
 const {
   tableStageProps,
   syncViewportFromDom: syncViewportFromDomRuntime,
 } = useDataGridTableStageRuntime<VueSandboxRow>({
   mode: computed(() => props.mode),
   rows,
+  sourceRows: stageSourceRows,
   runtime,
   rowVersion,
   totalRows,
@@ -798,6 +838,8 @@ const {
   toggleSortForColumn,
   sortIndicator,
   setColumnFilterText,
+  columnMenuValueFilterEnabled,
+  columnMenuValueFilterRowLimit: valueFilterRowLimit,
   applyRowHeightSettings,
   cloneRowData,
 })
@@ -834,6 +876,8 @@ const clearColumnMenuFilter = (columnKey: string): void => {
 const tableStageColumnsForView = computed(() => ({
   ...tableStageProps.value.columns,
   columnMenuEnabled: true,
+  columnMenuValueFilterEnabled: columnMenuValueFilterEnabled.value,
+  columnMenuValueFilterRowLimit: valueFilterRowLimit.value,
   columnMenuMaxFilterValues: 250,
   isColumnFilterActive,
   resolveColumnMenuSortDirection,
@@ -846,24 +890,30 @@ const tableStageColumnsForView = computed(() => ({
 
 const tableStageRowsForView = computed(() => ({
   ...tableStageProps.value.rows,
-  sourceRows: rows.value,
+  sourceRows: stageSourceRows.value,
+}))
+
+const tableStagePropsForView = computed(() => ({
+  ...tableStageProps.value,
+  columns: tableStageColumnsForView.value,
+  rows: tableStageRowsForView.value,
 }))
 
 const tableStageContextForView = createDataGridTableStageContext<VueSandboxRow>({
-  mode: computed(() => tableStageProps.value.mode),
-  rowHeightMode: computed(() => tableStageProps.value.rowHeightMode),
-  layout: computed(() => tableStageProps.value.layout),
-  viewport: computed(() => tableStageProps.value.viewport),
+  mode: computed(() => tableStagePropsForView.value.mode),
+  rowHeightMode: computed(() => tableStagePropsForView.value.rowHeightMode),
+  layout: computed(() => tableStagePropsForView.value.layout),
+  viewport: computed(() => tableStagePropsForView.value.viewport),
   columns: tableStageColumnsForView,
   rows: tableStageRowsForView,
-  selection: computed(() => tableStageProps.value.selection),
-  editing: computed(() => tableStageProps.value.editing),
-  cells: computed(() => tableStageProps.value.cells),
-  interaction: computed(() => tableStageProps.value.interaction),
+  selection: computed(() => tableStagePropsForView.value.selection),
+  editing: computed(() => tableStagePropsForView.value.editing),
+  cells: computed(() => tableStagePropsForView.value.cells),
+  interaction: computed(() => tableStagePropsForView.value.interaction),
 })
 
-const displayRows = computed(() => tableStageProps.value.rows.displayRows)
-const viewportRowStart = computed(() => tableStageProps.value.viewport.viewportRowStart)
+const displayRows = computed(() => tableStagePropsForView.value.rows.displayRows)
+const viewportRowStart = computed(() => tableStagePropsForView.value.viewport.viewportRowStart)
 const viewportRowEnd = computed(() => {
   const count = displayRows.value.length
   if (count <= 0) {
@@ -878,7 +928,7 @@ const sandboxPerfTelemetry = createSandboxGridPerfTelemetry({
   resolveStageRoot: () => tableStageRef.value?.getStageRootElement() ?? null,
   resolveTotalRows: () => totalRows.value,
   resolveVisibleRows: () => displayRows.value.length,
-  resolveRenderedColumns: () => tableStageProps.value.columns.renderedColumns.length,
+  resolveRenderedColumns: () => tableStagePropsForView.value.columns.renderedColumns.length,
   resolveViewportRowStart: () => viewportRowStart.value,
   resolveViewportRowEnd: () => viewportRowEnd.value,
 })

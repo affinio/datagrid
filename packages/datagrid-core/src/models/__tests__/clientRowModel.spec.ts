@@ -907,6 +907,57 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("isolates ingested rows from later external mutation by default", () => {
+    const baseRow = { id: 1, price: 10, qty: 2 }
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+    }>({
+      rows: [
+        {
+          row: baseRow,
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+    })
+
+    baseRow.price = 99
+
+    expect((model.getRow(0)?.row as { price: number }).price).toBe(10)
+
+    model.dispose()
+  })
+
+  it("can reuse ingested row objects when input isolation is disabled", () => {
+    const baseRow = { id: 1, price: 10, qty: 2 }
+    const model = createClientRowModel<{
+      id: number
+      price: number
+      qty: number
+    }>({
+      isolateInputRows: false,
+      rows: [
+        {
+          row: baseRow,
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+    })
+
+    expect(model.getRow(0)?.row).toBe(baseRow)
+
+    baseRow.price = 99
+
+    expect((model.getRow(0)?.row as { price: number }).price).toBe(99)
+
+    model.dispose()
+  })
+
   it("exports and restores calculation snapshots for debug-style time travel", () => {
     const model = createClientRowModel<{
       id: number

@@ -91,16 +91,18 @@
         </UiSubMenuContent>
       </UiSubMenu>
 
-      <UiMenuSeparator v-if="filterEnabled" />
+      <UiMenuSeparator v-if="hasAnyFilterControls" />
 
       <section
-        v-if="filterEnabled"
+        v-if="hasAnyFilterControls"
         class="datagrid-column-menu__section datagrid-column-menu__section--filter"
         @mousedown.stop
         @click.stop
       >
         <div class="datagrid-column-menu__section-head">
-          <span class="datagrid-column-menu__section-title">Filter by value</span>
+          <span class="datagrid-column-menu__section-title">
+            {{ effectiveValueFilterEnabled ? 'Filter' : 'Filter by text' }}
+          </span>
           <button
             type="button"
             class="datagrid-column-menu__link"
@@ -113,6 +115,28 @@
         </div>
 
         <input
+          v-if="textFilterEnabled"
+          :value="textFilterValue"
+          class="datagrid-column-menu__search"
+          type="search"
+          placeholder="Type to filter rows"
+          @mousedown.stop
+          @click.stop
+          @keydown.stop
+          @input="handleTextFilterInput"
+        />
+
+        <div
+          v-if="textFilterEnabled && !effectiveValueFilterEnabled"
+          class="datagrid-column-menu__hint"
+        >
+          {{ valueFilterDisabledByRowLimit
+            ? 'Value filter is disabled for this dataset size. Use text filter instead.'
+            : 'Value filter is unavailable here. Use text filter instead.' }}
+        </div>
+
+        <input
+          v-if="effectiveValueFilterEnabled"
           v-model="query"
           class="datagrid-column-menu__search"
           type="search"
@@ -123,7 +147,7 @@
         />
 
         <label
-          v-if="hasSearchQuery"
+          v-if="effectiveValueFilterEnabled && hasSearchQuery"
           class="datagrid-column-menu__merge-toggle"
           data-datagrid-column-menu-action="add-current-selection"
         >
@@ -135,9 +159,9 @@
           <span>Add current selection to filter</span>
         </label>
 
-        <UiMenuSeparator class="datagrid-column-menu__section-separator" />
+        <UiMenuSeparator v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__section-separator" />
 
-        <div class="datagrid-column-menu__toolbar">
+        <div v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__toolbar">
           <button
             type="button"
             class="datagrid-column-menu__link"
@@ -161,7 +185,7 @@
           </div>
         </div>
 
-        <div class="datagrid-column-menu__values">
+        <div v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__values">
           <div
             class="datagrid-column-menu__values-list"
             role="listbox"
@@ -190,17 +214,17 @@
           </div>
         </div>
 
-        <div v-if="hiddenMatchCount > 0" class="datagrid-column-menu__summary">
+        <div v-if="effectiveValueFilterEnabled && hiddenMatchCount > 0" class="datagrid-column-menu__summary">
           Showing first {{ visibleValues.length }} values. Use search to filter all {{ matchedValues.length }}.
         </div>
 
-        <div v-if="appliedFilterTokens.length === 0" class="datagrid-column-menu__hint">
+        <div v-if="effectiveValueFilterEnabled && appliedFilterTokens.length === 0" class="datagrid-column-menu__hint">
           Select at least one value to apply the filter.
         </div>
 
-        <UiMenuSeparator class="datagrid-column-menu__section-separator" />
+        <UiMenuSeparator v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__section-separator" />
 
-        <div class="datagrid-column-menu__footer">
+        <div v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__footer">
           <button
             type="button"
             class="datagrid-column-menu__button datagrid-column-menu__button--secondary"
@@ -260,6 +284,8 @@ interface UiMenuRef {
   }
 }
 
+const DATAGRID_COLUMN_MENU_VALUE_FILTER_HARD_ROW_LIMIT = 100_000
+
 const props = defineProps<{
   rows: readonly Record<string, unknown>[]
   columnKey: string
@@ -268,6 +294,9 @@ const props = defineProps<{
   sortEnabled: boolean
   pin: DataGridColumnPin
   filterEnabled: boolean
+  valueFilterRowLimit: number
+  textFilterEnabled: boolean
+  textFilterValue: string
   filterActive: boolean
   selectedFilterTokens: readonly string[]
   maxFilterValues: number
@@ -278,6 +307,7 @@ const emit = defineEmits<{
   (event: "pin", pin: DataGridColumnPin): void
   (event: "apply-filter", tokens: readonly string[]): void
   (event: "clear-filter"): void
+  (event: "update-text-filter", value: string): void
 }>()
 
 const menuRef = ref<UiMenuRef | null>(null)
@@ -289,7 +319,23 @@ const valueEntries = ref<readonly DataGridColumnMenuValueEntry[]>([])
 const draftSelectedTokens = ref<readonly string[]>([])
 const menuThemeVars = ref<Record<string, string>>({})
 
+const resolvedValueFilterRowLimit = computed(() => {
+  const configuredLimit = Number.isFinite(props.valueFilterRowLimit) && props.valueFilterRowLimit >= 0
+    ? props.valueFilterRowLimit
+    : Number.POSITIVE_INFINITY
+  return Math.min(configuredLimit, DATAGRID_COLUMN_MENU_VALUE_FILTER_HARD_ROW_LIMIT)
+})
+const effectiveValueFilterEnabled = computed(() => {
+  if (!props.filterEnabled) {
+    return false
+  }
+  return props.rows.length <= resolvedValueFilterRowLimit.value
+})
+const valueFilterDisabledByRowLimit = computed(() => (
+  props.filterEnabled && !effectiveValueFilterEnabled.value
+))
 const selectedTokenSet = computed(() => new Set(draftSelectedTokens.value))
+const hasAnyFilterControls = computed(() => effectiveValueFilterEnabled.value || props.textFilterEnabled)
 const hasSearchQuery = computed(() => query.value.trim().length > 0)
 
 const matchedValues = computed(() => {
@@ -337,7 +383,7 @@ const isAllValuesSelected = computed(() => (
 ))
 
 const canApplyFilter = computed(() => (
-  props.filterEnabled
+  effectiveValueFilterEnabled.value
   && valueEntries.value.length > 0
   && appliedFilterTokens.value.length > 0
 ))
@@ -380,6 +426,23 @@ watch(rootElementRef, () => {
     syncMenuThemeVars()
   }
 })
+
+watch(
+  () => [
+    open.value,
+    props.filterEnabled,
+    props.valueFilterRowLimit,
+    props.columnKey,
+    props.rows.length,
+    props.selectedFilterTokens.length,
+  ] as const,
+  ([isOpen]) => {
+    if (!isOpen) {
+      return
+    }
+    resetFilterDraft()
+  },
+)
 
 function normalizeColumnMenuToken(token: string): string {
   return token.startsWith("string:")
@@ -434,7 +497,7 @@ function syncMenuThemeVars(): void {
 function resetFilterDraft(): void {
   query.value = ""
   addCurrentSelectionToFilter.value = false
-  if (!props.filterEnabled) {
+  if (!effectiveValueFilterEnabled.value) {
     valueEntries.value = []
     draftSelectedTokens.value = []
     return
@@ -483,6 +546,10 @@ function handleApplyFilter(): void {
     emit("apply-filter", [...appliedFilterTokens.value])
   }
   closeMenu()
+}
+
+function handleTextFilterInput(event: Event): void {
+  emit("update-text-filter", (event.target as HTMLInputElement).value)
 }
 
 function handleClearFilter(): void {

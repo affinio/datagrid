@@ -68,6 +68,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void
   columnMenuEnabled?: Ref<boolean>
+  columnMenuValueFilterEnabled?: Ref<boolean>
+  columnMenuValueFilterRowLimit?: Ref<number>
   columnMenuMaxFilterValues?: Ref<number>
   isColumnFilterActive?: (columnKey: string) => boolean
   resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
@@ -608,6 +610,8 @@ export function useDataGridTableStageRuntime<
     sortIndicator: options.sortIndicator,
     setColumnFilterText: options.setColumnFilterText,
     columnMenuEnabled: options.columnMenuEnabled,
+    columnMenuValueFilterEnabled: options.columnMenuValueFilterEnabled,
+    columnMenuValueFilterRowLimit: options.columnMenuValueFilterRowLimit,
     columnMenuMaxFilterValues: options.columnMenuMaxFilterValues,
     isColumnFilterActive: options.isColumnFilterActive,
     resolveColumnMenuSortDirection: options.resolveColumnMenuSortDirection,

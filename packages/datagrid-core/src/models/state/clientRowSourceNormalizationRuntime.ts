@@ -17,6 +17,7 @@ export interface CreateClientRowSourceNormalizationRuntimeOptions<T> {
   resolveRowId?: DataGridRowIdResolver<T>
   treeDataEnabled: boolean
   projectionTransientStateRuntime: ClientRowProjectionTransientStateRuntime
+  isolateInputRows: boolean
 }
 
 export interface DataGridClientRowSourceNormalizationRuntime<T> {
@@ -27,6 +28,9 @@ export function createClientRowSourceNormalizationRuntime<T>(
   options: CreateClientRowSourceNormalizationRuntimeOptions<T>,
 ): DataGridClientRowSourceNormalizationRuntime<T> {
   const cloneRowData = (value: T): T => {
+    if (!options.isolateInputRows) {
+      return value
+    }
     if (!isRecord(value)) {
       return value
     }

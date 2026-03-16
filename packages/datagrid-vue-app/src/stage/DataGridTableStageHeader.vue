@@ -11,7 +11,7 @@
           </div>
           <div v-if="!hasColumnMenu()" class="col-filter col-filter--index-spacer" aria-hidden="true" />
         </div>
-        <template v-if="hasColumnMenu()">
+        <template v-if="shouldUseColumnMenus()">
           <template v-for="column in pinnedLeftColumns" :key="`header-left-${column.key}`">
             <div
               v-if="isRowSelectionColumn(column)"
@@ -39,19 +39,24 @@
             </div>
             <DataGridColumnMenu
               v-else
+              :key="resolveColumnMenuInstanceKey(column.key)"
               :rows="sourceRows"
               :column-key="column.key"
               :column-label="column.column.label ?? column.key"
               :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
               :sort-enabled="isColumnSortable(column)"
               :pin="column.pin"
-              :filter-enabled="isColumnFilterable(column)"
+              :filter-enabled="isColumnMenuValueFilterEnabled(column)"
+              :value-filter-row-limit="columnMenuValueFilterRowLimit"
+              :text-filter-enabled="isColumnFilterable(column)"
+              :text-filter-value="columnFilterTextByKey[column.key] ?? ''"
               :filter-active="isColumnFilterActiveSafe(column.key)"
               :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
               :max-filter-values="columnMenuMaxFilterValues"
               @sort="applyColumnMenuSortSafe(column.key, $event)"
               @pin="applyColumnMenuPinSafe(column.key, $event)"
               @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
+              @update-text-filter="setColumnFilterText(column.key, $event)"
               @clear-filter="clearColumnMenuFilterSafe(column.key)"
               v-slot="{ open }"
             >
@@ -156,23 +161,27 @@
           class="grid-column-spacer"
           :style="spacerStyle(leftColumnSpacerWidth)"
         />
-        <template v-if="hasColumnMenu()">
+        <template v-if="shouldUseColumnMenus()">
           <DataGridColumnMenu
             v-for="column in renderedColumns"
-            :key="`header-${column.key}`"
+            :key="resolveColumnMenuInstanceKey(column.key)"
             :rows="sourceRows"
             :column-key="column.key"
             :column-label="column.column.label ?? column.key"
             :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
             :sort-enabled="isColumnSortable(column)"
             :pin="column.pin"
-            :filter-enabled="isColumnFilterable(column)"
+            :filter-enabled="isColumnMenuValueFilterEnabled(column)"
+            :value-filter-row-limit="columnMenuValueFilterRowLimit"
+            :text-filter-enabled="isColumnFilterable(column)"
+            :text-filter-value="columnFilterTextByKey[column.key] ?? ''"
             :filter-active="isColumnFilterActiveSafe(column.key)"
             :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
             :max-filter-values="columnMenuMaxFilterValues"
             @sort="applyColumnMenuSortSafe(column.key, $event)"
             @pin="applyColumnMenuPinSafe(column.key, $event)"
             @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
+            @update-text-filter="setColumnFilterText(column.key, $event)"
             @clear-filter="clearColumnMenuFilterSafe(column.key)"
             v-slot="{ open }"
           >
@@ -247,23 +256,27 @@
     <div class="grid-header-pane grid-header-pane--right" :style="rightPaneStyle" @wheel="onLinkedViewportWheel">
       <slot name="right-chrome" />
       <div class="grid-header-row grid-pane-track" :style="rightTrackStyle">
-        <template v-if="hasColumnMenu()">
+        <template v-if="shouldUseColumnMenus()">
           <DataGridColumnMenu
             v-for="column in pinnedRightColumns"
-            :key="`header-right-${column.key}`"
+            :key="resolveColumnMenuInstanceKey(column.key)"
             :rows="sourceRows"
             :column-key="column.key"
             :column-label="column.column.label ?? column.key"
             :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
             :sort-enabled="isColumnSortable(column)"
             :pin="column.pin"
-            :filter-enabled="isColumnFilterable(column)"
+            :filter-enabled="isColumnMenuValueFilterEnabled(column)"
+            :value-filter-row-limit="columnMenuValueFilterRowLimit"
+            :text-filter-enabled="isColumnFilterable(column)"
+            :text-filter-value="columnFilterTextByKey[column.key] ?? ''"
             :filter-active="isColumnFilterActiveSafe(column.key)"
             :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
             :max-filter-values="columnMenuMaxFilterValues"
             @sort="applyColumnMenuSortSafe(column.key, $event)"
             @pin="applyColumnMenuPinSafe(column.key, $event)"
             @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
+            @update-text-filter="setColumnFilterText(column.key, $event)"
             @clear-filter="clearColumnMenuFilterSafe(column.key)"
             v-slot="{ open }"
           >
@@ -394,6 +407,11 @@ const columnMenuMaxFilterValues = computed(() => (
     ? columns.value.columnMenuMaxFilterValues
     : 250
 ))
+const columnMenuValueFilterRowLimit = computed(() => (
+  typeof columns.value.columnMenuValueFilterRowLimit === "number"
+    ? columns.value.columnMenuValueFilterRowLimit
+    : Number.MAX_SAFE_INTEGER
+))
 
 function hasColumnMenu(): boolean {
   if (columns.value.columnMenuEnabled === true) {
@@ -403,6 +421,10 @@ function hasColumnMenu(): boolean {
     || typeof columns.value.applyColumnMenuPin === "function"
     || typeof columns.value.applyColumnMenuFilter === "function"
     || typeof columns.value.clearColumnMenuFilter === "function"
+}
+
+function shouldUseColumnMenus(): boolean {
+  return hasColumnMenu() && columns.value.columnMenuValueFilterEnabled !== false
 }
 
 function resolveTextAlign(value: unknown): CSSProperties["textAlign"] | undefined {
@@ -451,6 +473,10 @@ function isColumnFilterable(column: TableColumn): boolean {
   return column.column.capabilities?.filterable !== false
 }
 
+function isColumnMenuValueFilterEnabled(column: TableColumn): boolean {
+  return isColumnFilterable(column) && columns.value.columnMenuValueFilterEnabled !== false
+}
+
 function headerCellPresentationStyle(column: TableColumn): CSSProperties {
   const textAlign = resolveTextAlign(
     column.column.presentation?.headerAlign ?? column.column.presentation?.align,
@@ -478,6 +504,15 @@ function resolveColumnMenuSortDirectionSafe(columnKey: string): "asc" | "desc" |
 function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string[] {
   const resolve = columns.value.resolveColumnMenuSelectedTokens
   return typeof resolve === "function" ? resolve(columnKey) : []
+}
+
+function resolveColumnMenuInstanceKey(columnKey: string): string {
+  return [
+    columnKey,
+    columns.value.columnMenuValueFilterEnabled === false ? "text-only" : "value-filter",
+    columnMenuValueFilterRowLimit.value,
+    sourceRows.value.length,
+  ].join(":")
 }
 
 function applyColumnMenuSortSafe(columnKey: string, direction: "asc" | "desc" | null): void {

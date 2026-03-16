@@ -132,6 +132,12 @@ function isDataGridColumnCacheParityVerificationEnabled(): boolean {
 export interface CreateClientRowModelOptions<T> {
   rows?: readonly DataGridRowNodeInput<T>[]
   resolveRowId?: DataGridRowIdResolver<T>
+  /**
+   * Clones row payloads on ingest to isolate the model from later external mutation.
+   * Disable only for tightly controlled perf-sensitive paths.
+   * Default: `true`.
+   */
+  isolateInputRows?: boolean
   initialTreeData?: DataGridTreeDataSpec<T> | null
   initialSortModel?: readonly DataGridSortState[]
   initialFilterModel?: DataGridFilterSnapshot | null

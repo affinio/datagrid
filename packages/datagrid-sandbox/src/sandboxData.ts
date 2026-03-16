@@ -5,18 +5,18 @@ export interface VueBaseRow {
   id: number
   name: string
   amount: number
-  start: Date
-  end: Date
+  start: string | Date
+  end: string | Date
   updatedAt: string
   stage: string
   status: string
   region: string
   category: string
   qty: number
-  baselineStart: Date
-  baselineEnd: Date
+  baselineStart: string | Date
+  baselineEnd: string | Date
   progress: number
-  dependencies: string[]
+  dependencies: string | string[]
   critical: boolean
   [key: string]: unknown
 }
@@ -103,6 +103,10 @@ const OWNERS = ["team-red", "team-blue", "team-green"]
 
 export const ROW_MODE_OPTIONS = [1000, 10000, 50000, 100000, 200000] as const
 export const COLUMN_MODE_OPTIONS = [8, 16, 32] as const
+
+function formatSandboxUtcDate(dayOffset: number): string {
+  return new Date(Date.UTC(2026, 2, 1 + dayOffset)).toISOString()
+}
 
 function appendExtraColumns(base: DataGridColumnInput[], columnCount: number): DataGridColumnInput[] {
   const columns = [...base]
@@ -294,23 +298,24 @@ function buildBaseRows(rowCount: number, columnCount: number): VueBaseRow[] {
     }
     const baselineLeadDays = (index % 4) + 1
     const baselineLagDays = index % 3
+    const dependencyValue = dependencies.join(",")
     const row: VueBaseRow = {
       rowId: `base-${index + 1}`,
       id: index + 1,
       name: `Task ${index + 1}`,
       amount: (index % 500) * 3 + (index % 17),
-      start: new Date(Date.UTC(2026, 2, 1 + startOffsetDays)),
-      end: new Date(Date.UTC(2026, 2, 1 + startOffsetDays + durationDays)),
+      start: formatSandboxUtcDate(startOffsetDays),
+      end: formatSandboxUtcDate(startOffsetDays + durationDays),
       updatedAt: `2026-03-${String((index % 28) + 1).padStart(2, "0")}T${String((index * 3) % 24).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}:00.000Z`,
       stage,
       status,
       region,
       category,
       qty: (index % 20) + 1,
-      baselineStart: new Date(Date.UTC(2026, 2, 1 + startOffsetDays - baselineLeadDays)),
-      baselineEnd: new Date(Date.UTC(2026, 2, 1 + startOffsetDays + durationDays - baselineLagDays)),
+      baselineStart: formatSandboxUtcDate(startOffsetDays - baselineLeadDays),
+      baselineEnd: formatSandboxUtcDate(startOffsetDays + durationDays - baselineLagDays),
       progress: (index * 13) % 101,
-      dependencies,
+      dependencies: dependencyValue,
       critical: durationDays >= 10 || index % 9 === 0,
     }
     fillExtraFields(row, index, columnCount, baseColumnsLength)

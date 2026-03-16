@@ -1,6 +1,7 @@
 import { isRef, onBeforeUnmount, ref, watch, type Ref } from "vue"
 import type {
   DataGridColumnInput,
+  CreateClientRowModelOptions,
   DataGridRowModelSnapshot,
   DataGridRowNodeInput,
   DataGridTreeDataFilterMode,
@@ -29,6 +30,7 @@ export interface UseDataGridAppRuntimeOptions<TRow> {
   mode: MaybeRef<DataGridAppRuntimeMode>
   rows: Ref<readonly TRow[]>
   columns: Ref<readonly DataGridColumnInput[]>
+  clientRowModelOptions?: Omit<CreateClientRowModelOptions<TRow>, "rows">
   services?: UseDataGridRuntimeOptions<TRow>["services"]
   treeData?: {
     getDataPath: (row: TRow) => readonly string[]
@@ -117,26 +119,30 @@ export function useDataGridAppRuntime<TRow>(
     }
   }
 
-  const clientRowModelOptions: UseDataGridRuntimeOptions<TRow>["clientRowModelOptions"] = mode === "tree" && options.treeData
-    ? {
-        initialTreeData: {
-          mode: "path",
-          getDataPath: options.treeData.getDataPath,
-          filterMode: options.treeData.filterMode ?? "include-descendants",
-        },
-      }
-    : mode === "pivot" && options.initialPivotModel
+  const clientRowModelOptions: UseDataGridRuntimeOptions<TRow>["clientRowModelOptions"] = {
+    ...(options.clientRowModelOptions ?? {}),
+    ...(mode === "tree" && options.treeData
+      ? {
+          initialTreeData: {
+            mode: "path",
+            getDataPath: options.treeData.getDataPath,
+            filterMode: options.treeData.filterMode ?? "include-descendants",
+          },
+        }
+      : {}),
+    ...(mode === "pivot" && options.initialPivotModel
       ? {
           initialPivotModel: options.initialPivotModel,
         }
-      : undefined
+      : {}),
+  }
 
   const runtime = useDataGridRuntime<TRow>({
     rows: options.rows,
     columns: options.columns,
     services: options.services,
     rowModel: workerRowModel ?? undefined,
-    clientRowModelOptions,
+    clientRowModelOptions: Object.keys(clientRowModelOptions).length > 0 ? clientRowModelOptions : undefined,
   })
 
   const rowVersion = ref(0)

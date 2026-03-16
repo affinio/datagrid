@@ -52,6 +52,8 @@ export interface DataGridTableStageColumnsSection {
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void
   columnMenuEnabled?: boolean
+  columnMenuValueFilterEnabled?: boolean
+  columnMenuValueFilterRowLimit?: number
   columnMenuMaxFilterValues?: number
   isColumnFilterActive?: (columnKey: string) => boolean
   resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
