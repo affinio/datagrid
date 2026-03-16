@@ -124,6 +124,7 @@ export function useDataGridTableStageRuntime<
     resolveBaseRowHeight: () => options.normalizedBaseRowHeight.value,
     resolveRowHeightOverride: rowIndex => options.runtime.api.view.getRowHeightOverride(rowIndex),
     resolveRowHeightVersion: () => options.runtime.api.view.getRowHeightVersion(),
+    hasRowHeightOverrides: () => options.runtime.api.view.getRowHeightVersion() > 0,
   })
 
   let isEditingCellForSelection: (

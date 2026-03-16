@@ -627,7 +627,7 @@ export default defineComponent({
                 defaultRendererProps: {
                   ...defaultRendererProps,
                   runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
-                  runtimeRowModel: slotProps.rowModel as { subscribe: (listener: () => void) => () => void },
+                  runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot">,
                 },
               }),
             }
@@ -635,7 +635,7 @@ export default defineComponent({
               default: (slotProps: DataGridRuntimeHostSlotProps) => h(DataGridDefaultRenderer, {
                 ...defaultRendererProps,
                 runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
-                runtimeRowModel: slotProps.rowModel as { subscribe: (listener: () => void) => () => void },
+                runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot">,
               }),
             },
       )

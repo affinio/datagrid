@@ -208,6 +208,40 @@ export function buildVueRows(mode: "base" | "tree" | "pivot" | "worker", rowCoun
   return buildBaseRows(rowCount, columnCount)
 }
 
+export function buildWorkerRowInputs(
+  rowCount: number,
+  columnCount: number,
+): DataGridRowNodeInput<VueWorkerRow>[] {
+  const rows: DataGridRowNodeInput<VueWorkerRow>[] = new Array(rowCount)
+  const baseColumnsLength = 8
+
+  for (let index = 0; index < rowCount; index += 1) {
+    const status = STATUSES[index % STATUSES.length] ?? "new"
+    const queue = QUEUES[index % QUEUES.length] ?? "sync"
+    const shard = SHARDS[index % SHARDS.length] ?? "shard-a"
+    const row: VueWorkerRow = {
+      rowId: `worker-${index + 1}`,
+      id: index + 1,
+      name: `Task ${index + 1}`,
+      status,
+      amount: (index % 100) + 1,
+      queue,
+      shard,
+      latencyMs: 5 + (index % 300),
+      retries: index % 4,
+      updatedAt: `2026-03-${String((index % 28) + 1).padStart(2, "0")}`,
+    }
+    fillExtraFields(row, index, columnCount, baseColumnsLength)
+    rows[index] = {
+      row,
+      rowId: row.rowId,
+      originalIndex: index,
+    }
+  }
+
+  return rows
+}
+
 export function buildCoreRows(rowCount: number, columnCount: number): CoreBaseRow[] {
   const rows: CoreBaseRow[] = new Array(rowCount)
   const baseColumnsLength = 7
@@ -374,30 +408,7 @@ function buildPivotRows(rowCount: number, columnCount: number): VuePivotRow[] {
 }
 
 function buildWorkerRows(rowCount: number, columnCount: number): VueWorkerRow[] {
-  const rows: VueWorkerRow[] = new Array(rowCount)
-  const baseColumnsLength = 8
-
-  for (let index = 0; index < rowCount; index += 1) {
-    const status = STATUSES[index % STATUSES.length] ?? "new"
-    const queue = QUEUES[index % QUEUES.length] ?? "sync"
-    const shard = SHARDS[index % SHARDS.length] ?? "shard-a"
-    const row: VueWorkerRow = {
-      rowId: `worker-${index + 1}`,
-      id: index + 1,
-      name: `Task ${index + 1}`,
-      status,
-      amount: (index % 100) + 1,
-      queue,
-      shard,
-      latencyMs: 5 + (index % 300),
-      retries: index % 4,
-      updatedAt: `2026-03-${String((index % 28) + 1).padStart(2, "0")}`,
-    }
-    fillExtraFields(row, index, columnCount, baseColumnsLength)
-    rows[index] = row
-  }
-
-  return rows
+  return buildWorkerRowInputs(rowCount, columnCount).map(entry => entry.row as VueWorkerRow)
 }
 
 export function toRowInputs<TRow>(rows: readonly TRow[]): DataGridRowNodeInput<TRow>[] {

@@ -1,5 +1,10 @@
-import { onBeforeUnmount, ref, type Ref } from "vue"
-import type { DataGridColumnInput, DataGridRowNodeInput, DataGridTreeDataFilterMode } from "@affino/datagrid-core"
+import { isRef, onBeforeUnmount, ref, watch, type Ref } from "vue"
+import type {
+  DataGridColumnInput,
+  DataGridRowModelSnapshot,
+  DataGridRowNodeInput,
+  DataGridTreeDataFilterMode,
+} from "@affino/datagrid-core"
 import type { DataGridPivotSpec } from "@affino/datagrid-pivot"
 import { useDataGridRuntime, type UseDataGridRuntimeOptions, type UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import {
@@ -31,8 +36,28 @@ export interface UseDataGridAppRuntimeOptions<TRow> {
   }
   initialPivotModel?: DataGridPivotSpec | null
   worker?: {
-    resolveRowInputs: (rows: readonly TRow[]) => readonly DataGridRowNodeInput<TRow>[]
+    rowInputs?: MaybeRef<readonly DataGridRowNodeInput<TRow>[]>
+    resolveRowInputs?: (rows: readonly TRow[]) => readonly DataGridRowNodeInput<TRow>[]
+    resolveRowInputsOnDemand?: () => readonly DataGridRowNodeInput<TRow>[]
+    rowInputsUpdateKey?: MaybeRef<unknown>
+    createHostWorker?: () => Worker
   }
+}
+
+interface DataGridWorkerHostInitMessage<TRow> {
+  __datagridWorkerHostInit: true
+  rows: readonly DataGridRowNodeInput<TRow>[]
+}
+
+function postWorkerHostInit<TRow>(
+  worker: Worker,
+  rows: readonly DataGridRowNodeInput<TRow>[],
+): void {
+  const message: DataGridWorkerHostInitMessage<TRow> = {
+    __datagridWorkerHostInit: true,
+    rows,
+  }
+  worker.postMessage(message)
 }
 
 export interface UseDataGridAppRuntimeResult<TRow> {
@@ -46,24 +71,50 @@ export function useDataGridAppRuntime<TRow>(
   const mode = resolveMaybeRef(options.mode)
   let workerHost: DataGridWorkerOwnedRowModelHost | null = null
   let workerRowModel: DataGridWorkerOwnedRowModel<TRow> | null = null
+  let hostWorker: Worker | null = null
   let workerPortA: MessagePort | null = null
   let workerPortB: MessagePort | null = null
+  const resolveWorkerRowInputs = (): readonly DataGridRowNodeInput<TRow>[] => {
+    if (!options.worker) {
+      return []
+    }
+    if (options.worker.resolveRowInputsOnDemand) {
+      return options.worker.resolveRowInputsOnDemand()
+    }
+    if (options.worker.rowInputs) {
+      return resolveMaybeRef(options.worker.rowInputs)
+    }
+    if (options.worker.resolveRowInputs) {
+      return options.worker.resolveRowInputs(options.rows.value)
+    }
+    return []
+  }
 
   if (mode === "worker" && options.worker) {
-    const channel = new MessageChannel()
-    channel.port1.start()
-    channel.port2.start()
-    workerPortA = channel.port1
-    workerPortB = channel.port2
-    workerHost = createDataGridWorkerOwnedRowModelHost<TRow>({
-      source: channel.port2,
-      target: channel.port2,
-      rows: options.worker.resolveRowInputs(options.rows.value),
-    })
-    workerRowModel = createDataGridWorkerOwnedRowModel<TRow>({
-      source: channel.port1,
-      target: channel.port1,
-    })
+    const initialRowInputs = resolveWorkerRowInputs()
+    if (options.worker.createHostWorker) {
+      hostWorker = options.worker.createHostWorker()
+      postWorkerHostInit(hostWorker, initialRowInputs)
+      workerRowModel = createDataGridWorkerOwnedRowModel<TRow>({
+        source: hostWorker,
+        target: hostWorker,
+      })
+    } else {
+      const channel = new MessageChannel()
+      channel.port1.start()
+      channel.port2.start()
+      workerPortA = channel.port1
+      workerPortB = channel.port2
+      workerHost = createDataGridWorkerOwnedRowModelHost<TRow>({
+        source: channel.port2,
+        target: channel.port2,
+        rows: initialRowInputs,
+      })
+      workerRowModel = createDataGridWorkerOwnedRowModel<TRow>({
+        source: channel.port1,
+        target: channel.port1,
+      })
+    }
   }
 
   const clientRowModelOptions: UseDataGridRuntimeOptions<TRow>["clientRowModelOptions"] = mode === "tree" && options.treeData
@@ -89,13 +140,45 @@ export function useDataGridAppRuntime<TRow>(
   })
 
   const rowVersion = ref(0)
+  const resolveRowModelVersionKey = (snapshot: DataGridRowModelSnapshot<TRow>): string => {
+    return [
+      snapshot.kind,
+      snapshot.revision ?? "",
+      snapshot.rowCount,
+      snapshot.loading ? 1 : 0,
+      snapshot.projection?.recomputeVersion ?? snapshot.projection?.version ?? "",
+    ].join("|")
+  }
+  let lastRowModelVersionKey = resolveRowModelVersionKey(runtime.rowModel.getSnapshot())
   const unsubscribeRows = runtime.rowModel.subscribe(() => {
+    const nextVersionKey = resolveRowModelVersionKey(runtime.rowModel.getSnapshot())
+    if (nextVersionKey === lastRowModelVersionKey) {
+      return
+    }
+    lastRowModelVersionKey = nextVersionKey
     rowVersion.value += 1
   })
+
+  if (mode === "worker" && options.worker) {
+    if (options.worker.resolveRowInputsOnDemand && options.worker.rowInputsUpdateKey !== undefined) {
+      watch(() => resolveMaybeRef(options.worker?.rowInputsUpdateKey as MaybeRef<unknown>), () => {
+        workerRowModel?.setRows(resolveWorkerRowInputs())
+      })
+    } else if (options.worker.rowInputs && isRef(options.worker.rowInputs)) {
+      watch(options.worker.rowInputs, rowInputs => {
+        workerRowModel?.setRows(rowInputs)
+      })
+    } else if (options.worker.resolveRowInputs && isRef(options.rows)) {
+      watch(options.rows, rows => {
+        workerRowModel?.setRows(options.worker?.resolveRowInputs?.(rows) ?? [])
+      })
+    }
+  }
 
   onBeforeUnmount(() => {
     unsubscribeRows()
     workerHost?.dispose()
+    hostWorker?.terminate()
     workerPortA?.close()
     workerPortB?.close()
   })

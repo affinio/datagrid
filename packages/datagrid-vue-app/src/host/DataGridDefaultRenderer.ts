@@ -16,6 +16,7 @@ import type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridPivotSpec,
+  DataGridRowModel,
   DataGridAppColumnLayoutDraftColumn,
   DataGridSortState,
   DataGridAppAdvancedFilterColumnOption,
@@ -376,7 +377,7 @@ export default defineComponent({
       required: true,
     },
     runtimeRowModel: {
-      type: Object as PropType<{ subscribe: (listener: () => void) => () => void }>,
+      type: Object as PropType<Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot">>,
       required: true,
     },
     selectionSnapshot: {
@@ -484,7 +485,26 @@ export default defineComponent({
       resolveInitialFilterTexts(filterModelState.value)
     ))
 
+    let lastRowModelVersionKey = ""
+    const resolveRowModelVersionKey = () => {
+      const snapshot = props.runtimeRowModel.getSnapshot()
+      return [
+        snapshot.kind,
+        snapshot.revision ?? "",
+        snapshot.rowCount,
+        snapshot.loading ? 1 : 0,
+        snapshot.projection?.recomputeVersion ?? snapshot.projection?.version ?? "",
+      ].join("|")
+    }
+
+    lastRowModelVersionKey = resolveRowModelVersionKey()
+
     const unsubscribeRowModel = props.runtimeRowModel.subscribe(() => {
+      const nextVersionKey = resolveRowModelVersionKey()
+      if (nextVersionKey === lastRowModelVersionKey) {
+        return
+      }
+      lastRowModelVersionKey = nextVersionKey
       rowVersion.value += 1
     })
 

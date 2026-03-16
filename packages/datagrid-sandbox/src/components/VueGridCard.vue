@@ -177,7 +177,7 @@
       </div>
     </header>
 
-    <DataGridTableStageLoose v-bind="tableStageProps" :stage-context="tableStageContextForView" />
+    <DataGridTableStageLoose ref="tableStageRef" v-bind="tableStageProps" :stage-context="tableStageContextForView" />
 
     <footer class="card__footer">
       Rendered {{ displayRows.length }} / {{ totalRows }} rows. {{ modeHint }}
@@ -187,7 +187,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watchEffect } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue"
 import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
 import type {
   DataGridColumnSnapshot,
@@ -213,9 +213,9 @@ import {
 import {
   buildVueColumns,
   buildVueRows,
+  buildWorkerRowInputs,
   COLUMN_MODE_OPTIONS,
   ROW_MODE_OPTIONS,
-  toRowInputs,
   type VueSandboxRow,
   type VueTreeRow,
 } from "../sandboxData"
@@ -226,9 +226,277 @@ import PivotAdvancedPanel from "./PivotAdvancedPanel.vue"
 import RefreshCellsPanel from "./RefreshCellsPanel.vue"
 import StatePanel from "./StatePanel.vue"
 import ComputePolicyPanel from "./ComputePolicyPanel.vue"
+import DataGridRowModelHostWorker from "../workers/datagridRowModelHost.worker.ts?worker"
 
 const DataGridTableStageLoose = DataGridTableStage as unknown as new () => {
   $props: Record<string, unknown>
+}
+
+interface DataGridTableStageExpose {
+  getStageRootElement: () => HTMLElement | null
+  getBodyViewportElement: () => HTMLElement | null
+}
+
+interface SandboxGridPerfTelemetrySnapshot {
+  viewport: {
+    scrollTop: number
+    scrollLeft: number
+    width: number
+    height: number
+  }
+  dom: {
+    rootNodes: number
+    stageNodes: number
+  }
+  memory: {
+    usedJSHeapMB: number | null
+    totalJSHeapMB: number | null
+    heapLimitMB: number | null
+  }
+  rendered: {
+    totalRows: number
+    visibleRows: number
+    renderedColumns: number
+    viewportRowStart: number
+    viewportRowEnd: number
+  }
+  scrolling: {
+    active: boolean
+    sessionCount: number
+    totalWindowShifts: number
+    lastSession: null | {
+      durationMs: number
+      scrollEvents: number
+      frameCount: number
+      averageFrameMs: number
+      maxFrameMs: number
+      slowFrameCount: number
+      windowShifts: number
+      travelPx: number
+    }
+  }
+}
+
+function createSandboxGridPerfTelemetry(options: {
+  resolveViewport: () => HTMLElement | null
+  resolveRoot: () => HTMLElement | null
+  resolveStageRoot: () => HTMLElement | null
+  resolveTotalRows: () => number
+  resolveVisibleRows: () => number
+  resolveRenderedColumns: () => number
+  resolveViewportRowStart: () => number
+  resolveViewportRowEnd: () => number
+}) {
+  let activeViewport: HTMLElement | null = null
+  let viewportScrollListener: ((event: Event) => void) | null = null
+  let activeSession: null | {
+    startedAt: number
+    lastScrollAt: number
+    lastFrameAt: number
+    lastScrollTop: number
+    lastScrollLeft: number
+    frameCount: number
+    frameDurationTotal: number
+    maxFrameMs: number
+    slowFrameCount: number
+    scrollEvents: number
+    windowShifts: number
+    travelPx: number
+  } = null
+  let lastSession: SandboxGridPerfTelemetrySnapshot["scrolling"]["lastSession"] = null
+  let sessionCount = 0
+  let totalWindowShifts = 0
+  let frameHandle = 0
+
+  const stopFrameLoop = (): void => {
+    if (frameHandle === 0 || typeof window === "undefined") {
+      return
+    }
+    window.cancelAnimationFrame(frameHandle)
+    frameHandle = 0
+  }
+
+  const finishSession = (endedAt: number): void => {
+    if (!activeSession) {
+      return
+    }
+    const effectiveFrameCount = Math.max(0, activeSession.frameCount - 1)
+    lastSession = {
+      durationMs: Math.max(0, Math.round(endedAt - activeSession.startedAt)),
+      scrollEvents: activeSession.scrollEvents,
+      frameCount: effectiveFrameCount,
+      averageFrameMs: effectiveFrameCount > 0
+        ? Number((activeSession.frameDurationTotal / effectiveFrameCount).toFixed(2))
+        : 0,
+      maxFrameMs: Number(activeSession.maxFrameMs.toFixed(2)),
+      slowFrameCount: activeSession.slowFrameCount,
+      windowShifts: activeSession.windowShifts,
+      travelPx: Math.round(activeSession.travelPx),
+    }
+    activeSession = null
+    stopFrameLoop()
+  }
+
+  const tickFrame = (now: number): void => {
+    if (!activeSession) {
+      frameHandle = 0
+      return
+    }
+    if (activeSession.lastFrameAt > 0) {
+      const delta = now - activeSession.lastFrameAt
+      activeSession.frameDurationTotal += delta
+      activeSession.maxFrameMs = Math.max(activeSession.maxFrameMs, delta)
+      if (delta >= 20) {
+        activeSession.slowFrameCount += 1
+      }
+    }
+    activeSession.lastFrameAt = now
+    activeSession.frameCount += 1
+
+    if (now - activeSession.lastScrollAt >= 140) {
+      finishSession(now)
+      return
+    }
+
+    if (typeof window === "undefined") {
+      frameHandle = 0
+      return
+    }
+    frameHandle = window.requestAnimationFrame(tickFrame)
+  }
+
+  const ensureFrameLoop = (): void => {
+    if (frameHandle !== 0 || typeof window === "undefined") {
+      return
+    }
+    frameHandle = window.requestAnimationFrame(tickFrame)
+  }
+
+  const handleViewportScroll = (event: Event): void => {
+    const viewport = event.target as HTMLElement | null
+    if (!viewport || typeof performance === "undefined") {
+      return
+    }
+    const now = performance.now()
+    if (!activeSession) {
+      sessionCount += 1
+      activeSession = {
+        startedAt: now,
+        lastScrollAt: now,
+        lastFrameAt: 0,
+        lastScrollTop: viewport.scrollTop,
+        lastScrollLeft: viewport.scrollLeft,
+        frameCount: 0,
+        frameDurationTotal: 0,
+        maxFrameMs: 0,
+        slowFrameCount: 0,
+        scrollEvents: 0,
+        windowShifts: 0,
+        travelPx: 0,
+      }
+    }
+    activeSession.scrollEvents += 1
+    activeSession.lastScrollAt = now
+    activeSession.travelPx += Math.abs(viewport.scrollTop - activeSession.lastScrollTop)
+      + Math.abs(viewport.scrollLeft - activeSession.lastScrollLeft)
+    activeSession.lastScrollTop = viewport.scrollTop
+    activeSession.lastScrollLeft = viewport.scrollLeft
+    ensureFrameLoop()
+  }
+
+  const detachViewport = (): void => {
+    if (activeViewport && viewportScrollListener) {
+      activeViewport.removeEventListener("scroll", viewportScrollListener)
+    }
+    activeViewport = null
+    viewportScrollListener = null
+  }
+
+  const syncViewport = (): void => {
+    const nextViewport = options.resolveViewport()
+    if (nextViewport === activeViewport) {
+      return
+    }
+    detachViewport()
+    if (!nextViewport) {
+      return
+    }
+    viewportScrollListener = handleViewportScroll
+    nextViewport.addEventListener("scroll", viewportScrollListener, { passive: true })
+    activeViewport = nextViewport
+  }
+
+  const noteViewportWindowShift = (): void => {
+    totalWindowShifts += 1
+    if (activeSession) {
+      activeSession.windowShifts += 1
+    }
+  }
+
+  const read = (): SandboxGridPerfTelemetrySnapshot => {
+    syncViewport()
+    const root = options.resolveRoot()
+    const stageRoot = options.resolveStageRoot()
+    const performanceWithMemory = performance as Performance & {
+      memory?: {
+        usedJSHeapSize?: number
+        totalJSHeapSize?: number
+        jsHeapSizeLimit?: number
+      }
+    }
+    const usedJSHeapSize = performanceWithMemory.memory?.usedJSHeapSize
+    const totalJSHeapSize = performanceWithMemory.memory?.totalJSHeapSize
+    const jsHeapSizeLimit = performanceWithMemory.memory?.jsHeapSizeLimit
+    return {
+      viewport: {
+        scrollTop: activeViewport?.scrollTop ?? 0,
+        scrollLeft: activeViewport?.scrollLeft ?? 0,
+        width: activeViewport?.clientWidth ?? 0,
+        height: activeViewport?.clientHeight ?? 0,
+      },
+      dom: {
+        rootNodes: root ? root.querySelectorAll("*").length : 0,
+        stageNodes: stageRoot ? stageRoot.querySelectorAll("*").length : 0,
+      },
+      memory: {
+        usedJSHeapMB: typeof usedJSHeapSize === "number"
+          ? Number((usedJSHeapSize / (1024 * 1024)).toFixed(2))
+          : null,
+        totalJSHeapMB: typeof totalJSHeapSize === "number"
+          ? Number((totalJSHeapSize / (1024 * 1024)).toFixed(2))
+          : null,
+        heapLimitMB: typeof jsHeapSizeLimit === "number"
+          ? Number((jsHeapSizeLimit / (1024 * 1024)).toFixed(2))
+          : null,
+      },
+      rendered: {
+        totalRows: options.resolveTotalRows(),
+        visibleRows: options.resolveVisibleRows(),
+        renderedColumns: options.resolveRenderedColumns(),
+        viewportRowStart: options.resolveViewportRowStart(),
+        viewportRowEnd: options.resolveViewportRowEnd(),
+      },
+      scrolling: {
+        active: activeSession != null,
+        sessionCount,
+        totalWindowShifts,
+        lastSession,
+      },
+    }
+  }
+
+  const dispose = (): void => {
+    finishSession(typeof performance === "undefined" ? 0 : performance.now())
+    detachViewport()
+    stopFrameLoop()
+  }
+
+  return {
+    syncViewport,
+    noteViewportWindowShift,
+    read,
+    dispose,
+  }
 }
 
 type Mode = "base" | "tree" | "pivot" | "worker"
@@ -240,6 +508,7 @@ const props = defineProps<{
 }>()
 
 const cardRootRef = ref<HTMLElement | null>(null)
+const tableStageRef = ref<DataGridTableStageExpose | null>(null)
 const sandboxThemeTokens = resolveGridThemeTokens(industrialNeutralTheme)
 
 watchEffect(() => {
@@ -298,7 +567,13 @@ const PIVOT_LAYOUTS: Record<PivotLayoutId, DataGridPivotSpec> = {
   },
 }
 
-const rows = computed(() => buildVueRows(props.mode, rowCount.value, columnCount.value))
+const rows = computed(() => {
+  if (props.mode === "worker") {
+    return buildWorkerRowInputs(Math.min(rowCount.value, 512), columnCount.value)
+      .map(entry => entry.row) as VueSandboxRow[]
+  }
+  return buildVueRows(props.mode, rowCount.value, columnCount.value)
+})
 const columns = computed(() => buildVueColumns(props.mode, columnCount.value))
 let syncViewportFromDom = (): void => {}
 
@@ -358,7 +633,9 @@ const {
   },
   initialPivotModel: PIVOT_LAYOUTS["department-month-revenue"],
   worker: {
-    resolveRowInputs: nextRows => toRowInputs(nextRows),
+    resolveRowInputsOnDemand: () => buildWorkerRowInputs(rowCount.value, columnCount.value),
+    rowInputsUpdateKey: computed(() => `${rowCount.value}:${columnCount.value}`),
+    createHostWorker: () => new DataGridRowModelHostWorker(),
   },
 })
 runtimeRef = runtime
@@ -481,13 +758,21 @@ const {
   closeDiagnosticsPanel,
   refreshDiagnosticsPanel,
 } = useDataGridAppDiagnosticsPanel({
-  readDiagnostics: () => runtime.api.diagnostics.getAll(),
+  readDiagnostics: () => {
+    const runtimeDiagnostics = runtime.api.diagnostics.getAll()
+    return {
+      ...(runtimeDiagnostics && typeof runtimeDiagnostics === "object"
+        ? runtimeDiagnostics as unknown as Record<string, unknown>
+        : { runtimeDiagnostics }),
+      sandboxPerf: sandboxPerfTelemetry.read(),
+    }
+  },
 })
 const virtualization = computed(() => ({
   rows: rowRenderMode.value !== "pagination",
   columns: true,
-  rowOverscan: 8,
-  columnOverscan: 2,
+  rowOverscan: props.mode === "worker" ? 3 : 8,
+  columnOverscan: props.mode === "worker" ? 1 : 2,
 }))
 const {
   tableStageProps,
@@ -585,5 +870,32 @@ const viewportRowEnd = computed(() => {
     return viewportRowStart.value
   }
   return viewportRowStart.value + count - 1
+})
+
+const sandboxPerfTelemetry = createSandboxGridPerfTelemetry({
+  resolveViewport: () => tableStageRef.value?.getBodyViewportElement() ?? null,
+  resolveRoot: () => cardRootRef.value,
+  resolveStageRoot: () => tableStageRef.value?.getStageRootElement() ?? null,
+  resolveTotalRows: () => totalRows.value,
+  resolveVisibleRows: () => displayRows.value.length,
+  resolveRenderedColumns: () => tableStageProps.value.columns.renderedColumns.length,
+  resolveViewportRowStart: () => viewportRowStart.value,
+  resolveViewportRowEnd: () => viewportRowEnd.value,
+})
+
+watch(viewportRowStart, (nextValue, previousValue) => {
+  if (previousValue !== nextValue) {
+    sandboxPerfTelemetry.noteViewportWindowShift()
+  }
+})
+
+onMounted(() => {
+  void nextTick(() => {
+    sandboxPerfTelemetry.syncViewport()
+  })
+})
+
+onBeforeUnmount(() => {
+  sandboxPerfTelemetry.dispose()
 })
 </script>

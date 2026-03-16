@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { createDataGridAppRowHeightMetrics } from "../dataGridRowHeightMetrics"
 
 describe("createDataGridAppRowHeightMetrics contract", () => {
@@ -41,5 +41,27 @@ describe("createDataGridAppRowHeightMetrics contract", () => {
     expect(metrics.resolveRowHeight(1)).toBe(90)
     expect(metrics.resolveRowOffset(2)).toBe(120)
     expect(metrics.resolveTotalHeight()).toBe(225)
+  })
+
+  it("uses constant-time math when there are no row height overrides", () => {
+    const resolveRowHeightOverride = vi.fn(() => null)
+
+    const metrics = createDataGridAppRowHeightMetrics({
+      totalRows: () => 200000,
+      resolveBaseRowHeight: () => 31,
+      resolveRowHeightOverride,
+      resolveRowHeightVersion: () => 0,
+      hasRowHeightOverrides: () => false,
+    })
+
+    expect(metrics.resolveRowHeight(123)).toBe(31)
+    expect(metrics.resolveRowOffset(1000)).toBe(31000)
+    expect(metrics.resolveRowIndexAtOffset(31000)).toBe(1000)
+    expect(metrics.resolveViewportRange(31000, 310, 2)).toEqual({
+      start: 998,
+      end: 1011,
+    })
+    expect(metrics.resolveTotalHeight()).toBe(6200000)
+    expect(resolveRowHeightOverride).not.toHaveBeenCalled()
   })
 })

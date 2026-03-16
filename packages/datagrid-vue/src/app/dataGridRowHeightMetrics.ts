@@ -3,6 +3,7 @@ export interface DataGridAppRowHeightMetricsOptions {
   resolveBaseRowHeight: () => number
   resolveRowHeightOverride: (rowIndex: number) => number | null
   resolveRowHeightVersion?: () => number
+  hasRowHeightOverrides?: () => boolean
 }
 
 export interface DataGridAppRowHeightMetrics {
@@ -20,7 +21,7 @@ interface CachedMetrics {
   totalRows: number
   baseRowHeight: number
   version: number
-  prefixOffsets: number[]
+  prefixOffsets: number[] | null
 }
 
 function normalizeRowHeight(value: number): number {
@@ -39,6 +40,7 @@ export function createDataGridAppRowHeightMetrics(
     const totalRows = Math.max(0, Math.trunc(options.totalRows()))
     const baseRowHeight = normalizeRowHeight(options.resolveBaseRowHeight())
     const version = options.resolveRowHeightVersion?.() ?? 0
+    const hasRowHeightOverrides = options.hasRowHeightOverrides?.() ?? true
 
     if (
       cachedMetrics
@@ -49,12 +51,15 @@ export function createDataGridAppRowHeightMetrics(
       return cachedMetrics
     }
 
-    const prefixOffsets = new Array<number>(totalRows + 1)
-    prefixOffsets[0] = 0
-    for (let rowIndex = 0; rowIndex < totalRows; rowIndex += 1) {
-      const override = options.resolveRowHeightOverride(rowIndex)
-      const previousOffset = prefixOffsets[rowIndex] ?? 0
-      prefixOffsets[rowIndex + 1] = previousOffset + normalizeRowHeight(override ?? baseRowHeight)
+    let prefixOffsets: number[] | null = null
+    if (hasRowHeightOverrides) {
+      prefixOffsets = new Array<number>(totalRows + 1)
+      prefixOffsets[0] = 0
+      for (let rowIndex = 0; rowIndex < totalRows; rowIndex += 1) {
+        const override = options.resolveRowHeightOverride(rowIndex)
+        const previousOffset = prefixOffsets[rowIndex] ?? 0
+        prefixOffsets[rowIndex + 1] = previousOffset + normalizeRowHeight(override ?? baseRowHeight)
+      }
     }
 
     cachedMetrics = {
@@ -71,6 +76,9 @@ export function createDataGridAppRowHeightMetrics(
     if (metrics.totalRows <= 0) {
       return metrics.baseRowHeight
     }
+    if (metrics.prefixOffsets == null) {
+      return metrics.baseRowHeight
+    }
     const normalizedIndex = Math.max(0, Math.min(metrics.totalRows - 1, Math.trunc(rowIndex)))
     const start = metrics.prefixOffsets[normalizedIndex] ?? 0
     const end = metrics.prefixOffsets[normalizedIndex + 1] ?? (start + metrics.baseRowHeight)
@@ -83,6 +91,9 @@ export function createDataGridAppRowHeightMetrics(
       return 0
     }
     const normalizedIndex = Math.max(0, Math.min(metrics.totalRows, Math.trunc(rowIndex)))
+    if (metrics.prefixOffsets == null) {
+      return normalizedIndex * metrics.baseRowHeight
+    }
     return metrics.prefixOffsets[normalizedIndex] ?? 0
   }
 
@@ -90,6 +101,13 @@ export function createDataGridAppRowHeightMetrics(
     const metrics = resolveCachedMetrics()
     if (metrics.totalRows <= 0) {
       return 0
+    }
+    if (metrics.prefixOffsets == null) {
+      const normalizedHeight = Math.max(1, metrics.baseRowHeight)
+      return Math.max(
+        0,
+        Math.min(metrics.totalRows - 1, Math.floor(Math.max(0, offset) / normalizedHeight)),
+      )
     }
     const totalHeight = metrics.prefixOffsets[metrics.totalRows] ?? 0
     if (totalHeight <= 0) {
@@ -132,6 +150,9 @@ export function createDataGridAppRowHeightMetrics(
 
   const resolveTotalHeight = (): number => {
     const metrics = resolveCachedMetrics()
+    if (metrics.prefixOffsets == null) {
+      return metrics.totalRows * metrics.baseRowHeight
+    }
     return metrics.prefixOffsets[metrics.totalRows] ?? 0
   }
 

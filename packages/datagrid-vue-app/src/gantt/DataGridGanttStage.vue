@@ -170,6 +170,8 @@ const hoverDependencyKey = ref<string | null>(null)
 const selectedDependencyKey = ref<string | null>(null)
 const hasAutoFocusedTimeline = ref(false)
 const redrawFrame = ref<number | null>(null)
+let pendingHeaderRedraw = false
+let pendingBodyRedraw = false
 
 let teardownTableViewport: (() => void) | null = null
 let resizeObserver: ResizeObserver | null = null
@@ -446,14 +448,34 @@ function syncTimelineViewportMetrics(): void {
   )
 }
 
-function scheduleRedraw(): void {
+function syncTimelineViewportWidthFromElement(element: HTMLElement | null): void {
+  if (!element) {
+    return
+  }
+  const nextWidth = Math.max(0, element.clientWidth)
+  if (nextWidth > 0 && timelineViewportWidth.value !== nextWidth) {
+    timelineViewportWidth.value = nextWidth
+  }
+}
+
+function scheduleRedraw(target: "both" | "header" | "body" = "both"): void {
+  pendingHeaderRedraw = pendingHeaderRedraw || target !== "body"
+  pendingBodyRedraw = pendingBodyRedraw || target !== "header"
   if (redrawFrame.value != null || typeof window === "undefined") {
     return
   }
   redrawFrame.value = window.requestAnimationFrame(() => {
+    const shouldDrawHeader = pendingHeaderRedraw
+    const shouldDrawBody = pendingBodyRedraw
     redrawFrame.value = null
-    drawTimelineHeader()
-    drawTimelineBody()
+    pendingHeaderRedraw = false
+    pendingBodyRedraw = false
+    if (shouldDrawHeader) {
+      drawTimelineHeader()
+    }
+    if (shouldDrawBody) {
+      drawTimelineBody()
+    }
   })
 }
 
@@ -463,6 +485,8 @@ function clearScheduledRedraw(): void {
   }
   window.cancelAnimationFrame(redrawFrame.value)
   redrawFrame.value = null
+  pendingHeaderRedraw = false
+  pendingBodyRedraw = false
 }
 
 function resolveRowHeight(rowIndex: number): number {
@@ -715,7 +739,7 @@ function clearDependencySelection(): void {
   }
   selectedDependencyKey.value = null
   hoverDependencyKey.value = null
-  scheduleRedraw()
+  scheduleRedraw("body")
 }
 
 function resolvePreviewRangeForBar(bar: DataGridGanttBarLayout<Record<string, unknown>>): { startMs: number; endMs: number } {
@@ -777,7 +801,7 @@ function drawTimelineHeader(): void {
   }
 
   const headerHeight = Math.max(1, headerHeightPx.value)
-  const width = resolveViewportWidth(viewport) || timelineViewportWidth.value || 1
+  const width = Math.max(1, timelineViewportWidth.value || viewport.clientWidth || 1)
   const model = buildDataGridTimelineRenderModels({
     timeline,
     scrollLeft: timelineScrollLeft.value,
@@ -874,7 +898,7 @@ function drawTimelineBody(): void {
   }
 
   const height = Math.max(1, tableViewportHeight.value || viewport.clientHeight || visibleBars.value.length * props.baseRowHeight)
-  const width = Math.max(1, resolveViewportWidth(viewport) || timelineViewportWidth.value || 1)
+  const width = Math.max(1, timelineViewportWidth.value || viewport.clientWidth || 1)
   const model = buildDataGridTimelineRenderModels({
     timeline,
     scrollLeft: timelineScrollLeft.value,
@@ -1195,7 +1219,7 @@ function handleTimelineBodyScroll(event: Event): void {
   if (!element) {
     return
   }
-  syncTimelineViewportMetrics()
+  syncTimelineViewportWidthFromElement(element)
   syncTimelineScroll(element.scrollLeft, "body")
 }
 
@@ -1204,6 +1228,7 @@ function handleTimelineHeaderScroll(event: Event): void {
   if (!element) {
     return
   }
+  syncTimelineViewportWidthFromElement(element)
   syncTimelineScroll(element.scrollLeft, "header")
 }
 
@@ -1232,7 +1257,7 @@ function handleTimelineWheel(event: WheelEvent): void {
     tableViewport.scrollTop = previousScrollTop + verticalDelta
     if (tableViewport.scrollTop !== previousScrollTop) {
       syncTableViewportMetrics()
-      scheduleRedraw()
+      scheduleRedraw("body")
     }
   }
 }
@@ -1346,7 +1371,7 @@ function commitDrag(): void {
   const drag = activeDragState.value
   activeDragState.value = null
   if (drag.initialStartMs === drag.draftStartMs && drag.initialEndMs === drag.draftEndMs) {
-    scheduleRedraw()
+    scheduleRedraw("body")
     return
   }
   props.runtime.api.rows.applyEdits([buildDataGridGanttRowEditPatch(
@@ -1359,7 +1384,7 @@ function commitDrag(): void {
   )], {
     reapply: true,
   })
-  scheduleRedraw()
+  scheduleRedraw("body")
 }
 
 function handleWindowPointerMove(event: PointerEvent): void {
@@ -1384,7 +1409,7 @@ function handleWindowPointerMove(event: PointerEvent): void {
     draftStartMs: nextRange.startMs,
     draftEndMs: nextRange.endMs,
   }
-  scheduleRedraw()
+  scheduleRedraw("body")
 }
 
 function handleWindowPointerUp(event: PointerEvent): void {
@@ -1424,7 +1449,7 @@ function handleCanvasPointerDown(event: PointerEvent): void {
     if (dependencyHit) {
       event.preventDefault()
       selectedDependencyKey.value = resolveDataGridGanttDependencyPathKey(dependencyHit)
-      scheduleRedraw()
+      scheduleRedraw("body")
       return
     }
     clearDependencySelection()
@@ -1447,7 +1472,7 @@ function handleCanvasPointerDown(event: PointerEvent): void {
     window.addEventListener("pointermove", handleWindowPointerMove)
     window.addEventListener("pointerup", handleWindowPointerUp)
   }
-  scheduleRedraw()
+  scheduleRedraw("body")
 }
 
 function handleCanvasPointerMove(event: PointerEvent): void {
@@ -1530,7 +1555,7 @@ function attachTableViewport(): void {
 
   const onScroll = () => {
     syncTableViewportMetrics()
-    scheduleRedraw()
+    scheduleRedraw("body")
   }
 
   viewport.addEventListener("scroll", onScroll, { passive: true })
@@ -1596,13 +1621,21 @@ watch(
   () => [
     visibleBarsSignature.value,
     visibleRowDividerSignature.value,
-    timelineStateSignature.value,
     rowHeightVersion.value,
     tableViewport.value.viewportRowStart,
     tableViewport.value.topSpacerHeight,
     tableScrollTop.value,
     tableViewportHeight.value,
-    timelineScrollLeft.value,
+  ],
+  () => {
+    scheduleRedraw("body")
+  },
+)
+
+watch(
+  () => [
+    timelineStateSignature.value,
+    headerHeightPx.value,
   ],
   () => {
     scheduleRedraw()
@@ -1617,7 +1650,7 @@ watch(
       && !nextSignature.split("|").includes(selectedDependencyKey.value)
     ) {
       selectedDependencyKey.value = null
-      scheduleRedraw()
+      scheduleRedraw("body")
     }
   },
 )
