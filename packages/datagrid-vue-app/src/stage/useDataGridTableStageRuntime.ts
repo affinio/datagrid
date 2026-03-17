@@ -65,6 +65,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   selectionAnchor: Ref<unknown>
   syncSelectionSnapshotFromRuntime: () => void
   rowSelectionSnapshot: Ref<DataGridRowSelectionSnapshot | null>
+  rowHover?: Ref<boolean>
+  stripedRows?: Ref<boolean>
   showRowIndex?: Ref<boolean>
   showRowSelection?: Ref<boolean>
   syncRowSelectionSnapshotFromRuntime?: () => void
@@ -198,6 +200,7 @@ export function useDataGridTableStageRuntime<
     rowHeightMode: options.rowHeightMode,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
     viewportRowStart,
+    bodyViewportRef,
     runtime: options.runtime as never,
     minRowHeight: MIN_ROW_HEIGHT,
     syncViewport: () => syncViewportFromDom(),
@@ -590,6 +593,8 @@ export function useDataGridTableStageRuntime<
     pinnedBottomRows,
     sourceRows: options.sourceRows ?? options.rows,
     showRowIndex,
+    rowHover: computed(() => options.rowHover?.value === true),
+    stripedRows: computed(() => options.stripedRows?.value === true),
     columnFilterTextByKey: options.columnFilterTextByKey,
     gridContentStyle,
     mainTrackStyle,

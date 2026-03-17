@@ -1,7 +1,7 @@
 <template>
   <section ref="stageRootRef" class="datagrid-gantt-stage">
     <div class="datagrid-gantt-stage__table" :style="tablePaneStyle">
-      <DataGridTableStage ref="tableStageRef" v-bind="table" />
+      <DataGridTableStage ref="tableStageRef" v-bind="embeddedTableStageProps" :stage-context="tableStageContext" />
     </div>
 
     <button
@@ -105,6 +105,10 @@ import {
   resolveDataGridGanttDependencyPathKey,
 } from "./dataGridGanttDependencySelection"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
+import {
+  materializeDataGridTableStagePropsFromContext,
+  type DataGridTableStageContext,
+} from "../stage/dataGridTableStageContext"
 
 ensureDataGridAppStyles()
 
@@ -140,15 +144,18 @@ const DRAG_AUTO_SCROLL_MAX_STEP_PX = 24
 const EMPTY_CRITICAL_TASK_IDS = new Set<string>()
 
 const props = defineProps<{
-  table: DataGridTableStageProps<Record<string, unknown>>
+  stageContext: DataGridTableStageContext<Record<string, unknown>>
   runtime: Pick<UseDataGridRuntimeResult<Record<string, unknown>>, "api">
   gantt: DataGridResolvedGanttOptions | null
   baseRowHeight: number
   rowVersion: number
 }>()
 
-const tableRows = computed(() => props.table.rows)
-const tableViewport = computed(() => props.table.viewport)
+const tableStageContext = props.stageContext
+const embeddedTableStageProps = computed(() => materializeDataGridTableStagePropsFromContext(tableStageContext))
+const tableRows = computed(() => tableStageContext.rows.value)
+const tableViewport = computed(() => tableStageContext.viewport.value)
+const tableRowHeightMode = computed(() => tableStageContext.rowHeightMode.value)
 
 const stageRootRef = ref<HTMLElement | null>(null)
 const tableStageRef = ref<DataGridTableStageExpose | null>(null)
@@ -499,7 +506,7 @@ const visibleRowMetrics = computed(() => {
   void displayRowsSignature.value
   void rowHeightVersion.value
 
-  if (props.table.rowHeightMode !== "auto") {
+  if (tableRowHeightMode.value !== "auto") {
     const metrics: Array<{ top: number; height: number }> = []
     let currentTop = tableViewport.value.topSpacerHeight
     for (let rowOffset = 0; rowOffset < tableRows.value.displayRows.length; rowOffset += 1) {

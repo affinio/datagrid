@@ -63,11 +63,11 @@ export interface UseDataGridAppClipboardResult {
 export function useDataGridAppClipboard<TRow, TSnapshot>(
   options: UseDataGridAppClipboardOptions<TRow, TSnapshot>,
 ): UseDataGridAppClipboardResult {
-  const getBodyRowAtIndex = (rowIndex: number): DataGridRowNode<TRow> | null => {
+  const getBodyRowAtIndex = (rowIndex: number): DataGridRowNode<TRow> | undefined => {
     const runtime = options.runtime as typeof options.runtime & {
       getBodyRowAtIndex?: (index: number) => DataGridRowNode<TRow> | null
     }
-    return runtime.getBodyRowAtIndex?.(rowIndex) ?? options.runtime.api.rows.get(rowIndex) ?? null
+    return runtime.getBodyRowAtIndex?.(rowIndex) ?? options.runtime.api.rows.get(rowIndex) ?? undefined
   }
 
   const copiedSelectionRange = ref<DataGridCopyRange | null>(null)

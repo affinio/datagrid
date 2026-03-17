@@ -220,6 +220,7 @@ export interface DataGridApiViewNamespace {
   setRowHeightMode(mode: "fixed" | "auto"): void
   setBaseRowHeight(height: number): void
   measureRowHeight(): void
+  getEffectiveRowHeight(): number
   setRowHeightOverride(rowIndex: number, height: number | null): void
   getRowHeightOverride(rowIndex: number): number | null
   getRowHeightVersion(): number

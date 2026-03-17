@@ -22,7 +22,8 @@ const DATA_GRID_APP_STYLES = `
   --datagrid-row-selected-range-bg: transparent;
   --datagrid-row-selected-sticky-bg: transparent;
   --datagrid-row-band-base-bg: var(--datagrid-row-background-color);
-  --datagrid-row-band-striped-bg: color-mix(in srgb, var(--datagrid-row-background-color) 94%, var(--datagrid-accent-strong) 6%);
+  --datagrid-row-band-hover-bg: var(--datagrid-row-hover-background-color);
+  --datagrid-row-band-striped-bg: color-mix(in srgb, var(--datagrid-row-background-color) 86%, var(--datagrid-accent-strong) 14%);
   --datagrid-row-band-group-bg: var(--datagrid-group-row-background-color);
   --datagrid-row-band-tree-bg: color-mix(in srgb, var(--datagrid-row-background-color) 82%, var(--datagrid-accent-strong) 18%);
   --datagrid-row-band-pivot-bg: color-mix(in srgb, var(--datagrid-row-background-color) 88%, var(--datagrid-accent-strong) 12%);
@@ -769,6 +770,37 @@ const DATA_GRID_APP_STYLES = `
   z-index: 4;
 }
 
+.grid-stage--canvas-chrome .grid-row--hovered::before,
+.grid-stage--canvas-chrome .grid-row--striped::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.grid-stage--canvas-chrome .grid-row--hovered::before {
+  background: var(--datagrid-row-hover-background-color);
+}
+
+.grid-stage--canvas-chrome .grid-row--striped::before {
+  background: var(--datagrid-row-band-striped-bg);
+}
+
+.grid-stage--canvas-chrome .grid-row--hovered {
+  background: var(--datagrid-row-hover-background-color);
+}
+
+.grid-stage--canvas-chrome .grid-row--striped {
+  background: var(--datagrid-row-band-striped-bg);
+}
+
+.grid-stage--canvas-chrome .grid-row > .grid-cell,
+.grid-stage--canvas-chrome .grid-row > .grid-column-spacer {
+  position: relative;
+  z-index: 1;
+}
+
 .grid-pane-track,
 .grid-center-track {
   display: flex;
@@ -816,10 +848,18 @@ const DATA_GRID_APP_STYLES = `
   align-self: stretch;
 }
 
-.grid-stage--auto-row-height .grid-body-content .grid-cell {
+.grid-stage--auto-row-height .grid-row {
+  align-items: stretch;
+}
+
+.grid-stage--auto-row-height .grid-body-content .grid-cell,
+.grid-stage--auto-row-height .grid-pane-content .grid-cell {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  align-items: flex-start;
 }
 
 .grid-row--autosize-probe .grid-cell {
@@ -1209,6 +1249,21 @@ body.datagrid-fill-drag-cursor * {
 .grid-row--hoverable.grid-row--hovered .grid-cell,
 .grid-row--hoverable.grid-row--hovered .grid-cell--index {
   background: var(--datagrid-row-hover-background-color);
+}
+
+.grid-row--striped .grid-cell,
+.grid-row--striped .grid-cell--index {
+  background: var(--datagrid-row-band-striped-bg);
+}
+
+.grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell,
+.grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell--index {
+  background: var(--datagrid-row-hover-background-color);
+}
+
+.grid-stage--canvas-chrome .grid-row--striped .grid-cell,
+.grid-stage--canvas-chrome .grid-row--striped .grid-cell--index {
+  background: var(--datagrid-row-band-striped-bg);
 }
 
 .grid-spacer {

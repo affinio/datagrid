@@ -81,6 +81,23 @@ export function createDataGridTableStageContextFromProps<TRow extends Record<str
   })
 }
 
+export function materializeDataGridTableStagePropsFromContext<TRow extends Record<string, unknown>>(
+  context: DataGridTableStageContext<TRow>,
+): DataGridTableStageProps<TRow> {
+  return {
+    mode: context.mode.value,
+    rowHeightMode: context.rowHeightMode.value,
+    layout: context.layout.value,
+    viewport: context.viewport.value,
+    columns: context.columns.value,
+    rows: context.rows.value,
+    selection: context.selection.value,
+    editing: context.editing.value,
+    cells: context.cells.value,
+    interaction: context.interaction.value,
+  }
+}
+
 export function provideDataGridTableStageContext<TRow extends Record<string, unknown>>(
   context: DataGridTableStageContext<TRow>,
 ): DataGridTableStageContext<TRow> {

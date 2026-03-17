@@ -84,6 +84,7 @@
       v-if="rows.pinnedBottomRows.length > 0"
       class="grid-body-shell grid-body-shell--pinned-bottom"
       :style="paneLayoutStyle"
+      @mouseleave="clearHoveredRow"
     >
       <canvas
         ref="centerBottomChromeCanvasEl"
@@ -314,7 +315,17 @@ function bodyCellPresentationStyle(column: TableColumn): CSSProperties {
   return textAlign ? { textAlign } : {}
 }
 
-function bodyCellSelectionStyle(column: TableColumn, rowOffset: number, columnIndex: number): CSSProperties {
+function resolveInlineRowStateBackground(row: TableRow, rowOffset: number): string | null {
+  if (isHoveredRow(row, rowOffset)) {
+    return "var(--datagrid-row-hover-background-color)"
+  }
+  if (isStripedRow(row, rowOffset)) {
+    return "var(--datagrid-row-band-striped-bg)"
+  }
+  return null
+}
+
+function bodyCellSelectionStyle(row: TableRow, column: TableColumn, rowOffset: number, columnIndex: number): CSSProperties {
   if (isVisualSelectionAnchorCell(rowOffset, columnIndex)) {
     if (column.pin === "left") {
       return { background: "var(--datagrid-pinned-left-bg)" }
@@ -327,7 +338,22 @@ function bodyCellSelectionStyle(column: TableColumn, rowOffset: number, columnIn
   if (shouldHighlightSelectedCellVisual(rowOffset, columnIndex)) {
     return { background: "var(--datagrid-selection-range-bg)" }
   }
+  const rowStateBackground = resolveInlineRowStateBackground(row, rowOffset)
+  if (rowStateBackground) {
+    return { background: rowStateBackground }
+  }
   return {}
+}
+
+function rowIndexCellStyle(row: TableRow, rowOffset: number): CSSProperties {
+  const rowStateBackground = resolveInlineRowStateBackground(row, rowOffset)
+  if (!rowStateBackground) {
+    return resolvedRowIndexColumnStyle.value
+  }
+  return {
+    ...resolvedRowIndexColumnStyle.value,
+    background: rowStateBackground,
+  }
 }
 
 function resolveCellCustomClass(
@@ -1316,6 +1342,11 @@ function drawGridChromeHorizontalLines(
 
 function resolveGridChromeBandColor(kind: string): string {
   switch (kind) {
+    case "hover":
+      return resolveGridChromeColor(
+        "--datagrid-row-band-hover-bg",
+        "rgba(251, 146, 60, 0.18)",
+      )
     case "base":
       return resolveGridChromeColor(
         "--datagrid-row-band-base-bg",
@@ -1966,7 +1997,7 @@ const rightTrackStyle = computed<CSSProperties>(() => ({
   maxWidth: `${rightPaneWidth.value}px`,
 }))
 
-const rowMetrics = computed(() => {
+function buildEstimatedVisibleRowMetrics(): readonly { top: number; height: number }[] {
   const metrics: Array<{ top: number; height: number }> = []
   let currentTop = viewport.value.topSpacerHeight
   displayRows.value.forEach((row, rowOffset) => {
@@ -1979,6 +2010,14 @@ const rowMetrics = computed(() => {
     currentTop += height
   })
   return metrics
+}
+
+const rowMetrics = computed(() => {
+  const estimated = buildEstimatedVisibleRowMetrics()
+  if (mode.value === "base" && rowHeightMode.value === "auto") {
+    return resolveVisibleRowMetricsFromDom(estimated)
+  }
+  return estimated
 })
 
 const pinnedBottomRowMetrics = computed(() => {
@@ -2005,6 +2044,9 @@ const pinnedBottomRowMetricsSignature = computed(() => (
 ))
 
 function resolveChromeRowBandKind(row: TableRow, rowOffset: number): string | null {
+  if (isHoveredRow(row, rowOffset)) {
+    return "hover"
+  }
   const className = rows.value.rowClass(row)
   if (className.includes("row--group") && className.includes("row--pivot")) {
     return "pivot-group"
@@ -2085,17 +2127,19 @@ watch(
   },
 )
 
-function resolveVisibleRowMetricsFromDom(): readonly { top: number; height: number }[] {
+function resolveVisibleRowMetricsFromDom(
+  fallbackMetrics: readonly { top: number; height: number }[],
+): readonly { top: number; height: number }[] {
   const viewport = bodyViewportEl.value
   if (!viewport) {
-    return rowMetrics.value
+    return fallbackMetrics
   }
   const viewportRect = viewport.getBoundingClientRect()
   const rowElements = Array.from(
     viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row"),
   )
   if (rowElements.length !== displayRows.value.length) {
-    return rowMetrics.value
+    return fallbackMetrics
   }
   return rowElements.map(rowElement => {
     const rowRect = rowElement.getBoundingClientRect()
@@ -2727,6 +2771,7 @@ const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   get rowIndexColumnStyle() {
     return resolvedRowIndexColumnStyle.value
   },
+  rowIndexCellStyle,
   handleRowIndexClickSafe,
   builtInCellClasses,
   cellStateClasses,
@@ -2899,6 +2944,6 @@ defineExpose({
   getStageRootElement: () => stageRootEl.value,
   getHeaderElement: () => resolveHeaderShellElement(),
   getBodyViewportElement: () => bodyViewportEl.value,
-  getVisibleRowMetrics: () => resolveVisibleRowMetricsFromDom(),
+  getVisibleRowMetrics: () => resolveVisibleRowMetricsFromDom(rowMetrics.value),
 })
 </script>

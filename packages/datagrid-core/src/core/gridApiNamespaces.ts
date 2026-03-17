@@ -110,6 +110,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   setRowHeightMode: DataGridApi<TRow>["view"]["setRowHeightMode"]
   setBaseRowHeight: DataGridApi<TRow>["view"]["setBaseRowHeight"]
   measureRowHeight: DataGridApi<TRow>["view"]["measureRowHeight"]
+  getEffectiveRowHeight: DataGridApi<TRow>["view"]["getEffectiveRowHeight"]
   setRowHeightOverride: DataGridApi<TRow>["view"]["setRowHeightOverride"]
   getRowHeightOverride: DataGridApi<TRow>["view"]["getRowHeightOverride"]
   getRowHeightVersion: DataGridApi<TRow>["view"]["getRowHeightVersion"]
@@ -272,6 +273,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       setRowHeightMode: methodSet.setRowHeightMode,
       setBaseRowHeight: methodSet.setBaseRowHeight,
       measureRowHeight: methodSet.measureRowHeight,
+      getEffectiveRowHeight: methodSet.getEffectiveRowHeight,
       setRowHeightOverride: methodSet.setRowHeightOverride,
       getRowHeightOverride: methodSet.getRowHeightOverride,
       getRowHeightVersion: methodSet.getRowHeightVersion,

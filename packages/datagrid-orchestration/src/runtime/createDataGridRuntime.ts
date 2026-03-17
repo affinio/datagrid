@@ -49,6 +49,7 @@ export function createDataGridRuntime<TRow = unknown>(
   const columnModel = createDataGridColumnModel({ columns: options.columns })
   let viewportRange: DataGridViewportRange = { start: 0, end: 0 }
   let virtualizationEnabled = true
+  let baseRowHeight = 31
   const rowHeightOverrides = new Map<number, number>()
   let rowHeightVersion = 0
 
@@ -73,8 +74,14 @@ export function createDataGridRuntime<TRow = unknown>(
     setRowHeightMode() {
       // No-op in headless default runtime.
     },
-    setBaseRowHeight() {
-      // No-op in headless default runtime.
+    getEffectiveRowHeight() {
+      return baseRowHeight
+    },
+    setBaseRowHeight(height) {
+      if (!Number.isFinite(height)) {
+        return
+      }
+      baseRowHeight = Math.max(1, Math.trunc(height))
       rowHeightVersion += 1
     },
     measureRowHeight() {

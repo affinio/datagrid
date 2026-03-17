@@ -101,7 +101,10 @@ export function sampleVisibleRowHeights(
   if (Array.isArray(fromHost)) {
     return fromHost
   }
-  const nodes = container.querySelectorAll?.<HTMLElement>("[data-row-index]")
+  const rowNodes = container.querySelectorAll?.<HTMLElement>(".grid-body-content > .grid-row[data-row-index]")
+  const nodes = rowNodes && rowNodes.length > 0
+    ? rowNodes
+    : container.querySelectorAll?.<HTMLElement>("[data-row-index]")
   if (!nodes || nodes.length === 0) {
     return []
   }

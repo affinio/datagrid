@@ -28,6 +28,7 @@ export interface DataGridApiViewMethods {
   setRowHeightMode: (mode: "fixed" | "auto") => void
   setBaseRowHeight: (height: number) => void
   measureRowHeight: () => void
+  getEffectiveRowHeight: () => number
   setRowHeightOverride: (rowIndex: number, height: number | null) => void
   getRowHeightOverride: (rowIndex: number) => number | null
   getRowHeightVersion: () => number
@@ -87,6 +88,13 @@ export function createDataGridApiViewMethods<TRow = unknown>(
     },
     measureRowHeight() {
       getViewportService()?.measureRowHeight?.()
+    },
+    getEffectiveRowHeight() {
+      const viewportService = getViewportService()
+      if (typeof viewportService?.getEffectiveRowHeight === "function") {
+        return viewportService.getEffectiveRowHeight()
+      }
+      return 0
     },
     setRowHeightOverride(rowIndex: number, height: number | null) {
       const normalizedIndex = normalizeRowIndex(rowIndex)

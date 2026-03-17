@@ -44,7 +44,7 @@ export interface DataGridTableStageBodyRenderApiBase {
   resolveCellCustomClass: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => unknown
   columnStyle: (key: string) => CSSProperties
   bodyCellPresentationStyle: (column: DataGridTableStageBodyColumn) => CSSProperties
-  bodyCellSelectionStyle: (column: DataGridTableStageBodyColumn, rowOffset: number, columnIndex: number) => CSSProperties
+  bodyCellSelectionStyle: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, columnIndex: number) => CSSProperties
   resolveCellCustomStyle: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => CSSProperties
   columnIndexByKey: (columnKey: string) => number
   cellTabIndex: (rowOffset: number, columnIndex: number) => number
@@ -106,5 +106,6 @@ export interface DataGridTableStagePinnedPaneRenderApi extends DataGridTableStag
   paneRowStyle: (row: DataGridTableStageBodyRow, rowOffset: number, paneWidth: number) => CSSProperties
   isFullRowSelectionSafe: (rowOffset: number) => boolean
   rowIndexColumnStyle: CSSProperties
+  rowIndexCellStyle: (row: DataGridTableStageBodyRow, rowOffset: number) => CSSProperties
   handleRowIndexClickSafe: (row: DataGridTableStageBodyRow, rowOffset: number, event: MouseEvent) => void
 }

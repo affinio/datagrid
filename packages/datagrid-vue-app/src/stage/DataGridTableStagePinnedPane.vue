@@ -14,6 +14,7 @@
         class="grid-row"
         :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, renderApi.viewportRowOffset(row, rowOffset)) }]"
         :style="renderApi.paneRowStyle(row, rowOffset, pane.width)"
+        :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
         @click="renderApi.handleRowContainerClick(row)"
         @mouseenter="renderApi.setHoveredRow(row, rowOffset)"
       >
@@ -21,7 +22,7 @@
           v-if="pane.showIndexColumn"
           class="grid-cell grid-cell--index grid-cell--index-number"
           :class="{ 'grid-cell--index-selected': renderApi.isFullRowSelectionSafe(renderApi.viewportRowOffset(row, rowOffset)) }"
-          :style="renderApi.rowIndexColumnStyle"
+          :style="renderApi.rowIndexCellStyle(row, renderApi.viewportRowOffset(row, rowOffset))"
           @click.stop="renderApi.handleRowIndexClickSafe(row, renderApi.viewportRowOffset(row, rowOffset), $event)"
         >
           {{ rows.rowIndexLabel(row, renderApi.viewportRowOffset(row, rowOffset)) }}
@@ -47,7 +48,7 @@
           :style="[
             renderApi.columnStyle(column.key),
             renderApi.bodyCellPresentationStyle(column),
-            renderApi.bodyCellSelectionStyle(column, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
+            renderApi.bodyCellSelectionStyle(row, column, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
             renderApi.resolveCellCustomStyle(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
           ]"
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"

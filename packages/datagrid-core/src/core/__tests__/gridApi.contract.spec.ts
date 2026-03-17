@@ -163,6 +163,31 @@ describe("data grid api facade contracts", () => {
     expect(api.columns.get("name")?.width).toBe(280)
   })
 
+  it("exposes the effective row height through the view namespace", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, name: "alpha" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "name", label: "Name" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        viewport: {
+          name: "viewport",
+          getEffectiveRowHeight() {
+            return 44
+          },
+        },
+      },
+    })
+
+    const api = createDataGridApi({ core })
+
+    expect(api.view.getEffectiveRowHeight()).toBe(44)
+  })
+
   it("routes explicit group expansion APIs through row model service", () => {
     const rowModel = createClientRowModel({
       rows: [

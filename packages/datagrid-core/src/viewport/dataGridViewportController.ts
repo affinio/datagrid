@@ -149,6 +149,7 @@ export interface DataGridViewportController<TRow = unknown> extends DataGridView
 	handleScroll(event: Event): void
 	updateViewportHeight(): void
 	measureRowHeight(): void
+	getEffectiveRowHeight(): number
 	cancelScrollRaf(): void
 	scrollToRow(index: number): void
 	scrollToColumn(key: string): void
@@ -1172,6 +1173,10 @@ export function createDataGridViewportController<TRow = unknown>(
 			}
 		}
 
+		function getEffectiveRowHeightValue(): number {
+			return Math.max(1, effectiveRowHeight.value || baseRowHeight)
+		}
+
 		function clampScrollLeftValue(value: number) {
 			if (!Number.isFinite(value)) return 0
 			const containerRef = container
@@ -1748,6 +1753,7 @@ export function createDataGridViewportController<TRow = unknown>(
 			handleScroll,
 			updateViewportHeight: updateViewportHeightValue,
 			measureRowHeight: measureRowHeightValue,
+			getEffectiveRowHeight: getEffectiveRowHeightValue,
 			cancelScrollRaf,
 			scrollToRow: scrollToRowValue,
 			scrollToColumn: scrollToColumnValue,

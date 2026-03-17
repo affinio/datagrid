@@ -15,6 +15,7 @@
         class="grid-row"
         :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, renderApi.viewportRowOffset(row, rowOffset)) }]"
         :style="[rows.rowStyle(row, renderApi.viewportRowOffset(row, rowOffset)), layout.mainTrackStyle]"
+        :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
         @click="renderApi.handleRowContainerClick(row)"
         @mouseenter="renderApi.setHoveredRow(row, rowOffset)"
       >
@@ -35,7 +36,7 @@
           :style="[
             renderApi.columnStyle(column.key),
             renderApi.bodyCellPresentationStyle(column),
-            renderApi.bodyCellSelectionStyle(column, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
+            renderApi.bodyCellSelectionStyle(row, column, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
             renderApi.resolveCellCustomStyle(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
           ]"
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"

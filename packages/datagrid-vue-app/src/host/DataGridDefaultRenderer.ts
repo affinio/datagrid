@@ -954,6 +954,8 @@ export default defineComponent({
       selectionSnapshot: props.selectionSnapshot,
       selectionAnchor: props.selectionAnchor,
       rowSelectionSnapshot: props.rowSelectionSnapshot,
+      rowHover: computed(() => props.rowHover),
+      stripedRows: computed(() => props.stripedRows),
       showRowIndex: computed(() => props.showRowIndex),
       showRowSelection: computed(() => props.rowSelection),
       syncSelectionSnapshotFromRuntime: props.syncSelectionSnapshotFromRuntime,
@@ -1077,7 +1079,7 @@ export default defineComponent({
         }, [
           props.viewMode === "gantt"
             ? h(DataGridGanttStage as Component, {
-              table: stageProps.value,
+              stageContext: tableStageContext,
               runtime: props.runtime,
               gantt: resolvedGanttOptions.value,
               baseRowHeight: normalizedBaseRowHeight.value,
