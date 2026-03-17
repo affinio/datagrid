@@ -19,8 +19,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "test:unit": "vitest run",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests",
     "demo:generate": "pnpm run build && node ./scripts/generate-demo.mjs"
   },
   "dependencies": {

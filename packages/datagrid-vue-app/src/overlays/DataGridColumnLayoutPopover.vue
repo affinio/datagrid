@@ -15,6 +15,7 @@
       v-if="popoverOpen"
       :ref="floating.contentRef"
       class="datagrid-column-layout"
+      data-datagrid-overlay-surface="true"
       :style="[popoverContentStyle, overlayThemeVars]"
       v-bind="contentProps"
     >

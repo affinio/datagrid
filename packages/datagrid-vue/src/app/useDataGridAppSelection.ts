@@ -35,6 +35,21 @@ export interface UseDataGridAppSelectionResult<TRow> {
 
 const aggregateNumberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 })
 
+function readByPath(value: unknown, path: string): unknown {
+  if (!path || typeof value !== "object" || value === null) {
+    return undefined
+  }
+  const segments = path.split(".").filter(Boolean)
+  let current: unknown = value
+  for (const segment of segments) {
+    if (typeof current !== "object" || current === null || !(segment in (current as Record<string, unknown>))) {
+      return undefined
+    }
+    current = (current as Record<string, unknown>)[segment]
+  }
+  return current
+}
+
 function normalizeRowId(value: unknown): DataGridRowId | null {
   return typeof value === "string" || typeof value === "number" ? value : null
 }
@@ -44,6 +59,52 @@ function formatAggregateNumber(value: number | null): string {
     return "—"
   }
   return aggregateNumberFormatter.format(value)
+}
+
+function readSelectionCellValue<TRow>(rowData: TRow, column: DataGridColumnSnapshot | undefined): unknown {
+  if (!column) {
+    return undefined
+  }
+  if (typeof column.column.valueGetter === "function") {
+    return column.column.valueGetter(rowData)
+  }
+  if (typeof column.column.accessor === "function") {
+    return column.column.accessor(rowData)
+  }
+  const source = rowData as unknown
+  if (typeof source !== "object" || source === null) {
+    return undefined
+  }
+  const directKey = column.key
+  const directValue = (source as Record<string, unknown>)[directKey]
+  if (typeof directValue !== "undefined") {
+    return directValue
+  }
+  if (typeof column.column.field === "string" && column.column.field.length > 0) {
+    const fieldValue = readByPath(source, column.column.field)
+    if (typeof fieldValue !== "undefined") {
+      return fieldValue
+    }
+  }
+  return readByPath(source, directKey)
+}
+
+function hasLeadingRowSelectionColumn<TRow>(
+  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api"> | null,
+): boolean {
+  return runtime?.api.rowSelection?.hasSupport?.() === true
+}
+
+function resolveSelectionColumnAtIndex(
+  visibleColumns: readonly DataGridColumnSnapshot[],
+  columnIndex: number,
+  hasRowSelectionColumn: boolean,
+): DataGridColumnSnapshot | undefined {
+  const normalizedIndex = hasRowSelectionColumn ? columnIndex - 1 : columnIndex
+  if (normalizedIndex < 0) {
+    return undefined
+  }
+  return visibleColumns[normalizedIndex]
 }
 
 export function useDataGridAppSelection<TRow>(
@@ -108,12 +169,13 @@ export function useDataGridAppSelection<TRow>(
     if (!runtime || !options.visibleColumns || !options.totalRows) {
       return null
     }
+    const hasRowSelectionColumn = hasLeadingRowSelectionColumn(runtime)
     const snapshot = selectionSnapshot.value
     if (!snapshot || snapshot.ranges.length === 0) {
       return null
     }
     const rowCount = options.totalRows.value
-    const columnCount = options.visibleColumns.value.length
+    const columnCount = options.visibleColumns.value.length + (hasRowSelectionColumn ? 1 : 0)
     if (rowCount <= 0 || columnCount <= 0) {
       return null
     }
@@ -144,11 +206,15 @@ export function useDataGridAppSelection<TRow>(
           seenCells.add(cellKey)
           selectedCellCount += 1
 
-          const columnKey = options.visibleColumns.value[columnIndex]?.key
-          if (!columnKey) {
+          const column = resolveSelectionColumnAtIndex(
+            options.visibleColumns.value,
+            columnIndex,
+            hasRowSelectionColumn,
+          )
+          if (!column?.key) {
             continue
           }
-          const rawValue = (rowNode.data as Record<string, unknown>)[columnKey]
+          const rawValue = readSelectionCellValue(rowNode.data, column)
           const numericValue = typeof rawValue === "number" ? rawValue : Number(rawValue)
           if (!Number.isFinite(numericValue)) {
             continue

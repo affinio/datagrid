@@ -22,7 +22,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
 
     const firstNameBefore = await cellTextByViewportCoord(page, 0, 1)
 
-    const amountMenuButton = page.locator('.grid-cell--header[data-column-key="amount"][data-datagrid-column-menu-trigger="true"]').first()
+    const amountMenuButton = page.locator('[data-datagrid-column-menu-button="true"][data-column-key="amount"]').first()
     await expect(amountMenuButton).toBeVisible({ timeout: 20_000 })
     await amountMenuButton.click()
     await page.locator('[data-datagrid-column-menu-action="sort-desc"]').click()

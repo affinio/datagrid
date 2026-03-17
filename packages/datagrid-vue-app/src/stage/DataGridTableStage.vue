@@ -315,14 +315,22 @@ function bodyCellPresentationStyle(column: TableColumn): CSSProperties {
   return textAlign ? { textAlign } : {}
 }
 
-function resolveInlineRowStateBackground(row: TableRow, rowOffset: number): string | null {
+function resolveInlineRowStateFill(row: TableRow, rowOffset: number): CSSProperties | null {
+  let overlayColor: string | null = null
   if (isHoveredRow(row, rowOffset)) {
-    return "var(--datagrid-row-hover-background-color)"
+    overlayColor = "var(--datagrid-row-band-hover-bg)"
+  } else if (isStripedRow(row, rowOffset)) {
+    overlayColor = "var(--datagrid-row-band-striped-bg)"
   }
-  if (isStripedRow(row, rowOffset)) {
-    return "var(--datagrid-row-band-striped-bg)"
+  if (!overlayColor) {
+    return null
   }
-  return null
+  return {
+    backgroundImage: `linear-gradient(${overlayColor}, ${overlayColor})`,
+    backgroundSize: "calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size))",
+    backgroundPosition: "top left",
+    backgroundRepeat: "no-repeat",
+  }
 }
 
 function bodyCellSelectionStyle(row: TableRow, column: TableColumn, rowOffset: number, columnIndex: number): CSSProperties {
@@ -338,21 +346,21 @@ function bodyCellSelectionStyle(row: TableRow, column: TableColumn, rowOffset: n
   if (shouldHighlightSelectedCellVisual(rowOffset, columnIndex)) {
     return { background: "var(--datagrid-selection-range-bg)" }
   }
-  const rowStateBackground = resolveInlineRowStateBackground(row, rowOffset)
-  if (rowStateBackground) {
-    return { background: rowStateBackground }
+  const rowStateFill = resolveInlineRowStateFill(row, rowOffset)
+  if (rowStateFill) {
+    return rowStateFill
   }
   return {}
 }
 
 function rowIndexCellStyle(row: TableRow, rowOffset: number): CSSProperties {
-  const rowStateBackground = resolveInlineRowStateBackground(row, rowOffset)
-  if (!rowStateBackground) {
+  const rowStateFill = resolveInlineRowStateFill(row, rowOffset)
+  if (!rowStateFill) {
     return resolvedRowIndexColumnStyle.value
   }
   return {
     ...resolvedRowIndexColumnStyle.value,
-    background: rowStateBackground,
+    ...rowStateFill,
   }
 }
 

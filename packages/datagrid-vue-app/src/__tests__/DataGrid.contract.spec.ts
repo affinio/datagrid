@@ -188,6 +188,9 @@ function resolveRowModel(wrapper: ReturnType<typeof mount>) {
 function resolveVm(wrapper: ReturnType<typeof mount>) {
   return wrapper.vm as unknown as {
     getApi?: () => {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
       rowSelection: {
         getSnapshot?: () => unknown
       }
@@ -195,6 +198,7 @@ function resolveVm(wrapper: ReturnType<typeof mount>) {
         getAggregationModel?: () => unknown
       }
     } | null
+    getSelectionAggregatesLabel?: () => string
     getView?: () => "table" | "gantt"
     setView?: (mode: "table" | "gantt") => void
     getState?: () => unknown
@@ -243,6 +247,11 @@ function queryColumnLayoutRoot(): HTMLElement | null {
 
 function queryAggregationsRoot(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(".datagrid-aggregations")
+}
+
+function queryVisibleComboboxPanel(): HTMLElement | null {
+  const panels = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-cell-combobox__panel"))
+  return panels.findLast(panel => getComputedStyle(panel).display !== "none") ?? null
 }
 
 function queryBodyCell(wrapper: ReturnType<typeof mount>, rowIndex: number, columnIndex: number) {
@@ -743,6 +752,7 @@ describe("DataGrid app facade contract", () => {
 
     const popover = queryAdvancedFilterRoot()
     expect(popover).toBeTruthy()
+    expect(queryVisibleComboboxPanel()).toBeNull()
 
     const valueInput = popover!.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
     expect(valueInput).toBeTruthy()
@@ -921,6 +931,7 @@ describe("DataGrid app facade contract", () => {
 
     const popover = queryAggregationsRoot()
     expect(popover).toBeTruthy()
+    expect(queryVisibleComboboxPanel()).toBeNull()
 
     const amountCheckbox = popover?.querySelector<HTMLInputElement>('input[type="checkbox"]')
     expect(amountCheckbox).toBeTruthy()
@@ -933,12 +944,18 @@ describe("DataGrid app facade contract", () => {
     amountOp!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
 
-    const sumOption = Array.from(popover!.querySelectorAll<HTMLButtonElement>(".datagrid-cell-combobox__option")).find(
+    const optionPanel = queryVisibleComboboxPanel()
+    expect(optionPanel).toBeTruthy()
+    expect(popover?.contains(optionPanel!)).toBe(false)
+
+    const sumOption = Array.from(optionPanel!.querySelectorAll<HTMLButtonElement>(".datagrid-cell-combobox__option")).find(
       option => option.textContent?.includes("Sum"),
     )
     expect(sumOption).toBeTruthy()
     sumOption!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
+
+    expect(queryAggregationsRoot()).toBeTruthy()
 
     popover!.querySelector<HTMLElement>(".datagrid-aggregations__primary")?.dispatchEvent(
       new MouseEvent("click", { bubbles: true }),
@@ -1125,6 +1142,44 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
 
     expect(log).toContain("stop:user-selection")
+  })
+
+  it("keeps selection aggregate labels aligned when row selection adds a leading checkbox column", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowSelection: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    resolveVm(wrapper).getApi?.()?.selection?.setSnapshot?.({
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 1,
+          startCol: 3,
+          endCol: 3,
+          startRowId: "r1",
+          endRowId: "r2",
+          anchor: { rowIndex: 0, colIndex: 3, rowId: "r1" },
+          focus: { rowIndex: 1, colIndex: 3, rowId: "r2" },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 3, rowId: "r2" },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getSelectionAggregatesLabel?.()).toBe(
+      "Selection: count 2 · sum 30 · min 10 · max 20 · avg 15",
+    )
+
+    wrapper.unmount()
   })
 
   it("renders checkbox cell types and toggles them on click without entering edit mode", async () => {

@@ -15,6 +15,7 @@
       v-if="popoverOpen"
       :ref="floating.contentRef"
       class="datagrid-aggregations"
+      data-datagrid-overlay-surface="true"
       :style="[popoverContentStyle, overlayThemeVars]"
       v-bind="contentProps"
     >
@@ -34,8 +35,9 @@
           class="datagrid-aggregations__select"
           :value="basis"
           :options="basisOptions"
-          :inline-panel="true"
           :open-on-mount="false"
+          :open-on-focus="false"
+          sticky-popover-id="aggregations"
           data-aggregations-autofocus="true"
           @commit="emit('update-basis', $event as 'filtered' | 'source')"
         />
@@ -60,8 +62,9 @@
             class="datagrid-aggregations__op"
             :value="item.op"
             :options="buildAggOpOptions(item.allowedOps)"
-            :inline-panel="true"
             :open-on-mount="false"
+            :open-on-focus="false"
+            sticky-popover-id="aggregations"
             :disabled="!item.enabled"
             @commit="emit('update-op', item.key, $event)"
           />

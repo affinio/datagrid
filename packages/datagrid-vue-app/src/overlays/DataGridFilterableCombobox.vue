@@ -28,6 +28,7 @@
         ref="panelEl"
         class="datagrid-cell-combobox__panel"
         :class="{ 'datagrid-cell-combobox__panel--inline': inlinePanel }"
+        :data-affino-popover-sticky="stickyPopoverId || undefined"
         :style="[overlayThemeVars, panelStyle]"
         role="listbox"
         @mousedown.prevent
@@ -98,6 +99,7 @@ const props = withDefaults(defineProps<{
   initialFilter?: string
   openOnFocus?: boolean
   inlinePanel?: boolean
+  stickyPopoverId?: string
 }>(), {
   options: () => [],
   placeholder: "Type to filter",
@@ -154,7 +156,12 @@ const inputClassName = computed(() => [
 
 const inputStyleValue = computed<StyleValue>(() => attrs.style as StyleValue)
 
-const teleportTarget = computed(() => props.inlinePanel ? undefined : "body")
+const teleportTarget = computed(() => {
+  if (props.inlinePanel) {
+    return undefined
+  }
+  return "body"
+})
 
 const selectedOption = computed(() => {
   return allOptions.value.find(option => option.value === props.value) ?? null
@@ -274,7 +281,7 @@ function updatePanelPosition(): void {
     left: `${left}px`,
     width: `${width}px`,
     maxHeight: "260px",
-    zIndex: "90",
+    zIndex: "240",
   }
 }
 
