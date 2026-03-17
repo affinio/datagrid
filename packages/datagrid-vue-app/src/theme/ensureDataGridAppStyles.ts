@@ -1311,6 +1311,22 @@ body.datagrid-fill-drag-cursor * {
   white-space: nowrap;
 }
 
+.col-head__group-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 24px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 14%, transparent);
+  color: var(--datagrid-accent-strong);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .col-head--row-select,
 .col-head--index {
   justify-content: center;
@@ -1348,6 +1364,7 @@ body.datagrid-fill-drag-cursor * {
 }
 
 .col-menu-trigger--filtered,
+.col-menu-trigger--grouped,
 .col-menu-trigger--open {
   border-color: color-mix(in srgb, var(--datagrid-accent-strong) 22%, transparent);
   background: color-mix(in srgb, var(--datagrid-accent-strong) 10%, transparent);
@@ -1591,6 +1608,50 @@ body.datagrid-fill-drag-cursor * {
 
 .datagrid-column-menu__item {
   font-size: 12.5px;
+}
+
+.datagrid-column-menu__panel .ui-menu-item[aria-disabled="true"],
+.datagrid-column-menu__panel .ui-submenu-trigger[aria-disabled="true"],
+.datagrid-column-menu__submenu-panel .ui-menu-item[aria-disabled="true"],
+.datagrid-column-menu__submenu-panel .ui-submenu-trigger[aria-disabled="true"] {
+  opacity: 0.34;
+  color: var(--datagrid-column-menu-muted-text);
+  background: transparent;
+  box-shadow: none;
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(0.35) saturate(0.15);
+}
+
+.datagrid-column-menu__panel .ui-menu-item[aria-disabled="true"]:hover,
+.datagrid-column-menu__panel .ui-menu-item[aria-disabled="true"]:focus,
+.datagrid-column-menu__panel .ui-menu-item[aria-disabled="true"]:focus-visible,
+.datagrid-column-menu__panel .ui-submenu-trigger[aria-disabled="true"]:hover,
+.datagrid-column-menu__panel .ui-submenu-trigger[aria-disabled="true"]:focus,
+.datagrid-column-menu__panel .ui-submenu-trigger[aria-disabled="true"]:focus-visible,
+.datagrid-column-menu__submenu-panel .ui-menu-item[aria-disabled="true"]:hover,
+.datagrid-column-menu__submenu-panel .ui-menu-item[aria-disabled="true"]:focus,
+.datagrid-column-menu__submenu-panel .ui-menu-item[aria-disabled="true"]:focus-visible,
+.datagrid-column-menu__submenu-panel .ui-submenu-trigger[aria-disabled="true"]:hover,
+.datagrid-column-menu__submenu-panel .ui-submenu-trigger[aria-disabled="true"]:focus,
+.datagrid-column-menu__submenu-panel .ui-submenu-trigger[aria-disabled="true"]:focus-visible {
+  background: transparent;
+  box-shadow: none;
+}
+
+.datagrid-column-menu__panel .ui-menu-item[aria-disabled="true"] .datagrid-column-menu__state,
+.datagrid-column-menu__panel .ui-submenu-trigger[aria-disabled="true"] .datagrid-column-menu__state,
+.datagrid-column-menu__submenu-panel .ui-menu-item[aria-disabled="true"] .datagrid-column-menu__state,
+.datagrid-column-menu__submenu-panel .ui-submenu-trigger[aria-disabled="true"] .datagrid-column-menu__state {
+  background: color-mix(in srgb, var(--datagrid-column-menu-muted-text) 10%, transparent);
+  color: inherit;
+}
+
+.datagrid-column-menu__panel .ui-menu-item[aria-disabled="true"] .ui-submenu-arrow,
+.datagrid-column-menu__panel .ui-submenu-trigger[aria-disabled="true"] .ui-submenu-arrow,
+.datagrid-column-menu__submenu-panel .ui-menu-item[aria-disabled="true"] .ui-submenu-arrow,
+.datagrid-column-menu__submenu-panel .ui-submenu-trigger[aria-disabled="true"] .ui-submenu-arrow {
+  color: inherit;
 }
 
 .datagrid-column-menu__link:hover:not(:disabled) {

@@ -17,14 +17,6 @@
         </label>
 
         <label>
-          Group by
-          <select v-model="groupByField">
-            <option value="">None</option>
-            <option value="segment">Segment</option>
-          </select>
-        </label>
-
-        <label>
           Patch size
           <select v-model.number="patchSize">
             <option
@@ -34,6 +26,16 @@
             >
               {{ option }}
             </option>
+          </select>
+        </label>
+
+        <label>
+          Menu demo
+          <select v-model="columnMenuPreset">
+            <option value="default">Default</option>
+            <option value="compact">Compact</option>
+            <option value="labels">Custom labels</option>
+            <option value="locked">Disabled sections</option>
           </select>
         </label>
 
@@ -50,7 +52,7 @@
         <span>Rows in model: {{ rows.length }}</span>
         <span>Formulas: {{ formulaPlan?.order.length ?? 0 }}</span>
         <span>Levels: {{ formulaPlan?.levels.length ?? 0 }}</span>
-        <span>Grouping: {{ groupByField || "off" }}</span>
+        <span>Grouping: {{ groupByLabel }}</span>
         <span>Last action: {{ lastAction }}</span>
       </div>
 
@@ -74,6 +76,7 @@
         diagnostics
         formula-packs
         performance="balanced"
+        :column-menu="columnMenu"
         :formula-runtime="{
           formulaColumnCacheMaxColumns: 32,
         }"
@@ -84,6 +87,7 @@
         virtualization
         @cell-change="handleGridCellChange"
         @selection-change="syncSelectionAggregatesLabel"
+        @update:group-by="handleGroupByUpdate"
       />
     </section>
 
@@ -100,10 +104,12 @@ import { computed, nextTick, ref, watch } from "vue";
 import {
   DataGrid,
   type DataGridAppColumnInput,
+  type DataGridColumnMenuProp,
 } from "@affino/datagrid-vue-app-enterprise";
 import type {
   DataGridAggregationModel,
   DataGridFormulaComputeStageDiagnostics,
+  DataGridGroupBySpec,
   DataGridRowId,
 } from "@affino/datagrid-vue";
 
@@ -163,8 +169,57 @@ interface PublicFormulaGridExpose {
   getSelectionAggregatesLabel: () => string;
 }
 
+type ColumnMenuPreset = "default" | "compact" | "labels" | "locked";
+type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | null>;
+
 const ROW_OPTIONS = [100, 1_000, 5_000] as const;
 const PATCH_OPTIONS = [1, 10, 100] as const;
+const COMPACT_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+  items: ["sort", "group", "pin"],
+  columns: {
+    total: {
+      hide: ["group"],
+    },
+  },
+};
+
+const LABELLED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+  labels: {
+    group: "Toggle segment grouping",
+    pin: "Freeze columns",
+    filter: "Formula filters",
+  },
+  columns: {
+    segment: {
+      labels: {
+        filter: "Segment filters",
+      },
+    },
+    total: {
+      labels: {
+        pin: "Freeze totals",
+      },
+    },
+  },
+};
+
+const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+  disabled: ["pin"],
+  columns: {
+    total: {
+      hide: ["group"],
+    },
+    taxRate: {
+      disabled: ["filter"],
+    },
+    segment: {
+      labels: {
+        group: "Group by segment",
+      },
+    },
+  },
+};
+
 const columns: readonly DataGridAppColumnInput[] = [
   {
     key: "id",
@@ -298,7 +353,11 @@ const columns: readonly DataGridAppColumnInput[] = [
 ];
 
 const rowCount = ref<number>(1_000);
-const groupByField = ref<"" | "segment">("segment");
+const columnMenuPreset = ref<ColumnMenuPreset>("default");
+const groupByModel = ref<DataGridGroupBySpec | null>({
+  fields: ["segment"],
+  expandedByDefault: true,
+});
 const patchSize = ref<number>(10);
 const lastAction = ref<string>("init");
 const rows = ref<readonly FormulaSandboxRow[]>([]);
@@ -310,7 +369,23 @@ const clientRowModelOptions = {
   resolveRowId: (row: unknown) => (row as FormulaSandboxRow).id,
 };
 const groupBy = computed(() => {
-  return groupByField.value ? groupByField.value : null;
+  return groupByModel.value;
+});
+const columnMenu = computed<DataGridColumnMenuProp>(() => {
+  switch (columnMenuPreset.value) {
+    case "compact":
+      return COMPACT_COLUMN_MENU;
+    case "labels":
+      return LABELLED_COLUMN_MENU;
+    case "locked":
+      return LOCKED_COLUMN_MENU;
+    default:
+      return true;
+  }
+});
+const groupByLabel = computed(() => {
+  const fields = groupByModel.value?.fields ?? [];
+  return fields.length > 0 ? fields.join(" + ") : "off";
 });
 const aggregationModel =
   computed<DataGridAggregationModel<FormulaSandboxRow> | null>(() => {
@@ -329,6 +404,10 @@ const aggregationModel =
       basis: "filtered",
     };
   });
+
+const handleGroupByUpdate = (nextGroupBy: DataGridGroupBySpec | null): void => {
+  groupByModel.value = nextGroupBy;
+};
 
 const dirtyNodesLabel = computed(() => {
   if (!computeStage.value || computeStage.value.dirtyNodes.length === 0) {

@@ -41,12 +41,18 @@
               v-else
               :key="resolveColumnMenuInstanceKey(column.key)"
               :rows="sourceRows"
+              :items="resolveColumnMenuItemsSafe(column.key)"
+              :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
+              :labels="resolveColumnMenuLabelsSafe(column.key)"
               :column-key="column.key"
               :column-label="column.column.label ?? column.key"
               :column-data-type="column.column.dataType"
               :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
               :sort-enabled="isColumnSortable(column)"
               :pin="column.pin"
+              :grouped="isColumnGroupedSafe(column.key)"
+              :group-order="resolveColumnGroupOrderSafe(column.key)"
+              :group-enabled="isColumnGroupable(column)"
               :filter-enabled="isColumnMenuValueFilterEnabled(column)"
               :value-filter-row-limit="columnMenuValueFilterRowLimit"
               :text-filter-enabled="isColumnFilterable(column)"
@@ -57,6 +63,7 @@
               @sort="applyColumnMenuSortSafe(column.key, $event)"
               @pin="applyColumnMenuPinSafe(column.key, $event)"
               @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
+              @group="applyColumnMenuGroupBySafe(column.key, $event)"
               @update-text-filter="setColumnFilterText(column.key, $event)"
               @clear-filter="clearColumnMenuFilterSafe(column.key)"
               v-slot="{ open, toggleMenuFromElement }"
@@ -151,6 +158,13 @@
             >
               <div class="col-head">
                 <span>{{ column.column.label ?? column.key }}</span>
+                <span
+                  v-if="resolveColumnGroupBadgeLabel(column.key)"
+                  class="col-head__group-badge"
+                  :title="resolveColumnGroupBadgeTitle(column.key)"
+                >
+                  {{ resolveColumnGroupBadgeLabel(column.key) }}
+                </span>
                 <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
                 <button
                   type="button"
@@ -195,12 +209,18 @@
             v-for="column in renderedColumns"
             :key="resolveColumnMenuInstanceKey(column.key)"
             :rows="sourceRows"
+            :items="resolveColumnMenuItemsSafe(column.key)"
+            :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
+            :labels="resolveColumnMenuLabelsSafe(column.key)"
             :column-key="column.key"
             :column-label="column.column.label ?? column.key"
             :column-data-type="column.column.dataType"
             :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
             :sort-enabled="isColumnSortable(column)"
             :pin="column.pin"
+            :grouped="isColumnGroupedSafe(column.key)"
+            :group-order="resolveColumnGroupOrderSafe(column.key)"
+            :group-enabled="isColumnGroupable(column)"
             :filter-enabled="isColumnMenuValueFilterEnabled(column)"
             :value-filter-row-limit="columnMenuValueFilterRowLimit"
             :text-filter-enabled="isColumnFilterable(column)"
@@ -210,6 +230,7 @@
             :max-filter-values="columnMenuMaxFilterValues"
             @sort="applyColumnMenuSortSafe(column.key, $event)"
             @pin="applyColumnMenuPinSafe(column.key, $event)"
+            @group="applyColumnMenuGroupBySafe(column.key, $event)"
             @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
             @update-text-filter="setColumnFilterText(column.key, $event)"
             @clear-filter="clearColumnMenuFilterSafe(column.key)"
@@ -226,6 +247,13 @@
             >
               <div class="col-head">
                 <span class="col-head__label">{{ column.column.label ?? column.key }}</span>
+                <span
+                  v-if="resolveColumnGroupBadgeLabel(column.key)"
+                  class="col-head__group-badge"
+                  :title="resolveColumnGroupBadgeTitle(column.key)"
+                >
+                  {{ resolveColumnGroupBadgeLabel(column.key) }}
+                </span>
                 <button
                   type="button"
                   class="col-menu-trigger"
@@ -280,6 +308,13 @@
           >
             <div class="col-head">
               <span>{{ column.column.label ?? column.key }}</span>
+              <span
+                v-if="resolveColumnGroupBadgeLabel(column.key)"
+                class="col-head__group-badge"
+                :title="resolveColumnGroupBadgeTitle(column.key)"
+              >
+                {{ resolveColumnGroupBadgeLabel(column.key) }}
+              </span>
               <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
               <button
                 type="button"
@@ -319,12 +354,18 @@
             v-for="column in pinnedRightColumns"
             :key="resolveColumnMenuInstanceKey(column.key)"
             :rows="sourceRows"
+            :items="resolveColumnMenuItemsSafe(column.key)"
+            :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
+            :labels="resolveColumnMenuLabelsSafe(column.key)"
             :column-key="column.key"
             :column-label="column.column.label ?? column.key"
             :column-data-type="column.column.dataType"
             :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
             :sort-enabled="isColumnSortable(column)"
             :pin="column.pin"
+            :grouped="isColumnGroupedSafe(column.key)"
+            :group-order="resolveColumnGroupOrderSafe(column.key)"
+            :group-enabled="isColumnGroupable(column)"
             :filter-enabled="isColumnMenuValueFilterEnabled(column)"
             :value-filter-row-limit="columnMenuValueFilterRowLimit"
             :text-filter-enabled="isColumnFilterable(column)"
@@ -335,6 +376,7 @@
             @sort="applyColumnMenuSortSafe(column.key, $event)"
             @pin="applyColumnMenuPinSafe(column.key, $event)"
             @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
+            @group="applyColumnMenuGroupBySafe(column.key, $event)"
             @update-text-filter="setColumnFilterText(column.key, $event)"
             @clear-filter="clearColumnMenuFilterSafe(column.key)"
             v-slot="{ open, toggleMenuFromElement }"
@@ -350,6 +392,13 @@
             >
               <div class="col-head">
                 <span class="col-head__label">{{ column.column.label ?? column.key }}</span>
+                <span
+                  v-if="resolveColumnGroupBadgeLabel(column.key)"
+                  class="col-head__group-badge"
+                  :title="resolveColumnGroupBadgeTitle(column.key)"
+                >
+                  {{ resolveColumnGroupBadgeLabel(column.key) }}
+                </span>
                 <button
                   type="button"
                   class="col-menu-trigger"
@@ -436,6 +485,7 @@
 import { computed, type CSSProperties, type PropType } from "vue"
 import type { DataGridColumnPin } from "@affino/datagrid-vue"
 import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
+import type { DataGridColumnMenuItemLabels } from "../overlays/dataGridColumnMenu"
 import type { DataGridTableStageBodyColumn as TableColumn } from "./dataGridTableStageBody.types"
 import {
   useDataGridTableStageColumnsSection,
@@ -564,6 +614,10 @@ function isColumnFilterable(column: TableColumn): boolean {
   return column.column.capabilities?.filterable !== false
 }
 
+function isColumnGroupable(column: TableColumn): boolean {
+  return column.column.capabilities?.groupable !== false
+}
+
 function isColumnMenuValueFilterEnabled(column: TableColumn): boolean {
   return isColumnFilterable(column) && columns.value.columnMenuValueFilterEnabled !== false
 }
@@ -600,6 +654,32 @@ function isColumnMenuFilterActive(columnKey: string): boolean {
   return isColumnFilterActiveSafe(columnKey)
 }
 
+function isColumnGroupedSafe(columnKey: string): boolean {
+  const evaluate = columns.value.isColumnGrouped
+  return typeof evaluate === "function" ? evaluate(columnKey) : false
+}
+
+function resolveColumnGroupOrderSafe(columnKey: string): number | null {
+  const resolve = columns.value.resolveColumnGroupOrder
+  return typeof resolve === "function" ? resolve(columnKey) : null
+}
+
+function resolveColumnGroupBadgeLabel(columnKey: string): string | null {
+  const order = resolveColumnGroupOrderSafe(columnKey)
+  if (!Number.isFinite(order)) {
+    return null
+  }
+  return `G${Number(order) + 1}`
+}
+
+function resolveColumnGroupBadgeTitle(columnKey: string): string {
+  const order = resolveColumnGroupOrderSafe(columnKey)
+  if (!Number.isFinite(order)) {
+    return "Grouped column"
+  }
+  return `Grouped column, level ${Number(order) + 1}`
+}
+
 function shouldShowColumnMenuFilterIcon(columnKey: string): boolean {
   return isColumnMenuFilterActive(columnKey)
 }
@@ -615,8 +695,9 @@ function shouldShowColumnMenuSortDescIcon(columnKey: string): boolean {
 function resolveColumnMenuTriggerClass(columnKey: string, open: boolean): Record<string, boolean> {
   return {
     "col-menu-trigger--open": open,
-    "col-menu-trigger--active": open || isColumnMenuSortActive(columnKey) || isColumnMenuFilterActive(columnKey),
+    "col-menu-trigger--active": open || isColumnMenuSortActive(columnKey) || isColumnMenuFilterActive(columnKey) || isColumnGroupedSafe(columnKey),
     "col-menu-trigger--filtered": isColumnMenuFilterActive(columnKey),
+    "col-menu-trigger--grouped": isColumnGroupedSafe(columnKey),
     "col-menu-trigger--sorted": isColumnMenuSortActive(columnKey),
   }
 }
@@ -625,6 +706,10 @@ function resolveColumnMenuButtonLabel(column: TableColumn): string {
   const states: string[] = []
   if (isColumnMenuFilterActive(column.key)) {
     states.push("filtered")
+  }
+  if (isColumnGroupedSafe(column.key)) {
+    const order = resolveColumnGroupOrderSafe(column.key)
+    states.push(Number.isFinite(order) ? `grouped level ${Number(order) + 1}` : "grouped")
   }
   if (shouldShowColumnMenuSortAscIcon(column.key)) {
     states.push("sorted ascending")
@@ -647,6 +732,21 @@ function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string
   return typeof resolve === "function" ? resolve(columnKey) : []
 }
 
+function resolveColumnMenuItemsSafe(columnKey: string) {
+  const resolve = columns.value.resolveColumnMenuItems
+  return typeof resolve === "function" ? resolve(columnKey) : ["sort", "group", "pin", "filter"]
+}
+
+function resolveColumnMenuDisabledItemsSafe(columnKey: string): readonly string[] {
+  const resolve = columns.value.resolveColumnMenuDisabledItems
+  return typeof resolve === "function" ? resolve(columnKey) : []
+}
+
+function resolveColumnMenuLabelsSafe(columnKey: string): DataGridColumnMenuItemLabels {
+  const resolve = columns.value.resolveColumnMenuLabels
+  return typeof resolve === "function" ? resolve(columnKey) : {}
+}
+
 function resolveColumnMenuInstanceKey(columnKey: string): string {
   return [
     columnKey,
@@ -662,6 +762,10 @@ function applyColumnMenuSortSafe(columnKey: string, direction: "asc" | "desc" | 
 
 function applyColumnMenuPinSafe(columnKey: string, pin: DataGridColumnPin): void {
   columns.value.applyColumnMenuPin?.(columnKey, pin)
+}
+
+function applyColumnMenuGroupBySafe(columnKey: string, grouped: boolean): void {
+  columns.value.applyColumnMenuGroupBy?.(columnKey, grouped)
 }
 
 function applyColumnMenuFilterSafe(columnKey: string, tokens: readonly string[]): void {

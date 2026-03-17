@@ -39,19 +39,6 @@
             <option value="custom">Custom</option>
           </select>
         </label>
-        <label v-if="props.mode === 'base' && !props.timesheetShowcase">
-          Group by
-          <select v-model="groupByField">
-            <option value="">None</option>
-            <option
-              v-for="column in columns"
-              :key="`group-by-${column.key}`"
-              :value="column.key"
-            >
-              {{ column.label ?? column.key }}
-            </option>
-          </select>
-        </label>
         <label v-if="props.mode === 'base'">
           Row mode
           <select v-model="rowHeightMode">
@@ -71,6 +58,15 @@
           <select v-model="viewMode">
             <option value="table">Table</option>
             <option value="gantt">Gantt</option>
+          </select>
+        </label>
+        <label v-if="props.mode === 'base' && !props.timesheetShowcase">
+          Menu demo
+          <select v-model="columnMenuPreset">
+            <option value="default">Default</option>
+            <option value="compact">Compact</option>
+            <option value="labels">Custom labels</option>
+            <option value="locked">Disabled sections</option>
           </select>
         </label>
         <label v-if="props.mode === 'base' && !props.timesheetShowcase && viewMode === 'gantt'">
@@ -143,7 +139,7 @@
           Hide unused source columns
         </label>
         <div
-          v-if="!props.timesheetShowcase && (props.mode === 'tree' || props.mode === 'pivot' || (props.mode === 'base' && groupByField))"
+          v-if="!props.timesheetShowcase && (props.mode === 'tree' || props.mode === 'pivot' || (props.mode === 'base' && hasActiveGrouping))"
           class="group-actions"
         >
           <button type="button" @click="expandAllGroups">Expand all</button>
@@ -216,7 +212,7 @@
         :rows="rows"
         :columns="columns"
         license-key="affino-dg-v1:enterprise:sandbox-demo:2099-12-31:all:0HTTHMS"
-        column-menu
+        :column-menu="columnMenu"
         column-layout
         diagnostics
         advanced-filter
@@ -241,6 +237,7 @@
         :is-cell-editable="timesheetIsCellEditable"
         @cell-change="handleGridCellChange"
         @selection-change="syncSelectionAggregatesLabel"
+        @update:group-by="handleGroupByUpdate"
         @update:column-state="handleColumnStateUpdate"
         @update:view-mode="handleViewModeUpdate"
         @update:state="handleStateUpdate"
@@ -262,6 +259,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import {
   DataGrid,
   type DataGridAppViewMode,
+  type DataGridColumnMenuProp,
   type DataGridGanttOptions,
   type DataGridGanttZoomLevel,
 } from "@affino/datagrid-vue-app-enterprise";
@@ -273,6 +271,7 @@ import {
 import type {
   DataGridColumnInput,
   DataGridColumnPin,
+  DataGridGroupBySpec,
   DataGridPivotInteropSnapshot,
   DataGridPivotLayoutImportOptions,
   DataGridPivotLayoutSnapshot,
@@ -362,6 +361,54 @@ interface TimesheetGridRuntimeHandle {
 }
 
 type ThemePreset = "default" | "industrial" | "sugar" | "custom";
+type ColumnMenuPreset = "default" | "compact" | "labels" | "locked";
+type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | null>;
+
+const COMPACT_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+  items: ["sort", "group", "pin"],
+  columns: {
+    amount: {
+      hide: ["group"],
+    },
+  },
+};
+
+const LABELLED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+  labels: {
+    group: "Toggle grouping",
+    pin: "Pinning",
+    filter: "Quick filters",
+  },
+  columns: {
+    region: {
+      labels: {
+        filter: "Region filters",
+      },
+    },
+    amount: {
+      labels: {
+        pin: "Freeze amount",
+      },
+    },
+  },
+};
+
+const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+  disabled: ["pin"],
+  columns: {
+    amount: {
+      hide: ["group"],
+    },
+    start: {
+      disabled: ["filter"],
+    },
+    name: {
+      labels: {
+        group: "Group tasks",
+      },
+    },
+  },
+};
 
 const props = defineProps<{
   title: string;
@@ -749,7 +796,8 @@ const rowCount = ref<number>(10000);
 const columnCount = ref<number>(16);
 const timesheetProjects = ref<readonly Omit<TimesheetRow, "total">[]>(cloneTimesheetProjects());
 const themePreset = ref<ThemePreset>("sugar");
-const groupByField = ref("");
+const columnMenuPreset = ref<ColumnMenuPreset>("default");
+const groupByModel = ref<DataGridGroupBySpec | null>(null);
 const rowHeightMode = ref<"fixed" | "auto">("fixed");
 const rowRenderMode = ref<"virtualization" | "pagination">("virtualization");
 const paginationPageSize = ref(100);
@@ -813,11 +861,12 @@ const columns = computed(() => (
     : buildVueColumns(props.mode, columnCount.value)
 ));
 const groupBy = computed(() => {
-  if (props.timesheetShowcase || props.mode !== "base" || !groupByField.value.trim()) {
+  if (props.timesheetShowcase || props.mode !== "base") {
     return null;
   }
-  return groupByField.value.trim();
+  return groupByModel.value;
 });
+const hasActiveGrouping = computed(() => (groupBy.value?.fields.length ?? 0) > 0);
 const pivotModel = computed(() => {
   return props.mode === "pivot" && pivotViewMode.value === "pivot"
     ? (PIVOT_LAYOUTS[pivotLayout.value] ?? null)
@@ -873,6 +922,22 @@ const virtualization = computed(() => {
     rowOverscan: 8,
     columnOverscan: 2,
   };
+});
+const columnMenu = computed<DataGridColumnMenuProp>(() => {
+  if (props.timesheetShowcase || props.mode !== "base") {
+    return true;
+  }
+
+  switch (columnMenuPreset.value) {
+    case "compact":
+      return COMPACT_COLUMN_MENU;
+    case "labels":
+      return LABELLED_COLUMN_MENU;
+    case "locked":
+      return LOCKED_COLUMN_MENU;
+    default:
+      return true;
+  }
 });
 const theme = computed<DataGridStyleConfig | "default">(() => {
   if (themePreset.value === "industrial") {
@@ -1026,7 +1091,7 @@ watch(
     themePreset.value = "sugar";
     rowCount.value = 1000;
     columnCount.value = Math.max(columnCount.value, 16);
-    groupByField.value = "region";
+    groupByModel.value = { fields: ["region"], expandedByDefault: true };
     ganttZoomLevel.value = "week";
     rowRenderMode.value = "virtualization";
     rowHeightMode.value = "fixed";
@@ -1051,7 +1116,7 @@ watch(
     baseRowHeight.value = 35;
     rowHover.value = true;
     stripedRows.value = false;
-    groupByField.value = "";
+    groupByModel.value = null;
     timesheetProjects.value = cloneTimesheetProjects();
     columnState.value = createTimesheetColumnState(columns.value);
   },
@@ -1118,9 +1183,9 @@ const syncTimesheetProjectsFromGrid = (): void => {
 };
 
 watch(
-  [gridRef, groupByField, viewMode],
-  async ([grid, groupField, mode]) => {
-    if (!props.ganttShowcase || !grid || !groupField || mode !== "gantt") {
+  [gridRef, groupBy, viewMode],
+  async ([grid, nextGroupBy, mode]) => {
+    if (!props.ganttShowcase || !grid || !nextGroupBy?.fields.length || mode !== "gantt") {
       return;
     }
     await nextTick();
@@ -1136,16 +1201,22 @@ watch(
       props.mode === "base" && columnState.value == null
         ? createBaseShowcaseColumnState(nextColumns, columnState.value)
         : normalizeColumnState(columnState.value, nextColumns);
-    if (
-      groupByField.value &&
-      !nextColumns.some((column) => column.key === groupByField.value)
-    ) {
-      groupByField.value = "";
+    if (groupByModel.value) {
+      const nextFields = groupByModel.value.fields.filter((field) => (
+        nextColumns.some((column) => column.key === field)
+      ));
+      groupByModel.value = nextFields.length > 0
+        ? { ...groupByModel.value, fields: nextFields }
+        : null;
     }
     selectionAggregatesLabel.value = "";
   },
   { immediate: true },
 );
+
+const handleGroupByUpdate = (nextGroupBy: DataGridGroupBySpec | null): void => {
+  groupByModel.value = nextGroupBy;
+};
 
 const handleColumnStateUpdate = (
   nextState: DataGridUnifiedColumnState,

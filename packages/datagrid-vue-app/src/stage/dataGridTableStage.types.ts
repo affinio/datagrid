@@ -6,6 +6,7 @@ import type {
   DataGridRowNode,
 } from "@affino/datagrid-vue"
 import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
+import type { DataGridColumnMenuItemKey, DataGridColumnMenuItemLabels } from "../overlays/dataGridColumnMenu"
 
 export type DataGridTableMode = "base" | "tree" | "pivot" | "worker"
 export type DataGridPendingEdge = "top" | "right" | "bottom" | "left"
@@ -55,11 +56,17 @@ export interface DataGridTableStageColumnsSection {
   columnMenuValueFilterEnabled?: boolean
   columnMenuValueFilterRowLimit?: number
   columnMenuMaxFilterValues?: number
+  resolveColumnMenuItems?: (columnKey: string) => readonly DataGridColumnMenuItemKey[]
+  resolveColumnMenuDisabledItems?: (columnKey: string) => readonly DataGridColumnMenuItemKey[]
+  resolveColumnMenuLabels?: (columnKey: string) => DataGridColumnMenuItemLabels
   isColumnFilterActive?: (columnKey: string) => boolean
+  isColumnGrouped?: (columnKey: string) => boolean
+  resolveColumnGroupOrder?: (columnKey: string) => number | null
   resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
   resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
   applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
   applyColumnMenuPin?: (columnKey: string, pin: DataGridColumnPin) => void
+  applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
   applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
   clearColumnMenuFilter?: (columnKey: string) => void
   startResize: (event: MouseEvent, columnKey: string) => void

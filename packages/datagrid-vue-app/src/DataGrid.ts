@@ -21,6 +21,7 @@ import {
   type DataGridFilterSnapshot,
   type DataGridFormulaFieldDefinition,
   type DataGridFormulaFunctionRegistry,
+  type DataGridGroupBySpec,
   type DataGridRowNode,
   type DataGridRowSelectionSnapshot,
   type DataGridRowModel,
@@ -377,6 +378,7 @@ export default defineComponent({
     "update:hiddenColumnKeys",
     "update:columnWidths",
     "update:columnPins",
+    "update:groupBy",
     "update:viewMode",
     "update:state",
     "ready",
@@ -533,6 +535,7 @@ export default defineComponent({
         hiddenColumnKeys: payload => emit("update:hiddenColumnKeys", payload),
         columnWidths: payload => emit("update:columnWidths", payload),
         columnPins: payload => emit("update:columnPins", payload),
+        groupBy: payload => emit("update:groupBy", payload as DataGridGroupBySpec | null),
         state: payload => emit("update:state", payload),
         ready: payload => emit("ready", {
           api: payload.api,

@@ -3,7 +3,7 @@ import {
   DATAGRID_GANTT_MIN_TABLE_PANE_WIDTH_PX,
   clampDataGridGanttTablePaneWidth,
   resolveDataGridGanttTablePaneDragWidth,
-} from "../dataGridGanttSplit"
+} from "../gantt/dataGridGanttSplit"
 
 describe("dataGridGanttSplit", () => {
   it("clamps table pane width to the minimum table width", () => {

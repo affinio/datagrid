@@ -33,15 +33,6 @@
             </option>
           </select>
         </label>
-        <label v-if="props.mode !== 'pivot'">
-          Group by
-          <select v-model="groupByField">
-            <option value="">None</option>
-            <option v-for="column in visibleColumns" :key="`group-by-${column.key}`" :value="column.key">
-              {{ column.column.label ?? column.key }}
-            </option>
-          </select>
-        </label>
         <label v-if="props.mode === 'base'">
           Row mode
           <select v-model="rowHeightMode">
@@ -99,7 +90,7 @@
             <option value="month-channel-margin">Month × Channel (Margin Avg)</option>
           </select>
         </label>
-        <div v-if="props.mode === 'tree' || props.mode === 'pivot'" class="group-actions">
+        <div v-if="props.mode === 'tree' || props.mode === 'pivot' || (props.mode === 'base' && hasActiveGrouping)" class="group-actions">
           <button type="button" @click="runtime.api.rows.expandAllGroups()">Expand all</button>
           <button type="button" @click="runtime.api.rows.collapseAllGroups()">Collapse all</button>
         </div>
@@ -813,6 +804,11 @@ const columnMenuValueFilterEnabled = computed(() => {
 const stageSourceRows = computed<readonly VueSandboxRow[]>(() => (
   columnMenuValueFilterEnabled.value ? rows.value : []
 ))
+const activeGroupBy = computed(() => {
+  void rowVersion.value
+  return runtime.api.rows.getSnapshot().groupBy ?? null
+})
+const hasActiveGrouping = computed(() => (activeGroupBy.value?.fields.length ?? 0) > 0)
 const {
   tableStageProps,
   syncViewportFromDom: syncViewportFromDomRuntime,
@@ -853,6 +849,15 @@ const isColumnFilterActive = (columnKey: string): boolean => {
   return String(columnFilterTextByKey.value[columnKey] ?? "").trim().length > 0
 }
 
+const resolveColumnGroupOrder = (columnKey: string): number | null => {
+  const index = activeGroupBy.value?.fields.findIndex(field => field === columnKey) ?? -1
+  return index >= 0 ? index : null
+}
+
+const isColumnGrouped = (columnKey: string): boolean => {
+  return resolveColumnGroupOrder(columnKey) !== null
+}
+
 const applyColumnMenuSort = (columnKey: string, direction: "asc" | "desc" | null): void => {
   sortState.value = direction === null
     ? sortState.value.filter(entry => entry.key !== columnKey)
@@ -862,6 +867,20 @@ const applyColumnMenuSort = (columnKey: string, direction: "asc" | "desc" | null
 
 const applyColumnMenuPin = (columnKey: string, pin: "left" | "right" | "none"): void => {
   runtime.api.columns.setPin(columnKey, pin)
+  syncViewportFromDom()
+}
+
+const applyColumnMenuGroupBy = (columnKey: string, grouped: boolean): void => {
+  const nextFields = grouped
+    ? Array.from(new Set([...(activeGroupBy.value?.fields ?? []), columnKey]))
+    : (activeGroupBy.value?.fields ?? []).filter(field => field !== columnKey)
+  runtime.api.rows.setGroupBy(nextFields.length > 0
+    ? {
+        fields: nextFields,
+        expandedByDefault: activeGroupBy.value?.expandedByDefault ?? true,
+      }
+    : null)
+  groupByField.value = nextFields[0] ?? ""
   syncViewportFromDom()
 }
 
@@ -880,10 +899,13 @@ const tableStageColumnsForView = computed(() => ({
   columnMenuValueFilterRowLimit: valueFilterRowLimit.value,
   columnMenuMaxFilterValues: 250,
   isColumnFilterActive,
+  isColumnGrouped,
+  resolveColumnGroupOrder,
   resolveColumnMenuSortDirection,
   resolveColumnMenuSelectedTokens: () => [],
   applyColumnMenuSort,
   applyColumnMenuPin,
+  applyColumnMenuGroupBy,
   applyColumnMenuFilter,
   clearColumnMenuFilter,
 }))

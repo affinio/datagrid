@@ -13,6 +13,7 @@ export default createWorkspaceVitestConfig(import.meta.url, {
     environment: "jsdom",
     globals: true,
     reporters: "dot",
+    setupFiles: ["./vitest.setup.ts"],
     server: {
       deps: {
         inline: [/^@affino\//, /node_modules\/\.pnpm\/@affino\+/],

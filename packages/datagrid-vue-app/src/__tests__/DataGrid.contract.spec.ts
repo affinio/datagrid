@@ -495,6 +495,174 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("supports declarative columnMenu section selection at the app level", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: {
+          items: ["group", "pin"],
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuAction("toggle-group")).toBeTruthy()
+    expect(queryColumnMenuAction("pin-submenu")).toBeTruthy()
+    expect(queryColumnMenuAction("sort-asc")).toBeNull()
+    expect(queryColumnMenuAction("clear-filter")).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it("supports declarative per-column columnMenu overrides", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: {
+          items: ["sort", "group", "pin", "filter"],
+          columns: {
+            owner: {
+              hide: ["group", "pin"],
+            },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuAction("sort-asc")).toBeTruthy()
+    expect(queryColumnMenuAction("toggle-group")).toBeNull()
+    expect(queryColumnMenuAction("pin-submenu")).toBeNull()
+    expect(queryColumnMenuAction("clear-filter")).toBeTruthy()
+
+    document.body.querySelector<HTMLElement>("[data-affino-menu-root]")?.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+    }))
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="region"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuAction("toggle-group")).toBeTruthy()
+    expect(queryColumnMenuAction("pin-submenu")).toBeTruthy()
+
+    wrapper.unmount()
+  })
+
+  it("supports declarative columnMenu labels", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: {
+          labels: {
+            group: "Toggle grouping",
+            pin: "Pinning",
+          },
+          columns: {
+            owner: {
+              labels: {
+                filter: "Owner filters",
+              },
+            },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuAction("toggle-group")?.textContent).toContain("Toggle grouping")
+    expect(queryColumnMenuAction("pin-submenu")?.textContent).toContain("Pinning")
+    expect(queryColumnMenuAction("clear-filter")?.closest("section")?.textContent).toContain("Owner filters")
+
+    wrapper.unmount()
+  })
+
+  it("supports declarative disabled columnMenu sections", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: {
+          disabled: ["pin"],
+          columns: {
+            owner: {
+              disabled: ["group", "filter"],
+            },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    const before = resolveRowModel(wrapper)?.getSnapshot()
+    expect(queryColumnMenuAction("toggle-group")?.getAttribute("aria-disabled")).toBe("true")
+    expect(queryColumnMenuAction("pin-submenu")?.getAttribute("aria-disabled")).toBe("true")
+    expect(queryColumnMenuAction("clear-filter")?.getAttribute("disabled")).not.toBeNull()
+
+    queryColumnMenuAction("toggle-group")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveRowModel(wrapper)?.getSnapshot()).toEqual(before)
+
+    wrapper.unmount()
+  })
+
+  it("groups a column from declarative columnMenu and emits update:groupBy", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    queryColumnMenuAction("toggle-group")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveRowModel(wrapper)?.getSnapshot()).toMatchObject({
+      groupBy: {
+        fields: ["owner"],
+        expandedByDefault: true,
+      },
+    })
+    expect(wrapper.emitted("update:groupBy")).toEqual(expect.arrayContaining([
+      [{ fields: ["owner"], expandedByDefault: true }],
+    ]))
+    expect(wrapper.find('.grid-cell--header[data-column-key="owner"] .col-head__group-badge').text()).toBe("G1")
+
+    wrapper.unmount()
+  })
+
   it("applies value-set filter from declarative columnMenu", async () => {
     const wrapper = mount(DataGrid, {
       props: {

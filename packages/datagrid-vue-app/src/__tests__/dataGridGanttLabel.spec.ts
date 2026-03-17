@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   DATAGRID_GANTT_MIN_INLINE_LABEL_WIDTH_PX,
   resolveDataGridGanttInlineLabel,
-} from "../dataGridGanttLabel"
+} from "../gantt/dataGridGanttLabel"
 
 function measureTextWidth(text: string): number {
   return text.length * 7

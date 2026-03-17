@@ -229,9 +229,57 @@ Enable the built-in header menu with one prop:
   />
 ```
 
+`column-menu` also accepts a declarative object when you want to control the
+built-in sections instead of replacing the menu renderer.
+
+```vue
+<script setup lang="ts">
+import { DataGrid, type DataGridColumnMenuProp } from "@affino/datagrid-vue-app"
+
+const columnMenu: DataGridColumnMenuProp = {
+  items: ["sort", "group", "pin", "filter"],
+  disabled: ["pin"],
+  labels: {
+    group: "Toggle grouping",
+    filter: "Quick filters",
+  },
+  columns: {
+    amount: {
+      hide: ["group"],
+      labels: {
+        pin: "Freeze amount",
+      },
+    },
+    start: {
+      disabled: ["filter"],
+    },
+  },
+}
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :column-menu="columnMenu"
+  />
+</template>
+```
+
+Supported app-level menu controls:
+
+- `items`: choose and order built-in sections (`sort`, `group`, `pin`, `filter`)
+- `disabled`: force specific built-in sections into a disabled state
+- `labels`: override built-in section labels
+- `columns[columnKey]`: per-column `items`, `hide`, `disabled`, and `labels`
+
+Grouping triggered from the built-in column menu updates the public controlled
+surface through `@update:groupBy` / `v-model:groupBy`.
+
 Out of the box this wires:
 
 - sort ascending / descending / clear
+- group / ungroup for groupable columns
 - pin column submenu (`left`, `right`, `none`)
 - value-set filter picker with search + apply/clear
 - column order / visibility popover

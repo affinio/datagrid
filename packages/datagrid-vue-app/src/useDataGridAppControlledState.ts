@@ -53,6 +53,7 @@ export interface UseDataGridAppControlledStateOptions {
     hiddenColumnKeys: (payload: readonly string[]) => void
     columnWidths: (payload: Readonly<Record<string, number | null>>) => void
     columnPins: (payload: Readonly<Record<string, DataGridColumnPin>>) => void
+    groupBy: (payload: DataGridGroupBySpec | null) => void
     state: (payload: DataGridUnifiedState<unknown>) => void
     ready: (payload: { api: DataGridAppControlledApi }) => void
   }
@@ -92,6 +93,16 @@ function createSyncKey(value: unknown): string | null {
   }
 }
 
+function cloneGroupBySpec(groupBy: DataGridGroupBySpec | null | undefined): DataGridGroupBySpec | null {
+  if (!groupBy) {
+    return null
+  }
+  return {
+    fields: [...groupBy.fields],
+    expandedByDefault: groupBy.expandedByDefault,
+  }
+}
+
 export function useDataGridAppControlledState(
   options: UseDataGridAppControlledStateOptions,
 ): UseDataGridAppControlledStateResult {
@@ -102,6 +113,7 @@ export function useDataGridAppControlledState(
   let lastAppliedStateInputKey: string | null = null
   let lastEmittedColumnStateKey: string | null = null
   let lastEmittedUnifiedStateKey: string | null = null
+  let lastEmittedGroupByKey: string | null = null
   let lastObservedColumnStateKey: string | null = null
   let lastObservedUnifiedStateKey: string | null = null
 
@@ -162,6 +174,12 @@ export function useDataGridAppControlledState(
         }
       }
       if (api) {
+        const groupBy = cloneGroupBySpec(api.rows.getSnapshot().groupBy)
+        const groupByKey = createSyncKey(groupBy)
+        if (groupByKey !== lastEmittedGroupByKey) {
+          lastEmittedGroupByKey = groupByKey
+          options.emit.groupBy(groupBy)
+        }
         const unifiedState = api.state.get()
         const unifiedStateKey = createSyncKey(unifiedState)
         lastObservedUnifiedStateKey = unifiedStateKey

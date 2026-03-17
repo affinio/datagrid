@@ -27,6 +27,9 @@ export type {
   DataGridAggregationsProp,
 } from "./config/dataGridAggregations"
 export type {
+  DataGridColumnMenuColumnOptions,
+  DataGridColumnMenuItemKey,
+  DataGridColumnMenuItemLabels,
   DataGridColumnMenuOptions,
   DataGridColumnMenuProp,
 } from "./overlays/dataGridColumnMenu"

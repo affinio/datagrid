@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { resolveDataGridGanttWheelIntent } from "../dataGridGanttWheel"
+import { resolveDataGridGanttWheelIntent } from "../gantt/dataGridGanttWheel"
 
 describe("dataGridGanttWheel", () => {
   it("treats dominant Y-wheel gestures as vertical scrolling", () => {

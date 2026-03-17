@@ -20,6 +20,7 @@ import {
   useDataGridAppViewportLifecycle,
 } from "@affino/datagrid-vue"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
+import type { DataGridColumnMenuItemKey, DataGridColumnMenuItemLabels } from "../overlays/dataGridColumnMenu"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import type { DataGridTableStageContext } from "./dataGridTableStageContext"
 import { useDataGridTableStageBindings } from "./useDataGridTableStageBindings"
@@ -80,11 +81,17 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   columnMenuValueFilterEnabled?: Ref<boolean>
   columnMenuValueFilterRowLimit?: Ref<number>
   columnMenuMaxFilterValues?: Ref<number>
+  resolveColumnMenuItems?: (columnKey: string) => readonly DataGridColumnMenuItemKey[]
+  resolveColumnMenuDisabledItems?: (columnKey: string) => readonly DataGridColumnMenuItemKey[]
+  resolveColumnMenuLabels?: (columnKey: string) => DataGridColumnMenuItemLabels
   isColumnFilterActive?: (columnKey: string) => boolean
+  isColumnGrouped?: (columnKey: string) => boolean
+  resolveColumnGroupOrder?: (columnKey: string) => number | null
   resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
   resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
   applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
   applyColumnMenuPin?: (columnKey: string, pin: import("@affino/datagrid-vue").DataGridColumnPin) => void
+  applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
   applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
   clearColumnMenuFilter?: (columnKey: string) => void
   applyRowHeightSettings: () => void
@@ -624,11 +631,17 @@ export function useDataGridTableStageRuntime<
     columnMenuValueFilterEnabled: options.columnMenuValueFilterEnabled,
     columnMenuValueFilterRowLimit: options.columnMenuValueFilterRowLimit,
     columnMenuMaxFilterValues: options.columnMenuMaxFilterValues,
+    resolveColumnMenuItems: options.resolveColumnMenuItems,
+    resolveColumnMenuDisabledItems: options.resolveColumnMenuDisabledItems,
+    resolveColumnMenuLabels: options.resolveColumnMenuLabels,
     isColumnFilterActive: options.isColumnFilterActive,
+    isColumnGrouped: options.isColumnGrouped,
+    resolveColumnGroupOrder: options.resolveColumnGroupOrder,
     resolveColumnMenuSortDirection: options.resolveColumnMenuSortDirection,
     resolveColumnMenuSelectedTokens: options.resolveColumnMenuSelectedTokens,
     applyColumnMenuSort: options.applyColumnMenuSort,
     applyColumnMenuPin: options.applyColumnMenuPin,
+    applyColumnMenuGroupBy: options.applyColumnMenuGroupBy,
     applyColumnMenuFilter: options.applyColumnMenuFilter,
     clearColumnMenuFilter: options.clearColumnMenuFilter,
     handleHeaderWheel: stageServices.scrollSync.handleHeaderWheel,

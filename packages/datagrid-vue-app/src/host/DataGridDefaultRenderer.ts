@@ -43,7 +43,12 @@ import type { DataGridAdvancedFilterOptions } from "../config/dataGridAdvancedFi
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "../config/dataGridAggregations"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
-import type { DataGridColumnMenuOptions } from "../overlays/dataGridColumnMenu"
+import {
+  resolveDataGridColumnMenuDisabledItems,
+  resolveDataGridColumnMenuLabels,
+  resolveDataGridColumnMenuItems,
+  type DataGridColumnMenuOptions,
+} from "../overlays/dataGridColumnMenu"
 import {
   normalizeDataGridGanttOptions,
   type DataGridAppViewMode,
@@ -176,6 +181,16 @@ function cloneAggregationModelState<TRow>(
   return {
     columns: model.columns.map(column => ({ ...column })),
     basis: model.basis === "source" ? "source" : "filtered",
+  }
+}
+
+function cloneGroupBySpec(groupBy: DataGridGroupBySpec | null | undefined): DataGridGroupBySpec | null {
+  if (!groupBy) {
+    return null
+  }
+  return {
+    fields: [...groupBy.fields],
+    expandedByDefault: groupBy.expandedByDefault,
   }
 }
 
@@ -625,6 +640,10 @@ export default defineComponent({
       void rowVersion.value
       return cloneAggregationModelState(props.runtime.api.rows.getAggregationModel())
     })
+    const currentGroupBy = computed<DataGridGroupBySpec | null>(() => {
+      void rowVersion.value
+      return cloneGroupBySpec(props.runtime.api.rows.getSnapshot().groupBy)
+    })
     const aggregationPanelItems = computed<readonly DataGridAggregationPanelItem[]>(() => {
       const enabledByKey = new Map<string, DataGridAggOp>(
         (aggregationDraftModel.value?.columns ?? []).map(column => [column.key, column.op]),
@@ -680,6 +699,27 @@ export default defineComponent({
         return []
       }
       return entry.tokens.map(token => normalizeColumnMenuToken(String(token ?? "")))
+    }
+
+    const resolveColumnMenuItems = (columnKey: string) => {
+      return resolveDataGridColumnMenuItems(props.columnMenu, columnKey)
+    }
+
+    const resolveColumnMenuDisabledItems = (columnKey: string) => {
+      return resolveDataGridColumnMenuDisabledItems(props.columnMenu, columnKey)
+    }
+
+    const resolveColumnMenuLabels = (columnKey: string) => {
+      return resolveDataGridColumnMenuLabels(props.columnMenu, columnKey)
+    }
+
+    const resolveColumnGroupOrder = (columnKey: string): number | null => {
+      const index = currentGroupBy.value?.fields.findIndex(field => field === columnKey) ?? -1
+      return index >= 0 ? index : null
+    }
+
+    const isColumnGrouped = (columnKey: string): boolean => {
+      return resolveColumnGroupOrder(columnKey) !== null
     }
 
     const applySortAndFilter = (): void => {
@@ -923,6 +963,19 @@ export default defineComponent({
       props.runtime.api.columns.setPin(columnKey, pin)
     }
 
+    const applyColumnMenuGroupBy = (columnKey: string, grouped: boolean): void => {
+      const current = currentGroupBy.value
+      const nextFields = grouped
+        ? Array.from(new Set([...(current?.fields ?? []), columnKey]))
+        : (current?.fields ?? []).filter(field => field !== columnKey)
+      props.runtime.api.rows.setGroupBy(nextFields.length > 0
+        ? {
+            fields: nextFields,
+            expandedByDefault: current?.expandedByDefault ?? true,
+          }
+        : null)
+    }
+
     const applyColumnMenuFilter = (columnKey: string, tokens: readonly string[]): void => {
       const normalizedTokens = Array.from(new Set(
         tokens
@@ -980,11 +1033,17 @@ export default defineComponent({
       setColumnFilterText,
       columnMenuEnabled: computed(() => props.columnMenu.enabled),
       columnMenuMaxFilterValues: computed(() => props.columnMenu.maxFilterValues),
+      resolveColumnMenuItems,
+      resolveColumnMenuDisabledItems,
+      resolveColumnMenuLabels,
       isColumnFilterActive,
+      isColumnGrouped,
+      resolveColumnGroupOrder,
       resolveColumnMenuSortDirection,
       resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
       applyColumnMenuSort,
       applyColumnMenuPin,
+      applyColumnMenuGroupBy,
       applyColumnMenuFilter,
       clearColumnMenuFilter,
       applyRowHeightSettings,
@@ -997,11 +1056,17 @@ export default defineComponent({
         ...tableStageProps.value.columns,
         columnMenuEnabled: props.columnMenu.enabled,
         columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
+        resolveColumnMenuItems,
+        resolveColumnMenuDisabledItems,
+        resolveColumnMenuLabels,
         isColumnFilterActive,
+        isColumnGrouped,
+        resolveColumnGroupOrder,
         resolveColumnMenuSortDirection,
         resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
         applyColumnMenuSort,
         applyColumnMenuPin,
+        applyColumnMenuGroupBy,
         applyColumnMenuFilter,
         clearColumnMenuFilter,
       },

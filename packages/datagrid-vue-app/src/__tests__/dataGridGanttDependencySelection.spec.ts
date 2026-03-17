@@ -3,7 +3,7 @@ import {
   DATAGRID_GANTT_DEPENDENCY_HIT_SLOP_PX,
   hitTestDataGridGanttDependencyPath,
   resolveDataGridGanttDependencyPathKey,
-} from "../dataGridGanttDependencySelection"
+} from "../gantt/dataGridGanttDependencySelection"
 
 describe("dataGridGanttDependencySelection", () => {
   const path = {
@@ -33,7 +33,7 @@ describe("dataGridGanttDependencySelection", () => {
     expect(
       hitTestDataGridGanttDependencyPath(
         [path] as never,
-        { x: 42, y: 14 + DATAGRID_GANTT_DEPENDENCY_HIT_SLOP_PX + 4 },
+        { x: 40 + DATAGRID_GANTT_DEPENDENCY_HIT_SLOP_PX + 1, y: 20 },
       ),
     ).toBeNull()
   })
