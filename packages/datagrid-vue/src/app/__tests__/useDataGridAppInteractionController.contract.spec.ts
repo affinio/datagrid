@@ -795,15 +795,15 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
-  it("fills down on fill-handle double click only through contiguous empty cells", () => {
+  it("fills down on fill-handle double click using the nearest contiguous reference column", () => {
     const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
       rowCount: 5,
       columnCount: 2,
       rowData: [
-        { a: "1" },
-        {},
-        {},
-        { a: "stop" },
+        { a: "1", b: "task-1" },
+        { b: "task-2" },
+        { b: "task-3" },
+        { b: "stop" },
         {},
       ],
     })
@@ -840,20 +840,111 @@ describe("useDataGridAppInteractionController contract", () => {
     })
     expect(applyClipboardEdits).toHaveBeenCalledWith({
       startRow: 0,
-      endRow: 2,
+      endRow: 3,
       startColumn: 0,
       endColumn: 0,
-    }, [["1"], ["2"], ["3"]])
+    }, [["1"], ["2"], ["3"], ["4"]])
     expect(controller.lastAppliedFill.value).toMatchObject({
       behavior: "series",
       previewRange: {
         startRow: 0,
-        endRow: 2,
+        endRow: 3,
         startColumn: 0,
         endColumn: 0,
       },
       allowBehaviorToggle: true,
     })
+  })
+
+  it("falls back to the nearest contiguous reference column on the right when the left side has no extent", () => {
+    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
+      rowCount: 5,
+      columnCount: 3,
+      rowData: [
+        { a: "1", c: "task-1" },
+        { c: "task-2" },
+        { c: "task-3" },
+        { c: "task-4" },
+        {},
+      ],
+    })
+
+    applyClipboardEdits.mockReturnValue(3)
+    buildFillMatrixFromRange.mockReturnValue([["1"]])
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 3,
+      startColumn: 0,
+      endColumn: 0,
+    }, [["1"], ["2"], ["3"], ["4"]])
+  })
+
+  it("prefers the left reference side before using the right side for fill-handle double click", () => {
+    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
+      rowCount: 6,
+      columnCount: 3,
+      rowData: [
+        { a: "left-1", b: "1", c: "right-1" },
+        { a: "left-2", c: "right-2" },
+        { a: "left-3", c: "right-3" },
+        { c: "right-4" },
+        { c: "right-5" },
+        {},
+      ],
+    })
+
+    applyClipboardEdits.mockReturnValue(3)
+    buildFillMatrixFromRange.mockReturnValue([["1"]])
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 1, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 1,
+        endCol: 1,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 1, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 1, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 1,
+      endColumn: 1,
+    }, [["1"], ["2"], ["3"]])
   })
 
   it("clears the removed tail when a repeated fill drag shrinks back toward the base range", () => {
@@ -959,10 +1050,16 @@ describe("useDataGridAppInteractionController contract", () => {
   it("marks plain-text fills as not offering a fill behavior toggle", () => {
     const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
       rowCount: 4,
-      columnCount: 1,
+      columnCount: 2,
+      rowData: [
+        { a: "Atlas", b: "task-1" },
+        { b: "task-2" },
+        { b: "task-3" },
+        {},
+      ],
     })
 
-    applyClipboardEdits.mockReturnValue(4)
+    applyClipboardEdits.mockReturnValue(3)
     buildFillMatrixFromRange.mockReturnValue([["Atlas"]])
     selectionSnapshot.value = {
       activeRangeIndex: 0,
@@ -986,6 +1083,12 @@ describe("useDataGridAppInteractionController contract", () => {
       cancelable: true,
     }))
 
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 0,
+    }, [["Atlas"], ["Atlas"], ["Atlas"]])
     expect(controller.lastAppliedFill.value).toMatchObject({
       behavior: "copy",
       allowBehaviorToggle: false,

@@ -1297,6 +1297,74 @@ export function useDataGridAppInteractionController<
     }
   }
 
+  const isNonEmptyFillReferenceValue = (row: DataGridRowNode<TRow>, columnKey: string): boolean => {
+    return options.readCell(row, columnKey).trim().length > 0
+  }
+
+  const resolveReferenceColumnExtentEndRow = (
+    baseRange: DataGridCopyRange,
+    columnIndex: number,
+  ): number => {
+    const columnKey = options.visibleColumns.value[columnIndex]?.key
+    if (!columnKey) {
+      return baseRange.endRow
+    }
+
+    for (let rowIndex = baseRange.startRow; rowIndex <= baseRange.endRow; rowIndex += 1) {
+      const row = getBodyRowAtIndex(rowIndex)
+      if (!row || row.rowId == null || row.kind === "group") {
+        return baseRange.endRow
+      }
+      if (!isNonEmptyFillReferenceValue(row, columnKey)) {
+        return baseRange.endRow
+      }
+    }
+
+    let contiguousEndRow = baseRange.endRow
+    for (let rowIndex = baseRange.endRow + 1; rowIndex < options.totalRows.value; rowIndex += 1) {
+      const row = getBodyRowAtIndex(rowIndex)
+      if (!row || row.rowId == null || row.kind === "group") {
+        break
+      }
+      if (!isNonEmptyFillReferenceValue(row, columnKey)) {
+        break
+      }
+      contiguousEndRow = rowIndex
+    }
+
+    return contiguousEndRow
+  }
+
+  const resolveBestNeighborFillEndRow = (baseRange: DataGridCopyRange): number => {
+    const evaluateDirection = (startColumnIndex: number, step: -1 | 1): number => {
+      let bestEndRow = baseRange.endRow
+      let foundCandidate = false
+      for (
+        let columnIndex = startColumnIndex;
+        columnIndex >= 0 && columnIndex < options.visibleColumns.value.length;
+        columnIndex += step
+      ) {
+        const candidateEndRow = resolveReferenceColumnExtentEndRow(baseRange, columnIndex)
+        if (candidateEndRow <= baseRange.endRow) {
+          if (foundCandidate) {
+            break
+          }
+          continue
+        }
+        foundCandidate = true
+        bestEndRow = Math.max(bestEndRow, candidateEndRow)
+      }
+      return bestEndRow
+    }
+
+    const leftEndRow = evaluateDirection(baseRange.startColumn - 1, -1)
+    if (leftEndRow > baseRange.endRow) {
+      return leftEndRow
+    }
+
+    return evaluateDirection(baseRange.endColumn + 1, 1)
+  }
+
   const startFillHandleDoubleClick = (event: MouseEvent): void => {
     if (options.mode.value !== "base") {
       return
@@ -1313,21 +1381,11 @@ export function useDataGridAppInteractionController<
     if (!options.isCellEditable(anchorRow, baseRange.endRow, anchorColumnKey, baseRange.endColumn)) {
       return
     }
-    let lastEmptyRowIndex = baseRange.endRow
-    for (let rowIndex = baseRange.endRow + 1; rowIndex < options.totalRows.value; rowIndex += 1) {
-      const row = getBodyRowAtIndex(rowIndex)
-      if (!row || row.kind === "group") {
-        break
-      }
-      if (options.readCell(row, anchorColumnKey) !== "") {
-        break
-      }
-      lastEmptyRowIndex = rowIndex
-    }
-    const previewRange = lastEmptyRowIndex > baseRange.endRow
+    const targetEndRow = resolveBestNeighborFillEndRow(baseRange)
+    const previewRange = targetEndRow > baseRange.endRow
       ? options.normalizeClipboardRange({
         startRow: baseRange.startRow,
-        endRow: lastEmptyRowIndex,
+        endRow: targetEndRow,
         startColumn: baseRange.startColumn,
         endColumn: baseRange.endColumn,
       })
