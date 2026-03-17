@@ -67,7 +67,8 @@ Keep these in `@affino/datagrid-vue-app`:
 
 - `DataGrid` as the default app-facing component
 - declarative columns / state / theme / pagination / virtualization
-- column menu, including declarative built-in section config (`items`, `disabled`, `labels`, per-column overrides)
+- saved-view facade helpers around unified state + `viewMode`
+- column menu, including declarative built-in section and action config (`items`, `disabled`, `disabledReasons`, `labels`, `actions`, per-column overrides)
 - column layout
 - advanced filter
 - aggregations

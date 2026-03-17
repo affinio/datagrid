@@ -66,6 +66,7 @@
             <option value="default">Default</option>
             <option value="compact">Compact</option>
             <option value="labels">Custom labels</option>
+            <option value="actions">Action overrides</option>
             <option value="locked">Disabled sections</option>
           </select>
         </label>
@@ -145,6 +146,13 @@
           <button type="button" @click="expandAllGroups">Expand all</button>
           <button type="button" @click="collapseAllGroups">Collapse all</button>
         </div>
+        <div v-if="!props.timesheetShowcase" class="group-actions">
+          <button type="button" @click="captureSavedView">Capture view</button>
+          <button type="button" :disabled="!savedViewModel" @click="applySavedView">Apply view</button>
+          <button type="button" @click="saveSavedViewToStorage">Save local</button>
+          <button type="button" :disabled="!hasPersistedSavedView" @click="loadSavedViewFromStorage">Load local</button>
+          <button type="button" :disabled="!hasPersistedSavedView" @click="clearPersistedSavedView">Clear local</button>
+        </div>
       </div>
       <StatePanel
         :is-open="isStatePanelOpen"
@@ -173,6 +181,7 @@
       <div class="meta">
         <span>Rows: {{ rows.length }}</span>
         <span>Columns: {{ columns.length }}</span>
+        <span>Saved view: {{ savedViewStatus }}</span>
         <span>{{ modeHint }}</span>
       </div>
       <div
@@ -264,6 +273,12 @@ import {
   type DataGridGanttZoomLevel,
 } from "@affino/datagrid-vue-app-enterprise";
 import {
+  clearDataGridSavedViewInStorage,
+  readDataGridSavedViewFromStorage,
+  type DataGridSavedViewSnapshot,
+  writeDataGridSavedViewToStorage,
+} from "@affino/datagrid-vue-app";
+import {
   industrialNeutralTheme,
   sugarTheme,
   type DataGridStyleConfig,
@@ -329,6 +344,15 @@ interface PublicDataGridExpose {
   getSelectionSummary: () => DataGridSelectionSummarySnapshot | null;
   getView: () => DataGridAppViewMode | null;
   setView: (mode: DataGridAppViewMode) => void;
+  getSavedView: () => DataGridSavedViewSnapshot<Record<string, unknown>> | null;
+  migrateSavedView: (
+    state: unknown,
+    options?: unknown,
+  ) => DataGridSavedViewSnapshot<Record<string, unknown>> | null;
+  applySavedView: (
+    savedView: DataGridSavedViewSnapshot<Record<string, unknown>>,
+    options?: unknown,
+  ) => boolean;
   applyColumnState: (columnState: DataGridUnifiedColumnState) => boolean;
   getState: () => DataGridUnifiedState<unknown> | null;
   migrateState: (
@@ -361,8 +385,10 @@ interface TimesheetGridRuntimeHandle {
 }
 
 type ThemePreset = "default" | "industrial" | "sugar" | "custom";
-type ColumnMenuPreset = "default" | "compact" | "labels" | "locked";
+type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked";
 type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | null>;
+
+const SHELL_SAVED_VIEW_STORAGE_KEY = "affino-datagrid-sandbox:shell-saved-view";
 
 const COMPACT_COLUMN_MENU: DeclarativeColumnMenuConfig = {
   items: ["sort", "group", "pin"],
@@ -393,14 +419,45 @@ const LABELLED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
   },
 };
 
+const ACTION_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+  actions: {
+    sortAsc: { label: "Ascending order" },
+    clearSort: { hidden: true },
+    pinMenu: { disabled: true, disabledReason: "Pinning is locked for this preset" },
+  },
+  columns: {
+    owner: {
+      actions: {
+        toggleGroup: {
+          label: "Owner grouping",
+          disabled: true,
+          disabledReason: "Owner grouping is managed by the active preset",
+        },
+        clearFilter: { hidden: true },
+      },
+    },
+    amount: {
+      actions: {
+        pinLeft: { label: "Freeze left" },
+      },
+    },
+  },
+};
+
 const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
   disabled: ["pin"],
+  disabledReasons: {
+    pin: "Pinning is locked in this scenario",
+  },
   columns: {
     amount: {
       hide: ["group"],
     },
     start: {
       disabled: ["filter"],
+      disabledReasons: {
+        filter: "Filtering is disabled for schedule columns",
+      },
     },
     name: {
       labels: {
@@ -664,6 +721,10 @@ function parseJson(value: string): unknown | null {
   }
 }
 
+function getBrowserStorage(): Storage | null {
+  return typeof window === "undefined" ? null : window.localStorage;
+}
+
 function buildBaseColumnState(
   columns: readonly DataGridColumnInput[],
 ): DataGridUnifiedColumnState {
@@ -848,6 +909,8 @@ const pivotAdvancedImportText = ref("");
 const pivotAdvancedOutputText = ref("");
 const columnState = ref<DataGridUnifiedColumnState | null>(null);
 const stateModel = ref<DataGridUnifiedState<unknown> | null>(null);
+const savedViewModel = ref<DataGridSavedViewSnapshot<Record<string, unknown>> | null>(null);
+const hasPersistedSavedView = ref(false);
 const selectionAggregatesLabel = ref("");
 
 const rows = computed(() =>
@@ -933,6 +996,8 @@ const columnMenu = computed<DataGridColumnMenuProp>(() => {
       return COMPACT_COLUMN_MENU;
     case "labels":
       return LABELLED_COLUMN_MENU;
+    case "actions":
+      return ACTION_COLUMN_MENU;
     case "locked":
       return LOCKED_COLUMN_MENU;
     default:
@@ -1072,11 +1137,65 @@ const shouldHideUnusedPivotSourceColumns = computed(() => {
     hideUnusedPivotSourceColumns.value
   );
 });
+const savedViewStatus = computed(() => {
+  if (!savedViewModel.value) {
+    return hasPersistedSavedView.value ? "persisted" : "not captured";
+  }
+  return `${savedViewModel.value.viewMode ?? "table"} / ${hasPersistedSavedView.value ? "captured + persisted" : "captured"}`;
+});
+
+const syncPersistedSavedViewFlag = (): void => {
+  hasPersistedSavedView.value = getBrowserStorage()?.getItem(SHELL_SAVED_VIEW_STORAGE_KEY) != null;
+};
+
+const saveSavedViewToStorage = (): void => {
+  const savedView = gridRef.value?.getSavedView() ?? savedViewModel.value;
+  if (!savedView) {
+    return;
+  }
+  savedViewModel.value = savedView;
+  if (writeDataGridSavedViewToStorage(getBrowserStorage(), SHELL_SAVED_VIEW_STORAGE_KEY, savedView)) {
+    hasPersistedSavedView.value = true;
+    stateOutputText.value = serializePretty(savedView);
+  }
+};
+
+const loadSavedViewFromStorage = (): void => {
+  const savedView = readDataGridSavedViewFromStorage(
+    getBrowserStorage(),
+    SHELL_SAVED_VIEW_STORAGE_KEY,
+    (state: unknown) => gridRef.value?.migrateSavedView({ state })?.state ?? null,
+  );
+  hasPersistedSavedView.value = savedView != null;
+  if (!savedView) {
+    return;
+  }
+  savedViewModel.value = savedView;
+  if (gridRef.value?.applySavedView(savedView)) {
+    stateModel.value = savedView.state;
+    viewMode.value = savedView.viewMode ?? "table";
+    stateOutputText.value = serializePretty(savedView);
+  }
+};
+
+const clearPersistedSavedView = (): void => {
+  if (clearDataGridSavedViewInStorage(getBrowserStorage(), SHELL_SAVED_VIEW_STORAGE_KEY)) {
+    hasPersistedSavedView.value = false;
+  }
+};
 
 watch(
   () => props.initialViewMode,
   (nextViewMode) => {
     viewMode.value = nextViewMode === "gantt" ? "gantt" : "table";
+  },
+  { immediate: true },
+);
+
+watch(
+  () => gridRef.value,
+  () => {
+    syncPersistedSavedViewFlag();
   },
   { immediate: true },
 );
@@ -1257,6 +1376,24 @@ const exportStatePayload = (): void => {
   stateOutputText.value = serializePretty(
     gridRef.value?.getState() ?? stateModel.value,
   );
+};
+
+const captureSavedView = (): void => {
+  savedViewModel.value = gridRef.value?.getSavedView() ?? null;
+  if (savedViewModel.value) {
+    stateOutputText.value = serializePretty(savedViewModel.value);
+  }
+};
+
+const applySavedView = (): void => {
+  if (!savedViewModel.value) {
+    return;
+  }
+  if (gridRef.value?.applySavedView(savedViewModel.value)) {
+    stateModel.value = savedViewModel.value.state;
+    viewMode.value = savedViewModel.value.viewMode ?? "table";
+    stateOutputText.value = serializePretty(savedViewModel.value);
+  }
 };
 
 const migrateStatePayload = (): void => {

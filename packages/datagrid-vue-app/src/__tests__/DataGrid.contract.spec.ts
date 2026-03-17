@@ -2,6 +2,13 @@ import { nextTick } from "vue"
 import { mount } from "@vue/test-utils"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import DataGrid from "../DataGrid"
+import {
+  clearDataGridSavedViewInStorage,
+  parseDataGridSavedView,
+  readDataGridSavedViewFromStorage,
+  serializeDataGridSavedView,
+  writeDataGridSavedViewToStorage,
+} from "../config/dataGridSavedView"
 import DataGridRuntimeHost from "../host/DataGridRuntimeHost"
 
 interface DemoRow {
@@ -201,6 +208,9 @@ function resolveVm(wrapper: ReturnType<typeof mount>) {
     getSelectionAggregatesLabel?: () => string
     getView?: () => "table" | "gantt"
     setView?: (mode: "table" | "gantt") => void
+    getSavedView?: () => { state: unknown; viewMode?: "table" | "gantt" } | null
+    migrateSavedView?: (savedView: unknown) => { state: unknown; viewMode?: "table" | "gantt" } | null
+    applySavedView?: (savedView: { state: unknown; viewMode?: "table" | "gantt" }) => boolean
     getState?: () => unknown
     getColumnSnapshot?: () => { order: readonly string[]; columns: readonly Array<{
       key: string
@@ -231,6 +241,22 @@ function queryColumnMenuAction(action: string): HTMLElement | null {
   }
   const matches = Array.from(document.body.querySelectorAll<HTMLElement>(selector))
   return matches.findLast(match => getComputedStyle(match).display !== "none") ?? null
+}
+
+function queryColumnMenuActionTitle(action: string): string | null {
+  const element = queryColumnMenuAction(action)
+  if (!element) {
+    return null
+  }
+  const dataReason = element.getAttribute("data-disabled-reason")
+  if (dataReason) {
+    return dataReason
+  }
+  const ownTitle = element.getAttribute("title")
+  if (ownTitle) {
+    return ownTitle
+  }
+  return element.querySelector<HTMLElement>("[title]")?.getAttribute("title") ?? null
 }
 
 function queryColumnMenuButton(columnKey: string): HTMLElement | null {
@@ -603,9 +629,16 @@ describe("DataGrid app facade contract", () => {
         columns: COLUMNS,
         columnMenu: {
           disabled: ["pin"],
+          disabledReasons: {
+            pin: "Pinning is locked for this view",
+          },
           columns: {
             owner: {
               disabled: ["group", "filter"],
+              disabledReasons: {
+                group: "Grouping is managed by the saved view",
+                filter: "Owner filtering is unavailable in this mode",
+              },
             },
           },
         },
@@ -620,8 +653,63 @@ describe("DataGrid app facade contract", () => {
 
     const before = resolveRowModel(wrapper)?.getSnapshot()
     expect(queryColumnMenuAction("toggle-group")?.getAttribute("aria-disabled")).toBe("true")
+    expect(queryColumnMenuActionTitle("toggle-group")).toBe("Grouping is managed by the saved view")
     expect(queryColumnMenuAction("pin-submenu")?.getAttribute("aria-disabled")).toBe("true")
+    expect(queryColumnMenuActionTitle("pin-submenu")).toBe("Pinning is locked for this view")
     expect(queryColumnMenuAction("clear-filter")?.getAttribute("disabled")).not.toBeNull()
+    expect(queryColumnMenuActionTitle("clear-filter")).toBe("Owner filtering is unavailable in this mode")
+
+    queryColumnMenuAction("toggle-group")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveRowModel(wrapper)?.getSnapshot()).toEqual(before)
+
+    wrapper.unmount()
+  })
+
+  it("supports declarative columnMenu action overrides", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: {
+          actions: {
+            sortAsc: { label: "Ascending order" },
+            clearSort: { hidden: true },
+            pinMenu: { disabled: true, disabledReason: "Pinning is locked at the workspace level" },
+          },
+          columns: {
+            owner: {
+              actions: {
+                toggleGroup: {
+                  label: "Owner grouping",
+                  disabled: true,
+                  disabledReason: "Owner grouping is managed by the active view",
+                },
+                clearFilter: { hidden: true },
+              },
+            },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    const before = resolveRowModel(wrapper)?.getSnapshot()
+
+    expect(queryColumnMenuAction("sort-asc")?.textContent).toContain("Ascending order")
+    expect(queryColumnMenuAction("sort-clear")).toBeNull()
+    expect(queryColumnMenuAction("toggle-group")?.textContent).toContain("Owner grouping")
+    expect(queryColumnMenuAction("toggle-group")?.getAttribute("aria-disabled")).toBe("true")
+    expect(queryColumnMenuActionTitle("toggle-group")).toBe("Owner grouping is managed by the active view")
+    expect(queryColumnMenuAction("pin-submenu")?.getAttribute("aria-disabled")).toBe("true")
+    expect(queryColumnMenuActionTitle("pin-submenu")).toBe("Pinning is locked at the workspace level")
+    expect(queryColumnMenuAction("clear-filter")).toBeNull()
 
     queryColumnMenuAction("toggle-group")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
@@ -1728,6 +1816,115 @@ describe("DataGrid app facade contract", () => {
         }),
       }),
     })
+
+    source.unmount()
+    target.unmount()
+  })
+
+  it("round-trips saved views through facade helpers including view mode", async () => {
+    const source = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        sortModel: [{ key: "amount", direction: "desc" }],
+        viewMode: "gantt",
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const savedView = resolveVm(source).getSavedView?.()
+    expect(savedView).toMatchObject({
+      viewMode: "gantt",
+      state: expect.objectContaining({
+        rows: expect.objectContaining({
+          snapshot: expect.objectContaining({
+            sortModel: [{ key: "amount", direction: "desc" }],
+          }),
+        }),
+      }),
+    })
+
+    const target = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const migrated = resolveVm(target).migrateSavedView?.(savedView as Record<string, unknown>)
+    expect(migrated).toBeTruthy()
+    expect(resolveVm(target).applySavedView?.(migrated as { state: unknown; viewMode?: "table" | "gantt" })).toBe(true)
+    await flushRuntimeTasks()
+
+    expect(resolveVm(target).getView?.()).toBe("gantt")
+    expect(resolveVm(target).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          sortModel: [{ key: "amount", direction: "desc" }],
+        }),
+      }),
+    })
+
+    source.unmount()
+    target.unmount()
+  })
+
+  it("serializes and restores saved views through storage helpers", async () => {
+    const source = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        sortModel: [{ key: "amount", direction: "desc" }],
+        viewMode: "gantt",
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const savedView = resolveVm(source).getSavedView?.()
+    expect(savedView).toBeTruthy()
+
+    const storageData = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => storageData.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storageData.set(key, value)
+      },
+      removeItem: (key: string) => {
+        storageData.delete(key)
+      },
+    }
+
+    const serialized = serializeDataGridSavedView(savedView as NonNullable<typeof savedView>)
+    expect(parseDataGridSavedView(serialized, value => resolveVm(source).migrateState?.(value) ?? null)).toMatchObject({
+      viewMode: "gantt",
+    })
+    expect(writeDataGridSavedViewToStorage(storage, "demo", savedView as NonNullable<typeof savedView>)).toBe(true)
+
+    const target = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const restored = readDataGridSavedViewFromStorage(
+      storage,
+      "demo",
+      value => resolveVm(target).migrateState?.(value) ?? null,
+    )
+    expect(restored).toBeTruthy()
+    expect(resolveVm(target).applySavedView?.(restored as NonNullable<typeof restored>)).toBe(true)
+    await flushRuntimeTasks()
+
+    expect(resolveVm(target).getView?.()).toBe("gantt")
+    expect(clearDataGridSavedViewInStorage(storage, "demo")).toBe(true)
+    expect(storage.getItem("demo")).toBeNull()
 
     source.unmount()
     target.unmount()

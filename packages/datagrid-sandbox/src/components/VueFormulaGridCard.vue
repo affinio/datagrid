@@ -35,6 +35,7 @@
             <option value="default">Default</option>
             <option value="compact">Compact</option>
             <option value="labels">Custom labels</option>
+            <option value="actions">Action overrides</option>
             <option value="locked">Disabled sections</option>
           </select>
         </label>
@@ -46,6 +47,11 @@
           Recompute formulas
         </button>
         <button type="button" @click="rebuildModel">Rebuild model</button>
+        <button type="button" @click="captureSavedView">Capture view</button>
+        <button type="button" :disabled="!savedViewModel" @click="applySavedView">Apply view</button>
+        <button type="button" @click="saveSavedViewToStorage">Save local</button>
+        <button type="button" :disabled="!hasPersistedSavedView" @click="loadSavedViewFromStorage">Load local</button>
+        <button type="button" :disabled="!hasPersistedSavedView" @click="clearPersistedSavedView">Clear local</button>
       </div>
 
       <div class="meta">
@@ -53,6 +59,7 @@
         <span>Formulas: {{ formulaPlan?.order.length ?? 0 }}</span>
         <span>Levels: {{ formulaPlan?.levels.length ?? 0 }}</span>
         <span>Grouping: {{ groupByLabel }}</span>
+        <span>Saved view: {{ savedViewStatus }}</span>
         <span>Last action: {{ lastAction }}</span>
       </div>
 
@@ -106,6 +113,12 @@ import {
   type DataGridAppColumnInput,
   type DataGridColumnMenuProp,
 } from "@affino/datagrid-vue-app-enterprise";
+import {
+  clearDataGridSavedViewInStorage,
+  readDataGridSavedViewFromStorage,
+  type DataGridSavedViewSnapshot,
+  writeDataGridSavedViewToStorage,
+} from "@affino/datagrid-vue-app";
 import type {
   DataGridAggregationModel,
   DataGridFormulaComputeStageDiagnostics,
@@ -167,10 +180,19 @@ interface PublicFormulaGridApi {
 interface PublicFormulaGridExpose {
   getApi: () => PublicFormulaGridApi | null;
   getSelectionAggregatesLabel: () => string;
+  getSavedView: () => DataGridSavedViewSnapshot<Record<string, unknown>> | null;
+  migrateSavedView: (savedView: unknown) => DataGridSavedViewSnapshot<Record<string, unknown>> | null;
+  applySavedView: (savedView: DataGridSavedViewSnapshot<Record<string, unknown>>) => boolean;
 }
 
-type ColumnMenuPreset = "default" | "compact" | "labels" | "locked";
+type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked";
 type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | null>;
+
+const FORMULA_SAVED_VIEW_STORAGE_KEY = "affino-datagrid-sandbox:formula-saved-view";
+
+function getBrowserStorage(): Storage | null {
+  return typeof window === "undefined" ? null : window.localStorage;
+}
 
 const ROW_OPTIONS = [100, 1_000, 5_000] as const;
 const PATCH_OPTIONS = [1, 10, 100] as const;
@@ -203,14 +225,45 @@ const LABELLED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
   },
 };
 
+const ACTION_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+  actions: {
+    sortAsc: { label: "Ascending order" },
+    clearSort: { hidden: true },
+    pinMenu: { disabled: true, disabledReason: "Pinning is locked for this preset" },
+  },
+  columns: {
+    segment: {
+      actions: {
+        toggleGroup: {
+          label: "Group segment",
+          disabled: true,
+          disabledReason: "Segment grouping is managed by the active preset",
+        },
+        clearFilter: { hidden: true },
+      },
+    },
+    total: {
+      actions: {
+        pinLeft: { label: "Freeze left" },
+      },
+    },
+  },
+};
+
 const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
   disabled: ["pin"],
+  disabledReasons: {
+    pin: "Pinning is locked in this scenario",
+  },
   columns: {
     total: {
       hide: ["group"],
     },
     taxRate: {
       disabled: ["filter"],
+      disabledReasons: {
+        filter: "Filtering is disabled for formula tax inputs",
+      },
     },
     segment: {
       labels: {
@@ -362,6 +415,8 @@ const patchSize = ref<number>(10);
 const lastAction = ref<string>("init");
 const rows = ref<readonly FormulaSandboxRow[]>([]);
 const gridRef = ref<PublicFormulaGridExpose | null>(null);
+const savedViewModel = ref<DataGridSavedViewSnapshot<Record<string, unknown>> | null>(null);
+const hasPersistedSavedView = ref(false);
 const formulaPlan = ref<FormulaExplainSnapshot["executionPlan"]>(null);
 const computeStage = ref<DataGridFormulaComputeStageDiagnostics | null>(null);
 const selectionAggregatesLabel = ref("");
@@ -377,6 +432,8 @@ const columnMenu = computed<DataGridColumnMenuProp>(() => {
       return COMPACT_COLUMN_MENU;
     case "labels":
       return LABELLED_COLUMN_MENU;
+    case "actions":
+      return ACTION_COLUMN_MENU;
     case "locked":
       return LOCKED_COLUMN_MENU;
     default:
@@ -387,6 +444,16 @@ const groupByLabel = computed(() => {
   const fields = groupByModel.value?.fields ?? [];
   return fields.length > 0 ? fields.join(" + ") : "off";
 });
+const savedViewStatus = computed(() => {
+  if (!savedViewModel.value) {
+    return hasPersistedSavedView.value ? "persisted" : "not captured";
+  }
+  return `${savedViewModel.value.viewMode ?? "table"} / ${hasPersistedSavedView.value ? "captured + persisted" : "captured"}`;
+});
+
+const syncPersistedSavedViewFlag = (): void => {
+  hasPersistedSavedView.value = getBrowserStorage()?.getItem(FORMULA_SAVED_VIEW_STORAGE_KEY) != null;
+};
 const aggregationModel =
   computed<DataGridAggregationModel<FormulaSandboxRow> | null>(() => {
     if (!groupBy.value) {
@@ -512,9 +579,77 @@ const recomputeFormulas = (): void => {
   refreshDiagnostics();
 };
 
+const captureSavedView = (): void => {
+  savedViewModel.value = gridRef.value?.getSavedView() ?? null;
+  lastAction.value = savedViewModel.value
+    ? `capture-view:${savedViewModel.value.viewMode ?? "table"}`
+    : "capture-view:none";
+};
+
+const saveSavedViewToStorage = (): void => {
+  const savedView = gridRef.value?.getSavedView() ?? savedViewModel.value;
+  if (!savedView) {
+    return;
+  }
+  savedViewModel.value = savedView;
+  if (writeDataGridSavedViewToStorage(getBrowserStorage(), FORMULA_SAVED_VIEW_STORAGE_KEY, savedView)) {
+    hasPersistedSavedView.value = true;
+    lastAction.value = `save-view:${savedView.viewMode ?? "table"}`;
+  }
+};
+
+const loadSavedViewFromStorage = (): void => {
+  const savedView = readDataGridSavedViewFromStorage(
+    getBrowserStorage(),
+    FORMULA_SAVED_VIEW_STORAGE_KEY,
+    (state: unknown) => gridRef.value?.migrateSavedView({ state })?.state ?? null,
+  );
+  hasPersistedSavedView.value = savedView != null;
+  if (!savedView) {
+    lastAction.value = "load-view:none";
+    return;
+  }
+  savedViewModel.value = savedView;
+  if (gridRef.value?.applySavedView(savedView)) {
+    lastAction.value = `load-view:${savedView.viewMode ?? "table"}`;
+    void nextTick(() => {
+      refreshDiagnostics();
+      syncSelectionAggregatesLabel();
+    });
+  }
+};
+
+const clearPersistedSavedView = (): void => {
+  if (clearDataGridSavedViewInStorage(getBrowserStorage(), FORMULA_SAVED_VIEW_STORAGE_KEY)) {
+    hasPersistedSavedView.value = false;
+    lastAction.value = "clear-view";
+  }
+};
+
+const applySavedView = (): void => {
+  if (!savedViewModel.value) {
+    return;
+  }
+  if (gridRef.value?.applySavedView(savedViewModel.value)) {
+    lastAction.value = `apply-view:${savedViewModel.value.viewMode ?? "table"}`;
+    void nextTick(() => {
+      refreshDiagnostics();
+      syncSelectionAggregatesLabel();
+    });
+  }
+};
+
 watch(rowCount, () => {
   rebuildModel();
 });
+
+watch(
+  () => gridRef.value,
+  () => {
+    syncPersistedSavedViewFlag();
+  },
+  { immediate: true },
+);
 
 watch(
   () => gridRef.value,

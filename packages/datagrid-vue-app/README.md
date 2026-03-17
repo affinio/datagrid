@@ -239,9 +239,17 @@ import { DataGrid, type DataGridColumnMenuProp } from "@affino/datagrid-vue-app"
 const columnMenu: DataGridColumnMenuProp = {
   items: ["sort", "group", "pin", "filter"],
   disabled: ["pin"],
+  disabledReasons: {
+    pin: "Pinning is locked for this saved view",
+  },
   labels: {
     group: "Toggle grouping",
     filter: "Quick filters",
+  },
+  actions: {
+    sortAsc: { label: "Ascending order" },
+    clearSort: { hidden: true },
+    pinMenu: { disabled: true, disabledReason: "Pinning is managed globally" },
   },
   columns: {
     amount: {
@@ -249,9 +257,15 @@ const columnMenu: DataGridColumnMenuProp = {
       labels: {
         pin: "Freeze amount",
       },
+      actions: {
+        pinLeft: { label: "Freeze left" },
+      },
     },
     start: {
       disabled: ["filter"],
+      disabledReasons: {
+        filter: "Filtering is disabled for schedule columns",
+      },
     },
   },
 }
@@ -270,8 +284,10 @@ Supported app-level menu controls:
 
 - `items`: choose and order built-in sections (`sort`, `group`, `pin`, `filter`)
 - `disabled`: force specific built-in sections into a disabled state
+- `disabledReasons`: attach explanatory text to disabled built-in sections
 - `labels`: override built-in section labels
-- `columns[columnKey]`: per-column `items`, `hide`, `disabled`, and `labels`
+- `actions`: override built-in action `label`, `hidden`, `disabled`, and `disabledReason` state
+- `columns[columnKey]`: per-column `items`, `hide`, `disabled`, `disabledReasons`, `labels`, and `actions`
 
 Grouping triggered from the built-in column menu updates the public controlled
 surface through `@update:groupBy` / `v-model:groupBy`.
@@ -283,6 +299,15 @@ Out of the box this wires:
 - pin column submenu (`left`, `right`, `none`)
 - value-set filter picker with search + apply/clear
 - column order / visibility popover
+
+Supported action keys for `actions` are:
+
+- `sortAsc`, `sortDesc`, `clearSort`
+- `toggleGroup`
+- `pinMenu`, `pinLeft`, `pinRight`, `unpin`
+- `clearFilter`, `addCurrentSelectionToFilter`, `selectAllValues`, `clearAllValues`, `applyFilter`, `cancelFilter`
+
+Disabled sections and actions can expose a reason string so users see why a menu affordance is unavailable.
 - clause-based advanced filter popover
 - aggregation model popover
 
@@ -777,6 +802,25 @@ function importState(raw: unknown) {
     gridRef.value?.applyState(migrated)
   }
 }
+
+function exportSavedView() {
+  return gridRef.value?.getSavedView()
+}
+
+function importSavedView(raw: unknown) {
+  const migrated = gridRef.value?.migrateSavedView(raw)
+  if (migrated) {
+    gridRef.value?.applySavedView(migrated)
+  }
+}
+
+function persistSavedView() {
+  const savedView = gridRef.value?.getSavedView()
+  if (!savedView) {
+    return
+  }
+  localStorage.setItem("demo-saved-view", JSON.stringify(savedView))
+}
 </script>
 ```
 
@@ -890,6 +934,19 @@ The component emits:
 - `getState()`
 - `migrateState(state, options?)`
 - `applyState(state, options?)`
+- `getSavedView()`
+- `migrateSavedView(savedView, options?)`
+- `applySavedView(savedView, options?)`
+
+Saved-view persistence helpers:
+
+- `serializeDataGridSavedView(savedView)`
+- `parseDataGridSavedView(raw, migrateState, options?)`
+- `writeDataGridSavedViewToStorage(storage, key, savedView)`
+- `readDataGridSavedViewFromStorage(storage, key, migrateState, options?)`
+- `clearDataGridSavedViewInStorage(storage, key)`
+
+Saved views are a thin app-level envelope around unified state plus `viewMode`, so presets can restore both grid layout/runtime state and whether the app is currently in `table` or `gantt` mode.
 
 ### Row and column insertion
 

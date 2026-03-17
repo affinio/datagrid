@@ -22,6 +22,7 @@ import {
   type DataGridFormulaFieldDefinition,
   type DataGridFormulaFunctionRegistry,
   type DataGridGroupBySpec,
+  type DataGridMigrateStateOptions,
   type DataGridRowNode,
   type DataGridRowSelectionSnapshot,
   type DataGridRowModel,
@@ -55,6 +56,10 @@ import {
   type DataGridAdvancedFilterOptions,
   type DataGridAdvancedFilterProp,
 } from "./config/dataGridAdvancedFilter"
+import {
+  migrateDataGridSavedView,
+  type DataGridSavedViewSnapshot,
+} from "./config/dataGridSavedView"
 import {
   resolveDataGridColumnLayout,
   type DataGridColumnLayoutOptions,
@@ -588,6 +593,38 @@ export default defineComponent({
       emit("update:viewMode", normalized)
     }
 
+    const getSavedView = (): DataGridSavedViewSnapshot<Record<string, unknown>> | null => {
+      const state = controlledState.getState()
+      if (!state) {
+        return null
+      }
+      return {
+        state,
+        viewMode: currentViewMode.value,
+      }
+    }
+
+    const migrateSavedView = (
+      savedView: unknown,
+      options?: DataGridMigrateStateOptions,
+    ): DataGridSavedViewSnapshot<Record<string, unknown>> | null => {
+      return migrateDataGridSavedView(savedView, controlledState.migrateState, options)
+    }
+
+    const applySavedView = (
+      savedView: DataGridSavedViewSnapshot<Record<string, unknown>>,
+      options?: DataGridSetStateOptions,
+    ): boolean => {
+      const applied = controlledState.applyState(savedView.state, options)
+      if (!applied) {
+        return false
+      }
+      if (savedView.viewMode) {
+        setView(savedView.viewMode)
+      }
+      return true
+    }
+
     onBeforeUnmount(() => {
       controlledState.dispose()
     })
@@ -604,6 +641,9 @@ export default defineComponent({
       getSelectionSummary: () => dataGridRef.value?.api.selection.summarize() ?? null,
       getView: () => currentViewMode.value,
       setView,
+      getSavedView,
+      migrateSavedView,
+      applySavedView,
       applyColumnState: controlledState.applyColumnState,
       getState: controlledState.getState,
       migrateState: controlledState.migrateState,

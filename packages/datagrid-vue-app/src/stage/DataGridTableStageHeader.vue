@@ -43,7 +43,9 @@
               :rows="sourceRows"
               :items="resolveColumnMenuItemsSafe(column.key)"
               :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
+              :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
               :labels="resolveColumnMenuLabelsSafe(column.key)"
+              :action-options="resolveColumnMenuActionOptionsSafe(column.key)"
               :column-key="column.key"
               :column-label="column.column.label ?? column.key"
               :column-data-type="column.column.dataType"
@@ -211,7 +213,9 @@
             :rows="sourceRows"
             :items="resolveColumnMenuItemsSafe(column.key)"
             :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
+            :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
             :labels="resolveColumnMenuLabelsSafe(column.key)"
+            :action-options="resolveColumnMenuActionOptionsSafe(column.key)"
             :column-key="column.key"
             :column-label="column.column.label ?? column.key"
             :column-data-type="column.column.dataType"
@@ -356,7 +360,9 @@
             :rows="sourceRows"
             :items="resolveColumnMenuItemsSafe(column.key)"
             :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
+            :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
             :labels="resolveColumnMenuLabelsSafe(column.key)"
+            :action-options="resolveColumnMenuActionOptionsSafe(column.key)"
             :column-key="column.key"
             :column-label="column.column.label ?? column.key"
             :column-data-type="column.column.dataType"
@@ -485,7 +491,11 @@
 import { computed, type CSSProperties, type PropType } from "vue"
 import type { DataGridColumnPin } from "@affino/datagrid-vue"
 import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
-import type { DataGridColumnMenuItemLabels } from "../overlays/dataGridColumnMenu"
+import type {
+  DataGridColumnMenuActionOptions,
+  DataGridColumnMenuDisabledReasons,
+  DataGridColumnMenuItemLabels,
+} from "../overlays/dataGridColumnMenu"
 import type { DataGridTableStageBodyColumn as TableColumn } from "./dataGridTableStageBody.types"
 import {
   useDataGridTableStageColumnsSection,
@@ -742,8 +752,18 @@ function resolveColumnMenuDisabledItemsSafe(columnKey: string): readonly string[
   return typeof resolve === "function" ? resolve(columnKey) : []
 }
 
+function resolveColumnMenuDisabledReasonsSafe(columnKey: string): DataGridColumnMenuDisabledReasons {
+  const resolve = columns.value.resolveColumnMenuDisabledReasons
+  return typeof resolve === "function" ? resolve(columnKey) : {}
+}
+
 function resolveColumnMenuLabelsSafe(columnKey: string): DataGridColumnMenuItemLabels {
   const resolve = columns.value.resolveColumnMenuLabels
+  return typeof resolve === "function" ? resolve(columnKey) : {}
+}
+
+function resolveColumnMenuActionOptionsSafe(columnKey: string): DataGridColumnMenuActionOptions {
+  const resolve = columns.value.resolveColumnMenuActionOptions
   return typeof resolve === "function" ? resolve(columnKey) : {}
 }
 

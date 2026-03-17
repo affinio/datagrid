@@ -51,7 +51,8 @@ Use it as a single decision sheet to understand whether the platform fits your p
 | Virtualization | Vertical virtualization (rows) | Core + Adapter | all | Viewport-driven visible row windows for large datasets. |
 | Virtualization | Horizontal virtualization (columns) | Core + Adapter | all | Deterministic horizontal windowing with pinned column support. |
 | Columns | Visibility, order, sizing, pinning | Core + Adapter | all | Canonical column model (`pin` contract, snapshots, state updates). |
-| App UX | Built-in column menu with declarative section config | App | main-thread, worker-owned | `columnMenu` supports boolean enablement and object-form `items` / `disabled` / `labels` / per-column overrides for built-in `sort/group/pin/filter` sections. |
+| App UX | Built-in column menu with declarative section/action config and disabled reasons | App | main-thread, worker-owned | `columnMenu` supports boolean enablement plus object-form `items` / `disabled` / `disabledReasons` / `labels` / `actions` / per-column overrides for built-in `sort/group/pin/filter` sections and actions. |
+| App UX | Saved-view facade helpers + persistence adapters | App | main-thread, worker-owned | Imperative `getSavedView()` / `migrateSavedView()` / `applySavedView()` persist unified runtime state together with app `viewMode`, while `serialize/parse/read/write/clear` helpers support storage-backed presets. |
 | Selection | Row and cell/range selection | Core + Adapter | all | Anchor/focus/range model and overlay transform contracts. |
 | Selection | Fill handle + drag-fill | Core + Adapter + App | main-thread, worker-owned | Spreadsheet-like fill interaction primitives, including drag-fill, double-click fill-down, and post-fill `Series` / `Copy` reapply in app facades. |
 | Selection | Range move / drag-move | Core + Adapter | main-thread, worker-owned | Move selected ranges with deterministic lifecycle hooks. |

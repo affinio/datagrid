@@ -20,7 +20,12 @@ import {
   useDataGridAppViewportLifecycle,
 } from "@affino/datagrid-vue"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
-import type { DataGridColumnMenuItemKey, DataGridColumnMenuItemLabels } from "../overlays/dataGridColumnMenu"
+import type {
+  DataGridColumnMenuActionOptions,
+  DataGridColumnMenuDisabledReasons,
+  DataGridColumnMenuItemKey,
+  DataGridColumnMenuItemLabels,
+} from "../overlays/dataGridColumnMenu"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import type { DataGridTableStageContext } from "./dataGridTableStageContext"
 import { useDataGridTableStageBindings } from "./useDataGridTableStageBindings"
@@ -83,7 +88,9 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   columnMenuMaxFilterValues?: Ref<number>
   resolveColumnMenuItems?: (columnKey: string) => readonly DataGridColumnMenuItemKey[]
   resolveColumnMenuDisabledItems?: (columnKey: string) => readonly DataGridColumnMenuItemKey[]
+  resolveColumnMenuDisabledReasons?: (columnKey: string) => DataGridColumnMenuDisabledReasons
   resolveColumnMenuLabels?: (columnKey: string) => DataGridColumnMenuItemLabels
+  resolveColumnMenuActionOptions?: (columnKey: string) => DataGridColumnMenuActionOptions
   isColumnFilterActive?: (columnKey: string) => boolean
   isColumnGrouped?: (columnKey: string) => boolean
   resolveColumnGroupOrder?: (columnKey: string) => number | null
@@ -633,7 +640,9 @@ export function useDataGridTableStageRuntime<
     columnMenuMaxFilterValues: options.columnMenuMaxFilterValues,
     resolveColumnMenuItems: options.resolveColumnMenuItems,
     resolveColumnMenuDisabledItems: options.resolveColumnMenuDisabledItems,
+    resolveColumnMenuDisabledReasons: options.resolveColumnMenuDisabledReasons,
     resolveColumnMenuLabels: options.resolveColumnMenuLabels,
+    resolveColumnMenuActionOptions: options.resolveColumnMenuActionOptions,
     isColumnFilterActive: options.isColumnFilterActive,
     isColumnGrouped: options.isColumnGrouped,
     resolveColumnGroupOrder: options.resolveColumnGroupOrder,

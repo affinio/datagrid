@@ -25,52 +25,65 @@
 
         <template v-if="section === 'sort'">
           <UiMenuItem
+            v-if="isActionVisible('sortAsc')"
             class="datagrid-column-menu__item"
             data-datagrid-column-menu-action="sort-asc"
-            :disabled="sortSectionDisabled || !sortEnabled"
+            :data-disabled-reason="resolveActionDisabledTitle('sortAsc', sortSectionDisabled || !sortEnabled, 'sort')"
+            :disabled="isActionDisabled('sortAsc', sortSectionDisabled || !sortEnabled)"
+            :title="resolveActionDisabledTitle('sortAsc', sortSectionDisabled || !sortEnabled, 'sort')"
             @select="$emit('sort', 'asc')"
           >
-            <span>{{ sortLabels.asc }}</span>
+            <span :title="resolveActionDisabledTitle('sortAsc', sortSectionDisabled || !sortEnabled, 'sort')">{{ sortAscLabel }}</span>
             <span v-if="sortDirection === 'asc'" class="datagrid-column-menu__state">Active</span>
           </UiMenuItem>
 
           <UiMenuItem
+            v-if="isActionVisible('sortDesc')"
             class="datagrid-column-menu__item"
             data-datagrid-column-menu-action="sort-desc"
-            :disabled="sortSectionDisabled || !sortEnabled"
+            :data-disabled-reason="resolveActionDisabledTitle('sortDesc', sortSectionDisabled || !sortEnabled, 'sort')"
+            :disabled="isActionDisabled('sortDesc', sortSectionDisabled || !sortEnabled)"
+            :title="resolveActionDisabledTitle('sortDesc', sortSectionDisabled || !sortEnabled, 'sort')"
             @select="$emit('sort', 'desc')"
           >
-            <span>{{ sortLabels.desc }}</span>
+            <span :title="resolveActionDisabledTitle('sortDesc', sortSectionDisabled || !sortEnabled, 'sort')">{{ sortDescLabel }}</span>
             <span v-if="sortDirection === 'desc'" class="datagrid-column-menu__state">Active</span>
           </UiMenuItem>
 
           <UiMenuItem
+            v-if="isActionVisible('clearSort')"
             class="datagrid-column-menu__item"
             data-datagrid-column-menu-action="sort-clear"
-            :disabled="sortSectionDisabled || !sortEnabled || sortDirection === null"
+            :data-disabled-reason="resolveActionDisabledTitle('clearSort', sortSectionDisabled || !sortEnabled || sortDirection === null, 'sort')"
+            :disabled="isActionDisabled('clearSort', sortSectionDisabled || !sortEnabled || sortDirection === null)"
+            :title="resolveActionDisabledTitle('clearSort', sortSectionDisabled || !sortEnabled || sortDirection === null, 'sort')"
             @select="$emit('sort', null)"
           >
-            Clear sort
+            <span :title="resolveActionDisabledTitle('clearSort', sortSectionDisabled || !sortEnabled || sortDirection === null, 'sort')">{{ clearSortLabel }}</span>
           </UiMenuItem>
         </template>
 
         <UiMenuItem
-          v-else-if="section === 'group'"
+          v-else-if="section === 'group' && isActionVisible('toggleGroup')"
           class="datagrid-column-menu__item"
           data-datagrid-column-menu-action="toggle-group"
-          :disabled="groupSectionDisabled || !groupEnabled"
-          @select="$emit('group', !grouped)"
+          :data-disabled-reason="resolveActionDisabledTitle('toggleGroup', groupSectionDisabled || !groupEnabled, 'group')"
+          :disabled="isActionDisabled('toggleGroup', groupSectionDisabled || !groupEnabled)"
+          :title="resolveActionDisabledTitle('toggleGroup', groupSectionDisabled || !groupEnabled, 'group')"
+          @select="handleToggleGroup"
         >
-          <span>{{ groupActionLabel }}</span>
+          <span :title="resolveActionDisabledTitle('toggleGroup', groupSectionDisabled || !groupEnabled, 'group')">{{ groupActionLabel }}</span>
           <span v-if="grouped && groupOrderLabel" class="datagrid-column-menu__state">{{ groupOrderLabel }}</span>
         </UiMenuItem>
 
-        <UiSubMenu v-else-if="section === 'pin'" :options="submenuOptions">
+        <UiSubMenu v-else-if="section === 'pin' && showPinSection" :options="submenuOptions">
           <UiSubMenuTrigger
             class="datagrid-column-menu__item datagrid-column-menu__item--submenu"
             data-datagrid-column-menu-action="pin-submenu"
-            :aria-disabled="pinSectionDisabled ? 'true' : undefined"
-            :disabled="pinSectionDisabled"
+            :data-disabled-reason="resolveActionDisabledTitle('pinMenu', pinSectionDisabled, 'pin')"
+            :aria-disabled="isActionDisabled('pinMenu', pinSectionDisabled) ? 'true' : undefined"
+            :disabled="isActionDisabled('pinMenu', pinSectionDisabled)"
+            :title="resolveActionDisabledTitle('pinMenu', pinSectionDisabled, 'pin')"
           >
             <span>{{ pinMenuLabel }}</span>
           </UiSubMenuTrigger>
@@ -80,32 +93,41 @@
             :style="menuThemeVars"
           >
             <UiMenuItem
+              v-if="isActionVisible('pinLeft')"
               class="datagrid-column-menu__item"
               data-datagrid-column-menu-action="pin-left"
-              :disabled="pinSectionDisabled"
+              :data-disabled-reason="resolveActionDisabledTitle('pinLeft', pinSectionDisabled, 'pin')"
+              :disabled="isActionDisabled('pinLeft', pinSectionDisabled)"
+              :title="resolveActionDisabledTitle('pinLeft', pinSectionDisabled, 'pin')"
               @select="$emit('pin', 'left')"
             >
-              <span>Pin left</span>
+              <span :title="resolveActionDisabledTitle('pinLeft', pinSectionDisabled, 'pin')">{{ pinLeftLabel }}</span>
               <span v-if="pin === 'left'" class="datagrid-column-menu__state">Active</span>
             </UiMenuItem>
 
             <UiMenuItem
+              v-if="isActionVisible('pinRight')"
               class="datagrid-column-menu__item"
               data-datagrid-column-menu-action="pin-right"
-              :disabled="pinSectionDisabled"
+              :data-disabled-reason="resolveActionDisabledTitle('pinRight', pinSectionDisabled, 'pin')"
+              :disabled="isActionDisabled('pinRight', pinSectionDisabled)"
+              :title="resolveActionDisabledTitle('pinRight', pinSectionDisabled, 'pin')"
               @select="$emit('pin', 'right')"
             >
-              <span>Pin right</span>
+              <span :title="resolveActionDisabledTitle('pinRight', pinSectionDisabled, 'pin')">{{ pinRightLabel }}</span>
               <span v-if="pin === 'right'" class="datagrid-column-menu__state">Active</span>
             </UiMenuItem>
 
             <UiMenuItem
+              v-if="isActionVisible('unpin')"
               class="datagrid-column-menu__item"
               data-datagrid-column-menu-action="pin-none"
-              :disabled="pinSectionDisabled || pin === 'none'"
+              :data-disabled-reason="resolveActionDisabledTitle('unpin', pinSectionDisabled || pin === 'none', 'pin')"
+              :disabled="isActionDisabled('unpin', pinSectionDisabled || pin === 'none')"
+              :title="resolveActionDisabledTitle('unpin', pinSectionDisabled || pin === 'none', 'pin')"
               @select="$emit('pin', 'none')"
             >
-              Unpin
+              <span :title="resolveActionDisabledTitle('unpin', pinSectionDisabled || pin === 'none', 'pin')">{{ unpinLabel }}</span>
             </UiMenuItem>
           </UiSubMenuContent>
         </UiSubMenu>
@@ -127,13 +149,16 @@
             {{ filterSectionLabel }}
           </span>
           <button
+            v-if="isActionVisible('clearFilter')"
             type="button"
             class="datagrid-column-menu__link"
             data-datagrid-column-menu-action="clear-filter"
-            :disabled="filterSectionDisabled || !filterActive"
+            :data-disabled-reason="resolveActionDisabledTitle('clearFilter', filterSectionDisabled || !filterActive, 'filter')"
+            :disabled="isActionDisabled('clearFilter', filterSectionDisabled || !filterActive)"
+            :title="resolveActionDisabledTitle('clearFilter', filterSectionDisabled || !filterActive, 'filter')"
             @click="handleClearFilter"
           >
-            Clear filter
+            {{ clearFilterLabel }}
           </button>
         </div>
 
@@ -144,6 +169,7 @@
           type="search"
           placeholder="Type to filter rows"
           :disabled="filterSectionDisabled"
+          :title="resolveSectionDisabledTitle('filter', filterSectionDisabled)"
           @mousedown.stop
           @click.stop
           @keydown.stop
@@ -166,45 +192,53 @@
           type="search"
           placeholder="Search values"
           :disabled="filterSectionDisabled"
+          :title="resolveSectionDisabledTitle('filter', filterSectionDisabled)"
           @mousedown.stop
           @click.stop
           @keydown.stop
         />
 
         <label
-          v-if="effectiveValueFilterEnabled && hasSearchQuery"
+          v-if="effectiveValueFilterEnabled && hasSearchQuery && isActionVisible('addCurrentSelectionToFilter')"
           class="datagrid-column-menu__merge-toggle"
           data-datagrid-column-menu-action="add-current-selection"
         >
           <input
             type="checkbox"
             :checked="addCurrentSelectionToFilter"
-            :disabled="filterSectionDisabled"
+            :disabled="isActionDisabled('addCurrentSelectionToFilter', filterSectionDisabled)"
+            :title="resolveActionDisabledTitle('addCurrentSelectionToFilter', filterSectionDisabled, 'filter')"
             @change="toggleAddCurrentSelectionToFilter"
           />
-          <span>Add current selection to filter</span>
+          <span>{{ addCurrentSelectionToFilterLabel }}</span>
         </label>
 
         <UiMenuSeparator v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__section-separator" />
 
         <div v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__toolbar">
           <button
+            v-if="isActionVisible('selectAllValues')"
             type="button"
             class="datagrid-column-menu__link"
             data-datagrid-column-menu-action="select-all-values"
-            :disabled="filterSectionDisabled || valueEntries.length === 0 || isAllValuesSelected"
+            :data-disabled-reason="resolveActionDisabledTitle('selectAllValues', filterSectionDisabled || valueEntries.length === 0 || isAllValuesSelected, 'filter')"
+            :disabled="isActionDisabled('selectAllValues', filterSectionDisabled || valueEntries.length === 0 || isAllValuesSelected)"
+            :title="resolveActionDisabledTitle('selectAllValues', filterSectionDisabled || valueEntries.length === 0 || isAllValuesSelected, 'filter')"
             @click="selectAllValues"
           >
-            Select all
+            {{ selectAllValuesLabel }}
           </button>
           <button
+            v-if="isActionVisible('clearAllValues')"
             type="button"
             class="datagrid-column-menu__link"
             data-datagrid-column-menu-action="clear-all-values"
-            :disabled="filterSectionDisabled || draftSelectedTokens.length === 0"
+            :data-disabled-reason="resolveActionDisabledTitle('clearAllValues', filterSectionDisabled || draftSelectedTokens.length === 0, 'filter')"
+            :disabled="isActionDisabled('clearAllValues', filterSectionDisabled || draftSelectedTokens.length === 0)"
+            :title="resolveActionDisabledTitle('clearAllValues', filterSectionDisabled || draftSelectedTokens.length === 0, 'filter')"
             @click="clearAllValues"
           >
-            Clear all
+            {{ clearAllValuesLabel }}
           </button>
           <div class="datagrid-column-menu__summary">
             {{ appliedSelectedCount }} / {{ appliedSelectableCount }} selected
@@ -229,6 +263,7 @@
                 type="checkbox"
                 :checked="selectedTokenSet.has(entry.token)"
                 :disabled="filterSectionDisabled"
+                :title="resolveSectionDisabledTitle('filter', filterSectionDisabled)"
                 @change="toggleFilterValue(entry.token)"
               />
               <span class="datagrid-column-menu__value-label">{{ entry.label }}</span>
@@ -253,21 +288,25 @@
 
         <div v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__footer">
           <button
+            v-if="isActionVisible('cancelFilter')"
             type="button"
             class="datagrid-column-menu__button datagrid-column-menu__button--secondary"
             data-datagrid-column-menu-action="cancel-filter"
             @click="closeMenu"
           >
-            Cancel
+            {{ cancelFilterLabel }}
           </button>
           <button
+            v-if="isActionVisible('applyFilter')"
             type="button"
             class="datagrid-column-menu__button datagrid-column-menu__button--primary"
             data-datagrid-column-menu-action="apply-filter"
-            :disabled="filterSectionDisabled || !canApplyFilter"
+            :data-disabled-reason="resolveActionDisabledTitle('applyFilter', filterSectionDisabled || !canApplyFilter, 'filter')"
+            :disabled="isActionDisabled('applyFilter', filterSectionDisabled || !canApplyFilter)"
+            :title="resolveActionDisabledTitle('applyFilter', filterSectionDisabled || !canApplyFilter, 'filter')"
             @click="handleApplyFilter"
           >
-            Apply
+            {{ applyFilterLabel }}
           </button>
         </div>
         </section>
@@ -293,7 +332,13 @@ import {
   type MenuOptions,
 } from "@affino/menu-vue"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
-import type { DataGridColumnMenuItemKey, DataGridColumnMenuItemLabels } from "./dataGridColumnMenu"
+import type {
+  DataGridColumnMenuActionKey,
+  DataGridColumnMenuActionOptions,
+  DataGridColumnMenuDisabledReasons,
+  DataGridColumnMenuItemKey,
+  DataGridColumnMenuItemLabels,
+} from "./dataGridColumnMenu"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 
 type DataGridColumnPin = "left" | "right" | "none"
@@ -319,7 +364,9 @@ const props = defineProps<{
   rows: readonly Record<string, unknown>[]
   items: readonly DataGridColumnMenuItemKey[]
   disabledItems: readonly DataGridColumnMenuItemKey[]
+  disabledReasons: DataGridColumnMenuDisabledReasons
   labels: DataGridColumnMenuItemLabels
+  actionOptions: DataGridColumnMenuActionOptions
   columnKey: string
   columnLabel: string
   columnDataType?: string
@@ -381,6 +428,15 @@ const valueFilterDisabledByRowLimit = computed(() => (
 ))
 const visibleSections = computed<readonly DataGridColumnMenuItemKey[]>(() => {
   return props.items.filter(section => {
+    if (section === "sort") {
+      return isActionVisible("sortAsc") || isActionVisible("sortDesc") || isActionVisible("clearSort")
+    }
+    if (section === "group") {
+      return isActionVisible("toggleGroup")
+    }
+    if (section === "pin") {
+      return showPinSection.value
+    }
     if (section === "filter") {
       return hasAnyFilterControls.value
     }
@@ -395,9 +451,31 @@ const selectedTokenSet = computed(() => new Set(draftSelectedTokens.value))
 const hasAnyFilterControls = computed(() => effectiveValueFilterEnabled.value || props.textFilterEnabled)
 const showTextFilterInput = computed(() => props.textFilterEnabled && !effectiveValueFilterEnabled.value)
 const hasSearchQuery = computed(() => query.value.trim().length > 0)
-const groupActionLabel = computed(() => props.labels.group ?? (props.grouped ? "Ungroup column" : "Group by this column"))
-const pinMenuLabel = computed(() => props.labels.pin ?? "Pin column")
+const showPinSection = computed(() => (
+  isActionVisible("pinMenu")
+  && (isActionVisible("pinLeft") || isActionVisible("pinRight") || isActionVisible("unpin"))
+))
+const groupActionLabel = computed(() => resolveActionLabel(
+  "toggleGroup",
+  props.labels.group ?? (props.grouped ? "Ungroup column" : "Group by this column"),
+))
+const pinMenuLabel = computed(() => resolveActionLabel("pinMenu", props.labels.pin ?? "Pin column"))
 const filterSectionLabel = computed(() => props.labels.filter ?? (effectiveValueFilterEnabled.value ? "Filter" : "Filter by text"))
+const sortAscLabel = computed(() => resolveActionLabel("sortAsc", sortLabels.value.asc))
+const sortDescLabel = computed(() => resolveActionLabel("sortDesc", sortLabels.value.desc))
+const clearSortLabel = computed(() => resolveActionLabel("clearSort", "Clear sort"))
+const pinLeftLabel = computed(() => resolveActionLabel("pinLeft", "Pin left"))
+const pinRightLabel = computed(() => resolveActionLabel("pinRight", "Pin right"))
+const unpinLabel = computed(() => resolveActionLabel("unpin", "Unpin"))
+const clearFilterLabel = computed(() => resolveActionLabel("clearFilter", "Clear filter"))
+const addCurrentSelectionToFilterLabel = computed(() => resolveActionLabel(
+  "addCurrentSelectionToFilter",
+  "Add current selection to filter",
+))
+const selectAllValuesLabel = computed(() => resolveActionLabel("selectAllValues", "Select all"))
+const clearAllValuesLabel = computed(() => resolveActionLabel("clearAllValues", "Clear all"))
+const cancelFilterLabel = computed(() => resolveActionLabel("cancelFilter", "Cancel"))
+const applyFilterLabel = computed(() => resolveActionLabel("applyFilter", "Apply"))
 
 const matchedValues = computed(() => {
   const normalizedQuery = query.value.trim().toLowerCase()
@@ -509,6 +587,49 @@ function normalizeColumnMenuToken(token: string): string {
   return token.startsWith("string:")
     ? `string:${token.slice("string:".length).toLowerCase()}`
     : token
+}
+
+function isActionVisible(actionKey: DataGridColumnMenuActionKey): boolean {
+  return props.actionOptions[actionKey]?.hidden !== true
+}
+
+function isActionDisabled(actionKey: DataGridColumnMenuActionKey, fallback = false): boolean {
+  return fallback || props.actionOptions[actionKey]?.disabled === true
+}
+
+function resolveActionLabel(actionKey: DataGridColumnMenuActionKey, fallback: string): string {
+  return props.actionOptions[actionKey]?.label ?? fallback
+}
+
+function resolveSectionDisabledReason(sectionKey: DataGridColumnMenuItemKey): string {
+  return props.disabledReasons[sectionKey] ?? ""
+}
+
+function resolveSectionDisabledTitle(sectionKey: DataGridColumnMenuItemKey, disabled: boolean): string | undefined {
+  if (!disabled) {
+    return undefined
+  }
+  const reason = resolveSectionDisabledReason(sectionKey)
+  return reason.length > 0 ? reason : undefined
+}
+
+function resolveActionDisabledTitle(
+  actionKey: DataGridColumnMenuActionKey,
+  fallbackDisabled = false,
+  sectionKey?: DataGridColumnMenuItemKey,
+): string | undefined {
+  const disabled = isActionDisabled(actionKey, fallbackDisabled)
+  if (!disabled) {
+    return undefined
+  }
+  const actionReason = props.actionOptions[actionKey]?.disabledReason?.trim() ?? ""
+  if (actionReason.length > 0) {
+    return actionReason
+  }
+  if (sectionKey) {
+    return resolveSectionDisabledTitle(sectionKey, true)
+  }
+  return undefined
 }
 
 function formatColumnMenuValueLabel(value: unknown): string {
@@ -659,6 +780,14 @@ function handleClearFilter(): void {
     return
   }
   emit("clear-filter")
+  closeMenu()
+}
+
+function handleToggleGroup(): void {
+  if (isActionDisabled("toggleGroup", groupSectionDisabled.value || !props.groupEnabled)) {
+    return
+  }
+  emit("group", !props.grouped)
   closeMenu()
 }
 

@@ -6,7 +6,12 @@ import type {
   DataGridRowNode,
 } from "@affino/datagrid-vue"
 import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
-import type { DataGridColumnMenuItemKey, DataGridColumnMenuItemLabels } from "../overlays/dataGridColumnMenu"
+import type {
+  DataGridColumnMenuActionOptions,
+  DataGridColumnMenuDisabledReasons,
+  DataGridColumnMenuItemKey,
+  DataGridColumnMenuItemLabels,
+} from "../overlays/dataGridColumnMenu"
 
 export type DataGridTableMode = "base" | "tree" | "pivot" | "worker"
 export type DataGridPendingEdge = "top" | "right" | "bottom" | "left"
@@ -58,7 +63,9 @@ export interface DataGridTableStageColumnsSection {
   columnMenuMaxFilterValues?: number
   resolveColumnMenuItems?: (columnKey: string) => readonly DataGridColumnMenuItemKey[]
   resolveColumnMenuDisabledItems?: (columnKey: string) => readonly DataGridColumnMenuItemKey[]
+  resolveColumnMenuDisabledReasons?: (columnKey: string) => DataGridColumnMenuDisabledReasons
   resolveColumnMenuLabels?: (columnKey: string) => DataGridColumnMenuItemLabels
+  resolveColumnMenuActionOptions?: (columnKey: string) => DataGridColumnMenuActionOptions
   isColumnFilterActive?: (columnKey: string) => boolean
   isColumnGrouped?: (columnKey: string) => boolean
   resolveColumnGroupOrder?: (columnKey: string) => number | null

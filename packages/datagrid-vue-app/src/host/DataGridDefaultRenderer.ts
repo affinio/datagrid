@@ -44,7 +44,9 @@ import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
 import {
+  resolveDataGridColumnMenuActionOptions,
   resolveDataGridColumnMenuDisabledItems,
+  resolveDataGridColumnMenuDisabledReasons,
   resolveDataGridColumnMenuLabels,
   resolveDataGridColumnMenuItems,
   type DataGridColumnMenuOptions,
@@ -709,8 +711,16 @@ export default defineComponent({
       return resolveDataGridColumnMenuDisabledItems(props.columnMenu, columnKey)
     }
 
+    const resolveColumnMenuDisabledReasons = (columnKey: string) => {
+      return resolveDataGridColumnMenuDisabledReasons(props.columnMenu, columnKey)
+    }
+
     const resolveColumnMenuLabels = (columnKey: string) => {
       return resolveDataGridColumnMenuLabels(props.columnMenu, columnKey)
+    }
+
+    const resolveColumnMenuActionOptions = (columnKey: string) => {
+      return resolveDataGridColumnMenuActionOptions(props.columnMenu, columnKey)
     }
 
     const resolveColumnGroupOrder = (columnKey: string): number | null => {
@@ -1035,7 +1045,9 @@ export default defineComponent({
       columnMenuMaxFilterValues: computed(() => props.columnMenu.maxFilterValues),
       resolveColumnMenuItems,
       resolveColumnMenuDisabledItems,
+      resolveColumnMenuDisabledReasons,
       resolveColumnMenuLabels,
+      resolveColumnMenuActionOptions,
       isColumnFilterActive,
       isColumnGrouped,
       resolveColumnGroupOrder,
@@ -1058,7 +1070,9 @@ export default defineComponent({
         columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
         resolveColumnMenuItems,
         resolveColumnMenuDisabledItems,
+        resolveColumnMenuDisabledReasons,
         resolveColumnMenuLabels,
+        resolveColumnMenuActionOptions,
         isColumnFilterActive,
         isColumnGrouped,
         resolveColumnGroupOrder,

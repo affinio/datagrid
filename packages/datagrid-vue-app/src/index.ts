@@ -19,15 +19,31 @@ export type {
   DataGridAdvancedFilterProp,
 } from "./config/dataGridAdvancedFilter"
 export type {
+  DataGridSavedViewSnapshot,
+  DataGridSavedViewStorageLike,
+} from "./config/dataGridSavedView"
+export type {
   DataGridColumnLayoutOptions,
   DataGridColumnLayoutProp,
 } from "./config/dataGridColumnLayout"
+export {
+  clearDataGridSavedViewInStorage,
+  migrateDataGridSavedView,
+  parseDataGridSavedView,
+  readDataGridSavedViewFromStorage,
+  serializeDataGridSavedView,
+  writeDataGridSavedViewToStorage,
+} from "./config/dataGridSavedView"
 export type {
   DataGridAggregationsOptions,
   DataGridAggregationsProp,
 } from "./config/dataGridAggregations"
 export type {
+  DataGridColumnMenuActionKey,
+  DataGridColumnMenuActionOption,
+  DataGridColumnMenuActionOptions,
   DataGridColumnMenuColumnOptions,
+  DataGridColumnMenuDisabledReasons,
   DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
   DataGridColumnMenuOptions,
