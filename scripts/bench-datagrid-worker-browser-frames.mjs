@@ -17,6 +17,7 @@ const BENCH_BROWSER_SESSIONS = Number.parseInt(process.env.BENCH_BROWSER_SESSION
 const BENCH_BROWSER_SCROLL_STEPS = Number.parseInt(process.env.BENCH_BROWSER_SCROLL_STEPS ?? "180", 10)
 const BENCH_BROWSER_STEP_DELAY_MS = Number.parseInt(process.env.BENCH_BROWSER_STEP_DELAY_MS ?? "8", 10)
 const BENCH_BROWSER_ROW_COUNT = Number.parseInt(process.env.BENCH_BROWSER_ROW_COUNT ?? "100000", 10)
+const BENCH_BROWSER_SCROLL_MODE = (process.env.BENCH_BROWSER_SCROLL_MODE ?? "position").trim().toLowerCase()
 const BENCH_BROWSER_HEADLESS = (process.env.BENCH_BROWSER_HEADLESS ?? "true").trim().toLowerCase() !== "false"
 const BENCH_OUTPUT_JSON = process.env.BENCH_OUTPUT_JSON
   ? resolve(process.env.BENCH_OUTPUT_JSON)
@@ -26,8 +27,12 @@ const BENCH_VIEWPORT_SELECTOR = ".table-wrap, .datagrid-sugar-stage__viewport, .
 const PERF_BUDGET_TOTAL_MS = Number.parseFloat(process.env.PERF_BUDGET_TOTAL_MS ?? "Infinity")
 const PERF_BUDGET_MAX_MAIN_FRAME_P95_MS = Number.parseFloat(process.env.PERF_BUDGET_MAX_MAIN_FRAME_P95_MS ?? "Infinity")
 const PERF_BUDGET_MAX_MAIN_DROPPED_PCT = Number.parseFloat(process.env.PERF_BUDGET_MAX_MAIN_DROPPED_PCT ?? "Infinity")
+const PERF_BUDGET_MAX_MAIN_PEAK_HEAP_MB = Number.parseFloat(process.env.PERF_BUDGET_MAX_MAIN_PEAK_HEAP_MB ?? "Infinity")
+const PERF_BUDGET_MAX_MAIN_PEAK_STAGE_NODES = Number.parseFloat(process.env.PERF_BUDGET_MAX_MAIN_PEAK_STAGE_NODES ?? "Infinity")
 const PERF_BUDGET_MAX_WORKER_FRAME_P95_MS = Number.parseFloat(process.env.PERF_BUDGET_MAX_WORKER_FRAME_P95_MS ?? "Infinity")
 const PERF_BUDGET_MAX_WORKER_DROPPED_PCT = Number.parseFloat(process.env.PERF_BUDGET_MAX_WORKER_DROPPED_PCT ?? "Infinity")
+const PERF_BUDGET_MAX_WORKER_PEAK_HEAP_MB = Number.parseFloat(process.env.PERF_BUDGET_MAX_WORKER_PEAK_HEAP_MB ?? "Infinity")
+const PERF_BUDGET_MAX_WORKER_PEAK_STAGE_NODES = Number.parseFloat(process.env.PERF_BUDGET_MAX_WORKER_PEAK_STAGE_NODES ?? "Infinity")
 const PERF_BUDGET_MAX_WORKER_FRAME_DRIFT_PCT = Number.parseFloat(process.env.PERF_BUDGET_MAX_WORKER_FRAME_DRIFT_PCT ?? "Infinity")
 const PERF_BUDGET_MAX_VARIANCE_PCT = Number.parseFloat(process.env.PERF_BUDGET_MAX_VARIANCE_PCT ?? "Infinity")
 const PERF_BUDGET_VARIANCE_MIN_MEAN_MS = Number.parseFloat(process.env.PERF_BUDGET_VARIANCE_MIN_MEAN_MS ?? "0.5")
@@ -36,6 +41,9 @@ assertPositiveInteger(BENCH_BROWSER_SESSIONS, "BENCH_BROWSER_SESSIONS")
 assertPositiveInteger(BENCH_BROWSER_SCROLL_STEPS, "BENCH_BROWSER_SCROLL_STEPS")
 assertPositiveInteger(BENCH_BROWSER_STEP_DELAY_MS, "BENCH_BROWSER_STEP_DELAY_MS")
 assertPositiveInteger(BENCH_BROWSER_ROW_COUNT, "BENCH_BROWSER_ROW_COUNT")
+if (BENCH_BROWSER_SCROLL_MODE !== "position" && BENCH_BROWSER_SCROLL_MODE !== "wheel") {
+  throw new Error("BENCH_BROWSER_SCROLL_MODE must be 'position' or 'wheel'")
+}
 if (!BENCH_BROWSER_MODES.length) {
   throw new Error("BENCH_WORKER_BROWSER_MODES must include at least one mode")
 }
@@ -149,15 +157,36 @@ async function runSession(page, mode, index) {
 
   await page.waitForTimeout(120)
 
-  const result = await page.evaluate(async ({ steps, stepDelayMs, index, viewportSelector }) => {
+  const result = await page.evaluate(async ({ steps, stepDelayMs, index, viewportSelector, scrollMode }) => {
     const viewport = document.querySelector(viewportSelector)
     if (!(viewport instanceof HTMLElement)) {
       throw new Error(`Datagrid viewport not found (${viewportSelector})`)
     }
 
+    const stageRoot = viewport.closest(".grid-stage") ?? document.querySelector(".grid-stage")
     const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
     const maxLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
     const frameDeltas = []
+    const telemetrySamples = []
+
+    const captureTelemetry = (label) => {
+      const performanceWithMemory = performance
+      const usedHeap = typeof performanceWithMemory?.memory?.usedJSHeapSize === "number"
+        ? performanceWithMemory.memory.usedJSHeapSize / (1024 * 1024)
+        : null
+      const totalHeap = typeof performanceWithMemory?.memory?.totalJSHeapSize === "number"
+        ? performanceWithMemory.memory.totalJSHeapSize / (1024 * 1024)
+        : null
+      telemetrySamples.push({
+        label,
+        pageNodes: document.body ? document.body.querySelectorAll("*").length : 0,
+        stageNodes: stageRoot instanceof HTMLElement ? stageRoot.querySelectorAll("*").length : 0,
+        usedHeapMb: usedHeap,
+        totalHeapMb: totalHeap,
+        scrollTop: viewport.scrollTop,
+        scrollLeft: viewport.scrollLeft,
+      })
+    }
 
     let running = true
     let last = performance.now()
@@ -172,25 +201,55 @@ async function runSession(page, mode, index) {
     requestAnimationFrame(tick)
 
     const pause = (ms) => new Promise(resolvePause => setTimeout(resolvePause, ms))
+    captureTelemetry("start")
 
     for (let step = 1; step <= steps; step += 1) {
       const phase = ((step + index) % 4)
-      if (phase === 0 || phase === 1) {
+      if (scrollMode === "wheel") {
+        const dominantVertical = phase === 0 || phase === 1
+        const deltaY = dominantVertical ? (phase === 0 ? 56 : 88) : 0
+        const deltaX = dominantVertical ? 0 : (phase === 2 ? 24 : 40)
+        viewport.dispatchEvent(new WheelEvent("wheel", {
+          deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+          deltaX,
+          deltaY,
+          bubbles: true,
+          cancelable: true,
+        }))
+      } else if (phase === 0 || phase === 1) {
         if (maxTop > 0) {
           viewport.scrollTop = Math.round((maxTop * step) / steps)
         }
       } else if (maxLeft > 0) {
         viewport.scrollLeft = Math.round((maxLeft * step) / steps)
       }
+      if (step === 1 || step === steps || step % 12 === 0) {
+        captureTelemetry(`step:${step}`)
+      }
       await pause(stepDelayMs)
     }
 
     await pause(Math.max(32, stepDelayMs * 2))
+    captureTelemetry("settled")
     running = false
     await pause(24)
 
+    const peakStageNodes = telemetrySamples.reduce((max, sample) => Math.max(max, sample.stageNodes), 0)
+    const peakPageNodes = telemetrySamples.reduce((max, sample) => Math.max(max, sample.pageNodes), 0)
+    const peakUsedHeapMb = telemetrySamples.reduce((max, sample) => (
+      typeof sample.usedHeapMb === "number" ? Math.max(max, sample.usedHeapMb) : max
+    ), 0)
+    const finalSample = telemetrySamples[telemetrySamples.length - 1] ?? null
+
     return {
       frameDeltas,
+      telemetry: {
+        sampleCount: telemetrySamples.length,
+        peakStageNodes,
+        peakPageNodes,
+        peakUsedHeapMb,
+        finalSample,
+      },
       maxTop,
       maxLeft,
       finalTop: viewport.scrollTop,
@@ -201,12 +260,14 @@ async function runSession(page, mode, index) {
     stepDelayMs: BENCH_BROWSER_STEP_DELAY_MS,
     index,
     viewportSelector: BENCH_VIEWPORT_SELECTOR,
+    scrollMode: BENCH_BROWSER_SCROLL_MODE,
   })
 
   return {
     mode,
     route,
     ...computeFrameMetrics(result.frameDeltas),
+    telemetry: result.telemetry,
     maxTop: result.maxTop,
     maxLeft: result.maxLeft,
     finalTop: result.finalTop,
@@ -282,6 +343,9 @@ for (const mode of BENCH_BROWSER_MODES) {
     frameP99Ms: stats(modeSessions.map(session => session.frameStats.p99)),
     droppedPct: stats(modeSessions.map(session => session.droppedPct)),
     fps: stats(modeSessions.map(session => session.fps)),
+    peakStageNodes: stats(modeSessions.map(session => session.telemetry?.peakStageNodes ?? 0)),
+    peakPageNodes: stats(modeSessions.map(session => session.telemetry?.peakPageNodes ?? 0)),
+    peakUsedHeapMb: stats(modeSessions.map(session => session.telemetry?.peakUsedHeapMb ?? 0)),
   }
 }
 
@@ -296,6 +360,16 @@ if (byMode["main-thread"]) {
       `main-thread dropped frame pct p95 ${byMode["main-thread"].droppedPct.p95.toFixed(2)} exceeds PERF_BUDGET_MAX_MAIN_DROPPED_PCT=${PERF_BUDGET_MAX_MAIN_DROPPED_PCT}`,
     )
   }
+  if (byMode["main-thread"].peakUsedHeapMb.p95 > PERF_BUDGET_MAX_MAIN_PEAK_HEAP_MB) {
+    budgetErrors.push(
+      `main-thread peak heap p95 ${byMode["main-thread"].peakUsedHeapMb.p95.toFixed(2)}MB exceeds PERF_BUDGET_MAX_MAIN_PEAK_HEAP_MB=${PERF_BUDGET_MAX_MAIN_PEAK_HEAP_MB}MB`,
+    )
+  }
+  if (byMode["main-thread"].peakStageNodes.p95 > PERF_BUDGET_MAX_MAIN_PEAK_STAGE_NODES) {
+    budgetErrors.push(
+      `main-thread peak stage nodes p95 ${byMode["main-thread"].peakStageNodes.p95.toFixed(2)} exceeds PERF_BUDGET_MAX_MAIN_PEAK_STAGE_NODES=${PERF_BUDGET_MAX_MAIN_PEAK_STAGE_NODES}`,
+    )
+  }
 }
 
 if (byMode["worker-owned"]) {
@@ -307,6 +381,16 @@ if (byMode["worker-owned"]) {
   if (byMode["worker-owned"].droppedPct.p95 > PERF_BUDGET_MAX_WORKER_DROPPED_PCT) {
     budgetErrors.push(
       `worker-owned dropped frame pct p95 ${byMode["worker-owned"].droppedPct.p95.toFixed(2)} exceeds PERF_BUDGET_MAX_WORKER_DROPPED_PCT=${PERF_BUDGET_MAX_WORKER_DROPPED_PCT}`,
+    )
+  }
+  if (byMode["worker-owned"].peakUsedHeapMb.p95 > PERF_BUDGET_MAX_WORKER_PEAK_HEAP_MB) {
+    budgetErrors.push(
+      `worker-owned peak heap p95 ${byMode["worker-owned"].peakUsedHeapMb.p95.toFixed(2)}MB exceeds PERF_BUDGET_MAX_WORKER_PEAK_HEAP_MB=${PERF_BUDGET_MAX_WORKER_PEAK_HEAP_MB}MB`,
+    )
+  }
+  if (byMode["worker-owned"].peakStageNodes.p95 > PERF_BUDGET_MAX_WORKER_PEAK_STAGE_NODES) {
+    budgetErrors.push(
+      `worker-owned peak stage nodes p95 ${byMode["worker-owned"].peakStageNodes.p95.toFixed(2)} exceeds PERF_BUDGET_MAX_WORKER_PEAK_STAGE_NODES=${PERF_BUDGET_MAX_WORKER_PEAK_STAGE_NODES}`,
     )
   }
 }
@@ -367,14 +451,19 @@ const summary = {
     rowCount: BENCH_BROWSER_ROW_COUNT,
     scrollSteps: BENCH_BROWSER_SCROLL_STEPS,
     stepDelayMs: BENCH_BROWSER_STEP_DELAY_MS,
+    scrollMode: BENCH_BROWSER_SCROLL_MODE,
     headless: BENCH_BROWSER_HEADLESS,
   },
   budgets: {
     totalMs: PERF_BUDGET_TOTAL_MS,
     maxMainFrameP95Ms: PERF_BUDGET_MAX_MAIN_FRAME_P95_MS,
     maxMainDroppedPct: PERF_BUDGET_MAX_MAIN_DROPPED_PCT,
+    maxMainPeakHeapMb: PERF_BUDGET_MAX_MAIN_PEAK_HEAP_MB,
+    maxMainPeakStageNodes: PERF_BUDGET_MAX_MAIN_PEAK_STAGE_NODES,
     maxWorkerFrameP95Ms: PERF_BUDGET_MAX_WORKER_FRAME_P95_MS,
     maxWorkerDroppedPct: PERF_BUDGET_MAX_WORKER_DROPPED_PCT,
+    maxWorkerPeakHeapMb: PERF_BUDGET_MAX_WORKER_PEAK_HEAP_MB,
+    maxWorkerPeakStageNodes: PERF_BUDGET_MAX_WORKER_PEAK_STAGE_NODES,
     maxWorkerFrameDriftPct: PERF_BUDGET_MAX_WORKER_FRAME_DRIFT_PCT,
     maxVariancePct: PERF_BUDGET_MAX_VARIANCE_PCT,
     varianceMinMeanMs: PERF_BUDGET_VARIANCE_MIN_MEAN_MS,
@@ -397,7 +486,7 @@ for (const mode of BENCH_BROWSER_MODES) {
   const aggregate = byMode[mode]
   if (!aggregate) continue
   console.log(
-    `${mode}: frame p95=${aggregate.frameP95Ms.p95.toFixed(3)}ms dropped p95=${aggregate.droppedPct.p95.toFixed(2)}%`,
+    `${mode}: frame p95=${aggregate.frameP95Ms.p95.toFixed(3)}ms dropped p95=${aggregate.droppedPct.p95.toFixed(2)}% peak heap p95=${aggregate.peakUsedHeapMb.p95.toFixed(2)}MB peak stage nodes p95=${aggregate.peakStageNodes.p95.toFixed(0)}`,
   )
 }
 

@@ -173,8 +173,10 @@ export interface DataGridRuntimeRowPartitionSnapshot<TRow = unknown> {
 
 interface DataGridRuntimeResolvedRowPartition<TRow = unknown> {
   bodyRows: (DataGridRowNode<TRow> | undefined)[]
+  bodyDisplayIndexes: number[]
   bodyRowIndexById: Map<string | number, number>
   snapshot: DataGridRuntimeRowPartitionSnapshot<TRow>
+  signature: string
 }
 
 function isWorkerBackedRowModel<TRow>(rowModel: DataGridRowModel<TRow>): boolean {
@@ -207,6 +209,7 @@ function buildSparseRowPartitionSnapshot<TRow>(
 ): DataGridRuntimeResolvedRowPartition<TRow> {
   const total = api.rows.getCount()
   const bodyRows: Array<DataGridRowNode<TRow> | undefined> = []
+  const bodyDisplayIndexes: number[] = []
   const bodyRowIndexById = new Map<string | number, number>()
   const pinnedTopRows: DataGridRowNode<TRow>[] = []
   const pinnedBottomRows: DataGridRowNode<TRow>[] = []
@@ -225,6 +228,7 @@ function buildSparseRowPartitionSnapshot<TRow>(
     }
     const bodyIndex = Math.max(0, Math.trunc(row.displayIndex))
     bodyRows[bodyIndex] = row
+    bodyDisplayIndexes[bodyIndex] = Math.max(0, Math.trunc(row.displayIndex))
     if (typeof row.rowId === "string" || typeof row.rowId === "number") {
       bodyRowIndexById.set(row.rowId, bodyIndex)
     }
@@ -232,12 +236,40 @@ function buildSparseRowPartitionSnapshot<TRow>(
 
   return {
     bodyRows,
+    bodyDisplayIndexes,
     bodyRowIndexById,
     snapshot: {
       bodyRowCount: Math.max(0, total),
       pinnedTopRows,
       pinnedBottomRows,
     },
+    signature: `${snapshot.revision ?? ""}|${total}|${snapshot.viewportRange.start}:${snapshot.viewportRange.end}`,
+  }
+}
+
+function buildRowPartitionSignature<TRow>(snapshot: DataGridRowModelSnapshot<TRow>): string {
+  return JSON.stringify({
+    revision: snapshot.revision ?? null,
+    kind: snapshot.kind,
+    rowCount: snapshot.rowCount,
+    loading: snapshot.loading,
+    pagination: snapshot.pagination,
+    sortModel: snapshot.sortModel,
+    filterModel: snapshot.filterModel,
+    groupBy: snapshot.groupBy,
+    pivotModel: snapshot.pivotModel ?? null,
+    groupExpansion: snapshot.groupExpansion,
+  })
+}
+
+function buildIndexedRowPartitionSnapshot<TRow>(
+  api: Pick<UseDataGridRuntimeResult<TRow>["api"], "rows">,
+  snapshot: DataGridRowModelSnapshot<TRow>,
+): DataGridRuntimeResolvedRowPartition<TRow> {
+  const nextPartition = buildRowPartitionSnapshot(api)
+  return {
+    ...nextPartition,
+    signature: buildRowPartitionSignature(snapshot),
   }
 }
 
@@ -289,17 +321,20 @@ function buildRowPartitionSnapshot<TRow>(
   const pinnedTopRows: DataGridRowNode<TRow>[] = []
   const pinnedBottomRows: DataGridRowNode<TRow>[] = []
   const bodyRows: Array<DataGridRowNode<TRow> | undefined> = []
+  const bodyDisplayIndexes: number[] = []
   const bodyRowIndexById = new Map<string | number, number>()
 
   if (typeof getRow !== "function" || total <= 0) {
     return {
       bodyRows,
+      bodyDisplayIndexes: [],
       bodyRowIndexById,
       snapshot: {
         bodyRowCount: Math.max(0, total),
         pinnedTopRows,
         pinnedBottomRows,
       },
+      signature: `empty|${Math.max(0, total)}`,
     }
   }
 
@@ -316,20 +351,22 @@ function buildRowPartitionSnapshot<TRow>(
       pinnedBottomRows.push(row)
       continue
     }
-    bodyRows.push(row)
+    bodyDisplayIndexes.push(rowIndex)
     if (typeof row.rowId === "string" || typeof row.rowId === "number") {
-      bodyRowIndexById.set(row.rowId, bodyRows.length - 1)
+      bodyRowIndexById.set(row.rowId, bodyDisplayIndexes.length - 1)
     }
   }
 
   return {
     bodyRows,
+    bodyDisplayIndexes,
     bodyRowIndexById,
     snapshot: {
-      bodyRowCount: bodyRows.length,
+      bodyRowCount: bodyDisplayIndexes.length,
       pinnedTopRows,
       pinnedBottomRows,
     },
+    signature: buildRowPartitionSignature(api.rows.getSnapshot()),
   }
 }
 
@@ -363,12 +400,14 @@ export function useDataGridRuntime<TRow = unknown>(
   const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
   const initialRowPartition = workerBackedRowModel
     ? buildSparseRowPartitionSnapshot<TRow>(api, rowModel.getSnapshot())
-    : buildRowPartitionSnapshot<TRow>(api)
+    : buildIndexedRowPartitionSnapshot<TRow>(api, rowModel.getSnapshot())
   const rowPartition = shallowRef<DataGridRuntimeRowPartitionSnapshot<TRow>>(
     initialRowPartition.snapshot,
   )
   let bodyRows = initialRowPartition.bodyRows
+  let bodyDisplayIndexes = initialRowPartition.bodyDisplayIndexes
   let bodyRowIndexById = initialRowPartition.bodyRowIndexById
+  let rowPartitionSignature = workerBackedRowModel ? initialRowPartition.signature : ""
   const resolveCurrentBodyVirtualWindow = (
     snapshot: DataGridRuntimeVirtualWindowSnapshot | null = runtime.getVirtualWindowSnapshot(),
   ): DataGridRuntimeVirtualWindowSnapshot => {
@@ -390,12 +429,26 @@ export function useDataGridRuntime<TRow = unknown>(
     virtualWindow.value = resolveCurrentBodyVirtualWindow(next)
   })
   const unsubscribeRowPartition = rowModel.subscribe((snapshot) => {
-    const nextPartition = workerBackedRowModel
-      ? buildSparseRowPartitionSnapshot<TRow>(api, snapshot)
-      : buildRowPartitionSnapshot<TRow>(api)
-    bodyRows = nextPartition.bodyRows
-    bodyRowIndexById = nextPartition.bodyRowIndexById
-    rowPartition.value = nextPartition.snapshot
+    if (workerBackedRowModel) {
+      const nextPartition = buildSparseRowPartitionSnapshot<TRow>(api, snapshot)
+      bodyRows = nextPartition.bodyRows
+      bodyDisplayIndexes = nextPartition.bodyDisplayIndexes
+      bodyRowIndexById = nextPartition.bodyRowIndexById
+      rowPartitionSignature = nextPartition.signature
+      rowPartition.value = nextPartition.snapshot
+      virtualWindow.value = resolveCurrentBodyVirtualWindow()
+      return
+    }
+
+    const nextSignature = buildRowPartitionSignature(snapshot)
+    if (nextSignature !== rowPartitionSignature) {
+      const nextPartition = buildIndexedRowPartitionSnapshot<TRow>(api, snapshot)
+      bodyRows = nextPartition.bodyRows
+      bodyDisplayIndexes = nextPartition.bodyDisplayIndexes
+      bodyRowIndexById = nextPartition.bodyRowIndexById
+      rowPartitionSignature = nextPartition.signature
+      rowPartition.value = nextPartition.snapshot
+    }
     virtualWindow.value = resolveCurrentBodyVirtualWindow()
   })
 
@@ -486,24 +539,75 @@ export function useDataGridRuntime<TRow = unknown>(
       }
       return syncedRows.filter(row => !isPinnedBodyExcludedRow(row))
     }
-    if (bodyRows.length === 0) {
+    if (rowPartition.value.bodyRowCount === 0 || bodyDisplayIndexes.length === 0) {
       return []
     }
-    const start = normalizedRange.start
-    const end = normalizedRange.end
-    return bodyRows.slice(start, end + 1).filter((row): row is DataGridRowNode<TRow> => Boolean(row))
+    const rowsInRange: DataGridRowNode<TRow>[] = []
+    for (let bodyIndex = normalizedRange.start; bodyIndex <= normalizedRange.end; bodyIndex += 1) {
+      const displayIndex = bodyDisplayIndexes[bodyIndex]
+      if (typeof displayIndex !== "number" || !Number.isFinite(displayIndex)) {
+        continue
+      }
+      const row = api.rows.get(displayIndex)
+      if (!row || isPinnedBodyExcludedRow(row)) {
+        continue
+      }
+      bodyRows[bodyIndex] = row
+      if (typeof row.rowId === "string" || typeof row.rowId === "number") {
+        bodyRowIndexById.set(row.rowId, bodyIndex)
+      }
+      rowsInRange.push(row)
+    }
+    return rowsInRange
   }
 
   function getBodyRowAtIndex(rowIndex: number): DataGridRowNode<TRow> | null {
-    if (bodyRows.length === 0) {
+    if (rowPartition.value.bodyRowCount === 0) {
       return null
     }
-    const normalizedIndex = Math.max(0, Math.min(bodyRows.length - 1, Math.trunc(rowIndex)))
-    return bodyRows[normalizedIndex] ?? null
+    const normalizedIndex = Math.max(0, Math.min(rowPartition.value.bodyRowCount - 1, Math.trunc(rowIndex)))
+    const cachedRow = bodyRows[normalizedIndex]
+    if (cachedRow) {
+      return cachedRow
+    }
+    const displayIndex = bodyDisplayIndexes[normalizedIndex]
+    if (typeof displayIndex !== "number" || !Number.isFinite(displayIndex)) {
+      return null
+    }
+    const row = api.rows.get(displayIndex)
+    if (!row || isPinnedBodyExcludedRow(row)) {
+      return null
+    }
+    bodyRows[normalizedIndex] = row
+    if (typeof row.rowId === "string" || typeof row.rowId === "number") {
+      bodyRowIndexById.set(row.rowId, normalizedIndex)
+    }
+    return row
   }
 
   function resolveBodyRowIndexById(rowId: string | number): number {
-    return bodyRowIndexById.get(rowId) ?? -1
+    const cachedIndex = bodyRowIndexById.get(rowId)
+    if (typeof cachedIndex === "number") {
+      return cachedIndex
+    }
+    for (let bodyIndex = 0; bodyIndex < bodyDisplayIndexes.length; bodyIndex += 1) {
+      const displayIndex = bodyDisplayIndexes[bodyIndex]
+      if (typeof displayIndex !== "number" || !Number.isFinite(displayIndex)) {
+        continue
+      }
+      const row = api.rows.get(displayIndex)
+      if (!row || isPinnedBodyExcludedRow(row)) {
+        continue
+      }
+      if (typeof row.rowId === "string" || typeof row.rowId === "number") {
+        bodyRowIndexById.set(row.rowId, bodyIndex)
+      }
+      if (row.rowId === rowId) {
+        bodyRows[bodyIndex] = row
+        return bodyIndex
+      }
+    }
+    return -1
   }
 
   function setViewportRange(range: DataGridBodyViewportRange) {

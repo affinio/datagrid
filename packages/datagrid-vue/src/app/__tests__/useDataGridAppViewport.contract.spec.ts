@@ -85,7 +85,8 @@ describe("useDataGridAppViewport contract", () => {
 
     const viewport = useDataGridAppViewport({
       runtime: {
-        syncBodyRowsInRange: ({ start, end }) => bodyRows.slice(start, end + 1) as never,
+        syncBodyRowsInRange: ({ start, end }: { start: number; end: number }) =>
+          bodyRows.slice(start, end + 1) as never,
         rowPartition: computed(() => ({
           bodyRowCount: bodyRows.length,
           pinnedTopRows: [],

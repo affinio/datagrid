@@ -1,7 +1,7 @@
 import { defineComponent, h, nextTick, ref } from "vue"
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
-import type { DataGridRowNodeInput } from "@affino/datagrid-core"
+import { createClientRowModel, type DataGridRowNodeInput } from "@affino/datagrid-core"
 import {
   createDataGridWorkerOwnedRowModel,
   createDataGridWorkerOwnedRowModelHost,
@@ -286,7 +286,7 @@ describe("useDataGridRuntime contract", () => {
       name: "RuntimePinnedBottomPartitionHost",
       setup() {
         runtime = useDataGridRuntime<RuntimeRow>({
-          rows,
+          rowModel: createClientRowModel<RuntimeRow>({ rows }),
           columns: COLUMNS,
         })
         return () => h("div")
