@@ -1111,6 +1111,54 @@ body.datagrid-fill-drag-cursor * {
   background: color-mix(in srgb, var(--datagrid-header-cell-hover-bg) 72%, var(--datagrid-accent-strong) 28%);
 }
 
+.grid-header-row--pivot-groups .grid-cell--header {
+  min-height: 28px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.grid-header-row--pivot-groups {
+  position: relative;
+  z-index: 6;
+}
+
+.grid-header-shell--pivot-groups .grid-header-row:not(.grid-header-row--pivot-groups) .grid-cell--header {
+  border-right: var(--datagrid-column-divider-size) solid var(--datagrid-header-column-divider-color);
+}
+
+.grid-header-shell--pivot-groups .grid-header-row--pivot-groups .grid-cell--header-group {
+  border-right: var(--datagrid-column-divider-size) solid var(--datagrid-header-column-divider-color);
+}
+
+.grid-cell--header-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--datagrid-header-row-bg) 78%, var(--datagrid-header-cell-bg) 22%);
+  border-bottom: 1px solid color-mix(in srgb, var(--datagrid-header-divider-color) 70%, transparent);
+}
+
+.grid-cell--header-group[data-datagrid-pivot-group-depth="0"] {
+  background: color-mix(in srgb, var(--datagrid-header-row-bg) 72%, var(--datagrid-header-cell-bg) 28%);
+}
+
+.grid-cell--header-group[data-datagrid-pivot-group-depth="1"] {
+  background: color-mix(in srgb, var(--datagrid-header-row-bg) 82%, var(--datagrid-header-cell-bg) 18%);
+}
+
+.grid-cell--header-group[data-datagrid-pivot-group-depth="2"],
+.grid-cell--header-group[data-datagrid-pivot-group-depth="3"] {
+  background: color-mix(in srgb, var(--datagrid-header-row-bg) 88%, var(--datagrid-header-cell-bg) 12%);
+}
+
+.grid-cell--header-group-last {
+  border-right-color: transparent !important;
+}
+
+.grid-cell--header-group-empty {
+  color: transparent;
+}
+
 .grid-cell--pinned-left,
 .grid-cell--pinned-right {
   background: var(--datagrid-pinned-bg);
@@ -1325,6 +1373,39 @@ body.datagrid-fill-drag-cursor * {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.col-head__pivot-group-label {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  opacity: 0.82;
+}
+
+.grid-cell--header-group[data-datagrid-pivot-group-depth="0"] .col-head__pivot-group-label {
+  font-size: 0.69rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  opacity: 0.76;
+}
+
+.grid-cell--header-group[data-datagrid-pivot-group-depth="1"] .col-head__pivot-group-label {
+  font-size: 0.72rem;
+  opacity: 0.84;
+}
+
+.grid-cell--header-group[data-datagrid-pivot-group-depth="2"] .col-head__pivot-group-label,
+.grid-cell--header-group[data-datagrid-pivot-group-depth="3"] .col-head__pivot-group-label {
+  font-size: 0.74rem;
+  text-transform: none;
+  letter-spacing: 0.015em;
+  opacity: 0.9;
 }
 
 .col-head--row-select,

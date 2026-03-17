@@ -125,7 +125,7 @@
           Pivot layout
           <select v-model="pivotLayout">
             <option value="department-month-revenue">
-              Department × Month (Revenue Σ)
+              Department × Month / Channel (Revenue Σ)
             </option>
             <option value="channel-status-deals">
               Channel × Status (Deals Σ)
@@ -690,7 +690,7 @@ function createTimesheetColumnState(
 const PIVOT_LAYOUTS: Record<PivotLayoutId, DataGridPivotSpec> = {
   "department-month-revenue": {
     rows: ["department"],
-    columns: ["month"],
+    columns: ["month", "channel"],
     values: [{ field: "amount", agg: "sum" }],
   },
   "channel-status-deals": {

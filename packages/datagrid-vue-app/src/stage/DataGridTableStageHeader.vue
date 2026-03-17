@@ -1,9 +1,37 @@
 <template>
-  <div class="grid-header-shell" :style="paneLayoutStyle">
+  <div class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasPivotHeaderGroups }" :style="paneLayoutStyle">
     <slot name="center-chrome" />
 
     <div class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="onLinkedViewportWheel">
       <slot name="left-chrome" />
+      <div
+        v-for="(headerGroups, rowIndex) in leftHeaderGroupRows"
+        :key="`left-pivot-group-row-${rowIndex}`"
+        class="grid-header-row grid-pane-track grid-header-row--pivot-groups"
+        :style="leftTrackStyle"
+      >
+        <div
+          v-if="showIndexColumn"
+          class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header grid-cell--header-group grid-cell--header-group-empty"
+          :style="rowIndexColumnStyle"
+          aria-hidden="true"
+        />
+        <div
+          v-for="(group, groupIndex) in headerGroups"
+          :key="group.key"
+          class="grid-cell grid-cell--header grid-cell--header-group grid-cell--pinned-left"
+          :class="{
+            'grid-cell--header-group-empty': !group.label,
+            'grid-cell--header-group-last': groupIndex === headerGroups.length - 1,
+          }"
+          :style="headerGroupStyle(group)"
+          :data-datagrid-pivot-group-label="group.label ?? undefined"
+          :data-datagrid-pivot-group-span="group.columns.length"
+          :data-datagrid-pivot-group-depth="rowIndex"
+        >
+          <span v-if="group.label" class="col-head__pivot-group-label">{{ group.label }}</span>
+        </div>
+      </div>
       <div class="grid-header-row grid-pane-track" :style="leftTrackStyle">
         <div v-if="showIndexColumn" class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header" :style="rowIndexColumnStyle">
           <div class="col-head col-head--index">
@@ -80,7 +108,7 @@
                 :data-column-key="column.key"
               >
                 <div class="col-head">
-                  <span class="col-head__label">{{ column.column.label ?? column.key }}</span>
+                  <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
                   <button
                     type="button"
                     class="col-menu-trigger"
@@ -159,7 +187,7 @@
               @click="handleHeaderColumnClick(column, $event.shiftKey)"
             >
               <div class="col-head">
-                <span>{{ column.column.label ?? column.key }}</span>
+                <span>{{ resolveHeaderDisplayLabel(column) }}</span>
                 <span
                   v-if="resolveColumnGroupBadgeLabel(column.key)"
                   class="col-head__group-badge"
@@ -200,6 +228,38 @@
       @scroll="handleHeaderScroll"
       @wheel="onLinkedViewportWheel"
     >
+      <div
+        v-for="(headerGroups, rowIndex) in centerHeaderGroupRows"
+        :key="`center-pivot-group-row-${rowIndex}`"
+        class="grid-header-row grid-center-track grid-header-row--pivot-groups"
+        :style="mainTrackStyle"
+      >
+        <div
+          v-if="leftColumnSpacerWidth > 0"
+          class="grid-column-spacer"
+          :style="spacerStyle(leftColumnSpacerWidth)"
+        />
+        <div
+          v-for="(group, groupIndex) in headerGroups"
+          :key="group.key"
+          class="grid-cell grid-cell--header grid-cell--header-group"
+          :class="{
+            'grid-cell--header-group-empty': !group.label,
+            'grid-cell--header-group-last': groupIndex === headerGroups.length - 1 && rightColumnSpacerWidth <= 0,
+          }"
+          :style="headerGroupStyle(group)"
+          :data-datagrid-pivot-group-label="group.label ?? undefined"
+          :data-datagrid-pivot-group-span="group.columns.length"
+          :data-datagrid-pivot-group-depth="rowIndex"
+        >
+          <span v-if="group.label" class="col-head__pivot-group-label">{{ group.label }}</span>
+        </div>
+        <div
+          v-if="rightColumnSpacerWidth > 0"
+          class="grid-column-spacer"
+          :style="spacerStyle(rightColumnSpacerWidth)"
+        />
+      </div>
       <div class="grid-header-row grid-center-track" :style="mainTrackStyle">
         <div
           v-if="leftColumnSpacerWidth > 0"
@@ -250,7 +310,7 @@
               :data-column-key="column.key"
             >
               <div class="col-head">
-                <span class="col-head__label">{{ column.column.label ?? column.key }}</span>
+                <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
                 <span
                   v-if="resolveColumnGroupBadgeLabel(column.key)"
                   class="col-head__group-badge"
@@ -311,7 +371,7 @@
             @click="handleHeaderColumnClick(column, $event.shiftKey)"
           >
             <div class="col-head">
-              <span>{{ column.column.label ?? column.key }}</span>
+              <span>{{ resolveHeaderDisplayLabel(column) }}</span>
               <span
                 v-if="resolveColumnGroupBadgeLabel(column.key)"
                 class="col-head__group-badge"
@@ -352,6 +412,28 @@
 
     <div class="grid-header-pane grid-header-pane--right" :style="rightPaneStyle" @wheel="onLinkedViewportWheel">
       <slot name="right-chrome" />
+      <div
+        v-for="(headerGroups, rowIndex) in rightHeaderGroupRows"
+        :key="`right-pivot-group-row-${rowIndex}`"
+        class="grid-header-row grid-pane-track grid-header-row--pivot-groups"
+        :style="rightTrackStyle"
+      >
+        <div
+          v-for="(group, groupIndex) in headerGroups"
+          :key="group.key"
+          class="grid-cell grid-cell--header grid-cell--header-group grid-cell--pinned-right"
+          :class="{
+            'grid-cell--header-group-empty': !group.label,
+            'grid-cell--header-group-last': groupIndex === headerGroups.length - 1,
+          }"
+          :style="headerGroupStyle(group)"
+          :data-datagrid-pivot-group-label="group.label ?? undefined"
+          :data-datagrid-pivot-group-span="group.columns.length"
+          :data-datagrid-pivot-group-depth="rowIndex"
+        >
+          <span v-if="group.label" class="col-head__pivot-group-label">{{ group.label }}</span>
+        </div>
+      </div>
       <div class="grid-header-row grid-pane-track" :style="rightTrackStyle">
         <template v-if="shouldUseColumnMenus()">
           <DataGridColumnMenu
@@ -397,7 +479,7 @@
               :data-column-key="column.key"
             >
               <div class="col-head">
-                <span class="col-head__label">{{ column.column.label ?? column.key }}</span>
+                <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
                 <span
                   v-if="resolveColumnGroupBadgeLabel(column.key)"
                   class="col-head__group-badge"
@@ -458,7 +540,7 @@
             @click="handleHeaderColumnClick(column, $event.shiftKey)"
           >
             <div class="col-head">
-              <span>{{ column.column.label ?? column.key }}</span>
+              <span>{{ resolveHeaderDisplayLabel(column) }}</span>
               <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
               <button
                 type="button"
@@ -494,15 +576,30 @@ import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
 import type {
   DataGridColumnMenuActionOptions,
   DataGridColumnMenuDisabledReasons,
+  DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
 } from "../overlays/dataGridColumnMenu"
 import type { DataGridTableStageBodyColumn as TableColumn } from "./dataGridTableStageBody.types"
 import {
+  useDataGridTableStageMode,
   useDataGridTableStageColumnsSection,
   useDataGridTableStageLayoutSection,
   useDataGridTableStageRowsSection,
   useDataGridTableStageViewportSection,
 } from "./dataGridTableStageContext"
+
+interface DataGridPivotHeaderMeta {
+  groupLabels?: readonly string[]
+  groupLabel?: string
+  leafLabel?: string
+}
+
+interface DataGridHeaderGroup {
+  key: string
+  label: string | null
+  width: number
+  columns: readonly TableColumn[]
+}
 
 const props = defineProps({
   paneLayoutStyle: {
@@ -539,6 +636,7 @@ const props = defineProps({
   },
 })
 
+const mode = useDataGridTableStageMode<Record<string, unknown>>()
 const layout = useDataGridTableStageLayoutSection<Record<string, unknown>>()
 const viewport = useDataGridTableStageViewportSection<Record<string, unknown>>()
 const columns = useDataGridTableStageColumnsSection<Record<string, unknown>>()
@@ -549,6 +647,19 @@ const visibleColumns = computed(() => columns.value.visibleColumns)
 const renderedColumns = computed(() => columns.value.renderedColumns)
 const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
 const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
+const pivotHeaderGroupDepth = computed(() => {
+  if (mode.value !== "pivot") {
+    return 0
+  }
+  return visibleColumns.value.reduce((maxDepth, column) => {
+    const meta = readPivotHeaderMeta(column)
+    return Math.max(maxDepth, meta?.groupLabels?.length ?? 0)
+  }, 0)
+})
+const hasPivotHeaderGroups = computed(() => pivotHeaderGroupDepth.value > 0)
+const leftHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedLeftColumns.value))
+const centerHeaderGroupRows = computed(() => buildHeaderGroupRows(renderedColumns.value))
+const rightHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedRightColumns.value))
 const mainTrackStyle = computed(() => layout.value.mainTrackStyle)
 const leftColumnSpacerWidth = computed(() => viewport.value.leftColumnSpacerWidth)
 const rightColumnSpacerWidth = computed(() => viewport.value.rightColumnSpacerWidth)
@@ -586,6 +697,82 @@ function resolveTextAlign(value: unknown): CSSProperties["textAlign"] | undefine
 
 function columnStyle(key: string): CSSProperties {
   return layout.value.columnStyle(key)
+}
+
+function resolveColumnWidth(column: TableColumn): number {
+  if (typeof column.width === "number" && Number.isFinite(column.width)) {
+    return Math.max(0, Math.trunc(column.width))
+  }
+  return 140
+}
+
+function readPivotHeaderMeta(column: TableColumn): DataGridPivotHeaderMeta | null {
+  const rawMeta = column.column.meta?.affinoPivotHeader
+  if (!rawMeta || typeof rawMeta !== "object") {
+    return null
+  }
+  const meta = rawMeta as Record<string, unknown>
+  return {
+    groupLabels: Array.isArray(meta.groupLabels)
+      ? meta.groupLabels.filter((value): value is string => typeof value === "string" && value.length > 0)
+      : typeof meta.groupLabel === "string" && meta.groupLabel.length > 0
+        ? [meta.groupLabel]
+        : undefined,
+    groupLabel: typeof meta.groupLabel === "string" ? meta.groupLabel : undefined,
+    leafLabel: typeof meta.leafLabel === "string" ? meta.leafLabel : undefined,
+  }
+}
+
+function resolveHeaderDisplayLabel(column: TableColumn): string {
+  if (mode.value !== "pivot") {
+    return column.column.label ?? column.key
+  }
+  return readPivotHeaderMeta(column)?.leafLabel ?? column.column.label ?? column.key
+}
+
+function buildHeaderGroups(columnsList: readonly TableColumn[], depth: number): readonly DataGridHeaderGroup[] {
+  const groups: DataGridHeaderGroup[] = []
+  for (const column of columnsList) {
+    const meta = readPivotHeaderMeta(column)
+    const label = typeof meta?.groupLabels?.[depth] === "string" && meta.groupLabels[depth].length > 0
+      ? meta.groupLabels[depth]
+      : null
+    const width = resolveColumnWidth(column)
+    const previous = groups[groups.length - 1]
+    if (previous && previous.label === label) {
+      previous.width += width
+      previous.columns = [...previous.columns, column]
+      continue
+    }
+    groups.push({
+      key: `${label ?? "empty"}:${column.key}`,
+      label,
+      width,
+      columns: [column],
+    })
+  }
+  return groups
+}
+
+function buildHeaderGroupRows(columnsList: readonly TableColumn[]): readonly (readonly DataGridHeaderGroup[])[] {
+  if (!hasPivotHeaderGroups.value) {
+    return []
+  }
+  const rows: Array<readonly DataGridHeaderGroup[]> = []
+  for (let depth = 0; depth < pivotHeaderGroupDepth.value; depth += 1) {
+    rows.push(buildHeaderGroups(columnsList, depth))
+  }
+  return rows
+}
+
+function headerGroupStyle(group: DataGridHeaderGroup): CSSProperties {
+  const width = `${Math.max(0, group.width)}px`
+  return {
+    width,
+    minWidth: width,
+    maxWidth: width,
+    textAlign: "center",
+  }
 }
 
 function sortIndicator(columnKey: string): string {
@@ -742,12 +929,12 @@ function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string
   return typeof resolve === "function" ? resolve(columnKey) : []
 }
 
-function resolveColumnMenuItemsSafe(columnKey: string) {
+function resolveColumnMenuItemsSafe(columnKey: string): readonly DataGridColumnMenuItemKey[] {
   const resolve = columns.value.resolveColumnMenuItems
   return typeof resolve === "function" ? resolve(columnKey) : ["sort", "group", "pin", "filter"]
 }
 
-function resolveColumnMenuDisabledItemsSafe(columnKey: string): readonly string[] {
+function resolveColumnMenuDisabledItemsSafe(columnKey: string): readonly DataGridColumnMenuItemKey[] {
   const resolve = columns.value.resolveColumnMenuDisabledItems
   return typeof resolve === "function" ? resolve(columnKey) : []
 }

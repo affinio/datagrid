@@ -214,7 +214,76 @@ function serializePivotColumnsSignature(columns: readonly DataGridPivotColumn[])
     .join("||")
 }
 
-function createPivotColumnDef(column: DataGridPivotColumn): DataGridColumnDef {
+function buildSourceColumnLabelsByKey(
+  baseColumns: readonly DataGridColumnInput[],
+): ReadonlyMap<string, string> {
+  return new Map(
+    baseColumns.map(column => [column.key, column.label ?? column.key] as const),
+  )
+}
+
+function resolvePivotValueLabel(
+  column: DataGridPivotColumn,
+  sourceColumnLabelsByKey: ReadonlyMap<string, string>,
+): string {
+  const fieldLabel = sourceColumnLabelsByKey.get(column.valueField) ?? column.valueField
+  return column.agg === "sum" ? fieldLabel : `${column.agg.toUpperCase()} ${fieldLabel}`
+}
+
+function createPivotHeaderMeta(
+  column: DataGridPivotColumn,
+  sourceColumnLabelsByKey: ReadonlyMap<string, string>,
+  hasSingleMetric: boolean,
+): Record<string, unknown> {
+  const pathLabels = column.columnPath
+    .map(segment => segment.value)
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+  const valueLabel = resolvePivotValueLabel(column, sourceColumnLabelsByKey)
+  let groupLabels: string[] = []
+  let leafLabel = column.label
+  let kind = "value"
+
+  if (column.grandTotal) {
+    kind = "grand-total"
+    leafLabel = hasSingleMetric ? "Total" : `Total ${valueLabel}`
+  } else if (column.subtotal) {
+    kind = "subtotal"
+    const subtotalLabels = pathLabels.length > 0
+      ? [...pathLabels.slice(0, -1), `${pathLabels[pathLabels.length - 1]} subtotal`]
+      : []
+    if (hasSingleMetric) {
+      groupLabels = subtotalLabels.slice(0, -1)
+      leafLabel = subtotalLabels[subtotalLabels.length - 1] ?? "Subtotal"
+    } else {
+      groupLabels = subtotalLabels
+      leafLabel = valueLabel
+    }
+  } else if (pathLabels.length === 0) {
+    leafLabel = valueLabel
+  } else if (hasSingleMetric) {
+    groupLabels = pathLabels.slice(0, -1)
+    leafLabel = pathLabels[pathLabels.length - 1] ?? valueLabel
+  } else {
+    groupLabels = pathLabels
+    leafLabel = valueLabel
+  }
+
+  return {
+    fullLabel: column.label,
+    groupLabel: groupLabels[0],
+    groupLabels,
+    leafLabel,
+    pathLabels,
+    valueLabel,
+    kind,
+  }
+}
+
+function createPivotColumnDef(
+  column: DataGridPivotColumn,
+  sourceColumnLabelsByKey: ReadonlyMap<string, string>,
+  hasSingleMetric: boolean,
+): DataGridColumnDef {
   return {
     key: column.id,
     label: column.label,
@@ -226,6 +295,7 @@ function createPivotColumnDef(column: DataGridPivotColumn): DataGridColumnDef {
         field: segment.field,
         value: segment.value,
       })),
+      affinoPivotHeader: createPivotHeaderMeta(column, sourceColumnLabelsByKey, hasSingleMetric),
     },
   }
 }
@@ -272,6 +342,9 @@ function buildEffectiveColumns(
 ): DataGridColumnInput[] {
   const seen = new Set<string>()
   const effective: DataGridColumnInput[] = []
+  const sourceColumnLabelsByKey = buildSourceColumnLabelsByKey(baseColumns)
+  const metricKeys = new Set(pivotColumns.map(column => `${column.valueField}:${column.agg}`))
+  const hasSingleMetric = metricKeys.size <= 1
 
   for (const baseColumn of baseColumns) {
     const normalized = cloneColumnInput(baseColumn)
@@ -287,7 +360,7 @@ function buildEffectiveColumns(
       continue
     }
     seen.add(pivotColumn.id)
-    const columnDef = createPivotColumnDef(pivotColumn)
+    const columnDef = createPivotColumnDef(pivotColumn, sourceColumnLabelsByKey, hasSingleMetric)
     effective.push(applyPersistedColumnState(columnDef, stateByKey.get(columnDef.key)))
   }
 

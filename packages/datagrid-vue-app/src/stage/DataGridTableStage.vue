@@ -256,6 +256,10 @@ function handleCellKeydown(event: KeyboardEvent, row: TableRow, rowOffset: numbe
 }
 
 type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>["selection"]["selectionRange"]>
+interface DataGridPivotHeaderMeta {
+  groupLabels?: readonly string[]
+}
+
 const RANGE_MOVE_HANDLE_HOVER_EDGE_PX = 6
 const FILL_ACTION_ROOT_SELECTOR = ".grid-fill-action"
 const FILL_ACTION_TRIGGER_SIZE_PX = 14
@@ -287,6 +291,17 @@ function parsePixelValue(value: unknown, fallback: number): number {
 function resolveColumnWidth(column: TableColumn): number {
   const style = layout.value.columnStyle(column.key)
   return parsePixelValue(style.width ?? style.minWidth ?? column.width, column.width ?? 140)
+}
+
+function readPivotHeaderMeta(column: TableColumn): DataGridPivotHeaderMeta | null {
+  const rawMeta = column.column.meta?.affinoPivotHeader
+  if (!isRecord(rawMeta)) {
+    return null
+  }
+  const groupLabels = Array.isArray(rawMeta.groupLabels)
+    ? rawMeta.groupLabels.filter((value): value is string => typeof value === "string" && value.length > 0)
+    : []
+  return groupLabels.length > 0 ? { groupLabels } : null
 }
 
 function resolveTextAlign(value: unknown): CSSProperties["textAlign"] | undefined {
@@ -1457,7 +1472,7 @@ function drawGridChromeCanvas(): void {
     headerRenderModel.left.width,
     headerRenderModel.left.height,
   )
-  if (leftHeaderContext) {
+  if (leftHeaderContext && !hasPivotHeaderGroups.value) {
     drawGridChromeVerticalLines(leftHeaderContext, headerRenderModel.left, headerColumnDividerColor, columnDividerWidth)
   }
 
@@ -1466,7 +1481,7 @@ function drawGridChromeCanvas(): void {
     headerRenderModel.center.width,
     headerRenderModel.center.height,
   )
-  if (centerHeaderContext) {
+  if (centerHeaderContext && !hasPivotHeaderGroups.value) {
     drawGridChromeVerticalLines(centerHeaderContext, headerRenderModel.center, headerColumnDividerColor, columnDividerWidth)
   }
 
@@ -1475,7 +1490,7 @@ function drawGridChromeCanvas(): void {
     headerRenderModel.right.width,
     headerRenderModel.right.height,
   )
-  if (rightHeaderContext) {
+  if (rightHeaderContext && !hasPivotHeaderGroups.value) {
     drawGridChromeVerticalLines(rightHeaderContext, headerRenderModel.right, headerColumnDividerColor, columnDividerWidth)
   }
 
@@ -1664,6 +1679,13 @@ const pinnedBottomChromeRenderModel = computed(() => (
     centerScrollLeft: bodyViewportScrollLeft.value,
   })
 ))
+
+const hasPivotHeaderGroups = computed(() => {
+  if (mode.value !== "pivot") {
+    return false
+  }
+  return visibleColumns.value.some(column => (readPivotHeaderMeta(column)?.groupLabels?.length ?? 0) > 0)
+})
 
 function clamp(value: number, min: number, max: number): number {
   if (max < min) {
@@ -2117,6 +2139,14 @@ const rightChromeColumnsSignature = computed(() => (
   pinnedRightColumns.value.map(resolveColumnWidth).join("|")
 ))
 
+const headerPivotGroupsSignature = computed(() => (
+  hasPivotHeaderGroups.value
+    ? visibleColumns.value
+      .map(column => `${column.key}:${readPivotHeaderMeta(column)?.groupLabels?.join(">") ?? ""}`)
+      .join("|")
+    : "none"
+))
+
 watch(
   () => [
     leftPaneWidth.value,
@@ -2128,6 +2158,7 @@ watch(
     leftChromeColumnsSignature.value,
     centerChromeColumnsSignature.value,
     rightChromeColumnsSignature.value,
+    headerPivotGroupsSignature.value,
   ].join("|"),
   () => {
     syncBodyViewportMetrics()

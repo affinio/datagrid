@@ -31,6 +31,20 @@ const BASE_ROWS: readonly DemoRow[] = [
   { rowId: "r3", owner: "Payments", region: "eu-west", amount: 30 },
 ]
 
+const PIVOT_HEADER_ROWS = [
+  { rowId: "p1", owner: "NOC", month: "2026-01", channel: "Web", amount: 10 },
+  { rowId: "p2", owner: "NOC", month: "2026-01", channel: "Email", amount: 15 },
+  { rowId: "p3", owner: "NOC", month: "2026-02", channel: "Web", amount: 20 },
+  { rowId: "p4", owner: "Payments", month: "2026-02", channel: "Email", amount: 25 },
+] as const
+
+const PIVOT_HEADER_COLUMNS = [
+  { key: "owner", label: "Owner", width: 180 },
+  { key: "month", label: "Month", width: 140 },
+  { key: "channel", label: "Channel", width: 140 },
+  { key: "amount", label: "Amount", width: 140 },
+] as const
+
 const MANY_FILTER_ROWS: readonly DemoRow[] = Array.from({ length: 500 }, (_unused, index) => ({
   rowId: `m${index + 1}`,
   owner: index === 0 ? "NOC" : "Payments",
@@ -1738,6 +1752,85 @@ describe("DataGrid app facade contract", () => {
         values: [{ field: "amount", agg: "sum" }],
       },
     })
+
+    wrapper.unmount()
+  })
+
+  it("renders grouped two-row headers for pivot columns with repeated prefixes", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        pivotModel: {
+          rows: ["owner"],
+          columns: ["region"],
+          values: [
+            { field: "amount", agg: "sum" },
+            { field: "amount", agg: "count" },
+          ],
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const pivotGroupLabels = wrapper
+      .findAll("[data-datagrid-pivot-group-label]")
+      .map(node => node.attributes("data-datagrid-pivot-group-label"))
+      .filter((value): value is string => typeof value === "string" && value.length > 0)
+
+    expect(pivotGroupLabels).toContain("eu-west")
+    expect(pivotGroupLabels).toContain("us-east")
+
+    const pivotLeafLabels = wrapper
+      .findAll('.grid-cell--header[data-column-key^="pivot|"] .col-head__label')
+      .map(node => node.text())
+
+    expect(pivotLeafLabels).toContain("Amount")
+    expect(pivotLeafLabels).toContain("COUNT Amount")
+
+    wrapper.unmount()
+  })
+
+  it("renders nested grouped headers for multi-level pivot columns", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: PIVOT_HEADER_ROWS,
+        columns: PIVOT_HEADER_COLUMNS,
+        pivotModel: {
+          rows: ["owner"],
+          columns: ["month", "channel"],
+          values: [
+            { field: "amount", agg: "sum" },
+            { field: "amount", agg: "count" },
+          ],
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const topGroupLabels = wrapper
+      .findAll('[data-datagrid-pivot-group-depth="0"]')
+      .map(node => node.attributes("data-datagrid-pivot-group-label"))
+      .filter((value): value is string => typeof value === "string" && value.length > 0)
+
+    const nestedGroupLabels = wrapper
+      .findAll('[data-datagrid-pivot-group-depth="1"]')
+      .map(node => node.attributes("data-datagrid-pivot-group-label"))
+      .filter((value): value is string => typeof value === "string" && value.length > 0)
+
+    expect(topGroupLabels).toContain("2026-01")
+    expect(topGroupLabels).toContain("2026-02")
+    expect(nestedGroupLabels).toContain("Web")
+    expect(nestedGroupLabels).toContain("Email")
+
+    const pivotLeafLabels = wrapper
+      .findAll('.grid-cell--header[data-column-key^="pivot|"] .col-head__label')
+      .map(node => node.text())
+
+    expect(pivotLeafLabels).toContain("Amount")
+    expect(pivotLeafLabels).toContain("COUNT Amount")
 
     wrapper.unmount()
   })
