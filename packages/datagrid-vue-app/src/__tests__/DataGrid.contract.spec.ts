@@ -314,6 +314,25 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("hides row numbers and checkbox selection when the public toggles are disabled", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        showRowIndex: false,
+        rowSelection: false,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".grid-cell--index-number").exists()).toBe(false)
+    expect(wrapper.find(".grid-cell--row-selection").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
   it("keeps a cell read-only when the column is explicitly non-editable even if the predicate returns true", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

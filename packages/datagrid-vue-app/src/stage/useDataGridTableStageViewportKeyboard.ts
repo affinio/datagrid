@@ -5,7 +5,7 @@ import type {
 } from "@affino/datagrid-vue"
 
 export interface UseDataGridTableStageViewportKeyboardOptions<TRow extends Record<string, unknown>> {
-  runtime: Pick<import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>, "api">
+  runtime: Pick<import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>, "getBodyRowAtIndex">
   selectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   totalRows: Ref<number>
   orderedVisibleColumns: ComputedRef<readonly DataGridColumnSnapshot[]>
@@ -83,7 +83,7 @@ export function useDataGridTableStageViewportKeyboard<TRow extends Record<string
       }
       return
     }
-    const row = options.runtime.api.rows.get(activeCell.rowIndex)
+    const row = options.runtime.getBodyRowAtIndex(activeCell.rowIndex)
     if (!row) {
       return
     }

@@ -7,31 +7,31 @@
   >
     <slot name="chrome" />
     <div :ref="pane.contentRef ?? undefined" class="grid-pane-content" :style="pane.contentStyle">
-      <div v-if="viewport.topSpacerHeight > 0" class="grid-spacer" :style="{ height: `${viewport.topSpacerHeight}px` }" />
+      <div v-if="(pane.topSpacerHeight ?? viewport.topSpacerHeight) > 0" class="grid-spacer" :style="{ height: `${pane.topSpacerHeight ?? viewport.topSpacerHeight}px` }" />
       <div
-        v-for="(row, rowOffset) in rows.displayRows"
+        v-for="(row, rowOffset) in pane.displayRows"
         :key="`${String(row.rowId)}-${pane.side}-row`"
         class="grid-row"
-        :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, rowOffset) }]"
+        :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, renderApi.viewportRowOffset(row, rowOffset)) }]"
         :style="renderApi.paneRowStyle(row, rowOffset, pane.width)"
         @click="renderApi.handleRowContainerClick(row)"
-        @mouseenter="renderApi.setHoveredRow(rowOffset)"
+        @mouseenter="renderApi.setHoveredRow(row, rowOffset)"
       >
         <div
           v-if="pane.showIndexColumn"
           class="grid-cell grid-cell--index grid-cell--index-number"
-          :class="{ 'grid-cell--index-selected': renderApi.isFullRowSelectionSafe(rowOffset) }"
+          :class="{ 'grid-cell--index-selected': renderApi.isFullRowSelectionSafe(renderApi.viewportRowOffset(row, rowOffset)) }"
           :style="renderApi.rowIndexColumnStyle"
-          @click.stop="renderApi.handleRowIndexClickSafe(row, rowOffset, $event)"
+          @click.stop="renderApi.handleRowIndexClickSafe(row, renderApi.viewportRowOffset(row, rowOffset), $event)"
         >
-          {{ rows.rowIndexLabel(row, rowOffset) }}
+          {{ rows.rowIndexLabel(row, renderApi.viewportRowOffset(row, rowOffset)) }}
           <button
             v-if="mode === 'base'"
             type="button"
             class="row-resize-handle"
             aria-label="Resize rows"
-            @mousedown.stop.prevent="rows.startRowResize($event, row, rowOffset)"
-            @dblclick.stop.prevent="rows.autosizeRow($event, row, rowOffset)"
+            @mousedown.stop.prevent="rows.startRowResize($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+            @dblclick.stop.prevent="rows.autosizeRow($event, row, renderApi.viewportRowOffset(row, rowOffset))"
           />
         </div>
         <div
@@ -41,29 +41,29 @@
           :class="[
             pane.side === 'left' ? 'grid-cell--pinned-left' : 'grid-cell--pinned-right',
             renderApi.builtInCellClasses(row, column),
-            renderApi.cellStateClasses(row, rowOffset, renderApi.columnIndexByKey(column.key)),
-            renderApi.resolveCellCustomClass(row, rowOffset, column, renderApi.columnIndexByKey(column.key)),
+            renderApi.cellStateClasses(row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
+            renderApi.resolveCellCustomClass(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
           ]"
           :style="[
             renderApi.columnStyle(column.key),
             renderApi.bodyCellPresentationStyle(column),
-            renderApi.bodyCellSelectionStyle(column, rowOffset, renderApi.columnIndexByKey(column.key)),
-            renderApi.resolveCellCustomStyle(row, rowOffset, column, renderApi.columnIndexByKey(column.key)),
+            renderApi.bodyCellSelectionStyle(column, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
+            renderApi.resolveCellCustomStyle(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
           ]"
-          :data-row-index="viewport.viewportRowStart + rowOffset"
+          :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
           :data-column-index="renderApi.columnIndexByKey(column.key)"
-          :tabindex="renderApi.cellTabIndex(rowOffset, renderApi.columnIndexByKey(column.key))"
+          :tabindex="renderApi.cellTabIndex(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
           :role="renderApi.checkboxCellRole(row, column)"
           :aria-checked="renderApi.checkboxCellAriaChecked(row, column)"
-          @mousedown.prevent.stop="renderApi.handleCellMouseDown($event, row, rowOffset, renderApi.columnIndexByKey(column.key))"
-          @click.stop="renderApi.handleBodyCellClick(row, rowOffset, column, renderApi.columnIndexByKey(column.key))"
-          @mousemove="renderApi.handleCellMouseMove($event, rowOffset, renderApi.columnIndexByKey(column.key))"
+          @mousedown.prevent.stop="renderApi.handleCellMouseDown($event, row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
+          @click.stop="renderApi.handleBodyCellClick(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
+          @mousemove="renderApi.handleCellMouseMove($event, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
           @mouseleave="renderApi.clearRangeMoveHandleHover()"
-          @keydown.stop="renderApi.handleCellKeydown($event, row, rowOffset, renderApi.columnIndexByKey(column.key))"
-          @dblclick.stop="renderApi.startInlineEditIfAllowed(row, column)"
+          @keydown.stop="renderApi.handleCellKeydown($event, row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
+          @dblclick.stop="renderApi.startInlineEditIfAllowed(row, column, renderApi.viewportRowOffset(row, rowOffset))"
         >
           <button
-            v-if="mode === 'base' && renderApi.isCellEditableSafe(row, rowOffset, column, renderApi.columnIndexByKey(column.key)) && renderApi.isFillHandleCellSafe(rowOffset, renderApi.columnIndexByKey(column.key)) && !renderApi.isEditingCellSafe(row, column.key)"
+            v-if="mode === 'base' && renderApi.isCellEditableSafe(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)) && renderApi.isFillHandleCellSafe(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)) && !renderApi.isEditingCellSafe(row, column.key)"
             type="button"
             class="cell-fill-handle"
             aria-label="Fill handle"
@@ -72,7 +72,7 @@
             @dblclick.stop.prevent="renderApi.handleFillHandleDoubleClick($event)"
           />
           <DataGridCellComboboxEditor
-            v-if="renderApi.isSelectEditorCell(row, rowOffset, column, renderApi.columnIndexByKey(column.key))"
+            v-if="renderApi.isSelectEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
             :value="renderApi.resolveSelectEditorValue(row, column)"
             :options="renderApi.resolveSelectEditorOptions(row, column)"
             :load-options="renderApi.resolveSelectEditorOptionsLoader(row, column)"
@@ -83,7 +83,7 @@
             @options-resolved="renderApi.handleSelectEditorOptionsResolved(row, column, $event)"
           />
           <input
-            v-else-if="renderApi.isTextEditorCell(row, rowOffset, column, renderApi.columnIndexByKey(column.key))"
+            v-else-if="renderApi.isTextEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
             class="cell-editor-control cell-editor-input"
             :value="editing.editingCellValue"
             @mousedown.stop
@@ -100,7 +100,7 @@
           <template v-else>{{ renderApi.readResolvedDisplayCell(row, column) }}</template>
         </div>
       </div>
-      <div v-if="viewport.bottomSpacerHeight > 0" class="grid-spacer" :style="{ height: `${viewport.bottomSpacerHeight}px` }" />
+      <div v-if="(pane.bottomSpacerHeight ?? viewport.bottomSpacerHeight) > 0" class="grid-spacer" :style="{ height: `${pane.bottomSpacerHeight ?? viewport.bottomSpacerHeight}px` }" />
       <DataGridTableStageOverlayLayer
         :selection-segments="pane.selectionOverlaySegments"
         :fill-preview-segments="pane.fillPreviewOverlaySegments"

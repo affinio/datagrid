@@ -31,14 +31,15 @@ function createRowSelectionColumn(): DataGridColumnSnapshot {
   } as unknown as DataGridColumnSnapshot
 }
 
-function createRows(count = 1): readonly DataGridTableRow<DemoRow>[] {
-  return Array.from({ length: count }, (_unused, index) => ({
-    rowId: `r${index + 1}`,
+function createRows(count = 1, startIndex = 0): readonly DataGridTableRow<DemoRow>[] {
+  return Array.from({ length: count }, (_unused, offset) => ({
+    rowId: `r${startIndex + offset + 1}`,
+    displayIndex: startIndex + offset,
     data: {
-      left: `L${index + 1}`,
-      centerA: `A${index + 1}`,
-      centerB: `B${index + 1}`,
-      right: `R${index + 1}`,
+      left: `L${startIndex + offset + 1}`,
+      centerA: `A${startIndex + offset + 1}`,
+      centerB: `B${startIndex + offset + 1}`,
+      right: `R${startIndex + offset + 1}`,
     },
   })) as unknown as readonly DataGridTableRow<DemoRow>[]
 }
@@ -55,6 +56,7 @@ function createStageProps(
     rowHover?: boolean
     stripedRows?: boolean
     rowCount?: number
+    pinnedBottomRowCount?: number
     isCellOnSelectionEdge?: (rowOffset: number, columnIndex: number, edge: "top" | "right" | "bottom" | "left") => boolean
     isCellInFillPreview?: (rowOffset: number, columnIndex: number) => boolean
     isFillHandleCell?: (rowOffset: number, columnIndex: number) => boolean
@@ -82,12 +84,14 @@ function createStageProps(
       options?: { draftValue?: string; openOnMount?: boolean },
     ) => void
     cancelInlineEdit?: () => void
+    showRowIndex?: boolean
     visibleColumns?: readonly DataGridColumnSnapshot[]
   },
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = options?.visibleColumns ?? createColumns()
   const renderedColumns = visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
   const rows = createRows(options?.rowCount ?? 1)
+  const pinnedBottomRows = createRows(options?.pinnedBottomRowCount ?? 0, rows.length)
 
   return {
     mode: "base",
@@ -128,6 +132,8 @@ function createStageProps(
     },
     rows: {
       displayRows: rows,
+      pinnedBottomRows,
+      showRowIndex: options?.showRowIndex ?? true,
       rowHover: options?.rowHover ?? false,
       stripedRows: options?.stripedRows ?? false,
       rowClass: () => "",
@@ -274,6 +280,24 @@ afterEach(() => {
 })
 
 describe("DataGridTableStage contract", () => {
+  it("renders pinned bottom rows in a dedicated bottom shell", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 2,
+        pinnedBottomRowCount: 2,
+      }),
+    })
+
+    await nextTick()
+
+    expect(wrapper.findAll(".grid-body-shell:not(.grid-body-shell--pinned-bottom) .grid-body-viewport .grid-row")).toHaveLength(2)
+    expect(wrapper.findAll(".grid-body-shell--pinned-bottom .grid-body-viewport--pinned-bottom .grid-row")).toHaveLength(2)
+    expect(wrapper.find(".grid-body-shell--pinned-bottom .grid-body-viewport--pinned-bottom").exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it("keeps overlay borders visually continuous across left, center and right panes", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
@@ -884,6 +908,22 @@ describe("DataGridTableStage contract", () => {
     expect(wrapper.findAll(".grid-body-pane--left .grid-row")[1]?.classes()).toContain("grid-row--striped")
     expect(wrapper.findAll(".grid-body-viewport .grid-row")[1]?.classes()).toContain("grid-row--striped")
     expect(wrapper.findAll(".grid-body-pane--right .grid-row")[1]?.classes()).toContain("grid-row--striped")
+
+    wrapper.unmount()
+  })
+
+  it("collapses the index lane when row numbers are disabled", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        showRowIndex: false,
+        selectionRange: null,
+        selectionAnchorCell: null,
+      }),
+    })
+
+    expect(wrapper.find(".grid-cell--index-number").exists()).toBe(false)
+    expect((wrapper.find(".grid-body-pane--left").element as HTMLElement).style.width).toBe("80px")
 
     wrapper.unmount()
   })

@@ -21,6 +21,7 @@ import {
   type DataGridFilterSnapshot,
   type DataGridFormulaFieldDefinition,
   type DataGridFormulaFunctionRegistry,
+  type DataGridRowNode,
   type DataGridRowSelectionSnapshot,
   type DataGridRowModel,
   type DataGridRowNodeInput,
@@ -90,6 +91,31 @@ type DataGridRuntimeOverrides = Omit<
 
 type DataGridSelectionService = NonNullable<DataGridRuntimeOverrides["selection"]>
 
+type DataGridBodyAwareRuntime = Pick<
+  UseDataGridRuntimeResult<Record<string, unknown>>,
+  "api" | "syncBodyRowsInRange" | "rowPartition" | "virtualWindow" | "columnSnapshot"
+> & {
+  getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<Record<string, unknown>> | null
+  resolveBodyRowIndexById: (rowId: string | number) => number
+}
+
+function createDisabledRowSelectionService(): DataGridSelectionService {
+  return {
+    name: "selection",
+    getRowSelectionSnapshot: () => null,
+    setRowSelectionSnapshot: () => undefined,
+    clearRowSelection: () => undefined,
+    getFocusedRow: () => null,
+    setFocusedRow: () => undefined,
+    getSelectedRows: () => [],
+    isRowSelected: () => false,
+    setRowSelected: () => undefined,
+    selectRows: () => undefined,
+    deselectRows: () => undefined,
+    clearSelectedRows: () => undefined,
+  }
+}
+
 function composeSelectionLifecycle(
   hook: "init" | "start" | "stop" | "dispose",
   services: readonly (DataGridSelectionService | undefined)[],
@@ -141,14 +167,17 @@ function composeSelectionService(options: {
 }
 
 interface LowLevelGridExpose {
-  api: DataGridApi<unknown>
+  api: DataGridApi<Record<string, unknown>>
   core: unknown
-  runtime: unknown
-  rowModel: DataGridRowModel<unknown>
+  runtime: DataGridBodyAwareRuntime
+  rowModel: DataGridRowModel<Record<string, unknown>>
   columnModel: DataGridColumnModel
   columnSnapshot: unknown
-  setRows: (rows: readonly unknown[]) => void
-  syncRowsInRange: (range: { start: number; end: number }) => readonly unknown[]
+  rowPartition: DataGridBodyAwareRuntime["rowPartition"]
+  setRows: (rows: readonly Record<string, unknown>[]) => void
+  syncBodyRowsInRange: (range: { start: number; end: number }) => readonly unknown[]
+  getBodyRowAtIndex: DataGridBodyAwareRuntime["getBodyRowAtIndex"]
+  resolveBodyRowIndexById: DataGridBodyAwareRuntime["resolveBodyRowIndexById"]
   virtualWindow: unknown
   start: () => Promise<void>
   stop: () => void
@@ -162,8 +191,8 @@ interface DataGridRuntimeHostSlotProps {
 }
 
 type DataGridDefaultRendererRuntime = Pick<
-  UseDataGridRuntimeResult<Record<string, unknown>>,
-  "api" | "syncRowsInRange" | "virtualWindow" | "columnSnapshot"
+  DataGridBodyAwareRuntime,
+  "api" | "syncBodyRowsInRange" | "getBodyRowAtIndex" | "resolveBodyRowIndexById" | "rowPartition" | "virtualWindow" | "columnSnapshot"
 >
 
 export default defineComponent({
@@ -233,6 +262,14 @@ export default defineComponent({
     advancedFilter: {
       type: [Boolean, Object] as PropType<DataGridAdvancedFilterProp | undefined>,
       default: undefined,
+    },
+    showRowIndex: {
+      type: Boolean,
+      default: true,
+    },
+    rowSelection: {
+      type: Boolean,
+      default: true,
     },
     pageSize: {
       type: Number as PropType<number | undefined>,
@@ -464,12 +501,15 @@ export default defineComponent({
     } = useDataGridAppRowSelection<unknown>({
       resolveRuntime: () => dataGridRef.value,
     })
+    const resolvedRowSelectionService = computed<DataGridSelectionService>(() => {
+      return props.rowSelection ? rowSelectionService : createDisabledRowSelectionService()
+    })
     const resolvedServices = computed<DataGridRuntimeOverrides>(() => ({
       ...(props.services ?? {}),
       selection: composeSelectionService({
         userSelectionService: props.services?.selection,
         cellSelectionService: selectionService,
-        rowSelectionService,
+        rowSelectionService: resolvedRowSelectionService.value,
       }),
     }))
     const {
@@ -520,6 +560,18 @@ export default defineComponent({
     )
 
     watch(
+      () => props.rowSelection,
+      enabled => {
+        if (enabled) {
+          syncRowSelectionSnapshotFromRuntime()
+          return
+        }
+        rowSelectionService.clearRowSelection?.()
+      },
+      { immediate: true },
+    )
+
+    watch(
       () => props.viewMode,
       nextViewMode => {
         currentViewMode.value = nextViewMode === "gantt" ? "gantt" : "table"
@@ -558,11 +610,11 @@ export default defineComponent({
       importPivotLayout: controlledState.importPivotLayout,
       expandAllGroups: controlledState.expandAllGroups,
       collapseAllGroups: controlledState.collapseAllGroups,
-      insertRowsAt: (index: number, rows: readonly DataGridRowNodeInput<unknown>[]) =>
+      insertRowsAt: (index: number, rows: readonly DataGridRowNodeInput<Record<string, unknown>>[]) =>
         dataGridRef.value?.api.rows.insertDataAt(index, rows) ?? false,
-      insertRowBefore: (rowId: string | number, rows: readonly DataGridRowNodeInput<unknown>[]) =>
+      insertRowBefore: (rowId: string | number, rows: readonly DataGridRowNodeInput<Record<string, unknown>>[]) =>
         dataGridRef.value?.api.rows.insertDataBefore(rowId, rows) ?? false,
-      insertRowAfter: (rowId: string | number, rows: readonly DataGridRowNodeInput<unknown>[]) =>
+      insertRowAfter: (rowId: string | number, rows: readonly DataGridRowNodeInput<Record<string, unknown>>[]) =>
         dataGridRef.value?.api.rows.insertDataAfter(rowId, rows) ?? false,
       insertColumnsAt: (index: number, columns: readonly DataGridAppColumnInput[]) =>
         dataGridRef.value?.api.columns.insertAt(index, columns) ?? false,
@@ -598,6 +650,8 @@ export default defineComponent({
         rowHover: props.rowHover,
         stripedRows: props.stripedRows,
         isCellEditable: props.isCellEditable,
+        showRowIndex: props.showRowIndex,
+        rowSelection: props.rowSelection,
         viewMode: currentViewMode.value,
         gantt: props.gantt,
       }

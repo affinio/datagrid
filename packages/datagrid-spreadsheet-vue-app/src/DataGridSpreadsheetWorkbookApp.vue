@@ -1316,7 +1316,10 @@ interface SpreadsheetRuntimeHandle {
   rowModel: DataGridRowModel<SpreadsheetGridRow>
   columnSnapshot: Ref<DataGridColumnModelSnapshot>
   virtualWindow: UseDataGridRuntimeResult<SpreadsheetGridRow>["virtualWindow"]
-  syncRowsInRange: UseDataGridRuntimeResult<SpreadsheetGridRow>["syncRowsInRange"]
+  syncBodyRowsInRange: UseDataGridRuntimeResult<SpreadsheetGridRow>["syncBodyRowsInRange"]
+  rowPartition: UseDataGridRuntimeResult<SpreadsheetGridRow>["rowPartition"]
+  getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<SpreadsheetGridRow> | null
+  resolveBodyRowIndexById: (rowId: string | number) => number
   setRows: UseDataGridRuntimeResult<SpreadsheetGridRow>["setRows"]
 }
 
@@ -1980,7 +1983,7 @@ const {
   sourceRows: gridRows as never,
   runtime: runtimeBundle,
   rowVersion: runtimeRowVersion,
-  totalRows,
+  totalRuntimeRows: totalRows,
   visibleColumns,
   rowRenderMode,
   rowHeightMode,
@@ -2048,7 +2051,7 @@ function resolveSelectionContext(): GridSelectionContext<DataGridRowId> {
       rowCount: totalRows.value,
       colCount: visibleColumns.value.length,
     },
-    getRowIdByIndex: rowIndex => runtimeBundle.api.rows.get(rowIndex)?.rowId ?? null,
+    getRowIdByIndex: rowIndex => runtimeBundle.getBodyRowAtIndex(rowIndex)?.rowId ?? null,
   }
 }
 
@@ -2112,7 +2115,7 @@ function resolveSpreadsheetColumnKeyFromStageIndex(columnIndex: number): string 
 function resolveSpreadsheetRuntimeRow(
   visualRowIndex: number,
 ): { rowId: DataGridRowId; sourceRowIndex: number } | null {
-  const rowNode = runtimeBundle.api.rows.get(visualRowIndex)
+  const rowNode = runtimeBundle.getBodyRowAtIndex(visualRowIndex)
   if (!rowNode || rowNode.kind === "group") {
     return null
   }
@@ -2238,12 +2241,12 @@ function applySpreadsheetGridEdits(
     const anchor = {
       rowIndex: range.startRow,
       colIndex: range.startColumn,
-      rowId: runtimeBundle.api.rows.get(range.startRow)?.rowId ?? null,
+      rowId: runtimeBundle.getBodyRowAtIndex(range.startRow)?.rowId ?? null,
     }
     const focus = {
       rowIndex: range.endRow,
       colIndex: range.endColumn,
-      rowId: runtimeBundle.api.rows.get(range.endRow)?.rowId ?? null,
+      rowId: runtimeBundle.getBodyRowAtIndex(range.endRow)?.rowId ?? null,
     }
     const nextRange = createGridSelectionRange(anchor, focus, resolveSelectionContext())
     const nextSnapshot = buildSelectionSnapshot(nextRange, {
@@ -2337,12 +2340,12 @@ function applySpreadsheetRangeMove(baseRange: DataGridCopyRange, targetRange: Da
   const anchor = {
     rowIndex: targetRange.startRow,
     colIndex: targetRange.startColumn,
-    rowId: runtimeBundle.api.rows.get(targetRange.startRow)?.rowId ?? null,
+    rowId: runtimeBundle.getBodyRowAtIndex(targetRange.startRow)?.rowId ?? null,
   }
   const focus = {
     rowIndex: targetRange.endRow,
     colIndex: targetRange.endColumn,
-    rowId: runtimeBundle.api.rows.get(targetRange.endRow)?.rowId ?? null,
+    rowId: runtimeBundle.getBodyRowAtIndex(targetRange.endRow)?.rowId ?? null,
   }
   const nextRange = createGridSelectionRange(anchor, focus, resolveSelectionContext())
   const nextSnapshot = buildSelectionSnapshot(nextRange, {

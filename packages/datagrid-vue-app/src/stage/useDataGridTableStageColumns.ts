@@ -10,6 +10,7 @@ const ROW_SELECTION_COLUMN_KEY = "__datagrid_row_selection__"
 export interface UseDataGridTableStageColumnsOptions<TRow extends Record<string, unknown>> {
   runtime: Pick<import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>, "api">
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
+  showRowSelection?: Ref<boolean>
   isCellEditable?: DataGridCellEditablePredicate<TRow>
 }
 
@@ -28,7 +29,9 @@ export interface UseDataGridTableStageColumnsResult<TRow extends Record<string, 
 export function useDataGridTableStageColumns<TRow extends Record<string, unknown>>(
   options: UseDataGridTableStageColumnsOptions<TRow>,
 ): UseDataGridTableStageColumnsResult<TRow> {
-  const hasRowSelectionSupport = computed(() => options.runtime.api.rowSelection.hasSupport())
+  const hasRowSelectionSupport = computed(() => {
+    return (options.showRowSelection?.value ?? true) && options.runtime.api.rowSelection.hasSupport()
+  })
   const rowSelectionColumn = computed<DataGridColumnSnapshot | null>(() => {
     if (!hasRowSelectionSupport.value) {
       return null

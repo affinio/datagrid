@@ -1,6 +1,7 @@
 import { defineComponent, h, nextTick, ref } from "vue"
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
+import type { DataGridRowNodeInput } from "@affino/datagrid-core"
 import {
   createDataGridWorkerOwnedRowModel,
   createDataGridWorkerOwnedRowModelHost,
@@ -256,6 +257,64 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime!.api.lifecycle.state).toBe("disposed")
 
     wrapper.unmount()
+  })
+
+  it("partitions interleaved pinned-bottom rows before viewport sync", async () => {
+    const rows: DataGridRowNodeInput<RuntimeRow>[] = [
+      { row: { rowId: "r1", name: "Alpha" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      {
+        row: { rowId: "r2", name: "Pinned total A" },
+        rowId: "r2",
+        originalIndex: 1,
+        displayIndex: 1,
+        state: { pinned: "bottom" },
+      },
+      { row: { rowId: "r3", name: "Bravo" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      { row: { rowId: "r4", name: "Charlie" }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      {
+        row: { rowId: "r5", name: "Pinned total B" },
+        rowId: "r5",
+        originalIndex: 4,
+        displayIndex: 4,
+        state: { pinned: "bottom" },
+      },
+      { row: { rowId: "r6", name: "Delta" }, rowId: "r6", originalIndex: 5, displayIndex: 5 },
+    ]
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+
+    const Host = defineComponent({
+      name: "RuntimePinnedBottomPartitionHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          rows,
+          columns: COLUMNS,
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+
+    expect(runtime).not.toBeNull()
+    expect(runtime!.rowPartition.value.bodyRowCount).toBe(4)
+    expect(runtime!.virtualWindow.value?.rowTotal).toBe(4)
+    expect(runtime!.rowPartition.value.pinnedBottomRows.map(row => String(row.rowId))).toEqual(["r2", "r5"])
+    expect(runtime!.syncBodyRowsInRange({ start: 1, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r4"])
+    expect(runtime!.getViewportRange()).toEqual({ start: 1, end: 2 })
+    expect(runtime!.virtualWindow.value?.rowStart).toBe(1)
+    expect(runtime!.virtualWindow.value?.rowEnd).toBe(2)
+    expect(runtime!.syncBodyRowsInRange({ start: 0, end: 3 }).map(row => String(row.rowId))).toEqual([
+      "r1",
+      "r3",
+      "r4",
+      "r6",
+    ])
+    expect(runtime!.virtualWindow.value?.rowStart).toBe(0)
+    expect(runtime!.virtualWindow.value?.rowEnd).toBe(3)
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
   })
 
   it("forwards clientRowModelOptions to runtime-created client row model", async () => {

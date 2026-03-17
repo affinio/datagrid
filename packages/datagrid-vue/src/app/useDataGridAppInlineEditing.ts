@@ -30,9 +30,10 @@ export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
   bodyViewportRef: Ref<HTMLElement | null>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   totalRows: Ref<number>
-  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api">
+  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex">
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
-  resolveRowIndexById: (rowId: string | number) => number
+  resolveBodyRowIndexById?: (rowId: string | number) => number
+  resolveRowIndexById?: (rowId: string | number) => number
   applyCellSelection: (coord: DataGridAppEditingCoord) => void
   ensureActiveCellVisible: (rowIndex: number, columnIndex: number) => void
   isCellEditable: (
@@ -68,6 +69,13 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   const editingCellValue = ref("")
   const editingCellInitialFilter = ref("")
   const editingCellOpenOnMount = ref(false)
+  const resolveBodyRowIndexById = options.resolveBodyRowIndexById ?? options.resolveRowIndexById ?? (() => -1)
+  const getBodyRowAtIndex = (rowIndex: number): DataGridRowNode<TRow> | null => {
+    const runtime = options.runtime as typeof options.runtime & {
+      getBodyRowAtIndex?: (index: number) => DataGridRowNode<TRow> | null
+    }
+    return runtime.getBodyRowAtIndex?.(rowIndex) ?? options.runtime.api.rows.get(rowIndex) ?? null
+  }
 
   const focusInlineEditor = (): void => {
     void nextTick(() => {
@@ -113,7 +121,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     if (columnIndex < 0) {
       return
     }
-    const currentRowIndex = options.resolveRowIndexById(rowId)
+    const currentRowIndex = resolveBodyRowIndexById(rowId)
     if (currentRowIndex < 0) {
       return
     }
@@ -127,7 +135,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       if (direction > 0) {
         for (let rowIndex = currentRowIndex; rowIndex < options.totalRows.value; rowIndex += 1) {
           const startColumnIndex = rowIndex === currentRowIndex ? columnIndex + 1 : 0
-          const row = options.runtime.api.rows.get(rowIndex)
+          const row = getBodyRowAtIndex(rowIndex)
           if (!row) {
             continue
           }
@@ -149,7 +157,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       }
       for (let rowIndex = currentRowIndex; rowIndex >= 0; rowIndex -= 1) {
         const startColumnIndex = rowIndex === currentRowIndex ? columnIndex - 1 : columnCount - 1
-        const row = options.runtime.api.rows.get(rowIndex)
+        const row = getBodyRowAtIndex(rowIndex)
         if (!row) {
           continue
         }
@@ -178,13 +186,13 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
           ? {
             rowIndex: Math.min(maxRowIndex, currentRowIndex + 1),
             columnIndex,
-            rowId: options.runtime.api.rows.get(Math.min(maxRowIndex, currentRowIndex + 1))?.rowId ?? rowId,
+            rowId: getBodyRowAtIndex(Math.min(maxRowIndex, currentRowIndex + 1))?.rowId ?? rowId,
           }
           : target === "above"
             ? {
               rowIndex: Math.max(0, currentRowIndex - 1),
               columnIndex,
-              rowId: options.runtime.api.rows.get(Math.max(0, currentRowIndex - 1))?.rowId ?? rowId,
+              rowId: getBodyRowAtIndex(Math.max(0, currentRowIndex - 1))?.rowId ?? rowId,
             }
             : {
               rowIndex: currentRowIndex,
@@ -212,7 +220,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     if (options.mode.value !== "base" || row.kind === "group" || row.rowId == null) {
       return
     }
-    const rowIndex = options.resolveRowIndexById(row.rowId)
+    const rowIndex = resolveBodyRowIndexById(row.rowId)
     const columnIndex = options.visibleColumns.value.findIndex(column => column.key === columnKey)
     if (rowIndex < 0 || columnIndex < 0 || !options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
       return
@@ -240,8 +248,8 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         ? (targetOrEvent ? "next" : "stay")
         : "stay"
     const beforeSnapshot = options.captureRowsSnapshot()
-    const rowIndex = options.resolveRowIndexById(currentEditingCell.rowId)
-    const rowNode = rowIndex >= 0 ? options.runtime.api.rows.get(rowIndex) : null
+    const rowIndex = resolveBodyRowIndexById(currentEditingCell.rowId)
+    const rowNode = rowIndex >= 0 ? getBodyRowAtIndex(rowIndex) : null
     const columnSnapshot = options.visibleColumns.value.find(column => column.key === currentEditingCell.columnKey)
     const parsedValue = columnSnapshot
       ? parseDataGridCellDraftValue({

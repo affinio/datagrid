@@ -68,7 +68,9 @@ export interface DataGridTableStageColumnsSection {
 
 export interface DataGridTableStageRowsSection<TRow extends Record<string, unknown>> {
   displayRows: readonly DataGridTableRow<TRow>[]
+  pinnedBottomRows: readonly DataGridTableRow<TRow>[]
   sourceRows?: readonly TRow[]
+  showRowIndex?: boolean
   rowHover?: boolean
   stripedRows?: boolean
   rowClass: (row: DataGridTableRow<TRow>) => string

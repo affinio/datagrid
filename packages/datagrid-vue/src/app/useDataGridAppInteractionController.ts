@@ -57,7 +57,7 @@ export interface UseDataGridAppInteractionControllerOptions<
   TSnapshot,
 > {
   mode: Ref<DataGridAppMode>
-  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api">
+  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex" | "resolveBodyRowIndexById">
   totalRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   viewportRowStart: Ref<number>
@@ -97,7 +97,7 @@ export interface UseDataGridAppInteractionControllerOptions<
     columnIndex: number,
   ) => boolean
   cloneRowData: (row: TRow) => TRow
-  resolveRowIndexById: (rowId: string | number) => number
+  resolveRowIndexById?: (rowId: string | number) => number
   captureRowsSnapshot: () => TSnapshot
   recordIntentTransaction: (
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
@@ -158,6 +158,30 @@ export function useDataGridAppInteractionController<
 >(
   options: UseDataGridAppInteractionControllerOptions<TRow, TSnapshot>,
 ): UseDataGridAppInteractionControllerResult<TRow> {
+  const getBodyRowAtIndex = (rowIndex: number): DataGridRowNode<TRow> | null => {
+    const runtime = options.runtime as typeof options.runtime & {
+      getBodyRowAtIndex?: (index: number) => DataGridRowNode<TRow> | null
+    }
+    return runtime.getBodyRowAtIndex?.(rowIndex) ?? options.runtime.api.rows.get(rowIndex) ?? null
+  }
+  const resolveBodyRowIndexById = (rowId: string | number): number => {
+    const runtime = options.runtime as typeof options.runtime & {
+      resolveBodyRowIndexById?: (value: string | number) => number
+    }
+    if (typeof runtime.resolveBodyRowIndexById === "function") {
+      return runtime.resolveBodyRowIndexById(rowId)
+    }
+    if (typeof options.resolveRowIndexById === "function") {
+      return options.resolveRowIndexById(rowId)
+    }
+    const count = options.runtime.api.rows.getCount()
+    for (let rowIndex = 0; rowIndex < count; rowIndex += 1) {
+      if (options.runtime.api.rows.get(rowIndex)?.rowId === rowId) {
+        return rowIndex
+      }
+    }
+    return -1
+  }
   const supportsCellSelectionMode = (): boolean => {
     return options.mode.value === "base" || options.mode.value === "worker"
   }
@@ -352,7 +376,7 @@ export function useDataGridAppInteractionController<
     const count = options.runtime.api.rows.getCount()
     const result: Array<DataGridAppRowWithId<TRow>> = []
     for (let rowIndex = 0; rowIndex < count; rowIndex += 1) {
-      const node = options.runtime.api.rows.get(rowIndex)
+      const node = getBodyRowAtIndex(rowIndex)
       if (!node || node.rowId == null || node.kind === "group") {
         continue
       }
@@ -390,8 +414,8 @@ export function useDataGridAppInteractionController<
     resolveDisplayedRowId: row => row.rowId,
     resolveColumnKeyAtIndex: columnIndex => options.visibleColumns.value[columnIndex]?.key ?? null,
     resolveDisplayedCellValue: (row, columnKey) => {
-      const rowIndex = options.resolveRowIndexById(row.rowId)
-      const node = rowIndex >= 0 ? options.runtime.api.rows.get(rowIndex) : null
+      const rowIndex = resolveBodyRowIndexById(row.rowId)
+      const node = rowIndex >= 0 ? getBodyRowAtIndex(rowIndex) : null
       if (!node || node.kind === "group") {
         return ""
       }
@@ -444,7 +468,7 @@ export function useDataGridAppInteractionController<
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,
     applyClipboardEdits: options.applyClipboardEdits,
     isCellEditableAt: (rowIndex, columnIndex) => {
-      const row = options.runtime.api.rows.get(rowIndex)
+      const row = getBodyRowAtIndex(rowIndex)
       const columnKey = options.visibleColumns.value[columnIndex]?.key
       if (!row || !columnKey) {
         return false
@@ -595,7 +619,7 @@ export function useDataGridAppInteractionController<
     return options.normalizeCellCoord({
       rowIndex,
       columnIndex,
-      rowId: options.runtime.api.rows.get(rowIndex)?.rowId ?? null,
+      rowId: getBodyRowAtIndex(rowIndex)?.rowId ?? null,
     })
   }
 
@@ -656,7 +680,7 @@ export function useDataGridAppInteractionController<
     },
     normalizeCellCoord: coord => options.normalizeCellCoord({
       ...coord,
-      rowId: options.runtime.api.rows.get(coord.rowIndex)?.rowId ?? null,
+      rowId: getBodyRowAtIndex(coord.rowIndex)?.rowId ?? null,
     }),
   })
 
@@ -997,7 +1021,7 @@ export function useDataGridAppInteractionController<
     return options.normalizeCellCoord({
       rowIndex: range.startRow,
       columnIndex: range.startColumn,
-      rowId: options.runtime.api.rows.get(range.startRow)?.rowId ?? null,
+      rowId: getBodyRowAtIndex(range.startRow)?.rowId ?? null,
     })
   }
 
@@ -1206,7 +1230,7 @@ export function useDataGridAppInteractionController<
       if (row.rowId == null) {
         return null
       }
-      const rowIndex = options.resolveRowIndexById(row.rowId)
+      const rowIndex = resolveBodyRowIndexById(row.rowId)
       if (rowIndex < 0) {
         return null
       }
@@ -1257,7 +1281,7 @@ export function useDataGridAppInteractionController<
       return
     }
     const baseRange = options.resolveSelectionRange()
-    const anchorRow = baseRange ? options.runtime.api.rows.get(baseRange.endRow) : null
+    const anchorRow = baseRange ? getBodyRowAtIndex(baseRange.endRow) : null
     const anchorColumnKey = baseRange ? options.visibleColumns.value[baseRange.endColumn]?.key : null
     if (!baseRange || !anchorRow || !anchorColumnKey) {
       return
@@ -1281,7 +1305,7 @@ export function useDataGridAppInteractionController<
     if (!baseRange) {
       return
     }
-    const anchorRow = options.runtime.api.rows.get(baseRange.endRow)
+    const anchorRow = getBodyRowAtIndex(baseRange.endRow)
     const anchorColumnKey = options.visibleColumns.value[baseRange.endColumn]?.key
     if (!anchorRow || !anchorColumnKey) {
       return
@@ -1291,7 +1315,7 @@ export function useDataGridAppInteractionController<
     }
     let lastEmptyRowIndex = baseRange.endRow
     for (let rowIndex = baseRange.endRow + 1; rowIndex < options.totalRows.value; rowIndex += 1) {
-      const row = options.runtime.api.rows.get(rowIndex)
+      const row = getBodyRowAtIndex(rowIndex)
       if (!row || row.kind === "group") {
         break
       }

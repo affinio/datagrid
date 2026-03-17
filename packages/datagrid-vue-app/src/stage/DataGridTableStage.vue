@@ -52,6 +52,9 @@
       </DataGridTableStagePinnedPane>
 
       <DataGridTableStageCenterPane
+        :display-rows="rows.displayRows"
+        :top-spacer-height="viewport.topSpacerHeight"
+        :bottom-spacer-height="viewport.bottomSpacerHeight"
         :viewport-ref="captureBodyViewportRef"
         :selection-overlay-segments="centerSelectionOverlaySegments"
         :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
@@ -73,6 +76,35 @@
         :style="floatingFillActionStyle"
         @toggle="toggleFloatingFillActionMenu"
         @selected="handleFillActionSelection"
+      />
+    </div>
+
+    <div
+      v-if="rows.pinnedBottomRows.length > 0"
+      class="grid-body-shell grid-body-shell--pinned-bottom"
+      :style="paneLayoutStyle"
+    >
+      <DataGridTableStagePinnedPane
+        :pane="leftPinnedBottomPane"
+        :render-api="pinnedPaneRenderApi"
+      />
+
+      <DataGridTableStageCenterPane
+        :display-rows="rows.pinnedBottomRows"
+        viewport-class="grid-body-viewport grid-body-viewport--pinned-bottom"
+        :viewport-ref="capturePinnedBottomViewportRef"
+        :handle-scroll="handlePinnedBottomViewportScroll"
+        :handle-wheel="handleBodyViewportWheel"
+        :handle-keydown="handlePinnedBottomViewportKeydown"
+        :selection-overlay-segments="centerPinnedBottomSelectionOverlaySegments"
+        :fill-preview-overlay-segments="centerPinnedBottomFillPreviewOverlaySegments"
+        :move-preview-overlay-segments="centerPinnedBottomMovePreviewOverlaySegments"
+        :render-api="centerPaneRenderApi"
+      />
+
+      <DataGridTableStagePinnedPane
+        :pane="rightPinnedBottomPane"
+        :render-api="pinnedPaneRenderApi"
       />
     </div>
   </section>
@@ -184,6 +216,7 @@ const interaction = stageContext.interaction
 const visibleColumns = computed(() => columns.value.visibleColumns)
 const renderedColumns = computed(() => columns.value.renderedColumns)
 const displayRows = computed(() => rows.value.displayRows)
+const pinnedBottomRows = computed(() => rows.value.pinnedBottomRows)
 const selectionRange = computed(() => selection.value.selectionRange)
 const isFillDragging = computed(() => selection.value.isFillDragging)
 function columnStyle(key: string): CSSProperties {
@@ -300,8 +333,7 @@ function resolveCellCustomStyle(
   return cells.value.cellStyle?.(row, rowOffset, column, columnIndex) ?? {}
 }
 
-function startInlineEditIfAllowed(row: TableRow, column: TableColumn): void {
-  const rowOffset = displayRows.value.findIndex(candidate => candidate === row)
+function startInlineEditIfAllowed(row: TableRow, column: TableColumn, rowOffset: number): void {
   const columnIndex = columnIndexByKey(column.key)
   if (rowOffset < 0 || !isCellEditableSafe(row, rowOffset, column, columnIndex)) {
     return
@@ -466,8 +498,12 @@ function isFillHandleCellSafe(rowOffset: number, columnIndex: number): boolean {
 }
 
 const DEFAULT_INDEX_COLUMN_WIDTH = 72
+const showRowIndex = computed(() => rows.value.showRowIndex !== false)
 
 const indexColumnWidthPx = computed(() => {
+  if (!showRowIndex.value) {
+    return 0
+  }
   const width = parsePixelValue(
     layout.value.indexColumnStyle.width ?? layout.value.indexColumnStyle.minWidth,
     DEFAULT_INDEX_COLUMN_WIDTH,
@@ -529,9 +565,12 @@ const centerChromeCanvasStyle = computed<CSSProperties>(() => ({
 const stageRootEl = ref<HTMLElement | null>(null)
 const headerShellEl = ref<HTMLElement | null>(null)
 const bodyViewportEl = ref<HTMLElement | null>(null)
+const bottomViewportEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
+const leftBottomPaneContentRef = ref<HTMLElement | null>(null)
+const rightBottomPaneContentRef = ref<HTMLElement | null>(null)
 const leftHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const centerHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
@@ -606,23 +645,29 @@ function clearHoveredRow(): void {
   hoveredRowIndex.value = null
 }
 
-function resolveAbsoluteRowIndex(rowOffset: number): number {
-  return viewport.value.viewportRowStart + rowOffset
+function resolveAbsoluteRowIndex(row: TableRow, rowOffset: number): number {
+  return Number.isFinite(row.displayIndex)
+    ? Math.max(0, Math.trunc(row.displayIndex))
+    : viewport.value.viewportRowStart + rowOffset
 }
 
-function setHoveredRow(rowOffset: number): void {
+function resolveViewportRowOffset(row: TableRow, rowOffset: number): number {
+  return resolveAbsoluteRowIndex(row, rowOffset) - viewport.value.viewportRowStart
+}
+
+function setHoveredRow(row: TableRow, rowOffset: number): void {
   if (!rows.value.rowHover) {
     return
   }
-  hoveredRowIndex.value = resolveAbsoluteRowIndex(rowOffset)
+  hoveredRowIndex.value = resolveAbsoluteRowIndex(row, rowOffset)
 }
 
-function isHoveredRow(rowOffset: number): boolean {
-  return rows.value.rowHover === true && hoveredRowIndex.value === resolveAbsoluteRowIndex(rowOffset)
+function isHoveredRow(row: TableRow, rowOffset: number): boolean {
+  return rows.value.rowHover === true && hoveredRowIndex.value === resolveAbsoluteRowIndex(row, rowOffset)
 }
 
-function isStripedRow(rowOffset: number): boolean {
-  return rows.value.stripedRows === true && resolveAbsoluteRowIndex(rowOffset) % 2 === 1
+function isStripedRow(row: TableRow, rowOffset: number): boolean {
+  return rows.value.stripedRows === true && resolveAbsoluteRowIndex(row, rowOffset) % 2 === 1
 }
 
 function isRowFocusedSafe(row: TableRow): boolean {
@@ -872,20 +917,20 @@ function handleRowContainerClick(row: TableRow): void {
 function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boolean> {
   return {
     "grid-row--hoverable": rows.value.rowHover === true,
-    "grid-row--hovered": isHoveredRow(rowOffset),
-    "grid-row--striped": isStripedRow(rowOffset),
+    "grid-row--hovered": isHoveredRow(row, rowOffset),
+    "grid-row--striped": isStripedRow(row, rowOffset),
     "grid-row--focused": isRowFocusedSafe(row),
     "grid-row--checkbox-selected": isRowCheckboxSelectedSafe(row),
   }
 }
 
-function isFullRowSelectionSafe(rowOffset: number): boolean {
+function isFullRowSelectionSafe(rowOffset: number, row?: TableRow): boolean {
   const range = selectionRange.value
   const lastColumnIndex = visibleColumns.value.length - 1
   if (!range || lastColumnIndex < 0) {
     return false
   }
-  const rowIndex = resolveAbsoluteRowIndex(rowOffset)
+  const rowIndex = row ? resolveAbsoluteRowIndex(row, rowOffset) : viewport.value.viewportRowStart + rowOffset
   return rowIndex >= range.startRow
     && rowIndex <= range.endRow
     && range.startColumn === 0
@@ -947,7 +992,7 @@ function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: 
   }
   if (isNearRangeMoveSelectionEdge(event, rowOffset, columnIndex)) {
     hoveredRangeMoveHandleCell.value = {
-      rowIndex: resolveAbsoluteRowIndex(rowOffset),
+      rowIndex: rowOffset + viewport.value.viewportRowStart,
       columnIndex,
     }
     return
@@ -987,7 +1032,7 @@ function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boo
     return false
   }
   return (
-    hoveredRangeMoveHandleCell.value?.rowIndex === resolveAbsoluteRowIndex(rowOffset)
+    hoveredRangeMoveHandleCell.value?.rowIndex === rowOffset + viewport.value.viewportRowStart
     && hoveredRangeMoveHandleCell.value?.columnIndex === columnIndex
   )
 }
@@ -999,7 +1044,7 @@ function resolveVisibleAnchorCellPosition(): { rowIndex: number; columnIndex: nu
         continue
       }
       return {
-        rowIndex: resolveAbsoluteRowIndex(rowOffset),
+        rowIndex: resolveAbsoluteRowIndex(displayRows.value[rowOffset] as TableRow, rowOffset),
         columnIndex,
       }
     }
@@ -1009,7 +1054,14 @@ function resolveVisibleAnchorCellPosition(): { rowIndex: number; columnIndex: nu
 
 function resolveVisibleCellElement(rowIndex: number, columnIndex: number): HTMLElement | null {
   const selector = `.grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`
-  for (const root of [leftPaneContentRef.value, bodyViewportEl.value, rightPaneContentRef.value]) {
+  for (const root of [
+    leftPaneContentRef.value,
+    bodyViewportEl.value,
+    rightPaneContentRef.value,
+    leftBottomPaneContentRef.value,
+    bottomViewportEl.value,
+    rightBottomPaneContentRef.value,
+  ]) {
     const match = root?.querySelector<HTMLElement>(selector)
     if (match) {
       return match
@@ -1020,7 +1072,14 @@ function resolveVisibleCellElement(rowIndex: number, columnIndex: number): HTMLE
 
 function resolveVisibleRowElement(rowIndex: number): HTMLElement | null {
   const selector = `.grid-cell[data-row-index="${rowIndex}"]`
-  for (const root of [leftPaneContentRef.value, bodyViewportEl.value, rightPaneContentRef.value]) {
+  for (const root of [
+    leftPaneContentRef.value,
+    bodyViewportEl.value,
+    rightPaneContentRef.value,
+    leftBottomPaneContentRef.value,
+    bottomViewportEl.value,
+    rightBottomPaneContentRef.value,
+  ]) {
     const match = root?.querySelector<HTMLElement>(selector)
     if (match) {
       return match
@@ -1090,6 +1149,11 @@ function captureBodyViewportRef(value: Element | ComponentPublicInstance | null)
   scheduleGridChromeRedraw()
 }
 
+function capturePinnedBottomViewportRef(value: Element | ComponentPublicInstance | null): void {
+  bottomViewportEl.value = resolveElementRef(value)
+  syncPinnedBottomViewportScrollLeft()
+}
+
 function captureLeftPaneContentRef(value: Element | ComponentPublicInstance | null): void {
   leftPaneContentRef.value = resolveElementRef(value)
 }
@@ -1098,11 +1162,27 @@ function captureRightPaneContentRef(value: Element | ComponentPublicInstance | n
   rightPaneContentRef.value = resolveElementRef(value)
 }
 
+function captureLeftBottomPaneContentRef(value: Element | ComponentPublicInstance | null): void {
+  leftBottomPaneContentRef.value = resolveElementRef(value)
+}
+
+function captureRightBottomPaneContentRef(value: Element | ComponentPublicInstance | null): void {
+  rightBottomPaneContentRef.value = resolveElementRef(value)
+}
+
 function syncBodyViewportScrollState(viewport: HTMLElement): void {
   bodyViewportScrollTop.value = viewport.scrollTop
   bodyViewportScrollLeft.value = viewport.scrollLeft
   bodyViewportClientWidth.value = viewport.clientWidth
   bodyViewportClientHeight.value = viewport.clientHeight
+}
+
+function syncPinnedBottomViewportScrollLeft(): void {
+  const viewport = bottomViewportEl.value
+  if (!viewport || viewport.scrollLeft === bodyViewportScrollLeft.value) {
+    return
+  }
+  viewport.scrollLeft = bodyViewportScrollLeft.value
 }
 
 function syncBodyViewportMetrics(): void {
@@ -1117,6 +1197,7 @@ function syncBodyViewportMetrics(): void {
   bodyViewportTopOffset.value = Math.max(0, viewportRect.top - shellRect.top)
   headerShellHeight.value = headerShellEl.value?.getBoundingClientRect().height ?? 0
   headerViewportClientWidth.value = resolveHeaderViewportElement()?.clientWidth ?? bodyViewportClientWidth.value
+  syncPinnedBottomViewportScrollLeft()
 }
 
 function resolveGridChromeDevicePixelRatio(): number {
@@ -1709,7 +1790,24 @@ function handleCenterViewportScroll(event: Event): void {
   }
   linkedPaneScrollSync.onSourceScroll(element.scrollTop)
   syncBodyViewportScrollState(element)
+  syncPinnedBottomViewportScrollLeft()
   scheduleGridChromeRedraw()
+}
+
+function handlePinnedBottomViewportScroll(event: Event): void {
+  const element = event.target as HTMLElement | null
+  const bodyViewport = bodyViewportEl.value
+  if (!element || !bodyViewport || bodyViewport.scrollLeft === element.scrollLeft) {
+    return
+  }
+  bodyViewport.scrollLeft = element.scrollLeft
+  viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
+  syncBodyViewportScrollState(bodyViewport)
+  scheduleGridChromeRedraw()
+}
+
+function handlePinnedBottomViewportKeydown(event: KeyboardEvent): void {
+  viewport.value.handleViewportKeydown(event)
 }
 
 function handleLinkedViewportWheel(event: WheelEvent): void {
@@ -1771,6 +1869,21 @@ const rowMetrics = computed(() => {
   return metrics
 })
 
+const pinnedBottomRowMetrics = computed(() => {
+  const metrics: Array<{ top: number; height: number }> = []
+  let currentTop = 0
+  pinnedBottomRows.value.forEach((row, rowOffset) => {
+    const style = rows.value.rowStyle(row, resolveViewportRowOffset(row, rowOffset))
+    const height = parsePixelValue(style.height ?? style.minHeight, 31)
+    metrics.push({
+      top: currentTop,
+      height,
+    })
+    currentTop += height
+  })
+  return metrics
+})
+
 const rowMetricsSignature = computed(() => (
   rowMetrics.value.map(metric => `${metric.top}:${metric.height}`).join("|")
 ))
@@ -1789,7 +1902,7 @@ function resolveChromeRowBandKind(row: TableRow, rowOffset: number): string | nu
   if (className.includes("row--pivot")) {
     return "pivot"
   }
-  if (isStripedRow(rowOffset)) {
+  if (isStripedRow(row, rowOffset)) {
     return "striped"
   }
   return "base"
@@ -1964,7 +2077,7 @@ function columnIndexByKey(columnKey: string): number {
 
 function paneRowStyle(row: TableRow, rowOffset: number, paneWidth: number): CSSProperties {
   return {
-    ...rows.value.rowStyle(row, rowOffset),
+    ...rows.value.rowStyle(row, resolveViewportRowOffset(row, rowOffset)),
     width: `${paneWidth}px`,
     minWidth: `${paneWidth}px`,
     maxWidth: `${paneWidth}px`,
@@ -1990,30 +2103,38 @@ function rangesEqual(left: OverlayRange | null, right: OverlayRange | null): boo
     && left.endColumn === right.endColumn
 }
 
-function resolveVisibleRangeBounds(range: OverlayRange | null) {
-  if (!range || displayRows.value.length === 0 || visibleColumns.value.length === 0) {
+function resolveVisibleRangeBoundsForRows(
+  range: OverlayRange | null,
+  laneRows: readonly TableRow[],
+) {
+  if (!range || laneRows.length === 0 || visibleColumns.value.length === 0) {
     return null
   }
 
-  const visibleRowStart = viewport.value.viewportRowStart
-  const visibleRowEnd = visibleRowStart + displayRows.value.length - 1
   const visibleColumnStart = 0
   const visibleColumnEnd = visibleColumns.value.length - 1
-
-  const startRowIndex = Math.max(range.startRow, visibleRowStart)
-  const endRowIndex = Math.min(range.endRow, visibleRowEnd)
   const startColumnIndex = Math.max(range.startColumn, visibleColumnStart)
   const endColumnIndex = Math.min(range.endColumn, visibleColumnEnd)
 
-  if (startRowIndex > endRowIndex || startColumnIndex > endColumnIndex) {
+  if (startColumnIndex > endColumnIndex) {
     return null
   }
 
-  const startRowOffset = startRowIndex - visibleRowStart
-  const endRowOffset = endRowIndex - visibleRowStart
-  const startMetric = rowMetrics.value[startRowOffset]
-  const endMetric = rowMetrics.value[endRowOffset]
-  if (!startMetric || !endMetric) {
+  let startRowOffset: number | null = null
+  let endRowOffset: number | null = null
+
+  laneRows.forEach((row, rowOffset) => {
+    const absoluteRowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+    if (absoluteRowIndex < range.startRow || absoluteRowIndex > range.endRow) {
+      return
+    }
+    if (startRowOffset == null) {
+      startRowOffset = rowOffset
+    }
+    endRowOffset = rowOffset
+  })
+
+  if (startRowOffset == null || endRowOffset == null) {
     return null
   }
 
@@ -2025,17 +2146,27 @@ function resolveVisibleRangeBounds(range: OverlayRange | null) {
   }
 }
 
+function resolveVisibleRangeBounds(range: OverlayRange | null) {
+  return resolveVisibleRangeBoundsForRows(range, displayRows.value)
+}
+
+function resolvePinnedBottomVisibleRangeBounds(range: OverlayRange | null) {
+  return resolveVisibleRangeBoundsForRows(range, pinnedBottomRows.value)
+}
+
 function resolveOverlayMetrics(bounds: {
   startRowOffset: number
   endRowOffset: number
   startColumnIndex: number
   endColumnIndex: number
-} | null) {
+} | null,
+  metricsSource = rowMetrics.value,
+) {
   if (!bounds) {
     return null
   }
-  const startMetric = rowMetrics.value[bounds.startRowOffset]
-  const endMetric = rowMetrics.value[bounds.endRowOffset]
+  const startMetric = metricsSource[bounds.startRowOffset]
+  const endMetric = metricsSource[bounds.endRowOffset]
   if (!startMetric || !endMetric) {
     return null
   }
@@ -2139,6 +2270,7 @@ function buildPaneOverlaySegments(
     backgroundColor?: string
     borderStyle?: "solid" | "dashed"
   },
+  viewportHeight = Math.max(0, bodyViewportClientHeight.value),
 ): OverlaySegment[] {
   if (!metrics) {
     return []
@@ -2150,7 +2282,6 @@ function buildPaneOverlaySegments(
     return []
   }
 
-  const viewportHeight = Math.max(0, bodyViewportClientHeight.value)
   const topBleed = metrics.top <= 0 ? 0 : 1
   const bottomBleed = viewportHeight > 0 && metrics.top + metrics.height >= viewportHeight ? 0 : 1
 
@@ -2315,6 +2446,26 @@ const visibleFillPreviewOverlayMetrics = computed(() => resolveOverlayMetrics(vi
 const visibleMovePreviewOverlayMetrics = computed(() => (
   resolveOverlayMetrics(resolveVisibleRangeBounds(normalizedMovePreviewRange.value))
 ))
+const visiblePinnedBottomSelectionOverlayMetrics = computed(() => {
+  if (visibleFillPreviewBounds.value) {
+    return null
+  }
+  return resolveOverlayMetrics(
+    resolvePinnedBottomVisibleRangeBounds(selectionRange.value),
+    pinnedBottomRowMetrics.value,
+  )
+})
+const visiblePinnedBottomFillPreviewOverlayMetrics = computed(() => resolveOverlayMetrics(
+  mergeOverlayBounds(
+    resolvePinnedBottomVisibleRangeBounds(selectionRange.value),
+    resolvePinnedBottomVisibleRangeBounds(selection.value.fillPreviewRange),
+  ),
+  pinnedBottomRowMetrics.value,
+))
+const visiblePinnedBottomMovePreviewOverlayMetrics = computed(() => resolveOverlayMetrics(
+  resolvePinnedBottomVisibleRangeBounds(normalizedMovePreviewRange.value),
+  pinnedBottomRowMetrics.value,
+))
 
 const leftSelectionOverlaySegments = computed<OverlaySegment[]>(() => (
   buildPaneOverlaySegments(visibleSelectionOverlayMetrics.value, "left", "selection", {
@@ -2332,6 +2483,24 @@ const rightSelectionOverlaySegments = computed<OverlaySegment[]>(() => (
   buildPaneOverlaySegments(visibleSelectionOverlayMetrics.value, "right", "selection", {
     borderColor: "var(--datagrid-selection-overlay-border)",
   })
+))
+
+const leftPinnedBottomSelectionOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visiblePinnedBottomSelectionOverlayMetrics.value, "left", "selection", {
+    borderColor: "var(--datagrid-selection-overlay-border)",
+  }, bottomViewportEl.value?.clientHeight ?? 0)
+))
+
+const centerPinnedBottomSelectionOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visiblePinnedBottomSelectionOverlayMetrics.value, "center", "selection", {
+    borderColor: "var(--datagrid-selection-overlay-border)",
+  }, bottomViewportEl.value?.clientHeight ?? 0)
+))
+
+const rightPinnedBottomSelectionOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visiblePinnedBottomSelectionOverlayMetrics.value, "right", "selection", {
+    borderColor: "var(--datagrid-selection-overlay-border)",
+  }, bottomViewportEl.value?.clientHeight ?? 0)
 ))
 
 const leftFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
@@ -2353,6 +2522,27 @@ const rightFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
     borderColor: "var(--datagrid-selection-overlay-fill-border)",
     backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
   })
+))
+
+const leftPinnedBottomFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visiblePinnedBottomFillPreviewOverlayMetrics.value, "left", "fill-preview", {
+    borderColor: "var(--datagrid-selection-overlay-fill-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
+  }, bottomViewportEl.value?.clientHeight ?? 0)
+))
+
+const centerPinnedBottomFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visiblePinnedBottomFillPreviewOverlayMetrics.value, "center", "fill-preview", {
+    borderColor: "var(--datagrid-selection-overlay-fill-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
+  }, bottomViewportEl.value?.clientHeight ?? 0)
+))
+
+const rightPinnedBottomFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visiblePinnedBottomFillPreviewOverlayMetrics.value, "right", "fill-preview", {
+    borderColor: "var(--datagrid-selection-overlay-fill-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
+  }, bottomViewportEl.value?.clientHeight ?? 0)
 ))
 
 const leftMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
@@ -2379,8 +2569,34 @@ const rightMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
   })
 ))
 
+const leftPinnedBottomMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visiblePinnedBottomMovePreviewOverlayMetrics.value, "left", "move-preview", {
+    borderColor: "var(--datagrid-selection-overlay-move-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
+    borderStyle: "dashed",
+  }, bottomViewportEl.value?.clientHeight ?? 0)
+))
+
+const centerPinnedBottomMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visiblePinnedBottomMovePreviewOverlayMetrics.value, "center", "move-preview", {
+    borderColor: "var(--datagrid-selection-overlay-move-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
+    borderStyle: "dashed",
+  }, bottomViewportEl.value?.clientHeight ?? 0)
+))
+
+const rightPinnedBottomMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
+  buildPaneOverlaySegments(visiblePinnedBottomMovePreviewOverlayMetrics.value, "right", "move-preview", {
+    borderColor: "var(--datagrid-selection-overlay-move-border)",
+    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
+    borderStyle: "dashed",
+  }, bottomViewportEl.value?.clientHeight ?? 0)
+))
+
 const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   handleLinkedViewportWheel,
+  absoluteRowIndex: resolveAbsoluteRowIndex,
+  viewportRowOffset: resolveViewportRowOffset,
   rowStateClasses,
   paneRowStyle,
   handleRowContainerClick,
@@ -2432,6 +2648,8 @@ const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
 const centerPaneRenderApi: DataGridTableStageCenterPaneRenderApi = {
   handleCenterViewportScroll,
   handleBodyViewportWheel,
+  absoluteRowIndex: resolveAbsoluteRowIndex,
+  viewportRowOffset: resolveViewportRowOffset,
   handleViewportKeydown(event) {
     viewport.value.handleViewportKeydown(event)
   },
@@ -2485,7 +2703,10 @@ const leftPinnedPane = computed<DataGridTableStagePinnedPaneProps>(() => ({
   contentStyle: {} as CSSProperties,
   contentRef: captureLeftPaneContentRef,
   columns: pinnedLeftColumns.value,
-  showIndexColumn: true,
+  showIndexColumn: showRowIndex.value,
+  displayRows: displayRows.value,
+  topSpacerHeight: viewport.value.topSpacerHeight,
+  bottomSpacerHeight: viewport.value.bottomSpacerHeight,
   selectionOverlaySegments: leftSelectionOverlaySegments.value,
   fillPreviewOverlaySegments: leftFillPreviewOverlaySegments.value,
   movePreviewOverlaySegments: leftMovePreviewOverlaySegments.value,
@@ -2499,9 +2720,40 @@ const rightPinnedPane = computed<DataGridTableStagePinnedPaneProps>(() => ({
   contentRef: captureRightPaneContentRef,
   columns: pinnedRightColumns.value,
   showIndexColumn: false,
+  displayRows: displayRows.value,
+  topSpacerHeight: viewport.value.topSpacerHeight,
+  bottomSpacerHeight: viewport.value.bottomSpacerHeight,
   selectionOverlaySegments: rightSelectionOverlaySegments.value,
   fillPreviewOverlaySegments: rightFillPreviewOverlaySegments.value,
   movePreviewOverlaySegments: rightMovePreviewOverlaySegments.value,
+}))
+
+const leftPinnedBottomPane = computed<DataGridTableStagePinnedPaneProps>(() => ({
+  side: "left" as const,
+  width: leftPaneWidth.value,
+  style: leftPaneStyle.value,
+  contentStyle: {} as CSSProperties,
+  contentRef: captureLeftBottomPaneContentRef,
+  columns: pinnedLeftColumns.value,
+  showIndexColumn: showRowIndex.value,
+  displayRows: pinnedBottomRows.value,
+  selectionOverlaySegments: leftPinnedBottomSelectionOverlaySegments.value,
+  fillPreviewOverlaySegments: leftPinnedBottomFillPreviewOverlaySegments.value,
+  movePreviewOverlaySegments: leftPinnedBottomMovePreviewOverlaySegments.value,
+}))
+
+const rightPinnedBottomPane = computed<DataGridTableStagePinnedPaneProps>(() => ({
+  side: "right" as const,
+  width: rightPaneWidth.value,
+  style: rightPaneStyle.value,
+  contentStyle: {} as CSSProperties,
+  contentRef: captureRightBottomPaneContentRef,
+  columns: pinnedRightColumns.value,
+  showIndexColumn: false,
+  displayRows: pinnedBottomRows.value,
+  selectionOverlaySegments: rightPinnedBottomSelectionOverlaySegments.value,
+  fillPreviewOverlaySegments: rightPinnedBottomFillPreviewOverlaySegments.value,
+  movePreviewOverlaySegments: rightPinnedBottomMovePreviewOverlaySegments.value,
 }))
 
 function cellStateClasses(row: TableRow, rowOffset: number, columnIndex: number): Record<string, boolean> {

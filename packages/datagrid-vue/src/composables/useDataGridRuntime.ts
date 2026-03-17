@@ -1,4 +1,4 @@
-import { isRef, onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue"
+import { isRef, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from "vue"
 import type {
   DataGridApiCapabilities,
   DataGridApiEventName,
@@ -82,7 +82,15 @@ export interface UseDataGridRuntimeOptions<TRow = unknown> {
 
 export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRuntime<TRow> {
   columnSnapshot: Ref<DataGridColumnModelSnapshot>
+  /**
+   * Scroll-window snapshot in body-row coordinates only.
+   * Pinned top and pinned bottom rows are excluded from rowStart, rowEnd, and rowTotal.
+   */
   virtualWindow: Ref<DataGridRuntimeVirtualWindowSnapshot | null>
+  /**
+   * Partition of the current runtime row model into scrollable body rows and pinned lanes.
+   */
+  rowPartition: Ref<DataGridRuntimeRowPartitionSnapshot<TRow>>
   setRows: (rows: readonly TRow[]) => void
   setAggregationModel: (aggregationModel: DataGridAggregationModel<TRow> | null) => void
   getAggregationModel: () => DataGridAggregationModel<TRow> | null
@@ -126,8 +134,139 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   start: () => Promise<void>
   stop: () => void
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
+  /**
+   * Sync rows for a body-relative viewport range.
+   * The range must address only scrollable body rows.
+   */
+  syncBodyRowsInRange: (range: DataGridBodyViewportRange) => readonly DataGridRowNode<TRow>[]
+  /**
+   * Resolve a scrollable body row by body-relative index.
+   */
+  getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<TRow> | null
+  /**
+   * Resolve a scrollable body row index by row id.
+   */
+  resolveBodyRowIndexById: (rowId: string | number) => number
+  /**
+   * Set the current body-relative viewport range.
+   * Pinned rows are excluded from this coordinate system.
+   */
   setViewportRange: (range: DataGridViewportRange) => void
-  getViewportRange: () => DataGridViewportRange
+  /**
+   * Get the current body-relative viewport range.
+   * Pinned rows are excluded from this coordinate system.
+   */
+  getViewportRange: () => DataGridBodyViewportRange
+}
+
+/**
+ * Viewport coordinates for the scrollable body lane only.
+ * Pinned top and pinned bottom rows never participate in this range.
+ */
+export type DataGridBodyViewportRange = DataGridViewportRange
+
+export interface DataGridRuntimeRowPartitionSnapshot<TRow = unknown> {
+  bodyRowCount: number
+  pinnedTopRows: readonly DataGridRowNode<TRow>[]
+  pinnedBottomRows: readonly DataGridRowNode<TRow>[]
+}
+
+interface DataGridRuntimeResolvedRowPartition<TRow = unknown> {
+  bodyRows: readonly DataGridRowNode<TRow>[]
+  bodyRowIndexById: ReadonlyMap<string | number, number>
+  snapshot: DataGridRuntimeRowPartitionSnapshot<TRow>
+}
+
+function normalizeBodyViewportRange(
+  range: DataGridViewportRange,
+  bodyRowCount: number,
+): DataGridBodyViewportRange {
+  if (bodyRowCount <= 0) {
+    return { start: 0, end: 0 }
+  }
+  const start = Math.max(0, Math.min(bodyRowCount - 1, Math.trunc(range.start)))
+  const end = Math.max(start, Math.min(bodyRowCount - 1, Math.trunc(range.end)))
+  return { start, end }
+}
+
+function resolveBodyVirtualWindowSnapshot(
+  snapshot: DataGridRuntimeVirtualWindowSnapshot | null,
+  bodyRowCount: number,
+  columnCount: number,
+): DataGridRuntimeVirtualWindowSnapshot {
+  const normalizedBodyRange = normalizeBodyViewportRange(
+    snapshot
+      ? { start: snapshot.rowStart, end: snapshot.rowEnd }
+      : { start: 0, end: Math.max(0, bodyRowCount - 1) },
+    bodyRowCount,
+  )
+  const colTotal = Math.max(0, columnCount)
+  const colStart = snapshot ? Math.max(0, Math.min(Math.max(0, colTotal - 1), Math.trunc(snapshot.colStart))) : 0
+  const colEnd = snapshot
+    ? Math.max(colStart, Math.min(Math.max(0, colTotal - 1), Math.trunc(snapshot.colEnd)))
+    : Math.max(0, colTotal - 1)
+
+  return {
+    rowStart: normalizedBodyRange.start,
+    rowEnd: normalizedBodyRange.end,
+    rowTotal: bodyRowCount,
+    colStart,
+    colEnd,
+    colTotal,
+    overscan: snapshot?.overscan ?? { top: 0, bottom: 0, left: 0, right: 0 },
+  }
+}
+
+function buildRowPartitionSnapshot<TRow>(
+  api: Pick<UseDataGridRuntimeResult<TRow>["api"], "rows">,
+): DataGridRuntimeResolvedRowPartition<TRow> {
+  const total = api.rows.getCount()
+  const getRow = api.rows.get
+  const pinnedTopRows: DataGridRowNode<TRow>[] = []
+  const pinnedBottomRows: DataGridRowNode<TRow>[] = []
+  const bodyRows: DataGridRowNode<TRow>[] = []
+  const bodyRowIndexById = new Map<string | number, number>()
+
+  if (typeof getRow !== "function" || total <= 0) {
+    return {
+      bodyRows,
+      bodyRowIndexById,
+      snapshot: {
+        bodyRowCount: Math.max(0, total),
+        pinnedTopRows,
+        pinnedBottomRows,
+      },
+    }
+  }
+
+  for (let rowIndex = 0; rowIndex < total; rowIndex += 1) {
+    const row = getRow(rowIndex)
+    if (!row) {
+      continue
+    }
+    if (row.state.pinned === "top") {
+      pinnedTopRows.push(row)
+      continue
+    }
+    if (row.state.pinned === "bottom") {
+      pinnedBottomRows.push(row)
+      continue
+    }
+    bodyRows.push(row)
+    if (typeof row.rowId === "string" || typeof row.rowId === "number") {
+      bodyRowIndexById.set(row.rowId, bodyRows.length - 1)
+    }
+  }
+
+  return {
+    bodyRows,
+    bodyRowIndexById,
+    snapshot: {
+      bodyRowCount: bodyRows.length,
+      pinnedTopRows,
+      pinnedBottomRows,
+    },
+  }
 }
 
 export function useDataGridRuntime<TRow = unknown>(
@@ -157,28 +296,38 @@ export function useDataGridRuntime<TRow = unknown>(
 
   const { rowModel, columnModel, core, api } = runtime
   const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
-  const buildFallbackVirtualWindow = (): DataGridRuntimeVirtualWindowSnapshot => {
-    const rowTotal = Math.max(0, api.rows.getCount())
-    const colTotal = Math.max(0, columnSnapshot.value.visibleColumns.length)
-    return {
-      rowStart: 0,
-      rowEnd: Math.max(0, rowTotal - 1),
-      rowTotal,
-      colStart: 0,
-      colEnd: Math.max(0, colTotal - 1),
-      colTotal,
-      overscan: { top: 0, bottom: 0, left: 0, right: 0 },
-    }
+  const initialRowPartition = buildRowPartitionSnapshot<TRow>(api)
+  const rowPartition = shallowRef<DataGridRuntimeRowPartitionSnapshot<TRow>>(
+    initialRowPartition.snapshot,
+  )
+  let bodyRows = initialRowPartition.bodyRows
+  let bodyRowIndexById = initialRowPartition.bodyRowIndexById
+  const resolveCurrentBodyVirtualWindow = (
+    snapshot: DataGridRuntimeVirtualWindowSnapshot | null = runtime.getVirtualWindowSnapshot(),
+  ): DataGridRuntimeVirtualWindowSnapshot => {
+    return resolveBodyVirtualWindowSnapshot(
+      snapshot,
+      rowPartition.value.bodyRowCount,
+      columnSnapshot.value.visibleColumns.length,
+    )
   }
-  const virtualWindow = ref<DataGridRuntimeVirtualWindowSnapshot | null>(
-    runtime.getVirtualWindowSnapshot() ?? buildFallbackVirtualWindow(),
+  const virtualWindow = shallowRef<DataGridRuntimeVirtualWindowSnapshot | null>(
+    resolveCurrentBodyVirtualWindow(),
   )
 
   const unsubscribeColumns = runtime.subscribeColumnSnapshot(next => {
     columnSnapshot.value = next
+    virtualWindow.value = resolveCurrentBodyVirtualWindow()
   })
   const unsubscribeVirtualWindow = runtime.subscribeVirtualWindow(next => {
-    virtualWindow.value = next ?? buildFallbackVirtualWindow()
+    virtualWindow.value = resolveCurrentBodyVirtualWindow(next)
+  })
+  const unsubscribeRowPartition = rowModel.subscribe(() => {
+    const nextPartition = buildRowPartitionSnapshot<TRow>(api)
+    bodyRows = nextPartition.bodyRows
+    bodyRowIndexById = nextPartition.bodyRowIndexById
+    rowPartition.value = nextPartition.snapshot
+    virtualWindow.value = resolveCurrentBodyVirtualWindow()
   })
 
   const shouldAutoStart = options.autoStart !== false
@@ -214,6 +363,7 @@ export function useDataGridRuntime<TRow = unknown>(
     }
     unsubscribeColumns()
     unsubscribeVirtualWindow()
+    unsubscribeRowPartition()
     runtime.stop()
   }
 
@@ -251,6 +401,40 @@ export function useDataGridRuntime<TRow = unknown>(
     }
   }
 
+  function syncBodyRowsInRange(range: DataGridBodyViewportRange): readonly DataGridRowNode<TRow>[] {
+    const normalizedRange = normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount)
+    runtime.syncRowsInRange(normalizedRange)
+    if (bodyRows.length === 0) {
+      return []
+    }
+    const start = normalizedRange.start
+    const end = normalizedRange.end
+    return bodyRows.slice(start, end + 1)
+  }
+
+  function getBodyRowAtIndex(rowIndex: number): DataGridRowNode<TRow> | null {
+    if (bodyRows.length === 0) {
+      return null
+    }
+    const normalizedIndex = Math.max(0, Math.min(bodyRows.length - 1, Math.trunc(rowIndex)))
+    return bodyRows[normalizedIndex] ?? null
+  }
+
+  function resolveBodyRowIndexById(rowId: string | number): number {
+    return bodyRowIndexById.get(rowId) ?? -1
+  }
+
+  function setViewportRange(range: DataGridBodyViewportRange) {
+    api.view.setViewportRange(normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount))
+  }
+
+  function getViewportRange(): DataGridBodyViewportRange {
+    return normalizeBodyViewportRange(
+      api.rows.getSnapshot().viewportRange,
+      rowPartition.value.bodyRowCount,
+    )
+  }
+
   return {
     rowModel,
     columnModel,
@@ -258,6 +442,7 @@ export function useDataGridRuntime<TRow = unknown>(
     api,
     columnSnapshot,
     virtualWindow,
+    rowPartition,
     setRows: runtime.setRows,
     setAggregationModel: api.rows.setAggregationModel,
     getAggregationModel: api.rows.getAggregationModel,
@@ -274,14 +459,11 @@ export function useDataGridRuntime<TRow = unknown>(
     start: runtime.start,
     stop,
     syncRowsInRange: runtime.syncRowsInRange,
-    setViewportRange: api.view.setViewportRange,
-    getViewportRange: () => {
-      const snapshot = api.rows.getSnapshot()
-      return {
-        start: snapshot.viewportRange.start,
-        end: snapshot.viewportRange.end,
-      }
-    },
+    syncBodyRowsInRange,
+    getBodyRowAtIndex,
+    resolveBodyRowIndexById,
+    setViewportRange,
+    getViewportRange,
     getProjectionMode: api.policy.getProjectionMode,
     setProjectionMode(mode: DataGridApiProjectionMode) {
       const nextMode = api.policy.setProjectionMode(mode)

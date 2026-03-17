@@ -13,13 +13,18 @@ function resolveMaybeRef<T>(value: MaybeRef<T>): T {
   return value
 }
 
+export type DataGridAppBodyViewportRuntime<TRow> = Pick<
+  UseDataGridRuntimeResult<TRow>,
+  "virtualWindow" | "syncBodyRowsInRange" | "rowPartition"
+>
+
 export interface UseDataGridAppViewportOptions<TRow> {
-  runtime: Pick<UseDataGridRuntimeResult<TRow>, "syncRowsInRange" | "virtualWindow" | "api">
+  runtime: DataGridAppBodyViewportRuntime<TRow>
   mode: MaybeRef<DataGridAppMode>
   rowRenderMode: MaybeRef<DataGridAppRowRenderMode>
   rowVirtualizationEnabled?: MaybeRef<boolean>
   columnVirtualizationEnabled?: MaybeRef<boolean>
-  totalRows: Ref<number>
+  totalRows?: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   normalizedBaseRowHeight: Ref<number>
   columnWidths?: Ref<Record<string, number>>
@@ -40,6 +45,7 @@ export interface UseDataGridAppViewportResult<TRow> {
   bodyViewportRef: Ref<HTMLElement | null>
   viewportScrollTop: Ref<number>
   displayRows: Ref<readonly DataGridRowNode<TRow>[]>
+  pinnedBottomRows: Ref<readonly DataGridRowNode<TRow>[]>
   renderedColumns: Ref<readonly DataGridColumnSnapshot[]>
   viewportRowStart: Ref<number>
   viewportRowEnd: Ref<number>
@@ -102,24 +108,30 @@ export function useDataGridAppViewport<TRow>(
     return resolveMaybeRef(options.mode) === "base" && resolveMaybeRef(options.rowRenderMode) === "pagination"
   })
 
+  const resolveScrollableBodyRowCount = (): number => {
+    return Math.max(0, options.runtime.rowPartition.value.bodyRowCount)
+  }
+
   const viewportRowStart = computed<number>(() => {
     if (isPaginationMode.value) {
       return 0
     }
-    return options.runtime.virtualWindow.value?.rowStart ?? 0
+    const maxStart = Math.max(0, resolveScrollableBodyRowCount() - 1)
+    return Math.min(options.runtime.virtualWindow.value?.rowStart ?? 0, maxStart)
   })
   const viewportRowEnd = computed<number>(() => {
     if (isPaginationMode.value) {
       return Math.max(0, displayRows.value.length - 1)
     }
-    return options.runtime.virtualWindow.value?.rowEnd ?? Math.max(0, options.totalRows.value - 1)
+    const maxEnd = Math.max(0, resolveScrollableBodyRowCount() - 1)
+    return Math.min(options.runtime.virtualWindow.value?.rowEnd ?? maxEnd, maxEnd)
   })
   const renderedRowEnd = computed<number>(() => {
     if (isPaginationMode.value) {
       return Math.max(0, displayRows.value.length - 1)
     }
     if (!resolveMaybeRef(options.rowVirtualizationEnabled)) {
-      return Math.max(0, options.totalRows.value - 1)
+      return Math.max(0, resolveScrollableBodyRowCount() - 1)
     }
     const actualCount = displayRows.value.length
     if (actualCount <= 0) {
@@ -142,8 +154,8 @@ export function useDataGridAppViewport<TRow>(
     if (isPaginationMode.value) {
       return 0
     }
-    const total = options.totalRows.value
-    if (total <= 0) {
+    const bodyRowCount = resolveScrollableBodyRowCount()
+    if (bodyRowCount <= 0) {
       return 0
     }
     if (
@@ -153,7 +165,7 @@ export function useDataGridAppViewport<TRow>(
       const renderedBottom = options.resolveRowOffset(renderedRowEnd.value + 1)
       return Math.max(0, options.resolveTotalRowHeight() - renderedBottom)
     }
-    const afterCount = Math.max(0, total - (renderedRowEnd.value + 1))
+    const afterCount = Math.max(0, bodyRowCount - (renderedRowEnd.value + 1))
     return afterCount * options.normalizedBaseRowHeight.value
   })
 
@@ -289,7 +301,7 @@ export function useDataGridAppViewport<TRow>(
   }
 
   const resolveViewportRangeFromElement = (element: HTMLElement): DataGridViewportRange => {
-    const total = options.runtime.api.rows.getCount()
+    const total = resolveScrollableBodyRowCount()
     if (total <= 0) {
       return { start: 0, end: 0 }
     }
@@ -326,7 +338,7 @@ export function useDataGridAppViewport<TRow>(
     ) {
       return
     }
-    displayRows.value = options.runtime.syncRowsInRange(range)
+    displayRows.value = options.runtime.syncBodyRowsInRange(range)
     lastSyncedRange = {
       start: range.start,
       end: range.end,
@@ -394,6 +406,7 @@ export function useDataGridAppViewport<TRow>(
     bodyViewportRef,
     viewportScrollTop,
     displayRows,
+    pinnedBottomRows: computed(() => options.runtime.rowPartition.value.pinnedBottomRows),
     renderedColumns: computed(() => viewportColumnMetrics.value.renderedColumns),
     viewportRowStart,
     viewportRowEnd,

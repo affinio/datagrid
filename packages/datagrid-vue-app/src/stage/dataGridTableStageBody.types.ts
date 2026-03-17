@@ -34,9 +34,11 @@ export type DataGridTableStageSelectEditorOptionsLoader = (
 ) => Promise<readonly DataGridTableStageSelectEditorOption[]>
 
 export interface DataGridTableStageBodyRenderApiBase {
+  absoluteRowIndex: (row: DataGridTableStageBodyRow, rowOffset: number) => number
+  viewportRowOffset: (row: DataGridTableStageBodyRow, rowOffset: number) => number
   rowStateClasses: (row: DataGridTableStageBodyRow, rowOffset: number) => Record<string, boolean>
   handleRowContainerClick: (row: DataGridTableStageBodyRow) => void
-  setHoveredRow: (rowOffset: number) => void
+  setHoveredRow: (row: DataGridTableStageBodyRow, rowOffset: number) => void
   builtInCellClasses: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => Record<string, boolean>
   cellStateClasses: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => Record<string, boolean>
   resolveCellCustomClass: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => unknown
@@ -53,7 +55,7 @@ export interface DataGridTableStageBodyRenderApiBase {
   handleCellMouseMove: (event: MouseEvent, rowOffset: number, columnIndex: number) => void
   clearRangeMoveHandleHover: () => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
-  startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => void
+  startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number) => void
   isCellEditableSafe: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   isFillHandleCellSafe: (rowOffset: number, columnIndex: number) => boolean
   isEditingCellSafe: (row: DataGridTableStageBodyRow, columnKey: string) => boolean
@@ -91,6 +93,9 @@ export interface DataGridTableStagePinnedPaneProps {
   contentRef?: (value: Element | ComponentPublicInstance | null) => void
   columns: readonly DataGridTableStageBodyColumn[]
   showIndexColumn: boolean
+  displayRows: readonly DataGridTableStageBodyRow[]
+  topSpacerHeight?: number
+  bottomSpacerHeight?: number
   selectionOverlaySegments: readonly DataGridTableStageOverlaySegment[]
   fillPreviewOverlaySegments: readonly DataGridTableStageOverlaySegment[]
   movePreviewOverlaySegments: readonly DataGridTableStageOverlaySegment[]

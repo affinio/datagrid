@@ -14,10 +14,7 @@ export interface DataGridTableStageHistoryAdapter {
 }
 
 export interface UseDataGridTableStageHistoryOptions<TRow extends Record<string, unknown>> {
-  runtime: Pick<
-    import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>,
-    "api" | "syncRowsInRange" | "virtualWindow" | "columnSnapshot"
-  >
+  runtime: Pick<import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>, "api">
   cloneRowData: (row: TRow) => TRow
   syncViewport: () => void
   history?: DataGridTableStageHistoryAdapter
@@ -41,7 +38,7 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
   const internalIntentHistory = options.history
     ? null
     : useDataGridAppIntentHistory<TRow>({
-      runtime: options.runtime as never,
+      runtime: options.runtime,
       cloneRowData: options.cloneRowData,
       syncViewport: options.syncViewport,
     })

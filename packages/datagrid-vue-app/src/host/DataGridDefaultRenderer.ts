@@ -62,6 +62,13 @@ interface SortToggleState {
 type DataGridColumnFilterEntry = DataGridFilterSnapshot["columnFilters"][string]
 type DataGridLegacyAdvancedFilterEntry = DataGridFilterSnapshot["advancedFilters"][string]
 type DataGridAdvancedExpressionEntry = NonNullable<DataGridFilterSnapshot["advancedExpression"]>
+type DataGridDefaultRendererRuntime = Pick<
+  UseDataGridRuntimeResult<Record<string, unknown>>,
+  "api" | "syncBodyRowsInRange" | "rowPartition" | "virtualWindow" | "columnSnapshot"
+> & {
+  getBodyRowAtIndex: (rowIndex: number) => import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>> | null
+  resolveBodyRowIndexById: (rowId: string | number) => number
+}
 
 function normalizeBaseRowHeight(value: number): number {
   if (!Number.isFinite(value)) {
@@ -373,7 +380,7 @@ export default defineComponent({
       default: () => [],
     },
     runtime: {
-      type: Object as PropType<Pick<UseDataGridRuntimeResult<Record<string, unknown>>, "api" | "syncRowsInRange" | "virtualWindow" | "columnSnapshot">>,
+      type: Object as PropType<DataGridDefaultRendererRuntime>,
       required: true,
     },
     runtimeRowModel: {
@@ -456,6 +463,14 @@ export default defineComponent({
       type: Boolean,
       default: false,
     },
+    showRowIndex: {
+      type: Boolean,
+      default: true,
+    },
+    rowSelection: {
+      type: Boolean,
+      default: true,
+    },
     isCellEditable: {
       type: Function as PropType<DataGridCellEditablePredicate<Record<string, unknown>> | undefined>,
       default: undefined,
@@ -530,7 +545,7 @@ export default defineComponent({
 
     const modeRef = computed(() => props.mode)
     const rowsRef = computed(() => props.rows)
-    const totalRows = computed(() => {
+    const totalRuntimeRows = computed(() => {
       void rowVersion.value
       return props.runtime.api.rows.getSnapshot().rowCount
     })
@@ -931,7 +946,7 @@ export default defineComponent({
       sourceRows: rowsRef,
       runtime: props.runtime,
       rowVersion,
-      totalRows,
+      totalRuntimeRows,
       visibleColumns,
       rowRenderMode: computed(() => props.renderMode),
       rowHeightMode,
@@ -939,6 +954,8 @@ export default defineComponent({
       selectionSnapshot: props.selectionSnapshot,
       selectionAnchor: props.selectionAnchor,
       rowSelectionSnapshot: props.rowSelectionSnapshot,
+      showRowIndex: computed(() => props.showRowIndex),
+      showRowSelection: computed(() => props.rowSelection),
       syncSelectionSnapshotFromRuntime: props.syncSelectionSnapshotFromRuntime,
       syncRowSelectionSnapshotFromRuntime: props.syncRowSelectionSnapshotFromRuntime,
       firstColumnKey,

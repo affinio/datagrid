@@ -15,8 +15,8 @@ import {
   useDataGridAppInteractionController,
   useDataGridAppRowPresentation,
   useDataGridAppRowSizing,
-  useDataGridAppRuntimeSync,
   useDataGridAppViewport,
+  useDataGridAppRuntimeSync,
   useDataGridAppViewportLifecycle,
 } from "@affino/datagrid-vue"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
@@ -42,16 +42,21 @@ const AUTO_RESIZE_SAMPLE_LIMIT = 400
 
 export type { DataGridTableStageHistoryAdapter } from "./useDataGridTableStageHistory"
 
+type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = Pick<
+  import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>,
+  "api" | "syncBodyRowsInRange" | "rowPartition" | "virtualWindow" | "columnSnapshot"
+> & {
+  getBodyRowAtIndex: (rowIndex: number) => import("@affino/datagrid-vue").DataGridRowNode<TRow> | null
+  resolveBodyRowIndexById: (rowId: string | number) => number
+}
+
 export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string, unknown>> {
   mode: Ref<"base" | "tree" | "pivot" | "worker">
   rows: Ref<readonly TRow[]>
   sourceRows?: Ref<readonly TRow[]>
-  runtime: Pick<
-    import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>,
-    "api" | "syncRowsInRange" | "virtualWindow" | "columnSnapshot"
-  >
+  runtime: DataGridTableStageBodyRuntime<TRow>
   rowVersion: Ref<number>
-  totalRows: Ref<number>
+  totalRuntimeRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   rowRenderMode: Ref<"virtualization" | "pagination">
   rowHeightMode: Ref<"fixed" | "auto">
@@ -60,6 +65,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   selectionAnchor: Ref<unknown>
   syncSelectionSnapshotFromRuntime: () => void
   rowSelectionSnapshot: Ref<DataGridRowSelectionSnapshot | null>
+  showRowIndex?: Ref<boolean>
+  showRowSelection?: Ref<boolean>
   syncRowSelectionSnapshotFromRuntime?: () => void
   firstColumnKey: Ref<string>
   columnFilterTextByKey: Ref<Record<string, string>>
@@ -105,9 +112,13 @@ export function useDataGridTableStageRuntime<
 ): UseDataGridTableStageRuntimeResult<TRow> {
   const syncRowSelectionSnapshotFromRuntime = options.syncRowSelectionSnapshotFromRuntime ?? (() => undefined)
   const rowSelectionSnapshotRef = options.rowSelectionSnapshot ?? ref<DataGridRowSelectionSnapshot | null>(null)
+  const showRowIndex = computed(() => options.showRowIndex?.value !== false)
+  const totalBodyRows = computed(() => options.runtime.rowPartition.value.bodyRowCount)
+  const effectiveIndexColumnWidth = computed(() => (showRowIndex.value ? INDEX_COLUMN_WIDTH : 0))
   const columnService = useDataGridTableStageColumns<TRow>({
     runtime: options.runtime,
     visibleColumns: options.visibleColumns,
+    showRowSelection: options.showRowSelection,
     isCellEditable: options.isCellEditable,
   })
   const {
@@ -122,7 +133,7 @@ export function useDataGridTableStageRuntime<
   } = columnService
 
   const rowHeightMetrics = createDataGridAppRowHeightMetrics({
-    totalRows: () => options.totalRows.value,
+    totalRows: () => totalBodyRows.value,
     resolveBaseRowHeight: () => options.normalizedBaseRowHeight.value,
     resolveRowHeightOverride: rowIndex => options.runtime.api.view.getRowHeightOverride(rowIndex),
     resolveRowHeightVersion: () => options.runtime.api.view.getRowHeightVersion(),
@@ -138,6 +149,7 @@ export function useDataGridTableStageRuntime<
     headerViewportRef,
     bodyViewportRef,
     displayRows,
+    pinnedBottomRows,
     renderedColumns,
     viewportRowStart,
     viewportColumnStart,
@@ -154,12 +166,12 @@ export function useDataGridTableStageRuntime<
     scheduleViewportSync,
     cancelScheduledViewportSync,
   } = useDataGridAppViewport<TRow>({
-    runtime: options.runtime as never,
+    runtime: options.runtime,
     mode: options.mode,
     rowRenderMode: options.rowRenderMode,
     rowVirtualizationEnabled: computed(() => options.virtualization.value.rows),
     columnVirtualizationEnabled: computed(() => options.virtualization.value.columns),
-    totalRows: options.totalRows,
+    totalRows: totalBodyRows,
     visibleColumns: centerColumns,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
     resolveColumnWidth,
@@ -194,7 +206,7 @@ export function useDataGridTableStageRuntime<
   const selectionController = useDataGridAppCellSelection<TRow>({
     mode: options.mode,
     runtime: options.runtime as never,
-    totalRows: options.totalRows,
+    totalRows: totalBodyRows,
     visibleColumns: orderedVisibleColumns,
     viewportRowStart,
     selectionSnapshot: options.selectionSnapshot,
@@ -257,7 +269,7 @@ export function useDataGridTableStageRuntime<
   } = rowSelectionService
 
   const stageIndexColumnStyle = computed(() => {
-    const width = `${INDEX_COLUMN_WIDTH}px`
+    const width = `${effectiveIndexColumnWidth.value}px`
     return {
       ...indexColumnStyle.value,
       width,
@@ -266,15 +278,7 @@ export function useDataGridTableStageRuntime<
     }
   })
 
-  const resolveRowIndexById = (rowId: string | number): number => {
-    const count = options.runtime.api.rows.getCount()
-    for (let rowIndex = 0; rowIndex < count; rowIndex += 1) {
-      if (options.runtime.api.rows.get(rowIndex)?.rowId === rowId) {
-        return rowIndex
-      }
-    }
-    return -1
-  }
+  const resolveBodyRowIndexById = (rowId: string | number): number => options.runtime.resolveBodyRowIndexById(rowId)
 
   const historyService = useDataGridTableStageHistory<TRow>({
     runtime: options.runtime,
@@ -325,7 +329,7 @@ export function useDataGridTableStageRuntime<
   const clipboard = useDataGridAppClipboard<TRow, unknown>({
     mode: options.mode,
     runtime: options.runtime as never,
-    totalRows: options.totalRows,
+    totalRows: totalBodyRows,
     visibleColumns: orderedVisibleColumns,
     viewportRowStart,
     resolveSelectionRange: resolveSelectionRangeForClipboard,
@@ -371,7 +375,7 @@ export function useDataGridTableStageRuntime<
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
     resolveRowHeight: rowHeightMetrics.resolveRowHeight,
     resolveRowOffset: rowHeightMetrics.resolveRowOffset,
-    indexColumnWidth: INDEX_COLUMN_WIDTH,
+    indexColumnWidth: effectiveIndexColumnWidth.value,
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
     syncViewport: () => syncViewportFromDom(),
   })
@@ -390,10 +394,10 @@ export function useDataGridTableStageRuntime<
     mode: options.mode,
     bodyViewportRef,
     visibleColumns: orderedVisibleColumns,
-    totalRows: options.totalRows,
+    totalRows: totalBodyRows,
     runtime: options.runtime as never,
     readCell: (row, columnKey) => readStageCell(row, columnKey),
-    resolveRowIndexById,
+    resolveRowIndexById: resolveBodyRowIndexById,
     applyCellSelection: coord => {
       applyCellSelectionByCoord(coord, false)
     },
@@ -437,12 +441,12 @@ export function useDataGridTableStageRuntime<
   } = useDataGridAppInteractionController<TRow, unknown>({
     mode: options.mode,
     runtime: options.runtime as never,
-    totalRows: options.totalRows,
+    totalRows: totalBodyRows,
     visibleColumns: orderedVisibleColumns,
     viewportRowStart,
     selectionSnapshot: options.selectionSnapshot,
     bodyViewportRef,
-    indexColumnWidth: INDEX_COLUMN_WIDTH,
+    indexColumnWidth: effectiveIndexColumnWidth.value,
     resolveColumnWidth,
     resolveRowHeight: rowHeightMetrics.resolveRowHeight,
     resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
@@ -456,7 +460,7 @@ export function useDataGridTableStageRuntime<
     readCell: (row, columnKey) => readStageCell(row, columnKey),
     isCellEditable: isCellEditableByKey,
     cloneRowData: options.cloneRowData,
-    resolveRowIndexById,
+    resolveRowIndexById: resolveBodyRowIndexById,
     captureRowsSnapshot: captureHistorySnapshot,
     recordIntentTransaction: (descriptor, beforeSnapshot) => {
       recordHistoryIntentTransaction(descriptor, beforeSnapshot)
@@ -492,7 +496,7 @@ export function useDataGridTableStageRuntime<
   const viewportKeyboardService = useDataGridTableStageViewportKeyboard<TRow>({
     runtime: options.runtime,
     selectionSnapshot: options.selectionSnapshot,
-    totalRows: options.totalRows,
+    totalRows: totalBodyRows,
     orderedVisibleColumns,
     viewportRowStart,
     applySelectionRange: applyClipboardSelectionRange,
@@ -583,7 +587,9 @@ export function useDataGridTableStageRuntime<
     visibleColumns: orderedVisibleColumns,
     renderedColumns,
     displayRows,
+    pinnedBottomRows,
     sourceRows: options.sourceRows ?? options.rows,
+    showRowIndex,
     columnFilterTextByKey: options.columnFilterTextByKey,
     gridContentStyle,
     mainTrackStyle,
@@ -673,7 +679,7 @@ export function useDataGridTableStageRuntime<
     mode: options.mode,
     rows: options.rows,
     runtime: options.runtime as never,
-    totalRows: options.totalRows,
+    totalRows: totalBodyRows,
     rowVersion: options.rowVersion,
     rowHeightMode: options.rowHeightMode,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,

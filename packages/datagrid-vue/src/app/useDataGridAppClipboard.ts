@@ -10,7 +10,7 @@ export type DataGridAppPendingClipboardEdge = "top" | "right" | "bottom" | "left
 
 export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   mode: Ref<DataGridAppMode>
-  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api">
+  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex">
   totalRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   viewportRowStart: Ref<number>
@@ -98,7 +98,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     copiedSelectionRange,
     lastCopiedPayload,
     resolveCopyRange: copyRangeHelpers.resolveCopyRange,
-    getRowAtIndex: rowIndex => options.runtime.api.rows.get(rowIndex),
+    getRowAtIndex: rowIndex => options.runtime.getBodyRowAtIndex(rowIndex),
     getColumnKeyAtIndex: columnIndex => options.visibleColumns.value[columnIndex]?.key ?? null,
     getCellValue: (row, columnKey) => (
       options.readClipboardCell
@@ -123,7 +123,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     const editsByRowId = new Map<string | number, Record<string, string>>()
 
     for (let rowIndex = normalized.startRow; rowIndex <= normalized.endRow; rowIndex += 1) {
-      const row = options.runtime.api.rows.get(rowIndex)
+      const row = options.runtime.getBodyRowAtIndex(rowIndex)
       if (!row || row.rowId == null || row.kind === "group") {
         continue
       }
@@ -176,7 +176,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   const buildFillMatrixFromRange = options.buildFillMatrixFromRange ?? ((range: DataGridCopyRange): string[][] => {
     const matrix: string[][] = []
     for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
-      const row = options.runtime.api.rows.get(rowIndex)
+      const row = options.runtime.getBodyRowAtIndex(rowIndex)
       if (!row || row.kind === "group") {
         matrix.push([])
         continue

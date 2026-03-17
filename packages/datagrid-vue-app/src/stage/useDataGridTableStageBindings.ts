@@ -84,7 +84,9 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
 
   const rowsSection = computed<DataGridTableStageRowsSection<TRow>>(() => ({
     displayRows: unref(options.displayRows),
+    pinnedBottomRows: unref(options.pinnedBottomRows),
     sourceRows: unref(options.sourceRows),
+    showRowIndex: unref(options.showRowIndex),
     rowHover: unref(options.rowHover),
     stripedRows: unref(options.stripedRows),
     rowClass: unref(options.rowClass),

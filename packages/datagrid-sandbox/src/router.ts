@@ -58,6 +58,15 @@ const routes = [
     },
   },
   {
+    path: "/vue/shell/timesheet-grid",
+    component: VueShellGridCard,
+    props: {
+      title: "Vue: Timesheet Grid (Sugar)",
+      mode: "base",
+      timesheetShowcase: true,
+    },
+  },
+  {
     path: "/vue/shell/tree-grid",
     component: VueShellGridCard,
     props: { title: "Vue: Tree Grid (Sugar)", mode: "tree" },

@@ -690,6 +690,11 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
 }
 
+.grid-body-shell--pinned-bottom {
+  border-top: var(--datagrid-row-divider-size) solid var(--datagrid-row-divider-color);
+  flex: 0 0 auto;
+}
+
 .grid-header-pane,
 .grid-body-pane {
   min-width: 0;
@@ -734,6 +739,16 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
   background: var(--datagrid-viewport-bg);
   overscroll-behavior-x: contain;
+}
+
+.grid-body-viewport--pinned-bottom {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.grid-body-viewport--pinned-bottom::-webkit-scrollbar {
+  display: none;
 }
 
 .grid-body-viewport:focus,

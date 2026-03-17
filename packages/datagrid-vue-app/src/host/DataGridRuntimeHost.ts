@@ -17,6 +17,7 @@ import type {
   DataGridCoreServiceRegistry,
   DataGridPaginationInput,
   DataGridRowModel,
+  DataGridRowNode,
   DataGridRowModelSnapshot,
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-vue"
@@ -101,6 +102,19 @@ export default defineComponent({
       startupOrder: props.startupOrder,
       autoStart: props.autoStart,
     })
+    const bodyRuntime = runtime as typeof runtime & {
+      getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<unknown> | null
+      resolveBodyRowIndexById: (rowId: string | number) => number
+    }
+    const publicRuntime = {
+      api: runtime.api,
+      syncBodyRowsInRange: runtime.syncBodyRowsInRange,
+      rowPartition: runtime.rowPartition,
+      virtualWindow: runtime.virtualWindow,
+      columnSnapshot: runtime.columnSnapshot,
+      getBodyRowAtIndex: bodyRuntime.getBodyRowAtIndex,
+      resolveBodyRowIndexById: bodyRuntime.resolveBodyRowIndexById,
+    }
 
     const syncPaginationState = (): void => {
       if (props.renderMode === "pagination") {
@@ -174,7 +188,7 @@ export default defineComponent({
       const window = runtime.virtualWindow.value
       return {
         ...(window ?? {}),
-        rowTotal: runtime.api.rows.getCount(),
+        rowTotal: window?.rowTotal ?? runtime.rowPartition.value.bodyRowCount,
         colTotal: runtime.columnSnapshot.value.visibleColumns.length,
       }
     })
@@ -182,12 +196,15 @@ export default defineComponent({
     expose({
       api: runtime.api,
       core: runtime.core,
-      runtime,
+      runtime: publicRuntime,
       rowModel: runtime.rowModel,
       columnModel: runtime.columnModel,
       columnSnapshot: runtime.columnSnapshot,
+      rowPartition: runtime.rowPartition,
       setRows: runtime.setRows,
-      syncRowsInRange: runtime.syncRowsInRange,
+      syncBodyRowsInRange: runtime.syncBodyRowsInRange,
+      getBodyRowAtIndex: bodyRuntime.getBodyRowAtIndex,
+      resolveBodyRowIndexById: bodyRuntime.resolveBodyRowIndexById,
       virtualWindow: runtime.virtualWindow,
       start: runtime.start,
       stop: runtime.stop,
@@ -210,13 +227,16 @@ export default defineComponent({
       slots.default?.({
         api: runtime.api,
         core: runtime.core,
-        runtime,
-        grid: runtime,
+        runtime: publicRuntime,
+        grid: publicRuntime,
         rowModel: runtime.rowModel,
         columnModel: runtime.columnModel,
         columnSnapshot: runtime.columnSnapshot.value,
+        rowPartition: runtime.rowPartition.value,
         setRows: runtime.setRows,
-        syncRowsInRange: runtime.syncRowsInRange,
+        syncBodyRowsInRange: runtime.syncBodyRowsInRange,
+        getBodyRowAtIndex: bodyRuntime.getBodyRowAtIndex,
+        resolveBodyRowIndexById: bodyRuntime.resolveBodyRowIndexById,
         virtualWindow: slotVirtualWindow.value,
       }) ?? [],
     )

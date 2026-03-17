@@ -22,7 +22,7 @@ export type DataGridAppSelectionAnchorLike =
 
 export interface UseDataGridAppCellSelectionOptions<TRow> {
   mode: Ref<DataGridAppMode>
-  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api">
+  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex">
   totalRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   viewportRowStart: Ref<number>
@@ -101,7 +101,7 @@ export function useDataGridAppCellSelection<TRow>(
         rowCount: options.totalRows.value,
         colCount: options.visibleColumns.value.length,
       },
-      getRowIdByIndex: (rowIndex: number) => options.runtime.api.rows.get(rowIndex)?.rowId ?? null,
+      getRowIdByIndex: (rowIndex: number) => options.runtime.getBodyRowAtIndex(rowIndex)?.rowId ?? null,
     }
   }
 
@@ -154,7 +154,7 @@ export function useDataGridAppCellSelection<TRow>(
     return {
       rowIndex,
       columnIndex,
-      rowId: options.runtime.api.rows.get(rowIndex)?.rowId ?? null,
+      rowId: options.runtime.getBodyRowAtIndex(rowIndex)?.rowId ?? null,
     }
   }
 
@@ -225,12 +225,12 @@ export function useDataGridAppCellSelection<TRow>(
     const anchor = {
       rowIndex: normalized.startRow,
       colIndex: normalized.startColumn,
-      rowId: options.runtime.api.rows.get(normalized.startRow)?.rowId ?? null,
+      rowId: options.runtime.getBodyRowAtIndex(normalized.startRow)?.rowId ?? null,
     }
     const focus = {
       rowIndex: normalized.endRow,
       colIndex: normalized.endColumn,
-      rowId: options.runtime.api.rows.get(normalized.endRow)?.rowId ?? null,
+      rowId: options.runtime.getBodyRowAtIndex(normalized.endRow)?.rowId ?? null,
     }
     const createdRange = createGridSelectionRange(anchor, focus, context)
     const snapshot = buildSelectionSnapshot(createdRange, {
