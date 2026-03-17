@@ -63,6 +63,13 @@ export interface UseDataGridAppClipboardResult {
 export function useDataGridAppClipboard<TRow, TSnapshot>(
   options: UseDataGridAppClipboardOptions<TRow, TSnapshot>,
 ): UseDataGridAppClipboardResult {
+  const getBodyRowAtIndex = (rowIndex: number): DataGridRowNode<TRow> | null => {
+    const runtime = options.runtime as typeof options.runtime & {
+      getBodyRowAtIndex?: (index: number) => DataGridRowNode<TRow> | null
+    }
+    return runtime.getBodyRowAtIndex?.(rowIndex) ?? options.runtime.api.rows.get(rowIndex) ?? null
+  }
+
   const copiedSelectionRange = ref<DataGridCopyRange | null>(null)
   const lastCopiedPayload = ref("")
   const pendingClipboardOperation = ref<DataGridAppPendingClipboardOperation>("none")
@@ -98,7 +105,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     copiedSelectionRange,
     lastCopiedPayload,
     resolveCopyRange: copyRangeHelpers.resolveCopyRange,
-    getRowAtIndex: rowIndex => options.runtime.getBodyRowAtIndex(rowIndex),
+    getRowAtIndex: rowIndex => getBodyRowAtIndex(rowIndex),
     getColumnKeyAtIndex: columnIndex => options.visibleColumns.value[columnIndex]?.key ?? null,
     getCellValue: (row, columnKey) => (
       options.readClipboardCell
@@ -123,7 +130,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     const editsByRowId = new Map<string | number, Record<string, string>>()
 
     for (let rowIndex = normalized.startRow; rowIndex <= normalized.endRow; rowIndex += 1) {
-      const row = options.runtime.getBodyRowAtIndex(rowIndex)
+      const row = getBodyRowAtIndex(rowIndex)
       if (!row || row.rowId == null || row.kind === "group") {
         continue
       }
@@ -176,7 +183,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   const buildFillMatrixFromRange = options.buildFillMatrixFromRange ?? ((range: DataGridCopyRange): string[][] => {
     const matrix: string[][] = []
     for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
-      const row = options.runtime.getBodyRowAtIndex(rowIndex)
+      const row = getBodyRowAtIndex(rowIndex)
       if (!row || row.kind === "group") {
         matrix.push([])
         continue
