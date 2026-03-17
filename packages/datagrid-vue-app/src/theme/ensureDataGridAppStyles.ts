@@ -267,6 +267,16 @@ const DATA_GRID_APP_STYLES = `
   background: color-mix(in srgb, var(--datagrid-column-menu-item-hover-bg) 72%, var(--datagrid-editor-bg));
 }
 
+.datagrid-app-toolbar__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--datagrid-grid-surface) 88%, var(--datagrid-editor-bg));
+}
+
+.datagrid-app-toolbar__button:hover:disabled {
+  background: color-mix(in srgb, var(--datagrid-grid-surface) 88%, var(--datagrid-editor-bg));
+}
+
 .datagrid-app-toolbar__button:focus,
 .datagrid-app-toolbar__button:focus-visible {
   outline: none;

@@ -4,8 +4,10 @@
     type="button"
     class="datagrid-app-toolbar__button"
     :class="{ 'datagrid-app-toolbar__button--active': active }"
-    :style="overlayThemeVars"
     v-bind="triggerProps"
+    :style="overlayThemeVars"
+    :disabled="disabled"
+    :title="disabledReason || undefined"
   >
     {{ buttonLabel }}
   </button>
@@ -116,9 +118,13 @@ const props = withDefaults(defineProps<{
   items: readonly DataGridAggregationPanelItem[]
   buttonLabel?: string
   active?: boolean
+  disabled?: boolean
+  disabledReason?: string
 }>(), {
   buttonLabel: "Aggregations",
   active: false,
+  disabled: false,
+  disabledReason: "",
 })
 
 const emit = defineEmits<{

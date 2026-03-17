@@ -918,6 +918,7 @@ describe("DataGrid app facade contract", () => {
           { key: "amount", label: "Amount", dataType: "number", capabilities: { aggregatable: true } },
         ],
         aggregations: true,
+        groupBy: "owner",
       },
     })
 
@@ -966,6 +967,35 @@ describe("DataGrid app facade contract", () => {
       basis: "filtered",
       columns: [{ key: "amount", op: "sum" }],
     })
+
+    wrapper.unmount()
+  })
+
+  it("disables declarative aggregations when no groupBy model is active", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: [
+          { key: "owner", label: "Owner" },
+          { key: "amount", label: "Amount", dataType: "number", capabilities: { aggregatable: true } },
+        ],
+        aggregations: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = wrapper.find(".datagrid-app-toolbar__button")
+    expect(trigger.exists()).toBe(true)
+    expect((trigger.element as HTMLButtonElement).disabled).toBe(true)
+    expect(trigger.attributes("title")).toContain("require an active group-by model")
+
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(queryAggregationsRoot()).toBeNull()
+    expect(resolveVm(wrapper).getApi?.()?.rows.getAggregationModel?.()).toBeNull()
 
     wrapper.unmount()
   })

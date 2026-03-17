@@ -620,6 +620,7 @@ export default defineComponent({
     })
     const isAggregationsPanelOpen = ref(false)
     const aggregationDraftModel = ref<DataGridAggregationModel<Record<string, unknown>> | null>(null)
+    const aggregationGroupingEnabled = computed(() => Boolean(props.groupBy?.fields?.length))
     const currentAggregationModel = computed<DataGridAggregationModel<Record<string, unknown>> | null>(() => {
       void rowVersion.value
       return cloneAggregationModelState(props.runtime.api.rows.getAggregationModel())
@@ -824,6 +825,17 @@ export default defineComponent({
       aggregationDraftModel.value = cloneAggregationModelState(currentAggregationModel.value)
       isAggregationsPanelOpen.value = false
     }
+
+    watch(
+      aggregationGroupingEnabled,
+      enabled => {
+        if (enabled) {
+          return
+        }
+        cancelAggregationsPanel()
+      },
+      { immediate: true },
+    )
 
     const clearAggregationsPanel = (): void => {
       aggregationDraftModel.value = null
@@ -1051,7 +1063,13 @@ export default defineComponent({
             basis: aggregationBasis.value,
             items: aggregationPanelItems.value,
             buttonLabel: props.aggregations.buttonLabel,
-            active: isAggregationsPanelOpen.value || Boolean(currentAggregationModel.value?.columns.length),
+            active: aggregationGroupingEnabled.value && (
+              isAggregationsPanelOpen.value || Boolean(currentAggregationModel.value?.columns.length)
+            ),
+            disabled: !aggregationGroupingEnabled.value,
+            disabledReason: aggregationGroupingEnabled.value
+              ? ""
+              : "Aggregations require an active group-by model.",
             onOpen: openAggregationsPanel,
             onUpdateBasis: updateAggregationBasis,
             onToggleColumn: toggleAggregationColumn,
