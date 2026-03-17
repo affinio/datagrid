@@ -215,11 +215,22 @@ function resolveRowAt<TValue extends Record<string, unknown>>(wrapper: ReturnTyp
 }
 
 function queryColumnMenuRoot(): HTMLElement | null {
-  return document.body.querySelector<HTMLElement>("[data-affino-menu-root]")
+  const roots = Array.from(document.body.querySelectorAll<HTMLElement>("[data-affino-menu-root]"))
+  return roots.findLast(root => getComputedStyle(root).display !== "none") ?? null
 }
 
 function queryColumnMenuAction(action: string): HTMLElement | null {
-  return document.body.querySelector<HTMLElement>(`[data-datagrid-column-menu-action="${action}"]`)
+  const selector = `[data-datagrid-column-menu-action="${action}"]`
+  const rootMatch = queryColumnMenuRoot()?.querySelector<HTMLElement>(selector)
+  if (rootMatch) {
+    return rootMatch
+  }
+  const matches = Array.from(document.body.querySelectorAll<HTMLElement>(selector))
+  return matches.findLast(match => getComputedStyle(match).display !== "none") ?? null
+}
+
+function queryColumnMenuButton(columnKey: string): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>(`[data-datagrid-column-menu-button="true"][data-column-key="${columnKey}"]`)
 }
 
 function queryAdvancedFilterRoot(): HTMLElement | null {
@@ -430,12 +441,19 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     const ownerHeader = wrapper.find('.grid-cell--header[data-column-key="owner"]')
+    const ownerMenuButton = ownerHeader.find('[data-datagrid-column-menu-button="true"]')
 
     expect(ownerHeader.exists()).toBe(true)
+    expect(ownerMenuButton.exists()).toBe(true)
 
     await ownerHeader.trigger("click")
     await flushRuntimeTasks()
+    expect(queryColumnMenuRoot()).toBeFalsy()
+
+    await ownerMenuButton.trigger("click")
+    await flushRuntimeTasks()
     expect(queryColumnMenuRoot()).toBeTruthy()
+    expect(queryColumnMenuAction("sort-asc")?.textContent).toContain("Sort A to Z")
 
     document.body.querySelector<HTMLElement>("[data-affino-menu-root]")?.dispatchEvent(new KeyboardEvent("keydown", {
       key: "Escape",
@@ -454,7 +472,7 @@ describe("DataGrid app facade contract", () => {
       sortModel: [{ key: "owner", direction: "desc" }],
     })
 
-    await ownerHeader.trigger("click")
+    await ownerMenuButton.trigger("click")
     await flushRuntimeTasks()
     queryColumnMenuAction("pin-submenu")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
@@ -479,11 +497,10 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const ownerHeader = wrapper.find('.grid-cell--header[data-column-key="owner"]')
-    await ownerHeader.trigger("click")
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
 
-    const valueRows = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-column-menu__value"))
+    const valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
     const paymentsRow = valueRows.find(row => row.textContent?.includes("Payments"))
     expect(paymentsRow).toBeTruthy()
 
@@ -536,11 +553,10 @@ describe("DataGrid app facade contract", () => {
 
     expect(wrapper.findAll(".grid-body-viewport .grid-spacer").length).toBeGreaterThan(0)
 
-    const ownerHeader = wrapper.find('.grid-cell--header[data-column-key="owner"]')
-    await ownerHeader.trigger("click")
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
 
-    const valueRows = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-column-menu__value"))
+    const valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
     const paymentsRow = valueRows.find(row => row.textContent?.includes("Payments"))
     expect(paymentsRow).toBeTruthy()
 
@@ -575,17 +591,19 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const ownerHeader = wrapper.find('.grid-cell--header[data-column-key="owner"]')
-    await ownerHeader.trigger("click")
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
 
-    const search = document.body.querySelector<HTMLInputElement>(".datagrid-column-menu__search")
+    const searchInputs = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLInputElement>(".datagrid-column-menu__search") ?? [])
+    expect(searchInputs).toHaveLength(1)
+    expect(searchInputs[0]?.placeholder).toBe("Search values")
+    const search = searchInputs.at(-1) ?? null
     expect(search).toBeTruthy()
     search!.value = "alp"
     search!.dispatchEvent(new Event("input", { bubbles: true }))
     await flushRuntimeTasks()
 
-    const valueRows = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-column-menu__value"))
+    const valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
     expect(valueRows).toHaveLength(2)
 
     const alpineRow = valueRows.find(row => row.textContent?.includes("Alpine"))
@@ -630,11 +648,10 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const ownerHeader = wrapper.find('.grid-cell--header[data-column-key="owner"]')
-    await ownerHeader.trigger("click")
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
 
-    let search = document.body.querySelector<HTMLInputElement>(".datagrid-column-menu__search")
+    let search = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLInputElement>(".datagrid-column-menu__search") ?? []).at(-1) ?? null
     expect(search).toBeTruthy()
     search!.value = "bet"
     search!.dispatchEvent(new Event("input", { bubbles: true }))
@@ -659,10 +676,10 @@ describe("DataGrid app facade contract", () => {
       }),
     })
 
-    await ownerHeader.trigger("click")
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
 
-    search = document.body.querySelector<HTMLInputElement>(".datagrid-column-menu__search")
+    search = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLInputElement>(".datagrid-column-menu__search") ?? []).at(-1) ?? null
     expect(search).toBeTruthy()
     search!.value = "alp"
     search!.dispatchEvent(new Event("input", { bubbles: true }))
@@ -674,7 +691,7 @@ describe("DataGrid app facade contract", () => {
     addCurrentSelection!.dispatchEvent(new Event("change", { bubbles: true }))
     await flushRuntimeTasks()
 
-    const valueRows = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-column-menu__value"))
+    const valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
     const alphaRow = valueRows.find(row => row.textContent?.includes("Alpha"))
     expect(alphaRow).toBeTruthy()
     const alphaCheckbox = alphaRow!.querySelector<HTMLInputElement>('input[type="checkbox"]')
@@ -1592,11 +1609,46 @@ describe("DataGrid app facade contract", () => {
     expect(rootElement.style.getPropertyValue("--datagrid-header-cell-bg")).toBe("#f4e8d5")
     expect(rootElement.style.getPropertyValue("--datagrid-column-menu-bg")).toBe("#fff8ef")
 
-    await wrapper.find('.grid-cell--header[data-column-key="owner"]').trigger("click")
+    queryColumnMenuButton("owner")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
 
     const menuRoot = queryColumnMenuRoot()
     expect(menuRoot?.style.getPropertyValue("--datagrid-column-menu-bg")).toBe("#fff8ef")
+
+    wrapper.unmount()
+  })
+
+  it("uses data-type specific sort labels in the declarative columnMenu", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: [
+          { rowId: "t1", owner: "NOC", createdAt: "2026-03-01", amount: 20 },
+          { rowId: "t2", owner: "Payments", createdAt: "2026-02-01", amount: 10 },
+        ],
+        columns: [
+          { key: "owner", label: "Owner", dataType: "string" },
+          { key: "createdAt", label: "Created", dataType: "date" },
+          { key: "amount", label: "Amount", dataType: "number" },
+        ],
+        columnMenu: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="createdAt"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    expect(queryColumnMenuAction("sort-asc")?.textContent).toContain("Sort oldest to newest")
+
+    document.body.querySelector<HTMLElement>("[data-affino-menu-root]")?.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+    }))
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="amount"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    expect(queryColumnMenuAction("sort-asc")?.textContent).toContain("Sort smallest to largest")
 
     wrapper.unmount()
   })

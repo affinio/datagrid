@@ -146,6 +146,38 @@ describe("useDataGridRuntimeService contract", () => {
     runtime.stop()
   })
 
+  it("keeps worker mode responsive when column metadata is cyclic", () => {
+    const meta: Record<string, unknown> = {
+      section: "ops",
+    }
+    meta.self = meta
+
+    const runtime = useDataGridRuntimeService<Row>({
+      rows: [
+        { rowId: "r1", name: "alpha" },
+        { rowId: "r2", name: "bravo" },
+      ],
+      columns: [{ key: "name", label: "Name", meta }],
+      clientRowModelOptions: {
+        computeMode: "worker",
+        computeTransport: {
+          dispatch() {
+            return { handled: false }
+          },
+        },
+      },
+    })
+
+    expect(() => {
+      runtime.api.rows.setSortModel([{ key: "name", direction: "asc" }])
+      runtime.syncRowsInRange({ start: 0, end: 1 })
+    }).not.toThrow()
+
+    expect(runtime.getColumnSnapshot().columns.map(column => column.key)).toEqual(["name"])
+
+    runtime.stop()
+  })
+
   it("passes api plugins through runtime constructor options", () => {
     const pluginEvents: string[] = []
     const runtime = useDataGridRuntimeService<Row>({

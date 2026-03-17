@@ -865,7 +865,7 @@ describe("DataGridTableStage contract", () => {
       },
     })
 
-    expect(wrapper.find('[data-datagrid-column-menu-trigger="true"]').exists()).toBe(true)
+    expect(wrapper.find('[data-datagrid-column-menu-button="true"]').exists()).toBe(true)
     expect(wrapper.find('.col-menu-bar-trigger').exists()).toBe(false)
     expect(wrapper.find('.col-filter-input').exists()).toBe(false)
 

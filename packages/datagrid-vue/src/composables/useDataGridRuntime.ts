@@ -172,9 +172,73 @@ export interface DataGridRuntimeRowPartitionSnapshot<TRow = unknown> {
 }
 
 interface DataGridRuntimeResolvedRowPartition<TRow = unknown> {
-  bodyRows: readonly DataGridRowNode<TRow>[]
-  bodyRowIndexById: ReadonlyMap<string | number, number>
+  bodyRows: (DataGridRowNode<TRow> | undefined)[]
+  bodyRowIndexById: Map<string | number, number>
   snapshot: DataGridRuntimeRowPartitionSnapshot<TRow>
+}
+
+function isWorkerBackedRowModel<TRow>(rowModel: DataGridRowModel<TRow>): boolean {
+  return typeof (
+    rowModel as DataGridRowModel<TRow> & {
+      getWorkerProtocolDiagnostics?: () => unknown
+    }
+  ).getWorkerProtocolDiagnostics === "function"
+}
+
+function isPinnedBodyExcludedRow<TRow>(row: DataGridRowNode<TRow>): boolean {
+  return row.state.pinned === "top" || row.state.pinned === "bottom"
+}
+
+function normalizeReadableViewportRange(
+  range: DataGridViewportRange,
+  rowCount: number,
+): DataGridViewportRange {
+  if (rowCount <= 0) {
+    return { start: 0, end: 0 }
+  }
+  const start = Math.max(0, Math.min(rowCount - 1, Math.trunc(range.start)))
+  const end = Math.max(start, Math.min(rowCount - 1, Math.trunc(range.end)))
+  return { start, end }
+}
+
+function buildSparseRowPartitionSnapshot<TRow>(
+  api: Pick<UseDataGridRuntimeResult<TRow>["api"], "rows">,
+  snapshot: DataGridRowModelSnapshot<TRow>,
+): DataGridRuntimeResolvedRowPartition<TRow> {
+  const total = api.rows.getCount()
+  const bodyRows: Array<DataGridRowNode<TRow> | undefined> = []
+  const bodyRowIndexById = new Map<string | number, number>()
+  const pinnedTopRows: DataGridRowNode<TRow>[] = []
+  const pinnedBottomRows: DataGridRowNode<TRow>[] = []
+  const visibleRows = total > 0 && typeof api.rows.getRange === "function"
+    ? api.rows.getRange(normalizeReadableViewportRange(snapshot.viewportRange, total))
+    : []
+
+  for (const row of visibleRows) {
+    if (row.state.pinned === "top") {
+      pinnedTopRows.push(row)
+      continue
+    }
+    if (row.state.pinned === "bottom") {
+      pinnedBottomRows.push(row)
+      continue
+    }
+    const bodyIndex = Math.max(0, Math.trunc(row.displayIndex))
+    bodyRows[bodyIndex] = row
+    if (typeof row.rowId === "string" || typeof row.rowId === "number") {
+      bodyRowIndexById.set(row.rowId, bodyIndex)
+    }
+  }
+
+  return {
+    bodyRows,
+    bodyRowIndexById,
+    snapshot: {
+      bodyRowCount: Math.max(0, total),
+      pinnedTopRows,
+      pinnedBottomRows,
+    },
+  }
 }
 
 function normalizeBodyViewportRange(
@@ -224,7 +288,7 @@ function buildRowPartitionSnapshot<TRow>(
   const getRow = api.rows.get
   const pinnedTopRows: DataGridRowNode<TRow>[] = []
   const pinnedBottomRows: DataGridRowNode<TRow>[] = []
-  const bodyRows: DataGridRowNode<TRow>[] = []
+  const bodyRows: Array<DataGridRowNode<TRow> | undefined> = []
   const bodyRowIndexById = new Map<string | number, number>()
 
   if (typeof getRow !== "function" || total <= 0) {
@@ -295,8 +359,11 @@ export function useDataGridRuntime<TRow = unknown>(
   }
 
   const { rowModel, columnModel, core, api } = runtime
+  const workerBackedRowModel = isWorkerBackedRowModel(rowModel)
   const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
-  const initialRowPartition = buildRowPartitionSnapshot<TRow>(api)
+  const initialRowPartition = workerBackedRowModel
+    ? buildSparseRowPartitionSnapshot<TRow>(api, rowModel.getSnapshot())
+    : buildRowPartitionSnapshot<TRow>(api)
   const rowPartition = shallowRef<DataGridRuntimeRowPartitionSnapshot<TRow>>(
     initialRowPartition.snapshot,
   )
@@ -322,8 +389,10 @@ export function useDataGridRuntime<TRow = unknown>(
   const unsubscribeVirtualWindow = runtime.subscribeVirtualWindow(next => {
     virtualWindow.value = resolveCurrentBodyVirtualWindow(next)
   })
-  const unsubscribeRowPartition = rowModel.subscribe(() => {
-    const nextPartition = buildRowPartitionSnapshot<TRow>(api)
+  const unsubscribeRowPartition = rowModel.subscribe((snapshot) => {
+    const nextPartition = workerBackedRowModel
+      ? buildSparseRowPartitionSnapshot<TRow>(api, snapshot)
+      : buildRowPartitionSnapshot<TRow>(api)
     bodyRows = nextPartition.bodyRows
     bodyRowIndexById = nextPartition.bodyRowIndexById
     rowPartition.value = nextPartition.snapshot
@@ -403,13 +472,26 @@ export function useDataGridRuntime<TRow = unknown>(
 
   function syncBodyRowsInRange(range: DataGridBodyViewportRange): readonly DataGridRowNode<TRow>[] {
     const normalizedRange = normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount)
-    runtime.syncRowsInRange(normalizedRange)
+    const syncedRows = runtime.syncRowsInRange(normalizedRange)
+    if (workerBackedRowModel) {
+      for (const row of syncedRows) {
+        if (isPinnedBodyExcludedRow(row)) {
+          continue
+        }
+        const bodyIndex = Math.max(0, Math.trunc(row.displayIndex))
+        bodyRows[bodyIndex] = row
+        if (typeof row.rowId === "string" || typeof row.rowId === "number") {
+          bodyRowIndexById.set(row.rowId, bodyIndex)
+        }
+      }
+      return syncedRows.filter(row => !isPinnedBodyExcludedRow(row))
+    }
     if (bodyRows.length === 0) {
       return []
     }
     const start = normalizedRange.start
     const end = normalizedRange.end
-    return bodyRows.slice(start, end + 1)
+    return bodyRows.slice(start, end + 1).filter((row): row is DataGridRowNode<TRow> => Boolean(row))
   }
 
   function getBodyRowAtIndex(rowIndex: number): DataGridRowNode<TRow> | null {

@@ -43,6 +43,7 @@
               :rows="sourceRows"
               :column-key="column.key"
               :column-label="column.column.label ?? column.key"
+              :column-data-type="column.column.dataType"
               :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
               :sort-enabled="isColumnSortable(column)"
               :pin="column.pin"
@@ -58,7 +59,7 @@
               @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
               @update-text-filter="setColumnFilterText(column.key, $event)"
               @clear-filter="clearColumnMenuFilterSafe(column.key)"
-              v-slot="{ open }"
+              v-slot="{ open, toggleMenuFromElement }"
             >
               <div
                 class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
@@ -68,12 +69,40 @@
                 }"
                 :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
                 :data-column-key="column.key"
-                data-datagrid-column-menu-trigger="true"
               >
                 <div class="col-head">
-                  <span>{{ column.column.label ?? column.key }}</span>
-                  <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
-                  <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
+                  <span class="col-head__label">{{ column.column.label ?? column.key }}</span>
+                  <button
+                    type="button"
+                    class="col-menu-trigger"
+                    :class="resolveColumnMenuTriggerClass(column.key, open)"
+                    :aria-label="resolveColumnMenuButtonLabel(column)"
+                    :title="resolveColumnMenuButtonLabel(column)"
+                    :data-column-key="column.key"
+                    data-datagrid-column-menu-trigger="true"
+                    data-datagrid-column-menu-button="true"
+                    @mousedown.stop
+                    @click.stop="handleColumnMenuButtonClick(toggleMenuFromElement, $event)"
+                  >
+                    <svg class="col-menu-trigger__icon" viewBox="0 0 16 16" aria-hidden="true">
+                      <path
+                        v-if="shouldShowColumnMenuFilterIcon(column.key)"
+                        d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"
+                      />
+                      <path
+                        v-if="shouldShowColumnMenuSortAscIcon(column.key)"
+                        d="M9 11V6.75M9 6.75 7.25 8.5M9 6.75 10.75 8.5"
+                      />
+                      <path
+                        v-else-if="shouldShowColumnMenuSortDescIcon(column.key)"
+                        d="M9 5v4.25M9 9.25 7.25 7.5M9 9.25 10.75 7.5"
+                      />
+                      <path
+                        v-else
+                        d="M5.5 6.5 8 9l2.5-2.5"
+                      />
+                    </svg>
+                  </button>
                   <button
                     type="button"
                     class="col-resize"
@@ -168,6 +197,7 @@
             :rows="sourceRows"
             :column-key="column.key"
             :column-label="column.column.label ?? column.key"
+            :column-data-type="column.column.dataType"
             :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
             :sort-enabled="isColumnSortable(column)"
             :pin="column.pin"
@@ -183,7 +213,7 @@
             @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
             @update-text-filter="setColumnFilterText(column.key, $event)"
             @clear-filter="clearColumnMenuFilterSafe(column.key)"
-            v-slot="{ open }"
+            v-slot="{ open, toggleMenuFromElement }"
           >
             <div
               class="grid-cell grid-cell--header grid-cell--header-sortable"
@@ -193,12 +223,40 @@
               }"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
-              data-datagrid-column-menu-trigger="true"
             >
               <div class="col-head">
-                <span>{{ column.column.label ?? column.key }}</span>
-                <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
-                <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
+                <span class="col-head__label">{{ column.column.label ?? column.key }}</span>
+                <button
+                  type="button"
+                  class="col-menu-trigger"
+                  :class="resolveColumnMenuTriggerClass(column.key, open)"
+                  :aria-label="resolveColumnMenuButtonLabel(column)"
+                  :title="resolveColumnMenuButtonLabel(column)"
+                  :data-column-key="column.key"
+                  data-datagrid-column-menu-trigger="true"
+                  data-datagrid-column-menu-button="true"
+                  @mousedown.stop
+                  @click.stop="handleColumnMenuButtonClick(toggleMenuFromElement, $event)"
+                >
+                  <svg class="col-menu-trigger__icon" viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      v-if="shouldShowColumnMenuFilterIcon(column.key)"
+                      d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"
+                    />
+                    <path
+                      v-if="shouldShowColumnMenuSortAscIcon(column.key)"
+                      d="M9 11V6.75M9 6.75 7.25 8.5M9 6.75 10.75 8.5"
+                    />
+                    <path
+                      v-else-if="shouldShowColumnMenuSortDescIcon(column.key)"
+                      d="M9 5v4.25M9 9.25 7.25 7.5M9 9.25 10.75 7.5"
+                    />
+                    <path
+                      v-else
+                      d="M5.5 6.5 8 9l2.5-2.5"
+                    />
+                  </svg>
+                </button>
                 <button
                   type="button"
                   class="col-resize"
@@ -263,6 +321,7 @@
             :rows="sourceRows"
             :column-key="column.key"
             :column-label="column.column.label ?? column.key"
+            :column-data-type="column.column.dataType"
             :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
             :sort-enabled="isColumnSortable(column)"
             :pin="column.pin"
@@ -278,7 +337,7 @@
             @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
             @update-text-filter="setColumnFilterText(column.key, $event)"
             @clear-filter="clearColumnMenuFilterSafe(column.key)"
-            v-slot="{ open }"
+            v-slot="{ open, toggleMenuFromElement }"
           >
             <div
               class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
@@ -288,12 +347,40 @@
               }"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
-              data-datagrid-column-menu-trigger="true"
             >
               <div class="col-head">
-                <span>{{ column.column.label ?? column.key }}</span>
-                <span v-if="isColumnFilterActiveSafe(column.key)" class="col-filter-badge" aria-hidden="true">F</span>
-                <span class="sort-indicator" aria-hidden="true">{{ sortIndicator(column.key) }}</span>
+                <span class="col-head__label">{{ column.column.label ?? column.key }}</span>
+                <button
+                  type="button"
+                  class="col-menu-trigger"
+                  :class="resolveColumnMenuTriggerClass(column.key, open)"
+                  :aria-label="resolveColumnMenuButtonLabel(column)"
+                  :title="resolveColumnMenuButtonLabel(column)"
+                  :data-column-key="column.key"
+                  data-datagrid-column-menu-trigger="true"
+                  data-datagrid-column-menu-button="true"
+                  @mousedown.stop
+                  @click.stop="handleColumnMenuButtonClick(toggleMenuFromElement, $event)"
+                >
+                  <svg class="col-menu-trigger__icon" viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      v-if="shouldShowColumnMenuFilterIcon(column.key)"
+                      d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"
+                    />
+                    <path
+                      v-if="shouldShowColumnMenuSortAscIcon(column.key)"
+                      d="M9 11V6.75M9 6.75 7.25 8.5M9 6.75 10.75 8.5"
+                    />
+                    <path
+                      v-else-if="shouldShowColumnMenuSortDescIcon(column.key)"
+                      d="M9 5v4.25M9 9.25 7.25 7.5M9 9.25 10.75 7.5"
+                    />
+                    <path
+                      v-else
+                      d="M5.5 6.5 8 9l2.5-2.5"
+                    />
+                  </svg>
+                </button>
                 <button
                   type="button"
                   class="col-resize"
@@ -503,6 +590,56 @@ function isColumnFilterActiveSafe(columnKey: string): boolean {
 function resolveColumnMenuSortDirectionSafe(columnKey: string): "asc" | "desc" | null {
   const resolve = columns.value.resolveColumnMenuSortDirection
   return typeof resolve === "function" ? resolve(columnKey) : null
+}
+
+function isColumnMenuSortActive(columnKey: string): boolean {
+  return resolveColumnMenuSortDirectionSafe(columnKey) !== null
+}
+
+function isColumnMenuFilterActive(columnKey: string): boolean {
+  return isColumnFilterActiveSafe(columnKey)
+}
+
+function shouldShowColumnMenuFilterIcon(columnKey: string): boolean {
+  return isColumnMenuFilterActive(columnKey)
+}
+
+function shouldShowColumnMenuSortAscIcon(columnKey: string): boolean {
+  return resolveColumnMenuSortDirectionSafe(columnKey) === "asc"
+}
+
+function shouldShowColumnMenuSortDescIcon(columnKey: string): boolean {
+  return resolveColumnMenuSortDirectionSafe(columnKey) === "desc"
+}
+
+function resolveColumnMenuTriggerClass(columnKey: string, open: boolean): Record<string, boolean> {
+  return {
+    "col-menu-trigger--open": open,
+    "col-menu-trigger--active": open || isColumnMenuSortActive(columnKey) || isColumnMenuFilterActive(columnKey),
+    "col-menu-trigger--filtered": isColumnMenuFilterActive(columnKey),
+    "col-menu-trigger--sorted": isColumnMenuSortActive(columnKey),
+  }
+}
+
+function resolveColumnMenuButtonLabel(column: TableColumn): string {
+  const states: string[] = []
+  if (isColumnMenuFilterActive(column.key)) {
+    states.push("filtered")
+  }
+  if (shouldShowColumnMenuSortAscIcon(column.key)) {
+    states.push("sorted ascending")
+  } else if (shouldShowColumnMenuSortDescIcon(column.key)) {
+    states.push("sorted descending")
+  }
+  const suffix = states.length > 0 ? `, ${states.join(" and ")}` : ""
+  return `Open column menu for ${column.column.label ?? column.key}${suffix}`
+}
+
+function handleColumnMenuButtonClick(
+  toggleMenuFromElement: (element: HTMLElement | null) => void,
+  event: MouseEvent,
+): void {
+  toggleMenuFromElement(event.currentTarget instanceof HTMLElement ? event.currentTarget : null)
 }
 
 function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string[] {

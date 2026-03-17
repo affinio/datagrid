@@ -1,8 +1,9 @@
 <template>
   <UiMenu ref="menuRef" :callbacks="menuCallbacks" :options="rootMenuOptions">
-    <UiMenuTrigger as-child trigger="both">
+    <UiMenuTrigger as-child trigger="contextmenu">
       <slot
         :open="open"
+        :toggle-menu-from-element="toggleMenuFromElement"
       />
     </UiMenuTrigger>
 
@@ -25,7 +26,7 @@
         :disabled="!sortEnabled"
         @select="$emit('sort', 'asc')"
       >
-        <span>Sort ascending</span>
+        <span>{{ sortLabels.asc }}</span>
         <span v-if="sortDirection === 'asc'" class="datagrid-column-menu__state">Active</span>
       </UiMenuItem>
 
@@ -35,7 +36,7 @@
         :disabled="!sortEnabled"
         @select="$emit('sort', 'desc')"
       >
-        <span>Sort descending</span>
+        <span>{{ sortLabels.desc }}</span>
         <span v-if="sortDirection === 'desc'" class="datagrid-column-menu__state">Active</span>
       </UiMenuItem>
 
@@ -95,7 +96,13 @@
 
       <section
         v-if="hasAnyFilterControls"
-        class="datagrid-column-menu__section datagrid-column-menu__section--filter"
+        :class="[
+          'datagrid-column-menu__section',
+          'datagrid-column-menu__section--filter',
+          {
+            'datagrid-column-menu__section--with-values': effectiveValueFilterEnabled,
+          },
+        ]"
         @mousedown.stop
         @click.stop
       >
@@ -115,7 +122,7 @@
         </div>
 
         <input
-          v-if="textFilterEnabled"
+          v-if="showTextFilterInput"
           :value="textFilterValue"
           class="datagrid-column-menu__search"
           type="search"
@@ -290,6 +297,7 @@ const props = defineProps<{
   rows: readonly Record<string, unknown>[]
   columnKey: string
   columnLabel: string
+  columnDataType?: string
   sortDirection: "asc" | "desc" | null
   sortEnabled: boolean
   pin: DataGridColumnPin
@@ -318,6 +326,7 @@ const addCurrentSelectionToFilter = ref(false)
 const valueEntries = ref<readonly DataGridColumnMenuValueEntry[]>([])
 const draftSelectedTokens = ref<readonly string[]>([])
 const menuThemeVars = ref<Record<string, string>>({})
+const sortLabels = computed(() => resolveColumnMenuSortLabels(props.columnDataType))
 
 const resolvedValueFilterRowLimit = computed(() => {
   const configuredLimit = Number.isFinite(props.valueFilterRowLimit) && props.valueFilterRowLimit >= 0
@@ -336,6 +345,7 @@ const valueFilterDisabledByRowLimit = computed(() => (
 ))
 const selectedTokenSet = computed(() => new Set(draftSelectedTokens.value))
 const hasAnyFilterControls = computed(() => effectiveValueFilterEnabled.value || props.textFilterEnabled)
+const showTextFilterInput = computed(() => props.textFilterEnabled && !effectiveValueFilterEnabled.value)
 const hasSearchQuery = computed(() => query.value.trim().length > 0)
 
 const matchedValues = computed(() => {
@@ -490,6 +500,32 @@ function closeMenu(): void {
   menuRef.value?.controller?.close("programmatic")
 }
 
+function openMenuFromElement(element: HTMLElement | null): void {
+  if (!element) {
+    return
+  }
+  const controller = menuRef.value?.controller
+  if (!controller) {
+    return
+  }
+  const rect = element.getBoundingClientRect()
+  controller.setAnchor({
+    x: rect.left,
+    y: rect.bottom,
+    width: rect.width,
+    height: 0,
+  })
+  controller.open("programmatic")
+}
+
+function toggleMenuFromElement(element: HTMLElement | null): void {
+  if (open.value) {
+    closeMenu()
+    return
+  }
+  openMenuFromElement(element)
+}
+
 function syncMenuThemeVars(): void {
   menuThemeVars.value = readDataGridOverlayThemeVars(rootElementRef.value)
 }
@@ -558,5 +594,35 @@ function handleClearFilter(): void {
   }
   emit("clear-filter")
   closeMenu()
+}
+
+function resolveColumnMenuSortLabels(
+  dataType: string | undefined,
+): { asc: string; desc: string } {
+  switch (dataType) {
+    case "date":
+    case "datetime":
+      return {
+        asc: "Sort oldest to newest",
+        desc: "Sort newest to oldest",
+      }
+    case "number":
+    case "currency":
+    case "percent":
+      return {
+        asc: "Sort smallest to largest",
+        desc: "Sort largest to smallest",
+      }
+    case "boolean":
+      return {
+        asc: "Sort false to true",
+        desc: "Sort true to false",
+      }
+    default:
+      return {
+        asc: "Sort A to Z",
+        desc: "Sort Z to A",
+      }
+  }
 }
 </script>

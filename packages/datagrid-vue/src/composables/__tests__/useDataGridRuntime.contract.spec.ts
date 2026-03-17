@@ -435,6 +435,9 @@ describe("useDataGridRuntime contract", () => {
     await flushRuntimeTasks()
 
     expect(runtime).not.toBeNull()
+    expect(runtime!.rowPartition.value.bodyRowCount).toBe(2)
+    expect(runtime!.syncBodyRowsInRange({ start: 0, end: 1 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
+    expect(String(runtime!.getBodyRowAtIndex(0)?.rowId)).toBe("r1")
     expect(runtime!.api.rows.getCount()).toBe(2)
     expect(runtime!.api.rows.getRange({ start: 0, end: 1 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
     expect(runtime!.api.rows.hasFormulaSupport()).toBe(true)
