@@ -928,6 +928,23 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("does not render a phantom header index lane when the first left-pinned column is a data column", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        showRowIndex: false,
+        selectionRange: null,
+        selectionAnchorCell: null,
+      }),
+    })
+
+    expect(wrapper.find(".grid-header-pane--left .grid-cell--index-header").exists()).toBe(false)
+    expect(wrapper.find(".grid-header-pane--left .grid-cell--pinned-left").attributes("data-column-key")).toBe("left")
+    expect((wrapper.find(".grid-header-pane--left").element as HTMLElement).style.width).toBe("80px")
+
+    wrapper.unmount()
+  })
+
   it("separates row checkbox column from the row-number cell and routes number clicks to full-row selection", async () => {
     const handleRowIndexClick = vi.fn()
     const visibleColumns = [createRowSelectionColumn(), ...createColumns()] as const

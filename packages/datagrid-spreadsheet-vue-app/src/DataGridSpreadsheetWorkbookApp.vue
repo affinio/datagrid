@@ -2449,6 +2449,22 @@ function resolveSheetHandle(sheetId: string | null | undefined): DataGridSpreads
   return workbook.getSheet(sheetId)
 }
 
+function isValidCellAddressForSheet(
+  handle: DataGridSpreadsheetWorkbookSheetHandle,
+  cell: DataGridSpreadsheetCellAddress,
+): boolean {
+  const hasColumn = handle.sheetModel.getColumns().some(column => column.key === cell.columnKey)
+  if (!hasColumn) {
+    return false
+  }
+
+  const hasRow = handle.sheetModel.getRows().some(row => (
+    (cell.rowId != null && row.id === cell.rowId)
+    || row.rowIndex === cell.rowIndex
+  ))
+  return hasRow
+}
+
 function resolveCellSnapshot(
   cell: DataGridSpreadsheetCellAddress | null,
 ): DataGridSpreadsheetCellSnapshot | null {
@@ -2457,6 +2473,9 @@ function resolveCellSnapshot(
   }
   const handle = resolveSheetHandle(cell.sheetId)
   if (!handle) {
+    return null
+  }
+  if (!isValidCellAddressForSheet(handle, cell)) {
     return null
   }
   return handle.sheetModel.getCell({
@@ -2530,6 +2549,10 @@ function openEditorCell(
     ...cell,
     sheetId: cell.sheetId ?? activeSheetHandle.value?.id ?? null,
   }
+  const nextHandle = resolveSheetHandle(nextCell.sheetId)
+  if (!nextHandle || !isValidCellAddressForSheet(nextHandle, nextCell)) {
+    return
+  }
   const previousActiveCell = editorSnapshot.value.activeCell
   if (
     previousActiveCell
@@ -2574,12 +2597,13 @@ function resolveSelectedGridCell(): DataGridSpreadsheetCellAddress | null {
   if (!columnKey || !row) {
     return null
   }
-  return {
+  const nextCell = {
     sheetId: currentSheet.id,
     rowId: row.rowId,
     rowIndex: row.sourceRowIndex,
     columnKey,
   }
+  return isValidCellAddressForSheet(currentSheet, nextCell) ? nextCell : null
 }
 
 function hasExpandedGridSelection(): boolean {

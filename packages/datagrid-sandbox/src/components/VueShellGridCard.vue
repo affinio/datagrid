@@ -324,6 +324,7 @@ interface TimesheetRow {
 
 interface PublicDataGridExpose {
   getApi: () => unknown | null;
+  getRuntime: () => unknown | null;
   getColumnState: () => DataGridUnifiedColumnState | null;
   getSelectionAggregatesLabel: () => string;
   getSelectionSummary: () => DataGridSelectionSummarySnapshot | null;
@@ -354,6 +355,10 @@ interface TimesheetGridApi {
     getCount: () => number;
     get: (index: number) => { rowId: DataGridRowId; data?: TimesheetRow } | undefined;
   };
+}
+
+interface TimesheetGridRuntimeHandle {
+  resolveBodyRowIndexById: (rowId: string | number) => number;
 }
 
 type ThemePreset = "default" | "industrial" | "sugar" | "custom";
@@ -462,7 +467,7 @@ function buildTimesheetColumns(): readonly DataGridColumnInput[] {
       key: "project",
       label: "Project",
       initialState: { width: 240, pin: "left" },
-      capabilities: { sortable: false, filterable: false },
+      capabilities: { sortable: true, filterable: false },
     },
     ...TIMESHEET_DAY_COLUMNS.map(({ key, label }) => ({
       key,
@@ -470,7 +475,7 @@ function buildTimesheetColumns(): readonly DataGridColumnInput[] {
       dataType: "number" as const,
       initialState: { width: 104 },
       presentation: { align: "right" as const, headerAlign: "right" as const },
-      capabilities: { sortable: false, filterable: false, editable: true },
+      capabilities: { sortable: true, filterable: false, editable: true },
       constraints: { min: 0, max: 24, step: 0.5 },
     })),
     {
@@ -479,7 +484,7 @@ function buildTimesheetColumns(): readonly DataGridColumnInput[] {
       dataType: "number" as const,
       initialState: { width: 128, pin: "right" },
       presentation: { align: "right" as const, headerAlign: "right" as const },
-      capabilities: { sortable: false, filterable: false },
+      capabilities: { sortable: true, filterable: false },
     },
   ] as const;
 }
@@ -870,48 +875,6 @@ const virtualization = computed(() => {
   };
 });
 const theme = computed<DataGridStyleConfig | "default">(() => {
-  if (props.timesheetShowcase) {
-    return {
-      inheritThemeFromDocument: false,
-      tokens: {
-        gridFontFamily: '"IBM Plex Sans", "Segoe UI", system-ui, sans-serif',
-        gridFontSize: "0.82rem",
-        gridTextColor: "#253443",
-        gridTextPrimary: "#102030",
-        gridTextMuted: "rgba(37, 52, 67, 0.74)",
-        gridBackgroundColor: "#f6f1e7",
-        gridViewportBackground: "#fbf7f0",
-        gridHeaderRowBackgroundColor: "#d7cab7",
-        gridHeaderCellBackgroundColor: "#c8b79f",
-        gridHeaderCellHoverBackgroundColor: "#baa68b",
-        bodyRowBackgroundColor: "#fffdf8",
-        bodyRowTextColor: "#253443",
-        bodyRowHoverBackgroundColor: "#f3ecde",
-        bodyRowSelectedBackgroundColor: "#e8dcc7",
-        indexCellBackgroundColor: "#f2eadc",
-        indexCellTextColor: "#5d4d3f",
-        rowDividerColor: "rgba(114, 94, 71, 0.18)",
-        columnDividerColor: "rgba(114, 94, 71, 0.18)",
-        headerDividerColor: "rgba(114, 94, 71, 0.24)",
-        pinnedBackgroundColor: "#efe3d0",
-        pinnedLeftBackgroundColor: "#f3e9d9",
-        pinnedRightBackgroundColor: "#e9dcc6",
-        pinnedLeftShadow: "inset -1px 0 0 rgba(114, 94, 71, 0.20)",
-        pinnedRightShadow: "inset 1px 0 0 rgba(114, 94, 71, 0.28)",
-        gridStickyBackgroundColor: "#eadcc8",
-        gridHeaderStickyBackgroundColor: "#c8b79f",
-        gridSelectionRangeBackgroundColor: "rgba(162, 123, 73, 0.12)",
-        gridSelectionActiveBorderColor: "#8c6844",
-        gridSelectionHandleBackgroundColor: "#8c6844",
-        gridSelectionHandleBorderColor: "#6f5136",
-        gridNumericTextColor: "#5f4730",
-        gridEditorBackgroundColor: "#fffdf8",
-        gridEditorBorderColor: "rgba(140, 104, 68, 0.4)",
-        gridEditorFocusBorderColor: "rgba(140, 104, 68, 0.78)",
-        gridEditorFocusRingColor: "rgba(162, 123, 73, 0.18)",
-      },
-    };
-  }
   if (themePreset.value === "industrial") {
     return industrialNeutralTheme;
   }
@@ -1118,11 +1081,13 @@ const syncTimesheetProjectsFromGrid = (): void => {
     return;
   }
   const api = gridRef.value?.getApi() as TimesheetGridApi | null;
+  const runtime = gridRef.value?.getRuntime() as TimesheetGridRuntimeHandle | null;
   if (!api) {
     return;
   }
   const nextProjects = timesheetProjects.value.map((project, index) => {
-    const gridRow = api.rows.get(index)?.data;
+    const bodyRowIndex = runtime?.resolveBodyRowIndexById(project.id) ?? index;
+    const gridRow = bodyRowIndex >= 0 ? api.rows.get(bodyRowIndex)?.data : undefined;
     if (!gridRow || gridRow.id === "timesheet-total") {
       return project;
     }

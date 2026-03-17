@@ -5,7 +5,7 @@
     <div class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="onLinkedViewportWheel">
       <slot name="left-chrome" />
       <div class="grid-header-row grid-pane-track" :style="leftTrackStyle">
-        <div class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header" :style="rowIndexColumnStyle">
+        <div v-if="showIndexColumn" class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header" :style="rowIndexColumnStyle">
           <div class="col-head col-head--index">
             <span>#</span>
           </div>
@@ -380,6 +380,10 @@ const props = defineProps({
   },
   rowIndexColumnStyle: {
     type: Object as PropType<CSSProperties>,
+    required: true,
+  },
+  showIndexColumn: {
+    type: Boolean,
     required: true,
   },
   onLinkedViewportWheel: {

@@ -17,6 +17,7 @@
       :left-track-style="leftTrackStyle"
       :right-track-style="rightTrackStyle"
       :row-index-column-style="resolvedRowIndexColumnStyle"
+      :show-index-column="showRowIndex"
       :on-linked-viewport-wheel="handleLinkedViewportWheel"
     >
       <template #center-chrome>
@@ -84,10 +85,20 @@
       class="grid-body-shell grid-body-shell--pinned-bottom"
       :style="paneLayoutStyle"
     >
+      <canvas
+        ref="centerBottomChromeCanvasEl"
+        class="grid-chrome-canvas grid-chrome-canvas--center-shell"
+        :style="centerBottomChromeCanvasStyle"
+        aria-hidden="true"
+      />
       <DataGridTableStagePinnedPane
         :pane="leftPinnedBottomPane"
         :render-api="pinnedPaneRenderApi"
-      />
+      >
+        <template #chrome>
+          <canvas ref="leftBottomChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+        </template>
+      </DataGridTableStagePinnedPane>
 
       <DataGridTableStageCenterPane
         :display-rows="rows.pinnedBottomRows"
@@ -105,7 +116,11 @@
       <DataGridTableStagePinnedPane
         :pane="rightPinnedBottomPane"
         :render-api="pinnedPaneRenderApi"
-      />
+      >
+        <template #chrome>
+          <canvas ref="rightBottomChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+        </template>
+      </DataGridTableStagePinnedPane>
     </div>
   </section>
 </template>
@@ -562,8 +577,13 @@ const centerChromeCanvasStyle = computed<CSSProperties>(() => ({
   height: `${Math.max(0, bodyViewportClientHeight.value)}px`,
 }))
 
+const centerBottomChromeCanvasStyle = computed<CSSProperties>(() => ({
+  left: `${leftPaneWidth.value}px`,
+  width: `${Math.max(0, bodyViewportClientWidth.value)}px`,
+  height: `${Math.max(0, pinnedBottomViewportClientHeight.value)}px`,
+}))
+
 const stageRootEl = ref<HTMLElement | null>(null)
-const headerShellEl = ref<HTMLElement | null>(null)
 const bodyViewportEl = ref<HTMLElement | null>(null)
 const bottomViewportEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
@@ -577,6 +597,9 @@ const rightHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const leftChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const centerChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const leftBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const centerBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const hoveredRangeMoveHandleCell = ref<{ rowIndex: number; columnIndex: number } | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
 const fillActionMenuOpen = ref(false)
@@ -586,6 +609,7 @@ const bodyViewportScrollTop = ref(0)
 const bodyViewportScrollLeft = ref(0)
 const bodyViewportClientWidth = ref(0)
 const bodyViewportClientHeight = ref(0)
+const pinnedBottomViewportClientHeight = ref(0)
 const bodyViewportTopOffset = ref(0)
 const GLOBAL_FILL_DRAG_CURSOR_CLASS = "datagrid-fill-drag-cursor"
 const restoreBodyCursor = ref<string | null>(null)
@@ -1089,7 +1113,11 @@ function resolveVisibleRowElement(rowIndex: number): HTMLElement | null {
 }
 
 function resolveHeaderViewportElement(): HTMLElement | null {
-  return headerShellEl.value?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
+  return resolveHeaderShellElement()?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
+}
+
+function resolveHeaderShellElement(): HTMLElement | null {
+  return stageRootEl.value?.querySelector<HTMLElement>(".grid-header-shell") ?? null
 }
 
 function resolveRelativeCellRect(cell: { rowIndex: number; columnIndex: number } | null): {
@@ -1151,6 +1179,7 @@ function captureBodyViewportRef(value: Element | ComponentPublicInstance | null)
 
 function capturePinnedBottomViewportRef(value: Element | ComponentPublicInstance | null): void {
   bottomViewportEl.value = resolveElementRef(value)
+  syncPinnedBottomViewportMetrics()
   syncPinnedBottomViewportScrollLeft()
 }
 
@@ -1185,6 +1214,10 @@ function syncPinnedBottomViewportScrollLeft(): void {
   viewport.scrollLeft = bodyViewportScrollLeft.value
 }
 
+function syncPinnedBottomViewportMetrics(): void {
+  pinnedBottomViewportClientHeight.value = bottomViewportEl.value?.clientHeight ?? 0
+}
+
 function syncBodyViewportMetrics(): void {
   const viewport = bodyViewportEl.value
   const shell = bodyShellRef.value
@@ -1195,8 +1228,9 @@ function syncBodyViewportMetrics(): void {
   const viewportRect = viewport.getBoundingClientRect()
   const shellRect = shell.getBoundingClientRect()
   bodyViewportTopOffset.value = Math.max(0, viewportRect.top - shellRect.top)
-  headerShellHeight.value = headerShellEl.value?.getBoundingClientRect().height ?? 0
+  headerShellHeight.value = resolveHeaderShellElement()?.getBoundingClientRect().height ?? 0
   headerViewportClientWidth.value = resolveHeaderViewportElement()?.clientWidth ?? bodyViewportClientWidth.value
+  syncPinnedBottomViewportMetrics()
   syncPinnedBottomViewportScrollLeft()
 }
 
@@ -1426,6 +1460,41 @@ function drawGridChromeCanvas(): void {
     drawGridChromeHorizontalLines(rightContext, renderModel.right, rowDividerColor, rowDividerWidth)
     drawGridChromeVerticalLines(rightContext, renderModel.right, columnDividerColor, columnDividerWidth)
   }
+
+  const bottomRenderModel = pinnedBottomChromeRenderModel.value
+
+  const leftBottomContext = prepareGridChromeCanvas(
+    leftBottomChromeCanvasEl.value,
+    bottomRenderModel.left.width,
+    bottomRenderModel.left.height,
+  )
+  if (leftBottomContext) {
+    drawGridChromeBands(leftBottomContext, bottomRenderModel.left)
+    drawGridChromeHorizontalLines(leftBottomContext, bottomRenderModel.left, rowDividerColor, rowDividerWidth)
+    drawGridChromeVerticalLines(leftBottomContext, bottomRenderModel.left, columnDividerColor, columnDividerWidth)
+  }
+
+  const centerBottomContext = prepareGridChromeCanvas(
+    centerBottomChromeCanvasEl.value,
+    bottomRenderModel.center.width,
+    bottomRenderModel.center.height,
+  )
+  if (centerBottomContext) {
+    drawGridChromeBands(centerBottomContext, bottomRenderModel.center)
+    drawGridChromeHorizontalLines(centerBottomContext, bottomRenderModel.center, rowDividerColor, rowDividerWidth)
+    drawGridChromeVerticalLines(centerBottomContext, bottomRenderModel.center, columnDividerColor, columnDividerWidth)
+  }
+
+  const rightBottomContext = prepareGridChromeCanvas(
+    rightBottomChromeCanvasEl.value,
+    bottomRenderModel.right.width,
+    bottomRenderModel.right.height,
+  )
+  if (rightBottomContext) {
+    drawGridChromeBands(rightBottomContext, bottomRenderModel.right)
+    drawGridChromeHorizontalLines(rightBottomContext, bottomRenderModel.right, rowDividerColor, rowDividerWidth)
+    drawGridChromeVerticalLines(rightBottomContext, bottomRenderModel.right, columnDividerColor, columnDividerWidth)
+  }
 }
 
 function scheduleGridChromeRedraw(): void {
@@ -1455,11 +1524,15 @@ function connectGridChromeResizeObserver(): void {
   if (bodyViewportEl.value) {
     gridChromeResizeObserver.observe(bodyViewportEl.value)
   }
+  if (bottomViewportEl.value) {
+    gridChromeResizeObserver.observe(bottomViewportEl.value)
+  }
   if (bodyShellRef.value) {
     gridChromeResizeObserver.observe(bodyShellRef.value)
   }
-  if (headerShellEl.value) {
-    gridChromeResizeObserver.observe(headerShellEl.value)
+  const headerShell = resolveHeaderShellElement()
+  if (headerShell) {
+    gridChromeResizeObserver.observe(headerShell)
   }
   const headerViewport = resolveHeaderViewportElement()
   if (headerViewport) {
@@ -1479,7 +1552,7 @@ const chromeRenderModel = computed(() => (
     leftColumnWidths: [
       indexColumnWidthPx.value,
       ...pinnedLeftColumns.value.map(resolveColumnWidth),
-    ],
+    ].filter(width => width > 0),
     centerColumnWidths: [
       viewport.value.leftColumnSpacerWidth,
       ...renderedColumns.value.map(resolveColumnWidth),
@@ -1503,7 +1576,46 @@ const headerChromeRenderModel = computed(() => (
     leftColumnWidths: [
       indexColumnWidthPx.value,
       ...pinnedLeftColumns.value.map(resolveColumnWidth),
-    ],
+    ].filter(width => width > 0),
+    centerColumnWidths: [
+      viewport.value.leftColumnSpacerWidth,
+      ...renderedColumns.value.map(resolveColumnWidth),
+      viewport.value.rightColumnSpacerWidth,
+    ].filter(width => width > 0),
+    rightColumnWidths: pinnedRightColumns.value.map(resolveColumnWidth),
+    centerScrollLeft: bodyViewportScrollLeft.value,
+  })
+))
+
+const pinnedBottomRowBands = computed<readonly DataGridChromeRowBand[]>(() => (
+  pinnedBottomRows.value.flatMap((row, rowOffset) => {
+    const metric = pinnedBottomRowMetrics.value[rowOffset]
+    const kind = resolveChromeRowBandKind(row, resolveViewportRowOffset(row, rowOffset))
+    if (!metric || !kind) {
+      return []
+    }
+    return [{
+      rowIndex: rowOffset,
+      top: metric.top,
+      height: metric.height,
+      kind,
+    }]
+  })
+))
+
+const pinnedBottomChromeRenderModel = computed(() => (
+  buildDataGridChromeRenderModel({
+    rowMetrics: pinnedBottomRowMetrics.value,
+    rowBands: pinnedBottomRowBands.value,
+    scrollTop: 0,
+    leftPaneWidth: leftPaneWidth.value,
+    centerPaneWidth: bodyViewportClientWidth.value,
+    rightPaneWidth: rightPaneWidth.value,
+    viewportHeight: pinnedBottomViewportClientHeight.value,
+    leftColumnWidths: [
+      indexColumnWidthPx.value,
+      ...pinnedLeftColumns.value.map(resolveColumnWidth),
+    ].filter(width => width > 0),
     centerColumnWidths: [
       viewport.value.leftColumnSpacerWidth,
       ...renderedColumns.value.map(resolveColumnWidth),
@@ -1888,6 +2000,10 @@ const rowMetricsSignature = computed(() => (
   rowMetrics.value.map(metric => `${metric.top}:${metric.height}`).join("|")
 ))
 
+const pinnedBottomRowMetricsSignature = computed(() => (
+  pinnedBottomRowMetrics.value.map(metric => `${metric.top}:${metric.height}`).join("|")
+))
+
 function resolveChromeRowBandKind(row: TableRow, rowOffset: number): string | null {
   const className = rows.value.rowClass(row)
   if (className.includes("row--group") && className.includes("row--pivot")) {
@@ -1928,6 +2044,10 @@ const rowBandsSignature = computed(() => (
   rowBands.value.map(band => `${band.kind}:${band.top}:${band.height}`).join("|")
 ))
 
+const pinnedBottomRowBandsSignature = computed(() => (
+  pinnedBottomRowBands.value.map(band => `${band.kind}:${band.top}:${band.height}`).join("|")
+))
+
 const leftChromeColumnsSignature = computed(() => (
   [
     indexColumnWidthPx.value,
@@ -1952,7 +2072,9 @@ watch(
     leftPaneWidth.value,
     rightPaneWidth.value,
     rowMetricsSignature.value,
+    pinnedBottomRowMetricsSignature.value,
     rowBandsSignature.value,
+    pinnedBottomRowBandsSignature.value,
     leftChromeColumnsSignature.value,
     centerChromeColumnsSignature.value,
     rightChromeColumnsSignature.value,
@@ -2775,7 +2897,7 @@ function cellStateClasses(row: TableRow, rowOffset: number, columnIndex: number)
 
 defineExpose({
   getStageRootElement: () => stageRootEl.value,
-  getHeaderElement: () => headerShellEl.value,
+  getHeaderElement: () => resolveHeaderShellElement(),
   getBodyViewportElement: () => bodyViewportEl.value,
   getVisibleRowMetrics: () => resolveVisibleRowMetricsFromDom(),
 })
