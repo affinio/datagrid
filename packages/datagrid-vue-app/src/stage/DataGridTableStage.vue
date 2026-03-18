@@ -829,13 +829,19 @@ function checkboxValueIsChecked(row: TableRow, column: TableColumn): boolean {
   return value === "true" || value === "1" || value === "yes" || value === "on"
 }
 
-function builtInCellClasses(row: TableRow, column: TableColumn): Record<string, boolean> {
+function builtInCellClasses(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): Record<string, boolean> {
   const editorMode = row.kind !== "group" ? resolveCellEditorMode(row, column) : "none"
+  const editable = isCellEditableSafe(row, rowOffset, column, columnIndex)
   return {
     "grid-cell--checkbox": shouldRenderCheckboxCell(row, column),
     "grid-cell--row-selection": isRowSelectionColumn(column),
-    "grid-cell--select": editorMode === "select",
-    "grid-cell--date": editorMode === "date" || editorMode === "datetime",
+    "grid-cell--select": editable && editorMode === "select",
+    "grid-cell--date": editable && (editorMode === "date" || editorMode === "datetime"),
   }
 }
 

@@ -39,7 +39,12 @@ export interface DataGridTableStageBodyRenderApiBase {
   rowStateClasses: (row: DataGridTableStageBodyRow, rowOffset: number) => Record<string, boolean>
   handleRowContainerClick: (row: DataGridTableStageBodyRow) => void
   setHoveredRow: (row: DataGridTableStageBodyRow, rowOffset: number) => void
-  builtInCellClasses: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => Record<string, boolean>
+  builtInCellClasses: (
+    row: DataGridTableStageBodyRow,
+    rowOffset: number,
+    column: DataGridTableStageBodyColumn,
+    columnIndex: number,
+  ) => Record<string, boolean>
   cellStateClasses: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => Record<string, boolean>
   resolveCellCustomClass: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => unknown
   columnStyle: (key: string) => CSSProperties

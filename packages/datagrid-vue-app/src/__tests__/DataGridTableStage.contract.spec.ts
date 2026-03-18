@@ -16,6 +16,33 @@ function createColumns(): readonly DataGridColumnSnapshot[] {
   ] as unknown as readonly DataGridColumnSnapshot[]
 }
 
+function createEditableAffordanceColumns(): readonly DataGridColumnSnapshot[] {
+  return [
+    {
+      key: "stage",
+      pin: "center",
+      width: 120,
+      column: {
+        key: "stage",
+        label: "Stage",
+        cellType: "select",
+        capabilities: { editable: true },
+      },
+    },
+    {
+      key: "createdAt",
+      pin: "center",
+      width: 140,
+      column: {
+        key: "createdAt",
+        label: "Created",
+        dataType: "date",
+        capabilities: { editable: true },
+      },
+    },
+  ] as unknown as readonly DataGridColumnSnapshot[]
+}
+
 function createRowSelectionColumn(): DataGridColumnSnapshot {
   return {
     key: "__datagrid_row_selection__",
@@ -711,6 +738,29 @@ describe("DataGridTableStage contract", () => {
     })
 
     expect(wrapper.find(".cell-fill-handle").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("does not mark readonly select and date cells as affordance cells, including pinned bottom rows", () => {
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        visibleColumns: createEditableAffordanceColumns(),
+        pinnedBottomRowCount: 1,
+        isCellEditable: () => false,
+      }),
+      attachTo: document.body,
+    })
+
+    const bodySelectCell = wrapper.find('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-index="0"]')
+    const bodyDateCell = wrapper.find('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-index="1"]')
+    const pinnedSelectCell = wrapper.find('.grid-body-viewport--pinned-bottom .grid-cell[data-row-index="1"][data-column-index="0"]')
+    const pinnedDateCell = wrapper.find('.grid-body-viewport--pinned-bottom .grid-cell[data-row-index="1"][data-column-index="1"]')
+
+    expect(bodySelectCell.classes()).not.toContain("grid-cell--select")
+    expect(bodyDateCell.classes()).not.toContain("grid-cell--date")
+    expect(pinnedSelectCell.classes()).not.toContain("grid-cell--select")
+    expect(pinnedDateCell.classes()).not.toContain("grid-cell--date")
 
     wrapper.unmount()
   })
