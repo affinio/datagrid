@@ -499,6 +499,7 @@ export default defineComponent({
       resolveRuntime: () => dataGridRef.value,
       visibleColumns,
       totalRows,
+      showRowSelection: computed(() => props.rowSelection),
     })
     const {
       rowSelectionSnapshot,

@@ -22,6 +22,7 @@ export interface UseDataGridAppSelectionOptions<TRow> {
   resolveRuntime?: () => Pick<UseDataGridRuntimeResult<TRow>, "api"> | null
   visibleColumns?: Ref<readonly DataGridColumnSnapshot[]>
   totalRows?: Ref<number>
+  showRowSelection?: MaybeRef<boolean>
 }
 
 export interface UseDataGridAppSelectionResult<TRow> {
@@ -90,9 +91,10 @@ function readSelectionCellValue<TRow>(rowData: TRow, column: DataGridColumnSnaps
 }
 
 function hasLeadingRowSelectionColumn<TRow>(
+  showRowSelection: boolean,
   runtime: Pick<UseDataGridRuntimeResult<TRow>, "api"> | null,
 ): boolean {
-  return runtime?.api.rowSelection?.hasSupport?.() === true
+  return showRowSelection && runtime?.api.rowSelection?.hasSupport?.() === true
 }
 
 function resolveSelectionColumnAtIndex(
@@ -169,7 +171,10 @@ export function useDataGridAppSelection<TRow>(
     if (!runtime || !options.visibleColumns || !options.totalRows) {
       return null
     }
-    const hasRowSelectionColumn = hasLeadingRowSelectionColumn(runtime)
+    const hasRowSelectionColumn = hasLeadingRowSelectionColumn(
+      resolveMaybeRef(options.showRowSelection ?? true),
+      runtime,
+    )
     const snapshot = selectionSnapshot.value
     if (!snapshot || snapshot.ranges.length === 0) {
       return null
