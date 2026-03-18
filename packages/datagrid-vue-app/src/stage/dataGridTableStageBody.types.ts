@@ -51,7 +51,7 @@ export interface DataGridTableStageBodyRenderApiBase {
   checkboxCellRole: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => string | undefined
   checkboxCellAriaChecked: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => "true" | "false" | undefined
   handleCellMouseDown: (event: MouseEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
-  handleBodyCellClick: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => void
+  handleBodyCellClick: (event: MouseEvent, row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => void
   handleCellMouseMove: (event: MouseEvent, rowOffset: number, columnIndex: number) => void
   clearRangeMoveHandleHover: () => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void

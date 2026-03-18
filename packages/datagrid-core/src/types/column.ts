@@ -39,6 +39,7 @@ export interface DataGridColumn extends DataGridColumnValueAccessors<any> {
   key: string
   field?: string
   label: string
+  flex?: number
   dataType?: DataGridColumnDataType | string
   cellType?: DataGridCellTypeId | string
   width?: number

@@ -570,7 +570,9 @@ function buildTimesheetColumns(): readonly DataGridColumnInput[] {
     {
       key: "project",
       label: "Project",
-      initialState: { width: 240, pin: "left" },
+      flex: 1,
+      minWidth: 240,
+      initialState: { width: 240 },
       capabilities: { sortable: true, filterable: false },
     },
     ...TIMESHEET_DAY_COLUMNS.map(({ key, label }) => ({
@@ -681,7 +683,6 @@ function createTimesheetColumnState(
     widths: { ...normalized.widths },
     pins: {
       ...normalized.pins,
-      project: "left",
       total: "right",
     },
   };

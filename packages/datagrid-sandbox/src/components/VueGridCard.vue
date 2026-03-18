@@ -818,7 +818,7 @@ const {
   sourceRows: stageSourceRows,
   runtime,
   rowVersion,
-  totalRows,
+  totalRuntimeRows: totalRows,
   visibleColumns,
   rowRenderMode,
   rowHeightMode,

@@ -229,12 +229,12 @@ const editing = stageContext.editing
 const cells = stageContext.cells
 const interaction = stageContext.interaction
 
-const visibleColumns = computed(() => columns.value.visibleColumns)
-const renderedColumns = computed(() => columns.value.renderedColumns)
-const displayRows = computed(() => rows.value.displayRows)
-const pinnedBottomRows = computed(() => rows.value.pinnedBottomRows)
-const selectionRange = computed(() => selection.value.selectionRange)
-const isFillDragging = computed(() => selection.value.isFillDragging)
+const visibleColumns = computed(() => columns.value?.visibleColumns ?? [])
+const renderedColumns = computed(() => columns.value?.renderedColumns ?? [])
+const displayRows = computed(() => rows.value?.displayRows ?? [])
+const pinnedBottomRows = computed(() => rows.value?.pinnedBottomRows ?? [])
+const selectionRange = computed(() => selection.value?.selectionRange ?? null)
+const isFillDragging = computed(() => selection.value?.isFillDragging === true)
 function columnStyle(key: string): CSSProperties {
   return layout.value.columnStyle(key)
 }
@@ -411,6 +411,23 @@ function startInlineEditIfAllowed(row: TableRow, column: TableColumn, rowOffset:
   )
 }
 
+function isSelectCellTriggerClick(event: MouseEvent, row: TableRow, column: TableColumn): boolean {
+  if (row.kind === "group" || resolveCellEditorMode(row, column) !== "select") {
+    return false
+  }
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  if (!target) {
+    return false
+  }
+  const rect = target.getBoundingClientRect()
+  if (rect.width <= 0) {
+    return false
+  }
+  const offsetX = event.clientX - rect.left
+  const triggerWidth = Math.min(24, Math.max(16, Math.floor(rect.width * 0.22)))
+  return offsetX >= rect.width - triggerWidth
+}
+
 function cellTabIndex(rowOffset: number, columnIndex: number): number {
   return isVisualSelectionAnchorCell(rowOffset, columnIndex) ? 0 : -1
 }
@@ -429,6 +446,18 @@ function handleFillHandleDoubleClick(event: MouseEvent): void {
   const cell = handle?.closest<HTMLElement>(".grid-cell")
   cell?.focus({ preventScroll: true })
   selection.value.startFillHandleDoubleClick(event)
+}
+
+function resolveViewportRowStart(): number {
+  return viewport.value?.viewportRowStart ?? 0
+}
+
+function resolveLeftColumnSpacerWidth(): number {
+  return viewport.value?.leftColumnSpacerWidth ?? 0
+}
+
+function resolveRightColumnSpacerWidth(): number {
+  return viewport.value?.rightColumnSpacerWidth ?? 0
 }
 
 function focusFillActionAnchorCell(): void {
@@ -591,11 +620,11 @@ const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => c
 const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
 
 const leftPaneWidth = computed(() => {
-  return indexColumnWidthPx.value + pinnedLeftColumns.value.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
+  return indexColumnWidthPx.value + (pinnedLeftColumns.value ?? []).reduce((sum, column) => sum + resolveColumnWidth(column), 0)
 })
 
 const rightPaneWidth = computed(() => {
-  return pinnedRightColumns.value.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
+  return (pinnedRightColumns.value ?? []).reduce((sum, column) => sum + resolveColumnWidth(column), 0)
 })
 
 const paneLayoutStyle = computed<CSSProperties>(() => ({
@@ -1081,6 +1110,7 @@ function handleGroupCellClick(row: TableRow): void {
 }
 
 function handleBodyCellClick(
+  event: MouseEvent,
   row: TableRow,
   rowOffset: number,
   column: TableColumn,
@@ -1095,6 +1125,10 @@ function handleBodyCellClick(
   }
   handleGroupCellClick(row)
   if (row.kind === "group") {
+    return
+  }
+  if (!isEditingCellSafe(row, column.key) && isSelectCellTriggerClick(event, row, column)) {
+    startInlineEditIfAllowed(row, column, rowOffset)
     return
   }
   interaction.value.handleCellClick(row, rowOffset, column, columnIndex)
@@ -1596,8 +1630,8 @@ function connectGridChromeResizeObserver(): void {
 
 const chromeRenderModel = computed(() => (
   buildDataGridChromeRenderModel({
-    rowMetrics: rowMetrics.value,
-    rowBands: rowBands.value,
+    rowMetrics: resolveChromeRowMetrics(),
+    rowBands: resolveChromeRowBands(),
     scrollTop: bodyViewportScrollTop.value,
     leftPaneWidth: leftPaneWidth.value,
     centerPaneWidth: bodyViewportClientWidth.value,
@@ -1605,14 +1639,14 @@ const chromeRenderModel = computed(() => (
     viewportHeight: bodyViewportClientHeight.value,
     leftColumnWidths: [
       indexColumnWidthPx.value,
-      ...pinnedLeftColumns.value.map(resolveColumnWidth),
+      ...(pinnedLeftColumns.value ?? []).map(resolveColumnWidth),
     ].filter(width => width > 0),
     centerColumnWidths: [
-      viewport.value.leftColumnSpacerWidth,
-      ...renderedColumns.value.map(resolveColumnWidth),
-      viewport.value.rightColumnSpacerWidth,
+      resolveLeftColumnSpacerWidth(),
+      ...(renderedColumns.value ?? []).map(resolveColumnWidth),
+      resolveRightColumnSpacerWidth(),
     ].filter(width => width > 0),
-    rightColumnWidths: pinnedRightColumns.value.map(resolveColumnWidth),
+    rightColumnWidths: (pinnedRightColumns.value ?? []).map(resolveColumnWidth),
     centerScrollLeft: bodyViewportScrollLeft.value,
   })
 ))
@@ -1629,14 +1663,14 @@ const headerChromeRenderModel = computed(() => (
     viewportHeight: headerShellHeight.value,
     leftColumnWidths: [
       indexColumnWidthPx.value,
-      ...pinnedLeftColumns.value.map(resolveColumnWidth),
+      ...(pinnedLeftColumns.value ?? []).map(resolveColumnWidth),
     ].filter(width => width > 0),
     centerColumnWidths: [
-      viewport.value.leftColumnSpacerWidth,
-      ...renderedColumns.value.map(resolveColumnWidth),
-      viewport.value.rightColumnSpacerWidth,
+      resolveLeftColumnSpacerWidth(),
+      ...(renderedColumns.value ?? []).map(resolveColumnWidth),
+      resolveRightColumnSpacerWidth(),
     ].filter(width => width > 0),
-    rightColumnWidths: pinnedRightColumns.value.map(resolveColumnWidth),
+    rightColumnWidths: (pinnedRightColumns.value ?? []).map(resolveColumnWidth),
     centerScrollLeft: bodyViewportScrollLeft.value,
   })
 ))
@@ -1657,10 +1691,14 @@ const pinnedBottomRowBands = computed<readonly DataGridChromeRowBand[]>(() => (
   })
 ))
 
+function resolvePinnedBottomChromeRowBands(): readonly DataGridChromeRowBand[] {
+  return pinnedBottomRowBands.value ?? []
+}
+
 const pinnedBottomChromeRenderModel = computed(() => (
   buildDataGridChromeRenderModel({
-    rowMetrics: pinnedBottomRowMetrics.value,
-    rowBands: pinnedBottomRowBands.value,
+    rowMetrics: resolvePinnedBottomChromeRowMetrics(),
+    rowBands: resolvePinnedBottomChromeRowBands(),
     scrollTop: 0,
     leftPaneWidth: leftPaneWidth.value,
     centerPaneWidth: bodyViewportClientWidth.value,
@@ -1668,14 +1706,14 @@ const pinnedBottomChromeRenderModel = computed(() => (
     viewportHeight: pinnedBottomViewportClientHeight.value,
     leftColumnWidths: [
       indexColumnWidthPx.value,
-      ...pinnedLeftColumns.value.map(resolveColumnWidth),
+      ...(pinnedLeftColumns.value ?? []).map(resolveColumnWidth),
     ].filter(width => width > 0),
     centerColumnWidths: [
-      viewport.value.leftColumnSpacerWidth,
-      ...renderedColumns.value.map(resolveColumnWidth),
-      viewport.value.rightColumnSpacerWidth,
+      resolveLeftColumnSpacerWidth(),
+      ...(renderedColumns.value ?? []).map(resolveColumnWidth),
+      resolveRightColumnSpacerWidth(),
     ].filter(width => width > 0),
-    rightColumnWidths: pinnedRightColumns.value.map(resolveColumnWidth),
+    rightColumnWidths: (pinnedRightColumns.value ?? []).map(resolveColumnWidth),
     centerScrollLeft: bodyViewportScrollLeft.value,
   })
 ))
@@ -1708,8 +1746,8 @@ function resolveVisibleFillActionAnchorCell(): { rowIndex: number; columnIndex: 
     return null
   }
 
-  const visibleRowStart = viewport.value.viewportRowStart
-  const visibleRowEnd = viewport.value.viewportRowStart + Math.max(0, displayRows.value.length - 1)
+  const visibleRowStart = resolveViewportRowStart()
+  const visibleRowEnd = resolveViewportRowStart() + Math.max(0, displayRows.value.length - 1)
   const range = selectionRange.value
   const selectionRowStart = range ? Math.min(range.startRow, range.endRow) : anchorCell.rowIndex
   const selectionRowEnd = range ? Math.max(range.startRow, range.endRow) : anchorCell.rowIndex
@@ -1721,7 +1759,7 @@ function resolveVisibleFillActionAnchorCell(): { rowIndex: number; columnIndex: 
     ? clamp(anchorCell.rowIndex, clampedRowStart, clampedRowEnd)
     : anchorCell.rowIndex
 
-  const visibleCenterColumnKeys = new Set(renderedColumns.value.map(column => column.key))
+  const visibleCenterColumnKeys = new Set((renderedColumns.value ?? []).map(column => column.key))
   const visibleColumnIndexes = visibleColumns.value
     .map((column, columnIndex) => ({ column, columnIndex }))
     .filter(({ column, columnIndex }) => {
@@ -2029,9 +2067,9 @@ const rightTrackStyle = computed<CSSProperties>(() => ({
 
 function buildEstimatedVisibleRowMetrics(): readonly { top: number; height: number }[] {
   const metrics: Array<{ top: number; height: number }> = []
-  let currentTop = viewport.value.topSpacerHeight
+  let currentTop = viewport.value?.topSpacerHeight ?? 0
   displayRows.value.forEach((row, rowOffset) => {
-    const style = rows.value.rowStyle(row, rowOffset)
+    const style = rows.value?.rowStyle(row, rowOffset) ?? {}
     const height = parsePixelValue(style.height ?? style.minHeight, 31)
     metrics.push({
       top: currentTop,
@@ -2050,11 +2088,15 @@ const rowMetrics = computed(() => {
   return estimated
 })
 
+function resolveChromeRowMetrics(): readonly { top: number; height: number }[] {
+  return rowMetrics.value ?? []
+}
+
 const pinnedBottomRowMetrics = computed(() => {
   const metrics: Array<{ top: number; height: number }> = []
   let currentTop = 0
   pinnedBottomRows.value.forEach((row, rowOffset) => {
-    const style = rows.value.rowStyle(row, resolveViewportRowOffset(row, rowOffset))
+    const style = rows.value?.rowStyle(row, resolveViewportRowOffset(row, rowOffset)) ?? {}
     const height = parsePixelValue(style.height ?? style.minHeight, 31)
     metrics.push({
       top: currentTop,
@@ -2064,6 +2106,10 @@ const pinnedBottomRowMetrics = computed(() => {
   })
   return metrics
 })
+
+function resolvePinnedBottomChromeRowMetrics(): readonly { top: number; height: number }[] {
+  return pinnedBottomRowMetrics.value ?? []
+}
 
 const rowMetricsSignature = computed(() => (
   rowMetrics.value.map(metric => `${metric.top}:${metric.height}`).join("|")
@@ -2112,6 +2158,10 @@ const rowBands = computed<readonly DataGridChromeRowBand[]>(() => (
   })
 ))
 
+function resolveChromeRowBands(): readonly DataGridChromeRowBand[] {
+  return rowBands.value ?? []
+}
+
 const rowBandsSignature = computed(() => (
   rowBands.value.map(band => `${band.kind}:${band.top}:${band.height}`).join("|")
 ))
@@ -2123,20 +2173,20 @@ const pinnedBottomRowBandsSignature = computed(() => (
 const leftChromeColumnsSignature = computed(() => (
   [
     indexColumnWidthPx.value,
-    ...pinnedLeftColumns.value.map(resolveColumnWidth),
+    ...(pinnedLeftColumns.value ?? []).map(resolveColumnWidth),
   ].join("|")
 ))
 
 const centerChromeColumnsSignature = computed(() => (
   [
-    viewport.value.leftColumnSpacerWidth,
-    ...renderedColumns.value.map(resolveColumnWidth),
-    viewport.value.rightColumnSpacerWidth,
+    resolveLeftColumnSpacerWidth(),
+    ...(renderedColumns.value ?? []).map(resolveColumnWidth),
+    resolveRightColumnSpacerWidth(),
   ].join("|")
 ))
 
 const rightChromeColumnsSignature = computed(() => (
-  pinnedRightColumns.value.map(resolveColumnWidth).join("|")
+  (pinnedRightColumns.value ?? []).map(resolveColumnWidth).join("|")
 ))
 
 const headerPivotGroupsSignature = computed(() => (
@@ -2543,7 +2593,7 @@ function buildPaneOverlaySegments(
       return []
     }
 
-    let left = viewport.value.leftColumnSpacerWidth
+    let left = resolveLeftColumnSpacerWidth()
     for (const column of renderedColumns.value) {
       if (column.key === selectedColumns[0]?.key) {
         break

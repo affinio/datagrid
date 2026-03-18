@@ -700,6 +700,10 @@ function columnStyle(key: string): CSSProperties {
 }
 
 function resolveColumnWidth(column: TableColumn): number {
+  const styleWidth = Number.parseFloat(String(layout.value.columnStyle(column.key).width ?? ""))
+  if (Number.isFinite(styleWidth) && styleWidth > 0) {
+    return Math.max(0, Math.trunc(styleWidth))
+  }
   if (typeof column.width === "number" && Number.isFinite(column.width)) {
     return Math.max(0, Math.trunc(column.width))
   }

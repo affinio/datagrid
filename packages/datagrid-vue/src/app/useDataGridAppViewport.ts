@@ -31,6 +31,8 @@ export interface UseDataGridAppViewportOptions<TRow> {
   resolveColumnWidth?: (column: DataGridColumnSnapshot) => number
   defaultColumnWidth?: number
   indexColumnWidth?: number
+  sizingColumns?: Ref<readonly DataGridColumnSnapshot[]>
+  flexFillOffsetWidth?: number
   rowOverscan?: MaybeRef<number>
   columnOverscan?: MaybeRef<number>
   measureVisibleRowHeights?: () => void
@@ -71,12 +73,14 @@ export function useDataGridAppViewport<TRow>(
 ): UseDataGridAppViewportResult<TRow> {
   const defaultColumnWidth = options.defaultColumnWidth ?? 140
   const indexColumnWidth = options.indexColumnWidth ?? 72
+  const flexFillOffsetWidth = options.flexFillOffsetWidth ?? indexColumnWidth
+  const sizingColumns = computed(() => options.sizingColumns?.value ?? options.visibleColumns.value)
   const snapshotColumnWidths = computed<Record<string, number>>(() => {
     return Object.fromEntries(
-      options.visibleColumns.value.map(column => [column.key, column.width ?? defaultColumnWidth]),
+      sizingColumns.value.map(column => [column.key, column.width ?? defaultColumnWidth]),
     )
   })
-  const resolveColumnWidth = (column: DataGridColumnSnapshot | undefined): number => {
+  const resolveBaseColumnWidth = (column: DataGridColumnSnapshot | undefined): number => {
     if (!column) {
       return defaultColumnWidth
     }
@@ -85,6 +89,72 @@ export function useDataGridAppViewport<TRow>(
       return resolvedWidth
     }
     return options.columnWidths?.value[column.key] ?? snapshotColumnWidths.value[column.key] ?? defaultColumnWidth
+  }
+  const resolveColumnFlex = (column: DataGridColumnSnapshot | undefined): number => {
+    if (!column) {
+      return 0
+    }
+    const value = column.column.flex
+    return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0
+  }
+  const effectiveColumnWidths = computed<Record<string, number>>(() => {
+    const columns = sizingColumns.value
+    const widths: Record<string, number> = {}
+    if (columns.length === 0) {
+      return widths
+    }
+
+    const fillTargetWidth = Math.max(
+      0,
+      (viewportShellClientWidth.value > 0 ? viewportShellClientWidth.value : viewportClientWidth.value) - flexFillOffsetWidth,
+    )
+    let fixedWidthTotal = 0
+    let flexBaseWidthTotal = 0
+    let flexWeightTotal = 0
+    const flexColumns: DataGridColumnSnapshot[] = []
+
+    for (const column of columns) {
+      const baseWidth = resolveBaseColumnWidth(column)
+      const flex = resolveColumnFlex(column)
+      if (flex > 0) {
+        flexColumns.push(column)
+        flexBaseWidthTotal += baseWidth
+        flexWeightTotal += flex
+        continue
+      }
+      fixedWidthTotal += baseWidth
+      widths[column.key] = baseWidth
+    }
+
+    if (flexColumns.length === 0 || fillTargetWidth <= 0) {
+      for (const column of flexColumns) {
+        widths[column.key] = resolveBaseColumnWidth(column)
+      }
+      return widths
+    }
+
+    const extraWidth = Math.max(0, fillTargetWidth - fixedWidthTotal - flexBaseWidthTotal)
+    let assignedExtraWidth = 0
+    let processedFlexWeight = 0
+
+    flexColumns.forEach((column, index) => {
+      const baseWidth = resolveBaseColumnWidth(column)
+      const flex = resolveColumnFlex(column)
+      processedFlexWeight += flex
+      const extraShare = index === flexColumns.length - 1
+        ? Math.max(0, extraWidth - assignedExtraWidth)
+        : Math.max(0, Math.floor((extraWidth * processedFlexWeight) / flexWeightTotal) - assignedExtraWidth)
+      assignedExtraWidth += extraShare
+      widths[column.key] = baseWidth + extraShare
+    })
+
+    return widths
+  })
+  const resolveColumnWidth = (column: DataGridColumnSnapshot | undefined): number => {
+    if (!column) {
+      return defaultColumnWidth
+    }
+    return effectiveColumnWidths.value[column.key] ?? resolveBaseColumnWidth(column)
   }
   const rowOverscan = computed(() => {
     const value = options.rowOverscan == null ? 8 : resolveMaybeRef(options.rowOverscan)
@@ -101,6 +171,7 @@ export function useDataGridAppViewport<TRow>(
   const displayRows = shallowRef<readonly DataGridRowNode<TRow>[]>([])
   const viewportScrollLeft = ref(0)
   const viewportClientWidth = ref(0)
+  const viewportShellClientWidth = ref(0)
   const viewportSyncRafHandle = ref<number | null>(null)
   let lastSyncedRange: DataGridViewportRange | null = null
   let lastViewportScrollTop = 0
@@ -290,7 +361,7 @@ export function useDataGridAppViewport<TRow>(
   })
 
   const columnStyle = (key: string): Record<string, string> => {
-    const column = options.visibleColumns.value.find(candidate => candidate.key === key)
+    const column = sizingColumns.value.find(candidate => candidate.key === key)
     const width = resolveColumnWidth(column)
     const px = `${width}px`
     return {
@@ -361,6 +432,7 @@ export function useDataGridAppViewport<TRow>(
     viewportScrollLeft.value = element.scrollLeft
     viewportScrollTop.value = element.scrollTop
     viewportClientWidth.value = element.clientWidth
+    viewportShellClientWidth.value = Math.max(element.parentElement?.clientWidth ?? 0, element.clientWidth)
     syncHeaderScrollLeftFromBody(element.scrollLeft)
     if (element.scrollTop === lastViewportScrollTop) {
       return
@@ -378,6 +450,7 @@ export function useDataGridAppViewport<TRow>(
     viewportScrollLeft.value = element.scrollLeft
     viewportScrollTop.value = element.scrollTop
     viewportClientWidth.value = element.clientWidth
+    viewportShellClientWidth.value = Math.max(element.parentElement?.clientWidth ?? 0, element.clientWidth)
     syncHeaderScrollLeftFromBody(element.scrollLeft)
     syncVisibleRows(resolveViewportRangeFromElement(element), true)
     options.measureVisibleRowHeights?.()

@@ -27,7 +27,11 @@
         :id="panelId"
         ref="panelEl"
         class="datagrid-cell-combobox__panel"
-        :class="{ 'datagrid-cell-combobox__panel--inline': inlinePanel }"
+        :class="{
+          'datagrid-cell-combobox__panel--inline': inlinePanel,
+          'datagrid-cell-combobox__panel--attached-below': panelPlacement === 'below',
+          'datagrid-cell-combobox__panel--attached-above': panelPlacement === 'above',
+        }"
         :data-affino-popover-sticky="stickyPopoverId || undefined"
         :style="[overlayThemeVars, panelStyle]"
         role="listbox"
@@ -57,9 +61,7 @@
               v-if="option.value === value"
               class="datagrid-cell-combobox__option-state"
               aria-hidden="true"
-            >
-              Selected
-            </span>
+            />
           </button>
 
           <div v-if="displayedOptions.length === 0" class="datagrid-cell-combobox__empty">
@@ -123,6 +125,7 @@ const inputEl = ref<HTMLInputElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
 const overlayThemeVars = ref<Record<string, string>>({})
 const panelStyle = ref<Record<string, string>>({})
+const panelPlacement = ref<"above" | "below">("below")
 const inputText = ref("")
 const isLoading = ref(false)
 const remoteOptions = ref<ReadonlyArray<DataGridFilterableComboboxOption>>([])
@@ -250,9 +253,10 @@ async function refreshRemoteOptions(query: string): Promise<void> {
 
 function updatePanelPosition(): void {
   if (props.inlinePanel) {
+    panelPlacement.value = "below"
     panelStyle.value = {
       position: "absolute",
-      top: "calc(100% + 6px)",
+      top: "calc(100% - 1px)",
       left: "0px",
       width: "100%",
       maxHeight: "260px",
@@ -264,13 +268,14 @@ function updatePanelPosition(): void {
     return
   }
   const rect = inputEl.value.getBoundingClientRect()
-  const width = Math.max(rect.width, 220)
+  const width = Math.max(rect.width, 160)
   const panelHeight = Math.min(panelEl.value?.offsetHeight ?? 220, 260)
   const spaceBelow = window.innerHeight - rect.bottom - 8
   const placeAbove = spaceBelow < Math.min(180, panelHeight) && rect.top > panelHeight + 12
+  panelPlacement.value = placeAbove ? "above" : "below"
   const top = placeAbove
-    ? Math.max(8, rect.top - panelHeight - 6)
-    : Math.min(window.innerHeight - panelHeight - 8, rect.bottom + 6)
+    ? Math.max(8, rect.top - panelHeight + 1)
+    : Math.min(window.innerHeight - panelHeight - 8, rect.bottom - 1)
   const left = Math.min(
     Math.max(8, rect.left),
     Math.max(8, window.innerWidth - width - 8),

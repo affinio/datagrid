@@ -130,6 +130,7 @@ export function useDataGridTableStageRuntime<
   const rowSelectionSnapshotRef = options.rowSelectionSnapshot ?? ref<DataGridRowSelectionSnapshot | null>(null)
   const showRowIndex = computed(() => options.showRowIndex?.value !== false)
   const totalBodyRows = computed(() => options.runtime.rowPartition.value.bodyRowCount)
+  const totalSelectableRows = computed(() => Math.max(0, options.totalRuntimeRows.value))
   const effectiveIndexColumnWidth = computed(() => (showRowIndex.value ? INDEX_COLUMN_WIDTH : 0))
   const columnService = useDataGridTableStageColumns<TRow>({
     runtime: options.runtime,
@@ -189,10 +190,12 @@ export function useDataGridTableStageRuntime<
     columnVirtualizationEnabled: computed(() => options.virtualization.value.columns),
     totalRows: totalBodyRows,
     visibleColumns: centerColumns,
+    sizingColumns: orderedVisibleColumns,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
     resolveColumnWidth,
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
     indexColumnWidth: 0,
+    flexFillOffsetWidth: effectiveIndexColumnWidth.value,
     rowOverscan: computed(() => options.virtualization.value.rowOverscan),
     columnOverscan: computed(() => options.virtualization.value.columnOverscan),
     measureVisibleRowHeights: () => measureVisibleRowHeights(),
@@ -201,6 +204,32 @@ export function useDataGridTableStageRuntime<
     resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
     resolveTotalRowHeight: rowHeightMetrics.resolveTotalHeight,
   })
+  const resolveStageColumnStyle = (columnKey: string): Record<string, string> => {
+    return _viewportColumnStyle(columnKey)
+  }
+
+  const getSelectableRowAtIndex = (rowIndex: number): import("@affino/datagrid-vue").DataGridRowNode<TRow> | null => {
+    if (totalSelectableRows.value <= 0) {
+      return null
+    }
+    const normalizedIndex = Math.max(0, Math.min(totalSelectableRows.value - 1, Math.trunc(rowIndex)))
+    return options.runtime.api.rows.get(normalizedIndex) ?? null
+  }
+
+  const resolveSelectableRowIndexById = (rowId: string | number): number => {
+    for (let rowIndex = 0; rowIndex < totalSelectableRows.value; rowIndex += 1) {
+      if (options.runtime.api.rows.get(rowIndex)?.rowId === rowId) {
+        return rowIndex
+      }
+    }
+    return options.runtime.resolveBodyRowIndexById(rowId)
+  }
+
+  const selectableRuntime = {
+    ...options.runtime,
+    getBodyRowAtIndex: getSelectableRowAtIndex,
+    resolveBodyRowIndexById: resolveSelectableRowIndexById,
+  }
 
   const {
     rowStyle,
@@ -222,8 +251,8 @@ export function useDataGridTableStageRuntime<
 
   const selectionController = useDataGridAppCellSelection<TRow>({
     mode: options.mode,
-    runtime: options.runtime as never,
-    totalRows: totalBodyRows,
+    runtime: selectableRuntime as never,
+    totalRows: totalSelectableRows,
     visibleColumns: orderedVisibleColumns,
     viewportRowStart,
     selectionSnapshot: options.selectionSnapshot,
@@ -295,8 +324,6 @@ export function useDataGridTableStageRuntime<
     }
   })
 
-  const resolveBodyRowIndexById = (rowId: string | number): number => options.runtime.resolveBodyRowIndexById(rowId)
-
   const historyService = useDataGridTableStageHistory<TRow>({
     runtime: options.runtime,
     cloneRowData: options.cloneRowData,
@@ -345,8 +372,8 @@ export function useDataGridTableStageRuntime<
 
   const clipboard = useDataGridAppClipboard<TRow, unknown>({
     mode: options.mode,
-    runtime: options.runtime as never,
-    totalRows: totalBodyRows,
+    runtime: selectableRuntime as never,
+    totalRows: totalSelectableRows,
     visibleColumns: orderedVisibleColumns,
     viewportRowStart,
     resolveSelectionRange: resolveSelectionRangeForClipboard,
@@ -411,10 +438,10 @@ export function useDataGridTableStageRuntime<
     mode: options.mode,
     bodyViewportRef,
     visibleColumns: orderedVisibleColumns,
-    totalRows: totalBodyRows,
-    runtime: options.runtime as never,
+    totalRows: totalSelectableRows,
+    runtime: selectableRuntime as never,
     readCell: (row, columnKey) => readStageCell(row, columnKey),
-    resolveRowIndexById: resolveBodyRowIndexById,
+    resolveRowIndexById: resolveSelectableRowIndexById,
     applyCellSelection: coord => {
       applyCellSelectionByCoord(coord, false)
     },
@@ -457,8 +484,8 @@ export function useDataGridTableStageRuntime<
     dispose: disposeInteractionController,
   } = useDataGridAppInteractionController<TRow, unknown>({
     mode: options.mode,
-    runtime: options.runtime as never,
-    totalRows: totalBodyRows,
+    runtime: selectableRuntime as never,
+    totalRows: totalSelectableRows,
     visibleColumns: orderedVisibleColumns,
     viewportRowStart,
     selectionSnapshot: options.selectionSnapshot,
@@ -477,7 +504,7 @@ export function useDataGridTableStageRuntime<
     readCell: (row, columnKey) => readStageCell(row, columnKey),
     isCellEditable: isCellEditableByKey,
     cloneRowData: options.cloneRowData,
-    resolveRowIndexById: resolveBodyRowIndexById,
+    resolveRowIndexById: resolveSelectableRowIndexById,
     captureRowsSnapshot: captureHistorySnapshot,
     recordIntentTransaction: (descriptor, beforeSnapshot) => {
       recordHistoryIntentTransaction(descriptor, beforeSnapshot)
@@ -511,9 +538,9 @@ export function useDataGridTableStageRuntime<
   })
 
   const viewportKeyboardService = useDataGridTableStageViewportKeyboard<TRow>({
-    runtime: options.runtime,
+    runtime: selectableRuntime,
     selectionSnapshot: options.selectionSnapshot,
-    totalRows: totalBodyRows,
+    totalRows: totalSelectableRows,
     orderedVisibleColumns,
     viewportRowStart,
     applySelectionRange: applyClipboardSelectionRange,
@@ -630,7 +657,7 @@ export function useDataGridTableStageRuntime<
     isRangeMoving,
     headerViewportRef,
     bodyViewportRef,
-    columnStyle: stageServices.columns.stageColumnStyle,
+    columnStyle: resolveStageColumnStyle,
     toggleSortForColumn: options.toggleSortForColumn,
     sortIndicator: options.sortIndicator,
     setColumnFilterText: options.setColumnFilterText,

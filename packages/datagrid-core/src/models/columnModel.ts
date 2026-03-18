@@ -53,6 +53,7 @@ export interface DataGridColumnDef<TRow = unknown> extends DataGridColumnValueAc
   key: string
   field?: Extract<keyof TRow, string> | string
   label?: string
+  flex?: number
   minWidth?: number
   maxWidth?: number
   dataType?: DataGridColumnDataType

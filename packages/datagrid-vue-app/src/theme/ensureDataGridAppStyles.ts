@@ -2195,36 +2195,36 @@ body.datagrid-fill-drag-cursor * {
   content: "";
   position: absolute;
   top: 50%;
-  right: 12px;
-  width: 10px;
-  height: 10px;
-  border-right: 2px solid var(--datagrid-text-muted);
-  border-bottom: 2px solid var(--datagrid-text-muted);
-  transform: translateY(-65%) rotate(45deg);
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid color-mix(in srgb, var(--datagrid-text-muted) 88%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--datagrid-text-muted) 88%, transparent);
+  transform: translateY(-58%) rotate(45deg);
   pointer-events: none;
-  opacity: 0.8;
+  opacity: 0.9;
 }
 
 .datagrid-cell-combobox__input {
-  padding-right: 32px;
+  padding-right: 24px;
   appearance: none;
 }
 
 .grid-cell--select:not(.grid-cell--editing) {
   position: relative;
-  padding-right: 28px;
+  padding-right: 24px;
 }
 
 .grid-cell--select:not(.grid-cell--editing)::after {
   content: "";
   position: absolute;
   top: 50%;
-  right: 12px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--datagrid-text-muted);
-  border-bottom: 2px solid var(--datagrid-text-muted);
-  transform: translateY(-65%) rotate(45deg);
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid color-mix(in srgb, var(--datagrid-text-muted) 88%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--datagrid-text-muted) 88%, transparent);
+  transform: translateY(-58%) rotate(45deg);
   pointer-events: none;
   opacity: 0;
   transition: opacity 120ms ease;
@@ -2239,33 +2239,46 @@ body.datagrid-fill-drag-cursor * {
 .datagrid-cell-combobox__panel {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px;
+  gap: 0;
+  padding: 4px;
   border: 1px solid var(--datagrid-column-menu-border);
-  border-radius: 12px;
-  background: var(--datagrid-column-menu-bg);
-  box-shadow: 0 18px 40px var(--datagrid-column-menu-shadow);
+  border-radius: 10px;
+  background: var(--datagrid-editor-bg);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--datagrid-column-menu-shadow) 55%, transparent);
   overflow: auto;
   z-index: 240;
+  font-size: var(--datagrid-font-size);
+  line-height: 1.2;
 }
 
 .datagrid-cell-combobox__panel--inline {
   position: absolute;
 }
 
+.datagrid-cell-combobox__panel--attached-below {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.datagrid-cell-combobox__panel--attached-above {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .datagrid-cell-combobox__option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  min-height: 36px;
+  gap: 8px;
+  min-height: 30px;
   width: 100%;
-  padding: 0 10px;
+  padding: 6px 8px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--datagrid-text-primary);
   font: inherit;
+  line-height: 1.2;
   text-align: left;
   cursor: pointer;
 }
@@ -2290,11 +2303,31 @@ body.datagrid-fill-drag-cursor * {
 .datagrid-cell-combobox__option-state,
 .datagrid-cell-combobox__empty {
   color: var(--datagrid-text-muted);
-  font-size: 12px;
+  font-size: calc(var(--datagrid-font-size) - 1px);
+}
+
+.datagrid-cell-combobox__option-state {
+  flex: 0 0 auto;
+  position: relative;
+  width: 14px;
+  height: 14px;
+  color: var(--datagrid-accent-strong);
+}
+
+.datagrid-cell-combobox__option-state::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(40deg);
 }
 
 .datagrid-cell-combobox__empty {
-  padding: 8px 10px;
+  padding: 8px;
 }
 
 .cell-editor-select {

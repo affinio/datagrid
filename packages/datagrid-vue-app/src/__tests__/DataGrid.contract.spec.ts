@@ -1,6 +1,7 @@
 import { nextTick } from "vue"
 import { mount } from "@vue/test-utils"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import type { DataGridRowNodeInput } from "@affino/datagrid-core"
 import DataGrid from "../DataGrid"
 import {
   clearDataGridSavedViewInStorage,
@@ -64,6 +65,71 @@ const COLUMNS = [
   { key: "region", label: "Region", width: 160 },
   { key: "amount", label: "Amount", width: 140 },
 ] as const
+
+const FLEX_COLUMNS = [
+  { key: "owner", label: "Owner", flex: 1, initialState: { width: 180 } },
+  { key: "region", label: "Region", initialState: { width: 160 } },
+  { key: "amount", label: "Amount", initialState: { width: 140 } },
+] as const
+
+const PINNED_FLEX_COLUMNS = [
+  { key: "owner", label: "Owner", flex: 1, initialState: { width: 180, pin: "left" } },
+  { key: "region", label: "Region", initialState: { width: 160 } },
+  { key: "amount", label: "Amount", initialState: { width: 140 } },
+] as const
+
+const PINNED_BOTTOM_SELECTION_COLUMNS = [
+  { key: "project", label: "Project", width: 180 },
+  { key: "monday", label: "Monday", width: 120 },
+  { key: "tuesday", label: "Tuesday", width: 120 },
+] as const
+
+const PINNED_BOTTOM_SELECTION_ROWS: readonly DataGridRowNodeInput<Record<string, unknown>>[] = [
+  {
+    kind: "leaf",
+    rowId: "pb1",
+    rowKey: "pb1",
+    sourceIndex: 0,
+    originalIndex: 0,
+    displayIndex: 0,
+    state: { selected: false, group: false, pinned: "none", expanded: false },
+    data: { project: "Alpha", monday: 4, tuesday: 6 },
+    row: { project: "Alpha", monday: 4, tuesday: 6 },
+  },
+  {
+    kind: "leaf",
+    rowId: "pb2",
+    rowKey: "pb2",
+    sourceIndex: 1,
+    originalIndex: 1,
+    displayIndex: 1,
+    state: { selected: false, group: false, pinned: "none", expanded: false },
+    data: { project: "Beta", monday: 8, tuesday: 9 },
+    row: { project: "Beta", monday: 8, tuesday: 9 },
+  },
+  {
+    kind: "leaf",
+    rowId: "pb3",
+    rowKey: "pb3",
+    sourceIndex: 2,
+    originalIndex: 2,
+    displayIndex: 2,
+    state: { selected: false, group: false, pinned: "none", expanded: false },
+    data: { project: "Gamma", monday: 1, tuesday: 2 },
+    row: { project: "Gamma", monday: 1, tuesday: 2 },
+  },
+  {
+    kind: "leaf",
+    rowId: "pb-total",
+    rowKey: "pb-total",
+    sourceIndex: 3,
+    originalIndex: 3,
+    displayIndex: 3,
+    state: { selected: false, group: false, pinned: "bottom", expanded: false },
+    data: { project: "Total", monday: 100, tuesday: 200 },
+    row: { project: "Total", monday: 100, tuesday: 200 },
+  },
+]
 
 const EDITABLE_COLUMNS = [
   { key: "owner", label: "Owner", width: 180, capabilities: { editable: true } },
@@ -300,6 +366,12 @@ function queryBodyCell(wrapper: ReturnType<typeof mount>, rowIndex: number, colu
   return wrapper.find(`.grid-body-viewport .grid-cell[data-row-index="${rowIndex}"][data-column-index="${resolvedColumnIndex}"]`)
 }
 
+function queryPinnedBottomCell(wrapper: ReturnType<typeof mount>, rowIndex: number, columnIndex: number) {
+  const hasRowSelectionColumn = wrapper.find(".grid-body-pane--left .grid-cell--row-selection").exists()
+  const resolvedColumnIndex = hasRowSelectionColumn ? columnIndex + 1 : columnIndex
+  return wrapper.find(`.grid-body-viewport--pinned-bottom .grid-cell[data-row-index="${rowIndex}"][data-column-index="${resolvedColumnIndex}"]`)
+}
+
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
 const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
 
@@ -317,6 +389,13 @@ afterAll(() => {
   HTMLElement.prototype.scrollIntoView = originalScrollIntoView
   HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
 })
+
+function setElementClientWidth(element: HTMLElement, width: number): void {
+  Object.defineProperty(element, "clientWidth", {
+    configurable: true,
+    value: width,
+  })
+}
 
 describe("DataGrid app facade contract", () => {
   it("does not expose enterprise-only props on the community facade", () => {
@@ -1482,6 +1561,37 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps selection aggregate labels aligned for pinned bottom rows", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: PINNED_BOTTOM_SELECTION_ROWS,
+        columns: PINNED_BOTTOM_SELECTION_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const mondayCell = queryPinnedBottomCell(wrapper, 3, 1)
+    const tuesdayCell = queryPinnedBottomCell(wrapper, 3, 2)
+
+    expect(mondayCell.exists()).toBe(true)
+    expect(tuesdayCell.exists()).toBe(true)
+
+    await mondayCell.trigger("mousedown", { button: 0, clientX: 8, clientY: 8 })
+    await mondayCell.trigger("click", { clientX: 8, clientY: 8 })
+    await tuesdayCell.trigger("mousedown", { button: 0, shiftKey: true, clientX: 16, clientY: 8 })
+    await tuesdayCell.trigger("click", { shiftKey: true, clientX: 16, clientY: 8 })
+
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getSelectionAggregatesLabel?.()).toBe(
+      "Selection: count 2 · sum 300 · min 100 · max 200 · avg 150",
+    )
+
+    wrapper.unmount()
+  })
+
   it("renders checkbox cell types and toggles them on click without entering edit mode", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
@@ -1550,6 +1660,27 @@ describe("DataGrid app facade contract", () => {
 
     expect(queryBodyCell(wrapper, 0, 0).text()).toContain("Planned")
     expect(resolveRowAt<{ stage: string }>(wrapper, 0)).toMatchObject({ stage: "planned" })
+
+    wrapper.unmount()
+  })
+
+  it("opens a select cell from the trailing chevron hit zone on single click", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SELECT_ROWS,
+        columns: SELECT_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("click", { clientX: 118, clientY: 16 })
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
+    expect(editor.exists()).toBe(true)
 
     wrapper.unmount()
   })
@@ -1872,6 +2003,74 @@ describe("DataGrid app facade contract", () => {
       expect.objectContaining({ key: "region", visible: false, width: 180, pin: "none" }),
       expect.objectContaining({ key: "amount", visible: true, width: 150, pin: "right" }),
     ]))
+
+    wrapper.unmount()
+  })
+
+  it("expands flex columns to fill the remaining center viewport width", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: FLEX_COLUMNS,
+        rowSelection: false,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const bodyViewport = wrapper.find(".grid-body-viewport")
+    expect(bodyViewport.exists()).toBe(true)
+    const bodyShell = bodyViewport.element.parentElement as HTMLElement | null
+    expect(bodyShell).toBeTruthy()
+    setElementClientWidth(bodyViewport.element as HTMLElement, 720)
+    if (bodyShell) {
+      setElementClientWidth(bodyShell, 792)
+    }
+    await bodyViewport.trigger("scroll")
+    await flushRuntimeTasks()
+
+    const ownerHeaderCell = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+    const regionHeaderCell = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="region"]')
+    const amountHeaderCell = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="amount"]')
+
+    expect(ownerHeaderCell.attributes("style")).toContain("width: 420px")
+    expect(regionHeaderCell.attributes("style")).toContain("width: 160px")
+    expect(amountHeaderCell.attributes("style")).toContain("width: 140px")
+
+    wrapper.unmount()
+  })
+
+  it("expands pinned flex columns from the full stage shell width", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: PINNED_FLEX_COLUMNS,
+        rowSelection: false,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const bodyViewport = wrapper.find(".grid-body-viewport")
+    expect(bodyViewport.exists()).toBe(true)
+    const bodyShell = bodyViewport.element.parentElement as HTMLElement | null
+    expect(bodyShell).toBeTruthy()
+    setElementClientWidth(bodyViewport.element as HTMLElement, 300)
+    if (bodyShell) {
+      setElementClientWidth(bodyShell, 720)
+    }
+    await bodyViewport.trigger("scroll")
+    await flushRuntimeTasks()
+
+    const ownerHeaderCell = wrapper.find('.grid-header-pane--left .grid-cell--header[data-column-key="owner"]')
+    const regionHeaderCell = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="region"]')
+    const amountHeaderCell = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="amount"]')
+
+    expect(ownerHeaderCell.attributes("style")).toContain("width: 348px")
+    expect(regionHeaderCell.attributes("style")).toContain("width: 160px")
+    expect(amountHeaderCell.attributes("style")).toContain("width: 140px")
 
     wrapper.unmount()
   })

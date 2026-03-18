@@ -20,18 +20,20 @@ import type {
   DataGridPivotSpec,
 } from "@affino/datagrid-vue"
 
-export type DataGridAppControlledApi = DataGridApi<unknown>
+type DataGridRowRecord = Record<string, unknown>
+
+export type DataGridAppControlledApi = DataGridApi<DataGridRowRecord>
 
 export interface DataGridAppControlledExpose {
   api: DataGridAppControlledApi
-  rowModel: DataGridRowModel<unknown>
+  rowModel: DataGridRowModel<DataGridRowRecord>
   columnModel: DataGridColumnModel
 }
 
 export interface UseDataGridAppControlledStateOptions {
   gridRef: Ref<DataGridAppControlledExpose | null>
   props: {
-    state?: DataGridUnifiedState<unknown> | null
+    state?: DataGridUnifiedState<DataGridRowRecord> | null
     stateOptions?: DataGridSetStateOptions | null
     columnState?: DataGridUnifiedColumnState | null
     columnOrder?: readonly string[] | null
@@ -41,7 +43,7 @@ export interface UseDataGridAppControlledStateOptions {
     sortModel?: readonly DataGridSortState[]
     filterModel?: DataGridFilterSnapshot | null
     groupBy?: DataGridGroupBySpec | null
-    aggregationModel?: DataGridAggregationModel<unknown> | null
+    aggregationModel?: DataGridAggregationModel<DataGridRowRecord> | null
     pivotModel?: DataGridPivotSpec | null
     rowHeightMode: "fixed" | "auto"
     baseRowHeight: number
@@ -54,7 +56,7 @@ export interface UseDataGridAppControlledStateOptions {
     columnWidths: (payload: Readonly<Record<string, number | null>>) => void
     columnPins: (payload: Readonly<Record<string, DataGridColumnPin>>) => void
     groupBy: (payload: DataGridGroupBySpec | null) => void
-    state: (payload: DataGridUnifiedState<unknown>) => void
+    state: (payload: DataGridUnifiedState<DataGridRowRecord>) => void
     ready: (payload: { api: DataGridAppControlledApi }) => void
   }
 }
@@ -64,14 +66,14 @@ export interface UseDataGridAppControlledStateResult {
   handleGridReady: () => void
   dispose: () => void
   getColumnState: () => DataGridUnifiedColumnState | null
-  getState: () => DataGridUnifiedState<unknown> | null
-  migrateState: (state: unknown, options?: DataGridMigrateStateOptions) => DataGridUnifiedState<unknown> | null
+  getState: () => DataGridUnifiedState<DataGridRowRecord> | null
+  migrateState: (state: unknown, options?: DataGridMigrateStateOptions) => DataGridUnifiedState<DataGridRowRecord> | null
   applyColumnState: (columnState: DataGridUnifiedColumnState) => boolean
-  applyState: (state: DataGridUnifiedState<unknown>, options?: DataGridSetStateOptions) => boolean
-  exportPivotLayout: () => DataGridPivotLayoutSnapshot<unknown> | null
-  exportPivotInterop: () => DataGridPivotInteropSnapshot<unknown> | null
+  applyState: (state: DataGridUnifiedState<DataGridRowRecord>, options?: DataGridSetStateOptions) => boolean
+  exportPivotLayout: () => DataGridPivotLayoutSnapshot<DataGridRowRecord> | null
+  exportPivotInterop: () => DataGridPivotInteropSnapshot<DataGridRowRecord> | null
   importPivotLayout: (
-    layout: DataGridPivotLayoutSnapshot<unknown>,
+    layout: DataGridPivotLayoutSnapshot<DataGridRowRecord>,
     options?: DataGridPivotLayoutImportOptions,
   ) => boolean
   expandAllGroups: () => void
@@ -358,14 +360,14 @@ export function useDataGridAppControlledState(
     options.emit.ready({ api: grid.api })
   }
 
-  const getState = (): DataGridUnifiedState<unknown> | null => {
+  const getState = (): DataGridUnifiedState<DataGridRowRecord> | null => {
     return options.gridRef.value?.api.state.get() ?? null
   }
 
   const migrateState = (
     state: unknown,
     migrateOptions?: DataGridMigrateStateOptions,
-  ): DataGridUnifiedState<unknown> | null => {
+  ): DataGridUnifiedState<DataGridRowRecord> | null => {
     return options.gridRef.value?.api.state.migrate(state, migrateOptions) ?? null
   }
 
@@ -396,7 +398,7 @@ export function useDataGridAppControlledState(
   }
 
   const applyState = (
-    state: DataGridUnifiedState<unknown>,
+    state: DataGridUnifiedState<DataGridRowRecord>,
     setOptions?: DataGridSetStateOptions,
   ): boolean => {
     const api = options.gridRef.value?.api
@@ -413,16 +415,16 @@ export function useDataGridAppControlledState(
     return true
   }
 
-  const exportPivotLayout = (): DataGridPivotLayoutSnapshot<unknown> | null => {
+  const exportPivotLayout = (): DataGridPivotLayoutSnapshot<DataGridRowRecord> | null => {
     return options.gridRef.value?.api.pivot.exportLayout() ?? null
   }
 
-  const exportPivotInterop = (): DataGridPivotInteropSnapshot<unknown> | null => {
+  const exportPivotInterop = (): DataGridPivotInteropSnapshot<DataGridRowRecord> | null => {
     return options.gridRef.value?.api.pivot.exportInterop() ?? null
   }
 
   const importPivotLayout = (
-    layout: DataGridPivotLayoutSnapshot<unknown>,
+    layout: DataGridPivotLayoutSnapshot<DataGridRowRecord>,
     importOptions?: DataGridPivotLayoutImportOptions,
   ): boolean => {
     const api = options.gridRef.value?.api

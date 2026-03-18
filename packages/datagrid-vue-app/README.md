@@ -826,6 +826,40 @@ function persistSavedView() {
 
 ## Column State
 
+Column definitions can also declare `flex` when a center-pane column should absorb the remaining viewport width.
+The column keeps its base width from `initialState.width`, controlled `column-widths`, or the default width, and `flex` adds a proportional share of any free space on top.
+
+```vue
+<script setup lang="ts">
+const columns = [
+  {
+    key: 'project',
+    label: 'Project',
+    flex: 1,
+    minWidth: 240,
+    initialState: { width: 240 },
+  },
+  {
+    key: 'mon',
+    label: 'Mon',
+    initialState: { width: 104 },
+  },
+  {
+    key: 'total',
+    label: 'Total',
+    initialState: { width: 128, pin: 'right' },
+  },
+]
+</script>
+```
+
+Notes:
+
+- `flex` is declared on the column definition, not in unified column state.
+- Multiple flex columns share leftover available stage width by their flex weight.
+- If there is no free space, the column falls back to its base width.
+- Pinned and unpinned columns participate in the same effective width calculation.
+
 Unified column-state object:
 
 ```vue

@@ -238,7 +238,7 @@ export default defineComponent({
       default: undefined,
     },
     aggregationModel: {
-      type: Object as PropType<DataGridAggregationModel<unknown> | null | undefined>,
+      type: Object as PropType<DataGridAggregationModel<Record<string, unknown>> | null | undefined>,
       default: undefined,
     },
     renderMode: {
@@ -338,7 +338,7 @@ export default defineComponent({
       default: undefined,
     },
     state: {
-      type: Object as PropType<DataGridUnifiedState<unknown> | null | undefined>,
+      type: Object as PropType<DataGridUnifiedState<Record<string, unknown>> | null | undefined>,
       default: undefined,
     },
     stateOptions: {

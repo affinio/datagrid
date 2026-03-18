@@ -71,7 +71,6 @@ import {
 } from "vue"
 import type { DataGridRowNode, UseDataGridRuntimeResult } from "@affino/datagrid-vue"
 import DataGridTableStage from "../stage/DataGridTableStage.vue"
-import type { DataGridTableStageProps } from "../stage/dataGridTableStage.types"
 import type {
   DataGridResolvedGanttOptions,
   DataGridGanttBarLayout,
