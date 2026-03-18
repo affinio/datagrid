@@ -156,12 +156,6 @@ importers:
 
   packages/datagrid-pivot: {}
 
-  packages/datagrid-pivot-enterprise:
-    dependencies:
-      '@affino/datagrid-pivot':
-        specifier: workspace:*
-        version: link:../datagrid-pivot
-
   packages/datagrid-plugins: {}
 
   packages/datagrid-sandbox:
@@ -250,6 +244,9 @@ importers:
       '@affino/datagrid-pivot':
         specifier: workspace:*
         version: link:../datagrid-pivot
+      '@affino/datagrid-worker':
+        specifier: workspace:*
+        version: link:../datagrid-worker
       '@affino/menu-vue':
         specifier: ^2.1.1
         version: 2.1.1(@affino/menu-core@1.1.0)(vue@3.4.38(typescript@5.9.3))
@@ -263,9 +260,6 @@ importers:
       '@affino/datagrid-theme':
         specifier: workspace:^
         version: link:../datagrid-theme
-      '@affino/datagrid-worker':
-        specifier: workspace:*
-        version: link:../datagrid-worker
 
   packages/datagrid-vue-app:
     dependencies:
