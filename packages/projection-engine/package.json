@@ -1,6 +1,6 @@
 {
   "name": "@affino/projection-engine",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Projection stage graph engine for Affino data pipelines",

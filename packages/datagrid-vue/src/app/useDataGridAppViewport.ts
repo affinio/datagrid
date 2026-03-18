@@ -94,7 +94,7 @@ export function useDataGridAppViewport<TRow>(
     if (!column) {
       return 0
     }
-    const value = column.column.flex
+    const value = column.column?.flex
     return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0
   }
   const effectiveColumnWidths = computed<Record<string, number>>(() => {

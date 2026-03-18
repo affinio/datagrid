@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-worker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Worker transport protocol and postMessage bridge for Affino DataGrid compute runtime",

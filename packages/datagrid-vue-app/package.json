@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue-app",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Declarative Vue DataGrid component for Affino",
   "type": "module",
   "main": "dist/index.js",
