@@ -428,6 +428,24 @@ function isSelectCellTriggerClick(event: MouseEvent, row: TableRow, column: Tabl
   return offsetX >= rect.width - triggerWidth
 }
 
+function isDateCellTriggerClick(event: MouseEvent, row: TableRow, column: TableColumn): boolean {
+  const editorMode = row.kind === "group" ? "none" : resolveCellEditorMode(row, column)
+  if (editorMode !== "date" && editorMode !== "datetime") {
+    return false
+  }
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  if (!target) {
+    return false
+  }
+  const rect = target.getBoundingClientRect()
+  if (rect.width <= 0) {
+    return false
+  }
+  const offsetX = event.clientX - rect.left
+  const triggerWidth = Math.min(24, Math.max(16, Math.floor(rect.width * 0.22)))
+  return offsetX >= rect.width - triggerWidth
+}
+
 function cellTabIndex(rowOffset: number, columnIndex: number): number {
   return isVisualSelectionAnchorCell(rowOffset, columnIndex) ? 0 : -1
 }
@@ -798,10 +816,12 @@ function checkboxValueIsChecked(row: TableRow, column: TableColumn): boolean {
 }
 
 function builtInCellClasses(row: TableRow, column: TableColumn): Record<string, boolean> {
+  const editorMode = row.kind !== "group" ? resolveCellEditorMode(row, column) : "none"
   return {
     "grid-cell--checkbox": shouldRenderCheckboxCell(row, column),
     "grid-cell--row-selection": isRowSelectionColumn(column),
-    "grid-cell--select": row.kind !== "group" && resolveCellEditorMode(row, column) === "select",
+    "grid-cell--select": editorMode === "select",
+    "grid-cell--date": editorMode === "date" || editorMode === "datetime",
   }
 }
 
@@ -827,7 +847,7 @@ function checkboxIndicatorMarkClass(row: TableRow, column: TableColumn): Record<
   }
 }
 
-function resolveCellEditorMode(row: TableRow, column: TableColumn): "none" | "text" | "select" {
+function resolveCellEditorMode(row: TableRow, column: TableColumn): "none" | "text" | "select" | "date" | "datetime" {
   return buildDataGridCellRenderModel({
     column: column.column,
     row: row.kind !== "group" ? row.data : undefined,
@@ -974,6 +994,22 @@ function isSelectEditorCell(
     && resolveCellEditorMode(row, column) === "select"
 }
 
+function isDateEditorCell(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): boolean {
+  const editorMode = resolveCellEditorMode(row, column)
+  return isCellEditableSafe(row, rowOffset, column, columnIndex)
+    && isEditingCellSafe(row, column.key)
+    && (editorMode === "date" || editorMode === "datetime")
+}
+
+function resolveDateEditorInputType(row: TableRow, column: TableColumn): "date" | "datetime-local" {
+  return resolveCellEditorMode(row, column) === "datetime" ? "datetime-local" : "date"
+}
+
 function isTextEditorCell(
   row: TableRow,
   rowOffset: number,
@@ -982,7 +1018,7 @@ function isTextEditorCell(
 ): boolean {
   return isCellEditableSafe(row, rowOffset, column, columnIndex)
     && isEditingCellSafe(row, column.key)
-    && resolveCellEditorMode(row, column) !== "select"
+    && resolveCellEditorMode(row, column) === "text"
 }
 
 function handleSelectEditorCommit(
@@ -995,6 +1031,11 @@ function handleSelectEditorCommit(
 
 function handleSelectEditorCancel(): void {
   editing.value.cancelInlineEdit()
+}
+
+function handleDateEditorChange(value: string, target: "stay" | "next" | "previous" = "stay"): void {
+  editing.value.updateEditingCellValue(value)
+  editing.value.commitInlineEdit(target)
 }
 
 function handleTextEditorBlur(): void {
@@ -1127,7 +1168,7 @@ function handleBodyCellClick(
   if (row.kind === "group") {
     return
   }
-  if (!isEditingCellSafe(row, column.key) && isSelectCellTriggerClick(event, row, column)) {
+  if (!isEditingCellSafe(row, column.key) && (isSelectCellTriggerClick(event, row, column) || isDateCellTriggerClick(event, row, column))) {
     startInlineEditIfAllowed(row, column, rowOffset)
     return
   }
@@ -2891,6 +2932,9 @@ const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   handleSelectEditorCommit,
   handleSelectEditorCancel,
   handleSelectEditorOptionsResolved,
+  isDateEditorCell,
+  resolveDateEditorInputType,
+  handleDateEditorChange,
   isTextEditorCell,
   updateEditingCellValue,
   handleEditorKeydown,
@@ -2942,6 +2986,9 @@ const centerPaneRenderApi: DataGridTableStageCenterPaneRenderApi = {
   handleSelectEditorCommit,
   handleSelectEditorCancel,
   handleSelectEditorOptionsResolved,
+  isDateEditorCell,
+  resolveDateEditorInputType,
+  handleDateEditorChange,
   isTextEditorCell,
   updateEditingCellValue,
   handleEditorKeydown,

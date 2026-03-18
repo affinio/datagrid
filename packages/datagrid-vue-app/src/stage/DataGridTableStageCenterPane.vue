@@ -72,6 +72,18 @@
             @options-resolved="renderApi.handleSelectEditorOptionsResolved(row, column, $event)"
           />
           <input
+            v-else-if="renderApi.isDateEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
+            class="cell-editor-control cell-editor-input cell-editor-input--date"
+            :type="renderApi.resolveDateEditorInputType(row, column)"
+            :value="editing.editingCellValue"
+            @mousedown.stop
+            @click.stop
+            @input="renderApi.updateEditingCellValue(($event.target as HTMLInputElement).value)"
+            @change="renderApi.handleDateEditorChange(($event.target as HTMLInputElement).value)"
+            @keydown.stop="renderApi.handleEditorKeydown"
+            @blur="renderApi.handleTextEditorBlur"
+          />
+          <input
             v-else-if="renderApi.isTextEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
             class="cell-editor-control cell-editor-input"
             :value="editing.editingCellValue"

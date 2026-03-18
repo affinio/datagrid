@@ -941,34 +941,40 @@ const DATA_GRID_APP_STYLES = `
   outline-offset: calc(-1 * var(--datagrid-selection-stroke-width));
 }
 
-.grid-cell--selection-edge::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 5;
-  border-top: var(--selection-edge-top, 0 solid transparent);
-  border-right: var(--selection-edge-right, 0 solid transparent);
-  border-bottom: var(--selection-edge-bottom, 0 solid transparent);
-  border-left: var(--selection-edge-left, 0 solid transparent);
-  box-sizing: border-box;
-  border-radius: 1px;
+.grid-cell--selection-edge {
+  --selection-edge-top-size: 0px;
+  --selection-edge-right-size: 0px;
+  --selection-edge-bottom-size: 0px;
+  --selection-edge-left-size: 0px;
+  --selection-edge-top-color: transparent;
+  --selection-edge-right-color: transparent;
+  --selection-edge-bottom-color: transparent;
+  --selection-edge-left-color: transparent;
+  box-shadow:
+    inset 0 var(--selection-edge-top-size) 0 0 var(--selection-edge-top-color),
+    inset calc(-1 * var(--selection-edge-right-size)) 0 0 0 var(--selection-edge-right-color),
+    inset 0 calc(-1 * var(--selection-edge-bottom-size)) 0 0 var(--selection-edge-bottom-color),
+    inset var(--selection-edge-left-size) 0 0 0 var(--selection-edge-left-color);
 }
 
 .grid-cell--selection-edge-top {
-  --selection-edge-top: var(--datagrid-selection-stroke-width) solid var(--datagrid-selection-handle-border);
+  --selection-edge-top-size: var(--datagrid-selection-stroke-width);
+  --selection-edge-top-color: var(--datagrid-selection-handle-border);
 }
 
 .grid-cell--selection-edge-right {
-  --selection-edge-right: var(--datagrid-selection-stroke-width) solid var(--datagrid-selection-handle-border);
+  --selection-edge-right-size: var(--datagrid-selection-stroke-width);
+  --selection-edge-right-color: var(--datagrid-selection-handle-border);
 }
 
 .grid-cell--selection-edge-bottom {
-  --selection-edge-bottom: var(--datagrid-selection-stroke-width) solid var(--datagrid-selection-handle-border);
+  --selection-edge-bottom-size: var(--datagrid-selection-stroke-width);
+  --selection-edge-bottom-color: var(--datagrid-selection-handle-border);
 }
 
 .grid-cell--selection-edge-left {
-  --selection-edge-left: var(--datagrid-selection-stroke-width) solid var(--datagrid-selection-handle-border);
+  --selection-edge-left-size: var(--datagrid-selection-stroke-width);
+  --selection-edge-left-color: var(--datagrid-selection-handle-border);
 }
 
 .grid-selection-overlay {
@@ -2215,7 +2221,12 @@ body.datagrid-fill-drag-cursor * {
   padding-right: 24px;
 }
 
-.grid-cell--select:not(.grid-cell--editing)::after {
+.grid-cell--date:not(.grid-cell--editing) {
+  position: relative;
+  padding-right: 26px;
+}
+
+.grid-cell--select:not(.grid-cell--editing)::before {
   content: "";
   position: absolute;
   top: 50%;
@@ -2228,11 +2239,45 @@ body.datagrid-fill-drag-cursor * {
   pointer-events: none;
   opacity: 0;
   transition: opacity 120ms ease;
+  z-index: 5;
 }
 
-.grid-cell--select:not(.grid-cell--editing):hover::after,
-.grid-cell--select.grid-cell--selection-anchor:not(.grid-cell--editing)::after,
-.grid-cell--select:not(.grid-cell--editing):focus-visible::after {
+.grid-cell--select:not(.grid-cell--editing):hover::before,
+.grid-cell--select.grid-cell--selection-anchor:not(.grid-cell--editing)::before,
+.grid-cell--select:not(.grid-cell--editing):focus-visible::before {
+  opacity: 0.85;
+}
+
+.grid-cell--date:not(.grid-cell--editing)::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid color-mix(in srgb, var(--datagrid-text-muted) 88%, transparent);
+  border-radius: 3px;
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--datagrid-text-muted) 88%, transparent) 0,
+      color-mix(in srgb, var(--datagrid-text-muted) 88%, transparent) 1.5px,
+      transparent 1.5px,
+      transparent 4px,
+      color-mix(in srgb, var(--datagrid-text-muted) 18%, transparent) 4px,
+      color-mix(in srgb, var(--datagrid-text-muted) 18%, transparent) 5.5px,
+      transparent 5.5px
+    );
+  transform: translateY(-50%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  z-index: 5;
+}
+
+.grid-cell--date:not(.grid-cell--editing):hover::before,
+.grid-cell--date.grid-cell--selection-anchor:not(.grid-cell--editing)::before,
+.grid-cell--date:not(.grid-cell--editing):focus-visible::before {
   opacity: 0.85;
 }
 
@@ -2342,6 +2387,10 @@ body.datagrid-fill-drag-cursor * {
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
   cursor: pointer;
+}
+
+.cell-editor-input--date {
+  padding-right: 8px;
 }
 
 .cell-editor-control::selection {

@@ -8,6 +8,7 @@ export type DataGridCellTypeId =
   | "checkbox"
   | "select"
   | "date"
+  | "datetime"
   | "formula"
   | "percent"
 
@@ -20,7 +21,7 @@ export type DataGridCellKeyboardAction =
 
 export type DataGridCellClickAction = "none" | "toggle"
 
-export type DataGridCellEditorMode = "none" | "text" | "select"
+export type DataGridCellEditorMode = "none" | "text" | "select" | "date" | "datetime"
 
 export interface DataGridCellTypeOption {
   label: string
@@ -213,7 +214,21 @@ const DEFAULT_DATE_CELL_TYPE: DataGridCellTypeDefinition = {
   id: "date",
   formatter: (value, context) => formatDataGridCellValue(value, context.column),
   parser: draft => parseDateDraft(draft),
-  editorMode: "text",
+  editorMode: "date",
+  clickAction: "none",
+  keyboard: {
+    enter: "startEdit",
+    f2: "startEdit",
+    printable: "startEdit",
+    space: "navigate",
+  },
+}
+
+const DEFAULT_DATETIME_CELL_TYPE: DataGridCellTypeDefinition = {
+  id: "datetime",
+  formatter: (value, context) => formatDataGridCellValue(value, context.column),
+  parser: draft => parseDateDraft(draft),
+  editorMode: "datetime",
   clickAction: "none",
   keyboard: {
     enter: "startEdit",
@@ -245,6 +260,7 @@ const DEFAULT_CELL_TYPE_DEFINITIONS: readonly DataGridCellTypeDefinition[] = Obj
   DEFAULT_CHECKBOX_CELL_TYPE,
   DEFAULT_SELECT_CELL_TYPE,
   DEFAULT_DATE_CELL_TYPE,
+  DEFAULT_DATETIME_CELL_TYPE,
   DEFAULT_FORMULA_CELL_TYPE,
 ])
 

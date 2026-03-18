@@ -1,5 +1,6 @@
 import { nextTick, ref, type Ref } from "vue"
 import {
+  buildDataGridCellRenderModel,
   parseDataGridCellDraftValue,
   type DataGridColumnSnapshot,
   type DataGridRowNode,
@@ -77,6 +78,61 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     return runtime.getBodyRowAtIndex?.(rowIndex) ?? options.runtime.api.rows.get(rowIndex) ?? null
   }
 
+  const readEditorSourceValue = (row: DataGridRowNode<TRow>, column: DataGridColumnSnapshot): unknown => {
+    if (row.kind === "group") {
+      return undefined
+    }
+    if (typeof column.column.accessor === "function") {
+      return column.column.accessor(row.data)
+    }
+    if (typeof column.column.valueGetter === "function") {
+      return column.column.valueGetter(row.data)
+    }
+    const field = typeof column.column.field === "string" && column.column.field.length > 0
+      ? column.column.field
+      : column.key
+    return (row.data as Record<string, unknown>)[field]
+  }
+
+  const padDateEditorPart = (value: number): string => String(value).padStart(2, "0")
+
+  const formatLocalDateTimeDraft = (date: Date): string => {
+    const year = date.getFullYear()
+    const month = padDateEditorPart(date.getMonth() + 1)
+    const day = padDateEditorPart(date.getDate())
+    const hours = padDateEditorPart(date.getHours())
+    const minutes = padDateEditorPart(date.getMinutes())
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  }
+
+  const normalizeTemporalEditorDraft = (value: unknown, includeTime: boolean): string => {
+    if (value == null || value === "") {
+      return ""
+    }
+    if (value instanceof Date) {
+      if (!Number.isFinite(value.getTime())) {
+        return ""
+      }
+      return includeTime ? formatLocalDateTimeDraft(value) : value.toISOString().slice(0, 10)
+    }
+    const stringValue = String(value).trim()
+    if (stringValue.length === 0) {
+      return ""
+    }
+    if (!includeTime && /^\d{4}-\d{2}-\d{2}$/.test(stringValue)) {
+      return stringValue
+    }
+    if (includeTime && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(stringValue)) {
+      return stringValue
+    }
+    const timestamp = Date.parse(stringValue)
+    if (!Number.isFinite(timestamp)) {
+      return ""
+    }
+    const date = new Date(timestamp)
+    return includeTime ? formatLocalDateTimeDraft(date) : date.toISOString().slice(0, 10)
+  }
+
   const focusInlineEditor = (): void => {
     void nextTick(() => {
       const applyFocus = (): void => {
@@ -88,6 +144,12 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         }
         editor.focus({ preventScroll: true })
         if (editor instanceof HTMLInputElement) {
+          if (editor.type === "date" || editor.type === "datetime-local") {
+            if (typeof editor.showPicker === "function") {
+              editor.showPicker()
+            }
+            return
+          }
           const caretPosition = editor.value.length
           editor.setSelectionRange(caretPosition, caretPosition)
           return
@@ -225,12 +287,25 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     if (rowIndex < 0 || columnIndex < 0 || !options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
       return
     }
+    const columnSnapshot = options.visibleColumns.value[columnIndex]
+    const editorMode = columnSnapshot
+      ? buildDataGridCellRenderModel({
+        column: columnSnapshot.column,
+        row: row.data,
+        editable: true,
+      }).editorMode
+      : "text"
+    const initialDraftValue = (editorMode === "date" || editorMode === "datetime") && columnSnapshot
+      ? normalizeTemporalEditorDraft(readEditorSourceValue(row, columnSnapshot), editorMode === "datetime")
+      : (startOptions.draftValue ?? options.readCell(row, columnKey))
     editingCell.value = {
       rowId: row.rowId,
       columnKey,
     }
-    editingCellValue.value = startOptions.draftValue ?? options.readCell(row, columnKey)
-    editingCellInitialFilter.value = startOptions.draftValue ?? ""
+    editingCellValue.value = initialDraftValue
+    editingCellInitialFilter.value = editorMode === "date" || editorMode === "datetime"
+      ? ""
+      : (startOptions.draftValue ?? "")
     editingCellOpenOnMount.value = startOptions.openOnMount === true
     focusInlineEditor()
   }

@@ -220,8 +220,9 @@ function inferColumnCellType<TRow>(column: DataGridColumnDef<TRow>): string | un
     case "percent":
       return "percent"
     case "date":
-    case "datetime":
       return "date"
+    case "datetime":
+      return "datetime"
     default:
       return undefined
   }

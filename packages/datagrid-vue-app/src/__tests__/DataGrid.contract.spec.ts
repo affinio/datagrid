@@ -26,6 +26,16 @@ interface FormulaRow {
   subtotal?: number
 }
 
+interface DateRow {
+  rowId: string
+  createdAt: Date
+}
+
+interface DateTimeRow {
+  rowId: string
+  updatedAt: Date
+}
+
 const BASE_ROWS: readonly DemoRow[] = [
   { rowId: "r1", owner: "NOC", region: "eu-west", amount: 10 },
   { rowId: "r2", owner: "NOC", region: "us-east", amount: 20 },
@@ -170,6 +180,39 @@ const SELECT_COLUMNS = [
 
 const SELECT_ROWS = [
   { rowId: "s1", stage: "backlog" },
+] as const
+
+const DATE_COLUMNS = [
+  { key: "createdAt", label: "Created", dataType: "date", capabilities: { editable: true } },
+] as const
+
+const DATE_ROWS: readonly DateRow[] = [
+  { rowId: "d1", createdAt: new Date("2026-03-10T00:00:00.000Z") },
+] as const
+
+const DATETIME_COLUMNS = [
+  {
+    key: "updatedAt",
+    label: "Updated",
+    dataType: "datetime",
+    capabilities: { editable: true },
+    presentation: {
+      format: {
+        dateTime: {
+          locale: "en-GB",
+          year: "numeric",
+          month: "short",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+      },
+    },
+  },
+] as const
+
+const DATETIME_ROWS: readonly DateTimeRow[] = [
+  { rowId: "dt1", updatedAt: new Date("2026-03-10T08:30:00.000Z") },
 ] as const
 
 const RANKED_SELECT_COLUMNS = [
@@ -1706,6 +1749,69 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     expect(wrapper.find(".datagrid-cell-combobox__input").exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it("opens a date cell from the trailing calendar hit zone and commits a picked date", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: DATE_ROWS,
+        columns: DATE_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("click", { clientX: 118, clientY: 16 })
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".cell-editor-input--date")
+    expect(editor.exists()).toBe(true)
+
+    const inputElement = editor.element as HTMLInputElement
+    inputElement.value = "2026-03-22"
+    inputElement.dispatchEvent(new Event("input", { bubbles: true }))
+    inputElement.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const updatedRow = resolveRowAt<{ createdAt: Date }>(wrapper, 0)
+    expect(updatedRow.createdAt).toBeInstanceOf(Date)
+    expect(updatedRow.createdAt.toISOString()).toBe("2026-03-22T00:00:00.000Z")
+
+    wrapper.unmount()
+  })
+
+  it("opens a datetime cell from the trailing calendar hit zone and commits a picked date-time", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: DATETIME_ROWS,
+        columns: DATETIME_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("click", { clientX: 118, clientY: 16 })
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".cell-editor-input--date")
+    expect(editor.exists()).toBe(true)
+    expect((editor.element as HTMLInputElement).type).toBe("datetime-local")
+
+    const inputElement = editor.element as HTMLInputElement
+    inputElement.value = "2026-03-22T03:07"
+    inputElement.dispatchEvent(new Event("input", { bubbles: true }))
+    inputElement.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const updatedRow = resolveRowAt<{ updatedAt: Date }>(wrapper, 0)
+    expect(updatedRow.updatedAt).toBeInstanceOf(Date)
+    expect(updatedRow.updatedAt.getTime()).toBe(new Date(2026, 2, 22, 3, 7).getTime())
 
     wrapper.unmount()
   })

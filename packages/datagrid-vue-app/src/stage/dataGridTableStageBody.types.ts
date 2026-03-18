@@ -68,6 +68,9 @@ export interface DataGridTableStageBodyRenderApiBase {
   handleSelectEditorCommit: (value: string, target?: "stay" | "next" | "previous") => void
   handleSelectEditorCancel: () => void
   handleSelectEditorOptionsResolved: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, options: ReadonlyArray<DataGridFilterableComboboxOption>) => void
+  isDateEditorCell: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
+  resolveDateEditorInputType: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => "date" | "datetime-local"
+  handleDateEditorChange: (value: string, target?: "stay" | "next" | "previous") => void
   isTextEditorCell: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   updateEditingCellValue: (value: string) => void
   handleEditorKeydown: (event: KeyboardEvent) => void
