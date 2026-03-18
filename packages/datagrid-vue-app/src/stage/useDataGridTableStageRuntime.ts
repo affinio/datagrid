@@ -75,6 +75,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   stripedRows?: Ref<boolean>
   showRowIndex?: Ref<boolean>
   showRowSelection?: Ref<boolean>
+  isRowInPendingClipboardCut?: (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>) => boolean
   syncRowSelectionSnapshotFromRuntime?: () => void
   firstColumnKey: Ref<string>
   columnFilterTextByKey: Ref<Record<string, string>>
@@ -113,12 +114,25 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean
   isCellEditable?: DataGridCellEditablePredicate<TRow>
   history?: DataGridTableStageHistoryAdapter
+  isContextMenuVisible?: () => boolean
+  closeContextMenu?: () => void
+  openContextMenuFromCurrentCell?: () => void
+  clearExternalPendingClipboardOperation?: () => boolean
 }
 
 export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, unknown>> {
   tableStageProps: ComputedRef<DataGridTableStageProps<TRow>>
   tableStageContext: DataGridTableStageContext<TRow>
   syncViewportFromDom: () => void
+  copySelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+  pasteSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+  cutSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+  clearSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+  captureHistorySnapshot: () => unknown
+  recordHistoryIntentTransaction: (
+    descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
+    beforeSnapshot: unknown,
+  ) => void
 }
 
 export function useDataGridTableStageRuntime<
@@ -462,6 +476,65 @@ export function useDataGridTableStageRuntime<
 
   const editingCellRef = computed(() => editingCell.value)
 
+  const interactionControllerOptions = {
+    mode: options.mode,
+    runtime: selectableRuntime as never,
+    totalRows: totalSelectableRows,
+    visibleColumns: orderedVisibleColumns,
+    viewportRowStart,
+    selectionSnapshot: options.selectionSnapshot,
+    bodyViewportRef,
+    indexColumnWidth: effectiveIndexColumnWidth.value,
+    resolveColumnWidth,
+    resolveRowHeight: rowHeightMetrics.resolveRowHeight,
+    resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
+    normalizeRowId,
+    normalizeCellCoord,
+    resolveSelectionRange: resolveSelectionRangeForClipboard,
+    applySelectionRange: applyClipboardSelectionRange,
+    applyCellSelectionByCoord,
+    setCellSelection,
+    clearCellSelection,
+    readCell: (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>, columnKey: string) => readStageCell(row, columnKey),
+    isCellEditable: isCellEditableByKey,
+    cloneRowData: options.cloneRowData,
+    resolveRowIndexById: resolveSelectableRowIndexById,
+    captureRowsSnapshot: captureHistorySnapshot,
+    recordIntentTransaction: (descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null }, beforeSnapshot: unknown) => {
+      recordHistoryIntentTransaction(descriptor, beforeSnapshot)
+    },
+    clearPendingClipboardOperation,
+    clearExternalPendingClipboardOperation: options.clearExternalPendingClipboardOperation,
+    copySelectedCells,
+    pasteSelectedCells,
+    cutSelectedCells,
+    normalizeClipboardRange,
+    applyClipboardEdits,
+    rangesEqual,
+    buildFillMatrixFromRange,
+    applyRangeMove: options.applyRangeMove,
+    syncViewport: () => syncViewportFromDom(),
+    editingCell: editingCellRef,
+    startInlineEdit,
+    commitInlineEdit,
+    canUndo: canUndoHistory,
+    canRedo: canRedoHistory,
+    runHistoryAction,
+    ensureKeyboardActiveCellVisible,
+    isContextMenuVisible: options.isContextMenuVisible,
+    closeContextMenu: options.closeContextMenu,
+    openContextMenuFromCurrentCell: options.openContextMenuFromCurrentCell,
+    handleToggleCellAction: (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>, rowIndex: number, columnIndex: number, column: DataGridColumnSnapshot) => {
+      if (!isRowSelectionColumn(column)) {
+        return false
+      }
+      void rowIndex
+      void columnIndex
+      toggleRowCheckboxSelected(row)
+      return true
+    },
+  } as Parameters<typeof useDataGridAppInteractionController<TRow, unknown>>[0]
+
   const {
     isPointerSelectingCells,
     isFillDragging,
@@ -481,61 +554,9 @@ export function useDataGridTableStageRuntime<
     handleWindowMouseUp: handleInteractionWindowMouseUp,
     isCellInFillPreview,
     isFillHandleCell,
+    clearSelectedCells,
     dispose: disposeInteractionController,
-  } = useDataGridAppInteractionController<TRow, unknown>({
-    mode: options.mode,
-    runtime: selectableRuntime as never,
-    totalRows: totalSelectableRows,
-    visibleColumns: orderedVisibleColumns,
-    viewportRowStart,
-    selectionSnapshot: options.selectionSnapshot,
-    bodyViewportRef,
-    indexColumnWidth: effectiveIndexColumnWidth.value,
-    resolveColumnWidth,
-    resolveRowHeight: rowHeightMetrics.resolveRowHeight,
-    resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
-    normalizeRowId,
-    normalizeCellCoord,
-    resolveSelectionRange: resolveSelectionRangeForClipboard,
-    applySelectionRange: applyClipboardSelectionRange,
-    applyCellSelectionByCoord,
-    setCellSelection,
-    clearCellSelection,
-    readCell: (row, columnKey) => readStageCell(row, columnKey),
-    isCellEditable: isCellEditableByKey,
-    cloneRowData: options.cloneRowData,
-    resolveRowIndexById: resolveSelectableRowIndexById,
-    captureRowsSnapshot: captureHistorySnapshot,
-    recordIntentTransaction: (descriptor, beforeSnapshot) => {
-      recordHistoryIntentTransaction(descriptor, beforeSnapshot)
-    },
-    clearPendingClipboardOperation,
-    copySelectedCells,
-    pasteSelectedCells,
-    cutSelectedCells,
-    normalizeClipboardRange,
-    applyClipboardEdits,
-    rangesEqual,
-    buildFillMatrixFromRange,
-    applyRangeMove: options.applyRangeMove,
-    syncViewport: () => syncViewportFromDom(),
-    editingCell: editingCellRef,
-    startInlineEdit,
-    commitInlineEdit,
-    canUndo: canUndoHistory,
-    canRedo: canRedoHistory,
-    runHistoryAction,
-    ensureKeyboardActiveCellVisible,
-    handleToggleCellAction: (row, rowIndex, columnIndex, column) => {
-      if (!isRowSelectionColumn(column)) {
-        return false
-      }
-      void rowIndex
-      void columnIndex
-      toggleRowCheckboxSelected(row)
-      return true
-    },
-  })
+  } = useDataGridAppInteractionController<TRow, unknown>(interactionControllerOptions)
 
   const viewportKeyboardService = useDataGridTableStageViewportKeyboard<TRow>({
     runtime: selectableRuntime,
@@ -687,6 +708,7 @@ export function useDataGridTableStageRuntime<
     rowClass,
     isRowAutosizeProbe,
     rowStyle,
+    isRowInPendingClipboardCut: options.isRowInPendingClipboardCut,
     isRowFocused: stageServices.rowSelection.isRowFocused,
     isRowCheckboxSelected: stageServices.rowSelection.isRowCheckboxSelected,
     allVisibleRowsSelected: stageServices.rowSelection.areAllVisibleRowsSelected,
@@ -771,5 +793,11 @@ export function useDataGridTableStageRuntime<
     tableStageProps,
     tableStageContext,
     syncViewportFromDom,
+    copySelectedCells,
+    pasteSelectedCells,
+    cutSelectedCells,
+    clearSelectedCells,
+    captureHistorySnapshot,
+    recordHistoryIntentTransaction,
   }
 }

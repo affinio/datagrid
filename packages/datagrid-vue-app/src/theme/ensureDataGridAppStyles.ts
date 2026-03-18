@@ -1345,6 +1345,35 @@ body.datagrid-fill-drag-cursor * {
   background-repeat: no-repeat;
 }
 
+.grid-row--clipboard-pending::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  z-index: 7;
+  background-image:
+    repeating-linear-gradient(90deg, var(--datagrid-selection-copied-border) 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(90deg, var(--datagrid-selection-copied-border) 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(0deg, var(--datagrid-selection-copied-border) 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(0deg, var(--datagrid-selection-copied-border) 0 6px, transparent 6px 12px);
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  background-size:
+    calc(100% - 4px) 2px,
+    calc(100% - 4px) 2px,
+    2px calc(100% - 4px),
+    2px calc(100% - 4px);
+  background-position:
+    2px 2px,
+    2px calc(100% - 2px),
+    2px 2px,
+    calc(100% - 2px) 2px;
+  box-shadow:
+    0 0 0 1px var(--datagrid-selection-copied-contrast),
+    0 0 0 2px var(--datagrid-selection-copied-glow);
+  border-radius: 2px;
+  animation: grid-clipboard-ants 0.7s linear infinite;
+}
+
 .grid-spacer {
   width: 1px;
 }
@@ -1964,6 +1993,60 @@ body.datagrid-fill-drag-cursor * {
   justify-content: flex-end;
   padding-top: 4px;
   gap: 6px;
+}
+
+.datagrid-context-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 188px;
+  padding: 6px;
+  border: 1px solid var(--datagrid-glass-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--datagrid-surface-elevated-color) 94%, white 6%);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.datagrid-context-menu:focus,
+.datagrid-context-menu:focus-visible {
+  outline: none;
+}
+
+.datagrid-context-menu__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--datagrid-text-primary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.datagrid-context-menu__item:hover,
+.datagrid-context-menu__item:focus,
+.datagrid-context-menu__item:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 11%, transparent);
+}
+
+.datagrid-context-menu__item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.datagrid-context-menu__separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: color-mix(in srgb, var(--datagrid-glass-border) 88%, transparent);
 }
 
 .datagrid-advanced-filter {

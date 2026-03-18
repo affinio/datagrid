@@ -133,6 +133,18 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     return includeTime ? formatLocalDateTimeDraft(date) : date.toISOString().slice(0, 10)
   }
 
+  const tryShowNativePicker = (editor: HTMLInputElement | HTMLSelectElement): void => {
+    if (typeof editor.showPicker !== "function") {
+      return
+    }
+    try {
+      editor.showPicker()
+    }
+    catch {
+      // Browsers can require a direct user gesture for showPicker; focus should still succeed.
+    }
+  }
+
   const focusInlineEditor = (): void => {
     void nextTick(() => {
       const applyFocus = (): void => {
@@ -145,17 +157,15 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         editor.focus({ preventScroll: true })
         if (editor instanceof HTMLInputElement) {
           if (editor.type === "date" || editor.type === "datetime-local") {
-            if (typeof editor.showPicker === "function") {
-              editor.showPicker()
-            }
+            tryShowNativePicker(editor)
             return
           }
           const caretPosition = editor.value.length
           editor.setSelectionRange(caretPosition, caretPosition)
           return
         }
-        if (editor instanceof HTMLSelectElement && typeof editor.showPicker === "function") {
-          editor.showPicker()
+        if (editor instanceof HTMLSelectElement) {
+          tryShowNativePicker(editor)
         }
       }
       applyFocus()

@@ -6,7 +6,7 @@
     @wheel="renderApi.handleLinkedViewportWheel"
   >
     <slot name="chrome" />
-    <div :ref="pane.contentRef ?? undefined" class="grid-pane-content" :style="pane.contentStyle">
+    <div :ref="pane.contentRef ?? undefined" class="grid-pane-content" :style="pane.contentStyle" @contextmenu="handleContextMenu">
       <div v-if="(pane.topSpacerHeight ?? viewport.topSpacerHeight) > 0" class="grid-spacer" :style="{ height: `${pane.topSpacerHeight ?? viewport.topSpacerHeight}px` }" />
       <div
         v-for="(row, rowOffset) in pane.displayRows"
@@ -20,9 +20,11 @@
       >
         <div
           v-if="pane.showIndexColumn"
-          class="grid-cell grid-cell--index grid-cell--index-number"
+          class="grid-cell grid-cell--index grid-cell--index-number datagrid-stage__row-index-cell"
           :class="{ 'grid-cell--index-selected': renderApi.isFullRowSelectionSafe(renderApi.viewportRowOffset(row, rowOffset)) }"
           :style="renderApi.rowIndexCellStyle(row, renderApi.viewportRowOffset(row, rowOffset))"
+          :data-row-id="String(row.rowId)"
+          :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
           @click.stop="renderApi.handleRowIndexClickSafe(row, renderApi.viewportRowOffset(row, rowOffset), $event)"
         >
           {{ rows.rowIndexLabel(row, renderApi.viewportRowOffset(row, rowOffset)) }}
@@ -40,6 +42,7 @@
           :key="`${String(row.rowId)}-${pane.side}-${column.key}`"
           class="grid-cell"
           :class="[
+            'datagrid-stage__cell',
             pane.side === 'left' ? 'grid-cell--pinned-left' : 'grid-cell--pinned-right',
             renderApi.builtInCellClasses(row, column),
             renderApi.cellStateClasses(row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
@@ -51,6 +54,8 @@
             renderApi.bodyCellSelectionStyle(row, column, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
             renderApi.resolveCellCustomStyle(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
           ]"
+          :data-row-id="String(row.rowId)"
+          :data-column-key="column.key"
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
           :data-column-index="renderApi.columnIndexByKey(column.key)"
           :tabindex="renderApi.cellTabIndex(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
@@ -147,10 +152,15 @@ const props = defineProps({
     type: Object as PropType<DataGridTableStagePinnedPaneRenderApi>,
     required: true,
   },
+  handleContextMenu: {
+    type: Function as PropType<(event: MouseEvent) => void>,
+    default: undefined,
+  },
 })
 
 const mode = useDataGridTableStageMode<Record<string, unknown>>()
 const viewport = useDataGridTableStageViewportSection<Record<string, unknown>>()
 const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const editing = useDataGridTableStageEditingSection<Record<string, unknown>>()
+const handleContextMenu = props.handleContextMenu
 </script>

@@ -50,6 +50,25 @@ export type {
   DataGridColumnMenuProp,
 } from "./overlays/dataGridColumnMenu"
 export type {
+  DataGridCellMenuActionKey,
+  DataGridCellMenuActionOption,
+  DataGridCellMenuActionOptions,
+  DataGridCellMenuColumnOptions,
+  DataGridCellMenuDisabledReasons,
+  DataGridCellMenuItemKey,
+  DataGridCellMenuItemLabels,
+  DataGridCellMenuOptions,
+  DataGridCellMenuProp,
+  DataGridRowIndexMenuActionKey,
+  DataGridRowIndexMenuActionOption,
+  DataGridRowIndexMenuActionOptions,
+  DataGridRowIndexMenuDisabledReasons,
+  DataGridRowIndexMenuItemKey,
+  DataGridRowIndexMenuItemLabels,
+  DataGridRowIndexMenuOptions,
+  DataGridRowIndexMenuProp,
+} from "./overlays/dataGridContextMenu"
+export type {
   DataGridGroupByProp,
   DataGridPaginationProp,
 } from "./config/dataGridPublicProps"

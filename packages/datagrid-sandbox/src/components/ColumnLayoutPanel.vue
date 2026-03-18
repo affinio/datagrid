@@ -57,3 +57,17 @@ const emitVisibility = (key: string, visible: boolean): void => {
   emit("toggle-visibility", { key, visible })
 }
 </script>
+
+<style scoped>
+.column-layout-panel__visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.column-layout-panel__visibility input[type="checkbox"] {
+  width: 0.78rem;
+  height: 0.78rem;
+  margin: 0;
+}
+</style>

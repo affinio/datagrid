@@ -100,6 +100,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     rowClass: unref(options.rowClass),
     isRowAutosizeProbe: unref(options.isRowAutosizeProbe),
     rowStyle: unref(options.rowStyle),
+    isRowInPendingClipboardCut: unref(options.isRowInPendingClipboardCut),
     isRowFocused: unref(options.isRowFocused),
     isRowCheckboxSelected: unref(options.isRowCheckboxSelected),
     allVisibleRowsSelected: unref(options.allVisibleRowsSelected),

@@ -90,6 +90,7 @@ export interface DataGridTableStageRowsSection<TRow extends Record<string, unkno
   rowClass: (row: DataGridTableRow<TRow>) => string
   isRowAutosizeProbe: (row: DataGridTableRow<TRow>, rowOffset: number) => boolean
   rowStyle: (row: DataGridTableRow<TRow>, rowOffset: number) => CSSProperties
+  isRowInPendingClipboardCut?: (row: DataGridTableRow<TRow>) => boolean
   isRowFocused?: (row: DataGridTableRow<TRow>) => boolean
   isRowCheckboxSelected?: (row: DataGridTableRow<TRow>) => boolean
   allVisibleRowsSelected?: boolean

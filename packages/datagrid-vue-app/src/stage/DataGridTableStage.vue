@@ -46,6 +46,7 @@
       <DataGridTableStagePinnedPane
         :pane="leftPinnedPane"
         :render-api="pinnedPaneRenderApi"
+        :handle-context-menu="onViewportContextMenu"
       >
         <template #chrome>
           <canvas ref="leftChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
@@ -57,6 +58,7 @@
         :top-spacer-height="viewport.topSpacerHeight"
         :bottom-spacer-height="viewport.bottomSpacerHeight"
         :viewport-ref="captureBodyViewportRef"
+        :handle-context-menu="onViewportContextMenu"
         :selection-overlay-segments="centerSelectionOverlaySegments"
         :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
         :move-preview-overlay-segments="centerMovePreviewOverlaySegments"
@@ -66,6 +68,7 @@
       <DataGridTableStagePinnedPane
         :pane="rightPinnedPane"
         :render-api="pinnedPaneRenderApi"
+        :handle-context-menu="onViewportContextMenu"
       >
         <template #chrome>
           <canvas ref="rightChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
@@ -95,6 +98,7 @@
       <DataGridTableStagePinnedPane
         :pane="leftPinnedBottomPane"
         :render-api="pinnedPaneRenderApi"
+        :handle-context-menu="onViewportContextMenu"
       >
         <template #chrome>
           <canvas ref="leftBottomChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
@@ -108,6 +112,7 @@
         :handle-scroll="handlePinnedBottomViewportScroll"
         :handle-wheel="handleBodyViewportWheel"
         :handle-keydown="handlePinnedBottomViewportKeydown"
+        :handle-context-menu="onViewportContextMenu"
         :selection-overlay-segments="centerPinnedBottomSelectionOverlaySegments"
         :fill-preview-overlay-segments="centerPinnedBottomFillPreviewOverlaySegments"
         :move-preview-overlay-segments="centerPinnedBottomMovePreviewOverlaySegments"
@@ -117,6 +122,7 @@
       <DataGridTableStagePinnedPane
         :pane="rightPinnedBottomPane"
         :render-api="pinnedPaneRenderApi"
+        :handle-context-menu="onViewportContextMenu"
       >
         <template #chrome>
           <canvas ref="rightBottomChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
@@ -205,6 +211,10 @@ const props = defineProps({
   interaction: {
     type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["interaction"]>,
     required: true,
+  },
+  onViewportContextMenu: {
+    type: Function as PropType<(event: MouseEvent) => void>,
+    default: undefined,
   },
   stageContext: {
     type: Object as PropType<DataGridTableStageContext<Record<string, unknown>>>,
@@ -1062,6 +1072,7 @@ function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boole
     "grid-row--hoverable": rows.value.rowHover === true,
     "grid-row--hovered": isHoveredRow(row, rowOffset),
     "grid-row--striped": isStripedRow(row, rowOffset),
+    "grid-row--clipboard-pending": rows.value.isRowInPendingClipboardCut?.(row) === true,
     "grid-row--focused": isRowFocusedSafe(row),
     "grid-row--checkbox-selected": isRowCheckboxSelectedSafe(row),
   }

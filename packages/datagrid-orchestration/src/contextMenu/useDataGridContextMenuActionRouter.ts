@@ -6,11 +6,13 @@ import type {
 export interface DataGridContextMenuActionRouterState {
   zone: DataGridContextMenuZone
   columnKey: string | null
+  rowId: string | null
 }
 
 export interface UseDataGridContextMenuActionRouterOptions {
   resolveContextMenuState: () => DataGridContextMenuActionRouterState
   runHeaderContextAction: (action: DataGridContextMenuActionId, columnKey: string) => boolean
+  runRowIndexContextAction: (action: DataGridContextMenuActionId, rowId: string) => Promise<boolean>
   copySelection: (trigger: "context-menu") => Promise<boolean>
   pasteSelection: (trigger: "context-menu") => Promise<boolean>
   cutSelection: (trigger: "context-menu") => Promise<boolean>
@@ -33,6 +35,14 @@ export function useDataGridContextMenuActionRouter(
         return false
       }
       return options.runHeaderContextAction(action, context.columnKey)
+    }
+
+    if (context.zone === "row-index") {
+      if (!context.rowId) {
+        options.closeContextMenu()
+        return false
+      }
+      return options.runRowIndexContextAction(action, context.rowId)
     }
 
     if (action === "copy") {

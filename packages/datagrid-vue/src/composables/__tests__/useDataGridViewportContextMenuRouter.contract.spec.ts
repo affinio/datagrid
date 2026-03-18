@@ -151,4 +151,34 @@ describe("useDataGridViewportContextMenuRouter contract", () => {
     expect(routerClose.dispatchViewportContextMenu(closeEvent)).toBe(true)
     expect(closeContextMenu).toHaveBeenCalled()
   })
+
+  it("opens row-index context menu when a system row index cell is targeted", () => {
+    const openContextMenu = vi.fn()
+    const rowIndexCell = document.createElement("div")
+    rowIndexCell.className = "datagrid-stage__row-index-cell"
+    rowIndexCell.dataset.rowId = "R2"
+
+    const router = useDataGridViewportContextMenuRouter({
+      isInteractionBlocked: () => false,
+      isRangeMoveModifierActive: () => false,
+      resolveSelectionRange: () => null,
+      resolveCellCoordFromDataset: vi.fn(() => null),
+      applyCellSelection: vi.fn(),
+      resolveActiveCellCoord: vi.fn(() => null),
+      setActiveCellCoord: vi.fn(),
+      cellCoordsEqual: vi.fn(() => true),
+      isMultiCellSelection: () => false,
+      isCoordInsideRange: () => false,
+      openContextMenu,
+      closeContextMenu: vi.fn(),
+      isRowIndexContextEnabled: () => true,
+    })
+
+    const event = createMouseEvent("contextmenu")
+    Object.defineProperty(event, "target", { value: rowIndexCell })
+
+    expect(router.dispatchViewportContextMenu(event)).toBe(true)
+    expect(event.defaultPrevented).toBe(true)
+    expect(openContextMenu).toHaveBeenCalledWith(120, 48, { zone: "row-index", rowId: "R2" })
+  })
 })

@@ -104,6 +104,7 @@ export interface UseDataGridAppInteractionControllerOptions<
     beforeSnapshot: TSnapshot,
   ) => void | Promise<void>
   clearPendingClipboardOperation: (clearSelection: boolean, clearBufferedClipboardPayload?: boolean) => boolean
+  clearExternalPendingClipboardOperation?: () => boolean
   copySelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   pasteSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   cutSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
@@ -128,6 +129,9 @@ export interface UseDataGridAppInteractionControllerOptions<
   canRedo: () => boolean
   runHistoryAction: (direction: "undo" | "redo") => Promise<unknown> | unknown
   ensureKeyboardActiveCellVisible: (rowIndex: number, columnIndex: number) => void
+  isContextMenuVisible?: () => boolean
+  closeContextMenu?: () => void
+  openContextMenuFromCurrentCell?: () => void
 }
 
 export interface UseDataGridAppInteractionControllerResult<TRow> {
@@ -149,6 +153,7 @@ export interface UseDataGridAppInteractionControllerResult<TRow> {
   handleWindowMouseUp: () => void
   isCellInFillPreview: (rowOffset: number, columnIndex: number) => boolean
   isFillHandleCell: (rowOffset: number, columnIndex: number) => boolean
+  clearSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   dispose: () => void
 }
 
@@ -158,6 +163,14 @@ export function useDataGridAppInteractionController<
 >(
   options: UseDataGridAppInteractionControllerOptions<TRow, TSnapshot>,
 ): UseDataGridAppInteractionControllerResult<TRow> {
+  const isContextMenuVisible = () => options.isContextMenuVisible?.() === true
+  const closeContextMenu = () => {
+    options.closeContextMenu?.()
+  }
+  const openContextMenuFromCurrentCell = () => {
+    options.openContextMenuFromCurrentCell?.()
+  }
+
   const getBodyRowAtIndex = (rowIndex: number): DataGridRowNode<TRow> | null => {
     const runtime = options.runtime as typeof options.runtime & {
       getBodyRowAtIndex?: (index: number) => DataGridRowNode<TRow> | null
@@ -763,7 +776,7 @@ export function useDataGridAppInteractionController<
     getLastNavigableColumnIndex: () => Math.max(0, options.visibleColumns.value.length - 1),
     getLastRowIndex: () => Math.max(0, options.totalRows.value - 1),
     resolveStepRows: () => 20,
-    closeContextMenu: () => undefined,
+    closeContextMenu,
     clearCellSelection: () => {
       options.clearCellSelection()
     },
@@ -1069,7 +1082,7 @@ export function useDataGridAppInteractionController<
   const rangeMoveStart = useDataGridRangeMoveStart<DataGridAppCellCoord, DataGridCopyRange>({
     resolveSelectionRange: options.resolveSelectionRange,
     isCoordInsideRange,
-    closeContextMenu: () => undefined,
+    closeContextMenu,
     focusViewport,
     stopDragSelection: () => {
       stopPointerSelection()
@@ -1142,7 +1155,7 @@ export function useDataGridAppInteractionController<
     commitInlineEdit: () => {
       options.commitInlineEdit()
     },
-    closeContextMenu: () => undefined,
+    closeContextMenu,
     canUndo: options.canUndo,
     canRedo: options.canRedo,
     runHistoryAction: direction => Promise.resolve(options.runHistoryAction(direction) as string | null),
@@ -1178,10 +1191,10 @@ export function useDataGridAppInteractionController<
 
   const keyboardCommandRouter = useDataGridKeyboardCommandRouter({
     isRangeMoving: () => isRangeMoving.value,
-    isContextMenuVisible: () => false,
-    closeContextMenu: () => undefined,
+    isContextMenuVisible,
+    closeContextMenu,
     focusViewport,
-    openContextMenuFromCurrentCell: () => undefined,
+    openContextMenuFromCurrentCell,
     selectAllCells: () => {
       if (!supportsCellSelectionMode()) {
         return
@@ -1249,7 +1262,7 @@ export function useDataGridAppInteractionController<
     startRangeMove: (coord, pointer) => {
       rangeMoveStart.startRangeMove(coord, pointer)
     },
-    closeContextMenu: () => undefined,
+    closeContextMenu,
     focusViewport,
     isFillDragging: () => isFillDragging.value,
     stopFillSelection: commit => {
@@ -1502,9 +1515,13 @@ export function useDataGridAppInteractionController<
     if (!supportsCellSelectionMode()) {
       return
     }
-    if (!isRangeMoving.value && event.key === "Escape" && options.clearPendingClipboardOperation(true, true)) {
-      event.preventDefault()
-      return
+    if (!isRangeMoving.value && event.key === "Escape") {
+      const clearedCellClipboard = options.clearPendingClipboardOperation(true, true)
+      const clearedExternalClipboard = options.clearExternalPendingClipboardOperation?.() === true
+      if (clearedCellClipboard || clearedExternalClipboard) {
+        event.preventDefault()
+        return
+      }
     }
     if (!options.selectionSnapshot.value?.activeCell) {
       options.setCellSelection(row, rowOffset, columnIndex, false)
@@ -1653,6 +1670,7 @@ export function useDataGridAppInteractionController<
     handleWindowMouseUp,
     isCellInFillPreview,
     isFillHandleCell,
+    clearSelectedCells,
     dispose: () => {
       pointerAutoScroll.dispose()
     },

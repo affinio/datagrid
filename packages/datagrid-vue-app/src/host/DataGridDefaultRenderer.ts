@@ -3,6 +3,7 @@ import {
   computed,
   defineComponent,
   h,
+  nextTick,
   onBeforeUnmount,
   ref,
   watch,
@@ -24,12 +25,19 @@ import type {
 } from "@affino/datagrid-vue"
 import {
   cloneDataGridFilterSnapshot,
+  useDataGridContextMenu,
   type GridSelectionPointLike,
   type DataGridRowId,
   type DataGridRowSelectionSnapshot,
   useDataGridAppAdvancedFilterBuilder,
   useDataGridAppColumnLayoutPanel,
 } from "@affino/datagrid-vue"
+import {
+  useDataGridContextMenuActionRouter,
+  useDataGridContextMenuAnchor,
+  useDataGridViewportContextMenuRouter,
+} from "@affino/datagrid-vue/advanced"
+import type { DataGridContextMenuActionId } from "@affino/datagrid-vue"
 import DataGridAdvancedFilterPopover from "../overlays/DataGridAdvancedFilterPopover.vue"
 import DataGridAggregationsPopover from "../overlays/DataGridAggregationsPopover.vue"
 import DataGridColumnLayoutPopover from "../overlays/DataGridColumnLayoutPopover.vue"
@@ -51,6 +59,20 @@ import {
   resolveDataGridColumnMenuItems,
   type DataGridColumnMenuOptions,
 } from "../overlays/dataGridColumnMenu"
+import {
+  resolveDataGridCellMenuActionOptions,
+  resolveDataGridCellMenuDisabledItems,
+  resolveDataGridCellMenuDisabledReasons,
+  resolveDataGridCellMenuItems,
+  resolveDataGridRowIndexMenuActionOptions,
+  resolveDataGridRowIndexMenuDisabledItems,
+  resolveDataGridRowIndexMenuDisabledReasons,
+  resolveDataGridRowIndexMenuItems,
+  type DataGridCellMenuActionKey,
+  type DataGridCellMenuOptions,
+  type DataGridRowIndexMenuActionKey,
+  type DataGridRowIndexMenuOptions,
+} from "../overlays/dataGridContextMenu"
 import {
   normalizeDataGridGanttOptions,
   type DataGridAppViewMode,
@@ -166,12 +188,82 @@ function resolveInitialFilterTexts(filterModel: DataGridFilterSnapshot | null | 
 
 function cloneRowData<TRow>(row: TRow): TRow {
   if (typeof globalThis.structuredClone === "function") {
-    return globalThis.structuredClone(row)
+    try {
+      return globalThis.structuredClone(row)
+    }
+    catch {
+      // Fall back to a plain-data clone when rows carry live references such as Window.
+    }
+  }
+  return cloneRowDataFallback(row, new WeakMap<object, unknown>())
+}
+
+function cloneRowDataFallback<TRow>(row: TRow, seen: WeakMap<object, unknown>): TRow {
+  if (row == null || typeof row !== "object") {
+    return row
+  }
+  if (row instanceof Date) {
+    return new Date(row.getTime()) as TRow
+  }
+  if (Array.isArray(row)) {
+    if (seen.has(row)) {
+      return seen.get(row) as TRow
+    }
+    const cloned: unknown[] = []
+    seen.set(row, cloned)
+    for (const value of row) {
+      cloned.push(cloneRowDataFallback(value, seen))
+    }
+    return cloned as TRow
+  }
+  if (isPlainRowObject(row)) {
+    if (seen.has(row)) {
+      return seen.get(row) as TRow
+    }
+    const cloned: Record<string, unknown> = {}
+    seen.set(row, cloned)
+    for (const [key, value] of Object.entries(row)) {
+      cloned[key] = cloneRowDataFallback(value, seen)
+    }
+    return cloned as TRow
   }
   if (row && typeof row === "object") {
     return { ...(row as Record<string, unknown>) } as TRow
   }
   return row
+}
+
+function isPlainRowObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object") {
+    return false
+  }
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function serializeRowClipboardRows(rows: readonly Record<string, unknown>[]): string | null {
+  const seen = new WeakSet<object>()
+  try {
+    return JSON.stringify(rows, (_key, value: unknown) => {
+      if (value == null || typeof value !== "object") {
+        return value
+      }
+      if (value instanceof Date) {
+        return value.toISOString()
+      }
+      if (Array.isArray(value) || isPlainRowObject(value)) {
+        if (seen.has(value)) {
+          return undefined
+        }
+        seen.add(value)
+        return value
+      }
+      return undefined
+    })
+  }
+  catch {
+    return null
+  }
 }
 
 function cloneAggregationModelState<TRow>(
@@ -385,6 +477,46 @@ function resolveAllowedAggregationOps(dataType: string | undefined): readonly Da
   return BASIC_AGG_OPS
 }
 
+const CELL_MENU_ACTION_IDS_BY_ITEM = {
+  clipboard: ["cut", "copy", "paste"],
+  edit: ["clear"],
+} satisfies Readonly<Record<string, readonly RendererContextMenuActionId[]>>
+
+const ROW_INDEX_MENU_ACTION_IDS_BY_ITEM = {
+  insert: ["insert-row-above", "insert-row-below"],
+  clipboard: ["cut-row", "copy-row", "paste-row"],
+  selection: ["delete-selected-rows"],
+} satisfies Readonly<Record<string, readonly RendererContextMenuActionId[]>>
+
+const DEFAULT_CONTEXT_MENU_ACTION_LABELS: Readonly<Record<RendererContextMenuActionId, string>> = {
+  cut: "Cut",
+  copy: "Copy",
+  paste: "Paste",
+  clear: "Clear values",
+  "insert-row-above": "Insert above",
+  "insert-row-below": "Insert below",
+  "copy-row": "Copy row",
+  "paste-row": "Paste row",
+  "cut-row": "Cut row",
+  "delete-selected-rows": "Delete selected rows",
+  "sort-asc": "Sort ascending",
+  "sort-desc": "Sort descending",
+  "sort-clear": "Clear sort",
+  filter: "Filter column",
+  "auto-size": "Auto size column",
+}
+
+type RendererContextMenuActionId =
+  | DataGridContextMenuActionId
+  | "insert-row-above"
+  | "insert-row-below"
+  | "copy-row"
+  | "paste-row"
+  | "cut-row"
+  | "delete-selected-rows"
+
+type RendererContextMenuZone = "cell" | "range" | "header" | "row-index"
+
 export default defineComponent({
   name: "DataGridDefaultRenderer",
   props: {
@@ -450,6 +582,14 @@ export default defineComponent({
     },
     columnMenu: {
       type: Object as PropType<DataGridColumnMenuOptions>,
+      required: true,
+    },
+    cellMenu: {
+      type: Object as PropType<DataGridCellMenuOptions>,
+      required: true,
+    },
+    rowIndexMenu: {
+      type: Object as PropType<DataGridRowIndexMenuOptions>,
       required: true,
     },
     columnLayout: {
@@ -1012,9 +1152,430 @@ export default defineComponent({
       applySortAndFilter()
     }
 
+    const stageHostRef = ref<HTMLElement | null>(null)
+    const rowClipboardBuffer = ref<{
+      rows: readonly Record<string, unknown>[]
+      operation: "copy" | "cut"
+      sourceRowIds: readonly string[]
+    } | null>(null)
+    let generatedRowIdentitySequence = 0
+    type MenuCoord = { rowIndex: number; columnIndex: number }
+    type MenuRange = { startRow: number; endRow: number; startColumn: number; endColumn: number }
+
+    const resolveCurrentSelectionRange = (): MenuRange | null => {
+      const snapshot = props.selectionSnapshot.value
+      const range = snapshot?.ranges[snapshot.activeRangeIndex] ?? null
+      if (!range) {
+        return null
+      }
+      return {
+        startRow: range.startRow,
+        endRow: range.endRow,
+        startColumn: range.startCol,
+        endColumn: range.endCol,
+      }
+    }
+
+    const resolveCurrentCellCoord = (): MenuCoord | null => {
+      const activeCell = props.selectionSnapshot.value?.activeCell
+      if (!activeCell) {
+        return null
+      }
+      return {
+        rowIndex: activeCell.rowIndex,
+        columnIndex: activeCell.colIndex,
+      }
+    }
+
+    const isMultiCellSelection = (
+      range: MenuRange | null,
+    ): boolean => {
+      if (!range) {
+        return false
+      }
+      return range.startRow !== range.endRow || range.startColumn !== range.endColumn
+    }
+
+    const isCoordInsideRange = (
+      coord: MenuCoord,
+      range: MenuRange,
+    ): boolean => {
+      return coord.rowIndex >= Math.min(range.startRow, range.endRow)
+        && coord.rowIndex <= Math.max(range.startRow, range.endRow)
+        && coord.columnIndex >= Math.min(range.startColumn, range.endColumn)
+        && coord.columnIndex <= Math.max(range.startColumn, range.endColumn)
+    }
+
+    const resolveCellCoordFromDataset = (rowId: string, columnKey: string): MenuCoord | null => {
+      const rowIndex = props.runtime.resolveBodyRowIndexById(rowId)
+      const columnIndex = visibleColumns.value.findIndex(column => column.key === columnKey)
+      if (rowIndex < 0 || columnIndex < 0) {
+        return null
+      }
+      return { rowIndex, columnIndex }
+    }
+
+    const buildSingleCellSelectionSnapshot = (coord: MenuCoord): import("@affino/datagrid-vue").DataGridSelectionSnapshot => ({
+      ranges: [{
+        startRow: coord.rowIndex,
+        endRow: coord.rowIndex,
+        startCol: coord.columnIndex,
+        endCol: coord.columnIndex,
+        anchor: {
+          rowIndex: coord.rowIndex,
+          colIndex: coord.columnIndex,
+          rowId: props.runtime.getBodyRowAtIndex(coord.rowIndex)?.rowId ?? null,
+        },
+        focus: {
+          rowIndex: coord.rowIndex,
+          colIndex: coord.columnIndex,
+          rowId: props.runtime.getBodyRowAtIndex(coord.rowIndex)?.rowId ?? null,
+        },
+        startRowId: props.runtime.getBodyRowAtIndex(coord.rowIndex)?.rowId ?? null,
+        endRowId: props.runtime.getBodyRowAtIndex(coord.rowIndex)?.rowId ?? null,
+      }],
+      activeRangeIndex: 0,
+      activeCell: {
+        rowIndex: coord.rowIndex,
+        colIndex: coord.columnIndex,
+        rowId: props.runtime.getBodyRowAtIndex(coord.rowIndex)?.rowId ?? null,
+      },
+    })
+
+    const resolveRuntimeRowById = (rowId: string): import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>> | null => {
+      const rowCount = props.runtime.api.rows.getCount()
+      for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+        const row = props.runtime.api.rows.get(rowIndex)
+        if (row && String(row.rowId) === rowId) {
+          return row
+        }
+      }
+      return null
+    }
+
+    const writeClipboardText = async (payload: string): Promise<boolean> => {
+      try {
+        if (!globalThis.navigator?.clipboard?.writeText) {
+          return false
+        }
+        await globalThis.navigator.clipboard.writeText(payload)
+        return true
+      }
+      catch {
+        return false
+      }
+    }
+
+    const readClipboardText = async (): Promise<string> => {
+      try {
+        if (!globalThis.navigator?.clipboard?.readText) {
+          return ""
+        }
+        return await globalThis.navigator.clipboard.readText()
+      }
+      catch {
+        return ""
+      }
+    }
+
+    const readRowClipboardRows = async (): Promise<readonly Record<string, unknown>[] | null> => {
+      if (rowClipboardBuffer.value?.rows.length) {
+        return rowClipboardBuffer.value.rows.map(row => cloneRowData(row))
+      }
+      const payload = (await readClipboardText()).trim()
+      if (!payload) {
+        return null
+      }
+      try {
+        const parsed = JSON.parse(payload)
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object")
+            .map(row => cloneRowData(row))
+        }
+        if (parsed && typeof parsed === "object") {
+          return [cloneRowData(parsed as Record<string, unknown>)]
+        }
+      }
+      catch {
+        return null
+      }
+      return null
+    }
+
+    const setRowClipboardRows = async (
+      rows: readonly Record<string, unknown>[],
+      operation: "copy" | "cut",
+      sourceRowIds: readonly string[] = [],
+    ): Promise<boolean> => {
+      const clonedRows = rows.map(row => cloneRowData(row))
+      rowClipboardBuffer.value = {
+        rows: clonedRows,
+        operation,
+        sourceRowIds: sourceRowIds.map(rowId => String(rowId)),
+      }
+      const clipboardPayload = serializeRowClipboardRows(clonedRows)
+      if (clipboardPayload) {
+        await writeClipboardText(clipboardPayload)
+      }
+      return true
+    }
+
+    const canInsertRows = (): boolean => props.runtime.api.rows.hasInsertSupport()
+    const canMutateRows = (): boolean => props.runtime.api.rows.hasDataMutationSupport()
+
+    const isStructuredSourceRowInput = (candidate: unknown): candidate is Record<string, unknown> => {
+      if (!candidate || typeof candidate !== "object") {
+        return false
+      }
+      return (
+        "data" in candidate
+        || "row" in candidate
+        || "kind" in candidate
+        || "state" in candidate
+        || "sourceIndex" in candidate
+        || "originalIndex" in candidate
+        || "displayIndex" in candidate
+      )
+    }
+
+    const resolveDataRowId = (candidate: Record<string, unknown>): string | null => {
+      const candidateRecord = candidate as { rowId?: unknown; id?: unknown }
+      if (candidateRecord.rowId != null) {
+        return String(candidateRecord.rowId)
+      }
+      if (candidateRecord.id != null) {
+        return String(candidateRecord.id)
+      }
+      return null
+    }
+
+    const resolveSourceRowTemplateByRowId = (rowId: string): Record<string, unknown> | null => {
+      for (const candidate of props.rows) {
+        if (!candidate || typeof candidate !== "object") {
+          continue
+        }
+        const record = candidate as Record<string, unknown>
+        const candidateRowId = record.rowId != null
+          ? String(record.rowId)
+          : record.rowKey != null
+            ? String(record.rowKey)
+            : null
+        if (candidateRowId === rowId && isStructuredSourceRowInput(record)) {
+          return record
+        }
+      }
+      for (const candidate of props.rows) {
+        if (!candidate || typeof candidate !== "object") {
+          continue
+        }
+        const record = candidate as Record<string, unknown>
+        if (isStructuredSourceRowInput(record)) {
+          return record
+        }
+      }
+      return null
+    }
+
+    const createGeneratedRowIdentity = (): string => {
+      generatedRowIdentitySequence += 1
+      return `datagrid-row-${Date.now()}-${generatedRowIdentitySequence}`
+    }
+
+    const cloneRawRowWithFreshIdentity = (row: Record<string, unknown>): Record<string, unknown> => {
+      const cloned = cloneRowData(row)
+      const nextIdentity = createGeneratedRowIdentity()
+      let assignedIdentity = false
+      if ("id" in cloned) {
+        cloned.id = nextIdentity
+        assignedIdentity = true
+      }
+      if ("rowId" in cloned) {
+        cloned.rowId = nextIdentity
+        assignedIdentity = true
+      }
+      if (!assignedIdentity) {
+        cloned.id = nextIdentity
+      }
+      return cloned
+    }
+
+    const buildBlankRawRowInput = (row: Record<string, unknown>): Record<string, unknown> => {
+      const nextIdentity = createGeneratedRowIdentity()
+      const nextRow: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(row)) {
+        if (key === "id" || key === "rowId") {
+          nextRow[key] = nextIdentity
+          continue
+        }
+        nextRow[key] = typeof value === "number" ? null : ""
+      }
+      if (!("id" in nextRow) && !("rowId" in nextRow)) {
+        nextRow.id = nextIdentity
+      }
+      return nextRow
+    }
+
+    const buildStructuredRowInput = (
+      row: Record<string, unknown>,
+      template: Record<string, unknown>,
+      mode: "clone" | "blank",
+    ): Record<string, unknown> => {
+      const nextIdentity = createGeneratedRowIdentity()
+      const nextData = mode === "clone"
+        ? cloneRowData(row)
+        : Object.entries(row).reduce<Record<string, unknown>>((result, [key, value]) => {
+            result[key] = typeof value === "number" ? null : ""
+            return result
+          }, {})
+      if ("id" in nextData || !("rowId" in nextData) && !("id" in nextData)) {
+        nextData.id = nextIdentity
+      }
+      if ("rowId" in nextData) {
+        nextData.rowId = nextIdentity
+      }
+      if ("rowKey" in nextData) {
+        nextData.rowKey = nextIdentity
+      }
+      const templateState = typeof template.state === "object" && template.state != null
+        ? template.state as Record<string, unknown>
+        : null
+      return {
+        kind: template.kind === "group" ? "leaf" : (template.kind ?? "leaf"),
+        rowId: nextIdentity,
+        rowKey: nextIdentity,
+        state: {
+          ...(templateState ?? {}),
+          selected: false,
+          group: false,
+          pinned: "none",
+          expanded: false,
+        },
+        data: nextData,
+        row: cloneRowData(nextData),
+      }
+    }
+
+    const cloneRowWithFreshIdentity = (
+      row: Record<string, unknown>,
+      template: Record<string, unknown> | null = null,
+    ): Record<string, unknown> => {
+      if (template && isStructuredSourceRowInput(template)) {
+        return buildStructuredRowInput(row, template, "clone")
+      }
+      return cloneRawRowWithFreshIdentity(row)
+    }
+
+    const buildInsertedRowInput = (
+      row: Record<string, unknown>,
+      template: Record<string, unknown> | null = null,
+    ): Record<string, unknown> => {
+      if (template && isStructuredSourceRowInput(template)) {
+        return buildStructuredRowInput(row, template, "blank")
+      }
+      return buildBlankRawRowInput(row)
+    }
+
+    const resolveSelectedRuntimeRowIds = (targetRowId: string): readonly string[] => {
+      const selectedRowIds = props.rowSelectionSnapshot.value?.selectedRows ?? []
+      const normalizedSelected = selectedRowIds
+        .map(rowId => String(rowId))
+        .filter(rowId => rowId.length > 0 && resolveRuntimeRowById(rowId)?.kind !== "group")
+      if (normalizedSelected.length > 0) {
+        return normalizedSelected
+      }
+      return targetRowId.length > 0 ? [targetRowId] : []
+    }
+
+    const removeRuntimeRows = (rowIds: readonly string[]): boolean => {
+      if (!canMutateRows() || rowIds.length === 0) {
+        return false
+      }
+      const rowIdSet = new Set(rowIds)
+      const nextRows = props.rows.filter(candidate => {
+        const normalized = resolveDataRowId(candidate)
+        return normalized == null || !rowIdSet.has(normalized)
+      })
+      if (nextRows.length === props.rows.length) {
+        return false
+      }
+      props.runtime.api.rows.replaceData(nextRows)
+      if (props.runtime.api.rowSelection.hasSupport()) {
+        props.runtime.api.rowSelection.clearSelectedRows()
+        props.syncRowSelectionSnapshotFromRuntime?.()
+      }
+      return true
+    }
+
+    const moveRuntimeRowsAfter = (sourceRowIds: readonly string[], targetRowId: string): boolean => {
+      if (!canMutateRows() || sourceRowIds.length === 0 || !targetRowId) {
+        return false
+      }
+      const sourceRowIdSet = new Set(sourceRowIds.map(rowId => String(rowId)))
+      if (sourceRowIdSet.has(String(targetRowId))) {
+        return false
+      }
+      const movedRows = props.rows.filter(candidate => {
+        const normalized = resolveDataRowId(candidate)
+        return normalized != null && sourceRowIdSet.has(normalized)
+      })
+      if (movedRows.length === 0) {
+        return false
+      }
+      const remainingRows = props.rows.filter(candidate => {
+        const normalized = resolveDataRowId(candidate)
+        return normalized == null || !sourceRowIdSet.has(normalized)
+      })
+      const targetIndex = remainingRows.findIndex(candidate => resolveDataRowId(candidate) === targetRowId)
+      if (targetIndex < 0) {
+        return false
+      }
+      props.runtime.api.rows.replaceData([
+        ...remainingRows.slice(0, targetIndex + 1),
+        ...movedRows,
+        ...remainingRows.slice(targetIndex + 1),
+      ])
+      if (props.runtime.api.rowSelection.hasSupport()) {
+        props.runtime.api.rowSelection.selectRows(sourceRowIds)
+        props.syncRowSelectionSnapshotFromRuntime?.()
+      }
+      return true
+    }
+
+    const clearPendingRowClipboardOperation = (): boolean => {
+      if (!rowClipboardBuffer.value) {
+        return false
+      }
+      rowClipboardBuffer.value = null
+      return true
+    }
+
+    const isRowInPendingClipboardCut = (
+      row: import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>>,
+    ): boolean => {
+      if (row.kind === "group") {
+        return false
+      }
+      const pending = rowClipboardBuffer.value
+      if (!pending) {
+        return false
+      }
+      return pending.sourceRowIds.includes(String(row.rowId))
+    }
+
+    let contextMenuVisible = () => false
+    let closeRuntimeContextMenu = (): void => undefined
+    let openRuntimeContextMenuFromCurrentCell = (): void => undefined
+
     const {
       tableStageProps,
       tableStageContext,
+      copySelectedCells,
+      pasteSelectedCells,
+      cutSelectedCells,
+      clearSelectedCells,
+      captureHistorySnapshot,
+      recordHistoryIntentTransaction,
     } = useDataGridTableStageRuntime<Record<string, unknown>>({
       mode: modeRef as Ref<DataGridMode>,
       rows: rowsRef,
@@ -1033,8 +1594,10 @@ export default defineComponent({
       stripedRows: computed(() => props.stripedRows),
       showRowIndex: computed(() => props.showRowIndex),
       showRowSelection: computed(() => props.rowSelection),
+      isRowInPendingClipboardCut,
       syncSelectionSnapshotFromRuntime: props.syncSelectionSnapshotFromRuntime,
       syncRowSelectionSnapshotFromRuntime: props.syncRowSelectionSnapshotFromRuntime,
+      clearExternalPendingClipboardOperation: clearPendingRowClipboardOperation,
       firstColumnKey,
       columnFilterTextByKey,
       virtualization: computed(() => props.virtualization),
@@ -1061,7 +1624,340 @@ export default defineComponent({
       applyRowHeightSettings,
       cloneRowData,
       isCellEditable: props.isCellEditable,
+      isContextMenuVisible: () => contextMenuVisible(),
+      closeContextMenu: () => closeRuntimeContextMenu(),
+      openContextMenuFromCurrentCell: () => {
+        openRuntimeContextMenuFromCurrentCell()
+      },
     })
+
+    const {
+      contextMenu,
+      contextMenuRef,
+      contextMenuStyle,
+      closeContextMenu,
+      openContextMenu,
+      onContextMenuKeyDown,
+    } = useDataGridContextMenu()
+
+    contextMenuVisible = () => contextMenu.value.visible
+    closeRuntimeContextMenu = closeContextMenu
+
+    const viewportContextRouter = useDataGridViewportContextMenuRouter<MenuCoord, MenuRange>({
+      isInteractionBlocked: () => false,
+      isRangeMoveModifierActive: () => false,
+      resolveSelectionRange: resolveCurrentSelectionRange,
+      resolveCellCoordFromDataset,
+      applyCellSelection: (coord: MenuCoord) => {
+        props.runtime.api.selection.setSnapshot(buildSingleCellSelectionSnapshot(coord))
+        props.syncSelectionSnapshotFromRuntime()
+      },
+      resolveActiveCellCoord: resolveCurrentCellCoord,
+      setActiveCellCoord: (coord: MenuCoord) => {
+        props.runtime.api.selection.setSnapshot(buildSingleCellSelectionSnapshot(coord))
+        props.syncSelectionSnapshotFromRuntime()
+      },
+      cellCoordsEqual: (left: MenuCoord | null, right: MenuCoord | null) => left?.rowIndex === right?.rowIndex && left?.columnIndex === right?.columnIndex,
+      isMultiCellSelection,
+      isCoordInsideRange,
+      openContextMenu,
+      closeContextMenu,
+      isColumnContextEnabled: (columnKey: string) => {
+        if (!props.cellMenu.enabled) {
+          return false
+        }
+        return resolveDataGridCellMenuItems(props.cellMenu, columnKey).length > 0
+      },
+      isRowIndexContextEnabled: () => props.rowIndexMenu.enabled && props.showRowIndex,
+    } as unknown as Parameters<typeof useDataGridViewportContextMenuRouter<MenuCoord, MenuRange>>[0])
+
+    const contextMenuAnchor = useDataGridContextMenuAnchor({
+      resolveCurrentCellCoord,
+      resolveViewportElement: () => stageHostRef.value,
+      resolveRowAtIndex: (rowIndex: number) => props.runtime.getBodyRowAtIndex(rowIndex) ?? undefined,
+      resolveColumnAtIndex: (columnIndex: number) => visibleColumns.value[columnIndex] ?? undefined,
+      resolveSelectionRange: resolveCurrentSelectionRange,
+      isMultiCellSelection: (range: MenuRange) => isMultiCellSelection(range),
+      isCoordInsideRange,
+      openContextMenu,
+      isColumnContextEnabled: column => props.cellMenu.enabled && resolveDataGridCellMenuItems(props.cellMenu, column.key).length > 0,
+    })
+
+    openRuntimeContextMenuFromCurrentCell = () => {
+      contextMenuAnchor.openContextMenuFromCurrentCell()
+    }
+
+    const recordRowMutation = (
+      beforeSnapshot: unknown,
+      label: string,
+    ): void => {
+      recordHistoryIntentTransaction({
+        intent: "edit",
+        label,
+      }, beforeSnapshot)
+    }
+
+    const runRowIndexContextAction = async (
+      action: RendererContextMenuActionId,
+      rowId: string,
+    ): Promise<boolean> => {
+      const targetRow = resolveRuntimeRowById(rowId)
+      if (!targetRow || targetRow.kind === "group") {
+        return false
+      }
+
+      if (action === "insert-row-above") {
+        if (!canInsertRows()) {
+          return false
+        }
+        const beforeSnapshot = captureHistorySnapshot()
+        const inserted = props.runtime.api.rows.insertDataBefore(
+          rowId,
+          [buildInsertedRowInput(targetRow.data, resolveSourceRowTemplateByRowId(rowId))],
+        )
+        if (inserted) {
+          recordRowMutation(beforeSnapshot, "Insert row above")
+        }
+        return inserted
+      }
+      if (action === "insert-row-below") {
+        if (!canInsertRows()) {
+          return false
+        }
+        const beforeSnapshot = captureHistorySnapshot()
+        const inserted = props.runtime.api.rows.insertDataAfter(
+          rowId,
+          [buildInsertedRowInput(targetRow.data, resolveSourceRowTemplateByRowId(rowId))],
+        )
+        if (inserted) {
+          recordRowMutation(beforeSnapshot, "Insert row below")
+        }
+        return inserted
+      }
+      if (action === "copy-row") {
+        return setRowClipboardRows([targetRow.data], "copy", [rowId])
+      }
+      if (action === "cut-row") {
+        return setRowClipboardRows([targetRow.data], "cut", [rowId])
+      }
+      if (action === "paste-row") {
+        if (!canInsertRows()) {
+          return false
+        }
+        const rows = await readRowClipboardRows()
+        if (!rows || rows.length === 0) {
+          return false
+        }
+        const beforeSnapshot = captureHistorySnapshot()
+        const pendingCutSourceRowIds = rowClipboardBuffer.value?.operation === "cut"
+          ? rowClipboardBuffer.value.sourceRowIds
+          : []
+        const sourceRowTemplate = resolveSourceRowTemplateByRowId(
+          pendingCutSourceRowIds[0] ?? rowId,
+        ) ?? resolveSourceRowTemplateByRowId(rowId)
+        const inserted = pendingCutSourceRowIds.length > 0
+          ? moveRuntimeRowsAfter(pendingCutSourceRowIds, rowId)
+          : props.runtime.api.rows.insertDataAfter(
+              rowId,
+              rows.map(row => cloneRowWithFreshIdentity(row, sourceRowTemplate)),
+            )
+        if (inserted && rowClipboardBuffer.value?.operation === "cut") {
+          rowClipboardBuffer.value = null
+        }
+        if (inserted) {
+          recordRowMutation(
+            beforeSnapshot,
+            pendingCutSourceRowIds.length > 0
+              ? (pendingCutSourceRowIds.length > 1 ? `Move ${pendingCutSourceRowIds.length} rows` : "Move row")
+              : (rows.length > 1 ? `Paste ${rows.length} rows` : "Paste row"),
+          )
+        }
+        return inserted
+      }
+      if (action === "delete-selected-rows") {
+        const rowIds = resolveSelectedRuntimeRowIds(rowId)
+        if (rowIds.length === 0) {
+          return false
+        }
+        const beforeSnapshot = captureHistorySnapshot()
+        const removed = removeRuntimeRows(rowIds)
+        if (removed) {
+          recordRowMutation(beforeSnapshot, rowIds.length > 1 ? `Delete ${rowIds.length} rows` : "Delete row")
+        }
+        return removed
+      }
+
+      return false
+    }
+
+    const contextMenuActionRouter = useDataGridContextMenuActionRouter({
+      resolveContextMenuState: () => ({
+        zone: contextMenu.value.zone as RendererContextMenuZone,
+        columnKey: contextMenu.value.columnKey,
+        rowId: contextMenu.value.rowId,
+      }),
+      runHeaderContextAction: () => false,
+      runRowIndexContextAction,
+      copySelection: copySelectedCells,
+      pasteSelection: pasteSelectedCells,
+      cutSelection: cutSelectedCells,
+      clearCurrentSelection: clearSelectedCells,
+      closeContextMenu,
+    } as unknown as Parameters<typeof useDataGridContextMenuActionRouter>[0])
+
+    const menuActionEntries = computed(() => {
+      if (!contextMenu.value.visible) {
+        return [] as Array<{
+          id: RendererContextMenuActionId
+          label: string
+          disabled: boolean
+          title: string | undefined
+          separatorBefore: boolean
+        }>
+      }
+
+      const zone = contextMenu.value.zone as RendererContextMenuZone
+
+      if (zone === "cell" || zone === "range") {
+        const columnKey = contextMenu.value.columnKey ?? ""
+        if (!props.cellMenu.enabled || !columnKey) {
+          return []
+        }
+        const items = resolveDataGridCellMenuItems(props.cellMenu, columnKey)
+        const disabledItems = new Set(resolveDataGridCellMenuDisabledItems(props.cellMenu, columnKey))
+        const disabledReasons = resolveDataGridCellMenuDisabledReasons(props.cellMenu, columnKey)
+        const actionOptions = resolveDataGridCellMenuActionOptions(props.cellMenu, columnKey)
+        return items.flatMap((item, itemIndex) => {
+          const itemActions = CELL_MENU_ACTION_IDS_BY_ITEM[item] ?? []
+          return itemActions.flatMap(actionId => {
+            const actionKey = actionId as DataGridCellMenuActionKey
+            const option = actionOptions[actionKey]
+            if (option?.hidden) {
+              return []
+            }
+            const disabled = disabledItems.has(item) || option?.disabled === true
+            return [{
+              id: actionId,
+              label: option?.label ?? DEFAULT_CONTEXT_MENU_ACTION_LABELS[actionId],
+              disabled,
+              title: option?.disabledReason ?? disabledReasons[item],
+              separatorBefore: itemIndex > 0 && actionId === itemActions[0],
+            }]
+          })
+        })
+      }
+
+      if (zone === "row-index") {
+        if (!props.rowIndexMenu.enabled) {
+          return []
+        }
+        const items = resolveDataGridRowIndexMenuItems(props.rowIndexMenu)
+        const disabledItems = new Set(resolveDataGridRowIndexMenuDisabledItems(props.rowIndexMenu))
+        const disabledReasons = resolveDataGridRowIndexMenuDisabledReasons(props.rowIndexMenu)
+        const actionOptions = resolveDataGridRowIndexMenuActionOptions(props.rowIndexMenu)
+        return items.flatMap((item, itemIndex) => {
+          const itemActions = ROW_INDEX_MENU_ACTION_IDS_BY_ITEM[item] ?? []
+          return itemActions.flatMap(actionId => {
+            const actionKey = actionId === "insert-row-above"
+              ? "insertAbove"
+              : actionId === "insert-row-below"
+                ? "insertBelow"
+                : actionId === "copy-row"
+                  ? "copy"
+                  : actionId === "paste-row"
+                    ? "paste"
+                    : actionId === "delete-selected-rows"
+                      ? "deleteSelected"
+                      : "cut"
+            const option = actionOptions[actionKey as DataGridRowIndexMenuActionKey]
+            if (option?.hidden) {
+              return []
+            }
+            let disabled = disabledItems.has(item) || option?.disabled === true
+            let title = option?.disabledReason ?? disabledReasons[item]
+            if ((actionId === "insert-row-above" || actionId === "insert-row-below" || actionId === "paste-row") && !canInsertRows()) {
+              disabled = true
+              title = title ?? "Row insertion is not supported by the current row model"
+            }
+            if ((actionId === "cut-row" || actionId === "delete-selected-rows") && !canMutateRows()) {
+              disabled = true
+              title = title ?? "Row deletion is not supported by the current row model"
+            }
+            if (actionId === "delete-selected-rows") {
+              const effectiveRowIds = resolveSelectedRuntimeRowIds(contextMenu.value.rowId ?? "")
+              if (effectiveRowIds.length === 0) {
+                disabled = true
+                title = title ?? "No deletable rows are selected"
+              }
+            }
+            return [{
+              id: actionId,
+              label: option?.label ?? DEFAULT_CONTEXT_MENU_ACTION_LABELS[actionId],
+              disabled,
+              title,
+              separatorBefore: itemIndex > 0 && actionId === itemActions[0],
+            }]
+          })
+        })
+      }
+
+      return []
+    })
+
+    const handleViewportContextMenu = (event: MouseEvent): void => {
+      viewportContextRouter.dispatchViewportContextMenu(event)
+    }
+
+    const focusGridViewport = (): void => {
+      const viewport = stageHostRef.value?.querySelector<HTMLElement>(".grid-body-viewport")
+      viewport?.focus({ preventScroll: true })
+    }
+
+    const scheduleGridViewportFocus = (): void => {
+      void nextTick(() => {
+        if (typeof window !== "undefined") {
+          window.requestAnimationFrame(() => {
+            focusGridViewport()
+          })
+          return
+        }
+        focusGridViewport()
+      })
+    }
+
+    const handleContextMenuAction = async (action: RendererContextMenuActionId): Promise<void> => {
+      const handled = await contextMenuActionRouter.runContextMenuAction(action as DataGridContextMenuActionId)
+      if (handled) {
+        focusGridViewport()
+        closeContextMenu()
+        scheduleGridViewportFocus()
+      }
+    }
+
+    watch(
+      () => contextMenu.value.visible,
+      (visible, _previous, onCleanup) => {
+        if (!visible || typeof window === "undefined") {
+          return
+        }
+        const handleWindowPointerDown = (event: MouseEvent) => {
+          const target = event.target as Node | null
+          if (target && contextMenuRef.value?.contains(target)) {
+            return
+          }
+          closeContextMenu()
+        }
+        const handleWindowBlur = () => {
+          closeContextMenu()
+        }
+        window.addEventListener("mousedown", handleWindowPointerDown, true)
+        window.addEventListener("blur", handleWindowBlur)
+        onCleanup(() => {
+          window.removeEventListener("mousedown", handleWindowPointerDown, true)
+          window.removeEventListener("blur", handleWindowBlur)
+        })
+      },
+    )
     const stageProps = computed(() => ({
       ...tableStageProps.value,
       columns: {
@@ -1173,6 +2069,7 @@ export default defineComponent({
       }, [
         h("div", {
           class: "datagrid-app-stage",
+          ref: stageHostRef,
         }, [
           props.viewMode === "gantt"
             ? h(DataGridGanttStage as Component, {
@@ -1185,7 +2082,43 @@ export default defineComponent({
             : h(DataGridTableStage as Component, {
               ...stageProps.value,
               stageContext: tableStageContext,
+              onViewportContextMenu: handleViewportContextMenu,
             }),
+          contextMenu.value.visible && menuActionEntries.value.length > 0
+            ? h("div", {
+              ref: contextMenuRef,
+              class: "datagrid-context-menu",
+              style: contextMenuStyle.value,
+              role: "menu",
+              tabindex: -1,
+              onKeydown: (event: KeyboardEvent) => {
+                onContextMenuKeyDown(event, {
+                  onEscape: () => {
+                    focusGridViewport()
+                  },
+                })
+              },
+            }, menuActionEntries.value.flatMap(entry => {
+              const nodes: Array<ReturnType<typeof h>> = []
+              if (entry.separatorBefore) {
+                nodes.push(h("div", {
+                  class: "datagrid-context-menu__separator",
+                  "aria-hidden": "true",
+                }))
+              }
+              nodes.push(h("button", {
+                type: "button",
+                class: "datagrid-context-menu__item",
+                "data-datagrid-menu-action": entry.id,
+                disabled: entry.disabled,
+                title: entry.title,
+                onClick: () => {
+                  void handleContextMenuAction(entry.id)
+                },
+              }, entry.label))
+              return nodes
+            }))
+            : null,
         ]),
         props.inspectorPanel
           ? h("aside", {

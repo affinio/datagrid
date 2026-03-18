@@ -9,8 +9,9 @@ describe("useDataGridContextMenuActionRouter contract", () => {
     const clearCurrentSelection = vi.fn(async () => true)
 
     const router = useDataGridContextMenuActionRouter({
-      resolveContextMenuState: () => ({ zone: "range", columnKey: "service" }),
+      resolveContextMenuState: () => ({ zone: "range", columnKey: "service", rowId: null }),
       runHeaderContextAction: vi.fn(() => false),
+      runRowIndexContextAction: vi.fn(async () => false),
       copySelection,
       pasteSelection,
       cutSelection,
@@ -34,8 +35,9 @@ describe("useDataGridContextMenuActionRouter contract", () => {
     const closeContextMenu = vi.fn()
 
     const missingColumnRouter = useDataGridContextMenuActionRouter({
-      resolveContextMenuState: () => ({ zone: "header", columnKey: null }),
+      resolveContextMenuState: () => ({ zone: "header", columnKey: null, rowId: null }),
       runHeaderContextAction,
+      runRowIndexContextAction: vi.fn(async () => false),
       copySelection: vi.fn(async () => true),
       pasteSelection: vi.fn(async () => true),
       cutSelection: vi.fn(async () => true),
@@ -48,8 +50,9 @@ describe("useDataGridContextMenuActionRouter contract", () => {
     expect(runHeaderContextAction).not.toHaveBeenCalled()
 
     const headerRouter = useDataGridContextMenuActionRouter({
-      resolveContextMenuState: () => ({ zone: "header", columnKey: "latencyMs" }),
+      resolveContextMenuState: () => ({ zone: "header", columnKey: "latencyMs", rowId: null }),
       runHeaderContextAction,
+      runRowIndexContextAction: vi.fn(async () => false),
       copySelection: vi.fn(async () => true),
       pasteSelection: vi.fn(async () => true),
       cutSelection: vi.fn(async () => true),
@@ -64,8 +67,9 @@ describe("useDataGridContextMenuActionRouter contract", () => {
   it("closes menu for unsupported action in non-header zones", async () => {
     const closeContextMenu = vi.fn()
     const router = useDataGridContextMenuActionRouter({
-      resolveContextMenuState: () => ({ zone: "cell", columnKey: "service" }),
+      resolveContextMenuState: () => ({ zone: "cell", columnKey: "service", rowId: null }),
       runHeaderContextAction: vi.fn(() => false),
+      runRowIndexContextAction: vi.fn(async () => false),
       copySelection: vi.fn(async () => true),
       pasteSelection: vi.fn(async () => true),
       cutSelection: vi.fn(async () => true),
@@ -75,5 +79,22 @@ describe("useDataGridContextMenuActionRouter contract", () => {
 
     await expect(router.runContextMenuAction("sort-asc")).resolves.toBe(false)
     expect(closeContextMenu).toHaveBeenCalledTimes(1)
+  })
+
+  it("routes row-index actions using the context row id", async () => {
+    const runRowIndexContextAction = vi.fn(async () => true)
+    const router = useDataGridContextMenuActionRouter({
+      resolveContextMenuState: () => ({ zone: "row-index", columnKey: null, rowId: "r-3" }),
+      runHeaderContextAction: vi.fn(() => false),
+      runRowIndexContextAction,
+      copySelection: vi.fn(async () => true),
+      pasteSelection: vi.fn(async () => true),
+      cutSelection: vi.fn(async () => true),
+      clearCurrentSelection: vi.fn(async () => true),
+      closeContextMenu: vi.fn(),
+    })
+
+    await expect(router.runContextMenuAction("insert-row-below")).resolves.toBe(true)
+    expect(runRowIndexContextAction).toHaveBeenCalledWith("insert-row-below", "r-3")
   })
 })

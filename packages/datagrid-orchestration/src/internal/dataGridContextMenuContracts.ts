@@ -1,10 +1,16 @@
-export type DataGridContextMenuZone = "cell" | "range" | "header"
+export type DataGridContextMenuZone = "cell" | "range" | "header" | "row-index"
 
 export type DataGridContextMenuActionId =
   | "copy"
   | "paste"
   | "cut"
   | "clear"
+  | "insert-row-above"
+  | "insert-row-below"
+  | "copy-row"
+  | "paste-row"
+  | "cut-row"
+  | "delete-selected-rows"
   | "sort-asc"
   | "sort-desc"
   | "sort-clear"

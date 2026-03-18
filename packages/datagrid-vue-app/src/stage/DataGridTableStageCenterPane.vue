@@ -5,6 +5,7 @@
     tabindex="0"
     @scroll="handleScroll"
     @wheel="handleWheel"
+    @contextmenu="handleContextMenu"
     @keydown.stop="handleKeydown"
   >
     <div class="grid-body-content" :style="layout.gridContentStyle">
@@ -29,6 +30,7 @@
           :key="`${String(row.rowId)}-${column.key}`"
           class="grid-cell"
           :class="[
+            'datagrid-stage__cell',
             renderApi.builtInCellClasses(row, column),
             renderApi.cellStateClasses(row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
             renderApi.resolveCellCustomClass(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
@@ -39,6 +41,8 @@
             renderApi.bodyCellSelectionStyle(row, column, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
             renderApi.resolveCellCustomStyle(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
           ]"
+          :data-row-id="String(row.rowId)"
+          :data-column-key="column.key"
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
           :data-column-index="renderApi.columnIndexByKey(column.key)"
           :tabindex="renderApi.cellTabIndex(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
@@ -168,6 +172,10 @@ const props = defineProps({
     type: Function as PropType<(event: KeyboardEvent) => void>,
     default: undefined,
   },
+  handleContextMenu: {
+    type: Function as PropType<(event: MouseEvent) => void>,
+    default: undefined,
+  },
   selectionOverlaySegments: {
     type: Array as PropType<readonly DataGridTableStageOverlaySegment[]>,
     required: true,
@@ -207,4 +215,5 @@ const bottomSpacerHeight = computed(() => props.bottomSpacerHeight ?? viewport.v
 const handleScroll = computed(() => props.handleScroll ?? renderApi.value.handleCenterViewportScroll)
 const handleWheel = computed(() => props.handleWheel ?? renderApi.value.handleBodyViewportWheel)
 const handleKeydown = computed(() => props.handleKeydown ?? renderApi.value.handleViewportKeydown)
+const handleContextMenu = computed(() => props.handleContextMenu)
 </script>

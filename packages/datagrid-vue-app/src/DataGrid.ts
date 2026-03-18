@@ -75,6 +75,14 @@ import {
   type DataGridColumnMenuOptions,
   type DataGridColumnMenuProp,
 } from "./overlays/dataGridColumnMenu"
+import {
+  resolveDataGridCellMenu,
+  resolveDataGridRowIndexMenu,
+  type DataGridCellMenuOptions,
+  type DataGridCellMenuProp,
+  type DataGridRowIndexMenuOptions,
+  type DataGridRowIndexMenuProp,
+} from "./overlays/dataGridContextMenu"
 import { type DataGridVirtualizationProp, resolveDataGridVirtualization } from "./config/dataGridVirtualization"
 import DataGridRuntimeHost from "./host/DataGridRuntimeHost"
 import {
@@ -257,6 +265,14 @@ export default defineComponent({
       type: [Boolean, Object] as PropType<DataGridColumnMenuProp | undefined>,
       default: undefined,
     },
+    cellMenu: {
+      type: [Boolean, Object] as PropType<DataGridCellMenuProp | undefined>,
+      default: undefined,
+    },
+    rowIndexMenu: {
+      type: [Boolean, Object] as PropType<DataGridRowIndexMenuProp | undefined>,
+      default: undefined,
+    },
     columnLayout: {
       type: [Boolean, Object] as PropType<DataGridColumnLayoutProp | undefined>,
       default: undefined,
@@ -405,6 +421,12 @@ export default defineComponent({
     const resolvedColumnMenu = computed<DataGridColumnMenuOptions>(() => {
       return resolveDataGridColumnMenu(props.columnMenu)
     })
+    const resolvedCellMenu = computed<DataGridCellMenuOptions>(() => {
+      return resolveDataGridCellMenu(props.cellMenu)
+    })
+    const resolvedRowIndexMenu = computed<DataGridRowIndexMenuOptions>(() => {
+      return resolveDataGridRowIndexMenu(props.rowIndexMenu)
+    })
     const resolvedColumnLayout = computed<DataGridColumnLayoutOptions>(() => {
       return resolveDataGridColumnLayout(props.columnLayout)
     })
@@ -488,19 +510,21 @@ export default defineComponent({
     })
     const visibleColumns = computed(() => dataGridRef.value?.api.columns.getSnapshot().visibleColumns ?? [])
     const totalRows = computed(() => dataGridRef.value?.api.rows.getCount() ?? 0)
+    const selectionOptions = {
+      mode: computed(() => inferredMode.value),
+      resolveRuntime: () => dataGridRef.value,
+      visibleColumns,
+      totalRows,
+      showRowSelection: computed(() => props.rowSelection),
+    } as Parameters<typeof useDataGridAppSelection<unknown>>[0]
+
     const {
       selectionSnapshot,
       selectionAnchor,
       syncSelectionSnapshotFromRuntime,
       selectionService,
       selectionAggregatesLabel,
-    } = useDataGridAppSelection<unknown>({
-      mode: computed(() => inferredMode.value),
-      resolveRuntime: () => dataGridRef.value,
-      visibleColumns,
-      totalRows,
-      showRowSelection: computed(() => props.rowSelection),
-    })
+    } = useDataGridAppSelection<unknown>(selectionOptions)
     const {
       rowSelectionSnapshot,
       syncRowSelectionSnapshotFromRuntime,
@@ -686,6 +710,8 @@ export default defineComponent({
         renderMode: resolvedRenderMode.value,
         virtualization: resolvedVirtualization.value,
         columnMenu: resolvedColumnMenu.value,
+        cellMenu: resolvedCellMenu.value,
+        rowIndexMenu: resolvedRowIndexMenu.value,
         columnLayout: resolvedColumnLayout.value,
         aggregations: resolvedAggregations.value,
         advancedFilter: resolvedAdvancedFilter.value,

@@ -32,6 +32,7 @@ export interface UseDataGridViewportContextMenuRouterOptions<
   openContextMenu: (clientX: number, clientY: number, context: OpenDataGridContextMenuInput) => void
   closeContextMenu: () => void
   isColumnContextEnabled?: (columnKey: string) => boolean
+  isRowIndexContextEnabled?: () => boolean
 }
 
 export interface UseDataGridViewportContextMenuRouterResult {
@@ -125,6 +126,20 @@ export function useDataGridViewportContextMenuRouter<
         return true
       }
       return false
+    }
+
+    const rowIndexCell = targetNode.closest(".datagrid-stage__row-index-cell[data-row-id]") as HTMLElement | null
+    if (rowIndexCell) {
+      if (options.isRowIndexContextEnabled?.() === false) {
+        return false
+      }
+      const rowId = rowIndexCell.dataset.rowId ?? ""
+      if (!rowId) {
+        return false
+      }
+      event.preventDefault()
+      options.openContextMenu(event.clientX, event.clientY, { zone: "row-index", rowId })
+      return true
     }
 
     event.preventDefault()

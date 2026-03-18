@@ -115,4 +115,64 @@ describe("useDataGridAppInlineEditing contract", () => {
     })
     expect(harness.ensureActiveCellVisible).toHaveBeenCalledWith(1, 0)
   })
+
+  it("swallows NotAllowedError when date editor showPicker requires a user gesture", async () => {
+    const rows = [
+      { rowId: "r1", kind: "data", data: { createdAt: new Date("2026-03-18T00:00:00.000Z") } },
+    ] as unknown as DataGridRowNode<{ createdAt: Date }>[]
+    const dateInput = document.createElement("input")
+    dateInput.className = "cell-editor-control"
+    dateInput.type = "date"
+    const showPicker = vi.fn(() => {
+      throw new DOMException("User activation required", "NotAllowedError")
+    })
+    Object.defineProperty(dateInput, "showPicker", {
+      configurable: true,
+      value: showPicker,
+    })
+    const bodyViewport = document.createElement("div")
+    bodyViewport.append(dateInput)
+
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback: FrameRequestCallback): number => {
+        callback(0)
+        return 1
+      })
+
+    const api = useDataGridAppInlineEditing<{ createdAt: Date }, readonly { createdAt: Date }[]>({
+      mode: ref("base"),
+      bodyViewportRef: ref(bodyViewport),
+      visibleColumns: ref([
+        { key: "createdAt", column: { key: "createdAt", dataType: "date" } },
+      ] as unknown as readonly DataGridColumnSnapshot[]),
+      totalRows: ref(rows.length),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => rows[rowIndex] ?? null,
+            applyEdits: vi.fn(),
+          },
+        },
+      } as never,
+      readCell: () => "2026-03-18",
+      resolveRowIndexById: rowId => rows.findIndex(row => row.rowId === rowId),
+      applyCellSelection: vi.fn(),
+      ensureActiveCellVisible: vi.fn(),
+      isCellEditable: () => true,
+      captureRowsSnapshot: () => rows.map(row => (row.kind === "group" ? { createdAt: new Date(0) } : { ...row.data })),
+      recordEditTransaction: vi.fn(),
+    })
+
+    expect(() => {
+      api.startInlineEdit(rows[0]!, "createdAt", { openOnMount: true })
+    }).not.toThrow()
+
+    await nextTick()
+    await nextTick()
+
+    expect(showPicker).toHaveBeenCalled()
+
+    requestAnimationFrameSpy.mockRestore()
+  })
 })

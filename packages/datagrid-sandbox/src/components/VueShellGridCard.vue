@@ -114,6 +114,21 @@
           <input v-model="stripedRows" type="checkbox" />
           Striped rows
         </label>
+        <div v-if="props.timesheetShowcase" class="timesheet-project-pool">
+          <span class="timesheet-project-pool__label">Projects</span>
+          <label
+            v-for="project in TIMESHEET_PROJECT_POOL"
+            :key="project.id"
+            class="timesheet-project-pool__option"
+          >
+            <input
+              v-model="activeTimesheetProjectIds"
+              type="checkbox"
+              :value="project.id"
+            />
+            <span>{{ project.project }}</span>
+          </label>
+        </div>
         <label v-if="props.mode === 'pivot'">
           Pivot view
           <select v-model="pivotViewMode">
@@ -140,7 +155,7 @@
           Hide unused source columns
         </label>
         <div
-          v-if="!props.timesheetShowcase && (props.mode === 'tree' || props.mode === 'pivot' || (props.mode === 'base' && hasActiveGrouping))"
+          v-if="props.mode === 'tree' || props.mode === 'pivot' || (props.mode === 'base' && hasActiveGrouping)"
           class="group-actions"
         >
           <button type="button" @click="expandAllGroups">Expand all</button>
@@ -222,6 +237,8 @@
         :columns="columns"
         license-key="affino-dg-v1:enterprise:sandbox-demo:2099-12-31:all:0HTTHMS"
         :column-menu="columnMenu"
+        :cell-menu="cellMenu"
+        :row-index-menu="rowIndexMenu"
         column-layout
         diagnostics
         advanced-filter
@@ -241,7 +258,7 @@
         :base-row-height="baseRowHeight"
         :row-hover="rowHover"
         :striped-rows="stripedRows"
-        :show-row-index="!props.timesheetShowcase"
+        :show-row-index="true"
         :row-selection="!props.timesheetShowcase"
         :is-cell-editable="timesheetIsCellEditable"
         @cell-change="handleGridCellChange"
@@ -264,7 +281,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch, type Ref } from "vue";
 import {
   DataGrid,
   type DataGridAppViewMode,
@@ -275,6 +292,8 @@ import {
 import {
   clearDataGridSavedViewInStorage,
   readDataGridSavedViewFromStorage,
+  type DataGridCellMenuProp,
+  type DataGridRowIndexMenuProp,
   type DataGridSavedViewSnapshot,
   writeDataGridSavedViewToStorage,
 } from "@affino/datagrid-vue-app";
@@ -284,6 +303,7 @@ import {
   type DataGridStyleConfig,
 } from "@affino/datagrid-theme";
 import type {
+  ClientRowModel,
   DataGridColumnInput,
   DataGridColumnPin,
   DataGridGroupBySpec,
@@ -337,6 +357,7 @@ interface TimesheetRow {
 }
 
 interface PublicDataGridExpose {
+  rowModel?: Ref<ClientRowModel<TimesheetRow> | null | undefined>;
   getApi: () => unknown | null;
   getRuntime: () => unknown | null;
   getColumnState: () => DataGridUnifiedColumnState | null;
@@ -380,13 +401,11 @@ interface TimesheetGridApi {
   };
 }
 
-interface TimesheetGridRuntimeHandle {
-  resolveBodyRowIndexById: (rowId: string | number) => number;
-}
-
 type ThemePreset = "default" | "industrial" | "sugar" | "custom";
 type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked";
 type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | null>;
+type DeclarativeCellMenuConfig = Exclude<DataGridCellMenuProp, boolean | null>;
+type DeclarativeRowIndexMenuConfig = Exclude<DataGridRowIndexMenuProp, boolean | null>;
 
 const SHELL_SAVED_VIEW_STORAGE_KEY = "affino-datagrid-sandbox:shell-saved-view";
 
@@ -467,6 +486,121 @@ const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
   },
 };
 
+const BASE_CELL_MENU: DeclarativeCellMenuConfig = {
+  items: ["clipboard", "edit"],
+  labels: {
+    clipboard: "Cell clipboard",
+    edit: "Cell editing",
+  },
+  actions: {
+    cut: { label: "Cut cell" },
+    copy: { label: "Copy cell" },
+    paste: { label: "Paste into cell" },
+    clear: { label: "Clear contents" },
+  },
+  columns: {
+    id: {
+      actions: {
+        cut: {
+          disabled: true,
+          disabledReason: "Identity cells stay immutable in the sugar demo",
+        },
+        paste: {
+          disabled: true,
+          disabledReason: "Identity cells stay immutable in the sugar demo",
+        },
+        clear: {
+          disabled: true,
+          disabledReason: "Identity cells stay immutable in the sugar demo",
+        },
+      },
+    },
+  },
+};
+
+const BASE_ROW_INDEX_MENU: DeclarativeRowIndexMenuConfig = {
+  items: ["insert", "clipboard", "selection"],
+  labels: {
+    insert: "Row insertion",
+    clipboard: "Row clipboard",
+    selection: "Selection actions",
+  },
+  actions: {
+    insertAbove: { label: "Insert row above" },
+    insertBelow: { label: "Insert row below" },
+    cut: { label: "Cut row" },
+    copy: { label: "Copy row" },
+    paste: { label: "Paste row below" },
+    deleteSelected: { label: "Delete selected rows" },
+  },
+};
+
+const TIMESHEET_CELL_MENU: DeclarativeCellMenuConfig = {
+  items: ["clipboard", "edit"],
+  labels: {
+    clipboard: "Timesheet clipboard",
+    edit: "Timesheet editing",
+  },
+  actions: {
+    cut: { label: "Cut hours" },
+    copy: { label: "Copy hours" },
+    paste: { label: "Paste hours" },
+    clear: { label: "Clear hours" },
+  },
+  columns: {
+    project: {
+      actions: {
+        cut: {
+          disabled: true,
+          disabledReason: "Project names stay read-only in the timesheet showcase",
+        },
+        paste: {
+          disabled: true,
+          disabledReason: "Project names stay read-only in the timesheet showcase",
+        },
+        clear: {
+          disabled: true,
+          disabledReason: "Project names stay read-only in the timesheet showcase",
+        },
+      },
+    },
+    total: {
+      actions: {
+        cut: {
+          disabled: true,
+          disabledReason: "Totals are derived from weekday cells",
+        },
+        paste: {
+          disabled: true,
+          disabledReason: "Totals are derived from weekday cells",
+        },
+        clear: {
+          disabled: true,
+          disabledReason: "Totals are derived from weekday cells",
+        },
+        copy: { label: "Copy total" },
+      },
+    },
+  },
+};
+
+const TIMESHEET_ROW_INDEX_MENU: DeclarativeRowIndexMenuConfig = {
+  items: ["insert", "clipboard", "selection"],
+  labels: {
+    insert: "Project rows",
+    clipboard: "Project clipboard",
+    selection: "Batch actions",
+  },
+  actions: {
+    insertAbove: { label: "Insert project above" },
+    insertBelow: { label: "Insert project below" },
+    cut: { label: "Cut project row" },
+    copy: { label: "Copy project row" },
+    paste: { label: "Paste project row below" },
+    deleteSelected: { label: "Delete selected projects" },
+  },
+};
+
 const props = defineProps<{
   title: string;
   mode: Mode;
@@ -485,7 +619,7 @@ const TIMESHEET_DAY_COLUMNS = [
   { key: "sunday", label: "Sun" },
 ] as const satisfies readonly { key: TimesheetDayKey; label: string }[];
 
-const TIMESHEET_PROJECTS: readonly Omit<TimesheetRow, "total">[] = [
+const TIMESHEET_PROJECT_POOL: readonly Omit<TimesheetRow, "total">[] = [
   {
     id: "proj-product-foundation",
     project: "Product foundation",
@@ -541,14 +675,54 @@ const TIMESHEET_PROJECTS: readonly Omit<TimesheetRow, "total">[] = [
     saturday: 1,
     sunday: 0,
   },
+  {
+    id: "proj-platform-hardening",
+    project: "Platform hardening",
+    monday: 3,
+    tuesday: 3.5,
+    wednesday: 2.5,
+    thursday: 4,
+    friday: 3,
+    saturday: 0,
+    sunday: 0,
+  },
+  {
+    id: "proj-customer-migration",
+    project: "Customer migration",
+    monday: 5,
+    tuesday: 4.5,
+    wednesday: 4,
+    thursday: 4.5,
+    friday: 3.5,
+    saturday: 0,
+    sunday: 0,
+  },
 ] as const;
+
+const DEFAULT_TIMESHEET_PROJECT_IDS = TIMESHEET_PROJECT_POOL.map(project => project.id);
 
 function roundTimesheetHours(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
 function cloneTimesheetProjects(): readonly Omit<TimesheetRow, "total">[] {
-  return TIMESHEET_PROJECTS.map(row => ({ ...row }));
+  return TIMESHEET_PROJECT_POOL.map(row => ({ ...row }));
+}
+
+function buildTimesheetProjectsFromPool(
+  selectedProjectIds: readonly string[],
+  existingProjects: readonly Omit<TimesheetRow, "total">[],
+): readonly Omit<TimesheetRow, "total">[] {
+  const selectedProjectIdSet = new Set(selectedProjectIds);
+  const poolProjectIdSet = new Set(TIMESHEET_PROJECT_POOL.map(project => project.id));
+  const existingProjectById = new Map(existingProjects.map(project => [project.id, project]));
+  const selectedPoolProjects = TIMESHEET_PROJECT_POOL
+    .filter(project => selectedProjectIdSet.has(project.id))
+    .map(project => ({ ...(existingProjectById.get(project.id) ?? project) }));
+  const customProjects = existingProjects
+    .filter(project => !poolProjectIdSet.has(project.id))
+    .map(project => ({ ...project }));
+  return [...selectedPoolProjects, ...customProjects];
 }
 
 function normalizeTimesheetHours(value: unknown): number {
@@ -710,6 +884,14 @@ function serializePretty(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+function createSyncKey(value: unknown): string | null {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
+  }
+}
+
 function parseJson(value: string): unknown | null {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -856,7 +1038,10 @@ function createBaseShowcaseColumnState(
 
 const rowCount = ref<number>(10000);
 const columnCount = ref<number>(16);
-const timesheetProjects = ref<readonly Omit<TimesheetRow, "total">[]>(cloneTimesheetProjects());
+const activeTimesheetProjectIds = ref<string[]>([...DEFAULT_TIMESHEET_PROJECT_IDS]);
+const timesheetProjects = ref<readonly Omit<TimesheetRow, "total">[]>(
+  buildTimesheetProjectsFromPool(activeTimesheetProjectIds.value, cloneTimesheetProjects()),
+);
 const themePreset = ref<ThemePreset>("sugar");
 const columnMenuPreset = ref<ColumnMenuPreset>("default");
 const groupByModel = ref<DataGridGroupBySpec | null>(null);
@@ -889,7 +1074,7 @@ const modeBadge = computed(() => {
 
 const modeHint = computed(() => {
   if (props.timesheetShowcase) {
-    return "Simple declarative timesheet: projects by row, weekdays by column, pinned daily totals below and pinned row totals on the right.";
+    return "Simple declarative timesheet: projects by row, weekdays by column, pinned daily totals below and pinned row totals on the right. Right-click a cell for Cut/Copy/Paste/Clear or the row index for Insert/Cut/Copy/Paste/Delete, all with undo/redo.";
   }
   return props.mode === "tree"
     ? "Public component with tree-data row model options."
@@ -899,7 +1084,7 @@ const modeHint = computed(() => {
         ? props.ganttShowcase
           ? "Enterprise gantt showcase over the same row model: baseline, typed predecessors, summaries and computed critical path."
           : "Public component in split grid plus timeline mode over the same visible rows."
-        : "Public component with declarative rows, columns and view state.";
+        : "Public component with declarative rows, columns, view state, and right-click menus for headers, cells, and the row index, including undoable cell clear and row batch delete.";
 });
 
 const isStatePanelOpen = ref(false);
@@ -925,7 +1110,7 @@ const columns = computed(() => (
     : buildVueColumns(props.mode, columnCount.value)
 ));
 const groupBy = computed(() => {
-  if (props.timesheetShowcase || props.mode !== "base") {
+  if (props.mode !== "base") {
     return null;
   }
   return groupByModel.value;
@@ -1004,6 +1189,18 @@ const columnMenu = computed<DataGridColumnMenuProp>(() => {
     default:
       return true;
   }
+});
+const cellMenu = computed<DataGridCellMenuProp>(() => {
+  if (props.mode !== "base") {
+    return false;
+  }
+  return props.timesheetShowcase ? TIMESHEET_CELL_MENU : BASE_CELL_MENU;
+});
+const rowIndexMenu = computed<DataGridRowIndexMenuProp>(() => {
+  if (props.mode !== "base") {
+    return false;
+  }
+  return props.timesheetShowcase ? TIMESHEET_ROW_INDEX_MENU : BASE_ROW_INDEX_MENU;
 });
 const theme = computed<DataGridStyleConfig | "default">(() => {
   if (themePreset.value === "industrial") {
@@ -1145,6 +1342,17 @@ const savedViewStatus = computed(() => {
   return `${savedViewModel.value.viewMode ?? "table"} / ${hasPersistedSavedView.value ? "captured + persisted" : "captured"}`;
 });
 
+const setColumnStateIfChanged = (
+  nextState: DataGridUnifiedColumnState,
+): void => {
+  const currentKey = createSyncKey(columnState.value);
+  const nextKey = createSyncKey(nextState);
+  if (currentKey === nextKey) {
+    return;
+  }
+  columnState.value = nextState;
+};
+
 const syncPersistedSavedViewFlag = (): void => {
   hasPersistedSavedView.value = getBrowserStorage()?.getItem(SHELL_SAVED_VIEW_STORAGE_KEY) != null;
 };
@@ -1218,7 +1426,7 @@ watch(
     baseRowHeight.value = 31;
     rowHover.value = true;
     stripedRows.value = true;
-    columnState.value = createBaseShowcaseColumnState(columns.value, columnState.value);
+    setColumnStateIfChanged(createBaseShowcaseColumnState(columns.value, columnState.value));
   },
   { immediate: true },
 );
@@ -1237,10 +1445,22 @@ watch(
     rowHover.value = true;
     stripedRows.value = false;
     groupByModel.value = null;
-    timesheetProjects.value = cloneTimesheetProjects();
-    columnState.value = createTimesheetColumnState(columns.value);
+    activeTimesheetProjectIds.value = [...DEFAULT_TIMESHEET_PROJECT_IDS];
+    timesheetProjects.value = buildTimesheetProjectsFromPool(activeTimesheetProjectIds.value, cloneTimesheetProjects());
+    setColumnStateIfChanged(createTimesheetColumnState(columns.value));
   },
   { immediate: true },
+);
+
+watch(
+  activeTimesheetProjectIds,
+  (selectedProjectIds) => {
+    if (!props.timesheetShowcase) {
+      return;
+    }
+    timesheetProjects.value = buildTimesheetProjectsFromPool(selectedProjectIds, timesheetProjects.value);
+  },
+  { deep: true },
 );
 
 const timesheetIsCellEditable = ({
@@ -1265,19 +1485,19 @@ const syncTimesheetProjectsFromGrid = (): void => {
   if (!props.timesheetShowcase) {
     return;
   }
-  const api = gridRef.value?.getApi() as TimesheetGridApi | null;
-  const runtime = gridRef.value?.getRuntime() as TimesheetGridRuntimeHandle | null;
-  if (!api) {
+  const sourceRows = gridRef.value?.rowModel?.value?.getSourceRows();
+  if (!sourceRows) {
     return;
   }
-  const nextProjects = timesheetProjects.value.map((project, index) => {
-    const bodyRowIndex = runtime?.resolveBodyRowIndexById(project.id) ?? index;
-    const gridRow = bodyRowIndex >= 0 ? api.rows.get(bodyRowIndex)?.data : undefined;
+  const nextProjects: Array<Omit<TimesheetRow, "total">> = [];
+  for (let index = 0; index < sourceRows.length; index += 1) {
+    const gridRow = sourceRows[index]?.data;
     if (!gridRow || gridRow.id === "timesheet-total") {
-      return project;
+      continue;
     }
-    return {
-      ...project,
+    nextProjects.push({
+      id: String(gridRow.id ?? `timesheet-row-${index + 1}`),
+      project: String(gridRow.project ?? ""),
       monday: normalizeTimesheetHours(gridRow.monday),
       tuesday: normalizeTimesheetHours(gridRow.tuesday),
       wednesday: normalizeTimesheetHours(gridRow.wednesday),
@@ -1285,17 +1505,20 @@ const syncTimesheetProjectsFromGrid = (): void => {
       friday: normalizeTimesheetHours(gridRow.friday),
       saturday: normalizeTimesheetHours(gridRow.saturday),
       sunday: normalizeTimesheetHours(gridRow.sunday),
-    };
-  });
-  const hasChanged = nextProjects.some((project, index) => (
-    project.monday !== timesheetProjects.value[index]?.monday
-    || project.tuesday !== timesheetProjects.value[index]?.tuesday
-    || project.wednesday !== timesheetProjects.value[index]?.wednesday
-    || project.thursday !== timesheetProjects.value[index]?.thursday
-    || project.friday !== timesheetProjects.value[index]?.friday
-    || project.saturday !== timesheetProjects.value[index]?.saturday
-    || project.sunday !== timesheetProjects.value[index]?.sunday
-  ));
+    });
+  }
+  const hasChanged = nextProjects.length !== timesheetProjects.value.length
+    || nextProjects.some((project, index) => (
+      project.id !== timesheetProjects.value[index]?.id
+      || project.project !== timesheetProjects.value[index]?.project
+      || project.monday !== timesheetProjects.value[index]?.monday
+      || project.tuesday !== timesheetProjects.value[index]?.tuesday
+      || project.wednesday !== timesheetProjects.value[index]?.wednesday
+      || project.thursday !== timesheetProjects.value[index]?.thursday
+      || project.friday !== timesheetProjects.value[index]?.friday
+      || project.saturday !== timesheetProjects.value[index]?.saturday
+      || project.sunday !== timesheetProjects.value[index]?.sunday
+    ));
   if (!hasChanged) {
     return;
   }
@@ -1317,10 +1540,11 @@ watch(
 watch(
   columns,
   (nextColumns) => {
-    columnState.value =
+    setColumnStateIfChanged(
       props.mode === "base" && columnState.value == null
         ? createBaseShowcaseColumnState(nextColumns, columnState.value)
-        : normalizeColumnState(columnState.value, nextColumns);
+        : normalizeColumnState(columnState.value, nextColumns),
+    );
     if (groupByModel.value) {
       const nextFields = groupByModel.value.fields.filter((field) => (
         nextColumns.some((column) => column.key === field)
@@ -1343,16 +1567,16 @@ const handleColumnStateUpdate = (
 ): void => {
   const normalizedNextState = normalizeColumnState(nextState, columns.value);
   if (!shouldHideUnusedPivotSourceColumns.value) {
-    columnState.value = normalizedNextState;
+    setColumnStateIfChanged(normalizedNextState);
     return;
   }
   const persistedState = normalizeColumnState(columnState.value, columns.value);
-  columnState.value = {
+  setColumnStateIfChanged({
     order: [...normalizedNextState.order],
     widths: { ...normalizedNextState.widths },
     pins: { ...normalizedNextState.pins },
     visibility: { ...persistedState.visibility },
-  };
+  });
 };
 
 const handleStateUpdate = (nextState: DataGridUnifiedState<unknown>): void => {
@@ -1540,5 +1764,43 @@ const collapseAllGroups = (): void => {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
+}
+
+.controls input[type="checkbox"],
+.timesheet-project-pool__option input {
+  width: 0.78rem;
+  height: 0.78rem;
+  margin: 0;
+}
+
+.timesheet-project-pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.6rem;
+  align-items: center;
+  max-width: 44rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.timesheet-project-pool__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(15, 23, 42, 0.76);
+}
+
+.timesheet-project-pool__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.26rem 0.52rem;
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  font-size: 0.78rem;
+  color: rgba(15, 23, 42, 0.84);
 }
 </style>

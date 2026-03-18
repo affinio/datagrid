@@ -85,6 +85,16 @@ export function resolveDataGridContextMenuActions(
     }
     return actions
   }
+  if (contextMenu.zone === "row-index") {
+    return [
+      { id: "insert-row-above", label: "Insert above" },
+      { id: "insert-row-below", label: "Insert below" },
+      { id: "cut-row", label: "Cut row" },
+      { id: "copy-row", label: "Copy row" },
+      { id: "paste-row", label: "Paste row" },
+      { id: "delete-selected-rows", label: "Delete selected rows" },
+    ]
+  }
   return [
     { id: "cut", label: "Cut" },
     { id: "paste", label: "Paste" },

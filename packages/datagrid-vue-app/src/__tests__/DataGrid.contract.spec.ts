@@ -386,6 +386,15 @@ function queryColumnMenuButton(columnKey: string): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(`[data-datagrid-column-menu-button="true"][data-column-key="${columnKey}"]`)
 }
 
+function queryContextMenuRoot(): HTMLElement | null {
+  const menus = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-context-menu"))
+  return menus.findLast(menu => getComputedStyle(menu).display !== "none") ?? null
+}
+
+function queryContextMenuAction(action: string): HTMLButtonElement | null {
+  return queryContextMenuRoot()?.querySelector<HTMLButtonElement>(`[data-datagrid-menu-action="${action}"]`) ?? null
+}
+
 function queryAdvancedFilterRoot(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(".datagrid-advanced-filter")
 }
@@ -851,6 +860,441 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     expect(resolveRowModel(wrapper)?.getSnapshot()).toEqual(before)
+
+    wrapper.unmount()
+  })
+
+  it("supports declarative cellMenu action composition per column", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        cellMenu: {
+          items: ["clipboard", "edit"],
+          columns: {
+            owner: {
+              actions: {
+                cut: { hidden: true },
+                copy: { label: "Copy owner value" },
+              },
+            },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const ownerCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-id="r1"][data-column-key="owner"]')
+    expect(ownerCell.exists()).toBe(true)
+
+    await ownerCell.trigger("contextmenu", { button: 2, clientX: 120, clientY: 48 })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuRoot()).toBeTruthy()
+    expect(queryContextMenuAction("cut")).toBeNull()
+    expect(queryContextMenuAction("copy")?.textContent).toContain("Copy owner value")
+    expect(queryContextMenuAction("paste")).toBeTruthy()
+    expect(queryContextMenuAction("clear")?.textContent).toContain("Clear values")
+
+    wrapper.unmount()
+  })
+
+  it("clears the targeted cell from declarative cellMenu", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        cellMenu: {
+          items: ["edit"],
+          actions: {
+            clear: { label: "Clear contents" },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    resolveVm(wrapper).getApi?.()?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        startRowId: "r1",
+        endRowId: "r1",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+    })
+    await flushRuntimeTasks()
+
+    const ownerCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-id="r1"][data-column-key="owner"]')
+    expect(ownerCell.exists()).toBe(true)
+
+    await ownerCell.trigger("contextmenu", { button: 2, clientX: 120, clientY: 48 })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuAction("clear")?.textContent).toContain("Clear contents")
+
+    queryContextMenuAction("clear")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      rows: {
+        get: (rowIndex: number) => { data?: { owner?: string } } | null
+      }
+    } | null
+    expect(api?.rows.get(0)?.data?.owner).toBe("")
+
+    wrapper.unmount()
+  })
+
+  it("opens declarative rowIndexMenu and inserts a row below the targeted row", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: {
+          actions: {
+            insertBelow: { label: "Insert line below" },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(rowIndexCell.exists()).toBe(true)
+
+    await rowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuAction("insert-row-below")?.textContent).toContain("Insert line below")
+
+    queryContextMenuAction("insert-row-below")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount + 1)
+    expect(document.activeElement?.classList.contains("grid-body-viewport")).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it("inserts a row below when source rows are structured row-node inputs", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: PINNED_BOTTOM_SELECTION_ROWS,
+        columns: PINNED_BOTTOM_SELECTION_COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="pb1"]')
+    expect(rowIndexCell.exists()).toBe(true)
+
+    await rowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("insert-row-below")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      rows: {
+        get: (index: number) => { rowId?: string; data?: { project?: string } } | undefined
+      }
+    } | null
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount + 1)
+    expect(api?.rows.get(1)?.rowId).toBeTruthy()
+    expect(api?.rows.get(1)?.data?.project).toBe("")
+
+    wrapper.unmount()
+  })
+
+  it("repeats insert-row-above on structured row-node inputs without losing row identity", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: PINNED_BOTTOM_SELECTION_ROWS,
+        columns: PINNED_BOTTOM_SELECTION_COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      rows: {
+        get: (index: number) => { rowId?: string; data?: { project?: string } } | undefined
+      }
+    } | null
+
+    const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="pb1"]')
+    expect(firstRowIndexCell.exists()).toBe(true)
+
+    await firstRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("insert-row-above")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const insertedRowId = api?.rows.get(0)?.rowId
+    expect(insertedRowId).toBeTruthy()
+
+    const insertedRowIndexCell = wrapper.find(`.datagrid-stage__row-index-cell[data-row-id="${insertedRowId}"]`)
+    expect(insertedRowIndexCell.exists()).toBe(true)
+
+    await insertedRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 30 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("insert-row-above")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(api?.rows.get(0)?.rowId).toBeTruthy()
+    expect(api?.rows.get(1)?.rowId).toBe(insertedRowId)
+    expect(api?.rows.get(0)?.data?.project).toBe("")
+    expect(api?.rows.get(1)?.data?.project).toBe("")
+
+    wrapper.unmount()
+  })
+
+  it("pastes a copied row below even when the row carries non-cloneable values", async () => {
+    const rowsWithLiveReference = [
+      { rowId: "r1", owner: "NOC", region: "eu-west", amount: 10, liveRef: globalThis },
+      { rowId: "r2", owner: "Payments", region: "us-east", amount: 20, liveRef: globalThis },
+    ] as const
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: rowsWithLiveReference,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+    const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(firstRowIndexCell.exists()).toBe(true)
+
+    await firstRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("copy-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).toContain("grid-row--clipboard-pending")
+
+    const secondRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(secondRowIndexCell.exists()).toBe(true)
+
+    await secondRowIndexCell.trigger("contextmenu", { button: 2, clientX: 108, clientY: 56 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("paste-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount + 1)
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).toContain("grid-row--clipboard-pending")
+
+    wrapper.unmount()
+  })
+
+  it("clears pending row clipboard outline on Escape", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
+    } | null
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+    })
+    await flushRuntimeTasks()
+
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(rowIndexCell.exists()).toBe(true)
+
+    await rowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("copy-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).toContain("grid-row--clipboard-pending")
+
+    const viewport = wrapper.find(".grid-body-viewport")
+    expect(viewport.exists()).toBe(true)
+    await viewport.trigger("keydown", { key: "Escape" })
+    await flushRuntimeTasks()
+
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).not.toContain("grid-row--clipboard-pending")
+
+    wrapper.unmount()
+  })
+
+  it("cuts the targeted row from declarative rowIndexMenu", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(rowIndexCell.exists()).toBe(true)
+
+    await rowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuAction("cut-row")?.textContent).toContain("Cut row")
+
+    queryContextMenuAction("cut-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount)
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).toContain("grid-row--clipboard-pending")
+
+    const lastRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r3"]')
+    expect(lastRowIndexCell.exists()).toBe(true)
+
+    await lastRowIndexCell.trigger("contextmenu", { button: 2, clientX: 108, clientY: 72 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("paste-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      rows: {
+        get: (index: number) => { rowId?: string } | undefined
+      }
+    } | null
+    expect([
+      api?.rows.get(0)?.rowId,
+      api?.rows.get(1)?.rowId,
+      api?.rows.get(2)?.rowId,
+    ]).toEqual(["r2", "r3", "r1"])
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).not.toContain("grid-row--clipboard-pending")
+
+    wrapper.unmount()
+  })
+
+  it("deletes the targeted row from declarative rowIndexMenu when no rows are preselected", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowSelection: true,
+        rowIndexMenu: {
+          items: ["selection"],
+          actions: {
+            deleteSelected: { label: "Delete chosen rows" },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(rowIndexCell.exists()).toBe(true)
+
+    await rowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuAction("delete-selected-rows")?.textContent).toContain("Delete chosen rows")
+
+    queryContextMenuAction("delete-selected-rows")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount - 1)
+
+    wrapper.unmount()
+  })
+
+  it("deletes selected rows from declarative rowIndexMenu", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowSelection: true,
+        rowIndexMenu: {
+          items: ["selection"],
+          actions: {
+            deleteSelected: { label: "Delete chosen rows" },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      rowSelection: {
+        selectRows: (rowIds: readonly string[]) => void
+        getSnapshot?: () => unknown
+      }
+    } | null
+    api?.rowSelection.selectRows(["r1", "r2"])
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(rowIndexCell.exists()).toBe(true)
+
+    await rowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuAction("delete-selected-rows")?.textContent).toContain("Delete chosen rows")
+
+    queryContextMenuAction("delete-selected-rows")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount - 2)
+    expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()).toBeNull()
 
     wrapper.unmount()
   })
