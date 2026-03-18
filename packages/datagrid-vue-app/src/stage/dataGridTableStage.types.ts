@@ -97,6 +97,7 @@ export interface DataGridTableStageRowsSection<TRow extends Record<string, unkno
   someVisibleRowsSelected?: boolean
   handleRowClick?: (row: DataGridTableRow<TRow>) => void
   handleRowIndexClick?: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean) => void
+  handleRowIndexKeydown?: (event: KeyboardEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
   handleToggleAllVisibleRows?: () => void
   toggleGroupRow: (row: DataGridTableRow<TRow>) => void
   rowIndexLabel: (row: DataGridTableRow<TRow>, rowOffset: number) => string

@@ -106,6 +106,13 @@ function normalizeBaseRowHeight(value: number): number {
   return Math.max(24, Math.trunc(value))
 }
 
+function escapeCssAttributeValue(value: string): string {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(value)
+  }
+  return value.replace(/\\/g, "\\\\").replace(/\"/g, '\\"')
+}
+
 function resolveInitialSortState(sortModel: readonly DataGridSortState[] | undefined): SortToggleState[] {
   return (sortModel ?? []).map(entry => ({
     key: entry.key,
@@ -506,6 +513,13 @@ const DEFAULT_CONTEXT_MENU_ACTION_LABELS: Readonly<Record<RendererContextMenuAct
   "auto-size": "Auto size column",
 }
 
+const ROW_INDEX_MENU_SHORTCUT_HINTS: Readonly<Partial<Record<RendererContextMenuActionId, string>>> = {
+  "insert-row-above": "Insert / Ctrl/Cmd+I",
+  "copy-row": "Ctrl/Cmd+C",
+  "paste-row": "Ctrl/Cmd+V",
+  "cut-row": "Ctrl/Cmd+X",
+}
+
 type RendererContextMenuActionId =
   | DataGridContextMenuActionId
   | "insert-row-above"
@@ -514,6 +528,8 @@ type RendererContextMenuActionId =
   | "paste-row"
   | "cut-row"
   | "delete-selected-rows"
+
+type RendererRowIndexKeyboardAction = RendererContextMenuActionId | "open-row-menu"
 
 type RendererContextMenuZone = "cell" | "range" | "header" | "row-index"
 
@@ -1484,7 +1500,48 @@ export default defineComponent({
       if (normalizedSelected.length > 0) {
         return normalizedSelected
       }
+
+      const selectionRange = resolveCurrentSelectionRange()
+      const lastVisibleColumnIndex = visibleColumns.value.length - 1
+      if (selectionRange && lastVisibleColumnIndex >= 0) {
+        const startColumn = Math.min(selectionRange.startColumn, selectionRange.endColumn)
+        const endColumn = Math.max(selectionRange.startColumn, selectionRange.endColumn)
+        const startRow = Math.min(selectionRange.startRow, selectionRange.endRow)
+        const endRow = Math.max(selectionRange.startRow, selectionRange.endRow)
+        const targetRowIndex = targetRowId.length > 0 ? props.runtime.resolveBodyRowIndexById(targetRowId) : -1
+        if (
+          startColumn === 0
+          && endColumn === lastVisibleColumnIndex
+          && (targetRowIndex < 0 || (targetRowIndex >= startRow && targetRowIndex <= endRow))
+        ) {
+          const rangedRowIds: string[] = []
+          for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
+            const row = props.runtime.getBodyRowAtIndex(rowIndex)
+            if (!row || row.kind === "group" || row.rowId == null) {
+              continue
+            }
+            rangedRowIds.push(String(row.rowId))
+          }
+          if (rangedRowIds.length > 0) {
+            return rangedRowIds
+          }
+        }
+      }
+
       return targetRowId.length > 0 ? [targetRowId] : []
+    }
+
+    const readCurrentRuntimeDataRows = (): Record<string, unknown>[] => {
+      const rows: Record<string, unknown>[] = []
+      const rowCount = props.runtime.api.rows.getCount()
+      for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+        const row = props.runtime.api.rows.get(rowIndex)
+        if (!row || row.kind === "group") {
+          continue
+        }
+        rows.push(row.data)
+      }
+      return rows
     }
 
     const removeRuntimeRows = (rowIds: readonly string[]): boolean => {
@@ -1492,11 +1549,11 @@ export default defineComponent({
         return false
       }
       const rowIdSet = new Set(rowIds)
-      const nextRows = props.rows.filter(candidate => {
+      const nextRows = readCurrentRuntimeDataRows().filter(candidate => {
         const normalized = resolveDataRowId(candidate)
         return normalized == null || !rowIdSet.has(normalized)
       })
-      if (nextRows.length === props.rows.length) {
+      if (nextRows.length === props.runtime.api.rows.getCount()) {
         return false
       }
       props.runtime.api.rows.replaceData(nextRows)
@@ -1511,18 +1568,19 @@ export default defineComponent({
       if (!canMutateRows() || sourceRowIds.length === 0 || !targetRowId) {
         return false
       }
+      const currentRows = readCurrentRuntimeDataRows()
       const sourceRowIdSet = new Set(sourceRowIds.map(rowId => String(rowId)))
       if (sourceRowIdSet.has(String(targetRowId))) {
         return false
       }
-      const movedRows = props.rows.filter(candidate => {
+      const movedRows = currentRows.filter(candidate => {
         const normalized = resolveDataRowId(candidate)
         return normalized != null && sourceRowIdSet.has(normalized)
       })
       if (movedRows.length === 0) {
         return false
       }
-      const remainingRows = props.rows.filter(candidate => {
+      const remainingRows = currentRows.filter(candidate => {
         const normalized = resolveDataRowId(candidate)
         return normalized == null || !sourceRowIdSet.has(normalized)
       })
@@ -1566,6 +1624,22 @@ export default defineComponent({
     let contextMenuVisible = () => false
     let closeRuntimeContextMenu = (): void => undefined
     let openRuntimeContextMenuFromCurrentCell = (): void => undefined
+    let runRowIndexContextAction = async (
+      _action: RendererRowIndexKeyboardAction,
+      _rowId: string | number,
+    ): Promise<boolean> => false
+
+    const resolveRowIndexMenuLabel = (
+      actionId: RendererContextMenuActionId,
+      customLabel?: string,
+    ): string => {
+      if (customLabel) {
+        return customLabel
+      }
+      const label = DEFAULT_CONTEXT_MENU_ACTION_LABELS[actionId]
+      const shortcutHint = ROW_INDEX_MENU_SHORTCUT_HINTS[actionId]
+      return shortcutHint ? `${label} (${shortcutHint})` : label
+    }
 
     const {
       tableStageProps,
@@ -1629,6 +1703,7 @@ export default defineComponent({
       openContextMenuFromCurrentCell: () => {
         openRuntimeContextMenuFromCurrentCell()
       },
+      runRowIndexKeyboardAction: (action, rowId) => runRowIndexContextAction(action, rowId),
     })
 
     const {
@@ -1687,6 +1762,28 @@ export default defineComponent({
       contextMenuAnchor.openContextMenuFromCurrentCell()
     }
 
+    const openRuntimeRowIndexContextMenu = (rowId: string | number): boolean => {
+      if (!props.rowIndexMenu.enabled || !props.showRowIndex || !stageHostRef.value) {
+        return false
+      }
+      const normalizedRowId = String(rowId)
+      const selector = `.datagrid-stage__row-index-cell[data-row-id="${escapeCssAttributeValue(normalizedRowId)}"]`
+      const rowIndexCell = stageHostRef.value.querySelector<HTMLElement>(selector)
+      if (!rowIndexCell) {
+        return false
+      }
+      const rect = rowIndexCell.getBoundingClientRect()
+      openContextMenu(
+        rect.left + Math.max(10, Math.min(rect.width / 2, Math.max(10, rect.width - 10))),
+        rect.bottom - 4,
+        {
+          zone: "row-index",
+          rowId: normalizedRowId,
+        } as unknown as Parameters<typeof openContextMenu>[2],
+      )
+      return true
+    }
+
     const recordRowMutation = (
       beforeSnapshot: unknown,
       label: string,
@@ -1697,11 +1794,15 @@ export default defineComponent({
       }, beforeSnapshot)
     }
 
-    const runRowIndexContextAction = async (
-      action: RendererContextMenuActionId,
-      rowId: string,
+    runRowIndexContextAction = async (
+      action: RendererRowIndexKeyboardAction,
+      rowId: string | number,
     ): Promise<boolean> => {
-      const targetRow = resolveRuntimeRowById(rowId)
+      const normalizedRowId = String(rowId)
+      if (action === "open-row-menu") {
+        return openRuntimeRowIndexContextMenu(normalizedRowId)
+      }
+      const targetRow = resolveRuntimeRowById(normalizedRowId)
       if (!targetRow || targetRow.kind === "group") {
         return false
       }
@@ -1713,7 +1814,7 @@ export default defineComponent({
         const beforeSnapshot = captureHistorySnapshot()
         const inserted = props.runtime.api.rows.insertDataBefore(
           rowId,
-          [buildInsertedRowInput(targetRow.data, resolveSourceRowTemplateByRowId(rowId))],
+          [buildInsertedRowInput(targetRow.data, resolveSourceRowTemplateByRowId(normalizedRowId))],
         )
         if (inserted) {
           recordRowMutation(beforeSnapshot, "Insert row above")
@@ -1727,7 +1828,7 @@ export default defineComponent({
         const beforeSnapshot = captureHistorySnapshot()
         const inserted = props.runtime.api.rows.insertDataAfter(
           rowId,
-          [buildInsertedRowInput(targetRow.data, resolveSourceRowTemplateByRowId(rowId))],
+          [buildInsertedRowInput(targetRow.data, resolveSourceRowTemplateByRowId(normalizedRowId))],
         )
         if (inserted) {
           recordRowMutation(beforeSnapshot, "Insert row below")
@@ -1735,10 +1836,10 @@ export default defineComponent({
         return inserted
       }
       if (action === "copy-row") {
-        return setRowClipboardRows([targetRow.data], "copy", [rowId])
+        return setRowClipboardRows([targetRow.data], "copy", [normalizedRowId])
       }
       if (action === "cut-row") {
-        return setRowClipboardRows([targetRow.data], "cut", [rowId])
+        return setRowClipboardRows([targetRow.data], "cut", [normalizedRowId])
       }
       if (action === "paste-row") {
         if (!canInsertRows()) {
@@ -1753,10 +1854,10 @@ export default defineComponent({
           ? rowClipboardBuffer.value.sourceRowIds
           : []
         const sourceRowTemplate = resolveSourceRowTemplateByRowId(
-          pendingCutSourceRowIds[0] ?? rowId,
-        ) ?? resolveSourceRowTemplateByRowId(rowId)
+          pendingCutSourceRowIds[0] ?? normalizedRowId,
+        ) ?? resolveSourceRowTemplateByRowId(normalizedRowId)
         const inserted = pendingCutSourceRowIds.length > 0
-          ? moveRuntimeRowsAfter(pendingCutSourceRowIds, rowId)
+          ? moveRuntimeRowsAfter(pendingCutSourceRowIds, normalizedRowId)
           : props.runtime.api.rows.insertDataAfter(
               rowId,
               rows.map(row => cloneRowWithFreshIdentity(row, sourceRowTemplate)),
@@ -1775,7 +1876,7 @@ export default defineComponent({
         return inserted
       }
       if (action === "delete-selected-rows") {
-        const rowIds = resolveSelectedRuntimeRowIds(rowId)
+        const rowIds = resolveSelectedRuntimeRowIds(normalizedRowId)
         if (rowIds.length === 0) {
           return false
         }
@@ -1892,7 +1993,7 @@ export default defineComponent({
             }
             return [{
               id: actionId,
-              label: option?.label ?? DEFAULT_CONTEXT_MENU_ACTION_LABELS[actionId],
+              label: resolveRowIndexMenuLabel(actionId, option?.label),
               disabled,
               title,
               separatorBefore: itemIndex > 0 && actionId === itemActions[0],

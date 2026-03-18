@@ -110,5 +110,7 @@ export interface DataGridTableStagePinnedPaneRenderApi extends DataGridTableStag
   isFullRowSelectionSafe: (rowOffset: number) => boolean
   rowIndexColumnStyle: CSSProperties
   rowIndexCellStyle: (row: DataGridTableStageBodyRow, rowOffset: number) => CSSProperties
+  rowIndexTabIndex: (row: DataGridTableStageBodyRow) => number
   handleRowIndexClickSafe: (row: DataGridTableStageBodyRow, rowOffset: number, event: MouseEvent) => void
+  handleRowIndexKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
 }

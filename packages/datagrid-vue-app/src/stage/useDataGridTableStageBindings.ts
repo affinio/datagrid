@@ -107,6 +107,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     someVisibleRowsSelected: unref(options.someVisibleRowsSelected),
     handleRowClick: unref(options.handleRowClick),
     handleRowIndexClick: unref(options.handleRowIndexClick),
+    handleRowIndexKeydown: unref(options.handleRowIndexKeydown),
     handleToggleAllVisibleRows: unref(options.handleToggleAllVisibleRows),
     toggleGroupRow: unref(options.toggleGroupRow),
     rowIndexLabel: unref(options.rowIndexLabel),

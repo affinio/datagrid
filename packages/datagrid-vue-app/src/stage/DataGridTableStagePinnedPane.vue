@@ -25,7 +25,9 @@
           :style="renderApi.rowIndexCellStyle(row, renderApi.viewportRowOffset(row, rowOffset))"
           :data-row-id="String(row.rowId)"
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
+          :tabindex="renderApi.rowIndexTabIndex(row)"
           @click.stop="renderApi.handleRowIndexClickSafe(row, renderApi.viewportRowOffset(row, rowOffset), $event)"
+          @keydown.stop="renderApi.handleRowIndexKeydown($event, row, renderApi.viewportRowOffset(row, rowOffset))"
         >
           {{ rows.rowIndexLabel(row, renderApi.viewportRowOffset(row, rowOffset)) }}
           <button

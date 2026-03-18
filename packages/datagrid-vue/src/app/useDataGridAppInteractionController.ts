@@ -49,6 +49,7 @@ interface DataGridAppPointer {
 
 type DataGridAppRowWithId<TRow> = TRow & { rowId: string | number }
 type DataGridAppPinnedOrigin = "left" | "right" | "center"
+type DataGridRowIndexKeyboardAction = "insert-row-above" | "copy-row" | "cut-row" | "paste-row" | "delete-selected-rows" | "open-row-menu"
 
 const DRAG_SELECTION_POINTER_THRESHOLD_PX = 4
 
@@ -132,6 +133,10 @@ export interface UseDataGridAppInteractionControllerOptions<
   isContextMenuVisible?: () => boolean
   closeContextMenu?: () => void
   openContextMenuFromCurrentCell?: () => void
+  runRowIndexKeyboardAction?: (
+    action: DataGridRowIndexKeyboardAction,
+    rowId: string | number,
+  ) => Promise<boolean> | boolean
 }
 
 export interface UseDataGridAppInteractionControllerResult<TRow> {
@@ -149,6 +154,7 @@ export interface UseDataGridAppInteractionControllerResult<TRow> {
   applyLastFillBehavior: (behavior: DataGridFillBehavior) => boolean
   handleCellMouseDown: (event: MouseEvent, row: DataGridRowNode<TRow>, rowOffset: number, columnIndex: number) => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridRowNode<TRow>, rowOffset: number, columnIndex: number) => void
+  handleRowIndexKeydown: (event: KeyboardEvent, row: DataGridRowNode<TRow>, rowOffset: number) => void
   handleWindowMouseMove: (event: MouseEvent) => void
   handleWindowMouseUp: () => void
   isCellInFillPreview: (rowOffset: number, columnIndex: number) => boolean
@@ -227,6 +233,33 @@ export function useDataGridAppInteractionController<
 
   const focusViewport = (): void => {
     options.bodyViewportRef.value?.focus({ preventScroll: true })
+  }
+
+  const restoreRowIndexFocus = (
+    rowId: string | number,
+    fallbackTarget: HTMLElement | null = null,
+  ): void => {
+    const applyFocus = (): void => {
+      const rowIndexCell = options.bodyViewportRef.value
+        ?.closest<HTMLElement>(".grid-body-shell")
+        ?.querySelector<HTMLElement>(`.datagrid-stage__row-index-cell[data-row-id="${String(rowId)}"]`)
+      const target = rowIndexCell ?? (fallbackTarget?.isConnected ? fallbackTarget : null)
+      if (target) {
+        target.focus({ preventScroll: true })
+        return
+      }
+      focusViewport()
+    }
+
+    applyFocus()
+    void nextTick(() => {
+      applyFocus()
+      if (typeof window !== "undefined") {
+        window.requestAnimationFrame(() => {
+          applyFocus()
+        })
+      }
+    })
   }
 
   const isPrintableEditingKey = (event: KeyboardEvent): boolean => {
@@ -1590,6 +1623,62 @@ export function useDataGridAppInteractionController<
     }
   }
 
+  const handleRowIndexKeydown = (
+    event: KeyboardEvent,
+    row: DataGridRowNode<TRow>,
+    rowOffset: number,
+  ): void => {
+    void rowOffset
+    if (row.rowId == null || !options.runRowIndexKeyboardAction) {
+      return
+    }
+
+    const isPrimaryModifier = (event.ctrlKey || event.metaKey) && !event.altKey
+    const normalizedKey = event.key.length === 1 ? event.key.toLowerCase() : event.key
+    const opensContextMenu = event.key === "ContextMenu"
+      || (event.key === "F10" && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey)
+
+    if (opensContextMenu) {
+      event.preventDefault()
+      event.stopPropagation()
+      void options.runRowIndexKeyboardAction("open-row-menu", row.rowId)
+      return
+    }
+
+    if (row.kind === "group") {
+      return
+    }
+
+    let action: DataGridRowIndexKeyboardAction | null = null
+
+    if (isPrimaryModifier && !event.shiftKey && normalizedKey === "c") {
+      action = "copy-row"
+    } else if (isPrimaryModifier && !event.shiftKey && normalizedKey === "x") {
+      action = "cut-row"
+    } else if (isPrimaryModifier && !event.shiftKey && normalizedKey === "v") {
+      action = "paste-row"
+    } else if (isPrimaryModifier && !event.shiftKey && normalizedKey === "i") {
+      action = "insert-row-above"
+    } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && (event.key === "Delete" || event.key === "Backspace")) {
+      action = "delete-selected-rows"
+    } else if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key === "Insert") {
+      action = "insert-row-above"
+    }
+
+    if (!action) {
+      return
+    }
+
+    const fallbackTarget = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+    event.preventDefault()
+    event.stopPropagation()
+    void Promise.resolve(options.runRowIndexKeyboardAction(action, row.rowId)).then(handled => {
+      if (handled) {
+        restoreRowIndexFocus(row.rowId as string | number, fallbackTarget)
+      }
+    })
+  }
+
   const handleWindowMouseMove = (event: MouseEvent): void => {
     const pointer = { clientX: event.clientX, clientY: event.clientY }
     if (pendingRangeMove.value && !isRangeMoving.value) {
@@ -1666,6 +1755,7 @@ export function useDataGridAppInteractionController<
     applyLastFillBehavior,
     handleCellMouseDown,
     handleCellKeydown,
+    handleRowIndexKeydown,
     handleWindowMouseMove,
     handleWindowMouseUp,
     isCellInFillPreview,

@@ -118,6 +118,10 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   closeContextMenu?: () => void
   openContextMenuFromCurrentCell?: () => void
   clearExternalPendingClipboardOperation?: () => boolean
+  runRowIndexKeyboardAction?: (
+    action: "insert-row-above" | "copy-row" | "cut-row" | "paste-row" | "delete-selected-rows" | "open-row-menu",
+    rowId: string | number,
+  ) => Promise<boolean> | boolean
 }
 
 export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, unknown>> {
@@ -134,6 +138,16 @@ export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, 
     beforeSnapshot: unknown,
   ) => void
 }
+
+type StageInteractionControllerResult<TRow extends Record<string, unknown>> =
+  ReturnType<typeof useDataGridAppInteractionController<TRow, unknown>> & {
+    handleRowIndexKeydown: (
+      event: KeyboardEvent,
+      row: import("@affino/datagrid-vue").DataGridRowNode<TRow>,
+      rowOffset: number,
+    ) => void
+    clearSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+  }
 
 export function useDataGridTableStageRuntime<
   TRow extends Record<string, unknown>,
@@ -524,6 +538,7 @@ export function useDataGridTableStageRuntime<
     isContextMenuVisible: options.isContextMenuVisible,
     closeContextMenu: options.closeContextMenu,
     openContextMenuFromCurrentCell: options.openContextMenuFromCurrentCell,
+    runRowIndexKeyboardAction: options.runRowIndexKeyboardAction,
     handleToggleCellAction: (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>, rowIndex: number, columnIndex: number, column: DataGridColumnSnapshot) => {
       if (!isRowSelectionColumn(column)) {
         return false
@@ -534,6 +549,10 @@ export function useDataGridTableStageRuntime<
       return true
     },
   } as Parameters<typeof useDataGridAppInteractionController<TRow, unknown>>[0]
+
+  const interactionController = (
+    useDataGridAppInteractionController<TRow, unknown>(interactionControllerOptions)
+  ) as StageInteractionControllerResult<TRow>
 
   const {
     isPointerSelectingCells,
@@ -550,13 +569,14 @@ export function useDataGridTableStageRuntime<
     applyLastFillBehavior,
     handleCellMouseDown,
     handleCellKeydown,
+    handleRowIndexKeydown,
     handleWindowMouseMove: handleInteractionWindowMouseMove,
     handleWindowMouseUp: handleInteractionWindowMouseUp,
     isCellInFillPreview,
     isFillHandleCell,
     clearSelectedCells,
     dispose: disposeInteractionController,
-  } = useDataGridAppInteractionController<TRow, unknown>(interactionControllerOptions)
+  } = interactionController
 
   const viewportKeyboardService = useDataGridTableStageViewportKeyboard<TRow>({
     runtime: selectableRuntime,
@@ -715,6 +735,7 @@ export function useDataGridTableStageRuntime<
     someVisibleRowsSelected: stageServices.rowSelection.areSomeVisibleRowsSelected,
     handleRowClick: stageServices.rowSelection.focusRow,
     handleRowIndexClick: stageServices.rowSelection.selectRowRange,
+    handleRowIndexKeydown,
     handleToggleAllVisibleRows: stageServices.rowSelection.toggleVisibleRowsSelected,
     toggleGroupRow,
     rowIndexLabel,

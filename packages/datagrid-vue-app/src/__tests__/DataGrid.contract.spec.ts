@@ -1,7 +1,7 @@
 import { nextTick } from "vue"
 import { mount } from "@vue/test-utils"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
-import type { DataGridRowNodeInput } from "@affino/datagrid-core"
+import type { DataGridRowNodeInput } from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
 import {
   clearDataGridSavedViewInStorage,
@@ -989,6 +989,167 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("supports Insert and Ctrl+I on the row index to insert a row above", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(rowIndexCell.exists()).toBe(true)
+
+    await rowIndexCell.trigger("click")
+    await rowIndexCell.trigger("keydown", { key: "i", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      rows: {
+        get: (index: number) => { rowId?: string; data?: { owner?: string } } | undefined
+      }
+    } | null
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount + 1)
+    expect(api?.rows.get(1)?.data?.owner).toBe("")
+    expect(document.activeElement?.classList.contains("datagrid-stage__row-index-cell")).toBe(true)
+
+    await rowIndexCell.trigger("keydown", { key: "Insert" })
+    await flushRuntimeTasks()
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount + 2)
+
+    wrapper.unmount()
+  })
+
+  it("opens the row index menu from the keyboard and shows shortcut hints", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(rowIndexCell.exists()).toBe(true)
+
+    await rowIndexCell.trigger("click")
+    await rowIndexCell.trigger("keydown", { key: "F10", shiftKey: true })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuRoot()).toBeTruthy()
+    expect(queryContextMenuAction("insert-row-above")?.textContent).toContain("Insert / Ctrl/Cmd+I")
+    expect(queryContextMenuAction("copy-row")?.textContent).toContain("Ctrl/Cmd+C")
+    expect(queryContextMenuAction("cut-row")?.textContent).toContain("Ctrl/Cmd+X")
+    expect(queryContextMenuAction("paste-row")?.textContent).toContain("Ctrl/Cmd+V")
+
+    queryContextMenuRoot()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    await flushRuntimeTasks()
+
+    await rowIndexCell.trigger("click")
+    await rowIndexCell.trigger("keydown", { key: "ContextMenu" })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuRoot()).toBeTruthy()
+    expect(queryContextMenuAction("copy-row")?.textContent).toContain("Copy row")
+
+    wrapper.unmount()
+  })
+
+  it("supports Ctrl+C and Ctrl+V on the row index to paste a copied row", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+    const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    const secondRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(firstRowIndexCell.exists()).toBe(true)
+    expect(secondRowIndexCell.exists()).toBe(true)
+
+    await firstRowIndexCell.trigger("click")
+    await firstRowIndexCell.trigger("keydown", { key: "c", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).toContain("grid-row--clipboard-pending")
+
+    await secondRowIndexCell.trigger("click")
+    await secondRowIndexCell.trigger("keydown", { key: "v", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      rows: {
+        get: (index: number) => { rowId?: string; data?: { owner?: string } } | undefined
+      }
+    } | null
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount + 1)
+    expect(api?.rows.get(2)?.data?.owner).toBe("NOC")
+
+    wrapper.unmount()
+  })
+
+  it("supports Ctrl+X and Ctrl+V on the row index to move a cut row", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+    const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    const lastRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r3"]')
+    expect(firstRowIndexCell.exists()).toBe(true)
+    expect(lastRowIndexCell.exists()).toBe(true)
+
+    await firstRowIndexCell.trigger("click")
+    await firstRowIndexCell.trigger("keydown", { key: "x", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount)
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).toContain("grid-row--clipboard-pending")
+
+    await lastRowIndexCell.trigger("click")
+    await lastRowIndexCell.trigger("keydown", { key: "v", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      rows: {
+        get: (index: number) => { rowId?: string } | undefined
+      }
+    } | null
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount)
+    expect([
+      api?.rows.get(0)?.rowId,
+      api?.rows.get(1)?.rowId,
+      api?.rows.get(2)?.rowId,
+    ]).toEqual(["r2", "r3", "r1"])
+
+    wrapper.unmount()
+  })
+
   it("inserts a row below when source rows are structured row-node inputs", async () => {
     const wrapper = mount(DataGrid, {
       props: {
@@ -1295,6 +1456,125 @@ describe("DataGrid app facade contract", () => {
 
     expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount - 2)
     expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it("deletes the current row-index selection range from declarative rowIndexMenu", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: {
+          items: ["selection"],
+          actions: {
+            deleteSelected: { label: "Delete chosen rows" },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(firstRowIndexCell.exists()).toBe(true)
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
+      rows: {
+        get: (index: number) => { rowId?: string } | undefined
+      }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: COLUMNS.length - 1,
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        startRowId: "r1",
+        endRowId: "r2",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+    })
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+
+    await firstRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuAction("delete-selected-rows")?.textContent).toContain("Delete chosen rows")
+
+    queryContextMenuAction("delete-selected-rows")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount - 2)
+    expect([api?.rows.get(0)?.rowId]).toEqual(["r3"])
+
+    wrapper.unmount()
+  })
+
+  it("supports Delete and Backspace on the row index to delete selected rows", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const secondRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(secondRowIndexCell.exists()).toBe(true)
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
+      rows: {
+        get: (index: number) => { rowId?: string } | undefined
+      }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: COLUMNS.length - 1,
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        startRowId: "r1",
+        endRowId: "r2",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+    })
+    await flushRuntimeTasks()
+
+    await secondRowIndexCell.trigger("keydown", { key: "Delete" })
+    await flushRuntimeTasks()
+
+    expect(resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0).toBe(1)
+    expect(api?.rows.get(0)?.rowId).toBe("r3")
+
+    const remainingRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r3"]')
+    expect(remainingRowIndexCell.exists()).toBe(true)
+
+    await remainingRowIndexCell.trigger("click")
+    await remainingRowIndexCell.trigger("keydown", { key: "Backspace" })
+    await flushRuntimeTasks()
+
+    expect(resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0).toBe(0)
 
     wrapper.unmount()
   })

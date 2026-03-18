@@ -460,6 +460,10 @@ function cellTabIndex(rowOffset: number, columnIndex: number): number {
   return isVisualSelectionAnchorCell(rowOffset, columnIndex) ? 0 : -1
 }
 
+function rowIndexTabIndex(row: TableRow): number {
+  return isRowFocusedSafe(row) ? 0 : -1
+}
+
 function handleFillHandleMouseDown(event: MouseEvent): void {
   fillActionMenuOpen.value = false
   const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
@@ -1057,7 +1061,13 @@ function handleRowClickSafe(row: TableRow): void {
 }
 
 function handleRowIndexClickSafe(row: TableRow, rowOffset: number, event: MouseEvent): void {
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  target?.focus({ preventScroll: true })
   rows.value.handleRowIndexClick?.(row, rowOffset, event.shiftKey)
+}
+
+function handleRowIndexKeydownSafe(event: KeyboardEvent, row: TableRow, rowOffset: number): void {
+  rows.value.handleRowIndexKeydown?.(event, row, rowOffset)
 }
 
 function handleRowContainerClick(row: TableRow): void {
@@ -2913,7 +2923,9 @@ const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
     return resolvedRowIndexColumnStyle.value
   },
   rowIndexCellStyle,
+  rowIndexTabIndex,
   handleRowIndexClickSafe,
+  handleRowIndexKeydown: handleRowIndexKeydownSafe,
   builtInCellClasses,
   cellStateClasses,
   resolveCellCustomClass,
