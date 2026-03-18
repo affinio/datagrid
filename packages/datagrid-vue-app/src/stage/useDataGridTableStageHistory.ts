@@ -1,5 +1,5 @@
-import type { DataGridAppRowSnapshot } from "@affino/datagrid-vue"
-import { useDataGridAppIntentHistory } from "@affino/datagrid-vue"
+import type { DataGridAppRowSnapshot } from "@affino/datagrid-vue/app"
+import { useDataGridAppIntentHistory } from "@affino/datagrid-vue/app"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 
 export interface DataGridTableStageHistoryAdapter {

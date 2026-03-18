@@ -33,9 +33,11 @@ import {
   type DataGridUnifiedState,
   type DataGridPivotSpec,
   type UseDataGridRuntimeResult,
+} from "@affino/datagrid-vue"
+import {
   useDataGridAppRowSelection,
   useDataGridAppSelection,
-} from "@affino/datagrid-vue"
+} from "@affino/datagrid-vue/app"
 import DataGridDefaultRenderer from "./host/DataGridDefaultRenderer"
 import {
   resolveDataGridColumns,

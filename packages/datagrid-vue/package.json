@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Vue adapter and headless foundation for Affino DataGrid",
@@ -8,6 +8,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./app": {
+      "types": "./dist/app/index.d.ts",
+      "import": "./dist/app/index.js"
+    },
+    "./app/worker": {
+      "types": "./dist/app/worker.d.ts",
+      "import": "./dist/app/worker.js"
     },
     "./stable": {
       "types": "./dist/stable.d.ts",
@@ -70,14 +78,10 @@
   "peerDependencies": {
     "pinia": "^2.1.0 || ^3.0.0",
     "vue": "^3.3.0",
-    "@affino/datagrid-theme": "workspace:^",
-    "@affino/datagrid-worker": "workspace:*"
+    "@affino/datagrid-theme": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@affino/datagrid-theme": {
-      "optional": true
-    },
-    "@affino/datagrid-worker": {
       "optional": true
     }
   },
@@ -85,11 +89,11 @@
     "@affino/datagrid-core": "workspace:*",
     "@affino/datagrid-pivot": "workspace:*",
     "@affino/datagrid-orchestration": "workspace:*",
+    "@affino/datagrid-worker": "workspace:*",
     "@affino/menu-vue": "^2.1.1"
   },
   "devDependencies": {
-    "@affino/datagrid-theme": "workspace:^",
-    "@affino/datagrid-worker": "workspace:*"
+    "@affino/datagrid-theme": "workspace:^"
   },
   "repository": {
     "type": "git",

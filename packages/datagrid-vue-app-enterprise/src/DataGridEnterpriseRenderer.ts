@@ -9,8 +9,8 @@ import {
 import {
   type DataGridApiDiagnosticsSnapshot,
   type DataGridApiFormulaExplainSnapshot,
-  useDataGridAppDiagnosticsPanel,
 } from "@affino/datagrid-vue"
+import { useDataGridAppDiagnosticsPanel } from "@affino/datagrid-vue/app"
 import {
   DataGridDefaultRenderer,
   type DataGridAppInspectorPanel,

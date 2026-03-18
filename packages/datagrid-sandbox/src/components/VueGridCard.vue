@@ -210,9 +210,9 @@ import {
   useDataGridAppDiagnosticsPanel,
   useDataGridAppModeMeta,
   useDataGridAppRowSelection,
-  useDataGridAppRuntime,
   useDataGridAppSelection,
-} from "@affino/datagrid-vue"
+} from "@affino/datagrid-vue/app"
+import { useDataGridAppRuntime } from "@affino/datagrid-vue/app/worker"
 import {
   buildVueColumns,
   buildVueRows,

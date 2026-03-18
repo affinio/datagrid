@@ -530,14 +530,16 @@ import { createGridSelectionRange, type GridSelectionContext, type GridSelection
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import {
   cloneDataGridFilterSnapshot,
-  useDataGridAppAdvancedFilterBuilder,
-  useDataGridAppRowSelection,
-  useDataGridAppSelection,
   useDataGridRuntime,
   type DataGridColumnSnapshot,
   type DataGridSortState,
   type UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
+import {
+  useDataGridAppAdvancedFilterBuilder,
+  useDataGridAppRowSelection,
+  useDataGridAppSelection,
+} from "@affino/datagrid-vue/app"
 import {
   DataGridAdvancedFilterPopover,
   DataGridTableStage,

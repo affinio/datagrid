@@ -86,7 +86,7 @@ import {
 import type {
   DataGridAppColumnLayoutPanelItem,
   DataGridAppColumnLayoutVisibilityPatch,
-} from "@affino/datagrid-vue"
+} from "@affino/datagrid-vue/app"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 

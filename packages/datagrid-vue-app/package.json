@@ -1,15 +1,26 @@
 {
   "name": "@affino/datagrid-vue-app",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "Declarative Vue DataGrid component for Affino",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./gantt": {
+      "types": "./dist/gantt.d.ts",
+      "import": "./dist/gantt.js"
+    },
+    "./advanced-filter": {
+      "types": "./dist/advanced-filter.d.ts",
+      "import": "./dist/advanced-filter.js"
     },
     "./internal": {
       "types": "./dist/internal.d.ts",
@@ -20,8 +31,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "pnpm --filter @affino/datagrid-chrome build && pnpm --filter @affino/datagrid-gantt build && pnpm --filter @affino/datagrid-vue build && tsc -p tsconfig.json",
-    "type-check": "pnpm --filter @affino/datagrid-chrome build && pnpm --filter @affino/datagrid-gantt build && pnpm --filter @affino/datagrid-vue build && tsc -p tsconfig.json --noEmit",
+    "build": "pnpm --filter @affino/datagrid-chrome build && pnpm --filter @affino/datagrid-gantt build && pnpm --filter @affino/datagrid-vue build && vite build && vue-tsc -p tsconfig.json --declaration --emitDeclarationOnly --outDir dist",
+    "type-check": "pnpm --filter @affino/datagrid-chrome build && pnpm --filter @affino/datagrid-gantt build && pnpm --filter @affino/datagrid-vue build && vue-tsc -p tsconfig.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
     "test": "pnpm run type-check && pnpm run test:unit"
   },

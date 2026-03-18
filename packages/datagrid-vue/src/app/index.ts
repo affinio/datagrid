@@ -120,13 +120,6 @@ export {
 } from "./useDataGridAppControls"
 
 export {
-  useDataGridAppRuntime,
-  type DataGridAppRuntimeMode,
-  type UseDataGridAppRuntimeOptions,
-  type UseDataGridAppRuntimeResult,
-} from "./useDataGridAppRuntime"
-
-export {
   useDataGridAppSelection,
   type UseDataGridAppSelectionOptions,
   type UseDataGridAppSelectionResult,

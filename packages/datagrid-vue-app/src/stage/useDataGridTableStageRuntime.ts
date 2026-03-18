@@ -18,7 +18,7 @@ import {
   useDataGridAppViewport,
   useDataGridAppRuntimeSync,
   useDataGridAppViewportLifecycle,
-} from "@affino/datagrid-vue"
+} from "@affino/datagrid-vue/app"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type {
   DataGridColumnMenuActionOptions,

@@ -1,6 +1,7 @@
 import {
   type Component,
   computed,
+  defineAsyncComponent,
   defineComponent,
   h,
   nextTick,
@@ -18,9 +19,7 @@ import type {
   DataGridGroupBySpec,
   DataGridPivotSpec,
   DataGridRowModel,
-  DataGridAppColumnLayoutDraftColumn,
   DataGridSortState,
-  DataGridAppAdvancedFilterColumnOption,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import {
@@ -29,23 +28,23 @@ import {
   type GridSelectionPointLike,
   type DataGridRowId,
   type DataGridRowSelectionSnapshot,
+} from "@affino/datagrid-vue"
+import {
   useDataGridAppAdvancedFilterBuilder,
   useDataGridAppColumnLayoutPanel,
-} from "@affino/datagrid-vue"
+  type DataGridAppColumnLayoutDraftColumn,
+  type DataGridAppAdvancedFilterColumnOption,
+} from "@affino/datagrid-vue/app"
 import {
   useDataGridContextMenuActionRouter,
   useDataGridContextMenuAnchor,
   useDataGridViewportContextMenuRouter,
 } from "@affino/datagrid-vue/advanced"
 import type { DataGridContextMenuActionId } from "@affino/datagrid-vue"
-import DataGridAdvancedFilterPopover from "../overlays/DataGridAdvancedFilterPopover.vue"
-import DataGridAggregationsPopover from "../overlays/DataGridAggregationsPopover.vue"
-import DataGridColumnLayoutPopover from "../overlays/DataGridColumnLayoutPopover.vue"
 import DataGridModuleHost, {
   type DataGridAppInspectorPanel,
   type DataGridAppToolbarModule,
 } from "./DataGridModuleHost"
-import DataGridGanttStage from "../gantt/DataGridGanttStage.vue"
 import DataGridTableStage from "../stage/DataGridTableStage.vue"
 import type { DataGridAdvancedFilterOptions } from "../config/dataGridAdvancedFilter"
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "../config/dataGridAggregations"
@@ -74,7 +73,6 @@ import {
   type DataGridRowIndexMenuOptions,
 } from "../overlays/dataGridContextMenu"
 import {
-  normalizeDataGridGanttOptions,
   type DataGridAppViewMode,
   type DataGridGanttProp,
 } from "../gantt/dataGridGantt"
@@ -82,6 +80,11 @@ import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualiza
 import { useDataGridTableStageRuntime } from "../stage/useDataGridTableStageRuntime"
 
 type DataGridMode = "base" | "tree" | "pivot" | "worker"
+
+const DataGridColumnLayoutPopover = defineAsyncComponent(() => import("../overlays/DataGridColumnLayoutPopover.vue"))
+const DataGridAdvancedFilterPopover = defineAsyncComponent(() => import("../overlays/DataGridAdvancedFilterPopover.vue"))
+const DataGridAggregationsPopover = defineAsyncComponent(() => import("../overlays/DataGridAggregationsPopover.vue"))
+const DataGridGanttStage = defineAsyncComponent(() => import("../gantt/DataGridGanttStageEntry"))
 
 interface SortToggleState {
   key: string
@@ -750,7 +753,6 @@ export default defineComponent({
     })
     const rowHeightMode = ref(props.rowHeightMode)
     const normalizedBaseRowHeight = computed(() => normalizeBaseRowHeight(props.baseRowHeight))
-    const resolvedGanttOptions = computed(() => normalizeDataGridGanttOptions(props.gantt))
     const firstColumnKey = computed<string>(() => visibleColumns.value[0]?.key ?? "name")
     const columnLabelByKey = computed(() => {
       const map = new Map<string, string>()
@@ -2176,7 +2178,7 @@ export default defineComponent({
             ? h(DataGridGanttStage as Component, {
               stageContext: tableStageContext,
               runtime: props.runtime,
-              gantt: resolvedGanttOptions.value,
+              gantt: props.gantt,
               baseRowHeight: normalizedBaseRowHeight.value,
               rowVersion: rowVersion.value,
             })

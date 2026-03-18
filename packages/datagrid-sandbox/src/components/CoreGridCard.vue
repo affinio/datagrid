@@ -289,7 +289,7 @@ import {
   useDataGridAppColumnLayoutPanel,
   useDataGridAppDiagnosticsPanel,
   type DataGridAppAdvancedFilterColumnOption,
-} from "@affino/datagrid-vue"
+} from "@affino/datagrid-vue/app"
 import { createGridSelectionRange, type GridSelectionContext, type GridSelectionPointLike } from "@affino/datagrid-core/advanced"
 import {
   resolveDataGridHeaderScrollSyncLeft,

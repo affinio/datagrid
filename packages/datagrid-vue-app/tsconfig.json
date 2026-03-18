@@ -28,6 +28,9 @@
       "@affino/datagrid-orchestration/*": ["../datagrid-orchestration/dist/src/*"],
       "@affino/datagrid-theme": ["../datagrid-theme/dist/index.d.ts"],
       "@affino/datagrid-theme/*": ["../datagrid-theme/dist/*"],
+      "@affino/datagrid-vue/app": ["../datagrid-vue/dist/app/index.d.ts"],
+      "@affino/datagrid-vue/app/worker": ["../datagrid-vue/dist/app/worker.d.ts"],
+      "@affino/datagrid-vue/app/*": ["../datagrid-vue/dist/app/*"],
       "@affino/datagrid-vue": ["../datagrid-vue/dist/index.d.ts"],
       "@affino/datagrid-vue/*": ["../datagrid-vue/dist/*"]
     }
