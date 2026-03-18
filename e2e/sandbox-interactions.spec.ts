@@ -65,9 +65,9 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   })
 
   test("inline editor Tab keeps focus inside grid and advances to the next editable cell", async ({ page }) => {
-    await gotoSandboxRoute(page, "/vue/shell/gantt-grid")
+    await gotoSandboxRoute(page, "/vue/shell/base-grid")
 
-    const editableCell = page.locator('.grid-row:not(.row--group) .grid-cell[data-column-index="2"]').first()
+    const editableCell = page.locator('.grid-row:not(.row--group) .grid-cell[data-column-key="amount"]').first()
     await expect(editableCell).toBeVisible({ timeout: 20_000 })
 
     const sourceRowIndex = await editableCell.getAttribute("data-row-index")
@@ -79,9 +79,9 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(editor).toBeVisible({ timeout: 20_000 })
     await editor.press("Tab")
 
-    await expect.poll(async () => activeGridCellCoord(page)).toEqual({
+    await expect.poll(async () => activeGridCellMeta(page)).toMatchObject({
       rowIndex: sourceRowIndex,
-      columnIndex: "3",
+      columnKey: "start",
     })
   })
 })
@@ -109,13 +109,14 @@ async function cellTextByViewportCoord(page: Page, rowIndex: number, columnIndex
   return (await cell.textContent())?.trim() ?? ""
 }
 
-async function activeGridCellCoord(page: Page): Promise<{ rowIndex: string | null; columnIndex: string | null }> {
+async function activeGridCellMeta(page: Page): Promise<{ rowIndex: string | null; columnIndex: string | null; columnKey: string | null }> {
   return await page.evaluate(() => {
     const activeElement = document.activeElement
     const cell = activeElement?.closest?.(".grid-cell")
     return {
       rowIndex: cell?.getAttribute("data-row-index") ?? null,
       columnIndex: cell?.getAttribute("data-column-index") ?? null,
+      columnKey: cell?.getAttribute("data-column-key") ?? null,
     }
   })
 }
