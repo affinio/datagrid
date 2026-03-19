@@ -9,6 +9,10 @@ export type {
   DataGridDeclarativeFormulaOptions,
 } from "./config/dataGridFormulaOptions"
 export type {
+  DataGridLayoutMode,
+  DataGridResolvedLayoutOptions,
+} from "./config/dataGridLayout"
+export type {
   DataGridCellEditablePredicate,
   DataGridCellEditablePredicateContext,
 } from "./dataGridEditability"

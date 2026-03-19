@@ -1646,6 +1646,7 @@ const gridColumns = computed<readonly DataGridColumnInput[]>(() => {
 })
 
 const gridMode = computed(() => "base" as const)
+const layoutMode = computed(() => "fill" as const)
 const rowRenderMode = computed(() => "virtualization" as const)
 const rowHeightMode = computed(() => "fixed" as const)
 const baseRowHeight = computed(() => 34)
@@ -1981,6 +1982,11 @@ const {
   syncViewportFromDom,
 } = useDataGridTableStageRuntime<SpreadsheetGridRow>({
   mode: gridMode,
+  layoutMode,
+  minRows: computed(() => null),
+  maxRows: computed(() => null),
+  enableFillHandle: computed(() => true),
+  enableRangeMove: computed(() => true),
   rows: gridRows as never,
   sourceRows: gridRows as never,
   runtime: runtimeBundle,
@@ -3815,6 +3821,7 @@ function resolveSpreadsheetCellStyle(
 
 const tableStagePropsForView = computed<DataGridTableStageProps<SpreadsheetGridRow>>(() => ({
   mode: tableStageProps.value.mode,
+  layoutMode: tableStageProps.value.layoutMode,
   rowHeightMode: tableStageProps.value.rowHeightMode,
   layout: tableStageProps.value.layout,
   selection: tableStageProps.value.selection,
@@ -3851,6 +3858,7 @@ const tableStagePropsForView = computed<DataGridTableStageProps<SpreadsheetGridR
 
 const tableStageContextForView = createDataGridTableStageContext<SpreadsheetGridRow>({
   mode: computed(() => tableStagePropsForView.value.mode),
+  layoutMode: computed(() => tableStagePropsForView.value.layoutMode),
   rowHeightMode: computed(() => tableStagePropsForView.value.rowHeightMode),
   layout: computed(() => tableStagePropsForView.value.layout),
   viewport: computed(() => tableStagePropsForView.value.viewport),

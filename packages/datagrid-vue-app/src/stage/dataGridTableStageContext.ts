@@ -20,6 +20,7 @@ export type DataGridTableStageSectionKey =
 export interface DataGridTableStageContext<TRow extends Record<string, unknown>> {
   mode: Readonly<Ref<DataGridTableStageProps<TRow>["mode"]>>
   rowHeightMode: Readonly<Ref<DataGridTableStageProps<TRow>["rowHeightMode"]>>
+  layoutMode: Readonly<Ref<DataGridTableStageProps<TRow>["layoutMode"]>>
   layout: Readonly<Ref<DataGridTableStageProps<TRow>["layout"]>>
   viewport: Readonly<Ref<DataGridTableStageProps<TRow>["viewport"]>>
   columns: Readonly<Ref<DataGridTableStageProps<TRow>["columns"]>>
@@ -33,6 +34,7 @@ export interface DataGridTableStageContext<TRow extends Record<string, unknown>>
 export interface DataGridTableStageContextSource<TRow extends Record<string, unknown>> {
   mode: Ref<DataGridTableStageProps<TRow>["mode"]>
   rowHeightMode: Ref<DataGridTableStageProps<TRow>["rowHeightMode"]>
+  layoutMode: Ref<DataGridTableStageProps<TRow>["layoutMode"]>
   layout: Ref<DataGridTableStageProps<TRow>["layout"]>
   viewport: Ref<DataGridTableStageProps<TRow>["viewport"]>
   columns: Ref<DataGridTableStageProps<TRow>["columns"]>
@@ -53,6 +55,7 @@ export function createDataGridTableStageContext<TRow extends Record<string, unkn
   return {
     mode: source.mode,
     rowHeightMode: source.rowHeightMode,
+    layoutMode: source.layoutMode,
     layout: source.layout,
     viewport: source.viewport,
     columns: source.columns,
@@ -70,6 +73,7 @@ export function createDataGridTableStageContextFromProps<TRow extends Record<str
   return createDataGridTableStageContext({
     mode: toRef(props, "mode"),
     rowHeightMode: toRef(props, "rowHeightMode"),
+    layoutMode: toRef(props, "layoutMode"),
     layout: toRef(props, "layout"),
     viewport: toRef(props, "viewport"),
     columns: toRef(props, "columns"),
@@ -87,6 +91,7 @@ export function materializeDataGridTableStagePropsFromContext<TRow extends Recor
   return {
     mode: context.mode.value,
     rowHeightMode: context.rowHeightMode.value,
+    layoutMode: context.layoutMode.value,
     layout: context.layout.value,
     viewport: context.viewport.value,
     columns: context.columns.value,
@@ -122,6 +127,10 @@ export function useDataGridTableStageMode<TRow extends Record<string, unknown>>(
 
 export function useDataGridTableStageRowHeightMode<TRow extends Record<string, unknown>>() {
   return useDataGridTableStageContext<TRow>().rowHeightMode
+}
+
+export function useDataGridTableStageLayoutMode<TRow extends Record<string, unknown>>() {
+  return useDataGridTableStageContext<TRow>().layoutMode
 }
 
 export function useDataGridTableStageSection<

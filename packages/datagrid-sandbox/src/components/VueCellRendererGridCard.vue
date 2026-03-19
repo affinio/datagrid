@@ -20,6 +20,11 @@
       <DataGrid
         :rows="rows"
         :columns="columns"
+        layout-mode="auto-height"
+        :min-rows="6"
+        :max-rows="8"
+        fill-handle
+        range-move
         :client-row-model-options="clientRowModelOptions"
         :theme="theme"
         :show-row-index="false"
@@ -216,7 +221,6 @@ onUnmounted(() => {
 .renderer-card__surface :deep(.grid-body-content),
 .renderer-card__surface :deep(.grid-pane-content) {
   min-height: 0;
-  height: 100%;
 }
 
 .renderer-status-chip {

@@ -144,6 +144,9 @@ describe("VueShellGridCard", () => {
     expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining("Unhandled error during execution of watcher callback"))
     expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining("Unhandled error during execution of component update"))
 
+    expect(grid.props("fillHandle")).toBe(true)
+    expect(grid.props("rangeMove")).toBe(true)
+
     wrapper.unmount()
   })
 })

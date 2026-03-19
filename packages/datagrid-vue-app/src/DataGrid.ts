@@ -59,6 +59,10 @@ import {
   type DataGridAdvancedFilterProp,
 } from "./config/dataGridAdvancedFilter"
 import {
+  resolveDataGridLayoutOptions,
+  type DataGridLayoutMode,
+} from "./config/dataGridLayout"
+import {
   migrateDataGridSavedView,
   type DataGridSavedViewSnapshot,
 } from "./config/dataGridSavedView"
@@ -371,6 +375,26 @@ export default defineComponent({
       type: Number,
       default: 31,
     },
+    layoutMode: {
+      type: String as PropType<DataGridLayoutMode>,
+      default: "fill",
+    },
+    minRows: {
+      type: Number as PropType<number | undefined>,
+      default: undefined,
+    },
+    maxRows: {
+      type: Number as PropType<number | undefined>,
+      default: undefined,
+    },
+    fillHandle: {
+      type: Boolean,
+      default: false,
+    },
+    rangeMove: {
+      type: Boolean,
+      default: false,
+    },
     rowHover: {
       type: Boolean,
       default: false,
@@ -444,6 +468,9 @@ export default defineComponent({
     const resolvedVirtualization = computed(() => {
       return resolveDataGridVirtualization(props.virtualization, resolvedRenderMode.value)
     })
+    const resolvedLayout = computed(() => (
+      resolveDataGridLayoutOptions(props.layoutMode, props.minRows, props.maxRows)
+    ))
     const resolvedClientRowModelOptions = computed(() => {
       return resolveDataGridFormulaRowModelOptions({
         columns: props.columns,
@@ -719,6 +746,11 @@ export default defineComponent({
         advancedFilter: resolvedAdvancedFilter.value,
         rowHeightMode: props.rowHeightMode,
         baseRowHeight: props.baseRowHeight,
+        layoutMode: resolvedLayout.value.layoutMode,
+        minRows: resolvedLayout.value.minRows,
+        maxRows: resolvedLayout.value.maxRows,
+        fillHandle: props.fillHandle,
+        rangeMove: props.rangeMove,
         rowHover: props.rowHover,
         stripedRows: props.stripedRows,
         isCellEditable: props.isCellEditable,
@@ -737,6 +769,7 @@ export default defineComponent({
           rowModel: resolvedRowModel.value,
           columns: resolvedColumns.value,
           theme: props.theme,
+          layoutMode: resolvedLayout.value.layoutMode,
           renderMode: resolvedRenderMode.value,
           pagination: resolvedPagination.value,
           plugins: props.plugins,

@@ -3190,6 +3190,110 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("supports auto-height layout mode with row-based body sizing", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        layoutMode: "auto-height",
+        maxRows: 2,
+        baseRowHeight: 31,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".affino-datagrid-app-root").classes()).toContain("affino-datagrid-app-root--auto-height")
+    expect(wrapper.find(".datagrid-app-layout").classes()).toContain("datagrid-app-layout--auto-height")
+    expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--layout-auto-height")
+    expect(wrapper.find(".grid-body-shell:not(.grid-body-shell--pinned-bottom)").attributes("style")).toContain("height: 62px")
+
+    wrapper.unmount()
+  })
+
+  it("respects auto-height minRows when the body has fewer rows", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS.slice(0, 2),
+        columns: COLUMNS,
+        layoutMode: "auto-height",
+        minRows: 4,
+        baseRowHeight: 31,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".grid-body-shell:not(.grid-body-shell--pinned-bottom)").attributes("style")).toContain("height: 124px")
+
+    wrapper.unmount()
+  })
+
+  it("keeps the fill handle disabled by default", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    resolveVm(wrapper).getApi?.()?.selection?.setSnapshot?.({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    })
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".cell-fill-handle").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("enables the fill handle declaratively", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        fillHandle: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    resolveVm(wrapper).getApi?.()?.selection?.setSnapshot?.({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    })
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".cell-fill-handle").exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it("uses data-type specific sort labels in the declarative columnMenu", async () => {
     const wrapper = mount(DataGrid, {
       props: {

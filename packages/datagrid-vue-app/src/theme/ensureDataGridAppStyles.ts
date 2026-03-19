@@ -3,7 +3,6 @@ const DATA_GRID_APP_STYLE_ID = "affino-datagrid-vue-app-styles"
 const DATA_GRID_APP_STYLES = `
 .affino-datagrid-app-root {
   display: flex;
-  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   font-family: var(--datagrid-font-family);
@@ -33,30 +32,65 @@ const DATA_GRID_APP_STYLES = `
   --datagrid-selection-copied-glow: color-mix(in srgb, var(--datagrid-selection-copied-border) 38%, transparent);
 }
 
+.affino-datagrid-app-root--fill {
+  flex: 1 1 auto;
+  height: 100%;
+}
+
+.affino-datagrid-app-root--auto-height {
+  height: auto;
+}
+
 .datagrid-app-layout {
   display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
   min-height: 0;
   width: 100%;
+}
+
+.datagrid-app-layout--fill {
+  flex: 1 1 auto;
   height: 100%;
+}
+
+.datagrid-app-layout--auto-height {
+  height: auto;
 }
 
 .datagrid-app-workspace {
   display: flex;
-  flex: 1 1 auto;
   gap: 12px;
   min-width: 0;
   min-height: 0;
+  width: 100%;
+}
+
+.datagrid-app-workspace--fill {
+  flex: 1 1 auto;
+  height: 100%;
+}
+
+.datagrid-app-workspace--auto-height {
+  align-items: flex-start;
+  height: auto;
 }
 
 .datagrid-app-stage {
   display: flex;
-  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
+  width: 100%;
+}
+
+.datagrid-app-stage--fill {
+  flex: 1 1 auto;
+  height: 100%;
+}
+
+.datagrid-app-stage--auto-height {
+  height: auto;
 }
 
 .datagrid-gantt-stage {
@@ -665,16 +699,25 @@ const DATA_GRID_APP_STYLES = `
 .grid-stage {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  flex: 1 1 auto;
   position: relative;
   width: 100%;
-  height: 100%;
   min-height: 0;
   min-width: 0;
   border: 0;
   border-radius: 8px;
   overflow: hidden;
   background: var(--datagrid-background-color);
+}
+
+.grid-stage--layout-fill {
+  flex: 1 1 auto;
+  height: 100%;
+}
+
+.grid-stage--layout-auto-height {
+  grid-template-rows: auto auto;
+  height: auto;
+  align-self: flex-start;
 }
 
 .grid-stage::before {
@@ -737,6 +780,10 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
 }
 
+.grid-body-pane--layout-auto-height {
+  min-height: 100%;
+}
+
 .grid-header-viewport {
   position: relative;
   overflow-x: hidden;
@@ -759,6 +806,10 @@ const DATA_GRID_APP_STYLES = `
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+}
+
+.grid-body-viewport--layout-auto-height {
+  min-height: 100%;
 }
 
 .grid-body-viewport--pinned-bottom::-webkit-scrollbar {

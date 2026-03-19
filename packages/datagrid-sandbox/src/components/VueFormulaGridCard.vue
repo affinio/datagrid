@@ -79,6 +79,11 @@
         ref="gridRef"
         :rows="rows"
         :columns="columns"
+        layout-mode="auto-height"
+        :min-rows="8"
+        :max-rows="16"
+        fill-handle
+        range-move
         license-key="affino-dg-v1:enterprise:sandbox-demo:2099-12-31:all:0HTTHMS"
         diagnostics
         formula-packs
@@ -667,7 +672,6 @@ rebuildModel();
 <style scoped>
 .grid-host {
   display: flex;
-  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
 }

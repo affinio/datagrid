@@ -58,6 +58,8 @@ export interface UseDataGridAppInteractionControllerOptions<
   TSnapshot,
 > {
   mode: Ref<DataGridAppMode>
+  enableFillHandle?: Ref<boolean>
+  enableRangeMove?: Ref<boolean>
   runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex" | "resolveBodyRowIndexById">
   totalRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
@@ -204,6 +206,8 @@ export function useDataGridAppInteractionController<
   const supportsCellSelectionMode = (): boolean => {
     return options.mode.value === "base" || options.mode.value === "worker"
   }
+  const isFillHandleEnabled = computed(() => options.enableFillHandle?.value !== false)
+  const isRangeMoveEnabled = computed(() => options.enableRangeMove?.value !== false)
 
   const isPointerSelectingCells = ref(false)
   const keyboardNavigationExtendsSelection = ref(false)
@@ -402,7 +406,8 @@ export function useDataGridAppInteractionController<
 
   const activatePendingRangeMove = (pointer: DataGridAppPointer): boolean => {
     const coord = pendingRangeMoveCoord.value
-    if (!pendingRangeMove.value || !coord) {
+    if (!isRangeMoveEnabled.value || !pendingRangeMove.value || !coord) {
+      clearPendingRangeMove()
       return false
     }
     clearPendingRangeMove()
@@ -1262,7 +1267,7 @@ export function useDataGridAppInteractionController<
     DataGridCopyRange
   >({
     isSelectionColumn: () => false,
-    isRangeMoveModifierActive: event => event.button === 0 && !event.shiftKey,
+    isRangeMoveModifierActive: event => isRangeMoveEnabled.value && event.button === 0 && !event.shiftKey,
     isEditorInteractionTarget: target => Boolean(target?.closest(".cell-editor-input")),
     hasInlineEditor: () => options.editingCell.value != null,
     commitInlineEdit: () => {
@@ -1293,6 +1298,14 @@ export function useDataGridAppInteractionController<
     resolveSelectionRange: options.resolveSelectionRange,
     isCoordInsideRange,
     startRangeMove: (coord, pointer) => {
+      if (!isRangeMoveEnabled.value) {
+        return
+      }
+      const row = getBodyRowAtIndex(coord.rowIndex)
+      const columnKey = options.visibleColumns.value[coord.columnIndex]?.key
+      if (!row || !columnKey || !options.isCellEditable(row, coord.rowIndex, columnKey, coord.columnIndex)) {
+        return
+      }
       rangeMoveStart.startRangeMove(coord, pointer)
     },
     closeContextMenu,
@@ -1323,7 +1336,7 @@ export function useDataGridAppInteractionController<
   })
 
   const startFillHandleDrag = (event: MouseEvent): void => {
-    if (options.mode.value !== "base") {
+    if (options.mode.value !== "base" || !isFillHandleEnabled.value) {
       return
     }
     const baseRange = options.resolveSelectionRange()
@@ -1412,7 +1425,7 @@ export function useDataGridAppInteractionController<
   }
 
   const startFillHandleDoubleClick = (event: MouseEvent): void => {
-    if (options.mode.value !== "base") {
+    if (options.mode.value !== "base" || !isFillHandleEnabled.value) {
       return
     }
     const baseRange = options.resolveSelectionRange()
@@ -1458,6 +1471,9 @@ export function useDataGridAppInteractionController<
   }
 
   const applyLastFillBehavior = (behavior: DataGridFillBehavior): boolean => {
+    if (!isFillHandleEnabled.value) {
+      return false
+    }
     const session = lastAppliedFill.value
     if (!session) {
       return false
@@ -1495,12 +1511,16 @@ export function useDataGridAppInteractionController<
 
     if (
       options.mode.value === "base"
+      && isRangeMoveEnabled.value
       && event.button === 0
       && !event.shiftKey
       && coord
       && currentRange
       && isCoordInsideRange(coord, currentRange)
     ) {
+      if (!options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
+        return
+      }
       event.preventDefault()
       focusViewport()
       pendingRangeMove.value = true
@@ -1682,6 +1702,10 @@ export function useDataGridAppInteractionController<
   const handleWindowMouseMove = (event: MouseEvent): void => {
     const pointer = { clientX: event.clientX, clientY: event.clientY }
     if (pendingRangeMove.value && !isRangeMoving.value) {
+      if (!isRangeMoveEnabled.value) {
+        clearPendingRangeMove()
+        return
+      }
       if (!shouldActivateRangeMove(pointer)) {
         return
       }
@@ -1759,7 +1783,12 @@ export function useDataGridAppInteractionController<
     handleWindowMouseMove,
     handleWindowMouseUp,
     isCellInFillPreview,
-    isFillHandleCell,
+    isFillHandleCell: (rowOffset: number, columnIndex: number) => {
+      if (!isFillHandleEnabled.value) {
+        return false
+      }
+      return isFillHandleCell(rowOffset, columnIndex)
+    },
     clearSelectedCells,
     dispose: () => {
       pointerAutoScroll.dispose()

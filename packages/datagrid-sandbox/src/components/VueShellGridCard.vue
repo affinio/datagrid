@@ -235,6 +235,11 @@
         ref="gridRef"
         :rows="rows"
         :columns="columns"
+        :layout-mode="sandboxLayoutMode"
+        :min-rows="sandboxMinRows"
+        :max-rows="sandboxMaxRows"
+        fill-handle
+        range-move
         license-key="affino-dg-v1:enterprise:sandbox-demo:2099-12-31:all:0HTTHMS"
         :column-menu="columnMenu"
         :cell-menu="cellMenu"
@@ -1208,6 +1213,30 @@ const virtualization = computed(() => {
     rowOverscan: 8,
     columnOverscan: 2,
   };
+});
+const sandboxLayoutMode = computed(() => {
+  return viewMode.value === "gantt" ? "fill" : "auto-height";
+});
+const sandboxMinRows = computed(() => {
+  if (sandboxLayoutMode.value !== "auto-height") {
+    return undefined;
+  }
+  return props.timesheetShowcase ? 6 : 8;
+});
+const sandboxMaxRows = computed(() => {
+  if (sandboxLayoutMode.value !== "auto-height") {
+    return undefined;
+  }
+  if (props.timesheetShowcase) {
+    return 18;
+  }
+  if (props.mode === "pivot") {
+    return 14;
+  }
+  if (props.mode === "tree") {
+    return 16;
+  }
+  return 14;
 });
 const columnMenu = computed<DataGridColumnMenuProp>(() => {
   if (props.timesheetShowcase || props.mode !== "base") {

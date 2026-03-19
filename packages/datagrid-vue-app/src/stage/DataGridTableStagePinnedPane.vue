@@ -1,7 +1,10 @@
 <template>
   <div
     class="grid-body-pane"
-    :class="pane.side === 'left' ? 'grid-body-pane--left' : 'grid-body-pane--right'"
+    :class="[
+      pane.side === 'left' ? 'grid-body-pane--left' : 'grid-body-pane--right',
+      layoutMode === 'auto-height' ? 'grid-body-pane--layout-auto-height' : 'grid-body-pane--layout-fill',
+    ]"
     :style="pane.style"
     @wheel="renderApi.handleLinkedViewportWheel"
   >
@@ -140,6 +143,7 @@ import DataGridCellContentRenderer from "./DataGridCellContentRenderer"
 import DataGridTableStageOverlayLayer from "./DataGridTableStageOverlayLayer.vue"
 import {
   useDataGridTableStageEditingSection,
+  useDataGridTableStageLayoutMode,
   useDataGridTableStageMode,
   useDataGridTableStageRowsSection,
   useDataGridTableStageViewportSection,
@@ -165,6 +169,7 @@ const props = defineProps({
 })
 
 const mode = useDataGridTableStageMode<Record<string, unknown>>()
+const layoutMode = useDataGridTableStageLayoutMode<Record<string, unknown>>()
 const viewport = useDataGridTableStageViewportSection<Record<string, unknown>>()
 const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const editing = useDataGridTableStageEditingSection<Record<string, unknown>>()

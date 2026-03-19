@@ -56,6 +56,8 @@ In practice, the project sits somewhere between a data grid and a reactive data 
 - Spreadsheet-style formulas
 - Built-in analytics features
 - Large dataset performance
+- Package-level height integration via `layoutMode`
+- Custom Vue cell content via per-column `cellRenderer`
 
 ## Install
 
@@ -158,9 +160,37 @@ Result:
 `presentation.numberFormat` and `presentation.dateTimeFormat` are display-only. Editing, clipboard and patch flows continue to use the raw cell value.
 The shared formatter implementation lives in `@affino/datagrid-format`, so the same column formatting rules can be reused by other adapters.
 
+## Layout Modes
+
+`DataGrid` exposes a package-level height contract so pages do not need to wrap the grid in ad-hoc `height: 100%` containers.
+
+- `fill`: app-shell behavior; the grid fills the available container height
+- `auto-height`: the grid computes its own table height from header and rows
+- `minRows`: optional lower bound for `auto-height`
+- `maxRows`: optional upper bound for `auto-height`; scrolling stays inside the body after this clamp
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  layout-mode="auto-height"
+  :min-rows="6"
+  :max-rows="14"
+/>
+```
+
+Normalization rules:
+
+- row limits are only applied in `auto-height`
+- `fill` always ignores `minRows` and `maxRows`
+- `0`, negative, `NaN`, and non-finite row limits are treated as unset
+- if both limits are present and `maxRows < minRows`, `maxRows` is clamped up to `minRows`
+- prefer `fill` for full-screen shells such as split gantt layouts and `auto-height` for embedded cards, stacked dashboard sections, and form flows
+
 ## Spreadsheet Fill Handle
 
-`DataGrid` includes spreadsheet-style fill interactions in base table mode without any extra feature flag.
+`DataGrid` keeps spreadsheet-style fill interactions off by default.
+Enable them declaratively with `fill-handle` when the host flow actually wants spreadsheet editing affordances.
 
 - Drag the fill handle from the active selection corner to extend the fill range.
 - Double-click the fill handle to fill the selected range down to the last row in the current projection.
@@ -202,6 +232,7 @@ const columns = [
     :rows="rows"
     :columns="columns"
     :client-row-model-options="{ resolveRowId: row => row.id }"
+    fill-handle
   />
 </template>
 ```
@@ -211,6 +242,31 @@ Recommended usage:
 - Keep identifier, formula-result, and derived columns read-only.
 - Use fill for base table editing flows; it is not surfaced in pivot/tree/worker stage modes.
 - Prefer `@affino/datagrid-vue-app` for the built-in UX; custom renderers should use the app hooks exported from `@affino/datagrid-vue`.
+
+## Range Move
+
+Selection drag-move is also off by default in `DataGrid`.
+Enable it with `range-move` when you want spreadsheet-style move semantics for an existing selection.
+
+- drag starts from inside the current selection
+- the grid shows a move preview before commit
+- dropping writes the moved cell payload back through the normal grid mutation path
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :client-row-model-options="{ resolveRowId: row => row.id }"
+  fill-handle
+  range-move
+/>
+```
+
+Recommended usage:
+
+- leave both props off for form-like tables where accidental spreadsheet gestures are a UX risk
+- enable them together for spreadsheet-heavy editing surfaces
+- keep them off for read-only, reporting, and embedded summary tables unless the interaction model is explicitly spreadsheet-like
 
 ## Declarative Column Menu
 
@@ -494,6 +550,11 @@ Affino DataGrid works well for:
 - `rows`
 - `columns`
 - `theme`
+- `layout-mode`
+- `min-rows`
+- `max-rows`
+- `fill-handle`
+- `range-move`
 - `column-menu`
 - `column-layout`
 - `advanced-filter`
@@ -715,6 +776,64 @@ Object form:
   }"
 />
 ```
+
+## Custom Cell Renderers
+
+Columns can provide a `cellRenderer` callback that returns Vue content for the display layer.
+
+```vue
+<script setup lang="ts">
+import { h } from "vue"
+import { DataGrid, type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
+
+interface Row {
+  id: string
+  employee: string
+  status: string
+  approval: string
+}
+
+const rows: Row[] = [
+  { id: "w1", employee: "Maya Patel", status: "Submitted", approval: "Waiting" },
+  { id: "w2", employee: "Liam Chen", status: "Approved", approval: "Approved" },
+]
+
+const columns: DataGridAppColumnInput<Row>[] = [
+  { key: "employee", label: "Employee" },
+  {
+    key: "status",
+    label: "Status",
+    cellRenderer: ({ displayValue, row }) => h("span", {
+      class: [
+        "status-pill",
+        row?.status === "Approved" ? "status-pill--success" : "status-pill--info",
+      ],
+    }, displayValue),
+  },
+  { key: "approval", label: "Approval" },
+]
+</script>
+
+<template>
+  <DataGrid :rows="rows" :columns="columns" />
+</template>
+```
+
+`cellRenderer` receives a context with:
+
+- `row`: current authored row object when available
+- `rowNode`: runtime row node
+- `rowOffset`: visible row offset inside the current viewport lane
+- `column` and `columnIndex`
+- `value`: raw string value used by the stage
+- `displayValue`: formatted display string after presentation rules
+
+Guidelines:
+
+- treat `cellRenderer` as display-only; editing, selection, fill, clipboard, and menus still belong to the grid shell
+- prefer pure render output from row data over local mutable renderer state
+- keep identifiers, derived values, and formula-result columns read-only where appropriate
+- if a renderer caches local UI state, listen for targeted app-layer cell refresh and re-sync on refresh
 
 ## Theme
 

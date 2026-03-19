@@ -42,6 +42,8 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     gridContentStyle: unref(options.gridContentStyle),
     mainTrackStyle: unref(options.mainTrackStyle),
     indexColumnStyle: unref(options.indexColumnStyle),
+    stageStyle: unref(options.stageStyle),
+    bodyShellStyle: unref(options.bodyShellStyle),
     columnStyle: unref(options.columnStyle),
   }))
 
@@ -120,6 +122,8 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     selectionAnchorCell: unref(options.selectionAnchorCell),
     fillPreviewRange: unref(options.fillPreviewRange),
     rangeMovePreviewRange: unref(options.rangeMovePreviewRange),
+    fillHandleEnabled: unref(options.fillHandleEnabled),
+    rangeMoveEnabled: unref(options.rangeMoveEnabled),
     isFillDragging: unref(options.isFillDragging),
     isRangeMoving: unref(options.isRangeMoving),
     fillActionAnchorCell: unref(options.fillActionAnchorCell),
@@ -166,6 +170,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
   const tableStageProps = computed<DataGridTableStageProps<TRow>>(() => ({
     mode: unref(options.mode),
     rowHeightMode: unref(options.rowHeightMode),
+    layoutMode: unref(options.layoutMode),
     layout: layoutSection.value,
     viewport: viewportSection.value,
     columns: columnsSection.value,
@@ -179,6 +184,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
   const tableStageContext = createDataGridTableStageContext<TRow>({
     mode: computed(() => unref(options.mode)),
     rowHeightMode: computed(() => unref(options.rowHeightMode)),
+    layoutMode: computed(() => unref(options.layoutMode)),
     layout: layoutSection,
     viewport: viewportSection,
     columns: columnsSection,

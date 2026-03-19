@@ -76,6 +76,7 @@ import {
   type DataGridAppViewMode,
   type DataGridGanttProp,
 } from "../gantt/dataGridGantt"
+import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import { useDataGridTableStageRuntime } from "../stage/useDataGridTableStageRuntime"
 
@@ -630,6 +631,26 @@ export default defineComponent({
     baseRowHeight: {
       type: Number,
       default: 31,
+    },
+    layoutMode: {
+      type: String as PropType<DataGridLayoutMode>,
+      default: "fill",
+    },
+    minRows: {
+      type: Number as PropType<number | null>,
+      default: null,
+    },
+    maxRows: {
+      type: Number as PropType<number | null>,
+      default: null,
+    },
+    fillHandle: {
+      type: Boolean,
+      default: false,
+    },
+    rangeMove: {
+      type: Boolean,
+      default: false,
     },
     rowHover: {
       type: Boolean,
@@ -1654,6 +1675,11 @@ export default defineComponent({
       recordHistoryIntentTransaction,
     } = useDataGridTableStageRuntime<Record<string, unknown>>({
       mode: modeRef as Ref<DataGridMode>,
+      layoutMode: computed(() => props.layoutMode),
+      minRows: computed(() => props.minRows),
+      maxRows: computed(() => props.maxRows),
+      enableFillHandle: computed(() => props.fillHandle),
+      enableRangeMove: computed(() => props.rangeMove),
       rows: rowsRef,
       sourceRows: rowsRef,
       runtime: props.runtime,
@@ -2162,16 +2188,31 @@ export default defineComponent({
     })
 
     return () => h("div", {
-      class: "datagrid-app-layout",
+      class: [
+        "datagrid-app-layout",
+        props.layoutMode === "auto-height"
+          ? "datagrid-app-layout--auto-height"
+          : "datagrid-app-layout--fill",
+      ],
     }, [
       h(DataGridModuleHost as Component, {
         modules: toolbarModules.value,
       }),
       h("div", {
-        class: "datagrid-app-workspace",
+        class: [
+          "datagrid-app-workspace",
+          props.layoutMode === "auto-height"
+            ? "datagrid-app-workspace--auto-height"
+            : "datagrid-app-workspace--fill",
+        ],
       }, [
         h("div", {
-          class: "datagrid-app-stage",
+          class: [
+            "datagrid-app-stage",
+            props.layoutMode === "auto-height"
+              ? "datagrid-app-stage--auto-height"
+              : "datagrid-app-stage--fill",
+          ],
           ref: stageHostRef,
         }, [
           props.viewMode === "gantt"

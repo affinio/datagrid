@@ -5,10 +5,13 @@
     :class="{
       'grid-stage--canvas-chrome': true,
       'grid-stage--auto-row-height': mode === 'base' && rowHeightMode === 'auto',
+      'grid-stage--layout-fill': layoutMode === 'fill',
+      'grid-stage--layout-auto-height': layoutMode === 'auto-height',
       'grid-stage--fill-dragging': isFillDragging,
       'grid-stage--range-moving': isRangeMoving,
       'grid-stage--single-cell-selection': isSingleSelectedCell,
     }"
+    :style="layout.stageStyle"
   >
     <DataGridTableStageHeader
       :pane-layout-style="paneLayoutStyle"
@@ -36,7 +39,7 @@
       </template>
     </DataGridTableStageHeader>
 
-    <div ref="bodyShellRef" class="grid-body-shell" :style="paneLayoutStyle" @mouseleave="clearHoveredRow">
+    <div ref="bodyShellRef" class="grid-body-shell" :style="[paneLayoutStyle, layout.bodyShellStyle]" @mouseleave="clearHoveredRow">
       <canvas
         ref="centerChromeCanvasEl"
         class="grid-chrome-canvas grid-chrome-canvas--center-shell"
@@ -180,6 +183,10 @@ const props = defineProps({
     type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["rowHeightMode"]>,
     required: true,
   },
+  layoutMode: {
+    type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["layoutMode"]>,
+    required: true,
+  },
   layout: {
     type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["layout"]>,
     required: true,
@@ -230,6 +237,7 @@ provideDataGridTableStageContext(stageContext)
 
 const mode = stageContext.mode
 const rowHeightMode = stageContext.rowHeightMode
+const layoutMode = stageContext.layoutMode
 const layout = stageContext.layout
 const viewport = stageContext.viewport
 const columns = stageContext.columns
@@ -620,6 +628,16 @@ function isFillHandleCellSafe(rowOffset: number, columnIndex: number): boolean {
   return typeof evaluate === "function"
     ? evaluate(rowOffset, columnIndex)
     : false
+}
+
+function isVisibleCellEditableByAbsoluteCoord(rowIndex: number, columnIndex: number): boolean {
+  const rowOffset = rowIndex - viewport.value.viewportRowStart
+  const row = displayRows.value[rowOffset]
+  const column = visibleColumns.value[columnIndex]
+  if (rowOffset < 0 || !row || !column) {
+    return false
+  }
+  return isCellEditableSafe(row, rowOffset, column, columnIndex)
 }
 
 const DEFAULT_INDEX_COLUMN_WIDTH = 72
@@ -1153,6 +1171,11 @@ function isNearRangeMoveSelectionEdge(
   if (!isCellSelectedSafe(rowOffset, columnIndex)) {
     return false
   }
+  const row = displayRows.value[rowOffset]
+  const column = visibleColumns.value[columnIndex]
+  if (!row || !column || !isCellEditableSafe(row, rowOffset, column, columnIndex)) {
+    return false
+  }
   const cell = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   if (!cell) {
     return false
@@ -1180,7 +1203,7 @@ function isNearRangeMoveSelectionEdge(
 }
 
 function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: number): void {
-  if (isFillDragging.value) {
+  if (isFillDragging.value || selection.value.rangeMoveEnabled !== true) {
     clearRangeMoveHandleHover()
     return
   }
@@ -1227,7 +1250,7 @@ function handleBodyCellClick(
 }
 
 function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boolean {
-  if (isFillDragging.value) {
+  if (isFillDragging.value || selection.value.rangeMoveEnabled !== true) {
     return false
   }
   return (
@@ -1872,6 +1895,10 @@ function resolveVisibleFillActionAnchorCell(): { rowIndex: number; columnIndex: 
       )
     : anchorCell.columnIndex
 
+  if (!isVisibleCellEditableByAbsoluteCoord(rowIndex, columnIndex)) {
+    return null
+  }
+
   return {
     rowIndex,
     columnIndex,
@@ -1879,7 +1906,7 @@ function resolveVisibleFillActionAnchorCell(): { rowIndex: number; columnIndex: 
 }
 
 function resolveFloatingFillActionLeft(): number | null {
-  const anchorCell = resolveVisibleFillActionAnchorCell() ?? selection.value.fillActionAnchorCell
+  const anchorCell = resolveVisibleFillActionAnchorCell()
   if (!anchorCell) {
     return null
   }
@@ -1942,7 +1969,7 @@ function resolveFloatingFillActionLeft(): number | null {
   return clamp(cellRight - FILL_ACTION_TRIGGER_SIZE_PX, viewportLeft, viewportRight)
 }
 
-function resolveFloatingFillActionTop(): number {
+function resolveFloatingFillActionTop(): number | null {
   const viewportTop = bodyViewportTopOffset.value + FILL_ACTION_VIEWPORT_MARGIN_PX
   const viewportBottom = bodyViewportTopOffset.value + Math.max(
     0,
@@ -1953,7 +1980,10 @@ function resolveFloatingFillActionTop(): number {
   )
   const anchorCell = selection.value.fillActionAnchorCell
   const targetCell = resolveVisibleFillActionAnchorCell()
-  if (anchorCell && targetCell && anchorCell.rowIndex !== targetCell.rowIndex) {
+  if (!targetCell) {
+    return null
+  }
+  if (anchorCell && anchorCell.rowIndex !== targetCell.rowIndex) {
     return viewportBottom
   }
   const relativeCellRect = resolveRelativeCellRect(targetCell)
@@ -1979,10 +2009,10 @@ const floatingFillActionStyle = computed<CSSProperties | null>(() => {
     return null
   }
   const left = resolveFloatingFillActionLeft()
-  if (left == null) {
+  const top = resolveFloatingFillActionTop()
+  if (left == null || top == null) {
     return null
   }
-  const top = resolveFloatingFillActionTop()
   return {
     left: `${left}px`,
     top: `${top}px`,

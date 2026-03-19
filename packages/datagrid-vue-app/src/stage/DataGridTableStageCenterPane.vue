@@ -1,7 +1,7 @@
 <template>
   <div
     :ref="viewportRef ?? undefined"
-    :class="viewportClass"
+    :class="resolvedViewportClass"
     tabindex="0"
     @scroll="handleScroll"
     @wheel="handleWheel"
@@ -132,6 +132,7 @@ import {
   useDataGridTableStageColumnsSection,
   useDataGridTableStageEditingSection,
   useDataGridTableStageLayoutSection,
+  useDataGridTableStageLayoutMode,
   useDataGridTableStageMode,
   useDataGridTableStageRowsSection,
   useDataGridTableStageViewportSection,
@@ -199,6 +200,7 @@ const props = defineProps({
 })
 
 const mode = useDataGridTableStageMode<Record<string, unknown>>()
+const layoutMode = useDataGridTableStageLayoutMode<Record<string, unknown>>()
 const layout = useDataGridTableStageLayoutSection<Record<string, unknown>>()
 const viewport = useDataGridTableStageViewportSection<Record<string, unknown>>()
 const columns = useDataGridTableStageColumnsSection<Record<string, unknown>>()
@@ -220,4 +222,10 @@ const handleScroll = computed(() => props.handleScroll ?? renderApi.value.handle
 const handleWheel = computed(() => props.handleWheel ?? renderApi.value.handleBodyViewportWheel)
 const handleKeydown = computed(() => props.handleKeydown ?? renderApi.value.handleViewportKeydown)
 const handleContextMenu = computed(() => props.handleContextMenu)
+const resolvedViewportClass = computed(() => [
+  viewportClass.value,
+  layoutMode.value === "auto-height"
+    ? "grid-body-viewport--layout-auto-height"
+    : "grid-body-viewport--layout-fill",
+])
 </script>

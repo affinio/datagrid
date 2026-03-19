@@ -78,6 +78,8 @@ function createStageProps(
     selectionAnchorCell?: { rowIndex: number; columnIndex: number } | null
     fillPreviewRange?: DataGridOverlayRange | null
     rangeMovePreviewRange?: DataGridOverlayRange | null
+    fillHandleEnabled?: boolean
+    rangeMoveEnabled?: boolean
     isFillDragging?: boolean
     isRangeMoving?: boolean
     rowHover?: boolean
@@ -123,10 +125,13 @@ function createStageProps(
   return {
     mode: "base",
     rowHeightMode: "fixed",
+    layoutMode: "fill",
     layout: {
       gridContentStyle: { width: "250px", minWidth: "250px" },
       mainTrackStyle: { width: "250px", minWidth: "250px" },
       indexColumnStyle: { width: "72px", minWidth: "72px", maxWidth: "72px", left: "0px" },
+      stageStyle: {},
+      bodyShellStyle: {},
       columnStyle: key => {
         const column = visibleColumns.find(candidate => candidate.key === key)
         const width = `${column?.width ?? 140}px`
@@ -176,6 +181,8 @@ function createStageProps(
       selectionAnchorCell: options?.selectionAnchorCell ?? { rowIndex: 0, columnIndex: 0 },
       fillPreviewRange: options?.fillPreviewRange ?? null,
       rangeMovePreviewRange: options?.rangeMovePreviewRange ?? null,
+      fillHandleEnabled: options?.fillHandleEnabled ?? false,
+      rangeMoveEnabled: options?.rangeMoveEnabled ?? true,
       isFillDragging: options?.isFillDragging ?? false,
       isRangeMoving: options?.isRangeMoving ?? false,
       fillActionAnchorCell: options?.fillActionAnchorCell ?? null,
@@ -770,6 +777,88 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("does not show the range-move hover affordance for a non-editable selected cell", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          isCellOnSelectionEdge: () => true,
+          isCellEditable: () => false,
+        },
+      ),
+    })
+
+    const selectedCell = wrapper.find('[data-row-index="0"][data-column-index="0"]')
+    expect(selectedCell.exists()).toBe(true)
+
+    Object.defineProperty(selectedCell.element, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        width: 120,
+        height: 32,
+        right: 120,
+        bottom: 32,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    })
+
+    await selectedCell.trigger("mousemove", {
+      clientX: 2,
+      clientY: 2,
+    })
+
+    expect(selectedCell.classes()).not.toContain("grid-cell--range-move-handle-hover")
+
+    wrapper.unmount()
+  })
+
+  it("does not show the range-move hover affordance when range move is disabled", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          rangeMoveEnabled: false,
+          isCellOnSelectionEdge: () => true,
+        },
+      ),
+    })
+
+    const selectedCell = wrapper.find('[data-row-index="0"][data-column-index="0"]')
+    expect(selectedCell.exists()).toBe(true)
+
+    Object.defineProperty(selectedCell.element, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        width: 120,
+        height: 32,
+        right: 120,
+        bottom: 32,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    })
+
+    await selectedCell.trigger("mousemove", {
+      clientX: 2,
+      clientY: 2,
+    })
+
+    expect(selectedCell.classes()).not.toContain("grid-cell--range-move-handle-hover")
+
+    wrapper.unmount()
+  })
+
   it("does not mark readonly select and date cells as affordance cells, including pinned bottom rows", () => {
     const wrapper = mount(DataGridTableStage, {
       props: createStageProps(() => false, {
@@ -789,6 +878,30 @@ describe("DataGridTableStage contract", () => {
     expect(bodyDateCell.classes()).not.toContain("grid-cell--date")
     expect(pinnedSelectCell.classes()).not.toContain("grid-cell--select")
     expect(pinnedDateCell.classes()).not.toContain("grid-cell--date")
+
+    wrapper.unmount()
+  })
+
+  it("applies layout mode classes and auto-height body shell sizing", () => {
+    const baseProps = createStageProps(() => false, {
+      rowCount: 2,
+    })
+    const wrapper = mount(DataGridTableStage, {
+      props: {
+        ...baseProps,
+        layoutMode: "auto-height",
+        layout: {
+          ...baseProps.layout,
+          stageStyle: { height: "auto" },
+          bodyShellStyle: { height: "62px", maxHeight: "62px" },
+        },
+      },
+    })
+
+    expect(wrapper.classes()).toContain("grid-stage--layout-auto-height")
+    expect(wrapper.attributes("style")).toContain("height: auto")
+    expect(wrapper.find(".grid-body-shell").attributes("style")).toContain("height: 62px")
+    expect(wrapper.find(".grid-body-viewport").classes()).toContain("grid-body-viewport--layout-auto-height")
 
     wrapper.unmount()
   })

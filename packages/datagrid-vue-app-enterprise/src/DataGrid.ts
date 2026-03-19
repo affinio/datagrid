@@ -181,6 +181,14 @@ export default defineComponent({
   name: "DataGrid",
   inheritAttrs: false,
   props: {
+    fillHandle: {
+      type: Boolean as PropType<boolean | undefined>,
+      default: undefined,
+    },
+    rangeMove: {
+      type: Boolean as PropType<boolean | undefined>,
+      default: undefined,
+    },
     diagnostics: {
       type: [Boolean, Object] as PropType<DataGridDiagnosticsProp | undefined>,
       default: undefined,
@@ -434,6 +442,8 @@ export default defineComponent({
         ...attrs,
         ref: dataGridRef,
         rowModel: resolvedRowModel.value,
+        ...(props.fillHandle !== undefined ? { fillHandle: props.fillHandle } : {}),
+        ...(props.rangeMove !== undefined ? { rangeMove: props.rangeMove } : {}),
         ...(resolvedVirtualization.value !== undefined
           ? { virtualization: resolvedVirtualization.value }
           : {}),

@@ -70,6 +70,8 @@ function createControllerHarness(options: {
   resolveRowIndexAtOffset?: (offset: number) => number
   mode?: "base" | "tree" | "pivot" | "worker"
   isCellEditable?: (rowIndex: number, columnIndex: number) => boolean
+  enableFillHandle?: boolean
+  enableRangeMove?: boolean
 } = {}) {
   const rowCount = options.rowCount ?? 1
   const columnWidths = options.columnWidths ?? Array.from({ length: options.columnCount ?? 2 }, () => 2)
@@ -204,6 +206,8 @@ function createControllerHarness(options: {
 
   const controller = useDataGridAppInteractionController<DemoRow, readonly DemoRow[]>({
     mode: ref(mode),
+    enableFillHandle: ref(options.enableFillHandle ?? true),
+    enableRangeMove: ref(options.enableRangeMove ?? true),
     runtime: {
       api: {
         rows: {
@@ -758,6 +762,111 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(applyCellSelectionByCoord).not.toHaveBeenCalled()
   })
 
+  it("does not start range move from a non-editable selected cell", () => {
+    const {
+      controller,
+      row,
+      selectionSnapshot,
+    } = createControllerHarness({
+      rowCount: 6,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      shellHeight: 160,
+      indexColumnWidth: 72,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(5, Math.floor(offset / 24))),
+      isCellEditable: () => false,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      }],
+    }
+
+    const anchorCell = createCell(0, 0)
+    const pointerDown = createMouseEvent("mousedown", anchorCell, {
+      button: 0,
+      clientX: 120,
+      clientY: 10,
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 120,
+      clientY: 82,
+    }))
+
+    expect(controller.isRangeMoving.value).toBe(false)
+    expect(controller.rangeMovePreviewRange.value).toBeNull()
+
+    controller.handleWindowMouseUp()
+
+    expect(selectionSnapshot.value?.ranges[0]).not.toMatchObject({
+      startRow: 3,
+      endRow: 4,
+      startCol: 0,
+      endCol: 0,
+    })
+  })
+
+  it("does not start range move when the feature is disabled", () => {
+    const {
+      controller,
+      row,
+      selectionSnapshot,
+    } = createControllerHarness({
+      rowCount: 6,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      shellHeight: 160,
+      indexColumnWidth: 72,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(5, Math.floor(offset / 24))),
+      enableRangeMove: false,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      }],
+    }
+
+    const anchorCell = createCell(0, 0)
+    const pointerDown = createMouseEvent("mousedown", anchorCell, {
+      button: 0,
+      clientX: 120,
+      clientY: 10,
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 120,
+      clientY: 82,
+    }))
+
+    expect(controller.isRangeMoving.value).toBe(false)
+    expect(controller.rangeMovePreviewRange.value).toBeNull()
+  })
+
   it("starts fill drag from the current range without extending preview before pointer movement", () => {
     const { controller, selectionSnapshot } = createControllerHarness({
       rowCount: 3,
@@ -793,6 +902,48 @@ describe("useDataGridAppInteractionController contract", () => {
       startColumn: 0,
       endColumn: 0,
     })
+  })
+
+  it("suppresses fill-handle interactions when the feature is disabled", () => {
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+      enableFillHandle: false,
+    })
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(controller.isFillDragging.value).toBe(false)
+    expect(controller.fillPreviewRange.value).toBeNull()
+    expect(controller.isFillHandleCell(0, 0)).toBe(false)
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(controller.applyLastFillBehavior("copy")).toBe(false)
   })
 
   it("fills down on fill-handle double click using the nearest contiguous reference column", () => {

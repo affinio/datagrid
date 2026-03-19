@@ -1,4 +1,4 @@
-import { computed, nextTick, ref, type ComputedRef, type Ref } from "vue"
+import { computed, nextTick, ref, type ComputedRef, type CSSProperties, type Ref } from "vue"
 import type {
   DataGridColumnSnapshot,
   DataGridRowSelectionSnapshot,
@@ -26,6 +26,7 @@ import type {
   DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
 } from "../overlays/dataGridColumnMenu"
+import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import type { DataGridTableStageContext } from "./dataGridTableStageContext"
 import { useDataGridTableStageBindings } from "./useDataGridTableStageBindings"
@@ -58,6 +59,11 @@ type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = Pick<
 
 export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string, unknown>> {
   mode: Ref<"base" | "tree" | "pivot" | "worker">
+  layoutMode: Ref<DataGridLayoutMode>
+  minRows: Ref<number | null>
+  maxRows: Ref<number | null>
+  enableFillHandle: Ref<boolean>
+  enableRangeMove: Ref<boolean>
   rows: Ref<readonly TRow[]>
   sourceRows?: Ref<readonly TRow[]>
   runtime: DataGridTableStageBodyRuntime<TRow>
@@ -183,6 +189,48 @@ export function useDataGridTableStageRuntime<
     resolveRowHeightOverride: rowIndex => options.runtime.api.view.getRowHeightOverride(rowIndex),
     resolveRowHeightVersion: () => options.runtime.api.view.getRowHeightVersion(),
     hasRowHeightOverrides: () => options.runtime.api.view.getRowHeightVersion() > 0,
+  })
+  const resolveHeightForRowSpan = (rowCount: number): number => {
+    const normalizedRowCount = Math.max(0, Math.trunc(rowCount))
+    if (normalizedRowCount <= 0) {
+      return 0
+    }
+    const totalResolvedHeight = rowHeightMetrics.resolveTotalHeight()
+    if (normalizedRowCount <= totalBodyRows.value) {
+      return rowHeightMetrics.resolveRowOffset(normalizedRowCount)
+    }
+    return totalResolvedHeight + ((normalizedRowCount - totalBodyRows.value) * options.normalizedBaseRowHeight.value)
+  }
+  const autoHeightBodyHeight = computed<number | null>(() => {
+    if (options.layoutMode.value !== "auto-height") {
+      return null
+    }
+    let resolvedHeight = rowHeightMetrics.resolveTotalHeight()
+    if (options.minRows.value !== null) {
+      resolvedHeight = Math.max(resolvedHeight, resolveHeightForRowSpan(options.minRows.value))
+    }
+    if (options.maxRows.value !== null) {
+      resolvedHeight = Math.min(resolvedHeight, resolveHeightForRowSpan(options.maxRows.value))
+    }
+    return Math.max(0, Math.trunc(resolvedHeight))
+  })
+  const stageStyle = computed<CSSProperties>(() => {
+    if (options.layoutMode.value !== "auto-height") {
+      return {}
+    }
+    return {
+      height: "auto",
+    }
+  })
+  const bodyShellStyle = computed<CSSProperties>(() => {
+    if (options.layoutMode.value !== "auto-height") {
+      return {}
+    }
+    const resolvedHeight = autoHeightBodyHeight.value ?? 0
+    return {
+      height: `${resolvedHeight}px`,
+      maxHeight: `${resolvedHeight}px`,
+    }
   })
 
   let isEditingCellForSelection: (
@@ -492,6 +540,8 @@ export function useDataGridTableStageRuntime<
 
   const interactionControllerOptions = {
     mode: options.mode,
+    enableFillHandle: options.enableFillHandle,
+    enableRangeMove: options.enableRangeMove,
     runtime: selectableRuntime as never,
     totalRows: totalSelectableRows,
     visibleColumns: orderedVisibleColumns,
@@ -669,6 +719,7 @@ export function useDataGridTableStageRuntime<
   } = useDataGridTableStageBindings<TRow>({
     mode: options.mode,
     rowHeightMode: options.rowHeightMode,
+    layoutMode: options.layoutMode,
     visibleColumns: orderedVisibleColumns,
     renderedColumns,
     displayRows,
@@ -681,6 +732,8 @@ export function useDataGridTableStageRuntime<
     gridContentStyle,
     mainTrackStyle,
     indexColumnStyle: stageIndexColumnStyle,
+    stageStyle,
+    bodyShellStyle,
     topSpacerHeight,
     bottomSpacerHeight,
     viewportRowStart,
@@ -694,6 +747,8 @@ export function useDataGridTableStageRuntime<
     selectionAnchorCell,
     fillPreviewRange,
     rangeMovePreviewRange,
+    fillHandleEnabled: computed(() => options.enableFillHandle.value),
+    rangeMoveEnabled: computed(() => options.enableRangeMove.value),
     isFillDragging,
     isRangeMoving,
     headerViewportRef,

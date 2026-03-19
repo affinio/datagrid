@@ -27,6 +27,7 @@ import {
   type DataGridThemeProp,
 } from "../theme/dataGridTheme"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
+import type { DataGridLayoutMode } from "../config/dataGridLayout"
 
 type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,
@@ -62,6 +63,10 @@ export default defineComponent({
     theme: {
       type: [String, Object] as PropType<DataGridThemeProp>,
       default: undefined,
+    },
+    layoutMode: {
+      type: String as PropType<DataGridLayoutMode>,
+      default: "fill",
     },
     plugins: {
       type: Array as PropType<readonly DataGridApiPluginDefinition<unknown>[]>,
@@ -214,12 +219,15 @@ export default defineComponent({
       "div",
       mergeProps(attrs, {
         ref: rootElementRef,
-        class: "affino-datagrid-app-root",
+        class: [
+          "affino-datagrid-app-root",
+          props.layoutMode === "auto-height"
+            ? "affino-datagrid-app-root--auto-height"
+            : "affino-datagrid-app-root--fill",
+        ],
         style: {
           display: "flex",
-          flex: "1 1 auto",
           width: "100%",
-          height: "100%",
           minHeight: "0",
           minWidth: "0",
         },

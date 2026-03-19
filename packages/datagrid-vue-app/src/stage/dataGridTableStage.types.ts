@@ -6,6 +6,7 @@ import type {
   DataGridRowNode,
 } from "@affino/datagrid-vue"
 import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
+import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type {
   DataGridColumnMenuActionOptions,
   DataGridColumnMenuDisabledReasons,
@@ -32,6 +33,8 @@ export interface DataGridTableStageLayoutSection {
   gridContentStyle: CSSProperties
   mainTrackStyle: CSSProperties
   indexColumnStyle: CSSProperties
+  stageStyle: CSSProperties
+  bodyShellStyle: CSSProperties
   columnStyle: (key: string) => CSSProperties
 }
 
@@ -110,6 +113,8 @@ export interface DataGridTableStageSelectionSection {
   selectionAnchorCell?: DataGridTableStageAnchorCell | null
   fillPreviewRange: DataGridOverlayRange | null
   rangeMovePreviewRange: DataGridOverlayRange | null
+  fillHandleEnabled: boolean
+  rangeMoveEnabled: boolean
   isFillDragging: boolean
   isRangeMoving: boolean
   fillActionAnchorCell?: DataGridTableStageAnchorCell | null
@@ -192,6 +197,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>>
   extends DataGridTableStageSectionedProps<TRow> {
   mode: DataGridTableMode
   rowHeightMode: "fixed" | "auto"
+  layoutMode: DataGridLayoutMode
 }
 
 interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
@@ -205,6 +211,7 @@ interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
     DataGridTableStageInteractionSection<TRow> {
   mode: DataGridTableMode
   rowHeightMode: "fixed" | "auto"
+  layoutMode: DataGridLayoutMode
 }
 
 export interface UseDataGridTableStageBindingsOptions<TRow extends Record<string, unknown>>

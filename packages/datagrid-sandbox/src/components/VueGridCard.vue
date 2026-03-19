@@ -194,7 +194,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect
 import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
 import type {
   DataGridColumnSnapshot,
-  DataGridAppAdvancedFilterColumnOption,
   DataGridPivotSpec,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
@@ -204,6 +203,7 @@ import {
   useDataGridTableStageRuntime,
 } from "@affino/datagrid-vue-app/internal"
 import {
+  type DataGridAppAdvancedFilterColumnOption,
   useDataGridAppAdvancedFilterBuilder,
   useDataGridAppColumnLayoutPanel,
   useDataGridAppControls,
@@ -796,6 +796,20 @@ const virtualization = computed(() => ({
   rowOverscan: props.mode === "worker" ? 3 : 8,
   columnOverscan: props.mode === "worker" ? 1 : 2,
 }))
+const stageLayoutMode = computed(() => "auto-height" as const)
+const stageMinRows = computed(() => (props.mode === "worker" ? 6 : 8))
+const stageMaxRows = computed(() => {
+  if (props.mode === "worker") {
+    return 12
+  }
+  if (props.mode === "tree") {
+    return 16
+  }
+  if (props.mode === "pivot") {
+    return 14
+  }
+  return rowRenderMode.value === "pagination" ? paginationPageSize.value : 14
+})
 const columnMenuValueFilterEnabled = computed(() => {
   return props.mode !== "worker"
     && valueFilterRowLimit.value > 0
@@ -814,6 +828,11 @@ const {
   syncViewportFromDom: syncViewportFromDomRuntime,
 } = useDataGridTableStageRuntime<VueSandboxRow>({
   mode: computed(() => props.mode),
+  layoutMode: stageLayoutMode,
+  minRows: stageMinRows,
+  maxRows: stageMaxRows,
+  enableFillHandle: computed(() => true),
+  enableRangeMove: computed(() => true),
   rows,
   sourceRows: stageSourceRows,
   runtime,
@@ -923,6 +942,7 @@ const tableStagePropsForView = computed(() => ({
 
 const tableStageContextForView = createDataGridTableStageContext<VueSandboxRow>({
   mode: computed(() => tableStagePropsForView.value.mode),
+  layoutMode: computed(() => tableStagePropsForView.value.layoutMode),
   rowHeightMode: computed(() => tableStagePropsForView.value.rowHeightMode),
   layout: computed(() => tableStagePropsForView.value.layout),
   viewport: computed(() => tableStagePropsForView.value.viewport),

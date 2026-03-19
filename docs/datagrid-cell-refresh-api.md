@@ -27,6 +27,10 @@ api.view.refreshCellsByRanges([{ rowKey, columnKeys }], options?)
 
 The adapter applies best-effort targeted DOM patch for visible cells and emits `affino-datagrid:cell-refresh` per refreshed cell.
 
+At the app layer this is most relevant for columns using public `cellRenderer` content in `@affino/datagrid-vue-app`.
+Simple renderers that derive VNodes directly from the current render context usually need no extra work.
+Renderers with local cached UI state should treat `affino-datagrid:cell-refresh` as the signal that the visible cell payload changed.
+
 ## Limitations
 
 - Automatic DOM text patch assumes plain object row access by `columnKey`.
