@@ -133,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType, type VNodeChild } from "vue"
 import { buildDataGridCellRenderModel } from "@affino/datagrid-vue"
 import {
   useDataGridLinkedPaneScrollSync,
@@ -996,6 +996,30 @@ function readResolvedDisplayCell(row: TableRow, column: TableColumn): string {
   const rawValue = readRowCellValue(row, column)
   const match = cachedOptions.find(option => option.value === String(rawValue ?? ""))
   return match?.label ?? displayValue
+}
+
+function renderResolvedCellContent(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): VNodeChild {
+  const displayValue = readResolvedDisplayCell(row, column)
+  const renderer = column.column.cellRenderer
+
+  if (typeof renderer !== "function") {
+    return displayValue
+  }
+
+  return renderer({
+    row: row.kind === "group" ? undefined : row.data,
+    rowNode: row,
+    rowOffset,
+    column,
+    columnIndex,
+    value: cells.value.readCell(row, column.key),
+    displayValue,
+  }) ?? displayValue
 }
 
 function resolveSelectEditorValue(row: TableRow, column: TableColumn): string {
@@ -2972,6 +2996,7 @@ const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   checkboxIndicatorClass,
   checkboxIndicatorMarkClass,
   readResolvedDisplayCell,
+  renderResolvedCellContent,
 }
 
 const centerPaneRenderApi: DataGridTableStageCenterPaneRenderApi = {
@@ -3026,6 +3051,7 @@ const centerPaneRenderApi: DataGridTableStageCenterPaneRenderApi = {
   checkboxIndicatorClass,
   checkboxIndicatorMarkClass,
   readResolvedDisplayCell,
+  renderResolvedCellContent,
 }
 
 const leftPinnedPane = computed<DataGridTableStagePinnedPaneProps>(() => ({

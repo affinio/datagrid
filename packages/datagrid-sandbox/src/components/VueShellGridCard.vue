@@ -281,9 +281,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch, type Ref } from "vue";
+import { computed, h, nextTick, ref, watch, type Ref } from "vue";
 import {
   DataGrid,
+  type DataGridAppColumnInput,
   type DataGridAppViewMode,
   type DataGridColumnMenuProp,
   type DataGridGanttOptions,
@@ -406,6 +407,7 @@ type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked";
 type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | null>;
 type DeclarativeCellMenuConfig = Exclude<DataGridCellMenuProp, boolean | null>;
 type DeclarativeRowIndexMenuConfig = Exclude<DataGridRowIndexMenuProp, boolean | null>;
+type ShellStatusTone = "neutral" | "info" | "warning" | "success";
 
 const SHELL_SAVED_VIEW_STORAGE_KEY = "affino-datagrid-sandbox:shell-saved-view";
 
@@ -731,6 +733,20 @@ function normalizeTimesheetHours(value: unknown): number {
     return 0;
   }
   return roundTimesheetHours(Math.min(24, Math.max(0, parsed)));
+}
+
+function resolveShellStatusTone(status: unknown): ShellStatusTone {
+  switch (String(status ?? "").trim().toLowerCase()) {
+    case "done":
+      return "success";
+    case "active":
+      return "info";
+    case "hold":
+      return "warning";
+    case "new":
+    default:
+      return "neutral";
+  }
 }
 
 function sumTimesheetDays(row: Omit<TimesheetRow, "total">): number {
@@ -1104,11 +1120,32 @@ const rows = computed(() =>
     ? buildTimesheetRows(timesheetProjects.value)
     : buildVueRows(props.mode, rowCount.value, columnCount.value),
 );
-const columns = computed(() => (
-  props.timesheetShowcase
-    ? buildTimesheetColumns()
-    : buildVueColumns(props.mode, columnCount.value)
-));
+const columns = computed<readonly DataGridAppColumnInput[]>(() => {
+  if (props.timesheetShowcase) {
+    return buildTimesheetColumns() as readonly DataGridAppColumnInput[];
+  }
+
+  const builtColumns = buildVueColumns(props.mode, columnCount.value) as DataGridAppColumnInput[];
+  if (props.mode !== "base") {
+    return builtColumns;
+  }
+
+  return builtColumns.map((column) => {
+    if (column.key !== "status") {
+      return column;
+    }
+
+    return {
+      ...column,
+      cellRenderer: ({ row, displayValue }) => h("span", {
+        class: [
+          "shell-status-pill",
+          `shell-status-pill--${resolveShellStatusTone(row && typeof row === "object" ? (row as Record<string, unknown>).status : displayValue)}`,
+        ],
+      }, displayValue),
+    };
+  });
+});
 const groupBy = computed(() => {
   if (props.mode !== "base") {
     return null;
@@ -1802,5 +1839,43 @@ const collapseAllGroups = (): void => {
   border: 1px solid rgba(148, 163, 184, 0.2);
   font-size: 0.78rem;
   color: rgba(15, 23, 42, 0.84);
+}
+
+:deep(.shell-status-pill) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.45rem;
+  padding: 0.16rem 0.58rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+:deep(.shell-status-pill--neutral) {
+  color: #43515c;
+  background: rgba(236, 240, 243, 0.92);
+  border-color: rgba(196, 205, 213, 0.85);
+}
+
+:deep(.shell-status-pill--info) {
+  color: #135985;
+  background: rgba(225, 240, 250, 0.95);
+  border-color: rgba(168, 204, 226, 0.9);
+}
+
+:deep(.shell-status-pill--warning) {
+  color: #8a4a09;
+  background: rgba(253, 244, 212, 0.96);
+  border-color: rgba(231, 204, 138, 0.92);
+}
+
+:deep(.shell-status-pill--success) {
+  color: #165c3d;
+  background: rgba(225, 245, 233, 0.96);
+  border-color: rgba(163, 210, 180, 0.92);
 }
 </style>

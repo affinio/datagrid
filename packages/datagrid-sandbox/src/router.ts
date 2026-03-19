@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router"
 import CoreGridCard from "./components/CoreGridCard.vue"
+import VueCellRendererGridCard from "./components/VueCellRendererGridCard.vue"
 import VueFormulaGridCard from "./components/VueFormulaGridCard.vue"
 import VueGridCard from "./components/VueGridCard.vue"
 import VueShellGridCard from "./components/VueShellGridCard.vue"
@@ -33,6 +34,10 @@ const routes = [
   {
     path: "/vue/formula-grid",
     component: VueFormulaGridCard,
+  },
+  {
+    path: "/vue/cell-renderer-grid",
+    component: VueCellRendererGridCard,
   },
   {
     path: "/vue/spreadsheet-workbook",

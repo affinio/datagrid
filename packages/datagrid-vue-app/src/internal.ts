@@ -58,6 +58,8 @@ export type {
 } from "@affino/datagrid-chrome"
 export type {
   DataGridAppClientRowModelOptions,
+  DataGridAppCellRenderer,
+  DataGridAppCellRendererContext,
   DataGridAppColumnInput,
   DataGridAppEnterpriseFormulaRuntimeOptions,
   ResolveDataGridFormulaRowModelOptionsInput,

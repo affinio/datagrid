@@ -1,5 +1,5 @@
 import { mount } from "@vue/test-utils"
-import { nextTick } from "vue"
+import { h, nextTick } from "vue"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot, DataGridOverlayRange } from "@affino/datagrid-vue"
 import type { DataGridTableRow, DataGridTableStageProps } from "../dataGridTableStage.types"
@@ -307,6 +307,34 @@ afterEach(() => {
 })
 
 describe("DataGridTableStage contract", () => {
+  it("renders custom Vue cell content when a column cellRenderer is provided", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        visibleColumns: [
+          {
+            key: "centerA",
+            pin: "center",
+            width: 140,
+            column: {
+              key: "centerA",
+              label: "Status",
+              cellRenderer: ({ displayValue }) => h("span", {
+                class: "test-status-pill",
+              }, `Status: ${displayValue}`),
+            },
+          },
+        ] as unknown as readonly DataGridColumnSnapshot[],
+      }),
+    })
+
+    await nextTick()
+
+    expect(wrapper.find(".test-status-pill").text()).toBe("Status: A1")
+
+    wrapper.unmount()
+  })
+
   it("renders pinned bottom rows in a dedicated bottom shell", async () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,

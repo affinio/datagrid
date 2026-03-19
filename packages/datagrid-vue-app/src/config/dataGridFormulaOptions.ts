@@ -1,16 +1,34 @@
+import type { VNodeChild } from "vue"
 import type {
   CreateClientRowModelOptions,
   DataGridColumnInput,
+  DataGridColumnSnapshot,
   DataGridComputedFieldDefinition,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFunctionRegistry,
+  DataGridRowNode,
 } from "@affino/datagrid-vue"
 
 /**
  * High-level authored column contract for `@affino/datagrid-vue-app`.
  */
-export interface DataGridAppColumnInput extends DataGridColumnInput {
+export interface DataGridAppCellRendererContext<TRow = unknown> {
+  row: TRow | undefined
+  rowNode: DataGridRowNode<TRow>
+  rowOffset: number
+  column: DataGridColumnSnapshot
+  columnIndex: number
+  value: string
+  displayValue: string
+}
+
+export type DataGridAppCellRenderer<TRow = unknown> = (
+  context: DataGridAppCellRendererContext<TRow>,
+) => VNodeChild
+
+export interface DataGridAppColumnInput<TRow = unknown> extends DataGridColumnInput<TRow> {
   formula?: string | null
+  cellRenderer?: DataGridAppCellRenderer<TRow> | null
 }
 
 export interface DataGridDeclarativeFormulaOptions<TRow = unknown> {

@@ -102,7 +102,10 @@
               <span class="grid-checkbox-indicator__mark" :class="renderApi.checkboxIndicatorMarkClass(row, column)" />
             </span>
           </template>
-          <template v-else>{{ renderApi.readResolvedDisplayCell(row, column) }}</template>
+          <DataGridCellContentRenderer
+            v-else
+            :content="renderApi.renderResolvedCellContent(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
+          />
         </div>
         <div
           v-if="viewport.rightColumnSpacerWidth > 0"
@@ -123,6 +126,7 @@
 <script setup lang="ts">
 import { computed, toRefs, type PropType } from "vue"
 import DataGridCellComboboxEditor from "../overlays/DataGridCellComboboxEditor.vue"
+import DataGridCellContentRenderer from "./DataGridCellContentRenderer"
 import DataGridTableStageOverlayLayer from "./DataGridTableStageOverlayLayer.vue"
 import {
   useDataGridTableStageColumnsSection,
