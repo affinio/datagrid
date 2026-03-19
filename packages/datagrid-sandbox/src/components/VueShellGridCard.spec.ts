@@ -149,4 +149,50 @@ describe("VueShellGridCard", () => {
 
     wrapper.unmount()
   })
+
+  it("exposes editable select columns in the tree shell demo", async () => {
+    const { default: VueShellGridCard } = await import("./VueShellGridCard.vue")
+
+    const wrapper = mount(VueShellGridCard, {
+      props: {
+        title: "Vue: Tree Grid (Sugar)",
+        mode: "tree",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUi()
+    await flushUi()
+
+    const grid = wrapper.findComponent({ name: "DataGrid" })
+    expect(grid.exists()).toBe(true)
+
+    const columns = ((grid.vm as { $attrs?: Record<string, unknown> }).$attrs?.columns ?? []) as Array<Record<string, unknown>>
+    const assignee = columns.find(column => column.key === "assignee")
+    const severity = columns.find(column => column.key === "severity")
+    const status = columns.find(column => column.key === "status")
+
+    expect(assignee).toMatchObject({
+      cellType: "select",
+      capabilities: expect.objectContaining({ editable: true }),
+      presentation: expect.objectContaining({ options: expect.any(Array) }),
+    })
+    expect(severity).toMatchObject({
+      cellType: "select",
+      capabilities: expect.objectContaining({ editable: true }),
+      presentation: expect.objectContaining({ options: expect.any(Array) }),
+    })
+    expect(status).toMatchObject({
+      cellType: "select",
+      capabilities: expect.objectContaining({ editable: true }),
+      presentation: expect.objectContaining({ options: expect.any(Array) }),
+    })
+
+    wrapper.unmount()
+  })
 })

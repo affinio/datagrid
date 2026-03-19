@@ -414,6 +414,29 @@ type DeclarativeCellMenuConfig = Exclude<DataGridCellMenuProp, boolean | null>;
 type DeclarativeRowIndexMenuConfig = Exclude<DataGridRowIndexMenuProp, boolean | null>;
 type ShellStatusTone = "neutral" | "info" | "warning" | "success";
 
+const TREE_ASSIGNEE_OPTIONS = [
+  { value: "Alice", label: "Alice" },
+  { value: "Bob", label: "Bob" },
+  { value: "Carla", label: "Carla" },
+  { value: "Dmitri", label: "Dmitri" },
+  { value: "Eva", label: "Eva" },
+  { value: "Farid", label: "Farid" },
+] as const;
+
+const TREE_SEVERITY_OPTIONS = [
+  { value: "S1", label: "S1" },
+  { value: "S2", label: "S2" },
+  { value: "S3", label: "S3" },
+  { value: "S4", label: "S4" },
+] as const;
+
+const TREE_STATUS_OPTIONS = [
+  { value: "new", label: "New" },
+  { value: "active", label: "Active" },
+  { value: "hold", label: "Hold" },
+  { value: "done", label: "Done" },
+] as const;
+
 const SHELL_SAVED_VIEW_STORAGE_KEY = "affino-datagrid-sandbox:shell-saved-view";
 
 const COMPACT_COLUMN_MENU: DeclarativeColumnMenuConfig = {
@@ -1131,6 +1154,53 @@ const columns = computed<readonly DataGridAppColumnInput[]>(() => {
   }
 
   const builtColumns = buildVueColumns(props.mode, columnCount.value) as DataGridAppColumnInput[];
+  if (props.mode === "tree") {
+    return builtColumns.map((column) => {
+      if (column.key === "assignee") {
+        return {
+          ...column,
+          cellType: "select",
+          presentation: {
+            ...(column.presentation ?? {}),
+            options: TREE_ASSIGNEE_OPTIONS,
+          },
+          capabilities: {
+            ...(column.capabilities ?? {}),
+            editable: true,
+          },
+        };
+      }
+      if (column.key === "severity") {
+        return {
+          ...column,
+          cellType: "select",
+          presentation: {
+            ...(column.presentation ?? {}),
+            options: TREE_SEVERITY_OPTIONS,
+          },
+          capabilities: {
+            ...(column.capabilities ?? {}),
+            editable: true,
+          },
+        };
+      }
+      if (column.key === "status") {
+        return {
+          ...column,
+          cellType: "select",
+          presentation: {
+            ...(column.presentation ?? {}),
+            options: TREE_STATUS_OPTIONS,
+          },
+          capabilities: {
+            ...(column.capabilities ?? {}),
+            editable: true,
+          },
+        };
+      }
+      return column;
+    });
+  }
   if (props.mode !== "base") {
     return builtColumns;
   }

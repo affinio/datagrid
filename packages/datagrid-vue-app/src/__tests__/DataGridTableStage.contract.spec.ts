@@ -115,11 +115,32 @@ function createStageProps(
     cancelInlineEdit?: () => void
     showRowIndex?: boolean
     visibleColumns?: readonly DataGridColumnSnapshot[]
+    firstRowKind?: "data" | "group"
+    firstRowExpanded?: boolean
+    firstRowGroupKey?: string
+    toggleGroupRow?: (row: DataGridTableRow<DemoRow>) => void
   },
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = options?.visibleColumns ?? createColumns()
   const renderedColumns = visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
-  const rows = createRows(options?.rowCount ?? 1)
+  const rows = createRows(options?.rowCount ?? 1).map((row, rowIndex) => {
+    if (rowIndex === 0 && options?.firstRowKind === "group") {
+      return {
+        rowId: options.firstRowGroupKey ?? "group-1",
+        kind: "group",
+        data: {},
+        state: { expanded: options.firstRowExpanded === true },
+        groupMeta: {
+          groupKey: options.firstRowGroupKey ?? "group-1",
+          groupField: "name",
+          groupValue: "Group 1",
+          level: 0,
+          childrenCount: 1,
+        },
+      } as unknown as DataGridTableRow<DemoRow>
+    }
+    return row
+  })
   const pinnedBottomRows = createRows(options?.pinnedBottomRowCount ?? 0, rows.length)
 
   return {
@@ -171,7 +192,7 @@ function createStageProps(
       rowClass: () => "",
       isRowAutosizeProbe: () => false,
       rowStyle: () => ({ height: "31px", minHeight: "31px" }),
-      toggleGroupRow: () => undefined,
+      toggleGroupRow: options?.toggleGroupRow ?? (() => undefined),
       rowIndexLabel: () => "1",
       startRowResize: () => undefined,
       autosizeRow: () => undefined,
@@ -855,6 +876,56 @@ describe("DataGridTableStage contract", () => {
     })
 
     expect(selectedCell.classes()).not.toContain("grid-cell--range-move-handle-hover")
+
+    wrapper.unmount()
+  })
+
+  it("toggles a collapsed tree group row from the keyboard on Space", async () => {
+    const toggleGroupRow = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...createStageProps(() => false, {
+          firstRowKind: "group",
+          firstRowExpanded: false,
+          firstRowGroupKey: "tree:path:workspace",
+          toggleGroupRow,
+        }),
+        mode: "tree",
+      },
+    })
+
+    const groupCell = wrapper.find('[data-row-index="0"][data-column-index="1"]')
+    expect(groupCell.exists()).toBe(true)
+
+    await groupCell.trigger("keydown", { key: " " })
+
+    expect(toggleGroupRow).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("toggles an expanded tree group row from the keyboard on Space", async () => {
+    const toggleGroupRow = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...createStageProps(() => false, {
+          firstRowKind: "group",
+          firstRowExpanded: true,
+          firstRowGroupKey: "tree:path:workspace",
+          toggleGroupRow,
+        }),
+        mode: "tree",
+      },
+    })
+
+    const groupCell = wrapper.find('[data-row-index="0"][data-column-index="1"]')
+    expect(groupCell.exists()).toBe(true)
+
+    await groupCell.trigger("keydown", { key: " " })
+
+    expect(toggleGroupRow).toHaveBeenCalledTimes(1)
 
     wrapper.unmount()
   })

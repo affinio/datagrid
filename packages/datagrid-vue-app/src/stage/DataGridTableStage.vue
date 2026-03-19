@@ -270,6 +270,19 @@ function handleCellMouseDown(event: MouseEvent, row: TableRow, rowOffset: number
 }
 
 function handleCellKeydown(event: KeyboardEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
+  if (
+    row.kind === "group"
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+    && (event.key === " " || event.key === "Spacebar")
+  ) {
+    event.preventDefault()
+    event.stopPropagation()
+    rows.value.toggleGroupRow(row)
+    return
+  }
   interaction.value.handleCellKeydown(event, row, rowOffset, columnIndex)
 }
 

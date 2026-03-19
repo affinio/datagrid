@@ -63,7 +63,7 @@ export function useDataGridAppCellSelection<TRow>(
   options: UseDataGridAppCellSelectionOptions<TRow>,
 ): UseDataGridAppCellSelectionResult<TRow> {
   const supportsCellSelectionMode = (): boolean => {
-    return options.mode.value === "base" || options.mode.value === "worker"
+    return options.mode.value === "base" || options.mode.value === "tree" || options.mode.value === "worker"
   }
 
   const resolveAnchorColumnIndex = (anchor: DataGridAppSelectionAnchorLike): number => {

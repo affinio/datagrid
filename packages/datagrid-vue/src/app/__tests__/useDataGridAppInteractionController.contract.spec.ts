@@ -72,6 +72,9 @@ function createControllerHarness(options: {
   isCellEditable?: (rowIndex: number, columnIndex: number) => boolean
   enableFillHandle?: boolean
   enableRangeMove?: boolean
+  firstRowKind?: "data" | "group"
+  firstRowExpanded?: boolean
+  firstRowGroupKey?: string
 } = {}) {
   const rowCount = options.rowCount ?? 1
   const columnWidths = options.columnWidths ?? Array.from({ length: options.columnCount ?? 2 }, () => 2)
@@ -83,11 +86,30 @@ function createControllerHarness(options: {
   })
   const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
   let selectionAnchor: { rowIndex: number; columnIndex: number; rowId: string | number | null } | null = null
-  let rows = Array.from({ length: rowCount }, (_, rowIndex) => ({
-    rowId: `r${rowIndex + 1}`,
-    kind: "data",
-    data: options.rowData?.[rowIndex] ?? {},
-  })) as unknown as DataGridRowNode<DemoRow>[]
+  let rows = Array.from({ length: rowCount }, (_, rowIndex) => {
+    if (rowIndex === 0 && options.firstRowKind === "group") {
+      return {
+        rowId: `g${rowIndex + 1}`,
+        kind: "group",
+        data: options.rowData?.[rowIndex] ?? {},
+        state: {
+          expanded: options.firstRowExpanded === true,
+        },
+        groupMeta: {
+          groupKey: options.firstRowGroupKey ?? "group-1",
+          groupField: "name",
+          groupValue: "Group 1",
+          level: 0,
+          childrenCount: Math.max(0, rowCount - 1),
+        },
+      }
+    }
+    return {
+      rowId: `r${rowIndex + 1}`,
+      kind: "data",
+      data: options.rowData?.[rowIndex] ?? {},
+    }
+  }) as unknown as DataGridRowNode<DemoRow>[]
   const row = rows[0]!
   const buildRangeSnapshot = (options: {
     anchor: { rowIndex: number; columnIndex: number; rowId: string | number | null }
@@ -203,6 +225,8 @@ function createControllerHarness(options: {
   const clearPendingClipboardOperation = vi.fn(() => false)
   const syncViewport = vi.fn()
   const startInlineEdit = vi.fn()
+  const expandGroup = vi.fn()
+  const collapseGroup = vi.fn()
 
   const controller = useDataGridAppInteractionController<DemoRow, readonly DemoRow[]>({
     mode: ref(mode),
@@ -213,6 +237,8 @@ function createControllerHarness(options: {
         rows: {
           get: (rowIndex: number) => rows[rowIndex] ?? null,
           getCount: () => rows.length,
+          expandGroup,
+          collapseGroup,
           setData: (nextRows: Array<{ rowId: string | number; row: DemoRow }>) => {
             rows = nextRows.map(nextRow => ({
               rowId: nextRow.rowId,
@@ -311,6 +337,8 @@ function createControllerHarness(options: {
     recordIntentTransaction,
     syncViewport,
     startInlineEdit,
+    expandGroup,
+    collapseGroup,
   }
 }
 
@@ -664,6 +692,46 @@ describe("useDataGridAppInteractionController contract", () => {
       anchor: { rowIndex: 0, colIndex: 1, rowId: "r1" },
       focus: { rowIndex: 0, colIndex: 1, rowId: "r1" },
     })
+  })
+
+  it("expands a collapsed tree group row on Space", () => {
+    const { controller, row, expandGroup, collapseGroup } = createControllerHarness({
+      mode: "base",
+      firstRowKind: "group",
+      firstRowExpanded: false,
+      firstRowGroupKey: "tree:path:workspace",
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: " ",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(expandGroup).toHaveBeenCalledWith("tree:path:workspace")
+    expect(collapseGroup).not.toHaveBeenCalled()
+  })
+
+  it("collapses an expanded tree group row on Space", () => {
+    const { controller, row, expandGroup, collapseGroup } = createControllerHarness({
+      mode: "base",
+      firstRowKind: "group",
+      firstRowExpanded: true,
+      firstRowGroupKey: "tree:path:workspace",
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: " ",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(collapseGroup).toHaveBeenCalledWith("tree:path:workspace")
+    expect(expandGroup).not.toHaveBeenCalled()
   })
 
   it("collapses an existing range to a single cell on click without starting range move", () => {

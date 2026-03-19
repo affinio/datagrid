@@ -204,7 +204,7 @@ export function useDataGridAppInteractionController<
     return -1
   }
   const supportsCellSelectionMode = (): boolean => {
-    return options.mode.value === "base" || options.mode.value === "worker"
+    return options.mode.value === "base" || options.mode.value === "tree" || options.mode.value === "worker"
   }
   const isFillHandleEnabled = computed(() => options.enableFillHandle?.value !== false)
   const isRangeMoveEnabled = computed(() => options.enableRangeMove?.value !== false)
@@ -1581,6 +1581,27 @@ export function useDataGridAppInteractionController<
     }
     if (keyboardCommandRouter.dispatchKeyboardCommands(event)) {
       return
+    }
+    if (
+      row.kind === "group"
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.altKey
+      && !event.shiftKey
+    ) {
+      const groupKey = row.groupMeta?.groupKey
+      if (groupKey && (event.key === " " || event.key === "Spacebar") && row.state.expanded !== true) {
+        event.preventDefault()
+        event.stopPropagation()
+        options.runtime.api.rows.expandGroup(groupKey)
+        return
+      }
+      if (groupKey && (event.key === " " || event.key === "Spacebar") && row.state.expanded === true) {
+        event.preventDefault()
+        event.stopPropagation()
+        options.runtime.api.rows.collapseGroup(groupKey)
+        return
+      }
     }
     const columnSnapshot = options.visibleColumns.value[columnIndex]
     const columnKey = columnSnapshot?.key

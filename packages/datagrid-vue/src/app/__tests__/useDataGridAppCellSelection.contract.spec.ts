@@ -47,4 +47,62 @@ describe("useDataGridAppCellSelection contract", () => {
     expect(api.shouldHighlightSelectedCell(0, 0)).toBe(false)
     expect(api.shouldHighlightSelectedCell(1, 0)).toBe(true)
   })
+
+  it("creates a cell selection snapshot in tree mode", () => {
+    const selectionSnapshot = ref(null as never)
+    const selectionAnchor = ref(null)
+    let runtimeSnapshot: unknown = null
+
+    const api = useDataGridAppCellSelection({
+      mode: ref("tree"),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => ({ rowId: `r${rowIndex + 1}` }),
+          },
+          selection: {
+            hasSupport: () => true,
+            setSnapshot: (snapshot: unknown) => {
+              runtimeSnapshot = snapshot
+            },
+          },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => ({ rowId: `r${rowIndex + 1}` }),
+      } as never,
+      totalRows: ref(10),
+      visibleColumns: ref([
+        { key: "a" },
+        { key: "b" },
+        { key: "c" },
+      ] as never),
+      viewportRowStart: ref(0),
+      selectionSnapshot,
+      selectionAnchor,
+      isEditingCell: () => false,
+    })
+
+    api.applyCellSelectionByCoord({
+      rowIndex: 2,
+      columnIndex: 1,
+      rowId: "r3",
+    }, false)
+
+    expect(selectionSnapshot.value).toMatchObject({
+      activeCell: { rowIndex: 2, colIndex: 1, rowId: "r3" },
+      ranges: [
+        {
+          startRow: 2,
+          endRow: 2,
+          startCol: 1,
+          endCol: 1,
+          anchor: { rowIndex: 2, colIndex: 1, rowId: "r3" },
+          focus: { rowIndex: 2, colIndex: 1, rowId: "r3" },
+        },
+      ],
+    })
+    expect(runtimeSnapshot).toMatchObject({
+      activeCell: { rowIndex: 2, colIndex: 1, rowId: "r3" },
+    })
+    expect(api.isSelectionAnchorCell(2, 1)).toBe(true)
+  })
 })
