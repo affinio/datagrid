@@ -39,8 +39,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, onUnmounted, ref, defineComponent, type PropType } from "vue"
-import { applyGridTheme, industrialNeutralTheme } from "@affino/datagrid-theme"
+import { computed, h, ref, watchEffect, defineComponent, type PropType } from "vue"
+import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
 import { DataGrid, type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
 
 type RendererTone = "neutral" | "info" | "warning" | "success" | "danger"
@@ -243,16 +243,11 @@ const clientRowModelOptions = {
 
 const theme = industrialNeutralTheme
 const cardRootRef = ref<HTMLElement | null>(null)
+const sandboxThemeTokens = resolveGridThemeTokens(theme)
 
-onMounted(() => {
+watchEffect(() => {
   if (cardRootRef.value) {
-    applyGridTheme(cardRootRef.value, theme)
-  }
-})
-
-onUnmounted(() => {
-  if (cardRootRef.value) {
-    applyGridTheme(cardRootRef.value, null)
+    applyGridTheme(cardRootRef.value, sandboxThemeTokens)
   }
 })
 </script>

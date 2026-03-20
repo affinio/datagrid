@@ -57,8 +57,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue"
-import { applyGridTheme, industrialNeutralTheme } from "@affino/datagrid-theme"
+import { computed, ref, watchEffect } from "vue"
+import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
 import { DataGrid, type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
 
 type FilterMode = "all" | "submitted" | "approved" | "needs-action"
@@ -171,6 +171,7 @@ const clientRowModelOptions = {
 }
 
 const theme = industrialNeutralTheme
+const sandboxThemeTokens = resolveGridThemeTokens(theme)
 
 function syncSelectedRows(): void {
   const api = gridRef.value?.getApi()
@@ -179,15 +180,9 @@ function syncSelectedRows(): void {
     : api.rowSelection.getSelectedRows().map(rowId => String(rowId))
 }
 
-onMounted(() => {
+watchEffect(() => {
   if (cardRootRef.value) {
-    applyGridTheme(cardRootRef.value, theme)
-  }
-})
-
-onUnmounted(() => {
-  if (cardRootRef.value) {
-    applyGridTheme(cardRootRef.value, null)
+    applyGridTheme(cardRootRef.value, sandboxThemeTokens)
   }
 })
 </script>

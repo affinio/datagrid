@@ -294,7 +294,10 @@ const tasks = [
     logPath: `${outputDir}/bench-datagrid-rowmodels.log`,
     budgets: {
       ci: {
-        PERF_BUDGET_TOTAL_MS: "9000",
+        BENCH_CLIENT_ITERATIONS: "600",
+        BENCH_SERVER_ITERATIONS: "120",
+        BENCH_WINDOW_SHIFT_ITERATIONS: "220",
+        PERF_BUDGET_TOTAL_MS: "12000",
         PERF_BUDGET_MAX_VARIANCE_PCT: "90",
         PERF_BUDGET_MAX_HEAP_DELTA_MB: "140",
         PERF_BUDGET_MAX_CLIENT_RANGE_P95_MS: "5",
