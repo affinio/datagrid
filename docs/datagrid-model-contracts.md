@@ -1,6 +1,6 @@
 # DataGrid Model Contracts
 
-Updated: `2026-02-09`
+Updated: `2026-03-20`
 
 This document defines the canonical model layer for `@affino/datagrid-core`.
 
@@ -98,7 +98,7 @@ Detailed treeData contract, policies, and migration examples:
 Headless contracts:
 
 - `DataGridColumnDef` = immutable definition only:
-  - `key`, `field`, `label`, `minWidth`, `maxWidth`, `dataType`, `presentation`, `capabilities`, `constraints`, `meta`
+  - `key`, `field`, `label`, `minWidth`, `maxWidth`, `dataType`, `presentation`, `capabilities`, `constraints`, `cellInteraction`, `meta`
 - `DataGridColumnInput` = authored input:
   - `DataGridColumnDef` + optional `initialState`
 - `DataGridColumnState` = runtime mutable state:
@@ -147,6 +147,42 @@ const columns = [
 ```
 
 `presentation.numberFormat` and `presentation.dateTimeFormat` affect display formatting only. Raw cell values remain unchanged for editing, clipboard and data patches. The shared headless implementation lives in `@affino/datagrid-format`.
+
+Interactive cell contract:
+
+- `cellInteraction` is the canonical column-level contract for keyboard-accessible in-cell actions that still participate in the grid-owned focus model.
+- `cellInteraction` is additive to `cellRenderer` and does not replace the grid shell's ownership of focus, selection, clipboard, fill, menus, or editing.
+- supported invocation channels are `click`, `Enter`, and `Space`; keyboard triggers are declared per column.
+- interaction accessibility semantics are column-owned through `role`, `label`, `pressed`, and `checked`.
+- runtime interaction context includes `row`, `rowId`, `value`, `editable`, and the resolved `column` definition.
+
+Example:
+
+```ts
+const columns = [
+  {
+    key: "approval",
+    label: "Approval",
+    capabilities: { editable: false },
+    cellInteraction: {
+      click: true,
+      keyboard: ["enter", "space"],
+      role: "button",
+      label: ({ row }) => row?.approved ? "Reopen approval" : "Approve row",
+      pressed: ({ row }) => row?.approved === true,
+      onInvoke: ({ rowId, trigger }) => {
+        console.log("invoke approval", rowId, trigger)
+      },
+    },
+  },
+]
+```
+
+Normalization guarantees:
+
+- `cellInteraction.keyboard` is normalized to a frozen array.
+- the normalized column snapshot preserves the authored `cellInteraction` object as immutable runtime metadata.
+- runtime keyboard and click action resolution uses `cellInteraction` before built-in cell-type defaults.
 
 Core API:
 

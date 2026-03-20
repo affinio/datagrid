@@ -63,6 +63,7 @@ function createControllerHarness(options: {
   rowCount?: number
   columnCount?: number
   rowData?: readonly DemoRow[]
+  visibleColumns?: readonly DataGridColumnSnapshot[]
   columnWidths?: readonly number[]
   shellWidth?: number
   shellHeight?: number
@@ -79,6 +80,17 @@ function createControllerHarness(options: {
   const rowCount = options.rowCount ?? 1
   const columnWidths = options.columnWidths ?? Array.from({ length: options.columnCount ?? 2 }, () => 2)
   const columnCount = options.columnCount ?? columnWidths.length
+  const visibleColumns = options.visibleColumns ?? (
+    Array.from({ length: columnCount }, (_, columnIndex) => ({
+      key: String.fromCharCode(97 + columnIndex),
+      width: columnWidths[columnIndex] ?? 2,
+      pin: "center",
+      column: {
+        key: String.fromCharCode(97 + columnIndex),
+        label: String.fromCharCode(65 + columnIndex),
+      },
+    })) as unknown as readonly DataGridColumnSnapshot[]
+  )
   const mode = options.mode ?? "base"
   const bodyViewport = createBodyViewport({
     shellWidth: options.shellWidth,
@@ -254,17 +266,7 @@ function createControllerHarness(options: {
       },
     } as never,
     totalRows: ref(rowCount),
-    visibleColumns: ref(
-      Array.from({ length: columnCount }, (_, columnIndex) => ({
-        key: String.fromCharCode(97 + columnIndex),
-        width: columnWidths[columnIndex] ?? 2,
-        pin: "center",
-        column: {
-          key: String.fromCharCode(97 + columnIndex),
-          label: String.fromCharCode(65 + columnIndex),
-        },
-      })) as unknown as readonly DataGridColumnSnapshot[],
-    ),
+    visibleColumns: ref(visibleColumns),
     viewportRowStart: ref(0),
     selectionSnapshot,
     bodyViewportRef: ref(bodyViewport),
@@ -583,6 +585,38 @@ describe("useDataGridAppInteractionController contract", () => {
 
     expect(keydown.defaultPrevented).toBe(true)
     expect(startInlineEdit).not.toHaveBeenCalled()
+  })
+
+  it("invokes column cellInteraction on Enter and preserves active cell focus", () => {
+    const onInvoke = vi.fn()
+    const { controller, row, ensureKeyboardActiveCellVisible } = createControllerHarness({
+      visibleColumns: [{
+        key: "status",
+        width: 120,
+        pin: "center",
+        column: {
+          key: "status",
+          label: "Status",
+          cellInteraction: {
+            role: "button",
+            onInvoke,
+          },
+        },
+      }] as unknown as readonly DataGridColumnSnapshot[],
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "Enter",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(onInvoke).toHaveBeenCalledWith(expect.objectContaining({
+      trigger: "keyboard-enter",
+    }))
+    expect(ensureKeyboardActiveCellVisible).toHaveBeenCalledWith(0, 0)
   })
 
   it("clears the selected range on Delete and records a clear intent", () => {

@@ -2203,6 +2203,40 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("toggles all filtered rows from the header row-selection checkbox", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const headerCheckbox = wrapper.find('.grid-header-shell .grid-checkbox-trigger[aria-label="Select all filtered rows"]')
+    expect(headerCheckbox.exists()).toBe(true)
+    expect(headerCheckbox.attributes("role")).toBe("checkbox")
+    expect(headerCheckbox.attributes("aria-checked")).toBe("false")
+
+    await headerCheckbox.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(headerCheckbox.attributes("aria-checked")).toBe("true")
+    expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()).toEqual({
+      focusedRow: null,
+      selectedRows: ["r1", "r2", "r3"],
+    })
+
+    await headerCheckbox.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(headerCheckbox.attributes("aria-checked")).toBe("false")
+    expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()).toBeNull()
+
+    wrapper.unmount()
+  })
+
   it("composes user selection lifecycle hooks with grid and row-selection capabilities", async () => {
     const log: string[] = []
     const wrapper = mount(DataGrid, {

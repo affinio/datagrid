@@ -181,7 +181,9 @@ export {
 export {
   buildDataGridCellRenderModel,
   createDataGridCellTypeRegistry,
+  invokeDataGridCellInteraction,
   parseDataGridCellDraftValue,
+  resolveDataGridCellInteraction,
   resolveDataGridCellClickAction,
   resolveDataGridCellKeyboardAction,
   resolveDataGridCellType,
@@ -189,13 +191,17 @@ export {
   type BuildDataGridCellRenderModelOptions,
   type CreateDataGridCellTypeRegistryOptions,
   type DataGridCellClickAction,
+  type DataGridCellInteractionContext,
   type DataGridCellEditorMode,
   type DataGridCellKeyboardAction,
   type DataGridCellRenderModel,
+  type DataGridResolvedCellInteraction,
   type DataGridCellTypeDefinition,
   type DataGridCellTypeId,
   type DataGridCellTypeOption,
   type DataGridCellTypeRegistry,
+  type InvokeDataGridCellInteractionOptions,
+  type ResolveDataGridCellInteractionOptions,
 } from "../cells/index.js"
 
 export {
@@ -449,6 +455,13 @@ export type {
 export { createServerBackedRowModel } from "./serverBackedRowModel.js"
 
 export type {
+  DataGridCellInteractionInvocationTrigger,
+  DataGridCellInteractionKeyboardTrigger,
+  DataGridCellInteractionRole,
+  DataGridCellInteractionTriState,
+  DataGridColumnCellInteraction,
+  DataGridColumnCellInteractionContext,
+  DataGridColumnCellInteractionInvokeContext,
   DataGridColumnCapabilities,
   DataGridColumnConstraintValue,
   DataGridColumnConstraints,

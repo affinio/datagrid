@@ -780,6 +780,7 @@ Object form:
 ## Custom Cell Renderers
 
 Columns can provide a `cellRenderer` callback that returns Vue content for the display layer.
+If a custom cell also needs keyboard-accessible interaction without breaking the grid-owned focus model, declare `cellInteraction` on the column and use `context.interactive` inside the renderer.
 
 ```vue
 <script setup lang="ts">
@@ -791,11 +792,12 @@ interface Row {
   employee: string
   status: string
   approval: string
+  approved: boolean
 }
 
 const rows: Row[] = [
-  { id: "w1", employee: "Maya Patel", status: "Submitted", approval: "Waiting" },
-  { id: "w2", employee: "Liam Chen", status: "Approved", approval: "Approved" },
+  { id: "w1", employee: "Maya Patel", status: "Submitted", approval: "Waiting", approved: false },
+  { id: "w2", employee: "Liam Chen", status: "Approved", approval: "Approved", approved: true },
 ]
 
 const columns: DataGridAppColumnInput<Row>[] = [
@@ -803,6 +805,16 @@ const columns: DataGridAppColumnInput<Row>[] = [
   {
     key: "status",
     label: "Status",
+    cellInteraction: {
+      click: true,
+      keyboard: ["enter", "space"],
+      role: "button",
+      label: ({ row }) => row?.approved ? "Reopen approval" : "Approve row",
+      pressed: ({ row }) => row?.approved === true,
+      onInvoke: ({ rowId, row }) => {
+        console.log("toggle approval", rowId, row?.status)
+      },
+    },
     cellRenderer: ({ displayValue, row }) => h("span", {
       class: [
         "status-pill",
@@ -810,7 +822,20 @@ const columns: DataGridAppColumnInput<Row>[] = [
       ],
     }, displayValue),
   },
-  { key: "approval", label: "Approval" },
+  {
+    key: "approval",
+    label: "Approval",
+    cellRenderer: ({ displayValue, interactive }) => h("button", {
+      type: "button",
+      class: "approval-action",
+      disabled: interactive?.enabled === false,
+      "aria-pressed": interactive?.ariaPressed,
+      onClick: event => {
+        event.stopPropagation()
+        interactive?.activate("click")
+      },
+    }, displayValue),
+  },
 ]
 </script>
 
@@ -827,13 +852,37 @@ const columns: DataGridAppColumnInput<Row>[] = [
 - `column` and `columnIndex`
 - `value`: raw string value used by the stage
 - `displayValue`: formatted display string after presentation rules
+- `interactive`: resolved cell interaction contract when the column declares `cellInteraction`; otherwise `null`
+
+`interactive` exposes:
+
+- `enabled`: `false` only when the interaction is currently disabled
+- `click`: whether click invocation is enabled for the cell wrapper
+- `keyboard`: enabled keyboard triggers (`enter`, `space`)
+- `role`, `ariaLabel`, `ariaPressed`, `ariaChecked`, `ariaDisabled`
+- `activate(trigger?)`: invoke the same column-level interaction path used by grid keyboard and wrapper click handling
 
 Guidelines:
 
-- treat `cellRenderer` as display-only; editing, selection, fill, clipboard, and menus still belong to the grid shell
+- keep interaction intent on the column via `cellInteraction`; use `interactive.activate(...)` from the renderer instead of ad-hoc row-local handlers
+- the grid shell still owns focus, selection, fill, clipboard, menus, and editing; `cellInteraction` only adds semantic invoke behavior inside that model
 - prefer pure render output from row data over local mutable renderer state
 - keep identifiers, derived values, and formula-result columns read-only where appropriate
 - if a renderer caches local UI state, listen for targeted app-layer cell refresh and re-sync on refresh
+
+### System checkbox interactions
+
+The built-in row-selection checkbox column uses the same `cellInteraction` contract internally.
+That means row checkboxes and the header select-all control now follow the same semantic path as authored interactive cells: click and keyboard invoke flow through one runtime contract, while the stage exposes the matching checkbox ARIA state.
+
+Practical implications:
+
+- `row-selection` is the reference example of a package-owned `cellInteraction` column
+- row checkboxes expose checkbox semantics without introducing nested focus targets inside the grid cell
+- the header checkbox stays aligned with the current visible body rows, including filtered slices
+- custom boolean/action columns should prefer this pattern instead of bespoke click handlers attached inside renderers
+
+For a live example, open the sandbox route `/vue/row-selection-grid` and switch between the visible row filters before using the header checkbox.
 
 ## Theme
 

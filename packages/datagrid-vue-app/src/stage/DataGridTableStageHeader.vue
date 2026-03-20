@@ -50,17 +50,17 @@
               <div class="col-head col-head--index">
                 <button
                   class="grid-checkbox-trigger"
-                  :class="headerCheckboxIndicatorClass()"
+                  :class="headerRowSelectionInteraction.triggerClass"
                   type="button"
-                  role="checkbox"
-                  aria-label="Select all filtered rows"
-                  :aria-checked="resolveHeaderRowSelectionAriaChecked()"
+                  :role="headerRowSelectionInteraction.role"
+                  :aria-label="headerRowSelectionInteraction.label"
+                  :aria-checked="headerRowSelectionInteraction.checked"
                   @mousedown.stop
                   @click.stop
-                  @click="handleToggleAllVisibleRowsSafe"
+                  @click="headerRowSelectionInteraction.activate()"
                 >
-                  <span class="grid-checkbox-indicator" :class="headerCheckboxIndicatorClass()" aria-hidden="true">
-                    <span class="grid-checkbox-indicator__mark" :class="headerCheckboxMarkClass()" />
+                  <span class="grid-checkbox-indicator" :class="headerRowSelectionInteraction.triggerClass" aria-hidden="true">
+                    <span class="grid-checkbox-indicator__mark" :class="headerRowSelectionInteraction.markClass" />
                   </span>
                 </button>
               </div>
@@ -164,17 +164,17 @@
               <div class="col-head col-head--index">
                 <button
                   class="grid-checkbox-trigger"
-                  :class="headerCheckboxIndicatorClass()"
+                  :class="headerRowSelectionInteraction.triggerClass"
                   type="button"
-                  role="checkbox"
-                  aria-label="Select all filtered rows"
-                  :aria-checked="resolveHeaderRowSelectionAriaChecked()"
+                  :role="headerRowSelectionInteraction.role"
+                  :aria-label="headerRowSelectionInteraction.label"
+                  :aria-checked="headerRowSelectionInteraction.checked"
                   @mousedown.stop
                   @click.stop
-                  @click="handleToggleAllVisibleRowsSafe"
+                  @click="headerRowSelectionInteraction.activate()"
                 >
-                  <span class="grid-checkbox-indicator" :class="headerCheckboxIndicatorClass()" aria-hidden="true">
-                    <span class="grid-checkbox-indicator__mark" :class="headerCheckboxMarkClass()" />
+                  <span class="grid-checkbox-indicator" :class="headerRowSelectionInteraction.triggerClass" aria-hidden="true">
+                    <span class="grid-checkbox-indicator__mark" :class="headerRowSelectionInteraction.markClass" />
                   </span>
                 </button>
               </div>
@@ -1004,6 +1004,17 @@ function resolveHeaderRowSelectionAriaChecked(): "true" | "false" | "mixed" {
   }
   return "false"
 }
+
+const headerRowSelectionInteraction = computed(() => ({
+  role: "checkbox" as const,
+  label: "Select all filtered rows",
+  checked: resolveHeaderRowSelectionAriaChecked(),
+  triggerClass: headerCheckboxIndicatorClass(),
+  markClass: headerCheckboxMarkClass(),
+  activate: () => {
+    handleToggleAllVisibleRowsSafe()
+  },
+}))
 
 function headerCheckboxIndicatorClass(): Record<string, boolean> {
   return {

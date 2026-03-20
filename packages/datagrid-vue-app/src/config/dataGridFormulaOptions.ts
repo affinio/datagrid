@@ -1,6 +1,9 @@
 import type { VNodeChild } from "vue"
 import type {
   CreateClientRowModelOptions,
+  DataGridCellInteractionInvocationTrigger,
+  DataGridCellInteractionKeyboardTrigger,
+  DataGridCellInteractionRole,
   DataGridColumnInput,
   DataGridColumnSnapshot,
   DataGridComputedFieldDefinition,
@@ -8,6 +11,18 @@ import type {
   DataGridFormulaFunctionRegistry,
   DataGridRowNode,
 } from "@affino/datagrid-vue"
+
+export interface DataGridAppCellRendererInteractiveContext {
+  enabled: boolean
+  click: boolean
+  keyboard: readonly DataGridCellInteractionKeyboardTrigger[]
+  role?: DataGridCellInteractionRole
+  ariaLabel?: string
+  ariaPressed?: "true" | "false" | "mixed"
+  ariaChecked?: "true" | "false" | "mixed"
+  ariaDisabled?: "true"
+  activate: (trigger?: DataGridCellInteractionInvocationTrigger) => boolean
+}
 
 /**
  * High-level authored column contract for `@affino/datagrid-vue-app`.
@@ -20,6 +35,7 @@ export interface DataGridAppCellRendererContext<TRow = unknown> {
   columnIndex: number
   value: string
   displayValue: string
+  interactive: DataGridAppCellRendererInteractiveContext | null
 }
 
 export type DataGridAppCellRenderer<TRow = unknown> = (

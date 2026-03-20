@@ -363,6 +363,79 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("applies cellInteraction aria semantics to the cell wrapper", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        visibleColumns: [{
+          key: "centerA",
+          pin: "center",
+          width: 140,
+          column: {
+            key: "centerA",
+            label: "Status",
+            cellInteraction: {
+              click: true,
+              role: "button",
+              label: "Open status details",
+              pressed: true,
+              onInvoke: vi.fn(),
+            },
+          },
+        }] as unknown as readonly DataGridColumnSnapshot[],
+      }),
+    })
+
+    await nextTick()
+
+    const cell = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"]')
+
+    expect(cell.attributes("role")).toBe("button")
+    expect(cell.attributes("aria-label")).toBe("Open status details")
+    expect(cell.attributes("aria-pressed")).toBe("true")
+
+    wrapper.unmount()
+  })
+
+  it("exposes interactive.activate to custom cell renderers", async () => {
+    const onInvoke = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        visibleColumns: [{
+          key: "centerA",
+          pin: "center",
+          width: 140,
+          column: {
+            key: "centerA",
+            label: "Status",
+            cellInteraction: {
+              click: true,
+              role: "button",
+              onInvoke,
+            },
+            cellRenderer: ({ interactive }) => h("button", {
+              class: "test-interactive-renderer",
+              onClick: (event: MouseEvent) => {
+                event.stopPropagation()
+                interactive?.activate("click")
+              },
+            }, interactive?.role ?? "none"),
+          },
+        }] as unknown as readonly DataGridColumnSnapshot[],
+      }),
+    })
+
+    await nextTick()
+    await wrapper.find(".test-interactive-renderer").trigger("click")
+
+    expect(onInvoke).toHaveBeenCalledWith(expect.objectContaining({
+      trigger: "click",
+    }))
+
+    wrapper.unmount()
+  })
+
   it("renders pinned bottom rows in a dedicated bottom shell", async () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,

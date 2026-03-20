@@ -5,6 +5,7 @@ import type {
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-core"
 import {
+  invokeDataGridCellInteraction,
   resolveDataGridCellKeyboardAction,
   toggleDataGridCellValue,
 } from "@affino/datagrid-core"
@@ -87,12 +88,6 @@ export interface UseDataGridAppInteractionControllerOptions<
   ) => void
   clearCellSelection: () => void
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
-  handleToggleCellAction?: (
-    row: DataGridRowNode<TRow>,
-    rowIndex: number,
-    columnIndex: number,
-    column: DataGridColumnSnapshot,
-  ) => boolean
   isCellEditable: (
     row: DataGridRowNode<TRow>,
     rowIndex: number,
@@ -1611,6 +1606,7 @@ export function useDataGridAppInteractionController<
       ? resolveDataGridCellKeyboardAction({
         column: columnSnapshot.column,
         row: row.kind !== "group" ? row.data : undefined,
+        rowId: row.rowId,
         editable,
         key: event.key,
         printable,
@@ -1620,9 +1616,6 @@ export function useDataGridAppInteractionController<
     if (keyboardAction === "toggle" && columnSnapshot && columnKey) {
       event.preventDefault()
       options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
-      if (options.handleToggleCellAction?.(row, rowIndex, columnIndex, columnSnapshot)) {
-        return
-      }
       applyDirectCellEdit(
         row,
         rowIndex,
@@ -1634,6 +1627,23 @@ export function useDataGridAppInteractionController<
         }),
         `Toggle ${columnKey}`,
       )
+      return
+    }
+    if (keyboardAction === "invoke" && columnSnapshot) {
+      event.preventDefault()
+      options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
+      invokeDataGridCellInteraction({
+        column: columnSnapshot.column,
+        row: row.kind !== "group" ? row.data : undefined,
+        rowId: row.rowId,
+        editable,
+        trigger: event.key === "Enter" ? "keyboard-enter" : "keyboard-space",
+      })
+      restoreActiveCellFocus({
+        rowIndex,
+        columnIndex,
+        rowId: row.rowId,
+      })
       return
     }
     if ((keyboardAction === "startEdit" || keyboardAction === "openSelect") && columnKey) {

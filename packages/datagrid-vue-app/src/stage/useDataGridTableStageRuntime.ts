@@ -589,15 +589,6 @@ export function useDataGridTableStageRuntime<
     closeContextMenu: options.closeContextMenu,
     openContextMenuFromCurrentCell: options.openContextMenuFromCurrentCell,
     runRowIndexKeyboardAction: options.runRowIndexKeyboardAction,
-    handleToggleCellAction: (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>, rowIndex: number, columnIndex: number, column: DataGridColumnSnapshot) => {
-      if (!isRowSelectionColumn(column)) {
-        return false
-      }
-      void rowIndex
-      void columnIndex
-      toggleRowCheckboxSelected(row)
-      return true
-    },
   } as Parameters<typeof useDataGridAppInteractionController<TRow, unknown>>[0]
 
   const interactionController = (

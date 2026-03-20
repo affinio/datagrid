@@ -50,6 +50,22 @@ export function useDataGridTableStageColumns<TRow extends Record<string, unknown
         key: ROW_SELECTION_COLUMN_KEY,
         label: "",
         cellType: "checkbox",
+        cellInteraction: {
+          click: true,
+          keyboard: ["enter", "space"],
+          role: "checkbox",
+          label: "Toggle row selection",
+          checked: ({ rowId }) => rowId != null && options.runtime.api.rowSelection.isSelected(rowId),
+          onInvoke: ({ rowId }) => {
+            if (rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
+              return
+            }
+            options.runtime.api.rowSelection.setSelected(
+              rowId,
+              !options.runtime.api.rowSelection.isSelected(rowId),
+            )
+          },
+        },
         minWidth: ROW_SELECTION_COLUMN_WIDTH,
         maxWidth: ROW_SELECTION_COLUMN_WIDTH,
         capabilities: {

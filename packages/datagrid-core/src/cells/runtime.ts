@@ -1,5 +1,12 @@
 import { formatDataGridCellValue } from "../columns/formatting.js"
-import type { DataGridColumnDef } from "../models/columnModel.js"
+import type {
+  DataGridCellInteractionInvocationTrigger,
+  DataGridCellInteractionKeyboardTrigger,
+  DataGridCellInteractionRole,
+  DataGridCellInteractionTriState,
+  DataGridColumnCellInteractionContext,
+  DataGridColumnDef,
+} from "../models/columnModel.js"
 
 export type DataGridCellTypeId =
   | "text"
@@ -17,9 +24,10 @@ export type DataGridCellKeyboardAction =
   | "navigate"
   | "startEdit"
   | "openSelect"
+  | "invoke"
   | "toggle"
 
-export type DataGridCellClickAction = "none" | "toggle"
+export type DataGridCellClickAction = "none" | "invoke" | "toggle"
 
 export type DataGridCellEditorMode = "none" | "text" | "select" | "date" | "datetime"
 
@@ -44,6 +52,20 @@ export interface DataGridCellTypeContext {
   column: DataGridColumnDef<any>
   row?: unknown
   value: unknown
+}
+
+export interface DataGridCellInteractionContext<TRow = unknown>
+  extends DataGridColumnCellInteractionContext<TRow> {}
+
+export interface DataGridResolvedCellInteraction {
+  role?: DataGridCellInteractionRole
+  label?: string
+  disabled: boolean
+  keyboard: readonly DataGridCellInteractionKeyboardTrigger[]
+  click: boolean
+  pressed?: "true" | "false" | "mixed"
+  checked?: "true" | "false" | "mixed"
+  invoke: (trigger: DataGridCellInteractionInvocationTrigger) => void
 }
 
 export interface DataGridCellParserContext {
@@ -106,6 +128,7 @@ export interface ParseDataGridCellDraftValueOptions<TRow = unknown> {
 export interface ResolveDataGridCellKeyboardActionOptions<TRow = unknown> {
   column: DataGridColumnDef<TRow>
   row?: TRow | null | undefined
+  rowId?: string | number | null | undefined
   editable: boolean
   key: string
   printable?: boolean
@@ -115,8 +138,22 @@ export interface ResolveDataGridCellKeyboardActionOptions<TRow = unknown> {
 export interface ResolveDataGridCellClickActionOptions<TRow = unknown> {
   column: DataGridColumnDef<TRow>
   row?: TRow | null | undefined
+  rowId?: string | number | null | undefined
   editable: boolean
   registry?: DataGridCellTypeRegistry
+}
+
+export interface ResolveDataGridCellInteractionOptions<TRow = unknown> {
+  column: DataGridColumnDef<TRow>
+  row?: TRow | null | undefined
+  rowId?: string | number | null | undefined
+  value?: unknown
+  editable: boolean
+}
+
+export interface InvokeDataGridCellInteractionOptions<TRow = unknown>
+  extends ResolveDataGridCellInteractionOptions<TRow> {
+  trigger: DataGridCellInteractionInvocationTrigger
 }
 
 export interface ToggleDataGridCellValueOptions<TRow = unknown> {
@@ -266,6 +303,29 @@ const DEFAULT_CELL_TYPE_DEFINITIONS: readonly DataGridCellTypeDefinition[] = Obj
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object"
+}
+
+function normalizeCellInteractionTriState(value: DataGridCellInteractionTriState | undefined): "true" | "false" | "mixed" | undefined {
+  if (value === "mixed") {
+    return "mixed"
+  }
+  if (value === true) {
+    return "true"
+  }
+  if (value === false) {
+    return "false"
+  }
+  return undefined
+}
+
+function resolveCellInteractionValue<TResult, TRow>(
+  source: TResult | ((context: DataGridCellInteractionContext<TRow>) => TResult) | undefined,
+  context: DataGridCellInteractionContext<TRow>,
+): TResult | undefined {
+  if (typeof source === "function") {
+    return (source as (context: DataGridCellInteractionContext<TRow>) => TResult)(context)
+  }
+  return source
 }
 
 function readRowValue<TRow>(row: TRow | null | undefined, column: DataGridColumnDef<TRow>): unknown {
@@ -499,7 +559,50 @@ export function buildDataGridCellRenderModel<TRow = unknown>(
     selected: options.selected === true,
     focused: options.focused === true,
     editorMode: resolvedType.editorMode ?? "text",
-    clickAction: resolvedType.clickAction ?? "none",
+    clickAction: resolveDataGridCellClickAction({
+      column: options.column,
+      row: options.row,
+      editable: options.editable === true,
+      registry: options.registry,
+    }),
+  }
+}
+
+export function resolveDataGridCellInteraction<TRow = unknown>(
+  options: ResolveDataGridCellInteractionOptions<TRow>,
+): DataGridResolvedCellInteraction | null {
+  const interaction = options.column.cellInteraction
+  if (!interaction) {
+    return null
+  }
+  const value = arguments.length > 0 && "value" in options
+    ? options.value
+    : readRowValue(options.row, options.column)
+  const context: DataGridCellInteractionContext<TRow> = {
+    column: options.column,
+    row: options.row ?? undefined,
+    rowId: options.rowId ?? undefined,
+    value,
+    editable: options.editable,
+  }
+  const keyboard = Array.isArray(interaction.keyboard) && interaction.keyboard.length > 0
+    ? Object.freeze([...interaction.keyboard])
+    : Object.freeze(["enter"] as const)
+
+  return {
+    role: resolveCellInteractionValue(interaction.role, context),
+    label: resolveCellInteractionValue(interaction.label, context),
+    disabled: resolveCellInteractionValue(interaction.disabled, context) === true,
+    keyboard,
+    click: interaction.click === true,
+    pressed: normalizeCellInteractionTriState(resolveCellInteractionValue(interaction.pressed, context)),
+    checked: normalizeCellInteractionTriState(resolveCellInteractionValue(interaction.checked, context)),
+    invoke: (trigger: DataGridCellInteractionInvocationTrigger) => {
+      interaction.onInvoke({
+        ...context,
+        trigger,
+      })
+    },
   }
 }
 
@@ -523,6 +626,20 @@ export function parseDataGridCellDraftValue<TRow = unknown>(
 export function resolveDataGridCellKeyboardAction<TRow = unknown>(
   options: ResolveDataGridCellKeyboardActionOptions<TRow>,
 ): DataGridCellKeyboardAction {
+  const interaction = resolveDataGridCellInteraction({
+    column: options.column,
+    row: options.row,
+    rowId: options.rowId,
+    editable: options.editable,
+  })
+  if (!interaction?.disabled) {
+    if (options.key === "Enter" && interaction?.keyboard.includes("enter")) {
+      return "invoke"
+    }
+    if ((options.key === " " || options.key === "Spacebar") && interaction?.keyboard.includes("space")) {
+      return "invoke"
+    }
+  }
   if (!options.editable) {
     if (options.key === " " || options.key === "Spacebar") {
       return "navigate"
@@ -553,6 +670,15 @@ export function resolveDataGridCellKeyboardAction<TRow = unknown>(
 export function resolveDataGridCellClickAction<TRow = unknown>(
   options: ResolveDataGridCellClickActionOptions<TRow>,
 ): DataGridCellClickAction {
+  const interaction = resolveDataGridCellInteraction({
+    column: options.column,
+    row: options.row,
+    rowId: options.rowId,
+    editable: options.editable,
+  })
+  if (interaction && !interaction.disabled && interaction.click) {
+    return "invoke"
+  }
   if (!options.editable) {
     return "none"
   }
@@ -561,6 +687,26 @@ export function resolveDataGridCellClickAction<TRow = unknown>(
     registry: options.registry,
   })
   return resolvedType.clickAction ?? "none"
+}
+
+export function invokeDataGridCellInteraction<TRow = unknown>(
+  options: InvokeDataGridCellInteractionOptions<TRow>,
+): boolean {
+  const interaction = resolveDataGridCellInteraction(options)
+  if (!interaction || interaction.disabled) {
+    return false
+  }
+  if (options.trigger === "click" && !interaction.click) {
+    return false
+  }
+  if (options.trigger === "keyboard-enter" && !interaction.keyboard.includes("enter")) {
+    return false
+  }
+  if (options.trigger === "keyboard-space" && !interaction.keyboard.includes("space")) {
+    return false
+  }
+  interaction.invoke(options.trigger)
+  return true
 }
 
 export function toggleDataGridCellValue<TRow = unknown>(

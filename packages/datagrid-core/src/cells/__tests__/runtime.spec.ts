@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
   buildDataGridCellRenderModel,
   createDataGridCellTypeRegistry,
+  invokeDataGridCellInteraction,
   parseDataGridCellDraftValue,
+  resolveDataGridCellInteraction,
   resolveDataGridCellClickAction,
   resolveDataGridCellKeyboardAction,
   resolveDataGridCellType,
@@ -100,6 +102,63 @@ describe("data grid cell engine", () => {
       column: { key: "approved", cellType: "checkbox" },
       editable: true,
     })).toBe("toggle")
+  })
+
+  it("resolves and invokes column cellInteraction semantics", () => {
+    const onInvoke = vi.fn()
+    const column = {
+      key: "status",
+      cellInteraction: {
+        click: true,
+        keyboard: ["enter", "space"] as const,
+        role: "button" as const,
+        label: "Open status details",
+        pressed: ({ value }: { value: unknown }) => value === "active",
+        onInvoke,
+      },
+    }
+
+    expect(resolveDataGridCellKeyboardAction({
+      column,
+      row: { status: "active" },
+      editable: false,
+      key: "Enter",
+    })).toBe("invoke")
+
+    expect(resolveDataGridCellClickAction({
+      column,
+      row: { status: "active" },
+      editable: false,
+    })).toBe("invoke")
+
+    expect(resolveDataGridCellInteraction({
+      column,
+      row: { status: "active" },
+      editable: false,
+      value: "active",
+    })).toMatchObject({
+      role: "button",
+      label: "Open status details",
+      pressed: "true",
+      click: true,
+      keyboard: ["enter", "space"],
+      disabled: false,
+    })
+
+    expect(invokeDataGridCellInteraction({
+      column,
+      row: { status: "active" },
+      rowId: "r1",
+      editable: false,
+      value: "active",
+      trigger: "keyboard-enter",
+    })).toBe(true)
+
+    expect(onInvoke).toHaveBeenCalledWith(expect.objectContaining({
+      rowId: "r1",
+      value: "active",
+      trigger: "keyboard-enter",
+    }))
   })
 
   it("supports registry overrides without changing grid code", () => {

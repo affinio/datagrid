@@ -137,7 +137,11 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType, type VNodeChild } from "vue"
-import { buildDataGridCellRenderModel } from "@affino/datagrid-vue"
+import {
+  buildDataGridCellRenderModel,
+  invokeDataGridCellInteraction,
+  resolveDataGridCellInteraction,
+} from "@affino/datagrid-vue"
 import {
   useDataGridLinkedPaneScrollSync,
   useDataGridManagedWheelScroll,
@@ -868,22 +872,77 @@ function builtInCellClasses(
 ): Record<string, boolean> {
   const editorMode = row.kind !== "group" ? resolveCellEditorMode(row, column) : "none"
   const editable = isCellEditableSafe(row, rowOffset, column, columnIndex)
+  const interaction = resolveCellInteraction(row, rowOffset, column, columnIndex)
   return {
     "grid-cell--checkbox": shouldRenderCheckboxCell(row, column),
     "grid-cell--row-selection": isRowSelectionColumn(column),
     "grid-cell--select": editable && editorMode === "select",
     "grid-cell--date": editable && (editorMode === "date" || editorMode === "datetime"),
+    "grid-cell--interactive": interaction !== null,
   }
 }
 
-function checkboxCellRole(row: TableRow, column: TableColumn): "checkbox" | undefined {
-  return shouldRenderCheckboxCell(row, column) ? "checkbox" : undefined
+function resolveCellInteraction(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+) {
+  return resolveDataGridCellInteraction({
+    column: column.column,
+    row: row.kind !== "group" ? row.data : undefined,
+    rowId: row.rowId,
+    editable: isCellEditableSafe(row, rowOffset, column, columnIndex),
+  })
 }
 
-function checkboxCellAriaChecked(row: TableRow, column: TableColumn): "true" | "false" | undefined {
-  return shouldRenderCheckboxCell(row, column)
-    ? (checkboxValueIsChecked(row, column) ? "true" : "false")
-    : undefined
+function cellAriaRole(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): string | undefined {
+  return resolveCellInteraction(row, rowOffset, column, columnIndex)?.role
+    ?? (shouldRenderCheckboxCell(row, column) ? "checkbox" : undefined)
+}
+
+function cellAriaChecked(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): "true" | "false" | "mixed" | undefined {
+  return resolveCellInteraction(row, rowOffset, column, columnIndex)?.checked
+    ?? (shouldRenderCheckboxCell(row, column)
+      ? (checkboxValueIsChecked(row, column) ? "true" : "false")
+      : undefined)
+}
+
+function cellAriaPressed(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): "true" | "false" | "mixed" | undefined {
+  return resolveCellInteraction(row, rowOffset, column, columnIndex)?.pressed
+}
+
+function cellAriaLabel(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): string | undefined {
+  return resolveCellInteraction(row, rowOffset, column, columnIndex)?.label
+}
+
+function cellAriaDisabled(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): "true" | undefined {
+  return resolveCellInteraction(row, rowOffset, column, columnIndex)?.disabled ? "true" : undefined
 }
 
 function checkboxIndicatorClass(row: TableRow, column: TableColumn): Record<string, boolean> {
@@ -1037,6 +1096,13 @@ function renderResolvedCellContent(
 ): VNodeChild {
   const displayValue = readResolvedDisplayCell(row, column)
   const renderer = column.column.cellRenderer
+  const editable = isCellEditableSafe(row, rowOffset, column, columnIndex)
+  const interaction = resolveDataGridCellInteraction({
+    column: column.column,
+    row: row.kind !== "group" ? row.data : undefined,
+    rowId: row.rowId,
+    editable,
+  })
 
   if (typeof renderer !== "function") {
     return displayValue
@@ -1050,6 +1116,25 @@ function renderResolvedCellContent(
     columnIndex,
     value: cells.value.readCell(row, column.key),
     displayValue,
+    interactive: interaction
+      ? {
+        enabled: interaction.disabled !== true,
+        click: interaction.click,
+        keyboard: interaction.keyboard,
+        role: interaction.role,
+        ariaLabel: interaction.label,
+        ariaPressed: interaction.pressed,
+        ariaChecked: interaction.checked,
+        ariaDisabled: interaction.disabled ? "true" : undefined,
+        activate: trigger => invokeDataGridCellInteraction({
+          column: column.column,
+          row: row.kind !== "group" ? row.data : undefined,
+          rowId: row.rowId,
+          editable,
+          trigger: trigger ?? "click",
+        }),
+      }
+      : null,
   }) ?? displayValue
 }
 
@@ -3008,8 +3093,11 @@ const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   resolveCellCustomStyle,
   columnIndexByKey,
   cellTabIndex,
-  checkboxCellRole,
-  checkboxCellAriaChecked,
+  cellAriaRole,
+  cellAriaChecked,
+  cellAriaPressed,
+  cellAriaLabel,
+  cellAriaDisabled,
   handleCellMouseDown,
   handleBodyCellClick,
   handleCellMouseMove,
@@ -3063,8 +3151,11 @@ const centerPaneRenderApi: DataGridTableStageCenterPaneRenderApi = {
   resolveCellCustomStyle,
   columnIndexByKey,
   cellTabIndex,
-  checkboxCellRole,
-  checkboxCellAriaChecked,
+  cellAriaRole,
+  cellAriaChecked,
+  cellAriaPressed,
+  cellAriaLabel,
+  cellAriaDisabled,
   handleCellMouseDown,
   handleBodyCellClick,
   handleCellMouseMove,

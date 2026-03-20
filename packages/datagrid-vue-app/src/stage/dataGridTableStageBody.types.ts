@@ -55,8 +55,11 @@ export interface DataGridTableStageBodyRenderApiBase {
   resolveCellCustomStyle: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => CSSProperties
   columnIndexByKey: (columnKey: string) => number
   cellTabIndex: (rowOffset: number, columnIndex: number) => number
-  checkboxCellRole: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => string | undefined
-  checkboxCellAriaChecked: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => "true" | "false" | undefined
+  cellAriaRole: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string | undefined
+  cellAriaChecked: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | "false" | "mixed" | undefined
+  cellAriaPressed: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | "false" | "mixed" | undefined
+  cellAriaLabel: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string | undefined
+  cellAriaDisabled: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | undefined
   handleCellMouseDown: (event: MouseEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
   handleBodyCellClick: (event: MouseEvent, row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => void
   handleCellMouseMove: (event: MouseEvent, rowOffset: number, columnIndex: number) => void

@@ -1,4 +1,5 @@
 import {
+  invokeDataGridCellInteraction,
   resolveDataGridCellClickAction,
   toggleDataGridCellValue,
   type DataGridColumnSnapshot,
@@ -63,8 +64,19 @@ export function useDataGridTableStageCellIo<TRow extends Record<string, unknown>
     const clickAction = resolveDataGridCellClickAction({
       column: column.column,
       row: row.kind !== "group" ? row.data : undefined,
+      rowId: row.rowId,
       editable,
     })
+    if (clickAction === "invoke") {
+      invokeDataGridCellInteraction({
+        column: column.column,
+        row: row.kind !== "group" ? row.data : undefined,
+        rowId: row.rowId,
+        editable,
+        trigger: "click",
+      })
+      return
+    }
     if (clickAction !== "toggle") {
       return
     }

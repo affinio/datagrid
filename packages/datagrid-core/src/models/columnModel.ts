@@ -31,6 +31,38 @@ export interface DataGridColumnCapabilities {
   aggregatable?: boolean
 }
 
+export type DataGridCellInteractionKeyboardTrigger = "enter" | "space"
+
+export type DataGridCellInteractionInvocationTrigger = "keyboard-enter" | "keyboard-space" | "click"
+
+export type DataGridCellInteractionRole = "button" | "checkbox" | "link" | "switch"
+
+export type DataGridCellInteractionTriState = boolean | "mixed"
+
+export interface DataGridColumnCellInteractionContext<TRow = unknown> {
+  column: DataGridColumnDef<TRow>
+  row?: TRow
+  rowId?: string | number | null
+  value: unknown
+  editable: boolean
+}
+
+export interface DataGridColumnCellInteractionInvokeContext<TRow = unknown>
+  extends DataGridColumnCellInteractionContext<TRow> {
+  trigger: DataGridCellInteractionInvocationTrigger
+}
+
+export interface DataGridColumnCellInteraction<TRow = unknown> {
+  keyboard?: readonly DataGridCellInteractionKeyboardTrigger[]
+  click?: boolean
+  disabled?: boolean | ((context: DataGridColumnCellInteractionContext<TRow>) => boolean)
+  role?: DataGridCellInteractionRole | ((context: DataGridColumnCellInteractionContext<TRow>) => DataGridCellInteractionRole | undefined)
+  label?: string | ((context: DataGridColumnCellInteractionContext<TRow>) => string | undefined)
+  pressed?: DataGridCellInteractionTriState | ((context: DataGridColumnCellInteractionContext<TRow>) => DataGridCellInteractionTriState | undefined)
+  checked?: DataGridCellInteractionTriState | ((context: DataGridColumnCellInteractionContext<TRow>) => DataGridCellInteractionTriState | undefined)
+  onInvoke: (context: DataGridColumnCellInteractionInvokeContext<TRow>) => void
+}
+
 export type DataGridColumnConstraintValue = number | Date | string
 
 export interface DataGridColumnConstraints {
@@ -61,6 +93,7 @@ export interface DataGridColumnDef<TRow = unknown> extends DataGridColumnValueAc
   capabilities?: DataGridColumnCapabilities
   constraints?: DataGridColumnConstraints
   cellType?: DataGridCellTypeId | string
+  cellInteraction?: DataGridColumnCellInteraction<TRow>
   placeholder?: string
   meta?: Record<string, unknown>
 }
@@ -194,6 +227,21 @@ function cloneObjectRecord<TValue extends Record<string, unknown> | undefined>(v
   return { ...value } as TValue
 }
 
+function freezeColumnCellInteraction<TRow>(
+  interaction: DataGridColumnCellInteraction<TRow> | undefined,
+): DataGridColumnCellInteraction<TRow> | undefined {
+  if (!interaction) {
+    return undefined
+  }
+  const keyboard = Array.isArray(interaction.keyboard)
+    ? Object.freeze([...interaction.keyboard])
+    : undefined
+  return Object.freeze({
+    ...interaction,
+    ...(keyboard ? { keyboard } : {}),
+  })
+}
+
 function normalizeCellTypeId(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined
@@ -303,6 +351,7 @@ function freezeColumnDefinition<TRow = unknown>(column: DataGridColumnDef<TRow>)
     presentation: _presentation,
     capabilities,
     constraints,
+    cellInteraction,
     meta,
     cellType: _cellType,
     accessor: _accessor,
@@ -315,6 +364,7 @@ function freezeColumnDefinition<TRow = unknown>(column: DataGridColumnDef<TRow>)
     presentation: normalizedPresentation,
     capabilities: capabilities ? Object.freeze({ ...capabilities }) : undefined,
     constraints: constraints ? Object.freeze({ ...constraints }) : undefined,
+    cellInteraction: freezeColumnCellInteraction(cellInteraction),
     meta: cloneObjectRecord(meta),
   }
   if (normalized.meta) {
