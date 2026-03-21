@@ -63,6 +63,18 @@ const gridState = ref(null)
 
 This app-layer path is also the supported spreadsheet fill integration: the default renderer exposes fill-handle drag-fill, double-click fill-down, and the post-fill `Series` / `Copy` menu in base table mode.
 
+The same app-layer path is also the supported additive toolbar extension path: `DataGrid` exposes a public `toolbarModules` prop for app-specific toolbar buttons and popovers without replacing the built-in renderer.
+
+```ts
+import {
+  DataGrid,
+  type DataGridAppToolbarModule,
+} from "@affino/datagrid-vue-app"
+```
+
+Prefer `toolbarModules` when you want to append actions to the built-in toolbar.
+Use the default slot only when you need full runtime-renderer ownership.
+
 ## If You Need More Control
 
 ```ts

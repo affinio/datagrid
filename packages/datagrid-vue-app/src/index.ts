@@ -10,6 +10,9 @@ export type {
   DataGridDeclarativeFormulaOptions,
 } from "./config/dataGridFormulaOptions"
 export type {
+  DataGridAppToolbarModule,
+} from "./host/DataGridModuleHost"
+export type {
   DataGridLayoutMode,
   DataGridResolvedLayoutOptions,
 } from "./config/dataGridLayout"

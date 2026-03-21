@@ -12,6 +12,8 @@ import {
 import {
   type CreateDataGridCoreOptions,
   type DataGridApi,
+  type DataGridApiRowSelectionChangedEvent,
+  type DataGridApiSelectionChangedEvent,
   type DataGridApiPluginDefinition,
   type DataGridAggregationModel,
   type DataGridColumnModel,
@@ -39,6 +41,7 @@ import {
   useDataGridAppSelection,
 } from "@affino/datagrid-vue/app"
 import DataGridDefaultRenderer from "./host/DataGridDefaultRenderer"
+import type { DataGridAppToolbarModule } from "./host/DataGridModuleHost"
 import {
   resolveDataGridColumns,
   resolveDataGridFormulaRowModelOptions,
@@ -415,21 +418,26 @@ export default defineComponent({
       type: [Boolean, Object] as PropType<DataGridGanttProp | undefined>,
       default: undefined,
     },
+    toolbarModules: {
+      type: Array as PropType<readonly DataGridAppToolbarModule[]>,
+      default: () => [],
+    },
   },
-  emits: [
-    "cell-change",
-    "selection-change",
-    "row-select",
-    "update:columnState",
-    "update:columnOrder",
-    "update:hiddenColumnKeys",
-    "update:columnWidths",
-    "update:columnPins",
-    "update:groupBy",
-    "update:viewMode",
-    "update:state",
-    "ready",
-  ],
+  emits: {
+    "cell-change": (_payload: unknown) => true,
+    "selection-change": (_payload: DataGridApiSelectionChangedEvent) => true,
+    "row-selection-change": (_payload: DataGridApiRowSelectionChangedEvent) => true,
+    "row-select": (_payload: DataGridRowSelectionSnapshot | null) => true,
+    "update:columnState": (_payload: DataGridUnifiedColumnState | null) => true,
+    "update:columnOrder": (_payload: readonly string[] | null) => true,
+    "update:hiddenColumnKeys": (_payload: readonly string[] | null) => true,
+    "update:columnWidths": (_payload: Readonly<Record<string, number | null>> | null) => true,
+    "update:columnPins": (_payload: Readonly<Record<string, DataGridColumnPin>> | null) => true,
+    "update:groupBy": (_payload: DataGridGroupBySpec | null) => true,
+    "update:viewMode": (_payload: DataGridAppViewMode) => true,
+    "update:state": (_payload: DataGridUnifiedState<Record<string, unknown>> | null) => true,
+    "ready": (_payload: { api: DataGridApi<Record<string, unknown>>; rowModel: DataGridRowModel<Record<string, unknown>> | null }) => true,
+  },
   setup(props, { attrs, slots, emit, expose }) {
     const dataGridRef = ref<LowLevelGridExpose | null>(null)
     const currentViewMode = ref<DataGridAppViewMode>("table")
@@ -598,7 +606,7 @@ export default defineComponent({
         state: payload => emit("update:state", payload),
         ready: payload => emit("ready", {
           api: payload.api,
-          rowModel: resolvedRowModel.value,
+          rowModel: (resolvedRowModel.value as DataGridRowModel<Record<string, unknown>> | null),
         }),
       },
     })
@@ -609,14 +617,23 @@ export default defineComponent({
       controlledState.emitSnapshotUpdates()
     }
 
-    const handleSelectionChange = (payload: unknown): void => {
+    const handleSelectionChange = (payload: DataGridApiSelectionChangedEvent): void => {
       emit("selection-change", payload)
+    }
+
+    const handleRowSelectionChange = (payload: DataGridApiRowSelectionChangedEvent): void => {
+      emit("row-selection-change", payload)
+    }
+
+    const flushRowSelectionSnapshotUpdates = (): void => {
+      controlledState.emitSnapshotUpdates()
     }
 
     watch(
       rowSelectionSnapshot,
       (snapshot: DataGridRowSelectionSnapshot | null) => {
         emit("row-select", snapshot)
+        flushRowSelectionSnapshotUpdates()
       },
       { deep: true },
     )
@@ -732,6 +749,7 @@ export default defineComponent({
         rowSelectionSnapshot,
         syncSelectionSnapshotFromRuntime,
         syncRowSelectionSnapshotFromRuntime,
+        flushRowSelectionSnapshotUpdates,
         sortModel: props.sortModel,
         filterModel: props.filterModel,
         groupBy: resolvedGroupBy.value,
@@ -758,6 +776,7 @@ export default defineComponent({
         rowSelection: props.rowSelection,
         viewMode: currentViewMode.value,
         gantt: props.gantt,
+        toolbarModules: props.toolbarModules,
       }
       return h(
         DataGridRuntimeHost,
@@ -778,6 +797,7 @@ export default defineComponent({
           autoStart: props.autoStart,
           onCellChange: handleCellChange,
           onSelectionChange: handleSelectionChange,
+          onRowSelectionChange: handleRowSelectionChange,
         },
         slots.default
           ? {

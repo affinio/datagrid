@@ -195,4 +195,36 @@ describe("VueShellGridCard", () => {
 
     wrapper.unmount()
   })
+
+  it("renders the sandbox toolbarModules demo action and updates the footer status on click", async () => {
+    const { default: VueShellGridCard } = await import("./VueShellGridCard.vue")
+
+    const wrapper = mount(VueShellGridCard, {
+      props: {
+        title: "Vue: Base Grid (Sugar)",
+        mode: "base",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUi()
+    await flushUi()
+
+    const toolbarButton = wrapper.find('[data-datagrid-toolbar-action="sandbox-summary"]')
+    expect(toolbarButton.exists()).toBe(true)
+    expect(toolbarButton.text()).toBe("Capture summary")
+
+    await toolbarButton.trigger("click")
+    await flushUi()
+
+    expect(wrapper.text()).toContain("Toolbar action:")
+    expect(wrapper.text()).toContain("table view")
+
+    wrapper.unmount()
+  })
 })

@@ -67,6 +67,7 @@ Use it as guard before capability-dependent mutating calls.
 - `state.get/set` is the unified state boundary for export/import (V1 model-centric payload).
 - `state.migrate(...)` is the explicit payload migration/validation hook before restore.
 - `events.on` is the typed public event surface with documented in-process ordering.
+- `events.on("row-selection:changed", ...)` is the typed row-selection event surface for `selectedRows` / `focusedRow` snapshots.
 - `events` includes explicit state import boundaries (`state:import:begin/end`).
 - `compute.switchMode(...)` is synchronous and does not implicitly trigger recompute.
 - `diagnostics.getAll()` is read-only and does not trigger recompute.

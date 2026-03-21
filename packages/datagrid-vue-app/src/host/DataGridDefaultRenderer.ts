@@ -4,9 +4,11 @@ import {
   defineAsyncComponent,
   defineComponent,
   h,
+  markRaw,
   nextTick,
   onBeforeUnmount,
   ref,
+  toRaw,
   watch,
   type PropType,
   type Ref,
@@ -101,6 +103,13 @@ type DataGridDefaultRendererRuntime = Pick<
 > & {
   getBodyRowAtIndex: (rowIndex: number) => import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>> | null
   resolveBodyRowIndexById: (rowId: string | number) => number
+}
+
+function normalizeToolbarModule(module: DataGridAppToolbarModule): DataGridAppToolbarModule {
+  return {
+    ...module,
+    component: markRaw(toRaw(module.component)),
+  }
 }
 
 function normalizeBaseRowHeight(value: number): number {
@@ -573,6 +582,10 @@ export default defineComponent({
       required: true,
     },
     syncRowSelectionSnapshotFromRuntime: {
+      type: Function as PropType<() => void>,
+      default: () => undefined,
+    },
+    flushRowSelectionSnapshotUpdates: {
       type: Function as PropType<() => void>,
       default: () => undefined,
     },
@@ -1699,6 +1712,7 @@ export default defineComponent({
       isRowInPendingClipboardCut,
       syncSelectionSnapshotFromRuntime: props.syncSelectionSnapshotFromRuntime,
       syncRowSelectionSnapshotFromRuntime: props.syncRowSelectionSnapshotFromRuntime,
+      flushRowSelectionSnapshotUpdates: props.flushRowSelectionSnapshotUpdates,
       clearExternalPendingClipboardOperation: clearPendingRowClipboardOperation,
       firstColumnKey,
       columnFilterTextByKey,
@@ -2148,6 +2162,7 @@ export default defineComponent({
             hasAnyFilters: hasActiveFilters.value,
             buttonLabel: props.advancedFilter.buttonLabel,
             active: hasActiveFilters.value,
+            showActiveIcon: hasActiveFilters.value,
             onOpen: openAdvancedFilterPanel,
             onAdd: addAdvancedFilterClause,
             onRemove: removeAdvancedFilterClause,
@@ -2184,7 +2199,7 @@ export default defineComponent({
           },
         })
       }
-      return [...modules, ...props.toolbarModules]
+      return [...modules, ...props.toolbarModules].map(normalizeToolbarModule)
     })
 
     return () => h("div", {

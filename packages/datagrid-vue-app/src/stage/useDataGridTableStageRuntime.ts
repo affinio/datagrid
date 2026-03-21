@@ -83,6 +83,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   showRowSelection?: Ref<boolean>
   isRowInPendingClipboardCut?: (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>) => boolean
   syncRowSelectionSnapshotFromRuntime?: () => void
+  flushRowSelectionSnapshotUpdates?: () => void
   firstColumnKey: Ref<string>
   columnFilterTextByKey: Ref<Record<string, string>>
   virtualization: Ref<DataGridVirtualizationOptions>
@@ -161,6 +162,7 @@ export function useDataGridTableStageRuntime<
   options: UseDataGridTableStageRuntimeOptions<TRow>,
 ): UseDataGridTableStageRuntimeResult<TRow> {
   const syncRowSelectionSnapshotFromRuntime = options.syncRowSelectionSnapshotFromRuntime ?? (() => undefined)
+  const flushRowSelectionSnapshotUpdates = options.flushRowSelectionSnapshotUpdates ?? (() => undefined)
   const rowSelectionSnapshotRef = options.rowSelectionSnapshot ?? ref<DataGridRowSelectionSnapshot | null>(null)
   const showRowIndex = computed(() => options.showRowIndex?.value !== false)
   const totalBodyRows = computed(() => options.runtime.rowPartition.value.bodyRowCount)
@@ -380,6 +382,14 @@ export function useDataGridTableStageRuntime<
     orderedVisibleColumns,
     displayRows,
     rowSelectionSnapshot: rowSelectionSnapshotRef,
+    applyRowSelectionMutation: mutator => {
+      if (!options.runtime.api.rowSelection.hasSupport()) {
+        return
+      }
+      mutator(options.runtime.api.rowSelection)
+      syncRowSelectionSnapshotFromRuntime()
+      flushRowSelectionSnapshotUpdates()
+    },
     viewportRowStart,
     selectionAnchorCell,
     applySelectionRange: applyClipboardSelectionRange,

@@ -2,6 +2,7 @@ import type {
   DataGridColumnSnapshot,
   DataGridRowId,
   DataGridRowSelectionSnapshot,
+  UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import { buildDataGridCellRenderModel } from "@affino/datagrid-vue"
 import { computed, type ComputedRef, type Ref } from "vue"
@@ -11,12 +12,16 @@ import type {
   DataGridTableStageAnchorCell,
 } from "./dataGridTableStage.types"
 
+type DataGridTableStageRowSelectionApi<TRow extends Record<string, unknown>> =
+  UseDataGridRuntimeResult<TRow>["api"]["rowSelection"]
+
 export interface UseDataGridTableStageRowSelectionOptions<TRow extends Record<string, unknown>> {
   runtime: Pick<import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>, "api">
   rowSelectionColumn: ComputedRef<DataGridColumnSnapshot | null>
   orderedVisibleColumns: ComputedRef<readonly DataGridColumnSnapshot[]>
   displayRows: Ref<readonly DataGridTableRow<TRow>[]>
   rowSelectionSnapshot: Ref<DataGridRowSelectionSnapshot | null>
+  applyRowSelectionMutation?: (mutator: (api: DataGridTableStageRowSelectionApi<TRow>) => void) => void
   viewportRowStart: Ref<number>
   selectionAnchorCell: ComputedRef<DataGridTableStageAnchorCell | null>
   applySelectionRange: (range: DataGridCopyRange) => void
@@ -39,6 +44,13 @@ export interface UseDataGridTableStageRowSelectionResult<TRow extends Record<str
 export function useDataGridTableStageRowSelection<TRow extends Record<string, unknown>>(
   options: UseDataGridTableStageRowSelectionOptions<TRow>,
 ): UseDataGridTableStageRowSelectionResult<TRow> {
+  const applyRowSelectionMutation = options.applyRowSelectionMutation
+    ?? ((mutator: (api: DataGridTableStageRowSelectionApi<TRow>) => void) => {
+      if (!options.runtime.api.rowSelection.hasSupport()) {
+        return
+      }
+      mutator(options.runtime.api.rowSelection)
+    })
   const rowSelectionSet = computed(() => new Set(options.rowSelectionSnapshot.value?.selectedRows ?? []))
 
   const isRowFocused = (row: DataGridTableRow<TRow>): boolean => {
@@ -102,7 +114,9 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     if (row.kind === "group" || row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
       return
     }
-    options.runtime.api.rowSelection.setSelected(row.rowId, !rowSelectionSet.value.has(row.rowId))
+    applyRowSelectionMutation(rowSelectionApi => {
+      rowSelectionApi.setSelected(row.rowId, !rowSelectionSet.value.has(row.rowId))
+    })
   }
 
   const toggleVisibleRowsSelected = (): void => {
@@ -111,10 +125,14 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     }
     const rowIds = selectableRowIds.value
     if (!areAllVisibleRowsSelected.value) {
-      options.runtime.api.rowSelection.selectRows(rowIds)
+      applyRowSelectionMutation(rowSelectionApi => {
+        rowSelectionApi.selectRows(rowIds)
+      })
       return
     }
-    options.runtime.api.rowSelection.deselectRows(rowIds)
+    applyRowSelectionMutation(rowSelectionApi => {
+      rowSelectionApi.deselectRows(rowIds)
+    })
   }
 
   const selectRowRange = (

@@ -4,9 +4,21 @@
     type="button"
     class="datagrid-app-toolbar__button"
     :class="{ 'datagrid-app-toolbar__button--active': active }"
+    data-datagrid-toolbar-action="advanced-filter"
+    :data-datagrid-advanced-filter-active="showActiveIcon ? 'true' : 'false'"
     :style="overlayThemeVars"
     v-bind="triggerProps"
   >
+    <span
+      v-if="showActiveIcon"
+      class="datagrid-app-toolbar__button-icon datagrid-app-toolbar__button-icon--advanced-filter"
+      data-datagrid-advanced-filter-icon="true"
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 16 16" focusable="false">
+        <path d="M2 3.5h12l-4.6 5.2v3.2l-2.8 1.6V8.7L2 3.5Z" fill="currentColor" />
+      </svg>
+    </span>
     {{ buttonLabel }}
   </button>
 
@@ -125,10 +137,9 @@
             <button
               type="button"
               class="datagrid-advanced-filter__ghost datagrid-advanced-filter__ghost--danger"
-              :disabled="clauses.length <= 1"
               @click="emit('remove', clause.id)"
             >
-              Remove
+              {{ clauses.length <= 1 ? 'Clear' : 'Remove' }}
             </button>
           </div>
         </div>
@@ -192,11 +203,13 @@ const props = withDefaults(defineProps<{
   hasAnyFilters?: boolean
   buttonLabel?: string
   active?: boolean
+  showActiveIcon?: boolean
 }>(), {
   appliedFilterSummaryItems: () => [],
   hasAnyFilters: false,
   buttonLabel: "Advanced filter",
   active: false,
+  showActiveIcon: false,
 })
 
 const emit = defineEmits<{

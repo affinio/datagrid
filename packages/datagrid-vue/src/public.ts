@@ -77,6 +77,8 @@ export type {
   DataGridApiEventPayload,
   DataGridApiErrorCode,
   DataGridApiErrorEvent,
+  DataGridApiRowSelectionChangedEvent,
+  DataGridApiSelectionChangedEvent,
   DataGridMigrateStateOptions,
   DataGridSetStateOptions,
   DataGridUnifiedRowsState,

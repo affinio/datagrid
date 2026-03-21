@@ -107,6 +107,8 @@ export {
   type DataGridApiEventPayload,
   type DataGridApiErrorCode,
   type DataGridApiErrorEvent,
+  type DataGridApiRowSelectionChangedEvent,
+  type DataGridApiSelectionChangedEvent,
   type DataGridMigrateStateOptions,
   type DataGridSetStateOptions,
   type DataGridUnifiedRowsState,

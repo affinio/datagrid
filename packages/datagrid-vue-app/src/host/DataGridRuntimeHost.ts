@@ -16,6 +16,7 @@ import type {
   DataGridColumnInput,
   DataGridCoreServiceRegistry,
   DataGridPaginationInput,
+  DataGridRowSelectionSnapshot,
   DataGridRowModel,
   DataGridRowNode,
   DataGridRowModelSnapshot,
@@ -42,6 +43,10 @@ interface DataGridRowsChangedEvent {
 
 interface DataGridSelectionChangedEvent {
   snapshot: DataGridSelectionSnapshot | null
+}
+
+interface DataGridRowSelectionChangedEvent {
+  snapshot: DataGridRowSelectionSnapshot | null
 }
 
 export default defineComponent({
@@ -93,7 +98,11 @@ export default defineComponent({
       default: null,
     },
   },
-  emits: ["cell-change", "selection-change"],
+  emits: {
+    "cell-change": (_payload: DataGridRowsChangedEvent) => true,
+    "selection-change": (_payload: DataGridSelectionChangedEvent) => true,
+    "row-selection-change": (_payload: DataGridRowSelectionChangedEvent) => true,
+  },
   setup(props, { attrs, slots, emit, expose }) {
     const rootElementRef = ref<HTMLElement | null>(null)
     provide(dataGridAppRootElementKey, rootElementRef)
@@ -181,10 +190,14 @@ export default defineComponent({
     const unsubscribeSelectionChanged = runtime.api.events.on("selection:changed", payload => {
       emit("selection-change", payload as DataGridSelectionChangedEvent)
     })
+    const unsubscribeRowSelectionChanged = runtime.api.events.on("row-selection:changed", payload => {
+      emit("row-selection-change", payload as DataGridRowSelectionChangedEvent)
+    })
 
     onBeforeUnmount(() => {
       unsubscribeRowsChanged()
       unsubscribeSelectionChanged()
+      unsubscribeRowSelectionChanged()
       themeObserver?.disconnect()
       themeObserver = null
     })

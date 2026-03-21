@@ -51,6 +51,12 @@ Current built-in app modules wired in the default renderer:
 - advanced filter
 - aggregations
 
+Current public extension seam for additive app-toolbar customization:
+
+- `toolbarModules` prop on `DataGrid`
+- typed by `DataGridAppToolbarModule`
+- appends custom toolbar buttons/popovers after built-in community modules
+
 Current enterprise-owned app additions:
 
 - diagnostics toolbar module via `@affino/datagrid-vue-app-enterprise`
@@ -68,6 +74,7 @@ Keep these in `@affino/datagrid-vue-app`:
 - `DataGrid` as the default app-facing component
 - declarative columns / state / theme / pagination / virtualization
 - saved-view facade helpers around unified state + `viewMode`
+- additive toolbar customization through public `toolbarModules`
 - column menu, including declarative built-in section and action config (`items`, `disabled`, `disabledReasons`, `labels`, `actions`, per-column overrides)
 - column layout
 - advanced filter
@@ -109,6 +116,18 @@ Community user:
 import { DataGrid } from "@affino/datagrid-vue-app"
 ```
 
+Community-safe additive toolbar customization:
+
+```ts
+import {
+   DataGrid,
+   type DataGridAppToolbarModule,
+} from "@affino/datagrid-vue-app"
+```
+
+Use `toolbarModules` when the app only needs to append custom toolbar actions.
+Do not expose `DataGridModuleHost` itself as a public plugin platform.
+
 Enterprise user:
 
 ```ts
@@ -128,6 +147,8 @@ Upgrade path:
    that re-exports the community app facade.
 2. Keep `DataGridModuleHost` internal and do not turn it into a public generic
    plugin platform yet.
+   Public additive customization for community users goes through
+   `DataGrid.toolbarModules`, not through direct module-host ownership.
 3. [x] Move `diagnostics` out of the community public story before first release:
    keep low-level runtime diagnostics APIs community-safe, but route premium app
    diagnostics UI through `@affino/datagrid-vue-app-enterprise`.

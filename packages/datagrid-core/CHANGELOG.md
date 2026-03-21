@@ -1,5 +1,25 @@
 # @affino/datagrid-core
 
+## 0.3.5
+
+### Patch Changes
+
+- ## Summary
+
+  Promoted typed selection event payloads through the stable core public surface so downstream packages can import `DataGridApiSelectionChangedEvent` and `DataGridApiRowSelectionChangedEvent` without deep/internal coupling.
+
+  ## User impact
+
+  Package consumers and adapter layers can now depend on canonical exported selection event typings from `@affino/datagrid-core`.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption: replace local/deep-imported selection event payload types with the public core exports.
+
+  ## Validation
+  - `pnpm --filter @affino/datagrid-core build`
+  - downstream `@affino/datagrid-vue` public build/type-check unblocked
+
 ## 0.2.0
 
 ### Minor Changes

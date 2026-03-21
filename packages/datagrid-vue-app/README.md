@@ -268,6 +268,85 @@ Recommended usage:
 - enable them together for spreadsheet-heavy editing surfaces
 - keep them off for read-only, reporting, and embedded summary tables unless the interaction model is explicitly spreadsheet-like
 
+## Custom Toolbar Modules
+
+`DataGrid` exposes a public `toolbar-modules` prop for additive toolbar actions.
+Use it when you want to keep the built-in app renderer and append custom buttons, popovers, or small workflow panels to the same toolbar row.
+
+- built-in modules such as column layout, advanced filter, and aggregations still render first
+- custom modules are appended after the built-in modules in declaration order
+- each module provides a stable `key`, a Vue `component`, and optional props passed into that component
+
+Type shape:
+
+```ts
+interface DataGridAppToolbarModule {
+  key: string
+  component: Component
+  props?: Record<string, unknown>
+}
+```
+
+Practical guidance:
+
+- use a stable `key` per module instance
+- keep the rendered trigger on the shared toolbar button class when you want built-in styling: `datagrid-app-toolbar__button`
+- add your own `data-datagrid-toolbar-action` when you want deterministic selectors for tests or analytics
+
+```vue
+<script setup lang="ts">
+import { DataGrid, type DataGridAppToolbarModule } from "@affino/datagrid-vue-app"
+import { defineComponent, h } from "vue"
+
+const ExportButton = defineComponent({
+  name: "ExportButton",
+  props: {
+    label: {
+      type: String,
+      required: true,
+    },
+    onTrigger: {
+      type: Function,
+      required: true,
+    },
+  },
+  setup(props) {
+    return () => h("button", {
+      type: "button",
+      class: "datagrid-app-toolbar__button",
+      onClick: () => props.onTrigger(),
+    }, props.label)
+  },
+})
+
+const toolbarModules: readonly DataGridAppToolbarModule[] = [
+  {
+    key: "export",
+    component: ExportButton,
+    props: {
+      label: "Export",
+      onTrigger: () => {
+        console.log("export current view")
+      },
+    },
+  },
+]
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :toolbar-modules="toolbarModules"
+    column-layout
+    advanced-filter
+  />
+</template>
+```
+
+Prefer `toolbar-modules` over replacing the whole default slot when the only goal is to extend the built-in toolbar.
+Use the default slot only when you need to take over the entire runtime renderer contract.
+
 ## Declarative Column Menu
 
 Enable the built-in header menu with one prop:
@@ -1106,6 +1185,8 @@ The component emits:
 
 - `cell-change`
 - `selection-change`
+- `row-selection-change`
+- `row-select` (legacy alias; prefer `row-selection-change` for typed row-selection snapshots)
 - `update:column-state`
 - `update:column-order`
 - `update:hidden-column-keys`
@@ -1113,6 +1194,11 @@ The component emits:
 - `update:column-pins`
 - `update:state`
 - `ready`
+
+## Advanced Filter UX
+
+- When at least one filter is active, the `Advanced filter` toolbar button shows an active filter icon and active button styling.
+- Removing the only advanced-filter clause does not lock the UI; the builder keeps one empty clause row so the user can clear and rebuild the expression in place.
 
 ## Ref API
 

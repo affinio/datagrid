@@ -35,7 +35,6 @@
 
     <div class="selection-card__surface">
       <DataGrid
-        ref="gridRef"
         :rows="visibleRows"
         :columns="columns"
         layout-mode="auto-height"
@@ -50,7 +49,7 @@
         row-height-mode="fixed"
         row-hover
         striped-rows
-        @selection-change="syncSelectedRows"
+        @row-selection-change="syncSelectedRows"
       />
     </div>
   </article>
@@ -72,14 +71,6 @@ interface RowSelectionDemoRow {
   hours: number
 }
 
-interface PublicGridExpose {
-  getApi: () => {
-    rowSelection: {
-      getSelectedRows(): readonly (string | number)[]
-    }
-  } | null
-}
-
 const rows = ref<readonly RowSelectionDemoRow[]>([
   { id: "ts-1001", employee: "Maya Patel", team: "Platform", status: "Submitted", reviewer: "Nora Singh", hours: 38.5 },
   { id: "ts-1002", employee: "Liam Chen", team: "Platform", status: "Approved", reviewer: "Nora Singh", hours: 40 },
@@ -99,7 +90,6 @@ const filterOptions: ReadonlyArray<{ value: FilterMode; label: string }> = [
 const activeFilter = ref<FilterMode>("all")
 const selectedRowIds = ref<string[]>([])
 const cardRootRef = ref<HTMLElement | null>(null)
-const gridRef = ref<PublicGridExpose | null>(null)
 
 const visibleRows = computed<readonly RowSelectionDemoRow[]>(() => {
   switch (activeFilter.value) {
@@ -173,11 +163,12 @@ const clientRowModelOptions = {
 const theme = industrialNeutralTheme
 const sandboxThemeTokens = resolveGridThemeTokens(theme)
 
-function syncSelectedRows(): void {
-  const api = gridRef.value?.getApi()
-  selectedRowIds.value = api == null
-    ? []
-    : api.rowSelection.getSelectedRows().map(rowId => String(rowId))
+function syncSelectedRows(payload: {
+  snapshot: {
+    selectedRows: readonly (string | number)[]
+  } | null
+}): void {
+  selectedRowIds.value = (payload.snapshot?.selectedRows ?? []).map(rowId => String(rowId))
 }
 
 watchEffect(() => {

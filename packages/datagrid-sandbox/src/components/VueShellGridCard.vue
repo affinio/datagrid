@@ -258,6 +258,7 @@
         :view-mode="viewMode"
         :gantt="ganttOptions"
         :theme="theme"
+        :toolbar-modules="toolbarModules"
         :virtualization="virtualization"
         :row-height-mode="rowHeightMode"
         :base-row-height="baseRowHeight"
@@ -278,6 +279,7 @@
     <footer class="card__footer">
       Enterprise app package demo:
       <code>import { DataGrid } from "@affino/datagrid-vue-app-enterprise"</code>
+      <span v-if="toolbarActionStatus">{{ toolbarActionStatus }}</span>
       <span v-if="selectionAggregatesLabel">
         {{ selectionAggregatesLabel }}</span
       >
@@ -286,7 +288,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, nextTick, ref, watch, type Ref } from "vue";
+import { computed, defineComponent, h, nextTick, ref, watch, type Ref } from "vue";
 import {
   DataGrid,
   type DataGridAppColumnInput,
@@ -298,6 +300,7 @@ import {
 import {
   clearDataGridSavedViewInStorage,
   readDataGridSavedViewFromStorage,
+  type DataGridAppToolbarModule,
   type DataGridCellMenuProp,
   type DataGridRowIndexMenuProp,
   type DataGridSavedViewSnapshot,
@@ -413,6 +416,32 @@ type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | nul
 type DeclarativeCellMenuConfig = Exclude<DataGridCellMenuProp, boolean | null>;
 type DeclarativeRowIndexMenuConfig = Exclude<DataGridRowIndexMenuProp, boolean | null>;
 type ShellStatusTone = "neutral" | "info" | "warning" | "success";
+
+const SandboxToolbarButton = defineComponent({
+  name: "SandboxToolbarButton",
+  props: {
+    label: {
+      type: String,
+      required: true,
+    },
+    actionKey: {
+      type: String,
+      required: true,
+    },
+    onTrigger: {
+      type: Function,
+      required: true,
+    },
+  },
+  setup(componentProps) {
+    return () => h("button", {
+      type: "button",
+      class: "datagrid-app-toolbar__button",
+      "data-datagrid-toolbar-action": componentProps.actionKey,
+      onClick: () => componentProps.onTrigger(),
+    }, componentProps.label)
+  },
+});
 
 const TREE_ASSIGNEE_OPTIONS = [
   { value: "Alice", label: "Alice" },
@@ -1142,6 +1171,7 @@ const stateModel = ref<DataGridUnifiedState<unknown> | null>(null);
 const savedViewModel = ref<DataGridSavedViewSnapshot<Record<string, unknown>> | null>(null);
 const hasPersistedSavedView = ref(false);
 const selectionAggregatesLabel = ref("");
+const toolbarActionStatus = ref("");
 
 const rows = computed(() =>
   props.timesheetShowcase
@@ -1476,6 +1506,22 @@ const savedViewStatus = computed(() => {
     return hasPersistedSavedView.value ? "persisted" : "not captured";
   }
   return `${savedViewModel.value.viewMode ?? "table"} / ${hasPersistedSavedView.value ? "captured + persisted" : "captured"}`;
+});
+
+const toolbarModules = computed<readonly DataGridAppToolbarModule[]>(() => {
+  return [
+    {
+      key: "sandbox-summary",
+      component: SandboxToolbarButton,
+      props: {
+        label: "Capture summary",
+        actionKey: "sandbox-summary",
+        onTrigger: () => {
+          toolbarActionStatus.value = `Toolbar action: ${rows.value.length} rows / ${columns.value.length} columns / ${viewMode.value} view`;
+        },
+      },
+    },
+  ];
 });
 
 const setColumnStateIfChanged = (

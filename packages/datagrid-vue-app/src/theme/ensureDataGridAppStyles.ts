@@ -284,6 +284,9 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .datagrid-app-toolbar__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--datagrid-filter-trigger-border);
@@ -320,6 +323,25 @@ const DATA_GRID_APP_STYLES = `
 .datagrid-app-toolbar__button--active {
   border-color: color-mix(in srgb, var(--datagrid-accent-strong) 46%, var(--datagrid-filter-trigger-border));
   background: color-mix(in srgb, var(--datagrid-accent-strong) 14%, var(--datagrid-editor-bg));
+}
+
+.datagrid-app-toolbar__button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.datagrid-app-toolbar__button-icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.datagrid-app-toolbar__button-icon--advanced-filter {
+  color: var(--datagrid-accent-strong);
 }
 
 .datagrid-column-layout {

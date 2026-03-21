@@ -1,5 +1,27 @@
 # @affino/datagrid-vue
 
+## 0.3.8
+
+### Patch Changes
+
+- ## Summary
+
+  Added the typed row-selection event path to the Vue package surface and aligned package-level exports with the canonical core selection event payload types.
+
+  ## User impact
+
+  Vue consumers can use the typed `row-selection-change` event flow and import the related selection event payload types from the stable Vue package surface.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption:
+    - prefer `row-selection-change` for row checkbox/header selection flows,
+    - keep `selection-change` for general cell/range selection flows.
+
+  ## Validation
+  - `pnpm --filter @affino/datagrid-vue build`
+  - Vue bridge/app contract coverage updated
+
 ## 0.2.0
 
 ### Minor Changes

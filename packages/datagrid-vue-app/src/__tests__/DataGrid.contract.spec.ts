@@ -1,8 +1,9 @@
-import { nextTick } from "vue"
-import { mount } from "@vue/test-utils"
+import { defineComponent, h, nextTick, ref } from "vue"
+import { flushPromises, mount } from "@vue/test-utils"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import type { DataGridRowNodeInput } from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
+import type { DataGridAppToolbarModule } from "../index"
 import {
   clearDataGridSavedViewInStorage,
   parseDataGridSavedView,
@@ -303,7 +304,22 @@ const GANTT_COLUMNS = [
 async function flushRuntimeTasks() {
   await nextTick()
   await Promise.resolve()
+  await flushPromises()
   await nextTick()
+}
+
+async function preloadAdvancedFilterPopover(): Promise<void> {
+  await import("../overlays/DataGridAdvancedFilterPopover.vue")
+}
+
+async function findAdvancedFilterTrigger(wrapper: ReturnType<typeof mount>) {
+  await flushRuntimeTasks()
+  await flushRuntimeTasks()
+  return wrapper.find('[data-datagrid-toolbar-action="advanced-filter"]')
+}
+
+function findToolbarAction(wrapper: ReturnType<typeof mount>, action: string) {
+  return wrapper.find(`[data-datagrid-toolbar-action="${action}"]`)
 }
 
 function resolveRowModel(wrapper: ReturnType<typeof mount>) {
@@ -459,6 +475,62 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).not.toContain("formulaPacks")
     expect(publicProps).not.toContain("performance")
     expect(publicProps).toContain("isCellEditable")
+    expect(publicProps).toContain("toolbarModules")
+  })
+
+  it("renders custom toolbar modules passed through the public toolbarModules prop", async () => {
+    const onTrigger = vi.fn()
+    const CustomToolbarButton = defineComponent({
+      name: "CustomToolbarButton",
+      props: {
+        label: {
+          type: String,
+          required: true,
+        },
+        onTrigger: {
+          type: Function,
+          required: true,
+        },
+      },
+      setup(componentProps) {
+        return () => h("button", {
+          type: "button",
+          class: "datagrid-app-toolbar__button",
+          "data-datagrid-toolbar-action": "custom-summary",
+          onClick: () => componentProps.onTrigger(),
+        }, componentProps.label)
+      },
+    })
+
+    const toolbarModules: readonly DataGridAppToolbarModule[] = [
+      {
+        key: "custom-summary",
+        component: CustomToolbarButton,
+        props: {
+          label: "Summary",
+          onTrigger,
+        },
+      },
+    ]
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        toolbarModules,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = findToolbarAction(wrapper, "custom-summary")
+    expect(trigger.exists()).toBe(true)
+    expect(trigger.text()).toBe("Summary")
+
+    await trigger.trigger("click")
+    expect(onTrigger).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
   })
 
   it("keeps a column editable cell read-only when the public predicate returns false", async () => {
@@ -1848,6 +1920,8 @@ describe("DataGrid app facade contract", () => {
   })
 
   it("opens declarative advancedFilter and applies the built-in clause expression", async () => {
+    await preloadAdvancedFilterPopover()
+
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
       props: {
@@ -1857,12 +1931,8 @@ describe("DataGrid app facade contract", () => {
       },
     })
 
-    await flushRuntimeTasks()
-
-    const trigger = wrapper.findAll(".datagrid-app-toolbar__button").find(candidate => (
-      candidate.text().includes("Advanced filter")
-    ))
-    expect(trigger).toBeTruthy()
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    expect(trigger.exists()).toBe(true)
     await trigger!.trigger("click")
     await flushRuntimeTasks()
 
@@ -1900,6 +1970,8 @@ describe("DataGrid app facade contract", () => {
   })
 
   it("renders applied filter summary and resets all filters from one action", async () => {
+    await preloadAdvancedFilterPopover()
+
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
       props: {
@@ -1932,12 +2004,10 @@ describe("DataGrid app facade contract", () => {
       },
     })
 
-    await flushRuntimeTasks()
-
-    const trigger = wrapper.findAll(".datagrid-app-toolbar__button").find(candidate => (
-      candidate.text().includes("Advanced filter")
-    ))
-    expect(trigger).toBeTruthy()
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    expect(trigger.exists()).toBe(true)
+    expect(trigger.attributes("data-datagrid-advanced-filter-active")).toBe("true")
+    expect(trigger.find('[data-datagrid-advanced-filter-icon="true"]').exists()).toBe(true)
     await trigger!.trigger("click")
     await flushRuntimeTasks()
 
@@ -1960,12 +2030,67 @@ describe("DataGrid app facade contract", () => {
       }),
     })
 
-    const reopenedTrigger = wrapper.findAll(".datagrid-app-toolbar__button").find(candidate => (
-      candidate.text().includes("Advanced filter")
-    ))
+    const reopenedTrigger = await findAdvancedFilterTrigger(wrapper)
     await reopenedTrigger!.trigger("click")
     await flushRuntimeTasks()
     expect(queryAdvancedFilterRoot()?.textContent).toContain("No filters applied")
+    expect(reopenedTrigger.attributes("data-datagrid-advanced-filter-active")).toBe("false")
+    expect(reopenedTrigger.find('[data-datagrid-advanced-filter-icon="true"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("clears the only advanced filter clause instead of blocking removal", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        advancedFilter: true,
+      },
+    })
+
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    expect(trigger.exists()).toBe(true)
+    await trigger!.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryAdvancedFilterRoot()
+    expect(popover).toBeTruthy()
+
+    const valueInput = popover!.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
+    expect(valueInput).toBeTruthy()
+    valueInput!.value = "NOC"
+    valueInput!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const clearButton = Array.from(popover!.querySelectorAll<HTMLButtonElement>("button")).find(candidate => (
+      candidate.textContent?.includes("Clear")
+    ))
+    expect(clearButton).toBeTruthy()
+    expect(clearButton?.disabled).toBe(false)
+
+    clearButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const clearedValueInput = queryAdvancedFilterRoot()?.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
+    expect(clearedValueInput?.value).toBe("")
+
+    queryAdvancedFilterRoot()?.querySelector<HTMLElement>(".datagrid-advanced-filter__primary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: null,
+          rowCount: 3,
+        }),
+      }),
+    })
 
     wrapper.unmount()
   })
@@ -2233,6 +2358,120 @@ describe("DataGrid app facade contract", () => {
 
     expect(headerCheckbox.attributes("aria-checked")).toBe("false")
     expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it("propagates row-select and unified state updates after header bulk row selection", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const initialStateUpdateCount = (wrapper.emitted("update:state") ?? []).length
+    const initialRowSelectCount = (wrapper.emitted("row-select") ?? []).length
+    const headerCheckbox = wrapper.find('.grid-header-shell .grid-checkbox-trigger[aria-label="Select all filtered rows"]')
+
+    expect(headerCheckbox.exists()).toBe(true)
+    expect(headerCheckbox.attributes("aria-checked")).toBe("false")
+
+    await headerCheckbox.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(headerCheckbox.attributes("aria-checked")).toBe("true")
+
+    const rowSelectEvents = wrapper.emitted("row-select") ?? []
+    expect(rowSelectEvents.length).toBeGreaterThan(initialRowSelectCount)
+    expect(rowSelectEvents.at(-1)?.[0]).toEqual({
+      focusedRow: null,
+      selectedRows: ["r1", "r2", "r3"],
+    })
+
+    const rowSelectionChangeEvents = wrapper.emitted("row-selection-change") ?? []
+    expect(rowSelectionChangeEvents.at(-1)?.[0]).toEqual({
+      snapshot: {
+        focusedRow: null,
+        selectedRows: ["r1", "r2", "r3"],
+      },
+    })
+
+    const stateUpdates = wrapper.emitted("update:state") ?? []
+    expect(stateUpdates.length).toBeGreaterThan(initialStateUpdateCount)
+    expect(stateUpdates.at(-1)?.[0]).toMatchObject({
+      rowSelection: {
+        focusedRow: null,
+        selectedRows: ["r1", "r2", "r3"],
+      },
+    })
+
+    wrapper.unmount()
+  })
+
+  it("preserves controlled row selection across header bulk toggle and rows churn with stable row ids", async () => {
+    const controlledRows = ref<DemoRow[]>(BASE_ROWS.map(row => ({ ...row })))
+    const controlledState = ref<Record<string, unknown> | null>(null)
+    const rowSelectEvents: Array<Record<string, unknown> | null> = []
+
+    const wrapper = mount(defineComponent({
+      setup() {
+        return () => h(DataGrid, {
+          rows: controlledRows.value,
+          columns: COLUMNS,
+          rowSelection: true,
+          state: controlledState.value,
+          "onUpdate:state": (nextState: Record<string, unknown> | null) => {
+            controlledState.value = nextState
+          },
+          onRowSelect: (snapshot: Record<string, unknown> | null) => {
+            rowSelectEvents.push(snapshot)
+          },
+        })
+      },
+    }), {
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const headerCheckbox = wrapper.find('.grid-header-shell .grid-checkbox-trigger[aria-label="Select all filtered rows"]')
+    expect(headerCheckbox.exists()).toBe(true)
+    expect(headerCheckbox.attributes("aria-checked")).toBe("false")
+
+    await headerCheckbox.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(rowSelectEvents.at(-1)).toEqual({
+      focusedRow: null,
+      selectedRows: ["r1", "r2", "r3"],
+    })
+    expect(controlledState.value).toMatchObject({
+      rowSelection: {
+        focusedRow: null,
+        selectedRows: ["r1", "r2", "r3"],
+      },
+    })
+    expect(headerCheckbox.attributes("aria-checked")).toBe("true")
+
+    controlledRows.value = controlledRows.value.map(row => ({
+      ...row,
+      amount: row.amount + 100,
+    }))
+    await nextTick()
+    await flushRuntimeTasks()
+
+    const refreshedHeaderCheckbox = wrapper.find('.grid-header-shell .grid-checkbox-trigger[aria-label="Select all filtered rows"]')
+    expect(refreshedHeaderCheckbox.attributes("aria-checked")).toBe("true")
+    expect(controlledState.value).toMatchObject({
+      rowSelection: {
+        focusedRow: null,
+        selectedRows: ["r1", "r2", "r3"],
+      },
+    })
 
     wrapper.unmount()
   })
@@ -3127,6 +3366,37 @@ describe("DataGrid app facade contract", () => {
 
     expect((wrapper.emitted("update:state") ?? []).length).toBe(initialUpdateCount)
     expect((wrapper.emitted("selection-change") ?? []).length).toBe(1)
+
+    wrapper.unmount()
+  })
+
+  it("forwards typed row-selection-change events from the runtime host", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const runtimeHost = wrapper.findComponent(DataGridRuntimeHost)
+
+    runtimeHost.vm.$emit("row-selection-change", {
+      snapshot: {
+        focusedRow: "r2",
+        selectedRows: ["r1", "r2"],
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect((wrapper.emitted("row-selection-change") ?? []).at(-1)?.[0]).toEqual({
+      snapshot: {
+        focusedRow: "r2",
+        selectedRows: ["r1", "r2"],
+      },
+    })
 
     wrapper.unmount()
   })

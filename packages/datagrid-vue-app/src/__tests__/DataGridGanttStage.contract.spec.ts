@@ -1,4 +1,4 @@
-import { mount } from "@vue/test-utils"
+import { flushPromises, mount } from "@vue/test-utils"
 import { nextTick, ref } from "vue"
 import { describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-vue"
@@ -139,6 +139,7 @@ describe("DataGridGanttStage contract", () => {
     const stageContext = createDataGridTableStageContext({
       mode: ref(table.mode),
       rowHeightMode: ref(table.rowHeightMode),
+      layoutMode: ref("fill"),
       layout: ref(table.layout),
       viewport: ref(table.viewport),
       columns: ref(table.columns),
@@ -164,6 +165,8 @@ describe("DataGridGanttStage contract", () => {
       attachTo: document.body,
     })
 
+    await nextTick()
+    await flushPromises()
     await nextTick()
 
     const rows = wrapper.findAll(".grid-row")
