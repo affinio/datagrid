@@ -142,6 +142,7 @@ export type DataGridAppBodyViewportRuntime<TRow> = Pick<
   "virtualWindow" | "syncBodyRowsInRange" | "rowPartition"
 > & {
   setViewportRange?: UseDataGridRuntimeResult<TRow>["setViewportRange"]
+  setVirtualWindowRange?: UseDataGridRuntimeResult<TRow>["setVirtualWindowRange"]
   getBodyRowAtIndex?: (rowIndex: number) => DataGridRowNode<TRow> | null
 }
 
@@ -348,7 +349,12 @@ export function useDataGridAppViewport<TRow>(
       totalMs: number
       incrementalResolveMs: number
       runtimeSyncMs: number
+      setViewportRangeMs: number
+      displayRowsAssignMs: number
       viewportCommitMs: number
+      rangeShiftStart: number
+      rangeShiftEnd: number
+      changedRowCount: number
     }
     | null = null
   let pendingViewportScrollTop = 0
@@ -769,14 +775,22 @@ export function useDataGridAppViewport<TRow>(
           totalMs: 0,
           incrementalResolveMs: 0,
           runtimeSyncMs: 0,
+          setViewportRangeMs: 0,
+          displayRowsAssignMs: 0,
           viewportCommitMs: 0,
+          rangeShiftStart: 0,
+          rangeShiftEnd: 0,
+          changedRowCount: 0,
         }
       }
       return
     }
+    const previousRange = lastSyncedRange
     const visibleRowsPerfStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
     let incrementalResolveMs = 0
     let runtimeSyncMs = 0
+    let setViewportRangeMs = 0
+    let displayRowsAssignMs = 0
     let viewportCommitMs = 0
     const incrementalRows = force
       ? null
@@ -790,10 +804,21 @@ export function useDataGridAppViewport<TRow>(
         return rows
       })()
     if (incrementalRows) {
-      if (typeof options.runtime.setViewportRange === "function") {
+      const setWindowRange = options.runtime.setVirtualWindowRange ?? options.runtime.setViewportRange
+      if (typeof setWindowRange === "function") {
         const commitStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
-        options.runtime.setViewportRange(range)
-        displayRows.value = incrementalRows
+        if (perfTraceEnabled) {
+          const setViewportRangeStart = resolveDataGridPerfNow()
+          setWindowRange(range)
+          setViewportRangeMs = resolveDataGridPerfNow() - setViewportRangeStart
+          const displayRowsAssignStart = resolveDataGridPerfNow()
+          displayRows.value = incrementalRows
+          displayRowsAssignMs = resolveDataGridPerfNow() - displayRowsAssignStart
+        }
+        else {
+          setWindowRange(range)
+          displayRows.value = incrementalRows
+        }
         if (perfTraceEnabled) {
           viewportCommitMs = resolveDataGridPerfNow() - commitStart
         }
@@ -820,12 +845,21 @@ export function useDataGridAppViewport<TRow>(
     if (perfTraceEnabled) {
       lastVisibleRowSyncPerf = {
         mode: incrementalRows
-          ? (typeof options.runtime.setViewportRange === "function" ? "incremental" : "incremental-runtime-fallback")
+          ? ((typeof options.runtime.setVirtualWindowRange === "function" || typeof options.runtime.setViewportRange === "function")
+              ? "incremental"
+              : "incremental-runtime-fallback")
           : "runtime",
         totalMs: resolveDataGridPerfNow() - visibleRowsPerfStart,
         incrementalResolveMs,
         runtimeSyncMs,
+        setViewportRangeMs,
+        displayRowsAssignMs,
         viewportCommitMs,
+        rangeShiftStart: previousRange ? range.start - previousRange.start : 0,
+        rangeShiftEnd: previousRange ? range.end - previousRange.end : 0,
+        changedRowCount: previousRange
+          ? Math.max(Math.abs(range.start - previousRange.start), Math.abs(range.end - previousRange.end))
+          : Math.max(0, range.end - range.start + 1),
       }
     }
   }
@@ -864,7 +898,12 @@ export function useDataGridAppViewport<TRow>(
             totalMs: 0,
             incrementalResolveMs: 0,
             runtimeSyncMs: 0,
+            setViewportRangeMs: 0,
+            displayRowsAssignMs: 0,
             viewportCommitMs: 0,
+            rangeShiftStart: 0,
+            rangeShiftEnd: 0,
+            changedRowCount: 0,
           }
         }
       }
@@ -925,7 +964,12 @@ export function useDataGridAppViewport<TRow>(
       visibleRowsMode: visibleRowsPerf?.mode ?? "none",
       visibleRowsIncrementalResolveMs: visibleRowsPerf?.incrementalResolveMs ?? 0,
       visibleRowsRuntimeSyncMs: visibleRowsPerf?.runtimeSyncMs ?? 0,
+      visibleRowsSetViewportRangeMs: visibleRowsPerf?.setViewportRangeMs ?? 0,
+      visibleRowsDisplayRowsAssignMs: visibleRowsPerf?.displayRowsAssignMs ?? 0,
       visibleRowsViewportCommitMs: visibleRowsPerf?.viewportCommitMs ?? 0,
+      visibleRowsRangeShiftStart: visibleRowsPerf?.rangeShiftStart ?? 0,
+      visibleRowsRangeShiftEnd: visibleRowsPerf?.rangeShiftEnd ?? 0,
+      visibleRowsChangedRowCount: visibleRowsPerf?.changedRowCount ?? 0,
     })
   }
 

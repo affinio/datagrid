@@ -153,6 +153,11 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
    */
   setViewportRange: (range: DataGridViewportRange) => void
   /**
+   * Cheap body-relative viewport window update for render pipelines.
+   * Keeps the canonical virtualWindow in sync without forcing a full row-model snapshot emit.
+   */
+  setVirtualWindowRange: (range: DataGridViewportRange) => void
+  /**
    * Get the current body-relative viewport range.
    * Pinned rows are excluded from this coordinate system.
    */
@@ -603,11 +608,19 @@ export function useDataGridRuntime<TRow = unknown>(
     runtime.setViewportRange(normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount))
   }
 
+  function setVirtualWindowRange(range: DataGridBodyViewportRange) {
+    runtime.setVirtualWindowRange(normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount))
+  }
+
   function getViewportRange(): DataGridBodyViewportRange {
-    return normalizeBodyViewportRange(
-      api.rows.getSnapshot().viewportRange,
-      rowPartition.value.bodyRowCount,
-    )
+    const currentWindow = virtualWindow.value
+    if (currentWindow) {
+      return normalizeBodyViewportRange(
+        { start: currentWindow.rowStart, end: currentWindow.rowEnd },
+        rowPartition.value.bodyRowCount,
+      )
+    }
+    return normalizeBodyViewportRange({ start: 0, end: 0 }, rowPartition.value.bodyRowCount)
   }
 
   return {
@@ -638,6 +651,7 @@ export function useDataGridRuntime<TRow = unknown>(
     getBodyRowAtIndex,
     resolveBodyRowIndexById,
     setViewportRange,
+    setVirtualWindowRange,
     getViewportRange,
     getProjectionMode: api.policy.getProjectionMode,
     setProjectionMode(mode: DataGridApiProjectionMode) {

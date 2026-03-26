@@ -266,6 +266,56 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r1", "r2", "r3", "r4", "r5"])
   })
 
+  it("prefers fast virtual-window updates over full viewport sync during incremental shifts", () => {
+    const raf = createRafHarness()
+    const rows = makeRows(100)
+    const syncRowsInRange = vi.fn(({ start, end }: { start: number; end: number }) => rows.slice(start, end + 1))
+    const getBodyRowAtIndex = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
+    const setViewportRange = vi.fn()
+    const setVirtualWindowRange = vi.fn()
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        setViewportRange,
+        setVirtualWindowRange,
+        getBodyRowAtIndex,
+        rowPartition: ref({ bodyRowCount: 100, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 4 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = {
+      scrollTop: 0,
+      scrollLeft: 0,
+      clientHeight: 100,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.syncViewportFromDom()
+
+    getBodyRowAtIndex.mockClear()
+    element.scrollTop = 20
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(setVirtualWindowRange).toHaveBeenCalledTimes(1)
+    expect(setVirtualWindowRange).toHaveBeenLastCalledWith({ start: 1, end: 5 })
+    expect(setViewportRange).not.toHaveBeenCalled()
+    expect(getBodyRowAtIndex).toHaveBeenCalledTimes(1)
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r1", "r2", "r3", "r4", "r5"])
+  })
+
   it("retains the last synced window while the visible range stays inside the overscan buffer", () => {
     const raf = createRafHarness()
     const rows = makeRows(200)

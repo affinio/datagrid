@@ -55,6 +55,7 @@ export interface UseDataGridRuntimeServiceResult<TRow = unknown> extends DataGri
   ) => void
   setColumns: (columns: readonly DataGridColumnInput[]) => void
   setViewportRange: (range: DataGridViewportRange) => void
+  setVirtualWindowRange: (range: DataGridViewportRange) => void
   start: () => Promise<void>
   stop: () => void
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
@@ -455,6 +456,31 @@ export function useDataGridRuntimeService<TRow = unknown>(
     emitVirtualWindow()
   }
 
+  const setVirtualWindowRange = (range: DataGridViewportRange) => {
+    const currentSnapshot = virtualWindowSnapshot ?? resolveVirtualWindowSnapshot()
+    const rowTotal = currentSnapshot?.rowTotal ?? normalizeCount(rowModel.getRowCount())
+    const normalizedRowRange = normalizeRange(range.start, range.end, rowTotal)
+    const nextSnapshot: DataGridRuntimeVirtualWindowSnapshot = {
+      rowStart: normalizedRowRange.start,
+      rowEnd: normalizedRowRange.end,
+      rowTotal,
+      colStart: currentSnapshot?.colStart ?? 0,
+      colEnd: currentSnapshot?.colEnd ?? 0,
+      colTotal: currentSnapshot?.colTotal ?? normalizeCount(columnModel.getSnapshot().visibleColumns.length),
+      overscan: currentSnapshot?.overscan ?? {
+        top: 0,
+        bottom: 0,
+        left: 0,
+        right: 0,
+      },
+    }
+    if (isSameVirtualWindow(virtualWindowSnapshot, nextSnapshot)) {
+      return
+    }
+    virtualWindowSnapshot = nextSnapshot
+    emitVirtualWindow()
+  }
+
   const syncColumnsFromRowPivot = (force = false): void => {
     const rowSnapshot = rowModel.getSnapshot()
     const pivotColumns = rowSnapshot.pivotColumns ?? []
@@ -578,6 +604,7 @@ export function useDataGridRuntimeService<TRow = unknown>(
     patchRows,
     setColumns,
     setViewportRange,
+    setVirtualWindowRange,
     start,
     stop,
     syncRowsInRange,
