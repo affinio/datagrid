@@ -1,4 +1,4 @@
-import { computed, ref, shallowRef, type Ref } from "vue"
+import { computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, type Ref } from "vue"
 import type { DataGridColumnSnapshot, DataGridRowNode, DataGridViewportRange } from "@affino/datagrid-core"
 import { resolveDataGridHeaderScrollSyncLeft } from "@affino/datagrid-orchestration"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
@@ -77,10 +77,19 @@ export function useDataGridAppViewport<TRow>(
   const indexColumnWidth = options.indexColumnWidth ?? 72
   const flexFillOffsetWidth = options.flexFillOffsetWidth ?? indexColumnWidth
   const sizingColumns = computed(() => options.sizingColumns?.value ?? options.visibleColumns.value)
+  const sizingColumnMap = computed<Map<string, DataGridColumnSnapshot>>(() => {
+    const map = new Map<string, DataGridColumnSnapshot>()
+    for (const col of sizingColumns.value) {
+      map.set(col.key, col)
+    }
+    return map
+  })
   const snapshotColumnWidths = computed<Record<string, number>>(() => {
-    return Object.fromEntries(
-      sizingColumns.value.map(column => [column.key, column.width ?? defaultColumnWidth]),
-    )
+    const result: Record<string, number> = {}
+    for (const column of sizingColumns.value) {
+      result[column.key] = column.width ?? defaultColumnWidth
+    }
+    return result
   })
   const resolveBaseColumnWidth = (column: DataGridColumnSnapshot | undefined): number => {
     if (!column) {
@@ -282,10 +291,22 @@ export function useDataGridAppViewport<TRow>(
     return afterCount * options.normalizedBaseRowHeight.value
   })
 
+  // Prefix sum array: columnPrefixWidths[i] = left edge (px) of column i.
+  // columnPrefixWidths[columns.length] = total track width.
+  // Computed once per column-layout change; used by viewportColumnMetrics and mainTrackWidth.
+  const columnPrefixWidths = computed<readonly number[]>(() => {
+    const columns = options.visibleColumns.value
+    const prefix = new Array<number>(columns.length + 1)
+    prefix[0] = 0
+    for (let i = 0; i < columns.length; i++) {
+      prefix[i + 1] = prefix[i] + resolveColumnWidth(columns[i])
+    }
+    return prefix
+  })
+
   const mainTrackWidth = computed<number>(() => {
-    return options.visibleColumns.value.reduce((sum, column) => {
-      return sum + resolveColumnWidth(column)
-    }, 0)
+    const prefix = columnPrefixWidths.value
+    return prefix[prefix.length - 1] ?? 0
   })
 
   const viewportColumnMetrics = computed(() => {
@@ -315,55 +336,44 @@ export function useDataGridAppViewport<TRow>(
     const scrollLeft = Math.max(0, viewportScrollLeft.value)
     const viewportStartPx = scrollLeft
     const viewportEndPx = scrollLeft + availableWidth
+    const prefix = columnPrefixWidths.value
 
-    let runningWidth = 0
-    let visibleStart = 0
-    while (
-      visibleStart < columns.length
-      && runningWidth + resolveColumnWidth(columns[visibleStart]) <= viewportStartPx
-    ) {
-      runningWidth += resolveColumnWidth(columns[visibleStart])
-      visibleStart += 1
+    // Binary search: first column whose right edge (prefix[i+1]) > viewportStartPx.
+    let lo = 0
+    let hi = columns.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (prefix[mid + 1] <= viewportStartPx) lo = mid + 1
+      else hi = mid
     }
+    const visibleStart = lo
 
     if (visibleStart >= columns.length) {
       const lastIndex = columns.length - 1
-      let leftSpacerWidth = 0
-      for (let index = 0; index < lastIndex; index += 1) {
-        leftSpacerWidth += resolveColumnWidth(columns[index])
-      }
       return {
         start: lastIndex,
         end: lastIndex,
         renderedColumns: columns.slice(lastIndex, lastIndex + 1),
-        leftSpacerWidth,
+        leftSpacerWidth: prefix[lastIndex], // O(1) via prefix sums
         rightSpacerWidth: 0,
       }
     }
 
-    let visibleEnd = visibleStart
-    let coveredWidth = runningWidth
-    while (visibleEnd < columns.length) {
-      coveredWidth += resolveColumnWidth(columns[visibleEnd])
-      if (coveredWidth >= viewportEndPx) {
-        break
-      }
-      visibleEnd += 1
+    // Binary search: last column whose left edge (prefix[i]) < viewportEndPx.
+    lo = visibleStart
+    hi = columns.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if (prefix[mid] < viewportEndPx) lo = mid
+      else hi = mid - 1
     }
+    const visibleEnd = lo
 
     const start = Math.max(0, visibleStart - columnOverscan.value)
     const end = Math.min(columns.length - 1, visibleEnd + columnOverscan.value)
 
-    let leftSpacerWidth = 0
-    for (let index = 0; index < start; index += 1) {
-      leftSpacerWidth += resolveColumnWidth(columns[index])
-    }
-
-    let renderedWidth = 0
-    for (let index = start; index <= end; index += 1) {
-      renderedWidth += resolveColumnWidth(columns[index])
-    }
-
+    const leftSpacerWidth = prefix[start] // O(1)
+    const renderedWidth = prefix[end + 1] - prefix[start] // O(1)
     const rightSpacerWidth = Math.max(0, totalWidth - leftSpacerWidth - renderedWidth)
 
     return {
@@ -403,8 +413,9 @@ export function useDataGridAppViewport<TRow>(
   })
 
   const columnStyle = (key: string): Record<string, string> => {
-    const column = sizingColumns.value.find(candidate => candidate.key === key)
-    const width = resolveColumnWidth(column)
+    // O(1): check the pre-built effectiveColumnWidths record first; fall back to
+    // resolveBaseColumnWidth only for the rare case where sizingColumns ≠ visibleColumns.
+    const width = effectiveColumnWidths.value[key] ?? resolveBaseColumnWidth(sizingColumnMap.value.get(key))
     const px = `${width}px`
     return {
       width: px,
@@ -558,6 +569,18 @@ export function useDataGridAppViewport<TRow>(
     }
     cancelViewportAnimationFrame(viewportSyncRafHandle)
     viewportSyncRafHandle = null
+  }
+
+  // Guard: onBeforeUnmount requires an active component instance.
+  // When this composable is used outside a component context (e.g. unit tests) the
+  // cleanup is handled by the caller via cancelScheduledViewportSync().
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      if (viewportSyncRafHandle !== null) {
+        cancelViewportAnimationFrame(viewportSyncRafHandle)
+        viewportSyncRafHandle = null
+      }
+    })
   }
 
   return {
