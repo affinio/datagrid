@@ -16,7 +16,9 @@ function resolveMaybeRef<T>(value: MaybeRef<T>): T {
 export type DataGridAppBodyViewportRuntime<TRow> = Pick<
   UseDataGridRuntimeResult<TRow>,
   "virtualWindow" | "syncBodyRowsInRange" | "rowPartition"
->
+> & {
+  getBodyRowAtIndex?: (rowIndex: number) => DataGridRowNode<TRow> | null
+}
 
 export interface UseDataGridAppViewportOptions<TRow> {
   runtime: DataGridAppBodyViewportRuntime<TRow>
@@ -73,6 +75,28 @@ export interface UseDataGridAppViewportResult<TRow> {
 export function useDataGridAppViewport<TRow>(
   options: UseDataGridAppViewportOptions<TRow>,
 ): UseDataGridAppViewportResult<TRow> {
+  interface ViewportSnapshot {
+    scrollTop: number
+    scrollLeft: number
+    clientWidth: number
+    clientHeight: number
+    shellClientWidth: number
+  }
+
+  interface ViewportDimensions {
+    clientWidth: number
+    clientHeight: number
+    shellClientWidth: number
+  }
+
+  interface ViewportColumnMetrics {
+    start: number
+    end: number
+    renderedColumns: readonly DataGridColumnSnapshot[]
+    leftSpacerWidth: number
+    rightSpacerWidth: number
+  }
+
   const defaultColumnWidth = options.defaultColumnWidth ?? 140
   const indexColumnWidth = options.indexColumnWidth ?? 72
   const flexFillOffsetWidth = options.flexFillOffsetWidth ?? indexColumnWidth
@@ -188,6 +212,18 @@ export function useDataGridAppViewport<TRow>(
   let viewportSyncRafHandle: number | null = null
   let pendingViewportSyncForce = false
   let pendingViewportSyncMeasureVisibleRowHeights = false
+  let pendingViewportScrollTop = 0
+  let pendingViewportScrollLeft = 0
+  let cachedViewportElement: HTMLElement | null = null
+  let cachedViewportDimensions: ViewportDimensions | null = null
+  let lastViewportColumnMetrics: {
+    columns: readonly DataGridColumnSnapshot[]
+    start: number
+    end: number
+    leftSpacerWidth: number
+    rightSpacerWidth: number
+    value: ViewportColumnMetrics
+  } | null = null
   const isPaginationMode = computed<boolean>(() => {
     return resolveMaybeRef(options.mode) === "base" && resolveMaybeRef(options.rowRenderMode) === "pagination"
   })
@@ -214,21 +250,47 @@ export function useDataGridAppViewport<TRow>(
     globalThis.clearTimeout(handle)
   }
 
-  interface ViewportSnapshot {
-    scrollTop: number
-    scrollLeft: number
-    clientWidth: number
-    clientHeight: number
-    shellClientWidth: number
-  }
-
-  const captureViewportSnapshot = (element: HTMLElement): ViewportSnapshot => ({
-    scrollTop: element.scrollTop,
-    scrollLeft: element.scrollLeft,
+  const captureViewportDimensions = (element: HTMLElement): ViewportDimensions => ({
     clientWidth: element.clientWidth,
     clientHeight: element.clientHeight,
     shellClientWidth: Math.max(element.parentElement?.clientWidth ?? 0, element.clientWidth),
   })
+
+  const cacheViewportDimensions = (element: HTMLElement, dimensions: ViewportDimensions): void => {
+    cachedViewportElement = element
+    cachedViewportDimensions = dimensions
+  }
+
+  const captureViewportSnapshot = (element: HTMLElement): ViewportSnapshot => {
+    const dimensions = captureViewportDimensions(element)
+    cacheViewportDimensions(element, dimensions)
+    pendingViewportScrollTop = element.scrollTop
+    pendingViewportScrollLeft = element.scrollLeft
+    return {
+      scrollTop: pendingViewportScrollTop,
+      scrollLeft: pendingViewportScrollLeft,
+      ...dimensions,
+    }
+  }
+
+  const resolveQueuedViewportSnapshot = (
+    element: HTMLElement,
+    commitOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean },
+  ): ViewportSnapshot => {
+    if (
+      commitOptions.forceVisibleRows
+      || commitOptions.measureVisibleRowHeights
+      || cachedViewportDimensions == null
+      || cachedViewportElement !== element
+    ) {
+      return captureViewportSnapshot(element)
+    }
+    return {
+      scrollTop: pendingViewportScrollTop,
+      scrollLeft: pendingViewportScrollLeft,
+      ...cachedViewportDimensions,
+    }
+  }
 
   const resolveScrollableBodyRowCount = (): number => {
     return Math.max(0, options.runtime.rowPartition.value.bodyRowCount)
@@ -309,28 +371,55 @@ export function useDataGridAppViewport<TRow>(
     return prefix[prefix.length - 1] ?? 0
   })
 
+  const resolveViewportColumnMetricsResult = (
+    columns: readonly DataGridColumnSnapshot[],
+    start: number,
+    end: number,
+    leftSpacerWidth: number,
+    rightSpacerWidth: number,
+  ): ViewportColumnMetrics => {
+    if (
+      lastViewportColumnMetrics
+      && lastViewportColumnMetrics.columns === columns
+      && lastViewportColumnMetrics.start === start
+      && lastViewportColumnMetrics.end === end
+      && lastViewportColumnMetrics.leftSpacerWidth === leftSpacerWidth
+      && lastViewportColumnMetrics.rightSpacerWidth === rightSpacerWidth
+    ) {
+      return lastViewportColumnMetrics.value
+    }
+    const renderedColumns =
+      start === 0 && end === Math.max(0, columns.length - 1) && leftSpacerWidth === 0 && rightSpacerWidth === 0
+        ? columns
+        : columns.slice(start, end + 1)
+    const value: ViewportColumnMetrics = {
+      start,
+      end,
+      renderedColumns,
+      leftSpacerWidth,
+      rightSpacerWidth,
+    }
+    lastViewportColumnMetrics = {
+      columns,
+      start,
+      end,
+      leftSpacerWidth,
+      rightSpacerWidth,
+      value,
+    }
+    return value
+  }
+
   const viewportColumnMetrics = computed(() => {
     const columns = options.visibleColumns.value
     const totalWidth = mainTrackWidth.value
     if (!resolveMaybeRef(options.columnVirtualizationEnabled) || columns.length <= 0) {
-      return {
-        start: 0,
-        end: Math.max(0, columns.length - 1),
-        renderedColumns: columns,
-        leftSpacerWidth: 0,
-        rightSpacerWidth: 0,
-      }
+      return resolveViewportColumnMetricsResult(columns, 0, Math.max(0, columns.length - 1), 0, 0)
     }
 
     const availableWidth = Math.max(0, viewportClientWidth.value - indexColumnWidth)
     if (availableWidth <= 0) {
-      return {
-        start: 0,
-        end: Math.max(0, columns.length - 1),
-        renderedColumns: columns,
-        leftSpacerWidth: 0,
-        rightSpacerWidth: 0,
-      }
+      return resolveViewportColumnMetricsResult(columns, 0, Math.max(0, columns.length - 1), 0, 0)
     }
 
     const scrollLeft = Math.max(0, viewportScrollLeft.value)
@@ -350,13 +439,7 @@ export function useDataGridAppViewport<TRow>(
 
     if (visibleStart >= columns.length) {
       const lastIndex = columns.length - 1
-      return {
-        start: lastIndex,
-        end: lastIndex,
-        renderedColumns: columns.slice(lastIndex, lastIndex + 1),
-        leftSpacerWidth: prefix[lastIndex], // O(1) via prefix sums
-        rightSpacerWidth: 0,
-      }
+      return resolveViewportColumnMetricsResult(columns, lastIndex, lastIndex, prefix[lastIndex], 0)
     }
 
     // Binary search: last column whose left edge (prefix[i]) < viewportEndPx.
@@ -376,13 +459,7 @@ export function useDataGridAppViewport<TRow>(
     const renderedWidth = prefix[end + 1] - prefix[start] // O(1)
     const rightSpacerWidth = Math.max(0, totalWidth - leftSpacerWidth - renderedWidth)
 
-    return {
-      start,
-      end,
-      renderedColumns: columns.slice(start, end + 1),
-      leftSpacerWidth,
-      rightSpacerWidth,
-    }
+    return resolveViewportColumnMetricsResult(columns, start, end, leftSpacerWidth, rightSpacerWidth)
   })
 
   const gridContentStyle = computed<Record<string, string>>(() => {
@@ -455,6 +532,54 @@ export function useDataGridAppViewport<TRow>(
     return { start, end }
   }
 
+  const resolveIncrementalVisibleRows = (
+    range: DataGridViewportRange,
+  ): readonly DataGridRowNode<TRow>[] | null => {
+    const getBodyRowAtIndex = options.runtime.getBodyRowAtIndex
+    if (typeof getBodyRowAtIndex !== "function" || !lastSyncedRange) {
+      return null
+    }
+    const previousRange = lastSyncedRange
+    const previousRows = displayRows.value
+    const previousLength = previousRange.end >= previousRange.start
+      ? previousRange.end - previousRange.start + 1
+      : 0
+    if (previousRows.length !== previousLength) {
+      return null
+    }
+    const overlapStart = Math.max(previousRange.start, range.start)
+    const overlapEnd = Math.min(previousRange.end, range.end)
+    if (overlapEnd < overlapStart) {
+      return null
+    }
+
+    const nextRows: DataGridRowNode<TRow>[] = []
+    for (let rowIndex = range.start; rowIndex < overlapStart; rowIndex += 1) {
+      const row = getBodyRowAtIndex(rowIndex)
+      if (row) {
+        nextRows.push(row)
+      }
+    }
+
+    const overlapOffset = overlapStart - previousRange.start
+    const overlapLength = overlapEnd - overlapStart + 1
+    for (let index = 0; index < overlapLength; index += 1) {
+      const row = previousRows[overlapOffset + index]
+      if (row) {
+        nextRows.push(row)
+      }
+    }
+
+    for (let rowIndex = overlapEnd + 1; rowIndex <= range.end; rowIndex += 1) {
+      const row = getBodyRowAtIndex(rowIndex)
+      if (row) {
+        nextRows.push(row)
+      }
+    }
+
+    return nextRows
+  }
+
   const syncVisibleRows = (range: DataGridViewportRange, force = false): void => {
     if (
       !force
@@ -464,7 +589,9 @@ export function useDataGridAppViewport<TRow>(
     ) {
       return
     }
-    displayRows.value = options.runtime.syncBodyRowsInRange(range)
+    displayRows.value = force
+      ? options.runtime.syncBodyRowsInRange(range)
+      : (resolveIncrementalVisibleRows(range) ?? options.runtime.syncBodyRowsInRange(range))
     lastSyncedRange = {
       start: range.start,
       end: range.end,
@@ -515,7 +642,10 @@ export function useDataGridAppViewport<TRow>(
     if (!element) {
       return
     }
-    commitViewportSnapshot(captureViewportSnapshot(element), {
+    commitViewportSnapshot(resolveQueuedViewportSnapshot(element, {
+      forceVisibleRows: shouldForceVisibleRows,
+      measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
+    }), {
       forceVisibleRows: shouldForceVisibleRows,
       measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
     })
@@ -535,7 +665,9 @@ export function useDataGridAppViewport<TRow>(
 
   const handleViewportScroll = (event: Event): void => {
     const element = event.target as HTMLElement
-    syncHeaderScrollLeftFromBody(element.scrollLeft)
+    pendingViewportScrollTop = element.scrollTop
+    pendingViewportScrollLeft = element.scrollLeft
+    syncHeaderScrollLeftFromBody(pendingViewportScrollLeft)
     scheduleViewportCommit({
       forceVisibleRows: false,
       measureVisibleRowHeights: false,
@@ -580,6 +712,8 @@ export function useDataGridAppViewport<TRow>(
         cancelViewportAnimationFrame(viewportSyncRafHandle)
         viewportSyncRafHandle = null
       }
+      cachedViewportElement = null
+      cachedViewportDimensions = null
     })
   }
 

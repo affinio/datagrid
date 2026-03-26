@@ -76,6 +76,14 @@ function makeColumns(count: number, width = 140): DataGridColumnSnapshot[] {
   })) as unknown as DataGridColumnSnapshot[]
 }
 
+function makeRows(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    rowId: `r${i}`,
+    displayIndex: i,
+    kind: "leaf",
+  }))
+}
+
 function makeBodyViewport(scrollLeft = 0, clientWidth = 800): HTMLElement {
   return { scrollTop: 0, scrollLeft, clientHeight: 600, clientWidth } as HTMLElement
 }
@@ -205,6 +213,53 @@ describe("useDataGridAppViewport contract", () => {
     expect(syncRowsInRange).toHaveBeenLastCalledWith({ start: 3, end: 7 })
   })
 
+  it("incrementally shifts visible rows when the viewport range overlaps the previous frame", () => {
+    const raf = createRafHarness()
+    const rows = makeRows(100)
+    const syncRowsInRange = vi.fn(({ start, end }: { start: number; end: number }) => rows.slice(start, end + 1))
+    const getBodyRowAtIndex = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        getBodyRowAtIndex,
+        rowPartition: ref({ bodyRowCount: 100, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 4 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = {
+      scrollTop: 0,
+      scrollLeft: 0,
+      clientHeight: 100,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.syncViewportFromDom()
+
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r0", "r1", "r2", "r3", "r4"])
+
+    getBodyRowAtIndex.mockClear()
+    element.scrollTop = 20
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(getBodyRowAtIndex).toHaveBeenCalledTimes(1)
+    expect(getBodyRowAtIndex).toHaveBeenLastCalledWith(5)
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r1", "r2", "r3", "r4", "r5"])
+  })
+
   // -------------------------------------------------------------------------
   // columnStyle() correctness
   // -------------------------------------------------------------------------
@@ -290,6 +345,34 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.leftColumnSpacerWidth.value).toBe(30 * 100)
     // renderedWidth = 8 * 100 = 800; rightSpacer = 10000 - 3000 - 800 = 6200
     expect(viewport.rightColumnSpacerWidth.value).toBe(10000 - 3000 - 8 * 100)
+  })
+
+  it("reuses renderedColumns ref when horizontal scroll stays within the same column range", () => {
+    const raf = createRafHarness()
+    const cols = makeColumns(100, 100)
+
+    const viewport = makeViewport({
+      visibleColumns: ref(cols),
+      columnVirtualizationEnabled: computed(() => true),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const el = makeBodyViewport(3010, 800)
+    viewport.bodyViewportRef.value = el
+    viewport.syncViewportFromDom()
+
+    const firstRenderedColumns = viewport.renderedColumns.value
+
+    el.scrollLeft = 3040
+    viewport.handleViewportScroll(createScrollEvent(el))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(viewport.viewportColumnStart.value).toBe(30)
+    expect(viewport.viewportColumnEnd.value).toBe(38)
+    expect(viewport.renderedColumns.value).toBe(firstRenderedColumns)
   })
 
   it("applies column overscan symmetrically around the visible range", () => {
@@ -392,6 +475,89 @@ describe("useDataGridAppViewport contract", () => {
 
     // Confirm the RAF was truly cancelled — no sync should happen
     expect(syncRowsInRange).not.toHaveBeenCalled()
+  })
+
+  it("reuses cached viewport dimensions during scroll-only RAF commits", () => {
+    const raf = createRafHarness()
+    const widthReads = { clientWidth: 0, clientHeight: 0, shellClientWidth: 0 }
+    let scrollTop = 0
+    let scrollLeft = 0
+
+    const parentElement = {} as HTMLElement
+    Object.defineProperty(parentElement, "clientWidth", {
+      configurable: true,
+      get() {
+        widthReads.shellClientWidth += 1
+        return 640
+      },
+    })
+
+    const element = { parentElement } as HTMLElement
+    Object.defineProperty(element, "scrollTop", {
+      configurable: true,
+      get() {
+        return scrollTop
+      },
+      set(value: number) {
+        scrollTop = value
+      },
+    })
+    Object.defineProperty(element, "scrollLeft", {
+      configurable: true,
+      get() {
+        return scrollLeft
+      },
+      set(value: number) {
+        scrollLeft = value
+      },
+    })
+    Object.defineProperty(element, "clientWidth", {
+      configurable: true,
+      get() {
+        widthReads.clientWidth += 1
+        return 600
+      },
+    })
+    Object.defineProperty(element, "clientHeight", {
+      configurable: true,
+      get() {
+        widthReads.clientHeight += 1
+        return 400
+      },
+    })
+
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: () => [],
+        rowPartition: ref({ bodyRowCount: 100, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    viewport.bodyViewportRef.value = element
+    viewport.syncViewportFromDom()
+
+    widthReads.clientWidth = 0
+    widthReads.clientHeight = 0
+    widthReads.shellClientWidth = 0
+    scrollTop = 20
+    scrollLeft = 16
+
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(widthReads.clientWidth).toBe(0)
+    expect(widthReads.clientHeight).toBe(0)
+    expect(widthReads.shellClientWidth).toBe(0)
   })
 
   // -------------------------------------------------------------------------

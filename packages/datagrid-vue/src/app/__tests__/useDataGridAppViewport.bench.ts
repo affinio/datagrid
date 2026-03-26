@@ -249,6 +249,56 @@ describe("mainTrackWidth — 200 columns", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// Suite 5 — visible-row sync: full window rebuild vs incremental overlap reuse
+//
+// Simulates 1 000 consecutive scroll steps where the viewport moves by one row.
+// ---------------------------------------------------------------------------
+
+describe("visible-row sync — 1 000 one-row window shifts", () => {
+  const ROW_COUNT = 100_000
+  const WINDOW_SIZE = 80
+  const SHIFTS = 1_000
+  const rows = Array.from({ length: ROW_COUNT }, (_, index) => ({ rowId: `row-${index}` }))
+
+  bench("BEFORE — rebuild full visible window on every shift", () => {
+    let start = 0
+    let visibleRows: { rowId: string }[] = rows.slice(0, WINDOW_SIZE)
+
+    for (let shift = 0; shift < SHIFTS; shift += 1) {
+      start += 1
+      const nextRows: { rowId: string }[] = []
+      for (let rowIndex = start; rowIndex < start + WINDOW_SIZE; rowIndex += 1) {
+        const row = rows[rowIndex]
+        if (row) {
+          nextRows.push(row)
+        }
+      }
+      visibleRows = nextRows
+    }
+
+    _sink = visibleRows
+  })
+
+  bench("AFTER  — reuse overlap and fetch only delta rows", () => {
+    let start = 0
+    let visibleRows: { rowId: string }[] = rows.slice(0, WINDOW_SIZE)
+
+    for (let shift = 0; shift < SHIFTS; shift += 1) {
+      const nextStart = start + 1
+      const nextRows = visibleRows.slice(1)
+      const appendedRow = rows[nextStart + WINDOW_SIZE - 1]
+      if (appendedRow) {
+        nextRows.push(appendedRow)
+      }
+      visibleRows = nextRows
+      start = nextStart
+    }
+
+    _sink = visibleRows
+  })
+})
+
 // Read once so TypeScript does not warn "declared but never read".
 // Has no runtime effect; V8 will eliminate this check.
 void _sink
