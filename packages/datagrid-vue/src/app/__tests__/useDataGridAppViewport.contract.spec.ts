@@ -266,6 +266,66 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r1", "r2", "r3", "r4", "r5"])
   })
 
+  it("retains the last synced window while the visible range stays inside the overscan buffer", () => {
+    const raf = createRafHarness()
+    const rows = makeRows(200)
+    const syncRowsInRange = vi.fn(({ start, end }: { start: number; end: number }) => rows.slice(start, end + 1))
+    const getBodyRowAtIndex = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
+    const setViewportRange = vi.fn()
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        setViewportRange,
+        getBodyRowAtIndex,
+        rowPartition: ref({ bodyRowCount: 200, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 4),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = {
+      scrollTop: 400,
+      scrollLeft: 0,
+      clientHeight: 100,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.syncViewportFromDom()
+
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(syncRowsInRange).toHaveBeenLastCalledWith({ start: 16, end: 28 })
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(rows.slice(16, 29).map(row => row.rowId))
+
+    element.scrollTop = 440
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(setViewportRange).not.toHaveBeenCalled()
+    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(rows.slice(16, 29).map(row => row.rowId))
+
+    element.scrollTop = 460
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(setViewportRange).toHaveBeenCalledTimes(1)
+    expect(setViewportRange).toHaveBeenLastCalledWith({ start: 19, end: 31 })
+    expect(getBodyRowAtIndex).toHaveBeenCalledTimes(3)
+    expect(getBodyRowAtIndex.mock.calls.map(([rowIndex]) => rowIndex)).toEqual([29, 30, 31])
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(rows.slice(19, 32).map(row => row.rowId))
+  })
+
   // -------------------------------------------------------------------------
   // columnStyle() correctness
   // -------------------------------------------------------------------------

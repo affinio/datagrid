@@ -6,6 +6,130 @@ import type { DataGridAppMode, DataGridAppRowRenderMode } from "./useDataGridApp
 
 type MaybeRef<T> = T | Ref<T>
 
+const DATA_GRID_PERF_TRACE_QUERY_PARAM = "dgPerfTrace"
+const DATA_GRID_PERF_TRACE_STORAGE_KEY = "affino-datagrid-perf-trace"
+const DATA_GRID_PERF_STORE_KEY = "__AFFINO_DATAGRID_PERF__"
+const DATA_GRID_PERF_SAMPLE_LIMIT = 400
+
+type DataGridPerfSample = {
+  scope: string
+  ts: number
+  totalMs: number
+  [key: string]: string | number
+}
+
+type DataGridPerfStore = {
+  samples: DataGridPerfSample[]
+  push: (sample: DataGridPerfSample) => void
+  clear: () => void
+  latest: (scope?: string) => DataGridPerfSample | null
+  summary: () => Array<{ scope: string; count: number; meanMs: number; p95Ms: number; maxMs: number }>
+}
+
+function parseDataGridBooleanToken(value: string | null): boolean | null {
+  if (!value) {
+    return null
+  }
+  const normalizedValue = value.trim().toLowerCase()
+  if (normalizedValue === "1" || normalizedValue === "true" || normalizedValue === "on") {
+    return true
+  }
+  if (normalizedValue === "0" || normalizedValue === "false" || normalizedValue === "off") {
+    return false
+  }
+  return null
+}
+
+function resolveDataGridPerfTraceEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false
+  }
+  const queryFlag = parseDataGridBooleanToken(
+    new URLSearchParams(window.location.search).get(DATA_GRID_PERF_TRACE_QUERY_PARAM),
+  )
+  if (queryFlag != null) {
+    return queryFlag
+  }
+  try {
+    const storedFlag = parseDataGridBooleanToken(
+      window.localStorage?.getItem(DATA_GRID_PERF_TRACE_STORAGE_KEY) ?? null,
+    )
+    return storedFlag ?? false
+  }
+  catch {
+    return false
+  }
+}
+
+function resolveDataGridPerfNow(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now()
+  }
+  return Date.now()
+}
+
+function createDataGridPerfStore(): DataGridPerfStore {
+  const samples: DataGridPerfSample[] = []
+  return {
+    samples,
+    push(sample) {
+      samples.push(sample)
+      if (samples.length > DATA_GRID_PERF_SAMPLE_LIMIT) {
+        samples.splice(0, samples.length - DATA_GRID_PERF_SAMPLE_LIMIT)
+      }
+    },
+    clear() {
+      samples.length = 0
+    },
+    latest(scope) {
+      if (!scope) {
+        return samples.at(-1) ?? null
+      }
+      for (let index = samples.length - 1; index >= 0; index -= 1) {
+        if (samples[index]?.scope === scope) {
+          return samples[index] ?? null
+        }
+      }
+      return null
+    },
+    summary() {
+      const grouped = new Map<string, number[]>()
+      for (const sample of samples) {
+        const bucket = grouped.get(sample.scope) ?? []
+        bucket.push(sample.totalMs)
+        grouped.set(sample.scope, bucket)
+      }
+      return Array.from(grouped.entries()).map(([scope, values]) => {
+        const sortedValues = [...values].sort((left, right) => left - right)
+        const total = sortedValues.reduce((sum, value) => sum + value, 0)
+        const p95Index = Math.min(sortedValues.length - 1, Math.max(0, Math.ceil(sortedValues.length * 0.95) - 1))
+        return {
+          scope,
+          count: sortedValues.length,
+          meanMs: total / Math.max(1, sortedValues.length),
+          p95Ms: sortedValues[p95Index] ?? 0,
+          maxMs: sortedValues.at(-1) ?? 0,
+        }
+      })
+    },
+  }
+}
+
+function resolveDataGridPerfStore(): DataGridPerfStore | null {
+  if (typeof window === "undefined") {
+    return null
+  }
+  const perfWindow = window as typeof window & { [DATA_GRID_PERF_STORE_KEY]?: DataGridPerfStore }
+  if (!perfWindow[DATA_GRID_PERF_STORE_KEY]) {
+    perfWindow[DATA_GRID_PERF_STORE_KEY] = createDataGridPerfStore()
+  }
+  return perfWindow[DATA_GRID_PERF_STORE_KEY] ?? null
+}
+
+function recordDataGridPerfSample(sample: DataGridPerfSample): void {
+  resolveDataGridPerfStore()?.push(sample)
+}
+
 function resolveMaybeRef<T>(value: MaybeRef<T>): T {
   if (typeof value === "object" && value !== null && "value" in value) {
     return value.value as T
@@ -96,6 +220,11 @@ export function useDataGridAppViewport<TRow>(
     renderedColumns: readonly DataGridColumnSnapshot[]
     leftSpacerWidth: number
     rightSpacerWidth: number
+  }
+
+  const perfTraceEnabled = resolveDataGridPerfTraceEnabled()
+  if (perfTraceEnabled) {
+    resolveDataGridPerfStore()
   }
 
   const defaultColumnWidth = options.defaultColumnWidth ?? 140
@@ -213,6 +342,15 @@ export function useDataGridAppViewport<TRow>(
   let viewportSyncRafHandle: number | null = null
   let pendingViewportSyncForce = false
   let pendingViewportSyncMeasureVisibleRowHeights = false
+  let lastVisibleRowSyncPerf:
+    | {
+      mode: string
+      totalMs: number
+      incrementalResolveMs: number
+      runtimeSyncMs: number
+      viewportCommitMs: number
+    }
+    | null = null
   let pendingViewportScrollTop = 0
   let pendingViewportScrollLeft = 0
   let cachedViewportElement: HTMLElement | null = null
@@ -533,6 +671,43 @@ export function useDataGridAppViewport<TRow>(
     return { start, end }
   }
 
+  const resolveVisibleRowRangeFromSnapshot = (
+    snapshot: Pick<ViewportSnapshot, "scrollTop" | "clientHeight">,
+  ): DataGridViewportRange => {
+    const total = resolveScrollableBodyRowCount()
+    if (total <= 0) {
+      return { start: 0, end: 0 }
+    }
+    if (resolveMaybeRef(options.mode) === "base" && resolveMaybeRef(options.rowRenderMode) === "pagination") {
+      return { start: 0, end: total - 1 }
+    }
+    if (!resolveMaybeRef(options.rowVirtualizationEnabled)) {
+      return { start: 0, end: total - 1 }
+    }
+
+    if (typeof options.resolveRowIndexAtOffset === "function") {
+      const start = Math.max(0, options.resolveRowIndexAtOffset(snapshot.scrollTop))
+      const visibleBottomOffset = Math.max(0, snapshot.scrollTop + Math.max(1, snapshot.clientHeight) - 1)
+      const end = Math.min(total - 1, options.resolveRowIndexAtOffset(visibleBottomOffset))
+      return { start, end }
+    }
+
+    const estimatedRowHeight = options.normalizedBaseRowHeight.value
+    const start = Math.max(0, Math.floor(snapshot.scrollTop / estimatedRowHeight))
+    const visibleCount = Math.ceil(Math.max(1, snapshot.clientHeight) / estimatedRowHeight)
+    const end = Math.min(total - 1, start + visibleCount - 1)
+    return { start, end }
+  }
+
+  const canRetainLastSyncedRange = (visibleRange: DataGridViewportRange): boolean => {
+    if (!lastSyncedRange) {
+      return false
+    }
+    const hysteresis = Math.max(1, Math.floor(rowOverscan.value / 2))
+    return visibleRange.start >= lastSyncedRange.start + hysteresis
+      && visibleRange.end <= lastSyncedRange.end - hysteresis
+  }
+
   const resolveIncrementalVisibleRows = (
     range: DataGridViewportRange,
   ): readonly DataGridRowNode<TRow>[] | null => {
@@ -588,24 +763,70 @@ export function useDataGridAppViewport<TRow>(
       && lastSyncedRange.start === range.start
         && lastSyncedRange.end === range.end
     ) {
+      if (perfTraceEnabled) {
+        lastVisibleRowSyncPerf = {
+          mode: "skipped",
+          totalMs: 0,
+          incrementalResolveMs: 0,
+          runtimeSyncMs: 0,
+          viewportCommitMs: 0,
+        }
+      }
       return
     }
-    const incrementalRows = force ? null : resolveIncrementalVisibleRows(range)
+    const visibleRowsPerfStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
+    let incrementalResolveMs = 0
+    let runtimeSyncMs = 0
+    let viewportCommitMs = 0
+    const incrementalRows = force
+      ? null
+      : (() => {
+        if (!perfTraceEnabled) {
+          return resolveIncrementalVisibleRows(range)
+        }
+        const incrementalStart = resolveDataGridPerfNow()
+        const rows = resolveIncrementalVisibleRows(range)
+        incrementalResolveMs = resolveDataGridPerfNow() - incrementalStart
+        return rows
+      })()
     if (incrementalRows) {
       if (typeof options.runtime.setViewportRange === "function") {
+        const commitStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
         options.runtime.setViewportRange(range)
         displayRows.value = incrementalRows
+        if (perfTraceEnabled) {
+          viewportCommitMs = resolveDataGridPerfNow() - commitStart
+        }
       }
       else {
+        const syncStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
         displayRows.value = options.runtime.syncBodyRowsInRange(range)
+        if (perfTraceEnabled) {
+          runtimeSyncMs = resolveDataGridPerfNow() - syncStart
+        }
       }
     }
     else {
+      const syncStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
       displayRows.value = options.runtime.syncBodyRowsInRange(range)
+      if (perfTraceEnabled) {
+        runtimeSyncMs = resolveDataGridPerfNow() - syncStart
+      }
     }
     lastSyncedRange = {
       start: range.start,
       end: range.end,
+    }
+    if (perfTraceEnabled) {
+      lastVisibleRowSyncPerf = {
+        mode: incrementalRows
+          ? (typeof options.runtime.setViewportRange === "function" ? "incremental" : "incremental-runtime-fallback")
+          : "runtime",
+        totalMs: resolveDataGridPerfNow() - visibleRowsPerfStart,
+        incrementalResolveMs,
+        runtimeSyncMs,
+        viewportCommitMs,
+      }
     }
   }
 
@@ -632,10 +853,24 @@ export function useDataGridAppViewport<TRow>(
 
     if (commitOptions.forceVisibleRows || snapshot.scrollTop !== lastViewportScrollTop) {
       lastViewportScrollTop = snapshot.scrollTop
-      syncVisibleRows(resolveViewportRangeFromSnapshot({
+      const nextViewportSnapshot = {
         scrollTop: snapshot.scrollTop,
         clientHeight: snapshot.clientHeight,
-      }), commitOptions.forceVisibleRows)
+      }
+      if (!commitOptions.forceVisibleRows && canRetainLastSyncedRange(resolveVisibleRowRangeFromSnapshot(nextViewportSnapshot))) {
+        if (perfTraceEnabled) {
+          lastVisibleRowSyncPerf = {
+            mode: "retained",
+            totalMs: 0,
+            incrementalResolveMs: 0,
+            runtimeSyncMs: 0,
+            viewportCommitMs: 0,
+          }
+        }
+      }
+      else {
+        syncVisibleRows(resolveViewportRangeFromSnapshot(nextViewportSnapshot), commitOptions.forceVisibleRows)
+      }
     }
 
     if (commitOptions.measureVisibleRowHeights) {
@@ -653,12 +888,44 @@ export function useDataGridAppViewport<TRow>(
     if (!element) {
       return
     }
-    commitViewportSnapshot(resolveQueuedViewportSnapshot(element, {
+    if (!perfTraceEnabled) {
+      commitViewportSnapshot(resolveQueuedViewportSnapshot(element, {
+        forceVisibleRows: shouldForceVisibleRows,
+        measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
+      }), {
+        forceVisibleRows: shouldForceVisibleRows,
+        measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
+      })
+      return
+    }
+    const rafStart = resolveDataGridPerfNow()
+    const snapshotStart = rafStart
+    const snapshot = resolveQueuedViewportSnapshot(element, {
       forceVisibleRows: shouldForceVisibleRows,
       measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
-    }), {
+    })
+    const snapshotMs = resolveDataGridPerfNow() - snapshotStart
+    const commitStart = resolveDataGridPerfNow()
+    commitViewportSnapshot(snapshot, {
       forceVisibleRows: shouldForceVisibleRows,
       measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
+    })
+    const commitMs = resolveDataGridPerfNow() - commitStart
+    const visibleRowsPerf = lastVisibleRowSyncPerf
+    recordDataGridPerfSample({
+      scope: "viewportRaf",
+      ts: Date.now(),
+      totalMs: resolveDataGridPerfNow() - rafStart,
+      snapshotMs,
+      commitMs,
+      rowCount: displayRows.value.length,
+      forceVisibleRows: shouldForceVisibleRows ? 1 : 0,
+      measureVisibleRowHeights: shouldMeasureVisibleRowHeights ? 1 : 0,
+      visibleRowsMs: visibleRowsPerf?.totalMs ?? 0,
+      visibleRowsMode: visibleRowsPerf?.mode ?? "none",
+      visibleRowsIncrementalResolveMs: visibleRowsPerf?.incrementalResolveMs ?? 0,
+      visibleRowsRuntimeSyncMs: visibleRowsPerf?.runtimeSyncMs ?? 0,
+      visibleRowsViewportCommitMs: visibleRowsPerf?.viewportCommitMs ?? 0,
     })
   }
 
