@@ -12,6 +12,24 @@ export interface DataGridSavedViewStorageLike {
   removeItem: (key: string) => void
 }
 
+export function sanitizeDataGridSavedViewState<TRow extends Record<string, unknown> = Record<string, unknown>>(
+  state: DataGridUnifiedState<TRow>,
+): DataGridUnifiedState<TRow> {
+  return {
+    ...state,
+    transaction: null,
+  }
+}
+
+export function sanitizeDataGridSavedView<TRow extends Record<string, unknown> = Record<string, unknown>>(
+  savedView: DataGridSavedViewSnapshot<TRow>,
+): DataGridSavedViewSnapshot<TRow> {
+  return {
+    ...savedView,
+    state: sanitizeDataGridSavedViewState(savedView.state),
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
 }
@@ -34,16 +52,16 @@ export function migrateDataGridSavedView<TRow extends Record<string, unknown> = 
       ? "table"
       : undefined
 
-  return {
+  return sanitizeDataGridSavedView({
     state: migratedState,
     ...(viewMode ? { viewMode } : {}),
-  }
+  })
 }
 
 export function serializeDataGridSavedView<TRow extends Record<string, unknown> = Record<string, unknown>>(
   savedView: DataGridSavedViewSnapshot<TRow>,
 ): string {
-  return JSON.stringify(savedView)
+  return JSON.stringify(sanitizeDataGridSavedView(savedView))
 }
 
 export function parseDataGridSavedView<TRow extends Record<string, unknown> = Record<string, unknown>>(

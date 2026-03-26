@@ -173,6 +173,7 @@ import {
   type DataGridTableStageContext,
   provideDataGridTableStageContext,
 } from "./dataGridTableStageContext"
+import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
 import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilterableCombobox"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 
@@ -761,6 +762,7 @@ const restoreBodyCursor = ref<string | null>(null)
 const restoreDocumentCursor = ref<string | null>(null)
 let gridChromeAnimationFrame = 0
 let gridChromeResizeObserver: ResizeObserver | null = null
+let teardownTouchPanGuard: (() => void) | null = null
 
 function syncGlobalFillDragCursor(active: boolean): void {
   if (typeof document === "undefined") {
@@ -2253,6 +2255,8 @@ onBeforeUnmount(() => {
   syncGlobalFillDragCursor(false)
   linkedPaneScrollSync.reset()
   managedWheelScroll.reset()
+  teardownTouchPanGuard?.()
+  teardownTouchPanGuard = null
   if (gridChromeAnimationFrame !== 0 && typeof window !== "undefined") {
     window.cancelAnimationFrame(gridChromeAnimationFrame)
     gridChromeAnimationFrame = 0
@@ -2268,6 +2272,16 @@ onMounted(() => {
   syncBodyViewportMetrics()
   connectGridChromeResizeObserver()
   scheduleGridChromeRedraw()
+  if (stageRootEl.value) {
+    teardownTouchPanGuard = installDataGridTouchPanGuard({
+      root: stageRootEl.value,
+      resolveScrollContainers: () => [
+        bodyViewportEl.value,
+        bottomViewportEl.value,
+        resolveHeaderViewportElement(),
+      ],
+    })
+  }
   if (typeof window !== "undefined") {
     window.addEventListener("resize", syncBodyViewportMetrics)
   }

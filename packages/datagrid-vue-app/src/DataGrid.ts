@@ -67,6 +67,7 @@ import {
 } from "./config/dataGridLayout"
 import {
   migrateDataGridSavedView,
+  sanitizeDataGridSavedView,
   type DataGridSavedViewSnapshot,
 } from "./config/dataGridSavedView"
 import {
@@ -218,6 +219,26 @@ type DataGridDefaultRendererRuntime = Pick<
   "api" | "syncBodyRowsInRange" | "getBodyRowAtIndex" | "resolveBodyRowIndexById" | "rowPartition" | "virtualWindow" | "columnSnapshot"
 >
 
+function rowSelectionSnapshotsEqual(
+  left: DataGridRowSelectionSnapshot | null | undefined,
+  right: DataGridRowSelectionSnapshot | null | undefined,
+): boolean {
+  if (left?.focusedRow !== right?.focusedRow) {
+    return false
+  }
+  const leftRows = left?.selectedRows ?? []
+  const rightRows = right?.selectedRows ?? []
+  if (leftRows.length !== rightRows.length) {
+    return false
+  }
+  for (let index = 0; index < leftRows.length; index += 1) {
+    if (leftRows[index] !== rightRows[index]) {
+      return false
+    }
+  }
+  return true
+}
+
 export default defineComponent({
   name: "DataGrid",
   inheritAttrs: false,
@@ -301,6 +322,10 @@ export default defineComponent({
     rowSelection: {
       type: Boolean,
       default: true,
+    },
+    rowSelectionState: {
+      type: Object as PropType<DataGridRowSelectionSnapshot | null | undefined>,
+      default: undefined,
     },
     pageSize: {
       type: Number as PropType<number | undefined>,
@@ -428,6 +453,7 @@ export default defineComponent({
     "selection-change": (_payload: DataGridApiSelectionChangedEvent) => true,
     "row-selection-change": (_payload: DataGridApiRowSelectionChangedEvent) => true,
     "row-select": (_payload: DataGridRowSelectionSnapshot | null) => true,
+    "update:rowSelectionState": (_payload: DataGridRowSelectionSnapshot | null) => true,
     "update:columnState": (_payload: DataGridUnifiedColumnState | null) => true,
     "update:columnOrder": (_payload: readonly string[] | null) => true,
     "update:hiddenColumnKeys": (_payload: readonly string[] | null) => true,
@@ -440,7 +466,8 @@ export default defineComponent({
   },
   setup(props, { attrs, slots, emit, expose }) {
     const dataGridRef = ref<LowLevelGridExpose | null>(null)
-    const currentViewMode = ref<DataGridAppViewMode>("table")
+    const currentViewMode = ref<DataGridAppViewMode>(props.viewMode === "gantt" ? "gantt" : "table")
+    const runtimeUnifiedState = ref<DataGridUnifiedState<Record<string, unknown>> | null>(props.state ?? null)
     const resolvedRenderMode = computed(() => {
       return resolveDataGridRenderMode(props.renderMode, props.pagination)
     })
@@ -472,6 +499,31 @@ export default defineComponent({
     })
     const resolvedGroupBy = computed(() => {
       return resolveDataGridGroupBy(props.groupBy)
+    })
+    const effectiveUnifiedState = computed(() => props.state ?? runtimeUnifiedState.value)
+    const effectiveSortModel = computed<readonly DataGridSortState[] | undefined>(() => {
+      if (props.sortModel !== undefined) {
+        return props.sortModel
+      }
+      return effectiveUnifiedState.value?.rows?.snapshot?.sortModel
+    })
+    const effectiveFilterModel = computed<DataGridFilterSnapshot | null | undefined>(() => {
+      if (props.filterModel !== undefined) {
+        return props.filterModel
+      }
+      return effectiveUnifiedState.value?.rows?.snapshot?.filterModel ?? null
+    })
+    const effectiveGroupBy = computed<DataGridGroupBySpec | null>(() => {
+      if (props.groupBy !== undefined) {
+        return resolvedGroupBy.value ?? null
+      }
+      return effectiveUnifiedState.value?.rows?.snapshot?.groupBy ?? null
+    })
+    const effectivePivotModel = computed<DataGridPivotSpec | null | undefined>(() => {
+      if (props.pivotModel !== undefined) {
+        return props.pivotModel
+      }
+      return effectiveUnifiedState.value?.rows?.snapshot?.pivotModel ?? null
     })
     const resolvedVirtualization = computed(() => {
       return resolveDataGridVirtualization(props.virtualization, resolvedRenderMode.value)
@@ -537,7 +589,7 @@ export default defineComponent({
       },
     }
     const inferredMode = computed<"base" | "tree" | "pivot">(() => {
-      if (props.pivotModel) {
+      if (effectivePivotModel.value) {
         return "pivot"
       }
       if (resolvedClientRowModelOptions.value && "initialTreeData" in resolvedClientRowModelOptions.value) {
@@ -603,7 +655,10 @@ export default defineComponent({
         columnWidths: payload => emit("update:columnWidths", payload),
         columnPins: payload => emit("update:columnPins", payload),
         groupBy: payload => emit("update:groupBy", payload as DataGridGroupBySpec | null),
-        state: payload => emit("update:state", payload),
+        state: payload => {
+          runtimeUnifiedState.value = payload
+          emit("update:state", payload)
+        },
         ready: payload => emit("ready", {
           api: payload.api,
           rowModel: (resolvedRowModel.value as DataGridRowModel<Record<string, unknown>> | null),
@@ -633,15 +688,28 @@ export default defineComponent({
       rowSelectionSnapshot,
       (snapshot: DataGridRowSelectionSnapshot | null) => {
         emit("row-select", snapshot)
+        emit("update:rowSelectionState", snapshot)
         flushRowSelectionSnapshotUpdates()
       },
       { deep: true },
     )
 
     watch(
-      () => props.rowSelection,
-      enabled => {
+      () => [props.rowSelection, props.rowSelectionState, dataGridRef.value] as const,
+      ([enabled, controlledRowSelection]) => {
         if (enabled) {
+          if (controlledRowSelection !== undefined) {
+            const runtimeRowSelection = dataGridRef.value?.api.rowSelection
+            if (!rowSelectionSnapshotsEqual(rowSelectionSnapshot.value, controlledRowSelection)) {
+              if (controlledRowSelection) {
+                runtimeRowSelection?.setSnapshot(controlledRowSelection)
+              } else {
+                runtimeRowSelection?.clear()
+              }
+              syncRowSelectionSnapshotFromRuntime()
+            }
+            return
+          }
           syncRowSelectionSnapshotFromRuntime()
           return
         }
@@ -669,10 +737,10 @@ export default defineComponent({
       if (!state) {
         return null
       }
-      return {
+      return sanitizeDataGridSavedView({
         state,
         viewMode: currentViewMode.value,
-      }
+      })
     }
 
     const migrateSavedView = (
@@ -686,12 +754,13 @@ export default defineComponent({
       savedView: DataGridSavedViewSnapshot<Record<string, unknown>>,
       options?: DataGridSetStateOptions,
     ): boolean => {
-      const applied = controlledState.applyState(savedView.state, options)
+      const sanitized = sanitizeDataGridSavedView(savedView)
+      const applied = controlledState.applyState(sanitized.state, options)
       if (!applied) {
         return false
       }
-      if (savedView.viewMode) {
-        setView(savedView.viewMode)
+      if (sanitized.viewMode) {
+        setView(sanitized.viewMode)
       }
       return true
     }
@@ -750,10 +819,10 @@ export default defineComponent({
         syncSelectionSnapshotFromRuntime,
         syncRowSelectionSnapshotFromRuntime,
         flushRowSelectionSnapshotUpdates,
-        sortModel: props.sortModel,
-        filterModel: props.filterModel,
-        groupBy: resolvedGroupBy.value,
-        pivotModel: props.pivotModel,
+        sortModel: effectiveSortModel.value,
+        filterModel: effectiveFilterModel.value,
+        groupBy: effectiveGroupBy.value,
+        pivotModel: effectivePivotModel.value,
         renderMode: resolvedRenderMode.value,
         virtualization: resolvedVirtualization.value,
         columnMenu: resolvedColumnMenu.value,

@@ -4,6 +4,7 @@
     type="button"
     class="datagrid-app-toolbar__button"
     :class="{ 'datagrid-app-toolbar__button--active': active }"
+    data-datagrid-toolbar-action="column-layout"
     :style="overlayThemeVars"
     v-bind="triggerProps"
   >

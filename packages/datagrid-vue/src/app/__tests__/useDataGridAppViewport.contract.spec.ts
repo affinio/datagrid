@@ -7,6 +7,46 @@ function createScrollEvent(target: HTMLElement): Event {
   return { target } as unknown as Event
 }
 
+interface RafHarness {
+  request: (callback: FrameRequestCallback) => number
+  cancel: (handle: number) => void
+  run: (handle: number) => void
+  handles: () => number[]
+}
+
+function getScheduledFrameHandle(raf: RafHarness): number {
+  const [handle] = raf.handles()
+
+  expect(handle).toBeDefined()
+
+  return handle as number
+}
+
+function createRafHarness(): RafHarness {
+  let nextHandle = 1
+  const callbacks = new Map<number, FrameRequestCallback>()
+
+  return {
+    request(callback) {
+      const handle = nextHandle
+      nextHandle += 1
+      callbacks.set(handle, callback)
+      return handle
+    },
+    cancel(handle) {
+      callbacks.delete(handle)
+    },
+    run(handle) {
+      const callback = callbacks.get(handle)
+      callbacks.delete(handle)
+      callback?.(0)
+    },
+    handles() {
+      return [...callbacks.keys()]
+    },
+  }
+}
+
 describe("useDataGridAppViewport contract", () => {
   it("falls back to snapshot widths when column overrides are empty", () => {
     const visibleColumns = ref([
@@ -38,6 +78,7 @@ describe("useDataGridAppViewport contract", () => {
   })
 
   it("does not resync visible rows when scroll stays within the same virtual range", () => {
+    const raf = createRafHarness()
     const syncRowsInRange = vi.fn(() => [])
     const viewport = useDataGridAppViewport({
       runtime: {
@@ -52,6 +93,8 @@ describe("useDataGridAppViewport contract", () => {
       visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
       normalizedBaseRowHeight: ref(20),
       rowOverscan: computed(() => 0),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
     })
 
     const element = {
@@ -60,15 +103,69 @@ describe("useDataGridAppViewport contract", () => {
       clientHeight: 100,
       clientWidth: 320,
     } as HTMLElement
+    viewport.bodyViewportRef.value = element
 
     viewport.handleViewportScroll(createScrollEvent(element))
-    viewport.handleViewportScroll(createScrollEvent({ ...element, scrollTop: 19 } as HTMLElement))
+    element.scrollTop = 19
+    viewport.handleViewportScroll(createScrollEvent(element))
+    expect(syncRowsInRange).toHaveBeenCalledTimes(0)
+
+    const firstFrame = getScheduledFrameHandle(raf)
+    raf.run(firstFrame)
 
     expect(syncRowsInRange).toHaveBeenCalledTimes(1)
 
-    viewport.handleViewportScroll(createScrollEvent({ ...element, scrollTop: 20 } as HTMLElement))
+    element.scrollTop = 20
+    viewport.handleViewportScroll(createScrollEvent(element))
+    const secondFrame = getScheduledFrameHandle(raf)
+    raf.run(secondFrame)
 
     expect(syncRowsInRange).toHaveBeenCalledTimes(2)
+  })
+
+  it("coalesces multiple scroll events into one visible-row sync per animation frame", () => {
+    const raf = createRafHarness()
+    const syncRowsInRange = vi.fn(() => [])
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        rowPartition: ref({ bodyRowCount: 100, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const baseElement = {
+      scrollTop: 0,
+      scrollLeft: 0,
+      clientHeight: 100,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = baseElement
+
+    baseElement.scrollTop = 20
+    viewport.handleViewportScroll(createScrollEvent(baseElement))
+    baseElement.scrollTop = 40
+    viewport.handleViewportScroll(createScrollEvent(baseElement))
+    baseElement.scrollTop = 60
+    viewport.handleViewportScroll(createScrollEvent(baseElement))
+
+    expect(syncRowsInRange).toHaveBeenCalledTimes(0)
+    expect(raf.handles()).toHaveLength(1)
+
+    const frame = getScheduledFrameHandle(raf)
+    raf.run(frame)
+
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(syncRowsInRange).toHaveBeenLastCalledWith({ start: 3, end: 7 })
   })
 
   it("partitions pinned bottom rows out of the body viewport without relying on tail order", () => {

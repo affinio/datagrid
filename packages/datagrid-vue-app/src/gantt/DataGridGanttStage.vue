@@ -103,6 +103,7 @@ import {
   hitTestDataGridGanttDependencyPath,
   resolveDataGridGanttDependencyPathKey,
 } from "./dataGridGanttDependencySelection"
+import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import {
   materializeDataGridTableStagePropsFromContext,
@@ -180,6 +181,7 @@ let pendingHeaderRedraw = false
 let pendingBodyRedraw = false
 
 let teardownTableViewport: (() => void) | null = null
+let teardownTouchPanGuard: (() => void) | null = null
 let resizeObserver: ResizeObserver | null = null
 let syncingTimelineScroll = false
 
@@ -1667,6 +1669,16 @@ watch(
 )
 
 onMounted(() => {
+  if (stageRootRef.value) {
+    teardownTouchPanGuard = installDataGridTouchPanGuard({
+      root: stageRootRef.value,
+      resolveScrollContainers: () => [
+        tableViewportRef.value,
+        timelineBodyViewportRef.value,
+        timelineHeaderViewportRef.value,
+      ],
+    })
+  }
   void nextTick(() => {
     syncStageMetrics()
     attachTableViewport()
@@ -1683,6 +1695,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearScheduledRedraw()
+  teardownTouchPanGuard?.()
+  teardownTouchPanGuard = null
   disconnectTableViewport()
   resizeObserver?.disconnect()
   resizeObserver = null

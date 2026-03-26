@@ -48,6 +48,8 @@ import DataGridModuleHost, {
   type DataGridAppToolbarModule,
 } from "./DataGridModuleHost"
 import DataGridTableStage from "../stage/DataGridTableStage.vue"
+import DataGridGanttStage from "../gantt/DataGridGanttStageEntry"
+import DataGridColumnLayoutPopover from "../overlays/DataGridColumnLayoutPopover.vue"
 import type { DataGridAdvancedFilterOptions } from "../config/dataGridAdvancedFilter"
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "../config/dataGridAggregations"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
@@ -81,13 +83,12 @@ import {
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import { useDataGridTableStageRuntime } from "../stage/useDataGridTableStageRuntime"
+import { resolveAdvancedFilterDraftClausesFromFilterModel } from "../advancedFilterDraftClauses"
 
 type DataGridMode = "base" | "tree" | "pivot" | "worker"
 
-const DataGridColumnLayoutPopover = defineAsyncComponent(() => import("../overlays/DataGridColumnLayoutPopover.vue"))
 const DataGridAdvancedFilterPopover = defineAsyncComponent(() => import("../overlays/DataGridAdvancedFilterPopover.vue"))
 const DataGridAggregationsPopover = defineAsyncComponent(() => import("../overlays/DataGridAggregationsPopover.vue"))
-const DataGridGanttStage = defineAsyncComponent(() => import("../gantt/DataGridGanttStageEntry"))
 
 interface SortToggleState {
   key: string
@@ -817,6 +818,7 @@ export default defineComponent({
       isAdvancedFilterPanelOpen,
       advancedFilterDraftClauses,
       appliedAdvancedFilterExpression,
+      hydrateAdvancedFilterClauses,
       openAdvancedFilterPanel,
       addAdvancedFilterClause,
       removeAdvancedFilterClause,
@@ -932,14 +934,25 @@ export default defineComponent({
       const advancedExpression = props.advancedFilter.enabled
         ? appliedAdvancedFilterExpression.value
         : (filterModelState.value.advancedExpression ?? null)
+      const nextFilterModel = props.advancedFilter.enabled
+        ? {
+            ...filterModelState.value,
+            advancedFilters: {},
+            advancedExpression,
+          }
+        : {
+            ...filterModelState.value,
+            advancedExpression,
+          }
 
       props.runtime.api.rows.setSortAndFilterModel({
         sortModel: nextSortModel,
-        filterModel: pruneFilterModel({
-          ...filterModelState.value,
-          advancedExpression,
-        }),
+        filterModel: pruneFilterModel(nextFilterModel),
       })
+    }
+
+    const syncAdvancedFilterBuilderFromRuntime = (): void => {
+      hydrateAdvancedFilterClauses(resolveAdvancedFilterDraftClausesFromFilterModel(filterModelState.value))
     }
 
     const effectiveAdvancedExpression = computed<DataGridAdvancedExpressionEntry | null>(() => {
@@ -992,6 +1005,22 @@ export default defineComponent({
       },
       { deep: true },
     )
+
+    watch(
+      filterModelState,
+      () => {
+        if (!props.advancedFilter.enabled || isAdvancedFilterPanelOpen.value) {
+          return
+        }
+        syncAdvancedFilterBuilderFromRuntime()
+      },
+      { immediate: true, deep: true },
+    )
+
+    const handleOpenAdvancedFilterPanel = (): void => {
+      syncAdvancedFilterBuilderFromRuntime()
+      openAdvancedFilterPanel()
+    }
 
     const toggleSortForColumn = (columnKey: string, additive = false): void => {
       const currentIndex = sortState.value.findIndex(entry => entry.key === columnKey)
@@ -2163,7 +2192,7 @@ export default defineComponent({
             buttonLabel: props.advancedFilter.buttonLabel,
             active: hasActiveFilters.value,
             showActiveIcon: hasActiveFilters.value,
-            onOpen: openAdvancedFilterPanel,
+            onOpen: handleOpenAdvancedFilterPanel,
             onAdd: addAdvancedFilterClause,
             onRemove: removeAdvancedFilterClause,
             onUpdateClause: updateAdvancedFilterClause,

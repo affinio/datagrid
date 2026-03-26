@@ -198,6 +198,8 @@ const DATA_GRID_APP_STYLES = `
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
+  touch-action: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .datagrid-gantt-timeline__viewport--header {
@@ -813,6 +815,7 @@ const DATA_GRID_APP_STYLES = `
   border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
   background: var(--datagrid-header-row-bg);
   overscroll-behavior-x: contain;
+  touch-action: none;
 }
 
 .grid-body-viewport {
@@ -822,6 +825,8 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
   background: var(--datagrid-viewport-bg);
   overscroll-behavior-x: contain;
+  touch-action: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .grid-body-viewport--pinned-bottom {

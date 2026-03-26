@@ -80,6 +80,15 @@ export interface UseDataGridAppControlledStateResult {
   collapseAllGroups: () => void
 }
 
+interface PendingColumnStateApplication {
+  columnState: DataGridUnifiedColumnState
+}
+
+interface PendingUnifiedStateApplication {
+  state: DataGridUnifiedState<DataGridRowRecord>
+  options?: DataGridSetStateOptions
+}
+
 function normalizeWidth(width: number | null | undefined): number | null {
   if (!Number.isFinite(width)) {
     return null
@@ -118,6 +127,8 @@ export function useDataGridAppControlledState(
   let lastEmittedGroupByKey: string | null = null
   let lastObservedColumnStateKey: string | null = null
   let lastObservedUnifiedStateKey: string | null = null
+  let pendingColumnStateApplication: PendingColumnStateApplication | null = null
+  let pendingUnifiedStateApplication: PendingUnifiedStateApplication | null = null
 
   const disposeSubscriptions = (): void => {
     unsubscribeRowModel?.()
@@ -202,6 +213,104 @@ export function useDataGridAppControlledState(
       sortModel: options.props.sortModel ?? [],
       filterModel: options.props.filterModel ?? null,
     })
+  }
+
+  const getRuntimeColumnKeys = (): Set<string> | null => {
+    const columnsApi = options.gridRef.value?.api.columns
+    if (!columnsApi) {
+      return null
+    }
+    return new Set(columnsApi.getSnapshot().columns.map(column => column.key))
+  }
+
+  const getRequiredColumnKeys = (columnState: DataGridUnifiedColumnState | null | undefined): Set<string> => {
+    const required = new Set<string>()
+    if (!columnState) {
+      return required
+    }
+    for (const columnKey of columnState.order) {
+      required.add(columnKey)
+    }
+    for (const columnKey of Object.keys(columnState.visibility ?? {})) {
+      required.add(columnKey)
+    }
+    for (const columnKey of Object.keys(columnState.widths ?? {})) {
+      required.add(columnKey)
+    }
+    for (const columnKey of Object.keys(columnState.pins ?? {})) {
+      required.add(columnKey)
+    }
+    return required
+  }
+
+  const canApplyColumnState = (columnState: DataGridUnifiedColumnState | null | undefined): boolean => {
+    const runtimeColumnKeys = getRuntimeColumnKeys()
+    if (!runtimeColumnKeys) {
+      return false
+    }
+    const requiredColumnKeys = getRequiredColumnKeys(columnState)
+    if (requiredColumnKeys.size === 0) {
+      return true
+    }
+    if (options.props.columns.length > 0) {
+      return true
+    }
+    for (const columnKey of requiredColumnKeys) {
+      if (!runtimeColumnKeys.has(columnKey)) {
+        return false
+      }
+    }
+    return true
+  }
+
+  const canApplyUnifiedState = (state: DataGridUnifiedState<DataGridRowRecord>): boolean => {
+    return canApplyColumnState(state.columns)
+  }
+
+  const applyColumnStateNow = (columnState: DataGridUnifiedColumnState): boolean => {
+    const api = options.gridRef.value?.api
+    if (!api) {
+      return false
+    }
+    api.columns.setOrder(columnState.order)
+    for (const [columnKey, visible] of Object.entries(columnState.visibility)) {
+      api.columns.setVisibility(columnKey, visible)
+    }
+    for (const [columnKey, width] of Object.entries(columnState.widths)) {
+      api.columns.setWidth(columnKey, normalizeWidth(width))
+    }
+    for (const [columnKey, pin] of Object.entries(columnState.pins)) {
+      api.columns.setPin(columnKey, pin)
+    }
+    return true
+  }
+
+  const flushPendingApplications = (): void => {
+    if (pendingUnifiedStateApplication) {
+      const pending = pendingUnifiedStateApplication
+      const api = options.gridRef.value?.api
+      if (api) {
+        const migrated = api.state.migrate(pending.state, { strict: pending.options?.strict })
+        if (migrated && canApplyUnifiedState(migrated)) {
+          pendingUnifiedStateApplication = null
+          api.state.set(migrated, pending.options)
+          lastAppliedStateInputKey = createSyncKey(pending.state)
+        }
+      }
+    }
+
+    if (pendingColumnStateApplication && canApplyColumnState(pendingColumnStateApplication.columnState)) {
+      const pending = pendingColumnStateApplication
+      pendingColumnStateApplication = null
+      lastAppliedColumnInputsKey = createSyncKey({
+        columnState: pending.columnState,
+        columnOrder: null,
+        hiddenColumnKeys: null,
+        columnWidths: null,
+        columnPins: null,
+      })
+      applyColumnStateNow(pending.columnState)
+    }
   }
 
   const syncGroupBy = (): void => {
@@ -322,6 +431,9 @@ export function useDataGridAppControlledState(
     if (!migrated) {
       return
     }
+    if (!canApplyUnifiedState(migrated)) {
+      return
+    }
     api.state.set(migrated, options.props.stateOptions ?? {})
     lastAppliedStateInputKey = stateInputKey
   }
@@ -356,6 +468,7 @@ export function useDataGridAppControlledState(
     syncAggregationModel()
     syncPivotModel()
     syncRowHeight()
+    flushPendingApplications()
     emitSnapshotUpdates()
     options.emit.ready({ api: grid.api })
   }
@@ -372,9 +485,9 @@ export function useDataGridAppControlledState(
   }
 
   const applyColumnState = (columnState: DataGridUnifiedColumnState): boolean => {
-    const api = options.gridRef.value?.api
-    if (!api) {
-      return false
+    if (!canApplyColumnState(columnState)) {
+      pendingColumnStateApplication = { columnState }
+      return true
     }
     lastAppliedColumnInputsKey = createSyncKey({
       columnState,
@@ -383,15 +496,10 @@ export function useDataGridAppControlledState(
       columnWidths: null,
       columnPins: null,
     })
-    api.columns.setOrder(columnState.order)
-    for (const [columnKey, visible] of Object.entries(columnState.visibility)) {
-      api.columns.setVisibility(columnKey, visible)
-    }
-    for (const [columnKey, width] of Object.entries(columnState.widths)) {
-      api.columns.setWidth(columnKey, normalizeWidth(width))
-    }
-    for (const [columnKey, pin] of Object.entries(columnState.pins)) {
-      api.columns.setPin(columnKey, pin)
+    pendingColumnStateApplication = null
+    if (!applyColumnStateNow(columnState)) {
+      pendingColumnStateApplication = { columnState }
+      return true
     }
     emitSnapshotUpdates()
     return true
@@ -403,14 +511,20 @@ export function useDataGridAppControlledState(
   ): boolean => {
     const api = options.gridRef.value?.api
     if (!api) {
-      return false
+      pendingUnifiedStateApplication = { state, options: setOptions }
+      return true
     }
     const migrated = api.state.migrate(state, { strict: setOptions?.strict })
     if (!migrated) {
       return false
     }
+    if (!canApplyUnifiedState(migrated)) {
+      pendingUnifiedStateApplication = { state, options: setOptions }
+      return true
+    }
     api.state.set(migrated, setOptions)
     lastAppliedStateInputKey = createSyncKey(state)
+    pendingUnifiedStateApplication = null
     emitSnapshotUpdates()
     return true
   }
@@ -461,6 +575,7 @@ export function useDataGridAppControlledState(
       lastAppliedStateInputKey = null
       syncUnifiedState()
       syncColumnState()
+      flushPendingApplications()
       emitSnapshotUpdates()
     },
     { deep: true },
@@ -476,6 +591,7 @@ export function useDataGridAppControlledState(
       syncAggregationModel()
       syncPivotModel()
       syncRowHeight()
+      flushPendingApplications()
       emitSnapshotUpdates()
     },
     { deep: true },
@@ -491,6 +607,7 @@ export function useDataGridAppControlledState(
     ] as const,
     () => {
       syncColumnState()
+      flushPendingApplications()
       emitSnapshotUpdates()
     },
     { deep: true },

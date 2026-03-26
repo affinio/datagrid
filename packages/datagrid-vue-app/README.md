@@ -1019,6 +1019,8 @@ Supported preset names:
 
 The public component exposes full grid state round-tripping.
 
+When `state` is the only controlled input, the built-in app toolbar and filter affordances derive their effective sort, filter, grouping, and pivot state from that unified snapshot. You do not need to mirror the same payload back into separate `sort-model`, `filter-model`, `group-by`, or `pivot-model` props just to keep the default renderer synchronized.
+
 Controlled state:
 
 ```vue
@@ -1049,6 +1051,38 @@ function importState(raw: unknown) {
     gridRef.value?.applyState(migrated)
   }
 }
+
+`applyState()` and `applySavedView()` also queue the restore until the runtime and declared columns are ready. Host pages can restore presets before async column definitions finish loading instead of maintaining a separate pending-saved-view scheduler.
+
+Saved views sanitize transient transaction history before serialization and restore. The persisted envelope keeps layout, filters, grouping, pivoting, row selection, and `viewMode`, but drops undo/redo history.
+
+### Controlled Row Selection
+
+`rowSelection` still enables the built-in checkbox column and header select-all control. When a page wants to own the selected-row snapshot directly, use `rowSelectionState` with `update:rowSelectionState`.
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import { DataGrid } from "@affino/datagrid-vue-app"
+
+const rowSelectionState = ref({
+  focusedRow: null,
+  selectedRows: ["r2"],
+})
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    row-selection
+    :row-selection-state="rowSelectionState"
+    @update:row-selection-state="rowSelectionState = $event"
+  />
+</template>
+```
+
+The legacy `row-select` event still exists, but `rowSelectionState` is the stable controlled API when the page wants to bind selected row ids without diffing unified-state updates.
 
 function exportSavedView() {
   return gridRef.value?.getSavedView()

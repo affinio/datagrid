@@ -21,6 +21,7 @@ export interface UseDataGridAppAdvancedFilterBuilderResult {
   advancedFilterDraftClauses: ComputedRef<readonly DataGridAppAdvancedFilterClauseDraft[]>
   advancedFilterColumns: ComputedRef<readonly DataGridAppAdvancedFilterColumnOption[]>
   appliedAdvancedFilterExpression: ComputedRef<DataGridAdvancedFilterExpression | null>
+  hydrateAdvancedFilterClauses: (clauses: readonly DataGridAppAdvancedFilterClauseDraft[]) => void
   openAdvancedFilterPanel: () => void
   addAdvancedFilterClause: () => void
   removeAdvancedFilterClause: (clauseId: number) => void
@@ -68,6 +69,17 @@ export function useDataGridAppAdvancedFilterBuilder(
     if (!clauses.length) {
       return [createClause()]
     }
+    return clauses.map(clause => createClause({
+      join: clause.join,
+      columnKey: clause.columnKey,
+      operator: clause.operator,
+      value: clause.value,
+    }))
+  }
+
+  const cloneAppliedClauses = (
+    clauses: readonly DataGridAppAdvancedFilterClauseDraft[],
+  ): DataGridAppAdvancedFilterClauseDraft[] => {
     return clauses.map(clause => createClause({
       join: clause.join,
       columnKey: clause.columnKey,
@@ -128,6 +140,11 @@ export function useDataGridAppAdvancedFilterBuilder(
     return buildAdvancedFilterExpressionFromClauses(appliedClauses.value)
   })
 
+  const hydrateAdvancedFilterClauses = (clauses: readonly DataGridAppAdvancedFilterClauseDraft[]): void => {
+    appliedClauses.value = cloneAppliedClauses(clauses)
+    draftClauses.value = cloneClauses(appliedClauses.value)
+  }
+
   const openAdvancedFilterPanel = (): void => {
     draftClauses.value = cloneClauses(appliedClauses.value)
     isPanelOpen.value = true
@@ -182,6 +199,7 @@ export function useDataGridAppAdvancedFilterBuilder(
     advancedFilterDraftClauses: computed(() => draftClauses.value),
     advancedFilterColumns,
     appliedAdvancedFilterExpression,
+    hydrateAdvancedFilterClauses,
     openAdvancedFilterPanel,
     addAdvancedFilterClause,
     removeAdvancedFilterClause,

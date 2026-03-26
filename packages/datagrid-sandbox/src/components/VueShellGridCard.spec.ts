@@ -8,16 +8,48 @@ import type { DataGridGroupBySpec } from "@affino/datagrid-vue"
 vi.mock("@affino/popover-vue", async () => {
   const { ref } = await import("vue")
   return {
-    usePopoverController: () => ({
-      state: ref({ open: false }),
-      getTriggerProps: (value: Record<string, unknown> = {}) => value,
-      getContentProps: (value: Record<string, unknown> = {}) => value,
-      open: () => {},
-      close: () => {},
-    }),
+    usePopoverController: (
+      _config?: unknown,
+      handlers?: { onOpen?: () => void; onClose?: () => void },
+    ) => {
+      const state = ref({ open: false })
+
+      const open = (): void => {
+        if (state.value.open) {
+          return
+        }
+        state.value = { open: true }
+        handlers?.onOpen?.()
+      }
+
+      const close = (): void => {
+        if (!state.value.open) {
+          return
+        }
+        state.value = { open: false }
+        handlers?.onClose?.()
+      }
+
+      return {
+        state,
+        getTriggerProps: (value: Record<string, unknown> = {}) => ({
+          ...value,
+          onClick: (event: MouseEvent) => {
+            const handler = value.onClick
+            if (typeof handler === "function") {
+              handler(event)
+            }
+            open()
+          },
+        }),
+        getContentProps: (value: Record<string, unknown> = {}) => value,
+        open,
+        close,
+      }
+    },
     useFloatingPopover: () => ({
       contentStyle: ref({}),
-      teleportTarget: ref(null),
+      teleportTarget: ref(document.body),
       contentRef: ref<HTMLElement | null>(null),
       updatePosition: async () => {},
     }),
@@ -60,6 +92,24 @@ async function flushUi(): Promise<void> {
   await nextTick()
 }
 
+async function preloadAdvancedFilterPopover(): Promise<void> {
+  await import("../../../datagrid-vue-app/src/overlays/DataGridAdvancedFilterPopover.vue")
+}
+
+function queryAdvancedFilterRoot(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>(".datagrid-advanced-filter")
+}
+
+async function findAdvancedFilterTrigger(wrapper: ReturnType<typeof mount>) {
+  await flushUi()
+  await flushUi()
+  return wrapper.find('[data-datagrid-toolbar-action="advanced-filter"]')
+}
+
+function findButtonByText(wrapper: ReturnType<typeof mount>, label: string) {
+  return wrapper.findAll("button").find(candidate => candidate.text() === label)
+}
+
 describe("VueShellGridCard", () => {
   beforeAll(() => {
     class ResizeObserverStub {
@@ -95,6 +145,7 @@ describe("VueShellGridCard", () => {
 
   afterEach(() => {
     document.body.innerHTML = ""
+    globalThis.localStorage?.clear()
     vi.restoreAllMocks()
   })
 
@@ -224,6 +275,105 @@ describe("VueShellGridCard", () => {
 
     expect(wrapper.text()).toContain("Toolbar action:")
     expect(wrapper.text()).toContain("table view")
+
+    wrapper.unmount()
+  })
+
+  it("restores advanced filter draft clauses from sandbox saved view storage", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const { default: VueShellGridCard } = await import("./VueShellGridCard.vue")
+
+    const wrapper = mount(VueShellGridCard, {
+      props: {
+        title: "Vue: Base Grid (Sugar)",
+        mode: "base",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUi()
+    await flushUi()
+
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    expect(trigger.exists()).toBe(true)
+    await trigger.trigger("click")
+    await flushUi()
+
+    let popover = queryAdvancedFilterRoot()
+    expect(popover).toBeTruthy()
+
+    let rows = Array.from(popover?.querySelectorAll<HTMLElement>(".datagrid-advanced-filter__row") ?? [])
+    expect(rows).toHaveLength(1)
+
+    const firstValueInput = rows[0]?.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
+    expect(firstValueInput).toBeTruthy()
+    firstValueInput!.value = "NOC"
+    firstValueInput!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushUi()
+
+    popover?.querySelector<HTMLElement>(".datagrid-advanced-filter__secondary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushUi()
+
+    popover = queryAdvancedFilterRoot()
+    rows = Array.from(popover?.querySelectorAll<HTMLElement>(".datagrid-advanced-filter__row") ?? [])
+    expect(rows).toHaveLength(2)
+
+    const secondValueInput = rows[1]?.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
+    expect(secondValueInput).toBeTruthy()
+    secondValueInput!.value = "Alice"
+    secondValueInput!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushUi()
+
+    popover?.querySelector<HTMLElement>(".datagrid-advanced-filter__primary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushUi()
+
+    const saveLocalButton = findButtonByText(wrapper, "Save local")
+    expect(saveLocalButton?.exists()).toBe(true)
+    await saveLocalButton!.trigger("click")
+    await flushUi()
+
+    const reopenedTrigger = await findAdvancedFilterTrigger(wrapper)
+    await reopenedTrigger.trigger("click")
+    await flushUi()
+
+    popover = queryAdvancedFilterRoot()
+    expect(popover).toBeTruthy()
+    popover?.querySelector<HTMLElement>('[data-datagrid-advanced-filter-action="reset-all"]')?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushUi()
+
+    expect((await findAdvancedFilterTrigger(wrapper)).attributes("data-datagrid-advanced-filter-active")).toBe("false")
+
+    const loadLocalButton = findButtonByText(wrapper, "Load local")
+    expect(loadLocalButton?.exists()).toBe(true)
+    await loadLocalButton!.trigger("click")
+    await flushUi()
+    await flushUi()
+
+    expect((await findAdvancedFilterTrigger(wrapper)).attributes("data-datagrid-advanced-filter-active")).toBe("true")
+
+    await (await findAdvancedFilterTrigger(wrapper)).trigger("click")
+    await flushUi()
+
+    popover = queryAdvancedFilterRoot()
+    rows = Array.from(popover?.querySelectorAll<HTMLElement>(".datagrid-advanced-filter__row") ?? [])
+    expect(rows).toHaveLength(2)
+
+    const hydratedValues = rows.map(row => (
+      row.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')?.value ?? null
+    ))
+    expect(hydratedValues).toEqual(["NOC", "Alice"])
 
     wrapper.unmount()
   })

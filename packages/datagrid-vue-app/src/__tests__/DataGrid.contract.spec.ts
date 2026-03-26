@@ -1,6 +1,6 @@
 import { defineComponent, h, nextTick, ref } from "vue"
 import { flushPromises, mount } from "@vue/test-utils"
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import type { DataGridRowNodeInput } from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
 import type { DataGridAppToolbarModule } from "../index"
@@ -368,7 +368,7 @@ function resolveRowAt<TValue extends Record<string, unknown>>(wrapper: ReturnTyp
 }
 
 function queryColumnMenuRoot(): HTMLElement | null {
-  const roots = Array.from(document.body.querySelectorAll<HTMLElement>("[data-affino-menu-root]"))
+  const roots = Array.from(document.body.querySelectorAll<HTMLElement>("[data-datagrid-column-menu-panel=\"true\"]"))
   return roots.findLast(root => getComputedStyle(root).display !== "none") ?? null
 }
 
@@ -456,6 +456,10 @@ beforeAll(() => {
 afterAll(() => {
   HTMLElement.prototype.scrollIntoView = originalScrollIntoView
   HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
+})
+
+afterEach(() => {
+  document.body.innerHTML = ""
 })
 
 function setElementClientWidth(element: HTMLElement, width: number): void {
@@ -1969,6 +1973,148 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("reopens advanced filter builder with the same mixed-join draft clauses after apply", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        advancedFilter: true,
+      },
+    })
+
+    const selectComboboxOption = async (input: HTMLInputElement, optionLabel: string, query: string = optionLabel): Promise<void> => {
+      input.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      input.value = query
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+      await flushRuntimeTasks()
+
+      const option = [...document.body.querySelectorAll<HTMLButtonElement>(".datagrid-cell-combobox__option")].find(candidate => (
+        candidate.textContent?.includes(optionLabel)
+      ))
+      expect(option).toBeTruthy()
+      option?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      await flushRuntimeTasks()
+    }
+
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    expect(trigger.exists()).toBe(true)
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    let popover = queryAdvancedFilterRoot()
+    expect(popover).toBeTruthy()
+
+    let rows = Array.from(popover?.querySelectorAll<HTMLElement>(".datagrid-advanced-filter__row") ?? [])
+    expect(rows).toHaveLength(1)
+
+    const firstValueInput = rows[0]?.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
+    expect(firstValueInput).toBeTruthy()
+    firstValueInput!.value = "NOC"
+    firstValueInput!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    popover?.querySelector<HTMLElement>(".datagrid-advanced-filter__secondary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    popover = queryAdvancedFilterRoot()
+    rows = Array.from(popover?.querySelectorAll<HTMLElement>(".datagrid-advanced-filter__row") ?? [])
+    expect(rows).toHaveLength(2)
+
+    const secondComboboxes = rows[1]?.querySelectorAll<HTMLInputElement>('input[role="combobox"]')
+    expect(secondComboboxes?.length).toBe(3)
+    await selectComboboxOption(secondComboboxes![0]!, "OR", "or")
+    await selectComboboxOption(secondComboboxes![1]!, "Region", "reg")
+    await selectComboboxOption(secondComboboxes![2]!, "Equals", "eq")
+
+    const secondValueInput = rows[1]?.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
+    expect(secondValueInput).toBeTruthy()
+    secondValueInput!.value = "eu-west"
+    secondValueInput!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    popover?.querySelector<HTMLElement>(".datagrid-advanced-filter__secondary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    popover = queryAdvancedFilterRoot()
+    rows = Array.from(popover?.querySelectorAll<HTMLElement>(".datagrid-advanced-filter__row") ?? [])
+    expect(rows).toHaveLength(3)
+
+    const thirdComboboxes = rows[2]?.querySelectorAll<HTMLInputElement>('input[role="combobox"]')
+    expect(thirdComboboxes?.length).toBe(3)
+    await selectComboboxOption(thirdComboboxes![1]!, "Amount", "amo")
+    await selectComboboxOption(thirdComboboxes![2]!, ">=", ">")
+
+    const thirdValueInput = rows[2]?.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
+    expect(thirdValueInput).toBeTruthy()
+    thirdValueInput!.value = "10"
+    thirdValueInput!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    popover?.querySelector<HTMLElement>(".datagrid-advanced-filter__primary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            advancedExpression: expect.objectContaining({
+              kind: "group",
+              operator: "and",
+            }),
+          }),
+        }),
+      }),
+    })
+
+    const reopenedTrigger = await findAdvancedFilterTrigger(wrapper)
+    await reopenedTrigger.trigger("click")
+    await flushRuntimeTasks()
+
+    popover = queryAdvancedFilterRoot()
+    rows = Array.from(popover?.querySelectorAll<HTMLElement>(".datagrid-advanced-filter__row") ?? [])
+    expect(rows).toHaveLength(3)
+
+    const readClauseState = (row: HTMLElement) => {
+      const comboboxes = row.querySelectorAll<HTMLInputElement>('input[role="combobox"]')
+      return {
+        join: comboboxes[0]?.value ?? null,
+        column: comboboxes[1]?.value ?? null,
+        operator: comboboxes[2]?.value ?? null,
+        value: row.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')?.value ?? null,
+      }
+    }
+
+    expect(readClauseState(rows[0]!)).toEqual({
+      join: "AND",
+      column: "Owner",
+      operator: "Contains",
+      value: "NOC",
+    })
+    expect(readClauseState(rows[1]!)).toEqual({
+      join: "OR",
+      column: "Region",
+      operator: "Equals",
+      value: "eu-west",
+    })
+    expect(readClauseState(rows[2]!)).toEqual({
+      join: "AND",
+      column: "Amount",
+      operator: ">=",
+      value: "10",
+    })
+
+    wrapper.unmount()
+  })
+
   it("renders applied filter summary and resets all filters from one action", async () => {
     await preloadAdvancedFilterPopover()
 
@@ -2040,6 +2186,122 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("restores saved views after columns become available and syncs built-in filter UI from runtime state", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const source = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        advancedFilter: true,
+        filterModel: {
+          columnFilters: {
+            owner: {
+              kind: "predicate",
+              operator: "contains",
+              value: "NOC",
+              caseSensitive: false,
+            },
+          },
+          advancedFilters: {
+            region: {
+              type: "text",
+              clauses: [
+                {
+                  operator: "equals",
+                  value: "eu-west",
+                },
+              ],
+            },
+            amount: {
+              type: "number",
+              clauses: [
+                {
+                  operator: "gte",
+                  value: 10,
+                },
+                {
+                  operator: "lte",
+                  value: 20,
+                  join: "and",
+                },
+              ],
+            },
+          },
+          advancedExpression: null,
+        },
+        viewMode: "gantt",
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const savedView = resolveVm(source).getSavedView?.()
+    expect(savedView).toBeTruthy()
+
+    const controlledColumns = ref<readonly typeof COLUMNS[number][]>([])
+    const targetGridRef = ref<{
+      applySavedView?: (savedView: NonNullable<typeof savedView>) => boolean
+      getView?: () => "table" | "gantt"
+      getState?: () => unknown
+    } | null>(null)
+
+    const target = mount(defineComponent({
+      setup() {
+        return () => h(DataGrid, {
+          ref: targetGridRef,
+          rows: BASE_ROWS,
+          columns: controlledColumns.value,
+          advancedFilter: true,
+        })
+      },
+    }), {
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    expect(targetGridRef.value?.applySavedView?.(savedView as NonNullable<typeof savedView>)).toBe(true)
+    expect(targetGridRef.value?.getView?.()).toBe("gantt")
+
+    controlledColumns.value = COLUMNS
+    await flushRuntimeTasks()
+
+    expect(targetGridRef.value?.getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              owner: expect.objectContaining({
+                operator: "contains",
+                value: "NOC",
+              }),
+            }),
+          }),
+        }),
+      }),
+    })
+
+    const trigger = await findAdvancedFilterTrigger(target.findComponent(DataGrid))
+    expect(trigger.exists()).toBe(true)
+    expect(trigger.attributes("data-datagrid-advanced-filter-active")).toBe("true")
+
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const advancedFilterRows = Array.from(queryAdvancedFilterRoot()?.querySelectorAll<HTMLElement>(".datagrid-advanced-filter__row") ?? [])
+    expect(advancedFilterRows).toHaveLength(3)
+
+    const hydratedValues = advancedFilterRows.map(row => (
+      row.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')?.value ?? null
+    ))
+    expect(hydratedValues).toEqual(["eu-west", "10", "20"])
+
+    source.unmount()
+    target.unmount()
+  })
+
   it("clears the only advanced filter clause instead of blocking removal", async () => {
     await preloadAdvancedFilterPopover()
 
@@ -2107,7 +2369,7 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const trigger = wrapper.find(".datagrid-app-toolbar__button")
+    const trigger = findToolbarAction(wrapper, "column-layout")
     expect(trigger.exists()).toBe(true)
 
     await trigger.trigger("click")
@@ -2165,7 +2427,7 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const trigger = wrapper.find(".datagrid-app-toolbar__button")
+    const trigger = findToolbarAction(wrapper, "aggregations")
     expect(trigger.exists()).toBe(true)
 
     await trigger.trigger("click")
@@ -2472,6 +2734,61 @@ describe("DataGrid app facade contract", () => {
         selectedRows: ["r1", "r2", "r3"],
       },
     })
+
+    wrapper.unmount()
+  })
+
+  it("supports a controlled rowSelectionState contract alongside the legacy row-select event", async () => {
+    const controlledRowSelection = ref<{ focusedRow: string | null; selectedRows: string[] } | null>({
+      focusedRow: "r2",
+      selectedRows: ["r2"],
+    })
+    const rowSelectEvents: Array<{ focusedRow: string | null; selectedRows: string[] } | null> = []
+
+    const wrapper = mount(defineComponent({
+      setup() {
+        return () => h(DataGrid, {
+          rows: BASE_ROWS,
+          columns: COLUMNS,
+          rowSelection: true,
+          rowSelectionState: controlledRowSelection.value,
+          "onUpdate:rowSelectionState": (nextState: { focusedRow: string | null; selectedRows: string[] } | null) => {
+            controlledRowSelection.value = nextState
+          },
+          onRowSelect: (snapshot: { focusedRow: string | null; selectedRows: string[] } | null) => {
+            rowSelectEvents.push(snapshot)
+          },
+        })
+      },
+    }), {
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    let leftPaneRows = wrapper.findAll(".grid-body-pane--left .grid-row")
+    expect(leftPaneRows[1]?.find('.grid-cell--row-selection[role="checkbox"]').attributes("aria-checked")).toBe("true")
+    expect(leftPaneRows[0]?.find('.grid-cell--row-selection[role="checkbox"]').attributes("aria-checked")).toBe("false")
+
+    controlledRowSelection.value = {
+      focusedRow: null,
+      selectedRows: ["r1", "r3"],
+    }
+    await flushRuntimeTasks()
+
+    leftPaneRows = wrapper.findAll(".grid-body-pane--left .grid-row")
+    expect(leftPaneRows[0]?.find('.grid-cell--row-selection[role="checkbox"]').attributes("aria-checked")).toBe("true")
+    expect(leftPaneRows[1]?.find('.grid-cell--row-selection[role="checkbox"]').attributes("aria-checked")).toBe("false")
+    expect(leftPaneRows[2]?.find('.grid-cell--row-selection[role="checkbox"]').attributes("aria-checked")).toBe("true")
+
+    const headerCheckbox = wrapper.find('.grid-header-shell .grid-checkbox-trigger[aria-label="Select all filtered rows"]')
+    await headerCheckbox.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(controlledRowSelection.value?.focusedRow).toBeNull()
+    expect([...(controlledRowSelection.value?.selectedRows ?? [])].sort()).toEqual(["r1", "r2", "r3"])
+    expect(rowSelectEvents.at(-1)?.focusedRow).toBeNull()
+    expect([...(rowSelectEvents.at(-1)?.selectedRows ?? [])].sort()).toEqual(["r1", "r2", "r3"])
 
     wrapper.unmount()
   })
@@ -3323,6 +3640,45 @@ describe("DataGrid app facade contract", () => {
 
     source.unmount()
     target.unmount()
+  })
+
+  it("sanitizes transient transaction snapshots out of saved views", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const migrated = resolveVm(wrapper).migrateSavedView?.({
+      state: {
+        ...(resolveVm(wrapper).getState?.() as Record<string, unknown>),
+        transaction: {
+          undoDepth: 2,
+          redoDepth: 1,
+          pendingBatch: null,
+        },
+      },
+      viewMode: "table",
+    })
+
+    expect(migrated).toMatchObject({
+      viewMode: "table",
+      state: expect.objectContaining({
+        transaction: null,
+      }),
+    })
+
+    const serialized = serializeDataGridSavedView(migrated as NonNullable<typeof migrated>)
+    expect(JSON.parse(serialized)).toMatchObject({
+      state: expect.objectContaining({
+        transaction: null,
+      }),
+    })
+
+    wrapper.unmount()
   })
 
   it("emits unified state updates when declarative props mutate runtime state", async () => {

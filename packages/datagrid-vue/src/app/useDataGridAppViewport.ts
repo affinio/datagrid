@@ -40,6 +40,8 @@ export interface UseDataGridAppViewportOptions<TRow> {
   resolveRowOffset?: (rowIndex: number) => number
   resolveRowIndexAtOffset?: (offset: number) => number
   resolveTotalRowHeight?: () => number
+  requestAnimationFrame?: (callback: FrameRequestCallback) => number
+  cancelAnimationFrame?: (handle: number) => void
 }
 
 export interface UseDataGridAppViewportResult<TRow> {
@@ -172,11 +174,51 @@ export function useDataGridAppViewport<TRow>(
   const viewportScrollLeft = ref(0)
   const viewportClientWidth = ref(0)
   const viewportShellClientWidth = ref(0)
-  const viewportSyncRafHandle = ref<number | null>(null)
   let lastSyncedRange: DataGridViewportRange | null = null
   let lastViewportScrollTop = 0
+  let viewportSyncRafHandle: number | null = null
+  let pendingViewportSyncForce = false
+  let pendingViewportSyncMeasureVisibleRowHeights = false
   const isPaginationMode = computed<boolean>(() => {
     return resolveMaybeRef(options.mode) === "base" && resolveMaybeRef(options.rowRenderMode) === "pagination"
+  })
+
+  const requestViewportAnimationFrame = (callback: FrameRequestCallback): number => {
+    if (typeof options.requestAnimationFrame === "function") {
+      return options.requestAnimationFrame(callback)
+    }
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      return window.requestAnimationFrame(callback)
+    }
+    return globalThis.setTimeout(() => callback(Date.now()), 16) as unknown as number
+  }
+
+  const cancelViewportAnimationFrame = (handle: number): void => {
+    if (typeof options.cancelAnimationFrame === "function") {
+      options.cancelAnimationFrame(handle)
+      return
+    }
+    if (typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
+      window.cancelAnimationFrame(handle)
+      return
+    }
+    globalThis.clearTimeout(handle)
+  }
+
+  interface ViewportSnapshot {
+    scrollTop: number
+    scrollLeft: number
+    clientWidth: number
+    clientHeight: number
+    shellClientWidth: number
+  }
+
+  const captureViewportSnapshot = (element: HTMLElement): ViewportSnapshot => ({
+    scrollTop: element.scrollTop,
+    scrollLeft: element.scrollLeft,
+    clientWidth: element.clientWidth,
+    clientHeight: element.clientHeight,
+    shellClientWidth: Math.max(element.parentElement?.clientWidth ?? 0, element.clientWidth),
   })
 
   const resolveScrollableBodyRowCount = (): number => {
@@ -371,7 +413,9 @@ export function useDataGridAppViewport<TRow>(
     }
   }
 
-  const resolveViewportRangeFromElement = (element: HTMLElement): DataGridViewportRange => {
+  const resolveViewportRangeFromSnapshot = (
+    snapshot: Pick<ViewportSnapshot, "scrollTop" | "clientHeight">,
+  ): DataGridViewportRange => {
     const total = resolveScrollableBodyRowCount()
     if (total <= 0) {
       return { start: 0, end: 0 }
@@ -384,8 +428,8 @@ export function useDataGridAppViewport<TRow>(
     }
 
     if (typeof options.resolveRowIndexAtOffset === "function") {
-      const start = Math.max(0, options.resolveRowIndexAtOffset(element.scrollTop) - rowOverscan.value)
-      const visibleBottomOffset = Math.max(0, element.scrollTop + Math.max(1, element.clientHeight) - 1)
+      const start = Math.max(0, options.resolveRowIndexAtOffset(snapshot.scrollTop) - rowOverscan.value)
+      const visibleBottomOffset = Math.max(0, snapshot.scrollTop + Math.max(1, snapshot.clientHeight) - 1)
       const end = Math.min(
         total - 1,
         options.resolveRowIndexAtOffset(visibleBottomOffset) + rowOverscan.value,
@@ -394,8 +438,8 @@ export function useDataGridAppViewport<TRow>(
     }
 
     const estimatedRowHeight = options.normalizedBaseRowHeight.value
-    const start = Math.max(0, Math.floor(element.scrollTop / estimatedRowHeight) - rowOverscan.value)
-    const visibleCount = Math.ceil(Math.max(1, element.clientHeight) / estimatedRowHeight) + rowOverscan.value * 2
+    const start = Math.max(0, Math.floor(snapshot.scrollTop / estimatedRowHeight) - rowOverscan.value)
+    const visibleCount = Math.ceil(Math.max(1, snapshot.clientHeight) / estimatedRowHeight) + rowOverscan.value * 2
     const end = Math.min(total - 1, start + visibleCount - 1)
     return { start, end }
   }
@@ -427,18 +471,64 @@ export function useDataGridAppViewport<TRow>(
     }
   }
 
-  const handleViewportScroll = (event: Event): void => {
-    const element = event.target as HTMLElement
-    viewportScrollLeft.value = element.scrollLeft
-    viewportScrollTop.value = element.scrollTop
-    viewportClientWidth.value = element.clientWidth
-    viewportShellClientWidth.value = Math.max(element.parentElement?.clientWidth ?? 0, element.clientWidth)
-    syncHeaderScrollLeftFromBody(element.scrollLeft)
-    if (element.scrollTop === lastViewportScrollTop) {
+  const commitViewportSnapshot = (
+    snapshot: ViewportSnapshot,
+    commitOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean },
+  ): void => {
+    viewportScrollLeft.value = snapshot.scrollLeft
+    viewportScrollTop.value = snapshot.scrollTop
+    viewportClientWidth.value = snapshot.clientWidth
+    viewportShellClientWidth.value = snapshot.shellClientWidth
+    syncHeaderScrollLeftFromBody(snapshot.scrollLeft)
+
+    if (commitOptions.forceVisibleRows || snapshot.scrollTop !== lastViewportScrollTop) {
+      lastViewportScrollTop = snapshot.scrollTop
+      syncVisibleRows(resolveViewportRangeFromSnapshot({
+        scrollTop: snapshot.scrollTop,
+        clientHeight: snapshot.clientHeight,
+      }), commitOptions.forceVisibleRows)
+    }
+
+    if (commitOptions.measureVisibleRowHeights) {
+      options.measureVisibleRowHeights?.()
+    }
+  }
+
+  const flushPendingViewportSync = (): void => {
+    viewportSyncRafHandle = null
+    const element = bodyViewportRef.value
+    const shouldForceVisibleRows = pendingViewportSyncForce
+    const shouldMeasureVisibleRowHeights = pendingViewportSyncMeasureVisibleRowHeights
+    pendingViewportSyncForce = false
+    pendingViewportSyncMeasureVisibleRowHeights = false
+    if (!element) {
       return
     }
-    lastViewportScrollTop = element.scrollTop
-    syncVisibleRows(resolveViewportRangeFromElement(element))
+    commitViewportSnapshot(captureViewportSnapshot(element), {
+      forceVisibleRows: shouldForceVisibleRows,
+      measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
+    })
+  }
+
+  const scheduleViewportCommit = (nextOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean }): void => {
+    // Keep native scroll IO light and collapse reactive viewport work into one frame commit.
+    pendingViewportSyncForce = pendingViewportSyncForce || nextOptions.forceVisibleRows
+    pendingViewportSyncMeasureVisibleRowHeights = pendingViewportSyncMeasureVisibleRowHeights || nextOptions.measureVisibleRowHeights
+    if (viewportSyncRafHandle !== null) {
+      return
+    }
+    viewportSyncRafHandle = requestViewportAnimationFrame(() => {
+      flushPendingViewportSync()
+    })
+  }
+
+  const handleViewportScroll = (event: Event): void => {
+    const element = event.target as HTMLElement
+    syncHeaderScrollLeftFromBody(element.scrollLeft)
+    scheduleViewportCommit({
+      forceVisibleRows: false,
+      measureVisibleRowHeights: false,
+    })
   }
 
   const syncViewportFromDom = (): void => {
@@ -446,32 +536,28 @@ export function useDataGridAppViewport<TRow>(
     if (!element) {
       return
     }
-    lastViewportScrollTop = element.scrollTop
-    viewportScrollLeft.value = element.scrollLeft
-    viewportScrollTop.value = element.scrollTop
-    viewportClientWidth.value = element.clientWidth
-    viewportShellClientWidth.value = Math.max(element.parentElement?.clientWidth ?? 0, element.clientWidth)
-    syncHeaderScrollLeftFromBody(element.scrollLeft)
-    syncVisibleRows(resolveViewportRangeFromElement(element), true)
-    options.measureVisibleRowHeights?.()
+    cancelScheduledViewportSync()
+    commitViewportSnapshot(captureViewportSnapshot(element), {
+      forceVisibleRows: true,
+      measureVisibleRowHeights: true,
+    })
   }
 
   const scheduleViewportSync = (): void => {
-    if (viewportSyncRafHandle.value != null) {
-      return
-    }
-    viewportSyncRafHandle.value = window.requestAnimationFrame(() => {
-      viewportSyncRafHandle.value = null
-      syncViewportFromDom()
+    scheduleViewportCommit({
+      forceVisibleRows: true,
+      measureVisibleRowHeights: true,
     })
   }
 
   const cancelScheduledViewportSync = (): void => {
-    if (viewportSyncRafHandle.value == null) {
+    pendingViewportSyncForce = false
+    pendingViewportSyncMeasureVisibleRowHeights = false
+    if (viewportSyncRafHandle == null) {
       return
     }
-    window.cancelAnimationFrame(viewportSyncRafHandle.value)
-    viewportSyncRafHandle.value = null
+    cancelViewportAnimationFrame(viewportSyncRafHandle)
+    viewportSyncRafHandle = null
   }
 
   return {
