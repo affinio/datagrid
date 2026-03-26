@@ -515,6 +515,45 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.leftColumnSpacerWidth.value).toBe(12 * 100)
   })
 
+  it("retains the last rendered column window while the visible range stays inside the overscan buffer", () => {
+    const raf = createRafHarness()
+    const cols = makeColumns(80, 100)
+
+    const viewport = makeViewport({
+      visibleColumns: ref(cols),
+      columnVirtualizationEnabled: computed(() => true),
+      columnOverscan: computed(() => 2),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const el = makeBodyViewport(1500, 800)
+    viewport.bodyViewportRef.value = el
+    viewport.syncViewportFromDom()
+
+    const firstRenderedColumns = viewport.renderedColumns.value
+
+    expect(viewport.viewportColumnStart.value).toBe(13)
+    expect(viewport.viewportColumnEnd.value).toBe(24)
+
+    el.scrollLeft = 1600
+    viewport.handleViewportScroll(createScrollEvent(el))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(viewport.viewportColumnStart.value).toBe(13)
+    expect(viewport.viewportColumnEnd.value).toBe(24)
+    expect(viewport.renderedColumns.value).toBe(firstRenderedColumns)
+
+    el.scrollLeft = 1700
+    viewport.handleViewportScroll(createScrollEvent(el))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(viewport.viewportColumnStart.value).toBe(15)
+    expect(viewport.viewportColumnEnd.value).toBe(26)
+    expect(viewport.renderedColumns.value).not.toBe(firstRenderedColumns)
+  })
+
   it("clamps column range to boundaries when scrolled past last column", () => {
     const raf = createRafHarness()
     const COLS = makeColumns(10, 100) // 1000 px total

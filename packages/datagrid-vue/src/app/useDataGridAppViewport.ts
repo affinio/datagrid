@@ -361,6 +361,13 @@ export function useDataGridAppViewport<TRow>(
   let pendingViewportScrollLeft = 0
   let cachedViewportElement: HTMLElement | null = null
   let cachedViewportDimensions: ViewportDimensions | null = null
+  let lastSyncedColumnRange:
+    | {
+      columns: readonly DataGridColumnSnapshot[]
+      start: number
+      end: number
+    }
+    | null = null
   let lastViewportColumnMetrics: {
     columns: readonly DataGridColumnSnapshot[]
     start: number
@@ -555,15 +562,61 @@ export function useDataGridAppViewport<TRow>(
     return value
   }
 
+  const resolveBufferedViewportColumnMetrics = (
+    columns: readonly DataGridColumnSnapshot[],
+    visibleStart: number,
+    visibleEnd: number,
+    prefix: readonly number[],
+    totalWidth: number,
+  ): ViewportColumnMetrics => {
+    const previousRange = lastSyncedColumnRange?.columns === columns
+      ? lastSyncedColumnRange
+      : null
+    const hysteresis = Math.max(1, Math.floor(columnOverscan.value / 2))
+    const retainPreviousRange = previousRange != null
+      && visibleStart >= previousRange.start + hysteresis
+      && visibleEnd <= previousRange.end - hysteresis
+
+    const start = retainPreviousRange
+      ? previousRange.start
+      : Math.max(0, visibleStart - columnOverscan.value)
+    const end = retainPreviousRange
+      ? previousRange.end
+      : Math.min(columns.length - 1, visibleEnd + columnOverscan.value)
+    const leftSpacerWidth = prefix[start] ?? 0
+    const renderedWidth = (prefix[end + 1] ?? totalWidth) - leftSpacerWidth
+    const rightSpacerWidth = Math.max(0, totalWidth - leftSpacerWidth - renderedWidth)
+
+    lastSyncedColumnRange = {
+      columns,
+      start,
+      end,
+    }
+
+    return resolveViewportColumnMetricsResult(columns, start, end, leftSpacerWidth, rightSpacerWidth)
+  }
+
   const viewportColumnMetrics = computed(() => {
     const columns = options.visibleColumns.value
     const totalWidth = mainTrackWidth.value
     if (!resolveMaybeRef(options.columnVirtualizationEnabled) || columns.length <= 0) {
+      lastSyncedColumnRange = columns.length > 0
+        ? {
+          columns,
+          start: 0,
+          end: Math.max(0, columns.length - 1),
+        }
+        : null
       return resolveViewportColumnMetricsResult(columns, 0, Math.max(0, columns.length - 1), 0, 0)
     }
 
     const availableWidth = Math.max(0, viewportClientWidth.value - indexColumnWidth)
     if (availableWidth <= 0) {
+      lastSyncedColumnRange = {
+        columns,
+        start: 0,
+        end: Math.max(0, columns.length - 1),
+      }
       return resolveViewportColumnMetricsResult(columns, 0, Math.max(0, columns.length - 1), 0, 0)
     }
 
@@ -584,7 +637,7 @@ export function useDataGridAppViewport<TRow>(
 
     if (visibleStart >= columns.length) {
       const lastIndex = columns.length - 1
-      return resolveViewportColumnMetricsResult(columns, lastIndex, lastIndex, prefix[lastIndex], 0)
+      return resolveBufferedViewportColumnMetrics(columns, lastIndex, lastIndex, prefix, totalWidth)
     }
 
     // Binary search: last column whose left edge (prefix[i]) < viewportEndPx.
@@ -597,14 +650,7 @@ export function useDataGridAppViewport<TRow>(
     }
     const visibleEnd = lo
 
-    const start = Math.max(0, visibleStart - columnOverscan.value)
-    const end = Math.min(columns.length - 1, visibleEnd + columnOverscan.value)
-
-    const leftSpacerWidth = prefix[start] // O(1)
-    const renderedWidth = prefix[end + 1] - prefix[start] // O(1)
-    const rightSpacerWidth = Math.max(0, totalWidth - leftSpacerWidth - renderedWidth)
-
-    return resolveViewportColumnMetricsResult(columns, start, end, leftSpacerWidth, rightSpacerWidth)
+    return resolveBufferedViewportColumnMetrics(columns, visibleStart, visibleEnd, prefix, totalWidth)
   })
 
   const gridContentStyle = computed<Record<string, string>>(() => {

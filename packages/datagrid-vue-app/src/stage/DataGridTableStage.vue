@@ -891,6 +891,8 @@ const restoreBodyCursor = ref<string | null>(null)
 const restoreDocumentCursor = ref<string | null>(null)
 let gridChromeAnimationFrame = 0
 let gridChromeResizeObserver: ResizeObserver | null = null
+type GridChromeRedrawMode = "full" | "center-scroll"
+let pendingGridChromeRedrawMode: GridChromeRedrawMode = "full"
 let teardownTouchPanGuard: (() => void) | null = null
 
 function syncGlobalFillDragCursor(active: boolean): void {
@@ -1882,8 +1884,37 @@ function drawGridChromeVerticalLines(
   context.restore()
 }
 
-function drawGridChromeCanvas(): void {
+function drawGridChromeBodyPane(
+  context: CanvasRenderingContext2D | null,
+  pane: DataGridChromePaneModel,
+  rowDividerColor: string,
+  rowDividerWidth: number,
+  columnDividerColor: string,
+  columnDividerWidth: number,
+): void {
+  if (!context) {
+    return
+  }
+  drawGridChromeBands(context, pane)
+  drawGridChromeHorizontalLines(context, pane, rowDividerColor, rowDividerWidth)
+  drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth)
+}
+
+function drawGridChromeHeaderPane(
+  context: CanvasRenderingContext2D | null,
+  pane: DataGridChromePaneModel,
+  columnDividerColor: string,
+  columnDividerWidth: number,
+): void {
+  if (!context || hasPivotHeaderGroups.value) {
+    return
+  }
+  drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth)
+}
+
+function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
   gridChromeAnimationFrame = 0
+  pendingGridChromeRedrawMode = "full"
   const headerRenderModel = headerChromeRenderModel.value
   const renderModel = chromeRenderModel.value
   const rowDividerColor = resolveGridChromeColor("--datagrid-row-divider-color", "rgba(0, 0, 0, 0.08)")
@@ -1892,13 +1923,15 @@ function drawGridChromeCanvas(): void {
   const rowDividerWidth = resolveGridChromeLineWidth("--datagrid-row-divider-size", 1)
   const columnDividerWidth = resolveGridChromeLineWidth("--datagrid-column-divider-size", 1)
 
-  const leftHeaderContext = prepareGridChromeCanvas(
-    leftHeaderChromeCanvasEl.value,
-    headerRenderModel.left.width,
-    headerRenderModel.left.height,
-  )
-  if (leftHeaderContext && !hasPivotHeaderGroups.value) {
-    drawGridChromeVerticalLines(leftHeaderContext, headerRenderModel.left, headerColumnDividerColor, columnDividerWidth)
+  const leftHeaderContext = mode === "full"
+    ? prepareGridChromeCanvas(
+      leftHeaderChromeCanvasEl.value,
+      headerRenderModel.left.width,
+      headerRenderModel.left.height,
+    )
+    : null
+  if (leftHeaderContext) {
+    drawGridChromeHeaderPane(leftHeaderContext, headerRenderModel.left, headerColumnDividerColor, columnDividerWidth)
   }
 
   const centerHeaderContext = prepareGridChromeCanvas(
@@ -1906,51 +1939,75 @@ function drawGridChromeCanvas(): void {
     headerRenderModel.center.width,
     headerRenderModel.center.height,
   )
-  if (centerHeaderContext && !hasPivotHeaderGroups.value) {
-    drawGridChromeVerticalLines(centerHeaderContext, headerRenderModel.center, headerColumnDividerColor, columnDividerWidth)
+  drawGridChromeHeaderPane(centerHeaderContext, headerRenderModel.center, headerColumnDividerColor, columnDividerWidth)
+
+  const rightHeaderContext = mode === "full"
+    ? prepareGridChromeCanvas(
+      rightHeaderChromeCanvasEl.value,
+      headerRenderModel.right.width,
+      headerRenderModel.right.height,
+    )
+    : null
+  if (rightHeaderContext) {
+    drawGridChromeHeaderPane(rightHeaderContext, headerRenderModel.right, headerColumnDividerColor, columnDividerWidth)
   }
 
-  const rightHeaderContext = prepareGridChromeCanvas(
-    rightHeaderChromeCanvasEl.value,
-    headerRenderModel.right.width,
-    headerRenderModel.right.height,
-  )
-  if (rightHeaderContext && !hasPivotHeaderGroups.value) {
-    drawGridChromeVerticalLines(rightHeaderContext, headerRenderModel.right, headerColumnDividerColor, columnDividerWidth)
-  }
-
-  const leftContext = prepareGridChromeCanvas(leftChromeCanvasEl.value, renderModel.left.width, renderModel.left.height)
+  const leftContext = mode === "full"
+    ? prepareGridChromeCanvas(leftChromeCanvasEl.value, renderModel.left.width, renderModel.left.height)
+    : null
   if (leftContext) {
-    drawGridChromeBands(leftContext, renderModel.left)
-    drawGridChromeHorizontalLines(leftContext, renderModel.left, rowDividerColor, rowDividerWidth)
-    drawGridChromeVerticalLines(leftContext, renderModel.left, columnDividerColor, columnDividerWidth)
+    drawGridChromeBodyPane(
+      leftContext,
+      renderModel.left,
+      rowDividerColor,
+      rowDividerWidth,
+      columnDividerColor,
+      columnDividerWidth,
+    )
   }
 
   const centerContext = prepareGridChromeCanvas(centerChromeCanvasEl.value, renderModel.center.width, renderModel.center.height)
-  if (centerContext) {
-    drawGridChromeBands(centerContext, renderModel.center)
-    drawGridChromeHorizontalLines(centerContext, renderModel.center, rowDividerColor, rowDividerWidth)
-    drawGridChromeVerticalLines(centerContext, renderModel.center, columnDividerColor, columnDividerWidth)
-  }
+  drawGridChromeBodyPane(
+    centerContext,
+    renderModel.center,
+    rowDividerColor,
+    rowDividerWidth,
+    columnDividerColor,
+    columnDividerWidth,
+  )
 
-  const rightContext = prepareGridChromeCanvas(rightChromeCanvasEl.value, renderModel.right.width, renderModel.right.height)
+  const rightContext = mode === "full"
+    ? prepareGridChromeCanvas(rightChromeCanvasEl.value, renderModel.right.width, renderModel.right.height)
+    : null
   if (rightContext) {
-    drawGridChromeBands(rightContext, renderModel.right)
-    drawGridChromeHorizontalLines(rightContext, renderModel.right, rowDividerColor, rowDividerWidth)
-    drawGridChromeVerticalLines(rightContext, renderModel.right, columnDividerColor, columnDividerWidth)
+    drawGridChromeBodyPane(
+      rightContext,
+      renderModel.right,
+      rowDividerColor,
+      rowDividerWidth,
+      columnDividerColor,
+      columnDividerWidth,
+    )
   }
 
   const bottomRenderModel = pinnedBottomChromeRenderModel.value
 
-  const leftBottomContext = prepareGridChromeCanvas(
-    leftBottomChromeCanvasEl.value,
-    bottomRenderModel.left.width,
-    bottomRenderModel.left.height,
-  )
+  const leftBottomContext = mode === "full"
+    ? prepareGridChromeCanvas(
+      leftBottomChromeCanvasEl.value,
+      bottomRenderModel.left.width,
+      bottomRenderModel.left.height,
+    )
+    : null
   if (leftBottomContext) {
-    drawGridChromeBands(leftBottomContext, bottomRenderModel.left)
-    drawGridChromeHorizontalLines(leftBottomContext, bottomRenderModel.left, rowDividerColor, rowDividerWidth)
-    drawGridChromeVerticalLines(leftBottomContext, bottomRenderModel.left, columnDividerColor, columnDividerWidth)
+    drawGridChromeBodyPane(
+      leftBottomContext,
+      bottomRenderModel.left,
+      rowDividerColor,
+      rowDividerWidth,
+      columnDividerColor,
+      columnDividerWidth,
+    )
   }
 
   const centerBottomContext = prepareGridChromeCanvas(
@@ -1958,34 +2015,47 @@ function drawGridChromeCanvas(): void {
     bottomRenderModel.center.width,
     bottomRenderModel.center.height,
   )
-  if (centerBottomContext) {
-    drawGridChromeBands(centerBottomContext, bottomRenderModel.center)
-    drawGridChromeHorizontalLines(centerBottomContext, bottomRenderModel.center, rowDividerColor, rowDividerWidth)
-    drawGridChromeVerticalLines(centerBottomContext, bottomRenderModel.center, columnDividerColor, columnDividerWidth)
-  }
-
-  const rightBottomContext = prepareGridChromeCanvas(
-    rightBottomChromeCanvasEl.value,
-    bottomRenderModel.right.width,
-    bottomRenderModel.right.height,
+  drawGridChromeBodyPane(
+    centerBottomContext,
+    bottomRenderModel.center,
+    rowDividerColor,
+    rowDividerWidth,
+    columnDividerColor,
+    columnDividerWidth,
   )
+
+  const rightBottomContext = mode === "full"
+    ? prepareGridChromeCanvas(
+      rightBottomChromeCanvasEl.value,
+      bottomRenderModel.right.width,
+      bottomRenderModel.right.height,
+    )
+    : null
   if (rightBottomContext) {
-    drawGridChromeBands(rightBottomContext, bottomRenderModel.right)
-    drawGridChromeHorizontalLines(rightBottomContext, bottomRenderModel.right, rowDividerColor, rowDividerWidth)
-    drawGridChromeVerticalLines(rightBottomContext, bottomRenderModel.right, columnDividerColor, columnDividerWidth)
+    drawGridChromeBodyPane(
+      rightBottomContext,
+      bottomRenderModel.right,
+      rowDividerColor,
+      rowDividerWidth,
+      columnDividerColor,
+      columnDividerWidth,
+    )
   }
 }
 
-function scheduleGridChromeRedraw(): void {
+function scheduleGridChromeRedraw(mode: GridChromeRedrawMode = "full"): void {
+  pendingGridChromeRedrawMode = gridChromeAnimationFrame === 0
+    ? mode
+    : (mode === "full" || pendingGridChromeRedrawMode === "full" ? "full" : "center-scroll")
   if (typeof window === "undefined") {
-    drawGridChromeCanvas()
+    drawGridChromeCanvas(pendingGridChromeRedrawMode)
     return
   }
   if (gridChromeAnimationFrame !== 0) {
     return
   }
   gridChromeAnimationFrame = window.requestAnimationFrame(() => {
-    drawGridChromeCanvas()
+    drawGridChromeCanvas(pendingGridChromeRedrawMode)
   })
 }
 
@@ -2397,10 +2467,16 @@ function handleCenterViewportScroll(event: Event): void {
   if (!element) {
     return
   }
+  const previousScrollTop = bodyViewportScrollTop.value
+  const previousScrollLeft = bodyViewportScrollLeft.value
   linkedPaneScrollSync.onSourceScroll(element.scrollTop)
   syncBodyViewportScrollState(element)
   syncPinnedBottomViewportScrollLeft()
-  scheduleGridChromeRedraw()
+  scheduleGridChromeRedraw(
+    element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop
+      ? "center-scroll"
+      : "full",
+  )
 }
 
 function handlePinnedBottomViewportScroll(event: Event): void {
@@ -2412,7 +2488,7 @@ function handlePinnedBottomViewportScroll(event: Event): void {
   bodyViewport.scrollLeft = element.scrollLeft
   viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
   syncBodyViewportScrollState(bodyViewport)
-  scheduleGridChromeRedraw()
+  scheduleGridChromeRedraw("center-scroll")
 }
 
 function handlePinnedBottomViewportKeydown(event: KeyboardEvent): void {

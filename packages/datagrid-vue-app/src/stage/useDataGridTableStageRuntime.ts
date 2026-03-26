@@ -49,10 +49,15 @@ const AUTO_RESIZE_SAMPLE_LIMIT = 400
 
 export type { DataGridTableStageHistoryAdapter } from "./useDataGridTableStageHistory"
 
-type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = Pick<
-  import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>,
-  "api" | "syncBodyRowsInRange" | "setViewportRange" | "setVirtualWindowRange" | "rowPartition" | "virtualWindow" | "columnSnapshot"
-> & {
+type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = {
+  api: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["api"]
+  syncBodyRowsInRange: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["syncBodyRowsInRange"]
+  setViewportRange: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["setViewportRange"]
+  rowPartition: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["rowPartition"]
+  virtualWindow: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["virtualWindow"]
+  columnSnapshot: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["columnSnapshot"]
+  setVirtualWindowRange?: (range: { start: number; end: number }) => void
+} & {
   getBodyRowAtIndex: (rowIndex: number) => import("@affino/datagrid-vue").DataGridRowNode<TRow> | null
   resolveBodyRowIndexById: (rowId: string | number) => number
 }
@@ -702,7 +707,7 @@ export function useDataGridTableStageRuntime<
     stopColumnResize,
     handleInteractionWindowMouseMove,
     handleInteractionWindowMouseUp,
-    syncViewport: syncViewportFromDom,
+    syncViewport: handleViewportScroll,
   })
 
   const stageServices = {

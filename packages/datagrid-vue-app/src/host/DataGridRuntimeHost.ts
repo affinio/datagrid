@@ -119,6 +119,7 @@ export default defineComponent({
     const bodyRuntime = runtime as typeof runtime & {
       getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<unknown> | null
       resolveBodyRowIndexById: (rowId: string | number) => number
+      setVirtualWindowRange?: (range: { start: number; end: number }) => void
     }
     const publicRuntime = {
       api: runtime.api,

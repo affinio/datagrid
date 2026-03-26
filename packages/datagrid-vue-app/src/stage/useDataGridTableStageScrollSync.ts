@@ -7,7 +7,7 @@ export interface UseDataGridTableStageScrollSyncOptions {
   stopColumnResize: () => void
   handleInteractionWindowMouseMove: (event: MouseEvent) => void
   handleInteractionWindowMouseUp: () => void
-  syncViewport: () => void
+  syncViewport: (event: Event) => void
 }
 
 export interface UseDataGridTableStageScrollSyncResult {
@@ -20,6 +20,10 @@ export interface UseDataGridTableStageScrollSyncResult {
 export function useDataGridTableStageScrollSync(
   options: UseDataGridTableStageScrollSyncOptions,
 ): UseDataGridTableStageScrollSyncResult {
+  const createSyntheticScrollEvent = (target: HTMLElement): Event => {
+    return { target } as unknown as Event
+  }
+
   const handleWindowMouseMove = (event: MouseEvent): void => {
     if (options.isColumnResizing.value) {
       options.applyColumnResizeFromPointer(event.clientX)
@@ -47,7 +51,7 @@ export function useDataGridTableStageScrollSync(
     if (verticalDelta !== 0) {
       bodyViewport.scrollTop += verticalDelta
     }
-    options.syncViewport()
+    options.syncViewport(createSyntheticScrollEvent(bodyViewport))
   }
 
   const handleHeaderScroll = (event: Event): void => {
@@ -59,7 +63,7 @@ export function useDataGridTableStageScrollSync(
     if (bodyViewport.scrollLeft !== headerViewport.scrollLeft) {
       bodyViewport.scrollLeft = headerViewport.scrollLeft
     }
-    options.syncViewport()
+    options.syncViewport(createSyntheticScrollEvent(bodyViewport))
   }
 
   const handleWindowMouseUp = (): void => {

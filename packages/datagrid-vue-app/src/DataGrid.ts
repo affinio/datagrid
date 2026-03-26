@@ -115,10 +115,15 @@ type DataGridRuntimeOverrides = Omit<
 
 type DataGridSelectionService = NonNullable<DataGridRuntimeOverrides["selection"]>
 
-type DataGridBodyAwareRuntime = Pick<
-  UseDataGridRuntimeResult<Record<string, unknown>>,
-  "api" | "syncBodyRowsInRange" | "setViewportRange" | "setVirtualWindowRange" | "rowPartition" | "virtualWindow" | "columnSnapshot"
-> & {
+type DataGridBodyAwareRuntime = {
+  api: UseDataGridRuntimeResult<Record<string, unknown>>["api"]
+  syncBodyRowsInRange: UseDataGridRuntimeResult<Record<string, unknown>>["syncBodyRowsInRange"]
+  setViewportRange: UseDataGridRuntimeResult<Record<string, unknown>>["setViewportRange"]
+  rowPartition: UseDataGridRuntimeResult<Record<string, unknown>>["rowPartition"]
+  virtualWindow: UseDataGridRuntimeResult<Record<string, unknown>>["virtualWindow"]
+  columnSnapshot: UseDataGridRuntimeResult<Record<string, unknown>>["columnSnapshot"]
+  setVirtualWindowRange?: (range: { start: number; end: number }) => void
+} & {
   getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<Record<string, unknown>> | null
   resolveBodyRowIndexById: (rowId: string | number) => number
 }
