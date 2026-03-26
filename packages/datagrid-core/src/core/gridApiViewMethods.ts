@@ -32,6 +32,14 @@ export interface DataGridApiViewMethods {
   setRowHeightOverride: (rowIndex: number, height: number | null) => void
   getRowHeightOverride: (rowIndex: number) => number | null
   getRowHeightVersion: () => number
+  getRowHeightOverridesSnapshot: () => ReadonlyMap<number, number>
+  getLastRowHeightMutation: () => {
+    version: number
+    kind: "set" | "clear" | "clear-all"
+    rowIndex: number | null
+    previousHeight: number | null
+    nextHeight: number | null
+  } | null
   clearRowHeightOverrides: () => void
   refreshCellsByRowKeys: (
     rowKeys: readonly DataGridRowId[],
@@ -56,6 +64,13 @@ export function createDataGridApiViewMethods<TRow = unknown>(
 ): DataGridApiViewMethods {
   const { rowModel, getViewportService, cellRefreshQueue } = input
   const rowHeightOverrideFallback = new Map<number, number>()
+  let lastRowHeightMutationFallback: {
+    version: number
+    kind: "set" | "clear" | "clear-all"
+    rowIndex: number | null
+    previousHeight: number | null
+    nextHeight: number | null
+  } | null = null
   const normalizeRowIndex = (value: number): number | null => {
     if (!Number.isFinite(value)) {
       return null
@@ -101,6 +116,7 @@ export function createDataGridApiViewMethods<TRow = unknown>(
       if (normalizedIndex == null) {
         return
       }
+      const previousHeight = rowHeightOverrideFallback.get(normalizedIndex) ?? null
       const viewportService = getViewportService()
       if (typeof viewportService?.setRowHeightOverride === "function") {
         viewportService.setRowHeightOverride(normalizedIndex, height)
@@ -108,6 +124,15 @@ export function createDataGridApiViewMethods<TRow = unknown>(
 
       if (height == null) {
         rowHeightOverrideFallback.delete(normalizedIndex)
+        lastRowHeightMutationFallback = {
+          version: typeof viewportService?.getRowHeightVersion === "function"
+            ? viewportService.getRowHeightVersion()
+            : rowHeightOverrideFallback.size,
+          kind: "clear",
+          rowIndex: normalizedIndex,
+          previousHeight,
+          nextHeight: null,
+        }
         return
       }
 
@@ -116,6 +141,15 @@ export function createDataGridApiViewMethods<TRow = unknown>(
         return
       }
       rowHeightOverrideFallback.set(normalizedIndex, normalizedHeight)
+      lastRowHeightMutationFallback = {
+        version: typeof viewportService?.getRowHeightVersion === "function"
+          ? viewportService.getRowHeightVersion()
+          : rowHeightOverrideFallback.size,
+        kind: "set",
+        rowIndex: normalizedIndex,
+        previousHeight,
+        nextHeight: normalizedHeight,
+      }
     },
     getRowHeightOverride(rowIndex: number) {
       const normalizedIndex = normalizeRowIndex(rowIndex)
@@ -138,9 +172,33 @@ export function createDataGridApiViewMethods<TRow = unknown>(
       }
       return rowHeightOverrideFallback.size
     },
+    getRowHeightOverridesSnapshot() {
+      const viewportService = getViewportService()
+      if (typeof viewportService?.getRowHeightOverridesSnapshot === "function") {
+        return viewportService.getRowHeightOverridesSnapshot()
+      }
+      return rowHeightOverrideFallback
+    },
+    getLastRowHeightMutation() {
+      const viewportService = getViewportService()
+      if (typeof viewportService?.getLastRowHeightMutation === "function") {
+        return viewportService.getLastRowHeightMutation()
+      }
+      return lastRowHeightMutationFallback
+    },
     clearRowHeightOverrides() {
       rowHeightOverrideFallback.clear()
-      getViewportService()?.clearRowHeightOverrides?.()
+      const viewportService = getViewportService()
+      viewportService?.clearRowHeightOverrides?.()
+      lastRowHeightMutationFallback = {
+        version: typeof viewportService?.getRowHeightVersion === "function"
+          ? viewportService.getRowHeightVersion()
+          : rowHeightOverrideFallback.size,
+        kind: "clear-all",
+        rowIndex: null,
+        previousHeight: null,
+        nextHeight: null,
+      }
     },
     refreshCellsByRowKeys(
       rowKeys: readonly DataGridRowId[],

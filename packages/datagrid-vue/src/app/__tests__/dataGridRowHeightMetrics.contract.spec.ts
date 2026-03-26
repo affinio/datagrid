@@ -64,4 +64,53 @@ describe("createDataGridAppRowHeightMetrics contract", () => {
     expect(metrics.resolveTotalHeight()).toBe(6200000)
     expect(resolveRowHeightOverride).not.toHaveBeenCalled()
   })
+
+  it("applies sparse row-height mutations without rescanning every row when snapshots are available", () => {
+    let version = 1
+    let lastMutation = null as {
+      version: number
+      kind: "set" | "clear" | "clear-all"
+      rowIndex: number | null
+      previousHeight: number | null
+      nextHeight: number | null
+    } | null
+    const overrides = new Map<number, number>([
+      [1, 60],
+      [3, 45],
+    ])
+    const resolveRowHeightOverride = vi.fn((rowIndex: number) => overrides.get(rowIndex) ?? null)
+
+    const metrics = createDataGridAppRowHeightMetrics({
+      totalRows: () => 200000,
+      resolveBaseRowHeight: () => 30,
+      resolveRowHeightOverride,
+      resolveRowHeightVersion: () => version,
+      hasRowHeightOverrides: () => overrides.size > 0,
+      resolveRowHeightOverridesSnapshot: () => overrides,
+      resolveLastRowHeightMutation: () => lastMutation,
+    })
+
+    expect(metrics.resolveRowOffset(4)).toBe(165)
+    expect(metrics.resolveViewportRange(85, 70, 1)).toEqual({
+      start: 0,
+      end: 4,
+    })
+    expect(resolveRowHeightOverride).not.toHaveBeenCalled()
+
+    const previousHeight = overrides.get(1) ?? null
+    overrides.set(1, 90)
+    version = 2
+    lastMutation = {
+      version,
+      kind: "set",
+      rowIndex: 1,
+      previousHeight,
+      nextHeight: 90,
+    }
+
+    expect(metrics.resolveRowHeight(1)).toBe(90)
+    expect(metrics.resolveRowOffset(2)).toBe(120)
+    expect(metrics.resolveTotalHeight()).toBe((200000 * 30) + 75)
+    expect(resolveRowHeightOverride).not.toHaveBeenCalled()
+  })
 })

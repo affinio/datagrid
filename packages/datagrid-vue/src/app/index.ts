@@ -20,6 +20,7 @@ export {
 
 export {
   createDataGridAppRowHeightMetrics,
+  type DataGridAppRowHeightMutation,
   type DataGridAppRowHeightMetrics,
   type DataGridAppRowHeightMetricsOptions,
 } from "./dataGridRowHeightMetrics"

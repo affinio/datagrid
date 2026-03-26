@@ -52,6 +52,13 @@ export function createDataGridRuntime<TRow = unknown>(
   let baseRowHeight = 31
   const rowHeightOverrides = new Map<number, number>()
   let rowHeightVersion = 0
+  let lastRowHeightMutation: {
+    version: number
+    kind: "set" | "clear" | "clear-all"
+    rowIndex: number | null
+    previousHeight: number | null
+    nextHeight: number | null
+  } | null = null
 
   const defaultViewportService: DataGridCoreServiceRegistry["viewport"] & {
     setVirtualizationEnabled: (enabled: boolean) => void
@@ -91,16 +98,32 @@ export function createDataGridRuntime<TRow = unknown>(
       if (!Number.isInteger(rowIndex) || rowIndex < 0) {
         return
       }
+      const previousHeight = rowHeightOverrides.get(rowIndex) ?? null
       if (height == null) {
         rowHeightOverrides.delete(rowIndex)
         rowHeightVersion += 1
+        lastRowHeightMutation = {
+          version: rowHeightVersion,
+          kind: "clear",
+          rowIndex,
+          previousHeight,
+          nextHeight: null,
+        }
         return
       }
       if (!Number.isFinite(height)) {
         return
       }
-      rowHeightOverrides.set(rowIndex, Math.max(1, Math.trunc(height)))
+      const normalizedHeight = Math.max(1, Math.trunc(height))
+      rowHeightOverrides.set(rowIndex, normalizedHeight)
       rowHeightVersion += 1
+      lastRowHeightMutation = {
+        version: rowHeightVersion,
+        kind: "set",
+        rowIndex,
+        previousHeight,
+        nextHeight: normalizedHeight,
+      }
     },
     getRowHeightOverride(rowIndex) {
       if (!Number.isInteger(rowIndex) || rowIndex < 0) {
@@ -111,9 +134,22 @@ export function createDataGridRuntime<TRow = unknown>(
     getRowHeightVersion() {
       return rowHeightVersion
     },
+    getRowHeightOverridesSnapshot() {
+      return rowHeightOverrides
+    },
+    getLastRowHeightMutation() {
+      return lastRowHeightMutation
+    },
     clearRowHeightOverrides() {
       rowHeightOverrides.clear()
       rowHeightVersion += 1
+      lastRowHeightMutation = {
+        version: rowHeightVersion,
+        kind: "clear-all",
+        rowIndex: null,
+        previousHeight: null,
+        nextHeight: null,
+      }
     },
   }
 

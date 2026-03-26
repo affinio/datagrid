@@ -191,6 +191,8 @@ export function useDataGridTableStageRuntime<
     resolveRowHeightOverride: rowIndex => options.runtime.api.view.getRowHeightOverride(rowIndex),
     resolveRowHeightVersion: () => options.runtime.api.view.getRowHeightVersion(),
     hasRowHeightOverrides: () => options.runtime.api.view.getRowHeightVersion() > 0,
+    resolveRowHeightOverridesSnapshot: () => options.runtime.api.view.getRowHeightOverridesSnapshot?.() ?? null,
+    resolveLastRowHeightMutation: () => options.runtime.api.view.getLastRowHeightMutation?.() ?? null,
   })
   const resolveHeightForRowSpan = (rowCount: number): number => {
     const normalizedRowCount = Math.max(0, Math.trunc(rowCount))

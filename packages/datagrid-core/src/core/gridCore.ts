@@ -91,6 +91,14 @@ export interface DataGridCoreViewportService extends DataGridCoreService {
   setRowHeightOverride?(rowIndex: number, height: number | null): void
   getRowHeightOverride?(rowIndex: number): number | null
   getRowHeightVersion?(): number
+  getRowHeightOverridesSnapshot?(): ReadonlyMap<number, number>
+  getLastRowHeightMutation?(): {
+    version: number
+    kind: "set" | "clear" | "clear-all"
+    rowIndex: number | null
+    previousHeight: number | null
+    nextHeight: number | null
+  } | null
   clearRowHeightOverrides?(): void
 }
 
