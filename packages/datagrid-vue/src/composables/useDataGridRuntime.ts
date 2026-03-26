@@ -526,8 +526,8 @@ export function useDataGridRuntime<TRow = unknown>(
 
   function syncBodyRowsInRange(range: DataGridBodyViewportRange): readonly DataGridRowNode<TRow>[] {
     const normalizedRange = normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount)
+    const syncedRows = runtime.syncRowsInRange(normalizedRange)
     if (workerBackedRowModel) {
-      const syncedRows = runtime.syncRowsInRange(normalizedRange)
       for (const row of syncedRows) {
         if (isPinnedBodyExcludedRow(row)) {
           continue
@@ -540,7 +540,6 @@ export function useDataGridRuntime<TRow = unknown>(
       }
       return syncedRows.filter(row => !isPinnedBodyExcludedRow(row))
     }
-    runtime.setViewportRange(normalizedRange)
     if (rowPartition.value.bodyRowCount === 0 || bodyRows.length === 0) {
       return []
     }

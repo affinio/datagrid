@@ -545,7 +545,7 @@ export function useDataGridRuntimeService<TRow = unknown>(
 
   function syncRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[] {
     setViewportRange(range)
-    const rows = api.rows.getRange(range)
+    const rows = rowModel.getRowsInRange(range)
     return rows
   }
 

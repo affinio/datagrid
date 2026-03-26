@@ -55,6 +55,7 @@ function makeViewport(overrides: Partial<Parameters<typeof useDataGridAppViewpor
   return useDataGridAppViewport({
     runtime: {
       syncBodyRowsInRange: () => [],
+      setViewportRange: () => undefined,
       rowPartition: ref({ bodyRowCount: 0, pinnedTopRows: [], pinnedBottomRows: [] }),
       virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
     } as never,
@@ -218,9 +219,11 @@ describe("useDataGridAppViewport contract", () => {
     const rows = makeRows(100)
     const syncRowsInRange = vi.fn(({ start, end }: { start: number; end: number }) => rows.slice(start, end + 1))
     const getBodyRowAtIndex = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
+    const setViewportRange = vi.fn()
     const viewport = useDataGridAppViewport({
       runtime: {
         syncBodyRowsInRange: syncRowsInRange,
+        setViewportRange,
         getBodyRowAtIndex,
         rowPartition: ref({ bodyRowCount: 100, pinnedTopRows: [], pinnedBottomRows: [] }),
         virtualWindow: ref({ rowStart: 0, rowEnd: 4 }),
@@ -248,6 +251,7 @@ describe("useDataGridAppViewport contract", () => {
 
     expect(syncRowsInRange).toHaveBeenCalledTimes(1)
     expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r0", "r1", "r2", "r3", "r4"])
+    expect(setViewportRange).not.toHaveBeenCalled()
 
     getBodyRowAtIndex.mockClear()
     element.scrollTop = 20
@@ -257,6 +261,8 @@ describe("useDataGridAppViewport contract", () => {
     expect(syncRowsInRange).toHaveBeenCalledTimes(1)
     expect(getBodyRowAtIndex).toHaveBeenCalledTimes(1)
     expect(getBodyRowAtIndex).toHaveBeenLastCalledWith(5)
+    expect(setViewportRange).toHaveBeenCalledTimes(1)
+    expect(setViewportRange).toHaveBeenLastCalledWith({ start: 1, end: 5 })
     expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r1", "r2", "r3", "r4", "r5"])
   })
 

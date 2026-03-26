@@ -117,7 +117,7 @@ type DataGridSelectionService = NonNullable<DataGridRuntimeOverrides["selection"
 
 type DataGridBodyAwareRuntime = Pick<
   UseDataGridRuntimeResult<Record<string, unknown>>,
-  "api" | "syncBodyRowsInRange" | "rowPartition" | "virtualWindow" | "columnSnapshot"
+  "api" | "syncBodyRowsInRange" | "setViewportRange" | "rowPartition" | "virtualWindow" | "columnSnapshot"
 > & {
   getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<Record<string, unknown>> | null
   resolveBodyRowIndexById: (rowId: string | number) => number
@@ -216,7 +216,7 @@ interface DataGridRuntimeHostSlotProps {
 
 type DataGridDefaultRendererRuntime = Pick<
   DataGridBodyAwareRuntime,
-  "api" | "syncBodyRowsInRange" | "getBodyRowAtIndex" | "resolveBodyRowIndexById" | "rowPartition" | "virtualWindow" | "columnSnapshot"
+  "api" | "syncBodyRowsInRange" | "setViewportRange" | "getBodyRowAtIndex" | "resolveBodyRowIndexById" | "rowPartition" | "virtualWindow" | "columnSnapshot"
 >
 
 function rowSelectionSnapshotsEqual(

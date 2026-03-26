@@ -51,7 +51,7 @@ export type { DataGridTableStageHistoryAdapter } from "./useDataGridTableStageHi
 
 type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = Pick<
   import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>,
-  "api" | "syncBodyRowsInRange" | "rowPartition" | "virtualWindow" | "columnSnapshot"
+  "api" | "syncBodyRowsInRange" | "setViewportRange" | "rowPartition" | "virtualWindow" | "columnSnapshot"
 > & {
   getBodyRowAtIndex: (rowIndex: number) => import("@affino/datagrid-vue").DataGridRowNode<TRow> | null
   resolveBodyRowIndexById: (rowId: string | number) => number

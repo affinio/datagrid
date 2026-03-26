@@ -123,6 +123,7 @@ export default defineComponent({
     const publicRuntime = {
       api: runtime.api,
       syncBodyRowsInRange: runtime.syncBodyRowsInRange,
+      setViewportRange: runtime.setViewportRange,
       rowPartition: runtime.rowPartition,
       virtualWindow: runtime.virtualWindow,
       columnSnapshot: runtime.columnSnapshot,

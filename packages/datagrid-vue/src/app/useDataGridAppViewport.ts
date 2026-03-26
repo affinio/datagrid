@@ -17,6 +17,7 @@ export type DataGridAppBodyViewportRuntime<TRow> = Pick<
   UseDataGridRuntimeResult<TRow>,
   "virtualWindow" | "syncBodyRowsInRange" | "rowPartition"
 > & {
+  setViewportRange?: UseDataGridRuntimeResult<TRow>["setViewportRange"]
   getBodyRowAtIndex?: (rowIndex: number) => DataGridRowNode<TRow> | null
 }
 
@@ -585,13 +586,23 @@ export function useDataGridAppViewport<TRow>(
       !force
       && lastSyncedRange
       && lastSyncedRange.start === range.start
-      && lastSyncedRange.end === range.end
+        && lastSyncedRange.end === range.end
     ) {
       return
     }
-    displayRows.value = force
-      ? options.runtime.syncBodyRowsInRange(range)
-      : (resolveIncrementalVisibleRows(range) ?? options.runtime.syncBodyRowsInRange(range))
+    const incrementalRows = force ? null : resolveIncrementalVisibleRows(range)
+    if (incrementalRows) {
+      if (typeof options.runtime.setViewportRange === "function") {
+        options.runtime.setViewportRange(range)
+        displayRows.value = incrementalRows
+      }
+      else {
+        displayRows.value = options.runtime.syncBodyRowsInRange(range)
+      }
+    }
+    else {
+      displayRows.value = options.runtime.syncBodyRowsInRange(range)
+    }
     lastSyncedRange = {
       start: range.start,
       end: range.end,
