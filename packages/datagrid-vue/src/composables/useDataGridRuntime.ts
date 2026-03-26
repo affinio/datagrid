@@ -351,9 +351,10 @@ function buildRowPartitionSnapshot<TRow>(
       pinnedBottomRows.push(row)
       continue
     }
+    bodyRows.push(row)
     bodyDisplayIndexes.push(rowIndex)
     if (typeof row.rowId === "string" || typeof row.rowId === "number") {
-      bodyRowIndexById.set(row.rowId, bodyDisplayIndexes.length - 1)
+      bodyRowIndexById.set(row.rowId, bodyRows.length - 1)
     }
   }
 
@@ -407,7 +408,7 @@ export function useDataGridRuntime<TRow = unknown>(
   let bodyRows = initialRowPartition.bodyRows
   let bodyDisplayIndexes = initialRowPartition.bodyDisplayIndexes
   let bodyRowIndexById = initialRowPartition.bodyRowIndexById
-  let rowPartitionSignature = workerBackedRowModel ? initialRowPartition.signature : ""
+  let rowPartitionSignature = initialRowPartition.signature
   const resolveCurrentBodyVirtualWindow = (
     snapshot: DataGridRuntimeVirtualWindowSnapshot | null = runtime.getVirtualWindowSnapshot(),
   ): DataGridRuntimeVirtualWindowSnapshot => {
@@ -525,8 +526,8 @@ export function useDataGridRuntime<TRow = unknown>(
 
   function syncBodyRowsInRange(range: DataGridBodyViewportRange): readonly DataGridRowNode<TRow>[] {
     const normalizedRange = normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount)
-    const syncedRows = runtime.syncRowsInRange(normalizedRange)
     if (workerBackedRowModel) {
+      const syncedRows = runtime.syncRowsInRange(normalizedRange)
       for (const row of syncedRows) {
         if (isPinnedBodyExcludedRow(row)) {
           continue
@@ -539,26 +540,15 @@ export function useDataGridRuntime<TRow = unknown>(
       }
       return syncedRows.filter(row => !isPinnedBodyExcludedRow(row))
     }
-    if (rowPartition.value.bodyRowCount === 0 || bodyDisplayIndexes.length === 0) {
+    runtime.setViewportRange(normalizedRange)
+    if (rowPartition.value.bodyRowCount === 0 || bodyRows.length === 0) {
       return []
     }
-    const rowsInRange: DataGridRowNode<TRow>[] = []
-    for (let bodyIndex = normalizedRange.start; bodyIndex <= normalizedRange.end; bodyIndex += 1) {
-      const displayIndex = bodyDisplayIndexes[bodyIndex]
-      if (typeof displayIndex !== "number" || !Number.isFinite(displayIndex)) {
-        continue
-      }
-      const row = api.rows.get(displayIndex)
-      if (!row || isPinnedBodyExcludedRow(row)) {
-        continue
-      }
-      bodyRows[bodyIndex] = row
-      if (typeof row.rowId === "string" || typeof row.rowId === "number") {
-        bodyRowIndexById.set(row.rowId, bodyIndex)
-      }
-      rowsInRange.push(row)
+    const endExclusive = Math.min(bodyRows.length, normalizedRange.end + 1)
+    if (normalizedRange.start >= endExclusive) {
+      return []
     }
-    return rowsInRange
+    return bodyRows.slice(normalizedRange.start, endExclusive) as DataGridRowNode<TRow>[]
   }
 
   function getBodyRowAtIndex(rowIndex: number): DataGridRowNode<TRow> | null {
@@ -611,7 +601,7 @@ export function useDataGridRuntime<TRow = unknown>(
   }
 
   function setViewportRange(range: DataGridBodyViewportRange) {
-    api.view.setViewportRange(normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount))
+    runtime.setViewportRange(normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount))
   }
 
   function getViewportRange(): DataGridBodyViewportRange {

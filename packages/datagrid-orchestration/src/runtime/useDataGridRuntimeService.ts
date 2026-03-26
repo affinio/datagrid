@@ -54,6 +54,7 @@ export interface UseDataGridRuntimeServiceResult<TRow = unknown> extends DataGri
     options?: DataGridClientRowPatchOptions,
   ) => void
   setColumns: (columns: readonly DataGridColumnInput[]) => void
+  setViewportRange: (range: DataGridViewportRange) => void
   start: () => Promise<void>
   stop: () => void
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
@@ -537,10 +538,14 @@ export function useDataGridRuntimeService<TRow = unknown>(
     disposed = true
   }
 
-  function syncRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[] {
+  function setViewportRange(range: DataGridViewportRange) {
     api.view.setViewportRange(range)
-    const rows = api.rows.getRange(range)
     recomputeVirtualWindow()
+  }
+
+  function syncRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[] {
+    setViewportRange(range)
+    const rows = api.rows.getRange(range)
     return rows
   }
 
@@ -572,6 +577,7 @@ export function useDataGridRuntimeService<TRow = unknown>(
     setRows,
     patchRows,
     setColumns,
+    setViewportRange,
     start,
     stop,
     syncRowsInRange,

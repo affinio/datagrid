@@ -1,6 +1,6 @@
 import { defineComponent, h, nextTick, ref } from "vue"
 import { mount } from "@vue/test-utils"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { createClientRowModel, type DataGridRowNodeInput } from "@affino/datagrid-core"
 import {
   createDataGridWorkerOwnedRowModel,
@@ -359,6 +359,45 @@ describe("useDataGridRuntime contract", () => {
     expect(diagnostics?.configuredMode).toBe("worker")
     expect((diagnostics?.dispatchCount ?? 0) > 0).toBe(true)
     expect(dispatchedKinds.length).toBeGreaterThan(0)
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
+  })
+
+  it("prefills client body-row cache so body-relative reads avoid per-row api.get calls", async () => {
+    const rows: readonly DataGridRowNodeInput<RuntimeRow>[] = [
+      { row: { rowId: "r1", name: "Alpha" }, rowId: "r1" },
+      { row: { rowId: "r2", name: "Pinned total" }, rowId: "r2", state: { pinned: "bottom" } },
+      { row: { rowId: "r3", name: "Bravo" }, rowId: "r3" },
+      { row: { rowId: "r4", name: "Charlie" }, rowId: "r4" },
+    ]
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+
+    const Host = defineComponent({
+      name: "RuntimeBodyRowCacheHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          rowModel: createClientRowModel<RuntimeRow>({ rows }),
+          columns: COLUMNS,
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+
+    expect(runtime).not.toBeNull()
+
+    const getSpy = vi.spyOn(runtime!.api.rows, "get")
+
+    expect(String(runtime!.getBodyRowAtIndex(0)?.rowId)).toBe("r1")
+    expect(runtime!.syncBodyRowsInRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual([
+      "r1",
+      "r3",
+      "r4",
+    ])
+    expect(getSpy).not.toHaveBeenCalled()
 
     wrapper.unmount()
     await flushRuntimeTasks()
