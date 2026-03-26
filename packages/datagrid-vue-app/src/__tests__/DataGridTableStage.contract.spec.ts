@@ -250,6 +250,7 @@ async function applyViewportLayoutMetrics(
     viewportTop: number
     viewportHeight: number
     rowBottomsByIndex?: Record<number, number>
+    rowRectsByIndex?: Record<number, { top: number; height: number; left?: number; width?: number }>
     cellRectsByCoord?: Record<string, { left: number; top: number; width: number; height: number }>
   },
 ): Promise<void> {
@@ -303,6 +304,24 @@ async function applyViewportLayoutMetrics(
       bottom: rowBottom,
       width: 120,
       height: 31,
+      toJSON: () => ({}),
+    }) as DOMRect
+  }
+
+  for (const [rowIndexText, rect] of Object.entries(options.rowRectsByIndex ?? {})) {
+    const rowElement = wrapper.find(`.grid-body-viewport .grid-row[data-row-index="${rowIndexText}"]`).element as HTMLElement | undefined
+    if (!rowElement) {
+      continue
+    }
+    rowElement.getBoundingClientRect = () => ({
+      x: rect.left ?? 72,
+      y: rect.top,
+      left: rect.left ?? 72,
+      top: rect.top,
+      right: (rect.left ?? 72) + (rect.width ?? 250),
+      bottom: rect.top + rect.height,
+      width: rect.width ?? 250,
+      height: rect.height,
       toJSON: () => ({}),
     }) as DOMRect
   }
@@ -1047,6 +1066,118 @@ describe("DataGridTableStage contract", () => {
     expect(wrapper.find(".grid-body-shell").attributes("style")).toContain("height: 62px")
     expect(wrapper.find(".grid-body-viewport").classes()).toContain("grid-body-viewport--layout-auto-height")
 
+    wrapper.unmount()
+  })
+
+  it("does not resync shell metrics when auto-height row metrics shift during body scroll", async () => {
+    let rafHandle = 0
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      callback(0)
+      rafHandle += 1
+      return rafHandle
+    })
+
+    const baseProps = createStageProps(() => false, {
+      rowCount: 3,
+      selectionRange: null,
+      selectionAnchorCell: null,
+    })
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...baseProps,
+        rowHeightMode: "auto",
+      },
+    })
+
+    await applyViewportLayoutMetrics(wrapper, {
+      viewportTop: 12,
+      viewportHeight: 96,
+      rowRectsByIndex: {
+        0: { top: 12, height: 31 },
+        1: { top: 43, height: 31 },
+        2: { top: 74, height: 31 },
+      },
+    })
+
+    const shell = wrapper.find(".grid-body-shell").element as HTMLElement
+    const headerShell = wrapper.find(".grid-header-shell").element as HTMLElement
+    const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    const rowElements = wrapper.findAll(".grid-body-viewport .grid-row")
+
+    const shellRectSpy = vi.fn(() => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 420,
+      bottom: 220,
+      width: 420,
+      height: 220,
+      toJSON: () => ({}),
+    }) as DOMRect)
+    const headerShellRectSpy = vi.fn(() => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 420,
+      bottom: 48,
+      width: 420,
+      height: 48,
+      toJSON: () => ({}),
+    }) as DOMRect)
+    const viewportRectSpy = vi.fn(() => ({
+      x: 72,
+      y: 12,
+      left: 72,
+      top: 12,
+      right: 322,
+      bottom: 108,
+      width: 250,
+      height: 96,
+      toJSON: () => ({}),
+    }) as DOMRect)
+    const rowRectSpies = rowElements.map((rowElement, index) => {
+      const rectTop = 12 + (index * 31)
+      const spy = vi.fn(() => ({
+        x: 72,
+        y: rectTop,
+        left: 72,
+        top: rectTop,
+        right: 322,
+        bottom: rectTop + 31,
+        width: 250,
+        height: 31,
+        toJSON: () => ({}),
+      }) as DOMRect)
+      ;(rowElement.element as HTMLElement).getBoundingClientRect = spy as typeof rowElement.element.getBoundingClientRect
+      return spy
+    })
+
+    shell.getBoundingClientRect = shellRectSpy as typeof shell.getBoundingClientRect
+    headerShell.getBoundingClientRect = headerShellRectSpy as typeof headerShell.getBoundingClientRect
+    viewport.getBoundingClientRect = viewportRectSpy as typeof viewport.getBoundingClientRect
+
+    shellRectSpy.mockClear()
+    headerShellRectSpy.mockClear()
+    viewportRectSpy.mockClear()
+    rowRectSpies.forEach(spy => spy.mockClear())
+
+    Object.defineProperty(viewport, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 31,
+    })
+    viewport.dispatchEvent(new Event("scroll"))
+    await nextTick()
+
+    expect(viewportRectSpy).toHaveBeenCalled()
+    expect(rowRectSpies.some(spy => spy.mock.calls.length > 0)).toBe(true)
+    expect(shellRectSpy).not.toHaveBeenCalled()
+    expect(headerShellRectSpy).not.toHaveBeenCalled()
+
+    rafSpy.mockRestore()
     wrapper.unmount()
   })
 

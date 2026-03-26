@@ -2317,6 +2317,7 @@ function buildEstimatedVisibleRowMetrics(): readonly { top: number; height: numb
 const rowMetrics = computed(() => {
   const estimated = buildEstimatedVisibleRowMetrics()
   if (mode.value === "base" && rowHeightMode.value === "auto") {
+    bodyViewportScrollTop.value
     return resolveVisibleRowMetricsFromDom(estimated)
   }
   return estimated
@@ -2435,10 +2436,6 @@ watch(
   () => [
     leftPaneWidth.value,
     rightPaneWidth.value,
-    rowMetricsSignature.value,
-    pinnedBottomRowMetricsSignature.value,
-    rowBandsSignature.value,
-    pinnedBottomRowBandsSignature.value,
     leftChromeColumnsSignature.value,
     centerChromeColumnsSignature.value,
     rightChromeColumnsSignature.value,
@@ -2446,6 +2443,20 @@ watch(
   ].join("|"),
   () => {
     syncBodyViewportMetrics()
+    scheduleGridChromeRedraw()
+  },
+)
+
+watch(
+  () => [
+    rowMetricsSignature.value,
+    pinnedBottomRowMetricsSignature.value,
+    rowBandsSignature.value,
+    pinnedBottomRowBandsSignature.value,
+  ].join("|"),
+  () => {
+    // Auto-height row metrics can shift during scroll; redraw chrome, but avoid
+    // re-reading shell/header layout metrics that belong to resize/column sync.
     scheduleGridChromeRedraw()
   },
 )
