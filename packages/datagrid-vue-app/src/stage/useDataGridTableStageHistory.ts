@@ -4,6 +4,7 @@ import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 
 export interface DataGridTableStageHistoryAdapter {
   captureSnapshot: () => unknown
+  captureSnapshotForRowIds?: (rowIds: readonly (string | number)[]) => unknown
   recordIntentTransaction: (
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: unknown,
@@ -14,7 +15,10 @@ export interface DataGridTableStageHistoryAdapter {
 }
 
 export interface UseDataGridTableStageHistoryOptions<TRow extends Record<string, unknown>> {
-  runtime: Pick<import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>, "api">
+  runtime: Pick<
+    import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>,
+    "api" | "getBodyRowAtIndex" | "resolveBodyRowIndexById"
+  >
   cloneRowData: (row: TRow) => TRow
   syncViewport: () => void
   history?: DataGridTableStageHistoryAdapter
@@ -22,6 +26,7 @@ export interface UseDataGridTableStageHistoryOptions<TRow extends Record<string,
 
 export interface UseDataGridTableStageHistoryResult {
   captureHistorySnapshot: () => unknown
+  captureHistorySnapshotForRowIds: (rowIds: readonly (string | number)[]) => unknown
   recordHistoryIntentTransaction: (
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: unknown,
@@ -48,6 +53,15 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
       return options.history.captureSnapshot()
     }
     return internalIntentHistory?.captureRowsSnapshot() ?? null
+  }
+
+  const captureHistorySnapshotForRowIds = (
+    rowIds: readonly (string | number)[],
+  ): unknown => {
+    if (options.history) {
+      return options.history.captureSnapshotForRowIds?.(rowIds) ?? options.history.captureSnapshot()
+    }
+    return internalIntentHistory?.captureRowsSnapshotByIds(rowIds) ?? null
   }
 
   const recordHistoryIntentTransaction = (
@@ -85,6 +99,7 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
 
   return {
     captureHistorySnapshot,
+    captureHistorySnapshotForRowIds,
     recordHistoryIntentTransaction,
     canUndoHistory,
     canRedoHistory,

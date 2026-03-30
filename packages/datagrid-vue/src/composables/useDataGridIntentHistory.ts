@@ -20,6 +20,7 @@ export interface UseDataGridIntentHistoryResult<TSnapshot> {
   recordIntentTransaction: (
     descriptor: DataGridIntentTransactionDescriptor,
     beforeSnapshot: TSnapshot,
+    afterSnapshotOverride?: TSnapshot,
   ) => Promise<string | null>
   runHistoryAction: (direction: "undo" | "redo") => Promise<string | null>
   dispose: () => void

@@ -137,8 +137,20 @@ export function useDataGridAppControlledState(
     unsubscribeColumnModel = null
   }
 
+  const resolveActiveGrid = (): DataGridAppControlledExpose | null => {
+    const grid = options.gridRef.value
+    if (!grid || grid.api.lifecycle.state === "disposed") {
+      return null
+    }
+    return grid
+  }
+
+  const resolveActiveApi = (): DataGridAppControlledApi | null => {
+    return resolveActiveGrid()?.api ?? null
+  }
+
   const getColumnState = (): DataGridUnifiedColumnState | null => {
-    const columnsApi = options.gridRef.value?.api.columns
+    const columnsApi = resolveActiveApi()?.columns
     if (!columnsApi) {
       return null
     }
@@ -169,7 +181,7 @@ export function useDataGridAppControlledState(
     queueMicrotask(() => {
       scheduledSnapshotEmit = false
       const columnState = getColumnState()
-      const api = options.gridRef.value?.api
+      const api = resolveActiveApi()
       if (columnState) {
         const columnStateKey = createSyncKey(columnState)
         lastObservedColumnStateKey = columnStateKey
@@ -205,7 +217,7 @@ export function useDataGridAppControlledState(
   }
 
   const syncSortAndFilterModel = (): void => {
-    const api = options.gridRef.value?.api
+    const api = resolveActiveApi()
     if (!api || (options.props.sortModel === undefined && options.props.filterModel === undefined)) {
       return
     }
@@ -216,7 +228,7 @@ export function useDataGridAppControlledState(
   }
 
   const getRuntimeColumnKeys = (): Set<string> | null => {
-    const columnsApi = options.gridRef.value?.api.columns
+    const columnsApi = resolveActiveApi()?.columns
     if (!columnsApi) {
       return null
     }
@@ -268,7 +280,7 @@ export function useDataGridAppControlledState(
   }
 
   const applyColumnStateNow = (columnState: DataGridUnifiedColumnState): boolean => {
-    const api = options.gridRef.value?.api
+    const api = resolveActiveApi()
     if (!api) {
       return false
     }
@@ -288,7 +300,7 @@ export function useDataGridAppControlledState(
   const flushPendingApplications = (): void => {
     if (pendingUnifiedStateApplication) {
       const pending = pendingUnifiedStateApplication
-      const api = options.gridRef.value?.api
+      const api = resolveActiveApi()
       if (api) {
         const migrated = api.state.migrate(pending.state, { strict: pending.options?.strict })
         if (migrated && canApplyUnifiedState(migrated)) {
@@ -314,7 +326,7 @@ export function useDataGridAppControlledState(
   }
 
   const syncGroupBy = (): void => {
-    const api = options.gridRef.value?.api
+    const api = resolveActiveApi()
     if (!api || options.props.groupBy === undefined) {
       return
     }
@@ -322,7 +334,7 @@ export function useDataGridAppControlledState(
   }
 
   const syncAggregationModel = (): void => {
-    const api = options.gridRef.value?.api
+    const api = resolveActiveApi()
     if (!api || options.props.aggregationModel === undefined) {
       return
     }
@@ -330,7 +342,7 @@ export function useDataGridAppControlledState(
   }
 
   const syncPivotModel = (): void => {
-    const api = options.gridRef.value?.api
+    const api = resolveActiveApi()
     if (!api || options.props.pivotModel === undefined) {
       return
     }
@@ -338,7 +350,7 @@ export function useDataGridAppControlledState(
   }
 
   const syncColumnState = (): void => {
-    const api = options.gridRef.value?.api
+    const api = resolveActiveApi()
     if (!api) {
       return
     }
@@ -415,7 +427,7 @@ export function useDataGridAppControlledState(
   }
 
   const syncUnifiedState = (): void => {
-    const api = options.gridRef.value?.api
+    const api = resolveActiveApi()
     if (!api || options.props.state == null) {
       return
     }
@@ -439,7 +451,7 @@ export function useDataGridAppControlledState(
   }
 
   const syncRowHeight = (): void => {
-    const api = options.gridRef.value?.api
+    const api = resolveActiveApi()
     if (!api) {
       return
     }
@@ -448,7 +460,7 @@ export function useDataGridAppControlledState(
   }
 
   const handleGridReady = (): void => {
-    const grid = options.gridRef.value
+    const grid = resolveActiveGrid()
     if (!grid) {
       return
     }
@@ -474,14 +486,14 @@ export function useDataGridAppControlledState(
   }
 
   const getState = (): DataGridUnifiedState<DataGridRowRecord> | null => {
-    return options.gridRef.value?.api.state.get() ?? null
+    return resolveActiveApi()?.state.get() ?? null
   }
 
   const migrateState = (
     state: unknown,
     migrateOptions?: DataGridMigrateStateOptions,
   ): DataGridUnifiedState<DataGridRowRecord> | null => {
-    return options.gridRef.value?.api.state.migrate(state, migrateOptions) ?? null
+    return resolveActiveApi()?.state.migrate(state, migrateOptions) ?? null
   }
 
   const applyColumnState = (columnState: DataGridUnifiedColumnState): boolean => {
@@ -509,7 +521,7 @@ export function useDataGridAppControlledState(
     state: DataGridUnifiedState<DataGridRowRecord>,
     setOptions?: DataGridSetStateOptions,
   ): boolean => {
-    const api = options.gridRef.value?.api
+    const api = resolveActiveApi()
     if (!api) {
       pendingUnifiedStateApplication = { state, options: setOptions }
       return true
@@ -530,18 +542,18 @@ export function useDataGridAppControlledState(
   }
 
   const exportPivotLayout = (): DataGridPivotLayoutSnapshot<DataGridRowRecord> | null => {
-    return options.gridRef.value?.api.pivot.exportLayout() ?? null
+    return resolveActiveApi()?.pivot.exportLayout() ?? null
   }
 
   const exportPivotInterop = (): DataGridPivotInteropSnapshot<DataGridRowRecord> | null => {
-    return options.gridRef.value?.api.pivot.exportInterop() ?? null
+    return resolveActiveApi()?.pivot.exportInterop() ?? null
   }
 
   const importPivotLayout = (
     layout: DataGridPivotLayoutSnapshot<DataGridRowRecord>,
     importOptions?: DataGridPivotLayoutImportOptions,
   ): boolean => {
-    const api = options.gridRef.value?.api
+    const api = resolveActiveApi()
     if (!api) {
       return false
     }
@@ -551,12 +563,12 @@ export function useDataGridAppControlledState(
   }
 
   const expandAllGroups = (): void => {
-    options.gridRef.value?.api.rows.expandAllGroups()
+    resolveActiveApi()?.rows.expandAllGroups()
     emitSnapshotUpdates()
   }
 
   const collapseAllGroups = (): void => {
-    options.gridRef.value?.api.rows.collapseAllGroups()
+    resolveActiveApi()?.rows.collapseAllGroups()
     emitSnapshotUpdates()
   }
 

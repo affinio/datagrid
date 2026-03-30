@@ -44,6 +44,7 @@ export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
     columnIndex: number,
   ) => boolean
   captureRowsSnapshot: () => TSnapshot
+  captureRowsSnapshotForRowIds?: (rowIds: readonly (string | number)[]) => TSnapshot
   recordEditTransaction: (beforeSnapshot: TSnapshot) => void
 }
 
@@ -332,7 +333,8 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       : typeof targetOrEvent === "boolean"
         ? (targetOrEvent ? "next" : "stay")
         : "stay"
-    const beforeSnapshot = options.captureRowsSnapshot()
+    const beforeSnapshot = options.captureRowsSnapshotForRowIds?.([currentEditingCell.rowId])
+      ?? options.captureRowsSnapshot()
     const rowIndex = resolveBodyRowIndexById(currentEditingCell.rowId)
     const rowNode = rowIndex >= 0 ? getBodyRowAtIndex(rowIndex) : null
     const columnSnapshot = options.visibleColumns.value.find(column => column.key === currentEditingCell.columnKey)

@@ -256,7 +256,7 @@ function createDataGridPerfStore(): DataGridPerfStore {
     },
     latest(scope) {
       if (!scope) {
-        return samples.at(-1) ?? null
+        return samples.length > 0 ? (samples[samples.length - 1] ?? null) : null
       }
       for (let index = samples.length - 1; index >= 0; index -= 1) {
         if (samples[index]?.scope === scope) {
@@ -281,7 +281,7 @@ function createDataGridPerfStore(): DataGridPerfStore {
           count: sortedValues.length,
           meanMs: total / Math.max(1, sortedValues.length),
           p95Ms: sortedValues[p95Index] ?? 0,
-          maxMs: sortedValues.at(-1) ?? 0,
+          maxMs: sortedValues.length > 0 ? (sortedValues[sortedValues.length - 1] ?? 0) : 0,
         }
       })
     },

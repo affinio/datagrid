@@ -19,6 +19,7 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   applySelectionRange: (range: DataGridCopyRange) => void
   clearCellSelection: () => void
   captureRowsSnapshot: () => TSnapshot
+  captureRowsSnapshotForRowIds?: (rowIds: readonly (string | number)[]) => TSnapshot
   recordEditTransaction: (beforeSnapshot: TSnapshot) => void
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
   readClipboardCell?: (row: DataGridRowNode<TRow>, columnKey: string) => string
@@ -75,6 +76,10 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   const pendingClipboardOperation = ref<DataGridAppPendingClipboardOperation>("none")
   const pendingClipboardRange = ref<DataGridCopyRange | null>(null)
 
+  const captureRowsSnapshotForRowIds = (rowIds: readonly (string | number)[]): TSnapshot => {
+    return options.captureRowsSnapshotForRowIds?.(rowIds) ?? options.captureRowsSnapshot()
+  }
+
   const normalizeClipboardRange = (range: DataGridCopyRange): DataGridCopyRange | null => {
     const rowCount = options.totalRows.value
     const columnCount = options.visibleColumns.value.length
@@ -100,6 +105,24 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     resolveSelectionRange: options.resolveSelectionRange,
     resolveCurrentCellCoord: options.resolveCurrentCellCoord,
   })
+
+  const collectBodyRowIdsInRange = (range: DataGridCopyRange | null): Array<string | number> => {
+    const normalized = range ? normalizeClipboardRange(range) : null
+    if (!normalized) {
+      return []
+    }
+    const rowIds: Array<string | number> = []
+    const seen = new Set<string | number>()
+    for (let rowIndex = normalized.startRow; rowIndex <= normalized.endRow; rowIndex += 1) {
+      const row = getBodyRowAtIndex(rowIndex)
+      if (!row || row.rowId == null || row.kind === "group" || seen.has(row.rowId)) {
+        continue
+      }
+      seen.add(row.rowId)
+      rowIds.push(row.rowId)
+    }
+    return rowIds
+  }
 
   const clipboardBridge = useDataGridClipboardBridge<DataGridRowNode<TRow>, DataGridCopyRange>({
     copiedSelectionRange,
@@ -155,7 +178,9 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       return 0
     }
 
-    const beforeSnapshot = applyOptions.recordHistory === false ? null : options.captureRowsSnapshot()
+    const beforeSnapshot = applyOptions.recordHistory === false
+      ? null
+      : captureRowsSnapshotForRowIds(Array.from(editsByRowId.keys()))
     const updates: DataGridClientRowPatch<TRow>[] = Array.from(editsByRowId.entries(), ([rowId, data]) => ({
       rowId,
       data: data as Partial<TRow>,
@@ -279,7 +304,10 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       void trigger
       return true
     }
-    const beforeSnapshot = options.captureRowsSnapshot()
+    const beforeSnapshot = captureRowsSnapshotForRowIds([
+      ...collectBodyRowIdsInRange(pendingSourceRange),
+      ...collectBodyRowIdsInRange(normalizedTargetRange),
+    ])
     if (pendingOperation === "cut" && pendingSourceRange) {
       applyClipboardEdits(pendingSourceRange, [[""]], { recordHistory: false })
     }

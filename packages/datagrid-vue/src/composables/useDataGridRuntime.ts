@@ -530,6 +530,9 @@ export function useDataGridRuntime<TRow = unknown>(
   }
 
   function syncBodyRowsInRange(range: DataGridBodyViewportRange): readonly DataGridRowNode<TRow>[] {
+    if (runtime.isDisposed()) {
+      return []
+    }
     const normalizedRange = normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount)
     const syncedRows = runtime.syncRowsInRange(normalizedRange)
     if (workerBackedRowModel) {
@@ -556,6 +559,9 @@ export function useDataGridRuntime<TRow = unknown>(
   }
 
   function getBodyRowAtIndex(rowIndex: number): DataGridRowNode<TRow> | null {
+    if (runtime.isDisposed()) {
+      return null
+    }
     if (rowPartition.value.bodyRowCount === 0) {
       return null
     }
@@ -580,6 +586,9 @@ export function useDataGridRuntime<TRow = unknown>(
   }
 
   function resolveBodyRowIndexById(rowId: string | number): number {
+    if (runtime.isDisposed()) {
+      return -1
+    }
     const cachedIndex = bodyRowIndexById.get(rowId)
     if (typeof cachedIndex === "number") {
       return cachedIndex
@@ -605,10 +614,16 @@ export function useDataGridRuntime<TRow = unknown>(
   }
 
   function setViewportRange(range: DataGridBodyViewportRange) {
+    if (runtime.isDisposed()) {
+      return
+    }
     runtime.setViewportRange(normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount))
   }
 
   function setVirtualWindowRange(range: DataGridBodyViewportRange) {
+    if (runtime.isDisposed()) {
+      return
+    }
     runtime.setVirtualWindowRange(normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount))
   }
 

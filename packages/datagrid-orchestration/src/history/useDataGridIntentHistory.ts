@@ -27,6 +27,7 @@ export interface UseDataGridIntentHistoryResult<TSnapshot> {
   recordIntentTransaction: (
     descriptor: DataGridIntentTransactionDescriptor,
     beforeSnapshot: TSnapshot,
+    afterSnapshotOverride?: TSnapshot,
   ) => Promise<string | null>
   runHistoryAction: (direction: "undo" | "redo") => Promise<string | null>
   dispose: () => void
@@ -103,11 +104,12 @@ export function useDataGridIntentHistory<TSnapshot>(
   async function recordIntentTransaction(
     descriptor: DataGridIntentTransactionDescriptor,
     beforeSnapshot: TSnapshot,
+    afterSnapshotOverride?: TSnapshot,
   ): Promise<string | null> {
     if (disposed) {
       return null
     }
-    const afterSnapshot = options.captureSnapshot()
+    const afterSnapshot = afterSnapshotOverride ?? options.captureSnapshot()
     transactionIntentCounter += 1
     const normalizedIntent = descriptor.intent.trim() || "intent"
     const transactionId = `intent-${normalizedIntent}-${transactionIntentCounter}`

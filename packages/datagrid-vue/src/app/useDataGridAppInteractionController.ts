@@ -97,6 +97,7 @@ export interface UseDataGridAppInteractionControllerOptions<
   cloneRowData: (row: TRow) => TRow
   resolveRowIndexById?: (rowId: string | number) => number
   captureRowsSnapshot: () => TSnapshot
+  captureRowsSnapshotForRowIds?: (rowIds: readonly (string | number)[]) => TSnapshot
   recordIntentTransaction: (
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: TSnapshot,
@@ -279,7 +280,7 @@ export function useDataGridAppInteractionController<
     if (row.kind === "group" || row.rowId == null) {
       return false
     }
-    const beforeSnapshot = options.captureRowsSnapshot()
+    const beforeSnapshot = options.captureRowsSnapshotForRowIds?.([row.rowId]) ?? options.captureRowsSnapshot()
     options.runtime.api.rows.applyEdits([
       {
         rowId: row.rowId,
@@ -432,6 +433,32 @@ export function useDataGridAppInteractionController<
       })
     }
     return result
+  }
+
+  const collectRowIdsInRange = (range: DataGridCopyRange | null): Array<string | number> => {
+    const normalizedRange = range ? options.normalizeClipboardRange(range) : null
+    if (!normalizedRange) {
+      return []
+    }
+    const rowIds: Array<string | number> = []
+    const seen = new Set<string | number>()
+    for (let rowIndex = normalizedRange.startRow; rowIndex <= normalizedRange.endRow; rowIndex += 1) {
+      const row = getBodyRowAtIndex(rowIndex)
+      if (!row || row.rowId == null || row.kind === "group" || seen.has(row.rowId)) {
+        continue
+      }
+      seen.add(row.rowId)
+      rowIds.push(row.rowId)
+    }
+    return rowIds
+  }
+
+  const captureRowsSnapshotForRanges = (ranges: readonly (DataGridCopyRange | null)[]): TSnapshot => {
+    const rowIds: Array<string | number> = []
+    for (const range of ranges) {
+      rowIds.push(...collectRowIdsInRange(range))
+    }
+    return options.captureRowsSnapshotForRowIds?.(rowIds) ?? options.captureRowsSnapshot()
   }
 
   const rangeMutationEngine = useDataGridRangeMutationEngine<
@@ -598,7 +625,7 @@ export function useDataGridAppInteractionController<
     if (restartSession && options.rangesEqual(restartSession.baseRange, baseRange)) {
       const removedRange = resolveRemovedFillRange(restartSession.previewRange, previewRange)
       if (removedRange) {
-        const beforeSnapshot = options.captureRowsSnapshot()
+        const beforeSnapshot = captureRowsSnapshotForRanges([removedRange, previewRange])
         const sourceMatrix = options.buildFillMatrixFromRange(baseRange)
         const resolvedBehavior = behavior
           ?? activeFillBehavior.value
@@ -1204,7 +1231,7 @@ export function useDataGridAppInteractionController<
     if (!range) {
       return false
     }
-    const beforeSnapshot = options.captureRowsSnapshot()
+    const beforeSnapshot = captureRowsSnapshotForRanges([range])
     options.clearPendingClipboardOperation(false)
     const applied = options.applyClipboardEdits(range, [[""]], { recordHistory: false })
     if (applied <= 0) {

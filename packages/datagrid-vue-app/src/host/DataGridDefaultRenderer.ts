@@ -98,10 +98,14 @@ interface SortToggleState {
 type DataGridColumnFilterEntry = DataGridFilterSnapshot["columnFilters"][string]
 type DataGridLegacyAdvancedFilterEntry = DataGridFilterSnapshot["advancedFilters"][string]
 type DataGridAdvancedExpressionEntry = NonNullable<DataGridFilterSnapshot["advancedExpression"]>
-type DataGridDefaultRendererRuntime = Pick<
-  UseDataGridRuntimeResult<Record<string, unknown>>,
-  "api" | "syncBodyRowsInRange" | "rowPartition" | "virtualWindow" | "columnSnapshot"
-> & {
+type DataGridDefaultRendererRuntime = {
+  api: UseDataGridRuntimeResult<Record<string, unknown>>["api"]
+  syncBodyRowsInRange: UseDataGridRuntimeResult<Record<string, unknown>>["syncBodyRowsInRange"]
+  setViewportRange: UseDataGridRuntimeResult<Record<string, unknown>>["setViewportRange"]
+  rowPartition: UseDataGridRuntimeResult<Record<string, unknown>>["rowPartition"]
+  virtualWindow: UseDataGridRuntimeResult<Record<string, unknown>>["virtualWindow"]
+  columnSnapshot: UseDataGridRuntimeResult<Record<string, unknown>>["columnSnapshot"]
+  setVirtualWindowRange?: (range: { start: number; end: number }) => void
   getBodyRowAtIndex: (rowIndex: number) => import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>> | null
   resolveBodyRowIndexById: (rowId: string | number) => number
 }

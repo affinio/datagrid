@@ -175,4 +175,43 @@ describe("useDataGridAppInlineEditing contract", () => {
 
     requestAnimationFrameSpy.mockRestore()
   })
+
+  it("captures history only for the edited row id on commit", () => {
+    const harness = createHarness()
+    const captureRowsSnapshot = vi.fn(() => [])
+    const captureRowsSnapshotForRowIds = vi.fn((rowIds: readonly (string | number)[]) => rowIds)
+    const api = useDataGridAppInlineEditing<DemoRow, readonly (string | number)[]>({
+      mode: ref("base"),
+      bodyViewportRef: ref(null),
+      visibleColumns: ref([
+        { key: "owner", column: { key: "owner" } },
+        { key: "status", column: { key: "status" } },
+        { key: "amount", column: { key: "amount", dataType: "number" } },
+      ] as unknown as readonly DataGridColumnSnapshot[]),
+      totalRows: ref(harness.rows.length),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => harness.rows[rowIndex] ?? null,
+            applyEdits: harness.applyEdits,
+          },
+        },
+      } as never,
+      readCell: (row, columnKey) => String(row.kind === "group" ? "" : (row.data[columnKey as keyof DemoRow] ?? "")),
+      resolveRowIndexById: rowId => harness.rows.findIndex(row => row.rowId === rowId),
+      applyCellSelection: harness.applyCellSelection,
+      ensureActiveCellVisible: harness.ensureActiveCellVisible,
+      isCellEditable: (_row, _rowIndex, columnKey) => columnKey !== "status",
+      captureRowsSnapshot,
+      captureRowsSnapshotForRowIds,
+      recordEditTransaction: harness.recordEditTransaction,
+    })
+
+    api.startInlineEdit(harness.rows[0]!, "owner")
+    api.editingCellValue.value = "Grace"
+    api.commitInlineEdit()
+
+    expect(captureRowsSnapshotForRowIds).toHaveBeenCalledWith(["r1"])
+    expect(captureRowsSnapshot).not.toHaveBeenCalled()
+  })
 })

@@ -49,9 +49,11 @@ export function resolveAdvancedFilterDraftClausesFromExpression(
     if (childClauses.length === 0) {
       continue
     }
-    if (index > 0) {
+    const firstClause = childClauses[0]
+    if (index > 0 && firstClause) {
       childClauses[0] = {
-        ...childClauses[0],
+        ...firstClause,
+        id: firstClause.id,
         join: expression.operator,
       }
     }

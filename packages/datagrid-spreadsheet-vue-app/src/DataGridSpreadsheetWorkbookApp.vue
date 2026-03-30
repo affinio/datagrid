@@ -1319,7 +1319,9 @@ interface SpreadsheetRuntimeHandle {
   columnSnapshot: Ref<DataGridColumnModelSnapshot>
   virtualWindow: UseDataGridRuntimeResult<SpreadsheetGridRow>["virtualWindow"]
   syncBodyRowsInRange: UseDataGridRuntimeResult<SpreadsheetGridRow>["syncBodyRowsInRange"]
+  setViewportRange: UseDataGridRuntimeResult<SpreadsheetGridRow>["setViewportRange"]
   rowPartition: UseDataGridRuntimeResult<SpreadsheetGridRow>["rowPartition"]
+  setVirtualWindowRange?: (range: { start: number; end: number }) => void
   getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<SpreadsheetGridRow> | null
   resolveBodyRowIndexById: (rowId: string | number) => number
   setRows: UseDataGridRuntimeResult<SpreadsheetGridRow>["setRows"]

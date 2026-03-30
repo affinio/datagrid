@@ -19,6 +19,7 @@ export interface UseDataGridTableStageCellIoOptions<TRow extends Record<string, 
   readDisplayCell: (row: DataGridTableRow<TRow>, columnKey: string) => string
   toggleRowCheckboxSelected: (row: DataGridTableRow<TRow>) => void
   captureHistorySnapshot: () => unknown
+  captureHistorySnapshotForRowIds?: (rowIds: readonly (string | number)[]) => unknown
   recordHistoryIntentTransaction: (
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: unknown,
@@ -83,7 +84,7 @@ export function useDataGridTableStageCellIo<TRow extends Record<string, unknown>
     if (row.kind === "group" || row.rowId == null) {
       return
     }
-    const beforeSnapshot = options.captureHistorySnapshot()
+    const beforeSnapshot = options.captureHistorySnapshotForRowIds?.([row.rowId]) ?? options.captureHistorySnapshot()
     options.runtime.api.rows.applyEdits([
       {
         rowId: row.rowId,

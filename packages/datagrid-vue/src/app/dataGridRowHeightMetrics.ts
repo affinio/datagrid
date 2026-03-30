@@ -102,7 +102,7 @@ export function createDataGridAppRowHeightMetrics(
     }
 
     for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
-      chunkPrefixDeltas[chunkIndex + 1] = chunkPrefixDeltas[chunkIndex] + (chunkDeltas[chunkIndex] ?? 0)
+      chunkPrefixDeltas[chunkIndex + 1] = (chunkPrefixDeltas[chunkIndex] ?? 0) + (chunkDeltas[chunkIndex] ?? 0)
     }
 
     return {
@@ -161,7 +161,7 @@ export function createDataGridAppRowHeightMetrics(
     if (deltaDiff !== 0) {
       metrics.chunkDeltas[chunkIndex] = (metrics.chunkDeltas[chunkIndex] ?? 0) + deltaDiff
       for (let index = chunkIndex + 1; index < metrics.chunkPrefixDeltas.length; index += 1) {
-        metrics.chunkPrefixDeltas[index] += deltaDiff
+        metrics.chunkPrefixDeltas[index] = (metrics.chunkPrefixDeltas[index] ?? 0) + deltaDiff
       }
       metrics.totalHeight += deltaDiff
     }
@@ -331,7 +331,8 @@ export function createDataGridAppRowHeightMetrics(
         const chunkStartRow = middle * metrics.chunkSize
         const rowDeltas = metrics.chunkRowDeltas[middle]
         let rowStartOffset = chunkStartOffset
-        for (let rowOffset = 0; rowOffset < chunkRowEnd - chunkStartRow; rowOffset += 1) {
+        const rowsInChunk = chunkRowEnd - chunkStartRow
+        for (let rowOffset = 0; rowOffset < rowsInChunk; rowOffset += 1) {
           const rowHeight = metrics.baseRowHeight + (rowDeltas?.get(rowOffset) ?? 0)
           const rowEndOffset = rowStartOffset + rowHeight
           if (clampedOffset < rowEndOffset) {

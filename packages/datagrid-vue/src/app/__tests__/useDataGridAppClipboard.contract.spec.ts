@@ -165,6 +165,79 @@ describe("useDataGridAppClipboard contract", () => {
     ])
   })
 
+  it("captures history only for affected row ids during paste", async () => {
+    const rows = ref<DemoRow[]>([
+      { rowId: "r1", a: "A1", b: "B1", c: "C1" },
+      { rowId: "r2", a: "A2", b: "B2", c: "C2" },
+      { rowId: "r3", a: "A3", b: "B3", c: "C3" },
+    ])
+    const captureRowsSnapshot = vi.fn(() => rows.value.map(row => ({ ...row })))
+    const captureRowsSnapshotForRowIds = vi.fn((rowIds: readonly (string | number)[]) => {
+      return rows.value
+        .filter(row => rowIds.includes(row.rowId))
+        .map(row => ({ ...row }))
+    })
+
+    const clipboard = useDataGridAppClipboard<DemoRow, DemoRow[]>({
+      mode: ref("base"),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => {
+              const row = rows.value[rowIndex]
+              return row ? { rowId: row.rowId, kind: "leaf", data: row } : null
+            },
+            applyEdits: (updates: Array<{ rowId: string; data: Partial<DemoRow> }>) => {
+              rows.value = rows.value.map(row => {
+                const update = updates.find(candidate => candidate.rowId === row.rowId)
+                return update ? { ...row, ...update.data } : row
+              })
+            },
+          },
+        },
+      } as never,
+      totalRows: ref(rows.value.length),
+      visibleColumns: ref([
+        { key: "a" },
+        { key: "b" },
+        { key: "c" },
+      ] as never),
+      viewportRowStart: ref(0),
+      resolveSelectionRange: () => null,
+      resolveCurrentCellCoord: () => ({ rowIndex: 1, columnIndex: 0 }),
+      applySelectionRange: () => undefined,
+      clearCellSelection: () => undefined,
+      captureRowsSnapshot,
+      captureRowsSnapshotForRowIds,
+      recordEditTransaction: () => undefined,
+      readCell: (row, columnKey) => String((row.data as DemoRow)[columnKey as keyof DemoRow] ?? ""),
+      isCellEditable: () => true,
+      syncViewport: () => undefined,
+    })
+
+    const originalClipboard = navigator.clipboard
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined),
+        readText: vi.fn<() => Promise<string>>().mockResolvedValue("X\tY"),
+      },
+    })
+
+    try {
+      const applied = await clipboard.pasteSelectedCells("keyboard")
+
+      expect(applied).toBe(true)
+      expect(captureRowsSnapshotForRowIds).toHaveBeenCalledWith(["r2"])
+      expect(captureRowsSnapshot).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
+
   it("writes to and reads from the system clipboard when available", async () => {
     const { clipboard, currentCell, rows } = createClipboardHarness()
     const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)

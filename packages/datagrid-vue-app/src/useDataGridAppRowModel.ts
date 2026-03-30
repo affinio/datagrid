@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, shallowRef, watch, type Ref } from "vue"
+import { computed, nextTick, onUnmounted, ref, shallowRef, watch, type Ref } from "vue"
 import {
   createClientRowModel,
   type ClientRowModel,
@@ -69,17 +69,27 @@ export function useDataGridAppRowModel(
     }
   }
 
+  const disposeOwnedRowModelLater = (model: DataGridRowModel<unknown> | null): void => {
+    if (!model || model === options.rowModel.value) {
+      return
+    }
+    void nextTick(() => {
+      disposeOwnedRowModel(model)
+    })
+  }
+
   const recreateInternalRowModel = (): void => {
     if (options.rowModel.value) {
       return
     }
-    disposeOwnedRowModel(internalRowModel.value)
+    const previousModel = internalRowModel.value
     internalRowModel.value = createClientRowModel<unknown>({
       rows: options.rows.value as readonly DataGridRowNodeInput<unknown>[],
       ...resolveClientRowModelOptions(options.clientRowModelOptions.value),
     })
     dataGridInstanceKey.value += 1
     options.onOwnedRowModelRecreated?.()
+    disposeOwnedRowModelLater(previousModel)
   }
 
   const resolvedRowModel = computed<DataGridRowModel<unknown>>(() => {
@@ -109,9 +119,10 @@ export function useDataGridAppRowModel(
     options.rowModel,
     nextRowModel => {
       if (nextRowModel) {
-        disposeOwnedRowModel(internalRowModel.value)
+        const previousModel = internalRowModel.value
         internalRowModel.value = null
         dataGridInstanceKey.value += 1
+        disposeOwnedRowModelLater(previousModel)
         return
       }
       if (!internalRowModel.value) {
@@ -120,7 +131,7 @@ export function useDataGridAppRowModel(
     },
   )
 
-  onBeforeUnmount(() => {
+  onUnmounted(() => {
     disposeOwnedRowModel(internalRowModel.value)
     disposeOwnedRowModel(fallbackRowModel)
   })

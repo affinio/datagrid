@@ -425,6 +425,7 @@ export function useDataGridTableStageRuntime<
   })
   const {
     captureHistorySnapshot,
+    captureHistorySnapshotForRowIds,
     recordHistoryIntentTransaction,
     canUndoHistory,
     canRedoHistory,
@@ -456,6 +457,7 @@ export function useDataGridTableStageRuntime<
     readDisplayCell,
     toggleRowCheckboxSelected,
     captureHistorySnapshot,
+    captureHistorySnapshotForRowIds,
     recordHistoryIntentTransaction,
     syncViewport: () => syncViewportFromDom(),
   })
@@ -474,6 +476,7 @@ export function useDataGridTableStageRuntime<
     applySelectionRange: applyClipboardSelectionRange,
     clearCellSelection,
     captureRowsSnapshot: captureHistorySnapshot,
+    captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
     recordEditTransaction: beforeSnapshot => {
       recordHistoryIntentTransaction({
         intent: "edit",
@@ -543,6 +546,7 @@ export function useDataGridTableStageRuntime<
     },
     isCellEditable: isCellEditableByKey,
     captureRowsSnapshot: captureHistorySnapshot,
+    captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
     recordEditTransaction: beforeSnapshot => {
       recordHistoryIntentTransaction({
         intent: "edit",
@@ -581,6 +585,7 @@ export function useDataGridTableStageRuntime<
     cloneRowData: options.cloneRowData,
     resolveRowIndexById: resolveSelectableRowIndexById,
     captureRowsSnapshot: captureHistorySnapshot,
+    captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
     recordIntentTransaction: (descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null }, beforeSnapshot: unknown) => {
       recordHistoryIntentTransaction(descriptor, beforeSnapshot)
     },

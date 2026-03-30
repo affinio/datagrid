@@ -83,7 +83,7 @@ function createDataGridPerfStore(): DataGridPerfStore {
     },
     latest(scope) {
       if (!scope) {
-        return samples.at(-1) ?? null
+        return samples.length > 0 ? (samples[samples.length - 1] ?? null) : null
       }
       for (let index = samples.length - 1; index >= 0; index -= 1) {
         if (samples[index]?.scope === scope) {
@@ -108,7 +108,7 @@ function createDataGridPerfStore(): DataGridPerfStore {
           count: sortedValues.length,
           meanMs: total / Math.max(1, sortedValues.length),
           p95Ms: sortedValues[p95Index] ?? 0,
-          maxMs: sortedValues.at(-1) ?? 0,
+          maxMs: sortedValues.length > 0 ? (sortedValues[sortedValues.length - 1] ?? 0) : 0,
         }
       })
     },
@@ -513,7 +513,9 @@ export function useDataGridAppViewport<TRow>(
     const prefix = new Array<number>(columns.length + 1)
     prefix[0] = 0
     for (let i = 0; i < columns.length; i++) {
-      prefix[i + 1] = prefix[i] + resolveColumnWidth(columns[i])
+      const previousWidth = prefix[i] ?? 0
+      const column = columns[i]
+      prefix[i + 1] = previousWidth + (column ? resolveColumnWidth(column) : 0)
     }
     return prefix
   })
@@ -630,7 +632,8 @@ export function useDataGridAppViewport<TRow>(
     let hi = columns.length
     while (lo < hi) {
       const mid = (lo + hi) >> 1
-      if (prefix[mid + 1] <= viewportStartPx) lo = mid + 1
+      const rightEdge = prefix[mid + 1] ?? totalWidth
+      if (rightEdge <= viewportStartPx) lo = mid + 1
       else hi = mid
     }
     const visibleStart = lo
@@ -645,7 +648,8 @@ export function useDataGridAppViewport<TRow>(
     hi = columns.length - 1
     while (lo < hi) {
       const mid = (lo + hi + 1) >> 1
-      if (prefix[mid] < viewportEndPx) lo = mid
+      const leftEdge = prefix[mid] ?? 0
+      if (leftEdge < viewportEndPx) lo = mid
       else hi = mid - 1
     }
     const visibleEnd = lo

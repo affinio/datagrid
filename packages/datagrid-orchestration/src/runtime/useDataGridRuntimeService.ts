@@ -457,6 +457,9 @@ export function useDataGridRuntimeService<TRow = unknown>(
   }
 
   const setVirtualWindowRange = (range: DataGridViewportRange) => {
+    if (disposed) {
+      return
+    }
     const currentSnapshot = virtualWindowSnapshot ?? resolveVirtualWindowSnapshot()
     const rowTotal = currentSnapshot?.rowTotal ?? normalizeCount(rowModel.getRowCount())
     const normalizedRowRange = normalizeRange(range.start, range.end, rowTotal)
@@ -517,7 +520,7 @@ export function useDataGridRuntimeService<TRow = unknown>(
   }
 
   function setRows(rows: readonly TRow[]) {
-    if (!isMutableRowsModel(rowModel)) {
+    if (disposed || !isMutableRowsModel(rowModel)) {
       return
     }
     rowModel.setRows(rows)
@@ -528,7 +531,7 @@ export function useDataGridRuntimeService<TRow = unknown>(
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
   ) {
-    if (!isMutableRowsModel(rowModel) || typeof rowModel.patchRows !== "function") {
+    if (disposed || !isMutableRowsModel(rowModel) || typeof rowModel.patchRows !== "function") {
       return
     }
     rowModel.patchRows(updates, options)
@@ -536,6 +539,9 @@ export function useDataGridRuntimeService<TRow = unknown>(
   }
 
   function setColumns(columns: readonly DataGridColumnInput[]) {
+    if (disposed) {
+      return
+    }
     baseColumns = Array.isArray(columns)
       ? columns.map(cloneColumnInput)
       : []
@@ -565,11 +571,17 @@ export function useDataGridRuntimeService<TRow = unknown>(
   }
 
   function setViewportRange(range: DataGridViewportRange) {
+    if (disposed || api.lifecycle.state === "disposed") {
+      return
+    }
     api.view.setViewportRange(range)
     recomputeVirtualWindow()
   }
 
   function syncRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[] {
+    if (disposed || api.lifecycle.state === "disposed") {
+      return []
+    }
     setViewportRange(range)
     const rows = rowModel.getRowsInRange(range)
     return rows

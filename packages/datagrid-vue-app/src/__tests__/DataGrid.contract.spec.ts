@@ -2550,6 +2550,47 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("reapplies declarative aggregationModel after owned row-model recreation", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        aggregationModel: {
+          columns: [{ key: "amount", op: "sum" }],
+          basis: "filtered",
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.setProps({
+      clientRowModelOptions: {
+        resolveRowId: (row: DemoRow) => row.rowId,
+      },
+    })
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getApi?.()?.rows.getAggregationModel?.()).toMatchObject({
+      basis: "filtered",
+      columns: [{ key: "amount", op: "sum" }],
+    })
+
+    wrapper.unmount()
+    await flushPromises()
+
+    const consoleMessages = [...consoleError.mock.calls, ...consoleWarn.mock.calls]
+      .map(call => call.map(entry => String(entry)).join(" "))
+
+    expect(consoleMessages.some(message => message.includes("ClientRowModel has been disposed"))).toBe(false)
+    expect(consoleMessages.some(message => message.includes("Unhandled error during execution of watcher callback"))).toBe(false)
+
+    consoleError.mockRestore()
+    consoleWarn.mockRestore()
+  })
+
   it("keeps row focus independent from checkbox row selection", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

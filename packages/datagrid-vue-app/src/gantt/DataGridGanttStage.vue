@@ -155,6 +155,8 @@ const tableStageContext = props.stageContext
 const embeddedTableStageProps = computed(() => materializeDataGridTableStagePropsFromContext(tableStageContext))
 const tableRows = computed(() => tableStageContext.rows.value)
 const tableViewport = computed(() => tableStageContext.viewport.value)
+const tableSelection = computed(() => tableStageContext.selection.value)
+const tableColumns = computed(() => tableStageContext.columns.value)
 const tableRowHeightMode = computed(() => tableStageContext.rowHeightMode.value)
 
 const stageRootRef = ref<HTMLElement | null>(null)
@@ -625,9 +627,123 @@ const selectedDependencyRowIds = computed(() => {
   ])
 })
 
+const selectedTableRowRange = computed(() => {
+  const range = tableSelection.value.selectionRange
+  const columnCount = tableColumns.value.visibleColumns.length
+  if (!range || columnCount <= 0) {
+    return null
+  }
+  const startColumn = Math.min(range.startColumn, range.endColumn)
+  const endColumn = Math.max(range.startColumn, range.endColumn)
+  if (startColumn !== 0 || endColumn !== columnCount - 1) {
+    return null
+  }
+  return {
+    startRow: Math.min(range.startRow, range.endRow),
+    endRow: Math.max(range.startRow, range.endRow),
+  }
+})
+
+const selectedVisibleRowIds = computed(() => {
+  const selectedRowIds = new Set<string>()
+  const selectedRange = selectedTableRowRange.value
+
+  tableRows.value.displayRows.forEach((row, rowOffset) => {
+    if (row.rowId == null) {
+      return
+    }
+    if (tableRows.value.isRowCheckboxSelected?.(row)) {
+      selectedRowIds.add(String(row.rowId))
+      return
+    }
+    if (!selectedRange) {
+      return
+    }
+    const absoluteRowIndex = tableViewport.value.viewportRowStart + rowOffset
+    if (absoluteRowIndex >= selectedRange.startRow && absoluteRowIndex <= selectedRange.endRow) {
+      selectedRowIds.add(String(row.rowId))
+    }
+  })
+
+  return selectedRowIds
+})
+
+const selectedVisibleRowBands = computed(() => {
+  return visibleRowMetrics.value.flatMap((metric, rowOffset) => {
+    const row = tableRows.value.displayRows[rowOffset]
+    if (!row || row.rowId == null || !selectedVisibleRowIds.value.has(String(row.rowId))) {
+      return []
+    }
+    return [{
+      top: metric.top,
+      height: metric.height,
+    }]
+  })
+})
+
 const displayRowsSignature = computed(() => tableRows.value.displayRows
   .map((row, index) => `${row.rowId == null ? index : String(row.rowId)}`)
   .join("|"))
+
+const selectedVisibleRowSignature = computed(() => (
+  [...selectedVisibleRowIds.value].join("|")
+))
+
+function resolveVisibleBodyRowById(rowId: string): { rowIndex: number; rowId: string | number } | null {
+  const rowOffset = tableRows.value.displayRows.findIndex(row => String(row.rowId) === rowId)
+  if (rowOffset < 0) {
+    return null
+  }
+  const row = tableRows.value.displayRows[rowOffset]
+  if (!row || row.rowId == null) {
+    return null
+  }
+  return {
+    rowIndex: tableViewport.value.viewportRowStart + rowOffset,
+    rowId: row.rowId,
+  }
+}
+
+function syncTableSelectionFromBar(rowId: string): void {
+  const targetRow = resolveVisibleBodyRowById(rowId)
+  const visibleColumnCount = tableColumns.value.visibleColumns.length
+  if (!targetRow || visibleColumnCount <= 0) {
+    return
+  }
+
+  if (props.runtime.api.selection.hasSupport()) {
+    props.runtime.api.selection.setSnapshot({
+      ranges: [{
+        startRow: targetRow.rowIndex,
+        endRow: targetRow.rowIndex,
+        startCol: 0,
+        endCol: visibleColumnCount - 1,
+        startRowId: targetRow.rowId,
+        endRowId: targetRow.rowId,
+        anchor: {
+          rowIndex: targetRow.rowIndex,
+          colIndex: 0,
+          rowId: targetRow.rowId,
+        },
+        focus: {
+          rowIndex: targetRow.rowIndex,
+          colIndex: visibleColumnCount - 1,
+          rowId: targetRow.rowId,
+        },
+      }],
+      activeRangeIndex: 0,
+      activeCell: {
+        rowIndex: targetRow.rowIndex,
+        colIndex: 0,
+        rowId: targetRow.rowId,
+      },
+    })
+  }
+
+  if (props.runtime.api.rowSelection.hasSupport()) {
+    props.runtime.api.rowSelection.setFocusedRow(targetRow.rowId)
+  }
+}
 
 const ganttConfigSignature = computed(() => {
   if (!props.gantt) {
@@ -932,6 +1048,7 @@ function drawTimelineBody(): void {
   const gridStroke = readCssVar("--datagrid-column-divider-color", "rgba(148, 163, 184, 0.16)")
   const rowStroke = readCssVar("--datagrid-row-divider-color", "rgba(148, 163, 184, 0.18)")
   const weekendFill = readCssVar("--datagrid-weekend-bg", "rgba(148, 163, 184, 0.08)")
+  const selectedRowFill = readCssVar("--datagrid-selection-range-bg", "rgba(37, 99, 235, 0.16)")
   const barFill = readCssVar("--datagrid-accent-strong", "#2563eb")
   const barFillMuted = readCssVar("--datagrid-selection-range-bg", "rgba(37, 99, 235, 0.16)")
   const summaryBarFill = "rgba(30, 64, 175, 0.24)"
@@ -948,12 +1065,31 @@ function drawTimelineBody(): void {
   const dependencyUnderlay = "rgba(255, 255, 255, 0.72)"
   const dependencySelectedStroke = "rgba(15, 23, 42, 0.84)"
   const dependencySelectedUnderlay = "rgba(255, 255, 255, 0.94)"
+  const rowSelectedBarStroke = "rgba(37, 99, 235, 0.68)"
+  const rowSelectedBarUnderlay = "rgba(255, 255, 255, 0.9)"
   const majorGridStroke = readCssVar("--datagrid-header-divider-color", "rgba(148, 163, 184, 0.3)")
   const labelColor = "#ffffff"
   const fontFamily = readCssVar("--datagrid-font-family", "ui-sans-serif, system-ui, sans-serif")
   const todayStroke = readCssVar("--datagrid-accent-strong", "#2563eb")
-  const selectedBarStroke = "rgba(15, 23, 42, 0.85)"
-  const selectedBarUnderlay = "rgba(255, 255, 255, 0.96)"
+
+  const resolveBarSelectionOutline = (input: {
+    isTableRowSelected: boolean
+    isDependencySelectedBar: boolean
+  }): { stroke: string; underlay: string } | null => {
+    if (input.isDependencySelectedBar) {
+      return {
+        stroke: dependencySelectedStroke,
+        underlay: dependencySelectedUnderlay,
+      }
+    }
+    if (input.isTableRowSelected) {
+      return {
+        stroke: rowSelectedBarStroke,
+        underlay: rowSelectedBarUnderlay,
+      }
+    }
+    return null
+  }
 
   context.fillStyle = background
   context.fillRect(0, 0, width, height)
@@ -966,6 +1102,18 @@ function drawTimelineBody(): void {
       continue
     }
     context.fillRect(visibleStart, 0, visibleEnd - visibleStart, height)
+  }
+
+  context.fillStyle = selectedRowFill
+  for (const band of selectedVisibleRowBands.value) {
+    const y = Math.round(band.top - tableScrollTop.value)
+    const bandHeight = Math.max(1, Math.round(band.height))
+    const visibleTop = Math.max(0, y)
+    const visibleBottom = Math.min(height, y + bandHeight)
+    if (visibleBottom <= visibleTop) {
+      continue
+    }
+    context.fillRect(0, visibleTop, width, visibleBottom - visibleTop)
   }
 
   context.strokeStyle = gridStroke
@@ -1029,7 +1177,12 @@ function drawTimelineBody(): void {
     )
     const x = frame.x - timelineScrollLeft.value
     const widthPx = frame.width
+    const isTableRowSelected = selectedVisibleRowIds.value.has(bar.rowId)
     const isDependencySelectedBar = selectedDependencyRowIds.value.has(bar.rowId)
+    const selectionOutline = resolveBarSelectionOutline({
+      isTableRowSelected,
+      isDependencySelectedBar,
+    })
     const hasBaseline = bar.baselineStartMs != null
       && bar.baselineEndMs != null
       && (bar.baselineStartMs !== bar.startMs || bar.baselineEndMs !== bar.endMs)
@@ -1099,13 +1252,13 @@ function drawTimelineBody(): void {
       drawDiamond(context, x + (widthPx / 2), bar.y + (bar.height / 2), Math.max(widthPx, bar.height))
       context.fillStyle = fillStyle
       context.fill()
-      if (isDependencySelectedBar) {
+      if (selectionOutline) {
         drawDiamond(context, x + (widthPx / 2), bar.y + (bar.height / 2), Math.max(widthPx, bar.height))
-        context.strokeStyle = selectedBarUnderlay
+        context.strokeStyle = selectionOutline.underlay
         context.lineWidth = 4
         context.stroke()
         drawDiamond(context, x + (widthPx / 2), bar.y + (bar.height / 2), Math.max(widthPx, bar.height))
-        context.strokeStyle = selectedBarStroke
+        context.strokeStyle = selectionOutline.stroke
         context.lineWidth = 2
         context.stroke()
       }
@@ -1141,14 +1294,14 @@ function drawTimelineBody(): void {
       context.fill()
     }
 
-    if (isDependencySelectedBar) {
+    if (selectionOutline) {
       drawRoundedRect(context, x, bar.y, widthPx, bar.height, 6)
-      context.strokeStyle = selectedBarUnderlay
+      context.strokeStyle = selectionOutline.underlay
       context.lineWidth = 4
       context.stroke()
 
       drawRoundedRect(context, x, bar.y, widthPx, bar.height, 6)
-      context.strokeStyle = selectedBarStroke
+      context.strokeStyle = selectionOutline.stroke
       context.lineWidth = 2
       context.stroke()
     }
@@ -1457,6 +1610,7 @@ function handleCanvasPointerDown(event: PointerEvent): void {
     props.gantt.resizeHandleWidth,
   )
   if (hit) {
+    syncTableSelectionFromBar(hit.bar.rowId)
     selectedDependencyKey.value = null
     hoverDependencyKey.value = null
   }
@@ -1636,6 +1790,7 @@ watch(
 watch(
   () => [
     visibleBarsSignature.value,
+    selectedVisibleRowSignature.value,
     visibleRowDividerSignature.value,
     tableScrollTop.value,
     tableViewportHeight.value,

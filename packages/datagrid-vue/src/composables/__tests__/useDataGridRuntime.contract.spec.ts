@@ -259,6 +259,39 @@ describe("useDataGridRuntime contract", () => {
     wrapper.unmount()
   })
 
+  it("no-ops viewport-facing body sync after dispose", async () => {
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+
+    const Host = defineComponent({
+      name: "RuntimeDisposedViewportHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          rows: [{ rowId: "r1", name: "Alpha" }],
+          columns: COLUMNS,
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
+
+    expect(runtime).not.toBeNull()
+    expect(runtime!.api.lifecycle.state).toBe("disposed")
+    expect(runtime!.syncBodyRowsInRange({ start: 0, end: 0 })).toEqual([])
+    expect(runtime!.getBodyRowAtIndex(0)).toBeNull()
+    expect(runtime!.resolveBodyRowIndexById("r1")).toBe(-1)
+    expect(() => {
+      runtime!.setViewportRange({ start: 0, end: 0 })
+    }).not.toThrow()
+    expect(() => {
+      runtime!.setVirtualWindowRange({ start: 0, end: 0 })
+    }).not.toThrow()
+  })
+
   it("partitions interleaved pinned-bottom rows before viewport sync", async () => {
     const rows: DataGridRowNodeInput<RuntimeRow>[] = [
       { row: { rowId: "r1", name: "Alpha" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
