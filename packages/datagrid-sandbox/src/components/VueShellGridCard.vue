@@ -114,6 +114,38 @@
           <input v-model="stripedRows" type="checkbox" />
           Striped rows
         </label>
+        <label v-if="props.mode === 'base' && !props.timesheetShowcase">
+          <input
+            v-model="showRowLines"
+            type="checkbox"
+            data-sandbox-grid-lines-toggle="rows"
+          />
+          Row lines
+        </label>
+        <label v-if="props.mode === 'base' && !props.timesheetShowcase">
+          <input
+            v-model="showColumnLines"
+            type="checkbox"
+            data-sandbox-grid-lines-toggle="columns"
+          />
+          Column lines
+        </label>
+        <label v-if="props.mode === 'base' && !props.timesheetShowcase">
+          <input
+            v-model="showHeaderColumnLines"
+            type="checkbox"
+            data-sandbox-grid-lines-toggle="header-columns"
+          />
+          Header lines
+        </label>
+        <label v-if="props.mode === 'base' && !props.timesheetShowcase">
+          <input
+            v-model="showPinnedSeparators"
+            type="checkbox"
+            data-sandbox-grid-lines-toggle="pinned-separators"
+          />
+          Pinned separators
+        </label>
         <div v-if="props.timesheetShowcase" class="timesheet-project-pool">
           <span class="timesheet-project-pool__label">Projects</span>
           <label
@@ -247,6 +279,7 @@
         column-layout
         diagnostics
         advanced-filter
+        :find-replace="props.mode === 'base'"
         aggregations
         :client-row-model-options="clientRowModelOptions"
         :group-by="groupBy"
@@ -264,6 +297,7 @@
         :base-row-height="baseRowHeight"
         :row-hover="rowHover"
         :striped-rows="stripedRows"
+        :grid-lines="gridLines"
         :show-row-index="true"
         :row-selection="!props.timesheetShowcase"
         :is-cell-editable="timesheetIsCellEditable"
@@ -302,6 +336,7 @@ import {
   readDataGridSavedViewFromStorage,
   type DataGridAppToolbarModule,
   type DataGridCellMenuProp,
+  type DataGridGridLinesProp,
   type DataGridRowIndexMenuProp,
   type DataGridSavedViewSnapshot,
   writeDataGridSavedViewToStorage,
@@ -1127,6 +1162,10 @@ const ganttZoomLevel = ref<DataGridGanttZoomLevel>("week");
 const baseRowHeight = ref(31);
 const rowHover = ref(true);
 const stripedRows = ref(true);
+const showRowLines = ref(true);
+const showColumnLines = ref(true);
+const showHeaderColumnLines = ref(true);
+const showPinnedSeparators = ref(true);
 const pivotViewMode = ref<PivotViewMode>("pivot");
 const pivotLayout = ref<PivotLayoutId>("department-month-revenue");
 const hideUnusedPivotSourceColumns = ref(true);
@@ -1312,6 +1351,16 @@ const virtualization = computed(() => {
     columns: true,
     rowOverscan: 8,
     columnOverscan: 2,
+  };
+});
+const gridLines = computed<DataGridGridLinesProp>(() => {
+  const body = showRowLines.value
+    ? (showColumnLines.value ? "all" : "rows")
+    : (showColumnLines.value ? "columns" : "none");
+  return {
+    body,
+    header: showHeaderColumnLines.value ? "columns" : "none",
+    pinnedSeparators: showPinnedSeparators.value,
   };
 });
 const sandboxLayoutMode = computed(() => {
@@ -1608,6 +1657,10 @@ watch(
     baseRowHeight.value = 31;
     rowHover.value = true;
     stripedRows.value = true;
+    showRowLines.value = true;
+    showColumnLines.value = true;
+    showHeaderColumnLines.value = true;
+    showPinnedSeparators.value = true;
     setColumnStateIfChanged(createBaseShowcaseColumnState(columns.value, columnState.value));
   },
   { immediate: true },
@@ -1626,6 +1679,10 @@ watch(
     baseRowHeight.value = 35;
     rowHover.value = true;
     stripedRows.value = false;
+    showRowLines.value = true;
+    showColumnLines.value = true;
+    showHeaderColumnLines.value = true;
+    showPinnedSeparators.value = true;
     groupByModel.value = null;
     activeTimesheetProjectIds.value = [...DEFAULT_TIMESHEET_PROJECT_IDS];
     timesheetProjects.value = buildTimesheetProjectsFromPool(activeTimesheetProjectIds.value, cloneTimesheetProjects());

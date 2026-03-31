@@ -236,7 +236,10 @@ function createControllerHarness(options: {
   const recordIntentTransaction = vi.fn()
   const clearPendingClipboardOperation = vi.fn(() => false)
   const syncViewport = vi.fn()
+  const editingCell = ref<{ rowId: string | number; columnKey: string } | null>(null)
   const startInlineEdit = vi.fn()
+  const appendInlineEditTextInput = vi.fn(() => false)
+  const cancelInlineEdit = vi.fn()
   const expandGroup = vi.fn()
   const collapseGroup = vi.fn()
 
@@ -315,8 +318,10 @@ function createControllerHarness(options: {
     rangesEqual: (left, right) => JSON.stringify(left) === JSON.stringify(right),
     buildFillMatrixFromRange,
     syncViewport,
-    editingCell: ref(null),
+    editingCell,
     startInlineEdit,
+    appendInlineEditTextInput,
+    cancelInlineEdit,
     commitInlineEdit: vi.fn(),
     canUndo: () => false,
     canRedo: () => false,
@@ -338,7 +343,10 @@ function createControllerHarness(options: {
     clearPendingClipboardOperation,
     recordIntentTransaction,
     syncViewport,
+    editingCell,
     startInlineEdit,
+    appendInlineEditTextInput,
+    cancelInlineEdit,
     expandGroup,
     collapseGroup,
   }
@@ -571,8 +579,9 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
-  it("does not start keyboard editing for a blocked cell", () => {
-    const { controller, row, startInlineEdit } = createControllerHarness({
+  it("uses Enter for vertical navigation instead of keyboard edit start", () => {
+    const { controller, row, startInlineEdit, selectionSnapshot } = createControllerHarness({
+      rowCount: 3,
       isCellEditable: () => false,
     })
 
@@ -585,6 +594,11 @@ describe("useDataGridAppInteractionController contract", () => {
 
     expect(keydown.defaultPrevented).toBe(true)
     expect(startInlineEdit).not.toHaveBeenCalled()
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 1,
+      colIndex: 0,
+      rowId: "r2",
+    })
   })
 
   it("invokes column cellInteraction on Enter and preserves active cell focus", () => {
@@ -603,6 +617,7 @@ describe("useDataGridAppInteractionController contract", () => {
           },
         },
       }] as unknown as readonly DataGridColumnSnapshot[],
+      isCellEditable: () => false,
     })
 
     const keydown = new KeyboardEvent("keydown", {
@@ -617,6 +632,66 @@ describe("useDataGridAppInteractionController contract", () => {
       trigger: "keyboard-enter",
     }))
     expect(ensureKeyboardActiveCellVisible).toHaveBeenCalledWith(0, 0)
+  })
+
+  it("starts inline editing from the first typed character on the focused cell", () => {
+    const { controller, row, startInlineEdit } = createControllerHarness()
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "p",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(startInlineEdit).toHaveBeenCalledWith(
+      row,
+      "a",
+      {
+        draftValue: "p",
+        openOnMount: true,
+      },
+    )
+  })
+
+  it("buffers additional typed characters on the same cell while inline editing is opening", () => {
+    const { controller, row, editingCell, appendInlineEditTextInput, startInlineEdit } = createControllerHarness()
+
+    editingCell.value = {
+      rowId: row.rowId ?? "r1",
+      columnKey: "a",
+    }
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "l",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(appendInlineEditTextInput).toHaveBeenCalledWith("l")
+    expect(startInlineEdit).not.toHaveBeenCalled()
+  })
+
+  it("cancels the pending inline edit on Escape while focus is still on the cell", () => {
+    const { controller, row, editingCell, cancelInlineEdit } = createControllerHarness()
+
+    editingCell.value = {
+      rowId: row.rowId ?? "r1",
+      columnKey: "a",
+    }
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "Escape",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(cancelInlineEdit).toHaveBeenCalledTimes(1)
   })
 
   it("clears the selected range on Delete and records a clear intent", () => {

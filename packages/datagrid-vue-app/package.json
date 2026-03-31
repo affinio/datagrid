@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue-app",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Declarative Vue DataGrid component for Affino",
   "type": "module",
   "main": "dist/index.js",
@@ -21,6 +21,10 @@
     "./advanced-filter": {
       "types": "./dist/advanced-filter.d.ts",
       "import": "./dist/advanced-filter.js"
+    },
+    "./find-replace": {
+      "types": "./dist/find-replace.d.ts",
+      "import": "./dist/find-replace.js"
     },
     "./internal": {
       "types": "./dist/internal.d.ts",

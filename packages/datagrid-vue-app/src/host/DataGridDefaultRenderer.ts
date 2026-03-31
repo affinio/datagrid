@@ -1,5 +1,6 @@
 import {
   type Component,
+  type CSSProperties,
   computed,
   defineAsyncComponent,
   defineComponent,
@@ -52,6 +53,8 @@ import DataGridGanttStage from "../gantt/DataGridGanttStageEntry"
 import DataGridColumnLayoutPopover from "../overlays/DataGridColumnLayoutPopover.vue"
 import type { DataGridAdvancedFilterOptions } from "../config/dataGridAdvancedFilter"
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "../config/dataGridAggregations"
+import type { DataGridFindReplaceOptions } from "../config/dataGridFindReplace"
+import type { DataGridGridLinesOptions } from "../config/dataGridGridLines"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
 import {
@@ -84,11 +87,16 @@ import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import { useDataGridTableStageRuntime } from "../stage/useDataGridTableStageRuntime"
 import { resolveAdvancedFilterDraftClausesFromFilterModel } from "../advancedFilterDraftClauses"
+import {
+  useDataGridAppFindReplace,
+  type DataGridFindReplaceVisualTarget,
+} from "../useDataGridAppFindReplace"
 
 type DataGridMode = "base" | "tree" | "pivot" | "worker"
 
 const DataGridAdvancedFilterPopover = defineAsyncComponent(() => import("../overlays/DataGridAdvancedFilterPopover.vue"))
 const DataGridAggregationsPopover = defineAsyncComponent(() => import("../overlays/DataGridAggregationsPopover.vue"))
+const DataGridFindReplacePopover = defineAsyncComponent(() => import("../overlays/DataGridFindReplacePopover.vue"))
 
 interface SortToggleState {
   key: string
@@ -642,6 +650,14 @@ export default defineComponent({
       type: Object as PropType<DataGridAdvancedFilterOptions>,
       required: true,
     },
+    findReplace: {
+      type: Object as PropType<DataGridFindReplaceOptions>,
+      required: true,
+    },
+    gridLines: {
+      type: Object as PropType<DataGridGridLinesOptions>,
+      required: true,
+    },
     rowHeightMode: {
       type: String as PropType<"fixed" | "auto">,
       default: "fixed",
@@ -708,6 +724,20 @@ export default defineComponent({
     },
   },
   setup(props) {
+    const gridLinesStyle = computed<CSSProperties>(() => ({
+      "--datagrid-row-divider-size": props.gridLines.bodyRows ? "1px" : "0px",
+      "--datagrid-column-divider-size": props.gridLines.bodyColumns ? "1px" : "0px",
+      "--datagrid-header-column-divider-size": props.gridLines.headerColumns ? "1px" : "0px",
+      "--datagrid-pinned-pane-separator-size": props.gridLines.pinnedSeparators ? "2px" : "0px",
+    }))
+    const gridLinesChromeSignature = computed(() => {
+      return [
+        props.gridLines.body,
+        props.gridLines.header,
+        props.gridLines.pinnedSeparators ? "sep:1" : "sep:0",
+      ].join("|")
+    })
+
     const rowVersion = ref(0)
     const sortState = ref<SortToggleState[]>(resolveInitialSortState(props.sortModel))
     const filterModelState = ref<DataGridFilterSnapshot>(cloneFilterModelState(props.filterModel))
@@ -1688,6 +1718,7 @@ export default defineComponent({
     let contextMenuVisible = () => false
     let closeRuntimeContextMenu = (): void => undefined
     let openRuntimeContextMenuFromCurrentCell = (): void => undefined
+    const highlightedFindReplaceCell = ref<DataGridFindReplaceVisualTarget | null>(null)
     let runRowIndexContextAction = async (
       _action: RendererRowIndexKeyboardAction,
       _rowId: string | number,
@@ -1713,7 +1744,9 @@ export default defineComponent({
       cutSelectedCells,
       clearSelectedCells,
       captureHistorySnapshot,
+      captureHistorySnapshotForRowIds,
       recordHistoryIntentTransaction,
+      revealCellInComfortZone,
     } = useDataGridTableStageRuntime<Record<string, unknown>>({
       mode: modeRef as Ref<DataGridMode>,
       layoutMode: computed(() => props.layoutMode),
@@ -1735,6 +1768,7 @@ export default defineComponent({
       rowSelectionSnapshot: props.rowSelectionSnapshot,
       rowHover: computed(() => props.rowHover),
       stripedRows: computed(() => props.stripedRows),
+      chromeSignature: gridLinesChromeSignature,
       showRowIndex: computed(() => props.showRowIndex),
       showRowSelection: computed(() => props.rowSelection),
       isRowInPendingClipboardCut,
@@ -1774,7 +1808,67 @@ export default defineComponent({
         openRuntimeContextMenuFromCurrentCell()
       },
       runRowIndexKeyboardAction: (action, rowId) => runRowIndexContextAction(action, rowId),
+      cellClass: (row, rowIndex, column) => {
+        const target = highlightedFindReplaceCell.value
+        if (!target || row.kind === "group" || row.rowId == null) {
+          return null
+        }
+        if (row.rowId !== target.rowId || column.key !== target.columnKey) {
+          return null
+        }
+        return {
+          "grid-cell--find-match-active": true,
+          "grid-cell--find-match-flash-a": target.flashPhase === 0,
+          "grid-cell--find-match-flash-b": target.flashPhase === 1,
+        }
+      },
     })
+
+    const stageVisibleColumns = computed(() => tableStageProps.value.columns.visibleColumns)
+    const applyActiveCell = (coord: MenuCoord): void => {
+      props.runtime.api.selection.setSnapshot(buildSingleCellSelectionSnapshot(coord))
+      props.syncSelectionSnapshotFromRuntime()
+    }
+    const isFindReplaceCellEditable = (
+      row: import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>>,
+      rowIndex: number,
+      column: DataGridColumnSnapshot,
+      columnIndex: number,
+    ): boolean => {
+      if (row.kind === "group" || row.rowId == null || column.column.capabilities?.editable === false) {
+        return false
+      }
+      if (!props.isCellEditable) {
+        return true
+      }
+      return props.isCellEditable({
+        row: row.data,
+        rowId: row.rowId,
+        rowIndex,
+        column: column.column,
+        columnKey: column.key,
+      })
+    }
+    const findReplace = useDataGridAppFindReplace<Record<string, unknown>, unknown>({
+      runtime: props.runtime,
+      visibleColumns,
+      stageVisibleColumns,
+      resolveCurrentCellCoord,
+      applyActiveCell,
+      revealCellInComfortZone,
+      captureRowsSnapshot: captureHistorySnapshot,
+      captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
+      recordHistoryIntentTransaction,
+      isCellEditable: isFindReplaceCellEditable,
+    })
+
+    watch(
+      findReplace.highlightedCell,
+      nextHighlightedCell => {
+        highlightedFindReplaceCell.value = nextHighlightedCell
+      },
+      { immediate: true },
+    )
 
     const {
       contextMenu,
@@ -1794,13 +1888,11 @@ export default defineComponent({
       resolveSelectionRange: resolveCurrentSelectionRange,
       resolveCellCoordFromDataset,
       applyCellSelection: (coord: MenuCoord) => {
-        props.runtime.api.selection.setSnapshot(buildSingleCellSelectionSnapshot(coord))
-        props.syncSelectionSnapshotFromRuntime()
+        applyActiveCell(coord)
       },
       resolveActiveCellCoord: resolveCurrentCellCoord,
       setActiveCellCoord: (coord: MenuCoord) => {
-        props.runtime.api.selection.setSnapshot(buildSingleCellSelectionSnapshot(coord))
-        props.syncSelectionSnapshotFromRuntime()
+        applyActiveCell(coord)
       },
       cellCoordsEqual: (left: MenuCoord | null, right: MenuCoord | null) => left?.rowIndex === right?.rowIndex && left?.columnIndex === right?.columnIndex,
       isMultiCellSelection,
@@ -2201,6 +2293,33 @@ export default defineComponent({
           },
         })
       }
+      if (props.findReplace.enabled) {
+        modules.push({
+          key: "find-replace",
+          component: DataGridFindReplacePopover as Component,
+          props: {
+            isOpen: findReplace.isPanelOpen.value,
+            findText: findReplace.findText.value,
+            replaceText: findReplace.replaceText.value,
+            matchCase: findReplace.matchCase.value,
+            statusText: findReplace.statusText.value,
+            buttonLabel: props.findReplace.buttonLabel,
+            active: findReplace.active.value,
+            canFind: findReplace.canFind.value,
+            canReplaceCurrent: findReplace.canReplaceCurrent.value,
+            canReplaceAll: findReplace.canReplaceAll.value,
+            onOpen: findReplace.openPanel,
+            onCancel: findReplace.closePanel,
+            onUpdateFindText: findReplace.updateFindText,
+            onUpdateReplaceText: findReplace.updateReplaceText,
+            onUpdateMatchCase: findReplace.updateMatchCase,
+            onFindNext: findReplace.findNext,
+            onFindPrevious: findReplace.findPrevious,
+            onReplaceCurrent: findReplace.replaceCurrent,
+            onReplaceAll: findReplace.replaceAll,
+          },
+        })
+      }
       if (props.aggregations.enabled && props.mode !== "pivot") {
         modules.push({
           key: "aggregations",
@@ -2237,6 +2356,7 @@ export default defineComponent({
           ? "datagrid-app-layout--auto-height"
           : "datagrid-app-layout--fill",
       ],
+      style: gridLinesStyle.value,
     }, [
       h(DataGridModuleHost as Component, {
         modules: toolbarModules.value,

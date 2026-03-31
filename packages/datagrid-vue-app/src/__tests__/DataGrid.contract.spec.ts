@@ -312,6 +312,10 @@ async function preloadAdvancedFilterPopover(): Promise<void> {
   await import("../overlays/DataGridAdvancedFilterPopover.vue")
 }
 
+async function preloadFindReplacePopover(): Promise<void> {
+  await import("../overlays/DataGridFindReplacePopover.vue")
+}
+
 async function findAdvancedFilterTrigger(wrapper: ReturnType<typeof mount>) {
   await flushRuntimeTasks()
   await flushRuntimeTasks()
@@ -415,6 +419,10 @@ function queryAdvancedFilterRoot(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(".datagrid-advanced-filter")
 }
 
+function queryFindReplaceRoot(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>(".datagrid-find-replace")
+}
+
 function queryColumnLayoutRoot(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(".datagrid-column-layout")
 }
@@ -480,6 +488,8 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).not.toContain("performance")
     expect(publicProps).toContain("isCellEditable")
     expect(publicProps).toContain("toolbarModules")
+    expect(publicProps).toContain("findReplace")
+    expect(publicProps).toContain("gridLines")
   })
 
   it("renders custom toolbar modules passed through the public toolbarModules prop", async () => {
@@ -576,7 +586,69 @@ describe("DataGrid app facade contract", () => {
     await cell.trigger("dblclick")
     await flushRuntimeTasks()
 
-    expect(wrapper.find(".cell-editor-input").exists()).toBe(true)
+    const editor = wrapper.find<HTMLInputElement>(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+    const editorElement = editor.element as HTMLInputElement
+    expect(document.activeElement).toBe(editorElement)
+    expect(editorElement.selectionStart).toBe(editorElement.value.length)
+    expect(editorElement.selectionEnd).toBe(editorElement.value.length)
+
+    wrapper.unmount()
+  })
+
+  it("buffers a fast typed word into inline editing on a focused editable cell", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        isCellEditable: () => true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    cell.element.dispatchEvent(new KeyboardEvent("keydown", { key: "p", bubbles: true, cancelable: true }))
+    cell.element.dispatchEvent(new KeyboardEvent("keydown", { key: "l", bubbles: true, cancelable: true }))
+    cell.element.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true }))
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+    expect((editor.element as HTMLInputElement).value).toBe("pla")
+
+    wrapper.unmount()
+  })
+
+  it("restores the previous value when Escape cancels a fast typed inline edit before the editor takes focus", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        isCellEditable: () => true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    cell.element.dispatchEvent(new KeyboardEvent("keydown", { key: "p", bubbles: true, cancelable: true }))
+    cell.element.dispatchEvent(new KeyboardEvent("keydown", { key: "l", bubbles: true, cancelable: true }))
+    cell.element.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true }))
+    cell.element.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(false)
+    expect(queryBodyCell(wrapper, 0, 0).text()).toContain("NOC")
+    expect(resolveRowAt<{ owner: string }>(wrapper, 0)).toMatchObject({ owner: "NOC" })
 
     wrapper.unmount()
   })
@@ -1973,6 +2045,50 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("opens declarative findReplace, selects the next match, and flashes the resolved cell", async () => {
+    await preloadFindReplacePopover()
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SEARCH_FILTER_ROWS,
+        columns: COLUMNS,
+        findReplace: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = findToolbarAction(wrapper, "find-replace")
+    expect(trigger.exists()).toBe(true)
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryFindReplaceRoot()
+    expect(popover).toBeTruthy()
+
+    const findInput = popover?.querySelector<HTMLInputElement>('[data-find-replace-autofocus="true"]') ?? null
+    expect(findInput).toBeTruthy()
+    findInput!.value = "Beta"
+    findInput!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const findNextButton = Array.from(popover?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+      .find(button => button.textContent?.includes("Find next"))
+    expect(findNextButton).toBeTruthy()
+    findNextButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(queryFindReplaceRoot()).toBeTruthy()
+
+    const targetCell = queryBodyCell(wrapper, 2, 0)
+    expect(targetCell.exists()).toBe(true)
+    expect(targetCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(targetCell.classes()).toContain("grid-cell--find-match-active")
+
+    wrapper.unmount()
+  })
+
   it("hydrates advanced filter clauses from column menu filters", async () => {
     await preloadAdvancedFilterPopover()
 
@@ -3167,11 +3283,16 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
-  it("opens a focused select cell on Enter", async () => {
+  it("uses Enter to move vertically without opening a focused select cell", async () => {
+    const selectNavigationRows = [
+      { rowId: "s1", stage: "backlog" },
+      { rowId: "s2", stage: "planned" },
+    ] as const
+
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
       props: {
-        rows: SELECT_ROWS,
+        rows: selectNavigationRows,
         columns: SELECT_COLUMNS,
       },
     })
@@ -3187,7 +3308,8 @@ describe("DataGrid app facade contract", () => {
     await cell.trigger("keydown", { key: "Enter" })
     await flushRuntimeTasks()
 
-    expect(wrapper.find(".datagrid-cell-combobox__input").exists()).toBe(true)
+    expect(wrapper.find(".datagrid-cell-combobox__input").exists()).toBe(false)
+    expect(queryBodyCell(wrapper, 1, 0).classes()).toContain("grid-cell--selection-anchor")
 
     wrapper.unmount()
   })
@@ -3358,12 +3480,13 @@ describe("DataGrid app facade contract", () => {
 
     expect(wrapper.find(".datagrid-cell-combobox__input").exists()).toBe(false)
 
-    await cell.trigger("keydown", { key: "Enter" })
+    await cell.trigger("keydown", { key: "r" })
     await flushRuntimeTasks()
 
     const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
     expect(editor.exists()).toBe(true)
     expect(asyncOptions).toHaveBeenCalled()
+    expect((editor.element as HTMLInputElement).value).toBe("r")
 
     const inputElement = editor.element as HTMLInputElement
     inputElement.value = "rev"
@@ -3971,6 +4094,31 @@ describe("DataGrid app facade contract", () => {
 
     const menuRoot = queryColumnMenuRoot()
     expect(menuRoot?.style.getPropertyValue("--datagrid-column-menu-bg")).toBe("#fff8ef")
+
+    wrapper.unmount()
+  })
+
+  it("applies declarative grid line presets to layout chrome vars", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        gridLines: "rows",
+        theme: "sugar",
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const rootElement = wrapper.find(".affino-datagrid-app-root")
+    const layoutElement = wrapper.find(".datagrid-app-layout").element as HTMLElement
+
+    expect(rootElement.classes()).toContain("affino-datagrid-app-root--theme-sugar")
+    expect(layoutElement.style.getPropertyValue("--datagrid-row-divider-size")).toBe("1px")
+    expect(layoutElement.style.getPropertyValue("--datagrid-column-divider-size")).toBe("0px")
+    expect(layoutElement.style.getPropertyValue("--datagrid-header-column-divider-size")).toBe("0px")
+    expect(layoutElement.style.getPropertyValue("--datagrid-pinned-pane-separator-size")).toBe("2px")
 
     wrapper.unmount()
   })

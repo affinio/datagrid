@@ -59,6 +59,8 @@ export interface UseDataGridAppInlineEditingResult<TRow> {
     columnKey: string,
     options?: DataGridAppInlineEditStartOptions,
   ) => void
+  appendInlineEditTextInput: (value: string) => boolean
+  handleEditorBlur: () => void
   commitInlineEdit: (targetOrEvent?: DataGridAppInlineEditCommitTarget | boolean | FocusEvent) => void
   cancelInlineEdit: () => void
   handleEditorKeydown: (event: KeyboardEvent) => void
@@ -71,6 +73,8 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   const editingCellValue = ref("")
   const editingCellInitialFilter = ref("")
   const editingCellOpenOnMount = ref(false)
+  const editingCellEditorMode = ref<"none" | "text" | "select" | "date" | "datetime">("none")
+  const suppressNextBlurCommit = ref(false)
   const resolveBodyRowIndexById = options.resolveBodyRowIndexById ?? options.resolveRowIndexById ?? (() => -1)
   const getBodyRowAtIndex = (rowIndex: number): DataGridRowNode<TRow> | null => {
     const runtime = options.runtime as typeof options.runtime & {
@@ -146,12 +150,42 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     }
   }
 
+  const resolveEditorSearchRoot = (): ParentNode | null => {
+    const viewport = options.bodyViewportRef.value
+    if (!viewport) {
+      return null
+    }
+    const stageRoot = viewport.closest(".grid-stage")
+    return stageRoot ?? viewport
+  }
+
+  const resolveActiveInlineEditor = (): HTMLInputElement | HTMLSelectElement | null => {
+    const root = resolveEditorSearchRoot()
+    if (!root) {
+      return null
+    }
+    const currentEditingCell = editingCell.value
+    if (!currentEditingCell) {
+      return root.querySelector<HTMLInputElement | HTMLSelectElement>(".cell-editor-control")
+    }
+    const editors = root.querySelectorAll<HTMLInputElement | HTMLSelectElement>(".cell-editor-control")
+    const editingRowId = String(currentEditingCell.rowId)
+    for (const editor of editors) {
+      const hostCell = editor.closest<HTMLElement>(".grid-cell")
+      if (
+        hostCell?.dataset.rowId === editingRowId
+        && hostCell.dataset.columnKey === currentEditingCell.columnKey
+      ) {
+        return editor
+      }
+    }
+    return root.querySelector<HTMLInputElement | HTMLSelectElement>(".cell-editor-control")
+  }
+
   const focusInlineEditor = (): void => {
     void nextTick(() => {
       const applyFocus = (): void => {
-        const editor = options.bodyViewportRef.value?.querySelector<HTMLInputElement | HTMLSelectElement>(
-          ".cell-editor-control",
-        )
+        const editor = resolveActiveInlineEditor()
         if (!editor) {
           return
         }
@@ -173,7 +207,13 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       if (typeof window !== "undefined") {
         window.requestAnimationFrame(() => {
           applyFocus()
+          window.requestAnimationFrame(() => {
+            applyFocus()
+          })
         })
+        window.setTimeout(() => {
+          applyFocus()
+        }, 0)
       }
     })
   }
@@ -183,6 +223,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     editingCellValue.value = ""
     editingCellInitialFilter.value = ""
     editingCellOpenOnMount.value = false
+    editingCellEditorMode.value = "none"
   }
 
   const focusAfterInlineEdit = (
@@ -318,7 +359,30 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       ? ""
       : (startOptions.draftValue ?? "")
     editingCellOpenOnMount.value = startOptions.openOnMount === true
+    editingCellEditorMode.value = editorMode
+    suppressNextBlurCommit.value = false
     focusInlineEditor()
+  }
+
+  const appendInlineEditTextInput = (value: string): boolean => {
+    if (!editingCell.value || value.length === 0) {
+      return false
+    }
+    if (
+      editingCellEditorMode.value === "none"
+      || editingCellEditorMode.value === "date"
+      || editingCellEditorMode.value === "datetime"
+    ) {
+      return false
+    }
+    if (editingCellEditorMode.value === "select") {
+      editingCellInitialFilter.value += value
+      focusInlineEditor()
+      return true
+    }
+    editingCellValue.value += value
+    focusInlineEditor()
+    return true
   }
 
   const commitInlineEdit = (
@@ -355,16 +419,26 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     ])
     options.recordEditTransaction(beforeSnapshot)
     clearInlineEdit()
+    suppressNextBlurCommit.value = false
     focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, target)
   }
 
   const cancelInlineEdit = (): void => {
     const currentEditingCell = editingCell.value
+    suppressNextBlurCommit.value = true
     clearInlineEdit()
     if (!currentEditingCell) {
       return
     }
     focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, "stay")
+  }
+
+  const handleEditorBlur = (): void => {
+    if (suppressNextBlurCommit.value) {
+      suppressNextBlurCommit.value = false
+      return
+    }
+    commitInlineEdit()
   }
 
   const handleEditorKeydown = (event: KeyboardEvent): void => {
@@ -395,8 +469,10 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     editingCellOpenOnMount,
     isEditingCell,
     startInlineEdit,
+    appendInlineEditTextInput,
     commitInlineEdit,
     cancelInlineEdit,
     handleEditorKeydown,
+    handleEditorBlur,
   }
 }

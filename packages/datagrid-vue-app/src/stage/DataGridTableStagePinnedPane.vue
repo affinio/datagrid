@@ -24,7 +24,10 @@
         <div
           v-if="pane.showIndexColumn"
           class="grid-cell grid-cell--index grid-cell--index-number datagrid-stage__row-index-cell"
-          :class="{ 'grid-cell--index-selected': renderApi.isFullRowSelectionSafe(renderApi.viewportRowOffset(row, rowOffset)) }"
+          :class="{
+            'grid-cell--index-selected': renderApi.isFullRowSelectionSafe(renderApi.viewportRowOffset(row, rowOffset)),
+            'grid-cell--pinned-divider-right': pane.side === 'left' && pane.columns.length > 0,
+          }"
           :style="renderApi.rowIndexCellStyle(row, renderApi.viewportRowOffset(row, rowOffset))"
           :data-row-id="String(row.rowId)"
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
@@ -43,12 +46,14 @@
           />
         </div>
         <div
-          v-for="column in pane.columns"
+          v-for="(column, columnOffset) in pane.columns"
           :key="`${String(row.rowId)}-${pane.side}-${column.key}`"
           class="grid-cell"
           :class="[
             'datagrid-stage__cell',
             pane.side === 'left' ? 'grid-cell--pinned-left' : 'grid-cell--pinned-right',
+            pane.side === 'left' && columnOffset < pane.columns.length - 1 ? 'grid-cell--pinned-divider-right' : null,
+            pane.side === 'right' && columnOffset > 0 ? 'grid-cell--pinned-divider-left' : null,
             renderApi.builtInCellClasses(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
             renderApi.cellStateClasses(row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
             renderApi.resolveCellCustomClass(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
@@ -74,7 +79,7 @@
           @mousemove="renderApi.handleCellMouseMove($event, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
           @mouseleave="renderApi.clearRangeMoveHandleHover()"
           @keydown.stop="renderApi.handleCellKeydown($event, row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
-          @dblclick.stop="renderApi.startInlineEditIfAllowed(row, column, renderApi.viewportRowOffset(row, rowOffset))"
+          @dblclick.stop.prevent="renderApi.startInlineEditIfAllowed(row, column, renderApi.viewportRowOffset(row, rowOffset))"
         >
           <button
             v-if="mode === 'base' && renderApi.isCellEditableSafe(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)) && renderApi.isFillHandleCellSafe(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)) && !renderApi.isEditingCellSafe(row, column.key)"
@@ -101,6 +106,7 @@
             class="cell-editor-control cell-editor-input cell-editor-input--date"
             :type="renderApi.resolveDateEditorInputType(row, column)"
             :value="editing.editingCellValue"
+            autofocus
             @mousedown.stop
             @click.stop
             @input="renderApi.updateEditingCellValue(($event.target as HTMLInputElement).value)"
@@ -112,6 +118,7 @@
             v-else-if="renderApi.isTextEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
             class="cell-editor-control cell-editor-input"
             :value="editing.editingCellValue"
+            autofocus
             @mousedown.stop
             @click.stop
             @input="renderApi.updateEditingCellValue(($event.target as HTMLInputElement).value)"

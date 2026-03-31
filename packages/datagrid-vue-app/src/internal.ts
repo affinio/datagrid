@@ -8,6 +8,7 @@ export { default as DataGridDefaultRenderer } from "./host/DataGridDefaultRender
 export { default as DataGridGanttStage } from "./gantt/DataGridGanttStage.vue"
 export { default as DataGridModuleHost } from "./host/DataGridModuleHost"
 export { default as DataGridAdvancedFilterPopover } from "./overlays/DataGridAdvancedFilterPopover.vue"
+export { default as DataGridFindReplacePopover } from "./overlays/DataGridFindReplacePopover.vue"
 export { default as DataGridTableStage } from "./stage/DataGridTableStage.vue"
 export {
   buildDataGridTimelineRenderModels,

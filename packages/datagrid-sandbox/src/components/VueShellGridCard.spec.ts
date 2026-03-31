@@ -96,8 +96,16 @@ async function preloadAdvancedFilterPopover(): Promise<void> {
   await import("../../../datagrid-vue-app/src/overlays/DataGridAdvancedFilterPopover.vue")
 }
 
+async function preloadFindReplacePopover(): Promise<void> {
+  await import("../../../datagrid-vue-app/src/overlays/DataGridFindReplacePopover.vue")
+}
+
 function queryAdvancedFilterRoot(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(".datagrid-advanced-filter")
+}
+
+function queryFindReplaceRoot(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>(".datagrid-find-replace")
 }
 
 async function findAdvancedFilterTrigger(wrapper: ReturnType<typeof mount>) {
@@ -374,6 +382,84 @@ describe("VueShellGridCard", () => {
       row.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')?.value ?? null
     ))
     expect(hydratedValues).toEqual(["NOC", "Alice"])
+
+    wrapper.unmount()
+  })
+
+  it("exposes declarative findReplace on the base sugar sandbox card", async () => {
+    await preloadFindReplacePopover()
+
+    const { default: VueShellGridCard } = await import("./VueShellGridCard.vue")
+
+    const wrapper = mount(VueShellGridCard, {
+      props: {
+        title: "Vue: Base Grid (Sugar)",
+        mode: "base",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUi()
+    await flushUi()
+
+    const trigger = wrapper.find('[data-datagrid-toolbar-action="find-replace"]')
+    expect(trigger.exists()).toBe(true)
+
+    await trigger.trigger("click")
+    await flushUi()
+
+    expect(queryFindReplaceRoot()).toBeTruthy()
+
+    wrapper.unmount()
+  })
+
+  it("exposes declarative gridLines controls on the base sugar sandbox card", async () => {
+    const { default: VueShellGridCard } = await import("./VueShellGridCard.vue")
+
+    const wrapper = mount(VueShellGridCard, {
+      props: {
+        title: "Vue: Base Grid (Sugar)",
+        mode: "base",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUi()
+    await flushUi()
+
+    const grid = wrapper.findComponent({ name: "DataGrid" })
+    expect(grid.exists()).toBe(true)
+    expect(grid.props("gridLines")).toMatchObject({
+      body: "all",
+      header: "columns",
+      pinnedSeparators: true,
+    })
+
+    const columnLinesToggle = wrapper.find('[data-sandbox-grid-lines-toggle="columns"]')
+    const pinnedSeparatorsToggle = wrapper.find('[data-sandbox-grid-lines-toggle="pinned-separators"]')
+
+    expect(columnLinesToggle.exists()).toBe(true)
+    expect(pinnedSeparatorsToggle.exists()).toBe(true)
+
+    await columnLinesToggle.setValue(false)
+    await pinnedSeparatorsToggle.setValue(false)
+    await flushUi()
+
+    expect(grid.props("gridLines")).toMatchObject({
+      body: "rows",
+      header: "columns",
+      pinnedSeparators: false,
+    })
 
     wrapper.unmount()
   })

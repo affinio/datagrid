@@ -56,7 +56,7 @@
           @mousemove="renderApi.handleCellMouseMove($event, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
           @mouseleave="renderApi.clearRangeMoveHandleHover"
           @keydown.stop="renderApi.handleCellKeydown($event, row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
-          @dblclick.stop="renderApi.startInlineEditIfAllowed(row, column, renderApi.viewportRowOffset(row, rowOffset))"
+          @dblclick.stop.prevent="renderApi.startInlineEditIfAllowed(row, column, renderApi.viewportRowOffset(row, rowOffset))"
         >
           <button
             v-if="mode === 'base' && renderApi.isCellEditableSafe(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)) && renderApi.isFillHandleCellSafe(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)) && !renderApi.isEditingCellSafe(row, column.key)"
@@ -83,6 +83,7 @@
             class="cell-editor-control cell-editor-input cell-editor-input--date"
             :type="renderApi.resolveDateEditorInputType(row, column)"
             :value="editing.editingCellValue"
+            autofocus
             @mousedown.stop
             @click.stop
             @input="renderApi.updateEditingCellValue(($event.target as HTMLInputElement).value)"
@@ -94,6 +95,7 @@
             v-else-if="renderApi.isTextEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
             class="cell-editor-control cell-editor-input"
             :value="editing.editingCellValue"
+            autofocus
             @mousedown.stop
             @click.stop
             @input="renderApi.updateEditingCellValue(($event.target as HTMLInputElement).value)"

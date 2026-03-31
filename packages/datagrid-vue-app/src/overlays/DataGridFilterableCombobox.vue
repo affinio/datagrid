@@ -446,6 +446,25 @@ watch(() => props.value, () => {
   syncInputTextFromValue()
 })
 
+watch(() => props.initialFilter, nextFilter => {
+  if (document.activeElement === inputEl.value) {
+    return
+  }
+  state.value = setDataGridCellComboboxFilter(state.value, nextFilter)
+  if (nextFilter.length > 0) {
+    syncInputTextFromInitialFilter()
+    void refreshRemoteOptions(nextFilter)
+  }
+  else {
+    syncInputTextFromValue()
+  }
+  syncActiveIndex(true)
+  void nextTick(() => {
+    updatePanelPosition()
+    scrollActiveOptionIntoView()
+  })
+})
+
 watch(() => props.disabled, disabled => {
   if (disabled) {
     closeCombobox()

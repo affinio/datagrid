@@ -137,6 +137,7 @@ export interface DataGridTableStageEditingSection<TRow extends Record<string, un
   ) => void
   updateEditingCellValue: (value: string) => void
   handleEditorKeydown: (event: KeyboardEvent) => void
+  handleEditorBlur: () => void
   commitInlineEdit: (target?: "stay" | "next" | "previous") => void
   cancelInlineEdit: () => void
 }
@@ -198,6 +199,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>>
   mode: DataGridTableMode
   rowHeightMode: "fixed" | "auto"
   layoutMode: DataGridLayoutMode
+  chromeSignature?: string
 }
 
 interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
@@ -212,6 +214,7 @@ interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
   mode: DataGridTableMode
   rowHeightMode: "fixed" | "auto"
   layoutMode: DataGridLayoutMode
+  chromeSignature?: string
 }
 
 export interface UseDataGridTableStageBindingsOptions<TRow extends Record<string, unknown>>

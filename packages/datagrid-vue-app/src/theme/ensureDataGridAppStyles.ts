@@ -28,8 +28,15 @@ const DATA_GRID_APP_STYLES = `
   --datagrid-row-band-pivot-bg: color-mix(in srgb, var(--datagrid-row-background-color) 88%, var(--datagrid-accent-strong) 12%);
   --datagrid-row-band-pivot-group-bg: color-mix(in srgb, var(--datagrid-group-row-background-color) 78%, var(--datagrid-accent-strong) 22%);
   --datagrid-header-column-divider-color: var(--datagrid-column-divider-color);
+  --datagrid-header-column-divider-size: var(--datagrid-column-divider-size);
+  --datagrid-pinned-pane-separator-size: 2px;
+  --datagrid-pinned-pane-separator-color: color-mix(in srgb, var(--datagrid-column-divider-color) 74%, var(--datagrid-text-color) 26%);
   --datagrid-selection-copied-contrast: color-mix(in srgb, var(--datagrid-background-color) 84%, var(--datagrid-text-color));
   --datagrid-selection-copied-glow: color-mix(in srgb, var(--datagrid-selection-copied-border) 38%, transparent);
+}
+
+.affino-datagrid-app-root--theme-sugar {
+  --datagrid-pinned-pane-separator-color: color-mix(in srgb, var(--datagrid-column-divider-color) 82%, var(--datagrid-text-color) 18%);
 }
 
 .affino-datagrid-app-root--fill {
@@ -785,12 +792,12 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-header-pane--left,
 .grid-body-pane--left {
-  border-right: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color);
+  border-right: var(--datagrid-pinned-pane-separator-size) solid var(--datagrid-pinned-pane-separator-color);
 }
 
 .grid-header-pane--right,
 .grid-body-pane--right {
-  border-left: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color);
+  border-left: var(--datagrid-pinned-pane-separator-size) solid var(--datagrid-pinned-pane-separator-color);
 }
 
 .grid-header-pane {
@@ -1207,11 +1214,11 @@ body.datagrid-fill-drag-cursor * {
 }
 
 .grid-header-shell--pivot-groups .grid-header-row:not(.grid-header-row--pivot-groups) .grid-cell--header {
-  border-right: var(--datagrid-column-divider-size) solid var(--datagrid-header-column-divider-color);
+  border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
 }
 
 .grid-header-shell--pivot-groups .grid-header-row--pivot-groups .grid-cell--header-group {
-  border-right: var(--datagrid-column-divider-size) solid var(--datagrid-header-column-divider-color);
+  border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
 }
 
 .grid-cell--header-group {
@@ -1250,17 +1257,18 @@ body.datagrid-fill-drag-cursor * {
 
 .grid-cell--pinned-left {
   background: var(--datagrid-pinned-left-bg);
-  box-shadow: var(--datagrid-pinned-left-shadow);
-}
-
-.grid-cell--index + .grid-cell--pinned-left,
-.grid-cell--index + .grid-cell--row-selection + .grid-cell--pinned-left {
-  box-shadow: none;
 }
 
 .grid-cell--pinned-right {
   background: var(--datagrid-pinned-right-bg);
-  box-shadow: var(--datagrid-pinned-right-shadow);
+}
+
+.grid-cell--pinned-divider-right {
+  box-shadow: inset calc(-1 * var(--datagrid-column-divider-size)) 0 0 var(--datagrid-column-divider-color);
+}
+
+.grid-cell--pinned-divider-left {
+  box-shadow: inset var(--datagrid-column-divider-size) 0 0 var(--datagrid-column-divider-color);
 }
 
 .sort-indicator {
@@ -2286,6 +2294,165 @@ body.datagrid-fill-drag-cursor * {
   cursor: not-allowed;
 }
 
+.datagrid-find-replace {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(440px, calc(100vw - 16px));
+  max-height: min(420px, calc(100vh - 16px));
+  padding: 10px;
+  border: 1px solid var(--datagrid-column-menu-border);
+  border-radius: 12px;
+  background: var(--datagrid-column-menu-bg);
+  box-shadow: 0 18px 40px var(--datagrid-column-menu-shadow);
+  color: var(--datagrid-text-primary);
+  font-family: var(--datagrid-font-family);
+  font-size: var(--datagrid-font-size);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.datagrid-find-replace__header,
+.datagrid-find-replace__footer,
+.datagrid-find-replace__footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.datagrid-find-replace__eyebrow {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--datagrid-column-menu-muted-text);
+}
+
+.datagrid-find-replace__title {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-find-replace__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.datagrid-find-replace__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.datagrid-find-replace__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--datagrid-column-menu-muted-text);
+}
+
+.datagrid-find-replace__field input,
+.datagrid-find-replace__primary,
+.datagrid-find-replace__secondary,
+.datagrid-find-replace__ghost {
+  height: 30px;
+  border: 1px solid var(--datagrid-column-menu-search-border);
+  border-radius: 7px;
+  background: var(--datagrid-column-menu-search-bg);
+  color: var(--datagrid-text-primary);
+  font: inherit;
+}
+
+.datagrid-find-replace__field input {
+  width: 100%;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.datagrid-find-replace__field input::placeholder {
+  color: var(--datagrid-column-menu-muted-text);
+  opacity: 1;
+}
+
+.datagrid-find-replace__field input:focus,
+.datagrid-find-replace__field input:focus-visible,
+.datagrid-find-replace__primary:focus,
+.datagrid-find-replace__primary:focus-visible,
+.datagrid-find-replace__secondary:focus,
+.datagrid-find-replace__secondary:focus-visible,
+.datagrid-find-replace__ghost:focus,
+.datagrid-find-replace__ghost:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--datagrid-column-menu-focus-ring);
+}
+
+.datagrid-find-replace__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--datagrid-text-secondary);
+}
+
+.datagrid-find-replace__status {
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px dashed var(--datagrid-filter-trigger-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--datagrid-column-menu-item-hover-bg) 34%, transparent);
+  color: var(--datagrid-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.datagrid-find-replace__status[data-has-message="true"] {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--datagrid-accent-strong) 18%, var(--datagrid-filter-trigger-border));
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-find-replace__ghost,
+.datagrid-find-replace__secondary,
+.datagrid-find-replace__primary {
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.datagrid-find-replace__ghost,
+.datagrid-find-replace__secondary {
+  background: transparent;
+}
+
+.datagrid-find-replace__ghost:hover,
+.datagrid-find-replace__secondary:hover {
+  background: var(--datagrid-column-menu-item-hover-bg);
+}
+
+.datagrid-find-replace__primary {
+  border-color: color-mix(in srgb, var(--datagrid-accent-strong) 48%, var(--datagrid-column-menu-search-border));
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 18%, transparent);
+}
+
+.datagrid-find-replace__primary:hover {
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 26%, transparent);
+}
+
+.datagrid-find-replace__ghost:disabled,
+.datagrid-find-replace__secondary:disabled,
+.datagrid-find-replace__primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 @media (max-width: 900px) {
   .datagrid-advanced-filter {
     width: min(460px, calc(100vw - 16px));
@@ -2298,6 +2465,31 @@ body.datagrid-fill-drag-cursor * {
   .datagrid-advanced-filter__row-actions {
     justify-content: flex-end;
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .datagrid-find-replace {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    padding: 12px;
+  }
+
+  .datagrid-find-replace__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .datagrid-find-replace__footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .datagrid-find-replace__footer-actions {
+    width: 100%;
+  }
+
+  .datagrid-find-replace__footer-actions > button {
+    flex: 1 1 auto;
   }
 }
 
@@ -2568,6 +2760,32 @@ body.datagrid-fill-drag-cursor * {
   padding: 0;
   background: var(--datagrid-editor-bg);
   box-shadow: inset 0 0 0 1px var(--datagrid-editor-border);
+}
+
+.affino-datagrid-app-root .grid-cell--find-match-active {
+  outline: 2px solid color-mix(in srgb, var(--datagrid-accent-strong) 72%, #f59e0b 28%);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--datagrid-accent-strong) 32%, transparent);
+}
+
+.affino-datagrid-app-root .grid-cell--find-match-flash-a,
+.affino-datagrid-app-root .grid-cell--find-match-flash-b {
+  animation: datagrid-find-match-flash 640ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes datagrid-find-match-flash {
+  0% {
+    background: color-mix(in srgb, #f59e0b 42%, var(--datagrid-selection-range-bg));
+    outline-color: color-mix(in srgb, #f59e0b 84%, var(--datagrid-accent-strong));
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, #f59e0b 60%, transparent),
+      0 0 0 2px color-mix(in srgb, #f59e0b 16%, transparent);
+  }
+  100% {
+    background: transparent;
+    outline-color: color-mix(in srgb, var(--datagrid-accent-strong) 72%, #f59e0b 28%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--datagrid-accent-strong) 32%, transparent);
+  }
 }
 
 .cell-fill-handle {

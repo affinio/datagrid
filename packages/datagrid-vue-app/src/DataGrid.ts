@@ -62,6 +62,16 @@ import {
   type DataGridAdvancedFilterProp,
 } from "./config/dataGridAdvancedFilter"
 import {
+  resolveDataGridFindReplace,
+  type DataGridFindReplaceOptions,
+  type DataGridFindReplaceProp,
+} from "./config/dataGridFindReplace"
+import {
+  resolveDataGridGridLines,
+  type DataGridGridLinesOptions,
+  type DataGridGridLinesProp,
+} from "./config/dataGridGridLines"
+import {
   resolveDataGridLayoutOptions,
   type DataGridLayoutMode,
 } from "./config/dataGridLayout"
@@ -320,6 +330,14 @@ export default defineComponent({
       type: [Boolean, Object] as PropType<DataGridAdvancedFilterProp | undefined>,
       default: undefined,
     },
+    findReplace: {
+      type: [Boolean, Object] as PropType<DataGridFindReplaceProp | undefined>,
+      default: undefined,
+    },
+    gridLines: {
+      type: [String, Object] as PropType<DataGridGridLinesProp | undefined>,
+      default: undefined,
+    },
     showRowIndex: {
       type: Boolean,
       default: true,
@@ -501,6 +519,12 @@ export default defineComponent({
     })
     const resolvedAdvancedFilter = computed<DataGridAdvancedFilterOptions>(() => {
       return resolveDataGridAdvancedFilter(props.advancedFilter)
+    })
+    const resolvedFindReplace = computed<DataGridFindReplaceOptions>(() => {
+      return resolveDataGridFindReplace(props.findReplace)
+    })
+    const resolvedGridLines = computed<DataGridGridLinesOptions>(() => {
+      return resolveDataGridGridLines(props.gridLines)
     })
     const resolvedGroupBy = computed(() => {
       return resolveDataGridGroupBy(props.groupBy)
@@ -836,6 +860,8 @@ export default defineComponent({
         columnLayout: resolvedColumnLayout.value,
         aggregations: resolvedAggregations.value,
         advancedFilter: resolvedAdvancedFilter.value,
+        findReplace: resolvedFindReplace.value,
+        gridLines: resolvedGridLines.value,
         rowHeightMode: props.rowHeightMode,
         baseRowHeight: props.baseRowHeight,
         layoutMode: resolvedLayout.value.layoutMode,

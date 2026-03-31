@@ -316,6 +316,10 @@ const props = defineProps({
     type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["layoutMode"]>,
     required: true,
   },
+  chromeSignature: {
+    type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["chromeSignature"]>,
+    default: "",
+  },
   layout: {
     type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["layout"]>,
     required: true,
@@ -495,7 +499,11 @@ function bodyCellPresentationStyle(column: TableColumn): CSSProperties {
   return textAlign ? { textAlign } : {}
 }
 
-function resolveInlineRowStateFill(row: TableRow, rowOffset: number): CSSProperties | null {
+function resolveInlineRowStateFill(
+  row: TableRow,
+  rowOffset: number,
+  options: { fullBleed?: boolean } = {},
+): CSSProperties | null {
   let overlayColor: string | null = null
   if (isHoveredRow(row, rowOffset)) {
     overlayColor = "var(--datagrid-row-band-hover-bg)"
@@ -504,6 +512,11 @@ function resolveInlineRowStateFill(row: TableRow, rowOffset: number): CSSPropert
   }
   if (!overlayColor) {
     return null
+  }
+  if (options.fullBleed === true) {
+    return {
+      background: overlayColor,
+    }
   }
   return {
     backgroundImage: `linear-gradient(${overlayColor}, ${overlayColor})`,
@@ -526,7 +539,9 @@ function bodyCellSelectionStyle(row: TableRow, column: TableColumn, rowOffset: n
   if (shouldHighlightSelectedCellVisual(rowOffset, columnIndex)) {
     return { background: "var(--datagrid-selection-range-bg)" }
   }
-  const rowStateFill = resolveInlineRowStateFill(row, rowOffset)
+  const rowStateFill = resolveInlineRowStateFill(row, rowOffset, {
+    fullBleed: column.pin === "left" || column.pin === "right",
+  })
   if (rowStateFill) {
     return rowStateFill
   }
@@ -534,7 +549,7 @@ function bodyCellSelectionStyle(row: TableRow, column: TableColumn, rowOffset: n
 }
 
 function rowIndexCellStyle(row: TableRow, rowOffset: number): CSSProperties {
-  const rowStateFill = resolveInlineRowStateFill(row, rowOffset)
+  const rowStateFill = resolveInlineRowStateFill(row, rowOffset, { fullBleed: true })
   if (!rowStateFill) {
     return resolvedRowIndexColumnStyle.value
   }
@@ -1332,7 +1347,7 @@ function handleDateEditorChange(value: string, target: "stay" | "next" | "previo
 }
 
 function handleTextEditorBlur(): void {
-  editing.value.commitInlineEdit()
+  editing.value.handleEditorBlur()
 }
 
 function handleRowClickSafe(row: TableRow): void {
@@ -1717,22 +1732,33 @@ function resolveGridChromeDevicePixelRatio(): number {
   return Math.max(1, window.devicePixelRatio || 1)
 }
 
-function resolveGridChromeColor(variableName: string, fallback: string): string {
-  const root = stageRootEl.value
-  if (!root || typeof window === "undefined") {
-    return fallback
+function resolveGridChromeVariable(variableName: string): string {
+  if (typeof window === "undefined") {
+    return ""
   }
-  const value = window.getComputedStyle(root).getPropertyValue(variableName).trim()
+  let element: HTMLElement | null = stageRootEl.value
+  while (element) {
+    const value = window.getComputedStyle(element).getPropertyValue(variableName).trim()
+    if (value.length > 0) {
+      return value
+    }
+    element = element.parentElement
+  }
+  return window.getComputedStyle(document.documentElement).getPropertyValue(variableName).trim()
+}
+
+function resolveGridChromeColor(variableName: string, fallback: string): string {
+  const value = resolveGridChromeVariable(variableName)
   return value || fallback
 }
 
 function resolveGridChromeLineWidth(variableName: string, fallback: number): number {
-  const root = stageRootEl.value
-  if (!root || typeof window === "undefined") {
+  const rawValue = resolveGridChromeVariable(variableName)
+  if (rawValue.length === 0) {
     return fallback
   }
-  const value = Number.parseFloat(window.getComputedStyle(root).getPropertyValue(variableName))
-  return Number.isFinite(value) && value > 0 ? value : fallback
+  const value = Number.parseFloat(rawValue)
+  return Number.isFinite(value) && value >= 0 ? value : fallback
 }
 
 function prepareGridChromeCanvas(
@@ -1873,6 +1899,11 @@ function drawGridChromeVerticalLines(
   context.lineWidth = columnDividerWidth
   context.beginPath()
   for (const line of pane.verticalLines) {
+    // Pane boundaries already have dedicated CSS borders; avoid double-width seams
+    // by skipping chrome lines that land exactly on the pane edges.
+    if (line.position <= 0.5 || line.position >= pane.width - 0.5) {
+      continue
+    }
     const x = Math.round(line.position) - 0.5
     if (x < -columnDividerWidth || x > pane.width + columnDividerWidth) {
       continue
@@ -1922,6 +1953,7 @@ function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
   const headerColumnDividerColor = resolveGridChromeColor("--datagrid-header-column-divider-color", columnDividerColor)
   const rowDividerWidth = resolveGridChromeLineWidth("--datagrid-row-divider-size", 1)
   const columnDividerWidth = resolveGridChromeLineWidth("--datagrid-column-divider-size", 1)
+  const headerColumnDividerWidth = resolveGridChromeLineWidth("--datagrid-header-column-divider-size", columnDividerWidth)
 
   const leftHeaderContext = mode === "full"
     ? prepareGridChromeCanvas(
@@ -1931,7 +1963,7 @@ function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
     )
     : null
   if (leftHeaderContext) {
-    drawGridChromeHeaderPane(leftHeaderContext, headerRenderModel.left, headerColumnDividerColor, columnDividerWidth)
+    drawGridChromeHeaderPane(leftHeaderContext, headerRenderModel.left, headerColumnDividerColor, headerColumnDividerWidth)
   }
 
   const centerHeaderContext = prepareGridChromeCanvas(
@@ -1939,7 +1971,7 @@ function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
     headerRenderModel.center.width,
     headerRenderModel.center.height,
   )
-  drawGridChromeHeaderPane(centerHeaderContext, headerRenderModel.center, headerColumnDividerColor, columnDividerWidth)
+  drawGridChromeHeaderPane(centerHeaderContext, headerRenderModel.center, headerColumnDividerColor, headerColumnDividerWidth)
 
   const rightHeaderContext = mode === "full"
     ? prepareGridChromeCanvas(
@@ -1949,7 +1981,7 @@ function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
     )
     : null
   if (rightHeaderContext) {
-    drawGridChromeHeaderPane(rightHeaderContext, headerRenderModel.right, headerColumnDividerColor, columnDividerWidth)
+    drawGridChromeHeaderPane(rightHeaderContext, headerRenderModel.right, headerColumnDividerColor, headerColumnDividerWidth)
   }
 
   const leftContext = mode === "full"
@@ -1962,7 +1994,7 @@ function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
       rowDividerColor,
       rowDividerWidth,
       columnDividerColor,
-      columnDividerWidth,
+      0,
     )
   }
 
@@ -1986,7 +2018,7 @@ function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
       rowDividerColor,
       rowDividerWidth,
       columnDividerColor,
-      columnDividerWidth,
+      0,
     )
   }
 
@@ -2006,7 +2038,7 @@ function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
       rowDividerColor,
       rowDividerWidth,
       columnDividerColor,
-      columnDividerWidth,
+      0,
     )
   }
 
@@ -2038,7 +2070,7 @@ function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
       rowDividerColor,
       rowDividerWidth,
       columnDividerColor,
-      columnDividerWidth,
+      0,
     )
   }
 }
@@ -2696,6 +2728,16 @@ watch(
   () => {
     syncBodyViewportMetrics()
     scheduleGridChromeRedraw()
+  },
+)
+
+watch(
+  () => props.chromeSignature,
+  () => {
+    void nextTick(() => {
+      syncBodyViewportMetrics()
+      scheduleGridChromeRedraw()
+    })
   },
 )
 

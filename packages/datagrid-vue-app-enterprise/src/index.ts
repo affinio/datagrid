@@ -26,6 +26,14 @@ export type {
   DataGridAdvancedFilterProp,
 } from "@affino/datagrid-vue-app"
 export type {
+  DataGridFindReplaceOptions,
+  DataGridFindReplaceProp,
+  DataGridGridLinesHeaderMode,
+  DataGridGridLinesOptions,
+  DataGridGridLinesPreset,
+  DataGridGridLinesProp,
+} from "@affino/datagrid-vue-app"
+export type {
   DataGridSavedViewSnapshot,
   DataGridSavedViewStorageLike,
 } from "@affino/datagrid-vue-app"

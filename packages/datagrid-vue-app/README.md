@@ -640,6 +640,7 @@ Affino DataGrid works well for:
 - `aggregations`
 - `row-hover`
 - `striped-rows`
+- `grid-lines`
 - `row-height-mode`
 - `base-row-height`
 
@@ -772,6 +773,45 @@ Full override:
   :current-page="0"
 />
 ```
+
+### Grid lines
+
+`DataGrid` uses full spreadsheet-style grid lines by default.
+
+Preset form:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  grid-lines="rows"
+/>
+```
+
+Supported presets:
+
+- `all`
+- `rows`
+- `columns`
+- `none`
+
+Object form:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :grid-lines="{
+    body: 'rows',
+    header: 'columns',
+    pinnedSeparators: true,
+  }"
+/>
+```
+
+`body` controls body row and column dividers, `header` controls header vertical dividers, and `pinnedSeparators` controls the stronger seam between left / center / right panes.
+
+In this monorepo, `/vue/shell/base-grid` exposes the same options as live checkboxes so you can compare the visual modes before wiring them into a product surface.
 
 ### Grouping and aggregation
 

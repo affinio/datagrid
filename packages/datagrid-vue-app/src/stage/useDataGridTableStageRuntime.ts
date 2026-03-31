@@ -39,7 +39,11 @@ import { useDataGridTableStageRowSelection } from "./useDataGridTableStageRowSel
 import { useDataGridTableStageScrollSync } from "./useDataGridTableStageScrollSync"
 import { useDataGridTableStageViewportKeyboard } from "./useDataGridTableStageViewportKeyboard"
 import { useDataGridTableStageVisualSelection } from "./useDataGridTableStageVisualSelection"
-import type { DataGridTableStageProps } from "./dataGridTableStage.types"
+import type {
+  DataGridTableRow,
+  DataGridTableStageCellClass,
+  DataGridTableStageProps,
+} from "./dataGridTableStage.types"
 
 const DEFAULT_COLUMN_WIDTH = 140
 const INDEX_COLUMN_WIDTH = 72
@@ -84,6 +88,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   rowSelectionSnapshot: Ref<DataGridRowSelectionSnapshot | null>
   rowHover?: Ref<boolean>
   stripedRows?: Ref<boolean>
+  chromeSignature?: Ref<string | undefined>
   showRowIndex?: Ref<boolean>
   showRowSelection?: Ref<boolean>
   isRowInPendingClipboardCut?: (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>) => boolean
@@ -134,6 +139,12 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
     action: "insert-row-above" | "copy-row" | "cut-row" | "paste-row" | "delete-selected-rows" | "open-row-menu",
     rowId: string | number,
   ) => Promise<boolean> | boolean
+  cellClass?: (
+    row: DataGridTableRow<TRow>,
+    rowIndex: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ) => DataGridTableStageCellClass | null | undefined
 }
 
 export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, unknown>> {
@@ -145,10 +156,12 @@ export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, 
   cutSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   clearSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   captureHistorySnapshot: () => unknown
+  captureHistorySnapshotForRowIds: (rowIds: readonly (string | number)[]) => unknown
   recordHistoryIntentTransaction: (
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: unknown,
   ) => void
+  revealCellInComfortZone: (rowIndex: number, columnIndex: number) => Promise<void>
 }
 
 type StageInteractionControllerResult<TRow extends Record<string, unknown>> =
@@ -508,6 +521,7 @@ export function useDataGridTableStageRuntime<
 
   const {
     ensureKeyboardActiveCellVisible,
+    revealCellInComfortZone,
   } = useDataGridAppActiveCellViewport({
     bodyViewportRef,
     visibleColumns: orderedVisibleColumns,
@@ -527,9 +541,11 @@ export function useDataGridTableStageRuntime<
     editingCellOpenOnMount,
     isEditingCell,
     startInlineEdit,
+    appendInlineEditTextInput,
     commitInlineEdit,
     cancelInlineEdit,
     handleEditorKeydown,
+    handleEditorBlur,
   } = useDataGridAppInlineEditing<TRow, unknown>({
     mode: options.mode,
     bodyViewportRef,
@@ -602,6 +618,8 @@ export function useDataGridTableStageRuntime<
     syncViewport: () => syncViewportFromDom(),
     editingCell: editingCellRef,
     startInlineEdit,
+    appendInlineEditTextInput,
+    cancelInlineEdit,
     commitInlineEdit,
     canUndo: canUndoHistory,
     canRedo: canRedoHistory,
@@ -733,6 +751,7 @@ export function useDataGridTableStageRuntime<
     mode: options.mode,
     rowHeightMode: options.rowHeightMode,
     layoutMode: options.layoutMode,
+    chromeSignature: options.chromeSignature,
     visibleColumns: orderedVisibleColumns,
     renderedColumns,
     displayRows,
@@ -834,10 +853,19 @@ export function useDataGridTableStageRuntime<
     fillActionBehavior: stageServices.fillAction.fillActionBehavior,
     applyFillActionBehavior: applyLastFillBehavior,
     handleEditorKeydown,
+    handleEditorBlur,
     commitInlineEdit,
     cancelInlineEdit,
     readCell: stageServices.cellIo.readStageCell,
     readDisplayCell: stageServices.cellIo.readStageDisplayCell,
+    cellClass: options.cellClass
+      ? (row, rowOffset, column, columnIndex) => options.cellClass?.(
+        row,
+        viewportRowStart.value + rowOffset,
+        column,
+        columnIndex,
+      )
+      : undefined,
   })
 
   useDataGridAppRuntimeSync({
@@ -887,6 +915,8 @@ export function useDataGridTableStageRuntime<
     cutSelectedCells,
     clearSelectedCells,
     captureHistorySnapshot,
+    captureHistorySnapshotForRowIds,
     recordHistoryIntentTransaction,
+    revealCellInComfortZone,
   }
 }

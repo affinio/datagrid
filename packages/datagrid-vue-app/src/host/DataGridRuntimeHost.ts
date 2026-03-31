@@ -237,6 +237,7 @@ export default defineComponent({
         ref: rootElementRef,
         class: [
           "affino-datagrid-app-root",
+          props.theme === "sugar" ? "affino-datagrid-app-root--theme-sugar" : null,
           props.layoutMode === "auto-height"
             ? "affino-datagrid-app-root--auto-height"
             : "affino-datagrid-app-root--fill",

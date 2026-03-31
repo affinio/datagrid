@@ -29,6 +29,16 @@ export type {
   DataGridAdvancedFilterProp,
 } from "./config/dataGridAdvancedFilter"
 export type {
+  DataGridFindReplaceOptions,
+  DataGridFindReplaceProp,
+} from "./config/dataGridFindReplace"
+export type {
+  DataGridGridLinesHeaderMode,
+  DataGridGridLinesOptions,
+  DataGridGridLinesPreset,
+  DataGridGridLinesProp,
+} from "./config/dataGridGridLines"
+export type {
   DataGridSavedViewSnapshot,
   DataGridSavedViewStorageLike,
 } from "./config/dataGridSavedView"

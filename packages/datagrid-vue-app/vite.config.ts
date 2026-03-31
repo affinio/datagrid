@@ -12,6 +12,7 @@ export default defineConfig({
         index: resolve(__dirname, "src/index.ts"),
         gantt: resolve(__dirname, "src/gantt.ts"),
         "advanced-filter": resolve(__dirname, "src/advanced-filter.ts"),
+        "find-replace": resolve(__dirname, "src/find-replace.ts"),
         internal: resolve(__dirname, "src/internal.ts"),
       },
       formats: ["es"],

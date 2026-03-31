@@ -142,6 +142,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     startInlineEdit: unref(options.startInlineEdit),
     updateEditingCellValue,
     handleEditorKeydown: unref(options.handleEditorKeydown),
+    handleEditorBlur: unref(options.handleEditorBlur),
     commitInlineEdit: unref(options.commitInlineEdit),
     cancelInlineEdit: unref(options.cancelInlineEdit),
   }))
@@ -171,6 +172,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     mode: unref(options.mode),
     rowHeightMode: unref(options.rowHeightMode),
     layoutMode: unref(options.layoutMode),
+    chromeSignature: unref(options.chromeSignature),
     layout: layoutSection.value,
     viewport: viewportSection.value,
     columns: columnsSection.value,

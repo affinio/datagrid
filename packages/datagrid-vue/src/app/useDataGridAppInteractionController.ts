@@ -123,6 +123,8 @@ export interface UseDataGridAppInteractionControllerOptions<
     columnKey: string,
     options?: { draftValue?: string; openOnMount?: boolean },
   ) => void
+  appendInlineEditTextInput?: (value: string) => boolean
+  cancelInlineEdit: () => void
   commitInlineEdit: (target?: "stay" | "next" | "previous") => void
   canUndo: () => boolean
   canRedo: () => boolean
@@ -1627,6 +1629,17 @@ export function useDataGridAppInteractionController<
     }
     const columnSnapshot = options.visibleColumns.value[columnIndex]
     const columnKey = columnSnapshot?.key
+    const currentEditingCell = options.editingCell.value
+    if (
+      event.key === "Escape"
+      && columnKey
+      && currentEditingCell?.rowId === row.rowId
+      && currentEditingCell.columnKey === columnKey
+    ) {
+      event.preventDefault()
+      options.cancelInlineEdit()
+      return
+    }
     const editable = Boolean(columnKey) && options.isCellEditable(row, rowIndex, columnKey as string, columnIndex)
     const printable = isPrintableEditingKey(event)
     const keyboardAction = columnSnapshot && columnKey
@@ -1639,6 +1652,22 @@ export function useDataGridAppInteractionController<
         printable,
       })
       : "none"
+
+    // Mirror Excel: Enter navigates vertically for editable cells; typing/F2/double-click opens edit mode.
+    if (
+      event.key === "Enter"
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.altKey
+      && (keyboardAction !== "invoke" || editable)
+    ) {
+      keyboardNavigationExtendsSelection.value = event.shiftKey
+      const navigationHandled = cellNavigation.dispatchNavigation(event)
+      keyboardNavigationExtendsSelection.value = false
+      if (navigationHandled) {
+        return
+      }
+    }
 
     if (keyboardAction === "toggle" && columnSnapshot && columnKey) {
       event.preventDefault()
@@ -1676,6 +1705,14 @@ export function useDataGridAppInteractionController<
     if ((keyboardAction === "startEdit" || keyboardAction === "openSelect") && columnKey) {
       event.preventDefault()
       if (editable) {
+        if (
+          printable
+          && currentEditingCell?.rowId === row.rowId
+          && currentEditingCell.columnKey === columnKey
+        ) {
+          options.appendInlineEditTextInput?.(event.key)
+          return
+        }
         options.startInlineEdit(
           row,
           columnKey,

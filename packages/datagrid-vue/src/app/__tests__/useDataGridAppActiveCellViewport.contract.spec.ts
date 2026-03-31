@@ -150,4 +150,54 @@ describe("useDataGridAppActiveCellViewport contract", () => {
     expect(syncViewport).toHaveBeenCalledTimes(1)
     expect((centerCell.focus as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1)
   })
+
+  it("reveals the active cell inside a comfort zone instead of pinning it to the edge", async () => {
+    const stage = document.createElement("section")
+    stage.className = "grid-stage"
+    const viewport = createViewport()
+    viewport.scrollTop = 0
+    viewport.scrollLeft = 120
+    stage.appendChild(viewport)
+    document.body.appendChild(stage)
+
+    const centerCell = appendStageCell(stage, 3, 1, {
+      left: 250,
+      right: 350,
+      width: 100,
+    })
+    const syncViewport = vi.fn()
+    const rowOffsets = [0, 30, 90, 120]
+    const rowHeights = [30, 60, 30, 45]
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation(callback => {
+        callback(0)
+        return 1
+      })
+
+    const { revealCellInComfortZone } = useDataGridAppActiveCellViewport({
+      bodyViewportRef: ref(viewport),
+      visibleColumns: ref([
+        { key: "centerA", pin: "center", width: 140 },
+        { key: "centerB", pin: "center", width: 140 },
+      ] as unknown as readonly DataGridColumnSnapshot[]),
+      columnWidths: ref({ centerA: 140, centerB: 140 }),
+      normalizedBaseRowHeight: ref(31),
+      resolveRowOffset: rowIndex => rowOffsets[rowIndex] ?? 0,
+      resolveRowHeight: rowIndex => rowHeights[rowIndex] ?? 31,
+      syncViewport,
+    })
+
+    try {
+      await revealCellInComfortZone(3, 1)
+
+      expect(viewport.scrollTop).toBe(66)
+      expect(viewport.scrollLeft).toBe(206)
+      expect(syncViewport).toHaveBeenCalledTimes(2)
+      expect((centerCell.focus as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    }
+    finally {
+      requestAnimationFrameSpy.mockRestore()
+    }
+  })
 })

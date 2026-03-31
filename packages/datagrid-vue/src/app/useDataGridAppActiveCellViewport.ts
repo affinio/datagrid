@@ -1,4 +1,4 @@
-import { type Ref } from "vue"
+import { nextTick, type Ref } from "vue"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-core"
 
 export interface UseDataGridAppActiveCellViewportOptions {
@@ -16,6 +16,7 @@ export interface UseDataGridAppActiveCellViewportOptions {
 
 export interface UseDataGridAppActiveCellViewportResult {
   ensureKeyboardActiveCellVisible: (rowIndex: number, columnIndex: number) => void
+  revealCellInComfortZone: (rowIndex: number, columnIndex: number) => Promise<void>
 }
 
 export function useDataGridAppActiveCellViewport(
@@ -23,6 +24,9 @@ export function useDataGridAppActiveCellViewport(
 ): UseDataGridAppActiveCellViewportResult {
   const defaultColumnWidth = options.defaultColumnWidth ?? 140
   const visibilityMarginPx = 2
+  const resolveComfortMarginPx = (size: number): number => {
+    return Math.max(18, Math.min(96, Math.floor(size * 0.18)))
+  }
 
   const resolveCellElement = (rowIndex: number, columnIndex: number): HTMLElement | null => {
     const viewport = options.bodyViewportRef.value
@@ -43,7 +47,11 @@ export function useDataGridAppActiveCellViewport(
     return options.columnWidths?.value[column.key] ?? column.width ?? defaultColumnWidth
   }
 
-  const ensureEstimatedRowVisible = (viewport: HTMLElement, rowIndex: number): void => {
+  const ensureEstimatedRowVisible = (
+    viewport: HTMLElement,
+    rowIndex: number,
+    comfortMarginPx = visibilityMarginPx,
+  ): void => {
     const estimatedTop = typeof options.resolveRowOffset === "function"
       ? Math.max(0, options.resolveRowOffset(rowIndex))
       : Math.max(0, rowIndex * options.normalizedBaseRowHeight.value)
@@ -55,11 +63,11 @@ export function useDataGridAppActiveCellViewport(
     const visibleTop = viewport.scrollTop
     const visibleBottom = visibleTop + viewport.clientHeight
 
-    if (estimatedTop < visibleTop) {
-      viewport.scrollTop = estimatedTop
+    if (estimatedTop < visibleTop + comfortMarginPx) {
+      viewport.scrollTop = Math.max(0, estimatedTop - comfortMarginPx)
       options.syncViewport()
-    } else if (estimatedBottom > visibleBottom) {
-      viewport.scrollTop = Math.max(0, estimatedBottom - viewport.clientHeight)
+    } else if (estimatedBottom > visibleBottom - comfortMarginPx) {
+      viewport.scrollTop = Math.max(0, estimatedBottom - viewport.clientHeight + comfortMarginPx)
       options.syncViewport()
     }
   }
@@ -118,6 +126,7 @@ export function useDataGridAppActiveCellViewport(
     viewport: HTMLElement,
     rowIndex: number,
     columnIndex: number,
+    comfortMarginPx = visibilityMarginPx,
   ): boolean => {
     const targetCell = resolveCellElement(rowIndex, columnIndex)
     if (!targetCell) {
@@ -126,8 +135,8 @@ export function useDataGridAppActiveCellViewport(
 
     const viewportRect = viewport.getBoundingClientRect()
     const targetRect = targetCell.getBoundingClientRect()
-    const visibleLeft = viewportRect.left + visibilityMarginPx
-    const visibleRight = viewportRect.right - visibilityMarginPx
+    const visibleLeft = viewportRect.left + comfortMarginPx
+    const visibleRight = viewportRect.right - comfortMarginPx
     let nextScrollLeft = viewport.scrollLeft
 
     if (targetRect.left < visibleLeft) {
@@ -144,6 +153,54 @@ export function useDataGridAppActiveCellViewport(
     viewport.scrollLeft = nextScrollLeft
     options.syncViewport()
     return true
+  }
+
+  const ensureEstimatedCenterColumnVisible = (
+    viewport: HTMLElement,
+    columnIndex: number,
+    comfortMarginPx: number,
+  ): void => {
+    const centerMetrics = resolveCenterColumnMetrics(columnIndex)
+    if (!centerMetrics) {
+      return
+    }
+    const visibleLeft = viewport.scrollLeft
+    const visibleRight = visibleLeft + viewport.clientWidth
+    const maxScrollLeft = Math.max(0, centerMetrics.totalWidth - viewport.clientWidth)
+    let nextScrollLeft = visibleLeft
+
+    if (centerMetrics.start < visibleLeft + comfortMarginPx) {
+      nextScrollLeft = centerMetrics.start - comfortMarginPx
+    } else if (centerMetrics.end > visibleRight - comfortMarginPx) {
+      nextScrollLeft = centerMetrics.end - viewport.clientWidth + comfortMarginPx
+    }
+
+    nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft))
+    if (Math.abs(nextScrollLeft - viewport.scrollLeft) >= 1) {
+      viewport.scrollLeft = nextScrollLeft
+      options.syncViewport()
+    }
+  }
+
+  const waitForNextAnimationFrame = async (): Promise<void> => {
+    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      return
+    }
+    await new Promise<void>(resolve => {
+      window.requestAnimationFrame(() => resolve())
+    })
+  }
+
+  const focusResolvedCellWithRetry = async (
+    viewport: HTMLElement,
+    rowIndex: number,
+    columnIndex: number,
+  ): Promise<void> => {
+    focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
+    await nextTick()
+    focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
+    await waitForNextAnimationFrame()
+    focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
   }
 
   const ensureKeyboardActiveCellVisible = (rowIndex: number, columnIndex: number): void => {
@@ -186,7 +243,36 @@ export function useDataGridAppActiveCellViewport(
     focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
   }
 
+  const revealCellInComfortZone = async (rowIndex: number, columnIndex: number): Promise<void> => {
+    const viewport = options.bodyViewportRef.value
+    if (!viewport) {
+      return
+    }
+    const targetColumn = options.visibleColumns.value[columnIndex]
+    const verticalComfortMarginPx = resolveComfortMarginPx(viewport.clientHeight)
+    ensureEstimatedRowVisible(viewport, rowIndex, verticalComfortMarginPx)
+
+    if (targetColumn?.pin === "left" || targetColumn?.pin === "right") {
+      await focusResolvedCellWithRetry(viewport, rowIndex, columnIndex)
+      return
+    }
+
+    const horizontalComfortMarginPx = resolveComfortMarginPx(viewport.clientWidth)
+    const usedDomScrollAlignment = ensureCenterCellVisibleByDomRect(
+      viewport,
+      rowIndex,
+      columnIndex,
+      horizontalComfortMarginPx,
+    )
+    if (!usedDomScrollAlignment) {
+      ensureEstimatedCenterColumnVisible(viewport, columnIndex, horizontalComfortMarginPx)
+    }
+
+    await focusResolvedCellWithRetry(viewport, rowIndex, columnIndex)
+  }
+
   return {
     ensureKeyboardActiveCellVisible,
+    revealCellInComfortZone,
   }
 }
