@@ -1973,6 +1973,90 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("hydrates advanced filter clauses from column menu filters", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SEARCH_FILTER_ROWS,
+        columns: COLUMNS,
+        columnMenu: true,
+        advancedFilter: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    let search = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLInputElement>(".datagrid-column-menu__search") ?? []).at(-1) ?? null
+    expect(search).toBeTruthy()
+    search!.value = "bet"
+    search!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    queryColumnMenuAction("apply-filter")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              owner: expect.objectContaining({
+                kind: "valueSet",
+                tokens: ["string:beta"],
+              }),
+            }),
+            advancedExpression: null,
+          }),
+          rowCount: 1,
+        }),
+      }),
+    })
+
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const advancedFilterRows = Array.from(queryAdvancedFilterRoot()?.querySelectorAll<HTMLElement>(".datagrid-advanced-filter__row") ?? [])
+    expect(advancedFilterRows).toHaveLength(1)
+
+    const comboboxes = advancedFilterRows[0]?.querySelectorAll<HTMLInputElement>('input[role="combobox"]') ?? []
+    expect(comboboxes[1]?.value).toBe("Owner")
+    expect(comboboxes[2]?.value).toBe("In")
+    expect(
+      advancedFilterRows[0]?.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')?.value,
+    ).toBe("beta")
+
+    queryAdvancedFilterRoot()?.querySelector<HTMLElement>(".datagrid-advanced-filter__primary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            columnFilters: {},
+            advancedFilters: {},
+            advancedExpression: expect.objectContaining({
+              kind: "condition",
+              key: "owner",
+              operator: "in",
+              value: "beta",
+            }),
+          }),
+          rowCount: 1,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
   it("reopens advanced filter builder with the same mixed-join draft clauses after apply", async () => {
     await preloadAdvancedFilterPopover()
 
@@ -2291,12 +2375,12 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     const advancedFilterRows = Array.from(queryAdvancedFilterRoot()?.querySelectorAll<HTMLElement>(".datagrid-advanced-filter__row") ?? [])
-    expect(advancedFilterRows).toHaveLength(3)
+    expect(advancedFilterRows).toHaveLength(4)
 
     const hydratedValues = advancedFilterRows.map(row => (
       row.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')?.value ?? null
     ))
-    expect(hydratedValues).toEqual(["eu-west", "10", "20"])
+    expect(hydratedValues).toEqual(["NOC", "eu-west", "10", "20"])
 
     source.unmount()
     target.unmount()

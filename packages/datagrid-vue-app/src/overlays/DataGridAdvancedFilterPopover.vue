@@ -185,6 +185,7 @@ const JOIN_OPTIONS: readonly DataGridFilterableComboboxOption[] = Object.freeze(
 
 const OPERATOR_OPTIONS: readonly DataGridFilterableComboboxOption[] = Object.freeze([
   { value: "contains", label: "Contains" },
+  { value: "in", label: "In" },
   { value: "equals", label: "Equals" },
   { value: "not-equals", label: "Not equals" },
   { value: "starts-with", label: "Starts with" },

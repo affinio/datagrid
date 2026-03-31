@@ -828,7 +828,7 @@ export default defineComponent({
       removeAdvancedFilterClause,
       updateAdvancedFilterClause,
       cancelAdvancedFilterPanel,
-      applyAdvancedFilterPanel,
+      applyAdvancedFilterPanel: commitAdvancedFilterPanelDraft,
       clearAdvancedFilterPanel,
     } = useDataGridAppAdvancedFilterBuilder({
       resolveColumns: () => advancedFilterColumns.value,
@@ -935,9 +935,7 @@ export default defineComponent({
         key: entry.key,
         direction: entry.direction,
       }))
-      const advancedExpression = props.advancedFilter.enabled
-        ? appliedAdvancedFilterExpression.value
-        : (filterModelState.value.advancedExpression ?? null)
+      const advancedExpression = filterModelState.value.advancedExpression ?? null
       const nextFilterModel = props.advancedFilter.enabled
         ? {
             ...filterModelState.value,
@@ -960,9 +958,6 @@ export default defineComponent({
     }
 
     const effectiveAdvancedExpression = computed<DataGridAdvancedExpressionEntry | null>(() => {
-      if (props.advancedFilter.enabled) {
-        return appliedAdvancedFilterExpression.value ?? filterModelState.value.advancedExpression ?? null
-      }
       return filterModelState.value.advancedExpression ?? null
     })
 
@@ -1000,17 +995,6 @@ export default defineComponent({
     }
 
     watch(
-      appliedAdvancedFilterExpression,
-      () => {
-        if (!props.advancedFilter.enabled) {
-          return
-        }
-        applySortAndFilter()
-      },
-      { deep: true },
-    )
-
-    watch(
       filterModelState,
       () => {
         if (!props.advancedFilter.enabled || isAdvancedFilterPanelOpen.value) {
@@ -1024,6 +1008,17 @@ export default defineComponent({
     const handleOpenAdvancedFilterPanel = (): void => {
       syncAdvancedFilterBuilderFromRuntime()
       openAdvancedFilterPanel()
+    }
+
+    const applyAdvancedFilterPanel = (): void => {
+      commitAdvancedFilterPanelDraft()
+      filterModelState.value = {
+        ...cloneFilterModelState(filterModelState.value),
+        columnFilters: {},
+        advancedFilters: {},
+        advancedExpression: appliedAdvancedFilterExpression.value,
+      }
+      applySortAndFilter()
     }
 
     const toggleSortForColumn = (columnKey: string, additive = false): void => {

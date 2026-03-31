@@ -22,6 +22,61 @@ function stringifyAdvancedFilterDraftValue(value: unknown): string {
   return String(value)
 }
 
+function stringifyColumnFilterToken(token: string): string {
+  const separatorIndex = token.indexOf(":")
+  if (separatorIndex > 0) {
+    const prefix = token.slice(0, separatorIndex)
+    if (/^[a-z-]+$/i.test(prefix)) {
+      return token.slice(separatorIndex + 1)
+    }
+  }
+  return token
+}
+
+function resolveAdvancedFilterDraftClausesFromColumnFilters(
+  filterModel: DataGridFilterSnapshot,
+): DataGridAppAdvancedFilterClauseDraft[] {
+  const clauses: DataGridAppAdvancedFilterClauseDraft[] = []
+  for (const [columnKey, filter] of Object.entries(filterModel.columnFilters ?? {})) {
+    if (!filter) {
+      continue
+    }
+    if (filter.kind === "valueSet") {
+      const values = Array.from(new Set(
+        (filter.tokens ?? [])
+          .map(token => stringifyColumnFilterToken(String(token ?? "")))
+          .map(value => value.trim())
+          .filter(value => value.length > 0),
+      ))
+      if (values.length === 0) {
+        continue
+      }
+      clauses.push({
+        id: clauses.length,
+        join: "and",
+        columnKey,
+        operator: "in",
+        value: values.join(", "),
+      })
+      continue
+    }
+    const values = [filter.value, filter.value2]
+      .map(value => stringifyAdvancedFilterDraftValue(value))
+      .filter(value => value.length > 0)
+    if (values.length === 0) {
+      continue
+    }
+    clauses.push({
+      id: clauses.length,
+      join: "and",
+      columnKey,
+      operator: String(filter.operator ?? "contains"),
+      value: values.join(", "),
+    })
+  }
+  return clauses
+}
+
 export function resolveAdvancedFilterDraftClausesFromExpression(
   expression: DataGridAdvancedExpressionEntry | null | undefined,
 ): DataGridAppAdvancedFilterClauseDraft[] {
@@ -68,7 +123,25 @@ export function resolveAdvancedFilterDraftClausesFromFilterModel(
   if (!filterModel) {
     return []
   }
+  const columnClauses = resolveAdvancedFilterDraftClausesFromColumnFilters(filterModel)
   const expression = filterModel.advancedExpression
     ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModel.advancedFilters)
-  return resolveAdvancedFilterDraftClausesFromExpression(expression ?? null)
+  const advancedClauses = resolveAdvancedFilterDraftClausesFromExpression(expression ?? null)
+  const combinedClauses = [
+    ...columnClauses,
+    ...advancedClauses.map((clause, index) => {
+      if (columnClauses.length > 0 && index === 0) {
+        return {
+          ...clause,
+          join: "and",
+        }
+      }
+      return clause
+    }),
+  ]
+  return combinedClauses.map((clause, index) => ({
+    ...clause,
+    id: index,
+    join: index === 0 ? "and" : clause.join,
+  }))
 }
