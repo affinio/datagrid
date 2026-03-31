@@ -12,8 +12,8 @@ Single source of truth for platform capabilities:
 
 Base formula APIs now have a dedicated package boundary:
 
-- community: [@affino/datagrid-formula-engine](/Users/anton/Projects/affinio/datagrid/packages/datagrid-formula-engine/README.md)
-- boundary doc: [/Users/anton/Projects/affinio/datagrid/docs/datagrid-formula-engine-community-vs-enterprise.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-formula-engine-community-vs-enterprise.md)
+- community: [@affino/datagrid-formula-engine](https://github.com/affinio/affinio/tree/main/packages/datagrid-formula-engine#readme)
+- boundary doc: [datagrid-formula-engine-community-vs-enterprise.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-formula-engine-community-vs-enterprise.md)
 
 Keep row-model orchestration and formula integration inside `@affino/datagrid-core`.
 Use `@affino/datagrid-formula-engine` for formula parsing/compile/graph APIs.
@@ -22,8 +22,8 @@ Use `@affino/datagrid-formula-engine` for formula parsing/compile/graph APIs.
 
 Base pivot APIs now also have a dedicated package boundary:
 
-- community: [@affino/datagrid-pivot](/Users/anton/Projects/affinio/datagrid/packages/datagrid-pivot/README.md)
-- boundary doc: [/Users/anton/Projects/affinio/datagrid/docs/datagrid-pivot-community-vs-enterprise.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-pivot-community-vs-enterprise.md)
+- community: [@affino/datagrid-pivot](https://github.com/affinio/affinio/tree/main/packages/datagrid-pivot#readme)
+- boundary doc: [datagrid-pivot-community-vs-enterprise.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-pivot-community-vs-enterprise.md)
 
 Keep row-model orchestration and pivot runtime integration inside `@affino/datagrid-core`.
 Use `@affino/datagrid-pivot` for pivot contracts and pure pivot helper APIs.
@@ -210,4 +210,4 @@ Horizontal virtualization now uses a deterministic clamp/update path:
 ## Roadmap
 
 Execution and quality hardening are tracked in:
-`/Users/anton/Projects/affinio/docs/datagrid-ag-architecture-9.5-pipeline-checklist.md`.
+[datagrid-ag-architecture-9.5-pipeline-checklist.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-ag-architecture-9.5-pipeline-checklist.md).

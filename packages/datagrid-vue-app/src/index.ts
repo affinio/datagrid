@@ -5,6 +5,8 @@ export const DataGrid: Component = DataGridComponent
 export type {
   DataGridAppCellRenderer,
   DataGridAppCellRendererContext,
+  DataGridAppGroupCellRenderer,
+  DataGridAppGroupCellRendererContext,
   DataGridAppCellRendererInteractiveContext,
   DataGridAppColumnInput,
   DataGridDeclarativeFormulaOptions,

@@ -4,8 +4,8 @@ Workbook-first spreadsheet shell for Affino DataGrid.
 
 `@affino/datagrid-spreadsheet-vue-app` sits one layer above:
 
-- [`@affino/datagrid-core`](/Users/anton/Projects/affinio/datagrid/packages/datagrid-core/README.md) for workbook, sheet, formula, and rewrite semantics
-- [`@affino/datagrid-vue-app`](/Users/anton/Projects/affinio/datagrid/packages/datagrid-vue-app/README.md) for the grid stage, menus, filter UI, viewport, and fill-handle surface
+- [`@affino/datagrid-core`](https://github.com/affinio/affinio/tree/main/packages/datagrid-core#readme) for workbook, sheet, formula, and rewrite semantics
+- [`@affino/datagrid-vue-app`](https://github.com/affinio/affinio/tree/main/packages/datagrid-vue-app#readme) for the grid stage, menus, filter UI, viewport, and fill-handle surface
 
 This package is the user-facing spreadsheet app layer.
 

@@ -10,6 +10,7 @@ import type {
   DataGridFormulaFieldDefinition,
   DataGridFormulaFunctionRegistry,
   DataGridRowNode,
+  DataGridRowRenderMeta,
 } from "@affino/datagrid-vue"
 
 export interface DataGridAppCellRendererInteractiveContext {
@@ -38,13 +39,39 @@ export interface DataGridAppCellRendererContext<TRow = unknown> {
   interactive: DataGridAppCellRendererInteractiveContext | null
 }
 
+export interface DataGridAppGroupCellRendererGroupContext {
+  key: string
+  field: string
+  value: string
+  childrenCount: number
+  isLabelColumn: boolean
+  renderMeta: DataGridRowRenderMeta & {
+    isGroup: true
+  }
+  toggle: () => void
+}
+
+export interface DataGridAppGroupCellRendererContext<TRow = unknown>
+  extends Omit<DataGridAppCellRendererContext<TRow>, "row" | "rowNode"> {
+  row: undefined
+  rowNode: DataGridRowNode<TRow> & {
+    kind: "group"
+  }
+  group: DataGridAppGroupCellRendererGroupContext
+}
+
 export type DataGridAppCellRenderer<TRow = unknown> = (
   context: DataGridAppCellRendererContext<TRow>,
+) => VNodeChild
+
+export type DataGridAppGroupCellRenderer<TRow = unknown> = (
+  context: DataGridAppGroupCellRendererContext<TRow>,
 ) => VNodeChild
 
 export interface DataGridAppColumnInput<TRow = unknown> extends DataGridColumnInput<TRow> {
   formula?: string | null
   cellRenderer?: DataGridAppCellRenderer<TRow> | null
+  groupCellRenderer?: DataGridAppGroupCellRenderer<TRow> | null
 }
 
 export interface DataGridDeclarativeFormulaOptions<TRow = unknown> {

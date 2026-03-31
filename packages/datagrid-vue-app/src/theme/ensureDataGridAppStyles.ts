@@ -1326,6 +1326,11 @@ body.datagrid-fill-drag-cursor * {
   color: var(--datagrid-group-row-text-color);
 }
 
+.grid-row.row--group.grid-row--group-explicit-trigger .grid-cell,
+.grid-row.row--group.grid-row--group-explicit-trigger .grid-cell--index-number {
+  cursor: default;
+}
+
 .grid-checkbox-trigger {
   display: inline-flex;
   align-items: center;

@@ -7,11 +7,11 @@
 Declarative Vue component layer for Affino DataGrid.
 
 `@affino/datagrid-vue-app` is the app-facing package.
-It depends on [`@affino/datagrid-vue`](/Users/anton/Projects/affinio/datagrid/packages/datagrid-vue/README.md), which remains the adapter and headless foundation between Vue and the grid engine.
+It depends on [`@affino/datagrid-vue`](https://github.com/affinio/affinio/tree/main/packages/datagrid-vue#readme), which remains the adapter and headless foundation between Vue and the grid engine.
 
 Boundary doc:
 
-- [/Users/anton/Projects/affinio/datagrid/docs/datagrid-vue-app-community-vs-enterprise.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-vue-app-community-vs-enterprise.md)
+- [datagrid-vue-app-community-vs-enterprise.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-vue-app-community-vs-enterprise.md)
 
 Public export:
 
@@ -578,11 +578,11 @@ Current gantt capabilities:
 
 Reference:
 
-- [/Users/anton/Projects/affinio/datagrid/docs/datagrid-gantt.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-gantt.md)
+- [datagrid-gantt.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-gantt.md)
 
 ## Table Chrome Engine
 
-The default table renderer uses [`@affino/datagrid-chrome`](/Users/anton/Projects/affinio/datagrid/packages/datagrid-chrome/src/index.ts) for shared headless table chrome geometry.
+The default table renderer uses [`@affino/datagrid-chrome`](https://github.com/affinio/affinio/tree/main/packages/datagrid-chrome#readme) for shared headless table chrome geometry.
 
 That engine derives:
 
@@ -900,6 +900,7 @@ Object form:
 
 Columns can provide a `cellRenderer` callback that returns Vue content for the display layer.
 If a custom cell also needs keyboard-accessible interaction without breaking the grid-owned focus model, declare `cellInteraction` on the column and use `context.interactive` inside the renderer.
+For grouped rows, prefer `groupCellRenderer` so you receive structured group metadata instead of reverse-engineering the formatted disclosure label.
 
 ```vue
 <script setup lang="ts">
@@ -973,6 +974,37 @@ const columns: DataGridAppColumnInput<Row>[] = [
 - `displayValue`: formatted display string after presentation rules
 - `interactive`: resolved cell interaction contract when the column declares `cellInteraction`; otherwise `null`
 
+`groupCellRenderer` receives the same display fields for group rows plus `group`, which includes:
+
+- `key`, `field`, `value`
+- `childrenCount`
+- `isLabelColumn`
+- `renderMeta` with normalized `level`, `isExpanded`, and `hasChildren`
+- `toggle()` to expand or collapse the current group row
+
+When you author `groupCellRenderer`, treat `group.toggle()` as the canonical expand/collapse trigger.
+The stage keeps the rest of the group cell surface available for grid selection and navigation, so expansion should live behind an explicit trigger button or disclosure control inside the renderer rather than on the entire cell wrapper.
+
+```ts
+{
+  key: "name",
+  label: "Name",
+  groupCellRenderer: ({ displayValue, group }) => h("div", { class: "group-cell" }, [
+    h("button", {
+      type: "button",
+      class: "group-cell__trigger",
+      "aria-label": group.renderMeta.isExpanded ? "Collapse group" : "Expand group",
+      onClick: event => {
+        event.stopPropagation()
+        group.toggle()
+      },
+    }, group.renderMeta.isExpanded ? "▾" : "▸"),
+    h("span", { class: "group-cell__label" }, displayValue),
+    h("span", { class: "group-cell__count" }, String(group.childrenCount)),
+  ]),
+}
+```
+
 `interactive` exposes:
 
 - `enabled`: `false` only when the interaction is currently disabled
@@ -984,6 +1016,7 @@ const columns: DataGridAppColumnInput<Row>[] = [
 Guidelines:
 
 - keep interaction intent on the column via `cellInteraction`; use `interactive.activate(...)` from the renderer instead of ad-hoc row-local handlers
+- keep group expand/collapse behind an explicit trigger inside `groupCellRenderer`; do not rely on the whole group cell acting as the disclosure target
 - the grid shell still owns focus, selection, fill, clipboard, menus, and editing; `cellInteraction` only adds semantic invoke behavior inside that model
 - prefer pure render output from row data over local mutable renderer state
 - keep identifiers, derived values, and formula-result columns read-only where appropriate

@@ -382,6 +382,114 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("renders grouped rows through groupCellRenderer with structured group context", async () => {
+    const toggleGroupRow = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        firstRowKind: "group",
+        firstRowExpanded: false,
+        toggleGroupRow,
+        visibleColumns: [
+          {
+            key: "centerA",
+            pin: "center",
+            width: 140,
+            column: {
+              key: "centerA",
+              label: "Group",
+              groupCellRenderer: ({ group }) => h("button", {
+                type: "button",
+                class: "test-group-renderer",
+                onClick: event => {
+                  event.stopPropagation()
+                  group.toggle()
+                },
+              }, `${group.renderMeta.isExpanded ? "open" : "closed"}:${group.field}:${group.value}:${group.childrenCount}:${group.isLabelColumn ? "label" : "value"}`),
+            },
+          },
+        ] as unknown as readonly DataGridColumnSnapshot[],
+      }),
+    })
+
+    await nextTick()
+
+    expect(wrapper.find(".test-group-renderer").text()).toBe("closed:name:Group 1:1:label")
+
+    await wrapper.find(".test-group-renderer").trigger("click")
+
+    expect(toggleGroupRow).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("does not toggle a grouped row from the cell wrapper click when groupCellRenderer is authored", async () => {
+    const toggleGroupRow = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        firstRowKind: "group",
+        firstRowExpanded: false,
+        toggleGroupRow,
+        visibleColumns: [
+          {
+            key: "centerA",
+            pin: "center",
+            width: 140,
+            column: {
+              key: "centerA",
+              label: "Group",
+              groupCellRenderer: ({ group }) => h("div", {
+                class: "test-group-surface",
+              }, `${group.field}:${group.value}`),
+            },
+          },
+        ] as unknown as readonly DataGridColumnSnapshot[],
+      }),
+    })
+
+    await nextTick()
+  expect(wrapper.find('.grid-body-viewport .grid-row[data-row-index="0"]').classes()).toContain("grid-row--group-explicit-trigger")
+    await wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"]').trigger("click")
+
+    expect(toggleGroupRow).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it("does not toggle a grouped row from Space on the cell wrapper when groupCellRenderer is authored", async () => {
+    const toggleGroupRow = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        firstRowKind: "group",
+        firstRowExpanded: false,
+        toggleGroupRow,
+        visibleColumns: [
+          {
+            key: "centerA",
+            pin: "center",
+            width: 140,
+            column: {
+              key: "centerA",
+              label: "Group",
+              groupCellRenderer: ({ group }) => h("div", {
+                class: "test-group-surface",
+              }, `${group.field}:${group.value}`),
+            },
+          },
+        ] as unknown as readonly DataGridColumnSnapshot[],
+      }),
+    })
+
+    await nextTick()
+    await wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"]').trigger("keydown", { key: " " })
+
+    expect(toggleGroupRow).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
   it("applies cellInteraction aria semantics to the cell wrapper", async () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,

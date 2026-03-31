@@ -139,8 +139,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType, type VNodeChild } from "vue"
 import {
   buildDataGridCellRenderModel,
+  getDataGridRowRenderMeta,
   invokeDataGridCellInteraction,
   resolveDataGridCellInteraction,
+  type DataGridCellInteractionInvocationTrigger,
 } from "@affino/datagrid-vue"
 import {
   useDataGridLinkedPaneScrollSync,
@@ -173,6 +175,7 @@ import {
   type DataGridTableStageContext,
   provideDataGridTableStageContext,
 } from "./dataGridTableStageContext"
+import type { DataGridAppCellRendererInteractiveContext } from "../config/dataGridFormulaOptions"
 import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
 import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilterableCombobox"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
@@ -391,6 +394,9 @@ const displayRows = computed(() => rows.value?.displayRows ?? [])
 const pinnedBottomRows = computed(() => rows.value?.pinnedBottomRows ?? [])
 const selectionRange = computed(() => selection.value?.selectionRange ?? null)
 const isFillDragging = computed(() => selection.value?.isFillDragging === true)
+const hasExplicitGroupCellRenderer = computed(() => (
+  visibleColumns.value.some(column => hasGroupCellRenderer(column))
+))
 function columnStyle(key: string): CSSProperties {
   return layout.value.columnStyle(key)
 }
@@ -410,6 +416,7 @@ function handleCellMouseDown(event: MouseEvent, row: TableRow, rowOffset: number
 function handleCellKeydown(event: KeyboardEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
   if (
     row.kind === "group"
+    && !hasExplicitGroupCellRenderer.value
     && !event.ctrlKey
     && !event.metaKey
     && !event.altKey
@@ -481,6 +488,13 @@ function resolveTextAlign(value: unknown): CSSProperties["textAlign"] | undefine
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object"
+}
+
+function hasGroupCellRenderer(column: TableColumn): boolean {
+  const authoredColumn = column.column as typeof column.column & {
+    groupCellRenderer?: unknown
+  }
+  return typeof authoredColumn.groupCellRenderer === "function"
 }
 
 function isPromiseLike<TValue>(value: unknown): value is PromiseLike<TValue> {
@@ -1243,7 +1257,6 @@ function renderResolvedCellContent(
   columnIndex: number,
 ): VNodeChild {
   const displayValue = readResolvedDisplayCell(row, column)
-  const renderer = column.column.cellRenderer
   const editable = isCellEditableSafe(row, rowOffset, column, columnIndex)
   const interaction = resolveDataGridCellInteraction({
     column: column.column,
@@ -1252,37 +1265,78 @@ function renderResolvedCellContent(
     editable,
   })
 
+  const interactive: DataGridAppCellRendererInteractiveContext | null = interaction
+    ? {
+      enabled: interaction.disabled !== true,
+      click: interaction.click,
+      keyboard: interaction.keyboard,
+      role: interaction.role,
+      ariaLabel: interaction.label,
+      ariaPressed: interaction.pressed,
+      ariaChecked: interaction.checked,
+      ariaDisabled: interaction.disabled ? "true" : undefined,
+      activate: (trigger?: DataGridCellInteractionInvocationTrigger) => invokeDataGridCellInteraction({
+        column: column.column,
+        row: row.kind !== "group" ? row.data : undefined,
+        rowId: row.rowId,
+        editable,
+        trigger: trigger ?? "click",
+      }),
+    }
+    : null
+
+  if (row.kind === "group") {
+    const renderer = column.column.groupCellRenderer ?? column.column.cellRenderer
+    if (typeof renderer !== "function") {
+      return displayValue
+    }
+    const groupRow = row as TableRow & { kind: "group" }
+    const childrenCount = Number.isFinite(row.groupMeta?.childrenCount)
+      ? Math.max(0, Math.trunc(row.groupMeta?.childrenCount as number))
+      : 0
+    const renderMeta = getDataGridRowRenderMeta(groupRow)
+    return renderer({
+      row: undefined,
+      rowNode: groupRow,
+      rowOffset,
+      column,
+      columnIndex,
+      value: cells.value.readCell(row, column.key),
+      displayValue,
+      interactive,
+      group: {
+        key: row.groupMeta?.groupKey ?? String(row.rowId ?? ""),
+        field: String(row.groupMeta?.groupField ?? "group"),
+        value: String(row.groupMeta?.groupValue ?? row.rowId ?? ""),
+        childrenCount,
+        isLabelColumn: props.mode === "tree"
+          ? column.key === "name"
+          : column.key === (props.columns.visibleColumns[0]?.key ?? "name"),
+        renderMeta: {
+          ...renderMeta,
+          isGroup: true,
+        },
+        toggle: () => {
+          rows.value.toggleGroupRow(row)
+        },
+      },
+    }) ?? displayValue
+  }
+
+  const renderer = column.column.cellRenderer
   if (typeof renderer !== "function") {
     return displayValue
   }
 
   return renderer({
-    row: row.kind === "group" ? undefined : row.data,
+    row: row.data,
     rowNode: row,
     rowOffset,
     column,
     columnIndex,
     value: cells.value.readCell(row, column.key),
     displayValue,
-    interactive: interaction
-      ? {
-        enabled: interaction.disabled !== true,
-        click: interaction.click,
-        keyboard: interaction.keyboard,
-        role: interaction.role,
-        ariaLabel: interaction.label,
-        ariaPressed: interaction.pressed,
-        ariaChecked: interaction.checked,
-        ariaDisabled: interaction.disabled ? "true" : undefined,
-        activate: trigger => invokeDataGridCellInteraction({
-          column: column.column,
-          row: row.kind !== "group" ? row.data : undefined,
-          rowId: row.rowId,
-          editable,
-          trigger: trigger ?? "click",
-        }),
-      }
-      : null,
+    interactive,
   }) ?? displayValue
 }
 
@@ -1366,9 +1420,6 @@ function handleRowIndexKeydownSafe(event: KeyboardEvent, row: TableRow, rowOffse
 
 function handleRowContainerClick(row: TableRow): void {
   handleRowClickSafe(row)
-  if (row.kind === "group") {
-    rows.value.toggleGroupRow(row)
-  }
 }
 
 function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boolean> {
@@ -1376,6 +1427,7 @@ function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boole
     "grid-row--hoverable": rows.value.rowHover === true,
     "grid-row--hovered": isHoveredRow(row, rowOffset),
     "grid-row--striped": isStripedRow(row, rowOffset),
+    "grid-row--group-explicit-trigger": row.kind === "group" && hasExplicitGroupCellRenderer.value,
     "grid-row--clipboard-pending": rows.value.isRowInPendingClipboardCut?.(row) === true,
     "grid-row--focused": isRowFocusedSafe(row),
     "grid-row--checkbox-selected": isRowCheckboxSelectedSafe(row),
@@ -1465,6 +1517,9 @@ function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: 
 
 function handleGroupCellClick(row: TableRow): void {
   if (row.kind !== "group") {
+    return
+  }
+  if (hasExplicitGroupCellRenderer.value) {
     return
   }
   rows.value.toggleGroupRow(row)

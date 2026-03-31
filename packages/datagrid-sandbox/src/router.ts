@@ -58,6 +58,15 @@ const routes = [
     props: { title: "Vue: Base Grid (Sugar)", mode: "base" },
   },
   {
+    path: "/vue/shell/grouped-grid",
+    component: VueShellGridCard,
+    props: {
+      title: "Vue: Grouped Grid (Sugar)",
+      mode: "base",
+      groupedShowcase: true,
+    },
+  },
+  {
     path: "/vue/shell/gantt-grid",
     component: VueShellGridCard,
     props: {

@@ -4,7 +4,7 @@ Laravel/Livewire-oriented facade for Affino DataGrid.
 
 If you want the app-facing Laravel entrypoint, prefer:
 
-- [@affino/datagrid-laravel-app](/Users/anton/Projects/affinio/datagrid/packages/datagrid-laravel-app/README.md)
+- [@affino/datagrid-laravel-app](https://github.com/affinio/affinio/tree/main/packages/datagrid-laravel-app#readme)
 
 Use `@affino/datagrid-laravel` when you want the lower-level Laravel/Livewire
 adapter bridge instead of importing `@affino/datagrid-core` and
@@ -20,7 +20,7 @@ Single source of truth for platform capabilities:
 
 If a Laravel integration needs direct formula-engine APIs, use:
 
-- [@affino/datagrid-formula-engine](/Users/anton/Projects/affinio/datagrid/packages/datagrid-formula-engine/README.md)
+- [@affino/datagrid-formula-engine](https://github.com/affinio/affinio/tree/main/packages/datagrid-formula-engine#readme)
 
 Keep Laravel grid/runtime integration through `@affino/datagrid-laravel`.
 
@@ -28,7 +28,7 @@ Keep Laravel grid/runtime integration through `@affino/datagrid-laravel`.
 
 If a Laravel integration needs direct pivot contracts or layout snapshot types, use:
 
-- [@affino/datagrid-pivot](/Users/anton/Projects/affinio/datagrid/packages/datagrid-pivot/README.md)
+- [@affino/datagrid-pivot](https://github.com/affinio/affinio/tree/main/packages/datagrid-pivot#readme)
 
 Keep Laravel grid/runtime integration through `@affino/datagrid-laravel`.
 

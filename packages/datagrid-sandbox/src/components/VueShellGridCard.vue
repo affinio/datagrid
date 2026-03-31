@@ -283,6 +283,7 @@
         aggregations
         :client-row-model-options="clientRowModelOptions"
         :group-by="groupBy"
+        :aggregation-model="aggregationModel"
         :pivot-model="pivotModel"
         :pagination="pagination"
         :page-size="paginationPageSize"
@@ -348,6 +349,7 @@ import {
 } from "@affino/datagrid-theme";
 import type {
   ClientRowModel,
+  DataGridAggregationModel,
   DataGridColumnInput,
   DataGridColumnPin,
   DataGridGroupBySpec,
@@ -700,6 +702,7 @@ const props = defineProps<{
   mode: Mode;
   initialViewMode?: DataGridAppViewMode;
   ganttShowcase?: boolean;
+  groupedShowcase?: boolean;
   timesheetShowcase?: boolean;
 }>();
 
@@ -839,6 +842,61 @@ function resolveShellStatusTone(status: unknown): ShellStatusTone {
     default:
       return "neutral";
   }
+}
+
+function renderShellGroupLabel(field: string): string {
+  if (field === "region") {
+    return "Region";
+  }
+  if (field === "category") {
+    return "Category";
+  }
+  return field;
+}
+
+function buildShellGroupCellRenderer(columnKey: string) {
+  return ({ group, displayValue }: {
+    group: {
+      field: string;
+      value: string;
+      childrenCount: number;
+      isLabelColumn: boolean;
+      renderMeta: { isExpanded?: boolean; level: number };
+      toggle: () => void;
+    };
+    displayValue: string;
+  }) => {
+    const disclosure = group.renderMeta.isExpanded ? "▾" : "▸";
+    if (columnKey === "name") {
+      return h("div", { class: "shell-group-line" }, [
+        h("button", {
+          type: "button",
+          class: "shell-group-trigger",
+          "aria-label": group.renderMeta.isExpanded ? "Collapse group" : "Expand group",
+          "aria-expanded": group.renderMeta.isExpanded ? "true" : "false",
+          onClick: (event: MouseEvent) => {
+            event.stopPropagation();
+            group.toggle();
+          },
+        }, disclosure),
+        h("div", { class: "shell-group-pill" }, [
+          h("span", { class: "shell-group-pill__field" }, renderShellGroupLabel(group.field)),
+          h("span", { class: "shell-group-pill__value" }, group.value),
+          h("span", { class: "shell-group-pill__count" }, `${group.childrenCount}`),
+        ]),
+      ]);
+    }
+
+    if (columnKey === "id") {
+      return h("span", { class: "shell-group-secondary shell-group-secondary--count" }, `${group.childrenCount} rows`);
+    }
+
+    if (!group.isLabelColumn) {
+      return displayValue;
+    }
+
+    return h("span", { class: "shell-group-secondary" }, `${renderShellGroupLabel(group.field)}: ${group.value}`);
+  };
 }
 
 function sumTimesheetDays(row: Omit<TimesheetRow, "total">): number {
@@ -1144,6 +1202,82 @@ function createBaseShowcaseColumnState(
   };
 }
 
+function createGroupedShowcaseColumnState(
+  columns: readonly DataGridColumnInput[],
+  existingState: DataGridUnifiedColumnState | null | undefined,
+): DataGridUnifiedColumnState {
+  const normalized = normalizeColumnState(existingState, columns);
+  const ordered = applySandboxColumnOrder(normalized, [
+    "name",
+    "region",
+    "status",
+    "amount",
+    "category",
+    "updatedAt",
+    "id",
+    "start",
+    "end",
+    "progress",
+    "dependencies",
+    "baselineStart",
+    "baselineEnd",
+    "critical",
+  ]);
+  return {
+    order: [...ordered.order],
+    visibility: {
+      ...ordered.visibility,
+      name: true,
+      region: true,
+      status: true,
+      amount: true,
+      category: true,
+      updatedAt: true,
+      id: true,
+    },
+    widths: { ...ordered.widths },
+    pins: {
+      ...ordered.pins,
+      name: "left",
+      region: "none",
+      id: "none",
+      amount: "none",
+      updatedAt: "right",
+    },
+  };
+}
+
+function createGroupedShowcaseAggregationModel(
+  columns: readonly DataGridColumnInput[],
+): DataGridAggregationModel<Record<string, unknown>> {
+  return {
+    columns: columns.flatMap((column) => {
+      switch (column.key) {
+        case "id":
+          return [{ key: column.key, op: "count" as const }];
+        case "amount":
+          return [{ key: column.key, op: "sum" as const }];
+        case "start":
+        case "baselineStart":
+          return [{ key: column.key, op: "min" as const }];
+        case "end":
+        case "baselineEnd":
+        case "updatedAt":
+          return [{ key: column.key, op: "max" as const }];
+        case "progress":
+          return [{ key: column.key, op: "avg" as const }];
+        case "critical":
+          return [{ key: column.key, op: "max" as const }];
+        case "name":
+          return [];
+        default:
+          return [{ key: column.key, op: "first" as const }];
+      }
+    }),
+    basis: "filtered",
+  };
+}
+
 const rowCount = ref<number>(10000);
 const columnCount = ref<number>(16);
 const activeTimesheetProjectIds = ref<string[]>([...DEFAULT_TIMESHEET_PROJECT_IDS]);
@@ -1175,6 +1309,9 @@ const modeBadge = computed(() => {
   if (props.timesheetShowcase) {
     return "Sugar / Timesheet";
   }
+  if (props.groupedShowcase) {
+    return "Sugar / Grouped";
+  }
   return props.mode === "tree"
     ? "Sugar / Tree"
     : props.mode === "pivot"
@@ -1187,6 +1324,9 @@ const modeBadge = computed(() => {
 const modeHint = computed(() => {
   if (props.timesheetShowcase) {
     return "Simple declarative timesheet: projects by row, weekdays by column, pinned daily totals below and pinned row totals on the right. Right-click a cell for Cut/Copy/Paste/Clear or the row index for Insert/Cut/Copy/Paste/Delete, all with undo/redo.";
+  }
+  if (props.groupedShowcase) {
+    return "Public component grouped by region with a custom groupCellRenderer on the label column plus declarative aggregations, so parent rows stay non-editable but still render meaningful values across the visible columns.";
   }
   return props.mode === "tree"
     ? "Public component with tree-data row model options."
@@ -1275,19 +1415,24 @@ const columns = computed<readonly DataGridAppColumnInput[]>(() => {
   }
 
   return builtColumns.map((column) => {
-    if (column.key !== "status") {
-      return column;
+    if (column.key === "status") {
+      return {
+        ...column,
+        cellRenderer: ({ row, displayValue }) => h("span", {
+          class: [
+            "shell-status-pill",
+            `shell-status-pill--${resolveShellStatusTone(row && typeof row === "object" ? (row as Record<string, unknown>).status : displayValue)}`,
+          ],
+        }, displayValue),
+      };
     }
-
-    return {
-      ...column,
-      cellRenderer: ({ row, displayValue }) => h("span", {
-        class: [
-          "shell-status-pill",
-          `shell-status-pill--${resolveShellStatusTone(row && typeof row === "object" ? (row as Record<string, unknown>).status : displayValue)}`,
-        ],
-      }, displayValue),
-    };
+    if (column.key === "name" || column.key === "id") {
+      return {
+        ...column,
+        groupCellRenderer: buildShellGroupCellRenderer(column.key),
+      };
+    }
+    return column;
   });
 });
 const groupBy = computed(() => {
@@ -1295,6 +1440,12 @@ const groupBy = computed(() => {
     return null;
   }
   return groupByModel.value;
+});
+const aggregationModel = computed<DataGridAggregationModel<Record<string, unknown>> | null>(() => {
+  if (props.mode !== "base" || !props.groupedShowcase || !groupBy.value) {
+    return null;
+  }
+  return createGroupedShowcaseAggregationModel(columns.value);
 });
 const hasActiveGrouping = computed(() => (groupBy.value?.fields.length ?? 0) > 0);
 const pivotModel = computed(() => {
@@ -1662,6 +1813,31 @@ watch(
     showHeaderColumnLines.value = true;
     showPinnedSeparators.value = true;
     setColumnStateIfChanged(createBaseShowcaseColumnState(columns.value, columnState.value));
+  },
+  { immediate: true },
+);
+
+watch(
+  () => props.groupedShowcase,
+  (enabled) => {
+    if (!enabled || props.mode !== "base") {
+      return;
+    }
+    viewMode.value = "table";
+    themePreset.value = "sugar";
+    rowCount.value = 1000;
+    columnCount.value = Math.max(columnCount.value, 12);
+    groupByModel.value = { fields: ["region"], expandedByDefault: true };
+    rowRenderMode.value = "virtualization";
+    rowHeightMode.value = "fixed";
+    baseRowHeight.value = 33;
+    rowHover.value = true;
+    stripedRows.value = true;
+    showRowLines.value = true;
+    showColumnLines.value = true;
+    showHeaderColumnLines.value = true;
+    showPinnedSeparators.value = true;
+    setColumnStateIfChanged(createGroupedShowcaseColumnState(columns.value, columnState.value));
   },
   { immediate: true },
 );
@@ -2079,5 +2255,90 @@ const collapseAllGroups = (): void => {
   color: #165c3d;
   background: rgba(225, 245, 233, 0.96);
   border-color: rgba(163, 210, 180, 0.92);
+}
+
+:deep(.shell-group-line) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  cursor: default;
+}
+
+:deep(.shell-group-trigger) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.94);
+  color: rgba(51, 65, 85, 0.92);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+:deep(.shell-group-trigger:hover) {
+  background: rgba(241, 245, 249, 0.98);
+}
+
+:deep(.shell-group-trigger:focus-visible) {
+  outline: 2px solid rgba(37, 99, 235, 0.34);
+  outline-offset: 2px;
+}
+
+:deep(.shell-group-pill) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  min-height: 1.7rem;
+  padding: 0.2rem 0.58rem;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: rgba(15, 23, 42, 0.88);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  min-width: 0;
+  cursor: default;
+}
+
+:deep(.shell-group-pill__field) {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(71, 85, 105, 0.88);
+}
+
+:deep(.shell-group-pill__value) {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+:deep(.shell-group-pill__count) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  min-height: 1.35rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.94);
+  color: rgba(30, 41, 59, 0.9);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+:deep(.shell-group-secondary) {
+  font-size: 0.76rem;
+  color: rgba(71, 85, 105, 0.78);
+}
+
+:deep(.shell-group-secondary--count) {
+  font-weight: 600;
+  color: rgba(51, 65, 85, 0.82);
 }
 </style>

@@ -1,6 +1,9 @@
 import type { ComponentPublicInstance, CSSProperties, VNodeChild } from "vue"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-vue"
-import type { DataGridAppCellRenderer } from "../config/dataGridFormulaOptions"
+import type {
+  DataGridAppCellRenderer,
+  DataGridAppGroupCellRenderer,
+} from "../config/dataGridFormulaOptions"
 import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilterableCombobox"
 import type { DataGridTableRow } from "./dataGridTableStage.types"
 
@@ -9,6 +12,7 @@ export type DataGridTableStageBodyRow = DataGridTableRow<Record<string, unknown>
 export type DataGridTableStageBodyColumn = DataGridColumnSnapshot & {
   column: DataGridColumnSnapshot["column"] & {
     cellRenderer?: DataGridAppCellRenderer<Record<string, unknown>> | null
+    groupCellRenderer?: DataGridAppGroupCellRenderer<Record<string, unknown>> | null
     presentation?: {
       align?: "left" | "center" | "right"
       headerAlign?: "left" | "center" | "right"

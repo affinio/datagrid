@@ -287,6 +287,61 @@ describe("VueShellGridCard", () => {
     wrapper.unmount()
   })
 
+  it("preconfigures the grouped shell showcase with region grouping, a groupCellRenderer, and aggregation-backed parent rows", async () => {
+    const { default: VueShellGridCard } = await import("./VueShellGridCard.vue")
+
+    const wrapper = mount(VueShellGridCard, {
+      props: {
+        title: "Vue: Grouped Grid (Sugar)",
+        mode: "base",
+        groupedShowcase: true,
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUi()
+    await flushUi()
+
+    const grid = wrapper.findComponent({ name: "DataGrid" })
+    expect(grid.exists()).toBe(true)
+    const gridVm = grid.vm as { $props?: Record<string, unknown>; $attrs?: Record<string, unknown> }
+    const resolvedGroupBy = grid.props("groupBy")
+      ?? gridVm.$props?.groupBy
+      ?? gridVm.$attrs?.groupBy
+      ?? gridVm.$attrs?.["group-by"]
+    expect(resolvedGroupBy).toEqual({
+      fields: ["region"],
+      expandedByDefault: true,
+    })
+    const resolvedAggregationModel = grid.props("aggregationModel")
+      ?? gridVm.$props?.aggregationModel
+      ?? gridVm.$attrs?.aggregationModel
+      ?? gridVm.$attrs?.["aggregation-model"]
+    expect(resolvedAggregationModel).toMatchObject({
+      basis: "filtered",
+      columns: expect.arrayContaining([
+        expect.objectContaining({ key: "id", op: "count" }),
+        expect.objectContaining({ key: "region", op: "first" }),
+        expect.objectContaining({ key: "amount", op: "sum" }),
+        expect.objectContaining({ key: "updatedAt", op: "max" }),
+      ]),
+    })
+
+    const columns = (gridVm.$attrs?.columns ?? []) as Array<Record<string, unknown>>
+    const nameColumn = columns.find(column => column.key === "name")
+    const idColumn = columns.find(column => column.key === "id")
+
+    expect(typeof nameColumn?.groupCellRenderer).toBe("function")
+    expect(typeof idColumn?.groupCellRenderer).toBe("function")
+
+    wrapper.unmount()
+  })
+
   it("restores advanced filter draft clauses from sandbox saved view storage", async () => {
     await preloadAdvancedFilterPopover()
 
