@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Vue adapter and headless foundation for Affino DataGrid",
@@ -89,8 +89,7 @@
     "@affino/datagrid-core": "workspace:*",
     "@affino/datagrid-pivot": "workspace:*",
     "@affino/datagrid-orchestration": "workspace:*",
-    "@affino/datagrid-worker": "workspace:*",
-    "@affino/menu-vue": "^2.1.1"
+    "@affino/datagrid-worker": "workspace:*"
   },
   "devDependencies": {
     "@affino/datagrid-theme": "workspace:^"

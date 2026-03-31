@@ -58,6 +58,14 @@ interface DataGridFindReplaceMatch {
   columnKey: string
 }
 
+function assignRowUpdateValue<TRow extends Record<string, unknown>>(
+  rowUpdate: Partial<TRow>,
+  columnKey: string,
+  value: TRow[keyof TRow],
+): void {
+  ;(rowUpdate as Record<string, TRow[keyof TRow]>)[columnKey] = value
+}
+
 export interface UseDataGridAppFindReplaceResult {
   isPanelOpen: Ref<boolean>
   findText: Ref<string>
@@ -489,11 +497,15 @@ export function useDataGridAppFindReplace<
           continue
         }
         const currentRowUpdate = updatesByRowId.get(row.rowId) ?? {}
-        currentRowUpdate[column.key] = parseDataGridCellDraftValue({
-          column: column.column,
-          row: row.data,
-          draft: replaced.value,
-        }) as Partial<TRow>[keyof TRow]
+        assignRowUpdateValue(
+          currentRowUpdate,
+          column.key,
+          parseDataGridCellDraftValue({
+            column: column.column,
+            row: row.data,
+            draft: replaced.value,
+          }) as TRow[keyof TRow],
+        )
         updatesByRowId.set(row.rowId, currentRowUpdate)
         if (!affectedRowIdSet.has(row.rowId)) {
           affectedRowIdSet.add(row.rowId)

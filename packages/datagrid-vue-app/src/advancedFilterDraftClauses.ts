@@ -2,9 +2,16 @@ import {
   buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   type DataGridFilterSnapshot,
 } from "@affino/datagrid-vue"
-import type { DataGridAppAdvancedFilterClauseDraft } from "@affino/datagrid-vue/app"
+import type {
+  DataGridAppAdvancedFilterClauseDraft,
+  DataGridAppAdvancedFilterClauseJoin,
+} from "@affino/datagrid-vue/app"
 
 type DataGridAdvancedExpressionEntry = NonNullable<DataGridFilterSnapshot["advancedExpression"]>
+
+function normalizeAdvancedFilterClauseJoin(value: string | null | undefined): DataGridAppAdvancedFilterClauseJoin {
+  return value === "or" ? "or" : "and"
+}
 
 function stringifyAdvancedFilterDraftValue(value: unknown): string {
   if (value == null) {
@@ -109,7 +116,7 @@ export function resolveAdvancedFilterDraftClausesFromExpression(
       childClauses[0] = {
         ...firstClause,
         id: firstClause.id,
-        join: expression.operator,
+        join: normalizeAdvancedFilterClauseJoin(expression.operator),
       }
     }
     clauses.push(...childClauses)
@@ -127,13 +134,13 @@ export function resolveAdvancedFilterDraftClausesFromFilterModel(
   const expression = filterModel.advancedExpression
     ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModel.advancedFilters)
   const advancedClauses = resolveAdvancedFilterDraftClausesFromExpression(expression ?? null)
-  const combinedClauses = [
+  const combinedClauses: DataGridAppAdvancedFilterClauseDraft[] = [
     ...columnClauses,
-    ...advancedClauses.map((clause, index) => {
+    ...advancedClauses.map<DataGridAppAdvancedFilterClauseDraft>((clause, index) => {
       if (columnClauses.length > 0 && index === 0) {
         return {
           ...clause,
-          join: "and",
+          join: normalizeAdvancedFilterClauseJoin("and"),
         }
       }
       return clause
@@ -142,6 +149,6 @@ export function resolveAdvancedFilterDraftClausesFromFilterModel(
   return combinedClauses.map((clause, index) => ({
     ...clause,
     id: index,
-    join: index === 0 ? "and" : clause.join,
+    join: index === 0 ? normalizeAdvancedFilterClauseJoin("and") : clause.join,
   }))
 }

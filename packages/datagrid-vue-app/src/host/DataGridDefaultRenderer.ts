@@ -18,6 +18,7 @@ import type {
   DataGridAggOp,
   DataGridAggregationModel,
   DataGridColumnPin,
+  DataGridColumnSnapshot,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridPivotSpec,
@@ -1808,7 +1809,7 @@ export default defineComponent({
         openRuntimeContextMenuFromCurrentCell()
       },
       runRowIndexKeyboardAction: (action, rowId) => runRowIndexContextAction(action, rowId),
-      cellClass: (row, rowIndex, column) => {
+      cellClass: (row, _rowIndex, column) => {
         const target = highlightedFindReplaceCell.value
         if (!target || row.kind === "group" || row.rowId == null) {
           return null
@@ -1833,7 +1834,7 @@ export default defineComponent({
       row: import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>>,
       rowIndex: number,
       column: DataGridColumnSnapshot,
-      columnIndex: number,
+      _columnIndex: number,
     ): boolean => {
       if (row.kind === "group" || row.rowId == null || column.column.capabilities?.editable === false) {
         return false
