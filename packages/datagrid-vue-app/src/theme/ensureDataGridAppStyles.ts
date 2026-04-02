@@ -30,13 +30,13 @@ const DATA_GRID_APP_STYLES = `
   --datagrid-header-column-divider-color: var(--datagrid-column-divider-color);
   --datagrid-header-column-divider-size: var(--datagrid-column-divider-size);
   --datagrid-pinned-pane-separator-size: 2px;
-  --datagrid-pinned-pane-separator-color: color-mix(in srgb, var(--datagrid-column-divider-color) 74%, var(--datagrid-text-color) 26%);
+  --datagrid-pinned-pane-separator-color: color-mix(in srgb, var(--datagrid-column-divider-color) 82%, var(--datagrid-text-color) 18%);
   --datagrid-selection-copied-contrast: color-mix(in srgb, var(--datagrid-background-color) 84%, var(--datagrid-text-color));
   --datagrid-selection-copied-glow: color-mix(in srgb, var(--datagrid-selection-copied-border) 38%, transparent);
 }
 
 .affino-datagrid-app-root--theme-sugar {
-  --datagrid-pinned-pane-separator-color: color-mix(in srgb, var(--datagrid-column-divider-color) 82%, var(--datagrid-text-color) 18%);
+  --datagrid-pinned-pane-separator-color: color-mix(in srgb, var(--datagrid-column-divider-color) 88%, var(--datagrid-text-color) 12%);
 }
 
 .affino-datagrid-app-root--fill {
@@ -792,12 +792,36 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-header-pane--left,
 .grid-body-pane--left {
-  border-right: var(--datagrid-pinned-pane-separator-size) solid var(--datagrid-pinned-pane-separator-color);
+  box-shadow: none;
 }
 
 .grid-header-pane--right,
 .grid-body-pane--right {
-  border-left: var(--datagrid-pinned-pane-separator-size) solid var(--datagrid-pinned-pane-separator-color);
+  box-shadow: none;
+}
+
+.grid-header-pane--left::after,
+.grid-body-pane--left::after,
+.grid-header-pane--right::before,
+.grid-body-pane--right::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--datagrid-pinned-pane-separator-size);
+  background: var(--datagrid-pinned-pane-separator-color);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.grid-header-pane--left::after,
+.grid-body-pane--left::after {
+  right: 0;
+}
+
+.grid-header-pane--right::before,
+.grid-body-pane--right::before {
+  left: 0;
 }
 
 .grid-header-pane {

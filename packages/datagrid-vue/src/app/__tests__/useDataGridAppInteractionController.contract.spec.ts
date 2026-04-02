@@ -240,6 +240,7 @@ function createControllerHarness(options: {
   const startInlineEdit = vi.fn()
   const appendInlineEditTextInput = vi.fn(() => false)
   const cancelInlineEdit = vi.fn()
+  const commitInlineEdit = vi.fn()
   const expandGroup = vi.fn()
   const collapseGroup = vi.fn()
 
@@ -322,7 +323,7 @@ function createControllerHarness(options: {
     startInlineEdit,
     appendInlineEditTextInput,
     cancelInlineEdit,
-    commitInlineEdit: vi.fn(),
+    commitInlineEdit,
     canUndo: () => false,
     canRedo: () => false,
     runHistoryAction: vi.fn(),
@@ -347,6 +348,7 @@ function createControllerHarness(options: {
     startInlineEdit,
     appendInlineEditTextInput,
     cancelInlineEdit,
+    commitInlineEdit,
     expandGroup,
     collapseGroup,
   }
@@ -879,6 +881,34 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(applyCellSelectionByCoord).toHaveBeenCalledWith(
       expect.objectContaining({ rowIndex: 0, columnIndex: 1 }),
       false,
+    )
+  })
+
+  it("commits the previous inline editor without restoring its focus when pointer-selecting a new cell", () => {
+    const { controller, row, editingCell, commitInlineEdit, applyCellSelectionByCoord } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 3,
+    })
+
+    editingCell.value = {
+      rowId: row.rowId ?? "r1",
+      columnKey: "a",
+    }
+
+    const cell = createCell(0, 1)
+    const pointerDown = createMouseEvent("mousedown", cell, {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 1)
+
+    expect(commitInlineEdit).toHaveBeenCalledWith("none")
+    expect(applyCellSelectionByCoord).toHaveBeenCalledWith(
+      expect.objectContaining({ rowIndex: 0, columnIndex: 1 }),
+      false,
+      expect.objectContaining({ rowIndex: 0, columnIndex: 1 }),
     )
   })
 

@@ -323,7 +323,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, ref, watch, type Ref } from "vue";
+import { computed, defineComponent, h, nextTick, ref, watch } from "vue";
 import {
   DataGrid,
   type DataGridAppColumnInput,
@@ -403,7 +403,7 @@ interface TimesheetRow {
 }
 
 interface PublicDataGridExpose {
-  rowModel?: Ref<ClientRowModel<TimesheetRow> | null | undefined>;
+  rowModel?: ClientRowModel<TimesheetRow> | null | undefined;
   getApi: () => unknown | null;
   getRuntime: () => unknown | null;
   getColumnState: () => DataGridUnifiedColumnState | null;
@@ -438,13 +438,6 @@ interface PublicDataGridExpose {
   ) => boolean;
   expandAllGroups: () => void;
   collapseAllGroups: () => void;
-}
-
-interface TimesheetGridApi {
-  rows: {
-    getCount: () => number;
-    get: (index: number) => { rowId: DataGridRowId; data?: TimesheetRow } | undefined;
-  };
 }
 
 type ThemePreset = "default" | "industrial" | "sugar" | "custom";
@@ -1250,30 +1243,41 @@ function createGroupedShowcaseColumnState(
 function createGroupedShowcaseAggregationModel(
   columns: readonly DataGridColumnInput[],
 ): DataGridAggregationModel<Record<string, unknown>> {
+  const aggregationColumns: Array<DataGridAggregationModel<Record<string, unknown>>["columns"][number]> = [];
+
+  for (const column of columns) {
+    switch (column.key) {
+      case "id":
+        aggregationColumns.push({ key: column.key, op: "count" });
+        break;
+      case "amount":
+        aggregationColumns.push({ key: column.key, op: "sum" });
+        break;
+      case "start":
+      case "baselineStart":
+        aggregationColumns.push({ key: column.key, op: "min" });
+        break;
+      case "end":
+      case "baselineEnd":
+      case "updatedAt":
+        aggregationColumns.push({ key: column.key, op: "max" });
+        break;
+      case "progress":
+        aggregationColumns.push({ key: column.key, op: "avg" });
+        break;
+      case "critical":
+        aggregationColumns.push({ key: column.key, op: "max" });
+        break;
+      case "name":
+        break;
+      default:
+        aggregationColumns.push({ key: column.key, op: "first" });
+        break;
+    }
+  }
+
   return {
-    columns: columns.flatMap((column) => {
-      switch (column.key) {
-        case "id":
-          return [{ key: column.key, op: "count" as const }];
-        case "amount":
-          return [{ key: column.key, op: "sum" as const }];
-        case "start":
-        case "baselineStart":
-          return [{ key: column.key, op: "min" as const }];
-        case "end":
-        case "baselineEnd":
-        case "updatedAt":
-          return [{ key: column.key, op: "max" as const }];
-        case "progress":
-          return [{ key: column.key, op: "avg" as const }];
-        case "critical":
-          return [{ key: column.key, op: "max" as const }];
-        case "name":
-          return [];
-        default:
-          return [{ key: column.key, op: "first" as const }];
-      }
-    }),
+    columns: aggregationColumns,
     basis: "filtered",
   };
 }
@@ -1900,7 +1904,7 @@ const syncTimesheetProjectsFromGrid = (): void => {
   if (!props.timesheetShowcase) {
     return;
   }
-  const sourceRows = gridRef.value?.rowModel?.value?.getSourceRows();
+  const sourceRows = gridRef.value?.rowModel?.getSourceRows();
   if (!sourceRows) {
     return;
   }

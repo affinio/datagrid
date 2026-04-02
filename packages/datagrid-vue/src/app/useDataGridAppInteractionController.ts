@@ -125,7 +125,7 @@ export interface UseDataGridAppInteractionControllerOptions<
   ) => void
   appendInlineEditTextInput?: (value: string) => boolean
   cancelInlineEdit: () => void
-  commitInlineEdit: (target?: "stay" | "next" | "previous") => void
+  commitInlineEdit: (target?: "stay" | "next" | "previous" | "none") => void
   canUndo: () => boolean
   canRedo: () => boolean
   runHistoryAction: (direction: "undo" | "redo") => Promise<unknown> | unknown
@@ -1298,7 +1298,7 @@ export function useDataGridAppInteractionController<
       if (!options.editingCell.value) {
         return false
       }
-      options.commitInlineEdit("stay")
+      options.commitInlineEdit("none")
       return true
     },
     resolveCellCoord: (row, columnKey) => {

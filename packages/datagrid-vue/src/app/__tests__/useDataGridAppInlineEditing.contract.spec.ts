@@ -307,4 +307,21 @@ describe("useDataGridAppInlineEditing contract", () => {
     expect(captureRowsSnapshotForRowIds).toHaveBeenCalledWith(["r1"])
     expect(captureRowsSnapshot).not.toHaveBeenCalled()
   })
+
+  it("commits without restoring selection or focus when the next cell already owns pointer focus", () => {
+    const harness = createHarness()
+
+    harness.api.startInlineEdit(harness.rows[0]!, "owner")
+    harness.api.editingCellValue.value = "Legacy"
+    harness.api.commitInlineEdit("none")
+
+    expect(harness.applyEdits).toHaveBeenCalledWith([
+      {
+        rowId: "r1",
+        data: { owner: "Legacy" },
+      },
+    ])
+    expect(harness.applyCellSelection).not.toHaveBeenCalled()
+    expect(harness.ensureActiveCellVisible).not.toHaveBeenCalled()
+  })
 })

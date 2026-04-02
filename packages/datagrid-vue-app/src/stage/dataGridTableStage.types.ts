@@ -138,7 +138,7 @@ export interface DataGridTableStageEditingSection<TRow extends Record<string, un
   updateEditingCellValue: (value: string) => void
   handleEditorKeydown: (event: KeyboardEvent) => void
   handleEditorBlur: () => void
-  commitInlineEdit: (target?: "stay" | "next" | "previous") => void
+  commitInlineEdit: (target?: "stay" | "next" | "previous" | "none") => void
   cancelInlineEdit: () => void
 }
 

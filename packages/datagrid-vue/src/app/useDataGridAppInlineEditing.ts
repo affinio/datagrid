@@ -19,7 +19,7 @@ interface DataGridAppEditingCoord {
   rowId: string | number
 }
 
-type DataGridAppInlineEditCommitTarget = "stay" | "next" | "previous" | "below" | "above"
+type DataGridAppInlineEditCommitTarget = "stay" | "next" | "previous" | "below" | "above" | "none"
 
 interface DataGridAppInlineEditStartOptions {
   draftValue?: string
@@ -420,7 +420,9 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     options.recordEditTransaction(beforeSnapshot)
     clearInlineEdit()
     suppressNextBlurCommit.value = false
-    focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, target)
+    if (target !== "none") {
+      focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, target)
+    }
   }
 
   const cancelInlineEdit = (): void => {

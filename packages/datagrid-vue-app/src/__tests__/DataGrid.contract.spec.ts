@@ -653,6 +653,50 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("starts typing in the newly clicked cell after committing a previous inline edit", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        isCellEditable: () => true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const firstCell = queryBodyCell(wrapper, 0, 0)
+    await firstCell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const firstEditor = wrapper.find<HTMLInputElement>(".cell-editor-input")
+    expect(firstEditor.exists()).toBe(true)
+    ;(firstEditor.element as HTMLInputElement).value = "Legacy"
+    firstEditor.element.dispatchEvent(new Event("input", { bubbles: true }))
+
+    const nextCell = queryBodyCell(wrapper, 1, 0)
+    nextCell.element.dispatchEvent(new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    }))
+    nextCell.element.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "n",
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushRuntimeTasks()
+
+    const nextEditor = queryBodyCell(wrapper, 1, 0).find<HTMLInputElement>(".cell-editor-input")
+    expect(nextEditor.exists()).toBe(true)
+    expect((nextEditor.element as HTMLInputElement).value).toBe("n")
+    expect(resolveRowAt<{ owner: string }>(wrapper, 0)).toMatchObject({ owner: "Legacy" })
+
+    wrapper.unmount()
+  })
+
   it("hides row numbers and checkbox selection when the public toggles are disabled", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
