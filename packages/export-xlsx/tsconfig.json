@@ -7,7 +7,6 @@
     "declarationMap": true,
     "emitDeclarationOnly": false,
     "moduleResolution": "bundler",
-    "baseUrl": ".",
     "noUncheckedIndexedAccess": false
   },
   "include": ["src/**/*.ts"],

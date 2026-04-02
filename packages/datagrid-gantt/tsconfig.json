@@ -8,7 +8,6 @@
     "emitDeclarationOnly": false,
     "moduleResolution": "bundler",
     "noUncheckedIndexedAccess": false,
-    "baseUrl": ".",
     "paths": {
       "@affino/datagrid-core": ["../datagrid-core/dist/src/index.d.ts"],
       "@affino/datagrid-core/*": ["../datagrid-core/dist/src/*"]

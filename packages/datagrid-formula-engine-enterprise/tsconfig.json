@@ -7,7 +7,6 @@
     "declarationMap": true,
     "emitDeclarationOnly": false,
     "moduleResolution": "bundler",
-    "baseUrl": ".",
     "paths": {
       "@affino/datagrid-formula-engine": ["../datagrid-formula-engine/dist/index.d.ts"],
       "@affino/datagrid-formula-engine/*": ["../datagrid-formula-engine/dist/*"]

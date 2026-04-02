@@ -16,7 +16,6 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
       "@affino/datagrid-core": ["../datagrid-core/dist/src/index.d.ts"],
       "@affino/datagrid-core/*": ["../datagrid-core/dist/src/*"],

@@ -3,7 +3,6 @@
   "compilerOptions": {
     "moduleResolution": "bundler",
     "types": ["vite/client"],
-    "baseUrl": ".",
     "paths": {
       "@affino/datagrid-core": ["../datagrid-core/src/index.ts"],
       "@affino/datagrid-core/*": ["../datagrid-core/src/*"],

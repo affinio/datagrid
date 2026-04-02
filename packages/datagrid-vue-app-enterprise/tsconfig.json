@@ -16,7 +16,6 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
       "@affino/datagrid-chrome": ["../datagrid-chrome/dist/index.d.ts"],
       "@affino/datagrid-chrome/*": ["../datagrid-chrome/dist/*"],
