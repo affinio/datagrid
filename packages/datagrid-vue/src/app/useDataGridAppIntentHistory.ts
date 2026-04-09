@@ -11,6 +11,7 @@ export interface UseDataGridAppIntentHistoryOptions<TRow> {
   runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex" | "resolveBodyRowIndexById">
   cloneRowData: (row: TRow) => TRow
   syncViewport: () => void
+  maxHistoryDepth?: number
 }
 
 export interface UseDataGridAppIntentHistoryResult<TRow> {
@@ -99,6 +100,7 @@ export function useDataGridAppIntentHistory<TRow>(
       })))
       options.syncViewport()
     },
+    maxHistoryDepth: options.maxHistoryDepth,
   })
 
   const recordIntentTransaction = (

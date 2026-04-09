@@ -74,6 +74,8 @@
               :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
               :labels="resolveColumnMenuLabelsSafe(column.key)"
               :action-options="resolveColumnMenuActionOptionsSafe(column.key)"
+              :custom-items="resolveColumnMenuCustomItemsSafe(column.key)"
+              :trigger-mode="resolveColumnMenuTriggerModeSafe()"
               :column-key="column.key"
               :column-label="column.column.label ?? column.key"
               :column-data-type="column.column.dataType"
@@ -110,6 +112,7 @@
                 <div class="col-head">
                   <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
                   <button
+                    v-if="shouldShowColumnMenuButton()"
                     type="button"
                     class="col-menu-trigger"
                     :class="resolveColumnMenuTriggerClass(column.key, open)"
@@ -276,6 +279,8 @@
             :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
             :labels="resolveColumnMenuLabelsSafe(column.key)"
             :action-options="resolveColumnMenuActionOptionsSafe(column.key)"
+            :custom-items="resolveColumnMenuCustomItemsSafe(column.key)"
+            :trigger-mode="resolveColumnMenuTriggerModeSafe()"
             :column-key="column.key"
             :column-label="column.column.label ?? column.key"
             :column-data-type="column.column.dataType"
@@ -319,6 +324,7 @@
                   {{ resolveColumnGroupBadgeLabel(column.key) }}
                 </span>
                 <button
+                  v-if="shouldShowColumnMenuButton()"
                   type="button"
                   class="col-menu-trigger"
                   :class="resolveColumnMenuTriggerClass(column.key, open)"
@@ -445,6 +451,8 @@
             :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
             :labels="resolveColumnMenuLabelsSafe(column.key)"
             :action-options="resolveColumnMenuActionOptionsSafe(column.key)"
+            :custom-items="resolveColumnMenuCustomItemsSafe(column.key)"
+            :trigger-mode="resolveColumnMenuTriggerModeSafe()"
             :column-key="column.key"
             :column-label="column.column.label ?? column.key"
             :column-data-type="column.column.dataType"
@@ -488,6 +496,7 @@
                   {{ resolveColumnGroupBadgeLabel(column.key) }}
                 </span>
                 <button
+                  v-if="shouldShowColumnMenuButton()"
                   type="button"
                   class="col-menu-trigger"
                   :class="resolveColumnMenuTriggerClass(column.key, open)"
@@ -575,9 +584,11 @@ import type { DataGridColumnPin } from "@affino/datagrid-vue"
 import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
 import type {
   DataGridColumnMenuActionOptions,
+  DataGridColumnMenuCustomItem,
   DataGridColumnMenuDisabledReasons,
   DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
+  DataGridColumnMenuTriggerMode,
 } from "../overlays/dataGridColumnMenu"
 import type { DataGridTableStageBodyColumn as TableColumn } from "./dataGridTableStageBody.types"
 import {
@@ -933,6 +944,14 @@ function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string
   return typeof resolve === "function" ? resolve(columnKey) : []
 }
 
+function resolveColumnMenuTriggerModeSafe(): DataGridColumnMenuTriggerMode {
+  return columns.value.columnMenuTrigger ?? "button+contextmenu"
+}
+
+function shouldShowColumnMenuButton(): boolean {
+  return resolveColumnMenuTriggerModeSafe() !== "contextmenu"
+}
+
 function resolveColumnMenuItemsSafe(columnKey: string): readonly DataGridColumnMenuItemKey[] {
   const resolve = columns.value.resolveColumnMenuItems
   return typeof resolve === "function" ? resolve(columnKey) : ["sort", "group", "pin", "filter"]
@@ -956,6 +975,11 @@ function resolveColumnMenuLabelsSafe(columnKey: string): DataGridColumnMenuItemL
 function resolveColumnMenuActionOptionsSafe(columnKey: string): DataGridColumnMenuActionOptions {
   const resolve = columns.value.resolveColumnMenuActionOptions
   return typeof resolve === "function" ? resolve(columnKey) : {}
+}
+
+function resolveColumnMenuCustomItemsSafe(columnKey: string): readonly DataGridColumnMenuCustomItem[] {
+  const resolve = columns.value.resolveColumnMenuCustomItems
+  return typeof resolve === "function" ? resolve(columnKey) : []
 }
 
 function resolveColumnMenuInstanceKey(columnKey: string): string {

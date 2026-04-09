@@ -1,11 +1,16 @@
 <template>
   <UiMenu ref="menuRef" :callbacks="menuCallbacks" :options="rootMenuOptions">
-    <UiMenuTrigger as-child trigger="contextmenu">
+    <UiMenuTrigger v-if="contextMenuEnabled" as-child trigger="contextmenu">
       <slot
         :open="open"
         :toggle-menu-from-element="toggleMenuFromElement"
       />
     </UiMenuTrigger>
+    <slot
+      v-else
+      :open="open"
+      :toggle-menu-from-element="toggleMenuFromElement"
+    />
 
     <UiMenuContent
       class-name="ui-menu-content datagrid-column-menu__panel"
@@ -18,12 +23,12 @@
       <UiMenuLabel class="datagrid-column-menu__title">
         {{ columnLabel }}
       </UiMenuLabel>
-      <UiMenuSeparator v-if="visibleSections.length > 0" />
+      <UiMenuSeparator v-if="menuEntries.length > 0" />
 
-      <template v-for="(section, index) in visibleSections" :key="section">
+      <template v-for="(entry, index) in menuEntries" :key="entry.key">
         <UiMenuSeparator v-if="index > 0" />
 
-        <template v-if="section === 'sort'">
+        <template v-if="entry.kind === 'section' && entry.key === 'sort'">
           <UiMenuItem
             v-if="isActionVisible('sortAsc')"
             class="datagrid-column-menu__item"
@@ -64,7 +69,7 @@
         </template>
 
         <UiMenuItem
-          v-else-if="section === 'group' && isActionVisible('toggleGroup')"
+          v-else-if="entry.kind === 'section' && entry.key === 'group' && isActionVisible('toggleGroup')"
           class="datagrid-column-menu__item"
           data-datagrid-column-menu-action="toggle-group"
           :data-disabled-reason="resolveActionDisabledTitle('toggleGroup', groupSectionDisabled || !groupEnabled, 'group')"
@@ -76,7 +81,7 @@
           <span v-if="grouped && groupOrderLabel" class="datagrid-column-menu__state">{{ groupOrderLabel }}</span>
         </UiMenuItem>
 
-        <UiSubMenu v-else-if="section === 'pin' && showPinSection" :options="submenuOptions">
+        <UiSubMenu v-else-if="entry.kind === 'section' && entry.key === 'pin' && showPinSection" :options="submenuOptions">
           <UiSubMenuTrigger
             class="datagrid-column-menu__item datagrid-column-menu__item--submenu"
             data-datagrid-column-menu-action="pin-submenu"
@@ -133,7 +138,7 @@
         </UiSubMenu>
 
         <section
-          v-else-if="section === 'filter'"
+          v-else-if="entry.kind === 'section' && entry.key === 'filter'"
           :class="[
             'datagrid-column-menu__section',
             'datagrid-column-menu__section--filter',
@@ -310,6 +315,19 @@
           </button>
         </div>
         </section>
+
+        <UiMenuItem
+          v-else-if="entry.kind === 'custom'"
+          class="datagrid-column-menu__item"
+          :data-datagrid-column-menu-action="`custom:${entry.item.key}`"
+          :data-datagrid-column-menu-custom-key="entry.item.key"
+          :data-disabled-reason="resolveCustomItemDisabledTitle(entry.item)"
+          :disabled="isCustomItemDisabled(entry.item)"
+          :title="resolveCustomItemDisabledTitle(entry.item)"
+          @select="handleCustomItemSelect(entry.item)"
+        >
+          <span :title="resolveCustomItemDisabledTitle(entry.item)">{{ entry.item.label }}</span>
+        </UiMenuItem>
       </template>
     </UiMenuContent>
   </UiMenu>
@@ -335,9 +353,11 @@ import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import type {
   DataGridColumnMenuActionKey,
   DataGridColumnMenuActionOptions,
+  DataGridColumnMenuCustomItem,
   DataGridColumnMenuDisabledReasons,
   DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
+  DataGridColumnMenuTriggerMode,
 } from "./dataGridColumnMenu"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 
@@ -349,6 +369,10 @@ interface DataGridColumnMenuValueEntry {
   count: number
   searchText: string
 }
+
+type DataGridColumnMenuRenderableEntry =
+  | { kind: "section"; key: DataGridColumnMenuItemKey }
+  | { kind: "custom"; key: string; item: DataGridColumnMenuCustomItem }
 
 interface UiMenuRef {
   controller?: {
@@ -367,6 +391,8 @@ const props = defineProps<{
   disabledReasons: DataGridColumnMenuDisabledReasons
   labels: DataGridColumnMenuItemLabels
   actionOptions: DataGridColumnMenuActionOptions
+  customItems: readonly DataGridColumnMenuCustomItem[]
+  triggerMode: DataGridColumnMenuTriggerMode
   columnKey: string
   columnLabel: string
   columnDataType?: string
@@ -404,6 +430,7 @@ const draftSelectedTokens = ref<readonly string[]>([])
 const menuThemeVars = ref<Record<string, string>>({})
 const sortLabels = computed(() => resolveColumnMenuSortLabels(props.columnDataType))
 const disabledItems = computed(() => new Set(props.disabledItems))
+const contextMenuEnabled = computed(() => props.triggerMode !== "button")
 const groupOrderLabel = computed(() => {
   if (!props.grouped || !Number.isFinite(props.groupOrder)) {
     return null
@@ -442,6 +469,9 @@ const visibleSections = computed<readonly DataGridColumnMenuItemKey[]>(() => {
     }
     return true
   })
+})
+const menuEntries = computed<readonly DataGridColumnMenuRenderableEntry[]>(() => {
+  return createColumnMenuEntries(visibleSections.value, props.customItems)
 })
 const sortSectionDisabled = computed(() => disabledItems.value.has("sort"))
 const groupSectionDisabled = computed(() => disabledItems.value.has("group"))
@@ -632,6 +662,15 @@ function resolveActionDisabledTitle(
   return undefined
 }
 
+function isCustomItemDisabled(item: DataGridColumnMenuCustomItem): boolean {
+  return item.disabled === true
+}
+
+function resolveCustomItemDisabledTitle(item: DataGridColumnMenuCustomItem): string | undefined {
+  const reason = item.disabledReason?.trim() ?? ""
+  return reason.length > 0 ? reason : undefined
+}
+
 function formatColumnMenuValueLabel(value: unknown): string {
   if (value == null) {
     return "(Blanks)"
@@ -670,6 +709,17 @@ function collectColumnMenuValueEntries(
 
 function closeMenu(): void {
   menuRef.value?.controller?.close("programmatic")
+}
+
+async function handleCustomItemSelect(item: DataGridColumnMenuCustomItem): Promise<void> {
+  if (isCustomItemDisabled(item)) {
+    return
+  }
+  await item.onSelect?.({
+    columnKey: props.columnKey,
+    columnLabel: props.columnLabel,
+    closeMenu,
+  })
 }
 
 function openMenuFromElement(element: HTMLElement | null): void {
@@ -819,5 +869,57 @@ function resolveColumnMenuSortLabels(
         desc: "Sort Z to A",
       }
   }
+}
+
+function createColumnMenuEntries(
+  sections: readonly DataGridColumnMenuItemKey[],
+  customItems: readonly DataGridColumnMenuCustomItem[],
+): readonly DataGridColumnMenuRenderableEntry[] {
+  const startEntries: DataGridColumnMenuRenderableEntry[] = []
+  const endEntries: DataGridColumnMenuRenderableEntry[] = []
+  const beforeEntries = new Map<DataGridColumnMenuItemKey, DataGridColumnMenuRenderableEntry[]>()
+  const afterEntries = new Map<DataGridColumnMenuItemKey, DataGridColumnMenuRenderableEntry[]>()
+  const visibleSectionsSet = new Set(sections)
+
+  for (const item of customItems) {
+    if (item.hidden === true) {
+      continue
+    }
+    const entry: DataGridColumnMenuRenderableEntry = {
+      kind: "custom",
+      key: item.key,
+      item,
+    }
+    const placement = item.placement ?? "end"
+    if (placement === "start") {
+      startEntries.push(entry)
+      continue
+    }
+    if (placement === "end") {
+      endEntries.push(entry)
+      continue
+    }
+    const [position, section] = placement.split(":") as ["before" | "after", DataGridColumnMenuItemKey]
+    if (!visibleSectionsSet.has(section)) {
+      endEntries.push(entry)
+      continue
+    }
+    const targetEntries = position === "before" ? beforeEntries : afterEntries
+    const bucket = targetEntries.get(section)
+    if (bucket) {
+      bucket.push(entry)
+    } else {
+      targetEntries.set(section, [entry])
+    }
+  }
+
+  const entries: DataGridColumnMenuRenderableEntry[] = [...startEntries]
+  for (const section of sections) {
+    entries.push(...(beforeEntries.get(section) ?? []))
+    entries.push({ kind: "section", key: section })
+    entries.push(...(afterEntries.get(section) ?? []))
+  }
+  entries.push(...endEntries)
+  return Object.freeze(entries)
 }
 </script>

@@ -68,6 +68,7 @@
             <option value="labels">Custom labels</option>
             <option value="actions">Action overrides</option>
             <option value="locked">Disabled sections</option>
+            <option value="custom">Custom items + button trigger</option>
           </select>
         </label>
         <label v-if="props.mode === 'base' && !props.timesheetShowcase && viewMode === 'gantt'">
@@ -328,7 +329,6 @@ import {
   DataGrid,
   type DataGridAppColumnInput,
   type DataGridAppViewMode,
-  type DataGridColumnMenuProp,
   type DataGridGanttOptions,
   type DataGridGanttZoomLevel,
 } from "@affino/datagrid-vue-app-enterprise";
@@ -337,6 +337,7 @@ import {
   readDataGridSavedViewFromStorage,
   type DataGridAppToolbarModule,
   type DataGridCellMenuProp,
+  type DataGridColumnMenuProp,
   type DataGridGridLinesProp,
   type DataGridRowIndexMenuProp,
   type DataGridSavedViewSnapshot,
@@ -438,10 +439,14 @@ interface PublicDataGridExpose {
   ) => boolean;
   expandAllGroups: () => void;
   collapseAllGroups: () => void;
+  insertColumnBefore?: (
+    columnKey: string,
+    columns: readonly DataGridAppColumnInput[],
+  ) => boolean;
 }
 
 type ThemePreset = "default" | "industrial" | "sugar" | "custom";
-type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked";
+type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked" | "custom";
 type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | null>;
 type DeclarativeCellMenuConfig = Exclude<DataGridCellMenuProp, boolean | null>;
 type DeclarativeRowIndexMenuConfig = Exclude<DataGridRowIndexMenuProp, boolean | null>;
@@ -574,6 +579,8 @@ const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
     },
   },
 };
+
+const SANDBOX_INSERTED_COLUMN_WIDTH = 148;
 
 const BASE_CELL_MENU: DeclarativeCellMenuConfig = {
   items: ["clipboard", "edit"],
@@ -1308,6 +1315,9 @@ const pivotViewMode = ref<PivotViewMode>("pivot");
 const pivotLayout = ref<PivotLayoutId>("department-month-revenue");
 const hideUnusedPivotSourceColumns = ref(true);
 const gridRef = ref<PublicDataGridExpose | null>(null);
+const columnLabelOverrides = ref<Readonly<Record<string, string>>>({});
+const columnRenameCounts = ref<Readonly<Record<string, number>>>({});
+const insertedSandboxColumnCount = ref(0);
 
 const modeBadge = computed(() => {
   if (props.timesheetShowcase) {
@@ -1361,14 +1371,33 @@ const rows = computed(() =>
     ? buildTimesheetRows(timesheetProjects.value)
     : buildVueRows(props.mode, rowCount.value, columnCount.value),
 );
+
+function applySandboxColumnLabelOverrides(
+  input: readonly DataGridAppColumnInput[],
+): readonly DataGridAppColumnInput[] {
+  if (Object.keys(columnLabelOverrides.value).length === 0) {
+    return input;
+  }
+  return input.map((column) => {
+    const label = columnLabelOverrides.value[column.key];
+    if (typeof label !== "string" || label.length === 0 || label === column.label) {
+      return column;
+    }
+    return {
+      ...column,
+      label,
+    };
+  });
+}
+
 const columns = computed<readonly DataGridAppColumnInput[]>(() => {
   if (props.timesheetShowcase) {
-    return buildTimesheetColumns() as readonly DataGridAppColumnInput[];
+    return applySandboxColumnLabelOverrides(buildTimesheetColumns() as readonly DataGridAppColumnInput[]);
   }
 
   const builtColumns = buildVueColumns(props.mode, columnCount.value) as DataGridAppColumnInput[];
   if (props.mode === "tree") {
-    return builtColumns.map((column) => {
+    return applySandboxColumnLabelOverrides(builtColumns.map((column) => {
       if (column.key === "assignee") {
         return {
           ...column,
@@ -1412,13 +1441,13 @@ const columns = computed<readonly DataGridAppColumnInput[]>(() => {
         };
       }
       return column;
-    });
+    }));
   }
   if (props.mode !== "base") {
-    return builtColumns;
+    return applySandboxColumnLabelOverrides(builtColumns);
   }
 
-  return builtColumns.map((column) => {
+  return applySandboxColumnLabelOverrides(builtColumns.map((column) => {
     if (column.key === "status") {
       return {
         ...column,
@@ -1437,7 +1466,7 @@ const columns = computed<readonly DataGridAppColumnInput[]>(() => {
       };
     }
     return column;
-  });
+  }));
 });
 const groupBy = computed(() => {
   if (props.mode !== "base") {
@@ -1556,6 +1585,37 @@ const columnMenu = computed<DataGridColumnMenuProp>(() => {
       return ACTION_COLUMN_MENU;
     case "locked":
       return LOCKED_COLUMN_MENU;
+    case "custom":
+      return {
+        trigger: "button",
+        customItems: [
+          {
+            key: "insert-left",
+            label: "Insert column left",
+            placement: "after:group",
+            onSelect: ({ columnKey, closeMenu }) => {
+              insertSandboxColumnLeft(columnKey);
+              closeMenu();
+            },
+          },
+        ],
+        columns: Object.fromEntries(columns.value.map((column) => [
+          column.key,
+          {
+            customItems: [
+              {
+                key: "rename",
+                label: "Rename column",
+                placement: "end",
+                onSelect: ({ columnKey, columnLabel, closeMenu }) => {
+                  renameSandboxColumn(columnKey, columnLabel);
+                  closeMenu();
+                },
+              },
+            ],
+          },
+        ])),
+      } satisfies DeclarativeColumnMenuConfig;
     default:
       return true;
   }
@@ -2014,6 +2074,40 @@ const handleGridCellChange = (): void => {
 const syncSelectionAggregatesLabel = (): void => {
   selectionAggregatesLabel.value =
     gridRef.value?.getSelectionAggregatesLabel() ?? "";
+};
+
+const insertSandboxColumnLeft = (columnKey: string): void => {
+  insertedSandboxColumnCount.value += 1;
+  const index = insertedSandboxColumnCount.value;
+  const inserted = gridRef.value?.insertColumnBefore?.(columnKey, [
+    {
+      key: `sandbox-inserted-${index}`,
+      label: `Inserted ${index}`,
+      initialState: {
+        width: SANDBOX_INSERTED_COLUMN_WIDTH,
+      },
+      capabilities: {
+        editable: false,
+      },
+    },
+  ]) ?? false;
+  toolbarActionStatus.value = inserted
+    ? `Custom menu: inserted column ${index} before ${columnKey}`
+    : `Custom menu: insert before ${columnKey} was rejected`;
+};
+
+const renameSandboxColumn = (columnKey: string, columnLabel: string): void => {
+  const baseLabel = columnLabel.replace(/ \(Renamed(?: \d+)?\)$/u, "");
+  const nextCount = (columnRenameCounts.value[columnKey] ?? 0) + 1;
+  columnRenameCounts.value = {
+    ...columnRenameCounts.value,
+    [columnKey]: nextCount,
+  };
+  columnLabelOverrides.value = {
+    ...columnLabelOverrides.value,
+    [columnKey]: `${baseLabel} (Renamed ${nextCount})`,
+  };
+  toolbarActionStatus.value = `Custom menu: renamed ${columnKey} to ${baseLabel} (Renamed ${nextCount})`;
 };
 
 const exportStatePayload = (): void => {

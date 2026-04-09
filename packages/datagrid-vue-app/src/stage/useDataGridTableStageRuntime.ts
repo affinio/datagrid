@@ -20,11 +20,14 @@ import {
   useDataGridAppViewportLifecycle,
 } from "@affino/datagrid-vue/app"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
+import type { DataGridHistoryController } from "../dataGridHistory"
 import type {
   DataGridColumnMenuActionOptions,
+  DataGridColumnMenuCustomItem,
   DataGridColumnMenuDisabledReasons,
   DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
+  DataGridColumnMenuTriggerMode,
 } from "../overlays/dataGridColumnMenu"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
@@ -101,6 +104,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void
   columnMenuEnabled?: Ref<boolean>
+  columnMenuTrigger?: Ref<DataGridColumnMenuTriggerMode>
   columnMenuValueFilterEnabled?: Ref<boolean>
   columnMenuValueFilterRowLimit?: Ref<number>
   columnMenuMaxFilterValues?: Ref<number>
@@ -109,6 +113,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   resolveColumnMenuDisabledReasons?: (columnKey: string) => DataGridColumnMenuDisabledReasons
   resolveColumnMenuLabels?: (columnKey: string) => DataGridColumnMenuItemLabels
   resolveColumnMenuActionOptions?: (columnKey: string) => DataGridColumnMenuActionOptions
+  resolveColumnMenuCustomItems?: (columnKey: string) => readonly DataGridColumnMenuCustomItem[]
   isColumnFilterActive?: (columnKey: string) => boolean
   isColumnGrouped?: (columnKey: string) => boolean
   resolveColumnGroupOrder?: (columnKey: string) => number | null
@@ -131,6 +136,9 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean
   isCellEditable?: DataGridCellEditablePredicate<TRow>
   history?: DataGridTableStageHistoryAdapter
+  historyEnabled?: Ref<boolean>
+  historyMaxDepth?: Ref<number | undefined>
+  historyShortcuts?: Ref<false | "grid" | "window">
   isContextMenuVisible?: () => boolean
   closeContextMenu?: () => void
   openContextMenuFromCurrentCell?: () => void
@@ -150,6 +158,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
 export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, unknown>> {
   tableStageProps: ComputedRef<DataGridTableStageProps<TRow>>
   tableStageContext: DataGridTableStageContext<TRow>
+  historyController: DataGridHistoryController
   syncViewportFromDom: () => void
   copySelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   pasteSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
@@ -434,6 +443,8 @@ export function useDataGridTableStageRuntime<
     runtime: options.runtime,
     cloneRowData: options.cloneRowData,
     syncViewport: () => syncViewportFromDom(),
+    enabled: options.historyEnabled?.value !== false,
+    maxHistoryDepth: options.historyMaxDepth?.value,
     history: options.history,
   })
   const {
@@ -621,9 +632,13 @@ export function useDataGridTableStageRuntime<
     appendInlineEditTextInput,
     cancelInlineEdit,
     commitInlineEdit,
-    canUndo: canUndoHistory,
-    canRedo: canRedoHistory,
-    runHistoryAction,
+    canUndo: () => (options.historyShortcuts?.value ?? "grid") === "grid" && canUndoHistory(),
+    canRedo: () => (options.historyShortcuts?.value ?? "grid") === "grid" && canRedoHistory(),
+    runHistoryAction: direction => (
+      (options.historyShortcuts?.value ?? "grid") === "grid"
+        ? runHistoryAction(direction)
+        : Promise.resolve(null)
+    ),
     ensureKeyboardActiveCellVisible,
     isContextMenuVisible: options.isContextMenuVisible,
     closeContextMenu: options.closeContextMenu,
@@ -790,6 +805,7 @@ export function useDataGridTableStageRuntime<
     sortIndicator: options.sortIndicator,
     setColumnFilterText: options.setColumnFilterText,
     columnMenuEnabled: options.columnMenuEnabled,
+    columnMenuTrigger: options.columnMenuTrigger,
     columnMenuValueFilterEnabled: options.columnMenuValueFilterEnabled,
     columnMenuValueFilterRowLimit: options.columnMenuValueFilterRowLimit,
     columnMenuMaxFilterValues: options.columnMenuMaxFilterValues,
@@ -798,6 +814,7 @@ export function useDataGridTableStageRuntime<
     resolveColumnMenuDisabledReasons: options.resolveColumnMenuDisabledReasons,
     resolveColumnMenuLabels: options.resolveColumnMenuLabels,
     resolveColumnMenuActionOptions: options.resolveColumnMenuActionOptions,
+    resolveColumnMenuCustomItems: options.resolveColumnMenuCustomItems,
     isColumnFilterActive: options.isColumnFilterActive,
     isColumnGrouped: options.isColumnGrouped,
     resolveColumnGroupOrder: options.resolveColumnGroupOrder,
@@ -909,6 +926,11 @@ export function useDataGridTableStageRuntime<
   return {
     tableStageProps,
     tableStageContext,
+    historyController: {
+      canUndo: canUndoHistory,
+      canRedo: canRedoHistory,
+      runHistoryAction,
+    },
     syncViewportFromDom,
     copySelectedCells,
     pasteSelectedCells,

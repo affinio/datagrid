@@ -135,7 +135,7 @@ import type {
   DataGridAppAdvancedFilterClauseDraft,
   DataGridAppAdvancedFilterClausePatch,
   DataGridAppAdvancedFilterColumnOption,
-} from "@affino/datagrid-vue"
+} from "@affino/datagrid-vue/app"
 
 const props = withDefaults(defineProps<{
   isOpen: boolean

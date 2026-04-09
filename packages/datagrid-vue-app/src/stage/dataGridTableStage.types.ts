@@ -9,9 +9,11 @@ import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type {
   DataGridColumnMenuActionOptions,
+  DataGridColumnMenuCustomItem,
   DataGridColumnMenuDisabledReasons,
   DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
+  DataGridColumnMenuTriggerMode,
 } from "../overlays/dataGridColumnMenu"
 
 export type DataGridTableMode = "base" | "tree" | "pivot" | "worker"
@@ -61,6 +63,7 @@ export interface DataGridTableStageColumnsSection {
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void
   columnMenuEnabled?: boolean
+  columnMenuTrigger?: DataGridColumnMenuTriggerMode
   columnMenuValueFilterEnabled?: boolean
   columnMenuValueFilterRowLimit?: number
   columnMenuMaxFilterValues?: number
@@ -69,6 +72,7 @@ export interface DataGridTableStageColumnsSection {
   resolveColumnMenuDisabledReasons?: (columnKey: string) => DataGridColumnMenuDisabledReasons
   resolveColumnMenuLabels?: (columnKey: string) => DataGridColumnMenuItemLabels
   resolveColumnMenuActionOptions?: (columnKey: string) => DataGridColumnMenuActionOptions
+  resolveColumnMenuCustomItems?: (columnKey: string) => readonly DataGridColumnMenuCustomItem[]
   isColumnFilterActive?: (columnKey: string) => boolean
   isColumnGrouped?: (columnKey: string) => boolean
   resolveColumnGroupOrder?: (columnKey: string) => number | null

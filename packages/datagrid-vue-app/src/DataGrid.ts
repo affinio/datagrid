@@ -111,6 +111,12 @@ import {
 } from "./useDataGridAppControlledState"
 import { useDataGridAppRowModel } from "./useDataGridAppRowModel"
 import type { DataGridCellEditablePredicate } from "./dataGridEditability"
+import {
+  createDisabledDataGridHistoryController,
+  resolveDataGridHistory,
+  type DataGridHistoryController,
+  type DataGridHistoryProp,
+} from "./dataGridHistory"
 import type {
   DataGridAppViewMode,
   DataGridGanttProp,
@@ -466,6 +472,10 @@ export default defineComponent({
       type: [Boolean, Object] as PropType<DataGridGanttProp | undefined>,
       default: undefined,
     },
+    history: {
+      type: [Boolean, Object] as PropType<DataGridHistoryProp | undefined>,
+      default: undefined,
+    },
     toolbarModules: {
       type: Array as PropType<readonly DataGridAppToolbarModule[]>,
       default: () => [],
@@ -489,8 +499,11 @@ export default defineComponent({
   },
   setup(props, { attrs, slots, emit, expose }) {
     const dataGridRef = ref<LowLevelGridExpose | null>(null)
+    const disabledHistoryController = createDisabledDataGridHistoryController()
+    const registeredHistoryController = ref<DataGridHistoryController | null>(null)
     const currentViewMode = ref<DataGridAppViewMode>(props.viewMode === "gantt" ? "gantt" : "table")
     const runtimeUnifiedState = ref<DataGridUnifiedState<Record<string, unknown>> | null>(props.state ?? null)
+    const resolvedHistory = computed(() => resolveDataGridHistory(props.history))
     const resolvedRenderMode = computed(() => {
       return resolveDataGridRenderMode(props.renderMode, props.pagination)
     })
@@ -761,6 +774,30 @@ export default defineComponent({
       emit("update:viewMode", normalized)
     }
 
+    const registerHistoryController = (controller: DataGridHistoryController | null): void => {
+      registeredHistoryController.value = controller
+    }
+
+    const adapterHistoryController = computed<DataGridHistoryController>(() => {
+      const adapter = resolvedHistory.value.adapter
+      if (!resolvedHistory.value.enabled || !adapter) {
+        return disabledHistoryController
+      }
+      return {
+        canUndo: () => adapter.canUndo(),
+        canRedo: () => adapter.canRedo(),
+        runHistoryAction: direction => adapter.runHistoryAction(direction),
+      }
+    })
+
+    const historyController: DataGridHistoryController = {
+      canUndo: () => (registeredHistoryController.value ?? adapterHistoryController.value).canUndo(),
+      canRedo: () => (registeredHistoryController.value ?? adapterHistoryController.value).canRedo(),
+      runHistoryAction: direction => (
+        (registeredHistoryController.value ?? adapterHistoryController.value).runHistoryAction(direction)
+      ),
+    }
+
     const getSavedView = (): DataGridSavedViewSnapshot<Record<string, unknown>> | null => {
       const state = controlledState.getState()
       if (!state) {
@@ -801,6 +838,8 @@ export default defineComponent({
     expose({
       grid: dataGridRef,
       rowModel: resolvedRowModel,
+      history: historyController,
+      getHistory: () => historyController,
       getApi: () => dataGridRef.value?.api ?? null,
       getRuntime: () => dataGridRef.value?.runtime ?? null,
       getCore: () => dataGridRef.value?.core ?? null,
@@ -876,6 +915,8 @@ export default defineComponent({
         rowSelection: props.rowSelection,
         viewMode: currentViewMode.value,
         gantt: props.gantt,
+        history: resolvedHistory.value,
+        registerHistoryController,
         toolbarModules: props.toolbarModules,
       }
       return h(

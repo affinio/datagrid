@@ -399,10 +399,16 @@ describe("useDataGridRuntime contract", () => {
 
   it("prefills client body-row cache so body-relative reads avoid per-row api.get calls", async () => {
     const rows: readonly DataGridRowNodeInput<RuntimeRow>[] = [
-      { row: { rowId: "r1", name: "Alpha" }, rowId: "r1" },
-      { row: { rowId: "r2", name: "Pinned total" }, rowId: "r2", state: { pinned: "bottom" } },
-      { row: { rowId: "r3", name: "Bravo" }, rowId: "r3" },
-      { row: { rowId: "r4", name: "Charlie" }, rowId: "r4" },
+      { row: { rowId: "r1", name: "Alpha" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      {
+        row: { rowId: "r2", name: "Pinned total" },
+        rowId: "r2",
+        originalIndex: 1,
+        displayIndex: 1,
+        state: { pinned: "bottom" },
+      },
+      { row: { rowId: "r3", name: "Bravo" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      { row: { rowId: "r4", name: "Charlie" }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
     ]
     let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
 

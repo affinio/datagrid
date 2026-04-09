@@ -3,7 +3,7 @@ import { flushPromises, mount } from "@vue/test-utils"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import type { DataGridRowNodeInput } from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
-import type { DataGridAppToolbarModule } from "../index"
+import type { DataGridAppToolbarModule, DataGridTableStageHistoryAdapter } from "../index"
 import {
   clearDataGridSavedViewInStorage,
   parseDataGridSavedView,
@@ -337,6 +337,11 @@ function resolveRowModel(wrapper: ReturnType<typeof mount>) {
 
 function resolveVm(wrapper: ReturnType<typeof mount>) {
   return wrapper.vm as unknown as {
+    history?: {
+      canUndo?: () => boolean
+      canRedo?: () => boolean
+      runHistoryAction?: (direction: "undo" | "redo") => Promise<string | null>
+    }
     getApi?: () => {
       selection?: {
         setSnapshot?: (snapshot: unknown) => void
@@ -490,6 +495,89 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).toContain("toolbarModules")
     expect(publicProps).toContain("findReplace")
     expect(publicProps).toContain("gridLines")
+    expect(publicProps).toContain("history")
+  })
+
+  it("renders declarative history controls and exposes a stable history controller", async () => {
+    const runHistoryAction = vi.fn(async (direction: "undo" | "redo") => (
+      direction === "undo" ? "intent-edit-1" : null
+    ))
+    const historyAdapter: DataGridTableStageHistoryAdapter = {
+      captureSnapshot: () => null,
+      recordIntentTransaction: () => undefined,
+      canUndo: () => true,
+      canRedo: () => false,
+      runHistoryAction,
+    }
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        history: {
+          adapter: historyAdapter,
+          controls: true,
+          shortcuts: false,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const undoButton = findToolbarAction(wrapper, "undo")
+    const redoButton = findToolbarAction(wrapper, "redo")
+
+    expect(undoButton.exists()).toBe(true)
+    expect(redoButton.exists()).toBe(true)
+    expect((undoButton.element as HTMLButtonElement).disabled).toBe(false)
+    expect((redoButton.element as HTMLButtonElement).disabled).toBe(true)
+
+    await undoButton.trigger("click")
+    expect(runHistoryAction).toHaveBeenCalledWith("undo")
+
+    expect(resolveVm(wrapper).history?.canUndo?.()).toBe(true)
+    expect(resolveVm(wrapper).history?.canRedo?.()).toBe(false)
+    await resolveVm(wrapper).history?.runHistoryAction?.("undo")
+    expect(runHistoryAction).toHaveBeenCalledTimes(2)
+
+    wrapper.unmount()
+  })
+
+  it("routes window-level history shortcuts through the declarative controller", async () => {
+    const runHistoryAction = vi.fn(async (_direction: "undo" | "redo") => "intent-edit-2")
+    const historyAdapter: DataGridTableStageHistoryAdapter = {
+      captureSnapshot: () => null,
+      recordIntentTransaction: () => undefined,
+      canUndo: () => true,
+      canRedo: () => true,
+      runHistoryAction,
+    }
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        history: {
+          adapter: historyAdapter,
+          shortcuts: "window",
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    window.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "z",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushRuntimeTasks()
+
+    expect(runHistoryAction).toHaveBeenCalledWith("undo")
+
+    wrapper.unmount()
   })
 
   it("renders custom toolbar modules passed through the public toolbarModules prop", async () => {
@@ -858,6 +946,39 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("supports declarative columnMenu trigger modes", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: {
+          trigger: "button",
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuButton("owner")).toBeTruthy()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"]').trigger("contextmenu", {
+      button: 2,
+      clientX: 120,
+      clientY: 48,
+    })
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuRoot()).toBeNull()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuRoot()).toBeTruthy()
+
+    wrapper.unmount()
+  })
+
   it("supports declarative columnMenu section selection at the app level", async () => {
     const wrapper = mount(DataGrid, {
       props: {
@@ -1052,6 +1173,84 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     expect(resolveRowModel(wrapper)?.getSnapshot()).toEqual(before)
+
+    wrapper.unmount()
+  })
+
+  it("supports declarative custom columnMenu items with placement and per-column overrides", async () => {
+    const onInsertLeft = vi.fn()
+    const onRename = vi.fn()
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: {
+          customItems: [
+            {
+              key: "insert-left",
+              label: "Insert column left",
+              placement: "after:group",
+              onSelect: onInsertLeft,
+            },
+          ],
+          columns: {
+            owner: {
+              customItems: [
+                {
+                  key: "rename",
+                  label: "Rename column",
+                  placement: "end",
+                  onSelect: onRename,
+                },
+              ],
+            },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    const toggleGroup = queryColumnMenuAction("toggle-group")
+    const insertLeft = queryColumnMenuAction("custom:insert-left")
+    const rename = queryColumnMenuAction("custom:rename")
+
+    expect(insertLeft?.textContent).toContain("Insert column left")
+    expect(rename?.textContent).toContain("Rename column")
+    expect(toggleGroup).toBeTruthy()
+    expect(insertLeft).toBeTruthy()
+    expect(Boolean(toggleGroup?.compareDocumentPosition(insertLeft as Node) && (toggleGroup!.compareDocumentPosition(insertLeft as Node) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
+
+    insertLeft?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(onInsertLeft).toHaveBeenCalledWith(expect.objectContaining({
+      columnKey: "owner",
+      columnLabel: "Owner",
+      closeMenu: expect.any(Function),
+    }))
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    queryColumnMenuAction("custom:rename")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(onRename).toHaveBeenCalledWith(expect.objectContaining({
+      columnKey: "owner",
+      columnLabel: "Owner",
+      closeMenu: expect.any(Function),
+    }))
+
+    await wrapper.find('.grid-cell--header[data-column-key="region"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuAction("custom:insert-left")?.textContent).toContain("Insert column left")
+    expect(queryColumnMenuAction("custom:rename")).toBeNull()
 
     wrapper.unmount()
   })

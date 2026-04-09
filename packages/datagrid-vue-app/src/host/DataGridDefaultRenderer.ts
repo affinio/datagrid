@@ -49,6 +49,7 @@ import DataGridModuleHost, {
   type DataGridAppInspectorPanel,
   type DataGridAppToolbarModule,
 } from "./DataGridModuleHost"
+import DataGridHistoryToolbarButton from "./DataGridHistoryToolbarButton"
 import DataGridTableStage from "../stage/DataGridTableStage.vue"
 import DataGridGanttStage from "../gantt/DataGridGanttStageEntry"
 import DataGridColumnLayoutPopover from "../overlays/DataGridColumnLayoutPopover.vue"
@@ -60,6 +61,7 @@ import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
 import {
   resolveDataGridColumnMenuActionOptions,
+  resolveDataGridColumnMenuCustomItems,
   resolveDataGridColumnMenuDisabledItems,
   resolveDataGridColumnMenuDisabledReasons,
   resolveDataGridColumnMenuLabels,
@@ -92,6 +94,7 @@ import {
   useDataGridAppFindReplace,
   type DataGridFindReplaceVisualTarget,
 } from "../useDataGridAppFindReplace"
+import type { DataGridHistoryController, DataGridResolvedHistoryOptions } from "../dataGridHistory"
 
 type DataGridMode = "base" | "tree" | "pivot" | "worker"
 
@@ -719,6 +722,14 @@ export default defineComponent({
       type: Array as PropType<readonly DataGridAppToolbarModule[]>,
       default: () => [],
     },
+    history: {
+      type: Object as PropType<DataGridResolvedHistoryOptions>,
+      required: true,
+    },
+    registerHistoryController: {
+      type: Function as PropType<(controller: DataGridHistoryController | null) => void>,
+      default: () => undefined,
+    },
     inspectorPanel: {
       type: Object as PropType<DataGridAppInspectorPanel | null>,
       default: null,
@@ -950,6 +961,10 @@ export default defineComponent({
 
     const resolveColumnMenuActionOptions = (columnKey: string) => {
       return resolveDataGridColumnMenuActionOptions(props.columnMenu, columnKey)
+    }
+
+    const resolveColumnMenuCustomItems = (columnKey: string) => {
+      return resolveDataGridColumnMenuCustomItems(props.columnMenu, columnKey)
     }
 
     const resolveColumnGroupOrder = (columnKey: string): number | null => {
@@ -1740,6 +1755,7 @@ export default defineComponent({
     const {
       tableStageProps,
       tableStageContext,
+      historyController,
       copySelectedCells,
       pasteSelectedCells,
       cutSelectedCells,
@@ -1784,12 +1800,14 @@ export default defineComponent({
       sortIndicator,
       setColumnFilterText,
       columnMenuEnabled: computed(() => props.columnMenu.enabled),
+      columnMenuTrigger: computed(() => props.columnMenu.trigger),
       columnMenuMaxFilterValues: computed(() => props.columnMenu.maxFilterValues),
       resolveColumnMenuItems,
       resolveColumnMenuDisabledItems,
       resolveColumnMenuDisabledReasons,
       resolveColumnMenuLabels,
       resolveColumnMenuActionOptions,
+      resolveColumnMenuCustomItems,
       isColumnFilterActive,
       isColumnGrouped,
       resolveColumnGroupOrder,
@@ -1802,6 +1820,10 @@ export default defineComponent({
       clearColumnMenuFilter,
       applyRowHeightSettings,
       cloneRowData,
+      historyEnabled: computed(() => props.history.enabled),
+      historyMaxDepth: computed(() => props.history.depth),
+      historyShortcuts: computed(() => props.history.shortcuts),
+      history: props.history.adapter,
       isCellEditable: props.isCellEditable,
       isContextMenuVisible: () => contextMenuVisible(),
       closeContextMenu: () => closeRuntimeContextMenu(),
@@ -1823,6 +1845,46 @@ export default defineComponent({
           "grid-cell--find-match-flash-b": target.flashPhase === 1,
         }
       },
+    })
+
+    watch(
+      () => props.registerHistoryController,
+      registerHistoryController => {
+        registerHistoryController?.(historyController)
+      },
+      { immediate: true },
+    )
+
+    watch(
+      () => props.history.shortcuts,
+      (shortcutMode, _previous, onCleanup) => {
+        if (shortcutMode !== "window" || typeof window === "undefined") {
+          return
+        }
+        const handleWindowKeydown = (event: KeyboardEvent) => {
+          if (event.defaultPrevented || event.altKey || !(event.ctrlKey || event.metaKey)) {
+            return
+          }
+          const key = event.key.toLowerCase()
+          const direction = key === "z"
+            ? (event.shiftKey ? "redo" : "undo")
+            : (key === "y" && !event.shiftKey ? "redo" : null)
+          if (!direction) {
+            return
+          }
+          event.preventDefault()
+          void historyController.runHistoryAction(direction)
+        }
+        window.addEventListener("keydown", handleWindowKeydown)
+        onCleanup(() => {
+          window.removeEventListener("keydown", handleWindowKeydown)
+        })
+      },
+      { immediate: true },
+    )
+
+    onBeforeUnmount(() => {
+      props.registerHistoryController?.(null)
     })
 
     const stageVisibleColumns = computed(() => tableStageProps.value.columns.visibleColumns)
@@ -2227,12 +2289,14 @@ export default defineComponent({
       columns: {
         ...tableStageProps.value.columns,
         columnMenuEnabled: props.columnMenu.enabled,
+        columnMenuTrigger: props.columnMenu.trigger,
         columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
         resolveColumnMenuItems,
         resolveColumnMenuDisabledItems,
         resolveColumnMenuDisabledReasons,
         resolveColumnMenuLabels,
         resolveColumnMenuActionOptions,
+        resolveColumnMenuCustomItems,
         isColumnFilterActive,
         isColumnGrouped,
         resolveColumnGroupOrder,
@@ -2253,6 +2317,28 @@ export default defineComponent({
     }))
     const toolbarModules = computed<readonly DataGridAppToolbarModule[]>(() => {
       const modules: DataGridAppToolbarModule[] = []
+      if (props.history.enabled && props.history.controls === "toolbar") {
+        modules.push({
+          key: "history-undo",
+          component: DataGridHistoryToolbarButton as Component,
+          props: {
+            action: "undo",
+            label: "Undo",
+            disabled: !historyController.canUndo(),
+            onTrigger: () => historyController.runHistoryAction("undo"),
+          },
+        })
+        modules.push({
+          key: "history-redo",
+          component: DataGridHistoryToolbarButton as Component,
+          props: {
+            action: "redo",
+            label: "Redo",
+            disabled: !historyController.canRedo(),
+            onTrigger: () => historyController.runHistoryAction("redo"),
+          },
+        })
+      }
       if (props.columnLayout.enabled) {
         modules.push({
           key: "column-layout",

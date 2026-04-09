@@ -347,6 +347,83 @@ const toolbarModules: readonly DataGridAppToolbarModule[] = [
 Prefer `toolbar-modules` over replacing the whole default slot when the only goal is to extend the built-in toolbar.
 Use the default slot only when you need to take over the entire runtime renderer contract.
 
+## Declarative History
+
+Enable built-in undo/redo with one prop:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  history
+/>
+```
+
+The object form lets you control the source, depth, shortcuts, and built-in controls:
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import {
+  DataGrid,
+  type DataGridHistoryProp,
+  type DataGridTableStageHistoryAdapter,
+} from "@affino/datagrid-vue-app"
+
+const historyAdapter: DataGridTableStageHistoryAdapter = {
+  captureSnapshot: () => null,
+  recordIntentTransaction: () => undefined,
+  canUndo: () => true,
+  canRedo: () => false,
+  runHistoryAction: async direction => direction === "undo" ? "intent-1" : null,
+}
+
+const history: DataGridHistoryProp = {
+  depth: 80,
+  shortcuts: "window",
+  controls: "toolbar",
+  adapter: historyAdapter,
+}
+
+const gridRef = ref<{
+  getHistory?: () => {
+    runHistoryAction?: (direction: "undo" | "redo") => Promise<string | null>
+  }
+} | null>(null)
+
+async function undoFromExternalButton() {
+  await gridRef.value?.getHistory()?.runHistoryAction("undo")
+}
+</script>
+
+<template>
+  <button type="button" @click="undoFromExternalButton">
+    Undo from external UI
+  </button>
+
+  <DataGrid
+    ref="gridRef"
+    :rows="rows"
+    :columns="columns"
+    :history="history"
+  />
+</template>
+```
+
+Supported history options:
+
+- `enabled`: explicit on/off switch when the object form is used
+- `depth`: max undo depth for recorded transactions/intents
+- `shortcuts`: `false`, `"grid"`, or `"window"`
+- `controls`: `false`, `"toolbar"`, or `"external-only"`
+- `adapter`: provide an external history source instead of the built-in app intent history
+
+Notes:
+
+- `depth` limits undoable transactions/intents, not raw per-cell keystrokes.
+- When `adapter` is omitted, the app facade falls back to its built-in intent history.
+- The component ref always exposes a stable history controller through `history` and `getHistory()`.
+
 ## Declarative Column Menu
 
 Enable the built-in header menu with one prop:
@@ -372,6 +449,7 @@ built-in sections instead of replacing the menu renderer.
 import { DataGrid, type DataGridColumnMenuProp } from "@affino/datagrid-vue-app"
 
 const columnMenu: DataGridColumnMenuProp = {
+  trigger: "button+contextmenu",
   items: ["sort", "group", "pin", "filter"],
   disabled: ["pin"],
   disabledReasons: {
@@ -386,6 +464,16 @@ const columnMenu: DataGridColumnMenuProp = {
     clearSort: { hidden: true },
     pinMenu: { disabled: true, disabledReason: "Pinning is managed globally" },
   },
+  customItems: [
+    {
+      key: "insert-left",
+      label: "Insert column left",
+      placement: "after:group",
+      onSelect: ({ columnKey }) => {
+        console.log("Insert before", columnKey)
+      },
+    },
+  ],
   columns: {
     amount: {
       hide: ["group"],
@@ -395,6 +483,19 @@ const columnMenu: DataGridColumnMenuProp = {
       actions: {
         pinLeft: { label: "Freeze left" },
       },
+    },
+    owner: {
+      customItems: [
+        {
+          key: "rename",
+          label: "Rename column",
+          placement: "end",
+          onSelect: ({ columnKey, closeMenu }) => {
+            console.log("Rename", columnKey)
+            closeMenu()
+          },
+        },
+      ],
     },
     start: {
       disabled: ["filter"],
@@ -417,12 +518,22 @@ const columnMenu: DataGridColumnMenuProp = {
 
 Supported app-level menu controls:
 
+- `trigger`: `button`, `contextmenu`, or `button+contextmenu` (default)
 - `items`: choose and order built-in sections (`sort`, `group`, `pin`, `filter`)
 - `disabled`: force specific built-in sections into a disabled state
 - `disabledReasons`: attach explanatory text to disabled built-in sections
 - `labels`: override built-in section labels
 - `actions`: override built-in action `label`, `hidden`, `disabled`, and `disabledReason` state
-- `columns[columnKey]`: per-column `items`, `hide`, `disabled`, `disabledReasons`, `labels`, and `actions`
+- `customItems`: add custom menu entries around the built-in sections
+- `columns[columnKey]`: per-column `items`, `hide`, `disabled`, `disabledReasons`, `labels`, `actions`, and `customItems`
+
+Custom menu items support:
+
+- `key`: stable item id
+- `label`: rendered menu text
+- `placement`: `start`, `end`, `before:sort`, `after:sort`, `before:group`, `after:group`, `before:pin`, `after:pin`, `before:filter`, `after:filter`
+- `hidden`, `disabled`, `disabledReason`
+- `onSelect(context)`: callback with `{ columnKey, columnLabel, closeMenu }`
 
 Grouping triggered from the built-in column menu updates the public controlled
 surface through `@update:groupBy` / `v-model:groupBy`.
@@ -443,6 +554,8 @@ Supported action keys for `actions` are:
 - `clearFilter`, `addCurrentSelectionToFilter`, `selectAllValues`, `clearAllValues`, `applyFilter`, `cancelFilter`
 
 Disabled sections and actions can expose a reason string so users see why a menu affordance is unavailable.
+- `trigger: "button"` disables the standard header `contextmenu` open path while keeping the menu button.
+- `trigger: "contextmenu"` keeps right-click open on the header cell and hides the button.
 - clause-based advanced filter popover
 - aggregation model popover
 
@@ -1314,6 +1427,13 @@ The component emits:
 - `getApi()`
 - `getRuntime()`
 - `getCore()`
+
+### History
+
+- `history.canUndo()`
+- `history.canRedo()`
+- `history.runHistoryAction(direction)`
+- `getHistory()`
 
 ### Column state
 

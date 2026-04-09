@@ -21,7 +21,8 @@ function rebuildPrefixOffsets(overrides: ReadonlyMap<number, number>): number[] 
   const prefix = new Array<number>(TOTAL_ROWS + 1)
   prefix[0] = 0
   for (let rowIndex = 0; rowIndex < TOTAL_ROWS; rowIndex += 1) {
-    prefix[rowIndex + 1] = prefix[rowIndex] + (overrides.get(rowIndex) ?? BASE_ROW_HEIGHT)
+    const currentOffset = prefix[rowIndex] ?? 0
+    prefix[rowIndex + 1] = currentOffset + (overrides.get(rowIndex) ?? BASE_ROW_HEIGHT)
   }
   return prefix
 }

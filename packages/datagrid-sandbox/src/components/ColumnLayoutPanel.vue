@@ -34,7 +34,7 @@
 import type {
   DataGridAppColumnLayoutPanelItem,
   DataGridAppColumnLayoutVisibilityPatch,
-} from "@affino/datagrid-vue"
+} from "@affino/datagrid-vue/app"
 
 withDefaults(defineProps<{
   isOpen: boolean

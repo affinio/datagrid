@@ -1,6 +1,7 @@
 import type { DataGridAppRowSnapshot } from "@affino/datagrid-vue/app"
 import { useDataGridAppIntentHistory } from "@affino/datagrid-vue/app"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
+import type { DataGridHistoryController } from "../dataGridHistory"
 
 export interface DataGridTableStageHistoryAdapter {
   captureSnapshot: () => unknown
@@ -21,10 +22,12 @@ export interface UseDataGridTableStageHistoryOptions<TRow extends Record<string,
   >
   cloneRowData: (row: TRow) => TRow
   syncViewport: () => void
+  enabled?: boolean
+  maxHistoryDepth?: number
   history?: DataGridTableStageHistoryAdapter
 }
 
-export interface UseDataGridTableStageHistoryResult {
+export interface UseDataGridTableStageHistoryResult extends DataGridHistoryController {
   captureHistorySnapshot: () => unknown
   captureHistorySnapshotForRowIds: (rowIds: readonly (string | number)[]) => unknown
   recordHistoryIntentTransaction: (
@@ -40,15 +43,19 @@ export interface UseDataGridTableStageHistoryResult {
 export function useDataGridTableStageHistory<TRow extends Record<string, unknown>>(
   options: UseDataGridTableStageHistoryOptions<TRow>,
 ): UseDataGridTableStageHistoryResult {
-  const internalIntentHistory = options.history
+  const internalIntentHistory = options.enabled === false || options.history
     ? null
     : useDataGridAppIntentHistory<TRow>({
       runtime: options.runtime,
       cloneRowData: options.cloneRowData,
       syncViewport: options.syncViewport,
+      maxHistoryDepth: options.maxHistoryDepth,
     })
 
   const captureHistorySnapshot = (): unknown => {
+    if (options.enabled === false) {
+      return null
+    }
     if (options.history) {
       return options.history.captureSnapshot()
     }
@@ -58,6 +65,9 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
   const captureHistorySnapshotForRowIds = (
     rowIds: readonly (string | number)[],
   ): unknown => {
+    if (options.enabled === false) {
+      return null
+    }
     if (options.history) {
       return options.history.captureSnapshotForRowIds?.(rowIds) ?? options.history.captureSnapshot()
     }
@@ -68,6 +78,9 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: unknown,
   ): void => {
+    if (options.enabled === false) {
+      return
+    }
     if (options.history) {
       void options.history.recordIntentTransaction(descriptor, beforeSnapshot)
       return
@@ -79,14 +92,23 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
   }
 
   const canUndoHistory = (): boolean => {
+    if (options.enabled === false) {
+      return false
+    }
     return options.history ? options.history.canUndo() : (internalIntentHistory?.canUndo.value ?? false)
   }
 
   const canRedoHistory = (): boolean => {
+    if (options.enabled === false) {
+      return false
+    }
     return options.history ? options.history.canRedo() : (internalIntentHistory?.canRedo.value ?? false)
   }
 
   const runHistoryAction = (direction: "undo" | "redo"): Promise<string | null> => {
+    if (options.enabled === false) {
+      return Promise.resolve(null)
+    }
     if (options.history) {
       return options.history.runHistoryAction(direction)
     }
@@ -103,6 +125,8 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
     recordHistoryIntentTransaction,
     canUndoHistory,
     canRedoHistory,
+    canUndo: canUndoHistory,
+    canRedo: canRedoHistory,
     runHistoryAction,
     disposeIntentHistory,
   }

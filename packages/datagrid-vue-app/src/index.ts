@@ -23,6 +23,16 @@ export type {
   DataGridCellEditablePredicateContext,
 } from "./dataGridEditability"
 export type {
+  DataGridHistoryController,
+  DataGridHistoryControlsMode,
+  DataGridHistoryOptions,
+  DataGridHistoryProp,
+  DataGridHistoryShortcutsMode,
+} from "./dataGridHistory"
+export type {
+  DataGridTableStageHistoryAdapter,
+} from "./stage/useDataGridTableStageHistory"
+export type {
   DataGridThemePreset,
   DataGridThemeProp,
 } from "./theme/dataGridTheme"
@@ -65,11 +75,15 @@ export type {
   DataGridColumnMenuActionOption,
   DataGridColumnMenuActionOptions,
   DataGridColumnMenuColumnOptions,
+  DataGridColumnMenuCustomItem,
+  DataGridColumnMenuCustomItemContext,
+  DataGridColumnMenuCustomItemPlacement,
   DataGridColumnMenuDisabledReasons,
   DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
   DataGridColumnMenuOptions,
   DataGridColumnMenuProp,
+  DataGridColumnMenuTriggerMode,
 } from "./overlays/dataGridColumnMenu"
 export type {
   DataGridCellMenuActionKey,
