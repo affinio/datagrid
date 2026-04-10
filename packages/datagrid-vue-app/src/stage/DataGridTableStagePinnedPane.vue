@@ -34,8 +34,13 @@
           :data-row-id="String(row.rowId)"
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
           :tabindex="renderApi.rowIndexTabIndex(row)"
+          :draggable="renderApi.isRowIndexDraggable(row)"
           @click.stop="renderApi.handleRowIndexClickSafe(row, renderApi.viewportRowOffset(row, rowOffset), $event)"
           @keydown.stop="renderApi.handleRowIndexKeydown($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+          @dragstart.stop="renderApi.handleRowIndexDragStart($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+          @dragover.stop.prevent="renderApi.handleRowIndexDragOver($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+          @drop.stop.prevent="renderApi.handleRowIndexDrop($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+          @dragend.stop="renderApi.handleRowIndexDragEnd()"
         >
           {{ rows.rowIndexLabel(row, renderApi.viewportRowOffset(row, rowOffset)) }}
           <button
@@ -106,6 +111,7 @@
           <input
             v-else-if="renderApi.isDateEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
             class="cell-editor-control cell-editor-input cell-editor-input--date"
+            :name="`datagrid-cell-editor-${column.key}`"
             :type="renderApi.resolveDateEditorInputType(row, column)"
             :value="editing.editingCellValue"
             autofocus
@@ -119,6 +125,7 @@
           <input
             v-else-if="renderApi.isTextEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
             class="cell-editor-control cell-editor-input"
+            :name="`datagrid-cell-editor-${column.key}`"
             :value="editing.editingCellValue"
             autofocus
             @mousedown.stop

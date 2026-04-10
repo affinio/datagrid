@@ -131,6 +131,7 @@
           <label class="datagrid-advanced-filter__field datagrid-advanced-filter__field--value">
             <span class="datagrid-advanced-filter__label">Value</span>
             <input
+              :name="`datagrid-advanced-filter-value-${clause.id}`"
               :value="clause.value"
               type="text"
               placeholder="Value"

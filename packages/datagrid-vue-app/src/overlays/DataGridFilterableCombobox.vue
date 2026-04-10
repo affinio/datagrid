@@ -3,6 +3,8 @@
     <input
       ref="inputEl"
       v-bind="inputAttrs"
+      :id="inputId"
+      :name="inputName"
       :class="inputClassName"
       :style="inputStyleValue"
       type="text"
@@ -131,11 +133,15 @@ const isLoading = ref(false)
 const remoteOptions = ref<ReadonlyArray<DataGridFilterableComboboxOption>>([])
 const state = ref(createDataGridCellComboboxState({ open: false }))
 const panelId = `datagrid-filterable-combobox-${Math.random().toString(36).slice(2, 10)}`
+const inputIdFallback = `${panelId}-input`
+const inputNameFallback = `${panelId}-field`
 let requestId = 0
 
 const inputAttrs = computed(() => {
   const {
     class: _className,
+    id: _id,
+    name: _name,
     style: _styleValue,
     type: _type,
     value: _value,
@@ -150,6 +156,10 @@ const inputAttrs = computed(() => {
   } = attrs
   return rest
 })
+
+const inputId = computed(() => String(attrs.id ?? inputIdFallback))
+
+const inputName = computed(() => String(attrs.name ?? inputNameFallback))
 
 const inputClassName = computed(() => [
   "cell-editor-control",

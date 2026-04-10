@@ -2,6 +2,7 @@ import type { Component } from "vue"
 import DataGridComponent from "./DataGrid"
 
 export const DataGrid: Component = DataGridComponent
+export { default as DataGridModuleHost } from "./host/DataGridModuleHost"
 export type {
   DataGridAppCellRenderer,
   DataGridAppCellRendererContext,
@@ -16,6 +17,13 @@ export type {
 export type {
   DataGridAppToolbarModule,
 } from "./host/DataGridModuleHost"
+export type {
+  DataGridChromeDensity,
+  DataGridChromeOptions,
+  DataGridChromeProp,
+  DataGridResolvedChromeOptions,
+  DataGridToolbarPlacement,
+} from "./config/dataGridChrome"
 export type {
   DataGridLayoutMode,
   DataGridResolvedLayoutOptions,
@@ -68,6 +76,10 @@ export type {
   DataGridColumnLayoutOptions,
   DataGridColumnLayoutProp,
 } from "./config/dataGridColumnLayout"
+export type {
+  DataGridRowReorderOptions,
+  DataGridRowReorderProp,
+} from "./config/dataGridRowReorder"
 export {
   clearDataGridSavedViewInStorage,
   migrateDataGridSavedView,

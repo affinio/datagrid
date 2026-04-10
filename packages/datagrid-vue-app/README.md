@@ -16,6 +16,7 @@ Boundary doc:
 Public export:
 
 - `DataGrid`
+- `DataGridModuleHost`
 
 The package ships its own runtime table-stage styles, so the default renderer does not depend on sandbox CSS.
 
@@ -186,6 +187,65 @@ Normalization rules:
 - `0`, negative, `NaN`, and non-finite row limits are treated as unset
 - if both limits are present and `maxRows < minRows`, `maxRows` is clamped up to `minRows`
 - prefer `fill` for full-screen shells such as split gantt layouts and `auto-height` for embedded cards, stacked dashboard sections, and form flows
+
+## Chrome Layout
+
+`DataGrid` now exposes package-level chrome controls so apps do not need CSS overrides just to remove the default toolbar-to-stage gap or collapse spreadsheet shells into a single surface.
+
+- `chrome.toolbarPlacement`: `"stacked"`, `"integrated"`, or `"hidden"`
+- `chrome.density`: `"comfortable"` or `"compact"`
+- `chrome.toolbarGap`: controls `--datagrid-app-layout-gap`
+- `chrome.workspaceGap`: controls `--datagrid-app-workspace-gap`
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :chrome="{
+    toolbarPlacement: 'integrated',
+    density: 'compact',
+    toolbarGap: 0,
+    workspaceGap: 8,
+  }"
+  :history="{ controls: true }"
+/>
+```
+
+Notes:
+
+- `stacked` keeps the previous app-shell structure and remains the default
+- `integrated` renders the toolbar inside the same surface as the table with a divider instead of a vertical gap
+- `hidden` disables the internal toolbar renderer so the host can place modules in its own header
+- gantt currently falls back to `stacked` when `integrated` is requested
+
+When you hide the internal toolbar, the component emits the resolved built-in plus custom toolbar modules through `@toolbar-modules-change`, and the package exports `DataGridModuleHost` so the host can render the exact same modules externally.
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import {
+  DataGrid,
+  DataGridModuleHost,
+  type DataGridAppToolbarModule,
+} from "@affino/datagrid-vue-app"
+
+const toolbarModules = ref<readonly DataGridAppToolbarModule[]>([])
+</script>
+
+<template>
+  <header class="sheet-header">
+    <DataGridModuleHost :modules="toolbarModules" />
+  </header>
+
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :history="{ controls: true }"
+    :chrome="{ toolbarPlacement: 'hidden' }"
+    @toolbar-modules-change="toolbarModules = $event"
+  />
+</template>
+```
 
 ## Placeholder Rows
 
@@ -1508,6 +1568,26 @@ The component emits:
 
 - The built-in `Column layout`, `Advanced filter`, and `Find / replace` toolbar panels render through the shared Affino overlay host rather than inline in the grid tree.
 - These built-in panels are draggable by their header title area and reopen at the last detached position for the current grid instance during the active page session.
+
+## Row Reorder
+
+Row drag-and-drop is declarative and opt-in.
+
+- `rowReorder: true` enables drag reorder from the row index column
+- `rowReorder: false` keeps the row index non-draggable
+- the feature only applies when the grid is using a mutable rows API and `showRowIndex` is enabled
+- placeholder rows, group rows, and pinned rows are not draggable
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :show-row-index="true"
+  :row-reorder="true"
+/>
+```
+
+If you need to ship the UI but keep row order locked, leave `rowReorder` unset or pass `false`.
 
 ## Ref API
 

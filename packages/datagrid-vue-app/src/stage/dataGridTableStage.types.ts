@@ -105,6 +105,11 @@ export interface DataGridTableStageRowsSection<TRow extends Record<string, unkno
   handleRowClick?: (row: DataGridTableRow<TRow>) => void
   handleRowIndexClick?: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean) => void
   handleRowIndexKeydown?: (event: KeyboardEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
+  reorderRowsByIndex?: (payload: {
+    sourceRowId: string | number
+    targetRowId: string | number
+    placement: "before" | "after"
+  }) => boolean
   handleToggleAllVisibleRows?: () => void
   toggleGroupRow: (row: DataGridTableRow<TRow>) => void
   rowIndexLabel: (row: DataGridTableRow<TRow>, rowOffset: number) => string

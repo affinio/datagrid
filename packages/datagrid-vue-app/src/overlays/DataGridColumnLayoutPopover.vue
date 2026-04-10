@@ -41,9 +41,21 @@
           v-for="item in items"
           :key="item.key"
           class="datagrid-column-layout__row"
+          :class="{
+            'datagrid-column-layout__row--drag-source': draggedKey === item.key,
+            'datagrid-column-layout__row--drop-before': dropTargetKey === item.key && dropPlacement === 'before',
+            'datagrid-column-layout__row--drop-after': dropTargetKey === item.key && dropPlacement === 'after',
+          }"
+          :draggable="true"
+          @dragstart="handleDragStart($event, item.key)"
+          @dragover="handleDragOver($event, item.key)"
+          @drop="handleDrop($event, item.key)"
+          @dragend="handleDragEnd"
         >
           <label class="datagrid-column-layout__visibility">
+            <span class="datagrid-column-layout__drag-handle" aria-hidden="true">::</span>
             <input
+              :name="`datagrid-column-layout-visible-${item.key}`"
               type="checkbox"
               :checked="item.visible"
               @change="emitVisibility(item.key, ($event.target as HTMLInputElement).checked)"
@@ -113,6 +125,7 @@ const emit = defineEmits<{
   "toggle-visibility": [payload: DataGridAppColumnLayoutVisibilityPatch]
   "move-up": [key: string]
   "move-down": [key: string]
+  "move-to-position": [payload: { key: string; targetKey: string; placement: "before" | "after" }]
   apply: []
   cancel: []
 }>()
@@ -161,6 +174,9 @@ const triggerProps = computed(() => controller.getTriggerProps({ role: "dialog" 
 const contentProps = computed(() => controller.getContentProps({ role: "dialog", tabIndex: -1 }))
 const popoverOpen = computed(() => controller.state.value.open)
 const popoverTeleportTarget = computed(() => floating.teleportTarget.value)
+const draggedKey = ref<string | null>(null)
+const dropTargetKey = ref<string | null>(null)
+const dropPlacement = ref<"before" | "after" | null>(null)
 
 watch(
   () => props.isOpen,
@@ -206,5 +222,58 @@ function syncOverlayThemeVars(): void {
 
 function emitVisibility(key: string, visible: boolean): void {
   emit("toggle-visibility", { key, visible })
+}
+
+function resolveDropPlacement(event: DragEvent): "before" | "after" {
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const rect = target?.getBoundingClientRect()
+  if (!rect || rect.height <= 0) {
+    return "after"
+  }
+  return event.clientY < rect.top + rect.height / 2 ? "before" : "after"
+}
+
+function handleDragStart(event: DragEvent, key: string): void {
+  draggedKey.value = key
+  dropTargetKey.value = null
+  dropPlacement.value = null
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move"
+    event.dataTransfer.setData("text/plain", key)
+  }
+}
+
+function handleDragOver(event: DragEvent, key: string): void {
+  if (!draggedKey.value || draggedKey.value === key) {
+    dropTargetKey.value = null
+    dropPlacement.value = null
+    return
+  }
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = "move"
+  }
+  dropTargetKey.value = key
+  dropPlacement.value = resolveDropPlacement(event)
+}
+
+function handleDrop(event: DragEvent, key: string): void {
+  if (!draggedKey.value || draggedKey.value === key) {
+    handleDragEnd()
+    return
+  }
+  event.preventDefault()
+  emit("move-to-position", {
+    key: draggedKey.value,
+    targetKey: key,
+    placement: resolveDropPlacement(event),
+  })
+  handleDragEnd()
+}
+
+function handleDragEnd(): void {
+  draggedKey.value = null
+  dropTargetKey.value = null
+  dropPlacement.value = null
 }
 </script>

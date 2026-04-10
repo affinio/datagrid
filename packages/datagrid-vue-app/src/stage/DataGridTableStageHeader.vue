@@ -211,6 +211,7 @@
               <div class="col-filter" @click.stop>
                 <input
                   class="col-filter-input"
+                  :name="`datagrid-header-filter-left-${column.key}`"
                   :value="columnFilterTextByKey[column.key] ?? ''"
                   :disabled="!isColumnFilterable(column)"
                   placeholder="Filter..."
@@ -398,6 +399,7 @@
             <div class="col-filter" @click.stop>
               <input
                 class="col-filter-input"
+                :name="`datagrid-header-filter-center-${column.key}`"
                 :value="columnFilterTextByKey[column.key] ?? ''"
                 :disabled="!isColumnFilterable(column)"
                 placeholder="Filter..."
@@ -563,6 +565,7 @@
             <div class="col-filter" @click.stop>
               <input
                 class="col-filter-input"
+                :name="`datagrid-header-filter-right-${column.key}`"
                 :value="columnFilterTextByKey[column.key] ?? ''"
                 :disabled="!isColumnFilterable(column)"
                 placeholder="Filter..."

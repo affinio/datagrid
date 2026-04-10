@@ -7,11 +7,14 @@ import type {
   DataGridUnifiedState,
 } from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
+import {
+  DataGridModuleHost,
+  type DataGridAppToolbarModule,
+  type DataGridSavedViewSnapshot,
+  type DataGridTableStageHistoryAdapter,
+} from "../index"
 import type {
   DataGridAppCellRendererContext,
-  DataGridAppToolbarModule,
-  DataGridSavedViewSnapshot,
-  DataGridTableStageHistoryAdapter,
 } from "../index"
 import {
   clearDataGridSavedViewInStorage,
@@ -504,6 +507,66 @@ function createPointerLikeEvent(
   return event as PointerEvent
 }
 
+function createDragDataTransfer() {
+  const store = new Map<string, string>()
+  return {
+    effectAllowed: "all",
+    dropEffect: "move",
+    setData(type: string, value: string) {
+      store.set(type, value)
+    },
+    getData(type: string) {
+      return store.get(type) ?? ""
+    },
+    clearData(type?: string) {
+      if (type) {
+        store.delete(type)
+        return
+      }
+      store.clear()
+    },
+  }
+}
+
+function createDragLikeEvent(
+  type: string,
+  init: MouseEventInit & { dataTransfer?: ReturnType<typeof createDragDataTransfer> } = {},
+): DragEvent {
+  const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
+  Object.defineProperty(event, "clientX", {
+    configurable: true,
+    value: init.clientX ?? 0,
+  })
+  Object.defineProperty(event, "clientY", {
+    configurable: true,
+    value: init.clientY ?? 0,
+  })
+  Object.defineProperty(event, "dataTransfer", {
+    configurable: true,
+    value: init.dataTransfer ?? createDragDataTransfer(),
+  })
+  return event
+}
+
+async function dragDropElement(
+  source: HTMLElement,
+  target: HTMLElement,
+  options: { targetClientY?: number } = {},
+): Promise<void> {
+  const dataTransfer = createDragDataTransfer()
+  source.dispatchEvent(createDragLikeEvent("dragstart", { dataTransfer, clientY: 8 }))
+  target.dispatchEvent(createDragLikeEvent("dragover", {
+    dataTransfer,
+    clientY: options.targetClientY ?? 24,
+  }))
+  target.dispatchEvent(createDragLikeEvent("drop", {
+    dataTransfer,
+    clientY: options.targetClientY ?? 24,
+  }))
+  source.dispatchEvent(createDragLikeEvent("dragend", { dataTransfer, clientY: options.targetClientY ?? 24 }))
+  await flushRuntimeTasks()
+}
+
 async function dragOverlaySurface(
   root: HTMLElement,
   delta: { x: number; y: number },
@@ -663,6 +726,8 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).toContain("findReplace")
     expect(publicProps).toContain("gridLines")
     expect(publicProps).toContain("history")
+    expect(publicProps).toContain("chrome")
+    expect(publicProps).toContain("rowReorder")
     expect(publicProps).toContain("placeholderRows")
   })
 
@@ -801,6 +866,102 @@ describe("DataGrid app facade contract", () => {
     expect(onTrigger).toHaveBeenCalledTimes(1)
 
     wrapper.unmount()
+  })
+
+  it("supports integrated chrome placement with compact density and configurable gaps", async () => {
+    const historyAdapter: DataGridTableStageHistoryAdapter = {
+      captureSnapshot: () => null,
+      recordIntentTransaction: () => undefined,
+      canUndo: () => true,
+      canRedo: () => false,
+      runHistoryAction: async direction => direction === "undo" ? "intent-integrated" : null,
+    }
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        history: {
+          adapter: historyAdapter,
+          controls: true,
+          shortcuts: false,
+        },
+        chrome: {
+          density: "compact",
+          toolbarPlacement: "integrated",
+          toolbarGap: 0,
+          workspaceGap: 8,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const layoutElement = wrapper.find(".datagrid-app-layout")
+    const layoutStyle = layoutElement.element as HTMLElement
+
+    expect(layoutElement.classes()).toContain("datagrid-app-layout--toolbar-integrated")
+    expect(layoutElement.classes()).toContain("datagrid-app-layout--density-compact")
+    expect(layoutStyle.style.getPropertyValue("--datagrid-app-layout-gap")).toBe("0px")
+    expect(layoutStyle.style.getPropertyValue("--datagrid-app-workspace-gap")).toBe("8px")
+    expect(layoutStyle.style.getPropertyValue("--datagrid-app-toolbar-button-height")).toBe("28px")
+    expect(wrapper.find(".datagrid-app-stage-surface--integrated .datagrid-app-toolbar--integrated").exists()).toBe(true)
+    expect(wrapper.findAll(".datagrid-app-layout > .datagrid-app-toolbar")).toHaveLength(0)
+
+    wrapper.unmount()
+  })
+
+  it("publishes built-in toolbar modules for external chrome hosts when internal toolbar is hidden", async () => {
+    const runHistoryAction = vi.fn(async (direction: "undo" | "redo") => (
+      direction === "undo" ? "intent-external" : null
+    ))
+    const historyAdapter: DataGridTableStageHistoryAdapter = {
+      captureSnapshot: () => null,
+      recordIntentTransaction: () => undefined,
+      canUndo: () => true,
+      canRedo: () => true,
+      runHistoryAction,
+    }
+
+    let publishedModules: readonly DataGridAppToolbarModule[] = []
+    const gridWrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        history: {
+          adapter: historyAdapter,
+          controls: true,
+          shortcuts: false,
+        },
+        chrome: {
+          toolbarPlacement: "hidden",
+        },
+        onToolbarModulesChange: (modules: readonly DataGridAppToolbarModule[]) => {
+          publishedModules = modules
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+    await Promise.resolve()
+
+    expect(gridWrapper.find(".datagrid-app-layout .datagrid-app-toolbar").exists()).toBe(false)
+    expect(publishedModules).toHaveLength(2)
+
+    const hostWrapper = mount(DataGridModuleHost, {
+      props: {
+        modules: publishedModules,
+      },
+    })
+
+    expect(hostWrapper.find('[data-datagrid-toolbar-action="undo"]').exists()).toBe(true)
+    expect(hostWrapper.find('[data-datagrid-toolbar-action="redo"]').exists()).toBe(true)
+
+    await hostWrapper.find('[data-datagrid-toolbar-action="undo"]').trigger("click")
+  expect(runHistoryAction).toHaveBeenCalledWith("undo")
+
+    hostWrapper.unmount()
+    gridWrapper.unmount()
   })
 
   it("keeps a column editable cell read-only when the public predicate returns false", async () => {
@@ -1686,6 +1847,62 @@ describe("DataGrid app facade contract", () => {
 
     expect(queryContextMenuRoot()).toBeTruthy()
     expect(queryContextMenuAction("copy-row")?.textContent).toContain("Copy row")
+
+    wrapper.unmount()
+  })
+
+  it("reorders rows by dragging the row index and keeps visible labels sequential", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        rowReorder: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    const lastRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r3"]')
+    expect(firstRowIndexCell.exists()).toBe(true)
+    expect(lastRowIndexCell.exists()).toBe(true)
+
+    await dragDropElement(firstRowIndexCell.element as HTMLElement, lastRowIndexCell.element as HTMLElement, {
+      targetClientY: 28,
+    })
+
+    expect(resolveRowAt<Record<string, unknown>>(wrapper, 0)?.rowId).toBe("r2")
+    expect(resolveRowAt<Record<string, unknown>>(wrapper, 1)?.rowId).toBe("r3")
+    expect(resolveRowAt<Record<string, unknown>>(wrapper, 2)?.rowId).toBe("r1")
+
+    const rowIndexLabels = (Array.from(
+      wrapper.element.querySelectorAll('.grid-body-pane--left .datagrid-stage__row-index-cell'),
+    ) as HTMLElement[])
+      .filter(cell => ["r1", "r2", "r3"].includes(cell.dataset.rowId ?? ""))
+      .map(cell => cell.textContent?.trim())
+
+    expect(rowIndexLabels).toEqual(["1", "2", "3"])
+
+    wrapper.unmount()
+  })
+
+  it("keeps row index drag disabled unless rowReorder is enabled declaratively", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(firstRowIndexCell.exists()).toBe(true)
+    expect((firstRowIndexCell.element as HTMLElement).draggable).toBe(false)
 
     wrapper.unmount()
   })
@@ -3240,6 +3457,45 @@ describe("DataGrid app facade contract", () => {
         expect.objectContaining({ key: "owner", visible: false }),
         expect.objectContaining({ key: "region", visible: true }),
       ]),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("reorders columns inside the column layout panel with drag and drop", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnLayout: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = findToolbarAction(wrapper, "column-layout")
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryColumnLayoutRoot()
+    expect(popover).toBeTruthy()
+
+    const rows = Array.from(popover!.querySelectorAll<HTMLElement>(".datagrid-column-layout__row"))
+    const ownerRow = rows.find(row => row.textContent?.includes("Owner"))
+    const amountRow = rows.find(row => row.textContent?.includes("Amount"))
+    expect(ownerRow).toBeTruthy()
+    expect(amountRow).toBeTruthy()
+
+    await dragDropElement(ownerRow!, amountRow!, { targetClientY: 28 })
+
+    popover!.querySelector<HTMLElement>(".datagrid-column-layout__primary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getColumnSnapshot?.()).toMatchObject({
+      order: ["region", "amount", "owner"],
     })
 
     wrapper.unmount()

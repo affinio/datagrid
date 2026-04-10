@@ -28,10 +28,6 @@ export function useDataGridAppRowPresentation<TRow extends Record<string, unknow
     if (row.kind === "group") {
       return ""
     }
-    const sourceId = (row.data as { id?: unknown }).id
-    if (typeof sourceId === "number" && Number.isFinite(sourceId)) {
-      return String(sourceId)
-    }
     return String(options.viewportRowStart.value + rowOffset + 1)
   }
 

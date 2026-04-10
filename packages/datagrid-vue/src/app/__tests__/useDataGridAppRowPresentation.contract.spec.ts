@@ -17,6 +17,35 @@ function createRuntimeColumnSnapshot(columns: readonly Record<string, unknown>[]
 }
 
 describe("useDataGridAppRowPresentation contract", () => {
+  it("keeps row index labels sequential even when source rows use numeric ids", () => {
+    const presentation = useDataGridAppRowPresentation({
+      mode: ref("base"),
+      runtime: {
+        api: {
+          rows: {
+            expandGroup: vi.fn(),
+            collapseGroup: vi.fn(),
+          },
+        },
+        columnSnapshot: createRuntimeColumnSnapshot([]),
+      } as never,
+      viewportRowStart: ref(0),
+      firstColumnKey: ref("name"),
+    })
+
+    expect(presentation.rowIndexLabel({
+      kind: "data",
+      rowId: "row-4",
+      data: { id: 4 },
+    } as never, 0)).toBe("1")
+
+    expect(presentation.rowIndexLabel({
+      kind: "data",
+      rowId: "row-2",
+      data: { id: 2 },
+    } as never, 1)).toBe("2")
+  })
+
   it("renders group labels with an expanded or collapsed caret", () => {
     const presentation = useDataGridAppRowPresentation({
       mode: ref("tree"),

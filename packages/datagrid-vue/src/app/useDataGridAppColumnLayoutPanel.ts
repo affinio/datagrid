@@ -19,6 +19,7 @@ export interface UseDataGridAppColumnLayoutPanelResult {
   applyColumnLayoutPanel: () => void
   moveColumnUp: (key: string) => void
   moveColumnDown: (key: string) => void
+  moveColumnToPosition: (key: string, targetKey: string, placement: "before" | "after") => void
   updateColumnVisibility: (patch: DataGridAppColumnLayoutVisibilityPatch) => void
 }
 
@@ -72,6 +73,34 @@ export function useDataGridAppColumnLayoutPanel(
     moveColumn(key, 1)
   }
 
+  const moveColumnToPosition = (
+    key: string,
+    targetKey: string,
+    placement: "before" | "after",
+  ): void => {
+    if (key === targetKey) {
+      return
+    }
+    const sourceIndex = draftColumns.value.findIndex(column => column.key === key)
+    const targetIndex = draftColumns.value.findIndex(column => column.key === targetKey)
+    if (sourceIndex < 0 || targetIndex < 0) {
+      return
+    }
+    const nextDraft = [...draftColumns.value]
+    const movedColumn = nextDraft[sourceIndex]
+    if (!movedColumn) {
+      return
+    }
+    nextDraft.splice(sourceIndex, 1)
+    const normalizedTargetIndex = nextDraft.findIndex(column => column.key === targetKey)
+    if (normalizedTargetIndex < 0) {
+      return
+    }
+    const insertIndex = placement === "after" ? normalizedTargetIndex + 1 : normalizedTargetIndex
+    nextDraft.splice(insertIndex, 0, movedColumn)
+    draftColumns.value = nextDraft
+  }
+
   const updateColumnVisibility = (patch: DataGridAppColumnLayoutVisibilityPatch): void => {
     draftColumns.value = draftColumns.value.map(column => {
       if (column.key !== patch.key) {
@@ -107,6 +136,7 @@ export function useDataGridAppColumnLayoutPanel(
     applyColumnLayoutPanel,
     moveColumnUp,
     moveColumnDown,
+    moveColumnToPosition,
     updateColumnVisibility,
   }
 }

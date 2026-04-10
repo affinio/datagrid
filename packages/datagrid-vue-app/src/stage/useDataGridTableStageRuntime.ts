@@ -151,6 +151,11 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
     action: "insert-row-above" | "copy-row" | "cut-row" | "paste-row" | "delete-selected-rows" | "open-row-menu",
     rowId: string | number,
   ) => Promise<boolean> | boolean
+  reorderRowsByIndex?: (payload: {
+    sourceRowId: string | number
+    targetRowId: string | number
+    placement: "before" | "after"
+  }) => boolean
   cellClass?: (
     row: DataGridTableRow<TRow>,
     rowIndex: number,
@@ -956,6 +961,7 @@ export function useDataGridTableStageRuntime<
     handleRowClick: stageServices.rowSelection.focusRow,
     handleRowIndexClick: stageServices.rowSelection.selectRowRange,
     handleRowIndexKeydown,
+    reorderRowsByIndex: options.reorderRowsByIndex,
     handleToggleAllVisibleRows: stageServices.rowSelection.toggleVisibleRowsSelected,
     toggleGroupRow,
     rowIndexLabel,

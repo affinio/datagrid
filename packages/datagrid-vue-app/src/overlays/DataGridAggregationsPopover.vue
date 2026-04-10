@@ -54,6 +54,7 @@
         >
           <label class="datagrid-aggregations__toggle">
             <input
+              :name="`datagrid-aggregations-toggle-${item.key}`"
               type="checkbox"
               :checked="item.enabled"
               @change="emit('toggle-column', item.key, ($event.target as HTMLInputElement).checked)"

@@ -42,10 +42,23 @@ export type {
 export { useDataGridAppRowModel } from "./useDataGridAppRowModel"
 export { useDataGridTableStageBindings } from "./stage/useDataGridTableStageBindings"
 export { useDataGridTableStageRuntime } from "./stage/useDataGridTableStageRuntime"
+export { resolveDataGridChrome } from "./config/dataGridChrome"
+export { resolveDataGridRowReorder } from "./config/dataGridRowReorder"
 export type {
   DataGridAppInspectorPanel,
   DataGridAppToolbarModule,
 } from "./host/DataGridModuleHost"
+export type {
+  DataGridChromeDensity,
+  DataGridChromeOptions,
+  DataGridChromeProp,
+  DataGridResolvedChromeOptions,
+  DataGridToolbarPlacement,
+} from "./config/dataGridChrome"
+export type {
+  DataGridRowReorderOptions,
+  DataGridRowReorderProp,
+} from "./config/dataGridRowReorder"
 export type {
   BuildDataGridChromePaneModelInput,
   BuildDataGridChromeRenderModelInput,

@@ -40,6 +40,7 @@
         <label class="datagrid-find-replace__field">
           <span class="datagrid-find-replace__label">Find</span>
           <input
+            name="datagrid-find-replace-find"
             data-find-replace-autofocus="true"
             :value="findText"
             type="text"
@@ -52,6 +53,7 @@
         <label class="datagrid-find-replace__field">
           <span class="datagrid-find-replace__label">Replace</span>
           <input
+            name="datagrid-find-replace-replace"
             :value="replaceText"
             type="text"
             placeholder="Replacement"
@@ -62,6 +64,7 @@
 
       <label class="datagrid-find-replace__toggle">
         <input
+          name="datagrid-find-replace-match-case"
           :checked="matchCase"
           type="checkbox"
           @change="emit('update-match-case', ($event.target as HTMLInputElement).checked)"

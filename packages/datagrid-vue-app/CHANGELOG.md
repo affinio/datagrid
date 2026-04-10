@@ -1,5 +1,30 @@
 # @affino/datagrid-vue-app
 
+## 0.1.26
+
+### Patch Changes
+
+- ## Summary
+
+  Added package-level chrome layout controls, external toolbar hosting support, declarative row reorder, drag-and-drop column ordering inside the built-in Columns panel, and sequential visual row-index labels. This patch also cleans up package-rendered native input fields so built-in overlays and editors no longer rely on unnamed browser controls.
+
+  ## User impact
+
+  `DataGrid` consumers can now tune app-shell chrome declaratively through `chrome`, including `stacked` / `integrated` / `hidden` toolbar placement, compact density, and explicit toolbar/workspace gaps. Hosts can render built-in toolbar modules outside the grid through `toolbar-modules-change` plus exported `DataGridModuleHost`. Row drag-and-drop is now an opt-in public feature through `rowReorder`, column order can be changed by dragging items inside the built-in `Columns` panel, and row index labels stay visually stable as `1..N` regardless of numeric source ids or reordered row data. Sandbox demos now expose row reorder in the main sugar table scenario.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption:
+    - pass `chrome` when you need package-level control over toolbar placement, density, or shell gaps,
+    - subscribe to `toolbar-modules-change` and render `DataGridModuleHost` when toolbar UI must live in an external host shell,
+    - pass `rowReorder` to opt into drag-and-drop row reordering from the row index,
+    - use the built-in `Columns` panel drag-and-drop instead of custom move-up / move-down wrappers when manual column ordering is sufficient.
+
+  ## Validation
+  - public facade contract coverage updated for `chrome`, external toolbar module publication, row drag reorder, row-reorder opt-in gating, and column-layout drag reorder
+  - package README and sandbox demos updated for the new public facade options
+  - package type-check passed
+
 ## 0.1.25
 
 ### Patch Changes

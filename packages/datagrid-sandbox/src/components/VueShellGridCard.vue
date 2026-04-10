@@ -317,6 +317,7 @@
         :grid-lines="gridLines"
         :show-row-index="true"
         :row-selection="!props.timesheetShowcase"
+        :row-reorder="rowReorder"
         :placeholder-rows="placeholderRows"
         :is-cell-editable="timesheetIsCellEditable"
         @cell-change="handleGridCellChange"
@@ -1639,6 +1640,12 @@ const gridLines = computed<DataGridGridLinesProp>(() => {
 });
 const sandboxLayoutMode = computed(() => {
   return viewMode.value === "gantt" ? "fill" : "auto-height";
+});
+const rowReorder = computed(() => {
+  return props.mode === "base"
+    && viewMode.value === "table"
+    && !props.timesheetShowcase
+    && !hasActiveGrouping.value;
 });
 const sandboxMinRows = computed(() => {
   if (sandboxLayoutMode.value !== "auto-height") {

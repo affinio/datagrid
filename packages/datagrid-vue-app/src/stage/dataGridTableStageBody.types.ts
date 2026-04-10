@@ -132,6 +132,11 @@ export interface DataGridTableStagePinnedPaneRenderApi extends DataGridTableStag
   rowIndexCellClasses: (row: DataGridTableStageBodyRow, rowOffset: number) => Record<string, boolean>
   rowIndexCellStyle: (row: DataGridTableStageBodyRow, rowOffset: number) => CSSProperties
   rowIndexTabIndex: (row: DataGridTableStageBodyRow) => number
+  isRowIndexDraggable: (row: DataGridTableStageBodyRow) => boolean
   handleRowIndexClickSafe: (row: DataGridTableStageBodyRow, rowOffset: number, event: MouseEvent) => void
   handleRowIndexKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
+  handleRowIndexDragStart: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
+  handleRowIndexDragOver: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
+  handleRowIndexDrop: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
+  handleRowIndexDragEnd: () => void
 }

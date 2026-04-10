@@ -86,6 +86,8 @@ import {
   type DataGridAppViewMode,
   type DataGridGanttProp,
 } from "../gantt/dataGridGantt"
+import type { DataGridResolvedChromeOptions, DataGridToolbarPlacement } from "../config/dataGridChrome"
+import type { DataGridRowReorderOptions } from "../config/dataGridRowReorder"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { DataGridPlaceholderRowsOptions } from "../config/dataGridPlaceholderRows"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
@@ -713,6 +715,10 @@ export default defineComponent({
       type: Boolean,
       default: true,
     },
+    rowReorder: {
+      type: Object as PropType<DataGridRowReorderOptions>,
+      required: true,
+    },
     isCellEditable: {
       type: Function as PropType<DataGridCellEditablePredicate<Record<string, unknown>> | undefined>,
       default: undefined,
@@ -733,8 +739,16 @@ export default defineComponent({
       type: Object as PropType<DataGridResolvedHistoryOptions>,
       required: true,
     },
+    chrome: {
+      type: Object as PropType<DataGridResolvedChromeOptions>,
+      required: true,
+    },
     registerHistoryController: {
       type: Function as PropType<(controller: DataGridHistoryController | null) => void>,
+      default: () => undefined,
+    },
+    reportToolbarModules: {
+      type: Function as PropType<(modules: readonly DataGridAppToolbarModule[]) => void>,
       default: () => undefined,
     },
     inspectorPanel: {
@@ -743,11 +757,21 @@ export default defineComponent({
     },
   },
   setup(props) {
-    const gridLinesStyle = computed<CSSProperties>(() => ({
+    const gridChromeStyle = computed<CSSProperties>(() => ({
       "--datagrid-row-divider-size": props.gridLines.bodyRows ? "1px" : "0px",
       "--datagrid-column-divider-size": props.gridLines.bodyColumns ? "1px" : "0px",
       "--datagrid-header-column-divider-size": props.gridLines.headerColumns ? "1px" : "0px",
       "--datagrid-pinned-pane-separator-size": props.gridLines.pinnedSeparators ? "2px" : "0px",
+      "--datagrid-app-layout-gap": `${props.chrome.toolbarGap}px`,
+      "--datagrid-app-workspace-gap": `${props.chrome.workspaceGap}px`,
+      "--datagrid-app-toolbar-gap": props.chrome.density === "compact" ? "10px" : "12px",
+      "--datagrid-app-toolbar-group-gap": props.chrome.density === "compact" ? "6px" : "8px",
+      "--datagrid-app-toolbar-button-gap": props.chrome.density === "compact" ? "6px" : "8px",
+      "--datagrid-app-toolbar-button-height": props.chrome.density === "compact" ? "28px" : "32px",
+      "--datagrid-app-toolbar-button-padding-inline": props.chrome.density === "compact" ? "10px" : "12px",
+      "--datagrid-app-toolbar-button-font-size": props.chrome.density === "compact" ? "11px" : "12px",
+      "--datagrid-app-toolbar-surface-padding-block": props.chrome.density === "compact" ? "8px" : "10px",
+      "--datagrid-app-toolbar-surface-padding-inline": props.chrome.density === "compact" ? "10px" : "12px",
     }))
     const gridLinesChromeSignature = computed(() => {
       return [
@@ -857,6 +881,7 @@ export default defineComponent({
       applyColumnLayoutPanel,
       moveColumnUp,
       moveColumnDown,
+      moveColumnToPosition,
       updateColumnVisibility,
     } = useDataGridAppColumnLayoutPanel({
       resolveColumns: () => columnLayoutDraftColumns.value,
@@ -1877,6 +1902,49 @@ export default defineComponent({
       return moveRuntimeRowsToIndex(sourceRowIds, targetIndex + 1)
     }
 
+    const reorderRowsByIndex = (payload: {
+      sourceRowId: string | number
+      targetRowId: string | number
+      placement: "before" | "after"
+    }): boolean => {
+      if (!canMutateRows()) {
+        return false
+      }
+      const normalizedSourceRowId = String(payload.sourceRowId)
+      const normalizedTargetRowId = String(payload.targetRowId)
+      if (!normalizedSourceRowId || !normalizedTargetRowId || normalizedSourceRowId === normalizedTargetRowId) {
+        return false
+      }
+      const resolvedSelection = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedSourceRowId))
+      const sourceRowIds = resolvedSelection.includes(normalizedSourceRowId)
+        ? resolvedSelection
+        : resolveExistingRuntimeDataRowIds([normalizedSourceRowId])
+      if (sourceRowIds.length === 0 || sourceRowIds.includes(normalizedTargetRowId)) {
+        return false
+      }
+
+      const currentRows = readCurrentRuntimeDataRows()
+      const sourceRowIdSet = new Set(sourceRowIds)
+      const remainingRows = currentRows.filter(candidate => {
+        const normalized = resolveDataRowId(candidate)
+        return normalized == null || !sourceRowIdSet.has(normalized)
+      })
+      const targetIndex = remainingRows.findIndex(candidate => resolveDataRowId(candidate) === normalizedTargetRowId)
+      if (targetIndex < 0) {
+        return false
+      }
+
+      const beforeSnapshot = captureHistorySnapshot()
+      const moved = moveRuntimeRowsToIndex(
+        sourceRowIds,
+        payload.placement === "after" ? targetIndex + 1 : targetIndex,
+      )
+      if (moved) {
+        recordRowMutation(beforeSnapshot, sourceRowIds.length > 1 ? `Move ${sourceRowIds.length} rows` : "Move row")
+      }
+      return moved
+    }
+
     const clearPendingRowClipboardOperation = (): boolean => {
       if (!rowClipboardBuffer.value) {
         return false
@@ -1999,6 +2067,7 @@ export default defineComponent({
         openRuntimeContextMenuFromCurrentCell()
       },
       runRowIndexKeyboardAction: (action, rowId) => runRowIndexContextAction(action, rowId),
+      reorderRowsByIndex: props.rowReorder.enabled ? reorderRowsByIndex : undefined,
       cellClass: (row, _rowIndex, column) => {
         const target = highlightedFindReplaceCell.value
         if (!target || row.kind === "group" || row.rowId == null) {
@@ -2622,6 +2691,9 @@ export default defineComponent({
             onToggleVisibility: updateColumnVisibility,
             onMoveUp: moveColumnUp,
             onMoveDown: moveColumnDown,
+            onMoveToPosition: (payload: { key: string; targetKey: string; placement: "before" | "after" }) => {
+              moveColumnToPosition(payload.key, payload.targetKey, payload.placement)
+            },
             onApply: applyColumnLayoutPanel,
             onCancel: cancelColumnLayoutPanel,
           },
@@ -2706,18 +2778,50 @@ export default defineComponent({
       return [...modules, ...props.toolbarModules].map(normalizeToolbarModule)
     })
 
+    watch(
+      toolbarModules,
+      nextModules => {
+        props.reportToolbarModules?.(nextModules)
+      },
+      { immediate: true, flush: "post" },
+    )
+
+    const effectiveToolbarPlacement = computed<DataGridToolbarPlacement>(() => {
+      if (props.viewMode === "gantt" && props.chrome.toolbarPlacement === "integrated") {
+        return "stacked"
+      }
+      return props.chrome.toolbarPlacement
+    })
+
+    const renderToolbarInternally = computed(() => {
+      return toolbarModules.value.length > 0 && effectiveToolbarPlacement.value !== "hidden"
+    })
+
+    const renderToolbarStacked = computed(() => {
+      return renderToolbarInternally.value && effectiveToolbarPlacement.value === "stacked"
+    })
+
+    const renderToolbarIntegrated = computed(() => {
+      return renderToolbarInternally.value && effectiveToolbarPlacement.value === "integrated"
+    })
+
     return () => h("div", {
       class: [
         "datagrid-app-layout",
+        `datagrid-app-layout--toolbar-${effectiveToolbarPlacement.value}`,
+        `datagrid-app-layout--density-${props.chrome.density}`,
         props.layoutMode === "auto-height"
           ? "datagrid-app-layout--auto-height"
           : "datagrid-app-layout--fill",
       ],
-      style: gridLinesStyle.value,
+      style: gridChromeStyle.value,
     }, [
-      h(DataGridModuleHost as Component, {
-        modules: toolbarModules.value,
-      }),
+      renderToolbarStacked.value
+        ? h(DataGridModuleHost as Component, {
+          modules: toolbarModules.value,
+          variant: "standalone",
+        })
+        : null,
       h("div", {
         class: [
           "datagrid-app-workspace",
@@ -2726,64 +2830,138 @@ export default defineComponent({
             : "datagrid-app-workspace--fill",
         ],
       }, [
-        h("div", {
-          class: [
-            "datagrid-app-stage",
-            props.layoutMode === "auto-height"
-              ? "datagrid-app-stage--auto-height"
-              : "datagrid-app-stage--fill",
-          ],
-          ref: stageHostRef,
-        }, [
-          props.viewMode === "gantt"
-            ? h(DataGridGanttStage as Component, {
-              stageContext: tableStageContext,
-              runtime: props.runtime,
-              gantt: props.gantt,
-              baseRowHeight: normalizedBaseRowHeight.value,
-              rowVersion: rowVersion.value,
-            })
-            : h(DataGridTableStage as Component, {
-              ...stageProps.value,
-              stageContext: tableStageContext,
-              onViewportContextMenu: handleViewportContextMenu,
+        renderToolbarIntegrated.value
+          ? h("div", {
+            class: [
+              "datagrid-app-stage-surface",
+              props.layoutMode === "auto-height"
+                ? "datagrid-app-stage-surface--auto-height"
+                : "datagrid-app-stage-surface--fill",
+              "datagrid-app-stage-surface--integrated",
+            ],
+          }, [
+            h(DataGridModuleHost as Component, {
+              modules: toolbarModules.value,
+              variant: "integrated",
             }),
-          contextMenu.value.visible && menuActionEntries.value.length > 0
-            ? h("div", {
-              ref: contextMenuRef,
-              class: "datagrid-context-menu",
-              style: contextMenuStyle.value,
-              role: "menu",
-              tabindex: -1,
-              onKeydown: (event: KeyboardEvent) => {
-                onContextMenuKeyDown(event, {
-                  onEscape: () => {
-                    focusGridViewport()
-                  },
+            h("div", {
+              class: [
+                "datagrid-app-stage",
+                "datagrid-app-stage--integrated",
+                props.layoutMode === "auto-height"
+                  ? "datagrid-app-stage--auto-height"
+                  : "datagrid-app-stage--fill",
+              ],
+              ref: stageHostRef,
+            }, [
+              props.viewMode === "gantt"
+                ? h(DataGridGanttStage as Component, {
+                  stageContext: tableStageContext,
+                  runtime: props.runtime,
+                  gantt: props.gantt,
+                  baseRowHeight: normalizedBaseRowHeight.value,
+                  rowVersion: rowVersion.value,
                 })
-              },
-            }, menuActionEntries.value.flatMap(entry => {
-              const nodes: Array<ReturnType<typeof h>> = []
-              if (entry.separatorBefore) {
-                nodes.push(h("div", {
-                  class: "datagrid-context-menu__separator",
-                  "aria-hidden": "true",
+                : h(DataGridTableStage as Component, {
+                  ...stageProps.value,
+                  stageContext: tableStageContext,
+                  onViewportContextMenu: handleViewportContextMenu,
+                }),
+              contextMenu.value.visible && menuActionEntries.value.length > 0
+                ? h("div", {
+                  ref: contextMenuRef,
+                  class: "datagrid-context-menu",
+                  style: contextMenuStyle.value,
+                  role: "menu",
+                  tabindex: -1,
+                  onKeydown: (event: KeyboardEvent) => {
+                    onContextMenuKeyDown(event, {
+                      onEscape: () => {
+                        focusGridViewport()
+                      },
+                    })
+                  },
+                }, menuActionEntries.value.flatMap(entry => {
+                  const nodes: Array<ReturnType<typeof h>> = []
+                  if (entry.separatorBefore) {
+                    nodes.push(h("div", {
+                      class: "datagrid-context-menu__separator",
+                      "aria-hidden": "true",
+                    }))
+                  }
+                  nodes.push(h("button", {
+                    type: "button",
+                    class: "datagrid-context-menu__item",
+                    "data-datagrid-menu-action": entry.id,
+                    disabled: entry.disabled,
+                    title: entry.title,
+                    onClick: () => {
+                      void handleContextMenuAction(entry.id)
+                    },
+                  }, entry.label))
+                  return nodes
                 }))
-              }
-              nodes.push(h("button", {
-                type: "button",
-                class: "datagrid-context-menu__item",
-                "data-datagrid-menu-action": entry.id,
-                disabled: entry.disabled,
-                title: entry.title,
-                onClick: () => {
-                  void handleContextMenuAction(entry.id)
+                : null,
+            ]),
+          ])
+          : h("div", {
+            class: [
+              "datagrid-app-stage",
+              props.layoutMode === "auto-height"
+                ? "datagrid-app-stage--auto-height"
+                : "datagrid-app-stage--fill",
+            ],
+            ref: stageHostRef,
+          }, [
+            props.viewMode === "gantt"
+              ? h(DataGridGanttStage as Component, {
+                stageContext: tableStageContext,
+                runtime: props.runtime,
+                gantt: props.gantt,
+                baseRowHeight: normalizedBaseRowHeight.value,
+                rowVersion: rowVersion.value,
+              })
+              : h(DataGridTableStage as Component, {
+                ...stageProps.value,
+                stageContext: tableStageContext,
+                onViewportContextMenu: handleViewportContextMenu,
+              }),
+            contextMenu.value.visible && menuActionEntries.value.length > 0
+              ? h("div", {
+                ref: contextMenuRef,
+                class: "datagrid-context-menu",
+                style: contextMenuStyle.value,
+                role: "menu",
+                tabindex: -1,
+                onKeydown: (event: KeyboardEvent) => {
+                  onContextMenuKeyDown(event, {
+                    onEscape: () => {
+                      focusGridViewport()
+                    },
+                  })
                 },
-              }, entry.label))
-              return nodes
-            }))
-            : null,
-        ]),
+              }, menuActionEntries.value.flatMap(entry => {
+                const nodes: Array<ReturnType<typeof h>> = []
+                if (entry.separatorBefore) {
+                  nodes.push(h("div", {
+                    class: "datagrid-context-menu__separator",
+                    "aria-hidden": "true",
+                  }))
+                }
+                nodes.push(h("button", {
+                  type: "button",
+                  class: "datagrid-context-menu__item",
+                  "data-datagrid-menu-action": entry.id,
+                  disabled: entry.disabled,
+                  title: entry.title,
+                  onClick: () => {
+                    void handleContextMenuAction(entry.id)
+                  },
+                }, entry.label))
+                return nodes
+              }))
+              : null,
+          ]),
         props.inspectorPanel
           ? h("aside", {
             class: "datagrid-app-inspector-shell",

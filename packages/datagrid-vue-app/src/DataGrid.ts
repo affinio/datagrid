@@ -48,6 +48,11 @@ import {
   type DataGridAppClientRowModelOptions,
   type DataGridAppColumnInput,
 } from "./config/dataGridFormulaOptions"
+import {
+  resolveDataGridChrome,
+  type DataGridChromeProp,
+  type DataGridResolvedChromeOptions,
+} from "./config/dataGridChrome"
 import { type DataGridThemeProp } from "./theme/dataGridTheme"
 import {
   resolveDataGridGroupBy,
@@ -90,6 +95,11 @@ import {
   type DataGridColumnLayoutOptions,
   type DataGridColumnLayoutProp,
 } from "./config/dataGridColumnLayout"
+import {
+  resolveDataGridRowReorder,
+  type DataGridRowReorderOptions,
+  type DataGridRowReorderProp,
+} from "./config/dataGridRowReorder"
 import {
   resolveDataGridAggregations,
   type DataGridAggregationsOptions,
@@ -266,6 +276,53 @@ function rowSelectionSnapshotsEqual(
   return true
 }
 
+function toolbarModulePropsEqual(
+  left: Record<string, unknown> | undefined,
+  right: Record<string, unknown> | undefined,
+): boolean {
+  if (left === right) {
+    return true
+  }
+  const leftEntries = Object.entries(left ?? {})
+  const rightEntries = Object.entries(right ?? {})
+  if (leftEntries.length !== rightEntries.length) {
+    return false
+  }
+  for (const [key, value] of leftEntries) {
+    if (!Object.is(value, right?.[key])) {
+      return false
+    }
+  }
+  return true
+}
+
+function toolbarModulesEqual(
+  left: readonly DataGridAppToolbarModule[],
+  right: readonly DataGridAppToolbarModule[],
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftModule = left[index]
+    const rightModule = right[index]
+    if (!leftModule || !rightModule) {
+      return false
+    }
+    if (
+      leftModule.key !== rightModule.key
+      || leftModule.component !== rightModule.component
+      || !toolbarModulePropsEqual(leftModule.props, rightModule.props)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 export default defineComponent({
   name: "DataGrid",
   inheritAttrs: false,
@@ -357,6 +414,10 @@ export default defineComponent({
     rowSelection: {
       type: Boolean,
       default: true,
+    },
+    rowReorder: {
+      type: [Boolean, Object] as PropType<DataGridRowReorderProp | undefined>,
+      default: undefined,
     },
     rowSelectionState: {
       type: Object as PropType<DataGridRowSelectionSnapshot | null | undefined>,
@@ -486,6 +547,10 @@ export default defineComponent({
       type: [Boolean, Object] as PropType<DataGridHistoryProp | undefined>,
       default: undefined,
     },
+    chrome: {
+      type: [String, Object] as PropType<DataGridChromeProp | undefined>,
+      default: undefined,
+    },
     toolbarModules: {
       type: Array as PropType<readonly DataGridAppToolbarModule[]>,
       default: () => [],
@@ -505,15 +570,20 @@ export default defineComponent({
     "update:groupBy": (_payload: DataGridGroupBySpec | null) => true,
     "update:viewMode": (_payload: DataGridAppViewMode) => true,
     "update:state": (_payload: DataGridUnifiedState<Record<string, unknown>> | null) => true,
+    "toolbar-modules-change": (_payload: readonly DataGridAppToolbarModule[]) => true,
     "ready": (_payload: { api: DataGridApi<Record<string, unknown>>; rowModel: DataGridRowModel<Record<string, unknown>> | null }) => true,
   },
   setup(props, { attrs, slots, emit, expose }) {
     const dataGridRef = ref<LowLevelGridExpose | null>(null)
     const disabledHistoryController = createDisabledDataGridHistoryController()
     const registeredHistoryController = ref<DataGridHistoryController | null>(null)
+    const resolvedToolbarModules = ref<readonly DataGridAppToolbarModule[]>([])
+    let queuedToolbarModules: readonly DataGridAppToolbarModule[] | null = null
+    let toolbarModulesEmitScheduled = false
     const currentViewMode = ref<DataGridAppViewMode>(props.viewMode === "gantt" ? "gantt" : "table")
     const runtimeUnifiedState = ref<DataGridUnifiedState<Record<string, unknown>> | null>(props.state ?? null)
     const resolvedHistory = computed(() => resolveDataGridHistory(props.history))
+    const resolvedChrome = computed<DataGridResolvedChromeOptions>(() => resolveDataGridChrome(props.chrome))
     const resolvedRenderMode = computed(() => {
       return resolveDataGridRenderMode(props.renderMode, props.pagination)
     })
@@ -585,6 +655,9 @@ export default defineComponent({
     ))
     const resolvedPlaceholderRows = computed<DataGridPlaceholderRowsOptions<Record<string, unknown>>>(() => {
       return resolveDataGridPlaceholderRows(props.placeholderRows)
+    })
+    const resolvedRowReorder = computed<DataGridRowReorderOptions>(() => {
+      return resolveDataGridRowReorder(props.rowReorder)
     })
     const resolvedClientRowModelOptions = computed(() => {
       return resolveDataGridFormulaRowModelOptions({
@@ -791,6 +864,27 @@ export default defineComponent({
       registeredHistoryController.value = controller
     }
 
+    const reportToolbarModules = (modules: readonly DataGridAppToolbarModule[]): void => {
+      if (toolbarModulesEqual(resolvedToolbarModules.value, modules)) {
+        return
+      }
+      resolvedToolbarModules.value = modules
+      queuedToolbarModules = modules
+      if (toolbarModulesEmitScheduled) {
+        return
+      }
+      toolbarModulesEmitScheduled = true
+      Promise.resolve().then(() => {
+        toolbarModulesEmitScheduled = false
+        const nextModules = queuedToolbarModules
+        queuedToolbarModules = null
+        if (!nextModules) {
+          return
+        }
+        emit("toolbar-modules-change", nextModules)
+      })
+    }
+
     const adapterHistoryController = computed<DataGridHistoryController>(() => {
       const adapter = resolvedHistory.value.adapter
       if (!resolvedHistory.value.enabled || !adapter) {
@@ -853,6 +947,8 @@ export default defineComponent({
       rowModel: resolvedRowModel,
       history: historyController,
       getHistory: () => historyController,
+      toolbarModules: resolvedToolbarModules,
+      getToolbarModules: () => resolvedToolbarModules.value,
       getApi: () => dataGridRef.value?.api ?? null,
       getRuntime: () => dataGridRef.value?.runtime ?? null,
       getCore: () => dataGridRef.value?.core ?? null,
@@ -927,10 +1023,13 @@ export default defineComponent({
         isCellEditable: props.isCellEditable,
         showRowIndex: props.showRowIndex,
         rowSelection: props.rowSelection,
+        rowReorder: resolvedRowReorder.value,
         viewMode: currentViewMode.value,
         gantt: props.gantt,
         history: resolvedHistory.value,
+        chrome: resolvedChrome.value,
         registerHistoryController,
+        reportToolbarModules,
         toolbarModules: props.toolbarModules,
       }
       return h(

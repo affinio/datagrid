@@ -18,13 +18,22 @@ export default defineComponent({
       type: Array as PropType<readonly DataGridAppToolbarModule[]>,
       default: () => [],
     },
+    variant: {
+      type: String as PropType<"standalone" | "integrated">,
+      default: "standalone",
+    },
   },
   setup(props) {
     return (): VNode | null => {
       if (props.modules.length === 0) {
         return null
       }
-      return h("div", { class: "datagrid-app-toolbar" }, [
+      return h("div", {
+        class: [
+          "datagrid-app-toolbar",
+          props.variant === "integrated" ? "datagrid-app-toolbar--integrated" : null,
+        ],
+      }, [
         h("div", { class: "datagrid-app-toolbar__group" }, props.modules.map(module => (
           h(module.component, {
             key: module.key,

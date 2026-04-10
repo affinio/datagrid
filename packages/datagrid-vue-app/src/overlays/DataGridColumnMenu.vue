@@ -169,6 +169,7 @@
 
         <input
           v-if="showTextFilterInput"
+          :name="`datagrid-column-menu-text-filter-${columnKey}`"
           :value="textFilterValue"
           class="datagrid-column-menu__search"
           type="search"
@@ -193,6 +194,7 @@
         <input
           v-if="effectiveValueFilterEnabled"
           v-model="query"
+          :name="`datagrid-column-menu-value-search-${columnKey}`"
           class="datagrid-column-menu__search"
           type="search"
           placeholder="Search values"
@@ -209,6 +211,7 @@
           data-datagrid-column-menu-action="add-current-selection"
         >
           <input
+            :name="`datagrid-column-menu-add-selection-${columnKey}`"
             type="checkbox"
             :checked="addCurrentSelectionToFilter"
             :disabled="isActionDisabled('addCurrentSelectionToFilter', filterSectionDisabled)"
@@ -265,6 +268,7 @@
               :aria-selected="selectedTokenSet.has(entry.token)"
             >
               <input
+                :name="`datagrid-column-menu-value-${columnKey}-${entry.token}`"
                 type="checkbox"
                 :checked="selectedTokenSet.has(entry.token)"
                 :disabled="filterSectionDisabled"
