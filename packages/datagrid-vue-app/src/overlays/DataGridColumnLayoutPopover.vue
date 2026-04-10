@@ -17,11 +17,17 @@
       :ref="floating.contentRef"
       class="datagrid-column-layout"
       data-datagrid-overlay-surface="true"
-      :style="[popoverContentStyle, overlayThemeVars]"
+      data-datagrid-overlay-surface-id="column-layout"
+      :data-datagrid-overlay-dragging="draggable.dragging.value ? 'true' : 'false'"
+      :style="[draggable.surfaceStyle.value, overlayThemeVars]"
       v-bind="contentProps"
     >
       <header class="datagrid-column-layout__header">
-        <div>
+        <div
+          class="datagrid-overlay-drag-handle"
+          data-datagrid-overlay-drag-handle="true"
+          @pointerdown="draggable.handlePointerDown"
+        >
           <div class="datagrid-column-layout__eyebrow">Column layout</div>
           <h3 class="datagrid-column-layout__title">Order and visibility</h3>
         </div>
@@ -90,6 +96,7 @@ import type {
 } from "@affino/datagrid-vue/app"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
+import { useDataGridDraggableOverlaySurface } from "./useDataGridDraggableOverlaySurface"
 
 const props = withDefaults(defineProps<{
   isOpen: boolean
@@ -144,11 +151,15 @@ const floating = useFloatingPopover(controller, {
   lockScroll: false,
   returnFocus: true,
 })
+const draggable = useDataGridDraggableOverlaySurface({
+  surfaceId: "column-layout",
+  rootElementRef,
+  floating,
+})
 
 const triggerProps = computed(() => controller.getTriggerProps({ role: "dialog" }))
 const contentProps = computed(() => controller.getContentProps({ role: "dialog", tabIndex: -1 }))
 const popoverOpen = computed(() => controller.state.value.open)
-const popoverContentStyle = computed(() => floating.contentStyle.value)
 const popoverTeleportTarget = computed(() => floating.teleportTarget.value)
 
 watch(

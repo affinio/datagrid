@@ -50,15 +50,28 @@ export interface DataGridColumnMenuCustomItemContext {
   closeMenu: () => void
 }
 
-export interface DataGridColumnMenuCustomItem {
+interface DataGridColumnMenuCustomItemBase {
   key: string
   label: string
   placement?: DataGridColumnMenuCustomItemPlacement
   hidden?: boolean
   disabled?: boolean
   disabledReason?: string
+}
+
+export interface DataGridColumnMenuCustomLeafItem extends DataGridColumnMenuCustomItemBase {
+  kind?: "item"
   onSelect?: (context: DataGridColumnMenuCustomItemContext) => void | Promise<void>
 }
+
+export interface DataGridColumnMenuCustomSubmenuItem extends DataGridColumnMenuCustomItemBase {
+  kind: "submenu"
+  items: readonly DataGridColumnMenuCustomItem[]
+}
+
+export type DataGridColumnMenuCustomItem =
+  | DataGridColumnMenuCustomLeafItem
+  | DataGridColumnMenuCustomSubmenuItem
 
 export interface DataGridColumnMenuColumnOptions {
   items?: readonly DataGridColumnMenuItemKey[]
@@ -194,7 +207,7 @@ function normalizeCustomItems(
     const placement = typeof item.placement === "string" && isCustomItemPlacement(item.placement)
       ? item.placement
       : undefined
-    normalized.push(Object.freeze({
+    const baseItem = {
       key,
       label,
       ...(placement ? { placement } : {}),
@@ -203,8 +216,23 @@ function normalizeCustomItems(
       ...(typeof item.disabledReason === "string" && item.disabledReason.trim().length > 0
         ? { disabledReason: item.disabledReason.trim() }
         : {}),
+    } satisfies DataGridColumnMenuCustomItemBase
+    if (item.kind === "submenu") {
+      const items = normalizeCustomItems(item.items)
+      if (items.length === 0) {
+        continue
+      }
+      normalized.push(Object.freeze({
+        ...baseItem,
+        kind: "submenu",
+        items,
+      } satisfies DataGridColumnMenuCustomSubmenuItem))
+      continue
+    }
+    normalized.push(Object.freeze({
+      ...baseItem,
       ...(typeof item.onSelect === "function" ? { onSelect: item.onSelect } : {}),
-    } satisfies DataGridColumnMenuCustomItem))
+    } satisfies DataGridColumnMenuCustomLeafItem))
   }
   return Object.freeze(normalized)
 }

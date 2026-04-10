@@ -316,18 +316,13 @@
         </div>
         </section>
 
-        <UiMenuItem
+        <DataGridColumnMenuCustomEntry
           v-else-if="entry.kind === 'custom'"
-          class="datagrid-column-menu__item"
-          :data-datagrid-column-menu-action="`custom:${entry.item.key}`"
-          :data-datagrid-column-menu-custom-key="entry.item.key"
-          :data-disabled-reason="resolveCustomItemDisabledTitle(entry.item)"
-          :disabled="isCustomItemDisabled(entry.item)"
-          :title="resolveCustomItemDisabledTitle(entry.item)"
-          @select="handleCustomItemSelect(entry.item)"
-        >
-          <span :title="resolveCustomItemDisabledTitle(entry.item)">{{ entry.item.label }}</span>
-        </UiMenuItem>
+          :item="entry.item"
+          :menu-theme-vars="menuThemeVars"
+          :submenu-options="submenuOptions"
+          @select="handleCustomItemSelect"
+        />
       </template>
     </UiMenuContent>
   </UiMenu>
@@ -349,11 +344,13 @@ import {
   type MenuCallbacks,
   type MenuOptions,
 } from "@affino/menu-vue"
+import DataGridColumnMenuCustomEntry from "./DataGridColumnMenuCustomEntry.vue"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import type {
   DataGridColumnMenuActionKey,
   DataGridColumnMenuActionOptions,
   DataGridColumnMenuCustomItem,
+  DataGridColumnMenuCustomLeafItem,
   DataGridColumnMenuDisabledReasons,
   DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
@@ -666,11 +663,6 @@ function isCustomItemDisabled(item: DataGridColumnMenuCustomItem): boolean {
   return item.disabled === true
 }
 
-function resolveCustomItemDisabledTitle(item: DataGridColumnMenuCustomItem): string | undefined {
-  const reason = item.disabledReason?.trim() ?? ""
-  return reason.length > 0 ? reason : undefined
-}
-
 function formatColumnMenuValueLabel(value: unknown): string {
   if (value == null) {
     return "(Blanks)"
@@ -711,7 +703,7 @@ function closeMenu(): void {
   menuRef.value?.controller?.close("programmatic")
 }
 
-async function handleCustomItemSelect(item: DataGridColumnMenuCustomItem): Promise<void> {
+async function handleCustomItemSelect(item: DataGridColumnMenuCustomLeafItem): Promise<void> {
   if (isCustomItemDisabled(item)) {
     return
   }

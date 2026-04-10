@@ -353,6 +353,21 @@ const DATA_GRID_APP_STYLES = `
   color: var(--datagrid-accent-strong);
 }
 
+.datagrid-overlay-drag-handle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+[data-datagrid-overlay-dragging="true"] .datagrid-overlay-drag-handle,
+.datagrid-overlay-drag-handle:active {
+  cursor: grabbing;
+}
+
 .datagrid-column-layout {
   display: flex;
   flex-direction: column;
@@ -1336,8 +1351,51 @@ body.datagrid-fill-drag-cursor * {
 }
 
 .grid-cell--index-selected {
+  overflow: visible;
+}
+
+.datagrid-stage__row-index-cell.grid-cell--index-selected::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: calc(6px + var(--datagrid-column-divider-size));
   background: var(--datagrid-selection-range-bg);
-  box-shadow: inset 0 0 0 1px var(--datagrid-selection-border-color);
+  border-left: 1px solid var(--datagrid-selection-border-color);
+  border-right: 1px solid var(--datagrid-selection-border-color);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.datagrid-stage__row-index-cell.grid-cell--index-selected-top::before {
+  top: 2px;
+  bottom: calc(var(--datagrid-row-divider-size) * -1);
+  border-top: 1px solid var(--datagrid-selection-border-color);
+  border-radius: 10px 10px 0 0;
+}
+
+.datagrid-stage__row-index-cell.grid-cell--index-selected-middle::before {
+  top: calc(var(--datagrid-row-divider-size) * -1);
+  bottom: calc(var(--datagrid-row-divider-size) * -1);
+}
+
+.datagrid-stage__row-index-cell.grid-cell--index-selected-bottom::before {
+  top: calc(var(--datagrid-row-divider-size) * -1);
+  bottom: 2px;
+  border-bottom: 1px solid var(--datagrid-selection-border-color);
+  border-radius: 0 0 10px 10px;
+}
+
+.datagrid-stage__row-index-cell.grid-cell--index-selected-single::before {
+  top: 2px;
+  bottom: 2px;
+  border-top: 1px solid var(--datagrid-selection-border-color);
+  border-bottom: 1px solid var(--datagrid-selection-border-color);
+  border-radius: 10px;
+}
+
+.datagrid-stage__row-index-cell.grid-cell--index-selected .row-resize-handle {
+  position: relative;
+  z-index: 1;
 }
 
 .grid-row .grid-cell--index {

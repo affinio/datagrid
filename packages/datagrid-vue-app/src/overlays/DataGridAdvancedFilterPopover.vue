@@ -28,11 +28,17 @@
       :ref="floating.contentRef"
       class="datagrid-advanced-filter"
       data-datagrid-overlay-surface="true"
-      :style="[popoverContentStyle, overlayThemeVars]"
+      data-datagrid-overlay-surface-id="advanced-filter"
+      :data-datagrid-overlay-dragging="draggable.dragging.value ? 'true' : 'false'"
+      :style="[draggable.surfaceStyle.value, overlayThemeVars]"
       v-bind="contentProps"
     >
       <header class="datagrid-advanced-filter__header">
-        <div>
+        <div
+          class="datagrid-overlay-drag-handle"
+          data-datagrid-overlay-drag-handle="true"
+          @pointerdown="draggable.handlePointerDown"
+        >
           <div class="datagrid-advanced-filter__eyebrow">Advanced filter</div>
           <h3 class="datagrid-advanced-filter__title">Build clause-based filter</h3>
         </div>
@@ -177,6 +183,7 @@ import DataGridFilterableCombobox from "./DataGridFilterableCombobox.vue"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import type { DataGridFilterableComboboxOption } from "./dataGridFilterableCombobox"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
+import { useDataGridDraggableOverlaySurface } from "./useDataGridDraggableOverlaySurface"
 
 const JOIN_OPTIONS: readonly DataGridFilterableComboboxOption[] = Object.freeze([
   { value: "and", label: "AND" },
@@ -257,11 +264,15 @@ const floating = useFloatingPopover(controller, {
   lockScroll: false,
   returnFocus: true,
 })
+const draggable = useDataGridDraggableOverlaySurface({
+  surfaceId: "advanced-filter",
+  rootElementRef,
+  floating,
+})
 
 const triggerProps = computed(() => controller.getTriggerProps({ role: "dialog" }))
 const contentProps = computed(() => controller.getContentProps({ role: "dialog", tabIndex: -1 }))
 const popoverOpen = computed(() => controller.state.value.open)
-const popoverContentStyle = computed(() => floating.contentStyle.value)
 const popoverTeleportTarget = computed(() => floating.teleportTarget.value)
 const columnOptions = computed<readonly DataGridFilterableComboboxOption[]>(() => {
   return props.columns.map(column => ({

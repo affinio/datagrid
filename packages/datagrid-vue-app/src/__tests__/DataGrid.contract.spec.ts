@@ -472,6 +472,67 @@ function queryAggregationsRoot(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(".datagrid-aggregations")
 }
 
+function queryOverlayDragHandle(root: HTMLElement | null): HTMLElement | null {
+  return root?.querySelector<HTMLElement>('[data-datagrid-overlay-drag-handle="true"]') ?? null
+}
+
+function readOverlayPosition(root: HTMLElement | null): { left: number; top: number } | null {
+  if (!root) {
+    return null
+  }
+  const left = Number.parseFloat(root.style.left)
+  const top = Number.parseFloat(root.style.top)
+  if (!Number.isFinite(left) || !Number.isFinite(top)) {
+    return null
+  }
+  return { left, top }
+}
+
+function createPointerLikeEvent(
+  type: string,
+  init: MouseEventInit & { pointerId?: number } = {},
+): PointerEvent {
+  const event = typeof PointerEvent !== "undefined"
+    ? new PointerEvent(type, { bubbles: true, cancelable: true, ...init })
+    : new MouseEvent(type, { bubbles: true, cancelable: true, ...init })
+  if (typeof PointerEvent === "undefined" && init.pointerId != null) {
+    Object.defineProperty(event, "pointerId", {
+      configurable: true,
+      value: init.pointerId,
+    })
+  }
+  return event as PointerEvent
+}
+
+async function dragOverlaySurface(
+  root: HTMLElement,
+  delta: { x: number; y: number },
+): Promise<void> {
+  const handle = queryOverlayDragHandle(root)
+  expect(handle).toBeTruthy()
+
+  handle!.dispatchEvent(createPointerLikeEvent("pointerdown", {
+    button: 0,
+    buttons: 1,
+    clientX: 48,
+    clientY: 40,
+    pointerId: 1,
+  }))
+  window.dispatchEvent(createPointerLikeEvent("pointermove", {
+    buttons: 1,
+    clientX: 48 + delta.x,
+    clientY: 40 + delta.y,
+    pointerId: 1,
+  }))
+  window.dispatchEvent(createPointerLikeEvent("pointerup", {
+    button: 0,
+    clientX: 48 + delta.x,
+    clientY: 40 + delta.y,
+    pointerId: 1,
+  }))
+  await flushRuntimeTasks()
+}
+
 function queryVisibleComboboxPanel(): HTMLElement | null {
   const panels = Array.from(document.body.querySelectorAll<HTMLElement>(".datagrid-cell-combobox__panel"))
   return panels.findLast(panel => getComputedStyle(panel).display !== "none") ?? null
@@ -1358,6 +1419,72 @@ describe("DataGrid app facade contract", () => {
 
     expect(queryColumnMenuAction("custom:insert-left")?.textContent).toContain("Insert column left")
     expect(queryColumnMenuAction("custom:rename")).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it("supports nested declarative custom columnMenu submenus", async () => {
+    const onDuplicate = vi.fn()
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: {
+          customItems: [
+            {
+              key: "organize",
+              label: "Organize",
+              kind: "submenu",
+              placement: "after:group",
+              items: [
+                {
+                  key: "advanced",
+                  label: "Advanced",
+                  kind: "submenu",
+                  items: [
+                    {
+                      key: "duplicate",
+                      label: "Duplicate column",
+                      onSelect: onDuplicate,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    const organize = queryColumnMenuAction("custom:organize")
+    expect(organize?.textContent).toContain("Organize")
+
+    organize?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const advanced = queryColumnMenuAction("custom:organize/advanced")
+    expect(advanced?.textContent).toContain("Advanced")
+
+    advanced?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const duplicate = queryColumnMenuAction("custom:organize/advanced/duplicate")
+    expect(duplicate?.textContent).toContain("Duplicate column")
+
+    duplicate?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(onDuplicate).toHaveBeenCalledWith(expect.objectContaining({
+      columnKey: "owner",
+      columnLabel: "Owner",
+      closeMenu: expect.any(Function),
+    }))
 
     wrapper.unmount()
   })
@@ -2463,6 +2590,50 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("lets users drag the advanced filter panel and reopens it at the detached position", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        advancedFilter: true,
+      },
+    })
+
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const initialRoot = queryAdvancedFilterRoot()
+    expect(initialRoot).toBeTruthy()
+    const initialPosition = readOverlayPosition(initialRoot)
+    expect(initialPosition).toBeTruthy()
+
+    await dragOverlaySurface(initialRoot!, { x: 84, y: 56 })
+
+    const draggedRoot = queryAdvancedFilterRoot()
+    const draggedPosition = readOverlayPosition(draggedRoot)
+    expect(draggedPosition).toEqual({
+      left: initialPosition!.left + 84,
+      top: initialPosition!.top + 56,
+    })
+
+    draggedRoot?.querySelector<HTMLButtonElement>(".datagrid-advanced-filter__ghost")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+    expect(queryAdvancedFilterRoot()).toBeNull()
+
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(readOverlayPosition(queryAdvancedFilterRoot())).toEqual(draggedPosition)
+
+    wrapper.unmount()
+  })
+
   it("opens declarative findReplace, selects the next match, and flashes the resolved cell", async () => {
     await preloadFindReplacePopover()
 
@@ -2503,6 +2674,51 @@ describe("DataGrid app facade contract", () => {
     expect(targetCell.exists()).toBe(true)
     expect(targetCell.classes()).toContain("grid-cell--selection-anchor")
     expect(targetCell.classes()).toContain("grid-cell--find-match-active")
+
+    wrapper.unmount()
+  })
+
+  it("lets users drag the find/replace panel and reopens it at the detached position", async () => {
+    await preloadFindReplacePopover()
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SEARCH_FILTER_ROWS,
+        columns: COLUMNS,
+        findReplace: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = findToolbarAction(wrapper, "find-replace")
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const initialRoot = queryFindReplaceRoot()
+    expect(initialRoot).toBeTruthy()
+    const initialPosition = readOverlayPosition(initialRoot)
+    expect(initialPosition).toBeTruthy()
+
+    await dragOverlaySurface(initialRoot!, { x: 72, y: 44 })
+
+    const draggedPosition = readOverlayPosition(queryFindReplaceRoot())
+    expect(draggedPosition).toEqual({
+      left: initialPosition!.left + 72,
+      top: initialPosition!.top + 44,
+    })
+
+    queryFindReplaceRoot()?.querySelector<HTMLButtonElement>(".datagrid-find-replace__ghost")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+    expect(queryFindReplaceRoot()).toBeNull()
+
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(readOverlayPosition(queryFindReplaceRoot())).toEqual(draggedPosition)
 
     wrapper.unmount()
   })
@@ -3029,6 +3245,49 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("lets users drag the column layout panel and reopens it at the detached position", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnLayout: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = findToolbarAction(wrapper, "column-layout")
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const initialRoot = queryColumnLayoutRoot()
+    expect(initialRoot).toBeTruthy()
+    const initialPosition = readOverlayPosition(initialRoot)
+    expect(initialPosition).toBeTruthy()
+
+    await dragOverlaySurface(initialRoot!, { x: 64, y: 48 })
+
+    const draggedPosition = readOverlayPosition(queryColumnLayoutRoot())
+    expect(draggedPosition).toEqual({
+      left: initialPosition!.left + 64,
+      top: initialPosition!.top + 48,
+    })
+
+    queryColumnLayoutRoot()?.querySelector<HTMLButtonElement>(".datagrid-column-layout__ghost")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+    expect(queryColumnLayoutRoot()).toBeNull()
+
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(readOverlayPosition(queryColumnLayoutRoot())).toEqual(draggedPosition)
+
+    wrapper.unmount()
+  })
+
   it("opens declarative aggregations and applies the runtime aggregation model", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
@@ -3215,6 +3474,7 @@ describe("DataGrid app facade contract", () => {
       props: {
         rows: BASE_ROWS,
         columns: COLUMNS,
+        rowSelection: false,
       },
     })
 
@@ -3448,6 +3708,49 @@ describe("DataGrid app facade contract", () => {
     expect([...(controlledRowSelection.value?.selectedRows ?? [])].sort()).toEqual(["r1", "r2", "r3"])
     expect(rowSelectEvents.at(-1)?.focusedRow).toBeNull()
     expect([...(rowSelectEvents.at(-1)?.selectedRows ?? [])].sort()).toEqual(["r1", "r2", "r3"])
+
+    wrapper.unmount()
+  })
+
+  it("marks row-index multi-row selections as contiguous top middle bottom segments", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    resolveVm(wrapper).getApi?.()?.selection?.setSnapshot?.({
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 2,
+          startCol: 0,
+          endCol: 999,
+          startRowId: "r1",
+          endRowId: "r3",
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 2, colIndex: 2, rowId: "r3" },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 2, colIndex: 2, rowId: "r3" },
+    })
+    await flushRuntimeTasks()
+
+    const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    const secondRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    const thirdRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r3"]')
+
+    expect(firstRowIndexCell.classes()).toContain("grid-cell--index-selected")
+    expect(firstRowIndexCell.classes()).toContain("grid-cell--index-selected-top")
+    expect(secondRowIndexCell.classes()).toContain("grid-cell--index-selected")
+    expect(secondRowIndexCell.classes()).toContain("grid-cell--index-selected-middle")
+    expect(thirdRowIndexCell.classes()).toContain("grid-cell--index-selected")
+    expect(thirdRowIndexCell.classes()).toContain("grid-cell--index-selected-bottom")
 
     wrapper.unmount()
   })

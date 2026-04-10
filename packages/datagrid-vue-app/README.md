@@ -525,6 +525,36 @@ const columnMenu: DataGridColumnMenuProp = {
         console.log("Insert before", columnKey)
       },
     },
+    {
+      key: "organize",
+      kind: "submenu",
+      label: "Organize",
+      placement: "end",
+      items: [
+        {
+          key: "duplicate",
+          label: "Duplicate column",
+          onSelect: ({ columnKey }) => {
+            console.log("Duplicate", columnKey)
+          },
+        },
+        {
+          key: "advanced",
+          kind: "submenu",
+          label: "Advanced",
+          items: [
+            {
+              key: "freeze-snapshot",
+              label: "Freeze current layout",
+              onSelect: ({ columnKey, closeMenu }) => {
+                console.log("Freeze", columnKey)
+                closeMenu()
+              },
+            },
+          ],
+        },
+      ],
+    },
   ],
   columns: {
     amount: {
@@ -582,10 +612,12 @@ Supported app-level menu controls:
 Custom menu items support:
 
 - `key`: stable item id
+- `kind`: `item` (default) or `submenu`
 - `label`: rendered menu text
 - `placement`: `start`, `end`, `before:sort`, `after:sort`, `before:group`, `after:group`, `before:pin`, `after:pin`, `before:filter`, `after:filter`
 - `hidden`, `disabled`, `disabledReason`
-- `onSelect(context)`: callback with `{ columnKey, columnLabel, closeMenu }`
+- `onSelect(context)`: callback with `{ columnKey, columnLabel, closeMenu }` for leaf items
+- `items`: nested submenu entries when `kind: "submenu"`
 
 Grouping triggered from the built-in column menu updates the public controlled
 surface through `@update:groupBy` / `v-model:groupBy`.
@@ -1471,6 +1503,11 @@ The component emits:
 
 - When at least one filter is active, the `Advanced filter` toolbar button shows an active filter icon and active button styling.
 - Removing the only advanced-filter clause does not lock the UI; the builder keeps one empty clause row so the user can clear and rebuild the expression in place.
+
+## Built-in Overlay Panels
+
+- The built-in `Column layout`, `Advanced filter`, and `Find / replace` toolbar panels render through the shared Affino overlay host rather than inline in the grid tree.
+- These built-in panels are draggable by their header title area and reopen at the last detached position for the current grid instance during the active page session.
 
 ## Ref API
 

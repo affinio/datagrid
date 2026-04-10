@@ -17,11 +17,17 @@
       :ref="floating.contentRef"
       class="datagrid-find-replace"
       data-datagrid-overlay-surface="true"
-      :style="[popoverContentStyle, overlayThemeVars]"
+      data-datagrid-overlay-surface-id="find-replace"
+      :data-datagrid-overlay-dragging="draggable.dragging.value ? 'true' : 'false'"
+      :style="[draggable.surfaceStyle.value, overlayThemeVars]"
       v-bind="contentProps"
     >
       <header class="datagrid-find-replace__header">
-        <div>
+        <div
+          class="datagrid-overlay-drag-handle"
+          data-datagrid-overlay-drag-handle="true"
+          @pointerdown="draggable.handlePointerDown"
+        >
           <div class="datagrid-find-replace__eyebrow">Find / replace</div>
           <h3 class="datagrid-find-replace__title">Search visible cells and apply batched edits</h3>
         </div>
@@ -117,6 +123,7 @@ import {
 } from "@affino/popover-vue"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
+import { useDataGridDraggableOverlaySurface } from "./useDataGridDraggableOverlaySurface"
 
 const props = withDefaults(defineProps<{
   isOpen: boolean
@@ -185,11 +192,15 @@ const floating = useFloatingPopover(controller, {
   lockScroll: false,
   returnFocus: true,
 })
+const draggable = useDataGridDraggableOverlaySurface({
+  surfaceId: "find-replace",
+  rootElementRef,
+  floating,
+})
 
 const triggerProps = computed(() => controller.getTriggerProps({ role: "dialog" }))
 const contentProps = computed(() => controller.getContentProps({ role: "dialog", tabIndex: -1 }))
 const popoverOpen = computed(() => controller.state.value.open)
-const popoverContentStyle = computed(() => floating.contentStyle.value)
 const popoverTeleportTarget = computed(() => floating.teleportTarget.value)
 
 watch(

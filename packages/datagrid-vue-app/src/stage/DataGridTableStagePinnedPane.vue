@@ -24,10 +24,12 @@
         <div
           v-if="pane.showIndexColumn"
           class="grid-cell grid-cell--index grid-cell--index-number datagrid-stage__row-index-cell"
-          :class="{
-            'grid-cell--index-selected': renderApi.isFullRowSelectionSafe(renderApi.viewportRowOffset(row, rowOffset)),
-            'grid-cell--pinned-divider-right': pane.side === 'left' && pane.columns.length > 0,
-          }"
+          :class="[
+            renderApi.rowIndexCellClasses(row, renderApi.viewportRowOffset(row, rowOffset)),
+            {
+              'grid-cell--pinned-divider-right': pane.side === 'left' && pane.columns.length > 0,
+            },
+          ]"
           :style="renderApi.rowIndexCellStyle(row, renderApi.viewportRowOffset(row, rowOffset))"
           :data-row-id="String(row.rowId)"
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"

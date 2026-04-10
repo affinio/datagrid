@@ -577,6 +577,34 @@ function rowIndexCellStyle(row: TableRow, rowOffset: number): CSSProperties {
   }
 }
 
+function isFullRowSelectionIndex(rowIndex: number): boolean {
+  const range = selectionRange.value
+  const lastColumnIndex = visibleColumns.value.length - 1
+  if (!range || lastColumnIndex < 0) {
+    return false
+  }
+  return rowIndex >= range.startRow
+    && rowIndex <= range.endRow
+    && range.startColumn === 0
+    && range.endColumn >= lastColumnIndex
+}
+
+function rowIndexCellClasses(row: TableRow, rowOffset: number): Record<string, boolean> {
+  const rowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+  if (!isFullRowSelectionIndex(rowIndex)) {
+    return {}
+  }
+  const previousSelected = isFullRowSelectionIndex(rowIndex - 1)
+  const nextSelected = isFullRowSelectionIndex(rowIndex + 1)
+  return {
+    "grid-cell--index-selected": true,
+    "grid-cell--index-selected-single": !previousSelected && !nextSelected,
+    "grid-cell--index-selected-top": !previousSelected && nextSelected,
+    "grid-cell--index-selected-middle": previousSelected && nextSelected,
+    "grid-cell--index-selected-bottom": previousSelected && !nextSelected,
+  }
+}
+
 function resolveCellCustomClass(
   row: TableRow,
   rowOffset: number,
@@ -1448,16 +1476,8 @@ function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boole
 }
 
 function isFullRowSelectionSafe(rowOffset: number, row?: TableRow): boolean {
-  const range = selectionRange.value
-  const lastColumnIndex = visibleColumns.value.length - 1
-  if (!range || lastColumnIndex < 0) {
-    return false
-  }
   const rowIndex = row ? resolveAbsoluteRowIndex(row, rowOffset) : viewport.value.viewportRowStart + rowOffset
-  return rowIndex >= range.startRow
-    && rowIndex <= range.endRow
-    && range.startColumn === 0
-    && range.endColumn >= lastColumnIndex
+  return isFullRowSelectionIndex(rowIndex)
 }
 
 function isCellOnSelectionEdgeSafe(
@@ -3467,6 +3487,7 @@ const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   get rowIndexColumnStyle() {
     return resolvedRowIndexColumnStyle.value
   },
+  rowIndexCellClasses,
   rowIndexCellStyle,
   rowIndexTabIndex,
   handleRowIndexClickSafe,

@@ -1,5 +1,29 @@
 # @affino/datagrid-vue-app
 
+## 0.1.25
+
+### Patch Changes
+
+- ## Summary
+
+  Moved built-in toolbar popover drag and detached-position restore behavior into the package overlay layer, added recursive declarative custom submenu support for the standard column menu, and made row-index multi-row selection render as one contiguous visual selection block instead of fragmented per-row cells.
+
+  ## User impact
+
+  `DataGrid` consumers now get draggable built-in `Column layout`, `Advanced filter`, and `Find / replace` panels without app-shell glue code, and those panels reopen at their last detached position for the current grid instance during the active page session. Header column menus can now declare nested custom submenu trees through `columnMenu.customItems` / per-column `customItems` with stable typed leaf and submenu contracts. Multi-row selection through the row index now reads visually as one continuous selection surface.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption:
+    - replace flat custom header-menu item lists with nested `kind: "submenu"` entries when you need custom submenu trees,
+    - consume the exported `DataGridColumnMenuCustomLeafItem` / `DataGridColumnMenuCustomSubmenuItem` types if your app authors typed menu configs explicitly.
+
+  ## Validation
+  - public facade contract coverage updated for draggable built-in overlay panels, nested declarative column-menu submenus, and contiguous row-index selection classes
+  - focused contract regressions passed for advanced filter, find/replace, and column layout drag persistence
+  - package README updated for draggable built-in overlay panels and nested custom column-menu submenu config
+  - package type-check passed
+
 ## 0.1.24
 
 ### Patch Changes
