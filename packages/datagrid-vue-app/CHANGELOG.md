@@ -1,5 +1,30 @@
 # @affino/datagrid-vue-app
 
+## 0.1.24
+
+### Patch Changes
+
+- ## Summary
+
+  Added the public declarative `history` facade, declarative column/header menu customization, and a new `placeholderRows` surface for Excel-like visual tail rows that materialize only on first write. This patch also closes the placeholder-tail runtime regressions around viewport synchronization and drag-move into empty target rows.
+
+  ## User impact
+
+  `DataGrid` consumers can now enable built-in history with stable controller access, customize or disable the standard header/column menu declaratively, and render empty tail rows without persisting placeholder records up front. Placeholder rows now behave correctly across inline edit, paste, checkbox toggles, row-index insert/copy/cut/paste/delete flows, undo back to placeholder state, viewport entry into the visual tail, and drag-moving cells into empty tail rows. Authored cell renderers also receive `surface.kind` so custom UI can distinguish real rows from placeholder surface rows.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption:
+    - pass `history` to enable built-in undo/redo controls and stable `canUndo` / `canRedo` / `runHistoryAction(...)` access from the component ref,
+    - pass `columnMenu` object-form configuration to tune built-in menu trigger, standard items, disabled states, and custom items,
+    - pass `placeholderRows` to add a fixed visual tail with lazy row materialization via `createRowAt(...)`.
+
+  ## Validation
+  - public facade contract coverage updated for `history`, `columnMenu`, `placeholderRows`, renderer `surface.kind`, and placeholder row-index flows
+  - stage placeholder virtual-window regression passed
+  - targeted drag-move into placeholder-tail contract regression passed
+  - package README, shared docs, and sandbox demos updated
+
 ## 0.1.14
 
 ### Patch Changes

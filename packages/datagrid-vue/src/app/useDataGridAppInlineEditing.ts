@@ -32,6 +32,7 @@ export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   totalRows: Ref<number>
   runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex">
+  ensureEditableRowAtIndex?: (rowIndex: number) => DataGridRowNode<TRow> | null
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
   resolveBodyRowIndexById?: (rowId: string | number) => number
   resolveRowIndexById?: (rowId: string | number) => number
@@ -397,10 +398,13 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       : typeof targetOrEvent === "boolean"
         ? (targetOrEvent ? "next" : "stay")
         : "stay"
-    const beforeSnapshot = options.captureRowsSnapshotForRowIds?.([currentEditingCell.rowId])
-      ?? options.captureRowsSnapshot()
     const rowIndex = resolveBodyRowIndexById(currentEditingCell.rowId)
-    const rowNode = rowIndex >= 0 ? getBodyRowAtIndex(rowIndex) : null
+    let rowNode = rowIndex >= 0 ? getBodyRowAtIndex(rowIndex) : null
+    const beforeSnapshot = options.captureRowsSnapshot()
+    if (rowIndex >= 0 && typeof options.ensureEditableRowAtIndex === "function") {
+      rowNode = options.ensureEditableRowAtIndex(rowIndex) ?? rowNode
+    }
+    const resolvedRowId = rowNode?.rowId ?? currentEditingCell.rowId
     const columnSnapshot = options.visibleColumns.value.find(column => column.key === currentEditingCell.columnKey)
     const parsedValue = columnSnapshot
       ? parseDataGridCellDraftValue({
@@ -411,7 +415,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       : editingCellValue.value
     options.runtime.api.rows.applyEdits([
       {
-        rowId: currentEditingCell.rowId,
+        rowId: resolvedRowId,
         data: {
           [currentEditingCell.columnKey]: parsedValue,
         } as Partial<TRow>,
@@ -421,7 +425,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     clearInlineEdit()
     suppressNextBlurCommit.value = false
     if (target !== "none") {
-      focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, target)
+      focusAfterInlineEdit(resolvedRowId, currentEditingCell.columnKey, target)
     }
   }
 

@@ -187,6 +187,58 @@ Normalization rules:
 - if both limits are present and `maxRows < minRows`, `maxRows` is clamped up to `minRows`
 - prefer `fill` for full-screen shells such as split gantt layouts and `auto-height` for embedded cards, stacked dashboard sections, and form flows
 
+## Placeholder Rows
+
+`DataGrid` can render an Excel-like visual tail without forcing your app to persist empty records up front.
+
+- `rows` stay materialized only: real rows still drive save/export/formulas/filtering/sorting/history snapshots.
+- `placeholderRows.count` adds a visual empty tail after the last real row.
+- `placeholderRows.createRowAt(...)` materializes a real row only when the user performs a write action.
+- the current package-level policy is `fixed-tail`
+- built-in materialization triggers are `edit`, `paste`, and checkbox/toggle writes
+- before materialization, placeholder rows do not increase `api.rows.getCount()`
+- row-index `copy`, `cut`, and `delete selected` actions continue to operate on the real materialized rows from a full-row selection, even when that selection extends into the placeholder tail
+- authored `cellRenderer` and `groupCellRenderer` contexts expose `surface.kind` so custom rendering can distinguish real rows from placeholder visual rows
+- the Vue sandbox base-table card includes a live `Placeholder tail` toggle so you can verify visual tail rendering and first-write materialization end to end
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue-app"
+
+const rows = [
+  { rowId: "r1", owner: "NOC", amount: 10 },
+]
+
+const columns = [
+  { key: "owner", label: "Owner", capabilities: { editable: true } },
+  { key: "amount", label: "Amount", capabilities: { editable: true } },
+]
+
+let nextRowId = 2
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :placeholder-rows="{
+      count: 8,
+      createRowAt: ({ visualRowIndex, reason }) => ({
+        rowId: `new-${nextRowId++}`,
+        owner: reason === 'paste' ? `Imported ${visualRowIndex + 1}` : '',
+        amount: 0,
+      }),
+    }"
+  />
+</template>
+```
+
+Current semantics:
+
+- editing the first placeholder row materializes exactly that row
+- editing a deeper placeholder row materializes rows up to that visual index so coordinates stay stable
+- when built-in `history` is enabled, undo restores a just-materialized placeholder row back to visual-tail state
+
 ## Spreadsheet Fill Handle
 
 `DataGrid` keeps spreadsheet-style fill interactions off by default.

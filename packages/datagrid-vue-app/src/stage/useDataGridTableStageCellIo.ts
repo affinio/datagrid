@@ -10,6 +10,7 @@ import type { DataGridTableRow } from "./dataGridTableStage.types"
 export interface UseDataGridTableStageCellIoOptions<TRow extends Record<string, unknown>> {
   runtime: Pick<import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>, "api">
   viewportRowStart: import("vue").Ref<number>
+  ensureEditableRowAtIndex?: (rowIndex: number) => DataGridTableRow<TRow> | null
   isRowSelectionColumnKey: (columnKey: string) => boolean
   isRowSelectionColumn: (column: DataGridColumnSnapshot) => boolean
   isCellEditableByKey: (row: DataGridTableRow<TRow>, rowIndex: number, columnKey: string, columnIndex: number) => boolean
@@ -84,14 +85,18 @@ export function useDataGridTableStageCellIo<TRow extends Record<string, unknown>
     if (row.kind === "group" || row.rowId == null) {
       return
     }
-    const beforeSnapshot = options.captureHistorySnapshotForRowIds?.([row.rowId]) ?? options.captureHistorySnapshot()
+    const beforeSnapshot = options.captureHistorySnapshot()
+    const editableRow = options.ensureEditableRowAtIndex?.(rowIndex) ?? row
+    if (editableRow.kind === "group" || editableRow.rowId == null) {
+      return
+    }
     options.runtime.api.rows.applyEdits([
       {
-        rowId: row.rowId,
+        rowId: editableRow.rowId,
         data: {
           [column.key]: toggleDataGridCellValue({
             column: column.column,
-            row: row.data,
+            row: editableRow.data,
           }),
         } as Partial<TRow>,
       },

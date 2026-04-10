@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Vue adapter and headless foundation for Affino DataGrid",

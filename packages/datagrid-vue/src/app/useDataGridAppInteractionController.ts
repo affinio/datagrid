@@ -88,6 +88,7 @@ export interface UseDataGridAppInteractionControllerOptions<
   ) => void
   clearCellSelection: () => void
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
+  ensureEditableRowAtIndex?: (rowIndex: number) => DataGridRowNode<TRow> | null
   isCellEditable: (
     row: DataGridRowNode<TRow>,
     rowIndex: number,
@@ -242,11 +243,41 @@ export function useDataGridAppInteractionController<
     fallbackTarget: HTMLElement | null = null,
   ): void => {
     const applyFocus = (): void => {
-      const rowIndexCell = options.bodyViewportRef.value
-        ?.closest<HTMLElement>(".grid-body-shell")
-        ?.querySelector<HTMLElement>(`.datagrid-stage__row-index-cell[data-row-id="${String(rowId)}"]`)
-      const target = rowIndexCell ?? (fallbackTarget?.isConnected ? fallbackTarget : null)
+      const bodyShell = options.bodyViewportRef.value?.closest<HTMLElement>(".grid-body-shell")
+      const rowIndexCell = bodyShell?.querySelector<HTMLElement>(`.datagrid-stage__row-index-cell[data-row-id="${String(rowId)}"]`)
+      const fallbackRowIndex = Number.parseInt(fallbackTarget?.dataset.rowIndex ?? "", 10)
+      const closestVisualIndexCell = Number.isFinite(fallbackRowIndex)
+        ? Array.from(bodyShell?.querySelectorAll<HTMLElement>(".datagrid-stage__row-index-cell") ?? []).reduce<HTMLElement | null>(
+            (closest, candidate) => {
+              const candidateRowIndex = Number.parseInt(candidate.dataset.rowIndex ?? "", 10)
+              if (!Number.isFinite(candidateRowIndex)) {
+                return closest
+              }
+              if (!closest) {
+                return candidate
+              }
+              const closestRowIndex = Number.parseInt(closest.dataset.rowIndex ?? "", 10)
+              if (!Number.isFinite(closestRowIndex)) {
+                return candidate
+              }
+              return Math.abs(candidateRowIndex - fallbackRowIndex) < Math.abs(closestRowIndex - fallbackRowIndex)
+                ? candidate
+                : closest
+            },
+            null,
+          )
+        : null
+      const sameVisualIndexCell = Number.isFinite(fallbackRowIndex)
+        ? bodyShell?.querySelector<HTMLElement>(`.datagrid-stage__row-index-cell[data-row-index="${fallbackRowIndex}"]`)
+        : null
+      const target = rowIndexCell
+        ?? (fallbackTarget?.isConnected ? fallbackTarget : null)
+        ?? sameVisualIndexCell
+        ?? closestVisualIndexCell
       if (target) {
+        if (target.tabIndex < 0 && !target.hasAttribute("tabindex")) {
+          target.setAttribute("tabindex", "-1")
+        }
         target.focus({ preventScroll: true })
         return
       }
@@ -282,10 +313,14 @@ export function useDataGridAppInteractionController<
     if (row.kind === "group" || row.rowId == null) {
       return false
     }
-    const beforeSnapshot = options.captureRowsSnapshotForRowIds?.([row.rowId]) ?? options.captureRowsSnapshot()
+    const beforeSnapshot = options.captureRowsSnapshot()
+    const resolvedRow = options.ensureEditableRowAtIndex?.(rowIndex) ?? row
+    if (resolvedRow.kind === "group" || resolvedRow.rowId == null) {
+      return false
+    }
     options.runtime.api.rows.applyEdits([
       {
-        rowId: row.rowId,
+        rowId: resolvedRow.rowId,
         data: {
           [columnKey]: nextValue,
         } as Partial<TRow>,
@@ -305,7 +340,7 @@ export function useDataGridAppInteractionController<
     restoreActiveCellFocus({
       rowIndex,
       columnIndex,
-      rowId: row.rowId,
+      rowId: resolvedRow.rowId,
     })
     return true
   }

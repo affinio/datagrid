@@ -1,9 +1,18 @@
 import { defineComponent, h, nextTick, ref } from "vue"
 import { flushPromises, mount } from "@vue/test-utils"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
-import type { DataGridRowNodeInput } from "@affino/datagrid-vue"
+import type {
+  DataGridRowNodeInput,
+  DataGridRowSelectionSnapshot,
+  DataGridUnifiedState,
+} from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
-import type { DataGridAppToolbarModule, DataGridTableStageHistoryAdapter } from "../index"
+import type {
+  DataGridAppCellRendererContext,
+  DataGridAppToolbarModule,
+  DataGridSavedViewSnapshot,
+  DataGridTableStageHistoryAdapter,
+} from "../index"
 import {
   clearDataGridSavedViewInStorage,
   parseDataGridSavedView,
@@ -308,6 +317,15 @@ async function flushRuntimeTasks() {
   await nextTick()
 }
 
+async function flushAnimationFrame() {
+  if (typeof window === "undefined") {
+    return
+  }
+  await new Promise<void>(resolve => {
+    window.requestAnimationFrame(() => resolve())
+  })
+}
+
 async function preloadAdvancedFilterPopover(): Promise<void> {
   await import("../overlays/DataGridAdvancedFilterPopover.vue")
 }
@@ -326,13 +344,26 @@ function findToolbarAction(wrapper: ReturnType<typeof mount>, action: string) {
   return wrapper.find(`[data-datagrid-toolbar-action="${action}"]`)
 }
 
+type ResolvedRowModelSnapshot = Record<string, unknown> & {
+  rowCount?: number
+}
+
+type ResolvedRowModel<TValue extends Record<string, unknown> = Record<string, unknown>> = {
+  getSnapshot: () => ResolvedRowModelSnapshot
+  getRow?: (rowIndex: number) => { row?: TValue } | undefined
+}
+
 function resolveRowModel(wrapper: ReturnType<typeof mount>) {
   const vm = wrapper.vm as unknown as {
-    rowModel?: { value?: { getSnapshot: () => unknown }; getSnapshot?: () => unknown }
+    rowModel?: { value?: unknown } | unknown
   }
-  return vm.rowModel && "value" in vm.rowModel
+  const resolved = vm.rowModel && typeof vm.rowModel === "object" && "value" in vm.rowModel
     ? vm.rowModel.value
     : vm.rowModel
+  if (!resolved || typeof resolved !== "object" || typeof (resolved as { getSnapshot?: unknown }).getSnapshot !== "function") {
+    return null
+  }
+  return resolved as ResolvedRowModel
 }
 
 function resolveVm(wrapper: ReturnType<typeof mount>) {
@@ -350,17 +381,20 @@ function resolveVm(wrapper: ReturnType<typeof mount>) {
         getSnapshot?: () => unknown
       }
       rows: {
+        getCount?: () => number
+        get?: (index: number) => { rowId?: string | number; data?: Record<string, unknown> } | undefined
         getAggregationModel?: () => unknown
       }
     } | null
     getSelectionAggregatesLabel?: () => string
     getView?: () => "table" | "gantt"
     setView?: (mode: "table" | "gantt") => void
-    getSavedView?: () => { state: unknown; viewMode?: "table" | "gantt" } | null
-    migrateSavedView?: (savedView: unknown) => { state: unknown; viewMode?: "table" | "gantt" } | null
-    applySavedView?: (savedView: { state: unknown; viewMode?: "table" | "gantt" }) => boolean
-    getState?: () => unknown
-    getColumnSnapshot?: () => { order: readonly string[]; columns: readonly Array<{
+    getSavedView?: () => DataGridSavedViewSnapshot<Record<string, unknown>> | null
+    migrateSavedView?: (savedView: unknown) => DataGridSavedViewSnapshot<Record<string, unknown>> | null
+    applySavedView?: (savedView: DataGridSavedViewSnapshot<Record<string, unknown>>) => boolean
+    migrateState?: (state: unknown) => DataGridUnifiedState<Record<string, unknown>> | null
+    getState?: () => DataGridUnifiedState<Record<string, unknown>> | null
+    getColumnSnapshot?: () => { order: readonly string[]; columns: ReadonlyArray<{
       key: string
       visible: boolean
       pin: string
@@ -370,10 +404,12 @@ function resolveVm(wrapper: ReturnType<typeof mount>) {
 }
 
 function resolveRowAt<TValue extends Record<string, unknown>>(wrapper: ReturnType<typeof mount>, index: number): TValue | null {
-  const rowModel = resolveRowModel(wrapper) as {
-    getRow?: (rowIndex: number) => { row?: TValue } | undefined
-  } | null
+  const rowModel = resolveRowModel(wrapper) as ResolvedRowModel<TValue> | null
   return rowModel?.getRow?.(index)?.row ?? null
+}
+
+function resolveApiRowCount(wrapper: ReturnType<typeof mount>): number {
+  return resolveVm(wrapper).getApi?.()?.rows.getCount?.() ?? 0
 }
 
 function queryColumnMenuRoot(): HTMLElement | null {
@@ -482,6 +518,76 @@ function setElementClientWidth(element: HTMLElement, width: number): void {
   })
 }
 
+function setElementClientHeight(element: HTMLElement, height: number): void {
+  Object.defineProperty(element, "clientHeight", {
+    configurable: true,
+    value: height,
+  })
+}
+
+function setGridBodyShellGeometry(
+  wrapper: ReturnType<typeof mount>,
+  options: { left?: number; top?: number; width?: number; height?: number } = {},
+): void {
+  const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+  const bodyShell = viewport.closest(".grid-body-shell") as HTMLElement | null
+  const left = options.left ?? 0
+  const top = options.top ?? 0
+  const width = options.width ?? 420
+  const height = options.height ?? 220
+
+  setElementClientWidth(viewport, width)
+  setElementClientHeight(viewport, height)
+  viewport.getBoundingClientRect = () => DOMRect.fromRect({
+    x: left,
+    y: top,
+    width,
+    height,
+  })
+
+  if (!bodyShell) {
+    return
+  }
+  setElementClientWidth(bodyShell, width)
+  setElementClientHeight(bodyShell, height)
+  bodyShell.getBoundingClientRect = () => DOMRect.fromRect({
+    x: left,
+    y: top,
+    width,
+    height,
+  })
+}
+
+async function dragMoveSelectedBodyCell(
+  wrapper: ReturnType<typeof mount>,
+  source: { rowIndex: number; columnIndex: number; clientX: number; clientY: number },
+  target: { clientX: number; clientY: number },
+): Promise<void> {
+  const sourceCell = queryBodyCell(wrapper, source.rowIndex, source.columnIndex)
+  expect(sourceCell.exists()).toBe(true)
+
+  await sourceCell.trigger("mousedown", {
+    button: 0,
+    clientX: source.clientX,
+    clientY: source.clientY,
+  })
+  window.dispatchEvent(new MouseEvent("mousemove", {
+    bubbles: true,
+    buttons: 1,
+    clientX: target.clientX,
+    clientY: target.clientY,
+  }))
+  await flushRuntimeTasks()
+
+  window.dispatchEvent(new MouseEvent("mouseup", {
+    bubbles: true,
+    button: 0,
+    clientX: target.clientX,
+    clientY: target.clientY,
+  }))
+  await flushRuntimeTasks()
+}
+
 describe("DataGrid app facade contract", () => {
   it("does not expose enterprise-only props on the community facade", () => {
     const publicProps = Object.keys((DataGrid as unknown as { props?: Record<string, unknown> }).props ?? {})
@@ -496,6 +602,7 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).toContain("findReplace")
     expect(publicProps).toContain("gridLines")
     expect(publicProps).toContain("history")
+    expect(publicProps).toContain("placeholderRows")
   })
 
   it("renders declarative history controls and exposes a stable history controller", async () => {
@@ -641,7 +748,7 @@ describe("DataGrid app facade contract", () => {
       props: {
         rows: BASE_ROWS,
         columns: EDITABLE_COLUMNS,
-        isCellEditable: ({ rowId }: { rowId: string }) => rowId !== "r1",
+        isCellEditable: ({ rowId }) => rowId !== "r1",
       },
     })
 
@@ -831,7 +938,7 @@ describe("DataGrid app facade contract", () => {
       props: {
         rows: BASE_ROWS,
         columns: EDITABLE_COLUMNS,
-        isCellEditable: ({ rowId }: { rowId: string }) => rowId !== "r1",
+        isCellEditable: ({ rowId }) => rowId !== "r1",
       },
     })
 
@@ -1771,6 +1878,74 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("cuts the current row-index selection range from declarative rowIndexMenu", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
+      rows: {
+        get: (index: number) => { rowId?: string } | undefined
+      }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: COLUMNS.length - 1,
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        startRowId: "r1",
+        endRowId: "r2",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+    })
+    await flushRuntimeTasks()
+
+    const secondRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(secondRowIndexCell.exists()).toBe(true)
+
+    await secondRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 56 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("cut-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(wrapper.findAll('.grid-body-pane--left .grid-row').at(0)?.classes()).toContain("grid-row--clipboard-pending")
+    expect(wrapper.findAll('.grid-body-pane--left .grid-row').at(1)?.classes()).toContain("grid-row--clipboard-pending")
+
+    const lastRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r3"]')
+    expect(lastRowIndexCell.exists()).toBe(true)
+
+    await lastRowIndexCell.trigger("contextmenu", { button: 2, clientX: 108, clientY: 72 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("paste-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect([
+      api?.rows.get(0)?.rowId,
+      api?.rows.get(1)?.rowId,
+      api?.rows.get(2)?.rowId,
+    ]).toEqual(["r3", "r1", "r2"])
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).not.toContain("grid-row--clipboard-pending")
+
+    wrapper.unmount()
+  })
+
   it("deletes the targeted row from declarative rowIndexMenu when no rows are preselected", async () => {
     const wrapper = mount(DataGrid, {
       props: {
@@ -2685,9 +2860,9 @@ describe("DataGrid app facade contract", () => {
 
     const controlledColumns = ref<readonly typeof COLUMNS[number][]>([])
     const targetGridRef = ref<{
-      applySavedView?: (savedView: NonNullable<typeof savedView>) => boolean
+      applySavedView?: (savedView: DataGridSavedViewSnapshot<Record<string, unknown>>) => boolean
       getView?: () => "table" | "gantt"
-      getState?: () => unknown
+      getState?: () => DataGridUnifiedState<Record<string, unknown>> | null
     } | null>(null)
 
     const target = mount(defineComponent({
@@ -3011,7 +3186,7 @@ describe("DataGrid app facade contract", () => {
 
     await wrapper.setProps({
       clientRowModelOptions: {
-        resolveRowId: (row: DemoRow) => row.rowId,
+        resolveRowId: row => (row as DemoRow).rowId,
       },
     })
     await flushRuntimeTasks()
@@ -3160,8 +3335,8 @@ describe("DataGrid app facade contract", () => {
 
   it("preserves controlled row selection across header bulk toggle and rows churn with stable row ids", async () => {
     const controlledRows = ref<DemoRow[]>(BASE_ROWS.map(row => ({ ...row })))
-    const controlledState = ref<Record<string, unknown> | null>(null)
-    const rowSelectEvents: Array<Record<string, unknown> | null> = []
+    const controlledState = ref<DataGridUnifiedState<Record<string, unknown>> | null>(null)
+    const rowSelectEvents: Array<DataGridRowSelectionSnapshot | null> = []
 
     const wrapper = mount(defineComponent({
       setup() {
@@ -3170,10 +3345,10 @@ describe("DataGrid app facade contract", () => {
           columns: COLUMNS,
           rowSelection: true,
           state: controlledState.value,
-          "onUpdate:state": (nextState: Record<string, unknown> | null) => {
+          "onUpdate:state": (nextState: DataGridUnifiedState<Record<string, unknown>> | null) => {
             controlledState.value = nextState
           },
-          onRowSelect: (snapshot: Record<string, unknown> | null) => {
+          onRowSelect: (snapshot: DataGridRowSelectionSnapshot | null) => {
             rowSelectEvents.push(snapshot)
           },
         })
@@ -3223,11 +3398,11 @@ describe("DataGrid app facade contract", () => {
   })
 
   it("supports a controlled rowSelectionState contract alongside the legacy row-select event", async () => {
-    const controlledRowSelection = ref<{ focusedRow: string | null; selectedRows: string[] } | null>({
+    const controlledRowSelection = ref<DataGridRowSelectionSnapshot | null>({
       focusedRow: "r2",
       selectedRows: ["r2"],
     })
-    const rowSelectEvents: Array<{ focusedRow: string | null; selectedRows: string[] } | null> = []
+    const rowSelectEvents: Array<DataGridRowSelectionSnapshot | null> = []
 
     const wrapper = mount(defineComponent({
       setup() {
@@ -3236,10 +3411,10 @@ describe("DataGrid app facade contract", () => {
           columns: COLUMNS,
           rowSelection: true,
           rowSelectionState: controlledRowSelection.value,
-          "onUpdate:rowSelectionState": (nextState: { focusedRow: string | null; selectedRows: string[] } | null) => {
+          "onUpdate:rowSelectionState": (nextState: DataGridRowSelectionSnapshot | null) => {
             controlledRowSelection.value = nextState
           },
-          onRowSelect: (snapshot: { focusedRow: string | null; selectedRows: string[] } | null) => {
+          onRowSelect: (snapshot: DataGridRowSelectionSnapshot | null) => {
             rowSelectEvents.push(snapshot)
           },
         })
@@ -3582,6 +3757,10 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     const updatedRow = resolveRowAt<{ createdAt: Date }>(wrapper, 0)
+    expect(updatedRow).toBeTruthy()
+    if (!updatedRow) {
+      throw new Error("Expected updated date row")
+    }
     expect(updatedRow.createdAt).toBeInstanceOf(Date)
     expect(updatedRow.createdAt.toISOString()).toBe("2026-03-22T00:00:00.000Z")
 
@@ -3614,6 +3793,10 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     const updatedRow = resolveRowAt<{ updatedAt: Date }>(wrapper, 0)
+    expect(updatedRow).toBeTruthy()
+    if (!updatedRow) {
+      throw new Error("Expected updated datetime row")
+    }
     expect(updatedRow.updatedAt).toBeInstanceOf(Date)
     expect(updatedRow.updatedAt.getTime()).toBe(new Date(2026, 2, 22, 3, 7).getTime())
 
@@ -3896,7 +4079,7 @@ describe("DataGrid app facade contract", () => {
           },
           pins: {
             owner: "left",
-            region: "center",
+            region: "none",
             amount: "right",
           },
         },
@@ -4006,7 +4189,7 @@ describe("DataGrid app facade contract", () => {
       props: {
         rows: BASE_ROWS,
         columns: COLUMNS,
-        state: state as Record<string, unknown>,
+        state: state as DataGridUnifiedState<Record<string, unknown>>,
       },
     })
 
@@ -4057,9 +4240,9 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const migrated = resolveVm(target).migrateSavedView?.(savedView as Record<string, unknown>)
+    const migrated = resolveVm(target).migrateSavedView?.(savedView as DataGridSavedViewSnapshot<Record<string, unknown>>)
     expect(migrated).toBeTruthy()
-    expect(resolveVm(target).applySavedView?.(migrated as { state: unknown; viewMode?: "table" | "gantt" })).toBe(true)
+    expect(resolveVm(target).applySavedView?.(migrated as DataGridSavedViewSnapshot<Record<string, unknown>>)).toBe(true)
     await flushRuntimeTasks()
 
     expect(resolveVm(target).getView?.()).toBe("gantt")
@@ -4101,11 +4284,11 @@ describe("DataGrid app facade contract", () => {
       },
     }
 
-    const serialized = serializeDataGridSavedView(savedView as NonNullable<typeof savedView>)
+    const serialized = serializeDataGridSavedView(savedView as DataGridSavedViewSnapshot<Record<string, unknown>>)
     expect(parseDataGridSavedView(serialized, value => resolveVm(source).migrateState?.(value) ?? null)).toMatchObject({
       viewMode: "gantt",
     })
-    expect(writeDataGridSavedViewToStorage(storage, "demo", savedView as NonNullable<typeof savedView>)).toBe(true)
+    expect(writeDataGridSavedViewToStorage(storage, "demo", savedView as DataGridSavedViewSnapshot<Record<string, unknown>>)).toBe(true)
 
     const target = mount(DataGrid, {
       props: {
@@ -4143,9 +4326,15 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
+    const currentState = resolveVm(wrapper).getState?.()
+    expect(currentState).toBeTruthy()
+    if (!currentState) {
+      throw new Error("Expected current grid state")
+    }
+
     const migrated = resolveVm(wrapper).migrateSavedView?.({
       state: {
-        ...(resolveVm(wrapper).getState?.() as Record<string, unknown>),
+        ...currentState,
         transaction: {
           undoDepth: 2,
           redoDepth: 1,
@@ -4162,7 +4351,7 @@ describe("DataGrid app facade contract", () => {
       }),
     })
 
-    const serialized = serializeDataGridSavedView(migrated as NonNullable<typeof migrated>)
+    const serialized = serializeDataGridSavedView(migrated as DataGridSavedViewSnapshot<Record<string, unknown>>)
     expect(JSON.parse(serialized)).toMatchObject({
       state: expect.objectContaining({
         transaction: null,
@@ -4286,7 +4475,7 @@ describe("DataGrid app facade contract", () => {
             : column
         )),
         clientRowModelOptions: {
-          resolveRowId: (row: FormulaRow) => row.id,
+          resolveRowId: row => (row as FormulaRow).id,
         },
       },
     })
@@ -4295,7 +4484,7 @@ describe("DataGrid app facade contract", () => {
 
     const rowModel = resolveRowModel(wrapper) as {
       getRow?: (index: number) => { row?: FormulaRow } | undefined
-      getFormulaFields?: () => readonly Array<{ name: string }>
+      getFormulaFields?: () => ReadonlyArray<{ name: string }>
     } | null
 
     expect(rowModel?.getFormulaFields?.()).toEqual([
@@ -4405,6 +4594,1233 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("renders placeholderRows as visual tail without materializing them into the row model", async () => {
+    let nextRowId = 2
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: EDITABLE_COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: () => ({
+            rowId: `ph-${nextRowId++}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(1)
+    expect(queryBodyCell(wrapper, 1, 0).exists()).toBe(true)
+    expect(queryBodyCell(wrapper, 2, 0).exists()).toBe(true)
+    expect(queryBodyCell(wrapper, 1, 0).text()).toBe("")
+
+    wrapper.unmount()
+  })
+
+  it("exposes placeholder surface metadata to authored cell renderers", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: [
+          {
+            key: "owner",
+            label: "Owner",
+            width: 180,
+            capabilities: { editable: true },
+            cellRenderer: ({ displayValue, surface }: DataGridAppCellRendererContext<Record<string, unknown>>) => h("span", {
+              class: `test-surface-${surface.kind}`,
+            }, surface.kind === "placeholder" ? "placeholder-row" : displayValue),
+          },
+          { key: "region", label: "Region", width: 160 },
+          { key: "amount", label: "Amount", width: 140 },
+        ] as unknown as readonly typeof EDITABLE_COLUMNS[number][],
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 1,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(queryBodyCell(wrapper, 0, 0).text()).toBe("NOC")
+    expect(queryBodyCell(wrapper, 1, 0).text()).toBe("placeholder-row")
+    expect(wrapper.findAll(".test-surface-real")).toHaveLength(1)
+    expect(wrapper.findAll(".test-surface-placeholder")).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it("materializes a placeholder row on first inline edit", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: EDITABLE_COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 1,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(1)
+
+    const placeholderCell = queryBodyCell(wrapper, 1, 0)
+    await placeholderCell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+
+    await editor.setValue("Created row")
+    await editor.trigger("blur")
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(2)
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 1)).toMatchObject({
+      rowId: "ph-1",
+      owner: "Created row",
+    })
+
+    wrapper.unmount()
+  })
+
+  it("undoes placeholder materialization back to visual tail state", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: EDITABLE_COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        history: true,
+        placeholderRows: {
+          count: 1,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    await queryBodyCell(wrapper, 1, 0).trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find(".cell-editor-input")
+    await editor.setValue("Undo me")
+    await editor.trigger("blur")
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(2)
+
+    await resolveVm(wrapper).history?.runHistoryAction?.("undo")
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(1)
+    expect(queryBodyCell(wrapper, 1, 0).exists()).toBe(true)
+    expect(queryBodyCell(wrapper, 1, 0).text()).toBe("")
+
+    wrapper.unmount()
+  })
+
+  it("materializes intermediate placeholder rows when editing a deeper placeholder row", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: [],
+        columns: EDITABLE_COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 3,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(0)
+
+    const placeholderCell = queryBodyCell(wrapper, 2, 0)
+    expect(placeholderCell.exists()).toBe(true)
+
+    await placeholderCell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+
+    await editor.setValue("Deep placeholder")
+    await editor.trigger("blur")
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(3)
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 0)).toMatchObject({
+      rowId: "ph-0",
+      owner: "",
+    })
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 1)).toMatchObject({
+      rowId: "ph-1",
+      owner: "",
+    })
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 2)).toMatchObject({
+      rowId: "ph-2",
+      owner: "Deep placeholder",
+    })
+
+    wrapper.unmount()
+  })
+
+  it("materializes placeholder rows when pasting into an empty grid", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: [],
+        columns: EDITABLE_COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    const originalClipboard = navigator.clipboard
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined),
+        readText: vi.fn<() => Promise<string>>().mockResolvedValue("Alpha\teu-west\t101\nBeta\tus-east\t202"),
+      },
+    })
+
+    try {
+      await flushRuntimeTasks()
+
+      const firstPlaceholderCell = queryBodyCell(wrapper, 0, 0)
+      expect(firstPlaceholderCell.exists()).toBe(true)
+
+      await firstPlaceholderCell.trigger("click")
+      await flushRuntimeTasks()
+
+      await firstPlaceholderCell.trigger("keydown", { key: "v", ctrlKey: true })
+      await flushRuntimeTasks()
+
+      expect(resolveApiRowCount(wrapper)).toBe(2)
+      expect(resolveRowAt<{ rowId: string; owner: string; region: string; amount: number | string }>(wrapper, 0)).toMatchObject({
+        rowId: "ph-0",
+        owner: "Alpha",
+        region: "eu-west",
+        amount: "101",
+      })
+      expect(resolveRowAt<{ rowId: string; owner: string; region: string; amount: number | string }>(wrapper, 1)).toMatchObject({
+        rowId: "ph-1",
+        owner: "Beta",
+        region: "us-east",
+        amount: "202",
+      })
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+
+    wrapper.unmount()
+  })
+
+  it("moves a selected cell into an empty placeholder row with drag move", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: EDITABLE_COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        rangeMove: true,
+        placeholderRows: {
+          count: 1,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+    setGridBodyShellGeometry(wrapper)
+
+    const sourceCell = queryBodyCell(wrapper, 0, 0)
+    await sourceCell.trigger("mousedown", {
+      button: 0,
+      clientX: 270,
+      clientY: 16,
+    })
+    window.dispatchEvent(new MouseEvent("mouseup", {
+      bubbles: true,
+      button: 0,
+      clientX: 270,
+      clientY: 16,
+    }))
+    await flushRuntimeTasks()
+
+    await dragMoveSelectedBodyCell(wrapper, {
+      rowIndex: 0,
+      columnIndex: 0,
+      clientX: 270,
+      clientY: 16,
+    }, {
+      clientX: 270,
+      clientY: 48,
+    })
+
+    expect(resolveApiRowCount(wrapper)).toBe(2)
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 0)).toMatchObject({
+      rowId: "r1",
+      owner: "",
+    })
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 1)).toMatchObject({
+      rowId: "ph-1",
+      owner: "NOC",
+    })
+    expect(queryBodyCell(wrapper, 0, 0).text()).toBe("")
+    expect(queryBodyCell(wrapper, 1, 0).text()).toBe("NOC")
+
+    wrapper.unmount()
+  })
+
+  it("materializes a placeholder row on checkbox toggle even when the grid starts empty", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: [],
+        columns: CHECKBOX_COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 1,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            approved: false,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(0)
+
+    const cell = wrapper.find('.grid-body-viewport .grid-cell--checkbox[role="checkbox"]')
+    expect(cell.exists()).toBe(true)
+
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(1)
+    expect(resolveRowAt<{ rowId: string; approved: boolean }>(wrapper, 0)).toMatchObject({
+      rowId: "ph-0",
+      approved: true,
+    })
+
+    wrapper.unmount()
+  })
+
+  it("navigates into the placeholder tail on Enter without materializing a row", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: EDITABLE_COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 1,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    expect(cell.exists()).toBe(true)
+
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    await cell.trigger("keydown", { key: "Enter" })
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(false)
+    expect(resolveApiRowCount(wrapper)).toBe(1)
+    expect(queryBodyCell(wrapper, 1, 0).classes()).toContain("grid-cell--selection-anchor")
+    expect(queryBodyCell(wrapper, 1, 0).text()).toBe("")
+
+    wrapper.unmount()
+  })
+
+  it("inserts above a placeholder row from rowIndexMenu and disables unsupported placeholder row actions", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: EDITABLE_COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(1)
+
+    const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:1"]')
+    expect(placeholderRowIndexCell.exists()).toBe(true)
+
+    await placeholderRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 56 })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuAction("insert-row-above")?.hasAttribute("disabled")).toBe(false)
+    expect(queryContextMenuAction("copy-row")?.hasAttribute("disabled")).toBe(true)
+    expect(queryContextMenuAction("cut-row")?.hasAttribute("disabled")).toBe(true)
+    expect(queryContextMenuAction("paste-row")?.hasAttribute("disabled")).toBe(false)
+    expect(queryContextMenuAction("delete-selected-rows")?.hasAttribute("disabled")).toBe(true)
+
+    queryContextMenuAction("insert-row-above")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(2)
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 1)).toMatchObject({
+      rowId: "ph-1",
+      owner: "",
+    })
+
+    wrapper.unmount()
+  })
+
+  it("records mixed real-plus-placeholder row-index deletes as real-row history only", async () => {
+    const recordIntentTransaction = vi.fn()
+    const historyAdapter: DataGridTableStageHistoryAdapter = {
+      captureSnapshot: () => ({ token: "delete-placeholder-range" }),
+      recordIntentTransaction,
+      canUndo: () => false,
+      canRedo: () => false,
+      runHistoryAction: async () => null,
+    }
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 2),
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        history: {
+          adapter: historyAdapter,
+          shortcuts: false,
+        },
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
+      rows: {
+        get: (index: number) => { rowId?: string } | undefined
+      }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 1,
+        endRow: 3,
+        startCol: 0,
+        endCol: COLUMNS.length - 1,
+        anchor: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        focus: { rowIndex: 3, colIndex: 0, rowId: "__datagrid_placeholder__:3" },
+        startRowId: "r2",
+        endRowId: "__datagrid_placeholder__:3",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 3, colIndex: 0, rowId: "__datagrid_placeholder__:3" },
+    })
+    await flushRuntimeTasks()
+
+    const secondRealRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(secondRealRowIndexCell.exists()).toBe(true)
+
+    await secondRealRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("delete-selected-rows")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(1)
+    expect(api?.rows.get(0)?.rowId).toBe("r1")
+    expect(recordIntentTransaction).toHaveBeenCalledTimes(1)
+    expect(recordIntentTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ label: "Delete row" }),
+      expect.objectContaining({ token: "delete-placeholder-range" }),
+    )
+
+    wrapper.unmount()
+  })
+
+  it("enables placeholder row-index selection delete when the active range includes real rows", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 2),
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
+      rows: {
+        get: (index: number) => { rowId?: string } | undefined
+      }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 1,
+        endRow: 3,
+        startCol: 0,
+        endCol: COLUMNS.length - 1,
+        anchor: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        focus: { rowIndex: 3, colIndex: 0, rowId: "__datagrid_placeholder__:3" },
+        startRowId: "r2",
+        endRowId: "__datagrid_placeholder__:3",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 3, colIndex: 0, rowId: "__datagrid_placeholder__:3" },
+    })
+    await flushRuntimeTasks()
+
+    const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:3"]')
+    expect(placeholderRowIndexCell.exists()).toBe(true)
+
+    await placeholderRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 72 })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuAction("delete-selected-rows")?.disabled).toBe(false)
+
+    queryContextMenuAction("delete-selected-rows")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(1)
+    expect(api?.rows.get(0)?.rowId).toBe("r1")
+
+    wrapper.unmount()
+  })
+
+  it("supports Delete on a placeholder row index when the active range includes real rows", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 2),
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
+      rows: {
+        get: (index: number) => { rowId?: string } | undefined
+      }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 1,
+        endRow: 3,
+        startCol: 0,
+        endCol: COLUMNS.length - 1,
+        anchor: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        focus: { rowIndex: 3, colIndex: 0, rowId: "__datagrid_placeholder__:3" },
+        startRowId: "r2",
+        endRowId: "__datagrid_placeholder__:3",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 3, colIndex: 0, rowId: "__datagrid_placeholder__:3" },
+    })
+    await flushRuntimeTasks()
+
+    const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:3"]')
+    expect(placeholderRowIndexCell.exists()).toBe(true)
+
+    ;(placeholderRowIndexCell.element as HTMLElement).focus()
+    await placeholderRowIndexCell.trigger("keydown", { key: "Delete" })
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(1)
+    expect(api?.rows.get(0)?.rowId).toBe("r1")
+
+    wrapper.unmount()
+  })
+
+  it("supports Insert and Ctrl+I on a placeholder row index", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: EDITABLE_COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const firstPlaceholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:1"]')
+    expect(firstPlaceholderRowIndexCell.exists()).toBe(true)
+
+    await firstPlaceholderRowIndexCell.trigger("click")
+    ;(firstPlaceholderRowIndexCell.element as HTMLElement).focus()
+    await firstPlaceholderRowIndexCell.trigger("keydown", { key: "i", ctrlKey: true })
+    await flushRuntimeTasks()
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(2)
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 1)).toMatchObject({
+      rowId: "ph-1",
+      owner: "",
+    })
+    expect(document.activeElement?.classList.contains("datagrid-stage__row-index-cell")).toBe(true)
+
+    const nextPlaceholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:2"]')
+    expect(nextPlaceholderRowIndexCell.exists()).toBe(true)
+
+    await nextPlaceholderRowIndexCell.trigger("click")
+    ;(nextPlaceholderRowIndexCell.element as HTMLElement).focus()
+    await nextPlaceholderRowIndexCell.trigger("keydown", { key: "Insert" })
+    await flushRuntimeTasks()
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(3)
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 2)).toMatchObject({
+      rowId: "ph-2",
+      owner: "",
+    })
+
+    wrapper.unmount()
+  })
+
+  it("opens the placeholder row index menu from the keyboard and keeps unsupported actions disabled", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: EDITABLE_COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 1,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:1"]')
+    expect(placeholderRowIndexCell.exists()).toBe(true)
+
+    await placeholderRowIndexCell.trigger("click")
+    await placeholderRowIndexCell.trigger("keydown", { key: "F10", shiftKey: true })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuRoot()).toBeTruthy()
+    expect(queryContextMenuAction("insert-row-above")?.disabled).toBe(false)
+    expect(queryContextMenuAction("copy-row")?.disabled).toBe(true)
+    expect(queryContextMenuAction("cut-row")?.disabled).toBe(true)
+    expect(queryContextMenuAction("paste-row")?.disabled).toBe(false)
+    expect(queryContextMenuAction("delete-selected-rows")?.disabled).toBe(true)
+
+    queryContextMenuRoot()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    await flushRuntimeTasks()
+
+    await placeholderRowIndexCell.trigger("click")
+    await placeholderRowIndexCell.trigger("keydown", { key: "ContextMenu" })
+    await flushRuntimeTasks()
+
+    expect(queryContextMenuRoot()).toBeTruthy()
+    expect(queryContextMenuAction("insert-row-above")?.disabled).toBe(false)
+    expect(queryContextMenuAction("copy-row")?.disabled).toBe(true)
+    expect(queryContextMenuAction("paste-row")?.disabled).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("pastes a copied row below a placeholder row from rowIndexMenu", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const realRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(realRowIndexCell.exists()).toBe(true)
+
+    await realRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("copy-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:1"]')
+    expect(placeholderRowIndexCell.exists()).toBe(true)
+
+    await placeholderRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 56 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("paste-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(3)
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 1)).toMatchObject({
+      rowId: "ph-1",
+      owner: "",
+    })
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 2)).toMatchObject({
+      owner: "NOC",
+    })
+
+    wrapper.unmount()
+  })
+
+  it("supports Ctrl+V on a placeholder row index after copying a real row", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const realRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(realRowIndexCell.exists()).toBe(true)
+
+    await realRowIndexCell.trigger("click")
+    await realRowIndexCell.trigger("keydown", { key: "c", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:1"]')
+    expect(placeholderRowIndexCell.exists()).toBe(true)
+
+    await placeholderRowIndexCell.trigger("click")
+    await placeholderRowIndexCell.trigger("keydown", { key: "v", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(3)
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 1)).toMatchObject({
+      rowId: "ph-1",
+      owner: "",
+    })
+    expect(resolveRowAt<{ owner: string }>(wrapper, 2)).toMatchObject({
+      owner: "NOC",
+    })
+    expect(document.activeElement?.classList.contains("datagrid-stage__row-index-cell")).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it("pastes the current row-index copy selection below a placeholder row from rowIndexMenu", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 2),
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: COLUMNS.length - 1,
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        startRowId: "r1",
+        endRowId: "r2",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+    })
+    await flushRuntimeTasks()
+
+    const secondRealRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(secondRealRowIndexCell.exists()).toBe(true)
+
+    await secondRealRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 56 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("copy-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:3"]')
+    expect(placeholderRowIndexCell.exists()).toBe(true)
+
+    await placeholderRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 72 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("paste-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(6)
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 2)).toMatchObject({ rowId: "ph-2", owner: "" })
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 3)).toMatchObject({ rowId: "ph-3", owner: "" })
+    expect(resolveRowAt<{ rowId: string; owner: string; region: string }>(wrapper, 4)).toMatchObject({ owner: "NOC", region: "eu-west" })
+    expect(resolveRowAt<{ rowId: string; owner: string; region: string }>(wrapper, 5)).toMatchObject({ owner: "NOC", region: "us-east" })
+    expect(resolveRowAt<{ rowId: string }>(wrapper, 4)?.rowId).not.toBe("r1")
+    expect(resolveRowAt<{ rowId: string }>(wrapper, 5)?.rowId).not.toBe("r2")
+
+    wrapper.unmount()
+  })
+
+  it("supports Ctrl+C and Ctrl+V for the current row-index selection range into the placeholder tail", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 2),
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: COLUMNS.length - 1,
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        startRowId: "r1",
+        endRowId: "r2",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+    })
+    await flushRuntimeTasks()
+
+    const secondRealRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(secondRealRowIndexCell.exists()).toBe(true)
+
+    ;(secondRealRowIndexCell.element as HTMLElement).focus()
+    await secondRealRowIndexCell.trigger("keydown", { key: "c", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:3"]')
+    expect(placeholderRowIndexCell.exists()).toBe(true)
+
+    ;(placeholderRowIndexCell.element as HTMLElement).focus()
+    await placeholderRowIndexCell.trigger("keydown", { key: "v", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(6)
+    expect(resolveRowAt<{ rowId: string; owner: string; region: string }>(wrapper, 4)).toMatchObject({ owner: "NOC", region: "eu-west" })
+    expect(resolveRowAt<{ rowId: string; owner: string; region: string }>(wrapper, 5)).toMatchObject({ owner: "NOC", region: "us-east" })
+
+    wrapper.unmount()
+  })
+
+  it("supports Ctrl+X and Ctrl+V to move a cut row below a placeholder row index", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 2),
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const firstRealRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(firstRealRowIndexCell.exists()).toBe(true)
+
+    await firstRealRowIndexCell.trigger("click")
+    await firstRealRowIndexCell.trigger("keydown", { key: "x", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).toContain("grid-row--clipboard-pending")
+
+    const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:2"]')
+    expect(placeholderRowIndexCell.exists()).toBe(true)
+
+    await placeholderRowIndexCell.trigger("click")
+    await placeholderRowIndexCell.trigger("keydown", { key: "v", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(3)
+    expect(resolveRowAt<{ rowId: string }>(wrapper, 0)).toMatchObject({ rowId: "r2" })
+    expect(resolveRowAt<{ rowId: string }>(wrapper, 1)).toMatchObject({ rowId: "ph-2" })
+    expect(resolveRowAt<{ rowId: string }>(wrapper, 2)).toMatchObject({ rowId: "r1" })
+    expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).not.toContain("grid-row--clipboard-pending")
+    expect(document.activeElement?.classList.contains("datagrid-stage__row-index-cell")).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it("moves the current row-index selection range below a placeholder row index with Ctrl+X and Ctrl+V", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+      }
+      rows: {
+        get: (index: number) => { rowId?: string } | undefined
+      }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: COLUMNS.length - 1,
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        startRowId: "r1",
+        endRowId: "r2",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+    })
+    await flushRuntimeTasks()
+
+    const secondRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(secondRowIndexCell.exists()).toBe(true)
+
+    ;(secondRowIndexCell.element as HTMLElement).focus()
+    await secondRowIndexCell.trigger("keydown", { key: "x", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    expect(wrapper.findAll('.grid-body-pane--left .grid-row').at(0)?.classes()).toContain("grid-row--clipboard-pending")
+    expect(wrapper.findAll('.grid-body-pane--left .grid-row').at(1)?.classes()).toContain("grid-row--clipboard-pending")
+
+    const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:4"]')
+    expect(placeholderRowIndexCell.exists()).toBe(true)
+
+    ;(placeholderRowIndexCell.element as HTMLElement).focus()
+    await placeholderRowIndexCell.trigger("keydown", { key: "v", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    expect(resolveApiRowCount(wrapper)).toBe(5)
+    expect([
+      api?.rows.get(0)?.rowId,
+      api?.rows.get(1)?.rowId,
+      api?.rows.get(2)?.rowId,
+      api?.rows.get(3)?.rowId,
+      api?.rows.get(4)?.rowId,
+    ]).toEqual(["r3", "ph-3", "ph-4", "r1", "r2"])
+
+    wrapper.unmount()
+  })
+
+  it("pastes multiple clipboard rows below a deeper placeholder row from rowIndexMenu", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 3,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    const originalClipboard = navigator.clipboard
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined),
+        readText: vi.fn<() => Promise<string>>().mockResolvedValue(JSON.stringify([
+          { rowId: "clip-1", owner: "Alpha", region: "eu-west", amount: 101 },
+          { rowId: "clip-2", owner: "Beta", region: "us-east", amount: 202 },
+        ])),
+      },
+    })
+
+    try {
+      await flushRuntimeTasks()
+
+      const placeholderRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="__datagrid_placeholder__:2"]')
+      expect(placeholderRowIndexCell.exists()).toBe(true)
+
+      await placeholderRowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 72 })
+      await flushRuntimeTasks()
+
+      queryContextMenuAction("paste-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      await flushRuntimeTasks()
+
+      expect(resolveApiRowCount(wrapper)).toBe(5)
+      expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 1)).toMatchObject({
+        rowId: "ph-1",
+        owner: "",
+      })
+      expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 2)).toMatchObject({
+        rowId: "ph-2",
+        owner: "",
+      })
+      expect(resolveRowAt<{ owner: string; region: string; amount: number }>(wrapper, 3)).toMatchObject({
+        owner: "Alpha",
+        region: "eu-west",
+        amount: 101,
+      })
+      expect(resolveRowAt<{ owner: string; region: string; amount: number }>(wrapper, 4)).toMatchObject({
+        owner: "Beta",
+        region: "us-east",
+        amount: 202,
+      })
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+
+    wrapper.unmount()
+  })
+
   it("keeps the fill handle disabled by default", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
@@ -4478,7 +5894,7 @@ describe("DataGrid app facade contract", () => {
           { rowId: "t2", owner: "Payments", createdAt: "2026-02-01", amount: 10 },
         ],
         columns: [
-          { key: "owner", label: "Owner", dataType: "string" },
+          { key: "owner", label: "Owner" },
           { key: "createdAt", label: "Created", dataType: "date" },
           { key: "amount", label: "Amount", dataType: "number" },
         ],

@@ -64,6 +64,8 @@ export type {
   DataGridAppGroupCellRenderer,
   DataGridAppGroupCellRendererContext,
   DataGridAppCellRendererInteractiveContext,
+  DataGridAppRowSurfaceContext,
+  DataGridAppRowSurfaceKind,
   DataGridAppColumnInput,
   DataGridAppEnterpriseFormulaRuntimeOptions,
   ResolveDataGridFormulaRowModelOptionsInput,

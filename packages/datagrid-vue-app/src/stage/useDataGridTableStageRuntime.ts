@@ -30,12 +30,14 @@ import type {
   DataGridColumnMenuTriggerMode,
 } from "../overlays/dataGridColumnMenu"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
+import type { DataGridPlaceholderRowsOptions } from "../config/dataGridPlaceholderRows"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import type { DataGridTableStageContext } from "./dataGridTableStageContext"
 import { useDataGridTableStageBindings } from "./useDataGridTableStageBindings"
 import { useDataGridTableStageCellIo } from "./useDataGridTableStageCellIo"
 import { useDataGridTableStageColumns } from "./useDataGridTableStageColumns"
 import { useDataGridTableStageFillAction } from "./useDataGridTableStageFillAction"
+import { useDataGridTableStagePlaceholderRows } from "./useDataGridTableStagePlaceholderRows"
 import type { DataGridTableStageHistoryAdapter } from "./useDataGridTableStageHistory"
 import { useDataGridTableStageHistory } from "./useDataGridTableStageHistory"
 import { useDataGridTableStageRowSelection } from "./useDataGridTableStageRowSelection"
@@ -60,6 +62,7 @@ type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = {
   api: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["api"]
   syncBodyRowsInRange: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["syncBodyRowsInRange"]
   setViewportRange: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["setViewportRange"]
+  setRows?: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["setRows"]
   rowPartition: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["rowPartition"]
   virtualWindow: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["virtualWindow"]
   columnSnapshot: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["columnSnapshot"]
@@ -74,6 +77,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   layoutMode: Ref<DataGridLayoutMode>
   minRows: Ref<number | null>
   maxRows: Ref<number | null>
+  placeholderRows: Ref<DataGridPlaceholderRowsOptions<TRow>>
   enableFillHandle: Ref<boolean>
   enableRangeMove: Ref<boolean>
   rows: Ref<readonly TRow[]>
@@ -193,7 +197,14 @@ export function useDataGridTableStageRuntime<
   const rowSelectionSnapshotRef = options.rowSelectionSnapshot ?? ref<DataGridRowSelectionSnapshot | null>(null)
   const showRowIndex = computed(() => options.showRowIndex?.value !== false)
   const totalBodyRows = computed(() => options.runtime.rowPartition.value.bodyRowCount)
-  const totalSelectableRows = computed(() => Math.max(0, options.totalRuntimeRows.value))
+  const placeholderRows = useDataGridTableStagePlaceholderRows<TRow>({
+    runtime: options.runtime,
+    sourceRows: options.sourceRows ?? options.rows,
+    totalBodyRows,
+    placeholderRows: options.placeholderRows,
+    cloneRowData: options.cloneRowData,
+  })
+  const totalSelectableRows = computed(() => Math.max(0, placeholderRows.totalVisualRows.value))
   const effectiveIndexColumnWidth = computed(() => (showRowIndex.value ? INDEX_COLUMN_WIDTH : 0))
   const columnService = useDataGridTableStageColumns<TRow>({
     runtime: options.runtime,
@@ -213,7 +224,7 @@ export function useDataGridTableStageRuntime<
   } = columnService
 
   const rowHeightMetrics = createDataGridAppRowHeightMetrics({
-    totalRows: () => totalBodyRows.value,
+    totalRows: () => totalSelectableRows.value,
     resolveBaseRowHeight: () => options.normalizedBaseRowHeight.value,
     resolveRowHeightOverride: rowIndex => options.runtime.api.view.getRowHeightOverride(rowIndex),
     resolveRowHeightVersion: () => options.runtime.api.view.getRowHeightVersion(),
@@ -290,12 +301,12 @@ export function useDataGridTableStageRuntime<
     scheduleViewportSync,
     cancelScheduledViewportSync,
   } = useDataGridAppViewport<TRow>({
-    runtime: options.runtime,
+    runtime: placeholderRows.visualRuntime,
     mode: options.mode,
     rowRenderMode: options.rowRenderMode,
     rowVirtualizationEnabled: computed(() => options.virtualization.value.rows),
     columnVirtualizationEnabled: computed(() => options.virtualization.value.columns),
-    totalRows: totalBodyRows,
+    totalRows: totalSelectableRows,
     visibleColumns: centerColumns,
     sizingColumns: orderedVisibleColumns,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,
@@ -315,28 +326,8 @@ export function useDataGridTableStageRuntime<
     return _viewportColumnStyle(columnKey)
   }
 
-  const getSelectableRowAtIndex = (rowIndex: number): import("@affino/datagrid-vue").DataGridRowNode<TRow> | null => {
-    if (totalSelectableRows.value <= 0) {
-      return null
-    }
-    const normalizedIndex = Math.max(0, Math.min(totalSelectableRows.value - 1, Math.trunc(rowIndex)))
-    return options.runtime.api.rows.get(normalizedIndex) ?? null
-  }
-
-  const resolveSelectableRowIndexById = (rowId: string | number): number => {
-    for (let rowIndex = 0; rowIndex < totalSelectableRows.value; rowIndex += 1) {
-      if (options.runtime.api.rows.get(rowIndex)?.rowId === rowId) {
-        return rowIndex
-      }
-    }
-    return options.runtime.resolveBodyRowIndexById(rowId)
-  }
-
-  const selectableRuntime = {
-    ...options.runtime,
-    getBodyRowAtIndex: getSelectableRowAtIndex,
-    resolveBodyRowIndexById: resolveSelectableRowIndexById,
-  }
+  const selectableRuntime = placeholderRows.visualRuntime
+  const resolveSelectableRowIndexById = selectableRuntime.resolveBodyRowIndexById
 
   const {
     rowStyle,
@@ -407,6 +398,7 @@ export function useDataGridTableStageRuntime<
 
   const rowSelectionService = useDataGridTableStageRowSelection<TRow>({
     runtime: options.runtime,
+    isPlaceholderRow: placeholderRows.isPlaceholderRow,
     rowSelectionColumn,
     orderedVisibleColumns,
     displayRows,
@@ -472,6 +464,7 @@ export function useDataGridTableStageRuntime<
   const cellIoService = useDataGridTableStageCellIo<TRow>({
     runtime: options.runtime,
     viewportRowStart,
+    ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "toggle"),
     isRowSelectionColumnKey,
     isRowSelectionColumn,
     isCellEditableByKey,
@@ -488,6 +481,30 @@ export function useDataGridTableStageRuntime<
   const {
     readStageCell,
   } = cellIoService
+
+  const isResolvedSurfaceCellEditable = (
+    row: DataGridTableRow<TRow>,
+    column: DataGridColumnSnapshot | null | undefined,
+    fallback: () => boolean,
+  ): boolean => {
+    if (placeholderRows.isPlaceholderRow(row)) {
+      return placeholderRows.isPlaceholderCellEditable(column)
+    }
+    return fallback()
+  }
+
+  const isSurfaceCellEditableByKey = (
+    row: DataGridTableRow<TRow>,
+    rowIndex: number,
+    columnKey: string,
+    columnIndex: number,
+  ): boolean => {
+    return isResolvedSurfaceCellEditable(
+      row,
+      orderedVisibleColumns.value[columnIndex],
+      () => isCellEditableByKey(row, rowIndex, columnKey, columnIndex),
+    )
+  }
 
   const clipboard = useDataGridAppClipboard<TRow, unknown>({
     mode: options.mode,
@@ -511,10 +528,11 @@ export function useDataGridTableStageRuntime<
     readClipboardCell: options.readClipboardCell
       ? (row, columnKey) => options.readClipboardCell?.(row, columnKey) ?? ""
       : undefined,
-    isCellEditable: isCellEditableByKey,
+    isCellEditable: isSurfaceCellEditableByKey,
     syncViewport: () => syncViewportFromDom(),
     applyClipboardEdits: options.applyClipboardEdits,
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,
+    ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "paste"),
   })
 
   const {
@@ -571,7 +589,7 @@ export function useDataGridTableStageRuntime<
     ensureActiveCellVisible: (rowIndex, columnIndex) => {
       ensureKeyboardActiveCellVisible(rowIndex, columnIndex)
     },
-    isCellEditable: isCellEditableByKey,
+    isCellEditable: isSurfaceCellEditableByKey,
     captureRowsSnapshot: captureHistorySnapshot,
     captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
     recordEditTransaction: beforeSnapshot => {
@@ -580,11 +598,108 @@ export function useDataGridTableStageRuntime<
         label: "Cell edit",
       }, beforeSnapshot)
     },
+    ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "edit"),
   })
 
   isEditingCellForSelection = isEditingCell
 
   const editingCellRef = computed(() => editingCell.value)
+
+  const applyStageRangeMove = (
+    baseRange: DataGridCopyRange,
+    targetRange: DataGridCopyRange,
+  ): boolean => {
+    const normalizedBaseRange = normalizeClipboardRange(baseRange)
+    const normalizedTargetRange = normalizeClipboardRange(targetRange)
+    if (!normalizedBaseRange || !normalizedTargetRange || rangesEqual(normalizedBaseRange, normalizedTargetRange)) {
+      return false
+    }
+
+    const sourceMatrix = buildFillMatrixFromRange(normalizedBaseRange)
+    const sourceRowCount = normalizedBaseRange.endRow - normalizedBaseRange.startRow + 1
+    const sourceColumnCount = normalizedBaseRange.endColumn - normalizedBaseRange.startColumn + 1
+    const targetRowHasNonEmptyValue = new Map<number, boolean>()
+
+    for (let rowOffset = 0; rowOffset < sourceRowCount; rowOffset += 1) {
+      let hasNonEmptyValue = false
+      for (let columnOffset = 0; columnOffset < sourceColumnCount; columnOffset += 1) {
+        if ((sourceMatrix[rowOffset]?.[columnOffset] ?? "").length > 0) {
+          hasNonEmptyValue = true
+          break
+        }
+      }
+      targetRowHasNonEmptyValue.set(normalizedTargetRange.startRow + rowOffset, hasNonEmptyValue)
+    }
+
+    const beforeSnapshot = captureHistorySnapshot()
+    const rowPatchDataById = new Map<string | number, Record<string, unknown>>()
+    let blocked = 0
+    let applied = 0
+
+    const getRowPatch = (rowId: string | number): Record<string, unknown> => {
+      const current = rowPatchDataById.get(rowId)
+      if (current) {
+        return current
+      }
+      const next: Record<string, unknown> = {}
+      rowPatchDataById.set(rowId, next)
+      return next
+    }
+
+    for (let rowIndex = normalizedBaseRange.startRow; rowIndex <= normalizedBaseRange.endRow; rowIndex += 1) {
+      const sourceRow = selectableRuntime.getBodyRowAtIndex(rowIndex)
+      if (!sourceRow || sourceRow.kind === "group" || sourceRow.rowId == null || placeholderRows.isPlaceholderRow(sourceRow)) {
+        continue
+      }
+      for (let columnIndex = normalizedBaseRange.startColumn; columnIndex <= normalizedBaseRange.endColumn; columnIndex += 1) {
+        const columnKey = orderedVisibleColumns.value[columnIndex]?.key
+        if (!columnKey || isRowSelectionColumnKey(columnKey)) {
+          continue
+        }
+        getRowPatch(sourceRow.rowId)[columnKey] = ""
+      }
+    }
+
+    for (let rowIndex = normalizedTargetRange.startRow; rowIndex <= normalizedTargetRange.endRow; rowIndex += 1) {
+      let targetRow = selectableRuntime.getBodyRowAtIndex(rowIndex)
+      if (placeholderRows.isPlaceholderRow(targetRow) && targetRowHasNonEmptyValue.get(rowIndex) === true) {
+        targetRow = placeholderRows.ensureMaterializedRowAt(rowIndex, "paste")
+      }
+      for (let columnIndex = normalizedTargetRange.startColumn; columnIndex <= normalizedTargetRange.endColumn; columnIndex += 1) {
+        const columnKey = orderedVisibleColumns.value[columnIndex]?.key
+        if (!columnKey || isRowSelectionColumnKey(columnKey)) {
+          continue
+        }
+        const rowOffset = rowIndex - normalizedTargetRange.startRow
+        const columnOffset = columnIndex - normalizedTargetRange.startColumn
+        const nextValue = sourceMatrix[rowOffset]?.[columnOffset] ?? ""
+
+        if (!targetRow || targetRow.kind === "group" || targetRow.rowId == null || placeholderRows.isPlaceholderRow(targetRow)) {
+          blocked += 1
+          continue
+        }
+        getRowPatch(targetRow.rowId)[columnKey] = nextValue
+        applied += 1
+      }
+    }
+
+    if (applied <= 0 || rowPatchDataById.size === 0) {
+      return false
+    }
+
+    options.runtime.api.rows.applyEdits(Array.from(rowPatchDataById.entries()).map(([rowId, data]) => ({
+      rowId,
+      data: data as Partial<TRow>,
+    })))
+    applyClipboardSelectionRange(normalizedTargetRange)
+    recordHistoryIntentTransaction({
+      intent: "move",
+      label: blocked > 0 ? `Move ${applied} cells (blocked ${blocked})` : `Move ${applied} cells`,
+      affectedRange: normalizedTargetRange,
+    }, beforeSnapshot)
+    syncViewportFromDom()
+    return true
+  }
 
   const interactionControllerOptions = {
     mode: options.mode,
@@ -608,9 +723,10 @@ export function useDataGridTableStageRuntime<
     setCellSelection,
     clearCellSelection,
     readCell: (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>, columnKey: string) => readStageCell(row, columnKey),
-    isCellEditable: isCellEditableByKey,
+    isCellEditable: isSurfaceCellEditableByKey,
     cloneRowData: options.cloneRowData,
     resolveRowIndexById: resolveSelectableRowIndexById,
+    ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "toggle"),
     captureRowsSnapshot: captureHistorySnapshot,
     captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
     recordIntentTransaction: (descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null }, beforeSnapshot: unknown) => {
@@ -625,7 +741,7 @@ export function useDataGridTableStageRuntime<
     applyClipboardEdits,
     rangesEqual,
     buildFillMatrixFromRange,
-    applyRangeMove: options.applyRangeMove,
+    applyRangeMove: options.applyRangeMove ?? applyStageRangeMove,
     syncViewport: () => syncViewportFromDom(),
     editingCell: editingCellRef,
     startInlineEdit,
@@ -855,9 +971,12 @@ export function useDataGridTableStageRuntime<
     isCellInPendingClipboardRange,
     isCellOnPendingClipboardEdge,
     isEditingCell,
-    isCellEditable: (row, rowOffset, column, columnIndex) => {
-      void columnIndex
-      return isCellEditable(row, viewportRowStart.value + rowOffset, column)
+    isCellEditable: (row, rowOffset, column, _columnIndex) => {
+      return isResolvedSurfaceCellEditable(
+        row,
+        column,
+        () => isCellEditable(row, viewportRowStart.value + rowOffset, column),
+      )
     },
     handleCellMouseDown,
     handleCellClick: stageServices.cellIo.handleCellClick,
@@ -889,7 +1008,7 @@ export function useDataGridTableStageRuntime<
     mode: options.mode,
     rows: options.rows,
     runtime: options.runtime as never,
-    totalRows: totalBodyRows,
+    totalRows: totalSelectableRows,
     rowVersion: options.rowVersion,
     rowHeightMode: options.rowHeightMode,
     normalizedBaseRowHeight: options.normalizedBaseRowHeight,

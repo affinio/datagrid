@@ -60,6 +60,20 @@
             <option value="gantt">Gantt</option>
           </select>
         </label>
+        <label v-if="showPlaceholderTailControls">
+          <input v-model="placeholderTailEnabled" type="checkbox" />
+          Placeholder tail
+        </label>
+        <label v-if="showPlaceholderTailControls && placeholderTailEnabled">
+          Tail rows
+          <input
+            v-model.number="placeholderTailCount"
+            type="number"
+            min="1"
+            max="24"
+            step="1"
+          />
+        </label>
         <label v-if="props.mode === 'base' && !props.timesheetShowcase">
           Menu demo
           <select v-model="columnMenuPreset">
@@ -229,6 +243,7 @@
       <div class="meta">
         <span>Rows: {{ rows.length }}</span>
         <span>Columns: {{ columns.length }}</span>
+        <span v-if="showPlaceholderTailControls && placeholderTailEnabled">Placeholder tail: {{ placeholderTailCount }}</span>
         <span>Saved view: {{ savedViewStatus }}</span>
         <span>{{ modeHint }}</span>
       </div>
@@ -302,6 +317,7 @@
         :grid-lines="gridLines"
         :show-row-index="true"
         :row-selection="!props.timesheetShowcase"
+        :placeholder-rows="placeholderRows"
         :is-cell-editable="timesheetIsCellEditable"
         @cell-change="handleGridCellChange"
         @selection-change="syncSelectionAggregatesLabel"
@@ -339,6 +355,7 @@ import {
   type DataGridCellMenuProp,
   type DataGridColumnMenuProp,
   type DataGridGridLinesProp,
+  type DataGridPlaceholderRowsProp,
   type DataGridRowIndexMenuProp,
   type DataGridSavedViewSnapshot,
   writeDataGridSavedViewToStorage,
@@ -1303,6 +1320,8 @@ const rowRenderMode = ref<"virtualization" | "pagination">("virtualization");
 const paginationPageSize = ref(100);
 const paginationPage = ref(1);
 const viewMode = ref<DataGridAppViewMode>("table");
+const placeholderTailEnabled = ref(false);
+const placeholderTailCount = ref(6);
 const ganttZoomLevel = ref<DataGridGanttZoomLevel>("week");
 const baseRowHeight = ref(31);
 const rowHover = ref(true);
@@ -1350,7 +1369,9 @@ const modeHint = computed(() => {
         ? props.ganttShowcase
           ? "Enterprise gantt showcase over the same row model: baseline, typed predecessors, summaries and computed critical path."
           : "Public component in split grid plus timeline mode over the same visible rows."
-        : "Public component with declarative rows, columns, view state, and right-click menus for headers, cells, and the row index, including undoable cell clear and row batch delete.";
+        : placeholderTailEnabled.value
+          ? `Public component with declarative rows, columns, view state, right-click menus, and a ${placeholderTailCount.value}-row placeholder tail that materializes on first write.`
+          : "Public component with declarative rows, columns, view state, and right-click menus for headers, cells, and the row index, including undoable cell clear and row batch delete.";
 });
 
 const isStatePanelOpen = ref(false);
@@ -1371,6 +1392,75 @@ const rows = computed(() =>
     ? buildTimesheetRows(timesheetProjects.value)
     : buildVueRows(props.mode, rowCount.value, columnCount.value),
 );
+
+const showPlaceholderTailControls = computed(() => {
+  return props.mode === "base" && !props.timesheetShowcase && viewMode.value === "table";
+});
+
+function buildSandboxPlaceholderRow(visualRowIndex: number): Record<string, unknown> {
+  const now = new Date();
+  const startDateIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+  const endDateIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
+  const timestampIso = now.toISOString();
+  const row: Record<string, unknown> = {
+    rowId: `sandbox-placeholder-${visualRowIndex + 1}`,
+    id: 900000 + visualRowIndex + 1,
+    name: "",
+    amount: 0,
+    start: startDateIso,
+    end: endDateIso,
+    updatedAt: timestampIso,
+    stage: "backlog",
+    status: "new",
+    region: "",
+    category: "",
+    qty: 0,
+    baselineStart: startDateIso,
+    baselineEnd: endDateIso,
+    progress: 0,
+    dependencies: "",
+    critical: false,
+  };
+
+  for (const column of columns.value) {
+    if (row[column.key] !== undefined) {
+      continue;
+    }
+    if (column.cellType === "checkbox" || column.dataType === "boolean") {
+      row[column.key] = false;
+      continue;
+    }
+    if (
+      column.dataType === "number"
+      || column.dataType === "currency"
+      || column.dataType === "percent"
+    ) {
+      row[column.key] = 0;
+      continue;
+    }
+    if (column.dataType === "date") {
+      row[column.key] = startDateIso;
+      continue;
+    }
+    if (column.dataType === "datetime") {
+      row[column.key] = timestampIso;
+      continue;
+    }
+    row[column.key] = "";
+  }
+
+  return row;
+}
+
+const placeholderRows = computed<DataGridPlaceholderRowsProp<Record<string, unknown>>>(() => {
+  if (!showPlaceholderTailControls.value || !placeholderTailEnabled.value) {
+    return null;
+  }
+  return {
+    count: Math.max(1, Math.trunc(placeholderTailCount.value)),
+    createRowAt: ({ visualRowIndex }) => buildSandboxPlaceholderRow(visualRowIndex),
+  };
+});
 
 function applySandboxColumnLabelOverrides(
   input: readonly DataGridAppColumnInput[],
@@ -1862,6 +1952,7 @@ watch(
       return;
     }
     viewMode.value = "gantt";
+    placeholderTailEnabled.value = false;
     themePreset.value = "sugar";
     rowCount.value = 1000;
     columnCount.value = Math.max(columnCount.value, 16);
@@ -1888,6 +1979,7 @@ watch(
       return;
     }
     viewMode.value = "table";
+    placeholderTailEnabled.value = false;
     themePreset.value = "sugar";
     rowCount.value = 1000;
     columnCount.value = Math.max(columnCount.value, 12);
@@ -1916,6 +2008,7 @@ watch(
     rowHeightMode.value = "fixed";
     rowRenderMode.value = "virtualization";
     viewMode.value = "table";
+    placeholderTailEnabled.value = false;
     baseRowHeight.value = 35;
     rowHover.value = true;
     stripedRows.value = false;
@@ -1940,6 +2033,15 @@ watch(
     timesheetProjects.value = buildTimesheetProjectsFromPool(selectedProjectIds, timesheetProjects.value);
   },
   { deep: true },
+);
+
+watch(
+  () => viewMode.value,
+  (nextViewMode) => {
+    if (nextViewMode === "gantt") {
+      placeholderTailEnabled.value = false;
+    }
+  },
 );
 
 const timesheetIsCellEditable = ({

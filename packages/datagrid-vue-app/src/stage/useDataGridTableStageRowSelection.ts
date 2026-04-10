@@ -17,6 +17,7 @@ type DataGridTableStageRowSelectionApi<TRow extends Record<string, unknown>> =
 
 export interface UseDataGridTableStageRowSelectionOptions<TRow extends Record<string, unknown>> {
   runtime: Pick<import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>, "api">
+  isPlaceholderRow?: (row: DataGridTableRow<TRow>) => boolean
   rowSelectionColumn: ComputedRef<DataGridColumnSnapshot | null>
   orderedVisibleColumns: ComputedRef<readonly DataGridColumnSnapshot[]>
   displayRows: Ref<readonly DataGridTableRow<TRow>[]>
@@ -44,6 +45,7 @@ export interface UseDataGridTableStageRowSelectionResult<TRow extends Record<str
 export function useDataGridTableStageRowSelection<TRow extends Record<string, unknown>>(
   options: UseDataGridTableStageRowSelectionOptions<TRow>,
 ): UseDataGridTableStageRowSelectionResult<TRow> {
+  const isPlaceholderRow = options.isPlaceholderRow ?? (() => false)
   const applyRowSelectionMutation = options.applyRowSelectionMutation
     ?? ((mutator: (api: DataGridTableStageRowSelectionApi<TRow>) => void) => {
       if (!options.runtime.api.rowSelection.hasSupport()) {
@@ -54,11 +56,11 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   const rowSelectionSet = computed(() => new Set(options.rowSelectionSnapshot.value?.selectedRows ?? []))
 
   const isRowFocused = (row: DataGridTableRow<TRow>): boolean => {
-    return row.rowId != null && options.rowSelectionSnapshot.value?.focusedRow === row.rowId
+    return !isPlaceholderRow(row) && row.rowId != null && options.rowSelectionSnapshot.value?.focusedRow === row.rowId
   }
 
   const isRowCheckboxSelected = (row: DataGridTableRow<TRow>): boolean => {
-    return row.kind !== "group" && row.rowId != null && rowSelectionSet.value.has(row.rowId)
+    return !isPlaceholderRow(row) && row.kind !== "group" && row.rowId != null && rowSelectionSet.value.has(row.rowId)
   }
 
   const readRowSelectionValue = (row: DataGridTableRow<TRow>): boolean => {
@@ -71,7 +73,7 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
 
   const readRowSelectionDisplayCell = (row: DataGridTableRow<TRow>): string => {
     const column = options.rowSelectionColumn.value?.column
-    if (!column || row.kind === "group") {
+    if (!column || row.kind === "group" || isPlaceholderRow(row)) {
       return ""
     }
     return buildDataGridCellRenderModel({
@@ -104,14 +106,14 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   })
 
   const focusRow = (row: DataGridTableRow<TRow>): void => {
-    if (row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
+    if (isPlaceholderRow(row) || row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
       return
     }
     options.runtime.api.rowSelection.setFocusedRow(row.rowId)
   }
 
   const toggleRowCheckboxSelected = (row: DataGridTableRow<TRow>): void => {
-    if (row.kind === "group" || row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
+    if (isPlaceholderRow(row) || row.kind === "group" || row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
       return
     }
     applyRowSelectionMutation(rowSelectionApi => {

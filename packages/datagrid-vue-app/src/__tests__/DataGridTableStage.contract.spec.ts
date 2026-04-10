@@ -366,9 +366,9 @@ describe("DataGridTableStage contract", () => {
             column: {
               key: "centerA",
               label: "Status",
-              cellRenderer: ({ displayValue }) => h("span", {
+              cellRenderer: ({ displayValue, surface }) => h("span", {
                 class: "test-status-pill",
-              }, `Status: ${displayValue}`),
+              }, `Status: ${surface.kind}:${displayValue}`),
             },
           },
         ] as unknown as readonly DataGridColumnSnapshot[],
@@ -377,7 +377,7 @@ describe("DataGridTableStage contract", () => {
 
     await nextTick()
 
-    expect(wrapper.find(".test-status-pill").text()).toBe("Status: A1")
+    expect(wrapper.find(".test-status-pill").text()).toBe("Status: real:A1")
 
     wrapper.unmount()
   })

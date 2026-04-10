@@ -126,6 +126,7 @@ export default defineComponent({
       syncBodyRowsInRange: runtime.syncBodyRowsInRange,
       setViewportRange: runtime.setViewportRange,
       setVirtualWindowRange: runtime.setVirtualWindowRange,
+      setRows: runtime.setRows,
       rowPartition: runtime.rowPartition,
       virtualWindow: runtime.virtualWindow,
       columnSnapshot: runtime.columnSnapshot,

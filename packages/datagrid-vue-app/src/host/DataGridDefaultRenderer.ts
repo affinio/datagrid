@@ -87,8 +87,10 @@ import {
   type DataGridGanttProp,
 } from "../gantt/dataGridGantt"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
+import type { DataGridPlaceholderRowsOptions } from "../config/dataGridPlaceholderRows"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import { useDataGridTableStageRuntime } from "../stage/useDataGridTableStageRuntime"
+import { isDataGridPlaceholderSurfaceRow } from "../stage/useDataGridTableStagePlaceholderRows"
 import { resolveAdvancedFilterDraftClausesFromFilterModel } from "../advancedFilterDraftClauses"
 import {
   useDataGridAppFindReplace,
@@ -114,6 +116,7 @@ type DataGridDefaultRendererRuntime = {
   api: UseDataGridRuntimeResult<Record<string, unknown>>["api"]
   syncBodyRowsInRange: UseDataGridRuntimeResult<Record<string, unknown>>["syncBodyRowsInRange"]
   setViewportRange: UseDataGridRuntimeResult<Record<string, unknown>>["setViewportRange"]
+  setRows?: UseDataGridRuntimeResult<Record<string, unknown>>["setRows"]
   rowPartition: UseDataGridRuntimeResult<Record<string, unknown>>["rowPartition"]
   virtualWindow: UseDataGridRuntimeResult<Record<string, unknown>>["virtualWindow"]
   columnSnapshot: UseDataGridRuntimeResult<Record<string, unknown>>["columnSnapshot"]
@@ -681,6 +684,10 @@ export default defineComponent({
     maxRows: {
       type: Number as PropType<number | null>,
       default: null,
+    },
+    placeholderRows: {
+      type: Object as PropType<DataGridPlaceholderRowsOptions<Record<string, unknown>>>,
+      required: true,
     },
     fillHandle: {
       type: Boolean,
@@ -1379,6 +1386,26 @@ export default defineComponent({
       return null
     }
 
+    const resolvePlaceholderVisualRowIndex = (rowId: string): number | null => {
+      if (!props.placeholderRows.enabled || !props.placeholderRows.createRowAt) {
+        return null
+      }
+      if (resolveRuntimeRowById(rowId)) {
+        return null
+      }
+      const selector = `.datagrid-stage__row-index-cell[data-row-id="${escapeCssAttributeValue(rowId)}"]`
+      const rowIndexCell = stageHostRef.value?.querySelector<HTMLElement>(selector)
+      const visualRowIndex = Number.parseInt(rowIndexCell?.dataset.rowIndex ?? "", 10)
+      if (!Number.isFinite(visualRowIndex)) {
+        return null
+      }
+      const normalizedVisualRowIndex = Math.max(0, Math.trunc(visualRowIndex))
+      if (normalizedVisualRowIndex < props.runtime.api.rows.getCount()) {
+        return null
+      }
+      return normalizedVisualRowIndex
+    }
+
     const writeClipboardText = async (payload: string): Promise<boolean> => {
       try {
         if (!globalThis.navigator?.clipboard?.writeText) {
@@ -1602,11 +1629,109 @@ export default defineComponent({
       return buildBlankRawRowInput(row)
     }
 
+    const buildPlaceholderInsertedRowInput = (
+      visualRowIndex: number,
+      materializedRowCount: number,
+      sourceRows: readonly Record<string, unknown>[],
+    ): Record<string, unknown> | null => {
+      if (!props.placeholderRows.enabled || !props.placeholderRows.createRowAt) {
+        return null
+      }
+      const createdRow = props.placeholderRows.createRowAt({
+        visualRowIndex,
+        materializedRowCount,
+        sourceRows,
+        reason: "edit",
+      })
+      return createdRow ? cloneRowData(createdRow) : null
+    }
+
+    const insertPlaceholderRowAtVisualIndex = (
+      insertIndex: number,
+      ensureMaterializedCount: number,
+    ): boolean => {
+      if (!canInsertRows()) {
+        return false
+      }
+
+      const nextSourceRows = readCurrentRuntimeDataRows().map(row => cloneRowData(row))
+      let materializedCount = props.runtime.api.rows.getCount()
+
+      while (materializedCount < ensureMaterializedCount) {
+        const fillerRow = buildPlaceholderInsertedRowInput(
+          materializedCount,
+          materializedCount,
+          nextSourceRows,
+        )
+        if (!fillerRow) {
+          return false
+        }
+        const inserted = props.runtime.api.rows.insertDataAt(materializedCount, [fillerRow])
+        if (!inserted) {
+          return false
+        }
+        nextSourceRows.push(fillerRow)
+        materializedCount += 1
+      }
+
+      const safeInsertIndex = Math.max(0, Math.min(materializedCount, Math.trunc(insertIndex)))
+      const insertedRow = buildPlaceholderInsertedRowInput(
+        safeInsertIndex,
+        materializedCount,
+        nextSourceRows,
+      )
+      if (!insertedRow) {
+        return false
+      }
+
+      return props.runtime.api.rows.insertDataAt(safeInsertIndex, [insertedRow])
+    }
+
+    const materializePlaceholderRowsUpTo = (
+      ensureMaterializedCount: number,
+    ): readonly Record<string, unknown>[] | null => {
+      if (!canInsertRows()) {
+        return null
+      }
+
+      const nextSourceRows = readCurrentRuntimeDataRows().map(row => cloneRowData(row))
+      let materializedCount = props.runtime.api.rows.getCount()
+      const normalizedCount = Math.max(0, Math.trunc(ensureMaterializedCount))
+
+      while (materializedCount < normalizedCount) {
+        const fillerRow = buildPlaceholderInsertedRowInput(
+          materializedCount,
+          materializedCount,
+          nextSourceRows,
+        )
+        if (!fillerRow) {
+          return null
+        }
+        const inserted = props.runtime.api.rows.insertDataAt(materializedCount, [fillerRow])
+        if (!inserted) {
+          return null
+        }
+        nextSourceRows.push(fillerRow)
+        materializedCount += 1
+      }
+
+      return nextSourceRows
+    }
+
     const resolveSelectedRuntimeRowIds = (targetRowId: string): readonly string[] => {
+      const isDeletableRuntimeRowId = (rowId: string): boolean => {
+        const rowIndex = props.runtime.resolveBodyRowIndexById(rowId)
+        if (rowIndex < 0 || rowIndex >= props.runtime.api.rows.getCount()) {
+          return false
+        }
+        const row = props.runtime.getBodyRowAtIndex(rowIndex)
+        return row != null && row.kind !== "group" && !isDataGridPlaceholderSurfaceRow(row)
+      }
+
       const selectedRowIds = props.rowSelectionSnapshot.value?.selectedRows ?? []
       const normalizedSelected = selectedRowIds
         .map(rowId => String(rowId))
-        .filter(rowId => rowId.length > 0 && resolveRuntimeRowById(rowId)?.kind !== "group")
+        .filter(rowId => rowId.length > 0 && isDeletableRuntimeRowId(rowId))
       if (normalizedSelected.length > 0) {
         return normalizedSelected
       }
@@ -1630,7 +1755,11 @@ export default defineComponent({
             if (!row || row.kind === "group" || row.rowId == null) {
               continue
             }
-            rangedRowIds.push(String(row.rowId))
+            const rowId = String(row.rowId)
+            if (!isDeletableRuntimeRowId(rowId)) {
+              continue
+            }
+            rangedRowIds.push(rowId)
           }
           if (rangedRowIds.length > 0) {
             return rangedRowIds
@@ -1638,7 +1767,7 @@ export default defineComponent({
         }
       }
 
-      return targetRowId.length > 0 ? [targetRowId] : []
+      return targetRowId.length > 0 && isDeletableRuntimeRowId(targetRowId) ? [targetRowId] : []
     }
 
     const readCurrentRuntimeDataRows = (): Record<string, unknown>[] => {
@@ -1652,6 +1781,28 @@ export default defineComponent({
         rows.push(row.data)
       }
       return rows
+    }
+
+    const resolveExistingRuntimeDataRowIds = (rowIds: readonly string[]): readonly string[] => {
+      const existingRowIds = new Set(
+        readCurrentRuntimeDataRows()
+          .map(row => resolveDataRowId(row))
+          .filter((rowId): rowId is string => rowId != null),
+      )
+      return Array.from(new Set(rowIds.map(rowId => String(rowId)).filter(rowId => existingRowIds.has(rowId))))
+    }
+
+    const resolveExistingRuntimeDataRowsByIds = (
+      rowIds: readonly string[],
+    ): readonly Record<string, unknown>[] => {
+      if (rowIds.length === 0) {
+        return []
+      }
+      const rowIdSet = new Set(rowIds.map(rowId => String(rowId)))
+      return readCurrentRuntimeDataRows().filter(candidate => {
+        const normalized = resolveDataRowId(candidate)
+        return normalized != null && rowIdSet.has(normalized)
+      })
     }
 
     const removeRuntimeRows = (rowIds: readonly string[]): boolean => {
@@ -1674,15 +1825,12 @@ export default defineComponent({
       return true
     }
 
-    const moveRuntimeRowsAfter = (sourceRowIds: readonly string[], targetRowId: string): boolean => {
-      if (!canMutateRows() || sourceRowIds.length === 0 || !targetRowId) {
+    const moveRuntimeRowsToIndex = (sourceRowIds: readonly string[], targetIndex: number): boolean => {
+      if (!canMutateRows() || sourceRowIds.length === 0) {
         return false
       }
       const currentRows = readCurrentRuntimeDataRows()
       const sourceRowIdSet = new Set(sourceRowIds.map(rowId => String(rowId)))
-      if (sourceRowIdSet.has(String(targetRowId))) {
-        return false
-      }
       const movedRows = currentRows.filter(candidate => {
         const normalized = resolveDataRowId(candidate)
         return normalized != null && sourceRowIdSet.has(normalized)
@@ -1694,20 +1842,39 @@ export default defineComponent({
         const normalized = resolveDataRowId(candidate)
         return normalized == null || !sourceRowIdSet.has(normalized)
       })
-      const targetIndex = remainingRows.findIndex(candidate => resolveDataRowId(candidate) === targetRowId)
-      if (targetIndex < 0) {
-        return false
-      }
+      const safeTargetIndex = Number.isFinite(targetIndex)
+        ? Math.max(0, Math.min(remainingRows.length, Math.trunc(targetIndex)))
+        : remainingRows.length
       props.runtime.api.rows.replaceData([
-        ...remainingRows.slice(0, targetIndex + 1),
+        ...remainingRows.slice(0, safeTargetIndex),
         ...movedRows,
-        ...remainingRows.slice(targetIndex + 1),
+        ...remainingRows.slice(safeTargetIndex),
       ])
       if (props.runtime.api.rowSelection.hasSupport()) {
         props.runtime.api.rowSelection.selectRows(sourceRowIds)
         props.syncRowSelectionSnapshotFromRuntime?.()
       }
       return true
+    }
+
+    const moveRuntimeRowsAfter = (sourceRowIds: readonly string[], targetRowId: string): boolean => {
+      if (!canMutateRows() || sourceRowIds.length === 0 || !targetRowId) {
+        return false
+      }
+      const sourceRowIdSet = new Set(sourceRowIds.map(rowId => String(rowId)))
+      if (sourceRowIdSet.has(String(targetRowId))) {
+        return false
+      }
+      const currentRows = readCurrentRuntimeDataRows()
+      const remainingRows = currentRows.filter(candidate => {
+        const normalized = resolveDataRowId(candidate)
+        return normalized == null || !sourceRowIdSet.has(normalized)
+      })
+      const targetIndex = remainingRows.findIndex(candidate => resolveDataRowId(candidate) === targetRowId)
+      if (targetIndex < 0) {
+        return false
+      }
+      return moveRuntimeRowsToIndex(sourceRowIds, targetIndex + 1)
     }
 
     const clearPendingRowClipboardOperation = (): boolean => {
@@ -1769,6 +1936,7 @@ export default defineComponent({
       layoutMode: computed(() => props.layoutMode),
       minRows: computed(() => props.minRows),
       maxRows: computed(() => props.maxRows),
+      placeholderRows: computed(() => props.placeholderRows),
       enableFillHandle: computed(() => props.fillHandle),
       enableRangeMove: computed(() => props.rangeMove),
       rows: rowsRef,
@@ -2027,6 +2195,83 @@ export default defineComponent({
       if (action === "open-row-menu") {
         return openRuntimeRowIndexContextMenu(normalizedRowId)
       }
+      const placeholderVisualRowIndex = resolvePlaceholderVisualRowIndex(normalizedRowId)
+      if (placeholderVisualRowIndex != null) {
+        if (action === "delete-selected-rows") {
+          const rowIds = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedRowId))
+          if (rowIds.length === 0) {
+            return false
+          }
+          const beforeSnapshot = captureHistorySnapshot()
+          const removed = removeRuntimeRows(rowIds)
+          if (removed) {
+            recordRowMutation(beforeSnapshot, rowIds.length > 1 ? `Delete ${rowIds.length} rows` : "Delete row")
+          }
+          return removed
+        }
+        if (action === "insert-row-above") {
+          const beforeSnapshot = captureHistorySnapshot()
+          const inserted = insertPlaceholderRowAtVisualIndex(
+            placeholderVisualRowIndex,
+            placeholderVisualRowIndex,
+          )
+          if (inserted) {
+            recordRowMutation(beforeSnapshot, "Insert row above")
+          }
+          return inserted
+        }
+        if (action === "insert-row-below") {
+          const beforeSnapshot = captureHistorySnapshot()
+          const inserted = insertPlaceholderRowAtVisualIndex(
+            placeholderVisualRowIndex + 1,
+            placeholderVisualRowIndex + 1,
+          )
+          if (inserted) {
+            recordRowMutation(beforeSnapshot, "Insert row below")
+          }
+          return inserted
+        }
+        if (action === "paste-row") {
+          if (!canInsertRows()) {
+            return false
+          }
+          const rows = await readRowClipboardRows()
+          if (!rows || rows.length === 0) {
+            return false
+          }
+          const beforeSnapshot = captureHistorySnapshot()
+          const pendingCutSourceRowIds = rowClipboardBuffer.value?.operation === "cut"
+            ? rowClipboardBuffer.value.sourceRowIds
+            : []
+          const sourceRows = materializePlaceholderRowsUpTo(placeholderVisualRowIndex + 1)
+          if (!sourceRows) {
+            return false
+          }
+          const insertIndex = Math.max(0, placeholderVisualRowIndex + 1)
+          const sourceRowTemplate = resolveSourceRowTemplateByRowId(
+            pendingCutSourceRowIds[0] ?? normalizedRowId,
+          ) ?? resolveSourceRowTemplateByRowId(normalizedRowId)
+          const inserted = pendingCutSourceRowIds.length > 0
+            ? moveRuntimeRowsToIndex(pendingCutSourceRowIds, insertIndex)
+            : props.runtime.api.rows.insertDataAt(
+                insertIndex,
+                rows.map(row => cloneRowWithFreshIdentity(row, sourceRowTemplate)),
+              )
+          if (inserted && rowClipboardBuffer.value?.operation === "cut") {
+            rowClipboardBuffer.value = null
+          }
+          if (inserted) {
+            recordRowMutation(
+              beforeSnapshot,
+              pendingCutSourceRowIds.length > 0
+                ? (pendingCutSourceRowIds.length > 1 ? `Move ${pendingCutSourceRowIds.length} rows` : "Move row")
+                : (rows.length > 1 ? `Paste ${rows.length} rows` : "Paste row"),
+            )
+          }
+          return inserted
+        }
+        return false
+      }
       const targetRow = resolveRuntimeRowById(normalizedRowId)
       if (!targetRow || targetRow.kind === "group") {
         return false
@@ -2061,10 +2306,22 @@ export default defineComponent({
         return inserted
       }
       if (action === "copy-row") {
-        return setRowClipboardRows([targetRow.data], "copy", [normalizedRowId])
+        const rowIds = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedRowId))
+        const rows = resolveExistingRuntimeDataRowsByIds(rowIds)
+        return setRowClipboardRows(
+          rows.length > 0 ? rows : [targetRow.data],
+          "copy",
+          rowIds.length > 0 ? rowIds : [normalizedRowId],
+        )
       }
       if (action === "cut-row") {
-        return setRowClipboardRows([targetRow.data], "cut", [normalizedRowId])
+        const rowIds = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedRowId))
+        const rows = resolveExistingRuntimeDataRowsByIds(rowIds)
+        return setRowClipboardRows(
+          rows.length > 0 ? rows : [targetRow.data],
+          "cut",
+          rowIds.length > 0 ? rowIds : [normalizedRowId],
+        )
       }
       if (action === "paste-row") {
         if (!canInsertRows()) {
@@ -2101,7 +2358,7 @@ export default defineComponent({
         return inserted
       }
       if (action === "delete-selected-rows") {
-        const rowIds = resolveSelectedRuntimeRowIds(normalizedRowId)
+        const rowIds = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedRowId))
         if (rowIds.length === 0) {
           return false
         }
@@ -2177,6 +2434,7 @@ export default defineComponent({
         if (!props.rowIndexMenu.enabled) {
           return []
         }
+        const placeholderVisualRowIndex = resolvePlaceholderVisualRowIndex(contextMenu.value.rowId ?? "")
         const items = resolveDataGridRowIndexMenuItems(props.rowIndexMenu)
         const disabledItems = new Set(resolveDataGridRowIndexMenuDisabledItems(props.rowIndexMenu))
         const disabledReasons = resolveDataGridRowIndexMenuDisabledReasons(props.rowIndexMenu)
@@ -2201,6 +2459,16 @@ export default defineComponent({
             }
             let disabled = disabledItems.has(item) || option?.disabled === true
             let title = option?.disabledReason ?? disabledReasons[item]
+            if (
+              placeholderVisualRowIndex != null
+              && actionId !== "delete-selected-rows"
+              && actionId !== "insert-row-above"
+              && actionId !== "insert-row-below"
+              && actionId !== "paste-row"
+            ) {
+              disabled = true
+              title = title ?? "Placeholder rows must be materialized before this action is available"
+            }
             if ((actionId === "insert-row-above" || actionId === "insert-row-below" || actionId === "paste-row") && !canInsertRows()) {
               disabled = true
               title = title ?? "Row insertion is not supported by the current row model"
@@ -2210,7 +2478,9 @@ export default defineComponent({
               title = title ?? "Row deletion is not supported by the current row model"
             }
             if (actionId === "delete-selected-rows") {
-              const effectiveRowIds = resolveSelectedRuntimeRowIds(contextMenu.value.rowId ?? "")
+              const effectiveRowIds = resolveExistingRuntimeDataRowIds(
+                resolveSelectedRuntimeRowIds(contextMenu.value.rowId ?? ""),
+              )
               if (effectiveRowIds.length === 0) {
                 disabled = true
                 title = title ?? "No deletable rows are selected"

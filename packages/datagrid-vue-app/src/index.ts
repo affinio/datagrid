@@ -8,6 +8,8 @@ export type {
   DataGridAppGroupCellRenderer,
   DataGridAppGroupCellRendererContext,
   DataGridAppCellRendererInteractiveContext,
+  DataGridAppRowSurfaceContext,
+  DataGridAppRowSurfaceKind,
   DataGridAppColumnInput,
   DataGridDeclarativeFormulaOptions,
 } from "./config/dataGridFormulaOptions"
@@ -18,6 +20,14 @@ export type {
   DataGridLayoutMode,
   DataGridResolvedLayoutOptions,
 } from "./config/dataGridLayout"
+export type {
+  DataGridPlaceholderRowCreateParams,
+  DataGridPlaceholderRowFactory,
+  DataGridPlaceholderRowMaterializeTrigger,
+  DataGridPlaceholderRowsOptions,
+  DataGridPlaceholderRowsPolicy,
+  DataGridPlaceholderRowsProp,
+} from "./config/dataGridPlaceholderRows"
 export type {
   DataGridCellEditablePredicate,
   DataGridCellEditablePredicateContext,

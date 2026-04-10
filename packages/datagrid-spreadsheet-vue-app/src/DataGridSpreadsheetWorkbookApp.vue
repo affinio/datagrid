@@ -1987,6 +1987,13 @@ const {
   layoutMode,
   minRows: computed(() => null),
   maxRows: computed(() => null),
+  placeholderRows: computed(() => ({
+    enabled: false,
+    policy: "fixed-tail" as const,
+    count: 0,
+    materializeOn: ["edit", "paste", "toggle"] as const,
+    createRowAt: null,
+  })),
   enableFillHandle: computed(() => true),
   enableRangeMove: computed(() => true),
   rows: gridRows as never,

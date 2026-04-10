@@ -1,5 +1,27 @@
 # @affino/datagrid-vue
 
+## 0.3.16
+
+### Patch Changes
+
+- ## Summary
+
+  Added placeholder-aware app runtime hooks across clipboard, inline editing, and interaction control so downstream facades can lazily materialize editable rows during edit, paste, toggle, and range-move flows without breaking focus restoration or history capture.
+
+  ## User impact
+
+  Consumers building on the Vue app/runtime composables can now support Excel-like visual placeholder tails with stable edit and clipboard semantics. Paste and drag-move flows can materialize target rows on demand, and the runtime now records whole-mutation snapshots for these mixed materialized/visual interactions instead of relying on precomputed row-id subsets.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption:
+    - pass `ensureEditableRowAtIndex(...)` when composing `useDataGridAppClipboard(...)`, `useDataGridAppInlineEditing(...)`, or `useDataGridAppInteractionController(...)` around lazily materialized rows.
+
+  ## Validation
+  - downstream app facade and stage regressions updated for placeholder-row materialization paths
+  - targeted placeholder viewport synchronization regression passed
+  - targeted drag-move into placeholder-tail regression passed
+
 ## 0.3.8
 
 ### Patch Changes

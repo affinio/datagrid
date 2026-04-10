@@ -175,10 +175,14 @@ import {
   type DataGridTableStageContext,
   provideDataGridTableStageContext,
 } from "./dataGridTableStageContext"
-import type { DataGridAppCellRendererInteractiveContext } from "../config/dataGridFormulaOptions"
+import type {
+  DataGridAppCellRendererInteractiveContext,
+  DataGridAppRowSurfaceContext,
+} from "../config/dataGridFormulaOptions"
 import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
 import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilterableCombobox"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
+import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 
 ensureDataGridAppStyles()
 
@@ -1250,6 +1254,12 @@ function readResolvedDisplayCell(row: TableRow, column: TableColumn): string {
   return match?.label ?? displayValue
 }
 
+function resolveRowSurfaceContext(row: TableRow): DataGridAppRowSurfaceContext {
+  return {
+    kind: isDataGridPlaceholderSurfaceRow(row) ? "placeholder" : "real",
+  }
+}
+
 function renderResolvedCellContent(
   row: TableRow,
   rowOffset: number,
@@ -1257,6 +1267,7 @@ function renderResolvedCellContent(
   columnIndex: number,
 ): VNodeChild {
   const displayValue = readResolvedDisplayCell(row, column)
+  const surface = resolveRowSurfaceContext(row)
   const editable = isCellEditableSafe(row, rowOffset, column, columnIndex)
   const interaction = resolveDataGridCellInteraction({
     column: column.column,
@@ -1298,6 +1309,7 @@ function renderResolvedCellContent(
     return renderer({
       row: undefined,
       rowNode: groupRow,
+      surface,
       rowOffset,
       column,
       columnIndex,
@@ -1331,6 +1343,7 @@ function renderResolvedCellContent(
   return renderer({
     row: row.data,
     rowNode: row,
+    surface,
     rowOffset,
     column,
     columnIndex,

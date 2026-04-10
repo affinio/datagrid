@@ -25,12 +25,19 @@ export interface DataGridAppCellRendererInteractiveContext {
   activate: (trigger?: DataGridCellInteractionInvocationTrigger) => boolean
 }
 
+export type DataGridAppRowSurfaceKind = "real" | "placeholder"
+
+export interface DataGridAppRowSurfaceContext {
+  kind: DataGridAppRowSurfaceKind
+}
+
 /**
  * High-level authored column contract for `@affino/datagrid-vue-app`.
  */
 export interface DataGridAppCellRendererContext<TRow = unknown> {
   row: TRow | undefined
   rowNode: DataGridRowNode<TRow>
+  surface: DataGridAppRowSurfaceContext
   rowOffset: number
   column: DataGridColumnSnapshot
   columnIndex: number

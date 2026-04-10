@@ -76,6 +76,11 @@ import {
   type DataGridLayoutMode,
 } from "./config/dataGridLayout"
 import {
+  resolveDataGridPlaceholderRows,
+  type DataGridPlaceholderRowsOptions,
+  type DataGridPlaceholderRowsProp,
+} from "./config/dataGridPlaceholderRows"
+import {
   migrateDataGridSavedView,
   sanitizeDataGridSavedView,
   type DataGridSavedViewSnapshot,
@@ -135,6 +140,7 @@ type DataGridBodyAwareRuntime = {
   api: UseDataGridRuntimeResult<Record<string, unknown>>["api"]
   syncBodyRowsInRange: UseDataGridRuntimeResult<Record<string, unknown>>["syncBodyRowsInRange"]
   setViewportRange: UseDataGridRuntimeResult<Record<string, unknown>>["setViewportRange"]
+  setRows: UseDataGridRuntimeResult<Record<string, unknown>>["setRows"]
   rowPartition: UseDataGridRuntimeResult<Record<string, unknown>>["rowPartition"]
   virtualWindow: UseDataGridRuntimeResult<Record<string, unknown>>["virtualWindow"]
   columnSnapshot: UseDataGridRuntimeResult<Record<string, unknown>>["columnSnapshot"]
@@ -237,7 +243,7 @@ interface DataGridRuntimeHostSlotProps {
 
 type DataGridDefaultRendererRuntime = Pick<
   DataGridBodyAwareRuntime,
-  "api" | "syncBodyRowsInRange" | "setViewportRange" | "setVirtualWindowRange" | "getBodyRowAtIndex" | "resolveBodyRowIndexById" | "rowPartition" | "virtualWindow" | "columnSnapshot"
+  "api" | "syncBodyRowsInRange" | "setViewportRange" | "setVirtualWindowRange" | "setRows" | "getBodyRowAtIndex" | "resolveBodyRowIndexById" | "rowPartition" | "virtualWindow" | "columnSnapshot"
 >
 
 function rowSelectionSnapshotsEqual(
@@ -444,6 +450,10 @@ export default defineComponent({
       type: Number as PropType<number | undefined>,
       default: undefined,
     },
+    placeholderRows: {
+      type: [Number, Object] as PropType<DataGridPlaceholderRowsProp<Record<string, unknown>> | undefined>,
+      default: undefined,
+    },
     fillHandle: {
       type: Boolean,
       default: false,
@@ -573,6 +583,9 @@ export default defineComponent({
     const resolvedLayout = computed(() => (
       resolveDataGridLayoutOptions(props.layoutMode, props.minRows, props.maxRows)
     ))
+    const resolvedPlaceholderRows = computed<DataGridPlaceholderRowsOptions<Record<string, unknown>>>(() => {
+      return resolveDataGridPlaceholderRows(props.placeholderRows)
+    })
     const resolvedClientRowModelOptions = computed(() => {
       return resolveDataGridFormulaRowModelOptions({
         columns: props.columns,
@@ -906,6 +919,7 @@ export default defineComponent({
         layoutMode: resolvedLayout.value.layoutMode,
         minRows: resolvedLayout.value.minRows,
         maxRows: resolvedLayout.value.maxRows,
+        placeholderRows: resolvedPlaceholderRows.value,
         fillHandle: props.fillHandle,
         rangeMove: props.rangeMove,
         rowHover: props.rowHover,
