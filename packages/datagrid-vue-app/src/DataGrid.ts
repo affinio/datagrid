@@ -135,7 +135,7 @@ import {
 import type {
   DataGridAppViewMode,
   DataGridGanttProp,
-} from "./gantt/dataGridGantt"
+} from "./gantt/dataGridGantt.types"
 
 type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,

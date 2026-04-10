@@ -25,4 +25,4 @@ export type {
   DataGridWorkingCalendar,
   BuildDataGridTimelineRenderModelsInput,
   ResolveDataGridTimelineRangeInput,
-} from "./gantt/dataGridGantt"
+} from "./gantt/dataGridGantt.types"

@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue-app",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "Declarative Vue DataGrid component for Affino",
   "type": "module",
   "main": "dist/index.js",
@@ -17,6 +17,10 @@
     "./gantt": {
       "types": "./dist/gantt.d.ts",
       "import": "./dist/gantt.js"
+    },
+    "./aggregations": {
+      "types": "./dist/aggregations.d.ts",
+      "import": "./dist/aggregations.js"
     },
     "./advanced-filter": {
       "types": "./dist/advanced-filter.d.ts",

@@ -9,6 +9,7 @@ import {
   nextTick,
   onBeforeUnmount,
   ref,
+  shallowRef,
   toRaw,
   watch,
   type PropType,
@@ -34,11 +35,11 @@ import {
   type DataGridRowSelectionSnapshot,
 } from "@affino/datagrid-vue"
 import {
-  useDataGridAppAdvancedFilterBuilder,
   useDataGridAppColumnLayoutPanel,
   type DataGridAppColumnLayoutDraftColumn,
   type DataGridAppAdvancedFilterColumnOption,
 } from "@affino/datagrid-vue/app"
+import type { UseDataGridAppAdvancedFilterBuilderResult } from "@affino/datagrid-vue/app"
 import {
   useDataGridContextMenuActionRouter,
   useDataGridContextMenuAnchor,
@@ -51,7 +52,6 @@ import DataGridModuleHost, {
 } from "./DataGridModuleHost"
 import DataGridHistoryToolbarButton from "./DataGridHistoryToolbarButton"
 import DataGridTableStage from "../stage/DataGridTableStage.vue"
-import DataGridGanttStage from "../gantt/DataGridGanttStageEntry"
 import DataGridColumnLayoutPopover from "../overlays/DataGridColumnLayoutPopover.vue"
 import type { DataGridAdvancedFilterOptions } from "../config/dataGridAdvancedFilter"
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "../config/dataGridAggregations"
@@ -85,7 +85,7 @@ import {
 import {
   type DataGridAppViewMode,
   type DataGridGanttProp,
-} from "../gantt/dataGridGantt"
+} from "../gantt/dataGridGantt.types"
 import type { DataGridResolvedChromeOptions, DataGridToolbarPlacement } from "../config/dataGridChrome"
 import type { DataGridRowReorderOptions } from "../config/dataGridRowReorder"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
@@ -95,7 +95,7 @@ import { useDataGridTableStageRuntime } from "../stage/useDataGridTableStageRunt
 import { isDataGridPlaceholderSurfaceRow } from "../stage/useDataGridTableStagePlaceholderRows"
 import { resolveAdvancedFilterDraftClausesFromFilterModel } from "../advancedFilterDraftClauses"
 import {
-  useDataGridAppFindReplace,
+  type UseDataGridAppFindReplaceResult,
   type DataGridFindReplaceVisualTarget,
 } from "../useDataGridAppFindReplace"
 import type { DataGridHistoryController, DataGridResolvedHistoryOptions } from "../dataGridHistory"
@@ -105,6 +105,7 @@ type DataGridMode = "base" | "tree" | "pivot" | "worker"
 const DataGridAdvancedFilterPopover = defineAsyncComponent(() => import("../overlays/DataGridAdvancedFilterPopover.vue"))
 const DataGridAggregationsPopover = defineAsyncComponent(() => import("../overlays/DataGridAggregationsPopover.vue"))
 const DataGridFindReplacePopover = defineAsyncComponent(() => import("../overlays/DataGridFindReplacePopover.vue"))
+const DataGridGanttStage = defineAsyncComponent(() => import("../gantt/DataGridGanttStageEntry"))
 
 interface SortToggleState {
   key: string
@@ -892,21 +893,56 @@ export default defineComponent({
         }
       },
     })
-    const {
-      isAdvancedFilterPanelOpen,
-      advancedFilterDraftClauses,
-      appliedAdvancedFilterExpression,
-      hydrateAdvancedFilterClauses,
-      openAdvancedFilterPanel,
-      addAdvancedFilterClause,
-      removeAdvancedFilterClause,
-      updateAdvancedFilterClause,
-      cancelAdvancedFilterPanel,
-      applyAdvancedFilterPanel: commitAdvancedFilterPanelDraft,
-      clearAdvancedFilterPanel,
-    } = useDataGridAppAdvancedFilterBuilder({
-      resolveColumns: () => advancedFilterColumns.value,
-    })
+    const advancedFilterBuilderRef = shallowRef<UseDataGridAppAdvancedFilterBuilderResult | null>(null)
+    const isAdvancedFilterPanelOpen = computed(() => (
+      advancedFilterBuilderRef.value?.isAdvancedFilterPanelOpen.value ?? false
+    ))
+    const advancedFilterDraftClauses = computed(() => (
+      advancedFilterBuilderRef.value?.advancedFilterDraftClauses.value ?? []
+    ))
+    const appliedAdvancedFilterExpression = computed<DataGridAdvancedExpressionEntry | null>(() => (
+      advancedFilterBuilderRef.value?.appliedAdvancedFilterExpression.value ?? null
+    ))
+    const ensureAdvancedFilterBuilder = async (): Promise<UseDataGridAppAdvancedFilterBuilderResult> => {
+      if (advancedFilterBuilderRef.value) {
+        return advancedFilterBuilderRef.value
+      }
+      const { useDataGridAppAdvancedFilterBuilder } = await import("@affino/datagrid-vue/app")
+      const builder = useDataGridAppAdvancedFilterBuilder({
+        resolveColumns: () => advancedFilterColumns.value,
+      })
+      builder.hydrateAdvancedFilterClauses(resolveAdvancedFilterDraftClausesFromFilterModel(filterModelState.value))
+      advancedFilterBuilderRef.value = builder
+      return builder
+    }
+    const hydrateAdvancedFilterClauses = (clauses: Parameters<UseDataGridAppAdvancedFilterBuilderResult["hydrateAdvancedFilterClauses"]>[0]): void => {
+      advancedFilterBuilderRef.value?.hydrateAdvancedFilterClauses(clauses)
+    }
+    const openAdvancedFilterPanel = async (): Promise<void> => {
+      const builder = await ensureAdvancedFilterBuilder()
+      builder.openAdvancedFilterPanel()
+    }
+    const addAdvancedFilterClause = async (): Promise<void> => {
+      const builder = await ensureAdvancedFilterBuilder()
+      builder.addAdvancedFilterClause()
+    }
+    const removeAdvancedFilterClause = async (clauseId: number): Promise<void> => {
+      const builder = await ensureAdvancedFilterBuilder()
+      builder.removeAdvancedFilterClause(clauseId)
+    }
+    const updateAdvancedFilterClause = async (patch: Parameters<UseDataGridAppAdvancedFilterBuilderResult["updateAdvancedFilterClause"]>[0]): Promise<void> => {
+      const builder = await ensureAdvancedFilterBuilder()
+      builder.updateAdvancedFilterClause(patch)
+    }
+    const cancelAdvancedFilterPanel = (): void => {
+      advancedFilterBuilderRef.value?.cancelAdvancedFilterPanel()
+    }
+    const commitAdvancedFilterPanelDraft = (): void => {
+      advancedFilterBuilderRef.value?.applyAdvancedFilterPanel()
+    }
+    const clearAdvancedFilterPanel = (): void => {
+      advancedFilterBuilderRef.value?.clearAdvancedFilterPanel()
+    }
     const isAggregationsPanelOpen = ref(false)
     const aggregationDraftModel = ref<DataGridAggregationModel<Record<string, unknown>> | null>(null)
     const aggregationGroupingEnabled = computed(() => Boolean(props.groupBy?.fields?.length))
@@ -1085,7 +1121,7 @@ export default defineComponent({
 
     const handleOpenAdvancedFilterPanel = (): void => {
       syncAdvancedFilterBuilderFromRuntime()
-      openAdvancedFilterPanel()
+      void openAdvancedFilterPanel()
     }
 
     const applyAdvancedFilterPanel = (): void => {
@@ -1399,6 +1435,138 @@ export default defineComponent({
         rowId: props.runtime.getBodyRowAtIndex(coord.rowIndex)?.rowId ?? null,
       },
     })
+
+    const resolveFocusedReorderedRowId = (sourceRowIds: readonly string[]): string | null => {
+      if (sourceRowIds.length === 0) {
+        return null
+      }
+      const sourceRowIdSet = new Set(sourceRowIds)
+      const activeRowId = props.selectionSnapshot.value?.activeCell?.rowId
+      if (activeRowId != null) {
+        const normalizedActiveRowId = String(activeRowId)
+        if (sourceRowIdSet.has(normalizedActiveRowId)) {
+          return normalizedActiveRowId
+        }
+      }
+      const activeRange = props.selectionSnapshot.value?.ranges[props.selectionSnapshot.value?.activeRangeIndex ?? 0] ?? null
+      const anchorRowId = activeRange?.anchor?.rowId
+      if (anchorRowId != null) {
+        const normalizedAnchorRowId = String(anchorRowId)
+        if (sourceRowIdSet.has(normalizedAnchorRowId)) {
+          return normalizedAnchorRowId
+        }
+      }
+      const focusedRowId = props.rowSelectionSnapshot.value?.focusedRow
+      if (focusedRowId != null) {
+        const normalizedFocusedRowId = String(focusedRowId)
+        if (sourceRowIdSet.has(normalizedFocusedRowId)) {
+          return normalizedFocusedRowId
+        }
+      }
+      return sourceRowIds[0] ?? null
+    }
+
+    const buildRowIndexSelectionSnapshot = (
+      rowIds: readonly string[],
+      focusRowId: string,
+    ): import("@affino/datagrid-vue").DataGridSelectionSnapshot | null => {
+      const lastColumnIndex = visibleColumns.value.length - 1
+      if (rowIds.length === 0 || lastColumnIndex < 0) {
+        return null
+      }
+      const resolvedRows = rowIds
+        .map(rowId => ({ rowId, rowIndex: props.runtime.resolveBodyRowIndexById(rowId) }))
+        .filter((entry): entry is { rowId: string; rowIndex: number } => entry.rowIndex >= 0)
+        .sort((left, right) => left.rowIndex - right.rowIndex)
+      if (resolvedRows.length === 0) {
+        return null
+      }
+      const fallbackRow = resolvedRows[0] ?? null
+      const focusedRowIndex = props.runtime.resolveBodyRowIndexById(focusRowId)
+      const resolvedFocusRow = focusedRowIndex >= 0
+        ? { rowId: focusRowId, rowIndex: focusedRowIndex }
+        : fallbackRow
+      if (!resolvedFocusRow || resolvedFocusRow.rowIndex < 0) {
+        return null
+      }
+      return {
+        ranges: [{
+          startRow: resolvedRows[0]?.rowIndex ?? resolvedFocusRow.rowIndex,
+          endRow: resolvedRows[resolvedRows.length - 1]?.rowIndex ?? resolvedFocusRow.rowIndex,
+          startCol: 0,
+          endCol: lastColumnIndex,
+          anchor: {
+            rowIndex: resolvedFocusRow.rowIndex,
+            colIndex: 0,
+            rowId: resolvedFocusRow.rowId,
+          },
+          focus: {
+            rowIndex: resolvedFocusRow.rowIndex,
+            colIndex: 0,
+            rowId: resolvedFocusRow.rowId,
+          },
+          startRowId: resolvedRows[0]?.rowId ?? resolvedFocusRow.rowId,
+          endRowId: resolvedRows[resolvedRows.length - 1]?.rowId ?? resolvedFocusRow.rowId,
+        }],
+        activeRangeIndex: 0,
+        activeCell: {
+          rowIndex: resolvedFocusRow.rowIndex,
+          colIndex: 0,
+          rowId: resolvedFocusRow.rowId,
+        },
+      }
+    }
+
+    const scheduleViewportAnchorFocus = (): void => {
+      const focusViewport = (): boolean => {
+        const viewport = stageHostRef.value?.querySelector<HTMLElement>(".grid-body-viewport")
+        if (!viewport) {
+          return false
+        }
+        try {
+          viewport.focus({ preventScroll: true })
+        }
+        catch {
+          viewport.focus()
+        }
+        return document.activeElement === viewport
+      }
+
+      const runAttempt = (attempt: number): void => {
+        void nextTick(() => {
+          if (focusViewport() || attempt >= 3) {
+            return
+          }
+          if (typeof window !== "undefined") {
+            window.requestAnimationFrame(() => {
+              runAttempt(attempt + 1)
+            })
+            return
+          }
+          runAttempt(attempt + 1)
+        })
+      }
+
+      runAttempt(0)
+    }
+
+    const restoreRowInteractionAfterReorder = (sourceRowIds: readonly string[]): void => {
+      const focusRowId = resolveFocusedReorderedRowId(sourceRowIds)
+      if (!focusRowId) {
+        return
+      }
+      if (props.runtime.api.rowSelection.hasSupport()) {
+        props.runtime.api.rowSelection.setFocusedRow(focusRowId)
+        props.syncRowSelectionSnapshotFromRuntime?.()
+        props.flushRowSelectionSnapshotUpdates?.()
+      }
+      const nextSelectionSnapshot = buildRowIndexSelectionSnapshot(sourceRowIds, focusRowId)
+      if (nextSelectionSnapshot) {
+        props.runtime.api.selection.setSnapshot(nextSelectionSnapshot)
+        props.syncSelectionSnapshotFromRuntime()
+      }
+      scheduleViewportAnchorFocus()
+    }
 
     const resolveRuntimeRowById = (rowId: string): import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>> | null => {
       const rowCount = props.runtime.api.rows.getCount()
@@ -1940,6 +2108,7 @@ export default defineComponent({
         payload.placement === "after" ? targetIndex + 1 : targetIndex,
       )
       if (moved) {
+        restoreRowInteractionAfterReorder(sourceRowIds)
         recordRowMutation(beforeSnapshot, sourceRowIds.length > 1 ? `Move ${sourceRowIds.length} rows` : "Move row")
       }
       return moved
@@ -2149,21 +2318,77 @@ export default defineComponent({
         columnKey: column.key,
       })
     }
-    const findReplace = useDataGridAppFindReplace<Record<string, unknown>, unknown>({
-      runtime: props.runtime,
-      visibleColumns,
-      stageVisibleColumns,
-      resolveCurrentCellCoord,
-      applyActiveCell,
-      revealCellInComfortZone,
-      captureRowsSnapshot: captureHistorySnapshot,
-      captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
-      recordHistoryIntentTransaction,
-      isCellEditable: isFindReplaceCellEditable,
-    })
+    const findReplaceRef = shallowRef<UseDataGridAppFindReplaceResult | null>(null)
+    const ensureFindReplace = async (): Promise<UseDataGridAppFindReplaceResult> => {
+      if (findReplaceRef.value) {
+        return findReplaceRef.value
+      }
+      const { useDataGridAppFindReplace } = await import("../useDataGridAppFindReplace")
+      const feature = useDataGridAppFindReplace<Record<string, unknown>, unknown>({
+        runtime: props.runtime,
+        visibleColumns,
+        stageVisibleColumns,
+        resolveCurrentCellCoord,
+        applyActiveCell,
+        revealCellInComfortZone,
+        captureRowsSnapshot: captureHistorySnapshot,
+        captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
+        recordHistoryIntentTransaction,
+        isCellEditable: isFindReplaceCellEditable,
+      })
+      findReplaceRef.value = feature
+      return feature
+    }
+    const findReplace = {
+      isPanelOpen: computed(() => findReplaceRef.value?.isPanelOpen.value ?? false),
+      findText: computed(() => findReplaceRef.value?.findText.value ?? ""),
+      replaceText: computed(() => findReplaceRef.value?.replaceText.value ?? ""),
+      matchCase: computed(() => findReplaceRef.value?.matchCase.value ?? false),
+      statusText: computed(() => findReplaceRef.value?.statusText.value ?? ""),
+      active: computed(() => findReplaceRef.value?.active.value ?? false),
+      canFind: computed(() => findReplaceRef.value?.canFind.value ?? false),
+      canReplaceCurrent: computed(() => findReplaceRef.value?.canReplaceCurrent.value ?? false),
+      canReplaceAll: computed(() => findReplaceRef.value?.canReplaceAll.value ?? false),
+      highlightedCell: computed(() => findReplaceRef.value?.highlightedCell.value ?? null),
+      openPanel: async (): Promise<void> => {
+        const feature = await ensureFindReplace()
+        feature.openPanel()
+      },
+      closePanel: (): void => {
+        findReplaceRef.value?.closePanel()
+      },
+      updateFindText: async (value: string): Promise<void> => {
+        const feature = await ensureFindReplace()
+        feature.updateFindText(value)
+      },
+      updateReplaceText: async (value: string): Promise<void> => {
+        const feature = await ensureFindReplace()
+        feature.updateReplaceText(value)
+      },
+      updateMatchCase: async (value: boolean): Promise<void> => {
+        const feature = await ensureFindReplace()
+        feature.updateMatchCase(value)
+      },
+      findNext: async (): Promise<boolean> => {
+        const feature = await ensureFindReplace()
+        return feature.findNext()
+      },
+      findPrevious: async (): Promise<boolean> => {
+        const feature = await ensureFindReplace()
+        return feature.findPrevious()
+      },
+      replaceCurrent: async (): Promise<boolean> => {
+        const feature = await ensureFindReplace()
+        return feature.replaceCurrent()
+      },
+      replaceAll: async (): Promise<number> => {
+        const feature = await ensureFindReplace()
+        return feature.replaceAll()
+      },
+    }
 
     watch(
-      findReplace.highlightedCell,
+      () => findReplace.highlightedCell.value,
       nextHighlightedCell => {
         highlightedFindReplaceCell.value = nextHighlightedCell
       },

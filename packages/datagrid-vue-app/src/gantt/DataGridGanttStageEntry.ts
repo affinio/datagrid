@@ -3,8 +3,8 @@ import type { UseDataGridRuntimeResult } from "@affino/datagrid-vue"
 import DataGridGanttStage from "./DataGridGanttStage.vue"
 import {
   normalizeDataGridGanttOptions,
-  type DataGridGanttProp,
 } from "./dataGridGantt"
+import type { DataGridGanttProp } from "./dataGridGantt.types"
 import type { DataGridTableStageContext } from "../stage/dataGridTableStageContext"
 
 export default defineComponent({

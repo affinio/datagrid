@@ -1872,6 +1872,8 @@ describe("DataGrid app facade contract", () => {
     await dragDropElement(firstRowIndexCell.element as HTMLElement, lastRowIndexCell.element as HTMLElement, {
       targetClientY: 28,
     })
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
 
     expect(resolveRowAt<Record<string, unknown>>(wrapper, 0)?.rowId).toBe("r2")
     expect(resolveRowAt<Record<string, unknown>>(wrapper, 1)?.rowId).toBe("r3")
@@ -1884,6 +1886,11 @@ describe("DataGrid app facade contract", () => {
       .map(cell => cell.textContent?.trim())
 
     expect(rowIndexLabels).toEqual(["1", "2", "3"])
+
+    const movedRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(movedRowIndexCell.exists()).toBe(true)
+    expect(document.activeElement?.classList.contains("grid-body-viewport")).toBe(true)
+    expect((movedRowIndexCell.element as HTMLElement).tabIndex).toBe(0)
 
     wrapper.unmount()
   })

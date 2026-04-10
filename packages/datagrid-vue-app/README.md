@@ -74,6 +74,25 @@ Peer dependencies:
 
 - `vue ^3.3.0`
 
+## Optional Entrypoints
+
+The root package entry is intentionally kept as the base table app surface.
+
+Use subpath imports when you want optional feature modules explicitly:
+
+- `@affino/datagrid-vue-app/gantt`
+- `@affino/datagrid-vue-app/advanced-filter`
+- `@affino/datagrid-vue-app/find-replace`
+- `@affino/datagrid-vue-app/aggregations`
+
+Practical implications:
+
+- ordinary `DataGrid` table usage no longer needs to pull `@affino/datagrid-gantt` through the root runtime graph
+- gantt stage code is loaded lazily only when the gantt view is rendered
+- advanced filter, find / replace, and aggregations remain available as optional package entrypoints instead of mandatory consumer-side chunking requirements
+
+Consumer-side chunk tuning can still help, but it is now an optimization rather than a workaround for the package boundary.
+
 ## Quick Start
 
 Minimal example with virtualization and built-in features.
