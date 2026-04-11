@@ -18,6 +18,11 @@ export interface UseDataGridCellNavigationOptions<
   clearCellSelection: () => void
   setLastAction: (message: string) => void
   applyCellSelection: (nextCoord: TCoord, extend: boolean, fallbackAnchor?: TCoord) => void
+  resolveDirectionalJumpTarget?: (
+    current: TCoord,
+    direction: "up" | "down" | "left" | "right",
+    event: KeyboardEvent,
+  ) => TCoord | undefined
   onNavigationApplied?: (nextCoord: TCoord) => void
 }
 
@@ -67,19 +72,45 @@ export function useDataGridCellNavigation<
     let extend = event.shiftKey
     const stepRows = Math.max(1, options.resolveStepRows())
     const key = resolveNavigationKey(event)
+    const isPrimaryModifier = (event.ctrlKey || event.metaKey) && !event.altKey
+
+    const resolveDirectionalTarget = (
+      direction: "up" | "down" | "left" | "right",
+      fallback: () => TCoord,
+    ): TCoord => {
+      if (isPrimaryModifier) {
+        const modifiedTarget = options.resolveDirectionalJumpTarget?.(current, direction, event)
+        if (modifiedTarget) {
+          return modifiedTarget
+        }
+      }
+      return fallback()
+    }
 
     switch (key) {
       case "ArrowUp":
-        target.rowIndex -= 1
+        target = resolveDirectionalTarget("up", () => ({
+          ...target,
+          rowIndex: current.rowIndex - 1,
+        }))
         break
       case "ArrowDown":
-        target.rowIndex += 1
+        target = resolveDirectionalTarget("down", () => ({
+          ...target,
+          rowIndex: current.rowIndex + 1,
+        }))
         break
       case "ArrowLeft":
-        target.columnIndex = options.getAdjacentNavigableColumnIndex(current.columnIndex, -1)
+        target = resolveDirectionalTarget("left", () => ({
+          ...target,
+          columnIndex: options.getAdjacentNavigableColumnIndex(current.columnIndex, -1),
+        }))
         break
       case "ArrowRight":
-        target.columnIndex = options.getAdjacentNavigableColumnIndex(current.columnIndex, 1)
+        target = resolveDirectionalTarget("right", () => ({
+          ...target,
+          columnIndex: options.getAdjacentNavigableColumnIndex(current.columnIndex, 1),
+        }))
         break
       case "PageUp":
         target.rowIndex -= stepRows

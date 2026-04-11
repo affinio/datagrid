@@ -43,11 +43,16 @@ export { useDataGridAppRowModel } from "./useDataGridAppRowModel"
 export { useDataGridTableStageBindings } from "./stage/useDataGridTableStageBindings"
 export { useDataGridTableStageRuntime } from "./stage/useDataGridTableStageRuntime"
 export { resolveDataGridChrome } from "./config/dataGridChrome"
+export { resolveDataGridColumnReorder } from "./config/dataGridColumnReorder"
 export { resolveDataGridRowReorder } from "./config/dataGridRowReorder"
 export type {
   DataGridAppInspectorPanel,
   DataGridAppToolbarModule,
 } from "./host/DataGridModuleHost"
+export type {
+  DataGridColumnReorderOptions,
+  DataGridColumnReorderProp,
+} from "./config/dataGridColumnReorder"
 export type {
   DataGridChromeDensity,
   DataGridChromeOptions,

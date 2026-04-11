@@ -59,6 +59,11 @@ export interface DataGridTableStageColumnsSection {
   visibleColumns: readonly DataGridColumnSnapshot[]
   renderedColumns: readonly DataGridColumnSnapshot[]
   columnFilterTextByKey: Readonly<Record<string, string>>
+  reorderColumnsByHeader?: (payload: {
+    sourceColumnKey: string
+    targetColumnKey: string
+    placement: "before" | "after"
+  }) => boolean
   toggleSortForColumn: (columnKey: string, additive?: boolean) => void
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void

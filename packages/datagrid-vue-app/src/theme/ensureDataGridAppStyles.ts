@@ -1322,6 +1322,42 @@ body.datagrid-fill-drag-cursor * {
   cursor: default;
 }
 
+.grid-cell--header-reorderable,
+.grid-cell--header-menu-enabled.grid-cell--header-reorderable {
+  cursor: grab;
+}
+
+.grid-cell--header-reorder-source {
+  opacity: 0.58;
+  cursor: grabbing;
+}
+
+.grid-cell--header.grid-cell--header-drop-before,
+.grid-cell--header.grid-cell--header-drop-after {
+  overflow: visible;
+}
+
+.grid-cell--header.grid-cell--header-drop-before::after,
+.grid-cell--header.grid-cell--header-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--datagrid-accent-strong);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.grid-cell--header.grid-cell--header-drop-before::after {
+  left: -1px;
+}
+
+.grid-cell--header.grid-cell--header-drop-after::after {
+  right: -1px;
+}
+
 .grid-cell--header-menu-open {
   background: color-mix(in srgb, var(--datagrid-header-cell-hover-bg) 72%, var(--datagrid-accent-strong) 28%);
 }

@@ -1,5 +1,29 @@
 # @affino/datagrid-vue-app
 
+## 0.1.27
+
+### Patch Changes
+
+- ## Summary
+
+  Slimmed the root app entry so heavy optional surfaces no longer have to ride the default runtime path, and aligned modified-arrow keyboard selection with Excel-style expansion semantics.
+
+  ## User impact
+
+  The base `DataGrid` entry now keeps gantt-specific runtime code behind a lazy boundary instead of pulling `@affino/datagrid-gantt` into ordinary table usage. Optional heavy UI surfaces are now easier to consume as explicit package entrypoints, including the new `@affino/datagrid-vue-app/aggregations` subpath alongside the existing `gantt`, `advanced-filter`, and `find-replace` entries. In grid interaction, `Shift+Ctrl/Cmd+Arrow` now extends the current range in the requested direction until the first blank gap, matching the expected Excel-like keyboard workflow for contiguous data blocks.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption:
+    - import feature-specific surfaces from subpaths when you want stricter bundle boundaries around gantt, aggregations, advanced filter, or find/replace UI,
+    - keep consumer-side chunk tuning only as an optimization layer; the package root no longer requires it as a workaround for gantt coupling,
+    - rely on `Shift+Ctrl/Cmd+Arrow` for contiguous range expansion in spreadsheet-like keyboard flows.
+
+  ## Validation
+  - `@affino/datagrid-vue-app` type-check passed
+  - `@affino/datagrid-vue-app` build passed and the base `dist/index.js` no longer statically imports `@affino/datagrid-gantt`
+  - focused `@affino/datagrid-vue` keyboard-navigation contracts passed for modified-arrow range extension
+
 ## 0.1.26
 
 ### Patch Changes

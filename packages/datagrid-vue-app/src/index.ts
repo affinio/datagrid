@@ -77,6 +77,10 @@ export type {
   DataGridColumnLayoutProp,
 } from "./config/dataGridColumnLayout"
 export type {
+  DataGridColumnReorderOptions,
+  DataGridColumnReorderProp,
+} from "./config/dataGridColumnReorder"
+export type {
   DataGridRowReorderOptions,
   DataGridRowReorderProp,
 } from "./config/dataGridRowReorder"

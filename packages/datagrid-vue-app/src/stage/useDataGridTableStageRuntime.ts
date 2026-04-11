@@ -104,6 +104,11 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   firstColumnKey: Ref<string>
   columnFilterTextByKey: Ref<Record<string, string>>
   virtualization: Ref<DataGridVirtualizationOptions>
+  reorderColumnsByHeader?: (payload: {
+    sourceColumnKey: string
+    targetColumnKey: string
+    placement: "before" | "after"
+  }) => boolean
   toggleSortForColumn: (columnKey: string, additive?: boolean) => void
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void
@@ -922,6 +927,7 @@ export function useDataGridTableStageRuntime<
     headerViewportRef,
     bodyViewportRef,
     columnStyle: resolveStageColumnStyle,
+    reorderColumnsByHeader: options.reorderColumnsByHeader,
     toggleSortForColumn: options.toggleSortForColumn,
     sortIndicator: options.sortIndicator,
     setColumnFilterText: options.setColumnFilterText,

@@ -83,4 +83,42 @@ describe("useDataGridCellNavigation contract", () => {
 
     expect(router.dispatchNavigation(new KeyboardEvent("keydown", { key: "A", cancelable: true }))).toBe(false)
   })
+
+  it("uses directional jump targets for Ctrl/Cmd+Shift+Arrow navigation", () => {
+    const applyCellSelection = vi.fn()
+    const router = useDataGridCellNavigation({
+      resolveCurrentCellCoord: () => ({ rowIndex: 1, columnIndex: 1 }),
+      resolveTabTarget: () => null,
+      normalizeCellCoord: coord => coord,
+      getAdjacentNavigableColumnIndex: (columnIndex, direction) => columnIndex + direction,
+      getFirstNavigableColumnIndex: () => 0,
+      getLastNavigableColumnIndex: () => 5,
+      getLastRowIndex: () => 10,
+      resolveStepRows: () => 5,
+      closeContextMenu: vi.fn(),
+      clearCellSelection: vi.fn(),
+      setLastAction: vi.fn(),
+      resolveDirectionalJumpTarget: (current, direction, event) => {
+        expect(current).toEqual({ rowIndex: 1, columnIndex: 1 })
+        expect(direction).toBe("right")
+        expect(event.shiftKey).toBe(true)
+        expect(event.metaKey).toBe(true)
+        return { rowIndex: 1, columnIndex: 4 }
+      },
+      applyCellSelection,
+    })
+
+    expect(router.dispatchNavigation(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      shiftKey: true,
+      metaKey: true,
+      cancelable: true,
+    }))).toBe(true)
+
+    expect(applyCellSelection).toHaveBeenCalledWith(
+      { rowIndex: 1, columnIndex: 4 },
+      true,
+      { rowIndex: 1, columnIndex: 1 },
+    )
+  })
 })

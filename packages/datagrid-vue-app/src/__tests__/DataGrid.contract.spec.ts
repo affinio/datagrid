@@ -551,19 +551,25 @@ function createDragLikeEvent(
 async function dragDropElement(
   source: HTMLElement,
   target: HTMLElement,
-  options: { targetClientY?: number } = {},
+  options: { targetClientX?: number; targetClientY?: number } = {},
 ): Promise<void> {
   const dataTransfer = createDragDataTransfer()
   source.dispatchEvent(createDragLikeEvent("dragstart", { dataTransfer, clientY: 8 }))
   target.dispatchEvent(createDragLikeEvent("dragover", {
     dataTransfer,
+    clientX: options.targetClientX ?? 24,
     clientY: options.targetClientY ?? 24,
   }))
   target.dispatchEvent(createDragLikeEvent("drop", {
     dataTransfer,
+    clientX: options.targetClientX ?? 24,
     clientY: options.targetClientY ?? 24,
   }))
-  source.dispatchEvent(createDragLikeEvent("dragend", { dataTransfer, clientY: options.targetClientY ?? 24 }))
+  source.dispatchEvent(createDragLikeEvent("dragend", {
+    dataTransfer,
+    clientX: options.targetClientX ?? 24,
+    clientY: options.targetClientY ?? 24,
+  }))
   await flushRuntimeTasks()
 }
 
@@ -727,6 +733,7 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).toContain("gridLines")
     expect(publicProps).toContain("history")
     expect(publicProps).toContain("chrome")
+    expect(publicProps).toContain("columnReorder")
     expect(publicProps).toContain("rowReorder")
     expect(publicProps).toContain("placeholderRows")
   })
@@ -1910,6 +1917,56 @@ describe("DataGrid app facade contract", () => {
     const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
     expect(firstRowIndexCell.exists()).toBe(true)
     expect((firstRowIndexCell.element as HTMLElement).draggable).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("reorders columns by dragging header cells when columnReorder is enabled", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: false,
+        columnReorder: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const ownerHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+    const amountHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="amount"]')
+    expect(ownerHeader.exists()).toBe(true)
+    expect(amountHeader.exists()).toBe(true)
+    expect((ownerHeader.element as HTMLElement).draggable).toBe(true)
+
+    await dragDropElement(ownerHeader.element as HTMLElement, amountHeader.element as HTMLElement, {
+      targetClientX: 96,
+    })
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getColumnSnapshot?.()).toMatchObject({
+      order: ["region", "amount", "owner"],
+    })
+
+    wrapper.unmount()
+  })
+
+  it("keeps header drag disabled unless columnReorder is enabled declaratively", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: false,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const ownerHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+    expect(ownerHeader.exists()).toBe(true)
+    expect((ownerHeader.element as HTMLElement).draggable).toBe(false)
 
     wrapper.unmount()
   })

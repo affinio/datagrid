@@ -59,6 +59,7 @@ import type { DataGridFindReplaceOptions } from "../config/dataGridFindReplace"
 import type { DataGridGridLinesOptions } from "../config/dataGridGridLines"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
+import type { DataGridColumnReorderOptions } from "../config/dataGridColumnReorder"
 import {
   resolveDataGridColumnMenuActionOptions,
   resolveDataGridColumnMenuCustomItems,
@@ -650,6 +651,10 @@ export default defineComponent({
     },
     columnLayout: {
       type: Object as PropType<DataGridColumnLayoutOptions>,
+      required: true,
+    },
+    columnReorder: {
+      type: Object as PropType<DataGridColumnReorderOptions>,
       required: true,
     },
     aggregations: {
@@ -2114,6 +2119,49 @@ export default defineComponent({
       return moved
     }
 
+    const reorderColumnsByHeader = (payload: {
+      sourceColumnKey: string
+      targetColumnKey: string
+      placement: "before" | "after"
+    }): boolean => {
+      const normalizedSourceColumnKey = String(payload.sourceColumnKey)
+      const normalizedTargetColumnKey = String(payload.targetColumnKey)
+      if (!normalizedSourceColumnKey || !normalizedTargetColumnKey || normalizedSourceColumnKey === normalizedTargetColumnKey) {
+        return false
+      }
+
+      const currentColumns = allColumns.value
+      const sourceColumn = currentColumns.find(column => column.key === normalizedSourceColumnKey)
+      const targetColumn = currentColumns.find(column => column.key === normalizedTargetColumnKey)
+      if (!sourceColumn || !targetColumn) {
+        return false
+      }
+      if ((sourceColumn.pin ?? "none") !== (targetColumn.pin ?? "none")) {
+        return false
+      }
+
+      const nextOrder = currentColumns.map(column => column.key)
+      const sourceIndex = nextOrder.indexOf(normalizedSourceColumnKey)
+      const targetIndex = nextOrder.indexOf(normalizedTargetColumnKey)
+      if (sourceIndex < 0 || targetIndex < 0) {
+        return false
+      }
+
+      const movedColumnKey = nextOrder[sourceIndex]
+      if (!movedColumnKey) {
+        return false
+      }
+      nextOrder.splice(sourceIndex, 1)
+      const normalizedTargetIndex = nextOrder.indexOf(normalizedTargetColumnKey)
+      if (normalizedTargetIndex < 0) {
+        return false
+      }
+      const insertIndex = payload.placement === "after" ? normalizedTargetIndex + 1 : normalizedTargetIndex
+      nextOrder.splice(insertIndex, 0, movedColumnKey)
+      props.runtime.api.columns.setOrder(nextOrder)
+      return true
+    }
+
     const clearPendingRowClipboardOperation = (): boolean => {
       if (!rowClipboardBuffer.value) {
         return false
@@ -2236,6 +2284,7 @@ export default defineComponent({
         openRuntimeContextMenuFromCurrentCell()
       },
       runRowIndexKeyboardAction: (action, rowId) => runRowIndexContextAction(action, rowId),
+      reorderColumnsByHeader: props.columnReorder.enabled ? reorderColumnsByHeader : undefined,
       reorderRowsByIndex: props.rowReorder.enabled ? reorderRowsByIndex : undefined,
       cellClass: (row, _rowIndex, column) => {
         const target = highlightedFindReplaceCell.value

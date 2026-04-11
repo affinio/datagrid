@@ -96,6 +96,11 @@ import {
   type DataGridColumnLayoutProp,
 } from "./config/dataGridColumnLayout"
 import {
+  resolveDataGridColumnReorder,
+  type DataGridColumnReorderOptions,
+  type DataGridColumnReorderProp,
+} from "./config/dataGridColumnReorder"
+import {
   resolveDataGridRowReorder,
   type DataGridRowReorderOptions,
   type DataGridRowReorderProp,
@@ -391,6 +396,10 @@ export default defineComponent({
       type: [Boolean, Object] as PropType<DataGridColumnLayoutProp | undefined>,
       default: undefined,
     },
+    columnReorder: {
+      type: [Boolean, Object] as PropType<DataGridColumnReorderProp | undefined>,
+      default: undefined,
+    },
     aggregations: {
       type: [Boolean, Object] as PropType<DataGridAggregationsProp | undefined>,
       default: undefined,
@@ -606,6 +615,9 @@ export default defineComponent({
     })
     const resolvedColumnLayout = computed<DataGridColumnLayoutOptions>(() => {
       return resolveDataGridColumnLayout(props.columnLayout)
+    })
+    const resolvedColumnReorder = computed<DataGridColumnReorderOptions>(() => {
+      return resolveDataGridColumnReorder(props.columnReorder)
     })
     const resolvedAggregations = computed<DataGridAggregationsOptions>(() => {
       return resolveDataGridAggregations(props.aggregations)
@@ -1006,6 +1018,7 @@ export default defineComponent({
         cellMenu: resolvedCellMenu.value,
         rowIndexMenu: resolvedRowIndexMenu.value,
         columnLayout: resolvedColumnLayout.value,
+        columnReorder: resolvedColumnReorder.value,
         aggregations: resolvedAggregations.value,
         advancedFilter: resolvedAdvancedFilter.value,
         findReplace: resolvedFindReplace.value,

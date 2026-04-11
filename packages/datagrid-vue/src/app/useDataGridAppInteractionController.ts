@@ -184,6 +184,73 @@ export function useDataGridAppInteractionController<
     }
     return runtime.getBodyRowAtIndex?.(rowIndex) ?? options.runtime.api.rows.get(rowIndex) ?? null
   }
+
+  const isSemanticNavigationCellNonEmpty = (rowIndex: number, columnIndex: number): boolean | null => {
+    const row = getBodyRowAtIndex(rowIndex)
+    const columnKey = options.visibleColumns.value[columnIndex]?.key
+    if (!row || row.rowId == null || row.kind === "group" || !columnKey) {
+      return null
+    }
+    return options.readCell(row, columnKey).trim().length > 0
+  }
+
+  const resolveDirectionalSemanticJumpTarget = (
+    current: DataGridAppCellCoord,
+    direction: "up" | "down" | "left" | "right",
+    event: KeyboardEvent,
+  ): DataGridAppCellCoord | undefined => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+      return undefined
+    }
+
+    const currentCellIsNonEmpty = isSemanticNavigationCellNonEmpty(current.rowIndex, current.columnIndex)
+    if (currentCellIsNonEmpty == null) {
+      return undefined
+    }
+
+    const nextColumnIndex = (columnIndex: number, step: 1 | -1): number => {
+      const lastColumn = Math.max(0, options.visibleColumns.value.length - 1)
+      return Math.max(0, Math.min(lastColumn, columnIndex + step))
+    }
+
+    const step = (coord: DataGridAppCellCoord): DataGridAppCellCoord | null => {
+      switch (direction) {
+        case "up":
+          return coord.rowIndex > 0
+            ? { ...coord, rowIndex: coord.rowIndex - 1, rowId: getBodyRowAtIndex(coord.rowIndex - 1)?.rowId ?? null }
+            : null
+        case "down":
+          return coord.rowIndex < Math.max(0, options.totalRows.value - 1)
+            ? { ...coord, rowIndex: coord.rowIndex + 1, rowId: getBodyRowAtIndex(coord.rowIndex + 1)?.rowId ?? null }
+            : null
+        case "left": {
+          const columnIndex = nextColumnIndex(coord.columnIndex, -1)
+          return columnIndex === coord.columnIndex
+            ? null
+            : { ...coord, columnIndex, rowId: getBodyRowAtIndex(coord.rowIndex)?.rowId ?? null }
+        }
+        case "right": {
+          const columnIndex = nextColumnIndex(coord.columnIndex, 1)
+          return columnIndex === coord.columnIndex
+            ? null
+            : { ...coord, columnIndex, rowId: getBodyRowAtIndex(coord.rowIndex)?.rowId ?? null }
+        }
+      }
+    }
+
+    let lastMatchingCoord = current
+    let candidate = step(current)
+    while (candidate) {
+      const candidateIsNonEmpty = isSemanticNavigationCellNonEmpty(candidate.rowIndex, candidate.columnIndex)
+      if (candidateIsNonEmpty == null || candidateIsNonEmpty !== currentCellIsNonEmpty) {
+        break
+      }
+      lastMatchingCoord = candidate
+      candidate = step(candidate)
+    }
+
+    return options.normalizeCellCoord(lastMatchingCoord) ?? current
+  }
   const resolveBodyRowIndexById = (rowId: string | number): number => {
     const runtime = options.runtime as typeof options.runtime & {
       resolveBodyRowIndexById?: (value: string | number) => number
@@ -864,7 +931,10 @@ export function useDataGridAppInteractionController<
       }
       return { ...current, rowIndex: current.rowIndex + 1, columnIndex: 0 }
     },
-    normalizeCellCoord: coord => options.normalizeCellCoord(coord),
+    normalizeCellCoord: coord => options.normalizeCellCoord({
+      ...coord,
+      rowId: getBodyRowAtIndex(coord.rowIndex)?.rowId ?? null,
+    }),
     getAdjacentNavigableColumnIndex: (columnIndex, direction) => {
       const lastColumn = Math.max(0, options.visibleColumns.value.length - 1)
       return Math.max(0, Math.min(lastColumn, columnIndex + direction))
@@ -878,6 +948,9 @@ export function useDataGridAppInteractionController<
       options.clearCellSelection()
     },
     setLastAction: () => undefined,
+    resolveDirectionalJumpTarget: (current, direction, event) => {
+      return resolveDirectionalSemanticJumpTarget(current, direction, event)
+    },
     applyCellSelection: (nextCoord, extend, fallbackAnchor) => {
       options.applyCellSelectionByCoord(nextCoord, extend, fallbackAnchor)
     },

@@ -805,6 +805,58 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
+  it("extends selection with Shift+Cmd/Ctrl+Arrow to the first blank gap like Excel", () => {
+    const { controller, row, selectionSnapshot, setSelectionSnapshot } = createControllerHarness({
+      rowCount: 1,
+      columnCount: 4,
+      rowData: [{
+        a: "alpha",
+        b: "beta",
+        c: "",
+        d: "tail",
+      }],
+    })
+
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      shiftKey: true,
+      metaKey: true,
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 0,
+      colIndex: 1,
+      rowId: "r1",
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 0,
+      endCol: 1,
+      anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      focus: { rowIndex: 0, colIndex: 1, rowId: "r1" },
+    })
+  })
+
   it("expands a collapsed tree group row on Space", () => {
     const { controller, row, expandGroup, collapseGroup } = createControllerHarness({
       mode: "base",

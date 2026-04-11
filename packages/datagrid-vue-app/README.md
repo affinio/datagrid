@@ -1588,6 +1588,25 @@ The component emits:
 - The built-in `Column layout`, `Advanced filter`, and `Find / replace` toolbar panels render through the shared Affino overlay host rather than inline in the grid tree.
 - These built-in panels are draggable by their header title area and reopen at the last detached position for the current grid instance during the active page session.
 
+## Column Reorder
+
+Column drag-and-drop is declarative and opt-in.
+
+- `columnReorder: true` enables drag reorder from header cells
+- `columnReorder: false` keeps header cells non-draggable
+- the feature currently reorders only regular visible data columns inside the same pin lane
+- row-selection headers and pivot header layouts do not participate in header drag reorder
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :column-reorder="true"
+/>
+```
+
+If you only want manual order changes inside the built-in `Columns` panel, leave `columnReorder` unset and keep using `columnLayout`.
+
 ## Row Reorder
 
 Row drag-and-drop is declarative and opt-in.

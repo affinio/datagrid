@@ -102,12 +102,14 @@
             >
               <div
                 class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
-                :class="{
-                  'grid-cell--header-menu-enabled': true,
-                  'grid-cell--header-menu-open': open,
-                }"
+                :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
                 :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
                 :data-column-key="column.key"
+                :draggable="isHeaderColumnDraggable(column)"
+                @dragstart.stop="handleHeaderColumnDragStart($event, column)"
+                @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
+                @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+                @dragend.stop="handleHeaderColumnDragEnd"
               >
                 <div class="col-head">
                   <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
@@ -185,9 +187,15 @@
             <div
               v-else
               class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
+              :class="resolveHeaderCellClasses(column)"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, $event.shiftKey)"
+              @dragstart.stop="handleHeaderColumnDragStart($event, column)"
+              @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
+              @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+              @dragend.stop="handleHeaderColumnDragEnd"
             >
               <div class="col-head">
                 <span>{{ resolveHeaderDisplayLabel(column) }}</span>
@@ -308,12 +316,14 @@
           >
             <div
               class="grid-cell grid-cell--header grid-cell--header-sortable"
-              :class="{
-                'grid-cell--header-menu-enabled': true,
-                'grid-cell--header-menu-open': open,
-              }"
+              :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              :draggable="isHeaderColumnDraggable(column)"
+              @dragstart.stop="handleHeaderColumnDragStart($event, column)"
+              @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
+              @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+              @dragend.stop="handleHeaderColumnDragEnd"
             >
               <div class="col-head">
                 <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
@@ -373,9 +383,15 @@
             v-for="column in renderedColumns"
             :key="`header-${column.key}`"
             class="grid-cell grid-cell--header grid-cell--header-sortable"
+            :class="resolveHeaderCellClasses(column)"
             :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
             :data-column-key="column.key"
+            :draggable="isHeaderColumnDraggable(column)"
             @click="handleHeaderColumnClick(column, $event.shiftKey)"
+            @dragstart.stop="handleHeaderColumnDragStart($event, column)"
+            @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
+            @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+            @dragend.stop="handleHeaderColumnDragEnd"
           >
             <div class="col-head">
               <span>{{ resolveHeaderDisplayLabel(column) }}</span>
@@ -481,12 +497,14 @@
           >
             <div
               class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
-              :class="{
-                'grid-cell--header-menu-enabled': true,
-                'grid-cell--header-menu-open': open,
-              }"
+              :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              :draggable="isHeaderColumnDraggable(column)"
+              @dragstart.stop="handleHeaderColumnDragStart($event, column)"
+              @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
+              @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+              @dragend.stop="handleHeaderColumnDragEnd"
             >
               <div class="col-head">
                 <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
@@ -546,9 +564,15 @@
             v-for="column in pinnedRightColumns"
             :key="`header-right-${column.key}`"
             class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
+            :class="resolveHeaderCellClasses(column)"
             :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
             :data-column-key="column.key"
+            :draggable="isHeaderColumnDraggable(column)"
             @click="handleHeaderColumnClick(column, $event.shiftKey)"
+            @dragstart.stop="handleHeaderColumnDragStart($event, column)"
+            @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
+            @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+            @dragend.stop="handleHeaderColumnDragEnd"
           >
             <div class="col-head">
               <span>{{ resolveHeaderDisplayLabel(column) }}</span>
@@ -582,7 +606,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, type CSSProperties, type PropType } from "vue"
+import { computed, ref, type CSSProperties, type PropType } from "vue"
 import type { DataGridColumnPin } from "@affino/datagrid-vue"
 import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
 import type {
@@ -688,6 +712,11 @@ const columnMenuValueFilterRowLimit = computed(() => (
     ? columns.value.columnMenuValueFilterRowLimit
     : Number.MAX_SAFE_INTEGER
 ))
+const draggedHeaderColumnKey = ref<string | null>(null)
+const draggedHeaderColumnPin = ref<DataGridColumnPin>("none")
+const dragOverHeaderColumnKey = ref<string | null>(null)
+const dragOverHeaderPlacement = ref<"before" | "after" | null>(null)
+let suppressHeaderClick = false
 
 function hasColumnMenu(): boolean {
   if (columns.value.columnMenuEnabled === true) {
@@ -707,6 +736,66 @@ function resolveTextAlign(value: unknown): CSSProperties["textAlign"] | undefine
   return value === "left" || value === "center" || value === "right"
     ? value
     : undefined
+}
+
+function normalizeColumnPin(value: unknown): DataGridColumnPin {
+  return value === "left" || value === "right" ? value : "none"
+}
+
+function scheduleHeaderClickSuppressionReset(): void {
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(() => {
+      suppressHeaderClick = false
+    })
+    return
+  }
+  queueMicrotask(() => {
+    suppressHeaderClick = false
+  })
+}
+
+function clearHeaderColumnDragState(resetClickSuppression = false): void {
+  draggedHeaderColumnKey.value = null
+  dragOverHeaderColumnKey.value = null
+  dragOverHeaderPlacement.value = null
+  draggedHeaderColumnPin.value = "none"
+  if (resetClickSuppression) {
+    scheduleHeaderClickSuppressionReset()
+  }
+}
+
+function isHeaderColumnDraggable(column: TableColumn): boolean {
+  return typeof columns.value.reorderColumnsByHeader === "function"
+    && mode.value !== "pivot"
+    && !isRowSelectionColumn(column)
+}
+
+function isHeaderDragBlockedFromTarget(event: DragEvent): boolean {
+  const target = event.target instanceof HTMLElement ? event.target : null
+  return Boolean(target?.closest(".col-resize, .col-menu-trigger, .col-filter, .col-filter-input, input, button"))
+}
+
+function resolveHeaderColumnDropPlacement(event: DragEvent): "before" | "after" {
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const rect = target?.getBoundingClientRect()
+  if (!rect || rect.width <= 0) {
+    return "after"
+  }
+  return event.clientX < rect.left + rect.width / 2 ? "before" : "after"
+}
+
+function resolveHeaderCellClasses(
+  column: TableColumn,
+  options: { menuEnabled?: boolean; menuOpen?: boolean } = {},
+): Record<string, boolean> {
+  return {
+    "grid-cell--header-menu-enabled": options.menuEnabled === true,
+    "grid-cell--header-menu-open": options.menuOpen === true,
+    "grid-cell--header-reorderable": isHeaderColumnDraggable(column),
+    "grid-cell--header-reorder-source": draggedHeaderColumnKey.value === column.key,
+    "grid-cell--header-drop-before": dragOverHeaderColumnKey.value === column.key && dragOverHeaderPlacement.value === "before",
+    "grid-cell--header-drop-after": dragOverHeaderColumnKey.value === column.key && dragOverHeaderPlacement.value === "after",
+  }
 }
 
 function columnStyle(key: string): CSSProperties {
@@ -845,10 +934,72 @@ function headerCellPresentationStyle(column: TableColumn): CSSProperties {
 }
 
 function handleHeaderColumnClick(column: TableColumn, additive: boolean): void {
+  if (suppressHeaderClick) {
+    return
+  }
   if (!isColumnSortable(column)) {
     return
   }
   columns.value.toggleSortForColumn(column.key, additive)
+}
+
+function handleHeaderColumnDragStart(event: DragEvent, column: TableColumn): void {
+  if (!isHeaderColumnDraggable(column) || isHeaderDragBlockedFromTarget(event)) {
+    clearHeaderColumnDragState()
+    return
+  }
+  suppressHeaderClick = true
+  draggedHeaderColumnKey.value = column.key
+  draggedHeaderColumnPin.value = normalizeColumnPin(column.pin)
+  dragOverHeaderColumnKey.value = null
+  dragOverHeaderPlacement.value = null
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move"
+    event.dataTransfer.dropEffect = "move"
+    event.dataTransfer.setData("text/plain", column.key)
+  }
+}
+
+function handleHeaderColumnDragOver(event: DragEvent, column: TableColumn): void {
+  if (!draggedHeaderColumnKey.value || !isHeaderColumnDraggable(column)) {
+    dragOverHeaderColumnKey.value = null
+    dragOverHeaderPlacement.value = null
+    return
+  }
+  if (draggedHeaderColumnKey.value === column.key || draggedHeaderColumnPin.value !== normalizeColumnPin(column.pin)) {
+    dragOverHeaderColumnKey.value = null
+    dragOverHeaderPlacement.value = null
+    return
+  }
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = "move"
+  }
+  dragOverHeaderColumnKey.value = column.key
+  dragOverHeaderPlacement.value = resolveHeaderColumnDropPlacement(event)
+}
+
+function handleHeaderColumnDrop(event: DragEvent, column: TableColumn): void {
+  const sourceColumnKey = draggedHeaderColumnKey.value
+  if (!sourceColumnKey || !isHeaderColumnDraggable(column)) {
+    clearHeaderColumnDragState(true)
+    return
+  }
+  if (sourceColumnKey === column.key || draggedHeaderColumnPin.value !== normalizeColumnPin(column.pin)) {
+    clearHeaderColumnDragState(true)
+    return
+  }
+  event.preventDefault()
+  columns.value.reorderColumnsByHeader?.({
+    sourceColumnKey,
+    targetColumnKey: column.key,
+    placement: resolveHeaderColumnDropPlacement(event),
+  })
+  clearHeaderColumnDragState(true)
+}
+
+function handleHeaderColumnDragEnd(): void {
+  clearHeaderColumnDragState(true)
 }
 
 function isColumnFilterActiveSafe(columnKey: string): boolean {
