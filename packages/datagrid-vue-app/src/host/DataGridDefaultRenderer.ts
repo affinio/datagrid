@@ -1441,6 +1441,187 @@ export default defineComponent({
       },
     })
 
+    type CapturedColumnSelectionCoord = {
+      rowIndex: number
+      rowId: string | number | null
+      columnKey: string
+    }
+
+    type CapturedColumnSelectionRange = {
+      startRow: number
+      endRow: number
+      startColumnKey: string
+      endColumnKey: string
+      startRowId: string | number | null
+      endRowId: string | number | null
+      anchor: CapturedColumnSelectionCoord
+      focus: CapturedColumnSelectionCoord
+    }
+
+    type CapturedColumnSelectionState = {
+      ranges: readonly CapturedColumnSelectionRange[]
+      activeRangeIndex: number
+      activeCell: CapturedColumnSelectionCoord | null
+    }
+
+    const resolveVisibleColumnKeyAtIndex = (
+      columnKeys: readonly string[],
+      columnIndex: number,
+    ): string | null => {
+      if (!Number.isFinite(columnIndex)) {
+        return null
+      }
+      const normalizedColumnIndex = Math.trunc(columnIndex)
+      return columnKeys[normalizedColumnIndex] ?? null
+    }
+
+    const normalizeSelectionRowId = (value: unknown): string | number | null => {
+      return typeof value === "string" || typeof value === "number"
+        ? value
+        : null
+    }
+
+    const captureColumnSelectionState = (): CapturedColumnSelectionState | null => {
+      const snapshot = props.selectionSnapshot.value
+      const columnKeys = visibleColumns.value.map(column => column.key)
+      if (!snapshot || columnKeys.length === 0) {
+        return null
+      }
+
+      const ranges = snapshot.ranges
+        .map(range => {
+          const startColumnKey = resolveVisibleColumnKeyAtIndex(columnKeys, range.startCol)
+          const endColumnKey = resolveVisibleColumnKeyAtIndex(columnKeys, range.endCol)
+          if (!startColumnKey || !endColumnKey) {
+            return null
+          }
+
+          const anchorColumnKey = resolveVisibleColumnKeyAtIndex(columnKeys, range.anchor?.colIndex ?? range.startCol)
+            ?? startColumnKey
+          const focusColumnKey = resolveVisibleColumnKeyAtIndex(columnKeys, range.focus?.colIndex ?? range.endCol)
+            ?? endColumnKey
+
+          return {
+            startRow: range.startRow,
+            endRow: range.endRow,
+            startColumnKey,
+            endColumnKey,
+            startRowId: normalizeSelectionRowId(range.startRowId),
+            endRowId: normalizeSelectionRowId(range.endRowId),
+            anchor: {
+              rowIndex: range.anchor?.rowIndex ?? range.startRow,
+              rowId: normalizeSelectionRowId(range.anchor?.rowId),
+              columnKey: anchorColumnKey,
+            },
+            focus: {
+              rowIndex: range.focus?.rowIndex ?? range.endRow,
+              rowId: normalizeSelectionRowId(range.focus?.rowId),
+              columnKey: focusColumnKey,
+            },
+          } satisfies CapturedColumnSelectionRange
+        })
+        .filter((range): range is CapturedColumnSelectionRange => range != null)
+
+      if (ranges.length === 0) {
+        return null
+      }
+
+      const activeCellColumnKey = snapshot.activeCell
+        ? resolveVisibleColumnKeyAtIndex(columnKeys, snapshot.activeCell.colIndex)
+        : null
+
+      return {
+        ranges,
+        activeRangeIndex: Math.max(0, Math.trunc(snapshot.activeRangeIndex ?? 0)),
+        activeCell: snapshot.activeCell && activeCellColumnKey
+          ? {
+              rowIndex: snapshot.activeCell.rowIndex,
+              rowId: normalizeSelectionRowId(snapshot.activeCell.rowId),
+              columnKey: activeCellColumnKey,
+            }
+          : null,
+      }
+    }
+
+    const buildColumnSelectionSnapshotFromCapturedState = (
+      captured: CapturedColumnSelectionState,
+    ): import("@affino/datagrid-vue").DataGridSelectionSnapshot | null => {
+      const currentColumnKeys = visibleColumns.value.map(column => column.key)
+      if (currentColumnKeys.length === 0) {
+        return null
+      }
+
+      const ranges: import("@affino/datagrid-vue").DataGridSelectionSnapshot["ranges"] = []
+      for (const range of captured.ranges) {
+        const startColumnIndex = currentColumnKeys.indexOf(range.startColumnKey)
+        const endColumnIndex = currentColumnKeys.indexOf(range.endColumnKey)
+        const anchorColumnIndex = currentColumnKeys.indexOf(range.anchor.columnKey)
+        const focusColumnIndex = currentColumnKeys.indexOf(range.focus.columnKey)
+        if (startColumnIndex < 0 || endColumnIndex < 0 || anchorColumnIndex < 0 || focusColumnIndex < 0) {
+          continue
+        }
+        ranges.push({
+          startRow: range.startRow,
+          endRow: range.endRow,
+          startCol: startColumnIndex,
+          endCol: endColumnIndex,
+          startRowId: range.startRowId,
+          endRowId: range.endRowId,
+          anchor: {
+            rowIndex: range.anchor.rowIndex,
+            colIndex: anchorColumnIndex,
+            rowId: range.anchor.rowId,
+          },
+          focus: {
+            rowIndex: range.focus.rowIndex,
+            colIndex: focusColumnIndex,
+            rowId: range.focus.rowId,
+          },
+        })
+      }
+
+      if (ranges.length === 0) {
+        return null
+      }
+
+      const activeRangeIndex = Math.min(ranges.length - 1, Math.max(0, captured.activeRangeIndex))
+      const fallbackRange = ranges[activeRangeIndex] ?? ranges[0] ?? null
+      if (!fallbackRange) {
+        return null
+      }
+
+      const activeCellColumnIndex = captured.activeCell
+        ? currentColumnKeys.indexOf(captured.activeCell.columnKey)
+        : -1
+
+      return {
+        ranges,
+        activeRangeIndex,
+        activeCell: activeCellColumnIndex >= 0 && captured.activeCell
+          ? {
+              rowIndex: captured.activeCell.rowIndex,
+              colIndex: activeCellColumnIndex,
+              rowId: captured.activeCell.rowId,
+            }
+          : {
+              rowIndex: fallbackRange.focus.rowIndex,
+              colIndex: fallbackRange.focus.colIndex,
+              rowId: fallbackRange.focus.rowId,
+            },
+      }
+    }
+
+    const restoreColumnInteractionAfterReorder = (captured: CapturedColumnSelectionState | null): void => {
+      const nextSelectionSnapshot = captured
+        ? buildColumnSelectionSnapshotFromCapturedState(captured)
+        : null
+      if (nextSelectionSnapshot) {
+        props.runtime.api.selection.setSnapshot(nextSelectionSnapshot)
+        props.syncSelectionSnapshotFromRuntime()
+      }
+      scheduleViewportAnchorFocus()
+    }
+
     const resolveFocusedReorderedRowId = (sourceRowIds: readonly string[]): string | null => {
       if (sourceRowIds.length === 0) {
         return null
@@ -2136,9 +2317,6 @@ export default defineComponent({
       if (!sourceColumn || !targetColumn) {
         return false
       }
-      if ((sourceColumn.pin ?? "none") !== (targetColumn.pin ?? "none")) {
-        return false
-      }
 
       const nextOrder = currentColumns.map(column => column.key)
       const sourceIndex = nextOrder.indexOf(normalizedSourceColumnKey)
@@ -2158,7 +2336,15 @@ export default defineComponent({
       }
       const insertIndex = payload.placement === "after" ? normalizedTargetIndex + 1 : normalizedTargetIndex
       nextOrder.splice(insertIndex, 0, movedColumnKey)
+
+      const previousSelection = captureColumnSelectionState()
+      const targetPin = (targetColumn.pin ?? "none") as DataGridColumnPin
+      const sourcePin = (sourceColumn.pin ?? "none") as DataGridColumnPin
+      if (sourcePin !== targetPin) {
+        props.runtime.api.columns.setPin(normalizedSourceColumnKey, targetPin)
+      }
       props.runtime.api.columns.setOrder(nextOrder)
+      restoreColumnInteractionAfterReorder(previousSelection)
       return true
     }
 

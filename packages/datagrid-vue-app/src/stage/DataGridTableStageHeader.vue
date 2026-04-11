@@ -713,7 +713,6 @@ const columnMenuValueFilterRowLimit = computed(() => (
     : Number.MAX_SAFE_INTEGER
 ))
 const draggedHeaderColumnKey = ref<string | null>(null)
-const draggedHeaderColumnPin = ref<DataGridColumnPin>("none")
 const dragOverHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderPlacement = ref<"before" | "after" | null>(null)
 let suppressHeaderClick = false
@@ -738,10 +737,6 @@ function resolveTextAlign(value: unknown): CSSProperties["textAlign"] | undefine
     : undefined
 }
 
-function normalizeColumnPin(value: unknown): DataGridColumnPin {
-  return value === "left" || value === "right" ? value : "none"
-}
-
 function scheduleHeaderClickSuppressionReset(): void {
   if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
     window.requestAnimationFrame(() => {
@@ -758,7 +753,6 @@ function clearHeaderColumnDragState(resetClickSuppression = false): void {
   draggedHeaderColumnKey.value = null
   dragOverHeaderColumnKey.value = null
   dragOverHeaderPlacement.value = null
-  draggedHeaderColumnPin.value = "none"
   if (resetClickSuppression) {
     scheduleHeaderClickSuppressionReset()
   }
@@ -950,7 +944,6 @@ function handleHeaderColumnDragStart(event: DragEvent, column: TableColumn): voi
   }
   suppressHeaderClick = true
   draggedHeaderColumnKey.value = column.key
-  draggedHeaderColumnPin.value = normalizeColumnPin(column.pin)
   dragOverHeaderColumnKey.value = null
   dragOverHeaderPlacement.value = null
   if (event.dataTransfer) {
@@ -966,7 +959,7 @@ function handleHeaderColumnDragOver(event: DragEvent, column: TableColumn): void
     dragOverHeaderPlacement.value = null
     return
   }
-  if (draggedHeaderColumnKey.value === column.key || draggedHeaderColumnPin.value !== normalizeColumnPin(column.pin)) {
+  if (draggedHeaderColumnKey.value === column.key) {
     dragOverHeaderColumnKey.value = null
     dragOverHeaderPlacement.value = null
     return
@@ -985,7 +978,7 @@ function handleHeaderColumnDrop(event: DragEvent, column: TableColumn): void {
     clearHeaderColumnDragState(true)
     return
   }
-  if (sourceColumnKey === column.key || draggedHeaderColumnPin.value !== normalizeColumnPin(column.pin)) {
+  if (sourceColumnKey === column.key) {
     clearHeaderColumnDragState(true)
     return
   }

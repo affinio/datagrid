@@ -1,28 +1,30 @@
 # @affino/datagrid-vue-app
 
-## 0.1.27
+## 0.1.28
 
 ### Patch Changes
 
 - ## Summary
 
-  Slimmed the root app entry so heavy optional surfaces no longer have to ride the default runtime path, and aligned modified-arrow keyboard selection with Excel-style expansion semantics.
+  Slimmed the root app entry so heavy optional surfaces no longer have to ride the default runtime path, aligned modified-arrow keyboard selection with Excel-style expansion semantics, and promoted header drag reorder into the package-level grid surface with selection/focus continuity.
 
   ## User impact
 
-  The base `DataGrid` entry now keeps gantt-specific runtime code behind a lazy boundary instead of pulling `@affino/datagrid-gantt` into ordinary table usage. Optional heavy UI surfaces are now easier to consume as explicit package entrypoints, including the new `@affino/datagrid-vue-app/aggregations` subpath alongside the existing `gantt`, `advanced-filter`, and `find-replace` entries. In grid interaction, `Shift+Ctrl/Cmd+Arrow` now extends the current range in the requested direction until the first blank gap, matching the expected Excel-like keyboard workflow for contiguous data blocks.
+  The base `DataGrid` entry now keeps gantt-specific runtime code behind a lazy boundary instead of pulling `@affino/datagrid-gantt` into ordinary table usage. Optional heavy UI surfaces are now easier to consume as explicit package entrypoints, including the new `@affino/datagrid-vue-app/aggregations` subpath alongside the existing `gantt`, `advanced-filter`, and `find-replace` entries. In grid interaction, `Shift+Ctrl/Cmd+Arrow` now extends the current range in the requested direction until the first blank gap, matching the expected Excel-like keyboard workflow for contiguous data blocks. Header drag reorder is now also available declaratively through `columnReorder`, including cross-pin moves between left, center, and right lanes; after reorder, the active cell and keyboard focus stay attached to the moved logical column instead of drifting with the old visual column index.
 
   ## Migration
   - No migration required.
   - Optional adoption:
     - import feature-specific surfaces from subpaths when you want stricter bundle boundaries around gantt, aggregations, advanced filter, or find/replace UI,
     - keep consumer-side chunk tuning only as an optimization layer; the package root no longer requires it as a workaround for gantt coupling,
-    - rely on `Shift+Ctrl/Cmd+Arrow` for contiguous range expansion in spreadsheet-like keyboard flows.
+    - rely on `Shift+Ctrl/Cmd+Arrow` for contiguous range expansion in spreadsheet-like keyboard flows,
+    - enable `columnReorder` when header drag-and-drop should be available from the package surface, including cross-pin moves.
 
   ## Validation
   - `@affino/datagrid-vue-app` type-check passed
   - `@affino/datagrid-vue-app` build passed and the base `dist/index.js` no longer statically imports `@affino/datagrid-gantt`
   - focused `@affino/datagrid-vue` keyboard-navigation contracts passed for modified-arrow range extension
+  - focused `@affino/datagrid-vue-app` facade contracts passed for package-level header drag reorder, continuity after reorder, and cross-pin moves
 
 ## 0.1.26
 

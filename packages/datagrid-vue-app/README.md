@@ -1594,8 +1594,9 @@ Column drag-and-drop is declarative and opt-in.
 
 - `columnReorder: true` enables drag reorder from header cells
 - `columnReorder: false` keeps header cells non-draggable
-- the feature currently reorders only regular visible data columns inside the same pin lane
+- the feature reorders regular visible data columns and can move them across `left` / `center` / `right` pin lanes by dropping onto a target header in that lane
 - row-selection headers and pivot header layouts do not participate in header drag reorder
+- after reorder, keyboard navigation continuity stays attached to the moved logical column instead of the previous visual column index
 
 ```vue
 <DataGrid

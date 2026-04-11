@@ -1952,6 +1952,133 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps active-cell continuity after column reorder so keyboard navigation stays on the moved logical column", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: false,
+        columnReorder: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.() as {
+      selection?: {
+        setSnapshot?: (snapshot: unknown) => void
+        getSnapshot?: () => unknown
+      }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 1,
+        endRow: 1,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r2",
+        endRowId: "r2",
+        anchor: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+    })
+    await flushRuntimeTasks()
+
+    const ownerHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+    const amountHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="amount"]')
+    expect(ownerHeader.exists()).toBe(true)
+    expect(amountHeader.exists()).toBe(true)
+
+    await dragDropElement(ownerHeader.element as HTMLElement, amountHeader.element as HTMLElement, {
+      targetClientX: 96,
+    })
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+
+    expect(api?.selection?.getSnapshot?.()).toMatchObject({
+      ranges: [expect.objectContaining({
+        startRow: 1,
+        endRow: 1,
+        startCol: 2,
+        endCol: 2,
+        anchor: expect.objectContaining({ rowIndex: 1, colIndex: 2, rowId: "r2" }),
+        focus: expect.objectContaining({ rowIndex: 1, colIndex: 2, rowId: "r2" }),
+      })],
+      activeCell: expect.objectContaining({ rowIndex: 1, colIndex: 2, rowId: "r2" }),
+    })
+
+    expect(document.activeElement?.classList.contains("grid-body-viewport")).toBe(true)
+
+    const viewport = wrapper.find('.grid-body-viewport')
+    expect(viewport.exists()).toBe(true)
+    await viewport.trigger("keydown", { key: "ArrowLeft" })
+    await flushRuntimeTasks()
+
+    expect(api?.selection?.getSnapshot?.()).toMatchObject({
+      activeCell: expect.objectContaining({ rowIndex: 1, colIndex: 1, rowId: "r2" }),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("moves columns across pin lanes and updates the target pin declaratively", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: false,
+        columnReorder: true,
+        columnState: {
+          order: ["owner", "region", "amount"],
+          visibility: {
+            owner: true,
+            region: true,
+            amount: true,
+          },
+          widths: {},
+          pins: {
+            owner: "left",
+            region: "none",
+            amount: "right",
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const ownerHeader = wrapper.find('.grid-header-pane--left .grid-cell--header[data-column-key="owner"]')
+    const regionHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="region"]')
+    expect(ownerHeader.exists()).toBe(true)
+    expect(regionHeader.exists()).toBe(true)
+
+    await dragDropElement(ownerHeader.element as HTMLElement, regionHeader.element as HTMLElement, {
+      targetClientX: 8,
+    })
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+
+    const columnSnapshot = resolveVm(wrapper).getColumnSnapshot?.()
+    expect(columnSnapshot).toMatchObject({
+      order: ["owner", "region", "amount"],
+    })
+    expect(columnSnapshot?.columns).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "owner", pin: "none" }),
+      expect.objectContaining({ key: "region", pin: "none" }),
+      expect.objectContaining({ key: "amount", pin: "right" }),
+    ]))
+
+    expect(wrapper.find('.grid-header-pane--left .grid-cell--header[data-column-key="owner"]').exists()).toBe(false)
+    expect(wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="owner"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it("keeps header drag disabled unless columnReorder is enabled declaratively", async () => {
     const wrapper = mount(DataGrid, {
       props: {
