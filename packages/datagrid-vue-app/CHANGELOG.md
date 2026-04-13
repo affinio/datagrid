@@ -6,21 +6,23 @@
 
 - ## Summary
 
-  Added typed facade helpers to the public app package surface, promoted explicit `readFilterCell` / `readSelectionCell` hooks into the declarative `DataGrid` facade, and tightened stage rendering so multi-range selection, copied-range visuals, effective-value filter menus, and committed selection overlays stay aligned across pinned panes and workbook-style flows.
+  Added typed facade helpers to the public app package surface, promoted explicit `readFilterCell` / `readSelectionCell` hooks into the declarative `DataGrid` facade, and tightened stage rendering so multi-range selection, copied-range visuals, effective-value filter menus, and committed selection overlays stay aligned across pinned panes and workbook-style flows. This unreleased patch also expands the native `cellMenu` surface with declarative custom items, nested submenus, and a built-in `Paste special` section.
 
   ## User impact
 
-  Application teams can now author typed `DataGrid` wrappers with `defineDataGridComponent`, `defineDataGridColumns`, typed cell readers, and `useDataGridRef` directly from the package root. Declarative column menus and selection summaries can reflect formula/display values rather than raw source fields, while multi-range selection and copy visuals remain stable in spreadsheet-style scenarios.
+  Application teams can now author typed `DataGrid` wrappers with `defineDataGridComponent`, `defineDataGridColumns`, typed cell readers, and `useDataGridRef` directly from the package root. Declarative column menus and selection summaries can reflect formula/display values rather than raw source fields, while multi-range selection and copy visuals remain stable in spreadsheet-style scenarios. Cell context menus now follow the same native configuration direction as header menus, including per-column custom items, nested submenu trees, and standard `Paste special -> Values only` behavior.
 
   ## Migration
   - No migration required.
   - Optional adoption:
     - use `defineDataGridComponent<TRow>()`, `defineDataGridColumns<TRow>()`, and `useDataGridRef<TRow>()` for row-typed wrappers or render-function usage,
     - pass `readFilterCell` when column-menu value filters should use effective values,
-    - pass `readSelectionCell` when aggregate labels and `getSelectionSummary()` should use displayed/formula values.
+    - pass `readSelectionCell` when aggregate labels and `getSelectionSummary()` should use displayed/formula values,
+    - migrate cell context-menu extension code to declarative `cellMenu.customItems` / `cellMenu.actions` when native menu composition is sufficient,
+    - enable the built-in `pasteSpecial` section when spreadsheet-like values-only paste should stay inside the standard context-menu pipeline.
 
   ## Validation
-  - public facade contract coverage updated for typed facade helpers and effective-value readers
+  - public facade contract coverage updated for typed facade helpers, effective-value readers, declarative cell-menu submenu composition, and native paste-special actions
   - focused stage contracts passed for multi-range overlay segments and selection classes
   - spreadsheet workbook regressions passed for aggregate overlay, Cmd-click additive selection, and full-column header selection
 

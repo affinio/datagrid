@@ -73,14 +73,20 @@ import {
 } from "../overlays/dataGridColumnMenu"
 import {
   resolveDataGridCellMenuActionOptions,
+  resolveDataGridCellMenuCustomItems,
   resolveDataGridCellMenuDisabledItems,
   resolveDataGridCellMenuDisabledReasons,
   resolveDataGridCellMenuItems,
+  resolveDataGridCellMenuLabels,
   resolveDataGridRowIndexMenuActionOptions,
   resolveDataGridRowIndexMenuDisabledItems,
   resolveDataGridRowIndexMenuDisabledReasons,
   resolveDataGridRowIndexMenuItems,
   type DataGridCellMenuActionKey,
+  type DataGridCellMenuCustomItem,
+  type DataGridCellMenuCustomLeafItem,
+  type DataGridCellMenuDisabledReasons,
+  type DataGridCellMenuItemKey,
   type DataGridCellMenuOptions,
   type DataGridRowIndexMenuActionKey,
   type DataGridRowIndexMenuOptions,
@@ -102,6 +108,10 @@ import {
   type DataGridFindReplaceVisualTarget,
 } from "../useDataGridAppFindReplace"
 import type { DataGridHistoryController, DataGridResolvedHistoryOptions } from "../dataGridHistory"
+import type {
+  DataGridStructuralRowActionHandler,
+  DataGridStructuralRowActionId,
+} from "../dataGridStructuralRowActions"
 
 type DataGridMode = "base" | "tree" | "pivot" | "worker"
 
@@ -525,6 +535,7 @@ function resolveAllowedAggregationOps(dataType: string | undefined): readonly Da
 
 const CELL_MENU_ACTION_IDS_BY_ITEM = {
   clipboard: ["cut", "copy", "paste"],
+  pasteSpecial: ["paste-values"],
   edit: ["clear"],
 } satisfies Readonly<Record<string, readonly RendererContextMenuActionId[]>>
 
@@ -538,6 +549,7 @@ const DEFAULT_CONTEXT_MENU_ACTION_LABELS: Readonly<Record<RendererContextMenuAct
   cut: "Cut",
   copy: "Copy",
   paste: "Paste",
+  "paste-values": "Values only",
   clear: "Clear values",
   "insert-row-above": "Insert above",
   "insert-row-below": "Insert below",
@@ -561,12 +573,30 @@ const ROW_INDEX_MENU_SHORTCUT_HINTS: Readonly<Partial<Record<RendererContextMenu
 
 type RendererContextMenuActionId =
   | DataGridContextMenuActionId
+  | "paste-values"
   | "insert-row-above"
   | "insert-row-below"
   | "copy-row"
   | "paste-row"
   | "cut-row"
   | "delete-selected-rows"
+
+type RendererContextMenuEntry = {
+  kind: "action"
+  id: string
+  label: string
+  disabled: boolean
+  title: string | undefined
+  actionId?: RendererContextMenuActionId
+  onSelect?: () => Promise<void> | void
+} | {
+  kind: "submenu"
+  id: string
+  label: string
+  disabled: boolean
+  title: string | undefined
+  entries: readonly RendererContextMenuEntry[]
+}
 
 type RendererRowIndexKeyboardAction = RendererContextMenuActionId | "open-row-menu"
 
@@ -761,6 +791,14 @@ export default defineComponent({
     },
     reportToolbarModules: {
       type: Function as PropType<(modules: readonly DataGridAppToolbarModule[]) => void>,
+      default: () => undefined,
+    },
+    runStructuralRowAction: {
+      type: Function as PropType<DataGridStructuralRowActionHandler<Record<string, unknown>> | undefined>,
+      default: undefined,
+    },
+    registerStructuralRowActionRunner: {
+      type: Function as PropType<((runner: ((action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>) | null) => void) | undefined>,
       default: () => undefined,
     },
     inspectorPanel: {
@@ -2397,6 +2435,8 @@ export default defineComponent({
       return pending.sourceRowIds.includes(String(row.rowId))
     }
 
+    const hasDelegatedStructuralRowAction = (): boolean => typeof props.runStructuralRowAction === "function"
+
     let contextMenuVisible = () => false
     let closeRuntimeContextMenu = (): void => undefined
     let openRuntimeContextMenuFromCurrentCell = (): void => undefined
@@ -2527,6 +2567,14 @@ export default defineComponent({
     )
 
     watch(
+      () => props.registerStructuralRowActionRunner,
+      registerStructuralRowActionRunner => {
+        registerStructuralRowActionRunner?.(runResolvedStructuralRowAction)
+      },
+      { immediate: true },
+    )
+
+    watch(
       () => props.history.shortcuts,
       (shortcutMode, _previous, onCleanup) => {
         if (shortcutMode !== "window" || typeof window === "undefined") {
@@ -2556,6 +2604,7 @@ export default defineComponent({
 
     onBeforeUnmount(() => {
       props.registerHistoryController?.(null)
+      props.registerStructuralRowActionRunner?.(null)
     })
 
     const stageVisibleColumns = computed(() => tableStageProps.value.columns.visibleColumns)
@@ -2746,25 +2795,35 @@ export default defineComponent({
       }, beforeSnapshot)
     }
 
-    runRowIndexContextAction = async (
-      action: RendererRowIndexKeyboardAction,
+    async function runResolvedStructuralRowAction(
+      action: DataGridStructuralRowActionId,
       rowId: string | number,
-    ): Promise<boolean> => {
+    ): Promise<boolean> {
       const normalizedRowId = String(rowId)
-      if (action === "open-row-menu") {
-        return openRuntimeRowIndexContextMenu(normalizedRowId)
-      }
       const placeholderVisualRowIndex = resolvePlaceholderVisualRowIndex(normalizedRowId)
+      const targetRow = placeholderVisualRowIndex == null ? resolveRuntimeRowById(normalizedRowId) : null
+      const selectedRowIds = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedRowId))
+      const delegated = await props.runStructuralRowAction?.({
+        action,
+        rowId,
+        row: targetRow && targetRow.kind !== "group" ? targetRow : null,
+        rowIndex: placeholderVisualRowIndex ?? props.runtime.resolveBodyRowIndexById(normalizedRowId),
+        placeholderVisualRowIndex,
+        selectedRowIds,
+      })
+      if (typeof delegated === "boolean") {
+        return delegated
+      }
+
       if (placeholderVisualRowIndex != null) {
         if (action === "delete-selected-rows") {
-          const rowIds = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedRowId))
-          if (rowIds.length === 0) {
+          if (selectedRowIds.length === 0) {
             return false
           }
           const beforeSnapshot = captureHistorySnapshot()
-          const removed = removeRuntimeRows(rowIds)
+          const removed = removeRuntimeRows(selectedRowIds)
           if (removed) {
-            recordRowMutation(beforeSnapshot, rowIds.length > 1 ? `Delete ${rowIds.length} rows` : "Delete row")
+            recordRowMutation(beforeSnapshot, selectedRowIds.length > 1 ? `Delete ${selectedRowIds.length} rows` : "Delete row")
           }
           return removed
         }
@@ -2790,6 +2849,69 @@ export default defineComponent({
           }
           return inserted
         }
+        return false
+      }
+
+      if (!targetRow || targetRow.kind === "group") {
+        return false
+      }
+
+      if (action === "delete-selected-rows") {
+        if (selectedRowIds.length === 0) {
+          return false
+        }
+        const beforeSnapshot = captureHistorySnapshot()
+        const removed = removeRuntimeRows(selectedRowIds)
+        if (removed) {
+          recordRowMutation(beforeSnapshot, selectedRowIds.length > 1 ? `Delete ${selectedRowIds.length} rows` : "Delete row")
+        }
+        return removed
+      }
+      if (action === "insert-row-above") {
+        if (!canInsertRows()) {
+          return false
+        }
+        const beforeSnapshot = captureHistorySnapshot()
+        const inserted = props.runtime.api.rows.insertDataBefore(
+          rowId,
+          [buildInsertedRowInput(targetRow.data, resolveSourceRowTemplateByRowId(normalizedRowId))],
+        )
+        if (inserted) {
+          recordRowMutation(beforeSnapshot, "Insert row above")
+        }
+        return inserted
+      }
+      if (action === "insert-row-below") {
+        if (!canInsertRows()) {
+          return false
+        }
+        const beforeSnapshot = captureHistorySnapshot()
+        const inserted = props.runtime.api.rows.insertDataAfter(
+          rowId,
+          [buildInsertedRowInput(targetRow.data, resolveSourceRowTemplateByRowId(normalizedRowId))],
+        )
+        if (inserted) {
+          recordRowMutation(beforeSnapshot, "Insert row below")
+        }
+        return inserted
+      }
+
+      return false
+    }
+
+    runRowIndexContextAction = async (
+      action: RendererRowIndexKeyboardAction,
+      rowId: string | number,
+    ): Promise<boolean> => {
+      const normalizedRowId = String(rowId)
+      if (action === "open-row-menu") {
+        return openRuntimeRowIndexContextMenu(normalizedRowId)
+      }
+      if (action === "insert-row-above" || action === "insert-row-below" || action === "delete-selected-rows") {
+        return runResolvedStructuralRowAction(action, rowId)
+      }
+      const placeholderVisualRowIndex = resolvePlaceholderVisualRowIndex(normalizedRowId)
+      if (placeholderVisualRowIndex != null) {
         if (action === "paste-row") {
           if (!canInsertRows()) {
             return false
@@ -2834,35 +2956,6 @@ export default defineComponent({
       const targetRow = resolveRuntimeRowById(normalizedRowId)
       if (!targetRow || targetRow.kind === "group") {
         return false
-      }
-
-      if (action === "insert-row-above") {
-        if (!canInsertRows()) {
-          return false
-        }
-        const beforeSnapshot = captureHistorySnapshot()
-        const inserted = props.runtime.api.rows.insertDataBefore(
-          rowId,
-          [buildInsertedRowInput(targetRow.data, resolveSourceRowTemplateByRowId(normalizedRowId))],
-        )
-        if (inserted) {
-          recordRowMutation(beforeSnapshot, "Insert row above")
-        }
-        return inserted
-      }
-      if (action === "insert-row-below") {
-        if (!canInsertRows()) {
-          return false
-        }
-        const beforeSnapshot = captureHistorySnapshot()
-        const inserted = props.runtime.api.rows.insertDataAfter(
-          rowId,
-          [buildInsertedRowInput(targetRow.data, resolveSourceRowTemplateByRowId(normalizedRowId))],
-        )
-        if (inserted) {
-          recordRowMutation(beforeSnapshot, "Insert row below")
-        }
-        return inserted
       }
       if (action === "copy-row") {
         const rowIds = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedRowId))
@@ -2916,18 +3009,6 @@ export default defineComponent({
         }
         return inserted
       }
-      if (action === "delete-selected-rows") {
-        const rowIds = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedRowId))
-        if (rowIds.length === 0) {
-          return false
-        }
-        const beforeSnapshot = captureHistorySnapshot()
-        const removed = removeRuntimeRows(rowIds)
-        if (removed) {
-          recordRowMutation(beforeSnapshot, rowIds.length > 1 ? `Delete ${rowIds.length} rows` : "Delete row")
-        }
-        return removed
-      }
 
       return false
     }
@@ -2947,15 +3028,140 @@ export default defineComponent({
       closeContextMenu,
     } as unknown as Parameters<typeof useDataGridContextMenuActionRouter>[0])
 
-    const menuActionEntries = computed(() => {
+    const openContextMenuSubmenuIds = ref<readonly string[]>([])
+
+    const isContextMenuSubmenuOpen = (id: string): boolean => openContextMenuSubmenuIds.value.includes(id)
+
+    const closeContextMenuSubmenu = (id: string): void => {
+      openContextMenuSubmenuIds.value = openContextMenuSubmenuIds.value.filter(candidate => (
+        candidate !== id && !candidate.startsWith(`${id}/`)
+      ))
+    }
+
+    const toggleContextMenuSubmenu = (id: string, ancestorIds: readonly string[] = []): void => {
+      if (isContextMenuSubmenuOpen(id)) {
+        closeContextMenuSubmenu(id)
+        return
+      }
+      openContextMenuSubmenuIds.value = Array.from(new Set([...ancestorIds, id]))
+    }
+
+    const resolveCellActionEntry = (
+      item: DataGridCellMenuItemKey,
+      actionId: RendererContextMenuActionId,
+      disabledItems: ReadonlySet<DataGridCellMenuItemKey>,
+      disabledReasons: DataGridCellMenuDisabledReasons,
+      actionOptions: ReturnType<typeof resolveDataGridCellMenuActionOptions>,
+    ): RendererContextMenuEntry | null => {
+      const actionKey = actionId === "paste-values"
+        ? "pasteValues"
+        : actionId as DataGridCellMenuActionKey
+      const option = actionOptions[actionKey]
+      if (option?.hidden) {
+        return null
+      }
+      const disabled = disabledItems.has(item) || option?.disabled === true
+      return {
+        kind: "action",
+        id: actionId,
+        label: option?.label ?? DEFAULT_CONTEXT_MENU_ACTION_LABELS[actionId],
+        disabled,
+        title: option?.disabledReason ?? disabledReasons[item],
+        actionId,
+      }
+    }
+
+    const resolveCellCustomEntry = (
+      item: DataGridCellMenuCustomItem,
+      pathPrefix: string,
+      context: {
+        zone: "cell" | "range"
+        columnKey: string
+        rowId: string | null
+      },
+    ): RendererContextMenuEntry | null => {
+      if (item.hidden === true) {
+        return null
+      }
+      const actionPath = pathPrefix.length > 0 ? `${pathPrefix}/${item.key}` : item.key
+      const actionId = `custom:${actionPath}`
+      const title = item.disabledReason?.trim() || undefined
+      if (item.kind === "submenu") {
+        const entries = item.items.flatMap(child => {
+          const entry = resolveCellCustomEntry(child, actionPath, context)
+          return entry ? [entry] : []
+        })
+        if (entries.length === 0) {
+          return null
+        }
+        return {
+          kind: "submenu",
+          id: actionId,
+          label: item.label,
+          disabled: item.disabled === true,
+          title,
+          entries,
+        }
+      }
+      return {
+        kind: "action",
+        id: actionId,
+        label: item.label,
+        disabled: item.disabled === true,
+        title,
+        onSelect: async () => {
+          if (item.disabled === true) {
+            return
+          }
+          await (item as DataGridCellMenuCustomLeafItem).onSelect?.({
+            zone: context.zone,
+            columnKey: context.columnKey,
+            rowId: context.rowId,
+            closeMenu: closeContextMenu,
+          })
+        },
+      }
+    }
+
+    const resolvePlacedCellMenuGroups = (
+      groups: ReadonlyArray<{
+        itemKey: DataGridCellMenuItemKey
+        entries: readonly RendererContextMenuEntry[]
+      }>,
+      customItems: readonly DataGridCellMenuCustomItem[],
+      context: {
+        zone: "cell" | "range"
+        columnKey: string
+        rowId: string | null
+      },
+    ): RendererContextMenuEntry[][] => {
+      const customGroupsByPlacement = new Map<string, RendererContextMenuEntry[][]>()
+      const pushCustomGroup = (placement: string, entry: RendererContextMenuEntry | null) => {
+        if (!entry) {
+          return
+        }
+        const current = customGroupsByPlacement.get(placement) ?? []
+        current.push([entry])
+        customGroupsByPlacement.set(placement, current)
+      }
+      for (const customItem of customItems) {
+        pushCustomGroup(customItem.placement ?? "end", resolveCellCustomEntry(customItem, "", context))
+      }
+      const placedGroups: RendererContextMenuEntry[][] = [
+        ...(customGroupsByPlacement.get("start") ?? []),
+      ]
+      for (const group of groups) {
+        placedGroups.push(...(customGroupsByPlacement.get(`before:${group.itemKey}`) ?? []))
+        placedGroups.push([...group.entries])
+        placedGroups.push(...(customGroupsByPlacement.get(`after:${group.itemKey}`) ?? []))
+      }
+      placedGroups.push(...(customGroupsByPlacement.get("end") ?? []))
+      return placedGroups.filter(group => group.length > 0)
+    }
+
+    const menuEntryGroups = computed(() => {
       if (!contextMenu.value.visible) {
-        return [] as Array<{
-          id: RendererContextMenuActionId
-          label: string
-          disabled: boolean
-          title: string | undefined
-          separatorBefore: boolean
-        }>
+        return [] as RendererContextMenuEntry[][]
       }
 
       const zone = contextMenu.value.zone as RendererContextMenuZone
@@ -2968,24 +3174,46 @@ export default defineComponent({
         const items = resolveDataGridCellMenuItems(props.cellMenu, columnKey)
         const disabledItems = new Set(resolveDataGridCellMenuDisabledItems(props.cellMenu, columnKey))
         const disabledReasons = resolveDataGridCellMenuDisabledReasons(props.cellMenu, columnKey)
+        const labels = resolveDataGridCellMenuLabels(props.cellMenu, columnKey)
         const actionOptions = resolveDataGridCellMenuActionOptions(props.cellMenu, columnKey)
-        return items.flatMap((item, itemIndex) => {
+        const customItems = resolveDataGridCellMenuCustomItems(props.cellMenu, columnKey)
+        const builtInGroups: Array<{
+          itemKey: DataGridCellMenuItemKey
+          entries: readonly RendererContextMenuEntry[]
+        }> = []
+        for (const item of items) {
           const itemActions = CELL_MENU_ACTION_IDS_BY_ITEM[item] ?? []
-          return itemActions.flatMap(actionId => {
-            const actionKey = actionId as DataGridCellMenuActionKey
-            const option = actionOptions[actionKey]
-            if (option?.hidden) {
-              return []
-            }
-            const disabled = disabledItems.has(item) || option?.disabled === true
-            return [{
-              id: actionId,
-              label: option?.label ?? DEFAULT_CONTEXT_MENU_ACTION_LABELS[actionId],
-              disabled,
-              title: option?.disabledReason ?? disabledReasons[item],
-              separatorBefore: itemIndex > 0 && actionId === itemActions[0],
-            }]
+          const entries: RendererContextMenuEntry[] = itemActions.flatMap(actionId => {
+            const entry = resolveCellActionEntry(item, actionId, disabledItems, disabledReasons, actionOptions)
+            return entry ? [entry] : []
           })
+          if (entries.length === 0) {
+            continue
+          }
+          if (item === "pasteSpecial") {
+            const submenuDisabled = disabledItems.has(item) || entries.every(entry => entry.disabled)
+            builtInGroups.push({
+              itemKey: item,
+              entries: [{
+                kind: "submenu",
+                id: "paste-special-submenu",
+                label: labels.pasteSpecial ?? "Paste special",
+                disabled: submenuDisabled,
+                title: disabledReasons[item] ?? (entries.length === 1 ? entries[0]?.title : undefined),
+                entries,
+              } satisfies RendererContextMenuEntry],
+            })
+            continue
+          }
+          builtInGroups.push({
+            itemKey: item,
+            entries,
+          })
+        }
+        return resolvePlacedCellMenuGroups(builtInGroups, customItems, {
+          zone,
+          columnKey,
+          rowId: contextMenu.value.rowId,
         })
       }
 
@@ -2998,9 +3226,10 @@ export default defineComponent({
         const disabledItems = new Set(resolveDataGridRowIndexMenuDisabledItems(props.rowIndexMenu))
         const disabledReasons = resolveDataGridRowIndexMenuDisabledReasons(props.rowIndexMenu)
         const actionOptions = resolveDataGridRowIndexMenuActionOptions(props.rowIndexMenu)
-        return items.flatMap((item, itemIndex) => {
+        const groups: RendererContextMenuEntry[][] = []
+        for (const item of items) {
           const itemActions = ROW_INDEX_MENU_ACTION_IDS_BY_ITEM[item] ?? []
-          return itemActions.flatMap(actionId => {
+          const entries: RendererContextMenuEntry[] = itemActions.flatMap(actionId => {
             const actionKey = actionId === "insert-row-above"
               ? "insertAbove"
               : actionId === "insert-row-below"
@@ -3016,7 +3245,8 @@ export default defineComponent({
             if (option?.hidden) {
               return []
             }
-            let disabled = disabledItems.has(item) || option?.disabled === true
+            const disabled = disabledItems.has(item) || option?.disabled === true
+            let nextDisabled = disabled
             let title = option?.disabledReason ?? disabledReasons[item]
             if (
               placeholderVisualRowIndex != null
@@ -3025,15 +3255,27 @@ export default defineComponent({
               && actionId !== "insert-row-below"
               && actionId !== "paste-row"
             ) {
-              disabled = true
+              nextDisabled = true
               title = title ?? "Placeholder rows must be materialized before this action is available"
             }
-            if ((actionId === "insert-row-above" || actionId === "insert-row-below" || actionId === "paste-row") && !canInsertRows()) {
-              disabled = true
+            if (
+              (actionId === "insert-row-above" || actionId === "insert-row-below")
+              && !canInsertRows()
+              && !hasDelegatedStructuralRowAction()
+            ) {
+              nextDisabled = true
               title = title ?? "Row insertion is not supported by the current row model"
             }
-            if ((actionId === "cut-row" || actionId === "delete-selected-rows") && !canMutateRows()) {
-              disabled = true
+            if (actionId === "paste-row" && !canInsertRows()) {
+              nextDisabled = true
+              title = title ?? "Row insertion is not supported by the current row model"
+            }
+            if (actionId === "cut-row" && !canMutateRows()) {
+              nextDisabled = true
+              title = title ?? "Row deletion is not supported by the current row model"
+            }
+            if (actionId === "delete-selected-rows" && !canMutateRows() && !hasDelegatedStructuralRowAction()) {
+              nextDisabled = true
               title = title ?? "Row deletion is not supported by the current row model"
             }
             if (actionId === "delete-selected-rows") {
@@ -3041,22 +3283,27 @@ export default defineComponent({
                 resolveSelectedRuntimeRowIds(contextMenu.value.rowId ?? ""),
               )
               if (effectiveRowIds.length === 0) {
-                disabled = true
+                nextDisabled = true
                 title = title ?? "No deletable rows are selected"
               }
             }
             return [{
+              kind: "action",
               id: actionId,
               label: resolveRowIndexMenuLabel(actionId, option?.label),
-              disabled,
+              disabled: nextDisabled,
               title,
-              separatorBefore: itemIndex > 0 && actionId === itemActions[0],
-            }]
+              actionId,
+            } satisfies RendererContextMenuEntry]
           })
-        })
+          if (entries.length > 0) {
+            groups.push(entries)
+          }
+        }
+        return groups
       }
 
-      return []
+      return [] as RendererContextMenuEntry[][]
     })
 
     const handleViewportContextMenu = (event: MouseEvent): void => {
@@ -3089,9 +3336,109 @@ export default defineComponent({
       }
     }
 
+    const handleContextMenuEntrySelect = async (entry: RendererContextMenuEntry): Promise<void> => {
+      if (entry.disabled) {
+        return
+      }
+      if (entry.kind === "submenu") {
+        return
+      }
+      if (entry.actionId) {
+        await handleContextMenuAction(entry.actionId)
+        return
+      }
+      await entry.onSelect?.()
+    }
+
+    const renderContextMenuEntries = (
+      entries: readonly RendererContextMenuEntry[],
+      ancestorIds: readonly string[] = [],
+      depth = 0,
+    ): Array<ReturnType<typeof h>> => {
+      return entries.flatMap(entry => {
+        if (entry.kind === "submenu") {
+          const open = isContextMenuSubmenuOpen(entry.id)
+          const subtree = open
+            ? h("div", {
+              class: "datagrid-context-menu__submenu-panel",
+              role: "group",
+            }, renderContextMenuEntries(entry.entries, [...ancestorIds, entry.id], depth + 1))
+            : null
+          return [
+            h("button", {
+              type: "button",
+              class: [
+                "datagrid-context-menu__item",
+                "datagrid-context-menu__item--submenu",
+              ],
+              "data-datagrid-menu-action": entry.id,
+              "data-datagrid-menu-depth": String(depth),
+              "data-datagrid-menu-open": open ? "true" : undefined,
+              disabled: entry.disabled,
+              title: entry.title,
+              onClick: () => {
+                toggleContextMenuSubmenu(entry.id, ancestorIds)
+              },
+            }, [
+              h("span", entry.label),
+              h("span", {
+                class: "datagrid-context-menu__submenu-arrow",
+                "aria-hidden": "true",
+              }, open ? "v" : ">"),
+            ]),
+            ...(subtree ? [subtree] : []),
+          ]
+        }
+        return [h("button", {
+          type: "button",
+          class: "datagrid-context-menu__item",
+          "data-datagrid-menu-action": entry.id,
+          "data-datagrid-menu-depth": String(depth),
+          disabled: entry.disabled,
+          title: entry.title,
+          onClick: () => {
+            void handleContextMenuEntrySelect(entry)
+          },
+        }, entry.label)]
+      })
+    }
+
+    const renderContextMenu = (): ReturnType<typeof h> | null => {
+      if (!contextMenu.value.visible || menuEntryGroups.value.length === 0) {
+        return null
+      }
+      return h("div", {
+        ref: contextMenuRef,
+        class: "datagrid-context-menu",
+        style: contextMenuStyle.value,
+        role: "menu",
+        tabindex: -1,
+        onKeydown: (event: KeyboardEvent) => {
+          onContextMenuKeyDown(event, {
+            onEscape: () => {
+              focusGridViewport()
+            },
+          })
+        },
+      }, menuEntryGroups.value.flatMap((group, groupIndex) => {
+        const nodes: Array<ReturnType<typeof h>> = []
+        if (groupIndex > 0) {
+          nodes.push(h("div", {
+            class: "datagrid-context-menu__separator",
+            "aria-hidden": "true",
+          }))
+        }
+        nodes.push(...renderContextMenuEntries(group))
+        return nodes
+      }))
+    }
+
     watch(
       () => contextMenu.value.visible,
       (visible, _previous, onCleanup) => {
+        if (!visible) {
+          openContextMenuSubmenuIds.value = []
+        }
         if (!visible || typeof window === "undefined") {
           return
         }
@@ -3357,41 +3704,7 @@ export default defineComponent({
                   stageContext: tableStageContext,
                   onViewportContextMenu: handleViewportContextMenu,
                 }),
-              contextMenu.value.visible && menuActionEntries.value.length > 0
-                ? h("div", {
-                  ref: contextMenuRef,
-                  class: "datagrid-context-menu",
-                  style: contextMenuStyle.value,
-                  role: "menu",
-                  tabindex: -1,
-                  onKeydown: (event: KeyboardEvent) => {
-                    onContextMenuKeyDown(event, {
-                      onEscape: () => {
-                        focusGridViewport()
-                      },
-                    })
-                  },
-                }, menuActionEntries.value.flatMap(entry => {
-                  const nodes: Array<ReturnType<typeof h>> = []
-                  if (entry.separatorBefore) {
-                    nodes.push(h("div", {
-                      class: "datagrid-context-menu__separator",
-                      "aria-hidden": "true",
-                    }))
-                  }
-                  nodes.push(h("button", {
-                    type: "button",
-                    class: "datagrid-context-menu__item",
-                    "data-datagrid-menu-action": entry.id,
-                    disabled: entry.disabled,
-                    title: entry.title,
-                    onClick: () => {
-                      void handleContextMenuAction(entry.id)
-                    },
-                  }, entry.label))
-                  return nodes
-                }))
-                : null,
+              renderContextMenu(),
             ]),
           ])
           : h("div", {
@@ -3416,41 +3729,7 @@ export default defineComponent({
                 stageContext: tableStageContext,
                 onViewportContextMenu: handleViewportContextMenu,
               }),
-            contextMenu.value.visible && menuActionEntries.value.length > 0
-              ? h("div", {
-                ref: contextMenuRef,
-                class: "datagrid-context-menu",
-                style: contextMenuStyle.value,
-                role: "menu",
-                tabindex: -1,
-                onKeydown: (event: KeyboardEvent) => {
-                  onContextMenuKeyDown(event, {
-                    onEscape: () => {
-                      focusGridViewport()
-                    },
-                  })
-                },
-              }, menuActionEntries.value.flatMap(entry => {
-                const nodes: Array<ReturnType<typeof h>> = []
-                if (entry.separatorBefore) {
-                  nodes.push(h("div", {
-                    class: "datagrid-context-menu__separator",
-                    "aria-hidden": "true",
-                  }))
-                }
-                nodes.push(h("button", {
-                  type: "button",
-                  class: "datagrid-context-menu__item",
-                  "data-datagrid-menu-action": entry.id,
-                  disabled: entry.disabled,
-                  title: entry.title,
-                  onClick: () => {
-                    void handleContextMenuAction(entry.id)
-                  },
-                }, entry.label))
-                return nodes
-              }))
-              : null,
+            renderContextMenu(),
           ]),
         props.inspectorPanel
           ? h("aside", {

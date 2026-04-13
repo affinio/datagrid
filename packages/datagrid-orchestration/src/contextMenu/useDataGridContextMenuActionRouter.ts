@@ -3,6 +3,10 @@ import type {
   DataGridContextMenuZone,
 } from "../internal/dataGridContextMenuContracts"
 
+interface DataGridContextMenuPasteOptions {
+  mode?: "default" | "values"
+}
+
 export interface DataGridContextMenuActionRouterState {
   zone: DataGridContextMenuZone
   columnKey: string | null
@@ -14,7 +18,7 @@ export interface UseDataGridContextMenuActionRouterOptions {
   runHeaderContextAction: (action: DataGridContextMenuActionId, columnKey: string) => boolean
   runRowIndexContextAction: (action: DataGridContextMenuActionId, rowId: string) => Promise<boolean>
   copySelection: (trigger: "context-menu") => Promise<boolean>
-  pasteSelection: (trigger: "context-menu") => Promise<boolean>
+  pasteSelection: (trigger: "context-menu", options?: DataGridContextMenuPasteOptions) => Promise<boolean>
   cutSelection: (trigger: "context-menu") => Promise<boolean>
   clearCurrentSelection: (trigger: "context-menu") => Promise<boolean>
   closeContextMenu: () => void
@@ -50,6 +54,9 @@ export function useDataGridContextMenuActionRouter(
     }
     if (action === "paste") {
       return options.pasteSelection("context-menu")
+    }
+    if (action === "paste-values") {
+      return options.pasteSelection("context-menu", { mode: "values" })
     }
     if (action === "cut") {
       return options.cutSelection("context-menu")

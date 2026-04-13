@@ -1083,6 +1083,7 @@ const formulaReferenceHandleMetrics = ref<FormulaReferenceHandleMetrics | null>(
 const formulaReferenceDragState = ref<FormulaReferenceDragState | null>(null)
 const hoveredFormulaReferenceKey = ref<string | null>(null)
 const pendingWorkbookHistoryCommitCount = ref(0)
+const lastClipboardPasteSpecialMatrixBuilder = ref<((range: DataGridCopyRange, mode: "values") => string[][]) | null>(null)
 let pendingWorkbookHistoryTail: Promise<void> = Promise.resolve()
 let pendingHoveredFormulaReferencePreviewTimer: number | null = null
 let activeHoveredFormulaReferencePreview:
@@ -1953,6 +1954,7 @@ const {
   readClipboardCell: (row, columnKey) => readSpreadsheetClipboardCell(row, columnKey),
   applyClipboardEdits: applySpreadsheetGridEdits,
   buildFillMatrixFromRange: buildSpreadsheetFillMatrixFromRange,
+  buildPasteSpecialMatrixFromRange: buildSpreadsheetPasteSpecialMatrixFromRange,
   applyRangeMove: applySpreadsheetRangeMove,
   history: {
     captureSnapshot: () => workbookHistory.captureSnapshot(),
@@ -2136,6 +2138,29 @@ function readSpreadsheetClipboardCell(
   row: DataGridRowNode<SpreadsheetGridRow>,
   columnKey: string,
 ): string {
+  const clipboardRows = [...gridRows.value]
+  const clipboardColumnKeys = visibleColumns.value.map(column => column.key)
+  const clipboardCellsByKey = activeSheetView.value.cellsByKey
+  lastClipboardPasteSpecialMatrixBuilder.value = (range, mode) => {
+    if (mode !== "values") {
+      return buildSpreadsheetFillMatrixFromRange(range)
+    }
+    const matrix: string[][] = []
+    for (let visualRowIndex = range.startRow; visualRowIndex <= range.endRow; visualRowIndex += 1) {
+      const snapshotRow = clipboardRows[visualRowIndex]
+      const rowValues: string[] = []
+      for (let columnIndex = range.startColumn; columnIndex <= range.endColumn; columnIndex += 1) {
+        const sourceColumnKey = clipboardColumnKeys[columnIndex]
+        const sourceRowIndex = typeof snapshotRow?.__rowIndex === "number" ? snapshotRow.__rowIndex : null
+        const cell = sourceColumnKey != null && sourceRowIndex != null
+          ? clipboardCellsByKey.get(makeLocalCellKey(sourceRowIndex, sourceColumnKey)) ?? null
+          : null
+        rowValues.push(cell ? resolveCellDisplayText(cell) : "")
+      }
+      matrix.push(rowValues)
+    }
+    return matrix
+  }
   const rowData = row.kind === "group" ? null : (row.data as SpreadsheetGridRow | undefined)
   const rowIndex = typeof rowData?.__rowIndex === "number" ? rowData.__rowIndex : null
   if (rowIndex == null) {
@@ -2190,6 +2215,30 @@ function buildSpreadsheetFillMatrixFromRange(range: DataGridCopyRange): string[]
       const columnKey = resolveSpreadsheetColumnKeyFromStageIndex(columnIndex)
       const cell = columnKey ? resolveSpreadsheetCellSnapshotByVisualCoord(visualRowIndex, columnKey) : null
       rowValues.push(cell?.rawInput ?? "")
+    }
+    matrix.push(rowValues)
+  }
+  return matrix
+}
+
+function buildSpreadsheetPasteSpecialMatrixFromRange(
+  range: DataGridCopyRange,
+  mode: "values",
+): string[][] {
+  const capturedBuilder = lastClipboardPasteSpecialMatrixBuilder.value
+  if (capturedBuilder) {
+    return capturedBuilder(range, mode)
+  }
+  if (mode !== "values") {
+    return buildSpreadsheetFillMatrixFromRange(range)
+  }
+  const matrix: string[][] = []
+  for (let visualRowIndex = range.startRow; visualRowIndex <= range.endRow; visualRowIndex += 1) {
+    const rowValues: string[] = []
+    for (let columnIndex = range.startColumn; columnIndex <= range.endColumn; columnIndex += 1) {
+      const columnKey = resolveSpreadsheetColumnKeyFromStageIndex(columnIndex)
+      const cell = columnKey ? resolveSpreadsheetCellSnapshotByVisualCoord(visualRowIndex, columnKey) : null
+      rowValues.push(cell ? resolveCellDisplayText(cell) : "")
     }
     matrix.push(rowValues)
   }

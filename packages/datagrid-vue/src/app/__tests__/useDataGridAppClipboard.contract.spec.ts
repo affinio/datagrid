@@ -11,6 +11,12 @@ type DemoRow = {
 
 function createClipboardHarness(options: {
   readClipboardCell?: (row: { data: DemoRow }, columnKey: string) => string
+  buildPasteSpecialMatrixFromRange?: (range: {
+    startRow: number
+    endRow: number
+    startColumn: number
+    endColumn: number
+  }, mode: "values") => string[][]
   isCellEditable?: (row: { data: DemoRow; rowId: string }, rowIndex: number, columnKey: string, columnIndex: number) => boolean
   resolveSelectionRanges?: () => ReadonlyArray<{
     startRow: number
@@ -70,6 +76,7 @@ function createClipboardHarness(options: {
     recordEditTransaction: () => undefined,
     readCell: (row, columnKey) => String((row.data as DemoRow)[columnKey as keyof DemoRow] ?? ""),
     readClipboardCell: options.readClipboardCell,
+    buildPasteSpecialMatrixFromRange: options.buildPasteSpecialMatrixFromRange,
     isCellEditable: (row, rowIndex, columnKey, columnIndex) => {
       return options.isCellEditable?.(
         { data: row.data as DemoRow, rowId: String(row.rowId) },
@@ -323,6 +330,44 @@ describe("useDataGridAppClipboard contract", () => {
       expect(writeText).toHaveBeenCalledWith(
         "=[price]@row\t=SUM([qty]@row, [price]@row)\n=[price]@row\t=SUM([qty]@row, [price]@row)",
       )
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
+
+  it("uses the internal paste-special matrix when pasting values from a copied range", async () => {
+    const { clipboard, currentCell, rows } = createClipboardHarness({
+      readClipboardCell: (_row, columnKey) => columnKey === "a" ? "=A()" : "=B()",
+      buildPasteSpecialMatrixFromRange: (_range, mode) => {
+        expect(mode).toBe("values")
+        return [["11", "22"], ["33", "44"]]
+      },
+    })
+    const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)
+    const readText = vi.fn<() => Promise<string>>().mockResolvedValue("=A()\t=B()")
+    const originalClipboard = navigator.clipboard
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+        readText,
+      },
+    })
+
+    try {
+      await clipboard.copySelectedCells("keyboard")
+
+      currentCell.value = { rowIndex: 1, columnIndex: 1 }
+      const applied = await clipboard.pasteSelectedCells("keyboard", { mode: "values" })
+
+      expect(applied).toBe(true)
+      expect(readText).not.toHaveBeenCalled()
+      expect(rows.value[1]).toMatchObject({ b: "11", c: "22" })
+      expect(rows.value[2]).toMatchObject({ b: "33", c: "44" })
     } finally {
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,

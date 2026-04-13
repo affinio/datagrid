@@ -6,19 +6,21 @@
 
 - ## Summary
 
-  Refined pointer gesture policy so Ctrl/Cmd can drive additive selection while range-move stays on `Alt`, and forwarded additive intent through the shared cell pointer-down router.
+  Refined pointer gesture policy so Ctrl/Cmd can drive additive selection while range-move stays on `Alt`, and forwarded additive intent through the shared cell pointer-down router. The unreleased context-menu contracts now also expose a dedicated values-only paste action for downstream `Paste special` flows.
 
   ## User impact
 
-  Hosts building spreadsheet-like interactions on top of orchestration primitives now get the expected Ctrl/Cmd multi-select behavior without accidental range-move activation. Pointer-down routing preserves additive intent early enough for downstream selection controllers to keep multiple committed ranges.
+  Hosts building spreadsheet-like interactions on top of orchestration primitives now get the expected Ctrl/Cmd multi-select behavior without accidental range-move activation. Pointer-down routing preserves additive intent early enough for downstream selection controllers to keep multiple committed ranges, and context-menu routers can distinguish ordinary paste from values-only paste without inventing extra ad-hoc action channels.
 
   ## Migration
   - No migration required.
   - If local gesture docs or wrappers described Ctrl/Meta as range-move modifiers, update them to `Alt`.
+  - If you match context-menu action ids explicitly, include `paste-values` alongside the existing cell clipboard actions.
 
   ## Validation
   - pointer modifier policy contract passed
   - cell pointer-down router contract passed for additive Ctrl/Cmd forwarding
+  - context-menu action router contract passed for values-only paste dispatch
 
 ## 0.2.0
 

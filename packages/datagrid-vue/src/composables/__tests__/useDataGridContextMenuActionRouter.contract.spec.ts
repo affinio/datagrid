@@ -21,11 +21,13 @@ describe("useDataGridContextMenuActionRouter contract", () => {
 
     await expect(router.runContextMenuAction("copy")).resolves.toBe(true)
     await expect(router.runContextMenuAction("paste")).resolves.toBe(true)
+    await expect(router.runContextMenuAction("paste-values")).resolves.toBe(true)
     await expect(router.runContextMenuAction("cut")).resolves.toBe(true)
     await expect(router.runContextMenuAction("clear")).resolves.toBe(true)
 
     expect(copySelection).toHaveBeenCalledWith("context-menu")
     expect(pasteSelection).toHaveBeenCalledWith("context-menu")
+    expect(pasteSelection).toHaveBeenCalledWith("context-menu", { mode: "values" })
     expect(cutSelection).toHaveBeenCalledWith("context-menu")
     expect(clearCurrentSelection).toHaveBeenCalledWith("context-menu")
   })

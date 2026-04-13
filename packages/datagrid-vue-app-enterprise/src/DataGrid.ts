@@ -413,6 +413,10 @@ export default defineComponent({
       getColumnState: () => (dataGridRef.value as { getColumnState?: () => unknown } | null)?.getColumnState?.() ?? null,
       getColumnSnapshot: () => (dataGridRef.value as { getColumnSnapshot?: () => unknown } | null)?.getColumnSnapshot?.() ?? null,
       getSelectionAggregatesLabel: () => (dataGridRef.value as { getSelectionAggregatesLabel?: () => unknown } | null)?.getSelectionAggregatesLabel?.() ?? null,
+      runStructuralRowAction: (...args: unknown[]) => (
+        (dataGridRef.value as { runStructuralRowAction?: (...values: unknown[]) => unknown } | null)?.runStructuralRowAction?.(...args)
+        ?? Promise.resolve(false)
+      ),
       getSelectionSummary: () => (dataGridRef.value as { getSelectionSummary?: () => unknown } | null)?.getSelectionSummary?.() ?? null,
       getView: () => (dataGridRef.value as { getView?: () => unknown } | null)?.getView?.() ?? null,
       setView: (...args: unknown[]) => (dataGridRef.value as { setView?: (...values: unknown[]) => unknown } | null)?.setView?.(...args) ?? null,

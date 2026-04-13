@@ -1784,6 +1784,202 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("supports declarative custom cellMenu items with nested submenus", async () => {
+    const onInspect = vi.fn()
+    const onDuplicate = vi.fn()
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        cellMenu: {
+          items: ["clipboard", "edit"],
+          customItems: [
+            {
+              key: "organize",
+              label: "Organize",
+              placement: "after:clipboard",
+              kind: "submenu",
+              items: [
+                {
+                  key: "duplicate",
+                  label: "Duplicate cell",
+                  onSelect: onDuplicate,
+                },
+              ],
+            },
+          ],
+          columns: {
+            owner: {
+              customItems: [
+                {
+                  key: "inspect",
+                  label: "Inspect cell",
+                  placement: "start",
+                  onSelect: onInspect,
+                },
+              ],
+            },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const ownerCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-id="r1"][data-column-key="owner"]')
+    expect(ownerCell.exists()).toBe(true)
+
+    await ownerCell.trigger("contextmenu", { button: 2, clientX: 120, clientY: 48 })
+    await flushRuntimeTasks()
+
+    const inspect = queryContextMenuAction("custom:inspect")
+    const copy = queryContextMenuAction("copy")
+    const organize = queryContextMenuAction("custom:organize")
+
+    expect(inspect?.textContent).toContain("Inspect cell")
+    expect(organize?.textContent).toContain("Organize")
+    expect(copy).toBeTruthy()
+    expect(Boolean(inspect?.compareDocumentPosition(copy as Node) && (inspect!.compareDocumentPosition(copy as Node) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
+
+    inspect?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(onInspect).toHaveBeenCalledWith(expect.objectContaining({
+      zone: "cell",
+      columnKey: "owner",
+      rowId: "r1",
+      closeMenu: expect.any(Function),
+    }))
+
+    await ownerCell.trigger("contextmenu", { button: 2, clientX: 120, clientY: 48 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("custom:organize")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const duplicate = queryContextMenuAction("custom:organize/duplicate")
+    expect(duplicate?.textContent).toContain("Duplicate cell")
+
+    duplicate?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(onDuplicate).toHaveBeenCalledWith(expect.objectContaining({
+      zone: "cell",
+      columnKey: "owner",
+      rowId: "r1",
+      closeMenu: expect.any(Function),
+    }))
+
+    wrapper.unmount()
+  })
+
+  it("supports Paste special values from the native cellMenu", async () => {
+    const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)
+    const readText = vi.fn<() => Promise<string>>().mockResolvedValue("clipboard-fallback")
+    const originalClipboard = navigator.clipboard
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+        readText,
+      },
+    })
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        cellMenu: {
+          items: ["clipboard", "pasteSpecial", "edit"],
+          actions: {
+            pasteValues: { label: "Paste values only" },
+          },
+        },
+      },
+      attachTo: document.body,
+    })
+
+    try {
+      await flushRuntimeTasks()
+
+      const api = resolveVm(wrapper).getApi?.() as {
+        selection?: {
+          setSnapshot?: (snapshot: unknown) => void
+        }
+        rows: {
+          get: (rowIndex: number) => { data?: { owner?: string; region?: string } } | null
+        }
+      } | null
+
+      api?.selection?.setSnapshot?.({
+        ranges: [{
+          startRow: 0,
+          endRow: 0,
+          startCol: 0,
+          endCol: 0,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          startRowId: "r1",
+          endRowId: "r1",
+        }],
+        activeRangeIndex: 0,
+        activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      })
+      await flushRuntimeTasks()
+
+      const sourceCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-id="r1"][data-column-key="owner"]')
+      const targetCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-id="r2"][data-column-key="region"]')
+      expect(sourceCell.exists()).toBe(true)
+      expect(targetCell.exists()).toBe(true)
+
+      await sourceCell.trigger("contextmenu", { button: 2, clientX: 120, clientY: 48 })
+      await flushRuntimeTasks()
+
+      queryContextMenuAction("copy")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      await flushRuntimeTasks()
+
+      api?.selection?.setSnapshot?.({
+        ranges: [{
+          startRow: 1,
+          endRow: 1,
+          startCol: 1,
+          endCol: 1,
+          anchor: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+          focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+          startRowId: "r2",
+          endRowId: "r2",
+        }],
+        activeRangeIndex: 0,
+        activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+      })
+      await flushRuntimeTasks()
+
+      await targetCell.trigger("contextmenu", { button: 2, clientX: 160, clientY: 84 })
+      await flushRuntimeTasks()
+
+      expect(queryContextMenuAction("paste-special-submenu")?.textContent).toContain("Paste special")
+
+      queryContextMenuAction("paste-special-submenu")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      await flushRuntimeTasks()
+
+      expect(queryContextMenuAction("paste-values")?.textContent).toContain("Paste values only")
+
+      queryContextMenuAction("paste-values")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      await flushRuntimeTasks()
+
+      expect(readText).not.toHaveBeenCalled()
+      expect(api?.rows.get(1)?.data?.region).toBe("NOC")
+    } finally {
+      wrapper.unmount()
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
+
   it("opens declarative rowIndexMenu and inserts a row below the targeted row", async () => {
     const wrapper = mount(DataGrid, {
       props: {
@@ -1814,6 +2010,41 @@ describe("DataGrid app facade contract", () => {
 
     expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount + 1)
     expect(document.activeElement?.classList.contains("grid-body-viewport")).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it("routes row-index structural inserts through runStructuralRowAction before falling back to raw row mutations", async () => {
+    const runStructuralRowAction = vi.fn(async () => true)
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+        runStructuralRowAction,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const beforeRowCount = resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    expect(rowIndexCell.exists()).toBe(true)
+
+    await rowIndexCell.trigger("contextmenu", { button: 2, clientX: 96, clientY: 42 })
+    await flushRuntimeTasks()
+
+    queryContextMenuAction("insert-row-below")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(runStructuralRowAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: "insert-row-below",
+      rowId: "r1",
+      rowIndex: 0,
+      placeholderVisualRowIndex: null,
+    }))
+    expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount)
 
     wrapper.unmount()
   })
@@ -3690,6 +3921,35 @@ describe("DataGrid app facade contract", () => {
         }),
       }),
     })
+
+    wrapper.unmount()
+  })
+
+  it("exposes runStructuralRowAction through useDataGridRef", async () => {
+    const gridRef = useDataGridRef<DemoRow>()
+    const runStructuralRowAction = vi.fn(async () => true)
+
+    const wrapper = mount(defineComponent({
+      setup() {
+        return () => h(DataGrid, {
+          ref: gridRef,
+          rows: BASE_ROWS,
+          columns: COLUMNS,
+          runStructuralRowAction,
+        })
+      },
+    }))
+
+    await flushRuntimeTasks()
+
+    expect(gridRef.value).not.toBeNull()
+    await expect(gridRef.value!.runStructuralRowAction("insert-row-above", "r2")).resolves.toBe(true)
+    expect(runStructuralRowAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: "insert-row-above",
+      rowId: "r2",
+      rowIndex: 1,
+      placeholderVisualRowIndex: null,
+    }))
 
     wrapper.unmount()
   })

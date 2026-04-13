@@ -41,6 +41,11 @@ import {
   useDataGridAppRowSelection,
   useDataGridAppSelection,
 } from "@affino/datagrid-vue/app"
+import {
+  defineDataGridStructuralRowActionHandler,
+  type DataGridStructuralRowActionHandler,
+  type DataGridStructuralRowActionId,
+} from "./dataGridStructuralRowActions"
 import type { DataGridBivariantCallback } from "./types/bivariance"
 import DataGridDefaultRenderer from "./host/DataGridDefaultRenderer"
 import type { DataGridAppToolbarModule } from "./host/DataGridModuleHost"
@@ -170,6 +175,8 @@ export function defineDataGridSelectionCellReader<TRow = unknown>() {
 export function defineDataGridFilterCellReader<TRow = unknown>() {
   return <TReader extends DataGridFilterCellReader<TRow>>(reader: TReader): TReader => reader
 }
+
+export { defineDataGridStructuralRowActionHandler }
 
 type DataGridBodyAwareRuntime = {
   api: UseDataGridRuntimeResult<Record<string, unknown>>["api"]
@@ -477,6 +484,10 @@ const dataGridProps = {
     type: [Boolean, Object] as PropType<DataGridRowIndexMenuProp | undefined>,
     default: undefined,
   },
+  runStructuralRowAction: {
+    type: Function as PropType<DataGridStructuralRowActionHandler<Record<string, unknown>> | undefined>,
+    default: undefined,
+  },
   columnLayout: {
     type: [Boolean, Object] as PropType<DataGridColumnLayoutProp | undefined>,
     default: undefined,
@@ -693,6 +704,7 @@ export interface DataGridExposed<TRow = unknown> {
   getHistory: () => DataGridHistoryController
   getApi: () => DataGridApi<TRow> | null
   getSelectionAggregatesLabel: () => string
+  runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>
   getState: () => DataGridUnifiedState<TRow> | null
   getSavedView: () => DataGridSavedViewSnapshot<TRow & Record<string, unknown>> | null
   migrateSavedView: (
@@ -732,6 +744,7 @@ const DataGridRuntimeComponent = defineComponent({
     const dataGridRef = ref<LowLevelGridExpose | null>(null)
     const disabledHistoryController = createDisabledDataGridHistoryController()
     const registeredHistoryController = ref<DataGridHistoryController | null>(null)
+    const registeredStructuralRowActionRunner = ref<((action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>) | null>(null)
     const resolvedToolbarModules = ref<readonly DataGridAppToolbarModule[]>([])
     let queuedToolbarModules: readonly DataGridAppToolbarModule[] | null = null
     let toolbarModulesEmitScheduled = false
@@ -1039,6 +1052,12 @@ const DataGridRuntimeComponent = defineComponent({
       registeredHistoryController.value = controller
     }
 
+    const registerStructuralRowActionRunner = (
+      runner: ((action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>) | null,
+    ): void => {
+      registeredStructuralRowActionRunner.value = runner
+    }
+
     const reportToolbarModules = (modules: readonly DataGridAppToolbarModule[]): void => {
       if (toolbarModulesEqual(resolvedToolbarModules.value, modules)) {
         return
@@ -1115,6 +1134,7 @@ const DataGridRuntimeComponent = defineComponent({
 
     onBeforeUnmount(() => {
       controlledState.dispose()
+      registerStructuralRowActionRunner(null)
     })
 
     expose({
@@ -1130,6 +1150,9 @@ const DataGridRuntimeComponent = defineComponent({
       getColumnState: () => controlledState.getColumnState(),
       getColumnSnapshot: () => dataGridRef.value?.api.columns.getSnapshot() ?? null,
       getSelectionAggregatesLabel: () => selectionAggregatesLabel.value,
+      runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => (
+        registeredStructuralRowActionRunner.value?.(action, rowId) ?? Promise.resolve(false)
+      ),
       getSelectionSummary: () => {
         const summarize = dataGridRef.value?.api.selection.summarize
         if (!summarize) {
@@ -1217,8 +1240,10 @@ const DataGridRuntimeComponent = defineComponent({
         history: resolvedHistory.value,
         chrome: resolvedChrome.value,
         registerHistoryController,
+        registerStructuralRowActionRunner,
         reportToolbarModules,
         toolbarModules: props.toolbarModules,
+        runStructuralRowAction: props.runStructuralRowAction,
       }
       return h(
         DataGridRuntimeHost,
@@ -1286,11 +1311,11 @@ export function useDataGridRef<TRow = unknown>() {
 }
 
 export function defineDataGridComponent<TRow = unknown>() {
-  return DataGridRuntimeComponent as DataGridComponentFor<TRow>
+  return DataGridRuntimeComponent as unknown as DataGridComponentFor<TRow>
 }
 
 export type DataGridComponent = DataGridRuntimeStatics & {
   new <TRow = unknown>(): DataGridComponentInstance<TRow>
 }
 
-export default DataGridRuntimeComponent as DataGridComponent
+export default DataGridRuntimeComponent as unknown as DataGridComponent

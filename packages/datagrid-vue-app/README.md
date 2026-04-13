@@ -718,6 +718,90 @@ Supported action keys for `actions` are:
 - `pinMenu`, `pinLeft`, `pinRight`, `unpin`
 - `clearFilter`, `addCurrentSelectionToFilter`, `selectAllValues`, `clearAllValues`, `applyFilter`, `cancelFilter`
 
+## Declarative Cell Menu
+
+`cell-menu` exposes the same native configuration direction as the header menu, so apps can tune the built-in cell context menu without replacing the renderer.
+
+```vue
+<script setup lang="ts">
+import { DataGrid, type DataGridCellMenuProp } from "@affino/datagrid-vue-app"
+
+const cellMenu: DataGridCellMenuProp = {
+  items: ["clipboard", "pasteSpecial", "edit"],
+  labels: {
+    pasteSpecial: "Paste special",
+  },
+  actions: {
+    copy: { label: "Copy value" },
+    pasteValues: { label: "Values only" },
+  },
+  customItems: [
+    {
+      key: "organize",
+      label: "Organize",
+      placement: "after:pasteSpecial",
+      kind: "submenu",
+      items: [
+        {
+          key: "duplicate",
+          label: "Duplicate cell",
+          onSelect: ({ columnKey, rowId }) => {
+            console.log("Duplicate", columnKey, rowId)
+          },
+        },
+      ],
+    },
+  ],
+  columns: {
+    owner: {
+      customItems: [
+        {
+          key: "inspect",
+          label: "Inspect cell",
+          placement: "start",
+          onSelect: ({ zone, columnKey, rowId, closeMenu }) => {
+            console.log(zone, columnKey, rowId)
+            closeMenu()
+          },
+        },
+      ],
+    },
+  },
+}
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :cell-menu="cellMenu"
+  />
+</template>
+```
+
+Supported built-in cell-menu sections:
+
+- `clipboard`: `cut`, `copy`, `paste`
+- `pasteSpecial`: `pasteValues`
+- `edit`: `clear`
+
+Supported cell-menu controls:
+
+- `items`: choose and order built-in sections (`clipboard`, `pasteSpecial`, `edit`)
+- `disabled`, `disabledReasons`, `labels`
+- `actions`: override built-in action `label`, `hidden`, `disabled`, and `disabledReason`
+- `customItems`: add custom items or nested submenus around the built-in sections
+- `columns[columnKey]`: per-column `items`, `hide`, `disabled`, `disabledReasons`, `labels`, `actions`, and `customItems`
+
+Custom cell-menu items support:
+
+- `key`, `kind`, `label`, `hidden`, `disabled`, `disabledReason`
+- `placement`: `start`, `end`, `before:clipboard`, `after:clipboard`, `before:pasteSpecial`, `after:pasteSpecial`, `before:edit`, `after:edit`
+- `onSelect(context)`: leaf callbacks receive `{ zone, columnKey, rowId, closeMenu }`
+- `items`: nested submenu entries when `kind: "submenu"`
+
+`Paste special -> Values only` uses the same native clipboard pipeline as ordinary paste. When the source copy came from the grid itself, the app runtime can preserve internal semantics instead of degrading to a plain system-clipboard round trip.
+
 Disabled sections and actions can expose a reason string so users see why a menu affordance is unavailable.
 - `trigger: "button"` disables the standard header `contextmenu` open path while keeping the menu button.
 - `trigger: "contextmenu"` keeps right-click open on the header cell and hides the button.
@@ -1751,6 +1835,9 @@ Saved views are a thin app-level envelope around unified state plus `viewMode`, 
 - `insertRowsAt(index, rows)`
 - `insertRowBefore(rowId, rows)`
 - `insertRowAfter(rowId, rows)`
+- `runStructuralRowAction(action, rowId)`
+
+Use `runStructuralRowAction(...)` when row inserts or deletes must be delegated to a higher-level model such as a spreadsheet sheet/workbook that owns structural rewrite semantics. The built-in row-index menu and keyboard shortcuts route through the same entry point before falling back to generic row mutations.
 
 ### Selection
 

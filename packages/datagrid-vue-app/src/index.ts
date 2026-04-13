@@ -7,6 +7,7 @@ export {
   defineDataGridComponent,
   defineDataGridFilterCellReader,
   defineDataGridSelectionCellReader,
+  defineDataGridStructuralRowActionHandler,
   useDataGridRef,
 } from "./DataGrid"
 export type {
@@ -18,6 +19,11 @@ export type {
   DataGridProps,
   DataGridSelectionCellReader,
 } from "./DataGrid"
+export type {
+  DataGridStructuralRowActionContext,
+  DataGridStructuralRowActionHandler,
+  DataGridStructuralRowActionId,
+} from "./dataGridStructuralRowActions"
 export type {
   DataGridAppClientRowModelOptions,
   DataGridAppCellRenderer,
@@ -134,6 +140,11 @@ export type {
   DataGridCellMenuActionOption,
   DataGridCellMenuActionOptions,
   DataGridCellMenuColumnOptions,
+  DataGridCellMenuCustomItem,
+  DataGridCellMenuCustomItemContext,
+  DataGridCellMenuCustomItemPlacement,
+  DataGridCellMenuCustomLeafItem,
+  DataGridCellMenuCustomSubmenuItem,
   DataGridCellMenuDisabledReasons,
   DataGridCellMenuItemKey,
   DataGridCellMenuItemLabels,

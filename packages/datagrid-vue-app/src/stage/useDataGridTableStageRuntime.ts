@@ -7,6 +7,7 @@ import type {
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import {
   createDataGridAppRowHeightMetrics,
+  type DataGridAppPasteOptions,
   useDataGridAppActiveCellViewport,
   useDataGridAppCellSelection,
   useDataGridAppClipboard,
@@ -145,6 +146,10 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
     options?: { recordHistory?: boolean },
   ) => number
   buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
+  buildPasteSpecialMatrixFromRange?: (
+    range: DataGridCopyRange,
+    mode: "values",
+  ) => string[][]
   applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean
   isCellEditable?: DataGridCellEditablePredicate<TRow>
   history?: DataGridTableStageHistoryAdapter
@@ -178,7 +183,10 @@ export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, 
   historyController: DataGridHistoryController
   syncViewportFromDom: () => void
   copySelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
-  pasteSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+  pasteSelectedCells: (
+    trigger?: "keyboard" | "context-menu",
+    options?: DataGridAppPasteOptions,
+  ) => Promise<boolean>
   cutSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   clearSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   captureHistorySnapshot: () => unknown
@@ -547,6 +555,7 @@ export function useDataGridTableStageRuntime<
     syncViewport: () => syncViewportFromDom(),
     applyClipboardEdits: options.applyClipboardEdits,
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,
+    buildPasteSpecialMatrixFromRange: options.buildPasteSpecialMatrixFromRange,
     ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "paste"),
   })
 

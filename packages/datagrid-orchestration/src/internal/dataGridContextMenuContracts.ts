@@ -3,6 +3,7 @@ export type DataGridContextMenuZone = "cell" | "range" | "header" | "row-index"
 export type DataGridContextMenuActionId =
   | "copy"
   | "paste"
+  | "paste-values"
   | "cut"
   | "clear"
   | "insert-row-above"

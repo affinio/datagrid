@@ -7,6 +7,11 @@ import type { DataGridAppMode } from "./useDataGridAppControls"
 
 export type DataGridAppPendingClipboardOperation = "none" | "copy" | "cut"
 export type DataGridAppPendingClipboardEdge = "top" | "right" | "bottom" | "left"
+export type DataGridAppPasteMode = "default" | "values"
+
+export interface DataGridAppPasteOptions {
+  mode?: DataGridAppPasteMode
+}
 
 export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   mode: Ref<DataGridAppMode>
@@ -38,6 +43,10 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
     options?: { recordHistory?: boolean },
   ) => number
   buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
+  buildPasteSpecialMatrixFromRange?: (
+    range: DataGridCopyRange,
+    mode: Exclude<DataGridAppPasteMode, "default">,
+  ) => string[][]
 }
 
 export interface UseDataGridAppClipboardResult {
@@ -54,7 +63,10 @@ export interface UseDataGridAppClipboardResult {
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
   clearPendingClipboardOperation: (clearSelection: boolean, clearBufferedClipboardPayload?: boolean) => boolean
   copySelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
-  pasteSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+  pasteSelectedCells: (
+    trigger?: "keyboard" | "context-menu",
+    options?: DataGridAppPasteOptions,
+  ) => Promise<boolean>
   cutSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   isCellInPendingClipboardRange: (rowOffset: number, columnIndex: number) => boolean
   isCellOnPendingClipboardEdge: (
@@ -283,7 +295,10 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     return stageClipboardOperation("copy", trigger)
   }
 
-  const pasteSelectedCells = async (trigger: "keyboard" | "context-menu" = "keyboard"): Promise<boolean> => {
+  const pasteSelectedCells = async (
+    trigger: "keyboard" | "context-menu" = "keyboard",
+    pasteOptions: DataGridAppPasteOptions = {},
+  ): Promise<boolean> => {
     if (options.mode.value !== "base") {
       return false
     }
@@ -291,16 +306,25 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     if (!activeCoord) {
       return false
     }
-    const payload = await clipboardBridge.readClipboardPayload()
-    if (!payload.trim()) {
-      return false
-    }
-    const matrix = clipboardBridge.parseClipboardMatrix(payload)
-    const matrixHeight = Math.max(1, matrix.length)
-    const matrixWidth = Math.max(1, matrix[0]?.length ?? 1)
     const pendingOperation = pendingClipboardOperation.value
     const rawPendingSourceRange = pendingClipboardRange.value ?? copiedSelectionRange.value
     const pendingSourceRange = rawPendingSourceRange ? normalizeClipboardRange(rawPendingSourceRange) : null
+    const pasteMode = pasteOptions.mode ?? "default"
+    let matrix: string[][] = []
+
+    if (pasteMode === "values" && pendingSourceRange) {
+      matrix = options.buildPasteSpecialMatrixFromRange?.(pendingSourceRange, "values")
+        ?? buildFillMatrixFromRange(pendingSourceRange)
+    } else {
+      const payload = await clipboardBridge.readClipboardPayload()
+      if (!payload.trim()) {
+        return false
+      }
+      matrix = clipboardBridge.parseClipboardMatrix(payload)
+    }
+
+    const matrixHeight = Math.max(1, matrix.length)
+    const matrixWidth = Math.max(1, matrix[0]?.length ?? 1)
     const selected = options.resolveSelectionRange()
     const targetRange = selected && matrixHeight === 1 && matrixWidth === 1 && copyRangeHelpers.isMultiCellSelection(selected)
       ? selected

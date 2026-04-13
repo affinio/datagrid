@@ -2358,6 +2358,7 @@ body.datagrid-fill-drag-cursor * {
 .datagrid-context-menu__item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   width: 100%;
   min-height: 32px;
   padding: 0 10px;
@@ -2382,6 +2383,25 @@ body.datagrid-fill-drag-cursor * {
   opacity: 0.5;
   cursor: not-allowed;
   background: transparent;
+}
+
+.datagrid-context-menu__item--submenu {
+  font-weight: 600;
+}
+
+.datagrid-context-menu__submenu-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 10px;
+  padding-left: 8px;
+  border-left: 1px solid color-mix(in srgb, var(--datagrid-glass-border) 72%, transparent);
+}
+
+.datagrid-context-menu__submenu-arrow {
+  margin-left: 12px;
+  color: color-mix(in srgb, var(--datagrid-text-secondary, var(--datagrid-text-primary)) 88%, transparent);
+  font-size: 11px;
 }
 
 .datagrid-context-menu__separator {

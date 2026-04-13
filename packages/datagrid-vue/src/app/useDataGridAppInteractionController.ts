@@ -108,7 +108,10 @@ export interface UseDataGridAppInteractionControllerOptions<
   clearPendingClipboardOperation: (clearSelection: boolean, clearBufferedClipboardPayload?: boolean) => boolean
   clearExternalPendingClipboardOperation?: () => boolean
   copySelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
-  pasteSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+  pasteSelectedCells: (
+    trigger?: "keyboard" | "context-menu",
+    options?: { mode?: "default" | "values" },
+  ) => Promise<boolean>
   cutSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   normalizeClipboardRange: (range: DataGridCopyRange) => DataGridCopyRange | null
   applyClipboardEdits: (

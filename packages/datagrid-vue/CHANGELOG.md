@@ -6,21 +6,22 @@
 
 - ## Summary
 
-  Extended the shared app-selection and clipboard composables to support committed multi-range selection, additive Ctrl/Cmd selection flows, and aggregate recomputation from effective selection values after row-model changes.
+  Extended the shared app-selection and clipboard composables to support committed multi-range selection, additive Ctrl/Cmd selection flows, and aggregate recomputation from effective selection values after row-model changes. The unreleased clipboard surface now also accepts explicit paste modes so downstream facades can route `Paste special` variants through the same shared pipeline.
 
   ## User impact
 
-  Consumers composing custom renderers on top of `@affino/datagrid-vue` can now keep multiple committed cell ranges visible/queryable, preserve copied-range visuals across all committed ranges, and recompute selection summaries after in-range edits without forcing a full grid remount. Ctrl/Cmd is now reserved for additive selection instead of conflicting with range-move intent.
+  Consumers composing custom renderers on top of `@affino/datagrid-vue` can now keep multiple committed cell ranges visible/queryable, preserve copied-range visuals across all committed ranges, and recompute selection summaries after in-range edits without forcing a full grid remount. Ctrl/Cmd is now reserved for additive selection instead of conflicting with range-move intent. Clipboard integrations can also distinguish ordinary paste from values-only paste without forking the base copy/paste implementation.
 
   ## Migration
   - No migration required.
   - Optional adoption:
     - read all committed ranges through `resolveSelectionRanges()` when custom overlays or clipboard UI should mirror multi-range state,
     - pass `readSelectionCell` into `useDataGridAppSelection(...)` when aggregate labels should use effective values,
-    - treat `Alt` as the range-move modifier if you previously overloaded Ctrl/Cmd in custom pointer flows.
+    - treat `Alt` as the range-move modifier if you previously overloaded Ctrl/Cmd in custom pointer flows,
+    - pass an explicit paste mode into `pasteSelectedCells(...)` when custom menus or shortcuts need values-only paste semantics.
 
   ## Validation
-  - focused contracts passed for `useDataGridAppCellSelection`, `useDataGridAppClipboard`, and `useDataGridAppSelection`
+  - focused contracts passed for `useDataGridAppCellSelection`, `useDataGridAppClipboard`, `useDataGridAppSelection`, and the context-menu action router proxy
   - pointer-down and pointer-modifier regressions passed in the shared composable suite
   - downstream stage and workbook regressions passed
 

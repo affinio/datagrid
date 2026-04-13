@@ -1,11 +1,16 @@
-export const DATAGRID_CELL_MENU_ITEM_KEYS = ["clipboard", "edit"] as const
+export const DATAGRID_CELL_MENU_ITEM_KEYS = ["clipboard", "pasteSpecial", "edit"] as const
 
 export type DataGridCellMenuItemKey = (typeof DATAGRID_CELL_MENU_ITEM_KEYS)[number]
+export type DataGridCellMenuCustomItemPlacement =
+  | "start"
+  | "end"
+  | `before:${DataGridCellMenuItemKey}`
+  | `after:${DataGridCellMenuItemKey}`
 
 export type DataGridCellMenuItemLabels = Readonly<Partial<Record<DataGridCellMenuItemKey, string>>>
 export type DataGridCellMenuDisabledReasons = Readonly<Partial<Record<DataGridCellMenuItemKey, string>>>
 
-export const DATAGRID_CELL_MENU_ACTION_KEYS = ["cut", "copy", "paste", "clear"] as const
+export const DATAGRID_CELL_MENU_ACTION_KEYS = ["cut", "copy", "paste", "pasteValues", "clear"] as const
 
 export type DataGridCellMenuActionKey = (typeof DATAGRID_CELL_MENU_ACTION_KEYS)[number]
 
@@ -20,6 +25,36 @@ export type DataGridCellMenuActionOptions = Readonly<
   Partial<Record<DataGridCellMenuActionKey, DataGridCellMenuActionOption>>
 >
 
+export interface DataGridCellMenuCustomItemContext {
+  zone: "cell" | "range"
+  columnKey: string
+  rowId: string | null
+  closeMenu: () => void
+}
+
+interface DataGridCellMenuCustomItemBase {
+  key: string
+  label: string
+  placement?: DataGridCellMenuCustomItemPlacement
+  hidden?: boolean
+  disabled?: boolean
+  disabledReason?: string
+}
+
+export interface DataGridCellMenuCustomLeafItem extends DataGridCellMenuCustomItemBase {
+  kind?: "item"
+  onSelect?: (context: DataGridCellMenuCustomItemContext) => void | Promise<void>
+}
+
+export interface DataGridCellMenuCustomSubmenuItem extends DataGridCellMenuCustomItemBase {
+  kind: "submenu"
+  items: readonly DataGridCellMenuCustomItem[]
+}
+
+export type DataGridCellMenuCustomItem =
+  | DataGridCellMenuCustomLeafItem
+  | DataGridCellMenuCustomSubmenuItem
+
 export interface DataGridCellMenuColumnOptions {
   items?: readonly DataGridCellMenuItemKey[]
   hide?: readonly DataGridCellMenuItemKey[]
@@ -27,6 +62,7 @@ export interface DataGridCellMenuColumnOptions {
   disabledReasons?: DataGridCellMenuDisabledReasons
   labels?: DataGridCellMenuItemLabels
   actions?: DataGridCellMenuActionOptions
+  customItems?: readonly DataGridCellMenuCustomItem[]
 }
 
 export interface DataGridCellMenuOptions {
@@ -36,6 +72,7 @@ export interface DataGridCellMenuOptions {
   disabledReasons: DataGridCellMenuDisabledReasons
   labels: DataGridCellMenuItemLabels
   actions: DataGridCellMenuActionOptions
+  customItems: readonly DataGridCellMenuCustomItem[]
   columns: Readonly<Record<string, DataGridCellMenuColumnOptions>>
 }
 
@@ -48,6 +85,7 @@ export type DataGridCellMenuProp =
       disabledReasons?: DataGridCellMenuDisabledReasons
       labels?: DataGridCellMenuItemLabels
       actions?: DataGridCellMenuActionOptions
+      customItems?: readonly DataGridCellMenuCustomItem[]
       columns?: Readonly<Record<string, DataGridCellMenuColumnOptions>>
     }
   | null
@@ -182,6 +220,68 @@ function normalizeActionOptions<TKey extends string, TOption extends {
   return Object.freeze(Object.fromEntries(entries) as Partial<Record<TKey, Readonly<TOption>>>)
 }
 
+function isCellCustomItemPlacement(
+  value: string,
+): value is DataGridCellMenuCustomItemPlacement {
+  if (value === "start" || value === "end") {
+    return true
+  }
+  if (!value.includes(":")) {
+    return false
+  }
+  const [position, itemKey] = value.split(":")
+  return (position === "before" || position === "after")
+    && DATAGRID_CELL_MENU_ITEM_KEYS.includes(itemKey as DataGridCellMenuItemKey)
+}
+
+function normalizeCellCustomItems(
+  input: readonly DataGridCellMenuCustomItem[] | undefined,
+): readonly DataGridCellMenuCustomItem[] {
+  if (!Array.isArray(input)) {
+    return Object.freeze([])
+  }
+  const normalized: DataGridCellMenuCustomItem[] = []
+  const seenKeys = new Set<string>()
+  for (const item of input) {
+    const key = typeof item?.key === "string" ? item.key.trim() : ""
+    const label = typeof item?.label === "string" ? item.label.trim() : ""
+    if (key.length === 0 || label.length === 0 || seenKeys.has(key)) {
+      continue
+    }
+    seenKeys.add(key)
+    const placement = typeof item.placement === "string" && isCellCustomItemPlacement(item.placement)
+      ? item.placement
+      : undefined
+    const baseItem = {
+      key,
+      label,
+      ...(placement ? { placement } : {}),
+      ...(item.hidden === true ? { hidden: true } : {}),
+      ...(item.disabled === true ? { disabled: true } : {}),
+      ...(typeof item.disabledReason === "string" && item.disabledReason.trim().length > 0
+        ? { disabledReason: item.disabledReason.trim() }
+        : {}),
+    } satisfies DataGridCellMenuCustomItemBase
+    if (item.kind === "submenu") {
+      const items = normalizeCellCustomItems(item.items)
+      if (items.length === 0) {
+        continue
+      }
+      normalized.push(Object.freeze({
+        ...baseItem,
+        kind: "submenu",
+        items,
+      } satisfies DataGridCellMenuCustomSubmenuItem))
+      continue
+    }
+    normalized.push(Object.freeze({
+      ...baseItem,
+      ...(typeof item.onSelect === "function" ? { onSelect: item.onSelect } : {}),
+    } satisfies DataGridCellMenuCustomLeafItem))
+  }
+  return Object.freeze(normalized)
+}
+
 function normalizeCellColumns(
   input: Readonly<Record<string, DataGridCellMenuColumnOptions>> | undefined,
 ): Readonly<Record<string, DataGridCellMenuColumnOptions>> {
@@ -197,6 +297,7 @@ function normalizeCellColumns(
       const disabledReasons = normalizeLabels(value?.disabledReasons, DATAGRID_CELL_MENU_ITEM_KEYS)
       const labels = normalizeLabels(value?.labels, DATAGRID_CELL_MENU_ITEM_KEYS)
       const actions = normalizeActionOptions(value?.actions, DATAGRID_CELL_MENU_ACTION_KEYS)
+      const customItems = normalizeCellCustomItems(value?.customItems)
       return [
         key,
         {
@@ -206,6 +307,7 @@ function normalizeCellColumns(
           ...(Object.keys(disabledReasons).length > 0 ? { disabledReasons } : {}),
           ...(Object.keys(labels).length > 0 ? { labels } : {}),
           ...(Object.keys(actions).length > 0 ? { actions } : {}),
+          ...(customItems.length > 0 ? { customItems } : {}),
         } satisfies DataGridCellMenuColumnOptions,
       ] as const
     })
@@ -223,6 +325,7 @@ export function resolveDataGridCellMenu(
       disabledReasons: Object.freeze({}),
       labels: Object.freeze({}),
       actions: Object.freeze({}),
+      customItems: Object.freeze([]),
       columns: {},
     }
   }
@@ -234,6 +337,7 @@ export function resolveDataGridCellMenu(
       disabledReasons: Object.freeze({}),
       labels: Object.freeze({}),
       actions: Object.freeze({}),
+      customItems: Object.freeze([]),
       columns: {},
     }
   }
@@ -244,6 +348,7 @@ export function resolveDataGridCellMenu(
     disabledReasons: normalizeLabels(input.disabledReasons, DATAGRID_CELL_MENU_ITEM_KEYS),
     labels: normalizeLabels(input.labels, DATAGRID_CELL_MENU_ITEM_KEYS),
     actions: normalizeActionOptions(input.actions, DATAGRID_CELL_MENU_ACTION_KEYS),
+    customItems: normalizeCellCustomItems(input.customItems),
     columns: normalizeCellColumns(input.columns),
   }
 }
@@ -306,6 +411,20 @@ export function resolveDataGridCellMenuActionOptions(
     })
     .filter(([, value]) => Object.keys(value).length > 0)
   return Object.freeze(Object.fromEntries(entries))
+}
+
+export function resolveDataGridCellMenuCustomItems(
+  options: DataGridCellMenuOptions,
+  columnKey: string,
+): readonly DataGridCellMenuCustomItem[] {
+  const merged = new Map<string, DataGridCellMenuCustomItem>()
+  for (const item of options.customItems) {
+    merged.set(item.key, item)
+  }
+  for (const item of options.columns[columnKey]?.customItems ?? []) {
+    merged.set(item.key, item)
+  }
+  return Object.freeze(Array.from(merged.values()))
 }
 
 export function resolveDataGridRowIndexMenu(
