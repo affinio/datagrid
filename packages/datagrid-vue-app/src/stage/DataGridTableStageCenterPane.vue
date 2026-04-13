@@ -125,6 +125,7 @@
         :selection-segments="selectionOverlaySegments"
         :fill-preview-segments="fillPreviewOverlaySegments"
         :move-preview-segments="movePreviewOverlaySegments"
+        :lanes="overlayLanes"
       />
     </div>
   </div>
@@ -147,6 +148,7 @@ import {
 import type {
   DataGridTableStageBodyRow,
   DataGridTableStageCenterPaneRenderApi,
+  DataGridTableStageOverlayLane,
   DataGridTableStageOverlaySegment,
 } from "./dataGridTableStageBody.types"
 import type { DataGridElementRefHandler } from "./dataGridTableStage.types"
@@ -200,6 +202,10 @@ const props = defineProps({
     type: Array as PropType<readonly DataGridTableStageOverlaySegment[]>,
     required: true,
   },
+  overlayLanes: {
+    type: Array as PropType<readonly DataGridTableStageOverlayLane[]>,
+    default: () => [],
+  },
   renderApi: {
     type: Object as PropType<DataGridTableStageCenterPaneRenderApi>,
     required: true,
@@ -220,6 +226,7 @@ const {
   selectionOverlaySegments,
   fillPreviewOverlaySegments,
   movePreviewOverlaySegments,
+  overlayLanes,
   renderApi,
 } = toRefs(props)
 

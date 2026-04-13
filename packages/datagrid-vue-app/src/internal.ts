@@ -93,6 +93,7 @@ export type {
   DataGridPendingEdge,
   DataGridTableMode,
   DataGridTableRow,
+  DataGridTableStageCustomOverlay,
   DataGridTableStageSectionedProps,
   DataGridTableStageProps,
   UseDataGridTableStageBindingsOptions,

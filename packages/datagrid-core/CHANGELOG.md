@@ -8,19 +8,25 @@
 
   Added effective-value hooks for client filtering, histograms, and selection summary so package consumers can resolve workbook/formula/display values without mutating raw row payloads. The public core surface now also exports the reusable selection-cell resolver and the stable bivariant callback helper used by higher-level typed facades.
 
+  The spreadsheet helpers now also expose reusable formula-reference bounds and decoration builders so workbook-style adapters can derive overlay lanes from parsed formula references without duplicating sheet/column range resolution in UI components.
+
   ## User impact
 
   Integrators can keep value-set filters, advanced filter predicates, column histograms, and selection aggregates aligned with what the user actually sees in the grid. This is especially useful for formula-backed columns, derived display labels, and workbook adapters that should filter or summarize effective values instead of stored source fields.
+
+  Spreadsheet shells can now build formula reference overlays from a shared core helper instead of reimplementing reference-to-range resolution per frontend package.
 
   ## Migration
   - No migration required.
   - Optional adoption:
     - pass `readFilterCell` to `createClientRowModel(...)` when filters and histograms must read effective values,
     - pass `readSelectionCell` to `api.selection.summarize(...)` or `createDataGridSelectionSummary(...)` when aggregates should use display/formula results.
+    - replace local formula-reference range builders with `resolveDataGridSpreadsheetFormulaReferenceBounds(...)` / `createDataGridSpreadsheetFormulaReferenceDecorations(...)` when building spreadsheet overlays.
 
   ## Validation
   - targeted `clientRowModel` regression for `readFilterCell` passed
   - targeted `selectionSummary` regression for `readSelectionCell` precedence/fallback passed
+  - targeted spreadsheet formula reference decoration unit coverage passed
   - downstream facade and workbook regressions updated against the new effective-value path
 
 ## 0.3.5

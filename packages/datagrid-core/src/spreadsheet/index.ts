@@ -5,6 +5,14 @@ export type {
   DataGridSpreadsheetDerivedSheetRuntimeRow,
 } from "./derivedSheetRuntime.js"
 export type {
+  CreateDataGridSpreadsheetFormulaReferenceDecorationsOptions,
+  DataGridSpreadsheetFormulaReferenceBounds,
+  DataGridSpreadsheetFormulaReferenceDecoration,
+  DataGridSpreadsheetFormulaReferenceSheet,
+  DataGridSpreadsheetFormulaReferenceSheetColumn,
+  ResolveDataGridSpreadsheetFormulaReferenceBoundsOptions,
+} from "./formulaReferenceDecorations.js"
+export type {
   AnalyzeDataGridSpreadsheetCellInputOptions,
   CreateDataGridSpreadsheetFormulaEditorModelOptions,
   DataGridSpreadsheetCellAddress,
@@ -88,5 +96,9 @@ export {
   rewriteDataGridSpreadsheetFormulaReferences,
   resolveDataGridSpreadsheetActiveFormulaReference,
 } from "./formulaEditorModel.js"
+export {
+  createDataGridSpreadsheetFormulaReferenceDecorations,
+  resolveDataGridSpreadsheetFormulaReferenceBounds,
+} from "./formulaReferenceDecorations.js"
 export { createDataGridSpreadsheetSheetModel } from "./sheetModel.js"
 export { createDataGridSpreadsheetWorkbookModel } from "./workbookModel.js"

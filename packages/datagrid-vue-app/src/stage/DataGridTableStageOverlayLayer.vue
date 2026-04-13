@@ -23,32 +23,44 @@
       :style="segment.style"
     />
   </div>
+  <div
+    v-for="lane in visibleLanes"
+    :key="lane.key"
+    class="grid-selection-overlay"
+    :class="[layerClass, lane.className]"
+    :data-datagrid-overlay-lane="lane.key"
+    aria-hidden="true"
+  >
+    <div
+      v-for="segment in lane.segments"
+      :key="segment.key"
+      class="grid-selection-overlay__segment"
+      :class="lane.segmentClassName"
+      :style="segment.style"
+      data-datagrid-overlay-segment="true"
+    />
+  </div>
 </template>
 
 <script setup lang="ts">
-import type { CSSProperties, PropType } from "vue"
+import { computed, type CSSProperties } from "vue"
+import type { DataGridTableStageOverlayLane } from "./dataGridTableStageBody.types"
 
 interface OverlaySegment {
   key: string
   style: CSSProperties
 }
 
-defineProps({
-  selectionSegments: {
-    type: Array as PropType<readonly OverlaySegment[]>,
-    required: true,
-  },
-  fillPreviewSegments: {
-    type: Array as PropType<readonly OverlaySegment[]>,
-    required: true,
-  },
-  movePreviewSegments: {
-    type: Array as PropType<readonly OverlaySegment[]>,
-    required: true,
-  },
-  layerClass: {
-    type: String,
-    default: "",
-  },
+const props = withDefaults(defineProps<{
+  selectionSegments: readonly OverlaySegment[]
+  fillPreviewSegments: readonly OverlaySegment[]
+  movePreviewSegments: readonly OverlaySegment[]
+  layerClass?: string
+  lanes?: readonly DataGridTableStageOverlayLane[]
+}>(), {
+  layerClass: "",
+  lanes: () => [],
 })
+
+const visibleLanes = computed(() => (props.lanes ?? []).filter(lane => lane.segments.length > 0))
 </script>

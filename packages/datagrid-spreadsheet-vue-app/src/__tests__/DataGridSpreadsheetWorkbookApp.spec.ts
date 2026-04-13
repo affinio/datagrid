@@ -983,6 +983,36 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     workbook.dispose()
   })
 
+  it("renders separate overlay lanes for multiple formula references", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    const formulaInput = wrapper.get(".spreadsheet-formula-input")
+    await formulaInput.trigger("focus")
+    await formulaInput.setValue("=[qty]1+[price]2")
+    await flushUiAndTimers()
+
+    const overlayLanes = wrapper.findAll(".spreadsheet-formula-reference-overlay-lane")
+    expect(overlayLanes).toHaveLength(2)
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
   it("inserts cross-sheet references after switching sheets during formula editing", async () => {
     const workbook = createWorkbookModel()
 

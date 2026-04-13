@@ -30,6 +30,13 @@ export type DataGridTableStageOverlaySegment = {
   style: CSSProperties
 }
 
+export type DataGridTableStageOverlayLane = {
+  key: string
+  className?: string
+  segmentClassName?: string
+  segments: readonly DataGridTableStageOverlaySegment[]
+}
+
 export type DataGridTableStageSelectEditorOption = {
   label: string
   value: string
@@ -122,9 +129,11 @@ export interface DataGridTableStagePinnedPaneProps {
   selectionOverlaySegments: readonly DataGridTableStageOverlaySegment[]
   fillPreviewOverlaySegments: readonly DataGridTableStageOverlaySegment[]
   movePreviewOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  overlayLanes?: readonly DataGridTableStageOverlayLane[]
   selectionSeamOverlaySegments: readonly DataGridTableStageOverlaySegment[]
   fillPreviewSeamOverlaySegments: readonly DataGridTableStageOverlaySegment[]
   movePreviewSeamOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  seamOverlayLanes?: readonly DataGridTableStageOverlayLane[]
 }
 
 export interface DataGridTableStagePinnedPaneRenderApi extends DataGridTableStageBodyRenderApiBase {

@@ -27,6 +27,18 @@ export type DataGridTableStageCellClass =
   | readonly string[]
   | Readonly<Record<string, boolean>>
 
+export interface DataGridTableStageCustomOverlay {
+  key: string
+  ranges: readonly DataGridOverlayRange[]
+  className?: string
+  segmentClassName?: string
+  borderColor?: string
+  backgroundColor?: string
+  borderStyle?: "solid" | "dashed"
+  hideSingleCell?: boolean
+  zIndex?: number
+}
+
 export interface DataGridTableStageAnchorCell {
   rowIndex: number
   columnIndex: number
@@ -219,6 +231,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>>
   rowHeightMode: "fixed" | "auto"
   layoutMode: DataGridLayoutMode
   chromeSignature?: string
+  customOverlays?: readonly DataGridTableStageCustomOverlay[]
 }
 
 interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>

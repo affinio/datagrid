@@ -213,6 +213,7 @@
             class="grid-host spreadsheet-grid-host"
             @mousedown.capture="handleGridPointerDownCapture"
             @mousemove.capture="handleFormulaReferenceDragMove"
+            @scroll.capture="scheduleFormulaReferenceHandleSync"
           >
             <DataGridTableStageLoose v-bind="tableStagePropsForView" :stage-context="tableStageContextForView" />
           </section>
@@ -226,7 +227,7 @@
           </div>
 
           <div
-            v-if="formulaReferenceOverlayMetrics"
+            v-if="formulaReferenceHandleMetrics"
             class="spreadsheet-formula-reference-overlay"
             :class="{ 'spreadsheet-formula-reference-overlay--dragging': formulaReferenceDragState != null }"
             :style="formulaReferenceOverlayStyle"
@@ -397,7 +398,9 @@ import {
   type MenuOptions,
 } from "@affino/menu-vue"
 import {
+  createDataGridSpreadsheetFormulaReferenceDecorations,
   createDataGridSpreadsheetFormulaEditorModel,
+  resolveDataGridSpreadsheetFormulaReferenceBounds,
   rewriteDataGridSpreadsheetFormulaReferences,
   type DataGridApi,
   type DataGridColumnInput,
@@ -409,6 +412,8 @@ import {
   type DataGridSelectionSnapshot,
   type DataGridSpreadsheetCellAddress,
   type DataGridSpreadsheetCellSnapshot,
+  type DataGridSpreadsheetFormulaReferenceBounds,
+  type DataGridSpreadsheetFormulaReferenceDecoration,
   type DataGridSpreadsheetStyle,
   type DataGridSpreadsheetWorkbookModel,
   type DataGridSpreadsheetWorkbookSheetHandle,
@@ -436,7 +441,10 @@ import {
   dataGridAppRootElementKey,
   useDataGridTableStageRuntime,
 } from "@affino/datagrid-vue-app/internal"
-import type { DataGridTableStageProps } from "@affino/datagrid-vue-app/internal"
+import type {
+  DataGridTableStageCustomOverlay,
+  DataGridTableStageProps,
+} from "@affino/datagrid-vue-app/internal"
 import DataGridSpreadsheetFormulaEditor from "./DataGridSpreadsheetFormulaEditor.vue"
 import { resolveSpreadsheetWorkbookThemeTokens } from "./spreadsheetWorkbookTheme"
 import { useDataGridSpreadsheetWorkbookHistory } from "./useDataGridSpreadsheetWorkbookHistory"
@@ -525,14 +533,12 @@ type FormulaAutocompleteMatch = {
   replacementEnd: number
 }
 
-type FormulaReferenceOverlayMetrics = {
+type FormulaReferenceHandleMetrics = {
   top: number
   left: number
   width: number
   height: number
   color: string
-  borderColor: string
-  backgroundColor: string
 }
 
 type FormulaReferenceHandleCorner = typeof FORMULA_REFERENCE_HANDLE_CORNERS[number]
@@ -1073,7 +1079,7 @@ const workbookHistory = useDataGridSpreadsheetWorkbookHistory({
 const hasPendingFormulaEditHistory = computed(() => pendingFormulaEditHistory.value?.changed === true)
 const formulaAutocompleteOpen = ref(false)
 const formulaAutocompleteActiveIndex = ref(0)
-const formulaReferenceOverlayMetrics = ref<FormulaReferenceOverlayMetrics | null>(null)
+const formulaReferenceHandleMetrics = ref<FormulaReferenceHandleMetrics | null>(null)
 const formulaReferenceDragState = ref<FormulaReferenceDragState | null>(null)
 const hoveredFormulaReferenceKey = ref<string | null>(null)
 const pendingWorkbookHistoryCommitCount = ref(0)
@@ -1422,6 +1428,7 @@ onBeforeUnmount(() => {
   activeHoveredFormulaReferencePreview = null
   if (typeof window !== "undefined") {
     window.removeEventListener("mouseup", stopFormulaReferenceDrag)
+    window.removeEventListener("resize", scheduleFormulaReferenceHandleSync)
   }
   clearPendingSelectionRestoreTimer()
   unsubscribeRuntimeRows()
@@ -1872,6 +1879,7 @@ watch(
 onMounted(() => {
   if (typeof window !== "undefined") {
     window.addEventListener("mouseup", stopFormulaReferenceDrag)
+    window.addEventListener("resize", scheduleFormulaReferenceHandleSync)
   }
   bindWorkbookSubscription()
   void nextTick(() => {
@@ -2083,14 +2091,14 @@ const visibleColumnIndexByKey = computed(() => {
 
 const stageVisibleColumnIndexByKey = computed(() => {
   const indexByKey = new Map<string, number>()
-  tableStagePropsForView.value.columns.visibleColumns.forEach((column, index) => {
+  tableStageProps.value.columns.visibleColumns.forEach((column, index) => {
     indexByKey.set(column.key, index)
   })
   return indexByKey
 })
 
 function resolveSpreadsheetColumnKeyFromStageIndex(columnIndex: number): string | null {
-  const columnKey = tableStagePropsForView.value.columns.visibleColumns[columnIndex]?.key
+  const columnKey = tableStageProps.value.columns.visibleColumns[columnIndex]?.key
   return columnKey && visibleColumnIndexByKey.value.has(columnKey)
     ? columnKey
     : null
@@ -2830,86 +2838,42 @@ function restoreHoveredFormulaReferencePreview(): void {
   })
 }
 
-function resolveFormulaReferenceColumnBounds(
-  reference: Pick<(typeof editorSnapshot.value.analysis.references)[number], "referenceName" | "rangeReferenceName">,
-  referencedSheet: DataGridSpreadsheetWorkbookSheetHandle,
-): {
-  startColumnIndex: number
-  endColumnIndex: number
-  startColumnKey: string
-  endColumnKey: string
-} | null {
-  const columns = referencedSheet.sheetModel.getColumns()
-  const startColumnIndex = columns.findIndex(column => column.key === reference.referenceName)
-  const requestedEndColumnKey = reference.rangeReferenceName && reference.rangeReferenceName !== reference.referenceName
-    ? reference.rangeReferenceName
-    : reference.referenceName
-  const requestedEndColumnIndex = columns.findIndex(column => column.key === requestedEndColumnKey)
-  if (startColumnIndex < 0 || requestedEndColumnIndex < 0) {
-    return null
-  }
-  const [from, to] = startColumnIndex <= requestedEndColumnIndex
-    ? [startColumnIndex, requestedEndColumnIndex]
-    : [requestedEndColumnIndex, startColumnIndex]
-  const startColumnKey = columns[from]?.key
-  const endColumnKey = columns[to]?.key
-  if (!startColumnKey || !endColumnKey) {
-    return null
-  }
-  return {
-    startColumnIndex: from,
-    endColumnIndex: to,
-    startColumnKey,
-    endColumnKey,
-  }
-}
-
 function resolveFormulaReferenceBoundsForReference(
   reference: Pick<(typeof editorSnapshot.value.analysis.references)[number], "sheetReference" | "referenceName" | "rangeReferenceName" | "targetRowIndexes">,
   options: {
     requireActiveSheet?: boolean
   } = {},
-): {
+): (DataGridSpreadsheetFormulaReferenceBounds & {
   referencedSheet: DataGridSpreadsheetWorkbookSheetHandle
-  startRowIndex: number
-  endRowIndex: number
-  startColumnIndex: number
-  endColumnIndex: number
-  startColumnKey: string
-  endColumnKey: string
   topLeftCell: DataGridSpreadsheetCellAddress
   bottomRightCell: DataGridSpreadsheetCellAddress
-} | null {
+}) | null {
   const referencedSheet = resolveWorkbookSheetHandleForReference(reference)
   if (!referencedSheet) {
     return null
   }
-  if (options.requireActiveSheet === true && referencedSheet.id !== activeSheetHandle.value?.id) {
+  const bounds = resolveDataGridSpreadsheetFormulaReferenceBounds({
+    ...reference,
+    key: "interactive",
+  }, {
+    activeSheetId: activeSheetHandle.value?.id ?? null,
+    requireActiveSheet: options.requireActiveSheet,
+    resolveSheet: () => ({
+      id: referencedSheet.id,
+      columns: referencedSheet.sheetModel.getColumns(),
+    }),
+  })
+  if (!bounds) {
     return null
   }
-  const rowIndexes = reference.targetRowIndexes.filter(rowIndex => typeof rowIndex === "number" && rowIndex >= 0)
-  if (rowIndexes.length === 0) {
-    return null
-  }
-  const startRowIndex = Math.min(...rowIndexes)
-  const endRowIndex = Math.max(...rowIndexes)
-  const columnBounds = resolveFormulaReferenceColumnBounds(reference, referencedSheet)
-  if (!columnBounds) {
-    return null
-  }
-  const topLeftCell = createFormulaReferenceCellAddress(referencedSheet, startRowIndex, columnBounds.startColumnKey)
-  const bottomRightCell = createFormulaReferenceCellAddress(referencedSheet, endRowIndex, columnBounds.endColumnKey)
+  const topLeftCell = createFormulaReferenceCellAddress(referencedSheet, bounds.startRowIndex, bounds.startColumnKey)
+  const bottomRightCell = createFormulaReferenceCellAddress(referencedSheet, bounds.endRowIndex, bounds.endColumnKey)
   if (!topLeftCell || !bottomRightCell) {
     return null
   }
   return {
     referencedSheet,
-    startRowIndex,
-    endRowIndex,
-    startColumnIndex: columnBounds.startColumnIndex,
-    endColumnIndex: columnBounds.endColumnIndex,
-    startColumnKey: columnBounds.startColumnKey,
-    endColumnKey: columnBounds.endColumnKey,
+    ...bounds,
     topLeftCell,
     bottomRightCell,
   }
@@ -2950,22 +2914,11 @@ function resolveInteractiveFormulaReferenceBounds(): {
   return resolveFormulaReferenceBoundsForReference(reference, { requireActiveSheet: true })
 }
 
-function resolveVisibleFormulaReferenceBounds(): {
-  referencedSheet: DataGridSpreadsheetWorkbookSheetHandle
-  startRowIndex: number
-  endRowIndex: number
-  startColumnIndex: number
-  endColumnIndex: number
-  startColumnKey: string
-  endColumnKey: string
-  topLeftCell: DataGridSpreadsheetCellAddress
-  bottomRightCell: DataGridSpreadsheetCellAddress
-} | null {
-  const reference = previewFormulaReference.value ?? interactiveFormulaReference.value
-  if (!reference) {
-    return null
+function escapeCssAttributeValue(value: string): string {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(value)
   }
-  return resolveFormulaReferenceBoundsForReference(reference, { requireActiveSheet: true })
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
 }
 
 function resolveFormulaReferenceCornerCell(
@@ -3009,33 +2962,51 @@ function revealFormulaReferenceTarget(
   })
 }
 
-function syncFormulaReferenceOverlayMetrics(): void {
+function syncFormulaReferenceHandleMetrics(): void {
   if (!isFormulaReferenceMode.value) {
-    formulaReferenceOverlayMetrics.value = null
+    formulaReferenceHandleMetrics.value = null
     return
   }
-  const bounds = resolveVisibleFormulaReferenceBounds()
+  const reference = interactiveFormulaReference.value
   const stageElement = gridHostRef.value?.closest<HTMLElement>(".spreadsheet-grid-stage")
-  const reference = previewFormulaReference.value ?? interactiveFormulaReference.value
-  const topLeftElement = resolveGridCellElement(bounds?.topLeftCell ?? null)
-  const bottomRightElement = resolveGridCellElement(bounds?.bottomRightCell ?? null)
-  if (!bounds || !topLeftElement || !bottomRightElement || !stageElement || !reference) {
-    formulaReferenceOverlayMetrics.value = null
+  if (!reference || !stageElement) {
+    formulaReferenceHandleMetrics.value = null
     return
   }
-  const topLeftRect = topLeftElement.getBoundingClientRect()
-  const bottomRightRect = bottomRightElement.getBoundingClientRect()
-  const stageRect = stageElement.getBoundingClientRect()
-  const palette = resolvePalette(reference.colorIndex)
-  formulaReferenceOverlayMetrics.value = {
-    top: topLeftRect.top - stageRect.top,
-    left: topLeftRect.left - stageRect.left,
-    width: Math.max(0, bottomRightRect.right - topLeftRect.left),
-    height: Math.max(0, bottomRightRect.bottom - topLeftRect.top),
-    color: palette.border,
-    borderColor: palette.border,
-    backgroundColor: palette.soft,
+  const overlaySelector = `[data-datagrid-overlay-lane="${escapeCssAttributeValue(`formula-reference:${reference.key}`)}"] [data-datagrid-overlay-segment="true"]`
+  const segments = Array.from(stageElement.querySelectorAll<HTMLElement>(overlaySelector))
+  if (segments.length === 0) {
+    formulaReferenceHandleMetrics.value = null
+    return
   }
+  const stageRect = stageElement.getBoundingClientRect()
+  let top = Number.POSITIVE_INFINITY
+  let left = Number.POSITIVE_INFINITY
+  let right = Number.NEGATIVE_INFINITY
+  let bottom = Number.NEGATIVE_INFINITY
+  for (const segment of segments) {
+    const rect = segment.getBoundingClientRect()
+    top = Math.min(top, rect.top)
+    left = Math.min(left, rect.left)
+    right = Math.max(right, rect.right)
+    bottom = Math.max(bottom, rect.bottom)
+  }
+  if (!Number.isFinite(top) || !Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(bottom)) {
+    formulaReferenceHandleMetrics.value = null
+    return
+  }
+  const palette = resolvePalette(reference.colorIndex)
+  formulaReferenceHandleMetrics.value = {
+    top: top - stageRect.top,
+    left: left - stageRect.left,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+    color: palette.border,
+  }
+}
+
+function scheduleFormulaReferenceHandleSync(): void {
+  void nextTick(syncFormulaReferenceHandleMetrics)
 }
 
 function rewriteActiveFormulaReferenceToCell(
@@ -3184,7 +3155,7 @@ function handleFormulaReferenceDragMove(event: MouseEvent): void {
   rewriteActiveFormulaReferenceToCell(targetCell, {
     anchorCell: dragState.mode === "resize-range" ? dragState.anchorCell : null,
   })
-  void nextTick(syncFormulaReferenceOverlayMetrics)
+  scheduleFormulaReferenceHandleSync()
 }
 
 function stopFormulaReferenceDrag(): void {
@@ -3193,7 +3164,7 @@ function stopFormulaReferenceDrag(): void {
   }
   formulaReferenceDragState.value = null
   focusFormulaBar(editorSnapshot.value.selection)
-  void nextTick(syncFormulaReferenceOverlayMetrics)
+  scheduleFormulaReferenceHandleSync()
 }
 
 function restoreEditorCellSelection(options: { focusGrid?: boolean } = {}): void {
@@ -3871,6 +3842,7 @@ const tableStagePropsForView = computed<DataGridTableStageProps<SpreadsheetGridR
   layoutMode: tableStageProps.value.layoutMode,
   rowHeightMode: tableStageProps.value.rowHeightMode,
   layout: tableStageProps.value.layout,
+  customOverlays: formulaReferenceStageOverlays.value,
   selection: tableStageProps.value.selection,
   rows: {
     ...tableStageProps.value.rows,
@@ -3998,8 +3970,51 @@ const activeFormulaReference = computed(() => (
   editorSnapshot.value.analysis.references.find(reference => reference.key === editorSnapshot.value.activeReferenceKey) ?? null
 ))
 
+function buildFormulaReferenceStageOverlay(
+  decoration: DataGridSpreadsheetFormulaReferenceDecoration,
+): DataGridTableStageCustomOverlay | null {
+  const referencedSheet = workbook.getSheet(decoration.referencedSheetId)
+  if (!referencedSheet) {
+    return null
+  }
+  const topLeftCell = createFormulaReferenceCellAddress(referencedSheet, decoration.startRowIndex, decoration.startColumnKey)
+  const bottomRightCell = createFormulaReferenceCellAddress(referencedSheet, decoration.endRowIndex, decoration.endColumnKey)
+  if (!topLeftCell || !bottomRightCell) {
+    return null
+  }
+  const startColumn = stageVisibleColumnIndexByKey.value.get(decoration.startColumnKey)
+  const endColumn = stageVisibleColumnIndexByKey.value.get(decoration.endColumnKey)
+  const startRow = resolveVisualRowIndexForCell(topLeftCell)
+  const endRow = resolveVisualRowIndexForCell(bottomRightCell)
+  if (
+    startColumn == null
+    || endColumn == null
+    || startRow == null
+    || endRow == null
+  ) {
+    return null
+  }
+  const palette = resolvePalette(decoration.colorIndex)
+  return {
+    key: `formula-reference:${decoration.referenceKey}`,
+    ranges: Object.freeze([{
+      startRow,
+      endRow,
+      startColumn,
+      endColumn,
+    }]),
+    className: decoration.active
+      ? "spreadsheet-formula-reference-overlay-lane spreadsheet-formula-reference-overlay-lane--active"
+      : "spreadsheet-formula-reference-overlay-lane",
+    segmentClassName: "spreadsheet-formula-reference-overlay-segment",
+    borderColor: palette.border,
+    backgroundColor: decoration.active ? palette.solid : palette.soft,
+    zIndex: decoration.active ? 8 : 7,
+  }
+}
+
 const formulaReferenceOverlayStyle = computed(() => {
-  const metrics = formulaReferenceOverlayMetrics.value
+  const metrics = formulaReferenceHandleMetrics.value
   if (!metrics) {
     return {}
   }
@@ -4009,8 +4024,6 @@ const formulaReferenceOverlayStyle = computed(() => {
     width: `${metrics.width}px`,
     height: `${metrics.height}px`,
     color: metrics.color,
-    borderColor: metrics.borderColor,
-    backgroundColor: metrics.backgroundColor,
   }
 })
 
@@ -4031,6 +4044,33 @@ const interactiveFormulaReference = computed(() => {
   return editorSnapshot.value.analysis.references.length === 1
     ? editorSnapshot.value.analysis.references[0] ?? null
     : null
+})
+
+const formulaReferenceDecorations = computed<readonly DataGridSpreadsheetFormulaReferenceDecoration[]>(() => {
+  if (!isFormulaReferenceMode.value || editorSnapshot.value.analysis.kind !== "formula") {
+    return Object.freeze([])
+  }
+  return createDataGridSpreadsheetFormulaReferenceDecorations(editorSnapshot.value.analysis.references, {
+    activeReferenceKey: hoveredFormulaReferenceKey.value ?? editorSnapshot.value.activeReferenceKey,
+    activeSheetId: activeSheetHandle.value?.id ?? null,
+    requireActiveSheet: true,
+    resolveSheet: reference => {
+      const referencedSheet = resolveWorkbookSheetHandleForReference(reference)
+      if (!referencedSheet) {
+        return null
+      }
+      return {
+        id: referencedSheet.id,
+        columns: referencedSheet.sheetModel.getColumns(),
+      }
+    },
+  })
+})
+
+const formulaReferenceStageOverlays = computed<readonly DataGridTableStageCustomOverlay[]>(() => {
+  return Object.freeze(formulaReferenceDecorations.value
+    .map(decoration => buildFormulaReferenceStageOverlay(decoration))
+    .filter((overlay): overlay is DataGridTableStageCustomOverlay => overlay != null))
 })
 
 const formulaReferenceTargetSheetId = computed(() => {
@@ -4059,9 +4099,9 @@ const formulaReferenceTargetSheetStyle = computed(() => {
 })
 
 watch(
-  [previewFormulaReference, interactiveFormulaReference, isFormulaReferenceMode, workbookRevision],
+  [formulaReferenceStageOverlays, interactiveFormulaReference, isFormulaReferenceMode, workbookRevision],
   () => {
-    void nextTick(syncFormulaReferenceOverlayMetrics)
+    scheduleFormulaReferenceHandleSync()
   },
   { immediate: true },
 )
@@ -4746,15 +4786,21 @@ function clearHoveredFormulaReferenceKey(): void {
 
 .spreadsheet-formula-reference-overlay {
   position: absolute;
-  border: 2px solid;
-  border-radius: 4px;
   pointer-events: none;
   box-sizing: border-box;
-  z-index: 3;
+  z-index: 9;
 }
 
 .spreadsheet-formula-reference-overlay--dragging {
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.86), 0 10px 24px rgba(15, 23, 42, 0.16);
+  filter: drop-shadow(0 10px 24px rgba(15, 23, 42, 0.16));
+}
+
+:deep(.spreadsheet-formula-reference-overlay-lane .spreadsheet-formula-reference-overlay-segment) {
+  transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+
+:deep(.spreadsheet-formula-reference-overlay-lane--active .spreadsheet-formula-reference-overlay-segment) {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.42);
 }
 
 .spreadsheet-formula-reference-handle {

@@ -14,6 +14,7 @@
       :selection-segments="pane.selectionSeamOverlaySegments"
       :fill-preview-segments="pane.fillPreviewSeamOverlaySegments"
       :move-preview-segments="pane.movePreviewSeamOverlaySegments"
+      :lanes="pane.seamOverlayLanes"
     />
     <div :ref="pane.contentRef ?? undefined" class="grid-pane-content" :style="pane.contentStyle" @contextmenu="handleContextMenu">
       <div v-if="(pane.topSpacerHeight ?? viewport.topSpacerHeight) > 0" class="grid-spacer" :style="{ height: `${pane.topSpacerHeight ?? viewport.topSpacerHeight}px` }" />
@@ -156,6 +157,7 @@
         :selection-segments="pane.selectionOverlaySegments"
         :fill-preview-segments="pane.fillPreviewOverlaySegments"
         :move-preview-segments="pane.movePreviewOverlaySegments"
+        :lanes="pane.overlayLanes"
       />
     </div>
   </div>
