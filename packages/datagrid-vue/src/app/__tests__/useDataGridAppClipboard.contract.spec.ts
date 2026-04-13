@@ -12,6 +12,12 @@ type DemoRow = {
 function createClipboardHarness(options: {
   readClipboardCell?: (row: { data: DemoRow }, columnKey: string) => string
   isCellEditable?: (row: { data: DemoRow; rowId: string }, rowIndex: number, columnKey: string, columnIndex: number) => boolean
+  resolveSelectionRanges?: () => ReadonlyArray<{
+    startRow: number
+    endRow: number
+    startColumn: number
+    endColumn: number
+  }>
 } = {}) {
   const rows = ref<DemoRow[]>([
     { rowId: "r1", a: "A1", b: "B1", c: "C1" },
@@ -56,6 +62,7 @@ function createClipboardHarness(options: {
     ] as never),
     viewportRowStart: ref(0),
     resolveSelectionRange: () => selectionRange.value,
+    resolveSelectionRanges: options.resolveSelectionRanges,
     resolveCurrentCellCoord: () => currentCell.value,
     applySelectionRange,
     clearCellSelection,
@@ -236,6 +243,21 @@ describe("useDataGridAppClipboard contract", () => {
         value: originalClipboard,
       })
     }
+  })
+
+  it("tracks pending clipboard visuals for each committed selection range", async () => {
+    const { clipboard } = createClipboardHarness({
+      resolveSelectionRanges: () => [
+        { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+        { startRow: 1, endRow: 1, startColumn: 2, endColumn: 2 },
+      ],
+    })
+
+    await clipboard.copySelectedCells("keyboard")
+
+    expect(clipboard.isCellInPendingClipboardRange(0, 0)).toBe(true)
+    expect(clipboard.isCellInPendingClipboardRange(1, 2)).toBe(true)
+    expect(clipboard.isCellInPendingClipboardRange(0, 1)).toBe(false)
   })
 
   it("writes to and reads from the system clipboard when available", async () => {

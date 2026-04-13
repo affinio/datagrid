@@ -494,9 +494,9 @@ The object form lets you control the source, depth, shortcuts, and built-in cont
 
 ```vue
 <script setup lang="ts">
-import { ref } from "vue"
 import {
   DataGrid,
+  useDataGridRef,
   type DataGridHistoryProp,
   type DataGridTableStageHistoryAdapter,
 } from "@affino/datagrid-vue-app"
@@ -516,11 +516,13 @@ const history: DataGridHistoryProp = {
   adapter: historyAdapter,
 }
 
-const gridRef = ref<{
-  getHistory?: () => {
-    runHistoryAction?: (direction: "undo" | "redo") => Promise<string | null>
-  }
-} | null>(null)
+type DemoRow = {
+  rowId: string
+  owner: string
+  amount: number
+}
+
+const gridRef = useDataGridRef<DemoRow>()
 
 async function undoFromExternalButton() {
   await gridRef.value?.getHistory()?.runHistoryAction("undo")
@@ -1385,10 +1387,16 @@ Imperative state helpers via `ref`:
 
 ```vue
 <script setup lang="ts">
-import { ref } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid, useDataGridRef } from "@affino/datagrid-vue-app"
 
-const gridRef = ref<InstanceType<typeof DataGrid> | null>(null)
+type DemoRow = {
+  rowId: string
+  owner: string
+  region: string
+  amount: number
+}
+
+const gridRef = useDataGridRef<DemoRow>()
 
 function exportState() {
   return gridRef.value?.getState()
@@ -1453,6 +1461,73 @@ function persistSavedView() {
 }
 </script>
 ```
+
+### Typed facade helpers
+
+When you want row-aware typing to stay explicit across columns, filter/selection readers, imperative refs, and authored `h()` / JSX rendering, use the typed facade helpers exported by `@affino/datagrid-vue-app`.
+
+```ts
+import { h } from "vue"
+import {
+  defineDataGridColumns,
+  defineDataGridComponent,
+  defineDataGridFilterCellReader,
+  defineDataGridSelectionCellReader,
+  useDataGridRef,
+} from "@affino/datagrid-vue-app"
+
+type InvoiceRow = {
+  rowId: string
+  statusCode: "a" | "b"
+  formula: string
+  effectiveAmount: number
+}
+
+const TypedDataGrid = defineDataGridComponent<InvoiceRow>()
+
+const columns = defineDataGridColumns<InvoiceRow>()([
+  {
+    key: "status",
+    field: "statusCode",
+    label: "Status",
+    valueGetter: row => row.statusCode === "a" ? "Active" : "Blocked",
+  },
+  {
+    key: "formula",
+    label: "Formula",
+  },
+] as const)
+
+const readFilterCell = defineDataGridFilterCellReader<InvoiceRow>()((row, columnKey) => {
+  if (columnKey !== "status") {
+    return undefined
+  }
+  return row.data.statusCode === "a" ? "Active" : "Blocked"
+})
+
+const readSelectionCell = defineDataGridSelectionCellReader<InvoiceRow>()((row, columnKey) => {
+  if (columnKey !== "formula") {
+    return undefined
+  }
+  return row.data.effectiveAmount
+})
+
+const gridRef = useDataGridRef<InvoiceRow>()
+
+export function renderGrid(rows: readonly InvoiceRow[]) {
+  return h(TypedDataGrid, {
+    ref: gridRef,
+    rows,
+    columns,
+    readFilterCell,
+    readSelectionCell,
+  })
+}
+```
+
+Use the regular `DataGrid` component directly in template-first SFCs. Reach for `defineDataGridComponent<TRow>()` when you are authoring render functions, JSX, or wrapper components that need one explicit row type carried through the whole facade.
+
+For a live example, open the sandbox route `/vue/typed-facade-grid`.
 
 ## Column State
 

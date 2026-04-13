@@ -2025,6 +2025,37 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("uses readFilterCell for value-set filters and histograms", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, statusCode: "a" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, statusCode: "b" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, statusCode: "a" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      readFilterCell: (rowNode, columnKey) => {
+        if (columnKey !== "status") {
+          return undefined
+        }
+        return rowNode.data.statusCode === "a" ? "Active" : "Blocked"
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: {
+        status: { kind: "valueSet", tokens: ["string:active"] },
+      },
+      advancedFilters: {},
+    })
+
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1", "r3"])
+    expect(model.getColumnHistogram("status", { ignoreSelfFilter: true })).toEqual([
+      { token: "string:Active", value: "Active", count: 2, text: "Active" },
+      { token: "string:Blocked", value: "Blocked", count: 1, text: "Blocked" },
+    ])
+
+    model.dispose()
+  })
+
   it("computes group aggregates when aggregation model is configured", () => {
     const model = createClientRowModel({
       rows: [

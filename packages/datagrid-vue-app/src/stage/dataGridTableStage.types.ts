@@ -1,4 +1,5 @@
 import type { ComponentPublicInstance, CSSProperties, Ref } from "vue"
+import type { DataGridColumnHistogramEntry } from "@affino/datagrid-core"
 import type {
   DataGridColumnPin,
   DataGridColumnSnapshot,
@@ -65,6 +66,7 @@ export interface DataGridTableStageColumnsSection {
     placement: "before" | "after"
   }) => boolean
   toggleSortForColumn: (columnKey: string, additive?: boolean) => void
+  handleHeaderColumnClick?: (columnKey: string, options: { additive: boolean; extend: boolean }) => void
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void
   columnMenuEnabled?: boolean
@@ -83,6 +85,7 @@ export interface DataGridTableStageColumnsSection {
   resolveColumnGroupOrder?: (columnKey: string) => number | null
   resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
   resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
+  resolveColumnMenuValueEntries?: (columnKey: string) => readonly DataGridColumnHistogramEntry[]
   applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
   applyColumnMenuPin?: (columnKey: string, pin: DataGridColumnPin) => void
   applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
@@ -124,7 +127,9 @@ export interface DataGridTableStageRowsSection<TRow extends Record<string, unkno
 
 export interface DataGridTableStageSelectionSection {
   selectionRange: DataGridOverlayRange | null
+  selectionRanges?: readonly DataGridOverlayRange[]
   selectionAnchorCell?: DataGridTableStageAnchorCell | null
+  totalRowCount?: number
   fillPreviewRange: DataGridOverlayRange | null
   rangeMovePreviewRange: DataGridOverlayRange | null
   fillHandleEnabled: boolean

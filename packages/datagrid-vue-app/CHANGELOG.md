@@ -1,5 +1,29 @@
 # @affino/datagrid-vue-app
 
+## Unreleased
+
+### Patch Changes
+
+- ## Summary
+
+  Added typed facade helpers to the public app package surface, promoted explicit `readFilterCell` / `readSelectionCell` hooks into the declarative `DataGrid` facade, and tightened stage rendering so multi-range selection, copied-range visuals, effective-value filter menus, and committed selection overlays stay aligned across pinned panes and workbook-style flows.
+
+  ## User impact
+
+  Application teams can now author typed `DataGrid` wrappers with `defineDataGridComponent`, `defineDataGridColumns`, typed cell readers, and `useDataGridRef` directly from the package root. Declarative column menus and selection summaries can reflect formula/display values rather than raw source fields, while multi-range selection and copy visuals remain stable in spreadsheet-style scenarios.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption:
+    - use `defineDataGridComponent<TRow>()`, `defineDataGridColumns<TRow>()`, and `useDataGridRef<TRow>()` for row-typed wrappers or render-function usage,
+    - pass `readFilterCell` when column-menu value filters should use effective values,
+    - pass `readSelectionCell` when aggregate labels and `getSelectionSummary()` should use displayed/formula values.
+
+  ## Validation
+  - public facade contract coverage updated for typed facade helpers and effective-value readers
+  - focused stage contracts passed for multi-range overlay segments and selection classes
+  - spreadsheet workbook regressions passed for aggregate overlay, Cmd-click additive selection, and full-column header selection
+
 ## 0.1.28
 
 ### Patch Changes

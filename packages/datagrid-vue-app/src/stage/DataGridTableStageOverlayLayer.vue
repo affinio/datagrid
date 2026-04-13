@@ -1,5 +1,5 @@
 <template>
-  <div v-if="selectionSegments.length > 0" class="grid-selection-overlay" aria-hidden="true">
+  <div v-if="selectionSegments.length > 0" class="grid-selection-overlay" :class="layerClass" aria-hidden="true">
     <div
       v-for="segment in selectionSegments"
       :key="segment.key"
@@ -7,7 +7,7 @@
       :style="segment.style"
     />
   </div>
-  <div v-if="fillPreviewSegments.length > 0" class="grid-selection-overlay" aria-hidden="true">
+  <div v-if="fillPreviewSegments.length > 0" class="grid-selection-overlay" :class="layerClass" aria-hidden="true">
     <div
       v-for="segment in fillPreviewSegments"
       :key="segment.key"
@@ -15,7 +15,7 @@
       :style="segment.style"
     />
   </div>
-  <div v-if="movePreviewSegments.length > 0" class="grid-selection-overlay" aria-hidden="true">
+  <div v-if="movePreviewSegments.length > 0" class="grid-selection-overlay" :class="layerClass" aria-hidden="true">
     <div
       v-for="segment in movePreviewSegments"
       :key="segment.key"
@@ -45,6 +45,10 @@ defineProps({
   movePreviewSegments: {
     type: Array as PropType<readonly OverlaySegment[]>,
     required: true,
+  },
+  layerClass: {
+    type: String,
+    default: "",
   },
 })
 </script>

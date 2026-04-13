@@ -2,13 +2,19 @@ import { defineComponent, h, nextTick, ref } from "vue"
 import { flushPromises, mount } from "@vue/test-utils"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import type {
+  DataGridRowNode,
   DataGridRowNodeInput,
   DataGridRowSelectionSnapshot,
   DataGridUnifiedState,
 } from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
 import {
+  defineDataGridComponent,
+  defineDataGridFilterCellReader,
   DataGridModuleHost,
+  defineDataGridColumns,
+  defineDataGridSelectionCellReader,
+  useDataGridRef,
   type DataGridAppToolbarModule,
   type DataGridSavedViewSnapshot,
   type DataGridTableStageHistoryAdapter,
@@ -49,6 +55,20 @@ interface DateTimeRow {
   updatedAt: Date
 }
 
+interface EffectiveSelectionRow {
+  rowId: string
+  formula: string
+  effectiveAmount: number
+}
+
+interface EffectiveFilterRow {
+  rowId: string
+  statusCode: string
+}
+
+const EffectiveFilterGrid = defineDataGridComponent<EffectiveFilterRow>()
+const EffectiveSelectionGrid = defineDataGridComponent<EffectiveSelectionRow>()
+
 const BASE_ROWS: readonly DemoRow[] = [
   { rowId: "r1", owner: "NOC", region: "eu-west", amount: 10 },
   { rowId: "r2", owner: "NOC", region: "us-east", amount: 20 },
@@ -83,11 +103,27 @@ const SEARCH_FILTER_ROWS: readonly DemoRow[] = [
   { rowId: "s4", owner: "Gamma", region: "us-east", amount: 40 },
 ]
 
+const EFFECTIVE_FILTER_ROWS: readonly EffectiveFilterRow[] = [
+  { rowId: "ef1", statusCode: "a" },
+  { rowId: "ef2", statusCode: "b" },
+  { rowId: "ef3", statusCode: "a" },
+]
+
 const COLUMNS = [
   { key: "owner", label: "Owner", width: 180 },
   { key: "region", label: "Region", width: 160 },
   { key: "amount", label: "Amount", width: 140 },
 ] as const
+
+const EFFECTIVE_FILTER_COLUMNS = defineDataGridColumns<EffectiveFilterRow>()([
+  {
+    key: "status",
+    field: "statusCode",
+    label: "Status",
+    width: 180,
+    valueGetter: (row: EffectiveFilterRow) => row.statusCode === "a" ? "Active" : "Blocked",
+  },
+] as const)
 
 const FLEX_COLUMNS = [
   { key: "owner", label: "Owner", flex: 1, initialState: { width: 180 } },
@@ -2756,6 +2792,89 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("builds value-set filter choices from effective column values", async () => {
+    const wrapper = mount(EffectiveFilterGrid, {
+      props: {
+        rows: EFFECTIVE_FILTER_ROWS,
+        columns: EFFECTIVE_FILTER_COLUMNS,
+        columnMenu: true,
+        rowSelection: false,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="status"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    const valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
+    expect(valueRows.map(row => row.textContent?.replace(/\s+/g, " ").trim())).toEqual([
+      expect.stringContaining("Active"),
+      expect.stringContaining("Blocked"),
+    ])
+
+    const activeRow = valueRows.find(row => row.textContent?.includes("Active"))
+    expect(activeRow).toBeTruthy()
+    const activeCheckbox = activeRow!.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(activeCheckbox).toBeTruthy()
+    activeCheckbox!.checked = false
+    activeCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+    queryColumnMenuAction("apply-filter")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              status: expect.objectContaining({
+                kind: "valueSet",
+                tokens: ["string:blocked"],
+              }),
+            }),
+          }),
+          rowCount: 1,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("accepts a typed readFilterCell helper on the public facade", async () => {
+    const readFilterCell = defineDataGridFilterCellReader<EffectiveFilterRow>()((row, columnKey) => {
+      if (columnKey !== "status") {
+        return undefined
+      }
+      return row.data.statusCode === "a" ? "Active" : "Blocked"
+    })
+
+    const wrapper = mount(EffectiveFilterGrid, {
+      props: {
+        rows: EFFECTIVE_FILTER_ROWS,
+        columns: defineDataGridColumns<EffectiveFilterRow>()([
+          { key: "status", field: "statusCode", label: "Status", width: 180 },
+        ] as const),
+        columnMenu: true,
+        rowSelection: false,
+        readFilterCell,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="status"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    const valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
+    expect(valueRows.map(row => row.textContent?.replace(/\s+/g, " ").trim())).toEqual([
+      expect.stringContaining("Active"),
+      expect.stringContaining("Blocked"),
+    ])
+
+    wrapper.unmount()
+  })
+
   it("recomputes viewport spacers after declarative columnMenu filter shrinks the row set", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
@@ -3542,6 +3661,66 @@ describe("DataGrid app facade contract", () => {
 
     source.unmount()
     target.unmount()
+  })
+
+  it("exposes typed getApi and getState through useDataGridRef", async () => {
+    const gridRef = useDataGridRef<DemoRow>()
+
+    const wrapper = mount(defineComponent({
+      setup() {
+        return () => h(DataGrid, {
+          ref: gridRef,
+          rows: BASE_ROWS,
+          columns: COLUMNS,
+        })
+      },
+    }))
+
+    await flushRuntimeTasks()
+
+    expect(gridRef.value?.getApi?.()?.rows.get(0)?.data).toMatchObject({
+      owner: "NOC",
+      region: "eu-west",
+      amount: 10,
+    })
+    expect(gridRef.value?.getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          rowCount: 3,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("supports defineDataGridComponent for typed h-render usage", async () => {
+    const TypedDataGrid = defineDataGridComponent<DemoRow>()
+    const gridRef = useDataGridRef<DemoRow>()
+
+    const wrapper = mount(defineComponent({
+      setup() {
+        return () => h(TypedDataGrid, {
+          ref: gridRef,
+          rows: BASE_ROWS,
+          columns: defineDataGridColumns<DemoRow>()([
+            { key: "owner", label: "Owner", width: 180 },
+            { key: "region", label: "Region", width: 160 },
+            { key: "amount", label: "Amount", width: 140 },
+          ] as const),
+        })
+      },
+    }))
+
+    await flushRuntimeTasks()
+
+    expect(gridRef.value?.getApi?.()?.rows.get(0)?.data).toMatchObject({
+      owner: "NOC",
+      region: "eu-west",
+      amount: 10,
+    })
+
+    wrapper.unmount()
   })
 
   it("clears the only advanced filter clause instead of blocking removal", async () => {
@@ -4354,6 +4533,108 @@ describe("DataGrid app facade contract", () => {
     expect(resolveVm(wrapper).getSelectionAggregatesLabel?.()).toBe(
       "Selection: count 2 · sum 300 · min 100 · max 200 · avg 150",
     )
+
+    wrapper.unmount()
+  })
+
+  it("uses readSelectionCell for aggregate labels and selection summary, and recomputes after edits inside the selection", async () => {
+    const rows: readonly EffectiveSelectionRow[] = [
+      { rowId: "fx1", formula: "=10+20", effectiveAmount: 30 },
+      { rowId: "fx2", formula: "=5+15", effectiveAmount: 20 },
+    ]
+    const columns = [
+      { key: "formula", label: "Formula", width: 180 },
+    ] as const
+
+    const wrapper = mount(EffectiveSelectionGrid, {
+      attachTo: document.body,
+      props: {
+        rows,
+        columns,
+        rowSelection: false,
+        readSelectionCell: defineDataGridSelectionCellReader<EffectiveSelectionRow>()((row, columnKey) => {
+          if (columnKey !== "formula") {
+            return undefined
+          }
+          return (row.data as EffectiveSelectionRow).effectiveAmount
+        }),
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const vm = resolveVm(wrapper) as ReturnType<typeof resolveVm> & {
+      getSelectionSummary?: () => unknown
+      getApi?: () => unknown
+    }
+    const api = vm.getApi?.() as {
+      selection?: { setSnapshot?: (snapshot: unknown) => void }
+      rows?: { applyEdits?: (updates: unknown[]) => void }
+    } | null
+
+    api?.selection?.setSnapshot?.({
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 1,
+          startCol: 0,
+          endCol: 0,
+          startRowId: "fx1",
+          endRowId: "fx2",
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "fx1" },
+          focus: { rowIndex: 1, colIndex: 0, rowId: "fx2" },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "fx2" },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getSelectionAggregatesLabel?.()).toBe(
+      "Selection: count 2 · sum 50 · min 20 · max 30 · avg 25",
+    )
+    expect(vm.getSelectionSummary?.()).toMatchObject({
+      selectedCells: 2,
+      columns: {
+        formula: {
+          metrics: {
+            sum: 50,
+            min: 20,
+            max: 30,
+            avg: 25,
+          },
+        },
+      },
+    })
+
+    api?.rows?.applyEdits?.([
+      {
+        rowId: "fx2",
+        data: {
+          effectiveAmount: 40,
+        },
+      },
+    ])
+
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getSelectionAggregatesLabel?.()).toBe(
+      "Selection: count 2 · sum 70 · min 30 · max 40 · avg 35",
+    )
+    expect(vm.getSelectionSummary?.()).toMatchObject({
+      selectedCells: 2,
+      columns: {
+        formula: {
+          metrics: {
+            sum: 70,
+            min: 30,
+            max: 40,
+            avg: 35,
+          },
+        },
+      },
+    })
 
     wrapper.unmount()
   })
@@ -5242,6 +5523,89 @@ describe("DataGrid app facade contract", () => {
     ])
     expect(rowModel?.getRow?.(0)?.row).toMatchObject({
       subtotal: 36,
+    })
+
+    wrapper.unmount()
+  })
+
+  it("applies advanced-filter predicates to declarative formula columns", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: FORMULA_ROWS,
+        columns: FORMULA_COLUMNS.map(column => (
+          column.key === "subtotal"
+            ? { ...column, formula: "price * qty" }
+            : column
+        )),
+        clientRowModelOptions: {
+          resolveRowId: row => (row as FormulaRow).id,
+        },
+        advancedFilter: true,
+      },
+    })
+
+    const selectComboboxOption = async (
+      input: HTMLInputElement,
+      optionLabel: string,
+      query: string = optionLabel,
+    ): Promise<void> => {
+      input.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      input.value = query
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+      await flushRuntimeTasks()
+
+      const option = [...document.body.querySelectorAll<HTMLButtonElement>(".datagrid-cell-combobox__option")].find(candidate => (
+        candidate.textContent?.includes(optionLabel)
+      ))
+      expect(option).toBeTruthy()
+      option?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      await flushRuntimeTasks()
+    }
+
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    expect(trigger.exists()).toBe(true)
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryAdvancedFilterRoot()
+    expect(popover).toBeTruthy()
+
+    const row = popover?.querySelector<HTMLElement>(".datagrid-advanced-filter__row") ?? null
+    expect(row).toBeTruthy()
+
+    const comboboxes = row?.querySelectorAll<HTMLInputElement>('input[role="combobox"]') ?? []
+    expect(comboboxes.length).toBeGreaterThanOrEqual(3)
+    await selectComboboxOption(comboboxes[1]!, "Subtotal", "sub")
+    await selectComboboxOption(comboboxes[2]!, ">", ">")
+
+    const valueInput = row?.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
+    expect(valueInput).toBeTruthy()
+    valueInput!.value = "20"
+    valueInput!.dispatchEvent(new Event("input", { bubbles: true }))
+
+    popover?.querySelector<HTMLElement>(".datagrid-advanced-filter__primary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            advancedExpression: expect.objectContaining({
+              key: "subtotal",
+              kind: "condition",
+              operator: "gt",
+              type: "number",
+              value: 20,
+            }),
+          }),
+          rowCount: 1,
+        }),
+      }),
     })
 
     wrapper.unmount()

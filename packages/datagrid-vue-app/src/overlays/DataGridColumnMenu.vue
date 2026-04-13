@@ -334,7 +334,7 @@
 
 <script setup lang="ts">
 import { computed, inject, ref, watch } from "vue"
-import { serializeColumnValueToToken } from "@affino/datagrid-vue"
+import type { DataGridColumnHistogramEntry } from "@affino/datagrid-vue"
 import {
   UiMenu,
   UiMenuContent,
@@ -386,7 +386,8 @@ interface UiMenuRef {
 const DATAGRID_COLUMN_MENU_VALUE_FILTER_HARD_ROW_LIMIT = 100_000
 
 const props = defineProps<{
-  rows: readonly Record<string, unknown>[]
+  rowCount: number
+  resolveValueEntries?: (() => readonly DataGridColumnHistogramEntry[]) | undefined
   items: readonly DataGridColumnMenuItemKey[]
   disabledItems: readonly DataGridColumnMenuItemKey[]
   disabledReasons: DataGridColumnMenuDisabledReasons
@@ -449,7 +450,7 @@ const effectiveValueFilterEnabled = computed(() => {
   if (!props.filterEnabled) {
     return false
   }
-  return props.rows.length <= resolvedValueFilterRowLimit.value
+  return props.rowCount <= resolvedValueFilterRowLimit.value
 })
 const valueFilterDisabledByRowLimit = computed(() => (
   props.filterEnabled && !effectiveValueFilterEnabled.value
@@ -603,7 +604,7 @@ watch(
     props.filterEnabled,
     props.valueFilterRowLimit,
     props.columnKey,
-    props.rows.length,
+    props.rowCount,
     props.selectedFilterTokens.length,
   ] as const,
   ([isOpen]) => {
@@ -667,35 +668,34 @@ function isCustomItemDisabled(item: DataGridColumnMenuCustomItem): boolean {
   return item.disabled === true
 }
 
-function formatColumnMenuValueLabel(value: unknown): string {
+function formatColumnMenuValueLabel(value: unknown, fallbackText?: string): string {
   if (value == null) {
     return "(Blanks)"
   }
-  const text = String(value)
+  const text = typeof fallbackText === "string" && fallbackText.length > 0
+    ? fallbackText
+    : String(value)
   return text.length > 0 ? text : "(Blanks)"
 }
 
 function collectColumnMenuValueEntries(
-  rows: readonly Record<string, unknown>[],
-  columnKey: string,
+  entries: readonly DataGridColumnHistogramEntry[],
 ): readonly DataGridColumnMenuValueEntry[] {
-  const counts = new Map<string, DataGridColumnMenuValueEntry>()
-  for (const row of rows) {
-    const token = normalizeColumnMenuToken(serializeColumnValueToToken(row[columnKey]))
-    const existing = counts.get(token)
-    if (existing) {
-      existing.count += 1
+  const normalizedEntries: DataGridColumnMenuValueEntry[] = []
+  for (const entry of entries) {
+    const token = normalizeColumnMenuToken(String(entry.token ?? ""))
+    if (!token) {
       continue
     }
-    const label = formatColumnMenuValueLabel(row[columnKey])
-    counts.set(token, {
+    const label = formatColumnMenuValueLabel(entry.value, entry.text)
+    normalizedEntries.push({
       token,
       label,
-      count: 1,
+      count: Math.max(0, Math.trunc(entry.count)),
       searchText: label.toLowerCase(),
     })
   }
-  return Array.from(counts.values()).sort((left, right) => (
+  return normalizedEntries.sort((left, right) => (
     left.label.localeCompare(right.label, undefined, {
       numeric: true,
       sensitivity: "base",
@@ -756,7 +756,7 @@ function resetFilterDraft(): void {
     draftSelectedTokens.value = []
     return
   }
-  const entries = collectColumnMenuValueEntries(props.rows, props.columnKey)
+  const entries = collectColumnMenuValueEntries(props.resolveValueEntries?.() ?? [])
   valueEntries.value = entries
   const activeTokens = Array.from(new Set(
     props.selectedFilterTokens

@@ -14,6 +14,7 @@ export interface UseDataGridTableStageVisualSelectionOptions {
   isFillDragging: Ref<boolean>
   interactionSelectionRange: Ref<DataGridCopyRange | null>
   resolveCommittedSelectionRange: () => DataGridCopyRange | null
+  resolveCommittedSelectionRanges: () => readonly DataGridCopyRange[]
   isCommittedSelectionAnchorCell: (rowOffset: number, columnIndex: number) => boolean
   isCommittedCellSelected: (rowOffset: number, columnIndex: number) => boolean
   shouldHighlightCommittedSelectedCell: (rowOffset: number, columnIndex: number) => boolean
@@ -22,6 +23,7 @@ export interface UseDataGridTableStageVisualSelectionOptions {
 
 export interface UseDataGridTableStageVisualSelectionResult {
   selectionRange: ComputedRef<DataGridCopyRange | null>
+  selectionRanges: ComputedRef<readonly DataGridCopyRange[]>
   isSelectionAnchorCell: (rowOffset: number, columnIndex: number) => boolean
   isCellSelected: (rowOffset: number, columnIndex: number) => boolean
   shouldHighlightSelectedCell: (rowOffset: number, columnIndex: number) => boolean
@@ -34,6 +36,13 @@ export function useDataGridTableStageVisualSelection(
   const selectionRange = computed(() => (
     options.interactionSelectionRange.value ?? options.resolveCommittedSelectionRange()
   ))
+  const selectionRanges = computed<readonly DataGridCopyRange[]>(() => {
+    const interactionRange = options.interactionSelectionRange.value
+    if (interactionRange) {
+      return [interactionRange]
+    }
+    return options.resolveCommittedSelectionRanges()
+  })
 
   const resolveVisualAnchorCell = (): DataGridTableStageAnchorCell | null => {
     const range = selectionRange.value
@@ -51,6 +60,7 @@ export function useDataGridTableStageVisualSelection(
   }
 
   const resolveVisualSelectionRange = (): DataGridCopyRange | null => selectionRange.value
+  const resolveVisualSelectionRanges = (): readonly DataGridCopyRange[] => selectionRanges.value
 
   const isVisualFillSelectionActive = (): boolean => {
     return options.mode.value === "base" && options.isFillDragging.value && Boolean(options.fillPreviewRange.value)
@@ -81,7 +91,7 @@ export function useDataGridTableStageVisualSelection(
 
   const isCellSelected = (rowOffset: number, columnIndex: number): boolean => {
     if (!isVisualFillSelectionActive()) {
-      return options.isCommittedCellSelected(rowOffset, columnIndex)
+      return resolveVisualSelectionRanges().some(range => isCellWithinRange(range, rowOffset, columnIndex))
     }
     const range = resolveVisualSelectionRange()
     return range ? isCellWithinRange(range, rowOffset, columnIndex) : false
@@ -89,7 +99,19 @@ export function useDataGridTableStageVisualSelection(
 
   const shouldHighlightSelectedCell = (rowOffset: number, columnIndex: number): boolean => {
     if (!isVisualFillSelectionActive()) {
-      return options.shouldHighlightCommittedSelectedCell(rowOffset, columnIndex)
+      const ranges = resolveVisualSelectionRanges()
+      if (ranges.length === 0 || !ranges.some(range => isCellWithinRange(range, rowOffset, columnIndex))) {
+        return false
+      }
+      if (
+        ranges.length === 1
+        && ranges[0]
+        && ranges[0].startRow === ranges[0].endRow
+        && ranges[0].startColumn === ranges[0].endColumn
+      ) {
+        return false
+      }
+      return !isSelectionAnchorCell(rowOffset, columnIndex)
     }
     const range = resolveVisualSelectionRange()
     if (!range || !isCellWithinRange(range, rowOffset, columnIndex)) {
@@ -108,7 +130,22 @@ export function useDataGridTableStageVisualSelection(
     edge: DataGridPendingEdge,
   ): boolean => {
     if (!isVisualFillSelectionActive()) {
-      return options.isCommittedCellOnSelectionEdge(rowOffset, columnIndex, edge)
+      return resolveVisualSelectionRanges().some(range => {
+        if (!isCellWithinRange(range, rowOffset, columnIndex)) {
+          return false
+        }
+        const rowIndex = options.viewportRowStart.value + rowOffset
+        switch (edge) {
+          case "top":
+            return rowIndex === range.startRow
+          case "right":
+            return columnIndex === range.endColumn
+          case "bottom":
+            return rowIndex === range.endRow
+          case "left":
+            return columnIndex === range.startColumn
+        }
+      })
     }
     const range = resolveVisualSelectionRange()
     if (!range || !isCellWithinRange(range, rowOffset, columnIndex)) {
@@ -129,6 +166,7 @@ export function useDataGridTableStageVisualSelection(
 
   return {
     selectionRange,
+    selectionRanges,
     isSelectionAnchorCell,
     isCellSelected,
     shouldHighlightSelectedCell,

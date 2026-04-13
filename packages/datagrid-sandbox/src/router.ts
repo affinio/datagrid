@@ -6,6 +6,7 @@ import VueGridCard from "./components/VueGridCard.vue"
 import VueRowSelectionInteractionGridCard from "./components/VueRowSelectionInteractionGridCard.vue"
 import VueShellGridCard from "./components/VueShellGridCard.vue"
 import VueSpreadsheetWorkbookCard from "./components/VueSpreadsheetWorkbookCard.vue"
+import VueTypedFacadeGridCard from "./components/VueTypedFacadeGridCard.vue"
 
 const routes = [
   {
@@ -43,6 +44,10 @@ const routes = [
   {
     path: "/vue/row-selection-grid",
     component: VueRowSelectionInteractionGridCard,
+  },
+  {
+    path: "/vue/typed-facade-grid",
+    component: VueTypedFacadeGridCard,
   },
   {
     path: "/vue/spreadsheet-workbook",

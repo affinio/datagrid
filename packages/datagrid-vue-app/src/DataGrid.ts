@@ -1,6 +1,7 @@
 import {
   computed,
   defineComponent,
+  type ExtractPublicPropTypes,
   h,
   onBeforeUnmount,
   ref,
@@ -40,6 +41,7 @@ import {
   useDataGridAppRowSelection,
   useDataGridAppSelection,
 } from "@affino/datagrid-vue/app"
+import type { DataGridBivariantCallback } from "./types/bivariance"
 import DataGridDefaultRenderer from "./host/DataGridDefaultRenderer"
 import type { DataGridAppToolbarModule } from "./host/DataGridModuleHost"
 import {
@@ -151,6 +153,24 @@ type DataGridRuntimeOverrides = Omit<
 
 type DataGridSelectionService = NonNullable<DataGridRuntimeOverrides["selection"]>
 
+export type DataGridSelectionCellReader<TRow = unknown> = DataGridBivariantCallback<[
+  row: DataGridRowNode<TRow>,
+  columnKey: string,
+], unknown>
+
+export type DataGridFilterCellReader<TRow = unknown> = DataGridBivariantCallback<[
+  row: DataGridRowNode<TRow>,
+  columnKey: string,
+], unknown>
+
+export function defineDataGridSelectionCellReader<TRow = unknown>() {
+  return <TReader extends DataGridSelectionCellReader<TRow>>(reader: TReader): TReader => reader
+}
+
+export function defineDataGridFilterCellReader<TRow = unknown>() {
+  return <TReader extends DataGridFilterCellReader<TRow>>(reader: TReader): TReader => reader
+}
+
 type DataGridBodyAwareRuntime = {
   api: UseDataGridRuntimeResult<Record<string, unknown>>["api"]
   syncBodyRowsInRange: UseDataGridRuntimeResult<Record<string, unknown>>["syncBodyRowsInRange"]
@@ -163,6 +183,74 @@ type DataGridBodyAwareRuntime = {
 } & {
   getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<Record<string, unknown>> | null
   resolveBodyRowIndexById: (rowId: string | number) => number
+}
+
+function readDataGridRowValueByPath(source: unknown, path: string): unknown {
+  if (!path || typeof source !== "object" || source === null) {
+    return undefined
+  }
+  const segments = path.split(".").filter(Boolean)
+  let current: unknown = source
+  for (const segment of segments) {
+    if (Array.isArray(current)) {
+      const index = Number(segment)
+      if (!Number.isInteger(index) || index < 0 || index >= current.length) {
+        return undefined
+      }
+      current = current[index]
+      continue
+    }
+    if (typeof current !== "object" || current === null || !(segment in (current as Record<string, unknown>))) {
+      return undefined
+    }
+    current = (current as Record<string, unknown>)[segment]
+  }
+  return current
+}
+
+function createDataGridReadFilterCell(
+  columns: readonly DataGridAppColumnInput[] | undefined,
+  explicitReadFilterCell?: DataGridFilterCellReader,
+): DataGridFilterCellReader | undefined {
+  const columnsByKey = new Map<string, DataGridAppColumnInput>()
+  for (const column of columns ?? []) {
+    const key = String(column.key ?? "").trim()
+    if (!key) {
+      continue
+    }
+    columnsByKey.set(key, column)
+  }
+  if (columnsByKey.size === 0 && typeof explicitReadFilterCell !== "function") {
+    return undefined
+  }
+  return (rowNode: DataGridRowNode<unknown>, columnKey: string) => {
+    if (typeof explicitReadFilterCell === "function") {
+      const explicitValue = explicitReadFilterCell(rowNode, columnKey)
+      if (typeof explicitValue !== "undefined") {
+        return explicitValue
+      }
+    }
+    const column = columnsByKey.get(String(columnKey ?? "").trim())
+    if (!column) {
+      return undefined
+    }
+    const rowData = rowNode.data as Record<string, unknown>
+    if (typeof column.valueGetter === "function") {
+      return column.valueGetter(rowData)
+    }
+    if (typeof column.accessor === "function") {
+      return column.accessor(rowData)
+    }
+    const field = typeof column.field === "string" ? column.field.trim() : ""
+    if (!field) {
+      return undefined
+    }
+    const directValue = rowData[field]
+    if (typeof directValue !== "undefined") {
+      return directValue
+    }
+    return readDataGridRowValueByPath(rowData, field)
+  }
 }
 
 function createDisabledRowSelectionService(): DataGridSelectionService {
@@ -328,243 +416,301 @@ function toolbarModulesEqual(
   return true
 }
 
-export default defineComponent({
+const dataGridProps = {
+  rows: {
+    type: Array as PropType<readonly unknown[]>,
+    default: () => [],
+  },
+  rowModel: {
+    type: Object as PropType<DataGridRowModel<unknown> | undefined>,
+    default: undefined,
+  },
+  clientRowModelOptions: {
+    type: Object as PropType<DataGridAppClientRowModelOptions<unknown> | undefined>,
+    default: undefined,
+  },
+  computedFields: {
+    type: Array as PropType<readonly DataGridComputedFieldDefinition<unknown>[] | null | undefined>,
+    default: undefined,
+  },
+  formulas: {
+    type: Array as PropType<readonly DataGridFormulaFieldDefinition[] | null | undefined>,
+    default: undefined,
+  },
+  formulaFunctions: {
+    type: Object as PropType<DataGridFormulaFunctionRegistry | null | undefined>,
+    default: undefined,
+  },
+  columns: {
+    type: Array as PropType<readonly DataGridAppColumnInput[]>,
+    default: () => [],
+  },
+  theme: {
+    type: [String, Object] as PropType<DataGridThemeProp>,
+    default: undefined,
+  },
+  aggregationModel: {
+    type: Object as PropType<DataGridAggregationModel<Record<string, unknown>> | null | undefined>,
+    default: undefined,
+  },
+  renderMode: {
+    type: String as PropType<"virtualization" | "pagination" | undefined>,
+    default: undefined,
+  },
+  virtualization: {
+    type: [Boolean, Object] as PropType<DataGridVirtualizationProp | undefined>,
+    default: undefined,
+  },
+  pagination: {
+    type: [Boolean, Object] as PropType<DataGridPaginationProp | undefined>,
+    default: undefined,
+  },
+  columnMenu: {
+    type: [Boolean, Object] as PropType<DataGridColumnMenuProp | undefined>,
+    default: undefined,
+  },
+  cellMenu: {
+    type: [Boolean, Object] as PropType<DataGridCellMenuProp | undefined>,
+    default: undefined,
+  },
+  rowIndexMenu: {
+    type: [Boolean, Object] as PropType<DataGridRowIndexMenuProp | undefined>,
+    default: undefined,
+  },
+  columnLayout: {
+    type: [Boolean, Object] as PropType<DataGridColumnLayoutProp | undefined>,
+    default: undefined,
+  },
+  columnReorder: {
+    type: [Boolean, Object] as PropType<DataGridColumnReorderProp | undefined>,
+    default: undefined,
+  },
+  aggregations: {
+    type: [Boolean, Object] as PropType<DataGridAggregationsProp | undefined>,
+    default: undefined,
+  },
+  advancedFilter: {
+    type: [Boolean, Object] as PropType<DataGridAdvancedFilterProp | undefined>,
+    default: undefined,
+  },
+  findReplace: {
+    type: [Boolean, Object] as PropType<DataGridFindReplaceProp | undefined>,
+    default: undefined,
+  },
+  gridLines: {
+    type: [String, Object] as PropType<DataGridGridLinesProp | undefined>,
+    default: undefined,
+  },
+  showRowIndex: {
+    type: Boolean,
+    default: true,
+  },
+  rowSelection: {
+    type: Boolean,
+    default: true,
+  },
+  rowReorder: {
+    type: [Boolean, Object] as PropType<DataGridRowReorderProp | undefined>,
+    default: undefined,
+  },
+  rowSelectionState: {
+    type: Object as PropType<DataGridRowSelectionSnapshot | null | undefined>,
+    default: undefined,
+  },
+  pageSize: {
+    type: Number as PropType<number | undefined>,
+    default: undefined,
+  },
+  currentPage: {
+    type: Number as PropType<number | undefined>,
+    default: undefined,
+  },
+  plugins: {
+    type: Array as PropType<readonly DataGridApiPluginDefinition<unknown>[]>,
+    default: () => [],
+  },
+  services: {
+    type: Object as PropType<DataGridRuntimeOverrides | undefined>,
+    default: undefined,
+  },
+  startupOrder: {
+    type: Array as PropType<CreateDataGridCoreOptions["startupOrder"] | undefined>,
+    default: undefined,
+  },
+  autoStart: {
+    type: Boolean,
+    default: true,
+  },
+  sortModel: {
+    type: Array as PropType<readonly DataGridSortState[] | undefined>,
+    default: undefined,
+  },
+  filterModel: {
+    type: Object as PropType<DataGridFilterSnapshot | null | undefined>,
+    default: undefined,
+  },
+  groupBy: {
+    type: [String, Array, Object] as PropType<DataGridGroupByProp | undefined>,
+    default: undefined,
+  },
+  pivotModel: {
+    type: Object as PropType<DataGridPivotSpec | null | undefined>,
+    default: undefined,
+  },
+  columnState: {
+    type: Object as PropType<DataGridUnifiedColumnState | null | undefined>,
+    default: undefined,
+  },
+  columnOrder: {
+    type: Array as PropType<readonly string[] | null | undefined>,
+    default: undefined,
+  },
+  hiddenColumnKeys: {
+    type: Array as PropType<readonly string[] | null | undefined>,
+    default: undefined,
+  },
+  columnWidths: {
+    type: Object as PropType<Readonly<Record<string, number | null>> | null | undefined>,
+    default: undefined,
+  },
+  columnPins: {
+    type: Object as PropType<Readonly<Record<string, DataGridColumnPin>> | null | undefined>,
+    default: undefined,
+  },
+  state: {
+    type: Object as PropType<DataGridUnifiedState<Record<string, unknown>> | null | undefined>,
+    default: undefined,
+  },
+  stateOptions: {
+    type: Object as PropType<DataGridSetStateOptions | null | undefined>,
+    default: undefined,
+  },
+  rowHeightMode: {
+    type: String as PropType<"fixed" | "auto">,
+    default: "fixed",
+  },
+  baseRowHeight: {
+    type: Number,
+    default: 31,
+  },
+  layoutMode: {
+    type: String as PropType<DataGridLayoutMode>,
+    default: "fill",
+  },
+  minRows: {
+    type: Number as PropType<number | undefined>,
+    default: undefined,
+  },
+  maxRows: {
+    type: Number as PropType<number | undefined>,
+    default: undefined,
+  },
+  placeholderRows: {
+    type: [Number, Object] as PropType<DataGridPlaceholderRowsProp<Record<string, unknown>> | undefined>,
+    default: undefined,
+  },
+  fillHandle: {
+    type: Boolean,
+    default: false,
+  },
+  rangeMove: {
+    type: Boolean,
+    default: false,
+  },
+  rowHover: {
+    type: Boolean,
+    default: false,
+  },
+  stripedRows: {
+    type: Boolean,
+    default: false,
+  },
+  readSelectionCell: {
+    type: Function as PropType<DataGridSelectionCellReader | undefined>,
+    default: undefined,
+  },
+  readFilterCell: {
+    type: Function as PropType<DataGridFilterCellReader | undefined>,
+    default: undefined,
+  },
+  isCellEditable: {
+    type: Function as PropType<DataGridCellEditablePredicate<Record<string, unknown>> | undefined>,
+    default: undefined,
+  },
+  viewMode: {
+    type: String as PropType<DataGridAppViewMode | undefined>,
+    default: undefined,
+  },
+  gantt: {
+    type: [Boolean, Object] as PropType<DataGridGanttProp | undefined>,
+    default: undefined,
+  },
+  history: {
+    type: [Boolean, Object] as PropType<DataGridHistoryProp | undefined>,
+    default: undefined,
+  },
+  chrome: {
+    type: [String, Object] as PropType<DataGridChromeProp | undefined>,
+    default: undefined,
+  },
+  toolbarModules: {
+    type: Array as PropType<readonly DataGridAppToolbarModule[]>,
+    default: () => [],
+  },
+} as const
+
+type DataGridPublicPropsBase = ExtractPublicPropTypes<typeof dataGridProps>
+
+export type DataGridProps<TRow = unknown> = Omit<
+  DataGridPublicPropsBase,
+  | "rows"
+  | "rowModel"
+  | "clientRowModelOptions"
+  | "computedFields"
+  | "columns"
+  | "plugins"
+  | "state"
+  | "placeholderRows"
+  | "readSelectionCell"
+  | "readFilterCell"
+  | "isCellEditable"
+> & {
+  rows?: readonly (TRow | DataGridRowNodeInput<TRow>)[]
+  rowModel?: DataGridRowModel<TRow> | undefined
+  clientRowModelOptions?: DataGridAppClientRowModelOptions<TRow> | undefined
+  computedFields?: readonly DataGridComputedFieldDefinition<TRow>[] | null | undefined
+  columns?: readonly DataGridAppColumnInput<TRow>[]
+  plugins?: readonly DataGridApiPluginDefinition<TRow>[]
+  state?: DataGridUnifiedState<TRow> | null | undefined
+  placeholderRows?: DataGridPlaceholderRowsProp<TRow> | undefined
+  readSelectionCell?: DataGridSelectionCellReader<TRow> | undefined
+  readFilterCell?: DataGridFilterCellReader<TRow> | undefined
+  isCellEditable?: DataGridCellEditablePredicate<TRow> | undefined
+}
+
+export interface DataGridExposed<TRow = unknown> {
+  history: DataGridHistoryController
+  getHistory: () => DataGridHistoryController
+  getApi: () => DataGridApi<TRow> | null
+  getSelectionAggregatesLabel: () => string
+  getState: () => DataGridUnifiedState<TRow> | null
+  getSavedView: () => DataGridSavedViewSnapshot<TRow & Record<string, unknown>> | null
+  migrateSavedView: (
+    savedView: unknown,
+    options?: DataGridMigrateStateOptions,
+  ) => DataGridSavedViewSnapshot<TRow & Record<string, unknown>> | null
+  applySavedView: (
+    savedView: DataGridSavedViewSnapshot<TRow & Record<string, unknown>>,
+    options?: DataGridSetStateOptions,
+  ) => boolean
+  migrateState: (state: unknown, options?: DataGridMigrateStateOptions) => DataGridUnifiedState<TRow> | null
+  applyState: (state: DataGridUnifiedState<TRow> | null, options?: DataGridSetStateOptions) => boolean
+}
+
+const DataGridRuntimeComponent = defineComponent({
   name: "DataGrid",
   inheritAttrs: false,
-  props: {
-    rows: {
-      type: Array as PropType<readonly unknown[]>,
-      default: () => [],
-    },
-    rowModel: {
-      type: Object as PropType<DataGridRowModel<unknown> | undefined>,
-      default: undefined,
-    },
-    clientRowModelOptions: {
-      type: Object as PropType<DataGridAppClientRowModelOptions<unknown> | undefined>,
-      default: undefined,
-    },
-    computedFields: {
-      type: Array as PropType<readonly DataGridComputedFieldDefinition<unknown>[] | null | undefined>,
-      default: undefined,
-    },
-    formulas: {
-      type: Array as PropType<readonly DataGridFormulaFieldDefinition[] | null | undefined>,
-      default: undefined,
-    },
-    formulaFunctions: {
-      type: Object as PropType<DataGridFormulaFunctionRegistry | null | undefined>,
-      default: undefined,
-    },
-    columns: {
-      type: Array as PropType<readonly DataGridAppColumnInput[]>,
-      default: () => [],
-    },
-    theme: {
-      type: [String, Object] as PropType<DataGridThemeProp>,
-      default: undefined,
-    },
-    aggregationModel: {
-      type: Object as PropType<DataGridAggregationModel<Record<string, unknown>> | null | undefined>,
-      default: undefined,
-    },
-    renderMode: {
-      type: String as PropType<"virtualization" | "pagination" | undefined>,
-      default: undefined,
-    },
-    virtualization: {
-      type: [Boolean, Object] as PropType<DataGridVirtualizationProp | undefined>,
-      default: undefined,
-    },
-    pagination: {
-      type: [Boolean, Object] as PropType<DataGridPaginationProp | undefined>,
-      default: undefined,
-    },
-    columnMenu: {
-      type: [Boolean, Object] as PropType<DataGridColumnMenuProp | undefined>,
-      default: undefined,
-    },
-    cellMenu: {
-      type: [Boolean, Object] as PropType<DataGridCellMenuProp | undefined>,
-      default: undefined,
-    },
-    rowIndexMenu: {
-      type: [Boolean, Object] as PropType<DataGridRowIndexMenuProp | undefined>,
-      default: undefined,
-    },
-    columnLayout: {
-      type: [Boolean, Object] as PropType<DataGridColumnLayoutProp | undefined>,
-      default: undefined,
-    },
-    columnReorder: {
-      type: [Boolean, Object] as PropType<DataGridColumnReorderProp | undefined>,
-      default: undefined,
-    },
-    aggregations: {
-      type: [Boolean, Object] as PropType<DataGridAggregationsProp | undefined>,
-      default: undefined,
-    },
-    advancedFilter: {
-      type: [Boolean, Object] as PropType<DataGridAdvancedFilterProp | undefined>,
-      default: undefined,
-    },
-    findReplace: {
-      type: [Boolean, Object] as PropType<DataGridFindReplaceProp | undefined>,
-      default: undefined,
-    },
-    gridLines: {
-      type: [String, Object] as PropType<DataGridGridLinesProp | undefined>,
-      default: undefined,
-    },
-    showRowIndex: {
-      type: Boolean,
-      default: true,
-    },
-    rowSelection: {
-      type: Boolean,
-      default: true,
-    },
-    rowReorder: {
-      type: [Boolean, Object] as PropType<DataGridRowReorderProp | undefined>,
-      default: undefined,
-    },
-    rowSelectionState: {
-      type: Object as PropType<DataGridRowSelectionSnapshot | null | undefined>,
-      default: undefined,
-    },
-    pageSize: {
-      type: Number as PropType<number | undefined>,
-      default: undefined,
-    },
-    currentPage: {
-      type: Number as PropType<number | undefined>,
-      default: undefined,
-    },
-    plugins: {
-      type: Array as PropType<readonly DataGridApiPluginDefinition<unknown>[]>,
-      default: () => [],
-    },
-    services: {
-      type: Object as PropType<DataGridRuntimeOverrides | undefined>,
-      default: undefined,
-    },
-    startupOrder: {
-      type: Array as PropType<CreateDataGridCoreOptions["startupOrder"] | undefined>,
-      default: undefined,
-    },
-    autoStart: {
-      type: Boolean,
-      default: true,
-    },
-    sortModel: {
-      type: Array as PropType<readonly DataGridSortState[] | undefined>,
-      default: undefined,
-    },
-    filterModel: {
-      type: Object as PropType<DataGridFilterSnapshot | null | undefined>,
-      default: undefined,
-    },
-    groupBy: {
-      type: [String, Array, Object] as PropType<DataGridGroupByProp | undefined>,
-      default: undefined,
-    },
-    pivotModel: {
-      type: Object as PropType<DataGridPivotSpec | null | undefined>,
-      default: undefined,
-    },
-    columnState: {
-      type: Object as PropType<DataGridUnifiedColumnState | null | undefined>,
-      default: undefined,
-    },
-    columnOrder: {
-      type: Array as PropType<readonly string[] | null | undefined>,
-      default: undefined,
-    },
-    hiddenColumnKeys: {
-      type: Array as PropType<readonly string[] | null | undefined>,
-      default: undefined,
-    },
-    columnWidths: {
-      type: Object as PropType<Readonly<Record<string, number | null>> | null | undefined>,
-      default: undefined,
-    },
-    columnPins: {
-      type: Object as PropType<Readonly<Record<string, DataGridColumnPin>> | null | undefined>,
-      default: undefined,
-    },
-    state: {
-      type: Object as PropType<DataGridUnifiedState<Record<string, unknown>> | null | undefined>,
-      default: undefined,
-    },
-    stateOptions: {
-      type: Object as PropType<DataGridSetStateOptions | null | undefined>,
-      default: undefined,
-    },
-    rowHeightMode: {
-      type: String as PropType<"fixed" | "auto">,
-      default: "fixed",
-    },
-    baseRowHeight: {
-      type: Number,
-      default: 31,
-    },
-    layoutMode: {
-      type: String as PropType<DataGridLayoutMode>,
-      default: "fill",
-    },
-    minRows: {
-      type: Number as PropType<number | undefined>,
-      default: undefined,
-    },
-    maxRows: {
-      type: Number as PropType<number | undefined>,
-      default: undefined,
-    },
-    placeholderRows: {
-      type: [Number, Object] as PropType<DataGridPlaceholderRowsProp<Record<string, unknown>> | undefined>,
-      default: undefined,
-    },
-    fillHandle: {
-      type: Boolean,
-      default: false,
-    },
-    rangeMove: {
-      type: Boolean,
-      default: false,
-    },
-    rowHover: {
-      type: Boolean,
-      default: false,
-    },
-    stripedRows: {
-      type: Boolean,
-      default: false,
-    },
-    isCellEditable: {
-      type: Function as PropType<DataGridCellEditablePredicate<Record<string, unknown>> | undefined>,
-      default: undefined,
-    },
-    viewMode: {
-      type: String as PropType<DataGridAppViewMode | undefined>,
-      default: undefined,
-    },
-    gantt: {
-      type: [Boolean, Object] as PropType<DataGridGanttProp | undefined>,
-      default: undefined,
-    },
-    history: {
-      type: [Boolean, Object] as PropType<DataGridHistoryProp | undefined>,
-      default: undefined,
-    },
-    chrome: {
-      type: [String, Object] as PropType<DataGridChromeProp | undefined>,
-      default: undefined,
-    },
-    toolbarModules: {
-      type: Array as PropType<readonly DataGridAppToolbarModule[]>,
-      default: () => [],
-    },
-  },
+  props: dataGridProps,
   emits: {
     "cell-change": (_payload: unknown) => true,
     "selection-change": (_payload: DataGridApiSelectionChangedEvent) => true,
@@ -671,10 +817,26 @@ export default defineComponent({
     const resolvedRowReorder = computed<DataGridRowReorderOptions>(() => {
       return resolveDataGridRowReorder(props.rowReorder)
     })
+    const resolvedReadFilterCell = computed<DataGridFilterCellReader | undefined>(() => {
+      const clientRowModelReadFilterCell = props.clientRowModelOptions?.readFilterCell as DataGridFilterCellReader | undefined
+      return createDataGridReadFilterCell(
+        props.columns,
+        props.readFilterCell ?? clientRowModelReadFilterCell,
+      )
+    })
+    const resolvedAppClientRowModelOptions = computed<DataGridAppClientRowModelOptions<unknown> | undefined>(() => {
+      if (!resolvedReadFilterCell.value) {
+        return props.clientRowModelOptions
+      }
+      return {
+        ...(props.clientRowModelOptions ?? {}),
+        readFilterCell: resolvedReadFilterCell.value as DataGridAppClientRowModelOptions<unknown>["readFilterCell"],
+      }
+    })
     const resolvedClientRowModelOptions = computed(() => {
       return resolveDataGridFormulaRowModelOptions({
         columns: props.columns,
-        clientRowModelOptions: props.clientRowModelOptions,
+        clientRowModelOptions: resolvedAppClientRowModelOptions.value,
         computedFields: props.computedFields,
         formulas: props.formulas,
         formulaFunctions: props.formulaFunctions,
@@ -745,6 +907,7 @@ export default defineComponent({
       visibleColumns,
       totalRows,
       showRowSelection: computed(() => props.rowSelection),
+      readSelectionCell: props.readSelectionCell,
     } as Parameters<typeof useDataGridAppSelection<unknown>>[0]
 
     const {
@@ -967,7 +1130,18 @@ export default defineComponent({
       getColumnState: () => controlledState.getColumnState(),
       getColumnSnapshot: () => dataGridRef.value?.api.columns.getSnapshot() ?? null,
       getSelectionAggregatesLabel: () => selectionAggregatesLabel.value,
-      getSelectionSummary: () => dataGridRef.value?.api.selection.summarize() ?? null,
+      getSelectionSummary: () => {
+        const summarize = dataGridRef.value?.api.selection.summarize
+        if (!summarize) {
+          return null
+        }
+        const summaryOptions: Parameters<typeof summarize>[0] & {
+          readSelectionCell?: typeof props.readSelectionCell
+        } = {
+          readSelectionCell: props.readSelectionCell,
+        }
+        return summarize(summaryOptions)
+      },
       getView: () => currentViewMode.value,
       setView,
       getSavedView,
@@ -1033,6 +1207,7 @@ export default defineComponent({
         rangeMove: props.rangeMove,
         rowHover: props.rowHover,
         stripedRows: props.stripedRows,
+        readSelectionCell: props.readSelectionCell,
         isCellEditable: props.isCellEditable,
         showRowIndex: props.showRowIndex,
         rowSelection: props.rowSelection,
@@ -1088,3 +1263,34 @@ export default defineComponent({
     }
   },
 })
+
+type DataGridRuntimeStatics = {
+  [K in keyof typeof DataGridRuntimeComponent]: (typeof DataGridRuntimeComponent)[K]
+}
+
+type DataGridComponentInstance<TRow = unknown> = Omit<
+  InstanceType<typeof DataGridRuntimeComponent>,
+  "$props" | keyof DataGridExposed<any>
+> & {
+  $props: DataGridProps<TRow>
+} & DataGridExposed<TRow>
+
+export type DataGridInstance<TRow = unknown> = DataGridComponentInstance<TRow>
+
+export type DataGridComponentFor<TRow = unknown> = DataGridRuntimeStatics & {
+  new (): DataGridComponentInstance<TRow>
+}
+
+export function useDataGridRef<TRow = unknown>() {
+  return ref<DataGridInstance<TRow> | null>(null)
+}
+
+export function defineDataGridComponent<TRow = unknown>() {
+  return DataGridRuntimeComponent as DataGridComponentFor<TRow>
+}
+
+export type DataGridComponent = DataGridRuntimeStatics & {
+  new <TRow = unknown>(): DataGridComponentInstance<TRow>
+}
+
+export default DataGridRuntimeComponent as DataGridComponent

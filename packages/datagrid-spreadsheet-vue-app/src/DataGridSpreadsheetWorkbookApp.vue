@@ -81,154 +81,40 @@
         </div>
       </div>
 
-      <div
-        class="spreadsheet-formula-shell"
-        :class="{
-          'spreadsheet-formula-shell--focused': isFormulaBarFocused,
-          'spreadsheet-formula-shell--reference-mode': isFormulaReferenceMode,
-          'spreadsheet-formula-shell--readonly': activeSheetReadOnly,
-        }"
-      >
-        <div class="spreadsheet-formula-address">
-          <div class="spreadsheet-formula-address__copy">
-            <span class="spreadsheet-formula-address__label">Active cell</span>
-            <strong>{{ activeCellBadge }}</strong>
-          </div>
-          <span class="spreadsheet-formula-address__badge">{{ formulaModeLabel }}</span>
-        </div>
-
-        <UiMenu ref="formulaAutocompleteMenuRef" :callbacks="formulaAutocompleteMenuCallbacks" :options="formulaAutocompleteMenuOptions">
-          <UiMenuTrigger as-child trigger="both">
-            <div class="spreadsheet-formula-main">
-              <div class="spreadsheet-formula-toolbar">
-                <div class="spreadsheet-formula-toolbar__copy">
-                  <span class="spreadsheet-formula-toolbar__fx">fx</span>
-                  <div class="spreadsheet-formula-toolbar__text">
-                    <strong>{{ formulaModeLabel }}</strong>
-                    <span>{{ formulaModeHint }}</span>
-                  </div>
-                </div>
-
-                <div v-if="!activeSheetReadOnly" class="spreadsheet-formula-toolbar__actions">
-                  <button
-                    type="button"
-                    class="spreadsheet-action spreadsheet-action--subtle"
-                    @mousedown.prevent
-                    @click="handleFormulaCancel"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    class="spreadsheet-action spreadsheet-action--primary"
-                    @mousedown.prevent
-                    @click="handleFormulaCommit"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-
-              <textarea
-                ref="formulaInputRef"
-                class="spreadsheet-formula-input"
-                :value="editorSnapshot.rawInput"
-                :readonly="activeSheetReadOnly"
-                spellcheck="false"
-                :placeholder="formulaInputPlaceholder"
-                @focus="handleFormulaFocus"
-                @blur="handleFormulaBlur"
-                @input="handleFormulaInput"
-                @select="syncFormulaSelectionFromDom"
-                @click="syncFormulaSelectionFromDom"
-                @keyup="syncFormulaSelectionFromDom"
-                @keydown="handleFormulaKeydown"
-              />
-
-              <div class="spreadsheet-formula-preview" aria-hidden="true">
-                <template v-for="segment in formulaPreviewSegments" :key="segment.key">
-                  <span
-                    v-if="segment.kind === 'reference'"
-                    class="spreadsheet-formula-token spreadsheet-formula-token--reference"
-                    :class="{ 'spreadsheet-formula-token--active': segment.active }"
-                    :style="segment.style"
-                    @mouseenter="setHoveredFormulaReferenceKey(segment.referenceKey)"
-                    @mouseleave="clearHoveredFormulaReferenceKey"
-                  >
-                    {{ segment.text }}
-                  </span>
-                  <span v-else class="spreadsheet-formula-token">{{ segment.text }}</span>
-                </template>
-              </div>
-
-              <div v-if="isFormulaReferenceMode" class="spreadsheet-formula-caption">
-                <span class="spreadsheet-formula-caption__label">Selection</span>
-                <span>{{ formulaSelectionSummary }}</span>
-              </div>
-            </div>
-          </UiMenuTrigger>
-
-          <UiMenuContent
-            v-if="isFormulaAutocompleteVisible"
-            class-name="ui-menu-content spreadsheet-formula-autocomplete"
-            align="start"
-            :gutter="8"
-            data-affino-menu-root
-            data-spreadsheet-formula-autocomplete="true"
-          >
-            <UiMenuLabel class="spreadsheet-formula-autocomplete__label">
-              Formula functions
-            </UiMenuLabel>
-            <UiMenuSeparator />
-
-            <UiMenuItem
-              v-for="(item, index) in formulaAutocompleteSuggestions"
-              :key="item.name"
-              class="spreadsheet-formula-autocomplete__item"
-              :class="{ 'spreadsheet-formula-autocomplete__item--active': index === formulaAutocompleteActiveIndex }"
-              :data-formula-autocomplete-item="item.name"
-              :data-formula-autocomplete-active="index === formulaAutocompleteActiveIndex ? 'true' : 'false'"
-              @mouseenter="formulaAutocompleteActiveIndex = index"
-              @select="applyFormulaAutocomplete(item)"
-            >
-              <div class="spreadsheet-formula-autocomplete__item-copy">
-                <div class="spreadsheet-formula-autocomplete__item-head">
-                  <span class="spreadsheet-formula-autocomplete__item-name">{{ item.name }}</span>
-                  <span class="spreadsheet-formula-autocomplete__item-arity">{{ item.arityLabel }}</span>
-                </div>
-                <div class="spreadsheet-formula-autocomplete__item-detail">
-                  {{ item.detail }}
-                </div>
-              </div>
-            </UiMenuItem>
-          </UiMenuContent>
-        </UiMenu>
-
-        <div class="spreadsheet-formula-state">
-          <div v-if="activeSheetReadOnly" class="spreadsheet-formula-readonly">
-            Derived view from <strong>{{ activeSheetViewSourceLabel }}</strong>. Edit the source sheet to recompute.
-          </div>
-          <div class="spreadsheet-formula-value">
-            <span class="spreadsheet-formula-state__label">Display</span>
-            <span>{{ activeCellDisplayLabel }}</span>
-          </div>
-          <div class="spreadsheet-formula-value">
-            <span class="spreadsheet-formula-state__label">Mode</span>
-            <span>{{ formulaStateSummary }}</span>
-          </div>
-          <div class="spreadsheet-formula-value">
-            <span class="spreadsheet-formula-state__label">Refs</span>
-            <span>{{ formulaReferenceSummary }}</span>
-          </div>
-          <div
-            v-if="activeDiagnosticMessage"
-            class="spreadsheet-formula-error"
-            :title="activeDiagnosticMessage"
-          >
-            {{ activeDiagnosticMessage }}
-          </div>
-        </div>
-      </div>
+      <DataGridSpreadsheetFormulaEditor
+        ref="formulaEditorRef"
+        :active-cell-badge="activeCellBadge"
+        :formula-mode-label="formulaModeLabel"
+        :formula-mode-hint="formulaModeHint"
+        :formula-input-placeholder="formulaInputPlaceholder"
+        :active-cell-display-label="activeCellDisplayLabel"
+        :formula-state-summary="formulaStateSummary"
+        :formula-reference-summary="formulaReferenceSummary"
+        :formula-selection-summary="formulaSelectionSummary"
+        :active-sheet-view-source-label="activeSheetViewSourceLabel"
+        :editor-raw-input="editorSnapshot.rawInput"
+        :is-focused="isFormulaBarFocused"
+        :is-reference-mode="isFormulaReferenceMode"
+        :is-readonly="activeSheetReadOnly"
+        :active-diagnostic-message="activeDiagnosticMessage"
+        :preview-segments="formulaPreviewSegments"
+        :autocomplete-suggestions="formulaAutocompleteSuggestions"
+        :autocomplete-active-index="formulaAutocompleteActiveIndex"
+        :autocomplete-visible="isFormulaAutocompleteVisible"
+        :menu-callbacks="formulaAutocompleteMenuCallbacks"
+        :menu-options="formulaAutocompleteMenuOptions"
+        @blur="handleFormulaBlur"
+        @cancel="handleFormulaCancel"
+        @commit="handleFormulaCommit"
+        @focus="handleFormulaFocus"
+        @input="handleFormulaInput"
+        @keydown="handleFormulaKeydown"
+        @selection-change="syncFormulaSelectionFromDom"
+        @reference-enter="setHoveredFormulaReferenceKey"
+        @reference-leave="clearHoveredFormulaReferenceKey"
+        @autocomplete-hover="formulaAutocompleteActiveIndex = $event"
+        @autocomplete-select="applyFormulaAutocomplete"
+      />
 
       <div v-if="props.workbookStats" class="meta">
         <span>Workbook sheets: {{ workbookSnapshot.sheets.length }}</span>
@@ -330,6 +216,14 @@
           >
             <DataGridTableStageLoose v-bind="tableStagePropsForView" :stage-context="tableStageContextForView" />
           </section>
+
+          <div
+            v-if="selectionAggregatesLabel"
+            class="spreadsheet-selection-aggregate-overlay"
+            aria-live="polite"
+          >
+            {{ selectionAggregatesLabel }}
+          </div>
 
           <div
             v-if="formulaReferenceOverlayMetrics"
@@ -497,14 +391,8 @@ import {
   DATAGRID_DEFAULT_FORMULA_FUNCTIONS,
   type DataGridFormulaFunctionRegistry,
 } from "@affino/datagrid-formula-engine"
-import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
+import { applyGridTheme } from "@affino/datagrid-theme"
 import {
-  UiMenu,
-  UiMenuContent,
-  UiMenuItem,
-  UiMenuLabel,
-  UiMenuSeparator,
-  UiMenuTrigger,
   type MenuCallbacks,
   type MenuOptions,
 } from "@affino/menu-vue"
@@ -540,6 +428,7 @@ import {
   useDataGridAppRowSelection,
   useDataGridAppSelection,
 } from "@affino/datagrid-vue/app"
+import type { DataGridThemeProp } from "@affino/datagrid-vue-app"
 import {
   DataGridAdvancedFilterPopover,
   DataGridTableStage,
@@ -548,6 +437,8 @@ import {
   useDataGridTableStageRuntime,
 } from "@affino/datagrid-vue-app/internal"
 import type { DataGridTableStageProps } from "@affino/datagrid-vue-app/internal"
+import DataGridSpreadsheetFormulaEditor from "./DataGridSpreadsheetFormulaEditor.vue"
+import { resolveSpreadsheetWorkbookThemeTokens } from "./spreadsheetWorkbookTheme"
 import { useDataGridSpreadsheetWorkbookHistory } from "./useDataGridSpreadsheetWorkbookHistory"
 
 const DataGridTableStageLoose = DataGridTableStage as unknown as new () => {
@@ -559,6 +450,7 @@ export interface DataGridSpreadsheetWorkbookAppProps {
   title?: string
   subtitle?: string | null
   badgeLabel?: string | null
+  theme?: DataGridThemeProp
   formulaPlaceholder?: string
   clipboardCopyMode?: "formula" | "display" | "smart"
   footerText?: string | null
@@ -573,6 +465,7 @@ const props = withDefaults(defineProps<DataGridSpreadsheetWorkbookAppProps>(), {
   title: "Spreadsheet Workbook",
   subtitle: null,
   badgeLabel: "Spreadsheet",
+  theme: "industrial-neutral",
   formulaPlaceholder: "Type a value or formula. Try = [qty]@row * [price]@row and click cells.",
   clipboardCopyMode: "smart",
   footerText: null,
@@ -649,14 +542,6 @@ type FormulaReferenceDragState = {
   handleCorner: FormulaReferenceHandleCorner
   anchorCell: DataGridSpreadsheetCellAddress | null
   lastTargetCellKey: string | null
-}
-
-interface UiMenuRef {
-  controller?: {
-    open: (reason?: "pointer" | "keyboard" | "programmatic") => void
-    close: (reason?: "pointer" | "keyboard" | "programmatic") => void
-    setAnchor: (rect: { x: number; y: number; width: number; height: number } | null) => void
-  }
 }
 
 interface SortToggleState {
@@ -744,10 +629,18 @@ const formulaAutocompleteMenuOptions: MenuOptions = {
 const FORMULA_REFERENCE_HANDLE_CORNERS = ["top-left", "top-right", "bottom-right", "bottom-left"] as const
 
 const cardRootRef = ref<HTMLElement | null>(null)
-const formulaInputRef = ref<HTMLTextAreaElement | null>(null)
-const formulaAutocompleteMenuRef = ref<UiMenuRef | null>(null)
+const formulaEditorRef = ref<{
+  blur(): void
+  focus(options?: FocusOptions): void
+  getInputElement(): HTMLTextAreaElement | null
+  getMenuController(): {
+    open: (reason?: "pointer" | "keyboard" | "programmatic") => void
+    close: (reason?: "pointer" | "keyboard" | "programmatic") => void
+    setAnchor: (rect: { x: number; y: number; width: number; height: number } | null) => void
+  } | null
+  setSelectionRange(start: number, end: number): void
+} | null>(null)
 const gridHostRef = ref<HTMLElement | null>(null)
-const sandboxThemeTokens = resolveGridThemeTokens(industrialNeutralTheme)
 
 provide(dataGridAppRootElementKey, cardRootRef)
 
@@ -755,8 +648,16 @@ watchEffect(() => {
   if (!cardRootRef.value) {
     return
   }
-  applyGridTheme(cardRootRef.value, sandboxThemeTokens)
+  applyGridTheme(cardRootRef.value, resolveSpreadsheetWorkbookThemeTokens(props.theme))
 })
+
+function getFormulaInputElement(): HTMLTextAreaElement | null {
+  return formulaEditorRef.value?.getInputElement() ?? null
+}
+
+function getFormulaAutocompleteMenuController() {
+  return formulaEditorRef.value?.getMenuController() ?? null
+}
 
 function cloneRowData<TRow,>(row: TRow): TRow {
   if (typeof globalThis.structuredClone === "function") {
@@ -1327,7 +1228,7 @@ interface SpreadsheetRuntimeHandle {
   setRows: UseDataGridRuntimeResult<SpreadsheetGridRow>["setRows"]
 }
 
-let runtimeRef: Pick<SpreadsheetRuntimeHandle, "api" | "columnSnapshot"> | null = null
+let runtimeRef: SpreadsheetRuntimeHandle | null = null
 
 const unsubscribeEditor = editorModel.subscribe(snapshot => {
   editorSnapshot.value = snapshot
@@ -1346,7 +1247,7 @@ watch(formulaAutocompleteSuggestions, suggestions => {
 })
 
 watch(isFormulaAutocompleteVisible, async visible => {
-  const controller = formulaAutocompleteMenuRef.value?.controller
+  const controller = getFormulaAutocompleteMenuController()
   if (!controller) {
     return
   }
@@ -1700,12 +1601,14 @@ const {
   selectionSnapshot,
   selectionAnchor,
   runtimeServices,
+  selectionAggregatesLabel,
   syncSelectionSnapshotFromRuntime,
 } = useDataGridAppSelection<SpreadsheetGridRow>({
   mode: gridMode,
-  resolveRuntime: () => (runtimeRef ? { api: runtimeRef.api } : null),
+  resolveRuntime: () => (runtimeRef ? { api: runtimeRef.api, rowModel: runtimeRef.rowModel } : null),
   visibleColumns,
   totalRows,
+  readSelectionCell: (row, columnKey) => readSpreadsheetSelectionCell(row, columnKey),
 })
 
 const {
@@ -1728,6 +1631,7 @@ const runtimeBundle = useDataGridRuntime<SpreadsheetGridRow>({
   },
   clientRowModelOptions: {
     resolveRowId: (row: SpreadsheetGridRow) => row.id,
+    readFilterCell: (row, columnKey) => readSpreadsheetFilterCell(row, columnKey),
   },
 }) as unknown as SpreadsheetRuntimeHandle
 
@@ -1806,6 +1710,13 @@ function resolveCurrentValueFilterTokens(columnKey: string): readonly string[] {
     return []
   }
   return entry.tokens.map(token => normalizeColumnMenuToken(String(token ?? "")))
+}
+
+function resolveColumnMenuValueEntries(columnKey: string) {
+  return runtimeBundle.api.columns.getHistogram(columnKey, {
+    ignoreSelfFilter: true,
+    orderBy: "valueAsc",
+  })
 }
 
 function toggleSortForColumn(columnKey: string, additive = false): void {
@@ -2014,6 +1925,7 @@ const {
   columnFilterTextByKey,
   virtualization,
   toggleSortForColumn,
+  handleHeaderColumnClick: handleSpreadsheetHeaderColumnClick,
   sortIndicator,
   setColumnFilterText,
   columnMenuEnabled: computed(() => true),
@@ -2021,6 +1933,7 @@ const {
   isColumnFilterActive,
   resolveColumnMenuSortDirection,
   resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
+  resolveColumnMenuValueEntries,
   applyColumnMenuSort,
   applyColumnMenuPin: (columnKey, pin) => {
     runtimeBundle.api.columns.setPin(columnKey, pin)
@@ -2076,34 +1989,88 @@ function buildSelectionSnapshot(
   range: ReturnType<typeof createGridSelectionRange<DataGridRowId>>,
   activeCell: GridSelectionPointLike<DataGridRowId>,
 ): DataGridSelectionSnapshot {
+  return buildSelectionSnapshotFromRanges([
+    buildSelectionSnapshotRange(range),
+  ], 0, activeCell)
+}
+
+function buildSelectionSnapshotRange(
+  range: ReturnType<typeof createGridSelectionRange<DataGridRowId>>,
+): DataGridSelectionSnapshot["ranges"][number] {
   return {
-    ranges: [
-      {
-        startRow: range.startRow,
-        endRow: range.endRow,
-        startCol: range.startCol,
-        endCol: range.endCol,
-        startRowId: range.startRowId ?? null,
-        endRowId: range.endRowId ?? null,
-        anchor: {
-          rowIndex: range.anchor.rowIndex,
-          colIndex: range.anchor.colIndex,
-          rowId: range.anchor.rowId ?? null,
-        },
-        focus: {
-          rowIndex: range.focus.rowIndex,
-          colIndex: range.focus.colIndex,
-          rowId: range.focus.rowId ?? null,
-        },
-      },
-    ],
-    activeRangeIndex: 0,
+    startRow: range.startRow,
+    endRow: range.endRow,
+    startCol: range.startCol,
+    endCol: range.endCol,
+    startRowId: range.startRowId ?? null,
+    endRowId: range.endRowId ?? null,
+    anchor: {
+      rowIndex: range.anchor.rowIndex,
+      colIndex: range.anchor.colIndex,
+      rowId: range.anchor.rowId ?? null,
+    },
+    focus: {
+      rowIndex: range.focus.rowIndex,
+      colIndex: range.focus.colIndex,
+      rowId: range.focus.rowId ?? null,
+    },
+  }
+}
+
+function buildSelectionSnapshotFromRanges(
+  ranges: readonly DataGridSelectionSnapshot["ranges"][number][],
+  activeRangeIndex: number,
+  activeCell: GridSelectionPointLike<DataGridRowId>,
+): DataGridSelectionSnapshot {
+  return {
+    ranges: [...ranges],
+    activeRangeIndex,
     activeCell: {
       rowIndex: activeCell.rowIndex,
       colIndex: activeCell.colIndex,
       rowId: activeCell.rowId ?? null,
     },
   }
+}
+
+function resolveActiveSelectionSnapshotRange(
+  snapshot: DataGridSelectionSnapshot | null,
+): DataGridSelectionSnapshot["ranges"][number] | null {
+  if (!snapshot || snapshot.ranges.length === 0) {
+    return null
+  }
+  const activeIndex = Math.max(0, Math.min(snapshot.activeRangeIndex ?? 0, snapshot.ranges.length - 1))
+  return snapshot.ranges[activeIndex] ?? snapshot.ranges[0] ?? null
+}
+
+function applySpreadsheetSelectionSnapshot(snapshot: DataGridSelectionSnapshot): void {
+  const activeRange = resolveActiveSelectionSnapshotRange(snapshot)
+  selectionAnchor.value = activeRange
+    ? {
+        rowIndex: activeRange.anchor.rowIndex,
+        colIndex: activeRange.anchor.colIndex,
+        rowId: typeof activeRange.anchor.rowId === "string" || typeof activeRange.anchor.rowId === "number"
+          ? activeRange.anchor.rowId
+          : null,
+      }
+    : null
+  selectionSnapshot.value = snapshot
+  runtimeBundle.api.selection.setSnapshot(snapshot)
+  syncViewportFromDom()
+}
+
+function selectionSnapshotRangesEqual(
+  left: DataGridSelectionSnapshot["ranges"][number],
+  right: DataGridSelectionSnapshot["ranges"][number],
+): boolean {
+  return left.startRow === right.startRow
+    && left.endRow === right.endRow
+    && left.startCol === right.startCol
+    && left.endCol === right.endCol
+    && left.anchor.rowIndex === right.anchor.rowIndex
+    && left.anchor.colIndex === right.anchor.colIndex
+    && left.focus.rowIndex === right.focus.rowIndex
+    && left.focus.colIndex === right.focus.colIndex
 }
 
 const visibleColumnIndexByKey = computed(() => {
@@ -2179,6 +2146,32 @@ function readSpreadsheetClipboardCell(
   return cell.inputKind === "formula"
     ? (cell.rawInput ?? "")
     : String(resolveGridCellValue(cell) ?? "")
+}
+
+function readSpreadsheetFilterCell(
+  row: DataGridRowNode<SpreadsheetGridRow>,
+  columnKey: string,
+): unknown {
+  const rowData = row.kind === "group" ? null : (row.data as SpreadsheetGridRow | undefined)
+  const rowIndex = typeof rowData?.__rowIndex === "number" ? rowData.__rowIndex : null
+  if (rowIndex == null) {
+    return undefined
+  }
+  const cell = activeSheetView.value.cellsByKey.get(makeLocalCellKey(rowIndex, columnKey)) ?? null
+  if (!cell) {
+    return undefined
+  }
+  if (cell.errorValue) {
+    return "#ERROR"
+  }
+  return cell.displayValue ?? ""
+}
+
+function readSpreadsheetSelectionCell(
+  row: DataGridRowNode<SpreadsheetGridRow>,
+  columnKey: string,
+): unknown {
+  return readSpreadsheetFilterCell(row, columnKey)
 }
 
 function buildSpreadsheetFillMatrixFromRange(range: DataGridCopyRange): string[][] {
@@ -2271,13 +2264,7 @@ function applySpreadsheetGridEdits(
       colIndex: nextRange.focus.colIndex,
       rowId: nextRange.focus.rowId ?? null,
     })
-    selectionAnchor.value = {
-      rowIndex: nextRange.anchor.rowIndex,
-      colIndex: nextRange.anchor.colIndex,
-      rowId: nextRange.anchor.rowId ?? null,
-    }
-    selectionSnapshot.value = nextSnapshot
-    runtimeBundle.api.selection.setSnapshot(nextSnapshot)
+    applySpreadsheetSelectionSnapshot(nextSnapshot)
   }
   return applied ? affectedRowIds.size : 0
 }
@@ -2370,13 +2357,7 @@ function applySpreadsheetRangeMove(baseRange: DataGridCopyRange, targetRange: Da
     colIndex: nextRange.anchor.colIndex,
     rowId: nextRange.anchor.rowId ?? null,
   })
-  selectionAnchor.value = {
-    rowIndex: nextRange.anchor.rowIndex,
-    colIndex: nextRange.anchor.colIndex,
-    rowId: nextRange.anchor.rowId ?? null,
-  }
-  selectionSnapshot.value = nextSnapshot
-  runtimeBundle.api.selection.setSnapshot(nextSnapshot)
+  applySpreadsheetSelectionSnapshot(nextSnapshot)
   void recordWorkbookHistoryTransaction({
     intent: "move",
     label: `Move ${changedCells} cells`,
@@ -2449,14 +2430,68 @@ function applyCellRangeSelection(
     colIndex: range.focus.colIndex,
     rowId: range.focus.rowId ?? null,
   })
-  selectionAnchor.value = {
-    rowIndex: range.anchor.rowIndex,
-    colIndex: range.anchor.colIndex,
-    rowId: range.anchor.rowId ?? null,
+  applySpreadsheetSelectionSnapshot(nextSnapshot)
+}
+
+function handleSpreadsheetHeaderColumnClick(
+  columnKey: string,
+  options: { additive: boolean; extend: boolean },
+): void {
+  const columnIndex = stageVisibleColumnIndexByKey.value.get(columnKey)
+  const rowCount = totalRows.value
+  if (columnIndex == null || rowCount <= 0) {
+    return
   }
-  selectionSnapshot.value = nextSnapshot
-  runtimeBundle.api.selection.setSnapshot(nextSnapshot)
-  syncViewportFromDom()
+
+  const topRowId = runtimeBundle.getBodyRowAtIndex(0)?.rowId ?? null
+  const bottomRowId = runtimeBundle.getBodyRowAtIndex(rowCount - 1)?.rowId ?? null
+  const currentSnapshot = selectionSnapshot.value
+  const currentActiveIndex = currentSnapshot && currentSnapshot.ranges.length > 0
+    ? Math.max(0, Math.min(currentSnapshot.activeRangeIndex ?? 0, currentSnapshot.ranges.length - 1))
+    : 0
+  const activeRange = resolveActiveSelectionSnapshotRange(currentSnapshot)
+  const anchorColumnIndex = options.extend && activeRange
+    ? activeRange.anchor.colIndex
+    : columnIndex
+
+  const nextRange = createGridSelectionRange({
+    rowIndex: 0,
+    colIndex: anchorColumnIndex,
+    rowId: runtimeBundle.getBodyRowAtIndex(0)?.rowId ?? null,
+  }, {
+    rowIndex: rowCount - 1,
+    colIndex: columnIndex,
+    rowId: runtimeBundle.getBodyRowAtIndex(rowCount - 1)?.rowId ?? null,
+  }, resolveSelectionContext())
+  const nextSnapshotRange = buildSelectionSnapshotRange(nextRange)
+
+  let nextRanges: DataGridSelectionSnapshot["ranges"]
+  let activeRangeIndex = 0
+
+  if (options.extend && currentSnapshot && currentSnapshot.ranges.length > 0) {
+    nextRanges = currentSnapshot.ranges.map((range, index) => (
+      index === currentActiveIndex ? nextSnapshotRange : range
+    ))
+    activeRangeIndex = currentActiveIndex
+  } else if (options.additive && currentSnapshot && currentSnapshot.ranges.length > 0) {
+    const duplicateIndex = currentSnapshot.ranges.findIndex(range => selectionSnapshotRangesEqual(range, nextSnapshotRange))
+    if (duplicateIndex >= 0) {
+      nextRanges = [...currentSnapshot.ranges]
+      activeRangeIndex = duplicateIndex
+    } else {
+      nextRanges = [...currentSnapshot.ranges, nextSnapshotRange]
+      activeRangeIndex = nextRanges.length - 1
+    }
+  } else {
+    nextRanges = [nextSnapshotRange]
+  }
+
+  const nextSnapshot = buildSelectionSnapshotFromRanges(nextRanges, activeRangeIndex, {
+    rowIndex: 0,
+    colIndex: columnIndex,
+    rowId: topRowId ?? bottomRowId,
+  })
+  applySpreadsheetSelectionSnapshot(nextSnapshot)
 }
 
 function resolveSheetHandle(sheetId: string | null | undefined): DataGridSpreadsheetWorkbookSheetHandle | null {
@@ -2508,7 +2543,7 @@ function focusFormulaBar(selection?: { start: number; end: number }): void {
   allowFormulaBlur = false
   isFormulaBarFocused.value = true
   void nextTick(() => {
-    const input = formulaInputRef.value
+    const input = getFormulaInputElement()
     if (!input) {
       return
     }
@@ -2627,6 +2662,9 @@ function hasExpandedGridSelection(): boolean {
   const snapshot = selectionSnapshot.value
   if (!snapshot || snapshot.ranges.length === 0) {
     return false
+  }
+  if (snapshot.ranges.length > 1) {
+    return true
   }
   const activeIndex = snapshot.activeRangeIndex ?? 0
   const range = snapshot.ranges[activeIndex] ?? snapshot.ranges[0]
@@ -3284,7 +3322,7 @@ function openSheet(sheetId: string): void {
 }
 
 function syncFormulaSelectionFromDom(): void {
-  const input = formulaInputRef.value
+  const input = getFormulaInputElement()
   if (!input) {
     return
   }
@@ -3298,8 +3336,8 @@ function syncFormulaSelectionFromDom(): void {
 }
 
 function syncFormulaAutocompleteMenuAnchor(): void {
-  const controller = formulaAutocompleteMenuRef.value?.controller
-  const input = formulaInputRef.value
+  const controller = getFormulaAutocompleteMenuController()
+  const input = getFormulaInputElement()
   if (!controller || !input) {
     return
   }
@@ -3337,9 +3375,9 @@ function applyFormulaAutocomplete(suggestion: FormulaAutocompleteSuggestion): vo
     markFormulaEditHistoryChanged()
   }
   syncEditorCellDisplay()
-  formulaAutocompleteMenuRef.value?.controller?.close("programmatic")
+  getFormulaAutocompleteMenuController()?.close("programmatic")
   void nextTick(() => {
-    const input = formulaInputRef.value
+    const input = getFormulaInputElement()
     if (!input) {
       return
     }
@@ -3429,7 +3467,7 @@ function handleFormulaCommit(): void {
   preserveFormulaFocusFromGridPointer.value = false
   allowFormulaBlur = true
   restoreEditorCellSelection({ focusGrid: true })
-  formulaInputRef.value?.blur()
+  formulaEditorRef.value?.blur()
 }
 
 function handleFormulaCancel(): void {
@@ -3445,13 +3483,13 @@ function handleFormulaCancel(): void {
     measureSpreadsheetOperation("Cancel formula edit", () => {
       workbook.restoreState(currentSession.beforeSnapshot)
     })
-    formulaInputRef.value?.blur()
+    formulaEditorRef.value?.blur()
     syncSpreadsheetAfterHistoryRestore({ focusGrid: true })
     return
   }
 
   restoreEditorCellSelection({ focusGrid: true })
-  formulaInputRef.value?.blur()
+  formulaEditorRef.value?.blur()
 }
 
 function handleFormulaKeydown(event: KeyboardEvent): void {
@@ -4521,276 +4559,6 @@ function clearHoveredFormulaReferenceKey(): void {
   cursor: default;
 }
 
-.spreadsheet-formula-shell {
-  display: grid;
-  grid-template-columns: 190px minmax(0, 1fr) 220px;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--spreadsheet-border);
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9));
-}
-
-.spreadsheet-formula-shell--focused {
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.28);
-}
-
-.spreadsheet-formula-shell--reference-mode {
-  border-color: rgba(37, 99, 235, 0.34);
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.18), 0 18px 38px rgba(37, 99, 235, 0.08);
-}
-
-.spreadsheet-formula-shell--readonly {
-  background: linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.96));
-}
-
-.spreadsheet-formula-address {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 44px;
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.06);
-  color: var(--spreadsheet-accent);
-}
-
-.spreadsheet-formula-address__copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.spreadsheet-formula-address__copy strong {
-  font-size: 16px;
-  line-height: 1.2;
-}
-
-.spreadsheet-formula-address__label {
-  font-size: 11px;
-  line-height: 1.2;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--spreadsheet-ink-soft);
-}
-
-.spreadsheet-formula-address__badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: rgba(37, 99, 235, 0.1);
-  color: #1d4ed8;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.spreadsheet-formula-main {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.spreadsheet-formula-toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.spreadsheet-formula-toolbar__copy {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-}
-
-.spreadsheet-formula-toolbar__fx {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 64, 175, 0.9));
-  color: #f8fafc;
-  font: 700 14px/1.1 "IBM Plex Sans", "Segoe UI", sans-serif;
-  letter-spacing: 0.02em;
-}
-
-.spreadsheet-formula-toolbar__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.spreadsheet-formula-toolbar__text strong {
-  font-size: 13px;
-  color: var(--spreadsheet-accent);
-}
-
-.spreadsheet-formula-toolbar__text span {
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--spreadsheet-ink-soft);
-}
-
-.spreadsheet-formula-toolbar__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.spreadsheet-formula-input {
-  width: 100%;
-  min-height: 72px;
-  resize: vertical;
-  border: 1px solid var(--spreadsheet-border);
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.84);
-  color: var(--datagrid-text-color);
-  font: 500 13px/1.5 ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
-}
-
-.spreadsheet-formula-input[readonly] {
-  background: rgba(248, 250, 252, 0.9);
-  color: var(--spreadsheet-ink-soft);
-  cursor: default;
-}
-
-.spreadsheet-formula-preview {
-  min-height: 24px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.04);
-  color: var(--spreadsheet-ink-soft);
-  font: 500 12px/1.5 ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.spreadsheet-formula-caption {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  padding: 0 2px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--spreadsheet-ink-soft);
-}
-
-.spreadsheet-formula-caption__label {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.spreadsheet-formula-autocomplete {
-  min-width: min(460px, calc(100vw - 32px));
-  max-width: min(560px, calc(100vw - 32px));
-  --ui-menu-bg: rgba(255, 255, 255, 0.98);
-  --ui-menu-border: color-mix(in srgb, var(--spreadsheet-border) 82%, rgba(37, 99, 235, 0.18));
-  --ui-menu-hover-bg: rgba(37, 99, 235, 0.08);
-  --ui-menu-text: var(--datagrid-text-color);
-  --ui-menu-muted: var(--spreadsheet-ink-soft);
-  --ui-menu-focus-ring: 0 0 0 2px rgba(37, 99, 235, 0.16);
-  --ui-menu-shadow: 0 22px 48px rgba(15, 23, 42, 0.16);
-}
-
-.spreadsheet-formula-autocomplete__label {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.spreadsheet-formula-autocomplete__item {
-  align-items: stretch;
-  padding: 0;
-}
-
-.spreadsheet-formula-autocomplete__item-copy {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-}
-
-.spreadsheet-formula-autocomplete__item-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.spreadsheet-formula-autocomplete__item-name {
-  font: 700 12px/1.4 ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
-  color: #0f172a;
-}
-
-.spreadsheet-formula-autocomplete__item-arity,
-.spreadsheet-formula-autocomplete__item-detail {
-  font-size: 11px;
-  color: var(--spreadsheet-ink-soft);
-}
-
-.spreadsheet-formula-token--reference {
-  border-radius: 6px;
-  padding: 0 2px;
-}
-
-.spreadsheet-formula-token--active {
-  font-weight: 700;
-}
-
-.spreadsheet-formula-state {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.spreadsheet-formula-value {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.spreadsheet-formula-readonly {
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(37, 99, 235, 0.08);
-  color: #1d4ed8;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.spreadsheet-formula-state__label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--spreadsheet-ink-soft);
-}
-
-.spreadsheet-formula-error {
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(239, 68, 68, 0.12);
-  color: #b91c1c;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
 .spreadsheet-layout {
   display: grid;
   grid-template-columns: 272px minmax(0, 1fr);
@@ -4958,6 +4726,24 @@ function clearHoveredFormulaReferenceKey(): void {
   min-height: 0;
 }
 
+.spreadsheet-selection-aggregate-overlay {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  max-width: min(480px, calc(100% - 28px));
+  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  background: rgba(100, 116, 139, 0.74);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(8px);
+  color: rgba(248, 250, 252, 0.98);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  z-index: 4;
+}
+
 .spreadsheet-formula-reference-overlay {
   position: absolute;
   border: 2px solid;
@@ -5117,19 +4903,6 @@ function clearHoveredFormulaReferenceKey(): void {
 }
 
 @media (max-width: 1200px) {
-  .spreadsheet-formula-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .spreadsheet-formula-toolbar {
-    flex-direction: column;
-  }
-
-  .spreadsheet-formula-toolbar__actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
   .spreadsheet-layout {
     grid-template-columns: 1fr;
   }

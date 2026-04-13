@@ -79,6 +79,7 @@ Direct refs into view sheets still target the current materialized row addresses
 ## Public Surface
 
 - `DataGridSpreadsheetWorkbookApp`
+- `DataGridSpreadsheetFormulaEditor`
 - `useDataGridSpreadsheetWorkbookHistory`
 
 Core prop:
@@ -90,11 +91,21 @@ Useful customization props:
 - `title`
 - `subtitle`
 - `badgeLabel`
+- `theme`
 - `formulaPlaceholder`
+- `clipboardCopyMode`
 - `footerText`
 - `styleActions`
 - `advancedFilter`
 - `diagnostics`
+
+## Interaction Highlights
+
+- Column-menu value filters and advanced filters resolve workbook display/formula values, so workbook-facing predicates can follow what the user sees instead of raw row payloads.
+- The shell can show a bottom-right aggregate overlay for the current workbook selection.
+- `Ctrl/Cmd + click` appends independent cells or ranges to the committed selection.
+- Clicking a column header selects the whole visible column; `Shift` extends from the current anchor column and `Ctrl/Cmd` adds another full-column range.
+- `theme` accepts the same `DataGridThemeProp` shapes as `@affino/datagrid-vue-app`, with workbook shell tokens merged on top.
 
 Slots:
 

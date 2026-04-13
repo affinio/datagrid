@@ -16,6 +16,7 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   viewportRowStart: Ref<number>
   resolveSelectionRange: () => DataGridCopyRange | null
+  resolveSelectionRanges?: () => readonly DataGridCopyRange[]
   resolveCurrentCellCoord: () => { rowIndex: number; columnIndex: number } | null
   applySelectionRange: (range: DataGridCopyRange) => void
   clearCellSelection: () => void
@@ -42,6 +43,7 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
 export interface UseDataGridAppClipboardResult {
   pendingClipboardOperation: Ref<DataGridAppPendingClipboardOperation>
   pendingClipboardRange: Ref<DataGridCopyRange | null>
+  pendingClipboardRanges: Ref<readonly DataGridCopyRange[]>
   normalizeClipboardRange: (range: DataGridCopyRange) => DataGridCopyRange | null
   applyClipboardEdits: (
     range: DataGridCopyRange,
@@ -76,6 +78,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   const lastCopiedPayload = ref("")
   const pendingClipboardOperation = ref<DataGridAppPendingClipboardOperation>("none")
   const pendingClipboardRange = ref<DataGridCopyRange | null>(null)
+  const pendingClipboardRanges = ref<readonly DataGridCopyRange[]>([])
 
   const normalizeClipboardRange = (range: DataGridCopyRange): DataGridCopyRange | null => {
     const rowCount = options.totalRows.value
@@ -184,6 +187,31 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     )
   }
 
+  const collectAffectedRowIds = (ranges: readonly (DataGridCopyRange | null | undefined)[]): readonly (string | number)[] => {
+    const rowIds = new Set<string | number>()
+    for (const candidateRange of ranges) {
+      const range = candidateRange ? normalizeClipboardRange(candidateRange) : null
+      if (!range) {
+        continue
+      }
+      for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
+        const rowId = getBodyRowAtIndex(rowIndex)?.rowId
+        if (typeof rowId === "string" || typeof rowId === "number") {
+          rowIds.add(rowId)
+        }
+      }
+    }
+    return Array.from(rowIds)
+  }
+
+  const captureBeforeEditSnapshot = (ranges: readonly (DataGridCopyRange | null | undefined)[]): TSnapshot => {
+    const rowIds = collectAffectedRowIds(ranges)
+    if (rowIds.length > 0 && typeof options.captureRowsSnapshotForRowIds === "function") {
+      return options.captureRowsSnapshotForRowIds(rowIds)
+    }
+    return options.captureRowsSnapshot()
+  }
+
   const buildFillMatrixFromRange = options.buildFillMatrixFromRange ?? ((range: DataGridCopyRange): string[][] => {
     const matrix: string[][] = []
     for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
@@ -211,6 +239,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     }
     pendingClipboardOperation.value = "none"
     pendingClipboardRange.value = null
+    pendingClipboardRanges.value = []
     if (clearBufferedClipboardPayload) {
       copiedSelectionRange.value = null
       lastCopiedPayload.value = ""
@@ -240,6 +269,13 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     }
     pendingClipboardOperation.value = operation
     pendingClipboardRange.value = sourceRange
+    pendingClipboardRanges.value = options.resolveSelectionRanges?.()
+      .map(range => normalizeClipboardRange(range))
+      .filter((range): range is DataGridCopyRange => range != null)
+      ?? [sourceRange]
+    if (pendingClipboardRanges.value.length === 0) {
+      pendingClipboardRanges.value = [sourceRange]
+    }
     return true
   }
 
@@ -283,7 +319,11 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       void trigger
       return true
     }
-      const beforeSnapshot = options.captureRowsSnapshot()
+    const beforeSnapshot = captureBeforeEditSnapshot(
+      pendingOperation === "cut"
+        ? [pendingSourceRange, normalizedTargetRange]
+        : [normalizedTargetRange],
+    )
     if (pendingOperation === "cut" && pendingSourceRange) {
       applyClipboardEdits(pendingSourceRange, [[""]], { recordHistory: false })
     }
@@ -309,17 +349,16 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     if (options.mode.value !== "base" || pendingClipboardOperation.value === "none") {
       return false
     }
-    const range = pendingClipboardRange.value
-    if (!range) {
+    if (pendingClipboardRanges.value.length === 0) {
       return false
     }
     const rowIndex = options.viewportRowStart.value + rowOffset
-    return (
+    return pendingClipboardRanges.value.some(range => (
       rowIndex >= range.startRow
       && rowIndex <= range.endRow
       && columnIndex >= range.startColumn
       && columnIndex <= range.endColumn
-    )
+    ))
   }
 
   const isCellOnPendingClipboardEdge = (
@@ -330,26 +369,33 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     if (!isCellInPendingClipboardRange(rowOffset, columnIndex)) {
       return false
     }
-    const range = pendingClipboardRange.value
-    if (!range) {
-      return false
-    }
     const rowIndex = options.viewportRowStart.value + rowOffset
-    if (edge === "top") {
-      return rowIndex === range.startRow
-    }
-    if (edge === "right") {
-      return columnIndex === range.endColumn
-    }
-    if (edge === "bottom") {
-      return rowIndex === range.endRow
-    }
-    return columnIndex === range.startColumn
+    return pendingClipboardRanges.value.some(range => {
+      if (
+        rowIndex < range.startRow
+        || rowIndex > range.endRow
+        || columnIndex < range.startColumn
+        || columnIndex > range.endColumn
+      ) {
+        return false
+      }
+      if (edge === "top") {
+        return rowIndex === range.startRow
+      }
+      if (edge === "right") {
+        return columnIndex === range.endColumn
+      }
+      if (edge === "bottom") {
+        return rowIndex === range.endRow
+      }
+      return columnIndex === range.startColumn
+    })
   }
 
   return {
     pendingClipboardOperation,
     pendingClipboardRange,
+    pendingClipboardRanges,
     normalizeClipboardRange,
     applyClipboardEdits,
     rangesEqual,

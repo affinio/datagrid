@@ -122,6 +122,9 @@ export interface DataGridTableStagePinnedPaneProps {
   selectionOverlaySegments: readonly DataGridTableStageOverlaySegment[]
   fillPreviewOverlaySegments: readonly DataGridTableStageOverlaySegment[]
   movePreviewOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  selectionSeamOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  fillPreviewSeamOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  movePreviewSeamOverlaySegments: readonly DataGridTableStageOverlaySegment[]
 }
 
 export interface DataGridTableStagePinnedPaneRenderApi extends DataGridTableStageBodyRenderApiBase {

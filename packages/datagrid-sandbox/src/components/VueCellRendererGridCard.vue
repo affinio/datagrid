@@ -17,7 +17,7 @@
     </header>
 
     <div class="renderer-card__surface">
-      <DataGrid
+      <TypedDataGrid
         :rows="rows"
         :columns="columns"
         layout-mode="auto-height"
@@ -41,7 +41,11 @@
 <script setup lang="ts">
 import { computed, h, ref, watchEffect, defineComponent, type PropType } from "vue"
 import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
-import { DataGrid, type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
+import {
+  defineDataGridColumns,
+  defineDataGridComponent,
+  type DataGridAppClientRowModelOptions,
+} from "@affino/datagrid-vue-app"
 
 type RendererTone = "neutral" | "info" | "warning" | "success" | "danger"
 
@@ -56,6 +60,8 @@ interface RendererDemoRow {
   approvalTone: RendererTone
   approved: boolean
 }
+
+const TypedDataGrid = defineDataGridComponent<RendererDemoRow>()
 
 const StatusChip = defineComponent({
   name: "SandboxStatusChip",
@@ -152,7 +158,7 @@ function toggleApproval(rowId: string | number | null | undefined): void {
   })
 }
 
-const columns = computed<readonly DataGridAppColumnInput<RendererDemoRow>[]>(() => [
+const columns = computed(() => defineDataGridColumns<RendererDemoRow>()([
   {
     key: "period",
     label: "Week",
@@ -235,11 +241,11 @@ const columns = computed<readonly DataGridAppColumnInput<RendererDemoRow>[]>(() 
       },
     }, row?.approved ? "Reopen" : "Approve"),
   },
-])
+] as const))
 
 const clientRowModelOptions = {
   resolveRowId: (row: RendererDemoRow) => row.id,
-}
+} satisfies DataGridAppClientRowModelOptions<RendererDemoRow>
 
 const theme = industrialNeutralTheme
 const cardRootRef = ref<HTMLElement | null>(null)

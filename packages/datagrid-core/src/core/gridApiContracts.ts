@@ -547,4 +547,5 @@ export interface DataGridSelectionSummaryApiOptions<TRow = unknown> {
   columns?: readonly DataGridSelectionSummaryColumnConfig<TRow>[]
   defaultAggregations?: readonly DataGridSelectionAggregationKind[]
   getColumnKeyByIndex?: (columnIndex: number) => string | null | undefined
+  readSelectionCell?: (rowNode: DataGridRowNode<TRow>, columnKey: string) => unknown
 }

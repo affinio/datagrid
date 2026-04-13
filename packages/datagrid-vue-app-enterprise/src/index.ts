@@ -2,9 +2,24 @@ import type { Component } from "vue"
 import DataGridComponent from "./DataGrid"
 
 export const DataGrid: Component = DataGridComponent
+export {
+  defineDataGridColumns,
+  defineDataGridComponent,
+  defineDataGridFilterCellReader,
+  defineDataGridSelectionCellReader,
+  useDataGridRef,
+} from "@affino/datagrid-vue-app"
 export type {
+  DataGridAppClientRowModelOptions,
   DataGridAppColumnInput,
+  DataGridComponent,
+  DataGridComponentFor,
   DataGridDeclarativeFormulaOptions,
+  DataGridExposed,
+  DataGridFilterCellReader,
+  DataGridInstance,
+  DataGridProps,
+  DataGridSelectionCellReader,
 } from "@affino/datagrid-vue-app"
 export type {
   DataGridThemePreset,

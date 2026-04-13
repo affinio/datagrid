@@ -115,16 +115,19 @@
 import { computed, nextTick, ref, watch } from "vue";
 import {
   DataGrid,
-  type DataGridAppColumnInput,
   type DataGridColumnMenuProp,
 } from "@affino/datagrid-vue-app-enterprise";
 import {
+  defineDataGridColumns,
   clearDataGridSavedViewInStorage,
   readDataGridSavedViewFromStorage,
+  useDataGridRef,
+  type DataGridAppClientRowModelOptions,
   type DataGridSavedViewSnapshot,
   writeDataGridSavedViewToStorage,
 } from "@affino/datagrid-vue-app";
 import type {
+  DataGridApi,
   DataGridAggregationModel,
   DataGridFormulaComputeStageDiagnostics,
   DataGridGroupBySpec,
@@ -156,39 +159,8 @@ interface FormulaExplainSnapshot {
   computeStage: DataGridFormulaComputeStageDiagnostics | null;
 }
 
-interface PublicFormulaGridApi {
-  rows: {
-    getCount: () => number;
-    get: (
-      index: number,
-    ) =>
-      | { rowId: DataGridRowId; kind?: string; data?: FormulaSandboxRow }
-      | undefined;
-    patch: (
-      updates: readonly {
-        rowId: DataGridRowId;
-        data: Partial<FormulaSandboxRow>;
-      }[],
-      options?: {
-        recomputeFilter?: boolean;
-        recomputeSort?: boolean;
-        recomputeGroup?: boolean;
-      },
-    ) => void;
-    recomputeComputedFields: (rowIds?: readonly DataGridRowId[]) => number;
-  };
-  diagnostics: {
-    getFormulaExplain: () => FormulaExplainSnapshot;
-  };
-}
-
-interface PublicFormulaGridExpose {
-  getApi: () => PublicFormulaGridApi | null;
-  getSelectionAggregatesLabel: () => string;
-  getSavedView: () => DataGridSavedViewSnapshot<Record<string, unknown>> | null;
-  migrateSavedView: (savedView: unknown) => DataGridSavedViewSnapshot<Record<string, unknown>> | null;
-  applySavedView: (savedView: DataGridSavedViewSnapshot<Record<string, unknown>>) => boolean;
-}
+type FormulaSavedViewRow = FormulaSandboxRow & Record<string, unknown>;
+type FormulaSavedView = DataGridSavedViewSnapshot<FormulaSavedViewRow>;
 
 type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked";
 type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | null>;
@@ -278,7 +250,7 @@ const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
   },
 };
 
-const columns: readonly DataGridAppColumnInput[] = [
+const columns = defineDataGridColumns<FormulaSandboxRow>()([
   {
     key: "id",
     label: "ID",
@@ -408,7 +380,7 @@ const columns: readonly DataGridAppColumnInput[] = [
     capabilities: { sortable: true, filterable: true },
     formula: "SAFE_DIVIDE(total - cost, total, 0)",
   },
-];
+] as const);
 
 const rowCount = ref<number>(1_000);
 const columnMenuPreset = ref<ColumnMenuPreset>("default");
@@ -419,15 +391,15 @@ const groupByModel = ref<DataGridGroupBySpec | null>({
 const patchSize = ref<number>(10);
 const lastAction = ref<string>("init");
 const rows = ref<readonly FormulaSandboxRow[]>([]);
-const gridRef = ref<PublicFormulaGridExpose | null>(null);
-const savedViewModel = ref<DataGridSavedViewSnapshot<Record<string, unknown>> | null>(null);
+const gridRef = useDataGridRef<FormulaSandboxRow>();
+const savedViewModel = ref<FormulaSavedView | null>(null);
 const hasPersistedSavedView = ref(false);
 const formulaPlan = ref<FormulaExplainSnapshot["executionPlan"]>(null);
 const computeStage = ref<DataGridFormulaComputeStageDiagnostics | null>(null);
 const selectionAggregatesLabel = ref("");
 const clientRowModelOptions = {
-  resolveRowId: (row: unknown) => (row as FormulaSandboxRow).id,
-};
+  resolveRowId: (row: FormulaSandboxRow) => row.id,
+} satisfies DataGridAppClientRowModelOptions<FormulaSandboxRow>;
 const groupBy = computed(() => {
   return groupByModel.value;
 });
@@ -512,7 +484,7 @@ const buildRows = (count: number): readonly FormulaSandboxRow[] => {
 };
 
 const refreshDiagnostics = (): void => {
-  const api = gridRef.value?.getApi();
+  const api = gridRef.value?.getApi() as DataGridApi<FormulaSandboxRow> | null | undefined;
   if (!api) {
     formulaPlan.value = null;
     computeStage.value = null;
@@ -543,7 +515,7 @@ const rebuildModel = (): void => {
 };
 
 const applyRandomPatch = (): void => {
-  const api = gridRef.value?.getApi();
+  const api = gridRef.value?.getApi() as DataGridApi<FormulaSandboxRow> | null | undefined;
   if (!api || rows.value.length === 0) {
     return;
   }
@@ -575,7 +547,7 @@ const applyRandomPatch = (): void => {
 };
 
 const recomputeFormulas = (): void => {
-  const api = gridRef.value?.getApi();
+  const api = gridRef.value?.getApi() as DataGridApi<FormulaSandboxRow> | null | undefined;
   if (!api) {
     return;
   }
@@ -604,7 +576,7 @@ const saveSavedViewToStorage = (): void => {
 };
 
 const loadSavedViewFromStorage = (): void => {
-  const savedView = readDataGridSavedViewFromStorage(
+  const savedView = readDataGridSavedViewFromStorage<FormulaSavedViewRow>(
     getBrowserStorage(),
     FORMULA_SAVED_VIEW_STORAGE_KEY,
     (state: unknown) => gridRef.value?.migrateSavedView({ state })?.state ?? null,

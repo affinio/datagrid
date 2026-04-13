@@ -89,4 +89,92 @@ describe("selection summary", () => {
       columns: {},
     })
   })
+
+  it("prefers readSelectionCell before configured value getters", () => {
+    const rows = [
+      makeRowNode({ id: 1, owner: "noc", latencyMs: 100 }, 0),
+      makeRowNode({ id: 2, owner: "ops", latencyMs: 150 }, 1),
+    ]
+
+    const selection: DataGridSelectionSnapshot = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 1,
+          startCol: 0,
+          endCol: 0,
+          startRowId: 1,
+          endRowId: 2,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: 1 },
+          focus: { rowIndex: 1, colIndex: 0, rowId: 2 },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: 2 },
+    }
+
+    const summary = createDataGridSelectionSummary<Row>({
+      selection,
+      rowCount: rows.length,
+      getRow: index => rows[index],
+      getColumnKeyByIndex: () => "latencyMs",
+      readSelectionCell: rowNode => rowNode.data.latencyMs / 10,
+      columns: [
+        {
+          key: "latencyMs",
+          aggregations: ["sum", "min", "max", "avg"],
+          valueGetter: () => 999,
+        },
+      ],
+    })
+
+    expect(summary.columns.latencyMs.metrics.sum).toBe(25)
+    expect(summary.columns.latencyMs.metrics.min).toBe(10)
+    expect(summary.columns.latencyMs.metrics.max).toBe(15)
+    expect(summary.columns.latencyMs.metrics.avg).toBe(12.5)
+  })
+
+  it("falls back to existing getters when readSelectionCell returns undefined", () => {
+    const rows = [
+      makeRowNode({ id: 1, owner: "noc", latencyMs: 100 }, 0),
+      makeRowNode({ id: 2, owner: "ops", latencyMs: 150 }, 1),
+    ]
+
+    const selection: DataGridSelectionSnapshot = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 1,
+          startCol: 0,
+          endCol: 0,
+          startRowId: 1,
+          endRowId: 2,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: 1 },
+          focus: { rowIndex: 1, colIndex: 0, rowId: 2 },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: 2 },
+    }
+
+    const summary = createDataGridSelectionSummary<Row>({
+      selection,
+      rowCount: rows.length,
+      getRow: index => rows[index],
+      getColumnKeyByIndex: () => "latencyMs",
+      readSelectionCell: () => undefined,
+      columns: [
+        {
+          key: "latencyMs",
+          aggregations: ["sum", "min", "max", "avg"],
+          valueGetter: rowNode => rowNode.data.latencyMs / 5,
+        },
+      ],
+    })
+
+    expect(summary.columns.latencyMs.metrics.sum).toBe(50)
+    expect(summary.columns.latencyMs.metrics.min).toBe(20)
+    expect(summary.columns.latencyMs.metrics.max).toBe(30)
+    expect(summary.columns.latencyMs.metrics.avg).toBe(25)
+  })
 })

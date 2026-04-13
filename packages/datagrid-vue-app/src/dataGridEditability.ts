@@ -1,4 +1,5 @@
 import type { DataGridColumnSnapshot, DataGridRowId } from "@affino/datagrid-vue"
+import type { DataGridBivariantCallback } from "./types/bivariance"
 
 export interface DataGridCellEditablePredicateContext<TRow> {
   row: TRow
@@ -8,6 +9,6 @@ export interface DataGridCellEditablePredicateContext<TRow> {
   columnKey: string
 }
 
-export type DataGridCellEditablePredicate<TRow> = (
+export type DataGridCellEditablePredicate<TRow> = DataGridBivariantCallback<[
   ctx: DataGridCellEditablePredicateContext<TRow>,
-) => boolean
+], boolean>

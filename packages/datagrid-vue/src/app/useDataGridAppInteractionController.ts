@@ -79,12 +79,14 @@ export interface UseDataGridAppInteractionControllerOptions<
     coord: DataGridAppCellCoord,
     extend: boolean,
     fallbackAnchor?: DataGridAppSelectionAnchorLike,
+    additive?: boolean,
   ) => void
   setCellSelection: (
     row: DataGridRowNode<TRow>,
     rowOffset: number,
     columnIndex: number,
     extend: boolean,
+    additive?: boolean,
   ) => void
   clearCellSelection: () => void
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
@@ -1458,8 +1460,8 @@ export function useDataGridAppInteractionController<
     setDragPointer: pointer => {
       pendingDragPointerStart.value = pointer
     },
-    applyCellSelection: (coord, extend, fallbackAnchor) => {
-      options.applyCellSelectionByCoord(coord, extend, fallbackAnchor)
+    applyCellSelection: (coord, extend, fallbackAnchor, additive) => {
+      options.applyCellSelectionByCoord(coord, extend, fallbackAnchor, additive)
     },
     startInteractionAutoScroll: () => {
       pointerAutoScroll.startInteractionAutoScroll()
@@ -1674,7 +1676,7 @@ export function useDataGridAppInteractionController<
     if (event.button !== 0) {
       return
     }
-    options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
+    options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey, event.ctrlKey || event.metaKey)
     if (!supportsCellSelectionMode()) {
       return
     }

@@ -34,7 +34,7 @@
     </header>
 
     <div class="selection-card__surface">
-      <DataGrid
+      <TypedDataGrid
         :rows="visibleRows"
         :columns="columns"
         layout-mode="auto-height"
@@ -58,7 +58,11 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from "vue"
 import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
-import { DataGrid, type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
+import {
+  defineDataGridColumns,
+  defineDataGridComponent,
+  type DataGridAppClientRowModelOptions,
+} from "@affino/datagrid-vue-app"
 
 type FilterMode = "all" | "submitted" | "approved" | "needs-action"
 
@@ -70,6 +74,8 @@ interface RowSelectionDemoRow {
   reviewer: string
   hours: number
 }
+
+const TypedDataGrid = defineDataGridComponent<RowSelectionDemoRow>()
 
 const rows = ref<readonly RowSelectionDemoRow[]>([
   { id: "ts-1001", employee: "Maya Patel", team: "Platform", status: "Submitted", reviewer: "Nora Singh", hours: 38.5 },
@@ -109,7 +115,7 @@ const selectedVisibleRowCount = computed(() => {
   return visibleRows.value.filter(row => selectedIds.has(row.id)).length
 })
 
-const columns = computed<readonly DataGridAppColumnInput<RowSelectionDemoRow>[]>(() => [
+const columns = computed(() => defineDataGridColumns<RowSelectionDemoRow>()([
   {
     key: "employee",
     label: "Employee",
@@ -154,11 +160,11 @@ const columns = computed<readonly DataGridAppColumnInput<RowSelectionDemoRow>[]>
       },
     },
   },
-])
+] as const))
 
 const clientRowModelOptions = {
   resolveRowId: (row: RowSelectionDemoRow) => row.id,
-}
+} satisfies DataGridAppClientRowModelOptions<RowSelectionDemoRow>
 
 const theme = industrialNeutralTheme
 const sandboxThemeTokens = resolveGridThemeTokens(theme)

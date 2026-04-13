@@ -15,6 +15,11 @@ export interface DataGridSelectionSummaryColumnConfig<TRow = unknown> {
   valueGetter?: (rowNode: DataGridRowNode<TRow>) => unknown
 }
 
+export type DataGridSelectionCellValueReader<TRow = unknown> = (
+  rowNode: DataGridRowNode<TRow>,
+  columnKey: string,
+) => unknown
+
 export interface DataGridSelectionSummaryColumnSnapshot {
   key: string
   selectedCellCount: number
@@ -38,9 +43,19 @@ export interface CreateDataGridSelectionSummaryOptions<TRow = unknown> {
   getRow: (rowIndex: number) => DataGridRowNode<TRow> | undefined
   getColumnKeyByIndex: (columnIndex: number) => string | null | undefined
   columns?: readonly DataGridSelectionSummaryColumnConfig<TRow>[]
+  readSelectionCell?: DataGridSelectionCellValueReader<TRow>
   defaultAggregations?: readonly DataGridSelectionAggregationKind[]
   scope?: DataGridSelectionSummaryScope
   includeRowIndex?: (rowIndex: number) => boolean
+}
+
+export interface ResolveDataGridSelectionCellValueOptions<TRow = unknown> {
+  rowNode: DataGridRowNode<TRow>
+  columnKey: string
+  readSelectionCell?: DataGridSelectionCellValueReader<TRow>
+  valueGetter?: ((rowNode: DataGridRowNode<TRow>) => unknown) | undefined
+  accessor?: ((rowData: TRow) => unknown) | undefined
+  field?: string | null | undefined
 }
 
 const DEFAULT_AGGREGATIONS: readonly DataGridSelectionAggregationKind[] = [
@@ -203,6 +218,28 @@ function readDefaultCellValue<TRow>(rowNode: DataGridRowNode<TRow>, columnKey: s
   return readByPath(source, columnKey)
 }
 
+export function resolveDataGridSelectionCellValue<TRow = unknown>(
+  options: ResolveDataGridSelectionCellValueOptions<TRow>,
+): unknown {
+  const hookValue = options.readSelectionCell?.(options.rowNode, options.columnKey)
+  if (typeof hookValue !== "undefined") {
+    return hookValue
+  }
+  if (typeof options.valueGetter === "function") {
+    return options.valueGetter(options.rowNode)
+  }
+  if (typeof options.accessor === "function") {
+    return options.accessor(options.rowNode.data)
+  }
+  if (typeof options.field === "string" && options.field.length > 0) {
+    const fieldValue = readByPath(options.rowNode.data as unknown, options.field)
+    if (typeof fieldValue !== "undefined") {
+      return fieldValue
+    }
+  }
+  return readDefaultCellValue(options.rowNode, options.columnKey)
+}
+
 export function createDataGridSelectionSummary<TRow = unknown>(
   options: CreateDataGridSelectionSummaryOptions<TRow>,
 ): DataGridSelectionSummarySnapshot {
@@ -278,9 +315,12 @@ export function createDataGridSelectionSummary<TRow = unknown>(
         const aggregations = normalizeAggregations(columnConfig?.aggregations, defaultAggregations)
         const accumulator = ensureColumnAccumulator(accumulators, columnKey, aggregations)
 
-        const value = typeof columnConfig?.valueGetter === "function"
-          ? columnConfig.valueGetter(rowNode)
-          : readDefaultCellValue(rowNode, columnKey)
+        const value = resolveDataGridSelectionCellValue({
+          rowNode,
+          columnKey,
+          readSelectionCell: options.readSelectionCell,
+          valueGetter: columnConfig?.valueGetter,
+        })
 
         accumulator.selectedCellCount += 1
         accumulator.distinctValues.add(toDistinctKey(value))

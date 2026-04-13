@@ -7,6 +7,7 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
   font-family: var(--datagrid-font-family);
   font-size: var(--datagrid-font-size);
+  line-height: 1.2;
   color: var(--datagrid-text-color);
   background: var(--datagrid-background-color);
   --datagrid-surface-elevated-color: color-mix(in srgb, var(--datagrid-background-color) 92%, white 8%);
@@ -1102,6 +1103,7 @@ const DATA_GRID_APP_STYLES = `
   min-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2;
   color: var(--datagrid-row-text-color);
   background: var(--datagrid-row-background-color);
   user-select: none;
@@ -1316,6 +1318,12 @@ body.datagrid-fill-drag-cursor * {
 
 .grid-cell--header-sortable:hover {
   background: var(--datagrid-header-cell-hover-bg);
+}
+
+.grid-cell--header-selected,
+.grid-cell--header-selected:hover {
+  background: color-mix(in srgb, var(--datagrid-selection-range-bg) 78%, var(--datagrid-header-cell-background-color) 22%);
+  box-shadow: inset 0 -2px 0 0 var(--datagrid-selection-border-color);
 }
 
 .grid-cell--header-menu-enabled {
@@ -1572,7 +1580,9 @@ body.datagrid-fill-drag-cursor * {
   height: 20px;
   margin: 0;
   padding: 0;
+  box-sizing: border-box;
   border: 0;
+  font: inherit;
   background: transparent;
   cursor: pointer;
 }
@@ -1787,8 +1797,10 @@ body.datagrid-fill-drag-cursor * {
   height: 22px;
   margin-left: auto;
   padding: 0;
+  box-sizing: border-box;
   border: 1px solid transparent;
   border-radius: 6px;
+  font: inherit;
   background: transparent;
   color: var(--datagrid-sort-indicator-color);
   cursor: pointer;
@@ -1840,10 +1852,15 @@ body.datagrid-fill-drag-cursor * {
   width: 100%;
   min-width: 0;
   height: 22px;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
   border: 1px solid var(--datagrid-filter-trigger-border);
   border-radius: 4px;
   padding: 0 6px;
+  font: inherit;
   font-size: 11px;
+  line-height: 1.2;
   color: var(--datagrid-text-primary);
   background: var(--datagrid-filter-trigger-bg);
 }

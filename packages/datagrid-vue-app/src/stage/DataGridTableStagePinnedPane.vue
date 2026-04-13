@@ -9,6 +9,12 @@
     @wheel="renderApi.handleLinkedViewportWheel"
   >
     <slot name="chrome" />
+    <DataGridTableStageOverlayLayer
+      layer-class="grid-selection-overlay--pane-seam"
+      :selection-segments="pane.selectionSeamOverlaySegments"
+      :fill-preview-segments="pane.fillPreviewSeamOverlaySegments"
+      :move-preview-segments="pane.movePreviewSeamOverlaySegments"
+    />
     <div :ref="pane.contentRef ?? undefined" class="grid-pane-content" :style="pane.contentStyle" @contextmenu="handleContextMenu">
       <div v-if="(pane.topSpacerHeight ?? viewport.topSpacerHeight) > 0" class="grid-spacer" :style="{ height: `${pane.topSpacerHeight ?? viewport.topSpacerHeight}px` }" />
       <div

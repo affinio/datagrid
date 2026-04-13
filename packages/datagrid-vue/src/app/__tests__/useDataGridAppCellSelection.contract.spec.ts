@@ -1,5 +1,6 @@
 import { ref } from "vue"
 import { describe, expect, it } from "vitest"
+import type { DataGridSelectionSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppCellSelection } from "../useDataGridAppCellSelection"
 
 describe("useDataGridAppCellSelection contract", () => {
@@ -49,8 +50,8 @@ describe("useDataGridAppCellSelection contract", () => {
   })
 
   it("creates a cell selection snapshot in tree mode", () => {
-    const selectionSnapshot = ref(null as never)
-    const selectionAnchor = ref(null)
+    const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
+    const selectionAnchor = ref<{ rowIndex: number; colIndex: number; rowId: string | null } | null>(null)
     let runtimeSnapshot: unknown = null
 
     const api = useDataGridAppCellSelection({
@@ -104,5 +105,50 @@ describe("useDataGridAppCellSelection contract", () => {
       activeCell: { rowIndex: 2, colIndex: 1, rowId: "r3" },
     })
     expect(api.isSelectionAnchorCell(2, 1)).toBe(true)
+  })
+
+  it("appends additive ctrl/cmd selections and keeps all ranges queryable", () => {
+    const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
+    const selectionAnchor = ref<{ rowIndex: number; colIndex: number; rowId: string | null } | null>(null)
+
+    const api = useDataGridAppCellSelection({
+      mode: ref("base"),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => ({ rowId: `r${rowIndex + 1}` }),
+          },
+          selection: {
+            hasSupport: () => true,
+            setSnapshot: () => undefined,
+          },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => ({ rowId: `r${rowIndex + 1}` }),
+      } as never,
+      totalRows: ref(10),
+      visibleColumns: ref([
+        { key: "a" },
+        { key: "b" },
+        { key: "c" },
+      ] as never),
+      viewportRowStart: ref(0),
+      selectionSnapshot,
+      selectionAnchor,
+      isEditingCell: () => false,
+    })
+
+    api.applyCellSelectionByCoord({ rowIndex: 1, columnIndex: 0, rowId: "r2" }, false)
+    api.applyCellSelectionByCoord({ rowIndex: 4, columnIndex: 2, rowId: "r5" }, false, undefined, true)
+
+    expect(selectionSnapshot.value?.ranges).toHaveLength(2)
+    expect(selectionSnapshot.value?.activeRangeIndex).toBe(1)
+    expect(api.resolveSelectionRanges()).toEqual([
+      { startRow: 1, endRow: 1, startColumn: 0, endColumn: 0 },
+      { startRow: 4, endRow: 4, startColumn: 2, endColumn: 2 },
+    ])
+    expect(api.isCellSelected(1, 0)).toBe(true)
+    expect(api.isCellSelected(4, 2)).toBe(true)
+    expect(api.isSelectionAnchorCell(4, 2)).toBe(true)
+    expect(api.shouldHighlightSelectedCell(1, 0)).toBe(true)
   })
 })

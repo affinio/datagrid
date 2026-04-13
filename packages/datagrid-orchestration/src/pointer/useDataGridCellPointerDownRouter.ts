@@ -31,7 +31,7 @@ export interface UseDataGridCellPointerDownRouterOptions<
   setDragSelecting: (value: boolean) => void
   setLastDragCoord: (coord: TCoord) => void
   setDragPointer: (pointer: { clientX: number; clientY: number }) => void
-  applyCellSelection: (coord: TCoord, extend: boolean, fallbackAnchor?: TCoord) => void
+  applyCellSelection: (coord: TCoord, extend: boolean, fallbackAnchor?: TCoord, additive?: boolean) => void
   startInteractionAutoScroll: () => void
   setLastAction: (message: string) => void
 }
@@ -95,7 +95,7 @@ export function useDataGridCellPointerDownRouter<
     options.setDragSelecting(true)
     options.setLastDragCoord(coord)
     options.setDragPointer({ clientX: event.clientX, clientY: event.clientY })
-    options.applyCellSelection(coord, event.shiftKey, coord)
+    options.applyCellSelection(coord, event.shiftKey, coord, event.ctrlKey || event.metaKey)
     options.setLastAction(
       event.shiftKey
         ? `Extended selection to R${coord.rowIndex + 1} · ${columnKey}`

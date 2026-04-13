@@ -19,6 +19,7 @@
       <RouterLink class="sandbox__link" to="/vue/formula-grid">Vue Formula</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/cell-renderer-grid">Vue Cell Renderer</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/row-selection-grid">Vue Row Selection</RouterLink>
+      <RouterLink class="sandbox__link" to="/vue/typed-facade-grid">Vue Typed Facade</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/spreadsheet-workbook">Vue Spreadsheet</RouterLink>
     </nav>
 

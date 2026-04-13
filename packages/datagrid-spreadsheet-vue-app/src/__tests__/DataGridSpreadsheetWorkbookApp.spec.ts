@@ -70,20 +70,61 @@ async function selectGridCell(
   wrapper: ReturnType<typeof mount>,
   rowIndex: number,
   columnIndex: number,
+  options: {
+    shiftKey?: boolean
+    ctrlKey?: boolean
+    metaKey?: boolean
+  } = {},
 ): Promise<void> {
-  const cell = wrapper.find(`.spreadsheet-grid-host .grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`)
+  const dataCells = wrapper
+    .findAll(`.spreadsheet-grid-host .grid-cell[data-row-index="${rowIndex}"][data-column-key]`)
+    .filter(cell => cell.attributes("data-column-key") !== "__datagrid_row_selection__")
+  const cell = dataCells[columnIndex]
+    ?? wrapper.find(`.spreadsheet-grid-host .grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`)
   expect(cell.exists()).toBe(true)
   await cell.trigger("mousedown", {
     button: 0,
     clientX: 16,
     clientY: 16,
+    shiftKey: options.shiftKey,
+    ctrlKey: options.ctrlKey,
+    metaKey: options.metaKey,
   })
   window.dispatchEvent(new MouseEvent("mouseup", {
     bubbles: true,
     button: 0,
     clientX: 16,
     clientY: 16,
+    shiftKey: options.shiftKey,
+    ctrlKey: options.ctrlKey,
+    metaKey: options.metaKey,
   }))
+  await cell.trigger("click", {
+    clientX: 16,
+    clientY: 16,
+    shiftKey: options.shiftKey,
+    ctrlKey: options.ctrlKey,
+    metaKey: options.metaKey,
+  })
+  await flushUiAndTimers()
+}
+
+async function selectGridHeader(
+  wrapper: ReturnType<typeof mount>,
+  columnKey: string,
+  options: {
+    shiftKey?: boolean
+    ctrlKey?: boolean
+    metaKey?: boolean
+  } = {},
+): Promise<void> {
+  const header = wrapper.find(`.spreadsheet-grid-host .grid-cell--header[data-column-key="${columnKey}"]`)
+  expect(header.exists()).toBe(true)
+  await header.trigger("click", {
+    shiftKey: options.shiftKey,
+    ctrlKey: options.ctrlKey,
+    metaKey: options.metaKey,
+  })
   await flushUiAndTimers()
 }
 
@@ -107,7 +148,11 @@ function findGridCell(
   rowIndex: number,
   columnIndex: number,
 ) {
-  return wrapper.find(`.spreadsheet-grid-host .grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`)
+  const dataCells = wrapper
+    .findAll(`.spreadsheet-grid-host .grid-cell[data-row-index="${rowIndex}"][data-column-key]`)
+    .filter(cell => cell.attributes("data-column-key") !== "__datagrid_row_selection__")
+  return dataCells[columnIndex]
+    ?? wrapper.find(`.spreadsheet-grid-host .grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`)
 }
 
 function createWorkbookModel(): DataGridSpreadsheetWorkbookModel {
@@ -312,6 +357,104 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
 
     expect((formulaInput.element as HTMLTextAreaElement).value).toBe("420")
     expect(wrapper.text()).toContain("Orders / price / row 1")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("shows a bottom-right selection aggregate summary for multi-cell selections", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    await selectGridCell(wrapper, 0, 0)
+    await selectGridCell(wrapper, 0, 1, { shiftKey: true })
+
+    const aggregateOverlay = wrapper.find(".spreadsheet-selection-aggregate-overlay")
+    expect(aggregateOverlay.exists()).toBe(true)
+    expect(aggregateOverlay.text()).toContain("Selection: count 2")
+    expect(aggregateOverlay.text()).toContain("sum 424")
+    expect(aggregateOverlay.text()).toContain("min 4")
+    expect(aggregateOverlay.text()).toContain("max 420")
+    expect(aggregateOverlay.text()).toContain("avg 212")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("adds individual cells to the workbook selection on cmd-click", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    await selectGridCell(wrapper, 0, 0)
+    await selectGridCell(wrapper, 1, 1, { metaKey: true })
+
+    expect(findGridCell(wrapper, 0, 0).classes()).toContain("grid-cell--selected")
+    expect(findGridCell(wrapper, 1, 1).classes()).toContain("grid-cell--selection-anchor")
+
+    const aggregateOverlay = wrapper.find(".spreadsheet-selection-aggregate-overlay")
+    expect(aggregateOverlay.exists()).toBe(true)
+    expect(aggregateOverlay.text()).toContain("Selection: count 2")
+    expect(aggregateOverlay.text()).toContain("sum 784")
+    expect(aggregateOverlay.text()).toContain("min 4")
+    expect(aggregateOverlay.text()).toContain("max 780")
+    expect(aggregateOverlay.text()).toContain("avg 392")
+
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("selects a full column from the workbook header", async () => {
+    const workbook = createWorkbookModel()
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    await selectGridHeader(wrapper, "price")
+
+    const header = wrapper.get('.spreadsheet-grid-host .grid-cell--header[data-column-key="price"]')
+    expect(header.classes()).toContain("grid-cell--header-selected")
+    expect(findGridCell(wrapper, 0, 1).classes()).toContain("grid-cell--selection-anchor")
+    expect(findGridCell(wrapper, 1, 1).classes()).toContain("grid-cell--selected")
 
     wrapper.unmount()
     workbook.dispose()

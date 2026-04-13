@@ -110,6 +110,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
     placement: "before" | "after"
   }) => boolean
   toggleSortForColumn: (columnKey: string, additive?: boolean) => void
+  handleHeaderColumnClick?: (columnKey: string, options: { additive: boolean; extend: boolean }) => void
   sortIndicator: (columnKey: string) => string
   setColumnFilterText: (columnKey: string, value: string) => void
   columnMenuEnabled?: Ref<boolean>
@@ -128,6 +129,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   resolveColumnGroupOrder?: (columnKey: string) => number | null
   resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
   resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
+  resolveColumnMenuValueEntries?: (columnKey: string) => readonly import("@affino/datagrid-core").DataGridColumnHistogramEntry[]
   applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
   applyColumnMenuPin?: (columnKey: string, pin: import("@affino/datagrid-vue").DataGridColumnPin) => void
   applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
@@ -136,6 +138,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   applyRowHeightSettings: () => void
   cloneRowData: (row: TRow) => TRow
   readClipboardCell?: (row: import("@affino/datagrid-core").DataGridRowNode<TRow>, columnKey: string) => string
+  readSelectionCell?: (row: import("@affino/datagrid-core").DataGridRowNode<TRow>, columnKey: string) => unknown
   applyClipboardEdits?: (
     range: DataGridCopyRange,
     matrix: string[][],
@@ -372,6 +375,7 @@ export function useDataGridTableStageRuntime<
     normalizeRowId,
     normalizeCellCoord,
     resolveSelectionRange: resolveSelectionRangeForClipboard,
+    resolveSelectionRanges,
     resolveCurrentCellCoord: resolveCurrentCellCoordForClipboard,
     applySelectionRange: applyClipboardSelectionRange,
     applyCellSelectionByCoord,
@@ -523,6 +527,7 @@ export function useDataGridTableStageRuntime<
     visibleColumns: orderedVisibleColumns,
     viewportRowStart,
     resolveSelectionRange: resolveSelectionRangeForClipboard,
+    resolveSelectionRanges,
     resolveCurrentCellCoord: resolveCurrentCellCoordForClipboard,
     applySelectionRange: applyClipboardSelectionRange,
     clearCellSelection,
@@ -800,6 +805,12 @@ export function useDataGridTableStageRuntime<
     dispose: disposeInteractionController,
   } = interactionController
 
+  const visualInteractionSelectionRange = computed(() => (
+    isPointerSelectingCells.value
+      ? interactionSelectionRange.value
+      : null
+  ))
+
   const viewportKeyboardService = useDataGridTableStageViewportKeyboard<TRow>({
     runtime: selectableRuntime,
     selectionSnapshot: options.selectionSnapshot,
@@ -849,14 +860,15 @@ export function useDataGridTableStageRuntime<
     selectionAnchorCell,
     fillPreviewRange,
     isFillDragging,
-    interactionSelectionRange,
+    interactionSelectionRange: visualInteractionSelectionRange,
     resolveCommittedSelectionRange: resolveSelectionRangeForClipboard,
+    resolveCommittedSelectionRanges: resolveSelectionRanges,
     isCommittedSelectionAnchorCell,
     isCommittedCellSelected,
     shouldHighlightCommittedSelectedCell,
     isCommittedCellOnSelectionEdge,
   })
-  const { selectionRange } = visualSelectionService
+  const { selectionRange, selectionRanges } = visualSelectionService
 
   const fillActionService = useDataGridTableStageFillAction({
     lastAppliedFill,
@@ -917,7 +929,9 @@ export function useDataGridTableStageRuntime<
     editingCellInitialFilter,
     editingCellOpenOnMount,
     selectionRange,
+    selectionRanges,
     selectionAnchorCell,
+    totalRowCount: totalSelectableRows,
     fillPreviewRange,
     rangeMovePreviewRange,
     fillHandleEnabled: computed(() => options.enableFillHandle.value),
@@ -929,6 +943,7 @@ export function useDataGridTableStageRuntime<
     columnStyle: resolveStageColumnStyle,
     reorderColumnsByHeader: options.reorderColumnsByHeader,
     toggleSortForColumn: options.toggleSortForColumn,
+    handleHeaderColumnClick: options.handleHeaderColumnClick,
     sortIndicator: options.sortIndicator,
     setColumnFilterText: options.setColumnFilterText,
     columnMenuEnabled: options.columnMenuEnabled,
@@ -947,6 +962,7 @@ export function useDataGridTableStageRuntime<
     resolveColumnGroupOrder: options.resolveColumnGroupOrder,
     resolveColumnMenuSortDirection: options.resolveColumnMenuSortDirection,
     resolveColumnMenuSelectedTokens: options.resolveColumnMenuSelectedTokens,
+    resolveColumnMenuValueEntries: options.resolveColumnMenuValueEntries,
     applyColumnMenuSort: options.applyColumnMenuSort,
     applyColumnMenuPin: options.applyColumnMenuPin,
     applyColumnMenuGroupBy: options.applyColumnMenuGroupBy,

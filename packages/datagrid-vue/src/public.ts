@@ -39,6 +39,7 @@ export {
 } from "@affino/datagrid-pivot"
 
 export type {
+  DataGridBivariantCallback,
   CreateDataGridCoreOptions,
   DataGridCoreServiceRegistry,
   DataGridAggOp,
@@ -86,6 +87,7 @@ export type {
   DataGridUnifiedColumnState,
   DataGridUnifiedState,
   DataGridColumnModel,
+  DataGridColumnHistogramEntry,
   DataGridColumnCapabilities,
   DataGridCellInteractionInvocationTrigger,
   DataGridCellInteractionKeyboardTrigger,

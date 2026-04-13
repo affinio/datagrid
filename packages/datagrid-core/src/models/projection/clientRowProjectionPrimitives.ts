@@ -17,6 +17,19 @@ import {
 } from "../filters/columnFilterUtils.js"
 import { resolveAdvancedExpression } from "../mutation/rowPatchAnalyzer.js"
 
+export type DataGridFilterCellValueReader<T> = (
+  rowNode: DataGridRowNode<T>,
+  columnKey: string,
+) => unknown
+
+export interface ResolveDataGridFilterCellValueOptions<T> {
+  rowNode: DataGridRowNode<T>
+  columnKey: string
+  field?: string
+  readFilterCell?: DataGridFilterCellValueReader<T>
+  readField?: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown
+}
+
 function readByPath(value: unknown, path: string): unknown {
   if (!path || typeof value !== "object" || value === null) {
     return undefined
@@ -53,6 +66,19 @@ export function readRowField<T>(rowNode: DataGridRowNode<T>, key: string, field?
     return directValue
   }
   return readByPath(source, resolvedField)
+}
+
+export function resolveDataGridFilterCellValue<T>(
+  options: ResolveDataGridFilterCellValueOptions<T>,
+): unknown {
+  if (typeof options.readFilterCell === "function") {
+    const resolved = options.readFilterCell(options.rowNode, options.columnKey)
+    if (typeof resolved !== "undefined") {
+      return resolved
+    }
+  }
+  const readField = options.readField ?? readRowField
+  return readField(options.rowNode, options.columnKey, options.field)
 }
 
 export function normalizeText(value: unknown): string {
@@ -151,6 +177,7 @@ export function createFilterPredicate<T>(
   options: {
     ignoreColumnFilterKey?: string
     readRowField?: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown
+    readFilterCell?: DataGridFilterCellValueReader<T>
   } = {},
 ): (rowNode: DataGridRowNode<T>) => boolean {
   if (!filterModel) {
@@ -161,6 +188,7 @@ export function createFilterPredicate<T>(
     ? options.ignoreColumnFilterKey.trim()
     : ""
   const readField = options.readRowField ?? readRowField
+  const readFilterCell = options.readFilterCell
 
   const effectiveFilterModel = (() => {
     if (!ignoredColumnKey) {
@@ -216,7 +244,12 @@ export function createFilterPredicate<T>(
 
   return (rowNode: DataGridRowNode<T>) => {
     for (const [key, filterEntry] of columnFilters) {
-      const candidate = readField(rowNode, key)
+      const candidate = resolveDataGridFilterCellValue({
+        rowNode,
+        columnKey: key,
+        readFilterCell,
+        readField,
+      })
       if (filterEntry.kind === "valueSet") {
         const candidateToken = normalizeValueSetTokenForLookup(serializeColumnValueToToken(candidate))
         if (!filterEntry.valueTokenSet?.has(candidateToken)) {
@@ -231,7 +264,13 @@ export function createFilterPredicate<T>(
 
     if (advancedExpression) {
       return evaluateDataGridAdvancedFilterExpression(advancedExpression, condition => {
-        return readField(rowNode, condition.key, condition.field)
+        return resolveDataGridFilterCellValue({
+          rowNode,
+          columnKey: condition.key,
+          field: condition.field,
+          readFilterCell,
+          readField,
+        })
       })
     }
 
@@ -339,13 +378,22 @@ export function buildColumnHistogram<T>(
   rows: readonly DataGridRowNode<T>[],
   columnId: string,
   options?: DataGridColumnHistogramOptions,
-  readField: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown = readRowField,
+  valueOptions: {
+    readField?: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown
+    readFilterCell?: DataGridFilterCellValueReader<T>
+  } = {},
 ): DataGridColumnHistogram {
   const key = String(columnId ?? "").trim()
   const entriesByToken = new Map<string, DataGridColumnHistogramEntry>()
+  const readField = valueOptions.readField ?? readRowField
 
   for (const row of rows) {
-    const value = readField(row, key)
+    const value = resolveDataGridFilterCellValue({
+      rowNode: row,
+      columnKey: key,
+      readFilterCell: valueOptions.readFilterCell,
+      readField,
+    })
     const token = serializeColumnValueToToken(value)
     const current = entriesByToken.get(token)
     if (current) {

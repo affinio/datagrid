@@ -78,9 +78,44 @@ describe("useDataGridCellPointerDownRouter contract", () => {
     expect(setDragSelecting).toHaveBeenCalledWith(true)
     expect(setLastDragCoord).toHaveBeenCalledWith({ rowIndex: 1, columnIndex: 2 })
     expect(setDragPointer).toHaveBeenCalledWith({ clientX: 12, clientY: 19 })
-    expect(applyCellSelection).toHaveBeenCalledWith({ rowIndex: 1, columnIndex: 2 }, true, { rowIndex: 1, columnIndex: 2 })
+    expect(applyCellSelection).toHaveBeenCalledWith({ rowIndex: 1, columnIndex: 2 }, true, { rowIndex: 1, columnIndex: 2 }, false)
     expect(startInteractionAutoScroll).not.toHaveBeenCalled()
     expect(setLastAction).toHaveBeenCalledWith("Extended selection to R2 · service")
+  })
+
+  it("forwards ctrl/cmd additive intent during pointer-down selection", () => {
+    const applyCellSelection = vi.fn()
+    const router = useDataGridCellPointerDownRouter({
+      isSelectionColumn: () => false,
+      isRangeMoveModifierActive: () => false,
+      isEditorInteractionTarget: () => false,
+      hasInlineEditor: () => false,
+      commitInlineEdit: vi.fn(() => true),
+      resolveCellCoord: () => ({ rowIndex: 2, columnIndex: 1 }),
+      resolveSelectionRange: () => null,
+      isCoordInsideRange: () => false,
+      startRangeMove: vi.fn(),
+      closeContextMenu: vi.fn(),
+      focusViewport: vi.fn(),
+      isFillDragging: () => false,
+      stopFillSelection: vi.fn(),
+      setDragSelecting: vi.fn(),
+      setLastDragCoord: vi.fn(),
+      setDragPointer: vi.fn(),
+      applyCellSelection,
+      startInteractionAutoScroll: vi.fn(),
+      setLastAction: vi.fn(),
+    })
+
+    const event = createEvent({ button: 0, ctrlKey: true })
+
+    expect(router.dispatchCellPointerDown({ rowId: "R3" }, "service", event)).toBe(true)
+    expect(applyCellSelection).toHaveBeenCalledWith(
+      { rowIndex: 2, columnIndex: 1 },
+      false,
+      { rowIndex: 2, columnIndex: 1 },
+      true,
+    )
   })
 
   it("ignores non-cell cases (selection column, editor target, invalid button)", () => {

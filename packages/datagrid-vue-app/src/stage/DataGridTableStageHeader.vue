@@ -68,7 +68,8 @@
             <DataGridColumnMenu
               v-else
               :key="resolveColumnMenuInstanceKey(column.key)"
-              :rows="sourceRows"
+              :row-count="sourceRows.length"
+              :resolve-value-entries="() => resolveColumnMenuValueEntriesSafe(column.key)"
               :items="resolveColumnMenuItemsSafe(column.key)"
               :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
               :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
@@ -106,6 +107,7 @@
                 :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
                 :data-column-key="column.key"
                 :draggable="isHeaderColumnDraggable(column)"
+                @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
                 @dragstart.stop="handleHeaderColumnDragStart($event, column)"
                 @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
                 @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
@@ -191,7 +193,7 @@
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
               :draggable="isHeaderColumnDraggable(column)"
-              @click="handleHeaderColumnClick(column, $event.shiftKey)"
+              @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
               @dragstart.stop="handleHeaderColumnDragStart($event, column)"
               @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
               @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
@@ -282,7 +284,8 @@
           <DataGridColumnMenu
             v-for="column in renderedColumns"
             :key="resolveColumnMenuInstanceKey(column.key)"
-            :rows="sourceRows"
+            :row-count="sourceRows.length"
+            :resolve-value-entries="() => resolveColumnMenuValueEntriesSafe(column.key)"
             :items="resolveColumnMenuItemsSafe(column.key)"
             :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
             :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
@@ -320,6 +323,7 @@
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
               :draggable="isHeaderColumnDraggable(column)"
+              @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
               @dragstart.stop="handleHeaderColumnDragStart($event, column)"
               @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
               @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
@@ -387,7 +391,7 @@
             :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
             :data-column-key="column.key"
             :draggable="isHeaderColumnDraggable(column)"
-            @click="handleHeaderColumnClick(column, $event.shiftKey)"
+            @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
             @dragstart.stop="handleHeaderColumnDragStart($event, column)"
             @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
             @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
@@ -463,7 +467,8 @@
           <DataGridColumnMenu
             v-for="column in pinnedRightColumns"
             :key="resolveColumnMenuInstanceKey(column.key)"
-            :rows="sourceRows"
+            :row-count="sourceRows.length"
+            :resolve-value-entries="() => resolveColumnMenuValueEntriesSafe(column.key)"
             :items="resolveColumnMenuItemsSafe(column.key)"
             :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
             :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
@@ -501,6 +506,7 @@
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
               :draggable="isHeaderColumnDraggable(column)"
+              @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
               @dragstart.stop="handleHeaderColumnDragStart($event, column)"
               @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
               @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
@@ -568,7 +574,7 @@
             :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
             :data-column-key="column.key"
             :draggable="isHeaderColumnDraggable(column)"
-            @click="handleHeaderColumnClick(column, $event.shiftKey)"
+            @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
             @dragstart.stop="handleHeaderColumnDragStart($event, column)"
             @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
             @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
@@ -623,6 +629,7 @@ import {
   useDataGridTableStageColumnsSection,
   useDataGridTableStageLayoutSection,
   useDataGridTableStageRowsSection,
+  useDataGridTableStageSelectionSection,
   useDataGridTableStageViewportSection,
 } from "./dataGridTableStageContext"
 
@@ -679,6 +686,7 @@ const layout = useDataGridTableStageLayoutSection<Record<string, unknown>>()
 const viewport = useDataGridTableStageViewportSection<Record<string, unknown>>()
 const columns = useDataGridTableStageColumnsSection<Record<string, unknown>>()
 const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
+const selection = useDataGridTableStageSelectionSection<Record<string, unknown>>()
 
 const sourceRows = computed(() => rows.value.sourceRows ?? [])
 const visibleColumns = computed(() => columns.value.visibleColumns)
@@ -783,6 +791,7 @@ function resolveHeaderCellClasses(
   options: { menuEnabled?: boolean; menuOpen?: boolean } = {},
 ): Record<string, boolean> {
   return {
+    "grid-cell--header-selected": isFullColumnSelection(column),
     "grid-cell--header-menu-enabled": options.menuEnabled === true,
     "grid-cell--header-menu-open": options.menuOpen === true,
     "grid-cell--header-reorderable": isHeaderColumnDraggable(column),
@@ -790,6 +799,26 @@ function resolveHeaderCellClasses(
     "grid-cell--header-drop-before": dragOverHeaderColumnKey.value === column.key && dragOverHeaderPlacement.value === "before",
     "grid-cell--header-drop-after": dragOverHeaderColumnKey.value === column.key && dragOverHeaderPlacement.value === "after",
   }
+}
+
+function isFullColumnSelection(column: TableColumn): boolean {
+  const columnIndex = visibleColumns.value.findIndex(entry => entry.key === column.key)
+  const totalRowCount = selection.value.totalRowCount ?? 0
+  if (columnIndex < 0 || totalRowCount <= 0) {
+    return false
+  }
+  const ranges = selection.value.selectionRanges
+    ?? (selection.value.selectionRange ? [selection.value.selectionRange] : [])
+  return ranges.some(range => {
+    const startRow = Math.min(range.startRow, range.endRow)
+    const endRow = Math.max(range.startRow, range.endRow)
+    const startColumn = Math.min(range.startColumn, range.endColumn)
+    const endColumn = Math.max(range.startColumn, range.endColumn)
+    return startRow === 0
+      && endRow >= totalRowCount - 1
+      && columnIndex >= startColumn
+      && columnIndex <= endColumn
+  })
 }
 
 function columnStyle(key: string): CSSProperties {
@@ -927,14 +956,21 @@ function headerCellPresentationStyle(column: TableColumn): CSSProperties {
   return textAlign ? { textAlign } : {}
 }
 
-function handleHeaderColumnClick(column: TableColumn, additive: boolean): void {
+function handleHeaderColumnClick(
+  column: TableColumn,
+  modifiers: { additive: boolean; extend: boolean },
+): void {
   if (suppressHeaderClick) {
+    return
+  }
+  if (columns.value.handleHeaderColumnClick) {
+    columns.value.handleHeaderColumnClick(column.key, modifiers)
     return
   }
   if (!isColumnSortable(column)) {
     return
   }
-  columns.value.toggleSortForColumn(column.key, additive)
+  columns.value.toggleSortForColumn(column.key, modifiers.extend)
 }
 
 function handleHeaderColumnDragStart(event: DragEvent, column: TableColumn): void {
@@ -1088,6 +1124,11 @@ function handleColumnMenuButtonClick(
 
 function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string[] {
   const resolve = columns.value.resolveColumnMenuSelectedTokens
+  return typeof resolve === "function" ? resolve(columnKey) : []
+}
+
+function resolveColumnMenuValueEntriesSafe(columnKey: string) {
+  const resolve = columns.value.resolveColumnMenuValueEntries
   return typeof resolve === "function" ? resolve(columnKey) : []
 }
 

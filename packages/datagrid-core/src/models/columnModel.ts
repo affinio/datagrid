@@ -1,5 +1,6 @@
 import type { DataGridColumnFormat, DataGridFormatDataType } from "@affino/datagrid-format"
 import type { DataGridCellTypeId } from "../cells/runtime.js"
+import type { DataGridBivariantCallback } from "../types/bivariance.js"
 
 export type {
   DataGridColumnDateTimeFormatOptions,
@@ -13,7 +14,9 @@ export type DataGridColumnDataType = DataGridFormatDataType
 
 export type DataGridColumnOptionsResult = readonly unknown[] | Promise<readonly unknown[]>
 
-export type DataGridColumnOptionsSource<TRow = unknown> = readonly unknown[] | ((row: TRow) => DataGridColumnOptionsResult)
+export type DataGridColumnOptionsSource<TRow = unknown> =
+  | readonly unknown[]
+  | DataGridBivariantCallback<[row: TRow], DataGridColumnOptionsResult>
 
 export interface DataGridColumnPresentation<TRow = unknown> {
   align?: "left" | "center" | "right"
@@ -55,12 +58,18 @@ export interface DataGridColumnCellInteractionInvokeContext<TRow = unknown>
 export interface DataGridColumnCellInteraction<TRow = unknown> {
   keyboard?: readonly DataGridCellInteractionKeyboardTrigger[]
   click?: boolean
-  disabled?: boolean | ((context: DataGridColumnCellInteractionContext<TRow>) => boolean)
-  role?: DataGridCellInteractionRole | ((context: DataGridColumnCellInteractionContext<TRow>) => DataGridCellInteractionRole | undefined)
-  label?: string | ((context: DataGridColumnCellInteractionContext<TRow>) => string | undefined)
-  pressed?: DataGridCellInteractionTriState | ((context: DataGridColumnCellInteractionContext<TRow>) => DataGridCellInteractionTriState | undefined)
-  checked?: DataGridCellInteractionTriState | ((context: DataGridColumnCellInteractionContext<TRow>) => DataGridCellInteractionTriState | undefined)
-  onInvoke: (context: DataGridColumnCellInteractionInvokeContext<TRow>) => void
+  disabled?: boolean | DataGridBivariantCallback<[context: DataGridColumnCellInteractionContext<TRow>], boolean>
+  role?: DataGridCellInteractionRole | DataGridBivariantCallback<[
+    context: DataGridColumnCellInteractionContext<TRow>,
+  ], DataGridCellInteractionRole | undefined>
+  label?: string | DataGridBivariantCallback<[context: DataGridColumnCellInteractionContext<TRow>], string | undefined>
+  pressed?: DataGridCellInteractionTriState | DataGridBivariantCallback<[
+    context: DataGridColumnCellInteractionContext<TRow>,
+  ], DataGridCellInteractionTriState | undefined>
+  checked?: DataGridCellInteractionTriState | DataGridBivariantCallback<[
+    context: DataGridColumnCellInteractionContext<TRow>,
+  ], DataGridCellInteractionTriState | undefined>
+  onInvoke: DataGridBivariantCallback<[context: DataGridColumnCellInteractionInvokeContext<TRow>], void>
 }
 
 export type DataGridColumnConstraintValue = number | Date | string
@@ -71,9 +80,9 @@ export interface DataGridColumnConstraints {
 }
 
 export interface DataGridColumnValueAccessors<TRow = unknown> {
-  accessor?: (row: TRow) => unknown
-  valueGetter?: (row: TRow) => unknown
-  valueSetter?: (row: TRow, value: unknown) => void
+  accessor?: DataGridBivariantCallback<[row: TRow], unknown>
+  valueGetter?: DataGridBivariantCallback<[row: TRow], unknown>
+  valueSetter?: DataGridBivariantCallback<[row: TRow, value: unknown], void>
 }
 
 export interface DataGridColumnOption {

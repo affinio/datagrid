@@ -105,3 +105,4 @@ storybook-static/
 artifacts/
 sbom.cdx.json
 .claude/
+.refs/

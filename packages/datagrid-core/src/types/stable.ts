@@ -69,3 +69,5 @@ export type {
   DataGridStateConfig,
   DataGridConfig,
 } from "./base"
+
+export type { DataGridBivariantCallback } from "./bivariance"

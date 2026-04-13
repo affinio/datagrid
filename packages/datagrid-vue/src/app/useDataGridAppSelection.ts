@@ -1,7 +1,12 @@
-import { computed, ref, type Ref } from "vue"
+import { computed, ref, watch, type Ref } from "vue"
+import {
+  resolveDataGridSelectionCellValue,
+} from "@affino/datagrid-core"
 import type {
   DataGridColumnSnapshot,
   DataGridRowId,
+  DataGridRowModelSnapshot,
+  DataGridRowNode,
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-core"
 import type { GridSelectionPointLike } from "@affino/datagrid-core/advanced"
@@ -19,10 +24,11 @@ function resolveMaybeRef<T>(value: MaybeRef<T>): T {
 
 export interface UseDataGridAppSelectionOptions<TRow> {
   mode: MaybeRef<DataGridAppMode>
-  resolveRuntime?: () => Pick<UseDataGridRuntimeResult<TRow>, "api"> | null
+  resolveRuntime?: () => (Pick<UseDataGridRuntimeResult<TRow>, "api"> & Partial<Pick<UseDataGridRuntimeResult<TRow>, "rowModel">>) | null
   visibleColumns?: Ref<readonly DataGridColumnSnapshot[]>
   totalRows?: Ref<number>
   showRowSelection?: MaybeRef<boolean>
+  readSelectionCell?: (row: DataGridRowNode<TRow>, columnKey: string) => unknown
 }
 
 export interface UseDataGridAppSelectionResult<TRow> {
@@ -36,21 +42,6 @@ export interface UseDataGridAppSelectionResult<TRow> {
 
 const aggregateNumberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 })
 
-function readByPath(value: unknown, path: string): unknown {
-  if (!path || typeof value !== "object" || value === null) {
-    return undefined
-  }
-  const segments = path.split(".").filter(Boolean)
-  let current: unknown = value
-  for (const segment of segments) {
-    if (typeof current !== "object" || current === null || !(segment in (current as Record<string, unknown>))) {
-      return undefined
-    }
-    current = (current as Record<string, unknown>)[segment]
-  }
-  return current
-}
-
 function normalizeRowId(value: unknown): DataGridRowId | null {
   return typeof value === "string" || typeof value === "number" ? value : null
 }
@@ -62,32 +53,36 @@ function formatAggregateNumber(value: number | null): string {
   return aggregateNumberFormatter.format(value)
 }
 
-function readSelectionCellValue<TRow>(rowData: TRow, column: DataGridColumnSnapshot | undefined): unknown {
+function readSelectionCellValue<TRow>(
+  rowNode: DataGridRowNode<TRow>,
+  column: DataGridColumnSnapshot | undefined,
+  readSelectionCell?: (row: DataGridRowNode<TRow>, columnKey: string) => unknown,
+): unknown {
   if (!column) {
     return undefined
   }
-  if (typeof column.column.valueGetter === "function") {
-    return column.column.valueGetter(rowData)
-  }
-  if (typeof column.column.accessor === "function") {
-    return column.column.accessor(rowData)
-  }
-  const source = rowData as unknown
-  if (typeof source !== "object" || source === null) {
-    return undefined
-  }
-  const directKey = column.key
-  const directValue = (source as Record<string, unknown>)[directKey]
-  if (typeof directValue !== "undefined") {
-    return directValue
-  }
-  if (typeof column.column.field === "string" && column.column.field.length > 0) {
-    const fieldValue = readByPath(source, column.column.field)
-    if (typeof fieldValue !== "undefined") {
-      return fieldValue
-    }
-  }
-  return readByPath(source, directKey)
+  return resolveDataGridSelectionCellValue({
+    rowNode,
+    columnKey: column.key,
+    readSelectionCell,
+    valueGetter: typeof column.column.valueGetter === "function"
+      ? currentRowNode => column.column.valueGetter?.(currentRowNode.data)
+      : undefined,
+    accessor: typeof column.column.accessor === "function"
+      ? rowData => column.column.accessor?.(rowData)
+      : undefined,
+    field: typeof column.column.field === "string" ? column.column.field : undefined,
+  })
+}
+
+function resolveRowModelVersionKey<TRow>(snapshot: DataGridRowModelSnapshot<TRow>): string {
+  return [
+    snapshot.kind,
+    snapshot.revision ?? "",
+    snapshot.rowCount,
+    snapshot.loading ? 1 : 0,
+    snapshot.projection?.recomputeVersion ?? snapshot.projection?.version ?? "",
+  ].join("|")
 }
 
 function hasLeadingRowSelectionColumn<TRow>(
@@ -114,6 +109,7 @@ export function useDataGridAppSelection<TRow>(
 ): UseDataGridAppSelectionResult<TRow> {
   const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
   const selectionAnchor = ref<GridSelectionPointLike<DataGridRowId> | null>(null)
+  const rowVersion = ref(0)
 
   const syncSelectionState = (snapshot: DataGridSelectionSnapshot | null): void => {
     selectionSnapshot.value = snapshot
@@ -157,6 +153,27 @@ export function useDataGridAppSelection<TRow>(
     )
   }
 
+  watch(
+    () => options.resolveRuntime?.()?.rowModel ?? null,
+    (rowModel, _previous, onCleanup) => {
+      if (!rowModel) {
+        return
+      }
+      let lastVersionKey = resolveRowModelVersionKey(rowModel.getSnapshot())
+      const unsubscribe = rowModel.subscribe(() => {
+        const nextVersionKey = resolveRowModelVersionKey(rowModel.getSnapshot())
+        if (nextVersionKey === lastVersionKey) {
+          return
+        }
+        lastVersionKey = nextVersionKey
+        rowVersion.value += 1
+      })
+      onCleanup(() => {
+        unsubscribe()
+      })
+    },
+    { immediate: true },
+  )
   const selectionAggregates = computed<{
     count: number
     sum: number | null
@@ -164,6 +181,7 @@ export function useDataGridAppSelection<TRow>(
     max: number | null
     average: number | null
   } | null>(() => {
+    void rowVersion.value
     if (resolveMaybeRef(options.mode) !== "base") {
       return null
     }
@@ -219,7 +237,7 @@ export function useDataGridAppSelection<TRow>(
           if (!column?.key) {
             continue
           }
-          const rawValue = readSelectionCellValue(rowNode.data, column)
+          const rawValue = readSelectionCellValue(rowNode, column, options.readSelectionCell)
           const numericValue = typeof rawValue === "number" ? rawValue : Number(rawValue)
           if (!Number.isFinite(numericValue)) {
             continue

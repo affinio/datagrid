@@ -109,6 +109,33 @@ Projection recompute is dirty-stage driven (not full-pass): blocked stages (`rec
 Projection diagnostics expose cycle vs actual recompute semantics: `version`/`cycleVersion` increase every projection cycle, while `recomputeVersion` increases only when at least one stage actually recomputed.
 For `treeData`, set `dependencyFields` to avoid unnecessary regroup/tree projection on unrelated cell patches.
 
+## Effective Filter And Selection Values
+
+When displayed values differ from the raw row payload, keep filters, histogram entries, and selection aggregates aligned with the effective value the user sees.
+
+`createClientRowModel(...)` accepts `readFilterCell(rowNode, columnKey)` for value-set filters, advanced-filter predicates, and `getColumnHistogram(...)`:
+
+```ts
+const rowModel = createClientRowModel({
+  rows,
+  readFilterCell(rowNode, columnKey) {
+    if (columnKey !== "status") {
+      return undefined
+    }
+    return rowNode.data.statusCode === "a" ? "Active" : "Blocked"
+  },
+})
+
+rowModel.getColumnHistogram("status", { ignoreSelfFilter: true })
+```
+
+The same pattern is available for selection aggregates through `readSelectionCell`:
+
+- `api.selection.summarize({ readSelectionCell })`
+- `createDataGridSelectionSummary({ ..., readSelectionCell })`
+
+Use this when formula-backed or display-formatted columns should contribute their effective values to `sum`, `min`, `max`, `avg`, and distinct counts instead of the stored raw field.
+
 ## Pivot Model (Engine Primitive)
 
 Client row model supports declarative pivot projection via:

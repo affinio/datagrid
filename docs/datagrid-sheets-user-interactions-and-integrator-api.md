@@ -1,6 +1,6 @@
 # DataGrid Sheets Baseline: User Interactions + Integrator API
 
-Updated: `2026-03-11`
+Updated: `2026-04-13`
 Scope: `/datagrid` demo baseline and `@affino/datagrid-core` integration contract.
 
 ## 1) End-User Interactions (Behavior Contract)
@@ -8,7 +8,9 @@ Scope: `/datagrid` demo baseline and `@affino/datagrid-core` integration contrac
 ### Selection and navigation
 
 - Click cell: sets active cell and single-cell selection.
+- `Ctrl/Cmd + click`: appends an independent committed cell/range selection instead of replacing the current selection.
 - `Shift + click` / `Shift + arrows`: extends range from fixed anchor.
+- Click column header: selects the full visible column; `Shift` extends from the active column and `Ctrl/Cmd` adds another column range.
 - Drag on cells: expands range continuously; auto-scroll on viewport edges (X/Y).
 - `Tab` / `Shift+Tab`: horizontal navigation over navigable columns.
 - `Home` / `End` and `Ctrl/Cmd + Home/End`: row/dataset edge jumps.
@@ -29,6 +31,7 @@ Scope: `/datagrid` demo baseline and `@affino/datagrid-core` integration contrac
 ### Clipboard and context menu
 
 - `Ctrl/Cmd + C`: copy selected range.
+- Copied-range outline is retained for each committed selection range, not only the active block.
 - `Ctrl/Cmd + V`: paste at active target (matrix-aware).
 - `Ctrl/Cmd + X`: cut (copy + clear editable cells).
 - Context menu (`Shift+F10` or mouse right click): copy/paste/cut/clear and header actions (sort/filter/auto-size).
@@ -125,6 +128,8 @@ Notes:
 - Fill handle is surfaced only in base table mode.
 - Set `capabilities.editable = false` on columns that must stay read-only.
 - The built-in UI supports drag-fill, double-click fill-down, and post-fill `Series` / `Copy` reapply.
+- Pass `readFilterCell` when filter menus or histograms must reflect effective formula/display values instead of raw row fields.
+- Pass `readSelectionCell` when aggregate labels or `api.selection.summarize(...)` should use effective values.
 
 ### Custom Vue renderer path
 
@@ -162,7 +167,7 @@ Do not use the removed `useAffinoDataGrid*` wrappers.
   - `api.transaction.undo()`
   - `api.transaction.redo()`
 - Selection summary:
-  - `api.selection.summarize({ columns, defaultAggregations })`
+  - `api.selection.summarize({ columns, defaultAggregations, readSelectionCell })`
 
 ## 3) Related References
 

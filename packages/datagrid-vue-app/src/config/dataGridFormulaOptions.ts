@@ -12,6 +12,7 @@ import type {
   DataGridRowNode,
   DataGridRowRenderMeta,
 } from "@affino/datagrid-vue"
+import type { DataGridBivariantCallback } from "../types/bivariance"
 
 export interface DataGridAppCellRendererInteractiveContext {
   enabled: boolean
@@ -77,8 +78,12 @@ export type DataGridAppGroupCellRenderer<TRow = unknown> = (
 
 export interface DataGridAppColumnInput<TRow = unknown> extends DataGridColumnInput<TRow> {
   formula?: string | null
-  cellRenderer?: DataGridAppCellRenderer<TRow> | null
-  groupCellRenderer?: DataGridAppGroupCellRenderer<TRow> | null
+  cellRenderer?: DataGridBivariantCallback<[context: DataGridAppCellRendererContext<TRow>], VNodeChild> | null
+  groupCellRenderer?: DataGridBivariantCallback<[context: DataGridAppGroupCellRendererContext<TRow>], VNodeChild> | null
+}
+
+export function defineDataGridColumns<TRow = unknown>() {
+  return <TColumns extends readonly DataGridAppColumnInput<TRow>[]>(columns: TColumns): TColumns => columns
 }
 
 export interface DataGridDeclarativeFormulaOptions<TRow = unknown> {
@@ -90,7 +95,9 @@ export interface DataGridDeclarativeFormulaOptions<TRow = unknown> {
 export type DataGridAppClientRowModelOptions<TRow = unknown> = Omit<
   CreateClientRowModelOptions<TRow>,
   "rows" | "computeMode" | "workerPatchDispatchThreshold" | "formulaColumnCacheMaxColumns"
->
+> & {
+  readFilterCell?: DataGridBivariantCallback<[rowNode: DataGridRowNode<TRow>, columnKey: string], unknown>
+}
 
 export interface DataGridAppEnterpriseFormulaRuntimeOptions {
   computeMode?: "sync" | "worker"

@@ -342,9 +342,31 @@ function isWithinCombobox(target: EventTarget | null): boolean {
     && (rootEl.value?.contains(target) === true || panelEl.value?.contains(target) === true)
 }
 
+function resolveCommittedValue(): string {
+  if (state.value.filter.trim().length === 0) {
+    return props.value
+  }
+
+  if (activeOption.value) {
+    return activeOption.value.value
+  }
+
+  const normalizedInput = inputText.value.trim().toLocaleLowerCase()
+  if (normalizedInput.length === 0) {
+    return props.value
+  }
+
+  const exactOption = displayedOptions.value.find(option => (
+    option.label.trim().toLocaleLowerCase() === normalizedInput
+    || option.value.trim().toLocaleLowerCase() === normalizedInput
+  ))
+
+  return exactOption?.value ?? props.value
+}
+
 function commitCurrentValue(target: CommitTarget = "stay"): void {
   closeCombobox()
-  emit("commit", props.value, target)
+  emit("commit", resolveCommittedValue(), target)
 }
 
 function commitOption(value: string, target: CommitTarget = "stay"): void {

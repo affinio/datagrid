@@ -145,7 +145,9 @@ export {
 
 export {
   createDataGridSelectionSummary,
+  resolveDataGridSelectionCellValue,
   type CreateDataGridSelectionSummaryOptions,
+  type DataGridSelectionCellValueReader,
   type DataGridSelectionAggregationKind,
   type DataGridSelectionSummaryScope,
   type DataGridSelectionSummaryColumnConfig,

@@ -132,6 +132,7 @@ function isDataGridColumnCacheParityVerificationEnabled(): boolean {
 export interface CreateClientRowModelOptions<T> {
   rows?: readonly DataGridRowNodeInput<T>[]
   resolveRowId?: DataGridRowIdResolver<T>
+  readFilterCell?: (rowNode: DataGridRowNode<T>, columnKey: string) => unknown
   /**
    * Clones row payloads on ingest to isolate the model from later external mutation.
    * Disable only for tightly controlled perf-sensitive paths.
@@ -367,6 +368,7 @@ export function createClientRowModel<T>(
     getFilterModel,
     getFilterRevision: () => runtimeState.filterRevision,
     readRowField: readProjectionRowField,
+    readFilterCell: options.readFilterCell,
     createFilterPredicate,
     sourceColumnCacheLimit: Number.isFinite(formulaColumnCacheMaxColumns)
       ? formulaColumnCacheMaxColumns
@@ -1110,19 +1112,22 @@ export function createClientRowModel<T>(
     getAggregationModel() {
       return cloneAggregationModel(viewStateRuntime.getAggregationModel())
     },
-    getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions) {
+    getColumnHistogram(columnId: string, histogramOptions?: DataGridColumnHistogramOptions) {
       ensureActive()
       const normalizedColumnId = columnId.trim()
       if (normalizedColumnId.length === 0) {
         return []
       }
 
-      const scope = options?.scope ?? "filtered"
+      const scope = histogramOptions?.scope ?? "filtered"
       if (scope === "sourceAll") {
-        return buildColumnHistogram(getBaseSourceRows(), normalizedColumnId, options, readProjectionRowField)
+        return buildColumnHistogram(getBaseSourceRows(), normalizedColumnId, histogramOptions, {
+          readField: readProjectionRowField,
+          readFilterCell: options.readFilterCell,
+        })
       }
 
-      if (options?.ignoreSelfFilter === true) {
+      if (histogramOptions?.ignoreSelfFilter === true) {
         const filterPredicate = derivedCacheRuntime.resolveFilterPredicate({ ignoreColumnFilterKey: normalizedColumnId })
         const rowsForHistogram: DataGridRowNode<T>[] = []
         for (const row of getBaseSourceRows()) {
@@ -1130,14 +1135,20 @@ export function createClientRowModel<T>(
             rowsForHistogram.push(row)
           }
         }
-        return buildColumnHistogram(rowsForHistogram, normalizedColumnId, options, readProjectionRowField)
+        return buildColumnHistogram(rowsForHistogram, normalizedColumnId, histogramOptions, {
+          readField: readProjectionRowField,
+          readFilterCell: options.readFilterCell,
+        })
       }
 
       return buildColumnHistogram(
         runtimeState.filteredRowsProjection,
         normalizedColumnId,
-        options,
-        readProjectionRowField,
+        histogramOptions,
+        {
+          readField: readProjectionRowField,
+          readFilterCell: options.readFilterCell,
+        },
       )
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {

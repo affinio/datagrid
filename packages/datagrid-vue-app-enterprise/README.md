@@ -74,6 +74,23 @@ import { DataGrid } from "@affino/datagrid-vue-app-enterprise"
 The intent is to keep enterprise as a strict superset of the community app
 experience while changing only the dependency and import path.
 
+## Typed Facade Parity
+
+The enterprise package now re-exports the row-typed facade helpers from the community app package, so wrapper components do not need mixed imports.
+
+```ts
+import {
+  DataGrid,
+  defineDataGridColumns,
+  defineDataGridComponent,
+  defineDataGridFilterCellReader,
+  defineDataGridSelectionCellReader,
+  useDataGridRef,
+} from "@affino/datagrid-vue-app-enterprise"
+```
+
+Use these helpers exactly as you would from `@affino/datagrid-vue-app` when your enterprise shell needs typed columns, typed `ref` access, or effective filter/selection readers.
+
 License format:
 
 - `affino-dg-v1:<tier>:<customer>:<expiresAt>:<features>:<checksum>`

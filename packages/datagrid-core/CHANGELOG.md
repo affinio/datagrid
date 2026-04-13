@@ -1,5 +1,28 @@
 # @affino/datagrid-core
 
+## Unreleased
+
+### Patch Changes
+
+- ## Summary
+
+  Added effective-value hooks for client filtering, histograms, and selection summary so package consumers can resolve workbook/formula/display values without mutating raw row payloads. The public core surface now also exports the reusable selection-cell resolver and the stable bivariant callback helper used by higher-level typed facades.
+
+  ## User impact
+
+  Integrators can keep value-set filters, advanced filter predicates, column histograms, and selection aggregates aligned with what the user actually sees in the grid. This is especially useful for formula-backed columns, derived display labels, and workbook adapters that should filter or summarize effective values instead of stored source fields.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption:
+    - pass `readFilterCell` to `createClientRowModel(...)` when filters and histograms must read effective values,
+    - pass `readSelectionCell` to `api.selection.summarize(...)` or `createDataGridSelectionSummary(...)` when aggregates should use display/formula results.
+
+  ## Validation
+  - targeted `clientRowModel` regression for `readFilterCell` passed
+  - targeted `selectionSummary` regression for `readSelectionCell` precedence/fallback passed
+  - downstream facade and workbook regressions updated against the new effective-value path
+
 ## 0.3.5
 
 ### Patch Changes

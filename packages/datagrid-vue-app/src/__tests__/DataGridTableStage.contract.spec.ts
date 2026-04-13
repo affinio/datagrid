@@ -75,6 +75,7 @@ function createStageProps(
   isCellSelected: (rowOffset: number, columnIndex: number) => boolean,
   options?: {
     selectionRange?: DataGridOverlayRange | null
+    selectionRanges?: readonly DataGridOverlayRange[]
     selectionAnchorCell?: { rowIndex: number; columnIndex: number } | null
     fillPreviewRange?: DataGridOverlayRange | null
     rangeMovePreviewRange?: DataGridOverlayRange | null
@@ -123,6 +124,7 @@ function createStageProps(
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = options?.visibleColumns ?? createColumns()
   const renderedColumns = visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
+  const selectionAnchorCell = options?.selectionAnchorCell ?? { rowIndex: 0, columnIndex: 0 }
   const rows = createRows(options?.rowCount ?? 1).map((row, rowIndex) => {
     if (rowIndex === 0 && options?.firstRowKind === "group") {
       return {
@@ -199,7 +201,8 @@ function createStageProps(
     },
     selection: {
       selectionRange: options?.selectionRange ?? { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
-      selectionAnchorCell: options?.selectionAnchorCell ?? { rowIndex: 0, columnIndex: 0 },
+      selectionRanges: options?.selectionRanges,
+      selectionAnchorCell,
       fillPreviewRange: options?.fillPreviewRange ?? null,
       rangeMovePreviewRange: options?.rangeMovePreviewRange ?? null,
       fillHandleEnabled: options?.fillHandleEnabled ?? false,
@@ -226,8 +229,19 @@ function createStageProps(
     },
     cells: {
       isCellSelected,
-      isSelectionAnchorCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
-      shouldHighlightSelectedCell: (rowOffset, columnIndex) => isCellSelected(rowOffset, columnIndex) && !(rowOffset === 0 && columnIndex === 0),
+      isSelectionAnchorCell: (rowOffset, columnIndex) => (
+        selectionAnchorCell != null
+        && rowOffset === selectionAnchorCell.rowIndex
+        && columnIndex === selectionAnchorCell.columnIndex
+      ),
+      shouldHighlightSelectedCell: (rowOffset, columnIndex) => (
+        isCellSelected(rowOffset, columnIndex)
+        && !(
+          selectionAnchorCell != null
+          && rowOffset === selectionAnchorCell.rowIndex
+          && columnIndex === selectionAnchorCell.columnIndex
+        )
+      ),
       isCellOnSelectionEdge: options?.isCellOnSelectionEdge ?? (() => false),
       isCellInFillPreview: options?.isCellInFillPreview ?? (() => false),
       isCellInPendingClipboardRange: () => false,
@@ -592,17 +606,27 @@ describe("DataGridTableStage contract", () => {
       ),
     })
 
-    const leftSegment = wrapper.find(".grid-body-pane--left .grid-selection-overlay__segment")
+    const leftSegment = wrapper.find(".grid-body-pane--left .grid-pane-content .grid-selection-overlay__segment")
     const centerSegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment")
-    const rightSegment = wrapper.find(".grid-body-pane--right .grid-selection-overlay__segment")
+    const rightSegment = wrapper.find(".grid-body-pane--right .grid-pane-content .grid-selection-overlay__segment")
+    const leftSeamSegment = wrapper.find(".grid-body-pane--left > .grid-selection-overlay--pane-seam .grid-selection-overlay__segment")
+    const rightSeamSegment = wrapper.find(".grid-body-pane--right > .grid-selection-overlay--pane-seam .grid-selection-overlay__segment")
 
     expect(leftSegment.exists()).toBe(true)
     expect(centerSegment.exists()).toBe(true)
     expect(rightSegment.exists()).toBe(true)
+    expect(leftSeamSegment.exists()).toBe(true)
+    expect(rightSeamSegment.exists()).toBe(true)
     expect(leftSegment.attributes("style")).toContain("border-right-width: 0px;")
     expect(centerSegment.attributes("style")).toContain("border-left-width: 0px;")
     expect(centerSegment.attributes("style")).toContain("border-right-width: 0px;")
     expect(rightSegment.attributes("style")).toContain("border-left-width: 0px;")
+    expect(leftSeamSegment.attributes("style")).toContain("width: var(--datagrid-pinned-pane-separator-size);")
+    expect(leftSeamSegment.attributes("style")).toContain("border-left-width: 0px;")
+    expect(leftSeamSegment.attributes("style")).toContain("border-right-width: 0px;")
+    expect(rightSeamSegment.attributes("style")).toContain("width: var(--datagrid-pinned-pane-separator-size);")
+    expect(rightSeamSegment.attributes("style")).toContain("border-left-width: 0px;")
+    expect(rightSeamSegment.attributes("style")).toContain("border-right-width: 0px;")
 
     wrapper.unmount()
   })
@@ -618,15 +642,47 @@ describe("DataGridTableStage contract", () => {
       ),
     })
 
-    expect(wrapper.find(".grid-body-pane--left .grid-selection-overlay__segment").exists()).toBe(false)
+    expect(wrapper.find(".grid-body-pane--left .grid-pane-content .grid-selection-overlay__segment").exists()).toBe(false)
 
     const centerSegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment")
-    const rightSegment = wrapper.find(".grid-body-pane--right .grid-selection-overlay__segment")
+    const rightSegment = wrapper.find(".grid-body-pane--right .grid-pane-content .grid-selection-overlay__segment")
+    const rightSeamSegment = wrapper.find(".grid-body-pane--right > .grid-selection-overlay--pane-seam .grid-selection-overlay__segment")
 
     expect(centerSegment.exists()).toBe(true)
     expect(rightSegment.exists()).toBe(true)
+    expect(rightSeamSegment.exists()).toBe(true)
     expect(centerSegment.attributes("style")).toContain("border-right-width: 0px;")
     expect(rightSegment.attributes("style")).toContain("border-left-width: 0px;")
+
+    wrapper.unmount()
+  })
+
+  it("renders separate overlay segments for committed multi-range selections", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => columnIndex === 1 && (rowOffset === 0 || rowOffset === 1),
+        {
+          rowCount: 2,
+          selectionRange: { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+          selectionRanges: [
+            { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+            { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+          ],
+          selectionAnchorCell: { rowIndex: 1, columnIndex: 1 },
+        },
+      ),
+    })
+
+    const centerSegments = wrapper.findAll(".grid-body-viewport .grid-selection-overlay__segment")
+    const firstSelectedCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="0"][data-column-key="centerA"]')
+    const secondSelectedCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="1"][data-column-key="centerA"]')
+
+    expect(centerSegments).toHaveLength(2)
+    expect(firstSelectedCell.classes()).toContain("grid-cell--selected")
+    expect(secondSelectedCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(wrapper.find(".grid-body-pane--left .grid-selection-overlay__segment").exists()).toBe(false)
+    expect(wrapper.find(".grid-body-pane--right .grid-selection-overlay__segment").exists()).toBe(false)
 
     wrapper.unmount()
   })
@@ -647,10 +703,12 @@ describe("DataGridTableStage contract", () => {
     expect(wrapper.classes()).toContain("grid-stage--range-moving")
 
     const centerSegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment--move-preview")
-    const rightSegment = wrapper.find(".grid-body-pane--right .grid-selection-overlay__segment--move-preview")
+    const rightSegment = wrapper.find(".grid-body-pane--right .grid-pane-content .grid-selection-overlay__segment--move-preview")
+    const rightSeamSegment = wrapper.find(".grid-body-pane--right > .grid-selection-overlay--pane-seam .grid-selection-overlay__segment--move-preview")
 
     expect(centerSegment.exists()).toBe(true)
     expect(rightSegment.exists()).toBe(true)
+    expect(rightSeamSegment.exists()).toBe(true)
     expect(centerSegment.attributes("style")).toContain("border-right-width: 0px;")
     expect(rightSegment.attributes("style")).toContain("border-left-width: 0px;")
 
@@ -739,14 +797,16 @@ describe("DataGridTableStage contract", () => {
     })
 
     const allCenterSegments = wrapper.findAll(".grid-body-viewport .grid-selection-overlay__segment")
-    const allRightSegments = wrapper.findAll(".grid-body-pane--right .grid-selection-overlay__segment")
+    const allRightSegments = wrapper.findAll(".grid-body-pane--right .grid-pane-content .grid-selection-overlay__segment")
     const centerFillSegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment--fill-preview")
-    const rightSegment = wrapper.find(".grid-body-pane--right .grid-selection-overlay__segment--fill-preview")
+    const rightSegment = wrapper.find(".grid-body-pane--right .grid-pane-content .grid-selection-overlay__segment--fill-preview")
+    const rightSeamSegment = wrapper.find(".grid-body-pane--right > .grid-selection-overlay--pane-seam .grid-selection-overlay__segment--fill-preview")
 
     expect(allCenterSegments).toHaveLength(1)
     expect(allRightSegments).toHaveLength(1)
     expect(centerFillSegment.exists()).toBe(true)
     expect(rightSegment.exists()).toBe(true)
+    expect(rightSeamSegment.exists()).toBe(true)
     expect(centerFillSegment.attributes("style")).toContain("border-right-width: 0px;")
     expect(rightSegment.attributes("style")).toContain("border-left-width: 0px;")
 
@@ -1451,6 +1511,8 @@ describe("DataGridTableStage contract", () => {
       attachTo: document.body,
       props: createStageProps(() => false, {
         rowHover: true,
+        selectionRange: { startRow: 0, endRow: 0, startColumn: 2, endColumn: 2 },
+        selectionAnchorCell: { rowIndex: 0, columnIndex: 2 },
       }),
     })
 
@@ -1459,6 +1521,15 @@ describe("DataGridTableStage contract", () => {
     expect(wrapper.find(".grid-body-pane--left .grid-row").classes()).toContain("grid-row--hovered")
     expect(wrapper.find(".grid-body-viewport .grid-row").classes()).toContain("grid-row--hovered")
     expect(wrapper.find(".grid-body-pane--right .grid-row").classes()).toContain("grid-row--hovered")
+
+  const pinnedLeftCellStyle = wrapper.find('.grid-body-pane--left .datagrid-stage__cell[data-column-key="left"]').attributes("style")
+  const centerCellStyle = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-column-key="centerA"]').attributes("style")
+  const rowIndexCellStyle = wrapper.find('.grid-body-pane--left .datagrid-stage__row-index-cell').attributes("style")
+
+  expect(pinnedLeftCellStyle).toContain("background-image: linear-gradient(var(--datagrid-row-band-hover-bg), var(--datagrid-row-band-hover-bg))")
+  expect(pinnedLeftCellStyle).toContain("background-size: 100% calc(100% - var(--datagrid-row-divider-size))")
+  expect(centerCellStyle).toContain("background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size))")
+  expect(rowIndexCellStyle).toContain("background-size: 100% calc(100% - var(--datagrid-row-divider-size))")
 
     await wrapper.find(".grid-body-shell").trigger("mouseleave")
 

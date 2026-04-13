@@ -1,9 +1,25 @@
-import type { Component } from "vue"
 import DataGridComponent from "./DataGrid"
 
-export const DataGrid: Component = DataGridComponent
+export const DataGrid = DataGridComponent
 export { default as DataGridModuleHost } from "./host/DataGridModuleHost"
+export { defineDataGridColumns } from "./config/dataGridFormulaOptions"
+export {
+  defineDataGridComponent,
+  defineDataGridFilterCellReader,
+  defineDataGridSelectionCellReader,
+  useDataGridRef,
+} from "./DataGrid"
 export type {
+  DataGridComponent,
+  DataGridComponentFor,
+  DataGridExposed,
+  DataGridFilterCellReader,
+  DataGridInstance,
+  DataGridProps,
+  DataGridSelectionCellReader,
+} from "./DataGrid"
+export type {
+  DataGridAppClientRowModelOptions,
   DataGridAppCellRenderer,
   DataGridAppCellRendererContext,
   DataGridAppGroupCellRenderer,

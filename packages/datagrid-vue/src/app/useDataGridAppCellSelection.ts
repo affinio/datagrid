@@ -4,6 +4,7 @@ import type {
   DataGridRowId,
   DataGridRowNode,
   DataGridSelectionSnapshot,
+  DataGridSelectionSnapshotRange,
 } from "@affino/datagrid-core"
 import type { DataGridCopyRange, GridSelectionPointLike } from "../advanced"
 import { createGridSelectionRange } from "../advanced"
@@ -35,18 +36,21 @@ export interface UseDataGridAppCellSelectionResult<TRow> {
   normalizeRowId: (value: unknown) => DataGridRowId | null
   normalizeCellCoord: (coord: DataGridAppCellCoord) => DataGridAppCellCoord | null
   resolveSelectionRange: () => DataGridCopyRange | null
+  resolveSelectionRanges: () => readonly DataGridCopyRange[]
   resolveCurrentCellCoord: () => { rowIndex: number; columnIndex: number } | null
   applySelectionRange: (range: DataGridCopyRange) => void
   applyCellSelectionByCoord: (
     coord: DataGridAppCellCoord,
     extend: boolean,
     fallbackAnchor?: DataGridAppSelectionAnchorLike,
+    additive?: boolean,
   ) => void
   setCellSelection: (
     row: DataGridRowNode<TRow>,
     rowOffset: number,
     columnIndex: number,
     extend: boolean,
+    additive?: boolean,
   ) => void
   clearCellSelection: () => void
   isCellSelected: (rowOffset: number, columnIndex: number) => boolean
@@ -106,35 +110,40 @@ export function useDataGridAppCellSelection<TRow>(
   }
 
   const buildSelectionSnapshot = (
-    range: ReturnType<typeof createGridSelectionRange<DataGridRowId>>,
+    ranges: readonly DataGridSelectionSnapshotRange[],
+    activeRangeIndex: number,
     activeCell: GridSelectionPointLike<DataGridRowId>,
   ): DataGridSelectionSnapshot => {
     return {
-      ranges: [
-        {
-          startRow: range.startRow,
-          endRow: range.endRow,
-          startCol: range.startCol,
-          endCol: range.endCol,
-          startRowId: range.startRowId ?? null,
-          endRowId: range.endRowId ?? null,
-          anchor: {
-            rowIndex: range.anchor.rowIndex,
-            colIndex: range.anchor.colIndex,
-            rowId: range.anchor.rowId ?? null,
-          },
-          focus: {
-            rowIndex: range.focus.rowIndex,
-            colIndex: range.focus.colIndex,
-            rowId: range.focus.rowId ?? null,
-          },
-        },
-      ],
-      activeRangeIndex: 0,
+      ranges: [...ranges],
+      activeRangeIndex,
       activeCell: {
         rowIndex: activeCell.rowIndex,
         colIndex: activeCell.colIndex,
         rowId: activeCell.rowId ?? null,
+      },
+    }
+  }
+
+  const buildSnapshotRange = (
+    range: ReturnType<typeof createGridSelectionRange<DataGridRowId>>,
+  ): DataGridSelectionSnapshotRange => {
+    return {
+      startRow: range.startRow,
+      endRow: range.endRow,
+      startCol: range.startCol,
+      endCol: range.endCol,
+      startRowId: range.startRowId ?? null,
+      endRowId: range.endRowId ?? null,
+      anchor: {
+        rowIndex: range.anchor.rowIndex,
+        colIndex: range.anchor.colIndex,
+        rowId: range.anchor.rowId ?? null,
+      },
+      focus: {
+        rowIndex: range.focus.rowIndex,
+        colIndex: range.focus.colIndex,
+        rowId: range.focus.rowId ?? null,
       },
     }
   }
@@ -179,13 +188,9 @@ export function useDataGridAppCellSelection<TRow>(
     }
   }
 
-  const resolveSelectionRange = (): DataGridCopyRange | null => {
-    const snapshot = options.selectionSnapshot.value
-    if (!snapshot || snapshot.ranges.length === 0) {
-      return null
-    }
-    const activeIndex = snapshot.activeRangeIndex ?? 0
-    const range = snapshot.ranges[activeIndex] ?? snapshot.ranges[0]
+  const normalizeSelectionSnapshotRange = (
+    range: DataGridSelectionSnapshotRange | null | undefined,
+  ): DataGridCopyRange | null => {
     if (!range) {
       return null
     }
@@ -195,6 +200,57 @@ export function useDataGridAppCellSelection<TRow>(
       startColumn: range.startCol,
       endColumn: range.endCol,
     })
+  }
+
+  const resolveActiveSnapshotRange = (
+    snapshot: DataGridSelectionSnapshot | null,
+  ): DataGridSelectionSnapshotRange | null => {
+    if (!snapshot || snapshot.ranges.length === 0) {
+      return null
+    }
+    const activeIndex = snapshot.activeRangeIndex ?? 0
+    return snapshot.ranges[activeIndex] ?? snapshot.ranges[0] ?? null
+  }
+
+  const areSnapshotRangesEqual = (
+    left: DataGridSelectionSnapshotRange,
+    right: DataGridSelectionSnapshotRange,
+  ): boolean => {
+    return left.startRow === right.startRow
+      && left.endRow === right.endRow
+      && left.startCol === right.startCol
+      && left.endCol === right.endCol
+      && left.anchor.rowIndex === right.anchor.rowIndex
+      && left.anchor.colIndex === right.anchor.colIndex
+      && left.focus.rowIndex === right.focus.rowIndex
+      && left.focus.colIndex === right.focus.colIndex
+  }
+
+  const applySelectionSnapshot = (
+    snapshot: DataGridSelectionSnapshot,
+    anchor: GridSelectionPointLike<DataGridRowId>,
+  ): void => {
+    options.selectionAnchor.value = {
+      rowIndex: anchor.rowIndex,
+      colIndex: anchor.colIndex,
+      rowId: anchor.rowId ?? null,
+    }
+    options.selectionSnapshot.value = snapshot
+    options.runtime.api.selection.setSnapshot(snapshot)
+  }
+
+  const resolveSelectionRange = (): DataGridCopyRange | null => {
+    return normalizeSelectionSnapshotRange(resolveActiveSnapshotRange(options.selectionSnapshot.value))
+  }
+
+  const resolveSelectionRanges = (): readonly DataGridCopyRange[] => {
+    const snapshot = options.selectionSnapshot.value
+    if (!snapshot || snapshot.ranges.length === 0) {
+      return []
+    }
+    return snapshot.ranges
+      .map(range => normalizeSelectionSnapshotRange(range))
+      .filter((range): range is DataGridCopyRange => range != null)
   }
 
   const resolveCurrentCellCoord = (): { rowIndex: number; columnIndex: number } | null => {
@@ -233,24 +289,19 @@ export function useDataGridAppCellSelection<TRow>(
       rowId: options.runtime.getBodyRowAtIndex(normalized.endRow)?.rowId ?? null,
     }
     const createdRange = createGridSelectionRange(anchor, focus, context)
-    const snapshot = buildSelectionSnapshot(createdRange, {
+    const snapshot = buildSelectionSnapshot([buildSnapshotRange(createdRange)], 0, {
       rowIndex: createdRange.focus.rowIndex,
       colIndex: createdRange.focus.colIndex,
       rowId: createdRange.focus.rowId ?? null,
     })
-    options.selectionAnchor.value = {
-      rowIndex: createdRange.anchor.rowIndex,
-      colIndex: createdRange.anchor.colIndex,
-      rowId: createdRange.anchor.rowId ?? null,
-    }
-    options.selectionSnapshot.value = snapshot
-    options.runtime.api.selection.setSnapshot(snapshot)
+    applySelectionSnapshot(snapshot, createdRange.anchor)
   }
 
   const applyCellSelectionByCoord = (
     coord: DataGridAppCellCoord,
     extend: boolean,
     fallbackAnchor?: DataGridAppSelectionAnchorLike,
+    additive = false,
   ): void => {
     if (!supportsCellSelectionMode() || !options.runtime.api.selection.hasSupport()) {
       return
@@ -280,18 +331,38 @@ export function useDataGridAppCellSelection<TRow>(
       colIndex: normalizedCoord.columnIndex,
       rowId: normalizedCoord.rowId,
     }, context)
-    const snapshot = buildSelectionSnapshot(range, {
+    const nextSnapshotRange = buildSnapshotRange(range)
+    const currentSnapshot = options.selectionSnapshot.value
+    const normalizedActiveIndex = currentSnapshot && currentSnapshot.ranges.length > 0
+      ? Math.max(0, Math.min(currentSnapshot.activeRangeIndex ?? 0, currentSnapshot.ranges.length - 1))
+      : 0
+    let nextRanges: DataGridSelectionSnapshotRange[]
+    let activeRangeIndex = 0
+
+    if (extend && currentSnapshot && currentSnapshot.ranges.length > 0) {
+      nextRanges = currentSnapshot.ranges.map((entry, index) => (
+        index === normalizedActiveIndex ? nextSnapshotRange : entry
+      ))
+      activeRangeIndex = normalizedActiveIndex
+    } else if (additive && currentSnapshot && currentSnapshot.ranges.length > 0) {
+      const duplicateIndex = currentSnapshot.ranges.findIndex(entry => areSnapshotRangesEqual(entry, nextSnapshotRange))
+      if (duplicateIndex >= 0) {
+        nextRanges = [...currentSnapshot.ranges]
+        activeRangeIndex = duplicateIndex
+      } else {
+        nextRanges = [...currentSnapshot.ranges, nextSnapshotRange]
+        activeRangeIndex = nextRanges.length - 1
+      }
+    } else {
+      nextRanges = [nextSnapshotRange]
+    }
+
+    const snapshot = buildSelectionSnapshot(nextRanges, activeRangeIndex, {
       rowIndex: normalizedCoord.rowIndex,
       colIndex: normalizedCoord.columnIndex,
       rowId: normalizedCoord.rowId,
     })
-    options.selectionAnchor.value = {
-      rowIndex: range.anchor.rowIndex,
-      colIndex: range.anchor.colIndex,
-      rowId: range.anchor.rowId ?? null,
-    }
-    options.selectionSnapshot.value = snapshot
-    options.runtime.api.selection.setSnapshot(snapshot)
+    applySelectionSnapshot(snapshot, range.anchor)
   }
 
   const setCellSelection = (
@@ -299,6 +370,7 @@ export function useDataGridAppCellSelection<TRow>(
     rowOffset: number,
     columnIndex: number,
     extend: boolean,
+    additive = false,
   ): void => {
     if (options.isEditingCell(row, options.visibleColumns.value[columnIndex]?.key ?? "")) {
       return
@@ -307,7 +379,7 @@ export function useDataGridAppCellSelection<TRow>(
       rowIndex: options.viewportRowStart.value + rowOffset,
       columnIndex,
       rowId: row.rowId ?? null,
-    }, extend)
+    }, extend, undefined, additive)
   }
 
   const clearCellSelection = (): void => {
@@ -317,17 +389,17 @@ export function useDataGridAppCellSelection<TRow>(
   }
 
   const isCellSelected = (rowOffset: number, columnIndex: number): boolean => {
-    const range = resolveSelectionRange()
-    if (!range) {
+    const ranges = resolveSelectionRanges()
+    if (ranges.length === 0) {
       return false
     }
     const rowIndex = options.viewportRowStart.value + rowOffset
-    return (
+    return ranges.some(range => (
       rowIndex >= range.startRow
       && rowIndex <= range.endRow
       && columnIndex >= range.startColumn
       && columnIndex <= range.endColumn
-    )
+    ))
   }
 
   const isSelectionAnchorCell = (rowOffset: number, columnIndex: number): boolean => {
@@ -340,12 +412,16 @@ export function useDataGridAppCellSelection<TRow>(
   }
 
   const shouldHighlightSelectedCell = (rowOffset: number, columnIndex: number): boolean => {
-    const range = resolveSelectionRange()
-    if (!range || !isCellSelected(rowOffset, columnIndex)) {
+    const ranges = resolveSelectionRanges()
+    if (ranges.length === 0 || !isCellSelected(rowOffset, columnIndex)) {
       return false
     }
-    const isSingleCell = range.startRow === range.endRow && range.startColumn === range.endColumn
-    if (isSingleCell) {
+    if (
+      ranges.length === 1
+      && ranges[0]
+      && ranges[0].startRow === ranges[0].endRow
+      && ranges[0].startColumn === ranges[0].endColumn
+    ) {
       return false
     }
     return !isSelectionAnchorCell(rowOffset, columnIndex)
@@ -356,27 +432,38 @@ export function useDataGridAppCellSelection<TRow>(
     columnIndex: number,
     edge: "top" | "right" | "bottom" | "left",
   ): boolean => {
-    const range = resolveSelectionRange()
-    if (!range || !isCellSelected(rowOffset, columnIndex)) {
+    const ranges = resolveSelectionRanges()
+    if (ranges.length === 0 || !isCellSelected(rowOffset, columnIndex)) {
       return false
     }
     const rowIndex = options.viewportRowStart.value + rowOffset
-    switch (edge) {
-      case "top":
-        return rowIndex === range.startRow
-      case "right":
-        return columnIndex === range.endColumn
-      case "bottom":
-        return rowIndex === range.endRow
-      case "left":
-        return columnIndex === range.startColumn
-    }
+    return ranges.some(range => {
+      if (
+        rowIndex < range.startRow
+        || rowIndex > range.endRow
+        || columnIndex < range.startColumn
+        || columnIndex > range.endColumn
+      ) {
+        return false
+      }
+      switch (edge) {
+        case "top":
+          return rowIndex === range.startRow
+        case "right":
+          return columnIndex === range.endColumn
+        case "bottom":
+          return rowIndex === range.endRow
+        case "left":
+          return columnIndex === range.startColumn
+      }
+    })
   }
 
   return {
     normalizeRowId,
     normalizeCellCoord,
     resolveSelectionRange,
+    resolveSelectionRanges,
     resolveCurrentCellCoord,
     applySelectionRange,
     applyCellSelectionByCoord,

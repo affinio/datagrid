@@ -68,6 +68,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     columnFilterTextByKey: unref(options.columnFilterTextByKey),
     reorderColumnsByHeader: unref(options.reorderColumnsByHeader),
     toggleSortForColumn: unref(options.toggleSortForColumn),
+    handleHeaderColumnClick: unref(options.handleHeaderColumnClick),
     sortIndicator: unref(options.sortIndicator),
     setColumnFilterText: unref(options.setColumnFilterText),
     columnMenuEnabled: unref(options.columnMenuEnabled),
@@ -86,6 +87,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     resolveColumnGroupOrder: unref(options.resolveColumnGroupOrder),
     resolveColumnMenuSortDirection: unref(options.resolveColumnMenuSortDirection),
     resolveColumnMenuSelectedTokens: unref(options.resolveColumnMenuSelectedTokens),
+    resolveColumnMenuValueEntries: unref(options.resolveColumnMenuValueEntries),
     applyColumnMenuSort: unref(options.applyColumnMenuSort),
     applyColumnMenuPin: unref(options.applyColumnMenuPin),
     applyColumnMenuGroupBy: unref(options.applyColumnMenuGroupBy),
@@ -123,7 +125,9 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
 
   const selectionSection = computed<DataGridTableStageSelectionSection>(() => ({
     selectionRange: unref(options.selectionRange),
+    selectionRanges: unref(options.selectionRanges),
     selectionAnchorCell: unref(options.selectionAnchorCell),
+    totalRowCount: unref(options.totalRowCount),
     fillPreviewRange: unref(options.fillPreviewRange),
     rangeMovePreviewRange: unref(options.rangeMovePreviewRange),
     fillHandleEnabled: unref(options.fillHandleEnabled),

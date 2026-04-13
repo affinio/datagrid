@@ -12,7 +12,15 @@ This package is the user-facing spreadsheet app layer.
 Public export:
 
 - `DataGridSpreadsheetWorkbookApp`
+- `DataGridSpreadsheetFormulaEditor`
 - `useDataGridSpreadsheetWorkbookHistory`
+
+Useful customization props:
+
+- `theme`
+- `formulaPlaceholder`
+- `clipboardCopyMode`
+- `footerText`
 
 ## What It Owns
 
@@ -64,9 +72,9 @@ const workbook = createDataGridSpreadsheetWorkbookModel({
             },
           },
         ],
-        },
       },
-      {
+    },
+    {
         id: "orders-by-customer",
         name: "Orders by customer",
         kind: "view",
@@ -87,7 +95,7 @@ const workbook = createDataGridSpreadsheetWorkbookModel({
         ],
       },
     ],
-  })
+})
 
 workbook.sync()
 </script>
@@ -96,10 +104,19 @@ workbook.sync()
   <DataGridSpreadsheetWorkbookApp
     :workbook-model="workbook"
     title="Revenue workbook"
+    theme="industrial-neutral"
     footer-text="Spreadsheet shell on top of datagrid-vue-app + datagrid-core."
   />
 </template>
 ```
+
+## Workbook UX Highlights
+
+- Column-menu value filters and advanced filters resolve workbook display/formula values, not only raw row payloads.
+- The workbook shell can show a bottom-right aggregate overlay for the current selection.
+- `Ctrl/Cmd + click` adds independent cells or ranges to the committed workbook selection.
+- Clicking a column header selects the full visible column; `Shift` extends from the active column and `Ctrl/Cmd` adds another full-column range.
+- `DataGridSpreadsheetFormulaEditor` is exported separately when you need to embed the workbook formula bar inside a custom shell.
 
 ## Slots
 
@@ -126,6 +143,7 @@ Use `runWorkbookIntent(...)` for external workbook mutations such as rename shee
 - The workbook model remains the source of truth.
 - View sheets are declared in the workbook with `kind: "view"`, `sourceSheetId`, and a declarative `pipeline`.
 - View sheets are rendered as read-only in the app shell, but they still fully support selection, copy, sort, filter, and diagnostics.
+- `theme` accepts the same `DataGridThemeProp` shapes as `@affino/datagrid-vue-app`; workbook-specific shell tokens are merged on top.
 - Direct refs into a view sheet are still address-based links to the current materialized result; use `TABLE(...)` when you need dynamic scans over the full derived table.
 - Sort and filter are view concerns on the active sheet; cell edits and fill still commit through `sheetModel`.
 - Undo and redo restore workbook state, not generic rendered row snapshots.

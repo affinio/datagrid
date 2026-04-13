@@ -23,10 +23,12 @@ import type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridPivotSpec,
+  DataGridRowNode,
   DataGridRowModel,
   DataGridSortState,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
+import type { DataGridColumnHistogramEntry } from "@affino/datagrid-core"
 import {
   cloneDataGridFilterSnapshot,
   useDataGridContextMenu,
@@ -713,6 +715,10 @@ export default defineComponent({
       type: Boolean,
       default: false,
     },
+    readSelectionCell: {
+      type: Function as PropType<((row: DataGridRowNode<Record<string, unknown>>, columnKey: string) => unknown) | undefined>,
+      default: undefined,
+    },
     showRowIndex: {
       type: Boolean,
       default: true,
@@ -928,14 +934,29 @@ export default defineComponent({
       builder.openAdvancedFilterPanel()
     }
     const addAdvancedFilterClause = async (): Promise<void> => {
+      const existingBuilder = advancedFilterBuilderRef.value
+      if (existingBuilder) {
+        existingBuilder.addAdvancedFilterClause()
+        return
+      }
       const builder = await ensureAdvancedFilterBuilder()
       builder.addAdvancedFilterClause()
     }
     const removeAdvancedFilterClause = async (clauseId: number): Promise<void> => {
+      const existingBuilder = advancedFilterBuilderRef.value
+      if (existingBuilder) {
+        existingBuilder.removeAdvancedFilterClause(clauseId)
+        return
+      }
       const builder = await ensureAdvancedFilterBuilder()
       builder.removeAdvancedFilterClause(clauseId)
     }
     const updateAdvancedFilterClause = async (patch: Parameters<UseDataGridAppAdvancedFilterBuilderResult["updateAdvancedFilterClause"]>[0]): Promise<void> => {
+      const existingBuilder = advancedFilterBuilderRef.value
+      if (existingBuilder) {
+        existingBuilder.updateAdvancedFilterClause(patch)
+        return
+      }
       const builder = await ensureAdvancedFilterBuilder()
       builder.updateAdvancedFilterClause(patch)
     }
@@ -1014,6 +1035,13 @@ export default defineComponent({
         return []
       }
       return entry.tokens.map(token => normalizeColumnMenuToken(String(token ?? "")))
+    }
+
+    const resolveColumnMenuValueEntries = (columnKey: string): readonly DataGridColumnHistogramEntry[] => {
+      return props.runtime.api.columns.getHistogram(columnKey, {
+        ignoreSelfFilter: true,
+        orderBy: "valueAsc",
+      })
     }
 
     const resolveColumnMenuItems = (columnKey: string) => {
@@ -2452,6 +2480,7 @@ export default defineComponent({
       resolveColumnGroupOrder,
       resolveColumnMenuSortDirection,
       resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
+      resolveColumnMenuValueEntries,
       applyColumnMenuSort,
       applyColumnMenuPin,
       applyColumnMenuGroupBy,
@@ -2459,6 +2488,7 @@ export default defineComponent({
       clearColumnMenuFilter,
       applyRowHeightSettings,
       cloneRowData,
+      readSelectionCell: props.readSelectionCell,
       historyEnabled: computed(() => props.history.enabled),
       historyMaxDepth: computed(() => props.history.depth),
       historyShortcuts: computed(() => props.history.shortcuts),

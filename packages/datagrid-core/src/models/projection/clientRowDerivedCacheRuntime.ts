@@ -1,4 +1,5 @@
 import type { DataGridFilterSnapshot, DataGridRowId, DataGridRowNode } from "../rowModel.js"
+import type { DataGridFilterCellValueReader } from "./clientRowProjectionPrimitives.js"
 import type { SortValueCacheEntry } from "./clientRowProjectionBasicStages.js"
 
 export interface DataGridClientRowModelDerivedCacheDiagnostics {
@@ -23,11 +24,13 @@ export interface ClientRowDerivedCacheRuntimeContext<T> {
   getFilterModel: () => DataGridFilterSnapshot | null
   getFilterRevision: () => number
   readRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown
+  readFilterCell?: DataGridFilterCellValueReader<T>
   createFilterPredicate: (
     filterModel: DataGridFilterSnapshot | null,
     options: {
       ignoreColumnFilterKey?: string
       readRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown
+      readFilterCell?: DataGridFilterCellValueReader<T>
     },
   ) => (rowNode: DataGridRowNode<T>) => boolean
   sourceColumnCacheLimit: number | null
@@ -98,6 +101,7 @@ export function createClientRowDerivedCacheRuntime<T>(
         return context.createFilterPredicate(filterModel, {
           ignoreColumnFilterKey: ignoredColumnKey,
           readRowField: context.readRowField,
+          readFilterCell: context.readFilterCell,
         })
       }
 
@@ -109,6 +113,7 @@ export function createClientRowDerivedCacheRuntime<T>(
 
       const next = context.createFilterPredicate(filterModel, {
         readRowField: context.readRowField,
+        readFilterCell: context.readFilterCell,
       })
       cachedFilterPredicateKey = filterKey
       cachedFilterPredicate = next

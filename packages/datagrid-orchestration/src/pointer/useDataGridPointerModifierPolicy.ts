@@ -4,7 +4,7 @@ export interface UseDataGridPointerModifierPolicyResult {
 
 export function useDataGridPointerModifierPolicy(): UseDataGridPointerModifierPolicyResult {
   function isRangeMoveModifierActive(event: MouseEvent | KeyboardEvent): boolean {
-    return event.altKey || event.ctrlKey || event.metaKey
+    return event.altKey
   }
 
   return {
