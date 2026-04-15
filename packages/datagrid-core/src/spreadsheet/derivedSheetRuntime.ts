@@ -1,9 +1,10 @@
 import type { DataGridRowId } from "../models/rowModel.js"
-import type { DataGridSpreadsheetStyle } from "./sheetModel.js"
+import type { DataGridSpreadsheetStyle } from "./sheet.js"
 
 export interface DataGridSpreadsheetDerivedSheetRuntimeColumn {
   key: string
   title: string
+  formulaAlias: string
   style: DataGridSpreadsheetStyle | null
 }
 
@@ -38,6 +39,7 @@ export function createDataGridSpreadsheetDerivedSheetRuntime(
     columns: Object.freeze(options.columns.map(column => Object.freeze({
       key: column.key,
       title: column.title,
+      formulaAlias: column.formulaAlias,
       style: column.style,
     }))),
     rows: Object.freeze(options.rows.map(row => Object.freeze({

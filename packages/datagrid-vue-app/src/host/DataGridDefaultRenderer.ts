@@ -112,6 +112,10 @@ import type {
   DataGridStructuralRowActionHandler,
   DataGridStructuralRowActionId,
 } from "../dataGridStructuralRowActions"
+import type {
+  DataGridTableStageCellClass,
+  DataGridTableStageCustomOverlay,
+} from "../stage/dataGridTableStage.types"
 
 type DataGridMode = "base" | "tree" | "pivot" | "worker"
 
@@ -146,6 +150,47 @@ function normalizeToolbarModule(module: DataGridAppToolbarModule): DataGridAppTo
     ...module,
     component: markRaw(toRaw(module.component)),
   }
+}
+
+function mergeCellClasses(
+  left: DataGridTableStageCellClass | null | undefined,
+  right: DataGridTableStageCellClass | null | undefined,
+): DataGridTableStageCellClass | null {
+  if (!left) {
+    return right ?? null
+  }
+  if (!right) {
+    return left
+  }
+
+  const merged: Record<string, boolean> = {}
+  const append = (value: DataGridTableStageCellClass): void => {
+    if (typeof value === "string") {
+      for (const token of value.split(/\s+/).filter(Boolean)) {
+        merged[token] = true
+      }
+      return
+    }
+    if (Array.isArray(value)) {
+      for (const token of value) {
+        if (typeof token !== "string") {
+          continue
+        }
+        for (const part of token.split(/\s+/).filter(Boolean)) {
+          merged[part] = true
+        }
+      }
+      return
+    }
+    for (const [key, enabled] of Object.entries(value)) {
+      merged[key] = enabled === true || merged[key] === true
+    }
+  }
+
+  append(left)
+  append(right)
+
+  return Object.keys(merged).length > 0 ? merged : null
 }
 
 function normalizeBaseRowHeight(value: number): number {
@@ -749,6 +794,24 @@ export default defineComponent({
       type: Function as PropType<((row: DataGridRowNode<Record<string, unknown>>, columnKey: string) => unknown) | undefined>,
       default: undefined,
     },
+    cellClass: {
+      type: Function as PropType<((
+        row: DataGridRowNode<Record<string, unknown>>,
+        rowIndex: number,
+        column: DataGridColumnSnapshot,
+        columnIndex: number,
+      ) => DataGridTableStageCellClass | null | undefined) | undefined>,
+      default: undefined,
+    },
+    cellStyle: {
+      type: Function as PropType<((
+        row: DataGridRowNode<Record<string, unknown>>,
+        rowIndex: number,
+        column: DataGridColumnSnapshot,
+        columnIndex: number,
+      ) => CSSProperties | null | undefined) | undefined>,
+      default: undefined,
+    },
     showRowIndex: {
       type: Boolean,
       default: true,
@@ -776,6 +839,10 @@ export default defineComponent({
     toolbarModules: {
       type: Array as PropType<readonly DataGridAppToolbarModule[]>,
       default: () => [],
+    },
+    customOverlays: {
+      type: Array as PropType<readonly DataGridTableStageCustomOverlay[] | undefined>,
+      default: undefined,
     },
     history: {
       type: Object as PropType<DataGridResolvedHistoryOptions>,
@@ -2542,20 +2609,23 @@ export default defineComponent({
       runRowIndexKeyboardAction: (action, rowId) => runRowIndexContextAction(action, rowId),
       reorderColumnsByHeader: props.columnReorder.enabled ? reorderColumnsByHeader : undefined,
       reorderRowsByIndex: props.rowReorder.enabled ? reorderRowsByIndex : undefined,
-      cellClass: (row, _rowIndex, column) => {
+      cellClass: (row, rowIndex, column, columnIndex) => {
         const target = highlightedFindReplaceCell.value
-        if (!target || row.kind === "group" || row.rowId == null) {
-          return null
-        }
-        if (row.rowId !== target.rowId || column.key !== target.columnKey) {
-          return null
-        }
-        return {
-          "grid-cell--find-match-active": true,
-          "grid-cell--find-match-flash-a": target.flashPhase === 0,
-          "grid-cell--find-match-flash-b": target.flashPhase === 1,
-        }
+        const highlightedClass = !target || row.kind === "group" || row.rowId == null
+          ? null
+          : (row.rowId !== target.rowId || column.key !== target.columnKey
+              ? null
+              : {
+                  "grid-cell--find-match-active": true,
+                  "grid-cell--find-match-flash-a": target.flashPhase === 0,
+                  "grid-cell--find-match-flash-b": target.flashPhase === 1,
+                })
+        return mergeCellClasses(
+          highlightedClass,
+          props.cellClass?.(row, rowIndex, column, columnIndex),
+        )
       },
+      cellStyle: props.cellStyle,
     })
 
     watch(
@@ -3361,10 +3431,16 @@ export default defineComponent({
           const subtree = open
             ? h("div", {
               class: "datagrid-context-menu__submenu-panel",
-              role: "group",
+              role: "menu",
+              "data-datagrid-menu-parent-action": entry.id,
             }, renderContextMenuEntries(entry.entries, [...ancestorIds, entry.id], depth + 1))
             : null
-          return [
+          return [h("div", {
+            class: [
+              "datagrid-context-menu__submenu",
+              open ? "datagrid-context-menu__submenu--open" : null,
+            ],
+          }, [
             h("button", {
               type: "button",
               class: [
@@ -3374,6 +3450,8 @@ export default defineComponent({
               "data-datagrid-menu-action": entry.id,
               "data-datagrid-menu-depth": String(depth),
               "data-datagrid-menu-open": open ? "true" : undefined,
+              "aria-haspopup": "menu",
+              "aria-expanded": open ? "true" : "false",
               disabled: entry.disabled,
               title: entry.title,
               onClick: () => {
@@ -3384,10 +3462,10 @@ export default defineComponent({
               h("span", {
                 class: "datagrid-context-menu__submenu-arrow",
                 "aria-hidden": "true",
-              }, open ? "v" : ">"),
+              }, ">"),
             ]),
             ...(subtree ? [subtree] : []),
-          ]
+          ])]
         }
         return [h("button", {
           type: "button",
@@ -3462,6 +3540,7 @@ export default defineComponent({
     )
     const stageProps = computed(() => ({
       ...tableStageProps.value,
+      customOverlays: props.customOverlays,
       columns: {
         ...tableStageProps.value.columns,
         columnMenuEnabled: props.columnMenu.enabled,

@@ -1,6 +1,6 @@
 import type { DataGridRowId } from "../models/rowModel.js"
 import type { DataGridFormulaTableSource } from "../models/formula/formulaContracts.js"
-import { analyzeDataGridSpreadsheetCellInput, type DataGridSpreadsheetCellAddress } from "./formulaEditorModel.js"
+import { analyzeDataGridSpreadsheetCellInput, type DataGridSpreadsheetCellAddress } from "./sheet.js"
 import {
   createDataGridSpreadsheetDerivedSheetRuntime,
   type DataGridSpreadsheetDerivedSheetRuntime,
@@ -18,7 +18,7 @@ import type {
   DataGridSpreadsheetSheetModel,
   DataGridSpreadsheetSheetState,
   DataGridSpreadsheetStyle,
-} from "./sheetModel.js"
+} from "./sheet.js"
 
 const EMPTY_FORMULA_CELLS = Object.freeze([]) as readonly DataGridSpreadsheetFormulaCellSnapshot[]
 const EMPTY_STRUCTURAL_FORMULA_CELLS = Object.freeze([]) as readonly DataGridSpreadsheetFormulaStructuralCellSnapshot[]
@@ -117,6 +117,7 @@ function createDerivedRuntimeFromSheetState(
     return {
       key: column.key,
       title: column.title,
+      formulaAlias: column.formulaAlias,
       style: column.style ?? null,
     }
   })
@@ -299,6 +300,7 @@ export function createDataGridSpreadsheetDerivedSheetModel(
         sheetId,
         sheetName,
         lastRowMutation: null,
+        lastColumnMutation: null,
       }
     },
     getSheetId() {
@@ -413,6 +415,15 @@ export function createDataGridSpreadsheetDerivedSheetModel(
       return readonlyMutation()
     },
     insertRowsAfter(_rowId: DataGridRowId, _rows?: readonly DataGridSpreadsheetRowInput[]) {
+      return readonlyMutation()
+    },
+    renameColumn(_columnKey: string, _nextColumnKey: string) {
+      return readonlyMutation()
+    },
+    setColumnTitle(_columnKey: string, _title: string | null) {
+      return readonlyMutation()
+    },
+    setColumnFormulaAlias(_columnKey: string, _formulaAlias: string | null) {
       return readonlyMutation()
     },
     setSheetStyle(_style: DataGridSpreadsheetStyle | null) {

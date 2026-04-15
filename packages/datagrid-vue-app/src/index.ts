@@ -4,6 +4,8 @@ export const DataGrid = DataGridComponent
 export { default as DataGridModuleHost } from "./host/DataGridModuleHost"
 export { defineDataGridColumns } from "./config/dataGridFormulaOptions"
 export {
+  defineDataGridCellClassResolver,
+  defineDataGridCellStyleResolver,
   defineDataGridComponent,
   defineDataGridFilterCellReader,
   defineDataGridSelectionCellReader,
@@ -11,6 +13,8 @@ export {
   useDataGridRef,
 } from "./DataGrid"
 export type {
+  DataGridCellClassResolver,
+  DataGridCellStyleResolver,
   DataGridComponent,
   DataGridComponentFor,
   DataGridExposed,
@@ -72,6 +76,9 @@ export type {
 export type {
   DataGridTableStageHistoryAdapter,
 } from "./stage/useDataGridTableStageHistory"
+export type {
+  DataGridTableStageCustomOverlay,
+} from "./stage/dataGridTableStage.types"
 export type {
   DataGridThemePreset,
   DataGridThemeProp,

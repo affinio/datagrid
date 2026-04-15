@@ -1,6 +1,7 @@
 import {
   computed,
   defineComponent,
+  type CSSProperties,
   type ExtractPublicPropTypes,
   h,
   onBeforeUnmount,
@@ -17,6 +18,7 @@ import {
   type DataGridApiSelectionChangedEvent,
   type DataGridApiPluginDefinition,
   type DataGridAggregationModel,
+  type DataGridColumnSnapshot,
   type DataGridColumnModel,
   type DataGridColumnPin,
   type DataGridComputedFieldDefinition,
@@ -148,6 +150,10 @@ import type {
   DataGridAppViewMode,
   DataGridGanttProp,
 } from "./gantt/dataGridGantt.types"
+import type {
+  DataGridTableStageCellClass,
+  DataGridTableStageCustomOverlay,
+} from "./stage/dataGridTableStage.types"
 
 type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,
@@ -168,12 +174,34 @@ export type DataGridFilterCellReader<TRow = unknown> = DataGridBivariantCallback
   columnKey: string,
 ], unknown>
 
+export type DataGridCellClassResolver<TRow = unknown> = DataGridBivariantCallback<[
+  row: DataGridRowNode<TRow>,
+  rowIndex: number,
+  column: DataGridColumnSnapshot,
+  columnIndex: number,
+], DataGridTableStageCellClass | null | undefined>
+
+export type DataGridCellStyleResolver<TRow = unknown> = DataGridBivariantCallback<[
+  row: DataGridRowNode<TRow>,
+  rowIndex: number,
+  column: DataGridColumnSnapshot,
+  columnIndex: number,
+], CSSProperties | null | undefined>
+
 export function defineDataGridSelectionCellReader<TRow = unknown>() {
   return <TReader extends DataGridSelectionCellReader<TRow>>(reader: TReader): TReader => reader
 }
 
 export function defineDataGridFilterCellReader<TRow = unknown>() {
   return <TReader extends DataGridFilterCellReader<TRow>>(reader: TReader): TReader => reader
+}
+
+export function defineDataGridCellClassResolver<TRow = unknown>() {
+  return <TResolver extends DataGridCellClassResolver<TRow>>(resolver: TResolver): TResolver => resolver
+}
+
+export function defineDataGridCellStyleResolver<TRow = unknown>() {
+  return <TResolver extends DataGridCellStyleResolver<TRow>>(resolver: TResolver): TResolver => resolver
 }
 
 export { defineDataGridStructuralRowActionHandler }
@@ -644,6 +672,14 @@ const dataGridProps = {
     type: Function as PropType<DataGridFilterCellReader | undefined>,
     default: undefined,
   },
+  cellClass: {
+    type: Function as PropType<DataGridCellClassResolver | undefined>,
+    default: undefined,
+  },
+  cellStyle: {
+    type: Function as PropType<DataGridCellStyleResolver | undefined>,
+    default: undefined,
+  },
   isCellEditable: {
     type: Function as PropType<DataGridCellEditablePredicate<Record<string, unknown>> | undefined>,
     default: undefined,
@@ -668,6 +704,10 @@ const dataGridProps = {
     type: Array as PropType<readonly DataGridAppToolbarModule[]>,
     default: () => [],
   },
+  customOverlays: {
+    type: Array as PropType<readonly DataGridTableStageCustomOverlay[] | undefined>,
+    default: undefined,
+  },
 } as const
 
 type DataGridPublicPropsBase = ExtractPublicPropTypes<typeof dataGridProps>
@@ -684,6 +724,8 @@ export type DataGridProps<TRow = unknown> = Omit<
   | "placeholderRows"
   | "readSelectionCell"
   | "readFilterCell"
+  | "cellClass"
+  | "cellStyle"
   | "isCellEditable"
 > & {
   rows?: readonly (TRow | DataGridRowNodeInput<TRow>)[]
@@ -696,6 +738,8 @@ export type DataGridProps<TRow = unknown> = Omit<
   placeholderRows?: DataGridPlaceholderRowsProp<TRow> | undefined
   readSelectionCell?: DataGridSelectionCellReader<TRow> | undefined
   readFilterCell?: DataGridFilterCellReader<TRow> | undefined
+  cellClass?: DataGridCellClassResolver<TRow> | undefined
+  cellStyle?: DataGridCellStyleResolver<TRow> | undefined
   isCellEditable?: DataGridCellEditablePredicate<TRow> | undefined
 }
 
@@ -1231,6 +1275,8 @@ const DataGridRuntimeComponent = defineComponent({
         rowHover: props.rowHover,
         stripedRows: props.stripedRows,
         readSelectionCell: props.readSelectionCell,
+        cellClass: props.cellClass,
+        cellStyle: props.cellStyle,
         isCellEditable: props.isCellEditable,
         showRowIndex: props.showRowIndex,
         rowSelection: props.rowSelection,
@@ -1243,6 +1289,7 @@ const DataGridRuntimeComponent = defineComponent({
         registerStructuralRowActionRunner,
         reportToolbarModules,
         toolbarModules: props.toolbarModules,
+        customOverlays: props.customOverlays,
         runStructuralRowAction: props.runStructuralRowAction,
       }
       return h(

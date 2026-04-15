@@ -128,6 +128,37 @@ async function selectGridHeader(
   await flushUiAndTimers()
 }
 
+function queryColumnMenuRoot(): HTMLElement | null {
+  const roots = Array.from(document.body.querySelectorAll<HTMLElement>("[data-datagrid-column-menu-panel=\"true\"]"))
+  return roots.findLast(root => getComputedStyle(root).display !== "none") ?? null
+}
+
+function queryColumnMenuAction(action: string): HTMLElement | null {
+  const selector = `[data-datagrid-column-menu-action="${action}"]`
+  const rootMatch = queryColumnMenuRoot()?.querySelector<HTMLElement>(selector)
+  if (rootMatch) {
+    return rootMatch
+  }
+  const matches = Array.from(document.body.querySelectorAll<HTMLElement>(selector))
+  return matches.findLast(match => getComputedStyle(match).display !== "none") ?? null
+}
+
+function queryColumnMenuRootByTitle(title: string): HTMLElement | null {
+  const roots = Array.from(document.body.querySelectorAll<HTMLElement>("[data-datagrid-column-menu-panel=\"true\"]"))
+  return roots.findLast(root => {
+    if (getComputedStyle(root).display === "none") {
+      return false
+    }
+    const label = root.querySelector<HTMLElement>(".datagrid-column-menu__title")
+    return label?.textContent?.trim() === title
+  }) ?? null
+}
+
+function queryColumnMenuActionInPanel(title: string, action: string): HTMLElement | null {
+  const selector = `[data-datagrid-column-menu-action="${action}"]`
+  return queryColumnMenuRootByTitle(title)?.querySelector<HTMLElement>(selector) ?? null
+}
+
 async function copySelectedGridCell(
   wrapper: ReturnType<typeof mount>,
   rowIndex: number,
@@ -328,6 +359,175 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     expect(text).toContain("1680")
     expect(wrapper.find(".cell-fill-handle").exists()).toBe(true)
 
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("splits column title and key renames through the column menu", async () => {
+    const workbook = createWorkbookModel()
+    const promptSpy = vi.spyOn(window, "prompt")
+      .mockReturnValueOnce("Unit price")
+      .mockReturnValueOnce("unitPrice")
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    await wrapper.find('.spreadsheet-grid-host .grid-cell--header[data-column-key="price"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushUiAndTimers()
+
+    queryColumnMenuActionInPanel("Price", "custom:rename-column/rename-column-title")?.dispatchEvent(new Event("select", { bubbles: true }))
+    await flushUiAndTimers()
+
+    const ordersSheetAfterTitleRename = workbook.getSheet("orders")?.sheetModel
+    const totalAfterTitleRename = ordersSheetAfterTitleRename?.getCell({
+      sheetId: "orders",
+      rowId: "order-1",
+      rowIndex: 0,
+      columnKey: "total",
+    })
+
+    expect(promptSpy).toHaveBeenNthCalledWith(1, expect.stringContaining("Rename display title"), "Price")
+    expect(ordersSheetAfterTitleRename?.getColumns().find(column => column.key === "price")).toMatchObject({
+      key: "price",
+      title: "Unit price",
+    })
+    expect(totalAfterTitleRename?.rawInput).toBe("=[qty]@row * [price]@row")
+
+    await wrapper.find('.spreadsheet-grid-host .grid-cell--header[data-column-key="price"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushUiAndTimers()
+
+    queryColumnMenuActionInPanel("Unit price", "custom:rename-column/rename-column-key")?.dispatchEvent(new Event("select", { bubbles: true }))
+    await flushUiAndTimers()
+
+    const ordersSheetAfterKeyRename = workbook.getSheet("orders")?.sheetModel
+    const totalAfterKeyRename = ordersSheetAfterKeyRename?.getCell({
+      sheetId: "orders",
+      rowId: "order-1",
+      rowIndex: 0,
+      columnKey: "total",
+    })
+
+    expect(promptSpy).toHaveBeenNthCalledWith(2, expect.stringContaining("Rename reference key"), "price")
+    expect(ordersSheetAfterKeyRename?.getColumns().find(column => column.key === "unitPrice")).toMatchObject({
+      key: "unitPrice",
+      title: "Unit price",
+    })
+    expect(totalAfterKeyRename?.rawInput).toBe("=[qty]@row * [unitPrice]@row")
+    expect(totalAfterKeyRename?.displayValue).toBe(1680)
+
+    promptSpy.mockRestore()
+    wrapper.unmount()
+    workbook.dispose()
+  })
+
+  it("renames the formula alias through the column menu and rewrites workbook formulas", async () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      activeSheetId: "orders",
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            referenceParserOptions: {
+              syntax: "smartsheet",
+              smartsheetAbsoluteRowBase: 1,
+              allowSheetQualifiedReferences: true,
+            },
+            columns: [
+              { key: "qty", title: "Qty" },
+              { key: "price", title: "Price" },
+              { key: "total", title: "Total" },
+            ],
+            rows: [
+              { id: "order-1", cells: { qty: 4, price: 420, total: "=[Qty]@row * [Price]@row" } },
+              { id: "order-2", cells: { qty: 2, price: 780, total: "=[Qty]@row * [Price]@row" } },
+            ],
+          },
+        },
+        {
+          id: "summary",
+          name: "Summary",
+          sheetModelOptions: {
+            referenceParserOptions: {
+              syntax: "smartsheet",
+              smartsheetAbsoluteRowBase: 1,
+              allowSheetQualifiedReferences: true,
+            },
+            columns: [
+              { key: "metric", title: "Metric" },
+              { key: "value", title: "Value" },
+            ],
+            rows: [
+              { id: "summary-1", cells: { metric: "Order prices", value: "=orders![Price]1 + orders![Price]2" } },
+            ],
+          },
+        },
+      ],
+    })
+    workbook.sync()
+
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValueOnce("Unit price")
+
+    const wrapper = mount(DataGridSpreadsheetWorkbookApp, {
+      props: {
+        workbookModel: workbook,
+        title: "Revenue workbook",
+      },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+    })
+
+    await flushUiAndTimers()
+
+    await wrapper.find('.spreadsheet-grid-host .grid-cell--header[data-column-key="price"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushUiAndTimers()
+
+    queryColumnMenuActionInPanel("Price", "custom:rename-column/rename-column-formula-alias")?.dispatchEvent(new Event("select", { bubbles: true }))
+    await flushUiAndTimers()
+
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+    const summarySheet = workbook.getSheet("summary")?.sheetModel
+    const totalCell = ordersSheet?.getCell({
+      sheetId: "orders",
+      rowId: "order-1",
+      rowIndex: 0,
+      columnKey: "total",
+    })
+    const summaryValueCell = summarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-1",
+      rowIndex: 0,
+      columnKey: "value",
+    })
+
+    expect(promptSpy).toHaveBeenCalledWith(expect.stringContaining("Rename formula alias"), "Price")
+    expect(ordersSheet?.getColumns().find(column => column.key === "price")).toMatchObject({
+      key: "price",
+      title: "Price",
+      formulaAlias: "Unit price",
+    })
+    expect(totalCell?.rawInput).toBe("=[Qty]@row * [Unit price]@row")
+    expect(totalCell?.displayValue).toBe(1680)
+    expect(summaryValueCell?.rawInput).toBe("=orders![Unit price]1 + orders![Unit price]2")
+    expect(summaryValueCell?.displayValue).toBe(1200)
+
+    promptSpy.mockRestore()
     wrapper.unmount()
     workbook.dispose()
   })
@@ -864,7 +1064,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
 
     await selectGridCell(wrapper, 0, 1)
 
-    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=[price]@row")
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=[Price]@row")
     expect(wrapper.text()).toContain("Orders / qty / row 1")
 
     const editedCell = findGridCell(wrapper, 0, 0)
@@ -903,7 +1103,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
 
     await selectGridCell(wrapper, 0, 1)
 
-    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=[price]@row")
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=[Price]@row")
     expect(wrapper.find(".spreadsheet-formula-reference-overlay").exists()).toBe(true)
 
     const dragHandle = wrapper.get(".spreadsheet-formula-reference-handle--top-left")
@@ -925,7 +1125,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     }))
     await flushUiAndTimers()
 
-    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=[total]2")
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=[Total]2")
     expect(wrapper.find(".spreadsheet-formula-reference-overlay").exists()).toBe(true)
 
     wrapper.unmount()
@@ -976,7 +1176,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     }))
     await flushUiAndTimers()
 
-    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=SUM([qty]1:[total]2)")
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=SUM([Qty]1:[Total]2)")
     expect(wrapper.find(".spreadsheet-formula-reference-overlay").exists()).toBe(true)
 
     wrapper.unmount()
@@ -1048,7 +1248,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
 
     await selectGridCell(wrapper, 0, 2)
 
-    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=orders![total]1")
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=orders![Total]1")
 
     wrapper.unmount()
     workbook.dispose()
@@ -1108,7 +1308,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     }))
     await flushUiAndTimers()
 
-    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=orders![total]2")
+    expect((formulaInput.element as HTMLTextAreaElement).value).toBe("=orders![Total]2")
 
     wrapper.unmount()
     workbook.dispose()

@@ -1,7 +1,9 @@
+import { normalizeFormulaReference } from "../models/formula/formulaEngine.js"
 import type { DataGridSpreadsheetFormulaReferenceSpan } from "./formulaEditorModel.js"
 
 export interface DataGridSpreadsheetFormulaReferenceSheetColumn {
   key: string
+  formulaAlias?: string | null
 }
 
 export interface DataGridSpreadsheetFormulaReferenceSheet {
@@ -39,6 +41,67 @@ export interface DataGridSpreadsheetFormulaReferenceDecoration
   active: boolean
 }
 
+function normalizeFormulaReferenceLookupName(referenceName: unknown): string {
+  const normalized = String(referenceName ?? "").trim()
+  if (normalized.length === 0) {
+    return ""
+  }
+  const normalizedReference = normalizeFormulaReference(normalized)
+  if (
+    /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(normalizedReference)
+    || normalizedReference.includes(".")
+    || normalizedReference.includes("[")
+    || normalizedReference.includes('"')
+  ) {
+    return normalizedReference
+  }
+  return normalizeFormulaReference(`"${normalized.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
+}
+
+function buildSpreadsheetColumnReferenceLookup(
+  columns: readonly DataGridSpreadsheetFormulaReferenceSheetColumn[],
+): ReadonlyMap<string, string> {
+  const keyByReferenceName = new Map<string, string>()
+  const aliasCandidates = new Map<string, Set<string>>()
+
+  for (const column of columns) {
+    const normalizedKeyReferenceName = normalizeFormulaReferenceLookupName(column.key)
+    if (normalizedKeyReferenceName.length > 0) {
+      keyByReferenceName.set(normalizedKeyReferenceName, column.key)
+    }
+  }
+
+  for (const column of columns) {
+    const normalizedFormulaAlias = String(column.formulaAlias ?? "").trim()
+    const normalizedAliasReferenceName = normalizeFormulaReferenceLookupName(
+      normalizedFormulaAlias.length > 0 ? normalizedFormulaAlias : column.key,
+    )
+    const normalizedKeyReferenceName = normalizeFormulaReferenceLookupName(column.key)
+    if (
+      normalizedAliasReferenceName.length === 0
+      || normalizedAliasReferenceName === normalizedKeyReferenceName
+      || keyByReferenceName.has(normalizedAliasReferenceName)
+    ) {
+      continue
+    }
+    const candidates = aliasCandidates.get(normalizedAliasReferenceName) ?? new Set<string>()
+    candidates.add(column.key)
+    aliasCandidates.set(normalizedAliasReferenceName, candidates)
+  }
+
+  for (const [referenceName, candidateKeys] of aliasCandidates.entries()) {
+    if (candidateKeys.size !== 1) {
+      continue
+    }
+    const [columnKey] = candidateKeys
+    if (columnKey) {
+      keyByReferenceName.set(referenceName, columnKey)
+    }
+  }
+
+  return keyByReferenceName
+}
+
 export function resolveDataGridSpreadsheetFormulaReferenceBounds(
   reference: Pick<
     DataGridSpreadsheetFormulaReferenceSpan,
@@ -63,11 +126,17 @@ export function resolveDataGridSpreadsheetFormulaReferenceBounds(
 
   const startRowIndex = Math.min(...rowIndexes)
   const endRowIndex = Math.max(...rowIndexes)
-  const startColumnIndex = referencedSheet.columns.findIndex(column => column.key === reference.referenceName)
+  const columnLookup = buildSpreadsheetColumnReferenceLookup(referencedSheet.columns)
+  const startColumnKey = columnLookup.get(normalizeFormulaReferenceLookupName(reference.referenceName)) ?? null
   const requestedEndColumnKey = reference.rangeReferenceName && reference.rangeReferenceName !== reference.referenceName
-    ? reference.rangeReferenceName
-    : reference.referenceName
-  const requestedEndColumnIndex = referencedSheet.columns.findIndex(column => column.key === requestedEndColumnKey)
+    ? columnLookup.get(normalizeFormulaReferenceLookupName(reference.rangeReferenceName)) ?? null
+    : startColumnKey
+  const startColumnIndex = startColumnKey
+    ? referencedSheet.columns.findIndex(column => column.key === startColumnKey)
+    : -1
+  const requestedEndColumnIndex = requestedEndColumnKey
+    ? referencedSheet.columns.findIndex(column => column.key === requestedEndColumnKey)
+    : -1
   if (startColumnIndex < 0 || requestedEndColumnIndex < 0) {
     return null
   }
@@ -75,9 +144,9 @@ export function resolveDataGridSpreadsheetFormulaReferenceBounds(
   const [fromColumnIndex, toColumnIndex] = startColumnIndex <= requestedEndColumnIndex
     ? [startColumnIndex, requestedEndColumnIndex]
     : [requestedEndColumnIndex, startColumnIndex]
-  const startColumnKey = referencedSheet.columns[fromColumnIndex]?.key
+  const resolvedStartColumnKey = referencedSheet.columns[fromColumnIndex]?.key
   const endColumnKey = referencedSheet.columns[toColumnIndex]?.key
-  if (!startColumnKey || !endColumnKey) {
+  if (!resolvedStartColumnKey || !endColumnKey) {
     return null
   }
 
@@ -88,7 +157,7 @@ export function resolveDataGridSpreadsheetFormulaReferenceBounds(
     endRowIndex,
     startColumnIndex: fromColumnIndex,
     endColumnIndex: toColumnIndex,
-    startColumnKey,
+    startColumnKey: resolvedStartColumnKey,
     endColumnKey,
   })
 }

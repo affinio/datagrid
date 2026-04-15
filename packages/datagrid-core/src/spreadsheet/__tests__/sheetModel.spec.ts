@@ -222,6 +222,166 @@ describe("createDataGridSpreadsheetSheetModel", () => {
     sheet.dispose()
   })
 
+  it("rewrites same-sheet formulas when a column key is renamed", () => {
+    const sheet = createDataGridSpreadsheetSheetModel({
+      sheetId: "orders",
+      sheetName: "Orders",
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+      columns: [{ key: "qty" }, { key: "price" }, { key: "total" }],
+      rows: [
+        {
+          id: "row-1",
+          cells: {
+            qty: 2,
+            price: 10,
+            total: "=[qty]@row * [price]@row",
+          },
+        },
+      ],
+    })
+
+    expect(sheet.renameColumn("price", "unitPrice")).toBe(true)
+
+    const totalCell = sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-1",
+      rowIndex: 0,
+      columnKey: "total",
+    })
+    const snapshot = sheet.getSnapshot()
+
+    expect(sheet.getColumns().map(column => ({ key: column.key, title: column.title }))).toEqual([
+      { key: "qty", title: "qty" },
+      { key: "unitPrice", title: "unitPrice" },
+      { key: "total", title: "total" },
+    ])
+    expect(snapshot.lastColumnMutation).toEqual({
+      revision: 1,
+      kind: "rename",
+      previousKey: "price",
+      nextKey: "unitPrice",
+    })
+    expect(totalCell?.rawInput).toBe("=[qty]@row * [unitPrice]@row")
+    expect(totalCell?.displayValue).toBe(20)
+
+    sheet.dispose()
+  })
+
+  it("updates column titles without rewriting formulas", () => {
+    const sheet = createDataGridSpreadsheetSheetModel({
+      sheetId: "orders",
+      sheetName: "Orders",
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+      columns: [{ key: "price" }, { key: "total" }],
+      rows: [
+        {
+          id: "row-1",
+          cells: {
+            price: 10,
+            total: "=[price]@row",
+          },
+        },
+      ],
+    })
+
+    expect(sheet.setColumnTitle("price", "Unit price")).toBe(true)
+
+    const totalCell = sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-1",
+      rowIndex: 0,
+      columnKey: "total",
+    })
+
+    expect(sheet.getColumns()[0]).toMatchObject({
+      key: "price",
+      title: "Unit price",
+    })
+    expect(sheet.getSnapshot().lastColumnMutation).toBeNull()
+    expect(totalCell?.rawInput).toBe("=[price]@row")
+    expect(totalCell?.displayValue).toBe(10)
+
+    sheet.dispose()
+  })
+
+  it("uses the column title as the default formula alias", () => {
+    const sheet = createDataGridSpreadsheetSheetModel({
+      sheetId: "orders",
+      sheetName: "Orders",
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+      columns: [{ key: "price", title: "Unit price" }, { key: "total", title: "Total" }],
+      rows: [
+        {
+          id: "row-1",
+          cells: {
+            price: 10,
+            total: "=[Unit price]@row",
+          },
+        },
+      ],
+    })
+
+    const totalCell = sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-1",
+      rowIndex: 0,
+      columnKey: "total",
+    })
+
+    expect(sheet.getColumns()[0]).toMatchObject({
+      key: "price",
+      title: "Unit price",
+      formulaAlias: "Unit price",
+    })
+    expect(totalCell?.rawInput).toBe("=[Unit price]@row")
+    expect(totalCell?.displayValue).toBe(10)
+
+    sheet.dispose()
+  })
+
+  it("rewrites same-sheet formulas when a column formula alias changes", () => {
+    const sheet = createDataGridSpreadsheetSheetModel({
+      sheetId: "orders",
+      sheetName: "Orders",
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+      columns: [{ key: "price", title: "Price" }, { key: "total", title: "Total" }],
+      rows: [
+        {
+          id: "row-1",
+          cells: {
+            price: 10,
+            total: "=[Price]@row",
+          },
+        },
+      ],
+    })
+
+    expect(sheet.setColumnFormulaAlias("price", "Unit price")).toBe(true)
+
+    const totalCell = sheet.getCell({
+      sheetId: "orders",
+      rowId: "row-1",
+      rowIndex: 0,
+      columnKey: "total",
+    })
+
+    expect(sheet.getColumns()[0]).toMatchObject({
+      key: "price",
+      title: "Price",
+      formulaAlias: "Unit price",
+    })
+    expect(sheet.getSnapshot().lastColumnMutation).toEqual({
+      revision: 1,
+      kind: "rename",
+      previousKey: "Price",
+      nextKey: "Unit price",
+    })
+    expect(totalCell?.rawInput).toBe("=[Unit price]@row")
+    expect(totalCell?.displayValue).toBe(10)
+
+    sheet.dispose()
+  })
+
   it("surfaces missing sheet-qualified references as errors instead of falling back to the local sheet", () => {
     const sheet = createDataGridSpreadsheetSheetModel({
       sheetId: "summary",

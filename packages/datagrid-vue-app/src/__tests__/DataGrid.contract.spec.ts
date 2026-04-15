@@ -9,6 +9,8 @@ import type {
 } from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
 import {
+  defineDataGridCellClassResolver,
+  defineDataGridCellStyleResolver,
   defineDataGridComponent,
   defineDataGridFilterCellReader,
   DataGridModuleHost,
@@ -17,6 +19,7 @@ import {
   useDataGridRef,
   type DataGridAppToolbarModule,
   type DataGridSavedViewSnapshot,
+  type DataGridTableStageCustomOverlay,
   type DataGridTableStageHistoryAdapter,
 } from "../index"
 import type {
@@ -772,6 +775,53 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).toContain("columnReorder")
     expect(publicProps).toContain("rowReorder")
     expect(publicProps).toContain("placeholderRows")
+    expect(publicProps).toContain("cellClass")
+    expect(publicProps).toContain("cellStyle")
+  })
+
+  it("applies public cellClass and cellStyle resolvers through the facade", async () => {
+    const TypedDataGrid = defineDataGridComponent<DemoRow>()
+    const cellClass = defineDataGridCellClassResolver<DemoRow>()((row, _rowIndex, column) => {
+      if (row.kind === "group" || row.rowId !== "r1" || column.key !== "owner") {
+        return null
+      }
+      return {
+        "demo-cell-highlight": true,
+      }
+    })
+    const cellStyle = defineDataGridCellStyleResolver<DemoRow>()((row, _rowIndex, column) => {
+      if (row.kind === "group" || row.rowId !== "r1" || column.key !== "owner") {
+        return null
+      }
+      return {
+        backgroundColor: "rgb(255, 238, 204)",
+        color: "rgb(146, 64, 14)",
+      }
+    })
+
+    const wrapper = mount(TypedDataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        cellClass,
+        cellStyle,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const targetCell = queryBodyCell(wrapper, 0, 0)
+    expect(targetCell.exists()).toBe(true)
+    expect(targetCell.classes()).toContain("demo-cell-highlight")
+    expect((targetCell.element as HTMLElement).style.backgroundColor).toBe("rgb(255, 238, 204)")
+    expect((targetCell.element as HTMLElement).style.color).toBe("rgb(146, 64, 14)")
+
+    const otherCell = queryBodyCell(wrapper, 0, 1)
+    expect(otherCell.classes()).not.toContain("demo-cell-highlight")
+    expect((otherCell.element as HTMLElement).style.backgroundColor).toBe("")
+
+    wrapper.unmount()
   })
 
   it("renders declarative history controls and exposes a stable history controller", async () => {
@@ -1857,6 +1907,12 @@ describe("DataGrid app facade contract", () => {
 
     queryContextMenuAction("custom:organize")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
+
+    const organizePanel = queryContextMenuRoot()?.querySelector<HTMLElement>(
+      '.datagrid-context-menu__submenu-panel[data-datagrid-menu-parent-action="custom:organize"]',
+    )
+    expect(organizePanel).toBeTruthy()
+    expect(getComputedStyle(organizePanel as HTMLElement).position).toBe("absolute")
 
     const duplicate = queryContextMenuAction("custom:organize/duplicate")
     expect(duplicate?.textContent).toContain("Duplicate cell")
@@ -3957,6 +4013,16 @@ describe("DataGrid app facade contract", () => {
   it("supports defineDataGridComponent for typed h-render usage", async () => {
     const TypedDataGrid = defineDataGridComponent<DemoRow>()
     const gridRef = useDataGridRef<DemoRow>()
+    const customOverlays: readonly DataGridTableStageCustomOverlay[] = [{
+      key: "demo-range",
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startColumn: 0,
+        endColumn: 1,
+      }],
+      borderColor: "#0b57d0",
+    }]
 
     const wrapper = mount(defineComponent({
       setup() {
@@ -3968,6 +4034,7 @@ describe("DataGrid app facade contract", () => {
             { key: "region", label: "Region", width: 160 },
             { key: "amount", label: "Amount", width: 140 },
           ] as const),
+          customOverlays,
         })
       },
     }))

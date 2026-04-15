@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-formula-engine",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Community formula engine API for Affino DataGrid",

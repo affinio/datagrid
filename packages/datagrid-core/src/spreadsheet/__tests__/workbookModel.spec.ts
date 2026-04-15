@@ -340,6 +340,96 @@ describe("createDataGridSpreadsheetWorkbookModel", () => {
     workbook.dispose()
   })
 
+  it("rewrites cross-sheet column references and table field literals when source columns are renamed", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "customerId" }, { key: "total" }],
+            rows: [
+              { id: "order-1", cells: { customerId: 1, total: 100 } },
+              { id: "order-2", cells: { customerId: 1, total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "customers",
+          name: "Customers",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "id" }, { key: "spend" }],
+            rows: [
+              {
+                id: "customer-1",
+                cells: {
+                  id: 1,
+                  spend: "=ROLLUP('orders', 'customerId', [id]@row, 'total', 'sum', 0)",
+                },
+              },
+            ],
+          },
+        },
+        {
+          id: "summary",
+          name: "Summary",
+          sheetModelOptions: {
+            referenceParserOptions: SHEET_QUALIFIED_REFERENCE_OPTIONS,
+            columns: [{ key: "value" }],
+            rows: [
+              {
+                id: "summary-1",
+                cells: {
+                  value: "=SUM(TABLE('orders', 'total')) + orders![total]1",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+    const customersSheet = workbook.getSheet("customers")?.sheetModel
+    const summarySheet = workbook.getSheet("summary")?.sheetModel
+
+    expect(ordersSheet?.renameColumn("total", "amount")).toBe(true)
+
+    const spendAfterAmountRename = customersSheet?.getCell({
+      sheetId: "customers",
+      rowId: "customer-1",
+      rowIndex: 0,
+      columnKey: "spend",
+    })
+    const summaryAfterAmountRename = summarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-1",
+      rowIndex: 0,
+      columnKey: "value",
+    })
+
+    expect(spendAfterAmountRename?.rawInput).toBe("=ROLLUP('orders', 'customerId', [id]@row, 'amount', 'sum', 0)")
+    expect(spendAfterAmountRename?.displayValue).toBe(300)
+    expect(summaryAfterAmountRename?.rawInput).toBe("=SUM(TABLE('orders', 'amount')) + orders![amount]1")
+    expect(summaryAfterAmountRename?.displayValue).toBe(400)
+
+    expect(ordersSheet?.renameColumn("customerId", "clientId")).toBe(true)
+
+    const spendAfterClientRename = customersSheet?.getCell({
+      sheetId: "customers",
+      rowId: "customer-1",
+      rowIndex: 0,
+      columnKey: "spend",
+    })
+
+    expect(spendAfterClientRename?.rawInput).toBe("=ROLLUP('orders', 'clientId', [id]@row, 'amount', 'sum', 0)")
+    expect(spendAfterClientRename?.displayValue).toBe(300)
+
+    workbook.dispose()
+  })
+
   it("rewrites and invalidates cross-sheet absolute references when source rows are removed", () => {
     const workbook = createDataGridSpreadsheetWorkbookModel({
       sheets: [

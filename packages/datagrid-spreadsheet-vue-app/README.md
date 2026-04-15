@@ -116,7 +116,19 @@ workbook.sync()
 - The workbook shell can show a bottom-right aggregate overlay for the current selection.
 - `Ctrl/Cmd + click` adds independent cells or ranges to the committed workbook selection.
 - Clicking a column header selects the full visible column; `Shift` extends from the active column and `Ctrl/Cmd` adds another full-column range.
+- Column rename is split into display-title rename and reference-key rename so formulas do not break when users only want to relabel a header.
+- Spreadsheet columns can also expose a `formulaAlias` so formulas can reference the user-facing name instead of the raw key. When omitted, the initial alias defaults to the column title.
 - `DataGridSpreadsheetFormulaEditor` is exported separately when you need to embed the workbook formula bar inside a custom shell.
+
+## Column Rename And Formulas
+
+The workbook shell exposes two different rename paths from the column menu:
+
+- `Display title`: updates the visible header text only. This calls `sheetModel.setColumnTitle(...)` and leaves formula references unchanged.
+- `Formula alias`: updates the user-facing formula token. This calls `sheetModel.setColumnFormulaAlias(...)` and rewrites workbook formulas that reference that alias.
+- `Reference key`: renames the semantic column key. This calls `sheetModel.renameColumn(...)` and rewrites workbook formulas that reference that column.
+
+Use title rename when the user is changing copy or presentation. Use formula-alias rename when the visible spreadsheet formula token should change. Use key rename only when the underlying reference identity of the column is actually changing.
 
 ## Slots
 

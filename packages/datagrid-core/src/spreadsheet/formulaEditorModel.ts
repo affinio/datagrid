@@ -10,6 +10,7 @@ import {
   type DataGridFormulaRowSelector,
   type DataGridFormulaSourceSpan,
 } from "../models/formula/formulaEngine.js"
+import type { DataGridFormulaAstNode } from "@affino/datagrid-formula-engine"
 
 export type DataGridSpreadsheetFormulaReferenceOutputSyntax = "canonical" | "smartsheet"
 export type DataGridSpreadsheetCellInputKind = "blank" | "value" | "formula"
@@ -1056,6 +1057,111 @@ export function rewriteDataGridSpreadsheetFormulaReferences(
     changed = true
   }
   return changed ? nextInput : normalizedRawInput
+}
+
+function formatDataGridSpreadsheetStringLiteralReplacement(
+  rawLiteralText: string,
+  nextLiteralValue: string,
+): string {
+  const quote = rawLiteralText.startsWith("\"") ? "\"" : "'"
+  const escapedValue = String(nextLiteralValue ?? "")
+    .split("\\").join("\\\\")
+    .split(quote).join(`\\${quote}`)
+  return `${quote}${escapedValue}${quote}`
+}
+
+export function rewriteDataGridSpreadsheetFormulaStringLiterals(
+  rawInput: string,
+  rewrite: (
+    literalText: string,
+    context: {
+      callName: string | null
+      argumentIndex: number | null
+      callArgs: readonly DataGridFormulaAstNode[] | null
+    },
+  ) => string | null,
+  options: AnalyzeDataGridSpreadsheetCellInputOptions = {},
+): string {
+  const normalizedRawInput = String(rawInput ?? "")
+  const analysis = analyzeDataGridSpreadsheetCellInput(normalizedRawInput, options)
+  if (analysis.kind !== "formula" || !analysis.formulaSpan || !analysis.formula) {
+    return normalizedRawInput
+  }
+
+  let ast: DataGridFormulaAstNode | null = null
+  try {
+    ast = parseDataGridFormulaExpression(analysis.formula, {
+      referenceParserOptions: options.referenceParserOptions,
+    }).ast
+  } catch {
+    ast = null
+  }
+
+  if (!ast) {
+    return normalizedRawInput
+  }
+
+  const replacements: Array<{ start: number; end: number; nextText: string }> = []
+
+  const visit = (
+    node: DataGridFormulaAstNode,
+    parentCallName: string | null,
+    parentArgumentIndex: number | null,
+    parentCallArgs: readonly DataGridFormulaAstNode[] | null,
+  ): void => {
+    if (node.kind === "literal" && typeof node.value === "string") {
+      const nextLiteralValue = rewrite(node.value, {
+        callName: parentCallName,
+        argumentIndex: parentArgumentIndex,
+        callArgs: parentCallArgs,
+      })
+      if (typeof nextLiteralValue === "string" && nextLiteralValue !== node.value) {
+        const start = analysis.formulaSpan!.start + node.span.start
+        const end = analysis.formulaSpan!.start + node.span.end
+        replacements.push({
+          start,
+          end,
+          nextText: formatDataGridSpreadsheetStringLiteralReplacement(
+            normalizedRawInput.slice(start, end),
+            nextLiteralValue,
+          ),
+        })
+      }
+      return
+    }
+
+    if (node.kind === "call") {
+      for (let index = 0; index < node.args.length; index += 1) {
+        const argument = node.args[index]
+        if (!argument) {
+          continue
+        }
+        visit(argument, node.name, index, node.args)
+      }
+      return
+    }
+
+    if (node.kind === "unary") {
+      visit(node.value, parentCallName, parentArgumentIndex, parentCallArgs)
+      return
+    }
+
+    if (node.kind === "binary") {
+      visit(node.left, parentCallName, parentArgumentIndex, parentCallArgs)
+      visit(node.right, parentCallName, parentArgumentIndex, parentCallArgs)
+    }
+  }
+
+  visit(ast, null, null, null)
+  if (replacements.length === 0) {
+    return normalizedRawInput
+  }
+
+  let nextInput = normalizedRawInput
+  for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
+    nextInput = `${nextInput.slice(0, replacement.start)}${replacement.nextText}${nextInput.slice(replacement.end)}`
+  }
+  return nextInput
 }
 
 export function resolveDataGridSpreadsheetActiveFormulaReference(

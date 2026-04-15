@@ -175,6 +175,12 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
     column: DataGridColumnSnapshot,
     columnIndex: number,
   ) => DataGridTableStageCellClass | null | undefined
+  cellStyle?: (
+    row: DataGridTableRow<TRow>,
+    rowIndex: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ) => CSSProperties | null | undefined
 }
 
 export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, unknown>> {
@@ -1033,6 +1039,14 @@ export function useDataGridTableStageRuntime<
     readDisplayCell: stageServices.cellIo.readStageDisplayCell,
     cellClass: options.cellClass
       ? (row, rowOffset, column, columnIndex) => options.cellClass?.(
+        row,
+        viewportRowStart.value + rowOffset,
+        column,
+        columnIndex,
+      )
+      : undefined,
+    cellStyle: options.cellStyle
+      ? (row, rowOffset, column, columnIndex) => options.cellStyle?.(
         row,
         viewportRowStart.value + rowOffset,
         column,

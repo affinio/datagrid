@@ -1,8 +1,10 @@
 import {
   createDataGridSpreadsheetSheetModel,
+  type DataGridSpreadsheetCellStylePatch,
+  type DataGridSpreadsheetReferenceSheet,
   type DataGridSpreadsheetSheetModel,
   type DataGridSpreadsheetSheetState,
-} from "./sheetModel.js"
+} from "./sheet.js"
 import { isTypedPlainSpreadsheetSheetState } from "./sheetStateGuards.js"
 import type {
   DataGridSpreadsheetWorkbookViewDefinition,
@@ -80,7 +82,7 @@ export interface HydrateSpreadsheetWorkbookDataSheetModelOptions {
   sheetModelOptions: DataGridSpreadsheetWorkbookViewSheetModelOptions | null
   sheetId: string
   sheetName: string
-  resolveSheetReference: (sheetReference: string) => DataGridSpreadsheetSheetModel | null
+  resolveSheetReference: (sheetReference: string) => DataGridSpreadsheetReferenceSheet | null
 }
 
 export type SpreadsheetWorkbookSheetStateExportPayload =
@@ -137,6 +139,7 @@ export function createMetadataOnlyDerivedRuntimeFromSheetState(
     columns: state.columns.map(column => ({
       key: column.key,
       title: column.title,
+      formulaAlias: column.formulaAlias,
       style: column.style ?? null,
     })),
     rows: Object.freeze([]),
@@ -153,6 +156,7 @@ function createSpreadsheetWorkbookDataSheetModelBaseOptions(
     columns: sheetState.columns.map(column => ({
       key: column.key,
       title: column.title,
+      formulaAlias: column.formulaAlias,
       style: column.style,
     })),
     sheetStyle: sheetState.sheetStyle,
@@ -185,10 +189,7 @@ export function hydrateSpreadsheetWorkbookDataSheetModel(
     return sheetModel
   }
 
-  const cellStylePatches: Array<{
-    cell: Parameters<DataGridSpreadsheetSheetModel["setCellStyle"]>[0]
-    style: Parameters<DataGridSpreadsheetSheetModel["setCellStyle"]>[1]
-  }> = []
+  const cellStylePatches: DataGridSpreadsheetCellStylePatch[] = []
   const rows = sheetState.rows.map((row, rowIndex) => {
     const cells: Record<string, string> = {}
     for (const cell of row.cells) {
@@ -239,6 +240,7 @@ export function createSpreadsheetWorkbookSheetStateExport(
         columns: Object.freeze(input.derivedRuntime.columns.map(column => ({
           key: column.key,
           title: column.title,
+          formulaAlias: column.formulaAlias,
           style: column.style,
         }))),
         rows: Object.freeze([]),

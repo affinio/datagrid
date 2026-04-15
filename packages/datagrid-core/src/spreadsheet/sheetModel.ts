@@ -4,6 +4,7 @@ import {
   compileDataGridFormulaFieldArtifact,
   createFormulaErrorValue,
   isFormulaErrorValue,
+  normalizeFormulaReference,
   parseDataGridFormulaIdentifier,
   type DataGridCompiledFormulaArtifact,
   type DataGridCompiledFormulaField,
@@ -23,6 +24,8 @@ import {
   createDataGridSpreadsheetCellFormulaRuntimeModel,
   mapDataGridSpreadsheetCellFormulaRuntimeModelBindings,
   renderDataGridSpreadsheetCellFormulaRuntimeModel,
+  rewriteDataGridSpreadsheetFormulaReferences,
+  rewriteDataGridSpreadsheetFormulaStringLiterals,
   type DataGridSpreadsheetCellAddress,
   type DataGridSpreadsheetCellFormulaModel,
   type DataGridSpreadsheetCellFormulaRuntimeModel,
@@ -37,12 +40,14 @@ export type DataGridSpreadsheetStyle = Readonly<Record<string, unknown>>
 export interface DataGridSpreadsheetColumnInput {
   key: string
   title?: string | null
+  formulaAlias?: string | null
   style?: DataGridSpreadsheetStyle | null
 }
 
 export interface DataGridSpreadsheetColumnSnapshot {
   key: string
   title: string
+  formulaAlias: string
   style: DataGridSpreadsheetStyle | null
 }
 
@@ -145,6 +150,15 @@ export interface DataGridSpreadsheetSheetRowMutation {
   count: number
 }
 
+export type DataGridSpreadsheetSheetColumnMutationKind = "rename"
+
+export interface DataGridSpreadsheetSheetColumnMutation {
+  revision: number
+  kind: DataGridSpreadsheetSheetColumnMutationKind
+  previousKey: string
+  nextKey: string
+}
+
 export interface DataGridSpreadsheetSheetSnapshot {
   revision: number
   valueRevision: number
@@ -157,11 +171,26 @@ export interface DataGridSpreadsheetSheetSnapshot {
   sheetId: string | null
   sheetName: string | null
   lastRowMutation: DataGridSpreadsheetSheetRowMutation | null
+  lastColumnMutation: DataGridSpreadsheetSheetColumnMutation | null
 }
 
 export type DataGridSpreadsheetSheetListener = (
   snapshot: DataGridSpreadsheetSheetSnapshot,
 ) => void
+
+export interface DataGridSpreadsheetReferenceSheet {
+  getSheetId(): string | null
+  getColumns(): readonly DataGridSpreadsheetColumnSnapshot[]
+  getRowCount(): number
+  getCellDisplayValue(cell: DataGridSpreadsheetCellAddress): unknown
+}
+
+export interface DataGridSpreadsheetViewSourceSheet {
+  getSnapshot(): DataGridSpreadsheetSheetSnapshot
+  getColumns(): readonly DataGridSpreadsheetColumnSnapshot[]
+  getRows(): readonly DataGridSpreadsheetRowSnapshot[]
+  getTableSource(): DataGridFormulaTableSource
+}
 
 export interface CreateDataGridSpreadsheetSheetModelOptions {
   sheetId?: string | null
@@ -178,7 +207,7 @@ export interface CreateDataGridSpreadsheetSheetModelOptions {
   resolveSheetReference?: (
     sheetReference: string,
     currentSheetId: string | null,
-  ) => DataGridSpreadsheetSheetModel | null | undefined
+  ) => DataGridSpreadsheetReferenceSheet | null | undefined
 }
 
 export interface DataGridSpreadsheetSheetModel {
@@ -207,6 +236,9 @@ export interface DataGridSpreadsheetSheetModel {
   removeRowsAt(index: number, count?: number): boolean
   insertRowsBefore(rowId: DataGridRowId, rows?: readonly DataGridSpreadsheetRowInput[]): boolean
   insertRowsAfter(rowId: DataGridRowId, rows?: readonly DataGridSpreadsheetRowInput[]): boolean
+  renameColumn(columnKey: string, nextColumnKey: string): boolean
+  setColumnTitle(columnKey: string, title: string | null): boolean
+  setColumnFormulaAlias(columnKey: string, formulaAlias: string | null): boolean
   setSheetStyle(style: DataGridSpreadsheetStyle | null): boolean
   setColumnStyle(columnKey: string, style: DataGridSpreadsheetStyle | null): boolean
   setRowStyle(rowId: DataGridRowId, style: DataGridSpreadsheetStyle | null): boolean
@@ -244,7 +276,13 @@ function formatSpreadsheetCellPreviewValue(value: unknown): string {
 interface SpreadsheetColumnState {
   key: string
   title: string
+  formulaAlias: string
   style: DataGridSpreadsheetStyle | null
+}
+
+interface SpreadsheetColumnReferenceSource {
+  key: string
+  formulaAlias?: string | null
 }
 
 interface SpreadsheetRowState {
@@ -307,6 +345,110 @@ function normalizeColumnTitle(value: unknown, fallback: string): string {
   return normalized.length === 0 ? fallback : normalized
 }
 
+function normalizeColumnFormulaAlias(value: unknown, fallback: string): string {
+  const normalized = String(value ?? "").trim()
+  return normalized.length === 0 ? fallback : normalized
+}
+
+function normalizeFormulaReferenceLookupName(referenceName: unknown): string {
+  const normalized = String(referenceName ?? "").trim()
+  if (normalized.length === 0) {
+    return ""
+  }
+  const normalizedReference = normalizeFormulaReference(normalized)
+  if (
+    /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(normalizedReference)
+    || normalizedReference.includes(".")
+    || normalizedReference.includes("[")
+    || normalizedReference.includes('"')
+  ) {
+    return normalizedReference
+  }
+  return normalizeFormulaReference(`"${normalized.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
+}
+
+function resolveColumnFormulaReferenceName(column: SpreadsheetColumnReferenceSource): string {
+  const normalizedFormulaAlias = String(column.formulaAlias ?? "").trim()
+  return normalizedFormulaAlias.length > 0 ? normalizedFormulaAlias : column.key
+}
+
+function buildSpreadsheetColumnReferenceLookup(
+  availableColumns: readonly SpreadsheetColumnReferenceSource[],
+): ReadonlyMap<string, string> {
+  const keyByReferenceName = new Map<string, string>()
+  const aliasCandidates = new Map<string, Set<string>>()
+
+  for (const column of availableColumns) {
+    const normalizedKeyReferenceName = normalizeFormulaReferenceLookupName(column.key)
+    if (normalizedKeyReferenceName.length > 0) {
+      keyByReferenceName.set(normalizedKeyReferenceName, column.key)
+    }
+  }
+
+  for (const column of availableColumns) {
+    const normalizedAliasReferenceName = normalizeFormulaReferenceLookupName(resolveColumnFormulaReferenceName(column))
+    const normalizedKeyReferenceName = normalizeFormulaReferenceLookupName(column.key)
+    if (
+      normalizedAliasReferenceName.length === 0
+      || normalizedAliasReferenceName === normalizedKeyReferenceName
+    ) {
+      continue
+    }
+    const candidates = aliasCandidates.get(normalizedAliasReferenceName) ?? new Set<string>()
+    candidates.add(column.key)
+    aliasCandidates.set(normalizedAliasReferenceName, candidates)
+  }
+
+  for (const [referenceName, candidateKeys] of aliasCandidates.entries()) {
+    if (candidateKeys.size !== 1 || keyByReferenceName.has(referenceName)) {
+      continue
+    }
+    const [columnKey] = candidateKeys
+    if (columnKey) {
+      keyByReferenceName.set(referenceName, columnKey)
+    }
+  }
+
+  return keyByReferenceName
+}
+
+function resolveSpreadsheetColumnReferenceKey(
+  referenceName: string,
+  availableColumns: readonly SpreadsheetColumnReferenceSource[],
+  lookup: ReadonlyMap<string, string> = buildSpreadsheetColumnReferenceLookup(availableColumns),
+): string | null {
+  const normalizedReferenceName = normalizeFormulaReferenceLookupName(referenceName)
+  if (normalizedReferenceName.length === 0) {
+    return null
+  }
+  return lookup.get(normalizedReferenceName) ?? null
+}
+
+function resolveSpreadsheetColumnKeysForReferenceRange(
+  startReferenceName: string,
+  endReferenceName: string | null | undefined,
+  availableColumns: readonly SpreadsheetColumnReferenceSource[],
+  lookup: ReadonlyMap<string, string> = buildSpreadsheetColumnReferenceLookup(availableColumns),
+): readonly string[] {
+  const startColumnKey = resolveSpreadsheetColumnReferenceKey(startReferenceName, availableColumns, lookup)
+  if (!startColumnKey) {
+    return Object.freeze([])
+  }
+  const endColumnKey = endReferenceName
+    ? resolveSpreadsheetColumnReferenceKey(endReferenceName, availableColumns, lookup) ?? startColumnKey
+    : startColumnKey
+  if (endColumnKey === startColumnKey) {
+    return Object.freeze([startColumnKey])
+  }
+  const startIndex = availableColumns.findIndex(column => column.key === startColumnKey)
+  const endIndex = availableColumns.findIndex(column => column.key === endColumnKey)
+  if (startIndex < 0 || endIndex < 0) {
+    return Object.freeze([startColumnKey])
+  }
+  const [from, to] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex]
+  return Object.freeze(availableColumns.slice(from, to + 1).map(column => column.key))
+}
+
 function normalizeSpreadsheetStyle(
   style: DataGridSpreadsheetStyle | null | undefined,
 ): DataGridSpreadsheetStyle | null {
@@ -366,6 +508,7 @@ function areSpreadsheetColumnSnapshotsEqual(
       || !rightColumn
       || leftColumn.key !== rightColumn.key
       || leftColumn.title !== rightColumn.title
+      || leftColumn.formulaAlias !== rightColumn.formulaAlias
       || !areSpreadsheetStylesEqual(leftColumn.style, rightColumn.style)
     ) {
       return false
@@ -523,6 +666,19 @@ function cloneSpreadsheetSheetRowMutation(
     : null
 }
 
+function cloneSpreadsheetSheetColumnMutation(
+  mutation: DataGridSpreadsheetSheetColumnMutation | null,
+): DataGridSpreadsheetSheetColumnMutation | null {
+  return mutation
+    ? {
+      revision: mutation.revision,
+      kind: mutation.kind,
+      previousKey: mutation.previousKey,
+      nextKey: mutation.nextKey,
+    }
+    : null
+}
+
 function resolveFormulaTableContextKey(name: string): string {
   const normalized = name.trim().toLowerCase()
   return normalized.length === 0 ? "tables" : `table:${normalized}`
@@ -620,13 +776,15 @@ export function createDataGridSpreadsheetSheetModel(
   const columnIndexByKey = new Map<string, number>()
   for (const column of options.columns ?? []) {
     const key = normalizeColumnKey(column.key)
+    const title = normalizeColumnTitle(column.title, key)
     if (columnIndexByKey.has(key)) {
       throw new Error(`[DataGridSpreadsheetSheet] duplicate column key '${key}'.`)
     }
     columnIndexByKey.set(key, columns.length)
     columns.push({
       key,
-      title: normalizeColumnTitle(column.title, key),
+      title,
+      formulaAlias: normalizeColumnFormulaAlias(column.formulaAlias, title),
       style: normalizeSpreadsheetStyle(column.style),
     })
   }
@@ -740,6 +898,7 @@ export function createDataGridSpreadsheetSheetModel(
   const compiledFormulaArtifactByExactFormula = new Map<string, DataGridCompiledFormulaArtifact<Record<string, unknown>>>()
   const reusableCurrentRowFormulaAnalysisByRawInput = new Map<string, DataGridSpreadsheetCellInputAnalysis>()
   const reusableCurrentRowFormulaTemplateByKey = new Map<string, SpreadsheetFormulaCellState>()
+  let columnReferenceKeyByName = buildSpreadsheetColumnReferenceLookup(columns)
   let formulaStructuralReferenceIndexRevision = -1
   let formulaStructuralCellKeysBySheetAlias = new Map<string, readonly string[]>()
   const tableSource = {
@@ -781,7 +940,9 @@ export function createDataGridSpreadsheetSheetModel(
   let formulaStructureRevision = 0
   let styleRevision = 0
   let rowMutationRevision = 0
+  let columnMutationRevision = 0
   let lastRowMutation: DataGridSpreadsheetSheetRowMutation | null = null
+  let lastColumnMutation: DataGridSpreadsheetSheetColumnMutation | null = null
   let sheetStyle = normalizeSpreadsheetStyle(options.sheetStyle)
   const listeners = new Set<DataGridSpreadsheetSheetListener>()
 
@@ -811,6 +972,7 @@ export function createDataGridSpreadsheetSheetModel(
       sheetId,
       sheetName,
       lastRowMutation: cloneSpreadsheetSheetRowMutation(lastRowMutation),
+      lastColumnMutation: cloneSpreadsheetSheetColumnMutation(lastColumnMutation),
     }
   }
 
@@ -881,6 +1043,10 @@ export function createDataGridSpreadsheetSheetModel(
     for (const listener of listeners) {
       listener(snapshot)
     }
+  }
+
+  function rebuildColumnReferenceLookup(): void {
+    columnReferenceKeyByName = buildSpreadsheetColumnReferenceLookup(columns)
   }
 
   function resolveCellKey(cell: DataGridSpreadsheetCellAddress): string {
@@ -1068,7 +1234,7 @@ export function createDataGridSpreadsheetSheetModel(
 
   function resolveReferencedSheetModel(
     sheetReference: string | null | undefined,
-  ): DataGridSpreadsheetSheetModel | null {
+  ): DataGridSpreadsheetReferenceSheet | null {
     if (isCurrentSheetReference(sheetReference)) {
       return null
     }
@@ -1182,32 +1348,19 @@ export function createDataGridSpreadsheetSheetModel(
     const dependencies: DataGridSpreadsheetCellAddress[] = []
     const seenDependencyKeys = new Set<string>()
 
-    const resolveColumnKeysForReference = (
-      startColumnKey: string,
-      endColumnKey: string | null | undefined,
-      availableColumns: readonly { key: string }[],
-    ): readonly string[] => {
-      if (!endColumnKey || endColumnKey === startColumnKey) {
-        return Object.freeze([startColumnKey])
-      }
-      const startIndex = availableColumns.findIndex(column => column.key === startColumnKey)
-      const endIndex = availableColumns.findIndex(column => column.key === endColumnKey)
-      if (startIndex < 0 || endIndex < 0) {
-        return Object.freeze([startColumnKey])
-      }
-      const [from, to] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex]
-      return Object.freeze(availableColumns.slice(from, to + 1).map(column => column.key))
-    }
-
     for (const reference of analysis.references) {
       if (!isCurrentSheetReference(reference.sheetReference)) {
         continue
       }
-      const targetColumnKeys = resolveColumnKeysForReference(
+      const targetColumnKeys = resolveSpreadsheetColumnKeysForReferenceRange(
         reference.referenceName,
         reference.rangeReferenceName,
         columns,
+        columnReferenceKeyByName,
       )
+      if (targetColumnKeys.length === 0) {
+        continue
+      }
       for (const targetRowIndex of reference.targetRowIndexes) {
         const row = rows[targetRowIndex]
         if (!row) {
@@ -1822,22 +1975,15 @@ export function createDataGridSpreadsheetSheetModel(
   ): DataGridComputedFieldComputeContext<Record<string, unknown>> {
     const row = rows[formulaCell.address.rowIndex]
     const formulaRuntimeBindingByIndex = new Map(formulaCell.formulaRuntime.bindings.map(binding => [binding.index, binding]))
-
-    const resolveColumnKeysForRange = (
-      startColumnKey: string,
-      endColumnKey: string | null | undefined,
-      availableColumns: readonly { key: string }[],
-    ): readonly string[] => {
-      if (!endColumnKey || endColumnKey === startColumnKey) {
-        return Object.freeze([startColumnKey])
+    const referencedSheetColumnLookups = new Map<DataGridSpreadsheetSheetModel, ReadonlyMap<string, string>>()
+    const resolveSheetColumnLookup = (referencedSheetModel: DataGridSpreadsheetSheetModel): ReadonlyMap<string, string> => {
+      const cached = referencedSheetColumnLookups.get(referencedSheetModel)
+      if (cached) {
+        return cached
       }
-      const startIndex = availableColumns.findIndex(column => column.key === startColumnKey)
-      const endIndex = availableColumns.findIndex(column => column.key === endColumnKey)
-      if (startIndex < 0 || endIndex < 0) {
-        return Object.freeze([startColumnKey])
-      }
-      const [from, to] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex]
-      return Object.freeze(availableColumns.slice(from, to + 1).map(column => column.key))
+      const lookup = buildSpreadsheetColumnReferenceLookup(referencedSheetModel.getColumns())
+      referencedSheetColumnLookups.set(referencedSheetModel, lookup)
+      return lookup
     }
 
     return {
@@ -1880,11 +2026,18 @@ export function createDataGridSpreadsheetSheetModel(
               : null
           }
           if (referencedSheetModel) {
-            const targetColumnKeys = resolveColumnKeysForRange(
+            const referencedColumns = referencedSheetModel.getColumns()
+            const targetColumnKeys = resolveSpreadsheetColumnKeysForReferenceRange(
               compiledReferenceBinding.referenceName,
               compiledReferenceBinding.rangeReferenceName,
-              referencedSheetModel.getColumns(),
+              referencedColumns,
+              resolveSheetColumnLookup(referencedSheetModel),
             )
+            if (targetColumnKeys.length === 0) {
+              return isRangeReference
+                ? Object.freeze([])
+                : null
+            }
             const resolvedValues = targetRowIndexes.flatMap(targetRowIndex => targetColumnKeys.map(columnKey => (
               referencedSheetModel.getCellDisplayValue({
                 sheetId: referencedSheetModel.getSheetId(),
@@ -1897,11 +2050,17 @@ export function createDataGridSpreadsheetSheetModel(
               ? Object.freeze(resolvedValues)
               : (resolvedValues[0] ?? null)
           }
-          const targetColumnKeys = resolveColumnKeysForRange(
+          const targetColumnKeys = resolveSpreadsheetColumnKeysForReferenceRange(
             compiledReferenceBinding.referenceName,
             compiledReferenceBinding.rangeReferenceName,
             columns,
+            columnReferenceKeyByName,
           )
+          if (targetColumnKeys.length === 0) {
+            return isRangeReference
+              ? Object.freeze([])
+              : null
+          }
           const resolvedValues = targetRowIndexes.flatMap((targetRowIndex) => targetColumnKeys.map((columnKey) => {
             const targetCellKey = makeCellKey(targetRowIndex, columnKey)
             const targetFormulaCell = formulaCellByKey.get(targetCellKey)
@@ -1942,11 +2101,18 @@ export function createDataGridSpreadsheetSheetModel(
             : null
         }
         if (referencedSheetModel) {
-          const targetColumnKeys = resolveColumnKeysForRange(
+          const referencedColumns = referencedSheetModel.getColumns()
+          const targetColumnKeys = resolveSpreadsheetColumnKeysForReferenceRange(
             parsed.referenceName,
             parsed.rangeReferenceName,
-            referencedSheetModel.getColumns(),
+            referencedColumns,
+            resolveSheetColumnLookup(referencedSheetModel),
           )
+          if (targetColumnKeys.length === 0) {
+            return isRangeReference
+              ? Object.freeze([])
+              : null
+          }
           const resolvedValues = targetRowIndexes.flatMap(targetRowIndex => targetColumnKeys.map(columnKey => (
             referencedSheetModel.getCellDisplayValue({
               sheetId: referencedSheetModel.getSheetId(),
@@ -1959,11 +2125,17 @@ export function createDataGridSpreadsheetSheetModel(
             ? Object.freeze(resolvedValues)
             : (resolvedValues[0] ?? null)
         }
-        const targetColumnKeys = resolveColumnKeysForRange(
+        const targetColumnKeys = resolveSpreadsheetColumnKeysForReferenceRange(
           parsed.referenceName,
           parsed.rangeReferenceName,
           columns,
+          columnReferenceKeyByName,
         )
+        if (targetColumnKeys.length === 0) {
+          return isRangeReference
+            ? Object.freeze([])
+            : null
+        }
         const resolvedValues = targetRowIndexes.flatMap((targetRowIndex) => targetColumnKeys.map((columnKey) => {
           const targetCellKey = makeCellKey(targetRowIndex, columnKey)
           const targetFormulaCell = formulaCellByKey.get(targetCellKey)
@@ -2503,6 +2675,104 @@ export function createDataGridSpreadsheetSheetModel(
     })
   }
 
+  function rewriteColumnRenameFormulaLiterals(
+    rawInput: string,
+    rowIndex: number,
+    previousColumnKey: string,
+    nextColumnKey: string,
+    sheetAliases: ReadonlySet<string>,
+  ): string {
+    return rewriteDataGridSpreadsheetFormulaStringLiterals(rawInput, (literalText, context) => {
+      const functionName = context.callName?.trim().toUpperCase()
+      const argumentIndex = context.argumentIndex
+      if (!functionName || typeof argumentIndex !== "number") {
+        return null
+      }
+
+      const tableNameNode = context.callArgs?.[0]
+      if (!tableNameNode || tableNameNode.kind !== "literal" || typeof tableNameNode.value !== "string") {
+        return null
+      }
+
+      const normalizedTableAlias = normalizeSpreadsheetSheetReferenceAlias(tableNameNode.value)
+      if (normalizedTableAlias.length === 0 || !sheetAliases.has(normalizedTableAlias)) {
+        return null
+      }
+
+      const shouldRewrite = (
+        (functionName === "TABLE" && argumentIndex === 1)
+        || (functionName === "RELATED" && (argumentIndex === 2 || argumentIndex === 3))
+        || (functionName === "ROLLUP" && (argumentIndex === 1 || argumentIndex === 3))
+      )
+
+      return shouldRewrite && literalText === previousColumnKey
+        ? nextColumnKey
+        : null
+    }, {
+      currentRowIndex: rowIndex,
+      referenceParserOptions,
+    })
+  }
+
+  function rewriteStoredFormulaColumnReferences(
+    formulas: readonly {
+      rowIndex: number
+      columnKey: string
+      rawInput: string
+    }[],
+    previousColumnKey: string,
+    nextColumnKey: string,
+    sheetAliases: ReadonlySet<string>,
+  ): boolean {
+    let changed = false
+
+    for (const formula of formulas) {
+      const targetColumnKey = formula.columnKey === previousColumnKey
+        ? nextColumnKey
+        : formula.columnKey
+      const rewrittenReferences = rewriteDataGridSpreadsheetFormulaReferences(formula.rawInput, reference => {
+        if (!isCurrentSheetReference(reference.sheetReference)) {
+          return null
+        }
+        const nextReferenceName = reference.referenceName === previousColumnKey
+          ? nextColumnKey
+          : reference.referenceName
+        const nextRangeReferenceName = reference.rangeReferenceName === previousColumnKey
+          ? nextColumnKey
+          : reference.rangeReferenceName
+        if (
+          nextReferenceName === reference.referenceName
+          && nextRangeReferenceName === reference.rangeReferenceName
+        ) {
+          return null
+        }
+        return {
+          sheetReference: reference.sheetReference,
+          referenceName: nextReferenceName,
+          rangeReferenceName: nextRangeReferenceName,
+          rowSelector: reference.rowSelector,
+        }
+      }, {
+        currentRowIndex: formula.rowIndex,
+        referenceParserOptions,
+      })
+      const rewrittenRawInput = rewriteColumnRenameFormulaLiterals(
+        rewrittenReferences,
+        formula.rowIndex,
+        previousColumnKey,
+        nextColumnKey,
+        sheetAliases,
+      )
+      if (rewrittenRawInput === formula.rawInput) {
+        continue
+      }
+      changed = true
+      setStoredRawInput(formula.rowIndex, targetColumnKey, rewrittenRawInput)
+    }
+
+    return changed
+  }
+
   function hasCurrentSheetAbsoluteReferencesAtOrAfter(
     runtimeModel: DataGridSpreadsheetCellFormulaRuntimeModel,
     rowIndex: number,
@@ -2707,6 +2977,194 @@ export function createDataGridSpreadsheetSheetModel(
     return true
   }
 
+  function renameColumn(
+    columnKey: string,
+    nextColumnKey: string,
+  ): boolean {
+    ensureActive()
+    const normalizedColumnKey = normalizeColumnKey(columnKey)
+    const normalizedNextColumnKey = normalizeColumnKey(nextColumnKey)
+    if (normalizedColumnKey === normalizedNextColumnKey) {
+      return false
+    }
+
+    const columnIndex = columnIndexByKey.get(normalizedColumnKey)
+    if (typeof columnIndex !== "number") {
+      throw new Error(`[DataGridSpreadsheetSheet] unknown column '${normalizedColumnKey}'.`)
+    }
+    if (columnIndexByKey.has(normalizedNextColumnKey)) {
+      throw new Error(`[DataGridSpreadsheetSheet] duplicate column key '${normalizedNextColumnKey}'.`)
+    }
+
+    const column = columns[columnIndex]
+    if (!column) {
+      throw new Error(`[DataGridSpreadsheetSheet] unknown column '${normalizedColumnKey}'.`)
+    }
+
+    const formulaSnapshots = [...formulaCellByKey.values()].map(formulaCell => ({
+      rowIndex: formulaCell.address.rowIndex,
+      columnKey: formulaCell.address.columnKey,
+      rawInput: getRawInput(formulaCell.key),
+    }))
+
+    columnIndexByKey.delete(normalizedColumnKey)
+    columnIndexByKey.set(normalizedNextColumnKey, columnIndex)
+    column.key = normalizedNextColumnKey
+    if (column.title === normalizedColumnKey) {
+      column.title = normalizedNextColumnKey
+    }
+    if (column.formulaAlias === normalizedColumnKey) {
+      column.formulaAlias = normalizedNextColumnKey
+    }
+
+    for (const rowInputs of rawInputByRowIndex) {
+      if (!rowInputs?.has(normalizedColumnKey)) {
+        continue
+      }
+      const rawInput = rowInputs.get(normalizedColumnKey)
+      rowInputs.delete(normalizedColumnKey)
+      if (typeof rawInput === "string") {
+        rowInputs.set(normalizedNextColumnKey, rawInput)
+      }
+    }
+
+    for (const rowStyles of cellStyleByRowIndex) {
+      if (!rowStyles?.has(normalizedColumnKey)) {
+        continue
+      }
+      const style = rowStyles.get(normalizedColumnKey)
+      rowStyles.delete(normalizedColumnKey)
+      if (style) {
+        rowStyles.set(normalizedNextColumnKey, style)
+      }
+    }
+
+    const localAliases = new Set<string>(
+      [sheetId, sheetName]
+        .map(alias => normalizeSpreadsheetSheetReferenceAlias(alias))
+        .filter(alias => alias.length > 0),
+    )
+    rewriteStoredFormulaColumnReferences(
+      formulaSnapshots,
+      normalizedColumnKey,
+      normalizedNextColumnKey,
+      localAliases,
+    )
+    rebuildColumnReferenceLookup()
+
+    analysisByCellKey.clear()
+    formulaCellByKey.clear()
+    dependentsByCellKey.clear()
+    reusableCurrentRowFormulaAnalysisByRawInput.clear()
+    reusableCurrentRowFormulaTemplateByKey.clear()
+
+    formulaStructureRevision += 1
+    columnMutationRevision += 1
+    lastColumnMutation = {
+      revision: columnMutationRevision,
+      kind: "rename",
+      previousKey: normalizedColumnKey,
+      nextKey: normalizedNextColumnKey,
+    }
+    revision += 1
+    const baseValuesChanged = rebuildFormulaState()
+    const formulaValuesChanged = applyFormulaEvaluation(null)
+    if (baseValuesChanged || formulaValuesChanged) {
+      valueRevision += 1
+    }
+    emit()
+    return true
+  }
+
+  function setColumnTitle(
+    columnKey: string,
+    title: string | null,
+  ): boolean {
+    ensureActive()
+    const normalizedColumnKey = normalizeColumnKey(columnKey)
+    const columnIndex = columnIndexByKey.get(normalizedColumnKey)
+    if (typeof columnIndex !== "number") {
+      throw new Error(`[DataGridSpreadsheetSheet] unknown column '${normalizedColumnKey}'.`)
+    }
+    const column = columns[columnIndex]
+    if (!column) {
+      throw new Error(`[DataGridSpreadsheetSheet] unknown column '${normalizedColumnKey}'.`)
+    }
+    const nextTitle = normalizeColumnTitle(title, normalizedColumnKey)
+    if (column.title === nextTitle) {
+      return false
+    }
+    column.title = nextTitle
+    revision += 1
+    emit()
+    return true
+  }
+
+  function setColumnFormulaAlias(
+    columnKey: string,
+    formulaAlias: string | null,
+  ): boolean {
+    ensureActive()
+    const normalizedColumnKey = normalizeColumnKey(columnKey)
+    const columnIndex = columnIndexByKey.get(normalizedColumnKey)
+    if (typeof columnIndex !== "number") {
+      throw new Error(`[DataGridSpreadsheetSheet] unknown column '${normalizedColumnKey}'.`)
+    }
+    const column = columns[columnIndex]
+    if (!column) {
+      throw new Error(`[DataGridSpreadsheetSheet] unknown column '${normalizedColumnKey}'.`)
+    }
+
+    const nextFormulaAlias = normalizeColumnFormulaAlias(formulaAlias, column.title)
+    if (column.formulaAlias === nextFormulaAlias) {
+      return false
+    }
+
+    const formulaSnapshots = [...formulaCellByKey.values()].map(formulaCell => ({
+      rowIndex: formulaCell.address.rowIndex,
+      columnKey: formulaCell.address.columnKey,
+      rawInput: getRawInput(formulaCell.key),
+    }))
+    const previousFormulaAlias = column.formulaAlias
+    column.formulaAlias = nextFormulaAlias
+    rebuildColumnReferenceLookup()
+
+    const localAliases = new Set<string>(
+      [sheetId, sheetName]
+        .map(alias => normalizeSpreadsheetSheetReferenceAlias(alias))
+        .filter(alias => alias.length > 0),
+    )
+    rewriteStoredFormulaColumnReferences(
+      formulaSnapshots,
+      previousFormulaAlias,
+      nextFormulaAlias,
+      localAliases,
+    )
+
+    analysisByCellKey.clear()
+    formulaCellByKey.clear()
+    dependentsByCellKey.clear()
+    reusableCurrentRowFormulaAnalysisByRawInput.clear()
+    reusableCurrentRowFormulaTemplateByKey.clear()
+
+    formulaStructureRevision += 1
+    columnMutationRevision += 1
+    lastColumnMutation = {
+      revision: columnMutationRevision,
+      kind: "rename",
+      previousKey: previousFormulaAlias,
+      nextKey: nextFormulaAlias,
+    }
+    revision += 1
+    const baseValuesChanged = rebuildFormulaState()
+    const formulaValuesChanged = applyFormulaEvaluation(null)
+    if (baseValuesChanged || formulaValuesChanged) {
+      valueRevision += 1
+    }
+    emit()
+    return true
+  }
+
   const initialBaseValuesChanged = rebuildFormulaState()
   const initialFormulaValuesChanged = applyFormulaEvaluation(null)
   if (initialBaseValuesChanged || initialFormulaValuesChanged) {
@@ -2761,6 +3219,7 @@ export function createDataGridSpreadsheetSheetModel(
       return Object.freeze(columns.map(column => ({
         key: column.key,
         title: column.title,
+        formulaAlias: column.formulaAlias,
         style: column.style,
       })))
     },
@@ -2782,6 +3241,7 @@ export function createDataGridSpreadsheetSheetModel(
         columns: Object.freeze(columns.map(column => ({
           key: column.key,
           title: column.title,
+          formulaAlias: column.formulaAlias,
           style: column.style,
         }))),
         rows: Object.freeze(rows.map(row => {
@@ -2826,6 +3286,7 @@ export function createDataGridSpreadsheetSheetModel(
         const nextColumns = (state.columns ?? []).map(column => ({
           key: normalizeColumnKey(column.key),
           title: normalizeColumnTitle(column.title, column.key),
+          formulaAlias: normalizeColumnFormulaAlias(column.formulaAlias, normalizeColumnTitle(column.title, column.key)),
           style: normalizeSpreadsheetStyle(column.style),
         }))
 
@@ -2843,9 +3304,11 @@ export function createDataGridSpreadsheetSheetModel(
           columns.push({
             key: column.key,
             title: column.title,
+            formulaAlias: column.formulaAlias,
             style: column.style,
           })
         }
+        rebuildColumnReferenceLookup()
 
         rows.length = 0
         rowIndexById.clear()
@@ -2898,6 +3361,7 @@ export function createDataGridSpreadsheetSheetModel(
         formulaCellByKey.clear()
         dependentsByCellKey.clear()
         lastRowMutation = null
+        lastColumnMutation = null
         formulaStructureRevision += 1
         styleRevision += 1
         valueRevision += 1
@@ -2912,6 +3376,7 @@ export function createDataGridSpreadsheetSheetModel(
         columns: Object.freeze((state.columns ?? []).map(column => ({
           key: normalizeColumnKey(column.key),
           title: normalizeColumnTitle(column.title, column.key),
+          formulaAlias: normalizeColumnFormulaAlias(column.formulaAlias, normalizeColumnTitle(column.title, column.key)),
           style: normalizeSpreadsheetStyle(column.style),
         }))),
         rows: Object.freeze((state.rows ?? []).map((row, rowIndex) => Object.freeze({
@@ -2962,9 +3427,11 @@ export function createDataGridSpreadsheetSheetModel(
         columns.push({
           key: column.key,
           title: column.title,
+          formulaAlias: column.formulaAlias,
           style: column.style,
         })
       }
+      rebuildColumnReferenceLookup()
 
       rows.length = 0
       rowIndexById.clear()
@@ -3024,6 +3491,7 @@ export function createDataGridSpreadsheetSheetModel(
       formulaCellByKey.clear()
       dependentsByCellKey.clear()
       lastRowMutation = null
+      lastColumnMutation = null
       formulaStructureRevision += 1
       styleRevision += 1
       revision += 1
@@ -3150,6 +3618,9 @@ export function createDataGridSpreadsheetSheetModel(
       }
       return insertRowsAt(rowIndex + 1, nextRows)
     },
+    renameColumn,
+    setColumnTitle,
+    setColumnFormulaAlias,
     setSheetStyle(style) {
       ensureActive()
       const nextStyle = normalizeSpreadsheetStyle(style)

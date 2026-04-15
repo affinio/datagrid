@@ -12,10 +12,10 @@ import { createPivotAxisKey, createPivotColumnId, createPivotColumnLabel } from 
 import type {
   CreateDataGridSpreadsheetSheetModelOptions,
   DataGridSpreadsheetColumnSnapshot,
-  DataGridSpreadsheetSheetModel,
   DataGridSpreadsheetSheetState,
   DataGridSpreadsheetStyle,
-} from "./sheetModel.js"
+  DataGridSpreadsheetViewSourceSheet,
+} from "./sheet.js"
 import type { DataGridFormulaTableRowsSource, DataGridFormulaTableSource } from "../models/formula/formulaContracts.js"
 import {
   createDataGridSpreadsheetDerivedSheetRuntime,
@@ -123,8 +123,8 @@ export interface MaterializeDataGridSpreadsheetViewSheetOptions {
   sheetId: string
   sheetName: string
   sourceSheetId: string
-  sourceSheetModel: DataGridSpreadsheetSheetModel | null
-  resolveSheetModel?: (sheetId: string) => DataGridSpreadsheetSheetModel | null
+  sourceSheetModel: DataGridSpreadsheetViewSourceSheet | null
+  resolveSheetModel?: (sheetId: string) => DataGridSpreadsheetViewSourceSheet | null
   pipeline: readonly DataGridSpreadsheetViewStep[]
   sheetModelOptions?: DataGridSpreadsheetWorkbookViewSheetModelOptions | null
   errorMessage?: string | null
@@ -194,6 +194,7 @@ export interface DataGridSpreadsheetViewPivotStageState {
 interface SpreadsheetViewColumnState {
   key: string
   title: string
+  formulaAlias: string
   style: DataGridSpreadsheetStyle | null
 }
 
@@ -500,10 +501,11 @@ function isSpreadsheetViewTableRowsSource(
   return !Array.isArray(value) && typeof value === "object" && value !== null && "rows" in value
 }
 
-function createDatasetFromSheetModel(sheetModel: DataGridSpreadsheetSheetModel): SpreadsheetViewDataset {
+function createDatasetFromSheetModel(sheetModel: DataGridSpreadsheetViewSourceSheet): SpreadsheetViewDataset {
   const columns = sheetModel.getColumns().map(column => ({
     key: column.key,
     title: column.title,
+    formulaAlias: column.formulaAlias,
     style: column.style,
   }))
   const tableSource = sheetModel.getTableSource()
@@ -610,6 +612,7 @@ function applyProjectStep(
     return {
       key: nextKey,
       title: normalizeColumnTitle(projection.label, sourceColumn?.title ?? nextKey),
+      formulaAlias: sourceColumn?.formulaAlias ?? normalizeColumnTitle(projection.label, sourceColumn?.title ?? nextKey),
       style: sourceColumn?.style ?? null,
     }
   })
@@ -666,7 +669,7 @@ function createJoinStageKey(
 
 function createJoinStageState(
   rightSheetId: string,
-  rightSheetModel: DataGridSpreadsheetSheetModel,
+  rightSheetModel: DataGridSpreadsheetViewSourceSheet,
   rightKey: string,
   selections: readonly DataGridSpreadsheetViewJoinColumn[],
   stageKey: string,
@@ -705,7 +708,7 @@ function createJoinStageState(
 function applyJoinStep(
   dataset: SpreadsheetViewDataset,
   step: DataGridSpreadsheetViewJoinStep,
-  resolveSheetModel: ((sheetId: string) => DataGridSpreadsheetSheetModel | null) | undefined,
+  resolveSheetModel: ((sheetId: string) => DataGridSpreadsheetViewSourceSheet | null) | undefined,
   previousJoinStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewJoinStageState> | undefined,
   nextJoinStageStatesByKey: Map<string, DataGridSpreadsheetViewJoinStageState>,
 ): SpreadsheetViewDataset {
@@ -753,6 +756,7 @@ function applyJoinStep(
     outputColumns.push({
       key,
       title: normalizeColumnTitle(selection.label, rightColumn?.title ?? key),
+      formulaAlias: rightColumn?.formulaAlias ?? normalizeColumnTitle(selection.label, rightColumn?.title ?? key),
       style: rightColumn?.style ?? null,
     })
     joinOutputKeys.add(key)
@@ -983,6 +987,7 @@ function applyGroupStep(
     columns.push({
       key,
       title: normalizeColumnTitle(field.label, sourceColumn?.title ?? key),
+      formulaAlias: sourceColumn?.formulaAlias ?? normalizeColumnTitle(field.label, sourceColumn?.title ?? key),
       style: sourceColumn?.style ?? null,
     })
   }
@@ -991,6 +996,7 @@ function applyGroupStep(
     columns.push({
       key,
       title: normalizeColumnTitle(aggregation.label, key),
+      formulaAlias: normalizeColumnTitle(aggregation.label, key),
       style: NUMERIC_AGGREGATIONS.has(aggregation.agg)
         ? Object.freeze({
           textAlign: "right",
@@ -1269,12 +1275,14 @@ function applyPivotStep(
       return {
         key: column.key,
         title: column.title,
+        formulaAlias: sourceColumn?.formulaAlias ?? column.title,
         style: sourceColumn?.style ?? null,
       }
     }
     return {
       key: column.key,
       title: column.title,
+      formulaAlias: column.title,
       style: column.value && column.value.agg !== "custom" && NUMERIC_AGGREGATIONS.has(column.value.agg)
         ? Object.freeze({ textAlign: "right" })
         : null,
@@ -1319,6 +1327,7 @@ function datasetToSheetState(
     columns: Object.freeze(dataset.columns.map(column => ({
       key: column.key,
       title: column.title,
+      formulaAlias: column.formulaAlias,
       style: column.style,
     } satisfies DataGridSpreadsheetColumnSnapshot))),
     rows: Object.freeze(dataset.rows.map(row => ({
@@ -1348,6 +1357,7 @@ function datasetToDerivedSheetRuntime(
     columns: dataset.columns.map(column => ({
       key: column.key,
       title: column.title,
+      formulaAlias: column.formulaAlias,
       style: column.style,
     })),
     rows: dataset.rows.map(row => ({
@@ -1369,11 +1379,13 @@ function createDataGridSpreadsheetViewErrorDataset(
       {
         key: "status",
         title: "Status",
+        formulaAlias: "Status",
         style: Object.freeze({ fontWeight: 700 }),
       },
       {
         key: "message",
         title: "Message",
+        formulaAlias: "Message",
         style: null,
       },
     ]),

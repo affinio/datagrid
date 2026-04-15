@@ -109,4 +109,36 @@ describe("spreadsheet formula reference decorations", () => {
       },
     ])
   })
+
+  it("resolves bounds for references that target a column formula alias", () => {
+    const analysis = analyzeDataGridSpreadsheetCellInput("=[Unit price]2", {
+      currentRowIndex: 0,
+      referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+    })
+    const reference = analysis.references[0]
+
+    expect(reference).toBeDefined()
+
+    const bounds = resolveDataGridSpreadsheetFormulaReferenceBounds(reference!, {
+      resolveSheet: () => ({
+        id: "orders",
+        columns: [
+          { key: "qty", formulaAlias: "Qty" },
+          { key: "price", formulaAlias: "Unit price" },
+          { key: "total", formulaAlias: "Total" },
+        ],
+      }),
+    })
+
+    expect(bounds).toEqual({
+      referenceKey: reference!.key,
+      referencedSheetId: "orders",
+      startRowIndex: 1,
+      endRowIndex: 1,
+      startColumnIndex: 1,
+      endColumnIndex: 1,
+      startColumnKey: "price",
+      endColumnKey: "price",
+    })
+  })
 })

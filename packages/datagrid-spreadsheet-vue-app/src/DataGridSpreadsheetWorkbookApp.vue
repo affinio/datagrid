@@ -390,6 +390,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch, watchEffect, type Ref } from "vue"
 import {
   DATAGRID_DEFAULT_FORMULA_FUNCTIONS,
+  normalizeFormulaReference,
   type DataGridFormulaFunctionRegistry,
 } from "@affino/datagrid-formula-engine"
 import { applyGridTheme } from "@affino/datagrid-theme"
@@ -433,7 +434,10 @@ import {
   useDataGridAppRowSelection,
   useDataGridAppSelection,
 } from "@affino/datagrid-vue/app"
-import type { DataGridThemeProp } from "@affino/datagrid-vue-app"
+import type {
+  DataGridColumnMenuCustomItem,
+  DataGridThemeProp,
+} from "@affino/datagrid-vue-app"
 import {
   DataGridAdvancedFilterPopover,
   DataGridTableStage,
@@ -693,6 +697,95 @@ function normalizeColumnMenuToken(token: string): string {
   return token.startsWith("string:")
     ? `string:${token.slice("string:".length).toLowerCase()}`
     : token
+}
+
+function normalizeFormulaReferenceLookupName(referenceName: unknown): string {
+  const normalized = String(referenceName ?? "").trim()
+  if (normalized.length === 0) {
+    return ""
+  }
+  const normalizedReference = normalizeFormulaReference(normalized)
+  if (
+    /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(normalizedReference)
+    || normalizedReference.includes(".")
+    || normalizedReference.includes("[")
+    || normalizedReference.includes('"')
+  ) {
+    return normalizedReference
+  }
+  return normalizeFormulaReference(`"${normalized.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
+}
+
+function buildSpreadsheetColumnReferenceLookup(
+  columns: readonly { key: string; formulaAlias?: string | null }[],
+): ReadonlyMap<string, string> {
+  const keyByReferenceName = new Map<string, string>()
+  const aliasCandidates = new Map<string, Set<string>>()
+
+  for (const column of columns) {
+    const normalizedKeyReferenceName = normalizeFormulaReferenceLookupName(column.key)
+    if (normalizedKeyReferenceName.length > 0) {
+      keyByReferenceName.set(normalizedKeyReferenceName, column.key)
+    }
+  }
+
+  for (const column of columns) {
+    const normalizedFormulaAlias = String(column.formulaAlias ?? "").trim()
+    const alias = normalizedFormulaAlias.length > 0 ? normalizedFormulaAlias : column.key
+    const normalizedAliasReferenceName = normalizeFormulaReferenceLookupName(alias)
+    const normalizedKeyReferenceName = normalizeFormulaReferenceLookupName(column.key)
+    if (
+      normalizedAliasReferenceName.length === 0
+      || normalizedAliasReferenceName === normalizedKeyReferenceName
+      || keyByReferenceName.has(normalizedAliasReferenceName)
+    ) {
+      continue
+    }
+    const candidates = aliasCandidates.get(normalizedAliasReferenceName) ?? new Set<string>()
+    candidates.add(column.key)
+    aliasCandidates.set(normalizedAliasReferenceName, candidates)
+  }
+
+  for (const [referenceName, candidateKeys] of aliasCandidates.entries()) {
+    if (candidateKeys.size !== 1) {
+      continue
+    }
+    const [columnKey] = candidateKeys
+    if (columnKey) {
+      keyByReferenceName.set(referenceName, columnKey)
+    }
+  }
+
+  return keyByReferenceName
+}
+
+function resolveSpreadsheetFormulaReferenceKey(
+  referenceName: string,
+  columns: readonly { key: string; formulaAlias?: string | null }[],
+): string | null {
+  const normalizedReferenceName = normalizeFormulaReferenceLookupName(referenceName)
+  if (normalizedReferenceName.length === 0) {
+    return null
+  }
+  return buildSpreadsheetColumnReferenceLookup(columns).get(normalizedReferenceName) ?? null
+}
+
+function resolveSpreadsheetFormulaReferenceName(
+  columnKey: string,
+  columns: readonly { key: string; formulaAlias?: string | null }[],
+): string {
+  const column = columns.find(entry => entry.key === columnKey)
+  if (!column) {
+    return columnKey
+  }
+  const normalizedFormulaAlias = String(column.formulaAlias ?? "").trim()
+  if (normalizedFormulaAlias.length === 0) {
+    return column.key
+  }
+  const lookup = buildSpreadsheetColumnReferenceLookup(columns)
+  return lookup.get(normalizeFormulaReferenceLookupName(normalizedFormulaAlias)) === column.key
+    ? normalizedFormulaAlias
+    : column.key
 }
 
 function resolveInitialFilterTexts(filterModel: DataGridFilterSnapshot | null | undefined): Record<string, string> {
@@ -1582,6 +1675,13 @@ const columnLabelByKey = computed(() => {
   }
   return map
 })
+const columnFormulaAliasByKey = computed(() => {
+  const map = new Map<string, string>()
+  for (const column of activeSheetView.value.columns) {
+    map.set(column.key, column.formulaAlias)
+  }
+  return map
+})
 const advancedFilterColumns = computed(() => {
   return visibleColumns.value
     .filter(column => column.visible !== false)
@@ -1659,6 +1759,169 @@ watch(
 
 const resolveColumnLabel = (columnKey: string): string => {
   return columnLabelByKey.value.get(columnKey) ?? columnKey
+}
+
+const resolveColumnFormulaAlias = (columnKey: string): string => {
+  return columnFormulaAliasByKey.value.get(columnKey) ?? resolveColumnLabel(columnKey)
+}
+
+function promptSpreadsheetColumnInput(
+  message: string,
+  initialValue: string,
+): string | null {
+  if (typeof window === "undefined" || typeof window.prompt !== "function") {
+    return null
+  }
+  const nextValue = window.prompt(message, initialValue)
+  return nextValue == null
+    ? null
+    : nextValue.trim()
+}
+
+function reportSpreadsheetColumnMutationError(error: unknown): void {
+  const message = error instanceof Error
+    ? error.message
+    : "Spreadsheet column update failed."
+  if (typeof window !== "undefined" && typeof window.alert === "function") {
+    window.alert(message)
+    return
+  }
+  console.error(message)
+}
+
+async function renameActiveSheetColumnKey(columnKey: string): Promise<void> {
+  if (activeSheetReadOnly.value) {
+    return
+  }
+  const handle = activeSheetHandle.value
+  if (!handle) {
+    return
+  }
+  const nextColumnKey = promptSpreadsheetColumnInput(
+    `Rename reference key for column '${resolveColumnLabel(columnKey)}'. Formulas will be rewritten to use the new key.`,
+    columnKey,
+  )
+  if (!nextColumnKey || nextColumnKey === columnKey) {
+    return
+  }
+  try {
+    const applied = await runWorkbookIntent({
+      intent: "rename-column-key",
+      label: `Rename column key ${columnKey} -> ${nextColumnKey}`,
+    }, () => handle.sheetModel.renameColumn(columnKey, nextColumnKey))
+    if (applied) {
+      await nextTick()
+      syncEditorCellDisplay({ forceRawInput: true })
+    }
+  } catch (error) {
+    reportSpreadsheetColumnMutationError(error)
+  }
+}
+
+async function renameActiveSheetColumnTitle(columnKey: string): Promise<void> {
+  if (activeSheetReadOnly.value) {
+    return
+  }
+  const handle = activeSheetHandle.value
+  if (!handle) {
+    return
+  }
+  const currentTitle = resolveColumnLabel(columnKey)
+  const nextTitle = promptSpreadsheetColumnInput(
+    `Rename display title for column '${currentTitle}'. Formula references will keep using '${columnKey}'. Leave blank to reset the title back to the key.`,
+    currentTitle,
+  )
+  if (nextTitle == null) {
+    return
+  }
+  const normalizedNextTitle = nextTitle.length > 0 ? nextTitle : null
+  const effectiveNextTitle = normalizedNextTitle ?? columnKey
+  if (effectiveNextTitle === currentTitle) {
+    return
+  }
+  try {
+    await runWorkbookIntent({
+      intent: "rename-column-title",
+      label: `Rename column title ${columnKey}`,
+    }, () => handle.sheetModel.setColumnTitle(columnKey, normalizedNextTitle))
+  } catch (error) {
+    reportSpreadsheetColumnMutationError(error)
+  }
+}
+
+async function renameActiveSheetColumnFormulaAlias(columnKey: string): Promise<void> {
+  if (activeSheetReadOnly.value) {
+    return
+  }
+  const handle = activeSheetHandle.value
+  if (!handle) {
+    return
+  }
+  const currentFormulaAlias = resolveColumnFormulaAlias(columnKey)
+  const nextFormulaAlias = promptSpreadsheetColumnInput(
+    `Rename formula alias for column '${resolveColumnLabel(columnKey)}'. Formulas will be rewritten to use the new alias. Leave blank to reset the alias back to the current display title.`,
+    currentFormulaAlias,
+  )
+  if (nextFormulaAlias == null) {
+    return
+  }
+  const normalizedNextFormulaAlias = nextFormulaAlias.length > 0 ? nextFormulaAlias : null
+  const effectiveNextFormulaAlias = normalizedNextFormulaAlias ?? resolveColumnLabel(columnKey)
+  if (effectiveNextFormulaAlias === currentFormulaAlias) {
+    return
+  }
+  try {
+    const applied = await runWorkbookIntent({
+      intent: "rename-column-formula-alias",
+      label: `Rename column formula alias ${columnKey}`,
+    }, () => handle.sheetModel.setColumnFormulaAlias(columnKey, normalizedNextFormulaAlias))
+    if (applied) {
+      await nextTick()
+      syncEditorCellDisplay({ forceRawInput: true })
+    }
+  } catch (error) {
+    reportSpreadsheetColumnMutationError(error)
+  }
+}
+
+function resolveSpreadsheetColumnMenuCustomItems(columnKey: string): readonly DataGridColumnMenuCustomItem[] {
+  const columnLabel = resolveColumnLabel(columnKey)
+  const columnFormulaAlias = resolveColumnFormulaAlias(columnKey)
+  return Object.freeze([
+    {
+      key: "rename-column",
+      kind: "submenu",
+      label: "Rename column",
+      placement: "end",
+      disabled: activeSheetReadOnly.value,
+      disabledReason: activeSheetReadOnly.value
+        ? "Derived sheets are read-only"
+        : undefined,
+      items: Object.freeze([
+        {
+          key: "rename-column-title",
+          label: `Display title (${columnLabel})`,
+          onSelect: async () => {
+            await renameActiveSheetColumnTitle(columnKey)
+          },
+        },
+        {
+          key: "rename-column-formula-alias",
+          label: `Formula alias (${columnFormulaAlias})`,
+          onSelect: async () => {
+            await renameActiveSheetColumnFormulaAlias(columnKey)
+          },
+        },
+        {
+          key: "rename-column-key",
+          label: `Reference key (${columnKey})`,
+          onSelect: async () => {
+            await renameActiveSheetColumnKey(columnKey)
+          },
+        },
+      ]),
+    },
+  ])
 }
 
 const activeFilterSummaryItems = computed<readonly string[]>(() => {
@@ -1943,6 +2206,7 @@ const {
   resolveColumnMenuSortDirection,
   resolveColumnMenuSelectedTokens: resolveCurrentValueFilterTokens,
   resolveColumnMenuValueEntries,
+  resolveColumnMenuCustomItems: resolveSpreadsheetColumnMenuCustomItems,
   applyColumnMenuSort,
   applyColumnMenuPin: (columnKey, pin) => {
     runtimeBundle.api.columns.setPin(columnKey, pin)
@@ -2800,7 +3064,9 @@ function resolveActiveFormulaReferenceTargetCell(): DataGridSpreadsheetCellAddre
   if (!row) {
     return null
   }
-  const column = referencedSheet.sheetModel.getColumns().find(entry => entry.key === reference.referenceName)
+  const referencedColumns = referencedSheet.sheetModel.getColumns()
+  const referencedColumnKey = resolveSpreadsheetFormulaReferenceKey(reference.referenceName, referencedColumns)
+  const column = referencedColumns.find(entry => entry.key === referencedColumnKey)
   if (!column) {
     return null
   }
@@ -3099,10 +3365,12 @@ function rewriteActiveFormulaReferenceToCell(
       if (!startColumnKey || !endColumnKey) {
         return null
       }
+      const startReferenceName = resolveSpreadsheetFormulaReferenceName(startColumnKey, columns)
+      const endReferenceName = resolveSpreadsheetFormulaReferenceName(endColumnKey, columns)
       if (startRowIndex === endRowIndex && startColumnKey === endColumnKey) {
         return {
           sheetReference: targetSheetReference,
-          referenceName: startColumnKey,
+          referenceName: startReferenceName,
           rowIndex: targetSheetReference ? null : startRowIndex,
           rowSelector: targetSheetReference
             ? {
@@ -3114,8 +3382,8 @@ function rewriteActiveFormulaReferenceToCell(
       }
       return {
         sheetReference: targetSheetReference,
-        referenceName: startColumnKey,
-        rangeReferenceName: startColumnKey === endColumnKey ? null : endColumnKey,
+        referenceName: startReferenceName,
+        rangeReferenceName: startColumnKey === endColumnKey ? null : endReferenceName,
         rowSelector: {
           kind: "absolute-window",
           startRowIndex,
@@ -3123,9 +3391,10 @@ function rewriteActiveFormulaReferenceToCell(
         },
       }
     }
+    const targetColumns = targetSheet?.sheetModel.getColumns() ?? []
     return {
       sheetReference: targetSheetReference,
-      referenceName: targetCell.columnKey,
+      referenceName: resolveSpreadsheetFormulaReferenceName(targetCell.columnKey, targetColumns),
       rowIndex: targetSheetReference ? null : targetCell.rowIndex,
       rowSelector: targetSheetReference
         ? {
@@ -3278,6 +3547,7 @@ function insertReferenceFromCell(targetCell: DataGridSpreadsheetCellAddress): vo
     return
   }
   const targetSheet = resolveSheetHandle(targetCell.sheetId)
+  const targetColumns = targetSheet?.sheetModel.getColumns() ?? []
   const sheetReference = targetCell.sheetId !== activeCell.sheetId
     ? (targetSheet?.aliases[0] ?? targetCell.sheetId)
     : null
@@ -3288,7 +3558,7 @@ function insertReferenceFromCell(targetCell: DataGridSpreadsheetCellAddress): vo
   }
   editorModel.insertReference({
     sheetReference,
-    referenceName: targetCell.columnKey,
+    referenceName: resolveSpreadsheetFormulaReferenceName(targetCell.columnKey, targetColumns),
     rowIndex: sheetReference ? null : targetCell.rowIndex,
     rowSelector: sheetReference
       ? {
@@ -3773,13 +4043,18 @@ const referenceHighlightByCellKey = computed(() => {
       ? workbook.getSheets().find(sheet => sheet.aliases.includes(reference.sheetReference ?? "")) ?? null
       : activeSheetHandle.value
     const columns = targetSheet?.sheetModel.getColumns() ?? []
-    if (!reference.rangeReferenceName || reference.rangeReferenceName === reference.referenceName) {
-      return Object.freeze([reference.referenceName])
+    const startColumnKey = resolveSpreadsheetFormulaReferenceKey(reference.referenceName, columns)
+    if (!startColumnKey) {
+      return Object.freeze([])
     }
-    const startIndex = columns.findIndex(column => column.key === reference.referenceName)
-    const endIndex = columns.findIndex(column => column.key === reference.rangeReferenceName)
+    if (!reference.rangeReferenceName || reference.rangeReferenceName === reference.referenceName) {
+      return Object.freeze([startColumnKey])
+    }
+    const endColumnKey = resolveSpreadsheetFormulaReferenceKey(reference.rangeReferenceName, columns) ?? startColumnKey
+    const startIndex = columns.findIndex(column => column.key === startColumnKey)
+    const endIndex = columns.findIndex(column => column.key === endColumnKey)
     if (startIndex < 0 || endIndex < 0) {
-      return Object.freeze([reference.referenceName])
+      return Object.freeze([startColumnKey])
     }
     const [from, to] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex]
     return Object.freeze(columns.slice(from, to + 1).map(column => column.key))

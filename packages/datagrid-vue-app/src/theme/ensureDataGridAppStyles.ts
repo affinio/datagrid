@@ -2389,13 +2389,26 @@ body.datagrid-fill-drag-cursor * {
   font-weight: 600;
 }
 
+.datagrid-context-menu__submenu {
+  position: relative;
+}
+
 .datagrid-context-menu__submenu-panel {
+  position: absolute;
+  top: -6px;
+  left: calc(100% + 6px);
+  z-index: 1;
+  min-width: 188px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--datagrid-glass-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--datagrid-surface-elevated-color) 94%, white 6%);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-left: 10px;
-  padding-left: 8px;
-  border-left: 1px solid color-mix(in srgb, var(--datagrid-glass-border) 72%, transparent);
 }
 
 .datagrid-context-menu__submenu-arrow {

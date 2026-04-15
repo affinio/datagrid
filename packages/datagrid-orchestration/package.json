@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-orchestration",
-  "version": "0.3.9",
+  "version": "0.3.11",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Framework-agnostic orchestration layer for @affino/datagrid-core",
