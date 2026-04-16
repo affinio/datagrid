@@ -61,6 +61,12 @@ export interface DataGridColumnValueSetFilter {
   tokens: string[]
 }
 
+export interface DataGridColumnStyleValueSetFilter {
+  kind: "styleValueSet"
+  styleKey: string
+  tokens: string[]
+}
+
 export type DataGridColumnPredicateOperator =
   | "contains"
   | "startsWith"
@@ -89,10 +95,13 @@ export type DataGridColumnFilter =
   | DataGridColumnValueSetFilter
   | DataGridColumnPredicateFilter
 
+export type DataGridColumnStyleFilter = DataGridColumnStyleValueSetFilter
+
 export type DataGridColumnFilterSnapshotEntry = DataGridColumnFilter
 
 export interface DataGridFilterSnapshot {
   columnFilters: Record<string, DataGridColumnFilterSnapshotEntry>
+  columnStyleFilters?: Record<string, DataGridColumnStyleFilter>
   advancedFilters: Record<string, DataGridAdvancedFilter>
   advancedExpression?: DataGridAdvancedFilterExpression | null
 }

@@ -1975,8 +1975,8 @@ export function createDataGridSpreadsheetSheetModel(
   ): DataGridComputedFieldComputeContext<Record<string, unknown>> {
     const row = rows[formulaCell.address.rowIndex]
     const formulaRuntimeBindingByIndex = new Map(formulaCell.formulaRuntime.bindings.map(binding => [binding.index, binding]))
-    const referencedSheetColumnLookups = new Map<DataGridSpreadsheetSheetModel, ReadonlyMap<string, string>>()
-    const resolveSheetColumnLookup = (referencedSheetModel: DataGridSpreadsheetSheetModel): ReadonlyMap<string, string> => {
+    const referencedSheetColumnLookups = new Map<DataGridSpreadsheetReferenceSheet, ReadonlyMap<string, string>>()
+    const resolveSheetColumnLookup = (referencedSheetModel: DataGridSpreadsheetReferenceSheet): ReadonlyMap<string, string> => {
       const cached = referencedSheetColumnLookups.get(referencedSheetModel)
       if (cached) {
         return cached

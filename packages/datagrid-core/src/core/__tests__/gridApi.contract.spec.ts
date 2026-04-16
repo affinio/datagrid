@@ -3,6 +3,7 @@ import {
   createDataGridColumnModel,
   createClientRowModel,
   createDataSourceBackedRowModel,
+  serializeColumnValueToToken,
 } from "../../models"
 import type { DataGridRowModel } from "../../models"
 import type { DataGridSelectionSnapshot } from "../../selection/snapshot"
@@ -161,6 +162,50 @@ describe("data grid api facade contracts", () => {
     expect(api.columns.get("id")?.visible).toBe(false)
     expect(api.columns.get("name")?.pin).toBe("left")
     expect(api.columns.get("name")?.width).toBe(280)
+  })
+
+  it("exposes style histograms through the columns namespace", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", styles: { status: { backgroundColor: "#ff0000" } } }, rowId: 1, originalIndex: 0 },
+        { row: { id: 2, team: "A", styles: { status: { backgroundColor: "#00ff00" } } }, rowId: 2, originalIndex: 1 },
+      ],
+      readFilterCellStyle: (rowNode, columnKey, styleKey) => {
+        return (rowNode.data as {
+          styles?: Record<string, Record<string, unknown>>
+        }).styles?.[columnKey]?.[styleKey]
+      },
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "status", label: "Status" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+
+    const api = createDataGridApi({ core })
+
+    api.rows.setFilterModel({
+      columnFilters: { team: { kind: "valueSet", tokens: ["string:A"] } },
+      columnStyleFilters: {
+        status: {
+          kind: "styleValueSet",
+          styleKey: "backgroundColor",
+          tokens: [serializeColumnValueToToken("#ff0000")],
+        },
+      },
+      advancedFilters: {},
+    })
+
+    expect(api.columns.getHistogram("status", { styleKey: "backgroundColor", ignoreSelfFilter: true })).toEqual([
+      { token: "string:#00ff00", value: "#00ff00", count: 1, text: "#00ff00" },
+      { token: "string:#ff0000", value: "#ff0000", count: 1, text: "#ff0000" },
+    ])
+
+    rowModel.dispose()
   })
 
   it("exposes the effective row height through the view namespace", () => {
@@ -2088,6 +2133,63 @@ describe("data grid api facade contracts", () => {
     expect(api.rows.getAggregationModel()).toEqual(saved.rows.aggregationModel)
     expect(api.columns.getSnapshot().order).toEqual(saved.columns.order)
     expect(api.selection.getSnapshot()).toEqual(saved.selection)
+  })
+
+  it("roundtrips serializable column style filters through unified state", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r1", originalIndex: 0 },
+        { row: { id: 2, styles: { status: { backgroundColor: "#00ff00" } } }, rowId: "r2", originalIndex: 1 },
+      ],
+      readFilterCellStyle: (rowNode, columnKey, styleKey) => {
+        return (rowNode.data as {
+          styles?: Record<string, Record<string, unknown>>
+        }).styles?.[columnKey]?.[styleKey]
+      },
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "status", label: "Status" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.rows.setFilterModel({
+      columnFilters: {},
+      columnStyleFilters: {
+        status: {
+          kind: "styleValueSet",
+          styleKey: "backgroundColor",
+          tokens: [serializeColumnValueToToken("#ff0000")],
+        },
+      },
+      advancedFilters: {},
+    })
+
+    const exported = api.state.get()
+    expect(exported?.rows.snapshot.filterModel).toEqual({
+      columnFilters: {},
+      columnStyleFilters: {
+        status: {
+          kind: "styleValueSet",
+          styleKey: "backgroundColor",
+          tokens: [serializeColumnValueToToken("#ff0000")],
+        },
+      },
+      advancedFilters: {},
+    })
+
+    api.rows.setFilterModel(null)
+    expect(api.rows.getSnapshot().rowCount).toBe(2)
+
+    api.state.set(exported ?? null)
+    expect(api.rows.getSnapshot().rowCount).toBe(1)
+
+    rowModel.dispose()
   })
 
   it("emits facade events for rows/columns/projection/selection/transaction/state", async () => {

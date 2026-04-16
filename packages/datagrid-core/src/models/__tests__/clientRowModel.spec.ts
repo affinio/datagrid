@@ -4,6 +4,7 @@ import {
   createDataGridDependencyGraph,
   createDataGridProjectionPolicy,
   normalizeViewportRange,
+  serializeColumnValueToToken,
 } from "../index"
 import type { VisibleRow } from "../../types"
 import type { DataGridRowNodeInput } from "../rowModel"
@@ -2056,6 +2057,171 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("builds style histograms from filtered projection and can ignore the current column style filter", () => {
+    const model = createClientRowModel({
+      rows: [
+        {
+          row: { id: 1, team: "A", styles: { status: { backgroundColor: "#ff0000" } } },
+          rowId: "r1",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+        {
+          row: { id: 2, team: "A", styles: { status: { backgroundColor: "#00ff00" } } },
+          rowId: "r2",
+          originalIndex: 1,
+          displayIndex: 1,
+        },
+        {
+          row: { id: 3, team: "B", styles: { status: { backgroundColor: "#ff0000" } } },
+          rowId: "r3",
+          originalIndex: 2,
+          displayIndex: 2,
+        },
+      ],
+      readFilterCellStyle: (rowNode, columnKey, styleKey) => {
+        return (rowNode.data as {
+          styles?: Record<string, Record<string, unknown>>
+        }).styles?.[columnKey]?.[styleKey]
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: {
+        team: { kind: "valueSet", tokens: ["string:A"] },
+      },
+      columnStyleFilters: {
+        status: {
+          kind: "styleValueSet",
+          styleKey: "backgroundColor",
+          tokens: [serializeColumnValueToToken("#ff0000")],
+        },
+      },
+      advancedFilters: {},
+    })
+
+    expect(model.getColumnHistogram("status", { styleKey: "backgroundColor" })).toEqual([
+      { token: "string:#ff0000", value: "#ff0000", count: 1, text: "#ff0000" },
+    ])
+    expect(model.getColumnHistogram("status", { styleKey: "backgroundColor", ignoreSelfFilter: true })).toEqual([
+      { token: "string:#00ff00", value: "#00ff00", count: 1, text: "#00ff00" },
+      { token: "string:#ff0000", value: "#ff0000", count: 1, text: "#ff0000" },
+    ])
+    expect(model.getColumnHistogram("status", { styleKey: "backgroundColor", scope: "sourceAll" })).toEqual([
+      { token: "string:#00ff00", value: "#00ff00", count: 1, text: "#00ff00" },
+      { token: "string:#ff0000", value: "#ff0000", count: 2, text: "#ff0000" },
+    ])
+
+    model.dispose()
+  })
+
+  it("filters rows by style metadata through columnStyleFilters", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, status: "active", styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, status: "blocked", styles: { status: { backgroundColor: "#00ff00" } } }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, status: "active", styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      readFilterCellStyle: (rowNode, columnKey, styleKey) => {
+        return (rowNode.data as {
+          styles?: Record<string, Record<string, unknown>>
+        }).styles?.[columnKey]?.[styleKey]
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: {},
+      columnStyleFilters: {
+        status: {
+          kind: "styleValueSet",
+          styleKey: "backgroundColor",
+          tokens: [serializeColumnValueToToken("#ff0000")],
+        },
+      },
+      advancedFilters: {},
+    })
+
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1", "r3"])
+
+    model.dispose()
+  })
+
+  it("composes style filters with value filters on the same column", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, statusCode: "a", styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, statusCode: "a", styles: { status: { backgroundColor: "#00ff00" } } }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, statusCode: "b", styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      readFilterCell: (rowNode, columnKey) => {
+        if (columnKey !== "status") {
+          return undefined
+        }
+        return rowNode.data.statusCode === "a" ? "Active" : "Blocked"
+      },
+      readFilterCellStyle: (rowNode, columnKey, styleKey) => {
+        return (rowNode.data as {
+          styles?: Record<string, Record<string, unknown>>
+        }).styles?.[columnKey]?.[styleKey]
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: {
+        status: { kind: "valueSet", tokens: ["string:active"] },
+      },
+      columnStyleFilters: {
+        status: {
+          kind: "styleValueSet",
+          styleKey: "backgroundColor",
+          tokens: [serializeColumnValueToToken("#ff0000")],
+        },
+      },
+      advancedFilters: {},
+    })
+
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1"])
+
+    model.dispose()
+  })
+
+  it("clears and reapplies style filters without losing row-model determinism", () => {
+    const colorFilter = {
+      columnFilters: {},
+      columnStyleFilters: {
+        status: {
+          kind: "styleValueSet",
+          styleKey: "backgroundColor",
+          tokens: [serializeColumnValueToToken("#ff0000")],
+        },
+      },
+      advancedFilters: {},
+    } as const
+
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, styles: { status: { backgroundColor: "#00ff00" } } }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      readFilterCellStyle: (rowNode, columnKey, styleKey) => {
+        return (rowNode.data as {
+          styles?: Record<string, Record<string, unknown>>
+        }).styles?.[columnKey]?.[styleKey]
+      },
+    })
+
+    model.setFilterModel(colorFilter)
+    expect(model.getSnapshot().rowCount).toBe(1)
+
+    model.setFilterModel(null)
+    expect(model.getSnapshot().rowCount).toBe(2)
+
+    model.setFilterModel(colorFilter)
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1"])
+
+    model.dispose()
+  })
+
   it("computes group aggregates when aggregation model is configured", () => {
     const model = createClientRowModel({
       rows: [
@@ -3077,6 +3243,40 @@ describe("createClientRowModel", () => {
 
     model.setFilterModel({
       columnFilters: { status: { kind: "valueSet", tokens: ["string:active"] } },
+      advancedFilters: {},
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    const group = rows.find(row => row.kind === "group")
+    expect(group?.groupMeta?.aggregates).toEqual({ score: 10 })
+
+    model.dispose()
+  })
+
+  it("applies style filters before grouped aggregation projection", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10, styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 20, styles: { status: { backgroundColor: "#00ff00" } } }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      initialAggregationModel: { columns: [{ key: "score", op: "sum" }] },
+      readFilterCellStyle: (rowNode, columnKey, styleKey) => {
+        return (rowNode.data as {
+          styles?: Record<string, Record<string, unknown>>
+        }).styles?.[columnKey]?.[styleKey]
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: {},
+      columnStyleFilters: {
+        status: {
+          kind: "styleValueSet",
+          styleKey: "backgroundColor",
+          tokens: [serializeColumnValueToToken("#ff0000")],
+        },
+      },
       advancedFilters: {},
     })
 

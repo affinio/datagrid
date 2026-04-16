@@ -13,6 +13,7 @@ import {
   defineDataGridCellStyleResolver,
   defineDataGridComponent,
   defineDataGridFilterCellReader,
+  defineDataGridFilterCellStyleReader,
   DataGridModuleHost,
   defineDataGridColumns,
   defineDataGridSelectionCellReader,
@@ -67,6 +68,7 @@ interface EffectiveSelectionRow {
 interface EffectiveFilterRow {
   rowId: string
   statusCode: string
+  styles?: Record<string, Record<string, string>>
 }
 
 const EffectiveFilterGrid = defineDataGridComponent<EffectiveFilterRow>()
@@ -107,9 +109,9 @@ const SEARCH_FILTER_ROWS: readonly DemoRow[] = [
 ]
 
 const EFFECTIVE_FILTER_ROWS: readonly EffectiveFilterRow[] = [
-  { rowId: "ef1", statusCode: "a" },
-  { rowId: "ef2", statusCode: "b" },
-  { rowId: "ef3", statusCode: "a" },
+  { rowId: "ef1", statusCode: "a", styles: { status: { backgroundColor: "#ff0000" } } },
+  { rowId: "ef2", statusCode: "b", styles: { status: { backgroundColor: "#00ff00" } } },
+  { rowId: "ef3", statusCode: "a", styles: { status: { backgroundColor: "#ff0000" } } },
 ]
 
 const COLUMNS = [
@@ -3158,6 +3160,52 @@ describe("DataGrid app facade contract", () => {
       expect.stringContaining("Active"),
       expect.stringContaining("Blocked"),
     ])
+
+    wrapper.unmount()
+  })
+
+  it("accepts a typed readFilterCellStyle helper on the public facade", async () => {
+    const readFilterCellStyle = defineDataGridFilterCellStyleReader<EffectiveFilterRow>()((row, columnKey, styleKey) => {
+      return row.data.styles?.[columnKey]?.[styleKey]
+    })
+
+    const wrapper = mount(EffectiveFilterGrid, {
+      props: {
+        rows: EFFECTIVE_FILTER_ROWS,
+        columns: EFFECTIVE_FILTER_COLUMNS,
+        rowSelection: false,
+        filterModel: {
+          columnFilters: {},
+          columnStyleFilters: {
+            status: {
+              kind: "styleValueSet",
+              styleKey: "backgroundColor",
+              tokens: ["string:#ff0000"],
+            },
+          },
+          advancedFilters: {},
+        },
+        readFilterCellStyle,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          rowCount: 2,
+          filterModel: expect.objectContaining({
+            columnStyleFilters: expect.objectContaining({
+              status: expect.objectContaining({
+                kind: "styleValueSet",
+                styleKey: "backgroundColor",
+              }),
+            }),
+          }),
+        }),
+      }),
+    })
 
     wrapper.unmount()
   })

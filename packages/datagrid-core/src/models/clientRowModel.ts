@@ -28,6 +28,7 @@ import{
   type DataGridAggregationModel,
   type DataGridGroupBySpec,
   type DataGridProjectionStageTimer,
+  type DataGridFilterCellStyleReader,
   type DataGridRowId,
   type DataGridRowIdResolver,
   type DataGridRowNode,
@@ -133,6 +134,7 @@ export interface CreateClientRowModelOptions<T> {
   rows?: readonly DataGridRowNodeInput<T>[]
   resolveRowId?: DataGridRowIdResolver<T>
   readFilterCell?: (rowNode: DataGridRowNode<T>, columnKey: string) => unknown
+  readFilterCellStyle?: DataGridFilterCellStyleReader<T>
   /**
    * Clones row payloads on ingest to isolate the model from later external mutation.
    * Disable only for tightly controlled perf-sensitive paths.
@@ -369,6 +371,7 @@ export function createClientRowModel<T>(
     getFilterRevision: () => runtimeState.filterRevision,
     readRowField: readProjectionRowField,
     readFilterCell: options.readFilterCell,
+    readFilterCellStyle: options.readFilterCellStyle,
     createFilterPredicate,
     sourceColumnCacheLimit: Number.isFinite(formulaColumnCacheMaxColumns)
       ? formulaColumnCacheMaxColumns
@@ -1124,6 +1127,7 @@ export function createClientRowModel<T>(
         return buildColumnHistogram(getBaseSourceRows(), normalizedColumnId, histogramOptions, {
           readField: readProjectionRowField,
           readFilterCell: options.readFilterCell,
+          readFilterCellStyle: options.readFilterCellStyle,
         })
       }
 
@@ -1138,6 +1142,7 @@ export function createClientRowModel<T>(
         return buildColumnHistogram(rowsForHistogram, normalizedColumnId, histogramOptions, {
           readField: readProjectionRowField,
           readFilterCell: options.readFilterCell,
+          readFilterCellStyle: options.readFilterCellStyle,
         })
       }
 
@@ -1148,6 +1153,7 @@ export function createClientRowModel<T>(
         {
           readField: readProjectionRowField,
           readFilterCell: options.readFilterCell,
+          readFilterCellStyle: options.readFilterCellStyle,
         },
       )
     },

@@ -45,6 +45,7 @@ export interface FilterMenuState {
 
 export interface FilterStateSnapshot {
 	columnFilters: Record<string, FilterColumnEntry>
+	columnStyleFilters?: Record<string, FilterColumnStyleEntry>
 	advancedFilters: Record<string, FilterCondition>
 	advancedExpression?: AdvancedFilterExpressionNode | null
 }
@@ -60,6 +61,12 @@ export interface FilterColumnPredicateEntry {
 	value?: unknown
 	value2?: unknown
 	caseSensitive?: boolean
+}
+
+export interface FilterColumnStyleEntry {
+	kind: "styleValueSet"
+	styleKey: string
+	tokens: string[]
 }
 
 export type FilterColumnEntry = string[] | FilterColumnValueSetEntry | FilterColumnPredicateEntry

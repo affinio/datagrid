@@ -85,6 +85,8 @@ export type {
   DataGridColumnFilterSnapshotEntry,
   DataGridColumnPredicateFilter,
   DataGridColumnPredicateOperator,
+  DataGridColumnStyleFilter,
+  DataGridColumnStyleValueSetFilter,
   DataGridColumnValueSetFilter,
   DataGridFilterClause,
   DataGridFilterSnapshot,
@@ -110,6 +112,11 @@ export {
 
 export type DataGridRowId = string | number
 export type DataGridRowIdResolver<T = unknown> = (row: T, index: number) => DataGridRowId
+export type DataGridFilterCellStyleReader<T = unknown> = (
+  rowNode: DataGridRowNode<T>,
+  columnKey: string,
+  styleKey: string,
+) => unknown
 export interface DataGridColumnHistogramEntry {
   token: string
   value: unknown
@@ -122,6 +129,7 @@ export type DataGridColumnHistogram = readonly DataGridColumnHistogramEntry[]
 export interface DataGridColumnHistogramOptions {
   scope?: "filtered" | "sourceAll"
   ignoreSelfFilter?: boolean
+  styleKey?: string
   limit?: number
   orderBy?: "countDesc" | "valueAsc"
 }

@@ -174,6 +174,12 @@ export type DataGridFilterCellReader<TRow = unknown> = DataGridBivariantCallback
   columnKey: string,
 ], unknown>
 
+export type DataGridFilterCellStyleReader<TRow = unknown> = DataGridBivariantCallback<[
+  row: DataGridRowNode<TRow>,
+  columnKey: string,
+  styleKey: string,
+], unknown>
+
 export type DataGridCellClassResolver<TRow = unknown> = DataGridBivariantCallback<[
   row: DataGridRowNode<TRow>,
   rowIndex: number,
@@ -194,6 +200,10 @@ export function defineDataGridSelectionCellReader<TRow = unknown>() {
 
 export function defineDataGridFilterCellReader<TRow = unknown>() {
   return <TReader extends DataGridFilterCellReader<TRow>>(reader: TReader): TReader => reader
+}
+
+export function defineDataGridFilterCellStyleReader<TRow = unknown>() {
+  return <TReader extends DataGridFilterCellStyleReader<TRow>>(reader: TReader): TReader => reader
 }
 
 export function defineDataGridCellClassResolver<TRow = unknown>() {
@@ -672,6 +682,10 @@ const dataGridProps = {
     type: Function as PropType<DataGridFilterCellReader | undefined>,
     default: undefined,
   },
+  readFilterCellStyle: {
+    type: Function as PropType<DataGridFilterCellStyleReader | undefined>,
+    default: undefined,
+  },
   cellClass: {
     type: Function as PropType<DataGridCellClassResolver | undefined>,
     default: undefined,
@@ -724,6 +738,7 @@ export type DataGridProps<TRow = unknown> = Omit<
   | "placeholderRows"
   | "readSelectionCell"
   | "readFilterCell"
+  | "readFilterCellStyle"
   | "cellClass"
   | "cellStyle"
   | "isCellEditable"
@@ -738,6 +753,7 @@ export type DataGridProps<TRow = unknown> = Omit<
   placeholderRows?: DataGridPlaceholderRowsProp<TRow> | undefined
   readSelectionCell?: DataGridSelectionCellReader<TRow> | undefined
   readFilterCell?: DataGridFilterCellReader<TRow> | undefined
+  readFilterCellStyle?: DataGridFilterCellStyleReader<TRow> | undefined
   cellClass?: DataGridCellClassResolver<TRow> | undefined
   cellStyle?: DataGridCellStyleResolver<TRow> | undefined
   isCellEditable?: DataGridCellEditablePredicate<TRow> | undefined
@@ -882,12 +898,15 @@ const DataGridRuntimeComponent = defineComponent({
       )
     })
     const resolvedAppClientRowModelOptions = computed<DataGridAppClientRowModelOptions<unknown> | undefined>(() => {
-      if (!resolvedReadFilterCell.value) {
+      const resolvedReadFilterCellStyle = props.readFilterCellStyle
+        ?? props.clientRowModelOptions?.readFilterCellStyle
+      if (!resolvedReadFilterCell.value && !resolvedReadFilterCellStyle) {
         return props.clientRowModelOptions
       }
       return {
         ...(props.clientRowModelOptions ?? {}),
         readFilterCell: resolvedReadFilterCell.value as DataGridAppClientRowModelOptions<unknown>["readFilterCell"],
+        readFilterCellStyle: resolvedReadFilterCellStyle as DataGridAppClientRowModelOptions<unknown>["readFilterCellStyle"],
       }
     })
     const resolvedClientRowModelOptions = computed(() => {

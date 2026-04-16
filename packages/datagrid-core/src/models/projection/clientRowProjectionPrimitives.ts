@@ -5,6 +5,7 @@ import type {
   DataGridColumnHistogramEntry,
   DataGridColumnHistogramOptions,
   DataGridColumnPredicateFilter,
+  DataGridColumnStyleFilter,
   DataGridFilterSnapshot,
   DataGridRowNode,
   DataGridSortState,
@@ -22,12 +23,25 @@ export type DataGridFilterCellValueReader<T> = (
   columnKey: string,
 ) => unknown
 
+export type DataGridFilterCellStyleValueReader<T> = (
+  rowNode: DataGridRowNode<T>,
+  columnKey: string,
+  styleKey: string,
+) => unknown
+
 export interface ResolveDataGridFilterCellValueOptions<T> {
   rowNode: DataGridRowNode<T>
   columnKey: string
   field?: string
   readFilterCell?: DataGridFilterCellValueReader<T>
   readField?: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown
+}
+
+export interface ResolveDataGridFilterCellStyleValueOptions<T> {
+  rowNode: DataGridRowNode<T>
+  columnKey: string
+  styleKey: string
+  readFilterCellStyle?: DataGridFilterCellStyleValueReader<T>
 }
 
 function readByPath(value: unknown, path: string): unknown {
@@ -79,6 +93,15 @@ export function resolveDataGridFilterCellValue<T>(
   }
   const readField = options.readField ?? readRowField
   return readField(options.rowNode, options.columnKey, options.field)
+}
+
+export function resolveDataGridFilterCellStyleValue<T>(
+  options: ResolveDataGridFilterCellStyleValueOptions<T>,
+): unknown {
+  if (typeof options.readFilterCellStyle !== "function") {
+    return undefined
+  }
+  return options.readFilterCellStyle(options.rowNode, options.columnKey, options.styleKey)
 }
 
 export function normalizeText(value: unknown): string {
@@ -172,12 +195,63 @@ function normalizeColumnFilterEntries(
   return normalized
 }
 
+function normalizeStyleValueTokenForLookup(token: string): string {
+  if (token.startsWith("string:")) {
+    return `string:${token.slice("string:".length).toLowerCase()}`
+  }
+  return token
+}
+
+function normalizeColumnStyleFilterEntries(
+  columnStyleFilters: Record<string, DataGridColumnStyleFilter>,
+): Array<{
+  key: string
+  styleKey: string
+  valueTokenSet: Set<string>
+}> {
+  const normalized: Array<{
+    key: string
+    styleKey: string
+    valueTokenSet: Set<string>
+  }> = []
+  for (const [rawKey, rawEntry] of Object.entries(columnStyleFilters ?? {})) {
+    const key = rawKey.trim()
+    if (!key || !rawEntry || rawEntry.kind !== "styleValueSet") {
+      continue
+    }
+    const styleKey = String(rawEntry.styleKey ?? "").trim()
+    if (!styleKey) {
+      continue
+    }
+    const seen = new Set<string>()
+    const valueTokens: string[] = []
+    for (const rawToken of rawEntry.tokens ?? []) {
+      const token = normalizeStyleValueTokenForLookup(String(rawToken ?? ""))
+      if (!token || seen.has(token)) {
+        continue
+      }
+      seen.add(token)
+      valueTokens.push(token)
+    }
+    if (valueTokens.length === 0) {
+      continue
+    }
+    normalized.push({
+      key,
+      styleKey,
+      valueTokenSet: new Set(valueTokens),
+    })
+  }
+  return normalized
+}
+
 export function createFilterPredicate<T>(
   filterModel: DataGridFilterSnapshot | null,
   options: {
     ignoreColumnFilterKey?: string
     readRowField?: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown
     readFilterCell?: DataGridFilterCellValueReader<T>
+    readFilterCellStyle?: DataGridFilterCellStyleValueReader<T>
   } = {},
 ): (rowNode: DataGridRowNode<T>) => boolean {
   if (!filterModel) {
@@ -189,6 +263,7 @@ export function createFilterPredicate<T>(
     : ""
   const readField = options.readRowField ?? readRowField
   const readFilterCell = options.readFilterCell
+  const readFilterCellStyle = options.readFilterCellStyle
 
   const effectiveFilterModel = (() => {
     if (!ignoredColumnKey) {
@@ -221,11 +296,24 @@ export function createFilterPredicate<T>(
       }
       nextAdvancedFilters[rawKey] = advancedFilter
     }
+    const nextColumnStyleFilters: Record<string, DataGridColumnStyleFilter> = {}
+    for (const [rawKey, styleFilter] of Object.entries(filterModel.columnStyleFilters ?? {})) {
+      if (rawKey.trim() === ignoredColumnKey) {
+        changed = true
+        continue
+      }
+      nextColumnStyleFilters[rawKey] = {
+        kind: "styleValueSet",
+        styleKey: styleFilter.styleKey,
+        tokens: [...styleFilter.tokens],
+      }
+    }
     if (!changed) {
       return filterModel
     }
     return {
       columnFilters: nextColumnFilters,
+      columnStyleFilters: nextColumnStyleFilters,
       advancedFilters: nextAdvancedFilters,
       advancedExpression: filterModel.advancedExpression ?? null,
     } satisfies DataGridFilterSnapshot
@@ -234,13 +322,10 @@ export function createFilterPredicate<T>(
   const columnFilters = normalizeColumnFilterEntries(
     (effectiveFilterModel.columnFilters ?? {}) as Record<string, DataGridColumnFilterSnapshotEntry>,
   ).map(entry => [entry.key, entry] as const)
+  const columnStyleFilters = normalizeColumnStyleFilterEntries(
+    (effectiveFilterModel.columnStyleFilters ?? {}) as Record<string, DataGridColumnStyleFilter>,
+  )
   const advancedExpression = resolveAdvancedExpression(effectiveFilterModel)
-  const normalizeValueSetTokenForLookup = (token: string): string => {
-    if (token.startsWith("string:")) {
-      return `string:${token.slice("string:".length).toLowerCase()}`
-    }
-    return token
-  }
 
   return (rowNode: DataGridRowNode<T>) => {
     for (const [key, filterEntry] of columnFilters) {
@@ -251,13 +336,26 @@ export function createFilterPredicate<T>(
         readField,
       })
       if (filterEntry.kind === "valueSet") {
-        const candidateToken = normalizeValueSetTokenForLookup(serializeColumnValueToToken(candidate))
+        const candidateToken = normalizeStyleValueTokenForLookup(serializeColumnValueToToken(candidate))
         if (!filterEntry.valueTokenSet?.has(candidateToken)) {
           return false
         }
         continue
       }
       if (filterEntry.predicate && !evaluateColumnPredicateFilter(filterEntry.predicate, candidate)) {
+        return false
+      }
+    }
+
+    for (const filterEntry of columnStyleFilters) {
+      const candidate = resolveDataGridFilterCellStyleValue({
+        rowNode,
+        columnKey: filterEntry.key,
+        styleKey: filterEntry.styleKey,
+        readFilterCellStyle,
+      })
+      const candidateToken = normalizeStyleValueTokenForLookup(serializeColumnValueToToken(candidate))
+      if (!filterEntry.valueTokenSet.has(candidateToken)) {
         return false
       }
     }
@@ -289,6 +387,10 @@ export function hasActiveFilterModel(filterModel: DataGridFilterSnapshot | null)
     }
     return true
   })) {
+    return true
+  }
+  const columnStyleFilters = Object.values(filterModel.columnStyleFilters ?? {})
+  if (columnStyleFilters.some(entry => entry.tokens.length > 0)) {
     return true
   }
   const advancedKeys = Object.keys(filterModel.advancedFilters ?? {})
@@ -381,19 +483,28 @@ export function buildColumnHistogram<T>(
   valueOptions: {
     readField?: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown
     readFilterCell?: DataGridFilterCellValueReader<T>
+    readFilterCellStyle?: DataGridFilterCellStyleValueReader<T>
   } = {},
 ): DataGridColumnHistogram {
   const key = String(columnId ?? "").trim()
+  const styleKey = String(options?.styleKey ?? "").trim()
   const entriesByToken = new Map<string, DataGridColumnHistogramEntry>()
   const readField = valueOptions.readField ?? readRowField
 
   for (const row of rows) {
-    const value = resolveDataGridFilterCellValue({
-      rowNode: row,
-      columnKey: key,
-      readFilterCell: valueOptions.readFilterCell,
-      readField,
-    })
+    const value = styleKey.length > 0
+      ? resolveDataGridFilterCellStyleValue({
+        rowNode: row,
+        columnKey: key,
+        styleKey,
+        readFilterCellStyle: valueOptions.readFilterCellStyle,
+      })
+      : resolveDataGridFilterCellValue({
+        rowNode: row,
+        columnKey: key,
+        readFilterCell: valueOptions.readFilterCell,
+        readField,
+      })
     const token = serializeColumnValueToToken(value)
     const current = entriesByToken.get(token)
     if (current) {
@@ -459,6 +570,16 @@ function normalizeColumnFilterEntryForSignature(
   })
 }
 
+function normalizeColumnStyleFilterEntryForSignature(
+  entry: DataGridColumnStyleFilter,
+): string {
+  return stableSerializeUnknown({
+    kind: "styleValueSet",
+    styleKey: String(entry.styleKey ?? "").trim(),
+    tokens: normalizeFilterValuesForSignature(entry.tokens),
+  })
+}
+
 function serializeFilterModelForSignature(filterModel: DataGridFilterSnapshot | null): string {
   if (!filterModel) {
     return "__none__"
@@ -477,6 +598,14 @@ function serializeFilterModelForSignature(filterModel: DataGridFilterSnapshot | 
     }
     normalizedColumnFilters[key] = normalizeColumnFilterEntryForSignature(entry)
   }
+  const normalizedColumnStyleFilters: Record<string, string> = {}
+  for (const [rawKey, entry] of Object.entries(filterModel.columnStyleFilters ?? {})) {
+    const key = rawKey.trim()
+    if (!key || !String(entry.styleKey ?? "").trim() || entry.tokens.length === 0) {
+      continue
+    }
+    normalizedColumnStyleFilters[key] = normalizeColumnStyleFilterEntryForSignature(entry)
+  }
   const normalizedAdvancedFilters: Record<string, DataGridAdvancedFilter> = {}
   for (const [rawKey, advancedFilter] of Object.entries(filterModel.advancedFilters ?? {})) {
     const key = rawKey.trim()
@@ -487,6 +616,7 @@ function serializeFilterModelForSignature(filterModel: DataGridFilterSnapshot | 
   }
   return stableSerializeUnknown({
     columnFilters: normalizedColumnFilters,
+    columnStyleFilters: normalizedColumnStyleFilters,
     advancedFilters: normalizedAdvancedFilters,
     advancedExpression: resolveAdvancedExpression(filterModel),
   })

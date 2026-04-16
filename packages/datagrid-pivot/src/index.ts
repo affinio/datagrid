@@ -23,6 +23,8 @@ export type {
   DataGridColumnFilterSnapshotEntry,
   DataGridColumnPredicateFilter,
   DataGridColumnPredicateOperator,
+  DataGridColumnStyleFilter,
+  DataGridColumnStyleValueSetFilter,
   DataGridColumnValueSetFilter,
   DataGridColumnPin,
   DataGridFilterClause,
