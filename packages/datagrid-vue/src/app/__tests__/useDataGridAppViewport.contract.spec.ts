@@ -632,7 +632,7 @@ describe("useDataGridAppViewport contract", () => {
     expect(syncRowsInRange).not.toHaveBeenCalled()
   })
 
-  it("reuses cached viewport dimensions during scroll-only RAF commits", () => {
+  it("refreshes viewport dimensions consistently across scroll and RAF commit boundaries", () => {
     const raf = createRafHarness()
     const widthReads = { clientWidth: 0, clientHeight: 0, shellClientWidth: 0 }
     let scrollTop = 0
@@ -708,11 +708,19 @@ describe("useDataGridAppViewport contract", () => {
     scrollLeft = 16
 
     viewport.handleViewportScroll(createScrollEvent(element))
+    expect(widthReads.clientWidth).toBe(2)
+    expect(widthReads.clientHeight).toBe(1)
+    expect(widthReads.shellClientWidth).toBe(1)
+
+    widthReads.clientWidth = 0
+    widthReads.clientHeight = 0
+    widthReads.shellClientWidth = 0
+
     raf.run(getScheduledFrameHandle(raf))
 
-    expect(widthReads.clientWidth).toBe(0)
-    expect(widthReads.clientHeight).toBe(0)
-    expect(widthReads.shellClientWidth).toBe(0)
+    expect(widthReads.clientWidth).toBe(2)
+    expect(widthReads.clientHeight).toBe(1)
+    expect(widthReads.shellClientWidth).toBe(1)
   })
 
   // -------------------------------------------------------------------------

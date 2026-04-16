@@ -26,6 +26,11 @@ export {
 } from "./dataGridRowHeightMetrics"
 
 export {
+  restoreDataGridFocus,
+  type RestoreDataGridFocusOptions,
+} from "./dataGridFocusRestore"
+
+export {
   useDataGridAppClipboard,
   type DataGridAppPasteOptions,
   type DataGridAppPendingClipboardEdge,

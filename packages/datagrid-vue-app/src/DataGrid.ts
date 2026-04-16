@@ -7,6 +7,7 @@ import {
   onBeforeUnmount,
   ref,
   toRef,
+  unref,
   watch,
   type PropType,
   type VNode,
@@ -976,7 +977,27 @@ const DataGridRuntimeComponent = defineComponent({
       return "base"
     })
     const visibleColumns = computed(() => dataGridRef.value?.api.columns.getSnapshot().visibleColumns ?? [])
-    const totalRows = computed(() => dataGridRef.value?.api.rows.getCount() ?? 0)
+    const totalRows = computed(() => {
+      const runtime = dataGridRef.value?.runtime
+      if (!runtime) {
+        return 0
+      }
+      const rowPartition = unref(runtime.rowPartition)
+      return Math.max(0, rowPartition.bodyRowCount + rowPartition.pinnedBottomRows.length)
+    })
+    const resolveSelectionRowAtIndex = (rowIndex: number): DataGridRowNode<unknown> | null => {
+      const runtime = dataGridRef.value?.runtime
+      if (!runtime) {
+        return null
+      }
+      const rowPartition = unref(runtime.rowPartition)
+      const bodyRowCount = rowPartition.bodyRowCount
+      if (rowIndex < bodyRowCount) {
+        return runtime.getBodyRowAtIndex(rowIndex)
+      }
+      const pinnedBottomIndex = rowIndex - bodyRowCount
+      return rowPartition.pinnedBottomRows[pinnedBottomIndex] ?? null
+    }
     const selectionOptions = {
       mode: computed(() => inferredMode.value),
       resolveRuntime: () => dataGridRef.value,
@@ -984,6 +1005,7 @@ const DataGridRuntimeComponent = defineComponent({
       totalRows,
       showRowSelection: computed(() => props.rowSelection),
       readSelectionCell: props.readSelectionCell,
+      resolveSelectionRowAtIndex,
     } as Parameters<typeof useDataGridAppSelection<unknown>>[0]
 
     const {

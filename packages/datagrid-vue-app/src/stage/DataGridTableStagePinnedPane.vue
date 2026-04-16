@@ -56,6 +56,7 @@
             class="row-resize-handle"
             aria-label="Resize rows"
             @mousedown.stop.prevent="rows.startRowResize($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+            @click.stop.prevent
             @dblclick.stop.prevent="rows.autosizeRow($event, row, renderApi.viewportRowOffset(row, rowOffset))"
           />
         </div>

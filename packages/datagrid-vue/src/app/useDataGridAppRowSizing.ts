@@ -20,6 +20,7 @@ export interface UseDataGridAppRowSizingResult<TRow> {
   measureVisibleRowHeights: () => void
   startRowResize: (event: MouseEvent, row: DataGridRowNode<TRow>, rowOffset: number) => void
   autosizeRow: (event: MouseEvent, row: DataGridRowNode<TRow>, rowOffset: number) => void
+  consumeRecentRowResizeInteraction: () => boolean
   dispose: () => void
 }
 
@@ -30,6 +31,7 @@ export function useDataGridAppRowSizing<TRow>(
   const rowHeightRenderRevision = ref(0)
   const measuringRowKey = ref<string | null>(null)
   const rowResizeState = ref<{ rowKey: string; startY: number; startBase: number } | null>(null)
+  const suppressNextRowIndexClick = ref(false)
   const autoMeasuredRowIndexes = new Set<number>()
   const manualAutoRowHeightFloors = new Map<number, number>()
 
@@ -214,6 +216,7 @@ export function useDataGridAppRowSizing<TRow>(
     if (options.mode.value !== "base") {
       return
     }
+    suppressNextRowIndexClick.value = true
     const rowIndex = options.viewportRowStart.value + rowOffset
     const rowKey = String(rowIndex)
     rowResizeState.value = {
@@ -231,6 +234,7 @@ export function useDataGridAppRowSizing<TRow>(
     if (options.mode.value !== "base") {
       return
     }
+    suppressNextRowIndexClick.value = true
     const rowIndex = options.viewportRowStart.value + rowOffset
     if (options.rowHeightMode.value === "auto") {
       manualAutoRowHeightFloors.delete(rowIndex)
@@ -252,12 +256,21 @@ export function useDataGridAppRowSizing<TRow>(
     })
   }
 
+  const consumeRecentRowResizeInteraction = (): boolean => {
+    if (!suppressNextRowIndexClick.value) {
+      return false
+    }
+    suppressNextRowIndexClick.value = false
+    return true
+  }
+
   return {
     rowStyle,
     isRowAutosizeProbe,
     measureVisibleRowHeights,
     startRowResize,
     autosizeRow,
+    consumeRecentRowResizeInteraction,
     dispose: () => {
       stopRowResize()
       clearAutoMeasuredRowHeights()

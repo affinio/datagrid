@@ -198,6 +198,7 @@ function createStageProps(
       rowIndexLabel: () => "1",
       startRowResize: () => undefined,
       autosizeRow: () => undefined,
+      consumeRecentRowResizeInteraction: () => false,
     },
     selection: {
       selectionRange: options?.selectionRange ?? { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
@@ -1632,6 +1633,35 @@ describe("DataGridTableStage contract", () => {
     await indexCell.trigger("click", { shiftKey: true })
 
     expect(handleRowIndexClick).toHaveBeenCalledWith(expect.objectContaining({ rowId: "r1" }), 0, true)
+
+    wrapper.unmount()
+  })
+
+  it("does not route row resize handle clicks to row index selection", async () => {
+    const startRowResize = vi.fn()
+    const handleRowIndexClick = vi.fn()
+    const baseProps = createStageProps(() => false)
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...baseProps,
+        rows: {
+          ...baseProps.rows,
+          startRowResize,
+          handleRowIndexClick,
+          consumeRecentRowResizeInteraction: () => true,
+        },
+      },
+    })
+
+    const resizeHandle = wrapper.find(".row-resize-handle")
+    expect(resizeHandle.exists()).toBe(true)
+
+    await resizeHandle.trigger("mousedown", { clientY: 32 })
+    await resizeHandle.trigger("click")
+
+    expect(startRowResize).toHaveBeenCalledTimes(1)
+    expect(handleRowIndexClick).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

@@ -7,6 +7,7 @@ import {
 } from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type { DataGridAppMode } from "./useDataGridAppControls"
+import { restoreDataGridFocus } from "./dataGridFocusRestore"
 
 interface DataGridAppEditingCell {
   rowId: string | number
@@ -184,38 +185,29 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   }
 
   const focusInlineEditor = (): void => {
-    void nextTick(() => {
-      const applyFocus = (): void => {
-        const editor = resolveActiveInlineEditor()
-        if (!editor) {
-          return
-        }
-        editor.focus({ preventScroll: true })
-        if (editor instanceof HTMLInputElement) {
-          if (editor.type === "date" || editor.type === "datetime-local") {
-            tryShowNativePicker(editor)
-            return
-          }
-          const caretPosition = editor.value.length
-          editor.setSelectionRange(caretPosition, caretPosition)
-          return
-        }
-        if (editor instanceof HTMLSelectElement) {
+    const applyFocus = (): void => {
+      const editor = resolveActiveInlineEditor()
+      if (!editor) {
+        return
+      }
+      editor.focus({ preventScroll: true })
+      if (editor instanceof HTMLInputElement) {
+        if (editor.type === "date" || editor.type === "datetime-local") {
           tryShowNativePicker(editor)
+          return
         }
+        const caretPosition = editor.value.length
+        editor.setSelectionRange(caretPosition, caretPosition)
+        return
       }
-      applyFocus()
-      if (typeof window !== "undefined") {
-        window.requestAnimationFrame(() => {
-          applyFocus()
-          window.requestAnimationFrame(() => {
-            applyFocus()
-          })
-        })
-        window.setTimeout(() => {
-          applyFocus()
-        }, 0)
+      if (editor instanceof HTMLSelectElement) {
+        tryShowNativePicker(editor)
       }
+    }
+
+    void restoreDataGridFocus(applyFocus, {
+      animationFramePasses: 2,
+      includeTimeoutPass: true,
     })
   }
 
@@ -227,10 +219,19 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     editingCellEditorMode.value = "none"
   }
 
+  const restoreViewportFocus = (): void => {
+    void restoreDataGridFocus(() => {
+      options.bodyViewportRef.value?.focus({ preventScroll: true })
+    }, {
+      includeTimeoutPass: true,
+    })
+  }
+
   const focusAfterInlineEdit = (
     rowId: string | number,
     columnKey: string,
     target: DataGridAppInlineEditCommitTarget,
+    settings: { restoreViewportFocus?: boolean } = {},
   ): void => {
     const columnIndex = options.visibleColumns.value.findIndex(column => column.key === columnKey)
     if (columnIndex < 0) {
@@ -324,6 +325,9 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     })
     void nextTick(() => {
       options.ensureActiveCellVisible(nextCoord.rowIndex, nextCoord.columnIndex)
+      if (settings.restoreViewportFocus === true) {
+        restoreViewportFocus()
+      }
     })
   }
 
@@ -399,8 +403,14 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         ? (targetOrEvent ? "next" : "stay")
         : "stay"
     const rowIndex = resolveBodyRowIndexById(currentEditingCell.rowId)
+    const backingRowNode = rowIndex >= 0 ? options.runtime.api.rows.get(rowIndex) ?? null : null
     let rowNode = rowIndex >= 0 ? getBodyRowAtIndex(rowIndex) : null
-    const beforeSnapshot = options.captureRowsSnapshot()
+    const requiresFullSnapshot = rowIndex < 0
+      || !backingRowNode
+      || backingRowNode.rowId !== currentEditingCell.rowId
+    const beforeSnapshot = !requiresFullSnapshot && typeof options.captureRowsSnapshotForRowIds === "function"
+      ? options.captureRowsSnapshotForRowIds([currentEditingCell.rowId])
+      : options.captureRowsSnapshot()
     if (rowIndex >= 0 && typeof options.ensureEditableRowAtIndex === "function") {
       rowNode = options.ensureEditableRowAtIndex(rowIndex) ?? rowNode
     }
@@ -425,7 +435,12 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     clearInlineEdit()
     suppressNextBlurCommit.value = false
     if (target !== "none") {
-      focusAfterInlineEdit(resolvedRowId, currentEditingCell.columnKey, target)
+      focusAfterInlineEdit(resolvedRowId, currentEditingCell.columnKey, target, {
+        restoreViewportFocus: target === "next"
+          || target === "previous"
+          || target === "below"
+          || target === "above",
+      })
     }
   }
 
@@ -436,7 +451,9 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     if (!currentEditingCell) {
       return
     }
-    focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, "stay")
+    focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, "stay", {
+      restoreViewportFocus: true,
+    })
   }
 
   const handleEditorBlur = (): void => {

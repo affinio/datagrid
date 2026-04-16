@@ -232,6 +232,9 @@ export function useDataGridTableStageRuntime<
     cloneRowData: options.cloneRowData,
   })
   const totalSelectableRows = computed(() => Math.max(0, placeholderRows.totalVisualRows.value))
+  const totalInteractiveRows = computed(() => {
+    return Math.max(0, totalSelectableRows.value + options.runtime.rowPartition.value.pinnedBottomRows.length)
+  })
   const effectiveIndexColumnWidth = computed(() => (showRowIndex.value ? INDEX_COLUMN_WIDTH : 0))
   const columnService = useDataGridTableStageColumns<TRow>({
     runtime: options.runtime,
@@ -355,6 +358,17 @@ export function useDataGridTableStageRuntime<
 
   const selectableRuntime = placeholderRows.visualRuntime
   const resolveSelectableRowIndexById = selectableRuntime.resolveBodyRowIndexById
+  const resolveSelectableRowAtIndex = (rowIndex: number): DataGridTableRow<TRow> | null => {
+    if (!Number.isFinite(rowIndex)) {
+      return null
+    }
+    const normalizedIndex = Math.max(0, Math.trunc(rowIndex))
+    if (normalizedIndex < totalSelectableRows.value) {
+      return selectableRuntime.getBodyRowAtIndex(normalizedIndex)
+    }
+    const pinnedBottomIndex = normalizedIndex - totalSelectableRows.value
+    return options.runtime.rowPartition.value.pinnedBottomRows[pinnedBottomIndex] ?? null
+  }
 
   const {
     rowStyle,
@@ -362,6 +376,7 @@ export function useDataGridTableStageRuntime<
     measureVisibleRowHeights,
     startRowResize,
     autosizeRow,
+    consumeRecentRowResizeInteraction,
     dispose: disposeRowSizing,
   } = useDataGridAppRowSizing<TRow>({
     mode: options.mode,
@@ -376,10 +391,19 @@ export function useDataGridTableStageRuntime<
 
   const selectionController = useDataGridAppCellSelection<TRow>({
     mode: options.mode,
-    runtime: selectableRuntime as never,
-    totalRows: totalSelectableRows,
+    runtime: {
+      api: selectableRuntime.api,
+      getBodyRowAtIndex: resolveSelectableRowAtIndex,
+    } as never,
+    totalRows: totalInteractiveRows,
     visibleColumns: orderedVisibleColumns,
     viewportRowStart,
+    resolveRowIndex: (rowOffset: number) => {
+      const row = displayRows.value[rowOffset]
+      return row && Number.isFinite(row.displayIndex)
+        ? Math.max(0, Math.trunc(row.displayIndex))
+        : viewportRowStart.value + rowOffset
+    },
     selectionSnapshot: options.selectionSnapshot,
     selectionAnchor: options.selectionAnchor as never,
     isEditingCell: (row, columnKey): boolean => isEditingCellForSelection(row, columnKey),
@@ -1006,6 +1030,7 @@ export function useDataGridTableStageRuntime<
     handleResizeDoubleClick,
     startRowResize,
     autosizeRow,
+    consumeRecentRowResizeInteraction,
     isCellSelected: stageServices.visualSelection.isCellSelected,
     isSelectionAnchorCell: stageServices.visualSelection.isSelectionAnchorCell,
     shouldHighlightSelectedCell: stageServices.visualSelection.shouldHighlightSelectedCell,

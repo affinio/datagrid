@@ -150,6 +150,7 @@ import {
   useDataGridLinkedPaneScrollSync,
   useDataGridManagedWheelScroll,
 } from "@affino/datagrid-vue/advanced"
+import { restoreDataGridFocus } from "@affino/datagrid-vue/app"
 import {
   buildDataGridChromeRenderModel,
   type DataGridChromePaneModel,
@@ -1559,6 +1560,9 @@ function handleRowClickSafe(row: TableRow): void {
 }
 
 function handleRowIndexClickSafe(row: TableRow, rowOffset: number, event: MouseEvent): void {
+  if (rows.value.consumeRecentRowResizeInteraction?.() === true) {
+    return
+  }
   const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   target?.focus({ preventScroll: true })
   rows.value.handleRowIndexClick?.(row, rowOffset, event.shiftKey)
@@ -1794,21 +1798,13 @@ function focusVisibleAnchorCell(): void {
   if (cellElement) {
     cellElement.focus({ preventScroll: true })
     return
-    }
+  }
   bodyViewportEl.value?.focus({ preventScroll: true })
 }
 
-  function restoreAnchorCellFocus(): void {
-    focusVisibleAnchorCell()
-    void nextTick(() => {
-      focusVisibleAnchorCell()
-      if (typeof window !== "undefined") {
-        window.requestAnimationFrame(() => {
-          focusVisibleAnchorCell()
-        })
-      }
-    })
-  }
+function restoreAnchorCellFocus(): void {
+  void restoreDataGridFocus(focusVisibleAnchorCell)
+}
 
 function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
   bodyViewportEl.value = resolveElementRef(value)

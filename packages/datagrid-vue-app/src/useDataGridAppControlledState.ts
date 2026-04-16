@@ -264,9 +264,6 @@ export function useDataGridAppControlledState(
     if (requiredColumnKeys.size === 0) {
       return true
     }
-    if (options.props.columns.length > 0) {
-      return true
-    }
     for (const columnKey of requiredColumnKeys) {
       if (!runtimeColumnKeys.has(columnKey)) {
         return false

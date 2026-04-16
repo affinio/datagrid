@@ -135,6 +135,7 @@ export interface DataGridTableStageRowsSection<TRow extends Record<string, unkno
   rowIndexLabel: (row: DataGridTableRow<TRow>, rowOffset: number) => string
   startRowResize: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
   autosizeRow: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
+  consumeRecentRowResizeInteraction?: () => boolean
 }
 
 export interface DataGridTableStageSelectionSection {

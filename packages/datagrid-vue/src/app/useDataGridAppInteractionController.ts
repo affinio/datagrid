@@ -37,6 +37,7 @@ import {
   useDataGridAppFill,
   type DataGridAppAppliedFillSession,
 } from "./useDataGridAppFill"
+import { restoreDataGridFocus } from "./dataGridFocusRestore"
 import type {
   DataGridAppCellCoord,
   DataGridAppSelectionAnchorLike,
@@ -175,6 +176,12 @@ export function useDataGridAppInteractionController<
 >(
   options: UseDataGridAppInteractionControllerOptions<TRow, TSnapshot>,
 ): UseDataGridAppInteractionControllerResult<TRow> {
+  const resolveRowIndex = (row: DataGridRowNode<TRow>, rowOffset: number): number => {
+    return Number.isFinite(row.displayIndex)
+      ? Math.max(0, Math.trunc(row.displayIndex))
+      : options.viewportRowStart.value + rowOffset
+  }
+
   const isContextMenuVisible = () => options.isContextMenuVisible?.() === true
   const closeContextMenu = () => {
     options.closeContextMenu?.()
@@ -356,15 +363,7 @@ export function useDataGridAppInteractionController<
       focusViewport()
     }
 
-    applyFocus()
-    void nextTick(() => {
-      applyFocus()
-      if (typeof window !== "undefined") {
-        window.requestAnimationFrame(() => {
-          applyFocus()
-        })
-      }
-    })
+    void restoreDataGridFocus(applyFocus)
   }
 
   const isPrintableEditingKey = (event: KeyboardEvent): boolean => {
@@ -1464,7 +1463,11 @@ export function useDataGridAppInteractionController<
       pendingDragPointerStart.value = pointer
     },
     applyCellSelection: (coord, extend, fallbackAnchor, additive) => {
-      options.applyCellSelectionByCoord(coord, extend, fallbackAnchor, additive)
+      if (additive) {
+        options.applyCellSelectionByCoord(coord, extend, fallbackAnchor, true)
+        return
+      }
+      options.applyCellSelectionByCoord(coord, extend, fallbackAnchor)
     },
     startInteractionAutoScroll: () => {
       pointerAutoScroll.startInteractionAutoScroll()
@@ -1638,7 +1641,7 @@ export function useDataGridAppInteractionController<
       return
     }
     const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-    const rowIndex = options.viewportRowStart.value + rowOffset
+    const rowIndex = resolveRowIndex(row, rowOffset)
     const coord = options.normalizeCellCoord({
       rowIndex,
       columnIndex,
@@ -1696,7 +1699,7 @@ export function useDataGridAppInteractionController<
     rowOffset: number,
     columnIndex: number,
   ): void => {
-    const rowIndex = options.viewportRowStart.value + rowOffset
+    const rowIndex = resolveRowIndex(row, rowOffset)
     if (isFillDragging.value && event.key === "Escape") {
       event.preventDefault()
       stopFillSelection(false)

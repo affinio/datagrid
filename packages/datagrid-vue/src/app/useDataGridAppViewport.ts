@@ -1039,6 +1039,22 @@ export function useDataGridAppViewport<TRow>(
     const element = event.target as HTMLElement
     pendingViewportScrollTop = element.scrollTop
     pendingViewportScrollLeft = element.scrollLeft
+    const shouldRefreshDimensions = cachedViewportElement !== element
+      || cachedViewportDimensions == null
+      || cachedViewportDimensions.clientWidth <= 0
+      || cachedViewportDimensions.clientHeight <= 0
+      || cachedViewportDimensions.shellClientWidth <= 0
+
+    if (shouldRefreshDimensions) {
+      const dimensions = captureViewportDimensions(element)
+      if (viewportClientWidth.value !== dimensions.clientWidth) {
+        viewportClientWidth.value = dimensions.clientWidth
+      }
+      if (viewportShellClientWidth.value !== dimensions.shellClientWidth) {
+        viewportShellClientWidth.value = dimensions.shellClientWidth
+      }
+      cacheViewportDimensions(element, dimensions)
+    }
     syncHeaderScrollLeftFromBody(pendingViewportScrollLeft)
     scheduleViewportCommit({
       forceVisibleRows: false,

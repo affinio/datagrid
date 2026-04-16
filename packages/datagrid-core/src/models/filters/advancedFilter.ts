@@ -481,13 +481,15 @@ export function cloneDataGridFilterSnapshot(
     return null
   }
 
+  const clonedColumnStyleFilters = Object.fromEntries(
+    Object.entries(input.columnStyleFilters ?? {}).map(([key, entry]) => [key, cloneColumnStyleFilterEntry(entry)]),
+  )
+
   return {
     columnFilters: Object.fromEntries(
       Object.entries(input.columnFilters ?? {}).map(([key, entry]) => [key, cloneColumnFilterEntry(entry)]),
     ),
-    columnStyleFilters: Object.fromEntries(
-      Object.entries(input.columnStyleFilters ?? {}).map(([key, entry]) => [key, cloneColumnStyleFilterEntry(entry)]),
-    ),
+    ...(input.columnStyleFilters != null ? { columnStyleFilters: clonedColumnStyleFilters } : {}),
     advancedFilters: Object.fromEntries(
       Object.entries(input.advancedFilters ?? {}).map(([key, condition]) => [
         key,

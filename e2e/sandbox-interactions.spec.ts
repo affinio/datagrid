@@ -79,9 +79,10 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(editor).toBeVisible({ timeout: 20_000 })
     await editor.press("Tab")
 
-    await expect.poll(async () => activeGridCellMeta(page)).toMatchObject({
+    await expect.poll(async () => selectionAnchorMeta(page)).toMatchObject({
       rowIndex: sourceRowIndex,
       columnKey: "start",
+      focusOwnedByGrid: true,
     })
   })
 })
@@ -109,14 +110,19 @@ async function cellTextByViewportCoord(page: Page, rowIndex: number, columnIndex
   return (await cell.textContent())?.trim() ?? ""
 }
 
-async function activeGridCellMeta(page: Page): Promise<{ rowIndex: string | null; columnIndex: string | null; columnKey: string | null }> {
+async function selectionAnchorMeta(page: Page): Promise<{
+  rowIndex: string | null
+  columnIndex: string | null
+  columnKey: string | null
+  focusOwnedByGrid: boolean
+}> {
   return await page.evaluate(() => {
-    const activeElement = document.activeElement
-    const cell = activeElement?.closest?.(".grid-cell")
+    const anchorCell = document.querySelector<HTMLElement>(".grid-cell--selection-anchor")
     return {
-      rowIndex: cell?.getAttribute("data-row-index") ?? null,
-      columnIndex: cell?.getAttribute("data-column-index") ?? null,
-      columnKey: cell?.getAttribute("data-column-key") ?? null,
+      rowIndex: anchorCell?.getAttribute("data-row-index") ?? null,
+      columnIndex: anchorCell?.getAttribute("data-column-index") ?? null,
+      columnKey: anchorCell?.getAttribute("data-column-key") ?? null,
+      focusOwnedByGrid: document.activeElement?.classList.contains("grid-body-viewport") === true,
     }
   })
 }

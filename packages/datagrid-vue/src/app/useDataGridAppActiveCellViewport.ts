@@ -1,5 +1,6 @@
-import { nextTick, type Ref } from "vue"
+import { type Ref } from "vue"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-core"
+import { restoreDataGridFocus } from "./dataGridFocusRestore"
 
 export interface UseDataGridAppActiveCellViewportOptions {
   bodyViewportRef: Ref<HTMLElement | null>
@@ -182,25 +183,14 @@ export function useDataGridAppActiveCellViewport(
     }
   }
 
-  const waitForNextAnimationFrame = async (): Promise<void> => {
-    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
-      return
-    }
-    await new Promise<void>(resolve => {
-      window.requestAnimationFrame(() => resolve())
-    })
-  }
-
   const focusResolvedCellWithRetry = async (
     viewport: HTMLElement,
     rowIndex: number,
     columnIndex: number,
   ): Promise<void> => {
-    focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
-    await nextTick()
-    focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
-    await waitForNextAnimationFrame()
-    focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
+    await restoreDataGridFocus(() => {
+      focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
+    })
   }
 
   const ensureKeyboardActiveCellVisible = (rowIndex: number, columnIndex: number): void => {
@@ -209,7 +199,7 @@ export function useDataGridAppActiveCellViewport(
       return
     }
     const targetColumn = options.visibleColumns.value[columnIndex]
-    ensureEstimatedRowVisible(viewport, rowIndex)
+    ensureEstimatedRowVisible(viewport, rowIndex, 0)
 
     if (targetColumn?.pin === "left" || targetColumn?.pin === "right") {
       focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
@@ -240,7 +230,9 @@ export function useDataGridAppActiveCellViewport(
       }
     }
 
-    focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
+    void restoreDataGridFocus(() => {
+      focusResolvedCellOrViewport(viewport, rowIndex, columnIndex)
+    })
   }
 
   const revealCellInComfortZone = async (rowIndex: number, columnIndex: number): Promise<void> => {

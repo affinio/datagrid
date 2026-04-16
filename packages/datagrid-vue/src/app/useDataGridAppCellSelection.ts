@@ -27,6 +27,7 @@ export interface UseDataGridAppCellSelectionOptions<TRow> {
   totalRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   viewportRowStart: Ref<number>
+  resolveRowIndex?: (rowOffset: number) => number
   selectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   selectionAnchor: Ref<GridSelectionPointLike<DataGridRowId> | null>
   isEditingCell: (row: DataGridRowNode<TRow>, columnKey: string) => boolean
@@ -66,6 +67,13 @@ export interface UseDataGridAppCellSelectionResult<TRow> {
 export function useDataGridAppCellSelection<TRow>(
   options: UseDataGridAppCellSelectionOptions<TRow>,
 ): UseDataGridAppCellSelectionResult<TRow> {
+  const resolveRowIndex = (rowOffset: number): number => {
+    if (typeof options.resolveRowIndex === "function") {
+      return options.resolveRowIndex(rowOffset)
+    }
+    return options.viewportRowStart.value + rowOffset
+  }
+
   const supportsCellSelectionMode = (): boolean => {
     return options.mode.value === "base" || options.mode.value === "tree" || options.mode.value === "worker"
   }
@@ -375,11 +383,19 @@ export function useDataGridAppCellSelection<TRow>(
     if (options.isEditingCell(row, options.visibleColumns.value[columnIndex]?.key ?? "")) {
       return
     }
-    applyCellSelectionByCoord({
-      rowIndex: options.viewportRowStart.value + rowOffset,
+    const rowIndex = Number.isFinite(row.displayIndex)
+      ? Math.max(0, Math.trunc(row.displayIndex))
+      : resolveRowIndex(rowOffset)
+    const coord = {
+      rowIndex,
       columnIndex,
       rowId: row.rowId ?? null,
-    }, extend, undefined, additive)
+    }
+    if (additive) {
+      applyCellSelectionByCoord(coord, extend, undefined, true)
+      return
+    }
+    applyCellSelectionByCoord(coord, extend)
   }
 
   const clearCellSelection = (): void => {
@@ -393,7 +409,7 @@ export function useDataGridAppCellSelection<TRow>(
     if (ranges.length === 0) {
       return false
     }
-    const rowIndex = options.viewportRowStart.value + rowOffset
+    const rowIndex = resolveRowIndex(rowOffset)
     return ranges.some(range => (
       rowIndex >= range.startRow
       && rowIndex <= range.endRow
@@ -407,7 +423,7 @@ export function useDataGridAppCellSelection<TRow>(
     if (!anchor) {
       return false
     }
-    const rowIndex = options.viewportRowStart.value + rowOffset
+    const rowIndex = resolveRowIndex(rowOffset)
     return rowIndex === anchor.rowIndex && columnIndex === anchor.columnIndex
   }
 
@@ -436,7 +452,7 @@ export function useDataGridAppCellSelection<TRow>(
     if (ranges.length === 0 || !isCellSelected(rowOffset, columnIndex)) {
       return false
     }
-    const rowIndex = options.viewportRowStart.value + rowOffset
+    const rowIndex = resolveRowIndex(rowOffset)
     return ranges.some(range => {
       if (
         rowIndex < range.startRow

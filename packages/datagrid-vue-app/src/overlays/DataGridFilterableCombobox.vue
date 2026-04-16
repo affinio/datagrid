@@ -17,6 +17,7 @@
       aria-autocomplete="list"
       :aria-activedescendant="activeOptionId"
       @focus="handleInputFocus"
+      @mousedown.stop
       @click.stop="handleInputClick"
       @input="handleInput"
       @keydown.stop="handleKeydown"

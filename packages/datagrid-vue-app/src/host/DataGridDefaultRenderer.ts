@@ -116,13 +116,13 @@ import type {
   DataGridTableStageCellClass,
   DataGridTableStageCustomOverlay,
 } from "../stage/dataGridTableStage.types"
+import DataGridGanttStage from "../gantt/DataGridGanttStageEntry"
 
 type DataGridMode = "base" | "tree" | "pivot" | "worker"
 
 const DataGridAdvancedFilterPopover = defineAsyncComponent(() => import("../overlays/DataGridAdvancedFilterPopover.vue"))
 const DataGridAggregationsPopover = defineAsyncComponent(() => import("../overlays/DataGridAggregationsPopover.vue"))
 const DataGridFindReplacePopover = defineAsyncComponent(() => import("../overlays/DataGridFindReplacePopover.vue"))
-const DataGridGanttStage = defineAsyncComponent(() => import("../gantt/DataGridGanttStageEntry"))
 
 interface SortToggleState {
   key: string

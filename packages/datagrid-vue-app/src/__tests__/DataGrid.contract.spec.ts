@@ -1108,6 +1108,49 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps keyboard focus in the grid after Tab commits an inline text edit", async () => {
+    const tabEditableColumns = [
+      { key: "owner", label: "Owner", width: 180, capabilities: { editable: true } },
+      { key: "region", label: "Region", width: 160, capabilities: { editable: true } },
+      { key: "amount", label: "Amount", width: 140 },
+    ] as const
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: tabEditableColumns,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const firstCell = queryBodyCell(wrapper, 0, 0)
+    await firstCell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+
+    await editor.setValue("Legacy")
+    await editor.trigger("keydown", { key: "Tab" })
+    await flushRuntimeTasks()
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+
+    expect(resolveRowAt<{ owner: string }>(wrapper, 0)).toMatchObject({ owner: "Legacy" })
+    expect(queryBodyCell(wrapper, 0, 1).classes()).toContain("grid-cell--selection-anchor")
+    expect(document.activeElement?.classList.contains("grid-body-viewport")).toBe(true)
+
+    const viewport = wrapper.find(".grid-body-viewport")
+    await viewport.trigger("keydown", { key: "ArrowRight" })
+    await flushRuntimeTasks()
+
+    expect(queryBodyCell(wrapper, 0, 2).classes()).toContain("grid-cell--selection-anchor")
+
+    wrapper.unmount()
+  })
+
   it("buffers a fast typed word into inline editing on a focused editable cell", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
@@ -4475,7 +4518,7 @@ describe("DataGrid app facade contract", () => {
       props: {
         rows: BASE_ROWS,
         columns: COLUMNS,
-        rowSelection: false,
+        rowSelection: true,
       },
     })
 
@@ -5082,6 +5125,33 @@ describe("DataGrid app facade contract", () => {
 
     expect(queryBodyCell(wrapper, 0, 0).text()).toContain("Planned")
     expect(resolveRowAt<{ stage: string }>(wrapper, 0)).toMatchObject({ stage: "planned" })
+
+    wrapper.unmount()
+  })
+
+  it("allows text-selection mousedown inside an active select editor", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SELECT_ROWS,
+        columns: SELECT_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
+    expect(editor.exists()).toBe(true)
+
+    const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true, clientX: 24, clientY: 12 })
+    editor.element.dispatchEvent(event)
+    await flushRuntimeTasks()
+
+    expect(event.defaultPrevented).toBe(false)
 
     wrapper.unmount()
   })

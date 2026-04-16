@@ -37,6 +37,12 @@ export interface UseDataGridTableStageCellIoResult<TRow extends Record<string, u
 export function useDataGridTableStageCellIo<TRow extends Record<string, unknown>>(
   options: UseDataGridTableStageCellIoOptions<TRow>,
 ): UseDataGridTableStageCellIoResult<TRow> {
+  const resolveRowIndex = (row: DataGridTableRow<TRow>, rowOffset: number): number => {
+    return Number.isFinite(row.displayIndex)
+      ? Math.max(0, Math.trunc(row.displayIndex))
+      : options.viewportRowStart.value + rowOffset
+  }
+
   const readStageCell = (row: DataGridTableRow<TRow>, columnKey: string): string => {
     if (options.isRowSelectionColumnKey(columnKey)) {
       return options.readRowSelectionCell(row)
@@ -61,7 +67,7 @@ export function useDataGridTableStageCellIo<TRow extends Record<string, unknown>
       options.toggleRowCheckboxSelected(row)
       return
     }
-    const rowIndex = options.viewportRowStart.value + rowOffset
+    const rowIndex = resolveRowIndex(row, rowOffset)
     const editable = options.isCellEditableByKey(row, rowIndex, column.key, columnIndex)
     const clickAction = resolveDataGridCellClickAction({
       column: column.column,

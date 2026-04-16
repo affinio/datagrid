@@ -29,6 +29,7 @@ export interface UseDataGridAppSelectionOptions<TRow> {
   totalRows?: Ref<number>
   showRowSelection?: MaybeRef<boolean>
   readSelectionCell?: (row: DataGridRowNode<TRow>, columnKey: string) => unknown
+  resolveSelectionRowAtIndex?: (rowIndex: number) => DataGridRowNode<TRow> | null
 }
 
 export interface UseDataGridAppSelectionResult<TRow> {
@@ -217,7 +218,7 @@ export function useDataGridAppSelection<TRow>(
       const endColumn = Math.max(0, Math.min(columnCount - 1, Math.max(range.startCol, range.endCol)))
 
       for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
-        const rowNode = runtime.api.rows.get(rowIndex)
+        const rowNode = options.resolveSelectionRowAtIndex?.(rowIndex) ?? runtime.api.rows.get(rowIndex)
         if (!rowNode || rowNode.kind === "group") {
           continue
         }
