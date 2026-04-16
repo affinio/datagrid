@@ -18,6 +18,7 @@ import {
 import type {
   DataGridAggOp,
   DataGridAggregationModel,
+  DataGridColumnHistogramEntry,
   DataGridColumnPin,
   DataGridColumnSnapshot,
   DataGridFilterSnapshot,
@@ -28,7 +29,6 @@ import type {
   DataGridSortState,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
-import type { DataGridColumnHistogramEntry } from "@affino/datagrid-core"
 import {
   cloneDataGridFilterSnapshot,
   useDataGridContextMenu,

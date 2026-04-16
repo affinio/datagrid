@@ -1,8 +1,11 @@
 import { computed, nextTick, ref, type ComputedRef, type CSSProperties, type Ref } from "vue"
 import type {
+  DataGridColumnHistogramEntry,
+  DataGridRowNode,
   DataGridColumnSnapshot,
   DataGridRowSelectionSnapshot,
   DataGridSelectionSnapshot,
+  UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import {
@@ -60,16 +63,16 @@ const AUTO_RESIZE_SAMPLE_LIMIT = 400
 export type { DataGridTableStageHistoryAdapter } from "./useDataGridTableStageHistory"
 
 type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = {
-  api: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["api"]
-  syncBodyRowsInRange: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["syncBodyRowsInRange"]
-  setViewportRange: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["setViewportRange"]
-  setRows?: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["setRows"]
-  rowPartition: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["rowPartition"]
-  virtualWindow: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["virtualWindow"]
-  columnSnapshot: import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>["columnSnapshot"]
+  api: UseDataGridRuntimeResult<TRow>["api"]
+  syncBodyRowsInRange: UseDataGridRuntimeResult<TRow>["syncBodyRowsInRange"]
+  setViewportRange: UseDataGridRuntimeResult<TRow>["setViewportRange"]
+  setRows?: UseDataGridRuntimeResult<TRow>["setRows"]
+  rowPartition: UseDataGridRuntimeResult<TRow>["rowPartition"]
+  virtualWindow: UseDataGridRuntimeResult<TRow>["virtualWindow"]
+  columnSnapshot: UseDataGridRuntimeResult<TRow>["columnSnapshot"]
   setVirtualWindowRange?: (range: { start: number; end: number }) => void
 } & {
-  getBodyRowAtIndex: (rowIndex: number) => import("@affino/datagrid-vue").DataGridRowNode<TRow> | null
+  getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<TRow> | null
   resolveBodyRowIndexById: (rowId: string | number) => number
 }
 
@@ -130,7 +133,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   resolveColumnGroupOrder?: (columnKey: string) => number | null
   resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
   resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
-  resolveColumnMenuValueEntries?: (columnKey: string) => readonly import("@affino/datagrid-core").DataGridColumnHistogramEntry[]
+  resolveColumnMenuValueEntries?: (columnKey: string) => readonly DataGridColumnHistogramEntry[]
   applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
   applyColumnMenuPin?: (columnKey: string, pin: import("@affino/datagrid-vue").DataGridColumnPin) => void
   applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
@@ -138,8 +141,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   clearColumnMenuFilter?: (columnKey: string) => void
   applyRowHeightSettings: () => void
   cloneRowData: (row: TRow) => TRow
-  readClipboardCell?: (row: import("@affino/datagrid-core").DataGridRowNode<TRow>, columnKey: string) => string
-  readSelectionCell?: (row: import("@affino/datagrid-core").DataGridRowNode<TRow>, columnKey: string) => unknown
+  readClipboardCell?: (row: DataGridRowNode<TRow>, columnKey: string) => string
+  readSelectionCell?: (row: DataGridRowNode<TRow>, columnKey: string) => unknown
   applyClipboardEdits?: (
     range: DataGridCopyRange,
     matrix: string[][],

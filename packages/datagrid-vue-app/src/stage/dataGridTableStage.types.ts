@@ -1,6 +1,6 @@
 import type { ComponentPublicInstance, CSSProperties, Ref } from "vue"
-import type { DataGridColumnHistogramEntry } from "@affino/datagrid-core"
 import type {
+  DataGridColumnHistogramEntry,
   DataGridColumnPin,
   DataGridColumnSnapshot,
   DataGridOverlayRange,
