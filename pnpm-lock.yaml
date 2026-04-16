@@ -247,9 +247,6 @@ importers:
       '@affino/datagrid-worker':
         specifier: workspace:*
         version: link:../datagrid-worker
-      '@affino/menu-vue':
-        specifier: ^2.1.1
-        version: 2.1.1(@affino/menu-core@1.1.0)(vue@3.4.38(typescript@5.9.3))
       pinia:
         specifier: ^2.1.0 || ^3.0.0
         version: 3.0.4(typescript@5.9.3)(vue@3.4.38(typescript@5.9.3))
