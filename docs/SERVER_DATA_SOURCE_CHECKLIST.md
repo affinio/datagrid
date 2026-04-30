@@ -1,5 +1,7 @@
 # Server Data Source Parity Checklist
 
+Status: baseline demo implemented; filtering/editing parity not started.
+
 ## Current Baseline
 - Demo route: `/vue/server-data-source-grid`
 - Demo uses `createDataSourceBackedRowModel`
@@ -16,12 +18,12 @@
 - [x] Sandbox navigation link
 
 ## Next Slices
-- Server-side filtering
-- Inline editing
-- Optimistic updates
-- Undo/redo semantics
-- Fill handle semantics
-- Range move
+- [ ] Server-side filtering
+- [ ] Inline editing
+- [ ] Optimistic updates
+- [ ] Undo/redo semantics
+- [ ] Fill handle semantics
+- [ ] Range move
 
 ## Client-Model Parity Checklist
 - [ ] Selection across unloaded rows
