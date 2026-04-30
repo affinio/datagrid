@@ -151,6 +151,113 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("does not refresh when commitEdits throws", async () => {
+    const rows = [
+      { id: 1, value: "row-1" },
+      { id: 2, value: "row-2" },
+    ]
+    const commitEdits = vi.fn(async () => {
+      throw new Error("commit failed")
+    })
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        return {
+          rows: rows
+            .filter(row => row.id >= request.range.start + 1 && row.id <= request.range.end + 1)
+            .map((row, offset) => ({
+              index: request.range.start + offset,
+              row,
+              rowId: row.id,
+            })),
+          total: rows.length,
+        }
+      },
+      commitEdits,
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+
+    const refreshSpy = vi.spyOn(model, "refresh")
+    model.setViewportRange({ start: 0, end: 0 })
+    await flushMicrotasks()
+
+    model.patchRows?.([
+      { rowId: 1, data: { value: "updated" } },
+    ])
+
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(commitEdits).toHaveBeenCalledWith({
+      edits: [
+        { rowId: 1, data: { value: "updated" } },
+      ],
+    })
+    expect(refreshSpy).not.toHaveBeenCalled()
+    expect(model.getRow(0)?.row.value).toBe("row-1")
+
+    model.dispose()
+  })
+
+  it("does not refresh when commitEdits returns rejected rows", async () => {
+    const rows = [
+      { id: 1, value: "row-1" },
+      { id: 2, value: "row-2" },
+    ]
+    const commitEdits = vi.fn(async () => ({
+      rejected: [{ rowId: 1, reason: "conflict" }],
+    }))
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        return {
+          rows: rows
+            .filter(row => row.id >= request.range.start + 1 && row.id <= request.range.end + 1)
+            .map((row, offset) => ({
+              index: request.range.start + offset,
+              row,
+              rowId: row.id,
+            })),
+          total: rows.length,
+        }
+      },
+      commitEdits,
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+
+    const refreshSpy = vi.spyOn(model, "refresh")
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    model.setViewportRange({ start: 0, end: 0 })
+    await flushMicrotasks()
+
+    model.patchRows?.([
+      { rowId: 1, data: { value: "updated" } },
+    ])
+
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(commitEdits).toHaveBeenCalledWith({
+      edits: [
+        { rowId: 1, data: { value: "updated" } },
+      ],
+    })
+    expect(refreshSpy).not.toHaveBeenCalled()
+    expect(model.getRow(0)?.row.value).toBe("row-1")
+    expect(consoleSpy).toHaveBeenCalled()
+
+    consoleSpy.mockRestore()
+    model.dispose()
+  })
+
   it("keeps patchRows unavailable when the data source does not implement commitEdits", async () => {
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       async pull() {

@@ -1418,10 +1418,17 @@ export function createDataSourceBackedRowModel<T = unknown>(
             void Promise.resolve(getDataSourceCommitEdits({
               edits: updates,
             }))
-              .then(() => {
-                if (!disposed) {
+              .then(result => {
+                if (!disposed && (result.rejected == null || result.rejected.length === 0)) {
                   void pullRange(toSourceRange(viewportRange), "refresh", "critical")
+                  return
                 }
+                if (result.rejected != null && result.rejected.length > 0) {
+                  console.error("[DataGridDataSource] commitEdits returned rejected rows.", result.rejected)
+                }
+              })
+              .catch(error => {
+                console.error("[DataGridDataSource] commitEdits failed.", error)
               })
           },
         }
