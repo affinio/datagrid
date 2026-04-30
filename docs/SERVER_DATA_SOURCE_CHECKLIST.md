@@ -26,6 +26,15 @@ Status: baseline demo implemented; filtering/editing parity not started.
 - [ ] Fill handle semantics
 - [ ] Range move
 
+Note: inline editing requires a dedicated server/data-source mutation API. The current data-source row model is read/pull-oriented and does not implement `patchRows`.
+### Example usage (client adapter)
+
+- Listen to `cell-edit` from DataGrid
+- Apply optimistic local override
+- Call `dataSource.commitEdits([{ rowId, data }])`
+- On success: invalidate affected range
+- On failure: rollback override and refresh
+
 ## Client-Model Parity Checklist
 - [ ] Selection across unloaded rows
 - [ ] Copy/paste across unloaded rows
@@ -44,6 +53,15 @@ Status: baseline demo implemented; filtering/editing parity not started.
 - [ ] Confirm whether additional public hooks are needed for server cache invalidation UX
 - [ ] Confirm whether retry and push-update affordances belong in the public app layer
 - [ ] Confirm whether diagnostics should expose more server-specific cache/prefetch state
+
+## Proposed Mutation API
+- Optional `commitEdits` method on `DataGridDataSource`
+- `pull()` remains read-only
+- Optimistic lifecycle: apply local override, commit to datasource, refresh/invalidate on success
+- Rollback/error handling: restore the local override and surface the failure if commit is rejected
+- Revision/conflict support is optional future enhancement, not required for v1
+- Batch edits are supported by the `edits[]` request shape
+- Out of scope for v1: `before-cell-edit`, conflict UI, merge semantics, `patchRows` on `DataSourceBackedRowModel`
 
 ## Manual Test Checklist
 - [ ] Open the demo and verify initial load completes
