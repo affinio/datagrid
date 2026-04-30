@@ -60,6 +60,11 @@ export interface DataGridTableStageViewportSection {
   topSpacerHeight: number
   bottomSpacerHeight: number
   viewportRowStart: number
+  viewportRowEnd?: number
+  virtualRowTotal?: number
+  baseRowHeight?: number
+  resolveRowHeight?: (rowIndex: number) => number
+  resolveRowOffset?: (rowIndex: number) => number
   columnWindowStart: number
   leftColumnSpacerWidth: number
   rightColumnSpacerWidth: number

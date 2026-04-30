@@ -499,6 +499,56 @@ describe("useDataGridRuntime contract", () => {
     rowModel.dispose()
   })
 
+  it("routes sparse virtual-window updates through the row model viewport", async () => {
+    const pull = vi.fn(async (request) => ({
+      total: 300,
+      rows: Array.from(
+        { length: Math.max(0, request.range.end - request.range.start + 1) },
+        (_unused, offset) => {
+          const index = request.range.start + offset
+          return {
+            index,
+            row: { rowId: `r${index}`, name: `Row ${index}`, tested_at: index },
+            rowId: `r${index}`,
+          }
+        },
+      ),
+    })) satisfies DataGridDataSource<RuntimeRow>["pull"]
+    const rowModel = createDataSourceBackedRowModel<RuntimeRow>({
+      dataSource: { pull },
+      initialTotal: 300,
+    })
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+
+    const Host = defineComponent({
+      name: "RuntimeSparseVirtualWindowHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          rowModel,
+          columns: COLUMNS,
+          autoStart: false,
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+
+    runtime!.setVirtualWindowRange({ start: 128, end: 255 })
+    await flushRuntimeTasks()
+
+    expect(pull).toHaveBeenCalledTimes(1)
+    expect(pull.mock.calls[0]?.[0]).toMatchObject({
+      reason: "viewport-change",
+      range: { start: 128, end: 255 },
+    })
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
+    rowModel.dispose()
+  })
+
   it("passes plugin definitions from composable options into runtime api", async () => {
     const pluginEvents: string[] = []
     let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null

@@ -22,6 +22,16 @@ function flushMicrotasks(): Promise<void> {
   return Promise.resolve().then(() => Promise.resolve())
 }
 
+function buildRows(start: number, end: number) {
+  return Array.from({ length: end - start + 1 }, (_, offset) => {
+    const index = start + offset
+    return {
+      index,
+      row: { id: index, value: `row-${index}` },
+    }
+  })
+}
+
 describe("createDataSourceBackedRowModel", () => {
   it("delegates column histograms to the data source with effective filter context", async () => {
     const histogramRequests: DataGridDataSourceColumnHistogramRequest[] = []
@@ -245,6 +255,329 @@ describe("createDataSourceBackedRowModel", () => {
     expect(diagnostics.pullRequested).toBe(1)
     expect(diagnostics.pullCoalesced).toBeGreaterThanOrEqual(1)
     expect(diagnostics.pullAborted).toBe(0)
+
+    model.dispose()
+  })
+
+  it("schedules background prefetch after initial critical viewport load", async () => {
+    const calls: PullCall<{ id: number; value: string }>[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          calls.push({ request, resolve, reject })
+          request.signal.addEventListener("abort", () => reject({ name: "AbortError" }))
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100_000,
+      prefetch: {
+        enabled: true,
+        triggerViewportFactor: 1,
+        windowViewportFactor: 3,
+        minBatchSize: 30,
+        maxBatchSize: 90,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 29 })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.request.reason).toBe("viewport-change")
+    expect(calls[0]?.request.priority).toBe("critical")
+
+    calls[0]?.resolve({
+      rows: buildRows(0, 29),
+      total: 100_000,
+    })
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.request.reason).toBe("prefetch")
+    expect(calls[1]?.request.priority).toBe("background")
+    expect(calls[1]?.request.range).toEqual({ start: 30, end: 119 })
+
+    calls[1]?.resolve({
+      rows: buildRows(30, 119),
+      total: 100_000,
+    })
+    await flushMicrotasks()
+
+    const diagnostics = model.getBackpressureDiagnostics()
+    expect(diagnostics.prefetchScheduled).toBeGreaterThanOrEqual(1)
+    expect(diagnostics.prefetchStarted).toBeGreaterThanOrEqual(1)
+    expect(diagnostics.prefetchCompleted).toBeGreaterThanOrEqual(1)
+    expect(diagnostics.cachedAheadRows).toBeGreaterThan(0)
+
+    model.dispose()
+  })
+
+  it("scrolls within loaded buffer and starts next background prefetch before hitting the edge", async () => {
+    const calls: PullCall<{ id: number; value: string }>[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          calls.push({ request, resolve, reject })
+          request.signal.addEventListener("abort", () => reject({ name: "AbortError" }))
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100_000,
+      prefetch: {
+        enabled: true,
+        triggerViewportFactor: 1,
+        windowViewportFactor: 2,
+        minBatchSize: 30,
+        maxBatchSize: 60,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 29 })
+    calls[0]?.resolve({ rows: buildRows(0, 29), total: 100_000 })
+    await flushMicrotasks()
+    calls[1]?.resolve({ rows: buildRows(30, 89), total: 100_000 })
+    await flushMicrotasks()
+
+    const callCountBeforeScroll = calls.length
+    model.setViewportRange({ start: 30, end: 59 })
+    await flushMicrotasks()
+
+    expect(calls.length).toBe(callCountBeforeScroll + 1)
+    expect(calls[calls.length - 1]?.request.reason).toBe("prefetch")
+    expect(calls[calls.length - 1]?.request.priority).toBe("background")
+    expect(calls[calls.length - 1]?.request.range).toEqual({ start: 90, end: 149 })
+    expect(calls.some(call => call.request.reason === "viewport-change" && call.request.range.start === 30)).toBe(false)
+
+    model.dispose()
+  })
+
+  it("coalesces repeated forward prefetch demand instead of duplicating requests", async () => {
+    const calls: PullCall<{ id: number; value: string }>[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          calls.push({ request, resolve, reject })
+          request.signal.addEventListener("abort", () => reject({ name: "AbortError" }))
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100_000,
+      prefetch: {
+        enabled: true,
+        triggerViewportFactor: 1,
+        windowViewportFactor: 2,
+        minBatchSize: 30,
+        maxBatchSize: 60,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 29 })
+    calls[0]?.resolve({ rows: buildRows(0, 29), total: 100_000 })
+    await flushMicrotasks()
+    calls[1]?.resolve({ rows: buildRows(30, 89), total: 100_000 })
+    await flushMicrotasks()
+
+    model.setViewportRange({ start: 30, end: 59 })
+    await flushMicrotasks()
+    expect(calls[calls.length - 1]?.request.range).toEqual({ start: 90, end: 149 })
+
+    const callCountWithActivePrefetch = calls.length
+    model.setViewportRange({ start: 35, end: 64 })
+    model.setViewportRange({ start: 40, end: 69 })
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(callCountWithActivePrefetch)
+    const diagnostics = model.getBackpressureDiagnostics()
+    expect(diagnostics.prefetchCoalesced).toBeGreaterThanOrEqual(1)
+    expect(diagnostics.prefetchAborted).toBe(0)
+
+    model.dispose()
+  })
+
+  it("supports backward prefetch when the user scrolls upward", async () => {
+    const calls: PullCall<{ id: number; value: string }>[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          calls.push({ request, resolve, reject })
+          request.signal.addEventListener("abort", () => reject({ name: "AbortError" }))
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100_000,
+      prefetch: {
+        enabled: true,
+        triggerViewportFactor: 1,
+        windowViewportFactor: 1,
+        minBatchSize: 30,
+        maxBatchSize: 30,
+        directionalBias: "scroll-direction",
+      },
+    })
+
+    model.setViewportRange({ start: 200, end: 229 })
+    calls[0]?.resolve({ rows: buildRows(200, 229), total: 100_000 })
+    await flushMicrotasks()
+    calls[1]?.resolve({ rows: buildRows(230, 259), total: 100_000 })
+    await flushMicrotasks()
+
+    model.setViewportRange({ start: 170, end: 199 })
+    expect(calls[calls.length - 1]?.request.reason).toBe("viewport-change")
+    calls[calls.length - 1]?.resolve({ rows: buildRows(170, 199), total: 100_000 })
+    await flushMicrotasks()
+
+    expect(calls[calls.length - 1]?.request.reason).toBe("prefetch")
+    expect(calls[calls.length - 1]?.request.priority).toBe("background")
+    expect(calls[calls.length - 1]?.request.range).toEqual({ start: 140, end: 169 })
+
+    model.dispose()
+  })
+
+  it("keeps critical viewport pulls independent from background prefetch work", async () => {
+    const calls: PullCall<{ id: number; value: string }>[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          calls.push({ request, resolve, reject })
+          request.signal.addEventListener("abort", () => reject({ name: "AbortError" }))
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100_000,
+      prefetch: {
+        enabled: true,
+        triggerViewportFactor: 1,
+        windowViewportFactor: 2,
+        minBatchSize: 30,
+        maxBatchSize: 60,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 29 })
+    calls[0]?.resolve({ rows: buildRows(0, 29), total: 100_000 })
+    await flushMicrotasks()
+
+    expect(calls[1]?.request.reason).toBe("prefetch")
+    model.setViewportRange({ start: 200, end: 229 })
+
+    expect(calls).toHaveLength(3)
+    expect(calls[1]?.request.signal.aborted).toBe(false)
+    expect(calls[2]?.request.reason).toBe("viewport-change")
+    expect(calls[2]?.request.priority).toBe("critical")
+
+    calls[2]?.resolve({ rows: buildRows(200, 229), total: 100_000 })
+    await flushMicrotasks()
+    expect(calls[2]?.request.signal.aborted).toBe(false)
+
+    model.dispose()
+  })
+
+  it("applies row updates while background prefetch is inflight", async () => {
+    let pushListener: DataGridDataSourcePushListener<{ id: number; value: string }> | null = null
+    const calls: PullCall<{ id: number; value: string }>[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          calls.push({ request, resolve, reject })
+          request.signal.addEventListener("abort", () => reject({ name: "AbortError" }))
+        })
+      },
+      subscribe(listener) {
+        pushListener = listener
+        return () => {
+          pushListener = null
+        }
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100_000,
+      prefetch: {
+        enabled: true,
+        triggerViewportFactor: 1,
+        windowViewportFactor: 2,
+        minBatchSize: 30,
+        maxBatchSize: 60,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 29 })
+    calls[0]?.resolve({ rows: buildRows(0, 29), total: 100_000 })
+    await flushMicrotasks()
+
+    pushListener?.({
+      type: "upsert",
+      rows: [{ index: 5, row: { id: 5, value: "patched-5" } }],
+      total: 100_000,
+    })
+    expect(model.getRow(5)?.row.value).toBe("patched-5")
+
+    calls[1]?.resolve({ rows: buildRows(30, 89), total: 100_000 })
+    await flushMicrotasks()
+    expect(model.getRow(5)?.row.value).toBe("patched-5")
+
+    model.dispose()
+  })
+
+  it("keeps prefetched near-future rows available under cache pressure", async () => {
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        return {
+          rows: buildRows(request.range.start, request.range.end),
+          total: 100_000,
+        }
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100_000,
+      rowCacheLimit: 48,
+      prefetch: {
+        enabled: true,
+        triggerViewportFactor: 1,
+        windowViewportFactor: 2,
+        minBatchSize: 20,
+        maxBatchSize: 20,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 19 })
+    await flushMicrotasks()
+    await flushMicrotasks()
+    expect(model.getRow(20)?.row.value).toBe("row-20")
+    expect(model.getRow(39)?.row.value).toBe("row-39")
+
+    model.setViewportRange({ start: 20, end: 39 })
+    await flushMicrotasks()
+    await flushMicrotasks()
+    expect(model.getRow(40)?.row.value).toBe("row-40")
+    expect(model.getRow(59)?.row.value).toBe("row-59")
+
+    const diagnostics = model.getBackpressureDiagnostics()
+    expect(diagnostics.rowCacheSize).toBeLessThanOrEqual(diagnostics.rowCacheLimit)
+    expect(diagnostics.cachedAheadRows).toBeGreaterThanOrEqual(20)
 
     model.dispose()
   })

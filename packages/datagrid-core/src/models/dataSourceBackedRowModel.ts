@@ -68,6 +68,16 @@ export interface CreateDataSourceBackedRowModelOptions<T = unknown> {
   initialPagination?: DataGridPaginationInput | null
   initialTotal?: number
   rowCacheLimit?: number
+  prefetch?: DataGridDataSourcePrefetchOptions
+}
+
+export interface DataGridDataSourcePrefetchOptions {
+  enabled?: boolean
+  triggerViewportFactor?: number
+  windowViewportFactor?: number
+  minBatchSize?: number
+  maxBatchSize?: number
+  directionalBias?: "forward" | "backward" | "symmetric" | "scroll-direction"
 }
 
 export interface DataSourceBackedRowModel<T = unknown> extends DataGridRowModel<T> {
@@ -90,6 +100,7 @@ interface InFlightPull {
   range: DataGridViewportRange
   promise: Promise<void>
   priority: DataGridDataSourcePullPriority
+  reason: DataGridDataSourcePullReason
 }
 
 interface PendingPull {
@@ -97,10 +108,14 @@ interface PendingPull {
   reason: DataGridDataSourcePullReason
   priority: DataGridDataSourcePullPriority
   key: string
+  stateKey: string
   treeData: DataGridDataSourceTreePullContext | null
 }
 
 const DEFAULT_ROW_CACHE_LIMIT = 4096
+const DEFAULT_PREFETCH_MAX_BATCH_SIZE = 512
+const DEFAULT_PREFETCH_TRIGGER_VIEWPORT_FACTOR = 1
+const DEFAULT_PREFETCH_WINDOW_VIEWPORT_FACTOR = 3
 
 function isAbortError(error: unknown): boolean {
   if (!error) {
@@ -272,14 +287,42 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let disposed = false
   let revision = 0
   let requestCounter = 0
-  let inFlight: InFlightPull | null = null
-  let pendingPull: PendingPull | null = null
+  let criticalInFlight: InFlightPull | null = null
+  let backgroundInFlight: InFlightPull | null = null
+  let pendingCriticalPull: PendingPull | null = null
+  let pendingBackgroundPull: PendingPull | null = null
   let backpressurePaused = false
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rowCount)
+  let lastViewportDirection: -1 | 0 | 1 = 0
   const rowCacheLimit =
     Number.isFinite(options.rowCacheLimit) && (options.rowCacheLimit as number) > 0
       ? Math.max(1, Math.trunc(options.rowCacheLimit as number))
       : DEFAULT_ROW_CACHE_LIMIT
+  const prefetchOptions = (() => {
+    const configured = options.prefetch ?? {}
+    const enabled = configured.enabled !== false
+    const triggerViewportFactor = Number.isFinite(configured.triggerViewportFactor)
+      ? Math.max(0, configured.triggerViewportFactor as number)
+      : DEFAULT_PREFETCH_TRIGGER_VIEWPORT_FACTOR
+    const windowViewportFactor = Number.isFinite(configured.windowViewportFactor)
+      ? Math.max(1, configured.windowViewportFactor as number)
+      : DEFAULT_PREFETCH_WINDOW_VIEWPORT_FACTOR
+    const minBatchSize = Number.isFinite(configured.minBatchSize)
+      ? Math.max(1, Math.trunc(configured.minBatchSize as number))
+      : 1
+    const maxBatchSize = Number.isFinite(configured.maxBatchSize)
+      ? Math.max(minBatchSize, Math.trunc(configured.maxBatchSize as number))
+      : Math.max(minBatchSize, DEFAULT_PREFETCH_MAX_BATCH_SIZE)
+    const directionalBias = configured.directionalBias ?? "scroll-direction"
+    return {
+      enabled,
+      triggerViewportFactor,
+      windowViewportFactor,
+      minBatchSize,
+      maxBatchSize,
+      directionalBias,
+    } as const
+  })()
 
   const rowCache = new Map<number, DataGridRowNode<T>>()
   const listeners = new Set<DataGridRowModelListener<T>>()
@@ -298,6 +341,17 @@ export function createDataSourceBackedRowModel<T = unknown>(
     hasPendingPull: false,
     rowCacheSize: 0,
     rowCacheLimit,
+    prefetchScheduled: 0,
+    prefetchStarted: 0,
+    prefetchCompleted: 0,
+    prefetchSkippedCached: 0,
+    prefetchCoalesced: 0,
+    prefetchDroppedStale: 0,
+    prefetchAborted: 0,
+    cachedAheadRows: 0,
+    cachedBehindRows: 0,
+    criticalInFlight: false,
+    backgroundInFlight: false,
   }
 
   const unsubscribePush = typeof dataSource.subscribe === "function"
@@ -306,12 +360,36 @@ export function createDataSourceBackedRowModel<T = unknown>(
       })
     : null
 
+  function getProtectedSourceRanges(): readonly DataGridViewportRange[] {
+    const protectedRanges: DataGridViewportRange[] = [toSourceRange(viewportRange)]
+    const maybeAdd = (range: DataGridViewportRange | null | undefined) => {
+      if (!range) {
+        return
+      }
+      protectedRanges.push(range)
+    }
+    maybeAdd(criticalInFlight?.range)
+    maybeAdd(backgroundInFlight?.range)
+    maybeAdd(pendingCriticalPull?.range)
+    maybeAdd(pendingBackgroundPull?.range)
+    return protectedRanges
+  }
+
+  function isProtectedCacheIndex(index: number, protectedRanges: readonly DataGridViewportRange[]): boolean {
+    for (const range of protectedRanges) {
+      if (index >= range.start && index <= range.end) {
+        return true
+      }
+    }
+    return false
+  }
+
   function enforceRowCacheLimit() {
-    const protectedRange = toSourceRange(viewportRange)
+    const protectedRanges = getProtectedSourceRanges()
     while (rowCache.size > rowCacheLimit) {
       let evictIndex: number | undefined
       for (const cachedIndex of rowCache.keys()) {
-        if (cachedIndex < protectedRange.start || cachedIndex > protectedRange.end) {
+        if (!isProtectedCacheIndex(cachedIndex, protectedRanges)) {
           evictIndex = cachedIndex
           break
         }
@@ -402,6 +480,87 @@ export function createDataSourceBackedRowModel<T = unknown>(
       start: toSourceIndex(normalized.start),
       end: toSourceIndex(normalized.end),
     }
+  }
+
+  function getViewportSize(range: DataGridViewportRange): number {
+    return Math.max(0, range.end - range.start + 1)
+  }
+
+  function isRangeFullyCached(range: DataGridViewportRange): boolean {
+    for (let index = range.start; index <= range.end; index += 1) {
+      if (!rowCache.has(index)) {
+        return false
+      }
+    }
+    return true
+  }
+
+  function doesRangeContainIndex(range: DataGridViewportRange | null | undefined, index: number): boolean {
+    return Boolean(range && index >= range.start && index <= range.end)
+  }
+
+  function isIndexCovered(index: number): boolean {
+    return rowCache.has(index)
+      || doesRangeContainIndex(criticalInFlight?.range, index)
+      || doesRangeContainIndex(backgroundInFlight?.range, index)
+      || doesRangeContainIndex(pendingCriticalPull?.range, index)
+      || doesRangeContainIndex(pendingBackgroundPull?.range, index)
+  }
+
+  function countCoveredRowsForward(startIndex: number, upperBound: number): number {
+    if (startIndex > upperBound) {
+      return 0
+    }
+    let covered = 0
+    for (let index = startIndex; index <= upperBound; index += 1) {
+      if (!isIndexCovered(index)) {
+        break
+      }
+      covered += 1
+    }
+    return covered
+  }
+
+  function countCoveredRowsBackward(startIndex: number, lowerBound: number): number {
+    if (startIndex < lowerBound) {
+      return 0
+    }
+    let covered = 0
+    for (let index = startIndex; index >= lowerBound; index -= 1) {
+      if (!isIndexCovered(index)) {
+        break
+      }
+      covered += 1
+    }
+    return covered
+  }
+
+  function resolvePrefetchBatchSize(viewportSize: number): number {
+    const scaledSize = Math.ceil(viewportSize * prefetchOptions.windowViewportFactor)
+    return Math.max(
+      prefetchOptions.minBatchSize,
+      Math.min(prefetchOptions.maxBatchSize, Math.max(1, scaledSize)),
+    )
+  }
+
+  function resolvePrefetchTriggerSize(viewportSize: number): number {
+    return Math.max(1, Math.ceil(viewportSize * prefetchOptions.triggerViewportFactor))
+  }
+
+  function updateCachedCoverageDiagnostics(sourceViewport: DataGridViewportRange): void {
+    if (rowCount <= 0) {
+      diagnostics.cachedAheadRows = 0
+      diagnostics.cachedBehindRows = 0
+      return
+    }
+    diagnostics.cachedAheadRows = countCoveredRowsForward(
+      sourceViewport.end + 1,
+      Math.max(0, rowCount - 1),
+    )
+    diagnostics.cachedBehindRows = countCoveredRowsBackward(
+      sourceViewport.start - 1,
+      0,
+    )
   }
 
   function getSnapshot(): DataGridRowModelSnapshot<T> {
@@ -567,20 +726,198 @@ export function createDataSourceBackedRowModel<T = unknown>(
     diagnostics.rowCacheSize = rowCache.size
   }
 
+  function resolvePrefetchDirections(): readonly ("forward" | "backward")[] {
+    switch (prefetchOptions.directionalBias) {
+      case "forward":
+        return ["forward"]
+      case "backward":
+        return ["backward"]
+      case "symmetric":
+        return ["forward", "backward"]
+      case "scroll-direction":
+      default:
+        return lastViewportDirection < 0 ? ["backward", "forward"] : ["forward", "backward"]
+    }
+  }
+
+  function buildPrefetchCandidate(
+    sourceViewport: DataGridViewportRange,
+    direction: "forward" | "backward",
+  ): { range: DataGridViewportRange; cachedRows: number } | null {
+    if (!prefetchOptions.enabled || rowCount <= 0) {
+      return null
+    }
+    const viewportSize = getViewportSize(sourceViewport)
+    if (viewportSize <= 0) {
+      return null
+    }
+    const batchSize = resolvePrefetchBatchSize(viewportSize)
+    const triggerSize = resolvePrefetchTriggerSize(viewportSize)
+    if (direction === "forward") {
+      if (sourceViewport.end >= rowCount - 1) {
+        return null
+      }
+      const cachedRows = countCoveredRowsForward(sourceViewport.end + 1, rowCount - 1)
+      if (cachedRows > triggerSize) {
+        return null
+      }
+      const start = sourceViewport.end + 1 + cachedRows
+      if (start >= rowCount) {
+        return null
+      }
+      return {
+        range: {
+          start,
+          end: Math.min(rowCount - 1, start + batchSize - 1),
+        },
+        cachedRows,
+      }
+    }
+    if (sourceViewport.start <= 0) {
+      return null
+    }
+    const cachedRows = countCoveredRowsBackward(sourceViewport.start - 1, 0)
+    if (cachedRows > triggerSize) {
+      return null
+    }
+    const end = sourceViewport.start - 1 - cachedRows
+    if (end < 0) {
+      return null
+    }
+    return {
+      range: {
+        start: Math.max(0, end - batchSize + 1),
+        end,
+      },
+      cachedRows,
+    }
+  }
+
+  function scheduleViewportPrefetch(): void {
+    if (!prefetchOptions.enabled || disposed) {
+      return
+    }
+    const visibleCount = getVisibleRowCount()
+    if (visibleCount <= 0 || rowCount <= 0) {
+      diagnostics.cachedAheadRows = 0
+      diagnostics.cachedBehindRows = 0
+      return
+    }
+    const sourceViewport = toSourceRange(viewportRange)
+    updateCachedCoverageDiagnostics(sourceViewport)
+    let bestCandidate: { range: DataGridViewportRange; cachedRows: number } | null = null
+    for (const direction of resolvePrefetchDirections()) {
+      const candidate = buildPrefetchCandidate(sourceViewport, direction)
+      if (!candidate) {
+        continue
+      }
+      if (!bestCandidate || candidate.cachedRows < bestCandidate.cachedRows) {
+        bestCandidate = candidate
+      }
+      if (prefetchOptions.directionalBias !== "symmetric") {
+        break
+      }
+    }
+    if (!bestCandidate) {
+      diagnostics.prefetchSkippedCached += 1
+      return
+    }
+    if (isRangeFullyCached(bestCandidate.range)) {
+      diagnostics.prefetchSkippedCached += 1
+      return
+    }
+    diagnostics.prefetchScheduled += 1
+    void pullRange(bestCandidate.range, "prefetch", "background")
+  }
+
   function resetPaginationCursor(): void {
     paginationCursor = null
   }
 
-  function abortInFlight() {
-    if (!inFlight) {
+  function readLaneInFlight(priority: DataGridDataSourcePullPriority): InFlightPull | null {
+    return priority === "background" ? backgroundInFlight : criticalInFlight
+  }
+
+  function writeLaneInFlight(priority: DataGridDataSourcePullPriority, value: InFlightPull | null): void {
+    if (priority === "background") {
+      backgroundInFlight = value
+    } else {
+      criticalInFlight = value
+    }
+    diagnostics.criticalInFlight = Boolean(criticalInFlight)
+    diagnostics.backgroundInFlight = Boolean(backgroundInFlight)
+    diagnostics.inFlight = diagnostics.criticalInFlight || diagnostics.backgroundInFlight
+  }
+
+  function readPendingPull(priority: DataGridDataSourcePullPriority): PendingPull | null {
+    return priority === "background" ? pendingBackgroundPull : pendingCriticalPull
+  }
+
+  function writePendingPull(priority: DataGridDataSourcePullPriority, value: PendingPull | null): void {
+    if (priority === "background") {
+      pendingBackgroundPull = value
+    } else {
+      pendingCriticalPull = value
+    }
+    diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+  }
+
+  function abortLaneInFlight(priority: DataGridDataSourcePullPriority, reason: "stale" | "preempted" = "preempted") {
+    const active = readLaneInFlight(priority)
+    if (!active) {
       return
     }
-    if (!inFlight.controller.signal.aborted) {
-      inFlight.controller.abort()
+    if (!active.controller.signal.aborted) {
+      active.controller.abort()
       diagnostics.pullAborted += 1
+      if (priority === "background") {
+        diagnostics.prefetchAborted += 1
+        if (reason === "stale") {
+          diagnostics.prefetchDroppedStale += 1
+        }
+      }
     }
-    inFlight = null
-    diagnostics.inFlight = false
+    writeLaneInFlight(priority, null)
+  }
+
+  function clearBackgroundPrefetchState(reason: "stale" | "reset" = "stale"): void {
+    abortLaneInFlight("background", reason === "reset" ? "preempted" : reason)
+    if (pendingBackgroundPull) {
+      if (reason === "stale") {
+        diagnostics.prefetchDroppedStale += 1
+      }
+      pendingBackgroundPull = null
+    }
+    diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+  }
+
+  function buildRequestStateKey(): string {
+    return serializePullState({
+      sortModel,
+      filterModel,
+      groupBy,
+      groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
+      pivotModel,
+      aggregationModel,
+      pagination: getPaginationSnapshot(),
+      cursor: paginationCursor,
+    })
+  }
+
+  function buildRequestKey(
+    requestRange: DataGridViewportRange,
+    reason: DataGridDataSourcePullReason,
+    priority: DataGridDataSourcePullPriority,
+    treePullContext: DataGridDataSourceTreePullContext | null,
+    stateKey: string,
+  ): string {
+    return serializePullState({
+      range: requestRange,
+      reason,
+      priority,
+      treeData: treePullContext,
+      state: stateKey,
+    })
   }
 
   function queuePendingPull(
@@ -588,45 +925,102 @@ export function createDataSourceBackedRowModel<T = unknown>(
     reason: DataGridDataSourcePullReason,
     priority: DataGridDataSourcePullPriority,
     requestKey: string,
+    requestStateKey: string,
     treePullContext: DataGridDataSourceTreePullContext | null,
   ): Promise<void> {
-    if (pendingPull && pendingPull.key === requestKey) {
+    const active = readLaneInFlight(priority)
+    const pending = readPendingPull(priority)
+    if (pending && pending.key === requestKey) {
       diagnostics.pullCoalesced += 1
-      return inFlight?.promise ?? Promise.resolve()
+      if (priority === "background") {
+        diagnostics.prefetchCoalesced += 1
+      }
+      return active?.promise ?? Promise.resolve()
     }
-    const pendingRank = pendingPull ? resolvePriorityRank(pendingPull.priority) : -1
+    if (priority === "background" && pending && pending.stateKey === requestStateKey) {
+      if (rangeContains(pending.range, requestRange)) {
+        diagnostics.pullCoalesced += 1
+        diagnostics.prefetchCoalesced += 1
+        return active?.promise ?? Promise.resolve()
+      }
+      if (rangesOverlap(pending.range, requestRange) || pending.range.end + 1 === requestRange.start || requestRange.end + 1 === pending.range.start) {
+        writePendingPull(priority, {
+          range: {
+            start: Math.min(pending.range.start, requestRange.start),
+            end: Math.max(pending.range.end, requestRange.end),
+          },
+          reason,
+          priority,
+          key: buildRequestKey(
+            {
+              start: Math.min(pending.range.start, requestRange.start),
+              end: Math.max(pending.range.end, requestRange.end),
+            },
+            reason,
+            priority,
+            treePullContext,
+            requestStateKey,
+          ),
+          stateKey: requestStateKey,
+          treeData: treePullContext,
+        })
+        diagnostics.pullCoalesced += 1
+        diagnostics.prefetchCoalesced += 1
+        diagnostics.pullDeferred += 1
+        emit()
+        return active?.promise ?? Promise.resolve()
+      }
+      diagnostics.prefetchDroppedStale += 1
+    }
+    const pendingRank = pending ? resolvePriorityRank(pending.priority) : -1
     const nextRank = resolvePriorityRank(priority)
     if (nextRank >= pendingRank) {
-      pendingPull = {
+      writePendingPull(priority, {
         range: requestRange,
         reason,
         priority,
         key: requestKey,
+        stateKey: requestStateKey,
         treeData: treePullContext,
-      }
-      diagnostics.hasPendingPull = true
+      })
     }
     diagnostics.pullDeferred += 1
     emit()
-    return inFlight?.promise ?? Promise.resolve()
+    return active?.promise ?? Promise.resolve()
   }
 
   async function drainBackpressureQueue(): Promise<void> {
     while (!disposed) {
-      const active = inFlight?.promise ?? null
-      if (active) {
-        await active.catch(() => {})
+      const activeCritical = criticalInFlight?.promise ?? null
+      const activeBackground = backgroundInFlight?.promise ?? null
+      if (activeCritical || activeBackground) {
+        await Promise.all([
+          activeCritical?.catch(() => {}),
+          activeBackground?.catch(() => {}),
+        ])
         continue
       }
-      const next = pendingPull
-      if (!next) {
-        diagnostics.hasPendingPull = false
-        return
+      const nextCritical = pendingCriticalPull
+      if (nextCritical) {
+        pendingCriticalPull = null
+        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+        await pullRange(nextCritical.range, nextCritical.reason, nextCritical.priority, nextCritical.treeData)
+        continue
       }
-      pendingPull = null
+      const nextBackground = pendingBackgroundPull
+      if (nextBackground) {
+        pendingBackgroundPull = null
+        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+        await pullRange(nextBackground.range, nextBackground.reason, nextBackground.priority, nextBackground.treeData)
+        continue
+      }
       diagnostics.hasPendingPull = false
-      await pullRange(next.range, next.reason, next.priority, next.treeData)
+      return
     }
+  }
+
+  function refreshLoadingState() {
+    loading = Boolean(criticalInFlight)
   }
 
   async function pullRange(
@@ -640,79 +1034,102 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     const requestRange = normalizeRequestedRange(range)
     const treePullContext = normalizeTreePullContext(treeData)
-    const requestStateKey = serializePullState({
-      sortModel,
-      filterModel,
-      groupBy,
-      groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
-      pivotModel,
-      aggregationModel,
-      pagination: getPaginationSnapshot(),
-      cursor: paginationCursor,
-    })
-    const requestKey = serializePullState({
-      range: requestRange,
-      reason,
-      priority,
-      treeData: treePullContext,
-      state: requestStateKey,
-    })
+    const requestStateKey = buildRequestStateKey()
+    const requestKey = buildRequestKey(requestRange, reason, priority, treePullContext, requestStateKey)
+    const laneInFlight = readLaneInFlight(priority)
 
-    if (backpressurePaused) {
-      return queuePendingPull(requestRange, reason, priority, requestKey, treePullContext)
+    if (priority === "background" && isRangeFullyCached(requestRange)) {
+      diagnostics.prefetchSkippedCached += 1
+      return
     }
 
-    if (inFlight && !inFlight.controller.signal.aborted && inFlight.key === requestKey) {
+    if (backpressurePaused) {
+      return queuePendingPull(requestRange, reason, priority, requestKey, requestStateKey, treePullContext)
+    }
+
+    if (laneInFlight && !laneInFlight.controller.signal.aborted && laneInFlight.key === requestKey) {
       diagnostics.pullCoalesced += 1
-      return inFlight.promise
+      if (priority === "background") {
+        diagnostics.prefetchCoalesced += 1
+      }
+      return laneInFlight.promise
     }
 
     if (
-      reason === "viewport-change" &&
-      inFlight &&
-      !inFlight.controller.signal.aborted &&
-      inFlight.stateKey === requestStateKey &&
-      resolvePriorityRank(inFlight.priority) >= resolvePriorityRank(priority) &&
-      rangeContains(inFlight.range, requestRange)
+      reason === "viewport-change"
+      && laneInFlight
+      && !laneInFlight.controller.signal.aborted
+      && laneInFlight.stateKey === requestStateKey
+      && resolvePriorityRank(laneInFlight.priority) >= resolvePriorityRank(priority)
+      && rangeContains(laneInFlight.range, requestRange)
     ) {
       diagnostics.pullCoalesced += 1
-      return inFlight.promise
+      return laneInFlight.promise
     }
 
-    if (inFlight && !inFlight.controller.signal.aborted) {
-      const nextRank = resolvePriorityRank(priority)
-      const activeRank = resolvePriorityRank(inFlight.priority)
-      if (nextRank < activeRank) {
-        if (pendingPull && pendingPull.key === requestKey) {
-          diagnostics.pullCoalesced += 1
-          return inFlight.promise
+    if (priority === "background") {
+      const activeCritical = criticalInFlight
+      if (activeCritical && !activeCritical.controller.signal.aborted) {
+        return queuePendingPull(requestRange, reason, priority, requestKey, requestStateKey, treePullContext)
+      }
+      if (
+        backgroundInFlight
+        && !backgroundInFlight.controller.signal.aborted
+        && backgroundInFlight.stateKey === requestStateKey
+        && rangeContains(backgroundInFlight.range, requestRange)
+      ) {
+        diagnostics.pullCoalesced += 1
+        diagnostics.prefetchCoalesced += 1
+        return backgroundInFlight.promise
+      }
+      if (
+        backgroundInFlight
+        && !backgroundInFlight.controller.signal.aborted
+        && backgroundInFlight.stateKey === requestStateKey
+      ) {
+        return queuePendingPull(requestRange, reason, priority, requestKey, requestStateKey, treePullContext)
+      }
+    } else {
+      if (
+        backgroundInFlight
+        && !backgroundInFlight.controller.signal.aborted
+        && backgroundInFlight.stateKey === requestStateKey
+        && rangesOverlap(backgroundInFlight.range, requestRange)
+      ) {
+        abortLaneInFlight("background", "preempted")
+      }
+      if (backgroundInFlight && backgroundInFlight.stateKey !== requestStateKey) {
+        abortLaneInFlight("background", "stale")
+      }
+      if (pendingBackgroundPull && pendingBackgroundPull.stateKey !== requestStateKey) {
+        diagnostics.prefetchDroppedStale += 1
+        pendingBackgroundPull = null
+        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+      }
+      if (criticalInFlight && !criticalInFlight.controller.signal.aborted) {
+        const nextRank = resolvePriorityRank(priority)
+        const activeRank = resolvePriorityRank(criticalInFlight.priority)
+        if (nextRank < activeRank) {
+          return queuePendingPull(requestRange, reason, priority, requestKey, requestStateKey, treePullContext)
         }
-        const pendingRank = pendingPull ? resolvePriorityRank(pendingPull.priority) : -1
-        if (nextRank >= pendingRank) {
-          pendingPull = {
-            range: requestRange,
-            reason,
-            priority,
-            key: requestKey,
-            treeData: treePullContext,
-          }
-          diagnostics.hasPendingPull = true
-        }
-        diagnostics.pullDeferred += 1
-        return inFlight.promise
       }
     }
 
-    abortInFlight()
+    if (laneInFlight && !laneInFlight.controller.signal.aborted) {
+      abortLaneInFlight(priority, "preempted")
+    }
+
     const requestId = requestCounter + 1
     requestCounter = requestId
     const controller = new AbortController()
     const requestPromise = (async () => {
-      diagnostics.inFlight = true
       diagnostics.paused = backpressurePaused
       diagnostics.pullRequested += 1
-      loading = true
-      error = null
+      if (priority === "background") {
+        diagnostics.prefetchStarted += 1
+      }
+      refreshLoadingState()
+      error = priority === "background" ? error : null
       emit()
 
       try {
@@ -736,8 +1153,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
           },
         })
 
-        if (disposed || !inFlight || inFlight.requestId !== requestId || controller.signal.aborted) {
+        const active = readLaneInFlight(priority)
+        if (disposed || !active || active.requestId !== requestId || controller.signal.aborted) {
           diagnostics.pullDropped += 1
+          if (priority === "background") {
+            diagnostics.prefetchDroppedStale += 1
+          }
           return
         }
 
@@ -771,28 +1192,46 @@ export function createDataSourceBackedRowModel<T = unknown>(
           bumpRevision()
         }
         diagnostics.pullCompleted += 1
+        if (priority === "background") {
+          diagnostics.prefetchCompleted += 1
+        }
+        updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
+        if (priority !== "background") {
+          scheduleViewportPrefetch()
+        } else if (!criticalInFlight) {
+          scheduleViewportPrefetch()
+        }
       } catch (reasonError) {
         if (isAbortError(reasonError)) {
           return
         }
-        error = reasonError instanceof Error ? reasonError : new Error(String(reasonError))
+        if (priority !== "background") {
+          error = reasonError instanceof Error ? reasonError : new Error(String(reasonError))
+        }
       } finally {
-        if (inFlight && inFlight.requestId === requestId) {
-          inFlight = null
-          diagnostics.inFlight = false
-          if (!disposed && pendingPull && !backpressurePaused) {
-            const next = pendingPull
-            pendingPull = null
-            diagnostics.hasPendingPull = false
-            void pullRange(next.range, next.reason, next.priority, next.treeData)
+        const active = readLaneInFlight(priority)
+        if (active && active.requestId === requestId) {
+          writeLaneInFlight(priority, null)
+          if (!disposed && !backpressurePaused) {
+            if (!criticalInFlight && pendingCriticalPull) {
+              const next = pendingCriticalPull
+              pendingCriticalPull = null
+              diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+              void pullRange(next.range, next.reason, next.priority, next.treeData)
+            } else if (!backgroundInFlight && !criticalInFlight && pendingBackgroundPull) {
+              const next = pendingBackgroundPull
+              pendingBackgroundPull = null
+              diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+              void pullRange(next.range, next.reason, next.priority, next.treeData)
+            }
           }
         }
-        loading = Boolean(inFlight)
+        refreshLoadingState()
         emit()
       }
     })()
 
-    inFlight = {
+    writeLaneInFlight(priority, {
       requestId,
       controller,
       key: requestKey,
@@ -800,7 +1239,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
       range: requestRange,
       promise: requestPromise,
       priority,
-    }
+      reason,
+    })
 
     return requestPromise
   }
@@ -808,6 +1248,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   function applyPushInvalidation(invalidation: DataGridDataSourceInvalidation) {
     if (invalidation.kind === "all") {
       clearAll()
+      clearBackgroundPrefetchState("stale")
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate(invalidation))
       }
@@ -816,6 +1257,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
 
     clearRange(invalidation.range)
+    if (backgroundInFlight && rangesOverlap(backgroundInFlight.range, normalizeRequestedRange(invalidation.range))) {
+      clearBackgroundPrefetchState("stale")
+    }
     if (typeof dataSource.invalidate === "function") {
       void Promise.resolve(dataSource.invalidate(invalidation))
     }
@@ -861,6 +1305,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (changed) {
         bumpRevision()
       }
+      updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
       emit()
       return
     }
@@ -885,6 +1330,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (changed) {
         bumpRevision()
       }
+      updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
       emit()
       return
     }
@@ -1010,23 +1456,28 @@ export function createDataSourceBackedRowModel<T = unknown>(
       const unchanged =
         nextViewport.start === viewportRange.start &&
         nextViewport.end === viewportRange.end
+      lastViewportDirection = nextViewport.start > viewportRange.start
+        ? 1
+        : nextViewport.start < viewportRange.start
+          ? -1
+          : lastViewportDirection
       viewportRange = nextViewport
+      const sourceViewport = toSourceRange(nextViewport)
 
       if (unchanged) {
-        const sourceViewport = toSourceRange(nextViewport)
-        let hasFullRange = true
-        for (let index = sourceViewport.start; index <= sourceViewport.end; index += 1) {
-          if (!rowCache.has(index)) {
-            hasFullRange = false
-            break
-          }
-        }
-        if (hasFullRange) {
+        if (isRangeFullyCached(sourceViewport)) {
+          scheduleViewportPrefetch()
           return
         }
       }
 
-      void pullRange(toSourceRange(nextViewport), "viewport-change", "critical")
+      if (isRangeFullyCached(sourceViewport)) {
+        scheduleViewportPrefetch()
+        emit()
+        return
+      }
+
+      void pullRange(sourceViewport, "viewport-change", "critical")
       emit()
     },
     setPagination(nextPagination: DataGridPaginationInput | null) {
@@ -1040,6 +1491,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       paginationInput = normalized
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       bumpRevision()
       emit()
@@ -1055,6 +1507,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         currentPage: 0,
       }
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       bumpRevision()
       emit()
@@ -1073,6 +1526,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         currentPage: normalizedPage,
       }
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       bumpRevision()
       emit()
@@ -1081,6 +1535,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       ensureActive()
       sortModel = Array.isArray(nextSortModel) ? [...nextSortModel] : []
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(toSourceRange(viewportRange), "sort-change", "critical")
@@ -1090,6 +1545,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       ensureActive()
       filterModel = cloneDataGridFilterSnapshot(nextFilterModel ?? null)
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(toSourceRange(viewportRange), "filter-change", "critical")
@@ -1105,6 +1561,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       expansionExpandedByDefault = Boolean(normalized?.expandedByDefault)
       toggledGroupKeys.clear()
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(
@@ -1124,6 +1581,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       pivotModel = normalized
       pivotColumns = []
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(toSourceRange(viewportRange), "group-change", "critical")
@@ -1140,6 +1598,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       aggregationModel = normalized
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(toSourceRange(viewportRange), "group-change", "critical")
@@ -1154,6 +1613,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(
@@ -1173,6 +1633,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(
@@ -1192,6 +1653,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(
@@ -1211,6 +1673,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(
@@ -1232,6 +1695,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       expansionExpandedByDefault = true
       toggledGroupKeys.clear()
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(
@@ -1253,6 +1717,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       expansionExpandedByDefault = false
       toggledGroupKeys.clear()
       resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
       bumpRevision()
       clearAll()
       void pullRange(
@@ -1267,6 +1732,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       ensureActive()
       if (reason === "reset") {
         clearAll()
+        clearBackgroundPrefetchState("stale")
         if (typeof dataSource.invalidate === "function") {
           await dataSource.invalidate({ kind: "all", reason: "reset" })
         }
@@ -1278,6 +1744,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
       const sourceRange = toSourceRange(range)
       const invalidation: DataGridDataSourceInvalidation = { kind: "range", range: sourceRange, reason: "model-range" }
       clearRange(sourceRange)
+      if (backgroundInFlight && rangesOverlap(backgroundInFlight.range, sourceRange)) {
+        clearBackgroundPrefetchState("stale")
+      }
+      if (pendingBackgroundPull && rangesOverlap(pendingBackgroundPull.range, sourceRange)) {
+        diagnostics.prefetchDroppedStale += 1
+        pendingBackgroundPull = null
+        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+      }
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate(invalidation))
       }
@@ -1290,6 +1764,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     invalidateAll() {
       ensureActive()
       clearAll()
+      clearBackgroundPrefetchState("stale")
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate({ kind: "all", reason: "model-all" }))
       }
@@ -1312,10 +1787,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       backpressurePaused = false
       diagnostics.paused = false
-      if (pendingPull && !inFlight) {
-        const next = pendingPull
-        pendingPull = null
-        diagnostics.hasPendingPull = false
+      if (pendingCriticalPull && !criticalInFlight) {
+        const next = pendingCriticalPull
+        pendingCriticalPull = null
+        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+        void pullRange(next.range, next.reason, next.priority, next.treeData)
+      } else if (pendingBackgroundPull && !criticalInFlight && !backgroundInFlight) {
+        const next = pendingBackgroundPull
+        pendingBackgroundPull = null
+        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
         void pullRange(next.range, next.reason, next.priority, next.treeData)
       } else {
         emit()
@@ -1340,10 +1820,13 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
     },
     getBackpressureDiagnostics() {
-      diagnostics.inFlight = Boolean(inFlight)
-      diagnostics.hasPendingPull = Boolean(pendingPull)
+      diagnostics.criticalInFlight = Boolean(criticalInFlight)
+      diagnostics.backgroundInFlight = Boolean(backgroundInFlight)
+      diagnostics.inFlight = diagnostics.criticalInFlight || diagnostics.backgroundInFlight
+      diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
       diagnostics.paused = backpressurePaused
       diagnostics.rowCacheSize = rowCache.size
+      updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
       return { ...diagnostics }
     },
     subscribe(listener) {
@@ -1360,11 +1843,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
       disposed = true
-      abortInFlight()
+      abortLaneInFlight("critical", "stale")
+      abortLaneInFlight("background", "stale")
       listeners.clear()
       rowCache.clear()
-      pendingPull = null
+      pendingCriticalPull = null
+      pendingBackgroundPull = null
       diagnostics.inFlight = false
+      diagnostics.criticalInFlight = false
+      diagnostics.backgroundInFlight = false
       diagnostics.paused = false
       diagnostics.hasPendingPull = false
       diagnostics.rowCacheSize = 0

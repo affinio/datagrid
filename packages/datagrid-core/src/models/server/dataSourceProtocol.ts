@@ -24,6 +24,7 @@ export type DataGridDataSourcePullPriority = "critical" | "normal" | "background
 export type DataGridDataSourcePullReason =
   | "mount"
   | "viewport-change"
+  | "prefetch"
   | "refresh"
   | "sort-change"
   | "filter-change"
@@ -166,6 +167,17 @@ export interface DataGridDataSourceBackpressureDiagnostics {
   hasPendingPull: boolean
   rowCacheSize: number
   rowCacheLimit: number
+  prefetchScheduled: number
+  prefetchStarted: number
+  prefetchCompleted: number
+  prefetchSkippedCached: number
+  prefetchCoalesced: number
+  prefetchDroppedStale: number
+  prefetchAborted: number
+  cachedAheadRows: number
+  cachedBehindRows: number
+  criticalInFlight: boolean
+  backgroundInFlight: boolean
 }
 
 export type DataGridServerPivotRowRole = "group" | "detail" | "subtotal" | "grand-total"

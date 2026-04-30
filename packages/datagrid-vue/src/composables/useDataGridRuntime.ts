@@ -617,7 +617,12 @@ export function useDataGridRuntime<TRow = unknown>(
     if (runtime.isDisposed()) {
       return
     }
-    runtime.setVirtualWindowRange(normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount))
+    const normalizedRange = normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount)
+    if (sparseRowModel) {
+      runtime.setViewportRange(normalizedRange)
+      return
+    }
+    runtime.setVirtualWindowRange(normalizedRange)
   }
 
   function getViewportRange(): DataGridBodyViewportRange {

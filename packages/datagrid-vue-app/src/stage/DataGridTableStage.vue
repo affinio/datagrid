@@ -161,6 +161,7 @@ import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
 import DataGridTableStagePinnedPane from "./DataGridTableStagePinnedPane.vue"
 import {
+  resolveDataGridVirtualChromeRowMetrics,
   resolveDeviceAlignedCanvasLineWidth,
   resolveDeviceAlignedCanvasStrokeCenter,
 } from "./dataGridChromeCanvasMath"
@@ -805,6 +806,42 @@ function handleFillHandleDoubleClick(event: MouseEvent): void {
 
 function resolveViewportRowStart(): number {
   return viewport.value?.viewportRowStart ?? 0
+}
+
+function resolveViewportRowEnd(): number {
+  const explicitEnd = viewport.value?.viewportRowEnd
+  if (Number.isFinite(explicitEnd)) {
+    return Math.max(resolveViewportRowStart(), Math.trunc(explicitEnd as number))
+  }
+  const actualCount = displayRows.value.length
+  return actualCount > 0
+    ? resolveViewportRowStart() + actualCount - 1
+    : resolveViewportRowStart() - 1
+}
+
+function resolveVirtualRowTotal(): number {
+  const explicitTotal = viewport.value?.virtualRowTotal
+  if (Number.isFinite(explicitTotal)) {
+    return Math.max(0, Math.trunc(explicitTotal as number))
+  }
+  return Math.max(
+    resolveViewportRowEnd() + 1,
+    displayRows.value.length,
+    selection.value?.totalRowCount ?? 0,
+  )
+}
+
+function resolveBaseRowHeight(): number {
+  const explicitHeight = viewport.value?.baseRowHeight
+  if (Number.isFinite(explicitHeight) && (explicitHeight as number) > 0) {
+    return Math.max(1, Math.trunc(explicitHeight as number))
+  }
+  const firstRow = displayRows.value[0]
+  if (firstRow) {
+    const style = rows.value?.rowStyle(firstRow, resolveViewportRowOffset(firstRow, 0)) ?? {}
+    return Math.max(1, Math.trunc(parsePixelValue(style.height ?? style.minHeight, 31)))
+  }
+  return 31
 }
 
 function resolveLeftColumnSpacerWidth(): number {
@@ -2781,18 +2818,19 @@ const rightTrackStyle = computed<CSSProperties>(() => ({
 }))
 
 function buildEstimatedVisibleRowMetrics(): readonly { top: number; height: number }[] {
-  const metrics: Array<{ top: number; height: number }> = []
-  let currentTop = viewport.value?.topSpacerHeight ?? 0
-  displayRows.value.forEach((row, rowOffset) => {
-    const style = rows.value?.rowStyle(row, rowOffset) ?? {}
-    const height = parsePixelValue(style.height ?? style.minHeight, 31)
-    metrics.push({
-      top: currentTop,
-      height,
-    })
-    currentTop += height
+  const virtualMetrics = resolveDataGridVirtualChromeRowMetrics({
+    rowStart: resolveViewportRowStart(),
+    rowEnd: resolveViewportRowEnd(),
+    rowTotal: resolveVirtualRowTotal(),
+    topSpacerHeight: viewport.value?.topSpacerHeight ?? 0,
+    baseRowHeight: resolveBaseRowHeight(),
+    resolveRowHeight: viewport.value?.resolveRowHeight,
+    resolveRowOffset: viewport.value?.resolveRowOffset,
   })
-  return metrics
+  return virtualMetrics.map(metric => ({
+    top: metric.top,
+    height: metric.height,
+  }))
 }
 
 const rowMetrics = computed(() => {
@@ -2858,21 +2896,36 @@ function resolveChromeRowBandKind(row: TableRow, rowOffset: number): string | nu
   return "base"
 }
 
-const rowBands = computed<readonly DataGridChromeRowBand[]>(() => (
-  displayRows.value.flatMap((row, rowOffset) => {
-    const metric = rowMetrics.value[rowOffset]
-    const kind = resolveChromeRowBandKind(row, rowOffset)
+const rowBands = computed<readonly DataGridChromeRowBand[]>(() => {
+  const viewportRowStart = resolveViewportRowStart()
+  const virtualBands = rowMetrics.value.map((metric, metricOffset) => {
+    const absoluteRowIndex = viewportRowStart + metricOffset
+    return {
+      rowIndex: metricOffset,
+      top: metric.top,
+      height: metric.height,
+      kind: rows.value.stripedRows === true && absoluteRowIndex % 2 === 1 ? "striped" : "base",
+    }
+  })
+  const loadedBands = displayRows.value.flatMap((row, rowOffset) => {
+    const metricOffset = resolveAbsoluteRowIndex(row, rowOffset) - viewportRowStart
+    const metric = rowMetrics.value[metricOffset]
+    const kind = resolveChromeRowBandKind(row, resolveViewportRowOffset(row, rowOffset))
     if (!metric || !kind) {
       return []
     }
     return [{
-      rowIndex: rowOffset,
+      rowIndex: metricOffset,
       top: metric.top,
       height: metric.height,
       kind,
     }]
   })
-))
+  return [
+    ...virtualBands,
+    ...loadedBands,
+  ]
+})
 
 function resolveChromeRowBands(): readonly DataGridChromeRowBand[] {
   return rowBands.value ?? []
@@ -2955,6 +3008,9 @@ watch(
 function resolveVisibleRowMetricsFromDom(
   fallbackMetrics: readonly { top: number; height: number }[],
 ): readonly { top: number; height: number }[] {
+  if (displayRows.value.length !== fallbackMetrics.length) {
+    return fallbackMetrics
+  }
   const viewport = bodyViewportEl.value
   if (!viewport) {
     return fallbackMetrics
@@ -3142,7 +3198,34 @@ function resolveVisibleRangeBoundsForRows(
 }
 
 function resolveVisibleRangeBounds(range: OverlayRange | null) {
-  return resolveVisibleRangeBoundsForRows(range, displayRows.value)
+  if (!range || visibleColumns.value.length === 0) {
+    return null
+  }
+
+  const visibleColumnStart = 0
+  const visibleColumnEnd = visibleColumns.value.length - 1
+  const startColumnIndex = Math.max(range.startColumn, visibleColumnStart)
+  const endColumnIndex = Math.min(range.endColumn, visibleColumnEnd)
+
+  if (startColumnIndex > endColumnIndex) {
+    return null
+  }
+
+  const visibleRowStart = resolveViewportRowStart()
+  const visibleRowEnd = resolveViewportRowEnd()
+  const startRowIndex = Math.max(range.startRow, visibleRowStart)
+  const endRowIndex = Math.min(range.endRow, visibleRowEnd)
+
+  if (startRowIndex > endRowIndex) {
+    return null
+  }
+
+  return {
+    startRowOffset: startRowIndex - visibleRowStart,
+    endRowOffset: endRowIndex - visibleRowStart,
+    startColumnIndex,
+    endColumnIndex,
+  }
 }
 
 function resolvePinnedBottomVisibleRangeBounds(range: OverlayRange | null) {
