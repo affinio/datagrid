@@ -15,10 +15,11 @@ Status: baseline demo implemented; filtering/editing parity not started.
 - [x] Stable row identity
 - [x] Loading/error diagnostics
 - [x] Server-side sorting
+- [x] Server-side filtering
+- [x] Server-side column histograms
 - [x] Sandbox navigation link
 
 ## Next Slices
-- [ ] Server-side filtering
 - [ ] Inline editing
 - [ ] Optimistic updates
 - [ ] Undo/redo semantics
@@ -31,6 +32,7 @@ Status: baseline demo implemented; filtering/editing parity not started.
 - [ ] Grouping
 - [ ] Aggregation
 - [ ] Pivot/histograms if applicable
+- Note: numeric buckets are not implemented yet; value histograms use exact numeric values for now.
 
 ## Server-Specific Behaviour
 - [ ] Cache invalidation
@@ -47,6 +49,7 @@ Status: baseline demo implemented; filtering/editing parity not started.
 - [ ] Open the demo and verify initial load completes
 - [ ] Scroll quickly and confirm viewport-driven requests continue
 - [ ] Sort by multiple columns if supported by the grid header
+- [ ] Apply a filter and confirm the visible range reloads against filtered rows
 - [ ] Trigger a refresh and confirm row identities remain stable
 - [ ] Trigger the error path and verify diagnostics update
 - [ ] Confirm cached rows and loaded rows labels match observed behavior

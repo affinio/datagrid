@@ -20,6 +20,7 @@
         <span>Loaded: {{ loadedRowsLabel }}</span>
         <span>Pending: {{ pendingRequestsLabel }}</span>
         <span>Sort: {{ sortModelLabel }}</span>
+        <span>Filter: {{ filterModelLabel }}</span>
       </div>
     </header>
 
@@ -32,6 +33,8 @@
         virtualization
         :show-row-index="true"
         :row-selection="false"
+        :column-menu="columnMenu"
+        advanced-filter
         layout-mode="auto-height"
         :min-rows="8"
         :max-rows="16"
@@ -70,6 +73,10 @@
           <dt>Sort</dt>
           <dd>{{ sortModelLabel }}</dd>
         </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Filter</dt>
+          <dd>{{ filterModelLabel }}</dd>
+        </div>
       </dl>
     </aside>
   </article>
@@ -77,7 +84,22 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
-import { createDataSourceBackedRowModel, type DataGridDataSource, type DataGridDataSourcePullRequest, type DataGridDataSourcePullResult, type DataGridDataSourcePushListener, type DataGridDataSourceInvalidation, type DataGridSortState } from "@affino/datagrid-vue"
+import {
+  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
+  createDataSourceBackedRowModel,
+  evaluateColumnPredicateFilter,
+  evaluateDataGridAdvancedFilterExpression,
+  serializeColumnValueToToken,
+  type DataGridColumnHistogram,
+  type DataGridColumnHistogramEntry,
+  type DataGridDataSource,
+  type DataGridDataSourceInvalidation,
+  type DataGridDataSourcePullRequest,
+  type DataGridDataSourcePullResult,
+  type DataGridDataSourcePushListener,
+  type DataGridFilterSnapshot,
+  type DataGridSortState,
+} from "@affino/datagrid-vue"
 import { type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
 import { DataGrid } from "@affino/datagrid-vue-app"
 
@@ -86,6 +108,7 @@ interface ServerDemoRow {
   index: number
   name: string
   segment: string
+  status: string
   region: string
   value: number
   updatedAt: string
@@ -108,12 +131,23 @@ const pendingRequests = ref(0)
 const loading = ref(true)
 const error = ref<Error | null>(null)
 const sortModelText = ref("none")
+const filterModelText = ref("none")
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
+const statuses = ["Active", "Paused", "Closed"] as const
 const regions = ["AMER", "EMEA", "APAC", "LATAM"] as const
+const columnMenu = {
+  enabled: true,
+  valueFilterEnabled: true,
+  valueFilterRowLimit: ROW_COUNT,
+  maxFilterValues: 250,
+} as const
+
+type ServerDemoHistogramRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["getColumnHistogram"]>>[0]
 
 function createRow(index: number): ServerDemoRow {
   const segment = segments[index % segments.length]!
+  const status = statuses[(index * 5) % statuses.length]!
   const region = regions[(index * 7) % regions.length]!
   const value = (index * 97) % 100_000
   const minute = String(index % 60).padStart(2, "0")
@@ -122,6 +156,7 @@ function createRow(index: number): ServerDemoRow {
     index,
     name: `Account ${index.toString().padStart(5, "0")}`,
     segment,
+    status,
     region,
     value,
     updatedAt: `2026-04-30T12:${minute}:00.000Z`,
@@ -155,14 +190,193 @@ function compareBySortModel(
   return left.index - right.index
 }
 
-function buildSortedRows(sortModel: readonly DataGridSortState[]): readonly ServerDemoRow[] {
+function matchesColumnFilter(
+  row: ServerDemoRow,
+  columnKey: string,
+  filterEntry: DataGridFilterSnapshot["columnFilters"][string],
+): boolean {
+  if (!filterEntry) {
+    return true
+  }
+  const candidate = row[columnKey as keyof ServerDemoRow]
+  if (Array.isArray(filterEntry)) {
+    const normalizedCandidate = serializeColumnValueToToken(candidate).toLowerCase()
+    return filterEntry.some(token => String(token ?? "").toLowerCase() === normalizedCandidate)
+  }
+  if (filterEntry.kind === "valueSet") {
+    const normalizedCandidate = serializeColumnValueToToken(candidate).toLowerCase()
+    return (filterEntry.tokens ?? []).some(token => String(token ?? "").toLowerCase() === normalizedCandidate)
+  }
+  if (filterEntry.kind === "predicate") {
+    return evaluateColumnPredicateFilter(filterEntry, candidate)
+  }
+  return true
+}
+
+function matchesFilterModel(row: ServerDemoRow, filterModel: DataGridFilterSnapshot | null): boolean {
+  if (!filterModel) {
+    return true
+  }
+  for (const [columnKey, filterEntry] of Object.entries(filterModel.columnFilters ?? {})) {
+    if (!matchesColumnFilter(row, columnKey, filterEntry)) {
+      return false
+    }
+  }
+  const expression = filterModel.advancedExpression
+    ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModel.advancedFilters)
+  if (!expression) {
+    return true
+  }
+  if (expression.kind === "condition") {
+    const key = String(expression.key ?? expression.field ?? "")
+    if (!key) {
+      return false
+    }
+    const candidate = row[key as keyof ServerDemoRow]
+    const candidateText = String(candidate ?? "").toLowerCase()
+    const expectedText = String(expression.value ?? "").toLowerCase()
+    const operator = String(expression.operator ?? "contains").toLowerCase()
+    if (operator === "contains") {
+      return candidateText.includes(expectedText)
+    }
+    if (operator === "notcontains" || operator === "not-contains") {
+      return !candidateText.includes(expectedText)
+    }
+    if (operator === "equals") {
+      return candidateText === expectedText
+    }
+    if (operator === "startswith" || operator === "starts-with") {
+      return candidateText.startsWith(expectedText)
+    }
+    if (operator === "endswith" || operator === "ends-with") {
+      return candidateText.endsWith(expectedText)
+    }
+    return evaluateColumnPredicateFilter({
+      kind: "predicate",
+      operator: expression.operator as never,
+      value: expression.value,
+      value2: expression.value2,
+    }, candidate)
+  }
+  return evaluateDataGridAdvancedFilterExpression(expression, condition => {
+    const key = String(condition.key ?? condition.field ?? "")
+    if (!key) {
+      return false
+    }
+    const value = row[key as keyof ServerDemoRow]
+    return evaluateColumnPredicateFilter({
+      kind: "predicate",
+      operator: String(condition.operator ?? "contains") as never,
+      value: condition.value,
+      value2: condition.value2,
+    }, value)
+  })
+}
+
+function buildFilteredRows(filterModel: DataGridFilterSnapshot | null): readonly ServerDemoRow[] {
   const rows = Array.from({ length: ROW_COUNT }, (_unused, index) => createRow(index))
-  if (sortModel.length === 0) {
+  if (!filterModel) {
     return rows
   }
-  // Demo-only: full-table sort is acceptable at 100k rows here, but a real service
-  // should replace this with indexed or backend-native sorting.
-  return rows.sort((left, right) => compareBySortModel(left, right, sortModel))
+  return rows.filter(row => matchesFilterModel(row, filterModel))
+}
+
+function cloneFilterModelExcludingColumn(
+  filterModel: DataGridFilterSnapshot | null,
+  columnKey: string,
+): DataGridFilterSnapshot | null {
+  if (!filterModel) {
+    return null
+  }
+  const normalizedKey = columnKey.trim()
+  const columnFilters: NonNullable<DataGridFilterSnapshot["columnFilters"]> = {}
+  for (const [key, entry] of Object.entries(filterModel.columnFilters ?? {})) {
+    if (key.trim() !== normalizedKey) {
+      columnFilters[key] = entry
+    }
+  }
+  return {
+    ...filterModel,
+    columnFilters,
+  }
+}
+
+function normalizeHistogramSearch(search: string | undefined): string {
+  return String(search ?? "").trim().toLowerCase()
+}
+
+function resolveHistogramValue(row: ServerDemoRow, columnId: string): unknown {
+  switch (columnId) {
+    case "region":
+      return row.region
+    case "segment":
+      return row.segment
+    case "status":
+      return row.status
+    case "value":
+      return row.value
+    default:
+      return row[columnId as keyof ServerDemoRow]
+  }
+}
+
+function compareHistogramEntries(left: DataGridColumnHistogramEntry, right: DataGridColumnHistogramEntry): number {
+  if (left.count !== right.count) {
+    return right.count - left.count
+  }
+  return String(left.text ?? left.value ?? left.token).localeCompare(String(right.text ?? right.value ?? right.token), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  })
+}
+
+function buildColumnHistogram(
+  request: ServerDemoHistogramRequest,
+): DataGridColumnHistogram {
+  const rows = buildFilteredRows(
+    request.options.ignoreSelfFilter === true
+      ? cloneFilterModelExcludingColumn(request.filterModel, request.columnId)
+      : request.filterModel,
+  )
+  const search = normalizeHistogramSearch(request.options.search)
+  const histogram = new Map<string, DataGridColumnHistogramEntry>()
+  for (const row of rows) {
+    const value = resolveHistogramValue(row, request.columnId)
+    if (value == null) {
+      continue
+    }
+    const token = serializeColumnValueToToken(value)
+    const existing = histogram.get(token)
+    if (existing) {
+      existing.count += 1
+      continue
+    }
+    histogram.set(token, {
+      token,
+      value,
+      text: String(value),
+      count: 1,
+    })
+  }
+  let entries = Array.from(histogram.values())
+  if (search.length > 0) {
+    entries = entries.filter(entry => {
+      const text = String(entry.text ?? entry.value ?? entry.token).toLowerCase()
+      return text.includes(search) || String(entry.token).toLowerCase().includes(search)
+    })
+  }
+  if (request.options.orderBy === "valueAsc") {
+    entries.sort((left, right) => String(left.text ?? left.value ?? left.token).localeCompare(String(right.text ?? right.value ?? right.token), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    }))
+  } else {
+    entries.sort(compareHistogramEntries)
+  }
+  const limit = Number.isFinite(request.options.limit)
+    ? Math.max(0, Math.trunc(request.options.limit as number))
+    : entries.length
+  return entries.slice(0, limit)
 }
 
 function wait(ms: number, signal: AbortSignal): Promise<void> {
@@ -197,7 +411,10 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
         failureMode.value = false
         throw new Error("Simulated backend failure")
       }
-      const sortedRows = buildSortedRows(request.sortModel)
+      const filteredRows = buildFilteredRows(request.filterModel)
+      const sortedRows = request.sortModel.length > 0
+        ? [...filteredRows].sort((left, right) => compareBySortModel(left, right, request.sortModel))
+        : filteredRows
       const start = Math.max(0, Math.trunc(request.range.start))
       const end = Math.max(start, Math.trunc(request.range.end))
       const limit = Math.max(1, Math.min(PAGE_SIZE, end - start + 1))
@@ -206,11 +423,11 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
         row,
         rowId: row.id,
       }))
-      totalRows.value = ROW_COUNT
-      loadedRows.value = Math.min(ROW_COUNT, Math.max(loadedRows.value, end + 1))
+      totalRows.value = filteredRows.length
+      loadedRows.value = Math.min(filteredRows.length, Math.max(loadedRows.value, end + 1))
       return {
         rows,
-        total: ROW_COUNT,
+        total: filteredRows.length,
       }
     } catch (caught) {
       const candidate = caught as Error
@@ -235,6 +452,9 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
       listener({ type: "invalidate", invalidation })
     }
   },
+  async getColumnHistogram(request: ServerDemoHistogramRequest): Promise<DataGridColumnHistogram> {
+    return buildColumnHistogram(request)
+  },
 }
 
 const rowModel = createDataSourceBackedRowModel<ServerDemoRow>({
@@ -256,6 +476,7 @@ const columns = [
   { key: "id", label: "Row ID", minWidth: 120, flex: 1, capabilities: { sortable: true } },
   { key: "name", label: "Account", minWidth: 180, flex: 1.2, capabilities: { sortable: true } },
   { key: "segment", label: "Segment", minWidth: 120, flex: 0.9, capabilities: { sortable: true } },
+  { key: "status", label: "Status", minWidth: 120, flex: 0.8, capabilities: { sortable: true } },
   { key: "region", label: "Region", minWidth: 100, flex: 0.8, capabilities: { sortable: true } },
   { key: "value", label: "Value", minWidth: 110, flex: 0.8, capabilities: { sortable: true } },
   { key: "updatedAt", label: "Updated", minWidth: 180, flex: 1.1, capabilities: { sortable: true } },
@@ -264,6 +485,9 @@ const columns = [
 const diagnostics = ref(rowModel.getBackpressureDiagnostics())
 const sortModelLabel = computed(() => {
   return sortModelText.value
+})
+const filterModelLabel = computed(() => {
+  return filterModelText.value
 })
 const rowCacheLabel = computed(() => `${diagnostics.value.rowCacheSize} / ${diagnostics.value.rowCacheLimit}`)
 const loadingLabel = computed(() => {
@@ -282,8 +506,16 @@ function refreshVisibleRange(): void {
 }
 
 function handleStateUpdate(state: unknown): void {
-  const sortModel = (state as { rows?: { snapshot?: { sortModel?: readonly DataGridSortState[] } } } | null)
-    ?.rows?.snapshot?.sortModel ?? []
+  const snapshot = (state as { rows?: { snapshot?: { sortModel?: readonly DataGridSortState[]; filterModel?: DataGridFilterSnapshot | null } } } | null)?.rows?.snapshot
+  const sortModel = snapshot?.sortModel ?? []
+  const filterModel = snapshot?.filterModel ?? null
+  filterModelText.value = filterModel
+    ? [
+        ...Object.keys(filterModel.columnFilters ?? {}),
+        ...(filterModel.advancedExpression ? ["advanced"] : []),
+        ...(Object.keys(filterModel.advancedFilters ?? {}).length > 0 ? ["legacy-advanced"] : []),
+      ].join(", ") || "active"
+    : "none"
   sortModelText.value = sortModel.length > 0
     ? sortModel.map(entry => `${entry.key}:${entry.direction}`).join(", ")
     : "none"
