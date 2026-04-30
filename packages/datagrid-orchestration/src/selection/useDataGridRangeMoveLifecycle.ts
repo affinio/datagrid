@@ -1,5 +1,5 @@
 export interface UseDataGridRangeMoveLifecycleOptions {
-  applyRangeMove: () => boolean
+  applyRangeMove: () => boolean | Promise<boolean>
   setRangeMoving: (value: boolean) => void
   clearRangeMovePointer: () => void
   clearRangeMoveBaseRange: () => void
@@ -16,10 +16,10 @@ export interface UseDataGridRangeMoveLifecycleResult {
 export function useDataGridRangeMoveLifecycle(
   options: UseDataGridRangeMoveLifecycleOptions,
 ): UseDataGridRangeMoveLifecycleResult {
-  function stopRangeMove(applyPreview: boolean) {
+  async function stopRangeMove(applyPreview: boolean) {
     if (applyPreview) {
       try {
-        options.applyRangeMove()
+        await options.applyRangeMove()
       } catch (error) {
         options.onApplyRangeMoveError?.(error)
       }

@@ -119,10 +119,10 @@ export interface UseDataGridAppInteractionControllerOptions<
     range: DataGridCopyRange,
     matrix: string[][],
     options?: { recordHistory?: boolean },
-  ) => number
+  ) => number | Promise<number>
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
-  applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean
+  applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean | Promise<boolean>
   syncViewport: () => void
   editingCell: Ref<{ rowId: string | number; columnKey: string } | null>
   startInlineEdit: (
@@ -158,7 +158,7 @@ export interface UseDataGridAppInteractionControllerResult<TRow> {
   stopFillSelection: (commit: boolean) => void
   startFillHandleDrag: (event: MouseEvent) => void
   startFillHandleDoubleClick: (event: MouseEvent) => void
-  applyLastFillBehavior: (behavior: DataGridFillBehavior) => boolean
+  applyLastFillBehavior: (behavior: DataGridFillBehavior) => boolean | Promise<boolean>
   handleCellMouseDown: (event: MouseEvent, row: DataGridRowNode<TRow>, rowOffset: number, columnIndex: number) => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridRowNode<TRow>, rowOffset: number, columnIndex: number) => void
   handleRowIndexKeydown: (event: KeyboardEvent, row: DataGridRowNode<TRow>, rowOffset: number) => void
@@ -373,14 +373,14 @@ export function useDataGridAppInteractionController<
     return event.key.length === 1
   }
 
-  const applyDirectCellEdit = (
+  const applyDirectCellEdit = async (
     row: DataGridRowNode<TRow>,
     rowIndex: number,
     columnIndex: number,
     columnKey: string,
     nextValue: unknown,
     label: string,
-  ): boolean => {
+  ): Promise<boolean> => {
     if (row.kind === "group" || row.rowId == null) {
       return false
     }
@@ -389,7 +389,7 @@ export function useDataGridAppInteractionController<
     if (resolvedRow.kind === "group" || resolvedRow.rowId == null) {
       return false
     }
-    options.runtime.api.rows.applyEdits([
+    await options.runtime.api.rows.applyEdits([
       {
         rowId: resolvedRow.rowId,
         data: {
@@ -663,11 +663,11 @@ export function useDataGridAppInteractionController<
     syncViewport: options.syncViewport,
   })
 
-  const applyCommittedFillRange = (
+  const applyCommittedFillRange = async (
     baseRange: DataGridCopyRange,
     previewRange: DataGridCopyRange,
     behavior?: DataGridFillBehavior,
-  ): boolean => {
+  ): Promise<boolean> => {
     const resolveRemovedFillRange = (
       previousRange: DataGridCopyRange,
       nextRange: DataGridCopyRange,
@@ -744,13 +744,13 @@ export function useDataGridAppInteractionController<
             sourceMatrix,
           })
 
-        options.applyClipboardEdits(removedRange, [["" ]], { recordHistory: false })
+        await options.applyClipboardEdits(removedRange, [[""]], { recordHistory: false })
 
         if (options.rangesEqual(baseRange, previewRange)) {
           options.applySelectionRange(baseRange)
           lastAppliedFill.value = null
         } else {
-          options.applyClipboardEdits(previewRange, buildDataGridFillMatrix({
+          await options.applyClipboardEdits(previewRange, buildDataGridFillMatrix({
             baseRange,
             previewRange,
             sourceMatrix,
@@ -781,7 +781,7 @@ export function useDataGridAppInteractionController<
       }
     }
 
-    const applied = applyFillRange(baseRange, previewRange, behavior)
+    const applied = await applyFillRange(baseRange, previewRange, behavior)
     if (applied && behavior) {
       activeFillBehavior.value = behavior
     }
@@ -1067,7 +1067,7 @@ export function useDataGridAppInteractionController<
       if (!baseRange || !previewRange) {
         return
       }
-      applyCommittedFillRange(baseRange, previewRange)
+    void applyCommittedFillRange(baseRange, previewRange)
     },
     setFillDragging: value => {
       isFillDragging.value = value
@@ -1347,7 +1347,7 @@ export function useDataGridAppInteractionController<
     }
     const beforeSnapshot = captureRowsSnapshotForRanges([range])
     options.clearPendingClipboardOperation(false)
-    const applied = options.applyClipboardEdits(range, [[""]], { recordHistory: false })
+    const applied = await options.applyClipboardEdits(range, [[""]], { recordHistory: false })
     if (applied <= 0) {
       return false
     }
@@ -1601,16 +1601,19 @@ export function useDataGridAppInteractionController<
     const preferredFocusCoord = resolveFillOriginFocusCoord()
     event.preventDefault()
     event.stopPropagation()
-    if (applyCommittedFillRange(baseRange, previewRange, behavior)) {
+    void applyCommittedFillRange(baseRange, previewRange, behavior).then(applied => {
+      if (!applied) {
+        return
+      }
       activeFillBehavior.value = behavior
       const restoredCoord = preferredFocusCoord
         ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
         : null
       restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
-    }
+    })
   }
 
-  const applyLastFillBehavior = (behavior: DataGridFillBehavior): boolean => {
+  const applyLastFillBehavior = async (behavior: DataGridFillBehavior): Promise<boolean> => {
     if (!isFillHandleEnabled.value) {
       return false
     }
@@ -1619,7 +1622,7 @@ export function useDataGridAppInteractionController<
       return false
     }
     const preferredFocusCoord = resolveFillOriginFocusCoord()
-    const applied = applyCommittedFillRange(session.baseRange, session.previewRange, behavior)
+    const applied = await applyCommittedFillRange(session.baseRange, session.previewRange, behavior)
     if (applied) {
       activeFillBehavior.value = behavior
       const restoredCoord = preferredFocusCoord
@@ -1788,7 +1791,7 @@ export function useDataGridAppInteractionController<
     if (keyboardAction === "toggle" && columnSnapshot && columnKey) {
       event.preventDefault()
       options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
-      applyDirectCellEdit(
+      void applyDirectCellEdit(
         row,
         rowIndex,
         columnIndex,

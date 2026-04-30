@@ -41,7 +41,7 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
     range: DataGridCopyRange,
     matrix: string[][],
     options?: { recordHistory?: boolean },
-  ) => number
+  ) => number | Promise<number>
   buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
   buildPasteSpecialMatrixFromRange?: (
     range: DataGridCopyRange,
@@ -58,7 +58,7 @@ export interface UseDataGridAppClipboardResult {
     range: DataGridCopyRange,
     matrix: string[][],
     options?: { recordHistory?: boolean },
-  ) => number
+  ) => number | Promise<number>
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
   clearPendingClipboardOperation: (clearSelection: boolean, clearBufferedClipboardPayload?: boolean) => boolean
@@ -133,11 +133,11 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     closeContextMenu: () => undefined,
   })
 
-  const applyClipboardEdits = options.applyClipboardEdits ?? ((
+  const applyClipboardEdits = options.applyClipboardEdits ?? (async (
     range: DataGridCopyRange,
     matrix: string[][],
     applyOptions: { recordHistory?: boolean } = {},
-  ): number => {
+  ): Promise<number> => {
     const normalized = normalizeClipboardRange(range)
     if (!normalized) {
       return 0
@@ -179,7 +179,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       rowId,
       data: data as Partial<TRow>,
     }))
-    options.runtime.api.rows.applyEdits(updates)
+    await options.runtime.api.rows.applyEdits(updates)
     options.applySelectionRange(normalized)
     if (beforeSnapshot != null) {
       options.recordEditTransaction(beforeSnapshot)
@@ -349,9 +349,9 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
         : [normalizedTargetRange],
     )
     if (pendingOperation === "cut" && pendingSourceRange) {
-      applyClipboardEdits(pendingSourceRange, [[""]], { recordHistory: false })
+      void applyClipboardEdits(pendingSourceRange, [[""]], { recordHistory: false })
     }
-    const appliedRows = applyClipboardEdits(targetRange, matrix, { recordHistory: false })
+    const appliedRows = await applyClipboardEdits(targetRange, matrix, { recordHistory: false })
     if (appliedRows <= 0) {
       return false
     }

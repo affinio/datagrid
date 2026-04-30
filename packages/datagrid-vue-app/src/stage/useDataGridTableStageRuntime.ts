@@ -163,7 +163,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
     range: DataGridCopyRange,
     mode: "values",
   ) => string[][]
-  applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean
+  applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean | Promise<boolean>
   isCellEditable?: DataGridCellEditablePredicate<TRow>
   history?: DataGridTableStageHistoryAdapter
   historyEnabled?: Ref<boolean>
@@ -674,10 +674,10 @@ export function useDataGridTableStageRuntime<
 
   const editingCellRef = computed(() => editingCell.value)
 
-  const applyStageRangeMove = (
+  const applyStageRangeMove = async (
     baseRange: DataGridCopyRange,
     targetRange: DataGridCopyRange,
-  ): boolean => {
+  ): Promise<boolean> => {
     const normalizedBaseRange = normalizeClipboardRange(baseRange)
     const normalizedTargetRange = normalizeClipboardRange(targetRange)
     if (!normalizedBaseRange || !normalizedTargetRange || rangesEqual(normalizedBaseRange, normalizedTargetRange)) {
@@ -756,7 +756,7 @@ export function useDataGridTableStageRuntime<
       return false
     }
 
-    options.runtime.api.rows.applyEdits(Array.from(rowPatchDataById.entries()).map(([rowId, data]) => ({
+    await options.runtime.api.rows.applyEdits(Array.from(rowPatchDataById.entries()).map(([rowId, data]) => ({
       rowId,
       data: data as Partial<TRow>,
     })))

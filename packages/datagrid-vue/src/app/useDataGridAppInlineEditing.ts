@@ -400,9 +400,9 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     return true
   }
 
-  const commitInlineEdit = (
+  const commitInlineEdit = async (
     targetOrEvent: DataGridAppInlineEditCommitTarget | boolean | FocusEvent = "stay",
-  ): void => {
+  ): Promise<void> => {
     const currentEditingCell = editingCell.value
     if (!currentEditingCell) {
       return
@@ -438,7 +438,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         draft: editingCellValue.value,
       })
       : editingCellValue.value
-    options.runtime.api.rows.applyEdits([
+    await options.runtime.api.rows.applyEdits([
       {
         rowId: resolvedRowId,
         data: {

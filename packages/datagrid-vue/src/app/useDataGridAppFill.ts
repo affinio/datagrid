@@ -27,19 +27,19 @@ export interface UseDataGridAppFillOptions {
   resolveSelectionRange: () => DataGridCopyRange | null
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
-  applyClipboardEdits: (range: DataGridCopyRange, matrix: string[][]) => number
+  applyClipboardEdits: (range: DataGridCopyRange, matrix: string[][]) => number | Promise<number>
   isCellEditableAt: (rowIndex: number, columnIndex: number) => boolean
   setLastAppliedFillSession: (session: DataGridAppAppliedFillSession | null) => void
   syncViewport: () => void
 }
 
 export interface UseDataGridAppFillResult {
-  applyFillPreview: (behavior?: DataGridFillBehavior) => boolean
+  applyFillPreview: (behavior?: DataGridFillBehavior) => boolean | Promise<boolean>
   applyFillRange: (
     baseRange: DataGridCopyRange,
     previewRange: DataGridCopyRange,
     behavior?: DataGridFillBehavior,
-  ) => boolean
+  ) => boolean | Promise<boolean>
   isCellInFillPreview: (rowOffset: number, columnIndex: number) => boolean
   isFillHandleCell: (rowOffset: number, columnIndex: number) => boolean
 }
@@ -47,11 +47,11 @@ export interface UseDataGridAppFillResult {
 export function useDataGridAppFill(
   options: UseDataGridAppFillOptions,
 ): UseDataGridAppFillResult {
-  const applyFillRange = (
+  const applyFillRange = async (
     baseRange: DataGridCopyRange,
     previewRange: DataGridCopyRange,
     behaviorOverride?: DataGridFillBehavior,
-  ): boolean => {
+  ): Promise<boolean> => {
     if (options.rangesEqual(baseRange, previewRange)) {
       return false
     }
@@ -72,7 +72,7 @@ export function useDataGridAppFill(
       sourceMatrix,
       behavior,
     })
-    const appliedRows = options.applyClipboardEdits(previewRange, matrix)
+    const appliedRows = await options.applyClipboardEdits(previewRange, matrix)
     if (appliedRows > 0) {
       options.setLastAppliedFillSession({
         baseRange: { ...baseRange },
@@ -90,7 +90,7 @@ export function useDataGridAppFill(
     return false
   }
 
-  const applyFillPreview = (behavior?: DataGridFillBehavior): boolean => {
+  const applyFillPreview = async (behavior?: DataGridFillBehavior): Promise<boolean> => {
     const baseRange = options.fillBaseRange.value
     const previewRange = options.fillPreviewRange.value
     if (!baseRange || !previewRange) {
