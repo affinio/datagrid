@@ -13,6 +13,7 @@
       <div class="server-grid__toolbar">
         <button type="button" class="server-grid__button" @click="refreshVisibleRange">Refresh visible range</button>
         <button type="button" class="server-grid__button" @click="simulateErrorOnce">Simulate one error</button>
+        <button type="button" class="server-grid__button" @click="simulateCommitFailure">Simulate commit failure</button>
       </div>
       <div class="server-grid__meta">
         <span>Rows: {{ totalRowsLabel }}</span>
@@ -29,6 +30,7 @@
         :key="gridKey"
         :columns="columns"
         :row-model="rowModel"
+        :is-cell-editable="isCellEditable"
         theme="industrial-neutral"
         virtualization
         :show-row-index="true"
@@ -39,11 +41,12 @@
         :min-rows="8"
         :max-rows="16"
         @update:state="handleStateUpdate"
+        @cell-edit="handleCellEdit"
       />
     </section>
 
     <aside class="server-grid__diagnostics">
-      <h3>Loading diagnostics</h3>
+  <h3>Loading diagnostics</h3>
       <dl class="server-grid__diagnostics-list">
         <div class="server-grid__diagnostics-card">
           <dt>Status</dt>
@@ -58,8 +61,20 @@
           <dd>{{ loadedRowsLabel }}</dd>
         </div>
         <div class="server-grid__diagnostics-card">
+          <dt>Edited rows</dt>
+          <dd>{{ editedRowsLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Last edit</dt>
+          <dd>{{ lastEditLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
           <dt>Cached rows</dt>
           <dd>{{ rowCacheLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Commit mode</dt>
+          <dd>{{ commitModeLabel }}</dd>
         </div>
         <div class="server-grid__diagnostics-card">
           <dt>In flight</dt>
@@ -124,7 +139,9 @@ const props = defineProps<{
 
 const gridKey = ref(0)
 const failureMode = ref(false)
+const commitFailureMode = ref(false)
 const lastViewportRange = ref<{ start: number; end: number }>({ start: 0, end: 0 })
+const committedOverrides = ref(new Map<string, Partial<ServerDemoRow>>())
 const totalRows = ref(0)
 const loadedRows = ref(0)
 const pendingRequests = ref(0)
@@ -132,6 +149,8 @@ const loading = ref(true)
 const error = ref<Error | null>(null)
 const sortModelText = ref("none")
 const filterModelText = ref("none")
+const commitModeText = ref("ok")
+const lastEditText = ref("none")
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
 const statuses = ["Active", "Paused", "Closed"] as const
@@ -144,15 +163,20 @@ const columnMenu = {
 } as const
 
 type ServerDemoHistogramRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["getColumnHistogram"]>>[0]
+type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>[0]
 
-function createRow(index: number): ServerDemoRow {
+function resolveRowId(index: number): string {
+  return `srv-${index.toString().padStart(6, "0")}`
+}
+
+function resolveBaseRow(index: number): ServerDemoRow {
   const segment = segments[index % segments.length]!
   const status = statuses[(index * 5) % statuses.length]!
   const region = regions[(index * 7) % regions.length]!
   const value = (index * 97) % 100_000
   const minute = String(index % 60).padStart(2, "0")
   return {
-    id: `srv-${index.toString().padStart(6, "0")}`,
+    id: resolveRowId(index),
     index,
     name: `Account ${index.toString().padStart(5, "0")}`,
     segment,
@@ -161,6 +185,12 @@ function createRow(index: number): ServerDemoRow {
     value,
     updatedAt: `2026-04-30T12:${minute}:00.000Z`,
   }
+}
+
+function createRow(index: number): ServerDemoRow {
+  const baseRow = resolveBaseRow(index)
+  const overrides = committedOverrides.value.get(baseRow.id)
+  return overrides ? { ...baseRow, ...overrides } : baseRow
 }
 
 function compareSortValue(left: unknown, right: unknown, direction: "asc" | "desc"): number {
@@ -455,6 +485,9 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
   async getColumnHistogram(request: ServerDemoHistogramRequest): Promise<DataGridColumnHistogram> {
     return buildColumnHistogram(request)
   },
+  async commitEdits(request: ServerDemoCommitEditsRequest) {
+    return applyCommitEdits(request)
+  },
 }
 
 const rowModel = createDataSourceBackedRowModel<ServerDemoRow>({
@@ -472,13 +505,15 @@ const rowModel = createDataSourceBackedRowModel<ServerDemoRow>({
   resolveRowId: row => row.id,
 })
 
+const safeEditableColumns = new Set(["name", "segment", "status", "region", "value"])
+
 const columns = [
   { key: "id", label: "Row ID", minWidth: 120, flex: 1, capabilities: { sortable: true } },
-  { key: "name", label: "Account", minWidth: 180, flex: 1.2, capabilities: { sortable: true } },
-  { key: "segment", label: "Segment", minWidth: 120, flex: 0.9, capabilities: { sortable: true } },
-  { key: "status", label: "Status", minWidth: 120, flex: 0.8, capabilities: { sortable: true } },
-  { key: "region", label: "Region", minWidth: 100, flex: 0.8, capabilities: { sortable: true } },
-  { key: "value", label: "Value", minWidth: 110, flex: 0.8, capabilities: { sortable: true } },
+  { key: "name", label: "Account", minWidth: 180, flex: 1.2, capabilities: { sortable: true, editable: true } },
+  { key: "segment", label: "Segment", minWidth: 120, flex: 0.9, capabilities: { sortable: true, editable: true } },
+  { key: "status", label: "Status", minWidth: 120, flex: 0.8, capabilities: { sortable: true, editable: true } },
+  { key: "region", label: "Region", minWidth: 100, flex: 0.8, capabilities: { sortable: true, editable: true } },
+  { key: "value", label: "Value", minWidth: 110, flex: 0.8, capabilities: { sortable: true, editable: true } },
   { key: "updatedAt", label: "Updated", minWidth: 180, flex: 1.1, capabilities: { sortable: true } },
 ] satisfies readonly DataGridAppColumnInput<ServerDemoRow>[]
 
@@ -489,7 +524,10 @@ const sortModelLabel = computed(() => {
 const filterModelLabel = computed(() => {
   return filterModelText.value
 })
+const editedRowsLabel = computed(() => String(committedOverrides.value.size))
+const lastEditLabel = computed(() => lastEditText.value)
 const rowCacheLabel = computed(() => `${diagnostics.value.rowCacheSize} / ${diagnostics.value.rowCacheLimit}`)
+const commitModeLabel = computed(() => commitModeText.value)
 const loadingLabel = computed(() => {
   if (error.value) return "error"
   if (pendingRequests.value > 0 || loading.value) return "loading"
@@ -522,9 +560,67 @@ function handleStateUpdate(state: unknown): void {
   diagnostics.value = rowModel.getBackpressureDiagnostics()
 }
 
+function isCellEditable(ctx: { rowId: string | number; columnKey: string }): boolean {
+  return safeEditableColumns.has(ctx.columnKey) && ctx.rowId != null
+}
+
+function handleCellEdit(payload: {
+  rowId: string | number
+  columnKey: string
+  oldValue: unknown
+  newValue: unknown
+  patch: {
+    rowId: string | number
+    data: Partial<ServerDemoRow>
+  }
+}): void {
+  lastEditText.value = `${payload.columnKey} ${String(payload.oldValue ?? "")} → ${String(payload.newValue ?? "")}`
+}
+
+function applyCommitEdits(request: ServerDemoCommitEditsRequest): Promise<{
+  committed?: readonly { rowId: string | number }[]
+  rejected?: readonly { rowId: string | number; reason?: string }[]
+}> {
+  if (commitFailureMode.value) {
+    commitFailureMode.value = false
+    commitModeText.value = "failed"
+    return Promise.resolve({
+      rejected: request.edits.map((edit) => ({
+        rowId: edit.rowId,
+        reason: "simulated failure",
+      })),
+    })
+  }
+
+  for (const edit of request.edits) {
+    const rowId = String(edit.rowId)
+    const current = committedOverrides.value.get(rowId) ?? {}
+    const nextData = { ...edit.data }
+    if ("value" in nextData) {
+      const numericValue = Number(nextData.value)
+      if (Number.isFinite(numericValue)) {
+        nextData.value = numericValue
+      }
+    }
+    committedOverrides.value = new Map(committedOverrides.value).set(rowId, {
+      ...current,
+      ...nextData,
+    })
+  }
+  commitModeText.value = "ok"
+  diagnostics.value = rowModel.getBackpressureDiagnostics()
+  return Promise.resolve({
+    committed: request.edits.map((edit) => ({ rowId: edit.rowId })),
+  })
+}
+
 function simulateErrorOnce(): void {
   failureMode.value = true
   void Promise.resolve(rowModel.refresh("manual")).catch(() => {})
+}
+
+function simulateCommitFailure(): void {
+  commitFailureMode.value = true
 }
 
 onMounted(() => {
@@ -550,7 +646,8 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid rgba(35, 42, 48, 0.12);
   min-width: 0;
-  overflow: visible;
+  max-height: min(42rem, 55vh);
+  overflow: auto;
 }
 
 .server-grid__diagnostics h3 {
@@ -564,6 +661,7 @@ onBeforeUnmount(() => {
   gap: 0.75rem;
   margin: 0;
   min-width: 0;
+  align-items: start;
 }
 
 .server-grid__diagnostics-card {
@@ -576,6 +674,7 @@ onBeforeUnmount(() => {
   border-radius: 0.5rem;
   background: rgba(255, 255, 255, 0.48);
   border: 1px solid rgba(35, 42, 48, 0.08);
+  overflow: hidden;
 }
 
 .server-grid__diagnostics-card dt,

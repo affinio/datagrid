@@ -1,6 +1,6 @@
 # Server Data Source Parity Checklist
 
-Status: baseline demo implemented; filtering/editing parity not started.
+Status: baseline demo implemented; filtering/histograms and demo-local editing slice implemented.
 
 ## Current Baseline
 - Demo route: `/vue/server-data-source-grid`
@@ -17,23 +17,16 @@ Status: baseline demo implemented; filtering/editing parity not started.
 - [x] Server-side sorting
 - [x] Server-side filtering
 - [x] Server-side column histograms
+- [x] Inline editing
+- [x] Optimistic updates
 - [x] Sandbox navigation link
 
 ## Next Slices
-- [ ] Inline editing
-- [ ] Optimistic updates
 - [ ] Undo/redo semantics
 - [ ] Fill handle semantics
 - [ ] Range move
 
-Note: inline editing requires a dedicated server/data-source mutation API. The current data-source row model is read/pull-oriented and does not implement `patchRows`.
-### Example usage (client adapter)
-
-- Listen to `cell-edit` from DataGrid
-- Apply optimistic local override
-- Call `dataSource.commitEdits([{ rowId, data }])`
-- On success: invalidate affected range
-- On failure: rollback override and refresh
+Note: the row model remains read/pull-oriented; the demo uses a datasource-local `commitEdits` adapter for optimistic edits.
 
 ## Client-Model Parity Checklist
 - [ ] Selection across unloaded rows
