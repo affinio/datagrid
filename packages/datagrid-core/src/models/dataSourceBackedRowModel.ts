@@ -82,7 +82,9 @@ export interface DataGridDataSourcePrefetchOptions {
 
 export interface DataSourceBackedRowModel<T = unknown> extends DataGridRowModel<T> {
   readonly dataSource: DataGridDataSource<T>
-  patchRows?: (updates: readonly import("./mutation/clientRowPatchRuntime.js").DataGridClientRowPatchLike<T>[]) => void
+  patchRows?: (
+    updates: readonly import("./mutation/clientRowPatchRuntime.js").DataGridClientRowPatchLike<T>[],
+  ) => void | Promise<void>
   getSparseRowModelDiagnostics(): DataGridSparseRowModelDiagnostics
   invalidateRange(range: DataGridViewportRange): void
   invalidateAll(): void
@@ -1415,7 +1417,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
             if (!Array.isArray(updates) || updates.length === 0) {
               return
             }
-            void Promise.resolve(getDataSourceCommitEdits({
+            return Promise.resolve(getDataSourceCommitEdits({
               edits: updates,
             }))
               .then(result => {

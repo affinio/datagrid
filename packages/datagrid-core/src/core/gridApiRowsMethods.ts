@@ -92,11 +92,11 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   patchRows: (
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
-  ) => void
+  ) => void | Promise<void>
   applyEdits: (
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridRowsApplyEditsOptions,
-  ) => void
+  ) => void | Promise<void>
   setAutoReapply: (value: boolean) => void
   getAutoReapply: () => boolean
   batch: <TResult>(fn: () => TResult) => TResult
@@ -356,7 +356,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
       assertMutationsAllowed("patch rows")
       assertNotAborted(options?.signal, "rows.patch")
       const capability = assertPatchCapability(getPatchCapability())
-      capability.patchRows(updates, options)
+      return capability.patchRows(updates, options)
     },
     applyEdits(
       updates: readonly DataGridClientRowPatch<TRow>[],
@@ -368,7 +368,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
       const shouldReapply = typeof options?.reapply === "boolean"
         ? options.reapply
         : autoReapply
-      capability.patchRows(updates, {
+      return capability.patchRows(updates, {
         recomputeSort: shouldReapply,
         recomputeFilter: shouldReapply,
         recomputeGroup: shouldReapply,

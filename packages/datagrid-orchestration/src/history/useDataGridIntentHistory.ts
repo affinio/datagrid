@@ -13,7 +13,7 @@ export interface DataGridIntentTransactionDescriptor {
 
 export interface UseDataGridIntentHistoryOptions<TSnapshot> {
   captureSnapshot: () => TSnapshot
-  applySnapshot: (snapshot: TSnapshot) => void
+  applySnapshot: (snapshot: TSnapshot) => void | Promise<void>
   maxHistoryDepth?: number
   logger?: Pick<Console, "error">
 }
@@ -44,7 +44,7 @@ export function useDataGridIntentHistory<TSnapshot>(
       if (context.direction === "apply") {
         return
       }
-      options.applySnapshot(command.payload as TSnapshot)
+      return options.applySnapshot(command.payload as TSnapshot)
     },
   })
 

@@ -85,7 +85,7 @@ export function useDataGridAppIntentHistory<TRow>(
     applySnapshot: snapshot => {
       if (snapshot.kind === "partial") {
         if (snapshot.rows.length > 0) {
-          options.runtime.api.rows.applyEdits(snapshot.rows.map(entry => ({
+          return options.runtime.api.rows.applyEdits(snapshot.rows.map(entry => ({
             rowId: entry.rowId,
             data: options.cloneRowData(entry.row) as Partial<TRow>,
           })))

@@ -69,4 +69,63 @@ describe("useDataGridAppIntentHistory contract", () => {
     ])
     expect(rows.find(row => row.rowId === "r2")?.data.value).toBe("B")
   })
+
+  it("propagates async partial snapshot replay through undo", async () => {
+    let rows = [
+      { rowId: "r1", data: { value: "A" } },
+      { rowId: "r2", data: { value: "B" } },
+    ]
+    let releaseCommit: () => void = () => undefined
+    const applyEdits = vi.fn(async (updates: Array<{ rowId: string | number; data: Partial<DemoRow> }>) => {
+      await new Promise<void>((resolve: (value: void | PromiseLike<void>) => void) => {
+        releaseCommit = resolve
+      })
+      rows = rows.map(row => {
+        const update = updates.find(candidate => candidate.rowId === row.rowId)
+        return update ? { ...row, data: { ...row.data, ...update.data } } : row
+      })
+    })
+
+    const history = useDataGridAppIntentHistory<DemoRow>({
+      runtime: {
+        api: {
+          rows: {
+            getCount: () => rows.length,
+            get: (rowIndex: number) => {
+              const row = rows[rowIndex]
+              return row ? { rowId: row.rowId, kind: "leaf", data: row.data } : null
+            },
+            setData: vi.fn(),
+            applyEdits,
+          },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => {
+          const row = rows[rowIndex]
+          return row ? { rowId: row.rowId, kind: "leaf", data: row.data } : null
+        },
+        resolveBodyRowIndexById: (rowId: string | number) => rows.findIndex(row => row.rowId === rowId),
+      } as never,
+      cloneRowData: row => ({ ...row }),
+      syncViewport: vi.fn(),
+    })
+
+    const beforeSnapshot = history.captureRowsSnapshotByIds(["r1"])
+    rows = rows.map(row => row.rowId === "r1" ? { ...row, data: { value: "patched" } } : row)
+
+    await history.recordIntentTransaction({ intent: "edit", label: "Patch row" }, beforeSnapshot)
+
+    const undoPromise = history.runHistoryAction("undo")
+    expect(history.canUndo.value).toBe(true)
+    expect(history.canRedo.value).toBe(false)
+    releaseCommit()
+    await undoPromise
+
+    expect(applyEdits).toHaveBeenCalledWith([
+      {
+        rowId: "r1",
+        data: { value: "A" },
+      },
+    ])
+    expect(rows.find(row => row.rowId === "r1")?.data.value).toBe("A")
+  })
 })
