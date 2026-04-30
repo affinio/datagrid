@@ -17,7 +17,7 @@ type MutableRowsRowModel<TRow> = DataGridRowModel<TRow> & {
   patchRows?: (
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
-  ) => void
+  ) => void | Promise<void>
 }
 
 function isMutableRowsModel<TRow>(model: DataGridRowModel<TRow>): model is MutableRowsRowModel<TRow> {
@@ -52,7 +52,7 @@ export interface UseDataGridRuntimeServiceResult<TRow = unknown> extends DataGri
   patchRows: (
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
-  ) => void
+  ) => void | Promise<void>
   setColumns: (columns: readonly DataGridColumnInput[]) => void
   setViewportRange: (range: DataGridViewportRange) => void
   setVirtualWindowRange: (range: DataGridViewportRange) => void

@@ -113,7 +113,7 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   applyEdits: (
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridEditOptions,
-  ) => void
+  ) => void | Promise<void>
   reapplyView: () => void
   autoReapply: Ref<boolean>
   getProjectionMode: () => DataGridApiProjectionMode

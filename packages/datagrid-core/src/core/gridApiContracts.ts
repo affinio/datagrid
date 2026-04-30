@@ -188,7 +188,7 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   applyEdits(
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridApplyEditsOptions,
-  ): void
+  ): void | Promise<void>
   setAutoReapply(value: boolean): void
   getAutoReapply(): boolean
   batch<TResult>(fn: () => TResult): TResult
