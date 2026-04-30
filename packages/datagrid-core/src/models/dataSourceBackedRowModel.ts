@@ -82,6 +82,7 @@ export interface DataGridDataSourcePrefetchOptions {
 
 export interface DataSourceBackedRowModel<T = unknown> extends DataGridRowModel<T> {
   readonly dataSource: DataGridDataSource<T>
+  patchRows?: (updates: readonly import("./mutation/clientRowPatchRuntime.js").DataGridClientRowPatchLike<T>[]) => void
   getSparseRowModelDiagnostics(): DataGridSparseRowModelDiagnostics
   invalidateRange(range: DataGridViewportRange): void
   invalidateAll(): void
@@ -1375,6 +1376,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
 
   const getDataSourceColumnHistogram = dataSource.getColumnHistogram
+  const getDataSourceCommitEdits = dataSource.commitEdits
   const histogramMethods: Pick<DataSourceBackedRowModel<T>, "getColumnHistogram"> =
     typeof getDataSourceColumnHistogram === "function"
       ? {
@@ -1401,6 +1403,26 @@ export function createDataSourceBackedRowModel<T = unknown>(
                 cursor: paginationCursor,
               },
             }).then(result => normalizeColumnHistogramResult(result))
+        },
+      }
+      : {}
+
+  const patchMethods: Pick<DataSourceBackedRowModel<T>, "patchRows"> =
+    typeof getDataSourceCommitEdits === "function"
+      ? {
+          patchRows(updates) {
+            ensureActive()
+            if (!Array.isArray(updates) || updates.length === 0) {
+              return
+            }
+            void Promise.resolve(getDataSourceCommitEdits({
+              edits: updates,
+            }))
+              .then(() => {
+                if (!disposed) {
+                  void pullRange(toSourceRange(viewportRange), "refresh", "critical")
+                }
+              })
           },
         }
       : {}
@@ -1409,6 +1431,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     kind: "server",
     dataSource,
     ...histogramMethods,
+    ...patchMethods,
     getSparseRowModelDiagnostics() {
       return {
         kind: "data-source",

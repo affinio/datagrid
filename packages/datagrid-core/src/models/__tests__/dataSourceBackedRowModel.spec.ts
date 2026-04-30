@@ -93,6 +93,85 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("exposes patchRows when the data source implements commitEdits and refreshes after commit", async () => {
+    const rows = [
+      { id: 1, value: "row-1" },
+      { id: 2, value: "row-2" },
+    ]
+    const commitEdits = vi.fn(async ({ edits }: { edits: readonly Array<{ rowId: number; data: { value?: string } }> }) => {
+      for (const edit of edits) {
+        const row = rows.find(candidate => candidate.id === edit.rowId)
+        if (row && typeof edit.data.value === "string") {
+          row.value = edit.data.value
+        }
+      }
+      return { committed: edits.map(edit => ({ rowId: edit.rowId })) }
+    })
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        return {
+          rows: rows
+            .filter(row => row.id >= request.range.start + 1 && row.id <= request.range.end + 1)
+            .map((row, offset) => ({
+              index: request.range.start + offset,
+              row,
+              rowId: row.id,
+            })),
+          total: rows.length,
+        }
+      },
+      commitEdits,
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+
+    expect(typeof model.patchRows).toBe("function")
+
+    model.setViewportRange({ start: 0, end: 0 })
+    await flushMicrotasks()
+
+    model.patchRows?.([
+      { rowId: 1, data: { value: "updated" } },
+    ])
+
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(commitEdits).toHaveBeenCalledWith({
+      edits: [
+        { rowId: 1, data: { value: "updated" } },
+      ],
+    })
+    expect(model.getRow(0)?.row.value).toBe("updated")
+
+    model.dispose()
+  })
+
+  it("keeps patchRows unavailable when the data source does not implement commitEdits", async () => {
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull() {
+        return {
+          rows: [],
+          total: 0,
+        }
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 0,
+    })
+
+    expect(model.patchRows).toBeUndefined()
+
+    model.dispose()
+  })
+
   it("enforces abort-first backpressure under viewport overload", async () => {
     const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {

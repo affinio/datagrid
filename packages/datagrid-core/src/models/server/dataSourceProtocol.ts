@@ -13,6 +13,7 @@ import type {
   DataGridSortState,
   DataGridViewportRange,
 } from "../rowModel.js"
+import type { DataGridClientRowPatch } from "../clientRowModel.js"
 import type {
   DataGridPivotColumn,
   DataGridPivotColumnPathSegment,
@@ -102,6 +103,23 @@ export interface DataGridDataSourcePullResult<T = unknown> {
   cursor?: string | null
 }
 
+export interface DataGridDataSourceCommitEditsRequest<T = unknown> {
+  edits: readonly DataGridClientRowPatch<T>[]
+  signal?: AbortSignal
+  revision?: string | number | null
+}
+
+export interface DataGridDataSourceCommitEditsResult {
+  committed?: readonly {
+    rowId: DataGridRowId
+    revision?: string | number | null
+  }[]
+  rejected?: readonly {
+    rowId: DataGridRowId
+    reason?: string
+  }[]
+}
+
 export interface DataGridDataSourceInvalidationAll {
   kind: "all"
   reason?: string
@@ -148,6 +166,7 @@ export type DataGridDataSourcePushListener<T = unknown> = (
 export interface DataGridDataSource<T = unknown> {
   pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<T>>
   getColumnHistogram?(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram>
+  commitEdits?(request: DataGridDataSourceCommitEditsRequest<T>): Promise<DataGridDataSourceCommitEditsResult>
   subscribe?(listener: DataGridDataSourcePushListener<T>): () => void
   invalidate?(invalidation: DataGridDataSourceInvalidation): Promise<void> | void
 }
