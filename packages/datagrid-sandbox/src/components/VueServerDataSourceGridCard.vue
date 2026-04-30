@@ -77,6 +77,10 @@
           <dd>{{ commitModeLabel }}</dd>
         </div>
         <div class="server-grid__diagnostics-card">
+          <dt>Commit msg</dt>
+          <dd>{{ commitMessageLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
           <dt>In flight</dt>
           <dd>{{ diagnostics.inFlight ? "yes" : "no" }}</dd>
         </div>
@@ -142,6 +146,7 @@ const failureMode = ref(false)
 const commitFailureMode = ref(false)
 const lastViewportRange = ref<{ start: number; end: number }>({ start: 0, end: 0 })
 const committedOverrides = ref(new Map<string, Partial<ServerDemoRow>>())
+const pendingOverrides = ref(new Map<string, Partial<ServerDemoRow>>())
 const totalRows = ref(0)
 const loadedRows = ref(0)
 const pendingRequests = ref(0)
@@ -150,6 +155,7 @@ const error = ref<Error | null>(null)
 const sortModelText = ref("none")
 const filterModelText = ref("none")
 const commitModeText = ref("ok")
+const commitMessageText = ref("none")
 const lastEditText = ref("none")
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
@@ -189,8 +195,9 @@ function resolveBaseRow(index: number): ServerDemoRow {
 
 function createRow(index: number): ServerDemoRow {
   const baseRow = resolveBaseRow(index)
-  const overrides = committedOverrides.value.get(baseRow.id)
-  return overrides ? { ...baseRow, ...overrides } : baseRow
+  const committed = committedOverrides.value.get(baseRow.id)
+  const pending = pendingOverrides.value.get(baseRow.id)
+  return committed || pending ? { ...baseRow, ...committed, ...pending } : baseRow
 }
 
 function compareSortValue(left: unknown, right: unknown, direction: "asc" | "desc"): number {
@@ -528,6 +535,7 @@ const editedRowsLabel = computed(() => String(committedOverrides.value.size))
 const lastEditLabel = computed(() => lastEditText.value)
 const rowCacheLabel = computed(() => `${diagnostics.value.rowCacheSize} / ${diagnostics.value.rowCacheLimit}`)
 const commitModeLabel = computed(() => commitModeText.value)
+const commitMessageLabel = computed(() => commitMessageText.value)
 const loadingLabel = computed(() => {
   if (error.value) return "error"
   if (pendingRequests.value > 0 || loading.value) return "loading"
@@ -581,37 +589,72 @@ function applyCommitEdits(request: ServerDemoCommitEditsRequest): Promise<{
   committed?: readonly { rowId: string | number }[]
   rejected?: readonly { rowId: string | number; reason?: string }[]
 }> {
-  if (commitFailureMode.value) {
-    commitFailureMode.value = false
+  try {
+    if (commitFailureMode.value) {
+      commitFailureMode.value = false
+      commitModeText.value = "failed"
+      commitMessageText.value = "rejected: simulated failure"
+      for (const edit of request.edits) {
+        const rowId = String(edit.rowId)
+        const nextPending = new Map(pendingOverrides.value)
+        nextPending.delete(rowId)
+        pendingOverrides.value = nextPending
+      }
+      diagnostics.value = rowModel.getBackpressureDiagnostics()
+      void rowModel.refresh("manual")
+      return Promise.resolve({
+        rejected: request.edits.map((edit) => ({
+          rowId: edit.rowId,
+          reason: "simulated failure",
+        })),
+      })
+    }
+
+    for (const edit of request.edits) {
+      const rowId = String(edit.rowId)
+      const committed = committedOverrides.value.get(rowId) ?? {}
+      const pending = pendingOverrides.value.get(rowId) ?? {}
+      const nextData = { ...pending, ...edit.data }
+      if ("value" in nextData) {
+        const numericValue = Number(nextData.value)
+        if (Number.isFinite(numericValue)) {
+          nextData.value = numericValue
+        }
+      }
+      const nextCommitted = new Map(committedOverrides.value)
+      nextCommitted.set(rowId, {
+        ...committed,
+        ...nextData,
+      })
+      committedOverrides.value = nextCommitted
+      const nextPending = new Map(pendingOverrides.value)
+      nextPending.delete(rowId)
+      pendingOverrides.value = nextPending
+    }
+    commitModeText.value = "ok"
+    commitMessageText.value = "committed"
+    diagnostics.value = rowModel.getBackpressureDiagnostics()
+    return Promise.resolve({
+      committed: request.edits.map((edit) => ({ rowId: edit.rowId })),
+    })
+  } catch (caught) {
     commitModeText.value = "failed"
+    commitMessageText.value = `error: ${caught instanceof Error ? caught.message : String(caught)}`
+    for (const edit of request.edits) {
+      const rowId = String(edit.rowId)
+      const nextPending = new Map(pendingOverrides.value)
+      nextPending.delete(rowId)
+      pendingOverrides.value = nextPending
+    }
+    diagnostics.value = rowModel.getBackpressureDiagnostics()
+    void rowModel.refresh("manual")
     return Promise.resolve({
       rejected: request.edits.map((edit) => ({
         rowId: edit.rowId,
-        reason: "simulated failure",
+        reason: caught instanceof Error ? caught.message : String(caught),
       })),
     })
   }
-
-  for (const edit of request.edits) {
-    const rowId = String(edit.rowId)
-    const current = committedOverrides.value.get(rowId) ?? {}
-    const nextData = { ...edit.data }
-    if ("value" in nextData) {
-      const numericValue = Number(nextData.value)
-      if (Number.isFinite(numericValue)) {
-        nextData.value = numericValue
-      }
-    }
-    committedOverrides.value = new Map(committedOverrides.value).set(rowId, {
-      ...current,
-      ...nextData,
-    })
-  }
-  commitModeText.value = "ok"
-  diagnostics.value = rowModel.getBackpressureDiagnostics()
-  return Promise.resolve({
-    committed: request.edits.map((edit) => ({ rowId: edit.rowId })),
-  })
 }
 
 function simulateErrorOnce(): void {

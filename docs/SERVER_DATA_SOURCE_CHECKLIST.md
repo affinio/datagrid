@@ -19,6 +19,7 @@ Status: baseline demo implemented; filtering/histograms and demo-local editing s
 - [x] Server-side column histograms
 - [x] Inline editing
 - [x] Optimistic updates
+- [x] Commit failure / rollback UX
 - [x] Sandbox navigation link
 
 ## Next Slices
