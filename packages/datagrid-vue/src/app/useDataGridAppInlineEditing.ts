@@ -48,6 +48,16 @@ export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
   captureRowsSnapshot: () => TSnapshot
   captureRowsSnapshotForRowIds?: (rowIds: readonly (string | number)[]) => TSnapshot
   recordEditTransaction: (beforeSnapshot: TSnapshot) => void
+  onCellEdit?: (payload: {
+    rowId: string | number
+    columnKey: string
+    oldValue: unknown
+    newValue: unknown
+    patch: {
+      rowId: string | number
+      data: Partial<TRow>
+    }
+  }) => void
 }
 
 export interface UseDataGridAppInlineEditingResult<TRow> {
@@ -416,6 +426,11 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     }
     const resolvedRowId = rowNode?.rowId ?? currentEditingCell.rowId
     const columnSnapshot = options.visibleColumns.value.find(column => column.key === currentEditingCell.columnKey)
+    const oldValue = rowNode && rowNode.kind !== "group"
+      ? (columnSnapshot
+        ? readEditorSourceValue(rowNode, columnSnapshot)
+        : (rowNode.data as Record<string, unknown>)[currentEditingCell.columnKey])
+      : undefined
     const parsedValue = columnSnapshot
       ? parseDataGridCellDraftValue({
         column: columnSnapshot.column,
@@ -431,6 +446,18 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         } as Partial<TRow>,
       },
     ])
+    options.onCellEdit?.({
+      rowId: resolvedRowId,
+      columnKey: currentEditingCell.columnKey,
+      oldValue,
+      newValue: parsedValue,
+      patch: {
+        rowId: resolvedRowId,
+        data: {
+          [currentEditingCell.columnKey]: parsedValue,
+        } as Partial<TRow>,
+      },
+    })
     options.recordEditTransaction(beforeSnapshot)
     clearInlineEdit()
     suppressNextBlurCommit.value = false

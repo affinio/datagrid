@@ -1116,6 +1116,45 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("emits a cell-edit event for a committed inline text edit", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+    await editor.setValue("Legacy")
+    await editor.trigger("blur")
+    await flushRuntimeTasks()
+
+    const events = wrapper.emitted("cell-edit") ?? []
+    expect(events).toHaveLength(1)
+    expect(events[0]?.[0]).toMatchObject({
+      rowId: "r1",
+      columnKey: "owner",
+      oldValue: "NOC",
+      newValue: "Legacy",
+      patch: {
+        rowId: "r1",
+        data: {
+          owner: "Legacy",
+        },
+      },
+    })
+
+    wrapper.unmount()
+  })
+
   it("keeps native context menu on an active text editor without opening the grid menu", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

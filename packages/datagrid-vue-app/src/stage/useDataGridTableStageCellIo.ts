@@ -26,6 +26,16 @@ export interface UseDataGridTableStageCellIoOptions<TRow extends Record<string, 
     beforeSnapshot: unknown,
   ) => void
   syncViewport: () => void
+  onCellEdit?: (payload: {
+    rowId: string | number
+    columnKey: string
+    oldValue: unknown
+    newValue: unknown
+    patch: {
+      rowId: string | number
+      data: Partial<TRow>
+    }
+  }) => void
 }
 
 export interface UseDataGridTableStageCellIoResult<TRow extends Record<string, unknown>> {
@@ -96,17 +106,31 @@ export function useDataGridTableStageCellIo<TRow extends Record<string, unknown>
     if (editableRow.kind === "group" || editableRow.rowId == null) {
       return
     }
+    const oldValue = editableRow.data[column.key]
+    const newValue = toggleDataGridCellValue({
+      column: column.column,
+      row: editableRow.data,
+    })
     options.runtime.api.rows.applyEdits([
       {
         rowId: editableRow.rowId,
         data: {
-          [column.key]: toggleDataGridCellValue({
-            column: column.column,
-            row: editableRow.data,
-          }),
+          [column.key]: newValue,
         } as Partial<TRow>,
       },
     ])
+    options.onCellEdit?.({
+      rowId: editableRow.rowId,
+      columnKey: column.key,
+      oldValue,
+      newValue,
+      patch: {
+        rowId: editableRow.rowId,
+        data: {
+          [column.key]: newValue,
+        } as Partial<TRow>,
+      },
+    })
     options.recordHistoryIntentTransaction({
       intent: "edit",
       label: `Toggle ${column.key}`,

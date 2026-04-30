@@ -139,6 +139,16 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
   applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
   clearColumnMenuFilter?: (columnKey: string) => void
+  onCellEdit?: (payload: {
+    rowId: string | number
+    columnKey: string
+    oldValue: unknown
+    newValue: unknown
+    patch: {
+      rowId: string | number
+      data: Partial<TRow>
+    }
+  }) => void
   applyRowHeightSettings: () => void
   cloneRowData: (row: TRow) => TRow
   readClipboardCell?: (row: DataGridRowNode<TRow>, columnKey: string) => string
@@ -657,6 +667,7 @@ export function useDataGridTableStageRuntime<
       }, beforeSnapshot)
     },
     ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "edit"),
+    onCellEdit: options.onCellEdit,
   })
 
   isEditingCellForSelection = isEditingCell

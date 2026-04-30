@@ -659,6 +659,19 @@ export default defineComponent({
       type: Object as PropType<Ref<DataGridRowSelectionSnapshot | null>>,
       required: true,
     },
+    onCellEdit: {
+      type: Function as PropType<((payload: {
+        rowId: string | number
+        columnKey: string
+        oldValue: unknown
+        newValue: unknown
+        patch: {
+          rowId: string | number
+          data: Partial<Record<string, unknown>>
+        }
+      }) => void) | undefined>,
+      default: undefined,
+    },
     syncSelectionSnapshotFromRuntime: {
       type: Function as PropType<() => void>,
       required: true,
@@ -2549,6 +2562,7 @@ export default defineComponent({
       rowHover: computed(() => props.rowHover),
       stripedRows: computed(() => props.stripedRows),
       chromeSignature: gridLinesChromeSignature,
+      onCellEdit: props.onCellEdit,
       showRowIndex: computed(() => props.showRowIndex),
       showRowSelection: computed(() => props.rowSelection),
       isRowInPendingClipboardCut,

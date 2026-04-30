@@ -18,6 +18,7 @@ export type {
   DataGridCellStyleResolver,
   DataGridComponent,
   DataGridComponentFor,
+  DataGridCellEditEvent,
   DataGridExposed,
   DataGridExposedRuntime,
   DataGridFilterCellReader,

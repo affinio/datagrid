@@ -38,6 +38,7 @@ import {
   type DataGridUnifiedColumnState,
   type DataGridUnifiedState,
   type DataGridPivotSpec,
+  type DataGridRowId,
   type UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import {
@@ -783,12 +784,24 @@ export interface DataGridExposed<TRow = unknown> {
   applyState: (state: DataGridUnifiedState<TRow> | null, options?: DataGridSetStateOptions) => boolean
 }
 
+export interface DataGridCellEditEvent<TRow = unknown> {
+  rowId: DataGridRowId
+  columnKey: string
+  oldValue: unknown
+  newValue: unknown
+  patch: {
+    rowId: DataGridRowId
+    data: Partial<TRow>
+  }
+}
+
 const DataGridRuntimeComponent = defineComponent({
   name: "DataGrid",
   inheritAttrs: false,
   props: dataGridProps,
   emits: {
     "cell-change": (_payload: unknown) => true,
+    "cell-edit": (_payload: DataGridCellEditEvent<Record<string, unknown>>) => true,
     "selection-change": (_payload: DataGridApiSelectionChangedEvent) => true,
     "row-selection-change": (_payload: DataGridApiRowSelectionChangedEvent) => true,
     "row-select": (_payload: DataGridRowSelectionSnapshot | null) => true,
@@ -1076,6 +1089,10 @@ const DataGridRuntimeComponent = defineComponent({
       controlledState.emitSnapshotUpdates()
     }
 
+    const handleCellEdit = (payload: DataGridCellEditEvent<Record<string, unknown>>): void => {
+      emit("cell-edit", payload)
+    }
+
     const handleSelectionChange = (payload: DataGridApiSelectionChangedEvent): void => {
       emit("selection-change", payload)
     }
@@ -1343,20 +1360,21 @@ const DataGridRuntimeComponent = defineComponent({
           ref: dataGridRef,
           key: dataGridInstanceKey.value,
           rows: props.rows,
-          rowModel: resolvedRowModel.value,
-          columns: resolvedColumns.value,
-          theme: props.theme,
-          layoutMode: resolvedLayout.value.layoutMode,
+        rowModel: resolvedRowModel.value,
+        columns: resolvedColumns.value,
+        theme: props.theme,
+        layoutMode: resolvedLayout.value.layoutMode,
           renderMode: resolvedRenderMode.value,
           pagination: resolvedPagination.value,
           plugins: props.plugins,
           services: resolvedServices.value,
           startupOrder: props.startupOrder,
-          autoStart: props.autoStart,
-          onCellChange: handleCellChange,
-          onSelectionChange: handleSelectionChange,
-          onRowSelectionChange: handleRowSelectionChange,
-        },
+        autoStart: props.autoStart,
+        onCellChange: handleCellChange,
+        onCellEdit: handleCellEdit,
+        onSelectionChange: handleSelectionChange,
+        onRowSelectionChange: handleRowSelectionChange,
+      },
         slots.default
           ? {
               default: (slotProps: DataGridRuntimeHostSlotProps) => slots.default?.({
@@ -1365,6 +1383,7 @@ const DataGridRuntimeComponent = defineComponent({
                   ...defaultRendererProps,
                   runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
                   runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot">,
+                  onCellEdit: handleCellEdit,
                 },
               }),
             }
@@ -1373,6 +1392,7 @@ const DataGridRuntimeComponent = defineComponent({
                 ...defaultRendererProps,
                 runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
                 runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot">,
+                onCellEdit: handleCellEdit,
               }),
             },
       )
