@@ -229,9 +229,9 @@
             type="button"
             class="datagrid-column-menu__link"
             data-datagrid-column-menu-action="select-all-values"
-            :data-disabled-reason="resolveActionDisabledTitle('selectAllValues', filterSectionDisabled || valueEntries.length === 0 || isAllValuesSelected, 'filter')"
-            :disabled="isActionDisabled('selectAllValues', filterSectionDisabled || valueEntries.length === 0 || isAllValuesSelected)"
-            :title="resolveActionDisabledTitle('selectAllValues', filterSectionDisabled || valueEntries.length === 0 || isAllValuesSelected, 'filter')"
+            :data-disabled-reason="resolveActionDisabledTitle('selectAllValues', filterSectionDisabled || valueEntriesBusy || valueEntries.length === 0 || isAllValuesSelected, 'filter')"
+            :disabled="isActionDisabled('selectAllValues', filterSectionDisabled || valueEntriesBusy || valueEntries.length === 0 || isAllValuesSelected)"
+            :title="resolveActionDisabledTitle('selectAllValues', filterSectionDisabled || valueEntriesBusy || valueEntries.length === 0 || isAllValuesSelected, 'filter')"
             @click="selectAllValues"
           >
             {{ selectAllValuesLabel }}
@@ -241,9 +241,9 @@
             type="button"
             class="datagrid-column-menu__link"
             data-datagrid-column-menu-action="clear-all-values"
-            :data-disabled-reason="resolveActionDisabledTitle('clearAllValues', filterSectionDisabled || draftSelectedTokens.length === 0, 'filter')"
-            :disabled="isActionDisabled('clearAllValues', filterSectionDisabled || draftSelectedTokens.length === 0)"
-            :title="resolveActionDisabledTitle('clearAllValues', filterSectionDisabled || draftSelectedTokens.length === 0, 'filter')"
+            :data-disabled-reason="resolveActionDisabledTitle('clearAllValues', filterSectionDisabled || valueEntriesBusy || draftSelectedTokens.length === 0, 'filter')"
+            :disabled="isActionDisabled('clearAllValues', filterSectionDisabled || valueEntriesBusy || draftSelectedTokens.length === 0)"
+            :title="resolveActionDisabledTitle('clearAllValues', filterSectionDisabled || valueEntriesBusy || draftSelectedTokens.length === 0, 'filter')"
             @click="clearAllValues"
           >
             {{ clearAllValuesLabel }}
@@ -255,38 +255,50 @@
 
         <div v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__values">
           <div
+            ref="valuesListRef"
             class="datagrid-column-menu__values-list"
             role="listbox"
             aria-multiselectable="true"
             :aria-label="`Filter values for ${columnLabel}`"
+            @scroll.passive="handleValuesListScroll"
           >
-            <label
-              v-for="entry in visibleValues"
-              :key="entry.token"
-              class="datagrid-column-menu__value"
-              role="option"
-              :aria-selected="selectedTokenSet.has(entry.token)"
-            >
-              <input
-                :name="`datagrid-column-menu-value-${columnKey}-${entry.token}`"
-                type="checkbox"
-                :checked="selectedTokenSet.has(entry.token)"
-                :disabled="filterSectionDisabled"
-                :title="resolveSectionDisabledTitle('filter', filterSectionDisabled)"
-                @change="toggleFilterValue(entry.token)"
-              />
-              <span class="datagrid-column-menu__value-label">{{ entry.label }}</span>
-              <span class="datagrid-column-menu__value-count">{{ entry.count }}</span>
-            </label>
+            <div v-if="valueEntriesLoading" class="datagrid-column-menu__empty">
+              Loading values...
+            </div>
 
-            <div v-if="visibleValues.length === 0" class="datagrid-column-menu__empty">
-              No matching values
+            <div v-else-if="valueEntriesError" class="datagrid-column-menu__empty">
+              Unable to load values
+            </div>
+
+            <template v-else>
+              <label
+                v-for="entry in visibleValues"
+                :key="entry.token"
+                class="datagrid-column-menu__value"
+                role="option"
+                :aria-selected="selectedTokenSet.has(entry.token)"
+              >
+                <input
+                  :name="`datagrid-column-menu-value-${columnKey}-${entry.token}`"
+                  type="checkbox"
+                  :checked="selectedTokenSet.has(entry.token)"
+                  :disabled="filterSectionDisabled"
+                  :title="resolveSectionDisabledTitle('filter', filterSectionDisabled)"
+                  @change="toggleFilterValue(entry.token)"
+                />
+                <span class="datagrid-column-menu__value-label">{{ entry.label }}</span>
+                <span class="datagrid-column-menu__value-count">{{ entry.count }}</span>
+              </label>
+            </template>
+
+            <div v-if="!valueEntriesLoading && !valueEntriesError && visibleValues.length === 0" class="datagrid-column-menu__empty">
+              {{ hasSearchQuery ? 'No matching values' : 'No values' }}
             </div>
           </div>
         </div>
 
         <div v-if="effectiveValueFilterEnabled && hiddenMatchCount > 0" class="datagrid-column-menu__summary">
-          Showing first {{ visibleValues.length }} values. Use search to filter all {{ matchedValues.length }}.
+          Showing {{ visibleValues.length }} of {{ matchedValues.length }} values. Scroll to load more or search.
         </div>
 
         <div v-if="effectiveValueFilterEnabled && appliedFilterTokens.length === 0" class="datagrid-column-menu__hint">
@@ -310,9 +322,9 @@
             type="button"
             class="datagrid-column-menu__button datagrid-column-menu__button--primary"
             data-datagrid-column-menu-action="apply-filter"
-            :data-disabled-reason="resolveActionDisabledTitle('applyFilter', filterSectionDisabled || !canApplyFilter, 'filter')"
-            :disabled="isActionDisabled('applyFilter', filterSectionDisabled || !canApplyFilter)"
-            :title="resolveActionDisabledTitle('applyFilter', filterSectionDisabled || !canApplyFilter, 'filter')"
+            :data-disabled-reason="resolveActionDisabledTitle('applyFilter', filterSectionDisabled || valueEntriesBusy || !canApplyFilter, 'filter')"
+            :disabled="isActionDisabled('applyFilter', filterSectionDisabled || valueEntriesBusy || !canApplyFilter)"
+            :title="resolveActionDisabledTitle('applyFilter', filterSectionDisabled || valueEntriesBusy || !canApplyFilter, 'filter')"
             @click="handleApplyFilter"
           >
             {{ applyFilterLabel }}
@@ -375,6 +387,10 @@ type DataGridColumnMenuRenderableEntry =
   | { kind: "section"; key: DataGridColumnMenuItemKey }
   | { kind: "custom"; key: string; item: DataGridColumnMenuCustomItem }
 
+type DataGridColumnMenuValueEntriesResult =
+  | readonly DataGridColumnHistogramEntry[]
+  | Promise<readonly DataGridColumnHistogramEntry[]>
+
 interface UiMenuRef {
   controller?: {
     open: (reason?: "pointer" | "keyboard" | "programmatic") => void
@@ -387,7 +403,7 @@ const DATAGRID_COLUMN_MENU_VALUE_FILTER_HARD_ROW_LIMIT = 100_000
 
 const props = defineProps<{
   rowCount: number
-  resolveValueEntries?: (() => readonly DataGridColumnHistogramEntry[]) | undefined
+  resolveValueEntries?: ((search?: string) => DataGridColumnMenuValueEntriesResult) | undefined
   items: readonly DataGridColumnMenuItemKey[]
   disabledItems: readonly DataGridColumnMenuItemKey[]
   disabledReasons: DataGridColumnMenuDisabledReasons
@@ -427,9 +443,16 @@ const rootElementRef = inject(dataGridAppRootElementKey, ref<HTMLElement | null>
 const open = ref(false)
 const query = ref("")
 const addCurrentSelectionToFilter = ref(false)
+const valuesListRef = ref<HTMLElement | null>(null)
 const valueEntries = ref<readonly DataGridColumnMenuValueEntry[]>([])
+const valueEntriesLoading = ref(false)
+const valueEntriesError = ref<string | null>(null)
 const draftSelectedTokens = ref<readonly string[]>([])
+const renderedValueCount = ref(0)
 const menuThemeVars = ref<Record<string, string>>({})
+const includeNewValueEntriesByDefault = ref(false)
+let valueEntriesRequestId = 0
+let suppressNextQueryReload = false
 const sortLabels = computed(() => resolveColumnMenuSortLabels(props.columnDataType))
 const disabledItems = computed(() => new Set(props.disabledItems))
 const contextMenuEnabled = computed(() => props.triggerMode !== "button")
@@ -445,6 +468,11 @@ const resolvedValueFilterRowLimit = computed(() => {
     ? props.valueFilterRowLimit
     : Number.POSITIVE_INFINITY
   return Math.min(configuredLimit, DATAGRID_COLUMN_MENU_VALUE_FILTER_HARD_ROW_LIMIT)
+})
+const valueRenderBatchSize = computed(() => {
+  return Number.isFinite(props.maxFilterValues) && props.maxFilterValues > 0
+    ? Math.max(20, Math.trunc(props.maxFilterValues))
+    : 120
 })
 const effectiveValueFilterEnabled = computed(() => {
   if (!props.filterEnabled) {
@@ -483,6 +511,7 @@ const selectedTokenSet = computed(() => new Set(draftSelectedTokens.value))
 const hasAnyFilterControls = computed(() => effectiveValueFilterEnabled.value || props.textFilterEnabled)
 const showTextFilterInput = computed(() => props.textFilterEnabled && !effectiveValueFilterEnabled.value)
 const hasSearchQuery = computed(() => query.value.trim().length > 0)
+const valueEntriesBusy = computed(() => valueEntriesLoading.value || valueEntriesError.value !== null)
 const showPinSection = computed(() => (
   isActionVisible("pinMenu")
   && (isActionVisible("pinLeft") || isActionVisible("pinRight") || isActionVisible("unpin"))
@@ -520,7 +549,7 @@ const visibleValues = computed(() => {
   if (hasSearchQuery.value) {
     return matchedValues.value
   }
-  return matchedValues.value.slice(0, props.maxFilterValues)
+  return matchedValues.value.slice(0, renderedValueCount.value)
 })
 
 const hiddenMatchCount = computed(() => {
@@ -555,6 +584,7 @@ const isAllValuesSelected = computed(() => (
 
 const canApplyFilter = computed(() => (
   effectiveValueFilterEnabled.value
+  && !valueEntriesBusy.value
   && valueEntries.value.length > 0
   && appliedFilterTokens.value.length > 0
 ))
@@ -586,9 +616,18 @@ const menuCallbacks: MenuCallbacks = {
   },
 }
 
-watch(hasSearchQuery, value => {
-  if (!value) {
+watch(query, value => {
+  resetValuesListScroll()
+  if (value.trim().length === 0) {
     addCurrentSelectionToFilter.value = false
+    resetRenderedValueCount()
+  }
+  if (suppressNextQueryReload) {
+    suppressNextQueryReload = false
+    return
+  }
+  if (open.value && effectiveValueFilterEnabled.value) {
+    void loadValueEntries(false)
   }
 })
 
@@ -600,15 +639,14 @@ watch(rootElementRef, () => {
 
 watch(
   () => [
-    open.value,
     props.filterEnabled,
     props.valueFilterRowLimit,
     props.columnKey,
     props.rowCount,
     props.selectedFilterTokens.length,
   ] as const,
-  ([isOpen]) => {
-    if (!isOpen) {
+  () => {
+    if (!open.value) {
       return
     }
     resetFilterDraft()
@@ -703,6 +741,10 @@ function collectColumnMenuValueEntries(
   ))
 }
 
+function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
+  return typeof (value as { then?: unknown })?.then === "function"
+}
+
 function closeMenu(): void {
   menuRef.value?.controller?.close("programmatic")
 }
@@ -749,29 +791,127 @@ function syncMenuThemeVars(): void {
 }
 
 function resetFilterDraft(): void {
-  query.value = ""
+  if (query.value !== "") {
+    suppressNextQueryReload = true
+    query.value = ""
+  }
   addCurrentSelectionToFilter.value = false
+  resetRenderedValueCount()
+  resetValuesListScroll()
   if (!effectiveValueFilterEnabled.value) {
     valueEntries.value = []
+    valueEntriesLoading.value = false
+    valueEntriesError.value = null
     draftSelectedTokens.value = []
+    includeNewValueEntriesByDefault.value = false
     return
   }
-  const entries = collectColumnMenuValueEntries(props.resolveValueEntries?.() ?? [])
-  valueEntries.value = entries
+  void loadValueEntries(true)
+}
+
+async function loadValueEntries(resetSelection: boolean): Promise<void> {
+  const requestId = valueEntriesRequestId + 1
+  valueEntriesRequestId = requestId
+  valueEntriesLoading.value = true
+  valueEntriesError.value = null
+
+  try {
+    const result = props.resolveValueEntries?.(query.value.trim()) ?? []
+    const rawEntries = isPromiseLike(result) ? await result : result
+    if (requestId !== valueEntriesRequestId) {
+      return
+    }
+    const entries = collectColumnMenuValueEntries(rawEntries)
+    valueEntries.value = entries
+    syncDraftSelectedTokens(entries, resetSelection)
+  } catch (error) {
+    if (requestId !== valueEntriesRequestId) {
+      return
+    }
+    valueEntries.value = []
+    valueEntriesError.value = error instanceof Error ? error.message : String(error)
+    draftSelectedTokens.value = []
+    includeNewValueEntriesByDefault.value = false
+  } finally {
+    if (requestId === valueEntriesRequestId) {
+      valueEntriesLoading.value = false
+    }
+  }
+}
+
+function syncDraftSelectedTokens(
+  entries: readonly DataGridColumnMenuValueEntry[],
+  resetSelection: boolean,
+): void {
   const activeTokens = Array.from(new Set(
     props.selectedFilterTokens
       .map(token => normalizeColumnMenuToken(String(token ?? "")))
-      .filter(token => entries.some(entry => entry.token === token)),
+      .filter(Boolean),
   ))
-  draftSelectedTokens.value = activeTokens.length > 0
-    ? activeTokens
-    : entries.map(entry => entry.token)
+  if (resetSelection) {
+    const entryTokenSet = new Set(entries.map(entry => entry.token))
+    const visibleActiveTokens = activeTokens.filter(token => entryTokenSet.has(token))
+    includeNewValueEntriesByDefault.value = activeTokens.length === 0
+    draftSelectedTokens.value = visibleActiveTokens.length > 0
+      ? visibleActiveTokens
+      : entries.map(entry => entry.token)
+    return
+  }
+
+  const nextTokens = new Set(draftSelectedTokens.value.map(token => normalizeColumnMenuToken(String(token ?? ""))).filter(Boolean))
+  for (const token of activeTokens) {
+    nextTokens.add(token)
+  }
+  if (includeNewValueEntriesByDefault.value) {
+    for (const entry of entries) {
+      nextTokens.add(entry.token)
+    }
+  }
+  if (nextTokens.size === 0 && activeTokens.length === 0) {
+    for (const entry of entries) {
+      nextTokens.add(entry.token)
+    }
+    includeNewValueEntriesByDefault.value = true
+  }
+  draftSelectedTokens.value = Array.from(nextTokens)
+}
+
+function resetRenderedValueCount(): void {
+  renderedValueCount.value = valueRenderBatchSize.value
+}
+
+function resetValuesListScroll(): void {
+  if (valuesListRef.value) {
+    valuesListRef.value.scrollTop = 0
+  }
+}
+
+function handleValuesListScroll(event: Event): void {
+  if (hasSearchQuery.value) {
+    return
+  }
+  if (renderedValueCount.value >= matchedValues.value.length) {
+    return
+  }
+  const target = event.target as HTMLElement | null
+  if (!target) {
+    return
+  }
+  const remaining = target.scrollHeight - (target.scrollTop + target.clientHeight)
+  if (remaining > 24) {
+    return
+  }
+  renderedValueCount.value = Math.min(
+    matchedValues.value.length,
+    renderedValueCount.value + valueRenderBatchSize.value,
+  )
 }
 
 function toggleFilterValue(token: string): void {
   if (filterSectionDisabled.value) {
     return
   }
+  includeNewValueEntriesByDefault.value = false
   const next = new Set(draftSelectedTokens.value)
   if (next.has(token)) {
     next.delete(token)
@@ -785,6 +925,7 @@ function selectAllValues(): void {
   if (filterSectionDisabled.value) {
     return
   }
+  includeNewValueEntriesByDefault.value = true
   draftSelectedTokens.value = valueEntries.value.map(entry => entry.token)
 }
 
@@ -792,6 +933,7 @@ function clearAllValues(): void {
   if (filterSectionDisabled.value) {
     return
   }
+  includeNewValueEntriesByDefault.value = false
   draftSelectedTokens.value = []
 }
 
@@ -806,7 +948,7 @@ function handleApplyFilter(): void {
   if (filterSectionDisabled.value || !canApplyFilter.value) {
     return
   }
-  if (appliedFilterTokens.value.length === valueEntries.value.length) {
+  if (!hasSearchQuery.value && appliedFilterTokens.value.length === valueEntries.value.length) {
     emit("clear-filter")
   } else {
     emit("apply-filter", [...appliedFilterTokens.value])

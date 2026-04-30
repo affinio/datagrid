@@ -1,4 +1,5 @@
 import { isRef, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from "vue"
+import { isDataGridSparseRowModel } from "@affino/datagrid-core"
 import type {
   DataGridApiCapabilities,
   DataGridApiEventName,
@@ -182,14 +183,6 @@ interface DataGridRuntimeResolvedRowPartition<TRow = unknown> {
   bodyRowIndexById: Map<string | number, number>
   snapshot: DataGridRuntimeRowPartitionSnapshot<TRow>
   signature: string
-}
-
-function isWorkerBackedRowModel<TRow>(rowModel: DataGridRowModel<TRow>): boolean {
-  return typeof (
-    rowModel as DataGridRowModel<TRow> & {
-      getWorkerProtocolDiagnostics?: () => unknown
-    }
-  ).getWorkerProtocolDiagnostics === "function"
 }
 
 function isPinnedBodyExcludedRow<TRow>(row: DataGridRowNode<TRow>): boolean {
@@ -402,9 +395,9 @@ export function useDataGridRuntime<TRow = unknown>(
   }
 
   const { rowModel, columnModel, core, api } = runtime
-  const workerBackedRowModel = isWorkerBackedRowModel(rowModel)
+  const sparseRowModel = isDataGridSparseRowModel(rowModel)
   const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
-  const initialRowPartition = workerBackedRowModel
+  const initialRowPartition = sparseRowModel
     ? buildSparseRowPartitionSnapshot<TRow>(api, rowModel.getSnapshot())
     : buildIndexedRowPartitionSnapshot<TRow>(api, rowModel.getSnapshot())
   const rowPartition = shallowRef<DataGridRuntimeRowPartitionSnapshot<TRow>>(
@@ -435,7 +428,7 @@ export function useDataGridRuntime<TRow = unknown>(
     virtualWindow.value = resolveCurrentBodyVirtualWindow(next)
   })
   const unsubscribeRowPartition = rowModel.subscribe((snapshot) => {
-    if (workerBackedRowModel) {
+    if (sparseRowModel) {
       const nextPartition = buildSparseRowPartitionSnapshot<TRow>(api, snapshot)
       bodyRows = nextPartition.bodyRows
       bodyDisplayIndexes = nextPartition.bodyDisplayIndexes
@@ -535,7 +528,7 @@ export function useDataGridRuntime<TRow = unknown>(
     }
     const normalizedRange = normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount)
     const syncedRows = runtime.syncRowsInRange(normalizedRange)
-    if (workerBackedRowModel) {
+    if (sparseRowModel) {
       for (const row of syncedRows) {
         if (isPinnedBodyExcludedRow(row)) {
           continue

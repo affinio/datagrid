@@ -15,6 +15,9 @@ import {
   type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
   type DataGridAggregationModel,
+  type DataGridColumnHistogram,
+  type DataGridColumnHistogramOptions,
+  type DataGridColumnHistogramResult,
   type DataGridRowId,
   type DataGridRowNode,
   type DataGridRowIdResolver,
@@ -22,6 +25,7 @@ import {
   type DataGridRowModelListener,
   type DataGridRowModelRefreshReason,
   type DataGridRowModelSnapshot,
+  type DataGridSparseRowModelDiagnostics,
   type DataGridSortState,
   type DataGridViewportRange,
 } from "./rowModel.js"
@@ -46,6 +50,7 @@ import type {
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
   DataGridDataSourceInvalidation,
+  DataGridDataSourcePivotPullContext,
   DataGridDataSourcePullPriority,
   DataGridDataSourcePullReason,
   DataGridDataSourceTreePullContext,
@@ -67,12 +72,14 @@ export interface CreateDataSourceBackedRowModelOptions<T = unknown> {
 
 export interface DataSourceBackedRowModel<T = unknown> extends DataGridRowModel<T> {
   readonly dataSource: DataGridDataSource<T>
+  getSparseRowModelDiagnostics(): DataGridSparseRowModelDiagnostics
   invalidateRange(range: DataGridViewportRange): void
   invalidateAll(): void
   pauseBackpressure(): boolean
   resumeBackpressure(): boolean
   flushBackpressure(): Promise<void>
   getBackpressureDiagnostics(): DataGridDataSourceBackpressureDiagnostics
+  getColumnHistogram?: (columnId: string, options?: DataGridColumnHistogramOptions) => DataGridColumnHistogramResult
 }
 
 interface InFlightPull {
@@ -173,6 +180,75 @@ function normalizeTreePullContext(
     scope: treeData.scope,
     groupKeys,
   }
+}
+
+function normalizeHistogramOptions(options: DataGridColumnHistogramOptions | undefined): DataGridColumnHistogramOptions {
+  const search = String(options?.search ?? "").trim()
+  return {
+    ...(options ?? {}),
+    ...(search.length > 0 ? { search } : {}),
+  }
+}
+
+function cloneFilterSnapshotForHistogram(
+  filterModel: DataGridFilterSnapshot | null,
+  columnId: string,
+  options: DataGridColumnHistogramOptions,
+): DataGridFilterSnapshot | null {
+  const cloned = cloneDataGridFilterSnapshot(filterModel)
+  if (!cloned || options.ignoreSelfFilter !== true) {
+    return cloned
+  }
+  const ignoredColumnId = columnId.trim()
+  if (ignoredColumnId.length === 0) {
+    return cloned
+  }
+  const columnFilters: NonNullable<DataGridFilterSnapshot["columnFilters"]> = {}
+  for (const [rawKey, entry] of Object.entries(cloned.columnFilters ?? {})) {
+    if (rawKey.trim() !== ignoredColumnId) {
+      columnFilters[rawKey] = entry
+    }
+  }
+  const columnStyleFilters: NonNullable<DataGridFilterSnapshot["columnStyleFilters"]> = {}
+  for (const [rawKey, entry] of Object.entries(cloned.columnStyleFilters ?? {})) {
+    if (rawKey.trim() !== ignoredColumnId) {
+      columnStyleFilters[rawKey] = entry
+    }
+  }
+  const advancedFilters: NonNullable<DataGridFilterSnapshot["advancedFilters"]> = {}
+  for (const [rawKey, entry] of Object.entries(cloned.advancedFilters ?? {})) {
+    if (rawKey.trim() !== ignoredColumnId) {
+      advancedFilters[rawKey] = entry
+    }
+  }
+  return {
+    columnFilters,
+    columnStyleFilters,
+    advancedFilters,
+    advancedExpression: cloned.advancedExpression ?? null,
+  }
+}
+
+function normalizeColumnHistogramResult(entries: readonly unknown[]): DataGridColumnHistogram {
+  const normalized = entries
+    .map(entry => {
+      const candidate = entry as { token?: unknown; value?: unknown; count?: unknown; text?: unknown }
+      const token = String(candidate?.token ?? "").trim()
+      if (token.length === 0) {
+        return null
+      }
+      const count = Number.isFinite(candidate.count)
+        ? Math.max(0, Math.trunc(candidate.count as number))
+        : 0
+      return {
+        token,
+        value: candidate.value,
+        count,
+        ...(typeof candidate.text === "string" ? { text: candidate.text } : {}),
+      }
+    })
+    .filter((entry): entry is DataGridColumnHistogram[number] => entry !== null)
+  return Object.freeze(normalized)
 }
 
 export function createDataSourceBackedRowModel<T = unknown>(
@@ -845,9 +921,57 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return normalized
   }
 
+  function getPivotPullContext(): DataGridDataSourcePivotPullContext {
+    return {
+      pivotModel: clonePivotSpec(pivotModel),
+      aggregationModel: clonePullAggregationModel(aggregationModel),
+    }
+  }
+
+  const getDataSourceColumnHistogram = dataSource.getColumnHistogram
+  const histogramMethods: Pick<DataSourceBackedRowModel<T>, "getColumnHistogram"> =
+    typeof getDataSourceColumnHistogram === "function"
+      ? {
+          getColumnHistogram(columnId: string, histogramOptions?: DataGridColumnHistogramOptions) {
+            ensureActive()
+            const normalizedColumnId = String(columnId ?? "").trim()
+            if (normalizedColumnId.length === 0) {
+              return []
+            }
+            const options = normalizeHistogramOptions(histogramOptions)
+            const controller = new AbortController()
+            return getDataSourceColumnHistogram({
+              columnId: normalizedColumnId,
+              options,
+              signal: controller.signal,
+              sortModel,
+              filterModel: cloneFilterSnapshotForHistogram(filterModel, normalizedColumnId, options),
+              groupBy: cloneGroupBySpec(groupBy),
+              groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
+              treeData: null,
+              pivot: getPivotPullContext(),
+              pagination: {
+                snapshot: getPaginationSnapshot(),
+                cursor: paginationCursor,
+              },
+            }).then(result => normalizeColumnHistogramResult(result))
+          },
+        }
+      : {}
+
   return {
     kind: "server",
     dataSource,
+    ...histogramMethods,
+    getSparseRowModelDiagnostics() {
+      return {
+        kind: "data-source",
+        rowCount: getVisibleRowCount(),
+        viewportRange: { ...viewportRange },
+        cachedRowCount: rowCache.size,
+        cacheLimit: rowCacheLimit,
+      }
+    },
     getSnapshot,
     getRowCount() {
       return getVisibleRowCount()

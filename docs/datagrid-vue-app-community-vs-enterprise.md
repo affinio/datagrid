@@ -75,9 +75,9 @@ Keep these in `@affino/datagrid-vue-app`:
 - declarative columns / state / theme / pagination / virtualization
 - saved-view facade helpers around unified state + `viewMode`
 - additive toolbar customization through public `toolbarModules`
-- column menu, including declarative built-in section and action config (`items`, `disabled`, `disabledReasons`, `labels`, `actions`, per-column overrides)
-- column layout
-- advanced filter
+- column menu, including declarative built-in section and action config (`items`, `disabled`, `disabledReasons`, `labels`, `actions`, per-column overrides) and async/server-side value-filter histograms
+- column layout, including `columnLayout.labels` for toolbar and panel localization
+- advanced filter, including `advancedFilter.labels` for toolbar text, panel copy, join labels, and operator labels
 - aggregations
 - row hover / striped rows / base table-stage UX
 - base formula usage already exposed through the community stack

@@ -18,6 +18,7 @@
       :aria-activedescendant="activeOptionId"
       @focus="handleInputFocus"
       @mousedown.stop
+      @contextmenu.stop
       @click.stop="handleInputClick"
       @input="handleInput"
       @keydown.stop="handleKeydown"

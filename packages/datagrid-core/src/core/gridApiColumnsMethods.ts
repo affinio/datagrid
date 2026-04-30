@@ -1,5 +1,5 @@
 import type {
-  DataGridColumnHistogram,
+  DataGridColumnHistogramResult,
   DataGridColumnHistogramOptions,
   DataGridColumnInput,
   DataGridColumnModel,
@@ -18,7 +18,7 @@ export interface DataGridApiColumnsMethods {
   setColumnVisibility: (key: string, visible: boolean) => void
   setColumnWidth: (key: string, width: number | null) => void
   setColumnPin: (key: string, pin: DataGridColumnPin) => void
-  getColumnHistogram: (columnId: string, options?: DataGridColumnHistogramOptions) => DataGridColumnHistogram
+  getColumnHistogram: (columnId: string, options?: DataGridColumnHistogramOptions) => DataGridColumnHistogramResult
 }
 
 export interface CreateDataGridApiColumnsMethodsInput {

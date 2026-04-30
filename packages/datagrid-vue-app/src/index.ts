@@ -19,6 +19,7 @@ export type {
   DataGridComponent,
   DataGridComponentFor,
   DataGridExposed,
+  DataGridExposedRuntime,
   DataGridFilterCellReader,
   DataGridFilterCellStyleReader,
   DataGridInstance,
@@ -86,8 +87,11 @@ export type {
   DataGridThemeProp,
 } from "./theme/dataGridTheme"
 export type {
+  DataGridAdvancedFilterLabels,
+  DataGridAdvancedFilterOperatorLabelKey,
   DataGridAdvancedFilterOptions,
   DataGridAdvancedFilterProp,
+  DataGridResolvedAdvancedFilterLabels,
 } from "./config/dataGridAdvancedFilter"
 export type {
   DataGridFindReplaceOptions,
@@ -104,8 +108,10 @@ export type {
   DataGridSavedViewStorageLike,
 } from "./config/dataGridSavedView"
 export type {
+  DataGridColumnLayoutLabels,
   DataGridColumnLayoutOptions,
   DataGridColumnLayoutProp,
+  DataGridResolvedColumnLayoutLabels,
 } from "./config/dataGridColumnLayout"
 export type {
   DataGridColumnReorderOptions,

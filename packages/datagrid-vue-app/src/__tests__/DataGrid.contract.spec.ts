@@ -2,6 +2,7 @@ import { defineComponent, h, nextTick, ref } from "vue"
 import { flushPromises, mount } from "@vue/test-utils"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import type {
+  DataGridRowModel,
   DataGridRowNode,
   DataGridRowNodeInput,
   DataGridRowSelectionSnapshot,
@@ -107,6 +108,13 @@ const SEARCH_FILTER_ROWS: readonly DemoRow[] = [
   { rowId: "s3", owner: "Beta", region: "eu-west", amount: 30 },
   { rowId: "s4", owner: "Gamma", region: "us-east", amount: 40 },
 ]
+
+const LARGE_COLUMN_MENU_VALUE_ROWS: readonly DemoRow[] = Array.from({ length: 30 }, (_unused, index) => ({
+  rowId: `lv${index + 1}`,
+  owner: `Owner ${String(index + 1).padStart(2, "0")}`,
+  region: "eu-west",
+  amount: index + 1,
+}))
 
 const EFFECTIVE_FILTER_ROWS: readonly EffectiveFilterRow[] = [
   { rowId: "ef1", statusCode: "a", styles: { status: { backgroundColor: "#ff0000" } } },
@@ -1104,6 +1112,35 @@ describe("DataGrid app facade contract", () => {
     expect(document.activeElement).toBe(editorElement)
     expect(editorElement.selectionStart).toBe(editorElement.value.length)
     expect(editorElement.selectionEnd).toBe(editorElement.value.length)
+
+    wrapper.unmount()
+  })
+
+  it("keeps native context menu on an active text editor without opening the grid menu", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 120, clientY: 48 })
+    editor.element.dispatchEvent(event)
+    await flushRuntimeTasks()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(queryContextMenuRoot()).toBeNull()
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(true)
 
     wrapper.unmount()
   })
@@ -3124,6 +3161,175 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("loads additional columnMenu filter values as the menu list scrolls", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: LARGE_COLUMN_MENU_VALUE_ROWS,
+        columns: COLUMNS,
+        columnMenu: {
+          enabled: true,
+          maxFilterValues: 20,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    let valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
+    expect(valueRows).toHaveLength(20)
+    expect(valueRows.at(0)?.textContent).toContain("Owner 01")
+    expect(valueRows.at(-1)?.textContent).toContain("Owner 20")
+
+    const valuesList = queryColumnMenuRoot()?.querySelector<HTMLElement>(".datagrid-column-menu__values-list") ?? null
+    expect(valuesList).toBeTruthy()
+    Object.defineProperty(valuesList!, "clientHeight", {
+      configurable: true,
+      value: 152,
+    })
+    Object.defineProperty(valuesList!, "scrollHeight", {
+      configurable: true,
+      value: 640,
+    })
+    Object.defineProperty(valuesList!, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 488,
+    })
+    valuesList!.dispatchEvent(new Event("scroll", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
+    expect(valueRows).toHaveLength(30)
+    expect(valueRows.at(-1)?.textContent).toContain("Owner 30")
+
+    wrapper.unmount()
+  })
+
+  it("loads columnMenu value filters asynchronously and sends search to the row model histogram", async () => {
+    type HistogramRequest = {
+      request: { options: { ignoreSelfFilter?: boolean; search?: string } }
+      resolve: (entries: readonly { token: string; value: string; count: number; text?: string }[]) => void
+      reject: (reason?: unknown) => void
+    }
+    const histogramRequests: HistogramRequest[] = []
+    const rowNodes = BASE_ROWS.map((row, index) => ({
+      row,
+      data: row,
+      rowId: row.rowId,
+      originalIndex: index,
+      displayIndex: index,
+      kind: "leaf" as const,
+      state: { selected: false, group: false, pinned: "none" as const, expanded: false },
+    }))
+    const rowModel = {
+      kind: "server",
+      getSnapshot: () => ({
+        revision: 0,
+        kind: "server",
+        rowCount: rowNodes.length,
+        loading: false,
+        error: null,
+        viewportRange: { start: 0, end: Math.max(0, rowNodes.length - 1) },
+        sortModel: [],
+        filterModel: null,
+        groupBy: null,
+        groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+        pagination: {
+          enabled: false,
+          pageSize: 0,
+          currentPage: 0,
+          pageCount: 1,
+          totalRowCount: rowNodes.length,
+          startIndex: 0,
+          endIndex: Math.max(0, rowNodes.length - 1),
+        },
+      }),
+      getRowCount: () => rowNodes.length,
+      getRow: (index: number) => rowNodes[index],
+      getRowsInRange: () => rowNodes,
+      setViewportRange: () => {},
+      setPagination: () => {},
+      setPageSize: () => {},
+      setCurrentPage: () => {},
+      setSortModel: () => {},
+      setFilterModel: () => {},
+      setSortAndFilterModel: () => {},
+      setGroupBy: () => {},
+      setPivotModel: () => {},
+      getPivotModel: () => null,
+      setAggregationModel: () => {},
+      getAggregationModel: () => null,
+      getColumnHistogram: (_columnKey: string, options?: { ignoreSelfFilter?: boolean; search?: string }) => {
+        const request = { options: options ?? {} }
+        return new Promise<readonly { token: string; value: string; count: number; text?: string }[]>((resolve, reject) => {
+          histogramRequests.push({ request, resolve, reject })
+        })
+      },
+      setGroupExpansion: () => {},
+      toggleGroup: () => {},
+      expandGroup: () => {},
+      collapseGroup: () => {},
+      expandAllGroups: () => {},
+      collapseAllGroups: () => {},
+      refresh: () => {},
+      subscribe: () => () => {},
+      dispose: () => {},
+    } as unknown as DataGridRowModel<DemoRow>
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowModel,
+        columnMenu: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuRoot()?.textContent).toContain("Loading values")
+    expect(histogramRequests).toHaveLength(1)
+    expect(histogramRequests[0]?.request.options.ignoreSelfFilter).toBe(true)
+
+    histogramRequests[0]?.resolve([
+      { token: "string:noc", value: "NOC", count: 2, text: "NOC" },
+      { token: "string:payments", value: "Payments", count: 1, text: "Payments" },
+    ])
+    await flushRuntimeTasks()
+
+    let valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
+    expect(valueRows.map(row => row.textContent?.replace(/\s+/g, " ").trim())).toEqual([
+      expect.stringContaining("NOC"),
+      expect.stringContaining("Payments"),
+    ])
+
+    const search = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLInputElement>(".datagrid-column-menu__search") ?? []).at(-1)
+    expect(search).toBeTruthy()
+    search!.value = "pay"
+    search!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(histogramRequests).toHaveLength(2)
+    expect(histogramRequests[1]?.request.options.search).toBe("pay")
+    histogramRequests[1]?.resolve([
+      { token: "string:payments", value: "Payments", count: 1, text: "Payments" },
+    ])
+    await flushRuntimeTasks()
+
+    valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
+    expect(valueRows).toHaveLength(1)
+    expect(valueRows[0]?.textContent).toContain("Payments")
+
+    wrapper.unmount()
+  })
+
   it("builds value-set filter choices from effective column values", async () => {
     const wrapper = mount(EffectiveFilterGrid, {
       props: {
@@ -3491,6 +3697,69 @@ describe("DataGrid app facade contract", () => {
         }),
       }),
     })
+
+    wrapper.unmount()
+  })
+
+  it("uses declarative labels for the advanced filter panel and operators", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        advancedFilter: {
+          labels: {
+            buttonLabel: "Расширенный фильтр",
+            eyebrow: "Фильтр",
+            title: "Условия отбора",
+            close: "Закрыть",
+            appliedEyebrow: "На таблице",
+            appliedTitle: "Активные фильтры",
+            resetAllFilters: "Сбросить все",
+            noFiltersApplied: "Фильтры не применены",
+            joinLabel: "Связь",
+            columnLabel: "Колонка",
+            operatorLabel: "Оператор",
+            valueLabel: "Значение",
+            valuePlaceholder: "Введите значение",
+            clearClause: "Очистить",
+            addClause: "Добавить условие",
+            cancel: "Отмена",
+            apply: "Применить",
+            activeSummaryPrefix: "Расширенный",
+            operators: {
+              contains: "содержит",
+              equals: "равно",
+            },
+            joins: {
+              and: "И",
+              or: "ИЛИ",
+            },
+          },
+        },
+      },
+    })
+
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    expect(trigger.text()).toContain("Расширенный фильтр")
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryAdvancedFilterRoot()
+    expect(popover).toBeTruthy()
+    expect(popover?.textContent).toContain("Фильтр")
+    expect(popover?.textContent).toContain("Условия отбора")
+    expect(popover?.textContent).toContain("Фильтры не применены")
+    expect(popover?.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')?.placeholder).toBe("Введите значение")
+
+    const operatorInput = Array.from(popover?.querySelectorAll<HTMLInputElement>(".datagrid-advanced-filter__select") ?? []).at(2)
+    expect(operatorInput).toBeTruthy()
+    operatorInput!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(queryVisibleComboboxPanel()?.textContent).toContain("содержит")
 
     wrapper.unmount()
   })
@@ -4246,6 +4515,46 @@ describe("DataGrid app facade contract", () => {
         expect.objectContaining({ key: "region", visible: true }),
       ]),
     })
+
+    wrapper.unmount()
+  })
+
+  it("uses declarative labels for the column layout panel", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnLayout: {
+          labels: {
+            buttonLabel: "Колонки",
+            eyebrow: "Настройка колонок",
+            title: "Порядок и видимость",
+            close: "Закрыть",
+            cancel: "Отмена",
+            apply: "Применить",
+            moveUp: "Вверх",
+            moveDown: "Вниз",
+          },
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const trigger = findToolbarAction(wrapper, "column-layout")
+    expect(trigger.text()).toContain("Колонки")
+
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryColumnLayoutRoot()
+    expect(popover).toBeTruthy()
+    expect(popover?.textContent).toContain("Настройка колонок")
+    expect(popover?.textContent).toContain("Порядок и видимость")
+    expect(popover?.textContent).toContain("Отмена")
+    expect(popover?.textContent).toContain("Применить")
+    expect(popover?.querySelector<HTMLButtonElement>(".datagrid-column-layout__icon-button")?.title).toContain("Вверх:")
 
     wrapper.unmount()
   })
@@ -5152,6 +5461,35 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     expect(event.defaultPrevented).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("keeps native context menu on an active select editor without opening the grid menu", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SELECT_ROWS,
+        columns: SELECT_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
+    expect(editor.exists()).toBe(true)
+
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 120, clientY: 48 })
+    editor.element.dispatchEvent(event)
+    await flushRuntimeTasks()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(queryContextMenuRoot()).toBeNull()
+    expect(wrapper.find(".datagrid-cell-combobox__input").exists()).toBe(true)
 
     wrapper.unmount()
   })

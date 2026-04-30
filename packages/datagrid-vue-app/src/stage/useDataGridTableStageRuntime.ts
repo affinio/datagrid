@@ -1,6 +1,5 @@
 import { computed, nextTick, ref, type ComputedRef, type CSSProperties, type Ref } from "vue"
 import type {
-  DataGridColumnHistogramEntry,
   DataGridRowNode,
   DataGridColumnSnapshot,
   DataGridRowSelectionSnapshot,
@@ -49,6 +48,7 @@ import { useDataGridTableStageScrollSync } from "./useDataGridTableStageScrollSy
 import { useDataGridTableStageViewportKeyboard } from "./useDataGridTableStageViewportKeyboard"
 import { useDataGridTableStageVisualSelection } from "./useDataGridTableStageVisualSelection"
 import type {
+  DataGridColumnMenuValueEntriesResult,
   DataGridTableRow,
   DataGridTableStageCellClass,
   DataGridTableStageProps,
@@ -133,7 +133,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   resolveColumnGroupOrder?: (columnKey: string) => number | null
   resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
   resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
-  resolveColumnMenuValueEntries?: (columnKey: string) => readonly DataGridColumnHistogramEntry[]
+  resolveColumnMenuValueEntries?: (columnKey: string, search?: string) => DataGridColumnMenuValueEntriesResult
   applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
   applyColumnMenuPin?: (columnKey: string, pin: import("@affino/datagrid-vue").DataGridColumnPin) => void
   applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void

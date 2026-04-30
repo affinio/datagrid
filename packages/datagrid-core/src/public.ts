@@ -264,6 +264,7 @@ export {
   type DataGridColumnValueSetFilter,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramEntry,
+  type DataGridColumnHistogramResult,
   type DataGridColumnHistogramOptions,
   type DataGridFilterClause,
   type DataGridFilterSnapshot,
@@ -307,6 +308,8 @@ export {
   type DataGridRowIdResolver,
   type DataGridRowModel,
   type DataGridRowModelKind,
+  type DataGridSparseRowModelDiagnostics,
+  type DataGridSparseRowModelKind,
   type DataGridProjectionDiagnostics,
   type DataGridProjectionInvalidationReason,
   type DataGridProjectionMemoryDiagnostics,
@@ -350,6 +353,7 @@ export {
   type DataGridPivotCellDrilldown,
   type DataGridDataSource,
   type DataGridDataSourceBackpressureDiagnostics,
+  type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSourceInvalidation,
   type DataGridDataSourcePaginationPullContext,
   type DataGridDataSourcePullPriority,
@@ -446,6 +450,7 @@ export {
   isSameTreeDataSpec,
   buildPaginationSnapshot,
   getDataGridRowRenderMeta,
+  isDataGridSparseRowModel,
 } from "./models/index.js"
 
 export {

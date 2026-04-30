@@ -23,6 +23,7 @@ import {
   type DataGridRowModelListener,
   type DataGridRowModelRefreshReason,
   type DataGridRowModelSnapshot,
+  type DataGridSparseRowModelDiagnostics,
   type DataGridSortState,
   type DataGridViewportRange,
 } from "./rowModel.js"
@@ -59,6 +60,7 @@ export interface CreateServerBackedRowModelOptions<T> {
 
 export interface ServerBackedRowModel<T> extends DataGridRowModel<T> {
   readonly source: ServerRowModel<T>
+  getSparseRowModelDiagnostics(): DataGridSparseRowModelDiagnostics
   syncFromSource(): void
   pauseBackpressure(): boolean
   resumeBackpressure(): boolean
@@ -703,6 +705,15 @@ export function createServerBackedRowModel<T>(
   return {
     kind: "server",
     source,
+    getSparseRowModelDiagnostics() {
+      return {
+        kind: "server",
+        rowCount: getVisibleRowCount(),
+        viewportRange: { ...viewportRange },
+        cachedRowCount: rowNodeCache.size,
+        cacheLimit: rowCacheLimit,
+      }
+    },
     getSnapshot,
     getRowCount() {
       return getVisibleRowCount()

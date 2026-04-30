@@ -17,6 +17,7 @@ import type {
   DataGridRowModelSnapshot,
   DataGridRowNode,
   DataGridRowNodeInput,
+  DataGridSparseRowModelDiagnostics,
   DataGridSortAndFilterModelInput,
   DataGridSortState,
   DataGridViewportRange,
@@ -50,6 +51,7 @@ export interface DataGridWorkerOwnedRowModel<T = unknown> extends DataGridRowMod
   getFormulaExecutionPlan: () => DataGridFormulaExecutionPlanSnapshot | null
   getFormulaComputeStageDiagnostics: () => DataGridFormulaComputeStageDiagnostics | null
   getComputeDiagnostics: () => DataGridClientComputeDiagnostics
+  getSparseRowModelDiagnostics: () => DataGridSparseRowModelDiagnostics
   getWorkerProtocolDiagnostics: () => {
     updatesReceived: number
     updatesApplied: number
@@ -1017,6 +1019,14 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
         transportKind: "custom",
         dispatchCount,
         fallbackCount: 0,
+      }
+    },
+    getSparseRowModelDiagnostics() {
+      return {
+        kind: "worker",
+        rowCount: Math.max(0, snapshot.rowCount),
+        viewportRange: { ...snapshot.viewportRange },
+        cachedRowCount: visibleRows.length + visibleWindowCache.size,
       }
     },
     getWorkerProtocolDiagnostics() {

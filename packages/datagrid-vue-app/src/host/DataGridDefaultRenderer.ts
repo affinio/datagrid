@@ -18,7 +18,6 @@ import {
 import type {
   DataGridAggOp,
   DataGridAggregationModel,
-  DataGridColumnHistogramEntry,
   DataGridColumnPin,
   DataGridColumnSnapshot,
   DataGridFilterSnapshot,
@@ -55,7 +54,11 @@ import DataGridModuleHost, {
 import DataGridHistoryToolbarButton from "./DataGridHistoryToolbarButton"
 import DataGridTableStage from "../stage/DataGridTableStage.vue"
 import DataGridColumnLayoutPopover from "../overlays/DataGridColumnLayoutPopover.vue"
-import type { DataGridAdvancedFilterOptions } from "../config/dataGridAdvancedFilter"
+import {
+  resolveDataGridAdvancedFilterOperatorLabel,
+  type DataGridAdvancedFilterOptions,
+  type DataGridResolvedAdvancedFilterLabels,
+} from "../config/dataGridAdvancedFilter"
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "../config/dataGridAggregations"
 import type { DataGridFindReplaceOptions } from "../config/dataGridFindReplace"
 import type { DataGridGridLinesOptions } from "../config/dataGridGridLines"
@@ -113,6 +116,7 @@ import type {
   DataGridStructuralRowActionId,
 } from "../dataGridStructuralRowActions"
 import type {
+  DataGridColumnMenuValueEntriesResult,
   DataGridTableStageCellClass,
   DataGridTableStageCustomOverlay,
 } from "../stage/dataGridTableStage.types"
@@ -402,52 +406,14 @@ function formatFilterDisplayValue(value: unknown): string {
   return String(value)
 }
 
-function formatColumnFilterOperator(operator: string): string {
-  switch (operator) {
-    case "contains":
-      return "contains"
-    case "startsWith":
-    case "starts-with":
-      return "starts with"
-    case "endsWith":
-    case "ends-with":
-      return "ends with"
-    case "equals":
-      return "="
-    case "notEquals":
-    case "not-equals":
-      return "!="
-    case "gt":
-      return ">"
-    case "gte":
-      return ">="
-    case "lt":
-      return "<"
-    case "lte":
-      return "<="
-    case "between":
-      return "between"
-    case "isEmpty":
-    case "is-empty":
-      return "is empty"
-    case "notEmpty":
-    case "not-empty":
-      return "is not empty"
-    case "isNull":
-    case "is-null":
-      return "is null"
-    case "notNull":
-    case "not-null":
-      return "is not null"
-    default:
-      return operator
-  }
+function formatColumnFilterOperator(operator: string, labels: DataGridResolvedAdvancedFilterLabels): string {
+  return resolveDataGridAdvancedFilterOperatorLabel(labels, operator)
 }
 
-function decodeColumnFilterToken(token: string): string {
+function decodeColumnFilterToken(token: string, labels: DataGridResolvedAdvancedFilterLabels): string {
   const normalized = String(token ?? "")
   if (normalized === "null") {
-    return "(Blanks)"
+    return labels.blankValueLabel
   }
   const separatorIndex = normalized.indexOf(":")
   if (separatorIndex < 0) {
@@ -469,15 +435,19 @@ function decodeColumnFilterToken(token: string): string {
   return normalized
 }
 
-function formatColumnFilterSummary(label: string, filter: DataGridColumnFilterEntry): string {
+function formatColumnFilterSummary(
+  label: string,
+  filter: DataGridColumnFilterEntry,
+  labels: DataGridResolvedAdvancedFilterLabels,
+): string {
   if (filter.kind === "valueSet") {
     if (filter.tokens.length === 1) {
-      return `${label}: ${decodeColumnFilterToken(filter.tokens[0] ?? "")}`
+      return `${label}: ${decodeColumnFilterToken(filter.tokens[0] ?? "", labels)}`
     }
-    return `${label}: ${filter.tokens.length} values`
+    return `${label}: ${filter.tokens.length} ${labels.valuesSummaryLabel}`
   }
   if (filter.operator === "between") {
-    return `${label} between ${formatFilterDisplayValue(filter.value)} and ${formatFilterDisplayValue(filter.value2)}`
+    return `${label} ${formatColumnFilterOperator(filter.operator, labels)} ${formatFilterDisplayValue(filter.value)} ${labels.betweenJoiner} ${formatFilterDisplayValue(filter.value2)}`
   }
   if (
     filter.operator === "isEmpty"
@@ -485,17 +455,22 @@ function formatColumnFilterSummary(label: string, filter: DataGridColumnFilterEn
     || filter.operator === "isNull"
     || filter.operator === "notNull"
   ) {
-    return `${label} ${formatColumnFilterOperator(filter.operator)}`
+    return `${label} ${formatColumnFilterOperator(filter.operator, labels)}`
   }
-  return `${label} ${formatColumnFilterOperator(filter.operator)} ${formatFilterDisplayValue(filter.value)}`
+  return `${label} ${formatColumnFilterOperator(filter.operator, labels)} ${formatFilterDisplayValue(filter.value)}`
 }
 
-function formatLegacyAdvancedFilterSummary(label: string, filter: DataGridLegacyAdvancedFilterEntry): string {
+function formatLegacyAdvancedFilterSummary(
+  label: string,
+  filter: DataGridLegacyAdvancedFilterEntry,
+  labels: DataGridResolvedAdvancedFilterLabels,
+): string {
   const parts = filter.clauses
     .map((clause, clauseIndex) => {
-      const prefix = clauseIndex === 0 ? "" : `${String(clause.join ?? "and").toUpperCase()} `
+      const join = clause.join === "or" ? labels.joins.or : labels.joins.and
+      const prefix = clauseIndex === 0 ? "" : `${join} `
       if (clause.operator === "between") {
-        return `${prefix}${formatColumnFilterOperator(clause.operator)} ${formatFilterDisplayValue(clause.value)} and ${formatFilterDisplayValue(clause.value2)}`
+        return `${prefix}${formatColumnFilterOperator(clause.operator, labels)} ${formatFilterDisplayValue(clause.value)} ${labels.betweenJoiner} ${formatFilterDisplayValue(clause.value2)}`
       }
       if (
         clause.operator === "isEmpty"
@@ -503,14 +478,14 @@ function formatLegacyAdvancedFilterSummary(label: string, filter: DataGridLegacy
         || clause.operator === "isNull"
         || clause.operator === "notNull"
       ) {
-        return `${prefix}${formatColumnFilterOperator(clause.operator)}`
+        return `${prefix}${formatColumnFilterOperator(clause.operator, labels)}`
       }
-      return `${prefix}${formatColumnFilterOperator(clause.operator)} ${formatFilterDisplayValue(clause.value)}`
+      return `${prefix}${formatColumnFilterOperator(clause.operator, labels)} ${formatFilterDisplayValue(clause.value)}`
     })
     .filter(part => part.length > 0)
 
   if (parts.length === 0) {
-    return `${label}: active`
+    return `${label}: ${labels.activeSummaryFallback}`
   }
   return `${label} ${parts.join(" ")}`
 }
@@ -518,11 +493,12 @@ function formatLegacyAdvancedFilterSummary(label: string, filter: DataGridLegacy
 function formatAdvancedExpressionSummary(
   expression: DataGridAdvancedExpressionEntry,
   resolveColumnLabel: (columnKey: string) => string,
+  labels: DataGridResolvedAdvancedFilterLabels,
 ): string {
   if (expression.kind === "condition") {
     const label = resolveColumnLabel(expression.key)
     if (expression.operator === "between") {
-      return `${label} between ${formatFilterDisplayValue(expression.value)} and ${formatFilterDisplayValue(expression.value2)}`
+      return `${label} ${formatColumnFilterOperator(expression.operator, labels)} ${formatFilterDisplayValue(expression.value)} ${labels.betweenJoiner} ${formatFilterDisplayValue(expression.value2)}`
     }
     if (
       expression.operator === "isEmpty"
@@ -530,17 +506,22 @@ function formatAdvancedExpressionSummary(
       || expression.operator === "isNull"
       || expression.operator === "notNull"
     ) {
-      return `${label} ${formatColumnFilterOperator(expression.operator)}`
+      return `${label} ${formatColumnFilterOperator(expression.operator, labels)}`
     }
-    return `${label} ${formatColumnFilterOperator(expression.operator)} ${formatFilterDisplayValue(expression.value)}`
+    return `${label} ${formatColumnFilterOperator(expression.operator, labels)} ${formatFilterDisplayValue(expression.value)}`
   }
   if (expression.kind === "not") {
-    return `NOT (${formatAdvancedExpressionSummary(expression.child, resolveColumnLabel)})`
+    return `${labels.notOperatorLabel} (${formatAdvancedExpressionSummary(expression.child, resolveColumnLabel, labels)})`
   }
+  const join = expression.operator === "or" ? labels.joins.or : labels.joins.and
   return expression.children
-    .map(child => formatAdvancedExpressionSummary(child, resolveColumnLabel))
+    .map(child => formatAdvancedExpressionSummary(child, resolveColumnLabel, labels))
     .filter(part => part.length > 0)
-    .join(` ${expression.operator.toUpperCase()} `)
+    .join(` ${join} `)
+}
+
+function formatAdvancedSummaryPrefix(summary: string, labels: DataGridResolvedAdvancedFilterLabels): string {
+  return labels.activeSummaryPrefix.length > 0 ? `${labels.activeSummaryPrefix}: ${summary}` : summary
 }
 
 const NUMERIC_AGG_OPS: readonly DataGridAggOp[] = [
@@ -1142,10 +1123,11 @@ export default defineComponent({
       return entry.tokens.map(token => normalizeColumnMenuToken(String(token ?? "")))
     }
 
-    const resolveColumnMenuValueEntries = (columnKey: string): readonly DataGridColumnHistogramEntry[] => {
+    const resolveColumnMenuValueEntries = (columnKey: string, search?: string): DataGridColumnMenuValueEntriesResult => {
       return props.runtime.api.columns.getHistogram(columnKey, {
         ignoreSelfFilter: true,
         orderBy: "valueAsc",
+        search,
       })
     }
 
@@ -1215,24 +1197,31 @@ export default defineComponent({
 
     const activeFilterSummaryItems = computed<readonly string[]>(() => {
       const resolveColumnLabel = (columnKey: string): string => columnLabelByKey.value.get(columnKey) ?? columnKey
+      const advancedLabels = props.advancedFilter.labels
       const items: string[] = []
 
       for (const [columnKey, entry] of Object.entries(filterModelState.value.columnFilters ?? {})) {
         if (!entry) {
           continue
         }
-        items.push(formatColumnFilterSummary(resolveColumnLabel(columnKey), entry))
+        items.push(formatColumnFilterSummary(resolveColumnLabel(columnKey), entry, advancedLabels))
       }
 
       for (const [columnKey, entry] of Object.entries(filterModelState.value.advancedFilters ?? {})) {
         if (!entry) {
           continue
         }
-        items.push(`Advanced: ${formatLegacyAdvancedFilterSummary(resolveColumnLabel(columnKey), entry)}`)
+        items.push(formatAdvancedSummaryPrefix(
+          formatLegacyAdvancedFilterSummary(resolveColumnLabel(columnKey), entry, advancedLabels),
+          advancedLabels,
+        ))
       }
 
       if (effectiveAdvancedExpression.value) {
-        items.push(`Advanced: ${formatAdvancedExpressionSummary(effectiveAdvancedExpression.value, resolveColumnLabel)}`)
+        items.push(formatAdvancedSummaryPrefix(
+          formatAdvancedExpressionSummary(effectiveAdvancedExpression.value, resolveColumnLabel, advancedLabels),
+          advancedLabels,
+        ))
       }
 
       return Object.freeze(items)
@@ -3602,6 +3591,7 @@ export default defineComponent({
             isOpen: isColumnLayoutPanelOpen.value,
             items: columnLayoutPanelItems.value,
             buttonLabel: props.columnLayout.buttonLabel,
+            labels: props.columnLayout.labels,
             active: false,
             onOpen: openColumnLayoutPanel,
             onToggleVisibility: updateColumnVisibility,
@@ -3626,6 +3616,7 @@ export default defineComponent({
             appliedFilterSummaryItems: activeFilterSummaryItems.value,
             hasAnyFilters: hasActiveFilters.value,
             buttonLabel: props.advancedFilter.buttonLabel,
+            labels: props.advancedFilter.labels,
             active: hasActiveFilters.value,
             showActiveIcon: hasActiveFilters.value,
             onOpen: handleOpenAdvancedFilterPanel,

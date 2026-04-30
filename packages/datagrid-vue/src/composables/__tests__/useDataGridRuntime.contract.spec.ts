@@ -1,7 +1,12 @@
 import { defineComponent, h, nextTick, ref } from "vue"
 import { mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
-import { createClientRowModel, type DataGridRowNodeInput } from "@affino/datagrid-core"
+import {
+  createClientRowModel,
+  createDataSourceBackedRowModel,
+  type DataGridDataSource,
+  type DataGridRowNodeInput,
+} from "@affino/datagrid-core"
 import {
   createDataGridWorkerOwnedRowModel,
   createDataGridWorkerOwnedRowModelHost,
@@ -440,6 +445,58 @@ describe("useDataGridRuntime contract", () => {
 
     wrapper.unmount()
     await flushRuntimeTasks()
+  })
+
+  it("treats data-source row models as sparse without worker diagnostics", async () => {
+    const source: DataGridDataSource<RuntimeRow> = {
+      async pull(request) {
+        const rows: RuntimeRow[] = []
+        for (let index = request.range.start; index <= request.range.end; index += 1) {
+          rows.push({ rowId: `r${index}`, name: `Row ${index}`, tested_at: index })
+        }
+        return {
+          total: 100,
+          rows: rows.map((row, offset) => ({
+            index: request.range.start + offset,
+            row,
+            rowId: row.rowId,
+          })),
+        }
+      },
+    }
+    const rowModel = createDataSourceBackedRowModel<RuntimeRow>({
+      dataSource: source,
+      initialTotal: 100,
+    })
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+
+    const Host = defineComponent({
+      name: "RuntimeDataSourceSparseHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          rowModel,
+          columns: COLUMNS,
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+    await flushRuntimeTasks()
+
+    expect(runtime).not.toBeNull()
+    expect("getWorkerProtocolDiagnostics" in rowModel).toBe(false)
+    expect(runtime!.rowPartition.value.bodyRowCount).toBe(100)
+    expect(runtime!.virtualWindow.value?.rowTotal).toBe(100)
+    expect(rowModel.getSparseRowModelDiagnostics()).toMatchObject({
+      kind: "data-source",
+      rowCount: 100,
+    })
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
+    rowModel.dispose()
   })
 
   it("passes plugin definitions from composable options into runtime api", async () => {

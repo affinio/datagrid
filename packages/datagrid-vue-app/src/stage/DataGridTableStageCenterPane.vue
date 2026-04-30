@@ -87,6 +87,7 @@
             autofocus
             @mousedown.stop
             @click.stop
+            @contextmenu.stop
             @input="renderApi.updateEditingCellValue(($event.target as HTMLInputElement).value)"
             @change="renderApi.handleDateEditorChange(($event.target as HTMLInputElement).value)"
             @keydown.stop="renderApi.handleEditorKeydown"
@@ -100,6 +101,7 @@
             autofocus
             @mousedown.stop
             @click.stop
+            @contextmenu.stop
             @input="renderApi.updateEditingCellValue(($event.target as HTMLInputElement).value)"
             @keydown.stop="renderApi.handleEditorKeydown"
             @blur="renderApi.handleTextEditorBlur"

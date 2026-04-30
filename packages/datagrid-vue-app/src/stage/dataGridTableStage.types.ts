@@ -18,6 +18,9 @@ import type {
 } from "../overlays/dataGridColumnMenu"
 
 export type DataGridTableMode = "base" | "tree" | "pivot" | "worker"
+export type DataGridColumnMenuValueEntriesResult =
+  | readonly DataGridColumnHistogramEntry[]
+  | Promise<readonly DataGridColumnHistogramEntry[]>
 export type DataGridPendingEdge = "top" | "right" | "bottom" | "left"
 export type DataGridTableRow<TRow extends Record<string, unknown>> = DataGridRowNode<TRow>
 export type DataGridElementRefHandler = (value: Element | ComponentPublicInstance | null) => void
@@ -97,7 +100,7 @@ export interface DataGridTableStageColumnsSection {
   resolveColumnGroupOrder?: (columnKey: string) => number | null
   resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
   resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
-  resolveColumnMenuValueEntries?: (columnKey: string) => readonly DataGridColumnHistogramEntry[]
+  resolveColumnMenuValueEntries?: (columnKey: string, search?: string) => DataGridColumnMenuValueEntriesResult
   applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
   applyColumnMenuPin?: (columnKey: string, pin: DataGridColumnPin) => void
   applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void

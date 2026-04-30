@@ -19,7 +19,7 @@
         <path d="M2 3.5h12l-4.6 5.2v3.2l-2.8 1.6V8.7L2 3.5Z" fill="currentColor" />
       </svg>
     </span>
-    {{ buttonLabel }}
+    {{ resolvedButtonLabel }}
   </button>
 
   <Teleport :to="popoverTeleportTarget">
@@ -39,19 +39,19 @@
           data-datagrid-overlay-drag-handle="true"
           @pointerdown="draggable.handlePointerDown"
         >
-          <div class="datagrid-advanced-filter__eyebrow">Advanced filter</div>
-          <h3 class="datagrid-advanced-filter__title">Build clause-based filter</h3>
+          <div class="datagrid-advanced-filter__eyebrow">{{ resolvedLabels.eyebrow }}</div>
+          <h3 class="datagrid-advanced-filter__title">{{ resolvedLabels.title }}</h3>
         </div>
         <button type="button" class="datagrid-advanced-filter__ghost" @click="emit('cancel')">
-          Close
+          {{ resolvedLabels.close }}
         </button>
       </header>
 
       <section class="datagrid-advanced-filter__applied">
         <div class="datagrid-advanced-filter__applied-head">
           <div>
-            <div class="datagrid-advanced-filter__eyebrow">Applied on table</div>
-            <div class="datagrid-advanced-filter__applied-title">Current filters</div>
+            <div class="datagrid-advanced-filter__eyebrow">{{ resolvedLabels.appliedEyebrow }}</div>
+            <div class="datagrid-advanced-filter__applied-title">{{ resolvedLabels.appliedTitle }}</div>
           </div>
           <button
             type="button"
@@ -60,7 +60,7 @@
             data-datagrid-advanced-filter-action="reset-all"
             @click="emit('reset-all')"
           >
-            Reset all filters
+            {{ resolvedLabels.resetAllFilters }}
           </button>
         </div>
 
@@ -74,7 +74,7 @@
           </span>
         </div>
         <div v-else class="datagrid-advanced-filter__applied-empty">
-          No filters applied
+          {{ resolvedLabels.noFiltersApplied }}
         </div>
       </section>
 
@@ -85,22 +85,22 @@
           class="datagrid-advanced-filter__row"
         >
           <label class="datagrid-advanced-filter__field datagrid-advanced-filter__field--join">
-            <span class="datagrid-advanced-filter__label">Join</span>
+            <span class="datagrid-advanced-filter__label">{{ resolvedLabels.joinLabel }}</span>
             <DataGridFilterableCombobox
               class="datagrid-advanced-filter__select"
               :value="clause.join"
-              :options="JOIN_OPTIONS"
+              :options="joinOptions"
               :open-on-mount="false"
               :open-on-focus="false"
               sticky-popover-id="advanced-filter"
               :disabled="clauseIndex === 0"
-              aria-label="Join operator"
+              :aria-label="resolvedLabels.joinAriaLabel"
               @commit="updateClause(clause.id, 'join', $event)"
             />
           </label>
 
           <label class="datagrid-advanced-filter__field">
-            <span class="datagrid-advanced-filter__label">Column</span>
+            <span class="datagrid-advanced-filter__label">{{ resolvedLabels.columnLabel }}</span>
             <DataGridFilterableCombobox
               class="datagrid-advanced-filter__select"
               :value="clause.columnKey"
@@ -109,33 +109,33 @@
               :open-on-focus="false"
               sticky-popover-id="advanced-filter"
               :data-advanced-filter-autofocus="clauseIndex === 0 ? 'true' : null"
-              aria-label="Column"
+              :aria-label="resolvedLabels.columnAriaLabel"
               @commit="updateClause(clause.id, 'columnKey', $event)"
             />
           </label>
 
           <label class="datagrid-advanced-filter__field">
-            <span class="datagrid-advanced-filter__label">Operator</span>
+            <span class="datagrid-advanced-filter__label">{{ resolvedLabels.operatorLabel }}</span>
             <DataGridFilterableCombobox
               class="datagrid-advanced-filter__select"
               :value="clause.operator"
-              :options="OPERATOR_OPTIONS"
+              :options="operatorOptions"
               :open-on-mount="false"
               :open-on-focus="false"
               sticky-popover-id="advanced-filter"
-              aria-label="Condition operator"
+              :aria-label="resolvedLabels.operatorAriaLabel"
               @commit="updateClause(clause.id, 'operator', $event)"
             />
           </label>
 
           <label class="datagrid-advanced-filter__field datagrid-advanced-filter__field--value">
-            <span class="datagrid-advanced-filter__label">Value</span>
+            <span class="datagrid-advanced-filter__label">{{ resolvedLabels.valueLabel }}</span>
             <input
               :name="`datagrid-advanced-filter-value-${clause.id}`"
               :value="clause.value"
               type="text"
-              placeholder="Value"
-              aria-label="Condition value"
+              :placeholder="resolvedLabels.valuePlaceholder"
+              :aria-label="resolvedLabels.valueAriaLabel"
               @input="updateClause(clause.id, 'value', ($event.target as HTMLInputElement).value)"
             />
           </label>
@@ -146,7 +146,7 @@
               class="datagrid-advanced-filter__ghost datagrid-advanced-filter__ghost--danger"
               @click="emit('remove', clause.id)"
             >
-              {{ clauses.length <= 1 ? 'Clear' : 'Remove' }}
+              {{ clauses.length <= 1 ? resolvedLabels.clearClause : resolvedLabels.removeClause }}
             </button>
           </div>
         </div>
@@ -154,14 +154,14 @@
 
       <footer class="datagrid-advanced-filter__footer">
         <button type="button" class="datagrid-advanced-filter__secondary" @click="emit('add')">
-          Add clause
+          {{ resolvedLabels.addClause }}
         </button>
         <div class="datagrid-advanced-filter__footer-actions">
           <button type="button" class="datagrid-advanced-filter__secondary" @click="emit('cancel')">
-            Cancel
+            {{ resolvedLabels.cancel }}
           </button>
           <button type="button" class="datagrid-advanced-filter__primary" @click="emit('apply')">
-            Apply
+            {{ resolvedLabels.apply }}
           </button>
         </div>
       </footer>
@@ -183,26 +183,12 @@ import type {
 import DataGridFilterableCombobox from "./DataGridFilterableCombobox.vue"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import type { DataGridFilterableComboboxOption } from "./dataGridFilterableCombobox"
+import {
+  DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS,
+  type DataGridResolvedAdvancedFilterLabels,
+} from "../config/dataGridAdvancedFilter"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 import { useDataGridDraggableOverlaySurface } from "./useDataGridDraggableOverlaySurface"
-
-const JOIN_OPTIONS: readonly DataGridFilterableComboboxOption[] = Object.freeze([
-  { value: "and", label: "AND" },
-  { value: "or", label: "OR" },
-])
-
-const OPERATOR_OPTIONS: readonly DataGridFilterableComboboxOption[] = Object.freeze([
-  { value: "contains", label: "Contains" },
-  { value: "in", label: "In" },
-  { value: "equals", label: "Equals" },
-  { value: "not-equals", label: "Not equals" },
-  { value: "starts-with", label: "Starts with" },
-  { value: "ends-with", label: "Ends with" },
-  { value: "gt", label: ">" },
-  { value: "gte", label: ">=" },
-  { value: "lt", label: "<" },
-  { value: "lte", label: "<=" },
-])
 
 const props = withDefaults(defineProps<{
   isOpen: boolean
@@ -211,12 +197,13 @@ const props = withDefaults(defineProps<{
   appliedFilterSummaryItems?: readonly string[]
   hasAnyFilters?: boolean
   buttonLabel?: string
+  labels?: DataGridResolvedAdvancedFilterLabels
   active?: boolean
   showActiveIcon?: boolean
 }>(), {
   appliedFilterSummaryItems: () => [],
   hasAnyFilters: false,
-  buttonLabel: "Advanced filter",
+  labels: () => DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS,
   active: false,
   showActiveIcon: false,
 })
@@ -275,6 +262,28 @@ const triggerProps = computed(() => controller.getTriggerProps({ role: "dialog" 
 const contentProps = computed(() => controller.getContentProps({ role: "dialog", tabIndex: -1 }))
 const popoverOpen = computed(() => controller.state.value.open)
 const popoverTeleportTarget = computed(() => floating.teleportTarget.value)
+const resolvedLabels = computed(() => props.labels ?? DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS)
+const resolvedButtonLabel = computed(() => {
+  return typeof props.buttonLabel === "string" && props.buttonLabel.trim().length > 0
+    ? props.buttonLabel.trim()
+    : resolvedLabels.value.buttonLabel
+})
+const joinOptions = computed<readonly DataGridFilterableComboboxOption[]>(() => Object.freeze([
+  { value: "and", label: resolvedLabels.value.joins.and },
+  { value: "or", label: resolvedLabels.value.joins.or },
+]))
+const operatorOptions = computed<readonly DataGridFilterableComboboxOption[]>(() => Object.freeze([
+  { value: "contains", label: resolvedLabels.value.operators.contains },
+  { value: "in", label: resolvedLabels.value.operators.in },
+  { value: "equals", label: resolvedLabels.value.operators.equals },
+  { value: "not-equals", label: resolvedLabels.value.operators["not-equals"] },
+  { value: "starts-with", label: resolvedLabels.value.operators["starts-with"] },
+  { value: "ends-with", label: resolvedLabels.value.operators["ends-with"] },
+  { value: "gt", label: resolvedLabels.value.operators.gt },
+  { value: "gte", label: resolvedLabels.value.operators.gte },
+  { value: "lt", label: resolvedLabels.value.operators.lt },
+  { value: "lte", label: resolvedLabels.value.operators.lte },
+]))
 const columnOptions = computed<readonly DataGridFilterableComboboxOption[]>(() => {
   return props.columns.map(column => ({
     value: column.key,

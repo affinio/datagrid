@@ -6,6 +6,7 @@ import {
 } from "../index"
 import type {
   DataGridDataSource,
+  DataGridDataSourceColumnHistogramRequest,
   DataGridDataSourcePullRequest,
   DataGridDataSourcePullResult,
   DataGridDataSourcePushListener,
@@ -22,6 +23,66 @@ function flushMicrotasks(): Promise<void> {
 }
 
 describe("createDataSourceBackedRowModel", () => {
+  it("delegates column histograms to the data source with effective filter context", async () => {
+    const histogramRequests: DataGridDataSourceColumnHistogramRequest[] = []
+    const dataSource: DataGridDataSource<{ id: number; status: string; owner: string }> = {
+      async pull() {
+        return { rows: [], total: 2 }
+      },
+      async getColumnHistogram(request) {
+        histogramRequests.push(request)
+        return [
+          { token: "string:active", value: "Active", count: 2, text: "Active" },
+          { token: "", value: "ignored", count: 1 },
+        ]
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 2,
+      initialFilterModel: {
+        columnFilters: {
+          status: { kind: "valueSet", tokens: ["string:blocked"] },
+          owner: { kind: "valueSet", tokens: ["string:noc"] },
+        },
+        columnStyleFilters: {
+          status: { kind: "styleValueSet", styleKey: "backgroundColor", tokens: ["string:#fff"] },
+        },
+        advancedFilters: {
+          status: { type: "text", clauses: [{ operator: "contains", value: "Blocked" }] },
+        },
+      },
+    })
+
+    expect(typeof model.getColumnHistogram).toBe("function")
+
+    const histogram = await model.getColumnHistogram?.("status", {
+      ignoreSelfFilter: true,
+      orderBy: "valueAsc",
+      search: " active ",
+    })
+
+    expect(histogram).toEqual([
+      { token: "string:active", value: "Active", count: 2, text: "Active" },
+    ])
+    expect(histogramRequests).toHaveLength(1)
+    expect(histogramRequests[0]?.columnId).toBe("status")
+    expect(histogramRequests[0]?.options).toMatchObject({
+      ignoreSelfFilter: true,
+      orderBy: "valueAsc",
+      search: "active",
+    })
+    expect(histogramRequests[0]?.filterModel?.columnFilters).toEqual({
+      owner: { kind: "valueSet", tokens: ["string:noc"] },
+    })
+    expect(histogramRequests[0]?.filterModel?.columnStyleFilters).toEqual({})
+    expect(histogramRequests[0]?.filterModel?.advancedFilters).toEqual({})
+
+    model.dispose()
+  })
+
   it("enforces abort-first backpressure under viewport overload", async () => {
     const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {

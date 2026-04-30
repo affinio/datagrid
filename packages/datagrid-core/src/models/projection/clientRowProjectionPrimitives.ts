@@ -488,6 +488,7 @@ export function buildColumnHistogram<T>(
 ): DataGridColumnHistogram {
   const key = String(columnId ?? "").trim()
   const styleKey = String(options?.styleKey ?? "").trim()
+  const normalizedSearch = String(options?.search ?? "").trim().toLowerCase()
   const entriesByToken = new Map<string, DataGridColumnHistogramEntry>()
   const readField = valueOptions.readField ?? readRowField
 
@@ -506,6 +507,10 @@ export function buildColumnHistogram<T>(
         readField,
       })
     const token = serializeColumnValueToToken(value)
+    const text = normalizeText(value)
+    if (normalizedSearch.length > 0 && !text.toLowerCase().includes(normalizedSearch)) {
+      continue
+    }
     const current = entriesByToken.get(token)
     if (current) {
       current.count += 1
@@ -514,7 +519,7 @@ export function buildColumnHistogram<T>(
     entriesByToken.set(token, {
       token,
       value,
-      text: normalizeText(value),
+      text,
       count: 1,
     })
   }

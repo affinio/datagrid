@@ -88,6 +88,7 @@ export {
   type DataSourceBackedRowModel,
   type DataGridDataSource,
   type DataGridDataSourceBackpressureDiagnostics,
+  type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSourceInvalidation,
   type DataGridDataSourcePaginationPullContext,
   type DataGridDataSourcePullPriority,

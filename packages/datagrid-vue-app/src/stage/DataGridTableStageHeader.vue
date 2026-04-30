@@ -69,7 +69,7 @@
               v-else
               :key="resolveColumnMenuInstanceKey(column.key)"
               :row-count="sourceRows.length"
-              :resolve-value-entries="() => resolveColumnMenuValueEntriesSafe(column.key)"
+              :resolve-value-entries="(search) => resolveColumnMenuValueEntriesSafe(column.key, search)"
               :items="resolveColumnMenuItemsSafe(column.key)"
               :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
               :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
@@ -285,7 +285,7 @@
             v-for="column in renderedColumns"
             :key="resolveColumnMenuInstanceKey(column.key)"
             :row-count="sourceRows.length"
-            :resolve-value-entries="() => resolveColumnMenuValueEntriesSafe(column.key)"
+            :resolve-value-entries="(search) => resolveColumnMenuValueEntriesSafe(column.key, search)"
             :items="resolveColumnMenuItemsSafe(column.key)"
             :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
             :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
@@ -468,7 +468,7 @@
             v-for="column in pinnedRightColumns"
             :key="resolveColumnMenuInstanceKey(column.key)"
             :row-count="sourceRows.length"
-            :resolve-value-entries="() => resolveColumnMenuValueEntriesSafe(column.key)"
+            :resolve-value-entries="(search) => resolveColumnMenuValueEntriesSafe(column.key, search)"
             :items="resolveColumnMenuItemsSafe(column.key)"
             :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
             :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
@@ -624,6 +624,7 @@ import type {
   DataGridColumnMenuTriggerMode,
 } from "../overlays/dataGridColumnMenu"
 import type { DataGridTableStageBodyColumn as TableColumn } from "./dataGridTableStageBody.types"
+import type { DataGridColumnMenuValueEntriesResult } from "./dataGridTableStage.types"
 import {
   useDataGridTableStageMode,
   useDataGridTableStageColumnsSection,
@@ -1127,9 +1128,9 @@ function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string
   return typeof resolve === "function" ? resolve(columnKey) : []
 }
 
-function resolveColumnMenuValueEntriesSafe(columnKey: string) {
+function resolveColumnMenuValueEntriesSafe(columnKey: string, search?: string): DataGridColumnMenuValueEntriesResult {
   const resolve = columns.value.resolveColumnMenuValueEntries
-  return typeof resolve === "function" ? resolve(columnKey) : []
+  return typeof resolve === "function" ? resolve(columnKey, search) : []
 }
 
 function resolveColumnMenuTriggerModeSafe(): DataGridColumnMenuTriggerMode {

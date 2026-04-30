@@ -1,5 +1,7 @@
 import type {
   DataGridAggregationModel,
+  DataGridColumnHistogram,
+  DataGridColumnHistogramOptions,
   DataGridFilterSnapshot,
   DataGridGroupExpansionSnapshot,
   DataGridGroupBySpec,
@@ -60,6 +62,19 @@ export interface DataGridDataSourcePullRequest {
   range: DataGridViewportRange
   priority: DataGridDataSourcePullPriority
   reason: DataGridDataSourcePullReason
+  signal: AbortSignal
+  sortModel: readonly DataGridSortState[]
+  filterModel: DataGridFilterSnapshot | null
+  groupBy: DataGridGroupBySpec | null
+  groupExpansion: DataGridGroupExpansionSnapshot
+  treeData: DataGridDataSourceTreePullContext | null
+  pivot: DataGridDataSourcePivotPullContext | null
+  pagination: DataGridDataSourcePaginationPullContext
+}
+
+export interface DataGridDataSourceColumnHistogramRequest {
+  columnId: string
+  options: DataGridColumnHistogramOptions
   signal: AbortSignal
   sortModel: readonly DataGridSortState[]
   filterModel: DataGridFilterSnapshot | null
@@ -131,6 +146,7 @@ export type DataGridDataSourcePushListener<T = unknown> = (
 
 export interface DataGridDataSource<T = unknown> {
   pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<T>>
+  getColumnHistogram?(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram>
   subscribe?(listener: DataGridDataSourcePushListener<T>): () => void
   invalidate?(invalidation: DataGridDataSourceInvalidation): Promise<void> | void
 }

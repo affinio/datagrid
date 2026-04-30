@@ -217,19 +217,21 @@ export function defineDataGridCellStyleResolver<TRow = unknown>() {
 
 export { defineDataGridStructuralRowActionHandler }
 
-type DataGridBodyAwareRuntime = {
-  api: UseDataGridRuntimeResult<Record<string, unknown>>["api"]
-  syncBodyRowsInRange: UseDataGridRuntimeResult<Record<string, unknown>>["syncBodyRowsInRange"]
-  setViewportRange: UseDataGridRuntimeResult<Record<string, unknown>>["setViewportRange"]
-  setRows: UseDataGridRuntimeResult<Record<string, unknown>>["setRows"]
-  rowPartition: UseDataGridRuntimeResult<Record<string, unknown>>["rowPartition"]
-  virtualWindow: UseDataGridRuntimeResult<Record<string, unknown>>["virtualWindow"]
-  columnSnapshot: UseDataGridRuntimeResult<Record<string, unknown>>["columnSnapshot"]
-  setVirtualWindowRange?: (range: { start: number; end: number }) => void
-} & {
-  getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<Record<string, unknown>> | null
-  resolveBodyRowIndexById: (rowId: string | number) => number
-}
+export type DataGridExposedRuntime<TRow = unknown> = Pick<
+  UseDataGridRuntimeResult<TRow>,
+  | "api"
+  | "syncBodyRowsInRange"
+  | "setViewportRange"
+  | "setVirtualWindowRange"
+  | "setRows"
+  | "rowPartition"
+  | "virtualWindow"
+  | "columnSnapshot"
+  | "getBodyRowAtIndex"
+  | "resolveBodyRowIndexById"
+>
+
+type DataGridBodyAwareRuntime = DataGridExposedRuntime<Record<string, unknown>>
 
 function readDataGridRowValueByPath(source: unknown, path: string): unknown {
   if (!path || typeof source !== "object" || source === null) {
@@ -764,6 +766,7 @@ export interface DataGridExposed<TRow = unknown> {
   history: DataGridHistoryController
   getHistory: () => DataGridHistoryController
   getApi: () => DataGridApi<TRow> | null
+  getRuntime: () => DataGridExposedRuntime<TRow> | null
   getSelectionAggregatesLabel: () => string
   runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>
   getState: () => DataGridUnifiedState<TRow> | null

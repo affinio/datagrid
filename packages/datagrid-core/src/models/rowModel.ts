@@ -126,10 +126,13 @@ export interface DataGridColumnHistogramEntry {
 
 export type DataGridColumnHistogram = readonly DataGridColumnHistogramEntry[]
 
+export type DataGridColumnHistogramResult = DataGridColumnHistogram | Promise<DataGridColumnHistogram>
+
 export interface DataGridColumnHistogramOptions {
   scope?: "filtered" | "sourceAll"
   ignoreSelfFilter?: boolean
   styleKey?: string
+  search?: string
   limit?: number
   orderBy?: "countDesc" | "valueAsc"
 }
@@ -211,6 +214,16 @@ export type DataGridTreeDataResolvedSpec<T = unknown> =
   | DataGridTreeDataResolvedParentSpec<T>
 
 export type DataGridRowModelKind = "client" | "server"
+
+export type DataGridSparseRowModelKind = "worker" | "server" | "data-source"
+
+export interface DataGridSparseRowModelDiagnostics {
+  kind: DataGridSparseRowModelKind
+  rowCount: number
+  viewportRange: DataGridViewportRange
+  cachedRowCount?: number
+  cacheLimit?: number
+}
 
 export type DataGridRowModelRefreshReason =
   | "mount"
@@ -404,6 +417,7 @@ export interface DataGridFormulaTablePatch {
 
 export interface DataGridRowModel<T = unknown> {
   readonly kind: DataGridRowModelKind
+  getSparseRowModelDiagnostics?(): DataGridSparseRowModelDiagnostics
   getSnapshot(): DataGridRowModelSnapshot<T>
   getRowCount(): number
   getRow(index: number): DataGridRowNode<T> | undefined
@@ -421,7 +435,7 @@ export interface DataGridRowModel<T = unknown> {
   getPivotCellDrilldown?(input: DataGridPivotCellDrilldownInput): DataGridPivotCellDrilldown<T> | null
   setAggregationModel(aggregationModel: DataGridAggregationModel<T> | null): void
   getAggregationModel(): DataGridAggregationModel<T> | null
-  getColumnHistogram?(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
+  getColumnHistogram?(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogramResult
   setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null): void
   toggleGroup(groupKey: string): void
   expandGroup(groupKey: string): void
@@ -451,6 +465,10 @@ export interface DataGridRowModel<T = unknown> {
   refresh(reason?: DataGridRowModelRefreshReason): Promise<void> | void
   subscribe(listener: DataGridRowModelListener<T>): () => void
   dispose(): void
+}
+
+export function isDataGridSparseRowModel<T = unknown>(rowModel: DataGridRowModel<T>): boolean {
+  return typeof rowModel.getSparseRowModelDiagnostics === "function" || rowModel.kind === "server"
 }
 
 const DATAGRID_TREE_DATA_DEFAULT_ORPHAN_POLICY: DataGridTreeDataOrphanPolicy = "root"

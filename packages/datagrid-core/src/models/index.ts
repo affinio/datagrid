@@ -14,6 +14,7 @@ export type {
   DataGridColumnValueSetFilter,
   DataGridColumnHistogram,
   DataGridColumnHistogramEntry,
+  DataGridColumnHistogramResult,
   DataGridColumnHistogramOptions,
   DataGridFilterCellStyleReader,
   DataGridFilterClause,
@@ -61,6 +62,8 @@ export type {
   DataGridRowIdResolver,
   DataGridRowModel,
   DataGridRowModelKind,
+  DataGridSparseRowModelDiagnostics,
+  DataGridSparseRowModelKind,
   DataGridProjectionDiagnostics,
   DataGridProjectionInvalidationReason,
   DataGridProjectionMemoryDiagnostics,
@@ -128,6 +131,7 @@ export {
   withResolvedRowIdentity,
   DATAGRID_FORMULA_META_FIELDS,
   isDataGridFormulaMetaField,
+  isDataGridSparseRowModel,
 } from "./rowModel.js"
 export {
   normalizePivotSpec,
@@ -501,6 +505,7 @@ export { createDataGridEditModel } from "./editModel.js"
 export type {
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
+  DataGridDataSourceColumnHistogramRequest,
   DataGridDataSourceInvalidation,
   DataGridDataSourcePaginationPullContext,
   DataGridDataSourcePullPriority,

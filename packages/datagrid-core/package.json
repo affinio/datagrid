@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-core",
-  "version": "0.3.17",
+  "version": "0.3.18",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Headless data grid core for Affino UI primitives",

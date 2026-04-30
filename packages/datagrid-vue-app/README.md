@@ -708,7 +708,7 @@ Out of the box this wires:
 - sort ascending / descending / clear
 - group / ungroup for groupable columns
 - pin column submenu (`left`, `right`, `none`)
-- value-set filter picker with search + apply/clear
+- value-set filter picker with search + apply/clear; server-backed row models may resolve values asynchronously through `api.columns.getHistogram(columnKey, { ignoreSelfFilter: true, search })`
 - column order / visibility popover
 
 Supported action keys for `actions` are:
@@ -1741,11 +1741,57 @@ The component emits:
 
 - When at least one filter is active, the `Advanced filter` toolbar button shows an active filter icon and active button styling.
 - Removing the only advanced-filter clause does not lock the UI; the builder keeps one empty clause row so the user can clear and rebuild the expression in place.
+- `advancedFilter.labels` customizes the toolbar text, panel headings, field labels, action labels, logical join labels, and operator labels. This is the supported localization path for built-in advanced-filter copy.
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :advanced-filter="{
+    labels: {
+      buttonLabel: 'Расширенный фильтр',
+      title: 'Условия отбора',
+      joinLabel: 'Связь',
+      columnLabel: 'Колонка',
+      operatorLabel: 'Оператор',
+      valueLabel: 'Значение',
+      apply: 'Применить',
+      cancel: 'Отмена',
+      operators: {
+        contains: 'содержит',
+        equals: 'равно',
+        'not-equals': 'не равно',
+      },
+      joins: { and: 'И', or: 'ИЛИ' },
+    },
+  }"
+/>
+```
 
 ## Built-in Overlay Panels
 
 - The built-in `Column layout`, `Advanced filter`, and `Find / replace` toolbar panels render through the shared Affino overlay host rather than inline in the grid tree.
 - These built-in panels are draggable by their header title area and reopen at the last detached position for the current grid instance during the active page session.
+- `columnLayout.labels` customizes the built-in columns panel text, including the toolbar label, panel title, close/cancel/apply actions, and move-button accessible labels.
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :column-layout="{
+    labels: {
+      buttonLabel: 'Колонки',
+      eyebrow: 'Настройка колонок',
+      title: 'Порядок и видимость',
+      close: 'Закрыть',
+      cancel: 'Отмена',
+      apply: 'Применить',
+      moveUp: 'Вверх',
+      moveDown: 'Вниз',
+    },
+  }"
+/>
+```
 
 ## Column Reorder
 
@@ -1792,7 +1838,7 @@ If you need to ship the UI but keep row order locked, leave `rowReorder` unset o
 ### Runtime access
 
 - `getApi()`
-- `getRuntime()`
+- `getRuntime()` returns the typed runtime bridge (`DataGridExposedRuntime`) for virtual-window and body-row APIs.
 - `getCore()`
 
 ### History

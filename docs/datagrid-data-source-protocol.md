@@ -1,6 +1,6 @@
 # DataGrid Data Source Protocol
 
-Updated: `2026-02-10`
+Updated: `2026-04-29`
 
 This document defines the canonical data-source boundary for `@affino/datagrid-core`.
 
@@ -19,6 +19,7 @@ Import path:
 `DataGridDataSource<T>`:
 
 - `pull(request)` - required demand API
+- `getColumnHistogram(request)` - optional server-side value histogram API for column value filters
 - `subscribe(listener)` - optional push stream
 - `invalidate(invalidation)` - optional invalidation hook
 
@@ -29,6 +30,17 @@ Import path:
 - `reason` - `mount | viewport-change | refresh | sort-change | filter-change | group-change | invalidation | push-invalidation`
 - `signal` - abort signal (abort-first cancellation contract)
 - `sortModel`, `filterModel`, `groupBy`, `groupExpansion` - canonical model state snapshot
+
+`DataGridDataSourceColumnHistogramRequest`:
+
+- `columnId` - target column key
+- `options` - histogram options (`scope`, `ignoreSelfFilter`, `styleKey`, `search`, `limit`, `orderBy`)
+- `signal` - abort signal for the histogram request
+- `sortModel`, `filterModel`, `groupBy`, `groupExpansion`, `treeData`, `pivot`, `pagination` - same effective runtime context shape used by pull requests
+
+When `ignoreSelfFilter` is true, `DataSourceBackedRowModel` removes the current column's value/style/legacy advanced filter entries before calling the data source. The data source should still apply the remaining filter context so the returned values represent the current table scope without the current column collapsing its own value list.
+
+When `search` is present, the data source should apply it server-side to the histogram value text/domain where possible. Client-backed row models keep the same option and filter the in-memory histogram locally.
 
 `DataGridDataSourcePushEvent<T>`:
 
@@ -41,7 +53,9 @@ Import path:
 `createDataSourceBackedRowModel` implements `DataGridRowModel` with:
 
 - range-driven demand via `setViewportRange`
+- sparse/server-backed row-model diagnostics via `getSparseRowModelDiagnostics()`
 - abort-first cancellation for overlapping pulls
+- optional histogram capability backed by `DataGridDataSource.getColumnHistogram`
 - cache invalidation APIs (`invalidateRange`, `invalidateAll`)
 - push application and refetch-on-overlap behavior
 - diagnostics via `getBackpressureDiagnostics()`
@@ -82,3 +96,4 @@ Required categories:
 - partial invalidation behavior
 - push stream application and invalidation-driven refetch
 - bounded cache contract under long viewport churn
+- data-source-backed histogram delegation, search forwarding, result normalization, and `ignoreSelfFilter` context pruning

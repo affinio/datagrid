@@ -3,7 +3,7 @@ import type {
   DataGridClientComputeMode,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
-  DataGridColumnHistogram,
+  DataGridColumnHistogramResult,
   DataGridColumnHistogramOptions,
   DataGridRowModel,
   DataGridRowNodeInput,
@@ -63,7 +63,7 @@ export type DataGridComputeCapability = {
 }
 
 export type DataGridColumnHistogramCapability = {
-  getColumnHistogram: (columnId: string, options?: DataGridColumnHistogramOptions) => DataGridColumnHistogram
+  getColumnHistogram: (columnId: string, options?: DataGridColumnHistogramOptions) => DataGridColumnHistogramResult
 }
 
 export type DataGridBackpressureControlCapability = {

@@ -72,6 +72,7 @@ const ADVANCED_SYMBOLS = new Set([
   "DataSourceBackedRowModel",
   "DataGridDataSource",
   "DataGridDataSourceBackpressureDiagnostics",
+  "DataGridDataSourceColumnHistogramRequest",
   "DataGridDataSourceInvalidation",
   "DataGridDataSourcePullPriority",
   "DataGridDataSourcePullReason",

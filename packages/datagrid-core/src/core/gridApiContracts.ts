@@ -13,8 +13,8 @@ import type {
   DataGridFormulaExecutionPlanSnapshot,
   DataGridFormulaGraphSnapshot,
   DataGridColumnInput,
-  DataGridColumnHistogram,
   DataGridColumnHistogramOptions,
+  DataGridColumnHistogramResult,
   DataGridColumnPin,
   DataGridColumnModelSnapshot,
   DataGridColumnSnapshot,
@@ -212,7 +212,7 @@ export interface DataGridApiColumnsNamespace {
   setVisibility(key: string, visible: boolean): void
   setWidth(key: string, width: number | null): void
   setPin(key: string, pin: DataGridColumnPin): void
-  getHistogram(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
+  getHistogram(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogramResult
 }
 
 export interface DataGridApiViewNamespace {

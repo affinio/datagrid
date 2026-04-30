@@ -8,7 +8,7 @@
     :style="overlayThemeVars"
     v-bind="triggerProps"
   >
-    {{ buttonLabel }}
+    {{ resolvedButtonLabel }}
   </button>
 
   <Teleport :to="popoverTeleportTarget">
@@ -28,11 +28,11 @@
           data-datagrid-overlay-drag-handle="true"
           @pointerdown="draggable.handlePointerDown"
         >
-          <div class="datagrid-column-layout__eyebrow">Column layout</div>
-          <h3 class="datagrid-column-layout__title">Order and visibility</h3>
+          <div class="datagrid-column-layout__eyebrow">{{ resolvedLabels.eyebrow }}</div>
+          <h3 class="datagrid-column-layout__title">{{ resolvedLabels.title }}</h3>
         </div>
         <button type="button" class="datagrid-column-layout__ghost" @click="emit('cancel')">
-          Close
+          {{ resolvedLabels.close }}
         </button>
       </header>
 
@@ -68,6 +68,8 @@
               type="button"
               class="datagrid-column-layout__icon-button"
               :disabled="!item.canMoveUp"
+              :aria-label="`${resolvedLabels.moveUp}: ${item.label}`"
+              :title="`${resolvedLabels.moveUp}: ${item.label}`"
               @click="emit('move-up', item.key)"
             >
               ↑
@@ -76,6 +78,8 @@
               type="button"
               class="datagrid-column-layout__icon-button"
               :disabled="!item.canMoveDown"
+              :aria-label="`${resolvedLabels.moveDown}: ${item.label}`"
+              :title="`${resolvedLabels.moveDown}: ${item.label}`"
               @click="emit('move-down', item.key)"
             >
               ↓
@@ -86,10 +90,10 @@
 
       <footer class="datagrid-column-layout__footer">
         <button type="button" class="datagrid-column-layout__secondary" @click="emit('cancel')">
-          Cancel
+          {{ resolvedLabels.cancel }}
         </button>
         <button type="button" class="datagrid-column-layout__primary" @click="emit('apply')">
-          Apply
+          {{ resolvedLabels.apply }}
         </button>
       </footer>
     </section>
@@ -107,6 +111,10 @@ import type {
   DataGridAppColumnLayoutVisibilityPatch,
 } from "@affino/datagrid-vue/app"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
+import {
+  DEFAULT_DATAGRID_COLUMN_LAYOUT_LABELS,
+  type DataGridResolvedColumnLayoutLabels,
+} from "../config/dataGridColumnLayout"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 import { useDataGridDraggableOverlaySurface } from "./useDataGridDraggableOverlaySurface"
 
@@ -114,9 +122,10 @@ const props = withDefaults(defineProps<{
   isOpen: boolean
   items: readonly DataGridAppColumnLayoutPanelItem[]
   buttonLabel?: string
+  labels?: DataGridResolvedColumnLayoutLabels
   active?: boolean
 }>(), {
-  buttonLabel: "Columns",
+  labels: () => DEFAULT_DATAGRID_COLUMN_LAYOUT_LABELS,
   active: false,
 })
 
@@ -174,6 +183,12 @@ const triggerProps = computed(() => controller.getTriggerProps({ role: "dialog" 
 const contentProps = computed(() => controller.getContentProps({ role: "dialog", tabIndex: -1 }))
 const popoverOpen = computed(() => controller.state.value.open)
 const popoverTeleportTarget = computed(() => floating.teleportTarget.value)
+const resolvedLabels = computed(() => props.labels ?? DEFAULT_DATAGRID_COLUMN_LAYOUT_LABELS)
+const resolvedButtonLabel = computed(() => {
+  return typeof props.buttonLabel === "string" && props.buttonLabel.trim().length > 0
+    ? props.buttonLabel.trim()
+    : resolvedLabels.value.buttonLabel
+})
 const draggedKey = ref<string | null>(null)
 const dropTargetKey = ref<string | null>(null)
 const dropPlacement = ref<"before" | "after" | null>(null)
