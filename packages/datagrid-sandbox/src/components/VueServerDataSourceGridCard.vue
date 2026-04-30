@@ -37,6 +37,8 @@
         :row-selection="false"
         :column-menu="columnMenu"
         advanced-filter
+        fill-handle
+        range-move
         layout-mode="auto-height"
         :min-rows="8"
         :max-rows="16"
@@ -79,6 +81,10 @@
         <div class="server-grid__diagnostics-card">
           <dt>Commit msg</dt>
           <dd>{{ commitMessageLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Commit detail</dt>
+          <dd>{{ commitDetailsLabel }}</dd>
         </div>
         <div class="server-grid__diagnostics-card">
           <dt>In flight</dt>
@@ -156,6 +162,7 @@ const sortModelText = ref("none")
 const filterModelText = ref("none")
 const commitModeText = ref("ok")
 const commitMessageText = ref("none")
+const commitDetailsText = ref("none")
 const lastEditText = ref("none")
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
@@ -536,6 +543,7 @@ const lastEditLabel = computed(() => lastEditText.value)
 const rowCacheLabel = computed(() => `${diagnostics.value.rowCacheSize} / ${diagnostics.value.rowCacheLimit}`)
 const commitModeLabel = computed(() => commitModeText.value)
 const commitMessageLabel = computed(() => commitMessageText.value)
+const commitDetailsLabel = computed(() => commitDetailsText.value)
 const loadingLabel = computed(() => {
   if (error.value) return "error"
   if (pendingRequests.value > 0 || loading.value) return "loading"
@@ -585,35 +593,36 @@ function handleCellEdit(payload: {
   lastEditText.value = `${payload.columnKey} ${String(payload.oldValue ?? "")} → ${String(payload.newValue ?? "")}`
 }
 
+function shouldRejectCommittedRow(rowId: string | number): boolean {
+  if (!commitFailureMode.value) {
+    return false
+  }
+  const numeric = Number(String(rowId).replace(/^srv-/, ""))
+  return Number.isFinite(numeric) && numeric % 2 === 0
+}
+
 function applyCommitEdits(request: ServerDemoCommitEditsRequest): Promise<{
   committed?: readonly { rowId: string | number }[]
   rejected?: readonly { rowId: string | number; reason?: string }[]
 }> {
   try {
-    if (commitFailureMode.value) {
-      commitFailureMode.value = false
-      commitModeText.value = "failed"
-      commitMessageText.value = "rejected: simulated failure"
-      for (const edit of request.edits) {
-        const rowId = String(edit.rowId)
-        const nextPending = new Map(pendingOverrides.value)
-        nextPending.delete(rowId)
-        pendingOverrides.value = nextPending
-      }
-      diagnostics.value = rowModel.getBackpressureDiagnostics()
-      void rowModel.refresh("manual")
-      return Promise.resolve({
-        rejected: request.edits.map((edit) => ({
-          rowId: edit.rowId,
-          reason: "simulated failure",
-        })),
-      })
-    }
-
+    const committedRows: Array<{ rowId: string | number }> = []
+    const rejectedRows: Array<{ rowId: string | number; reason?: string }> = []
+    const nextCommittedOverrides = new Map(committedOverrides.value)
+    const nextPendingOverrides = new Map(pendingOverrides.value)
     for (const edit of request.edits) {
       const rowId = String(edit.rowId)
-      const committed = committedOverrides.value.get(rowId) ?? {}
       const pending = pendingOverrides.value.get(rowId) ?? {}
+      if (shouldRejectCommittedRow(rowId)) {
+        nextPendingOverrides.delete(rowId)
+        nextCommittedOverrides.delete(rowId)
+        rejectedRows.push({
+          rowId: edit.rowId,
+          reason: "simulated failure",
+        })
+        continue
+      }
+      const committed = committedOverrides.value.get(rowId) ?? {}
       const nextData = { ...pending, ...edit.data }
       if ("value" in nextData) {
         const numericValue = Number(nextData.value)
@@ -621,30 +630,48 @@ function applyCommitEdits(request: ServerDemoCommitEditsRequest): Promise<{
           nextData.value = numericValue
         }
       }
-      const nextCommitted = new Map(committedOverrides.value)
-      nextCommitted.set(rowId, {
+      nextPendingOverrides.delete(rowId)
+      nextCommittedOverrides.set(rowId, {
         ...committed,
         ...nextData,
       })
-      committedOverrides.value = nextCommitted
-      const nextPending = new Map(pendingOverrides.value)
-      nextPending.delete(rowId)
-      pendingOverrides.value = nextPending
+      committedRows.push({ rowId: edit.rowId })
+    }
+    committedOverrides.value = nextCommittedOverrides
+    pendingOverrides.value = nextPendingOverrides
+    if (rejectedRows.length > 0) {
+      commitModeText.value = "failed"
+      commitMessageText.value = `partial rejection: ${rejectedRows.length} row${rejectedRows.length === 1 ? "" : "s"}`
+      commitDetailsText.value = rejectedRows.map(entry => String(entry.rowId)).join(", ")
+      diagnostics.value = rowModel.getBackpressureDiagnostics()
+      void rowModel.refresh("manual")
+      commitFailureMode.value = false
+      return Promise.resolve({
+        committed: committedRows,
+        rejected: rejectedRows,
+      })
     }
     commitModeText.value = "ok"
     commitMessageText.value = "committed"
+    commitDetailsText.value = committedRows.length > 0
+      ? committedRows.map(entry => String(entry.rowId)).join(", ")
+      : "none"
     diagnostics.value = rowModel.getBackpressureDiagnostics()
     return Promise.resolve({
-      committed: request.edits.map((edit) => ({ rowId: edit.rowId })),
+      committed: committedRows,
     })
   } catch (caught) {
     commitModeText.value = "failed"
     commitMessageText.value = `error: ${caught instanceof Error ? caught.message : String(caught)}`
+    commitDetailsText.value = "rollback"
     for (const edit of request.edits) {
       const rowId = String(edit.rowId)
       const nextPending = new Map(pendingOverrides.value)
       nextPending.delete(rowId)
       pendingOverrides.value = nextPending
+      const nextCommitted = new Map(committedOverrides.value)
+      nextCommitted.delete(rowId)
+      committedOverrides.value = nextCommitted
     }
     diagnostics.value = rowModel.getBackpressureDiagnostics()
     void rowModel.refresh("manual")

@@ -20,6 +20,8 @@ Status: baseline demo implemented; filtering/histograms and demo-local editing s
 - [x] Inline editing
 - [x] Optimistic updates
 - [x] Commit failure / rollback UX
+- [x] Batch commit support
+- [x] Partial batch rollback UX
 - [x] Sandbox navigation link
 
 ## Next Slices
@@ -28,6 +30,8 @@ Status: baseline demo implemented; filtering/histograms and demo-local editing s
 - [ ] Range move
 
 Note: the row model remains read/pull-oriented; the demo uses a datasource-local `commitEdits` adapter for optimistic edits.
+Note: single-cell `cell-edit` remains single-cell only; batch edits flow through `applyEdits([]) -> patchRows -> commitEdits([])`.
+Note: batch failure simulation rejects alternating rows so rollback behavior can be verified visually.
 
 ## Client-Model Parity Checklist
 - [ ] Selection across unloaded rows
