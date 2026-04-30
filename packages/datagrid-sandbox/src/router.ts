@@ -4,6 +4,7 @@ import VueCellRendererGridCard from "./components/VueCellRendererGridCard.vue"
 import VueFormulaGridCard from "./components/VueFormulaGridCard.vue"
 import VueGridCard from "./components/VueGridCard.vue"
 import VueRowSelectionInteractionGridCard from "./components/VueRowSelectionInteractionGridCard.vue"
+import VueServerDataSourceGridCard from "./components/VueServerDataSourceGridCard.vue"
 import VueShellGridCard from "./components/VueShellGridCard.vue"
 import VueSpreadsheetWorkbookCard from "./components/VueSpreadsheetWorkbookCard.vue"
 import VueTypedFacadeGridCard from "./components/VueTypedFacadeGridCard.vue"
@@ -32,6 +33,11 @@ const routes = [
     path: "/vue/worker-grid",
     component: VueGridCard,
     props: { title: "Vue: Worker Grid", mode: "worker" },
+  },
+  {
+    path: "/vue/server-data-source-grid",
+    component: VueServerDataSourceGridCard,
+    props: { title: "Vue: Server Data Source Grid" },
   },
   {
     path: "/vue/formula-grid",

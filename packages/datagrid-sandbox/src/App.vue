@@ -16,6 +16,7 @@
       <RouterLink class="sandbox__link" to="/vue/pivot-grid">Vue Pivot</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/shell/pivot-grid">Vue Pivot (Sugar)</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/worker-grid">Vue Worker</RouterLink>
+      <RouterLink class="sandbox__link" to="/vue/server-data-source-grid">Vue Server Data Source</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/formula-grid">Vue Formula</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/cell-renderer-grid">Vue Cell Renderer</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/row-selection-grid">Vue Row Selection</RouterLink>
