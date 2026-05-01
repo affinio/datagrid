@@ -151,6 +151,75 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("waits for the refresh pull to complete before resolving patchRows", async () => {
+    const rows = [
+      { id: 1, value: "row-1" },
+    ]
+    let resolveRefresh: ((result: DataGridDataSourcePullResult<{ id: number; value: string }>) => void) | null = null
+    const commitEdits = vi.fn(async ({ edits }: { edits: readonly Array<{ rowId: number; data: { value?: string } }> }) => {
+      for (const edit of edits) {
+        const row = rows.find(candidate => candidate.id === edit.rowId)
+        if (row && typeof edit.data.value === "string") {
+          row.value = edit.data.value
+        }
+      }
+      return { committed: edits.map(edit => ({ rowId: edit.rowId })) }
+    })
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        if (request.reason === "refresh") {
+          return await new Promise<DataGridDataSourcePullResult<{ id: number; value: string }>>(resolve => {
+            resolveRefresh = resolve
+          })
+        }
+        return {
+          rows: rows
+            .filter(row => row.id >= request.range.start + 1 && row.id <= request.range.end + 1)
+            .map((row, offset) => ({
+              index: request.range.start + offset,
+              row,
+              rowId: row.id,
+            })),
+          total: rows.length,
+        }
+      },
+      commitEdits,
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+
+    model.setViewportRange({ start: 0, end: 0 })
+    await flushMicrotasks()
+
+    const patchPromise = Promise.resolve(model.patchRows?.([
+      { rowId: 1, data: { value: "updated" } },
+    ]))
+    let resolved = false
+    patchPromise.then(() => {
+      resolved = true
+    })
+
+    await flushMicrotasks()
+    expect(resolved).toBe(false)
+    expect(resolveRefresh).not.toBeNull()
+
+    resolveRefresh?.({
+      rows: [
+        { index: 0, row: rows[0]!, rowId: 1 },
+      ],
+      total: rows.length,
+    })
+    await patchPromise
+    expect(resolved).toBe(true)
+    expect(model.getRow(0)?.row.value).toBe("updated")
+
+    model.dispose()
+  })
+
   it("does not refresh when commitEdits throws", async () => {
     const rows = [
       { id: 1, value: "row-1" },

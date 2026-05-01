@@ -12,6 +12,8 @@
       </div>
       <div class="server-grid__toolbar">
         <button type="button" class="server-grid__button" @click="refreshVisibleRange">Refresh visible range</button>
+        <button type="button" class="server-grid__button" :disabled="!canUndoHistory" @click="runHistoryAction('undo')">Undo</button>
+        <button type="button" class="server-grid__button" :disabled="!canRedoHistory" @click="runHistoryAction('redo')">Redo</button>
         <button type="button" class="server-grid__button" @click="simulateErrorOnce">Simulate one error</button>
         <button type="button" class="server-grid__button" @click="simulateCommitFailure">Simulate commit failure</button>
       </div>
@@ -27,6 +29,7 @@
 
     <section class="server-grid__surface">
       <DataGrid
+        ref="gridRef"
         :key="gridKey"
         :columns="columns"
         :row-model="rowModel"
@@ -39,6 +42,7 @@
         advanced-filter
         fill-handle
         range-move
+        :history="true"
         layout-mode="auto-height"
         :min-rows="8"
         :max-rows="16"
@@ -69,6 +73,22 @@
         <div class="server-grid__diagnostics-card">
           <dt>Last edit</dt>
           <dd>{{ lastEditLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Can undo</dt>
+          <dd>{{ canUndoLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Can redo</dt>
+          <dd>{{ canRedoLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>History action</dt>
+          <dd>{{ lastHistoryActionLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Edit history</dt>
+          <dd>{{ lastEditRecordedLabel }}</dd>
         </div>
         <div class="server-grid__diagnostics-card">
           <dt>Cached rows</dt>
@@ -148,6 +168,13 @@ const props = defineProps<{
 }>()
 
 const gridKey = ref(0)
+const gridRef = ref<{
+  history: {
+    canUndo: () => boolean
+    canRedo: () => boolean
+    runHistoryAction: (direction: "undo" | "redo") => Promise<string | null>
+  }
+} | null>(null)
 const failureMode = ref(false)
 const commitFailureMode = ref(false)
 const lastViewportRange = ref<{ start: number; end: number }>({ start: 0, end: 0 })
@@ -164,6 +191,8 @@ const commitModeText = ref("ok")
 const commitMessageText = ref("none")
 const commitDetailsText = ref("none")
 const lastEditText = ref("none")
+const lastHistoryActionText = ref("none")
+const lastEditRecordedText = ref("unknown")
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
 const statuses = ["Active", "Paused", "Closed"] as const
@@ -544,6 +573,12 @@ const rowCacheLabel = computed(() => `${diagnostics.value.rowCacheSize} / ${diag
 const commitModeLabel = computed(() => commitModeText.value)
 const commitMessageLabel = computed(() => commitMessageText.value)
 const commitDetailsLabel = computed(() => commitDetailsText.value)
+const canUndoHistory = computed(() => gridRef.value?.history.canUndo() ?? false)
+const canRedoHistory = computed(() => gridRef.value?.history.canRedo() ?? false)
+const canUndoLabel = computed(() => gridRef.value?.history.canUndo() ? "yes" : "no")
+const canRedoLabel = computed(() => gridRef.value?.history.canRedo() ? "yes" : "no")
+const lastHistoryActionLabel = computed(() => lastHistoryActionText.value)
+const lastEditRecordedLabel = computed(() => lastEditRecordedText.value)
 const loadingLabel = computed(() => {
   if (error.value) return "error"
   if (pendingRequests.value > 0 || loading.value) return "loading"
@@ -591,6 +626,16 @@ function handleCellEdit(payload: {
   }
 }): void {
   lastEditText.value = `${payload.columnKey} ${String(payload.oldValue ?? "")} → ${String(payload.newValue ?? "")}`
+  lastEditRecordedText.value = "pending"
+  void Promise.resolve().then(() => {
+    lastEditRecordedText.value = gridRef.value?.history.canUndo() ? "yes" : "no"
+  })
+}
+
+async function runHistoryAction(direction: "undo" | "redo"): Promise<void> {
+  const result = await gridRef.value?.history.runHistoryAction(direction) ?? null
+  lastHistoryActionText.value = result ?? `${direction}:none`
+  lastEditRecordedText.value = gridRef.value?.history.canUndo() ? "yes" : "no"
 }
 
 function shouldRejectCommittedRow(rowId: string | number): boolean {
@@ -697,6 +742,7 @@ onMounted(() => {
   totalRows.value = ROW_COUNT
   handleStateUpdate(rowModel.getSnapshot())
   void rowModel.refresh("mount")
+  lastEditRecordedText.value = "no"
 })
 
 onBeforeUnmount(() => {

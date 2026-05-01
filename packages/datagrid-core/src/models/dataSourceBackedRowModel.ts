@@ -1422,8 +1422,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
             }))
               .then(result => {
                 if (!disposed && (result.rejected == null || result.rejected.length === 0)) {
-                  void pullRange(toSourceRange(viewportRange), "refresh", "critical")
-                  return
+                  return pullRange(toSourceRange(viewportRange), "refresh", "critical")
                 }
                 if (result.rejected != null && result.rejected.length > 0) {
                   console.error("[DataGridDataSource] commitEdits returned rejected rows.", result.rejected)

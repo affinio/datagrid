@@ -47,7 +47,7 @@ export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
   ) => boolean
   captureRowsSnapshot: () => TSnapshot
   captureRowsSnapshotForRowIds?: (rowIds: readonly (string | number)[]) => TSnapshot
-  recordEditTransaction: (beforeSnapshot: TSnapshot) => void
+  recordEditTransaction: (beforeSnapshot: TSnapshot, afterSnapshotOverride?: TSnapshot) => void
   onCellEdit?: (payload: {
     rowId: string | number
     columnKey: string
@@ -81,6 +81,33 @@ export interface UseDataGridAppInlineEditingResult<TRow> {
 export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   options: UseDataGridAppInlineEditingOptions<TRow, TSnapshot>,
 ): UseDataGridAppInlineEditingResult<TRow> {
+  const buildAfterSnapshotFromEdit = (
+    beforeSnapshot: TSnapshot,
+    rowId: string | number,
+    columnKey: string,
+    nextValue: unknown,
+  ): TSnapshot => {
+    if (beforeSnapshot && typeof beforeSnapshot === "object" && Array.isArray((beforeSnapshot as { rows?: unknown }).rows)) {
+      const snapshot = beforeSnapshot as unknown as { rows: Array<{ rowId: string | number; row: TRow }> }
+      return {
+        ...(beforeSnapshot as Record<string, unknown>),
+        rows: snapshot.rows.map(entry => {
+          if (entry.rowId !== rowId) {
+            return entry
+          }
+          return {
+            ...entry,
+            row: {
+              ...(entry.row as Record<string, unknown>),
+              [columnKey]: nextValue,
+            } as TRow,
+          }
+        }),
+      } as TSnapshot
+    }
+    return beforeSnapshot
+  }
+
   const editingCell = ref<DataGridAppEditingCell | null>(null)
   const editingCellValue = ref("")
   const editingCellInitialFilter = ref("")
@@ -438,6 +465,9 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         draft: editingCellValue.value,
       })
       : editingCellValue.value
+    const afterSnapshot = typeof beforeSnapshot !== "undefined"
+      ? buildAfterSnapshotFromEdit(beforeSnapshot, resolvedRowId, currentEditingCell.columnKey, parsedValue)
+      : undefined
     await options.runtime.api.rows.applyEdits([
       {
         rowId: resolvedRowId,
@@ -458,7 +488,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         } as Partial<TRow>,
       },
     })
-    options.recordEditTransaction(beforeSnapshot)
+    options.recordEditTransaction(beforeSnapshot, afterSnapshot)
     clearInlineEdit()
     suppressNextBlurCommit.value = false
     if (target !== "none") {

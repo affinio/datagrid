@@ -66,6 +66,7 @@ describe("useDataGridAppInlineEditing contract", () => {
     const event = new KeyboardEvent("keydown", { key: "Tab", cancelable: true })
     harness.api.handleEditorKeydown(event)
     await nextTick()
+    await Promise.resolve()
 
     expect(event.defaultPrevented).toBe(true)
     expect(harness.applyEdits).toHaveBeenCalledWith([
@@ -89,6 +90,7 @@ describe("useDataGridAppInlineEditing contract", () => {
     const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, cancelable: true })
     harness.api.handleEditorKeydown(event)
     await nextTick()
+    await Promise.resolve()
 
     expect(event.defaultPrevented).toBe(true)
     expect(harness.applyCellSelection).toHaveBeenCalledWith({
@@ -106,6 +108,7 @@ describe("useDataGridAppInlineEditing contract", () => {
     const event = new KeyboardEvent("keydown", { key: "Enter", cancelable: true })
     harness.api.handleEditorKeydown(event)
     await nextTick()
+    await Promise.resolve()
 
     expect(event.defaultPrevented).toBe(true)
     expect(harness.applyCellSelection).toHaveBeenCalledWith({
@@ -323,5 +326,69 @@ describe("useDataGridAppInlineEditing contract", () => {
     ])
     expect(harness.applyCellSelection).not.toHaveBeenCalled()
     expect(harness.ensureActiveCellVisible).not.toHaveBeenCalled()
+  })
+
+  it("records the committed cell value in the after snapshot for inline edits", async () => {
+    const rows = [
+      { rowId: "r1", kind: "data", data: { owner: "alice", status: "open", amount: 10 } },
+    ] as unknown as DataGridRowNode<DemoRow>[]
+    const recordEditTransaction = vi.fn()
+    const api = useDataGridAppInlineEditing<DemoRow, { kind: "partial"; rows: Array<{ rowId: string | number; row: DemoRow }> }>({
+      mode: ref("base"),
+      bodyViewportRef: ref(null),
+      visibleColumns: ref([
+        { key: "owner", column: { key: "owner" } },
+      ] as unknown as readonly DataGridColumnSnapshot[]),
+      totalRows: ref(rows.length),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => rows[rowIndex] ?? null,
+            applyEdits(edits: ReadonlyArray<{ rowId: string | number; data: Partial<DemoRow> }>) {
+              for (const edit of edits) {
+                const row = rows.find(entry => entry.rowId === edit.rowId)
+                if (row && row.kind !== "group") {
+                  row.data = { ...row.data, ...edit.data }
+                }
+              }
+            },
+          },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] ?? null,
+      } as never,
+      readCell: row => String(row.kind === "group" ? "" : row.data.owner),
+      resolveRowIndexById: rowId => rows.findIndex(row => row.rowId === rowId),
+      applyCellSelection: vi.fn(),
+      ensureActiveCellVisible: vi.fn(),
+      isCellEditable: () => true,
+      captureRowsSnapshot: () => ({
+        kind: "partial",
+        rows: rows.map(row => ({
+          rowId: row.rowId,
+          row: { ...row.data },
+        })),
+      }),
+      recordEditTransaction,
+    })
+
+    const firstRow = rows[0]!
+    api.startInlineEdit(firstRow, "owner")
+    api.editingCellValue.value = "zoe"
+    api.commitInlineEdit()
+    await Promise.resolve()
+
+    expect(recordEditTransaction).toHaveBeenCalledTimes(1)
+    const [, afterSnapshot] = recordEditTransaction.mock.calls[0] ?? []
+    expect(afterSnapshot).toMatchObject({
+      kind: "partial",
+      rows: [
+        {
+          rowId: "r1",
+          row: {
+            owner: "zoe",
+          },
+        },
+      ],
+    })
   })
 })
