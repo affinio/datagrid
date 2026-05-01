@@ -388,7 +388,11 @@ interface LowLevelGridExpose {
 
 interface DataGridRuntimeHostSlotProps {
   runtime: LowLevelGridExpose["runtime"]
-  rowModel: LowLevelGridExpose["rowModel"]
+  rowModel: LowLevelGridExpose["rowModel"] & {
+    dataSource?: {
+      resolveFillBoundary?: (request: any) => any
+    }
+  }
   defaultRendererProps?: Record<string, unknown>
   [key: string]: unknown
 }
@@ -724,6 +728,14 @@ const dataGridProps = {
   },
   customOverlays: {
     type: Array as PropType<readonly DataGridTableStageCustomOverlay[] | undefined>,
+    default: undefined,
+  },
+  reportFillWarning: {
+    type: Function as PropType<((message: string) => void) | undefined>,
+    default: undefined,
+  },
+  reportFillPlumbingState: {
+    type: Function as PropType<((layer: string, present: boolean) => void) | undefined>,
     default: undefined,
   },
 } as const
@@ -1382,8 +1394,14 @@ const DataGridRuntimeComponent = defineComponent({
                 defaultRendererProps: {
                   ...defaultRendererProps,
                   runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
-                  runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot">,
+                  runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
+                    dataSource?: {
+                      resolveFillBoundary?: (request: any) => any
+                    }
+                  },
                   onCellEdit: handleCellEdit,
+                  reportFillWarning: props.reportFillWarning,
+                  reportFillPlumbingState: props.reportFillPlumbingState,
                 },
               }),
             }
@@ -1391,8 +1409,14 @@ const DataGridRuntimeComponent = defineComponent({
               default: (slotProps: DataGridRuntimeHostSlotProps) => h(DataGridDefaultRenderer, {
                 ...defaultRendererProps,
                 runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
-                runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot">,
+                runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
+                  dataSource?: {
+                    resolveFillBoundary?: (request: any) => any
+                  }
+                },
                 onCellEdit: handleCellEdit,
+                reportFillWarning: props.reportFillWarning,
+                reportFillPlumbingState: props.reportFillPlumbingState,
               }),
             },
       )

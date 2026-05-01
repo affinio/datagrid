@@ -644,8 +644,22 @@ export default defineComponent({
       required: true,
     },
     runtimeRowModel: {
-      type: Object as PropType<Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot">>,
+      type: Object as PropType<
+        Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
+          dataSource?: {
+            resolveFillBoundary?: (request: any) => any
+          }
+        }
+      >,
       required: true,
+    },
+    reportFillWarning: {
+      type: Function as PropType<((message: string) => void) | undefined>,
+      default: undefined,
+    },
+    reportFillPlumbingState: {
+      type: Function as PropType<((layer: string, present: boolean) => void) | undefined>,
+      default: undefined,
     },
     selectionSnapshot: {
       type: Object as PropType<Ref<import("@affino/datagrid-vue").DataGridSelectionSnapshot | null>>,
@@ -2550,6 +2564,7 @@ export default defineComponent({
       rows: rowsRef,
       sourceRows: rowsRef,
       runtime: props.runtime,
+      runtimeRowModel: props.runtimeRowModel ?? null,
       rowVersion,
       totalRuntimeRows,
       visibleColumns,
@@ -2570,6 +2585,8 @@ export default defineComponent({
       syncRowSelectionSnapshotFromRuntime: props.syncRowSelectionSnapshotFromRuntime,
       flushRowSelectionSnapshotUpdates: props.flushRowSelectionSnapshotUpdates,
       clearExternalPendingClipboardOperation: clearPendingRowClipboardOperation,
+      reportFillWarning: props.reportFillWarning,
+      reportFillPlumbingState: props.reportFillPlumbingState,
       firstColumnKey,
       columnFilterTextByKey,
       virtualization: computed(() => props.virtualization),

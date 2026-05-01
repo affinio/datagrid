@@ -27,7 +27,11 @@ export interface UseDataGridAppFillOptions {
   resolveSelectionRange: () => DataGridCopyRange | null
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
-  applyClipboardEdits: (range: DataGridCopyRange, matrix: string[][]) => number | Promise<number>
+  applyClipboardEdits: (
+    range: DataGridCopyRange,
+    matrix: string[][],
+    options?: { recordHistory?: boolean; recordHistoryLabel?: string },
+  ) => number | Promise<number>
   isCellEditableAt: (rowIndex: number, columnIndex: number) => boolean
   setLastAppliedFillSession: (session: DataGridAppAppliedFillSession | null) => void
   syncViewport: () => void
@@ -72,7 +76,9 @@ export function useDataGridAppFill(
       sourceMatrix,
       behavior,
     })
-    const appliedRows = await options.applyClipboardEdits(previewRange, matrix)
+    const appliedRows = await options.applyClipboardEdits(previewRange, matrix, {
+      recordHistoryLabel: "Fill edit",
+    })
     if (appliedRows > 0) {
       options.setLastAppliedFillSession({
         baseRange: { ...baseRange },

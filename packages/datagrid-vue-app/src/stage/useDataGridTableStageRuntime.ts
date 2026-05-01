@@ -1,5 +1,8 @@
 import { computed, nextTick, ref, type ComputedRef, type CSSProperties, type Ref } from "vue"
 import type {
+  DataGridFilterSnapshot,
+  DataGridGroupBySpec,
+  DataGridGroupExpansionSnapshot,
   DataGridRowNode,
   DataGridColumnSnapshot,
   DataGridRowSelectionSnapshot,
@@ -7,6 +10,10 @@ import type {
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
+import type {
+  DataGridPaginationSnapshot,
+  DataGridSortState,
+} from "@affino/datagrid-core"
 import {
   createDataGridAppRowHeightMetrics,
   type DataGridAppPasteOptions,
@@ -62,6 +69,35 @@ const AUTO_RESIZE_SAMPLE_LIMIT = 400
 
 export type { DataGridTableStageHistoryAdapter } from "./useDataGridTableStageHistory"
 
+interface DataGridAppFillProjectionContext {
+  sortModel: readonly DataGridSortState[]
+  filterModel: DataGridFilterSnapshot | null
+  groupBy: DataGridGroupBySpec | null
+  groupExpansion: DataGridGroupExpansionSnapshot
+  treeData: null
+  pivot: null
+  pagination: DataGridPaginationSnapshot
+}
+
+interface DataGridAppResolveFillBoundaryRequest {
+  direction: "up" | "down" | "left" | "right"
+  baseRange: DataGridCopyRange
+  fillColumns: readonly string[]
+  referenceColumns: readonly string[]
+  projection: DataGridAppFillProjectionContext
+  startRowIndex: number
+  startColumnIndex: number
+  limit?: number | null
+}
+
+interface DataGridAppResolveFillBoundaryResult {
+  endRowIndex: number | null
+  endRowId?: string | number | null
+  boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
+  scannedRowCount?: number
+  truncated?: boolean
+}
+
 type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = {
   api: UseDataGridRuntimeResult<TRow>["api"]
   syncBodyRowsInRange: UseDataGridRuntimeResult<TRow>["syncBodyRowsInRange"]
@@ -87,6 +123,15 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   rows: Ref<readonly TRow[]>
   sourceRows?: Ref<readonly TRow[]>
   runtime: DataGridTableStageBodyRuntime<TRow>
+  runtimeRowModel?: {
+    subscribe: UseDataGridRuntimeResult<TRow>["rowModel"]["subscribe"]
+    getSnapshot: UseDataGridRuntimeResult<TRow>["rowModel"]["getSnapshot"]
+    dataSource?: {
+      resolveFillBoundary?: (
+        request: DataGridAppResolveFillBoundaryRequest,
+      ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
+    }
+  } | null
   rowVersion: Ref<number>
   totalRuntimeRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
@@ -173,6 +218,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   closeContextMenu?: () => void
   openContextMenuFromCurrentCell?: () => void
   clearExternalPendingClipboardOperation?: () => boolean
+  reportFillWarning?: (message: string) => void
+  reportFillPlumbingState?: (layer: string, present: boolean) => void
   runRowIndexKeyboardAction?: (
     action: "insert-row-above" | "copy-row" | "cut-row" | "paste-row" | "delete-selected-rows" | "open-row-menu",
     rowId: string | number,
@@ -585,11 +632,11 @@ export function useDataGridTableStageRuntime<
     clearCellSelection,
     captureRowsSnapshot: captureHistorySnapshot,
     captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
-    recordEditTransaction: beforeSnapshot => {
+    recordEditTransaction: (beforeSnapshot, afterSnapshotOverride, label) => {
       recordHistoryIntentTransaction({
         intent: "edit",
-        label: "Cell edit",
-      }, beforeSnapshot)
+        label: label ?? "Cell edit",
+      }, beforeSnapshot, afterSnapshotOverride)
     },
     readCell: (row, columnKey) => readStageCell(row, columnKey),
     readClipboardCell: options.readClipboardCell
@@ -660,11 +707,11 @@ export function useDataGridTableStageRuntime<
     isCellEditable: isSurfaceCellEditableByKey,
     captureRowsSnapshot: captureHistorySnapshot,
     captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
-    recordEditTransaction: beforeSnapshot => {
+    recordEditTransaction: (beforeSnapshot, afterSnapshotOverride, label) => {
       recordHistoryIntentTransaction({
         intent: "edit",
-        label: "Cell edit",
-      }, beforeSnapshot)
+        label: label ?? "Cell edit",
+      }, beforeSnapshot, afterSnapshotOverride)
     },
     ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "edit"),
     onCellEdit: options.onCellEdit,
@@ -795,11 +842,58 @@ export function useDataGridTableStageRuntime<
     isCellEditable: isSurfaceCellEditableByKey,
     cloneRowData: options.cloneRowData,
     resolveRowIndexById: resolveSelectableRowIndexById,
+    isRowMaterializedAtIndex: (rowIndex: number) => {
+      const row = selectableRuntime.getBodyRowAtIndex(rowIndex)
+      return !!row && (row as { __placeholder?: boolean }).__placeholder !== true
+    },
+    resolveFillBoundary: (() => {
+      const runtimeRowModel = options.runtimeRowModel
+      const resolveFillBoundary = runtimeRowModel?.dataSource?.resolveFillBoundary
+      options.reportFillPlumbingState?.("stage_runtime_rowmodel", typeof resolveFillBoundary === "function")
+      if (typeof resolveFillBoundary !== "function") {
+        return undefined
+      }
+      return async (request: DataGridAppResolveFillBoundaryRequest) => {
+        const snapshot = options.runtime.api.rows.getSnapshot() as {
+          sortModel?: readonly DataGridSortState[]
+          filterModel?: DataGridFilterSnapshot | null
+          groupBy?: DataGridGroupBySpec | null
+          groupExpansion?: DataGridGroupExpansionSnapshot
+          pagination?: DataGridPaginationSnapshot
+        }
+        return resolveFillBoundary({
+          ...request,
+          projection: {
+            sortModel: snapshot.sortModel ?? [],
+            filterModel: snapshot.filterModel ?? null,
+            groupBy: snapshot.groupBy ?? null,
+            groupExpansion: snapshot.groupExpansion ?? { expandedByDefault: false, toggledGroupKeys: [] },
+            treeData: null,
+            pivot: null,
+            pagination: snapshot.pagination ?? {
+              enabled: false,
+              pageSize: 0,
+              currentPage: 0,
+              pageCount: 0,
+              totalRowCount: 0,
+              startIndex: 0,
+              endIndex: 0,
+            },
+          },
+        })
+      }
+    })(),
+    reportFillWarning: options.reportFillWarning,
+    reportFillPlumbingState: options.reportFillPlumbingState,
     ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "toggle"),
     captureRowsSnapshot: captureHistorySnapshot,
     captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
-    recordIntentTransaction: (descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null }, beforeSnapshot: unknown) => {
-      recordHistoryIntentTransaction(descriptor, beforeSnapshot)
+    recordIntentTransaction: (
+      descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
+      beforeSnapshot: unknown,
+      afterSnapshotOverride?: unknown,
+    ) => {
+      recordHistoryIntentTransaction(descriptor, beforeSnapshot, afterSnapshotOverride)
     },
     clearPendingClipboardOperation,
     clearExternalPendingClipboardOperation: options.clearExternalPendingClipboardOperation,

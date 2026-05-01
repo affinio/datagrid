@@ -33,6 +33,42 @@ import {
   type DataGridCopyRange,
 } from "../advanced"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
+import type {
+  DataGridFilterSnapshot,
+  DataGridGroupBySpec,
+  DataGridGroupExpansionSnapshot,
+  DataGridPaginationSnapshot,
+  DataGridSortState,
+} from "@affino/datagrid-core"
+
+interface DataGridAppFillProjectionContext {
+  sortModel: readonly DataGridSortState[]
+  filterModel: DataGridFilterSnapshot | null
+  groupBy: DataGridGroupBySpec | null
+  groupExpansion: DataGridGroupExpansionSnapshot
+  treeData: null
+  pivot: null
+  pagination: DataGridPaginationSnapshot
+}
+
+interface DataGridAppResolveFillBoundaryRequest {
+  direction: "up" | "down" | "left" | "right"
+  baseRange: DataGridCopyRange
+  fillColumns: readonly string[]
+  referenceColumns: readonly string[]
+  projection: DataGridAppFillProjectionContext
+  startRowIndex: number
+  startColumnIndex: number
+  limit?: number | null
+}
+
+interface DataGridAppResolveFillBoundaryResult {
+  endRowIndex: number | null
+  endRowId?: string | number | null
+  boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
+  scannedRowCount?: number
+  truncated?: boolean
+}
 import {
   useDataGridAppFill,
   type DataGridAppAppliedFillSession,
@@ -100,11 +136,18 @@ export interface UseDataGridAppInteractionControllerOptions<
   ) => boolean
   cloneRowData: (row: TRow) => TRow
   resolveRowIndexById?: (rowId: string | number) => number
+  isRowMaterializedAtIndex?: (rowIndex: number) => boolean
+  resolveFillBoundary?: (
+    request: DataGridAppResolveFillBoundaryRequest,
+  ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
+  reportFillWarning?: (message: string) => void
+  reportFillPlumbingState?: (layer: string, present: boolean) => void
   captureRowsSnapshot: () => TSnapshot
   captureRowsSnapshotForRowIds?: (rowIds: readonly (string | number)[]) => TSnapshot
   recordIntentTransaction: (
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: TSnapshot,
+    afterSnapshotOverride?: TSnapshot,
   ) => void | Promise<void>
   clearPendingClipboardOperation: (clearSelection: boolean, clearBufferedClipboardPayload?: boolean) => boolean
   clearExternalPendingClipboardOperation?: () => boolean
@@ -623,12 +666,12 @@ export function useDataGridAppInteractionController<
     setSelectionFromRange: (range, activePosition) => {
       applySelectionRangeWithActivePosition(range, activePosition)
     },
-    recordIntent: (descriptor, beforeSnapshot) => {
+    recordIntent: (descriptor, beforeSnapshot, afterSnapshotOverride) => {
       void options.recordIntentTransaction({
         intent: descriptor.intent,
         label: descriptor.label,
         affectedRange: descriptor.affectedRange ?? null,
-      }, beforeSnapshot)
+      }, beforeSnapshot, afterSnapshotOverride)
     },
     setLastAction: () => undefined,
   })
@@ -768,12 +811,13 @@ export function useDataGridAppInteractionController<
           }
         }
 
+        const afterSnapshot = captureRowsSnapshotForRanges([removedRange, previewRange])
         options.syncViewport()
         void options.recordIntentTransaction({
           intent: "fill",
-          label: "Fill cells",
+          label: "Fill edit",
           affectedRange: previewRange,
-        }, beforeSnapshot)
+        }, beforeSnapshot, afterSnapshot)
         if (behavior) {
           activeFillBehavior.value = behavior
         }
@@ -1500,6 +1544,40 @@ export function useDataGridAppInteractionController<
     return options.readCell(row, columnKey).trim().length > 0
   }
 
+  const buildFillProjectionContext = (): DataGridAppFillProjectionContext | null => {
+    const getSnapshot = options.runtime.api.rows.getSnapshot
+    if (typeof getSnapshot !== "function") {
+      return null
+    }
+    const snapshot = getSnapshot() as {
+      sortModel?: DataGridAppFillProjectionContext["sortModel"]
+      filterModel?: DataGridAppFillProjectionContext["filterModel"]
+      groupBy?: DataGridAppFillProjectionContext["groupBy"]
+      groupExpansion?: DataGridAppFillProjectionContext["groupExpansion"]
+      pagination?: DataGridAppFillProjectionContext["pagination"]
+    } | null
+    if (!snapshot) {
+      return null
+    }
+    return {
+      sortModel: snapshot.sortModel ?? [],
+      filterModel: snapshot.filterModel ?? null,
+      groupBy: snapshot.groupBy ?? null,
+      groupExpansion: snapshot.groupExpansion ?? { expandedByDefault: false, toggledGroupKeys: [] },
+      treeData: null,
+      pivot: null,
+      pagination: snapshot.pagination ?? {
+        enabled: false,
+        pageSize: 0,
+        currentPage: 0,
+        pageCount: 0,
+        totalRowCount: 0,
+        startIndex: 0,
+        endIndex: 0,
+      },
+    }
+  }
+
   const resolveReferenceColumnExtentEndRow = (
     baseRange: DataGridCopyRange,
     columnIndex: number,
@@ -1564,52 +1642,159 @@ export function useDataGridAppInteractionController<
     return evaluateDirection(baseRange.endColumn + 1, 1)
   }
 
+  const resolveServerAwareFillBoundary = async (
+    baseRange: DataGridCopyRange,
+  ): Promise<{ endRow: number; boundaryKind: DataGridAppResolveFillBoundaryResult["boundaryKind"]; resolvedByServer: boolean } | null> => {
+    if (!options.resolveFillBoundary) {
+      options.reportFillPlumbingState?.("interaction_controller_option", false)
+      return null
+    }
+    options.reportFillPlumbingState?.("interaction_controller_option", true)
+    const fillColumns: string[] = []
+    for (let columnIndex = baseRange.startColumn; columnIndex <= baseRange.endColumn; columnIndex += 1) {
+      const columnKey = options.visibleColumns.value[columnIndex]?.key
+      if (columnKey) {
+        fillColumns.push(columnKey)
+      }
+    }
+    const leftReferenceColumns: string[] = []
+    for (let columnIndex = baseRange.startColumn - 1; columnIndex >= 0; columnIndex -= 1) {
+      const columnKey = options.visibleColumns.value[columnIndex]?.key
+      if (columnKey) {
+        leftReferenceColumns.push(columnKey)
+      }
+    }
+    const rightReferenceColumns: string[] = []
+    for (let columnIndex = baseRange.endColumn + 1; columnIndex < options.visibleColumns.value.length; columnIndex += 1) {
+      const columnKey = options.visibleColumns.value[columnIndex]?.key
+      if (columnKey) {
+        rightReferenceColumns.push(columnKey)
+      }
+    }
+    const projection = buildFillProjectionContext()
+    options.reportFillPlumbingState?.("double_click_fill_columns", fillColumns.length > 0)
+    options.reportFillPlumbingState?.("double_click_left_refs", leftReferenceColumns.length > 0)
+    options.reportFillPlumbingState?.("double_click_right_refs", rightReferenceColumns.length > 0)
+    options.reportFillPlumbingState?.("double_click_projection", projection != null)
+    if (!projection) {
+      return null
+    }
+    const resolve = async (referenceColumns: readonly string[], direction: "left" | "right") => {
+      if (referenceColumns.length === 0) {
+        options.reportFillPlumbingState?.(`double_click_resolve_${direction}_skipped_no_refs`, true)
+        return null
+      }
+      options.reportFillPlumbingState?.(`double_click_resolve_${direction}_called`, true)
+      return options.resolveFillBoundary!({
+        direction,
+        baseRange,
+        fillColumns,
+        referenceColumns,
+        projection,
+        startRowIndex: baseRange.startRow,
+        startColumnIndex: direction === "left" ? baseRange.startColumn - 1 : baseRange.endColumn + 1,
+        limit: 500,
+      })
+    }
+    const left = await resolve(leftReferenceColumns, "left")
+    options.reportFillPlumbingState?.("double_click_left_result", left != null)
+    if (left && left.boundaryKind !== "unresolved" && left.endRowIndex != null) {
+      options.reportFillPlumbingState?.("double_click_left_selected", true)
+      return { endRow: left.endRowIndex, boundaryKind: left.boundaryKind, resolvedByServer: true }
+    }
+    const right = await resolve(rightReferenceColumns, "right")
+    options.reportFillPlumbingState?.("double_click_right_result", right != null)
+    if (right && right.boundaryKind !== "unresolved" && right.endRowIndex != null) {
+      options.reportFillPlumbingState?.("double_click_right_selected", true)
+      return { endRow: right.endRowIndex, boundaryKind: right.boundaryKind, resolvedByServer: true }
+    }
+    if (left?.boundaryKind === "unresolved" || right?.boundaryKind === "unresolved") {
+      options.reportFillWarning?.("server fill boundary unresolved; using loaded-cache fallback")
+    }
+    return null
+  }
+
   const startFillHandleDoubleClick = (event: MouseEvent): void => {
+    options.reportFillPlumbingState?.("double_click_handler", true)
     if (options.mode.value !== "base" || !isFillHandleEnabled.value) {
+      options.reportFillPlumbingState?.("double_click_handler_skipped", true)
       return
     }
     const baseRange = options.resolveSelectionRange()
     if (!baseRange) {
+      options.reportFillPlumbingState?.("double_click_handler_skipped_no_range", true)
       return
     }
     const anchorRow = getBodyRowAtIndex(baseRange.endRow)
     const anchorColumnKey = options.visibleColumns.value[baseRange.endColumn]?.key
     if (!anchorRow || !anchorColumnKey) {
+      options.reportFillPlumbingState?.("double_click_handler_skipped_no_anchor", true)
       return
     }
     if (!options.isCellEditable(anchorRow, baseRange.endRow, anchorColumnKey, baseRange.endColumn)) {
+      options.reportFillPlumbingState?.("double_click_handler_skipped_not_editable", true)
       return
     }
-    const targetEndRow = resolveBestNeighborFillEndRow(baseRange)
-    const previewRange = targetEndRow > baseRange.endRow
-      ? options.normalizeClipboardRange({
-        startRow: baseRange.startRow,
-        endRow: targetEndRow,
-        startColumn: baseRange.startColumn,
-        endColumn: baseRange.endColumn,
-      })
-      : null
-    if (!previewRange || options.rangesEqual(baseRange, previewRange)) {
-      return
-    }
-    const sourceMatrix = options.buildFillMatrixFromRange(baseRange)
-    const behavior = activeFillBehavior.value ?? resolveDataGridDefaultFillBehavior({
-      baseRange,
-      previewRange,
-      sourceMatrix,
-    })
     const preferredFocusCoord = resolveFillOriginFocusCoord()
     event.preventDefault()
     event.stopPropagation()
-    void applyCommittedFillRange(baseRange, previewRange, behavior).then(applied => {
-      if (!applied) {
+    void resolveServerAwareFillBoundary(baseRange).then(resolved => {
+      options.reportFillPlumbingState?.("double_click_resolved_server_branch", !!resolved?.resolvedByServer)
+      options.reportFillPlumbingState?.("double_click_resolved_endrow", typeof resolved?.endRow === "number")
+      const targetEndRow = resolved?.endRow ?? resolveBestNeighborFillEndRow(baseRange)
+      const previewRange = targetEndRow > baseRange.endRow
+        ? options.normalizeClipboardRange({
+          startRow: baseRange.startRow,
+          endRow: targetEndRow,
+          startColumn: baseRange.startColumn,
+          endColumn: baseRange.endColumn,
+        })
+        : null
+      if (!previewRange || options.rangesEqual(baseRange, previewRange)) {
         return
       }
-      activeFillBehavior.value = behavior
-      const restoredCoord = preferredFocusCoord
-        ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
-        : null
-      restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
+      const sourceMatrix = options.buildFillMatrixFromRange(baseRange)
+      const behavior = activeFillBehavior.value ?? resolveDataGridDefaultFillBehavior({
+        baseRange,
+        previewRange,
+        sourceMatrix,
+      })
+      if (resolved?.resolvedByServer) {
+        options.reportFillPlumbingState?.("double_click_server_branch_entered", true)
+        const resolvedRowCount = previewRange.endRow - previewRange.startRow + 1
+        const threshold = 500
+        if (resolvedRowCount > threshold) {
+          options.reportFillPlumbingState?.("double_click_blocked_large", true)
+          options.reportFillWarning?.("server fill execution not implemented yet")
+          return
+        }
+        let allLoaded = true
+        for (let rowIndex = previewRange.startRow; rowIndex <= previewRange.endRow; rowIndex += 1) {
+          const isMaterialized = options.isRowMaterializedAtIndex
+            ? options.isRowMaterializedAtIndex(rowIndex)
+            : !!getBodyRowAtIndex(rowIndex) && (getBodyRowAtIndex(rowIndex) as { __placeholder?: boolean }).__placeholder !== true
+          if (!isMaterialized) {
+            allLoaded = false
+            break
+          }
+        }
+        if (!allLoaded) {
+          options.reportFillPlumbingState?.("double_click_blocked_unloaded", true)
+          options.reportFillWarning?.("server fill execution not implemented yet")
+          return
+        }
+      }
+      options.reportFillPlumbingState?.("double_click_batch_commit_path", true)
+      void applyCommittedFillRange(baseRange, previewRange, behavior).then(applied => {
+        if (!applied) {
+          return
+        }
+        activeFillBehavior.value = behavior
+        const restoredCoord = preferredFocusCoord
+          ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
+          : null
+        restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
+      })
     })
   }
 

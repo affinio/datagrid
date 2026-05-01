@@ -47,7 +47,11 @@ export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
   ) => boolean
   captureRowsSnapshot: () => TSnapshot
   captureRowsSnapshotForRowIds?: (rowIds: readonly (string | number)[]) => TSnapshot
-  recordEditTransaction: (beforeSnapshot: TSnapshot, afterSnapshotOverride?: TSnapshot) => void
+  recordEditTransaction: (
+    beforeSnapshot: TSnapshot,
+    afterSnapshotOverride?: TSnapshot,
+    label?: string,
+  ) => void
   onCellEdit?: (payload: {
     rowId: string | number
     columnKey: string
@@ -488,7 +492,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         } as Partial<TRow>,
       },
     })
-    options.recordEditTransaction(beforeSnapshot, afterSnapshot)
+    options.recordEditTransaction(beforeSnapshot, afterSnapshot, "Cell edit")
     clearInlineEdit()
     suppressNextBlurCommit.value = false
     if (target !== "none") {

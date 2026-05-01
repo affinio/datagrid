@@ -185,14 +185,21 @@ describe("useDataGridAppClipboard contract", () => {
       { rowId: "r2", a: "A2", b: "B2", c: "C2" },
       { rowId: "r3", a: "A3", b: "B3", c: "C3" },
     ])
-    const captureRowsSnapshot = vi.fn(() => rows.value.map(row => ({ ...row })))
-    const captureRowsSnapshotForRowIds = vi.fn((rowIds: readonly (string | number)[]) => {
-      return rows.value
+    const captureRowsSnapshot = vi.fn(() => ({
+      kind: "full" as const,
+      rows: rows.value.map(row => ({ rowId: row.rowId, row: { ...row } })),
+    }))
+    const captureRowsSnapshotForRowIds = vi.fn((rowIds: readonly (string | number)[]) => ({
+      kind: "partial" as const,
+      rows: rows.value
         .filter(row => rowIds.includes(row.rowId))
-        .map(row => ({ ...row }))
-    })
+        .map(row => ({ rowId: row.rowId, row: { ...row } })),
+    }))
 
-    const clipboard = useDataGridAppClipboard<DemoRow, DemoRow[]>({
+    const clipboard = useDataGridAppClipboard<DemoRow, {
+      kind: "full" | "partial"
+      rows: Array<{ rowId: string | number; row: DemoRow }>
+    }>({
       mode: ref("base"),
       runtime: {
         api: {
@@ -250,6 +257,102 @@ describe("useDataGridAppClipboard contract", () => {
         value: originalClipboard,
       })
     }
+  })
+
+  it("records partial fill snapshots for the edited row ids", async () => {
+    const rows = ref<DemoRow[]>([
+      { rowId: "r1", a: "A1", b: "B1", c: "C1" },
+      { rowId: "r2", a: "A2", b: "B2", c: "C2" },
+      { rowId: "r3", a: "A3", b: "B3", c: "C3" },
+    ])
+    const captureRowsSnapshot = vi.fn(() => ({
+      kind: "full" as const,
+      rows: rows.value.map(row => ({ rowId: row.rowId, row: { ...row } })),
+    }))
+    const captureRowsSnapshotForRowIds = vi.fn((rowIds: readonly (string | number)[]) => ({
+      kind: "partial" as const,
+      rows: rows.value
+        .filter(row => rowIds.includes(row.rowId))
+        .map(row => ({ rowId: row.rowId, row: { ...row } })),
+    }))
+    const recordEditTransaction = vi.fn()
+
+    const clipboard = useDataGridAppClipboard<DemoRow, {
+      kind: "full" | "partial"
+      rows: Array<{ rowId: string | number; row: DemoRow }>
+    }>({
+      mode: ref("base"),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => {
+              const row = rows.value[rowIndex]
+              return row ? { rowId: row.rowId, kind: "leaf", data: row } : null
+            },
+            applyEdits: (updates: Array<{ rowId: string; data: Partial<DemoRow> }>) => {
+              rows.value = rows.value.map(row => {
+                const update = updates.find(candidate => candidate.rowId === row.rowId)
+                return update ? { ...row, ...update.data } : row
+              })
+            },
+          },
+        },
+      } as never,
+      totalRows: ref(rows.value.length),
+      visibleColumns: ref([
+        { key: "a" },
+        { key: "b" },
+        { key: "c" },
+      ] as never),
+      viewportRowStart: ref(0),
+      resolveSelectionRange: () => ({
+        startRow: 0,
+        endRow: 1,
+        startColumn: 0,
+        endColumn: 1,
+      }),
+      resolveCurrentCellCoord: () => ({ rowIndex: 0, columnIndex: 0 }),
+      applySelectionRange: () => undefined,
+      clearCellSelection: () => undefined,
+      captureRowsSnapshot,
+      captureRowsSnapshotForRowIds,
+      recordEditTransaction,
+      readCell: (row, columnKey) => String((row.data as DemoRow)[columnKey as keyof DemoRow] ?? ""),
+      isCellEditable: () => true,
+      syncViewport: () => undefined,
+    })
+
+    await clipboard.applyClipboardEdits(
+      {
+        startRow: 0,
+        endRow: 1,
+        startColumn: 0,
+        endColumn: 1,
+      },
+      [
+        ["A1", "B1"],
+        ["A2", "B2"],
+      ],
+    )
+
+    expect(recordEditTransaction).toHaveBeenCalledTimes(1)
+    expect(recordEditTransaction).toHaveBeenCalledWith(
+      {
+        kind: "partial",
+        rows: [
+          { rowId: "r1", row: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+          { rowId: "r2", row: { rowId: "r2", a: "A2", b: "B2", c: "C2" } },
+        ],
+      },
+      {
+        kind: "partial",
+        rows: [
+          { rowId: "r1", row: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+          { rowId: "r2", row: { rowId: "r2", a: "A2", b: "B2", c: "C2" } },
+        ],
+      },
+      undefined,
+    )
   })
 
   it("tracks pending clipboard visuals for each committed selection range", async () => {

@@ -9,6 +9,7 @@ export interface DataGridTableStageHistoryAdapter {
   recordIntentTransaction: (
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: unknown,
+    afterSnapshotOverride?: unknown,
   ) => void | Promise<void>
   canUndo: () => boolean
   canRedo: () => boolean
@@ -33,6 +34,7 @@ export interface UseDataGridTableStageHistoryResult extends DataGridHistoryContr
   recordHistoryIntentTransaction: (
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: unknown,
+    afterSnapshotOverride?: unknown,
   ) => void
   canUndoHistory: () => boolean
   canRedoHistory: () => boolean
@@ -77,17 +79,19 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
   const recordHistoryIntentTransaction = (
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: unknown,
+    afterSnapshotOverride?: unknown,
   ): void => {
     if (options.enabled === false) {
       return
     }
     if (options.history) {
-      void options.history.recordIntentTransaction(descriptor, beforeSnapshot)
+      void options.history.recordIntentTransaction(descriptor, beforeSnapshot, afterSnapshotOverride)
       return
     }
     void internalIntentHistory?.recordIntentTransaction(
       descriptor,
       beforeSnapshot as DataGridAppRowSnapshot<TRow>,
+      afterSnapshotOverride as DataGridAppRowSnapshot<TRow> | undefined,
     )
   }
 

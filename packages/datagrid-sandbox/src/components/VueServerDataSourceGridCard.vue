@@ -22,6 +22,16 @@
         <span>Viewport: {{ viewportLabel }}</span>
         <span>Loaded: {{ loadedRowsLabel }}</span>
         <span>Pending: {{ pendingRequestsLabel }}</span>
+        <span>Last batch rows: {{ lastBatchRowsLabel }}</span>
+        <span>Skipped rows: {{ lastSkippedRowsLabel }}</span>
+        <span>Fill warning: {{ fillWarningLabel }}</span>
+        <span>Fill boundary: {{ fillBoundaryLabel }}</span>
+        <span>Left: {{ fillBoundaryLeftLabel }}</span>
+        <span>Right: {{ fillBoundaryRightLabel }}</span>
+        <span>Fill blocked: {{ fillBlockedLabel }}</span>
+        <span>Fill applied: {{ fillAppliedLabel }}</span>
+        <span>Plumbing: {{ plumbingLabel }}</span>
+        <span>Branch: {{ branchLabel }}</span>
         <span>Sort: {{ sortModelLabel }}</span>
         <span>Filter: {{ filterModelLabel }}</span>
       </div>
@@ -42,13 +52,15 @@
         advanced-filter
         fill-handle
         range-move
-        :history="true"
-        layout-mode="auto-height"
-        :min-rows="8"
-        :max-rows="16"
-        @update:state="handleStateUpdate"
-        @cell-edit="handleCellEdit"
-      />
+      :history="true"
+      layout-mode="auto-height"
+      :min-rows="8"
+      :max-rows="16"
+      :report-fill-warning="handleFillWarning"
+      :report-fill-plumbing-state="reportFillPlumbingState"
+      @update:state="handleStateUpdate"
+      @cell-edit="handleCellEdit"
+    />
     </section>
 
     <aside class="server-grid__diagnostics">
@@ -105,6 +117,46 @@
         <div class="server-grid__diagnostics-card">
           <dt>Commit detail</dt>
           <dd>{{ commitDetailsLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Last batch rows</dt>
+          <dd>{{ lastBatchRowsLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Skipped rows</dt>
+          <dd>{{ lastSkippedRowsLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Fill warning</dt>
+          <dd>{{ fillWarningLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Fill boundary</dt>
+          <dd>{{ fillBoundaryLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Boundary L</dt>
+          <dd>{{ fillBoundaryLeftLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Boundary R</dt>
+          <dd>{{ fillBoundaryRightLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Fill blocked</dt>
+          <dd>{{ fillBlockedLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Fill applied</dt>
+          <dd>{{ fillAppliedLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Plumbing</dt>
+          <dd>{{ plumbingLabel }}</dd>
+        </div>
+        <div class="server-grid__diagnostics-card">
+          <dt>Branch</dt>
+          <dd>{{ branchLabel }}</dd>
         </div>
         <div class="server-grid__diagnostics-card">
           <dt>In flight</dt>
@@ -193,6 +245,17 @@ const commitDetailsText = ref("none")
 const lastEditText = ref("none")
 const lastHistoryActionText = ref("none")
 const lastEditRecordedText = ref("unknown")
+const lastBatchRowsText = ref("0")
+const lastSkippedRowsText = ref("0")
+const fillWarningText = ref("none")
+const fillBoundaryText = ref("none")
+const fillBoundaryLeftText = ref("none")
+const fillBoundaryRightText = ref("none")
+const fillBlockedText = ref("no")
+const fillAppliedText = ref("no")
+const plumbingState = ref<Record<string, boolean>>({})
+const branchState = ref("none")
+const lastSelectionRange = ref<{ startRow: number; endRow: number } | null>(null)
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
 const statuses = ["Active", "Paused", "Closed"] as const
@@ -209,6 +272,34 @@ type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<Se
 
 function resolveRowId(index: number): string {
   return `srv-${index.toString().padStart(6, "0")}`
+}
+
+function captureFillBoundary(result: {
+  endRowIndex: number | null
+  boundaryKind: string
+  scannedRowCount?: number
+  truncated?: boolean
+} | null): void {
+  fillBoundaryText.value = result
+    ? `${result.boundaryKind} @ ${result.endRowIndex ?? "null"} (${result.scannedRowCount ?? 0} scanned${result.truncated ? ", truncated" : ""})`
+    : "none"
+}
+
+function captureFillBoundarySide(side: "left" | "right", result: {
+  endRowIndex: number | null
+  endRowId?: string | number | null
+  boundaryKind: string
+  scannedRowCount?: number
+  truncated?: boolean
+} | null): void {
+  const text = result
+    ? `end=${result.endRowIndex ?? "null"} id=${result.endRowId ?? "null"} kind=${result.boundaryKind} scanned=${result.scannedRowCount ?? 0}${result.truncated ? " truncated" : ""}`
+    : "null"
+  if (side === "left") {
+    fillBoundaryLeftText.value = text
+  } else {
+    fillBoundaryRightText.value = text
+  }
 }
 
 function resolveBaseRow(index: number): ServerDemoRow {
@@ -352,6 +443,27 @@ function buildFilteredRows(filterModel: DataGridFilterSnapshot | null): readonly
     return rows
   }
   return rows.filter(row => matchesFilterModel(row, filterModel))
+}
+
+function buildProjectedRows(
+  sortModel: readonly DataGridSortState[],
+  filterModel: DataGridFilterSnapshot | null,
+): readonly ServerDemoRow[] {
+  const filteredRows = buildFilteredRows(filterModel)
+  if (sortModel.length === 0) {
+    return filteredRows
+  }
+  return [...filteredRows].sort((left, right) => compareBySortModel(left, right, sortModel))
+}
+
+function isNonEmptyFillBoundaryValue(value: unknown): boolean {
+  if (value == null) {
+    return false
+  }
+  if (typeof value === "string") {
+    return value.trim().length > 0
+  }
+  return true
 }
 
 function cloneFilterModelExcludingColumn(
@@ -528,6 +640,76 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
   async getColumnHistogram(request: ServerDemoHistogramRequest): Promise<DataGridColumnHistogram> {
     return buildColumnHistogram(request)
   },
+  async resolveFillBoundary(request) {
+    const projectedRows = buildProjectedRows(request.projection.sortModel, request.projection.filterModel)
+    fillBlockedText.value = "no"
+    const baseRange = request.baseRange as unknown as { start?: number; end?: number; startRow?: number; endRow?: number }
+    const rawEndRow = baseRange.endRow ?? baseRange.end ?? 0
+    const baseEndRow = Math.max(0, Math.trunc(rawEndRow))
+    const startIndex = Math.max(0, Math.trunc(baseEndRow + 1))
+    const limit = Number.isFinite(request.limit)
+      ? Math.max(0, Math.trunc(request.limit ?? 0))
+      : projectedRows.length
+    if (startIndex >= projectedRows.length) {
+      const result: {
+        endRowIndex: number | null
+        endRowId: string | null
+        boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
+        scannedRowCount: number
+        truncated: boolean
+      } = {
+        endRowIndex: projectedRows.length > 0 ? projectedRows.length - 1 : null,
+        endRowId: projectedRows[projectedRows.length - 1]?.id ?? null,
+        boundaryKind: "data-end",
+        scannedRowCount: 0,
+        truncated: false,
+      }
+      captureFillBoundary(result)
+      captureFillBoundarySide(request.direction === "left" ? "left" : "right", result)
+      return result
+    }
+    let endRowIndex = baseEndRow
+    let boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved" = "data-end"
+    let scanned = 0
+    for (let projectedIndex = startIndex; projectedIndex < projectedRows.length; projectedIndex += 1) {
+      if (scanned >= limit) {
+        boundaryKind = "cache-boundary"
+        break
+      }
+      const row = projectedRows[projectedIndex]
+      if (!row) {
+        boundaryKind = "unresolved"
+        break
+      }
+      scanned += 1
+      const hasAdjacentData = request.referenceColumns.some(columnKey => {
+        const candidate = row[columnKey as keyof ServerDemoRow]
+        return isNonEmptyFillBoundaryValue(candidate)
+      })
+      if (!hasAdjacentData) {
+        boundaryKind = projectedIndex >= projectedRows.length - 1 ? "data-end" : "gap"
+        break
+      }
+      endRowIndex = projectedIndex
+    }
+    const endRowId = endRowIndex >= 0 ? projectedRows[endRowIndex]?.id ?? null : null
+    const result: {
+      endRowIndex: number | null
+      endRowId: string | null
+      boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
+      scannedRowCount: number
+      truncated: boolean
+    } = {
+      endRowIndex: endRowIndex >= 0 ? endRowIndex : null,
+      endRowId,
+      boundaryKind,
+      scannedRowCount: scanned,
+      truncated: boundaryKind === "cache-boundary",
+    }
+    captureFillBoundary(result)
+    captureFillBoundarySide(request.direction === "left" ? "left" : "right", result)
+    return result
+  },
   async commitEdits(request: ServerDemoCommitEditsRequest) {
     return applyCommitEdits(request)
   },
@@ -573,6 +755,19 @@ const rowCacheLabel = computed(() => `${diagnostics.value.rowCacheSize} / ${diag
 const commitModeLabel = computed(() => commitModeText.value)
 const commitMessageLabel = computed(() => commitMessageText.value)
 const commitDetailsLabel = computed(() => commitDetailsText.value)
+const lastBatchRowsLabel = computed(() => lastBatchRowsText.value)
+const lastSkippedRowsLabel = computed(() => lastSkippedRowsText.value)
+const fillWarningLabel = computed(() => fillWarningText.value)
+const fillBoundaryLabel = computed(() => fillBoundaryText.value)
+const fillBoundaryLeftLabel = computed(() => fillBoundaryLeftText.value)
+const fillBoundaryRightLabel = computed(() => fillBoundaryRightText.value)
+const fillBlockedLabel = computed(() => fillBlockedText.value)
+const fillAppliedLabel = computed(() => fillAppliedText.value)
+const plumbingLabel = computed(() => {
+  const entries = Object.entries(plumbingState.value).map(([layer, present]) => `${layer}:${present ? "yes" : "no"}`)
+  return entries.length > 0 ? entries.join(", ") : "none"
+})
+const branchLabel = computed(() => branchState.value)
 const canUndoHistory = computed(() => gridRef.value?.history.canUndo() ?? false)
 const canRedoHistory = computed(() => gridRef.value?.history.canRedo() ?? false)
 const canUndoLabel = computed(() => gridRef.value?.history.canUndo() ? "yes" : "no")
@@ -595,9 +790,21 @@ function refreshVisibleRange(): void {
 }
 
 function handleStateUpdate(state: unknown): void {
-  const snapshot = (state as { rows?: { snapshot?: { sortModel?: readonly DataGridSortState[]; filterModel?: DataGridFilterSnapshot | null } } } | null)?.rows?.snapshot
+  const parsedState = state as {
+    rows?: { snapshot?: { sortModel?: readonly DataGridSortState[]; filterModel?: DataGridFilterSnapshot | null } }
+    selection?: {
+      ranges?: readonly { startRow: number; endRow: number }[]
+      activeRangeIndex?: number
+    } | null
+  } | null
+  const snapshot = parsedState?.rows?.snapshot
   const sortModel = snapshot?.sortModel ?? []
   const filterModel = snapshot?.filterModel ?? null
+  const activeRange = parsedState?.selection?.ranges?.[parsedState.selection.activeRangeIndex ?? 0] ?? parsedState?.selection?.ranges?.[0] ?? null
+  lastSelectionRange.value = activeRange ? {
+    startRow: Math.min(activeRange.startRow, activeRange.endRow),
+    endRow: Math.max(activeRange.startRow, activeRange.endRow),
+  } : null
   filterModelText.value = filterModel
     ? [
         ...Object.keys(filterModel.columnFilters ?? {}),
@@ -609,6 +816,44 @@ function handleStateUpdate(state: unknown): void {
     ? sortModel.map(entry => `${entry.key}:${entry.direction}`).join(", ")
     : "none"
   diagnostics.value = rowModel.getBackpressureDiagnostics()
+}
+
+function updateFillDiagnostics(batchRowCount: number, warnings: string[]): void {
+  fillAppliedText.value = batchRowCount > 0 ? "yes" : "no"
+  lastBatchRowsText.value = String(batchRowCount)
+  const expectedRows = lastSelectionRange.value
+    ? Math.max(0, lastSelectionRange.value.endRow - lastSelectionRange.value.startRow + 1)
+    : batchRowCount
+  const skippedRows = Math.max(0, expectedRows - batchRowCount)
+  lastSkippedRowsText.value = String(skippedRows)
+  const derivedWarnings = [...warnings]
+  if (skippedRows > 0 && loadedRows.value < totalRows.value) {
+    derivedWarnings.push("likely stopped at cache boundary")
+  }
+  fillWarningText.value = derivedWarnings.length > 0 ? derivedWarnings.join("; ") : "none"
+}
+
+function handleFillWarning(message: string): void {
+  fillWarningText.value = message
+  fillBlockedText.value = "yes"
+}
+
+function reportFillPlumbingState(layer: string, present: boolean): void {
+  plumbingState.value = {
+    ...plumbingState.value,
+    [layer]: present,
+  }
+  if (layer === "double_click_handler" && present) {
+    branchState.value = "double-click"
+  } else if (layer === "double_click_resolved_server_branch" && present) {
+    branchState.value = "server-resolved"
+  } else if (layer === "double_click_blocked_large" && present) {
+    branchState.value = "server-blocked-large"
+  } else if (layer === "double_click_blocked_unloaded" && present) {
+    branchState.value = "server-blocked-unloaded"
+  } else if (layer === "double_click_batch_commit_path" && present) {
+    branchState.value = "batch-commit"
+  }
 }
 
 function isCellEditable(ctx: { rowId: string | number; columnKey: string }): boolean {
@@ -626,6 +871,7 @@ function handleCellEdit(payload: {
   }
 }): void {
   lastEditText.value = `${payload.columnKey} ${String(payload.oldValue ?? "")} → ${String(payload.newValue ?? "")}`
+  updateFillDiagnostics(1, [])
   lastEditRecordedText.value = "pending"
   void Promise.resolve().then(() => {
     lastEditRecordedText.value = gridRef.value?.history.canUndo() ? "yes" : "no"
@@ -688,6 +934,10 @@ function applyCommitEdits(request: ServerDemoCommitEditsRequest): Promise<{
       commitModeText.value = "failed"
       commitMessageText.value = `partial rejection: ${rejectedRows.length} row${rejectedRows.length === 1 ? "" : "s"}`
       commitDetailsText.value = rejectedRows.map(entry => String(entry.rowId)).join(", ")
+      updateFillDiagnostics(committedRows.length, [
+        "partial rejection suppressed refresh",
+        committedRows.length > 1 ? "batch commit path used" : "single-row commit path used",
+      ])
       diagnostics.value = rowModel.getBackpressureDiagnostics()
       void rowModel.refresh("manual")
       commitFailureMode.value = false
@@ -701,6 +951,9 @@ function applyCommitEdits(request: ServerDemoCommitEditsRequest): Promise<{
     commitDetailsText.value = committedRows.length > 0
       ? committedRows.map(entry => String(entry.rowId)).join(", ")
       : "none"
+    updateFillDiagnostics(committedRows.length, committedRows.length > 1
+      ? ["batch commit path used"]
+      : [])
     diagnostics.value = rowModel.getBackpressureDiagnostics()
     return Promise.resolve({
       committed: committedRows,
@@ -720,6 +973,7 @@ function applyCommitEdits(request: ServerDemoCommitEditsRequest): Promise<{
     }
     diagnostics.value = rowModel.getBackpressureDiagnostics()
     void rowModel.refresh("manual")
+    updateFillDiagnostics(0, ["commit failed", "refresh suppressed until rollback recovery"])
     return Promise.resolve({
       rejected: request.edits.map((edit) => ({
         rowId: edit.rowId,

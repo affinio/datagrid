@@ -5,6 +5,25 @@ import { useDataGridAppInteractionController } from "../useDataGridAppInteractio
 
 type DemoRow = Record<string, unknown>
 
+interface DataGridAppResolveFillBoundaryRequest {
+  direction: "up" | "down" | "left" | "right"
+  baseRange: { startRow: number; endRow: number; startColumn: number; endColumn: number }
+  fillColumns: readonly string[]
+  referenceColumns: readonly string[]
+  projection: unknown
+  startRowIndex: number
+  startColumnIndex: number
+  limit?: number | null
+}
+
+interface DataGridAppResolveFillBoundaryResult {
+  endRowIndex: number | null
+  endRowId?: string | number | null
+  boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
+  scannedRowCount?: number
+  truncated?: boolean
+}
+
 function normalizeRowId(value: unknown): DataGridRowId | null {
   return typeof value === "string" || typeof value === "number" ? value : null
 }
@@ -61,6 +80,7 @@ function createMouseEvent(
 
 function createControllerHarness(options: {
   rowCount?: number
+  loadedRowCount?: number
   columnCount?: number
   rowData?: readonly DemoRow[]
   visibleColumns?: readonly DataGridColumnSnapshot[]
@@ -76,8 +96,12 @@ function createControllerHarness(options: {
   firstRowKind?: "data" | "group"
   firstRowExpanded?: boolean
   firstRowGroupKey?: string
+  resolveFillBoundary?: (
+    request: DataGridAppResolveFillBoundaryRequest,
+  ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
 } = {}) {
   const rowCount = options.rowCount ?? 1
+  const loadedRowCount = options.loadedRowCount ?? rowCount
   const columnWidths = options.columnWidths ?? Array.from({ length: options.columnCount ?? 2 }, () => 2)
   const columnCount = options.columnCount ?? columnWidths.length
   const visibleColumns = options.visibleColumns ?? (
@@ -99,6 +123,7 @@ function createControllerHarness(options: {
   const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
   let selectionAnchor: { rowIndex: number; columnIndex: number; rowId: string | number | null } | null = null
   let rows = Array.from({ length: rowCount }, (_, rowIndex) => {
+    const isLoaded = rowIndex < loadedRowCount
     if (rowIndex === 0 && options.firstRowKind === "group") {
       return {
         rowId: `g${rowIndex + 1}`,
@@ -114,6 +139,14 @@ function createControllerHarness(options: {
           level: 0,
           childrenCount: Math.max(0, rowCount - 1),
         },
+      }
+    }
+    if (!isLoaded) {
+      return {
+        rowId: `__datagrid_placeholder__:${rowIndex}`,
+        __placeholder: true,
+        kind: "leaf",
+        data: {},
       }
     }
     return {
@@ -234,6 +267,15 @@ function createControllerHarness(options: {
   const applyClipboardEdits = vi.fn(() => 0)
   const buildFillMatrixFromRange = vi.fn(() => [[""]])
   const recordIntentTransaction = vi.fn()
+  const reportFillWarning = vi.fn()
+  const captureRowsSnapshotForRowIds = vi.fn((rowIds: readonly (string | number)[]) => (
+    rows
+      .filter(nextRow => rowIds.includes(nextRow.rowId))
+      .map(nextRow => ({
+        rowId: String(nextRow.rowId),
+        ...(nextRow.data as DemoRow),
+      }))
+  ))
   const clearPendingClipboardOperation = vi.fn(() => false)
   const syncViewport = vi.fn()
   const editingCell = ref<{ rowId: string | number; columnKey: string } | null>(null)
@@ -253,6 +295,21 @@ function createControllerHarness(options: {
         rows: {
           get: (rowIndex: number) => rows[rowIndex] ?? null,
           getCount: () => rows.length,
+          getSnapshot: () => ({
+            sortModel: [],
+            filterModel: null,
+            groupBy: null,
+            groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+            pagination: {
+              enabled: false,
+              pageSize: 0,
+              currentPage: 0,
+              pageCount: 0,
+              totalRowCount: rows.length,
+              startIndex: 0,
+              endIndex: Math.max(0, rows.length - 1),
+            },
+          }),
           expandGroup,
           collapseGroup,
           setData: (nextRows: Array<{ rowId: string | number; row: DemoRow }>) => {
@@ -305,10 +362,13 @@ function createControllerHarness(options: {
     isCellEditable: (_row, rowIndex, _columnKey, columnIndex) => options.isCellEditable?.(rowIndex, columnIndex) ?? true,
     cloneRowData: rowData => ({ ...rowData }),
     resolveRowIndexById: rowId => rows.findIndex(nextRow => nextRow.rowId === rowId),
+    resolveFillBoundary: options.resolveFillBoundary,
+    reportFillWarning,
     captureRowsSnapshot: vi.fn(() => rows.map(nextRow => ({
       rowId: String(nextRow.rowId),
       ...(nextRow.data as DemoRow),
     }))),
+    captureRowsSnapshotForRowIds,
     recordIntentTransaction,
     clearPendingClipboardOperation,
     copySelectedCells: vi.fn(async () => false),
@@ -343,6 +403,8 @@ function createControllerHarness(options: {
     buildFillMatrixFromRange,
     clearPendingClipboardOperation,
     recordIntentTransaction,
+    captureRowsSnapshotForRowIds,
+    reportFillWarning,
     syncViewport,
     editingCell,
     startInlineEdit,
@@ -1206,7 +1268,7 @@ describe("useDataGridAppInteractionController contract", () => {
   })
 
   it("fills down on fill-handle double click using the nearest contiguous reference column", () => {
-    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
+    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange, recordIntentTransaction, captureRowsSnapshotForRowIds } = createControllerHarness({
       rowCount: 5,
       columnCount: 2,
       rowData: [
@@ -1254,6 +1316,8 @@ describe("useDataGridAppInteractionController contract", () => {
       startColumn: 0,
       endColumn: 0,
     }, [["1"], ["2"], ["3"], ["4"]])
+    expect(recordIntentTransaction).toHaveBeenCalledTimes(1)
+    expect(captureRowsSnapshotForRowIds).toHaveBeenCalledWith(["r1", "r2", "r3", "r4"])
     expect(controller.lastAppliedFill.value).toMatchObject({
       behavior: "series",
       previewRange: {
@@ -1309,6 +1373,199 @@ describe("useDataGridAppInteractionController contract", () => {
       startColumn: 0,
       endColumn: 0,
     }, [["1"], ["2"], ["3"], ["4"]])
+  })
+
+  it("uses datasource fill boundary resolution when available", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 4,
+      endRowId: "r5",
+      boundaryKind: "gap" as const,
+    }))
+    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
+      rowCount: 5,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { b: "task-2" },
+        { b: "task-3" },
+        { b: "task-4" },
+        { b: "" },
+      ],
+      resolveFillBoundary,
+    })
+
+    applyClipboardEdits.mockReturnValue(4)
+    buildFillMatrixFromRange.mockReturnValue([["1"]])
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 4,
+      startColumn: 0,
+      endColumn: 0,
+    }, expect.any(Array), expect.objectContaining({ recordHistoryLabel: "Fill edit" }))
+  })
+
+  it("warns and does not partially fill when server boundary exceeds the safe threshold", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 750,
+      endRowId: "r751",
+      boundaryKind: "gap" as const,
+    }))
+    const { controller, selectionSnapshot, applyClipboardEdits, reportFillWarning } = createControllerHarness({
+      rowCount: 800,
+      loadedRowCount: 8,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        ...Array.from({ length: 799 }, () => ({ b: "task-x" })),
+      ],
+      resolveFillBoundary,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith("server fill execution not implemented yet")
+  })
+
+  it("does not apply edits for server-resolved unloaded fill ranges", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 750,
+      endRowId: "r751",
+      boundaryKind: "gap" as const,
+    }))
+    const { controller, selectionSnapshot, applyClipboardEdits, reportFillWarning } = createControllerHarness({
+      rowCount: 800,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        ...Array.from({ length: 799 }, () => ({ b: "task-x" })),
+      ],
+      resolveFillBoundary,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith("server fill execution not implemented yet")
+  })
+
+  it("falls back to loaded-cache boundary discovery when server boundary is unresolved", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: null,
+      boundaryKind: "unresolved" as const,
+    }))
+    const { controller, selectionSnapshot, applyClipboardEdits, reportFillWarning } = createControllerHarness({
+      rowCount: 5,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { b: "task-2" },
+        { b: "task-3" },
+        { b: "stop" },
+        {},
+      ],
+      resolveFillBoundary,
+    })
+
+    applyClipboardEdits.mockReturnValue(3)
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(reportFillWarning).toHaveBeenCalledWith("server fill boundary unresolved; using loaded-cache fallback")
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 3,
+      startColumn: 0,
+      endColumn: 0,
+    }, expect.any(Array), expect.objectContaining({ recordHistoryLabel: "Fill edit" }))
   })
 
   it("prefers the left reference side before using the right side for fill-handle double click", () => {

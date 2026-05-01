@@ -60,6 +60,35 @@ export interface DataGridDataSourcePaginationPullContext {
   cursor: string | null
 }
 
+export interface DataGridDataSourceFillProjectionContext {
+  sortModel: readonly DataGridSortState[]
+  filterModel: DataGridFilterSnapshot | null
+  groupBy: DataGridGroupBySpec | null
+  groupExpansion: DataGridGroupExpansionSnapshot
+  treeData: DataGridDataSourceTreePullContext | null
+  pivot: DataGridDataSourcePivotPullContext | null
+  pagination: DataGridDataSourcePaginationPullContext
+}
+
+export interface DataGridDataSourceResolveFillBoundaryRequest {
+  direction: "up" | "down" | "left" | "right"
+  baseRange: DataGridViewportRange
+  fillColumns: readonly string[]
+  referenceColumns: readonly string[]
+  projection: DataGridDataSourceFillProjectionContext
+  startRowIndex: number
+  startColumnIndex: number
+  limit?: number | null
+}
+
+export interface DataGridDataSourceResolveFillBoundaryResult {
+  endRowIndex: number | null
+  endRowId?: DataGridRowId | null
+  boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
+  scannedRowCount?: number
+  truncated?: boolean
+}
+
 export interface DataGridDataSourcePullRequest {
   range: DataGridViewportRange
   priority: DataGridDataSourcePullPriority
@@ -167,6 +196,9 @@ export interface DataGridDataSource<T = unknown> {
   pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<T>>
   getColumnHistogram?(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram>
   commitEdits?(request: DataGridDataSourceCommitEditsRequest<T>): Promise<DataGridDataSourceCommitEditsResult>
+  resolveFillBoundary?(
+    request: DataGridDataSourceResolveFillBoundaryRequest,
+  ): Promise<DataGridDataSourceResolveFillBoundaryResult> | DataGridDataSourceResolveFillBoundaryResult
   subscribe?(listener: DataGridDataSourcePushListener<T>): () => void
   invalidate?(invalidation: DataGridDataSourceInvalidation): Promise<void> | void
 }

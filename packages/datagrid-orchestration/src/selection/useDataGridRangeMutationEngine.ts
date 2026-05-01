@@ -43,6 +43,7 @@ export interface UseDataGridRangeMutationEngineOptions<
   recordIntent: (
     descriptor: { intent: "move" | "fill"; label: string; affectedRange: TRange },
     beforeSnapshot: TSnapshot,
+    afterSnapshotOverride?: TSnapshot,
   ) => void | Promise<void>
   setLastAction: (message: string) => void
 }

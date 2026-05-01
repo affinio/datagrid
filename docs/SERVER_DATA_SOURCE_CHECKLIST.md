@@ -1,6 +1,6 @@
 # Server Data Source Parity Checklist
 
-Status: baseline demo implemented; filtering/histograms and demo-local editing slice implemented.
+Status: baseline demo implemented; filtering/histograms, demo-local editing, and server-v1 fill diagnostics implemented.
 
 ## Current Baseline
 - Demo route: `/vue/server-data-source-grid`
@@ -22,16 +22,19 @@ Status: baseline demo implemented; filtering/histograms and demo-local editing s
 - [x] Commit failure / rollback UX
 - [x] Batch commit support
 - [x] Partial batch rollback UX
+- [x] Server-v1 fill diagnostics
 - [x] Sandbox navigation link
 
 ## Next Slices
 - [ ] Undo/redo semantics
-- [ ] Fill handle semantics
 - [ ] Range move
 
 Note: the row model remains read/pull-oriented; the demo uses a datasource-local `commitEdits` adapter for optimistic edits.
 Note: single-cell `cell-edit` remains single-cell only; batch edits flow through `applyEdits([]) -> patchRows -> commitEdits([])`.
 Note: batch failure simulation rejects alternating rows so rollback behavior can be verified visually.
+Note: server-v1 fill is supported only for loaded rows; drag fill and double-click autofill remain viewport/cache bounded and reuse the normal grouped history transaction path.
+Note: server-v1 fill does not search beyond loaded rows for the true double-click autofill boundary and does not materialize unloaded rows.
+Note: if fill or batch commit hits partial rejection, the demo surfaces a warning and the refresh is suppressed until the commit path resolves.
 
 ## Client-Model Parity Checklist
 - [ ] Selection across unloaded rows
@@ -46,6 +49,7 @@ Note: batch failure simulation rejects alternating rows so rollback behavior can
 - [ ] Push updates
 - [ ] Error/retry UX
 - [ ] Performance profiling
+- [x] Fill diagnostics for loaded-row server v1
 
 ## Open API Gaps
 - [ ] Confirm whether additional public hooks are needed for server cache invalidation UX
@@ -60,6 +64,16 @@ Note: batch failure simulation rejects alternating rows so rollback behavior can
 - Revision/conflict support is optional future enhancement, not required for v1
 - Batch edits are supported by the `edits[]` request shape
 - Out of scope for v1: `before-cell-edit`, conflict UI, merge semantics, `patchRows` on `DataSourceBackedRowModel`
+
+## Server v1 Fill Contract
+- Supported: drag fill over loaded, editable rows.
+- Supported: double-click autofill over loaded, editable rows.
+- Supported: one grouped history transaction for a committed fill.
+- Supported: undo/redo for committed loaded-row fills.
+- Out of scope: finding the true autofill boundary beyond loaded/cache rows.
+- Out of scope: filling unloaded rows or materializing them implicitly.
+- Out of scope: server-specific formula rebasing semantics.
+- Diagnostics: batch row count, skipped/unloaded row count when detectable, cache-boundary warning, and partial-rejection/refresh-suppression warning.
 
 ## Manual Test Checklist
 - [ ] Open the demo and verify initial load completes

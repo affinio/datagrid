@@ -27,7 +27,11 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   clearCellSelection: () => void
   captureRowsSnapshot: () => TSnapshot
   captureRowsSnapshotForRowIds?: (rowIds: readonly (string | number)[]) => TSnapshot
-  recordEditTransaction: (beforeSnapshot: TSnapshot) => void
+  recordEditTransaction: (
+    beforeSnapshot: TSnapshot,
+    afterSnapshotOverride?: TSnapshot,
+    label?: string,
+  ) => void
   readCell: (row: DataGridRowNode<TRow>, columnKey: string) => string
   readClipboardCell?: (row: DataGridRowNode<TRow>, columnKey: string) => string
   isCellEditable: (
@@ -40,7 +44,7 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   applyClipboardEdits?: (
     range: DataGridCopyRange,
     matrix: string[][],
-    options?: { recordHistory?: boolean },
+    options?: { recordHistory?: boolean; recordHistoryLabel?: string },
   ) => number | Promise<number>
   buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
   buildPasteSpecialMatrixFromRange?: (
@@ -57,7 +61,7 @@ export interface UseDataGridAppClipboardResult {
   applyClipboardEdits: (
     range: DataGridCopyRange,
     matrix: string[][],
-    options?: { recordHistory?: boolean },
+    options?: { recordHistory?: boolean; recordHistoryLabel?: string },
   ) => number | Promise<number>
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
@@ -136,7 +140,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   const applyClipboardEdits = options.applyClipboardEdits ?? (async (
     range: DataGridCopyRange,
     matrix: string[][],
-    applyOptions: { recordHistory?: boolean } = {},
+    applyOptions: { recordHistory?: boolean; recordHistoryLabel?: string } = {},
   ): Promise<number> => {
     const normalized = normalizeClipboardRange(range)
     if (!normalized) {
@@ -145,10 +149,6 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     const matrixHeight = Math.max(1, matrix.length)
     const matrixWidth = Math.max(1, matrix[0]?.length ?? 1)
     const editsByRowId = new Map<string | number, Record<string, string>>()
-    const beforeSnapshot = applyOptions.recordHistory === false
-      ? null
-      : options.captureRowsSnapshot()
-
     for (let rowIndex = normalized.startRow; rowIndex <= normalized.endRow; rowIndex += 1) {
       const row = options.ensureEditableRowAtIndex?.(rowIndex) ?? getBodyRowAtIndex(rowIndex)
       if (!row || row.rowId == null || row.kind === "group") {
@@ -175,6 +175,10 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       return 0
     }
 
+    const rowIds = Array.from(editsByRowId.keys())
+    const beforeSnapshot = applyOptions.recordHistory === false
+      ? null
+      : (options.captureRowsSnapshotForRowIds?.(rowIds) ?? options.captureRowsSnapshot())
     const updates: DataGridClientRowPatch<TRow>[] = Array.from(editsByRowId.entries(), ([rowId, data]) => ({
       rowId,
       data: data as Partial<TRow>,
@@ -182,7 +186,10 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     await options.runtime.api.rows.applyEdits(updates)
     options.applySelectionRange(normalized)
     if (beforeSnapshot != null) {
-      options.recordEditTransaction(beforeSnapshot)
+      const afterSnapshot = options.captureRowsSnapshotForRowIds
+        ? options.captureRowsSnapshotForRowIds(rowIds)
+        : options.captureRowsSnapshot()
+      options.recordEditTransaction(beforeSnapshot, afterSnapshot, applyOptions.recordHistoryLabel)
     }
     return editsByRowId.size
   })
