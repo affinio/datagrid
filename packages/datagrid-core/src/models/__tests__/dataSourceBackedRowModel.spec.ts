@@ -32,6 +32,22 @@ function buildRows(start: number, end: number) {
   })
 }
 
+function createDeferredPullDataSource<TRow>() {
+  const calls: PullCall<TRow>[] = []
+  const dataSource: DataGridDataSource<TRow> = {
+    pull(request) {
+      return new Promise<DataGridDataSourcePullResult<TRow>>((resolve, reject) => {
+        calls.push({
+          request,
+          resolve,
+          reject,
+        })
+      })
+    },
+  }
+  return { calls, dataSource }
+}
+
 describe("createDataSourceBackedRowModel", () => {
   it("delegates column histograms to the data source with effective filter context", async () => {
     const histogramRequests: DataGridDataSourceColumnHistogramRequest[] = []
@@ -93,7 +109,116 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
-  it("applies sort and filter together with one backend pull", async () => {
+  it("keeps old rows visible during pending sort refresh and swaps cache on success", async () => {
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 2,
+    })
+
+    model.setViewportRange({ start: 0, end: 1 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: [
+        { index: 0, row: { id: 1, value: "old-1" }, rowId: 1 },
+        { index: 1, row: { id: 2, value: "old-2" }, rowId: 2 },
+      ],
+      total: 2,
+    })
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
+
+    const sortModel = [{ key: "value", direction: "asc" as const }]
+    model.setSortModel(sortModel)
+
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.request.sortModel).toEqual(sortModel)
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
+
+    calls[1]?.resolve({
+      rows: [
+        { index: 0, row: { id: 1, value: "sorted-1" }, rowId: 1 },
+        { index: 1, row: { id: 2, value: "sorted-2" }, rowId: 2 },
+      ],
+      total: 2,
+    })
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["sorted-1", "sorted-2"])
+
+    model.dispose()
+  })
+
+  it("keeps old rows visible during pending filter refresh and swaps cache on success", async () => {
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string; status: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 2,
+    })
+
+    model.setViewportRange({ start: 0, end: 1 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: [
+        { index: 0, row: { id: 1, value: "old-1", status: "inactive" }, rowId: 1 },
+        { index: 1, row: { id: 2, value: "old-2", status: "inactive" }, rowId: 2 },
+      ],
+      total: 2,
+    })
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
+
+    const filterModel = {
+      columnFilters: {
+        status: { kind: "valueSet", tokens: ["string:active"] },
+      },
+      advancedFilters: {},
+    }
+    model.setFilterModel(filterModel)
+
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.request.filterModel).toMatchObject(filterModel)
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
+
+    calls[1]?.resolve({
+      rows: [
+        { index: 0, row: { id: 1, value: "filtered-1", status: "active" }, rowId: 1 },
+        { index: 1, row: { id: 2, value: "filtered-2", status: "active" }, rowId: 2 },
+      ],
+      total: 2,
+    })
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["filtered-1", "filtered-2"])
+
+    model.dispose()
+  })
+
+  it("keeps old rows visible during pending batched sort and filter refresh and swaps cache on success", async () => {
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string; status: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 2,
+    })
+
+    model.setViewportRange({ start: 0, end: 1 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: [
+        { index: 0, row: { id: 1, value: "old-1", status: "inactive" }, rowId: 1 },
+        { index: 1, row: { id: 2, value: "old-2", status: "inactive" }, rowId: 2 },
+      ],
+      total: 2,
+    })
+    await flushMicrotasks()
+
     const sortModel = [{ key: "value", direction: "asc" as const }]
     const filterModel = {
       columnFilters: {
@@ -101,41 +226,62 @@ describe("createDataSourceBackedRowModel", () => {
       },
       advancedFilters: {},
     }
-    const pull = vi.fn(async () => ({
-      rows: [
-        {
-          index: 0,
-          row: { id: 1, value: "row-1", status: "active" },
-          rowId: 1,
-        },
-      ],
-      total: 1,
-    }))
-    const dataSource: DataGridDataSource<{ id: number; value: string; status: string }> = {
-      pull,
-    }
-
-    const model = createDataSourceBackedRowModel({
-      dataSource,
-      resolveRowId: row => row.id,
-      initialTotal: 1,
-    })
-
-    expect(typeof model.setSortAndFilterModel).toBe("function")
-
     model.setSortAndFilterModel?.({
       sortModel,
       filterModel,
     })
 
-    expect(pull).toHaveBeenCalledTimes(1)
-    expect(pull.mock.calls[0]?.[0].sortModel).toEqual(sortModel)
-    expect(pull.mock.calls[0]?.[0].filterModel).toMatchObject(filterModel)
-    expect(model.getSnapshot().sortModel).toEqual(sortModel)
-    expect(model.getSnapshot().filterModel).toMatchObject(filterModel)
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.request.sortModel).toEqual(sortModel)
+    expect(calls[1]?.request.filterModel).toMatchObject(filterModel)
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
 
+    calls[1]?.resolve({
+      rows: [
+        { index: 0, row: { id: 1, value: "sorted-filtered-1", status: "active" }, rowId: 1 },
+        { index: 1, row: { id: 2, value: "sorted-filtered-2", status: "active" }, rowId: 2 },
+      ],
+      total: 2,
+    })
     await flushMicrotasks()
-    expect(pull).toHaveBeenCalledTimes(1)
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(2)
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual([
+      "sorted-filtered-1",
+      "sorted-filtered-2",
+    ])
+
+    model.dispose()
+  })
+
+  it("keeps old rows visible and surfaces error when a sort refresh fails", async () => {
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 2,
+    })
+
+    model.setViewportRange({ start: 0, end: 1 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: [
+        { index: 0, row: { id: 1, value: "old-1" }, rowId: 1 },
+        { index: 1, row: { id: 2, value: "old-2" }, rowId: 2 },
+      ],
+      total: 2,
+    })
+    await flushMicrotasks()
+
+    model.setSortModel([{ key: "value", direction: "desc" }])
+    expect(calls).toHaveLength(2)
+    calls[1]?.reject(new Error("sort failed"))
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
+    expect(model.getSnapshot().error?.message).toBe("sort failed")
 
     model.dispose()
   })

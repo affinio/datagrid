@@ -64,6 +64,11 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 - [ ] No visible “table reload” effect
 - [ ] Diagnostics show `refreshing` instead of empty
 
+### Validation Notes
+
+- Deferred cache replacement for sort/filter is covered by focused tests in `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
+- The targeted tests prove stale rows remain readable while the pending pull is unresolved, and the cache swaps to the new rows only after success
+
 ---
 
 ## Phase 2 — Optimistic UI (Fill + Edit)
