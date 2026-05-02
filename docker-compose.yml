@@ -9,3 +9,21 @@ services:
     volumes:
       - .:/workspace
     command: sleep infinity
+    networks:
+      - net
+  db:
+    image: postgres:16
+    container_name: affino-db-dev
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.db.dev
+    volumes:
+      - db_data_dev:/var/lib/postgresql/data
+    networks:
+      - net
+
+volumes:
+  db_data_dev:
+
+networks:
+  net:
