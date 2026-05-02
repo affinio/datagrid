@@ -42,15 +42,18 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
   - Validation: targeted vitest passed
   - Note: full spec has pre-existing unrelated failures
 - [x] Ensure sort + filter = **one backend pull**
-- [ ] Remove `clearAll()` from:
-  - [ ] setSortModel
-  - [ ] setFilterModel
+- [x] Remove `clearAll()` from:
+  - [x] setSortModel
+  - [x] setFilterModel
   - [x] setAggregationModel
   - [x] setGroupBy
   - [x] setPivotModel
-- [ ] Introduce **staging / atomic swap** of cache
-- [ ] Keep existing rows visible during refresh
-- [ ] Preserve request versioning (DO NOT break it)
+- [x] Introduce **staging / atomic swap** of cache
+  - Validation: sort/filter/group focused tests + grouping/aggregation sandbox UI checks
+- [x] Keep existing rows visible during refresh
+  - Validation: sort/filter tests; grouping/aggregation manually verified in sandbox
+- [x] Preserve request versioning (DO NOT break it)
+  - Validation: existing requestId/stateKey logic preserved; no changes to stale-response discard path
 - [x] Add state split:
   - [x] `initialLoading`
   - [x] `refreshing`
@@ -58,11 +61,11 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 
 ### Acceptance Criteria
 
-- [ ] Sorting does NOT blank the grid
-- [ ] Filtering does NOT blank the grid
+- [x] Sorting does NOT blank the grid
+- [x] Filtering does NOT blank the grid
 - [x] Only one request per sort/filter change
-- [ ] No visible “table reload” effect
-- [ ] Diagnostics show `refreshing` instead of empty
+- [x] No visible “table reload” effect
+- [x] Diagnostics show `refreshing` instead of empty
 
 ### Validation Notes
 

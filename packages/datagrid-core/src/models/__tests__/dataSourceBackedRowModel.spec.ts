@@ -11,6 +11,7 @@ import type {
   DataGridDataSourcePullResult,
   DataGridDataSourcePushListener,
 } from "../server/dataSourceProtocol"
+import type { DataGridFilterSnapshot } from "../rowModel"
 
 interface PullCall<TRow> {
   request: DataGridDataSourcePullRequest
@@ -84,11 +85,14 @@ describe("createDataSourceBackedRowModel", () => {
 
     expect(typeof model.getColumnHistogram).toBe("function")
 
-    const histogram = await model.getColumnHistogram?.("status", {
-      ignoreSelfFilter: true,
-      orderBy: "valueAsc",
-      search: " active ",
-    })
+    const getColumnHistogram = model.getColumnHistogram
+    const histogram = getColumnHistogram
+      ? await getColumnHistogram("status", {
+          ignoreSelfFilter: true,
+          orderBy: "valueAsc",
+          search: " active ",
+        })
+      : null
 
     expect(histogram).toEqual([
       { token: "string:active", value: "Active", count: 2, text: "Active" },
@@ -274,7 +278,7 @@ describe("createDataSourceBackedRowModel", () => {
         status: { kind: "valueSet", tokens: ["string:active"] },
       },
       advancedFilters: {},
-    }
+    } satisfies DataGridFilterSnapshot
     model.setFilterModel(filterModel)
 
     expect(calls).toHaveLength(2)
@@ -340,7 +344,7 @@ describe("createDataSourceBackedRowModel", () => {
           index: 0,
           kind: "group",
           rowId: "status=active",
-          row: { label: "status=active", status: "active" },
+          row: { id: 0, value: "status=active", status: "active" },
         },
       ],
       total: 1,
@@ -350,7 +354,7 @@ describe("createDataSourceBackedRowModel", () => {
 
     expect(model.getRowCount()).toBe(1)
     expect(model.getRow(0)?.kind).toBe("group")
-    expect(model.getRow(0)?.row).toMatchObject({ label: "status=active", status: "active" })
+    expect(model.getRow(0)?.row).toMatchObject({ value: "status=active", status: "active" })
     expect(model.getRowsInRange({ start: 0, end: 1 })?.length).toBe(1)
     expect(model.getSnapshot().refreshing).toBe(false)
 
@@ -382,11 +386,14 @@ describe("createDataSourceBackedRowModel", () => {
         status: { kind: "valueSet", tokens: ["string:active"] },
       },
       advancedFilters: {},
+    } satisfies DataGridFilterSnapshot
+    const setSortAndFilterModel = model.setSortAndFilterModel
+    if (setSortAndFilterModel) {
+      setSortAndFilterModel({
+        sortModel,
+        filterModel,
+      })
     }
-    model.setSortAndFilterModel?.({
-      sortModel,
-      filterModel,
-    })
 
     expect(calls).toHaveLength(2)
     expect(calls[1]?.request.sortModel).toEqual(sortModel)
@@ -451,7 +458,7 @@ describe("createDataSourceBackedRowModel", () => {
       { id: 1, value: "row-1" },
       { id: 2, value: "row-2" },
     ]
-    const commitEdits = vi.fn(async ({ edits }: { edits: readonly Array<{ rowId: number; data: { value?: string } }> }) => {
+    const commitEdits = vi.fn(async ({ edits }: { edits: ReadonlyArray<{ rowId: number; data: { value?: string } }> }) => {
       for (const edit of edits) {
         const row = rows.find(candidate => candidate.id === edit.rowId)
         if (row && typeof edit.data.value === "string") {
@@ -487,9 +494,12 @@ describe("createDataSourceBackedRowModel", () => {
     model.setViewportRange({ start: 0, end: 0 })
     await flushMicrotasks()
 
-    model.patchRows?.([
-      { rowId: 1, data: { value: "updated" } },
-    ])
+    const patchRows = model.patchRows
+    if (patchRows) {
+      patchRows([
+        { rowId: 1, data: { value: "updated" } },
+      ])
+    }
 
     await flushMicrotasks()
     await flushMicrotasks()
@@ -509,7 +519,7 @@ describe("createDataSourceBackedRowModel", () => {
       { id: 1, value: "row-1" },
     ]
     let resolveRefresh: ((result: DataGridDataSourcePullResult<{ id: number; value: string }>) => void) | null = null
-    const commitEdits = vi.fn(async ({ edits }: { edits: readonly Array<{ rowId: number; data: { value?: string } }> }) => {
+    const commitEdits = vi.fn(async ({ edits }: { edits: ReadonlyArray<{ rowId: number; data: { value?: string } }> }) => {
       for (const edit of edits) {
         const row = rows.find(candidate => candidate.id === edit.rowId)
         if (row && typeof edit.data.value === "string") {
@@ -548,9 +558,10 @@ describe("createDataSourceBackedRowModel", () => {
     model.setViewportRange({ start: 0, end: 0 })
     await flushMicrotasks()
 
-    const patchPromise = Promise.resolve(model.patchRows?.([
+    const patchRows = model.patchRows
+    const patchPromise = Promise.resolve(patchRows ? patchRows([
       { rowId: 1, data: { value: "updated" } },
-    ]))
+    ]) : undefined)
     let resolved = false
     patchPromise.then(() => {
       resolved = true
@@ -560,12 +571,15 @@ describe("createDataSourceBackedRowModel", () => {
     expect(resolved).toBe(false)
     expect(resolveRefresh).not.toBeNull()
 
-    resolveRefresh?.({
-      rows: [
-        { index: 0, row: rows[0]!, rowId: 1 },
-      ],
-      total: rows.length,
-    })
+    const resolvedRefresh = resolveRefresh
+    if (resolvedRefresh) {
+      resolvedRefresh({
+        rows: [
+          { index: 0, row: rows[0]!, rowId: 1 },
+        ],
+        total: rows.length,
+      })
+    }
     await patchPromise
     expect(resolved).toBe(true)
     expect(model.getRow(0)?.row.value).toBe("updated")
@@ -607,9 +621,12 @@ describe("createDataSourceBackedRowModel", () => {
     model.setViewportRange({ start: 0, end: 0 })
     await flushMicrotasks()
 
-    model.patchRows?.([
-      { rowId: 1, data: { value: "updated" } },
-    ])
+    const patchRows = model.patchRows
+    if (patchRows) {
+      patchRows([
+        { rowId: 1, data: { value: "updated" } },
+      ])
+    }
 
     await flushMicrotasks()
     await flushMicrotasks()
@@ -660,9 +677,12 @@ describe("createDataSourceBackedRowModel", () => {
     model.setViewportRange({ start: 0, end: 0 })
     await flushMicrotasks()
 
-    model.patchRows?.([
-      { rowId: 1, data: { value: "updated" } },
-    ])
+    const patchRows = model.patchRows
+    if (patchRows) {
+      patchRows([
+        { rowId: 1, data: { value: "updated" } },
+      ])
+    }
 
     await flushMicrotasks()
     await flushMicrotasks()
@@ -1133,11 +1153,14 @@ describe("createDataSourceBackedRowModel", () => {
     calls[0]?.resolve({ rows: buildRows(0, 29), total: 100_000 })
     await flushMicrotasks()
 
-    pushListener?.({
-      type: "upsert",
-      rows: [{ index: 5, row: { id: 5, value: "patched-5" } }],
-      total: 100_000,
-    })
+    const listener = pushListener
+    if (listener) {
+      listener({
+        type: "upsert",
+        rows: [{ index: 5, row: { id: 5, value: "patched-5" } }],
+        total: 100_000,
+      })
+    }
     expect(model.getRow(5)?.row.value).toBe("patched-5")
 
     calls[1]?.resolve({ rows: buildRows(30, 89), total: 100_000 })
@@ -1437,22 +1460,11 @@ describe("createDataSourceBackedRowModel", () => {
       groupKeys: [],
     })
 
-    model.toggleGroup("value=row-10")
+    model.collapseGroup("value=row-10")
     expect(calls[calls.length - 1]?.request.reason).toBe("group-change")
     expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
       expandedByDefault: true,
       toggledGroupKeys: ["value=row-10"],
-    })
-    expect(calls[calls.length - 1]?.request.treeData).toEqual({
-      operation: "toggle-group",
-      scope: "branch",
-      groupKeys: ["value=row-10"],
-    })
-
-    model.collapseGroup("value=row-10")
-    expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
-      expandedByDefault: true,
-      toggledGroupKeys: [],
     })
     expect(calls[calls.length - 1]?.request.treeData).toEqual({
       operation: "collapse-group",
@@ -1463,10 +1475,21 @@ describe("createDataSourceBackedRowModel", () => {
     model.expandGroup("value=row-10")
     expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
       expandedByDefault: true,
-      toggledGroupKeys: ["value=row-10"],
+      toggledGroupKeys: [],
     })
     expect(calls[calls.length - 1]?.request.treeData).toEqual({
       operation: "expand-group",
+      scope: "branch",
+      groupKeys: ["value=row-10"],
+    })
+
+    model.toggleGroup("value=row-10")
+    expect(calls[calls.length - 1]?.request.groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: ["value=row-10"],
+    })
+    expect(calls[calls.length - 1]?.request.treeData).toEqual({
+      operation: "toggle-group",
       scope: "branch",
       groupKeys: ["value=row-10"],
     })
@@ -1649,7 +1672,9 @@ describe("createDataSourceBackedRowModel", () => {
   it("keeps active viewport rows cached under row-cache pressure from out-of-window pushes", async () => {
     let pushListener: DataGridDataSourcePushListener<{ id: number; value: string }> | null = null
     const emitPush = (event: Parameters<DataGridDataSourcePushListener<{ id: number; value: string }>>[0]) => {
-      ;(pushListener as DataGridDataSourcePushListener<{ id: number; value: string }> | null)?.(event)
+      if (pushListener) {
+        pushListener(event)
+      }
     }
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       async pull(request) {
@@ -1752,7 +1777,9 @@ describe("createDataSourceBackedRowModel", () => {
     const invalidate = vi.fn()
     let pushListener: DataGridDataSourcePushListener<{ id: number; value: string }> | null = null
     const emitPush = (event: Parameters<DataGridDataSourcePushListener<{ id: number; value: string }>>[0]) => {
-      ;(pushListener as DataGridDataSourcePushListener<{ id: number; value: string }> | null)?.(event)
+      if (pushListener) {
+        pushListener(event)
+      }
     }
     const pull = vi.fn(async (request: DataGridDataSourcePullRequest) => {
       const rows = Array.from({ length: request.range.end - request.range.start + 1 }, (_, offset) => {
