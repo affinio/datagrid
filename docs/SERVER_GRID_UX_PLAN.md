@@ -72,6 +72,8 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
   - first critical load reports `initialLoading = true`, `refreshing = false`, `loading = true`
   - pending sort refresh with cached rows reports `initialLoading = false`, `refreshing = true`, `loading = true`
   - completed refresh reports all three flags false/derived correctly after the pull resolves
+- `initialLoading` and `refreshing` are now first-class typed snapshot fields, and the sandbox snapshot diagnostic string prints both alongside `loading`
+- Sandbox diagnostics now read the active row-model snapshot during `handleStateUpdate()`, so the `RowModel snapshot` and `Runtime snapshot` cards are populated during normal server refreshes
 
 ---
 

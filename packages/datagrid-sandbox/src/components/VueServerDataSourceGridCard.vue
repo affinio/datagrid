@@ -674,6 +674,20 @@ function formatViewportRange(range: DataGridViewportRange | null | undefined): s
   return `${range.start}..${range.end}`
 }
 
+function formatRowModelSnapshot(snapshot: {
+  rowCount?: number
+  loading?: boolean
+  initialLoading?: boolean
+  refreshing?: boolean
+  viewportRange?: DataGridViewportRange
+} | null | undefined): string {
+  if (!snapshot) {
+    return "none"
+  }
+  const viewport = snapshot.viewportRange
+  return `rowCount=${snapshot.rowCount ?? 0} loading=${snapshot.loading ? "yes" : "no"} initialLoading=${snapshot.initialLoading ? "yes" : "no"} refreshing=${snapshot.refreshing ? "yes" : "no"} viewport=${viewport ? `${viewport.start}..${viewport.end}` : "none"}`
+}
+
 function parseSampleRowIndex(): number | null {
   const match = /^srv-(\d+)$/.exec(serverFillSampleRowText.value)
   if (!match) {
@@ -716,7 +730,7 @@ function updateRenderedSampleDiagnostics(): void {
   serverFillSampleRowIndexText.value = String(rowIndex)
   serverFillSampleVisibleIndexText.value = String(visibleIndex)
   const snapshot = rowModel.getSnapshot()
-  serverFillRowModelSnapshotText.value = `rowCount=${snapshot.rowCount} loading=${snapshot.loading ? "yes" : "no"} viewport=${snapshot.viewportRange.start}..${snapshot.viewportRange.end}`
+  serverFillRowModelSnapshotText.value = formatRowModelSnapshot(snapshot)
   const visibleRows = rowModel.getRowsInRange(visibleRowRange)
   serverFillVisibleRowsPreviewText.value = visibleRows
     .slice(0, 5)
@@ -1693,7 +1707,17 @@ function refreshVisibleRange(): void {
 
 function handleStateUpdate(state: unknown): void {
   const parsedState = state as {
-    rows?: { snapshot?: { sortModel?: readonly DataGridSortState[]; filterModel?: DataGridFilterSnapshot | null } }
+    rows?: {
+      snapshot?: {
+        sortModel?: readonly DataGridSortState[]
+        filterModel?: DataGridFilterSnapshot | null
+        rowCount?: number
+        loading?: boolean
+        initialLoading?: boolean
+        refreshing?: boolean
+        viewportRange?: DataGridViewportRange
+      }
+    }
     selection?: {
       ranges?: readonly { startRow: number; endRow: number }[]
       activeRangeIndex?: number
@@ -1702,6 +1726,7 @@ function handleStateUpdate(state: unknown): void {
   const snapshot = parsedState?.rows?.snapshot
   const sortModel = snapshot?.sortModel ?? []
   const filterModel = snapshot?.filterModel ?? null
+  const rowModelSnapshot = snapshot ?? null
   const activeRange = parsedState?.selection?.ranges?.[parsedState.selection.activeRangeIndex ?? 0] ?? parsedState?.selection?.ranges?.[0] ?? null
   lastSelectionRange.value = activeRange ? {
     startRow: Math.min(activeRange.startRow, activeRange.endRow),
@@ -1717,6 +1742,9 @@ function handleStateUpdate(state: unknown): void {
   sortModelText.value = sortModel.length > 0
     ? sortModel.map(entry => `${entry.key}:${entry.direction}`).join(", ")
     : "none"
+  const rowModelSnapshotText = formatRowModelSnapshot(rowModelSnapshot)
+  serverFillRowModelSnapshotText.value = rowModelSnapshotText
+  runtimeRowModelSnapshotText.value = rowModelSnapshotText
   diagnostics.value = rowModel.getBackpressureDiagnostics()
 }
 

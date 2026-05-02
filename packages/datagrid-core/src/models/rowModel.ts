@@ -300,6 +300,8 @@ export interface DataGridRowModelSnapshot<T = unknown> {
   kind: DataGridRowModelKind
   rowCount: number
   loading: boolean
+  initialLoading?: boolean
+  refreshing?: boolean
   warming?: boolean
   error: Error | null
   treeDataDiagnostics?: DataGridTreeDataDiagnostics | null

@@ -48,14 +48,6 @@ function createDeferredPullDataSource<TRow>() {
   return { calls, dataSource }
 }
 
-function readLoadingState(model: { getSnapshot(): unknown }) {
-  return model.getSnapshot() as {
-    initialLoading: boolean
-    refreshing: boolean
-    loading: boolean
-  }
-}
-
 describe("createDataSourceBackedRowModel", () => {
   it("delegates column histograms to the data source with effective filter context", async () => {
     const histogramRequests: DataGridDataSourceColumnHistogramRequest[] = []
@@ -128,11 +120,9 @@ describe("createDataSourceBackedRowModel", () => {
     model.setViewportRange({ start: 0, end: 0 })
 
     expect(calls).toHaveLength(1)
-    expect(readLoadingState(model)).toMatchObject({
-      initialLoading: true,
-      refreshing: false,
-      loading: true,
-    })
+    expect(model.getSnapshot().initialLoading).toBe(true)
+    expect(model.getSnapshot().refreshing).toBe(false)
+    expect(model.getSnapshot().loading).toBe(true)
 
     model.dispose()
   })
@@ -159,11 +149,9 @@ describe("createDataSourceBackedRowModel", () => {
     model.setSortModel([{ key: "value", direction: "asc" }])
 
     expect(calls).toHaveLength(2)
-    expect(readLoadingState(model)).toMatchObject({
-      initialLoading: false,
-      refreshing: true,
-      loading: true,
-    })
+    expect(model.getSnapshot().initialLoading).toBe(false)
+    expect(model.getSnapshot().refreshing).toBe(true)
+    expect(model.getSnapshot().loading).toBe(true)
 
     model.dispose()
   })
@@ -189,11 +177,9 @@ describe("createDataSourceBackedRowModel", () => {
 
     model.setSortModel([{ key: "value", direction: "asc" }])
     expect(calls).toHaveLength(2)
-    expect(readLoadingState(model)).toMatchObject({
-      initialLoading: false,
-      refreshing: true,
-      loading: true,
-    })
+    expect(model.getSnapshot().initialLoading).toBe(false)
+    expect(model.getSnapshot().refreshing).toBe(true)
+    expect(model.getSnapshot().loading).toBe(true)
 
     calls[1]?.resolve({
       rows: [
@@ -205,11 +191,9 @@ describe("createDataSourceBackedRowModel", () => {
     await flushMicrotasks()
     await flushMicrotasks()
 
-    expect(readLoadingState(model)).toMatchObject({
-      initialLoading: false,
-      refreshing: false,
-      loading: false,
-    })
+    expect(model.getSnapshot().initialLoading).toBe(false)
+    expect(model.getSnapshot().refreshing).toBe(false)
+    expect(model.getSnapshot().loading).toBe(false)
 
     model.dispose()
   })
@@ -224,8 +208,8 @@ describe("createDataSourceBackedRowModel", () => {
 
     model.setViewportRange({ start: 0, end: 1 })
     expect(calls).toHaveLength(1)
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).initialLoading).toBe(true)
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).refreshing).toBe(false)
+    expect(model.getSnapshot().initialLoading).toBe(true)
+    expect(model.getSnapshot().refreshing).toBe(false)
     calls[0]?.resolve({
       rows: [
         { index: 0, row: { id: 1, value: "old-1" }, rowId: 1 },
@@ -236,8 +220,8 @@ describe("createDataSourceBackedRowModel", () => {
     await flushMicrotasks()
 
     expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).initialLoading).toBe(false)
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).refreshing).toBe(false)
+    expect(model.getSnapshot().initialLoading).toBe(false)
+    expect(model.getSnapshot().refreshing).toBe(false)
 
     const sortModel = [{ key: "value", direction: "asc" as const }]
     model.setSortModel(sortModel)
@@ -245,8 +229,8 @@ describe("createDataSourceBackedRowModel", () => {
     expect(calls).toHaveLength(2)
     expect(calls[1]?.request.sortModel).toEqual(sortModel)
     expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).initialLoading).toBe(false)
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).refreshing).toBe(true)
+    expect(model.getSnapshot().initialLoading).toBe(false)
+    expect(model.getSnapshot().refreshing).toBe(true)
 
     calls[1]?.resolve({
       rows: [
@@ -259,7 +243,7 @@ describe("createDataSourceBackedRowModel", () => {
     await flushMicrotasks()
 
     expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["sorted-1", "sorted-2"])
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).refreshing).toBe(false)
+    expect(model.getSnapshot().refreshing).toBe(false)
 
     model.dispose()
   })
@@ -296,8 +280,8 @@ describe("createDataSourceBackedRowModel", () => {
     expect(calls).toHaveLength(2)
     expect(calls[1]?.request.filterModel).toMatchObject(filterModel)
     expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).initialLoading).toBe(false)
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).refreshing).toBe(true)
+    expect(model.getSnapshot().initialLoading).toBe(false)
+    expect(model.getSnapshot().refreshing).toBe(true)
 
     calls[1]?.resolve({
       rows: [
@@ -310,7 +294,7 @@ describe("createDataSourceBackedRowModel", () => {
     await flushMicrotasks()
 
     expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["filtered-1", "filtered-2"])
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).refreshing).toBe(false)
+    expect(model.getSnapshot().refreshing).toBe(false)
 
     model.dispose()
   })
@@ -350,8 +334,8 @@ describe("createDataSourceBackedRowModel", () => {
     expect(calls[1]?.request.sortModel).toEqual(sortModel)
     expect(calls[1]?.request.filterModel).toMatchObject(filterModel)
     expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).initialLoading).toBe(false)
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).refreshing).toBe(true)
+    expect(model.getSnapshot().initialLoading).toBe(false)
+    expect(model.getSnapshot().refreshing).toBe(true)
 
     calls[1]?.resolve({
       rows: [
@@ -368,7 +352,7 @@ describe("createDataSourceBackedRowModel", () => {
       "sorted-filtered-1",
       "sorted-filtered-2",
     ])
-    expect((model.getSnapshot() as { initialLoading: boolean; refreshing: boolean }).refreshing).toBe(false)
+    expect(model.getSnapshot().refreshing).toBe(false)
 
     model.dispose()
   })

@@ -607,12 +607,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
         ? {
             pivotModel: clonePivotSpec(pivotModel),
             pivotColumns: clonePivotColumnsSnapshot(pivotColumns),
-          }
+      }
         : {}),
       groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
-    } as DataGridRowModelSnapshot<T> & {
-      initialLoading: boolean
-      refreshing: boolean
     }
   }
 
