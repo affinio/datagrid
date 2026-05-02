@@ -110,6 +110,7 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 ### Validation Notes
 
 - Phase 2 slice 1 is now implemented for server/data-source-backed inline edits only: cached rows update immediately, successful commits reconcile through the normal refresh path without clearing cache, and failed commits roll back only the affected rows while leaving unrelated cache entries intact.
+- Phase 2 slice 2 is now implemented for server-backed fill on fully materialized ranges: the controller derives optimistic rowId-based patches locally, applies them before `commitFillOperation()` resolves, and rolls back only the affected cells when the server commit fails. Unloaded ranges still use the existing pessimistic server-fill behavior.
 
 ---
 

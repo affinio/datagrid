@@ -102,6 +102,7 @@ export function useDataGridAppFill(
         }
         return true
       }
+      return false
     }
     const matrix = buildDataGridFillMatrix({
       baseRange,

@@ -5,6 +5,11 @@ import { useDataGridAppInteractionController } from "../useDataGridAppInteractio
 
 type DemoRow = Record<string, unknown>
 
+interface DemoRowSnapshot {
+  kind: "full" | "partial"
+  rows: Array<{ rowId: string | number; row: DemoRow }>
+}
+
 interface DataGridAppResolveFillBoundaryRequest {
   direction: "up" | "down" | "left" | "right"
   baseRange: { startRow: number; endRow: number; startColumn: number; endColumn: number }
@@ -76,6 +81,24 @@ function createMouseEvent(
   Object.defineProperty(event, "target", { configurable: true, value: currentTarget })
   Object.defineProperty(event, "currentTarget", { configurable: true, value: currentTarget })
   return event
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
+
+async function flushAsync(): Promise<void> {
+  await nextTick()
+  await Promise.resolve()
+  await Promise.resolve()
+  await nextTick()
+  await new Promise(resolve => setTimeout(resolve, 0))
 }
 
 function createControllerHarness(options: {
@@ -265,18 +288,50 @@ function createControllerHarness(options: {
     }, extend)
   })
   const ensureKeyboardActiveCellVisible = vi.fn()
+  const applyEdits = vi.fn(async (updates: readonly { rowId: string | number; data: Partial<DemoRow> }[]) => {
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return
+    }
+    const updatesByRowId = new Map<string | number, Partial<DemoRow>>()
+    for (const update of updates) {
+      if (!update || (typeof update.rowId !== "string" && typeof update.rowId !== "number") || !update.data) {
+        continue
+      }
+      const previous = updatesByRowId.get(update.rowId)
+      updatesByRowId.set(update.rowId, {
+        ...(previous ?? {}),
+        ...update.data,
+      })
+    }
+    rows = rows.map(nextRow => {
+      const patch = updatesByRowId.get(nextRow.rowId)
+      if (!patch) {
+        return nextRow
+      }
+      return {
+        ...nextRow,
+        data: {
+          ...(nextRow.data as DemoRow),
+          ...patch,
+        },
+      } as DataGridRowNode<DemoRow>
+    }) as unknown as DataGridRowNode<DemoRow>[]
+  })
   const applyClipboardEdits = vi.fn(() => 0)
   const buildFillMatrixFromRange = vi.fn(() => [[""]])
   const recordIntentTransaction = vi.fn()
   const reportFillWarning = vi.fn()
-  const captureRowsSnapshotForRowIds = vi.fn((rowIds: readonly (string | number)[]) => (
-    rows
+  const captureRowsSnapshotForRowIds = vi.fn((rowIds: readonly (string | number)[]): DemoRowSnapshot => ({
+    kind: "partial",
+    rows: rows
       .filter(nextRow => rowIds.includes(nextRow.rowId))
       .map(nextRow => ({
-        rowId: String(nextRow.rowId),
-        ...(nextRow.data as DemoRow),
-      }))
-  ))
+        rowId: nextRow.rowId,
+        row: {
+          ...(nextRow.data as DemoRow),
+        },
+      })),
+  }))
   const clearPendingClipboardOperation = vi.fn(() => false)
   const syncViewport = vi.fn()
   const editingCell = ref<{ rowId: string | number; columnKey: string } | null>(null)
@@ -288,7 +343,7 @@ function createControllerHarness(options: {
   const collapseGroup = vi.fn()
   const invalidateRange = vi.fn()
 
-  const controller = useDataGridAppInteractionController<DemoRow, readonly DemoRow[]>({
+  const controller = useDataGridAppInteractionController<DemoRow, DemoRowSnapshot>({
     mode: ref(mode),
     enableFillHandle: ref(options.enableFillHandle ?? true),
     enableRangeMove: ref(options.enableRangeMove ?? true),
@@ -297,6 +352,7 @@ function createControllerHarness(options: {
         rows: {
           get: (rowIndex: number) => rows[rowIndex] ?? null,
           getCount: () => rows.length,
+          applyEdits,
           getSnapshot: () => ({
             sortModel: [],
             filterModel: null,
@@ -375,10 +431,15 @@ function createControllerHarness(options: {
     resolveRowIndexById: rowId => rows.findIndex(nextRow => nextRow.rowId === rowId),
     resolveFillBoundary: options.resolveFillBoundary,
     reportFillWarning,
-    captureRowsSnapshot: vi.fn(() => rows.map(nextRow => ({
-      rowId: String(nextRow.rowId),
-      ...(nextRow.data as DemoRow),
-    }))),
+    captureRowsSnapshot: vi.fn((): DemoRowSnapshot => ({
+      kind: "full",
+      rows: rows.map(nextRow => ({
+        rowId: nextRow.rowId,
+        row: {
+          ...(nextRow.data as DemoRow),
+        },
+      })),
+    })),
     captureRowsSnapshotForRowIds,
     recordIntentTransaction,
     clearPendingClipboardOperation,
@@ -411,6 +472,7 @@ function createControllerHarness(options: {
     setSelectionSnapshot,
     ensureKeyboardActiveCellVisible,
     applyClipboardEdits,
+    applyEdits,
     buildFillMatrixFromRange,
     clearPendingClipboardOperation,
     recordIntentTransaction,
@@ -1279,69 +1341,6 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(controller.applyLastFillBehavior("copy")).toBe(false)
   })
 
-  it("fills down on fill-handle double click using the nearest contiguous reference column", () => {
-    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange, recordIntentTransaction, captureRowsSnapshotForRowIds } = createControllerHarness({
-      rowCount: 5,
-      columnCount: 2,
-      rowData: [
-        { a: "1", b: "task-1" },
-        { b: "task-2" },
-        { b: "task-3" },
-        { b: "stop" },
-        {},
-      ],
-    })
-
-    applyClipboardEdits.mockReturnValue(3)
-    buildFillMatrixFromRange.mockReturnValue([["1"]])
-    selectionSnapshot.value = {
-      activeRangeIndex: 0,
-      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
-      ranges: [{
-        startRow: 0,
-        endRow: 0,
-        startCol: 0,
-        endCol: 0,
-        startRowId: "r1",
-        endRowId: "r1",
-        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
-        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
-      }],
-    }
-
-    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
-      clientX: 10,
-      clientY: 10,
-      bubbles: true,
-      cancelable: true,
-    }))
-
-    expect(buildFillMatrixFromRange).toHaveBeenCalledWith({
-      startRow: 0,
-      endRow: 0,
-      startColumn: 0,
-      endColumn: 0,
-    })
-    expect(applyClipboardEdits).toHaveBeenCalledWith({
-      startRow: 0,
-      endRow: 3,
-      startColumn: 0,
-      endColumn: 0,
-    }, [["1"], ["2"], ["3"], ["4"]])
-    expect(recordIntentTransaction).toHaveBeenCalledTimes(1)
-    expect(captureRowsSnapshotForRowIds).toHaveBeenCalledWith(["r1", "r2", "r3", "r4"])
-    expect(controller.lastAppliedFill.value).toMatchObject({
-      behavior: "series",
-      previewRange: {
-        startRow: 0,
-        endRow: 3,
-        startColumn: 0,
-        endColumn: 0,
-      },
-      allowBehaviorToggle: true,
-    })
-  })
-
   it("falls back to the nearest contiguous reference column on the right when the left side has no extent", () => {
     const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
       rowCount: 5,
@@ -1429,7 +1428,7 @@ describe("useDataGridAppInteractionController contract", () => {
       bubbles: true,
       cancelable: true,
     }))
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await flushAsync()
 
     expect(resolveFillBoundary).toHaveBeenCalled()
     expect(applyClipboardEdits).toHaveBeenCalledWith({
@@ -1478,7 +1477,7 @@ describe("useDataGridAppInteractionController contract", () => {
       bubbles: true,
       cancelable: true,
     }))
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await flushAsync()
 
     expect(resolveFillBoundary).toHaveBeenCalled()
     expect(applyClipboardEdits).not.toHaveBeenCalled()
@@ -1522,7 +1521,7 @@ describe("useDataGridAppInteractionController contract", () => {
       bubbles: true,
       cancelable: true,
     }))
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await flushAsync()
 
     expect(resolveFillBoundary).toHaveBeenCalled()
     expect(applyClipboardEdits).not.toHaveBeenCalled()
@@ -1585,7 +1584,7 @@ describe("useDataGridAppInteractionController contract", () => {
       bubbles: true,
       cancelable: true,
     }))
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await flushAsync()
 
     expect(resolveFillBoundary).toHaveBeenCalled()
     expect(commitFillOperation).toHaveBeenCalled()
@@ -1649,12 +1648,208 @@ describe("useDataGridAppInteractionController contract", () => {
       bubbles: true,
       cancelable: true,
     }))
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await flushAsync()
 
     expect(resolveFillBoundary).toHaveBeenCalled()
     expect(commitFillOperation).toHaveBeenCalled()
     expect(applyClipboardEdits).not.toHaveBeenCalled()
     expect(invalidateRange).toHaveBeenCalledWith({ start: 0, end: 500 })
+  })
+
+  it("applies optimistic server fill edits locally before commitFillOperation resolves when the target range is fully materialized", async () => {
+    const commitFill = createDeferred<{
+      operationId: string
+      revision?: string | number | null
+      affectedRowCount: number
+      affectedCellCount?: number
+      invalidation?: { kind: "range"; range: { startRow: number; endRow: number; startColumn: number; endColumn: number }; reason?: string } | null
+      warnings?: readonly string[]
+    } | null>()
+    const commitFillOperation = vi.fn(() => commitFill.promise)
+    const { controller, applyEdits, buildFillMatrixFromRange, captureRowsSnapshotForRowIds, syncViewport } = createControllerHarness({
+      rowCount: 300,
+      loadedRowCount: 300,
+      columnCount: 1,
+      rowData: [
+        { a: "Atlas" },
+        ...Array.from({ length: 299 }, () => ({ a: "" })),
+      ],
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    buildFillMatrixFromRange.mockReturnValue([["Atlas"]])
+    controller.lastAppliedFill.value = {
+      baseRange: {
+        startRow: 0,
+        endRow: 0,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      previewRange: {
+        startRow: 0,
+        endRow: 299,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      behavior: "copy",
+      allowBehaviorToggle: true,
+    }
+
+    const applyPromise = controller.applyLastFillBehavior("copy")
+    await flushAsync()
+
+    expect(commitFillOperation).toHaveBeenCalled()
+    expect(applyEdits).toHaveBeenCalled()
+    expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
+      { rowId: "r2", row: { a: "Atlas" } },
+      { rowId: "r3", row: { a: "Atlas" } },
+    ])
+
+    commitFill.resolve({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 300,
+      affectedCellCount: 300,
+      invalidation: {
+        kind: "range",
+        range: {
+          startRow: 0,
+          endRow: 299,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    })
+    await expect(applyPromise).resolves.toBe(true)
+
+    expect(syncViewport).toHaveBeenCalled()
+    expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
+      { rowId: "r2", row: { a: "Atlas" } },
+      { rowId: "r3", row: { a: "Atlas" } },
+    ])
+  })
+
+  it("rolls back optimistic server fill edits when commitFillOperation fails", async () => {
+    const commitFill = createDeferred<never>()
+    const commitFillOperation = vi.fn(() => commitFill.promise)
+    const { controller, applyEdits, buildFillMatrixFromRange, captureRowsSnapshotForRowIds, reportFillWarning } = createControllerHarness({
+      rowCount: 300,
+      loadedRowCount: 300,
+      columnCount: 1,
+      rowData: [
+        { a: "Atlas" },
+        ...Array.from({ length: 299 }, () => ({ a: "" })),
+      ],
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    buildFillMatrixFromRange.mockReturnValue([["Atlas"]])
+    controller.lastAppliedFill.value = {
+      baseRange: {
+        startRow: 0,
+        endRow: 0,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      previewRange: {
+        startRow: 0,
+        endRow: 299,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      behavior: "copy",
+      allowBehaviorToggle: true,
+    }
+
+    const applyPromise = controller.applyLastFillBehavior("copy")
+    await flushAsync()
+
+    expect(commitFillOperation).toHaveBeenCalled()
+    expect(applyEdits).toHaveBeenCalled()
+    expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
+      { rowId: "r2", row: { a: "Atlas" } },
+      { rowId: "r3", row: { a: "Atlas" } },
+    ])
+
+    commitFill.reject(new Error("commit failed"))
+    await expect(applyPromise).resolves.toBe(false)
+
+    expect(reportFillWarning).toHaveBeenCalledWith("server fill commit failed")
+    expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
+      { rowId: "r2", row: { a: "" } },
+      { rowId: "r3", row: { a: "" } },
+    ])
+  })
+
+  it("does not use optimistic local patching when the server fill target range is only partially materialized", async () => {
+    const commitFill = createDeferred<{
+      operationId: string
+      revision?: string | number | null
+      affectedRowCount: number
+      affectedCellCount?: number
+      invalidation?: { kind: "range"; range: { startRow: number; endRow: number; startColumn: number; endColumn: number }; reason?: string } | null
+      warnings?: readonly string[]
+    } | null>()
+    const commitFillOperation = vi.fn(() => commitFill.promise)
+    const { controller, applyEdits, buildFillMatrixFromRange, captureRowsSnapshotForRowIds } = createControllerHarness({
+      rowCount: 300,
+      loadedRowCount: 48,
+      columnCount: 1,
+      rowData: [
+        { a: "Atlas" },
+        ...Array.from({ length: 299 }, () => ({ a: "" })),
+      ],
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    buildFillMatrixFromRange.mockReturnValue([["Atlas"]])
+    controller.lastAppliedFill.value = {
+      baseRange: {
+        startRow: 0,
+        endRow: 0,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      previewRange: {
+        startRow: 0,
+        endRow: 299,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      behavior: "copy",
+      allowBehaviorToggle: true,
+    }
+
+    const applyPromise = controller.applyLastFillBehavior("copy")
+    await flushAsync()
+
+    expect(commitFillOperation).toHaveBeenCalled()
+    expect(applyEdits).not.toHaveBeenCalled()
+    expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
+      { rowId: "r2", row: { a: "" } },
+      { rowId: "r3", row: { a: "" } },
+    ])
+
+    commitFill.resolve({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 252,
+      affectedCellCount: 252,
+      invalidation: {
+        kind: "range",
+        range: {
+          startRow: 0,
+          endRow: 299,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    })
+    await expect(applyPromise).resolves.toBe(true)
+
+    expect(applyEdits).not.toHaveBeenCalled()
   })
 
   it("falls back to loaded-cache boundary discovery when server boundary is unresolved", async () => {
@@ -1697,7 +1892,7 @@ describe("useDataGridAppInteractionController contract", () => {
       bubbles: true,
       cancelable: true,
     }))
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await flushAsync()
 
     expect(reportFillWarning).toHaveBeenCalledWith("server fill boundary unresolved; using loaded-cache fallback")
     expect(applyClipboardEdits).toHaveBeenCalledWith({

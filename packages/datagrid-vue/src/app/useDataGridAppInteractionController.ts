@@ -149,6 +149,8 @@ function normalizeServerFillInvalidationRange(
     end: Math.max(Math.max(0, Math.trunc(start)), Math.trunc(end)),
   }
 }
+
+const ROW_SELECTION_COLUMN_KEY = "__datagrid_row_selection__"
 import {
   useDataGridAppFill,
   type DataGridAppAppliedFillSession,
@@ -807,18 +809,7 @@ export function useDataGridAppInteractionController<
         return false
       }
       const rowCount = Math.max(0, previewRange.endRow - previewRange.startRow + 1)
-      if (rowCount < 256) {
-        return false
-      }
-      for (let rowIndex = previewRange.startRow; rowIndex <= previewRange.endRow; rowIndex += 1) {
-        const isMaterialized = options.isRowMaterializedAtIndex
-          ? options.isRowMaterializedAtIndex(rowIndex)
-          : !!options.runtime?.getBodyRowAtIndex?.(rowIndex)
-        if (!isMaterialized) {
-          return true
-        }
-      }
-      return false
+      return rowCount >= 256
     },
     commitServerFill: async ({ baseRange, previewRange, behavior }) => {
       const runtimeRowModelDataSource = (options.runtimeRowModel as
@@ -841,49 +832,123 @@ export function useDataGridAppInteractionController<
         pagination?: DataGridPaginationSnapshot
       }
       const operationId = `fill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-      const result = await dataSource.commitFillOperation({
-        operationId,
-        projection: {
-          sortModel: snapshot.sortModel ?? [],
-          filterModel: snapshot.filterModel ?? null,
-          groupBy: snapshot.groupBy ?? null,
-          groupExpansion: snapshot.groupExpansion ?? { expandedByDefault: false, toggledGroupKeys: [] },
-          treeData: null,
-          pivot: null,
-          pagination: snapshot.pagination ?? {
-            enabled: false,
-            pageSize: 0,
-            currentPage: 0,
-            pageCount: 0,
-            totalRowCount: 0,
-            startIndex: 0,
-            endIndex: 0,
-          },
-        },
-        sourceRange: baseRange,
-        targetRange: previewRange,
-        fillColumns: options.visibleColumns.value
-          .slice(previewRange.startColumn, previewRange.endColumn + 1)
-          .map(column => String(column.key)),
-        referenceColumns: options.visibleColumns.value
-          .slice(baseRange.startColumn, baseRange.endColumn + 1)
-          .map(column => String(column.key)),
-        mode: behavior,
-        metadata: { origin: "double-click-fill", behaviorSource: "default" },
+      const sourceMatrix = options.buildFillMatrixFromRange(baseRange)
+      const fillMatrix = buildDataGridFillMatrix({
+        baseRange,
+        previewRange,
+        sourceMatrix,
+        behavior,
       })
-      options.reportFillPlumbingState?.("commitFillOperation_called", true)
-      options.reportFillPlumbingState?.("server_fill_operationId", true)
-      if (!result) {
-        options.reportFillWarning?.("server fill commit failed")
-        return {
-          operationId,
-          revision: null,
-          affectedRange: previewRange,
-          invalidation: null,
-          affectedRowCount: 0,
-          affectedCellCount: 0,
-          warnings: ["server fill commit failed"],
+      const materializedTargetRowIds: Array<string | number> = []
+      const optimisticUpdatesByRowId = new Map<string | number, Record<string, unknown>>()
+      let optimisticFillCandidate = options.captureRowsSnapshotForRowIds != null
+
+      if (optimisticFillCandidate) {
+        for (let rowIndex = previewRange.startRow; rowIndex <= previewRange.endRow; rowIndex += 1) {
+          const targetRow = getBodyRowAtIndex(rowIndex)
+          const isMaterialized = options.isRowMaterializedAtIndex
+            ? options.isRowMaterializedAtIndex(rowIndex)
+            : !!targetRow && (targetRow as { __placeholder?: boolean }).__placeholder !== true
+          if (!isMaterialized || !targetRow || targetRow.kind === "group" || targetRow.rowId == null || (targetRow as { __placeholder?: boolean }).__placeholder === true) {
+            optimisticFillCandidate = false
+            break
+          }
+          materializedTargetRowIds.push(targetRow.rowId)
+          for (let columnIndex = previewRange.startColumn; columnIndex <= previewRange.endColumn; columnIndex += 1) {
+            const columnKey = options.visibleColumns.value[columnIndex]?.key
+            if (!columnKey || columnKey === ROW_SELECTION_COLUMN_KEY) {
+              continue
+            }
+            const rowOffset = rowIndex - previewRange.startRow
+            const columnOffset = columnIndex - previewRange.startColumn
+            const nextValue = fillMatrix[rowOffset]?.[columnOffset] ?? ""
+            const current = optimisticUpdatesByRowId.get(targetRow.rowId) ?? {}
+            current[columnKey] = nextValue
+            optimisticUpdatesByRowId.set(targetRow.rowId, current)
+          }
         }
+      }
+
+      let optimisticRollbackUpdates: Array<{ rowId: string | number; data: Partial<TRow> }> | null = null
+      if (optimisticFillCandidate && materializedTargetRowIds.length > 0 && optimisticUpdatesByRowId.size > 0) {
+        const baselineSnapshot = options.captureRowsSnapshotForRowIds?.(materializedTargetRowIds) as
+          | { rows?: Array<{ rowId: string | number; row: TRow }> }
+          | null
+          | undefined
+        const baselineRows = baselineSnapshot?.rows ?? []
+        if (baselineRows.length === materializedTargetRowIds.length) {
+          const baselineByRowId = new Map<string | number, TRow>()
+          for (const entry of baselineRows) {
+            baselineByRowId.set(entry.rowId, entry.row)
+          }
+          optimisticRollbackUpdates = materializedTargetRowIds.flatMap(rowId => {
+            const row = baselineByRowId.get(rowId)
+            return row ? [{ rowId, data: row as Partial<TRow> }] : []
+          })
+          if (optimisticRollbackUpdates.length > 0) {
+            options.reportFillPlumbingState?.("server_fill_optimistic_applied", true)
+            await Promise.resolve(options.runtime.api.rows.applyEdits(Array.from(optimisticUpdatesByRowId.entries()).map(([rowId, data]) => ({
+              rowId,
+              data: data as Partial<TRow>,
+            }))))
+          }
+          else {
+            optimisticRollbackUpdates = null
+          }
+        }
+        else {
+          optimisticFillCandidate = false
+        }
+      }
+
+      let result: Awaited<ReturnType<NonNullable<typeof dataSource.commitFillOperation>>> | null = null
+      try {
+        result = await dataSource.commitFillOperation({
+          operationId,
+          projection: {
+            sortModel: snapshot.sortModel ?? [],
+            filterModel: snapshot.filterModel ?? null,
+            groupBy: snapshot.groupBy ?? null,
+            groupExpansion: snapshot.groupExpansion ?? { expandedByDefault: false, toggledGroupKeys: [] },
+            treeData: null,
+            pivot: null,
+            pagination: snapshot.pagination ?? {
+              enabled: false,
+              pageSize: 0,
+              currentPage: 0,
+              pageCount: 0,
+              totalRowCount: 0,
+              startIndex: 0,
+              endIndex: 0,
+            },
+          },
+          sourceRange: baseRange,
+          targetRange: previewRange,
+          fillColumns: options.visibleColumns.value
+            .slice(previewRange.startColumn, previewRange.endColumn + 1)
+            .map(column => String(column.key)),
+          referenceColumns: options.visibleColumns.value
+            .slice(baseRange.startColumn, baseRange.endColumn + 1)
+            .map(column => String(column.key)),
+          mode: behavior,
+          metadata: { origin: "double-click-fill", behaviorSource: "default" },
+        })
+        options.reportFillPlumbingState?.("commitFillOperation_called", true)
+        options.reportFillPlumbingState?.("server_fill_operationId", true)
+      }
+      catch {
+        if (optimisticRollbackUpdates && optimisticRollbackUpdates.length > 0) {
+          await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates))
+        }
+        options.reportFillWarning?.("server fill commit failed")
+        return null
+      }
+      if (!result) {
+        if (optimisticRollbackUpdates && optimisticRollbackUpdates.length > 0) {
+          await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates))
+        }
+        options.reportFillWarning?.("server fill commit failed")
+        return null
       }
       const invalidationRange = result.invalidation?.kind === "range" ? result.invalidation.range : previewRange
       const normalizedInvalidationRange = normalizeServerFillInvalidationRange(invalidationRange)
