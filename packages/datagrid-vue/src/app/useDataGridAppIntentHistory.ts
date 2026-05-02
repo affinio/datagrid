@@ -27,6 +27,14 @@ export interface UseDataGridAppIntentHistoryResult<TRow> {
 export function useDataGridAppIntentHistory<TRow>(
   options: UseDataGridAppIntentHistoryOptions<TRow>,
 ): UseDataGridAppIntentHistoryResult<TRow> {
+  const cloneSnapshot = (snapshot: DataGridAppRowSnapshot<TRow>): DataGridAppRowSnapshot<TRow> => ({
+    kind: snapshot.kind,
+    rows: snapshot.rows.map(entry => ({
+      rowId: entry.rowId,
+      row: options.cloneRowData(entry.row),
+    })),
+  })
+
   const resolveRuntimeRowById = (rowId: string | number) => {
     const rowIndex = options.runtime.resolveBodyRowIndexById(rowId)
     if (rowIndex >= 0) {
@@ -130,7 +138,11 @@ export function useDataGridAppIntentHistory<TRow>(
       ?? (beforeSnapshot.kind === "partial"
         ? captureRowsSnapshotByIds(beforeSnapshot.rows.map(entry => entry.rowId))
         : captureRowsSnapshot())
-    return intentHistory.recordIntentTransaction(descriptor, beforeSnapshot, afterSnapshot)
+    return intentHistory.recordIntentTransaction(
+      descriptor,
+      cloneSnapshot(beforeSnapshot),
+      cloneSnapshot(afterSnapshot),
+    )
   }
 
   return {

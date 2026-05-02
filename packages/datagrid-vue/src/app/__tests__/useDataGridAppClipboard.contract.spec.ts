@@ -1,5 +1,6 @@
 import { ref } from "vue"
 import { describe, expect, it, vi } from "vitest"
+import { useDataGridAppIntentHistory } from "../useDataGridAppIntentHistory"
 import { useDataGridAppClipboard } from "../useDataGridAppClipboard"
 
 type DemoRow = {
@@ -176,6 +177,139 @@ describe("useDataGridAppClipboard contract", () => {
     expect(rows.value).toEqual([
       { rowId: "r1", a: "", b: "B1", c: "C1" },
       { rowId: "r2", a: "A2", b: "A1", c: "C2" },
+    ])
+  })
+
+  it("replays cut-paste as one deterministic transaction through undo and redo", async () => {
+    const rows = ref<DemoRow[]>([
+      { rowId: "r1", a: "S1", b: "S2", c: "S3" },
+      { rowId: "r2", a: "T1", b: "T2", c: "T3" },
+    ])
+    const selectionRange = ref({
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 1,
+    })
+    const currentCell = ref({ rowIndex: 1, columnIndex: 0 })
+    const captureRowsSnapshot = () => ({
+      kind: "full" as const,
+      rows: rows.value.map(row => ({
+        rowId: row.rowId,
+        row: { ...row },
+      })),
+    })
+    const captureRowsSnapshotForRowIds = (rowIds: readonly (string | number)[]) => ({
+      kind: "partial" as const,
+      rows: rows.value
+        .filter(row => rowIds.includes(row.rowId))
+        .map(row => ({
+          rowId: row.rowId,
+          row: { ...row },
+        })),
+    })
+    const history = useDataGridAppIntentHistory<DemoRow>({
+      runtime: {
+        api: {
+          rows: {
+            getCount: () => rows.value.length,
+            get: (rowIndex: number) => {
+              const row = rows.value[rowIndex]
+              return row ? { rowId: row.rowId, kind: "leaf", data: row } : null
+            },
+            applyEdits: (updates: Array<{ rowId: string | number; data: Partial<DemoRow> }>) => {
+              rows.value = rows.value.map(row => {
+                const update = updates.find(candidate => candidate.rowId === row.rowId)
+                return update ? { ...row, ...update.data } : row
+              })
+            },
+          },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => {
+          const row = rows.value[rowIndex]
+          return row ? { rowId: row.rowId, kind: "leaf", data: row } : null
+        },
+        resolveBodyRowIndexById: (rowId: string | number) => rows.value.findIndex(row => row.rowId === rowId),
+      } as never,
+      cloneRowData: row => ({ ...row }),
+      syncViewport: vi.fn(),
+    })
+
+    const clipboard = useDataGridAppClipboard<DemoRow, {
+      kind: "full" | "partial"
+      rows: Array<{ rowId: string | number; row: DemoRow }>
+    }>({
+      mode: ref("base"),
+      runtime: {
+        api: {
+          rows: {
+            getCount: () => rows.value.length,
+            get: (rowIndex: number) => {
+              const row = rows.value[rowIndex]
+              return row ? { rowId: row.rowId, kind: "leaf", data: row } : null
+            },
+            applyEdits: (updates: Array<{ rowId: string | number; data: Partial<DemoRow> }>) => {
+              rows.value = rows.value.map(row => {
+                const update = updates.find(candidate => candidate.rowId === row.rowId)
+                return update ? { ...row, ...update.data } : row
+              })
+            },
+          },
+        },
+      } as never,
+      totalRows: ref(rows.value.length),
+      visibleColumns: ref([
+        { key: "a" },
+        { key: "b" },
+        { key: "c" },
+      ] as never),
+      viewportRowStart: ref(0),
+      resolveSelectionRange: () => selectionRange.value,
+      resolveCurrentCellCoord: () => currentCell.value,
+      applySelectionRange: range => {
+        selectionRange.value = range
+      },
+      clearCellSelection: () => undefined,
+      captureRowsSnapshot,
+      captureRowsSnapshotForRowIds,
+      recordEditTransaction: (beforeSnapshot, afterSnapshotOverride, label) => {
+        return history.recordIntentTransaction(
+          {
+            intent: "paste",
+            label: label ?? "Cut paste",
+          },
+          beforeSnapshot,
+          afterSnapshotOverride,
+        )
+      },
+      readCell: (row, columnKey) => String((row.data as DemoRow)[columnKey as keyof DemoRow] ?? ""),
+      isCellEditable: () => true,
+      syncViewport: () => undefined,
+    })
+
+    await clipboard.cutSelectedCells("keyboard")
+    const applied = await clipboard.pasteSelectedCells("keyboard")
+
+    expect(applied).toBe(true)
+    for (let attempt = 0; attempt < 5 && !history.canUndo.value; attempt += 1) {
+      await new Promise<void>(resolve => setTimeout(resolve, 0))
+    }
+    expect(history.canUndo.value).toBe(true)
+    expect(rows.value).toEqual([
+      { rowId: "r1", a: "", b: "", c: "S3" },
+      { rowId: "r2", a: "S1", b: "S2", c: "T3" },
+    ])
+
+    await history.runHistoryAction("undo")
+    expect(rows.value).toEqual([
+      { rowId: "r1", a: "S1", b: "S2", c: "S3" },
+      { rowId: "r2", a: "T1", b: "T2", c: "T3" },
+    ])
+
+    await history.runHistoryAction("redo")
+    expect(rows.value).toEqual([
+      { rowId: "r1", a: "", b: "", c: "S3" },
+      { rowId: "r2", a: "S1", b: "S2", c: "T3" },
     ])
   })
 
@@ -479,12 +613,12 @@ describe("useDataGridAppClipboard contract", () => {
     }
   })
 
-  it("skips blocked cells when applying clipboard edits", () => {
+  it("skips blocked cells when applying clipboard edits", async () => {
     const { clipboard, rows } = createClipboardHarness({
       isCellEditable: (_row, rowIndex, columnKey) => !(rowIndex === 0 && columnKey === "b"),
     })
 
-    const applied = clipboard.applyClipboardEdits({
+    const applied = await clipboard.applyClipboardEdits({
       startRow: 0,
       endRow: 0,
       startColumn: 0,
