@@ -344,6 +344,24 @@ export function useDataGridAppInteractionController<
     return options.readCell(row, columnKey).trim().length > 0
   }
 
+  const isServerBackedRowModel = (): boolean => {
+    const controllerRowModel = options.runtimeRowModel as
+      | { dataSource?: unknown }
+      | null
+      | undefined
+    const runtimeRowModel = options.runtime.rowModel as
+      | { dataSource?: unknown }
+      | undefined
+    return controllerRowModel?.dataSource != null || runtimeRowModel?.dataSource != null
+  }
+
+  const resolveSelectableColumnIndexes = (): readonly number[] => {
+    return options.visibleColumns.value
+      .map((column, columnIndex) => ({ column, columnIndex }))
+      .filter(({ column }) => column.key !== ROW_SELECTION_COLUMN_KEY)
+      .map(({ columnIndex }) => columnIndex)
+  }
+
   const resolveDirectionalSemanticJumpTarget = (
     current: DataGridAppCellCoord,
     direction: "up" | "down" | "left" | "right",
@@ -351,6 +369,39 @@ export function useDataGridAppInteractionController<
   ): DataGridAppCellCoord | undefined => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey) {
       return undefined
+    }
+
+    if (event.shiftKey && isServerBackedRowModel()) {
+      const lastRowIndex = Math.max(0, options.totalRows.value - 1)
+      const selectableColumnIndexes = resolveSelectableColumnIndexes()
+      const firstSelectableColumnIndex = selectableColumnIndexes[0] ?? 0
+      const lastSelectableColumnIndex = selectableColumnIndexes[selectableColumnIndexes.length - 1] ?? Math.max(0, options.visibleColumns.value.length - 1)
+      switch (direction) {
+        case "down":
+          return options.normalizeCellCoord({
+            ...current,
+            rowIndex: lastRowIndex,
+            rowId: getBodyRowAtIndex(lastRowIndex)?.rowId ?? null,
+          }) ?? current
+        case "up":
+          return options.normalizeCellCoord({
+            ...current,
+            rowIndex: 0,
+            rowId: getBodyRowAtIndex(0)?.rowId ?? null,
+          }) ?? current
+        case "right":
+          return options.normalizeCellCoord({
+            ...current,
+            columnIndex: lastSelectableColumnIndex,
+            rowId: getBodyRowAtIndex(current.rowIndex)?.rowId ?? null,
+          }) ?? current
+        case "left":
+          return options.normalizeCellCoord({
+            ...current,
+            columnIndex: firstSelectableColumnIndex,
+            rowId: getBodyRowAtIndex(current.rowIndex)?.rowId ?? null,
+          }) ?? current
+      }
     }
 
     const currentCellIsNonEmpty = isSemanticNavigationCellNonEmpty(current.rowIndex, current.columnIndex)

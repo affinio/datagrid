@@ -993,6 +993,319 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
+  it("extends Shift+Cmd/Ctrl+ArrowDown and ArrowUp to logical row boundaries in server-backed mode", () => {
+    const { controller, row, selectionSnapshot, setSelectionSnapshot } = createControllerHarness({
+      rowCount: 6,
+      loadedRowCount: 2,
+      columnCount: 2,
+      runtimeRowModelDataSource: {},
+      rowData: [
+        { a: "alpha", b: "beta" },
+        { a: "bravo", b: "charlie" },
+      ],
+    })
+
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    })
+
+    const extendToEnd = new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      shiftKey: true,
+      metaKey: true,
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(extendToEnd, row, 0, 0)
+
+    expect(extendToEnd.defaultPrevented).toBe(true)
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 5,
+      colIndex: 0,
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 5,
+      startCol: 0,
+      endCol: 0,
+      anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      focus: { rowIndex: 5, colIndex: 0 },
+    })
+
+    const plainArrowDown = new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(plainArrowDown, row, 0, 0)
+
+    expect(plainArrowDown.defaultPrevented).toBe(true)
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 1,
+      colIndex: 0,
+      rowId: "r2",
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 1,
+      endRow: 1,
+      startCol: 0,
+      endCol: 0,
+      anchor: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+    })
+
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 5, colIndex: 0, rowId: "r6" },
+      ranges: [{
+        startRow: 5,
+        endRow: 5,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r6",
+        endRowId: "r6",
+        anchor: { rowIndex: 5, colIndex: 0, rowId: "r6" },
+        focus: { rowIndex: 5, colIndex: 0, rowId: "r6" },
+      }],
+    })
+
+    const extendToStart = new KeyboardEvent("keydown", {
+      key: "ArrowUp",
+      shiftKey: true,
+      metaKey: true,
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(extendToStart, row, 0, 0)
+
+    expect(extendToStart.defaultPrevented).toBe(true)
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 0,
+      colIndex: 0,
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 5,
+      startCol: 0,
+      endCol: 0,
+      anchor: { rowIndex: 5, colIndex: 0, rowId: "r6" },
+      focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+    })
+  })
+
+  it("extends Shift+Cmd/Ctrl+ArrowLeft and ArrowRight to logical column boundaries in server-backed mode", () => {
+    const { controller, row, selectionSnapshot, setSelectionSnapshot } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 1,
+      visibleColumns: [
+        {
+          key: "a",
+          width: 2,
+          pin: "center",
+          column: {
+            key: "a",
+            label: "A",
+          },
+        },
+        {
+          key: "__datagrid_row_selection__",
+          width: 2,
+          pin: "left",
+          column: {
+            key: "__datagrid_row_selection__",
+            label: "",
+            meta: {
+              isSystem: true,
+              rowSelection: true,
+            },
+          },
+        },
+        {
+          key: "b",
+          width: 2,
+          pin: "center",
+          column: {
+            key: "b",
+            label: "B",
+          },
+        },
+        {
+          key: "c",
+          width: 2,
+          pin: "center",
+          column: {
+            key: "c",
+            label: "C",
+          },
+        },
+      ] as unknown as readonly DataGridColumnSnapshot[],
+      runtimeRowModelDataSource: {},
+    })
+
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    })
+
+    const plainArrowRight = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(plainArrowRight, row, 0, 0)
+
+    expect(plainArrowRight.defaultPrevented).toBe(true)
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 0,
+      colIndex: 1,
+      rowId: "r1",
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 1,
+      endCol: 1,
+      anchor: { rowIndex: 0, colIndex: 1, rowId: "r1" },
+      focus: { rowIndex: 0, colIndex: 1, rowId: "r1" },
+    })
+
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    })
+
+    const extendRight = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      shiftKey: true,
+      metaKey: true,
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(extendRight, row, 0, 0)
+
+    expect(extendRight.defaultPrevented).toBe(true)
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 0,
+      colIndex: 3,
+      rowId: "r1",
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 0,
+      endCol: 3,
+      anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      focus: { rowIndex: 0, colIndex: 3, rowId: "r1" },
+    })
+
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 3, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 3,
+        endCol: 3,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 3, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 3, rowId: "r1" },
+      }],
+    })
+
+    const plainArrowLeft = new KeyboardEvent("keydown", {
+      key: "ArrowLeft",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(plainArrowLeft, row, 0, 0)
+
+    expect(plainArrowLeft.defaultPrevented).toBe(true)
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 0,
+      colIndex: 2,
+      rowId: "r1",
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 2,
+      endCol: 2,
+      anchor: { rowIndex: 0, colIndex: 2, rowId: "r1" },
+      focus: { rowIndex: 0, colIndex: 2, rowId: "r1" },
+    })
+
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 3, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 3,
+        endCol: 3,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 3, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 3, rowId: "r1" },
+      }],
+    })
+
+    const extendLeft = new KeyboardEvent("keydown", {
+      key: "ArrowLeft",
+      shiftKey: true,
+      metaKey: true,
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(extendLeft, row, 0, 0)
+
+    expect(extendLeft.defaultPrevented).toBe(true)
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 0,
+      colIndex: 0,
+      rowId: "r1",
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 0,
+      endCol: 3,
+      anchor: { rowIndex: 0, colIndex: 3, rowId: "r1" },
+      focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+    })
+  })
+
   it("expands a collapsed tree group row on Space", () => {
     const { controller, row, expandGroup, collapseGroup } = createControllerHarness({
       mode: "base",
