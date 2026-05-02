@@ -25,6 +25,7 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   resolveCurrentCellCoord: () => { rowIndex: number; columnIndex: number } | null
   applySelectionRange: (range: DataGridCopyRange) => void
   clearCellSelection: () => void
+  setLastAction?: (message: string) => void
   captureRowsSnapshot: () => TSnapshot
   captureRowsSnapshotForRowIds?: (rowIds: readonly (string | number)[]) => TSnapshot
   recordEditTransaction: (
@@ -133,9 +134,27 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
         ? options.readClipboardCell(row, columnKey)
         : options.readCell(row, columnKey)
     ),
-    setLastAction: () => undefined,
+    setLastAction: message => {
+      options.setLastAction?.(message)
+    },
     closeContextMenu: () => undefined,
   })
+
+  const isMissingOrPlaceholderRow = (row: DataGridRowNode<TRow> | undefined): boolean => {
+    if (!row) {
+      return true
+    }
+    return (row as { __placeholder?: boolean }).__placeholder === true
+  }
+
+  const resolveMissingCopyRowIndex = (range: DataGridCopyRange): number | null => {
+    for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
+      if (isMissingOrPlaceholderRow(getBodyRowAtIndex(rowIndex))) {
+        return rowIndex
+      }
+    }
+    return null
+  }
 
   const collectClipboardEdits = (
     range: DataGridCopyRange,
@@ -351,6 +370,16 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   }
 
   const copySelectedCells = async (trigger: "keyboard" | "context-menu" = "keyboard"): Promise<boolean> => {
+    const sourceRange = copyRangeHelpers.resolveCopyRange()
+    if (sourceRange) {
+      const missingRowIndex = resolveMissingCopyRowIndex(sourceRange)
+      if (missingRowIndex != null) {
+        options.setLastAction?.(
+          "Selected range includes unloaded rows. Load rows or use server export.",
+        )
+        return false
+      }
+    }
     return stageClipboardOperation("copy", trigger)
   }
 

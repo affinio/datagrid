@@ -177,3 +177,4 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 
 - Server-backed Ctrl/Cmd+Shift+Arrow navigation should extend to logical dataset boundaries even when unloaded placeholder rows sit between the active cell and the edge of the cache.
 - Keep the existing semantic blank-gap behavior for non-server-backed Ctrl/Cmd+Arrow navigation and plain Arrow movement.
+- Clipboard copy for server-backed selections should block if the selected range includes unloaded rows, rather than serializing placeholder blanks or silently truncating missing rows.

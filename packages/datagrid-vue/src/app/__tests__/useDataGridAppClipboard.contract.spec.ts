@@ -10,6 +10,10 @@ type DemoRow = {
   c: string
 }
 
+type DemoRowNode =
+  | { rowId: string; kind: "leaf"; data: DemoRow }
+  | { rowId: string; kind: "leaf"; data: DemoRow; __placeholder: true }
+
 function createClipboardHarness(options: {
   readClipboardCell?: (row: { data: DemoRow }, columnKey: string) => string
   buildPasteSpecialMatrixFromRange?: (range: {
@@ -25,6 +29,7 @@ function createClipboardHarness(options: {
     startColumn: number
     endColumn: number
   }>
+  rowNodes?: readonly (DemoRowNode | null)[]
 } = {}) {
   const rows = ref<DemoRow[]>([
     { rowId: "r1", a: "A1", b: "B1", c: "C1" },
@@ -38,10 +43,16 @@ function createClipboardHarness(options: {
     endColumn: 1,
   })
   const currentCell = ref({ rowIndex: 0, columnIndex: 0 })
+  const lastAction = ref("")
   const applySelectionRange = vi.fn((range: { startRow: number; endRow: number; startColumn: number; endColumn: number }) => {
     selectionRange.value = range
   })
   const clearCellSelection = vi.fn()
+  const rowNodes = options.rowNodes ?? rows.value.map(row => ({
+    rowId: row.rowId,
+    kind: "leaf" as const,
+    data: row,
+  }))
 
   const clipboard = useDataGridAppClipboard<DemoRow, DemoRow[]>({
     mode: ref("base"),
@@ -49,8 +60,7 @@ function createClipboardHarness(options: {
       api: {
         rows: {
           get: (rowIndex: number) => {
-            const row = rows.value[rowIndex]
-            return row ? { rowId: row.rowId, kind: "leaf", data: row } : null
+            return rowNodes[rowIndex] ?? null
           },
           applyEdits: (updates: Array<{ rowId: string; data: Partial<DemoRow> }>) => {
             rows.value = rows.value.map(row => {
@@ -73,6 +83,9 @@ function createClipboardHarness(options: {
     resolveCurrentCellCoord: () => currentCell.value,
     applySelectionRange,
     clearCellSelection,
+    setLastAction: message => {
+      lastAction.value = message
+    },
     captureRowsSnapshot: () => rows.value.map(row => ({ ...row })),
     recordEditTransaction: () => undefined,
     readCell: (row, columnKey) => String((row.data as DemoRow)[columnKey as keyof DemoRow] ?? ""),
@@ -94,12 +107,22 @@ function createClipboardHarness(options: {
     rows,
     selectionRange,
     currentCell,
+    lastAction,
     applySelectionRange,
     clearCellSelection,
   }
 }
 
 describe("useDataGridAppClipboard contract", () => {
+  it("copies a fully loaded selection unchanged", async () => {
+    const { clipboard, lastAction } = createClipboardHarness()
+
+    const copied = await clipboard.copySelectedCells("keyboard")
+
+    expect(copied).toBe(true)
+    expect(lastAction.value).toBe("Copied 2x2 cells (keyboard)")
+  })
+
   it("keeps the pasted target range selected after paste", async () => {
     const { clipboard, currentCell, applySelectionRange, clearCellSelection } = createClipboardHarness()
 
@@ -627,5 +650,35 @@ describe("useDataGridAppClipboard contract", () => {
 
     expect(applied).toBe(1)
     expect(rows.value[0]).toEqual({ rowId: "r1", a: "X", b: "B1", c: "C1" })
+  })
+
+  it("blocks copy when a selected row is missing from the loaded cache", async () => {
+    const { clipboard, lastAction } = createClipboardHarness({
+      rowNodes: [
+        { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+        null,
+        { rowId: "r3", kind: "leaf", data: { rowId: "r3", a: "A3", b: "B3", c: "C3" } },
+      ],
+    })
+
+    const copied = await clipboard.copySelectedCells("keyboard")
+
+    expect(copied).toBe(false)
+    expect(lastAction.value).toBe("Selected range includes unloaded rows. Load rows or use server export.")
+  })
+
+  it("blocks copy when the selected range includes detectable placeholder rows", async () => {
+    const { clipboard, lastAction } = createClipboardHarness({
+      rowNodes: [
+        { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+        { rowId: "__datagrid_placeholder__:1", kind: "leaf", __placeholder: true, data: { rowId: "r2", a: "", b: "", c: "" } },
+        { rowId: "r3", kind: "leaf", data: { rowId: "r3", a: "A3", b: "B3", c: "C3" } },
+      ],
+    })
+
+    const copied = await clipboard.copySelectedCells("keyboard")
+
+    expect(copied).toBe(false)
+    expect(lastAction.value).toBe("Selected range includes unloaded rows. Load rows or use server export.")
   })
 })
