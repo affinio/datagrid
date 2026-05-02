@@ -39,10 +39,8 @@ import type {
   DataGridPivotSpec,
 } from "@affino/datagrid-pivot"
 import { cloneDataGridFilterSnapshot } from "./filters/advancedFilter.js"
-import {
-  isSameFilterModel,
-  isSameSortModel,
-} from "./projection/clientRowProjectionPrimitives.js"
+import { isSameFilterModel, isSameSortModel } from "./projection/clientRowProjectionPrimitives.js"
+import { applyRowDataPatch, mergeRowPatch } from "./clientRowRuntimeUtils.js"
 import {
   clonePullAggregationModel,
   clonePivotColumnsSnapshot,
@@ -121,6 +119,12 @@ interface PendingPull {
 
 interface PullRangeOptions {
   replaceCacheOnSuccess?: boolean
+}
+
+interface OptimisticEditTransaction<T> {
+  id: number
+  updatesByRowId: Map<DataGridRowId, Partial<T>>
+  baselinesByRowId: Map<DataGridRowId, DataGridRowNode<T>>
 }
 
 const DEFAULT_ROW_CACHE_LIMIT = 4096
@@ -304,6 +308,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let backgroundInFlight: InFlightPull | null = null
   let pendingCriticalPull: PendingPull | null = null
   let pendingBackgroundPull: PendingPull | null = null
+  let optimisticEditTransactionCounter = 0
+  const optimisticEditTransactions = new Map<number, OptimisticEditTransaction<T>>()
+  const optimisticEditTransactionOrder: number[] = []
+  let optimisticEditQueue: Promise<void> = Promise.resolve()
   let backpressurePaused = false
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rowCount)
   let lastViewportDirection: -1 | 0 | 1 = 0
@@ -452,6 +460,135 @@ export function createDataSourceBackedRowModel<T = unknown>(
     enforceRowCacheLimit()
     diagnostics.rowCacheSize = rowCache.size
     updateLoadingState()
+  }
+
+  function writeRowCacheWithOptimisticOverlay(index: number, row: DataGridRowNode<T>) {
+    const next = applyPendingOptimisticEditsToNode(row)
+    writeRowCache(index, next)
+  }
+
+  function findCachedRowById(
+    rowId: DataGridRowId,
+  ): { index: number; node: DataGridRowNode<T> } | null {
+    for (const [index, node] of rowCache.entries()) {
+      if (node.rowId === rowId) {
+        return { index, node }
+      }
+    }
+    return null
+  }
+
+  function getPendingOptimisticTransactionsForRow(rowId: DataGridRowId): OptimisticEditTransaction<T>[] {
+    const pending: OptimisticEditTransaction<T>[] = []
+    for (const transactionId of optimisticEditTransactionOrder) {
+      const transaction = optimisticEditTransactions.get(transactionId)
+      if (!transaction || !transaction.updatesByRowId.has(rowId)) {
+        continue
+      }
+      pending.push(transaction)
+    }
+    return pending
+  }
+
+  function applyPendingOptimisticEditsToNode(
+    node: DataGridRowNode<T>,
+    excludeTransactionId?: number,
+  ): DataGridRowNode<T> {
+    let nextNode = node
+    for (const transaction of getPendingOptimisticTransactionsForRow(node.rowId)) {
+      if (transaction.id === excludeTransactionId) {
+        continue
+      }
+      const patch = transaction.updatesByRowId.get(node.rowId)
+      if (!patch) {
+        continue
+      }
+      const nextRow = applyRowDataPatch(nextNode.row, patch)
+      if (nextRow === nextNode.row) {
+        continue
+      }
+      nextNode = {
+        ...nextNode,
+        data: nextRow,
+        row: nextRow,
+      }
+    }
+    return nextNode
+  }
+
+  function removeOptimisticTransaction(transactionId: number): void {
+    if (!optimisticEditTransactions.delete(transactionId)) {
+      return
+    }
+    const orderIndex = optimisticEditTransactionOrder.indexOf(transactionId)
+    if (orderIndex >= 0) {
+      optimisticEditTransactionOrder.splice(orderIndex, 1)
+    }
+  }
+
+  function rollbackOptimisticTransaction(
+    transaction: OptimisticEditTransaction<T>,
+    rowIds: readonly DataGridRowId[] = [...transaction.baselinesByRowId.keys()],
+  ): boolean {
+    let changed = false
+    const affectedRows = new Set(rowIds)
+    removeOptimisticTransaction(transaction.id)
+    for (const rowId of affectedRows) {
+      const baseline = transaction.baselinesByRowId.get(rowId)
+      if (!baseline) {
+        continue
+      }
+      const nextNode = applyPendingOptimisticEditsToNode(baseline)
+      writeRowCache(nextNode.sourceIndex, nextNode)
+      changed = true
+    }
+    return changed
+  }
+
+  async function processOptimisticCommit(transaction: OptimisticEditTransaction<T>): Promise<void> {
+    try {
+      const result = await Promise.resolve(
+        getDataSourceCommitEdits!({
+          edits: Array.from(transaction.updatesByRowId.entries()).map(([rowId, data]) => ({
+            rowId,
+            data,
+          })),
+        }),
+      )
+
+      if (disposed) {
+        return
+      }
+
+      const rejectedRowIds = new Set<DataGridRowId>((result.rejected ?? []).map(entry => entry.rowId))
+      const hasRejectedRows = rejectedRowIds.size > 0
+      if (hasRejectedRows) {
+        console.error("[DataGridDataSource] commitEdits returned rejected rows.", result.rejected)
+        error = new Error(
+          (result.rejected ?? [])
+            .map(entry => entry.reason)
+            .find((reason): reason is string => typeof reason === "string" && reason.length > 0)
+          ?? "commitEdits returned rejected rows",
+        )
+        rollbackOptimisticTransaction(transaction, Array.from(rejectedRowIds))
+        bumpRevision()
+        emit()
+        return
+      }
+
+      removeOptimisticTransaction(transaction.id)
+      error = null
+      await pullRange(toSourceRange(viewportRange), "refresh", "critical")
+    } catch (commitError) {
+      if (disposed) {
+        return
+      }
+      console.error("[DataGridDataSource] commitEdits failed.", commitError)
+      error = commitError instanceof Error ? commitError : new Error(String(commitError))
+      rollbackOptimisticTransaction(transaction)
+      bumpRevision()
+      emit()
+    }
   }
 
   function pruneRowCacheByRowCount() {
@@ -717,7 +854,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     for (const entry of rows) {
       const normalized = normalizeRowEntry(entry)
-      writeRowCache(normalized.index, normalized.node)
+      writeRowCacheWithOptimisticOverlay(normalized.index, normalized.node)
     }
     updateTotalFromRows(rows)
     return true
@@ -1441,20 +1578,64 @@ export function createDataSourceBackedRowModel<T = unknown>(
             if (!Array.isArray(updates) || updates.length === 0) {
               return
             }
-            return Promise.resolve(getDataSourceCommitEdits({
-              edits: updates,
-            }))
-              .then(result => {
-                if (!disposed && (result.rejected == null || result.rejected.length === 0)) {
-                  return pullRange(toSourceRange(viewportRange), "refresh", "critical")
-                }
-                if (result.rejected != null && result.rejected.length > 0) {
-                  console.error("[DataGridDataSource] commitEdits returned rejected rows.", result.rejected)
-                }
+            const transactionId = ++optimisticEditTransactionCounter
+            const baselinesByRowId = new Map<DataGridRowId, DataGridRowNode<T>>()
+            const updatesByRowId = new Map<DataGridRowId, Partial<T>>()
+            let changed = false
+
+            for (const update of updates) {
+              if (!update || typeof update.rowId !== "string" && typeof update.rowId !== "number") {
+                continue
+              }
+              if (typeof update.data === "undefined" || update.data === null) {
+                continue
+              }
+              const existingPatch = updatesByRowId.get(update.rowId)
+              updatesByRowId.set(
+                update.rowId,
+                existingPatch ? mergeRowPatch(existingPatch, update.data) : update.data,
+              )
+
+              const cached = findCachedRowById(update.rowId)
+              if (!cached) {
+                continue
+              }
+              if (!baselinesByRowId.has(update.rowId)) {
+                baselinesByRowId.set(update.rowId, cached.node)
+              }
+              const nextRow = applyRowDataPatch(cached.node.row, update.data)
+              if (nextRow === cached.node.row) {
+                continue
+              }
+              writeRowCache(cached.index, {
+                ...cached.node,
+                data: nextRow,
+                row: nextRow,
               })
-              .catch(error => {
-                console.error("[DataGridDataSource] commitEdits failed.", error)
-              })
+              changed = true
+            }
+
+            if (updatesByRowId.size === 0) {
+              return Promise.resolve()
+            }
+
+            const transaction: OptimisticEditTransaction<T> = {
+              id: transactionId,
+              updatesByRowId,
+              baselinesByRowId,
+            }
+            optimisticEditTransactions.set(transactionId, transaction)
+            optimisticEditTransactionOrder.push(transactionId)
+
+            if (changed) {
+              bumpRevision()
+              emit()
+            }
+
+            const previousCommitQueue = optimisticEditQueue
+            const commitTask = previousCommitQueue.then(() => processOptimisticCommit(transaction))
+            optimisticEditQueue = commitTask.then(() => undefined, () => undefined)
+            return commitTask
           },
         }
       : {}

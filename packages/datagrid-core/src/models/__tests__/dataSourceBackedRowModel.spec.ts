@@ -6,6 +6,7 @@ import {
 } from "../index"
 import type {
   DataGridDataSource,
+  DataGridDataSourceCommitEditsRequest,
   DataGridDataSourceColumnHistogramRequest,
   DataGridDataSourcePullRequest,
   DataGridDataSourcePullResult,
@@ -16,6 +17,12 @@ import type { DataGridFilterSnapshot } from "../rowModel"
 interface PullCall<TRow> {
   request: DataGridDataSourcePullRequest
   resolve: (result: DataGridDataSourcePullResult<TRow>) => void
+  reject: (reason?: unknown) => void
+}
+
+interface CommitCall<TRow> {
+  request: DataGridDataSourceCommitEditsRequest<TRow>
+  resolve: (result: { committed?: readonly { rowId: number | string }[]; rejected?: readonly { rowId: number | string; reason?: string }[] }) => void
   reject: (reason?: unknown) => void
 }
 
@@ -67,6 +74,20 @@ function createAbortableDeferredPullDataSource<TRow>() {
     },
   }
   return { calls, dataSource }
+}
+
+function createDeferredCommitEdits<TRow>() {
+  const calls: CommitCall<TRow>[] = []
+  const commitEdits = vi.fn((request: DataGridDataSourceCommitEditsRequest<TRow>) => {
+    return new Promise<{ committed?: readonly { rowId: number | string }[]; rejected?: readonly { rowId: number | string; reason?: string }[] }>((resolve, reject) => {
+      calls.push({
+        request,
+        resolve,
+        reject,
+      })
+    })
+  })
+  return { calls, commitEdits }
 }
 
 describe("createDataSourceBackedRowModel", () => {
@@ -634,6 +655,237 @@ describe("createDataSourceBackedRowModel", () => {
       ],
     })
     expect(model.getRow(0)?.row.value).toBe("updated")
+
+    model.dispose()
+  })
+
+  it("applies optimistic inline edits to cached rows before commit resolves", async () => {
+    const rows = [
+      { id: 1, value: "row-1" },
+      { id: 2, value: "row-2" },
+    ]
+    const { calls: commitCalls, commitEdits } = createDeferredCommitEdits<{ id: number; value: string }>()
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        return {
+          rows: rows
+            .filter(row => row.id >= request.range.start + 1 && row.id <= request.range.end + 1)
+            .map((row, offset) => ({
+              index: request.range.start + offset,
+              row,
+              rowId: row.id,
+            })),
+          total: rows.length,
+        }
+      },
+      commitEdits,
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+
+    model.setViewportRange({ start: 0, end: 1 })
+    await flushMicrotasks()
+
+    const patchRows = model.patchRows
+    const patchPromise = Promise.resolve(patchRows ? patchRows([
+      { rowId: 1, data: { value: "updated" } },
+    ]) : undefined)
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual([
+      "updated",
+      "row-2",
+    ])
+
+    await flushMicrotasks()
+    expect(commitCalls).toHaveLength(1)
+    expect(commitCalls[0]?.request.edits).toEqual([
+      { rowId: 1, data: { value: "updated" } },
+    ])
+
+    rows[0] = { ...rows[0], value: "updated" }
+    commitCalls[0]?.resolve({
+      committed: [{ rowId: 1 }],
+    })
+    await patchPromise
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual([
+      "updated",
+      "row-2",
+    ])
+
+    model.dispose()
+  })
+
+  it("reconciles optimistic inline edits with server refresh data after commit success", async () => {
+    const rows = [
+      { id: 1, value: "row-1" },
+      { id: 2, value: "row-2" },
+    ]
+    const { calls: commitCalls, commitEdits } = createDeferredCommitEdits<{ id: number; value: string }>()
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        return {
+          rows: rows
+            .filter(row => row.id >= request.range.start + 1 && row.id <= request.range.end + 1)
+            .map((row, offset) => ({
+              index: request.range.start + offset,
+              row,
+              rowId: row.id,
+            })),
+          total: rows.length,
+        }
+      },
+      commitEdits,
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+
+    model.setViewportRange({ start: 0, end: 1 })
+    await flushMicrotasks()
+
+    const patchRows = model.patchRows
+    const patchPromise = Promise.resolve(patchRows ? patchRows([
+      { rowId: 1, data: { value: "updated" } },
+    ]) : undefined)
+
+    await flushMicrotasks()
+    expect(commitCalls).toHaveLength(1)
+    rows[0] = { ...rows[0], value: "server-updated" }
+    commitCalls[0]?.resolve({
+      committed: [{ rowId: 1 }],
+    })
+    await patchPromise
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual([
+      "server-updated",
+      "row-2",
+    ])
+
+    model.dispose()
+  })
+
+  it("rolls back a failed optimistic inline edit and surfaces an error", async () => {
+    const rows = [
+      { id: 1, value: "row-1" },
+      { id: 2, value: "row-2" },
+    ]
+    const { calls: commitCalls, commitEdits } = createDeferredCommitEdits<{ id: number; value: string }>()
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        return {
+          rows: rows
+            .filter(row => row.id >= request.range.start + 1 && row.id <= request.range.end + 1)
+            .map((row, offset) => ({
+              index: request.range.start + offset,
+              row,
+              rowId: row.id,
+            })),
+          total: rows.length,
+        }
+      },
+      commitEdits,
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+
+    model.setViewportRange({ start: 0, end: 1 })
+    await flushMicrotasks()
+
+    const patchRows = model.patchRows
+    const patchPromise = Promise.resolve(patchRows ? patchRows([
+      { rowId: 1, data: { value: "updated" } },
+    ]) : undefined)
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual([
+      "updated",
+      "row-2",
+    ])
+
+    await flushMicrotasks()
+    expect(commitCalls).toHaveLength(1)
+    commitCalls[0]?.reject(new Error("commit failed"))
+    await patchPromise
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual([
+      "row-1",
+      "row-2",
+    ])
+    expect(model.getSnapshot().error?.message).toBe("commit failed")
+
+    model.dispose()
+  })
+
+  it("leaves unrelated cached rows unchanged during optimistic inline edits", async () => {
+    const rows = [
+      { id: 1, value: "row-1" },
+      { id: 2, value: "row-2" },
+      { id: 3, value: "row-3" },
+    ]
+    const { calls: commitCalls, commitEdits } = createDeferredCommitEdits<{ id: number; value: string }>()
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        return {
+          rows: rows
+            .filter(row => row.id >= request.range.start + 1 && row.id <= request.range.end + 1)
+            .map((row, offset) => ({
+              index: request.range.start + offset,
+              row,
+              rowId: row.id,
+            })),
+          total: rows.length,
+        }
+      },
+      commitEdits,
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+
+    model.setViewportRange({ start: 0, end: 2 })
+    await flushMicrotasks()
+
+    const patchRows = model.patchRows
+    const patchPromise = Promise.resolve(patchRows ? patchRows([
+      { rowId: 1, data: { value: "updated" } },
+    ]) : undefined)
+
+    expect(model.getRowsInRange({ start: 0, end: 2 })?.map(row => row.row.value)).toEqual([
+      "updated",
+      "row-2",
+      "row-3",
+    ])
+
+    await flushMicrotasks()
+    expect(commitCalls).toHaveLength(1)
+    rows[0] = { ...rows[0], value: "updated" }
+    commitCalls[0]?.resolve({
+      committed: [{ rowId: 1 }],
+    })
+    await patchPromise
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 2 })?.map(row => row.row.value)).toEqual([
+      "updated",
+      "row-2",
+      "row-3",
+    ])
 
     model.dispose()
   })

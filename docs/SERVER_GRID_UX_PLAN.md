@@ -107,6 +107,10 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 - [ ] No full refresh after edit
 - [ ] Errors rollback only affected cells
 
+### Validation Notes
+
+- Phase 2 slice 1 is now implemented for server/data-source-backed inline edits only: cached rows update immediately, successful commits reconcile through the normal refresh path without clearing cache, and failed commits roll back only the affected rows while leaving unrelated cache entries intact.
+
 ---
 
 ## Phase 3 — Selection & Range Consistency
