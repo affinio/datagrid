@@ -74,6 +74,9 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
   - completed refresh reports all three flags false/derived correctly after the pull resolves
 - `initialLoading` and `refreshing` are now first-class typed snapshot fields, and the sandbox snapshot diagnostic string prints both alongside `loading`
 - Sandbox diagnostics now read the active row-model snapshot during `handleStateUpdate()`, so the `RowModel snapshot` and `Runtime snapshot` cards are populated during normal server refreshes
+- Server-data-source sandbox grouping is visually testable through the existing Region column menu action. Selecting "Group by this column" sends `groupBy.fields = ["region"]`; the demo datasource returns deterministic `group:region:<REGION>` group rows and expanded leaf rows according to the row-model expansion snapshot.
+- Group trigger expand/collapse now follows the same stale-while-refresh rule: existing rows stay visible while the expansion pull returns, then the cache is replaced with the flattened expanded/collapsed result.
+- Data-source `expandGroup()` / `collapseGroup()` now evaluate group keys against the active `expandedByDefault` value, so column-menu grouping with default-expanded groups can collapse and re-expand correctly.
 
 ---
 

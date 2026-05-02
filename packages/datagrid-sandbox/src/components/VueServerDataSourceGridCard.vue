@@ -481,11 +481,13 @@ import {
   type DataGridColumnHistogram,
   type DataGridColumnHistogramEntry,
   type DataGridDataSource,
+  type DataGridDataSourceRowEntry,
   type DataGridDataSourceInvalidation,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourcePullResult,
   type DataGridDataSourcePushListener,
   type DataGridFilterSnapshot,
+  type DataGridGroupExpansionSnapshot,
   type DataGridViewportRange,
   type DataGridSortState,
 } from "@affino/datagrid-vue"
@@ -1133,6 +1135,87 @@ function buildProjectedRows(
   return [...filteredRows].sort((left, right) => compareBySortModel(left, right, sortModel))
 }
 
+function createRegionGroupKey(region: string): string {
+  return `group:region:${region}`
+}
+
+function isGroupExpandedLocal(expansion: DataGridGroupExpansionSnapshot, groupKey: string): boolean {
+  const toggled = new Set(expansion.toggledGroupKeys)
+  return expansion.expandedByDefault ? !toggled.has(groupKey) : toggled.has(groupKey)
+}
+
+function createRegionGroupRow(
+  region: string,
+  childCount: number,
+  index: number,
+  expanded: boolean,
+): DataGridDataSourceRowEntry<ServerDemoRow> {
+  const groupKey = createRegionGroupKey(region)
+  return {
+    index,
+    rowId: groupKey,
+    kind: "group",
+    state: {
+      expanded,
+    },
+    groupMeta: {
+      groupKey,
+      groupField: "region",
+      groupValue: region,
+      level: 0,
+      childrenCount: childCount,
+    },
+    row: {
+      id: groupKey,
+      index,
+      name: `Region: ${region}`,
+      segment: "Group",
+      status: "Grouped",
+      region,
+      value: childCount,
+      updatedAt: "grouped",
+    },
+  }
+}
+
+function buildRegionGroupedRows(
+  rows: readonly ServerDemoRow[],
+  expansion: DataGridGroupExpansionSnapshot,
+): readonly DataGridDataSourceRowEntry<ServerDemoRow>[] {
+  const buckets = new Map<string, ServerDemoRow[]>()
+  for (const region of regions) {
+    buckets.set(region, [])
+  }
+  for (const row of rows) {
+    const bucket = buckets.get(row.region) ?? []
+    bucket.push(row)
+    buckets.set(row.region, bucket)
+  }
+
+  const groupedRows: DataGridDataSourceRowEntry<ServerDemoRow>[] = []
+  for (const region of regions) {
+    const children = buckets.get(region) ?? []
+    if (children.length === 0) {
+      continue
+    }
+    const groupKey = createRegionGroupKey(region)
+    const expanded = isGroupExpandedLocal(expansion, groupKey)
+    groupedRows.push(createRegionGroupRow(region, children.length, groupedRows.length, expanded))
+    if (!expanded) {
+      continue
+    }
+    for (const row of children) {
+      groupedRows.push({
+        index: groupedRows.length,
+        row,
+        rowId: row.id,
+        kind: "leaf",
+      })
+    }
+  }
+  return groupedRows
+}
+
 function isNonEmptyFillBoundaryValue(value: unknown): boolean {
   if (value == null) {
     return false
@@ -1280,25 +1363,30 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
       const start = Math.max(0, Math.trunc(request.range.start))
       const end = Math.max(start, Math.trunc(request.range.end))
       const limit = Math.max(1, Math.min(PAGE_SIZE, end - start + 1))
-      const rows = sortedRows.slice(start, start + limit).map((row, offset) => ({
-        index: start + offset,
-        row,
-        rowId: row.id,
-      }))
+      const groupedByRegion = request.groupBy?.fields.includes("region") === true
+      const projectedRows = groupedByRegion
+        ? buildRegionGroupedRows(sortedRows, request.groupExpansion)
+        : sortedRows.map((row, index): DataGridDataSourceRowEntry<ServerDemoRow> => ({
+            index,
+            row,
+            rowId: row.id,
+            kind: "leaf",
+          }))
+      const rows = projectedRows.slice(start, start + limit)
       const sampleRowIndex = Number(String(serverFillSampleRowText.value).replace(/^srv-0*/, ""))
       const sampleRow = Number.isFinite(sampleRowIndex)
         ? rows.find(entry => entry.index === sampleRowIndex)
         : null
-  if (sampleRow) {
+      if (sampleRow) {
         const sampleColumnKey = (serverFillSampleColumnText.value !== "none" ? serverFillSampleColumnText.value : serverFillRequestFillColumnsText.value.split(", ")[0] ?? "value") as string
         serverFillSamplePullAfterText.value = String(resolveColumnValue(sampleRow.row, sampleColumnKey))
         scheduleRenderedSampleDiagnostics()
       }
-      totalRows.value = filteredRows.length
-      loadedRows.value = Math.min(filteredRows.length, Math.max(loadedRows.value, end + 1))
+      totalRows.value = projectedRows.length
+      loadedRows.value = Math.min(projectedRows.length, Math.max(loadedRows.value, end + 1))
       return {
         rows,
-        total: filteredRows.length,
+        total: projectedRows.length,
       }
     } catch (caught) {
       const candidate = caught as Error

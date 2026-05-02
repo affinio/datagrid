@@ -1703,7 +1703,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
       resetPaginationCursor()
       clearBackgroundPrefetchState("stale")
       bumpRevision()
-      clearAll()
       void pullRange(
         toSourceRange(viewportRange),
         "group-change",
@@ -1723,7 +1722,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
       resetPaginationCursor()
       clearBackgroundPrefetchState("stale")
       bumpRevision()
-      clearAll()
       void pullRange(
         toSourceRange(viewportRange),
         "group-change",
@@ -1737,13 +1735,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!getExpansionSpec()) {
         return
       }
-      if (!setGroupExpansionKey(toggledGroupKeys, groupKey, false, true)) {
+      if (!setGroupExpansionKey(toggledGroupKeys, groupKey, expansionExpandedByDefault, true)) {
         return
       }
       resetPaginationCursor()
       clearBackgroundPrefetchState("stale")
       bumpRevision()
-      clearAll()
       void pullRange(
         toSourceRange(viewportRange),
         "group-change",
@@ -1757,13 +1754,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!getExpansionSpec()) {
         return
       }
-      if (!setGroupExpansionKey(toggledGroupKeys, groupKey, false, false)) {
+      if (!setGroupExpansionKey(toggledGroupKeys, groupKey, expansionExpandedByDefault, false)) {
         return
       }
       resetPaginationCursor()
       clearBackgroundPrefetchState("stale")
       bumpRevision()
-      clearAll()
       void pullRange(
         toSourceRange(viewportRange),
         "group-change",
