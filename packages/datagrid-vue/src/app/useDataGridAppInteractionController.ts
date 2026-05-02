@@ -32,6 +32,7 @@ import {
   useDataGridRangeMutationEngine,
   type DataGridCopyRange,
 } from "../advanced"
+import { resolveMissingRowIndexInRange } from "./useDataGridAppClipboard"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type {
   DataGridFilterSnapshot,
@@ -1750,6 +1751,11 @@ export function useDataGridAppInteractionController<
     const rawRange = options.resolveSelectionRange()
     const range = rawRange ? options.normalizeClipboardRange(rawRange) : null
     if (!range) {
+      return false
+    }
+    const missingRowIndex = resolveMissingRowIndexInRange(getBodyRowAtIndex, range)
+    if (missingRowIndex != null) {
+      options.reportFillWarning?.("Selected range includes unloaded rows. Load rows or use server operation.")
       return false
     }
     const beforeSnapshot = captureRowsSnapshotForRanges([range])

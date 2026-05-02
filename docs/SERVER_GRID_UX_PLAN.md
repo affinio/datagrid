@@ -118,6 +118,9 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 
 **Goal:** support large, non-loaded ranges safely
 
+- Copy and clear/delete now block when a selected range includes unloaded rows instead of silently truncating or partially applying against the loaded cache.
+- Next slice should keep this guard behavior aligned with server-backed selection semantics across keyboard, clipboard, and row-ops paths.
+
 ### Tasks
 
 - [ ] Ensure selection is NOT tied to loaded rows

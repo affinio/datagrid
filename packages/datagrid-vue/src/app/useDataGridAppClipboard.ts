@@ -81,6 +81,27 @@ export interface UseDataGridAppClipboardResult {
   ) => boolean
 }
 
+export function isDataGridRowMissingOrPlaceholder<TRow>(
+  row: DataGridRowNode<TRow> | null | undefined,
+): boolean {
+  if (!row) {
+    return true
+  }
+  return (row as { __placeholder?: boolean }).__placeholder === true
+}
+
+export function resolveMissingRowIndexInRange<TRow>(
+  getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<TRow> | null | undefined,
+  range: DataGridCopyRange,
+): number | null {
+  for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
+    if (isDataGridRowMissingOrPlaceholder(getBodyRowAtIndex(rowIndex))) {
+      return rowIndex
+    }
+  }
+  return null
+}
+
 export function useDataGridAppClipboard<TRow, TSnapshot>(
   options: UseDataGridAppClipboardOptions<TRow, TSnapshot>,
 ): UseDataGridAppClipboardResult {
@@ -139,22 +160,6 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     },
     closeContextMenu: () => undefined,
   })
-
-  const isMissingOrPlaceholderRow = (row: DataGridRowNode<TRow> | undefined): boolean => {
-    if (!row) {
-      return true
-    }
-    return (row as { __placeholder?: boolean }).__placeholder === true
-  }
-
-  const resolveMissingCopyRowIndex = (range: DataGridCopyRange): number | null => {
-    for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
-      if (isMissingOrPlaceholderRow(getBodyRowAtIndex(rowIndex))) {
-        return rowIndex
-      }
-    }
-    return null
-  }
 
   const collectClipboardEdits = (
     range: DataGridCopyRange,
@@ -372,7 +377,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   const copySelectedCells = async (trigger: "keyboard" | "context-menu" = "keyboard"): Promise<boolean> => {
     const sourceRange = copyRangeHelpers.resolveCopyRange()
     if (sourceRange) {
-      const missingRowIndex = resolveMissingCopyRowIndex(sourceRange)
+      const missingRowIndex = resolveMissingRowIndexInRange(getBodyRowAtIndex, sourceRange)
       if (missingRowIndex != null) {
         options.setLastAction?.(
           "Selected range includes unloaded rows. Load rows or use server export.",

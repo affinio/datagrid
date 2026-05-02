@@ -106,6 +106,8 @@ function createControllerHarness(options: {
   loadedRowCount?: number
   columnCount?: number
   rowData?: readonly DemoRow[]
+  missingRowIndices?: readonly number[]
+  bodyRowAtIndex?: (rowIndex: number) => DataGridRowNode<DemoRow> | null | undefined
   visibleColumns?: readonly DataGridColumnSnapshot[]
   columnWidths?: readonly number[]
   shellWidth?: number
@@ -348,9 +350,17 @@ function createControllerHarness(options: {
     enableFillHandle: ref(options.enableFillHandle ?? true),
     enableRangeMove: ref(options.enableRangeMove ?? true),
     runtime: {
-      api: {
-        rows: {
-          get: (rowIndex: number) => rows[rowIndex] ?? null,
+        api: {
+          rows: {
+            get: (rowIndex: number) => {
+              if (options.missingRowIndices?.includes(rowIndex)) {
+                return null
+              }
+              if (options.bodyRowAtIndex) {
+                return options.bodyRowAtIndex(rowIndex) ?? null
+              }
+              return rows[rowIndex] ?? null
+            },
           getCount: () => rows.length,
           applyEdits,
           getSnapshot: () => ({
@@ -467,6 +477,7 @@ function createControllerHarness(options: {
     row,
     controller,
     selectionSnapshot,
+    getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] ?? null,
     applyCellSelectionByCoord,
     applySelectionRange,
     setSelectionSnapshot,
@@ -832,7 +843,7 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(cancelInlineEdit).toHaveBeenCalledTimes(1)
   })
 
-  it("clears the selected range on Delete and records a clear intent", () => {
+  it("clears the selected range on Delete and records a clear intent", async () => {
     const {
       controller,
       row,
@@ -841,6 +852,7 @@ describe("useDataGridAppInteractionController contract", () => {
       clearPendingClipboardOperation,
       recordIntentTransaction,
       syncViewport,
+      reportFillWarning,
     } = createControllerHarness({
       rowCount: 3,
       columnCount: 3,
@@ -867,6 +879,7 @@ describe("useDataGridAppInteractionController contract", () => {
     })
 
     controller.handleCellKeydown(keydown, row, 0, 0)
+    await flushAsync()
 
     expect(keydown.defaultPrevented).toBe(true)
     expect(clearPendingClipboardOperation).toHaveBeenCalledWith(false)
@@ -885,8 +898,125 @@ describe("useDataGridAppInteractionController contract", () => {
         startColumn: 0,
         endColumn: 1,
       },
-    }, expect.any(Array))
+    }, expect.objectContaining({
+      kind: "partial",
+    }))
     expect(syncViewport).toHaveBeenCalled()
+    expect(reportFillWarning).not.toHaveBeenCalled()
+  })
+
+  it("blocks Delete when the selected range includes a missing unloaded row", async () => {
+    const {
+      controller,
+      row,
+      setSelectionSnapshot,
+      applyClipboardEdits,
+      clearPendingClipboardOperation,
+      recordIntentTransaction,
+      reportFillWarning,
+      getBodyRowAtIndex,
+    } = createControllerHarness({
+      rowCount: 4,
+      columnCount: 2,
+      rowData: [
+        { a: "alpha", b: "beta" },
+        { a: "bravo", b: "charlie" },
+      ],
+      missingRowIndices: [2],
+    })
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 2,
+        startCol: 0,
+        endCol: 1,
+        startRowId: "r1",
+        endRowId: "__datagrid_placeholder__:2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 2, colIndex: 1, rowId: null },
+      }],
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "Delete",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+    await flushAsync()
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(clearPendingClipboardOperation).not.toHaveBeenCalled()
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(recordIntentTransaction).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Selected range includes unloaded rows. Load rows or use server operation.",
+    )
+    expect(getBodyRowAtIndex(0)?.data).toEqual({
+      a: "alpha",
+      b: "beta",
+    })
+    expect(getBodyRowAtIndex(1)?.data).toEqual({
+      a: "bravo",
+      b: "charlie",
+    })
+  })
+
+  it("blocks Delete when the selected range includes a placeholder unloaded row", async () => {
+    const {
+      controller,
+      row,
+      setSelectionSnapshot,
+      applyClipboardEdits,
+      clearPendingClipboardOperation,
+      recordIntentTransaction,
+      reportFillWarning,
+      getBodyRowAtIndex,
+    } = createControllerHarness({
+      rowCount: 4,
+      loadedRowCount: 1,
+      columnCount: 2,
+      rowData: [
+        { a: "alpha", b: "beta" },
+      ],
+    })
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 2,
+        startCol: 0,
+        endCol: 1,
+        startRowId: "r1",
+        endRowId: "__datagrid_placeholder__:2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 2, colIndex: 1, rowId: "__datagrid_placeholder__:2" },
+      }],
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "Delete",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+    await flushAsync()
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(clearPendingClipboardOperation).not.toHaveBeenCalled()
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(recordIntentTransaction).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Selected range includes unloaded rows. Load rows or use server operation.",
+    )
+    expect(getBodyRowAtIndex(0)?.data).toEqual({
+      a: "alpha",
+      b: "beta",
+    })
+    expect((getBodyRowAtIndex(1) as { __placeholder?: boolean } | null)?.__placeholder).toBe(true)
   })
 
   it("continues plain keyboard navigation from the anchor after a shift-extended range", () => {
