@@ -12,6 +12,8 @@
       </div>
       <div class="server-grid__toolbar">
         <button type="button" class="server-grid__button" @click="refreshVisibleRange">Refresh visible range</button>
+        <button type="button" class="server-grid__button" :disabled="aggregationActive" @click="applyRegionAggregation">Aggregate value by region</button>
+        <button type="button" class="server-grid__button" :disabled="!aggregationActive" @click="clearRegionAggregation">Clear aggregation</button>
         <button type="button" class="server-grid__button" :disabled="!canUndoHistory" @click="runHistoryAction('undo')">Undo</button>
         <button type="button" class="server-grid__button" :disabled="!canRedoHistory" @click="runHistoryAction('redo')">Redo</button>
         <button type="button" class="server-grid__button" @click="simulateErrorOnce">Simulate one error</button>
@@ -96,6 +98,28 @@
             <div class="server-grid__diagnostics-card">
               <dt>Cache</dt>
               <dd>{{ rowCacheLabel }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="server-grid__diagnostics-section">
+          <h4>Aggregation Debug</h4>
+          <dl class="server-grid__diagnostics-list">
+            <div class="server-grid__diagnostics-card">
+              <dt>Active</dt>
+              <dd>{{ aggregationActiveLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Last request</dt>
+              <dd>{{ lastAggregationRequestLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Response rows</dt>
+              <dd>{{ aggregateResponseRowsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>First rows</dt>
+              <dd>{{ aggregatePreviewRowsLabel }}</dd>
             </div>
           </dl>
         </div>
@@ -620,6 +644,10 @@ const fillAppliedText = ref("no")
 const plumbingState = ref<Record<string, boolean>>({})
 const branchState = ref("none")
 const lastSelectionRange = ref<{ startRow: number; endRow: number } | null>(null)
+const aggregationActive = ref(false)
+const lastAggregationRequestText = ref("none")
+const aggregateResponseRowsText = ref("0")
+const aggregatePreviewRowsText = ref("none")
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
 const statuses = ["Active", "Paused", "Closed"] as const
@@ -1216,6 +1244,52 @@ function buildRegionGroupedRows(
   return groupedRows
 }
 
+function createRegionAggregateRow(
+  region: string,
+  childCount: number,
+  valueSum: number,
+  index: number,
+): DataGridDataSourceRowEntry<ServerDemoRow> {
+  const rowId = `aggregate:region:${region}`
+  return {
+    index,
+    rowId,
+    kind: "leaf",
+    row: {
+      id: rowId,
+      index,
+      name: `Aggregate: ${region}`,
+      segment: "Aggregate",
+      status: `Count ${childCount}`,
+      region,
+      value: valueSum,
+      updatedAt: "aggregated",
+    },
+  }
+}
+
+function buildRegionAggregateRows(rows: readonly ServerDemoRow[]): readonly DataGridDataSourceRowEntry<ServerDemoRow>[] {
+  const buckets = new Map<string, { count: number; valueSum: number }>()
+  for (const region of regions) {
+    buckets.set(region, { count: 0, valueSum: 0 })
+  }
+  for (const row of rows) {
+    const bucket = buckets.get(row.region) ?? { count: 0, valueSum: 0 }
+    bucket.count += 1
+    bucket.valueSum += row.value
+    buckets.set(row.region, bucket)
+  }
+  const aggregateRows: DataGridDataSourceRowEntry<ServerDemoRow>[] = []
+  for (const region of regions) {
+    const bucket = buckets.get(region)
+    if (!bucket || bucket.count === 0) {
+      continue
+    }
+    aggregateRows.push(createRegionAggregateRow(region, bucket.count, bucket.valueSum, aggregateRows.length))
+  }
+  return aggregateRows
+}
+
 function isNonEmptyFillBoundaryValue(value: unknown): boolean {
   if (value == null) {
     return false
@@ -1363,15 +1437,36 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
       const start = Math.max(0, Math.trunc(request.range.start))
       const end = Math.max(start, Math.trunc(request.range.end))
       const limit = Math.max(1, Math.min(PAGE_SIZE, end - start + 1))
+      const aggregationModel = request.pivot?.aggregationModel ?? null
+      const aggregationColumns = aggregationModel?.columns ?? []
+      const aggregatedByRegion = aggregationColumns.length > 0
+      lastAggregationRequestText.value = aggregatedByRegion
+        ? `${aggregationModel?.basis ?? "filtered"}:${aggregationColumns.map(column => `${column.key}:${column.op}`).join(",")}`
+        : "none"
       const groupedByRegion = request.groupBy?.fields.includes("region") === true
-      const projectedRows = groupedByRegion
-        ? buildRegionGroupedRows(sortedRows, request.groupExpansion)
-        : sortedRows.map((row, index): DataGridDataSourceRowEntry<ServerDemoRow> => ({
-            index,
-            row,
-            rowId: row.id,
-            kind: "leaf",
-          }))
+      const projectedRows = aggregatedByRegion
+        ? buildRegionAggregateRows(sortedRows)
+        : groupedByRegion
+          ? buildRegionGroupedRows(sortedRows, request.groupExpansion)
+          : sortedRows.map((row, index): DataGridDataSourceRowEntry<ServerDemoRow> => ({
+              index,
+              row,
+              rowId: row.id,
+              kind: "leaf",
+            }))
+      if (aggregatedByRegion) {
+        aggregateResponseRowsText.value = String(projectedRows.length)
+        aggregatePreviewRowsText.value = projectedRows
+          .slice(0, 4)
+          .map(entry => {
+            const row = entry.row
+            return `${String(entry.rowId)} count=${row.status.replace(/^Count /, "")} sum=${row.value}`
+          })
+          .join("; ") || "none"
+      } else {
+        aggregateResponseRowsText.value = "0"
+        aggregatePreviewRowsText.value = "none"
+      }
       const rows = projectedRows.slice(start, start + limit)
       const sampleRowIndex = Number(String(serverFillSampleRowText.value).replace(/^srv-0*/, ""))
       const sampleRow = Number.isFinite(sampleRowIndex)
@@ -1642,6 +1737,10 @@ const sortModelLabel = computed(() => {
 const filterModelLabel = computed(() => {
   return filterModelText.value
 })
+const aggregationActiveLabel = computed(() => aggregationActive.value ? "yes" : "no")
+const lastAggregationRequestLabel = computed(() => lastAggregationRequestText.value)
+const aggregateResponseRowsLabel = computed(() => aggregateResponseRowsText.value)
+const aggregatePreviewRowsLabel = computed(() => aggregatePreviewRowsText.value)
 const editedRowsLabel = computed(() => String(committedOverrides.value.size))
 const lastEditLabel = computed(() => lastEditText.value)
 const rowCacheLabel = computed(() => `${diagnostics.value.rowCacheSize} / ${diagnostics.value.rowCacheLimit}`)
@@ -1793,6 +1892,21 @@ function refreshVisibleRange(): void {
   void rowModel.refresh("manual")
 }
 
+function applyRegionAggregation(): void {
+  aggregationActive.value = true
+  rowModel.setGroupBy(null)
+  rowModel.setAggregationModel({
+    basis: "filtered",
+    columns: [{ key: "value", op: "sum" }],
+  })
+}
+
+function clearRegionAggregation(): void {
+  aggregationActive.value = false
+  rowModel.setAggregationModel(null)
+  rowModel.setGroupBy(null)
+}
+
 function handleStateUpdate(state: unknown): void {
   const parsedState = state as {
     rows?: {
@@ -1814,7 +1928,9 @@ function handleStateUpdate(state: unknown): void {
   const snapshot = parsedState?.rows?.snapshot
   const sortModel = snapshot?.sortModel ?? []
   const filterModel = snapshot?.filterModel ?? null
+  const aggregationModel = rowModel.getAggregationModel()
   const rowModelSnapshot = snapshot ?? null
+  aggregationActive.value = Boolean(aggregationModel?.columns?.length)
   const activeRange = parsedState?.selection?.ranges?.[parsedState.selection.activeRangeIndex ?? 0] ?? parsedState?.selection?.ranges?.[0] ?? null
   lastSelectionRange.value = activeRange ? {
     startRow: Math.min(activeRange.startRow, activeRange.endRow),
