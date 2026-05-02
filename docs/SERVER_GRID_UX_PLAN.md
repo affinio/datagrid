@@ -57,7 +57,8 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 - [x] Add state split:
   - [x] `initialLoading`
   - [x] `refreshing`
-- [ ] Ensure viewport changes do NOT blank existing rows
+- [x] Ensure viewport changes do NOT blank existing rows
+  - Validation: focused viewport-stability tests cover cache retention across viewport churn, partial cache reuse while missing rows load, and final swap on resolve
 
 ### Acceptance Criteria
 
@@ -81,6 +82,7 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 - Group trigger expand/collapse now follows the same stale-while-refresh rule: existing rows stay visible while the expansion pull returns, then the cache is replaced with the flattened expanded/collapsed result.
 - Data-source `expandGroup()` / `collapseGroup()` now evaluate group keys against the active `expandedByDefault` value, so column-menu grouping with default-expanded groups can collapse and re-expand correctly.
 - Server-data-source sandbox aggregation is visually testable with the "Aggregate value by region" toolbar control. It sends an aggregation model for `value:sum`; the demo datasource returns deterministic `aggregate:region:<REGION>` leaf rows with `value = sum(value)` and `status = Count <n>`.
+- Viewport stability slice: the server/data-source row model now avoids a transient pre-inflight emit during viewport pulls, so the grid no longer sees a brief non-loading snapshot while a new viewport request is starting.
 
 ---
 

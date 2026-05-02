@@ -49,6 +49,26 @@ function createDeferredPullDataSource<TRow>() {
   return { calls, dataSource }
 }
 
+function createAbortableDeferredPullDataSource<TRow>() {
+  const calls: PullCall<TRow>[] = []
+  const dataSource: DataGridDataSource<TRow> = {
+    pull(request) {
+      return new Promise<DataGridDataSourcePullResult<TRow>>((resolve, reject) => {
+        const call: PullCall<TRow> = {
+          request,
+          resolve,
+          reject,
+        }
+        calls.push(call)
+        request.signal.addEventListener("abort", () => {
+          reject({ name: "AbortError" })
+        })
+      })
+    },
+  }
+  return { calls, dataSource }
+}
+
 describe("createDataSourceBackedRowModel", () => {
   it("delegates column histograms to the data source with effective filter context", async () => {
     const histogramRequests: DataGridDataSourceColumnHistogramRequest[] = []
@@ -127,6 +147,110 @@ describe("createDataSourceBackedRowModel", () => {
     expect(model.getSnapshot().initialLoading).toBe(true)
     expect(model.getSnapshot().refreshing).toBe(false)
     expect(model.getSnapshot().loading).toBe(true)
+
+    model.dispose()
+  })
+
+  it("keeps previously cached viewport rows readable while a new viewport pull is pending", async () => {
+    const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 20,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 2 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: buildRows(0, 2),
+      total: 20,
+    })
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 2 })?.map(row => row.row.value)).toEqual([
+      "row-0",
+      "row-1",
+      "row-2",
+    ])
+
+    model.setViewportRange({ start: 10, end: 12 })
+    expect(calls).toHaveLength(2)
+    expect(model.getSnapshot().loading).toBe(true)
+    expect(model.getRow(0)?.row.value).toBe("row-0")
+    expect(model.getRow(1)?.row.value).toBe("row-1")
+    expect(model.getRow(2)?.row.value).toBe("row-2")
+    expect(model.getSparseRowModelDiagnostics().cachedRowCount).toBeGreaterThanOrEqual(3)
+
+    model.dispose()
+  })
+
+  it("keeps partially cached viewport rows readable while missing rows load", async () => {
+    const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 20,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    model.setViewportRange({ start: 1, end: 2 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: buildRows(1, 2),
+      total: 20,
+    })
+    await flushMicrotasks()
+
+    model.setViewportRange({ start: 1, end: 5 })
+    expect(calls).toHaveLength(2)
+    expect(model.getRow(1)?.row.value).toBe("row-1")
+    expect(model.getRow(2)?.row.value).toBe("row-2")
+    expect(model.getRow(3)).toBeUndefined()
+    expect(model.getRow(4)).toBeUndefined()
+    expect(model.getRow(5)).toBeUndefined()
+
+    model.dispose()
+  })
+
+  it("applies resolved viewport rows after the pending pull completes", async () => {
+    const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 20,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    model.setViewportRange({ start: 1, end: 2 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: buildRows(1, 2),
+      total: 20,
+    })
+    await flushMicrotasks()
+
+    model.setViewportRange({ start: 1, end: 5 })
+    expect(calls).toHaveLength(2)
+
+    calls[1]?.resolve({
+      rows: buildRows(1, 5),
+      total: 20,
+    })
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(model.getRow(1)?.row.value).toBe("row-1")
+    expect(model.getRow(2)?.row.value).toBe("row-2")
+    expect(model.getRow(3)?.row.value).toBe("row-3")
+    expect(model.getRow(4)?.row.value).toBe("row-4")
+    expect(model.getRow(5)?.row.value).toBe("row-5")
 
     model.dispose()
   })

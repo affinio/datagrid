@@ -1153,9 +1153,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (priority === "background") {
         diagnostics.prefetchStarted += 1
       }
-      updateLoadingState()
       error = priority === "background" ? error : null
-      emit()
 
       try {
         const result = await dataSource.pull({
