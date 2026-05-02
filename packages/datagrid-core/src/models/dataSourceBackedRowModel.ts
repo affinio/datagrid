@@ -1647,12 +1647,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
       resetPaginationCursor()
       clearBackgroundPrefetchState("stale")
       bumpRevision()
-      clearAll()
       void pullRange(
         toSourceRange(viewportRange),
         "group-change",
         "critical",
         createTreePullContext("set-group-by", [], "all"),
+        {
+          replaceCacheOnSuccess: true,
+        },
       )
       emit()
     },
@@ -1667,8 +1669,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
       resetPaginationCursor()
       clearBackgroundPrefetchState("stale")
       bumpRevision()
-      clearAll()
-      void pullRange(toSourceRange(viewportRange), "group-change", "critical")
+      void pullRange(toSourceRange(viewportRange), "group-change", "critical", null, {
+        replaceCacheOnSuccess: true,
+      })
       emit()
     },
     getPivotModel() {
@@ -1684,8 +1687,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
       resetPaginationCursor()
       clearBackgroundPrefetchState("stale")
       bumpRevision()
-      clearAll()
-      void pullRange(toSourceRange(viewportRange), "group-change", "critical")
+      void pullRange(toSourceRange(viewportRange), "group-change", "critical", null, {
+        replaceCacheOnSuccess: true,
+      })
       emit()
     },
     getAggregationModel() {

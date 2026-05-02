@@ -299,6 +299,64 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("keeps old rows visible during pending group refresh and swaps cache on success", async () => {
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string; status: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 2,
+    })
+
+    model.setViewportRange({ start: 0, end: 1 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: [
+        { index: 0, row: { id: 1, value: "old-1", status: "inactive" }, rowId: 1 },
+        { index: 1, row: { id: 2, value: "old-2", status: "inactive" }, rowId: 2 },
+      ],
+      total: 2,
+    })
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
+
+    const groupBy = { fields: ["status"], expandedByDefault: true }
+    model.setGroupBy(groupBy)
+
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.request.reason).toBe("group-change")
+    expect(calls[1]?.request.groupBy).toEqual(groupBy)
+    expect(calls[1]?.request.treeData).toEqual({
+      operation: "set-group-by",
+      scope: "all",
+      groupKeys: [],
+    })
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
+    expect(model.getSnapshot().refreshing).toBe(true)
+
+    calls[1]?.resolve({
+      rows: [
+        {
+          index: 0,
+          kind: "group",
+          rowId: "status=active",
+          row: { label: "status=active", status: "active" },
+        },
+      ],
+      total: 1,
+    })
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(model.getRowCount()).toBe(1)
+    expect(model.getRow(0)?.kind).toBe("group")
+    expect(model.getRow(0)?.row).toMatchObject({ label: "status=active", status: "active" })
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.length).toBe(1)
+    expect(model.getSnapshot().refreshing).toBe(false)
+
+    model.dispose()
+  })
+
   it("keeps old rows visible during pending batched sort and filter refresh and swaps cache on success", async () => {
     const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string; status: string }>()
     const model = createDataSourceBackedRowModel({

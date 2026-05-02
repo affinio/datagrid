@@ -45,9 +45,9 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 - [ ] Remove `clearAll()` from:
   - [ ] setSortModel
   - [ ] setFilterModel
-  - [ ] setAggregationModel
-  - [ ] setGroupBy
-  - [ ] setPivotModel
+  - [x] setAggregationModel
+  - [x] setGroupBy
+  - [x] setPivotModel
 - [ ] Introduce **staging / atomic swap** of cache
 - [ ] Keep existing rows visible during refresh
 - [ ] Preserve request versioning (DO NOT break it)
@@ -66,7 +66,7 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 
 ### Validation Notes
 
-- Deferred cache replacement for sort/filter is covered by focused tests in `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
+- Deferred cache replacement for sort/filter/group refresh is covered by focused tests in `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
 - The targeted tests prove stale rows remain readable while the pending pull is unresolved, and the cache swaps to the new rows only after success
 - Loading-state split is covered by explicit focused tests:
   - first critical load reports `initialLoading = true`, `refreshing = false`, `loading = true`
