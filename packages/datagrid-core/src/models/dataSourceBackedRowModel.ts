@@ -293,6 +293,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let paginationCursor: string | null = null
   const toggledGroupKeys = new Set<string>()
   let rowCount = Math.max(0, Math.trunc(options.initialTotal ?? 0))
+  let initialLoading = false
+  let refreshing = false
   let loading = false
   let error: Error | null = null
   let disposed = false
@@ -422,6 +424,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
     revision += 1
   }
 
+  function updateLoadingState() {
+    const hasVisibleCache = rowCache.size > 0
+    const criticalLoading = Boolean(criticalInFlight)
+    initialLoading = !hasVisibleCache && criticalLoading
+    refreshing = hasVisibleCache && criticalLoading
+    loading = initialLoading || refreshing
+  }
+
   function readRowCache(index: number): DataGridRowNode<T> | undefined {
     if (!rowCache.has(index)) {
       return undefined
@@ -441,6 +451,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     rowCache.set(index, row)
     enforceRowCacheLimit()
     diagnostics.rowCacheSize = rowCache.size
+    updateLoadingState()
   }
 
   function pruneRowCacheByRowCount() {
@@ -450,6 +461,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
     }
     diagnostics.rowCacheSize = rowCache.size
+    updateLoadingState()
   }
 
   function ensureActive() {
@@ -583,6 +595,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
       kind: "server",
       rowCount: visibleCount,
       loading,
+      initialLoading,
+      refreshing,
       error,
       viewportRange,
       pagination,
@@ -596,6 +610,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
           }
         : {}),
       groupExpansion: buildGroupExpansionSnapshot(getExpansionSpec(), toggledGroupKeys),
+    } as DataGridRowModelSnapshot<T> & {
+      initialLoading: boolean
+      refreshing: boolean
     }
   }
 
@@ -726,6 +743,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       bumpRevision()
     }
     diagnostics.rowCacheSize = rowCache.size
+    updateLoadingState()
   }
 
   function clearAll() {
@@ -735,6 +753,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     diagnostics.invalidatedRows += rowCache.size
     rowCache.clear()
     diagnostics.rowCacheSize = rowCache.size
+    updateLoadingState()
   }
 
   function resolvePrefetchDirections(): readonly ("forward" | "backward")[] {
@@ -858,6 +877,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     diagnostics.criticalInFlight = Boolean(criticalInFlight)
     diagnostics.backgroundInFlight = Boolean(backgroundInFlight)
     diagnostics.inFlight = diagnostics.criticalInFlight || diagnostics.backgroundInFlight
+    updateLoadingState()
   }
 
   function readPendingPull(priority: DataGridDataSourcePullPriority): PendingPull | null {
@@ -1030,10 +1050,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
   }
 
-  function refreshLoadingState() {
-    loading = Boolean(criticalInFlight)
-  }
-
   async function pullRange(
     range: DataGridViewportRange,
     reason: DataGridDataSourcePullReason,
@@ -1140,7 +1156,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (priority === "background") {
         diagnostics.prefetchStarted += 1
       }
-      refreshLoadingState()
+      updateLoadingState()
       error = priority === "background" ? error : null
       emit()
 
@@ -1227,6 +1243,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         const active = readLaneInFlight(priority)
         if (active && active.requestId === requestId) {
           writeLaneInFlight(priority, null)
+          updateLoadingState()
           if (!disposed && !backpressurePaused) {
             if (!criticalInFlight && pendingCriticalPull) {
               const next = pendingCriticalPull
@@ -1241,7 +1258,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
             }
           }
         }
-        refreshLoadingState()
+        updateLoadingState()
         emit()
       }
     })()

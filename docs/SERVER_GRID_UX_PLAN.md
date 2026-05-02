@@ -51,9 +51,9 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 - [ ] Introduce **staging / atomic swap** of cache
 - [ ] Keep existing rows visible during refresh
 - [ ] Preserve request versioning (DO NOT break it)
-- [ ] Add state split:
-  - [ ] `initialLoading`
-  - [ ] `refreshing`
+- [x] Add state split:
+  - [x] `initialLoading`
+  - [x] `refreshing`
 - [ ] Ensure viewport changes do NOT blank existing rows
 
 ### Acceptance Criteria
@@ -68,6 +68,10 @@ Make server/data-source-backed grid behave like a local spreadsheet from a UX pe
 
 - Deferred cache replacement for sort/filter is covered by focused tests in `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
 - The targeted tests prove stale rows remain readable while the pending pull is unresolved, and the cache swaps to the new rows only after success
+- Loading-state split is covered by explicit focused tests:
+  - first critical load reports `initialLoading = true`, `refreshing = false`, `loading = true`
+  - pending sort refresh with cached rows reports `initialLoading = false`, `refreshing = true`, `loading = true`
+  - completed refresh reports all three flags false/derived correctly after the pull resolves
 
 ---
 
