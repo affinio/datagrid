@@ -128,4 +128,57 @@ describe("useDataGridAppIntentHistory contract", () => {
     ])
     expect(rows.find(row => row.rowId === "r1")?.data.value).toBe("A")
   })
+
+  it("replays full snapshots with row patches when setRows is unavailable", async () => {
+    let rows = [
+      { rowId: "r1", data: { value: "A" } },
+      { rowId: "r2", data: { value: "B" } },
+    ]
+    const setData = vi.fn()
+    const applyEdits = vi.fn((updates: Array<{ rowId: string | number; data: Partial<DemoRow> }>) => {
+      rows = rows.map(row => {
+        const update = updates.find(candidate => candidate.rowId === row.rowId)
+        return update ? { ...row, data: { ...row.data, ...update.data } } : row
+      })
+    })
+
+    const history = useDataGridAppIntentHistory<DemoRow>({
+      runtime: {
+        api: {
+          rows: {
+            getCount: () => rows.length,
+            get: (rowIndex: number) => {
+              const row = rows[rowIndex]
+              return row ? { rowId: row.rowId, kind: "leaf", data: row.data } : null
+            },
+            hasDataMutationSupport: () => false,
+            setData,
+            applyEdits,
+          },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => {
+          const row = rows[rowIndex]
+          return row ? { rowId: row.rowId, kind: "leaf", data: row.data } : null
+        },
+        resolveBodyRowIndexById: (rowId: string | number) => rows.findIndex(row => row.rowId === rowId),
+      } as never,
+      cloneRowData: row => ({ ...row }),
+      syncViewport: vi.fn(),
+    })
+
+    const beforeSnapshot = history.captureRowsSnapshot()
+    rows = rows.map(row => ({ ...row, data: { value: `${row.data.value}-edited` } }))
+
+    await history.recordIntentTransaction({
+      intent: "fill",
+      label: "Fill edit",
+    }, beforeSnapshot)
+
+    await history.runHistoryAction("undo")
+    await history.runHistoryAction("redo")
+
+    expect(setData).not.toHaveBeenCalled()
+    expect(applyEdits).toHaveBeenCalled()
+    expect(rows.map(row => row.data.value)).toEqual(["A-edited", "B-edited"])
+  })
 })

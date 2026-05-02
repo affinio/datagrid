@@ -93,7 +93,25 @@ export function useDataGridAppIntentHistory<TRow>(
         options.syncViewport()
         return
       }
-      options.runtime.api.rows.setData(snapshot.rows.map((entry, index) => ({
+      const rowsApi = options.runtime.api.rows as {
+        hasDataMutationSupport?: () => boolean
+        applyEdits?: (updates: Array<{ rowId: string | number; data: Partial<TRow> }>) => void | Promise<void>
+        setData?: (rows: Array<{ rowId: string | number; originalIndex: number; row: TRow }>) => void
+      }
+      if (typeof rowsApi.hasDataMutationSupport === "function" && !rowsApi.hasDataMutationSupport()) {
+        const rowPatches = snapshot.rows.map(entry => ({
+          rowId: entry.rowId,
+          data: options.cloneRowData(entry.row) as Partial<TRow>,
+        }))
+        if (rowPatches.length > 0) {
+          return Promise.resolve(rowsApi.applyEdits?.(rowPatches)).then(() => {
+            options.syncViewport()
+          })
+        }
+        options.syncViewport()
+        return
+      }
+      rowsApi.setData?.(snapshot.rows.map((entry, index) => ({
         rowId: entry.rowId,
         originalIndex: index,
         row: options.cloneRowData(entry.row),
