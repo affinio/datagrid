@@ -40,6 +40,10 @@ import type {
 } from "@affino/datagrid-pivot"
 import { cloneDataGridFilterSnapshot } from "./filters/advancedFilter.js"
 import {
+  isSameFilterModel,
+  isSameSortModel,
+} from "./projection/clientRowProjectionPrimitives.js"
+import {
   clonePullAggregationModel,
   clonePivotColumnsSnapshot,
   isSamePivotColumnsSnapshot,
@@ -113,6 +117,10 @@ interface PendingPull {
   key: string
   stateKey: string
   treeData: DataGridDataSourceTreePullContext | null
+}
+
+interface PullRangeOptions {
+  replaceCacheOnSuccess?: boolean
 }
 
 const DEFAULT_ROW_CACHE_LIMIT = 4096
@@ -1031,6 +1039,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     reason: DataGridDataSourcePullReason,
     priority: DataGridDataSourcePullPriority,
     treeData?: DataGridDataSourceTreePullContext | null,
+    options?: PullRangeOptions,
   ): Promise<void> {
     if (disposed) {
       return
@@ -1173,6 +1182,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
           pruneRowCacheByRowCount()
           changed = changed || rowCount !== previousRowCount
           viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
+        }
+        if (options?.replaceCacheOnSuccess) {
+          clearAll()
         }
         changed = applyRows(result.rows) || changed
         if (typeof result.cursor !== "undefined") {
@@ -1568,8 +1580,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
       resetPaginationCursor()
       clearBackgroundPrefetchState("stale")
       bumpRevision()
-      clearAll()
-      void pullRange(toSourceRange(viewportRange), "sort-change", "critical")
+      void pullRange(toSourceRange(viewportRange), "sort-change", "critical", null, {
+        replaceCacheOnSuccess: true,
+      })
       emit()
     },
     setFilterModel(nextFilterModel) {
@@ -1578,8 +1591,34 @@ export function createDataSourceBackedRowModel<T = unknown>(
       resetPaginationCursor()
       clearBackgroundPrefetchState("stale")
       bumpRevision()
-      clearAll()
-      void pullRange(toSourceRange(viewportRange), "filter-change", "critical")
+      void pullRange(toSourceRange(viewportRange), "filter-change", "critical", null, {
+        replaceCacheOnSuccess: true,
+      })
+      emit()
+    },
+    setSortAndFilterModel(input) {
+      ensureActive()
+      const nextSortModel = Array.isArray(input?.sortModel) ? [...input.sortModel] : []
+      const nextFilterModel = cloneDataGridFilterSnapshot(input?.filterModel ?? null)
+      const sortChanged = !isSameSortModel(sortModel, nextSortModel)
+      const filterChanged = !isSameFilterModel(filterModel, nextFilterModel)
+      if (!sortChanged && !filterChanged) {
+        return
+      }
+      sortModel = nextSortModel
+      filterModel = nextFilterModel
+      resetPaginationCursor()
+      clearBackgroundPrefetchState("stale")
+      bumpRevision()
+      void pullRange(
+        toSourceRange(viewportRange),
+        sortChanged ? "sort-change" : "filter-change",
+        "critical",
+        null,
+        {
+          replaceCacheOnSuccess: true,
+        },
+      )
       emit()
     },
     setGroupBy(nextGroupBy) {

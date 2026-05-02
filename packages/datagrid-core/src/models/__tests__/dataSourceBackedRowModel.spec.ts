@@ -93,6 +93,53 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("applies sort and filter together with one backend pull", async () => {
+    const sortModel = [{ key: "value", direction: "asc" as const }]
+    const filterModel = {
+      columnFilters: {
+        status: { kind: "valueSet", tokens: ["string:active"] },
+      },
+      advancedFilters: {},
+    }
+    const pull = vi.fn(async () => ({
+      rows: [
+        {
+          index: 0,
+          row: { id: 1, value: "row-1", status: "active" },
+          rowId: 1,
+        },
+      ],
+      total: 1,
+    }))
+    const dataSource: DataGridDataSource<{ id: number; value: string; status: string }> = {
+      pull,
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 1,
+    })
+
+    expect(typeof model.setSortAndFilterModel).toBe("function")
+
+    model.setSortAndFilterModel?.({
+      sortModel,
+      filterModel,
+    })
+
+    expect(pull).toHaveBeenCalledTimes(1)
+    expect(pull.mock.calls[0]?.[0].sortModel).toEqual(sortModel)
+    expect(pull.mock.calls[0]?.[0].filterModel).toMatchObject(filterModel)
+    expect(model.getSnapshot().sortModel).toEqual(sortModel)
+    expect(model.getSnapshot().filterModel).toMatchObject(filterModel)
+
+    await flushMicrotasks()
+    expect(pull).toHaveBeenCalledTimes(1)
+
+    model.dispose()
+  })
+
   it("exposes patchRows when the data source implements commitEdits and refreshes after commit", async () => {
     const rows = [
       { id: 1, value: "row-1" },
