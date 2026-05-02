@@ -104,6 +104,8 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
 
   const rowsSection = computed<DataGridTableStageRowsSection<TRow>>(() => ({
     displayRows: unref(options.displayRows),
+    displayRowsRevision: unref(options.displayRowsRevision),
+    runtimeRevision: unref(options.runtimeRevision),
     pinnedBottomRows: unref(options.pinnedBottomRows),
     sourceRows: unref(options.sourceRows),
     showRowIndex: unref(options.showRowIndex),
@@ -186,6 +188,10 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     rowHeightMode: unref(options.rowHeightMode),
     layoutMode: unref(options.layoutMode),
     chromeSignature: unref(options.chromeSignature),
+    customOverlays: unref(options.customOverlays),
+    reportCenterPaneDiagnostics: unref(options.reportCenterPaneDiagnostics),
+    reportFillPlumbingState: unref(options.reportFillPlumbingState),
+    reportFillPlumbingDetail: unref(options.reportFillPlumbingDetail),
     layout: layoutSection.value,
     viewport: viewportSection.value,
     columns: columnsSection.value,

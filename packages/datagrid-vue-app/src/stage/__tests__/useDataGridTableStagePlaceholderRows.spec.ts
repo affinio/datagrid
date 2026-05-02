@@ -11,7 +11,7 @@ interface DemoRow {
   owner: string
 }
 
-function buildRow(rowId: string, displayIndex: number): DataGridRowNode<DemoRow> {
+function buildRow(rowId: string, displayIndex: number, owner = rowId.toUpperCase()): DataGridRowNode<DemoRow> {
   return {
     kind: "leaf",
     rowId,
@@ -27,11 +27,11 @@ function buildRow(rowId: string, displayIndex: number): DataGridRowNode<DemoRow>
     },
     data: {
       rowId,
-      owner: rowId.toUpperCase(),
+      owner,
     },
     row: {
       rowId,
-      owner: rowId.toUpperCase(),
+      owner,
     },
   }
 }
@@ -134,5 +134,64 @@ describe("useDataGridTableStagePlaceholderRows", () => {
       rowEnd: 3,
       rowTotal: 4,
     })
+  })
+
+  it("uses backing runtime sync results for materialized visual rows", () => {
+    const totalBodyRows = ref(2)
+    const runtimeVirtualWindow = ref<DataGridRuntimeVirtualWindowSnapshot | null>({
+      rowStart: 0,
+      rowEnd: 1,
+      rowTotal: 2,
+      colStart: 0,
+      colEnd: 0,
+      colTotal: 1,
+      overscan: { top: 0, bottom: 0, left: 0, right: 0 },
+    })
+    const staleRows = [
+      buildRow("r1", 0, "stale-0"),
+      buildRow("r2", 1, "stale-1"),
+    ]
+    const freshRows = [
+      buildRow("r1", 0, "fresh-0"),
+      buildRow("r2", 1, "fresh-1"),
+    ]
+    const syncBodyRowsInRange = vi.fn(() => freshRows)
+
+    const service = useDataGridTableStagePlaceholderRows<DemoRow>({
+      runtime: {
+        api: {
+          rows: {
+            insertDataAt: vi.fn(),
+          },
+        },
+        syncBodyRowsInRange,
+        setViewportRange: vi.fn(),
+        setVirtualWindowRange: vi.fn(),
+        rowPartition: computed(() => ({
+          bodyRowCount: totalBodyRows.value,
+          pinnedTopRows: [],
+          pinnedBottomRows: [],
+        })),
+        virtualWindow: runtimeVirtualWindow,
+        columnSnapshot: ref({ visibleColumns: [] }),
+        getBodyRowAtIndex: rowIndex => staleRows[rowIndex] ?? null,
+        resolveBodyRowIndexById: rowId => staleRows.findIndex(row => row.rowId === rowId),
+      } as never,
+      sourceRows: ref([]),
+      totalBodyRows: computed(() => totalBodyRows.value),
+      placeholderRows: ref({
+        enabled: true,
+        policy: "fixed-tail",
+        count: 0,
+        materializeOn: ["edit", "paste", "toggle"],
+        createRowAt: null,
+      }),
+      cloneRowData: row => ({ ...row }),
+    })
+
+    const visibleRows = service.visualRuntime.syncBodyRowsInRange({ start: 0, end: 1 })
+
+    expect(syncBodyRowsInRange).toHaveBeenCalledWith({ start: 0, end: 1 })
+    expect(visibleRows.map(row => row.row.owner)).toEqual(["fresh-0", "fresh-1"])
   })
 })

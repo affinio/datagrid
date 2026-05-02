@@ -11,9 +11,20 @@ export interface DataGridTableStageHistoryAdapter {
     beforeSnapshot: unknown,
     afterSnapshotOverride?: unknown,
   ) => void | Promise<void>
+  recordServerFillTransaction?: (
+    descriptor: {
+      intent: "fill"
+      label: string
+      affectedRange?: DataGridCopyRange | null
+      operationId: string
+      revision?: string | number | null
+      mode: "copy" | "series"
+    },
+  ) => void | Promise<void>
   canUndo: () => boolean
   canRedo: () => boolean
   runHistoryAction: (direction: "undo" | "redo") => Promise<string | null>
+  runServerFillAction?: (direction: "undo" | "redo") => Promise<string | null>
 }
 
 export interface UseDataGridTableStageHistoryOptions<TRow extends Record<string, unknown>> {
@@ -35,6 +46,16 @@ export interface UseDataGridTableStageHistoryResult extends DataGridHistoryContr
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: unknown,
     afterSnapshotOverride?: unknown,
+  ) => void
+  recordServerFillTransaction: (
+    descriptor: {
+      intent: "fill"
+      label: string
+      affectedRange?: DataGridCopyRange | null
+      operationId: string
+      revision?: string | number | null
+      mode: "copy" | "series"
+    },
   ) => void
   canUndoHistory: () => boolean
   canRedoHistory: () => boolean
@@ -95,6 +116,22 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
     )
   }
 
+  const recordServerFillTransaction = (
+    descriptor: {
+      intent: "fill"
+      label: string
+      affectedRange?: DataGridCopyRange | null
+      operationId: string
+      revision?: string | number | null
+      mode: "copy" | "series"
+    },
+  ): void => {
+    if (options.enabled === false) {
+      return
+    }
+    void options.history?.recordServerFillTransaction?.(descriptor)
+  }
+
   const canUndoHistory = (): boolean => {
     if (options.enabled === false) {
       return false
@@ -127,6 +164,7 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
     captureHistorySnapshot,
     captureHistorySnapshotForRowIds,
     recordHistoryIntentTransaction,
+    recordServerFillTransaction,
     canUndoHistory,
     canRedoHistory,
     canUndo: canUndoHistory,

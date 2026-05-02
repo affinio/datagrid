@@ -26,7 +26,7 @@ Status: baseline demo implemented; filtering/histograms, demo-local editing, and
 - [x] Sandbox navigation link
 
 ## Next Slices
-- [ ] Undo/redo semantics
+- [x] Undo/redo semantics
 - [ ] Range move
 
 Note: the row model remains read/pull-oriented; the demo uses a datasource-local `commitEdits` adapter for optimistic edits.
@@ -73,7 +73,14 @@ Note: if fill or batch commit hits partial rejection, the demo surfaces a warnin
 - Out of scope: finding the true autofill boundary beyond loaded/cache rows.
 - Out of scope: filling unloaded rows or materializing them implicitly.
 - Out of scope: server-specific formula rebasing semantics.
-- Diagnostics: batch row count, skipped/unloaded row count when detectable, cache-boundary warning, and partial-rejection/refresh-suppression warning.
+- Diagnostics
+: batch row count, skipped/unloaded row count when detectable, cache-boundary warning, and partial-rejection/refresh-suppression warning.
+
+## Server Fill Stage 2
+- [x] Server-aware fill boundary resolution
+- [~] Server-side fill execution operation
+- [ ] Server-fill visual refresh/render parity
+- [ ] Server-fill undo/redo fully verified
 
 ## Manual Test Checklist
 - [ ] Open the demo and verify initial load completes

@@ -58,9 +58,14 @@
 
       <DataGridTableStageCenterPane
         :display-rows="rows.displayRows"
+        :runtime-revision="rows.runtimeRevision"
+        :body-rows-revision="rows.displayRowsRevision"
         :top-spacer-height="viewport.topSpacerHeight"
         :bottom-spacer-height="viewport.bottomSpacerHeight"
         :viewport-ref="captureBodyViewportRef"
+        :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
+        :report-fill-plumbing-state="props.reportFillPlumbingState"
+        :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
         :handle-context-menu="onViewportContextMenu"
         :selection-overlay-segments="centerSelectionOverlaySegments"
         :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
@@ -111,8 +116,13 @@
 
       <DataGridTableStageCenterPane
         :display-rows="rows.pinnedBottomRows"
+        :runtime-revision="rows.runtimeRevision"
+        :body-rows-revision="rows.displayRowsRevision"
         viewport-class="grid-body-viewport grid-body-viewport--pinned-bottom"
         :viewport-ref="capturePinnedBottomViewportRef"
+        :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
+        :report-fill-plumbing-state="props.reportFillPlumbingState"
+        :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
         :handle-scroll="handlePinnedBottomViewportScroll"
         :handle-wheel="handleBodyViewportWheel"
         :handle-keydown="handlePinnedBottomViewportKeydown"
@@ -337,6 +347,14 @@ const props = defineProps({
     type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["chromeSignature"]>,
     default: "",
   },
+  reportFillPlumbingState: {
+    type: Function as PropType<DataGridTableStageProps<Record<string, unknown>>["reportFillPlumbingState"]>,
+    default: undefined,
+  },
+  reportFillPlumbingDetail: {
+    type: Function as PropType<DataGridTableStageProps<Record<string, unknown>>["reportFillPlumbingDetail"]>,
+    default: undefined,
+  },
   layout: {
     type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["layout"]>,
     required: true,
@@ -372,6 +390,10 @@ const props = defineProps({
   customOverlays: {
     type: Array as PropType<readonly DataGridTableStageCustomOverlay[]>,
     default: () => [],
+  },
+  reportCenterPaneDiagnostics: {
+    type: Function as PropType<DataGridTableStageProps<Record<string, unknown>>["reportCenterPaneDiagnostics"]>,
+    default: undefined,
   },
   onViewportContextMenu: {
     type: Function as PropType<(event: MouseEvent) => void>,
@@ -428,6 +450,27 @@ function columnStyle(key: string): CSSProperties {
 
 function updateEditingCellValue(value: string): void {
   editing.value.updateEditingCellValue(value)
+}
+
+function emitRuntimeBodyDiagnostics(reason: string): void {
+  const viewportStart = viewport.value.viewportRowStart
+  const viewportEnd = viewport.value.viewportRowEnd ?? (viewportStart + Math.max(0, displayRows.value.length - 1))
+  const visibleRows = displayRows.value
+  const firstVisibleRows = visibleRows
+    .slice(0, 5)
+    .map(row => String(row.rowId))
+    .join(", ")
+  const sampleVisibleIndex = visibleRows.findIndex(row => String(row.rowId) === "srv-000025")
+  const sampleRow = sampleVisibleIndex >= 0 ? visibleRows[sampleVisibleIndex] : null
+  const sampleValue = sampleRow && sampleRow.kind !== "group"
+    ? String((sampleRow.row as Record<string, unknown>).region ?? "none")
+    : "none"
+  props.reportFillPlumbingDetail?.("runtime_viewport_range", `${viewportStart}..${viewportEnd}`)
+  props.reportFillPlumbingDetail?.("runtime_visible_first5", firstVisibleRows || "none")
+  props.reportFillPlumbingDetail?.("runtime_sample_row25_visible_index", sampleVisibleIndex >= 0 ? String(sampleVisibleIndex) : "none")
+  props.reportFillPlumbingDetail?.("runtime_sample_row25_region", sampleValue)
+  props.reportFillPlumbingDetail?.("runtime_redraw_reason", reason)
+  props.reportFillPlumbingState?.("runtime_redraw_happened", true)
 }
 
 function handleEditorKeydown(event: KeyboardEvent): void {
@@ -1925,6 +1968,20 @@ watch(
       })
     })
   },
+)
+
+watch(
+  () => [
+    viewport.value.viewportRowStart,
+    viewport.value.viewportRowEnd,
+    displayRows.value.map(row => `${String(row.rowId)}:${String((row.row as Record<string, unknown>).region ?? "")}`).join("|"),
+  ].join("|"),
+  () => {
+    void nextTick(() => {
+      emitRuntimeBodyDiagnostics("body-rows-update")
+    })
+  },
+  { immediate: true },
 )
 
 function syncPinnedBottomViewportScrollLeft(): void {

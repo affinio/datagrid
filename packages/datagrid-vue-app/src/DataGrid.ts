@@ -153,6 +153,7 @@ import type {
   DataGridGanttProp,
 } from "./gantt/dataGridGantt.types"
 import type {
+  DataGridTableStageCenterPaneDiagnostics,
   DataGridTableStageCellClass,
   DataGridTableStageCustomOverlay,
 } from "./stage/dataGridTableStage.types"
@@ -734,8 +735,16 @@ const dataGridProps = {
     type: Function as PropType<((message: string) => void) | undefined>,
     default: undefined,
   },
+  reportCenterPaneDiagnostics: {
+    type: Function as PropType<((payload: DataGridTableStageCenterPaneDiagnostics) => void) | undefined>,
+    default: undefined,
+  },
   reportFillPlumbingState: {
     type: Function as PropType<((layer: string, present: boolean) => void) | undefined>,
+    default: undefined,
+  },
+  reportFillPlumbingDetail: {
+    type: Function as PropType<((layer: string, value: string) => void) | undefined>,
     default: undefined,
   },
 } as const
@@ -1397,11 +1406,16 @@ const DataGridRuntimeComponent = defineComponent({
                   runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
                     dataSource?: {
                       resolveFillBoundary?: (request: any) => any
+                      commitFillOperation?: (request: any) => any
+                      undoFillOperation?: (request: any) => any
+                      redoFillOperation?: (request: any) => any
                     }
                   },
                   onCellEdit: handleCellEdit,
                   reportFillWarning: props.reportFillWarning,
+                  reportCenterPaneDiagnostics: props.reportCenterPaneDiagnostics,
                   reportFillPlumbingState: props.reportFillPlumbingState,
+                  reportFillPlumbingDetail: props.reportFillPlumbingDetail,
                 },
               }),
             }
@@ -1412,11 +1426,16 @@ const DataGridRuntimeComponent = defineComponent({
                 runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
                   dataSource?: {
                     resolveFillBoundary?: (request: any) => any
+                    commitFillOperation?: (request: any) => any
+                    undoFillOperation?: (request: any) => any
+                    redoFillOperation?: (request: any) => any
                   }
                 },
                 onCellEdit: handleCellEdit,
                 reportFillWarning: props.reportFillWarning,
+                reportCenterPaneDiagnostics: props.reportCenterPaneDiagnostics,
                 reportFillPlumbingState: props.reportFillPlumbingState,
+                reportFillPlumbingDetail: props.reportFillPlumbingDetail,
               }),
             },
       )

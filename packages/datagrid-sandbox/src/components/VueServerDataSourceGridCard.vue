@@ -17,170 +17,461 @@
         <button type="button" class="server-grid__button" @click="simulateErrorOnce">Simulate one error</button>
         <button type="button" class="server-grid__button" @click="simulateCommitFailure">Simulate commit failure</button>
       </div>
-      <div class="server-grid__meta">
-        <span>Rows: {{ totalRowsLabel }}</span>
-        <span>Viewport: {{ viewportLabel }}</span>
-        <span>Loaded: {{ loadedRowsLabel }}</span>
-        <span>Pending: {{ pendingRequestsLabel }}</span>
-        <span>Last batch rows: {{ lastBatchRowsLabel }}</span>
-        <span>Skipped rows: {{ lastSkippedRowsLabel }}</span>
-        <span>Fill warning: {{ fillWarningLabel }}</span>
-        <span>Fill boundary: {{ fillBoundaryLabel }}</span>
-        <span>Left: {{ fillBoundaryLeftLabel }}</span>
-        <span>Right: {{ fillBoundaryRightLabel }}</span>
-        <span>Fill blocked: {{ fillBlockedLabel }}</span>
-        <span>Fill applied: {{ fillAppliedLabel }}</span>
-        <span>Plumbing: {{ plumbingLabel }}</span>
-        <span>Branch: {{ branchLabel }}</span>
-        <span>Sort: {{ sortModelLabel }}</span>
-        <span>Filter: {{ filterModelLabel }}</span>
-      </div>
     </header>
 
-    <section class="server-grid__surface">
-      <DataGrid
-        ref="gridRef"
-        :key="gridKey"
-        :columns="columns"
-        :row-model="rowModel"
-        :is-cell-editable="isCellEditable"
-        theme="industrial-neutral"
-        virtualization
-        :show-row-index="true"
-        :row-selection="false"
+    <section class="server-grid__body">
+      <div class="server-grid__surface">
+        <DataGrid
+          ref="gridRef"
+          :key="gridKey"
+          :columns="columns"
+          :row-model="rowModel"
+          :is-cell-editable="isCellEditable"
+          theme="industrial-neutral"
+          virtualization
+          :show-row-index="true"
+          :row-selection="false"
         :column-menu="columnMenu"
         advanced-filter
         fill-handle
         range-move
-      :history="true"
-      layout-mode="auto-height"
-      :min-rows="8"
-      :max-rows="16"
-      :report-fill-warning="handleFillWarning"
-      :report-fill-plumbing-state="reportFillPlumbingState"
-      @update:state="handleStateUpdate"
-      @cell-edit="handleCellEdit"
-    />
-    </section>
+        :history="true"
+        layout-mode="auto-height"
+        :min-rows="8"
+        :max-rows="16"
+        :report-fill-warning="handleFillWarning"
+        :report-center-pane-diagnostics="reportCenterPaneDiagnostics"
+        :report-fill-plumbing-state="reportFillPlumbingState"
+        :report-fill-plumbing-detail="reportFillPlumbingDetail"
+        @update:state="handleStateUpdate"
+        @cell-edit="handleCellEdit"
+      />
+      </div>
 
-    <aside class="server-grid__diagnostics">
-  <h3>Loading diagnostics</h3>
-      <dl class="server-grid__diagnostics-list">
-        <div class="server-grid__diagnostics-card">
-          <dt>Status</dt>
-          <dd>{{ loadingLabel }}</dd>
+      <aside class="server-grid__diagnostics">
+        <h3>Diagnostics</h3>
+        <div class="server-grid__diagnostics-section">
+          <h4>Server State</h4>
+          <dl class="server-grid__diagnostics-list">
+            <div class="server-grid__diagnostics-card">
+              <dt>Status</dt>
+              <dd>{{ loadingLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Error</dt>
+              <dd>{{ errorLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Rows</dt>
+              <dd>{{ totalRowsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Requested viewport</dt>
+              <dd>{{ viewportLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Rendered viewport</dt>
+              <dd>{{ renderedViewportLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Loaded</dt>
+              <dd>{{ loadedRowsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Pending</dt>
+              <dd>{{ pendingRequestsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Last batch rows</dt>
+              <dd>{{ lastBatchRowsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Skipped rows</dt>
+              <dd>{{ lastSkippedRowsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Edited rows</dt>
+              <dd>{{ editedRowsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Cache</dt>
+              <dd>{{ rowCacheLabel }}</dd>
+            </div>
+          </dl>
         </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Error</dt>
-          <dd>{{ errorLabel }}</dd>
+
+        <div class="server-grid__diagnostics-section">
+          <h4>Fill Status</h4>
+          <dl class="server-grid__diagnostics-list">
+            <div class="server-grid__diagnostics-card">
+              <dt>Fill warning</dt>
+              <dd>{{ fillWarningLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Fill boundary</dt>
+              <dd>{{ fillBoundaryLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Boundary L</dt>
+              <dd>{{ fillBoundaryLeftLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Boundary R</dt>
+              <dd>{{ fillBoundaryRightLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Fill blocked</dt>
+              <dd>{{ fillBlockedLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Fill applied</dt>
+              <dd>{{ fillAppliedLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Branch</dt>
+              <dd>{{ branchLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Commit mode</dt>
+              <dd>{{ commitModeLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Commit msg</dt>
+              <dd>{{ commitMessageLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Commit detail</dt>
+              <dd>{{ commitDetailsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Batch applied</dt>
+              <dd>{{ clientBatchAppliedLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Batch warn</dt>
+              <dd>{{ clientBatchWarningLabel }}</dd>
+            </div>
+          </dl>
         </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Loaded rows</dt>
-          <dd>{{ loadedRowsLabel }}</dd>
+
+        <div class="server-grid__diagnostics-section">
+          <h4>Server Fill Operation</h4>
+          <dl class="server-grid__diagnostics-list">
+            <div class="server-grid__diagnostics-card">
+              <dt>commitFillOperation</dt>
+              <dd>{{ commitFillOperationAvailableLabel }} / {{ commitFillOperationCalledLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>operationId</dt>
+              <dd>{{ serverFillOperationIdLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Affected</dt>
+              <dd>{{ serverFillAffectedRowsLabel }} rows, {{ serverFillAffectedRangeLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Visible overlap</dt>
+              <dd>{{ serverFillVisibleOverlapLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Request</dt>
+              <dd>{{ serverFillRequestLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Mode</dt>
+              <dd>{{ serverFillRequestModeLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Fill cols</dt>
+              <dd>{{ serverFillRequestFillColumnsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Refs</dt>
+              <dd>{{ serverFillRequestReferenceColumnsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Dispatch</dt>
+              <dd>{{ serverFillDispatchAttemptedLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Refresh viewport</dt>
+              <dd>{{ serverFillRenderedViewportLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Invalidated range</dt>
+              <dd>{{ serverFillInvalidationRangeLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Invalidated raw</dt>
+              <dd>{{ serverFillRawInvalidationLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Invalidated norm</dt>
+              <dd>{{ serverFillNormalizedInvalidationLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Invalidation applied</dt>
+              <dd>{{ serverFillInvalidationAppliedLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>typeof runtime.rowModel.invalidateRange</dt>
+              <dd>{{ serverFillRuntimeRowModelInvalidateTypeLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>invalidateRange called</dt>
+              <dd>{{ serverFillInvalidateCalledLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>cache entry for row1 existed before invalidation</dt>
+              <dd>{{ serverFillCacheRow1BeforeInvalidationLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>cache entry for row1 exists after invalidation</dt>
+              <dd>{{ serverFillCacheRow1AfterInvalidationLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Sync input</dt>
+              <dd>{{ serverFillSyncInputRangeLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Latest rendered</dt>
+              <dd>{{ serverFillLatestRenderedViewportLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Runtime rendered</dt>
+              <dd>{{ serverFillRuntimeRenderedViewportLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>DisplayRows viewport</dt>
+              <dd>{{ serverFillDisplayRowsRenderedViewportLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Selected viewport</dt>
+              <dd>{{ serverFillSelectedRenderedViewportLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Used stored</dt>
+              <dd>{{ serverFillRefreshUsedStoredRenderedLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Stored rendered</dt>
+              <dd>{{ centerPaneStoredRenderedViewportLabel }}</dd>
+            </div>
+          </dl>
         </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Edited rows</dt>
-          <dd>{{ editedRowsLabel }}</dd>
+
+        <div class="server-grid__diagnostics-section">
+          <h4>Sample / Render</h4>
+          <dl class="server-grid__diagnostics-list">
+            <div class="server-grid__diagnostics-card">
+              <dt>Sample column</dt>
+              <dd>{{ serverFillSampleColumnLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Sample state</dt>
+              <dd>{{ serverFillSampleStateLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Rendered sample row</dt>
+              <dd>{{ serverFillSampleRowLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Center pane debug</dt>
+              <dd>
+                <pre class="server-grid__diagnostics-json">{{ centerPaneDebugJsonLabel }}</pre>
+              </dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>displayRowsRecomputeCount</dt>
+              <dd>{{ displayRowsRecomputeCountLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>centerPaneRuntimeRevision</dt>
+              <dd>{{ centerPaneRuntimeRevisionLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>centerPaneBodyRowsRevision</dt>
+              <dd>{{ centerPaneBodyRowsRevisionLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>source bodyRows[1]</dt>
+              <dd>{{ sourceBodyRow1Label }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>source bodyRows[1] identity</dt>
+              <dd>{{ sourceBodyRow1IdentityLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>syncRows 0..23 row1</dt>
+              <dd>{{ sourceSyncRow1Label }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>row1 cache status</dt>
+              <dd>{{ serverFillRow1CacheStatusLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>row1 sync value</dt>
+              <dd>{{ serverFillRow1SyncValueLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Before</dt>
+              <dd>{{ serverFillSampleBeforeLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>After store</dt>
+              <dd>{{ serverFillSampleAfterLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Cache</dt>
+              <dd>{{ serverFillSamplePullAfterLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Cell reader</dt>
+              <dd>{{ serverFillSampleCachedAfterLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Cell reader 2</dt>
+              <dd>{{ serverFillSampleCellReaderLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Rendered</dt>
+              <dd>{{ serverFillSampleRenderedLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Row index</dt>
+              <dd>{{ serverFillSampleRowIndexLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Visible index</dt>
+              <dd>{{ serverFillSampleVisibleIndexLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Lookup idx/id</dt>
+              <dd>{{ serverFillSampleLookupByIndexLabel }} / {{ serverFillSampleLookupByIdLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Row cache</dt>
+              <dd>{{ serverFillSampleRowCacheLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Visible rows</dt>
+              <dd>{{ serverFillVisibleRowsPreviewLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>RowModel snapshot</dt>
+              <dd>{{ serverFillRowModelSnapshotLabel }}</dd>
+            </div>
+          </dl>
         </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Last edit</dt>
-          <dd>{{ lastEditLabel }}</dd>
+
+        <div class="server-grid__diagnostics-section">
+          <h4>Plumbing / Debug</h4>
+          <dl class="server-grid__diagnostics-list">
+            <div class="server-grid__diagnostics-card">
+              <dt>Datasource keys</dt>
+              <dd>{{ datasourceKeysLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Datasource detail</dt>
+              <dd>{{ datasourceDetailLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Datasource fill</dt>
+              <dd>{{ datasourceCommitFillOperationLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>RowModel keys</dt>
+              <dd>{{ rowModelKeysLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>RowModel fill</dt>
+              <dd>{{ rowModelCommitFillOperationLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Runtime snapshot</dt>
+              <dd>{{ runtimeRowModelSnapshotLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Requested / rendered</dt>
+              <dd>{{ runtimeViewportRangeLabel }} / {{ renderedViewportLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Runtime first 5</dt>
+              <dd>{{ runtimeVisibleFirst5Label }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Runtime sample</dt>
+              <dd>{{ runtimeSampleRow25VisibleIndexLabel }} / {{ runtimeSampleRow25RegionLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Runtime redraw</dt>
+              <dd>{{ runtimeRedrawHappenedLabel }} / {{ runtimeRedrawReasonLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>RowModel keys</dt>
+              <dd>{{ rowModelKeysLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Can undo/redo</dt>
+              <dd>{{ canUndoLabel }} / {{ canRedoLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>History action</dt>
+              <dd>{{ lastHistoryActionLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Edit history</dt>
+              <dd>{{ lastEditRecordedLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Last edit</dt>
+              <dd>{{ lastEditLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Runtime redraw</dt>
+              <dd>{{ runtimeRedrawHappenedLabel }} / {{ runtimeRedrawReasonLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Alive</dt>
+              <dd>{{ runtimeDiagnosticsAliveLabel }} / {{ centerPaneAliveLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Mounted</dt>
+              <dd>{{ centerPaneMountedLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Plumbing</dt>
+              <dd>{{ plumbingLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Sort / Filter</dt>
+              <dd>{{ sortModelLabel }} / {{ filterModelLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>In flight</dt>
+              <dd>{{ diagnostics.inFlight ? "yes" : "no" }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Prefetch</dt>
+              <dd>{{ diagnostics.prefetchStarted }} started / {{ diagnostics.prefetchCompleted }} completed</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Visible col[4]</dt>
+              <dd>{{ serverFillVisibleColumnLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Datasource detail</dt>
+              <dd>{{ datasourceDetailLabel }}</dd>
+            </div>
+          </dl>
         </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Can undo</dt>
-          <dd>{{ canUndoLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Can redo</dt>
-          <dd>{{ canRedoLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>History action</dt>
-          <dd>{{ lastHistoryActionLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Edit history</dt>
-          <dd>{{ lastEditRecordedLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Cached rows</dt>
-          <dd>{{ rowCacheLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Commit mode</dt>
-          <dd>{{ commitModeLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Commit msg</dt>
-          <dd>{{ commitMessageLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Commit detail</dt>
-          <dd>{{ commitDetailsLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Last batch rows</dt>
-          <dd>{{ lastBatchRowsLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Skipped rows</dt>
-          <dd>{{ lastSkippedRowsLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Fill warning</dt>
-          <dd>{{ fillWarningLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Fill boundary</dt>
-          <dd>{{ fillBoundaryLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Boundary L</dt>
-          <dd>{{ fillBoundaryLeftLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Boundary R</dt>
-          <dd>{{ fillBoundaryRightLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Fill blocked</dt>
-          <dd>{{ fillBlockedLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Fill applied</dt>
-          <dd>{{ fillAppliedLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Plumbing</dt>
-          <dd>{{ plumbingLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Branch</dt>
-          <dd>{{ branchLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>In flight</dt>
-          <dd>{{ diagnostics.inFlight ? "yes" : "no" }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Prefetch</dt>
-          <dd>{{ diagnostics.prefetchStarted }} started / {{ diagnostics.prefetchCompleted }} completed</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Sort</dt>
-          <dd>{{ sortModelLabel }}</dd>
-        </div>
-        <div class="server-grid__diagnostics-card">
-          <dt>Filter</dt>
-          <dd>{{ filterModelLabel }}</dd>
-        </div>
-      </dl>
-    </aside>
+      </aside>
+    </section>
   </article>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
 import {
   buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   createDataSourceBackedRowModel,
@@ -195,6 +486,7 @@ import {
   type DataGridDataSourcePullResult,
   type DataGridDataSourcePushListener,
   type DataGridFilterSnapshot,
+  type DataGridViewportRange,
   type DataGridSortState,
 } from "@affino/datagrid-vue"
 import { type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
@@ -242,6 +534,76 @@ const filterModelText = ref("none")
 const commitModeText = ref("ok")
 const commitMessageText = ref("none")
 const commitDetailsText = ref("none")
+const clientBatchAppliedText = ref("no")
+const clientBatchWarningText = ref("none")
+const datasourceKeysText = ref("none")
+const datasourceDetailText = ref("none")
+const datasourceCommitFillOperationText = ref("unknown")
+const rowModelCommitFillOperationText = ref("unknown")
+const rowModelKeysText = ref("none")
+const commitFillOperationAvailableText = ref("unknown")
+const serverFillDispatchAttemptedText = ref("unknown")
+const commitFillOperationCalledText = ref("unknown")
+const serverFillOperationIdText = ref("none")
+const serverFillAffectedRowsText = ref("0")
+const serverFillAffectedRangeText = ref("none")
+const serverFillVisibleOverlapText = ref("unknown")
+const serverFillRequestText = ref("none")
+const serverFillRequestModeText = ref("none")
+const serverFillRequestFillColumnsText = ref("none")
+const serverFillRequestReferenceColumnsText = ref("none")
+const serverFillRenderedViewportText = ref("none")
+const serverFillRawInvalidationText = ref("none")
+const serverFillInvalidationRangeText = ref("none")
+const serverFillNormalizedInvalidationText = ref("none")
+const serverFillInvalidationAppliedText = ref("unknown")
+const serverFillRuntimeRowModelInvalidateTypeText = ref("none")
+const serverFillInvalidateCalledText = ref("unknown")
+const serverFillCacheRow1BeforeInvalidationText = ref("unknown")
+const serverFillCacheRow1AfterInvalidationText = ref("unknown")
+const serverFillSyncInputRangeText = ref("none")
+const serverFillLatestRenderedViewportText = ref("none")
+const serverFillRuntimeRenderedViewportText = ref("none")
+const serverFillDisplayRowsRenderedViewportText = ref("none")
+const serverFillSelectedRenderedViewportText = ref("none")
+const serverFillRefreshUsedStoredRenderedText = ref("unknown")
+const centerPaneStoredRenderedViewportText = ref("none")
+const serverFillSampleColumnText = ref("none")
+const serverFillSampleStateText = ref("none")
+const serverFillSampleRowText = ref("none")
+const serverFillSampleBeforeText = ref("none")
+const serverFillSampleAfterText = ref("none")
+const serverFillSamplePullAfterText = ref("none")
+const serverFillSampleCachedAfterText = ref("none")
+const serverFillSampleRowIndexText = ref("none")
+const serverFillSampleVisibleIndexText = ref("none")
+const serverFillSampleLookupByIndexText = ref("none")
+const serverFillSampleLookupByIdText = ref("none")
+const serverFillSampleRowCacheText = ref("none")
+const serverFillSampleCellReaderText = ref("none")
+const serverFillSampleRenderedText = ref("none")
+const serverFillRowModelSnapshotText = ref("none")
+const serverFillVisibleRowsPreviewText = ref("none")
+const runtimeViewportRangeText = ref("none")
+const runtimeRowModelSnapshotText = ref("none")
+const runtimeVisibleFirst5Text = ref("none")
+const runtimeSampleRow25VisibleIndexText = ref("none")
+const runtimeSampleRow25RegionText = ref("none")
+const runtimeRedrawReasonText = ref("none")
+const runtimeRedrawHappenedText = ref("unknown")
+const runtimeDiagnosticsAliveText = ref("unknown")
+const centerPaneAliveText = ref("unknown")
+const centerPaneMountedText = ref("unknown")
+const centerPaneDebugJsonText = ref("none")
+const displayRowsRecomputeCountText = ref("none")
+const centerPaneRuntimeRevisionText = ref("none")
+const centerPaneBodyRowsRevisionText = ref("none")
+const sourceBodyRow1Text = ref("none")
+const sourceBodyRow1IdentityText = ref("none")
+const sourceSyncRow1Text = ref("none")
+const serverFillRow1CacheStatusText = ref("unknown")
+const serverFillRow1SyncValueText = ref("none")
+const serverFillVisibleColumnText = ref("unknown")
 const lastEditText = ref("none")
 const lastHistoryActionText = ref("none")
 const lastEditRecordedText = ref("unknown")
@@ -269,9 +631,145 @@ const columnMenu = {
 
 type ServerDemoHistogramRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["getColumnHistogram"]>>[0]
 type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>[0]
+type ServerDemoCommitFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>[0]
+type ServerDemoUndoFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>[0]
 
 function resolveRowId(index: number): string {
   return `srv-${index.toString().padStart(6, "0")}`
+}
+
+function normalizeViewportRange(range: unknown): DataGridViewportRange | null {
+  if (!range || typeof range !== "object") {
+    return null
+  }
+  const candidate = range as {
+    startRow?: unknown
+    endRow?: unknown
+    start?: unknown
+    end?: unknown
+  }
+  const start = Number.isFinite(candidate.startRow)
+    ? Number(candidate.startRow)
+    : Number.isFinite(candidate.start)
+      ? Number(candidate.start)
+      : NaN
+  const end = Number.isFinite(candidate.endRow)
+    ? Number(candidate.endRow)
+    : Number.isFinite(candidate.end)
+      ? Number(candidate.end)
+      : NaN
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return null
+  }
+  return {
+    start: Math.max(0, Math.trunc(Math.min(start, end))),
+    end: Math.max(0, Math.trunc(Math.max(start, end))),
+  }
+}
+
+function formatViewportRange(range: DataGridViewportRange | null | undefined): string {
+  if (!range) {
+    return "none"
+  }
+  return `${range.start}..${range.end}`
+}
+
+function parseSampleRowIndex(): number | null {
+  const match = /^srv-(\d+)$/.exec(serverFillSampleRowText.value)
+  if (!match) {
+    return null
+  }
+  const parsed = Number.parseInt(match[1] ?? "", 10)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function readSampleColumnKey(): string | null {
+  return serverFillSampleColumnText.value !== "none" && serverFillSampleColumnText.value.length > 0
+    ? serverFillSampleColumnText.value
+    : null
+}
+
+function resolveVisibleColumnIndex(columnKey: string): number {
+  return columns.findIndex(column => String(column.key) === columnKey)
+}
+
+function updateRenderedSampleDiagnostics(): void {
+  const debug = centerPaneDebugPayload.value
+  const rowId = typeof debug?.row1?.id === "string" && debug.row1.id.length > 0 ? debug.row1.id : null
+  const rowIndex = typeof debug?.row1?.summary?.index === "number" ? debug.row1.summary.index : null
+  const columnKey = readSampleColumnKey()
+  if (rowIndex == null || !Number.isFinite(rowIndex) || !columnKey || !rowId) {
+    return
+  }
+  const renderedViewportStart = typeof debug?.renderedViewport?.start === "number"
+    ? debug.renderedViewport.start
+    : lastViewportRange.value.start
+  const renderedViewportEnd = typeof debug?.renderedViewport?.end === "number"
+    ? debug.renderedViewport.end
+    : lastViewportRange.value.end
+  const visibleIndex = Number.isFinite(renderedViewportStart)
+    ? Math.max(0, rowIndex - renderedViewportStart)
+    : rowIndex
+  const visibleRowRange = Number.isFinite(renderedViewportStart) && Number.isFinite(renderedViewportEnd)
+    ? { start: Math.max(0, renderedViewportStart), end: Math.max(Math.max(0, renderedViewportStart), renderedViewportEnd) }
+    : { start: 0, end: 0 }
+  serverFillSampleRowIndexText.value = String(rowIndex)
+  serverFillSampleVisibleIndexText.value = String(visibleIndex)
+  const snapshot = rowModel.getSnapshot()
+  serverFillRowModelSnapshotText.value = `rowCount=${snapshot.rowCount} loading=${snapshot.loading ? "yes" : "no"} viewport=${snapshot.viewportRange.start}..${snapshot.viewportRange.end}`
+  const visibleRows = rowModel.getRowsInRange(visibleRowRange)
+  serverFillVisibleRowsPreviewText.value = visibleRows
+    .slice(0, 5)
+    .map(row => `${String(row.rowId)}:${String(resolveColumnValue(row.row as ServerDemoRow, columnKey))}`)
+    .join(", ") || "none"
+  const rowByIndex = Number.isFinite(visibleIndex) ? rowModel.getRow(visibleIndex) : null
+  serverFillSampleLookupByIndexText.value = rowByIndex
+    ? `${String(rowByIndex.rowId)}:${rowByIndex.kind !== "group" ? String(resolveColumnValue(rowByIndex.row as ServerDemoRow, columnKey)) : "group"}`
+    : "missing"
+  const rowById = visibleRows.find(row => String(row.rowId) === rowId)
+  serverFillSampleLookupByIdText.value = rowById
+    ? `${String(rowById.rowId)}:${rowById.kind !== "group" ? String(resolveColumnValue(rowById.row as ServerDemoRow, columnKey)) : "group"}`
+    : "missing"
+  const cachedRow = rowByIndex ?? rowById
+  const rowCacheValue = cachedRow && cachedRow.kind !== "group"
+    ? resolveColumnValue(cachedRow.row as ServerDemoRow, columnKey)
+    : undefined
+  serverFillSampleRowCacheText.value = String(rowCacheValue ?? "missing")
+  serverFillSampleCellReaderText.value = String(rowCacheValue ?? "missing")
+  const columnIndex = resolveVisibleColumnIndex(columnKey)
+  const cell = document.querySelector<HTMLElement>(
+    columnIndex >= 0
+      ? `.sandbox-server-data-source-grid .grid-cell[data-row-id="${rowId}"][data-column-index="${columnIndex}"]`
+      : `.sandbox-server-data-source-grid .grid-cell[data-row-id="${rowId}"]`,
+  )
+  serverFillSampleRenderedText.value = cell?.textContent?.trim() || "not-rendered"
+}
+
+function scheduleRenderedSampleDiagnostics(): void {
+  void nextTick(() => {
+    for (const delay of [0, 50, 200, 500]) {
+      window.setTimeout(() => {
+        updateRenderedSampleDiagnostics()
+      }, delay)
+    }
+  })
+}
+
+interface ServerDemoFillChange {
+  rowId: string
+  columnKey: string
+  before: unknown
+  after: unknown
+}
+
+interface ServerDemoFillOperationRecord {
+  operationId: string
+  revision: number
+  sourceRange: DataGridViewportRange
+  targetRange: DataGridViewportRange
+  mode: "copy" | "series"
+  changes: ServerDemoFillChange[]
+  applied: boolean
 }
 
 function captureFillBoundary(result: {
@@ -325,6 +823,171 @@ function createRow(index: number): ServerDemoRow {
   const committed = committedOverrides.value.get(baseRow.id)
   const pending = pendingOverrides.value.get(baseRow.id)
   return committed || pending ? { ...baseRow, ...committed, ...pending } : baseRow
+}
+
+const fillOperations = new Map<string, ServerDemoFillOperationRecord>()
+let fillRevision = 0
+
+function resolveColumnValue(row: ServerDemoRow, columnKey: string): unknown {
+  return row[columnKey as keyof ServerDemoRow]
+}
+
+function applyOverride(rowId: string, columnKey: string, value: unknown): void {
+  const next = { ...(committedOverrides.value.get(rowId) ?? {}) }
+  next[columnKey as keyof ServerDemoRow] = value as never
+  committedOverrides.value.set(rowId, next)
+}
+
+function clearOverride(rowId: string, columnKey: string): void {
+  const existing = committedOverrides.value.get(rowId)
+  if (!existing) {
+    return
+  }
+  const next = { ...existing }
+  delete next[columnKey as keyof ServerDemoRow]
+  if (Object.keys(next).length === 0) {
+    committedOverrides.value.delete(rowId)
+    return
+  }
+  committedOverrides.value.set(rowId, next)
+}
+
+function buildSeriesValue(seed: unknown, offset: number): unknown {
+  if (typeof seed === "number") {
+    return seed + offset
+  }
+  const text = String(seed ?? "")
+  const match = text.match(/^(.*?)(-?\d+)$/)
+  if (!match) {
+    return text
+  }
+  const prefix = match[1] ?? ""
+  const value = Number(match[2] ?? "0")
+  return `${prefix}${value + offset}`
+}
+
+function applyFillOperation(
+  request: {
+    operationId?: string | null
+    sourceRange: DataGridViewportRange | { startRow?: number; endRow?: number; start?: number; end?: number }
+    targetRange: DataGridViewportRange | { startRow?: number; endRow?: number; start?: number; end?: number }
+    fillColumns: readonly string[]
+    mode: "copy" | "series"
+  },
+): ServerDemoFillOperationRecord {
+  const normalizedSourceRange = normalizeViewportRange(request.sourceRange)
+  const normalizedTargetRange = normalizeViewportRange(request.targetRange)
+  serverFillRequestText.value = `source=${JSON.stringify(request.sourceRange)} target=${JSON.stringify(request.targetRange)}`
+  serverFillRequestModeText.value = request.mode
+  serverFillRequestFillColumnsText.value = request.fillColumns.join(", ")
+  serverFillRequestReferenceColumnsText.value = "n/a"
+  serverFillAffectedRangeText.value = `raw=${JSON.stringify({ sourceRange: request.sourceRange, targetRange: request.targetRange })}`
+  if (!normalizedSourceRange || !normalizedTargetRange || request.fillColumns.length === 0) {
+    serverFillVisibleOverlapText.value = "unknown"
+    serverFillSampleRowText.value = "invalid-range"
+    serverFillSampleBeforeText.value = "none"
+    serverFillSampleAfterText.value = "none"
+    serverFillSamplePullAfterText.value = "none"
+    serverFillSampleCachedAfterText.value = "none"
+    serverFillSampleRowIndexText.value = "none"
+    serverFillSampleLookupByIndexText.value = "none"
+    serverFillSampleLookupByIdText.value = "none"
+    serverFillSampleRowCacheText.value = "none"
+    serverFillSampleCellReaderText.value = "none"
+    serverFillSampleRenderedText.value = "none"
+    throw new Error("invalid server fill range")
+  }
+  const operationId = request.operationId && request.operationId.trim().length > 0
+    ? request.operationId
+    : `fill-${++fillRevision}`
+  const changes: ServerDemoFillChange[] = []
+  const sourceHeight = Math.max(1, normalizedSourceRange.end - normalizedSourceRange.start + 1)
+  const renderedViewportStart = typeof centerPaneDebugPayload.value?.renderedViewport?.start === "number"
+    ? centerPaneDebugPayload.value.renderedViewport.start
+    : lastViewportRange.value.start
+  const renderedViewportEnd = typeof centerPaneDebugPayload.value?.renderedViewport?.end === "number"
+    ? centerPaneDebugPayload.value.renderedViewport.end
+    : lastViewportRange.value.end
+  const sampleColumnKey = request.fillColumns[0] ?? "value"
+  const targetVisibleRows = Array.from({ length: normalizedTargetRange.end - normalizedTargetRange.start + 1 }, (_unused, offset) => normalizedTargetRange.start + offset)
+    .filter(rowIndex => rowIndex >= renderedViewportStart && rowIndex <= renderedViewportEnd && (rowIndex < normalizedSourceRange.start || rowIndex > normalizedSourceRange.end))
+  const sampleRowIndex = targetVisibleRows.find(rowIndex => {
+    const row = createRow(rowIndex)
+    const before = resolveColumnValue(row, sampleColumnKey)
+    const sourceRowIndex = normalizedSourceRange.start + ((rowIndex - normalizedTargetRange.start) % sourceHeight)
+    const sourceValue = resolveColumnValue(createRow(sourceRowIndex), sampleColumnKey)
+    return before !== sourceValue
+  }) ?? targetVisibleRows[0] ?? null
+  serverFillSampleColumnText.value = sampleColumnKey
+  if (sampleRowIndex == null) {
+    serverFillSampleStateText.value = "visible rows already match source value"
+    serverFillSampleRowText.value = "none"
+    serverFillSampleBeforeText.value = "none"
+    serverFillSampleAfterText.value = "none"
+    serverFillSamplePullAfterText.value = "none"
+    serverFillSampleCachedAfterText.value = "none"
+    serverFillSampleRowIndexText.value = "none"
+    serverFillSampleLookupByIndexText.value = "none"
+    serverFillSampleLookupByIdText.value = "none"
+    serverFillSampleRowCacheText.value = "none"
+    serverFillSampleCellReaderText.value = "none"
+    serverFillSampleRenderedText.value = "none"
+  } else {
+    serverFillSampleStateText.value = "selected"
+    serverFillSampleRowText.value = resolveRowId(sampleRowIndex)
+    serverFillSampleRowIndexText.value = String(sampleRowIndex)
+    serverFillSampleBeforeText.value = String(resolveColumnValue(createRow(sampleRowIndex), sampleColumnKey))
+  }
+  for (let rowIndex = normalizedTargetRange.start; rowIndex <= normalizedTargetRange.end; rowIndex += 1) {
+    const sourceRowIndex = normalizedSourceRange.start + ((rowIndex - normalizedTargetRange.start) % sourceHeight)
+    const sourceRow = createRow(sourceRowIndex)
+    const targetRow = createRow(rowIndex)
+    for (const columnKey of request.fillColumns) {
+      const before = resolveColumnValue(targetRow, columnKey)
+      const sourceValue = resolveColumnValue(sourceRow, columnKey)
+      const after = request.mode === "series"
+        ? buildSeriesValue(sourceValue, rowIndex - normalizedTargetRange.start)
+        : sourceValue
+      if (sampleRowIndex != null && rowIndex === sampleRowIndex && columnKey === sampleColumnKey) {
+        serverFillSampleAfterText.value = String(after)
+      }
+      changes.push({
+        rowId: targetRow.id,
+        columnKey,
+        before,
+        after,
+      })
+      applyOverride(targetRow.id, columnKey, after)
+    }
+  }
+  return {
+    operationId,
+    revision: ++fillRevision,
+    sourceRange: normalizedSourceRange,
+    targetRange: normalizedTargetRange,
+    mode: request.mode,
+    changes,
+    applied: true,
+  }
+}
+
+function toggleFillOperation(operationId: string, apply: boolean): ServerDemoFillOperationRecord | null {
+  const record = fillOperations.get(operationId)
+  if (!record) {
+    return null
+  }
+  for (const change of record.changes) {
+    if (apply) {
+      applyOverride(change.rowId, change.columnKey, change.after)
+    } else if (typeof change.before === "undefined") {
+      clearOverride(change.rowId, change.columnKey)
+    } else {
+      applyOverride(change.rowId, change.columnKey, change.before)
+    }
+  }
+  record.applied = apply
+  record.revision = ++fillRevision
+  return record
 }
 
 function compareSortValue(left: unknown, right: unknown, direction: "asc" | "desc"): number {
@@ -608,6 +1271,15 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
         row,
         rowId: row.id,
       }))
+      const sampleRowIndex = Number(String(serverFillSampleRowText.value).replace(/^srv-0*/, ""))
+      const sampleRow = Number.isFinite(sampleRowIndex)
+        ? rows.find(entry => entry.index === sampleRowIndex)
+        : null
+  if (sampleRow) {
+        const sampleColumnKey = (serverFillSampleColumnText.value !== "none" ? serverFillSampleColumnText.value : serverFillRequestFillColumnsText.value.split(", ")[0] ?? "value") as string
+        serverFillSamplePullAfterText.value = String(resolveColumnValue(sampleRow.row, sampleColumnKey))
+        scheduleRenderedSampleDiagnostics()
+      }
       totalRows.value = filteredRows.length
       loadedRows.value = Math.min(filteredRows.length, Math.max(loadedRows.value, end + 1))
       return {
@@ -633,6 +1305,9 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
     }
   },
   invalidate(invalidation: DataGridDataSourceInvalidation) {
+    if (invalidation.reason === "model-range" || invalidation.reason === "model-all") {
+      return
+    }
     for (const listener of listeners) {
       listener({ type: "invalidate", invalidation })
     }
@@ -713,7 +1388,112 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
   async commitEdits(request: ServerDemoCommitEditsRequest) {
     return applyCommitEdits(request)
   },
+  async commitFillOperation(request: ServerDemoCommitFillRequest) {
+    let record: ServerDemoFillOperationRecord
+    try {
+      record = applyFillOperation({
+        operationId: request.operationId,
+        sourceRange: request.sourceRange as unknown as DataGridViewportRange,
+        targetRange: request.targetRange as unknown as DataGridViewportRange,
+        fillColumns: request.fillColumns,
+        mode: request.mode,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      fillWarningText.value = `server fill rejected: ${message}`
+      fillBlockedText.value = "yes"
+      fillAppliedText.value = "no"
+      commitFillOperationCalledText.value = "yes"
+      serverFillOperationIdText.value = request.operationId ?? "none"
+      serverFillAffectedRowsText.value = "0"
+      serverFillSampleAfterText.value = "none"
+      serverFillSamplePullAfterText.value = "none"
+      serverFillSampleCachedAfterText.value = "none"
+      return {
+        operationId: request.operationId ?? `fill-${++fillRevision}`,
+        revision: fillRevision,
+        affectedRowCount: 0,
+        affectedCellCount: 0,
+        invalidation: null,
+        warnings: [message],
+      }
+    }
+    const mutatedCount = record.changes.filter(change => change.before !== change.after).length
+    if (mutatedCount === 0) {
+      fillWarningText.value = "server fill no-op"
+      fillBlockedText.value = "no"
+      fillAppliedText.value = "server"
+      commitFillOperationCalledText.value = "yes"
+      serverFillOperationIdText.value = record.operationId
+      serverFillAffectedRowsText.value = "0"
+      serverFillAffectedRangeText.value = `normalized=${formatViewportRange(record.targetRange)}`
+      return {
+        operationId: record.operationId,
+        revision: record.revision,
+        affectedRowCount: 0,
+        affectedCellCount: 0,
+        invalidation: null,
+        warnings: ["server fill no-op"],
+      }
+    }
+    fillOperations.set(record.operationId, record)
+    fillWarningText.value = "none"
+    fillBlockedText.value = "no"
+    fillAppliedText.value = "yes"
+    commitFillOperationCalledText.value = "yes"
+    serverFillOperationIdText.value = record.operationId
+    serverFillAffectedRowsText.value = String(mutatedCount)
+    const sampleRowId = serverFillSampleRowText.value
+    const sampleColumnKey = readSampleColumnKey()
+    const sampleChange = record.changes.find(change => (
+      change.rowId === sampleRowId && change.columnKey === sampleColumnKey
+    )) ?? null
+    if (sampleChange) {
+      serverFillSampleAfterText.value = String(sampleChange.after)
+      const sampleRowIndex = parseSampleRowIndex() ?? record.targetRange.start
+      serverFillSamplePullAfterText.value = String(resolveColumnValue(createRow(sampleRowIndex), sampleChange.columnKey))
+      serverFillSampleCachedAfterText.value = serverFillSamplePullAfterText.value
+    }
+    lastHistoryActionText.value = "server-commit"
+    return {
+      operationId: record.operationId,
+      revision: record.revision,
+      affectedRowCount: mutatedCount,
+      affectedCellCount: mutatedCount,
+      invalidation: { kind: "range", range: record.targetRange, reason: "server-fill" },
+      undoToken: record.operationId,
+      redoToken: record.operationId,
+      warnings: [],
+    }
+  },
+  async undoFillOperation(request: ServerDemoUndoFillRequest) {
+    const record = toggleFillOperation(request.operationId, false)
+    if (!record) {
+      return { operationId: request.operationId, revision: fillRevision, warnings: ["missing-operation"] }
+    }
+    lastHistoryActionText.value = "server-undo"
+    return {
+      operationId: record.operationId,
+      revision: record.revision,
+      invalidation: { kind: "range", range: record.targetRange, reason: "server-fill-undo" },
+      warnings: [],
+    }
+  },
+  async redoFillOperation(request: ServerDemoUndoFillRequest) {
+    const record = toggleFillOperation(request.operationId, true)
+    if (!record) {
+      return { operationId: request.operationId, revision: fillRevision, warnings: ["missing-operation"] }
+    }
+    lastHistoryActionText.value = "server-redo"
+    return {
+      operationId: record.operationId,
+      revision: record.revision,
+      invalidation: { kind: "range", range: record.targetRange, reason: "server-fill-redo" },
+      warnings: [],
+    }
+  },
 }
+
 
 const rowModel = createDataSourceBackedRowModel<ServerDemoRow>({
   dataSource,
@@ -730,6 +1510,16 @@ const rowModel = createDataSourceBackedRowModel<ServerDemoRow>({
   resolveRowId: row => row.id,
 })
 
+const unsubscribeSampleDiagnostics = rowModel.subscribe(() => {
+  diagnostics.value = rowModel.getBackpressureDiagnostics()
+  scheduleRenderedSampleDiagnostics()
+})
+
+datasourceKeysText.value = Object.keys(dataSource).sort().join(", ")
+rowModelKeysText.value = Object.keys((rowModel as typeof rowModel & { dataSource?: Record<string, unknown> }).dataSource ?? {}).sort().join(", ")
+datasourceCommitFillOperationText.value = typeof dataSource.commitFillOperation === "function" ? "yes" : "no"
+rowModelCommitFillOperationText.value = typeof (rowModel as typeof rowModel & { dataSource?: { commitFillOperation?: unknown } }).dataSource?.commitFillOperation === "function" ? "yes" : "no"
+
 const safeEditableColumns = new Set(["name", "segment", "status", "region", "value"])
 
 const columns = [
@@ -741,6 +1531,7 @@ const columns = [
   { key: "value", label: "Value", minWidth: 110, flex: 0.8, capabilities: { sortable: true, editable: true } },
   { key: "updatedAt", label: "Updated", minWidth: 180, flex: 1.1, capabilities: { sortable: true } },
 ] satisfies readonly DataGridAppColumnInput<ServerDemoRow>[]
+serverFillVisibleColumnText.value = String(columns[4]?.key ?? "missing")
 
 const diagnostics = ref(rowModel.getBackpressureDiagnostics())
 const sortModelLabel = computed(() => {
@@ -755,6 +1546,13 @@ const rowCacheLabel = computed(() => `${diagnostics.value.rowCacheSize} / ${diag
 const commitModeLabel = computed(() => commitModeText.value)
 const commitMessageLabel = computed(() => commitMessageText.value)
 const commitDetailsLabel = computed(() => commitDetailsText.value)
+const clientBatchAppliedLabel = computed(() => clientBatchAppliedText.value)
+const clientBatchWarningLabel = computed(() => clientBatchWarningText.value)
+const datasourceKeysLabel = computed(() => datasourceKeysText.value)
+const datasourceDetailLabel = computed(() => datasourceDetailText.value)
+const datasourceCommitFillOperationLabel = computed(() => datasourceCommitFillOperationText.value)
+const rowModelCommitFillOperationLabel = computed(() => rowModelCommitFillOperationText.value)
+const rowModelKeysLabel = computed(() => rowModelKeysText.value)
 const lastBatchRowsLabel = computed(() => lastBatchRowsText.value)
 const lastSkippedRowsLabel = computed(() => lastSkippedRowsText.value)
 const fillWarningLabel = computed(() => fillWarningText.value)
@@ -763,6 +1561,103 @@ const fillBoundaryLeftLabel = computed(() => fillBoundaryLeftText.value)
 const fillBoundaryRightLabel = computed(() => fillBoundaryRightText.value)
 const fillBlockedLabel = computed(() => fillBlockedText.value)
 const fillAppliedLabel = computed(() => fillAppliedText.value)
+const commitFillOperationAvailableLabel = computed(() => commitFillOperationAvailableText.value)
+const serverFillDispatchAttemptedLabel = computed(() => serverFillDispatchAttemptedText.value)
+const commitFillOperationCalledLabel = computed(() => commitFillOperationCalledText.value)
+const serverFillOperationIdLabel = computed(() => serverFillOperationIdText.value)
+const serverFillAffectedRowsLabel = computed(() => serverFillAffectedRowsText.value)
+const serverFillAffectedRangeLabel = computed(() => serverFillAffectedRangeText.value)
+const serverFillVisibleOverlapLabel = computed(() => serverFillVisibleOverlapText.value)
+const serverFillRequestLabel = computed(() => serverFillRequestText.value)
+const serverFillRequestModeLabel = computed(() => serverFillRequestModeText.value)
+const serverFillRequestFillColumnsLabel = computed(() => serverFillRequestFillColumnsText.value)
+const serverFillRequestReferenceColumnsLabel = computed(() => serverFillRequestReferenceColumnsText.value)
+const serverFillRenderedViewportLabel = computed(() => serverFillRenderedViewportText.value)
+const serverFillRawInvalidationLabel = computed(() => serverFillRawInvalidationText.value)
+const serverFillInvalidationRangeLabel = computed(() => serverFillInvalidationRangeText.value)
+const serverFillNormalizedInvalidationLabel = computed(() => serverFillNormalizedInvalidationText.value)
+const serverFillInvalidationAppliedLabel = computed(() => serverFillInvalidationAppliedText.value)
+const serverFillRuntimeRowModelInvalidateTypeLabel = computed(() => serverFillRuntimeRowModelInvalidateTypeText.value)
+const serverFillInvalidateCalledLabel = computed(() => serverFillInvalidateCalledText.value)
+const serverFillCacheRow1BeforeInvalidationLabel = computed(() => serverFillCacheRow1BeforeInvalidationText.value)
+const serverFillCacheRow1AfterInvalidationLabel = computed(() => serverFillCacheRow1AfterInvalidationText.value)
+const serverFillSyncInputRangeLabel = computed(() => serverFillSyncInputRangeText.value)
+const serverFillLatestRenderedViewportLabel = computed(() => serverFillLatestRenderedViewportText.value)
+const serverFillRuntimeRenderedViewportLabel = computed(() => serverFillRuntimeRenderedViewportText.value)
+const serverFillDisplayRowsRenderedViewportLabel = computed(() => serverFillDisplayRowsRenderedViewportText.value)
+const serverFillSelectedRenderedViewportLabel = computed(() => serverFillSelectedRenderedViewportText.value)
+const serverFillRefreshUsedStoredRenderedLabel = computed(() => serverFillRefreshUsedStoredRenderedText.value)
+const centerPaneStoredRenderedViewportLabel = computed(() => centerPaneStoredRenderedViewportText.value)
+const serverFillSampleColumnLabel = computed(() => serverFillSampleColumnText.value)
+const serverFillSampleStateLabel = computed(() => serverFillSampleStateText.value)
+const serverFillSampleRowLabel = computed(() => serverFillSampleRowText.value)
+const serverFillSampleBeforeLabel = computed(() => serverFillSampleBeforeText.value)
+const serverFillSampleAfterLabel = computed(() => serverFillSampleAfterText.value)
+const serverFillSamplePullAfterLabel = computed(() => serverFillSamplePullAfterText.value)
+const serverFillSampleCachedAfterLabel = computed(() => serverFillSampleCachedAfterText.value)
+const serverFillSampleRowIndexLabel = computed(() => serverFillSampleRowIndexText.value)
+const serverFillSampleVisibleIndexLabel = computed(() => serverFillSampleVisibleIndexText.value)
+const serverFillSampleLookupByIndexLabel = computed(() => serverFillSampleLookupByIndexText.value)
+const serverFillSampleLookupByIdLabel = computed(() => serverFillSampleLookupByIdText.value)
+const serverFillSampleRowCacheLabel = computed(() => serverFillSampleRowCacheText.value)
+const serverFillSampleCellReaderLabel = computed(() => serverFillSampleCellReaderText.value)
+const serverFillSampleRenderedLabel = computed(() => serverFillSampleRenderedText.value)
+const serverFillRowModelSnapshotLabel = computed(() => serverFillRowModelSnapshotText.value)
+const serverFillVisibleRowsPreviewLabel = computed(() => serverFillVisibleRowsPreviewText.value)
+const runtimeViewportRangeLabel = computed(() => runtimeViewportRangeText.value)
+const runtimeRowModelSnapshotLabel = computed(() => runtimeRowModelSnapshotText.value)
+const runtimeVisibleFirst5Label = computed(() => runtimeVisibleFirst5Text.value)
+const runtimeSampleRow25VisibleIndexLabel = computed(() => runtimeSampleRow25VisibleIndexText.value)
+const runtimeSampleRow25RegionLabel = computed(() => runtimeSampleRow25RegionText.value)
+const runtimeRedrawReasonLabel = computed(() => runtimeRedrawReasonText.value)
+const runtimeRedrawHappenedLabel = computed(() => runtimeRedrawHappenedText.value)
+const runtimeDiagnosticsAliveLabel = computed(() => runtimeDiagnosticsAliveText.value)
+const centerPaneAliveLabel = computed(() => centerPaneAliveText.value)
+const centerPaneMountedLabel = computed(() => centerPaneMountedText.value)
+const centerPaneDebugJsonLabel = computed(() => centerPaneDebugJsonText.value)
+const displayRowsRecomputeCountLabel = computed(() => displayRowsRecomputeCountText.value)
+const centerPaneRuntimeRevisionLabel = computed(() => centerPaneRuntimeRevisionText.value)
+const centerPaneBodyRowsRevisionLabel = computed(() => centerPaneBodyRowsRevisionText.value)
+const sourceBodyRow1Label = computed(() => sourceBodyRow1Text.value)
+const sourceBodyRow1IdentityLabel = computed(() => sourceBodyRow1IdentityText.value)
+const sourceSyncRow1Label = computed(() => sourceSyncRow1Text.value)
+const serverFillRow1CacheStatusLabel = computed(() => serverFillRow1CacheStatusText.value)
+const serverFillRow1SyncValueLabel = computed(() => serverFillRow1SyncValueText.value)
+type CenterPaneDebugJson = {
+  rowsLength?: number
+  renderedViewport?: { start?: number | null; end?: number | null }
+  displayRowsRecomputeCount?: number
+  centerPaneRuntimeRevision?: string | number | null
+  centerPaneBodyRowsRevision?: string | number | null
+  firstFive?: readonly unknown[]
+  row1?: {
+    exists?: boolean
+    id?: string | null
+    keys?: readonly unknown[]
+    summary?: {
+      index?: number | null
+      kind?: string | null
+      dataKeys?: readonly string[]
+      dataRegion?: string | null
+      rowRegion?: string | null
+    } | null
+    regionCandidates?: unknown
+  }
+  sampleRenderedValue?: string | null
+}
+
+const centerPaneDebugPayload = computed<CenterPaneDebugJson | null>(() => {
+  if (centerPaneDebugJsonText.value === "none" || centerPaneDebugJsonText.value.length === 0) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(centerPaneDebugJsonText.value) as CenterPaneDebugJson
+    return parsed && typeof parsed === "object" ? parsed : null
+  } catch {
+    return null
+  }
+})
+const serverFillVisibleColumnLabel = computed(() => serverFillVisibleColumnText.value)
 const plumbingLabel = computed(() => {
   const entries = Object.entries(plumbingState.value).map(([layer, present]) => `${layer}:${present ? "yes" : "no"}`)
   return entries.length > 0 ? entries.join(", ") : "none"
@@ -782,6 +1677,13 @@ const loadingLabel = computed(() => {
 const errorLabel = computed(() => error.value?.message ?? "none")
 const totalRowsLabel = computed(() => totalRows.value.toLocaleString())
 const viewportLabel = computed(() => `${lastViewportRange.value.start}..${lastViewportRange.value.end}`)
+const renderedViewportLabel = computed(() => {
+  const renderedViewport = centerPaneDebugPayload.value?.renderedViewport
+  if (!renderedViewport) {
+    return "none"
+  }
+  return `${renderedViewport.start ?? "none"}..${renderedViewport.end ?? "none"}`
+})
 const loadedRowsLabel = computed(() => loadedRows.value.toLocaleString())
 const pendingRequestsLabel = computed(() => String(pendingRequests.value))
 
@@ -819,7 +1721,6 @@ function handleStateUpdate(state: unknown): void {
 }
 
 function updateFillDiagnostics(batchRowCount: number, warnings: string[]): void {
-  fillAppliedText.value = batchRowCount > 0 ? "yes" : "no"
   lastBatchRowsText.value = String(batchRowCount)
   const expectedRows = lastSelectionRange.value
     ? Math.max(0, lastSelectionRange.value.endRow - lastSelectionRange.value.startRow + 1)
@@ -830,18 +1731,157 @@ function updateFillDiagnostics(batchRowCount: number, warnings: string[]): void 
   if (skippedRows > 0 && loadedRows.value < totalRows.value) {
     derivedWarnings.push("likely stopped at cache boundary")
   }
-  fillWarningText.value = derivedWarnings.length > 0 ? derivedWarnings.join("; ") : "none"
+  clientBatchAppliedText.value = batchRowCount > 0 ? "yes" : "no"
+  clientBatchWarningText.value = derivedWarnings.length > 0 ? derivedWarnings.join("; ") : "none"
 }
 
 function handleFillWarning(message: string): void {
   fillWarningText.value = message
-  fillBlockedText.value = "yes"
+  const isServerPath = message === "server fill committed" || message === "server fill no-op"
+  fillBlockedText.value = isServerPath ? "no" : "yes"
+  if (isServerPath) {
+    fillAppliedText.value = "server"
+  }
+}
+
+function reportFillPlumbingDetail(layer: string, value: string): void {
+  if (layer === "controller_runtimeRowModel_dataSource_keys") {
+    datasourceDetailText.value = value || "none"
+  } else if (layer === "controller_runtime_rowModel_keys") {
+    rowModelKeysText.value = value || "none"
+  } else if (layer === "server_fill_affected_range") {
+    serverFillAffectedRangeText.value = value || "none"
+  } else if (layer === "server_fill_visible_overlap") {
+    serverFillVisibleOverlapText.value = value || "unknown"
+  } else if (layer === "runtime_viewport_range") {
+    runtimeViewportRangeText.value = value || "none"
+  } else if (layer === "runtime_rowModel_snapshot") {
+    runtimeRowModelSnapshotText.value = value || "none"
+  } else if (layer === "runtime_visible_first5") {
+    runtimeVisibleFirst5Text.value = value || "none"
+  } else if (layer === "runtime_sample_row25_visible_index") {
+    runtimeSampleRow25VisibleIndexText.value = value || "none"
+  } else if (layer === "runtime_sample_row25_region") {
+    runtimeSampleRow25RegionText.value = value || "none"
+  } else if (layer === "runtime_redraw_reason") {
+    runtimeRedrawReasonText.value = value || "none"
+  } else if (layer === "runtime_diagnostics_alive") {
+    runtimeDiagnosticsAliveText.value = value || "none"
+  } else if (layer === "runtime_body_rows_length") {
+    runtimeRowModelSnapshotText.value = value ? `bodyRows=${value}` : runtimeRowModelSnapshotText.value
+  } else if (layer === "runtime_body_first5_ids") {
+    runtimeVisibleFirst5Text.value = value || runtimeVisibleFirst5Text.value
+  } else if (layer === "runtime_body_first5_indexes") {
+    runtimeRedrawReasonText.value = value ? `bodyIndexes=${value}` : runtimeRedrawReasonText.value
+  } else if (layer === "runtime_body_sample_row25_visible_index") {
+    runtimeSampleRow25VisibleIndexText.value = value || runtimeSampleRow25VisibleIndexText.value
+  } else if (layer === "runtime_body_sample_row25_region") {
+    runtimeSampleRow25RegionText.value = value || runtimeSampleRow25RegionText.value
+  } else if (layer === "runtime_body_diagnostics_reason") {
+    runtimeRedrawReasonText.value = value || runtimeRedrawReasonText.value
+  } else if (layer === "server_fill_rendered_viewport") {
+    serverFillRenderedViewportText.value = value || "none"
+  } else if (layer === "server_fill_raw_invalidation") {
+    serverFillRawInvalidationText.value = value || "none"
+  } else if (layer === "server_fill_invalidation_range") {
+    serverFillInvalidationRangeText.value = value || "none"
+  } else if (layer === "server_fill_normalized_invalidation") {
+    serverFillNormalizedInvalidationText.value = value || "none"
+  } else if (layer === "server_fill_invalidation_applied") {
+    serverFillInvalidationAppliedText.value = value || "unknown"
+  } else if (layer === "server_fill_runtime_rowModel_invalidate_type") {
+    serverFillRuntimeRowModelInvalidateTypeText.value = value || "none"
+  } else if (layer === "server_fill_invalidation_called") {
+    serverFillInvalidateCalledText.value = value || "unknown"
+  } else if (layer === "server_fill_cache_row1_before_invalidation") {
+    serverFillCacheRow1BeforeInvalidationText.value = value || "unknown"
+  } else if (layer === "server_fill_cache_row1_after_invalidation") {
+    serverFillCacheRow1AfterInvalidationText.value = value || "unknown"
+  } else if (layer === "server_fill_sync_input_range") {
+    serverFillSyncInputRangeText.value = value || "none"
+  } else if (layer === "server_fill_latest_rendered_viewport") {
+    serverFillLatestRenderedViewportText.value = value || "none"
+  } else if (layer === "server_fill_runtime_rendered_viewport") {
+    serverFillRuntimeRenderedViewportText.value = value || "none"
+  } else if (layer === "server_fill_displayrows_rendered_viewport") {
+    serverFillDisplayRowsRenderedViewportText.value = value || "none"
+  } else if (layer === "server_fill_selected_rendered_viewport") {
+    serverFillSelectedRenderedViewportText.value = value || "none"
+  } else if (layer === "server_fill_refresh_used_stored_rendered") {
+    serverFillRefreshUsedStoredRenderedText.value = value || "no"
+  } else if (layer === "centerPaneStoredRenderedViewport") {
+    centerPaneStoredRenderedViewportText.value = value || "none"
+  } else if (layer === "source_body_row1") {
+    sourceBodyRow1Text.value = value || "none"
+  } else if (layer === "source_body_row1_identity") {
+    sourceBodyRow1IdentityText.value = value || "none"
+  } else if (layer === "source_sync_row1") {
+    sourceSyncRow1Text.value = value || "none"
+  } else if (layer === "server_fill_row1_cache_status") {
+    serverFillRow1CacheStatusText.value = value || "unknown"
+  } else if (layer === "server_fill_row1_sync_value") {
+    serverFillRow1SyncValueText.value = value || "none"
+  }
+}
+
+function reportCenterPaneDiagnostics(payload: {
+  mounted?: boolean
+  debugJson?: string
+  renderedViewport?: { start: number; end: number } | null
+  displayRowsRecomputeCount?: number
+  centerPaneRuntimeRevision?: string | number | null
+  centerPaneBodyRowsRevision?: string | number | null
+}): void {
+  if (typeof payload.mounted === "boolean") {
+    centerPaneMountedText.value = payload.mounted ? "yes" : "no"
+    centerPaneAliveText.value = payload.mounted ? "yes" : centerPaneAliveText.value
+  }
+  if (typeof payload.debugJson === "string") {
+    centerPaneDebugJsonText.value = payload.debugJson || "none"
+  }
+  if (typeof payload.displayRowsRecomputeCount === "number") {
+    displayRowsRecomputeCountText.value = String(payload.displayRowsRecomputeCount)
+  }
+  if ("centerPaneRuntimeRevision" in payload) {
+    centerPaneRuntimeRevisionText.value = payload.centerPaneRuntimeRevision == null
+      ? "none"
+      : String(payload.centerPaneRuntimeRevision)
+  }
+  if ("centerPaneBodyRowsRevision" in payload) {
+    centerPaneBodyRowsRevisionText.value = payload.centerPaneBodyRowsRevision == null
+      ? "none"
+      : String(payload.centerPaneBodyRowsRevision)
+  }
 }
 
 function reportFillPlumbingState(layer: string, present: boolean): void {
   plumbingState.value = {
     ...plumbingState.value,
     [layer]: present,
+  }
+  if (layer === "commitFillOperation_available") {
+    commitFillOperationAvailableText.value = present ? "yes" : "no"
+  } else if (layer === "server_fill_dispatch_attempted") {
+    serverFillDispatchAttemptedText.value = present ? "yes" : "no"
+  } else if (layer === "commitFillOperation_called") {
+    commitFillOperationCalledText.value = present ? "yes" : "no"
+  } else if (layer === "server_fill_operationId") {
+    serverFillOperationIdText.value = "set"
+  } else if (layer === "server_fill_affectedRowCount") {
+    serverFillAffectedRowsText.value = "set"
+  } else if (layer === "server_fill_invalidation_applied") {
+    serverFillInvalidationAppliedText.value = present ? "yes" : "no"
+  } else if (layer === "server_fill_invalidation_called") {
+    serverFillInvalidateCalledText.value = present ? "yes" : "no"
+  } else if (layer === "runtime_redraw_happened") {
+    runtimeRedrawHappenedText.value = present ? "yes" : "no"
+  } else if (layer === "runtime_diagnostics_alive") {
+    runtimeDiagnosticsAliveText.value = present ? "yes" : "no"
+  } else if (layer === "server-fill-committed" && present) {
+    branchState.value = "server-fill-committed"
+    fillWarningText.value = "server fill committed"
+    fillBlockedText.value = "no"
+    fillAppliedText.value = "server"
   }
   if (layer === "double_click_handler" && present) {
     branchState.value = "double-click"
@@ -1000,35 +2040,63 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unsubscribeSampleDiagnostics()
   rowModel.dispose()
 })
 </script>
 
 <style scoped>
-.server-grid__surface {
+.server-grid__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem);
+  gap: 1rem;
+  align-items: stretch;
   margin-top: 0.75rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.server-grid__surface {
+  min-width: 0;
+  min-height: 0;
 }
 
 .server-grid__diagnostics {
-  margin-top: 1rem;
-  padding: 0.9rem 1rem 1rem;
+  margin-top: 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  padding: 0.75rem 0.85rem 0.9rem;
   border-radius: 0.75rem;
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid rgba(35, 42, 48, 0.12);
-  min-width: 0;
-  max-height: min(42rem, 55vh);
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-size: 0.82rem;
 }
 
 .server-grid__diagnostics h3 {
-  margin: 0 0 0.75rem;
-  font-size: 0.95rem;
+  margin: 0 0 0.7rem;
+  font-size: 0.9rem;
+}
+
+.server-grid__diagnostics-section + .server-grid__diagnostics-section {
+  margin-top: 0.8rem;
+}
+
+.server-grid__diagnostics-section h4 {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(35, 42, 48, 0.62);
 }
 
 .server-grid__diagnostics-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
   margin: 0;
   min-width: 0;
   align-items: start;
@@ -1036,11 +2104,11 @@ onBeforeUnmount(() => {
 
 .server-grid__diagnostics-card {
   display: grid;
-  grid-template-columns: minmax(4.5rem, 6.5rem) minmax(0, 1fr);
-  gap: 0.75rem;
+  grid-template-columns: minmax(5rem, 6.5rem) minmax(0, 1fr);
+  gap: 0.55rem;
   align-items: start;
   min-width: 0;
-  padding: 0.65rem 0.75rem;
+  padding: 0.55rem 0.65rem;
   border-radius: 0.5rem;
   background: rgba(255, 255, 255, 0.48);
   border: 1px solid rgba(35, 42, 48, 0.08);
@@ -1062,5 +2130,24 @@ onBeforeUnmount(() => {
   color: rgba(35, 42, 48, 0.98);
   word-break: break-word;
   min-width: 0;
+}
+
+.server-grid__diagnostics-json {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 1100px) {
+  .server-grid__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .server-grid__diagnostics {
+    height: auto;
+    max-height: 24rem;
+  }
 }
 </style>

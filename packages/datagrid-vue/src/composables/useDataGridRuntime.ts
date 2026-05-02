@@ -529,17 +529,40 @@ export function useDataGridRuntime<TRow = unknown>(
     const normalizedRange = normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount)
     const syncedRows = runtime.syncRowsInRange(normalizedRange)
     if (sparseRowModel) {
+      for (let bodyIndex = normalizedRange.start; bodyIndex <= normalizedRange.end; bodyIndex += 1) {
+        const previousRow = bodyRows[bodyIndex]
+        if (
+          previousRow
+          && (typeof previousRow.rowId === "string" || typeof previousRow.rowId === "number")
+          && bodyRowIndexById.get(previousRow.rowId) === bodyIndex
+        ) {
+          bodyRowIndexById.delete(previousRow.rowId)
+        }
+        delete bodyRows[bodyIndex]
+      }
+      const rowsByBodyIndex = new Map<number, DataGridRowNode<TRow>>()
       for (const row of syncedRows) {
         if (isPinnedBodyExcludedRow(row)) {
           continue
         }
         const bodyIndex = Math.max(0, Math.trunc(row.displayIndex))
+        if (bodyIndex < normalizedRange.start || bodyIndex > normalizedRange.end) {
+          continue
+        }
         bodyRows[bodyIndex] = row
+        rowsByBodyIndex.set(bodyIndex, row)
         if (typeof row.rowId === "string" || typeof row.rowId === "number") {
           bodyRowIndexById.set(row.rowId, bodyIndex)
         }
       }
-      return syncedRows.filter(row => !isPinnedBodyExcludedRow(row))
+      const rows: DataGridRowNode<TRow>[] = []
+      for (let bodyIndex = normalizedRange.start; bodyIndex <= normalizedRange.end; bodyIndex += 1) {
+        const row = rowsByBodyIndex.get(bodyIndex)
+        if (row) {
+          rows.push(row)
+        }
+      }
+      return rows
     }
     if (rowPartition.value.bodyRowCount === 0 || bodyRows.length === 0) {
       return []
@@ -547,6 +570,25 @@ export function useDataGridRuntime<TRow = unknown>(
     const endExclusive = Math.min(bodyRows.length, normalizedRange.end + 1)
     if (normalizedRange.start >= endExclusive) {
       return []
+    }
+    for (const row of syncedRows) {
+      if (isPinnedBodyExcludedRow(row)) {
+        continue
+      }
+      let bodyIndex = -1
+      if (typeof row.rowId === "string" || typeof row.rowId === "number") {
+        bodyIndex = resolveBodyRowIndexById(row.rowId)
+      }
+      if (bodyIndex < 0) {
+        bodyIndex = Math.max(0, Math.trunc(row.displayIndex))
+      }
+      if (bodyIndex < normalizedRange.start || bodyIndex >= endExclusive) {
+        continue
+      }
+      bodyRows[bodyIndex] = row
+      if (typeof row.rowId === "string" || typeof row.rowId === "number") {
+        bodyRowIndexById.set(row.rowId, bodyIndex)
+      }
     }
     return bodyRows.slice(normalizedRange.start, endExclusive) as DataGridRowNode<TRow>[]
   }

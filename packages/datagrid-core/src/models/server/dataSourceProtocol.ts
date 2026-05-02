@@ -149,6 +149,66 @@ export interface DataGridDataSourceCommitEditsResult {
   }[]
 }
 
+export type DataGridFillMode = "copy" | "series"
+
+export interface DataGridDataSourceFillProjectionContext {
+  sortModel: readonly DataGridSortState[]
+  filterModel: DataGridFilterSnapshot | null
+  groupBy: DataGridGroupBySpec | null
+  groupExpansion: DataGridGroupExpansionSnapshot
+  treeData: DataGridDataSourceTreePullContext | null
+  pivot: DataGridDataSourcePivotPullContext | null
+  pagination: DataGridDataSourcePaginationPullContext
+}
+
+export interface DataGridDataSourceFillOperationRequest {
+  operationId?: string | null
+  revision?: string | number | null
+  projection: DataGridDataSourceFillProjectionContext
+  sourceRange: DataGridViewportRange
+  targetRange: DataGridViewportRange
+  fillColumns: readonly string[]
+  referenceColumns: readonly string[]
+  mode: DataGridFillMode
+  sourceRowIds?: readonly DataGridRowId[]
+  targetRowIds?: readonly DataGridRowId[]
+  metadata?: {
+    origin?: "drag-fill" | "double-click-fill" | "menu-reapply"
+    behaviorSource?: "default" | "explicit"
+  } | null
+}
+
+export interface DataGridDataSourceFillOperationResult {
+  operationId: string
+  revision?: string | number | null
+  affectedRowCount: number
+  affectedCellCount?: number
+  invalidation?: DataGridDataSourceInvalidation | null
+  undoToken?: string | null
+  redoToken?: string | null
+  warnings?: readonly string[]
+}
+
+export interface DataGridDataSourceFillUndoRequest {
+  operationId: string
+  revision?: string | number | null
+  projection: DataGridDataSourceFillProjectionContext
+}
+
+export interface DataGridDataSourceFillUndoResult {
+  operationId: string
+  revision?: string | number | null
+  invalidation?: DataGridDataSourceInvalidation | null
+  warnings?: readonly string[]
+}
+
+export interface DataGridDataSourceFillRedoResult {
+  operationId: string
+  revision?: string | number | null
+  invalidation?: DataGridDataSourceInvalidation | null
+  warnings?: readonly string[]
+}
+
 export interface DataGridDataSourceInvalidationAll {
   kind: "all"
   reason?: string
@@ -196,6 +256,9 @@ export interface DataGridDataSource<T = unknown> {
   pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<T>>
   getColumnHistogram?(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram>
   commitEdits?(request: DataGridDataSourceCommitEditsRequest<T>): Promise<DataGridDataSourceCommitEditsResult>
+  commitFillOperation?(request: DataGridDataSourceFillOperationRequest): Promise<DataGridDataSourceFillOperationResult>
+  undoFillOperation?(request: DataGridDataSourceFillUndoRequest): Promise<DataGridDataSourceFillUndoResult>
+  redoFillOperation?(request: DataGridDataSourceFillUndoRequest): Promise<DataGridDataSourceFillRedoResult>
   resolveFillBoundary?(
     request: DataGridDataSourceResolveFillBoundaryRequest,
   ): Promise<DataGridDataSourceResolveFillBoundaryResult> | DataGridDataSourceResolveFillBoundaryResult

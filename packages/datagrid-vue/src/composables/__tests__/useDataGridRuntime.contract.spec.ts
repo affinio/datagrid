@@ -201,6 +201,11 @@ describe("useDataGridRuntime contract", () => {
     )
     const patched = runtime!.api.rows.getRange({ start: 0, end: 2 })
     expect((patched[1]?.row as { name?: string })?.name).toBe("Bravo-updated")
+    expect(runtime!.syncBodyRowsInRange({ start: 0, end: 1 }).map(row => (row.row as { name?: string }).name)).toEqual([
+      "Charlie",
+      "Bravo-updated",
+    ])
+    expect((runtime!.getBodyRowAtIndex(1)?.row as { name?: string })?.name).toBe("Bravo-updated")
 
     runtime!.api.rows.setSortModel([{ key: "tested_at", direction: "desc" }])
     expect(runtime!.api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r2", "r1"])
@@ -517,6 +522,7 @@ describe("useDataGridRuntime contract", () => {
     const rowModel = createDataSourceBackedRowModel<RuntimeRow>({
       dataSource: { pull },
       initialTotal: 300,
+      prefetch: { enabled: false },
     })
     let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
 

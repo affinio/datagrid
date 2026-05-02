@@ -27,6 +27,18 @@ export interface UseDataGridAppFillOptions {
   resolveSelectionRange: () => DataGridCopyRange | null
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
+  shouldUseServerFill?: (
+    baseRange: DataGridCopyRange,
+    previewRange: DataGridCopyRange,
+    behavior: DataGridFillBehavior,
+  ) => boolean
+    commitServerFill?: (
+      request: {
+        baseRange: DataGridCopyRange
+        previewRange: DataGridCopyRange
+        behavior: DataGridFillBehavior
+      },
+    ) => Promise<{ operationId: string; revision?: string | number | null; affectedRange?: DataGridCopyRange | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null } | null>
   applyClipboardEdits: (
     range: DataGridCopyRange,
     matrix: string[][],
@@ -34,6 +46,8 @@ export interface UseDataGridAppFillOptions {
   ) => number | Promise<number>
   isCellEditableAt: (rowIndex: number, columnIndex: number) => boolean
   setLastAppliedFillSession: (session: DataGridAppAppliedFillSession | null) => void
+  setLastServerFillSession?: (session: { operationId: string; revision?: string | number | null; affectedRange?: DataGridCopyRange | null; behavior: DataGridFillBehavior } | null) => void
+  syncServerFillViewport?: (range?: DataGridCopyRange | null) => void | Promise<void>
   syncViewport: () => void
 }
 
@@ -70,6 +84,25 @@ export function useDataGridAppFill(
         previewRange,
         sourceMatrix,
       })
+    const useServerFill = options.shouldUseServerFill?.(baseRange, previewRange, behavior) ?? false
+    if (useServerFill && options.commitServerFill) {
+      const committed = await options.commitServerFill({ baseRange, previewRange, behavior })
+      if (committed) {
+        options.setLastServerFillSession?.({
+          operationId: committed.operationId,
+          revision: committed.revision,
+          affectedRange: committed.affectedRange ?? previewRange,
+          behavior,
+        })
+        if (options.syncServerFillViewport) {
+          await options.syncServerFillViewport(committed.invalidation?.range ?? committed.affectedRange ?? previewRange)
+        }
+        else {
+          options.syncViewport()
+        }
+        return true
+      }
+    }
     const matrix = buildDataGridFillMatrix({
       baseRange,
       previewRange,

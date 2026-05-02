@@ -117,6 +117,7 @@ import type {
 } from "../dataGridStructuralRowActions"
 import type {
   DataGridColumnMenuValueEntriesResult,
+  DataGridTableStageCenterPaneDiagnostics,
   DataGridTableStageCellClass,
   DataGridTableStageCustomOverlay,
 } from "../stage/dataGridTableStage.types"
@@ -648,6 +649,9 @@ export default defineComponent({
         Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
           dataSource?: {
             resolveFillBoundary?: (request: any) => any
+            commitFillOperation?: (request: any) => any
+            undoFillOperation?: (request: any) => any
+            redoFillOperation?: (request: any) => any
           }
         }
       >,
@@ -657,8 +661,16 @@ export default defineComponent({
       type: Function as PropType<((message: string) => void) | undefined>,
       default: undefined,
     },
+    reportCenterPaneDiagnostics: {
+      type: Function as PropType<((payload: DataGridTableStageCenterPaneDiagnostics) => void) | undefined>,
+      default: undefined,
+    },
     reportFillPlumbingState: {
       type: Function as PropType<((layer: string, present: boolean) => void) | undefined>,
+      default: undefined,
+    },
+    reportFillPlumbingDetail: {
+      type: Function as PropType<((layer: string, value: string) => void) | undefined>,
       default: undefined,
     },
     selectionSnapshot: {
@@ -2586,7 +2598,9 @@ export default defineComponent({
       flushRowSelectionSnapshotUpdates: props.flushRowSelectionSnapshotUpdates,
       clearExternalPendingClipboardOperation: clearPendingRowClipboardOperation,
       reportFillWarning: props.reportFillWarning,
+      reportCenterPaneDiagnostics: props.reportCenterPaneDiagnostics,
       reportFillPlumbingState: props.reportFillPlumbingState,
+      reportFillPlumbingDetail: props.reportFillPlumbingDetail,
       firstColumnKey,
       columnFilterTextByKey,
       virtualization: computed(() => props.virtualization),

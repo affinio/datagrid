@@ -69,6 +69,86 @@ interface DataGridAppResolveFillBoundaryResult {
   scannedRowCount?: number
   truncated?: boolean
 }
+
+interface DataGridAppFillDataSource {
+  resolveFillBoundary?: (
+    request: DataGridAppResolveFillBoundaryRequest,
+  ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
+  commitFillOperation?: (request: {
+    operationId?: string | null
+    revision?: string | number | null
+    projection: DataGridAppFillProjectionContext
+    sourceRange: DataGridCopyRange
+    targetRange: DataGridCopyRange
+    fillColumns: readonly string[]
+    referenceColumns: readonly string[]
+    mode: DataGridFillBehavior
+    metadata?: { origin?: "drag-fill" | "double-click-fill" | "menu-reapply"; behaviorSource?: "default" | "explicit" } | null
+  }) => Promise<{ operationId: string; revision?: string | number | null; affectedRowCount: number; affectedCellCount?: number; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+  undoFillOperation?: (request: {
+    operationId: string
+    revision?: string | number | null
+    projection: DataGridAppFillProjectionContext
+  }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+  redoFillOperation?: (request: {
+    operationId: string
+    revision?: string | number | null
+    projection: DataGridAppFillProjectionContext
+  }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+}
+
+function getFillRangeStart(range: DataGridCopyRange | { start?: number; end?: number }): number {
+  const candidate = range as { startRow?: unknown; start?: unknown }
+  return Number.isFinite(candidate.startRow)
+    ? Math.max(0, Math.trunc(Number(candidate.startRow)))
+    : Math.max(0, Math.trunc(Number(candidate.start ?? 0)))
+}
+
+function getFillRangeEnd(range: DataGridCopyRange | { start?: number; end?: number }): number {
+  const candidate = range as { endRow?: unknown; end?: unknown }
+  return Number.isFinite(candidate.endRow)
+    ? Math.max(0, Math.trunc(Number(candidate.endRow)))
+    : Math.max(0, Math.trunc(Number(candidate.end ?? getFillRangeStart(range))))
+}
+
+function formatServerFillAffectedRange(
+  range: DataGridCopyRange | { start?: number; end?: number },
+  fallbackColumns: DataGridCopyRange,
+): string {
+  const start = getFillRangeStart(range)
+  const end = getFillRangeEnd(range)
+  const startColumn = Number.isFinite((range as DataGridCopyRange).startColumn)
+    ? (range as DataGridCopyRange).startColumn
+    : fallbackColumns.startColumn
+  const endColumn = Number.isFinite((range as DataGridCopyRange).endColumn)
+    ? (range as DataGridCopyRange).endColumn
+    : fallbackColumns.endColumn
+  return `${start}..${end} x ${startColumn}..${endColumn}`
+}
+
+function normalizeServerFillInvalidationRange(
+  range: DataGridCopyRange | { start?: unknown; end?: unknown; startRow?: unknown; endRow?: unknown } | null | undefined,
+): { start: number; end: number } | null {
+  if (!range) {
+    return null
+  }
+  const candidate = range as { start?: unknown; end?: unknown; startRow?: unknown; endRow?: unknown }
+  const rawStart = Number.isFinite(candidate.startRow)
+    ? candidate.startRow
+    : candidate.start
+  const rawEnd = Number.isFinite(candidate.endRow)
+    ? candidate.endRow
+    : candidate.end
+  const start = Number(rawStart)
+  const end = Number(rawEnd ?? rawStart)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return null
+  }
+  return {
+    start: Math.max(0, Math.trunc(start)),
+    end: Math.max(Math.max(0, Math.trunc(start)), Math.trunc(end)),
+  }
+}
 import {
   useDataGridAppFill,
   type DataGridAppAppliedFillSession,
@@ -98,7 +178,7 @@ export interface UseDataGridAppInteractionControllerOptions<
   mode: Ref<DataGridAppMode>
   enableFillHandle?: Ref<boolean>
   enableRangeMove?: Ref<boolean>
-  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex" | "resolveBodyRowIndexById">
+  runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex" | "resolveBodyRowIndexById" | "rowModel">
   totalRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   viewportRowStart: Ref<number>
@@ -112,6 +192,14 @@ export interface UseDataGridAppInteractionControllerOptions<
   normalizeCellCoord: (coord: DataGridAppCellCoord) => DataGridAppCellCoord | null
   resolveSelectionRange: () => DataGridCopyRange | null
   applySelectionRange: (range: DataGridCopyRange) => void
+  recordServerFillTransaction?: (descriptor: {
+    intent: "fill"
+    label: string
+    affectedRange?: DataGridCopyRange | null
+    operationId: string
+    revision?: string | number | null
+    mode: DataGridFillBehavior
+  }) => void
   applyCellSelectionByCoord: (
     coord: DataGridAppCellCoord,
     extend: boolean,
@@ -140,6 +228,9 @@ export interface UseDataGridAppInteractionControllerOptions<
   resolveFillBoundary?: (
     request: DataGridAppResolveFillBoundaryRequest,
   ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
+  runtimeRowModel?: {
+    dataSource?: DataGridAppFillDataSource
+  } | null
   reportFillWarning?: (message: string) => void
   reportFillPlumbingState?: (layer: string, present: boolean) => void
   captureRowsSnapshot: () => TSnapshot
@@ -166,6 +257,7 @@ export interface UseDataGridAppInteractionControllerOptions<
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
   applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean | Promise<boolean>
+  refreshServerFillViewport?: (range?: DataGridCopyRange | null) => void | Promise<void>
   syncViewport: () => void
   editingCell: Ref<{ rowId: string | number; columnKey: string } | null>
   startInlineEdit: (
@@ -187,6 +279,7 @@ export interface UseDataGridAppInteractionControllerOptions<
     action: DataGridRowIndexKeyboardAction,
     rowId: string | number,
   ) => Promise<boolean> | boolean
+  reportFillPlumbingDetail?: (layer: string, value: string) => void
 }
 
 export interface UseDataGridAppInteractionControllerResult<TRow> {
@@ -690,6 +783,146 @@ export function useDataGridAppInteractionController<
     resolveSelectionRange: options.resolveSelectionRange,
     rangesEqual: options.rangesEqual,
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,
+    shouldUseServerFill: (_baseRange, previewRange) => {
+      const controllerRowModel = options.runtimeRowModel as
+        | { dataSource?: { commitFillOperation?: unknown } }
+        | null
+        | undefined
+      const runtimeRowModelDataSource = controllerRowModel?.dataSource
+      const runtimeRowModelFromRuntime = (options.runtime.rowModel as
+        | { dataSource?: { commitFillOperation?: unknown } }
+        | undefined)?.dataSource
+      options.reportFillPlumbingState?.("controller_runtimeRowModel_exists", controllerRowModel != null)
+      options.reportFillPlumbingState?.("controller_runtimeRowModel_dataSource_exists", runtimeRowModelDataSource != null)
+      options.reportFillPlumbingState?.("controller_runtimeRowModel_dataSource_keys", Object.keys(runtimeRowModelDataSource ?? {}).length > 0)
+      options.reportFillPlumbingDetail?.("controller_runtimeRowModel_dataSource_keys", Object.keys(runtimeRowModelDataSource ?? {}).join(","))
+      options.reportFillPlumbingState?.("controller_runtimeRowModel_commit_type", typeof runtimeRowModelDataSource?.commitFillOperation === "function")
+      options.reportFillPlumbingState?.("controller_runtime_rowModel_keys", Object.keys(runtimeRowModelFromRuntime ?? {}).length > 0)
+      options.reportFillPlumbingDetail?.("controller_runtime_rowModel_keys", Object.keys(runtimeRowModelFromRuntime ?? {}).join(","))
+      options.reportFillPlumbingState?.("controller_runtime_rowModel_commit_type", typeof runtimeRowModelFromRuntime?.commitFillOperation === "function")
+      const dataSource = runtimeRowModelDataSource ?? runtimeRowModelFromRuntime
+      options.reportFillPlumbingState?.("commitFillOperation_available", typeof dataSource?.commitFillOperation === "function")
+      options.reportFillPlumbingState?.("server_fill_dispatch_attempted", true)
+      if (typeof dataSource?.commitFillOperation !== "function") {
+        return false
+      }
+      const rowCount = Math.max(0, previewRange.endRow - previewRange.startRow + 1)
+      if (rowCount < 256) {
+        return false
+      }
+      for (let rowIndex = previewRange.startRow; rowIndex <= previewRange.endRow; rowIndex += 1) {
+        const isMaterialized = options.isRowMaterializedAtIndex
+          ? options.isRowMaterializedAtIndex(rowIndex)
+          : !!options.runtime?.getBodyRowAtIndex?.(rowIndex)
+        if (!isMaterialized) {
+          return true
+        }
+      }
+      return false
+    },
+    commitServerFill: async ({ baseRange, previewRange, behavior }) => {
+      const runtimeRowModelDataSource = (options.runtimeRowModel as
+        | { dataSource?: unknown }
+        | null
+        | undefined)?.dataSource as DataGridAppFillDataSource | undefined
+      const runtimeRowModelFallback = (options.runtime.rowModel as
+        | { dataSource?: unknown }
+        | undefined)?.dataSource as DataGridAppFillDataSource | undefined
+      const dataSource: DataGridAppFillDataSource | undefined = runtimeRowModelDataSource ?? runtimeRowModelFallback
+      if (!dataSource?.commitFillOperation) {
+        options.reportFillWarning?.("server fill execution not implemented yet")
+        return null
+      }
+      const snapshot = options.runtime.api.rows.getSnapshot() as {
+        sortModel?: readonly DataGridSortState[]
+        filterModel?: DataGridFilterSnapshot | null
+        groupBy?: DataGridGroupBySpec | null
+        groupExpansion?: DataGridGroupExpansionSnapshot
+        pagination?: DataGridPaginationSnapshot
+      }
+      const operationId = `fill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const result = await dataSource.commitFillOperation({
+        operationId,
+        projection: {
+          sortModel: snapshot.sortModel ?? [],
+          filterModel: snapshot.filterModel ?? null,
+          groupBy: snapshot.groupBy ?? null,
+          groupExpansion: snapshot.groupExpansion ?? { expandedByDefault: false, toggledGroupKeys: [] },
+          treeData: null,
+          pivot: null,
+          pagination: snapshot.pagination ?? {
+            enabled: false,
+            pageSize: 0,
+            currentPage: 0,
+            pageCount: 0,
+            totalRowCount: 0,
+            startIndex: 0,
+            endIndex: 0,
+          },
+        },
+        sourceRange: baseRange,
+        targetRange: previewRange,
+        fillColumns: options.visibleColumns.value
+          .slice(previewRange.startColumn, previewRange.endColumn + 1)
+          .map(column => String(column.key)),
+        referenceColumns: options.visibleColumns.value
+          .slice(baseRange.startColumn, baseRange.endColumn + 1)
+          .map(column => String(column.key)),
+        mode: behavior,
+        metadata: { origin: "double-click-fill", behaviorSource: "default" },
+      })
+      options.reportFillPlumbingState?.("commitFillOperation_called", true)
+      options.reportFillPlumbingState?.("server_fill_operationId", true)
+      if (!result) {
+        options.reportFillWarning?.("server fill commit failed")
+        return {
+          operationId,
+          revision: null,
+          affectedRange: previewRange,
+          invalidation: null,
+          affectedRowCount: 0,
+          affectedCellCount: 0,
+          warnings: ["server fill commit failed"],
+        }
+      }
+      const invalidationRange = result.invalidation?.kind === "range" ? result.invalidation.range : previewRange
+      const normalizedInvalidationRange = normalizeServerFillInvalidationRange(invalidationRange)
+      options.reportFillPlumbingDetail?.("server_fill_raw_invalidation", JSON.stringify(invalidationRange ?? null))
+      options.reportFillPlumbingDetail?.("server_fill_normalized_invalidation", normalizedInvalidationRange ? `${normalizedInvalidationRange.start}..${normalizedInvalidationRange.end}` : "none")
+      options.reportFillPlumbingDetail?.("server_fill_affected_range", formatServerFillAffectedRange(normalizedInvalidationRange ?? invalidationRange, previewRange))
+      const affectedRowCount = result.affectedRowCount ?? 0
+      const warnings = result.warnings ?? []
+      options.reportFillWarning?.(
+        warnings[0] ?? (affectedRowCount > 0 ? "server fill committed" : "server fill no-op"),
+      )
+      options.reportFillPlumbingState?.("server_fill_affectedRowCount", true)
+      if (!options.refreshServerFillViewport) {
+        const runtimeRowModel = options.runtimeRowModel as unknown as {
+          invalidateRange?: (range: { start: number; end: number }) => void
+        } | undefined
+        const runtimeRowModelFallback = options.runtime.rowModel as unknown as {
+          invalidateRange?: (range: { start: number; end: number }) => void
+        } | undefined
+        const rowsApi = options.runtime.api.rows as unknown as {
+          refresh?: () => void | Promise<void>
+        }
+        const invalidateTarget = runtimeRowModel?.invalidateRange ?? runtimeRowModelFallback?.invalidateRange
+        if (normalizedInvalidationRange && typeof invalidateTarget === "function") {
+          invalidateTarget(normalizedInvalidationRange)
+          options.reportFillPlumbingState?.("server_fill_invalidation_applied", true)
+        }
+        await Promise.resolve(rowsApi.refresh?.())
+      }
+      return {
+        operationId: result.operationId,
+        revision: result.revision,
+        affectedRange: invalidationRange,
+        invalidation: result.invalidation ?? null,
+        affectedRowCount,
+        affectedCellCount: result.affectedCellCount ?? affectedRowCount,
+        warnings,
+      }
+    },
     applyClipboardEdits: options.applyClipboardEdits,
     isCellEditableAt: (rowIndex, columnIndex) => {
       const row = getBodyRowAtIndex(rowIndex)
@@ -703,6 +936,20 @@ export function useDataGridAppInteractionController<
       lastAppliedFill.value = session
       activeFillBehavior.value = session?.behavior ?? activeFillBehavior.value
     },
+    setLastServerFillSession: session => {
+      if (!session) {
+        return
+      }
+      options.recordServerFillTransaction?.({
+        intent: "fill",
+        label: "Server fill",
+        affectedRange: session.affectedRange ?? null,
+        operationId: session.operationId,
+        revision: session.revision,
+        mode: session.behavior,
+      })
+    },
+    syncServerFillViewport: options.refreshServerFillViewport,
     syncViewport: options.syncViewport,
   })
 
@@ -1763,10 +2010,25 @@ export function useDataGridAppInteractionController<
         options.reportFillPlumbingState?.("double_click_server_branch_entered", true)
         const resolvedRowCount = previewRange.endRow - previewRange.startRow + 1
         const threshold = 500
+        const rowModel = options.runtimeRowModel as
+          | { dataSource?: { commitFillOperation?: unknown } }
+          | null
+          | undefined
+        const dataSource = rowModel?.dataSource ?? (options.runtime.rowModel as
+          | { dataSource?: { commitFillOperation?: unknown } }
+          | undefined)?.dataSource
+        options.reportFillPlumbingState?.("controller_runtimeRowModel_exists", rowModel != null)
+        options.reportFillPlumbingState?.("controller_runtimeRowModel_dataSource_exists", dataSource != null)
+        options.reportFillPlumbingState?.("controller_runtimeRowModel_commit_type", typeof rowModel?.dataSource?.commitFillOperation === "function")
+        options.reportFillPlumbingState?.("controller_runtime_rowModel_commit_type", typeof (options.runtime.rowModel as { dataSource?: { commitFillOperation?: unknown } } | undefined)?.dataSource?.commitFillOperation === "function")
+        const canCommitServerFill = typeof dataSource?.commitFillOperation === "function"
+        options.reportFillPlumbingState?.("commitFillOperation_available", canCommitServerFill)
         if (resolvedRowCount > threshold) {
-          options.reportFillPlumbingState?.("double_click_blocked_large", true)
-          options.reportFillWarning?.("server fill execution not implemented yet")
-          return
+          if (!canCommitServerFill) {
+            options.reportFillPlumbingState?.("double_click_blocked_large", true)
+            options.reportFillWarning?.("server fill execution not implemented yet")
+            return
+          }
         }
         let allLoaded = true
         for (let rowIndex = previewRange.startRow; rowIndex <= previewRange.endRow; rowIndex += 1) {
@@ -1778,9 +2040,23 @@ export function useDataGridAppInteractionController<
             break
           }
         }
-        if (!allLoaded) {
+        if (!allLoaded && !canCommitServerFill) {
           options.reportFillPlumbingState?.("double_click_blocked_unloaded", true)
           options.reportFillWarning?.("server fill execution not implemented yet")
+          return
+        }
+        if (canCommitServerFill) {
+          options.reportFillPlumbingState?.("server-fill-committed", true)
+          void Promise.resolve(applyFillRange(baseRange, previewRange, behavior)).then((applied: boolean) => {
+            if (!applied) {
+              return
+            }
+            activeFillBehavior.value = behavior
+            const restoredCoord = preferredFocusCoord
+              ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
+              : null
+            restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
+          })
           return
         }
       }

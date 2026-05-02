@@ -96,6 +96,7 @@ function createControllerHarness(options: {
   firstRowKind?: "data" | "group"
   firstRowExpanded?: boolean
   firstRowGroupKey?: string
+  runtimeRowModelDataSource?: Record<string, unknown>
   resolveFillBoundary?: (
     request: DataGridAppResolveFillBoundaryRequest,
   ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
@@ -285,6 +286,7 @@ function createControllerHarness(options: {
   const commitInlineEdit = vi.fn()
   const expandGroup = vi.fn()
   const collapseGroup = vi.fn()
+  const invalidateRange = vi.fn()
 
   const controller = useDataGridAppInteractionController<DemoRow, readonly DemoRow[]>({
     mode: ref(mode),
@@ -312,6 +314,7 @@ function createControllerHarness(options: {
           }),
           expandGroup,
           collapseGroup,
+          invalidateRange,
           setData: (nextRows: Array<{ rowId: string | number; row: DemoRow }>) => {
             rows = nextRows.map(nextRow => ({
               rowId: nextRow.rowId,
@@ -325,7 +328,15 @@ function createControllerHarness(options: {
           setSnapshot: setSelectionSnapshot,
         },
       },
+      rowModel: {
+        invalidateRange,
+      },
     } as never,
+    runtimeRowModel: options.runtimeRowModelDataSource
+      ? {
+          dataSource: options.runtimeRowModelDataSource as never,
+        }
+      : null,
     totalRows: ref(rowCount),
     visibleColumns: ref(visibleColumns),
     viewportRowStart: ref(0),
@@ -413,6 +424,7 @@ function createControllerHarness(options: {
     commitInlineEdit,
     expandGroup,
     collapseGroup,
+    invalidateRange,
   }
 }
 
@@ -1515,6 +1527,134 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(resolveFillBoundary).toHaveBeenCalled()
     expect(applyClipboardEdits).not.toHaveBeenCalled()
     expect(reportFillWarning).toHaveBeenCalledWith("server fill execution not implemented yet")
+  })
+
+  it("does not fall back to client batch fill when server fill is a no-op", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 500,
+      endRowId: "r501",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 500,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 0,
+      affectedCellCount: 0,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 0,
+          endRow: 500,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    }))
+    const { controller, selectionSnapshot, applyClipboardEdits, reportFillWarning } = createControllerHarness({
+      rowCount: 800,
+      loadedRowCount: 174,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        ...Array.from({ length: 799 }, () => ({ b: "task-x" })),
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalled()
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith("server fill no-op")
+  })
+
+  it("normalizes server fill invalidation to a row-model viewport range when falling back to direct invalidation", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 500,
+      endRowId: "r501",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 500,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 12,
+      affectedCellCount: 12,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 0,
+          endRow: 500,
+          startColumn: 4,
+          endColumn: 4,
+        },
+      },
+      warnings: [],
+    }))
+    const { controller, selectionSnapshot, applyClipboardEdits, invalidateRange } = createControllerHarness({
+      rowCount: 800,
+      loadedRowCount: 174,
+      columnCount: 5,
+      rowData: [
+        { region: "AMER" },
+        ...Array.from({ length: 799 }, () => ({ region: "LATAM" })),
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 4, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 4,
+        endCol: 4,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 4, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 4, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalled()
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(invalidateRange).toHaveBeenCalledWith({ start: 0, end: 500 })
   })
 
   it("falls back to loaded-cache boundary discovery when server boundary is unresolved", async () => {

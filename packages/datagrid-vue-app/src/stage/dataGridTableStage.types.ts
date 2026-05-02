@@ -42,6 +42,18 @@ export interface DataGridTableStageCustomOverlay {
   zIndex?: number
 }
 
+export interface DataGridTableStageCenterPaneDiagnostics {
+  mounted?: boolean
+  debugJson?: string
+  renderedViewport?: {
+    start: number
+    end: number
+  } | null
+  displayRowsRecomputeCount?: number
+  centerPaneRuntimeRevision?: string | number | null
+  centerPaneBodyRowsRevision?: string | number | null
+}
+
 export interface DataGridTableStageAnchorCell {
   rowIndex: number
   columnIndex: number
@@ -117,6 +129,8 @@ export interface DataGridTableStageColumnsSection {
 
 export interface DataGridTableStageRowsSection<TRow extends Record<string, unknown>> {
   displayRows: readonly DataGridTableRow<TRow>[]
+  displayRowsRevision?: number
+  runtimeRevision?: string | number | null
   pinnedBottomRows: readonly DataGridTableRow<TRow>[]
   sourceRows?: readonly TRow[]
   showRowIndex?: boolean
@@ -241,6 +255,9 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>>
   layoutMode: DataGridLayoutMode
   chromeSignature?: string
   customOverlays?: readonly DataGridTableStageCustomOverlay[]
+  reportCenterPaneDiagnostics?: (payload: DataGridTableStageCenterPaneDiagnostics) => void
+  reportFillPlumbingState?: (layer: string, present: boolean) => void
+  reportFillPlumbingDetail?: (layer: string, value: string) => void
 }
 
 interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
@@ -265,4 +282,8 @@ export interface UseDataGridTableStageBindingsOptions<TRow extends Record<string
   editingCellValueRef: Ref<string>
   headerViewportRef: Ref<HTMLElement | null>
   bodyViewportRef: Ref<HTMLElement | null>
+  customOverlays?: DataGridMaybeRef<readonly DataGridTableStageCustomOverlay[]>
+  reportCenterPaneDiagnostics?: DataGridMaybeRef<(payload: DataGridTableStageCenterPaneDiagnostics) => void>
+  reportFillPlumbingState?: DataGridMaybeRef<(layer: string, present: boolean) => void>
+  reportFillPlumbingDetail?: DataGridMaybeRef<(layer: string, value: string) => void>
 }

@@ -1208,6 +1208,11 @@ const DATA_GRID_APP_STYLES = `
   background: transparent !important;
 }
 
+.affino-datagrid-app-root .grid-selection-overlay__segment--server-fill {
+  border-style: solid;
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 12%, transparent) !important;
+}
+
 .grid-stage--range-moving .grid-body-shell .grid-cell {
   cursor: grabbing;
 }

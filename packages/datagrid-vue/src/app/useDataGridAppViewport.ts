@@ -177,8 +177,10 @@ export interface UseDataGridAppViewportResult<TRow> {
   bodyViewportRef: Ref<HTMLElement | null>
   viewportScrollTop: Ref<number>
   displayRows: Ref<readonly DataGridRowNode<TRow>[]>
+  displayRowsRevision: Ref<number>
   pinnedBottomRows: Ref<readonly DataGridRowNode<TRow>[]>
   renderedColumns: Ref<readonly DataGridColumnSnapshot[]>
+  renderedViewportRange: Ref<DataGridViewportRange | null>
   viewportRowStart: Ref<number>
   viewportRowEnd: Ref<number>
   viewportColumnStart: Ref<number>
@@ -192,6 +194,7 @@ export interface UseDataGridAppViewportResult<TRow> {
   mainTrackStyle: Ref<Record<string, string>>
   indexColumnStyle: Ref<Record<string, string>>
   columnStyle: (key: string) => Record<string, string>
+  syncRenderedRowsInRange: (range: DataGridViewportRange) => void
   handleViewportScroll: (event: Event) => void
   syncViewportFromDom: () => void
   scheduleViewportSync: () => void
@@ -335,6 +338,8 @@ export function useDataGridAppViewport<TRow>(
   const bodyViewportRef = ref<HTMLElement | null>(null)
   const viewportScrollTop = ref(0)
   const displayRows = shallowRef<readonly DataGridRowNode<TRow>[]>([])
+  const displayRowsRevision = ref(0)
+  const renderedViewportRange = ref<DataGridViewportRange | null>(null)
   const viewportScrollLeft = ref(0)
   const viewportClientWidth = ref(0)
   const viewportShellClientWidth = ref(0)
@@ -812,6 +817,35 @@ export function useDataGridAppViewport<TRow>(
     return nextRows
   }
 
+  const updateRenderedViewportRange = (rows: readonly DataGridRowNode<TRow>[]): void => {
+    if (rows.length === 0) {
+      renderedViewportRange.value = null
+      return
+    }
+    const first = rows[0]
+    const last = rows[rows.length - 1]
+    const start = first && Number.isFinite(first.displayIndex)
+      ? Math.max(0, Math.trunc(first.displayIndex))
+      : null
+    const end = last && Number.isFinite(last.displayIndex)
+      ? Math.max(0, Math.trunc(last.displayIndex))
+      : null
+    if (start == null || end == null) {
+      renderedViewportRange.value = null
+      return
+    }
+    renderedViewportRange.value = {
+      start,
+      end: Math.max(start, end),
+    }
+  }
+
+  const commitDisplayRows = (rows: readonly DataGridRowNode<TRow>[]): void => {
+    displayRows.value = rows
+    displayRowsRevision.value += 1
+    updateRenderedViewportRange(rows)
+  }
+
   const syncVisibleRows = (range: DataGridViewportRange, force = false): void => {
     if (
       !force
@@ -862,12 +896,12 @@ export function useDataGridAppViewport<TRow>(
           setWindowRange(range)
           setViewportRangeMs = resolveDataGridPerfNow() - setViewportRangeStart
           const displayRowsAssignStart = resolveDataGridPerfNow()
-          displayRows.value = incrementalRows
+          commitDisplayRows(incrementalRows)
           displayRowsAssignMs = resolveDataGridPerfNow() - displayRowsAssignStart
         }
         else {
           setWindowRange(range)
-          displayRows.value = incrementalRows
+          commitDisplayRows(incrementalRows)
         }
         if (perfTraceEnabled) {
           viewportCommitMs = resolveDataGridPerfNow() - commitStart
@@ -875,7 +909,7 @@ export function useDataGridAppViewport<TRow>(
       }
       else {
         const syncStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
-        displayRows.value = options.runtime.syncBodyRowsInRange(range)
+        commitDisplayRows(options.runtime.syncBodyRowsInRange(range))
         if (perfTraceEnabled) {
           runtimeSyncMs = resolveDataGridPerfNow() - syncStart
         }
@@ -883,7 +917,7 @@ export function useDataGridAppViewport<TRow>(
     }
     else {
       const syncStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
-      displayRows.value = options.runtime.syncBodyRowsInRange(range)
+      commitDisplayRows(options.runtime.syncBodyRowsInRange(range))
       if (perfTraceEnabled) {
         runtimeSyncMs = resolveDataGridPerfNow() - syncStart
       }
@@ -912,6 +946,10 @@ export function useDataGridAppViewport<TRow>(
           : Math.max(0, range.end - range.start + 1),
       }
     }
+  }
+
+  const syncRenderedRowsInRange = (range: DataGridViewportRange): void => {
+    syncVisibleRows(range, true)
   }
 
   const syncHeaderScrollLeftFromBody = (bodyScrollLeft: number): void => {
@@ -1110,8 +1148,10 @@ export function useDataGridAppViewport<TRow>(
     bodyViewportRef,
     viewportScrollTop,
     displayRows,
+    displayRowsRevision,
     pinnedBottomRows: computed(() => options.runtime.rowPartition.value.pinnedBottomRows),
     renderedColumns: computed(() => viewportColumnMetrics.value.renderedColumns),
+    renderedViewportRange,
     viewportRowStart,
     viewportRowEnd,
     viewportColumnStart: computed(() => viewportColumnMetrics.value.start),
@@ -1125,6 +1165,7 @@ export function useDataGridAppViewport<TRow>(
     mainTrackStyle,
     indexColumnStyle,
     columnStyle,
+    syncRenderedRowsInRange,
     handleViewportScroll,
     syncViewportFromDom,
     scheduleViewportSync,

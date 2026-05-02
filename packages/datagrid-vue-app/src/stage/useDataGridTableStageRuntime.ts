@@ -1,4 +1,4 @@
-import { computed, nextTick, ref, type ComputedRef, type CSSProperties, type Ref } from "vue"
+import { computed, nextTick, onMounted, ref, type ComputedRef, type CSSProperties, type Ref } from "vue"
 import type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
@@ -58,6 +58,8 @@ import type {
   DataGridColumnMenuValueEntriesResult,
   DataGridTableRow,
   DataGridTableStageCellClass,
+  DataGridTableStageCenterPaneDiagnostics,
+  DataGridTableStageCustomOverlay,
   DataGridTableStageProps,
 } from "./dataGridTableStage.types"
 
@@ -98,8 +100,25 @@ interface DataGridAppResolveFillBoundaryResult {
   truncated?: boolean
 }
 
+interface DataGridAppFillOperationRecord {
+  operationId: string
+  revision?: string | number | null
+  affectedRange: DataGridCopyRange | null
+  mode: DataGridFillBehavior
+}
+
+type DataGridAppServerFillState = "committed" | "undone" | null
+
+type DataGridFillBehavior = "copy" | "series"
+
+interface DataGridTableStageRenderedBodyViewport {
+  startRow: number
+  endRow: number
+}
+
 type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = {
   api: UseDataGridRuntimeResult<TRow>["api"]
+  rowModel?: UseDataGridRuntimeResult<TRow>["rowModel"]
   syncBodyRowsInRange: UseDataGridRuntimeResult<TRow>["syncBodyRowsInRange"]
   setViewportRange: UseDataGridRuntimeResult<TRow>["setViewportRange"]
   setRows?: UseDataGridRuntimeResult<TRow>["setRows"]
@@ -130,6 +149,55 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
       resolveFillBoundary?: (
         request: DataGridAppResolveFillBoundaryRequest,
       ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
+      commitFillOperation?: (request: {
+        operationId?: string | null
+        revision?: string | number | null
+        projection: DataGridAppFillProjectionContext
+        sourceRange: DataGridCopyRange
+        targetRange: DataGridCopyRange
+        fillColumns: readonly string[]
+        referenceColumns: readonly string[]
+        mode: DataGridFillBehavior
+        metadata?: { origin?: "drag-fill" | "double-click-fill" | "menu-reapply"; behaviorSource?: "default" | "explicit" } | null
+      }) => Promise<{ operationId: string; revision?: string | number | null; affectedRowCount: number; affectedCellCount?: number; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+      undoFillOperation?: (request: {
+        operationId: string
+        revision?: string | number | null
+        projection: DataGridAppFillProjectionContext
+      }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+      redoFillOperation?: (request: {
+        operationId: string
+        revision?: string | number | null
+        projection: DataGridAppFillProjectionContext
+      }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+    }
+    rowModel?: {
+      dataSource?: {
+        resolveFillBoundary?: (
+          request: DataGridAppResolveFillBoundaryRequest,
+        ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
+        commitFillOperation?: (request: {
+          operationId?: string | null
+          revision?: string | number | null
+          projection: DataGridAppFillProjectionContext
+          sourceRange: DataGridCopyRange
+          targetRange: DataGridCopyRange
+          fillColumns: readonly string[]
+          referenceColumns: readonly string[]
+          mode: DataGridFillBehavior
+          metadata?: { origin?: "drag-fill" | "double-click-fill" | "menu-reapply"; behaviorSource?: "default" | "explicit" } | null
+        }) => Promise<{ operationId: string; revision?: string | number | null; affectedRowCount: number; affectedCellCount?: number; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+        undoFillOperation?: (request: {
+          operationId: string
+          revision?: string | number | null
+          projection: DataGridAppFillProjectionContext
+        }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+        redoFillOperation?: (request: {
+          operationId: string
+          revision?: string | number | null
+          projection: DataGridAppFillProjectionContext
+        }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+      }
     }
   } | null
   rowVersion: Ref<number>
@@ -219,7 +287,9 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   openContextMenuFromCurrentCell?: () => void
   clearExternalPendingClipboardOperation?: () => boolean
   reportFillWarning?: (message: string) => void
+  reportCenterPaneDiagnostics?: (payload: DataGridTableStageCenterPaneDiagnostics) => void
   reportFillPlumbingState?: (layer: string, present: boolean) => void
+  reportFillPlumbingDetail?: (layer: string, value: string) => void
   runRowIndexKeyboardAction?: (
     action: "insert-row-above" | "copy-row" | "cut-row" | "paste-row" | "delete-selected-rows" | "open-row-menu",
     rowId: string | number,
@@ -282,6 +352,7 @@ export function useDataGridTableStageRuntime<
   const syncRowSelectionSnapshotFromRuntime = options.syncRowSelectionSnapshotFromRuntime ?? (() => undefined)
   const flushRowSelectionSnapshotUpdates = options.flushRowSelectionSnapshotUpdates ?? (() => undefined)
   const rowSelectionSnapshotRef = options.rowSelectionSnapshot ?? ref<DataGridRowSelectionSnapshot | null>(null)
+  const latestRenderedBodyViewport = ref<DataGridTableStageRenderedBodyViewport | null>(null)
   const showRowIndex = computed(() => options.showRowIndex?.value !== false)
   const totalBodyRows = computed(() => options.runtime.rowPartition.value.bodyRowCount)
   const placeholderRows = useDataGridTableStagePlaceholderRows<TRow>({
@@ -374,6 +445,8 @@ export function useDataGridTableStageRuntime<
     headerViewportRef,
     bodyViewportRef,
     displayRows,
+    displayRowsRevision,
+    renderedViewportRange,
     pinnedBottomRows,
     renderedColumns,
     viewportRowStart,
@@ -388,6 +461,7 @@ export function useDataGridTableStageRuntime<
     indexColumnStyle,
     columnStyle: _viewportColumnStyle,
     handleViewportScroll,
+    syncRenderedRowsInRange,
     syncViewportFromDom,
     scheduleViewportSync,
     cancelScheduledViewportSync,
@@ -413,6 +487,41 @@ export function useDataGridTableStageRuntime<
     resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
     resolveTotalRowHeight: rowHeightMetrics.resolveTotalHeight,
   })
+
+  const runtimeRowModelRevision = computed(() => {
+    void options.rowVersion.value
+    void options.runtime.rowPartition.value
+    return options.runtimeRowModel?.getSnapshot?.().revision ?? options.runtime.api.rows.getSnapshot().revision ?? null
+  })
+
+  const handleCenterPaneDiagnostics = (payload: DataGridTableStageCenterPaneDiagnostics): void => {
+    if ("renderedViewport" in payload && payload.renderedViewport) {
+      latestRenderedBodyViewport.value = {
+        startRow: Math.max(0, Math.trunc(payload.renderedViewport.start)),
+        endRow: Math.max(Math.max(0, Math.trunc(payload.renderedViewport.start)), Math.trunc(payload.renderedViewport.end)),
+      }
+      options.reportFillPlumbingDetail?.("centerPaneStoredRenderedViewport", formatRenderedBodyViewport(latestRenderedBodyViewport.value))
+    }
+    if (typeof payload.debugJson === "string" && payload.debugJson.length > 0) {
+      try {
+        const parsed = JSON.parse(payload.debugJson) as {
+          renderedViewport?: { start?: number | null; end?: number | null } | null
+        }
+        const start = parsed.renderedViewport?.start
+        const end = parsed.renderedViewport?.end
+        if (latestRenderedBodyViewport.value == null && Number.isFinite(start) && Number.isFinite(end)) {
+          latestRenderedBodyViewport.value = {
+            startRow: Math.max(0, Math.trunc(start as number)),
+            endRow: Math.max(Math.max(0, Math.trunc(start as number)), Math.trunc(end as number)),
+          }
+          options.reportFillPlumbingDetail?.("centerPaneStoredRenderedViewport", formatRenderedBodyViewport(latestRenderedBodyViewport.value))
+        }
+      } catch {
+        // Ignore malformed diagnostics payloads.
+      }
+    }
+    options.reportCenterPaneDiagnostics?.(payload)
+  }
   const resolveStageColumnStyle = (columnKey: string): Record<string, string> => {
     return _viewportColumnStyle(columnKey)
   }
@@ -558,8 +667,27 @@ export function useDataGridTableStageRuntime<
     recordHistoryIntentTransaction,
     canUndoHistory,
     canRedoHistory,
-    runHistoryAction,
+    runHistoryAction: runIntentHistoryAction,
   } = historyService
+  const lastServerFillOperation = ref<DataGridAppFillOperationRecord | null>(null)
+  const lastServerFillState = ref<DataGridAppServerFillState>(null)
+  const lastServerFillCustomOverlays = computed<readonly DataGridTableStageCustomOverlay[]>(() => {
+    const operation = lastServerFillOperation.value
+    if (!operation?.affectedRange) {
+      return []
+    }
+    return [{
+      key: "server-fill-affected-range",
+      ranges: [operation.affectedRange],
+      className: "grid-selection-overlay--server-fill",
+      segmentClassName: "grid-selection-overlay__segment--server-fill",
+      borderColor: "color-mix(in srgb, var(--datagrid-accent-strong) 72%, var(--datagrid-text-color) 28%)",
+      backgroundColor: "color-mix(in srgb, var(--datagrid-accent-strong) 10%, transparent)",
+      borderStyle: "solid",
+      hideSingleCell: false,
+      zIndex: 7,
+    }]
+  })
 
   const {
     rowIndexLabel,
@@ -720,6 +848,327 @@ export function useDataGridTableStageRuntime<
   isEditingCellForSelection = isEditingCell
 
   const editingCellRef = computed(() => editingCell.value)
+
+  onMounted(() => {
+    options.reportFillPlumbingState?.("runtime_diagnostics_alive", true)
+    options.reportFillPlumbingDetail?.("runtime_diagnostics_alive", "yes")
+  })
+
+  function buildFillProjectionContext(): DataGridAppFillProjectionContext {
+    const snapshot = options.runtime.api.rows.getSnapshot() as {
+      sortModel?: readonly DataGridSortState[]
+      filterModel?: DataGridFilterSnapshot | null
+      groupBy?: DataGridGroupBySpec | null
+      groupExpansion?: DataGridGroupExpansionSnapshot
+      pagination?: DataGridPaginationSnapshot
+    }
+    return {
+      sortModel: snapshot.sortModel ?? [],
+      filterModel: snapshot.filterModel ?? null,
+      groupBy: snapshot.groupBy ?? null,
+      groupExpansion: snapshot.groupExpansion ?? { expandedByDefault: false, toggledGroupKeys: [] },
+      treeData: null,
+      pivot: null,
+      pagination: snapshot.pagination ?? {
+        enabled: false,
+        pageSize: 0,
+        currentPage: 0,
+        pageCount: 0,
+        totalRowCount: 0,
+        startIndex: 0,
+        endIndex: 0,
+      },
+    }
+  }
+
+  function formatRuntimeRowModelSnapshot(): string {
+    const snapshot = options.runtimeRowModel?.getSnapshot?.()
+    if (!snapshot) {
+      return "none"
+    }
+    const viewport = snapshot.viewportRange
+    return [
+      `rowCount=${snapshot.rowCount}`,
+      `loading=${snapshot.loading ? "yes" : "no"}`,
+      `viewport=${viewport.start}..${viewport.end}`,
+      `revision=${snapshot.revision ?? "none"}`,
+    ].join(" ")
+  }
+
+  function readDebugRegion(row: DataGridRowNode<TRow> | null | undefined): string {
+    if (!row || row.kind === "group") {
+      return "none"
+    }
+    return String((row.row as Record<string, unknown>).region ?? (row.data as Record<string, unknown>).region ?? "none")
+  }
+
+  function formatDebugRow(row: DataGridRowNode<TRow> | null | undefined): string {
+    if (!row) {
+      return "none"
+    }
+    return `${String(row.rowId)}:${readDebugRegion(row)}`
+  }
+
+  function resolveRenderedBodyViewportRange(): DataGridCopyRange | null {
+    const rows = displayRows.value
+    if (rows.length === 0) {
+      return null
+    }
+    const first = rows[0]
+    const last = rows[rows.length - 1]
+    const firstDisplayIndex = first && Number.isFinite(first.displayIndex)
+      ? Math.max(0, Math.trunc(first.displayIndex))
+      : null
+    const lastDisplayIndex = last && Number.isFinite(last.displayIndex)
+      ? Math.max(0, Math.trunc(last.displayIndex))
+      : null
+    const startRow = firstDisplayIndex != null
+      ? firstDisplayIndex
+      : viewportRowStart.value
+    const endRow = lastDisplayIndex != null
+      ? Math.max(startRow, lastDisplayIndex)
+      : Math.max(startRow, startRow + rows.length - 1)
+    return {
+      startRow,
+      endRow,
+      startColumn: 0,
+      endColumn: Math.max(0, options.visibleColumns.value.length - 1),
+    }
+  }
+
+  function reportRendererViewportDiagnostics(reason: string): void {
+    const sampleRowId = "srv-000025"
+    const sampleVisibleIndex = selectableRuntime.resolveBodyRowIndexById(sampleRowId)
+    const sampleRow = sampleVisibleIndex >= 0
+      ? selectableRuntime.getBodyRowAtIndex(sampleVisibleIndex)
+      : null
+    const sampleValue = sampleRow && sampleRow.kind !== "group"
+      ? String((sampleRow.row as Record<string, unknown>).region ?? "none")
+      : "none"
+    const firstVisibleRows = [
+      selectableRuntime.getBodyRowAtIndex(0),
+      selectableRuntime.getBodyRowAtIndex(1),
+      selectableRuntime.getBodyRowAtIndex(2),
+      selectableRuntime.getBodyRowAtIndex(3),
+      selectableRuntime.getBodyRowAtIndex(4),
+    ]
+      .filter((row): row is DataGridRowNode<TRow> => row != null)
+      .map(row => String(row.rowId))
+      .join(", ")
+    options.reportFillPlumbingDetail?.("runtime_viewport_range", `${viewportRowStart.value}..${viewportRowEnd.value}`)
+    options.reportFillPlumbingDetail?.("runtime_rowModel_snapshot", formatRuntimeRowModelSnapshot())
+    options.reportFillPlumbingDetail?.("runtime_visible_first5", firstVisibleRows || "none")
+    options.reportFillPlumbingDetail?.("runtime_sample_row25_visible_index", sampleVisibleIndex >= 0 ? String(sampleVisibleIndex) : "none")
+    options.reportFillPlumbingDetail?.("runtime_sample_row25_region", sampleValue)
+    const sourceRow1BeforeSync = options.runtime.getBodyRowAtIndex(1)
+    const sourceSyncRows = options.runtime.syncBodyRowsInRange({
+      start: 0,
+      end: Math.min(23, Math.max(0, options.runtime.rowPartition.value.bodyRowCount - 1)),
+    })
+    const sourceSyncRow1 = sourceSyncRows.find(row => Math.trunc(row.displayIndex) === 1) ?? sourceSyncRows[1] ?? null
+    const sourceRow1AfterSync = options.runtime.getBodyRowAtIndex(1)
+    const displayRow1 = displayRows.value[1] ?? null
+    options.reportFillPlumbingDetail?.(
+      "server_fill_row1_cache_status",
+      sourceRow1BeforeSync != null && sourceSyncRow1 != null && sourceRow1BeforeSync === sourceSyncRow1
+        ? "cache-hit"
+        : "pulled-fresh",
+    )
+    options.reportFillPlumbingDetail?.("server_fill_row1_sync_value", formatDebugRow(sourceSyncRow1))
+    options.reportFillPlumbingDetail?.("source_body_row1", formatDebugRow(sourceRow1AfterSync))
+    options.reportFillPlumbingDetail?.("source_body_row1_identity", [
+      `before=${formatDebugRow(sourceRow1BeforeSync)}`,
+      `sameDisplay=${sourceRow1AfterSync != null && displayRow1 != null && sourceRow1AfterSync === displayRow1 ? "yes" : "no"}`,
+      `sameSync=${sourceRow1AfterSync != null && sourceSyncRow1 != null && sourceRow1AfterSync === sourceSyncRow1 ? "yes" : "no"}`,
+      `revision=${runtimeRowModelRevision.value ?? "none"}`,
+    ].join(" "))
+    options.reportFillPlumbingDetail?.("source_sync_row1", formatDebugRow(sourceSyncRow1))
+    options.reportFillPlumbingState?.("runtime_redraw_happened", true)
+    options.reportFillPlumbingDetail?.("runtime_redraw_reason", reason)
+  }
+
+  async function refreshVisibleViewportAfterServerFill(
+    invalidationRange?: DataGridCopyRange | { start?: unknown; end?: unknown; startRow?: unknown; endRow?: unknown } | null,
+  ): Promise<void> {
+    const runtimeRowModel = options.runtimeRowModel as unknown as {
+      invalidateRange?: (range: { start: number; end: number }) => void
+      refresh?: () => Promise<void> | void
+      getSnapshot?: () => { revision?: string | number | null } | null
+    } | undefined
+    const rowsApi = options.runtime.api.rows as unknown as {
+      refresh?: () => Promise<void> | void
+    }
+    const latestRenderedViewportRange = latestRenderedBodyViewport.value
+      ? {
+          startRow: latestRenderedBodyViewport.value.startRow,
+          endRow: latestRenderedBodyViewport.value.endRow,
+          startColumn: 0,
+          endColumn: Math.max(0, options.visibleColumns.value.length - 1),
+        }
+      : null
+    const runtimeRenderedViewportRange = renderedViewportRange.value
+      ? {
+          startRow: renderedViewportRange.value.start,
+          endRow: renderedViewportRange.value.end,
+          startColumn: 0,
+          endColumn: Math.max(0, options.visibleColumns.value.length - 1),
+        }
+      : null
+    const displayRowsRenderedViewportRange = resolveRenderedBodyViewportRange()
+    const selectedRenderedViewportRange = latestRenderedViewportRange
+      ?? runtimeRenderedViewportRange
+      ?? displayRowsRenderedViewportRange
+      ?? {
+        startRow: viewportRowStart.value,
+        endRow: viewportRowEnd.value,
+        startColumn: 0,
+        endColumn: Math.max(0, options.visibleColumns.value.length - 1),
+      }
+
+    options.reportFillPlumbingDetail?.("server_fill_latest_rendered_viewport", formatRenderedBodyViewport(latestRenderedBodyViewport.value))
+    options.reportFillPlumbingDetail?.("server_fill_runtime_rendered_viewport", formatRange(runtimeRenderedViewportRange))
+    options.reportFillPlumbingDetail?.("server_fill_displayrows_rendered_viewport", formatRange(displayRowsRenderedViewportRange))
+    options.reportFillPlumbingDetail?.("server_fill_selected_rendered_viewport", formatRange(selectedRenderedViewportRange))
+    options.reportFillPlumbingDetail?.("server_fill_refresh_used_stored_rendered", latestRenderedViewportRange ? "yes" : "no")
+    const normalizedInvalidationRange = normalizeViewportRangeLike(invalidationRange)
+      ?? normalizeViewportRangeLike({
+        startRow: selectedRenderedViewportRange.startRow,
+        endRow: selectedRenderedViewportRange.endRow,
+      })
+    options.reportFillPlumbingDetail?.("server_fill_raw_invalidation", invalidationRange ? JSON.stringify(invalidationRange) : "none")
+    options.reportFillPlumbingDetail?.("server_fill_invalidation_range", normalizedInvalidationRange ? `${normalizedInvalidationRange.start}..${normalizedInvalidationRange.end}` : "none")
+    options.reportFillPlumbingDetail?.("server_fill_normalized_invalidation", normalizedInvalidationRange ? `${normalizedInvalidationRange.start}..${normalizedInvalidationRange.end}` : "none")
+    options.reportFillPlumbingDetail?.("server_fill_sync_input_range", formatRange(selectedRenderedViewportRange))
+    options.reportFillPlumbingDetail?.("server_fill_runtime_rowModel_invalidate_type", typeof runtimeRowModel?.invalidateRange === "function" ? "function" : typeof runtimeRowModel?.invalidateRange)
+
+    const sourceRow1BeforeInvalidate = options.runtime.getBodyRowAtIndex(1)
+
+    let invalidationApplied = false
+    if (normalizedInvalidationRange && typeof runtimeRowModel?.invalidateRange === "function") {
+      runtimeRowModel.invalidateRange(normalizedInvalidationRange)
+      invalidationApplied = true
+    }
+    const sourceRow1AfterInvalidate = options.runtime.getBodyRowAtIndex(1)
+    options.reportFillPlumbingState?.("server_fill_invalidation_called", invalidationApplied)
+    options.reportFillPlumbingDetail?.("server_fill_cache_row1_before_invalidation", sourceRow1BeforeInvalidate ? "yes" : "no")
+    options.reportFillPlumbingDetail?.("server_fill_cache_row1_after_invalidation", sourceRow1AfterInvalidate ? "yes" : "no")
+    options.reportFillPlumbingState?.("server_fill_invalidation_applied", invalidationApplied)
+    if (typeof rowsApi.refresh === "function") {
+      await rowsApi.refresh()
+    }
+    if (selectedRenderedViewportRange) {
+      options.runtime.setViewportRange?.({
+        start: selectedRenderedViewportRange.startRow,
+        end: selectedRenderedViewportRange.endRow,
+      })
+      options.reportFillPlumbingDetail?.("server_fill_rendered_viewport", formatRange(selectedRenderedViewportRange))
+    }
+    if (selectedRenderedViewportRange) {
+      syncRenderedRowsInRange({
+        start: selectedRenderedViewportRange.startRow,
+        end: selectedRenderedViewportRange.endRow,
+      })
+    }
+    else {
+      syncViewportFromDom()
+    }
+    await nextTick()
+    reportRendererViewportDiagnostics("server-fill-refresh")
+  }
+
+  function formatRenderedBodyViewport(
+    viewport: DataGridTableStageRenderedBodyViewport | null | undefined,
+  ): string {
+    if (!viewport) {
+      return "none"
+    }
+    return `${viewport.startRow}..${viewport.endRow}`
+  }
+
+  function formatRange(range: DataGridCopyRange | null | undefined): string {
+    if (!range) {
+      return "none"
+    }
+    return `${range.startRow}..${range.endRow}`
+  }
+
+  function normalizeViewportRangeLike(
+    range: DataGridCopyRange | { start?: unknown; end?: unknown; startRow?: unknown; endRow?: unknown } | null | undefined,
+  ): { start: number; end: number } | null {
+    if (!range) {
+      return null
+    }
+    const candidate = range as { start?: unknown; end?: unknown; startRow?: unknown; endRow?: unknown }
+    const rawStart = Number.isFinite(candidate.startRow)
+      ? candidate.startRow
+      : candidate.start
+    const rawEnd = Number.isFinite(candidate.endRow)
+      ? candidate.endRow
+      : candidate.end
+    const start = Number(rawStart)
+    const end = Number(rawEnd ?? rawStart)
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+      return null
+    }
+    return {
+      start: Math.max(0, Math.trunc(start)),
+      end: Math.max(Math.max(0, Math.trunc(start)), Math.trunc(end)),
+    }
+  }
+
+  function isVisibleViewportOverlap(range: DataGridCopyRange | null | undefined): boolean {
+    if (!range) {
+      return false
+    }
+    return range.endRow >= viewportRowStart.value && range.startRow <= viewportRowEnd.value
+  }
+
+  const canUndoStageHistory = (): boolean => {
+    if ((options.historyShortcuts?.value ?? "grid") !== "grid") {
+      return false
+    }
+    return canUndoHistory() || lastServerFillState.value === "committed"
+  }
+
+  const canRedoStageHistory = (): boolean => {
+    if ((options.historyShortcuts?.value ?? "grid") !== "grid") {
+      return false
+    }
+    return canRedoHistory() || lastServerFillState.value === "undone"
+  }
+
+  const runStageHistoryAction = (direction: "undo" | "redo"): Promise<string | null> => {
+    if ((options.historyShortcuts?.value ?? "grid") !== "grid") {
+      return Promise.resolve(null)
+    }
+    if (lastServerFillOperation.value && (direction === "undo" || direction === "redo")) {
+      const stateMatchesDirection = (
+        (direction === "undo" && lastServerFillState.value === "committed")
+        || (direction === "redo" && lastServerFillState.value === "undone")
+      )
+      if (stateMatchesDirection) {
+        const operation = lastServerFillOperation.value
+        const rowModel = options.runtimeRowModel?.dataSource
+        const projection = buildFillProjectionContext()
+        const handler = direction === "undo" ? rowModel?.undoFillOperation : rowModel?.redoFillOperation
+        if (handler) {
+          return Promise.resolve(handler({
+            operationId: operation.operationId,
+            revision: operation.revision,
+            projection,
+          })).then(async result => {
+            const invalidationRange = result?.invalidation?.kind === "range" ? result.invalidation.range : operation.affectedRange ?? null
+            options.reportFillPlumbingDetail?.("server_fill_affected_range", formatRange(invalidationRange))
+            options.reportFillPlumbingDetail?.("server_fill_visible_overlap", isVisibleViewportOverlap(invalidationRange) ? "yes" : "no")
+            await refreshVisibleViewportAfterServerFill(invalidationRange)
+            lastServerFillState.value = direction === "undo" ? "undone" : "committed"
+            return operation.operationId
+          })
+        }
+      }
+    }
+    return runIntentHistoryAction(direction)
+  }
 
   const applyStageRangeMove = async (
     baseRange: DataGridCopyRange,
@@ -883,8 +1332,11 @@ export function useDataGridTableStageRuntime<
         })
       }
     })(),
+    runtimeRowModel: options.runtimeRowModel ?? null,
     reportFillWarning: options.reportFillWarning,
+    reportCenterPaneDiagnostics: handleCenterPaneDiagnostics,
     reportFillPlumbingState: options.reportFillPlumbingState,
+    reportFillPlumbingDetail: options.reportFillPlumbingDetail,
     ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "toggle"),
     captureRowsSnapshot: captureHistorySnapshot,
     captureRowsSnapshotForRowIds: captureHistorySnapshotForRowIds,
@@ -893,7 +1345,26 @@ export function useDataGridTableStageRuntime<
       beforeSnapshot: unknown,
       afterSnapshotOverride?: unknown,
     ) => {
+      lastServerFillOperation.value = null
+      lastServerFillState.value = null
       recordHistoryIntentTransaction(descriptor, beforeSnapshot, afterSnapshotOverride)
+    },
+    recordServerFillTransaction: (descriptor: {
+      intent: "fill"
+      label: string
+      affectedRange?: DataGridCopyRange | null
+      operationId: string
+      revision?: string | number | null
+      mode: DataGridFillBehavior
+    }) => {
+      historyService.recordServerFillTransaction(descriptor)
+      lastServerFillOperation.value = {
+        operationId: descriptor.operationId,
+        revision: descriptor.revision,
+        affectedRange: descriptor.affectedRange ?? null,
+        mode: descriptor.mode,
+      }
+      lastServerFillState.value = "committed"
     },
     clearPendingClipboardOperation,
     clearExternalPendingClipboardOperation: options.clearExternalPendingClipboardOperation,
@@ -905,19 +1376,16 @@ export function useDataGridTableStageRuntime<
     rangesEqual,
     buildFillMatrixFromRange,
     applyRangeMove: options.applyRangeMove ?? applyStageRangeMove,
+    refreshServerFillViewport: refreshVisibleViewportAfterServerFill,
     syncViewport: () => syncViewportFromDom(),
     editingCell: editingCellRef,
     startInlineEdit,
     appendInlineEditTextInput,
     cancelInlineEdit,
     commitInlineEdit,
-    canUndo: () => (options.historyShortcuts?.value ?? "grid") === "grid" && canUndoHistory(),
-    canRedo: () => (options.historyShortcuts?.value ?? "grid") === "grid" && canRedoHistory(),
-    runHistoryAction: direction => (
-      (options.historyShortcuts?.value ?? "grid") === "grid"
-        ? runHistoryAction(direction)
-        : Promise.resolve(null)
-    ),
+    canUndo: canUndoStageHistory,
+    canRedo: canRedoStageHistory,
+    runHistoryAction: runStageHistoryAction,
     ensureKeyboardActiveCellVisible,
     isContextMenuVisible: options.isContextMenuVisible,
     closeContextMenu: options.closeContextMenu,
@@ -1056,6 +1524,8 @@ export function useDataGridTableStageRuntime<
     visibleColumns: orderedVisibleColumns,
     renderedColumns,
     displayRows,
+    displayRowsRevision,
+    runtimeRevision: runtimeRowModelRevision,
     pinnedBottomRows,
     sourceRows: options.sourceRows ?? options.rows,
     showRowIndex,
@@ -1087,6 +1557,8 @@ export function useDataGridTableStageRuntime<
     totalRowCount: totalSelectableRows,
     fillPreviewRange,
     rangeMovePreviewRange,
+    customOverlays: lastServerFillCustomOverlays,
+    reportCenterPaneDiagnostics: handleCenterPaneDiagnostics,
     fillHandleEnabled: computed(() => options.enableFillHandle.value),
     rangeMoveEnabled: computed(() => options.enableRangeMove.value),
     isFillDragging,
@@ -1236,9 +1708,9 @@ export function useDataGridTableStageRuntime<
     tableStageProps,
     tableStageContext,
     historyController: {
-      canUndo: canUndoHistory,
-      canRedo: canRedoHistory,
-      runHistoryAction,
+      canUndo: canUndoStageHistory,
+      canRedo: canRedoStageHistory,
+      runHistoryAction: runStageHistoryAction,
     },
     syncViewportFromDom,
     copySelectedCells,
