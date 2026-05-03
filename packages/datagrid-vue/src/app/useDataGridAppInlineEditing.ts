@@ -472,6 +472,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     const afterSnapshot = typeof beforeSnapshot !== "undefined"
       ? buildAfterSnapshotFromEdit(beforeSnapshot, resolvedRowId, currentEditingCell.columnKey, parsedValue)
       : undefined
+    clearInlineEdit()
     await options.runtime.api.rows.applyEdits([
       {
         rowId: resolvedRowId,
@@ -493,7 +494,6 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       },
     })
     options.recordEditTransaction(beforeSnapshot, afterSnapshot, "Cell edit")
-    clearInlineEdit()
     suppressNextBlurCommit.value = false
     if (target !== "none") {
       focusAfterInlineEdit(resolvedRowId, currentEditingCell.columnKey, target, {

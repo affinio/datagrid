@@ -272,7 +272,14 @@ export function useDataGridTableStagePlaceholderRows<TRow extends Record<string,
         return []
       }
       const rows: DataGridRowNode<TRow>[] = []
-      for (let rowIndex = normalizedRange.start; rowIndex <= normalizedRange.end; rowIndex += 1) {
+      const materializedEnd = Math.min(normalizedRange.end, Math.max(0, options.totalBodyRows.value - 1))
+      if (normalizedRange.start <= materializedEnd && typeof options.runtime.syncBodyRowsInRange === "function") {
+        rows.push(...options.runtime.syncBodyRowsInRange({
+          start: normalizedRange.start,
+          end: materializedEnd,
+        }))
+      }
+      for (let rowIndex = Math.max(normalizedRange.start, options.totalBodyRows.value); rowIndex <= normalizedRange.end; rowIndex += 1) {
         const row = getVisualRowAtIndex(rowIndex)
         if (row) {
           rows.push(row)

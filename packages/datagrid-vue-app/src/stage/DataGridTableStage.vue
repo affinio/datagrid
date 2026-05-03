@@ -1974,7 +1974,9 @@ watch(
   () => [
     viewport.value.viewportRowStart,
     viewport.value.viewportRowEnd,
-    displayRows.value.map(row => `${String(row.rowId)}:${String((row.row as Record<string, unknown>).region ?? "")}`).join("|"),
+    displayRows.value
+      .map(row => `${String(row.rowId)}:${String((row.row as Record<string, unknown> | undefined)?.region ?? "")}`)
+      .join("|"),
   ].join("|"),
   () => {
     void nextTick(() => {

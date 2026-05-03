@@ -24,6 +24,7 @@ import {
   type DataGridColumnPin,
   type DataGridComputedFieldDefinition,
   type DataGridCoreServiceRegistry,
+  cloneDataGridFilterSnapshot,
   type DataGridFilterSnapshot,
   type DataGridFormulaFieldDefinition,
   type DataGridFormulaFunctionRegistry,
@@ -902,7 +903,7 @@ const DataGridRuntimeComponent = defineComponent({
       if (props.filterModel !== undefined) {
         return props.filterModel
       }
-      return effectiveUnifiedState.value?.rows?.snapshot?.filterModel ?? null
+      return cloneDataGridFilterSnapshot(effectiveUnifiedState.value?.rows?.snapshot?.filterModel ?? null)
     })
     const effectiveGroupBy = computed<DataGridGroupBySpec | null>(() => {
       if (props.groupBy !== undefined) {

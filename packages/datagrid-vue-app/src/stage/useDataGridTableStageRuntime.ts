@@ -1122,23 +1122,14 @@ export function useDataGridTableStageRuntime<
   }
 
   const canUndoStageHistory = (): boolean => {
-    if ((options.historyShortcuts?.value ?? "grid") !== "grid") {
-      return false
-    }
     return canUndoHistory() || lastServerFillState.value === "committed"
   }
 
   const canRedoStageHistory = (): boolean => {
-    if ((options.historyShortcuts?.value ?? "grid") !== "grid") {
-      return false
-    }
     return canRedoHistory() || lastServerFillState.value === "undone"
   }
 
   const runStageHistoryAction = (direction: "undo" | "redo"): Promise<string | null> => {
-    if ((options.historyShortcuts?.value ?? "grid") !== "grid") {
-      return Promise.resolve(null)
-    }
     if (lastServerFillOperation.value && (direction === "undo" || direction === "redo")) {
       const stateMatchesDirection = (
         (direction === "undo" && lastServerFillState.value === "committed")

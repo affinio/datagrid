@@ -968,6 +968,17 @@ export default defineComponent({
       { deep: true },
     )
 
+    watch(
+      rowVersion,
+      () => {
+        if (props.filterModel !== undefined) {
+          return
+        }
+        filterModelState.value = cloneFilterModelState(props.runtime.api.rows.getSnapshot().filterModel ?? null)
+      },
+      { immediate: true },
+    )
+
     const modeRef = computed(() => props.mode)
     const rowsRef = computed(() => props.rows)
     const totalRuntimeRows = computed(() => {

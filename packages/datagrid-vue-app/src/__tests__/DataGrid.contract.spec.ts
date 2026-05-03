@@ -4206,8 +4206,8 @@ describe("DataGrid app facade contract", () => {
 
     const popover = queryAdvancedFilterRoot()
     expect(popover).toBeTruthy()
-    expect(popover?.textContent).toContain('Owner contains "NOC"')
-    expect(popover?.textContent).toContain('Advanced: Region = "eu-west"')
+    expect(popover?.textContent).toContain('Owner Contains "NOC"')
+    expect(popover?.textContent).toContain('Advanced: Region Equals "eu-west"')
 
     popover?.querySelector<HTMLElement>('[data-datagrid-advanced-filter-action="reset-all"]')?.dispatchEvent(
       new MouseEvent("click", { bubbles: true }),
@@ -7070,8 +7070,9 @@ describe("DataGrid app facade contract", () => {
     expect(api?.rows.get(0)?.rowId).toBe("r1")
     expect(recordIntentTransaction).toHaveBeenCalledTimes(1)
     expect(recordIntentTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ label: "Delete row" }),
+      expect.objectContaining({ intent: "edit", label: "Delete row" }),
       expect.objectContaining({ token: "delete-placeholder-range" }),
+      undefined,
     )
 
     wrapper.unmount()

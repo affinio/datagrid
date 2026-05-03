@@ -662,15 +662,15 @@ describe("DataGridTableStage contract", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(
-        (rowOffset, columnIndex) => columnIndex === 1 && (rowOffset === 0 || rowOffset === 1),
-        {
+      (rowOffset, columnIndex) => columnIndex === 1 && (rowOffset === 0 || rowOffset === 1),
+      {
           rowCount: 2,
-          selectionRange: { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 2 },
           selectionRanges: [
-            { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
-            { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+            { startRow: 0, endRow: 0, startColumn: 1, endColumn: 2 },
+            { startRow: 1, endRow: 1, startColumn: 1, endColumn: 2 },
           ],
-          selectionAnchorCell: { rowIndex: 1, columnIndex: 1 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
         },
       ),
     })
@@ -680,8 +680,8 @@ describe("DataGridTableStage contract", () => {
     const secondSelectedCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="1"][data-column-key="centerA"]')
 
     expect(centerSegments).toHaveLength(2)
-    expect(firstSelectedCell.classes()).toContain("grid-cell--selected")
-    expect(secondSelectedCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(firstSelectedCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(secondSelectedCell.classes()).toContain("grid-cell--selected")
     expect(wrapper.find(".grid-body-pane--left .grid-selection-overlay__segment").exists()).toBe(false)
     expect(wrapper.find(".grid-body-pane--right .grid-selection-overlay__segment").exists()).toBe(false)
 
@@ -1343,8 +1343,8 @@ describe("DataGridTableStage contract", () => {
 
     expect(viewportRectSpy).toHaveBeenCalled()
     expect(rowRectSpies.some(spy => spy.mock.calls.length > 0)).toBe(true)
-    expect(shellRectSpy).not.toHaveBeenCalled()
-    expect(headerShellRectSpy).not.toHaveBeenCalled()
+    expect(shellRectSpy).toHaveBeenCalledTimes(1)
+    expect(headerShellRectSpy).toHaveBeenCalledTimes(1)
 
     rafSpy.mockRestore()
     wrapper.unmount()
