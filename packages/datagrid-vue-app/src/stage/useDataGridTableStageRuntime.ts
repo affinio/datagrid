@@ -3,17 +3,15 @@ import type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
+  DataGridPaginationSnapshot,
   DataGridRowNode,
   DataGridColumnSnapshot,
   DataGridRowSelectionSnapshot,
   DataGridSelectionSnapshot,
+  DataGridSortState,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
-import type {
-  DataGridPaginationSnapshot,
-  DataGridSortState,
-} from "@affino/datagrid-core"
 import {
   createDataGridAppRowHeightMetrics,
   type DataGridAppPasteOptions,
