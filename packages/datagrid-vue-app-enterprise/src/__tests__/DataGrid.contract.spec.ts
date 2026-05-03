@@ -702,6 +702,7 @@ describe("DataGrid enterprise facade contract", () => {
   it("blocks expired licenses even when a licenseKey is present", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     const wrapper = mount(DataGrid, {
+      attachTo: document.body,
       props: {
         rows: FORMULA_ROWS,
         columns: FORMULA_COLUMNS,
