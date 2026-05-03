@@ -1742,7 +1742,7 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
-  it("suppresses fill-handle interactions when the feature is disabled", () => {
+  it("suppresses fill-handle interactions when the feature is disabled", async () => {
     const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
       rowCount: 3,
       columnCount: 2,
@@ -1781,10 +1781,10 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(controller.fillPreviewRange.value).toBeNull()
     expect(controller.isFillHandleCell(0, 0)).toBe(false)
     expect(applyClipboardEdits).not.toHaveBeenCalled()
-    expect(controller.applyLastFillBehavior("copy")).toBe(false)
+    await expect(controller.applyLastFillBehavior("copy")).resolves.toBe(false)
   })
 
-  it("falls back to the nearest contiguous reference column on the right when the left side has no extent", () => {
+  it("falls back to the nearest contiguous reference column on the right when the left side has no extent", async () => {
     const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
       rowCount: 5,
       columnCount: 3,
@@ -1820,13 +1820,14 @@ describe("useDataGridAppInteractionController contract", () => {
       bubbles: true,
       cancelable: true,
     }))
+    await flushAsync()
 
     expect(applyClipboardEdits).toHaveBeenCalledWith({
       startRow: 0,
       endRow: 3,
       startColumn: 0,
       endColumn: 0,
-    }, [["1"], ["2"], ["3"], ["4"]])
+    }, [["1"], ["2"], ["3"], ["4"]], { recordHistoryLabel: "Fill edit" })
   })
 
   it("uses datasource fill boundary resolution when available", async () => {
@@ -2346,7 +2347,7 @@ describe("useDataGridAppInteractionController contract", () => {
     }, expect.any(Array), expect.objectContaining({ recordHistoryLabel: "Fill edit" }))
   })
 
-  it("prefers the left reference side before using the right side for fill-handle double click", () => {
+  it("prefers the left reference side before using the right side for fill-handle double click", async () => {
     const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
       rowCount: 6,
       columnCount: 3,
@@ -2383,16 +2384,17 @@ describe("useDataGridAppInteractionController contract", () => {
       bubbles: true,
       cancelable: true,
     }))
+    await flushAsync()
 
     expect(applyClipboardEdits).toHaveBeenCalledWith({
       startRow: 0,
       endRow: 2,
       startColumn: 1,
       endColumn: 1,
-    }, [["1"], ["2"], ["3"]])
+    }, [["1"], ["2"], ["3"]], { recordHistoryLabel: "Fill edit" })
   })
 
-  it("clears the removed tail when a repeated fill drag shrinks back toward the base range", () => {
+  it("clears the removed tail when a repeated fill drag shrinks back toward the base range", async () => {
     const elementFromPointSpy = vi.spyOn(document, "elementFromPoint")
     const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
       rowCount: 5,
@@ -2440,6 +2442,7 @@ describe("useDataGridAppInteractionController contract", () => {
       cancelable: true,
     }))
     controller.handleWindowMouseUp()
+    await flushAsync()
 
     expect(applyClipboardEdits).toHaveBeenNthCalledWith(1, {
       startRow: 3,
@@ -2460,7 +2463,7 @@ describe("useDataGridAppInteractionController contract", () => {
   })
 
 
-  it("does not apply fill-down from a blocked anchor cell", () => {
+  it("does not apply fill-down from a blocked anchor cell", async () => {
     const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
       rowCount: 4,
       columnCount: 2,
@@ -2488,11 +2491,12 @@ describe("useDataGridAppInteractionController contract", () => {
       bubbles: true,
       cancelable: true,
     }))
+    await flushAsync()
 
     expect(applyClipboardEdits).not.toHaveBeenCalled()
     expect(controller.lastAppliedFill.value).toBeNull()
   })
-  it("marks plain-text fills as not offering a fill behavior toggle", () => {
+  it("marks plain-text fills as not offering a fill behavior toggle", async () => {
     const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
       rowCount: 4,
       columnCount: 2,
@@ -2527,20 +2531,21 @@ describe("useDataGridAppInteractionController contract", () => {
       bubbles: true,
       cancelable: true,
     }))
+    await flushAsync()
 
     expect(applyClipboardEdits).toHaveBeenCalledWith({
       startRow: 0,
       endRow: 2,
       startColumn: 0,
       endColumn: 0,
-    }, [["Atlas"], ["Atlas"], ["Atlas"]])
+    }, [["Atlas"], ["Atlas"], ["Atlas"]], { recordHistoryLabel: "Fill edit" })
     expect(controller.lastAppliedFill.value).toMatchObject({
       behavior: "copy",
       allowBehaviorToggle: false,
     })
   })
 
-  it("reapplies the last fill with an explicit behavior override", () => {
+  it("reapplies the last fill with an explicit behavior override", async () => {
     const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
       rowCount: 4,
       columnCount: 2,
@@ -2570,15 +2575,13 @@ describe("useDataGridAppInteractionController contract", () => {
       allowBehaviorToggle: true,
     }
 
-    const applied = controller.applyLastFillBehavior("copy")
-
-    expect(applied).toBe(true)
+    await expect(controller.applyLastFillBehavior("copy")).resolves.toBe(true)
     expect(applyClipboardEdits).toHaveBeenCalledWith({
       startRow: 0,
       endRow: 3,
       startColumn: 0,
       endColumn: 0,
-    }, [["1"], ["1"], ["1"], ["1"]])
+    }, [["1"], ["1"], ["1"], ["1"]], { recordHistoryLabel: "Fill edit" })
     expect(controller.lastAppliedFill.value).toMatchObject({ behavior: "copy" })
   })
 
