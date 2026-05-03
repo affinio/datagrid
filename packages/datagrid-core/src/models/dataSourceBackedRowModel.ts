@@ -1154,15 +1154,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return active?.promise ?? Promise.resolve()
   }
 
-  async function drainBackpressureQueue(): Promise<void> {
+  async function drainCriticalBackpressureQueue(): Promise<void> {
     while (!disposed) {
       const activeCritical = criticalInFlight?.promise ?? null
-      const activeBackground = backgroundInFlight?.promise ?? null
-      if (activeCritical || activeBackground) {
-        await Promise.all([
-          activeCritical?.catch(() => {}),
-          activeBackground?.catch(() => {}),
-        ])
+      if (activeCritical) {
+        await activeCritical.catch(() => {})
         continue
       }
       const nextCritical = pendingCriticalPull
@@ -1172,14 +1168,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
         await pullRange(nextCritical.range, nextCritical.reason, nextCritical.priority, nextCritical.treeData)
         continue
       }
-      const nextBackground = pendingBackgroundPull
-      if (nextBackground) {
-        pendingBackgroundPull = null
-        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
-        await pullRange(nextBackground.range, nextBackground.reason, nextBackground.priority, nextBackground.treeData)
-        continue
-      }
-      diagnostics.hasPendingPull = false
       return
     }
   }
@@ -2072,9 +2060,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
         backpressurePaused = false
         diagnostics.paused = false
       }
+      // Flush is a foreground sync point; opportunistic prefetch must not keep callers waiting.
+      clearBackgroundPrefetchState("reset")
       try {
-        await drainBackpressureQueue()
+        await drainCriticalBackpressureQueue()
       } finally {
+        clearBackgroundPrefetchState("reset")
         if (wasPaused && !disposed) {
           backpressurePaused = true
           diagnostics.paused = true
