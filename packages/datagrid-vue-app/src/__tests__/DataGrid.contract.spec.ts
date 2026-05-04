@@ -3369,6 +3369,134 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("defers large columnMenu value histograms until after the menu opens", async () => {
+    type HistogramRequest = {
+      request: { options: { ignoreSelfFilter?: boolean; search?: string } }
+      resolve: (entries: readonly { token: string; value: string; count: number; text?: string }[]) => void
+      reject: (reason?: unknown) => void
+    }
+    const histogramRequests: HistogramRequest[] = []
+    const rowCount = 10_000
+    const sourceRows: readonly DemoRow[] = Array.from({ length: rowCount }, (_unused, index) => ({
+      rowId: `source-lazy-${index + 1}`,
+      owner: index % 2 === 0 ? "NOC" : "Payments",
+      region: "eu-west",
+      amount: index + 1,
+    }))
+    const rowNodes = Array.from({ length: 40 }, (_unused, index) => {
+      const row: DemoRow = {
+        rowId: `lazy-${index + 1}`,
+        owner: index % 2 === 0 ? "NOC" : "Payments",
+        region: "eu-west",
+        amount: index + 1,
+      }
+      return {
+        row,
+        data: row,
+        rowId: row.rowId,
+        originalIndex: index,
+        displayIndex: index,
+        kind: "leaf" as const,
+        state: { selected: false, group: false, pinned: "none" as const, expanded: false },
+      }
+    })
+    const rowModel = {
+      kind: "server",
+      getSnapshot: () => ({
+        revision: 0,
+        kind: "server",
+        rowCount,
+        loading: false,
+        error: null,
+        viewportRange: { start: 0, end: Math.max(0, rowNodes.length - 1) },
+        sortModel: [],
+        filterModel: null,
+        groupBy: null,
+        groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+        pagination: {
+          enabled: false,
+          pageSize: 0,
+          currentPage: 0,
+          pageCount: 1,
+          totalRowCount: rowCount,
+          startIndex: 0,
+          endIndex: Math.max(0, rowNodes.length - 1),
+        },
+      }),
+      getRowCount: () => rowCount,
+      getRow: (index: number) => rowNodes[index % rowNodes.length],
+      getRowsInRange: (start: number, end: number) => rowNodes.slice(start, Math.min(rowNodes.length, end + 1)),
+      setViewportRange: () => {},
+      setPagination: () => {},
+      setPageSize: () => {},
+      setCurrentPage: () => {},
+      setSortModel: () => {},
+      setFilterModel: () => {},
+      setSortAndFilterModel: () => {},
+      setGroupBy: () => {},
+      setPivotModel: () => {},
+      getPivotModel: () => null,
+      setAggregationModel: () => {},
+      getAggregationModel: () => null,
+      getColumnHistogram: (_columnKey: string, options?: { ignoreSelfFilter?: boolean; search?: string }) => {
+        const request = { options: options ?? {} }
+        return new Promise<readonly { token: string; value: string; count: number; text?: string }[]>((resolve, reject) => {
+          histogramRequests.push({ request, resolve, reject })
+        })
+      },
+      setGroupExpansion: () => {},
+      toggleGroup: () => {},
+      expandGroup: () => {},
+      collapseGroup: () => {},
+      expandAllGroups: () => {},
+      collapseAllGroups: () => {},
+      refresh: () => {},
+      subscribe: () => () => {},
+      dispose: () => {},
+    } as unknown as DataGridRowModel<DemoRow>
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: sourceRows,
+        columns: COLUMNS,
+        rowModel,
+        columnMenu: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    wrapper
+      .find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]')
+      .element
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    expect(histogramRequests).toHaveLength(0)
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuRoot()?.textContent).toContain("Loading values")
+
+    await flushAnimationFrame()
+    await flushAnimationFrame()
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+
+    expect(histogramRequests).toHaveLength(1)
+    expect(histogramRequests[0]?.request.options.ignoreSelfFilter).toBe(true)
+    histogramRequests[0]?.resolve([
+      { token: "string:noc", value: "NOC", count: 2, text: "NOC" },
+      { token: "string:payments", value: "Payments", count: 1, text: "Payments" },
+    ])
+    await flushRuntimeTasks()
+
+    const valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
+    expect(valueRows.map(row => row.textContent?.replace(/\s+/g, " ").trim())).toEqual([
+      expect.stringContaining("NOC"),
+      expect.stringContaining("Payments"),
+    ])
+
+    wrapper.unmount()
+  })
+
   it("builds value-set filter choices from effective column values", async () => {
     const wrapper = mount(EffectiveFilterGrid, {
       props: {

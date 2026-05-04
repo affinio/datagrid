@@ -400,6 +400,7 @@ interface UiMenuRef {
 }
 
 const DATAGRID_COLUMN_MENU_VALUE_FILTER_HARD_ROW_LIMIT = 100_000
+const DATAGRID_COLUMN_MENU_DEFER_VALUE_LOAD_ROW_THRESHOLD = 10_000
 
 const props = defineProps<{
   rowCount: number
@@ -453,6 +454,7 @@ const menuThemeVars = ref<Record<string, string>>({})
 const includeNewValueEntriesByDefault = ref(false)
 let valueEntriesRequestId = 0
 let suppressNextQueryReload = false
+let deferredValueEntriesLoadCancel: (() => void) | null = null
 const sortLabels = computed(() => resolveColumnMenuSortLabels(props.columnDataType))
 const disabledItems = computed(() => new Set(props.disabledItems))
 const contextMenuEnabled = computed(() => props.triggerMode !== "button")
@@ -480,6 +482,9 @@ const effectiveValueFilterEnabled = computed(() => {
   }
   return props.rowCount <= resolvedValueFilterRowLimit.value
 })
+const shouldDeferInitialValueEntriesLoad = computed(() => (
+  props.rowCount >= DATAGRID_COLUMN_MENU_DEFER_VALUE_LOAD_ROW_THRESHOLD
+))
 const valueFilterDisabledByRowLimit = computed(() => (
   props.filterEnabled && !effectiveValueFilterEnabled.value
 ))
@@ -613,6 +618,7 @@ const menuCallbacks: MenuCallbacks = {
   },
   onClose: () => {
     open.value = false
+    cancelDeferredValueEntriesLoad()
   },
 }
 
@@ -627,7 +633,7 @@ watch(query, value => {
     return
   }
   if (open.value && effectiveValueFilterEnabled.value) {
-    void loadValueEntries(false)
+    startValueEntriesLoad(false)
   }
 })
 
@@ -798,6 +804,7 @@ function resetFilterDraft(): void {
   addCurrentSelectionToFilter.value = false
   resetRenderedValueCount()
   resetValuesListScroll()
+  cancelDeferredValueEntriesLoad()
   if (!effectiveValueFilterEnabled.value) {
     valueEntries.value = []
     valueEntriesLoading.value = false
@@ -806,15 +813,65 @@ function resetFilterDraft(): void {
     includeNewValueEntriesByDefault.value = false
     return
   }
-  void loadValueEntries(true)
+  startValueEntriesLoad(true, { defer: shouldDeferInitialValueEntriesLoad.value })
 }
 
-async function loadValueEntries(resetSelection: boolean): Promise<void> {
+function cancelDeferredValueEntriesLoad(): void {
+  deferredValueEntriesLoadCancel?.()
+  deferredValueEntriesLoadCancel = null
+}
+
+function scheduleValueEntriesLoadFrame(callback: () => void): void {
+  if (
+    typeof window !== "undefined"
+    && typeof window.requestAnimationFrame === "function"
+    && typeof window.cancelAnimationFrame === "function"
+  ) {
+    const frameId = window.requestAnimationFrame(() => {
+      deferredValueEntriesLoadCancel = null
+      callback()
+    })
+    deferredValueEntriesLoadCancel = () => window.cancelAnimationFrame(frameId)
+    return
+  }
+
+  const timeoutId = globalThis.setTimeout(() => {
+    deferredValueEntriesLoadCancel = null
+    callback()
+  }, 0)
+  deferredValueEntriesLoadCancel = () => globalThis.clearTimeout(timeoutId)
+}
+
+function startValueEntriesLoad(resetSelection: boolean, options: { defer?: boolean } = {}): void {
+  cancelDeferredValueEntriesLoad()
   const requestId = valueEntriesRequestId + 1
   valueEntriesRequestId = requestId
   valueEntriesLoading.value = true
   valueEntriesError.value = null
 
+  if (!options.defer) {
+    void loadValueEntriesForRequest(requestId, resetSelection)
+    return
+  }
+
+  let frameCount = 0
+  const runAfterMenuPaint = () => {
+    if (!open.value || requestId !== valueEntriesRequestId || !effectiveValueFilterEnabled.value) {
+      return
+    }
+    frameCount += 1
+    if (frameCount < 3) {
+      scheduleValueEntriesLoadFrame(runAfterMenuPaint)
+      return
+    }
+    void loadValueEntriesForRequest(requestId, resetSelection)
+  }
+
+  // Let the menu paint before expensive local histograms run.
+  scheduleValueEntriesLoadFrame(runAfterMenuPaint)
+}
+
+async function loadValueEntriesForRequest(requestId: number, resetSelection: boolean): Promise<void> {
   try {
     const result = props.resolveValueEntries?.(query.value.trim()) ?? []
     const rawEntries = isPromiseLike(result) ? await result : result
