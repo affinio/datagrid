@@ -18,12 +18,35 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm run quality:lock:datagrid:parity
+      - run: pnpm run quality:lock:datagrid
+      - run: pnpm run test:e2e:datagrid:parity
       - name: Upload quality gate artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: datagrid-quality-gates-artifacts
+          path: |
+            artifacts/quality
+            artifacts/performance
+
+  benchmark-gates:
+    name: datagrid-benchmark-gates
+    runs-on: ubuntu-latest
+    needs: quality-gates
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run bench:regression
+      - name: Upload benchmark gate artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: datagrid-benchmark-gates-artifacts
           path: |
             artifacts/quality
             artifacts/performance
