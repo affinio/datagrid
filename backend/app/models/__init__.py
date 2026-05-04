@@ -1,3 +1,3 @@
-from app.features.server_demo.models import GridDemoRow
+from app.features.server_demo.models import GridDemoRow, ServerDemoCellEvent, ServerDemoOperation
 
-__all__ = ["GridDemoRow"]
+__all__ = ["GridDemoRow", "ServerDemoCellEvent", "ServerDemoOperation"]

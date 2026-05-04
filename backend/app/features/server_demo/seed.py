@@ -7,7 +7,7 @@ from typing import Iterable
 
 from sqlalchemy import delete, insert
 
-from app.features.server_demo.models import GridDemoRow
+from app.features.server_demo.models import GridDemoRow, ServerDemoCellEvent, ServerDemoOperation
 from app.infrastructure.db.database import AsyncSessionLocal
 
 ROW_COUNT = 100_000
@@ -35,6 +35,8 @@ def _row_payloads() -> Iterable[dict[str, object]]:
 async def seed_demo_rows() -> None:
     async with AsyncSessionLocal() as session:
         async with session.begin():
+            await session.execute(delete(ServerDemoCellEvent))
+            await session.execute(delete(ServerDemoOperation))
             await session.execute(delete(GridDemoRow))
 
             rows = _row_payloads()

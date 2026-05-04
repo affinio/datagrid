@@ -99,8 +99,9 @@ class ServerDemoEditItem(BaseModel):
 
 
 class ServerDemoCommitEditsRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
+    operation_id: str | None = Field(default=None, alias="operationId")
     edits: list[ServerDemoEditItem] = Field(default_factory=list)
 
 
@@ -138,6 +139,7 @@ class ServerDemoEditInvalidation(BaseModel):
 class ServerDemoCommitEditsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
+    operation_id: str | None = Field(default=None, alias="operationId")
     committed: list[ServerDemoCommittedEdit] = Field(default_factory=list)
     committed_row_ids: list[str] = Field(default_factory=list, alias="committedRowIds")
     rejected: list[ServerDemoRejectedEdit] = Field(default_factory=list)

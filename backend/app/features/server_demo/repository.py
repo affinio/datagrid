@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import re
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiException
+from app.features.server_demo.models import ServerDemoCellEvent as ServerDemoCellEventModel
+from app.features.server_demo.models import ServerDemoOperation as ServerDemoOperationModel
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.schemas import (
     ServerDemoCommittedEdit,
@@ -47,6 +51,23 @@ ENUM_VALUES_BY_COLUMN = {
     "region": REGION_VALUES,
 }
 INTEGER_PATTERN = re.compile(r"^[+-]?\d+$")
+OPERATION_STATUS_APPLIED = "applied"
+OPERATION_STATUS_UNDONE = "undone"
+
+
+@dataclass(frozen=True)
+class PendingCellEvent:
+    row: GridDemoRowModel
+    column_id: str
+    before_value: Any
+    after_value: Any
+
+
+@dataclass(frozen=True)
+class PreparedHistoryCellEvent:
+    event: ServerDemoCellEventModel
+    row: GridDemoRowModel
+    target_value: Any
 
 
 class ServerDemoRepository:
@@ -101,6 +122,8 @@ class ServerDemoRepository:
         )
 
     async def commit_edits(self, request: ServerDemoCommitEditsRequest) -> ServerDemoCommitEditsResponse:
+        requested_operation_id = self._normalize_optional_operation_id(request.operation_id)
+        operation_id: str | None = None
         committed: list[ServerDemoCommittedEdit] = []
         rejected: list[ServerDemoRejectedEdit] = []
         committed_row_ids: list[str] = []
@@ -116,6 +139,7 @@ class ServerDemoRepository:
 
             changed_rows: dict[str, GridDemoRowModel] = {}
             changed_at = datetime.now(timezone.utc)
+            cell_events: list[PendingCellEvent] = []
 
             for edit in request.edits:
                 column_id = edit.column_id
@@ -142,11 +166,20 @@ class ServerDemoRepository:
                     rejected.append(self._rejected_edit(edit.row_id, column_id, "previous-value-mismatch"))
                     continue
 
+                before_value = self._json_edit_value(current_value)
                 if next_value != current_value:
                     setattr(row, self._model_attribute_for_edit_column(column_id), next_value)
                     row.updated_at = changed_at
                     changed_rows[row.id] = row
 
+                cell_events.append(
+                    PendingCellEvent(
+                        row=row,
+                        column_id=column_id,
+                        before_value=before_value,
+                        after_value=self._json_edit_value(next_value),
+                    )
+                )
                 committed.append(
                     ServerDemoCommittedEdit(
                         row_id=row.id,
@@ -160,10 +193,219 @@ class ServerDemoRepository:
             if changed_rows:
                 await self._session.flush()
                 affected_indexes = [row.row_index for row in changed_rows.values()]
+            if cell_events:
+                operation_id = requested_operation_id or self._create_edit_operation_id()
+                await self._ensure_operation_id_available(operation_id)
+                self._session.add(
+                    ServerDemoOperationModel(
+                        operation_id=operation_id,
+                        operation_type="edit",
+                        status=OPERATION_STATUS_APPLIED,
+                        operation_metadata={},
+                        revision=changed_at,
+                        created_at=changed_at,
+                        modified_at=changed_at,
+                    )
+                )
+                await self._session.flush()
+                self._session.add_all(
+                    [
+                        ServerDemoCellEventModel(
+                            event_id=uuid4(),
+                            operation_id=operation_id,
+                            row_id=cell_event.row.id,
+                            column_key=cell_event.column_id,
+                            before_value=cell_event.before_value,
+                            after_value=cell_event.after_value,
+                            created_at=changed_at,
+                        )
+                        for cell_event in cell_events
+                    ]
+                )
 
             revision = await self._revision_token()
 
         return ServerDemoCommitEditsResponse(
+            operation_id=operation_id,
+            committed=committed,
+            committed_row_ids=committed_row_ids,
+            rejected=rejected,
+            revision=revision,
+            invalidation=self._build_edit_invalidation(affected_indexes),
+        )
+
+    async def undo_operation(self, operation_id: str) -> ServerDemoCommitEditsResponse:
+        return await self._apply_history_operation(operation_id, "undo")
+
+    async def redo_operation(self, operation_id: str) -> ServerDemoCommitEditsResponse:
+        return await self._apply_history_operation(operation_id, "redo")
+
+    def _normalize_optional_operation_id(self, operation_id: str | None) -> str | None:
+        normalized = operation_id.strip() if operation_id else ""
+        return normalized if normalized else None
+
+    def _require_operation_id(self, operation_id: str) -> str:
+        normalized = operation_id.strip()
+        if normalized:
+            return normalized
+        raise ApiException(
+            status_code=400,
+            code="invalid-operation-id",
+            message="operation_id must not be empty",
+        )
+
+    def _create_edit_operation_id(self) -> str:
+        return f"edit-{uuid4()}"
+
+    async def _ensure_operation_id_available(self, operation_id: str) -> None:
+        existing_count = await self._session.scalar(
+            select(func.count())
+            .select_from(ServerDemoOperationModel)
+            .where(ServerDemoOperationModel.operation_id == operation_id)
+        )
+        if existing_count:
+            raise ApiException(
+                status_code=409,
+                code="duplicate-operation-id",
+                message=f"Edit operation {operation_id} already exists",
+            )
+
+    async def _apply_history_operation(
+        self,
+        raw_operation_id: str,
+        action: str,
+    ) -> ServerDemoCommitEditsResponse:
+        operation_id = self._require_operation_id(raw_operation_id)
+
+        committed: list[ServerDemoCommittedEdit] = []
+        rejected: list[ServerDemoRejectedEdit] = []
+        committed_row_ids: list[str] = []
+        affected_indexes: list[int] = []
+
+        async with self._session.begin():
+            operation = await self._session.scalar(
+                select(ServerDemoOperationModel)
+                .where(ServerDemoOperationModel.operation_id == operation_id)
+                .with_for_update()
+            )
+            if operation is None:
+                raise ApiException(
+                    status_code=404,
+                    code="operation-not-found",
+                    message=f"Operation {operation_id} was not found",
+                )
+
+            if action == "undo":
+                if operation.status != OPERATION_STATUS_APPLIED:
+                    raise ApiException(
+                        status_code=409,
+                        code="operation-already-undone",
+                        message=f"Operation {operation_id} is not currently applied",
+                    )
+                next_status = OPERATION_STATUS_UNDONE
+            else:
+                if operation.status != OPERATION_STATUS_UNDONE:
+                    raise ApiException(
+                        status_code=409,
+                        code="operation-not-undone",
+                        message=f"Operation {operation_id} must be undone before redo",
+                    )
+                next_status = OPERATION_STATUS_APPLIED
+
+            cell_events = (
+                await self._session.scalars(
+                    select(ServerDemoCellEventModel)
+                    .where(ServerDemoCellEventModel.operation_id == operation_id)
+                    .order_by(ServerDemoCellEventModel.created_at.asc(), ServerDemoCellEventModel.event_id.asc())
+                )
+            ).all()
+
+            if not cell_events:
+                raise ApiException(
+                    status_code=409,
+                    code="operation-has-no-cell-events",
+                    message=f"Operation {operation_id} has no cell events",
+                )
+
+            row_ids = list(dict.fromkeys(event.row_id for event in cell_events))
+            rows = (
+                await self._session.scalars(
+                    select(GridDemoRowModel).where(GridDemoRowModel.id.in_(row_ids)).with_for_update()
+                )
+            ).all()
+            rows_by_id = {row.id: row for row in rows}
+
+            prepared_events: list[PreparedHistoryCellEvent] = []
+            for cell_event in cell_events:
+                row = rows_by_id.get(cell_event.row_id)
+                reject_reason = self._reject_reason_for_edit(row, cell_event.column_key)
+                if reject_reason is not None:
+                    rejected.append(self._rejected_edit(cell_event.row_id, cell_event.column_key, reject_reason))
+                    continue
+
+                try:
+                    target_value = self._normalize_edit_value(
+                        cell_event.column_key,
+                        cell_event.before_value if action == "undo" else cell_event.after_value,
+                    )
+                except ApiException as exc:
+                    rejected.append(self._rejected_edit(cell_event.row_id, cell_event.column_key, exc.code))
+                    continue
+
+                prepared_events.append(
+                    PreparedHistoryCellEvent(
+                        event=cell_event,
+                        row=row,
+                        target_value=target_value,
+                    )
+                )
+
+            if rejected:
+                revision = await self._revision_token()
+                return ServerDemoCommitEditsResponse(
+                    operation_id=operation_id,
+                    committed=[],
+                    committed_row_ids=[],
+                    rejected=rejected,
+                    revision=revision,
+                    invalidation=None,
+                )
+
+            changed_rows: dict[str, GridDemoRowModel] = {}
+            changed_at = datetime.now(timezone.utc)
+
+            for prepared_event in prepared_events:
+                current_value = self._current_edit_value(prepared_event.row, prepared_event.event.column_key)
+                if prepared_event.target_value != current_value:
+                    setattr(
+                        prepared_event.row,
+                        self._model_attribute_for_edit_column(prepared_event.event.column_key),
+                        prepared_event.target_value,
+                    )
+                    prepared_event.row.updated_at = changed_at
+                    changed_rows[prepared_event.row.id] = prepared_event.row
+
+                committed.append(
+                    ServerDemoCommittedEdit(
+                        row_id=prepared_event.row.id,
+                        column_id=prepared_event.event.column_key,
+                        revision=prepared_event.row.updated_at.isoformat(),
+                    )
+                )
+                if prepared_event.row.id not in committed_row_ids:
+                    committed_row_ids.append(prepared_event.row.id)
+
+            if changed_rows:
+                await self._session.flush()
+                affected_indexes = [row.row_index for row in changed_rows.values()]
+            operation.status = next_status
+            operation.modified_at = changed_at
+            operation.revision = changed_at
+
+            revision = await self._revision_token()
+
+        return ServerDemoCommitEditsResponse(
+            operation_id=operation_id,
             committed=committed,
             committed_row_ids=committed_row_ids,
             rejected=rejected,
@@ -358,6 +600,11 @@ class ServerDemoRepository:
         if row is None:
             return "row-not-found"
         return None
+
+    def _json_edit_value(self, value: Any) -> Any:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
 
     def _normalize_edit_value(self, column_id: str, value: Any) -> Any:
         if column_id == "name":

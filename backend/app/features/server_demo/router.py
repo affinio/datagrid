@@ -51,3 +51,19 @@ async def commit_edits(
     repository: ServerDemoRepository = Depends(get_server_demo_repository),
 ) -> ServerDemoCommitEditsResponse:
     return await repository.commit_edits(request)
+
+
+@router.post("/operations/{operation_id}/undo", response_model=ServerDemoCommitEditsResponse)
+async def undo_operation(
+    operation_id: str,
+    repository: ServerDemoRepository = Depends(get_server_demo_repository),
+) -> ServerDemoCommitEditsResponse:
+    return await repository.undo_operation(operation_id)
+
+
+@router.post("/operations/{operation_id}/redo", response_model=ServerDemoCommitEditsResponse)
+async def redo_operation(
+    operation_id: str,
+    repository: ServerDemoRepository = Depends(get_server_demo_repository),
+) -> ServerDemoCommitEditsResponse:
+    return await repository.redo_operation(operation_id)
