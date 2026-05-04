@@ -261,6 +261,7 @@ async function runScenario(page, sessionIndex, scenario) {
           renderedSnapshots: [],
           scrollWrites: [],
           rangeChangeCount: 0,
+          rangeSampleCount: 0,
           uniqueRangeCount: 0,
           mutationSummary: {
             callbackCount: 0,
@@ -268,6 +269,10 @@ async function runScenario(page, sessionIndex, scenario) {
             attributesMutations: 0,
             addedNodes: 0,
             removedNodes: 0,
+            addedRowNodes: 0,
+            removedRowNodes: 0,
+            addedCellNodes: 0,
+            removedCellNodes: 0,
           },
           layoutReadSamples: [],
           appPerf: null,
@@ -422,6 +427,23 @@ async function runScenario(page, sessionIndex, scenario) {
           : null,
       }
     }
+    const countGridElementNodes = (nodes) => {
+      const counts = { rows: 0, cells: 0 }
+      for (const node of nodes) {
+        if (!(node instanceof Element)) {
+          continue
+        }
+        if (node.matches(".grid-row")) {
+          counts.rows += 1
+        }
+        if (node.matches(".grid-cell")) {
+          counts.cells += 1
+        }
+        counts.rows += node.querySelectorAll(".grid-row").length
+        counts.cells += node.querySelectorAll(".grid-cell").length
+      }
+      return counts
+    }
     const perfWindow = window
     const dataGridPerfStore = isVerticalDiagnosticsScenario && perfWindow.__AFFINO_DATAGRID_PERF__
       ? perfWindow.__AFFINO_DATAGRID_PERF__
@@ -434,9 +456,15 @@ async function runScenario(page, sessionIndex, scenario) {
         verticalDiagnostics.mutationSummary.callbackCount += 1
         for (const mutation of mutations) {
           if (mutation.type === "childList") {
+            const addedGridNodes = countGridElementNodes(mutation.addedNodes)
+            const removedGridNodes = countGridElementNodes(mutation.removedNodes)
             verticalDiagnostics.mutationSummary.childListMutations += 1
             verticalDiagnostics.mutationSummary.addedNodes += mutation.addedNodes.length
             verticalDiagnostics.mutationSummary.removedNodes += mutation.removedNodes.length
+            verticalDiagnostics.mutationSummary.addedRowNodes += addedGridNodes.rows
+            verticalDiagnostics.mutationSummary.removedRowNodes += removedGridNodes.rows
+            verticalDiagnostics.mutationSummary.addedCellNodes += addedGridNodes.cells
+            verticalDiagnostics.mutationSummary.removedCellNodes += removedGridNodes.cells
           } else if (mutation.type === "attributes") {
             verticalDiagnostics.mutationSummary.attributesMutations += 1
           }
@@ -444,9 +472,7 @@ async function runScenario(page, sessionIndex, scenario) {
       })
       mutationObserver.observe(viewport, {
         childList: true,
-        attributes: true,
         subtree: true,
-        attributeFilter: ["class", "style", "aria-rowindex", "data-row-index"],
       })
     }
     const handleMeasuredScrollEvent = () => {
@@ -545,8 +571,9 @@ async function runScenario(page, sessionIndex, scenario) {
               afterWriteMs,
               writeCostMs: afterWriteMs - beforeWriteMs,
               msSinceLastRafBeforeWrite: beforeWriteMs - rafBeforeWriteMs,
-            }
+          }
           : null
+        const shouldCaptureRangeSnapshot = step === 1 || step === input.scrollSteps || step % 10 === 0
         if (verticalDiagnostics && (step === 1 || step === input.scrollSteps || step % 20 === 0)) {
           const layoutReadStartMs = performance.now()
           const rect = viewport.getBoundingClientRect()
@@ -565,18 +592,25 @@ async function runScenario(page, sessionIndex, scenario) {
         await pause(input.stepDelayMs)
         if (verticalDiagnostics && writeRecord) {
           const afterPauseMs = performance.now()
-          const nextSnapshot = captureRenderedSnapshot(`vertical:${step}`)
+          const nextSnapshot = shouldCaptureRangeSnapshot
+            ? captureRenderedSnapshot(`vertical:${step}`)
+            : null
           writeRecord.afterPauseMs = afterPauseMs
           writeRecord.waitedAfterWriteMs = afterPauseMs - afterWriteMs
           writeRecord.rafAfterPauseMs = lastRafTimestamp
           writeRecord.msFromWriteToLatestRaf = lastRafTimestamp - afterWriteMs
           writeRecord.rangeSignature = nextSnapshot?.rangeSignature ?? null
-          writeRecord.rangeChanged = previousSnapshot?.rangeSignature !== nextSnapshot?.rangeSignature
+          writeRecord.rangeChanged = nextSnapshot
+            ? previousSnapshot?.rangeSignature !== nextSnapshot.rangeSignature
+            : null
           verticalDiagnostics.scrollWrites.push(writeRecord)
-          if (writeRecord.rangeChanged) {
-            verticalDiagnostics.rangeChangeCount += 1
+          if (nextSnapshot) {
+            verticalDiagnostics.rangeSampleCount += 1
+            if (writeRecord.rangeChanged) {
+              verticalDiagnostics.rangeChangeCount += 1
+            }
+            previousSnapshot = nextSnapshot
           }
-          previousSnapshot = nextSnapshot
         }
       }
     } else if (input.scenario.verticalScroll) {
@@ -720,8 +754,8 @@ async function runScenario(page, sessionIndex, scenario) {
         waitAfterWriteMs: summarizeNumbers(waitAfterWrite),
         writeToLatestRafMs: summarizeNumbers(writeToRaf),
         scrollEventDelta: summarizeNumbers(eventDeltas),
-        rangeChangedPct: verticalDiagnostics.scrollWrites.length > 0
-          ? (verticalDiagnostics.rangeChangeCount / verticalDiagnostics.scrollWrites.length) * 100
+        rangeChangedPct: verticalDiagnostics.rangeSampleCount > 0
+          ? (verticalDiagnostics.rangeChangeCount / verticalDiagnostics.rangeSampleCount) * 100
           : 0,
         scrollEventsPerWrite: verticalDiagnostics.scrollWrites.length > 0
           ? verticalDiagnostics.scrollEvents.count / verticalDiagnostics.scrollWrites.length
@@ -729,6 +763,19 @@ async function runScenario(page, sessionIndex, scenario) {
         mutationCallbacksPerWrite: verticalDiagnostics.scrollWrites.length > 0
           ? verticalDiagnostics.mutationSummary.callbackCount / verticalDiagnostics.scrollWrites.length
           : 0,
+        addedRowsPerWrite: verticalDiagnostics.scrollWrites.length > 0
+          ? verticalDiagnostics.mutationSummary.addedRowNodes / verticalDiagnostics.scrollWrites.length
+          : 0,
+        removedRowsPerWrite: verticalDiagnostics.scrollWrites.length > 0
+          ? verticalDiagnostics.mutationSummary.removedRowNodes / verticalDiagnostics.scrollWrites.length
+          : 0,
+        addedCellsPerWrite: verticalDiagnostics.scrollWrites.length > 0
+          ? verticalDiagnostics.mutationSummary.addedCellNodes / verticalDiagnostics.scrollWrites.length
+          : 0,
+        removedCellsPerWrite: verticalDiagnostics.scrollWrites.length > 0
+          ? verticalDiagnostics.mutationSummary.removedCellNodes / verticalDiagnostics.scrollWrites.length
+          : 0,
+        rangeSampleCount: verticalDiagnostics.rangeSampleCount,
       }
       verticalDiagnostics.appPerf = dataGridPerfStore
         ? {
