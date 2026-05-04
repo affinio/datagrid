@@ -769,9 +769,9 @@ export function useDataGridAppViewport<TRow>(
       && visibleRange.end <= lastSyncedRange.end - hysteresis
   }
 
-  const resolveIncrementalVisibleRows = (
+  const resolveIndexedVisibleRows = (
     range: DataGridViewportRange,
-  ): readonly DataGridRowNode<TRow>[] | null => {
+  ): { rows: readonly DataGridRowNode<TRow>[]; mode: "indexed" | "incremental" } | null => {
     const getBodyRowAtIndex = options.runtime.getBodyRowAtIndex
     if (typeof getBodyRowAtIndex !== "function" || !lastSyncedRange) {
       return null
@@ -781,40 +781,50 @@ export function useDataGridAppViewport<TRow>(
     const previousLength = previousRange.end >= previousRange.start
       ? previousRange.end - previousRange.start + 1
       : 0
-    if (previousRows.length !== previousLength) {
-      return null
-    }
     const overlapStart = Math.max(previousRange.start, range.start)
     const overlapEnd = Math.min(previousRange.end, range.end)
-    if (overlapEnd < overlapStart) {
-      return null
+    const canReuseOverlap = previousRows.length === previousLength && overlapEnd >= overlapStart
+
+    if (!canReuseOverlap) {
+      const rows: DataGridRowNode<TRow>[] = []
+      for (let rowIndex = range.start; rowIndex <= range.end; rowIndex += 1) {
+        const row = getBodyRowAtIndex(rowIndex)
+        if (!row) {
+          return null
+        }
+        rows.push(row)
+      }
+      return { rows, mode: "indexed" }
     }
 
     const nextRows: DataGridRowNode<TRow>[] = []
     for (let rowIndex = range.start; rowIndex < overlapStart; rowIndex += 1) {
       const row = getBodyRowAtIndex(rowIndex)
-      if (row) {
-        nextRows.push(row)
+      if (!row) {
+        return null
       }
+      nextRows.push(row)
     }
 
     const overlapOffset = overlapStart - previousRange.start
     const overlapLength = overlapEnd - overlapStart + 1
     for (let index = 0; index < overlapLength; index += 1) {
       const row = previousRows[overlapOffset + index]
-      if (row) {
-        nextRows.push(row)
+      if (!row) {
+        return null
       }
+      nextRows.push(row)
     }
 
     for (let rowIndex = overlapEnd + 1; rowIndex <= range.end; rowIndex += 1) {
       const row = getBodyRowAtIndex(rowIndex)
-      if (row) {
-        nextRows.push(row)
+      if (!row) {
+        return null
       }
+      nextRows.push(row)
     }
 
-    return nextRows
+    return { rows: nextRows, mode: "incremental" }
   }
 
   const updateRenderedViewportRange = (rows: readonly DataGridRowNode<TRow>[]): void => {
@@ -876,18 +886,18 @@ export function useDataGridAppViewport<TRow>(
     let setViewportRangeMs = 0
     let displayRowsAssignMs = 0
     let viewportCommitMs = 0
-    const incrementalRows = force
+    const indexedRows = force
       ? null
       : (() => {
         if (!perfTraceEnabled) {
-          return resolveIncrementalVisibleRows(range)
+          return resolveIndexedVisibleRows(range)
         }
         const incrementalStart = resolveDataGridPerfNow()
-        const rows = resolveIncrementalVisibleRows(range)
+        const rows = resolveIndexedVisibleRows(range)
         incrementalResolveMs = resolveDataGridPerfNow() - incrementalStart
         return rows
       })()
-    if (incrementalRows) {
+    if (indexedRows) {
       const setWindowRange = options.runtime.setVirtualWindowRange ?? options.runtime.setViewportRange
       if (typeof setWindowRange === "function") {
         const commitStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
@@ -896,12 +906,12 @@ export function useDataGridAppViewport<TRow>(
           setWindowRange(range)
           setViewportRangeMs = resolveDataGridPerfNow() - setViewportRangeStart
           const displayRowsAssignStart = resolveDataGridPerfNow()
-          commitDisplayRows(incrementalRows)
+          commitDisplayRows(indexedRows.rows)
           displayRowsAssignMs = resolveDataGridPerfNow() - displayRowsAssignStart
         }
         else {
           setWindowRange(range)
-          commitDisplayRows(incrementalRows)
+          commitDisplayRows(indexedRows.rows)
         }
         if (perfTraceEnabled) {
           viewportCommitMs = resolveDataGridPerfNow() - commitStart
@@ -928,9 +938,9 @@ export function useDataGridAppViewport<TRow>(
     }
     if (perfTraceEnabled) {
       lastVisibleRowSyncPerf = {
-        mode: incrementalRows
+        mode: indexedRows
           ? ((typeof options.runtime.setVirtualWindowRange === "function" || typeof options.runtime.setViewportRange === "function")
-              ? "incremental"
+              ? indexedRows.mode
               : "incremental-runtime-fallback")
           : "runtime",
         totalMs: resolveDataGridPerfNow() - visibleRowsPerfStart,

@@ -153,6 +153,14 @@ function normalizeFrameDeltas(frameDeltas) {
   return frameDeltas.filter(delta => Number.isFinite(delta) && delta > 0).slice(2)
 }
 
+function buildScenarioUrl(scenario) {
+  const url = new URL(BENCH_BROWSER_ROUTE, BENCH_BROWSER_BASE_URL)
+  if (scenario.id === "vertical-scroll-only") {
+    url.searchParams.set("dgPerfTrace", "1")
+  }
+  return url.toString()
+}
+
 async function configureSandbox(page) {
   return await page.evaluate(({ rowCount, columnCount }) => {
     function selectNearestByLabel(pattern, target) {
@@ -225,8 +233,9 @@ async function runScenario(page, sessionIndex, scenario) {
 
     const stageRoot = viewport.closest(".grid-stage") ?? document.querySelector(".grid-stage")
     const frameDeltas = []
-    const longTaskDurations = []
+    const longTaskEntries = []
     const telemetrySamples = []
+    const isVerticalDiagnosticsScenario = input.scenario.id === "vertical-scroll-only"
     const interactions = {
       scenarioId: input.scenario.id,
       verticalScrollSteps: 0,
@@ -239,11 +248,121 @@ async function runScenario(page, sessionIndex, scenario) {
       cellUpdatesCommitted: 0,
       skipped: [],
     }
+    const verticalDiagnostics = isVerticalDiagnosticsScenario
+      ? {
+          enabled: true,
+          scrollContainer: null,
+          scrollEvents: {
+            count: 0,
+            first: null,
+            last: null,
+            samples: [],
+          },
+          renderedSnapshots: [],
+          scrollWrites: [],
+          rangeChangeCount: 0,
+          uniqueRangeCount: 0,
+          mutationSummary: {
+            callbackCount: 0,
+            childListMutations: 0,
+            attributesMutations: 0,
+            addedNodes: 0,
+            removedNodes: 0,
+          },
+          layoutReadSamples: [],
+          appPerf: null,
+          longTasks: [],
+        }
+      : null
 
     const pause = (ms) => new Promise(resolvePause => setTimeout(resolvePause, ms))
     const waitForPaint = () => new Promise(resolvePaint => {
       requestAnimationFrame(() => requestAnimationFrame(resolvePaint))
     })
+    const summarizeNumbers = (values) => {
+      const finite = values.filter(value => Number.isFinite(value))
+      if (!finite.length) {
+        return { count: 0, mean: 0, p50: 0, p95: 0, p99: 0, min: 0, max: 0 }
+      }
+      const sorted = [...finite].sort((a, b) => a - b)
+      const pick = (q) => {
+        const position = Math.max(0, Math.min(1, q)) * (sorted.length - 1)
+        const base = Math.floor(position)
+        const rest = position - base
+        const current = sorted[base] ?? 0
+        const next = sorted[base + 1] ?? current
+        return current + (next - current) * rest
+      }
+      return {
+        count: finite.length,
+        mean: finite.reduce((sum, value) => sum + value, 0) / finite.length,
+        p50: pick(0.5),
+        p95: pick(0.95),
+        p99: pick(0.99),
+        min: sorted[0] ?? 0,
+        max: sorted[sorted.length - 1] ?? 0,
+      }
+    }
+    const resolveElementDescriptor = (element) => {
+      if (!(element instanceof HTMLElement)) {
+        return null
+      }
+      return {
+        tagName: element.tagName.toLowerCase(),
+        id: element.id || null,
+        className: element.className || null,
+        role: element.getAttribute("role"),
+        tabIndex: element.tabIndex,
+      }
+    }
+    const parsePx = (value) => {
+      const parsed = Number.parseFloat(value)
+      return Number.isFinite(parsed) ? parsed : null
+    }
+    const captureRenderedSnapshot = (label) => {
+      if (!verticalDiagnostics) {
+        return null
+      }
+      const rowElements = Array.from(viewport.querySelectorAll(".grid-row"))
+        .filter(candidate => candidate instanceof HTMLElement)
+      const cellElements = Array.from(viewport.querySelectorAll(".grid-cell"))
+        .filter(candidate => candidate instanceof HTMLElement)
+      const rowIndexes = []
+      for (const element of cellElements) {
+        const rowIndex = Number.parseInt(element.getAttribute("data-row-index") ?? "", 10)
+        if (Number.isFinite(rowIndex)) {
+          rowIndexes.push(rowIndex)
+        }
+      }
+      const firstRowIndex = rowIndexes.length ? Math.min(...rowIndexes) : null
+      const lastRowIndex = rowIndexes.length ? Math.max(...rowIndexes) : null
+      const topSpacer = viewport.querySelector(".grid-spacer--top")
+        ?? viewport.querySelector(".grid-top-spacer")
+        ?? viewport.querySelector('[data-datagrid-spacer="top"]')
+      const bottomSpacer = viewport.querySelector(".grid-spacer--bottom")
+        ?? viewport.querySelector(".grid-bottom-spacer")
+        ?? viewport.querySelector('[data-datagrid-spacer="bottom"]')
+      const snapshot = {
+        label,
+        atMs: performance.now(),
+        scrollTop: viewport.scrollTop,
+        scrollLeft: viewport.scrollLeft,
+        rowNodes: rowElements.length,
+        cellNodes: cellElements.length,
+        stageNodes: stageRoot instanceof HTMLElement ? stageRoot.querySelectorAll("*").length : 0,
+        firstRowIndex,
+        lastRowIndex,
+        rangeSignature: `${firstRowIndex ?? "null"}:${lastRowIndex ?? "null"}:${rowElements.length}:${cellElements.length}`,
+        topSpacerHeight: topSpacer instanceof HTMLElement
+          ? (parsePx(topSpacer.style.height) ?? topSpacer.offsetHeight)
+          : null,
+        bottomSpacerHeight: bottomSpacer instanceof HTMLElement
+          ? (parsePx(bottomSpacer.style.height) ?? bottomSpacer.offsetHeight)
+          : null,
+      }
+      verticalDiagnostics.renderedSnapshots.push(snapshot)
+      return snapshot
+    }
     const captureTelemetry = (label) => {
       const performanceWithMemory = performance
       const usedHeap = typeof performanceWithMemory?.memory?.usedJSHeapSize === "number"
@@ -264,12 +383,102 @@ async function runScenario(page, sessionIndex, scenario) {
         scrollLeft: viewport.scrollLeft,
       })
     }
+    const captureScrollContainerDiagnostics = () => {
+      if (!verticalDiagnostics) {
+        return
+      }
+      const style = window.getComputedStyle(viewport)
+      const bodyContent = viewport.querySelector(".grid-body-content")
+      const rect = viewport.getBoundingClientRect()
+      verticalDiagnostics.scrollContainer = {
+        viewport: resolveElementDescriptor(viewport),
+        stageRoot: resolveElementDescriptor(stageRoot),
+        dimensions: {
+          clientWidth: viewport.clientWidth,
+          clientHeight: viewport.clientHeight,
+          scrollWidth: viewport.scrollWidth,
+          scrollHeight: viewport.scrollHeight,
+          offsetWidth: viewport.offsetWidth,
+          offsetHeight: viewport.offsetHeight,
+          maxTop: Math.max(0, viewport.scrollHeight - viewport.clientHeight),
+          maxLeft: Math.max(0, viewport.scrollWidth - viewport.clientWidth),
+          rectWidth: rect.width,
+          rectHeight: rect.height,
+        },
+        style: {
+          overflowX: style.overflowX,
+          overflowY: style.overflowY,
+          position: style.position,
+          contain: style.contain,
+          willChange: style.willChange,
+          transform: style.transform,
+        },
+        bodyContent: bodyContent instanceof HTMLElement
+          ? {
+              className: bodyContent.className || null,
+              transform: bodyContent.style.transform || window.getComputedStyle(bodyContent).transform,
+              height: bodyContent.style.height || null,
+            }
+          : null,
+      }
+    }
+    const perfWindow = window
+    const dataGridPerfStore = isVerticalDiagnosticsScenario && perfWindow.__AFFINO_DATAGRID_PERF__
+      ? perfWindow.__AFFINO_DATAGRID_PERF__
+      : null
+    dataGridPerfStore?.clear?.()
+
+    let mutationObserver = null
+    if (verticalDiagnostics && typeof MutationObserver !== "undefined") {
+      mutationObserver = new MutationObserver((mutations) => {
+        verticalDiagnostics.mutationSummary.callbackCount += 1
+        for (const mutation of mutations) {
+          if (mutation.type === "childList") {
+            verticalDiagnostics.mutationSummary.childListMutations += 1
+            verticalDiagnostics.mutationSummary.addedNodes += mutation.addedNodes.length
+            verticalDiagnostics.mutationSummary.removedNodes += mutation.removedNodes.length
+          } else if (mutation.type === "attributes") {
+            verticalDiagnostics.mutationSummary.attributesMutations += 1
+          }
+        }
+      })
+      mutationObserver.observe(viewport, {
+        childList: true,
+        attributes: true,
+        subtree: true,
+        attributeFilter: ["class", "style", "aria-rowindex", "data-row-index"],
+      })
+    }
+    const handleMeasuredScrollEvent = () => {
+      if (!verticalDiagnostics) {
+        return
+      }
+      const sample = {
+        atMs: performance.now(),
+        scrollTop: viewport.scrollTop,
+        scrollLeft: viewport.scrollLeft,
+      }
+      verticalDiagnostics.scrollEvents.count += 1
+      verticalDiagnostics.scrollEvents.first ??= sample
+      verticalDiagnostics.scrollEvents.last = sample
+      if (
+        verticalDiagnostics.scrollEvents.samples.length < 12
+        || verticalDiagnostics.scrollEvents.count % 40 === 0
+      ) {
+        verticalDiagnostics.scrollEvents.samples.push(sample)
+      }
+    }
+    if (verticalDiagnostics) {
+      viewport.addEventListener("scroll", handleMeasuredScrollEvent, { passive: true })
+    }
 
     let running = true
     let last = performance.now()
+    let lastRafTimestamp = last
     const tick = (timestamp) => {
       frameDeltas.push(timestamp - last)
       last = timestamp
+      lastRafTimestamp = timestamp
       if (running) {
         requestAnimationFrame(tick)
       }
@@ -280,7 +489,22 @@ async function runScenario(page, sessionIndex, scenario) {
       try {
         longTaskObserver = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
-            longTaskDurations.push(entry.duration)
+            const attribution = Array.isArray(entry.attribution)
+              ? entry.attribution.map(item => ({
+                  name: item.name ?? null,
+                  entryType: item.entryType ?? null,
+                  containerType: item.containerType ?? null,
+                  containerName: item.containerName ?? null,
+                  containerId: item.containerId ?? null,
+                  containerSrc: item.containerSrc ?? null,
+                }))
+              : []
+            longTaskEntries.push({
+              name: entry.name,
+              startTime: entry.startTime,
+              duration: entry.duration,
+              attribution,
+            })
           }
         })
         longTaskObserver.observe({ entryTypes: ["longtask"] })
@@ -291,20 +515,69 @@ async function runScenario(page, sessionIndex, scenario) {
 
     requestAnimationFrame(tick)
     const startedAt = performance.now()
+    captureScrollContainerDiagnostics()
     captureTelemetry("start")
+    captureRenderedSnapshot("start")
     await waitForPaint()
 
     const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
     const maxLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
 
     if (input.scenario.verticalScroll && maxTop > 0) {
+      let previousSnapshot = captureRenderedSnapshot("vertical:before-loop")
       for (let step = 1; step <= input.scrollSteps; step += 1) {
-        viewport.scrollTop = Math.round((maxTop * step) / input.scrollSteps)
+        const previousTop = viewport.scrollTop
+        const targetTop = Math.round((maxTop * step) / input.scrollSteps)
+        const beforeWriteMs = performance.now()
+        const rafBeforeWriteMs = lastRafTimestamp
+        viewport.scrollTop = targetTop
+        const afterWriteMs = performance.now()
         interactions.verticalScrollSteps += 1
+        const writeRecord = verticalDiagnostics
+          ? {
+              step,
+              previousTop,
+              targetTop,
+              appliedTop: viewport.scrollTop,
+              requestedDelta: targetTop - previousTop,
+              appliedDelta: viewport.scrollTop - previousTop,
+              beforeWriteMs,
+              afterWriteMs,
+              writeCostMs: afterWriteMs - beforeWriteMs,
+              msSinceLastRafBeforeWrite: beforeWriteMs - rafBeforeWriteMs,
+            }
+          : null
+        if (verticalDiagnostics && (step === 1 || step === input.scrollSteps || step % 20 === 0)) {
+          const layoutReadStartMs = performance.now()
+          const rect = viewport.getBoundingClientRect()
+          verticalDiagnostics.layoutReadSamples.push({
+            step,
+            durationMs: performance.now() - layoutReadStartMs,
+            clientHeight: viewport.clientHeight,
+            scrollHeight: viewport.scrollHeight,
+            rectTop: rect.top,
+            rectHeight: rect.height,
+          })
+        }
         if (step === 1 || step === input.scrollSteps || step % 40 === 0) {
           captureTelemetry(`vertical:${step}`)
         }
         await pause(input.stepDelayMs)
+        if (verticalDiagnostics && writeRecord) {
+          const afterPauseMs = performance.now()
+          const nextSnapshot = captureRenderedSnapshot(`vertical:${step}`)
+          writeRecord.afterPauseMs = afterPauseMs
+          writeRecord.waitedAfterWriteMs = afterPauseMs - afterWriteMs
+          writeRecord.rafAfterPauseMs = lastRafTimestamp
+          writeRecord.msFromWriteToLatestRaf = lastRafTimestamp - afterWriteMs
+          writeRecord.rangeSignature = nextSnapshot?.rangeSignature ?? null
+          writeRecord.rangeChanged = previousSnapshot?.rangeSignature !== nextSnapshot?.rangeSignature
+          verticalDiagnostics.scrollWrites.push(writeRecord)
+          if (writeRecord.rangeChanged) {
+            verticalDiagnostics.rangeChangeCount += 1
+          }
+          previousSnapshot = nextSnapshot
+        }
       }
     } else if (input.scenario.verticalScroll) {
       interactions.skipped.push("vertical-scroll:no-scroll-range")
@@ -415,10 +688,61 @@ async function runScenario(page, sessionIndex, scenario) {
 
     await pause(Math.max(32, input.stepDelayMs * 2))
     captureTelemetry("settled")
+    captureRenderedSnapshot("settled")
     const measuredElapsedMs = performance.now() - startedAt
     running = false
     await pause(24)
     longTaskObserver?.disconnect()
+    mutationObserver?.disconnect()
+    if (verticalDiagnostics) {
+      viewport.removeEventListener("scroll", handleMeasuredScrollEvent)
+      const uniqueRanges = new Set(
+        verticalDiagnostics.scrollWrites
+          .map(write => write.rangeSignature)
+          .filter(value => typeof value === "string"),
+      )
+      const writeDeltas = verticalDiagnostics.scrollWrites.map(write => write.appliedDelta)
+      const writeCosts = verticalDiagnostics.scrollWrites.map(write => write.writeCostMs)
+      const waitAfterWrite = verticalDiagnostics.scrollWrites.map(write => write.waitedAfterWriteMs)
+      const writeToRaf = verticalDiagnostics.scrollWrites.map(write => write.msFromWriteToLatestRaf)
+      const eventSamples = [
+        verticalDiagnostics.scrollEvents.first,
+        ...verticalDiagnostics.scrollEvents.samples,
+        verticalDiagnostics.scrollEvents.last,
+      ].filter(Boolean)
+      const eventDeltas = eventSamples
+        .slice(1)
+        .map((sample, index) => sample.scrollTop - (eventSamples[index]?.scrollTop ?? 0))
+      verticalDiagnostics.uniqueRangeCount = uniqueRanges.size
+      verticalDiagnostics.summary = {
+        scrollTopDelta: summarizeNumbers(writeDeltas),
+        scrollWriteCostMs: summarizeNumbers(writeCosts),
+        waitAfterWriteMs: summarizeNumbers(waitAfterWrite),
+        writeToLatestRafMs: summarizeNumbers(writeToRaf),
+        scrollEventDelta: summarizeNumbers(eventDeltas),
+        rangeChangedPct: verticalDiagnostics.scrollWrites.length > 0
+          ? (verticalDiagnostics.rangeChangeCount / verticalDiagnostics.scrollWrites.length) * 100
+          : 0,
+        scrollEventsPerWrite: verticalDiagnostics.scrollWrites.length > 0
+          ? verticalDiagnostics.scrollEvents.count / verticalDiagnostics.scrollWrites.length
+          : 0,
+        mutationCallbacksPerWrite: verticalDiagnostics.scrollWrites.length > 0
+          ? verticalDiagnostics.mutationSummary.callbackCount / verticalDiagnostics.scrollWrites.length
+          : 0,
+      }
+      verticalDiagnostics.appPerf = dataGridPerfStore
+        ? {
+            samples: Array.isArray(dataGridPerfStore.samples) ? dataGridPerfStore.samples.slice() : [],
+            summary: typeof dataGridPerfStore.summary === "function" ? dataGridPerfStore.summary() : [],
+          }
+        : null
+      verticalDiagnostics.longTasks = longTaskEntries.map(entry => ({
+        startTime: entry.startTime,
+        duration: entry.duration,
+        name: entry.name,
+        attribution: entry.attribution,
+      }))
+    }
 
     const heapValues = telemetrySamples
       .map(sample => sample.usedHeapMb)
@@ -429,7 +753,8 @@ async function runScenario(page, sessionIndex, scenario) {
 
     return {
       frameDeltas,
-      longTaskDurations,
+      longTaskDurations: longTaskEntries.map(entry => entry.duration),
+      longTaskEntries,
       telemetry: {
         sampleCount: telemetrySamples.length,
         firstSample: telemetrySamples[0] ?? null,
@@ -450,6 +775,7 @@ async function runScenario(page, sessionIndex, scenario) {
       maxLeft,
       finalTop: viewport.scrollTop,
       finalLeft: viewport.scrollLeft,
+      verticalDiagnostics,
     }
   }, {
     scenario,
@@ -478,6 +804,7 @@ async function runScenario(page, sessionIndex, scenario) {
     longTaskTotalMs,
     longTaskMaxMs,
     longTaskDuration: stats(result.longTaskDurations),
+    longTaskEntries: result.longTaskEntries,
     telemetry: result.telemetry,
     interactions: result.interactions,
     measuredElapsedMs: result.measuredElapsedMs,
@@ -485,6 +812,7 @@ async function runScenario(page, sessionIndex, scenario) {
     maxLeft: result.maxLeft,
     finalTop: result.finalTop,
     finalLeft: result.finalLeft,
+    verticalDiagnostics: result.verticalDiagnostics,
   }
 }
 
@@ -569,7 +897,7 @@ try {
         `[enterprise-browser-frames] scenario=${scenario.id} session ${session + 1}/${BENCH_BROWSER_SESSIONS}...`,
       )
       const page = await context.newPage()
-      await page.goto(`${BENCH_BROWSER_BASE_URL}${BENCH_BROWSER_ROUTE}`, {
+      await page.goto(buildScenarioUrl(scenario), {
         waitUntil: "networkidle",
         timeout: 120000,
       })
