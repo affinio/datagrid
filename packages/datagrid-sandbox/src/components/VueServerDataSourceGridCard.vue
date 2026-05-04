@@ -562,6 +562,8 @@ const filterModelText = ref("none")
 const commitModeText = ref("ok")
 const commitMessageText = ref("none")
 const commitDetailsText = ref("none")
+const serverEditOperationHistory = ref<string[]>([])
+const serverEditRedoHistory = ref<string[]>([])
 const clientBatchAppliedText = ref("no")
 const clientBatchWarningText = ref("none")
 const datasourceKeysText = ref("none")
@@ -849,6 +851,7 @@ type ServerDemoHistogramRequest = Parameters<NonNullable<DataGridDataSource<Serv
 type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>[0]
 type ServerDemoCommitFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>[0]
 type ServerDemoUndoFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>[0]
+type ServerDemoHttpDatasource = ReturnType<typeof createServerDemoDatasourceHttpAdapter>
 
 function resolveRowId(index: number): string {
   return `srv-${index.toString().padStart(6, "0")}`
@@ -1966,7 +1969,11 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
           throw unsupportedError
         }
         try {
-          return await commitEdits(request)
+          const result = await commitEdits(request) as ServerDemoCommitEditsResult & {
+            operationId?: string | null
+          }
+          recordServerEditOperation(result.operationId)
+          return result
         } catch (caught) {
           if (caught instanceof Error && caught.name === "AbortError") {
             throw caught
@@ -2168,10 +2175,20 @@ const plumbingLabel = computed(() => {
   return entries.length > 0 ? entries.join(", ") : "none"
 })
 const branchLabel = computed(() => branchState.value)
-const canUndoHistory = computed(() => gridRef.value?.history.canUndo() ?? false)
-const canRedoHistory = computed(() => gridRef.value?.history.canRedo() ?? false)
-const canUndoLabel = computed(() => gridRef.value?.history.canUndo() ? "yes" : "no")
-const canRedoLabel = computed(() => gridRef.value?.history.canRedo() ? "yes" : "no")
+const canUndoHistory = computed(() => {
+  if (serverDemoHttpDatasourceEnabled) {
+    return serverEditOperationHistory.value.length > 0
+  }
+  return gridRef.value?.history.canUndo() ?? false
+})
+const canRedoHistory = computed(() => {
+  if (serverDemoHttpDatasourceEnabled) {
+    return serverEditRedoHistory.value.length > 0
+  }
+  return gridRef.value?.history.canRedo() ?? false
+})
+const canUndoLabel = computed(() => (canUndoHistory.value ? "yes" : "no"))
+const canRedoLabel = computed(() => (canRedoHistory.value ? "yes" : "no"))
 const lastHistoryActionLabel = computed(() => lastHistoryActionText.value)
 const lastEditRecordedLabel = computed(() => lastEditRecordedText.value)
 const loadingLabel = computed(() => {
@@ -2451,11 +2468,66 @@ function handleCellEdit(payload: {
   updateFillDiagnostics(1, [])
   lastEditRecordedText.value = "pending"
   void Promise.resolve().then(() => {
-    lastEditRecordedText.value = gridRef.value?.history.canUndo() ? "yes" : "no"
+    lastEditRecordedText.value = canUndoHistory.value ? "yes" : "no"
   })
 }
 
+function recordServerEditOperation(operationId: string | null | undefined): void {
+  if (typeof operationId !== "string" || operationId.trim().length === 0) {
+    return
+  }
+  serverEditOperationHistory.value = [...serverEditOperationHistory.value, operationId]
+  serverEditRedoHistory.value = []
+}
+
+function consumeServerEditOperation(direction: "undo" | "redo"): string | null {
+  if (direction === "undo") {
+    const operationId = serverEditOperationHistory.value[serverEditOperationHistory.value.length - 1] ?? null
+    if (!operationId) {
+      return null
+    }
+    serverEditOperationHistory.value = serverEditOperationHistory.value.slice(0, -1)
+    serverEditRedoHistory.value = [...serverEditRedoHistory.value, operationId]
+    return operationId
+  }
+  const operationId = serverEditRedoHistory.value[serverEditRedoHistory.value.length - 1] ?? null
+  if (!operationId) {
+    return null
+  }
+  serverEditRedoHistory.value = serverEditRedoHistory.value.slice(0, -1)
+  serverEditOperationHistory.value = [...serverEditOperationHistory.value, operationId]
+  return operationId
+}
+
 async function runHistoryAction(direction: "undo" | "redo"): Promise<void> {
+  if (serverDemoHttpDatasourceEnabled) {
+    const operationId = consumeServerEditOperation(direction)
+    const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
+    const operationAction = direction === "undo"
+      ? serverDatasource?.undoOperation
+      : serverDatasource?.redoOperation
+    if (operationId && typeof operationAction === "function") {
+      try {
+        const result = await operationAction({ operationId })
+        lastHistoryActionText.value = result.operationId ?? `${direction}:${operationId}`
+        void rowModel.refresh("manual")
+        lastEditRecordedText.value = canUndoHistory.value ? "yes" : "no"
+        return
+      } catch (error) {
+        if (direction === "undo") {
+          serverEditRedoHistory.value = serverEditRedoHistory.value.filter(entry => entry !== operationId)
+          serverEditOperationHistory.value = [...serverEditOperationHistory.value, operationId]
+        } else {
+          serverEditOperationHistory.value = serverEditOperationHistory.value.filter(entry => entry !== operationId)
+          serverEditRedoHistory.value = [...serverEditRedoHistory.value, operationId]
+        }
+        throw error
+      }
+    }
+    lastHistoryActionText.value = `${direction}:none`
+    lastEditRecordedText.value = canUndoHistory.value ? "yes" : "no"
+    return
+  }
   const result = await gridRef.value?.history.runHistoryAction(direction) ?? null
   lastHistoryActionText.value = result ?? `${direction}:none`
   lastEditRecordedText.value = gridRef.value?.history.canUndo() ? "yes" : "no"

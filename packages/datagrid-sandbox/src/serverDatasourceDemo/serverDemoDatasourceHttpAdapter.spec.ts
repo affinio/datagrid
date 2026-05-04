@@ -305,6 +305,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
 
   it("posts single inline edits to the backend and maps committed rows", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      operationId: "op-inline-1",
       committed: [{ rowId: "srv-000001", columnId: "name", revision: "rev-row-1" }],
       committedRowIds: ["srv-000001"],
       rejected: [],
@@ -343,6 +344,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       ],
     })
     expect(result).toEqual({
+      operationId: "op-inline-1",
       committed: [{ rowId: "srv-000001", revision: "rev-global-1" }],
       rejected: [],
     })
@@ -389,6 +391,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
 
   it("maps readonly column rejections to row-model rejected rows", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      operationId: "op-readonly-1",
       committed: [],
       committedRowIds: [],
       rejected: [{ rowId: "srv-000004", columnId: "id", reason: "readonly-column" }],
@@ -410,6 +413,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       edits: [{ rowId: "srv-000004", columnId: "id", value: "srv-hacked" }],
     })
     expect(result).toEqual({
+      operationId: "op-readonly-1",
       committed: [],
       rejected: [{ rowId: "srv-000004", reason: "id: readonly-column" }],
     })
@@ -417,6 +421,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
 
   it("maps partial success responses without dropping rejected rows", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      operationId: "op-partial-1",
       committed: [{ rowId: "srv-000005", columnId: "name", revision: "rev-row-5" }],
       committedRowIds: ["srv-000005"],
       rejected: [{ rowId: "srv-000006", columnId: "status", reason: "invalid-enum-value" }],
@@ -442,6 +447,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     })
 
     expect(result).toEqual({
+      operationId: "op-partial-1",
       committed: [{ rowId: "srv-000005", revision: "rev-global-4" }],
       rejected: [{ rowId: "srv-000006", reason: "status: invalid-enum-value" }],
     })

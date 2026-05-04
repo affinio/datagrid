@@ -52,6 +52,7 @@ type ServerDemoHistogramResponse = {
 }
 
 type ServerDemoCommitEditsResponse = {
+  operationId?: string | null
   committed?: readonly {
     rowId: string | number
     columnId?: string | null
@@ -63,6 +64,15 @@ type ServerDemoCommitEditsResponse = {
     columnId?: string | null
     reason?: string | null
   }[]
+  revision?: string | number | null
+  invalidation?: unknown
+}
+
+type ServerDemoCommitEditsResultWithOperation = ServerDemoCommitEditsResult & {
+  operationId?: string | null
+}
+
+type ServerDemoServerOperationResult = ServerDemoCommitEditsResultWithOperation & {
   revision?: string | number | null
   invalidation?: unknown
 }
@@ -666,9 +676,29 @@ function toRejectedRows(response: ServerDemoCommitEditsResponse): ServerDemoComm
   }))
 }
 
+async function postServerOperation(
+  fetchImpl: typeof fetch,
+  url: string,
+  signal?: AbortSignal,
+): Promise<ServerDemoServerOperationResult> {
+  const response = await postJson<ServerDemoCommitEditsResponse>(fetchImpl, url, {}, signal)
+  return {
+    operationId: response.operationId ?? null,
+    committed: toUniqueRowCommits(response),
+    rejected: toRejectedRows(response),
+    revision: response.revision,
+    invalidation: response.invalidation,
+  }
+}
+
+export interface ServerDemoDatasourceHttpAdapter extends DataGridDataSource<ServerDemoRow> {
+  undoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult>
+  redoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult>
+}
+
 export function createServerDemoDatasourceHttpAdapter(
   options: ServerDemoDatasourceHttpAdapterOptions = {},
-): DataGridDataSource<ServerDemoRow> {
+): ServerDemoDatasourceHttpAdapter {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const listeners = new Set<DataGridDataSourcePushListener<ServerDemoRow>>()
 
@@ -749,9 +779,20 @@ export function createServerDemoDatasourceHttpAdapter(
         request.signal,
       )
       return {
+        operationId: response.operationId ?? null,
         committed: toUniqueRowCommits(response),
         rejected: toRejectedRows(response),
-      }
+      } as ServerDemoCommitEditsResultWithOperation
+    },
+
+    async undoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult> {
+      const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/undo`)
+      return await postServerOperation(fetchImpl, url, request.signal)
+    },
+
+    async redoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult> {
+      const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/redo`)
+      return await postServerOperation(fetchImpl, url, request.signal)
     },
 
     async commitFillOperation(): Promise<never> {
