@@ -1471,6 +1471,14 @@ describe("DataGrid app facade contract", () => {
     queryColumnMenuAction("sort-desc")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
 
+    expect(queryColumnMenuRoot()).toBeFalsy()
+    expect(wrapper.find(".datagrid-app-stage--sorting-pending").exists()).toBe(true)
+    expect(resolveRowModel(wrapper)?.getSnapshot().sortModel).toEqual([{ key: "owner", direction: "asc" }])
+
+    await flushAnimationFrame()
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+
     expect(resolveRowModel(wrapper)?.getSnapshot()).toMatchObject({
       sortModel: [{ key: "owner", direction: "desc" }],
     })

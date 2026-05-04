@@ -111,9 +111,49 @@ const DATA_GRID_APP_STYLES = `
 
 .datagrid-app-stage {
   display: flex;
+  position: relative;
   min-width: 0;
   min-height: 0;
   width: 100%;
+}
+
+.datagrid-app-stage--sorting-pending .grid-stage {
+  pointer-events: none;
+}
+
+.datagrid-app-sort-pending {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 14;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--datagrid-accent-strong) 28%, var(--datagrid-glass-border));
+  border-radius: 8px;
+  color: var(--datagrid-text-color);
+  background: color-mix(in srgb, var(--datagrid-background-color) 88%, var(--datagrid-accent-strong) 12%);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--datagrid-column-menu-shadow) 40%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.datagrid-app-sort-pending__spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--datagrid-accent-strong) 28%, transparent);
+  border-top-color: var(--datagrid-accent-strong);
+  border-radius: 999px;
+  animation: datagrid-app-sort-pending-spin 700ms linear infinite;
+}
+
+@keyframes datagrid-app-sort-pending-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .datagrid-app-stage--fill {

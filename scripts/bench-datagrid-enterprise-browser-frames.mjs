@@ -1103,6 +1103,58 @@ async function runScenario(page, sessionIndex, scenario) {
             summary: typeof dataGridPerfStore.summary === "function" ? dataGridPerfStore.summary() : [],
           }
         : null
+      const appPerfSamples = sortDiagnostics.appPerf?.samples ?? []
+      const latestAppSortRequest = [...appPerfSamples]
+        .reverse()
+        .find(sample => sample?.scope === "columnMenuSortRequest") ?? null
+      const latestAppSortApply = [...appPerfSamples]
+        .reverse()
+        .find(sample => sample?.scope === "columnMenuSortApply") ?? null
+      const latestViewportRaf = [...appPerfSamples]
+        .reverse()
+        .find(sample => sample?.scope === "viewportRaf") ?? null
+      sortDiagnostics.appSort = {
+        request: latestAppSortRequest,
+        apply: latestAppSortApply,
+        viewport: latestViewportRaf,
+      }
+      sortDiagnostics.phaseBreakdown = {
+        sortActionClickToHandlerStartMs: typeof latestAppSortRequest?.handlerStartMs === "number"
+          && typeof sortDiagnostics.phases.sortClickStartMs === "number"
+          ? latestAppSortRequest.handlerStartMs - sortDiagnostics.phases.sortClickStartMs
+          : null,
+        clickHandlerMs: typeof latestAppSortApply?.handlerMs === "number"
+          ? latestAppSortApply.handlerMs
+          : null,
+        handlerToApplyStartMs: typeof latestAppSortApply?.handlerToApplyStartMs === "number"
+          ? latestAppSortApply.handlerToApplyStartMs
+          : null,
+        setSortModelMs: typeof latestAppSortApply?.setSortModelMs === "number"
+          ? latestAppSortApply.setSortModelMs
+          : null,
+        projectionRebuildMs: typeof latestAppSortApply?.projectionRebuildMs === "number"
+          ? latestAppSortApply.projectionRebuildMs
+          : null,
+        projectionSortMs: typeof latestAppSortApply?.projectionSortMs === "number"
+          ? latestAppSortApply.projectionSortMs
+          : null,
+        projectionFilterMs: typeof latestAppSortApply?.projectionFilterMs === "number"
+          ? latestAppSortApply.projectionFilterMs
+          : null,
+        projectionGroupMs: typeof latestAppSortApply?.projectionGroupMs === "number"
+          ? latestAppSortApply.projectionGroupMs
+          : null,
+        viewportUpdateMs: typeof latestViewportRaf?.totalMs === "number"
+          ? latestViewportRaf.totalMs
+          : null,
+        visibleRowsMs: typeof latestViewportRaf?.visibleRowsMs === "number"
+          ? latestViewportRaf.visibleRowsMs
+          : null,
+        firstPaintAfterSortMs: typeof latestAppSortApply?.setSortModelEndMs === "number"
+          && typeof sortDiagnostics.phases.sortPaintEndMs === "number"
+          ? sortDiagnostics.phases.sortPaintEndMs - latestAppSortApply.setSortModelEndMs
+          : null,
+      }
       sortDiagnostics.summary = {
         addedRows: sortDiagnostics.mutationSummary.addedRowNodes,
         removedRows: sortDiagnostics.mutationSummary.removedRowNodes,
@@ -1230,6 +1282,17 @@ function aggregateRuns(runs) {
       sortApplyFrameP95Ms: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.frameWindow?.sortApplySummary?.p95)),
       sortWindowLongTaskCount: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.summary?.longTaskCount)),
       sortWindowLongTaskTotalMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.summary?.longTaskTotalMs)),
+      sortActionClickToHandlerStartMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.sortActionClickToHandlerStartMs)),
+      clickHandlerMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.clickHandlerMs)),
+      handlerToApplyStartMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.handlerToApplyStartMs)),
+      setSortModelMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.setSortModelMs)),
+      projectionRebuildMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.projectionRebuildMs)),
+      projectionSortMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.projectionSortMs)),
+      projectionFilterMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.projectionFilterMs)),
+      projectionGroupMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.projectionGroupMs)),
+      viewportUpdateMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.viewportUpdateMs)),
+      visibleRowsMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.visibleRowsMs)),
+      firstPaintAfterSortMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.firstPaintAfterSortMs)),
     },
   }
 }

@@ -134,6 +134,26 @@ interface SortToggleState {
   direction: "asc" | "desc"
 }
 
+interface ColumnMenuSortRequest {
+  columnKey: string
+  direction: "asc" | "desc" | null
+  nextSortState: SortToggleState[]
+}
+
+interface DataGridDefaultRendererPerfSample {
+  scope: string
+  ts: number
+  totalMs: number
+  [key: string]: string | number
+}
+
+type DataGridDefaultRendererPerfStore = {
+  push?: (sample: DataGridDefaultRendererPerfSample) => void
+}
+
+const DATA_GRID_PERF_STORE_KEY = "__AFFINO_DATAGRID_PERF__"
+const DATA_GRID_SLOW_SORT_THRESHOLD_MS = 50
+
 type DataGridColumnFilterEntry = DataGridFilterSnapshot["columnFilters"][string]
 type DataGridLegacyAdvancedFilterEntry = DataGridFilterSnapshot["advancedFilters"][string]
 type DataGridAdvancedExpressionEntry = NonNullable<DataGridFilterSnapshot["advancedExpression"]>
@@ -155,6 +175,40 @@ function normalizeToolbarModule(module: DataGridAppToolbarModule): DataGridAppTo
     ...module,
     component: markRaw(toRaw(module.component)),
   }
+}
+
+function resolveDataGridPerfNow(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now()
+  }
+  return Date.now()
+}
+
+function recordDataGridDefaultRendererPerf(sample: DataGridDefaultRendererPerfSample): void {
+  if (typeof window === "undefined") {
+    return
+  }
+  const perfWindow = window as typeof window & { [DATA_GRID_PERF_STORE_KEY]?: DataGridDefaultRendererPerfStore }
+  perfWindow[DATA_GRID_PERF_STORE_KEY]?.push?.(sample)
+}
+
+function requestDataGridAnimationFrame(callback: () => void): number | null {
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    return window.requestAnimationFrame(callback)
+  }
+  const timeoutId = globalThis.setTimeout(callback, 0)
+  return Number(timeoutId)
+}
+
+function cancelDataGridAnimationFrame(frameId: number | null): void {
+  if (frameId === null) {
+    return
+  }
+  if (typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
+    window.cancelAnimationFrame(frameId)
+    return
+  }
+  globalThis.clearTimeout(frameId)
 }
 
 function mergeCellClasses(
@@ -920,6 +974,9 @@ export default defineComponent({
 
     const rowVersion = ref(0)
     const sortState = ref<SortToggleState[]>(resolveInitialSortState(props.sortModel))
+    const pendingColumnMenuSort = ref<ColumnMenuSortRequest | null>(null)
+    let pendingColumnMenuSortFrameId: number | null = null
+    let pendingColumnMenuSortRequestId = 0
     const filterModelState = ref<DataGridFilterSnapshot>(cloneFilterModelState(props.filterModel))
     const columnFilterTextByKey = computed<Record<string, string>>(() => (
       resolveInitialFilterTexts(filterModelState.value)
@@ -950,6 +1007,7 @@ export default defineComponent({
 
     onBeforeUnmount(() => {
       unsubscribeRowModel()
+      cancelPendingColumnMenuSortFrame()
     })
 
     watch(
@@ -1214,7 +1272,15 @@ export default defineComponent({
       return resolveColumnGroupOrder(columnKey) !== null
     }
 
-    const applySortAndFilter = (): void => {
+    const applySortAndFilter = (): {
+      setSortModelMs: number
+      projectionRebuildMs: number
+      projectionSortMs: number
+      projectionFilterMs: number
+      projectionGroupMs: number
+      recomputeVersion: number
+      rowCount: number
+    } => {
       const nextSortModel: readonly DataGridSortState[] = sortState.value.map(entry => ({
         key: entry.key,
         direction: entry.direction,
@@ -1231,10 +1297,32 @@ export default defineComponent({
             advancedExpression,
           }
 
+      const setSortStartedAt = resolveDataGridPerfNow()
       props.runtime.api.rows.setSortAndFilterModel({
         sortModel: nextSortModel,
         filterModel: pruneFilterModel(nextFilterModel),
       })
+      const setSortEndedAt = resolveDataGridPerfNow()
+      const snapshot = props.runtime.api.rows.getSnapshot()
+      const projection = snapshot.projection as {
+        recomputeVersion?: number
+        performance?: {
+          totalTime?: number
+          stageTimes?: Partial<Record<string, number>>
+        }
+      } | null | undefined
+      const stageTimes = projection?.performance?.stageTimes ?? {}
+      return {
+        setSortModelMs: Math.max(0, setSortEndedAt - setSortStartedAt),
+        projectionRebuildMs: Number.isFinite(projection?.performance?.totalTime)
+          ? Math.max(0, Number(projection?.performance?.totalTime))
+          : 0,
+        projectionSortMs: Number.isFinite(stageTimes.sort) ? Math.max(0, Number(stageTimes.sort)) : 0,
+        projectionFilterMs: Number.isFinite(stageTimes.filter) ? Math.max(0, Number(stageTimes.filter)) : 0,
+        projectionGroupMs: Number.isFinite(stageTimes.group) ? Math.max(0, Number(stageTimes.group)) : 0,
+        recomputeVersion: Number.isFinite(projection?.recomputeVersion) ? Number(projection?.recomputeVersion) : 0,
+        rowCount: snapshot.rowCount,
+      }
     }
 
     const syncAdvancedFilterBuilderFromRuntime = (): void => {
@@ -1469,15 +1557,99 @@ export default defineComponent({
       return sortState.value.find(entry => entry.key === columnKey)?.direction ?? null
     }
 
+    function cancelPendingColumnMenuSortFrame(): void {
+      cancelDataGridAnimationFrame(pendingColumnMenuSortFrameId)
+      pendingColumnMenuSortFrameId = null
+    }
+
+    const runDeferredColumnMenuSort = (
+      requestId: number,
+      request: ColumnMenuSortRequest,
+      handlerStartMs: number,
+      handlerEndMs: number,
+      scheduledAtMs: number,
+    ): void => {
+      pendingColumnMenuSortFrameId = null
+      if (requestId !== pendingColumnMenuSortRequestId) {
+        return
+      }
+      const applyStartMs = resolveDataGridPerfNow()
+      sortState.value = request.nextSortState
+      const projectionTiming = applySortAndFilter()
+      const applyEndMs = resolveDataGridPerfNow()
+      const setSortModelMs = projectionTiming.setSortModelMs
+      const slowSort = setSortModelMs > DATA_GRID_SLOW_SORT_THRESHOLD_MS
+
+      recordDataGridDefaultRendererPerf({
+        scope: "columnMenuSortApply",
+        ts: Date.now(),
+        totalMs: Math.max(0, applyEndMs - handlerStartMs),
+        columnKey: request.columnKey,
+        direction: request.direction ?? "clear",
+        handlerMs: Math.max(0, handlerEndMs - handlerStartMs),
+        scheduleDelayMs: Math.max(0, applyStartMs - scheduledAtMs),
+        handlerToApplyStartMs: Math.max(0, applyStartMs - handlerStartMs),
+        setSortModelMs,
+        projectionRebuildMs: projectionTiming.projectionRebuildMs,
+        projectionSortMs: projectionTiming.projectionSortMs,
+        projectionFilterMs: projectionTiming.projectionFilterMs,
+        projectionGroupMs: projectionTiming.projectionGroupMs,
+        recomputeVersion: projectionTiming.recomputeVersion,
+        rowCount: projectionTiming.rowCount,
+        slowSort: slowSort ? 1 : 0,
+        thresholdMs: DATA_GRID_SLOW_SORT_THRESHOLD_MS,
+        applyStartMs,
+        setSortModelEndMs: applyEndMs,
+      })
+
+      if (!slowSort) {
+        pendingColumnMenuSort.value = null
+        return
+      }
+      pendingColumnMenuSortFrameId = requestDataGridAnimationFrame(() => {
+        pendingColumnMenuSortFrameId = null
+        if (requestId === pendingColumnMenuSortRequestId) {
+          pendingColumnMenuSort.value = null
+        }
+      })
+    }
+
+    const scheduleColumnMenuSortApply = (
+      request: ColumnMenuSortRequest,
+      handlerStartMs: number,
+      handlerEndMs: number,
+    ): void => {
+      cancelPendingColumnMenuSortFrame()
+      const requestId = ++pendingColumnMenuSortRequestId
+      const scheduledAtMs = resolveDataGridPerfNow()
+      pendingColumnMenuSort.value = request
+      pendingColumnMenuSortFrameId = requestDataGridAnimationFrame(() => {
+        pendingColumnMenuSortFrameId = requestDataGridAnimationFrame(() => {
+          runDeferredColumnMenuSort(requestId, request, handlerStartMs, handlerEndMs, scheduledAtMs)
+        })
+      })
+    }
+
     const applyColumnMenuSort = (columnKey: string, direction: "asc" | "desc" | null): void => {
+      const handlerStartMs = resolveDataGridPerfNow()
       const targetColumn = visibleColumns.value.find(column => column.key === columnKey)
       if (!targetColumn || targetColumn.column.capabilities?.sortable === false) {
         return
       }
-      sortState.value = direction === null
+      const nextSortState = direction === null
         ? sortState.value.filter(entry => entry.key !== columnKey)
         : [{ key: columnKey, direction }]
-      applySortAndFilter()
+      const handlerEndMs = resolveDataGridPerfNow()
+      recordDataGridDefaultRendererPerf({
+        scope: "columnMenuSortRequest",
+        ts: Date.now(),
+        totalMs: Math.max(0, handlerEndMs - handlerStartMs),
+        columnKey,
+        direction: direction ?? "clear",
+        handlerStartMs,
+        handlerEndMs,
+      })
+      scheduleColumnMenuSortApply({ columnKey, direction, nextSortState }, handlerStartMs, handlerEndMs)
     }
 
     const applyColumnMenuPin = (columnKey: string, pin: DataGridColumnPin): void => {
@@ -3556,6 +3728,26 @@ export default defineComponent({
       }))
     }
 
+    const renderSortingPending = (): ReturnType<typeof h> | null => {
+      if (!pendingColumnMenuSort.value) {
+        return null
+      }
+      return h("div", {
+        class: "datagrid-app-sort-pending",
+        role: "status",
+        "aria-live": "polite",
+        "aria-label": "Sorting",
+      }, [
+        h("span", {
+          class: "datagrid-app-sort-pending__spinner",
+          "aria-hidden": "true",
+        }),
+        h("span", {
+          class: "datagrid-app-sort-pending__label",
+        }, "Sorting"),
+      ])
+    }
+
     watch(
       () => contextMenu.value.visible,
       (visible, _previous, onCleanup) => {
@@ -3811,6 +4003,9 @@ export default defineComponent({
               class: [
                 "datagrid-app-stage",
                 "datagrid-app-stage--integrated",
+                {
+                  "datagrid-app-stage--sorting-pending": pendingColumnMenuSort.value !== null,
+                },
                 props.layoutMode === "auto-height"
                   ? "datagrid-app-stage--auto-height"
                   : "datagrid-app-stage--fill",
@@ -3830,12 +4025,16 @@ export default defineComponent({
                   stageContext: tableStageContext,
                   onViewportContextMenu: handleViewportContextMenu,
                 }),
+              renderSortingPending(),
               renderContextMenu(),
             ]),
           ])
           : h("div", {
             class: [
               "datagrid-app-stage",
+              {
+                "datagrid-app-stage--sorting-pending": pendingColumnMenuSort.value !== null,
+              },
               props.layoutMode === "auto-height"
                 ? "datagrid-app-stage--auto-height"
                 : "datagrid-app-stage--fill",
@@ -3855,6 +4054,7 @@ export default defineComponent({
                 stageContext: tableStageContext,
                 onViewportContextMenu: handleViewportContextMenu,
               }),
+            renderSortingPending(),
             renderContextMenu(),
           ]),
         props.inspectorPanel

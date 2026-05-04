@@ -36,7 +36,7 @@
             :data-disabled-reason="resolveActionDisabledTitle('sortAsc', sortSectionDisabled || !sortEnabled, 'sort')"
             :disabled="isActionDisabled('sortAsc', sortSectionDisabled || !sortEnabled)"
             :title="resolveActionDisabledTitle('sortAsc', sortSectionDisabled || !sortEnabled, 'sort')"
-            @select="$emit('sort', 'asc')"
+            @select="handleSortSelect('asc')"
           >
             <span :title="resolveActionDisabledTitle('sortAsc', sortSectionDisabled || !sortEnabled, 'sort')">{{ sortAscLabel }}</span>
             <span v-if="sortDirection === 'asc'" class="datagrid-column-menu__state">Active</span>
@@ -49,7 +49,7 @@
             :data-disabled-reason="resolveActionDisabledTitle('sortDesc', sortSectionDisabled || !sortEnabled, 'sort')"
             :disabled="isActionDisabled('sortDesc', sortSectionDisabled || !sortEnabled)"
             :title="resolveActionDisabledTitle('sortDesc', sortSectionDisabled || !sortEnabled, 'sort')"
-            @select="$emit('sort', 'desc')"
+            @select="handleSortSelect('desc')"
           >
             <span :title="resolveActionDisabledTitle('sortDesc', sortSectionDisabled || !sortEnabled, 'sort')">{{ sortDescLabel }}</span>
             <span v-if="sortDirection === 'desc'" class="datagrid-column-menu__state">Active</span>
@@ -62,7 +62,7 @@
             :data-disabled-reason="resolveActionDisabledTitle('clearSort', sortSectionDisabled || !sortEnabled || sortDirection === null, 'sort')"
             :disabled="isActionDisabled('clearSort', sortSectionDisabled || !sortEnabled || sortDirection === null)"
             :title="resolveActionDisabledTitle('clearSort', sortSectionDisabled || !sortEnabled || sortDirection === null, 'sort')"
-            @select="$emit('sort', null)"
+            @select="handleSortSelect(null)"
           >
             <span :title="resolveActionDisabledTitle('clearSort', sortSectionDisabled || !sortEnabled || sortDirection === null, 'sort')">{{ clearSortLabel }}</span>
           </UiMenuItem>
@@ -753,6 +753,11 @@ function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
 
 function closeMenu(): void {
   menuRef.value?.controller?.close("programmatic")
+}
+
+function handleSortSelect(direction: "asc" | "desc" | null): void {
+  closeMenu()
+  emit("sort", direction)
 }
 
 async function handleCustomItemSelect(item: DataGridColumnMenuCustomLeafItem): Promise<void> {
