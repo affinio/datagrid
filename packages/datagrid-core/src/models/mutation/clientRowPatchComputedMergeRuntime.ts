@@ -22,6 +22,7 @@ export interface ClientRowPatchComputedMergeRuntimeContext<T> {
   getMaterializedSourceRowAtIndex: (rowIndex: number) => DataGridRowNode<T> | null | undefined
   getSourceRowIndexById: () => ReadonlyMap<DataGridRowId, number>
   preparePatchedBaseRows: (rows: readonly DataGridRowNode<T>[], changedRowIds: readonly DataGridRowId[]) => void
+  hasComputedFields: () => boolean
 }
 
 export interface ClientRowPatchComputedMergeRuntime<T> {
@@ -36,6 +37,12 @@ export function createClientRowPatchComputedMergeRuntime<T>(
   const applyComputedFieldsToPatchResult = (
     patchResult: ApplyClientRowPatchUpdatesResult<T>,
   ): ApplyClientRowPatchUpdatesResult<T> => {
+    if (!context.hasComputedFields()) {
+      context.preparePatchedBaseRows(patchResult.nextSourceRows, patchResult.changedRowIds)
+      context.invalidateSourceColumnValuesByRowIds(patchResult.changedRowIds)
+      return patchResult
+    }
+
     const sourceRowIndexById = context.getSourceRowIndexById()
     const previousEffectiveRowsById = new Map<DataGridRowId, DataGridRowNode<T>>()
     for (const rowId of patchResult.changedRowIds) {

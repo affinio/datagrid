@@ -1237,6 +1237,218 @@ const COPY_PASTE_FILL_MEMORY_PHASES = [
   ["postGcRetained", "beforeSetup", "afterGc"],
 ]
 
+const COPY_PATCH_DIAGNOSTIC_PHASES = ["paste", "fill"]
+const COPY_PATCH_DIAGNOSTIC_NUMERIC_KEYS = [
+  "rowPatches",
+  "changedCellFields",
+  "uniqueChangedFields",
+  "patchElapsedMs",
+  "patchMsPerRow",
+  "patchUsPerChangedCell",
+  "rowNodeCloneCount",
+  "rowDataCloneCount",
+  "rowReferenceCloneCount",
+  "missingPatchedRows",
+  "eventCount",
+  "projectionVersionDelta",
+  "projectionRecomputeVersionDelta",
+  "projectionHadActualRecompute",
+  "projectionRecomputedStageCount",
+  "projectionBlockedStageCount",
+  "projectionStaleStageCountAfter",
+  "rowIndexBytesDelta",
+  "sortBufferBytesDelta",
+]
+
+const COPY_PATCH_DERIVED_CACHE_KEYS = [
+  "filterPredicateHits",
+  "filterPredicateMisses",
+  "sortValueHits",
+  "sortValueMisses",
+  "groupValueHits",
+  "groupValueMisses",
+  "sourceColumnCacheEvictions",
+]
+
+function countPatchFields(updates) {
+  const uniqueFields = new Set()
+  let changedCellFields = 0
+  for (const update of updates) {
+    const data = update?.data
+    if (!data || typeof data !== "object") {
+      continue
+    }
+    for (const key of Object.keys(data)) {
+      changedCellFields += 1
+      uniqueFields.add(key)
+    }
+  }
+  return {
+    rowPatches: updates.length,
+    changedCellFields,
+    uniqueChangedFields: uniqueFields.size,
+  }
+}
+
+function capturePatchRowReferences(model, updates) {
+  const rowIds = new Set()
+  let minRowId = Number.POSITIVE_INFINITY
+  let maxRowId = Number.NEGATIVE_INFINITY
+  let allNumericRowIds = true
+  for (const update of updates) {
+    rowIds.add(update.rowId)
+    if (typeof update.rowId === "number" && Number.isFinite(update.rowId)) {
+      minRowId = Math.min(minRowId, update.rowId)
+      maxRowId = Math.max(maxRowId, update.rowId)
+    } else {
+      allNumericRowIds = false
+    }
+  }
+  if (rowIds.size === 0) {
+    return new Map()
+  }
+  const rows = allNumericRowIds
+    ? model.getRowsInRange(normalizeRange(minRowId, model.getRowCount(), maxRowId - minRowId + 1))
+    : model.getRowsInRange(normalizeRange(0, model.getRowCount(), model.getRowCount()))
+  const references = new Map()
+  for (const rowNode of rows) {
+    if (rowIds.has(rowNode?.rowId)) {
+      references.set(rowNode.rowId, {
+        node: rowNode,
+        data: rowNode.data,
+        row: rowNode.row,
+      })
+    }
+  }
+  return references
+}
+
+function summarizePatchRowReferences(updates, before, after) {
+  let rowNodeCloneCount = 0
+  let rowDataCloneCount = 0
+  let rowReferenceCloneCount = 0
+  let missingPatchedRows = 0
+  const seen = new Set()
+  for (const update of updates) {
+    if (seen.has(update.rowId)) {
+      continue
+    }
+    seen.add(update.rowId)
+    const beforeRef = before.get(update.rowId)
+    const afterRef = after.get(update.rowId)
+    if (!beforeRef || !afterRef) {
+      missingPatchedRows += 1
+      continue
+    }
+    if (beforeRef.node !== afterRef.node) {
+      rowNodeCloneCount += 1
+    }
+    if (beforeRef.data !== afterRef.data) {
+      rowDataCloneCount += 1
+    }
+    if (beforeRef.row !== afterRef.row) {
+      rowReferenceCloneCount += 1
+    }
+  }
+  return {
+    rowNodeCloneCount,
+    rowDataCloneCount,
+    rowReferenceCloneCount,
+    missingPatchedRows,
+  }
+}
+
+function capturePatchProjectionDiagnostics(model) {
+  const projection = model.getSnapshot?.().projection ?? null
+  return {
+    version: projection?.version ?? 0,
+    recomputeVersion: projection?.recomputeVersion ?? 0,
+    lastRecomputeHadActual: projection?.lastRecomputeHadActual === true,
+    lastRecomputedStages: [...(projection?.lastRecomputedStages ?? [])],
+    lastBlockedStages: [...(projection?.lastBlockedStages ?? [])],
+    staleStages: [...(projection?.staleStages ?? [])],
+    lastInvalidationReasons: [...(projection?.lastInvalidationReasons ?? [])],
+    rowIndexBytes: projection?.memory?.rowIndexBytes ?? 0,
+    sortBufferBytes: projection?.memory?.sortBufferBytes ?? 0,
+  }
+}
+
+function summarizePatchProjectionDiagnostics(before, after) {
+  return {
+    projectionVersionDelta: after.version - before.version,
+    projectionRecomputeVersionDelta: after.recomputeVersion - before.recomputeVersion,
+    projectionHadActualRecompute: after.lastRecomputeHadActual ? 1 : 0,
+    projectionRecomputedStageCount: after.lastRecomputedStages.length,
+    projectionBlockedStageCount: after.lastBlockedStages.length,
+    projectionStaleStageCountAfter: after.staleStages.length,
+    rowIndexBytesDelta: after.rowIndexBytes - before.rowIndexBytes,
+    sortBufferBytesDelta: after.sortBufferBytes - before.sortBufferBytes,
+    projectionLastInvalidationReasons: after.lastInvalidationReasons,
+    projectionLastRecomputedStages: after.lastRecomputedStages,
+    projectionLastBlockedStages: after.lastBlockedStages,
+    projectionStaleStagesAfter: after.staleStages,
+  }
+}
+
+function captureDerivedCacheDiagnostics(model) {
+  return typeof model.getDerivedCacheDiagnostics === "function"
+    ? model.getDerivedCacheDiagnostics()
+    : null
+}
+
+function diffDerivedCacheDiagnostics(before, after) {
+  if (!before || !after) {
+    return Object.fromEntries(COPY_PATCH_DERIVED_CACHE_KEYS.map(key => [key, 0]))
+  }
+  return diffDerivedCache(before, after)
+}
+
+function createPatchApplicationDiagnostics(input) {
+  const patchShape = countPatchFields(input.updates)
+  const rowReferenceSummary = summarizePatchRowReferences(
+    input.updates,
+    input.rowReferencesBefore,
+    input.rowReferencesAfter,
+  )
+  return {
+    ...patchShape,
+    ...rowReferenceSummary,
+    patchElapsedMs: input.elapsedMs,
+    patchMsPerRow: patchShape.rowPatches > 0 ? input.elapsedMs / patchShape.rowPatches : 0,
+    patchUsPerChangedCell: patchShape.changedCellFields > 0
+      ? (input.elapsedMs * 1000) / patchShape.changedCellFields
+      : 0,
+    eventCount: input.eventCount,
+    ...summarizePatchProjectionDiagnostics(input.projectionBefore, input.projectionAfter),
+    derivedCacheDelta: diffDerivedCacheDiagnostics(input.derivedCacheBefore, input.derivedCacheAfter),
+  }
+}
+
+function aggregateCopyPatchDiagnostics(runs) {
+  return Object.fromEntries(
+    COPY_PATCH_DIAGNOSTIC_PHASES.map(phase => {
+      const diagnostics = runs.map(run => run.patchDiagnostics?.[phase]).filter(Boolean)
+      return [
+        phase,
+        {
+          ...Object.fromEntries(
+            COPY_PATCH_DIAGNOSTIC_NUMERIC_KEYS.map(key => [
+              key,
+              stats(diagnostics.map(entry => entry[key] ?? 0)),
+            ]),
+          ),
+          derivedCacheDelta: Object.fromEntries(
+            COPY_PATCH_DERIVED_CACHE_KEYS.map(key => [
+              key,
+              stats(diagnostics.map(entry => entry.derivedCacheDelta?.[key] ?? 0)),
+            ]),
+          ),
+        },
+      ]
+    }),
+  )
+}
+
 async function runCopyPasteFillScenario(createClientRowModel) {
   const runs = []
   for (const seed of BENCH_SEEDS) {
@@ -1266,6 +1478,7 @@ async function runCopyPasteFillScenario(createClientRowModel) {
       historySnapshotSizeBytes: stats(runs.map(run => run.historySnapshotSizeBytes)),
       phaseTimingsMs: aggregatePhaseTimings(runs, COPY_PASTE_FILL_PHASE_KEYS),
       phaseMemoryDeltaMb: aggregatePhaseMemoryDeltas(runs, COPY_PASTE_FILL_MEMORY_PHASES),
+      patchDiagnostics: aggregateCopyPatchDiagnostics(runs),
       elapsedMs: stats(runs.map(run => run.elapsedMs)),
       heapDeltaMb: stats(runs.map(run => run.heapDeltaMb)),
     },
@@ -1295,6 +1508,16 @@ async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}
   )
   recordMemory(phaseMemoryMb, "afterRowModelCreation")
   const startedAt = performance.now()
+  const patchDiagnostics = {}
+  const patchEventCounts = { paste: 0, fill: 0 }
+  let activePatchEventPhase = null
+  const unsubscribePatchListener = typeof model.subscribe === "function"
+    ? model.subscribe(() => {
+      if (activePatchEventPhase && Object.prototype.hasOwnProperty.call(patchEventCounts, activePatchEventPhase)) {
+        patchEventCounts[activePatchEventPhase] += 1
+      }
+    })
+    : null
 
   const copied = []
   const sourceRows = measurePhase(phaseTimingsMs, "copySourceRangeAccess", () =>
@@ -1339,13 +1562,33 @@ async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}
     }
   })
   recordMemory(phaseMemoryMb, "afterPastePayloadCreation")
-  measurePhase(phaseTimingsMs, "pastePatchApplication", () => {
+  const pasteRowReferencesBefore = capturePatchRowReferences(model, pasteUpdates)
+  const pasteProjectionBefore = capturePatchProjectionDiagnostics(model)
+  const pasteDerivedCacheBefore = captureDerivedCacheDiagnostics(model)
+  const pastePatchStartedAt = performance.now()
+  activePatchEventPhase = "paste"
+  try {
     model.patchRows(pasteUpdates, {
       recomputeSort: false,
       recomputeFilter: false,
       recomputeGroup: false,
       emit: false,
     })
+  } finally {
+    activePatchEventPhase = null
+  }
+  const pastePatchApplicationMs = performance.now() - pastePatchStartedAt
+  addTiming(phaseTimingsMs, "pastePatchApplication", pastePatchApplicationMs)
+  patchDiagnostics.paste = createPatchApplicationDiagnostics({
+    updates: pasteUpdates,
+    elapsedMs: pastePatchApplicationMs,
+    rowReferencesBefore: pasteRowReferencesBefore,
+    rowReferencesAfter: capturePatchRowReferences(model, pasteUpdates),
+    projectionBefore: pasteProjectionBefore,
+    projectionAfter: capturePatchProjectionDiagnostics(model),
+    derivedCacheBefore: pasteDerivedCacheBefore,
+    derivedCacheAfter: captureDerivedCacheDiagnostics(model),
+    eventCount: patchEventCounts.paste,
   })
   recordMemory(phaseMemoryMb, "afterPastePatchApplication")
   const pasteLatencyMs =
@@ -1365,13 +1608,33 @@ async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}
     }
   })
   recordMemory(phaseMemoryMb, "afterFillPayloadCreation")
-  measurePhase(phaseTimingsMs, "fillPatchApplication", () => {
+  const fillRowReferencesBefore = capturePatchRowReferences(model, fillUpdates)
+  const fillProjectionBefore = capturePatchProjectionDiagnostics(model)
+  const fillDerivedCacheBefore = captureDerivedCacheDiagnostics(model)
+  const fillPatchStartedAt = performance.now()
+  activePatchEventPhase = "fill"
+  try {
     model.patchRows(fillUpdates, {
       recomputeSort: false,
       recomputeFilter: false,
       recomputeGroup: false,
       emit: false,
     })
+  } finally {
+    activePatchEventPhase = null
+  }
+  const fillPatchApplicationMs = performance.now() - fillPatchStartedAt
+  addTiming(phaseTimingsMs, "fillPatchApplication", fillPatchApplicationMs)
+  patchDiagnostics.fill = createPatchApplicationDiagnostics({
+    updates: fillUpdates,
+    elapsedMs: fillPatchApplicationMs,
+    rowReferencesBefore: fillRowReferencesBefore,
+    rowReferencesAfter: capturePatchRowReferences(model, fillUpdates),
+    projectionBefore: fillProjectionBefore,
+    projectionAfter: capturePatchProjectionDiagnostics(model),
+    derivedCacheBefore: fillDerivedCacheBefore,
+    derivedCacheAfter: captureDerivedCacheDiagnostics(model),
+    eventCount: patchEventCounts.fill,
   })
   recordMemory(phaseMemoryMb, "afterFillPatchApplication")
   const fillLatencyMs =
@@ -1388,6 +1651,7 @@ async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}
   })
   recordMemory(phaseMemoryMb, "afterUndoRollback")
 
+  unsubscribePatchListener?.()
   model.dispose()
   recordMemory(phaseMemoryMb, "afterDispose")
   const heapEnd = await sampleHeapUsed()
@@ -1407,6 +1671,7 @@ async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}
     pasteRowPatches: pasteUpdates.length,
     fillRowPatches: fillUpdates.length,
     historySnapshotSizeBytes,
+    patchDiagnostics,
     phaseTimingsMs,
     phaseMemoryMb,
   }
