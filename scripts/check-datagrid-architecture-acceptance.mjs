@@ -351,7 +351,7 @@ registerTokenCheck(
 registerTokenCheck(
   "parity-lock-script",
   "package.json",
-  ["quality:lock:datagrid:parity", "bench:regression", "test:e2e:datagrid:parity"],
+  ["quality:lock:datagrid:parity", "test:e2e:datagrid:parity"],
   "Root scripts include cross-framework parity lock command",
 )
 registerFileCheck(
@@ -385,23 +385,23 @@ registerForbiddenTokenCheck(
     registerConditionCheck(
       parityScriptId,
       false,
-      "Parity lock script keeps contract order: quality lock -> bench regression -> parity e2e",
+      "Parity lock script keeps contract order: quality lock -> parity e2e",
       "package.json missing",
     )
   } else {
     const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"))
     const parityScript = String(pkg?.scripts?.["quality:lock:datagrid:parity"] ?? "")
     const lockIndex = parityScript.indexOf("quality:lock:datagrid")
-    const benchIndex = parityScript.indexOf("bench:regression")
     const parityE2eIndex = parityScript.indexOf("test:e2e:datagrid:parity")
+    const benchIndex = parityScript.indexOf("bench:regression")
     const ordered =
       lockIndex >= 0 &&
-      benchIndex > lockIndex &&
-      parityE2eIndex > benchIndex
+      parityE2eIndex > lockIndex &&
+      benchIndex < 0
     registerConditionCheck(
       parityScriptId,
       ordered,
-      "Parity lock script keeps contract order: quality lock -> bench regression -> parity e2e",
+      "Parity lock script keeps contract order: quality lock -> parity e2e",
       `unexpected parity script order: '${parityScript}'`,
     )
   }

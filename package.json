@@ -105,7 +105,8 @@
     "quality:gates:datagrid": "pnpm run test:datagrid:coverage && pnpm run test:e2e:critical",
     "quality:gates:datagrid:tree": "pnpm run test:datagrid:tree:contracts && pnpm run test:e2e:datagrid:tree && pnpm run bench:datagrid:tree:assert && pnpm run bench:datagrid:tree:matrix:assert:ci",
     "quality:lock:datagrid": "pnpm run quality:architecture:datagrid && pnpm run quality:facade:datagrid && pnpm run quality:perf:datagrid && pnpm run test:datagrid:strict-contracts && pnpm run quality:gates:datagrid && pnpm run quality:gates:datagrid:tree",
-    "quality:lock:datagrid:parity": "pnpm run quality:lock:datagrid && pnpm run bench:regression && pnpm run test:e2e:datagrid:parity",
+    "quality:lock:datagrid:parity": "pnpm run quality:lock:datagrid && pnpm run test:e2e:datagrid:parity",
+    "quality:lock:datagrid:parity:full": "pnpm run quality:lock:datagrid:parity && pnpm run bench:regression",
     "bench:regression": "pnpm run bench:datagrid:harness:ci:gate"
   },
   "devDependencies": {

@@ -18,8 +18,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm run quality:lock:datagrid
-      - run: pnpm run test:e2e:datagrid:parity
+      - run: pnpm run quality:lock:datagrid:parity
       - name: Upload quality gate artifacts
         uses: actions/upload-artifact@v4
         if: always()
