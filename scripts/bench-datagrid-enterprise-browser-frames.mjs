@@ -26,6 +26,49 @@ const BENCH_OUTPUT_JSON = process.env.BENCH_OUTPUT_JSON
   ? resolve(process.env.BENCH_OUTPUT_JSON)
   : resolve("artifacts/performance/bench-datagrid-enterprise-browser-frames.json")
 
+const SCENARIOS = [
+  {
+    id: "vertical-scroll-only",
+    verticalScroll: true,
+    horizontalScroll: false,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "horizontal-scroll-only",
+    verticalScroll: false,
+    horizontalScroll: true,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "sort-only",
+    verticalScroll: false,
+    horizontalScroll: false,
+    filter: false,
+    sort: true,
+    cellUpdates: false,
+  },
+  {
+    id: "inline-edit-burst-only",
+    verticalScroll: false,
+    horizontalScroll: false,
+    filter: false,
+    sort: false,
+    cellUpdates: true,
+  },
+  {
+    id: "combined",
+    verticalScroll: true,
+    horizontalScroll: true,
+    filter: true,
+    sort: true,
+    cellUpdates: true,
+  },
+]
+
 assertPositiveInteger(BENCH_BROWSER_SESSIONS, "BENCH_BROWSER_SESSIONS")
 assertPositiveInteger(BENCH_BROWSER_ROW_COUNT, "BENCH_BROWSER_ROW_COUNT")
 assertPositiveInteger(BENCH_BROWSER_COLUMN_COUNT, "BENCH_BROWSER_COLUMN_COUNT")
@@ -173,7 +216,7 @@ async function configureSandbox(page) {
   })
 }
 
-async function runSession(page, sessionIndex) {
+async function runScenario(page, sessionIndex, scenario) {
   const result = await page.evaluate(async (input) => {
     const viewport = document.querySelector(input.viewportSelector)
     if (!(viewport instanceof HTMLElement)) {
@@ -185,6 +228,7 @@ async function runSession(page, sessionIndex) {
     const longTaskDurations = []
     const telemetrySamples = []
     const interactions = {
+      scenarioId: input.scenario.id,
       verticalScrollSteps: 0,
       horizontalScrollSteps: 0,
       filterApplied: false,
@@ -253,7 +297,7 @@ async function runSession(page, sessionIndex) {
     const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
     const maxLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
 
-    if (maxTop > 0) {
+    if (input.scenario.verticalScroll && maxTop > 0) {
       for (let step = 1; step <= input.scrollSteps; step += 1) {
         viewport.scrollTop = Math.round((maxTop * step) / input.scrollSteps)
         interactions.verticalScrollSteps += 1
@@ -262,11 +306,11 @@ async function runSession(page, sessionIndex) {
         }
         await pause(input.stepDelayMs)
       }
-    } else {
+    } else if (input.scenario.verticalScroll) {
       interactions.skipped.push("vertical-scroll:no-scroll-range")
     }
 
-    if (maxLeft > 0) {
+    if (input.scenario.horizontalScroll && maxLeft > 0) {
       for (let step = 1; step <= input.horizontalSteps; step += 1) {
         const phase = (step + input.sessionIndex) % 2
         const position = phase === 0
@@ -279,17 +323,17 @@ async function runSession(page, sessionIndex) {
         }
         await pause(input.stepDelayMs)
       }
-    } else {
+    } else if (input.scenario.horizontalScroll) {
       interactions.skipped.push("horizontal-scroll:no-scroll-range")
     }
 
-    if (maxLeft > 0) {
+    if (maxLeft > 0 && (input.scenario.filter || input.scenario.sort || input.scenario.cellUpdates)) {
       viewport.scrollLeft = 0
       captureTelemetry("horizontal:reset")
       await waitForPaint()
     }
 
-    if (input.enableFilter) {
+    if (input.scenario.filter && input.enableFilter) {
       const filterInput = Array.from(document.querySelectorAll(".col-filter-input"))
         .find(candidate => candidate instanceof HTMLInputElement && !candidate.disabled)
       if (filterInput instanceof HTMLInputElement) {
@@ -306,9 +350,11 @@ async function runSession(page, sessionIndex) {
       } else {
         interactions.skipped.push("filter:no-enabled-header-filter")
       }
+    } else if (input.scenario.filter) {
+      interactions.skipped.push("filter:disabled-by-config")
     }
 
-    if (input.enableSort) {
+    if (input.scenario.sort && input.enableSort) {
       const preferredSortButton = document.querySelector(
         '.grid-cell--header[data-column-key="amount"] [data-datagrid-column-menu-button="true"]',
       )
@@ -328,9 +374,11 @@ async function runSession(page, sessionIndex) {
       } else {
         interactions.skipped.push("sort:no-column-menu-button")
       }
+    } else if (input.scenario.sort) {
+      interactions.skipped.push("sort:disabled-by-config")
     }
 
-    if (input.enableCellUpdates && input.cellUpdateBurst > 0) {
+    if (input.scenario.cellUpdates && input.enableCellUpdates && input.cellUpdateBurst > 0) {
       for (let index = 0; index < input.cellUpdateBurst; index += 1) {
         const cells = Array.from(
           document.querySelectorAll('.grid-row:not(.row--group) .grid-cell[data-column-key="amount"]'),
@@ -359,6 +407,10 @@ async function runSession(page, sessionIndex) {
         captureTelemetry(`cell-update:${index + 1}`)
         await waitForPaint()
       }
+    } else if (input.scenario.cellUpdates && !input.enableCellUpdates) {
+      interactions.skipped.push("cell-update:disabled-by-config")
+    } else if (input.scenario.cellUpdates) {
+      interactions.skipped.push("cell-update:empty-burst")
     }
 
     await pause(Math.max(32, input.stepDelayMs * 2))
@@ -400,6 +452,7 @@ async function runSession(page, sessionIndex) {
       finalLeft: viewport.scrollLeft,
     }
   }, {
+    scenario,
     viewportSelector: BENCH_VIEWPORT_SELECTOR,
     scrollSteps: BENCH_BROWSER_SCROLL_STEPS,
     horizontalSteps: BENCH_BROWSER_HORIZONTAL_STEPS,
@@ -417,6 +470,7 @@ async function runSession(page, sessionIndex) {
   const longTaskMaxMs = longTaskCount > 0 ? Math.max(...result.longTaskDurations) : 0
 
   return {
+    scenario: scenario.id,
     session: sessionIndex + 1,
     ...frame,
     frameDeltas: result.frameDeltas,
@@ -432,6 +486,59 @@ async function runSession(page, sessionIndex) {
     finalTop: result.finalTop,
     finalLeft: result.finalLeft,
   }
+}
+
+function aggregateRuns(runs) {
+  return {
+    measuredElapsedMs: stats(runs.map(run => run.measuredElapsedMs)),
+    interactionDurationMs: stats(runs.map(run => run.measuredElapsedMs)),
+    frameMs: stats(runs.flatMap(run => normalizeFrameDeltas(run.frameDeltas ?? []))),
+    frameP50Ms: stats(runs.map(run => run.frameStats.p50)),
+    frameP95Ms: stats(runs.map(run => run.frameStats.p95)),
+    frameP99Ms: stats(runs.map(run => run.frameStats.p99)),
+    fps: stats(runs.map(run => run.fps)),
+    droppedFramePct: stats(runs.map(run => run.droppedPct)),
+    droppedFrames: stats(runs.map(run => run.droppedFrames)),
+    longFramesOver16Ms: stats(runs.map(run => run.longFramesOver16Ms)),
+    longFramesOver32Ms: stats(runs.map(run => run.longFramesOver32Ms)),
+    longTaskCount: stats(runs.map(run => run.longTaskCount)),
+    longTaskTotalMs: stats(runs.map(run => run.longTaskTotalMs)),
+    longTaskMaxMs: stats(runs.map(run => run.longTaskMaxMs)),
+    peakUsedHeapMb: stats(runs.map(run => run.telemetry.peakUsedHeapMb ?? 0)),
+    heapDeltaMb: stats(runs.map(run => run.telemetry.heapDeltaMb ?? 0)),
+    peakPageNodes: stats(runs.map(run => run.telemetry.peakPageNodes)),
+    peakStageNodes: stats(runs.map(run => run.telemetry.peakStageNodes)),
+    peakVisibleCells: stats(runs.map(run => run.telemetry.peakVisibleCells)),
+    peakViewportCells: stats(runs.map(run => run.telemetry.peakViewportCells)),
+    cellUpdatesAttempted: stats(runs.map(run => run.interactions.cellUpdatesAttempted)),
+    cellUpdatesCommitted: stats(runs.map(run => run.interactions.cellUpdatesCommitted)),
+  }
+}
+
+function buildScenarioSummary(runs) {
+  const byScenario = {}
+  for (const scenario of SCENARIOS) {
+    const scenarioRuns = runs.filter(run => run.scenario === scenario.id)
+    byScenario[scenario.id] = {
+      aggregate: aggregateRuns(scenarioRuns),
+      sessions: scenarioRuns,
+    }
+  }
+  return byScenario
+}
+
+function resolveWorstScenario(scenarios) {
+  let worst = null
+  for (const [id, report] of Object.entries(scenarios)) {
+    const frameP95 = report.aggregate.frameP95Ms.p50
+    if (!Number.isFinite(frameP95)) {
+      continue
+    }
+    if (!worst || frameP95 > worst.frameP95Ms) {
+      worst = { id, frameP95Ms: frameP95 }
+    }
+  }
+  return worst
 }
 
 const startedAt = performance.now()
@@ -457,19 +564,23 @@ const setup = []
 
 try {
   for (let session = 0; session < BENCH_BROWSER_SESSIONS; session += 1) {
-    console.log(`[enterprise-browser-frames] session ${session + 1}/${BENCH_BROWSER_SESSIONS}...`)
-    const page = await context.newPage()
-    await page.goto(`${BENCH_BROWSER_BASE_URL}${BENCH_BROWSER_ROUTE}`, {
-      waitUntil: "networkidle",
-      timeout: 120000,
-    })
-    await page.waitForSelector(BENCH_VIEWPORT_SELECTOR, { timeout: 30000 })
-    const setupResult = await configureSandbox(page)
-    setup.push({ session: session + 1, ...setupResult })
-    await page.waitForTimeout(240)
-    const metrics = await runSession(page, session)
-    sessions.push(metrics)
-    await page.close()
+    for (const scenario of SCENARIOS) {
+      console.log(
+        `[enterprise-browser-frames] scenario=${scenario.id} session ${session + 1}/${BENCH_BROWSER_SESSIONS}...`,
+      )
+      const page = await context.newPage()
+      await page.goto(`${BENCH_BROWSER_BASE_URL}${BENCH_BROWSER_ROUTE}`, {
+        waitUntil: "networkidle",
+        timeout: 120000,
+      })
+      await page.waitForSelector(BENCH_VIEWPORT_SELECTOR, { timeout: 30000 })
+      const setupResult = await configureSandbox(page)
+      setup.push({ scenario: scenario.id, session: session + 1, ...setupResult })
+      await page.waitForTimeout(240)
+      const metrics = await runScenario(page, session, scenario)
+      sessions.push(metrics)
+      await page.close()
+    }
   }
 } finally {
   await context.close()
@@ -478,29 +589,11 @@ try {
 }
 
 const elapsedMs = performance.now() - startedAt
+const scenarioReports = buildScenarioSummary(sessions)
 const aggregate = {
   elapsedMs,
-  measuredElapsedMs: stats(sessions.map(session => session.measuredElapsedMs)),
-  frameMs: stats(sessions.flatMap(session => normalizeFrameDeltas(session.frameDeltas ?? []))),
-  frameP50Ms: stats(sessions.map(session => session.frameStats.p50)),
-  frameP95Ms: stats(sessions.map(session => session.frameStats.p95)),
-  frameP99Ms: stats(sessions.map(session => session.frameStats.p99)),
-  fps: stats(sessions.map(session => session.fps)),
-  droppedFramePct: stats(sessions.map(session => session.droppedPct)),
-  droppedFrames: stats(sessions.map(session => session.droppedFrames)),
-  longFramesOver16Ms: stats(sessions.map(session => session.longFramesOver16Ms)),
-  longFramesOver32Ms: stats(sessions.map(session => session.longFramesOver32Ms)),
-  longTaskCount: stats(sessions.map(session => session.longTaskCount)),
-  longTaskTotalMs: stats(sessions.map(session => session.longTaskTotalMs)),
-  longTaskMaxMs: stats(sessions.map(session => session.longTaskMaxMs)),
-  peakUsedHeapMb: stats(sessions.map(session => session.telemetry.peakUsedHeapMb ?? 0)),
-  heapDeltaMb: stats(sessions.map(session => session.telemetry.heapDeltaMb ?? 0)),
-  peakPageNodes: stats(sessions.map(session => session.telemetry.peakPageNodes)),
-  peakStageNodes: stats(sessions.map(session => session.telemetry.peakStageNodes)),
-  peakVisibleCells: stats(sessions.map(session => session.telemetry.peakVisibleCells)),
-  peakViewportCells: stats(sessions.map(session => session.telemetry.peakViewportCells)),
-  cellUpdatesAttempted: stats(sessions.map(session => session.interactions.cellUpdatesAttempted)),
-  cellUpdatesCommitted: stats(sessions.map(session => session.interactions.cellUpdatesCommitted)),
+  ...aggregateRuns(sessions),
+  worstScenarioByFrameP95: resolveWorstScenario(scenarioReports),
 }
 
 const summary = {
@@ -521,9 +614,11 @@ const summary = {
     enableSort: BENCH_ENABLE_SORT,
     enableCellUpdates: BENCH_ENABLE_CELL_UPDATES,
     headless: BENCH_BROWSER_HEADLESS,
+    scenarios: SCENARIOS.map(scenario => scenario.id),
   },
   setup,
   aggregate,
+  scenarios: scenarioReports,
   sessions,
   budgetErrors: [],
   ok: true,
@@ -536,3 +631,9 @@ console.log(`\nBenchmark summary written: ${BENCH_OUTPUT_JSON}`)
 console.log(
   `frame p50=${aggregate.frameP50Ms.p50.toFixed(3)}ms p95=${aggregate.frameP95Ms.p50.toFixed(3)}ms p99=${aggregate.frameP99Ms.p50.toFixed(3)}ms fps p50=${aggregate.fps.p50.toFixed(2)} dropped p95=${aggregate.droppedFramePct.p95.toFixed(2)}%`,
 )
+for (const scenario of SCENARIOS) {
+  const report = scenarioReports[scenario.id]
+  console.log(
+    `${scenario.id}: frame p50=${report.aggregate.frameP50Ms.p50.toFixed(3)}ms p95=${report.aggregate.frameP95Ms.p50.toFixed(3)}ms p99=${report.aggregate.frameP99Ms.p50.toFixed(3)}ms fps p50=${report.aggregate.fps.p50.toFixed(2)} dropped p95=${report.aggregate.droppedFramePct.p95.toFixed(2)}%`,
+  )
+}
