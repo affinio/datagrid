@@ -301,6 +301,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let refreshing = false
   let loading = false
   let error: Error | null = null
+  let resolvedEmptyTotal = false
   let disposed = false
   let revision = 0
   let requestCounter = 0
@@ -1307,6 +1308,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         const nextTotal = normalizeTotal(result.total)
         if (nextTotal != null) {
           rowCount = nextTotal
+          resolvedEmptyTotal = nextTotal === 0
           pruneRowCacheByRowCount()
           changed = changed || rowCount !== previousRowCount
           viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
@@ -1430,6 +1432,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       const nextTotal = normalizeTotal(event.total)
       if (nextTotal != null) {
         rowCount = nextTotal
+        resolvedEmptyTotal = nextTotal === 0
         pruneRowCacheByRowCount()
         changed = changed || rowCount !== previousRowCount
         viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
@@ -1465,6 +1468,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       const nextTotal = normalizeTotal(event.total)
       if (nextTotal != null) {
         rowCount = nextTotal
+        resolvedEmptyTotal = nextTotal === 0
         pruneRowCacheByRowCount()
         changed = changed || rowCount !== previousRowCount
         viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
@@ -1677,6 +1681,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
           : lastViewportDirection
       viewportRange = nextViewport
       const sourceViewport = toSourceRange(nextViewport)
+
+      if (resolvedEmptyTotal && rowCount <= 0) {
+        updateCachedCoverageDiagnostics(sourceViewport)
+        if (!unchanged) {
+          emit()
+        }
+        return
+      }
 
       if (unchanged) {
         if (isRangeFullyCached(sourceViewport)) {

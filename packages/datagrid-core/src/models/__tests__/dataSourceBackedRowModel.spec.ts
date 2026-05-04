@@ -172,6 +172,45 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("does not refetch the viewport after a resolved empty total", async () => {
+    const calls: DataGridDataSourcePullRequest[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        calls.push(request)
+        return {
+          rows: [],
+          total: 0,
+          cursor: "rev-empty",
+        }
+      },
+    }
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 24 })
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(1)
+    expect(model.getSnapshot()).toMatchObject({
+      rowCount: 0,
+      error: null,
+    })
+
+    model.setViewportRange({ start: 0, end: 24 })
+    model.setViewportRange({ start: 5, end: 29 })
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(1)
+
+    model.dispose()
+  })
+
   it("keeps previously cached viewport rows readable while a new viewport pull is pending", async () => {
     const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
     const model = createDataSourceBackedRowModel({

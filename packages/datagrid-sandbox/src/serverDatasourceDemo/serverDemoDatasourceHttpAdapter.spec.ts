@@ -18,7 +18,9 @@ function createAbortablePullRequest(): DataGridDataSourcePullRequest {
     sortModel: [{ key: "value", direction: "desc" }],
     filterModel: {
       columnFilters: {
-        region: { kind: "valueSet", tokens: ["EMEA"] },
+        region: { kind: "valueSet", tokens: ["string:emea"] },
+        segment: { kind: "valueSet", tokens: ["string:growth"] },
+        status: { kind: "valueSet", tokens: ["string:active"] },
         name: { kind: "predicate", operator: "contains", value: "Account 0001" },
         value: { kind: "predicate", operator: "between", value: 1000, value2: 2000 },
       },
@@ -58,8 +60,8 @@ function createHistogramRequest(): DataGridDataSourceColumnHistogramRequest {
     sortModel: [],
     filterModel: {
       columnFilters: {
-        region: { kind: "valueSet", tokens: ["EMEA"] },
-        status: { kind: "valueSet", tokens: ["Active"] },
+        region: { kind: "valueSet", tokens: ["string:emea"] },
+        status: { kind: "valueSet", tokens: ["string:active"] },
       },
       advancedFilters: {},
     },
@@ -124,6 +126,8 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       sortModel: [{ colId: "value", sort: "desc" }],
       filterModel: {
         region: { type: "equals", filter: "EMEA" },
+        segment: { type: "equals", filter: "Growth" },
+        status: { type: "equals", filter: "Active" },
         name: { type: "contains", filter: "Account 0001" },
         value: { type: "inRange", filter: 1000, filterTo: 2000 },
       },
@@ -132,7 +136,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     expect(result.cursor).toBe("rev-1")
     expect(result.rows).toEqual([
       {
-        index: 1,
+        index: 0,
         rowId: "srv-000001",
         row: {
           id: "srv-000001",
@@ -178,6 +182,85 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     expect(histogram).toEqual([
       { token: "string:EMEA", value: "EMEA", text: "string:EMEA", count: 5 },
     ])
+  })
+
+  it("drops empty filter clauses and supports legacy array value sets", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      rows: [],
+      total: 0,
+      revision: null,
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    await adapter.pull({
+      ...createAbortablePullRequest(),
+      filterModel: {
+        columnFilters: {
+          region: ["string:emea"] as never,
+          status: { kind: "valueSet", tokens: [] },
+          name: { kind: "predicate", operator: "contains", value: "   " },
+          value: { kind: "predicate", operator: "between", value: null, value2: null },
+        },
+        advancedFilters: {},
+      },
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      range: { startRow: 0, endRow: 50 },
+      sortModel: [{ colId: "value", sort: "desc" }],
+      filterModel: {
+        region: { type: "equals", filter: "EMEA" },
+      },
+    })
+  })
+
+  it("flattens browser advanced filter expressions into supported backend filters", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      rows: [],
+      total: 0,
+      revision: "rev-empty",
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    await adapter.pull({
+      ...createAbortablePullRequest(),
+      filterModel: {
+        columnFilters: {},
+        advancedFilters: {},
+        advancedExpression: {
+          kind: "group",
+          operator: "and",
+          children: [
+            { kind: "condition", key: "region", operator: "in", value: "emea" },
+            { kind: "condition", key: "name", operator: "contains", value: "0001" },
+            { kind: "condition", key: "value", type: "number", operator: "gte", value: 1000 },
+            { kind: "group", operator: "or", children: [{ kind: "condition", key: "status", operator: "equals", value: "" }] },
+          ],
+        },
+      },
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      range: { startRow: 0, endRow: 50 },
+      sortModel: [{ colId: "value", sort: "desc" }],
+      filterModel: {
+        region: { type: "equals", filter: "EMEA" },
+        name: { type: "contains", filter: "0001" },
+        value: { type: "greaterThanOrEqual", filter: 1000 },
+      },
+    })
   })
 
   it("throws a useful error when the backend returns a non-2xx response", async () => {

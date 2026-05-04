@@ -10,7 +10,12 @@ import {
   type DataGridFilterSnapshot,
 } from "@affino/datagrid-vue"
 
-import type { ServerDemoRow } from "./types"
+import {
+  SERVER_DEMO_REGIONS,
+  SERVER_DEMO_SEGMENTS,
+  SERVER_DEMO_STATUSES,
+  type ServerDemoRow,
+} from "./types"
 
 export interface ServerDemoDatasourceHttpAdapterOptions {
   baseUrl?: string
@@ -47,6 +52,38 @@ type ServerDemoHistogramResponse = {
 
 type BackendFilterModel = Record<string, unknown>
 
+type AdvancedExpressionCondition = {
+  kind: "condition"
+  key?: unknown
+  field?: unknown
+  type?: unknown
+  operator?: unknown
+  value?: unknown
+  value2?: unknown
+}
+
+type AdvancedExpressionGroup = {
+  kind: "group"
+  operator?: unknown
+  children?: readonly AdvancedExpressionNode[]
+}
+
+type AdvancedExpressionNot = {
+  kind: "not"
+  child?: AdvancedExpressionNode
+}
+
+type AdvancedExpressionNode =
+  | AdvancedExpressionCondition
+  | AdvancedExpressionGroup
+  | AdvancedExpressionNot
+
+const ENUM_FILTER_VALUES: Record<string, readonly string[]> = {
+  region: SERVER_DEMO_REGIONS,
+  segment: SERVER_DEMO_SEGMENTS,
+  status: SERVER_DEMO_STATUSES,
+}
+
 function resolveEndpoint(baseUrl: string | undefined, path: string): string {
   if (!baseUrl) {
     return path
@@ -56,6 +93,76 @@ function resolveEndpoint(baseUrl: string | undefined, path: string): string {
 
 function createUnsupportedOperationError(operation: string): Error {
   return new Error(`Server demo HTTP adapter does not implement ${operation} yet`)
+}
+
+function decodeColumnValueToken(token: string): unknown {
+  if (token.startsWith("string:")) {
+    return token.slice("string:".length)
+  }
+  if (token.startsWith("number:")) {
+    const value = Number(token.slice("number:".length))
+    return Number.isFinite(value) ? value : token
+  }
+  if (token === "null") {
+    return null
+  }
+  if (token === "boolean:true") {
+    return true
+  }
+  if (token === "boolean:false") {
+    return false
+  }
+  if (token.startsWith("date:")) {
+    return token.slice("date:".length)
+  }
+  return token
+}
+
+function normalizeFilterValue(value: unknown): unknown | null {
+  if (value == null) {
+    return null
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    if (trimmed.length === 0) {
+      return null
+    }
+    const decoded = decodeColumnValueToken(trimmed)
+    if (typeof decoded === "string" && decoded.trim().length === 0) {
+      return null
+    }
+    return decoded
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return value
+  }
+  return value
+}
+
+function normalizeFilterValueForColumn(columnId: string, value: unknown): unknown | null {
+  const normalized = normalizeFilterValue(value)
+  if (typeof normalized !== "string") {
+    return normalized
+  }
+
+  const canonicalValues = ENUM_FILTER_VALUES[columnId]
+  if (!canonicalValues) {
+    return normalized
+  }
+
+  const matched = canonicalValues.find(candidate => candidate.toLowerCase() === normalized.toLowerCase())
+  return matched ?? normalized
+}
+
+function normalizeFilterValues(columnId: string, values: readonly unknown[]): unknown[] {
+  const normalized: unknown[] = []
+  for (const value of values) {
+    const nextValue = normalizeFilterValueForColumn(columnId, value)
+    if (nextValue !== null) {
+      normalized.push(nextValue)
+    }
+  }
+  return normalized
 }
 
 function normalizeRange(range: DataGridDataSourcePullRequest["range"]): { startRow: number; endRow: number } {
@@ -69,6 +176,129 @@ function normalizeSortModel(request: DataGridDataSourcePullRequest): readonly { 
     colId: sortState.key,
     sort: sortState.direction,
   }))
+}
+
+function setBackendFilter(
+  backendFilterModel: BackendFilterModel,
+  columnId: string,
+  value: unknown,
+): void {
+  if (value != null) {
+    backendFilterModel[columnId] = value
+  }
+}
+
+function createValuePredicateFilter(operator: string, value: unknown, value2?: unknown): unknown | null {
+  const filterValue = normalizeFilterValue(value)
+  if (operator === "between" || operator === "range") {
+    const filterToValue = normalizeFilterValue(value2)
+    if (filterValue !== null && filterToValue !== null) {
+      return {
+        type: "inRange",
+        filter: filterValue,
+        filterTo: filterToValue,
+      }
+    }
+    return null
+  }
+  if (filterValue === null) {
+    return null
+  }
+  switch (operator) {
+    case "equals":
+    case "eq":
+    case "is":
+      return { type: "equals", filter: filterValue }
+    case "gt":
+    case ">":
+      return { type: "greaterThan", filter: filterValue }
+    case "gte":
+    case ">=":
+      return { type: "greaterThanOrEqual", filter: filterValue }
+    case "lt":
+    case "<":
+      return { type: "lessThan", filter: filterValue }
+    case "lte":
+    case "<=":
+      return { type: "lessThanOrEqual", filter: filterValue }
+    default:
+      return null
+  }
+}
+
+function createBackendFilterForPredicate(
+  columnId: string,
+  operator: string,
+  value: unknown,
+  value2?: unknown,
+): unknown | null {
+  const normalizedOperator = operator.trim().toLowerCase()
+  if (columnId === "value") {
+    return createValuePredicateFilter(normalizedOperator, value, value2)
+  }
+
+  if (normalizedOperator === "contains" && columnId === "name") {
+    const filterValue = normalizeFilterValueForColumn(columnId, value)
+    return filterValue !== null ? { type: "contains", filter: filterValue } : null
+  }
+
+  if (
+    normalizedOperator === "equals"
+    || normalizedOperator === "eq"
+    || normalizedOperator === "is"
+    || normalizedOperator === "in"
+  ) {
+    const values = Array.isArray(value)
+      ? normalizeFilterValues(columnId, value)
+      : normalizeFilterValues(columnId, [value])
+    if (values.length === 1) {
+      return { type: "equals", filter: values[0] }
+    }
+    if (values.length > 1) {
+      return { type: "equals", values }
+    }
+  }
+
+  return null
+}
+
+function flattenAdvancedExpression(
+  expression: unknown,
+  omitColumnId: string | undefined,
+  backendFilterModel: BackendFilterModel,
+): void {
+  if (!expression || typeof expression !== "object") {
+    return
+  }
+
+  const node = expression as AdvancedExpressionNode
+  if (node.kind === "condition") {
+    const columnId = String(node.key ?? node.field ?? "").trim()
+    if (!columnId || columnId === omitColumnId) {
+      return
+    }
+    setBackendFilter(
+      backendFilterModel,
+      columnId,
+      createBackendFilterForPredicate(
+        columnId,
+        String(node.operator ?? "contains"),
+        node.value,
+        node.value2,
+      ),
+    )
+    return
+  }
+
+  if (node.kind === "group") {
+    const operator = String(node.operator ?? "and").trim().toLowerCase()
+    if (operator !== "and") {
+      return
+    }
+    for (const child of node.children ?? []) {
+      flattenAdvancedExpression(child, omitColumnId, backendFilterModel)
+    }
+  }
 }
 
 function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColumnId?: string): BackendFilterModel | null {
@@ -85,12 +315,33 @@ function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColu
       continue
     }
 
-    if (filterEntry.kind === "valueSet") {
-      if (filterEntry.tokens.length === 1) {
-        const token = filterEntry.tokens[0]
+    if (Array.isArray(filterEntry)) {
+      const values = normalizeFilterValues(columnId, filterEntry)
+      if (values.length === 1) {
         backendFilterModel[columnId] = {
           type: "equals",
-          filter: token,
+          filter: values[0],
+        }
+      } else if (values.length > 1) {
+        backendFilterModel[columnId] = {
+          type: "equals",
+          values,
+        }
+      }
+      continue
+    }
+
+    if (filterEntry.kind === "valueSet") {
+      const values = normalizeFilterValues(columnId, filterEntry.tokens ?? [])
+      if (values.length === 1) {
+        backendFilterModel[columnId] = {
+          type: "equals",
+          filter: values[0],
+        }
+      } else if (values.length > 1) {
+        backendFilterModel[columnId] = {
+          type: "equals",
+          values,
         }
       }
       continue
@@ -107,18 +358,14 @@ function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColu
       case "gt":
       case "gte":
       case "lt":
-      case "lte": {
-        backendFilterModel[columnId] = { type: operator, filter: filterEntry.value }
+      case "lte":
+      case "between":
+        setBackendFilter(
+          backendFilterModel,
+          columnId,
+          createBackendFilterForPredicate(columnId, operator, filterEntry.value, filterEntry.value2),
+        )
         break
-      }
-      case "between": {
-        backendFilterModel[columnId] = {
-          type: "inRange",
-          filter: filterEntry.value,
-          filterTo: filterEntry.value2,
-        }
-        break
-      }
       case "isEmpty":
       case "isNull":
       case "notEmpty":
@@ -156,19 +403,40 @@ function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColu
         }
         const operator = clause.operator == null ? "" : String(clause.operator).trim().toLowerCase()
         if (operator === "gte" || operator === ">=") {
-          numericFilter.min = clause.value
+          const value = normalizeFilterValue(clause.value)
+          if (value !== null) {
+            numericFilter.min = value
+          }
         } else if (operator === "gt" || operator === ">") {
-          numericFilter.min = clause.value
+          const value = normalizeFilterValue(clause.value)
+          if (value !== null) {
+            numericFilter.min = value
+          }
         } else if (operator === "lte" || operator === "<=") {
-          numericFilter.max = clause.value
+          const value = normalizeFilterValue(clause.value)
+          if (value !== null) {
+            numericFilter.max = value
+          }
         } else if (operator === "lt" || operator === "<") {
-          numericFilter.max = clause.value
+          const value = normalizeFilterValue(clause.value)
+          if (value !== null) {
+            numericFilter.max = value
+          }
         } else if (operator === "between" || operator === "range") {
-          numericFilter.min = clause.value
-          numericFilter.max = clause.value2
+          const minValue = normalizeFilterValue(clause.value)
+          const maxValue = normalizeFilterValue(clause.value2)
+          if (minValue !== null) {
+            numericFilter.min = minValue
+          }
+          if (maxValue !== null) {
+            numericFilter.max = maxValue
+          }
         } else if (operator === "equals" || operator === "eq" || operator === "is") {
           numericFilter.type = "equals"
-          numericFilter.filter = clause.value
+          const value = normalizeFilterValue(clause.value)
+          if (value !== null) {
+            numericFilter.filter = value
+          }
         }
       }
 
@@ -185,18 +453,25 @@ function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColu
       }
       const operator = clause.operator == null ? "" : String(clause.operator).trim().toLowerCase()
       if (operator === "contains" || operator === "equals" || operator === "eq" || operator === "is") {
+        const value = normalizeFilterValueForColumn(columnId, clause.value)
+        if (value === null) {
+          continue
+        }
         backendFilterModel[columnId] = {
           type: operator === "contains" ? "contains" : "equals",
-          filter: clause.value,
+          filter: value,
         }
       } else if (operator === "gt" || operator === "gte" || operator === "lt" || operator === "lte") {
-        backendFilterModel[columnId] = {
-          type: operator,
-          filter: clause.value,
-        }
+        setBackendFilter(
+          backendFilterModel,
+          columnId,
+          createBackendFilterForPredicate(columnId, operator, clause.value),
+        )
       }
     }
   }
+
+  flattenAdvancedExpression(filterModel.advancedExpression, omitColumnId, backendFilterModel)
 
   if (Object.keys(backendFilterModel).length === 0) {
     return null
@@ -283,6 +558,7 @@ export function createServerDemoDatasourceHttpAdapter(
   return {
     async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
       const url = resolveEndpoint(options.baseUrl, "/api/server-demo/pull")
+      const startIndex = Math.max(0, Math.trunc(request.range.start))
       const response = await postJson<ServerDemoPullResponse>(fetchImpl, url, {
         range: normalizeRange(request.range),
         sortModel: normalizeSortModel(request),
@@ -290,8 +566,8 @@ export function createServerDemoDatasourceHttpAdapter(
       }, request.signal)
 
       return {
-        rows: response.rows.map(row => ({
-          index: row.index,
+        rows: response.rows.map((row, offset) => ({
+          index: startIndex + offset,
           rowId: row.id,
           row,
         })),
