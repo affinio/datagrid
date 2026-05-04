@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     description: str = "FastAPI backend for Merlin"
     app_version: str = "0.1.0"
     database_url: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+        default="postgresql+asyncpg://auctions_dev:auctions_dev_pass@db:5432/auctions_pg"
     )
     db_echo: bool = False
 
