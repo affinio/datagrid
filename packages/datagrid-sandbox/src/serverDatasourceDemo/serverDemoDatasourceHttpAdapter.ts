@@ -78,6 +78,7 @@ function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColu
 
   const backendFilterModel: BackendFilterModel = {}
   const columnFilters = filterModel.columnFilters ?? {}
+  const advancedFilters = filterModel.advancedFilters ?? {}
 
   for (const [columnId, filterEntry] of Object.entries(columnFilters) as Array<[string, DataGridColumnFilter]>) {
     if (columnId === omitColumnId) {
@@ -125,6 +126,75 @@ function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColu
         break
       default:
         break
+    }
+  }
+
+  for (const [columnId, advancedFilter] of Object.entries(advancedFilters) as Array<[
+    string,
+    {
+      clauses?: readonly {
+        operator?: unknown
+        value?: unknown
+        value2?: unknown
+      }[]
+    },
+  ]>) {
+    if (columnId === omitColumnId) {
+      continue
+    }
+
+    const clauses = advancedFilter.clauses ?? []
+    if (clauses.length === 0) {
+      continue
+    }
+
+    if (columnId === "value") {
+      const numericFilter: Record<string, unknown> = {}
+      for (const clause of clauses) {
+        if (!clause) {
+          continue
+        }
+        const operator = clause.operator == null ? "" : String(clause.operator).trim().toLowerCase()
+        if (operator === "gte" || operator === ">=") {
+          numericFilter.min = clause.value
+        } else if (operator === "gt" || operator === ">") {
+          numericFilter.min = clause.value
+        } else if (operator === "lte" || operator === "<=") {
+          numericFilter.max = clause.value
+        } else if (operator === "lt" || operator === "<") {
+          numericFilter.max = clause.value
+        } else if (operator === "between" || operator === "range") {
+          numericFilter.min = clause.value
+          numericFilter.max = clause.value2
+        } else if (operator === "equals" || operator === "eq" || operator === "is") {
+          numericFilter.type = "equals"
+          numericFilter.filter = clause.value
+        }
+      }
+
+      if (Object.keys(numericFilter).length > 0) {
+        backendFilterModel[columnId] = numericFilter
+      }
+      continue
+    }
+
+    if (clauses.length > 0) {
+      const clause = clauses[0]
+      if (!clause) {
+        continue
+      }
+      const operator = clause.operator == null ? "" : String(clause.operator).trim().toLowerCase()
+      if (operator === "contains" || operator === "equals" || operator === "eq" || operator === "is") {
+        backendFilterModel[columnId] = {
+          type: operator === "contains" ? "contains" : "equals",
+          filter: clause.value,
+        }
+      } else if (operator === "gt" || operator === "gte" || operator === "lt" || operator === "lte") {
+        backendFilterModel[columnId] = {
+          type: operator,
+          filter: clause.value,
+        }
+      }
     }
   }
 

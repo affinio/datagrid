@@ -504,6 +504,7 @@ import {
   serializeColumnValueToToken,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramEntry,
+  type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSource,
   type DataGridDataSourceRowEntry,
   type DataGridDataSourceInvalidation,
@@ -520,6 +521,9 @@ import { DataGrid } from "@affino/datagrid-vue-app"
 import {
   createFakeServerDatasource,
 } from "../serverDatasourceDemo/fakeServerDatasource"
+import {
+  createServerDemoDatasourceHttpAdapter,
+} from "../serverDatasourceDemo/serverDemoDatasourceHttpAdapter"
 import {
   type ServerDemoDatasourceHooks,
   type ServerDemoRow,
@@ -655,6 +659,47 @@ const columnMenu = {
   maxFilterValues: 250,
 } as const
 
+type ServerDemoPullDiagnosticsState = {
+  pendingRequests: number
+  loading: boolean
+  error: Error | null
+  lastViewportRange: { start: number; end: number }
+  totalRows: number
+  loadedRows: number
+}
+
+function applyPullDiagnostics(state: ServerDemoPullDiagnosticsState): void {
+  pendingRequests.value = state.pendingRequests
+  loading.value = state.loading
+  error.value = state.error
+  lastViewportRange.value = state.lastViewportRange
+  totalRows.value = state.totalRows
+  loadedRows.value = state.loadedRows
+}
+
+function supportsHttpReadPath(request: Pick<DataGridDataSourcePullRequest, "groupBy" | "pivot" | "treeData">): boolean {
+  return request.groupBy === null && request.pivot === null && request.treeData === null
+}
+
+function hasComplexValueRangeFilter(filterModel: DataGridFilterSnapshot | null): boolean {
+  if (!filterModel) {
+    return false
+  }
+
+  const valueFilter = filterModel.advancedFilters?.value
+  if (!valueFilter || !Array.isArray(valueFilter.clauses)) {
+    return false
+  }
+
+  return valueFilter.clauses.filter(clause => clause != null).length > 1
+}
+
+function supportsHttpHistogramPath(
+  request: Pick<DataGridDataSourceColumnHistogramRequest, "groupBy" | "pivot" | "treeData">,
+): boolean {
+  return request.groupBy === null && request.pivot === null && request.treeData === null
+}
+
 const serverDatasource = createFakeServerDatasource({
   shouldSimulatePullFailure: () => failureMode.value,
   shouldRejectCommittedRow: rowId => {
@@ -664,14 +709,7 @@ const serverDatasource = createFakeServerDatasource({
     const numeric = Number(String(rowId).replace(/^srv-/, ""))
     return Number.isFinite(numeric) && numeric % 2 === 0
   },
-  onPullDiagnostics(state): void {
-    pendingRequests.value = state.pendingRequests
-    loading.value = state.loading
-    error.value = state.error
-    lastViewportRange.value = state.lastViewportRange
-    totalRows.value = state.totalRows
-    loadedRows.value = state.loadedRows
-  },
+  onPullDiagnostics: applyPullDiagnostics,
   onAggregationDiagnostics(state): void {
     lastAggregationRequestText.value = state.lastAggregationRequest
     aggregateResponseRowsText.value = state.aggregateResponseRows
@@ -1793,10 +1831,54 @@ const legacyDataSource: DataGridDataSource<ServerDemoRow> = {
   },
 }
 
+const serverDemoHttpDatasourceEnabled = import.meta.env.VITE_SERVER_DEMO_HTTP_DATA_SOURCE === "true"
+const serverDemoHttpDatasourceBaseUrl = import.meta.env.VITE_SERVER_DEMO_API_BASE_URL?.trim() || undefined
+const serverDemoHttpDatasource = serverDemoHttpDatasourceEnabled
+  ? createServerDemoDatasourceHttpAdapter({ baseUrl: serverDemoHttpDatasourceBaseUrl })
+  : null
+const httpDatasource = serverDemoHttpDatasource
+
 
 void legacyDataSource
 
-const dataSource = serverDatasource.dataSource
+const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEnabled && serverDemoHttpDatasource
+  ? {
+      ...serverDatasource.dataSource,
+      async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
+        if (!failureMode.value && supportsHttpReadPath(request) && !hasComplexValueRangeFilter(request.filterModel)) {
+          pendingRequests.value += 1
+          loading.value = true
+          error.value = null
+          lastViewportRange.value = request.range
+          try {
+            const response = await httpDatasource!.pull(request)
+            totalRows.value = response.total ?? response.rows.length
+            loadedRows.value = Math.min(totalRows.value, Math.max(loadedRows.value, Math.trunc(request.range.end) + 1))
+            return response
+          } catch (caught) {
+            if (caught instanceof Error && caught.name === "AbortError") {
+              throw caught
+            }
+            error.value = caught instanceof Error ? caught : new Error(String(caught))
+            throw error.value
+          } finally {
+            pendingRequests.value = Math.max(0, pendingRequests.value - 1)
+            loading.value = pendingRequests.value > 0
+          }
+        }
+        return serverDatasource.dataSource.pull(request)
+      },
+      async getColumnHistogram(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram> {
+        if (supportsHttpHistogramPath(request)) {
+          const histogram = httpDatasource?.getColumnHistogram
+          if (typeof histogram === "function") {
+            return histogram(request)
+          }
+        }
+        return serverDatasource.dataSource.getColumnHistogram!(request)
+      },
+    }
+  : serverDatasource.dataSource
 
 rowModel = createDataSourceBackedRowModel<ServerDemoRow>({
   dataSource,
@@ -1822,6 +1904,9 @@ datasourceKeysText.value = Object.keys(dataSource).sort().join(", ")
 rowModelKeysText.value = Object.keys((rowModel as typeof rowModel & { dataSource?: Record<string, unknown> }).dataSource ?? {}).sort().join(", ")
 datasourceCommitFillOperationText.value = typeof dataSource.commitFillOperation === "function" ? "yes" : "no"
 rowModelCommitFillOperationText.value = typeof (rowModel as typeof rowModel & { dataSource?: { commitFillOperation?: unknown } }).dataSource?.commitFillOperation === "function" ? "yes" : "no"
+datasourceDetailText.value = serverDemoHttpDatasourceEnabled
+  ? `http read path${serverDemoHttpDatasourceBaseUrl ? ` @ ${serverDemoHttpDatasourceBaseUrl}` : ""} + fake writes`
+  : "fake datasource"
 
 const safeEditableColumns = new Set(["name", "segment", "status", "region", "value"])
 
