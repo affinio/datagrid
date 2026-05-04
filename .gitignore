@@ -106,3 +106,4 @@ artifacts/
 sbom.cdx.json
 .claude/
 .refs/
+logs/

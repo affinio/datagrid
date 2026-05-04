@@ -517,21 +517,16 @@ import {
 } from "@affino/datagrid-vue"
 import { type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
 import { DataGrid } from "@affino/datagrid-vue-app"
-
-interface ServerDemoRow {
-  id: string
-  index: number
-  name: string
-  segment: string
-  status: string
-  region: string
-  value: number
-  updatedAt: string
-}
-
-const ROW_COUNT = 100_000
-const PAGE_SIZE = 300
-const LATENCY_MS = 140
+import {
+  createFakeServerDatasource,
+} from "../serverDatasourceDemo/fakeServerDatasource"
+import {
+  type ServerDemoDatasourceHooks,
+  type ServerDemoRow,
+  SERVER_DEMO_ROW_COUNT as ROW_COUNT,
+  SERVER_DEMO_PAGE_SIZE as PAGE_SIZE,
+  SERVER_DEMO_LATENCY_MS as LATENCY_MS,
+} from "../serverDatasourceDemo/types"
 
 const props = defineProps<{
   title: string
@@ -648,6 +643,7 @@ const aggregationActive = ref(false)
 const lastAggregationRequestText = ref("none")
 const aggregateResponseRowsText = ref("0")
 const aggregatePreviewRowsText = ref("none")
+let rowModel: any = null
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
 const statuses = ["Active", "Paused", "Closed"] as const
@@ -658,6 +654,112 @@ const columnMenu = {
   valueFilterRowLimit: ROW_COUNT,
   maxFilterValues: 250,
 } as const
+
+const serverDatasource = createFakeServerDatasource({
+  shouldSimulatePullFailure: () => failureMode.value,
+  shouldRejectCommittedRow: rowId => {
+    if (!commitFailureMode.value) {
+      return false
+    }
+    const numeric = Number(String(rowId).replace(/^srv-/, ""))
+    return Number.isFinite(numeric) && numeric % 2 === 0
+  },
+  onPullDiagnostics(state): void {
+    pendingRequests.value = state.pendingRequests
+    loading.value = state.loading
+    error.value = state.error
+    lastViewportRange.value = state.lastViewportRange
+    totalRows.value = state.totalRows
+    loadedRows.value = state.loadedRows
+  },
+  onAggregationDiagnostics(state): void {
+    lastAggregationRequestText.value = state.lastAggregationRequest
+    aggregateResponseRowsText.value = state.aggregateResponseRows
+    aggregatePreviewRowsText.value = state.aggregatePreviewRows
+  },
+  onSampleDiagnostics(state): void {
+    serverFillSampleColumnText.value = state.sampleColumn
+    serverFillSampleStateText.value = state.sampleState
+    serverFillSampleRowText.value = state.sampleRow
+    serverFillSampleBeforeText.value = state.sampleBefore
+    serverFillSampleAfterText.value = state.sampleAfter
+    serverFillSamplePullAfterText.value = state.samplePullAfter
+    serverFillSampleCachedAfterText.value = state.sampleCachedAfter
+    serverFillSampleRowIndexText.value = state.sampleRowIndex
+    serverFillSampleVisibleIndexText.value = state.sampleVisibleIndex
+    serverFillSampleLookupByIndexText.value = state.sampleLookupByIndex
+    serverFillSampleLookupByIdText.value = state.sampleLookupById
+    serverFillSampleRowCacheText.value = state.sampleRowCache
+    serverFillSampleCellReaderText.value = state.sampleCellReader
+    serverFillSampleRenderedText.value = state.sampleRendered
+    serverFillVisibleRowsPreviewText.value = state.visibleRowsPreview
+    serverFillRowModelSnapshotText.value = state.rowModelSnapshot
+    if (state.samplePullAfter !== "none") {
+      scheduleRenderedSampleDiagnostics()
+    }
+  },
+  onFillDiagnostics(state): void {
+    fillWarningText.value = state.fillWarning
+    fillBlockedText.value = state.fillBlocked
+    fillAppliedText.value = state.fillApplied
+    commitFillOperationCalledText.value = state.commitFillOperationCalled
+    serverFillOperationIdText.value = state.operationId
+    serverFillAffectedRowsText.value = state.affectedRows
+    serverFillAffectedRangeText.value = state.affectedRange
+    serverFillVisibleOverlapText.value = state.visibleOverlap
+    serverFillRequestText.value = state.request
+    serverFillRequestModeText.value = state.mode
+    serverFillRequestFillColumnsText.value = state.fillColumns
+    serverFillRequestReferenceColumnsText.value = state.referenceColumns
+    serverFillDispatchAttemptedText.value = state.dispatchAttempted
+    serverFillRenderedViewportText.value = state.renderedViewport
+    serverFillRawInvalidationText.value = state.rawInvalidation
+    serverFillInvalidationRangeText.value = state.invalidationRange
+    serverFillNormalizedInvalidationText.value = state.normalizedInvalidation
+    serverFillInvalidationAppliedText.value = state.invalidationApplied
+    serverFillRuntimeRowModelInvalidateTypeText.value = state.runtimeRowModelInvalidateType
+    serverFillInvalidateCalledText.value = state.invalidateCalled
+    serverFillCacheRow1BeforeInvalidationText.value = state.cacheRow1BeforeInvalidation
+    serverFillCacheRow1AfterInvalidationText.value = state.cacheRow1AfterInvalidation
+    serverFillSyncInputRangeText.value = state.syncInputRange
+    serverFillLatestRenderedViewportText.value = state.latestRenderedViewport
+    serverFillRuntimeRenderedViewportText.value = state.runtimeRenderedViewport
+    serverFillDisplayRowsRenderedViewportText.value = state.displayRowsRenderedViewport
+    serverFillSelectedRenderedViewportText.value = state.selectedRenderedViewport
+    serverFillRefreshUsedStoredRenderedText.value = state.refreshUsedStoredRendered
+  },
+  onCommitDiagnostics(state): void {
+    commitModeText.value = state.commitMode
+    commitMessageText.value = state.commitMessage
+    commitDetailsText.value = state.commitDetails
+    clientBatchAppliedText.value = state.clientBatchApplied
+    clientBatchWarningText.value = state.clientBatchWarning
+    lastBatchRowsText.value = state.lastBatchRows
+    lastSkippedRowsText.value = state.lastSkippedRows
+    updateFillDiagnostics(Number(state.lastBatchRows) || 0, state.clientBatchWarning !== "none" ? state.clientBatchWarning.split("; ") : [])
+    if (state.commitMode === "failed" || state.clientBatchWarning !== "none") {
+      void rowModel?.refresh("manual")
+    }
+  },
+  onHistoryAction(value): void {
+    lastHistoryActionText.value = value
+  },
+  reportFillPlumbingState(layer, present): void {
+    reportFillPlumbingState(layer, present)
+  },
+  reportFillPlumbingDetail(layer, value): void {
+    reportFillPlumbingDetail(layer, value)
+  },
+  captureFillBoundary(result): void {
+    captureFillBoundary(result)
+  },
+  captureFillBoundarySide(side, result): void {
+    captureFillBoundarySide(side, result)
+  },
+  scheduleRenderedSampleDiagnostics(): void {
+    scheduleRenderedSampleDiagnostics()
+  },
+} satisfies ServerDemoDatasourceHooks)
 
 type ServerDemoHistogramRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["getColumnHistogram"]>>[0]
 type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>[0]
@@ -764,13 +866,13 @@ function updateRenderedSampleDiagnostics(): void {
   const visibleRows = rowModel.getRowsInRange(visibleRowRange)
   serverFillVisibleRowsPreviewText.value = visibleRows
     .slice(0, 5)
-    .map(row => `${String(row.rowId)}:${String(resolveColumnValue(row.row as ServerDemoRow, columnKey))}`)
+    .map((row: { rowId?: string | number; row: ServerDemoRow }) => `${String(row.rowId)}:${String(resolveColumnValue(row.row, columnKey))}`)
     .join(", ") || "none"
   const rowByIndex = Number.isFinite(visibleIndex) ? rowModel.getRow(visibleIndex) : null
   serverFillSampleLookupByIndexText.value = rowByIndex
     ? `${String(rowByIndex.rowId)}:${rowByIndex.kind !== "group" ? String(resolveColumnValue(rowByIndex.row as ServerDemoRow, columnKey)) : "group"}`
     : "missing"
-  const rowById = visibleRows.find(row => String(row.rowId) === rowId)
+  const rowById = visibleRows.find((row: { rowId?: string | number; row: ServerDemoRow }) => String(row.rowId) === rowId)
   serverFillSampleLookupByIdText.value = rowById
     ? `${String(rowById.rowId)}:${rowById.kind !== "group" ? String(resolveColumnValue(rowById.row as ServerDemoRow, columnKey)) : "group"}`
     : "missing"
@@ -1418,7 +1520,7 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
 
 const listeners = new Set<DataGridDataSourcePushListener<ServerDemoRow>>()
 
-const dataSource: DataGridDataSource<ServerDemoRow> = {
+const legacyDataSource: DataGridDataSource<ServerDemoRow> = {
   async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
     pendingRequests.value += 1
     loading.value = true
@@ -1692,7 +1794,11 @@ const dataSource: DataGridDataSource<ServerDemoRow> = {
 }
 
 
-const rowModel = createDataSourceBackedRowModel<ServerDemoRow>({
+void legacyDataSource
+
+const dataSource = serverDatasource.dataSource
+
+rowModel = createDataSourceBackedRowModel<ServerDemoRow>({
   dataSource,
   initialTotal: ROW_COUNT,
   rowCacheLimit: 8_000,
@@ -1741,7 +1847,7 @@ const aggregationActiveLabel = computed(() => aggregationActive.value ? "yes" : 
 const lastAggregationRequestLabel = computed(() => lastAggregationRequestText.value)
 const aggregateResponseRowsLabel = computed(() => aggregateResponseRowsText.value)
 const aggregatePreviewRowsLabel = computed(() => aggregatePreviewRowsText.value)
-const editedRowsLabel = computed(() => String(committedOverrides.value.size))
+const editedRowsLabel = computed(() => String(serverDatasource.getEditedRowCount()))
 const lastEditLabel = computed(() => lastEditText.value)
 const rowCacheLabel = computed(() => `${diagnostics.value.rowCacheSize} / ${diagnostics.value.rowCacheLimit}`)
 const commitModeLabel = computed(() => commitModeText.value)
