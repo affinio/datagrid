@@ -544,6 +544,7 @@ const gridRef = ref<{
     canRedo: () => boolean
     runHistoryAction: (direction: "undo" | "redo") => Promise<string | null>
   }
+  restoreFocus?: () => void
 } | null>(null)
 const failureMode = ref(false)
 const commitFailureMode = ref(false)
@@ -2512,6 +2513,7 @@ async function runHistoryAction(direction: "undo" | "redo"): Promise<void> {
         lastHistoryActionText.value = result.operationId ?? `${direction}:${operationId}`
         void rowModel.refresh("manual")
         lastEditRecordedText.value = canUndoHistory.value ? "yes" : "no"
+        gridRef.value?.restoreFocus?.()
         return
       } catch (error) {
         if (direction === "undo") {
@@ -2531,6 +2533,7 @@ async function runHistoryAction(direction: "undo" | "redo"): Promise<void> {
   const result = await gridRef.value?.history.runHistoryAction(direction) ?? null
   lastHistoryActionText.value = result ?? `${direction}:none`
   lastEditRecordedText.value = gridRef.value?.history.canUndo() ? "yes" : "no"
+  gridRef.value?.restoreFocus?.()
 }
 
 function shouldRejectCommittedRow(rowId: string | number): boolean {

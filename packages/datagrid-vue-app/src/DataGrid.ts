@@ -384,6 +384,7 @@ interface LowLevelGridExpose {
   getBodyRowAtIndex: DataGridBodyAwareRuntime["getBodyRowAtIndex"]
   resolveBodyRowIndexById: DataGridBodyAwareRuntime["resolveBodyRowIndexById"]
   virtualWindow: unknown
+  restoreFocus: () => void
   start: () => Promise<void>
   stop: () => void
 }
@@ -790,6 +791,7 @@ export interface DataGridExposed<TRow = unknown> {
   getHistory: () => DataGridHistoryController
   getApi: () => DataGridApi<TRow> | null
   getRuntime: () => DataGridExposedRuntime<TRow> | null
+  restoreFocus: () => void
   getSelectionAggregatesLabel: () => string
   runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>
   getState: () => DataGridUnifiedState<TRow> | null
@@ -1274,6 +1276,9 @@ const DataGridRuntimeComponent = defineComponent({
       getApi: () => dataGridRef.value?.api ?? null,
       getRuntime: () => dataGridRef.value?.runtime ?? null,
       getCore: () => dataGridRef.value?.core ?? null,
+      restoreFocus: () => {
+        dataGridRef.value?.restoreFocus()
+      },
       getColumnState: () => controlledState.getColumnState(),
       getColumnSnapshot: () => dataGridRef.value?.api.columns.getSnapshot() ?? null,
       getSelectionAggregatesLabel: () => selectionAggregatesLabel.value,

@@ -6,6 +6,7 @@ import {
   onBeforeUnmount,
   provide,
   ref,
+  nextTick,
   watch,
   type PropType,
   type VNode,
@@ -215,6 +216,38 @@ export default defineComponent({
       }
     })
 
+    const restoreFocus = (): void => {
+      const focusViewport = (): boolean => {
+        const viewport = rootElementRef.value?.querySelector<HTMLElement>(".grid-body-viewport")
+        if (!viewport) {
+          return false
+        }
+        try {
+          viewport.focus({ preventScroll: true })
+        } catch {
+          viewport.focus()
+        }
+        return typeof document !== "undefined" && document.activeElement === viewport
+      }
+
+      const runAttempt = (attempt: number): void => {
+        void nextTick(() => {
+          if (focusViewport() || attempt >= 3) {
+            return
+          }
+          if (typeof window !== "undefined") {
+            window.requestAnimationFrame(() => {
+              runAttempt(attempt + 1)
+            })
+            return
+          }
+          runAttempt(attempt + 1)
+        })
+      }
+
+      runAttempt(0)
+    }
+
     expose({
       api: runtime.api,
       core: runtime.core,
@@ -228,6 +261,7 @@ export default defineComponent({
       getBodyRowAtIndex: bodyRuntime.getBodyRowAtIndex,
       resolveBodyRowIndexById: bodyRuntime.resolveBodyRowIndexById,
       virtualWindow: runtime.virtualWindow,
+      restoreFocus,
       start: runtime.start,
       stop: runtime.stop,
     })
