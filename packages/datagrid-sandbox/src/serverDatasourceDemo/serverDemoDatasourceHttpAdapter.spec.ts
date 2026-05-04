@@ -447,7 +447,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     })
   })
 
-  it("emits backend invalidation events after committed edits", async () => {
+  it("does not emit commit invalidation events because the row model reconciles commit results", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       committed: [{ rowId: "srv-000007", columnId: "value", revision: "rev-row-7" }],
       committedRowIds: ["srv-000007"],
@@ -473,16 +473,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     await adapter.commitEdits!({ edits: [{ rowId: "srv-000007", data: { value: 777 } }] })
     unsubscribe()
 
-    expect(events).toEqual([
-      {
-        type: "invalidate",
-        invalidation: {
-          kind: "range",
-          range: { start: 7, end: 7 },
-          reason: "server-demo-edits",
-        },
-      },
-    ])
+    expect(events).toEqual([])
   })
 
   it("throws clear unsupported errors for write-oriented methods", async () => {

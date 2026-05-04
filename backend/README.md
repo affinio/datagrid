@@ -22,3 +22,10 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 cd backend
 uv run alembic upgrade head
 ```
+
+## Seed
+
+```bash
+cd backend
+uv run python -m app.features.server_demo.seed
+```

@@ -637,11 +637,12 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
-  it("exposes patchRows when the data source implements commitEdits and refreshes after commit", async () => {
+  it("exposes patchRows when the data source implements commitEdits without refreshing unaffected projections", async () => {
     const rows = [
       { id: 1, value: "row-1" },
       { id: 2, value: "row-2" },
     ]
+    const pullRequests: DataGridDataSourcePullRequest[] = []
     const commitEdits = vi.fn(async ({ edits }: { edits: ReadonlyArray<{ rowId: number; data: { value?: string } }> }) => {
       for (const edit of edits) {
         const row = rows.find(candidate => candidate.id === edit.rowId)
@@ -653,6 +654,7 @@ describe("createDataSourceBackedRowModel", () => {
     })
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       async pull(request) {
+        pullRequests.push(request)
         return {
           rows: rows
             .filter(row => row.id >= request.range.start + 1 && row.id <= request.range.end + 1)
@@ -693,6 +695,7 @@ describe("createDataSourceBackedRowModel", () => {
         { rowId: 1, data: { value: "updated" } },
       ],
     })
+    expect(pullRequests.filter(request => request.reason === "refresh")).toHaveLength(0)
     expect(model.getRow(0)?.row.value).toBe("updated")
 
     model.dispose()
@@ -785,6 +788,7 @@ describe("createDataSourceBackedRowModel", () => {
       dataSource,
       resolveRowId: row => row.id,
       initialTotal: rows.length,
+      initialSortModel: [{ key: "value", direction: "asc" }],
     })
 
     model.setViewportRange({ start: 0, end: 1 })
@@ -968,6 +972,7 @@ describe("createDataSourceBackedRowModel", () => {
       dataSource,
       resolveRowId: row => row.id,
       initialTotal: rows.length,
+      initialSortModel: [{ key: "value", direction: "asc" }],
     })
 
     model.setViewportRange({ start: 0, end: 0 })

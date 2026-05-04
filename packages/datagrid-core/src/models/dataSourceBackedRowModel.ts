@@ -42,6 +42,15 @@ import { cloneDataGridFilterSnapshot } from "./filters/advancedFilter.js"
 import { isSameFilterModel, isSameSortModel } from "./projection/clientRowProjectionPrimitives.js"
 import { applyRowDataPatch, mergeRowPatch } from "./clientRowRuntimeUtils.js"
 import {
+  collectAggregationModelFields,
+  collectChangedFieldsFromPatches,
+  collectFilterModelFields,
+  collectGroupByFields,
+  collectPivotModelFields,
+  collectSortModelFields,
+  doFieldPathsIntersect,
+} from "./mutation/rowPatchAnalyzer.js"
+import {
   clonePullAggregationModel,
   clonePivotColumnsSnapshot,
   isSamePivotColumnsSnapshot,
@@ -527,6 +536,33 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
   }
 
+  function shouldRefreshAfterOptimisticCommit(transaction: OptimisticEditTransaction<T>): boolean {
+    const changedFields = collectChangedFieldsFromPatches(transaction.updatesByRowId)
+    if (changedFields.size === 0) {
+      return false
+    }
+    if (sortModel.length > 0 && doFieldPathsIntersect(changedFields, collectSortModelFields(sortModel))) {
+      return true
+    }
+    const filterFields = collectFilterModelFields(filterModel)
+    if (filterFields.size > 0 && doFieldPathsIntersect(changedFields, filterFields)) {
+      return true
+    }
+    const groupFields = collectGroupByFields(groupBy)
+    if (groupFields.size > 0 && doFieldPathsIntersect(changedFields, groupFields)) {
+      return true
+    }
+    const pivotFields = collectPivotModelFields(pivotModel)
+    if (pivotFields.size > 0 && doFieldPathsIntersect(changedFields, pivotFields)) {
+      return true
+    }
+    const aggregationFields = collectAggregationModelFields(aggregationModel)
+    if (aggregationFields.size > 0 && doFieldPathsIntersect(changedFields, aggregationFields)) {
+      return true
+    }
+    return false
+  }
+
   function rollbackOptimisticTransaction(
     transaction: OptimisticEditTransaction<T>,
     rowIds: readonly DataGridRowId[] = [...transaction.baselinesByRowId.keys()],
@@ -577,9 +613,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
 
+      const needsProjectionRefresh = shouldRefreshAfterOptimisticCommit(transaction)
       removeOptimisticTransaction(transaction.id)
       error = null
-      await pullRange(toSourceRange(viewportRange), "refresh", "critical")
+      if (needsProjectionRefresh) {
+        await pullRange(toSourceRange(viewportRange), "refresh", "critical")
+      } else {
+        updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
+        emit()
+      }
     } catch (commitError) {
       if (disposed) {
         return

@@ -5,7 +5,6 @@ import {
   type DataGridColumnHistogramEntry,
   type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSource,
-  type DataGridDataSourceInvalidation,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourcePullResult,
   type DataGridDataSourcePushListener,
@@ -667,45 +666,11 @@ function toRejectedRows(response: ServerDemoCommitEditsResponse): ServerDemoComm
   }))
 }
 
-function normalizeDataSourceInvalidation(rawInvalidation: unknown): DataGridDataSourceInvalidation | null {
-  if (!isRecord(rawInvalidation)) {
-    return null
-  }
-  if (rawInvalidation.kind === "all") {
-    return {
-      kind: "all",
-      ...(typeof rawInvalidation.reason === "string" ? { reason: rawInvalidation.reason } : {}),
-    }
-  }
-  if (rawInvalidation.kind !== "range" || !isRecord(rawInvalidation.range)) {
-    return null
-  }
-  const start = Number(rawInvalidation.range.start)
-  const end = Number(rawInvalidation.range.end)
-  if (!Number.isFinite(start) || !Number.isFinite(end)) {
-    return null
-  }
-  return {
-    kind: "range",
-    range: {
-      start: Math.max(0, Math.trunc(start)),
-      end: Math.max(0, Math.trunc(end)),
-    },
-    ...(typeof rawInvalidation.reason === "string" ? { reason: rawInvalidation.reason } : {}),
-  }
-}
-
 export function createServerDemoDatasourceHttpAdapter(
   options: ServerDemoDatasourceHttpAdapterOptions = {},
 ): DataGridDataSource<ServerDemoRow> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const listeners = new Set<DataGridDataSourcePushListener<ServerDemoRow>>()
-
-  function emitInvalidation(invalidation: DataGridDataSourceInvalidation): void {
-    for (const listener of listeners) {
-      listener({ type: "invalidate", invalidation })
-    }
-  }
 
   return {
     async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
@@ -783,10 +748,6 @@ export function createServerDemoDatasourceHttpAdapter(
         body,
         request.signal,
       )
-      const invalidation = normalizeDataSourceInvalidation(response.invalidation)
-      if (invalidation) {
-        emitInvalidation(invalidation)
-      }
       return {
         committed: toUniqueRowCommits(response),
         rejected: toRejectedRows(response),
