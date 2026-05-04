@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { spawn, spawnSync } from "node:child_process"
 
@@ -137,6 +137,7 @@ const tasks = [
     command: "node",
     args: ["./scripts/bench-datagrid-datasource-churn.mjs"],
     retries: 1,
+    samples: mode === "ci" ? 3 : 1,
     jsonPath: `${outputDir}/bench-datagrid-datasource-churn.json`,
     logPath: `${outputDir}/bench-datagrid-datasource-churn.log`,
     budgets: {
@@ -374,6 +375,16 @@ function runTask(command, args, env) {
   })
 }
 
+function medianIndex(values) {
+  if (!values.length) {
+    return -1
+  }
+  const sorted = values
+    .map((value, index) => ({ value, index }))
+    .sort((left, right) => left.value - right.value)
+  return sorted[Math.floor((sorted.length - 1) / 2)]?.index ?? 0
+}
+
 function ensureBenchmarkBuildArtifacts(tasks) {
   const needsDatagridCoreBuild = tasks.some(task => [
     "datasource-churn",
@@ -419,41 +430,89 @@ for (const task of tasks) {
   }
 
   const maxAttempts = Math.max(1, Number.isFinite(task.retries) ? Number(task.retries) + 1 : 1)
-  let attempt = 0
-  let proc = null
-  let durationMs = 0
-  while (attempt < maxAttempts) {
-    attempt += 1
-    console.log(`\n[bench] running ${task.id}${maxAttempts > 1 ? ` (attempt ${attempt}/${maxAttempts})` : ""}...`)
-    const startedAt = Date.now()
-    proc = await runTask(task.command, task.args, env)
-    durationMs = Date.now() - startedAt
-    if (proc.status === 0) {
+  const sampleCount = Math.max(1, Number.isFinite(task.samples) ? Number(task.samples) : 1)
+  const measurements = []
+  const sampleLogs = []
+
+  for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+    let attempt = 0
+    let proc = null
+    let durationMs = 0
+    const sampleJsonPath = sampleCount > 1
+      ? `${task.jsonPath}.sample-${sampleIndex + 1}`
+      : task.jsonPath
+    const sampleEnv = {
+      ...env,
+      BENCH_OUTPUT_JSON: sampleJsonPath,
+    }
+
+    while (attempt < maxAttempts) {
+      attempt += 1
+      const label = sampleCount > 1
+        ? `sample ${sampleIndex + 1}/${sampleCount}${maxAttempts > 1 ? ` attempt ${attempt}/${maxAttempts}` : ""}`
+        : `${maxAttempts > 1 ? `attempt ${attempt}/${maxAttempts}` : "sample"}`
+      console.log(`\n[bench] running ${task.id} (${label})...`)
+      const startedAt = Date.now()
+      proc = await runTask(task.command, task.args, sampleEnv)
+      durationMs = Date.now() - startedAt
+      if (proc.status === 0) {
+        break
+      }
+      if (attempt < maxAttempts) {
+        console.warn(`[bench] ${task.id} failed on attempt ${attempt}, retrying...`)
+      }
+    }
+
+    if (!proc) {
+      throw new Error(`Harness internal error: task ${task.id} did not execute`)
+    }
+
+    const stdout = proc.stdout ?? ""
+    const stderr = proc.stderr ?? ""
+    sampleLogs.push(
+      [
+        `\n[bench] ${task.id} sample ${sampleIndex + 1}/${sampleCount}`,
+        stdout.trim(),
+        stderr.trim(),
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    )
+    measurements.push({
+      sampleIndex,
+      attempts: attempt,
+      durationMs,
+      proc,
+      sampleJsonPath,
+    })
+    if (proc.status !== 0) {
       break
     }
-    if (attempt < maxAttempts) {
-      console.warn(`[bench] ${task.id} failed on attempt ${attempt}, retrying...`)
-    }
   }
 
-  if (!proc) {
-    throw new Error(`Harness internal error: task ${task.id} did not execute`)
+  const ok = measurements.length === sampleCount && measurements.every(measurement => measurement.proc.status === 0)
+  const chosenMeasurement = ok
+    ? measurements[medianIndex(measurements.map(measurement => measurement.durationMs))]
+    : measurements[measurements.length - 1] ?? null
+
+  if (!chosenMeasurement) {
+    throw new Error(`Harness internal error: task ${task.id} did not produce measurements`)
   }
 
-  const stdout = proc.stdout ?? ""
-  const stderr = proc.stderr ?? ""
-  const combined = `${stdout}${stderr ? `\n${stderr}` : ""}`.trim()
+  if (sampleCount > 1 && chosenMeasurement.sampleJsonPath !== task.jsonPath) {
+    writeFileSync(task.jsonPath, readFileSync(chosenMeasurement.sampleJsonPath, "utf8"))
+  }
 
-  writeFileSync(task.logPath, combined)
+  writeFileSync(task.logPath, sampleLogs.join("\n"))
 
-  const ok = proc.status === 0
   const result = {
     id: task.id,
     ok,
-    attempts: attempt,
-    status: proc.status,
-    signal: proc.signal,
-    durationMs,
+    attempts: chosenMeasurement.attempts,
+    measurements: sampleCount,
+    status: chosenMeasurement.proc.status,
+    signal: chosenMeasurement.proc.signal,
+    durationMs: chosenMeasurement.durationMs,
     jsonPath: task.jsonPath,
     logPath: task.logPath,
   }
