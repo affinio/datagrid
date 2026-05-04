@@ -12,7 +12,13 @@ const BENCH_BROWSER_SESSIONS = intEnv("BENCH_BROWSER_SESSIONS", 2)
 const BENCH_BROWSER_ROW_COUNT = intEnv("BENCH_BROWSER_ROW_COUNT", 100000)
 const BENCH_BROWSER_COLUMN_COUNT = intEnv("BENCH_BROWSER_COLUMN_COUNT", 32)
 const BENCH_BROWSER_SCROLL_STEPS = intEnv("BENCH_BROWSER_SCROLL_STEPS", 240)
+const BENCH_BROWSER_SMOOTH_SCROLL_STEPS = intEnv(
+  "BENCH_BROWSER_SMOOTH_SCROLL_STEPS",
+  Math.max(BENCH_BROWSER_SCROLL_STEPS * 4, 960),
+)
+const BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX = intEnv("BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX", 96)
 const BENCH_BROWSER_HORIZONTAL_STEPS = intEnv("BENCH_BROWSER_HORIZONTAL_STEPS", 96)
+const BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS = intEnv("BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS", 16)
 const BENCH_BROWSER_STEP_DELAY_MS = intEnv("BENCH_BROWSER_STEP_DELAY_MS", 6)
 const BENCH_BROWSER_CELL_UPDATE_BURST = intEnv("BENCH_BROWSER_CELL_UPDATE_BURST", 4)
 const BENCH_BROWSER_HEADLESS = (process.env.BENCH_BROWSER_HEADLESS ?? "true").trim().toLowerCase() !== "false"
@@ -30,6 +36,20 @@ const SCENARIOS = [
   {
     id: "vertical-scroll-only",
     verticalScroll: true,
+    verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    smoothScroll: false,
+    horizontalScroll: false,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "vertical-smooth-scroll",
+    verticalScroll: false,
+    verticalSmoothScroll: true,
+    verticalDiagnostics: true,
+    smoothScroll: true,
     horizontalScroll: false,
     filter: false,
     sort: false,
@@ -38,6 +58,7 @@ const SCENARIOS = [
   {
     id: "horizontal-scroll-only",
     verticalScroll: false,
+    verticalSmoothScroll: false,
     horizontalScroll: true,
     filter: false,
     sort: false,
@@ -46,6 +67,7 @@ const SCENARIOS = [
   {
     id: "sort-only",
     verticalScroll: false,
+    verticalSmoothScroll: false,
     horizontalScroll: false,
     filter: false,
     sort: true,
@@ -54,6 +76,7 @@ const SCENARIOS = [
   {
     id: "inline-edit-burst-only",
     verticalScroll: false,
+    verticalSmoothScroll: false,
     horizontalScroll: false,
     filter: false,
     sort: false,
@@ -62,6 +85,7 @@ const SCENARIOS = [
   {
     id: "combined",
     verticalScroll: true,
+    verticalSmoothScroll: false,
     horizontalScroll: true,
     filter: true,
     sort: true,
@@ -73,7 +97,10 @@ assertPositiveInteger(BENCH_BROWSER_SESSIONS, "BENCH_BROWSER_SESSIONS")
 assertPositiveInteger(BENCH_BROWSER_ROW_COUNT, "BENCH_BROWSER_ROW_COUNT")
 assertPositiveInteger(BENCH_BROWSER_COLUMN_COUNT, "BENCH_BROWSER_COLUMN_COUNT")
 assertPositiveInteger(BENCH_BROWSER_SCROLL_STEPS, "BENCH_BROWSER_SCROLL_STEPS")
+assertPositiveInteger(BENCH_BROWSER_SMOOTH_SCROLL_STEPS, "BENCH_BROWSER_SMOOTH_SCROLL_STEPS")
+assertPositiveInteger(BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX, "BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX")
 assertPositiveInteger(BENCH_BROWSER_HORIZONTAL_STEPS, "BENCH_BROWSER_HORIZONTAL_STEPS")
+assertPositiveInteger(BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS, "BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS")
 assertPositiveInteger(BENCH_BROWSER_STEP_DELAY_MS, "BENCH_BROWSER_STEP_DELAY_MS")
 assertNonNegativeInteger(BENCH_BROWSER_CELL_UPDATE_BURST, "BENCH_BROWSER_CELL_UPDATE_BURST")
 
@@ -155,7 +182,7 @@ function normalizeFrameDeltas(frameDeltas) {
 
 function buildScenarioUrl(scenario) {
   const url = new URL(BENCH_BROWSER_ROUTE, BENCH_BROWSER_BASE_URL)
-  if (scenario.id === "vertical-scroll-only") {
+  if (scenario.verticalDiagnostics) {
     url.searchParams.set("dgPerfTrace", "1")
   }
   return url.toString()
@@ -235,10 +262,11 @@ async function runScenario(page, sessionIndex, scenario) {
     const frameDeltas = []
     const longTaskEntries = []
     const telemetrySamples = []
-    const isVerticalDiagnosticsScenario = input.scenario.id === "vertical-scroll-only"
+    const isVerticalDiagnosticsScenario = Boolean(input.scenario.verticalDiagnostics)
     const interactions = {
       scenarioId: input.scenario.id,
       verticalScrollSteps: 0,
+      verticalSmoothScrollSteps: 0,
       horizontalScrollSteps: 0,
       filterApplied: false,
       filterCleared: false,
@@ -281,6 +309,14 @@ async function runScenario(page, sessionIndex, scenario) {
       : null
 
     const pause = (ms) => new Promise(resolvePause => setTimeout(resolvePause, ms))
+    const waitForFrame = () => new Promise(resolveFrame => requestAnimationFrame(resolveFrame))
+    const waitForSmoothScrollFrame = async () => {
+      await waitForFrame()
+      const extraDelayMs = Math.max(0, input.smoothFrameDelayMs - 16)
+      if (extraDelayMs > 0) {
+        await pause(extraDelayMs)
+      }
+    }
     const waitForPaint = () => new Promise(resolvePaint => {
       requestAnimationFrame(() => requestAnimationFrame(resolvePaint))
     })
@@ -617,6 +653,103 @@ async function runScenario(page, sessionIndex, scenario) {
       interactions.skipped.push("vertical-scroll:no-scroll-range")
     }
 
+    if (input.scenario.verticalSmoothScroll && maxTop > 0) {
+      let previousSnapshot = captureRenderedSnapshot("vertical-smooth:before-loop")
+      const smoothDeltaPx = Math.max(1, Math.trunc(input.smoothScrollDeltaPx))
+      const smoothDistancePx = Math.min(maxTop, smoothDeltaPx * input.smoothScrollSteps)
+      const smoothEndTop = Math.min(maxTop, viewport.scrollTop + smoothDistancePx)
+      for (
+        let step = 1;
+        step <= input.smoothScrollSteps && viewport.scrollTop < smoothEndTop;
+        step += 1
+      ) {
+        const previousTop = viewport.scrollTop
+        const targetTop = Math.min(smoothEndTop, previousTop + smoothDeltaPx)
+        const beforeWriteMs = performance.now()
+        const rafBeforeWriteMs = lastRafTimestamp
+        const wheelEvent = new WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+          deltaX: 0,
+          deltaY: targetTop - previousTop,
+          view: window,
+        })
+        const wheelDispatched = viewport.dispatchEvent(wheelEvent)
+        let usedScrollFallback = false
+        if (viewport.scrollTop === previousTop) {
+          viewport.scrollBy({
+            top: targetTop - previousTop,
+            left: 0,
+            behavior: "instant",
+          })
+          usedScrollFallback = true
+        }
+        const afterWriteMs = performance.now()
+        interactions.verticalSmoothScrollSteps += 1
+        const writeRecord = verticalDiagnostics
+          ? {
+              step,
+              previousTop,
+              targetTop,
+              appliedTop: viewport.scrollTop,
+              requestedDelta: targetTop - previousTop,
+              appliedDelta: viewport.scrollTop - previousTop,
+              beforeWriteMs,
+              afterWriteMs,
+              writeCostMs: afterWriteMs - beforeWriteMs,
+              msSinceLastRafBeforeWrite: beforeWriteMs - rafBeforeWriteMs,
+              wheelDefaultPrevented: wheelEvent.defaultPrevented || !wheelDispatched,
+              usedScrollFallback,
+            }
+          : null
+        const shouldCaptureRangeSnapshot = step === 1
+          || step === input.smoothScrollSteps
+          || viewport.scrollTop >= smoothEndTop
+          || step % 20 === 0
+        if (verticalDiagnostics && (step === 1 || viewport.scrollTop >= smoothEndTop || step % 80 === 0)) {
+          const layoutReadStartMs = performance.now()
+          const rect = viewport.getBoundingClientRect()
+          verticalDiagnostics.layoutReadSamples.push({
+            step,
+            durationMs: performance.now() - layoutReadStartMs,
+            clientHeight: viewport.clientHeight,
+            scrollHeight: viewport.scrollHeight,
+            rectTop: rect.top,
+            rectHeight: rect.height,
+          })
+        }
+        if (step === 1 || viewport.scrollTop >= smoothEndTop || step % 160 === 0) {
+          captureTelemetry(`vertical-smooth:${step}`)
+        }
+        await waitForSmoothScrollFrame()
+        if (verticalDiagnostics && writeRecord) {
+          const afterPauseMs = performance.now()
+          const nextSnapshot = shouldCaptureRangeSnapshot
+            ? captureRenderedSnapshot(`vertical-smooth:${step}`)
+            : null
+          writeRecord.afterPauseMs = afterPauseMs
+          writeRecord.waitedAfterWriteMs = afterPauseMs - afterWriteMs
+          writeRecord.rafAfterPauseMs = lastRafTimestamp
+          writeRecord.msFromWriteToLatestRaf = lastRafTimestamp - afterWriteMs
+          writeRecord.rangeSignature = nextSnapshot?.rangeSignature ?? null
+          writeRecord.rangeChanged = nextSnapshot
+            ? previousSnapshot?.rangeSignature !== nextSnapshot.rangeSignature
+            : null
+          verticalDiagnostics.scrollWrites.push(writeRecord)
+          if (nextSnapshot) {
+            verticalDiagnostics.rangeSampleCount += 1
+            if (writeRecord.rangeChanged) {
+              verticalDiagnostics.rangeChangeCount += 1
+            }
+            previousSnapshot = nextSnapshot
+          }
+        }
+      }
+    } else if (input.scenario.verticalSmoothScroll) {
+      interactions.skipped.push("vertical-smooth-scroll:no-scroll-range")
+    }
+
     if (input.scenario.horizontalScroll && maxLeft > 0) {
       for (let step = 1; step <= input.horizontalSteps; step += 1) {
         const phase = (step + input.sessionIndex) % 2
@@ -828,6 +961,9 @@ async function runScenario(page, sessionIndex, scenario) {
     scenario,
     viewportSelector: BENCH_VIEWPORT_SELECTOR,
     scrollSteps: BENCH_BROWSER_SCROLL_STEPS,
+    smoothScrollSteps: BENCH_BROWSER_SMOOTH_SCROLL_STEPS,
+    smoothScrollDeltaPx: BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX,
+    smoothFrameDelayMs: BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS,
     horizontalSteps: BENCH_BROWSER_HORIZONTAL_STEPS,
     stepDelayMs: BENCH_BROWSER_STEP_DELAY_MS,
     cellUpdateBurst: BENCH_BROWSER_CELL_UPDATE_BURST,
@@ -982,6 +1118,9 @@ const summary = {
     rowCount: BENCH_BROWSER_ROW_COUNT,
     columnCount: BENCH_BROWSER_COLUMN_COUNT,
     scrollSteps: BENCH_BROWSER_SCROLL_STEPS,
+    smoothScrollSteps: BENCH_BROWSER_SMOOTH_SCROLL_STEPS,
+    smoothScrollDeltaPx: BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX,
+    smoothFrameDelayMs: BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS,
     horizontalSteps: BENCH_BROWSER_HORIZONTAL_STEPS,
     stepDelayMs: BENCH_BROWSER_STEP_DELAY_MS,
     cellUpdateBurst: BENCH_BROWSER_CELL_UPDATE_BURST,
