@@ -7,6 +7,7 @@ import type {
 } from "@affino/datagrid-vue"
 
 import { createServerDemoDatasourceHttpAdapter, ServerDemoHttpError } from "./serverDemoDatasourceHttpAdapter"
+import type { ServerDemoCommitEditsRequest } from "./types"
 
 function createAbortablePullRequest(): DataGridDataSourcePullRequest {
   const controller = new AbortController()
@@ -81,6 +82,22 @@ function createHistogramRequest(): DataGridDataSourceColumnHistogramRequest {
       },
       cursor: null,
     },
+  }
+}
+
+function createCommitEditsRequest(): ServerDemoCommitEditsRequest {
+  const controller = new AbortController()
+  return {
+    signal: controller.signal,
+    revision: "rev-before",
+    edits: [
+      {
+        rowId: "srv-000001",
+        data: {
+          name: "Renamed Account",
+        },
+      },
+    ],
   }
 }
 
@@ -286,10 +303,191 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     } satisfies Partial<ServerDemoHttpError>)
   })
 
+  it("posts single inline edits to the backend and maps committed rows", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      committed: [{ rowId: "srv-000001", columnId: "name", revision: "rev-row-1" }],
+      committedRowIds: ["srv-000001"],
+      rejected: [],
+      revision: "rev-global-1",
+      invalidation: {
+        kind: "range",
+        range: { start: 1, end: 1 },
+        reason: "server-demo-edits",
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ baseUrl: "http://localhost:8000", fetchImpl })
+    const result = await adapter.commitEdits!(createCommitEditsRequest())
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:8000/api/server-demo/edits")
+    expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      edits: [
+        {
+          rowId: "srv-000001",
+          columnId: "name",
+          value: "Renamed Account",
+          revision: "rev-before",
+        },
+      ],
+    })
+    expect(result).toEqual({
+      committed: [{ rowId: "srv-000001", revision: "rev-global-1" }],
+      rejected: [],
+    })
+  })
+
+  it("flattens batch edit patches into multiple backend cell edits", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      committed: [
+        { rowId: "srv-000002", columnId: "status", revision: "rev-row-2" },
+        { rowId: "srv-000002", columnId: "value", revision: "rev-row-2" },
+        { rowId: "srv-000003", columnId: "region", revision: "rev-row-3" },
+      ],
+      committedRowIds: ["srv-000002", "srv-000003"],
+      rejected: [],
+      revision: "rev-global-2",
+      invalidation: null,
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    const result = await adapter.commitEdits!({
+      edits: [
+        { rowId: "srv-000002", data: { status: "Active", value: 42 } },
+        { rowId: "srv-000003", data: { region: "EMEA" } },
+      ],
+    })
+
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      edits: [
+        { rowId: "srv-000002", columnId: "status", value: "Active" },
+        { rowId: "srv-000002", columnId: "value", value: 42 },
+        { rowId: "srv-000003", columnId: "region", value: "EMEA" },
+      ],
+    })
+    expect(result.committed).toEqual([
+      { rowId: "srv-000002", revision: "rev-global-2" },
+      { rowId: "srv-000003", revision: "rev-global-2" },
+    ])
+  })
+
+  it("maps readonly column rejections to row-model rejected rows", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      committed: [],
+      committedRowIds: [],
+      rejected: [{ rowId: "srv-000004", columnId: "id", reason: "readonly-column" }],
+      revision: "rev-global-3",
+      invalidation: null,
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    const result = await adapter.commitEdits!({
+      edits: [{ rowId: "srv-000004", data: { id: "srv-hacked" } }],
+    })
+
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      edits: [{ rowId: "srv-000004", columnId: "id", value: "srv-hacked" }],
+    })
+    expect(result).toEqual({
+      committed: [],
+      rejected: [{ rowId: "srv-000004", reason: "id: readonly-column" }],
+    })
+  })
+
+  it("maps partial success responses without dropping rejected rows", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      committed: [{ rowId: "srv-000005", columnId: "name", revision: "rev-row-5" }],
+      committedRowIds: ["srv-000005"],
+      rejected: [{ rowId: "srv-000006", columnId: "status", reason: "invalid-enum-value" }],
+      revision: "rev-global-4",
+      invalidation: {
+        kind: "range",
+        range: { start: 5, end: 5 },
+        reason: "server-demo-edits",
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    const result = await adapter.commitEdits!({
+      edits: [
+        { rowId: "srv-000005", data: { name: "Committed" } },
+        { rowId: "srv-000006", data: { status: "Archived" } },
+      ],
+    })
+
+    expect(result).toEqual({
+      committed: [{ rowId: "srv-000005", revision: "rev-global-4" }],
+      rejected: [{ rowId: "srv-000006", reason: "status: invalid-enum-value" }],
+    })
+  })
+
+  it("emits backend invalidation events after committed edits", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      committed: [{ rowId: "srv-000007", columnId: "value", revision: "rev-row-7" }],
+      committedRowIds: ["srv-000007"],
+      rejected: [],
+      revision: "rev-global-5",
+      invalidation: {
+        kind: "range",
+        range: { start: 7, end: 7 },
+        reason: "server-demo-edits",
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+    const events: unknown[] = []
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    const unsubscribe = adapter.subscribe!(event => {
+      events.push(event)
+    })
+
+    await adapter.commitEdits!({ edits: [{ rowId: "srv-000007", data: { value: 777 } }] })
+    unsubscribe()
+
+    expect(events).toEqual([
+      {
+        type: "invalidate",
+        invalidation: {
+          kind: "range",
+          range: { start: 7, end: 7 },
+          reason: "server-demo-edits",
+        },
+      },
+    ])
+  })
+
   it("throws clear unsupported errors for write-oriented methods", async () => {
     const adapter = createServerDemoDatasourceHttpAdapter()
 
-    await expect(adapter.commitEdits!({ edits: [] })).rejects.toThrow("commitEdits")
     await expect(adapter.commitFillOperation!({
       projection: {
         sortModel: [],

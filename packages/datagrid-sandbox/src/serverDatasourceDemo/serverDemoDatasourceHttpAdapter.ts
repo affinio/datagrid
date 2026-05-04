@@ -5,8 +5,10 @@ import {
   type DataGridColumnHistogramEntry,
   type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSource,
+  type DataGridDataSourceInvalidation,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourcePullResult,
+  type DataGridDataSourcePushListener,
   type DataGridFilterSnapshot,
 } from "@affino/datagrid-vue"
 
@@ -49,6 +51,26 @@ type ServerDemoHistogramResponse = {
     count: number
   }[]
 }
+
+type ServerDemoCommitEditsResponse = {
+  committed?: readonly {
+    rowId: string | number
+    columnId?: string | null
+    revision?: string | number | null
+  }[]
+  committedRowIds?: readonly (string | number)[]
+  rejected?: readonly {
+    rowId: string | number
+    columnId?: string | null
+    reason?: string | null
+  }[]
+  revision?: string | number | null
+  invalidation?: unknown
+}
+
+type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>[0]
+type ServerDemoCommitEditsResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>>
+type ServerDemoCommittedRowResult = NonNullable<ServerDemoCommitEditsResult["committed"]>[number]
 
 type BackendFilterModel = Record<string, unknown>
 
@@ -116,6 +138,10 @@ function decodeColumnValueToken(token: string): unknown {
     return token.slice("date:".length)
   }
   return token
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value))
 }
 
 function normalizeFilterValue(value: unknown): unknown | null {
@@ -528,7 +554,7 @@ async function postJson<TResponse>(
   fetchImpl: typeof fetch,
   url: string,
   body: unknown,
-  signal: AbortSignal,
+  signal?: AbortSignal,
 ): Promise<TResponse> {
   const response = await fetchImpl(url, {
     method: "POST",
@@ -550,10 +576,136 @@ function getHistogramResponseKey(entries: readonly DataGridColumnHistogramEntry[
   return entries
 }
 
+function readPreviousValue(edit: unknown, columnId: string): unknown {
+  if (!isRecord(edit)) {
+    return undefined
+  }
+  const previousData = edit.previousData
+  if (isRecord(previousData) && columnId in previousData) {
+    return previousData[columnId]
+  }
+  const previousValues = edit.previousValues
+  if (isRecord(previousValues) && columnId in previousValues) {
+    return previousValues[columnId]
+  }
+  return undefined
+}
+
+function normalizeCommitEditRequestBody(request: ServerDemoCommitEditsRequest): {
+  edits: {
+    rowId: string
+    columnId: string
+    value: unknown
+    previousValue?: unknown
+    revision?: string | number | null
+  }[]
+} {
+  const edits: {
+    rowId: string
+    columnId: string
+    value: unknown
+    previousValue?: unknown
+    revision?: string | number | null
+  }[] = []
+
+  for (const edit of request.edits) {
+    if (!edit || !isRecord(edit.data)) {
+      continue
+    }
+    for (const [columnId, value] of Object.entries(edit.data)) {
+      if (typeof value === "undefined") {
+        continue
+      }
+      const nextEdit: {
+        rowId: string
+        columnId: string
+        value: unknown
+        previousValue?: unknown
+        revision?: string | number | null
+      } = {
+        rowId: String(edit.rowId),
+        columnId,
+        value,
+      }
+      const previousValue = readPreviousValue(edit, columnId)
+      if (typeof previousValue !== "undefined") {
+        nextEdit.previousValue = previousValue
+      }
+      if (typeof request.revision !== "undefined") {
+        nextEdit.revision = request.revision
+      }
+      edits.push(nextEdit)
+    }
+  }
+
+  return { edits }
+}
+
+function toUniqueRowCommits(response: ServerDemoCommitEditsResponse): ServerDemoCommitEditsResult["committed"] {
+  const committedRows = response.committedRowIds ?? response.committed?.map(entry => entry.rowId) ?? []
+  const seen = new Set<string | number>()
+  const committed: ServerDemoCommittedRowResult[] = []
+  for (const rowId of committedRows) {
+    if (seen.has(rowId)) {
+      continue
+    }
+    seen.add(rowId)
+    committed.push({
+      rowId,
+      revision: response.revision ?? response.committed?.find(entry => entry.rowId === rowId)?.revision ?? null,
+    })
+  }
+  return committed
+}
+
+function toRejectedRows(response: ServerDemoCommitEditsResponse): ServerDemoCommitEditsResult["rejected"] {
+  return (response.rejected ?? []).map(entry => ({
+    rowId: entry.rowId,
+    reason: entry.columnId
+      ? `${entry.columnId}: ${entry.reason ?? "rejected"}`
+      : (entry.reason ?? "rejected"),
+  }))
+}
+
+function normalizeDataSourceInvalidation(rawInvalidation: unknown): DataGridDataSourceInvalidation | null {
+  if (!isRecord(rawInvalidation)) {
+    return null
+  }
+  if (rawInvalidation.kind === "all") {
+    return {
+      kind: "all",
+      ...(typeof rawInvalidation.reason === "string" ? { reason: rawInvalidation.reason } : {}),
+    }
+  }
+  if (rawInvalidation.kind !== "range" || !isRecord(rawInvalidation.range)) {
+    return null
+  }
+  const start = Number(rawInvalidation.range.start)
+  const end = Number(rawInvalidation.range.end)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return null
+  }
+  return {
+    kind: "range",
+    range: {
+      start: Math.max(0, Math.trunc(start)),
+      end: Math.max(0, Math.trunc(end)),
+    },
+    ...(typeof rawInvalidation.reason === "string" ? { reason: rawInvalidation.reason } : {}),
+  }
+}
+
 export function createServerDemoDatasourceHttpAdapter(
   options: ServerDemoDatasourceHttpAdapterOptions = {},
 ): DataGridDataSource<ServerDemoRow> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const listeners = new Set<DataGridDataSourcePushListener<ServerDemoRow>>()
+
+  function emitInvalidation(invalidation: DataGridDataSourceInvalidation): void {
+    for (const listener of listeners) {
+      listener({ type: "invalidate", invalidation })
+    }
+  }
 
   return {
     async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
@@ -622,8 +774,23 @@ export function createServerDemoDatasourceHttpAdapter(
       return getHistogramResponseKey(entries)
     },
 
-    async commitEdits(): Promise<never> {
-      throw createUnsupportedOperationError("commitEdits")
+    async commitEdits(request: ServerDemoCommitEditsRequest): Promise<ServerDemoCommitEditsResult> {
+      const url = resolveEndpoint(options.baseUrl, "/api/server-demo/edits")
+      const body = normalizeCommitEditRequestBody(request)
+      const response = await postJson<ServerDemoCommitEditsResponse>(
+        fetchImpl,
+        url,
+        body,
+        request.signal,
+      )
+      const invalidation = normalizeDataSourceInvalidation(response.invalidation)
+      if (invalidation) {
+        emitInvalidation(invalidation)
+      }
+      return {
+        committed: toUniqueRowCommits(response),
+        rejected: toRejectedRows(response),
+      }
     },
 
     async commitFillOperation(): Promise<never> {
@@ -640,6 +807,13 @@ export function createServerDemoDatasourceHttpAdapter(
 
     async resolveFillBoundary(): Promise<never> {
       throw createUnsupportedOperationError("resolveFillBoundary")
+    },
+
+    subscribe(listener: DataGridDataSourcePushListener<ServerDemoRow>): () => void {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
     },
   }
 }

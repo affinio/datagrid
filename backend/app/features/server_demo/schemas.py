@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -86,3 +86,60 @@ class ServerDemoHistogramResponse(BaseModel):
 
     column_id: str = Field(alias="columnId")
     entries: list[ServerDemoHistogramEntry] = Field(default_factory=list)
+
+
+class ServerDemoEditItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    row_id: str = Field(alias="rowId", min_length=1)
+    column_id: str = Field(alias="columnId", min_length=1)
+    value: Any
+    previous_value: Any | None = Field(default=None, alias="previousValue")
+    revision: str | None = None
+
+
+class ServerDemoCommitEditsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    edits: list[ServerDemoEditItem] = Field(default_factory=list)
+
+
+class ServerDemoCommittedEdit(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    row_id: str = Field(alias="rowId")
+    column_id: str = Field(alias="columnId")
+    revision: str
+
+
+class ServerDemoRejectedEdit(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    row_id: str = Field(alias="rowId")
+    column_id: str = Field(alias="columnId")
+    reason: str
+
+
+class ServerDemoInvalidationRange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+
+
+class ServerDemoEditInvalidation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["range"]
+    range: ServerDemoInvalidationRange
+    reason: str
+
+
+class ServerDemoCommitEditsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    committed: list[ServerDemoCommittedEdit] = Field(default_factory=list)
+    committed_row_ids: list[str] = Field(default_factory=list, alias="committedRowIds")
+    rejected: list[ServerDemoRejectedEdit] = Field(default_factory=list)
+    revision: str
+    invalidation: ServerDemoEditInvalidation | None = None

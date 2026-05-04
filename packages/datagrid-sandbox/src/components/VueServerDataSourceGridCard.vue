@@ -526,6 +526,7 @@ import {
 } from "../serverDatasourceDemo/serverDemoDatasourceHttpAdapter"
 import {
   type ServerDemoDatasourceHooks,
+  type ServerDemoCommitEditsResult,
   type ServerDemoRow,
   SERVER_DEMO_ROW_COUNT as ROW_COUNT,
   SERVER_DEMO_PAGE_SIZE as PAGE_SIZE,
@@ -554,6 +555,8 @@ const loadedRows = ref(0)
 const pendingRequests = ref(0)
 const loading = ref(true)
 const error = ref<Error | null>(null)
+const serverDatasourceUnavailableMessage = "Server datasource is unavailable. Check backend and retry."
+const serverDatasourceUnavailable = ref(false)
 const sortModelText = ref("none")
 const filterModelText = ref("none")
 const commitModeText = ref("ok")
@@ -678,7 +681,12 @@ function applyPullDiagnostics(state: ServerDemoPullDiagnosticsState): void {
 }
 
 function supportsHttpReadPath(request: Pick<DataGridDataSourcePullRequest, "groupBy" | "pivot" | "treeData">): boolean {
-  return request.groupBy === null && request.pivot === null && request.treeData === null
+  return (
+    request.groupBy === null
+    && request.treeData === null
+    && request.pivot?.pivotModel === null
+    && request.pivot?.aggregationModel === null
+  )
 }
 
 function hasComplexValueRangeFilter(filterModel: DataGridFilterSnapshot | null): boolean {
@@ -697,7 +705,45 @@ function hasComplexValueRangeFilter(filterModel: DataGridFilterSnapshot | null):
 function supportsHttpHistogramPath(
   request: Pick<DataGridDataSourceColumnHistogramRequest, "groupBy" | "pivot" | "treeData">,
 ): boolean {
-  return request.groupBy === null && request.pivot === null && request.treeData === null
+  return (
+    request.groupBy === null
+    && request.treeData === null
+    && request.pivot?.pivotModel === null
+    && request.pivot?.aggregationModel === null
+  )
+}
+
+function isHttpUnavailableError(caught: unknown): boolean {
+  if (caught instanceof DOMException && caught.name === "AbortError") {
+    return false
+  }
+  if (caught instanceof TypeError) {
+    return true
+  }
+  if (!caught || typeof caught !== "object") {
+    return false
+  }
+  const candidate = caught as { name?: unknown; message?: unknown }
+  if (candidate.name === "TypeError") {
+    return true
+  }
+  if (typeof candidate.message === "string") {
+    const message = candidate.message.toLowerCase()
+    return message.includes("failed to fetch") || message.includes("networkerror")
+  }
+  return false
+}
+
+function markHttpDatasourceUnavailable(): void {
+  serverDatasourceUnavailable.value = true
+  error.value = new Error(serverDatasourceUnavailableMessage)
+}
+
+function resetHttpDatasourceAvailability(): void {
+  serverDatasourceUnavailable.value = false
+  if (error.value?.message === serverDatasourceUnavailableMessage) {
+    error.value = null
+  }
 }
 
 const serverDatasource = createFakeServerDatasource({
@@ -1845,6 +1891,14 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
   ? {
       ...serverDatasource.dataSource,
       async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
+        if (serverDatasourceUnavailable.value) {
+          error.value = new Error(serverDatasourceUnavailableMessage)
+          return {
+            rows: [],
+            total: 0,
+            cursor: null,
+          }
+        }
         if (!failureMode.value && supportsHttpReadPath(request) && !hasComplexValueRangeFilter(request.filterModel)) {
           pendingRequests.value += 1
           loading.value = true
@@ -1859,6 +1913,16 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
             if (caught instanceof Error && caught.name === "AbortError") {
               throw caught
             }
+            if (isHttpUnavailableError(caught)) {
+              markHttpDatasourceUnavailable()
+              totalRows.value = 0
+              loadedRows.value = 0
+              return {
+                rows: [],
+                total: 0,
+                cursor: null,
+              }
+            }
             error.value = caught instanceof Error ? caught : new Error(String(caught))
             throw error.value
           } finally {
@@ -1869,13 +1933,62 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
         return serverDatasource.dataSource.pull(request)
       },
       async getColumnHistogram(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram> {
+        if (serverDatasourceUnavailable.value) {
+          error.value = new Error(serverDatasourceUnavailableMessage)
+          return []
+        }
         if (supportsHttpHistogramPath(request)) {
           const histogram = httpDatasource?.getColumnHistogram
           if (typeof histogram === "function") {
-            return histogram(request)
+            try {
+              return await histogram(request)
+            } catch (caught) {
+              if (isHttpUnavailableError(caught)) {
+                markHttpDatasourceUnavailable()
+                return []
+              }
+              throw caught
+            }
           }
         }
         return serverDatasource.dataSource.getColumnHistogram!(request)
+      },
+      async commitEdits(request: ServerDemoCommitEditsRequest): Promise<ServerDemoCommitEditsResult> {
+        if (serverDatasourceUnavailable.value) {
+          const unavailableError = new Error(serverDatasourceUnavailableMessage)
+          error.value = unavailableError
+          throw unavailableError
+        }
+        const commitEdits = httpDatasource?.commitEdits
+        if (typeof commitEdits !== "function") {
+          const unsupportedError = new Error("Server demo HTTP adapter does not implement commitEdits")
+          error.value = unsupportedError
+          throw unsupportedError
+        }
+        try {
+          return await commitEdits(request)
+        } catch (caught) {
+          if (caught instanceof Error && caught.name === "AbortError") {
+            throw caught
+          }
+          if (isHttpUnavailableError(caught)) {
+            markHttpDatasourceUnavailable()
+          } else {
+            error.value = caught instanceof Error ? caught : new Error(String(caught))
+          }
+          throw caught
+        }
+      },
+      subscribe(listener: DataGridDataSourcePushListener<ServerDemoRow>): () => void {
+        const httpSubscribe = httpDatasource?.subscribe
+        if (typeof httpSubscribe === "function") {
+          return httpSubscribe(listener)
+        }
+        return () => {}
+      },
+      invalidate(_invalidation: DataGridDataSourceInvalidation): void {
+        // HTTP invalidations are source-of-truth signals from the backend. Do not echo them
+        // into the fake datasource, or the row model will receive the same invalidation again.
       },
     }
   : serverDatasource.dataSource
@@ -2080,6 +2193,7 @@ const loadedRowsLabel = computed(() => loadedRows.value.toLocaleString())
 const pendingRequestsLabel = computed(() => String(pendingRequests.value))
 
 function refreshVisibleRange(): void {
+  resetHttpDatasourceAvailability()
   void rowModel.refresh("manual")
 }
 

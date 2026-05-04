@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends
 
 from app.features.server_demo.repository import ServerDemoRepository
 from app.features.server_demo.schemas import (
+    ServerDemoCommitEditsRequest,
+    ServerDemoCommitEditsResponse,
     ServerDemoHealthResponse,
     ServerDemoHistogramRequest,
     ServerDemoHistogramResponse,
@@ -41,3 +43,11 @@ async def histogram(
     repository: ServerDemoRepository = Depends(get_server_demo_repository),
 ) -> ServerDemoHistogramResponse:
     return await repository.histogram(request.column_id, request.filter_model)
+
+
+@router.post("/edits", response_model=ServerDemoCommitEditsResponse)
+async def commit_edits(
+    request: ServerDemoCommitEditsRequest,
+    repository: ServerDemoRepository = Depends(get_server_demo_repository),
+) -> ServerDemoCommitEditsResponse:
+    return await repository.commit_edits(request)
