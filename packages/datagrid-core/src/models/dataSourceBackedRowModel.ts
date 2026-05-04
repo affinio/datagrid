@@ -321,7 +321,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       : DEFAULT_ROW_CACHE_LIMIT
   const prefetchOptions = (() => {
     const configured = options.prefetch ?? {}
-    const enabled = configured.enabled !== false
+    const enabled = configured.enabled === true
     const triggerViewportFactor = Number.isFinite(configured.triggerViewportFactor)
       ? Math.max(0, configured.triggerViewportFactor as number)
       : DEFAULT_PREFETCH_TRIGGER_VIEWPORT_FACTOR
@@ -655,16 +655,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return true
   }
 
-  function doesRangeContainIndex(range: DataGridViewportRange | null | undefined, index: number): boolean {
-    return Boolean(range && index >= range.start && index <= range.end)
-  }
-
-  function isIndexCovered(index: number): boolean {
+  function isIndexCached(index: number): boolean {
     return rowCache.has(index)
-      || doesRangeContainIndex(criticalInFlight?.range, index)
-      || doesRangeContainIndex(backgroundInFlight?.range, index)
-      || doesRangeContainIndex(pendingCriticalPull?.range, index)
-      || doesRangeContainIndex(pendingBackgroundPull?.range, index)
   }
 
   function countCoveredRowsForward(startIndex: number, upperBound: number): number {
@@ -673,7 +665,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     let covered = 0
     for (let index = startIndex; index <= upperBound; index += 1) {
-      if (!isIndexCovered(index)) {
+      if (!isIndexCached(index)) {
         break
       }
       covered += 1
@@ -687,7 +679,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     let covered = 0
     for (let index = startIndex; index >= lowerBound; index -= 1) {
-      if (!isIndexCovered(index)) {
+      if (!isIndexCached(index)) {
         break
       }
       covered += 1
@@ -1237,7 +1229,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         && !backgroundInFlight.controller.signal.aborted
         && backgroundInFlight.stateKey === requestStateKey
       ) {
-        return queuePendingPull(requestRange, reason, priority, requestKey, requestStateKey, treePullContext)
+        abortLaneInFlight("background", "preempted")
       }
     } else {
       if (
@@ -1348,8 +1340,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
         }
         updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
         if (priority !== "background") {
-          scheduleViewportPrefetch()
-        } else if (!criticalInFlight) {
           scheduleViewportPrefetch()
         }
       } catch (reasonError) {
