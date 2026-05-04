@@ -177,6 +177,52 @@ function toMb(bytes) {
   return bytes / (1024 * 1024)
 }
 
+function heapMbNow() {
+  return toMb(process.memoryUsage().heapUsed)
+}
+
+function addTiming(target, key, elapsedMs) {
+  target[key] = (target[key] ?? 0) + elapsedMs
+}
+
+function measurePhase(target, key, fn) {
+  const startedAt = performance.now()
+  const result = fn()
+  addTiming(target, key, performance.now() - startedAt)
+  return result
+}
+
+function recordMemory(target, key) {
+  target[key] = heapMbNow()
+}
+
+function aggregatePhaseTimings(runs, phaseKeys) {
+  return Object.fromEntries(
+    phaseKeys.map(key => [key, stats(runs.map(run => run.phaseTimingsMs?.[key] ?? 0))]),
+  )
+}
+
+function aggregatePhaseSamples(runs, sampleKeys) {
+  return Object.fromEntries(
+    sampleKeys.map(key => [key, stats(runs.flatMap(run => run.phaseSamplesMs?.[key] ?? []))]),
+  )
+}
+
+function aggregatePhaseMemoryDeltas(runs, phasePairs) {
+  return Object.fromEntries(
+    phasePairs.map(([key, fromKey, toKey]) => [
+      key,
+      stats(
+        runs.map(run => {
+          const from = run.phaseMemoryMb?.[fromKey]
+          const to = run.phaseMemoryMb?.[toKey]
+          return typeof from === "number" && typeof to === "number" ? to - from : 0
+        }),
+      ),
+    ]),
+  )
+}
+
 async function sampleHeapUsed() {
   const maybeGc = globalThis.gc
   let minHeap = Number.POSITIVE_INFINITY
@@ -247,8 +293,23 @@ function deterministicCellValue(rowIndex, columnIndex, seed) {
   return (rowIndex * 1009 + columnIndex * 9176 + seed * 37) % 1000003
 }
 
+const COLUMN_KEY_CACHE = new Map()
+
+function getColumnKeys(columnCount) {
+  const safeColumnCount = Math.max(0, Math.trunc(columnCount))
+  let keys = COLUMN_KEY_CACHE.get(safeColumnCount)
+  if (!keys) {
+    keys = new Array(safeColumnCount)
+    for (let column = 0; column < safeColumnCount; column += 1) {
+      keys[column] = `c${column}`
+    }
+    COLUMN_KEY_CACHE.set(safeColumnCount, keys)
+  }
+  return keys
+}
+
 function readCell(row, columnIndex, seed = 0) {
-  const key = `c${columnIndex}`
+  const key = getColumnKeys(columnIndex + 1)[columnIndex]
   if (Object.prototype.hasOwnProperty.call(row, key)) {
     return row[key]
   }
@@ -256,14 +317,19 @@ function readCell(row, columnIndex, seed = 0) {
 }
 
 function materializeViewportCells(rows, columnCount, seed) {
+  const keys = getColumnKeys(columnCount)
   let checksum = 0
   for (const rowNode of rows) {
     const row = rowNode?.row ?? rowNode?.data ?? rowNode
     if (!row) {
       continue
     }
+    const rowId = Number(row.id ?? row.rowId ?? 0)
     for (let column = 0; column < columnCount; column += 1) {
-      const value = readCell(row, column, seed)
+      const key = keys[column]
+      const value = Object.prototype.hasOwnProperty.call(row, key)
+        ? row[key]
+        : (rowId * 1009 + column * 9176 + seed * 37) % 1000003
       checksum = (checksum + Number(value ?? 0) + column) % 2147483647
     }
   }
@@ -476,6 +542,34 @@ function createScenarioReport(name, config, runs, aggregate, extra = {}) {
   }
 }
 
+const CLIENT_VIEWPORT_PHASE_KEYS = [
+  "datasetGeneration",
+  "rowModelCreation",
+  "viewportRangeCalculation",
+  "rowModelViewportUpdate",
+  "renderedRangeAccess",
+  "logicalCellMaterialization",
+  "columnAccessValueResolution",
+  "selectionDecoratorReferenceGeometry",
+]
+
+const CLIENT_VIEWPORT_SAMPLE_KEYS = [
+  "viewportRangeCalculation",
+  "rowModelViewportUpdate",
+  "renderedRangeAccess",
+  "logicalCellMaterialization",
+  "columnAccessValueResolution",
+  "selectionDecoratorReferenceGeometry",
+]
+
+const CLIENT_VIEWPORT_MEMORY_PHASES = [
+  ["datasetGeneration", "beforeSetup", "afterDatasetGeneration"],
+  ["rowModelCreation", "afterDatasetGeneration", "afterRowModelCreation"],
+  ["operations", "afterRowModelCreation", "afterOperations"],
+  ["dispose", "afterOperations", "afterDispose"],
+  ["postGcRetained", "beforeSetup", "afterGc"],
+]
+
 async function runClientViewportScrollScenario(createClientRowModel) {
   const rowCountResults = []
   const runs = []
@@ -497,6 +591,12 @@ async function runClientViewportScrollScenario(createClientRowModel) {
       columnCount: CLIENT_COLUMN_COUNT,
       viewportCalculationMs: stats(sizeRuns.flatMap(run => run.viewportCalculationSamplesMs)),
       renderedRangeUpdateMs: stats(sizeRuns.flatMap(run => run.renderedRangeUpdateSamplesMs)),
+      phaseTimingsMs: aggregatePhaseTimings(sizeRuns, CLIENT_VIEWPORT_PHASE_KEYS),
+      phaseSamplesMs: aggregatePhaseSamples(sizeRuns, CLIENT_VIEWPORT_SAMPLE_KEYS),
+      phaseMemoryDeltaMb: aggregatePhaseMemoryDeltas(sizeRuns, CLIENT_VIEWPORT_MEMORY_PHASES),
+      totalElapsedWithSetupMs: stats(sizeRuns.map(run => run.totalElapsedWithSetupMs)),
+      operationElapsedMs: stats(sizeRuns.map(run => run.elapsedMs)),
+      materializedCells: stats(sizeRuns.map(run => run.materializedCells)),
       viewportLatencyMs: stats(sizeRuns.flatMap(run => run.viewportLatencySamplesMs)),
       elapsedMs: stats(sizeRuns.map(run => run.elapsedMs)),
       heapDeltaMb: stats(sizeRuns.map(run => run.heapDeltaMb)),
@@ -516,6 +616,12 @@ async function runClientViewportScrollScenario(createClientRowModel) {
     runs,
     {
       byRowCount: rowCountResults,
+      phaseTimingsMs: aggregatePhaseTimings(runs, CLIENT_VIEWPORT_PHASE_KEYS),
+      phaseSamplesMs: aggregatePhaseSamples(runs, CLIENT_VIEWPORT_SAMPLE_KEYS),
+      phaseMemoryDeltaMb: aggregatePhaseMemoryDeltas(runs, CLIENT_VIEWPORT_MEMORY_PHASES),
+      totalElapsedWithSetupMs: stats(runs.map(run => run.totalElapsedWithSetupMs)),
+      operationElapsedMs: stats(runs.map(run => run.elapsedMs)),
+      materializedCells: stats(runs.map(run => run.materializedCells)),
       elapsedMs: stats(runs.map(run => run.elapsedMs)),
       heapDeltaMb: stats(runs.map(run => run.heapDeltaMb)),
     },
@@ -526,19 +632,38 @@ async function runClientViewportScrollScenario(createClientRowModel) {
 
 async function measureClientViewportSeed(createClientRowModel, rowCount, seed, options = {}) {
   const heapStart = await sampleHeapUsed()
-  const rows = createEnterpriseRows(rowCount, seed, { physicalColumns: Math.min(10, CLIENT_COLUMN_COUNT) })
-  const model = createClientRowModel({
-    rows,
-    resolveRowId: row => row.id,
-    isolateInputRows: false,
-    captureFormulaExplainDiagnostics: false,
-    captureFormulaRowRecomputeDiagnostics: false,
-  })
+  const phaseTimingsMs = {}
+  const phaseMemoryMb = {
+    beforeSetup: toMb(heapStart),
+  }
+  const rows = measurePhase(phaseTimingsMs, "datasetGeneration", () =>
+    createEnterpriseRows(rowCount, seed, { physicalColumns: Math.min(10, CLIENT_COLUMN_COUNT) }),
+  )
+  recordMemory(phaseMemoryMb, "afterDatasetGeneration")
+  const model = measurePhase(phaseTimingsMs, "rowModelCreation", () =>
+    createClientRowModel({
+      rows,
+      resolveRowId: row => row.id,
+      isolateInputRows: false,
+      captureFormulaExplainDiagnostics: false,
+      captureFormulaRowRecomputeDiagnostics: false,
+    }),
+  )
+  recordMemory(phaseMemoryMb, "afterRowModelCreation")
   const rng = createRng(seed)
   const viewportCalculationSamplesMs = []
   const renderedRangeUpdateSamplesMs = []
   const viewportLatencySamplesMs = []
+  const phaseSamplesMs = {
+    viewportRangeCalculation: [],
+    rowModelViewportUpdate: [],
+    renderedRangeAccess: [],
+    logicalCellMaterialization: [],
+    columnAccessValueResolution: [],
+    selectionDecoratorReferenceGeometry: [],
+  }
   let checksum = 0
+  let materializedCells = 0
   const startedAt = performance.now()
 
   try {
@@ -546,31 +671,62 @@ async function measureClientViewportSeed(createClientRowModel, rowCount, seed, o
     for (let iteration = 0; iteration < iterations; iteration += 1) {
       const rawStart = randomInt(rng, 0, Math.max(0, rowCount - CLIENT_VIEWPORT_ROWS - 1))
       const opStartedAt = performance.now()
+      const rangeStartedAt = performance.now()
       const range = normalizeRange(rawStart, rowCount, CLIENT_VIEWPORT_ROWS)
+      const rangeElapsedMs = performance.now() - rangeStartedAt
+      const viewportUpdateStartedAt = performance.now()
       model.setViewportRange(range)
+      const viewportUpdateElapsedMs = performance.now() - viewportUpdateStartedAt
       const viewportDoneAt = performance.now()
+      const rangeAccessStartedAt = performance.now()
       const visibleRows = model.getRowsInRange(range)
+      const rangeAccessElapsedMs = performance.now() - rangeAccessStartedAt
+      const materializationStartedAt = performance.now()
       checksum = (checksum + materializeViewportCells(visibleRows, CLIENT_COLUMN_COUNT, seed)) % 2147483647
+      const materializationElapsedMs = performance.now() - materializationStartedAt
+      const selectionDecoratorReferenceGeometryElapsedMs = 0
+      materializedCells += visibleRows.length * CLIENT_COLUMN_COUNT
       const renderDoneAt = performance.now()
       if (!options.warmupOnly) {
         viewportCalculationSamplesMs.push(viewportDoneAt - opStartedAt)
         renderedRangeUpdateSamplesMs.push(renderDoneAt - viewportDoneAt)
         viewportLatencySamplesMs.push(renderDoneAt - opStartedAt)
+        phaseSamplesMs.viewportRangeCalculation.push(rangeElapsedMs)
+        phaseSamplesMs.rowModelViewportUpdate.push(viewportUpdateElapsedMs)
+        phaseSamplesMs.renderedRangeAccess.push(rangeAccessElapsedMs)
+        phaseSamplesMs.logicalCellMaterialization.push(materializationElapsedMs)
+        phaseSamplesMs.columnAccessValueResolution.push(materializationElapsedMs)
+        phaseSamplesMs.selectionDecoratorReferenceGeometry.push(selectionDecoratorReferenceGeometryElapsedMs)
+        addTiming(phaseTimingsMs, "viewportRangeCalculation", rangeElapsedMs)
+        addTiming(phaseTimingsMs, "rowModelViewportUpdate", viewportUpdateElapsedMs)
+        addTiming(phaseTimingsMs, "renderedRangeAccess", rangeAccessElapsedMs)
+        addTiming(phaseTimingsMs, "logicalCellMaterialization", materializationElapsedMs)
+        addTiming(phaseTimingsMs, "columnAccessValueResolution", materializationElapsedMs)
+        addTiming(phaseTimingsMs, "selectionDecoratorReferenceGeometry", selectionDecoratorReferenceGeometryElapsedMs)
       }
     }
   } finally {
+    recordMemory(phaseMemoryMb, "afterOperations")
     model.dispose()
+    recordMemory(phaseMemoryMb, "afterDispose")
   }
 
   const elapsedMs = performance.now() - startedAt
   const heapEnd = await sampleHeapUsed()
+  phaseMemoryMb.afterGc = toMb(heapEnd)
   return {
     seed,
     rowCount,
     columnCount: CLIENT_COLUMN_COUNT,
     elapsedMs,
+    totalElapsedWithSetupMs:
+      elapsedMs + (phaseTimingsMs.datasetGeneration ?? 0) + (phaseTimingsMs.rowModelCreation ?? 0),
     heapDeltaMb: toMb(heapEnd - heapStart),
     checksum,
+    materializedCells,
+    phaseTimingsMs,
+    phaseSamplesMs,
+    phaseMemoryMb,
     viewportCalculationSamplesMs,
     renderedRangeUpdateSamplesMs,
     viewportLatencySamplesMs,
@@ -1052,6 +1208,35 @@ function aggregateDerivedCache(deltas) {
   }
 }
 
+const COPY_PASTE_FILL_PHASE_KEYS = [
+  "datasetGeneration",
+  "rowModelCreation",
+  "copySourceRangeAccess",
+  "copiedRangeCreation",
+  "calculationSnapshotCreation",
+  "historySnapshotSizeEstimate",
+  "historySnapshotPush",
+  "pastePayloadCreation",
+  "pastePatchApplication",
+  "fillPayloadCreation",
+  "fillPatchApplication",
+  "undoRollback",
+]
+
+const COPY_PASTE_FILL_MEMORY_PHASES = [
+  ["datasetGeneration", "beforeSetup", "afterDatasetGeneration"],
+  ["rowModelCreation", "afterDatasetGeneration", "afterRowModelCreation"],
+  ["copiedRangeCreation", "afterRowModelCreation", "afterCopiedRangeCreation"],
+  ["historySnapshot", "afterCopiedRangeCreation", "afterHistorySnapshot"],
+  ["pastePayloadCreation", "afterHistorySnapshot", "afterPastePayloadCreation"],
+  ["pastePatchApplication", "afterPastePayloadCreation", "afterPastePatchApplication"],
+  ["fillPayloadCreation", "afterPastePatchApplication", "afterFillPayloadCreation"],
+  ["fillPatchApplication", "afterFillPayloadCreation", "afterFillPatchApplication"],
+  ["undoRollback", "afterFillPatchApplication", "afterUndoRollback"],
+  ["dispose", "afterUndoRollback", "afterDispose"],
+  ["postGcRetained", "beforeSetup", "afterGc"],
+]
+
 async function runCopyPasteFillScenario(createClientRowModel) {
   const runs = []
   for (const seed of BENCH_SEEDS) {
@@ -1079,6 +1264,8 @@ async function runCopyPasteFillScenario(createClientRowModel) {
       fillLatencyMs: stats(runs.map(run => run.fillLatencyMs)),
       undoLatencyMs: stats(runs.map(run => run.undoLatencyMs)),
       historySnapshotSizeBytes: stats(runs.map(run => run.historySnapshotSizeBytes)),
+      phaseTimingsMs: aggregatePhaseTimings(runs, COPY_PASTE_FILL_PHASE_KEYS),
+      phaseMemoryDeltaMb: aggregatePhaseMemoryDeltas(runs, COPY_PASTE_FILL_MEMORY_PHASES),
       elapsedMs: stats(runs.map(run => run.elapsedMs)),
       heapDeltaMb: stats(runs.map(run => run.heapDeltaMb)),
     },
@@ -1089,84 +1276,122 @@ async function runCopyPasteFillScenario(createClientRowModel) {
 
 async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}) {
   const heapStart = await sampleHeapUsed()
-  const rows = createEnterpriseRows(COPY_ROW_COUNT, seed, { physicalColumns: Math.min(20, COPY_COLUMN_COUNT) })
-  const model = createClientRowModel({
-    rows,
-    resolveRowId: row => row.id,
-    isolateInputRows: false,
-    captureFormulaExplainDiagnostics: false,
-    captureFormulaRowRecomputeDiagnostics: false,
-  })
+  const phaseTimingsMs = {}
+  const phaseMemoryMb = {
+    beforeSetup: toMb(heapStart),
+  }
+  const rows = measurePhase(phaseTimingsMs, "datasetGeneration", () =>
+    createEnterpriseRows(COPY_ROW_COUNT, seed, { physicalColumns: Math.min(20, COPY_COLUMN_COUNT) }),
+  )
+  recordMemory(phaseMemoryMb, "afterDatasetGeneration")
+  const model = measurePhase(phaseTimingsMs, "rowModelCreation", () =>
+    createClientRowModel({
+      rows,
+      resolveRowId: row => row.id,
+      isolateInputRows: false,
+      captureFormulaExplainDiagnostics: false,
+      captureFormulaRowRecomputeDiagnostics: false,
+    }),
+  )
+  recordMemory(phaseMemoryMb, "afterRowModelCreation")
   const startedAt = performance.now()
 
-  const copyStartedAt = performance.now()
   const copied = []
-  const sourceRows = model.getRowsInRange(normalizeRange(0, COPY_ROW_COUNT, COPY_ROWS))
-  for (let rowIndex = 0; rowIndex < Math.min(COPY_ROWS, sourceRows.length); rowIndex += 1) {
-    const row = sourceRows[rowIndex]?.row
-    const values = new Array(COPY_COLUMNS)
-    for (let column = 0; column < COPY_COLUMNS; column += 1) {
-      values[column] = readCell(row, column, seed)
+  const sourceRows = measurePhase(phaseTimingsMs, "copySourceRangeAccess", () =>
+    model.getRowsInRange(normalizeRange(0, COPY_ROW_COUNT, COPY_ROWS)),
+  )
+  measurePhase(phaseTimingsMs, "copiedRangeCreation", () => {
+    for (let rowIndex = 0; rowIndex < Math.min(COPY_ROWS, sourceRows.length); rowIndex += 1) {
+      const row = sourceRows[rowIndex]?.row
+      const values = new Array(COPY_COLUMNS)
+      for (let column = 0; column < COPY_COLUMNS; column += 1) {
+        values[column] = readCell(row, column, seed)
+      }
+      copied.push(values)
     }
-    copied.push(values)
-  }
-  const copyLatencyMs = performance.now() - copyStartedAt
-
-  const snapshot = typeof model.createCalculationSnapshot === "function"
-    ? model.createCalculationSnapshot()
-    : null
-  const historySnapshotSizeBytes = snapshot ? estimateJsonBytes(snapshot) : 0
-  if (typeof model.pushCalculationSnapshot === "function") {
-    model.pushCalculationSnapshot("enterprise-copy-paste-fill")
-  }
-
-  const pasteStartedAt = performance.now()
-  const pasteUpdates = []
-  const pasteStartRow = Math.min(COPY_ROW_COUNT - 1, Math.max(0, Math.floor(COPY_ROW_COUNT / 3)))
-  for (let rowOffset = 0; rowOffset < copied.length; rowOffset += 1) {
-    const data = {}
-    for (let column = 0; column < COPY_COLUMNS; column += 1) {
-      data[`c${column}`] = copied[rowOffset]?.[column] ?? 0
-    }
-    pasteUpdates.push({ rowId: pasteStartRow + rowOffset, data })
-  }
-  model.patchRows(pasteUpdates, {
-    recomputeSort: false,
-    recomputeFilter: false,
-    recomputeGroup: false,
-    emit: false,
   })
-  const pasteLatencyMs = performance.now() - pasteStartedAt
+  recordMemory(phaseMemoryMb, "afterCopiedRangeCreation")
+  const copyLatencyMs =
+    (phaseTimingsMs.copySourceRangeAccess ?? 0) + (phaseTimingsMs.copiedRangeCreation ?? 0)
 
-  const fillStartedAt = performance.now()
+  const snapshot = measurePhase(phaseTimingsMs, "calculationSnapshotCreation", () =>
+    typeof model.createCalculationSnapshot === "function" ? model.createCalculationSnapshot() : null,
+  )
+  const historySnapshotSizeBytes = measurePhase(phaseTimingsMs, "historySnapshotSizeEstimate", () =>
+    snapshot ? estimateJsonBytes(snapshot) : 0,
+  )
+  measurePhase(phaseTimingsMs, "historySnapshotPush", () => {
+    if (typeof model.pushCalculationSnapshot === "function") {
+      model.pushCalculationSnapshot("enterprise-copy-paste-fill")
+    }
+  })
+  recordMemory(phaseMemoryMb, "afterHistorySnapshot")
+
+  const pasteUpdates = []
+  measurePhase(phaseTimingsMs, "pastePayloadCreation", () => {
+    const pasteStartRow = Math.min(COPY_ROW_COUNT - 1, Math.max(0, Math.floor(COPY_ROW_COUNT / 3)))
+    for (let rowOffset = 0; rowOffset < copied.length; rowOffset += 1) {
+      const data = {}
+      for (let column = 0; column < COPY_COLUMNS; column += 1) {
+        data[`c${column}`] = copied[rowOffset]?.[column] ?? 0
+      }
+      pasteUpdates.push({ rowId: pasteStartRow + rowOffset, data })
+    }
+  })
+  recordMemory(phaseMemoryMb, "afterPastePayloadCreation")
+  measurePhase(phaseTimingsMs, "pastePatchApplication", () => {
+    model.patchRows(pasteUpdates, {
+      recomputeSort: false,
+      recomputeFilter: false,
+      recomputeGroup: false,
+      emit: false,
+    })
+  })
+  recordMemory(phaseMemoryMb, "afterPastePatchApplication")
+  const pasteLatencyMs =
+    (phaseTimingsMs.pastePayloadCreation ?? 0) + (phaseTimingsMs.pastePatchApplication ?? 0)
+
   const fillUpdates = []
+  const pasteStartRow = Math.min(COPY_ROW_COUNT - 1, Math.max(0, Math.floor(COPY_ROW_COUNT / 3)))
   const fillStartRow = Math.min(COPY_ROW_COUNT - 1, pasteStartRow + copied.length + 10)
   const fillLimit = Math.min(FILL_ROWS, Math.max(0, COPY_ROW_COUNT - fillStartRow))
-  for (let rowOffset = 0; rowOffset < fillLimit; rowOffset += 1) {
-    const data = {}
-    for (let column = 0; column < FILL_COLUMNS; column += 1) {
-      data[`c${column}`] = (copied[rowOffset % Math.max(1, copied.length)]?.[column] ?? 0) + rowOffset
+  measurePhase(phaseTimingsMs, "fillPayloadCreation", () => {
+    for (let rowOffset = 0; rowOffset < fillLimit; rowOffset += 1) {
+      const data = {}
+      for (let column = 0; column < FILL_COLUMNS; column += 1) {
+        data[`c${column}`] = (copied[rowOffset % Math.max(1, copied.length)]?.[column] ?? 0) + rowOffset
+      }
+      fillUpdates.push({ rowId: fillStartRow + rowOffset, data })
     }
-    fillUpdates.push({ rowId: fillStartRow + rowOffset, data })
-  }
-  model.patchRows(fillUpdates, {
-    recomputeSort: false,
-    recomputeFilter: false,
-    recomputeGroup: false,
-    emit: false,
   })
-  const fillLatencyMs = performance.now() - fillStartedAt
+  recordMemory(phaseMemoryMb, "afterFillPayloadCreation")
+  measurePhase(phaseTimingsMs, "fillPatchApplication", () => {
+    model.patchRows(fillUpdates, {
+      recomputeSort: false,
+      recomputeFilter: false,
+      recomputeGroup: false,
+      emit: false,
+    })
+  })
+  recordMemory(phaseMemoryMb, "afterFillPatchApplication")
+  const fillLatencyMs =
+    (phaseTimingsMs.fillPayloadCreation ?? 0) + (phaseTimingsMs.fillPatchApplication ?? 0)
 
   let undoSupported = false
   let undoLatencyMs = 0
-  if (!options.warmupOnly && typeof model.undoCalculationSnapshot === "function") {
-    const undoStartedAt = performance.now()
-    undoSupported = model.undoCalculationSnapshot() === true
-    undoLatencyMs = performance.now() - undoStartedAt
-  }
+  measurePhase(phaseTimingsMs, "undoRollback", () => {
+    if (!options.warmupOnly && typeof model.undoCalculationSnapshot === "function") {
+      const undoStartedAt = performance.now()
+      undoSupported = model.undoCalculationSnapshot() === true
+      undoLatencyMs = performance.now() - undoStartedAt
+    }
+  })
+  recordMemory(phaseMemoryMb, "afterUndoRollback")
 
   model.dispose()
+  recordMemory(phaseMemoryMb, "afterDispose")
   const heapEnd = await sampleHeapUsed()
+  phaseMemoryMb.afterGc = toMb(heapEnd)
   return {
     seed,
     elapsedMs: performance.now() - startedAt,
@@ -1182,8 +1407,49 @@ async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}
     pasteRowPatches: pasteUpdates.length,
     fillRowPatches: fillUpdates.length,
     historySnapshotSizeBytes,
+    phaseTimingsMs,
+    phaseMemoryMb,
   }
 }
+
+const PIVOT_TREE_PHASE_KEYS = [
+  "pivotSourceGeneration",
+  "pivotRowModelCreation",
+  "treeRowModelCreation",
+  "treeKeySampling",
+  "pivotProjectionRebuild",
+  "pivotViewportRangeUpdate",
+  "pivotMaterialization",
+  "pivotPatchApplication",
+  "pivotPatchSnapshot",
+  "treeExpandCollapse",
+  "treeMaterialization",
+  "groupedFilterProjection",
+  "groupedSortProjection",
+  "groupedViewportMaterialization",
+]
+
+const PIVOT_TREE_SAMPLE_KEYS = [
+  "pivotProjectionRebuild",
+  "pivotViewportRangeUpdate",
+  "pivotMaterialization",
+  "pivotPatchApplication",
+  "pivotPatchSnapshot",
+  "treeExpandCollapse",
+  "treeMaterialization",
+  "groupedFilterProjection",
+  "groupedSortProjection",
+  "groupedViewportMaterialization",
+]
+
+const PIVOT_TREE_MEMORY_PHASES = [
+  ["pivotSourceGeneration", "beforeSetup", "afterPivotSourceGeneration"],
+  ["pivotRowModelCreation", "afterPivotSourceGeneration", "afterPivotRowModelCreation"],
+  ["treeRowModelCreation", "afterPivotRowModelCreation", "afterTreeRowModelCreation"],
+  ["operations", "afterTreeRowModelCreation", "afterOperations"],
+  ["dispose", "afterOperations", "afterDispose"],
+  ["postGcRetained", "beforeSetup", "afterGc"],
+]
 
 async function runPivotTreeWorkloadScenario(createClientRowModel) {
   const runs = []
@@ -1208,6 +1474,9 @@ async function runPivotTreeWorkloadScenario(createClientRowModel) {
       pivotPatchMs: stats(runs.flatMap(run => run.pivotPatchSamplesMs)),
       treeToggleMs: stats(runs.flatMap(run => run.treeToggleSamplesMs)),
       groupedFilterSortViewportMs: stats(runs.flatMap(run => run.groupedFilterSortSamplesMs)),
+      phaseTimingsMs: aggregatePhaseTimings(runs, PIVOT_TREE_PHASE_KEYS),
+      phaseSamplesMs: aggregatePhaseSamples(runs, PIVOT_TREE_SAMPLE_KEYS),
+      phaseMemoryDeltaMb: aggregatePhaseMemoryDeltas(runs, PIVOT_TREE_MEMORY_PHASES),
       elapsedMs: stats(runs.map(run => run.elapsedMs)),
       heapDeltaMb: stats(runs.map(run => run.heapDeltaMb)),
     },
@@ -1218,7 +1487,14 @@ async function runPivotTreeWorkloadScenario(createClientRowModel) {
 
 async function measurePivotTreeSeed(createClientRowModel, seed, options = {}) {
   const heapStart = await sampleHeapUsed()
-  const rows = createEnterpriseRows(PIVOT_TREE_ROW_COUNT, seed, { physicalColumns: 10 })
+  const phaseTimingsMs = {}
+  const phaseMemoryMb = {
+    beforeSetup: toMb(heapStart),
+  }
+  const rows = measurePhase(phaseTimingsMs, "pivotSourceGeneration", () =>
+    createEnterpriseRows(PIVOT_TREE_ROW_COUNT, seed, { physicalColumns: 10 }),
+  )
+  recordMemory(phaseMemoryMb, "afterPivotSourceGeneration")
   const pivotModelPrimary = {
     rows: ["region", "team"],
     columns: ["year", "quarter"],
@@ -1229,96 +1505,162 @@ async function measurePivotTreeSeed(createClientRowModel, seed, options = {}) {
     columns: ["status"],
     values: [{ field: "latency", agg: "avg" }, { field: "score", agg: "max" }],
   }
-  const pivotModel = createClientRowModel({
-    rows,
-    resolveRowId: row => row.id,
-    isolateInputRows: false,
-    captureFormulaExplainDiagnostics: false,
-    captureFormulaRowRecomputeDiagnostics: false,
-  })
-  const treeModel = createClientRowModel({
-    rows,
-    resolveRowId: row => row.id,
-    isolateInputRows: false,
-    initialTreeData: {
-      mode: "path",
-      getDataPath: row => [row.treeA, row.treeB, row.treeC],
-      expandedByDefault: false,
-      dependencyFields: ["treeA", "treeB", "treeC", "revenue", "orders"],
-    },
-    initialAggregationModel: {
-      columns: [
-        { key: "revenue", field: "revenue", op: "sum" },
-        { key: "orders", field: "orders", op: "sum" },
-      ],
-    },
-    captureFormulaExplainDiagnostics: false,
-    captureFormulaRowRecomputeDiagnostics: false,
-  })
+  const pivotModel = measurePhase(phaseTimingsMs, "pivotRowModelCreation", () =>
+    createClientRowModel({
+      rows,
+      resolveRowId: row => row.id,
+      isolateInputRows: false,
+      captureFormulaExplainDiagnostics: false,
+      captureFormulaRowRecomputeDiagnostics: false,
+    }),
+  )
+  recordMemory(phaseMemoryMb, "afterPivotRowModelCreation")
+  const treeModel = measurePhase(phaseTimingsMs, "treeRowModelCreation", () =>
+    createClientRowModel({
+      rows,
+      resolveRowId: row => row.id,
+      isolateInputRows: false,
+      initialTreeData: {
+        mode: "path",
+        getDataPath: row => [row.treeA, row.treeB, row.treeC],
+        expandedByDefault: false,
+        dependencyFields: ["treeA", "treeB", "treeC", "revenue", "orders"],
+      },
+      initialAggregationModel: {
+        columns: [
+          { key: "revenue", field: "revenue", op: "sum" },
+          { key: "orders", field: "orders", op: "sum" },
+        ],
+      },
+      captureFormulaExplainDiagnostics: false,
+      captureFormulaRowRecomputeDiagnostics: false,
+    }),
+  )
+  recordMemory(phaseMemoryMb, "afterTreeRowModelCreation")
   const rng = createRng(seed)
   const pivotRebuildSamplesMs = []
   const pivotPatchSamplesMs = []
   const treeToggleSamplesMs = []
   const groupedFilterSortSamplesMs = []
+  const phaseSamplesMs = {
+    pivotProjectionRebuild: [],
+    pivotViewportRangeUpdate: [],
+    pivotMaterialization: [],
+    pivotPatchApplication: [],
+    pivotPatchSnapshot: [],
+    treeExpandCollapse: [],
+    treeMaterialization: [],
+    groupedFilterProjection: [],
+    groupedSortProjection: [],
+    groupedViewportMaterialization: [],
+  }
   let checksum = 0
   const startedAt = performance.now()
 
   try {
     const iterations = options.warmupOnly ? Math.min(2, PIVOT_TREE_ITERATIONS) : PIVOT_TREE_ITERATIONS
-    const treeKeys = sampleTreeGroupKeys(treeModel, PIVOT_TREE_VIEWPORT_ROWS)
+    const treeKeys = measurePhase(phaseTimingsMs, "treeKeySampling", () =>
+      sampleTreeGroupKeys(treeModel, PIVOT_TREE_VIEWPORT_ROWS),
+    )
     for (let iteration = 0; iteration < iterations; iteration += 1) {
       let started = performance.now()
+      let phaseStartedAt = performance.now()
       pivotModel.setPivotModel(iteration % 2 === 0 ? pivotModelPrimary : pivotModelAlt)
+      const pivotProjectionRebuildElapsedMs = performance.now() - phaseStartedAt
       const pivotRange = normalizeRange(iteration * 17, Math.max(1, pivotModel.getRowCount()), PIVOT_TREE_VIEWPORT_ROWS)
+      phaseStartedAt = performance.now()
       pivotModel.setViewportRange(pivotRange)
+      const pivotViewportRangeUpdateElapsedMs = performance.now() - phaseStartedAt
+      phaseStartedAt = performance.now()
       checksum += materializeViewportCells(pivotModel.getRowsInRange(pivotRange), 20, seed)
+      const pivotMaterializationElapsedMs = performance.now() - phaseStartedAt
       if (!options.warmupOnly) {
         pivotRebuildSamplesMs.push(performance.now() - started)
+        phaseSamplesMs.pivotProjectionRebuild.push(pivotProjectionRebuildElapsedMs)
+        phaseSamplesMs.pivotViewportRangeUpdate.push(pivotViewportRangeUpdateElapsedMs)
+        phaseSamplesMs.pivotMaterialization.push(pivotMaterializationElapsedMs)
+        addTiming(phaseTimingsMs, "pivotProjectionRebuild", pivotProjectionRebuildElapsedMs)
+        addTiming(phaseTimingsMs, "pivotViewportRangeUpdate", pivotViewportRangeUpdateElapsedMs)
+        addTiming(phaseTimingsMs, "pivotMaterialization", pivotMaterializationElapsedMs)
       }
 
       started = performance.now()
+      phaseStartedAt = performance.now()
       pivotModel.patchRows(createCellUpdateBatch(rng, PIVOT_TREE_ROW_COUNT, 8, 8), {
         recomputeSort: false,
         recomputeFilter: false,
         recomputeGroup: true,
         emit: false,
       })
+      const pivotPatchApplicationElapsedMs = performance.now() - phaseStartedAt
+      phaseStartedAt = performance.now()
       checksum += pivotModel.getSnapshot().pivotColumns?.length ?? 0
+      const pivotPatchSnapshotElapsedMs = performance.now() - phaseStartedAt
       if (!options.warmupOnly) {
         pivotPatchSamplesMs.push(performance.now() - started)
+        phaseSamplesMs.pivotPatchApplication.push(pivotPatchApplicationElapsedMs)
+        phaseSamplesMs.pivotPatchSnapshot.push(pivotPatchSnapshotElapsedMs)
+        addTiming(phaseTimingsMs, "pivotPatchApplication", pivotPatchApplicationElapsedMs)
+        addTiming(phaseTimingsMs, "pivotPatchSnapshot", pivotPatchSnapshotElapsedMs)
       }
 
       started = performance.now()
       const key = treeKeys[iteration % Math.max(1, treeKeys.length)]
+      phaseStartedAt = performance.now()
       if (key) {
         treeModel.toggleGroup(key)
       }
+      const treeExpandCollapseElapsedMs = performance.now() - phaseStartedAt
       const treeRange = normalizeRange(iteration * 11, Math.max(1, treeModel.getRowCount()), PIVOT_TREE_VIEWPORT_ROWS)
+      phaseStartedAt = performance.now()
       checksum += materializeViewportCells(treeModel.getRowsInRange(treeRange), 20, seed)
+      const treeMaterializationElapsedMs = performance.now() - phaseStartedAt
       if (!options.warmupOnly) {
         treeToggleSamplesMs.push(performance.now() - started)
+        phaseSamplesMs.treeExpandCollapse.push(treeExpandCollapseElapsedMs)
+        phaseSamplesMs.treeMaterialization.push(treeMaterializationElapsedMs)
+        addTiming(phaseTimingsMs, "treeExpandCollapse", treeExpandCollapseElapsedMs)
+        addTiming(phaseTimingsMs, "treeMaterialization", treeMaterializationElapsedMs)
       }
 
       started = performance.now()
+      phaseStartedAt = performance.now()
       treeModel.setFilterModel(buildFilterModel(iteration))
+      const groupedFilterProjectionElapsedMs = performance.now() - phaseStartedAt
+      phaseStartedAt = performance.now()
       treeModel.setSortModel(buildSortModel(iteration))
+      const groupedSortProjectionElapsedMs = performance.now() - phaseStartedAt
       const groupedRange = normalizeRange(iteration * 7, Math.max(1, treeModel.getRowCount()), PIVOT_TREE_VIEWPORT_ROWS)
+      phaseStartedAt = performance.now()
       checksum += materializeViewportCells(treeModel.getRowsInRange(groupedRange), 20, seed)
+      const groupedViewportMaterializationElapsedMs = performance.now() - phaseStartedAt
       if (!options.warmupOnly) {
         groupedFilterSortSamplesMs.push(performance.now() - started)
+        phaseSamplesMs.groupedFilterProjection.push(groupedFilterProjectionElapsedMs)
+        phaseSamplesMs.groupedSortProjection.push(groupedSortProjectionElapsedMs)
+        phaseSamplesMs.groupedViewportMaterialization.push(groupedViewportMaterializationElapsedMs)
+        addTiming(phaseTimingsMs, "groupedFilterProjection", groupedFilterProjectionElapsedMs)
+        addTiming(phaseTimingsMs, "groupedSortProjection", groupedSortProjectionElapsedMs)
+        addTiming(phaseTimingsMs, "groupedViewportMaterialization", groupedViewportMaterializationElapsedMs)
       }
     }
   } finally {
+    recordMemory(phaseMemoryMb, "afterOperations")
     pivotModel.dispose()
     treeModel.dispose()
+    recordMemory(phaseMemoryMb, "afterDispose")
   }
 
   const heapEnd = await sampleHeapUsed()
+  phaseMemoryMb.afterGc = toMb(heapEnd)
   return {
     seed,
     elapsedMs: performance.now() - startedAt,
     heapDeltaMb: toMb(heapEnd - heapStart),
     checksum,
+    phaseTimingsMs,
+    phaseSamplesMs,
+    phaseMemoryMb,
     pivotRebuildSamplesMs,
     pivotPatchSamplesMs,
     treeToggleSamplesMs,
