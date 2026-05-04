@@ -45,7 +45,7 @@ class ServerDemoRepository:
 
         rows = (await self._session.scalars(stmt)).all()
         total = await self._count_rows(conditions)
-        revision = await self._revision_token(conditions)
+        revision = await self._revision_token()
         return ServerDemoPullResponse(
             rows=[self._to_row(row) for row in rows],
             total=total,
@@ -88,11 +88,11 @@ class ServerDemoRepository:
         stmt = select(func.count()).select_from(GridDemoRowModel).where(*conditions)
         return int(await self._session.scalar(stmt) or 0)
 
-    async def _revision_token(self, conditions: Sequence[Any]) -> str | None:
-        stmt = select(func.max(GridDemoRowModel.updated_at)).where(*conditions)
+    async def _revision_token(self) -> str:
+        stmt = select(func.max(GridDemoRowModel.updated_at)).select_from(GridDemoRowModel)
         revision = await self._session.scalar(stmt)
         if revision is None:
-            return None
+            return "empty"
         return revision.isoformat()
 
     def _build_order_by(self, sort_model: Sequence[Any]) -> list[Any]:
@@ -125,9 +125,11 @@ class ServerDemoRepository:
 
         for column_id, raw_filter in filter_model.items():
             if column_id in {"segment", "status", "region"}:
-                value = self._extract_filter_value(raw_filter)
-                if value is not None:
-                    conditions.append(getattr(GridDemoRowModel, column_id) == value)
+                values = self._extract_filter_values(raw_filter)
+                if len(values) == 1:
+                    conditions.append(getattr(GridDemoRowModel, column_id) == values[0])
+                elif len(values) > 1:
+                    conditions.append(getattr(GridDemoRowModel, column_id).in_(values))
             elif column_id == "name":
                 value = self._extract_filter_value(raw_filter)
                 if value:
@@ -145,50 +147,118 @@ class ServerDemoRepository:
         min_value = raw_filter.get("min")
         max_value = raw_filter.get("max")
         if min_value is not None:
-            conditions.append(GridDemoRowModel.value >= self._coerce_int(min_value))
+            coerced_min = self._coerce_optional_int(min_value)
+            if coerced_min is not None:
+                conditions.append(GridDemoRowModel.value >= coerced_min)
         if max_value is not None:
-            conditions.append(GridDemoRowModel.value <= self._coerce_int(max_value))
+            coerced_max = self._coerce_optional_int(max_value)
+            if coerced_max is not None:
+                conditions.append(GridDemoRowModel.value <= coerced_max)
 
         filter_type = raw_filter.get("type")
         primary = raw_filter.get("filter")
         secondary = raw_filter.get("filterTo")
 
         if filter_type == "equals" and primary is not None:
-            conditions.append(GridDemoRowModel.value == self._coerce_int(primary))
+            coerced_primary = self._coerce_optional_int(primary)
+            if coerced_primary is not None:
+                conditions.append(GridDemoRowModel.value == coerced_primary)
         elif filter_type == "greaterThan" and primary is not None:
-            conditions.append(GridDemoRowModel.value > self._coerce_int(primary))
+            coerced_primary = self._coerce_optional_int(primary)
+            if coerced_primary is not None:
+                conditions.append(GridDemoRowModel.value > coerced_primary)
         elif filter_type == "greaterThanOrEqual" and primary is not None:
-            conditions.append(GridDemoRowModel.value >= self._coerce_int(primary))
+            coerced_primary = self._coerce_optional_int(primary)
+            if coerced_primary is not None:
+                conditions.append(GridDemoRowModel.value >= coerced_primary)
         elif filter_type == "lessThan" and primary is not None:
-            conditions.append(GridDemoRowModel.value < self._coerce_int(primary))
+            coerced_primary = self._coerce_optional_int(primary)
+            if coerced_primary is not None:
+                conditions.append(GridDemoRowModel.value < coerced_primary)
         elif filter_type == "lessThanOrEqual" and primary is not None:
-            conditions.append(GridDemoRowModel.value <= self._coerce_int(primary))
+            coerced_primary = self._coerce_optional_int(primary)
+            if coerced_primary is not None:
+                conditions.append(GridDemoRowModel.value <= coerced_primary)
         elif filter_type == "inRange" and primary is not None and secondary is not None:
-            conditions.append(GridDemoRowModel.value >= self._coerce_int(primary))
-            conditions.append(GridDemoRowModel.value <= self._coerce_int(secondary))
+            coerced_primary = self._coerce_optional_int(primary)
+            coerced_secondary = self._coerce_optional_int(secondary)
+            if coerced_primary is not None and coerced_secondary is not None:
+                conditions.append(GridDemoRowModel.value >= coerced_primary)
+                conditions.append(GridDemoRowModel.value <= coerced_secondary)
 
         return conditions
 
     def _extract_filter_value(self, raw_filter: Any) -> Any:
-        if isinstance(raw_filter, dict):
-            if "filter" in raw_filter:
-                return raw_filter["filter"]
-            if "value" in raw_filter:
-                return raw_filter["value"]
-            if "values" in raw_filter and raw_filter["values"]:
-                return raw_filter["values"][0]
+        values = self._extract_filter_values(raw_filter)
+        if not values:
             return None
-        return raw_filter
+        return values[0]
 
-    def _coerce_int(self, value: Any) -> int:
+    def _extract_filter_values(self, raw_filter: Any) -> list[Any]:
+        if isinstance(raw_filter, dict):
+            if "values" in raw_filter and isinstance(raw_filter["values"], (list, tuple, set)):
+                values = [self._normalize_filter_scalar(value) for value in raw_filter["values"]]
+                return [value for value in values if value is not None]
+            if "filter" in raw_filter:
+                value = self._normalize_filter_scalar(raw_filter["filter"])
+                return [value] if value is not None else []
+            if "value" in raw_filter:
+                value = self._normalize_filter_scalar(raw_filter["value"])
+                return [value] if value is not None else []
+            if "tokens" in raw_filter and isinstance(raw_filter["tokens"], (list, tuple, set)):
+                values = [self._normalize_filter_scalar(value) for value in raw_filter["tokens"]]
+                return [value for value in values if value is not None]
+            return []
+        if isinstance(raw_filter, (list, tuple, set)):
+            values = [self._normalize_filter_scalar(value) for value in raw_filter]
+            return [value for value in values if value is not None]
+        value = self._normalize_filter_scalar(raw_filter)
+        return [value] if value is not None else []
+
+    def _normalize_filter_scalar(self, value: Any) -> Any | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                return None
+            if normalized.startswith("string:"):
+                normalized = normalized[len("string:") :]
+            elif normalized.startswith("number:"):
+                normalized = normalized[len("number:") :]
+            elif normalized == "null":
+                return None
+            elif normalized == "boolean:true":
+                return True
+            elif normalized == "boolean:false":
+                return False
+            elif normalized.startswith("date:"):
+                normalized = normalized[len("date:") :]
+            return normalized if normalized else None
+        return value
+
+    def _coerce_optional_int(self, value: Any) -> int | None:
+        normalized = self._normalize_filter_scalar(value)
+        if normalized is None:
+            return None
         try:
-            return int(value)
+            return int(normalized)
         except (TypeError, ValueError) as exc:
             raise ApiException(
                 status_code=400,
                 code="invalid_filter",
                 message="Numeric filters must contain integer values",
             ) from exc
+
+    def _coerce_int(self, value: Any) -> int:
+        coerced = self._coerce_optional_int(value)
+        if coerced is None:
+            raise ApiException(
+                status_code=400,
+                code="invalid_filter",
+                message="Numeric filters must contain integer values",
+            )
+        return coerced
 
     def _sort_column_id(self, item: Any) -> str | None:
         if hasattr(item, "resolved_column_id"):

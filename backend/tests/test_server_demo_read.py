@@ -11,6 +11,8 @@ from app.main import app
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
+EXPECTED_SERVER_DEMO_REVISION = "2025-01-02T03:46:39+00:00"
+
 @pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
 async def seed_server_demo_rows() -> AsyncIterator[None]:
     await seed_demo_rows()
@@ -69,7 +71,27 @@ async def test_server_demo_pull_region_equality_filter(client: AsyncClient) -> N
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 25_000
+    assert body["revision"] == EXPECTED_SERVER_DEMO_REVISION
     assert all(row["region"] == "EMEA" for row in body["rows"])
+
+
+async def test_server_demo_pull_region_and_status_filter(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "filterModel": {
+                "region": {"filterType": "text", "type": "equals", "filter": "EMEA"},
+                "status": {"filterType": "text", "type": "equals", "filter": "Closed"},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] > 0
+    assert body["revision"] == EXPECTED_SERVER_DEMO_REVISION
+    assert all(row["region"] == "EMEA" and row["status"] == "Closed" for row in body["rows"])
 
 
 async def test_server_demo_pull_name_contains_filter(client: AsyncClient) -> None:
@@ -84,7 +106,27 @@ async def test_server_demo_pull_name_contains_filter(client: AsyncClient) -> Non
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 10
+    assert body["revision"] == EXPECTED_SERVER_DEMO_REVISION
     assert all("Account 0001" in row["name"] for row in body["rows"])
+
+
+async def test_server_demo_pull_no_match_returns_stable_revision(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "filterModel": {
+                "region": {"filterType": "text", "type": "equals", "filter": "NOPE"},
+                "status": {"filterType": "text", "type": "equals", "filter": "NOPE"},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rows"] == []
+    assert body["total"] == 0
+    assert body["revision"] == EXPECTED_SERVER_DEMO_REVISION
 
 
 async def test_server_demo_pull_value_min_max_filter(client: AsyncClient) -> None:
