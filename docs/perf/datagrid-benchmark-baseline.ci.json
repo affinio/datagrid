@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "generatedAt": "2026-05-04T10:00:00.000Z",
+  "sourceReport": "artifacts/performance/datagrid-benchmark-report.json",
+  "defaults": {
+    "maxDurationDriftPct": 120,
+    "maxAggregateElapsedDriftPct": 60,
+    "maxAggregateHeapDriftPct": 120
+  },
+  "tasks": {
+    "vue-adapters": {
+      "durationMs": 1044,
+      "aggregateElapsedMs": 89.57970880000002,
+      "aggregateHeapMb": 4.485528564453125,
+      "maxDurationDriftPct": 180,
+      "maxAggregateElapsedDriftPct": 140,
+      "maxAggregateHeapDriftPct": 120
+    },
+    "laravel-morph": {
+      "durationMs": 18843,
+      "aggregateElapsedMs": 3156.5094454000005,
+      "aggregateHeapMb": 24.743925476074217,
+      "maxDurationDriftPct": 160,
+      "maxAggregateElapsedDriftPct": 100,
+      "maxAggregateHeapDriftPct": 180
+    },
+    "interaction-models": {
+      "durationMs": 53,
+      "aggregateElapsedMs": 8.99384264,
+      "aggregateHeapMb": 0.7176971435546875,
+      "maxDurationDriftPct": 220,
+      "maxAggregateElapsedDriftPct": 200,
+      "maxAggregateHeapDriftPct": 220
+    },
+    "datasource-churn": {
+      "durationMs": 2083,
+      "aggregateElapsedMs": 380.5827107200001,
+      "aggregateHeapMb": 24.866119384765625,
+      "maxDurationDriftPct": 200,
+      "maxAggregateElapsedDriftPct": 165,
+      "maxAggregateHeapDriftPct": 180
+    },
+    "derived-cache": {
+      "durationMs": 25118,
+      "aggregateElapsedMs": 4228.33690024,
+      "aggregateHeapMb": 19.43914794921875,
+      "maxDurationDriftPct": 180,
+      "maxAggregateElapsedDriftPct": 120,
+      "maxAggregateHeapDriftPct": 180
+    },
+    "row-models": {
+      "durationMs": 18977,
+      "aggregateElapsedMs": 3134.99943536,
+      "aggregateHeapMb": 134.26998138427734,
+      "maxDurationDriftPct": 420,
+      "maxAggregateElapsedDriftPct": 420,
+      "maxAggregateHeapDriftPct": 180
+    }
+  }
+}

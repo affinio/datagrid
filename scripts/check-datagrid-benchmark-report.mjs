@@ -16,7 +16,12 @@ const requiredTasks = (
   .filter(Boolean)
 const expectedMode = process.env.DATAGRID_BENCH_EXPECT_MODE ?? "ci"
 const maxReportAgeMinutes = Number.parseFloat(process.env.DATAGRID_BENCH_MAX_REPORT_AGE_MINUTES ?? "180")
-const baselinePath = resolve(process.env.DATAGRID_BENCH_BASELINE ?? "docs/perf/datagrid-benchmark-baseline.json")
+const baselinePath = resolve(
+  process.env.DATAGRID_BENCH_BASELINE ??
+    (expectedMode === "ci"
+      ? "docs/perf/datagrid-benchmark-baseline.ci.json"
+      : "docs/perf/datagrid-benchmark-baseline.json"),
+)
 const baselineRequired = (process.env.DATAGRID_BENCH_BASELINE_REQUIRED ?? (expectedMode === "ci" ? "true" : "false"))
   .trim()
   .toLowerCase() !== "false"
