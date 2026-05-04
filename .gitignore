@@ -107,3 +107,22 @@ sbom.cdx.json
 .claude/
 .refs/
 logs/
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Python virtual envs
+.venv/
+venv/
+
+# Backend env files
+backend/.env
+backend/.env.*
+!backend/.env.example
+!backend/.env.*.example
