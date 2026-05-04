@@ -71,6 +71,7 @@ const SCENARIOS = [
     horizontalScroll: false,
     filter: false,
     sort: true,
+    sortDiagnostics: true,
     cellUpdates: false,
   },
   {
@@ -182,7 +183,7 @@ function normalizeFrameDeltas(frameDeltas) {
 
 function buildScenarioUrl(scenario) {
   const url = new URL(BENCH_BROWSER_ROUTE, BENCH_BROWSER_BASE_URL)
-  if (scenario.verticalDiagnostics) {
+  if (scenario.verticalDiagnostics || scenario.sortDiagnostics) {
     url.searchParams.set("dgPerfTrace", "1")
   }
   return url.toString()
@@ -260,9 +261,22 @@ async function runScenario(page, sessionIndex, scenario) {
 
     const stageRoot = viewport.closest(".grid-stage") ?? document.querySelector(".grid-stage")
     const frameDeltas = []
+    const frameSamples = []
     const longTaskEntries = []
     const telemetrySamples = []
     const isVerticalDiagnosticsScenario = Boolean(input.scenario.verticalDiagnostics)
+    const isSortDiagnosticsScenario = Boolean(input.scenario.sortDiagnostics)
+    const createMutationSummary = () => ({
+      callbackCount: 0,
+      childListMutations: 0,
+      attributesMutations: 0,
+      addedNodes: 0,
+      removedNodes: 0,
+      addedRowNodes: 0,
+      removedRowNodes: 0,
+      addedCellNodes: 0,
+      removedCellNodes: 0,
+    })
     const interactions = {
       scenarioId: input.scenario.id,
       verticalScrollSteps: 0,
@@ -291,20 +305,23 @@ async function runScenario(page, sessionIndex, scenario) {
           rangeChangeCount: 0,
           rangeSampleCount: 0,
           uniqueRangeCount: 0,
-          mutationSummary: {
-            callbackCount: 0,
-            childListMutations: 0,
-            attributesMutations: 0,
-            addedNodes: 0,
-            removedNodes: 0,
-            addedRowNodes: 0,
-            removedRowNodes: 0,
-            addedCellNodes: 0,
-            removedCellNodes: 0,
-          },
+          mutationSummary: createMutationSummary(),
           layoutReadSamples: [],
           appPerf: null,
           longTasks: [],
+        }
+      : null
+    const sortDiagnostics = isSortDiagnosticsScenario
+      ? {
+          enabled: true,
+          phases: {},
+          renderedSnapshots: [],
+          mutationSummary: createMutationSummary(),
+          frameWindow: null,
+          longTasks: [],
+          appPerf: null,
+          sortAction: null,
+          visibleRowsRefresh: null,
         }
       : null
 
@@ -360,10 +377,7 @@ async function runScenario(page, sessionIndex, scenario) {
       const parsed = Number.parseFloat(value)
       return Number.isFinite(parsed) ? parsed : null
     }
-    const captureRenderedSnapshot = (label) => {
-      if (!verticalDiagnostics) {
-        return null
-      }
+    const buildRenderedSnapshot = (label) => {
       const rowElements = Array.from(viewport.querySelectorAll(".grid-row"))
         .filter(candidate => candidate instanceof HTMLElement)
       const cellElements = Array.from(viewport.querySelectorAll(".grid-cell"))
@@ -401,8 +415,53 @@ async function runScenario(page, sessionIndex, scenario) {
           ? (parsePx(bottomSpacer.style.height) ?? bottomSpacer.offsetHeight)
           : null,
       }
+      return snapshot
+    }
+    const captureRenderedSnapshot = (label) => {
+      if (!verticalDiagnostics) {
+        return null
+      }
+      const snapshot = buildRenderedSnapshot(label)
       verticalDiagnostics.renderedSnapshots.push(snapshot)
       return snapshot
+    }
+    const captureSortRenderedSnapshot = (label) => {
+      if (!sortDiagnostics) {
+        return null
+      }
+      const snapshot = buildRenderedSnapshot(label)
+      sortDiagnostics.renderedSnapshots.push(snapshot)
+      return snapshot
+    }
+    const buildVisibleRowsSignature = () => {
+      const rowElements = Array.from(viewport.querySelectorAll(".grid-row"))
+        .filter(candidate => candidate instanceof HTMLElement)
+      if (!rowElements.length) {
+        return "empty"
+      }
+      return rowElements
+        .slice(0, 12)
+        .map((rowElement, index) => {
+          const cells = Array.from(rowElement.querySelectorAll(".grid-cell"))
+            .filter(candidate => candidate instanceof HTMLElement)
+          const rowIndex = cells
+            .map(cell => cell.getAttribute("data-row-index"))
+            .find(Boolean)
+          const rowKey = rowElement.getAttribute("data-row-key")
+            ?? rowElement.getAttribute("data-row-id")
+            ?? rowIndex
+            ?? String(index)
+          const amountCell = cells.find(cell => cell.getAttribute("data-column-key") === "amount")
+          const amountText = amountCell?.textContent?.trim() ?? ""
+          return `${rowKey}:${amountText}`
+        })
+        .join("|")
+    }
+    const summarizeFrameWindow = (startMs, endMs) => {
+      const samples = frameSamples
+        .filter(sample => sample.timestamp >= startMs && sample.timestamp <= endMs)
+        .map(sample => sample.delta)
+      return summarizeNumbers(samples)
     }
     const captureTelemetry = (label) => {
       const performanceWithMemory = performance
@@ -481,32 +540,41 @@ async function runScenario(page, sessionIndex, scenario) {
       return counts
     }
     const perfWindow = window
-    const dataGridPerfStore = isVerticalDiagnosticsScenario && perfWindow.__AFFINO_DATAGRID_PERF__
+    const traceDiagnosticsEnabled = isVerticalDiagnosticsScenario || isSortDiagnosticsScenario
+    const dataGridPerfStore = traceDiagnosticsEnabled && perfWindow.__AFFINO_DATAGRID_PERF__
       ? perfWindow.__AFFINO_DATAGRID_PERF__
       : null
     dataGridPerfStore?.clear?.()
 
+    const recordMutationSummary = (summary, mutations) => {
+      summary.callbackCount += 1
+      for (const mutation of mutations) {
+        if (mutation.type === "childList") {
+          const addedGridNodes = countGridElementNodes(mutation.addedNodes)
+          const removedGridNodes = countGridElementNodes(mutation.removedNodes)
+          summary.childListMutations += 1
+          summary.addedNodes += mutation.addedNodes.length
+          summary.removedNodes += mutation.removedNodes.length
+          summary.addedRowNodes += addedGridNodes.rows
+          summary.removedRowNodes += removedGridNodes.rows
+          summary.addedCellNodes += addedGridNodes.cells
+          summary.removedCellNodes += removedGridNodes.cells
+        } else if (mutation.type === "attributes") {
+          summary.attributesMutations += 1
+        }
+      }
+    }
     let mutationObserver = null
-    if (verticalDiagnostics && typeof MutationObserver !== "undefined") {
+    if ((verticalDiagnostics || sortDiagnostics) && typeof MutationObserver !== "undefined") {
       mutationObserver = new MutationObserver((mutations) => {
-        verticalDiagnostics.mutationSummary.callbackCount += 1
-        for (const mutation of mutations) {
-          if (mutation.type === "childList") {
-            const addedGridNodes = countGridElementNodes(mutation.addedNodes)
-            const removedGridNodes = countGridElementNodes(mutation.removedNodes)
-            verticalDiagnostics.mutationSummary.childListMutations += 1
-            verticalDiagnostics.mutationSummary.addedNodes += mutation.addedNodes.length
-            verticalDiagnostics.mutationSummary.removedNodes += mutation.removedNodes.length
-            verticalDiagnostics.mutationSummary.addedRowNodes += addedGridNodes.rows
-            verticalDiagnostics.mutationSummary.removedRowNodes += removedGridNodes.rows
-            verticalDiagnostics.mutationSummary.addedCellNodes += addedGridNodes.cells
-            verticalDiagnostics.mutationSummary.removedCellNodes += removedGridNodes.cells
-          } else if (mutation.type === "attributes") {
-            verticalDiagnostics.mutationSummary.attributesMutations += 1
-          }
+        if (verticalDiagnostics) {
+          recordMutationSummary(verticalDiagnostics.mutationSummary, mutations)
+        }
+        if (sortDiagnostics) {
+          recordMutationSummary(sortDiagnostics.mutationSummary, mutations)
         }
       })
-      mutationObserver.observe(viewport, {
+      mutationObserver.observe(sortDiagnostics && document.body ? document.body : viewport, {
         childList: true,
         subtree: true,
       })
@@ -538,7 +606,9 @@ async function runScenario(page, sessionIndex, scenario) {
     let last = performance.now()
     let lastRafTimestamp = last
     const tick = (timestamp) => {
-      frameDeltas.push(timestamp - last)
+      const delta = timestamp - last
+      frameDeltas.push(delta)
+      frameSamples.push({ timestamp, delta })
       last = timestamp
       lastRafTimestamp = timestamp
       if (running) {
@@ -799,15 +869,102 @@ async function runScenario(page, sessionIndex, scenario) {
         '.grid-cell--header[data-column-key="amount"] [data-datagrid-column-menu-button="true"]',
       )
       const sortButton = preferredSortButton ?? document.querySelector('[data-datagrid-column-menu-button="true"]')
+      if (sortDiagnostics) {
+        sortDiagnostics.sortAction = {
+          preferredButtonFound: preferredSortButton instanceof HTMLElement,
+          fallbackButtonFound: sortButton instanceof HTMLElement,
+          menuPanelFound: false,
+          sortDescActionFound: false,
+          sortDescActionDisabled: null,
+        }
+      }
       if (sortButton instanceof HTMLElement) {
+        captureSortRenderedSnapshot("sort:before-menu")
+        const beforeMenuSignature = buildVisibleRowsSignature()
+        const menuClickStartMs = performance.now()
         sortButton.click()
+        const menuClickEndMs = performance.now()
         await waitForPaint()
+        const menuPaintEndMs = performance.now()
+        const menuPanel = document.querySelector('[data-datagrid-column-menu-panel="true"]')
+        if (sortDiagnostics) {
+          sortDiagnostics.sortAction.menuPanelFound = menuPanel instanceof HTMLElement
+          sortDiagnostics.phases.menuClickStartMs = menuClickStartMs
+          sortDiagnostics.phases.menuClickEndMs = menuClickEndMs
+          sortDiagnostics.phases.menuClickMs = menuClickEndMs - menuClickStartMs
+          sortDiagnostics.phases.menuPaintEndMs = menuPaintEndMs
+          sortDiagnostics.phases.menuOpenToPaintMs = menuPaintEndMs - menuClickStartMs
+          sortDiagnostics.visibleRowsRefresh = {
+            beforeMenuSignature,
+            beforeSortSignature: null,
+            afterClickSignature: null,
+            finalSignature: null,
+            changedSynchronously: false,
+            changedAfterFrame: false,
+            frameCountUntilChange: 0,
+            timeoutMs: 2000,
+          }
+          captureSortRenderedSnapshot("sort:after-menu-open")
+        }
         const sortAction = document.querySelector('[data-datagrid-column-menu-action="sort-desc"]')
+        if (sortDiagnostics) {
+          sortDiagnostics.sortAction.sortDescActionFound = sortAction instanceof HTMLElement
+          sortDiagnostics.sortAction.sortDescActionDisabled = sortAction instanceof HTMLElement
+            ? sortAction.hasAttribute("disabled")
+            : null
+        }
         if (sortAction instanceof HTMLElement && !sortAction.hasAttribute("disabled")) {
+          const beforeSortSignature = buildVisibleRowsSignature()
+          if (sortDiagnostics?.visibleRowsRefresh) {
+            sortDiagnostics.visibleRowsRefresh.beforeSortSignature = beforeSortSignature
+          }
+          const sortClickStartMs = performance.now()
           sortAction.click()
+          const sortClickEndMs = performance.now()
+          const afterClickSignature = buildVisibleRowsSignature()
           interactions.sortApplied = true
           captureTelemetry("sort:desc")
+          let finalSignature = afterClickSignature
+          let changedSynchronously = afterClickSignature !== beforeSortSignature
+          let changedAfterFrame = false
+          let frameCountUntilChange = 0
+          const refreshWaitStartMs = performance.now()
+          while (!changedSynchronously && !changedAfterFrame && performance.now() - refreshWaitStartMs < 2000) {
+            await waitForFrame()
+            frameCountUntilChange += 1
+            finalSignature = buildVisibleRowsSignature()
+            changedAfterFrame = finalSignature !== beforeSortSignature
+          }
+          const visibleRefreshEndMs = performance.now()
           await waitForPaint()
+          const sortPaintEndMs = performance.now()
+          if (sortDiagnostics) {
+            sortDiagnostics.phases.sortClickStartMs = sortClickStartMs
+            sortDiagnostics.phases.sortClickEndMs = sortClickEndMs
+            sortDiagnostics.phases.sortClickMs = sortClickEndMs - sortClickStartMs
+            sortDiagnostics.phases.visibleRowsRefreshEndMs = visibleRefreshEndMs
+            sortDiagnostics.phases.visibleRowsRefreshMs = visibleRefreshEndMs - sortClickStartMs
+            sortDiagnostics.phases.sortPaintEndMs = sortPaintEndMs
+            sortDiagnostics.phases.sortClickToPaintMs = sortPaintEndMs - sortClickStartMs
+            sortDiagnostics.phases.totalSortInteractionMs = sortPaintEndMs - menuClickStartMs
+            sortDiagnostics.visibleRowsRefresh = {
+              ...sortDiagnostics.visibleRowsRefresh,
+              afterClickSignature,
+              finalSignature,
+              changedSynchronously,
+              changedAfterFrame,
+              frameCountUntilChange,
+            }
+            sortDiagnostics.frameWindow = {
+              startMs: menuClickStartMs,
+              endMs: sortPaintEndMs,
+              sortStartMs: sortClickStartMs,
+              sortEndMs: sortClickEndMs,
+              summary: summarizeFrameWindow(menuClickStartMs, sortPaintEndMs),
+              sortApplySummary: summarizeFrameWindow(sortClickStartMs, sortPaintEndMs),
+            }
+            captureSortRenderedSnapshot("sort:after-desc")
+          }
         } else {
           interactions.skipped.push("sort:no-sort-desc-action")
         }
@@ -923,6 +1080,38 @@ async function runScenario(page, sessionIndex, scenario) {
         attribution: entry.attribution,
       }))
     }
+    if (sortDiagnostics) {
+      const frameWindow = sortDiagnostics.frameWindow
+      if (frameWindow) {
+        sortDiagnostics.frameWindow = {
+          ...frameWindow,
+          summary: summarizeFrameWindow(frameWindow.startMs, frameWindow.endMs),
+          sortApplySummary: summarizeFrameWindow(frameWindow.sortStartMs, frameWindow.endMs),
+        }
+        sortDiagnostics.longTasks = longTaskEntries
+          .filter(entry => entry.startTime >= frameWindow.startMs && entry.startTime <= frameWindow.endMs)
+          .map(entry => ({
+            startTime: entry.startTime,
+            duration: entry.duration,
+            name: entry.name,
+            attribution: entry.attribution,
+          }))
+      }
+      sortDiagnostics.appPerf = dataGridPerfStore
+        ? {
+            samples: Array.isArray(dataGridPerfStore.samples) ? dataGridPerfStore.samples.slice() : [],
+            summary: typeof dataGridPerfStore.summary === "function" ? dataGridPerfStore.summary() : [],
+          }
+        : null
+      sortDiagnostics.summary = {
+        addedRows: sortDiagnostics.mutationSummary.addedRowNodes,
+        removedRows: sortDiagnostics.mutationSummary.removedRowNodes,
+        addedCells: sortDiagnostics.mutationSummary.addedCellNodes,
+        removedCells: sortDiagnostics.mutationSummary.removedCellNodes,
+        longTaskCount: sortDiagnostics.longTasks.length,
+        longTaskTotalMs: sortDiagnostics.longTasks.reduce((sum, entry) => sum + entry.duration, 0),
+      }
+    }
 
     const heapValues = telemetrySamples
       .map(sample => sample.usedHeapMb)
@@ -956,6 +1145,7 @@ async function runScenario(page, sessionIndex, scenario) {
       finalTop: viewport.scrollTop,
       finalLeft: viewport.scrollLeft,
       verticalDiagnostics,
+      sortDiagnostics,
     }
   }, {
     scenario,
@@ -996,10 +1186,12 @@ async function runScenario(page, sessionIndex, scenario) {
     finalTop: result.finalTop,
     finalLeft: result.finalLeft,
     verticalDiagnostics: result.verticalDiagnostics,
+    sortDiagnostics: result.sortDiagnostics,
   }
 }
 
 function aggregateRuns(runs) {
+  const sortDiagnosticsRuns = runs.map(run => run.sortDiagnostics).filter(Boolean)
   return {
     measuredElapsedMs: stats(runs.map(run => run.measuredElapsedMs)),
     interactionDurationMs: stats(runs.map(run => run.measuredElapsedMs)),
@@ -1023,6 +1215,22 @@ function aggregateRuns(runs) {
     peakViewportCells: stats(runs.map(run => run.telemetry.peakViewportCells)),
     cellUpdatesAttempted: stats(runs.map(run => run.interactions.cellUpdatesAttempted)),
     cellUpdatesCommitted: stats(runs.map(run => run.interactions.cellUpdatesCommitted)),
+    sortDiagnostics: {
+      menuClickMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.menuClickMs)),
+      menuOpenToPaintMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.menuOpenToPaintMs)),
+      sortClickMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.sortClickMs)),
+      sortClickToPaintMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.sortClickToPaintMs)),
+      visibleRowsRefreshMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.visibleRowsRefreshMs)),
+      totalSortInteractionMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.totalSortInteractionMs)),
+      addedRows: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.summary?.addedRows)),
+      removedRows: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.summary?.removedRows)),
+      addedCells: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.summary?.addedCells)),
+      removedCells: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.summary?.removedCells)),
+      sortWindowFrameP95Ms: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.frameWindow?.summary?.p95)),
+      sortApplyFrameP95Ms: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.frameWindow?.sortApplySummary?.p95)),
+      sortWindowLongTaskCount: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.summary?.longTaskCount)),
+      sortWindowLongTaskTotalMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.summary?.longTaskTotalMs)),
+    },
   }
 }
 
