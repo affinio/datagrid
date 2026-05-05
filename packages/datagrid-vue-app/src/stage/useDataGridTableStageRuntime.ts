@@ -96,6 +96,9 @@ interface DataGridAppResolveFillBoundaryResult {
   boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
   scannedRowCount?: number
   truncated?: boolean
+  revision?: string | null
+  projectionHash?: string | null
+  boundaryToken?: string | null
 }
 
 interface DataGridAppFillOperationRecord {
@@ -150,6 +153,9 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
       commitFillOperation?: (request: {
         operationId?: string | null
         revision?: string | number | null
+        baseRevision?: string | null
+        projectionHash?: string | null
+        boundaryToken?: string | null
         projection: DataGridAppFillProjectionContext
         sourceRange: DataGridCopyRange
         targetRange: DataGridCopyRange
@@ -179,6 +185,9 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
         commitFillOperation?: (request: {
           operationId?: string | null
           revision?: string | number | null
+          baseRevision?: string | null
+          projectionHash?: string | null
+          boundaryToken?: string | null
           projection: DataGridAppFillProjectionContext
           sourceRange: DataGridCopyRange
           targetRange: DataGridCopyRange

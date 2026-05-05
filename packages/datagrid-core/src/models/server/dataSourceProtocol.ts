@@ -87,6 +87,9 @@ export interface DataGridDataSourceResolveFillBoundaryResult {
   boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
   scannedRowCount?: number
   truncated?: boolean
+  revision?: string | null
+  projectionHash?: string | null
+  boundaryToken?: string | null
 }
 
 export interface DataGridDataSourcePullRequest {
@@ -164,6 +167,9 @@ export interface DataGridDataSourceFillProjectionContext {
 export interface DataGridDataSourceFillOperationRequest {
   operationId?: string | null
   revision?: string | number | null
+  baseRevision?: string | null
+  projectionHash?: string | null
+  boundaryToken?: string | null
   projection: DataGridDataSourceFillProjectionContext
   sourceRange: DataGridViewportRange
   targetRange: DataGridViewportRange

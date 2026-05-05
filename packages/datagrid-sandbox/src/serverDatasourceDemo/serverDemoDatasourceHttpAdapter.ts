@@ -58,6 +58,9 @@ type ServerDemoFillBoundaryResponse = {
   boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
   scannedRowCount?: number
   truncated?: boolean
+  revision?: string | null
+  projectionHash?: string | null
+  boundaryToken?: string | null
 }
 
 type ServerDemoFillCommitResponse = {
@@ -701,6 +704,9 @@ function normalizeFillBoundaryRequestBody(
 function normalizeFillCommitRequestBody(request: ServerDemoFillOperationRequest): {
   operationId?: string | null
   revision?: string | number | null
+  baseRevision?: string | null
+  projectionHash?: string | null
+  boundaryToken?: string | null
   projection: ServerDemoFillOperationRequest["projection"]
   sourceRange: { startRow: number; endRow: number; startColumn: number; endColumn: number }
   targetRange: { startRow: number; endRow: number; startColumn: number; endColumn: number }
@@ -715,6 +721,9 @@ function normalizeFillCommitRequestBody(request: ServerDemoFillOperationRequest)
   return {
     operationId: request.operationId ?? null,
     revision: request.revision ?? null,
+    baseRevision: request.baseRevision,
+    projectionHash: request.projectionHash,
+    boundaryToken: request.boundaryToken,
     projection: normalizeFillProjection(request.projection),
     sourceRange: serializeFillRange(request.sourceRange),
     targetRange: serializeFillRange(request.targetRange),

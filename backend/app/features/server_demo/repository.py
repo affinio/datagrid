@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlalchemy import func, select
@@ -28,9 +29,13 @@ from app.features.server_demo.schemas import (
     ServerDemoRejectedEdit,
     ServerDemoRow as ServerDemoRowSchema,
 )
+from app.api.errors import ApiException
+from app.grid.consistency import build_boundary_token, canonical_projection_hash
 from app.grid.mutations import GridCommittedCell, GridRejectedCell
 from app.grid.revision import GridRevisionService
 from app.grid.invalidation import GridInvalidationReasonMap, GridInvalidationService
+
+logger = logging.getLogger(__name__)
 
 
 class ServerDemoRepository(ServerGridDataAdapter):
@@ -65,6 +70,12 @@ class ServerDemoRepository(ServerGridDataAdapter):
         return await self._projection.histogram(self._session, column_id, filter_model)
 
     async def commit_edits(self, request: ServerDemoCommitEditsRequest) -> ServerDemoCommitEditsResponse:
+        current_revision = await self._read_current_revision_for_logging()
+        self._log_revision_mismatch(
+            operation_kind="edit",
+            requested_base_revision=request.base_revision,
+            current_revision=current_revision,
+        )
         result = await self._edits.commit_edits(self._session, request)
         revision = await self._revision.get_revision(self._session)
         return ServerDemoCommitEditsResponse(
@@ -77,9 +88,27 @@ class ServerDemoRepository(ServerGridDataAdapter):
         )
 
     async def resolve_fill_boundary(self, request: ServerDemoFillBoundaryRequest) -> ServerDemoFillBoundaryResponse:
-        return await self._fill.resolve_boundary(self._session, request)
+        boundary = await self._fill.resolve_boundary(self._session, request)
+        revision = await self._revision.get_revision(self._session)
+        projection_hash = canonical_projection_hash(request.projection)
+        boundary_payload = boundary.model_dump(exclude={"revision", "projection_hash", "boundary_token"})
+        boundary_token = self._build_boundary_token(
+            revision=revision,
+            projection_hash=projection_hash,
+            start_row_index=request.start_row_index,
+            end_row_index=boundary_payload["end_row_index"],
+            end_row_id=boundary_payload["end_row_id"],
+        )
+        return ServerDemoFillBoundaryResponse(**boundary_payload, revision=revision, projection_hash=projection_hash, boundary_token=boundary_token)
 
     async def commit_fill(self, request: ServerDemoFillCommitRequest) -> ServerDemoFillCommitResponse:
+        current_revision = await self._read_current_revision_for_logging()
+        projection_hash = canonical_projection_hash(request.projection)
+        self._raise_fill_consistency_error(
+            request=request,
+            current_revision=current_revision,
+            projection_hash=projection_hash,
+        )
         result = await self._fill.commit_fill(self._session, request)
         revision = await self._revision.get_revision(self._session)
         return ServerDemoFillCommitResponse(
@@ -153,4 +182,82 @@ class ServerDemoRepository(ServerGridDataAdapter):
             kind=invalidation.kind,
             range=ServerDemoInvalidationRange(start=invalidation.range_start, end=invalidation.range_end),
             reason=invalidation.reason,
+        )
+
+    async def _read_current_revision_for_logging(self) -> str:
+        revision = await self._revision.get_revision(self._session)
+        if self._session.in_transaction():
+            await self._session.rollback()
+        return revision
+
+    def _log_revision_mismatch(
+        self,
+        *,
+        operation_kind: str,
+        requested_base_revision: str | None,
+        current_revision: str,
+    ) -> None:
+        if requested_base_revision is None or requested_base_revision == current_revision:
+            return
+        logger.warning(
+            "server-demo %s commit baseRevision mismatch: requested=%s current=%s",
+            operation_kind,
+            requested_base_revision,
+            current_revision,
+        )
+
+    def _raise_fill_consistency_error(
+        self,
+        *,
+        request: ServerDemoFillCommitRequest,
+        current_revision: str,
+        projection_hash: str,
+    ) -> None:
+
+        if request.base_revision is not None and request.base_revision != current_revision:
+            raise ApiException(
+                status_code=409,
+                code="stale-revision",
+                message="Fill commit revision is stale",
+            )
+
+        if request.projection_hash is not None and request.projection_hash != projection_hash:
+            raise ApiException(
+                status_code=409,
+                code="projection-mismatch",
+                message="Fill commit projection does not match boundary projection",
+            )
+
+        if request.boundary_token is not None:
+            expected_boundary_token = self._build_boundary_token(
+                revision=current_revision,
+                projection_hash=projection_hash,
+                start_row_index=request.source_range.start_row,
+                end_row_index=request.target_range.end_row,
+                end_row_id=request.target_row_ids[-1] if request.target_row_ids else None,
+            )
+            if request.boundary_token != expected_boundary_token:
+                raise ApiException(
+                    status_code=409,
+                    code="boundary-mismatch",
+                    message="Fill commit boundary token is invalid",
+                )
+
+    def _build_boundary_token(
+        self,
+        *,
+        revision: str,
+        projection_hash: str,
+        start_row_index: int,
+        end_row_index: int | None,
+        end_row_id: str | None,
+    ) -> str:
+        return build_boundary_token(
+            {
+                "revision": revision,
+                "projectionHash": projection_hash,
+                "startRowIndex": start_row_index,
+                "endRowIndex": end_row_index,
+                "endRowId": end_row_id,
+            }
         )

@@ -138,6 +138,9 @@ class ServerDemoFillBoundaryResponse(BaseModel):
     )
     scanned_row_count: int = Field(ge=0, alias="scannedRowCount")
     truncated: bool
+    revision: str | None = None
+    projection_hash: str | None = Field(default=None, alias="projectionHash")
+    boundary_token: str | None = Field(default=None, alias="boundaryToken")
 
 
 class ServerDemoFillCommitRequest(BaseModel):
@@ -145,6 +148,9 @@ class ServerDemoFillCommitRequest(BaseModel):
 
     operation_id: str | None = Field(default=None, alias="operationId")
     revision: str | int | None = None
+    base_revision: str | None = Field(default=None, alias="baseRevision")
+    projection_hash: str | None = Field(default=None, alias="projectionHash")
+    boundary_token: str | None = Field(default=None, alias="boundaryToken")
     source_range: ServerDemoFillRange = Field(alias="sourceRange")
     target_range: ServerDemoFillRange = Field(alias="targetRange")
     source_row_ids: list[str] = Field(default_factory=list, alias="sourceRowIds")
@@ -181,6 +187,7 @@ class ServerDemoCommitEditsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     operation_id: str | None = Field(default=None, alias="operationId")
+    base_revision: str | None = Field(default=None, alias="baseRevision")
     edits: list[ServerDemoEditItem] = Field(default_factory=list)
 
 

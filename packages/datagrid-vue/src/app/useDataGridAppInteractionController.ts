@@ -69,6 +69,15 @@ interface DataGridAppResolveFillBoundaryResult {
   boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
   scannedRowCount?: number
   truncated?: boolean
+  revision?: string | null
+  projectionHash?: string | null
+  boundaryToken?: string | null
+}
+
+interface DataGridAppFillConsistencyMetadata {
+  revision?: string | null
+  projectionHash?: string | null
+  boundaryToken?: string | null
 }
 
 interface DataGridAppFillDataSource {
@@ -78,6 +87,9 @@ interface DataGridAppFillDataSource {
   commitFillOperation?: (request: {
     operationId?: string | null
     revision?: string | number | null
+    baseRevision?: string | null
+    projectionHash?: string | null
+    boundaryToken?: string | null
     projection: DataGridAppFillProjectionContext
     sourceRange: DataGridCopyRange
     targetRange: DataGridCopyRange
@@ -529,6 +541,7 @@ export function useDataGridAppInteractionController<
   const rangeMoveBaseRange = ref<DataGridCopyRange | null>(null)
   const rangeMoveOrigin = ref<DataGridAppCellCoord | null>(null)
   const rangeMovePreviewRange = ref<DataGridCopyRange | null>(null)
+  const serverFillBoundaryConsistencyMetadata = ref<DataGridAppFillConsistencyMetadata | null>(null)
   let fillPreviewCancelVersion = 0
   let lastServerFillMaterializationWarning: string | null = null
 
@@ -558,6 +571,7 @@ export function useDataGridAppInteractionController<
     fillBaseRange.value = null
     fillPreviewRange.value = null
     fillOriginFocusCoord.value = null
+    serverFillBoundaryConsistencyMetadata.value = null
     return true
   }
 
@@ -1034,6 +1048,7 @@ export function useDataGridAppInteractionController<
         pagination?: DataGridPaginationSnapshot
       }
       const operationId = `fill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const boundaryConsistencyMetadata = serverFillBoundaryConsistencyMetadata.value
       const sourceMatrix = options.buildFillMatrixFromRange(baseRange)
       const fillMatrix = buildDataGridFillMatrix({
         baseRange,
@@ -1181,6 +1196,15 @@ export function useDataGridAppInteractionController<
             .slice(baseRange.startColumn, baseRange.endColumn + 1)
             .map(column => String(column.key)),
           mode: serverFillBehavior.behavior,
+          ...(boundaryConsistencyMetadata?.revision !== undefined
+            ? { baseRevision: boundaryConsistencyMetadata.revision }
+            : {}),
+          ...(boundaryConsistencyMetadata?.projectionHash !== undefined
+            ? { projectionHash: boundaryConsistencyMetadata.projectionHash }
+            : {}),
+          ...(boundaryConsistencyMetadata?.boundaryToken !== undefined
+            ? { boundaryToken: boundaryConsistencyMetadata.boundaryToken }
+            : {}),
           metadata: { origin: "double-click-fill", behaviorSource: "default" },
         })
         options.reportFillPlumbingState?.("commitFillOperation_called", true)
@@ -1210,7 +1234,14 @@ export function useDataGridAppInteractionController<
         if (optimisticRollbackUpdates && optimisticRollbackUpdates.length > 0) {
           await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates))
         }
-        options.reportFillWarning?.(warnings[0] ?? "server fill no-op")
+        if (warnings.length > 0) {
+          for (const warning of warnings) {
+            options.reportFillWarning?.(warning)
+          }
+        }
+        else {
+          options.reportFillWarning?.("server fill no-op")
+        }
         options.reportFillPlumbingState?.("server_fill_affectedRowCount", false)
         return null
       }
@@ -1245,9 +1276,14 @@ export function useDataGridAppInteractionController<
         }
         return null
       }
-      options.reportFillWarning?.(
-        warnings[0] ?? partialMaterializedWarning ?? "server fill committed",
-      )
+      if (warnings.length > 0) {
+        for (const warning of warnings) {
+          options.reportFillWarning?.(warning)
+        }
+      }
+      else {
+        options.reportFillWarning?.(partialMaterializedWarning ?? "server fill committed")
+      }
       options.reportFillPlumbingState?.("server_fill_affectedRowCount", true)
       options.reportFillPlumbingState?.("server-fill-committed", true)
       if (!options.refreshServerFillViewport) {
@@ -2379,6 +2415,7 @@ export function useDataGridAppInteractionController<
   const resolveServerAwareFillBoundary = async (
     baseRange: DataGridCopyRange,
   ): Promise<{ endRow: number; boundaryKind: DataGridAppResolveFillBoundaryResult["boundaryKind"]; resolvedByServer: boolean; truncated?: boolean } | null> => {
+    serverFillBoundaryConsistencyMetadata.value = null
     if (!options.resolveFillBoundary) {
       options.reportFillPlumbingState?.("interaction_controller_option", false)
       return null
@@ -2434,12 +2471,22 @@ export function useDataGridAppInteractionController<
     options.reportFillPlumbingState?.("double_click_left_result", left != null)
     if (left && isAcceptedServerFillBoundaryKind(left.boundaryKind) && left.endRowIndex != null) {
       options.reportFillPlumbingState?.("double_click_left_selected", true)
+      serverFillBoundaryConsistencyMetadata.value = {
+        revision: left.revision,
+        projectionHash: left.projectionHash,
+        boundaryToken: left.boundaryToken,
+      }
       return { endRow: left.endRowIndex, boundaryKind: left.boundaryKind, resolvedByServer: true, truncated: left.truncated === true }
     }
     const right = await resolve(rightReferenceColumns, "right")
     options.reportFillPlumbingState?.("double_click_right_result", right != null)
     if (right && isAcceptedServerFillBoundaryKind(right.boundaryKind) && right.endRowIndex != null) {
       options.reportFillPlumbingState?.("double_click_right_selected", true)
+      serverFillBoundaryConsistencyMetadata.value = {
+        revision: right.revision,
+        projectionHash: right.projectionHash,
+        boundaryToken: right.boundaryToken,
+      }
       return { endRow: right.endRowIndex, boundaryKind: right.boundaryKind, resolvedByServer: true, truncated: right.truncated === true }
     }
     if (left?.boundaryKind === "unresolved" || right?.boundaryKind === "unresolved") {
@@ -2485,6 +2532,7 @@ export function useDataGridAppInteractionController<
         })
         : null
       if (!previewRange || options.rangesEqual(baseRange, previewRange)) {
+        serverFillBoundaryConsistencyMetadata.value = null
         if (resolved?.resolvedByServer && resolved.truncated) {
           options.reportFillWarning?.("Fill truncated at cache boundary")
         }
@@ -2500,6 +2548,7 @@ export function useDataGridAppInteractionController<
         options.reportFillPlumbingState?.("double_click_server_branch_entered", true)
         const normalizedFillBaseRange = options.normalizeClipboardRange(baseRange)
         if (!options.rangesEqual(options.resolveSelectionRange(), baseRange)) {
+          serverFillBoundaryConsistencyMetadata.value = null
           return
         }
         if (normalizedFillBaseRange) {

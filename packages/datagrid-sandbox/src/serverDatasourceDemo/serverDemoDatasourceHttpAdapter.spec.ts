@@ -544,6 +544,9 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       boundaryKind: "cache-boundary",
       scannedRowCount: 3,
       truncated: true,
+      revision: "rev-boundary-1",
+      projectionHash: "hash-boundary-1",
+      boundaryToken: "token-boundary-1",
     }), {
       status: 200,
       headers: {
@@ -600,6 +603,9 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       boundaryKind: "cache-boundary",
       scannedRowCount: 3,
       truncated: true,
+      revision: "rev-boundary-1",
+      projectionHash: "hash-boundary-1",
+      boundaryToken: "token-boundary-1",
     })
   })
 
@@ -626,6 +632,9 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     const result = await adapter.commitFillOperation!({
       operationId: "fill-123",
       revision: "rev-before",
+      baseRevision: "rev-boundary-1",
+      projectionHash: "hash-boundary-1",
+      boundaryToken: "token-boundary-1",
       projection: createFillProjection(),
       sourceRange: { start: 10, end: 11 },
       targetRange: { start: 12, end: 15 },
@@ -645,6 +654,9 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
       operationId: "fill-123",
       revision: "rev-before",
+      baseRevision: "rev-boundary-1",
+      projectionHash: "hash-boundary-1",
+      boundaryToken: "token-boundary-1",
       projection: {
         sortModel: [],
         filterModel: null,
@@ -785,6 +797,37 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       revision: "rev-fill-noop",
       invalidation: null,
       warnings: ["server fill no-op"],
+    })
+  })
+
+  it("surfaces fill commit 409 errors through the existing HTTP error path", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      code: "stale-revision",
+      message: "Fill commit revision is stale",
+    }), {
+      status: 409,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+
+    await expect(adapter.commitFillOperation!({
+      operationId: "fill-409",
+      projection: createFillProjection(),
+      sourceRange: { start: 10, end: 10 },
+      targetRange: { start: 10, end: 11 },
+      sourceRowIds: ["srv-000010"],
+      targetRowIds: ["srv-000010", "srv-000011"],
+      fillColumns: ["status"],
+      referenceColumns: ["status"],
+      mode: "copy",
+    })).rejects.toMatchObject({
+      name: "ServerDemoHttpError",
+      status: 409,
+      code: "stale-revision",
+      message: "Fill commit revision is stale",
     })
   })
 

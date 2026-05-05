@@ -27,6 +27,9 @@ interface DataGridAppResolveFillBoundaryResult {
   boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
   scannedRowCount?: number
   truncated?: boolean
+  revision?: string | null
+  projectionHash?: string | null
+  boundaryToken?: string | null
 }
 
 function normalizeRowId(value: unknown): DataGridRowId | null {
@@ -2667,6 +2670,87 @@ describe("useDataGridAppInteractionController contract", () => {
       referenceColumns: ["a"],
       mode: "copy",
     })
+  })
+
+  it("forwards fill boundary consistency metadata into server fill commits and surfaces backend warnings", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 2,
+      truncated: false,
+      revision: "rev-boundary-1",
+      projectionHash: "hash-boundary-1",
+      boundaryToken: "token-boundary-1",
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-consistency-1",
+      revision: "rev-fill-1",
+      affectedRowCount: 3,
+      affectedCellCount: 3,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 0,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: ["stale-revision", "projection-mismatch", "boundary-mismatch"],
+    }))
+    const { controller, selectionSnapshot, reportFillWarning } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { a: "2", b: "task-2" },
+        { a: "3", b: "task-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
+    expect(commitRequest).toMatchObject({
+      baseRevision: "rev-boundary-1",
+      projectionHash: "hash-boundary-1",
+      boundaryToken: "token-boundary-1",
+      sourceRowIds: ["r1"],
+      targetRowIds: ["r1", "r2", "r3"],
+      fillColumns: ["a"],
+      referenceColumns: ["a"],
+      mode: "copy",
+    })
+    expect(reportFillWarning).toHaveBeenCalledTimes(3)
+    expect(reportFillWarning).toHaveBeenNthCalledWith(1, "stale-revision")
+    expect(reportFillWarning).toHaveBeenNthCalledWith(2, "projection-mismatch")
+    expect(reportFillWarning).toHaveBeenNthCalledWith(3, "boundary-mismatch")
   })
 
   it("downgrades inferred server series double-click fill commits to copy mode", async () => {

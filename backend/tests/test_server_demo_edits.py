@@ -82,6 +82,29 @@ def create_fill_projection_payload() -> dict[str, object]:
     }
 
 
+async def fetch_fill_boundary_body(
+    client: AsyncClient,
+    *,
+    start_row_index: int,
+    limit: int = 3,
+) -> dict[str, object]:
+    response = await client.post(
+        "/api/server-demo/fill-boundary",
+        json={
+            "direction": "down",
+            "baseRange": {"startRow": start_row_index, "endRow": start_row_index, "startColumn": 0, "endColumn": 0},
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "projection": create_fill_projection_payload(),
+            "startRowIndex": start_row_index,
+            "startColumnIndex": 0,
+            "limit": limit,
+        },
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
 async def test_server_demo_revision_is_empty_when_no_rows(client: AsyncClient) -> None:
     service = ServerDemoRevisionService()
 
@@ -877,41 +900,101 @@ async def test_server_demo_all_rejected_edit_creates_no_operation(client: AsyncC
 
 
 async def test_server_demo_fill_boundary_basic_down(client: AsyncClient) -> None:
+    request_body = {
+        "direction": "down",
+        "baseRange": {"startRow": 10, "endRow": 10, "startColumn": 0, "endColumn": 0},
+        "fillColumns": ["status"],
+        "referenceColumns": ["status"],
+        "projection": create_fill_projection_payload(),
+        "startRowIndex": 11,
+        "startColumnIndex": 0,
+        "limit": 3,
+    }
     response = await client.post(
         "/api/server-demo/fill-boundary",
-        json={
-            "direction": "down",
-            "baseRange": {"startRow": 10, "endRow": 10, "startColumn": 0, "endColumn": 0},
-            "fillColumns": ["status"],
-            "referenceColumns": ["status"],
-            "projection": create_fill_projection_payload(),
-            "startRowIndex": 11,
-            "startColumnIndex": 0,
-            "limit": 3,
-        },
+        json=request_body,
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body == {
-        "endRowIndex": 13,
-        "endRowId": "srv-000013",
-        "boundaryKind": "cache-boundary",
-        "scannedRowCount": 3,
-        "truncated": True,
+    assert body["endRowIndex"] == 13
+    assert body["endRowId"] == "srv-000013"
+    assert body["boundaryKind"] == "cache-boundary"
+    assert body["scannedRowCount"] == 3
+    assert body["truncated"] is True
+    assert body["revision"]
+    assert body["projectionHash"]
+    assert body["boundaryToken"]
+
+    repeat_response = await client.post("/api/server-demo/fill-boundary", json=request_body)
+    assert repeat_response.status_code == 200
+    repeat_body = repeat_response.json()
+    assert repeat_body["projectionHash"] == body["projectionHash"]
+    assert repeat_body["boundaryToken"] == body["boundaryToken"]
+
+
+async def test_server_demo_fill_boundary_hash_changes_with_projection(client: AsyncClient) -> None:
+    base_request = {
+        "direction": "down",
+        "baseRange": {"startRow": 10, "endRow": 10, "startColumn": 0, "endColumn": 0},
+        "fillColumns": ["status"],
+        "referenceColumns": ["status"],
+        "startRowIndex": 11,
+        "startColumnIndex": 0,
+        "limit": 3,
     }
+
+    same_projection = create_fill_projection_payload()
+    alt_sort_projection = {**same_projection, "sortModel": [{"colId": "updated_at", "sort": "desc"}]}
+    alt_filter_projection = {**same_projection, "filterModel": {"status": {"values": ["Active"]}}}
+
+    same_response = await client.post(
+        "/api/server-demo/fill-boundary",
+        json={**base_request, "projection": same_projection},
+    )
+    sort_response = await client.post(
+        "/api/server-demo/fill-boundary",
+        json={**base_request, "projection": alt_sort_projection},
+    )
+    filter_response = await client.post(
+        "/api/server-demo/fill-boundary",
+        json={**base_request, "projection": alt_filter_projection},
+    )
+
+    assert same_response.status_code == 200
+    assert sort_response.status_code == 200
+    assert filter_response.status_code == 200
+    assert same_response.json()["projectionHash"] != sort_response.json()["projectionHash"]
+    assert same_response.json()["projectionHash"] != filter_response.json()["projectionHash"]
 
 
 async def test_server_demo_fill_commit_copy_single_column_with_history(client: AsyncClient) -> None:
     operation_id = "test-fill-copy-single-column"
     source_before = await pull_row(client, 20)
     target_before = await pull_row(client, 21)
+    boundary_response = await client.post(
+        "/api/server-demo/fill-boundary",
+        json={
+            "direction": "down",
+            "baseRange": {"startRow": 20, "endRow": 20, "startColumn": 0, "endColumn": 0},
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "projection": create_fill_projection_payload(),
+            "startRowIndex": 20,
+            "startColumnIndex": 0,
+            "limit": 3,
+        },
+    )
+    assert boundary_response.status_code == 200
+    boundary_body = boundary_response.json()
 
     response = await client.post(
         "/api/server-demo/fill/commit",
         json={
             "operationId": operation_id,
             "revision": "rev-before",
+            "baseRevision": boundary_body["revision"],
+            "projectionHash": boundary_body["projectionHash"],
             "sourceRange": {"startRow": 20, "endRow": 20, "startColumn": 0, "endColumn": 0},
             "targetRange": {"startRow": 20, "endRow": 21, "startColumn": 0, "endColumn": 0},
             "sourceRowIds": ["srv-000020"],
@@ -974,6 +1057,215 @@ async def test_server_demo_fill_commit_copy_single_column_with_history(client: A
     redo_response = await client.post(f"/api/server-demo/operations/{operation_id}/redo")
     assert redo_response.status_code == 200
     assert (await pull_row(client, 21))["status"] == source_before["status"]
+
+
+async def test_server_demo_fill_commit_accepts_optional_consistency_metadata_without_behavior_change(
+    client: AsyncClient,
+) -> None:
+    operation_id = "test-fill-copy-metadata"
+    boundary_body = await fetch_fill_boundary_body(client, start_row_index=120)
+    end_row_index = boundary_body["endRowIndex"]
+    assert isinstance(end_row_index, int)
+    target_row_ids = [f"srv-{row_index:06d}" for row_index in range(120, end_row_index + 1)]
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "revision": "rev-before",
+            "baseRevision": boundary_body["revision"],
+            "projectionHash": boundary_body["projectionHash"],
+            "boundaryToken": boundary_body["boundaryToken"],
+            "sourceRange": {"startRow": 120, "endRow": 120, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 120, "endRow": end_row_index, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000120"],
+            "targetRowIds": target_row_ids,
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == operation_id
+    assert body["warnings"] == []
+
+
+async def test_server_demo_fill_commit_missing_consistency_metadata_still_succeeds(
+    client: AsyncClient,
+) -> None:
+    operation_id = "test-fill-no-metadata"
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "sourceRange": {"startRow": 170, "endRow": 170, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 170, "endRow": 171, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000170"],
+            "targetRowIds": ["srv-000170", "srv-000171"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == operation_id
+    assert body["warnings"] == []
+    assert body["revision"]
+
+async def test_server_demo_fill_commit_stale_revision_returns_409(client: AsyncClient) -> None:
+    operation_id = "test-fill-stale-revision-warning"
+    await fetch_fill_boundary_body(client, start_row_index=130)
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "baseRevision": "definitely-stale",
+            "sourceRange": {"startRow": 130, "endRow": 130, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 130, "endRow": 131, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000130"],
+            "targetRowIds": ["srv-000130", "srv-000131"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "stale-revision",
+        "message": "Fill commit revision is stale",
+    }
+
+
+async def test_server_demo_fill_commit_projection_hash_mismatch_returns_409(client: AsyncClient) -> None:
+    operation_id = "test-fill-projection-warning"
+    await fetch_fill_boundary_body(client, start_row_index=140)
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "projectionHash": "incorrect-hash",
+            "sourceRange": {"startRow": 140, "endRow": 140, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 140, "endRow": 141, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000140"],
+            "targetRowIds": ["srv-000140", "srv-000141"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "projection-mismatch",
+        "message": "Fill commit projection does not match boundary projection",
+    }
+
+
+async def test_server_demo_fill_commit_boundary_token_mismatch_returns_409(client: AsyncClient) -> None:
+    operation_id = "test-fill-boundary-warning"
+    boundary_body = await fetch_fill_boundary_body(client, start_row_index=150)
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "boundaryToken": "not-the-boundary-token",
+            "baseRevision": boundary_body["revision"],
+            "projectionHash": boundary_body["projectionHash"],
+            "sourceRange": {"startRow": 150, "endRow": 150, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 150, "endRow": 151, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000150"],
+            "targetRowIds": ["srv-000150", "srv-000151"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "boundary-mismatch",
+        "message": "Fill commit boundary token is invalid",
+    }
+
+
+async def test_server_demo_fill_commit_multiple_consistency_mismatches_prioritize_stale_revision(
+    client: AsyncClient,
+) -> None:
+    operation_id = "test-fill-multi-warning"
+    await fetch_fill_boundary_body(client, start_row_index=160)
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "baseRevision": "stale",
+            "projectionHash": "wrong-hash",
+            "boundaryToken": "wrong-token",
+            "sourceRange": {"startRow": 160, "endRow": 160, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 160, "endRow": 161, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000160"],
+            "targetRowIds": ["srv-000160", "srv-000161"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "stale-revision",
+        "message": "Fill commit revision is stale",
+    }
+
+
+async def test_server_demo_fill_commit_matching_metadata_allows_fill_commit(
+    client: AsyncClient,
+) -> None:
+    operation_id = "test-fill-matching-metadata"
+    boundary_body = await fetch_fill_boundary_body(client, start_row_index=170)
+    end_row_index = boundary_body["endRowIndex"]
+    assert isinstance(end_row_index, int)
+    target_row_ids = [f"srv-{row_index:06d}" for row_index in range(170, end_row_index + 1)]
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "baseRevision": boundary_body["revision"],
+            "projectionHash": boundary_body["projectionHash"],
+            "boundaryToken": boundary_body["boundaryToken"],
+            "sourceRange": {"startRow": 170, "endRow": 170, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 170, "endRow": end_row_index, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000170"],
+            "targetRowIds": target_row_ids,
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == operation_id
+    assert body["warnings"] == []
+    assert body["affectedRowCount"] == 1
+    assert body["affectedCellCount"] == 1
 
 
 async def test_server_demo_fill_commit_noop_is_explicit(client: AsyncClient) -> None:
