@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
@@ -612,6 +613,10 @@ async def test_server_demo_single_edit_undo_and_redo(client: AsyncClient) -> Non
     assert operation.status == "undone"
     assert len(events) == 1
 
+    second_undo_response = await client.post(f"/api/server-demo/operations/{operation_id}/undo")
+    assert second_undo_response.status_code == 409
+    assert second_undo_response.json()["code"] == "operation-already-undone"
+
     redo_response = await client.post(f"/api/server-demo/operations/{operation_id}/redo")
     assert redo_response.status_code == 200
     redo_body = redo_response.json()
@@ -628,6 +633,10 @@ async def test_server_demo_single_edit_undo_and_redo(client: AsyncClient) -> Non
     assert operation is not None
     assert operation.status == "applied"
     assert len(events) == 1
+
+    second_redo_response = await client.post(f"/api/server-demo/operations/{operation_id}/redo")
+    assert second_redo_response.status_code == 409
+    assert second_redo_response.json()["code"] == "operation-not-undone"
 
 
 async def test_server_demo_batch_edit_undo_and_redo(client: AsyncClient) -> None:
@@ -722,6 +731,36 @@ async def test_server_demo_redo_before_undo_is_rejected(client: AsyncClient) -> 
 
     assert response.status_code == 409
     assert response.json()["code"] == "operation-not-undone"
+
+
+async def test_server_demo_undo_invalid_operation_id_is_rejected(client: AsyncClient) -> None:
+    response = await client.post("/api/server-demo/operations/%20%20/undo")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid-operation-id"
+
+
+async def test_server_demo_operation_with_no_cell_events_is_rejected(client: AsyncClient) -> None:
+    operation_id = "test-no-cell-events"
+
+    async with AsyncSessionLocal() as session:
+        session.add(
+            ServerDemoOperation(
+                operation_id=operation_id,
+                operation_type="edit",
+                status="applied",
+                operation_metadata={},
+                revision=datetime.now(timezone.utc),
+                created_at=datetime.now(timezone.utc),
+                modified_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+
+    response = await client.post(f"/api/server-demo/operations/{operation_id}/undo")
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "operation-has-no-cell-events"
 
 
 async def test_server_demo_partial_success_records_only_committed_cell_events(client: AsyncClient) -> None:
