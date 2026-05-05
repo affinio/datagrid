@@ -22,11 +22,13 @@ class GridProjectionService:
         columns: GridColumnRegistry,
         default_sort_column_id: str = "index",
         max_histogram_buckets: int = 100,
+        max_histogram_source_rows: int | None = None,
     ):
         self._model = model
         self._columns = columns
         self._default_sort_column_id = default_sort_column_id
         self._max_histogram_buckets = max(0, int(max_histogram_buckets))
+        self._max_histogram_source_rows = max_histogram_source_rows
 
     def build_filter_conditions(self, filter_model: dict[str, Any] | None) -> list[Any]:
         if not filter_model:
@@ -151,6 +153,14 @@ class GridProjectionService:
 
         column = getattr(self._model, definition.model_attr)
         conditions = self.build_filter_conditions(filter_model)
+        if self._max_histogram_source_rows is not None:
+            matching_rows = await self.count_rows(session, conditions)
+            if matching_rows > self._max_histogram_source_rows:
+                raise ApiException(
+                    status_code=400,
+                    code="histogram-source-too-large",
+                    message="Histogram source row count exceeds maximum allowed size",
+                )
         stmt = (
             select(column, func.count())
             .select_from(self._model)

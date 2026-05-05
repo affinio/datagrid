@@ -267,6 +267,102 @@ async def test_server_demo_batch_edit_exceeding_limit_returns_400(client: AsyncC
     }
 
 
+async def test_server_demo_fill_source_rows_exceeding_limit_returns_400(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 0, "endRow": 100, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 0, "endRow": 0, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": [f"srv-{row_index:06d}" for row_index in range(101)],
+            "targetRowIds": ["srv-000000"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+            "metadata": {},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "fill-source-too-large",
+        "message": "Fill source range exceeds maximum allowed size",
+    }
+
+
+async def test_server_demo_fill_column_count_exceeding_limit_returns_400(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 0, "endRow": 0, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 0, "endRow": 0, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000000"],
+            "targetRowIds": ["srv-000001"],
+            "fillColumns": [f"fill-{index:02d}" for index in range(51)],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+            "metadata": {},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "too-many-fill-columns",
+        "message": "Fill column count exceeds maximum allowed size",
+    }
+
+
+async def test_server_demo_fill_reference_column_count_exceeding_limit_returns_400(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 0, "endRow": 0, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 0, "endRow": 0, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000000"],
+            "targetRowIds": ["srv-000001"],
+            "fillColumns": ["status"],
+            "referenceColumns": [f"ref-{index:02d}" for index in range(51)],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+            "metadata": {},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "too-many-reference-columns",
+        "message": "Reference column count exceeds maximum allowed size",
+    }
+
+
+async def test_server_demo_fill_cell_fan_out_exceeding_limit_returns_400(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 0, "endRow": 0, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 0, "endRow": 100, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000000"],
+            "targetRowIds": [f"srv-{row_index:06d}" for row_index in range(101)],
+            "fillColumns": [f"fill-{index:02d}" for index in range(50)],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+            "metadata": {},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "fill-cell-count-too-large",
+        "message": "Fill cell count exceeds maximum allowed size",
+    }
+
+
 async def test_server_demo_move_like_batch_persists_source_clear_and_target_write(client: AsyncClient) -> None:
     operation_id = "test-move-like-batch"
     source_before = await pull_row(client, 110)

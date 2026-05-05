@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     grid_max_fill_target_rows: int = Field(default=1000, ge=0)
     grid_max_boundary_scan_limit: int = Field(default=1000, ge=0)
     grid_max_histogram_buckets: int = Field(default=100, ge=0)
+    grid_max_fill_source_rows: int = Field(default=100, ge=0)
+    grid_max_fill_columns: int = Field(default=50, ge=0)
+    grid_max_fill_cells: int = Field(default=5000, ge=0)
+    grid_max_filter_count_rows: int | None = Field(default=None, ge=0)
+    grid_max_histogram_source_rows: int | None = Field(default=None, ge=0)
     database_url: str = Field(
         default="postgresql+asyncpg://auctions_dev:auctions_dev_pass@db:5432/auctions_pg"
     )

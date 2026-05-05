@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+from app.core.config import Settings
 from app.features.server_demo.seed import seed_demo_rows
 from app.main import app
 
@@ -40,6 +41,26 @@ async def test_server_demo_pull_basic_range(client: AsyncClient) -> None:
     body = response.json()
     assert body["total"] == 100_000
     assert len(body["rows"]) == 50
+
+
+async def test_server_demo_pull_rejects_large_filtered_count_when_enabled(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "app.features.server_demo.repository.core_config.get_settings",
+        lambda: Settings(grid_max_filter_count_rows=10),
+    )
+
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={"range": {"startRow": 0, "endRow": 50}, "filterModel": {"region": {"filter": "EMEA"}}},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "filter-count-too-large",
+        "message": "Filtered row count exceeds maximum allowed size",
+    }
 
 
 async def test_server_demo_pull_exceeding_limit_returns_400(client: AsyncClient) -> None:
@@ -254,6 +275,45 @@ async def test_server_demo_region_histogram(client: AsyncClient) -> None:
     assert len(body["entries"]) == 4
     assert {entry["value"] for entry in body["entries"]} == {"AMER", "APAC", "EMEA", "LATAM"}
     assert all(entry["count"] == 25_000 for entry in body["entries"])
+
+
+async def test_server_demo_region_histogram_preserves_default_unlimited_source_rows(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "app.features.server_demo.repository.core_config.get_settings",
+        lambda: Settings(grid_max_histogram_source_rows=None),
+    )
+
+    response = await client.post(
+        "/api/server-demo/histogram",
+        json={"columnId": "region", "filterModel": None},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["columnId"] == "region"
+    assert len(body["entries"]) == 4
+
+
+async def test_server_demo_region_histogram_rejects_large_source_row_sets(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "app.features.server_demo.repository.core_config.get_settings",
+        lambda: Settings(grid_max_histogram_source_rows=10),
+    )
+
+    response = await client.post(
+        "/api/server-demo/histogram",
+        json={"columnId": "region", "filterModel": None},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "histogram-source-too-large",
+        "message": "Histogram source row count exceeds maximum allowed size",
+    }
 
 
 async def test_server_demo_region_histogram_respects_filter_model(client: AsyncClient) -> None:

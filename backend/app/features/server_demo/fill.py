@@ -33,6 +33,9 @@ class ServerDemoFillService(GridFillServiceBase):
         *,
         max_fill_target_rows: int = 1000,
         max_boundary_scan_limit: int = 1000,
+        max_fill_source_rows: int = 100,
+        max_fill_columns: int = 50,
+        max_fill_cells: int = 5000,
     ):
         if revision_service is None:
             raise ValueError("revision_service is required")
@@ -41,6 +44,9 @@ class ServerDemoFillService(GridFillServiceBase):
             revision_service,
             max_fill_target_rows=max_fill_target_rows,
             max_boundary_scan_limit=max_boundary_scan_limit,
+            max_fill_source_rows=max_fill_source_rows,
+            max_fill_columns=max_fill_columns,
+            max_fill_cells=max_fill_cells,
         )
         self._projection = projection
         self._workspace_id = workspace_id

@@ -19,12 +19,14 @@ class ServerDemoProjectionService(GridProjectionService):
         workspace_id: str | None = None,
         *,
         max_histogram_buckets: int = 100,
+        max_histogram_source_rows: int | None = None,
     ):
         super().__init__(
             model=table.model,
             columns=table.columns,
             default_sort_column_id=table.default_sort_column_id,
             max_histogram_buckets=max_histogram_buckets,
+            max_histogram_source_rows=max_histogram_source_rows,
         )
         self._table = table
         self._workspace_id = workspace_id
@@ -64,6 +66,14 @@ class ServerDemoProjectionService(GridProjectionService):
         scoped_conditions = [*conditions]
         if scope_condition is not None:
             scoped_conditions.append(scope_condition)
+        if self._max_histogram_source_rows is not None:
+            matching_rows = await self.count_rows(session, conditions)
+            if matching_rows > self._max_histogram_source_rows:
+                raise ApiException(
+                    status_code=400,
+                    code="histogram-source-too-large",
+                    message="Histogram source row count exceeds maximum allowed size",
+                )
         stmt = (
             select(column, func.count())
             .select_from(self._model)

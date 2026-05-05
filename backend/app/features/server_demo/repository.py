@@ -49,6 +49,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
             SERVER_DEMO_TABLE,
             workspace_id=workspace_id,
             max_histogram_buckets=settings.grid_max_histogram_buckets,
+            max_histogram_source_rows=settings.grid_max_histogram_source_rows,
         )
         self._revision = GridRevisionService(SERVER_DEMO_TABLE, workspace_id=workspace_id)
         self._edits = ServerDemoEditService(
@@ -64,6 +65,9 @@ class ServerDemoRepository(ServerGridDataAdapter):
             workspace_id=workspace_id,
             max_fill_target_rows=settings.grid_max_fill_target_rows,
             max_boundary_scan_limit=settings.grid_max_boundary_scan_limit,
+            max_fill_source_rows=settings.grid_max_fill_source_rows,
+            max_fill_columns=settings.grid_max_fill_columns,
+            max_fill_cells=settings.grid_max_fill_cells,
         )
         self._history = ServerDemoHistoryService(
             SERVER_DEMO_TABLE.columns,
@@ -90,12 +94,12 @@ class ServerDemoRepository(ServerGridDataAdapter):
             )
 
         conditions = self._projection.build_filter_conditions(request.filter_model)
+        total = await self._count_rows_with_policy(conditions, settings.grid_max_filter_count_rows)
         stmt = self._projection.build_row_query(conditions)
         stmt = stmt.order_by(*self._projection.build_order_by(request.sort_model))
         stmt = stmt.offset(request.range.start_row).limit(request.range.end_row - request.range.start_row)
 
         rows = (await self._session.scalars(stmt)).all()
-        total = await self._projection.count_rows(self._session, conditions)
         revision = await self._revision.get_revision(self._session)
         return ServerDemoPullResponse(
             rows=[self._to_row(row) for row in rows],
@@ -154,6 +158,16 @@ class ServerDemoRepository(ServerGridDataAdapter):
             invalidation=self._to_invalidation(self._invalidation.build_range_invalidation("fill", result.affected_indexes)),
             warnings=result.warnings,
         )
+
+    async def _count_rows_with_policy(self, conditions: list[Any], max_rows: int | None) -> int:
+        total = await self._projection.count_rows(self._session, conditions)
+        if max_rows is not None and total > max_rows:
+            raise ApiException(
+                status_code=400,
+                code="filter-count-too-large",
+                message="Filtered row count exceeds maximum allowed size",
+            )
+        return total
 
     async def undo_operation(self, operation_id: str) -> ServerDemoCommitEditsResponse:
         result = await self._history.undo_operation(self._session, operation_id)

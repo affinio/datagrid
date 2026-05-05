@@ -28,11 +28,17 @@ class GridFillServiceBase(ABC):
         *,
         max_fill_target_rows: int = 1000,
         max_boundary_scan_limit: int = 1000,
+        max_fill_source_rows: int = 100,
+        max_fill_columns: int = 50,
+        max_fill_cells: int = 5000,
     ):
         self._table = table
         self._revision_service = revision_service
         self._max_fill_target_rows = max(0, int(max_fill_target_rows))
         self._max_boundary_scan_limit = max(0, int(max_boundary_scan_limit))
+        self._max_fill_source_rows = max(0, int(max_fill_source_rows))
+        self._max_fill_columns = max(0, int(max_fill_columns))
+        self._max_fill_cells = max(0, int(max_fill_cells))
 
     async def resolve_boundary(self, session: AsyncSession, request: Any) -> dict[str, Any]:
         total = await self.count_projected_rows(session, request.projection)
@@ -137,11 +143,35 @@ class GridFillServiceBase(ABC):
                 code="invalid-fill-request",
                 message="referenceColumns must not be empty",
             )
+        if len(source_row_ids) > self._max_fill_source_rows:
+            raise ApiException(
+                status_code=400,
+                code="fill-source-too-large",
+                message="Fill source range exceeds maximum allowed size",
+            )
+        if len(fill_columns) > self._max_fill_columns:
+            raise ApiException(
+                status_code=400,
+                code="too-many-fill-columns",
+                message="Fill column count exceeds maximum allowed size",
+            )
+        if len(reference_columns) > self._max_fill_columns:
+            raise ApiException(
+                status_code=400,
+                code="too-many-reference-columns",
+                message="Reference column count exceeds maximum allowed size",
+            )
         if target_row_count > self._max_fill_target_rows:
             raise ApiException(
                 status_code=400,
                 code="fill-range-too-large",
                 message="Fill range exceeds maximum allowed size",
+            )
+        if target_row_count * len(fill_columns) > self._max_fill_cells:
+            raise ApiException(
+                status_code=400,
+                code="fill-cell-count-too-large",
+                message="Fill cell count exceeds maximum allowed size",
             )
 
         requested_operation_id = self.normalize_optional_operation_id(request.operation_id)
