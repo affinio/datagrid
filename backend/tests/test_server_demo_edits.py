@@ -46,14 +46,23 @@ async def pull_row(client: AsyncClient, row_index: int) -> dict[str, object]:
 
 async def fetch_operation_history(
     operation_id: str,
+    workspace_id: str | None = None,
 ) -> tuple[ServerDemoOperation | None, list[ServerDemoCellEvent]]:
     async with AsyncSessionLocal() as session:
-        operation = await session.get(ServerDemoOperation, operation_id)
+        operation_stmt = select(ServerDemoOperation).where(ServerDemoOperation.operation_id == operation_id)
+        if workspace_id is None:
+            operation_stmt = operation_stmt.where(ServerDemoOperation.workspace_id.is_(None))
+        else:
+            operation_stmt = operation_stmt.where(ServerDemoOperation.workspace_id == workspace_id)
+        operation = await session.scalar(operation_stmt)
+        event_stmt = select(ServerDemoCellEvent).where(ServerDemoCellEvent.operation_id == operation_id)
+        if workspace_id is None:
+            event_stmt = event_stmt.where(ServerDemoCellEvent.workspace_id.is_(None))
+        else:
+            event_stmt = event_stmt.where(ServerDemoCellEvent.workspace_id == workspace_id)
         events = (
             await session.scalars(
-                select(ServerDemoCellEvent)
-                .where(ServerDemoCellEvent.operation_id == operation_id)
-                .order_by(ServerDemoCellEvent.created_at.asc(), ServerDemoCellEvent.event_id.asc())
+                event_stmt.order_by(ServerDemoCellEvent.created_at.asc(), ServerDemoCellEvent.event_id.asc())
             )
         ).all()
     return operation, list(events)

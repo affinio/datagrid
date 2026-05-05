@@ -15,7 +15,7 @@ from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.projection import ServerDemoProjectionService
 from app.features.server_demo.schemas import ServerDemoFillBoundaryRequest, ServerDemoFillBoundaryResponse
 from app.features.server_demo.table import SERVER_DEMO_TABLE
-from app.features.server_demo.workspace import workspace_scope_condition
+from app.features.server_demo.workspace import workspace_column_condition, workspace_scope_condition
 from app.grid.fill import GridFillServiceBase
 from app.grid.mutations import PendingGridCellEvent
 from app.grid.revision import GridRevisionService
@@ -90,7 +90,10 @@ class ServerDemoFillService(GridFillServiceBase):
         existing_count = await session.scalar(
             select(func.count())
             .select_from(ServerDemoOperationModel)
-            .where(ServerDemoOperationModel.operation_id == operation_id)
+            .where(
+                ServerDemoOperationModel.operation_id == operation_id,
+                workspace_column_condition(ServerDemoOperationModel.workspace_id, self._workspace_id),
+            )
         )
         if existing_count:
             raise ApiException(
@@ -109,6 +112,7 @@ class ServerDemoFillService(GridFillServiceBase):
         session.add(
             ServerDemoOperationModel(
                 operation_id=operation_id,
+                workspace_id=self._workspace_id,
                 operation_type="fill",
                 status=OPERATION_STATUS_APPLIED,
                 operation_metadata=metadata,
@@ -130,6 +134,7 @@ class ServerDemoFillService(GridFillServiceBase):
                 ServerDemoCellEventModel(
                     event_id=uuid4(),
                     operation_id=operation_id,
+                    workspace_id=self._workspace_id,
                     row_id=cell_event.row.id,
                     column_key=cell_event.column_id,
                     before_value=cell_event.before_value,

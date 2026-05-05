@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,12 +37,19 @@ class GridDemoRow(Base):
 class ServerDemoOperation(Base):
     __tablename__ = "server_demo_operations"
     __table_args__ = (
+        Index("ix_server_demo_operations_operation_id_workspace_id", "operation_id", "workspace_id"),
         Index("ix_server_demo_operations_operation_type", "operation_type"),
         Index("ix_server_demo_operations_status", "status"),
         Index("ix_server_demo_operations_created_at", "created_at"),
     )
 
-    operation_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+        server_default=text("nextval('server_demo_operations_id_seq'::regclass)"),
+    )
+    operation_id: Mapped[str] = mapped_column(Text, nullable=False)
+    workspace_id: Mapped[str | None] = mapped_column(String, nullable=True)
     operation_type: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     operation_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSONB, nullable=False, default=dict)
@@ -54,17 +61,14 @@ class ServerDemoOperation(Base):
 class ServerDemoCellEvent(Base):
     __tablename__ = "server_demo_cell_events"
     __table_args__ = (
-        Index("ix_server_demo_cell_events_operation_id", "operation_id"),
+        Index("ix_server_demo_cell_events_operation_id_workspace_id", "operation_id", "workspace_id"),
         Index("ix_server_demo_cell_events_row_id", "row_id"),
         Index("ix_server_demo_cell_events_created_at", "created_at"),
     )
 
     event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
-    operation_id: Mapped[str] = mapped_column(
-        Text,
-        ForeignKey("server_demo_operations.operation_id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    operation_id: Mapped[str] = mapped_column(Text, nullable=False)
+    workspace_id: Mapped[str | None] = mapped_column(String, nullable=True)
     row_id: Mapped[str] = mapped_column(Text, nullable=False)
     column_key: Mapped[str] = mapped_column(Text, nullable=False)
     before_value: Mapped[object | None] = mapped_column(JSONB, nullable=True)

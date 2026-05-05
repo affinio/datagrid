@@ -5,7 +5,9 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
+from app.features.server_demo.models import ServerDemoCellEvent, ServerDemoOperation
 from app.features.server_demo.revision import ServerDemoRevisionService
 from app.features.server_demo.seed import insert_demo_rows, seed_demo_rows
 from app.infrastructure.db.database import AsyncSessionLocal
@@ -67,10 +69,13 @@ async def edit_name(
     value: str,
     workspace_id: str | None = None,
     base_revision: str | None = None,
+    operation_id: str | None = None,
 ) -> tuple[int, dict[str, object]]:
     payload: dict[str, object] = {"edits": [{"rowId": row_id, "columnId": "name", "value": value}]}
     if base_revision is not None:
         payload["baseRevision"] = base_revision
+    if operation_id is not None:
+        payload["operationId"] = operation_id
     response = await client.post("/api/server-demo/edits", json=payload, headers=workspace_headers(workspace_id))
     return response.status_code, response.json()
 
@@ -98,6 +103,28 @@ async def pull_workspace_rows(client: AsyncClient, workspace_id: str | None, *, 
     )
     assert response.status_code == 200
     return response.json()
+
+
+async def fetch_operation_history(
+    operation_id: str,
+    workspace_id: str | None,
+) -> tuple[ServerDemoOperation | None, list[ServerDemoCellEvent]]:
+    async with AsyncSessionLocal() as session:
+        operation_stmt = select(ServerDemoOperation).where(ServerDemoOperation.operation_id == operation_id)
+        if workspace_id is None:
+            operation_stmt = operation_stmt.where(ServerDemoOperation.workspace_id.is_(None))
+        else:
+            operation_stmt = operation_stmt.where(ServerDemoOperation.workspace_id == workspace_id)
+        operation = await session.scalar(operation_stmt)
+
+        events_stmt = select(ServerDemoCellEvent).where(ServerDemoCellEvent.operation_id == operation_id)
+        if workspace_id is None:
+            events_stmt = events_stmt.where(ServerDemoCellEvent.workspace_id.is_(None))
+        else:
+            events_stmt = events_stmt.where(ServerDemoCellEvent.workspace_id == workspace_id)
+        events = (await session.scalars(events_stmt.order_by(ServerDemoCellEvent.created_at.asc(), ServerDemoCellEvent.event_id.asc()))).all()
+
+    return operation, list(events)
 
 
 async def test_workspace_revision_counters_are_independent(client: AsyncClient) -> None:
@@ -392,10 +419,8 @@ async def test_workspace_a_undo_redo_respects_row_scope(client: AsyncClient) -> 
         f"/api/server-demo/operations/{operation_id}/undo",
         headers=workspace_headers("workspace-b"),
     )
-    assert wrong_workspace_undo.status_code == 200
-    assert wrong_workspace_undo.json()["rejected"] == [
-        {"rowId": "ws-a-000000", "columnId": "name", "reason": "row-not-found"}
-    ]
+    assert wrong_workspace_undo.status_code == 404
+    assert wrong_workspace_undo.json()["code"] == "operation-not-found"
     assert (await pull_workspace_rows(client, "workspace-a", start=0, end=1))["rows"][0]["name"] == "Scoped Undo Redo"
 
     correct_workspace_undo = await client.post(
@@ -409,7 +434,215 @@ async def test_workspace_a_undo_redo_respects_row_scope(client: AsyncClient) -> 
         f"/api/server-demo/operations/{operation_id}/redo",
         headers=workspace_headers("workspace-b"),
     )
-    assert wrong_workspace_redo.status_code == 200
-    assert wrong_workspace_redo.json()["rejected"] == [
-        {"rowId": "ws-a-000000", "columnId": "name", "reason": "row-not-found"}
-    ]
+    assert wrong_workspace_redo.status_code == 404
+    assert wrong_workspace_redo.json()["code"] == "operation-not-found"
+
+
+async def test_workspace_a_fill_history_scoped_correctly(client: AsyncClient) -> None:
+    operation_id = "shared-fill-history"
+
+    await insert_workspace_rows(workspace_id="workspace-a", id_prefix="ws-a", row_count=2, row_index_start=0)
+    await insert_workspace_rows(workspace_id="workspace-b", id_prefix="ws-b", row_count=2, row_index_start=0)
+
+    response_a = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "sourceRange": {"startRow": 0, "endRow": 0, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 0, "endRow": 1, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["ws-a-000000"],
+            "targetRowIds": ["ws-a-000000", "ws-a-000001"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+        headers=workspace_headers("workspace-a"),
+    )
+    assert response_a.status_code == 200
+
+    response_b = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "sourceRange": {"startRow": 0, "endRow": 0, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 0, "endRow": 1, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["ws-b-000000"],
+            "targetRowIds": ["ws-b-000000", "ws-b-000001"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+        headers=workspace_headers("workspace-b"),
+    )
+    assert response_b.status_code == 200
+
+    operation_a, events_a = await fetch_operation_history(operation_id, "workspace-a")
+    operation_b, events_b = await fetch_operation_history(operation_id, "workspace-b")
+
+    assert operation_a is not None
+    assert operation_a.workspace_id == "workspace-a"
+    assert operation_a.operation_type == "fill"
+    assert [event.workspace_id for event in events_a] == ["workspace-a"]
+    assert [event.row_id for event in events_a] == ["ws-a-000001"]
+
+    assert operation_b is not None
+    assert operation_b.workspace_id == "workspace-b"
+    assert operation_b.operation_type == "fill"
+    assert [event.workspace_id for event in events_b] == ["workspace-b"]
+    assert [event.row_id for event in events_b] == ["ws-b-000001"]
+
+
+async def test_workspace_a_edit_history_scoped_correctly(client: AsyncClient) -> None:
+    operation_id = "shared-edit-history"
+
+    await insert_workspace_rows(workspace_id="workspace-a", id_prefix="ws-a", row_count=1, row_index_start=0)
+    await insert_workspace_rows(workspace_id="workspace-b", id_prefix="ws-b", row_count=1, row_index_start=0)
+
+    edit_status_a, edit_body_a = await edit_name(
+        client,
+        row_id="ws-a-000000",
+        value="Workspace A Edit",
+        workspace_id="workspace-a",
+        base_revision="0",
+        operation_id=operation_id,
+    )
+    assert edit_status_a == 200
+
+    edit_status_b, edit_body_b = await edit_name(
+        client,
+        row_id="ws-b-000000",
+        value="Workspace B Edit",
+        workspace_id="workspace-b",
+        base_revision="0",
+        operation_id=operation_id,
+    )
+    assert edit_status_b == 200
+
+    operation_a, events_a = await fetch_operation_history(operation_id, "workspace-a")
+    operation_b, events_b = await fetch_operation_history(operation_id, "workspace-b")
+
+    assert operation_a is not None
+    assert operation_a.workspace_id == "workspace-a"
+    assert operation_a.operation_type == "edit"
+    assert [event.workspace_id for event in events_a] == ["workspace-a"]
+    assert [event.row_id for event in events_a] == ["ws-a-000000"]
+    assert events_a[0].after_value == "Workspace A Edit"
+
+    assert operation_b is not None
+    assert operation_b.workspace_id == "workspace-b"
+    assert operation_b.operation_type == "edit"
+    assert [event.workspace_id for event in events_b] == ["workspace-b"]
+    assert [event.row_id for event in events_b] == ["ws-b-000000"]
+    assert events_b[0].after_value == "Workspace B Edit"
+
+    assert edit_body_a["operationId"] == operation_id
+    assert edit_body_b["operationId"] == operation_id
+
+
+async def test_same_operation_id_in_different_workspaces_does_not_conflict(client: AsyncClient) -> None:
+    operation_id = "shared-operation-id"
+
+    await insert_workspace_rows(workspace_id="workspace-a", id_prefix="ws-a", row_count=1, row_index_start=0)
+    await insert_workspace_rows(workspace_id="workspace-b", id_prefix="ws-b", row_count=1, row_index_start=1)
+
+    edit_status_a, _ = await edit_name(
+        client,
+        row_id="ws-a-000000",
+        value="Workspace A Shared Op",
+        workspace_id="workspace-a",
+        base_revision="0",
+        operation_id=operation_id,
+    )
+    edit_status_b, _ = await edit_name(
+        client,
+        row_id="ws-b-000001",
+        value="Workspace B Shared Op",
+        workspace_id="workspace-b",
+        base_revision="0",
+        operation_id=operation_id,
+    )
+
+    assert edit_status_a == 200
+    assert edit_status_b == 200
+
+    operation_a, events_a = await fetch_operation_history(operation_id, "workspace-a")
+    operation_b, events_b = await fetch_operation_history(operation_id, "workspace-b")
+
+    assert operation_a is not None
+    assert operation_b is not None
+    assert operation_a.workspace_id == "workspace-a"
+    assert operation_b.workspace_id == "workspace-b"
+    assert [event.row_id for event in events_a] == ["ws-a-000000"]
+    assert [event.row_id for event in events_b] == ["ws-b-000001"]
+
+
+async def test_legacy_null_workspace_still_works(client: AsyncClient) -> None:
+    operation_id = "legacy-null-workspace"
+
+    edit_status, edit_body = await edit_name(
+        client,
+        row_id="srv-000010",
+        value="Legacy Null Workspace",
+        operation_id=operation_id,
+        base_revision="0",
+    )
+    assert edit_status == 200
+
+    operation, events = await fetch_operation_history(operation_id, None)
+    assert operation is not None
+    assert operation.workspace_id is None
+    assert operation.operation_type == "edit"
+    assert len(events) == 1
+    assert events[0].workspace_id is None
+    assert events[0].row_id == "srv-000010"
+
+    undo_response = await client.post(f"/api/server-demo/operations/{operation_id}/undo")
+    assert undo_response.status_code == 200
+    assert (await pull_workspace_rows(client, None, start=10, end=11))["rows"][0]["name"] == "Account 00010"
+
+    assert edit_body["operationId"] == operation_id
+
+
+async def test_row_and_operation_scope_consistency_no_cross_workspace_replay(
+    client: AsyncClient,
+) -> None:
+    operation_id = "shared-replay-operation"
+
+    await insert_workspace_rows(workspace_id="workspace-a", id_prefix="ws-a", row_count=1, row_index_start=0)
+    await insert_workspace_rows(workspace_id="workspace-b", id_prefix="ws-b", row_count=1, row_index_start=0)
+
+    edit_status_a, _ = await edit_name(
+        client,
+        row_id="ws-a-000000",
+        value="Workspace A Replay",
+        workspace_id="workspace-a",
+        base_revision="0",
+        operation_id=operation_id,
+    )
+    edit_status_b, _ = await edit_name(
+        client,
+        row_id="ws-b-000000",
+        value="Workspace B Replay",
+        workspace_id="workspace-b",
+        base_revision="0",
+        operation_id=operation_id,
+    )
+    assert edit_status_a == 200
+    assert edit_status_b == 200
+
+    undo_a = await client.post(
+        f"/api/server-demo/operations/{operation_id}/undo",
+        headers=workspace_headers("workspace-a"),
+    )
+    assert undo_a.status_code == 200
+    assert (await pull_workspace_rows(client, "workspace-a", start=0, end=1))["rows"][0]["name"] == "Account 00000"
+    assert (await pull_workspace_rows(client, "workspace-b", start=0, end=1))["rows"][0]["name"] == "Workspace B Replay"
+
+    undo_b = await client.post(
+        f"/api/server-demo/operations/{operation_id}/undo",
+        headers=workspace_headers("workspace-b"),
+    )
+    assert undo_b.status_code == 200
+    assert (await pull_workspace_rows(client, "workspace-b", start=0, end=1))["rows"][0]["name"] == "Account 00000"

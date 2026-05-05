@@ -11,7 +11,7 @@ from app.features.server_demo.models import ServerDemoCellEvent as ServerDemoCel
 from app.features.server_demo.models import ServerDemoOperation as ServerDemoOperationModel
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.table import SERVER_DEMO_TABLE
-from app.features.server_demo.workspace import workspace_scope_condition
+from app.features.server_demo.workspace import workspace_column_condition, workspace_scope_condition
 from app.grid.history import GridHistoryServiceBase
 from app.grid.mutations import GridHistoryApplyResult
 from app.grid.revision import GridRevisionService
@@ -37,7 +37,10 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
         return await self.apply_operation(session, operation_id, "redo")
 
     async def get_operation(self, session: AsyncSession, operation_id: str, *, with_for_update: bool = False) -> Any:
-        stmt = select(ServerDemoOperationModel).where(ServerDemoOperationModel.operation_id == operation_id)
+        stmt = select(ServerDemoOperationModel).where(
+            ServerDemoOperationModel.operation_id == operation_id,
+            workspace_column_condition(ServerDemoOperationModel.workspace_id, self._workspace_id),
+        )
         if with_for_update:
             stmt = stmt.with_for_update()
         return await session.scalar(stmt)
@@ -64,7 +67,10 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
         return (
             await session.scalars(
                 select(ServerDemoCellEventModel)
-                .where(ServerDemoCellEventModel.operation_id == operation_id)
+                .where(
+                    ServerDemoCellEventModel.operation_id == operation_id,
+                    workspace_column_condition(ServerDemoCellEventModel.workspace_id, self._workspace_id),
+                )
                 .order_by(ServerDemoCellEventModel.created_at.asc(), ServerDemoCellEventModel.event_id.asc())
             )
         ).all()
