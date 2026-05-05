@@ -152,6 +152,70 @@ async def test_server_demo_batch_edit_persists(client: AsyncClient) -> None:
     assert row_21["region"] == "LATAM"
 
 
+async def test_server_demo_move_like_batch_persists_source_clear_and_target_write(client: AsyncClient) -> None:
+    operation_id = "test-move-like-batch"
+    source_before = await pull_row(client, 110)
+    target_before = await pull_row(client, 111)
+
+    response = await client.post(
+        "/api/server-demo/edits",
+        json={
+            "operationId": operation_id,
+            "edits": [
+                {"rowId": "srv-000110", "columnId": "status", "value": ""},
+                {"rowId": "srv-000111", "columnId": "status", "value": "Paused"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == operation_id
+    assert body["committedRowIds"] == ["srv-000110", "srv-000111"]
+    assert body["rejected"] == []
+    assert [(entry["rowId"], entry["columnId"]) for entry in body["committed"]] == [
+        ("srv-000110", "status"),
+        ("srv-000111", "status"),
+    ]
+
+    source_after = await pull_row(client, 110)
+    target_after = await pull_row(client, 111)
+    assert source_after["status"] == ""
+    assert target_after["status"] == "Paused"
+
+    operation, events = await fetch_operation_history(operation_id)
+    assert operation is not None
+    assert operation.operation_type == "edit"
+    assert operation.status == "applied"
+    assert len(events) == 2
+    assert sorted((event.row_id, event.column_key) for event in events) == [
+        ("srv-000110", "status"),
+        ("srv-000111", "status"),
+    ]
+    assert events[0].before_value == source_before["status"]
+    assert events[0].after_value == ""
+    assert events[1].before_value == target_before["status"]
+    assert events[1].after_value == "Paused"
+
+    undo_response = await client.post(f"/api/server-demo/operations/{operation_id}/undo")
+    assert undo_response.status_code == 200
+    undo_body = undo_response.json()
+    assert undo_body["operationId"] == operation_id
+    assert sorted(undo_body["committedRowIds"]) == ["srv-000110", "srv-000111"]
+    assert undo_body["rejected"] == []
+    assert (await pull_row(client, 110))["status"] == source_before["status"]
+    assert (await pull_row(client, 111))["status"] == target_before["status"]
+
+    redo_response = await client.post(f"/api/server-demo/operations/{operation_id}/redo")
+    assert redo_response.status_code == 200
+    redo_body = redo_response.json()
+    assert redo_body["operationId"] == operation_id
+    assert sorted(redo_body["committedRowIds"]) == ["srv-000110", "srv-000111"]
+    assert redo_body["rejected"] == []
+    assert (await pull_row(client, 110))["status"] == ""
+    assert (await pull_row(client, 111))["status"] == "Paused"
+
+
 async def test_server_demo_invalid_column_edit_is_rejected(client: AsyncClient) -> None:
     response = await client.post(
         "/api/server-demo/edits",
@@ -214,6 +278,126 @@ async def test_server_demo_value_edit_persists_as_integer(client: AsyncClient) -
 
     row = await pull_row(client, 50)
     assert row["value"] == 12345
+
+
+async def test_server_demo_value_edit_can_be_cleared_with_empty_string(client: AsyncClient) -> None:
+    before = await pull_row(client, 500)
+
+    response = await client.post(
+        "/api/server-demo/edits",
+        json={"edits": [{"rowId": "srv-000500", "columnId": "value", "value": ""}]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"]
+    assert body["committedRowIds"] == ["srv-000500"]
+    assert body["rejected"] == []
+
+    after = await pull_row(client, 500)
+    assert after["value"] is None
+    assert after["updatedAt"] != before["updatedAt"]
+
+    sorted_response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 5},
+            "sortModel": [{"colId": "value", "sort": "asc"}],
+        },
+    )
+    assert sorted_response.status_code == 200
+
+    filtered_response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 5},
+            "filterModel": {"value": {"type": "greaterThan", "filter": 0}},
+        },
+    )
+    assert filtered_response.status_code == 200
+
+
+async def test_server_demo_value_edit_can_be_cleared_with_null(client: AsyncClient) -> None:
+    before = await pull_row(client, 501)
+
+    response = await client.post(
+        "/api/server-demo/edits",
+        json={"edits": [{"rowId": "srv-000501", "columnId": "value", "value": None}]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"]
+    assert body["committedRowIds"] == ["srv-000501"]
+    assert body["rejected"] == []
+
+    after = await pull_row(client, 501)
+    assert after["value"] is None
+    assert after["updatedAt"] != before["updatedAt"]
+
+
+async def test_server_demo_value_move_like_batch_clears_source_and_restores_with_history(client: AsyncClient) -> None:
+    operation_id = "test-value-move-like-batch"
+    source_before = await pull_row(client, 502)
+    target_before = await pull_row(client, 503)
+
+    response = await client.post(
+        "/api/server-demo/edits",
+        json={
+            "operationId": operation_id,
+            "edits": [
+                {"rowId": "srv-000502", "columnId": "value", "value": ""},
+                {"rowId": "srv-000503", "columnId": "value", "value": source_before["value"]},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == operation_id
+    assert body["committedRowIds"] == ["srv-000502", "srv-000503"]
+    assert body["rejected"] == []
+    assert [(entry["rowId"], entry["columnId"]) for entry in body["committed"]] == [
+        ("srv-000502", "value"),
+        ("srv-000503", "value"),
+    ]
+
+    source_after = await pull_row(client, 502)
+    target_after = await pull_row(client, 503)
+    assert source_after["value"] is None
+    assert target_after["value"] == source_before["value"]
+
+    operation, events = await fetch_operation_history(operation_id)
+    assert operation is not None
+    assert operation.operation_type == "edit"
+    assert operation.status == "applied"
+    assert len(events) == 2
+    assert sorted((event.row_id, event.column_key) for event in events) == [
+        ("srv-000502", "value"),
+        ("srv-000503", "value"),
+    ]
+    assert events[0].before_value == source_before["value"]
+    assert events[0].after_value is None
+    assert events[1].before_value == target_before["value"]
+    assert events[1].after_value == source_before["value"]
+
+    undo_response = await client.post(f"/api/server-demo/operations/{operation_id}/undo")
+    assert undo_response.status_code == 200
+    undo_body = undo_response.json()
+    assert undo_body["operationId"] == operation_id
+    assert sorted(undo_body["committedRowIds"]) == ["srv-000502", "srv-000503"]
+    assert undo_body["rejected"] == []
+    assert (await pull_row(client, 502))["value"] == source_before["value"]
+    assert (await pull_row(client, 503))["value"] == target_before["value"]
+
+    redo_response = await client.post(f"/api/server-demo/operations/{operation_id}/redo")
+    assert redo_response.status_code == 200
+    redo_body = redo_response.json()
+    assert redo_body["operationId"] == operation_id
+    assert sorted(redo_body["committedRowIds"]) == ["srv-000502", "srv-000503"]
+    assert redo_body["rejected"] == []
+    assert (await pull_row(client, 502))["value"] is None
+    assert (await pull_row(client, 503))["value"] == source_before["value"]
 
 
 async def test_server_demo_edit_persists_after_repeated_pull(client: AsyncClient) -> None:

@@ -1705,6 +1705,101 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(controller.rangeMovePreviewRange.value).toBeNull()
   })
 
+  it("commits server-backed range move as a single batch with source clears and target writes", async () => {
+    const {
+      controller,
+      row,
+      selectionSnapshot,
+      applyEdits,
+      recordIntentTransaction,
+      syncViewport,
+      applySelectionRange,
+    } = createControllerHarness({
+      rowCount: 2,
+      columnCount: 2,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      shellHeight: 80,
+      indexColumnWidth: 72,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(1, Math.floor(offset / 24))),
+      rowData: [
+        { a: "A1", b: "B1" },
+        { a: "A2", b: "B2" },
+      ],
+      runtimeRowModelDataSource: {},
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    const sourceCell = createCell(0, 0)
+    const pointerDown = createMouseEvent("mousedown", sourceCell, {
+      button: 0,
+      altKey: true,
+      clientX: 120,
+      clientY: 12,
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      altKey: true,
+      clientX: 220,
+      clientY: 36,
+    }))
+    controller.handleWindowMouseUp()
+    await flushAsync()
+
+    expect(applyEdits).toHaveBeenCalledTimes(1)
+    expect(applyEdits).toHaveBeenCalledWith([
+      { rowId: "r1", data: { a: "" } },
+      { rowId: "r2", data: { b: "A1" } },
+    ])
+    expect(recordIntentTransaction).toHaveBeenCalledTimes(1)
+    expect(recordIntentTransaction.mock.calls[0]?.[0]).toMatchObject({
+      intent: "move",
+      affectedRange: {
+        startRow: 1,
+        endRow: 1,
+        startColumn: 1,
+        endColumn: 1,
+      },
+    })
+    expect(recordIntentTransaction.mock.calls[0]?.[1]).toMatchObject({
+      kind: "partial",
+      rows: [
+        { rowId: "r1", row: { a: "A1", b: "B1" } },
+        { rowId: "r2", row: { a: "A2", b: "B2" } },
+      ],
+    })
+    expect(recordIntentTransaction.mock.calls[0]?.[2]).toMatchObject({
+      kind: "partial",
+      rows: [
+        { rowId: "r1", row: { a: "", b: "B1" } },
+        { rowId: "r2", row: { a: "A2", b: "A1" } },
+      ],
+    })
+    expect(applySelectionRange).toHaveBeenCalledWith({
+      startRow: 1,
+      endRow: 1,
+      startColumn: 1,
+      endColumn: 1,
+    })
+    expect(syncViewport).toHaveBeenCalled()
+  })
+
   it("starts fill drag from the current range without extending preview before pointer movement", () => {
     const { controller, selectionSnapshot } = createControllerHarness({
       rowCount: 3,

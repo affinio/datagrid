@@ -389,6 +389,38 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     ])
   })
 
+  it("preserves cleared cell values when flattening batch edit patches", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      committed: [
+        { rowId: "srv-000004", columnId: "name", revision: "rev-row-4" },
+        { rowId: "srv-000004", columnId: "status", revision: "rev-row-4" },
+      ],
+      committedRowIds: ["srv-000004"],
+      rejected: [],
+      revision: "rev-global-4",
+      invalidation: null,
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    await adapter.commitEdits!({
+      edits: [
+        { rowId: "srv-000004", data: { name: "", status: "Active" } },
+      ],
+    })
+
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      edits: [
+        { rowId: "srv-000004", columnId: "name", value: "" },
+        { rowId: "srv-000004", columnId: "status", value: "Active" },
+      ],
+    })
+  })
+
   it("maps readonly column rejections to row-model rejected rows", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       operationId: "op-readonly-1",

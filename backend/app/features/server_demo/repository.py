@@ -618,6 +618,8 @@ class ServerDemoRepository:
 
         enum_values = ENUM_VALUES_BY_COLUMN.get(column_id)
         if enum_values is not None:
+            if value == "":
+                return ""
             if not isinstance(value, str):
                 raise ApiException(
                     status_code=400,
@@ -634,6 +636,8 @@ class ServerDemoRepository:
             return normalized
 
         if column_id == "value":
+            if value is None or value == "":
+                return None
             return self._normalize_edit_int(value)
 
         raise ApiException(

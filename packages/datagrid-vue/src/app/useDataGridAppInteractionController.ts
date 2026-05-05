@@ -759,6 +759,92 @@ export function useDataGridAppInteractionController<
     return options.captureRowsSnapshotForRowIds?.(rowIds) ?? options.captureRowsSnapshot()
   }
 
+  const applyServerBackedRangeMove = async (
+    baseRange: DataGridCopyRange,
+    targetRange: DataGridCopyRange,
+  ): Promise<boolean> => {
+    const editsByRowId = new Map<string | number, Record<string, string>>()
+    let appliedCells = 0
+    let blockedCells = 0
+
+    for (let rowOffset = 0; rowOffset <= baseRange.endRow - baseRange.startRow; rowOffset += 1) {
+      const sourceRowIndex = baseRange.startRow + rowOffset
+      const targetRowIndex = targetRange.startRow + rowOffset
+      const sourceRow = getBodyRowAtIndex(sourceRowIndex)
+      const targetRow = getBodyRowAtIndex(targetRowIndex)
+      if (
+        !sourceRow
+        || !targetRow
+        || sourceRow.kind === "group"
+        || targetRow.kind === "group"
+        || sourceRow.rowId == null
+        || targetRow.rowId == null
+      ) {
+        blockedCells += Math.max(0, baseRange.endColumn - baseRange.startColumn + 1)
+        continue
+      }
+
+      for (let columnOffset = 0; columnOffset <= baseRange.endColumn - baseRange.startColumn; columnOffset += 1) {
+        const sourceColumnIndex = baseRange.startColumn + columnOffset
+        const targetColumnIndex = targetRange.startColumn + columnOffset
+        const sourceColumnKey = options.visibleColumns.value[sourceColumnIndex]?.key
+        const targetColumnKey = options.visibleColumns.value[targetColumnIndex]?.key
+        if (
+          !sourceColumnKey
+          || !targetColumnKey
+          || sourceColumnKey === ROW_SELECTION_COLUMN_KEY
+          || targetColumnKey === ROW_SELECTION_COLUMN_KEY
+          || !options.isCellEditable(sourceRow, sourceRowIndex, sourceColumnKey, sourceColumnIndex)
+          || !options.isCellEditable(targetRow, targetRowIndex, targetColumnKey, targetColumnIndex)
+        ) {
+          blockedCells += 1
+          continue
+        }
+
+        const sourceValue = options.readCell(sourceRow, sourceColumnKey)
+        const sourcePatch = editsByRowId.get(sourceRow.rowId) ?? {}
+        sourcePatch[sourceColumnKey] = ""
+        editsByRowId.set(sourceRow.rowId, sourcePatch)
+
+        const targetPatch = editsByRowId.get(targetRow.rowId) ?? {}
+        targetPatch[targetColumnKey] = sourceValue
+        editsByRowId.set(targetRow.rowId, targetPatch)
+        appliedCells += 1
+      }
+    }
+
+    if (appliedCells === 0) {
+      return false
+    }
+
+    const updates = Array.from(editsByRowId.entries(), ([rowId, data]) => ({
+      rowId,
+      data: data as Partial<TRow>,
+    }))
+    const beforeSnapshot = captureRowsSnapshotForRanges([baseRange, targetRange])
+
+    try {
+      await Promise.resolve(options.runtime.api.rows.applyEdits(updates))
+    } catch (error) {
+      options.reportFillWarning?.(
+        error instanceof Error ? error.message : "range move commit failed",
+      )
+      return false
+    }
+
+    const afterSnapshot = captureRowsSnapshotForRanges([baseRange, targetRange])
+    void options.recordIntentTransaction({
+      intent: "move",
+      label: blockedCells > 0
+        ? `Move ${appliedCells} cells (blocked ${blockedCells})`
+        : `Move ${appliedCells} cells`,
+      affectedRange: targetRange,
+    }, beforeSnapshot, afterSnapshot)
+    options.applySelectionRange(targetRange)
+    options.syncViewport()
+    return true
+  }
+
   const rangeMutationEngine = useDataGridRangeMutationEngine<
     DataGridAppRowWithId<TRow>,
     { rowId: string },
@@ -1638,6 +1724,9 @@ export function useDataGridAppInteractionController<
       const targetRange = rangeMovePreviewRange.value
       if (options.applyRangeMove && baseRange && targetRange) {
         return options.applyRangeMove(baseRange, targetRange)
+      }
+      if (baseRange && targetRange && isServerBackedRowModel()) {
+        return applyServerBackedRangeMove(baseRange, targetRange)
       }
       return rangeMutationEngine.applyRangeMove()
     },

@@ -701,6 +701,64 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("keeps cleared values in optimistic commitEdits payloads", async () => {
+    const rows = [
+      { id: 1, value: "row-1" },
+    ]
+    const commitEdits = vi.fn(async ({ edits }: { edits: ReadonlyArray<{ rowId: number; data: { value?: string } }> }) => {
+      for (const edit of edits) {
+        const row = rows.find(candidate => candidate.id === edit.rowId)
+        if (row && typeof edit.data.value === "string") {
+          row.value = edit.data.value
+        }
+      }
+      return { committed: edits.map(edit => ({ rowId: edit.rowId })) }
+    })
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        return {
+          rows: rows
+            .filter(row => row.id >= request.range.start + 1 && row.id <= request.range.end + 1)
+            .map((row, offset) => ({
+              index: request.range.start + offset,
+              row,
+              rowId: row.id,
+            })),
+          total: rows.length,
+        }
+      },
+      commitEdits,
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+
+    model.setViewportRange({ start: 0, end: 0 })
+    await flushMicrotasks()
+
+    const patchRows = model.patchRows
+    if (patchRows) {
+      patchRows([
+        { rowId: 1, data: { value: "" } },
+      ])
+    }
+
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(commitEdits).toHaveBeenCalledWith({
+      edits: [
+        { rowId: 1, data: { value: "" } },
+      ],
+    })
+    expect(model.getRow(0)?.row.value).toBe("")
+
+    model.dispose()
+  })
+
   it("applies optimistic inline edits to cached rows before commit resolves", async () => {
     const rows = [
       { id: 1, value: "row-1" },
