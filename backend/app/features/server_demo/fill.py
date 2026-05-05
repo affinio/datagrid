@@ -15,6 +15,7 @@ from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.projection import ServerDemoProjectionService
 from app.features.server_demo.schemas import ServerDemoFillBoundaryRequest, ServerDemoFillBoundaryResponse
 from app.features.server_demo.table import SERVER_DEMO_TABLE
+from app.features.server_demo.workspace import workspace_scope_condition
 from app.grid.fill import GridFillServiceBase
 from app.grid.mutations import PendingGridCellEvent
 from app.grid.revision import GridRevisionService
@@ -28,11 +29,13 @@ class ServerDemoFillService(GridFillServiceBase):
         _columns: Mapping[str, Any],
         projection: ServerDemoProjectionService,
         revision_service: GridRevisionService | None = None,
+        workspace_id: str | None = None,
     ):
         if revision_service is None:
             raise ValueError("revision_service is required")
         super().__init__(SERVER_DEMO_TABLE, revision_service)
         self._projection = projection
+        self._workspace_id = workspace_id
 
     async def resolve_boundary(
         self,
@@ -75,6 +78,9 @@ class ServerDemoFillService(GridFillServiceBase):
         if not row_ids:
             return {}
         stmt = select(GridDemoRowModel).where(GridDemoRowModel.id.in_(list(row_ids)))
+        scope_condition = workspace_scope_condition(SERVER_DEMO_TABLE, self._workspace_id)
+        if scope_condition is not None:
+            stmt = stmt.where(scope_condition)
         if with_for_update:
             stmt = stmt.with_for_update()
         rows = (await session.scalars(stmt)).all()

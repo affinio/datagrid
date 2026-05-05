@@ -8,6 +8,7 @@ SERVER_DEMO_TABLE = GridTableDefinition(
     table_id="server_demo",
     model=GridDemoRowModel,
     row_id_attr="id",
+    workspace_id_attr="workspace_id",
     row_index_attr="row_index",
     updated_at_attr="updated_at",
     columns=SERVER_DEMO_COLUMNS,

@@ -13,6 +13,7 @@ from app.features.server_demo.models import ServerDemoCellEvent as ServerDemoCel
 from app.features.server_demo.models import ServerDemoOperation as ServerDemoOperationModel
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.table import SERVER_DEMO_TABLE
+from app.features.server_demo.workspace import workspace_scope_condition
 from app.grid.edits import GridEditServiceBase
 from app.grid.mutations import PendingGridCellEvent
 from app.grid.revision import GridRevisionService
@@ -21,10 +22,16 @@ OPERATION_STATUS_APPLIED = "applied"
 
 
 class ServerDemoEditService(GridEditServiceBase):
-    def __init__(self, _columns: Mapping[str, Any] | None = None, revision_service: GridRevisionService | None = None):
+    def __init__(
+        self,
+        _columns: Mapping[str, Any] | None = None,
+        revision_service: GridRevisionService | None = None,
+        workspace_id: str | None = None,
+    ):
         if revision_service is None:
             raise ValueError("revision_service is required")
         super().__init__(SERVER_DEMO_TABLE, revision_service)
+        self._workspace_id = workspace_id
 
     def normalize_edit_value(self, column_id: str, value: Any) -> Any:
         if column_id == "name" and value is None:
@@ -45,6 +52,9 @@ class ServerDemoEditService(GridEditServiceBase):
         if not row_ids:
             return {}
         stmt = select(GridDemoRowModel).where(GridDemoRowModel.id.in_(row_ids))
+        scope_condition = workspace_scope_condition(SERVER_DEMO_TABLE, self._workspace_id)
+        if scope_condition is not None:
+            stmt = stmt.where(scope_condition)
         if with_for_update:
             stmt = stmt.with_for_update()
         rows = (await session.scalars(stmt)).all()

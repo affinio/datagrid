@@ -91,6 +91,7 @@ class GridHistoryServiceBase(ABC):
                 prepared_events.append((event, row, target_value, row_id, column_id))
 
             if rejected:
+                revision = await self._revision_service.get_revision(session)
                 return GridHistoryApplyResult(
                     operation_id=operation_id,
                     operation_type=self.get_operation_type(operation),
@@ -98,6 +99,7 @@ class GridHistoryServiceBase(ABC):
                     committed_row_ids=[],
                     rejected=rejected,
                     affected_indexes=[],
+                    revision=revision,
                 )
 
             changed_rows: dict[str, Any] = {}

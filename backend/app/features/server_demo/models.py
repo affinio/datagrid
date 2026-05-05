@@ -13,6 +13,8 @@ from app.infrastructure.db.database import Base
 class GridDemoRow(Base):
     __tablename__ = "grid_demo_rows"
     __table_args__ = (
+        Index("ix_grid_demo_rows_workspace_id", "workspace_id"),
+        Index("ix_grid_demo_rows_workspace_id_row_index", "workspace_id", "row_index"),
         Index("ix_grid_demo_rows_row_index", "row_index"),
         Index("ix_grid_demo_rows_region", "region"),
         Index("ix_grid_demo_rows_segment", "segment"),
@@ -22,6 +24,7 @@ class GridDemoRow(Base):
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(String, nullable=True)
     row_index: Mapped[int] = mapped_column(Integer, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     segment: Mapped[str] = mapped_column(String, nullable=False)

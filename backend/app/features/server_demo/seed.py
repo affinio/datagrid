@@ -19,10 +19,18 @@ BASE_UPDATED_AT = datetime(2025, 1, 1, tzinfo=timezone.utc)
 BATCH_SIZE = 5_000
 
 
-def _row_payloads() -> Iterable[dict[str, object]]:
-    for row_index in range(ROW_COUNT):
+def _row_payloads(
+    *,
+    workspace_id: str | None = None,
+    row_count: int = ROW_COUNT,
+    id_prefix: str = "srv",
+    row_index_start: int = 0,
+) -> Iterable[dict[str, object]]:
+    for offset in range(row_count):
+        row_index = row_index_start + offset
         yield {
-            "id": f"srv-{row_index:06d}",
+            "id": f"{id_prefix}-{row_index:06d}",
+            "workspace_id": workspace_id,
             "row_index": row_index,
             "name": f"Account {row_index:05d}",
             "segment": SEGMENTS[row_index % len(SEGMENTS)],
@@ -42,6 +50,28 @@ async def seed_demo_rows() -> None:
             await session.execute(delete(GridDemoRow))
 
             rows = _row_payloads()
+            while True:
+                batch = list(islice(rows, BATCH_SIZE))
+                if not batch:
+                    break
+                await session.execute(insert(GridDemoRow), batch)
+
+
+async def insert_demo_rows(
+    *,
+    workspace_id: str | None = None,
+    row_count: int = 1,
+    id_prefix: str = "ws",
+    row_index_start: int = 0,
+) -> None:
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            rows = _row_payloads(
+                workspace_id=workspace_id,
+                row_count=row_count,
+                id_prefix=id_prefix,
+                row_index_start=row_index_start,
+            )
             while True:
                 batch = list(islice(rows, BATCH_SIZE))
                 if not batch:

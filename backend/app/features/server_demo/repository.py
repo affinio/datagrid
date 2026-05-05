@@ -13,6 +13,7 @@ from app.features.server_demo.history import ServerDemoHistoryService
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.projection import ServerDemoProjectionService
 from app.features.server_demo.table import SERVER_DEMO_TABLE
+from app.features.server_demo.workspace import workspace_scope_condition
 from app.features.server_demo.schemas import (
     ServerDemoCommitEditsRequest,
     ServerDemoCommitEditsResponse,
@@ -42,15 +43,28 @@ class ServerDemoRepository(ServerGridDataAdapter):
     def __init__(self, session: AsyncSession, workspace_id: str | None = None):
         self._session = session
         self._workspace_id = workspace_id
-        self._projection = ServerDemoProjectionService(SERVER_DEMO_TABLE)
+        self._projection = ServerDemoProjectionService(SERVER_DEMO_TABLE, workspace_id=workspace_id)
         self._revision = GridRevisionService(SERVER_DEMO_TABLE, workspace_id=workspace_id)
-        self._edits = ServerDemoEditService(SERVER_DEMO_TABLE.columns, self._revision)
-        self._fill = ServerDemoFillService(SERVER_DEMO_TABLE.columns, self._projection, self._revision)
-        self._history = ServerDemoHistoryService(SERVER_DEMO_TABLE.columns, self._revision)
+        self._edits = ServerDemoEditService(SERVER_DEMO_TABLE.columns, self._revision, workspace_id=workspace_id)
+        self._fill = ServerDemoFillService(
+            SERVER_DEMO_TABLE.columns,
+            self._projection,
+            self._revision,
+            workspace_id=workspace_id,
+        )
+        self._history = ServerDemoHistoryService(
+            SERVER_DEMO_TABLE.columns,
+            self._revision,
+            workspace_id=workspace_id,
+        )
         self._invalidation = GridInvalidationService(GridInvalidationReasonMap())
 
     async def health(self) -> None:
-        await self._session.scalar(select(func.max(getattr(SERVER_DEMO_TABLE.model, SERVER_DEMO_TABLE.row_index_attr))))
+        stmt = select(func.max(getattr(SERVER_DEMO_TABLE.model, SERVER_DEMO_TABLE.row_index_attr)))
+        scope_condition = workspace_scope_condition(SERVER_DEMO_TABLE, self._workspace_id)
+        if scope_condition is not None:
+            stmt = stmt.where(scope_condition)
+        await self._session.scalar(stmt)
 
     async def pull(self, request: ServerDemoPullRequest) -> ServerDemoPullResponse:
         conditions = self._projection.build_filter_conditions(request.filter_model)

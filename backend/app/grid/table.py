@@ -15,6 +15,7 @@ class GridTableDefinition:
     updated_at_attr: str
     columns: GridColumnRegistry
     default_sort_column_id: str = "index"
+    workspace_id_attr: str | None = None
 
     def column(self, column_id: str) -> GridColumnDefinition | None:
         return self.columns.get(column_id)
@@ -27,6 +28,11 @@ class GridTableDefinition:
 
     def row_id_value(self, row: Any) -> str:
         return getattr(row, self.row_id_attr)
+
+    def workspace_id_value(self, row: Any) -> Any:
+        if self.workspace_id_attr is None:
+            return None
+        return getattr(row, self.workspace_id_attr)
 
     def row_index_value(self, row: Any) -> int:
         return getattr(row, self.row_index_attr)
