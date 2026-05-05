@@ -1,45 +1,51 @@
 # Consistency
 
-The server-backed datasource uses four related consistency values. They solve different problems and should not be conflated.
+This page explains the consistency contract in implementation terms.
 
-## Revision
+## Monotonic Revision
 
-`revision` is the monotonic workspace-scoped counter used for table state.
+`revision` is a monotonic counter for a table scope.
 
-Where it appears:
+Use it for:
 
-- pull response
-- edit commit response
-- fill boundary response
-- fill commit response
-- undo / redo response
+- cache cursors
+- stale-write checks
+- change detection after pull
+- history sequencing
 
-What it does:
+The backend should bump the revision only when the mutation actually changes persisted row state.
 
-- gives the frontend a lightweight change token
-- supports stale-write rejection for edits
-- supports stale-write rejection for fill commits when `baseRevision` is supplied
-- scopes undo/redo history to a workspace
+## Workspace-Scoped Revision
 
-In the current backend, the revision service stores one row per table and workspace scope.
+If the backend is multi-tenant, scope revision by workspace.
 
-## Base Revision
+Current behavior:
 
-`baseRevision` is a client-supplied optimistic concurrency check.
+- `X-Workspace-Id` selects the workspace scope
+- missing header means legacy default scope
+- a given table can have independent revision counters in different workspaces
 
-Behavior:
+Practical rule:
 
-- edit commits reject with `409 stale-revision` when `baseRevision` is present and does not match the current revision
-- fill commits reject with `409 stale-revision` when `baseRevision` is present and does not match the current revision
-- if `baseRevision` is omitted, the backend does not perform that specific stale check
+- do not reuse the global revision counter across workspaces
+- do not let a workspace read another workspace's revision row
 
-This keeps the protocol flexible for clients that do not yet track revision state, while still allowing a strict mode for clients that do.
+## `baseRevision` For Edits
 
-## Projection Hash
+`baseRevision` is the optimistic concurrency check for edit commits.
 
-`projectionHash` is a canonical hash of the fill projection snapshot.
+Required behavior:
 
-It exists because fill is not just a row-id problem. The fill boundary depends on the projection context that was active when the boundary was resolved:
+- if `baseRevision` is present and does not match the current revision, reject with `409 stale-revision`
+- if it is omitted, the backend may accept the commit without that specific check
+
+Use it on the frontend when you have a revision token from the last successful pull or write.
+
+## `projectionHash` For Fill
+
+`projectionHash` binds fill commit to the projection that was active when the fill boundary was resolved.
+
+It protects against changes in:
 
 - sort model
 - filter model
@@ -49,70 +55,70 @@ It exists because fill is not just a row-id problem. The fill boundary depends o
 - pivot state
 - pagination snapshot
 
-If the projection changes between boundary resolution and fill commit, the fill result may no longer be valid. The backend uses `projectionHash` to detect that mismatch.
+If the hash changes, the backend should reject with `409 projection-mismatch`.
 
-## Boundary Token
+## `boundaryToken` For Fill
 
-`boundaryToken` is a hash of the boundary payload plus the revision and projection hash.
+`boundaryToken` protects the exact boundary payload.
 
-It exists so the backend can verify that the target fill range still matches what the frontend saw when the boundary was resolved.
-
-The backend builds it from:
+It should be built from:
 
 - revision
 - projection hash
-- fill start row index
-- resolved boundary end row index
-- resolved boundary end row id
+- start row index
+- resolved end row index
+- resolved end row id
 
-If any of those change, the token changes.
+If the boundary token changes, the backend should reject with `409 boundary-mismatch`.
 
-## How Rejection Works
+## `X-Workspace-Id`
 
-The reference backend rejects stale or mismatched fill commits in this order:
+This header is the current workspace selector.
 
-1. stale `baseRevision`
-2. mismatched `projectionHash`
-3. mismatched `boundaryToken`
+Current behavior:
 
-That ordering matters because stale revision is the broadest and cheapest conflict to check first.
+- missing header reads the legacy `NULL` workspace
+- present header scopes reads and writes to that workspace
+- revision, pull, histogram, edits, fill, undo, and redo should all agree on the same workspace scope
 
-For edits, the conflict path is simpler:
+Do not derive workspace from the row payload.
 
-- if `baseRevision` is stale, the entire commit is rejected
-- if individual cell values are invalid, those edits are rejected at the row/cell level
-- if `previousValue` does not match the current row value, that edit is rejected
+## Stale / Mismatch Responses
 
-## Workspace-Scoped Revision
+Use these codes consistently:
 
-The revision service accepts an optional `workspace_id`.
+- `stale-revision`
+- `projection-mismatch`
+- `boundary-mismatch`
 
-With a workspace id:
+Frontend behavior should be deterministic:
 
-- the backend stores revision state separately for that workspace
-- the same table can have independent revision counters for different workspaces
-- undo/redo is also scoped to that workspace's revision state
+- stale revision means refresh and retry from a new revision
+- projection mismatch means the fill snapshot changed
+- boundary mismatch means the user no longer has the same fill boundary
 
-Without a workspace id:
+## What The Frontend Must Preserve Between Boundary And Commit
 
-- the backend behaves like the legacy shared scope
-
-This is currently controlled by the `X-Workspace-Id` header.
-
-## Current Limitations
-
-- server-side series fill is not implemented yet
-- fill still operates on a bounded projected window
-- the backend does not yet materialize arbitrary off-viewport rows for fill
-- the workspace scope is header-driven, not auth-driven
-- operation history is keyed by operation id, not by a stack cursor
-
-## Practical Rule
-
-If the frontend is about to commit a fill, it should send all three values when available:
+When the user resolves a fill boundary and later commits the fill, the frontend must keep the following fields unchanged unless the user explicitly changes the selection:
 
 - `baseRevision`
 - `projectionHash`
 - `boundaryToken`
+- `sourceRange`
+- `targetRange`
+- `sourceRowIds`
+- `targetRowIds`
+- `fillColumns`
+- `referenceColumns`
+- `mode`
+- `projection`
 
-That gives the backend the strongest possible consistency check without changing the row payload itself.
+If any of those values drift, the commit should be treated as a new operation rather than a continuation of the old one.
+
+## Current Limitations
+
+- server-side series fill is not implemented yet
+- history is operation-id based, not stack-based
+- full off-viewport materialization may be bounded
+- the workspace scope is header-driven, not auth-driven
+- the host app must still enforce authorization

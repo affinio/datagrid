@@ -1,15 +1,19 @@
 # Protocol
 
-This document defines the HTTP contract used by the server-backed datasource reference implementation.
+This document defines the HTTP contract used by the current server-backed datasource implementation.
+
+The examples below match the current `server_demo` shape. If your table uses different domain fields, keep the transport structure and swap only the row payload.
 
 ## Conventions
 
 - All endpoints are `POST` except `health`.
 - Requests and responses are JSON.
-- Errors are returned as JSON with at least `code` and `message`.
-- `range.endRow` is the exclusive end of the requested window.
-- `operationId` is optional on writes, but recommended if you want deterministic undo/redo and history tracking.
-- `revision` is a monotonic workspace-scoped string.
+- Errors are JSON with at least `code` and `message`.
+- `range.endRow` is exclusive.
+- `revision` is a monotonic string.
+- `baseRevision` is optional, but recommended for edits and fill commits.
+- `projectionHash` and `boundaryToken` are optional on fill commit, but strongly recommended.
+- `X-Workspace-Id` is the current workspace scope header.
 
 ## Pull
 
@@ -21,10 +25,10 @@ This document defines the HTTP contract used by the server-backed datasource ref
 {
   "range": { "startRow": 0, "endRow": 50 },
   "sortModel": [
-    { "colId": "value", "sort": "desc" }
+    { "colId": "currentPrice", "sort": "desc" }
   ],
   "filterModel": {
-    "status": { "type": "equals", "filter": "Active" }
+    "status": { "type": "equals", "filter": "Open" }
   }
 }
 ```
@@ -50,7 +54,20 @@ This document defines the HTTP contract used by the server-backed datasource ref
 }
 ```
 
-`revision` can be used by the frontend as a cache cursor or change token.
+Required fields:
+
+- `range.startRow`
+- `range.endRow`
+
+Recommended fields:
+
+- `sortModel`
+- `filterModel`
+
+Backward compatibility:
+
+- older clients may omit `sortModel` and `filterModel`
+- the backend should still return `rows`, `total`, and `revision`
 
 ## Histogram
 
@@ -80,6 +97,14 @@ This document defines the HTTP contract used by the server-backed datasource ref
   ]
 }
 ```
+
+Required fields:
+
+- `columnId`
+
+Optional fields:
+
+- `filterModel`
 
 ## Commit Edits
 
@@ -125,7 +150,19 @@ This document defines the HTTP contract used by the server-backed datasource ref
 }
 ```
 
-If every edit is rejected, the response still returns `200`, but `committed` and `committedRowIds` are empty and `operationId` may be `null`.
+Required fields:
+
+- `edits`
+
+Recommended fields:
+
+- `operationId`
+- `baseRevision`
+
+Backward compatibility:
+
+- if all edits are rejected, the backend may still return `200`
+- `operationId` may be `null` when nothing was committed
 
 ## Fill Boundary
 
@@ -169,13 +206,25 @@ If every edit is rejected, the response still returns `200`, but `committed` and
 }
 ```
 
-`boundaryKind` is one of:
+Required fields:
 
-- `data-end`
-- `gap`
-- `cache-boundary`
-- `projection-end`
-- `unresolved`
+- `direction`
+- `baseRange`
+- `fillColumns`
+- `referenceColumns`
+- `projection`
+- `startRowIndex`
+- `startColumnIndex`
+
+Optional fields:
+
+- `limit`
+
+Consistency fields:
+
+- `revision`
+- `projectionHash`
+- `boundaryToken`
 
 ## Fill Commit
 
@@ -228,15 +277,30 @@ If every edit is rejected, the response still returns `200`, but `committed` and
 }
 ```
 
-If the request is stale or inconsistent, the server returns `409` with one of these codes:
+Required fields:
 
-- `stale-revision`
-- `projection-mismatch`
-- `boundary-mismatch`
+- `sourceRange`
+- `targetRange`
+- `sourceRowIds`
+- `targetRowIds`
+- `fillColumns`
+- `referenceColumns`
+- `mode`
+- `projection`
 
-If the fill is a no-op, `operationId` may be `null`, `affectedRowCount` and `affectedCellCount` are `0`, and `warnings` contains `server fill no-op`.
+Recommended fields:
 
-Server-side series fill is not implemented yet. The reference backend rejects `mode: "series"` with `400 unsupported-fill-mode`.
+- `operationId`
+- `baseRevision`
+- `projectionHash`
+- `boundaryToken`
+
+Backward compatibility:
+
+- if `baseRevision` is omitted, the backend may skip stale-write rejection for that commit
+- if `projectionHash` is omitted, the backend may still accept the request when it can safely do so
+- if `boundaryToken` is omitted, the backend may still accept the request when it can safely do so
+- server-side `series` mode is currently rejected with `400 unsupported-fill-mode`
 
 ## Undo / Redo
 
@@ -260,24 +324,48 @@ Undo and redo return the same shape as edit commit responses:
   ],
   "committedRowIds": ["srv-000010"],
   "rejected": [],
-  "revision": "20",
+  "revision": "19",
   "invalidation": {
     "kind": "range",
     "range": { "start": 10, "end": 10 },
-    "reason": "server-demo-edit"
+    "reason": "server-demo-edits"
   }
 }
 ```
 
-## Error Response
+If the operation is unknown, the backend returns `404 operation-not-found`.
 
-Example stale revision response:
+## Error Response
 
 ```json
 {
   "code": "stale-revision",
-  "message": "Edit commit revision is stale"
+  "message": "Fill commit revision is stale"
 }
 ```
 
-The frontend adapter turns these HTTP errors into a typed `ServerDemoHttpError` with `status`, `code`, and `details`.
+Common error codes:
+
+- `stale-revision`
+- `projection-mismatch`
+- `boundary-mismatch`
+- `operation-not-found`
+- `row-not-found`
+- `duplicate-operation-id`
+- `unsupported-fill-mode`
+
+## Workspace Header
+
+`X-Workspace-Id` is not part of the JSON body, but it is part of the protocol contract because it changes revision scope and row visibility.
+
+Current behavior:
+
+- header missing means legacy default scope
+- header present means workspace-scoped row visibility and revision scope
+
+## Current Limitations
+
+- server-side series fill is not implemented yet
+- history is operation-id based, not stack-based
+- full off-viewport materialization may be bounded
+- the workspace scope is header-driven, not auth-driven
