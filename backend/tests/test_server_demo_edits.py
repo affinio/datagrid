@@ -6,10 +6,12 @@ from datetime import datetime, timezone
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
-from app.features.server_demo.models import ServerDemoCellEvent, ServerDemoOperation
+from app.features.server_demo.invalidation import ServerDemoInvalidationService
+from app.features.server_demo.models import GridDemoRow, ServerDemoCellEvent, ServerDemoOperation
 from app.features.server_demo.seed import seed_demo_rows
+from app.features.server_demo.revision import ServerDemoRevisionService
 from app.infrastructure.db.database import AsyncSessionLocal
 from app.main import app
 
@@ -78,6 +80,45 @@ def create_fill_projection_payload() -> dict[str, object]:
             "cursor": None,
         },
     }
+
+
+async def test_server_demo_revision_is_empty_when_no_rows(client: AsyncClient) -> None:
+    service = ServerDemoRevisionService()
+
+    async with AsyncSessionLocal() as session:
+        await session.execute(delete(GridDemoRow))
+        revision = await service.get_revision(session)
+        await session.rollback()
+
+    assert revision == "empty"
+
+
+async def test_server_demo_revision_returns_iso_string_when_rows_exist(client: AsyncClient) -> None:
+    service = ServerDemoRevisionService()
+
+    async with AsyncSessionLocal() as session:
+        revision = await service.get_revision(session)
+
+    assert revision != "empty"
+    datetime.fromisoformat(revision)
+
+
+async def test_server_demo_invalidation_builds_range_payload() -> None:
+    service = ServerDemoInvalidationService()
+
+    invalidation = service.build_range_invalidation("fill", [41, 39, 40])
+
+    assert invalidation is not None
+    assert invalidation.kind == "range"
+    assert invalidation.range.start == 39
+    assert invalidation.range.end == 41
+    assert invalidation.reason == "server-demo-fill"
+
+
+async def test_server_demo_invalidation_returns_none_when_no_indexes() -> None:
+    service = ServerDemoInvalidationService()
+
+    assert service.build_range_invalidation("edit", []) is None
 
 
 async def test_server_demo_single_edit_persists(client: AsyncClient) -> None:
