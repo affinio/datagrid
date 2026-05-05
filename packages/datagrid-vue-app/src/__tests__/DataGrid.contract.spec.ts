@@ -913,6 +913,31 @@ describe("DataGrid app facade contract", () => {
 
     expect(runHistoryAction).toHaveBeenCalledWith("undo")
 
+    runHistoryAction.mockClear()
+
+    window.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "y",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushRuntimeTasks()
+
+    expect(runHistoryAction).toHaveBeenCalledWith("redo")
+
+    runHistoryAction.mockClear()
+
+    window.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "z",
+      metaKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushRuntimeTasks()
+
+    expect(runHistoryAction).toHaveBeenCalledWith("redo")
+
     wrapper.unmount()
   })
 

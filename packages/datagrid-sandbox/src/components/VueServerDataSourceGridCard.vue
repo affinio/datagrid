@@ -33,21 +33,21 @@
           virtualization
           :show-row-index="true"
           :row-selection="false"
-        :column-menu="columnMenu"
-        advanced-filter
-        fill-handle
-        range-move
-        :history="true"
-        layout-mode="auto-height"
-        :min-rows="8"
-        :max-rows="16"
-        :report-fill-warning="handleFillWarning"
-        :report-center-pane-diagnostics="reportCenterPaneDiagnostics"
-        :report-fill-plumbing-state="reportFillPlumbingState"
-        :report-fill-plumbing-detail="reportFillPlumbingDetail"
-        @update:state="handleStateUpdate"
-        @cell-edit="handleCellEdit"
-      />
+          :column-menu="columnMenu"
+          advanced-filter
+          fill-handle
+          range-move
+          :history="gridHistory"
+          layout-mode="auto-height"
+          :min-rows="8"
+          :max-rows="16"
+          :report-fill-warning="handleFillWarning"
+          :report-center-pane-diagnostics="reportCenterPaneDiagnostics"
+          :report-fill-plumbing-state="reportFillPlumbingState"
+          :report-fill-plumbing-detail="reportFillPlumbingDetail"
+          @update:state="handleStateUpdate"
+          @cell-edit="handleCellEdit"
+        />
       </div>
 
       <aside class="server-grid__diagnostics">
@@ -533,6 +533,7 @@ import {
   SERVER_DEMO_PAGE_SIZE as PAGE_SIZE,
   SERVER_DEMO_LATENCY_MS as LATENCY_MS,
 } from "../serverDatasourceDemo/types"
+import type { DataGridTableStageHistoryAdapter } from "@affino/datagrid-vue-app"
 
 const props = defineProps<{
   title: string
@@ -2189,6 +2190,23 @@ const canRedoHistory = computed(() => {
   }
   return gridRef.value?.history.canRedo() ?? false
 })
+const serverHistoryAdapter = serverDemoHttpDatasourceEnabled
+  ? {
+      captureSnapshot: () => rowModel?.getSnapshot?.() ?? null,
+      captureSnapshotForRowIds: () => rowModel?.getSnapshot?.() ?? null,
+      recordIntentTransaction: () => undefined,
+      canUndo: () => serverEditOperationHistory.value.length > 0,
+      canRedo: () => serverEditRedoHistory.value.length > 0,
+      runHistoryAction: (direction: "undo" | "redo") => runHistoryAction(direction),
+    } satisfies DataGridTableStageHistoryAdapter
+  : null
+const gridHistory = serverDemoHttpDatasourceEnabled
+  ? {
+      adapter: serverHistoryAdapter!,
+      shortcuts: "window" as const,
+      controls: false as const,
+    }
+  : true
 const canUndoLabel = computed(() => (canUndoHistory.value ? "yes" : "no"))
 const canRedoLabel = computed(() => (canRedoHistory.value ? "yes" : "no"))
 const lastHistoryActionLabel = computed(() => lastHistoryActionText.value)
@@ -2501,7 +2519,7 @@ function consumeServerEditOperation(direction: "undo" | "redo"): string | null {
   return operationId
 }
 
-async function runHistoryAction(direction: "undo" | "redo"): Promise<void> {
+async function runHistoryAction(direction: "undo" | "redo"): Promise<string | null> {
   if (serverDemoHttpDatasourceEnabled) {
     const operationId = consumeServerEditOperation(direction)
     const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
@@ -2515,7 +2533,7 @@ async function runHistoryAction(direction: "undo" | "redo"): Promise<void> {
         void rowModel.refresh("manual")
         lastEditRecordedText.value = canUndoHistory.value ? "yes" : "no"
         gridRef.value?.restoreFocus?.()
-        return
+        return result.operationId ?? operationId
       } catch (error) {
         if (direction === "undo") {
           serverEditRedoHistory.value = serverEditRedoHistory.value.filter(entry => entry !== operationId)
@@ -2529,12 +2547,14 @@ async function runHistoryAction(direction: "undo" | "redo"): Promise<void> {
     }
     lastHistoryActionText.value = `${direction}:none`
     lastEditRecordedText.value = canUndoHistory.value ? "yes" : "no"
-    return
+    gridRef.value?.restoreFocus?.()
+    return null
   }
   const result = await gridRef.value?.history.runHistoryAction(direction) ?? null
   lastHistoryActionText.value = result ?? `${direction}:none`
   lastEditRecordedText.value = gridRef.value?.history.canUndo() ? "yes" : "no"
   gridRef.value?.restoreFocus?.()
+  return result
 }
 
 function shouldRejectCommittedRow(rowId: string | number): boolean {
