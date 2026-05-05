@@ -160,6 +160,62 @@ async def test_server_demo_pull_value_desc_sort(client: AsyncClient) -> None:
     assert rows[0]["value"] > rows[-1]["value"]
 
 
+async def test_server_demo_pull_invalid_sort_direction_falls_back_to_index(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 5},
+            "sortModel": [{"colId": "value", "sort": "sideways"}],
+        },
+    )
+
+    assert response.status_code == 200
+    rows = response.json()["rows"]
+    assert rows[0]["index"] == 0
+    assert rows[1]["index"] == 1
+
+
+async def test_server_demo_pull_updated_at_sort_aliases(client: AsyncClient) -> None:
+    response_alias = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 5},
+            "sortModel": [{"colId": "updatedAt", "sort": "desc"}],
+        },
+    )
+    assert response_alias.status_code == 200
+    rows_alias = response_alias.json()["rows"]
+    assert rows_alias[0]["index"] == 99_999
+    assert rows_alias[0]["updatedAt"] >= rows_alias[1]["updatedAt"]
+
+    response_snake = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 5},
+            "sortModel": [{"colId": "updated_at", "sort": "desc"}],
+        },
+    )
+    assert response_snake.status_code == 200
+    rows_snake = response_snake.json()["rows"]
+    assert rows_snake[0]["index"] == 99_999
+    assert rows_snake[0]["updatedAt"] >= rows_snake[1]["updatedAt"]
+
+
+async def test_server_demo_pull_segment_multi_value_filter(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "filterModel": {"segment": {"values": ["Core", "SMB"]}},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 50_000
+    assert all(row["segment"] in {"Core", "SMB"} for row in body["rows"])
+
+
 async def test_server_demo_pull_ignores_unknown_sort_column(client: AsyncClient) -> None:
     response = await client.post(
         "/api/server-demo/pull",
@@ -188,6 +244,52 @@ async def test_server_demo_region_histogram(client: AsyncClient) -> None:
     assert len(body["entries"]) == 4
     assert {entry["value"] for entry in body["entries"]} == {"AMER", "APAC", "EMEA", "LATAM"}
     assert all(entry["count"] == 25_000 for entry in body["entries"])
+
+
+async def test_server_demo_region_histogram_respects_filter_model(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/histogram",
+        json={
+            "columnId": "region",
+            "filterModel": {"status": {"filterType": "text", "type": "equals", "filter": "Active"}},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["columnId"] == "region"
+    assert len(body["entries"]) == 4
+    assert sum(entry["count"] for entry in body["entries"]) == 33_334
+
+
+@pytest.mark.parametrize("column_id", ["segment", "status"])
+async def test_server_demo_enum_histograms(client: AsyncClient, column_id: str) -> None:
+    response = await client.post(
+        "/api/server-demo/histogram",
+        json={"columnId": column_id, "filterModel": None},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["columnId"] == column_id
+    assert body["entries"]
+    assert all(entry["count"] > 0 for entry in body["entries"])
+
+
+async def test_server_demo_invalid_numeric_filter_returns_400(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 10},
+            "filterModel": {"value": {"min": "not-a-number"}},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "invalid_filter",
+        "message": "Numeric filters must contain integer values",
+    }
 
 
 async def test_server_demo_value_histogram_returns_400(client: AsyncClient) -> None:

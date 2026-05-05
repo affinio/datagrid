@@ -266,6 +266,23 @@ async def test_server_demo_invalid_column_edit_is_rejected(client: AsyncClient) 
     assert row["id"] == "srv-000030"
 
 
+async def test_server_demo_unknown_column_edit_is_rejected(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/edits",
+        json={"edits": [{"rowId": "srv-000030", "columnId": "does_not_exist", "value": "x"}]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] is None
+    assert body["rejected"] == [
+        {"rowId": "srv-000030", "columnId": "does_not_exist", "reason": "unsupported-column"}
+    ]
+    assert body["committed"] == []
+    assert body["committedRowIds"] == []
+    assert body["invalidation"] is None
+
+
 async def test_server_demo_invalid_enum_edit_is_rejected(client: AsyncClient) -> None:
     before = await pull_row(client, 40)
 
@@ -288,6 +305,60 @@ async def test_server_demo_invalid_enum_edit_is_rejected(client: AsyncClient) ->
     assert after["updatedAt"] == before["updatedAt"]
 
 
+async def test_server_demo_invalid_integer_edit_is_rejected(client: AsyncClient) -> None:
+    before = await pull_row(client, 51)
+
+    response = await client.post(
+        "/api/server-demo/edits",
+        json={"edits": [{"rowId": "srv-000051", "columnId": "value", "value": "12.5"}]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] is None
+    assert body["committed"] == []
+    assert body["committedRowIds"] == []
+    assert body["rejected"] == [
+        {"rowId": "srv-000051", "columnId": "value", "reason": "invalid-integer-value"}
+    ]
+    assert body["invalidation"] is None
+
+    after = await pull_row(client, 51)
+    assert after["value"] == before["value"]
+
+
+async def test_server_demo_previous_value_mismatch_is_rejected(client: AsyncClient) -> None:
+    before = await pull_row(client, 52)
+
+    response = await client.post(
+        "/api/server-demo/edits",
+        json={
+            "edits": [
+                {
+                    "rowId": "srv-000052",
+                    "columnId": "name",
+                    "value": "Mismatch Guard 52",
+                    "previousValue": "not-the-current-value",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] is None
+    assert body["committed"] == []
+    assert body["committedRowIds"] == []
+    assert body["rejected"] == [
+        {"rowId": "srv-000052", "columnId": "name", "reason": "previous-value-mismatch"}
+    ]
+    assert body["invalidation"] is None
+
+    after = await pull_row(client, 52)
+    assert after["name"] == before["name"]
+    assert after["updatedAt"] == before["updatedAt"]
+
+
 async def test_server_demo_value_edit_persists_as_integer(client: AsyncClient) -> None:
     response = await client.post(
         "/api/server-demo/edits",
@@ -302,6 +373,64 @@ async def test_server_demo_value_edit_persists_as_integer(client: AsyncClient) -
 
     row = await pull_row(client, 50)
     assert row["value"] == 12345
+
+
+async def test_server_demo_duplicate_operation_id_is_rejected(client: AsyncClient) -> None:
+    operation_id = "test-duplicate-edit-operation"
+
+    first_response = await client.post(
+        "/api/server-demo/edits",
+        json={
+            "operationId": operation_id,
+            "edits": [{"rowId": "srv-000053", "columnId": "name", "value": "Duplicate Guard 53"}],
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert first_response.json()["operationId"] == operation_id
+
+    second_response = await client.post(
+        "/api/server-demo/edits",
+        json={
+            "operationId": operation_id,
+            "edits": [{"rowId": "srv-000054", "columnId": "name", "value": "Duplicate Guard 54"}],
+        },
+    )
+
+    assert second_response.status_code == 409
+    assert second_response.json()["code"] == "duplicate-operation-id"
+
+
+async def test_server_demo_noop_edit_still_creates_operation_and_event(client: AsyncClient) -> None:
+    before = await pull_row(client, 55)
+
+    response = await client.post(
+        "/api/server-demo/edits",
+        json={
+            "operationId": "test-noop-edit",
+            "edits": [{"rowId": "srv-000055", "columnId": "name", "value": before["name"]}],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == "test-noop-edit"
+    assert body["committedRowIds"] == ["srv-000055"]
+    assert body["rejected"] == []
+
+    operation, events = await fetch_operation_history("test-noop-edit")
+    assert operation is not None
+    assert operation.operation_type == "edit"
+    assert operation.status == "applied"
+    assert len(events) == 1
+    assert events[0].row_id == "srv-000055"
+    assert events[0].column_key == "name"
+    assert events[0].before_value == before["name"]
+    assert events[0].after_value == before["name"]
+
+    after = await pull_row(client, 55)
+    assert after["name"] == before["name"]
+    assert after["updatedAt"] == before["updatedAt"]
 
 
 async def test_server_demo_value_edit_can_be_cleared_with_empty_string(client: AsyncClient) -> None:
