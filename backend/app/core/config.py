@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     app_name: str = "Merlin Backend"
     description: str = "FastAPI backend for Merlin"
     app_version: str = "0.1.0"
+    grid_allow_workspace_header_fallback: bool = True
     database_url: str = Field(
         default="postgresql+asyncpg://auctions_dev:auctions_dev_pass@db:5432/auctions_pg"
     )
