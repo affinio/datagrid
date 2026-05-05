@@ -119,6 +119,73 @@ describe("useDataGridAppInlineEditing contract", () => {
     expect(harness.ensureActiveCellVisible).toHaveBeenCalledWith(1, 0)
   })
 
+  it("moves selection immediately on Enter even when applyEdits is still pending", async () => {
+    const rows = [
+      { rowId: "r1", kind: "data", data: { owner: "Ada", status: "open", amount: 10 } },
+      { rowId: "r2", kind: "data", data: { owner: "Lin", status: "closed", amount: 20 } },
+    ] as unknown as DataGridRowNode<DemoRow>[]
+    let resolveCommit: (() => void) | undefined
+    const applyEdits = vi.fn(() => new Promise<void>(resolve => {
+      resolveCommit = resolve
+    }))
+    const applyCellSelection = vi.fn()
+    const ensureActiveCellVisible = vi.fn()
+    const recordEditTransaction = vi.fn()
+    const api = useDataGridAppInlineEditing<DemoRow, readonly DemoRow[]>({
+      mode: ref("base"),
+      bodyViewportRef: ref(null),
+      visibleColumns: ref([
+        { key: "owner", column: { key: "owner" } },
+        { key: "status", column: { key: "status" } },
+        { key: "amount", column: { key: "amount", dataType: "number" } },
+      ] as unknown as readonly DataGridColumnSnapshot[]),
+      totalRows: ref(rows.length),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => rows[rowIndex] ?? null,
+            applyEdits,
+          },
+        },
+      } as never,
+      readCell: (row, columnKey) => String(row.kind === "group" ? "" : (row.data[columnKey as keyof DemoRow] ?? "")),
+      resolveRowIndexById: rowId => rows.findIndex(row => row.rowId === rowId),
+      applyCellSelection,
+      ensureActiveCellVisible,
+      isCellEditable: (_row, _rowIndex, columnKey) => columnKey !== "status",
+      captureRowsSnapshot: () => rows.map(row => (row.kind === "group" ? {} as DemoRow : { ...row.data })),
+      recordEditTransaction,
+    })
+
+    api.startInlineEdit(rows[0]!, "owner")
+    api.editingCellValue.value = "Grace"
+
+    const event = new KeyboardEvent("keydown", { key: "Enter", cancelable: true })
+    api.handleEditorKeydown(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(applyEdits).toHaveBeenCalledWith([
+      {
+        rowId: "r1",
+        data: { owner: "Grace" },
+      },
+    ])
+    expect(applyCellSelection).toHaveBeenCalledWith({
+      rowIndex: 1,
+      columnIndex: 0,
+      rowId: "r2",
+    })
+
+    await nextTick()
+    expect(ensureActiveCellVisible).toHaveBeenCalledWith(1, 0)
+    expect(recordEditTransaction).not.toHaveBeenCalled()
+
+    resolveCommit?.()
+    await Promise.resolve()
+
+    expect(recordEditTransaction).toHaveBeenCalledTimes(1)
+  })
+
   it("buffers rapid typed input while the inline editor is mounting", () => {
     const harness = createHarness()
     harness.api.startInlineEdit(harness.rows[0]!, "owner", { draftValue: "p", openOnMount: true })

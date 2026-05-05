@@ -431,9 +431,9 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     return true
   }
 
-  const commitInlineEdit = async (
+  const commitInlineEdit = (
     targetOrEvent: DataGridAppInlineEditCommitTarget | boolean | FocusEvent = "stay",
-  ): Promise<void> => {
+  ): void => {
     const currentEditingCell = editingCell.value
     if (!currentEditingCell) {
       return
@@ -473,14 +473,14 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       ? buildAfterSnapshotFromEdit(beforeSnapshot, resolvedRowId, currentEditingCell.columnKey, parsedValue)
       : undefined
     clearInlineEdit()
-    await options.runtime.api.rows.applyEdits([
+    const commitPromise = Promise.resolve(options.runtime.api.rows.applyEdits([
       {
         rowId: resolvedRowId,
         data: {
           [currentEditingCell.columnKey]: parsedValue,
         } as Partial<TRow>,
       },
-    ])
+    ]))
     options.onCellEdit?.({
       rowId: resolvedRowId,
       columnKey: currentEditingCell.columnKey,
@@ -493,7 +493,6 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         } as Partial<TRow>,
       },
     })
-    options.recordEditTransaction(beforeSnapshot, afterSnapshot, "Cell edit")
     suppressNextBlurCommit.value = false
     if (target !== "none") {
       focusAfterInlineEdit(resolvedRowId, currentEditingCell.columnKey, target, {
@@ -503,6 +502,11 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
           || target === "above",
       })
     }
+    void commitPromise
+      .then(() => {
+        options.recordEditTransaction(beforeSnapshot, afterSnapshot, "Cell edit")
+      })
+      .catch(() => undefined)
   }
 
   const cancelInlineEdit = (): void => {
