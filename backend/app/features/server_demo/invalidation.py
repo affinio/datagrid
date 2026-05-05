@@ -2,29 +2,24 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from app.features.server_demo.schemas import ServerDemoEditInvalidation
-from app.features.server_demo.schemas import ServerDemoInvalidationRange
+from app.features.server_demo.schemas import ServerDemoEditInvalidation, ServerDemoInvalidationRange
+from app.grid.invalidation import GridInvalidationReasonMap, GridInvalidationService
 
 
-class ServerDemoInvalidationService:
+class ServerDemoInvalidationService(GridInvalidationService):
+    def __init__(self):
+        super().__init__(GridInvalidationReasonMap())
+
     def build_range_invalidation(
         self,
         operation_type: str,
         affected_indexes: Sequence[int],
     ) -> ServerDemoEditInvalidation | None:
-        if not affected_indexes:
+        invalidation = super().build_range_invalidation(operation_type, affected_indexes)
+        if invalidation is None:
             return None
         return ServerDemoEditInvalidation(
-            kind="range",
-            range=ServerDemoInvalidationRange(
-                start=min(affected_indexes),
-                end=max(affected_indexes),
-            ),
-            reason=self._operation_invalidation_reason(operation_type),
+            kind=invalidation.kind,
+            range=ServerDemoInvalidationRange(start=invalidation.range_start, end=invalidation.range_end),
+            reason=invalidation.reason,
         )
-
-    def _operation_invalidation_reason(self, operation_type: str) -> str:
-        if operation_type == "fill":
-            return "server-demo-fill"
-        return "server-demo-edits"
-

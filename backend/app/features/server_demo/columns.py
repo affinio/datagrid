@@ -1,23 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from app.grid.columns import GridColumnDefinition, MutableGridColumnRegistry
 
 
-@dataclass(frozen=True)
-class ServerDemoColumnDefinition:
-    id: str
-    model_attr: str
-    editable: bool = False
-    sortable: bool = False
-    filterable: bool = False
-    histogram: bool = False
-    value_type: Literal["string", "integer", "enum", "datetime"] = "string"
-    enum_values: frozenset[str] | None = None
-    readonly: bool = False
+ServerDemoColumnDefinition = GridColumnDefinition
 
 
-SERVER_DEMO_COLUMNS: dict[str, ServerDemoColumnDefinition] = {
+SERVER_DEMO_COLUMNS: MutableGridColumnRegistry = {
     "id": ServerDemoColumnDefinition(
         id="id",
         model_attr="id",
