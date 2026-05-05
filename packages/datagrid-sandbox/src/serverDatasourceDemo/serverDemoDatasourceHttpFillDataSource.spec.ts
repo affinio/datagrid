@@ -1,0 +1,186 @@
+import { describe, expect, it, vi } from "vitest"
+import type { DataGridDataSource } from "@affino/datagrid-vue"
+import type { ServerDemoRow } from "./types"
+import { createServerDemoDatasourceHttpFillDataSource } from "./serverDemoDatasourceHttpFillDataSource"
+
+function createFallbackDataSource(): DataGridDataSource<ServerDemoRow> {
+  return {
+    async pull() {
+      return { rows: [], total: 0, cursor: null }
+    },
+    async resolveFillBoundary() {
+      return {
+        endRowIndex: 1,
+        endRowId: "srv-000001",
+        boundaryKind: "gap",
+        scannedRowCount: 1,
+        truncated: false,
+      }
+    },
+    async commitFillOperation() {
+      return {
+        operationId: "fake-fill",
+        affectedRowCount: 1,
+        affectedCellCount: 1,
+        revision: 1,
+        invalidation: null,
+        warnings: [],
+      }
+    },
+    async undoFillOperation() {
+      return {
+        operationId: "fake-fill",
+        revision: 1,
+        invalidation: null,
+        warnings: [],
+      }
+    },
+    async redoFillOperation() {
+      return {
+        operationId: "fake-fill",
+        revision: 1,
+        invalidation: null,
+        warnings: [],
+      }
+    },
+    subscribe() {
+      return () => {}
+    },
+    invalidate() {},
+  }
+}
+
+function createProjection() {
+  return {
+    sortModel: [],
+    filterModel: null,
+    groupBy: null,
+    groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+    treeData: null,
+    pivot: null,
+    pagination: {
+      snapshot: {
+        enabled: false,
+        pageSize: 0,
+        currentPage: 0,
+        pageCount: 0,
+        totalRowCount: 0,
+        startIndex: 0,
+        endIndex: 0,
+      },
+      cursor: null,
+    },
+  }
+}
+
+describe("createServerDemoDatasourceHttpFillDataSource", () => {
+  it("uses HTTP fill methods when HTTP mode is enabled", async () => {
+    const fallback = createFallbackDataSource()
+    const httpResolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 5,
+      endRowId: "srv-000005",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 3,
+      truncated: true,
+    }))
+    const httpCommitFillOperation = vi.fn(async () => ({
+      operationId: "fill-123",
+      affectedRowCount: 2,
+      affectedCellCount: 2,
+      revision: "rev-1",
+      invalidation: null,
+      warnings: ["server fill committed"],
+    }))
+    const httpUndoFillOperation = vi.fn(async () => ({
+      operationId: "fill-123",
+      revision: "rev-undo",
+      invalidation: null,
+      warnings: [],
+    }))
+    const httpRedoFillOperation = vi.fn(async () => ({
+      operationId: "fill-123",
+      revision: "rev-redo",
+      invalidation: null,
+      warnings: [],
+    }))
+    const dataSource = createServerDemoDatasourceHttpFillDataSource({
+      enabled: true,
+      fallbackDataSource: fallback,
+      httpDatasource: {
+        resolveFillBoundary: httpResolveFillBoundary,
+        commitFillOperation: httpCommitFillOperation,
+        undoFillOperation: httpUndoFillOperation,
+        redoFillOperation: httpRedoFillOperation,
+      },
+    })
+
+    const boundary = await dataSource.resolveFillBoundary!({
+      direction: "down",
+      baseRange: { start: 0, end: 0 },
+      fillColumns: ["name"],
+      referenceColumns: ["name"],
+      projection: createProjection(),
+      startRowIndex: 1,
+      startColumnIndex: 0,
+      limit: 10,
+    })
+    const fillResult = await dataSource.commitFillOperation!({
+      operationId: "fill-123",
+      revision: "rev-before",
+      projection: createProjection(),
+      sourceRange: { start: 0, end: 0 },
+      targetRange: { start: 1, end: 1 },
+      fillColumns: ["name"],
+      referenceColumns: ["name"],
+      mode: "copy",
+    })
+    const undoResult = await dataSource.undoFillOperation!({
+      operationId: "fill-123",
+      revision: "rev-before",
+      projection: createProjection(),
+    })
+    const redoResult = await dataSource.redoFillOperation!({
+      operationId: "fill-123",
+      revision: "rev-before",
+      projection: createProjection(),
+    })
+
+    expect(httpResolveFillBoundary).toHaveBeenCalledTimes(1)
+    expect(httpCommitFillOperation).toHaveBeenCalledTimes(1)
+    expect(httpUndoFillOperation).toHaveBeenCalledTimes(1)
+    expect(httpRedoFillOperation).toHaveBeenCalledTimes(1)
+    expect(boundary).toMatchObject({ boundaryKind: "cache-boundary", endRowIndex: 5 })
+    expect(fillResult).toMatchObject({ operationId: "fill-123", revision: "rev-1" })
+    expect(undoResult).toMatchObject({ operationId: "fill-123", revision: "rev-undo" })
+    expect(redoResult).toMatchObject({ operationId: "fill-123", revision: "rev-redo" })
+  })
+
+  it("keeps the fake datasource untouched when HTTP mode is disabled", async () => {
+    const fallback = createFallbackDataSource()
+    const httpResolveFillBoundary = vi.fn()
+    const dataSource = createServerDemoDatasourceHttpFillDataSource({
+      enabled: false,
+      fallbackDataSource: fallback,
+      httpDatasource: {
+        resolveFillBoundary: httpResolveFillBoundary,
+        commitFillOperation: vi.fn(),
+        undoFillOperation: vi.fn(),
+        redoFillOperation: vi.fn(),
+      },
+    })
+
+    const boundary = await dataSource.resolveFillBoundary!({
+      direction: "down",
+      baseRange: { start: 0, end: 0 },
+      fillColumns: ["name"],
+      referenceColumns: ["name"],
+      projection: createProjection(),
+      startRowIndex: 1,
+      startColumnIndex: 0,
+      limit: 10,
+    })
+
+    expect(httpResolveFillBoundary).not.toHaveBeenCalled()
+    expect(boundary).toMatchObject({ boundaryKind: "gap", endRowIndex: 1 })
+  })
+})
