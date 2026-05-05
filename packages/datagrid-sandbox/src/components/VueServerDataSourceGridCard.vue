@@ -525,6 +525,9 @@ import {
   createServerDemoDatasourceHttpAdapter,
 } from "../serverDatasourceDemo/serverDemoDatasourceHttpAdapter"
 import {
+  createServerDemoDatasourceHttpFillDataSource,
+} from "../serverDatasourceDemo/serverDemoDatasourceHttpFillDataSource"
+import {
   type ServerDemoDatasourceHooks,
   type ServerDemoCommitEditsResult,
   normalizeServerDemoValueCellInput,
@@ -1895,7 +1898,11 @@ void legacyDataSource
 
 const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEnabled && serverDemoHttpDatasource
   ? {
-      ...serverDatasource.dataSource,
+      ...createServerDemoDatasourceHttpFillDataSource({
+        enabled: true,
+        fallbackDataSource: serverDatasource.dataSource,
+        httpDatasource: serverDemoHttpDatasource,
+      }),
       async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
         if (serverDatasourceUnavailable.value) {
           error.value = new Error(serverDatasourceUnavailableMessage)
@@ -2195,6 +2202,9 @@ const serverHistoryAdapter = serverDemoHttpDatasourceEnabled
       captureSnapshot: () => rowModel?.getSnapshot?.() ?? null,
       captureSnapshotForRowIds: () => rowModel?.getSnapshot?.() ?? null,
       recordIntentTransaction: () => undefined,
+      recordServerFillTransaction: descriptor => {
+        recordServerEditOperation(descriptor.operationId)
+      },
       canUndo: () => serverEditOperationHistory.value.length > 0,
       canRedo: () => serverEditRedoHistory.value.length > 0,
       runHistoryAction: (direction: "undo" | "redo") => runHistoryAction(direction),

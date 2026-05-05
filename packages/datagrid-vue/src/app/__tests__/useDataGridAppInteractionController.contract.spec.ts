@@ -122,6 +122,25 @@ function createControllerHarness(options: {
   firstRowExpanded?: boolean
   firstRowGroupKey?: string
   runtimeRowModelDataSource?: Record<string, unknown>
+  runtimeRowModelFallbackDataSource?: Record<string, unknown>
+  materializeRowsOnRefresh?: boolean
+  recordServerFillTransaction?: (descriptor: {
+    intent: "fill"
+    label: string
+    affectedRange?: { startRow: number; endRow: number; startColumn: number; endColumn: number } | null
+    operationId: string
+    revision?: string | number | null
+    mode: "copy" | "series"
+  }) => void
+  refreshServerFillViewport?: (range?: {
+    startRow?: number
+    endRow?: number
+    startColumn?: number
+    endColumn?: number
+    start?: number
+    end?: number
+  } | null) => void | Promise<void>
+  reportFillPlumbingState?: (layer: string, present: boolean) => void
   resolveFillBoundary?: (
     request: DataGridAppResolveFillBoundaryRequest,
   ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
@@ -181,6 +200,19 @@ function createControllerHarness(options: {
       data: options.rowData?.[rowIndex] ?? {},
     }
   }) as unknown as DataGridRowNode<DemoRow>[]
+  let requestedViewportRange: { start: number; end: number } | null = null
+  const materializeRowsInRange = (range: { start: number; end: number }): void => {
+    rows = rows.map((nextRow, rowIndex) => {
+      if (rowIndex < range.start || rowIndex > range.end || (nextRow as { __placeholder?: boolean }).__placeholder !== true) {
+        return nextRow
+      }
+      return {
+        rowId: `r${rowIndex + 1}`,
+        kind: "data",
+        data: options.rowData?.[rowIndex] ?? {},
+      } as unknown as DataGridRowNode<DemoRow>
+    }) as unknown as DataGridRowNode<DemoRow>[]
+  }
   const row = rows[0]!
   const buildRangeSnapshot = (options: {
     anchor: { rowIndex: number; columnIndex: number; rowId: string | number | null }
@@ -344,6 +376,14 @@ function createControllerHarness(options: {
   const expandGroup = vi.fn()
   const collapseGroup = vi.fn()
   const invalidateRange = vi.fn()
+  const setViewportRange = vi.fn((range: { start: number; end: number }) => {
+    requestedViewportRange = range
+  })
+  const refreshRows = vi.fn(async () => {
+    if (options.materializeRowsOnRefresh && requestedViewportRange) {
+      materializeRowsInRange(requestedViewportRange)
+    }
+  })
 
   const controller = useDataGridAppInteractionController<DemoRow, DemoRowSnapshot>({
     mode: ref(mode),
@@ -381,6 +421,7 @@ function createControllerHarness(options: {
           expandGroup,
           collapseGroup,
           invalidateRange,
+          refresh: refreshRows,
           setData: (nextRows: Array<{ rowId: string | number; row: DemoRow }>) => {
             rows = nextRows.map(nextRow => ({
               rowId: nextRow.rowId,
@@ -394,8 +435,14 @@ function createControllerHarness(options: {
           setSnapshot: setSelectionSnapshot,
         },
       },
+      setViewportRange,
       rowModel: {
         invalidateRange,
+        refresh: refreshRows,
+        setViewportRange,
+        dataSource: options.runtimeRowModelFallbackDataSource
+          ? options.runtimeRowModelFallbackDataSource as never
+          : undefined,
       },
     } as never,
     runtimeRowModel: options.runtimeRowModelDataSource
@@ -429,6 +476,7 @@ function createControllerHarness(options: {
       }
     },
     applySelectionRange,
+    recordServerFillTransaction: options.recordServerFillTransaction,
     applyCellSelectionByCoord,
     setCellSelection,
     clearCellSelection: vi.fn(),
@@ -441,6 +489,7 @@ function createControllerHarness(options: {
     resolveRowIndexById: rowId => rows.findIndex(nextRow => nextRow.rowId === rowId),
     resolveFillBoundary: options.resolveFillBoundary,
     reportFillWarning,
+    reportFillPlumbingState: options.reportFillPlumbingState,
     captureRowsSnapshot: vi.fn((): DemoRowSnapshot => ({
       kind: "full",
       rows: rows.map(nextRow => ({
@@ -460,6 +509,7 @@ function createControllerHarness(options: {
     applyClipboardEdits,
     rangesEqual: (left, right) => JSON.stringify(left) === JSON.stringify(right),
     buildFillMatrixFromRange,
+    refreshServerFillViewport: options.refreshServerFillViewport,
     syncViewport,
     editingCell,
     startInlineEdit,
@@ -498,6 +548,8 @@ function createControllerHarness(options: {
     expandGroup,
     collapseGroup,
     invalidateRange,
+    setViewportRange,
+    refreshRows,
   }
 }
 
@@ -1931,7 +1983,7 @@ describe("useDataGridAppInteractionController contract", () => {
       endRowId: "r5",
       boundaryKind: "gap" as const,
     }))
-    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
+    const { controller, selectionSnapshot, applyClipboardEdits, reportFillWarning } = createControllerHarness({
       rowCount: 5,
       columnCount: 2,
       rowData: [
@@ -1944,8 +1996,6 @@ describe("useDataGridAppInteractionController contract", () => {
       resolveFillBoundary,
     })
 
-    applyClipboardEdits.mockReturnValue(4)
-    buildFillMatrixFromRange.mockReturnValue([["1"]])
     selectionSnapshot.value = {
       activeRangeIndex: 0,
       activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
@@ -1970,12 +2020,8 @@ describe("useDataGridAppInteractionController contract", () => {
     await flushAsync()
 
     expect(resolveFillBoundary).toHaveBeenCalled()
-    expect(applyClipboardEdits).toHaveBeenCalledWith({
-      startRow: 0,
-      endRow: 4,
-      startColumn: 0,
-      endColumn: 0,
-    }, expect.any(Array), expect.objectContaining({ recordHistoryLabel: "Fill edit" }))
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith("server fill execution not implemented yet")
   })
 
   it("warns and does not partially fill when server boundary exceeds the safe threshold", async () => {
@@ -2067,23 +2113,24 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(reportFillWarning).toHaveBeenCalledWith("server fill execution not implemented yet")
   })
 
-  it("does not fall back to client batch fill when server fill is a no-op", async () => {
+  it("bounds cache-boundary double-click fill to contiguous materialized target rows", async () => {
     const resolveFillBoundary = vi.fn(async () => ({
       endRowIndex: 500,
       endRowId: "r501",
       boundaryKind: "cache-boundary" as const,
       scannedRowCount: 500,
+      truncated: true,
     }))
     const commitFillOperation = vi.fn(async () => ({
       operationId: "fill-1",
       revision: 1,
-      affectedRowCount: 0,
-      affectedCellCount: 0,
+      affectedRowCount: 173,
+      affectedCellCount: 173,
       invalidation: {
         kind: "range" as const,
         range: {
           startRow: 0,
-          endRow: 500,
+          endRow: 173,
           startColumn: 0,
           endColumn: 0,
         },
@@ -2126,9 +2173,1035 @@ describe("useDataGridAppInteractionController contract", () => {
     await flushAsync()
 
     expect(resolveFillBoundary).toHaveBeenCalled()
-    expect(commitFillOperation).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
     expect(applyClipboardEdits).not.toHaveBeenCalled()
+    const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
+    expect(commitRequest).toMatchObject({
+      targetRange: {
+        startRow: 0,
+        endRow: 173,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      sourceRowIds: ["r1"],
+      targetRowIds: Array.from({ length: 174 }, (_unused, index) => `r${index + 1}`),
+    })
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Fill applied only to loaded rows; server range was truncated/not fully materialized (327 target rows missing).",
+    )
+    expect(reportFillWarning).not.toHaveBeenLastCalledWith("Fill truncated at cache boundary")
+    expect(controller.fillPreviewRange.value).toBeNull()
+  })
+
+  it("attempts to materialize cache-boundary target rows before committing the server fill", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 5,
+      endRowId: "r6",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 5,
+      truncated: true,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 5,
+      affectedCellCount: 5,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 0,
+          endRow: 5,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    }))
+    const { controller, selectionSnapshot, setViewportRange, refreshRows, reportFillWarning } = createControllerHarness({
+      rowCount: 6,
+      loadedRowCount: 2,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        ...Array.from({ length: 5 }, () => ({ b: "task-x" })),
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+      materializeRowsOnRefresh: true,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(setViewportRange).toHaveBeenCalledWith({ start: 0, end: 5 })
+    expect(refreshRows).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
+    expect(commitRequest).toMatchObject({
+      targetRange: {
+        startRow: 0,
+        endRow: 5,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      sourceRowIds: ["r1"],
+      targetRowIds: ["r1", "r2", "r3", "r4", "r5", "r6"],
+    })
+    expect(reportFillWarning).toHaveBeenCalledWith("Fill truncated at cache boundary")
+  })
+
+  it("warns with missing target count and skips commit when no non-source target rows are materialized", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 500,
+      endRowId: "r501",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 500,
+      truncated: true,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 1,
+      affectedCellCount: 1,
+      invalidation: null,
+      warnings: [],
+    }))
+    const reportFillPlumbingState = vi.fn()
+    const { controller, selectionSnapshot, reportFillWarning } = createControllerHarness({
+      rowCount: 800,
+      loadedRowCount: 1,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        ...Array.from({ length: 799 }, () => ({ b: "task-x" })),
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+      reportFillPlumbingState,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(commitFillOperation).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "server fill target row ids are not fully materialized (500 target rows missing)",
+    )
+    expect(reportFillPlumbingState).not.toHaveBeenCalledWith("server-fill-committed", true)
+    expect(controller.fillPreviewRange.value).toBeNull()
+  })
+
+  it("builds a non-empty cache-boundary preview range before server commit settles", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 2,
+      truncated: true,
+    }))
+    const commitFill = createDeferred<{
+      operationId: string
+      revision?: string | number | null
+      affectedRowCount: number
+      affectedCellCount?: number
+      invalidation?: { kind: "range"; range: { startRow: number; endRow: number; startColumn: number; endColumn: number }; reason?: string } | null
+      warnings?: readonly string[]
+    } | null>()
+    const commitFillOperation = vi.fn(() => commitFill.promise)
+    const { controller, selectionSnapshot } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { a: "2", b: "task-2" },
+        { a: "3", b: "task-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(controller.fillPreviewRange.value).toEqual({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 0,
+    })
+
+    commitFill.resolve({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 3,
+      affectedCellCount: 3,
+      invalidation: {
+        kind: "range",
+        range: {
+          startRow: 0,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    })
+    await flushAsync()
+
+    expect(controller.fillPreviewRange.value).toBeNull()
+  })
+
+  it("clears cache-boundary preview when server commit fails", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 2,
+      truncated: true,
+    }))
+    const commitFillOperation = vi.fn(async () => {
+      throw new Error("commit failed")
+    })
+    const { controller, selectionSnapshot, reportFillWarning } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { a: "2", b: "task-2" },
+        { a: "3", b: "task-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(reportFillWarning).toHaveBeenCalledWith("server fill commit failed")
+    expect(controller.fillPreviewRange.value).toBeNull()
+  })
+
+  it("clicking a cell cancels pending server fill preview and resets selection", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 2,
+      truncated: true,
+    }))
+    const commitFill = createDeferred<{
+      operationId: string
+      revision?: string | number | null
+      affectedRowCount: number
+      affectedCellCount?: number
+      invalidation?: { kind: "range"; range: { startRow: number; endRow: number; startColumn: number; endColumn: number }; reason?: string } | null
+      warnings?: readonly string[]
+    } | null>()
+    const commitFillOperation = vi.fn(() => commitFill.promise)
+    const { controller, selectionSnapshot, getBodyRowAtIndex } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { a: "2", b: "task-2" },
+        { a: "3", b: "task-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(controller.fillPreviewRange.value).toEqual({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 0,
+    })
+
+    const clickedCell = createCell(1, 1)
+    const clickedRow = getBodyRowAtIndex(1)
+    expect(clickedRow).not.toBeNull()
+    controller.handleCellMouseDown(createMouseEvent("mousedown", clickedCell, {
+      button: 0,
+      clientX: 12,
+      clientY: 36,
+    }), clickedRow!, 1, 1)
+
+    expect(controller.fillPreviewRange.value).toBeNull()
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 1,
+      colIndex: 1,
+      rowId: "r2",
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 1,
+      endRow: 1,
+      startCol: 1,
+      endCol: 1,
+    })
+
+    commitFill.resolve({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 3,
+      affectedCellCount: 3,
+      invalidation: {
+        kind: "range",
+        range: {
+          startRow: 0,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    })
+    await flushAsync()
+
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 1,
+      colIndex: 1,
+      rowId: "r2",
+    })
+    expect(controller.fillPreviewRange.value).toBeNull()
+  })
+
+  it("commits server fill for cache-boundary double-click ranges and sends projected row ids", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 2,
+      truncated: true,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 3,
+      affectedCellCount: 3,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 0,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    }))
+    const { controller, selectionSnapshot, applyClipboardEdits, applySelectionRange, reportFillWarning } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { a: "2", b: "task-2" },
+        { a: "3", b: "task-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(applySelectionRange).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 0,
+    })
+    expect(reportFillWarning).toHaveBeenCalledWith("Fill truncated at cache boundary")
+    const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
+    expect(commitRequest).toMatchObject({
+      sourceRange: {
+        startRow: 0,
+        endRow: 0,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      targetRange: {
+        startRow: 0,
+        endRow: 2,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      sourceRowIds: ["r1"],
+      targetRowIds: ["r1", "r2", "r3"],
+      fillColumns: ["a"],
+      referenceColumns: ["a"],
+      mode: "copy",
+    })
+  })
+
+  it("downgrades inferred server series double-click fill commits to copy mode", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 2,
+      truncated: false,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 2,
+      affectedCellCount: 2,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 1,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    }))
+    const { controller, selectionSnapshot, buildFillMatrixFromRange, reportFillWarning } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { a: "", b: "task-2" },
+        { a: "", b: "task-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    buildFillMatrixFromRange.mockReturnValue([["1"]])
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
+    expect(commitRequest).toMatchObject({
+      mode: "copy",
+      sourceRowIds: ["r1"],
+      targetRowIds: ["r1", "r2", "r3"],
+      fillColumns: ["a"],
+      referenceColumns: ["a"],
+    })
+    expect(commitRequest?.mode).not.toBe("series")
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Series fill is not supported by the server datasource yet; using copy fill.",
+    )
+  })
+
+  it("registers a successful server fill operation id in server history", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "data-end" as const,
+      scannedRowCount: 2,
+      truncated: false,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-history-1",
+      revision: "rev-fill-1",
+      affectedRowCount: 2,
+      affectedCellCount: 2,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 1,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    }))
+    const recordServerFillTransaction = vi.fn()
+    const { controller, selectionSnapshot } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "Atlas", b: "task-1" },
+        { a: "", b: "task-2" },
+        { a: "", b: "task-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+      recordServerFillTransaction,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(recordServerFillTransaction).toHaveBeenCalledTimes(1)
+    expect(recordServerFillTransaction).toHaveBeenCalledWith({
+      intent: "fill",
+      label: "Server fill",
+      affectedRange: {
+        startRow: 1,
+        endRow: 2,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      operationId: "fill-history-1",
+      revision: "rev-fill-1",
+      mode: "copy",
+    })
+  })
+
+  it("warns and does not register server fill history when a successful commit has no operation id", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "data-end" as const,
+      scannedRowCount: 2,
+      truncated: false,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "",
+      revision: "rev-fill-1",
+      affectedRowCount: 2,
+      affectedCellCount: 2,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 1,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    }))
+    const recordServerFillTransaction = vi.fn()
+    const refreshServerFillViewport = vi.fn()
+    const { controller, selectionSnapshot, reportFillWarning } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "Atlas", b: "task-1" },
+        { a: "", b: "task-2" },
+        { a: "", b: "task-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+      recordServerFillTransaction,
+      refreshServerFillViewport,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(recordServerFillTransaction).not.toHaveBeenCalled()
+    expect(refreshServerFillViewport).toHaveBeenCalledWith({
+      startRow: 1,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 0,
+    })
+    expect(reportFillWarning).toHaveBeenCalledWith("server fill committed without operation id; undo/redo disabled")
+  })
+
+  it("refreshes the server fill viewport after a successful materialized double-click commit", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "srv-000002",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 2,
+      truncated: true,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-status",
+      revision: "rev-2",
+      affectedRowCount: 2,
+      affectedCellCount: 2,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          start: 1,
+          end: 2,
+        },
+        reason: "server-demo-fill",
+      },
+      warnings: [],
+    }))
+    const refreshServerFillViewport = vi.fn(async () => undefined)
+    const reportFillPlumbingState = vi.fn()
+    const visibleColumns = [
+      { key: "status", width: 2, pin: "center", column: { key: "status", label: "Status" } },
+      { key: "region", width: 2, pin: "center", column: { key: "region", label: "Region" } },
+    ] as unknown as readonly DataGridColumnSnapshot[]
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      visibleColumns,
+      rowData: [
+        { status: "Active", region: "AMER" },
+        { status: "Paused", region: "EMEA" },
+        { status: "Closed", region: "APAC" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+      refreshServerFillViewport,
+      reportFillPlumbingState,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(refreshServerFillViewport).toHaveBeenCalledTimes(1)
+    expect(refreshServerFillViewport).toHaveBeenCalledWith({
+      start: 1,
+      end: 2,
+    })
+    expect(reportFillPlumbingState).toHaveBeenCalledWith("server-fill-committed", true)
+    const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
+    expect(commitRequest).toMatchObject({
+      sourceRowIds: ["r1"],
+      targetRowIds: ["r1", "r2", "r3"],
+      fillColumns: ["status"],
+      referenceColumns: ["status"],
+      mode: "copy",
+    })
+  })
+
+  it("treats a zero affected-cell server fill as an explicit no-op instead of success", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 2,
+      truncated: false,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-noop",
+      revision: 1,
+      affectedRowCount: 1,
+      affectedCellCount: 0,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 0,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    }))
+    const refreshServerFillViewport = vi.fn(async () => undefined)
+    const reportFillPlumbingState = vi.fn()
+    const { controller, selectionSnapshot, applySelectionRange, reportFillWarning } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "same", b: "ref-1" },
+        { a: "same", b: "ref-2" },
+        { a: "same", b: "ref-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+      refreshServerFillViewport,
+      reportFillPlumbingState,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
     expect(reportFillWarning).toHaveBeenCalledWith("server fill no-op")
+    expect(refreshServerFillViewport).not.toHaveBeenCalled()
+    expect(applySelectionRange).not.toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 0,
+    })
+    expect(reportFillPlumbingState).not.toHaveBeenCalledWith("server-fill-committed", true)
+    expect(controller.fillPreviewRange.value).toBeNull()
+  })
+
+  it.each(["data-end", "gap"] as const)("commits server fill for %s double-click boundaries", async boundaryKind => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind,
+      scannedRowCount: 2,
+      truncated: false,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: `fill-${boundaryKind}`,
+      revision: 1,
+      affectedRowCount: 3,
+      affectedCellCount: 3,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 0,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    }))
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { a: "2", b: "task-2" },
+        { a: "3", b: "task-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
+    expect(commitRequest).toMatchObject({
+      targetRange: {
+        startRow: 0,
+        endRow: 2,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      sourceRowIds: ["r1"],
+      targetRowIds: ["r1", "r2", "r3"],
+    })
+  })
+
+  it("uses the runtime rowModel fallback when the controller datasource only resolves boundaries", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 2,
+      truncated: true,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-1",
+      revision: 1,
+      affectedRowCount: 3,
+      affectedCellCount: 3,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 0,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 0,
+        },
+      },
+      warnings: [],
+    }))
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { a: "2", b: "task-2" },
+        { a: "3", b: "task-3" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { resolveFillBoundary },
+      runtimeRowModelFallbackDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(resolveFillBoundary).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
   })
 
   it("normalizes server fill invalidation to a row-model viewport range when falling back to direct invalidation", async () => {
@@ -2137,6 +3210,7 @@ describe("useDataGridAppInteractionController contract", () => {
       endRowId: "r501",
       boundaryKind: "cache-boundary" as const,
       scannedRowCount: 500,
+      truncated: true,
     }))
     const commitFillOperation = vi.fn(async () => ({
       operationId: "fill-1",
@@ -2154,13 +3228,13 @@ describe("useDataGridAppInteractionController contract", () => {
       },
       warnings: [],
     }))
-    const { controller, selectionSnapshot, applyClipboardEdits, invalidateRange } = createControllerHarness({
-      rowCount: 800,
-      loadedRowCount: 174,
+    const { controller, selectionSnapshot, applyClipboardEdits, invalidateRange, reportFillWarning } = createControllerHarness({
+      rowCount: 501,
+      loadedRowCount: 501,
       columnCount: 5,
       rowData: [
         { region: "AMER" },
-        ...Array.from({ length: 799 }, () => ({ region: "LATAM" })),
+        ...Array.from({ length: 500 }, () => ({ region: "LATAM" })),
       ],
       resolveFillBoundary,
       runtimeRowModelDataSource: { commitFillOperation },
@@ -2193,6 +3267,7 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(commitFillOperation).toHaveBeenCalled()
     expect(applyClipboardEdits).not.toHaveBeenCalled()
     expect(invalidateRange).toHaveBeenCalledWith({ start: 0, end: 500 })
+    expect(reportFillWarning).toHaveBeenCalledWith("Fill truncated at cache boundary")
   })
 
   it("applies optimistic server fill edits locally before commitFillOperation resolves when the target range is fully materialized", async () => {
@@ -2321,7 +3396,7 @@ describe("useDataGridAppInteractionController contract", () => {
     ])
   })
 
-  it("does not use optimistic local patching when the server fill target range is only partially materialized", async () => {
+  it("commits only the materialized target prefix without optimistic local patching when the server fill target range is partial", async () => {
     const commitFill = createDeferred<{
       operationId: string
       revision?: string | number | null
@@ -2331,7 +3406,7 @@ describe("useDataGridAppInteractionController contract", () => {
       warnings?: readonly string[]
     } | null>()
     const commitFillOperation = vi.fn(() => commitFill.promise)
-    const { controller, applyEdits, buildFillMatrixFromRange, captureRowsSnapshotForRowIds } = createControllerHarness({
+    const { controller, applyEdits, buildFillMatrixFromRange, captureRowsSnapshotForRowIds, reportFillWarning } = createControllerHarness({
       rowCount: 300,
       loadedRowCount: 48,
       columnCount: 1,
@@ -2363,23 +3438,33 @@ describe("useDataGridAppInteractionController contract", () => {
     const applyPromise = controller.applyLastFillBehavior("copy")
     await flushAsync()
 
-    expect(commitFillOperation).toHaveBeenCalled()
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
     expect(applyEdits).not.toHaveBeenCalled()
+    const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
+    expect(commitRequest).toMatchObject({
+      targetRange: {
+        startRow: 0,
+        endRow: 47,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      sourceRowIds: ["r1"],
+      targetRowIds: Array.from({ length: 48 }, (_unused, index) => `r${index + 1}`),
+    })
     expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
       { rowId: "r2", row: { a: "" } },
       { rowId: "r3", row: { a: "" } },
     ])
-
     commitFill.resolve({
       operationId: "fill-1",
       revision: 1,
-      affectedRowCount: 252,
-      affectedCellCount: 252,
+      affectedRowCount: 47,
+      affectedCellCount: 47,
       invalidation: {
         kind: "range",
         range: {
           startRow: 0,
-          endRow: 299,
+          endRow: 47,
           startColumn: 0,
           endColumn: 0,
         },
@@ -2387,8 +3472,9 @@ describe("useDataGridAppInteractionController contract", () => {
       warnings: [],
     })
     await expect(applyPromise).resolves.toBe(true)
-
-    expect(applyEdits).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Fill applied only to loaded rows; server range was truncated/not fully materialized (252 target rows missing).",
+    )
   })
 
   it("falls back to loaded-cache boundary discovery when server boundary is unresolved", async () => {
@@ -2486,6 +3572,51 @@ describe("useDataGridAppInteractionController contract", () => {
       endRow: 2,
       startColumn: 1,
       endColumn: 1,
+    }, [["1"], ["2"], ["3"]], { recordHistoryLabel: "Fill edit" })
+  })
+
+  it("keeps local numeric double-click fill using series behavior", async () => {
+    const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
+      rowCount: 4,
+      columnCount: 2,
+      rowData: [
+        { a: "1", b: "task-1" },
+        { b: "task-2" },
+        { b: "task-3" },
+        {},
+      ],
+    })
+
+    applyClipboardEdits.mockReturnValue(3)
+    buildFillMatrixFromRange.mockReturnValue([["1"]])
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 0,
     }, [["1"], ["2"], ["3"]], { recordHistoryLabel: "Fill edit" })
   })
 

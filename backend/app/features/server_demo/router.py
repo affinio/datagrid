@@ -6,6 +6,10 @@ from app.features.server_demo.repository import ServerDemoRepository
 from app.features.server_demo.schemas import (
     ServerDemoCommitEditsRequest,
     ServerDemoCommitEditsResponse,
+    ServerDemoFillBoundaryRequest,
+    ServerDemoFillBoundaryResponse,
+    ServerDemoFillCommitRequest,
+    ServerDemoFillCommitResponse,
     ServerDemoHealthResponse,
     ServerDemoHistogramRequest,
     ServerDemoHistogramResponse,
@@ -51,6 +55,22 @@ async def commit_edits(
     repository: ServerDemoRepository = Depends(get_server_demo_repository),
 ) -> ServerDemoCommitEditsResponse:
     return await repository.commit_edits(request)
+
+
+@router.post("/fill-boundary", response_model=ServerDemoFillBoundaryResponse)
+async def resolve_fill_boundary(
+    request: ServerDemoFillBoundaryRequest,
+    repository: ServerDemoRepository = Depends(get_server_demo_repository),
+) -> ServerDemoFillBoundaryResponse:
+    return await repository.resolve_fill_boundary(request)
+
+
+@router.post("/fill/commit", response_model=ServerDemoFillCommitResponse)
+async def commit_fill(
+    request: ServerDemoFillCommitRequest,
+    repository: ServerDemoRepository = Depends(get_server_demo_repository),
+) -> ServerDemoFillCommitResponse:
+    return await repository.commit_fill(request)
 
 
 @router.post("/operations/{operation_id}/undo", response_model=ServerDemoCommitEditsResponse)

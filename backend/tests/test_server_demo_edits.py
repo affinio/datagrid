@@ -56,6 +56,29 @@ async def fetch_operation_history(
     return operation, list(events)
 
 
+def create_fill_projection_payload() -> dict[str, object]:
+    return {
+        "sortModel": [],
+        "filterModel": None,
+        "groupBy": None,
+        "groupExpansion": {"expandedByDefault": False, "toggledGroupKeys": []},
+        "treeData": None,
+        "pivot": None,
+        "pagination": {
+            "snapshot": {
+                "enabled": False,
+                "pageSize": 50,
+                "currentPage": 0,
+                "pageCount": 0,
+                "totalRowCount": 0,
+                "startIndex": 0,
+                "endIndex": 49,
+            },
+            "cursor": None,
+        },
+    }
+
+
 async def test_server_demo_single_edit_persists(client: AsyncClient) -> None:
     before = await pull_row(client, 10)
 
@@ -192,10 +215,11 @@ async def test_server_demo_move_like_batch_persists_source_clear_and_target_writ
         ("srv-000110", "status"),
         ("srv-000111", "status"),
     ]
-    assert events[0].before_value == source_before["status"]
-    assert events[0].after_value == ""
-    assert events[1].before_value == target_before["status"]
-    assert events[1].after_value == "Paused"
+    events_by_row = {event.row_id: event for event in events}
+    assert events_by_row["srv-000110"].before_value == source_before["status"]
+    assert events_by_row["srv-000110"].after_value == ""
+    assert events_by_row["srv-000111"].before_value == target_before["status"]
+    assert events_by_row["srv-000111"].after_value == "Paused"
 
     undo_response = await client.post(f"/api/server-demo/operations/{operation_id}/undo")
     assert undo_response.status_code == 200
@@ -376,10 +400,11 @@ async def test_server_demo_value_move_like_batch_clears_source_and_restores_with
         ("srv-000502", "value"),
         ("srv-000503", "value"),
     ]
-    assert events[0].before_value == source_before["value"]
-    assert events[0].after_value is None
-    assert events[1].before_value == target_before["value"]
-    assert events[1].after_value == source_before["value"]
+    events_by_row = {event.row_id: event for event in events}
+    assert events_by_row["srv-000502"].before_value == source_before["value"]
+    assert events_by_row["srv-000502"].after_value is None
+    assert events_by_row["srv-000503"].before_value == target_before["value"]
+    assert events_by_row["srv-000503"].after_value == source_before["value"]
 
     undo_response = await client.post(f"/api/server-demo/operations/{operation_id}/undo")
     assert undo_response.status_code == 200
@@ -640,3 +665,245 @@ async def test_server_demo_all_rejected_edit_creates_no_operation(client: AsyncC
     operation, events = await fetch_operation_history(operation_id)
     assert operation is None
     assert events == []
+
+
+async def test_server_demo_fill_boundary_basic_down(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/fill-boundary",
+        json={
+            "direction": "down",
+            "baseRange": {"startRow": 10, "endRow": 10, "startColumn": 0, "endColumn": 0},
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "projection": create_fill_projection_payload(),
+            "startRowIndex": 11,
+            "startColumnIndex": 0,
+            "limit": 3,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {
+        "endRowIndex": 13,
+        "endRowId": "srv-000013",
+        "boundaryKind": "cache-boundary",
+        "scannedRowCount": 3,
+        "truncated": True,
+    }
+
+
+async def test_server_demo_fill_commit_copy_single_column_with_history(client: AsyncClient) -> None:
+    operation_id = "test-fill-copy-single-column"
+    source_before = await pull_row(client, 20)
+    target_before = await pull_row(client, 21)
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 20, "endRow": 20, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 20, "endRow": 21, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000020"],
+            "targetRowIds": ["srv-000020", "srv-000021"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+            "metadata": {
+                "origin": "double-click-fill",
+                "behaviorSource": "default",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == operation_id
+    assert body["affectedRowCount"] == 1
+    assert body["affectedCellCount"] == 1
+    assert body["warnings"] == []
+    assert body["invalidation"] == {
+        "kind": "range",
+        "range": {"start": 21, "end": 21},
+        "reason": "server-demo-fill",
+    }
+
+    after = await pull_row(client, 21)
+    assert after["status"] == source_before["status"]
+    assert after["updatedAt"] != target_before["updatedAt"]
+
+    operation, events = await fetch_operation_history(operation_id)
+    assert operation is not None
+    assert operation.operation_type == "fill"
+    assert operation.status == "applied"
+    assert operation.operation_metadata == {
+        "sourceRange": {"startRow": 20, "endRow": 20, "startColumn": 0, "endColumn": 0},
+        "targetRange": {"startRow": 20, "endRow": 21, "startColumn": 0, "endColumn": 0},
+        "sourceRowIds": ["srv-000020"],
+        "targetRowIds": ["srv-000020", "srv-000021"],
+        "fillColumns": ["status"],
+        "referenceColumns": ["status"],
+        "mode": "copy",
+        "projection": create_fill_projection_payload(),
+        "metadata": {
+            "origin": "double-click-fill",
+            "behaviorSource": "default",
+        },
+    }
+    assert len(events) == 1
+    assert events[0].row_id == "srv-000021"
+    assert events[0].column_key == "status"
+    assert events[0].before_value == target_before["status"]
+    assert events[0].after_value == source_before["status"]
+
+    undo_response = await client.post(f"/api/server-demo/operations/{operation_id}/undo")
+    assert undo_response.status_code == 200
+    assert (await pull_row(client, 21))["status"] == target_before["status"]
+
+    redo_response = await client.post(f"/api/server-demo/operations/{operation_id}/redo")
+    assert redo_response.status_code == 200
+    assert (await pull_row(client, 21))["status"] == source_before["status"]
+
+
+async def test_server_demo_fill_commit_noop_is_explicit(client: AsyncClient) -> None:
+    operation_id = "test-fill-copy-noop"
+    before = await pull_row(client, 20)
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 20, "endRow": 20, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 20, "endRow": 20, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000020"],
+            "targetRowIds": ["srv-000020"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] is None
+    assert body["affectedRowCount"] == 0
+    assert body["affectedCellCount"] == 0
+    assert body["warnings"] == ["server fill no-op"]
+    assert body["invalidation"] is None
+    assert (await pull_row(client, 20))["status"] == before["status"]
+
+    operation, events = await fetch_operation_history(operation_id)
+    assert operation is None
+    assert events == []
+
+
+async def test_server_demo_fill_commit_copy_multi_row_multi_column(client: AsyncClient) -> None:
+    operation_id = "test-fill-copy-multi"
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 30, "endRow": 31, "startColumn": 0, "endColumn": 1},
+            "targetRange": {"startRow": 30, "endRow": 33, "startColumn": 0, "endColumn": 1},
+            "sourceRowIds": ["srv-000030", "srv-000031"],
+            "targetRowIds": ["srv-000030", "srv-000031", "srv-000032", "srv-000033"],
+            "fillColumns": ["segment", "region"],
+            "referenceColumns": ["segment", "region"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == operation_id
+    assert body["affectedRowCount"] == 2
+    assert body["affectedCellCount"] == 4
+    assert body["warnings"] == []
+
+    row_32 = await pull_row(client, 32)
+    row_33 = await pull_row(client, 33)
+    assert row_32["segment"] == "Enterprise"
+    assert row_32["region"] == "APAC"
+    assert row_33["segment"] == "SMB"
+    assert row_33["region"] == "LATAM"
+
+    operation, events = await fetch_operation_history(operation_id)
+    assert operation is not None
+    assert operation.operation_type == "fill"
+    assert operation.status == "applied"
+    assert len(events) == 4
+    assert sorted((event.row_id, event.column_key) for event in events) == [
+        ("srv-000032", "region"),
+        ("srv-000032", "segment"),
+        ("srv-000033", "region"),
+        ("srv-000033", "segment"),
+    ]
+
+
+async def test_server_demo_fill_commit_ignores_readonly_columns_safely(client: AsyncClient) -> None:
+    operation_id = "test-fill-readonly-ignore"
+    before = await pull_row(client, 41)
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 40, "endRow": 40, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 40, "endRow": 41, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000040"],
+            "targetRowIds": ["srv-000040", "srv-000041"],
+            "fillColumns": ["id", "status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == operation_id
+    assert body["affectedRowCount"] == 1
+    assert body["affectedCellCount"] == 1
+    assert body["warnings"] == ["id: readonly-column", "id: readonly-column"]
+
+    after = await pull_row(client, 41)
+    assert after["id"] == before["id"]
+    assert after["status"] == "Paused"
+
+    operation, events = await fetch_operation_history(operation_id)
+    assert operation is not None
+    assert operation.operation_type == "fill"
+    assert operation.status == "applied"
+    assert len(events) == 1
+    assert events[0].column_key == "status"
+
+
+async def test_server_demo_fill_commit_rejects_explicit_series_mode(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": "test-fill-series-rejected",
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 50, "endRow": 50, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 50, "endRow": 52, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000050"],
+            "targetRowIds": ["srv-000050", "srv-000051", "srv-000052"],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "series",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "unsupported-fill-mode"
+    assert body["message"] == "Series fill is not implemented yet"

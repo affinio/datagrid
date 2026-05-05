@@ -101,6 +101,29 @@ function createCommitEditsRequest(): ServerDemoCommitEditsRequest {
   }
 }
 
+function createFillProjection() {
+  return {
+    sortModel: [],
+    filterModel: null,
+    groupBy: null,
+    groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+    treeData: null,
+    pivot: null,
+    pagination: {
+      snapshot: {
+        enabled: false,
+        pageSize: 50,
+        currentPage: 0,
+        pageCount: 0,
+        totalRowCount: 0,
+        startIndex: 0,
+        endIndex: 49,
+      },
+      cursor: null,
+    },
+  }
+}
+
 describe("createServerDemoDatasourceHttpAdapter", () => {
   it("posts pulls to the backend and maps rows with ServerDemoRow shape intact", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
@@ -514,10 +537,39 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     expect(events).toEqual([])
   })
 
-  it("throws clear unsupported errors for write-oriented methods", async () => {
-    const adapter = createServerDemoDatasourceHttpAdapter()
+  it("posts fill boundary requests to the backend and maps the response", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      endRowIndex: 19,
+      endRowId: "srv-000019",
+      boundaryKind: "cache-boundary",
+      scannedRowCount: 3,
+      truncated: true,
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
 
-    await expect(adapter.commitFillOperation!({
+    const adapter = createServerDemoDatasourceHttpAdapter({ baseUrl: "http://localhost:8000", fetchImpl })
+    const result = await adapter.resolveFillBoundary!({
+      direction: "down",
+      baseRange: { start: 10, end: 10 },
+      fillColumns: ["name"],
+      referenceColumns: ["name"],
+      projection: createFillProjection(),
+      startRowIndex: 11,
+      startColumnIndex: 0,
+      limit: 3,
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:8000/api/server-demo/fill-boundary")
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      direction: "down",
+      baseRange: { startRow: 10, endRow: 10, startColumn: 0, endColumn: 0 },
+      fillColumns: ["name"],
+      referenceColumns: ["name"],
       projection: {
         sortModel: [],
         filterModel: null,
@@ -528,21 +580,246 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
         pagination: {
           snapshot: {
             enabled: false,
-            pageSize: 1,
+            pageSize: 50,
             currentPage: 0,
             pageCount: 0,
             totalRowCount: 0,
             startIndex: 0,
-            endIndex: 0,
+            endIndex: 49,
           },
           cursor: null,
         },
       },
-      sourceRange: { start: 0, end: 0 },
-      targetRange: { start: 0, end: 0 },
-      fillColumns: [],
-      referenceColumns: [],
+      startRowIndex: 11,
+      startColumnIndex: 0,
+      limit: 3,
+    })
+    expect(result).toEqual({
+      endRowIndex: 19,
+      endRowId: "srv-000019",
+      boundaryKind: "cache-boundary",
+      scannedRowCount: 3,
+      truncated: true,
+    })
+  })
+
+  it("posts fill commit requests to the backend and preserves the operation id", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      operationId: "fill-123",
+      affectedRowCount: 2,
+      affectedCellCount: 4,
+      revision: "rev-fill-1",
+      invalidation: {
+        kind: "range",
+        range: { start: 11, end: 12 },
+        reason: "server-demo-fill",
+      },
+      warnings: ["server fill committed"],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ baseUrl: "http://localhost:8000", fetchImpl })
+    const result = await adapter.commitFillOperation!({
+      operationId: "fill-123",
+      revision: "rev-before",
+      projection: createFillProjection(),
+      sourceRange: { start: 10, end: 11 },
+      targetRange: { start: 12, end: 15 },
+      sourceRowIds: ["srv-000010", "srv-000011"],
+      targetRowIds: ["srv-000012", "srv-000013", "srv-000014", "srv-000015"],
+      fillColumns: ["status", "region"],
+      referenceColumns: ["status", "region"],
       mode: "copy",
-    })).rejects.toThrow("commitFillOperation")
+      metadata: {
+        origin: "double-click-fill",
+        behaviorSource: "default",
+      },
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:8000/api/server-demo/fill/commit")
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      operationId: "fill-123",
+      revision: "rev-before",
+      projection: {
+        sortModel: [],
+        filterModel: null,
+        groupBy: null,
+        groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+        treeData: null,
+        pivot: null,
+        pagination: {
+          snapshot: {
+            enabled: false,
+            pageSize: 50,
+            currentPage: 0,
+            pageCount: 0,
+            totalRowCount: 0,
+            startIndex: 0,
+            endIndex: 49,
+          },
+          cursor: null,
+        },
+      },
+      sourceRange: { startRow: 10, endRow: 11, startColumn: 0, endColumn: 0 },
+      targetRange: { startRow: 12, endRow: 15, startColumn: 0, endColumn: 0 },
+      fillColumns: ["status", "region"],
+      referenceColumns: ["status", "region"],
+      mode: "copy",
+      sourceRowIds: ["srv-000010", "srv-000011"],
+      targetRowIds: ["srv-000012", "srv-000013", "srv-000014", "srv-000015"],
+      metadata: {
+        origin: "double-click-fill",
+        behaviorSource: "default",
+      },
+    })
+    expect(result).toEqual({
+      operationId: "fill-123",
+      affectedRowCount: 2,
+      affectedCellCount: 4,
+      revision: "rev-fill-1",
+      invalidation: {
+        kind: "range",
+        range: { start: 11, end: 12 },
+        reason: "server-demo-fill",
+      },
+      warnings: ["server fill committed"],
+    })
+  })
+
+  it("downgrades unsupported series fill commit requests to copy before posting", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      operationId: "fill-series-as-copy",
+      affectedRowCount: 2,
+      affectedCellCount: 2,
+      revision: "rev-fill-copy",
+      invalidation: {
+        kind: "range",
+        range: { start: 10, end: 12 },
+        reason: "server-demo-fill",
+      },
+      warnings: [],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    await adapter.commitFillOperation!({
+      operationId: "fill-series-as-copy",
+      projection: createFillProjection(),
+      sourceRange: { start: 10, end: 10 },
+      targetRange: { start: 10, end: 12 },
+      sourceRowIds: ["srv-000010"],
+      targetRowIds: ["srv-000010", "srv-000011", "srv-000012"],
+      fillColumns: ["status"],
+      referenceColumns: ["status"],
+      mode: "series",
+      metadata: {
+        origin: "double-click-fill",
+        behaviorSource: "default",
+      },
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))
+    expect(body).toMatchObject({
+      operationId: "fill-series-as-copy",
+      mode: "copy",
+      sourceRowIds: ["srv-000010"],
+      targetRowIds: ["srv-000010", "srv-000011", "srv-000012"],
+      fillColumns: ["status"],
+      referenceColumns: ["status"],
+    })
+    expect(body.mode).not.toBe("series")
+  })
+
+  it("maps fill commit no-op responses with explicit zero affected cells and warning", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      operationId: null,
+      affectedRowCount: 0,
+      affectedCellCount: 0,
+      revision: "rev-fill-noop",
+      invalidation: null,
+      warnings: ["server fill no-op"],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    const result = await adapter.commitFillOperation!({
+      operationId: "fill-noop",
+      revision: "rev-before",
+      projection: createFillProjection(),
+      sourceRange: { start: 10, end: 10 },
+      targetRange: { start: 10, end: 10 },
+      sourceRowIds: ["srv-000010"],
+      targetRowIds: ["srv-000010"],
+      fillColumns: ["status"],
+      referenceColumns: ["status"],
+      mode: "copy",
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toMatchObject({
+      operationId: "fill-noop",
+      sourceRowIds: ["srv-000010"],
+      targetRowIds: ["srv-000010"],
+      fillColumns: ["status"],
+      referenceColumns: ["status"],
+      mode: "copy",
+    })
+    expect(result).toEqual({
+      operationId: "fill-noop",
+      affectedRowCount: 0,
+      affectedCellCount: 0,
+      revision: "rev-fill-noop",
+      invalidation: null,
+      warnings: ["server fill no-op"],
+    })
+  })
+
+  it("routes fill undo and redo through the shared operation endpoints", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      committed: [{ rowId: "srv-000012", columnId: "status", revision: "rev-fill-undo" }],
+      committedRowIds: ["srv-000012"],
+      rejected: [],
+      revision: "rev-fill-undo",
+      invalidation: {
+        kind: "range",
+        range: { start: 12, end: 12 },
+        reason: "server-demo-fill",
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ baseUrl: "http://localhost:8000", fetchImpl })
+    await adapter.undoFillOperation!({
+      operationId: "fill-123",
+      revision: "rev-fill-undo",
+      projection: createFillProjection(),
+    })
+    await adapter.redoFillOperation!({
+      operationId: "fill-123",
+      revision: "rev-fill-undo",
+      projection: createFillProjection(),
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:8000/api/server-demo/operations/fill-123/undo")
+    expect(fetchImpl.mock.calls[1]?.[0]).toBe("http://localhost:8000/api/server-demo/operations/fill-123/redo")
   })
 })

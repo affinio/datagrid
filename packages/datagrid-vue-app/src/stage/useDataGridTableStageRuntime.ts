@@ -153,6 +153,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
         projection: DataGridAppFillProjectionContext
         sourceRange: DataGridCopyRange
         targetRange: DataGridCopyRange
+        sourceRowIds?: readonly (string | number)[]
+        targetRowIds?: readonly (string | number)[]
         fillColumns: readonly string[]
         referenceColumns: readonly string[]
         mode: DataGridFillBehavior
@@ -180,6 +182,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
           projection: DataGridAppFillProjectionContext
           sourceRange: DataGridCopyRange
           targetRange: DataGridCopyRange
+          sourceRowIds?: readonly (string | number)[]
+          targetRowIds?: readonly (string | number)[]
           fillColumns: readonly string[]
           referenceColumns: readonly string[]
           mode: DataGridFillBehavior
@@ -1039,6 +1043,14 @@ export function useDataGridTableStageRuntime<
     options.reportFillPlumbingDetail?.("server_fill_sync_input_range", formatRange(selectedRenderedViewportRange))
     options.reportFillPlumbingDetail?.("server_fill_runtime_rowModel_invalidate_type", typeof runtimeRowModel?.invalidateRange === "function" ? "function" : typeof runtimeRowModel?.invalidateRange)
 
+    if (selectedRenderedViewportRange) {
+      options.runtime.setViewportRange?.({
+        start: selectedRenderedViewportRange.startRow,
+        end: selectedRenderedViewportRange.endRow,
+      })
+      options.reportFillPlumbingDetail?.("server_fill_rendered_viewport", formatRange(selectedRenderedViewportRange))
+    }
+
     const sourceRow1BeforeInvalidate = options.runtime.getBodyRowAtIndex(1)
 
     let invalidationApplied = false
@@ -1053,13 +1065,6 @@ export function useDataGridTableStageRuntime<
     options.reportFillPlumbingState?.("server_fill_invalidation_applied", invalidationApplied)
     if (typeof rowsApi.refresh === "function") {
       await rowsApi.refresh()
-    }
-    if (selectedRenderedViewportRange) {
-      options.runtime.setViewportRange?.({
-        start: selectedRenderedViewportRange.startRow,
-        end: selectedRenderedViewportRange.endRow,
-      })
-      options.reportFillPlumbingDetail?.("server_fill_rendered_viewport", formatRange(selectedRenderedViewportRange))
     }
     if (selectedRenderedViewportRange) {
       syncRenderedRowsInRange({
@@ -1127,6 +1132,10 @@ export function useDataGridTableStageRuntime<
 
   const canRedoStageHistory = (): boolean => {
     return canRedoHistory() || lastServerFillState.value === "undone"
+  }
+
+  const delegatesServerFillHistoryToAdapter = (): boolean => {
+    return typeof options.history?.recordServerFillTransaction === "function"
   }
 
   const runStageHistoryAction = (direction: "undo" | "redo"): Promise<string | null> => {
@@ -1347,6 +1356,11 @@ export function useDataGridTableStageRuntime<
       mode: DataGridFillBehavior
     }) => {
       historyService.recordServerFillTransaction(descriptor)
+      if (delegatesServerFillHistoryToAdapter()) {
+        lastServerFillOperation.value = null
+        lastServerFillState.value = null
+        return
+      }
       lastServerFillOperation.value = {
         operationId: descriptor.operationId,
         revision: descriptor.revision,

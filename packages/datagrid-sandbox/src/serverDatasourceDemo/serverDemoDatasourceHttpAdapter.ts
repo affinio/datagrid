@@ -5,6 +5,7 @@ import {
   type DataGridColumnHistogramEntry,
   type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSource,
+  type DataGridDataSourceInvalidation,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourcePullResult,
   type DataGridDataSourcePushListener,
@@ -51,6 +52,30 @@ type ServerDemoHistogramResponse = {
   }[]
 }
 
+type ServerDemoFillBoundaryResponse = {
+  endRowIndex: number | null
+  endRowId?: string | number | null
+  boundaryKind: "data-end" | "gap" | "cache-boundary" | "projection-end" | "unresolved"
+  scannedRowCount?: number
+  truncated?: boolean
+}
+
+type ServerDemoFillCommitResponse = {
+  operationId?: string | null
+  affectedRowCount: number
+  affectedCellCount?: number
+  revision?: string | number | null
+  invalidation?: unknown
+  warnings?: readonly string[]
+}
+
+type ServerDemoFillHistoryResponse = {
+  operationId?: string | null
+  revision?: string | number | null
+  invalidation?: unknown
+  warnings?: readonly string[]
+}
+
 type ServerDemoCommitEditsResponse = {
   operationId?: string | null
   committed?: readonly {
@@ -80,6 +105,15 @@ type ServerDemoServerOperationResult = ServerDemoCommitEditsResultWithOperation 
 type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>[0]
 type ServerDemoCommitEditsResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>>
 type ServerDemoCommittedRowResult = NonNullable<ServerDemoCommitEditsResult["committed"]>[number]
+type ServerDemoFillOperationRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>[0]
+type ServerDemoFillBoundaryRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["resolveFillBoundary"]>>[0]
+type ServerDemoFillUndoRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>[0]
+type ServerDemoFillRedoRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["redoFillOperation"]>>[0]
+type ServerDemoFillOperationResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>>
+type ServerDemoFillUndoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>>
+type ServerDemoFillRedoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["redoFillOperation"]>>>
+
+export type ServerDemoHttpDatasource = ReturnType<typeof createServerDemoDatasourceHttpAdapter>
 
 type BackendFilterModel = Record<string, unknown>
 
@@ -120,10 +154,6 @@ function resolveEndpoint(baseUrl: string | undefined, path: string): string {
     return path
   }
   return new URL(path, baseUrl).toString()
-}
-
-function createUnsupportedOperationError(operation: string): Error {
-  return new Error(`Server demo HTTP adapter does not implement ${operation} yet`)
 }
 
 function decodeColumnValueToken(token: string): unknown {
@@ -585,6 +615,118 @@ function getHistogramResponseKey(entries: readonly DataGridColumnHistogramEntry[
   return entries
 }
 
+function normalizeDataGridInvalidation(value: unknown): DataGridDataSourceInvalidation | null {
+  if (!isRecord(value) || value.kind !== "range") {
+    return null
+  }
+  const range = isRecord(value.range) ? value.range : null
+  const start = Number(range?.start)
+  const end = Number(range?.end)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return null
+  }
+  return {
+    kind: "range",
+    range: {
+      start: Math.max(0, Math.trunc(start)),
+      end: Math.max(0, Math.trunc(end)),
+    },
+    reason: typeof value.reason === "string" && value.reason.trim().length > 0 ? value.reason : undefined,
+  }
+}
+
+function serializeFillRange(range: {
+  startRow?: number
+  endRow?: number
+  start?: number
+  end?: number
+  startColumn?: number
+  endColumn?: number
+}): {
+  startRow: number
+  endRow: number
+  startColumn: number
+  endColumn: number
+} {
+  const rawStartRow = Number.isFinite(range.startRow) ? Number(range.startRow) : Number(range.start ?? 0)
+  const rawEndRow = Number.isFinite(range.endRow) ? Number(range.endRow) : Number(range.end ?? rawStartRow)
+  const rawStartColumn = Number.isFinite(range.startColumn) ? Number(range.startColumn) : 0
+  const rawEndColumn = Number.isFinite(range.endColumn) ? Number(range.endColumn) : rawStartColumn
+  return {
+    startRow: Math.max(0, Math.trunc(rawStartRow)),
+    endRow: Math.max(0, Math.trunc(rawEndRow)),
+    startColumn: Math.max(0, Math.trunc(rawStartColumn)),
+    endColumn: Math.max(0, Math.trunc(rawEndColumn)),
+  }
+}
+
+function normalizeFillProjection(projection: ServerDemoFillOperationRequest["projection"]): ServerDemoFillOperationRequest["projection"] {
+  return {
+    sortModel: projection.sortModel,
+    filterModel: projection.filterModel,
+    groupBy: projection.groupBy,
+    groupExpansion: projection.groupExpansion,
+    treeData: projection.treeData,
+    pivot: projection.pivot,
+    pagination: projection.pagination,
+  }
+}
+
+function normalizeFillBoundaryRequestBody(
+  request: ServerDemoFillBoundaryRequest,
+): {
+  direction: "up" | "down" | "left" | "right"
+  baseRange: { startRow: number; endRow: number; startColumn: number; endColumn: number }
+  fillColumns: readonly string[]
+  referenceColumns: readonly string[]
+  projection: ServerDemoFillOperationRequest["projection"]
+  startRowIndex: number
+  startColumnIndex: number
+  limit?: number | null
+} {
+  return {
+    direction: request.direction,
+    baseRange: serializeFillRange(request.baseRange),
+    fillColumns: request.fillColumns,
+    referenceColumns: request.referenceColumns,
+    projection: normalizeFillProjection(request.projection),
+    startRowIndex: Math.max(0, Math.trunc(request.startRowIndex)),
+    startColumnIndex: Math.max(0, Math.trunc(request.startColumnIndex)),
+    limit: typeof request.limit === "number" && Number.isFinite(request.limit)
+      ? Math.max(0, Math.trunc(request.limit))
+      : request.limit ?? null,
+  }
+}
+
+function normalizeFillCommitRequestBody(request: ServerDemoFillOperationRequest): {
+  operationId?: string | null
+  revision?: string | number | null
+  projection: ServerDemoFillOperationRequest["projection"]
+  sourceRange: { startRow: number; endRow: number; startColumn: number; endColumn: number }
+  targetRange: { startRow: number; endRow: number; startColumn: number; endColumn: number }
+  fillColumns: readonly string[]
+  referenceColumns: readonly string[]
+  mode: "copy" | "series"
+  sourceRowIds?: readonly (string | number)[]
+  targetRowIds?: readonly (string | number)[]
+  metadata?: ServerDemoFillOperationRequest["metadata"] | null
+} {
+  const mode = request.mode === "series" ? "copy" : request.mode
+  return {
+    operationId: request.operationId ?? null,
+    revision: request.revision ?? null,
+    projection: normalizeFillProjection(request.projection),
+    sourceRange: serializeFillRange(request.sourceRange),
+    targetRange: serializeFillRange(request.targetRange),
+    fillColumns: request.fillColumns,
+    referenceColumns: request.referenceColumns,
+    mode,
+    sourceRowIds: request.sourceRowIds,
+    targetRowIds: request.targetRowIds,
+    metadata: request.metadata ?? null,
+  }
+}
+
 function readPreviousValue(edit: unknown, columnId: string): unknown {
   if (!isRecord(edit)) {
     return undefined
@@ -691,6 +833,19 @@ async function postServerOperation(
   }
 }
 
+async function postServerFillHistoryOperation(
+  fetchImpl: typeof fetch,
+  url: string,
+): Promise<ServerDemoFillHistoryResponse> {
+  const response = await postJson<ServerDemoCommitEditsResponse>(fetchImpl, url, {})
+  return {
+    operationId: response.operationId ?? null,
+    revision: response.revision,
+    invalidation: response.invalidation,
+    warnings: (response.rejected ?? []).map(entry => entry.reason ?? "rejected"),
+  }
+}
+
 export interface ServerDemoDatasourceHttpAdapter extends DataGridDataSource<ServerDemoRow> {
   undoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult>
   redoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult>
@@ -785,6 +940,32 @@ export function createServerDemoDatasourceHttpAdapter(
       } as ServerDemoCommitEditsResultWithOperation
     },
 
+    async resolveFillBoundary(request: ServerDemoFillBoundaryRequest): Promise<ServerDemoFillBoundaryResponse> {
+      const url = resolveEndpoint(options.baseUrl, "/api/server-demo/fill-boundary")
+      return await postJson<ServerDemoFillBoundaryResponse>(
+        fetchImpl,
+        url,
+        normalizeFillBoundaryRequestBody(request),
+      )
+    },
+
+    async commitFillOperation(request: ServerDemoFillOperationRequest): Promise<ServerDemoFillOperationResult> {
+      const url = resolveEndpoint(options.baseUrl, "/api/server-demo/fill/commit")
+      const response = await postJson<ServerDemoFillCommitResponse>(
+        fetchImpl,
+        url,
+        normalizeFillCommitRequestBody(request),
+      )
+      return {
+        operationId: response.operationId ?? request.operationId ?? "",
+        affectedRowCount: response.affectedRowCount,
+        affectedCellCount: response.affectedCellCount ?? response.affectedRowCount,
+        revision: response.revision,
+        invalidation: normalizeDataGridInvalidation(response.invalidation),
+        warnings: response.warnings ?? [],
+      }
+    },
+
     async undoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult> {
       const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/undo`)
       return await postServerOperation(fetchImpl, url, request.signal)
@@ -795,20 +976,26 @@ export function createServerDemoDatasourceHttpAdapter(
       return await postServerOperation(fetchImpl, url, request.signal)
     },
 
-    async commitFillOperation(): Promise<never> {
-      throw createUnsupportedOperationError("commitFillOperation")
+    async undoFillOperation(request: ServerDemoFillUndoRequest): Promise<ServerDemoFillUndoResult> {
+      const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/undo`)
+      const result = await postServerFillHistoryOperation(fetchImpl, url)
+      return {
+        operationId: result.operationId ?? request.operationId,
+        revision: result.revision,
+        invalidation: normalizeDataGridInvalidation(result.invalidation),
+        warnings: result.warnings,
+      }
     },
 
-    async undoFillOperation(): Promise<never> {
-      throw createUnsupportedOperationError("undoFillOperation")
-    },
-
-    async redoFillOperation(): Promise<never> {
-      throw createUnsupportedOperationError("redoFillOperation")
-    },
-
-    async resolveFillBoundary(): Promise<never> {
-      throw createUnsupportedOperationError("resolveFillBoundary")
+    async redoFillOperation(request: ServerDemoFillRedoRequest): Promise<ServerDemoFillRedoResult> {
+      const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/redo`)
+      const result = await postServerFillHistoryOperation(fetchImpl, url)
+      return {
+        operationId: result.operationId ?? request.operationId,
+        revision: result.revision,
+        invalidation: normalizeDataGridInvalidation(result.invalidation),
+        warnings: result.warnings,
+      }
     },
 
     subscribe(listener: DataGridDataSourcePushListener<ServerDemoRow>): () => void {

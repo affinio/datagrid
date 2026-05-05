@@ -81,6 +81,8 @@ interface DataGridAppFillDataSource {
     projection: DataGridAppFillProjectionContext
     sourceRange: DataGridCopyRange
     targetRange: DataGridCopyRange
+    sourceRowIds?: readonly (string | number)[]
+    targetRowIds?: readonly (string | number)[]
     fillColumns: readonly string[]
     referenceColumns: readonly string[]
     mode: DataGridFillBehavior
@@ -96,6 +98,31 @@ interface DataGridAppFillDataSource {
     revision?: string | number | null
     projection: DataGridAppFillProjectionContext
   }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+}
+
+interface DataGridAppProjectedFillRowIds {
+  rowIds: Array<string | number>
+  requestedRowCount: number
+  missingCount: number
+  firstMissingRowIndex: number | null
+  lastResolvedRowIndex: number | null
+  fullyMaterialized: boolean
+}
+
+const SERVER_FILL_SERIES_UNSUPPORTED_WARNING = "Series fill is not supported by the server datasource yet; using copy fill."
+
+function resolveServerFillCommitBehavior(
+  behavior: DataGridFillBehavior,
+): { behavior: DataGridFillBehavior; downgraded: boolean } {
+  return behavior === "series"
+    ? { behavior: "copy", downgraded: true }
+    : { behavior, downgraded: false }
+}
+
+function normalizeServerFillOperationId(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : null
 }
 
 function getFillRangeStart(range: DataGridCopyRange | { start?: number; end?: number }): number {
@@ -502,6 +529,45 @@ export function useDataGridAppInteractionController<
   const rangeMoveBaseRange = ref<DataGridCopyRange | null>(null)
   const rangeMoveOrigin = ref<DataGridAppCellCoord | null>(null)
   const rangeMovePreviewRange = ref<DataGridCopyRange | null>(null)
+  let fillPreviewCancelVersion = 0
+  let lastServerFillMaterializationWarning: string | null = null
+
+  const hasActiveFillPreviewState = (): boolean => {
+    return isFillDragging.value || fillBaseRange.value != null || fillPreviewRange.value != null
+  }
+
+  const clearFillPreviewState = (
+    expectedBaseRange?: DataGridCopyRange | null,
+    expectedPreviewRange?: DataGridCopyRange | null,
+  ): boolean => {
+    if (
+      expectedBaseRange !== undefined
+      && !options.rangesEqual(fillBaseRange.value, expectedBaseRange)
+    ) {
+      return false
+    }
+    if (
+      expectedPreviewRange !== undefined
+      && !options.rangesEqual(fillPreviewRange.value, expectedPreviewRange)
+    ) {
+      return false
+    }
+    isFillDragging.value = false
+    fillDragStartPointer.value = null
+    fillPointer.value = null
+    fillBaseRange.value = null
+    fillPreviewRange.value = null
+    fillOriginFocusCoord.value = null
+    return true
+  }
+
+  const cancelFillPreviewState = (): boolean => {
+    if (!hasActiveFillPreviewState()) {
+      return false
+    }
+    fillPreviewCancelVersion += 1
+    return clearFillPreviewState()
+  }
 
   const focusViewport = (): void => {
     options.bodyViewportRef.value?.focus({ preventScroll: true })
@@ -923,43 +989,41 @@ export function useDataGridAppInteractionController<
     resolveSelectionRange: options.resolveSelectionRange,
     rangesEqual: options.rangesEqual,
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,
-    shouldUseServerFill: (_baseRange, previewRange) => {
+    shouldUseServerFill: (_baseRange, _previewRange) => {
       const controllerRowModel = options.runtimeRowModel as
-        | { dataSource?: { commitFillOperation?: unknown } }
+        | { dataSource?: { commitFillOperation?: unknown; resolveFillBoundary?: unknown } }
         | null
         | undefined
-      const runtimeRowModelDataSource = controllerRowModel?.dataSource
       const runtimeRowModelFromRuntime = (options.runtime.rowModel as
-        | { dataSource?: { commitFillOperation?: unknown } }
+        | { dataSource?: { commitFillOperation?: unknown; resolveFillBoundary?: unknown } }
         | undefined)?.dataSource
       options.reportFillPlumbingState?.("controller_runtimeRowModel_exists", controllerRowModel != null)
-      options.reportFillPlumbingState?.("controller_runtimeRowModel_dataSource_exists", runtimeRowModelDataSource != null)
-      options.reportFillPlumbingState?.("controller_runtimeRowModel_dataSource_keys", Object.keys(runtimeRowModelDataSource ?? {}).length > 0)
-      options.reportFillPlumbingDetail?.("controller_runtimeRowModel_dataSource_keys", Object.keys(runtimeRowModelDataSource ?? {}).join(","))
-      options.reportFillPlumbingState?.("controller_runtimeRowModel_commit_type", typeof runtimeRowModelDataSource?.commitFillOperation === "function")
+      options.reportFillPlumbingState?.("controller_runtimeRowModel_dataSource_exists", controllerRowModel?.dataSource != null)
+      options.reportFillPlumbingState?.("controller_runtimeRowModel_dataSource_keys", Object.keys(controllerRowModel?.dataSource ?? {}).length > 0)
+      options.reportFillPlumbingDetail?.("controller_runtimeRowModel_dataSource_keys", Object.keys(controllerRowModel?.dataSource ?? {}).join(","))
+      options.reportFillPlumbingState?.("controller_runtimeRowModel_commit_type", typeof controllerRowModel?.dataSource?.commitFillOperation === "function")
       options.reportFillPlumbingState?.("controller_runtime_rowModel_keys", Object.keys(runtimeRowModelFromRuntime ?? {}).length > 0)
       options.reportFillPlumbingDetail?.("controller_runtime_rowModel_keys", Object.keys(runtimeRowModelFromRuntime ?? {}).join(","))
       options.reportFillPlumbingState?.("controller_runtime_rowModel_commit_type", typeof runtimeRowModelFromRuntime?.commitFillOperation === "function")
-      const dataSource = runtimeRowModelDataSource ?? runtimeRowModelFromRuntime
+      const dataSource = resolveServerFillDataSource()
       options.reportFillPlumbingState?.("commitFillOperation_available", typeof dataSource?.commitFillOperation === "function")
       options.reportFillPlumbingState?.("server_fill_dispatch_attempted", true)
-      if (typeof dataSource?.commitFillOperation !== "function") {
-        return false
-      }
-      const rowCount = Math.max(0, previewRange.endRow - previewRange.startRow + 1)
-      return rowCount >= 256
+      return typeof dataSource?.commitFillOperation === "function"
     },
     commitServerFill: async ({ baseRange, previewRange, behavior }) => {
-      const runtimeRowModelDataSource = (options.runtimeRowModel as
-        | { dataSource?: unknown }
-        | null
-        | undefined)?.dataSource as DataGridAppFillDataSource | undefined
-      const runtimeRowModelFallback = (options.runtime.rowModel as
-        | { dataSource?: unknown }
-        | undefined)?.dataSource as DataGridAppFillDataSource | undefined
-      const dataSource: DataGridAppFillDataSource | undefined = runtimeRowModelDataSource ?? runtimeRowModelFallback
+      lastServerFillMaterializationWarning = null
+      const serverFillBehavior = resolveServerFillCommitBehavior(behavior)
+      if (serverFillBehavior.downgraded) {
+        options.reportFillWarning?.(SERVER_FILL_SERIES_UNSUPPORTED_WARNING)
+        options.reportFillPlumbingState?.("server_fill_series_downgraded_to_copy", true)
+      }
+      const clearCurrentFillPreview = (): void => {
+        clearFillPreviewState(baseRange, previewRange)
+      }
+      const dataSource = resolveServerFillDataSource()
       if (!dataSource?.commitFillOperation) {
         options.reportFillWarning?.("server fill execution not implemented yet")
+        clearCurrentFillPreview()
         return null
       }
       const snapshot = options.runtime.api.rows.getSnapshot() as {
@@ -975,7 +1039,7 @@ export function useDataGridAppInteractionController<
         baseRange,
         previewRange,
         sourceMatrix,
-        behavior,
+        behavior: serverFillBehavior.behavior,
       })
       const materializedTargetRowIds: Array<string | number> = []
       const optimisticUpdatesByRowId = new Map<string | number, Record<string, unknown>>()
@@ -1005,6 +1069,52 @@ export function useDataGridAppInteractionController<
             optimisticUpdatesByRowId.set(targetRow.rowId, current)
           }
         }
+      }
+
+      const sourceResolution = resolveProjectedFillRowIds(baseRange)
+      reportProjectedFillRowIdResolution("source", sourceResolution)
+      if (!sourceResolution.fullyMaterialized) {
+        options.reportFillWarning?.(`server fill source row ids are not fully materialized (${sourceResolution.missingCount} source rows missing)`)
+        clearCurrentFillPreview()
+        return null
+      }
+      const sourceRowIds = sourceResolution.rowIds
+
+      let targetResolution = resolveProjectedFillRowIds(previewRange)
+      reportProjectedFillRowIdResolution("target", targetResolution)
+      if (!targetResolution.fullyMaterialized) {
+        const materialized = await materializeProjectedFillRows(previewRange)
+        if (materialized) {
+          targetResolution = resolveProjectedFillRowIds(previewRange)
+          reportProjectedFillRowIdResolution("target", targetResolution)
+        }
+      }
+
+      const missingTargetRows = targetResolution.missingCount
+      const boundedTargetEndRow = targetResolution.lastResolvedRowIndex
+      if (boundedTargetEndRow == null || boundedTargetEndRow <= baseRange.endRow || targetResolution.rowIds.length <= sourceRowIds.length) {
+        options.reportFillWarning?.(`server fill target row ids are not fully materialized (${missingTargetRows} target rows missing)`)
+        clearCurrentFillPreview()
+        return null
+      }
+
+      const commitTargetRange = targetResolution.fullyMaterialized
+        ? previewRange
+        : options.normalizeClipboardRange({
+          ...previewRange,
+          endRow: boundedTargetEndRow,
+        }) ?? {
+          ...previewRange,
+          endRow: boundedTargetEndRow,
+        }
+      const targetRowIds = targetResolution.rowIds
+      const partialMaterializedWarning = targetResolution.fullyMaterialized
+        ? null
+        : `Fill applied only to loaded rows; server range was truncated/not fully materialized (${missingTargetRows} target rows missing).`
+      if (partialMaterializedWarning) {
+        lastServerFillMaterializationWarning = partialMaterializedWarning
+        options.reportFillPlumbingState?.("server_fill_bounded_to_materialized_rows", true)
+        options.reportFillPlumbingDetail?.("server_fill_bounded_target_range", `${commitTargetRange.startRow}..${commitTargetRange.endRow}`)
       }
 
       let optimisticRollbackUpdates: Array<{ rowId: string | number; data: Partial<TRow> }> | null = null
@@ -1061,14 +1171,16 @@ export function useDataGridAppInteractionController<
             },
           },
           sourceRange: baseRange,
-          targetRange: previewRange,
+          targetRange: commitTargetRange,
+          sourceRowIds,
+          targetRowIds,
           fillColumns: options.visibleColumns.value
             .slice(previewRange.startColumn, previewRange.endColumn + 1)
             .map(column => String(column.key)),
           referenceColumns: options.visibleColumns.value
             .slice(baseRange.startColumn, baseRange.endColumn + 1)
             .map(column => String(column.key)),
-          mode: behavior,
+          mode: serverFillBehavior.behavior,
           metadata: { origin: "double-click-fill", behaviorSource: "default" },
         })
         options.reportFillPlumbingState?.("commitFillOperation_called", true)
@@ -1081,6 +1193,9 @@ export function useDataGridAppInteractionController<
         options.reportFillWarning?.("server fill commit failed")
         return null
       }
+      finally {
+        clearCurrentFillPreview()
+      }
       if (!result) {
         if (optimisticRollbackUpdates && optimisticRollbackUpdates.length > 0) {
           await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates))
@@ -1088,17 +1203,53 @@ export function useDataGridAppInteractionController<
         options.reportFillWarning?.("server fill commit failed")
         return null
       }
-      const invalidationRange = result.invalidation?.kind === "range" ? result.invalidation.range : previewRange
+      const affectedRowCount = result.affectedRowCount ?? 0
+      const affectedCellCount = result.affectedCellCount ?? affectedRowCount
+      const warnings = result.warnings ?? []
+      if (affectedCellCount <= 0) {
+        if (optimisticRollbackUpdates && optimisticRollbackUpdates.length > 0) {
+          await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates))
+        }
+        options.reportFillWarning?.(warnings[0] ?? "server fill no-op")
+        options.reportFillPlumbingState?.("server_fill_affectedRowCount", false)
+        return null
+      }
+      const committedOperationId = normalizeServerFillOperationId(result.operationId)
+      const invalidationRange = result.invalidation?.kind === "range" ? result.invalidation.range : commitTargetRange
       const normalizedInvalidationRange = normalizeServerFillInvalidationRange(invalidationRange)
       options.reportFillPlumbingDetail?.("server_fill_raw_invalidation", JSON.stringify(invalidationRange ?? null))
       options.reportFillPlumbingDetail?.("server_fill_normalized_invalidation", normalizedInvalidationRange ? `${normalizedInvalidationRange.start}..${normalizedInvalidationRange.end}` : "none")
       options.reportFillPlumbingDetail?.("server_fill_affected_range", formatServerFillAffectedRange(normalizedInvalidationRange ?? invalidationRange, previewRange))
-      const affectedRowCount = result.affectedRowCount ?? 0
-      const warnings = result.warnings ?? []
+      if (!committedOperationId) {
+        options.reportFillWarning?.("server fill committed without operation id; undo/redo disabled")
+        options.reportFillPlumbingState?.("server_fill_operationId", false)
+        if (options.refreshServerFillViewport) {
+          await Promise.resolve(options.refreshServerFillViewport(result.invalidation?.kind === "range" ? result.invalidation.range : invalidationRange))
+        }
+        else {
+          const runtimeRowModel = options.runtimeRowModel as unknown as {
+            invalidateRange?: (range: { start: number; end: number }) => void
+          } | undefined
+          const runtimeRowModelFallback = options.runtime.rowModel as unknown as {
+            invalidateRange?: (range: { start: number; end: number }) => void
+          } | undefined
+          const rowsApi = options.runtime.api.rows as unknown as {
+            refresh?: () => void | Promise<void>
+          }
+          const invalidateTarget = runtimeRowModel?.invalidateRange ?? runtimeRowModelFallback?.invalidateRange
+          if (normalizedInvalidationRange && typeof invalidateTarget === "function") {
+            invalidateTarget(normalizedInvalidationRange)
+            options.reportFillPlumbingState?.("server_fill_invalidation_applied", true)
+          }
+          await Promise.resolve(rowsApi.refresh?.())
+        }
+        return null
+      }
       options.reportFillWarning?.(
-        warnings[0] ?? (affectedRowCount > 0 ? "server fill committed" : "server fill no-op"),
+        warnings[0] ?? partialMaterializedWarning ?? "server fill committed",
       )
       options.reportFillPlumbingState?.("server_fill_affectedRowCount", true)
+      options.reportFillPlumbingState?.("server-fill-committed", true)
       if (!options.refreshServerFillViewport) {
         const runtimeRowModel = options.runtimeRowModel as unknown as {
           invalidateRange?: (range: { start: number; end: number }) => void
@@ -1117,12 +1268,12 @@ export function useDataGridAppInteractionController<
         await Promise.resolve(rowsApi.refresh?.())
       }
       return {
-        operationId: result.operationId,
+        operationId: committedOperationId,
         revision: result.revision,
         affectedRange: invalidationRange,
         invalidation: result.invalidation ?? null,
         affectedRowCount,
-        affectedCellCount: result.affectedCellCount ?? affectedRowCount,
+        affectedCellCount,
         warnings,
       }
     },
@@ -1993,6 +2144,7 @@ export function useDataGridAppInteractionController<
     const originCoord = resolveFillOriginFocusCoord()
     const restartSession = resolveRestartableFillSession(baseRange)
     if (fillHandleStart.onSelectionHandleMouseDown(event)) {
+      fillPreviewCancelVersion += 1
       activeRestartFillSession.value = restartSession
       fillOriginFocusCoord.value = originCoord
     }
@@ -2034,6 +2186,130 @@ export function useDataGridAppInteractionController<
         endIndex: 0,
       },
     }
+  }
+
+  const resolveServerFillDataSource = (): DataGridAppFillDataSource | undefined => {
+    const controllerDataSource = (options.runtimeRowModel as
+      | { dataSource?: DataGridAppFillDataSource }
+      | null
+      | undefined)?.dataSource
+    const runtimeDataSource = (options.runtime.rowModel as
+      | { dataSource?: DataGridAppFillDataSource }
+      | undefined)?.dataSource
+
+    if (typeof controllerDataSource?.commitFillOperation === "function") {
+      return controllerDataSource
+    }
+    if (typeof runtimeDataSource?.commitFillOperation === "function") {
+      return runtimeDataSource
+    }
+    if (typeof controllerDataSource?.resolveFillBoundary === "function") {
+      return controllerDataSource
+    }
+    if (typeof runtimeDataSource?.resolveFillBoundary === "function") {
+      return runtimeDataSource
+    }
+    return controllerDataSource ?? runtimeDataSource
+  }
+
+  const resolveProjectedFillRowIds = (range: DataGridCopyRange): DataGridAppProjectedFillRowIds => {
+    const rowIds: Array<string | number> = []
+    const requestedRowCount = Math.max(0, range.endRow - range.startRow + 1)
+    let firstMissingRowIndex: number | null = null
+    let lastResolvedRowIndex: number | null = null
+    for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
+      const row = getBodyRowAtIndex(rowIndex)
+      const isMaterialized = options.isRowMaterializedAtIndex
+        ? options.isRowMaterializedAtIndex(rowIndex)
+        : !!row && (row as { __placeholder?: boolean }).__placeholder !== true
+      if (!isMaterialized || !row || row.kind === "group" || row.rowId == null || (row as { __placeholder?: boolean }).__placeholder === true) {
+        firstMissingRowIndex = rowIndex
+        break
+      }
+      rowIds.push(row.rowId)
+      lastResolvedRowIndex = rowIndex
+    }
+    const missingCount = firstMissingRowIndex == null
+      ? 0
+      : Math.max(0, range.endRow - firstMissingRowIndex + 1)
+    return {
+      rowIds,
+      requestedRowCount,
+      missingCount,
+      firstMissingRowIndex,
+      lastResolvedRowIndex,
+      fullyMaterialized: missingCount === 0,
+    }
+  }
+
+  const reportProjectedFillRowIdResolution = (
+    label: "source" | "target",
+    resolution: DataGridAppProjectedFillRowIds,
+  ): void => {
+    options.reportFillPlumbingDetail?.(`server_fill_${label}_rows_requested`, String(resolution.requestedRowCount))
+    options.reportFillPlumbingDetail?.(`server_fill_${label}_row_ids_resolved`, String(resolution.rowIds.length))
+    options.reportFillPlumbingDetail?.(`server_fill_${label}_row_ids_missing`, String(resolution.missingCount))
+    options.reportFillPlumbingDetail?.(
+      `server_fill_${label}_first_missing_row_index`,
+      resolution.firstMissingRowIndex == null ? "none" : String(resolution.firstMissingRowIndex),
+    )
+  }
+
+  const materializeProjectedFillRows = async (
+    range: DataGridCopyRange,
+  ): Promise<boolean> => {
+    const normalizedRange = {
+      start: Math.max(0, Math.trunc(range.startRow)),
+      end: Math.max(Math.max(0, Math.trunc(range.startRow)), Math.trunc(range.endRow)),
+    }
+    const runtimeWithViewport = options.runtime as unknown as {
+      setViewportRange?: (range: { start: number; end: number }) => void
+      syncBodyRowsInRange?: (range: { start: number; end: number }) => readonly DataGridRowNode<TRow>[]
+    }
+    const rowModel = (options.runtimeRowModel ?? options.runtime.rowModel) as unknown as {
+      setViewportRange?: (range: { start: number; end: number }) => void
+      refresh?: (reason?: string) => Promise<void> | void
+    } | null | undefined
+    const rowsApi = options.runtime.api.rows as unknown as {
+      refresh?: () => Promise<void> | void
+    }
+    let attempted = false
+    try {
+      if (typeof runtimeWithViewport.setViewportRange === "function") {
+        runtimeWithViewport.setViewportRange(normalizedRange)
+        attempted = true
+      }
+      else if (typeof rowModel?.setViewportRange === "function") {
+        rowModel.setViewportRange(normalizedRange)
+        attempted = true
+      }
+
+      if (typeof rowModel?.refresh === "function") {
+        attempted = true
+        await Promise.resolve(rowModel.refresh("fill-materialize"))
+      }
+      else if (typeof rowsApi.refresh === "function") {
+        attempted = true
+        await Promise.resolve(rowsApi.refresh())
+      }
+
+      if (typeof runtimeWithViewport.syncBodyRowsInRange === "function") {
+        runtimeWithViewport.syncBodyRowsInRange(normalizedRange)
+        attempted = true
+      }
+    } catch (caught: unknown) {
+      options.reportFillPlumbingDetail?.("server_fill_materialize_error", caught instanceof Error ? caught.message : String(caught))
+      return false
+    }
+    options.reportFillPlumbingState?.("server_fill_materialize_attempted", attempted)
+    options.reportFillPlumbingDetail?.("server_fill_materialize_range", `${normalizedRange.start}..${normalizedRange.end}`)
+    return attempted
+  }
+
+  const isAcceptedServerFillBoundaryKind = (
+    boundaryKind: DataGridAppResolveFillBoundaryResult["boundaryKind"],
+  ): boundaryKind is "data-end" | "gap" | "cache-boundary" => {
+    return boundaryKind === "data-end" || boundaryKind === "gap" || boundaryKind === "cache-boundary"
   }
 
   const resolveReferenceColumnExtentEndRow = (
@@ -2102,7 +2378,7 @@ export function useDataGridAppInteractionController<
 
   const resolveServerAwareFillBoundary = async (
     baseRange: DataGridCopyRange,
-  ): Promise<{ endRow: number; boundaryKind: DataGridAppResolveFillBoundaryResult["boundaryKind"]; resolvedByServer: boolean } | null> => {
+  ): Promise<{ endRow: number; boundaryKind: DataGridAppResolveFillBoundaryResult["boundaryKind"]; resolvedByServer: boolean; truncated?: boolean } | null> => {
     if (!options.resolveFillBoundary) {
       options.reportFillPlumbingState?.("interaction_controller_option", false)
       return null
@@ -2156,15 +2432,15 @@ export function useDataGridAppInteractionController<
     }
     const left = await resolve(leftReferenceColumns, "left")
     options.reportFillPlumbingState?.("double_click_left_result", left != null)
-    if (left && left.boundaryKind !== "unresolved" && left.endRowIndex != null) {
+    if (left && isAcceptedServerFillBoundaryKind(left.boundaryKind) && left.endRowIndex != null) {
       options.reportFillPlumbingState?.("double_click_left_selected", true)
-      return { endRow: left.endRowIndex, boundaryKind: left.boundaryKind, resolvedByServer: true }
+      return { endRow: left.endRowIndex, boundaryKind: left.boundaryKind, resolvedByServer: true, truncated: left.truncated === true }
     }
     const right = await resolve(rightReferenceColumns, "right")
     options.reportFillPlumbingState?.("double_click_right_result", right != null)
-    if (right && right.boundaryKind !== "unresolved" && right.endRowIndex != null) {
+    if (right && isAcceptedServerFillBoundaryKind(right.boundaryKind) && right.endRowIndex != null) {
       options.reportFillPlumbingState?.("double_click_right_selected", true)
-      return { endRow: right.endRowIndex, boundaryKind: right.boundaryKind, resolvedByServer: true }
+      return { endRow: right.endRowIndex, boundaryKind: right.boundaryKind, resolvedByServer: true, truncated: right.truncated === true }
     }
     if (left?.boundaryKind === "unresolved" || right?.boundaryKind === "unresolved") {
       options.reportFillWarning?.("server fill boundary unresolved; using loaded-cache fallback")
@@ -2209,6 +2485,9 @@ export function useDataGridAppInteractionController<
         })
         : null
       if (!previewRange || options.rangesEqual(baseRange, previewRange)) {
+        if (resolved?.resolvedByServer && resolved.truncated) {
+          options.reportFillWarning?.("Fill truncated at cache boundary")
+        }
         return
       }
       const sourceMatrix = options.buildFillMatrixFromRange(baseRange)
@@ -2219,28 +2498,30 @@ export function useDataGridAppInteractionController<
       })
       if (resolved?.resolvedByServer) {
         options.reportFillPlumbingState?.("double_click_server_branch_entered", true)
-        const resolvedRowCount = previewRange.endRow - previewRange.startRow + 1
-        const threshold = 500
+        const normalizedFillBaseRange = options.normalizeClipboardRange(baseRange)
+        if (!options.rangesEqual(options.resolveSelectionRange(), baseRange)) {
+          return
+        }
+        if (normalizedFillBaseRange) {
+          fillBaseRange.value = normalizedFillBaseRange
+          fillPreviewRange.value = previewRange
+        }
+        const fillPreviewCancelVersionAtCommitStart = fillPreviewCancelVersion
         const rowModel = options.runtimeRowModel as
-          | { dataSource?: { commitFillOperation?: unknown } }
+          | { dataSource?: { commitFillOperation?: unknown; resolveFillBoundary?: unknown } }
           | null
           | undefined
-        const dataSource = rowModel?.dataSource ?? (options.runtime.rowModel as
-          | { dataSource?: { commitFillOperation?: unknown } }
-          | undefined)?.dataSource
+        const runtimeRowModel = options.runtime.rowModel as
+          | { dataSource?: { commitFillOperation?: unknown; resolveFillBoundary?: unknown } }
+          | undefined
+        const dataSource = resolveServerFillDataSource()
         options.reportFillPlumbingState?.("controller_runtimeRowModel_exists", rowModel != null)
-        options.reportFillPlumbingState?.("controller_runtimeRowModel_dataSource_exists", dataSource != null)
+        options.reportFillPlumbingState?.("controller_runtimeRowModel_dataSource_exists", rowModel?.dataSource != null)
         options.reportFillPlumbingState?.("controller_runtimeRowModel_commit_type", typeof rowModel?.dataSource?.commitFillOperation === "function")
-        options.reportFillPlumbingState?.("controller_runtime_rowModel_commit_type", typeof (options.runtime.rowModel as { dataSource?: { commitFillOperation?: unknown } } | undefined)?.dataSource?.commitFillOperation === "function")
+        options.reportFillPlumbingState?.("controller_runtime_rowModel_commit_type", typeof runtimeRowModel?.dataSource?.commitFillOperation === "function")
         const canCommitServerFill = typeof dataSource?.commitFillOperation === "function"
         options.reportFillPlumbingState?.("commitFillOperation_available", canCommitServerFill)
-        if (resolvedRowCount > threshold) {
-          if (!canCommitServerFill) {
-            options.reportFillPlumbingState?.("double_click_blocked_large", true)
-            options.reportFillWarning?.("server fill execution not implemented yet")
-            return
-          }
-        }
+        const serverFillBehavior = resolveServerFillCommitBehavior(behavior)
         let allLoaded = true
         for (let rowIndex = previewRange.startRow; rowIndex <= previewRange.endRow; rowIndex += 1) {
           const isMaterialized = options.isRowMaterializedAtIndex
@@ -2254,34 +2535,70 @@ export function useDataGridAppInteractionController<
         if (!allLoaded && !canCommitServerFill) {
           options.reportFillPlumbingState?.("double_click_blocked_unloaded", true)
           options.reportFillWarning?.("server fill execution not implemented yet")
+          clearFillPreviewState(normalizedFillBaseRange, previewRange)
           return
         }
         if (canCommitServerFill) {
-          options.reportFillPlumbingState?.("server-fill-committed", true)
-          void Promise.resolve(applyFillRange(baseRange, previewRange, behavior)).then((applied: boolean) => {
-            if (!applied) {
-              return
-            }
-            activeFillBehavior.value = behavior
-            const restoredCoord = preferredFocusCoord
-              ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
-              : null
-            restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
-          })
+          if (serverFillBehavior.downgraded) {
+            options.reportFillWarning?.(SERVER_FILL_SERIES_UNSUPPORTED_WARNING)
+            options.reportFillPlumbingState?.("server_fill_series_downgraded_to_copy", true)
+          }
+          void Promise.resolve(applyFillRange(baseRange, previewRange, serverFillBehavior.behavior))
+            .then((applied: boolean) => {
+              if (!applied) {
+                return
+              }
+              if (fillPreviewCancelVersion !== fillPreviewCancelVersionAtCommitStart) {
+                return
+              }
+              applySelectionRangeWithActivePosition(previewRange, "start")
+              if (
+                normalizedFillBaseRange
+                && options.rangesEqual(fillBaseRange.value, normalizedFillBaseRange)
+                && options.rangesEqual(fillPreviewRange.value, previewRange)
+              ) {
+                fillBaseRange.value = null
+                fillPreviewRange.value = null
+              }
+              activeFillBehavior.value = serverFillBehavior.behavior
+              if (resolved.truncated && !lastServerFillMaterializationWarning) {
+                options.reportFillWarning?.("Fill truncated at cache boundary")
+              }
+              const restoredCoord = preferredFocusCoord
+                ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
+                : null
+              restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
+            })
+            .catch((caught: unknown) => {
+              options.reportFillWarning?.(`server fill commit failed: ${caught instanceof Error ? caught.message : String(caught)}`)
+            })
+            .finally(() => {
+              clearFillPreviewState(normalizedFillBaseRange, previewRange)
+            })
           return
         }
+        options.reportFillPlumbingState?.("double_click_blocked_unloaded", true)
+        options.reportFillWarning?.("server fill execution not implemented yet")
+        clearFillPreviewState(normalizedFillBaseRange, previewRange)
+        return
       }
       options.reportFillPlumbingState?.("double_click_batch_commit_path", true)
-      void applyCommittedFillRange(baseRange, previewRange, behavior).then(applied => {
-        if (!applied) {
-          return
-        }
-        activeFillBehavior.value = behavior
-        const restoredCoord = preferredFocusCoord
-          ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
-          : null
-        restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
-      })
+      void applyCommittedFillRange(baseRange, previewRange, behavior)
+        .then(applied => {
+          if (!applied) {
+            return
+          }
+          activeFillBehavior.value = behavior
+          const restoredCoord = preferredFocusCoord
+            ? restoreSelectionActiveCellToCoord(preferredFocusCoord)
+            : null
+          restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
+        })
+        .catch((caught: unknown) => {
+          options.reportFillWarning?.(`fill commit failed: ${caught instanceof Error ? caught.message : String(caught)}`)
+        })
+    }).catch((caught: unknown) => {
+      options.reportFillWarning?.(`server fill boundary failed: ${caught instanceof Error ? caught.message : String(caught)}`)
     })
   }
 
@@ -2322,6 +2639,15 @@ export function useDataGridAppInteractionController<
       columnIndex,
       rowId: row.rowId ?? null,
     })
+    if (hasActiveFillPreviewState()) {
+      cancelFillPreviewState()
+      if (event.button === 0 && coord) {
+        event.preventDefault()
+        options.setCellSelection(row, rowOffset, columnIndex, false, false)
+        target?.focus({ preventScroll: true })
+      }
+      return
+    }
     const currentRange = options.resolveSelectionRange()
 
     if (
@@ -2375,9 +2701,9 @@ export function useDataGridAppInteractionController<
     columnIndex: number,
   ): void => {
     const rowIndex = resolveRowIndex(row, rowOffset)
-    if (isFillDragging.value && event.key === "Escape") {
+    if (hasActiveFillPreviewState() && event.key === "Escape") {
       event.preventDefault()
-      stopFillSelection(false)
+      cancelFillPreviewState()
       return
     }
     if (!supportsCellSelectionMode()) {

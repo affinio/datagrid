@@ -88,6 +88,85 @@ class ServerDemoHistogramResponse(BaseModel):
     entries: list[ServerDemoHistogramEntry] = Field(default_factory=list)
 
 
+class ServerDemoFillProjectionSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    sort_model: list[ServerDemoSortModelItem] = Field(default_factory=list, alias="sortModel")
+    filter_model: dict[str, Any] | None = Field(default=None, alias="filterModel")
+    group_by: dict[str, Any] | None = Field(default=None, alias="groupBy")
+    group_expansion: dict[str, Any] | None = Field(default=None, alias="groupExpansion")
+    tree_data: Any | None = Field(default=None, alias="treeData")
+    pivot: dict[str, Any] | None = Field(default=None, alias="pivot")
+    pagination: dict[str, Any] | None = Field(default=None, alias="pagination")
+
+
+class ServerDemoFillRange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_row: int = Field(ge=0, alias="startRow")
+    end_row: int = Field(ge=0, alias="endRow")
+    start_column: int = Field(ge=0, alias="startColumn")
+    end_column: int = Field(ge=0, alias="endColumn")
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.end_row < self.start_row:
+            raise ValueError("endRow must be greater than or equal to startRow")
+        if self.end_column < self.start_column:
+            raise ValueError("endColumn must be greater than or equal to startColumn")
+
+
+class ServerDemoFillBoundaryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    direction: Literal["up", "down", "left", "right"]
+    base_range: ServerDemoFillRange = Field(alias="baseRange")
+    fill_columns: list[str] = Field(default_factory=list, alias="fillColumns")
+    reference_columns: list[str] = Field(default_factory=list, alias="referenceColumns")
+    projection: ServerDemoFillProjectionSnapshot
+    start_row_index: int = Field(ge=0, alias="startRowIndex")
+    start_column_index: int = Field(ge=0, alias="startColumnIndex")
+    limit: int | None = Field(default=None, ge=0)
+
+
+class ServerDemoFillBoundaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    end_row_index: int | None = Field(default=None, alias="endRowIndex")
+    end_row_id: str | None = Field(default=None, alias="endRowId")
+    boundary_kind: Literal["data-end", "gap", "cache-boundary", "projection-end", "unresolved"] = Field(
+        alias="boundaryKind"
+    )
+    scanned_row_count: int = Field(ge=0, alias="scannedRowCount")
+    truncated: bool
+
+
+class ServerDemoFillCommitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    operation_id: str | None = Field(default=None, alias="operationId")
+    revision: str | int | None = None
+    source_range: ServerDemoFillRange = Field(alias="sourceRange")
+    target_range: ServerDemoFillRange = Field(alias="targetRange")
+    source_row_ids: list[str] = Field(default_factory=list, alias="sourceRowIds")
+    target_row_ids: list[str] = Field(default_factory=list, alias="targetRowIds")
+    fill_columns: list[str] = Field(default_factory=list, alias="fillColumns")
+    reference_columns: list[str] = Field(default_factory=list, alias="referenceColumns")
+    mode: Literal["copy", "series"]
+    projection: ServerDemoFillProjectionSnapshot
+    metadata: dict[str, Any] | None = None
+
+
+class ServerDemoFillCommitResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    operation_id: str | None = Field(default=None, alias="operationId")
+    affected_row_count: int = Field(ge=0, alias="affectedRowCount")
+    affected_cell_count: int = Field(ge=0, alias="affectedCellCount")
+    revision: str
+    invalidation: ServerDemoEditInvalidation | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ServerDemoEditItem(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
