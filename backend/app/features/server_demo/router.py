@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 
+from app.core.workspace import WorkspaceContext, get_workspace_context
 from app.features.server_demo.adapter import ServerGridDataAdapter
 from app.features.server_demo.repository import ServerDemoRepository
 from app.features.server_demo.schemas import (
@@ -26,9 +27,11 @@ router = APIRouter(prefix="/server-demo", tags=["server-demo"])
 
 def get_server_demo_repository(
     session: AsyncSession = Depends(get_db),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+    workspace_context: WorkspaceContext = Depends(get_workspace_context),
 ) -> ServerGridDataAdapter:
-    return ServerDemoRepository(session, workspace_id=workspace_id)
+    # Sandbox/dev compatibility: server-demo still accepts X-Workspace-Id when
+    # no authenticated workspace context is available yet.
+    return ServerDemoRepository(session, workspace_id=workspace_context.workspace_id)
 
 
 @router.get("/health", response_model=ServerDemoHealthResponse)
