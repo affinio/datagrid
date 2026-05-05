@@ -13,11 +13,18 @@ from app.grid.table import GridTableDefinition
 
 
 class ServerDemoProjectionService(GridProjectionService):
-    def __init__(self, table: GridTableDefinition, workspace_id: str | None = None):
+    def __init__(
+        self,
+        table: GridTableDefinition,
+        workspace_id: str | None = None,
+        *,
+        max_histogram_buckets: int = 100,
+    ):
         super().__init__(
             model=table.model,
             columns=table.columns,
             default_sort_column_id=table.default_sort_column_id,
+            max_histogram_buckets=max_histogram_buckets,
         )
         self._table = table
         self._workspace_id = workspace_id

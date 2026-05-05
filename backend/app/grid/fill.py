@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from datetime import datetime, timezone
@@ -14,18 +15,37 @@ from app.grid.revision import GridRevisionService
 from app.grid.table import GridTableDefinition
 from app.grid.values import coerce_optional_int, json_edit_value, normalize_edit_value, reject_reason_for_column
 
+logger = logging.getLogger(__name__)
+
 
 class GridFillServiceBase(ABC):
     operation_type = "fill"
 
-    def __init__(self, table: GridTableDefinition, revision_service: GridRevisionService):
+    def __init__(
+        self,
+        table: GridTableDefinition,
+        revision_service: GridRevisionService,
+        *,
+        max_fill_target_rows: int = 1000,
+        max_boundary_scan_limit: int = 1000,
+    ):
         self._table = table
         self._revision_service = revision_service
+        self._max_fill_target_rows = max(0, int(max_fill_target_rows))
+        self._max_boundary_scan_limit = max(0, int(max_boundary_scan_limit))
 
     async def resolve_boundary(self, session: AsyncSession, request: Any) -> dict[str, Any]:
         total = await self.count_projected_rows(session, request.projection)
         start_index = max(0, request.start_row_index)
-        limit = self._normalize_fill_scan_limit(request.limit)
+        requested_limit = self._normalize_fill_scan_limit(request.limit)
+        limit = min(requested_limit, self._max_boundary_scan_limit)
+        if requested_limit > limit:
+            logger.warning(
+                "boundary-truncated requested_limit=%s max_limit=%s start_index=%s",
+                requested_limit,
+                self._max_boundary_scan_limit,
+                start_index,
+            )
 
         if total == 0:
             return {
@@ -66,6 +86,14 @@ class GridFillServiceBase(ABC):
                 boundary_kind = "data-end"
 
         end_row = await self.fetch_projected_row(session, request.projection, last_contiguous_index)
+        if boundary_kind == "cache-boundary":
+            logger.warning(
+                "boundary-truncated start_index=%s scanned_row_count=%s limit=%s total=%s",
+                start_index,
+                scanned,
+                limit,
+                total,
+            )
         return {
             "end_row_index": last_contiguous_index,
             "end_row_id": self.get_row_id(end_row) if end_row is not None else None,
@@ -89,6 +117,7 @@ class GridFillServiceBase(ABC):
         reference_columns = self.normalize_column_ids(request.reference_columns)
         source_range = self.normalize_fill_range(request.source_range)
         target_range = self.normalize_fill_range(request.target_range)
+        target_row_count = len(target_row_ids)
 
         if not source_row_ids or not target_row_ids:
             raise ApiException(
@@ -107,6 +136,12 @@ class GridFillServiceBase(ABC):
                 status_code=400,
                 code="invalid-fill-request",
                 message="referenceColumns must not be empty",
+            )
+        if target_row_count > self._max_fill_target_rows:
+            raise ApiException(
+                status_code=400,
+                code="fill-range-too-large",
+                message="Fill range exceeds maximum allowed size",
             )
 
         requested_operation_id = self.normalize_optional_operation_id(request.operation_id)

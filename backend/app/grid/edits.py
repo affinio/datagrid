@@ -19,11 +19,25 @@ from app.grid.values import json_edit_value, normalize_edit_int, normalize_edit_
 class GridEditServiceBase(ABC):
     operation_type = "edit"
 
-    def __init__(self, table: GridTableDefinition, revision_service: GridRevisionService):
+    def __init__(
+        self,
+        table: GridTableDefinition,
+        revision_service: GridRevisionService,
+        *,
+        max_batch_edits: int = 500,
+    ):
         self._table = table
         self._revision_service = revision_service
+        self._max_batch_edits = max(0, int(max_batch_edits))
 
     async def commit_edits(self, session: AsyncSession, request: Any) -> GridMutationResult:
+        if len(request.edits) > self._max_batch_edits:
+            raise ApiException(
+                status_code=400,
+                code="too-many-edits",
+                message="Batch edit size exceeds limit",
+            )
+
         requested_operation_id = self.normalize_optional_operation_id(getattr(request, "operation_id", None))
         operation_id: str | None = None
         committed: list[GridCommittedCell] = []

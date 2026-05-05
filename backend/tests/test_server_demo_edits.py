@@ -16,6 +16,7 @@ from app.infrastructure.db.database import AsyncSessionLocal
 from app.main import app
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
+EXPECTED_SERVER_DEMO_REVISION = "0"
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="session", autouse=True)
@@ -246,6 +247,24 @@ async def test_server_demo_batch_edit_persists(client: AsyncClient) -> None:
     assert row_20["segment"] == "SMB"
     assert row_21["status"] == "Paused"
     assert row_21["region"] == "LATAM"
+
+
+async def test_server_demo_batch_edit_exceeding_limit_returns_400(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/edits",
+        json={
+            "edits": [
+                {"rowId": "srv-000020", "columnId": "status", "value": "Paused"}
+                for _ in range(501)
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "too-many-edits",
+        "message": "Batch edit size exceeds limit",
+    }
 
 
 async def test_server_demo_move_like_batch_persists_source_clear_and_target_write(client: AsyncClient) -> None:
@@ -939,6 +958,53 @@ async def test_server_demo_fill_boundary_basic_down(client: AsyncClient) -> None
     repeat_body = repeat_response.json()
     assert repeat_body["projectionHash"] == body["projectionHash"]
     assert repeat_body["boundaryToken"] == body["boundaryToken"]
+
+
+async def test_server_demo_fill_boundary_respects_max_scan_limit(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/fill-boundary",
+        json={
+            "direction": "down",
+            "baseRange": {"startRow": 0, "endRow": 0, "startColumn": 0, "endColumn": 0},
+            "fillColumns": ["status"],
+            "referenceColumns": ["name"],
+            "projection": create_fill_projection_payload(),
+            "startRowIndex": 0,
+            "startColumnIndex": 0,
+            "limit": 5000,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["scannedRowCount"] == 1000
+    assert body["truncated"] is True
+    assert body["boundaryKind"] == "cache-boundary"
+
+
+async def test_server_demo_fill_commit_exceeding_limit_returns_400(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": "test-fill-too-many-target-rows",
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 0, "endRow": 0, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 0, "endRow": 1000, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000000"],
+            "targetRowIds": [f"srv-{row_index:06d}" for row_index in range(1001)],
+            "fillColumns": ["status"],
+            "referenceColumns": ["status"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+            "metadata": {},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "fill-range-too-large",
+        "message": "Fill range exceeds maximum allowed size",
+    }
 
 
 async def test_server_demo_fill_boundary_hash_changes_with_projection(client: AsyncClient) -> None:

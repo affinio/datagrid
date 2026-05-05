@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import config as core_config
 from app.features.server_demo.adapter import ServerGridDataAdapter
 from app.features.server_demo.edits import ServerDemoEditService
 from app.features.server_demo.fill import ServerDemoFillService
@@ -43,14 +44,26 @@ class ServerDemoRepository(ServerGridDataAdapter):
     def __init__(self, session: AsyncSession, workspace_id: str | None = None):
         self._session = session
         self._workspace_id = workspace_id
-        self._projection = ServerDemoProjectionService(SERVER_DEMO_TABLE, workspace_id=workspace_id)
+        settings = core_config.get_settings()
+        self._projection = ServerDemoProjectionService(
+            SERVER_DEMO_TABLE,
+            workspace_id=workspace_id,
+            max_histogram_buckets=settings.grid_max_histogram_buckets,
+        )
         self._revision = GridRevisionService(SERVER_DEMO_TABLE, workspace_id=workspace_id)
-        self._edits = ServerDemoEditService(SERVER_DEMO_TABLE.columns, self._revision, workspace_id=workspace_id)
+        self._edits = ServerDemoEditService(
+            SERVER_DEMO_TABLE.columns,
+            self._revision,
+            workspace_id=workspace_id,
+            max_batch_edits=settings.grid_max_batch_edits,
+        )
         self._fill = ServerDemoFillService(
             SERVER_DEMO_TABLE.columns,
             self._projection,
             self._revision,
             workspace_id=workspace_id,
+            max_fill_target_rows=settings.grid_max_fill_target_rows,
+            max_boundary_scan_limit=settings.grid_max_boundary_scan_limit,
         )
         self._history = ServerDemoHistoryService(
             SERVER_DEMO_TABLE.columns,
@@ -67,6 +80,15 @@ class ServerDemoRepository(ServerGridDataAdapter):
         await self._session.scalar(stmt)
 
     async def pull(self, request: ServerDemoPullRequest) -> ServerDemoPullResponse:
+        settings = core_config.get_settings()
+        requested_rows = request.range.end_row - request.range.start_row
+        if requested_rows > settings.grid_max_pull_rows:
+            raise ApiException(
+                status_code=400,
+                code="pull-range-too-large",
+                message="Requested range exceeds maximum allowed size",
+            )
+
         conditions = self._projection.build_filter_conditions(request.filter_model)
         stmt = self._projection.build_row_query(conditions)
         stmt = stmt.order_by(*self._projection.build_order_by(request.sort_model))

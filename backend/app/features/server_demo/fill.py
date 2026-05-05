@@ -30,10 +30,18 @@ class ServerDemoFillService(GridFillServiceBase):
         projection: ServerDemoProjectionService,
         revision_service: GridRevisionService | None = None,
         workspace_id: str | None = None,
+        *,
+        max_fill_target_rows: int = 1000,
+        max_boundary_scan_limit: int = 1000,
     ):
         if revision_service is None:
             raise ValueError("revision_service is required")
-        super().__init__(SERVER_DEMO_TABLE, revision_service)
+        super().__init__(
+            SERVER_DEMO_TABLE,
+            revision_service,
+            max_fill_target_rows=max_fill_target_rows,
+            max_boundary_scan_limit=max_boundary_scan_limit,
+        )
         self._projection = projection
         self._workspace_id = workspace_id
 

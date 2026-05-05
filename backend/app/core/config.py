@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     description: str = "FastAPI backend for Merlin"
     app_version: str = "0.1.0"
     grid_allow_workspace_header_fallback: bool = True
+    grid_max_pull_rows: int = Field(default=1000, ge=0)
+    grid_max_batch_edits: int = Field(default=500, ge=0)
+    grid_max_fill_target_rows: int = Field(default=1000, ge=0)
+    grid_max_boundary_scan_limit: int = Field(default=1000, ge=0)
+    grid_max_histogram_buckets: int = Field(default=100, ge=0)
     database_url: str = Field(
         default="postgresql+asyncpg://auctions_dev:auctions_dev_pass@db:5432/auctions_pg"
     )

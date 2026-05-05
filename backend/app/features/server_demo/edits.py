@@ -27,10 +27,12 @@ class ServerDemoEditService(GridEditServiceBase):
         _columns: Mapping[str, Any] | None = None,
         revision_service: GridRevisionService | None = None,
         workspace_id: str | None = None,
+        *,
+        max_batch_edits: int = 500,
     ):
         if revision_service is None:
             raise ValueError("revision_service is required")
-        super().__init__(SERVER_DEMO_TABLE, revision_service)
+        super().__init__(SERVER_DEMO_TABLE, revision_service, max_batch_edits=max_batch_edits)
         self._workspace_id = workspace_id
 
     def normalize_edit_value(self, column_id: str, value: Any) -> Any:

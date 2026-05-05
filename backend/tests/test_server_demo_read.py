@@ -42,6 +42,16 @@ async def test_server_demo_pull_basic_range(client: AsyncClient) -> None:
     assert len(body["rows"]) == 50
 
 
+async def test_server_demo_pull_exceeding_limit_returns_400(client: AsyncClient) -> None:
+    response = await client.post("/api/server-demo/pull", json={"range": {"startRow": 0, "endRow": 1001}})
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "pull-range-too-large",
+        "message": "Requested range exceeds maximum allowed size",
+    }
+
+
 async def test_server_demo_pull_maps_row_shape(client: AsyncClient) -> None:
     response = await client.post("/api/server-demo/pull", json={"range": {"startRow": 0, "endRow": 1}})
 

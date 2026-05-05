@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -10,6 +11,8 @@ from app.api.errors import ApiException
 from app.grid.columns import GridColumnDefinition, GridColumnRegistry
 from app.grid.values import coerce_optional_int, normalize_filter_scalar
 
+logger = logging.getLogger(__name__)
+
 
 class GridProjectionService:
     def __init__(
@@ -18,10 +21,12 @@ class GridProjectionService:
         model: type[Any],
         columns: GridColumnRegistry,
         default_sort_column_id: str = "index",
+        max_histogram_buckets: int = 100,
     ):
         self._model = model
         self._columns = columns
         self._default_sort_column_id = default_sort_column_id
+        self._max_histogram_buckets = max(0, int(max_histogram_buckets))
 
     def build_filter_conditions(self, filter_model: dict[str, Any] | None) -> list[Any]:
         if not filter_model:
@@ -154,7 +159,16 @@ class GridProjectionService:
             .order_by(column)
         )
         result = await session.execute(stmt)
-        return [(value, count) for value, count in result.all()]
+        entries = [(value, count) for value, count in result.all()]
+        if len(entries) > self._max_histogram_buckets:
+            logger.warning(
+                "histogram-truncated column_id=%s bucket_count=%s max_buckets=%s",
+                column_id,
+                len(entries),
+                self._max_histogram_buckets,
+            )
+            return entries[: self._max_histogram_buckets]
+        return entries
 
     def _column_definition(self, column_id: str) -> GridColumnDefinition | None:
         return self._columns.get(column_id)
