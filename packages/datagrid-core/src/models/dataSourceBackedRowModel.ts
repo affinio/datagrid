@@ -98,6 +98,7 @@ export interface DataSourceBackedRowModel<T = unknown> extends DataGridRowModel<
   ) => void | Promise<void>
   getSparseRowModelDiagnostics(): DataGridSparseRowModelDiagnostics
   invalidateRange(range: DataGridViewportRange): void
+  invalidateRows(rowIds: readonly DataGridRowId[]): void
   invalidateAll(): void
   pauseBackpressure(): boolean
   resumeBackpressure(): boolean
@@ -915,6 +916,72 @@ export function createDataSourceBackedRowModel<T = unknown>(
     updateLoadingState()
   }
 
+  function clearRowsById(rowIds: readonly DataGridRowId[]): { changed: boolean; touchedViewport: boolean } {
+    if (!Array.isArray(rowIds) || rowIds.length === 0 || rowCache.size === 0) {
+      return {
+        changed: false,
+        touchedViewport: false,
+      }
+    }
+    const uniqueRowIds = new Set<DataGridRowId>()
+    for (const rowId of rowIds) {
+      if (typeof rowId === "string" || typeof rowId === "number") {
+        uniqueRowIds.add(rowId)
+      }
+    }
+    if (uniqueRowIds.size === 0) {
+      return {
+        changed: false,
+        touchedViewport: false,
+      }
+    }
+    const sourceViewport = toSourceRange(viewportRange)
+    let changed = false
+    let touchedViewport = false
+    for (const [index, node] of rowCache.entries()) {
+      if (!uniqueRowIds.has(node.rowId)) {
+        continue
+      }
+      if (rowCache.delete(index)) {
+        diagnostics.invalidatedRows += 1
+        changed = true
+        if (index >= sourceViewport.start && index <= sourceViewport.end) {
+          touchedViewport = true
+        }
+        if (backgroundInFlight && index >= backgroundInFlight.range.start && index <= backgroundInFlight.range.end) {
+          clearBackgroundPrefetchState("stale")
+        }
+        if (pendingBackgroundPull && index >= pendingBackgroundPull.range.start && index <= pendingBackgroundPull.range.end) {
+          diagnostics.prefetchDroppedStale += 1
+          pendingBackgroundPull = null
+          diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+        }
+      }
+    }
+    if (changed) {
+      bumpRevision()
+    }
+    diagnostics.rowCacheSize = rowCache.size
+    updateLoadingState()
+    return {
+      changed,
+      touchedViewport,
+    }
+  }
+
+  function invalidateRows(rowIds: readonly DataGridRowId[]) {
+    ensureActive()
+    const { changed, touchedViewport } = clearRowsById(rowIds)
+    if (!changed) {
+      return
+    }
+    if (touchedViewport) {
+      void pullRange(toSourceRange(viewportRange), "invalidation", "normal")
+      return
+    }
+    emit()
+  }
+
   function clearAll() {
     if (rowCache.size > 0) {
       bumpRevision()
@@ -1439,6 +1506,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
         void Promise.resolve(dataSource.invalidate(invalidation))
       }
       void pullRange(toSourceRange(viewportRange), "push-invalidation", "normal")
+      return
+    }
+
+    if (invalidation.kind === "rows") {
+      invalidateRows(invalidation.rowIds)
+      if (typeof dataSource.invalidate === "function") {
+        void Promise.resolve(dataSource.invalidate(invalidation))
+      }
       return
     }
 
@@ -2051,6 +2126,18 @@ export function createDataSourceBackedRowModel<T = unknown>(
         void Promise.resolve(dataSource.invalidate(invalidation))
       }
       if (rangesOverlap(normalizeRequestedRange(sourceRange), toSourceRange(viewportRange))) {
+        void pullRange(toSourceRange(viewportRange), "invalidation", "normal")
+      } else {
+        emit()
+      }
+    },
+    invalidateRows(rowIds) {
+      ensureActive()
+      const { changed, touchedViewport } = clearRowsById(rowIds)
+      if (!changed) {
+        return
+      }
+      if (touchedViewport) {
         void pullRange(toSourceRange(viewportRange), "invalidation", "normal")
       } else {
         emit()

@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
 
 from app.features.server_demo.invalidation import ServerDemoInvalidationService
+from app.features.server_demo.schemas import ServerDemoEditInvalidation
 from app.features.server_demo.models import GridDemoRow, ServerDemoCellEvent, ServerDemoOperation
 from app.features.server_demo.seed import seed_demo_rows
 from app.features.server_demo.revision import ServerDemoRevisionService
@@ -147,6 +148,33 @@ async def test_server_demo_invalidation_builds_range_payload() -> None:
     assert invalidation.reason == "server-demo-fill"
 
 
+async def test_server_demo_invalidation_builds_rows_payload() -> None:
+    service = ServerDemoInvalidationService()
+
+    invalidation = service.build_rows_invalidation("edit", ["srv-000041", "srv-000039", "srv-000040"])
+
+    assert invalidation is not None
+    assert invalidation.kind == "rows"
+    assert invalidation.row_ids == ["srv-000041", "srv-000039", "srv-000040"]
+    assert invalidation.reason == "server-demo-edits"
+
+
+async def test_server_demo_invalidation_accepts_legacy_range_payload() -> None:
+    invalidation = ServerDemoEditInvalidation.model_validate(
+        {
+            "kind": "range",
+            "range": {"start": 3, "end": 7},
+            "reason": "server-demo-edits",
+        }
+    )
+
+    assert invalidation.kind == "range"
+    assert invalidation.range is not None
+    assert invalidation.range.start == 3
+    assert invalidation.range.end == 7
+    assert invalidation.row_ids == []
+
+
 async def test_server_demo_invalidation_returns_none_when_no_indexes() -> None:
     service = ServerDemoInvalidationService()
 
@@ -184,8 +212,9 @@ async def test_server_demo_single_edit_persists(client: AsyncClient) -> None:
     assert body["rejected"] == []
     assert body["revision"]
     assert body["invalidation"] == {
-        "kind": "range",
-        "range": {"start": 10, "end": 10},
+        "kind": "rows",
+        "range": None,
+        "rowIds": ["srv-000010"],
         "reason": "server-demo-edits",
     }
     operation, events = await fetch_operation_history(body["operationId"])
@@ -227,8 +256,9 @@ async def test_server_demo_batch_edit_persists(client: AsyncClient) -> None:
     ]
     assert body["rejected"] == []
     assert body["invalidation"] == {
-        "kind": "range",
-        "range": {"start": 20, "end": 21},
+        "kind": "rows",
+        "range": None,
+        "rowIds": ["srv-000020", "srv-000021"],
         "reason": "server-demo-edits",
     }
     operation, events = await fetch_operation_history(body["operationId"])
@@ -247,6 +277,34 @@ async def test_server_demo_batch_edit_persists(client: AsyncClient) -> None:
     assert row_20["segment"] == "SMB"
     assert row_21["status"] == "Paused"
     assert row_21["region"] == "LATAM"
+
+
+async def test_server_demo_large_batch_edit_persists_with_range_invalidation(client: AsyncClient) -> None:
+    edits = [
+        {
+            "rowId": f"srv-{row_index:06d}",
+            "columnId": "name",
+            "value": f"Bulk Edited Account {row_index}",
+        }
+        for row_index in range(200, 251)
+    ]
+
+    response = await client.post(
+        "/api/server-demo/edits",
+        json={"edits": edits},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"]
+    assert body["committedRowIds"] == [f"srv-{row_index:06d}" for row_index in range(200, 251)]
+    assert body["rejected"] == []
+    assert body["invalidation"] == {
+        "kind": "range",
+        "range": {"start": 200, "end": 250},
+        "rowIds": [],
+        "reason": "server-demo-edits",
+    }
 
 
 async def test_server_demo_batch_edit_exceeding_limit_returns_400(client: AsyncClient) -> None:
@@ -790,8 +848,9 @@ async def test_server_demo_single_edit_undo_and_redo(client: AsyncClient) -> Non
     assert undo_body["committedRowIds"] == ["srv-000070"]
     assert undo_body["rejected"] == []
     assert undo_body["invalidation"] == {
-        "kind": "range",
-        "range": {"start": 70, "end": 70},
+        "kind": "rows",
+        "range": None,
+        "rowIds": ["srv-000070"],
         "reason": "server-demo-edits",
     }
     assert (await pull_row(client, 70))["name"] == before["name"]
@@ -811,8 +870,9 @@ async def test_server_demo_single_edit_undo_and_redo(client: AsyncClient) -> Non
     assert redo_body["committedRowIds"] == ["srv-000070"]
     assert redo_body["rejected"] == []
     assert redo_body["invalidation"] == {
-        "kind": "range",
-        "range": {"start": 70, "end": 70},
+        "kind": "rows",
+        "range": None,
+        "rowIds": ["srv-000070"],
         "reason": "server-demo-edits",
     }
     assert (await pull_row(client, 70))["name"] == "Undoable Account 70"
@@ -1187,8 +1247,9 @@ async def test_server_demo_fill_commit_copy_single_column_with_history(client: A
     assert body["affectedCellCount"] == 1
     assert body["warnings"] == []
     assert body["invalidation"] == {
-        "kind": "range",
-        "range": {"start": 21, "end": 21},
+        "kind": "rows",
+        "range": None,
+        "rowIds": ["srv-000021"],
         "reason": "server-demo-fill",
     }
 
@@ -1227,6 +1288,43 @@ async def test_server_demo_fill_commit_copy_single_column_with_history(client: A
     redo_response = await client.post(f"/api/server-demo/operations/{operation_id}/redo")
     assert redo_response.status_code == 200
     assert (await pull_row(client, 21))["status"] == source_before["status"]
+
+
+async def test_server_demo_fill_commit_large_result_uses_range_invalidation(client: AsyncClient) -> None:
+    operation_id = "test-fill-copy-range-invalidation"
+    source_before = await pull_row(client, 300)
+    target_row_ids = [f"srv-{row_index:06d}" for row_index in range(301, 353)]
+
+    response = await client.post(
+        "/api/server-demo/fill/commit",
+        json={
+            "operationId": operation_id,
+            "revision": "rev-before",
+            "sourceRange": {"startRow": 300, "endRow": 300, "startColumn": 0, "endColumn": 0},
+            "targetRange": {"startRow": 301, "endRow": 352, "startColumn": 0, "endColumn": 0},
+            "sourceRowIds": ["srv-000300"],
+            "targetRowIds": target_row_ids,
+            "fillColumns": ["name"],
+            "referenceColumns": ["name"],
+            "mode": "copy",
+            "projection": create_fill_projection_payload(),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == operation_id
+    assert body["affectedRowCount"] == 52
+    assert body["warnings"] == []
+    assert body["invalidation"] == {
+        "kind": "range",
+        "range": {"start": 301, "end": 352},
+        "rowIds": [],
+        "reason": "server-demo-fill",
+    }
+
+    row_301 = await pull_row(client, 301)
+    assert row_301["name"] == source_before["name"]
 
 
 async def test_server_demo_fill_commit_accepts_optional_consistency_metadata_without_behavior_change(

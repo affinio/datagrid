@@ -537,6 +537,37 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     expect(events).toEqual([])
   })
 
+  it("normalizes row invalidation payloads from the backend", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      operationId: "op-inline-rows",
+      committed: [{ rowId: "srv-000008", columnId: "name", revision: "rev-row-8" }],
+      committedRowIds: ["srv-000008"],
+      rejected: [],
+      revision: "rev-global-8",
+      invalidation: {
+        kind: "rows",
+        rowIds: ["srv-000008", "srv-000009"],
+        reason: "server-demo-edits",
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    const result = await adapter.commitEdits!({
+      edits: [{ rowId: "srv-000008", data: { name: "Rows Payload" } }],
+    })
+
+    expect(result.invalidation).toEqual({
+      kind: "rows",
+      rowIds: ["srv-000008", "srv-000009"],
+      reason: "server-demo-edits",
+    })
+  })
+
   it("posts fill boundary requests to the backend and maps the response", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       endRowIndex: 19,

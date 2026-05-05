@@ -68,14 +68,14 @@ type ServerDemoFillCommitResponse = {
   affectedRowCount: number
   affectedCellCount?: number
   revision?: string | number | null
-  invalidation?: unknown
+  invalidation?: DataGridDataSourceInvalidation | null
   warnings?: readonly string[]
 }
 
 type ServerDemoFillHistoryResponse = {
   operationId?: string | null
   revision?: string | number | null
-  invalidation?: unknown
+  invalidation?: DataGridDataSourceInvalidation | null
   warnings?: readonly string[]
 }
 
@@ -93,7 +93,7 @@ type ServerDemoCommitEditsResponse = {
     reason?: string | null
   }[]
   revision?: string | number | null
-  invalidation?: unknown
+  invalidation?: DataGridDataSourceInvalidation | null
 }
 
 type ServerDemoCommitEditsResultWithOperation = ServerDemoCommitEditsResult & {
@@ -102,7 +102,7 @@ type ServerDemoCommitEditsResultWithOperation = ServerDemoCommitEditsResult & {
 
 type ServerDemoServerOperationResult = ServerDemoCommitEditsResultWithOperation & {
   revision?: string | number | null
-  invalidation?: unknown
+  invalidation?: DataGridDataSourceInvalidation | null
 }
 
 type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>[0]
@@ -619,7 +619,24 @@ function getHistogramResponseKey(entries: readonly DataGridColumnHistogramEntry[
 }
 
 function normalizeDataGridInvalidation(value: unknown): DataGridDataSourceInvalidation | null {
-  if (!isRecord(value) || value.kind !== "range") {
+  if (!isRecord(value)) {
+    return null
+  }
+  if (value.kind === "rows") {
+    const rowIds = Array.isArray(value.rowIds)
+      ? value.rowIds
+          .filter((rowId): rowId is string | number => typeof rowId === "string" || typeof rowId === "number")
+      : null
+    if (!rowIds) {
+      return null
+    }
+    return {
+      kind: "rows",
+      rowIds,
+      reason: typeof value.reason === "string" && value.reason.trim().length > 0 ? value.reason : undefined,
+    }
+  }
+  if (value.kind !== "range") {
     return null
   }
   const range = isRecord(value.range) ? value.range : null

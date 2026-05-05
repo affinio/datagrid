@@ -25,7 +25,6 @@ from app.features.server_demo.schemas import (
     ServerDemoFillCommitResponse,
     ServerDemoHistogramResponse,
     ServerDemoEditInvalidation,
-    ServerDemoInvalidationRange,
     ServerDemoPullRequest,
     ServerDemoPullResponse,
     ServerDemoRejectedEdit,
@@ -35,7 +34,7 @@ from app.api.errors import ApiException
 from app.grid.consistency import build_boundary_token, canonical_projection_hash
 from app.grid.mutations import GridCommittedCell, GridRejectedCell
 from app.grid.revision import GridRevisionService
-from app.grid.invalidation import GridInvalidationReasonMap, GridInvalidationService
+from app.features.server_demo.invalidation import ServerDemoInvalidationService
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +73,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
             self._revision,
             workspace_id=workspace_id,
         )
-        self._invalidation = GridInvalidationService(GridInvalidationReasonMap())
+        self._invalidation = ServerDemoInvalidationService()
 
     async def health(self) -> None:
         stmt = select(func.max(getattr(SERVER_DEMO_TABLE.model, SERVER_DEMO_TABLE.row_index_attr)))
@@ -124,7 +123,11 @@ class ServerDemoRepository(ServerGridDataAdapter):
             committed_row_ids=result.committed_row_ids,
             rejected=[self._to_rejected_edit(item) for item in result.rejected],
             revision=result.revision,
-            invalidation=self._to_invalidation(self._invalidation.build_range_invalidation("edit", result.affected_indexes)),
+            invalidation=self._build_invalidation(
+                operation_type="edit",
+                affected_indexes=result.affected_indexes,
+                row_ids=result.committed_row_ids,
+            ),
         )
 
     async def resolve_fill_boundary(self, request: ServerDemoFillBoundaryRequest) -> ServerDemoFillBoundaryResponse:
@@ -155,7 +158,11 @@ class ServerDemoRepository(ServerGridDataAdapter):
             affected_row_count=len(result.affected_row_ids),
             affected_cell_count=result.affected_cell_count,
             revision=result.revision,
-            invalidation=self._to_invalidation(self._invalidation.build_range_invalidation("fill", result.affected_indexes)),
+            invalidation=self._build_invalidation(
+                operation_type="fill",
+                affected_indexes=result.affected_indexes,
+                row_ids=result.affected_row_ids,
+            ),
             warnings=result.warnings,
         )
 
@@ -177,8 +184,10 @@ class ServerDemoRepository(ServerGridDataAdapter):
             committed_row_ids=result.committed_row_ids,
             rejected=[self._to_rejected_edit(item) for item in result.rejected],
             revision=result.revision,
-            invalidation=self._to_invalidation(
-                self._invalidation.build_range_invalidation(result.operation_type, result.affected_indexes)
+            invalidation=self._build_invalidation(
+                operation_type=result.operation_type,
+                affected_indexes=result.affected_indexes,
+                row_ids=result.committed_row_ids,
             ),
         )
 
@@ -190,8 +199,10 @@ class ServerDemoRepository(ServerGridDataAdapter):
             committed_row_ids=result.committed_row_ids,
             rejected=[self._to_rejected_edit(item) for item in result.rejected],
             revision=result.revision,
-            invalidation=self._to_invalidation(
-                self._invalidation.build_range_invalidation(result.operation_type, result.affected_indexes)
+            invalidation=self._build_invalidation(
+                operation_type=result.operation_type,
+                affected_indexes=result.affected_indexes,
+                row_ids=result.committed_row_ids,
             ),
         )
 
@@ -213,23 +224,20 @@ class ServerDemoRepository(ServerGridDataAdapter):
     def _to_rejected_edit(self, item: GridRejectedCell) -> ServerDemoRejectedEdit:
         return ServerDemoRejectedEdit(row_id=item.row_id, column_id=item.column_id, reason=item.reason)
 
-    def _to_invalidation(
+    def _build_invalidation(
         self,
-        invalidation: object | None,
+        *,
+        operation_type: str,
+        affected_indexes: list[int],
+        row_ids: list[str],
     ) -> ServerDemoEditInvalidation | None:
-        if invalidation is None:
+        if not affected_indexes or not row_ids:
             return None
-        return self._map_invalidation(invalidation)
-
-    def _map_invalidation(self, invalidation: object) -> ServerDemoEditInvalidation:
-        from app.grid.invalidation import GridRangeInvalidation
-
-        assert isinstance(invalidation, GridRangeInvalidation)
-        return ServerDemoEditInvalidation(
-            kind=invalidation.kind,
-            range=ServerDemoInvalidationRange(start=invalidation.range_start, end=invalidation.range_end),
-            reason=invalidation.reason,
-        )
+        if len(affected_indexes) <= 50:
+            invalidation = self._invalidation.build_rows_invalidation(operation_type, row_ids)
+            if invalidation is not None:
+                return invalidation
+        return self._invalidation.build_range_invalidation(operation_type, affected_indexes)
 
     async def _read_current_revision_for_logging(self) -> str:
         revision = await self._revision.get_revision(self._session)

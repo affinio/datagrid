@@ -80,6 +80,10 @@ interface DataGridAppFillConsistencyMetadata {
   boundaryToken?: string | null
 }
 
+type DataGridAppServerFillInvalidation =
+  | { kind: "range"; range: DataGridCopyRange; reason?: string }
+  | { kind: "rows"; rowIds: readonly (string | number)[]; reason?: string }
+
 interface DataGridAppFillDataSource {
   resolveFillBoundary?: (
     request: DataGridAppResolveFillBoundaryRequest,
@@ -99,17 +103,17 @@ interface DataGridAppFillDataSource {
     referenceColumns: readonly string[]
     mode: DataGridFillBehavior
     metadata?: { origin?: "drag-fill" | "double-click-fill" | "menu-reapply"; behaviorSource?: "default" | "explicit" } | null
-  }) => Promise<{ operationId: string; revision?: string | number | null; affectedRowCount: number; affectedCellCount?: number; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+  }) => Promise<{ operationId: string; revision?: string | number | null; affectedRowCount: number; affectedCellCount?: number; invalidation?: DataGridAppServerFillInvalidation | null; warnings?: readonly string[] } | null>
   undoFillOperation?: (request: {
     operationId: string
     revision?: string | number | null
     projection: DataGridAppFillProjectionContext
-  }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+  }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: DataGridAppServerFillInvalidation | null; warnings?: readonly string[] } | null>
   redoFillOperation?: (request: {
     operationId: string
     revision?: string | number | null
     projection: DataGridAppFillProjectionContext
-  }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+  }) => Promise<{ operationId: string; revision?: string | number | null; invalidation?: DataGridAppServerFillInvalidation | null; warnings?: readonly string[] } | null>
 }
 
 interface DataGridAppProjectedFillRowIds {
@@ -1247,32 +1251,53 @@ export function useDataGridAppInteractionController<
       }
       const committedOperationId = normalizeServerFillOperationId(result.operationId)
       const invalidationRange = result.invalidation?.kind === "range" ? result.invalidation.range : commitTargetRange
+      const serverFillRefreshRange = result.invalidation?.kind === "rows" ? null : invalidationRange
+      const hasRowInvalidation = result.invalidation?.kind === "rows"
       const normalizedInvalidationRange = normalizeServerFillInvalidationRange(invalidationRange)
       options.reportFillPlumbingDetail?.("server_fill_raw_invalidation", JSON.stringify(invalidationRange ?? null))
       options.reportFillPlumbingDetail?.("server_fill_normalized_invalidation", normalizedInvalidationRange ? `${normalizedInvalidationRange.start}..${normalizedInvalidationRange.end}` : "none")
       options.reportFillPlumbingDetail?.("server_fill_affected_range", formatServerFillAffectedRange(normalizedInvalidationRange ?? invalidationRange, previewRange))
+      const runtimeRowModel = options.runtimeRowModel as unknown as {
+        invalidateRange?: (range: { start: number; end: number }) => void
+        invalidateRows?: (rowIds: readonly (string | number)[]) => void
+      } | undefined
+      const runtimeRowModelFallback = options.runtime.rowModel as unknown as {
+        invalidateRange?: (range: { start: number; end: number }) => void
+        invalidateRows?: (rowIds: readonly (string | number)[]) => void
+      } | undefined
+      const rowsApi = options.runtime.api.rows as unknown as {
+        refresh?: () => void | Promise<void>
+      }
+      const invalidateRangeTarget = runtimeRowModel?.invalidateRange ?? runtimeRowModelFallback?.invalidateRange
+      const invalidateRowsTarget = runtimeRowModel?.invalidateRows ?? runtimeRowModelFallback?.invalidateRows
+      const applyServerFillInvalidation = async (): Promise<void> => {
+        if (result.invalidation?.kind === "rows") {
+          if (typeof invalidateRowsTarget === "function") {
+            invalidateRowsTarget(result.invalidation.rowIds)
+            options.reportFillPlumbingState?.("server_fill_invalidation_applied", true)
+            return
+          }
+          await Promise.resolve(rowsApi.refresh?.())
+          return
+        }
+        if (serverFillRefreshRange && normalizedInvalidationRange && typeof invalidateRangeTarget === "function") {
+          invalidateRangeTarget(normalizedInvalidationRange)
+          options.reportFillPlumbingState?.("server_fill_invalidation_applied", true)
+          return
+        }
+        await Promise.resolve(rowsApi.refresh?.())
+      }
       if (!committedOperationId) {
         options.reportFillWarning?.("server fill committed without operation id; undo/redo disabled")
         options.reportFillPlumbingState?.("server_fill_operationId", false)
-        if (options.refreshServerFillViewport) {
-          await Promise.resolve(options.refreshServerFillViewport(result.invalidation?.kind === "range" ? result.invalidation.range : invalidationRange))
+        if (hasRowInvalidation) {
+          await applyServerFillInvalidation()
+        }
+        else if (options.refreshServerFillViewport) {
+          await Promise.resolve(options.refreshServerFillViewport(serverFillRefreshRange))
         }
         else {
-          const runtimeRowModel = options.runtimeRowModel as unknown as {
-            invalidateRange?: (range: { start: number; end: number }) => void
-          } | undefined
-          const runtimeRowModelFallback = options.runtime.rowModel as unknown as {
-            invalidateRange?: (range: { start: number; end: number }) => void
-          } | undefined
-          const rowsApi = options.runtime.api.rows as unknown as {
-            refresh?: () => void | Promise<void>
-          }
-          const invalidateTarget = runtimeRowModel?.invalidateRange ?? runtimeRowModelFallback?.invalidateRange
-          if (normalizedInvalidationRange && typeof invalidateTarget === "function") {
-            invalidateTarget(normalizedInvalidationRange)
-            options.reportFillPlumbingState?.("server_fill_invalidation_applied", true)
-          }
-          await Promise.resolve(rowsApi.refresh?.())
+          await applyServerFillInvalidation()
         }
         return null
       }
@@ -1286,22 +1311,10 @@ export function useDataGridAppInteractionController<
       }
       options.reportFillPlumbingState?.("server_fill_affectedRowCount", true)
       options.reportFillPlumbingState?.("server-fill-committed", true)
-      if (!options.refreshServerFillViewport) {
-        const runtimeRowModel = options.runtimeRowModel as unknown as {
-          invalidateRange?: (range: { start: number; end: number }) => void
-        } | undefined
-        const runtimeRowModelFallback = options.runtime.rowModel as unknown as {
-          invalidateRange?: (range: { start: number; end: number }) => void
-        } | undefined
-        const rowsApi = options.runtime.api.rows as unknown as {
-          refresh?: () => void | Promise<void>
-        }
-        const invalidateTarget = runtimeRowModel?.invalidateRange ?? runtimeRowModelFallback?.invalidateRange
-        if (normalizedInvalidationRange && typeof invalidateTarget === "function") {
-          invalidateTarget(normalizedInvalidationRange)
-          options.reportFillPlumbingState?.("server_fill_invalidation_applied", true)
-        }
-        await Promise.resolve(rowsApi.refresh?.())
+      if (hasRowInvalidation || !options.refreshServerFillViewport) {
+        await applyServerFillInvalidation()
+      } else {
+        await Promise.resolve(options.refreshServerFillViewport(serverFillRefreshRange))
       }
       return {
         operationId: committedOperationId,

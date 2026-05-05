@@ -2109,6 +2109,111 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("invalidates a single cached row by rowId without clearing unrelated rows", async () => {
+    const pull = vi.fn(async (request: DataGridDataSourcePullRequest) => {
+      const rows = buildRows(request.range.start, request.range.end)
+      return {
+        rows,
+        total: 1_000,
+      }
+    })
+
+    const model = createDataSourceBackedRowModel({
+      dataSource: { pull },
+      resolveRowId: row => row.id,
+      initialTotal: 1_000,
+    })
+
+    model.setViewportRange({ start: 10, end: 14 })
+    await flushMicrotasks()
+
+    expect(model.getRow(11)?.row.value).toBe("row-11")
+    expect(model.getRow(12)?.row.value).toBe("row-12")
+    expect(model.getRow(13)?.row.value).toBe("row-13")
+
+    model.invalidateRows([12])
+
+    expect(model.getRow(12)).toBeUndefined()
+    expect(model.getRow(11)?.row.value).toBe("row-11")
+    expect(model.getRow(13)?.row.value).toBe("row-13")
+
+    await flushMicrotasks()
+
+    expect(pull).toHaveBeenCalledTimes(2)
+    expect(model.getRow(11)?.row.value).toBe("row-11")
+    expect(model.getRow(12)?.row.value).toBe("row-12")
+    expect(model.getRow(13)?.row.value).toBe("row-13")
+
+    model.dispose()
+  })
+
+  it("deduplicates row ids and ignores empty row invalidations", async () => {
+    const pull = vi.fn(async (request: DataGridDataSourcePullRequest) => {
+      const rows = buildRows(request.range.start, request.range.end)
+      return {
+        rows,
+        total: 1_000,
+      }
+    })
+
+    const model = createDataSourceBackedRowModel({
+      dataSource: { pull },
+      resolveRowId: row => row.id,
+      initialTotal: 1_000,
+    })
+
+    model.setViewportRange({ start: 20, end: 24 })
+    await flushMicrotasks()
+
+    model.invalidateRows([])
+    model.invalidateRows([21, 21, 23, 23, 999])
+
+    expect(pull).toHaveBeenCalledTimes(2)
+    expect(model.getRow(20)?.row.value).toBe("row-20")
+    expect(model.getRow(21)).toBeUndefined()
+    expect(model.getRow(22)?.row.value).toBe("row-22")
+    expect(model.getRow(23)).toBeUndefined()
+    expect(model.getRow(24)?.row.value).toBe("row-24")
+
+    await flushMicrotasks()
+
+    expect(pull).toHaveBeenCalledTimes(2)
+    expect(model.getRow(21)?.row.value).toBe("row-21")
+    expect(model.getRow(22)?.row.value).toBe("row-22")
+    expect(model.getRow(23)?.row.value).toBe("row-23")
+
+    model.dispose()
+  })
+
+  it("only refetches the viewport when invalidated rows are visible", async () => {
+    const pull = vi.fn(async (request: DataGridDataSourcePullRequest) => {
+      const rows = buildRows(request.range.start, request.range.end)
+      return {
+        rows,
+        total: 1_000,
+      }
+    })
+
+    const model = createDataSourceBackedRowModel({
+      dataSource: { pull },
+      resolveRowId: row => row.id,
+      initialTotal: 1_000,
+    })
+
+    model.setViewportRange({ start: 50, end: 60 })
+    await flushMicrotasks()
+
+    model.invalidateRows([500])
+    await flushMicrotasks()
+
+    expect(pull).toHaveBeenCalledTimes(1)
+    expect(model.getRow(50)?.row.value).toBe("row-50")
+    expect(model.getRow(60)?.row.value).toBe("row-60")
+    expect(model.getBackpressureDiagnostics().invalidatedRows).toBe(0)
+
+    model.dispose()
+  })
+
   it("does not refetch immediately when invalidated range is outside active viewport", async () => {
     const pull = vi.fn(async (request: DataGridDataSourcePullRequest) => {
       const rows = Array.from({ length: request.range.end - request.range.start + 1 }, (_, offset) => {

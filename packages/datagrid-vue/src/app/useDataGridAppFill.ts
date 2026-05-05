@@ -17,6 +17,10 @@ export interface DataGridAppAppliedFillSession {
   allowBehaviorToggle: boolean
 }
 
+type DataGridAppServerFillInvalidation =
+  | { kind: "range"; range: DataGridCopyRange; reason?: string }
+  | { kind: "rows"; rowIds: readonly (string | number)[]; reason?: string }
+
 export interface UseDataGridAppFillOptions {
   mode: Ref<DataGridAppMode>
   viewportRowStart: Ref<number>
@@ -38,7 +42,7 @@ export interface UseDataGridAppFillOptions {
         previewRange: DataGridCopyRange
         behavior: DataGridFillBehavior
       },
-    ) => Promise<{ operationId: string; revision?: string | number | null; affectedRange?: DataGridCopyRange | null; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null } | null>
+    ) => Promise<{ operationId: string; revision?: string | number | null; affectedRange?: DataGridCopyRange | null; invalidation?: DataGridAppServerFillInvalidation | null } | null>
   applyClipboardEdits: (
     range: DataGridCopyRange,
     matrix: string[][],
@@ -88,6 +92,9 @@ export function useDataGridAppFill(
     if (useServerFill && options.commitServerFill) {
       const committed = await options.commitServerFill({ baseRange, previewRange, behavior })
       if (committed) {
+        const serverFillRefreshRange = committed.invalidation?.kind === "rows"
+          ? null
+          : committed.invalidation?.range ?? committed.affectedRange ?? previewRange
         options.setLastServerFillSession?.({
           operationId: committed.operationId,
           revision: committed.revision,
@@ -95,7 +102,7 @@ export function useDataGridAppFill(
           behavior,
         })
         if (options.syncServerFillViewport) {
-          await options.syncServerFillViewport(committed.invalidation?.range ?? committed.affectedRange ?? previewRange)
+          await options.syncServerFillViewport(serverFillRefreshRange)
         }
         else {
           options.syncViewport()

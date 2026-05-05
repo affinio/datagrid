@@ -150,6 +150,7 @@ export interface DataGridDataSourceCommitEditsResult {
     rowId: DataGridRowId
     reason?: string
   }[]
+  invalidation?: DataGridDataSourceInvalidation | null
 }
 
 export type DataGridFillMode = "copy" | "series"
@@ -226,9 +227,16 @@ export interface DataGridDataSourceInvalidationRange {
   reason?: string
 }
 
+export interface DataGridDataSourceInvalidationRows {
+  kind: "rows"
+  rowIds: readonly DataGridRowId[]
+  reason?: string
+}
+
 export type DataGridDataSourceInvalidation =
   | DataGridDataSourceInvalidationAll
   | DataGridDataSourceInvalidationRange
+  | DataGridDataSourceInvalidationRows
 
 export interface DataGridDataSourcePushUpsertEvent<T = unknown> {
   type: "upsert"

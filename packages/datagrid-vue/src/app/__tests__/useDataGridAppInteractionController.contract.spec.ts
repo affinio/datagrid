@@ -379,6 +379,7 @@ function createControllerHarness(options: {
   const expandGroup = vi.fn()
   const collapseGroup = vi.fn()
   const invalidateRange = vi.fn()
+  const invalidateRows = vi.fn()
   const setViewportRange = vi.fn((range: { start: number; end: number }) => {
     requestedViewportRange = range
   })
@@ -441,6 +442,7 @@ function createControllerHarness(options: {
       setViewportRange,
       rowModel: {
         invalidateRange,
+        invalidateRows,
         refresh: refreshRows,
         setViewportRange,
         dataSource: options.runtimeRowModelFallbackDataSource
@@ -551,6 +553,7 @@ function createControllerHarness(options: {
     expandGroup,
     collapseGroup,
     invalidateRange,
+    invalidateRows,
     setViewportRange,
     refreshRows,
   }
@@ -3352,6 +3355,68 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(applyClipboardEdits).not.toHaveBeenCalled()
     expect(invalidateRange).toHaveBeenCalledWith({ start: 0, end: 500 })
     expect(reportFillWarning).toHaveBeenCalledWith("Fill truncated at cache boundary")
+  })
+
+  it("routes server row invalidation through invalidateRows without triggering a full refresh", async () => {
+    const resolveFillBoundary = vi.fn(async () => ({
+      endRowIndex: 2,
+      endRowId: "r3",
+      boundaryKind: "cache-boundary" as const,
+      scannedRowCount: 2,
+      truncated: false,
+    }))
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-rows",
+      revision: 1,
+      affectedRowCount: 2,
+      affectedCellCount: 2,
+      invalidation: {
+        kind: "rows" as const,
+        rowIds: ["r2", "r3"],
+        reason: "server-demo-fill",
+      },
+      warnings: [],
+    }))
+    const { controller, selectionSnapshot, invalidateRows, invalidateRange, refreshRows } = createControllerHarness({
+      rowCount: 3,
+      loadedRowCount: 3,
+      columnCount: 2,
+      rowData: [
+        { status: "Active", region: "AMER" },
+        { status: "Paused", region: "EMEA" },
+        { status: "Closed", region: "APAC" },
+      ],
+      resolveFillBoundary,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDoubleClick(new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    await flushAsync()
+
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(invalidateRows).toHaveBeenCalledWith(["r2", "r3"])
+    expect(invalidateRange).not.toHaveBeenCalled()
+    expect(refreshRows).not.toHaveBeenCalled()
   })
 
   it("applies optimistic server fill edits locally before commitFillOperation resolves when the target range is fully materialized", async () => {

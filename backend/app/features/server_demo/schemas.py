@@ -215,10 +215,11 @@ class ServerDemoInvalidationRange(BaseModel):
 
 
 class ServerDemoEditInvalidation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    kind: Literal["range"]
-    range: ServerDemoInvalidationRange
+    kind: Literal["range", "rows"]
+    range: ServerDemoInvalidationRange | None = None
+    row_ids: list[str] = Field(default_factory=list, alias="rowIds")
     reason: str
 
 
