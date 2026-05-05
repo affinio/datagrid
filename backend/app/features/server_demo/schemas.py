@@ -55,7 +55,7 @@ class ServerDemoRow(BaseModel):
     segment: str
     status: str
     region: str
-    value: int
+    value: int | None
     updated_at: datetime = Field(alias="updatedAt")
 
 

@@ -40,6 +40,7 @@ import {
   SERVER_DEMO_ROW_COUNT,
   SERVER_DEMO_SEGMENTS,
   SERVER_DEMO_STATUSES,
+  normalizeServerDemoValueCellInput,
 } from "./types"
 
 function wait(ms: number, signal: AbortSignal): Promise<void> {
@@ -470,7 +471,7 @@ function buildRegionAggregateRows(rows: readonly ServerDemoRow[]) {
   for (const row of rows) {
     const bucket = buckets.get(row.region) ?? { count: 0, valueSum: 0 }
     bucket.count += 1
-    bucket.valueSum += row.value
+    bucket.valueSum += row.value ?? 0
     buckets.set(row.region, bucket)
   }
   const aggregateRows = []
@@ -731,10 +732,7 @@ function applyCommitEdits(
     const committed = state.committedOverrides.get(rowId) ?? {}
     const nextData = { ...pending, ...edit.data }
     if ("value" in nextData) {
-      const numericValue = Number(nextData.value)
-      if (Number.isFinite(numericValue)) {
-        nextData.value = numericValue
-      }
+      nextData.value = normalizeServerDemoValueCellInput(nextData.value)
     }
     nextPendingOverrides.delete(rowId)
     nextCommittedOverrides.set(rowId, {

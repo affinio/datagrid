@@ -22,6 +22,27 @@ export const SERVER_DEMO_SEGMENTS = ["Core", "Growth", "Enterprise", "SMB"] as c
 export const SERVER_DEMO_STATUSES = ["Active", "Paused", "Closed"] as const
 export const SERVER_DEMO_REGIONS = ["AMER", "EMEA", "APAC", "LATAM"] as const
 
+const SERVER_DEMO_INTEGER_PATTERN = /^[+-]?\d+$/
+
+export function normalizeServerDemoValueCellInput(value: unknown): number | null {
+  if (value === null || typeof value === "undefined" || value === "") {
+    return null
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value)
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim()
+    if (normalized.length === 0) {
+      return null
+    }
+    if (SERVER_DEMO_INTEGER_PATTERN.test(normalized)) {
+      return Number(normalized)
+    }
+  }
+  throw new Error("value edits must contain an integer or clear")
+}
+
 export interface ServerDemoRow {
   id: string
   index: number
@@ -29,7 +50,7 @@ export interface ServerDemoRow {
   segment: string
   status: string
   region: string
-  value: number
+  value: number | null
   updatedAt: string
 }
 

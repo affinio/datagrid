@@ -527,6 +527,7 @@ import {
 import {
   type ServerDemoDatasourceHooks,
   type ServerDemoCommitEditsResult,
+  normalizeServerDemoValueCellInput,
   type ServerDemoRow,
   SERVER_DEMO_ROW_COUNT as ROW_COUNT,
   SERVER_DEMO_PAGE_SIZE as PAGE_SIZE,
@@ -1466,7 +1467,7 @@ function buildRegionAggregateRows(rows: readonly ServerDemoRow[]): readonly Data
   for (const row of rows) {
     const bucket = buckets.get(row.region) ?? { count: 0, valueSum: 0 }
     bucket.count += 1
-    bucket.valueSum += row.value
+    bucket.valueSum += row.value ?? 0
     buckets.set(row.region, bucket)
   }
   const aggregateRows: DataGridDataSourceRowEntry<ServerDemoRow>[] = []
@@ -2568,10 +2569,7 @@ function applyCommitEdits(request: ServerDemoCommitEditsRequest): Promise<{
       const committed = committedOverrides.value.get(rowId) ?? {}
       const nextData = { ...pending, ...edit.data }
       if ("value" in nextData) {
-        const numericValue = Number(nextData.value)
-        if (Number.isFinite(numericValue)) {
-          nextData.value = numericValue
-        }
+        nextData.value = normalizeServerDemoValueCellInput(nextData.value)
       }
       nextPendingOverrides.delete(rowId)
       nextCommittedOverrides.set(rowId, {

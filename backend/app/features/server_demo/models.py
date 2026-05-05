@@ -27,7 +27,7 @@ class GridDemoRow(Base):
     segment: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
     region: Mapped[str] = mapped_column(String, nullable=False)
-    value: Mapped[int] = mapped_column(Integer, nullable=False)
+    value: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
