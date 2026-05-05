@@ -15,13 +15,16 @@ from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.table import SERVER_DEMO_TABLE
 from app.grid.edits import GridEditServiceBase
 from app.grid.mutations import PendingGridCellEvent
+from app.grid.revision import GridRevisionService
 
 OPERATION_STATUS_APPLIED = "applied"
 
 
 class ServerDemoEditService(GridEditServiceBase):
-    def __init__(self, _columns: Mapping[str, Any] | None = None):
-        super().__init__(SERVER_DEMO_TABLE)
+    def __init__(self, _columns: Mapping[str, Any] | None = None, revision_service: GridRevisionService | None = None):
+        if revision_service is None:
+            raise ValueError("revision_service is required")
+        super().__init__(SERVER_DEMO_TABLE, revision_service)
 
     def normalize_edit_value(self, column_id: str, value: Any) -> Any:
         if column_id == "name" and value is None:

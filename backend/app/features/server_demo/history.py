@@ -13,11 +13,14 @@ from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.table import SERVER_DEMO_TABLE
 from app.grid.history import GridHistoryServiceBase
 from app.grid.mutations import GridHistoryApplyResult
+from app.grid.revision import GridRevisionService
 
 
 class ServerDemoHistoryService(GridHistoryServiceBase):
-    def __init__(self, columns: Mapping[str, Any]):
-        super().__init__(SERVER_DEMO_TABLE)
+    def __init__(self, columns: Mapping[str, Any], revision_service: GridRevisionService | None = None):
+        if revision_service is None:
+            raise ValueError("revision_service is required")
+        super().__init__(SERVER_DEMO_TABLE, revision_service)
         self._columns = columns
 
     async def undo_operation(self, session: AsyncSession, operation_id: str) -> GridHistoryApplyResult:

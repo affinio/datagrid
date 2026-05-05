@@ -17,13 +17,21 @@ from app.features.server_demo.schemas import ServerDemoFillBoundaryRequest, Serv
 from app.features.server_demo.table import SERVER_DEMO_TABLE
 from app.grid.fill import GridFillServiceBase
 from app.grid.mutations import PendingGridCellEvent
+from app.grid.revision import GridRevisionService
 
 OPERATION_STATUS_APPLIED = "applied"
 
 
 class ServerDemoFillService(GridFillServiceBase):
-    def __init__(self, _columns: Mapping[str, Any], projection: ServerDemoProjectionService):
-        super().__init__(SERVER_DEMO_TABLE)
+    def __init__(
+        self,
+        _columns: Mapping[str, Any],
+        projection: ServerDemoProjectionService,
+        revision_service: GridRevisionService | None = None,
+    ):
+        if revision_service is None:
+            raise ValueError("revision_service is required")
+        super().__init__(SERVER_DEMO_TABLE, revision_service)
         self._projection = projection
 
     async def resolve_boundary(

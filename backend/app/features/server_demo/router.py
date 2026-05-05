@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 
 from app.features.server_demo.adapter import ServerGridDataAdapter
 from app.features.server_demo.repository import ServerDemoRepository
@@ -24,8 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 router = APIRouter(prefix="/server-demo", tags=["server-demo"])
 
 
-def get_server_demo_repository(session: AsyncSession = Depends(get_db)) -> ServerGridDataAdapter:
-    return ServerDemoRepository(session)
+def get_server_demo_repository(
+    session: AsyncSession = Depends(get_db),
+    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
+) -> ServerGridDataAdapter:
+    return ServerDemoRepository(session, workspace_id=workspace_id)
 
 
 @router.get("/health", response_model=ServerDemoHealthResponse)

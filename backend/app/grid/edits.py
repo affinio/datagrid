@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.errors import ApiException
 from app.grid.columns import GridColumnDefinition
 from app.grid.mutations import GridCommittedCell, GridMutationResult, GridRejectedCell, PendingGridCellEvent
+from app.grid.revision import GridRevisionService
 from app.grid.table import GridTableDefinition
 from app.grid.values import json_edit_value, normalize_edit_int, normalize_edit_value, reject_reason_for_column
 
@@ -18,8 +19,9 @@ from app.grid.values import json_edit_value, normalize_edit_int, normalize_edit_
 class GridEditServiceBase(ABC):
     operation_type = "edit"
 
-    def __init__(self, table: GridTableDefinition):
+    def __init__(self, table: GridTableDefinition, revision_service: GridRevisionService):
         self._table = table
+        self._revision_service = revision_service
 
     async def commit_edits(self, session: AsyncSession, request: Any) -> GridMutationResult:
         requested_operation_id = self.normalize_optional_operation_id(getattr(request, "operation_id", None))
@@ -31,6 +33,16 @@ class GridEditServiceBase(ABC):
         row_ids = list(dict.fromkeys(edit.row_id for edit in request.edits))
 
         async with session.begin():
+            base_revision = getattr(request, "base_revision", None)
+            if base_revision is not None:
+                current_revision = await self._revision_service.get_revision(session)
+                if base_revision != current_revision:
+                    raise ApiException(
+                        status_code=409,
+                        code="stale-revision",
+                        message="Edit commit revision is stale",
+                    )
+
             rows_by_id = await self.fetch_rows_by_ids(session, row_ids, with_for_update=True)
 
             changed_rows: dict[str, Any] = {}
@@ -97,12 +109,15 @@ class GridEditServiceBase(ABC):
                 await session.flush()
                 await self.create_cell_events(session, operation_id, cell_events, changed_at)
 
+            revision = await self._revision_service.bump_revision(session) if changed_rows else await self._revision_service.get_revision(session)
+
         return GridMutationResult(
             operation_id=operation_id,
             committed=committed,
             committed_row_ids=committed_row_ids,
             rejected=rejected,
             affected_indexes=affected_indexes,
+            revision=revision,
         )
 
     def normalize_optional_operation_id(self, operation_id: str | None) -> str | None:

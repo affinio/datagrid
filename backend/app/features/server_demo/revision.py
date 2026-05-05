@@ -5,5 +5,5 @@ from app.grid.revision import GridRevisionService
 
 
 class ServerDemoRevisionService(GridRevisionService):
-    def __init__(self):
-        super().__init__(SERVER_DEMO_TABLE)
+    def __init__(self, workspace_id: str | None = None):
+        super().__init__(SERVER_DEMO_TABLE, workspace_id=workspace_id)

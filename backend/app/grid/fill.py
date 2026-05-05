@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiException
 from app.grid.mutations import GridFillMutationResult, PendingGridCellEvent
+from app.grid.revision import GridRevisionService
 from app.grid.table import GridTableDefinition
 from app.grid.values import coerce_optional_int, json_edit_value, normalize_edit_value, reject_reason_for_column
 
@@ -17,8 +18,9 @@ from app.grid.values import coerce_optional_int, json_edit_value, normalize_edit
 class GridFillServiceBase(ABC):
     operation_type = "fill"
 
-    def __init__(self, table: GridTableDefinition):
+    def __init__(self, table: GridTableDefinition, revision_service: GridRevisionService):
         self._table = table
+        self._revision_service = revision_service
 
     async def resolve_boundary(self, session: AsyncSession, request: Any) -> dict[str, Any]:
         total = await self.count_projected_rows(session, request.projection)
@@ -192,9 +194,11 @@ class GridFillServiceBase(ABC):
                 await self.create_fill_operation(session, operation_id, operation_metadata, changed_at)
                 await session.flush()
                 await self.create_cell_events(session, operation_id, cell_events, changed_at)
+                revision = await self._revision_service.bump_revision(session)
             else:
                 operation_id = None
                 warnings.append("server fill no-op")
+                revision = await self._revision_service.get_revision(session)
 
         return GridFillMutationResult(
             operation_id=operation_id,
@@ -202,6 +206,7 @@ class GridFillServiceBase(ABC):
             affected_indexes=affected_indexes,
             affected_cell_count=affected_cell_count,
             warnings=warnings,
+            revision=revision,
         )
 
     def normalize_fill_value(self, column_id: str, value: Any) -> Any:

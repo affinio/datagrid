@@ -34,6 +34,7 @@ class GridMutationResult:
     committed_row_ids: list[str]
     rejected: list[GridRejectedCell]
     affected_indexes: list[int]
+    revision: str
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class GridFillMutationResult:
     affected_indexes: list[int]
     affected_cell_count: int
     warnings: list[str]
+    revision: str
 
 
 @dataclass(frozen=True)
@@ -53,3 +55,4 @@ class GridHistoryApplyResult:
     committed_row_ids: list[str]
     rejected: list[GridRejectedCell]
     affected_indexes: list[int]
+    revision: str

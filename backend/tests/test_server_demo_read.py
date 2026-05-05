@@ -11,7 +11,7 @@ from app.main import app
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
-EXPECTED_SERVER_DEMO_REVISION = "2025-01-02T03:46:39+00:00"
+EXPECTED_SERVER_DEMO_REVISION = "0"
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
 async def seed_server_demo_rows() -> AsyncIterator[None]:

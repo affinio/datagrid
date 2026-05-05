@@ -9,13 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiException
 from app.grid.mutations import GridCommittedCell, GridHistoryApplyResult, GridRejectedCell
+from app.grid.revision import GridRevisionService
 from app.grid.table import GridTableDefinition
-from app.grid.values import normalize_edit_value, reject_reason_for_column
+from app.grid.values import normalize_edit_int, normalize_edit_value, reject_reason_for_column
 
 
 class GridHistoryServiceBase(ABC):
-    def __init__(self, table: GridTableDefinition):
+    def __init__(self, table: GridTableDefinition, revision_service: GridRevisionService):
         self._table = table
+        self._revision_service = revision_service
 
     async def apply_operation(
         self,
@@ -124,6 +126,7 @@ class GridHistoryServiceBase(ABC):
             self.set_operation_status(operation, next_status)
             self.set_operation_modified_at(operation, changed_at)
             self.set_operation_revision(operation, changed_at)
+            revision = await self._revision_service.bump_revision(session)
 
         return GridHistoryApplyResult(
             operation_id=operation_id,
@@ -132,6 +135,7 @@ class GridHistoryServiceBase(ABC):
             committed_row_ids=committed_row_ids,
             rejected=rejected,
             affected_indexes=affected_indexes,
+            revision=revision,
         )
 
     def _require_operation_id(self, operation_id: str) -> str:

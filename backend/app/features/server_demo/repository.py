@@ -39,13 +39,14 @@ logger = logging.getLogger(__name__)
 
 
 class ServerDemoRepository(ServerGridDataAdapter):
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, workspace_id: str | None = None):
         self._session = session
+        self._workspace_id = workspace_id
         self._projection = ServerDemoProjectionService(SERVER_DEMO_TABLE)
-        self._edits = ServerDemoEditService(SERVER_DEMO_TABLE.columns)
-        self._fill = ServerDemoFillService(SERVER_DEMO_TABLE.columns, self._projection)
-        self._history = ServerDemoHistoryService(SERVER_DEMO_TABLE.columns)
-        self._revision = GridRevisionService(SERVER_DEMO_TABLE)
+        self._revision = GridRevisionService(SERVER_DEMO_TABLE, workspace_id=workspace_id)
+        self._edits = ServerDemoEditService(SERVER_DEMO_TABLE.columns, self._revision)
+        self._fill = ServerDemoFillService(SERVER_DEMO_TABLE.columns, self._projection, self._revision)
+        self._history = ServerDemoHistoryService(SERVER_DEMO_TABLE.columns, self._revision)
         self._invalidation = GridInvalidationService(GridInvalidationReasonMap())
 
     async def health(self) -> None:
@@ -77,13 +78,12 @@ class ServerDemoRepository(ServerGridDataAdapter):
             current_revision=current_revision,
         )
         result = await self._edits.commit_edits(self._session, request)
-        revision = await self._revision.get_revision(self._session)
         return ServerDemoCommitEditsResponse(
             operation_id=result.operation_id,
             committed=[self._to_committed_edit(item) for item in result.committed],
             committed_row_ids=result.committed_row_ids,
             rejected=[self._to_rejected_edit(item) for item in result.rejected],
-            revision=revision,
+            revision=result.revision,
             invalidation=self._to_invalidation(self._invalidation.build_range_invalidation("edit", result.affected_indexes)),
         )
 
@@ -110,25 +110,23 @@ class ServerDemoRepository(ServerGridDataAdapter):
             projection_hash=projection_hash,
         )
         result = await self._fill.commit_fill(self._session, request)
-        revision = await self._revision.get_revision(self._session)
         return ServerDemoFillCommitResponse(
             operation_id=result.operation_id,
             affected_row_count=len(result.affected_row_ids),
             affected_cell_count=result.affected_cell_count,
-            revision=revision,
+            revision=result.revision,
             invalidation=self._to_invalidation(self._invalidation.build_range_invalidation("fill", result.affected_indexes)),
             warnings=result.warnings,
         )
 
     async def undo_operation(self, operation_id: str) -> ServerDemoCommitEditsResponse:
         result = await self._history.undo_operation(self._session, operation_id)
-        revision = await self._revision.get_revision(self._session)
         return ServerDemoCommitEditsResponse(
             operation_id=result.operation_id,
             committed=[self._to_committed_edit(item) for item in result.committed],
             committed_row_ids=result.committed_row_ids,
             rejected=[self._to_rejected_edit(item) for item in result.rejected],
-            revision=revision,
+            revision=result.revision,
             invalidation=self._to_invalidation(
                 self._invalidation.build_range_invalidation(result.operation_type, result.affected_indexes)
             ),
@@ -136,13 +134,12 @@ class ServerDemoRepository(ServerGridDataAdapter):
 
     async def redo_operation(self, operation_id: str) -> ServerDemoCommitEditsResponse:
         result = await self._history.redo_operation(self._session, operation_id)
-        revision = await self._revision.get_revision(self._session)
         return ServerDemoCommitEditsResponse(
             operation_id=result.operation_id,
             committed=[self._to_committed_edit(item) for item in result.committed],
             committed_row_ids=result.committed_row_ids,
             rejected=[self._to_rejected_edit(item) for item in result.rejected],
-            revision=revision,
+            revision=result.revision,
             invalidation=self._to_invalidation(
                 self._invalidation.build_range_invalidation(result.operation_type, result.affected_indexes)
             ),

@@ -105,7 +105,7 @@ async def fetch_fill_boundary_body(
     return response.json()
 
 
-async def test_server_demo_revision_is_empty_when_no_rows(client: AsyncClient) -> None:
+async def test_server_demo_revision_is_zero_when_no_rows(client: AsyncClient) -> None:
     service = ServerDemoRevisionService()
 
     async with AsyncSessionLocal() as session:
@@ -113,17 +113,16 @@ async def test_server_demo_revision_is_empty_when_no_rows(client: AsyncClient) -
         revision = await service.get_revision(session)
         await session.rollback()
 
-    assert revision == "empty"
+    assert revision == "0"
 
 
-async def test_server_demo_revision_returns_iso_string_when_rows_exist(client: AsyncClient) -> None:
+async def test_server_demo_revision_returns_monotonic_string_when_rows_exist(client: AsyncClient) -> None:
     service = ServerDemoRevisionService()
 
     async with AsyncSessionLocal() as session:
         revision = await service.get_revision(session)
 
-    assert revision != "empty"
-    datetime.fromisoformat(revision)
+    assert revision == "0"
 
 
 async def test_server_demo_invalidation_builds_range_payload() -> None:
