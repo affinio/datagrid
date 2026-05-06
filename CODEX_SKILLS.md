@@ -14,3 +14,6 @@
 
 - affino-release  
   Validation, release preparation, commit messages, focused diffs, changelog/release workflow.
+
+- affino-token-saver
+  Minimize unnecessary output tokens while preserving implementation quality and validation discipline.
