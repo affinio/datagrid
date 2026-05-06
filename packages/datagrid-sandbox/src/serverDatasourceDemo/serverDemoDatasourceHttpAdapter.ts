@@ -252,6 +252,22 @@ const ENUM_FILTER_VALUES: Record<string, readonly string[]> = {
   status: SERVER_DEMO_STATUSES,
 }
 
+let pageLifecycleTeardownStarted = false
+
+function markPageLifecycleTeardownStarted(): void {
+  pageLifecycleTeardownStarted = true
+}
+
+function resetPageLifecycleTeardownStarted(): void {
+  pageLifecycleTeardownStarted = false
+}
+
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("beforeunload", markPageLifecycleTeardownStarted, { capture: true })
+  window.addEventListener("pagehide", markPageLifecycleTeardownStarted, { capture: true })
+  window.addEventListener("pageshow", resetPageLifecycleTeardownStarted, { capture: true })
+}
+
 function resolveEndpoint(baseUrl: string | undefined, path: string): string {
   if (!baseUrl) {
     return path
@@ -696,8 +712,31 @@ function toAbortError(): DOMException {
   return new DOMException("Aborted", "AbortError")
 }
 
+function isFetchTransportFailure(caught: unknown): boolean {
+  if (caught instanceof TypeError) {
+    return true
+  }
+  if (!caught || typeof caught !== "object") {
+    return false
+  }
+  const candidate = caught as { name?: unknown; message?: unknown }
+  if (candidate.name === "TypeError") {
+    return true
+  }
+  if (typeof candidate.message !== "string") {
+    return false
+  }
+  const message = candidate.message.toLowerCase()
+  return message.includes("failed to fetch")
+    || message.includes("networkerror")
+    || message.includes("load failed")
+}
+
 function isFetchAbortLikeError(caught: unknown): boolean {
   if (caught instanceof DOMException && caught.name === "AbortError") {
+    return true
+  }
+  if (pageLifecycleTeardownStarted && isFetchTransportFailure(caught)) {
     return true
   }
   if (!(caught instanceof Error)) {

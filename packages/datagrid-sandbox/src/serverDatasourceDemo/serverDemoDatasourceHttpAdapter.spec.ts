@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type {
   DataGridDataSourceColumnHistogramRequest,
   DataGridDataSourcePullRequest,
@@ -133,6 +133,10 @@ function createFillProjection() {
 }
 
 describe("createServerDemoDatasourceHttpAdapter", () => {
+  afterEach(() => {
+    window.dispatchEvent(new Event("pageshow"))
+  })
+
   it("keeps the default history scope stable", () => {
     expect(createServerDemoHistoryScope()).toEqual({
       workspace_id: "server-demo-sandbox",
@@ -260,6 +264,35 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       name: "AbortError",
       message: "Aborted",
     })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it("normalizes page reload transport failures to AbortError", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new TypeError("Failed to fetch")
+    })
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    const request = createAbortablePullRequest()
+
+    window.dispatchEvent(new Event("pagehide"))
+
+    await expect(adapter.pull(request)).rejects.toMatchObject({
+      name: "AbortError",
+      message: "Aborted",
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it("preserves transport failures after page lifecycle resumes", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new TypeError("Failed to fetch")
+    })
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+
+    window.dispatchEvent(new Event("pagehide"))
+    window.dispatchEvent(new Event("pageshow"))
+
+    await expect(adapter.pull(createAbortablePullRequest())).rejects.toBeInstanceOf(TypeError)
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
