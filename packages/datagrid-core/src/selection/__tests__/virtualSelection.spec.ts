@@ -90,6 +90,7 @@ describe("virtual selection helpers", () => {
       totalRowCount: 0,
       missingIntervals: [],
       rowIds: [],
+      scanLimited: false,
     })
   })
 
@@ -115,6 +116,7 @@ describe("virtual selection helpers", () => {
         { rowIndex: 6, rowId: "r6" },
         { rowIndex: 8, rowId: "r8" },
       ],
+      scanLimited: false,
     })
     expect(isDataGridSelectionRangeFullyLoaded(range, rowIndex => loadedRows.has(rowIndex))).toBe(false)
     expect(getDataGridSelectionMissingRowIntervals(range, rowIndex => loadedRows.has(rowIndex))).toEqual(coverage.missingIntervals)
@@ -133,10 +135,38 @@ describe("virtual selection helpers", () => {
     expect(coverage.totalRowCount).toBe(1000)
     expect(coverage.loadedRowCount).toBe(894)
     expect(coverage.isFullyLoaded).toBe(false)
+    expect(coverage.scanLimited).toBe(false)
     expect(coverage.missingIntervals).toEqual([
       { startRow: 100, endRow: 199 },
       { startRow: 500, endRow: 505 },
     ])
+  })
+
+  it("caps huge virtual coverage scans and returns safe truncated coverage", () => {
+    let scannedRowCount = 0
+    const coverage = collectDataGridSelectionLoadedCoverage({
+      startRow: 0,
+      endRow: 100_000,
+      startColumn: 0,
+      endColumn: 0,
+    }, {
+      maxScanRows: 128,
+      isRowLoaded: rowIndex => {
+        scannedRowCount += 1
+        return rowIndex % 2 === 0
+      },
+      getRowIdAtIndex: rowIndex => `r${rowIndex}`,
+    })
+
+    expect(scannedRowCount).toBe(128)
+    expect(coverage.scanLimited).toBe(true)
+    expect(coverage.isFullyLoaded).toBe(false)
+    expect(coverage.loadedRowCount).toBe(64)
+    expect(coverage.rowIds).toHaveLength(64)
+    expect(coverage.missingIntervals.at(-1)).toEqual({
+      startRow: 127,
+      endRow: 100_000,
+    })
   })
 
   it("separates materialized, server-delegated, and blocked operation decisions", () => {
@@ -340,5 +370,19 @@ describe("virtual selection helpers", () => {
       datasetVersion: 99,
     })
     expect(changedVersionIdentity?.projectionKey).toBe(baseIdentity?.projectionKey)
+  })
+
+  it("serializes cyclic and heavy projection inputs safely", () => {
+    const cyclicFilter: Record<string, unknown> = {
+      items: Array.from({ length: 256 }, (_, index) => ({ index, value: `v${index}` })),
+    }
+    cyclicFilter.self = cyclicFilter
+
+    const identity = buildDataGridSelectionProjectionIdentity(createProjectionSnapshot({
+      filterModel: cyclicFilter as never,
+    }))
+
+    expect(identity?.projectionKey).toContain("[Circular]")
+    expect(identity?.projectionKey?.length ?? 0).toBeLessThan(2_000)
   })
 })

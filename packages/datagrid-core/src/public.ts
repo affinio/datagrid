@@ -129,6 +129,7 @@ export {
 } from "./selection/snapshot.js"
 
 export {
+  DATA_GRID_VIRTUAL_SELECTION_MAX_SCAN_ROWS,
   buildDataGridSelectionProjectionIdentity,
   canDataGridOperationDelegateToServer,
   collectDataGridSelectionLoadedCoverage,

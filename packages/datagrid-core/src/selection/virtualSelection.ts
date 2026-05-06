@@ -34,6 +34,7 @@ export interface DataGridSelectionLoadedCoverage<TRowKey = DataGridRowId> {
   totalRowCount: number
   missingIntervals: readonly DataGridSelectionMissingRowInterval[]
   rowIds: readonly DataGridSelectionLoadedRowId<TRowKey>[]
+  scanLimited: boolean
 }
 
 export interface DataGridSelectionProjectionIdentity {
@@ -89,6 +90,7 @@ export interface DataGridVirtualSelectionOperationDecision {
 export interface CollectDataGridSelectionLoadedCoverageOptions<TRowKey = DataGridRowId> {
   isRowLoaded: (rowIndex: number) => boolean
   getRowIdAtIndex?: (rowIndex: number) => TRowKey | null | undefined
+  maxScanRows?: number
 }
 
 export interface CreateDataGridVirtualSelectionMetadataOptions<TRowKey = DataGridRowId> {
@@ -100,6 +102,8 @@ export interface CreateDataGridVirtualSelectionMetadataOptions<TRowKey = DataGri
   projectionStale?: boolean
   staleReason?: string | null
 }
+
+export const DATA_GRID_VIRTUAL_SELECTION_MAX_SCAN_ROWS = 4_096
 
 export function normalizeDataGridSelectionRangeLike(
   range: DataGridSelectionRangeLike,
@@ -199,27 +203,62 @@ export function collectDataGridSelectionLoadedCoverage<TRowKey = DataGridRowId>(
       totalRowCount: 0,
       missingIntervals: [],
       rowIds: [],
+      scanLimited: false,
     }
   }
   const rowIds: DataGridSelectionLoadedRowId<TRowKey>[] = []
   let loadedRowCount = 0
-  for (let rowIndex = normalized.startRow; rowIndex <= normalized.endRow; rowIndex += 1) {
-    if (!options.isRowLoaded(rowIndex)) {
-      continue
-    }
-    loadedRowCount += 1
-    const rowId = options.getRowIdAtIndex?.(rowIndex)
-    if (rowId != null) {
-      rowIds.push({ rowIndex, rowId })
+  const totalRowCount = normalized.endRow - normalized.startRow + 1
+  const rawMaxScanRows = options.maxScanRows ?? DATA_GRID_VIRTUAL_SELECTION_MAX_SCAN_ROWS
+  const maxScanRows = Number.isFinite(rawMaxScanRows)
+    ? Math.max(0, Math.trunc(rawMaxScanRows))
+    : DATA_GRID_VIRTUAL_SELECTION_MAX_SCAN_ROWS
+  const scanLimited = totalRowCount > maxScanRows
+  const scanEndRow = scanLimited
+    ? normalized.startRow + Math.max(0, maxScanRows - 1)
+    : normalized.endRow
+  const missingIntervals: DataGridSelectionMissingRowInterval[] = []
+  let openStart: number | null = null
+  let openEnd: number | null = null
+
+  for (let rowIndex = normalized.startRow; rowIndex <= scanEndRow; rowIndex += 1) {
+    if (options.isRowLoaded(rowIndex)) {
+      if (openStart != null && openEnd != null) {
+        missingIntervals.push({ startRow: openStart, endRow: openEnd })
+      }
+      openStart = null
+      openEnd = null
+      loadedRowCount += 1
+      const rowId = options.getRowIdAtIndex?.(rowIndex)
+      if (rowId != null) {
+        rowIds.push({ rowIndex, rowId })
+      }
+    } else {
+      if (openStart == null) {
+        openStart = rowIndex
+      }
+      openEnd = rowIndex
     }
   }
-  const missingIntervals = getDataGridSelectionMissingRowIntervals(normalized, options.isRowLoaded)
+  if (openStart != null && openEnd != null) {
+    missingIntervals.push({ startRow: openStart, endRow: openEnd })
+  }
+  if (scanLimited && scanEndRow < normalized.endRow) {
+    const tailInterval = { startRow: scanEndRow + 1, endRow: normalized.endRow }
+    const lastInterval = missingIntervals[missingIntervals.length - 1]
+    if (lastInterval && lastInterval.endRow + 1 >= tailInterval.startRow) {
+      lastInterval.endRow = tailInterval.endRow
+    } else {
+      missingIntervals.push(tailInterval)
+    }
+  }
   return {
-    isFullyLoaded: missingIntervals.length === 0,
+    isFullyLoaded: missingIntervals.length === 0 && !scanLimited,
     loadedRowCount,
-    totalRowCount: normalized.endRow - normalized.startRow + 1,
+    totalRowCount,
     missingIntervals,
     rowIds,
+    scanLimited,
   }
 }
 
@@ -351,6 +390,7 @@ export function createDataGridVirtualSelectionMetadata<TRowKey = DataGridRowId>(
       totalRowCount: options.coverage.totalRowCount,
       missingIntervals: [...options.coverage.missingIntervals],
       rowIds: [...options.coverage.rowIds],
+      scanLimited: options.coverage.scanLimited,
     },
     datasetVersion: options.projectionIdentity?.datasetVersion ?? null,
     projectionIdentity: options.projectionIdentity ?? null,
@@ -370,7 +410,7 @@ export function buildDataGridSelectionProjectionIdentity(
     rowModelKind: snapshot.kind,
     revision: snapshot.revision ?? null,
     datasetVersion: snapshot.datasetVersion ?? null,
-    projectionKey: JSON.stringify({
+    projectionKey: serializeDataGridSelectionProjectionKey({
       rowModelKind: snapshot.kind,
       sortModel: snapshot.sortModel ?? [],
       filterModel: snapshot.filterModel ?? null,
@@ -379,6 +419,59 @@ export function buildDataGridSelectionProjectionIdentity(
       pivotModel: snapshot.pivotModel ?? null,
       pagination: snapshot.pagination ?? null,
     }),
+  }
+}
+
+function serializeDataGridSelectionProjectionKey(value: unknown, active = new WeakSet<object>(), depth = 0): string {
+  const maxDepth = 4
+  const maxEntries = 32
+  if (value == null) {
+    return JSON.stringify(value)
+  }
+  if (typeof value === "bigint") {
+    return JSON.stringify(`${value}n`)
+  }
+  if (typeof value === "function") {
+    return JSON.stringify(`[Function:${value.name || "anonymous"}]`)
+  }
+  if (typeof value === "symbol") {
+    return JSON.stringify(String(value))
+  }
+  if (typeof value !== "object") {
+    return JSON.stringify(value)
+  }
+  if (value instanceof Date) {
+    return JSON.stringify(value.toISOString())
+  }
+  if (value instanceof RegExp) {
+    return JSON.stringify(String(value))
+  }
+  if (active.has(value)) {
+    return JSON.stringify("[Circular]")
+  }
+  if (depth >= maxDepth) {
+    return JSON.stringify("[DepthLimit]")
+  }
+  active.add(value)
+  try {
+    if (Array.isArray(value)) {
+      const entries = value.slice(0, maxEntries).map(entry => serializeDataGridSelectionProjectionKey(entry, active, depth + 1))
+      if (value.length > maxEntries) {
+        entries.push(JSON.stringify(`[+${value.length - maxEntries} more]`))
+      }
+      return `[${entries.join(",")}]`
+    }
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .slice(0, maxEntries)
+      .map(([key, nested]) => `${JSON.stringify(key)}:${serializeDataGridSelectionProjectionKey(nested, active, depth + 1)}`)
+    const totalEntries = Object.keys(value as Record<string, unknown>).length
+    if (totalEntries > maxEntries) {
+      entries.push(`${JSON.stringify("__truncated__")}:${JSON.stringify(totalEntries - maxEntries)}`)
+    }
+    return `{${entries.join(",")}}`
+  } finally {
+    active.delete(value)
   }
 }
 

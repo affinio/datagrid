@@ -12,6 +12,7 @@ import type {
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import {
+  DATA_GRID_VIRTUAL_SELECTION_MAX_SCAN_ROWS,
   buildDataGridSelectionProjectionIdentity,
   collectDataGridSelectionLoadedCoverage,
   createDataGridVirtualSelectionMetadata,
@@ -642,36 +643,52 @@ export function useDataGridTableStageRuntime<
     const projectionIdentity = buildDataGridSelectionProjectionIdentity(
       options.runtimeRowModel?.getSnapshot?.() ?? selectableRuntime.api.rows.getSnapshot(),
     )
+    let changed = false
     const nextRanges = snapshot.ranges.map(range => {
       if (!range.virtual) {
         return range
       }
       const coverage = collectDataGridSelectionLoadedCoverage(range, {
+        maxScanRows: DATA_GRID_VIRTUAL_SELECTION_MAX_SCAN_ROWS,
         isRowLoaded: rowIndex => {
           const row = selectableRuntime.getBodyRowAtIndex(rowIndex)
           return !!row && !placeholderRows.isPlaceholderRow(row)
         },
         getRowIdAtIndex: rowIndex => selectableRuntime.getBodyRowAtIndex(rowIndex)?.rowId ?? null,
       })
+      const nextProjectionIdentity = range.virtual.projectionIdentity ?? projectionIdentity
+      const projectionStale =
+        range.virtual.projectionStale === true
+        || (
+          range.virtual.projectionIdentity != null
+          && projectionIdentity != null
+          && !isSameDataGridSelectionProjectionIdentity(range.virtual.projectionIdentity, projectionIdentity)
+        )
+      const nextVirtual = createDataGridVirtualSelectionMetadata({
+        range,
+        anchorCell: range.anchor,
+        focusCell: range.focus,
+        coverage,
+        projectionIdentity: nextProjectionIdentity,
+        projectionStale,
+        staleReason: projectionStale
+          ? range.virtual.staleReason ?? "Selection projection changed after refresh."
+          : range.virtual.staleReason ?? null,
+      })
+      if (!changed && !isSameDataGridVirtualSelectionMetadata(range.virtual, nextVirtual)) {
+        changed = true
+      }
       return {
         ...range,
-        virtual: createDataGridVirtualSelectionMetadata({
-          range,
-          anchorCell: range.anchor,
-          focusCell: range.focus,
-          coverage,
-          projectionIdentity: range.virtual.projectionIdentity ?? projectionIdentity,
-          projectionStale: range.virtual.projectionStale === true,
-          staleReason: range.virtual.staleReason ?? null,
-        }),
+        virtual: nextVirtual,
       }
     })
+    if (!changed) {
+      return
+    }
     const nextSnapshot = {
       ...snapshot,
       ranges: nextRanges,
-    }
-    if (JSON.stringify(nextSnapshot) === JSON.stringify(snapshot)) {
-      return
     }
     options.selectionSnapshot.value = nextSnapshot
     if (selectableRuntime.api.selection.hasSupport()) {
@@ -681,6 +698,91 @@ export function useDataGridTableStageRuntime<
   watch(displayRowsRevision, () => {
     refreshVirtualSelectionCoverage()
   })
+
+  function isSameDataGridSelectionProjectionIdentity(
+    left: ReturnType<typeof buildDataGridSelectionProjectionIdentity>,
+    right: ReturnType<typeof buildDataGridSelectionProjectionIdentity>,
+  ): boolean {
+    return left?.rowModelKind === right?.rowModelKind
+      && left?.revision === right?.revision
+      && left?.datasetVersion === right?.datasetVersion
+      && left?.projectionKey === right?.projectionKey
+  }
+
+  function isSameDataGridSelectionLoadedCoverage(
+    left: NonNullable<NonNullable<NonNullable<DataGridSelectionSnapshot["ranges"][number]["virtual"]>>["coverage"]>,
+    right: NonNullable<NonNullable<NonNullable<DataGridSelectionSnapshot["ranges"][number]["virtual"]>>["coverage"]>,
+  ): boolean {
+    return left.isFullyLoaded === right.isFullyLoaded
+      && left.loadedRowCount === right.loadedRowCount
+      && left.totalRowCount === right.totalRowCount
+      && left.scanLimited === right.scanLimited
+      && sameDataGridSelectionIntervals(left.missingIntervals, right.missingIntervals)
+      && sameDataGridSelectionRowIds(left.rowIds, right.rowIds)
+  }
+
+  function isSameDataGridVirtualSelectionMetadata(
+    left: NonNullable<DataGridSelectionSnapshot["ranges"][number]["virtual"]>,
+    right: NonNullable<DataGridSelectionSnapshot["ranges"][number]["virtual"]>,
+  ): boolean {
+    return left.startRowIndex === right.startRowIndex
+      && left.endRowIndex === right.endRowIndex
+      && left.startColumnIndex === right.startColumnIndex
+      && left.endColumnIndex === right.endColumnIndex
+      && left.isVirtualSelection === right.isVirtualSelection
+      && left.projectionStale === right.projectionStale
+      && left.staleReason === right.staleReason
+      && left.datasetVersion === right.datasetVersion
+      && left.anchorCell.rowIndex === right.anchorCell.rowIndex
+      && left.anchorCell.colIndex === right.anchorCell.colIndex
+      && left.anchorCell.rowId === right.anchorCell.rowId
+      && left.focusCell.rowIndex === right.focusCell.rowIndex
+      && left.focusCell.colIndex === right.focusCell.colIndex
+      && left.focusCell.rowId === right.focusCell.rowId
+      && isSameDataGridSelectionProjectionIdentity(left.projectionIdentity ?? null, right.projectionIdentity ?? null)
+      && isSameDataGridSelectionLoadedCoverage(left.coverage, right.coverage)
+  }
+
+  function sameDataGridSelectionIntervals(
+    left: readonly { startRow: number; endRow: number }[],
+    right: readonly { startRow: number; endRow: number }[],
+  ): boolean {
+    if (left.length !== right.length) {
+      return false
+    }
+    for (let index = 0; index < left.length; index += 1) {
+      const leftInterval = left[index]
+      const rightInterval = right[index]
+      if (!leftInterval || !rightInterval) {
+        return false
+      }
+      if (leftInterval.startRow !== rightInterval.startRow || leftInterval.endRow !== rightInterval.endRow) {
+        return false
+      }
+    }
+    return true
+  }
+
+  function sameDataGridSelectionRowIds(
+    left: readonly { rowIndex: number; rowId: unknown }[],
+    right: readonly { rowIndex: number; rowId: unknown }[],
+  ): boolean {
+    if (left.length !== right.length) {
+      return false
+    }
+    for (let index = 0; index < left.length; index += 1) {
+      const leftRow = left[index]
+      const rightRow = right[index]
+      if (!leftRow || !rightRow) {
+        return false
+      }
+      if (leftRow.rowIndex !== rightRow.rowIndex || leftRow.rowId !== rightRow.rowId) {
+        return false
+      }
+    }
+    return true
+  }
+
   const selectionAnchorCell = computed(() => {
     const snapshot = options.selectionSnapshot.value
     if (!snapshot || snapshot.ranges.length === 0) {
