@@ -523,6 +523,7 @@ import {
 } from "../serverDatasourceDemo/fakeServerDatasource"
 import {
   createServerDemoDatasourceHttpAdapter,
+  applyServerDemoMutationInvalidation,
 } from "../serverDatasourceDemo/serverDemoDatasourceHttpAdapter"
 import {
   createServerDemoDatasourceHttpFillDataSource,
@@ -1906,6 +1907,13 @@ const serverDemoHttpDatasource = serverDemoHttpDatasourceEnabled
     })
   : null
 const httpDatasource = serverDemoHttpDatasource
+const serverDemoChangeFeedPollingEnabled = import.meta.env.VITE_SERVER_DEMO_CHANGE_FEED_POLLING === "true"
+const serverDemoChangeFeedPollingIntervalMs = Math.max(
+  500,
+  Number(import.meta.env.VITE_SERVER_DEMO_CHANGE_FEED_POLL_INTERVAL_MS ?? 2000),
+)
+let serverDemoChangeFeedPollTimer: ReturnType<typeof setInterval> | null = null
+let serverDemoChangeFeedPollInFlight = false
 
 
 void legacyDataSource
@@ -1917,6 +1925,7 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
         fallbackDataSource: serverDatasource.dataSource,
         httpDatasource: serverDemoHttpDatasource,
         refreshHistoryStatus: () => refreshHistoryStatus(),
+        applyInvalidation: invalidation => applyServerDemoMutationInvalidation(rowModel, invalidation),
       }),
       async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
         if (serverDatasourceUnavailable.value) {
@@ -2002,7 +2011,10 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
             latestRedoOperationId?: string | null
             affectedRows?: number
             affectedCells?: number
+            datasetVersion?: number | null
+            serverInvalidation?: Parameters<typeof applyServerDemoMutationInvalidation>[1]
           }
+          applyServerDemoMutationInvalidation(rowModel, result.serverInvalidation ?? { type: "dataset" })
           const affectedRowCount = new Set(result.committed?.map(entry => entry.rowId) ?? []).size
           const historyApplied = applyCommitHistoryDiagnostics(
             result,
@@ -2637,7 +2649,7 @@ async function refreshHistoryStatus(): Promise<void> {
 async function runHistoryAction(direction: "undo" | "redo"): Promise<string | null> {
   if (serverDemoHttpDatasourceEnabled) {
     const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
-    const historyAction = direction === "undo"
+        const historyAction = direction === "undo"
       ? serverDatasource?.undoHistoryStack
       : serverDatasource?.redoHistoryStack
     if (typeof historyAction === "function") {
@@ -2645,6 +2657,11 @@ async function runHistoryAction(direction: "undo" | "redo"): Promise<string | nu
         const result = await historyAction({
           ...serverDemoHistoryScope,
         })
+        if (result.serverInvalidation) {
+          applyServerDemoMutationInvalidation(rowModel, result.serverInvalidation)
+        } else {
+          await rowModel.refresh("manual")
+        }
         syncHistoryDiagnostics({
           operationId: result.operationId ?? null,
           canUndo: result.canUndo,
@@ -2653,7 +2670,6 @@ async function runHistoryAction(direction: "undo" | "redo"): Promise<string | nu
           affectedCells: result.affectedCells,
           action: result.action,
         })
-        await rowModel.refresh("manual")
         gridRef.value?.restoreFocus?.()
         return result.operationId ?? null
       } catch (caught) {
@@ -2790,15 +2806,53 @@ function simulateCommitFailure(): void {
   commitFailureMode.value = true
 }
 
+async function pollServerDemoChanges(): Promise<void> {
+  if (!serverDemoChangeFeedPollingEnabled) {
+    return
+  }
+  const getChangesSinceVersion = httpDatasource?.getChangesSinceVersion
+  if (typeof getChangesSinceVersion !== "function" || serverDemoChangeFeedPollInFlight) {
+    return
+  }
+  serverDemoChangeFeedPollInFlight = true
+  try {
+    const response = await getChangesSinceVersion({
+      sinceVersion: httpDatasource?.latestDatasetVersion ?? 0,
+    })
+    if (response.changes.length > 0) {
+      for (const change of response.changes) {
+        applyServerDemoMutationInvalidation(rowModel, change.invalidation)
+      }
+      await refreshHistoryStatus()
+    }
+  } catch (caught) {
+    if (!(caught instanceof Error && caught.name === "AbortError")) {
+      console.warn("Server demo change feed polling failed", caught)
+    }
+  } finally {
+    serverDemoChangeFeedPollInFlight = false
+  }
+}
+
 onMounted(() => {
   totalRows.value = ROW_COUNT
   handleStateUpdate(rowModel.getSnapshot())
   void refreshHistoryStatus()
   void rowModel.refresh("mount")
+  if (serverDemoChangeFeedPollingEnabled) {
+    void pollServerDemoChanges()
+    serverDemoChangeFeedPollTimer = setInterval(() => {
+      void pollServerDemoChanges()
+    }, serverDemoChangeFeedPollingIntervalMs)
+  }
   lastEditRecordedText.value = "no"
 })
 
 onBeforeUnmount(() => {
+  if (serverDemoChangeFeedPollTimer !== null) {
+    clearInterval(serverDemoChangeFeedPollTimer)
+    serverDemoChangeFeedPollTimer = null
+  }
   unsubscribeSampleDiagnostics()
   rowModel.dispose()
 })

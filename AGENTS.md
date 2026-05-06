@@ -17,6 +17,18 @@ You are a senior engineering partner, not a passive code generator.
 - For public API changes, propose the API first and wait for approval.
 - Keep commits focused and separable.
 
+## Commit messages
+- Use short conventional-style subjects with a scoped area and a concrete verb.
+- Preferred format: `<type>(<scope>): <what changed>`
+- Keep the scope aligned to the real package or subsystem, such as `backend`, `sandbox`, `datagrid`, `datagrid-vue`, or `server-demo`.
+- Prefer messages that describe the actual behavior change, not the implementation detail.
+- Good examples:
+  - `fix(sandbox): route HTTP datasource keyboard undo through server history`
+  - `feat(server-demo): persist datasource edits through backend`
+  - `fix(backend): return stable revision for empty datasource pulls`
+  - `test(backend): cover server demo datasource read endpoints`
+- When useful, include the exact package or feature area in the scope if it makes the change easier to scan.
+
 ## Project priorities
 - This project contains high-performance DataGrid packages.
 - Performance, typing, and API stability matter.

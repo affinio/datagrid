@@ -5,11 +5,16 @@ from datetime import datetime, timedelta, timezone
 from itertools import islice
 from typing import Iterable
 
-from sqlalchemy import delete, insert
+from sqlalchemy import delete, insert, text
 
-from app.features.server_demo.models import GridDemoRow, ServerDemoCellEvent, ServerDemoOperation
+from app.features.server_demo.models import (
+    GridDemoRow,
+    ServerDemoCellEvent,
+    ServerDemoChangeEvent,
+    ServerDemoOperation,
+)
 from affino_grid_backend.core.revision_models import GridRevision
-from app.infrastructure.db.database import AsyncSessionLocal
+from app.infrastructure.db.database import AsyncSessionLocal, engine
 
 ROW_COUNT = 100_000
 SEGMENTS = ("Core", "Growth", "Enterprise", "SMB")
@@ -42,9 +47,13 @@ def _row_payloads(
 
 
 async def seed_demo_rows() -> None:
+    async with engine.begin() as conn:
+        await conn.execute(text("CREATE SEQUENCE IF NOT EXISTS server_demo_change_events_id_seq"))
+        await conn.run_sync(lambda sync_conn: ServerDemoChangeEvent.__table__.create(sync_conn, checkfirst=True))
     async with AsyncSessionLocal() as session:
         async with session.begin():
             await session.execute(delete(ServerDemoCellEvent))
+            await session.execute(delete(ServerDemoChangeEvent))
             await session.execute(delete(ServerDemoOperation))
             await session.execute(delete(GridRevision))
             await session.execute(delete(GridDemoRow))

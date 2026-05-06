@@ -5,8 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "Merlin Backend"
-    description: str = "FastAPI backend for Merlin"
+    app_name: str = "Datagrid Backend"
+    description: str = "FastAPI backend for Datagrid"
     app_version: str = "0.1.0"
     grid_allow_workspace_header_fallback: bool = True
     grid_max_pull_rows: int = Field(default=1000, ge=0)
@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     grid_max_fill_source_rows: int = Field(default=100, ge=0)
     grid_max_fill_columns: int = Field(default=50, ge=0)
     grid_max_fill_cells: int = Field(default=5000, ge=0)
+    grid_max_change_feed_gap: int = Field(default=1000, ge=0)
     grid_max_filter_count_rows: int | None = Field(default=None, ge=0)
     grid_max_histogram_source_rows: int | None = Field(default=None, ge=0)
     database_url: str = Field(

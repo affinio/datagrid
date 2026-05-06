@@ -228,15 +228,16 @@ async def test_server_demo_single_edit_persists(client: AsyncClient) -> None:
     assert body["revision"]
     assert body["affectedRows"] == 1
     assert body["affectedCells"] == 1
+    assert body["datasetVersion"] == int(body["revision"])
     assert body["canUndo"] is True
     assert body["canRedo"] is False
     assert body["latestUndoOperationId"] == body["operationId"]
     assert body["latestRedoOperationId"] is None
     assert body["invalidation"] == {
-        "kind": "rows",
+        "type": "cell",
+        "cells": [{"rowId": "srv-000010", "columnId": "name"}],
+        "rows": [],
         "range": None,
-        "rowIds": ["srv-000010"],
-        "reason": "server-demo-edits",
     }
     operation, events = await fetch_operation_history(body["operationId"], scope["workspace_id"])
     assert operation is not None
@@ -258,9 +259,66 @@ async def test_server_demo_single_edit_persists(client: AsyncClient) -> None:
     status_body = status_response.json()
     assert status_body["canUndo"] is True
     assert status_body["canRedo"] is False
+    assert status_body["datasetVersion"] == 1
 
-    after = await pull_row(client, 10)
-    assert after["name"] == "Renamed Account 10"
+
+async def test_server_demo_edit_respects_base_revision_conflicts(client: AsyncClient) -> None:
+    before = await pull_row(client, 11)
+    pull_response = await client.post(
+        "/api/server-demo/pull",
+        json={"range": {"startRow": 11, "endRow": 12}},
+    )
+    assert pull_response.status_code == 200
+    current_revision = pull_response.json()["revision"]
+
+    stale_response = await client.post(
+        "/api/server-demo/edits",
+        json={
+            **server_demo_history_scope(),
+            "baseRevision": "definitely-stale",
+            "edits": [
+                {
+                    "rowId": "srv-000011",
+                    "columnId": "name",
+                    "value": "Rejected Rename",
+                    "previousValue": before["name"],
+                }
+            ],
+        },
+    )
+    assert stale_response.status_code == 409
+    assert stale_response.json() == {
+        "code": "stale-revision",
+        "message": "Edit commit revision is stale",
+    }
+
+    success_response = await client.post(
+        "/api/server-demo/edits",
+        json={
+            **server_demo_history_scope(),
+            "baseRevision": current_revision,
+            "edits": [
+                {
+                    "rowId": "srv-000011",
+                    "columnId": "name",
+                    "value": "Accepted Rename",
+                    "previousValue": before["name"],
+                }
+            ],
+        },
+    )
+    assert success_response.status_code == 200
+    success_body = success_response.json()
+    assert success_body["datasetVersion"] == int(success_body["revision"])
+    assert success_body["invalidation"] == {
+        "type": "cell",
+        "cells": [{"rowId": "srv-000011", "columnId": "name"}],
+        "rows": [],
+        "range": None,
+    }
+
+    after = await pull_row(client, 11)
+    assert after["name"] == "Accepted Rename"
     assert after["updatedAt"] != before["updatedAt"]
 
 
@@ -287,10 +345,14 @@ async def test_server_demo_batch_edit_persists(client: AsyncClient) -> None:
     ]
     assert body["rejected"] == []
     assert body["invalidation"] == {
-        "kind": "rows",
+        "type": "cell",
+        "cells": [
+            {"rowId": "srv-000020", "columnId": "segment"},
+            {"rowId": "srv-000021", "columnId": "status"},
+            {"rowId": "srv-000021", "columnId": "region"},
+        ],
+        "rows": [],
         "range": None,
-        "rowIds": ["srv-000020", "srv-000021"],
-        "reason": "server-demo-edits",
     }
     operation, events = await fetch_operation_history(body["operationId"])
     assert operation is not None
@@ -331,10 +393,13 @@ async def test_server_demo_large_batch_edit_persists_with_range_invalidation(cli
     assert body["committedRowIds"] == [f"srv-{row_index:06d}" for row_index in range(200, 251)]
     assert body["rejected"] == []
     assert body["invalidation"] == {
-        "kind": "range",
-        "range": {"start": 200, "end": 250},
-        "rowIds": [],
-        "reason": "server-demo-edits",
+        "type": "cell",
+        "cells": [
+            {"rowId": f"srv-{row_index:06d}", "columnId": "name"}
+            for row_index in range(200, 251)
+        ],
+        "rows": [],
+        "range": None,
     }
 
 
@@ -539,7 +604,12 @@ async def test_server_demo_invalid_column_edit_is_rejected(client: AsyncClient) 
         {"rowId": "srv-000030", "columnId": "id", "reason": "readonly-column"},
         {"rowId": "srv-000030", "columnId": "updatedAt", "reason": "readonly-column"},
     ]
-    assert body["invalidation"] is None
+    assert body["invalidation"] == {
+        "type": "dataset",
+        "cells": [],
+        "rows": [],
+        "range": None,
+    }
 
     row = await pull_row(client, 30)
     assert row["id"] == "srv-000030"
@@ -559,7 +629,12 @@ async def test_server_demo_unknown_column_edit_is_rejected(client: AsyncClient) 
     ]
     assert body["committed"] == []
     assert body["committedRowIds"] == []
-    assert body["invalidation"] is None
+    assert body["invalidation"] == {
+        "type": "dataset",
+        "cells": [],
+        "rows": [],
+        "range": None,
+    }
 
 
 async def test_server_demo_invalid_enum_edit_is_rejected(client: AsyncClient) -> None:
@@ -577,7 +652,12 @@ async def test_server_demo_invalid_enum_edit_is_rejected(client: AsyncClient) ->
     assert body["rejected"] == [
         {"rowId": "srv-000040", "columnId": "status", "reason": "invalid-enum-value"}
     ]
-    assert body["invalidation"] is None
+    assert body["invalidation"] == {
+        "type": "dataset",
+        "cells": [],
+        "rows": [],
+        "range": None,
+    }
 
     after = await pull_row(client, 40)
     assert after["status"] == before["status"]
@@ -600,7 +680,12 @@ async def test_server_demo_invalid_integer_edit_is_rejected(client: AsyncClient)
     assert body["rejected"] == [
         {"rowId": "srv-000051", "columnId": "value", "reason": "invalid-integer-value"}
     ]
-    assert body["invalidation"] is None
+    assert body["invalidation"] == {
+        "type": "dataset",
+        "cells": [],
+        "rows": [],
+        "range": None,
+    }
 
     after = await pull_row(client, 51)
     assert after["value"] == before["value"]
@@ -631,7 +716,12 @@ async def test_server_demo_previous_value_mismatch_is_rejected(client: AsyncClie
     assert body["rejected"] == [
         {"rowId": "srv-000052", "columnId": "name", "reason": "previous-value-mismatch"}
     ]
-    assert body["invalidation"] is None
+    assert body["invalidation"] == {
+        "type": "dataset",
+        "cells": [],
+        "rows": [],
+        "range": None,
+    }
 
     after = await pull_row(client, 52)
     assert after["name"] == before["name"]
@@ -881,10 +971,10 @@ async def test_server_demo_single_edit_undo_and_redo(client: AsyncClient) -> Non
     assert undo_body["committedRowIds"] == ["srv-000070"]
     assert undo_body["rejected"] == []
     assert undo_body["invalidation"] == {
-        "kind": "rows",
+        "type": "cell",
+        "cells": [{"rowId": "srv-000070", "columnId": "name"}],
+        "rows": [],
         "range": None,
-        "rowIds": ["srv-000070"],
-        "reason": "server-demo-edits",
     }
     assert (await pull_row(client, 70))["name"] == before["name"]
     operation, events = await fetch_operation_history(operation_id)
@@ -903,10 +993,10 @@ async def test_server_demo_single_edit_undo_and_redo(client: AsyncClient) -> Non
     assert redo_body["committedRowIds"] == ["srv-000070"]
     assert redo_body["rejected"] == []
     assert redo_body["invalidation"] == {
-        "kind": "rows",
+        "type": "cell",
+        "cells": [{"rowId": "srv-000070", "columnId": "name"}],
+        "rows": [],
         "range": None,
-        "rowIds": ["srv-000070"],
-        "reason": "server-demo-edits",
     }
     assert (await pull_row(client, 70))["name"] == "Undoable Account 70"
     operation, events = await fetch_operation_history(operation_id)
@@ -1113,7 +1203,12 @@ async def test_server_demo_all_rejected_edit_creates_no_operation(client: AsyncC
         {"rowId": "srv-000093", "columnId": "id", "reason": "readonly-column"},
         {"rowId": "srv-000094", "columnId": "status", "reason": "invalid-enum-value"},
     ]
-    assert body["invalidation"] is None
+    assert body["invalidation"] == {
+        "type": "dataset",
+        "cells": [],
+        "rows": [],
+        "range": None,
+    }
 
     operation, events = await fetch_operation_history(operation_id)
     assert operation is None
@@ -1287,16 +1382,22 @@ async def test_server_demo_fill_commit_copy_single_column_with_history(client: A
     assert body["affectedCellCount"] == 1
     assert body["affectedRows"] == 1
     assert body["affectedCells"] == 1
+    assert body["datasetVersion"] == int(body["revision"])
     assert body["canUndo"] is True
     assert body["canRedo"] is False
     assert body["latestUndoOperationId"] == operation_id
     assert body["latestRedoOperationId"] is None
     assert body["warnings"] == []
     assert body["invalidation"] == {
-        "kind": "rows",
-        "range": None,
-        "rowIds": ["srv-000021"],
-        "reason": "server-demo-fill",
+        "type": "range",
+        "cells": [],
+        "rows": [],
+        "range": {
+            "startRow": 21,
+            "endRow": 21,
+            "startColumn": "status",
+            "endColumn": "status",
+        },
     }
 
     after = await pull_row(client, 21)
@@ -1371,12 +1472,18 @@ async def test_server_demo_fill_commit_large_result_uses_range_invalidation(clie
     body = response.json()
     assert body["operationId"] == operation_id
     assert body["affectedRowCount"] == 52
+    assert body["datasetVersion"] == int(body["revision"])
     assert body["warnings"] == []
     assert body["invalidation"] == {
-        "kind": "range",
-        "range": {"start": 301, "end": 352},
-        "rowIds": [],
-        "reason": "server-demo-fill",
+        "type": "range",
+        "cells": [],
+        "rows": [],
+        "range": {
+            "startRow": 301,
+            "endRow": 352,
+            "startColumn": "name",
+            "endColumn": "name",
+        },
     }
 
     row_301 = await pull_row(client, 301)
@@ -1618,7 +1725,12 @@ async def test_server_demo_fill_commit_noop_is_explicit(client: AsyncClient) -> 
     assert body["affectedRowCount"] == 0
     assert body["affectedCellCount"] == 0
     assert body["warnings"] == ["server fill no-op"]
-    assert body["invalidation"] is None
+    assert body["invalidation"] == {
+        "type": "dataset",
+        "cells": [],
+        "rows": [],
+        "range": None,
+    }
     assert (await pull_row(client, 20))["status"] == before["status"]
 
     operation, events = await fetch_operation_history(operation_id)

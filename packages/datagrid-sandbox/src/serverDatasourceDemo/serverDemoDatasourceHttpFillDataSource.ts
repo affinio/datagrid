@@ -1,16 +1,26 @@
 import type { DataGridDataSource } from "@affino/datagrid-vue"
-import type { ServerDemoRow } from "./types"
-import type { ServerDemoHttpDatasource } from "./serverDemoDatasourceHttpAdapter"
+import type { ServerDemoMutationInvalidation, ServerDemoRow } from "./types"
+import type {
+  ServerDemoFillOperationRequest,
+  ServerDemoFillOperationResult,
+  ServerDemoUndoFillRequest,
+  ServerDemoUndoFillResult,
+} from "./types"
 import { shouldRefreshHistoryStatusAfterCommit } from "./serverDemoHistoryState"
+
+type ServerDemoHttpFillDatasource = {
+  resolveFillBoundary?: NonNullable<DataGridDataSource<ServerDemoRow>["resolveFillBoundary"]>
+  commitFillOperation?: (request: ServerDemoFillOperationRequest) => Promise<ServerDemoFillOperationResult>
+  undoFillOperation?: (request: ServerDemoUndoFillRequest) => Promise<ServerDemoUndoFillResult>
+  redoFillOperation?: (request: ServerDemoUndoFillRequest) => Promise<ServerDemoUndoFillResult>
+}
 
 export interface CreateServerDemoDatasourceHttpFillDataSourceOptions {
   enabled: boolean
   fallbackDataSource: DataGridDataSource<ServerDemoRow>
-  httpDatasource: Pick<
-    ServerDemoHttpDatasource,
-    "resolveFillBoundary" | "commitFillOperation" | "undoFillOperation" | "redoFillOperation"
-  > | null
+  httpDatasource: ServerDemoHttpFillDatasource | null
   refreshHistoryStatus?: () => Promise<void> | void
+  applyInvalidation?: (invalidation: ServerDemoMutationInvalidation | null | undefined) => void | Promise<void>
 }
 
 export function createServerDemoDatasourceHttpFillDataSource(
@@ -37,6 +47,7 @@ export function createServerDemoDatasourceHttpFillDataSource(
         throw new Error("Server demo HTTP adapter does not implement commitFillOperation")
       }
       const result = await commitFillOperation(request)
+      await options.applyInvalidation?.(result.serverInvalidation ?? { type: "dataset" })
       if (shouldRefreshHistoryStatusAfterCommit(result)) {
         await options.refreshHistoryStatus?.()
       }
@@ -48,6 +59,7 @@ export function createServerDemoDatasourceHttpFillDataSource(
         throw new Error("Server demo HTTP adapter does not implement undoFillOperation")
       }
       const result = await undoFillOperation(request)
+      await options.applyInvalidation?.(result.serverInvalidation ?? { type: "dataset" })
       await options.refreshHistoryStatus?.()
       return result
     },
@@ -57,6 +69,7 @@ export function createServerDemoDatasourceHttpFillDataSource(
         throw new Error("Server demo HTTP adapter does not implement redoFillOperation")
       }
       const result = await redoFillOperation(request)
+      await options.applyInvalidation?.(result.serverInvalidation ?? { type: "dataset" })
       await options.refreshHistoryStatus?.()
       return result
     },

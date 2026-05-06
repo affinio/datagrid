@@ -54,6 +54,33 @@ export interface ServerDemoRow {
   updatedAt: string
 }
 
+export interface ServerDemoMutationCellInvalidation {
+  rowId: string
+  columnId: string
+}
+
+export interface ServerDemoMutationRangeInvalidation {
+  startRow: number
+  endRow: number
+  startColumn?: string | null
+  endColumn?: string | null
+}
+
+export interface ServerDemoMutationInvalidation {
+  type: "cell" | "range" | "row" | "dataset"
+  cells?: readonly ServerDemoMutationCellInvalidation[]
+  rows?: readonly string[]
+  range?: ServerDemoMutationRangeInvalidation | null
+}
+
+export interface ServerDemoChangeFeedChange {
+  type: "cell" | "range" | "row" | "dataset"
+  invalidation: ServerDemoMutationInvalidation
+  operationId?: string | null
+  user_id?: string | null
+  session_id?: string | null
+}
+
 export interface ServerDemoFillChange {
   rowId: string
   columnKey: string
@@ -143,6 +170,11 @@ export interface ServerDemoFillDiagnostics {
   refreshUsedStoredRendered: string
 }
 
+export interface ServerDemoChangeFeedResponse {
+  datasetVersion: number
+  changes: ServerDemoChangeFeedChange[]
+}
+
 export interface ServerDemoCommitDiagnostics {
   commitMode: string
   commitMessage: string
@@ -184,15 +216,32 @@ export interface ServerDemoFillProjectionContext {
 
 export type ServerDemoDataSource = DataGridDataSource<ServerDemoRow>
 export type ServerDemoPullRequest = Parameters<ServerDemoDataSource["pull"]>[0]
-export type ServerDemoPullResult = Awaited<ReturnType<ServerDemoDataSource["pull"]>>
+export type ServerDemoPullResult = Awaited<ReturnType<ServerDemoDataSource["pull"]>> & {
+  datasetVersion?: number | null
+}
 export type ServerDemoHistogramRequest = Parameters<NonNullable<ServerDemoDataSource["getColumnHistogram"]>>[0]
 export type ServerDemoCommitEditsRequest = Parameters<NonNullable<ServerDemoDataSource["commitEdits"]>>[0]
-export type ServerDemoCommitEditsResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["commitEdits"]>>>
+export type ServerDemoCommitEditsResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["commitEdits"]>>> & {
+  datasetVersion?: number | null
+  serverInvalidation?: ServerDemoMutationInvalidation | null
+}
 export type ServerDemoFillOperationRequest = Parameters<NonNullable<ServerDemoDataSource["commitFillOperation"]>>[0]
-export type ServerDemoFillOperationResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["commitFillOperation"]>>>
+export type ServerDemoFillOperationResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["commitFillOperation"]>>> & {
+  datasetVersion?: number | null
+  serverInvalidation?: ServerDemoMutationInvalidation | null
+}
 export type ServerDemoUndoFillRequest = Parameters<NonNullable<ServerDemoDataSource["undoFillOperation"]>>[0]
-export type ServerDemoUndoFillResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["undoFillOperation"]>>>
-export type ServerDemoRedoFillResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["redoFillOperation"]>>>
+export type ServerDemoUndoFillResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["undoFillOperation"]>>> & {
+  datasetVersion?: number | null
+  serverInvalidation?: ServerDemoMutationInvalidation | null
+}
+export type ServerDemoRedoFillResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["redoFillOperation"]>>> & {
+  datasetVersion?: number | null
+  serverInvalidation?: ServerDemoMutationInvalidation | null
+}
+export interface ServerDemoChangeFeedRequest {
+  sinceVersion: number
+}
 export type ServerDemoFillBoundaryRequest = Parameters<NonNullable<ServerDemoDataSource["resolveFillBoundary"]>>[0]
 export type ServerDemoFillBoundaryResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["resolveFillBoundary"]>>>
 export type ServerDemoDataSourceInvalidation = DataGridDataSourceInvalidation

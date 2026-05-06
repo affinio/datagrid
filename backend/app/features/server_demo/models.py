@@ -87,3 +87,26 @@ class ServerDemoCellEvent(Base):
     before_value: Mapped[object | None] = mapped_column(JSONB, nullable=True)
     after_value: Mapped[object | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ServerDemoChangeEvent(Base):
+    __tablename__ = "server_demo_change_events"
+    __table_args__ = (
+        Index("ix_server_demo_change_events_workspace_id_revision", "workspace_id", "revision"),
+        Index("ix_server_demo_change_events_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        primary_key=True,
+        server_default=text("nextval('server_demo_change_events_id_seq'::regclass)"),
+    )
+    revision: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    workspace_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    table_id: Mapped[str] = mapped_column(String, nullable=False)
+    operation_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    change_type: Mapped[str] = mapped_column(Text, nullable=False)
+    invalidation: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -77,6 +77,7 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
   it("uses HTTP fill methods when HTTP mode is enabled", async () => {
     const fallback = createFallbackDataSource()
     const refreshHistoryStatus = vi.fn()
+    const applyInvalidation = vi.fn()
     const httpResolveFillBoundary = vi.fn(async () => ({
       endRowIndex: 5,
       endRowId: "srv-000005",
@@ -95,7 +96,22 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
       canRedo: false,
       latestUndoOperationId: "fill-123",
       latestRedoOperationId: null,
-      invalidation: null,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          start: 1,
+          end: 3,
+        },
+      },
+      serverInvalidation: {
+        type: "range" as const,
+        range: {
+          startRow: 1,
+          endRow: 3,
+          startColumn: "status",
+          endColumn: "status",
+        },
+      },
       warnings: ["server fill committed"],
     }))
     const httpUndoFillOperation = vi.fn(async () => ({
@@ -120,6 +136,7 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
         redoFillOperation: httpRedoFillOperation,
       },
       refreshHistoryStatus,
+      applyInvalidation,
     })
 
     const boundary = await dataSource.resolveFillBoundary!({
@@ -157,6 +174,17 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
     expect(httpCommitFillOperation).toHaveBeenCalledTimes(1)
     expect(httpUndoFillOperation).toHaveBeenCalledTimes(1)
     expect(httpRedoFillOperation).toHaveBeenCalledTimes(1)
+    expect(applyInvalidation).toHaveBeenNthCalledWith(1, {
+      type: "range",
+      range: {
+        startRow: 1,
+        endRow: 3,
+        startColumn: "status",
+        endColumn: "status",
+      },
+    })
+    expect(applyInvalidation).toHaveBeenNthCalledWith(2, { type: "dataset" })
+    expect(applyInvalidation).toHaveBeenNthCalledWith(3, { type: "dataset" })
     expect(refreshHistoryStatus).toHaveBeenCalledTimes(2)
     expect(boundary).toMatchObject({ boundaryKind: "cache-boundary", endRowIndex: 5 })
     expect(fillResult).toMatchObject({

@@ -16,7 +16,9 @@ import {
   SERVER_DEMO_REGIONS,
   SERVER_DEMO_SEGMENTS,
   SERVER_DEMO_STATUSES,
+  type ServerDemoChangeFeedResponse,
   type ServerDemoRow,
+  type ServerDemoChangeFeedRequest,
 } from "./types"
 import type { ServerDemoHistoryScope } from "./serverDemoHistoryScope"
 import {
@@ -48,6 +50,7 @@ type ServerDemoPullResponse = {
   rows: readonly ServerDemoRow[]
   total: number
   revision?: string | null
+  datasetVersion?: number | null
 }
 
 type ServerDemoHistogramResponse = {
@@ -56,6 +59,25 @@ type ServerDemoHistogramResponse = {
     value: unknown
     count: number
   }[]
+}
+
+type ServerDemoMutationCellInvalidation = {
+  rowId: string
+  columnId: string
+}
+
+type ServerDemoMutationRangeInvalidation = {
+  startRow: number
+  endRow: number
+  startColumn?: string | null
+  endColumn?: string | null
+}
+
+type ServerDemoMutationInvalidation = {
+  type: "cell" | "range" | "row" | "dataset"
+  cells?: readonly ServerDemoMutationCellInvalidation[]
+  rows?: readonly string[]
+  range?: ServerDemoMutationRangeInvalidation | null
 }
 
 type ServerDemoFillBoundaryResponse = {
@@ -76,18 +98,22 @@ type ServerDemoFillCommitResponse = {
   affectedRows?: number
   affectedCells?: number
   revision?: string | number | null
+  datasetVersion?: number | null
   canUndo?: boolean
   canRedo?: boolean
   latestUndoOperationId?: string | null
   latestRedoOperationId?: string | null
   invalidation?: DataGridDataSourceInvalidation | null
+  serverInvalidation?: ServerDemoMutationInvalidation | null
   warnings?: readonly string[]
 }
 
 type ServerDemoFillHistoryResponse = {
   operationId?: string | null
   revision?: string | number | null
+  datasetVersion?: number | null
   invalidation?: DataGridDataSourceInvalidation | null
+  serverInvalidation?: ServerDemoMutationInvalidation | null
   warnings?: readonly string[]
   affectedRows?: number
   affectedCells?: number
@@ -111,13 +137,14 @@ type ServerDemoCommitEditsResponse = {
     reason?: string | null
   }[]
   revision?: string | number | null
+  datasetVersion?: number | null
   affectedRows?: number
   affectedCells?: number
   canUndo?: boolean
   canRedo?: boolean
   latestUndoOperationId?: string | null
   latestRedoOperationId?: string | null
-  invalidation?: DataGridDataSourceInvalidation | null
+  invalidation?: ServerDemoMutationInvalidation | null
 }
 
 type ServerDemoHistoryStackRequestBody = ServerDemoHistoryScope
@@ -141,7 +168,9 @@ type ServerDemoHistoryStackResponse = {
     reason?: string | null
   }[]
   revision?: string | number | null
+  datasetVersion?: number | null
   invalidation?: DataGridDataSourceInvalidation | null
+  serverInvalidation?: ServerDemoMutationInvalidation | null
 }
 
 type ServerDemoHistoryStatusResponse = {
@@ -153,6 +182,7 @@ type ServerDemoHistoryStatusResponse = {
   canRedo: boolean
   latestUndoOperationId: string | null
   latestRedoOperationId: string | null
+  datasetVersion?: number | null
 }
 
 type ServerDemoCommitEditsResultWithOperation = ServerDemoCommitEditsResult & {
@@ -163,11 +193,14 @@ type ServerDemoCommitEditsResultWithOperation = ServerDemoCommitEditsResult & {
   latestRedoOperationId?: string | null
   affectedRows?: number
   affectedCells?: number
+  datasetVersion?: number | null
+  serverInvalidation?: ServerDemoMutationInvalidation | null
 }
 
 type ServerDemoServerOperationResult = ServerDemoCommitEditsResultWithOperation & {
   revision?: string | number | null
-  invalidation?: DataGridDataSourceInvalidation | null
+  datasetVersion?: number | null
+  serverInvalidation?: ServerDemoMutationInvalidation | null
 }
 
 type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>[0]
@@ -681,44 +714,129 @@ async function postJson<TResponse>(
   return (await response.json()) as TResponse
 }
 
+async function getJson<TResponse>(
+  fetchImpl: typeof fetch,
+  url: string,
+  signal?: AbortSignal,
+): Promise<TResponse> {
+  const response = await fetchImpl(url, {
+    method: "GET",
+    signal,
+  })
+
+  if (!response.ok) {
+    throw await parseErrorResponse(response)
+  }
+
+  return (await response.json()) as TResponse
+}
+
 function getHistogramResponseKey(entries: readonly DataGridColumnHistogramEntry[]): DataGridColumnHistogram {
   return entries
 }
 
-function normalizeDataGridInvalidation(value: unknown): DataGridDataSourceInvalidation | null {
+export function normalizeServerDemoMutationInvalidation(value: unknown): ServerDemoMutationInvalidation | null {
   if (!isRecord(value)) {
     return null
   }
-  if (value.kind === "rows") {
-    const rowIds = Array.isArray(value.rowIds)
-      ? value.rowIds
-          .filter((rowId): rowId is string | number => typeof rowId === "string" || typeof rowId === "number")
-      : null
-    if (!rowIds) {
+  const type = typeof value.type === "string" ? value.type.trim().toLowerCase() : typeof value.kind === "string" ? value.kind.trim().toLowerCase() : ""
+
+  if (type === "cell") {
+    const cells = Array.isArray(value.cells)
+      ? value.cells
+          .map(cell => {
+            if (!isRecord(cell)) {
+              return null
+            }
+            const rowId = cell.rowId
+            const columnId = cell.columnId
+            if (typeof rowId !== "string" || typeof columnId !== "string") {
+              return null
+            }
+            return { rowId, columnId }
+          })
+          .filter((cell): cell is ServerDemoMutationCellInvalidation => cell !== null)
+      : []
+    return cells.length > 0 ? { type: "cell", cells } : { type: "dataset" }
+  }
+
+  if (type === "row" || type === "rows") {
+    const rows = Array.isArray(value.rows)
+      ? value.rows.filter((rowId): rowId is string => typeof rowId === "string" && rowId.trim().length > 0).map(rowId => rowId.trim())
+      : Array.isArray(value.rowIds)
+        ? value.rowIds
+            .filter((rowId): rowId is string => typeof rowId === "string" && rowId.trim().length > 0)
+            .map(rowId => rowId.trim())
+        : []
+    return rows.length > 0 ? { type: "row", rows } : { type: "dataset" }
+  }
+
+  if (type === "range") {
+    const range = isRecord(value.range) ? value.range : null
+    const startRow = Number(range?.startRow ?? range?.start)
+    const endRow = Number(range?.endRow ?? range?.end)
+    if (!Number.isFinite(startRow) || !Number.isFinite(endRow)) {
       return null
     }
+    const startColumn = typeof range?.startColumn === "string" && range.startColumn.trim().length > 0
+      ? range.startColumn.trim()
+      : null
+    const endColumn = typeof range?.endColumn === "string" && range.endColumn.trim().length > 0
+      ? range.endColumn.trim()
+      : null
     return {
-      kind: "rows",
-      rowIds,
-      reason: typeof value.reason === "string" && value.reason.trim().length > 0 ? value.reason : undefined,
+      type: "range",
+      range: {
+        startRow: Math.max(0, Math.trunc(startRow)),
+        endRow: Math.max(0, Math.trunc(endRow)),
+        startColumn,
+        endColumn,
+      },
     }
   }
-  if (value.kind !== "range") {
+
+  if (type === "dataset") {
+    return { type: "dataset" }
+  }
+
+  return null
+}
+
+function normalizeDataGridInvalidation(value: unknown): DataGridDataSourceInvalidation | null {
+  const invalidation = normalizeServerDemoMutationInvalidation(value)
+  if (!invalidation) {
     return null
   }
-  const range = isRecord(value.range) ? value.range : null
-  const start = Number(range?.start)
-  const end = Number(range?.end)
-  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+  const rawReason = isRecord(value) && typeof value.reason === "string" && value.reason.trim().length > 0
+    ? value.reason.trim()
+    : undefined
+  if (invalidation.type === "dataset") {
+    return { kind: "all", reason: rawReason }
+  }
+  if (invalidation.type === "row") {
+    return {
+      kind: "rows",
+      rowIds: invalidation.rows ?? [],
+      reason: rawReason,
+    }
+  }
+  if (invalidation.type === "cell") {
+    return {
+      kind: "rows",
+      rowIds: [...new Set((invalidation.cells ?? []).map(cell => cell.rowId))],
+      reason: rawReason,
+    }
+  }
+  if (!invalidation.range) {
     return null
   }
   return {
     kind: "range",
     range: {
-      start: Math.max(0, Math.trunc(start)),
-      end: Math.max(0, Math.trunc(end)),
+      start: invalidation.range.startRow,
+      end: invalidation.range.endRow,
     },
-    reason: typeof value.reason === "string" && value.reason.trim().length > 0 ? value.reason : undefined,
+    reason: rawReason,
   }
 }
 
@@ -962,6 +1080,19 @@ function toServerDemoHistoryState(response: {
   }
 }
 
+function normalizeDatasetVersion(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.trunc(value))
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) {
+      return Math.max(0, Math.trunc(parsed))
+    }
+  }
+  return null
+}
+
 async function postServerOperation(
   fetchImpl: typeof fetch,
   url: string,
@@ -969,12 +1100,15 @@ async function postServerOperation(
 ): Promise<ServerDemoServerOperationResult> {
   const response = await postJson<ServerDemoCommitEditsResponse>(fetchImpl, url, {}, signal)
   const historyState = toServerDemoHistoryState(response)
+  const serverInvalidation = normalizeServerDemoMutationInvalidation(response.invalidation)
   return {
     operationId: response.operationId ?? null,
     committed: toUniqueRowCommits(response),
     rejected: toRejectedRows(response),
     revision: response.revision,
-    invalidation: response.invalidation,
+    datasetVersion: response.datasetVersion ?? normalizeDatasetVersion(response.revision),
+    invalidation: normalizeDataGridInvalidation(response.invalidation),
+    serverInvalidation,
     canUndo: historyState?.canUndo,
     canRedo: historyState?.canRedo,
     latestUndoOperationId: historyState?.latestUndoOperationId,
@@ -990,10 +1124,13 @@ async function postServerFillHistoryOperation(
 ): Promise<ServerDemoFillHistoryResponse> {
   const response = await postJson<ServerDemoCommitEditsResponse>(fetchImpl, url, {})
   const historyState = toServerDemoHistoryState(response)
+  const serverInvalidation = normalizeServerDemoMutationInvalidation(response.invalidation)
   return {
     operationId: response.operationId ?? null,
     revision: response.revision,
-    invalidation: response.invalidation,
+    datasetVersion: response.datasetVersion ?? normalizeDatasetVersion(response.revision),
+    invalidation: normalizeDataGridInvalidation(response.invalidation),
+    serverInvalidation,
     warnings: (response.rejected ?? []).map(entry => entry.reason ?? "rejected"),
     canUndo: historyState?.canUndo,
     canRedo: historyState?.canRedo,
@@ -1011,6 +1148,7 @@ async function postServerHistoryStackOperation(
   signal?: AbortSignal,
 ): Promise<ServerDemoHistoryStackResponse> {
   const response = await postJson<ServerDemoHistoryStackResponse>(fetchImpl, url, body, signal)
+  const serverInvalidation = normalizeServerDemoMutationInvalidation(response.invalidation)
   return {
     operationId: response.operationId ?? null,
     action: response.action,
@@ -1022,7 +1160,9 @@ async function postServerHistoryStackOperation(
     committedRowIds: response.committedRowIds,
     rejected: response.rejected,
     revision: response.revision,
-    invalidation: response.invalidation,
+    datasetVersion: response.datasetVersion ?? normalizeDatasetVersion(response.revision),
+    invalidation: normalizeDataGridInvalidation(response.invalidation),
+    serverInvalidation,
   }
 }
 
@@ -1035,12 +1175,65 @@ async function postServerHistoryStatusOperation(
   return await postJson<ServerDemoHistoryStatusResponse>(fetchImpl, url, body, signal)
 }
 
+export function applyServerDemoMutationInvalidation(
+  rowModel: {
+    patchRows?: (updates: readonly { rowId: string | number; data: Partial<ServerDemoRow> }[]) => void | Promise<void>
+    invalidateRange?: (range: { start: number; end: number }) => void
+    invalidateRows?: (rowIds: readonly string[]) => void
+    invalidateAll?: () => void
+  } | null | undefined,
+  invalidation: ServerDemoMutationInvalidation | null | undefined,
+  patches: readonly { rowId: string | number; data: Partial<ServerDemoRow> }[] = [],
+): void {
+  if (!rowModel || !invalidation) {
+    return
+  }
+
+  if (invalidation.type === "dataset") {
+    rowModel.invalidateAll?.()
+    return
+  }
+
+  if (invalidation.type === "range") {
+    const range = invalidation.range
+    if (!range) {
+      rowModel.invalidateAll?.()
+      return
+    }
+    rowModel.invalidateRange?.({ start: range.startRow, end: range.endRow })
+    return
+  }
+
+  if (invalidation.type === "cell") {
+    if (patches.length > 0 && typeof rowModel.patchRows === "function") {
+      rowModel.patchRows(patches)
+      return
+    }
+    const rowIds = [...new Set((invalidation.cells ?? []).map(cell => cell.rowId).filter(rowId => rowId.trim().length > 0))]
+    if (rowIds.length > 0) {
+      rowModel.invalidateRows?.(rowIds)
+      return
+    }
+    rowModel.invalidateAll?.()
+    return
+  }
+
+  const rowIds = [...new Set((invalidation.rows ?? []).map(rowId => rowId.trim()).filter(rowId => rowId.length > 0))]
+  if (rowIds.length > 0) {
+    rowModel.invalidateRows?.(rowIds)
+    return
+  }
+  rowModel.invalidateAll?.()
+}
+
 export interface ServerDemoDatasourceHttpAdapter extends DataGridDataSource<ServerDemoRow> {
   undoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult>
   redoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult>
   undoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse>
   redoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse>
   getHistoryStatus(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStatusResponse>
+  getChangesSinceVersion(request: ServerDemoChangeFeedRequest & { signal?: AbortSignal }): Promise<ServerDemoChangeFeedResponse>
+  latestDatasetVersion: number | null
 }
 
 export function createServerDemoDatasourceHttpAdapter(
@@ -1049,6 +1242,7 @@ export function createServerDemoDatasourceHttpAdapter(
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const listeners = new Set<DataGridDataSourcePushListener<ServerDemoRow>>()
   const historyScope = options.historyScope
+  let latestDatasetVersion: number | null = null
 
   return {
     async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
@@ -1059,6 +1253,7 @@ export function createServerDemoDatasourceHttpAdapter(
         sortModel: normalizeSortModel(request),
         filterModel: flattenFilterModel(request.filterModel),
       }, request.signal)
+      latestDatasetVersion = response.datasetVersion ?? normalizeDatasetVersion(response.revision) ?? latestDatasetVersion
 
       return {
         rows: response.rows.map((row, offset) => ({
@@ -1068,7 +1263,8 @@ export function createServerDemoDatasourceHttpAdapter(
         })),
         total: response.total,
         cursor: response.revision ?? null,
-      }
+        datasetVersion: latestDatasetVersion,
+      } as DataGridDataSourcePullResult<ServerDemoRow> & { datasetVersion: number | null }
     },
 
     async getColumnHistogram(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram> {
@@ -1129,6 +1325,7 @@ export function createServerDemoDatasourceHttpAdapter(
         body,
         request.signal,
       )
+      latestDatasetVersion = response.datasetVersion ?? normalizeDatasetVersion(response.revision) ?? latestDatasetVersion
       return {
         operationId: response.operationId ?? null,
         committed: toUniqueRowCommits(response),
@@ -1140,7 +1337,9 @@ export function createServerDemoDatasourceHttpAdapter(
         latestRedoOperationId: response.latestRedoOperationId ?? null,
         affectedRows: response.affectedRows,
         affectedCells: response.affectedCells,
+        datasetVersion: latestDatasetVersion,
         invalidation: normalizeDataGridInvalidation(response.invalidation),
+        serverInvalidation: normalizeServerDemoMutationInvalidation(response.invalidation),
       } as ServerDemoCommitEditsResultWithOperation
     },
 
@@ -1163,6 +1362,7 @@ export function createServerDemoDatasourceHttpAdapter(
           scope: historyScope,
         }),
       )
+      latestDatasetVersion = response.datasetVersion ?? normalizeDatasetVersion(response.revision) ?? latestDatasetVersion
       return {
         operationId: response.operationId ?? request.operationId ?? "",
         affectedRowCount: response.affectedRowCount,
@@ -1170,11 +1370,13 @@ export function createServerDemoDatasourceHttpAdapter(
         affectedRows: response.affectedRows ?? response.affectedRowCount,
         affectedCells: response.affectedCells ?? response.affectedCellCount ?? response.affectedRowCount,
         revision: response.revision,
+        datasetVersion: latestDatasetVersion,
         canUndo: response.canUndo,
         canRedo: response.canRedo,
         latestUndoOperationId: response.latestUndoOperationId ?? null,
         latestRedoOperationId: response.latestRedoOperationId ?? null,
         invalidation: normalizeDataGridInvalidation(response.invalidation),
+        serverInvalidation: normalizeServerDemoMutationInvalidation(response.invalidation),
         warnings: response.warnings ?? [],
       } as ServerDemoFillOperationResult & {
         operationId?: string | null
@@ -1189,27 +1391,44 @@ export function createServerDemoDatasourceHttpAdapter(
 
     async undoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult> {
       const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/undo`)
-      return await postServerOperation(fetchImpl, url, request.signal)
+      const result = await postServerOperation(fetchImpl, url, request.signal)
+      latestDatasetVersion = result.datasetVersion ?? latestDatasetVersion
+      return result
     },
 
     async redoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult> {
       const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/redo`)
-      return await postServerOperation(fetchImpl, url, request.signal)
+      const result = await postServerOperation(fetchImpl, url, request.signal)
+      latestDatasetVersion = result.datasetVersion ?? latestDatasetVersion
+      return result
     },
 
     async undoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse> {
       const url = resolveEndpoint(options.baseUrl, "/api/history/undo")
-      return await postServerHistoryStackOperation(fetchImpl, url, request, request.signal)
+      const result = await postServerHistoryStackOperation(fetchImpl, url, request, request.signal)
+      latestDatasetVersion = result.datasetVersion ?? latestDatasetVersion
+      return result
     },
 
     async redoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse> {
       const url = resolveEndpoint(options.baseUrl, "/api/history/redo")
-      return await postServerHistoryStackOperation(fetchImpl, url, request, request.signal)
+      const result = await postServerHistoryStackOperation(fetchImpl, url, request, request.signal)
+      latestDatasetVersion = result.datasetVersion ?? latestDatasetVersion
+      return result
     },
 
     async getHistoryStatus(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStatusResponse> {
       const url = resolveEndpoint(options.baseUrl, "/api/history/status")
-      return await postServerHistoryStatusOperation(fetchImpl, url, request, request.signal)
+      const result = await postServerHistoryStatusOperation(fetchImpl, url, request, request.signal)
+      latestDatasetVersion = result.datasetVersion ?? latestDatasetVersion
+      return result
+    },
+
+    async getChangesSinceVersion(request: ServerDemoChangeFeedRequest & { signal?: AbortSignal }): Promise<ServerDemoChangeFeedResponse> {
+      const url = resolveEndpoint(options.baseUrl, `/api/changes?sinceVersion=${encodeURIComponent(String(request.sinceVersion))}`)
+      const response = await getJson<ServerDemoChangeFeedResponse>(fetchImpl, url, request.signal)
+      latestDatasetVersion = response.datasetVersion ?? latestDatasetVersion
+      return response
     },
 
     async undoFillOperation(request: ServerDemoFillUndoRequest): Promise<ServerDemoFillUndoResult> {
@@ -1239,6 +1458,9 @@ export function createServerDemoDatasourceHttpAdapter(
       return () => {
         listeners.delete(listener)
       }
+    },
+    get latestDatasetVersion() {
+      return latestDatasetVersion
     },
   }
 }

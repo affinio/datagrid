@@ -6,7 +6,11 @@ import type {
   DataGridDataSourcePullRequest,
 } from "@affino/datagrid-vue"
 
-import { createServerDemoDatasourceHttpAdapter, ServerDemoHttpError } from "./serverDemoDatasourceHttpAdapter"
+import {
+  applyServerDemoMutationInvalidation,
+  createServerDemoDatasourceHttpAdapter,
+  ServerDemoHttpError,
+} from "./serverDemoDatasourceHttpAdapter"
 import {
   createServerDemoHistoryScope,
   resolveServerDemoHistoryScopeFromEnv,
@@ -166,6 +170,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       ],
       total: 100,
       revision: "rev-1",
+      datasetVersion: 1,
     }), {
       status: 200,
       headers: {
@@ -215,6 +220,121 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
         },
       },
     ])
+    expect(adapter.latestDatasetVersion).toBe(1)
+    expect((result as { datasetVersion?: number | null }).datasetVersion).toBe(1)
+  })
+
+  it("polls the change feed and updates the latest dataset version", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      datasetVersion: 2,
+      changes: [
+        {
+          type: "cell",
+          invalidation: {
+            type: "cell",
+            cells: [{ rowId: "srv-000010", columnId: "name" }],
+            rows: [],
+            range: null,
+          },
+          operationId: "change-1",
+          user_id: null,
+          session_id: "server-demo-session",
+        },
+      ],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ baseUrl: "http://localhost:8000", fetchImpl })
+    const result = await adapter.getChangesSinceVersion({ sinceVersion: 1 })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:8000/api/changes?sinceVersion=1")
+    expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({
+      method: "GET",
+    })
+    expect(adapter.latestDatasetVersion).toBe(2)
+    expect(result).toEqual({
+      datasetVersion: 2,
+      changes: [
+        {
+          type: "cell",
+          invalidation: {
+            type: "cell",
+            cells: [{ rowId: "srv-000010", columnId: "name" }],
+            rows: [],
+            range: null,
+          },
+          operationId: "change-1",
+          user_id: null,
+          session_id: "server-demo-session",
+        },
+      ],
+    })
+  })
+
+  it("applies cell, range, and dataset invalidations to the row model", () => {
+    const patchRows = vi.fn()
+    const invalidateRange = vi.fn()
+    const invalidateRows = vi.fn()
+    const invalidateAll = vi.fn()
+
+    applyServerDemoMutationInvalidation(
+      {
+        patchRows,
+        invalidateRange,
+        invalidateRows,
+        invalidateAll,
+      },
+      {
+        type: "cell",
+        cells: [
+          { rowId: "srv-000001", columnId: "name" },
+          { rowId: "srv-000002", columnId: "status" },
+        ],
+      },
+      [
+        { rowId: "srv-000001", data: { name: "Updated" } },
+        { rowId: "srv-000002", data: { status: "Paused" } },
+      ],
+    )
+
+    applyServerDemoMutationInvalidation(
+      {
+        patchRows,
+        invalidateRange,
+        invalidateRows,
+        invalidateAll,
+      },
+      {
+        type: "range",
+        range: { startRow: 3, endRow: 7, startColumn: "name", endColumn: "status" },
+      },
+    )
+
+    applyServerDemoMutationInvalidation(
+      {
+        patchRows,
+        invalidateRange,
+        invalidateRows,
+        invalidateAll,
+      },
+      {
+        type: "dataset",
+      },
+    )
+
+    expect(patchRows).toHaveBeenCalledTimes(1)
+    expect(patchRows).toHaveBeenCalledWith([
+      { rowId: "srv-000001", data: { name: "Updated" } },
+      { rowId: "srv-000002", data: { status: "Paused" } },
+    ])
+    expect(invalidateRange).toHaveBeenCalledWith({ start: 3, end: 7 })
+    expect(invalidateAll).toHaveBeenCalledTimes(1)
+    expect(invalidateRows).not.toHaveBeenCalled()
   })
 
   it("posts histograms, strips ignored self filters, and applies local search/limit ordering", async () => {
@@ -811,7 +931,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
         behaviorSource: "default",
       },
     })
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       operationId: "fill-123",
       affectedRowCount: 2,
       affectedCellCount: 4,
@@ -1001,7 +1121,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       referenceColumns: ["status"],
       mode: "copy",
     })
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       operationId: "fill-noop",
       affectedRowCount: 0,
       affectedCellCount: 0,

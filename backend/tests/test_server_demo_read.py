@@ -56,6 +56,7 @@ async def test_server_demo_pull_basic_range(client: AsyncClient) -> None:
     body = response.json()
     assert body["total"] == 100_000
     assert len(body["rows"]) == 50
+    assert body["datasetVersion"] == 0
 
 
 async def test_server_demo_pull_rejects_large_filtered_count_when_enabled(
@@ -118,6 +119,7 @@ async def test_server_demo_pull_region_equality_filter(client: AsyncClient) -> N
     body = response.json()
     assert body["total"] == 25_000
     assert body["revision"] == EXPECTED_SERVER_DEMO_REVISION
+    assert body["datasetVersion"] == int(EXPECTED_SERVER_DEMO_REVISION)
     assert all(row["region"] == "EMEA" for row in body["rows"])
 
 

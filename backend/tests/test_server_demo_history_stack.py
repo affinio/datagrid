@@ -167,6 +167,7 @@ async def test_history_status_reports_empty_stack(client: AsyncClient) -> None:
         "canRedo": False,
         "latestUndoOperationId": None,
         "latestRedoOperationId": None,
+        "datasetVersion": 0,
     }
 
 
@@ -188,6 +189,7 @@ async def test_history_status_tracks_commit_undo_redo_state(client: AsyncClient)
     assert commit_status["canRedo"] is False
     assert commit_status["latestUndoOperationId"] == "flow-1"
     assert commit_status["latestRedoOperationId"] is None
+    assert commit_status["datasetVersion"] == 1
 
     undo_status_code, undo_status = await stack_action(client, "undo", workspace_id=workspace_id)
     assert undo_status_code == 200
@@ -200,6 +202,7 @@ async def test_history_status_tracks_commit_undo_redo_state(client: AsyncClient)
     assert post_undo_status["canRedo"] is True
     assert post_undo_status["latestUndoOperationId"] is None
     assert post_undo_status["latestRedoOperationId"] == "flow-1"
+    assert post_undo_status["datasetVersion"] == 2
 
     redo_status_code, redo_status = await stack_action(client, "redo", workspace_id=workspace_id)
     assert redo_status_code == 200
@@ -212,6 +215,7 @@ async def test_history_status_tracks_commit_undo_redo_state(client: AsyncClient)
     assert post_redo_status["canRedo"] is False
     assert post_redo_status["latestUndoOperationId"] == "flow-1"
     assert post_redo_status["latestRedoOperationId"] is None
+    assert post_redo_status["datasetVersion"] == 3
 
 
 async def test_stack_undo_replays_cell_events_when_commit_and_request_scopes_differ(

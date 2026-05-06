@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -14,6 +14,7 @@ from app.features.server_demo.history import (
     normalize_history_scope_value,
     operation_scope_from_request,
 )
+from app.features.server_demo.models import ServerDemoChangeEvent as ServerDemoChangeEventModel
 from app.features.server_demo.models import ServerDemoCellEvent as ServerDemoCellEventModel
 from app.features.server_demo.models import ServerDemoOperation as ServerDemoOperationModel
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
@@ -178,6 +179,25 @@ class ServerDemoEditService(GridEditServiceBase):
             user_id=normalize_history_scope_value(getattr(request, "user_id", None)),
             session_id=normalize_history_scope_value(getattr(request, "session_id", None)) or None,
         )
+        if operation_id is not None and committed:
+            session.add(
+                ServerDemoChangeEventModel(
+                    revision=int(revision),
+                    workspace_id=scope_workspace_id,
+                    table_id=SERVER_DEMO_TABLE.table_id,
+                    operation_id=operation_id,
+                    user_id=normalize_history_scope_value(getattr(request, "user_id", None)),
+                    session_id=normalize_history_scope_value(getattr(request, "session_id", None)) or None,
+                    change_type="cell",
+                    invalidation={
+                        "type": "cell",
+                        "cells": [{"rowId": item.row_id, "columnId": item.column_id} for item in committed],
+                        "rows": [],
+                        "range": None,
+                    },
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
         return GridHistoryStatus(
             can_undo=status.can_undo,
             can_redo=status.can_redo,

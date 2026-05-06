@@ -73,11 +73,12 @@ class ServerDemoRow(BaseModel):
 
 
 class ServerDemoPullResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     rows: list[ServerDemoRow] = Field(default_factory=list)
     total: int
     revision: str | None = None
+    dataset_version: int = Field(alias="datasetVersion")
 
 
 class ServerDemoHistogramRequest(BaseModel):
@@ -196,11 +197,12 @@ class ServerDemoFillCommitResponse(BaseModel):
     affected_rows: int = Field(ge=0, alias="affectedRows")
     affected_cells: int = Field(ge=0, alias="affectedCells")
     revision: str
+    dataset_version: int = Field(alias="datasetVersion")
     can_undo: bool = Field(alias="canUndo")
     can_redo: bool = Field(alias="canRedo")
     latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
     latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
-    invalidation: ServerDemoEditInvalidation | None = None
+    invalidation: ServerDemoMutationInvalidation | None = None
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -266,6 +268,48 @@ class ServerDemoEditInvalidation(BaseModel):
     reason: str
 
 
+class ServerDemoMutationCellInvalidation(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    row_id: str = Field(alias="rowId")
+    column_id: str = Field(alias="columnId")
+
+
+class ServerDemoMutationRangeInvalidation(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    start_row: int = Field(ge=0, alias="startRow")
+    end_row: int = Field(ge=0, alias="endRow")
+    start_column: str | None = Field(default=None, alias="startColumn")
+    end_column: str | None = Field(default=None, alias="endColumn")
+
+
+class ServerDemoMutationInvalidation(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    type: Literal["cell", "range", "row", "dataset"]
+    cells: list[ServerDemoMutationCellInvalidation] = Field(default_factory=list)
+    rows: list[str] = Field(default_factory=list)
+    range: ServerDemoMutationRangeInvalidation | None = None
+
+
+class ServerDemoChangeFeedChange(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    type: Literal["cell", "range", "row", "dataset"]
+    invalidation: ServerDemoMutationInvalidation
+    operation_id: str | None = Field(default=None, alias="operationId")
+    user_id: str | None = None
+    session_id: str | None = None
+
+
+class ServerDemoChangeFeedResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    dataset_version: int = Field(alias="datasetVersion")
+    changes: list[ServerDemoChangeFeedChange] = Field(default_factory=list)
+
+
 class ServerDemoCommitEditsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -276,11 +320,12 @@ class ServerDemoCommitEditsResponse(BaseModel):
     affected_rows: int = Field(ge=0, alias="affectedRows")
     affected_cells: int = Field(ge=0, alias="affectedCells")
     revision: str
+    dataset_version: int = Field(alias="datasetVersion")
     can_undo: bool = Field(alias="canUndo")
     can_redo: bool = Field(alias="canRedo")
     latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
     latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
-    invalidation: ServerDemoEditInvalidation | None = None
+    invalidation: ServerDemoMutationInvalidation | None = None
 
 
 class ServerDemoHistoryStackRequest(BaseModel):
@@ -332,3 +377,4 @@ class ServerDemoHistoryStatusResponse(BaseModel):
     can_redo: bool = Field(alias="canRedo")
     latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
     latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
+    dataset_version: int = Field(alias="datasetVersion")
