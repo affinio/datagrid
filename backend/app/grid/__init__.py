@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from app.grid.columns import GridColumnDefinition
-from app.grid.contracts import GridDataAdapter
-from app.grid.projection import GridProjectionService
-from app.grid.fill import GridFillServiceBase
-from app.grid.invalidation import (
+from affino_grid_backend.core.columns import GridColumnDefinition
+from affino_grid_backend.core.contracts import GridDataAdapter
+from affino_grid_backend.core.projection import GridProjectionService
+from affino_grid_backend.fill import GridFillServiceBase
+from affino_grid_backend.core.invalidation import (
     GridInvalidation,
     GridInvalidationReasonMap,
     GridInvalidationService,
     GridRangeInvalidation,
     GridRowsInvalidation,
 )
-from app.grid.history import GridHistoryServiceBase
-from app.grid.mutations import (
+from affino_grid_backend.history import GridHistoryServiceBase
+from affino_grid_backend.core.mutations import (
     GridCommittedCell,
     GridFillMutationResult,
     GridHistoryApplyResult,
@@ -20,10 +20,10 @@ from app.grid.mutations import (
     GridRejectedCell,
     PendingGridCellEvent,
 )
-from app.grid.revision import GridRevisionService
-from app.grid.edits import GridEditServiceBase
-from app.grid.table import GridTableDefinition
-from app.grid.values import (
+from affino_grid_backend.core.revision import GridRevisionService
+from affino_grid_backend.edits import GridEditServiceBase
+from affino_grid_backend.core.table import GridTableDefinition
+from affino_grid_backend.core.values import (
     coerce_optional_int,
     json_edit_value,
     normalize_edit_int,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from affino_grid_backend.core.mutations import GridFillMutationResult
 from affino_grid_backend.fill.base import GridFillServiceBase
 
-__all__ = ["GridFillServiceBase"]
+__all__ = ["GridFillServiceBase", "GridFillMutationResult"]

@@ -1,15 +1,3 @@
-from __future__ import annotations
+from affino_grid_backend.core.revision_models import GridRevision, metadata
 
-from sqlalchemy import BigInteger, DateTime, Column, String, Table, text
-
-from app.infrastructure.db.database import Base
-
-
-GridRevision = Table(
-    "grid_revisions",
-    Base.metadata,
-    Column("table_id", String, nullable=False),
-    Column("workspace_id", String, nullable=True),
-    Column("revision", BigInteger, nullable=False, server_default=text("0")),
-    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
-)
+__all__ = ["GridRevision", "metadata"]
