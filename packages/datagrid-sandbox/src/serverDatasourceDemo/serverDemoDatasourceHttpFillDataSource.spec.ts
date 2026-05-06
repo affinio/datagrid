@@ -174,17 +174,9 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
     expect(httpCommitFillOperation).toHaveBeenCalledTimes(1)
     expect(httpUndoFillOperation).toHaveBeenCalledTimes(1)
     expect(httpRedoFillOperation).toHaveBeenCalledTimes(1)
-    expect(applyInvalidation).toHaveBeenNthCalledWith(1, {
-      type: "range",
-      range: {
-        startRow: 1,
-        endRow: 3,
-        startColumn: "status",
-        endColumn: "status",
-      },
-    })
+    expect(applyInvalidation).toHaveBeenCalledTimes(2)
+    expect(applyInvalidation).toHaveBeenNthCalledWith(1, { type: "dataset" })
     expect(applyInvalidation).toHaveBeenNthCalledWith(2, { type: "dataset" })
-    expect(applyInvalidation).toHaveBeenNthCalledWith(3, { type: "dataset" })
     expect(refreshHistoryStatus).toHaveBeenCalledTimes(2)
     expect(boundary).toMatchObject({ boundaryKind: "cache-boundary", endRowIndex: 5 })
     expect(fillResult).toMatchObject({
@@ -226,6 +218,54 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
 
     expect(httpResolveFillBoundary).not.toHaveBeenCalled()
     expect(boundary).toMatchObject({ boundaryKind: "gap", endRowIndex: 1 })
+  })
+
+  it("leaves commit range invalidation to the grid refresh path", async () => {
+    const fallback = createFallbackDataSource()
+    const applyInvalidation = vi.fn()
+    const httpCommitFillOperation = vi.fn(async () => ({
+      operationId: "fill-range",
+      affectedRowCount: 2,
+      affectedCellCount: 2,
+      revision: "rev-range",
+      canUndo: true,
+      canRedo: false,
+      serverInvalidation: {
+        type: "range" as const,
+        range: {
+          startRow: 1,
+          endRow: 2,
+          startColumn: "name",
+          endColumn: "name",
+        },
+      },
+      warnings: [],
+    }))
+    const dataSource = createServerDemoDatasourceHttpFillDataSource({
+      enabled: true,
+      fallbackDataSource: fallback,
+      httpDatasource: {
+        resolveFillBoundary: vi.fn(),
+        commitFillOperation: httpCommitFillOperation,
+        undoFillOperation: vi.fn(),
+        redoFillOperation: vi.fn(),
+      },
+      applyInvalidation,
+    })
+
+    await dataSource.commitFillOperation!({
+      operationId: "fill-range",
+      revision: "rev-before",
+      projection: createProjection(),
+      sourceRange: { start: 0, end: 0 },
+      targetRange: { start: 1, end: 2 },
+      fillColumns: ["name"],
+      referenceColumns: ["name"],
+      mode: "copy",
+    })
+
+    expect(httpCommitFillOperation).toHaveBeenCalledTimes(1)
+    expect(applyInvalidation).not.toHaveBeenCalled()
   })
 
   it("refreshes history status for legacy fill responses without history state", async () => {

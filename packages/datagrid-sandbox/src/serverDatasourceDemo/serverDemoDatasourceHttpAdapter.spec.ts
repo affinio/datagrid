@@ -986,6 +986,15 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
         range: { start: 11, end: 12 },
         reason: "server-demo-fill",
       },
+      serverInvalidation: {
+        type: "range",
+        range: {
+          startRow: 11,
+          endRow: 12,
+          startColumn: null,
+          endColumn: null,
+        },
+      },
       warnings: ["server fill committed"],
     })
   })

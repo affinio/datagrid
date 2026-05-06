@@ -2063,15 +2063,16 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
-  it("supports partial invalidation without clearing unaffected cache", async () => {
+  it("refreshes visible range invalidation without clearing cached rows first", async () => {
     const invalidate = vi.fn()
+    let generation = 0
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       async pull(request) {
         const rows = Array.from({ length: request.range.end - request.range.start + 1 }, (_, offset) => {
           const index = request.range.start + offset
           return {
             index,
-            row: { id: index, value: `row-${index}` },
+            row: { id: index, value: generation > 0 ? `row-${index}-fresh` : `row-${index}` },
           }
         })
         return {
@@ -2093,9 +2094,11 @@ describe("createDataSourceBackedRowModel", () => {
     expect(model.getRow(12)?.row.value).toBe("row-12")
     expect(model.getRow(11)?.row.value).toBe("row-11")
 
+    generation = 1
     model.invalidateRange({ start: 12, end: 13 })
-    expect(model.getRow(12)).toBeUndefined()
+    expect(model.getRow(12)?.row.value).toBe("row-12")
     expect(model.getRow(11)?.row.value).toBe("row-11")
+    expect(model.getSnapshot().loading).toBe(false)
     expect(invalidate).toHaveBeenCalledWith({
       kind: "range",
       range: { start: 12, end: 13 },
@@ -2103,8 +2106,9 @@ describe("createDataSourceBackedRowModel", () => {
     })
 
     await flushMicrotasks()
-    expect(model.getRow(12)?.row.value).toBe("row-12")
-    expect(model.getBackpressureDiagnostics().invalidatedRows).toBeGreaterThanOrEqual(2)
+    expect(model.getRow(12)?.row.value).toBe("row-12-fresh")
+    expect(model.getRow(13)?.row.value).toBe("row-13-fresh")
+    expect(model.getBackpressureDiagnostics().invalidatedRows).toBe(0)
 
     model.dispose()
   })

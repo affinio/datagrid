@@ -1421,6 +1421,7 @@ export function createServerDemoDatasourceHttpAdapter(
         }),
       )
       latestDatasetVersion = response.datasetVersion ?? normalizeDatasetVersion(response.revision) ?? latestDatasetVersion
+      const rawInvalidation = response.serverInvalidation ?? response.invalidation
       return {
         operationId: response.operationId ?? request.operationId ?? "",
         affectedRowCount: response.affectedRowCount,
@@ -1433,8 +1434,8 @@ export function createServerDemoDatasourceHttpAdapter(
         canRedo: response.canRedo,
         latestUndoOperationId: response.latestUndoOperationId ?? null,
         latestRedoOperationId: response.latestRedoOperationId ?? null,
-        invalidation: normalizeDataGridInvalidation(response.invalidation),
-        serverInvalidation: normalizeServerDemoMutationInvalidation(response.invalidation),
+        invalidation: normalizeDataGridInvalidation(rawInvalidation),
+        serverInvalidation: normalizeServerDemoMutationInvalidation(rawInvalidation),
         warnings: response.warnings ?? [],
       } as ServerDemoFillOperationResult & {
         operationId?: string | null

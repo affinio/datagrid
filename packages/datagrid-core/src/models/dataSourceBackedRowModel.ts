@@ -116,6 +116,7 @@ interface InFlightPull {
   promise: Promise<void>
   priority: DataGridDataSourcePullPriority
   reason: DataGridDataSourcePullReason
+  affectsLoading: boolean
 }
 
 interface PendingPull {
@@ -129,6 +130,7 @@ interface PendingPull {
 
 interface PullRangeOptions {
   replaceCacheOnSuccess?: boolean
+  affectsLoading?: boolean
 }
 
 interface OptimisticEditTransaction<T> {
@@ -445,7 +447,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   function updateLoadingState() {
     const hasVisibleCache = rowCache.size > 0
-    const criticalLoading = Boolean(criticalInFlight)
+    const criticalLoading = Boolean(criticalInFlight?.affectsLoading)
     initialLoading = !hasVisibleCache && criticalLoading
     refreshing = hasVisibleCache && criticalLoading
     loading = initialLoading || refreshing
@@ -896,14 +898,21 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return true
   }
 
-  function clearRange(range: DataGridViewportRange) {
+  function clearRange(
+    range: DataGridViewportRange,
+    options: { preserveRange?: DataGridViewportRange | null } = {},
+  ) {
     const normalized = normalizeRequestedRange(range)
     const bounded = normalizeViewportRange(normalized, rowCount)
+    const preserveRange = options.preserveRange ? normalizeRequestedRange(options.preserveRange) : null
     if (rowCount <= 0) {
       return
     }
     let changed = false
     for (let index = bounded.start; index <= bounded.end; index += 1) {
+      if (preserveRange && index >= preserveRange.start && index <= preserveRange.end) {
+        continue
+      }
       if (rowCache.delete(index)) {
         diagnostics.invalidatedRows += 1
         changed = true
@@ -1493,6 +1502,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       promise: requestPromise,
       priority,
       reason,
+      affectsLoading: options?.affectsLoading !== false,
     })
 
     return requestPromise
@@ -1517,15 +1527,18 @@ export function createDataSourceBackedRowModel<T = unknown>(
       return
     }
 
-    clearRange(invalidation.range)
-    if (backgroundInFlight && rangesOverlap(backgroundInFlight.range, normalizeRequestedRange(invalidation.range))) {
+    const normalizedInvalidationRange = normalizeRequestedRange(invalidation.range)
+    const sourceViewport = toSourceRange(viewportRange)
+    const touchesViewport = rangesOverlap(normalizedInvalidationRange, sourceViewport)
+    clearRange(invalidation.range, touchesViewport ? { preserveRange: sourceViewport } : {})
+    if (backgroundInFlight && rangesOverlap(backgroundInFlight.range, normalizedInvalidationRange)) {
       clearBackgroundPrefetchState("stale")
     }
     if (typeof dataSource.invalidate === "function") {
       void Promise.resolve(dataSource.invalidate(invalidation))
     }
-    if (rangesOverlap(normalizeRequestedRange(invalidation.range), toSourceRange(viewportRange))) {
-      void pullRange(toSourceRange(viewportRange), "push-invalidation", "normal")
+    if (touchesViewport) {
+      void pullRange(sourceViewport, "push-invalidation", "normal", null, { affectsLoading: false })
     } else {
       emit()
     }
@@ -2113,7 +2126,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
       ensureActive()
       const sourceRange = toSourceRange(range)
       const invalidation: DataGridDataSourceInvalidation = { kind: "range", range: sourceRange, reason: "model-range" }
-      clearRange(sourceRange)
+      const normalizedSourceRange = normalizeRequestedRange(sourceRange)
+      const sourceViewport = toSourceRange(viewportRange)
+      const touchesViewport = rangesOverlap(normalizedSourceRange, sourceViewport)
+      clearRange(sourceRange, touchesViewport ? { preserveRange: sourceViewport } : {})
       if (backgroundInFlight && rangesOverlap(backgroundInFlight.range, sourceRange)) {
         clearBackgroundPrefetchState("stale")
       }
@@ -2125,8 +2141,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate(invalidation))
       }
-      if (rangesOverlap(normalizeRequestedRange(sourceRange), toSourceRange(viewportRange))) {
-        void pullRange(toSourceRange(viewportRange), "invalidation", "normal")
+      if (touchesViewport) {
+        void pullRange(sourceViewport, "invalidation", "normal", null, { affectsLoading: false })
       } else {
         emit()
       }

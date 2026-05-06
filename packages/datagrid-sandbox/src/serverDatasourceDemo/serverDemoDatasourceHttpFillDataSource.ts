@@ -47,7 +47,6 @@ export function createServerDemoDatasourceHttpFillDataSource(
         throw new Error("Server demo HTTP adapter does not implement commitFillOperation")
       }
       const result = await commitFillOperation(request)
-      await options.applyInvalidation?.(result.serverInvalidation ?? { type: "dataset" })
       if (shouldRefreshHistoryStatusAfterCommit(result)) {
         await options.refreshHistoryStatus?.()
       }
