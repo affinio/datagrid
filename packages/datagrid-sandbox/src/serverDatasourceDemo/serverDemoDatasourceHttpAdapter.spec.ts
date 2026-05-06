@@ -452,7 +452,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       type: "upsert",
       rows: [
         {
-          index: 9,
+          index: 10,
           rowId: "srv-000010",
           row: {
             id: "srv-000010",
@@ -478,6 +478,47 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     unsubscribeDiagnostics()
     unsubscribe()
     expect(diagnosticsUpdates.length).toBeGreaterThan(0)
+  })
+
+  it("emits server row snapshots as cache-only upserts", () => {
+    const adapter = createServerDemoDatasourceHttpAdapter()
+    const pushed = vi.fn()
+    const unsubscribe = adapter.subscribe!(pushed)
+
+    expect(adapter.applyRowSnapshots([
+      {
+        id: "srv-000010",
+        index: 10,
+        name: "Account 00010",
+        segment: "Growth",
+        status: "Active",
+        region: "EMEA",
+        value: 910,
+        updatedAt: "2025-01-01T00:00:10Z",
+      },
+    ])).toBe(true)
+
+    expect(pushed).toHaveBeenCalledWith({
+      type: "upsert",
+      rows: [
+        {
+          index: 10,
+          rowId: "srv-000010",
+          row: {
+            id: "srv-000010",
+            index: 10,
+            name: "Account 00010",
+            segment: "Growth",
+            status: "Active",
+            region: "EMEA",
+            value: 910,
+            updatedAt: "2025-01-01T00:00:10Z",
+          },
+        },
+      ],
+    })
+
+    unsubscribe()
   })
 
   it("emits range invalidations and dataset fallbacks from the change feed", async () => {
@@ -526,7 +567,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     })
   })
 
-  it("polls from the latest seen version after a mutation response", async () => {
+  it("does not advance the change-feed cursor from mutation responses", async () => {
     const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
       const resolvedUrl = String(url)
       if (resolvedUrl.includes("/api/server-demo/edits")) {
@@ -567,35 +608,27 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
 
     const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
     await adapter.commitEdits!(createCommitEditsRequest())
-    expect(adapter.lastSeenVersion).toBe(7)
+    expect(adapter.latestDatasetVersion).toBe(7)
+    expect(adapter.lastSeenVersion).toBeNull()
 
     vi.useFakeTimers()
     adapter.startChangeFeedPolling({ intervalMs: 250 })
     await vi.advanceTimersByTimeAsync(0)
 
     const lastCall = fetchImpl.mock.calls[fetchImpl.mock.calls.length - 1]
-    expect(String(lastCall?.[0])).toContain("/api/changes?sinceVersion=7")
+    expect(String(lastCall?.[0])).toContain("/api/changes?sinceVersion=0")
     adapter.stopChangeFeedPolling()
   })
 
-  it("moves the polling cursor back when undo returns an older authoritative dataset version", async () => {
+  it("keeps the change-feed cursor on the feed revision after scoped history responses", async () => {
     const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
       const resolvedUrl = String(url)
-      if (resolvedUrl.includes("/api/server-demo/edits")) {
+      if (resolvedUrl.includes("/api/server-demo/pull")) {
         return new Response(JSON.stringify({
-          operationId: "op-inline-1",
-          committed: [{ rowId: "srv-000001", columnId: "name", revision: "rev-row-1" }],
-          committedRowIds: ["srv-000001"],
-          rejected: [],
-          affectedRows: 1,
-          affectedCells: 1,
-          revision: "rev-global-7",
-          datasetVersion: 7,
-          canUndo: true,
-          canRedo: false,
-          latestUndoOperationId: "op-inline-1",
-          latestRedoOperationId: null,
-          invalidation: null,
+          rows: [],
+          total: 0,
+          revision: "rev-feed-1",
+          datasetVersion: 1,
         }), {
           status: 200,
           headers: {
@@ -609,8 +642,11 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
           committed: [{ rowId: "srv-000001", columnId: "name", revision: "rev-row-1" }],
           committedRowIds: ["srv-000001"],
           rejected: [],
-          revision: "rev-global-4",
-          datasetVersion: 4,
+          action: "undo",
+          affectedRows: 1,
+          affectedCells: 1,
+          revision: "rev-scoped-3",
+          datasetVersion: 3,
           canUndo: true,
           canRedo: true,
           latestUndoOperationId: "op-inline-0",
@@ -625,7 +661,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       }
       if (resolvedUrl.includes("/api/changes")) {
         return new Response(JSON.stringify({
-          datasetVersion: 4,
+          datasetVersion: 1,
           changes: [],
         }), {
           status: 200,
@@ -638,20 +674,89 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     })
 
     const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
-    await adapter.commitEdits!(createCommitEditsRequest())
-    expect(adapter.lastSeenVersion).toBe(7)
+    await adapter.pull(createAbortablePullRequest())
+    expect(adapter.lastSeenVersion).toBe(1)
 
     await adapter.undoHistoryStack({
       workspace_id: "server-demo-sandbox",
       table_id: "server_demo",
       session_id: "server-demo-session",
     })
-    expect(adapter.lastSeenVersion).toBe(4)
+    expect(adapter.latestDatasetVersion).toBe(3)
+    expect(adapter.lastSeenVersion).toBe(1)
 
-    const response = await adapter.getChangesSinceVersion({ sinceVersion: 4 })
-    expect(response.datasetVersion).toBe(4)
+    const response = await adapter.getChangesSinceVersion({ sinceVersion: 1 })
+    expect(response.datasetVersion).toBe(1)
     const lastCall = fetchImpl.mock.calls[fetchImpl.mock.calls.length - 1]
-    expect(String(lastCall?.[0])).toContain("/api/changes?sinceVersion=4")
+    expect(String(lastCall?.[0])).toContain("/api/changes?sinceVersion=1")
+  })
+
+  it("resets stale change-feed cursors when the backend reports invalid sinceVersion", async () => {
+    vi.useFakeTimers()
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    let changeRequests = 0
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const resolvedUrl = String(url)
+      if (resolvedUrl.includes("/api/server-demo/pull")) {
+        return new Response(JSON.stringify({
+          rows: [],
+          total: 0,
+          revision: "rev-feed-5",
+          datasetVersion: 5,
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      }
+      if (resolvedUrl.includes("/api/changes")) {
+        changeRequests += 1
+        if (changeRequests === 1) {
+          return new Response(JSON.stringify({
+            code: "invalid-since-version",
+            message: "sinceVersion cannot be greater than the current dataset version",
+          }), {
+            status: 400,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          })
+        }
+        return new Response(JSON.stringify({
+          datasetVersion: 0,
+          changes: [],
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      }
+      throw new Error(`unexpected request: ${resolvedUrl}`)
+    })
+
+    try {
+      const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+      await adapter.pull(createAbortablePullRequest())
+      expect(adapter.lastSeenVersion).toBe(5)
+
+      adapter.startChangeFeedPolling({ intervalMs: 250 })
+      await vi.advanceTimersByTimeAsync(0)
+      await Promise.resolve()
+      expect(String(fetchImpl.mock.calls[fetchImpl.mock.calls.length - 1]?.[0])).toContain("/api/changes?sinceVersion=5")
+      expect(adapter.lastSeenVersion).toBe(0)
+      expect(warnSpy).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(250)
+      await Promise.resolve()
+      expect(String(fetchImpl.mock.calls[fetchImpl.mock.calls.length - 1]?.[0])).toContain("/api/changes?sinceVersion=0")
+      expect(adapter.lastSeenVersion).toBe(0)
+      adapter.stopChangeFeedPolling()
+    } finally {
+      warnSpy.mockRestore()
+      vi.useRealTimers()
+    }
   })
 
   it("applies cell, range, and dataset invalidations to the row model", () => {
@@ -1590,6 +1695,75 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     expect(fetchImpl.mock.calls[1]?.[0]).toBe("http://localhost:8000/api/server-demo/operations/fill-123/redo")
   })
 
+  it("preserves row snapshots on explicit undo and redo operation responses", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const isRedo = String(url).includes("/redo")
+      return new Response(JSON.stringify({
+        operationId: isRedo ? "redo-op-1" : "undo-op-1",
+        committed: [{ rowId: "srv-000021", columnId: "name", revision: "rev-op" }],
+        committedRowIds: ["srv-000021"],
+        rejected: [],
+        revision: "rev-op",
+        datasetVersion: 21,
+        canUndo: !isRedo,
+        canRedo: isRedo,
+        latestUndoOperationId: isRedo ? "undo-op-1" : null,
+        latestRedoOperationId: isRedo ? null : "redo-op-1",
+        invalidation: {
+          kind: "cell",
+          cells: [{ rowId: "srv-000021", columnId: "name" }],
+          reason: "server-demo-operation",
+        },
+        rows: [
+          {
+            id: "srv-000021",
+            index: 21,
+            name: isRedo ? "Redo Snapshot" : "Undo Snapshot",
+            segment: "Growth",
+            status: "Active",
+            region: "EMEA",
+            value: 21,
+            updatedAt: "2025-01-01T00:00:21Z",
+          },
+        ],
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+    })
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ baseUrl: "http://localhost:8000", fetchImpl })
+    const undoResult = await adapter.undoOperation({ operationId: "op-1" })
+    const redoResult = await adapter.redoOperation({ operationId: "op-1" })
+
+    expect(undoResult.rows).toEqual([
+      {
+        id: "srv-000021",
+        index: 21,
+        name: "Undo Snapshot",
+        segment: "Growth",
+        status: "Active",
+        region: "EMEA",
+        value: 21,
+        updatedAt: "2025-01-01T00:00:21Z",
+      },
+    ])
+    expect(redoResult.rows).toEqual([
+      {
+        id: "srv-000021",
+        index: 21,
+        name: "Redo Snapshot",
+        segment: "Growth",
+        status: "Active",
+        region: "EMEA",
+        value: 21,
+        updatedAt: "2025-01-01T00:00:21Z",
+      },
+    ])
+  })
+
   it("routes stack undo and redo through the history endpoints with scoped payloads", async () => {
     const scope = createServerDemoHistoryScope({
       user_id: "user-1",
@@ -1602,6 +1776,8 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
         action,
         canUndo: action === "undo",
         canRedo: action === "redo",
+        latestUndoOperationId: action === "redo" ? "undo-stack-123" : null,
+        latestRedoOperationId: action === "undo" ? "redo-stack-123" : null,
         affectedRows: 2,
         affectedCells: 3,
         committed: [],
@@ -1658,6 +1834,8 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       action: "undo",
       canUndo: true,
       canRedo: false,
+      latestUndoOperationId: null,
+      latestRedoOperationId: "redo-stack-123",
       affectedRows: 2,
       affectedCells: 3,
       rows: [
@@ -1678,6 +1856,8 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       action: "redo",
       canUndo: false,
       canRedo: true,
+      latestUndoOperationId: "undo-stack-123",
+      latestRedoOperationId: null,
       affectedRows: 2,
       affectedCells: 3,
       rows: [

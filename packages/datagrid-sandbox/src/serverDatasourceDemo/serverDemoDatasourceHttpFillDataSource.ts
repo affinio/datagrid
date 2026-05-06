@@ -20,7 +20,7 @@ export interface CreateServerDemoDatasourceHttpFillDataSourceOptions {
   fallbackDataSource: DataGridDataSource<ServerDemoRow>
   httpDatasource: ServerDemoHttpFillDatasource | null
   refreshHistoryStatus?: () => Promise<void> | void
-  applyRowPatches?: (updates: readonly { rowId: string | number; data: Partial<ServerDemoRow> }[]) => void | Promise<void>
+  applyRowSnapshots?: (rows: readonly ServerDemoRow[]) => void | Promise<void>
   applyInvalidation?: (invalidation: ServerDemoMutationInvalidation | null | undefined) => void | Promise<void>
 }
 
@@ -59,11 +59,8 @@ export function createServerDemoDatasourceHttpFillDataSource(
         throw new Error("Server demo HTTP adapter does not implement undoFillOperation")
       }
       const result = await undoFillOperation(request)
-      if (Array.isArray(result.rows) && result.rows.length > 0 && options.applyRowPatches) {
-        await options.applyRowPatches(result.rows.map(row => ({
-          rowId: row.id,
-          data: row,
-        })))
+      if (Array.isArray(result.rows) && result.rows.length > 0 && options.applyRowSnapshots) {
+        await options.applyRowSnapshots(result.rows)
       } else {
         await options.applyInvalidation?.(result.serverInvalidation ?? { type: "dataset" })
       }
@@ -76,11 +73,8 @@ export function createServerDemoDatasourceHttpFillDataSource(
         throw new Error("Server demo HTTP adapter does not implement redoFillOperation")
       }
       const result = await redoFillOperation(request)
-      if (Array.isArray(result.rows) && result.rows.length > 0 && options.applyRowPatches) {
-        await options.applyRowPatches(result.rows.map(row => ({
-          rowId: row.id,
-          data: row,
-        })))
+      if (Array.isArray(result.rows) && result.rows.length > 0 && options.applyRowSnapshots) {
+        await options.applyRowSnapshots(result.rows)
       } else {
         await options.applyInvalidation?.(result.serverInvalidation ?? { type: "dataset" })
       }

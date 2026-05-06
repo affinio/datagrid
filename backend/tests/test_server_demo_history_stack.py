@@ -148,6 +148,8 @@ async def test_stack_undo_without_operation_id_uses_latest_operation(client: Asy
     assert body["canRedo"] is True
     assert body["affectedRows"] == 1
     assert body["affectedCells"] == 1
+    assert body["rows"][0]["id"] == row_id
+    assert body["rows"][0]["name"] == "First"
     assert await pull_name(client, workspace_id=workspace_id) == "First"
 
 
@@ -296,6 +298,8 @@ async def test_stack_redo_without_operation_id_redoes_latest_undone_operation(cl
     assert body["action"] == "redo"
     assert body["canUndo"] is True
     assert body["canRedo"] is False
+    assert body["rows"][0]["id"] == row_id
+    assert body["rows"][0]["name"] == "Second"
     assert await pull_name(client, workspace_id=workspace_id) == "Second"
 
 
@@ -360,6 +364,8 @@ async def test_operation_id_based_undo_redo_still_works(client: AsyncClient) -> 
     )
     assert undo_response.status_code == 200
     assert undo_response.json()["operationId"] == operation_id
+    assert undo_response.json()["rows"][0]["id"] == row_id
+    assert undo_response.json()["rows"][0]["name"] == "Account 00000"
     assert await pull_name(client, workspace_id=workspace_id) == "Account 00000"
 
     redo_response = await client.post(
@@ -368,4 +374,6 @@ async def test_operation_id_based_undo_redo_still_works(client: AsyncClient) -> 
     )
     assert redo_response.status_code == 200
     assert redo_response.json()["operationId"] == operation_id
+    assert redo_response.json()["rows"][0]["id"] == row_id
+    assert redo_response.json()["rows"][0]["name"] == "Explicit"
     assert await pull_name(client, workspace_id=workspace_id) == "Explicit"

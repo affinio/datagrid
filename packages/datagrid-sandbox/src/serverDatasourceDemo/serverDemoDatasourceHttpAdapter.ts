@@ -183,6 +183,8 @@ type ServerDemoHistoryStackResponse = {
   datasetVersion?: number | null
   invalidation?: DataGridDataSourceInvalidation | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
   rows?: readonly ServerDemoRow[]
 }
 
@@ -208,6 +210,7 @@ type ServerDemoCommitEditsResultWithOperation = ServerDemoCommitEditsResult & {
   affectedCells?: number
   datasetVersion?: number | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
+  rows?: readonly ServerDemoRow[]
 }
 
 type ServerDemoServerOperationResult = ServerDemoCommitEditsResultWithOperation & {
@@ -991,7 +994,7 @@ function normalizeChangeFeedRows(
       continue
     }
     normalized.push({
-      index: Math.max(0, Math.trunc(rawRow.index) - 1),
+      index: Math.max(0, Math.trunc(rawRow.index)),
       rowId: rawRow.id,
       row: rawRow,
     })
@@ -1274,6 +1277,7 @@ async function postServerOperation(
     latestRedoOperationId: historyState?.latestRedoOperationId,
     affectedRows: historyState?.affectedRows ?? undefined,
     affectedCells: historyState?.affectedCells ?? undefined,
+    rows: response.rows ?? [],
   }
 }
 
@@ -1322,6 +1326,8 @@ async function postServerHistoryStackOperation(
     datasetVersion: response.datasetVersion ?? normalizeDatasetVersion(response.revision),
     invalidation: normalizeDataGridInvalidation(response.invalidation),
     serverInvalidation,
+    latestUndoOperationId: response.latestUndoOperationId ?? null,
+    latestRedoOperationId: response.latestRedoOperationId ?? null,
     rows: response.rows ?? [],
   }
 }
@@ -1399,6 +1405,7 @@ export interface ServerDemoDatasourceHttpAdapter extends DataGridDataSource<Serv
   stopChangeFeedPolling(): void
   getChangeFeedDiagnostics(): ServerDemoChangeFeedDiagnostics
   subscribeChangeFeedDiagnostics(listener: (diagnostics: ServerDemoChangeFeedDiagnostics) => void): () => void
+  applyRowSnapshots(rows: readonly (ServerDemoRow | ServerDemoDataSourceRowEntry)[]): boolean
 }
 
 export function createServerDemoDatasourceHttpAdapter(
@@ -1447,6 +1454,15 @@ export function createServerDemoDatasourceHttpAdapter(
       lastSeenVersion = normalizedVersion
     }
     emitChangeFeedDiagnostics()
+  }
+
+  function resetChangeFeedCursor(): void {
+    lastSeenVersion = 0
+    emitChangeFeedDiagnostics()
+  }
+
+  function isInvalidSinceVersionError(caught: unknown): boolean {
+    return caught instanceof ServerDemoHttpError && caught.code === "invalid-since-version"
   }
 
   function emitPushEvent(event: DataGridDataSourcePushEvent<ServerDemoRow>): void {
@@ -1515,7 +1531,7 @@ export function createServerDemoDatasourceHttpAdapter(
       return
     }
     const requestGeneration = changeFeedPollGeneration
-    const sinceVersion = lastSeenVersion ?? latestDatasetVersion ?? 0
+    const sinceVersion = lastSeenVersion ?? 0
     const controller = new AbortController()
     changeFeedPollAbortController = controller
     changeFeedPollRequestedSinceVersion = sinceVersion
@@ -1528,7 +1544,9 @@ export function createServerDemoDatasourceHttpAdapter(
       }
       applyChangeFeedResponse(response, sinceVersion)
     } catch (caught) {
-      if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+      if (isInvalidSinceVersionError(caught)) {
+        resetChangeFeedCursor()
+      } else if (!(caught instanceof DOMException && caught.name === "AbortError")) {
         console.warn("Server demo change feed polling failed", caught)
       }
     } finally {
@@ -1538,6 +1556,18 @@ export function createServerDemoDatasourceHttpAdapter(
       changeFeedPollInFlight = false
       emitChangeFeedDiagnostics()
     }
+  }
+
+  function applyRowSnapshots(rows: readonly (ServerDemoRow | ServerDemoDataSourceRowEntry)[]): boolean {
+    const normalizedRows = normalizeChangeFeedRows(rows)
+    if (!normalizedRows || normalizedRows.length === 0) {
+      return false
+    }
+    emitPushEvent({
+      type: "upsert",
+      rows: normalizedRows,
+    })
+    return true
   }
 
   function startChangeFeedPolling(options: ServerDemoDatasourceHttpAdapterChangeFeedOptions = {}): void {
@@ -1653,7 +1683,7 @@ export function createServerDemoDatasourceHttpAdapter(
         body,
         request.signal,
       )
-      updateDatasetVersion(response.datasetVersion ?? normalizeDatasetVersion(response.revision), true)
+      updateDatasetVersion(response.datasetVersion ?? normalizeDatasetVersion(response.revision))
       return {
         operationId: response.operationId ?? null,
         committed: toUniqueRowCommits(response),
@@ -1691,7 +1721,7 @@ export function createServerDemoDatasourceHttpAdapter(
           scope: historyScope,
         }),
       )
-      updateDatasetVersion(response.datasetVersion ?? normalizeDatasetVersion(response.revision), true)
+      updateDatasetVersion(response.datasetVersion ?? normalizeDatasetVersion(response.revision))
       const rawInvalidation = response.serverInvalidation ?? response.invalidation
       return {
         operationId: response.operationId ?? request.operationId ?? "",
@@ -1723,35 +1753,35 @@ export function createServerDemoDatasourceHttpAdapter(
     async undoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult> {
       const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/undo`)
       const result = await postServerOperation(fetchImpl, url, request.signal)
-      updateDatasetVersion(result.datasetVersion, true)
+      updateDatasetVersion(result.datasetVersion)
       return result
     },
 
     async redoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult> {
       const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/redo`)
       const result = await postServerOperation(fetchImpl, url, request.signal)
-      updateDatasetVersion(result.datasetVersion, true)
+      updateDatasetVersion(result.datasetVersion)
       return result
     },
 
     async undoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse> {
       const url = resolveEndpoint(options.baseUrl, "/api/history/undo")
       const result = await postServerHistoryStackOperation(fetchImpl, url, request, request.signal)
-      updateDatasetVersion(result.datasetVersion, true)
+      updateDatasetVersion(result.datasetVersion)
       return result
     },
 
     async redoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse> {
       const url = resolveEndpoint(options.baseUrl, "/api/history/redo")
       const result = await postServerHistoryStackOperation(fetchImpl, url, request, request.signal)
-      updateDatasetVersion(result.datasetVersion, true)
+      updateDatasetVersion(result.datasetVersion)
       return result
     },
 
     async getHistoryStatus(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStatusResponse> {
       const url = resolveEndpoint(options.baseUrl, "/api/history/status")
       const result = await postServerHistoryStatusOperation(fetchImpl, url, request, request.signal)
-      updateDatasetVersion(result.datasetVersion, true)
+      updateDatasetVersion(result.datasetVersion)
       return result
     },
 
@@ -1794,6 +1824,7 @@ export function createServerDemoDatasourceHttpAdapter(
         listeners.delete(listener)
       }
     },
+    applyRowSnapshots,
     get latestDatasetVersion() {
       return latestDatasetVersion
     },

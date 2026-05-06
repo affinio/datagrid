@@ -607,6 +607,8 @@ const commitDetailsText = ref("none")
 const serverHistoryCanUndo = ref(false)
 const serverHistoryCanRedo = ref(false)
 const serverHistoryLastOperationIdText = ref("none")
+const serverHistoryLatestUndoOperationId = ref<string | null>(null)
+const serverHistoryLatestRedoOperationId = ref<string | null>(null)
 const serverHistoryAffectedRowsText = ref("0")
 const serverHistoryAffectedCellsText = ref("0")
 const clientBatchAppliedText = ref("no")
@@ -698,6 +700,7 @@ const lastAggregationRequestText = ref("none")
 const aggregateResponseRowsText = ref("0")
 const aggregatePreviewRowsText = ref("none")
 let rowModel: any = null
+let historyStatusRequestGeneration = 0
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
 const statuses = ["Active", "Paused", "Closed"] as const
@@ -1958,7 +1961,9 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
       applyInvalidation: serverDemoChangeFeedPollingEnabled
         ? undefined
         : invalidation => applyServerDemoMutationInvalidation(rowModel, invalidation),
-      applyRowPatches: updates => rowModel.patchRows?.(updates),
+      applyRowSnapshots: rows => {
+        serverDemoHttpDatasource.applyRowSnapshots(rows)
+      },
     }),
       async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
         if (serverDatasourceUnavailable.value) {
@@ -2059,6 +2064,7 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
             affectedRowCount,
             result.committed?.length ?? 0,
           )
+          invalidateHistoryStatusRefreshes()
           if (!historyApplied) {
             syncHistoryDiagnostics({
               operationId: result.operationId ?? null,
@@ -2066,6 +2072,8 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
               canRedo: false,
               affectedRows: affectedRowCount,
               affectedCells: result.committed?.length ?? 0,
+              latestUndoOperationId: result.latestUndoOperationId ?? null,
+              latestRedoOperationId: result.latestRedoOperationId ?? null,
               action: "commit",
             })
             void refreshHistoryStatus()
@@ -2614,9 +2622,17 @@ function syncHistoryDiagnostics(result: {
   affectedCells?: number | null
   action?: "undo" | "redo" | "commit" | string | null
   resetAffected?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
 }): void {
   if (typeof result.operationId === "string" && result.operationId.trim().length > 0) {
     serverHistoryLastOperationIdText.value = result.operationId
+  }
+  if ("latestUndoOperationId" in result) {
+    serverHistoryLatestUndoOperationId.value = result.latestUndoOperationId ?? null
+  }
+  if ("latestRedoOperationId" in result) {
+    serverHistoryLatestRedoOperationId.value = result.latestRedoOperationId ?? null
   }
   if (typeof result.canUndo === "boolean") {
     serverHistoryCanUndo.value = result.canUndo
@@ -2640,6 +2656,10 @@ function syncHistoryDiagnostics(result: {
   lastEditRecordedText.value = `op=${operationId} rows=${serverHistoryAffectedRowsText.value} cells=${serverHistoryAffectedCellsText.value}`
 }
 
+function invalidateHistoryStatusRefreshes(): void {
+  historyStatusRequestGeneration += 1
+}
+
 function applyCommitHistoryDiagnostics(
   result: unknown,
   fallbackAffectedRows: number,
@@ -2655,6 +2675,8 @@ function applyCommitHistoryDiagnostics(
     canRedo: historyState.canRedo,
     affectedRows: historyState.affectedRows ?? fallbackAffectedRows,
     affectedCells: historyState.affectedCells ?? fallbackAffectedCells,
+    latestUndoOperationId: historyState.latestUndoOperationId ?? null,
+    latestRedoOperationId: historyState.latestRedoOperationId ?? null,
     action: "commit",
   })
   return true
@@ -2663,14 +2685,11 @@ function applyCommitHistoryDiagnostics(
 async function applyServerDemoRowSnapshots(
   rows: readonly ServerDemoRow[] | null | undefined,
 ): Promise<boolean> {
-  if (!rowModel || typeof rowModel.patchRows !== "function" || !rows || rows.length === 0) {
+  const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
+  if (!serverDatasource || !rows || rows.length === 0) {
     return false
   }
-  await Promise.resolve(rowModel.patchRows(rows.map(row => ({
-    rowId: row.id,
-    data: row,
-  }))))
-  return true
+  return serverDatasource.applyRowSnapshots(rows)
 }
 
 function applyHistoryStatusDiagnostics(result: {
@@ -2681,6 +2700,8 @@ function applyHistoryStatusDiagnostics(result: {
 }): void {
   serverHistoryCanUndo.value = result.canUndo
   serverHistoryCanRedo.value = result.canRedo
+  serverHistoryLatestUndoOperationId.value = result.latestUndoOperationId
+  serverHistoryLatestRedoOperationId.value = result.latestRedoOperationId
   serverHistoryLastOperationIdText.value = result.latestUndoOperationId ?? result.latestRedoOperationId ?? "none"
 }
 
@@ -2693,10 +2714,14 @@ async function refreshHistoryStatus(): Promise<void> {
   if (typeof historyStatus !== "function") {
     return
   }
+  const requestGeneration = historyStatusRequestGeneration
   try {
     const result: ServerDemoHistoryStatusResponse = await historyStatus({
       ...serverDemoHistoryScope,
     })
+    if (requestGeneration !== historyStatusRequestGeneration) {
+      return
+    }
     applyHistoryStatusDiagnostics(result)
   } catch (caught) {
     if (caught instanceof Error && caught.name === "AbortError") {
@@ -2715,42 +2740,46 @@ async function runHistoryAction(direction: "undo" | "redo"): Promise<string | nu
       ? serverDatasource?.undoHistoryStack
       : serverDatasource?.redoHistoryStack
     if (typeof historyAction === "function") {
-      try {
-        const result = await historyAction({
-          ...serverDemoHistoryScope,
-        })
-        const snapshotsApplied = await applyServerDemoRowSnapshots(result.rows)
-        if (!snapshotsApplied && result.serverInvalidation) {
-          applyServerDemoMutationInvalidation(rowModel, result.serverInvalidation)
-        } else if (!snapshotsApplied) {
-          await rowModel.refresh("manual")
-        }
-        syncHistoryDiagnostics({
-          operationId: result.operationId ?? null,
-          canUndo: result.canUndo,
-          canRedo: result.canRedo,
-          affectedRows: result.affectedRows,
-          affectedCells: result.affectedCells,
-          action: result.action,
-        })
-        gridRef.value?.restoreFocus?.()
-        return result.operationId ?? null
-      } catch (caught) {
-        throw caught
+      const result = await historyAction({
+        ...serverDemoHistoryScope,
+      })
+      invalidateHistoryStatusRefreshes()
+      const snapshotsApplied = await applyServerDemoRowSnapshots(result.rows)
+      if (!snapshotsApplied && result.serverInvalidation) {
+        applyServerDemoMutationInvalidation(rowModel, result.serverInvalidation)
+      } else if (!snapshotsApplied) {
+        await rowModel.refresh("manual")
       }
+      syncHistoryDiagnostics({
+        operationId: result.operationId ?? null,
+        canUndo: result.canUndo,
+        canRedo: result.canRedo,
+        affectedRows: result.affectedRows,
+        affectedCells: result.affectedCells,
+        latestUndoOperationId: result.latestUndoOperationId ?? null,
+        latestRedoOperationId: result.latestRedoOperationId ?? null,
+        action: result.action,
+      })
+      gridRef.value?.restoreFocus?.()
+      return result.operationId ?? null
     }
     syncHistoryDiagnostics({
       action: `${direction}:none`,
+      latestUndoOperationId: serverHistoryLatestUndoOperationId.value,
+      latestRedoOperationId: serverHistoryLatestRedoOperationId.value,
     })
     gridRef.value?.restoreFocus?.()
     return null
   }
   const result = await gridRef.value?.history.runHistoryAction(direction) ?? null
   if (result) {
+    invalidateHistoryStatusRefreshes()
     syncHistoryDiagnostics({
       operationId: result,
       canUndo: gridRef.value?.history.canUndo() ?? false,
       canRedo: gridRef.value?.history.canRedo() ?? false,
+      latestUndoOperationId: serverHistoryLatestUndoOperationId.value,
+      latestRedoOperationId: serverHistoryLatestRedoOperationId.value,
       action: direction,
     })
   } else {
@@ -2758,6 +2787,8 @@ async function runHistoryAction(direction: "undo" | "redo"): Promise<string | nu
       action: `${direction}:none`,
       canUndo: gridRef.value?.history.canUndo() ?? false,
       canRedo: gridRef.value?.history.canRedo() ?? false,
+      latestUndoOperationId: serverHistoryLatestUndoOperationId.value,
+      latestRedoOperationId: serverHistoryLatestRedoOperationId.value,
     })
   }
   gridRef.value?.restoreFocus?.()
@@ -2870,6 +2901,12 @@ function simulateCommitFailure(): void {
 }
 
 onMounted(() => {
+  invalidateHistoryStatusRefreshes()
+  serverHistoryCanUndo.value = false
+  serverHistoryCanRedo.value = false
+  serverHistoryLatestUndoOperationId.value = null
+  serverHistoryLatestRedoOperationId.value = null
+  serverHistoryLastOperationIdText.value = "none"
   totalRows.value = ROW_COUNT
   handleStateUpdate(rowModel.getSnapshot())
   void refreshHistoryStatus()

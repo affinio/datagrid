@@ -78,7 +78,7 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
     const fallback = createFallbackDataSource()
     const refreshHistoryStatus = vi.fn()
     const applyInvalidation = vi.fn()
-    const applyRowPatches = vi.fn()
+    const applyRowSnapshots = vi.fn()
     const httpResolveFillBoundary = vi.fn(async () => ({
       endRowIndex: 5,
       endRowId: "srv-000005",
@@ -161,7 +161,7 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
         redoFillOperation: httpRedoFillOperation,
       },
       refreshHistoryStatus,
-      applyRowPatches,
+      applyRowSnapshots,
       applyInvalidation,
     })
 
@@ -200,35 +200,29 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
     expect(httpCommitFillOperation).toHaveBeenCalledTimes(1)
     expect(httpUndoFillOperation).toHaveBeenCalledTimes(1)
     expect(httpRedoFillOperation).toHaveBeenCalledTimes(1)
-    expect(applyRowPatches).toHaveBeenCalledTimes(2)
-    expect(applyRowPatches).toHaveBeenNthCalledWith(1, [
+    expect(applyRowSnapshots).toHaveBeenCalledTimes(2)
+    expect(applyRowSnapshots).toHaveBeenNthCalledWith(1, [
       {
-        rowId: "srv-000002",
-        data: {
-          id: "srv-000002",
-          index: 2,
-          name: "Account 00002",
-          segment: "Growth",
-          status: "Active",
-          region: "EMEA",
-          value: 194,
-          updatedAt: "2025-01-01T00:00:02Z",
-        },
+        id: "srv-000002",
+        index: 2,
+        name: "Account 00002",
+        segment: "Growth",
+        status: "Active",
+        region: "EMEA",
+        value: 194,
+        updatedAt: "2025-01-01T00:00:02Z",
       },
     ])
-    expect(applyRowPatches).toHaveBeenNthCalledWith(2, [
+    expect(applyRowSnapshots).toHaveBeenNthCalledWith(2, [
       {
-        rowId: "srv-000002",
-        data: {
-          id: "srv-000002",
-          index: 2,
-          name: "Account 00002",
-          segment: "Growth",
-          status: "Paused",
-          region: "EMEA",
-          value: 194,
-          updatedAt: "2025-01-01T00:00:03Z",
-        },
+        id: "srv-000002",
+        index: 2,
+        name: "Account 00002",
+        segment: "Growth",
+        status: "Paused",
+        region: "EMEA",
+        value: 194,
+        updatedAt: "2025-01-01T00:00:03Z",
       },
     ])
     expect(applyInvalidation).not.toHaveBeenCalled()
