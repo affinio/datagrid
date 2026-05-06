@@ -688,6 +688,32 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("renders overlay segments for additive single-cell selections", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => columnIndex === 1 && (rowOffset === 0 || rowOffset === 1),
+        {
+          rowCount: 2,
+          selectionRange: { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+          selectionRanges: [
+            { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+            { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+          ],
+          selectionAnchorCell: { rowIndex: 1, columnIndex: 1 },
+        },
+      ),
+    })
+
+    const centerSegments = wrapper.findAll(".grid-body-viewport .grid-selection-overlay__segment")
+    const activeSelectedCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="1"][data-column-key="centerA"]')
+
+    expect(centerSegments).toHaveLength(2)
+    expect(activeSelectedCell.classes()).toContain("grid-cell--selection-anchor")
+
+    wrapper.unmount()
+  })
+
   it("renders a continuous move-preview overlay from center into pinned-right", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,

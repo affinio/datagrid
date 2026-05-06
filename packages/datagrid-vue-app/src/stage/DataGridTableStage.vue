@@ -3984,7 +3984,7 @@ const leftSelectionOverlaySegments = computed<OverlaySegment[]>(() => buildPaneO
   "selection",
   {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: true,
+    hideSingleCell: isSingleSelectedCell.value,
   },
 ))
 
@@ -3994,7 +3994,7 @@ const leftSelectionSeamOverlaySegments = computed<OverlaySegment[]>(() => buildP
   "selection",
   {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: true,
+    hideSingleCell: isSingleSelectedCell.value,
   },
 ))
 
@@ -4004,7 +4004,7 @@ const centerSelectionOverlaySegments = computed<OverlaySegment[]>(() => buildPan
   "selection",
   {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: true,
+    hideSingleCell: isSingleSelectedCell.value,
   },
 ))
 
@@ -4014,7 +4014,7 @@ const rightSelectionOverlaySegments = computed<OverlaySegment[]>(() => buildPane
   "selection",
   {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: true,
+    hideSingleCell: isSingleSelectedCell.value,
   },
 ))
 
@@ -4024,7 +4024,7 @@ const rightSelectionSeamOverlaySegments = computed<OverlaySegment[]>(() => build
   "selection",
   {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: true,
+    hideSingleCell: isSingleSelectedCell.value,
   },
 ))
 
@@ -4034,7 +4034,7 @@ const leftPinnedBottomSelectionOverlaySegments = computed<OverlaySegment[]>(() =
   "selection",
   {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: true,
+    hideSingleCell: isSingleSelectedCell.value,
   },
   bottomViewportEl.value?.clientHeight ?? 0,
 ))
@@ -4045,7 +4045,7 @@ const leftPinnedBottomSelectionSeamOverlaySegments = computed<OverlaySegment[]>(
   "selection",
   {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: true,
+    hideSingleCell: isSingleSelectedCell.value,
   },
   bottomViewportEl.value?.clientHeight ?? 0,
 ))
@@ -4056,7 +4056,7 @@ const centerPinnedBottomSelectionOverlaySegments = computed<OverlaySegment[]>(()
   "selection",
   {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: true,
+    hideSingleCell: isSingleSelectedCell.value,
   },
   bottomViewportEl.value?.clientHeight ?? 0,
 ))
@@ -4067,7 +4067,7 @@ const rightPinnedBottomSelectionOverlaySegments = computed<OverlaySegment[]>(() 
   "selection",
   {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: true,
+    hideSingleCell: isSingleSelectedCell.value,
   },
   bottomViewportEl.value?.clientHeight ?? 0,
 ))
@@ -4078,7 +4078,7 @@ const rightPinnedBottomSelectionSeamOverlaySegments = computed<OverlaySegment[]>
   "selection",
   {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: true,
+    hideSingleCell: isSingleSelectedCell.value,
   },
   bottomViewportEl.value?.clientHeight ?? 0,
 ))

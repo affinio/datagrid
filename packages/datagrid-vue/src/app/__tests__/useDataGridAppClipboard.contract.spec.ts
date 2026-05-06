@@ -527,6 +527,37 @@ describe("useDataGridAppClipboard contract", () => {
     expect(clipboard.isCellInPendingClipboardRange(0, 1)).toBe(false)
   })
 
+  it("pastes a copied scalar into every committed selection range", async () => {
+    const committedSelectionRanges = ref<ReadonlyArray<{
+      startRow: number
+      endRow: number
+      startColumn: number
+      endColumn: number
+    }>>([
+      { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+    ])
+    const { clipboard, rows, selectionRange, currentCell, applySelectionRange } = createClipboardHarness({
+      resolveSelectionRanges: () => committedSelectionRanges.value,
+    })
+
+    selectionRange.value = { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 }
+    await clipboard.copySelectedCells("keyboard")
+
+    committedSelectionRanges.value = [
+      { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+      { startRow: 2, endRow: 2, startColumn: 2, endColumn: 2 },
+    ]
+    selectionRange.value = { startRow: 2, endRow: 2, startColumn: 2, endColumn: 2 }
+    currentCell.value = { rowIndex: 2, columnIndex: 2 }
+
+    const applied = await clipboard.pasteSelectedCells("keyboard")
+
+    expect(applied).toBe(true)
+    expect(rows.value[1]).toMatchObject({ b: "A1" })
+    expect(rows.value[2]).toMatchObject({ c: "A1" })
+    expect(applySelectionRange).not.toHaveBeenCalled()
+  })
+
   it("writes to and reads from the system clipboard when available", async () => {
     const { clipboard, currentCell, rows } = createClipboardHarness()
     const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)
