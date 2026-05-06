@@ -201,9 +201,84 @@ class AuctionsPullResponse(BaseModel):
     rows: list[AuctionsRow] = Field(default_factory=list)
     total: int
     revision: str | None = None
+    dataset_version: int = Field(alias="datasetVersion")
+
+
+class AuctionsMutationInvalidationCell(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    row_id: str = Field(alias="rowId")
+    column_id: str = Field(alias="columnId")
+
+
+class AuctionsMutationInvalidationRange(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    start_row: int = Field(alias="startRow")
+    end_row: int = Field(alias="endRow")
+    start_column: str | None = Field(default=None, alias="startColumn")
+    end_column: str | None = Field(default=None, alias="endColumn")
+
+
+class AuctionsMutationInvalidation(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    type: Literal["cell", "range", "row", "dataset"]
+    cells: list[AuctionsMutationInvalidationCell] = Field(default_factory=list)
+    rows: list[str] = Field(default_factory=list)
+    range: AuctionsMutationInvalidationRange | None = None
+
+
+class AuctionsCommitResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    operation_id: str | None = Field(default=None, alias="operationId")
+    revision: str
+    dataset_version: int = Field(alias="datasetVersion")
+    affected_rows: int = Field(alias="affectedRows")
+    affected_cells: int = Field(alias="affectedCells")
+    can_undo: bool = Field(alias="canUndo")
+    can_redo: bool = Field(alias="canRedo")
+    latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
+    latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
+    invalidation: AuctionsMutationInvalidation | None = None
+
+
+class AuctionsHistoryScope(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+    table_id: str | None = Field(default="auctions", alias="tableId")
+    user_id: str | None = Field(default=None, alias="userId")
+    session_id: str | None = Field(default=None, alias="sessionId")
+
+
+class AuctionsHistoryStatusResponse(AuctionsHistoryScope):
+    can_undo: bool = Field(alias="canUndo")
+    can_redo: bool = Field(alias="canRedo")
+    latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
+    latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
+    dataset_version: int = Field(alias="datasetVersion")
+
+
+class AuctionsChangeFeedChange(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    type: Literal["cell", "range", "row", "dataset"]
+    operation_id: str | None = Field(default=None, alias="operationId")
+    user_id: str | None = None
+    session_id: str | None = None
+    invalidation: AuctionsMutationInvalidation
+
+
+class AuctionsChangeFeedResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    dataset_version: int = Field(alias="datasetVersion")
+    changes: list[AuctionsChangeFeedChange] = Field(default_factory=list)
 ```
 
-Add the write DTOs next: edit commit, fill boundary, fill commit, and undo/redo responses.
+Add the write DTOs next: edit commit, fill boundary, fill commit, stack history, history status, and change feed responses.
 
 ## Step 5: Implement Repository / Adapter
 
@@ -267,6 +342,10 @@ Required methods:
 - `commit_fill`
 - `undo_operation`
 - `redo_operation`
+- `undo_latest_operation`
+- `redo_latest_operation`
+- `history_status`
+- `change_feed`
 
 Optional methods:
 
@@ -303,8 +382,12 @@ Then add route handlers for:
 - `POST /edits`
 - `POST /fill-boundary`
 - `POST /fill/commit`
+- `POST /history/undo`
+- `POST /history/redo`
+- `POST /history/status`
 - `POST /operations/{operation_id}/undo`
 - `POST /operations/{operation_id}/redo`
+- `GET /changes?sinceVersion=...`
 
 ## Step 7: Implement Frontend HTTP Datasource Adapter
 
@@ -336,9 +419,12 @@ export function createAuctionsDatasourceHttpAdapter(options: {
 The adapter should preserve:
 
 - `revision`
+- `datasetVersion`
 - `baseRevision`
 - `projectionHash`
 - `boundaryToken`
+- mutation invalidation
+- stack history scope fields
 
 ## Step 8: Mount DataGrid in Vue
 
@@ -386,7 +472,9 @@ Test cases to add:
 - edit rejects rows from another workspace
 - histogram respects active filters
 - fill boundary and fill commit preserve consistency tokens
-- undo/redo only touch scoped rows
+- stack undo/redo only touch scoped rows
+- history status is scoped to workspace / user / session
+- change feed returns the expected changes or dataset fallback
 - legacy `NULL` workspace stays visible when no header is sent
 
 ## Step 10: Run Validation
@@ -404,7 +492,10 @@ If you changed the frontend adapter too, run the frontend type-check and smoke f
 ## Current Limitations
 
 - server-side series fill is not implemented yet
-- history is operation-id based, not stack-based
+- stack history is the normal undo/redo path
+- operation-id replay remains available for low-level diagnostics/manual replay
 - workspace comes from `X-Workspace-Id` unless the host app binds it to auth
 - full off-viewport materialization may be bounded by the projection window
 - the host app must enforce authorization
+- websocket transport is not implemented yet
+- polling/change feed is available as the current fallback path

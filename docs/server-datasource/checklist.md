@@ -13,9 +13,14 @@ Use this as a practical checklist for a new table.
 - [ ] histogram endpoint implemented
 - [ ] fill boundary endpoint implemented
 - [ ] fill commit endpoint implemented
-- [ ] undo endpoint implemented
-- [ ] redo endpoint implemented
-- [ ] revision wired
+- [ ] history undo endpoint wired
+- [ ] history redo endpoint wired
+- [ ] history status endpoint wired
+- [ ] change feed endpoint wired
+- [ ] legacy operation-id undo/replay route implemented if needed
+- [ ] datasetVersion returned
+- [ ] invalidation returned from mutations
+- [ ] baseRevision conflict behavior tested
 - [ ] workspace header handled
 - [ ] consistency metadata preserved
 - [ ] legacy `NULL` workspace behavior preserved if needed
@@ -30,8 +35,11 @@ Use this as a practical checklist for a new table.
 - [ ] edit mapping implemented
 - [ ] fill boundary mapping implemented
 - [ ] fill commit mapping implemented
-- [ ] undo mapping implemented
-- [ ] redo mapping implemented
+- [ ] stack undo mapping implemented
+- [ ] stack redo mapping implemented
+- [ ] change feed / polling adapter implemented if needed
+- [ ] datasetVersion stored
+- [ ] invalidation handling implemented
 - [ ] warnings surfaced
 - [ ] backend errors surfaced
 
@@ -49,8 +57,9 @@ Use this as a practical checklist for a new table.
 - [ ] edit a cell
 - [ ] resolve a fill boundary
 - [ ] commit a fill
-- [ ] undo the operation
-- [ ] redo the operation
+- [ ] undo the latest operation from stack history
+- [ ] redo the latest operation from stack history
+- [ ] poll the change feed if push transport is unavailable
 
 ## Reference Tests
 

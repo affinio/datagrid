@@ -5,6 +5,8 @@ This page uses the current `server_demo` implementation as the reference backend
 ## Main Pieces
 
 - router: [`backend/app/features/server_demo/router.py`](../../backend/app/features/server_demo/router.py)
+- history router: [`backend/app/features/server_demo/history_router.py`](../../backend/app/features/server_demo/history_router.py)
+- changes router: [`backend/app/features/server_demo/changes_router.py`](../../backend/app/features/server_demo/changes_router.py)
 - schemas: [`backend/app/features/server_demo/schemas.py`](../../backend/app/features/server_demo/schemas.py)
 - repository: [`backend/app/features/server_demo/repository.py`](../../backend/app/features/server_demo/repository.py)
 - adapter protocol: [`backend/app/features/server_demo/adapter.py`](../../backend/app/features/server_demo/adapter.py)
@@ -20,8 +22,12 @@ This page uses the current `server_demo` implementation as the reference backend
 - `POST /edits`
 - `POST /fill-boundary`
 - `POST /fill/commit`
+- `POST /history/undo`
+- `POST /history/redo`
+- `POST /history/status`
 - `POST /operations/{operation_id}/undo`
 - `POST /operations/{operation_id}/redo`
+- `GET /changes?sinceVersion=...`
 
 The router also resolves the workspace scope from `X-Workspace-Id`:
 
@@ -53,8 +59,10 @@ Responsibilities:
 
 - translate HTTP requests into grid-service calls
 - convert ORM rows into response schemas
-- compute revision / projection metadata
+- compute revision, datasetVersion, and projection metadata
+- record change events for the change feed
 - map service-level invalidation into API responses
+- map edits/fill/undo/redo into stack history state
 - enforce fill consistency errors before mutation
 
 The repository wires these services:
@@ -83,12 +91,12 @@ These are the reusable building blocks:
 What they do:
 
 - `GridRevisionService` maintains monotonic revision rows, optionally scoped by workspace.
-- `GridEditServiceBase` handles validation, stale-revision checks, cell event creation, and revision bumps for edit commits.
-- `GridFillServiceBase` resolves fill boundaries, applies copy fills, records fill operations, and bumps revision.
-- `GridHistoryServiceBase` replays undo and redo from stored operation history.
+- `GridEditServiceBase` handles validation, stale-revision checks, cell event creation, revision bumps, and stack-history state for edit commits.
+- `GridFillServiceBase` resolves fill boundaries, applies copy fills, records fill operations, and bumps revision / datasetVersion.
+- `GridHistoryServiceBase` replays undo and redo from stored operation history and resolves stack history status.
 - `GridProjectionService` handles filtering, sorting, row queries, and histograms.
 - `consistency.py` hashes projections and boundary payloads.
-- `invalidation.py` converts changed row indexes into range invalidation hints.
+- `invalidation.py` converts changed row indexes into cell, range, row, or dataset invalidation hints.
 
 ## How To Implement Another Table
 
@@ -116,6 +124,7 @@ Behavior:
 - if the header is present, the backend uses that value to scope the revision counter
 - if the header is missing, the backend uses the legacy shared scope
 - the header affects revision, stale-revision checks, and the revision bumps produced by undo/redo
+- stack history scope also includes `table_id`, `user_id`, and/or `session_id`
 
 This means two different workspace ids can mutate the same logical table without sharing the same revision counter.
 
@@ -124,9 +133,9 @@ This means two different workspace ids can mutate the same logical table without
 - keep the router thin
 - keep request/response field names aligned with the schema layer
 - do consistency checks before writing rows
-- use operation ids for history, not a positional stack cursor
+- use stack-based history for normal UX; keep operation-id replay for diagnostics/manual tools
 - return `409` for stale or mismatched fill commits
-- return a range invalidation when the change affects row indexes
+- return the current invalidation shape from mutations
 
 ## Related Files
 

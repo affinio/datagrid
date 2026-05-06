@@ -89,6 +89,55 @@ class <FeatureName>Row(BaseModel):
     category: str
     current_price: int | None = Field(alias="currentPrice")
     updated_at: datetime = Field(alias="updatedAt")
+
+
+class <FeatureName>PullResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[<FeatureName>Row] = Field(default_factory=list)
+    total: int
+    revision: str | None = None
+    dataset_version: int = Field(alias="datasetVersion")
+
+
+class <FeatureName>MutationInvalidationCell(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    row_id: str = Field(alias="rowId")
+    column_id: str = Field(alias="columnId")
+
+
+class <FeatureName>MutationInvalidationRange(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    start_row: int = Field(alias="startRow")
+    end_row: int = Field(alias="endRow")
+    start_column: str | None = Field(default=None, alias="startColumn")
+    end_column: str | None = Field(default=None, alias="endColumn")
+
+
+class <FeatureName>MutationInvalidation(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    type: Literal["cell", "range", "row", "dataset"]
+    cells: list[<FeatureName>MutationInvalidationCell] = Field(default_factory=list)
+    rows: list[str] = Field(default_factory=list)
+    range: <FeatureName>MutationInvalidationRange | None = None
+
+
+class <FeatureName>MutationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    operation_id: str | None = Field(default=None, alias="operationId")
+    revision: str
+    dataset_version: int = Field(alias="datasetVersion")
+    affected_rows: int = Field(alias="affectedRows")
+    affected_cells: int = Field(alias="affectedCells")
+    can_undo: bool = Field(alias="canUndo")
+    can_redo: bool = Field(alias="canRedo")
+    latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
+    latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
+    invalidation: <FeatureName>MutationInvalidation | None = None
 ```
 
 ## `repository.py`
@@ -143,6 +192,13 @@ class <FeatureName>Repository:
         )
 ```
 
+The repository should also expose stack history and change-feed methods:
+
+- `undo_latest_operation`
+- `redo_latest_operation`
+- `history_status`
+- `change_feed`
+
 ## `router.py`
 
 ```py
@@ -172,8 +228,12 @@ Required route handlers:
 - `POST /edits`
 - `POST /fill-boundary`
 - `POST /fill/commit`
+- `POST /history/undo`
+- `POST /history/redo`
+- `POST /history/status`
 - `POST /operations/{operation_id}/undo`
 - `POST /operations/{operation_id}/redo`
+- `GET /changes?sinceVersion=...`
 
 ## `tests`
 
@@ -201,7 +261,9 @@ Recommended tests:
 - histogram counts only scoped rows
 - fill boundary stays scoped
 - fill commit rejects cross-workspace ids
-- undo/redo respects workspace scope
+- stack undo/redo respects workspace scope
+- history status respects workspace / user / session scope
+- change feed returns the expected changes or dataset fallback
 
 ## Do-Not-Change Sections
 
@@ -209,3 +271,5 @@ Recommended tests:
 - Keep request and response field names aligned with the protocol.
 - Keep the workspace header name stable until the host app binds it to auth.
 - Keep unsupported server-side series fill rejected.
+- Keep stack history as the normal undo/redo UX.
+- Keep operation-id replay available only for diagnostics/manual replay.

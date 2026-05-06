@@ -30,8 +30,12 @@ const endpoints = {
   edits: "/api/auctions/edits",
   fillBoundary: "/api/auctions/fill-boundary",
   fillCommit: "/api/auctions/fill/commit",
-  undo: (operationId: string) => `/api/auctions/operations/${operationId}/undo`,
-  redo: (operationId: string) => `/api/auctions/operations/${operationId}/redo`,
+  historyUndo: "/api/history/undo",
+  historyRedo: "/api/history/redo",
+  historyStatus: "/api/history/status",
+  changes: (sinceVersion: number) => `/api/changes?sinceVersion=${sinceVersion}`,
+  undoReplay: (operationId: string) => `/api/auctions/operations/${operationId}/undo`,
+  redoReplay: (operationId: string) => `/api/auctions/operations/${operationId}/redo`,
 }
 ```
 
@@ -48,6 +52,8 @@ The backend must receive:
 - range
 - sort model
 - filter model
+
+The frontend should store `datasetVersion` from pull responses and reuse it for cache validation.
 
 ## Histogram Implementation
 
@@ -113,16 +119,46 @@ Preserve:
 ## Undo / Redo Implementation
 
 ```ts
-export async function undoOperation(operationId: string, options: AuctionsDatasourceHttpAdapterOptions) {
-  return await postJson(endpoints.undo(operationId), {}, options)
+export async function undoOperation(options: AuctionsDatasourceHttpAdapterOptions) {
+  return await postJson(endpoints.historyUndo, {}, options)
 }
 
-export async function redoOperation(operationId: string, options: AuctionsDatasourceHttpAdapterOptions) {
-  return await postJson(endpoints.redo(operationId), {}, options)
+export async function redoOperation(options: AuctionsDatasourceHttpAdapterOptions) {
+  return await postJson(endpoints.historyRedo, {}, options)
 }
 ```
 
 Undo/redo should use the same workspace header logic as pull and writes.
+Use the replay routes only for diagnostics/manual replay when you explicitly need an `operationId`.
+
+## History Status / Change Feed
+
+```ts
+export async function historyStatus(options: AuctionsDatasourceHttpAdapterOptions) {
+  return await postJson(endpoints.historyStatus, {}, options)
+}
+
+export async function pollChanges(sinceVersion: number, options: AuctionsDatasourceHttpAdapterOptions) {
+  const response = await fetch(`${options.baseUrl}${endpoints.changes(sinceVersion)}`, {
+    method: "GET",
+    headers: {
+      ...(options.workspaceId ? { "X-Workspace-Id": options.workspaceId } : {}),
+    },
+  })
+
+  if (!response.ok) {
+    const payload = await tryParseJson(response)
+    throw {
+      status: response.status,
+      code: payload?.code ?? "unknown_error",
+      message: payload?.message ?? response.statusText,
+      details: payload,
+    } satisfies ServerError
+  }
+
+  return await response.json()
+}
+```
 
 ## Warning / Error Propagation
 
@@ -182,4 +218,6 @@ const gridProps = computed(() => ({
 
 - Keep the adapter thin.
 - Do not reimplement fill or revision logic in the browser.
+- Keep `datasetVersion` in local cache state.
+- Handle backend invalidation shapes directly.
 - If the host app later binds workspace to auth, keep the adapter API but change how it derives the header value.

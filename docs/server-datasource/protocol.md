@@ -6,14 +6,17 @@ The examples below match the current `server_demo` shape. If your table uses dif
 
 ## Conventions
 
-- All endpoints are `POST` except `health`.
+- All mutation endpoints are `POST`.
+- `GET /api/changes?sinceVersion=...` is the current change-feed endpoint.
 - Requests and responses are JSON.
 - Errors are JSON with at least `code` and `message`.
 - `range.endRow` is exclusive.
 - `revision` is a monotonic string.
+- `datasetVersion` is the externally visible table-version token and is returned by pull and mutation responses.
 - `baseRevision` is optional, but recommended for edits and fill commits.
 - `projectionHash` and `boundaryToken` are optional on fill commit, but strongly recommended.
 - `X-Workspace-Id` is the current workspace scope header.
+- Normal undo/redo scope uses `workspace_id`, `table_id`, `user_id`, and/or `session_id`.
 
 ## Pull
 
@@ -50,7 +53,8 @@ The examples below match the current `server_demo` shape. If your table uses dif
     }
   ],
   "total": 100000,
-  "revision": "17"
+  "revision": "17",
+  "datasetVersion": 17
 }
 ```
 
@@ -142,11 +146,19 @@ Optional fields:
   "committedRowIds": ["srv-000010"],
   "rejected": [],
   "revision": "18",
+  "datasetVersion": 18,
+  "affectedRows": 1,
+  "affectedCells": 1,
   "invalidation": {
-    "kind": "range",
-    "range": { "start": 10, "end": 10 },
-    "reason": "server-demo-edits"
-  }
+    "type": "cell",
+    "cells": [{ "rowId": "srv-000010", "columnId": "name" }],
+    "rows": [],
+    "range": null
+  },
+  "canUndo": true,
+  "canRedo": false,
+  "latestUndoOperationId": "edit-123",
+  "latestRedoOperationId": null
 }
 ```
 
@@ -268,10 +280,18 @@ Consistency fields:
   "affectedRowCount": 1,
   "affectedCellCount": 1,
   "revision": "19",
+  "datasetVersion": 19,
+  "affectedRows": 1,
+  "affectedCells": 1,
+  "canUndo": true,
+  "canRedo": false,
+  "latestUndoOperationId": "fill-123",
+  "latestRedoOperationId": null,
   "invalidation": {
-    "kind": "range",
-    "range": { "start": 21, "end": 21 },
-    "reason": "server-demo-fill"
+    "type": "range",
+    "cells": [],
+    "rows": [],
+    "range": { "startRow": 21, "endRow": 21, "startColumn": "status", "endColumn": "status" }
   },
   "warnings": []
 }
@@ -302,19 +322,41 @@ Backward compatibility:
 - if `boundaryToken` is omitted, the backend may still accept the request when it can safely do so
 - server-side `series` mode is currently rejected with `400 unsupported-fill-mode`
 
-## Undo / Redo
+## History Stack
 
-`POST /api/server-demo/operations/{operation_id}/undo`
+Normal undo/redo uses stack history.
 
-`POST /api/server-demo/operations/{operation_id}/redo`
+`POST /api/history/undo`
+
+`POST /api/history/redo`
+
+`POST /api/history/status`
+
+Request body:
+
+```json
+{
+  "workspaceId": "workspace-a",
+  "tableId": "server_demo",
+  "userId": "user-a",
+  "sessionId": "session-a"
+}
+```
+
+Required scope:
+
+- `workspace_id`
+- `table_id`
+- `user_id` and/or `session_id`
 
 ### Response
 
-Undo and redo return the same shape as edit commit responses:
+Stack undo/redo return the same mutation shape, plus `action` on the stack route:
 
 ```json
 {
   "operationId": "edit-123",
+  "action": "undo",
   "committed": [
     {
       "rowId": "srv-000010",
@@ -325,15 +367,84 @@ Undo and redo return the same shape as edit commit responses:
   "committedRowIds": ["srv-000010"],
   "rejected": [],
   "revision": "19",
+  "datasetVersion": 19,
+  "affectedRows": 1,
+  "affectedCells": 1,
+  "canUndo": true,
+  "canRedo": false,
+  "latestUndoOperationId": "edit-123",
+  "latestRedoOperationId": null,
   "invalidation": {
-    "kind": "range",
-    "range": { "start": 10, "end": 10 },
-    "reason": "server-demo-edits"
+    "type": "cell",
+    "cells": [{ "rowId": "srv-000010", "columnId": "name" }],
+    "rows": [],
+    "range": null
   }
 }
 ```
 
+## Legacy Operation Replay
+
+`POST /api/server-demo/operations/{operation_id}/undo`
+
+`POST /api/server-demo/operations/{operation_id}/redo`
+
+These routes remain available for low-level diagnostics/manual replay.
+
 If the operation is unknown, the backend returns `404 operation-not-found`.
+
+## History Status
+
+`POST /api/history/status`
+
+### Response
+
+```json
+{
+  "workspace_id": "workspace-a",
+  "table_id": "server_demo",
+  "user_id": "user-a",
+  "session_id": "session-a",
+  "canUndo": true,
+  "canRedo": false,
+  "latestUndoOperationId": "edit-123",
+  "latestRedoOperationId": null,
+  "datasetVersion": 19
+}
+```
+
+## Change Feed
+
+`GET /api/changes?sinceVersion=...`
+
+### Response
+
+```json
+{
+  "datasetVersion": 19,
+  "changes": [
+    {
+      "type": "cell",
+      "operationId": "edit-123",
+      "user_id": "user-a",
+      "session_id": "session-a",
+      "invalidation": {
+        "type": "cell",
+        "cells": [{ "rowId": "srv-000010", "columnId": "name" }],
+        "rows": [],
+        "range": null
+      }
+    }
+  ]
+}
+```
+
+Behavior:
+
+- `sinceVersion == current` returns an empty `changes` array.
+- `sinceVersion > current` returns `400 invalid-since-version`.
+- `sinceVersion < current` returns matching changes when the gap is complete.
+- if the window is incomplete or the gap is too large, the backend may return a dataset invalidation fallback.
 
 ## Error Response
 
@@ -353,6 +464,7 @@ Common error codes:
 - `row-not-found`
 - `duplicate-operation-id`
 - `unsupported-fill-mode`
+- `invalid-since-version`
 
 ## Workspace Header
 
@@ -362,10 +474,15 @@ Current behavior:
 
 - header missing means legacy default scope
 - header present means workspace-scoped row visibility and revision scope
+- normal undo/redo scope additionally uses `table_id`, `user_id`, and/or `session_id`
 
 ## Current Limitations
 
 - server-side series fill is not implemented yet
-- history is operation-id based, not stack-based
+- stack history is the normal undo/redo path
 - full off-viewport materialization may be bounded
+- polling/change feed is available as the current fallback path
+- websocket transport is not implemented yet
+- operation-id undo/redo remains available as low-level diagnostics/manual replay
+- change feed may return dataset invalidation fallback when the event window is incomplete or the gap is too large
 - the workspace scope is header-driven, not auth-driven

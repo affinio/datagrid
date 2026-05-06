@@ -43,10 +43,16 @@ You need these endpoints for the current feature set:
 - `POST /api/server-demo/edits`
 - `POST /api/server-demo/fill-boundary`
 - `POST /api/server-demo/fill/commit`
+- `POST /api/history/undo`
+- `POST /api/history/redo`
+- `POST /api/history/status`
+- `GET /api/changes?sinceVersion=...`
 - `POST /api/server-demo/operations/{operation_id}/undo`
 - `POST /api/server-demo/operations/{operation_id}/redo`
 
 The demo router is in [`backend/app/features/server_demo/router.py`](../../backend/app/features/server_demo/router.py).
+The stack-history routes live under [`backend/app/features/server_demo/history_router.py`](../../backend/app/features/server_demo/history_router.py).
+The change feed route lives under [`backend/app/features/server_demo/changes_router.py`](../../backend/app/features/server_demo/changes_router.py).
 
 ## 3. Basic Flow
 
@@ -130,9 +136,18 @@ Send the fill boundary metadata back with the source and target row ids.
 
 ### Undo and Redo
 
-Use the operation id returned by the write response.
+Normal undo/redo uses stack history scoped by:
+
+- `workspace_id`
+- `table_id`
+- `user_id` and/or `session_id`
+
+Use the operation-id routes only for legacy/debug/manual replay.
 
 ```bash
+POST /api/history/undo
+POST /api/history/redo
+POST /api/history/status
 POST /api/server-demo/operations/fill-123/undo
 POST /api/server-demo/operations/fill-123/redo
 ```
@@ -142,5 +157,7 @@ POST /api/server-demo/operations/fill-123/redo
 - `pull` is the only required read path for basic scrolling.
 - `commitEdits` should return a revision string so the frontend can invalidate cached rows.
 - `resolveFillBoundary` and `commitFillOperation` are only needed if you want the grid's fill handle to be server-backed.
-- `undo` and `redo` are operation-id based. There is no stack cursor in the protocol.
+- `undo` and `redo` use stack history for normal UX.
+- `GET /api/changes?sinceVersion=...` is the current polling/change-feed fallback when the host app does not have push transport.
+- `POST /api/server-demo/operations/{operation_id}/undo|redo` remains available for low-level diagnostics/manual replay.
 - If you do not need fill yet, you can defer the fill endpoints and keep edit/pull working first.

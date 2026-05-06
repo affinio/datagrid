@@ -19,12 +19,12 @@ It handles:
 - edit commits
 - fill boundary resolution
 - fill commit
-- undo / redo
+- stack undo / redo
 - error normalization
 - basic invalidation normalization
 
 The adapter is intentionally thin. It does not try to reimplement the backend logic in the browser.
-The current reference adapter also keeps `subscribe()` as a local listener registry only. There is no backend push channel wired up yet.
+The current reference adapter also keeps `subscribe()` as a local listener registry only. There is no backend push channel wired up yet, so polling or change-feed refresh is the current fallback path.
 
 ## Request Mapping
 
@@ -38,7 +38,7 @@ It:
 - converts the grid sort model to backend `sortModel`
 - flattens the grid filter snapshot into a backend `filterModel`
 - sends the request with the abort signal
-- returns `rows`, `total`, and `cursor` from the backend `revision`
+- returns `rows`, `total`, `revision`, and `datasetVersion`
 
 ### `getColumnHistogram()`
 
@@ -112,8 +112,9 @@ Current adapter behavior:
 
 Maps to:
 
-- `POST /api/server-demo/operations/{operation_id}/undo`
-- `POST /api/server-demo/operations/{operation_id}/redo`
+- normal UX: `POST /api/history/undo`, `POST /api/history/redo`, `POST /api/history/status`
+- legacy/debug/manual replay: `POST /api/server-demo/operations/{operation_id}/undo`
+- legacy/debug/manual replay: `POST /api/server-demo/operations/{operation_id}/redo`
 
 The fill-specific wrapper uses the same routes for `undoFillOperation()` and `redoFillOperation()`.
 
@@ -134,6 +135,7 @@ This is important for fill consistency failures because the frontend can tell th
 - stale revision
 - projection mismatch
 - boundary mismatch
+- invalid-since-version
 
 ## How Fill Metadata Is Preserved
 
@@ -155,6 +157,14 @@ This is the part that makes server-backed fill feel deterministic rather than ap
 The backend may return warnings for a fill commit, including no-op fill cases or ignored columns. The adapter exposes those warnings directly.
 
 Invalidation is normalized to the grid's range invalidation shape when the backend returns a range payload. If the payload cannot be interpreted as a range, the adapter drops it rather than inventing a fake invalidation.
+Current backend invalidations are shaped as:
+
+- `cell`
+- `range`
+- `row`
+- `dataset`
+
+The adapter should preserve those semantics when it can and avoid fabricating a more specific invalidation than the backend returned.
 
 ## Related Demo Code
 

@@ -24,6 +24,7 @@ Current behavior:
 - `X-Workspace-Id` selects the workspace scope
 - missing header means legacy default scope
 - a given table can have independent revision counters in different workspaces
+- `datasetVersion` is the externally visible version token for the scoped dataset
 
 Practical rule:
 
@@ -132,6 +133,7 @@ Normal UX should use:
 - `POST /api/history/status`
 
 The frontend should not need to know the latest `operationId` for normal undo/redo.
+The legacy `/api/server-demo/operations/{operation_id}/undo|redo` routes remain available for low-level diagnostics/manual replay.
 
 ## Fill Idempotency
 
@@ -187,7 +189,7 @@ This avoids an immediate `/history/status` probe after every successful commit.
 Returned history state must correspond to the same scope as the committed operation.
 If history state cannot be determined reliably, the backend should omit it rather than return incorrect values.
 
-## Cell And Range Invalidation
+## Cell, Range, Row, And Dataset Invalidation
 
 Mutations should describe the smallest affected scope possible:
 
@@ -207,6 +209,13 @@ Invalidation should be:
 Avoid:
 
 - full dataset invalidation unless strictly necessary
+
+Current mapping:
+
+- edit -> cell invalidation
+- fill -> range invalidation
+- undo / redo -> invalidation for the original operation
+- fallback -> dataset invalidation
 
 ## Revision And History Relationship
 
@@ -262,6 +271,19 @@ Practical rule:
 - if the datasetVersion changes, the frontend must assume that some part of the dataset has changed
 - datasetVersion should be included in mutation responses when available
 
+## Change Feed
+
+`GET /api/changes?sinceVersion=...` is the current polling/change-feed path.
+
+Behavior:
+
+- `sinceVersion == current` returns an empty `changes` array
+- `sinceVersion > current` returns `400 invalid-since-version`
+- `sinceVersion < current` returns matching changes when the window is complete
+- if the change window is incomplete or the gap is too large, the backend may return a dataset-level invalidation fallback
+
+The frontend can use this as the fallback path when websocket transport is unavailable.
+
 ## Deterministic Replay
 
 History operations must be replayable deterministically.
@@ -289,10 +311,9 @@ the backend must:
 ## Current Limitations
 
 - server-side series fill is not implemented yet
-- full off-viewport materialization may be bounded
-- the workspace scope is still partly demo/env/header driven, not auth-driven
+- the workspace scope is still demo/env/header driven unless the host app binds it to auth
 - the host app must still enforce authorization
-- websocket/live update contract is not implemented yet
-- cell/range invalidation contract is not finalized yet
-- conflict/version handling is not fully wired into all mutation paths yet
-- history replay across partially materialized datasets may rely on fallback resolution
+- websocket transport is not implemented yet
+- operation-id undo/redo remains available as low-level diagnostics/manual replay
+- full off-viewport materialization may be bounded
+- change feed may return dataset invalidation fallback when the event window is incomplete or the gap is too large
