@@ -240,6 +240,55 @@ async def test_server_demo_pull_value_multi_bucket_filter_uses_or_semantics(clie
     )
 
 
+async def test_server_demo_pull_advanced_expression_or_filter(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "filterModel": {
+                "advancedExpression": {
+                    "kind": "group",
+                    "operator": "or",
+                    "children": [
+                        {"kind": "condition", "key": "region", "operator": "equals", "value": "EMEA"},
+                        {"kind": "condition", "key": "region", "operator": "equals", "value": "LATAM"},
+                    ],
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 50_000
+    assert all(row["region"] in {"EMEA", "LATAM"} for row in body["rows"])
+
+
+async def test_server_demo_pull_legacy_advanced_filters_are_preserved(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "filterModel": {
+                "advancedFilters": {
+                    "value": {
+                        "type": "number",
+                        "clauses": [
+                            {"operator": "gte", "value": 1000},
+                            {"operator": "lte", "value": 2000, "join": "and"},
+                        ],
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1_001
+    assert all(1000 <= row["value"] <= 2000 for row in body["rows"])
+
+
 async def test_server_demo_pull_value_scalar_exact_filter(client: AsyncClient) -> None:
     response = await client.post(
         "/api/server-demo/pull",

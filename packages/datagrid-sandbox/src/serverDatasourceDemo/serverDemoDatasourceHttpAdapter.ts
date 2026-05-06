@@ -240,32 +240,6 @@ export type ServerDemoHttpDatasource = ReturnType<typeof createServerDemoDatasou
 
 type BackendFilterModel = Record<string, unknown>
 
-type AdvancedExpressionCondition = {
-  kind: "condition"
-  key?: unknown
-  field?: unknown
-  type?: unknown
-  operator?: unknown
-  value?: unknown
-  value2?: unknown
-}
-
-type AdvancedExpressionGroup = {
-  kind: "group"
-  operator?: unknown
-  children?: readonly AdvancedExpressionNode[]
-}
-
-type AdvancedExpressionNot = {
-  kind: "not"
-  child?: AdvancedExpressionNode
-}
-
-type AdvancedExpressionNode =
-  | AdvancedExpressionCondition
-  | AdvancedExpressionGroup
-  | AdvancedExpressionNot
-
 const ENUM_FILTER_VALUES: Record<string, readonly string[]> = {
   region: SERVER_DEMO_REGIONS,
   segment: SERVER_DEMO_SEGMENTS,
@@ -466,45 +440,6 @@ function createBackendFilterForPredicate(
   return null
 }
 
-function flattenAdvancedExpression(
-  expression: unknown,
-  omitColumnId: string | undefined,
-  backendFilterModel: BackendFilterModel,
-): void {
-  if (!expression || typeof expression !== "object") {
-    return
-  }
-
-  const node = expression as AdvancedExpressionNode
-  if (node.kind === "condition") {
-    const columnId = String(node.key ?? node.field ?? "").trim()
-    if (!columnId || columnId === omitColumnId) {
-      return
-    }
-    setBackendFilter(
-      backendFilterModel,
-      columnId,
-      createBackendFilterForPredicate(
-        columnId,
-        String(node.operator ?? "contains"),
-        node.value,
-        node.value2,
-      ),
-    )
-    return
-  }
-
-  if (node.kind === "group") {
-    const operator = String(node.operator ?? "and").trim().toLowerCase()
-    if (operator !== "and") {
-      return
-    }
-    for (const child of node.children ?? []) {
-      flattenAdvancedExpression(child, omitColumnId, backendFilterModel)
-    }
-  }
-}
-
 function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColumnId?: string): BackendFilterModel | null {
   if (!filterModel) {
     return null
@@ -512,7 +447,6 @@ function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColu
 
   const backendFilterModel: BackendFilterModel = {}
   const columnFilters = filterModel.columnFilters ?? {}
-  const advancedFilters = filterModel.advancedFilters ?? {}
 
   for (const [columnId, filterEntry] of Object.entries(columnFilters) as Array<[string, DataGridColumnFilter]>) {
     if (columnId === omitColumnId) {
@@ -580,102 +514,33 @@ function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColu
     }
   }
 
-  for (const [columnId, advancedFilter] of Object.entries(advancedFilters) as Array<[
-    string,
-    {
-      clauses?: readonly {
-        operator?: unknown
-        value?: unknown
-        value2?: unknown
-      }[]
-    },
-  ]>) {
-    if (columnId === omitColumnId) {
-      continue
-    }
-
-    const clauses = advancedFilter.clauses ?? []
-    if (clauses.length === 0) {
-      continue
-    }
-
-    if (columnId === "value") {
-      const numericFilter: Record<string, unknown> = {}
-      for (const clause of clauses) {
-        if (!clause) {
-          continue
-        }
-        const operator = clause.operator == null ? "" : String(clause.operator).trim().toLowerCase()
-        if (operator === "gte" || operator === ">=") {
-          const value = normalizeFilterValue(clause.value)
-          if (value !== null) {
-            numericFilter.min = value
-          }
-        } else if (operator === "gt" || operator === ">") {
-          const value = normalizeFilterValue(clause.value)
-          if (value !== null) {
-            numericFilter.min = value
-          }
-        } else if (operator === "lte" || operator === "<=") {
-          const value = normalizeFilterValue(clause.value)
-          if (value !== null) {
-            numericFilter.max = value
-          }
-        } else if (operator === "lt" || operator === "<") {
-          const value = normalizeFilterValue(clause.value)
-          if (value !== null) {
-            numericFilter.max = value
-          }
-        } else if (operator === "between" || operator === "range") {
-          const minValue = normalizeFilterValue(clause.value)
-          const maxValue = normalizeFilterValue(clause.value2)
-          if (minValue !== null) {
-            numericFilter.min = minValue
-          }
-          if (maxValue !== null) {
-            numericFilter.max = maxValue
-          }
-        } else if (operator === "equals" || operator === "eq" || operator === "is") {
-          numericFilter.type = "equals"
-          const value = normalizeFilterValue(clause.value)
-          if (value !== null) {
-            numericFilter.filter = value
-          }
-        }
-      }
-
-      if (Object.keys(numericFilter).length > 0) {
-        backendFilterModel[columnId] = numericFilter
-      }
-      continue
-    }
-
-    if (clauses.length > 0) {
-      const clause = clauses[0]
-      if (!clause) {
+  if (filterModel.advancedExpression != null) {
+    backendFilterModel.advancedExpression = filterModel.advancedExpression
+  }
+  if (filterModel.advancedFilters != null) {
+    const clonedAdvancedFilters: Record<string, unknown> = {}
+    for (const [columnId, advancedFilter] of Object.entries(filterModel.advancedFilters)) {
+      if (columnId === omitColumnId) {
         continue
       }
-      const operator = clause.operator == null ? "" : String(clause.operator).trim().toLowerCase()
-      if (operator === "contains" || operator === "equals" || operator === "eq" || operator === "is") {
-        const value = normalizeFilterValueForColumn(columnId, clause.value)
-        if (value === null) {
-          continue
-        }
-        backendFilterModel[columnId] = {
-          type: operator === "contains" ? "contains" : "equals",
-          filter: value,
-        }
-      } else if (operator === "gt" || operator === "gte" || operator === "lt" || operator === "lte") {
-        setBackendFilter(
-          backendFilterModel,
-          columnId,
-          createBackendFilterForPredicate(columnId, operator, clause.value),
-        )
+      if (!advancedFilter || typeof advancedFilter !== "object") {
+        continue
+      }
+      const clonedAdvancedFilter = advancedFilter as unknown as Record<string, unknown>
+      const clauses = Array.isArray((advancedFilter as { clauses?: unknown }).clauses)
+        ? ((advancedFilter as { clauses?: readonly unknown[] }).clauses ?? []).map(clause => (
+            clause && typeof clause === "object" ? { ...(clause as Record<string, unknown>) } : clause
+          ))
+        : []
+      clonedAdvancedFilters[columnId] = {
+        ...clonedAdvancedFilter,
+        clauses,
       }
     }
+    if (Object.keys(clonedAdvancedFilters).length > 0) {
+      backendFilterModel.advancedFilters = clonedAdvancedFilters
+    }
   }
-
-  flattenAdvancedExpression(filterModel.advancedExpression, omitColumnId, backendFilterModel)
 
   if (Object.keys(backendFilterModel).length === 0) {
     return null

@@ -3,10 +3,12 @@ from __future__ import annotations
 import logging
 import math
 import re
+from datetime import datetime
+from collections.abc import Mapping
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import Integer, cast, func, literal, or_, select
+from sqlalchemy import Integer, String, and_, cast, func, literal, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from affino_grid_backend.core.columns import GridColumnDefinition, GridColumnRegistry
@@ -38,26 +40,452 @@ class GridProjectionService:
             return []
 
         conditions: list[Any] = []
-        for column_id, raw_filter in filter_model.items():
+        for column_id, raw_filter in self._iter_filter_model_columns(filter_model):
             definition = self._column_definition(column_id)
             if definition is None or not definition.filterable:
                 continue
 
             column = getattr(self._model, definition.model_attr)
-            if definition.value_type == "enum":
-                values = self._extract_filter_values(raw_filter)
-                if len(values) == 1:
-                    conditions.append(column == values[0])
-                elif len(values) > 1:
-                    conditions.append(column.in_(values))
-            elif definition.value_type == "integer":
-                conditions.extend(self.build_integer_conditions(column, raw_filter))
-            elif definition.value_type == "string":
-                value = self._extract_filter_value(raw_filter)
-                if value:
-                    conditions.append(column.ilike(f"%{value}%"))
+            conditions.extend(self._build_column_filter_conditions(definition, column, raw_filter))
+
+        advanced_expression = self._resolve_advanced_expression(filter_model)
+        if advanced_expression is not None:
+            advanced_condition = self._build_advanced_expression_condition(advanced_expression)
+            if advanced_condition is not None:
+                conditions.append(advanced_condition)
 
         return conditions
+
+    def _iter_filter_model_columns(self, filter_model: dict[str, Any]) -> Sequence[tuple[str, Any]]:
+        column_filters = filter_model.get("columnFilters")
+        if isinstance(column_filters, Mapping):
+            return tuple((str(column_id), raw_filter) for column_id, raw_filter in column_filters.items())
+
+        control_keys = {"advancedExpression", "advancedFilters", "columnStyleFilters"}
+        return tuple(
+            (str(column_id), raw_filter)
+            for column_id, raw_filter in filter_model.items()
+            if column_id not in control_keys
+        )
+
+    def _build_column_filter_conditions(
+        self,
+        definition: GridColumnDefinition,
+        column: Any,
+        raw_filter: Any,
+    ) -> list[Any]:
+        if isinstance(raw_filter, dict):
+            kind = str(raw_filter.get("kind") or "").strip().lower()
+            if kind == "valueset":
+                return self._build_value_set_filter_conditions(definition, column, raw_filter.get("tokens"))
+            if kind == "predicate":
+                return self._build_predicate_filter_conditions(definition, column, raw_filter)
+
+        if definition.value_type == "enum":
+            values = self._extract_filter_values(raw_filter)
+            if len(values) == 1:
+                return [self._build_text_equals_condition(column, values[0])]
+            if len(values) > 1:
+                return [self._build_text_in_condition(column, values)]
+            return []
+        if definition.value_type == "integer":
+            return self.build_integer_conditions(column, raw_filter)
+        if definition.value_type == "datetime":
+            return self._build_datetime_filter_conditions(column, raw_filter)
+        if definition.value_type == "string":
+            value = self._extract_filter_value(raw_filter)
+            if value:
+                return [self._build_text_contains_condition(column, value)]
+        return []
+
+    def _build_value_set_filter_conditions(
+        self,
+        definition: GridColumnDefinition,
+        column: Any,
+        raw_values: Any,
+    ) -> list[Any]:
+        if definition.value_type == "integer":
+            return self.build_integer_conditions(column, {"values": raw_values})
+
+        values = self._extract_filter_values({"values": raw_values})
+        if len(values) == 1:
+            return [self._build_text_equals_condition(column, values[0])]
+        if len(values) > 1:
+            return [self._build_text_in_condition(column, values)]
+        return []
+
+    def _build_predicate_filter_conditions(
+        self,
+        definition: GridColumnDefinition,
+        column: Any,
+        raw_filter: Mapping[str, Any],
+    ) -> list[Any]:
+        operator = str(raw_filter.get("operator") or "").strip().lower()
+        value = raw_filter.get("value")
+        value2 = raw_filter.get("value2")
+
+        if definition.value_type == "integer":
+            return self._build_numeric_predicate_conditions(column, operator, value, value2)
+        if definition.value_type == "datetime":
+            return self._build_datetime_predicate_conditions(column, operator, value, value2)
+        return self._build_text_predicate_conditions(column, operator, value, value2)
+
+    def _build_text_predicate_conditions(
+        self,
+        column: Any,
+        operator: str,
+        value: Any,
+        value2: Any,
+    ) -> list[Any]:
+        column_text = self._text_column_expression(column)
+
+        if operator in {"is-empty", "empty"}:
+            return [self._is_text_empty(column)]
+        if operator in {"not-empty", "is-not-empty"}:
+            return [not_(self._is_text_empty(column))]
+        if operator in {"is-null", "null"}:
+            return [column.is_(None)]
+        if operator in {"not-null", "is-not-null"}:
+            return [column.is_not(None)]
+        if operator in {"in", "not-in", "notin"}:
+            values = [self._normalize_text_value(item) for item in self._to_sequence(value)]
+            values = [item for item in values if item is not None]
+            if not values:
+                return []
+            condition = self._build_text_in_condition(column, values)
+            return [condition if operator == "in" else not_(condition)]
+
+        normalized = self._normalize_text_value(value)
+        if operator in {"eq", "equals", "is"}:
+            if normalized is None:
+                return []
+            return [self._build_text_equals_condition(column, normalized)]
+        if operator in {"ne", "not-equals", "notequals", "is-not"}:
+            if normalized is None:
+                return []
+            return [self._build_text_not_equals_condition(column, normalized)]
+        if operator == "contains":
+            if normalized is None:
+                return []
+            return [column_text.contains(normalized.lower())]
+        if operator in {"startswith", "starts-with"}:
+            if normalized is None:
+                return []
+            return [column_text.startswith(normalized.lower())]
+        if operator in {"endswith", "ends-with"}:
+            if normalized is None:
+                return []
+            return [column_text.endswith(normalized.lower())]
+        if operator in {"gt", ">"}:
+            if normalized is None:
+                return []
+            return [column_text > str(normalized).lower()]
+        if operator in {"gte", ">="}:
+            if normalized is None:
+                return []
+            return [column_text >= str(normalized).lower()]
+        if operator in {"lt", "<"}:
+            if normalized is None:
+                return []
+            return [column_text < str(normalized).lower()]
+        if operator in {"lte", "<="}:
+            if normalized is None:
+                return []
+            return [column_text <= str(normalized).lower()]
+        if operator in {"regex", "matches"}:
+            if normalized is None:
+                return []
+            return [column_text.op("~*")(str(normalized))]
+        return []
+
+    def _build_numeric_predicate_conditions(
+        self,
+        column: Any,
+        operator: str,
+        value: Any,
+        value2: Any,
+    ) -> list[Any]:
+        if operator in {"is-empty", "empty"}:
+            return [column.is_(None)]
+        if operator in {"not-empty", "is-not-empty"}:
+            return [column.is_not(None)]
+        if operator in {"is-null", "null"}:
+            return [column.is_(None)]
+        if operator in {"not-null", "is-not-null"}:
+            return [column.is_not(None)]
+
+        if operator in {"in", "not-in", "notin"}:
+            values = [coerced for coerced in (self._coerce_optional_number(item) for item in self._to_sequence(value)) if coerced is not None]
+            if not values:
+                return []
+            condition = column.in_(values)
+            return [condition if operator == "in" else not_(condition)]
+
+        left = self._coerce_optional_number(value)
+        right = self._coerce_optional_number(value2)
+        if operator in {"between", "range"}:
+            if left is None or right is None:
+                return []
+            minimum = min(left, right)
+            maximum = max(left, right)
+            return [and_(column >= minimum, column <= maximum)]
+        if left is None:
+            return []
+        if operator in {"eq", "equals", "is"}:
+            return [column == left]
+        if operator in {"ne", "not-equals", "notequals", "is-not"}:
+            return [column != left]
+        if operator in {"gt", ">"}:
+            return [column > left]
+        if operator in {"gte", ">="}:
+            return [column >= left]
+        if operator in {"lt", "<"}:
+            return [column < left]
+        if operator in {"lte", "<="}:
+            return [column <= left]
+        return []
+
+    def _build_datetime_predicate_conditions(
+        self,
+        column: Any,
+        operator: str,
+        value: Any,
+        value2: Any,
+    ) -> list[Any]:
+        if operator in {"is-empty", "empty"}:
+            return [column.is_(None)]
+        if operator in {"not-empty", "is-not-empty"}:
+            return [column.is_not(None)]
+        if operator in {"is-null", "null"}:
+            return [column.is_(None)]
+        if operator in {"not-null", "is-not-null"}:
+            return [column.is_not(None)]
+
+        if operator in {"in", "not-in", "notin"}:
+            values = [coerced for coerced in (self._coerce_optional_datetime(item) for item in self._to_sequence(value)) if coerced is not None]
+            if not values:
+                return []
+            condition = column.in_(values)
+            return [condition if operator == "in" else not_(condition)]
+
+        left = self._coerce_optional_datetime(value)
+        right = self._coerce_optional_datetime(value2)
+        if operator in {"between", "range"}:
+            if left is None or right is None:
+                return []
+            minimum = min(left, right)
+            maximum = max(left, right)
+            return [and_(column >= minimum, column <= maximum)]
+        if left is None:
+            return []
+        if operator in {"eq", "equals", "is"}:
+            return [column == left]
+        if operator in {"ne", "not-equals", "notequals", "is-not"}:
+            return [column != left]
+        if operator in {"gt", ">"}:
+            return [column > left]
+        if operator in {"gte", ">="}:
+            return [column >= left]
+        if operator in {"lt", "<"}:
+            return [column < left]
+        if operator in {"lte", "<="}:
+            return [column <= left]
+        return []
+
+    def _build_advanced_expression_condition(self, expression: Any) -> Any | None:
+        if not isinstance(expression, Mapping):
+            return None
+        kind = str(expression.get("kind") or "").strip().lower()
+        if kind == "condition":
+            return self._build_advanced_condition(expression)
+        if kind == "not":
+            child = self._build_advanced_expression_condition(expression.get("child"))
+            if child is None:
+                return literal(False)
+            return not_(child)
+        if kind == "group":
+            children = [
+                child
+                for child in (
+                    self._build_advanced_expression_condition(item)
+                    for item in expression.get("children") or []
+                )
+                if child is not None
+            ]
+            if not children:
+                return literal(False)
+            operator = str(expression.get("operator") or "and").strip().lower()
+            if operator == "or":
+                return or_(*children)
+            return and_(*children)
+        return literal(False)
+
+    def _build_advanced_condition(self, condition: Mapping[str, Any]) -> Any:
+        column_id = str(condition.get("key") or condition.get("field") or "").strip()
+        if not column_id:
+            return literal(False)
+        definition = self._column_definition(column_id)
+        if definition is None or not definition.filterable:
+            return literal(False)
+
+        column = getattr(self._model, definition.model_attr)
+        operator = str(condition.get("operator") or "equals").strip().lower()
+        value = condition.get("value")
+        value2 = condition.get("value2")
+        condition_type = str(condition.get("type") or definition.value_type).strip().lower()
+
+        if condition_type == "number":
+            clauses = self._build_numeric_predicate_conditions(column, operator, value, value2)
+        elif condition_type == "date":
+            clauses = self._build_datetime_predicate_conditions(column, operator, value, value2)
+        else:
+            clauses = self._build_text_predicate_conditions(column, operator, value, value2)
+
+        if clauses:
+            return clauses[0]
+        return literal(False)
+
+    def _resolve_advanced_expression(self, filter_model: dict[str, Any]) -> Any | None:
+        advanced_expression = filter_model.get("advancedExpression")
+        if advanced_expression is not None:
+            return advanced_expression
+
+        advanced_filters = filter_model.get("advancedFilters")
+        if not isinstance(advanced_filters, Mapping):
+            return None
+
+        per_column_expressions: list[Any] = []
+        for key, advanced in advanced_filters.items():
+            if not isinstance(advanced, Mapping):
+                continue
+            clauses = advanced.get("clauses")
+            if not isinstance(clauses, Sequence) or isinstance(clauses, (str, bytes)) or len(clauses) == 0:
+                continue
+            first_clause = clauses[0]
+            if not isinstance(first_clause, Mapping):
+                continue
+
+            current: Any | None = self._build_legacy_clause_condition(
+                str(key),
+                str(advanced.get("type") or "text"),
+                first_clause,
+            )
+            for clause in clauses[1:]:
+                if not isinstance(clause, Mapping):
+                    continue
+                next_condition = self._build_legacy_clause_condition(
+                    str(key),
+                    str(advanced.get("type") or "text"),
+                    clause,
+                )
+                join = self._normalize_clause_join(clause.get("join"))
+                if current is None:
+                    current = next_condition
+                    continue
+                current = {
+                    "kind": "group",
+                    "operator": join,
+                    "children": [current, next_condition],
+                }
+
+            if current is not None:
+                per_column_expressions.append(current)
+
+        if not per_column_expressions:
+            return None
+        if len(per_column_expressions) == 1:
+            return per_column_expressions[0]
+        return {
+            "kind": "group",
+            "operator": "and",
+            "children": per_column_expressions,
+        }
+
+    def _build_legacy_clause_condition(
+        self,
+        column_id: str,
+        condition_type: str,
+        clause: Mapping[str, Any],
+    ) -> Any:
+        operator = str(clause.get("operator") or "equals").strip().lower()
+        return {
+            "kind": "condition",
+            "key": column_id,
+            "type": condition_type,
+            "operator": operator,
+            "value": clause.get("value"),
+            "value2": clause.get("value2"),
+        }
+
+    def _normalize_clause_join(self, join: Any) -> str:
+        return "or" if str(join or "and").strip().lower() == "or" else "and"
+
+    def _build_text_equals_condition(self, column: Any, value: Any) -> Any:
+        return self._text_column_expression(column) == self._normalize_text_value(value)
+
+    def _build_text_not_equals_condition(self, column: Any, value: Any) -> Any:
+        return self._text_column_expression(column) != self._normalize_text_value(value)
+
+    def _build_text_in_condition(self, column: Any, values: Sequence[Any]) -> Any:
+        normalized_values = [self._normalize_text_value(value) for value in values if self._normalize_text_value(value) is not None]
+        return self._text_column_expression(column).in_(normalized_values)
+
+    def _build_text_contains_condition(self, column: Any, value: Any) -> Any:
+        normalized = self._normalize_text_value(value)
+        if normalized is None:
+            return literal(False)
+        return self._text_column_expression(column).contains(normalized.lower())
+
+    def _text_column_expression(self, column: Any) -> Any:
+        return func.lower(cast(column, String))
+
+    def _is_text_empty(self, column: Any) -> Any:
+        return or_(column.is_(None), func.trim(cast(column, String)) == "")
+
+    def _normalize_text_value(self, value: Any) -> str | None:
+        normalized = normalize_filter_scalar(value)
+        if normalized is None:
+            return None
+        return str(normalized).strip().lower()
+
+    def _coerce_optional_number(self, value: Any) -> int | float | None:
+        normalized = normalize_filter_scalar(value)
+        if normalized is None:
+            return None
+        if isinstance(normalized, (int, float)) and not isinstance(normalized, bool):
+            return normalized
+        try:
+            numeric = float(normalized)
+        except (TypeError, ValueError):
+            return None
+        if numeric.is_integer():
+            return int(numeric)
+        return numeric
+
+    def _coerce_optional_datetime(self, value: Any) -> datetime | None:
+        normalized = normalize_filter_scalar(value)
+        if normalized is None:
+            return None
+        if isinstance(normalized, datetime):
+            return normalized
+        if isinstance(normalized, str):
+            candidate = normalized.strip()
+            if not candidate:
+                return None
+            if candidate.endswith("Z"):
+                candidate = f"{candidate[:-1]}+00:00"
+            try:
+                return datetime.fromisoformat(candidate)
+            except ValueError:
+                return None
+        return None
+
+    def _to_sequence(self, value: Any) -> Sequence[Any]:
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            return value
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        return [value]
 
     def build_integer_conditions(self, column_attr: Any, raw_filter: Any) -> list[Any]:
         if not isinstance(raw_filter, dict):

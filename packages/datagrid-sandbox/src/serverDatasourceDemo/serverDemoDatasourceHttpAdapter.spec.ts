@@ -893,7 +893,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     })
   })
 
-  it("flattens browser advanced filter expressions into supported backend filters", async () => {
+  it("preserves browser advanced filter expressions for backend evaluation", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       rows: [],
       total: 0,
@@ -929,9 +929,16 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       range: { startRow: 0, endRow: 50 },
       sortModel: [{ colId: "value", sort: "desc" }],
       filterModel: {
-        region: { type: "equals", filter: "EMEA" },
-        name: { type: "contains", filter: "0001" },
-        value: { type: "greaterThanOrEqual", filter: 1000 },
+        advancedExpression: {
+          kind: "group",
+          operator: "and",
+          children: [
+            { kind: "condition", key: "region", operator: "in", value: "emea" },
+            { kind: "condition", key: "name", operator: "contains", value: "0001" },
+            { kind: "condition", key: "value", type: "number", operator: "gte", value: 1000 },
+            { kind: "group", operator: "or", children: [{ kind: "condition", key: "status", operator: "equals", value: "" }] },
+          ],
+        },
       },
     })
   })
