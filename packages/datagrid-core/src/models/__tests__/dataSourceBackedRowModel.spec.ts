@@ -820,6 +820,74 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("keeps visible rows stable when commit success invalidates a touched row", async () => {
+    const rows = [
+      { id: 1, value: "row-1" },
+      { id: 2, value: "row-2" },
+    ]
+    const calls: PullCall<{ id: number; value: string }>[] = []
+    let invalidateRows: ((rowIds: readonly number[]) => void) | null = null
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise<DataGridDataSourcePullResult<{ id: number; value: string }>>((resolve, reject) => {
+          calls.push({
+            request,
+            resolve,
+            reject,
+          })
+        })
+      },
+      async commitEdits() {
+        rows[0] = { ...rows[0], value: "server-updated" }
+        invalidateRows?.([1])
+        return { committed: [{ rowId: 1 }] }
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+    invalidateRows = rowIds => model.invalidateRows(rowIds)
+
+    model.setViewportRange({ start: 0, end: 1 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: rows.map((row, index) => ({ index, row, rowId: row.id })),
+      total: rows.length,
+    })
+    await flushMicrotasks()
+
+    const patchRows = model.patchRows
+    const patchPromise = Promise.resolve(patchRows ? patchRows([
+      { rowId: 1, data: { value: "updated" } },
+    ]) : undefined)
+
+    await patchPromise
+
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.request.reason).toBe("invalidation")
+    expect(model.getSnapshot().loading).toBe(false)
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual([
+      "updated",
+      "row-2",
+    ])
+
+    calls[1]?.resolve({
+      rows: rows.map((row, index) => ({ index, row, rowId: row.id })),
+      total: rows.length,
+    })
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual([
+      "server-updated",
+      "row-2",
+    ])
+
+    model.dispose()
+  })
+
   it("reconciles optimistic inline edits with server refresh data after commit success", async () => {
     const rows = [
       { id: 1, value: "row-1" },
@@ -2113,9 +2181,16 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
-  it("invalidates a single cached row by rowId without clearing unrelated rows", async () => {
+  it("refreshes a visible row invalidation without clearing cached rows first", async () => {
+    let generation = 0
     const pull = vi.fn(async (request: DataGridDataSourcePullRequest) => {
-      const rows = buildRows(request.range.start, request.range.end)
+      const rows = Array.from({ length: request.range.end - request.range.start + 1 }, (_, offset) => {
+        const index = request.range.start + offset
+        return {
+          index,
+          row: { id: index, value: generation > 0 ? `row-${index}-fresh` : `row-${index}` },
+        }
+      })
       return {
         rows,
         total: 1_000,
@@ -2135,18 +2210,21 @@ describe("createDataSourceBackedRowModel", () => {
     expect(model.getRow(12)?.row.value).toBe("row-12")
     expect(model.getRow(13)?.row.value).toBe("row-13")
 
+    generation = 1
     model.invalidateRows([12])
 
-    expect(model.getRow(12)).toBeUndefined()
+    expect(model.getRow(12)?.row.value).toBe("row-12")
     expect(model.getRow(11)?.row.value).toBe("row-11")
     expect(model.getRow(13)?.row.value).toBe("row-13")
+    expect(model.getSnapshot().loading).toBe(false)
 
     await flushMicrotasks()
 
     expect(pull).toHaveBeenCalledTimes(2)
-    expect(model.getRow(11)?.row.value).toBe("row-11")
-    expect(model.getRow(12)?.row.value).toBe("row-12")
-    expect(model.getRow(13)?.row.value).toBe("row-13")
+    expect(model.getRow(11)?.row.value).toBe("row-11-fresh")
+    expect(model.getRow(12)?.row.value).toBe("row-12-fresh")
+    expect(model.getRow(13)?.row.value).toBe("row-13-fresh")
+    expect(model.getBackpressureDiagnostics().invalidatedRows).toBe(0)
 
     model.dispose()
   })
@@ -2174,10 +2252,11 @@ describe("createDataSourceBackedRowModel", () => {
 
     expect(pull).toHaveBeenCalledTimes(2)
     expect(model.getRow(20)?.row.value).toBe("row-20")
-    expect(model.getRow(21)).toBeUndefined()
+    expect(model.getRow(21)?.row.value).toBe("row-21")
     expect(model.getRow(22)?.row.value).toBe("row-22")
-    expect(model.getRow(23)).toBeUndefined()
+    expect(model.getRow(23)?.row.value).toBe("row-23")
     expect(model.getRow(24)?.row.value).toBe("row-24")
+    expect(model.getSnapshot().loading).toBe(false)
 
     await flushMicrotasks()
 
