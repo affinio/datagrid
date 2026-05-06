@@ -9,6 +9,7 @@ export interface CreateServerDemoDatasourceHttpFillDataSourceOptions {
     ServerDemoHttpDatasource,
     "resolveFillBoundary" | "commitFillOperation" | "undoFillOperation" | "redoFillOperation"
   > | null
+  refreshHistoryStatus?: () => Promise<void> | void
 }
 
 export function createServerDemoDatasourceHttpFillDataSource(
@@ -34,21 +35,27 @@ export function createServerDemoDatasourceHttpFillDataSource(
       if (typeof commitFillOperation !== "function") {
         throw new Error("Server demo HTTP adapter does not implement commitFillOperation")
       }
-      return await commitFillOperation(request)
+      const result = await commitFillOperation(request)
+      await options.refreshHistoryStatus?.()
+      return result
     },
     async undoFillOperation(request) {
       const undoFillOperation = httpDatasource.undoFillOperation
       if (typeof undoFillOperation !== "function") {
         throw new Error("Server demo HTTP adapter does not implement undoFillOperation")
       }
-      return await undoFillOperation(request)
+      const result = await undoFillOperation(request)
+      await options.refreshHistoryStatus?.()
+      return result
     },
     async redoFillOperation(request) {
       const redoFillOperation = httpDatasource.redoFillOperation
       if (typeof redoFillOperation !== "function") {
         throw new Error("Server demo HTTP adapter does not implement redoFillOperation")
       }
-      return await redoFillOperation(request)
+      const result = await redoFillOperation(request)
+      await options.refreshHistoryStatus?.()
+      return result
     },
   }
 }

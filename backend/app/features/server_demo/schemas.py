@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ServerDemoHealthResponse(BaseModel):
@@ -147,6 +147,8 @@ class ServerDemoFillCommitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     operation_id: str | None = Field(default=None, alias="operationId")
+    user_id: str | None = Field(default=None, alias="userId")
+    session_id: str | None = Field(default=None, alias="sessionId")
     revision: str | int | None = None
     base_revision: str | None = Field(default=None, alias="baseRevision")
     projection_hash: str | None = Field(default=None, alias="projectionHash")
@@ -187,6 +189,8 @@ class ServerDemoCommitEditsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     operation_id: str | None = Field(default=None, alias="operationId")
+    user_id: str | None = Field(default=None, alias="userId")
+    session_id: str | None = Field(default=None, alias="sessionId")
     base_revision: str | None = Field(default=None, alias="baseRevision")
     edits: list[ServerDemoEditItem] = Field(default_factory=list)
 
@@ -232,3 +236,62 @@ class ServerDemoCommitEditsResponse(BaseModel):
     rejected: list[ServerDemoRejectedEdit] = Field(default_factory=list)
     revision: str
     invalidation: ServerDemoEditInvalidation | None = None
+
+
+class ServerDemoHistoryStackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    workspace_id: str = Field(alias="workspaceId", min_length=1)
+    table_id: str = Field(alias="tableId", min_length=1)
+    user_id: str | None = Field(default=None, alias="userId")
+    session_id: str | None = Field(default=None, alias="sessionId")
+
+    @model_validator(mode="after")
+    def require_user_or_session(self) -> "ServerDemoHistoryStackRequest":
+        user_id = self.user_id.strip() if self.user_id else ""
+        session_id = self.session_id.strip() if self.session_id else ""
+        if not user_id and not session_id:
+            raise ValueError("user_id or session_id is required")
+        self.user_id = user_id or None
+        self.session_id = session_id or None
+        return self
+
+
+class ServerDemoHistoryStackResponse(ServerDemoCommitEditsResponse):
+    action: Literal["undo", "redo"]
+    can_undo: bool = Field(alias="canUndo")
+    can_redo: bool = Field(alias="canRedo")
+    affected_rows: int = Field(alias="affectedRows", ge=0)
+    affected_cells: int = Field(alias="affectedCells", ge=0)
+
+
+class ServerDemoHistoryStatusRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    workspace_id: str = Field(alias="workspaceId", min_length=1)
+    table_id: str = Field(alias="tableId", min_length=1)
+    user_id: str | None = Field(default=None, alias="userId")
+    session_id: str | None = Field(default=None, alias="sessionId")
+
+    @model_validator(mode="after")
+    def require_user_or_session(self) -> "ServerDemoHistoryStatusRequest":
+        user_id = self.user_id.strip() if self.user_id else ""
+        session_id = self.session_id.strip() if self.session_id else ""
+        if not user_id and not session_id:
+            raise ValueError("user_id or session_id is required")
+        self.user_id = user_id or None
+        self.session_id = session_id or None
+        return self
+
+
+class ServerDemoHistoryStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    workspace_id: str
+    table_id: str
+    user_id: str | None = None
+    session_id: str | None = None
+    can_undo: bool = Field(alias="canUndo")
+    can_redo: bool = Field(alias="canRedo")
+    latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
+    latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")

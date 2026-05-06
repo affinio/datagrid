@@ -119,7 +119,7 @@ class GridEditServiceBase(ABC):
             if cell_events:
                 operation_id = requested_operation_id or self.create_edit_operation_id()
                 await self.ensure_operation_id_available(session, operation_id)
-                await self.create_operation(session, operation_id, changed_at)
+                await self.create_operation(session, operation_id, changed_at, request)
                 await session.flush()
                 await self.create_cell_events(session, operation_id, cell_events, changed_at)
 
@@ -178,7 +178,7 @@ class GridEditServiceBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_operation(self, session: AsyncSession, operation_id: str, changed_at: datetime) -> None:
+    async def create_operation(self, session: AsyncSession, operation_id: str, changed_at: datetime, request: Any) -> None:
         raise NotImplementedError
 
     @abstractmethod

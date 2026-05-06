@@ -528,6 +528,9 @@ import {
   createServerDemoDatasourceHttpFillDataSource,
 } from "../serverDatasourceDemo/serverDemoDatasourceHttpFillDataSource"
 import {
+  resolveServerDemoHistoryScopeFromEnv,
+} from "../serverDatasourceDemo/serverDemoHistoryScope"
+import {
   type ServerDemoDatasourceHooks,
   type ServerDemoCommitEditsResult,
   normalizeServerDemoValueCellInput,
@@ -563,13 +566,17 @@ const loading = ref(true)
 const error = ref<Error | null>(null)
 const serverDatasourceUnavailableMessage = "Server datasource is unavailable. Check backend and retry."
 const serverDatasourceUnavailable = ref(false)
+const serverDemoHistoryScope = resolveServerDemoHistoryScopeFromEnv()
 const sortModelText = ref("none")
 const filterModelText = ref("none")
 const commitModeText = ref("ok")
 const commitMessageText = ref("none")
 const commitDetailsText = ref("none")
-const serverEditOperationHistory = ref<string[]>([])
-const serverEditRedoHistory = ref<string[]>([])
+const serverHistoryCanUndo = ref(false)
+const serverHistoryCanRedo = ref(false)
+const serverHistoryLastOperationIdText = ref("none")
+const serverHistoryAffectedRowsText = ref("0")
+const serverHistoryAffectedCellsText = ref("0")
 const clientBatchAppliedText = ref("no")
 const clientBatchWarningText = ref("none")
 const datasourceKeysText = ref("none")
@@ -858,6 +865,7 @@ type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<Se
 type ServerDemoCommitFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>[0]
 type ServerDemoUndoFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>[0]
 type ServerDemoHttpDatasource = ReturnType<typeof createServerDemoDatasourceHttpAdapter>
+type ServerDemoHistoryStatusResponse = Awaited<ReturnType<NonNullable<ServerDemoHttpDatasource["getHistoryStatus"]>>>
 
 function resolveRowId(index: number): string {
   return `srv-${index.toString().padStart(6, "0")}`
@@ -1902,6 +1910,7 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
         enabled: true,
         fallbackDataSource: serverDatasource.dataSource,
         httpDatasource: serverDemoHttpDatasource,
+        refreshHistoryStatus: () => refreshHistoryStatus(),
       }),
       async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
         if (serverDatasourceUnavailable.value) {
@@ -1982,7 +1991,16 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
           const result = await commitEdits(request) as ServerDemoCommitEditsResult & {
             operationId?: string | null
           }
-          recordServerEditOperation(result.operationId)
+          const affectedRowCount = new Set(result.committed?.map(entry => entry.rowId) ?? []).size
+          syncHistoryDiagnostics({
+            operationId: result.operationId ?? null,
+            canUndo: true,
+            canRedo: false,
+            affectedRows: affectedRowCount,
+            affectedCells: result.committed?.length ?? 0,
+            action: "commit",
+          })
+          void refreshHistoryStatus()
           return result
         } catch (caught) {
           if (caught instanceof Error && caught.name === "AbortError") {
@@ -2187,13 +2205,13 @@ const plumbingLabel = computed(() => {
 const branchLabel = computed(() => branchState.value)
 const canUndoHistory = computed(() => {
   if (serverDemoHttpDatasourceEnabled) {
-    return serverEditOperationHistory.value.length > 0
+    return serverHistoryCanUndo.value
   }
   return gridRef.value?.history.canUndo() ?? false
 })
 const canRedoHistory = computed(() => {
   if (serverDemoHttpDatasourceEnabled) {
-    return serverEditRedoHistory.value.length > 0
+    return serverHistoryCanRedo.value
   }
   return gridRef.value?.history.canRedo() ?? false
 })
@@ -2203,10 +2221,16 @@ const serverHistoryAdapter = serverDemoHttpDatasourceEnabled
       captureSnapshotForRowIds: () => rowModel?.getSnapshot?.() ?? null,
       recordIntentTransaction: () => undefined,
       recordServerFillTransaction: descriptor => {
-        recordServerEditOperation(descriptor.operationId)
+        syncHistoryDiagnostics({
+          operationId: descriptor.operationId,
+          canUndo: true,
+          canRedo: false,
+          action: "commit",
+          resetAffected: true,
+        })
       },
-      canUndo: () => serverEditOperationHistory.value.length > 0,
-      canRedo: () => serverEditRedoHistory.value.length > 0,
+      canUndo: () => serverHistoryCanUndo.value,
+      canRedo: () => serverHistoryCanRedo.value,
       runHistoryAction: (direction: "undo" | "redo") => runHistoryAction(direction),
     } satisfies DataGridTableStageHistoryAdapter
   : null
@@ -2502,67 +2526,122 @@ function handleCellEdit(payload: {
   })
 }
 
-function recordServerEditOperation(operationId: string | null | undefined): void {
-  if (typeof operationId !== "string" || operationId.trim().length === 0) {
-    return
+function syncHistoryDiagnostics(result: {
+  operationId?: string | null
+  canUndo?: boolean
+  canRedo?: boolean
+  affectedRows?: number | null
+  affectedCells?: number | null
+  action?: "undo" | "redo" | "commit" | string | null
+  resetAffected?: boolean
+}): void {
+  if (typeof result.operationId === "string" && result.operationId.trim().length > 0) {
+    serverHistoryLastOperationIdText.value = result.operationId
   }
-  serverEditOperationHistory.value = [...serverEditOperationHistory.value, operationId]
-  serverEditRedoHistory.value = []
+  if (typeof result.canUndo === "boolean") {
+    serverHistoryCanUndo.value = result.canUndo
+  }
+  if (typeof result.canRedo === "boolean") {
+    serverHistoryCanRedo.value = result.canRedo
+  }
+  if (typeof result.affectedRows === "number" && Number.isFinite(result.affectedRows)) {
+    serverHistoryAffectedRowsText.value = String(Math.max(0, Math.trunc(result.affectedRows)))
+  } else if (result.resetAffected === true) {
+    serverHistoryAffectedRowsText.value = "unknown"
+  }
+  if (typeof result.affectedCells === "number" && Number.isFinite(result.affectedCells)) {
+    serverHistoryAffectedCellsText.value = String(Math.max(0, Math.trunc(result.affectedCells)))
+  } else if (result.resetAffected === true) {
+    serverHistoryAffectedCellsText.value = "unknown"
+  }
+  const operationId = serverHistoryLastOperationIdText.value
+  const action = typeof result.action === "string" && result.action.length > 0 ? result.action : "history"
+  lastHistoryActionText.value = `${action}:${operationId}`
+  lastEditRecordedText.value = `op=${operationId} rows=${serverHistoryAffectedRowsText.value} cells=${serverHistoryAffectedCellsText.value}`
 }
 
-function consumeServerEditOperation(direction: "undo" | "redo"): string | null {
-  if (direction === "undo") {
-    const operationId = serverEditOperationHistory.value[serverEditOperationHistory.value.length - 1] ?? null
-    if (!operationId) {
-      return null
+function applyHistoryStatusDiagnostics(result: {
+  canUndo: boolean
+  canRedo: boolean
+  latestUndoOperationId: string | null
+  latestRedoOperationId: string | null
+}): void {
+  serverHistoryCanUndo.value = result.canUndo
+  serverHistoryCanRedo.value = result.canRedo
+  serverHistoryLastOperationIdText.value = result.latestUndoOperationId ?? result.latestRedoOperationId ?? "none"
+}
+
+async function refreshHistoryStatus(): Promise<void> {
+  if (!serverDemoHttpDatasourceEnabled) {
+    return
+  }
+  const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
+  const historyStatus = serverDatasource?.getHistoryStatus
+  if (typeof historyStatus !== "function") {
+    return
+  }
+  try {
+    const result: ServerDemoHistoryStatusResponse = await historyStatus({
+      ...serverDemoHistoryScope,
+    })
+    applyHistoryStatusDiagnostics(result)
+  } catch (caught) {
+    if (caught instanceof Error && caught.name === "AbortError") {
+      return
     }
-    serverEditOperationHistory.value = serverEditOperationHistory.value.slice(0, -1)
-    serverEditRedoHistory.value = [...serverEditRedoHistory.value, operationId]
-    return operationId
+    if (isHttpUnavailableError(caught)) {
+      markHttpDatasourceUnavailable()
+    }
   }
-  const operationId = serverEditRedoHistory.value[serverEditRedoHistory.value.length - 1] ?? null
-  if (!operationId) {
-    return null
-  }
-  serverEditRedoHistory.value = serverEditRedoHistory.value.slice(0, -1)
-  serverEditOperationHistory.value = [...serverEditOperationHistory.value, operationId]
-  return operationId
 }
 
 async function runHistoryAction(direction: "undo" | "redo"): Promise<string | null> {
   if (serverDemoHttpDatasourceEnabled) {
-    const operationId = consumeServerEditOperation(direction)
     const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
-    const operationAction = direction === "undo"
-      ? serverDatasource?.undoOperation
-      : serverDatasource?.redoOperation
-    if (operationId && typeof operationAction === "function") {
+    const historyAction = direction === "undo"
+      ? serverDatasource?.undoHistoryStack
+      : serverDatasource?.redoHistoryStack
+    if (typeof historyAction === "function") {
       try {
-        const result = await operationAction({ operationId })
-        lastHistoryActionText.value = result.operationId ?? `${direction}:${operationId}`
-        void rowModel.refresh("manual")
-        lastEditRecordedText.value = canUndoHistory.value ? "yes" : "no"
+        const result = await historyAction({
+          ...serverDemoHistoryScope,
+        })
+        syncHistoryDiagnostics({
+          operationId: result.operationId ?? null,
+          canUndo: result.canUndo,
+          canRedo: result.canRedo,
+          affectedRows: result.affectedRows,
+          affectedCells: result.affectedCells,
+          action: result.action,
+        })
+        await rowModel.refresh("manual")
         gridRef.value?.restoreFocus?.()
-        return result.operationId ?? operationId
-      } catch (error) {
-        if (direction === "undo") {
-          serverEditRedoHistory.value = serverEditRedoHistory.value.filter(entry => entry !== operationId)
-          serverEditOperationHistory.value = [...serverEditOperationHistory.value, operationId]
-        } else {
-          serverEditOperationHistory.value = serverEditOperationHistory.value.filter(entry => entry !== operationId)
-          serverEditRedoHistory.value = [...serverEditRedoHistory.value, operationId]
-        }
-        throw error
+        return result.operationId ?? null
+      } catch (caught) {
+        throw caught
       }
     }
-    lastHistoryActionText.value = `${direction}:none`
-    lastEditRecordedText.value = canUndoHistory.value ? "yes" : "no"
+    syncHistoryDiagnostics({
+      action: `${direction}:none`,
+    })
     gridRef.value?.restoreFocus?.()
     return null
   }
   const result = await gridRef.value?.history.runHistoryAction(direction) ?? null
-  lastHistoryActionText.value = result ?? `${direction}:none`
-  lastEditRecordedText.value = gridRef.value?.history.canUndo() ? "yes" : "no"
+  if (result) {
+    syncHistoryDiagnostics({
+      operationId: result,
+      canUndo: gridRef.value?.history.canUndo() ?? false,
+      canRedo: gridRef.value?.history.canRedo() ?? false,
+      action: direction,
+    })
+  } else {
+    syncHistoryDiagnostics({
+      action: `${direction}:none`,
+      canUndo: gridRef.value?.history.canUndo() ?? false,
+      canRedo: gridRef.value?.history.canRedo() ?? false,
+    })
+  }
   gridRef.value?.restoreFocus?.()
   return result
 }
@@ -2675,6 +2754,7 @@ function simulateCommitFailure(): void {
 onMounted(() => {
   totalRows.value = ROW_COUNT
   handleStateUpdate(rowModel.getSnapshot())
+  void refreshHistoryStatus()
   void rowModel.refresh("mount")
   lastEditRecordedText.value = "no"
 })

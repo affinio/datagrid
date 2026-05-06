@@ -7,6 +7,10 @@ import type {
 } from "@affino/datagrid-vue"
 
 import { createServerDemoDatasourceHttpAdapter, ServerDemoHttpError } from "./serverDemoDatasourceHttpAdapter"
+import {
+  createServerDemoHistoryScope,
+  resolveServerDemoHistoryScopeFromEnv,
+} from "./serverDemoHistoryScope"
 import type { ServerDemoCommitEditsRequest } from "./types"
 
 function createAbortablePullRequest(): DataGridDataSourcePullRequest {
@@ -125,6 +129,27 @@ function createFillProjection() {
 }
 
 describe("createServerDemoDatasourceHttpAdapter", () => {
+  it("keeps the default history scope stable", () => {
+    expect(createServerDemoHistoryScope()).toEqual({
+      workspace_id: "server-demo-sandbox",
+      table_id: "server_demo",
+      session_id: "server-demo-session",
+    })
+  })
+
+  it("resolves history scope overrides from the demo env", () => {
+    expect(resolveServerDemoHistoryScopeFromEnv({
+      VITE_SERVER_DEMO_WORKSPACE_ID: "  workspace-override  ",
+      VITE_SERVER_DEMO_SESSION_ID: " session-override ",
+      VITE_SERVER_DEMO_USER_ID: " user-override ",
+    })).toEqual({
+      workspace_id: "workspace-override",
+      table_id: "server_demo",
+      session_id: "session-override",
+      user_id: "user-override",
+    })
+  })
+
   it("posts pulls to the backend and maps rows with ServerDemoRow shape intact", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       rows: [
@@ -366,10 +391,16 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
         },
       ],
     })
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       operationId: "op-inline-1",
       committed: [{ rowId: "srv-000001", revision: "rev-global-1" }],
       rejected: [],
+      revision: "rev-global-1",
+      invalidation: {
+        kind: "range",
+        range: { start: 1, end: 1 },
+        reason: "server-demo-edits",
+      },
     })
   })
 
@@ -467,10 +498,12 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
       edits: [{ rowId: "srv-000004", columnId: "id", value: "srv-hacked" }],
     })
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       operationId: "op-readonly-1",
       committed: [],
       rejected: [{ rowId: "srv-000004", reason: "id: readonly-column" }],
+      revision: "rev-global-3",
+      invalidation: null,
     })
   })
 
@@ -501,10 +534,16 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       ],
     })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       operationId: "op-partial-1",
       committed: [{ rowId: "srv-000005", revision: "rev-global-4" }],
       rejected: [{ rowId: "srv-000006", reason: "status: invalid-enum-value" }],
+      revision: "rev-global-4",
+      invalidation: {
+        kind: "range",
+        range: { start: 5, end: 5 },
+        reason: "server-demo-edits",
+      },
     })
   })
 
@@ -895,5 +934,116 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:8000/api/server-demo/operations/fill-123/undo")
     expect(fetchImpl.mock.calls[1]?.[0]).toBe("http://localhost:8000/api/server-demo/operations/fill-123/redo")
+  })
+
+  it("routes stack undo and redo through the history endpoints with scoped payloads", async () => {
+    const scope = createServerDemoHistoryScope({
+      user_id: "user-1",
+    })
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>
+      const action = String(String(_url).includes("/redo") ? "redo" : "undo")
+      return new Response(JSON.stringify({
+        operationId: `${action}-stack-123`,
+        action,
+        canUndo: action === "undo",
+        canRedo: action === "redo",
+        affectedRows: 2,
+        affectedCells: 3,
+        committed: [],
+        committedRowIds: [],
+        rejected: [],
+        revision: "rev-history-stack",
+        invalidation: {
+          kind: "range",
+          range: { start: 10, end: 12 },
+          reason: "server-demo-history",
+        },
+        body,
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+    })
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ baseUrl: "http://localhost:8000", fetchImpl })
+    const undoResult = await adapter.undoHistoryStack!({
+      ...scope,
+    })
+    const redoResult = await adapter.redoHistoryStack!({
+      ...scope,
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:8000/api/history/undo")
+    expect(fetchImpl.mock.calls[1]?.[0]).toBe("http://localhost:8000/api/history/redo")
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body ?? "{}"))).toMatchObject({
+      ...scope,
+    })
+    expect(JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body ?? "{}"))).toMatchObject({
+      workspace_id: scope.workspace_id,
+      table_id: scope.table_id,
+      session_id: scope.session_id,
+    })
+    expect(undoResult).toMatchObject({
+      operationId: "undo-stack-123",
+      action: "undo",
+      canUndo: true,
+      canRedo: false,
+      affectedRows: 2,
+      affectedCells: 3,
+    })
+    expect(redoResult).toMatchObject({
+      operationId: "redo-stack-123",
+      action: "redo",
+      canUndo: false,
+      canRedo: true,
+      affectedRows: 2,
+      affectedCells: 3,
+    })
+  })
+
+  it("routes history status through the status endpoint with scoped payloads", async () => {
+    const scope = createServerDemoHistoryScope({
+      user_id: "user-1",
+    })
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>
+      return new Response(JSON.stringify({
+        workspace_id: body.workspace_id,
+        table_id: body.table_id,
+        user_id: body.user_id ?? null,
+        session_id: body.session_id ?? null,
+        canUndo: true,
+        canRedo: false,
+        latestUndoOperationId: "status-undo-1",
+        latestRedoOperationId: null,
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+    })
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ baseUrl: "http://localhost:8000", fetchImpl })
+    const result = await adapter.getHistoryStatus!({
+      ...scope,
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:8000/api/history/status")
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body ?? "{}"))).toMatchObject({
+      ...scope,
+    })
+    expect(result).toMatchObject({
+      ...scope,
+      canUndo: true,
+      canRedo: false,
+      latestUndoOperationId: "status-undo-1",
+      latestRedoOperationId: null,
+    })
   })
 })

@@ -38,6 +38,14 @@ class ServerDemoOperation(Base):
     __tablename__ = "server_demo_operations"
     __table_args__ = (
         Index("ix_server_demo_operations_operation_id_workspace_id", "operation_id", "workspace_id"),
+        Index(
+            "ix_server_demo_operations_workspace_user_session_status_created",
+            "workspace_id",
+            "user_id",
+            "session_id",
+            "status",
+            "created_at",
+        ),
         Index("ix_server_demo_operations_operation_type", "operation_type"),
         Index("ix_server_demo_operations_status", "status"),
         Index("ix_server_demo_operations_created_at", "created_at"),
@@ -50,6 +58,8 @@ class ServerDemoOperation(Base):
     )
     operation_id: Mapped[str] = mapped_column(Text, nullable=False)
     workspace_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String, nullable=True)
     operation_type: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     operation_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSONB, nullable=False, default=dict)

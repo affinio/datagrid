@@ -1,0 +1,4 @@
+interface:
+  display_name: "Affino Token Saver"
+  short_description: "Concise, validation-first Affino workflows"
+  default_prompt: "Use $affino-token-saver for concise, validation-first Affino refactors and repetitive engineering tasks."

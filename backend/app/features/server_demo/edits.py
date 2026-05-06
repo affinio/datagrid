@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiException
+from app.features.server_demo.history import invalidate_redo_branch_for_scope, operation_scope_from_request
 from app.features.server_demo.models import ServerDemoCellEvent as ServerDemoCellEventModel
 from app.features.server_demo.models import ServerDemoOperation as ServerDemoOperationModel
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
@@ -78,11 +79,27 @@ class ServerDemoEditService(GridEditServiceBase):
                 message=f"Operation {operation_id} already exists",
             )
 
-    async def create_operation(self, session: AsyncSession, operation_id: str, changed_at: datetime) -> None:
+    async def create_operation(
+        self,
+        session: AsyncSession,
+        operation_id: str,
+        changed_at: datetime,
+        request: Any,
+    ) -> None:
+        user_id, session_id = operation_scope_from_request(request)
+        await invalidate_redo_branch_for_scope(
+            session,
+            workspace_id=self._workspace_id,
+            user_id=user_id,
+            session_id=session_id,
+            changed_at=changed_at,
+        )
         session.add(
             ServerDemoOperationModel(
                 operation_id=operation_id,
                 workspace_id=self._workspace_id,
+                user_id=user_id,
+                session_id=session_id,
                 operation_type="edit",
                 status=OPERATION_STATUS_APPLIED,
                 operation_metadata={},

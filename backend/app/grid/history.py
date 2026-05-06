@@ -27,11 +27,6 @@ class GridHistoryServiceBase(ABC):
     ) -> GridHistoryApplyResult:
         operation_id = self._require_operation_id(raw_operation_id)
 
-        committed: list[GridCommittedCell] = []
-        rejected: list[GridRejectedCell] = []
-        committed_row_ids: list[str] = []
-        affected_indexes: list[int] = []
-
         async with session.begin():
             operation = await self.get_operation(session, operation_id, with_for_update=True)
             if operation is None:
@@ -41,94 +36,106 @@ class GridHistoryServiceBase(ABC):
                     message=f"Operation {operation_id} was not found",
                 )
 
-            if action == "undo":
-                if self.get_operation_status(operation) != "applied":
-                    raise ApiException(
-                        status_code=409,
-                        code="operation-already-undone",
-                        message=f"Operation {operation_id} is not currently applied",
-                    )
-                next_status = "undone"
-            else:
-                if self.get_operation_status(operation) != "undone":
-                    raise ApiException(
-                        status_code=409,
-                        code="operation-not-undone",
-                        message=f"Operation {operation_id} must be undone before redo",
-                    )
-                next_status = "applied"
+            return await self.apply_loaded_operation(session, operation, action)
 
-            cell_events = await self.load_cell_events(session, operation_id)
-            if not cell_events:
+    async def apply_loaded_operation(
+        self,
+        session: AsyncSession,
+        operation: Any,
+        action: Literal["undo", "redo"],
+    ) -> GridHistoryApplyResult:
+        operation_id = self.get_operation_id(operation)
+        committed: list[GridCommittedCell] = []
+        rejected: list[GridRejectedCell] = []
+        committed_row_ids: list[str] = []
+        affected_indexes: list[int] = []
+
+        if action == "undo":
+            if self.get_operation_status(operation) != "applied":
                 raise ApiException(
                     status_code=409,
-                    code="operation-has-no-cell-events",
-                    message=f"Operation {operation_id} has no cell events",
+                    code="operation-already-undone",
+                    message=f"Operation {operation_id} is not currently applied",
                 )
-
-            operation_id = self.get_operation_id(operation)
-
-            row_ids = list(dict.fromkeys(self.event_row_id(event) for event in cell_events))
-            rows_by_id = await self.fetch_rows_by_ids(session, row_ids, with_for_update=True)
-
-            prepared_events: list[tuple[Any, Any, Any, str, str]] = []
-            for event in cell_events:
-                row_id = self.event_row_id(event)
-                column_id = self.event_column_id(event)
-                row = rows_by_id.get(row_id)
-                reject_reason = reject_reason_for_column(self._table.column(column_id), row is not None)
-                if reject_reason is not None:
-                    rejected.append(GridRejectedCell(row_id=row_id, column_id=column_id, reason=reject_reason))
-                    continue
-
-                try:
-                    raw_value = self.event_before_value(event) if action == "undo" else self.event_after_value(event)
-                    target_value = self.normalize_edit_value(column_id, raw_value)
-                except ApiException as exc:
-                    rejected.append(GridRejectedCell(row_id=row_id, column_id=column_id, reason=exc.code))
-                    continue
-
-                prepared_events.append((event, row, target_value, row_id, column_id))
-
-            if rejected:
-                revision = await self._revision_service.get_revision(session)
-                return GridHistoryApplyResult(
-                    operation_id=operation_id,
-                    operation_type=self.get_operation_type(operation),
-                    committed=[],
-                    committed_row_ids=[],
-                    rejected=rejected,
-                    affected_indexes=[],
-                    revision=revision,
+            next_status = "undone"
+        else:
+            if self.get_operation_status(operation) != "undone":
+                raise ApiException(
+                    status_code=409,
+                    code="operation-not-undone",
+                    message=f"Operation {operation_id} must be undone before redo",
                 )
+            next_status = "applied"
 
-            changed_rows: dict[str, Any] = {}
-            changed_at = datetime.now(timezone.utc)
+        cell_events = await self.load_cell_events(session, operation_id)
+        if not cell_events:
+            raise ApiException(
+                status_code=409,
+                code="operation-has-no-cell-events",
+                message=f"Operation {operation_id} has no cell events",
+            )
 
-            for _, row, target_value, row_id, column_id in prepared_events:
-                current_value = self.get_row_value(row, column_id)
-                if target_value != current_value:
-                    self.set_row_value(row, column_id, target_value)
-                    self.set_row_updated_at(row, changed_at)
-                    changed_rows[self.get_row_id(row)] = row
+        row_ids = list(dict.fromkeys(self.event_row_id(event) for event in cell_events))
+        rows_by_id = await self.fetch_rows_by_ids(session, row_ids, with_for_update=True)
 
-                committed.append(
-                    GridCommittedCell(
-                        row_id=row_id,
-                        column_id=column_id,
-                        revision=self.get_row_revision(row),
-                    )
+        prepared_events: list[tuple[Any, Any, Any, str, str]] = []
+        for event in cell_events:
+            row_id = self.event_row_id(event)
+            column_id = self.event_column_id(event)
+            row = rows_by_id.get(row_id)
+            reject_reason = reject_reason_for_column(self._table.column(column_id), row is not None)
+            if reject_reason is not None:
+                rejected.append(GridRejectedCell(row_id=row_id, column_id=column_id, reason=reject_reason))
+                continue
+
+            try:
+                raw_value = self.event_before_value(event) if action == "undo" else self.event_after_value(event)
+                target_value = self.normalize_edit_value(column_id, raw_value)
+            except ApiException as exc:
+                rejected.append(GridRejectedCell(row_id=row_id, column_id=column_id, reason=exc.code))
+                continue
+
+            prepared_events.append((event, row, target_value, row_id, column_id))
+
+        if rejected:
+            revision = await self._revision_service.get_revision(session)
+            return GridHistoryApplyResult(
+                operation_id=operation_id,
+                operation_type=self.get_operation_type(operation),
+                committed=[],
+                committed_row_ids=[],
+                rejected=rejected,
+                affected_indexes=[],
+                revision=revision,
+            )
+
+        changed_rows: dict[str, Any] = {}
+        changed_at = datetime.now(timezone.utc)
+
+        for _, row, target_value, row_id, column_id in prepared_events:
+            current_value = self.get_row_value(row, column_id)
+            if target_value != current_value:
+                self.set_row_value(row, column_id, target_value)
+                self.set_row_updated_at(row, changed_at)
+                changed_rows[self.get_row_id(row)] = row
+
+            committed.append(
+                GridCommittedCell(
+                    row_id=row_id,
+                    column_id=column_id,
+                    revision=self.get_row_revision(row),
                 )
-                if row_id not in committed_row_ids:
-                    committed_row_ids.append(row_id)
+            )
+            if row_id not in committed_row_ids:
+                committed_row_ids.append(row_id)
 
-            if changed_rows:
-                await session.flush()
-                affected_indexes = [self.get_row_index(row) for row in changed_rows.values()]
-            self.set_operation_status(operation, next_status)
-            self.set_operation_modified_at(operation, changed_at)
-            self.set_operation_revision(operation, changed_at)
-            revision = await self._revision_service.bump_revision(session)
+        if changed_rows:
+            await session.flush()
+            affected_indexes = [self.get_row_index(row) for row in changed_rows.values()]
+        self.set_operation_status(operation, next_status)
+        self.set_operation_modified_at(operation, changed_at)
+        self.set_operation_revision(operation, changed_at)
+        revision = await self._revision_service.bump_revision(session)
 
         return GridHistoryApplyResult(
             operation_id=operation_id,

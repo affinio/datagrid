@@ -23,6 +23,10 @@ from app.features.server_demo.schemas import (
     ServerDemoFillBoundaryResponse,
     ServerDemoFillCommitRequest,
     ServerDemoFillCommitResponse,
+    ServerDemoHistoryStackRequest,
+    ServerDemoHistoryStackResponse,
+    ServerDemoHistoryStatusRequest,
+    ServerDemoHistoryStatusResponse,
     ServerDemoHistogramResponse,
     ServerDemoEditInvalidation,
     ServerDemoPullRequest,
@@ -204,6 +208,86 @@ class ServerDemoRepository(ServerGridDataAdapter):
                 affected_indexes=result.affected_indexes,
                 row_ids=result.committed_row_ids,
             ),
+        )
+
+    async def undo_latest_operation(self, request: ServerDemoHistoryStackRequest) -> ServerDemoHistoryStackResponse:
+        self._require_supported_history_table(request.table_id)
+        result = await self._history.undo_latest_operation(
+            self._session,
+            user_id=request.user_id,
+            session_id=request.session_id,
+        )
+        return await self._to_history_stack_response(result, request, action="undo")
+
+    async def redo_latest_operation(self, request: ServerDemoHistoryStackRequest) -> ServerDemoHistoryStackResponse:
+        self._require_supported_history_table(request.table_id)
+        result = await self._history.redo_latest_operation(
+            self._session,
+            user_id=request.user_id,
+            session_id=request.session_id,
+        )
+        return await self._to_history_stack_response(result, request, action="redo")
+
+    async def _to_history_stack_response(
+        self,
+        result: Any,
+        request: ServerDemoHistoryStackRequest,
+        *,
+        action: str,
+    ) -> ServerDemoHistoryStackResponse:
+        can_undo = await self._history.can_undo(
+            self._session,
+            user_id=request.user_id,
+            session_id=request.session_id,
+        )
+        can_redo = await self._history.can_redo(
+            self._session,
+            user_id=request.user_id,
+            session_id=request.session_id,
+        )
+        return ServerDemoHistoryStackResponse(
+            operation_id=result.operation_id,
+            action=action,
+            can_undo=can_undo,
+            can_redo=can_redo,
+            affected_rows=len(result.committed_row_ids),
+            affected_cells=len(result.committed),
+            committed=[self._to_committed_edit(item) for item in result.committed],
+            committed_row_ids=result.committed_row_ids,
+            rejected=[self._to_rejected_edit(item) for item in result.rejected],
+            revision=result.revision,
+            invalidation=self._build_invalidation(
+                operation_type=result.operation_type,
+                affected_indexes=result.affected_indexes,
+                row_ids=result.committed_row_ids,
+            ),
+        )
+
+    async def history_status(self, request: ServerDemoHistoryStatusRequest) -> ServerDemoHistoryStatusResponse:
+        self._require_supported_history_table(request.table_id)
+        status = await self._history.get_status(
+            self._session,
+            user_id=request.user_id,
+            session_id=request.session_id,
+        )
+        return ServerDemoHistoryStatusResponse(
+            workspace_id=request.workspace_id,
+            table_id=request.table_id,
+            user_id=request.user_id,
+            session_id=request.session_id,
+            can_undo=status.can_undo,
+            can_redo=status.can_redo,
+            latest_undo_operation_id=status.latest_undo_operation_id,
+            latest_redo_operation_id=status.latest_redo_operation_id,
+        )
+
+    def _require_supported_history_table(self, table_id: str) -> None:
+        if table_id == SERVER_DEMO_TABLE.table_id:
+            return
+        raise ApiException(
+            status_code=404,
+            code="table-not-found",
+            message=f"History table {table_id} was not found",
         )
 
     def _to_row(self, row: GridDemoRowModel) -> ServerDemoRowSchema:

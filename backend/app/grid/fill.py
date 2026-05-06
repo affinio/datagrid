@@ -256,7 +256,7 @@ class GridFillServiceBase(ABC):
                 await session.flush()
                 affected_row_ids = list(changed_rows.keys())
                 affected_indexes = [self.get_row_index(row) for row in changed_rows.values()]
-                await self.create_fill_operation(session, operation_id, operation_metadata, changed_at)
+                await self.create_fill_operation(session, operation_id, operation_metadata, changed_at, request)
                 await session.flush()
                 await self.create_cell_events(session, operation_id, cell_events, changed_at)
                 revision = await self._revision_service.bump_revision(session)
@@ -443,6 +443,7 @@ class GridFillServiceBase(ABC):
         operation_id: str,
         metadata: dict[str, Any],
         changed_at: datetime,
+        request: Any,
     ) -> None:
         raise NotImplementedError
 

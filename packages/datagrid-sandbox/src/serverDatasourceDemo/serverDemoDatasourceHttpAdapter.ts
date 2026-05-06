@@ -18,6 +18,7 @@ import {
   SERVER_DEMO_STATUSES,
   type ServerDemoRow,
 } from "./types"
+import type { ServerDemoHistoryScope } from "./serverDemoHistoryScope"
 
 export interface ServerDemoDatasourceHttpAdapterOptions {
   baseUrl?: string
@@ -94,6 +95,41 @@ type ServerDemoCommitEditsResponse = {
   }[]
   revision?: string | number | null
   invalidation?: DataGridDataSourceInvalidation | null
+}
+
+type ServerDemoHistoryStackRequestBody = ServerDemoHistoryScope
+
+type ServerDemoHistoryStackResponse = {
+  operationId?: string | null
+  action: "undo" | "redo"
+  canUndo: boolean
+  canRedo: boolean
+  affectedRows: number
+  affectedCells: number
+  committed?: readonly {
+    rowId: string | number
+    columnId?: string | null
+    revision?: string | number | null
+  }[]
+  committedRowIds?: readonly (string | number)[]
+  rejected?: readonly {
+    rowId: string | number
+    columnId?: string | null
+    reason?: string | null
+  }[]
+  revision?: string | number | null
+  invalidation?: DataGridDataSourceInvalidation | null
+}
+
+type ServerDemoHistoryStatusResponse = {
+  workspace_id: string
+  table_id: string
+  user_id: string | null
+  session_id: string | null
+  canUndo: boolean
+  canRedo: boolean
+  latestUndoOperationId: string | null
+  latestRedoOperationId: string | null
 }
 
 type ServerDemoCommitEditsResultWithOperation = ServerDemoCommitEditsResult & {
@@ -872,9 +908,43 @@ async function postServerFillHistoryOperation(
   }
 }
 
+async function postServerHistoryStackOperation(
+  fetchImpl: typeof fetch,
+  url: string,
+  body: ServerDemoHistoryStackRequestBody,
+  signal?: AbortSignal,
+): Promise<ServerDemoHistoryStackResponse> {
+  const response = await postJson<ServerDemoHistoryStackResponse>(fetchImpl, url, body, signal)
+  return {
+    operationId: response.operationId ?? null,
+    action: response.action,
+    canUndo: response.canUndo,
+    canRedo: response.canRedo,
+    affectedRows: response.affectedRows,
+    affectedCells: response.affectedCells,
+    committed: response.committed,
+    committedRowIds: response.committedRowIds,
+    rejected: response.rejected,
+    revision: response.revision,
+    invalidation: response.invalidation,
+  }
+}
+
+async function postServerHistoryStatusOperation(
+  fetchImpl: typeof fetch,
+  url: string,
+  body: ServerDemoHistoryStackRequestBody,
+  signal?: AbortSignal,
+): Promise<ServerDemoHistoryStatusResponse> {
+  return await postJson<ServerDemoHistoryStatusResponse>(fetchImpl, url, body, signal)
+}
+
 export interface ServerDemoDatasourceHttpAdapter extends DataGridDataSource<ServerDemoRow> {
   undoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult>
   redoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult>
+  undoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse>
+  redoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse>
+  getHistoryStatus(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStatusResponse>
 }
 
 export function createServerDemoDatasourceHttpAdapter(
@@ -963,6 +1033,8 @@ export function createServerDemoDatasourceHttpAdapter(
         operationId: response.operationId ?? null,
         committed: toUniqueRowCommits(response),
         rejected: toRejectedRows(response),
+        revision: response.revision ?? null,
+        invalidation: normalizeDataGridInvalidation(response.invalidation),
       } as ServerDemoCommitEditsResultWithOperation
     },
 
@@ -1000,6 +1072,21 @@ export function createServerDemoDatasourceHttpAdapter(
     async redoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult> {
       const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/redo`)
       return await postServerOperation(fetchImpl, url, request.signal)
+    },
+
+    async undoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse> {
+      const url = resolveEndpoint(options.baseUrl, "/api/history/undo")
+      return await postServerHistoryStackOperation(fetchImpl, url, request, request.signal)
+    },
+
+    async redoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse> {
+      const url = resolveEndpoint(options.baseUrl, "/api/history/redo")
+      return await postServerHistoryStackOperation(fetchImpl, url, request, request.signal)
+    },
+
+    async getHistoryStatus(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStatusResponse> {
+      const url = resolveEndpoint(options.baseUrl, "/api/history/status")
+      return await postServerHistoryStatusOperation(fetchImpl, url, request, request.signal)
     },
 
     async undoFillOperation(request: ServerDemoFillUndoRequest): Promise<ServerDemoFillUndoResult> {
