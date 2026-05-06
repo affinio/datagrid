@@ -528,6 +528,9 @@ import {
   createServerDemoDatasourceHttpFillDataSource,
 } from "../serverDatasourceDemo/serverDemoDatasourceHttpFillDataSource"
 import {
+  normalizeServerDemoHistoryState,
+} from "../serverDatasourceDemo/serverDemoHistoryState"
+import {
   resolveServerDemoHistoryScopeFromEnv,
 } from "../serverDatasourceDemo/serverDemoHistoryScope"
 import {
@@ -1993,17 +1996,30 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
         try {
           const result = await commitEdits(request) as ServerDemoCommitEditsResult & {
             operationId?: string | null
+            canUndo?: boolean
+            canRedo?: boolean
+            latestUndoOperationId?: string | null
+            latestRedoOperationId?: string | null
+            affectedRows?: number
+            affectedCells?: number
           }
           const affectedRowCount = new Set(result.committed?.map(entry => entry.rowId) ?? []).size
-          syncHistoryDiagnostics({
-            operationId: result.operationId ?? null,
-            canUndo: true,
-            canRedo: false,
-            affectedRows: affectedRowCount,
-            affectedCells: result.committed?.length ?? 0,
-            action: "commit",
-          })
-          void refreshHistoryStatus()
+          const historyApplied = applyCommitHistoryDiagnostics(
+            result,
+            affectedRowCount,
+            result.committed?.length ?? 0,
+          )
+          if (!historyApplied) {
+            syncHistoryDiagnostics({
+              operationId: result.operationId ?? null,
+              canUndo: true,
+              canRedo: false,
+              affectedRows: affectedRowCount,
+              affectedCells: result.committed?.length ?? 0,
+              action: "commit",
+            })
+            void refreshHistoryStatus()
+          }
           return result
         } catch (caught) {
           if (caught instanceof Error && caught.name === "AbortError") {
@@ -2561,6 +2577,26 @@ function syncHistoryDiagnostics(result: {
   const action = typeof result.action === "string" && result.action.length > 0 ? result.action : "history"
   lastHistoryActionText.value = `${action}:${operationId}`
   lastEditRecordedText.value = `op=${operationId} rows=${serverHistoryAffectedRowsText.value} cells=${serverHistoryAffectedCellsText.value}`
+}
+
+function applyCommitHistoryDiagnostics(
+  result: unknown,
+  fallbackAffectedRows: number,
+  fallbackAffectedCells: number,
+): boolean {
+  const historyState = normalizeServerDemoHistoryState(result)
+  if (!historyState) {
+    return false
+  }
+  syncHistoryDiagnostics({
+    operationId: historyState.operationId ?? null,
+    canUndo: historyState.canUndo,
+    canRedo: historyState.canRedo,
+    affectedRows: historyState.affectedRows ?? fallbackAffectedRows,
+    affectedCells: historyState.affectedCells ?? fallbackAffectedCells,
+    action: "commit",
+  })
+  return true
 }
 
 function applyHistoryStatusDiagnostics(result: {

@@ -110,6 +110,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
         session: AsyncSession,
         *,
         table_id: str | None = SERVER_DEMO_TABLE.table_id,
+        workspace_id: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> GridHistoryApplyResult:
@@ -118,6 +119,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
             action="undo",
             status=OPERATION_STATUS_APPLIED,
             table_id=table_id,
+            workspace_id=workspace_id,
             user_id=user_id,
             session_id=session_id,
         )
@@ -127,6 +129,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
         session: AsyncSession,
         *,
         table_id: str | None = SERVER_DEMO_TABLE.table_id,
+        workspace_id: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> GridHistoryApplyResult:
@@ -135,6 +138,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
             action="redo",
             status=OPERATION_STATUS_UNDONE,
             table_id=table_id,
+            workspace_id=workspace_id,
             user_id=user_id,
             session_id=session_id,
         )
@@ -144,6 +148,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
         session: AsyncSession,
         *,
         table_id: str | None = SERVER_DEMO_TABLE.table_id,
+        workspace_id: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> bool:
@@ -151,6 +156,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
             session,
             status=OPERATION_STATUS_APPLIED,
             table_id=table_id,
+            workspace_id=workspace_id,
             user_id=user_id,
             session_id=session_id,
         )
@@ -160,6 +166,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
         session: AsyncSession,
         *,
         table_id: str | None = SERVER_DEMO_TABLE.table_id,
+        workspace_id: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> bool:
@@ -167,6 +174,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
             session,
             status=OPERATION_STATUS_UNDONE,
             table_id=table_id,
+            workspace_id=workspace_id,
             user_id=user_id,
             session_id=session_id,
         )
@@ -176,6 +184,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
         session: AsyncSession,
         *,
         table_id: str | None = SERVER_DEMO_TABLE.table_id,
+        workspace_id: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> ServerDemoHistoryStatus:
@@ -183,6 +192,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
             session,
             status=OPERATION_STATUS_APPLIED,
             table_id=table_id,
+            workspace_id=workspace_id,
             user_id=user_id,
             session_id=session_id,
             with_for_update=False,
@@ -191,6 +201,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
             session,
             status=OPERATION_STATUS_UNDONE,
             table_id=table_id,
+            workspace_id=workspace_id,
             user_id=user_id,
             session_id=session_id,
             with_for_update=False,
@@ -209,6 +220,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
         action: Literal["undo", "redo"],
         status: str,
         table_id: str | None = SERVER_DEMO_TABLE.table_id,
+        workspace_id: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> GridHistoryApplyResult:
@@ -217,6 +229,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
                 session,
                 status=status,
                 table_id=table_id,
+                workspace_id=workspace_id,
                 user_id=user_id,
                 session_id=session_id,
                 with_for_update=True,
@@ -235,6 +248,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
         *,
         status: str,
         table_id: str | None = SERVER_DEMO_TABLE.table_id,
+        workspace_id: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> bool:
@@ -243,8 +257,9 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
             ServerDemoOperationModel.status == status,
             *_operation_scope_conditions(ServerDemoOperationModel, user_id=user_id, session_id=session_id),
         ]
-        if self._workspace_id is not None:
-            conditions.insert(0, workspace_column_condition(ServerDemoOperationModel.workspace_id, self._workspace_id))
+        effective_workspace_id = self._workspace_id if workspace_id is None else workspace_id
+        if effective_workspace_id is not None:
+            conditions.insert(0, workspace_column_condition(ServerDemoOperationModel.workspace_id, effective_workspace_id))
         count = await session.scalar(
             select(func.count())
             .select_from(ServerDemoOperationModel)
@@ -258,6 +273,7 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
         *,
         status: str,
         table_id: str | None = SERVER_DEMO_TABLE.table_id,
+        workspace_id: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
         with_for_update: bool = False,
@@ -267,8 +283,9 @@ class ServerDemoHistoryService(GridHistoryServiceBase):
             ServerDemoOperationModel.status == status,
             *_operation_scope_conditions(ServerDemoOperationModel, user_id=user_id, session_id=session_id),
         ]
-        if self._workspace_id is not None:
-            conditions.insert(0, workspace_column_condition(ServerDemoOperationModel.workspace_id, self._workspace_id))
+        effective_workspace_id = self._workspace_id if workspace_id is None else workspace_id
+        if effective_workspace_id is not None:
+            conditions.insert(0, workspace_column_condition(ServerDemoOperationModel.workspace_id, effective_workspace_id))
         stmt = (
             select(ServerDemoOperationModel)
             .where(*conditions)

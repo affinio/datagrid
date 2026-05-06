@@ -193,7 +193,13 @@ class ServerDemoFillCommitResponse(BaseModel):
     operation_id: str | None = Field(default=None, alias="operationId")
     affected_row_count: int = Field(ge=0, alias="affectedRowCount")
     affected_cell_count: int = Field(ge=0, alias="affectedCellCount")
+    affected_rows: int = Field(ge=0, alias="affectedRows")
+    affected_cells: int = Field(ge=0, alias="affectedCells")
     revision: str
+    can_undo: bool = Field(alias="canUndo")
+    can_redo: bool = Field(alias="canRedo")
+    latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
+    latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
     invalidation: ServerDemoEditInvalidation | None = None
     warnings: list[str] = Field(default_factory=list)
 
@@ -267,7 +273,13 @@ class ServerDemoCommitEditsResponse(BaseModel):
     committed: list[ServerDemoCommittedEdit] = Field(default_factory=list)
     committed_row_ids: list[str] = Field(default_factory=list, alias="committedRowIds")
     rejected: list[ServerDemoRejectedEdit] = Field(default_factory=list)
+    affected_rows: int = Field(ge=0, alias="affectedRows")
+    affected_cells: int = Field(ge=0, alias="affectedCells")
     revision: str
+    can_undo: bool = Field(alias="canUndo")
+    can_redo: bool = Field(alias="canRedo")
+    latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
+    latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
     invalidation: ServerDemoEditInvalidation | None = None
 
 
@@ -290,10 +302,6 @@ class ServerDemoHistoryStackRequest(BaseModel):
 
 class ServerDemoHistoryStackResponse(ServerDemoCommitEditsResponse):
     action: Literal["undo", "redo"]
-    can_undo: bool = Field(alias="canUndo")
-    can_redo: bool = Field(alias="canRedo")
-    affected_rows: int = Field(alias="affectedRows", ge=0)
-    affected_cells: int = Field(alias="affectedCells", ge=0)
 
 
 class ServerDemoHistoryStatusRequest(BaseModel):

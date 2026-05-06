@@ -5,6 +5,14 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class GridHistoryStatus:
+    can_undo: bool
+    can_redo: bool
+    latest_undo_operation_id: str | None
+    latest_redo_operation_id: str | None
+
+
+@dataclass(frozen=True)
 class GridCommittedCell:
     row_id: str
     column_id: str
@@ -35,6 +43,7 @@ class GridMutationResult:
     rejected: list[GridRejectedCell]
     affected_indexes: list[int]
     revision: str
+    history_status: GridHistoryStatus | None = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +54,7 @@ class GridFillMutationResult:
     affected_cell_count: int
     warnings: list[str]
     revision: str
+    history_status: GridHistoryStatus | None = None
 
 
 @dataclass(frozen=True)

@@ -36,7 +36,7 @@ from app.features.server_demo.schemas import (
 )
 from app.api.errors import ApiException
 from affino_grid_backend.core.consistency import build_boundary_token, canonical_projection_hash
-from affino_grid_backend.core.mutations import GridCommittedCell, GridRejectedCell
+from affino_grid_backend.core.mutations import GridCommittedCell, GridHistoryStatus, GridRejectedCell
 from affino_grid_backend.core.revision import GridRevisionService
 from app.features.server_demo.invalidation import ServerDemoInvalidationService
 
@@ -55,10 +55,16 @@ class ServerDemoRepository(ServerGridDataAdapter):
             max_histogram_source_rows=settings.grid_max_histogram_source_rows,
         )
         self._revision = GridRevisionService(SERVER_DEMO_TABLE, workspace_id=workspace_id)
+        self._history = ServerDemoHistoryService(
+            SERVER_DEMO_TABLE.columns,
+            self._revision,
+            workspace_id=workspace_id,
+        )
         self._edits = ServerDemoEditService(
             SERVER_DEMO_TABLE.columns,
             self._revision,
             workspace_id=workspace_id,
+            history_service=self._history,
             max_batch_edits=settings.grid_max_batch_edits,
         )
         self._fill = ServerDemoFillService(
@@ -66,16 +72,12 @@ class ServerDemoRepository(ServerGridDataAdapter):
             self._projection,
             self._revision,
             workspace_id=workspace_id,
+            history_service=self._history,
             max_fill_target_rows=settings.grid_max_fill_target_rows,
             max_boundary_scan_limit=settings.grid_max_boundary_scan_limit,
             max_fill_source_rows=settings.grid_max_fill_source_rows,
             max_fill_columns=settings.grid_max_fill_columns,
             max_fill_cells=settings.grid_max_fill_cells,
-        )
-        self._history = ServerDemoHistoryService(
-            SERVER_DEMO_TABLE.columns,
-            self._revision,
-            workspace_id=workspace_id,
         )
         self._invalidation = ServerDemoInvalidationService()
 
@@ -121,18 +123,22 @@ class ServerDemoRepository(ServerGridDataAdapter):
             current_revision=current_revision,
         )
         result = await self._edits.commit_edits(self._session, request)
-        return ServerDemoCommitEditsResponse(
-            operation_id=result.operation_id,
-            committed=[self._to_committed_edit(item) for item in result.committed],
-            committed_row_ids=result.committed_row_ids,
-            rejected=[self._to_rejected_edit(item) for item in result.rejected],
-            revision=result.revision,
-            invalidation=self._build_invalidation(
+        response_payload = {
+            "operation_id": result.operation_id,
+            "committed": [self._to_committed_edit(item) for item in result.committed],
+            "committed_row_ids": result.committed_row_ids,
+            "rejected": [self._to_rejected_edit(item) for item in result.rejected],
+            "revision": result.revision,
+            "affected_rows": len(result.committed_row_ids),
+            "affected_cells": len(result.committed),
+            "invalidation": self._build_invalidation(
                 operation_type="edit",
                 affected_indexes=result.affected_indexes,
                 row_ids=result.committed_row_ids,
             ),
-        )
+        }
+        response_payload.update(self._history_response_fields(result.history_status))
+        return ServerDemoCommitEditsResponse(**response_payload)
 
     async def resolve_fill_boundary(self, request: ServerDemoFillBoundaryRequest) -> ServerDemoFillBoundaryResponse:
         boundary = await self._fill.resolve_boundary(self._session, request)
@@ -157,18 +163,22 @@ class ServerDemoRepository(ServerGridDataAdapter):
             projection_hash=projection_hash,
         )
         result = await self._fill.commit_fill(self._session, request)
-        return ServerDemoFillCommitResponse(
-            operation_id=result.operation_id,
-            affected_row_count=len(result.affected_row_ids),
-            affected_cell_count=result.affected_cell_count,
-            revision=result.revision,
-            invalidation=self._build_invalidation(
+        response_payload = {
+            "operation_id": result.operation_id,
+            "affected_row_count": len(result.affected_row_ids),
+            "affected_cell_count": result.affected_cell_count,
+            "revision": result.revision,
+            "affected_rows": len(result.affected_row_ids),
+            "affected_cells": result.affected_cell_count,
+            "invalidation": self._build_invalidation(
                 operation_type="fill",
                 affected_indexes=result.affected_indexes,
                 row_ids=result.affected_row_ids,
             ),
-            warnings=result.warnings,
-        )
+            "warnings": result.warnings,
+        }
+        response_payload.update(self._history_response_fields(result.history_status))
+        return ServerDemoFillCommitResponse(**response_payload)
 
     async def _count_rows_with_policy(self, conditions: list[Any], max_rows: int | None) -> int:
         total = await self._projection.count_rows(self._session, conditions)
@@ -182,33 +192,63 @@ class ServerDemoRepository(ServerGridDataAdapter):
 
     async def undo_operation(self, operation_id: str) -> ServerDemoCommitEditsResponse:
         result = await self._history.undo_operation(self._session, operation_id)
-        return ServerDemoCommitEditsResponse(
-            operation_id=result.operation_id,
-            committed=[self._to_committed_edit(item) for item in result.committed],
-            committed_row_ids=result.committed_row_ids,
-            rejected=[self._to_rejected_edit(item) for item in result.rejected],
-            revision=result.revision,
-            invalidation=self._build_invalidation(
+        history_status = await self._history.get_status(
+            self._session,
+            workspace_id=self._workspace_id,
+        )
+        response_payload = {
+            "operation_id": result.operation_id,
+            "committed": [self._to_committed_edit(item) for item in result.committed],
+            "committed_row_ids": result.committed_row_ids,
+            "rejected": [self._to_rejected_edit(item) for item in result.rejected],
+            "revision": result.revision,
+            "affected_rows": len(result.committed_row_ids),
+            "affected_cells": len(result.committed),
+            "invalidation": self._build_invalidation(
                 operation_type=result.operation_type,
                 affected_indexes=result.affected_indexes,
                 row_ids=result.committed_row_ids,
             ),
-        )
+        }
+        response_payload.update(self._history_response_fields(
+            GridHistoryStatus(
+                can_undo=history_status.can_undo,
+                can_redo=history_status.can_redo,
+                latest_undo_operation_id=history_status.latest_undo_operation_id,
+                latest_redo_operation_id=history_status.latest_redo_operation_id,
+            )
+        ))
+        return ServerDemoCommitEditsResponse(**response_payload)
 
     async def redo_operation(self, operation_id: str) -> ServerDemoCommitEditsResponse:
         result = await self._history.redo_operation(self._session, operation_id)
-        return ServerDemoCommitEditsResponse(
-            operation_id=result.operation_id,
-            committed=[self._to_committed_edit(item) for item in result.committed],
-            committed_row_ids=result.committed_row_ids,
-            rejected=[self._to_rejected_edit(item) for item in result.rejected],
-            revision=result.revision,
-            invalidation=self._build_invalidation(
+        history_status = await self._history.get_status(
+            self._session,
+            workspace_id=self._workspace_id,
+        )
+        response_payload = {
+            "operation_id": result.operation_id,
+            "committed": [self._to_committed_edit(item) for item in result.committed],
+            "committed_row_ids": result.committed_row_ids,
+            "rejected": [self._to_rejected_edit(item) for item in result.rejected],
+            "revision": result.revision,
+            "affected_rows": len(result.committed_row_ids),
+            "affected_cells": len(result.committed),
+            "invalidation": self._build_invalidation(
                 operation_type=result.operation_type,
                 affected_indexes=result.affected_indexes,
                 row_ids=result.committed_row_ids,
             ),
-        )
+        }
+        response_payload.update(self._history_response_fields(
+            GridHistoryStatus(
+                can_undo=history_status.can_undo,
+                can_redo=history_status.can_redo,
+                latest_undo_operation_id=history_status.latest_undo_operation_id,
+                latest_redo_operation_id=history_status.latest_redo_operation_id,
+            )
+        ))
+        return ServerDemoCommitEditsResponse(**response_payload)
 
     async def undo_latest_operation(self, request: ServerDemoHistoryStackRequest) -> ServerDemoHistoryStackResponse:
         self._require_supported_history_table(request.table_id)
@@ -237,46 +277,51 @@ class ServerDemoRepository(ServerGridDataAdapter):
         *,
         action: str,
     ) -> ServerDemoHistoryStackResponse:
-        can_undo = await self._history.can_undo(
+        status = await self._history.get_status(
             self._session,
             table_id=request.table_id,
+            workspace_id=request.workspace_id or self._workspace_id,
             user_id=request.user_id,
             session_id=request.session_id,
         )
-        can_redo = await self._history.can_redo(
-            self._session,
-            table_id=request.table_id,
-            user_id=request.user_id,
-            session_id=request.session_id,
-        )
-        return ServerDemoHistoryStackResponse(
-            operation_id=result.operation_id,
-            action=action,
-            can_undo=can_undo,
-            can_redo=can_redo,
-            affected_rows=len(result.committed_row_ids),
-            affected_cells=len(result.committed),
-            committed=[self._to_committed_edit(item) for item in result.committed],
-            committed_row_ids=result.committed_row_ids,
-            rejected=[self._to_rejected_edit(item) for item in result.rejected],
-            revision=result.revision,
-            invalidation=self._build_invalidation(
+        response_payload = {
+            "operation_id": result.operation_id,
+            "action": action,
+            "affected_rows": len(result.committed_row_ids),
+            "affected_cells": len(result.committed),
+            "committed": [self._to_committed_edit(item) for item in result.committed],
+            "committed_row_ids": result.committed_row_ids,
+            "rejected": [self._to_rejected_edit(item) for item in result.rejected],
+            "revision": result.revision,
+            "invalidation": self._build_invalidation(
                 operation_type=result.operation_type,
                 affected_indexes=result.affected_indexes,
                 row_ids=result.committed_row_ids,
             ),
+        }
+        response_payload.update(
+            self._history_response_fields(
+                GridHistoryStatus(
+                    can_undo=status.can_undo,
+                    can_redo=status.can_redo,
+                    latest_undo_operation_id=status.latest_undo_operation_id,
+                    latest_redo_operation_id=status.latest_redo_operation_id,
+                )
+            )
         )
+        return ServerDemoHistoryStackResponse(**response_payload)
 
     async def history_status(self, request: ServerDemoHistoryStatusRequest) -> ServerDemoHistoryStatusResponse:
         self._require_supported_history_table(request.table_id)
         status = await self._history.get_status(
             self._session,
             table_id=request.table_id,
+            workspace_id=request.workspace_id or self._workspace_id,
             user_id=request.user_id,
             session_id=request.session_id,
         )
         return ServerDemoHistoryStatusResponse(
-            workspace_id=request.workspace_id,
+            workspace_id=request.workspace_id or self._workspace_id,
             table_id=request.table_id,
             user_id=request.user_id,
             session_id=request.session_id,
@@ -285,6 +330,36 @@ class ServerDemoRepository(ServerGridDataAdapter):
             latest_undo_operation_id=status.latest_undo_operation_id,
             latest_redo_operation_id=status.latest_redo_operation_id,
         )
+
+    async def _read_history_status(self, request: ServerDemoHistoryStackRequest) -> GridHistoryStatus | None:
+        status = await self._history.get_status(
+            self._session,
+            table_id=request.table_id,
+            workspace_id=request.workspace_id or self._workspace_id,
+            user_id=request.user_id,
+            session_id=request.session_id,
+        )
+        return GridHistoryStatus(
+            can_undo=status.can_undo,
+            can_redo=status.can_redo,
+            latest_undo_operation_id=status.latest_undo_operation_id,
+            latest_redo_operation_id=status.latest_redo_operation_id,
+        )
+
+    def _history_response_fields(self, history_status: GridHistoryStatus | None) -> dict[str, Any]:
+        if history_status is None:
+            return {
+                "can_undo": False,
+                "can_redo": False,
+                "latest_undo_operation_id": None,
+                "latest_redo_operation_id": None,
+            }
+        return {
+            "can_undo": history_status.can_undo,
+            "can_redo": history_status.can_redo,
+            "latest_undo_operation_id": history_status.latest_undo_operation_id,
+            "latest_redo_operation_id": history_status.latest_redo_operation_id,
+        }
 
     def _require_supported_history_table(self, table_id: str) -> None:
         if table_id == SERVER_DEMO_TABLE.table_id:

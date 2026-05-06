@@ -226,6 +226,12 @@ async def test_server_demo_single_edit_persists(client: AsyncClient) -> None:
     ]
     assert body["rejected"] == []
     assert body["revision"]
+    assert body["affectedRows"] == 1
+    assert body["affectedCells"] == 1
+    assert body["canUndo"] is True
+    assert body["canRedo"] is False
+    assert body["latestUndoOperationId"] == body["operationId"]
+    assert body["latestRedoOperationId"] is None
     assert body["invalidation"] == {
         "kind": "rows",
         "range": None,
@@ -1279,6 +1285,12 @@ async def test_server_demo_fill_commit_copy_single_column_with_history(client: A
     assert body["operationId"] == operation_id
     assert body["affectedRowCount"] == 1
     assert body["affectedCellCount"] == 1
+    assert body["affectedRows"] == 1
+    assert body["affectedCells"] == 1
+    assert body["canUndo"] is True
+    assert body["canRedo"] is False
+    assert body["latestUndoOperationId"] == operation_id
+    assert body["latestRedoOperationId"] is None
     assert body["warnings"] == []
     assert body["invalidation"] == {
         "kind": "rows",

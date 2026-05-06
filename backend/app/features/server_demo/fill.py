@@ -21,7 +21,7 @@ from app.features.server_demo.projection import ServerDemoProjectionService
 from app.features.server_demo.schemas import ServerDemoFillBoundaryRequest, ServerDemoFillBoundaryResponse
 from app.features.server_demo.table import SERVER_DEMO_TABLE
 from app.features.server_demo.workspace import workspace_column_condition, workspace_scope_condition
-from affino_grid_backend.core.mutations import PendingGridCellEvent
+from affino_grid_backend.core.mutations import GridHistoryStatus, PendingGridCellEvent
 from affino_grid_backend.core.revision import GridRevisionService
 from affino_grid_backend.fill import GridFillServiceBase
 
@@ -35,6 +35,7 @@ class ServerDemoFillService(GridFillServiceBase):
         projection: ServerDemoProjectionService,
         revision_service: GridRevisionService | None = None,
         workspace_id: str | None = None,
+        history_service: Any | None = None,
         *,
         max_fill_target_rows: int = 1000,
         max_boundary_scan_limit: int = 1000,
@@ -55,6 +56,7 @@ class ServerDemoFillService(GridFillServiceBase):
         )
         self._projection = projection
         self._workspace_id = workspace_id
+        self._history_service = history_service
 
     async def resolve_boundary(
         self,
@@ -204,3 +206,32 @@ class ServerDemoFillService(GridFillServiceBase):
         conditions = self._projection.build_filter_conditions(projection.filter_model)
         stmt = self._projection.build_row_query(conditions)
         return stmt.order_by(*self._projection.build_order_by(projection.sort_model))
+
+    async def collect_history_status(
+        self,
+        session: AsyncSession,
+        request: Any,
+        *,
+        operation_id: str | None,
+        affected_row_ids: list[str],
+        affected_indexes: list[int],
+        affected_cell_count: int,
+        warnings: list[str],
+        revision: str,
+    ) -> GridHistoryStatus | None:
+        if self._history_service is None:
+            return None
+        scope_workspace_id = normalize_history_scope_value(getattr(request, "workspace_id", None)) or self._workspace_id
+        status = await self._history_service.get_status(
+            session,
+            table_id=normalize_history_scope_value(getattr(request, "table_id", None)) or SERVER_DEMO_TABLE.table_id,
+            workspace_id=scope_workspace_id,
+            user_id=normalize_history_scope_value(getattr(request, "user_id", None)),
+            session_id=normalize_history_scope_value(getattr(request, "session_id", None)) or None,
+        )
+        return GridHistoryStatus(
+            can_undo=status.can_undo,
+            can_redo=status.can_redo,
+            latest_undo_operation_id=status.latest_undo_operation_id,
+            latest_redo_operation_id=status.latest_redo_operation_id,
+        )

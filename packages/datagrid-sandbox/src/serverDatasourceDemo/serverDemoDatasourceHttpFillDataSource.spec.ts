@@ -76,6 +76,7 @@ function createProjection() {
 describe("createServerDemoDatasourceHttpFillDataSource", () => {
   it("uses HTTP fill methods when HTTP mode is enabled", async () => {
     const fallback = createFallbackDataSource()
+    const refreshHistoryStatus = vi.fn()
     const httpResolveFillBoundary = vi.fn(async () => ({
       endRowIndex: 5,
       endRowId: "srv-000005",
@@ -87,7 +88,13 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
       operationId: "fill-123",
       affectedRowCount: 2,
       affectedCellCount: 2,
+      affectedRows: 2,
+      affectedCells: 2,
       revision: "rev-1",
+      canUndo: true,
+      canRedo: false,
+      latestUndoOperationId: "fill-123",
+      latestRedoOperationId: null,
       invalidation: null,
       warnings: ["server fill committed"],
     }))
@@ -112,6 +119,7 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
         undoFillOperation: httpUndoFillOperation,
         redoFillOperation: httpRedoFillOperation,
       },
+      refreshHistoryStatus,
     })
 
     const boundary = await dataSource.resolveFillBoundary!({
@@ -149,8 +157,16 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
     expect(httpCommitFillOperation).toHaveBeenCalledTimes(1)
     expect(httpUndoFillOperation).toHaveBeenCalledTimes(1)
     expect(httpRedoFillOperation).toHaveBeenCalledTimes(1)
+    expect(refreshHistoryStatus).toHaveBeenCalledTimes(2)
     expect(boundary).toMatchObject({ boundaryKind: "cache-boundary", endRowIndex: 5 })
-    expect(fillResult).toMatchObject({ operationId: "fill-123", revision: "rev-1" })
+    expect(fillResult).toMatchObject({
+      operationId: "fill-123",
+      revision: "rev-1",
+      canUndo: true,
+      canRedo: false,
+      latestUndoOperationId: "fill-123",
+      latestRedoOperationId: null,
+    })
     expect(undoResult).toMatchObject({ operationId: "fill-123", revision: "rev-undo" })
     expect(redoResult).toMatchObject({ operationId: "fill-123", revision: "rev-redo" })
   })
@@ -182,5 +198,43 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
 
     expect(httpResolveFillBoundary).not.toHaveBeenCalled()
     expect(boundary).toMatchObject({ boundaryKind: "gap", endRowIndex: 1 })
+  })
+
+  it("refreshes history status for legacy fill responses without history state", async () => {
+    const fallback = createFallbackDataSource()
+    const refreshHistoryStatus = vi.fn()
+    const httpCommitFillOperation = vi.fn(async () => ({
+      operationId: "fill-legacy",
+      affectedRowCount: 1,
+      affectedCellCount: 1,
+      revision: "rev-legacy",
+      invalidation: null,
+      warnings: [],
+    }))
+    const dataSource = createServerDemoDatasourceHttpFillDataSource({
+      enabled: true,
+      fallbackDataSource: fallback,
+      httpDatasource: {
+        resolveFillBoundary: vi.fn(),
+        commitFillOperation: httpCommitFillOperation,
+        undoFillOperation: vi.fn(async () => ({ operationId: "fill-legacy", revision: "rev-undo", invalidation: null, warnings: [] })),
+        redoFillOperation: vi.fn(async () => ({ operationId: "fill-legacy", revision: "rev-redo", invalidation: null, warnings: [] })),
+      },
+      refreshHistoryStatus,
+    })
+
+    const result = await dataSource.commitFillOperation!({
+      operationId: "fill-legacy",
+      revision: "rev-before",
+      projection: createProjection(),
+      sourceRange: { start: 0, end: 0 },
+      targetRange: { start: 1, end: 1 },
+      fillColumns: ["name"],
+      referenceColumns: ["name"],
+      mode: "copy",
+    })
+
+    expect(result).toMatchObject({ operationId: "fill-legacy", revision: "rev-legacy" })
+    expect(refreshHistoryStatus).toHaveBeenCalledTimes(1)
   })
 })

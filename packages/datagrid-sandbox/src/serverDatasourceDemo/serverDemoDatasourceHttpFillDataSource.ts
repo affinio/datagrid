@@ -1,6 +1,7 @@
 import type { DataGridDataSource } from "@affino/datagrid-vue"
 import type { ServerDemoRow } from "./types"
 import type { ServerDemoHttpDatasource } from "./serverDemoDatasourceHttpAdapter"
+import { shouldRefreshHistoryStatusAfterCommit } from "./serverDemoHistoryState"
 
 export interface CreateServerDemoDatasourceHttpFillDataSourceOptions {
   enabled: boolean
@@ -36,7 +37,9 @@ export function createServerDemoDatasourceHttpFillDataSource(
         throw new Error("Server demo HTTP adapter does not implement commitFillOperation")
       }
       const result = await commitFillOperation(request)
-      await options.refreshHistoryStatus?.()
+      if (shouldRefreshHistoryStatusAfterCommit(result)) {
+        await options.refreshHistoryStatus?.()
+      }
       return result
     },
     async undoFillOperation(request) {

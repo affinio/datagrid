@@ -19,7 +19,7 @@ from app.features.server_demo.models import ServerDemoOperation as ServerDemoOpe
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.table import SERVER_DEMO_TABLE
 from app.features.server_demo.workspace import workspace_column_condition, workspace_scope_condition
-from affino_grid_backend.core.mutations import PendingGridCellEvent
+from affino_grid_backend.core.mutations import GridHistoryStatus, PendingGridCellEvent
 from affino_grid_backend.core.revision import GridRevisionService
 from affino_grid_backend.edits import GridEditServiceBase
 
@@ -32,6 +32,7 @@ class ServerDemoEditService(GridEditServiceBase):
         _columns: Mapping[str, Any] | None = None,
         revision_service: GridRevisionService | None = None,
         workspace_id: str | None = None,
+        history_service: Any | None = None,
         *,
         max_batch_edits: int = 500,
     ):
@@ -39,6 +40,7 @@ class ServerDemoEditService(GridEditServiceBase):
             raise ValueError("revision_service is required")
         super().__init__(SERVER_DEMO_TABLE, revision_service, max_batch_edits=max_batch_edits)
         self._workspace_id = workspace_id
+        self._history_service = history_service
 
     def normalize_edit_value(self, column_id: str, value: Any) -> Any:
         if column_id == "name" and value is None:
@@ -153,3 +155,32 @@ class ServerDemoEditService(GridEditServiceBase):
 
     def get_row_revision(self, row: GridDemoRowModel) -> str:
         return row.updated_at.isoformat()
+
+    async def collect_history_status(
+        self,
+        session: AsyncSession,
+        request: Any,
+        *,
+        operation_id: str | None,
+        committed: list[Any],
+        committed_row_ids: list[str],
+        rejected: list[Any],
+        affected_indexes: list[int],
+        revision: str,
+    ) -> GridHistoryStatus | None:
+        if self._history_service is None:
+            return None
+        scope_workspace_id = normalize_history_scope_value(getattr(request, "workspace_id", None)) or self._workspace_id
+        status = await self._history_service.get_status(
+            session,
+            table_id=normalize_history_scope_value(getattr(request, "table_id", None)) or SERVER_DEMO_TABLE.table_id,
+            workspace_id=scope_workspace_id,
+            user_id=normalize_history_scope_value(getattr(request, "user_id", None)),
+            session_id=normalize_history_scope_value(getattr(request, "session_id", None)) or None,
+        )
+        return GridHistoryStatus(
+            can_undo=status.can_undo,
+            can_redo=status.can_redo,
+            latest_undo_operation_id=status.latest_undo_operation_id,
+            latest_redo_operation_id=status.latest_redo_operation_id,
+        )

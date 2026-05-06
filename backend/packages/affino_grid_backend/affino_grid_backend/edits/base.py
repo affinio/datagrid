@@ -10,7 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from affino_grid_backend.core.columns import GridColumnDefinition
 from affino_grid_backend.core.errors import ApiException
-from affino_grid_backend.core.mutations import GridCommittedCell, GridMutationResult, GridRejectedCell, PendingGridCellEvent
+from affino_grid_backend.core.mutations import (
+    GridCommittedCell,
+    GridHistoryStatus,
+    GridMutationResult,
+    GridRejectedCell,
+    PendingGridCellEvent,
+)
 from affino_grid_backend.core.revision import GridRevisionService
 from affino_grid_backend.core.table import GridTableDefinition
 from affino_grid_backend.core.values import json_edit_value, normalize_edit_int, normalize_edit_value, reject_reason_for_column
@@ -124,6 +130,16 @@ class GridEditServiceBase(ABC):
                 await self.create_cell_events(session, operation_id, cell_events, changed_at)
 
             revision = await self._revision_service.bump_revision(session) if changed_rows else await self._revision_service.get_revision(session)
+            history_status = await self.collect_history_status(
+                session,
+                request,
+                operation_id=operation_id,
+                committed=committed,
+                committed_row_ids=committed_row_ids,
+                rejected=rejected,
+                affected_indexes=affected_indexes,
+                revision=revision,
+            )
 
         return GridMutationResult(
             operation_id=operation_id,
@@ -132,6 +148,7 @@ class GridEditServiceBase(ABC):
             rejected=rejected,
             affected_indexes=affected_indexes,
             revision=revision,
+            history_status=history_status,
         )
 
     def normalize_optional_operation_id(self, operation_id: str | None) -> str | None:
@@ -156,6 +173,20 @@ class GridEditServiceBase(ABC):
 
     def normalize_edit_int(self, value: Any) -> int:
         return normalize_edit_int(value)
+
+    async def collect_history_status(
+        self,
+        session: AsyncSession,
+        request: Any,
+        *,
+        operation_id: str | None,
+        committed: list[GridCommittedCell],
+        committed_row_ids: list[str],
+        rejected: list[GridRejectedCell],
+        affected_indexes: list[int],
+        revision: str,
+    ) -> GridHistoryStatus | None:
+        return None
 
     def column_definition(self, column_id: str) -> GridColumnDefinition | None:
         return self._table.column(column_id)

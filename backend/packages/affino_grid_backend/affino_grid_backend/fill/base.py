@@ -10,7 +10,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from affino_grid_backend.core.errors import ApiException
-from affino_grid_backend.core.mutations import GridFillMutationResult, PendingGridCellEvent
+from affino_grid_backend.core.mutations import GridFillMutationResult, GridHistoryStatus, PendingGridCellEvent
 from affino_grid_backend.core.revision import GridRevisionService
 from affino_grid_backend.core.table import GridTableDefinition
 from affino_grid_backend.core.values import coerce_optional_int, json_edit_value, normalize_edit_value, reject_reason_for_column
@@ -264,6 +264,16 @@ class GridFillServiceBase(ABC):
                 operation_id = None
                 warnings.append("server fill no-op")
                 revision = await self._revision_service.get_revision(session)
+            history_status = await self.collect_history_status(
+                session,
+                request,
+                operation_id=operation_id,
+                affected_row_ids=affected_row_ids,
+                affected_indexes=affected_indexes,
+                affected_cell_count=affected_cell_count,
+                warnings=warnings,
+                revision=revision,
+            )
 
         return GridFillMutationResult(
             operation_id=operation_id,
@@ -272,6 +282,7 @@ class GridFillServiceBase(ABC):
             affected_cell_count=affected_cell_count,
             warnings=warnings,
             revision=revision,
+            history_status=history_status,
         )
 
     def normalize_fill_value(self, column_id: str, value: Any) -> Any:
@@ -399,6 +410,20 @@ class GridFillServiceBase(ABC):
 
     def _is_non_empty_fill_boundary_value(self, value: Any) -> bool:
         return value is not None and value != ""
+
+    async def collect_history_status(
+        self,
+        session: AsyncSession,
+        request: Any,
+        *,
+        operation_id: str | None,
+        affected_row_ids: list[str],
+        affected_indexes: list[int],
+        affected_cell_count: int,
+        warnings: list[str],
+        revision: str,
+    ) -> GridHistoryStatus | None:
+        return None
 
     @abstractmethod
     def build_projected_query(self, session: AsyncSession, projection: Any) -> Any:

@@ -19,6 +19,10 @@ import {
   type ServerDemoRow,
 } from "./types"
 import type { ServerDemoHistoryScope } from "./serverDemoHistoryScope"
+import {
+  normalizeServerDemoHistoryState,
+  type ServerDemoHistoryState,
+} from "./serverDemoHistoryState"
 
 export interface ServerDemoDatasourceHttpAdapterOptions {
   baseUrl?: string
@@ -69,7 +73,13 @@ type ServerDemoFillCommitResponse = {
   operationId?: string | null
   affectedRowCount: number
   affectedCellCount?: number
+  affectedRows?: number
+  affectedCells?: number
   revision?: string | number | null
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
   invalidation?: DataGridDataSourceInvalidation | null
   warnings?: readonly string[]
 }
@@ -79,6 +89,12 @@ type ServerDemoFillHistoryResponse = {
   revision?: string | number | null
   invalidation?: DataGridDataSourceInvalidation | null
   warnings?: readonly string[]
+  affectedRows?: number
+  affectedCells?: number
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
 }
 
 type ServerDemoCommitEditsResponse = {
@@ -95,6 +111,12 @@ type ServerDemoCommitEditsResponse = {
     reason?: string | null
   }[]
   revision?: string | number | null
+  affectedRows?: number
+  affectedCells?: number
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
   invalidation?: DataGridDataSourceInvalidation | null
 }
 
@@ -135,6 +157,12 @@ type ServerDemoHistoryStatusResponse = {
 
 type ServerDemoCommitEditsResultWithOperation = ServerDemoCommitEditsResult & {
   operationId?: string | null
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
+  affectedRows?: number
+  affectedCells?: number
 }
 
 type ServerDemoServerOperationResult = ServerDemoCommitEditsResultWithOperation & {
@@ -915,18 +943,44 @@ function toRejectedRows(response: ServerDemoCommitEditsResponse): ServerDemoComm
   }))
 }
 
+function toServerDemoHistoryState(response: {
+  operationId?: string | null
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
+  affectedRows?: number
+  affectedCells?: number
+}): ServerDemoHistoryState | null {
+  const normalized = normalizeServerDemoHistoryState(response)
+  if (!normalized) {
+    return null
+  }
+  return {
+    ...normalized,
+    operationId: response.operationId ?? null,
+  }
+}
+
 async function postServerOperation(
   fetchImpl: typeof fetch,
   url: string,
   signal?: AbortSignal,
 ): Promise<ServerDemoServerOperationResult> {
   const response = await postJson<ServerDemoCommitEditsResponse>(fetchImpl, url, {}, signal)
+  const historyState = toServerDemoHistoryState(response)
   return {
     operationId: response.operationId ?? null,
     committed: toUniqueRowCommits(response),
     rejected: toRejectedRows(response),
     revision: response.revision,
     invalidation: response.invalidation,
+    canUndo: historyState?.canUndo,
+    canRedo: historyState?.canRedo,
+    latestUndoOperationId: historyState?.latestUndoOperationId,
+    latestRedoOperationId: historyState?.latestRedoOperationId,
+    affectedRows: historyState?.affectedRows ?? undefined,
+    affectedCells: historyState?.affectedCells ?? undefined,
   }
 }
 
@@ -935,11 +989,18 @@ async function postServerFillHistoryOperation(
   url: string,
 ): Promise<ServerDemoFillHistoryResponse> {
   const response = await postJson<ServerDemoCommitEditsResponse>(fetchImpl, url, {})
+  const historyState = toServerDemoHistoryState(response)
   return {
     operationId: response.operationId ?? null,
     revision: response.revision,
     invalidation: response.invalidation,
     warnings: (response.rejected ?? []).map(entry => entry.reason ?? "rejected"),
+    canUndo: historyState?.canUndo,
+    canRedo: historyState?.canRedo,
+    latestUndoOperationId: historyState?.latestUndoOperationId,
+    latestRedoOperationId: historyState?.latestRedoOperationId,
+    affectedRows: historyState?.affectedRows ?? undefined,
+    affectedCells: historyState?.affectedCells ?? undefined,
   }
 }
 
@@ -1073,6 +1134,12 @@ export function createServerDemoDatasourceHttpAdapter(
         committed: toUniqueRowCommits(response),
         rejected: toRejectedRows(response),
         revision: response.revision ?? null,
+        canUndo: response.canUndo,
+        canRedo: response.canRedo,
+        latestUndoOperationId: response.latestUndoOperationId ?? null,
+        latestRedoOperationId: response.latestRedoOperationId ?? null,
+        affectedRows: response.affectedRows,
+        affectedCells: response.affectedCells,
         invalidation: normalizeDataGridInvalidation(response.invalidation),
       } as ServerDemoCommitEditsResultWithOperation
     },
@@ -1100,9 +1167,23 @@ export function createServerDemoDatasourceHttpAdapter(
         operationId: response.operationId ?? request.operationId ?? "",
         affectedRowCount: response.affectedRowCount,
         affectedCellCount: response.affectedCellCount ?? response.affectedRowCount,
+        affectedRows: response.affectedRows ?? response.affectedRowCount,
+        affectedCells: response.affectedCells ?? response.affectedCellCount ?? response.affectedRowCount,
         revision: response.revision,
+        canUndo: response.canUndo,
+        canRedo: response.canRedo,
+        latestUndoOperationId: response.latestUndoOperationId ?? null,
+        latestRedoOperationId: response.latestRedoOperationId ?? null,
         invalidation: normalizeDataGridInvalidation(response.invalidation),
         warnings: response.warnings ?? [],
+      } as ServerDemoFillOperationResult & {
+        operationId?: string | null
+        affectedRows?: number
+        affectedCells?: number
+        canUndo?: boolean
+        canRedo?: boolean
+        latestUndoOperationId?: string | null
+        latestRedoOperationId?: string | null
       }
     },
 
