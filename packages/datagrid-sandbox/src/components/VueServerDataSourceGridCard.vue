@@ -84,6 +84,22 @@
               <dd>{{ pendingRequestsLabel }}</dd>
             </div>
             <div class="server-grid__diagnostics-card">
+              <dt>Dataset version</dt>
+              <dd>{{ datasetVersionLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Last seen</dt>
+              <dd>{{ lastSeenVersionLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Change feed</dt>
+              <dd>{{ changeFeedPollingLabel }} / {{ changeFeedPendingLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Applied changes</dt>
+              <dd>{{ appliedChangeCountLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
               <dt>Last batch rows</dt>
               <dd>{{ lastBatchRowsLabel }}</dd>
             </div>
@@ -529,6 +545,9 @@ import {
   createServerDemoDatasourceHttpFillDataSource,
 } from "../serverDatasourceDemo/serverDemoDatasourceHttpFillDataSource"
 import {
+  resolveServerDemoChangeFeedPollingIntervalMs,
+} from "../serverDatasourceDemo/serverDemoChangeFeedPolling"
+import {
   normalizeServerDemoHistoryState,
 } from "../serverDatasourceDemo/serverDemoHistoryState"
 import {
@@ -537,6 +556,7 @@ import {
 import {
   type ServerDemoDatasourceHooks,
   type ServerDemoCommitEditsResult,
+  type ServerDemoChangeFeedDiagnostics,
   normalizeServerDemoValueCellInput,
   type ServerDemoRow,
   SERVER_DEMO_ROW_COUNT as ROW_COUNT,
@@ -568,6 +588,14 @@ const loadedRows = ref(0)
 const pendingRequests = ref(0)
 const loading = ref(true)
 const error = ref<Error | null>(null)
+const changeFeedDiagnostics = ref<ServerDemoChangeFeedDiagnostics>({
+  currentDatasetVersion: null,
+  lastSeenVersion: null,
+  polling: false,
+  pending: false,
+  appliedChanges: 0,
+  intervalMs: null,
+})
 const serverDatasourceUnavailableMessage = "Server datasource is unavailable. Check backend and retry."
 const serverDatasourceUnavailable = ref(false)
 const serverDemoHistoryScope = resolveServerDemoHistoryScopeFromEnv()
@@ -1907,26 +1935,30 @@ const serverDemoHttpDatasource = serverDemoHttpDatasourceEnabled
     })
   : null
 const httpDatasource = serverDemoHttpDatasource
-const serverDemoChangeFeedPollingEnabled = import.meta.env.VITE_SERVER_DEMO_CHANGE_FEED_POLLING === "true"
-const serverDemoChangeFeedPollingIntervalMs = Math.max(
-  500,
-  Number(import.meta.env.VITE_SERVER_DEMO_CHANGE_FEED_POLL_INTERVAL_MS ?? 2000),
+let unsubscribeChangeFeedDiagnostics: (() => void) | null = null
+if (httpDatasource) {
+  unsubscribeChangeFeedDiagnostics = httpDatasource.subscribeChangeFeedDiagnostics(diagnosticsState => {
+    changeFeedDiagnostics.value = diagnosticsState
+  })
+}
+const serverDemoChangeFeedPollingEnabled = serverDemoHttpDatasourceEnabled
+const serverDemoChangeFeedPollingIntervalMs = resolveServerDemoChangeFeedPollingIntervalMs(
+  import.meta.env.VITE_SERVER_DEMO_CHANGE_FEED_POLL_INTERVAL_MS,
 )
-let serverDemoChangeFeedPollTimer: ReturnType<typeof setInterval> | null = null
-let serverDemoChangeFeedPollInFlight = false
-
 
 void legacyDataSource
 
 const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEnabled && serverDemoHttpDatasource
   ? {
-      ...createServerDemoDatasourceHttpFillDataSource({
-        enabled: true,
-        fallbackDataSource: serverDatasource.dataSource,
-        httpDatasource: serverDemoHttpDatasource,
-        refreshHistoryStatus: () => refreshHistoryStatus(),
-        applyInvalidation: invalidation => applyServerDemoMutationInvalidation(rowModel, invalidation),
-      }),
+    ...createServerDemoDatasourceHttpFillDataSource({
+      enabled: true,
+      fallbackDataSource: serverDatasource.dataSource,
+      httpDatasource: serverDemoHttpDatasource,
+      refreshHistoryStatus: () => refreshHistoryStatus(),
+      applyInvalidation: serverDemoChangeFeedPollingEnabled
+        ? undefined
+        : invalidation => applyServerDemoMutationInvalidation(rowModel, invalidation),
+    }),
       async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
         if (serverDatasourceUnavailable.value) {
           error.value = new Error(serverDatasourceUnavailableMessage)
@@ -2014,7 +2046,11 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
             datasetVersion?: number | null
             serverInvalidation?: Parameters<typeof applyServerDemoMutationInvalidation>[1]
           }
-          applyServerDemoMutationInvalidation(rowModel, result.serverInvalidation ?? { type: "dataset" })
+          if (result.serverInvalidation) {
+            applyServerDemoMutationInvalidation(rowModel, result.serverInvalidation)
+          } else {
+            await rowModel.refresh("manual")
+          }
           const affectedRowCount = new Set(result.committed?.map(entry => entry.rowId) ?? []).size
           const historyApplied = applyCommitHistoryDiagnostics(
             result,
@@ -2293,6 +2329,17 @@ const renderedViewportLabel = computed(() => {
 })
 const loadedRowsLabel = computed(() => loadedRows.value.toLocaleString())
 const pendingRequestsLabel = computed(() => String(pendingRequests.value))
+const datasetVersionLabel = computed(() => {
+  const value = changeFeedDiagnostics.value.currentDatasetVersion
+  return value === null ? "none" : String(value)
+})
+const lastSeenVersionLabel = computed(() => {
+  const value = changeFeedDiagnostics.value.lastSeenVersion
+  return value === null ? "none" : String(value)
+})
+const changeFeedPollingLabel = computed(() => changeFeedDiagnostics.value.polling ? "yes" : "no")
+const changeFeedPendingLabel = computed(() => changeFeedDiagnostics.value.pending ? "yes" : "no")
+const appliedChangeCountLabel = computed(() => String(changeFeedDiagnostics.value.appliedChanges))
 
 function refreshVisibleRange(): void {
   resetHttpDatasourceAvailability()
@@ -2649,7 +2696,7 @@ async function refreshHistoryStatus(): Promise<void> {
 async function runHistoryAction(direction: "undo" | "redo"): Promise<string | null> {
   if (serverDemoHttpDatasourceEnabled) {
     const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
-        const historyAction = direction === "undo"
+    const historyAction = direction === "undo"
       ? serverDatasource?.undoHistoryStack
       : serverDatasource?.redoHistoryStack
     if (typeof historyAction === "function") {
@@ -2806,52 +2853,25 @@ function simulateCommitFailure(): void {
   commitFailureMode.value = true
 }
 
-async function pollServerDemoChanges(): Promise<void> {
-  if (!serverDemoChangeFeedPollingEnabled) {
-    return
-  }
-  const getChangesSinceVersion = httpDatasource?.getChangesSinceVersion
-  if (typeof getChangesSinceVersion !== "function" || serverDemoChangeFeedPollInFlight) {
-    return
-  }
-  serverDemoChangeFeedPollInFlight = true
-  try {
-    const response = await getChangesSinceVersion({
-      sinceVersion: httpDatasource?.latestDatasetVersion ?? 0,
-    })
-    if (response.changes.length > 0) {
-      for (const change of response.changes) {
-        applyServerDemoMutationInvalidation(rowModel, change.invalidation)
-      }
-      await refreshHistoryStatus()
-    }
-  } catch (caught) {
-    if (!(caught instanceof Error && caught.name === "AbortError")) {
-      console.warn("Server demo change feed polling failed", caught)
-    }
-  } finally {
-    serverDemoChangeFeedPollInFlight = false
-  }
-}
-
 onMounted(() => {
   totalRows.value = ROW_COUNT
   handleStateUpdate(rowModel.getSnapshot())
   void refreshHistoryStatus()
-  void rowModel.refresh("mount")
-  if (serverDemoChangeFeedPollingEnabled) {
-    void pollServerDemoChanges()
-    serverDemoChangeFeedPollTimer = setInterval(() => {
-      void pollServerDemoChanges()
-    }, serverDemoChangeFeedPollingIntervalMs)
-  }
+  void rowModel.refresh("mount").catch(() => {}).finally(() => {
+    if (serverDemoChangeFeedPollingEnabled) {
+      httpDatasource?.startChangeFeedPolling({
+        intervalMs: serverDemoChangeFeedPollingIntervalMs,
+      })
+    }
+  })
   lastEditRecordedText.value = "no"
 })
 
 onBeforeUnmount(() => {
-  if (serverDemoChangeFeedPollTimer !== null) {
-    clearInterval(serverDemoChangeFeedPollTimer)
-    serverDemoChangeFeedPollTimer = null
+  httpDatasource?.stopChangeFeedPolling()
+  if (unsubscribeChangeFeedDiagnostics) {
+    unsubscribeChangeFeedDiagnostics()
+    unsubscribeChangeFeedDiagnostics = null
   }
   unsubscribeSampleDiagnostics()
   rowModel.dispose()

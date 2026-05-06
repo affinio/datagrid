@@ -79,6 +79,7 @@ export interface ServerDemoChangeFeedChange {
   operationId?: string | null
   user_id?: string | null
   session_id?: string | null
+  rows?: readonly ServerDemoDataSourceRowEntry[]
 }
 
 export interface ServerDemoFillChange {
@@ -199,6 +200,15 @@ export interface ServerDemoDatasourceHooks {
   scheduleRenderedSampleDiagnostics?: () => void
   shouldSimulatePullFailure?: () => boolean
   shouldRejectCommittedRow?: (rowId: string) => boolean
+}
+
+export interface ServerDemoChangeFeedDiagnostics {
+  currentDatasetVersion: number | null
+  lastSeenVersion: number | null
+  polling: boolean
+  pending: boolean
+  appliedChanges: number
+  intervalMs: number | null
 }
 
 export interface ServerDemoFillProjectionContext {

@@ -8,17 +8,22 @@ import {
   type DataGridDataSourceInvalidation,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourcePullResult,
+  type DataGridDataSourcePushEvent,
   type DataGridDataSourcePushListener,
   type DataGridFilterSnapshot,
+  type DataGridDataSourceRowEntry,
 } from "@affino/datagrid-vue"
 
 import {
   SERVER_DEMO_REGIONS,
   SERVER_DEMO_SEGMENTS,
   SERVER_DEMO_STATUSES,
+  type ServerDemoChangeFeedChange,
   type ServerDemoChangeFeedResponse,
   type ServerDemoRow,
   type ServerDemoChangeFeedRequest,
+  type ServerDemoChangeFeedDiagnostics,
+  type ServerDemoDataSourceRowEntry,
 } from "./types"
 import type { ServerDemoHistoryScope } from "./serverDemoHistoryScope"
 import {
@@ -30,6 +35,10 @@ export interface ServerDemoDatasourceHttpAdapterOptions {
   baseUrl?: string
   fetchImpl?: typeof fetch
   historyScope?: ServerDemoHistoryScope
+}
+
+export interface ServerDemoDatasourceHttpAdapterChangeFeedOptions {
+  intervalMs?: number
 }
 
 export class ServerDemoHttpError extends Error {
@@ -937,6 +946,35 @@ function normalizeDataGridInvalidation(value: unknown): DataGridDataSourceInvali
   }
 }
 
+function normalizeChangeFeedRows(
+  rows: readonly ServerDemoDataSourceRowEntry[] | null | undefined,
+): readonly DataGridDataSourceRowEntry<ServerDemoRow>[] | null {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return null
+  }
+  const normalized: DataGridDataSourceRowEntry<ServerDemoRow>[] = []
+  for (const entry of rows) {
+    if (!entry || typeof entry !== "object") {
+      continue
+    }
+    if (typeof entry.index !== "number" || !Number.isFinite(entry.index)) {
+      continue
+    }
+    if (typeof entry.rowId !== "string" && typeof entry.rowId !== "number") {
+      continue
+    }
+    normalized.push({
+      index: Math.max(0, Math.trunc(entry.index)),
+      rowId: entry.rowId,
+      row: entry.row,
+      ...(entry.kind ? { kind: entry.kind } : {}),
+      ...(entry.groupMeta ? { groupMeta: entry.groupMeta } : {}),
+      ...(entry.state ? { state: entry.state } : {}),
+    })
+  }
+  return normalized.length > 0 ? normalized : null
+}
+
 function serializeFillRange(range: {
   startRow?: number
   endRow?: number
@@ -1331,6 +1369,11 @@ export interface ServerDemoDatasourceHttpAdapter extends DataGridDataSource<Serv
   getHistoryStatus(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStatusResponse>
   getChangesSinceVersion(request: ServerDemoChangeFeedRequest & { signal?: AbortSignal }): Promise<ServerDemoChangeFeedResponse>
   latestDatasetVersion: number | null
+  lastSeenVersion: number | null
+  startChangeFeedPolling(options?: ServerDemoDatasourceHttpAdapterChangeFeedOptions): void
+  stopChangeFeedPolling(): void
+  getChangeFeedDiagnostics(): ServerDemoChangeFeedDiagnostics
+  subscribeChangeFeedDiagnostics(listener: (diagnostics: ServerDemoChangeFeedDiagnostics) => void): () => void
 }
 
 export function createServerDemoDatasourceHttpAdapter(
@@ -1338,8 +1381,171 @@ export function createServerDemoDatasourceHttpAdapter(
 ): ServerDemoDatasourceHttpAdapter {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const listeners = new Set<DataGridDataSourcePushListener<ServerDemoRow>>()
+  const changeFeedDiagnosticsListeners = new Set<(diagnostics: ServerDemoChangeFeedDiagnostics) => void>()
   const historyScope = options.historyScope
   let latestDatasetVersion: number | null = null
+  let lastSeenVersion: number | null = null
+  let changeFeedPollingActive = false
+  let changeFeedPollingIntervalMs: number | null = null
+  let changeFeedPollTimer: ReturnType<typeof setInterval> | null = null
+  let changeFeedPollInFlight = false
+  let changeFeedPollGeneration = 0
+  let changeFeedPollAbortController: AbortController | null = null
+  let changeFeedPollRequestedSinceVersion: number | null = null
+  let appliedChangeCount = 0
+
+  function getChangeFeedDiagnostics(): ServerDemoChangeFeedDiagnostics {
+    return {
+      currentDatasetVersion: latestDatasetVersion,
+      lastSeenVersion,
+      polling: changeFeedPollingActive,
+      pending: changeFeedPollInFlight,
+      appliedChanges: appliedChangeCount,
+      intervalMs: changeFeedPollingIntervalMs,
+    }
+  }
+
+  function emitChangeFeedDiagnostics(): void {
+    const diagnostics = getChangeFeedDiagnostics()
+    for (const listener of changeFeedDiagnosticsListeners) {
+      listener(diagnostics)
+    }
+  }
+
+  function updateDatasetVersion(version: number | null | undefined, markSeen = false): void {
+    const normalizedVersion = normalizeDatasetVersion(version)
+    if (normalizedVersion === null) {
+      return
+    }
+    latestDatasetVersion = normalizedVersion
+    if (markSeen) {
+      lastSeenVersion = normalizedVersion
+    }
+    emitChangeFeedDiagnostics()
+  }
+
+  function emitPushEvent(event: DataGridDataSourcePushEvent<ServerDemoRow>): void {
+    for (const listener of listeners) {
+      listener(event)
+    }
+  }
+
+  async function loadChangeFeedSinceVersion(
+    sinceVersion: number,
+    signal?: AbortSignal,
+  ): Promise<ServerDemoChangeFeedResponse> {
+    return await getJson<ServerDemoChangeFeedResponse>(
+      fetchImpl,
+      resolveEndpoint(options.baseUrl, `/api/changes?sinceVersion=${encodeURIComponent(String(sinceVersion))}`),
+      signal,
+    )
+  }
+
+  function applyChangeFeedResponse(response: ServerDemoChangeFeedResponse, requestSinceVersion: number): void {
+    if (changeFeedPollRequestedSinceVersion !== requestSinceVersion) {
+      return
+    }
+    if (lastSeenVersion !== null && lastSeenVersion !== requestSinceVersion) {
+      return
+    }
+    updateDatasetVersion(response.datasetVersion, true)
+    for (const change of response.changes ?? []) {
+      dispatchChangeFeedChange(change)
+    }
+  }
+
+  function dispatchChangeFeedChange(change: ServerDemoChangeFeedChange): void {
+    const rows = normalizeChangeFeedRows(change.rows)
+    if ((change.type === "cell" || change.type === "row") && rows && rows.length > 0) {
+      appliedChangeCount += rows.length
+      emitPushEvent({
+        type: "upsert",
+        rows,
+      })
+      return
+    }
+
+    const invalidation = normalizeDataGridInvalidation(change.invalidation)
+    if (!invalidation) {
+      appliedChangeCount += 1
+      emitPushEvent({
+        type: "invalidate",
+        invalidation: {
+          kind: "all",
+          reason: "change-feed",
+        },
+      })
+      return
+    }
+
+    appliedChangeCount += 1
+    emitPushEvent({
+      type: "invalidate",
+      invalidation,
+    })
+  }
+
+  async function pollChangeFeed(signal?: AbortSignal): Promise<void> {
+    if (!changeFeedPollingActive || changeFeedPollInFlight) {
+      return
+    }
+    const requestGeneration = changeFeedPollGeneration
+    const sinceVersion = lastSeenVersion ?? latestDatasetVersion ?? 0
+    const controller = new AbortController()
+    changeFeedPollAbortController = controller
+    changeFeedPollRequestedSinceVersion = sinceVersion
+    changeFeedPollInFlight = true
+    emitChangeFeedDiagnostics()
+    try {
+      const response = await loadChangeFeedSinceVersion(sinceVersion, signal ?? controller.signal)
+      if (!changeFeedPollingActive || requestGeneration !== changeFeedPollGeneration) {
+        return
+      }
+      applyChangeFeedResponse(response, sinceVersion)
+    } catch (caught) {
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+        console.warn("Server demo change feed polling failed", caught)
+      }
+    } finally {
+      if (changeFeedPollAbortController === controller) {
+        changeFeedPollAbortController = null
+      }
+      changeFeedPollInFlight = false
+      emitChangeFeedDiagnostics()
+    }
+  }
+
+  function startChangeFeedPolling(options: ServerDemoDatasourceHttpAdapterChangeFeedOptions = {}): void {
+    const intervalMs = Number.isFinite(options.intervalMs)
+      ? Math.max(250, Math.trunc(options.intervalMs ?? 0))
+      : 500
+    stopChangeFeedPolling()
+    changeFeedPollingActive = true
+    changeFeedPollingIntervalMs = intervalMs
+    changeFeedPollGeneration += 1
+    emitChangeFeedDiagnostics()
+    void pollChangeFeed()
+    changeFeedPollTimer = globalThis.setInterval(() => {
+      void pollChangeFeed()
+    }, intervalMs)
+  }
+
+  function stopChangeFeedPolling(): void {
+    if (changeFeedPollTimer !== null) {
+      clearInterval(changeFeedPollTimer)
+      changeFeedPollTimer = null
+    }
+    changeFeedPollingActive = false
+    changeFeedPollingIntervalMs = null
+    changeFeedPollGeneration += 1
+    if (changeFeedPollAbortController && !changeFeedPollAbortController.signal.aborted) {
+      changeFeedPollAbortController.abort()
+    }
+    changeFeedPollAbortController = null
+    changeFeedPollRequestedSinceVersion = null
+    changeFeedPollInFlight = false
+    emitChangeFeedDiagnostics()
+  }
 
   return {
     async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
@@ -1350,7 +1556,7 @@ export function createServerDemoDatasourceHttpAdapter(
         sortModel: normalizeSortModel(request),
         filterModel: flattenFilterModel(request.filterModel),
       }, request.signal)
-      latestDatasetVersion = response.datasetVersion ?? normalizeDatasetVersion(response.revision) ?? latestDatasetVersion
+      updateDatasetVersion(response.datasetVersion ?? normalizeDatasetVersion(response.revision), true)
 
       return {
         rows: response.rows.map((row, offset) => ({
@@ -1422,7 +1628,7 @@ export function createServerDemoDatasourceHttpAdapter(
         body,
         request.signal,
       )
-      latestDatasetVersion = response.datasetVersion ?? normalizeDatasetVersion(response.revision) ?? latestDatasetVersion
+      updateDatasetVersion(response.datasetVersion ?? normalizeDatasetVersion(response.revision), true)
       return {
         operationId: response.operationId ?? null,
         committed: toUniqueRowCommits(response),
@@ -1459,7 +1665,7 @@ export function createServerDemoDatasourceHttpAdapter(
           scope: historyScope,
         }),
       )
-      latestDatasetVersion = response.datasetVersion ?? normalizeDatasetVersion(response.revision) ?? latestDatasetVersion
+      updateDatasetVersion(response.datasetVersion ?? normalizeDatasetVersion(response.revision), true)
       const rawInvalidation = response.serverInvalidation ?? response.invalidation
       return {
         operationId: response.operationId ?? request.operationId ?? "",
@@ -1490,42 +1696,44 @@ export function createServerDemoDatasourceHttpAdapter(
     async undoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult> {
       const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/undo`)
       const result = await postServerOperation(fetchImpl, url, request.signal)
-      latestDatasetVersion = result.datasetVersion ?? latestDatasetVersion
+      updateDatasetVersion(result.datasetVersion, true)
       return result
     },
 
     async redoOperation(request: { operationId: string; signal?: AbortSignal }): Promise<ServerDemoServerOperationResult> {
       const url = resolveEndpoint(options.baseUrl, `/api/server-demo/operations/${encodeURIComponent(request.operationId)}/redo`)
       const result = await postServerOperation(fetchImpl, url, request.signal)
-      latestDatasetVersion = result.datasetVersion ?? latestDatasetVersion
+      updateDatasetVersion(result.datasetVersion, true)
       return result
     },
 
     async undoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse> {
       const url = resolveEndpoint(options.baseUrl, "/api/history/undo")
       const result = await postServerHistoryStackOperation(fetchImpl, url, request, request.signal)
-      latestDatasetVersion = result.datasetVersion ?? latestDatasetVersion
+      updateDatasetVersion(result.datasetVersion, true)
       return result
     },
 
     async redoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse> {
       const url = resolveEndpoint(options.baseUrl, "/api/history/redo")
       const result = await postServerHistoryStackOperation(fetchImpl, url, request, request.signal)
-      latestDatasetVersion = result.datasetVersion ?? latestDatasetVersion
+      updateDatasetVersion(result.datasetVersion, true)
       return result
     },
 
     async getHistoryStatus(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStatusResponse> {
       const url = resolveEndpoint(options.baseUrl, "/api/history/status")
       const result = await postServerHistoryStatusOperation(fetchImpl, url, request, request.signal)
-      latestDatasetVersion = result.datasetVersion ?? latestDatasetVersion
+      updateDatasetVersion(result.datasetVersion, true)
       return result
     },
 
     async getChangesSinceVersion(request: ServerDemoChangeFeedRequest & { signal?: AbortSignal }): Promise<ServerDemoChangeFeedResponse> {
-      const url = resolveEndpoint(options.baseUrl, `/api/changes?sinceVersion=${encodeURIComponent(String(request.sinceVersion))}`)
-      const response = await getJson<ServerDemoChangeFeedResponse>(fetchImpl, url, request.signal)
-      latestDatasetVersion = response.datasetVersion ?? latestDatasetVersion
+      const response = await loadChangeFeedSinceVersion(request.sinceVersion, request.signal)
+      updateDatasetVersion(response.datasetVersion, true)
+      for (const change of response.changes ?? []) {
+        dispatchChangeFeedChange(change)
+      }
       return response
     },
 
@@ -1559,6 +1767,19 @@ export function createServerDemoDatasourceHttpAdapter(
     },
     get latestDatasetVersion() {
       return latestDatasetVersion
+    },
+    get lastSeenVersion() {
+      return lastSeenVersion
+    },
+    startChangeFeedPolling,
+    stopChangeFeedPolling,
+    getChangeFeedDiagnostics,
+    subscribeChangeFeedDiagnostics(listener: (diagnostics: ServerDemoChangeFeedDiagnostics) => void): () => void {
+      changeFeedDiagnosticsListeners.add(listener)
+      listener(getChangeFeedDiagnostics())
+      return () => {
+        changeFeedDiagnosticsListeners.delete(listener)
+      }
     },
   }
 }

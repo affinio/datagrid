@@ -134,6 +134,7 @@ function createFillProjection() {
 
 describe("createServerDemoDatasourceHttpAdapter", () => {
   afterEach(() => {
+    vi.useRealTimers()
     window.dispatchEvent(new Event("pageshow"))
   })
 
@@ -311,6 +312,22 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
           operationId: "change-1",
           user_id: null,
           session_id: "server-demo-session",
+          rows: [
+            {
+              index: 9,
+              rowId: "srv-000010",
+              row: {
+                id: "srv-000010",
+                index: 10,
+                name: "Account 00010",
+                segment: "Growth",
+                status: "Active",
+                region: "EMEA",
+                value: 910,
+                updatedAt: "2025-01-01T00:00:10Z",
+              },
+            },
+          ],
         },
       ],
     }), {
@@ -343,9 +360,310 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
           operationId: "change-1",
           user_id: null,
           session_id: "server-demo-session",
+          rows: [
+            {
+              index: 9,
+              rowId: "srv-000010",
+              row: {
+                id: "srv-000010",
+                index: 10,
+                name: "Account 00010",
+                segment: "Growth",
+                status: "Active",
+                region: "EMEA",
+                value: 910,
+                updatedAt: "2025-01-01T00:00:10Z",
+              },
+            },
+          ],
         },
       ],
     })
+  })
+
+  it("starts polling the change feed and emits upsert events without overlapping requests", async () => {
+    vi.useFakeTimers()
+    let resolveChanges: ((response: Response) => void) | null = null
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const resolvedUrl = String(url)
+      if (resolvedUrl.includes("/api/changes")) {
+        return await new Promise<Response>(resolve => {
+          resolveChanges = resolve
+        })
+      }
+      throw new Error(`unexpected request: ${resolvedUrl}`)
+    })
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    const pushed = vi.fn()
+    const diagnosticsUpdates: ReturnType<typeof adapter.getChangeFeedDiagnostics>[] = []
+    const unsubscribe = adapter.subscribe!(pushed)
+    const unsubscribeDiagnostics = adapter.subscribeChangeFeedDiagnostics(state => {
+      diagnosticsUpdates.push(state)
+    })
+
+    adapter.startChangeFeedPolling({ intervalMs: 250 })
+    await vi.advanceTimersByTimeAsync(0)
+    await Promise.resolve()
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("/api/changes?sinceVersion=0")
+    expect(adapter.getChangeFeedDiagnostics()).toMatchObject({
+      polling: true,
+      pending: true,
+      appliedChanges: 0,
+    })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+
+    if (resolveChanges) {
+      const resolveChangeFeed = resolveChanges as (response: Response) => void
+      resolveChangeFeed(new Response(JSON.stringify({
+        datasetVersion: 2,
+        changes: [
+          {
+            type: "cell",
+            invalidation: {
+              type: "cell",
+              cells: [{ rowId: "srv-000010", columnId: "name" }],
+              rows: [],
+              range: null,
+            },
+            rows: [
+              {
+                index: 9,
+                rowId: "srv-000010",
+                row: {
+                  id: "srv-000010",
+                  index: 10,
+                  name: "Account 00010",
+                  segment: "Growth",
+                  status: "Active",
+                  region: "EMEA",
+                  value: 910,
+                  updatedAt: "2025-01-01T00:00:10Z",
+                },
+              },
+            ],
+          },
+        ],
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }))
+    }
+    await Promise.resolve()
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+    await Promise.resolve()
+
+    expect(pushed).toHaveBeenCalledWith({
+      type: "upsert",
+      rows: [
+        {
+          index: 9,
+          rowId: "srv-000010",
+          row: {
+            id: "srv-000010",
+            index: 10,
+            name: "Account 00010",
+            segment: "Growth",
+            status: "Active",
+            region: "EMEA",
+            value: 910,
+            updatedAt: "2025-01-01T00:00:10Z",
+          },
+        },
+      ],
+    })
+    expect(adapter.lastSeenVersion).toBe(2)
+    expect(adapter.getChangeFeedDiagnostics()).toMatchObject({
+      polling: true,
+      pending: false,
+      appliedChanges: 1,
+    })
+
+    adapter.stopChangeFeedPolling()
+    unsubscribeDiagnostics()
+    unsubscribe()
+    expect(diagnosticsUpdates.length).toBeGreaterThan(0)
+  })
+
+  it("emits range invalidations and dataset fallbacks from the change feed", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      datasetVersion: 4,
+      changes: [
+        {
+          type: "range",
+          invalidation: {
+            type: "range",
+            range: { startRow: 3, endRow: 7, startColumn: "name", endColumn: "status" },
+          },
+        },
+        {
+          type: "dataset",
+          invalidation: {
+            type: "dataset",
+          },
+        },
+      ],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    const pushed = vi.fn()
+    adapter.subscribe!(pushed)
+
+    await adapter.getChangesSinceVersion({ sinceVersion: 3 })
+
+    expect(pushed).toHaveBeenNthCalledWith(1, {
+      type: "invalidate",
+      invalidation: {
+        kind: "range",
+        range: { start: 3, end: 7 },
+      },
+    })
+    expect(pushed).toHaveBeenNthCalledWith(2, {
+      type: "invalidate",
+      invalidation: {
+        kind: "all",
+      },
+    })
+  })
+
+  it("polls from the latest seen version after a mutation response", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const resolvedUrl = String(url)
+      if (resolvedUrl.includes("/api/server-demo/edits")) {
+        return new Response(JSON.stringify({
+          operationId: "op-inline-1",
+          committed: [{ rowId: "srv-000001", columnId: "name", revision: "rev-row-1" }],
+          committedRowIds: ["srv-000001"],
+          rejected: [],
+          affectedRows: 1,
+          affectedCells: 1,
+          revision: "rev-global-7",
+          datasetVersion: 7,
+          canUndo: true,
+          canRedo: false,
+          latestUndoOperationId: "op-inline-1",
+          latestRedoOperationId: null,
+          invalidation: null,
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      }
+      if (resolvedUrl.includes("/api/changes")) {
+        return new Response(JSON.stringify({
+          datasetVersion: 8,
+          changes: [],
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      }
+      throw new Error(`unexpected request: ${resolvedUrl}`)
+    })
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    await adapter.commitEdits!(createCommitEditsRequest())
+    expect(adapter.lastSeenVersion).toBe(7)
+
+    vi.useFakeTimers()
+    adapter.startChangeFeedPolling({ intervalMs: 250 })
+    await vi.advanceTimersByTimeAsync(0)
+
+    const lastCall = fetchImpl.mock.calls[fetchImpl.mock.calls.length - 1]
+    expect(String(lastCall?.[0])).toContain("/api/changes?sinceVersion=7")
+    adapter.stopChangeFeedPolling()
+  })
+
+  it("moves the polling cursor back when undo returns an older authoritative dataset version", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const resolvedUrl = String(url)
+      if (resolvedUrl.includes("/api/server-demo/edits")) {
+        return new Response(JSON.stringify({
+          operationId: "op-inline-1",
+          committed: [{ rowId: "srv-000001", columnId: "name", revision: "rev-row-1" }],
+          committedRowIds: ["srv-000001"],
+          rejected: [],
+          affectedRows: 1,
+          affectedCells: 1,
+          revision: "rev-global-7",
+          datasetVersion: 7,
+          canUndo: true,
+          canRedo: false,
+          latestUndoOperationId: "op-inline-1",
+          latestRedoOperationId: null,
+          invalidation: null,
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      }
+      if (resolvedUrl.includes("/undo")) {
+        return new Response(JSON.stringify({
+          operationId: "op-inline-1",
+          committed: [{ rowId: "srv-000001", columnId: "name", revision: "rev-row-1" }],
+          committedRowIds: ["srv-000001"],
+          rejected: [],
+          revision: "rev-global-4",
+          datasetVersion: 4,
+          canUndo: true,
+          canRedo: true,
+          latestUndoOperationId: "op-inline-0",
+          latestRedoOperationId: "op-inline-1",
+          invalidation: null,
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      }
+      if (resolvedUrl.includes("/api/changes")) {
+        return new Response(JSON.stringify({
+          datasetVersion: 4,
+          changes: [],
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+      }
+      throw new Error(`unexpected request: ${resolvedUrl}`)
+    })
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    await adapter.commitEdits!(createCommitEditsRequest())
+    expect(adapter.lastSeenVersion).toBe(7)
+
+    await adapter.undoHistoryStack({
+      workspace_id: "server-demo-sandbox",
+      table_id: "server_demo",
+      session_id: "server-demo-session",
+    })
+    expect(adapter.lastSeenVersion).toBe(4)
+
+    const response = await adapter.getChangesSinceVersion({ sinceVersion: 4 })
+    expect(response.datasetVersion).toBe(4)
+    const lastCall = fetchImpl.mock.calls[fetchImpl.mock.calls.length - 1]
+    expect(String(lastCall?.[0])).toContain("/api/changes?sinceVersion=4")
   })
 
   it("applies cell, range, and dataset invalidations to the row model", () => {
