@@ -224,6 +224,45 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     expect((result as { datasetVersion?: number | null }).datasetVersion).toBe(1)
   })
 
+  it("normalizes aborted pull requests to AbortError even when fetch reports a transport failure", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new TypeError("Failed to fetch")
+    })
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    const controller = new AbortController()
+    const request: DataGridDataSourcePullRequest = {
+      range: { start: 0, end: 49 },
+      priority: "normal",
+      reason: "mount",
+      signal: controller.signal,
+      sortModel: [],
+      filterModel: null,
+      groupBy: null,
+      groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+      treeData: null,
+      pivot: null,
+      pagination: {
+        snapshot: {
+          enabled: false,
+          pageSize: 50,
+          currentPage: 0,
+          pageCount: 0,
+          totalRowCount: 0,
+          startIndex: 0,
+          endIndex: 49,
+        },
+        cursor: null,
+      },
+    }
+    controller.abort()
+
+    await expect(adapter.pull(request)).rejects.toMatchObject({
+      name: "AbortError",
+      message: "Aborted",
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
   it("polls the change feed and updates the latest dataset version", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       datasetVersion: 2,

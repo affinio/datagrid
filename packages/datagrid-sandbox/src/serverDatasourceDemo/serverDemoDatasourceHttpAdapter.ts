@@ -692,26 +692,62 @@ async function parseErrorResponse(response: Response): Promise<ServerDemoHttpErr
   return new ServerDemoHttpError(message, response.status, code, parsedBody ?? text)
 }
 
+function toAbortError(): DOMException {
+  return new DOMException("Aborted", "AbortError")
+}
+
+function isFetchAbortLikeError(caught: unknown): boolean {
+  if (caught instanceof DOMException && caught.name === "AbortError") {
+    return true
+  }
+  if (!(caught instanceof Error)) {
+    return false
+  }
+  return caught.name === "AbortError" || caught.message.toLowerCase().includes("abort")
+}
+
 async function postJson<TResponse>(
   fetchImpl: typeof fetch,
   url: string,
   body: unknown,
   signal?: AbortSignal,
 ): Promise<TResponse> {
-  const response = await fetchImpl(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    signal,
-  })
-
-  if (!response.ok) {
-    throw await parseErrorResponse(response)
+  let response: Response
+  try {
+    response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal,
+    })
+  } catch (caught) {
+    if (signal?.aborted || isFetchAbortLikeError(caught)) {
+      throw toAbortError()
+    }
+    throw caught
   }
 
-  return (await response.json()) as TResponse
+  if (!response.ok) {
+    try {
+      throw await parseErrorResponse(response)
+    } catch (caught) {
+      if (signal?.aborted || isFetchAbortLikeError(caught)) {
+        throw toAbortError()
+      }
+      throw caught
+    }
+  }
+
+  try {
+    return (await response.json()) as TResponse
+  } catch (caught) {
+    if (signal?.aborted || isFetchAbortLikeError(caught)) {
+      throw toAbortError()
+    }
+    throw caught
+  }
 }
 
 async function getJson<TResponse>(
@@ -719,16 +755,38 @@ async function getJson<TResponse>(
   url: string,
   signal?: AbortSignal,
 ): Promise<TResponse> {
-  const response = await fetchImpl(url, {
-    method: "GET",
-    signal,
-  })
-
-  if (!response.ok) {
-    throw await parseErrorResponse(response)
+  let response: Response
+  try {
+    response = await fetchImpl(url, {
+      method: "GET",
+      signal,
+    })
+  } catch (caught) {
+    if (signal?.aborted || isFetchAbortLikeError(caught)) {
+      throw toAbortError()
+    }
+    throw caught
   }
 
-  return (await response.json()) as TResponse
+  if (!response.ok) {
+    try {
+      throw await parseErrorResponse(response)
+    } catch (caught) {
+      if (signal?.aborted || isFetchAbortLikeError(caught)) {
+        throw toAbortError()
+      }
+      throw caught
+    }
+  }
+
+  try {
+    return (await response.json()) as TResponse
+  } catch (caught) {
+    if (signal?.aborted || isFetchAbortLikeError(caught)) {
+      throw toAbortError()
+    }
+    throw caught
+  }
 }
 
 function getHistogramResponseKey(entries: readonly DataGridColumnHistogramEntry[]): DataGridColumnHistogram {
