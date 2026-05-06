@@ -450,6 +450,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
 
     expect(pushed).toHaveBeenCalledWith({
       type: "upsert",
+      datasetVersion: 2,
       rows: [
         {
           index: 10,
@@ -554,15 +555,19 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
 
     expect(pushed).toHaveBeenNthCalledWith(1, {
       type: "invalidate",
+      datasetVersion: 4,
       invalidation: {
         kind: "range",
         range: { start: 3, end: 7 },
+        reason: undefined,
       },
     })
     expect(pushed).toHaveBeenNthCalledWith(2, {
       type: "invalidate",
+      datasetVersion: 4,
       invalidation: {
         kind: "all",
+        reason: undefined,
       },
     })
   })

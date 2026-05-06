@@ -119,6 +119,36 @@
         </div>
 
         <div class="server-grid__diagnostics-section">
+          <h4>Selection</h4>
+          <dl class="server-grid__diagnostics-list">
+            <div class="server-grid__diagnostics-card">
+              <dt>Selected range</dt>
+              <dd>{{ selectionRangeLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Virtual</dt>
+              <dd>{{ selectionVirtualLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Fully loaded</dt>
+              <dd>{{ selectionFullyLoadedLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Missing rows</dt>
+              <dd>{{ selectionMissingIntervalsLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Projection stale</dt>
+              <dd>{{ selectionProjectionStaleLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Blocked op</dt>
+              <dd>{{ selectionBlockedReasonLabel }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="server-grid__diagnostics-section">
           <h4>Aggregation Debug</h4>
           <dl class="server-grid__diagnostics-list">
             <div class="server-grid__diagnostics-card">
@@ -695,6 +725,12 @@ const fillAppliedText = ref("no")
 const plumbingState = ref<Record<string, boolean>>({})
 const branchState = ref("none")
 const lastSelectionRange = ref<{ startRow: number; endRow: number } | null>(null)
+const selectionRangeText = ref("none")
+const selectionVirtualText = ref("no")
+const selectionFullyLoadedText = ref("unknown")
+const selectionMissingIntervalsText = ref("none")
+const selectionProjectionStaleText = ref("no")
+const selectionBlockedReasonText = ref("none")
 const aggregationActive = ref(false)
 const lastAggregationRequestText = ref("none")
 const aggregateResponseRowsText = ref("0")
@@ -2173,6 +2209,12 @@ const rowModelKeysLabel = computed(() => rowModelKeysText.value)
 const lastBatchRowsLabel = computed(() => lastBatchRowsText.value)
 const lastSkippedRowsLabel = computed(() => lastSkippedRowsText.value)
 const fillWarningLabel = computed(() => fillWarningText.value)
+const selectionRangeLabel = computed(() => selectionRangeText.value)
+const selectionVirtualLabel = computed(() => selectionVirtualText.value)
+const selectionFullyLoadedLabel = computed(() => selectionFullyLoadedText.value)
+const selectionMissingIntervalsLabel = computed(() => selectionMissingIntervalsText.value)
+const selectionProjectionStaleLabel = computed(() => selectionProjectionStaleText.value)
+const selectionBlockedReasonLabel = computed(() => selectionBlockedReasonText.value)
 const fillBoundaryLabel = computed(() => fillBoundaryText.value)
 const fillBoundaryLeftLabel = computed(() => fillBoundaryLeftText.value)
 const fillBoundaryRightLabel = computed(() => fillBoundaryRightText.value)
@@ -2385,7 +2427,21 @@ function handleStateUpdate(state: unknown): void {
       }
     }
     selection?: {
-      ranges?: readonly { startRow: number; endRow: number }[]
+      ranges?: readonly {
+        startRow: number
+        endRow: number
+        startCol?: number
+        endCol?: number
+        virtual?: {
+          isVirtualSelection?: boolean
+          projectionStale?: boolean
+          staleReason?: string | null
+          coverage?: {
+            isFullyLoaded?: boolean
+            missingIntervals?: readonly { startRow: number; endRow: number }[]
+          } | null
+        } | null
+      }[]
       activeRangeIndex?: number
     } | null
   } | null
@@ -2400,6 +2456,31 @@ function handleStateUpdate(state: unknown): void {
     startRow: Math.min(activeRange.startRow, activeRange.endRow),
     endRow: Math.max(activeRange.startRow, activeRange.endRow),
   } : null
+  if (activeRange) {
+    const startRow = Math.min(activeRange.startRow, activeRange.endRow)
+    const endRow = Math.max(activeRange.startRow, activeRange.endRow)
+    const startCol = typeof activeRange.startCol === "number" ? Math.min(activeRange.startCol, activeRange.endCol ?? activeRange.startCol) : 0
+    const endCol = typeof activeRange.endCol === "number" ? Math.max(activeRange.startCol ?? activeRange.endCol, activeRange.endCol) : startCol
+    const virtual = activeRange.virtual ?? null
+    const coverage = virtual?.coverage ?? null
+    selectionRangeText.value = `${startRow}..${endRow} x ${startCol}..${endCol}`
+    selectionVirtualText.value = virtual?.isVirtualSelection === true ? "yes" : "no"
+    selectionFullyLoadedText.value = coverage?.isFullyLoaded === true
+      ? "yes"
+      : coverage?.isFullyLoaded === false
+        ? "no"
+        : "unknown"
+    selectionMissingIntervalsText.value = formatSelectionMissingIntervals(coverage?.missingIntervals ?? [])
+    selectionProjectionStaleText.value = virtual?.projectionStale === true
+      ? `yes${virtual.staleReason ? ` (${virtual.staleReason})` : ""}`
+      : "no"
+  } else {
+    selectionRangeText.value = "none"
+    selectionVirtualText.value = "no"
+    selectionFullyLoadedText.value = "unknown"
+    selectionMissingIntervalsText.value = "none"
+    selectionProjectionStaleText.value = "no"
+  }
   filterModelText.value = filterModel
     ? [
         ...Object.keys(filterModel.columnFilters ?? {}),
@@ -2414,6 +2495,15 @@ function handleStateUpdate(state: unknown): void {
   serverFillRowModelSnapshotText.value = rowModelSnapshotText
   runtimeRowModelSnapshotText.value = rowModelSnapshotText
   diagnostics.value = rowModel.getBackpressureDiagnostics()
+}
+
+function formatSelectionMissingIntervals(intervals: readonly { startRow: number; endRow: number }[]): string {
+  if (!intervals.length) {
+    return "none"
+  }
+  return intervals
+    .map(interval => `${interval.startRow}..${interval.endRow}`)
+    .join(", ")
 }
 
 function updateFillDiagnostics(batchRowCount: number, warnings: string[]): void {
@@ -2434,6 +2524,9 @@ function updateFillDiagnostics(batchRowCount: number, warnings: string[]): void 
 function handleFillWarning(message: string): void {
   fillWarningText.value = message
   const isServerPath = message === "server fill committed" || message === "server fill no-op"
+  if (!isServerPath) {
+    selectionBlockedReasonText.value = message
+  }
   fillBlockedText.value = isServerPath ? "no" : "yes"
   if (isServerPath) {
     fillAppliedText.value = "server"

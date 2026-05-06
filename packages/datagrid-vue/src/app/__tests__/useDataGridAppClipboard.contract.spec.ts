@@ -712,4 +712,19 @@ describe("useDataGridAppClipboard contract", () => {
     expect(copied).toBe(false)
     expect(lastAction.value).toBe("Selected range includes unloaded rows. Load rows or use server export.")
   })
+
+  it("blocks cut when the selected range includes unloaded rows", async () => {
+    const { clipboard, lastAction } = createClipboardHarness({
+      rowNodes: [
+        { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+        null,
+        { rowId: "r3", kind: "leaf", data: { rowId: "r3", a: "A3", b: "B3", c: "C3" } },
+      ],
+    })
+
+    const cut = await clipboard.cutSelectedCells("keyboard")
+
+    expect(cut).toBe(false)
+    expect(lastAction.value).toBe("Selected range includes unloaded rows. Load rows or use server export.")
+  })
 })

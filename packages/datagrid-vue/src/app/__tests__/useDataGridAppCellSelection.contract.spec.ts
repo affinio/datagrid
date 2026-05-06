@@ -151,4 +151,85 @@ describe("useDataGridAppCellSelection contract", () => {
     expect(api.isSelectionAnchorCell(4, 2)).toBe(true)
     expect(api.shouldHighlightSelectedCell(1, 0)).toBe(true)
   })
+
+  it("preserves virtual selection metadata for ranges beyond the loaded cache", () => {
+    const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
+    const selectionAnchor = ref<{ rowIndex: number; colIndex: number; rowId: string | null } | null>(null)
+
+    const api = useDataGridAppCellSelection({
+      mode: ref("base"),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => ({ rowId: `r${rowIndex + 1}` }),
+          },
+          selection: {
+            hasSupport: () => true,
+            setSnapshot: (snapshot: DataGridSelectionSnapshot) => {
+              selectionSnapshot.value = snapshot
+            },
+          },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => (
+          rowIndex <= 1
+            ? { rowId: `r${rowIndex + 1}` }
+            : null
+        ),
+      } as never,
+      totalRows: ref(10),
+      visibleColumns: ref([
+        { key: "a" },
+        { key: "b" },
+      ] as never),
+      viewportRowStart: ref(0),
+      selectionSnapshot,
+      selectionAnchor,
+      isEditingCell: () => false,
+      isVirtualSelectionMode: () => true,
+      isRowLoadedAtIndex: rowIndex => rowIndex <= 1,
+      resolveProjectionIdentity: () => ({
+        rowModelKind: "server",
+        revision: 1,
+        datasetVersion: 4,
+        projectionKey: "server-projection",
+      }),
+    })
+
+    api.applySelectionRange({
+      startRow: 0,
+      endRow: 5,
+      startColumn: 0,
+      endColumn: 1,
+    })
+
+    const range = selectionSnapshot.value?.ranges[0]
+    expect(range).toMatchObject({
+      startRow: 0,
+      endRow: 5,
+      startCol: 0,
+      endCol: 1,
+      startRowId: "r1",
+      endRowId: null,
+      virtual: {
+        startRowIndex: 0,
+        endRowIndex: 5,
+        startColumnIndex: 0,
+        endColumnIndex: 1,
+        datasetVersion: 4,
+        isVirtualSelection: true,
+        coverage: {
+          isFullyLoaded: false,
+          loadedRowCount: 2,
+          totalRowCount: 6,
+          missingIntervals: [{ startRow: 2, endRow: 5 }],
+        },
+      },
+    })
+    expect(api.resolveSelectionRange()).toEqual({
+      startRow: 0,
+      endRow: 5,
+      startColumn: 0,
+      endColumn: 1,
+    })
+  })
 })

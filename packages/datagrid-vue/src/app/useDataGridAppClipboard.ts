@@ -1,5 +1,6 @@
 import { ref, type Ref } from "vue"
 import type { DataGridClientRowPatch, DataGridColumnSnapshot, DataGridRowNode } from "@affino/datagrid-core"
+import { getDataGridSelectionMissingRowIntervals } from "@affino/datagrid-core"
 import type { DataGridCopyRange } from "../advanced"
 import { useDataGridClipboardBridge, useDataGridCopyRangeHelpers } from "../advanced"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
@@ -94,12 +95,9 @@ export function resolveMissingRowIndexInRange<TRow>(
   getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<TRow> | null | undefined,
   range: DataGridCopyRange,
 ): number | null {
-  for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
-    if (isDataGridRowMissingOrPlaceholder(getBodyRowAtIndex(rowIndex))) {
-      return rowIndex
-    }
-  }
-  return null
+  return getDataGridSelectionMissingRowIntervals(range, rowIndex => (
+    !isDataGridRowMissingOrPlaceholder(getBodyRowAtIndex(rowIndex))
+  ))[0]?.startRow ?? null
 }
 
 export function useDataGridAppClipboard<TRow, TSnapshot>(
@@ -482,6 +480,16 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     if (options.mode.value !== "base") {
       return false
     }
+    const preflightRange = copyRangeHelpers.resolveCopyRange()
+    if (preflightRange) {
+      const missingRowIndex = resolveMissingRowIndexInRange(getBodyRowAtIndex, preflightRange)
+      if (missingRowIndex != null) {
+        options.setLastAction?.(
+          "Selected range includes unloaded rows. Load rows or use server export.",
+        )
+        return false
+      }
+    }
     const copied = await clipboardBridge.copySelection(trigger)
     if (!copied) {
       return false
@@ -504,16 +512,6 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   }
 
   const copySelectedCells = async (trigger: "keyboard" | "context-menu" = "keyboard"): Promise<boolean> => {
-    const sourceRange = copyRangeHelpers.resolveCopyRange()
-    if (sourceRange) {
-      const missingRowIndex = resolveMissingRowIndexInRange(getBodyRowAtIndex, sourceRange)
-      if (missingRowIndex != null) {
-        options.setLastAction?.(
-          "Selected range includes unloaded rows. Load rows or use server export.",
-        )
-        return false
-      }
-    }
     return stageClipboardOperation("copy", trigger)
   }
 

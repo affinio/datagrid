@@ -1502,6 +1502,7 @@ export function createServerDemoDatasourceHttpAdapter(
       emitPushEvent({
         type: "upsert",
         rows,
+        datasetVersion: latestDatasetVersion,
       })
       return
     }
@@ -1511,6 +1512,7 @@ export function createServerDemoDatasourceHttpAdapter(
       appliedChangeCount += 1
       emitPushEvent({
         type: "invalidate",
+        datasetVersion: latestDatasetVersion,
         invalidation: {
           kind: "all",
           reason: "change-feed",
@@ -1522,6 +1524,7 @@ export function createServerDemoDatasourceHttpAdapter(
     appliedChangeCount += 1
     emitPushEvent({
       type: "invalidate",
+      datasetVersion: latestDatasetVersion,
       invalidation,
     })
   }

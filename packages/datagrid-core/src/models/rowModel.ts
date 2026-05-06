@@ -297,6 +297,7 @@ export interface DataGridRowNode<T = unknown> {
 export interface DataGridRowModelSnapshot<T = unknown> {
   readonly __rowType__?: T | undefined
   revision?: number
+  datasetVersion?: string | number | null
   kind: DataGridRowModelKind
   rowCount: number
   loading: boolean

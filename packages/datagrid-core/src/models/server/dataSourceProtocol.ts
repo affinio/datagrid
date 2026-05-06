@@ -131,6 +131,7 @@ export interface DataGridDataSourceRowEntry<T = unknown> {
 export interface DataGridDataSourcePullResult<T = unknown> {
   rows: readonly DataGridDataSourceRowEntry<T>[]
   total?: number | null
+  datasetVersion?: string | number | null
   pivotColumns?: readonly DataGridPivotColumn[]
   cursor?: string | null
 }
@@ -242,6 +243,7 @@ export interface DataGridDataSourcePushUpsertEvent<T = unknown> {
   type: "upsert"
   rows: readonly DataGridDataSourceRowEntry<T>[]
   total?: number | null
+  datasetVersion?: string | number | null
   pivotColumns?: readonly DataGridPivotColumn[]
   cursor?: string | null
 }
@@ -250,11 +252,13 @@ export interface DataGridDataSourcePushRemoveEvent {
   type: "remove"
   indexes: readonly number[]
   total?: number | null
+  datasetVersion?: string | number | null
 }
 
 export interface DataGridDataSourcePushInvalidateEvent {
   type: "invalidate"
   invalidation: DataGridDataSourceInvalidation
+  datasetVersion?: string | number | null
 }
 
 export type DataGridDataSourcePushEvent<T = unknown> =

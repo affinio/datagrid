@@ -2,6 +2,7 @@ import type {
   GridSelectionPoint,
   GridSelectionRange,
 } from "./selectionState"
+import type { DataGridVirtualSelectionMetadata } from "./virtualSelection.js"
 
 export interface GridSelectionSnapshotRange<TRowKey = unknown> {
   startRow: number
@@ -12,6 +13,7 @@ export interface GridSelectionSnapshotRange<TRowKey = unknown> {
   endRowId: TRowKey | null
   anchor: GridSelectionPoint<TRowKey>
   focus: GridSelectionPoint<TRowKey>
+  virtual?: DataGridVirtualSelectionMetadata<TRowKey> | null
 }
 
 export interface GridSelectionSnapshot<TRowKey = unknown> {
@@ -60,16 +62,22 @@ export function createSelectionSnapshot<TRowKey = unknown>(
     return null
   }
 
-  const snapshotRanges = ranges.map(range => ({
-    startRow: range.startRow,
-    endRow: range.endRow,
-    startCol: range.startCol,
-    endCol: range.endCol,
-    startRowId: resolveRowId(range.startRowId, range.startRow),
-    endRowId: resolveRowId(range.endRowId, range.endRow),
-    anchor: clonePoint(range.anchor),
-    focus: clonePoint(range.focus),
-  }))
+  const snapshotRanges = ranges.map(range => {
+    const rangeWithVirtual = range as GridSelectionRange<TRowKey> & {
+      virtual?: DataGridVirtualSelectionMetadata<TRowKey> | null
+    }
+    return {
+      startRow: range.startRow,
+      endRow: range.endRow,
+      startCol: range.startCol,
+      endCol: range.endCol,
+      startRowId: resolveRowId(range.startRowId, range.startRow),
+      endRowId: resolveRowId(range.endRowId, range.endRow),
+      anchor: clonePoint(range.anchor),
+      focus: clonePoint(range.focus),
+      ...(rangeWithVirtual.virtual ? { virtual: rangeWithVirtual.virtual } : {}),
+    }
+  })
 
   const activeCell = selectedPoint ? clonePoint(selectedPoint) : null
 

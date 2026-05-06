@@ -1119,6 +1119,7 @@ const DataGridRuntimeComponent = defineComponent({
 
     const handleSelectionChange = (payload: DataGridApiSelectionChangedEvent): void => {
       emit("selection-change", payload)
+      controlledState.emitSnapshotUpdates()
     }
 
     const handleRowSelectionChange = (payload: DataGridApiRowSelectionChangedEvent): void => {

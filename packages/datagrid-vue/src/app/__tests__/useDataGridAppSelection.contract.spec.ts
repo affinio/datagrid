@@ -1,4 +1,4 @@
-import { ref } from "vue"
+import { nextTick, ref } from "vue"
 import { describe, expect, it } from "vitest"
 import { useDataGridAppSelection } from "../useDataGridAppSelection"
 
@@ -320,5 +320,104 @@ describe("useDataGridAppSelection contract", () => {
     expect(selection.selectionAggregatesLabel.value).toBe(
       "Selection: count 2 · sum 50 · min 10 · max 40 · avg 25",
     )
+  })
+
+  it("marks virtual selections projection-stale when row indexes are invalidated by sort changes", async () => {
+    let sortDirection: "asc" | "desc" = "asc"
+    let runtimeSnapshot = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 4,
+          startCol: 0,
+          endCol: 0,
+          startRowId: "r1",
+          endRowId: null,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 4, colIndex: 0, rowId: null },
+          virtual: {
+            anchorCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+            focusCell: { rowIndex: 4, colIndex: 0, rowId: null },
+            startRowIndex: 0,
+            endRowIndex: 4,
+            startColumnIndex: 0,
+            endColumnIndex: 0,
+            rowIds: [{ rowIndex: 0, rowId: "r1" }],
+            coverage: {
+              isFullyLoaded: false,
+              loadedRowCount: 1,
+              totalRowCount: 5,
+              missingIntervals: [{ startRow: 1, endRow: 4 }],
+              rowIds: [{ rowIndex: 0, rowId: "r1" }],
+            },
+            projectionIdentity: { rowModelKind: "server", projectionKey: "initial" },
+            projectionStale: false,
+            staleReason: null,
+            isVirtualSelection: true,
+          },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 4, colIndex: 0, rowId: null },
+    }
+    const rowModelListenerRef: { current: (() => void) | null } = { current: null }
+    const setSnapshot = (snapshot: typeof runtimeSnapshot): void => {
+      runtimeSnapshot = snapshot
+    }
+
+    const selection = useDataGridAppSelection({
+      mode: ref("base"),
+      resolveRuntime: () => ({
+        api: {
+          selection: {
+            hasSupport: () => true,
+            getSnapshot: () => runtimeSnapshot,
+            setSnapshot,
+          },
+        },
+        rowModel: {
+          getSnapshot: () => ({
+            kind: "server",
+            revision: 1,
+            rowCount: 10,
+            loading: false,
+            error: null,
+            viewportRange: { start: 0, end: 5 },
+            pagination: {
+              enabled: false,
+              pageSize: 0,
+              currentPage: 0,
+              pageCount: 0,
+              totalRowCount: 10,
+              startIndex: 0,
+              endIndex: 9,
+            },
+            sortModel: [{ key: "name", direction: sortDirection }],
+            filterModel: null,
+            groupBy: null,
+            groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+          }),
+          subscribe: (listener: () => void) => {
+            rowModelListenerRef.current = listener
+            return () => undefined
+          },
+        },
+      } as never),
+    })
+
+    selection.syncSelectionSnapshotFromRuntime()
+    await nextTick()
+
+    sortDirection = "desc"
+    rowModelListenerRef.current?.()
+
+    expect(selection.selectionSnapshot.value?.ranges[0]?.virtual).toMatchObject({
+      projectionStale: true,
+      staleReason: "projection-changed",
+    })
+    expect(runtimeSnapshot.ranges[0]?.virtual).toMatchObject({
+      projectionStale: true,
+      staleReason: "projection-changed",
+    })
   })
 })

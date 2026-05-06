@@ -1903,7 +1903,7 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
-  it("promotes the full dragged range into selection after a successful server fill commit", async () => {
+  it("promotes the full dragged range into selection after a fully materialized local fill", async () => {
     const elementFromPointSpy = vi.spyOn(document, "elementFromPoint")
     const commitFillOperation = vi.fn(async () => ({
       operationId: "fill-1",
@@ -1923,7 +1923,7 @@ describe("useDataGridAppInteractionController contract", () => {
       warnings: [],
     }))
     const refreshServerFillViewport = vi.fn(async () => undefined)
-    const { controller, selectionSnapshot } = createControllerHarness({
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
       rowCount: 6,
       loadedRowCount: 6,
       columnCount: 1,
@@ -1938,6 +1938,7 @@ describe("useDataGridAppInteractionController contract", () => {
       runtimeRowModelDataSource: { commitFillOperation },
       refreshServerFillViewport,
     })
+    applyClipboardEdits.mockReturnValue(6)
 
     selectionSnapshot.value = {
       activeRangeIndex: 0,
@@ -1973,22 +1974,13 @@ describe("useDataGridAppInteractionController contract", () => {
     controller.handleWindowMouseUp()
     await flushAsync()
 
-    expect(commitFillOperation).toHaveBeenCalledTimes(1)
-    expect(commitFillOperation).toHaveBeenCalledWith(expect.objectContaining({
-      sourceRange: {
-        startRow: 0,
-        endRow: 0,
-        startColumn: 0,
-        endColumn: 0,
-      },
-      targetRange: {
-        startRow: 0,
-        endRow: 5,
-        startColumn: 0,
-        endColumn: 0,
-      },
-      mode: "copy",
-    }))
+    expect(commitFillOperation).not.toHaveBeenCalled()
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 5,
+      startColumn: 0,
+      endColumn: 0,
+    }, expect.any(Array), { recordHistoryLabel: "Fill edit" })
     expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
       startRow: 0,
       endRow: 5,
@@ -1998,15 +1990,7 @@ describe("useDataGridAppInteractionController contract", () => {
       focus: { rowIndex: 5, colIndex: 0, rowId: "r6" },
     })
     expect(selectionSnapshot.value?.activeCell).toMatchObject({ rowIndex: 0, colIndex: 0, rowId: "r1" })
-    expect(refreshServerFillViewport).toHaveBeenCalledWith(expect.objectContaining({
-      kind: "range",
-      range: {
-        startRow: 0,
-        endRow: 5,
-        startColumn: 0,
-        endColumn: 0,
-      },
-    }))
+    expect(refreshServerFillViewport).not.toHaveBeenCalled()
 
     elementFromPointSpy.mockRestore()
   })
@@ -2416,7 +2400,7 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(reportFillWarning).toHaveBeenCalledWith("server fill execution not implemented yet")
   })
 
-  it("bounds cache-boundary double-click fill to contiguous materialized target rows", async () => {
+  it("blocks cache-boundary double-click fill when the logical target range cannot be fully materialized", async () => {
     const resolveFillBoundary = vi.fn(async () => ({
       endRowIndex: 500,
       endRowId: "r501",
@@ -2476,23 +2460,11 @@ describe("useDataGridAppInteractionController contract", () => {
     await flushAsync()
 
     expect(resolveFillBoundary).toHaveBeenCalled()
-    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(commitFillOperation).not.toHaveBeenCalled()
     expect(applyClipboardEdits).not.toHaveBeenCalled()
-    const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
-    expect(commitRequest).toMatchObject({
-      targetRange: {
-        startRow: 0,
-        endRow: 173,
-        startColumn: 0,
-        endColumn: 0,
-      },
-      sourceRowIds: ["r1"],
-      targetRowIds: Array.from({ length: 174 }, (_unused, index) => `r${index + 1}`),
-    })
     expect(reportFillWarning).toHaveBeenCalledWith(
-      "Fill applied only to loaded rows; server range was truncated/not fully materialized (327 target rows missing).",
+      "server fill target row ids are not fully materialized (327 target rows missing)",
     )
-    expect(reportFillWarning).not.toHaveBeenLastCalledWith("Fill truncated at cache boundary")
     expect(controller.fillPreviewRange.value).toBeNull()
   })
 
@@ -3731,17 +3703,9 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(refreshRows).not.toHaveBeenCalled()
   })
 
-  it("applies optimistic server fill edits locally before commitFillOperation resolves when the target range is fully materialized", async () => {
-    const commitFill = createDeferred<{
-      operationId: string
-      revision?: string | number | null
-      affectedRowCount: number
-      affectedCellCount?: number
-      invalidation?: { kind: "range"; range: { startRow: number; endRow: number; startColumn: number; endColumn: number }; reason?: string } | null
-      warnings?: readonly string[]
-    } | null>()
-    const commitFillOperation = vi.fn(() => commitFill.promise)
-    const { controller, applyEdits, buildFillMatrixFromRange, captureRowsSnapshotForRowIds, invalidateRange, syncViewport } = createControllerHarness({
+  it("uses the local fill path when the server-backed target range is fully materialized", async () => {
+    const commitFillOperation = vi.fn()
+    const { controller, applyEdits, applyClipboardEdits, buildFillMatrixFromRange, invalidateRange, syncViewport } = createControllerHarness({
       rowCount: 300,
       loadedRowCount: 300,
       columnCount: 1,
@@ -3753,6 +3717,7 @@ describe("useDataGridAppInteractionController contract", () => {
     })
 
     buildFillMatrixFromRange.mockReturnValue([["Atlas"]])
+    applyClipboardEdits.mockResolvedValue(300)
     controller.lastAppliedFill.value = {
       baseRange: {
         startRow: 0,
@@ -3773,43 +3738,23 @@ describe("useDataGridAppInteractionController contract", () => {
     const applyPromise = controller.applyLastFillBehavior("copy")
     await flushAsync()
 
-    expect(commitFillOperation).toHaveBeenCalled()
-    expect(applyEdits).toHaveBeenCalled()
-    expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
-      { rowId: "r2", row: { a: "Atlas" } },
-      { rowId: "r3", row: { a: "Atlas" } },
-    ])
-
-    commitFill.resolve({
-      operationId: "fill-1",
-      revision: 1,
-      affectedRowCount: 300,
-      affectedCellCount: 300,
-      invalidation: {
-        kind: "range",
-        range: {
-          startRow: 0,
-          endRow: 299,
-          startColumn: 0,
-          endColumn: 0,
-        },
-      },
-      warnings: [],
-    })
     await expect(applyPromise).resolves.toBe(true)
 
-    expect(invalidateRange).toHaveBeenCalledWith({ start: 0, end: 299 })
-    expect(syncViewport).not.toHaveBeenCalled()
-    expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
-      { rowId: "r2", row: { a: "Atlas" } },
-      { rowId: "r3", row: { a: "Atlas" } },
-    ])
+    expect(commitFillOperation).not.toHaveBeenCalled()
+    expect(applyEdits).not.toHaveBeenCalled()
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 299,
+      startColumn: 0,
+      endColumn: 0,
+    }, expect.any(Array), { recordHistoryLabel: "Fill edit" })
+    expect(invalidateRange).not.toHaveBeenCalled()
+    expect(syncViewport).toHaveBeenCalled()
   })
 
-  it("rolls back optimistic server fill edits when commitFillOperation fails", async () => {
-    const commitFill = createDeferred<never>()
-    const commitFillOperation = vi.fn(() => commitFill.promise)
-    const { controller, applyEdits, buildFillMatrixFromRange, captureRowsSnapshotForRowIds, reportFillWarning } = createControllerHarness({
+  it("does not call server fill or rollback when a fully materialized target range is filled locally", async () => {
+    const commitFillOperation = vi.fn()
+    const { controller, applyEdits, applyClipboardEdits, buildFillMatrixFromRange, reportFillWarning } = createControllerHarness({
       rowCount: 300,
       loadedRowCount: 300,
       columnCount: 1,
@@ -3821,6 +3766,7 @@ describe("useDataGridAppInteractionController contract", () => {
     })
 
     buildFillMatrixFromRange.mockReturnValue([["Atlas"]])
+    applyClipboardEdits.mockResolvedValue(300)
     controller.lastAppliedFill.value = {
       baseRange: {
         startRow: 0,
@@ -3841,33 +3787,15 @@ describe("useDataGridAppInteractionController contract", () => {
     const applyPromise = controller.applyLastFillBehavior("copy")
     await flushAsync()
 
-    expect(commitFillOperation).toHaveBeenCalled()
-    expect(applyEdits).toHaveBeenCalled()
-    expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
-      { rowId: "r2", row: { a: "Atlas" } },
-      { rowId: "r3", row: { a: "Atlas" } },
-    ])
+    await expect(applyPromise).resolves.toBe(true)
 
-    commitFill.reject(new Error("commit failed"))
-    await expect(applyPromise).resolves.toBe(false)
-
-    expect(reportFillWarning).toHaveBeenCalledWith("server fill commit failed")
-    expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
-      { rowId: "r2", row: { a: "" } },
-      { rowId: "r3", row: { a: "" } },
-    ])
+    expect(commitFillOperation).not.toHaveBeenCalled()
+    expect(applyEdits).not.toHaveBeenCalled()
+    expect(reportFillWarning).not.toHaveBeenCalledWith("server fill commit failed")
   })
 
-  it("commits only the materialized target prefix without optimistic local patching when the server fill target range is partial", async () => {
-    const commitFill = createDeferred<{
-      operationId: string
-      revision?: string | number | null
-      affectedRowCount: number
-      affectedCellCount?: number
-      invalidation?: { kind: "range"; range: { startRow: number; endRow: number; startColumn: number; endColumn: number }; reason?: string } | null
-      warnings?: readonly string[]
-    } | null>()
-    const commitFillOperation = vi.fn(() => commitFill.promise)
+  it("blocks partial server fill targets instead of committing a materialized prefix", async () => {
+    const commitFillOperation = vi.fn()
     const { controller, applyEdits, buildFillMatrixFromRange, captureRowsSnapshotForRowIds, reportFillWarning } = createControllerHarness({
       rowCount: 300,
       loadedRowCount: 48,
@@ -3900,42 +3828,15 @@ describe("useDataGridAppInteractionController contract", () => {
     const applyPromise = controller.applyLastFillBehavior("copy")
     await flushAsync()
 
-    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    await expect(applyPromise).resolves.toBe(false)
+    expect(commitFillOperation).not.toHaveBeenCalled()
     expect(applyEdits).not.toHaveBeenCalled()
-    const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
-    expect(commitRequest).toMatchObject({
-      targetRange: {
-        startRow: 0,
-        endRow: 47,
-        startColumn: 0,
-        endColumn: 0,
-      },
-      sourceRowIds: ["r1"],
-      targetRowIds: Array.from({ length: 48 }, (_unused, index) => `r${index + 1}`),
-    })
     expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
       { rowId: "r2", row: { a: "" } },
       { rowId: "r3", row: { a: "" } },
     ])
-    commitFill.resolve({
-      operationId: "fill-1",
-      revision: 1,
-      affectedRowCount: 47,
-      affectedCellCount: 47,
-      invalidation: {
-        kind: "range",
-        range: {
-          startRow: 0,
-          endRow: 47,
-          startColumn: 0,
-          endColumn: 0,
-        },
-      },
-      warnings: [],
-    })
-    await expect(applyPromise).resolves.toBe(true)
     expect(reportFillWarning).toHaveBeenCalledWith(
-      "Fill applied only to loaded rows; server range was truncated/not fully materialized (252 target rows missing).",
+      "server fill target row ids are not fully materialized (252 target rows missing)",
     )
   })
 

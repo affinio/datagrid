@@ -845,10 +845,34 @@ export function useDataGridAppInteractionController<
     return options.captureRowsSnapshotForRowIds?.(rowIds) ?? options.captureRowsSnapshot()
   }
 
+  const isRowMaterializedForOperation = (rowIndex: number): boolean => {
+    const row = getBodyRowAtIndex(rowIndex)
+    return options.isRowMaterializedAtIndex
+      ? options.isRowMaterializedAtIndex(rowIndex)
+      : !!row && (row as { __placeholder?: boolean }).__placeholder !== true
+  }
+
+  const isRangeFullyMaterialized = (range: DataGridCopyRange | null): boolean => {
+    const normalizedRange = range ? options.normalizeClipboardRange(range) : null
+    if (!normalizedRange) {
+      return false
+    }
+    for (let rowIndex = normalizedRange.startRow; rowIndex <= normalizedRange.endRow; rowIndex += 1) {
+      if (!isRowMaterializedForOperation(rowIndex)) {
+        return false
+      }
+    }
+    return true
+  }
+
   const applyServerBackedRangeMove = async (
     baseRange: DataGridCopyRange,
     targetRange: DataGridCopyRange,
   ): Promise<boolean> => {
+    if (!isRangeFullyMaterialized(baseRange) || !isRangeFullyMaterialized(targetRange)) {
+      options.reportFillWarning?.("Range move includes unloaded rows. Load the full source and target ranges before moving.")
+      return false
+    }
     const editsByRowId = new Map<string | number, Record<string, string>>()
     let appliedCells = 0
     let blockedCells = 0
@@ -1009,7 +1033,7 @@ export function useDataGridAppInteractionController<
     resolveSelectionRange: options.resolveSelectionRange,
     rangesEqual: options.rangesEqual,
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,
-    shouldUseServerFill: (_baseRange, _previewRange) => {
+    shouldUseServerFill: (_baseRange, previewRange) => {
       const controllerRowModel = options.runtimeRowModel as
         | { dataSource?: { commitFillOperation?: unknown; resolveFillBoundary?: unknown } }
         | null
@@ -1028,7 +1052,7 @@ export function useDataGridAppInteractionController<
       const dataSource = resolveServerFillDataSource()
       options.reportFillPlumbingState?.("commitFillOperation_available", typeof dataSource?.commitFillOperation === "function")
       options.reportFillPlumbingState?.("server_fill_dispatch_attempted", true)
-      return typeof dataSource?.commitFillOperation === "function"
+      return serverFillBoundaryConsistencyMetadata.value != null || !isRangeFullyMaterialized(previewRange)
     },
     commitServerFill: async ({ baseRange, previewRange, behavior }) => {
       lastServerFillMaterializationWarning = null
@@ -1112,31 +1136,14 @@ export function useDataGridAppInteractionController<
       }
 
       const missingTargetRows = targetResolution.missingCount
-      const boundedTargetEndRow = targetResolution.lastResolvedRowIndex
-      if (boundedTargetEndRow == null || boundedTargetEndRow <= baseRange.endRow || targetResolution.rowIds.length <= sourceRowIds.length) {
+      if (!targetResolution.fullyMaterialized || targetResolution.rowIds.length <= sourceRowIds.length) {
         options.reportFillWarning?.(`server fill target row ids are not fully materialized (${missingTargetRows} target rows missing)`)
         clearCurrentFillPreview()
         return null
       }
 
-      const commitTargetRange = targetResolution.fullyMaterialized
-        ? previewRange
-        : options.normalizeClipboardRange({
-          ...previewRange,
-          endRow: boundedTargetEndRow,
-        }) ?? {
-          ...previewRange,
-          endRow: boundedTargetEndRow,
-        }
+      const commitTargetRange = previewRange
       const targetRowIds = targetResolution.rowIds
-      const partialMaterializedWarning = targetResolution.fullyMaterialized
-        ? null
-        : `Fill applied only to loaded rows; server range was truncated/not fully materialized (${missingTargetRows} target rows missing).`
-      if (partialMaterializedWarning) {
-        lastServerFillMaterializationWarning = partialMaterializedWarning
-        options.reportFillPlumbingState?.("server_fill_bounded_to_materialized_rows", true)
-        options.reportFillPlumbingDetail?.("server_fill_bounded_target_range", `${commitTargetRange.startRow}..${commitTargetRange.endRow}`)
-      }
 
       let optimisticRollbackUpdates: Array<{ rowId: string | number; data: Partial<TRow> }> | null = null
       if (optimisticFillCandidate && materializedTargetRowIds.length > 0 && optimisticUpdatesByRowId.size > 0) {
@@ -1310,7 +1317,7 @@ export function useDataGridAppInteractionController<
         }
       }
       else {
-        options.reportFillWarning?.(partialMaterializedWarning ?? "server fill committed")
+        options.reportFillWarning?.("server fill committed")
       }
       options.reportFillPlumbingState?.("server_fill_affectedRowCount", true)
       options.reportFillPlumbingState?.("server-fill-committed", true)

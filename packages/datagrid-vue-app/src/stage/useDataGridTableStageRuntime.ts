@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, ref, type ComputedRef, type CSSProperties, type Ref } from "vue"
+import { computed, nextTick, onMounted, ref, watch, type ComputedRef, type CSSProperties, type Ref } from "vue"
 import type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
@@ -10,6 +10,11 @@ import type {
   DataGridSelectionSnapshot,
   DataGridSortState,
   UseDataGridRuntimeResult,
+} from "@affino/datagrid-vue"
+import {
+  buildDataGridSelectionProjectionIdentity,
+  collectDataGridSelectionLoadedCoverage,
+  createDataGridVirtualSelectionMetadata,
 } from "@affino/datagrid-vue"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import {
@@ -597,6 +602,19 @@ export function useDataGridTableStageRuntime<
     selectionSnapshot: options.selectionSnapshot,
     selectionAnchor: options.selectionAnchor as never,
     isEditingCell: (row, columnKey): boolean => isEditingCellForSelection(row, columnKey),
+    isVirtualSelectionMode: () => {
+      const snapshot = options.runtimeRowModel?.getSnapshot?.() ?? selectableRuntime.api.rows.getSnapshot()
+      const sparseDiagnostics = options.runtime.rowModel?.getSparseRowModelDiagnostics?.()
+      return snapshot.kind === "server" || sparseDiagnostics != null
+    },
+    isRowLoadedAtIndex: rowIndex => {
+      const row = selectableRuntime.getBodyRowAtIndex(rowIndex)
+      return !!row && !placeholderRows.isPlaceholderRow(row)
+    },
+    resolveProjectionIdentity: () => {
+      const snapshot = options.runtimeRowModel?.getSnapshot?.() ?? selectableRuntime.api.rows.getSnapshot()
+      return buildDataGridSelectionProjectionIdentity(snapshot)
+    },
   })
 
   const {
@@ -616,6 +634,53 @@ export function useDataGridTableStageRuntime<
     ?? ((rowOffset: number, columnIndex: number) => isCommittedCellSelected(rowOffset, columnIndex))
   const isCommittedCellOnSelectionEdge = selectionController.isCellOnSelectionEdge
     ?? (() => false)
+  const refreshVirtualSelectionCoverage = (): void => {
+    const snapshot = options.selectionSnapshot.value
+    if (!snapshot?.ranges.some(range => range.virtual)) {
+      return
+    }
+    const projectionIdentity = buildDataGridSelectionProjectionIdentity(
+      options.runtimeRowModel?.getSnapshot?.() ?? selectableRuntime.api.rows.getSnapshot(),
+    )
+    const nextRanges = snapshot.ranges.map(range => {
+      if (!range.virtual) {
+        return range
+      }
+      const coverage = collectDataGridSelectionLoadedCoverage(range, {
+        isRowLoaded: rowIndex => {
+          const row = selectableRuntime.getBodyRowAtIndex(rowIndex)
+          return !!row && !placeholderRows.isPlaceholderRow(row)
+        },
+        getRowIdAtIndex: rowIndex => selectableRuntime.getBodyRowAtIndex(rowIndex)?.rowId ?? null,
+      })
+      return {
+        ...range,
+        virtual: createDataGridVirtualSelectionMetadata({
+          range,
+          anchorCell: range.anchor,
+          focusCell: range.focus,
+          coverage,
+          projectionIdentity: range.virtual.projectionIdentity ?? projectionIdentity,
+          projectionStale: range.virtual.projectionStale === true,
+          staleReason: range.virtual.staleReason ?? null,
+        }),
+      }
+    })
+    const nextSnapshot = {
+      ...snapshot,
+      ranges: nextRanges,
+    }
+    if (JSON.stringify(nextSnapshot) === JSON.stringify(snapshot)) {
+      return
+    }
+    options.selectionSnapshot.value = nextSnapshot
+    if (selectableRuntime.api.selection.hasSupport()) {
+      selectableRuntime.api.selection.setSnapshot(nextSnapshot)
+    }
+  }
+  watch(displayRowsRevision, () => {
+    refreshVirtualSelectionCoverage()
+  })
   const selectionAnchorCell = computed(() => {
     const snapshot = options.selectionSnapshot.value
     if (!snapshot || snapshot.ranges.length === 0) {
@@ -790,6 +855,9 @@ export function useDataGridTableStageRuntime<
     readClipboardCell: options.readClipboardCell
       ? (row, columnKey) => options.readClipboardCell?.(row, columnKey) ?? ""
       : undefined,
+    setLastAction: message => {
+      options.reportFillWarning?.(message)
+    },
     isCellEditable: isSurfaceCellEditableByKey,
     syncViewport: () => syncViewportFromDom(),
     applyClipboardEdits: options.applyClipboardEdits,
@@ -1162,6 +1230,22 @@ export function useDataGridTableStageRuntime<
     return range.endRow >= viewportRowStart.value && range.startRow <= viewportRowEnd.value
   }
 
+  function isServerBackedStageRows(): boolean {
+    const snapshot = options.runtimeRowModel?.getSnapshot?.() ?? options.runtime.api.rows.getSnapshot()
+    const sparseDiagnostics = options.runtime.rowModel?.getSparseRowModelDiagnostics?.()
+    return snapshot.kind === "server" || sparseDiagnostics != null
+  }
+
+  function isStageRangeFullyMaterialized(range: DataGridCopyRange): boolean {
+    for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
+      const row = selectableRuntime.getBodyRowAtIndex(rowIndex)
+      if (!row || placeholderRows.isPlaceholderRow(row)) {
+        return false
+      }
+    }
+    return true
+  }
+
   const canUndoStageHistory = (): boolean => {
     return canUndoHistory() || lastServerFillState.value === "committed"
   }
@@ -1216,6 +1300,13 @@ export function useDataGridTableStageRuntime<
     const normalizedBaseRange = normalizeClipboardRange(baseRange)
     const normalizedTargetRange = normalizeClipboardRange(targetRange)
     if (!normalizedBaseRange || !normalizedTargetRange || rangesEqual(normalizedBaseRange, normalizedTargetRange)) {
+      return false
+    }
+    if (
+      isServerBackedStageRows()
+      && (!isStageRangeFullyMaterialized(normalizedBaseRange) || !isStageRangeFullyMaterialized(normalizedTargetRange))
+    ) {
+      options.reportFillWarning?.("Range move includes unloaded rows. Load the full source and target ranges before moving.")
       return false
     }
 

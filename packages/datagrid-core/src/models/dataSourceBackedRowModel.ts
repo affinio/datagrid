@@ -316,6 +316,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let resolvedEmptyTotal = false
   let disposed = false
   let revision = 0
+  let datasetVersion: string | number | null = null
   let requestCounter = 0
   let criticalInFlight: InFlightPull | null = null
   let backgroundInFlight: InFlightPull | null = null
@@ -767,6 +768,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     viewportRange = normalizeViewportRange(viewportRange, visibleCount)
     return {
       revision,
+      datasetVersion,
       kind: "server",
       rowCount: visibleCount,
       loading,
@@ -1429,6 +1431,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
         }
 
         let changed = false
+        if (typeof result.datasetVersion !== "undefined" && result.datasetVersion !== datasetVersion) {
+          datasetVersion = result.datasetVersion ?? null
+          changed = true
+        }
         const previousRowCount = rowCount
         const nextTotal = normalizeTotal(result.total)
         if (nextTotal != null) {
@@ -1556,9 +1562,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
       return
     }
     diagnostics.pushApplied += 1
+    let versionChanged = false
+    if (typeof event.datasetVersion !== "undefined" && event.datasetVersion !== datasetVersion) {
+      datasetVersion = event.datasetVersion ?? null
+      versionChanged = true
+    }
 
     if (event.type === "upsert") {
-      let changed = applyRows(event.rows)
+      let changed = applyRows(event.rows) || versionChanged
       if (typeof event.cursor !== "undefined") {
         const normalizedCursor = event.cursor == null ? null : String(event.cursor)
         if (normalizedCursor !== paginationCursor) {
@@ -1593,7 +1604,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
 
     if (event.type === "remove") {
-      let changed = false
+      let changed = versionChanged
       for (const rawIndex of event.indexes) {
         const index = Number.isFinite(rawIndex) ? Math.max(0, Math.trunc(rawIndex)) : -1
         if (index >= 0) {

@@ -129,6 +129,32 @@ export {
 } from "./selection/snapshot.js"
 
 export {
+  buildDataGridSelectionProjectionIdentity,
+  canDataGridOperationDelegateToServer,
+  collectDataGridSelectionLoadedCoverage,
+  createDataGridVirtualSelectionMetadata,
+  doesDataGridOperationRequireMaterializedValues,
+  evaluateDataGridVirtualSelectionOperation,
+  getDataGridSelectionMissingRowIntervals,
+  getDataGridSelectionVisibleRowOverlap,
+  isDataGridSelectionRangeFullyLoaded,
+  markDataGridVirtualSelectionProjectionStale,
+  normalizeDataGridSelectionRangeLike,
+  type CollectDataGridSelectionLoadedCoverageOptions,
+  type CreateDataGridVirtualSelectionMetadataOptions,
+  type DataGridNormalizedSelectionRange,
+  type DataGridSelectionLoadedCoverage,
+  type DataGridSelectionLoadedRowId,
+  type DataGridSelectionMissingRowInterval,
+  type DataGridSelectionProjectionIdentity,
+  type DataGridSelectionRangeLike,
+  type DataGridVirtualSelectionMetadata,
+  type DataGridVirtualSelectionOperation,
+  type DataGridVirtualSelectionOperationDecision,
+  type DataGridVirtualSelectionServerCapabilities,
+} from "./selection/virtualSelection.js"
+
+export {
   clearDataGridRowFocus,
   clearDataGridSelectedRows,
   dataGridRowSelectionSnapshotsEqual,

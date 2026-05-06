@@ -1,5 +1,7 @@
 import { computed, ref, watch, type Ref } from "vue"
 import {
+  buildDataGridSelectionProjectionIdentity,
+  markDataGridVirtualSelectionProjectionStale,
   resolveDataGridSelectionCellValue,
 } from "@affino/datagrid-core"
 import type {
@@ -80,10 +82,15 @@ function resolveRowModelVersionKey<TRow>(snapshot: DataGridRowModelSnapshot<TRow
   return [
     snapshot.kind,
     snapshot.revision ?? "",
+    snapshot.datasetVersion ?? "",
     snapshot.rowCount,
     snapshot.loading ? 1 : 0,
     snapshot.projection?.recomputeVersion ?? snapshot.projection?.version ?? "",
   ].join("|")
+}
+
+function selectionHasFreshVirtualMetadata(snapshot: DataGridSelectionSnapshot | null): boolean {
+  return snapshot?.ranges.some(range => range.virtual && range.virtual.projectionStale !== true) === true
 }
 
 function hasLeadingRowSelectionColumn<TRow>(
@@ -154,6 +161,19 @@ export function useDataGridAppSelection<TRow>(
     )
   }
 
+  const markCurrentSelectionProjectionStale = (reason: string): void => {
+    const snapshot = selectionSnapshot.value
+    if (!snapshot || !selectionHasFreshVirtualMetadata(snapshot)) {
+      return
+    }
+    const staleSnapshot = markDataGridVirtualSelectionProjectionStale(snapshot, reason)
+    syncSelectionState(staleSnapshot)
+    const runtime = options.resolveRuntime?.() ?? null
+    if (runtime?.api.selection.hasSupport()) {
+      runtime.api.selection.setSnapshot(staleSnapshot)
+    }
+  }
+
   watch(
     () => options.resolveRuntime?.()?.rowModel ?? null,
     (rowModel, _previous, onCleanup) => {
@@ -161,8 +181,15 @@ export function useDataGridAppSelection<TRow>(
         return
       }
       let lastVersionKey = resolveRowModelVersionKey(rowModel.getSnapshot())
+      let lastProjectionKey = buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot())?.projectionKey ?? null
       const unsubscribe = rowModel.subscribe(() => {
-        const nextVersionKey = resolveRowModelVersionKey(rowModel.getSnapshot())
+        const nextSnapshot = rowModel.getSnapshot()
+        const nextProjectionKey = buildDataGridSelectionProjectionIdentity(nextSnapshot)?.projectionKey ?? null
+        if (lastProjectionKey != null && nextProjectionKey != null && nextProjectionKey !== lastProjectionKey) {
+          markCurrentSelectionProjectionStale("projection-changed")
+        }
+        lastProjectionKey = nextProjectionKey
+        const nextVersionKey = resolveRowModelVersionKey(nextSnapshot)
         if (nextVersionKey === lastVersionKey) {
           return
         }

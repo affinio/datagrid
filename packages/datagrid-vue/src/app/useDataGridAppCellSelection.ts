@@ -3,8 +3,13 @@ import type {
   DataGridColumnSnapshot,
   DataGridRowId,
   DataGridRowNode,
+  DataGridSelectionProjectionIdentity,
   DataGridSelectionSnapshot,
   DataGridSelectionSnapshotRange,
+} from "@affino/datagrid-core"
+import {
+  collectDataGridSelectionLoadedCoverage,
+  createDataGridVirtualSelectionMetadata,
 } from "@affino/datagrid-core"
 import type { DataGridCopyRange, GridSelectionPointLike } from "../advanced"
 import { createGridSelectionRange } from "../advanced"
@@ -31,6 +36,9 @@ export interface UseDataGridAppCellSelectionOptions<TRow> {
   selectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   selectionAnchor: Ref<GridSelectionPointLike<DataGridRowId> | null>
   isEditingCell: (row: DataGridRowNode<TRow>, columnKey: string) => boolean
+  isVirtualSelectionMode?: () => boolean
+  isRowLoadedAtIndex?: (rowIndex: number) => boolean
+  resolveProjectionIdentity?: () => DataGridSelectionProjectionIdentity | null
 }
 
 export interface UseDataGridAppCellSelectionResult<TRow> {
@@ -136,23 +144,54 @@ export function useDataGridAppCellSelection<TRow>(
   const buildSnapshotRange = (
     range: ReturnType<typeof createGridSelectionRange<DataGridRowId>>,
   ): DataGridSelectionSnapshotRange => {
-    return {
+    const anchor = {
+      rowIndex: range.anchor.rowIndex,
+      colIndex: range.anchor.colIndex,
+      rowId: range.anchor.rowId ?? null,
+    }
+    const focus = {
+      rowIndex: range.focus.rowIndex,
+      colIndex: range.focus.colIndex,
+      rowId: range.focus.rowId ?? null,
+    }
+    const baseRange: DataGridSelectionSnapshotRange = {
       startRow: range.startRow,
       endRow: range.endRow,
       startCol: range.startCol,
       endCol: range.endCol,
       startRowId: range.startRowId ?? null,
       endRowId: range.endRowId ?? null,
-      anchor: {
-        rowIndex: range.anchor.rowIndex,
-        colIndex: range.anchor.colIndex,
-        rowId: range.anchor.rowId ?? null,
-      },
-      focus: {
-        rowIndex: range.focus.rowIndex,
-        colIndex: range.focus.colIndex,
-        rowId: range.focus.rowId ?? null,
-      },
+      anchor,
+      focus,
+    }
+    if (options.isVirtualSelectionMode?.() !== true) {
+      return baseRange
+    }
+    const isRowLoaded = (rowIndex: number): boolean => {
+      if (typeof options.isRowLoadedAtIndex === "function") {
+        return options.isRowLoadedAtIndex(rowIndex)
+      }
+      const row = options.runtime.getBodyRowAtIndex(rowIndex)
+      return !!row && (row as { __placeholder?: boolean }).__placeholder !== true
+    }
+    const coverage = collectDataGridSelectionLoadedCoverage({
+      startRow: range.startRow,
+      endRow: range.endRow,
+      startColumn: range.startCol,
+      endColumn: range.endCol,
+    }, {
+      isRowLoaded,
+      getRowIdAtIndex: rowIndex => options.runtime.getBodyRowAtIndex(rowIndex)?.rowId ?? null,
+    })
+    return {
+      ...baseRange,
+      virtual: createDataGridVirtualSelectionMetadata({
+        range: baseRange,
+        anchorCell: anchor,
+        focusCell: focus,
+        coverage,
+        projectionIdentity: options.resolveProjectionIdentity?.() ?? null,
+      }),
     }
   }
 
