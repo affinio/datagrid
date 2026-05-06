@@ -32,6 +32,20 @@ def workspace_headers(workspace_id: str) -> dict[str, str]:
     return {"X-Workspace-Id": workspace_id}
 
 
+def server_demo_history_scope(
+    *,
+    workspace_id: str,
+    user_id: str | None = "history-user-a",
+    session_id: str | None = "history-session-a",
+) -> dict[str, str | None]:
+    return {
+        "workspace_id": workspace_id,
+        "table_id": "server_demo",
+        "user_id": user_id,
+        "session_id": session_id,
+    }
+
+
 async def insert_workspace_rows(*, workspace_id: str, id_prefix: str, row_count: int = 1) -> None:
     await insert_demo_rows(workspace_id=workspace_id, id_prefix=id_prefix, row_count=row_count)
 
@@ -51,8 +65,11 @@ async def commit_name(
         headers=workspace_headers(workspace_id),
         json={
             "operationId": operation_id,
-            "userId": user_id,
-            "sessionId": session_id,
+            **server_demo_history_scope(
+                workspace_id=workspace_id,
+                user_id=user_id,
+                session_id=session_id,
+            ),
             "edits": [{"rowId": row_id, "columnId": "name", "value": value}],
         },
     )
@@ -70,12 +87,7 @@ async def stack_action(
 ) -> tuple[int, dict[str, object]]:
     response = await client.post(
         f"/api/history/{action}",
-        json={
-            "workspace_id": workspace_id,
-            "table_id": "server_demo",
-            "user_id": user_id,
-            "session_id": session_id,
-        },
+        json=server_demo_history_scope(workspace_id=workspace_id, user_id=user_id, session_id=session_id),
     )
     return response.status_code, response.json()
 
@@ -89,12 +101,7 @@ async def status_action(
 ) -> tuple[int, dict[str, object]]:
     response = await client.post(
         "/api/history/status",
-        json={
-            "workspace_id": workspace_id,
-            "table_id": "server_demo",
-            "user_id": user_id,
-            "session_id": session_id,
-        },
+        json=server_demo_history_scope(workspace_id=workspace_id, user_id=user_id, session_id=session_id),
     )
     return response.status_code, response.json()
 
@@ -116,6 +123,7 @@ async def fetch_operation(workspace_id: str, operation_id: str) -> ServerDemoOpe
         operation = await session.scalar(
             select(ServerDemoOperation).where(
                 ServerDemoOperation.workspace_id == workspace_id,
+                ServerDemoOperation.table_id == "server_demo",
                 ServerDemoOperation.operation_id == operation_id,
             )
         )
@@ -168,6 +176,11 @@ async def test_history_status_tracks_commit_undo_redo_state(client: AsyncClient)
     await insert_workspace_rows(workspace_id=workspace_id, id_prefix="hist-flow")
 
     await commit_name(client, workspace_id=workspace_id, row_id=row_id, value="First", operation_id="flow-1")
+    operation = await fetch_operation(workspace_id, "flow-1")
+    assert operation.workspace_id == workspace_id
+    assert operation.table_id == "server_demo"
+    assert operation.user_id == "history-user-a"
+    assert operation.session_id == "history-session-a"
 
     commit_status_code, commit_status = await status_action(client, workspace_id=workspace_id)
     assert commit_status_code == 200
@@ -199,6 +212,38 @@ async def test_history_status_tracks_commit_undo_redo_state(client: AsyncClient)
     assert post_redo_status["canRedo"] is False
     assert post_redo_status["latestUndoOperationId"] == "flow-1"
     assert post_redo_status["latestRedoOperationId"] is None
+
+
+async def test_stack_undo_replays_cell_events_when_commit_and_request_scopes_differ(
+    client: AsyncClient,
+) -> None:
+    request_workspace_id = "history-stack-request-scope"
+    header_workspace_id = "history-stack-header-scope"
+    row_id = "hist-mismatch-000000"
+    operation_id = "scope-mismatch-1"
+    await insert_workspace_rows(workspace_id=header_workspace_id, id_prefix="hist-mismatch")
+
+    response = await client.post(
+        "/api/server-demo/edits",
+        headers=workspace_headers(header_workspace_id),
+        json={
+            "operationId": operation_id,
+            **server_demo_history_scope(workspace_id=request_workspace_id),
+            "edits": [{"rowId": row_id, "columnId": "name", "value": "Scoped Mismatch"}],
+        },
+    )
+
+    assert response.status_code == 200
+
+    status_code, body = await status_action(client, workspace_id=request_workspace_id)
+    assert status_code == 200
+    assert body["canUndo"] is True
+    assert body["latestUndoOperationId"] == operation_id
+
+    undo_status, undo_body = await stack_action(client, "undo", workspace_id=request_workspace_id)
+    assert undo_status == 200
+    assert undo_body["operationId"] == operation_id
+    assert await pull_name(client, workspace_id=header_workspace_id) == "Account 00000"
 
 
 async def test_history_status_isolated_by_user_and_session_scope(client: AsyncClient) -> None:

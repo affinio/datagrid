@@ -7,11 +7,11 @@ from typing import Any, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.errors import ApiException
-from app.grid.mutations import GridCommittedCell, GridHistoryApplyResult, GridRejectedCell
-from app.grid.revision import GridRevisionService
-from app.grid.table import GridTableDefinition
-from app.grid.values import normalize_edit_int, normalize_edit_value, reject_reason_for_column
+from affino_grid_backend.core.errors import ApiException
+from affino_grid_backend.core.mutations import GridCommittedCell, GridHistoryApplyResult, GridRejectedCell
+from affino_grid_backend.core.revision import GridRevisionService
+from affino_grid_backend.core.table import GridTableDefinition
+from affino_grid_backend.core.values import normalize_edit_int, normalize_edit_value, reject_reason_for_column
 
 
 class GridHistoryServiceBase(ABC):

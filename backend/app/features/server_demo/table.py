@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.features.server_demo.columns import SERVER_DEMO_COLUMNS
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
-from app.grid.table import GridTableDefinition
+from affino_grid_backend.core.table import GridTableDefinition
 
 SERVER_DEMO_TABLE = GridTableDefinition(
     table_id="server_demo",

@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.errors import ApiException
 from app.features.server_demo.schemas import ServerDemoHistogramEntry, ServerDemoHistogramResponse
 from app.features.server_demo.workspace import workspace_scope_condition
-from app.grid.projection import GridProjectionService
-from app.grid.table import GridTableDefinition
+from affino_grid_backend.core.projection import GridProjectionService
+from affino_grid_backend.core.table import GridTableDefinition
 
 
 class ServerDemoProjectionService(GridProjectionService):

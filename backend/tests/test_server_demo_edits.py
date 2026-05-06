@@ -18,6 +18,8 @@ from app.main import app
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 EXPECTED_SERVER_DEMO_REVISION = "0"
+DEFAULT_SERVER_DEMO_WORKSPACE_ID = "server-demo-sandbox"
+DEFAULT_SERVER_DEMO_TABLE_ID = "server_demo"
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="session", autouse=True)
@@ -56,18 +58,29 @@ async def fetch_operation_history(
             operation_stmt = operation_stmt.where(ServerDemoOperation.workspace_id.is_(None))
         else:
             operation_stmt = operation_stmt.where(ServerDemoOperation.workspace_id == workspace_id)
+        operation_stmt = operation_stmt.where(ServerDemoOperation.table_id == DEFAULT_SERVER_DEMO_TABLE_ID)
         operation = await session.scalar(operation_stmt)
         event_stmt = select(ServerDemoCellEvent).where(ServerDemoCellEvent.operation_id == operation_id)
-        if workspace_id is None:
-            event_stmt = event_stmt.where(ServerDemoCellEvent.workspace_id.is_(None))
-        else:
-            event_stmt = event_stmt.where(ServerDemoCellEvent.workspace_id == workspace_id)
         events = (
             await session.scalars(
                 event_stmt.order_by(ServerDemoCellEvent.created_at.asc(), ServerDemoCellEvent.event_id.asc())
             )
         ).all()
     return operation, list(events)
+
+
+def server_demo_history_scope(
+    *,
+    workspace_id: str = DEFAULT_SERVER_DEMO_WORKSPACE_ID,
+    user_id: str | None = None,
+    session_id: str | None = "server-demo-session",
+) -> dict[str, str | None]:
+    return {
+        "workspace_id": workspace_id,
+        "table_id": DEFAULT_SERVER_DEMO_TABLE_ID,
+        "user_id": user_id,
+        "session_id": session_id,
+    }
 
 
 def create_fill_projection_payload() -> dict[str, object]:
@@ -183,10 +196,12 @@ async def test_server_demo_invalidation_returns_none_when_no_indexes() -> None:
 
 async def test_server_demo_single_edit_persists(client: AsyncClient) -> None:
     before = await pull_row(client, 10)
+    scope = server_demo_history_scope()
 
     response = await client.post(
         "/api/server-demo/edits",
         json={
+            **scope,
             "edits": [
                 {
                     "rowId": "srv-000010",
@@ -217,16 +232,26 @@ async def test_server_demo_single_edit_persists(client: AsyncClient) -> None:
         "rowIds": ["srv-000010"],
         "reason": "server-demo-edits",
     }
-    operation, events = await fetch_operation_history(body["operationId"])
+    operation, events = await fetch_operation_history(body["operationId"], scope["workspace_id"])
     assert operation is not None
     assert operation.operation_type == "edit"
     assert operation.status == "applied"
     assert operation.operation_metadata == {}
+    assert operation.workspace_id == scope["workspace_id"]
+    assert operation.table_id == scope["table_id"]
+    assert operation.user_id is None
+    assert operation.session_id == scope["session_id"]
     assert len(events) == 1
     assert events[0].row_id == "srv-000010"
     assert events[0].column_key == "name"
     assert events[0].before_value == before["name"]
     assert events[0].after_value == "Renamed Account 10"
+
+    status_response = await client.post("/api/history/status", json=scope)
+    assert status_response.status_code == 200
+    status_body = status_response.json()
+    assert status_body["canUndo"] is True
+    assert status_body["canRedo"] is False
 
     after = await pull_row(client, 10)
     assert after["name"] == "Renamed Account 10"
@@ -425,11 +450,13 @@ async def test_server_demo_move_like_batch_persists_source_clear_and_target_writ
     operation_id = "test-move-like-batch"
     source_before = await pull_row(client, 110)
     target_before = await pull_row(client, 111)
+    scope = server_demo_history_scope()
 
     response = await client.post(
         "/api/server-demo/edits",
         json={
             "operationId": operation_id,
+            **scope,
             "edits": [
                 {"rowId": "srv-000110", "columnId": "status", "value": ""},
                 {"rowId": "srv-000111", "columnId": "status", "value": "Paused"},
@@ -452,7 +479,7 @@ async def test_server_demo_move_like_batch_persists_source_clear_and_target_writ
     assert source_after["status"] == ""
     assert target_after["status"] == "Paused"
 
-    operation, events = await fetch_operation_history(operation_id)
+    operation, events = await fetch_operation_history(operation_id, scope["workspace_id"])
     assert operation is not None
     assert operation.operation_type == "edit"
     assert operation.status == "applied"
@@ -994,6 +1021,8 @@ async def test_server_demo_operation_with_no_cell_events_is_rejected(client: Asy
         session.add(
             ServerDemoOperation(
                 operation_id=operation_id,
+                workspace_id=DEFAULT_SERVER_DEMO_WORKSPACE_ID,
+                table_id=DEFAULT_SERVER_DEMO_TABLE_ID,
                 operation_type="edit",
                 status="applied",
                 operation_metadata={},
@@ -1012,11 +1041,13 @@ async def test_server_demo_operation_with_no_cell_events_is_rejected(client: Asy
 
 async def test_server_demo_partial_success_records_only_committed_cell_events(client: AsyncClient) -> None:
     operation_id = "test-partial-success-history"
+    scope = server_demo_history_scope()
 
     response = await client.post(
         "/api/server-demo/edits",
         json={
             "operationId": operation_id,
+            **scope,
             "edits": [
                 {"rowId": "srv-000091", "columnId": "name", "value": "Partially Committed 91"},
                 {"rowId": "srv-000091", "columnId": "id", "value": "srv-hacked"},
@@ -1041,7 +1072,8 @@ async def test_server_demo_partial_success_records_only_committed_cell_events(cl
         {"rowId": "srv-000092", "columnId": "status", "reason": "invalid-enum-value"},
     ]
 
-    operation, events = await fetch_operation_history(operation_id)
+    scope = server_demo_history_scope()
+    operation, events = await fetch_operation_history(operation_id, scope["workspace_id"])
     assert operation is not None
     assert operation.operation_type == "edit"
     assert operation.status == "applied"
@@ -1202,6 +1234,7 @@ async def test_server_demo_fill_commit_copy_single_column_with_history(client: A
     operation_id = "test-fill-copy-single-column"
     source_before = await pull_row(client, 20)
     target_before = await pull_row(client, 21)
+    scope = server_demo_history_scope()
     boundary_response = await client.post(
         "/api/server-demo/fill-boundary",
         json={
@@ -1222,6 +1255,7 @@ async def test_server_demo_fill_commit_copy_single_column_with_history(client: A
         "/api/server-demo/fill/commit",
         json={
             "operationId": operation_id,
+            **scope,
             "revision": "rev-before",
             "baseRevision": boundary_body["revision"],
             "projectionHash": boundary_body["projectionHash"],
@@ -1257,10 +1291,14 @@ async def test_server_demo_fill_commit_copy_single_column_with_history(client: A
     assert after["status"] == source_before["status"]
     assert after["updatedAt"] != target_before["updatedAt"]
 
-    operation, events = await fetch_operation_history(operation_id)
+    operation, events = await fetch_operation_history(operation_id, scope["workspace_id"])
     assert operation is not None
     assert operation.operation_type == "fill"
     assert operation.status == "applied"
+    assert operation.workspace_id == scope["workspace_id"]
+    assert operation.table_id == scope["table_id"]
+    assert operation.user_id is None
+    assert operation.session_id == scope["session_id"]
     assert operation.operation_metadata == {
         "sourceRange": {"startRow": 20, "endRow": 20, "startColumn": 0, "endColumn": 0},
         "targetRange": {"startRow": 20, "endRow": 21, "startColumn": 0, "endColumn": 0},
@@ -1280,6 +1318,12 @@ async def test_server_demo_fill_commit_copy_single_column_with_history(client: A
     assert events[0].column_key == "status"
     assert events[0].before_value == target_before["status"]
     assert events[0].after_value == source_before["status"]
+
+    status_response = await client.post("/api/history/status", json=scope)
+    assert status_response.status_code == 200
+    status_body = status_response.json()
+    assert status_body["canUndo"] is True
+    assert status_body["canRedo"] is False
 
     undo_response = await client.post(f"/api/server-demo/operations/{operation_id}/undo")
     assert undo_response.status_code == 200

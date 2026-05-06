@@ -3,6 +3,17 @@ revision = 3
 requires-python = ">=3.11"
 
 [[package]]
+name = "affino-grid-backend"
+version = "0.1.0"
+source = { editable = "packages/affino_grid_backend" }
+dependencies = [
+    { name = "sqlalchemy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "sqlalchemy", specifier = ">=2.0.44" }]
+
+[[package]]
 name = "aiosqlite"
 version = "0.22.1"
 source = { registry = "https://pypi.org/simple" }
@@ -139,6 +150,7 @@ name = "demo-backend"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "affino-grid-backend" },
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "fastapi" },
@@ -159,6 +171,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "affino-grid-backend", editable = "packages/affino_grid_backend" },
     { name = "alembic", specifier = ">=1.12.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "fastapi", specifier = ">=0.122.0" },

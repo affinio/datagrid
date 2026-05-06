@@ -8,7 +8,7 @@ from typing import Iterable
 from sqlalchemy import delete, insert
 
 from app.features.server_demo.models import GridDemoRow, ServerDemoCellEvent, ServerDemoOperation
-from app.grid.revision_models import GridRevision
+from affino_grid_backend.core.revision_models import GridRevision
 from app.infrastructure.db.database import AsyncSessionLocal
 
 ROW_COUNT = 100_000

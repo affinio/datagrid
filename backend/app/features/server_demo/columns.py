@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.grid.columns import GridColumnDefinition, MutableGridColumnRegistry
+from affino_grid_backend.core.columns import GridColumnDefinition, MutableGridColumnRegistry
 
 
 ServerDemoColumnDefinition = GridColumnDefinition

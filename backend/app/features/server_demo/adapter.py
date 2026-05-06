@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from app.grid.contracts import GridDataAdapter
+from affino_grid_backend.core.contracts import GridDataAdapter
 from app.features.server_demo.schemas import (
     ServerDemoCommitEditsRequest,
     ServerDemoCommitEditsResponse,

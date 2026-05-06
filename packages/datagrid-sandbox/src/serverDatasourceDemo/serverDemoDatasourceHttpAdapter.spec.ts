@@ -404,6 +404,40 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     })
   })
 
+  it("includes the shared history scope when posting inline edits", async () => {
+    const scope = createServerDemoHistoryScope({
+      user_id: "user-1",
+    })
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      operationId: "op-inline-scope",
+      committed: [{ rowId: "srv-000001", columnId: "name", revision: "rev-row-scope" }],
+      committedRowIds: ["srv-000001"],
+      rejected: [],
+      revision: "rev-global-scope",
+      invalidation: null,
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl, historyScope: scope })
+    await adapter.commitEdits!({
+      edits: [{ rowId: "srv-000001", data: { name: "Scoped Name" } }],
+    })
+
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      workspace_id: scope.workspace_id,
+      table_id: scope.table_id,
+      user_id: scope.user_id ?? null,
+      session_id: scope.session_id,
+      edits: [
+        { rowId: "srv-000001", columnId: "name", value: "Scoped Name" },
+      ],
+    })
+  })
+
   it("flattens batch edit patches into multiple backend cell edits", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       committed: [
@@ -770,6 +804,89 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
         reason: "server-demo-fill",
       },
       warnings: ["server fill committed"],
+    })
+  })
+
+  it("includes the shared history scope when posting fill commits", async () => {
+    const scope = createServerDemoHistoryScope({
+      user_id: "user-1",
+    })
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      operationId: "fill-scope",
+      affectedRowCount: 2,
+      affectedCellCount: 4,
+      revision: "rev-fill-scope",
+      invalidation: null,
+      warnings: [],
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl, historyScope: scope })
+    await adapter.commitFillOperation!({
+      operationId: "fill-scope",
+      revision: "rev-before",
+      baseRevision: "rev-boundary-1",
+      projectionHash: "hash-boundary-1",
+      boundaryToken: "token-boundary-1",
+      projection: createFillProjection(),
+      sourceRange: { start: 10, end: 11 },
+      targetRange: { start: 12, end: 15 },
+      sourceRowIds: ["srv-000010", "srv-000011"],
+      targetRowIds: ["srv-000012", "srv-000013", "srv-000014", "srv-000015"],
+      fillColumns: ["status", "region"],
+      referenceColumns: ["status", "region"],
+      mode: "copy",
+      metadata: {
+        origin: "double-click-fill",
+        behaviorSource: "default",
+      },
+    })
+
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      operationId: "fill-scope",
+      workspace_id: scope.workspace_id,
+      table_id: scope.table_id,
+      user_id: scope.user_id ?? null,
+      session_id: scope.session_id,
+      revision: "rev-before",
+      baseRevision: "rev-boundary-1",
+      projectionHash: "hash-boundary-1",
+      boundaryToken: "token-boundary-1",
+      projection: {
+        sortModel: [],
+        filterModel: null,
+        groupBy: null,
+        groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+        treeData: null,
+        pivot: null,
+        pagination: {
+          snapshot: {
+            enabled: false,
+            pageSize: 50,
+            currentPage: 0,
+            pageCount: 0,
+            totalRowCount: 0,
+            startIndex: 0,
+            endIndex: 49,
+          },
+          cursor: null,
+        },
+      },
+      sourceRange: { startRow: 10, endRow: 11, startColumn: 0, endColumn: 0 },
+      targetRange: { startRow: 12, endRow: 15, startColumn: 0, endColumn: 0 },
+      fillColumns: ["status", "region"],
+      referenceColumns: ["status", "region"],
+      mode: "copy",
+      sourceRowIds: ["srv-000010", "srv-000011"],
+      targetRowIds: ["srv-000012", "srv-000013", "srv-000014", "srv-000015"],
+      metadata: {
+        origin: "double-click-fill",
+        behaviorSource: "default",
+      },
     })
   })
 

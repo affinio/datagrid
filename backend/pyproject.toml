@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.7.0",
     "pydantic-settings>=2.2.1",
     "alembic>=1.12.0",
+    "affino-grid-backend",
 ]
 
 [dependency-groups]
@@ -29,6 +30,9 @@ dev = [
 
 [tool.uv]
 managed = true
+
+[tool.uv.sources]
+affino-grid-backend = { path = "packages/affino_grid_backend", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

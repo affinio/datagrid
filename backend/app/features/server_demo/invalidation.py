@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from app.features.server_demo.schemas import ServerDemoEditInvalidation, ServerDemoInvalidationRange
-from app.grid.invalidation import (
+from affino_grid_backend.core.invalidation import (
     GridInvalidationReasonMap,
     GridInvalidationService,
     GridRangeInvalidation,

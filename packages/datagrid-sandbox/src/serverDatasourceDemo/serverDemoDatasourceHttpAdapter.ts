@@ -23,6 +23,7 @@ import type { ServerDemoHistoryScope } from "./serverDemoHistoryScope"
 export interface ServerDemoDatasourceHttpAdapterOptions {
   baseUrl?: string
   fetchImpl?: typeof fetch
+  historyScope?: ServerDemoHistoryScope
 }
 
 export class ServerDemoHttpError extends Error {
@@ -151,6 +152,8 @@ type ServerDemoFillRedoRequest = Parameters<NonNullable<DataGridDataSource<Serve
 type ServerDemoFillOperationResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>>
 type ServerDemoFillUndoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>>
 type ServerDemoFillRedoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["redoFillOperation"]>>>
+type ServerDemoCommitEditsRequestWithScope = ServerDemoCommitEditsRequest & { scope?: ServerDemoHistoryScope }
+type ServerDemoFillOperationRequestWithScope = ServerDemoFillOperationRequest & { scope?: ServerDemoHistoryScope }
 
 export type ServerDemoHttpDatasource = ReturnType<typeof createServerDemoDatasourceHttpAdapter>
 
@@ -754,8 +757,12 @@ function normalizeFillBoundaryRequestBody(
   }
 }
 
-function normalizeFillCommitRequestBody(request: ServerDemoFillOperationRequest): {
+function normalizeFillCommitRequestBody(request: ServerDemoFillOperationRequestWithScope): {
   operationId?: string | null
+  workspace_id?: string
+  table_id?: string
+  user_id?: string | null
+  session_id?: string
   revision?: string | number | null
   baseRevision?: string | null
   projectionHash?: string | null
@@ -769,10 +776,21 @@ function normalizeFillCommitRequestBody(request: ServerDemoFillOperationRequest)
   sourceRowIds?: readonly (string | number)[]
   targetRowIds?: readonly (string | number)[]
   metadata?: ServerDemoFillOperationRequest["metadata"] | null
+  scope?: ServerDemoHistoryScope
 } {
   const mode = request.mode === "series" ? "copy" : request.mode
+  const scope = request.scope
+  const scopePayload = scope
+    ? {
+        workspace_id: scope.workspace_id,
+        table_id: scope.table_id,
+        user_id: scope.user_id ?? null,
+        session_id: scope.session_id,
+      }
+    : {}
   return {
     operationId: request.operationId ?? null,
+    ...scopePayload,
     revision: request.revision ?? null,
     baseRevision: request.baseRevision,
     projectionHash: request.projectionHash,
@@ -804,7 +822,11 @@ function readPreviousValue(edit: unknown, columnId: string): unknown {
   return undefined
 }
 
-function normalizeCommitEditRequestBody(request: ServerDemoCommitEditsRequest): {
+function normalizeCommitEditRequestBody(request: ServerDemoCommitEditsRequestWithScope): {
+  workspace_id?: string
+  table_id?: string
+  user_id?: string | null
+  session_id?: string
   edits: {
     rowId: string
     columnId: string
@@ -812,7 +834,17 @@ function normalizeCommitEditRequestBody(request: ServerDemoCommitEditsRequest): 
     previousValue?: unknown
     revision?: string | number | null
   }[]
+  scope?: ServerDemoHistoryScope
 } {
+  const scope = request.scope
+  const scopePayload = scope
+    ? {
+        workspace_id: scope.workspace_id,
+        table_id: scope.table_id,
+        user_id: scope.user_id ?? null,
+        session_id: scope.session_id,
+      }
+    : {}
   const edits: {
     rowId: string
     columnId: string
@@ -851,7 +883,10 @@ function normalizeCommitEditRequestBody(request: ServerDemoCommitEditsRequest): 
     }
   }
 
-  return { edits }
+  return {
+    ...scopePayload,
+    edits,
+  }
 }
 
 function toUniqueRowCommits(response: ServerDemoCommitEditsResponse): ServerDemoCommitEditsResult["committed"] {
@@ -952,6 +987,7 @@ export function createServerDemoDatasourceHttpAdapter(
 ): ServerDemoDatasourceHttpAdapter {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const listeners = new Set<DataGridDataSourcePushListener<ServerDemoRow>>()
+  const historyScope = options.historyScope
 
   return {
     async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
@@ -1022,7 +1058,10 @@ export function createServerDemoDatasourceHttpAdapter(
 
     async commitEdits(request: ServerDemoCommitEditsRequest): Promise<ServerDemoCommitEditsResult> {
       const url = resolveEndpoint(options.baseUrl, "/api/server-demo/edits")
-      const body = normalizeCommitEditRequestBody(request)
+      const body = normalizeCommitEditRequestBody({
+        ...request,
+        scope: historyScope,
+      })
       const response = await postJson<ServerDemoCommitEditsResponse>(
         fetchImpl,
         url,
@@ -1052,7 +1091,10 @@ export function createServerDemoDatasourceHttpAdapter(
       const response = await postJson<ServerDemoFillCommitResponse>(
         fetchImpl,
         url,
-        normalizeFillCommitRequestBody(request),
+        normalizeFillCommitRequestBody({
+          ...request,
+          scope: historyScope,
+        }),
       )
       return {
         operationId: response.operationId ?? request.operationId ?? "",

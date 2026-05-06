@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.grid.table import GridTableDefinition
+from affino_grid_backend.core.table import GridTableDefinition
 
 
 def workspace_column_condition(column: Any, workspace_id: str | None) -> Any:

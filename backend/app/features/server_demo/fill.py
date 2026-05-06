@@ -9,7 +9,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiException
-from app.features.server_demo.history import invalidate_redo_branch_for_scope, operation_scope_from_request
+from app.features.server_demo.history import (
+    invalidate_redo_branch_for_scope,
+    normalize_history_scope_value,
+    operation_scope_from_request,
+)
 from app.features.server_demo.models import ServerDemoCellEvent as ServerDemoCellEventModel
 from app.features.server_demo.models import ServerDemoOperation as ServerDemoOperationModel
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
@@ -17,9 +21,9 @@ from app.features.server_demo.projection import ServerDemoProjectionService
 from app.features.server_demo.schemas import ServerDemoFillBoundaryRequest, ServerDemoFillBoundaryResponse
 from app.features.server_demo.table import SERVER_DEMO_TABLE
 from app.features.server_demo.workspace import workspace_column_condition, workspace_scope_condition
-from app.grid.fill import GridFillServiceBase
-from app.grid.mutations import PendingGridCellEvent
-from app.grid.revision import GridRevisionService
+from affino_grid_backend.core.mutations import PendingGridCellEvent
+from affino_grid_backend.core.revision import GridRevisionService
+from affino_grid_backend.fill import GridFillServiceBase
 
 OPERATION_STATUS_APPLIED = "applied"
 
@@ -102,14 +106,10 @@ class ServerDemoFillService(GridFillServiceBase):
         return {row.id: row for row in rows}
 
     async def ensure_operation_id_available(self, session: AsyncSession, operation_id: str) -> None:
-        existing_count = await session.scalar(
-            select(func.count())
-            .select_from(ServerDemoOperationModel)
-            .where(
-                ServerDemoOperationModel.operation_id == operation_id,
-                workspace_column_condition(ServerDemoOperationModel.workspace_id, self._workspace_id),
-            )
-        )
+        conditions = [ServerDemoOperationModel.operation_id == operation_id]
+        if self._workspace_id is not None:
+            conditions.append(workspace_column_condition(ServerDemoOperationModel.workspace_id, self._workspace_id))
+        existing_count = await session.scalar(select(func.count()).select_from(ServerDemoOperationModel).where(*conditions))
         if existing_count:
             raise ApiException(
                 status_code=409,
@@ -126,9 +126,12 @@ class ServerDemoFillService(GridFillServiceBase):
         request: Any,
     ) -> None:
         user_id, session_id = operation_scope_from_request(request)
+        workspace_id = normalize_history_scope_value(getattr(request, "workspace_id", None))
+        table_id = normalize_history_scope_value(getattr(request, "table_id", None)) or SERVER_DEMO_TABLE.table_id
         await invalidate_redo_branch_for_scope(
             session,
-            workspace_id=self._workspace_id,
+            workspace_id=workspace_id or self._workspace_id,
+            table_id=table_id,
             user_id=user_id,
             session_id=session_id,
             changed_at=changed_at,
@@ -136,7 +139,8 @@ class ServerDemoFillService(GridFillServiceBase):
         session.add(
             ServerDemoOperationModel(
                 operation_id=operation_id,
-                workspace_id=self._workspace_id,
+                workspace_id=workspace_id or self._workspace_id,
+                table_id=table_id,
                 user_id=user_id,
                 session_id=session_id,
                 operation_type="fill",

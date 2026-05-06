@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.features.server_demo.table import SERVER_DEMO_TABLE
-from app.grid.revision import GridRevisionService
+from affino_grid_backend.core.revision import GridRevisionService
 
 
 class ServerDemoRevisionService(GridRevisionService):

@@ -5,6 +5,19 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.features.server_demo.history import (
+    DEFAULT_SERVER_DEMO_SESSION_ID,
+)
+
+
+def _normalize_scope_value(value: str | None) -> str | None:
+    normalized = value.strip() if value else ""
+    return normalized or None
+
+
+def _default_scope_value(value: str | None, default: str) -> str:
+    return _normalize_scope_value(value) or default
+
 
 class ServerDemoHealthResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -147,6 +160,8 @@ class ServerDemoFillCommitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     operation_id: str | None = Field(default=None, alias="operationId")
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+    table_id: str | None = Field(default=None, alias="tableId")
     user_id: str | None = Field(default=None, alias="userId")
     session_id: str | None = Field(default=None, alias="sessionId")
     revision: str | int | None = None
@@ -162,6 +177,14 @@ class ServerDemoFillCommitRequest(BaseModel):
     mode: Literal["copy", "series"]
     projection: ServerDemoFillProjectionSnapshot
     metadata: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def normalize_scope(self) -> "ServerDemoFillCommitRequest":
+        self.workspace_id = _normalize_scope_value(self.workspace_id)
+        self.table_id = _default_scope_value(self.table_id, "server_demo")
+        self.user_id = _normalize_scope_value(self.user_id)
+        self.session_id = _normalize_scope_value(self.session_id) or DEFAULT_SERVER_DEMO_SESSION_ID
+        return self
 
 
 class ServerDemoFillCommitResponse(BaseModel):
@@ -189,10 +212,20 @@ class ServerDemoCommitEditsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     operation_id: str | None = Field(default=None, alias="operationId")
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+    table_id: str | None = Field(default=None, alias="tableId")
     user_id: str | None = Field(default=None, alias="userId")
     session_id: str | None = Field(default=None, alias="sessionId")
     base_revision: str | None = Field(default=None, alias="baseRevision")
     edits: list[ServerDemoEditItem] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def normalize_scope(self) -> "ServerDemoCommitEditsRequest":
+        self.workspace_id = _normalize_scope_value(self.workspace_id)
+        self.table_id = _default_scope_value(self.table_id, "server_demo")
+        self.user_id = _normalize_scope_value(self.user_id)
+        self.session_id = _normalize_scope_value(self.session_id) or DEFAULT_SERVER_DEMO_SESSION_ID
+        return self
 
 
 class ServerDemoCommittedEdit(BaseModel):
@@ -241,19 +274,17 @@ class ServerDemoCommitEditsResponse(BaseModel):
 class ServerDemoHistoryStackRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    workspace_id: str = Field(alias="workspaceId", min_length=1)
-    table_id: str = Field(alias="tableId", min_length=1)
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+    table_id: str | None = Field(default=None, alias="tableId")
     user_id: str | None = Field(default=None, alias="userId")
     session_id: str | None = Field(default=None, alias="sessionId")
 
     @model_validator(mode="after")
     def require_user_or_session(self) -> "ServerDemoHistoryStackRequest":
-        user_id = self.user_id.strip() if self.user_id else ""
-        session_id = self.session_id.strip() if self.session_id else ""
-        if not user_id and not session_id:
-            raise ValueError("user_id or session_id is required")
-        self.user_id = user_id or None
-        self.session_id = session_id or None
+        self.workspace_id = _normalize_scope_value(self.workspace_id)
+        self.table_id = _default_scope_value(self.table_id, "server_demo")
+        self.user_id = _normalize_scope_value(self.user_id)
+        self.session_id = _normalize_scope_value(self.session_id) or DEFAULT_SERVER_DEMO_SESSION_ID
         return self
 
 
@@ -268,26 +299,24 @@ class ServerDemoHistoryStackResponse(ServerDemoCommitEditsResponse):
 class ServerDemoHistoryStatusRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    workspace_id: str = Field(alias="workspaceId", min_length=1)
-    table_id: str = Field(alias="tableId", min_length=1)
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+    table_id: str | None = Field(default=None, alias="tableId")
     user_id: str | None = Field(default=None, alias="userId")
     session_id: str | None = Field(default=None, alias="sessionId")
 
     @model_validator(mode="after")
     def require_user_or_session(self) -> "ServerDemoHistoryStatusRequest":
-        user_id = self.user_id.strip() if self.user_id else ""
-        session_id = self.session_id.strip() if self.session_id else ""
-        if not user_id and not session_id:
-            raise ValueError("user_id or session_id is required")
-        self.user_id = user_id or None
-        self.session_id = session_id or None
+        self.workspace_id = _normalize_scope_value(self.workspace_id)
+        self.table_id = _default_scope_value(self.table_id, "server_demo")
+        self.user_id = _normalize_scope_value(self.user_id)
+        self.session_id = _normalize_scope_value(self.session_id) or DEFAULT_SERVER_DEMO_SESSION_ID
         return self
 
 
 class ServerDemoHistoryStatusResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    workspace_id: str
+    workspace_id: str | None = None
     table_id: str
     user_id: str | None = None
     session_id: str | None = None

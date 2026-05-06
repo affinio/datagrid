@@ -35,9 +35,9 @@ from app.features.server_demo.schemas import (
     ServerDemoRow as ServerDemoRowSchema,
 )
 from app.api.errors import ApiException
-from app.grid.consistency import build_boundary_token, canonical_projection_hash
-from app.grid.mutations import GridCommittedCell, GridRejectedCell
-from app.grid.revision import GridRevisionService
+from affino_grid_backend.core.consistency import build_boundary_token, canonical_projection_hash
+from affino_grid_backend.core.mutations import GridCommittedCell, GridRejectedCell
+from affino_grid_backend.core.revision import GridRevisionService
 from app.features.server_demo.invalidation import ServerDemoInvalidationService
 
 logger = logging.getLogger(__name__)
@@ -214,6 +214,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
         self._require_supported_history_table(request.table_id)
         result = await self._history.undo_latest_operation(
             self._session,
+            table_id=request.table_id,
             user_id=request.user_id,
             session_id=request.session_id,
         )
@@ -223,6 +224,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
         self._require_supported_history_table(request.table_id)
         result = await self._history.redo_latest_operation(
             self._session,
+            table_id=request.table_id,
             user_id=request.user_id,
             session_id=request.session_id,
         )
@@ -237,11 +239,13 @@ class ServerDemoRepository(ServerGridDataAdapter):
     ) -> ServerDemoHistoryStackResponse:
         can_undo = await self._history.can_undo(
             self._session,
+            table_id=request.table_id,
             user_id=request.user_id,
             session_id=request.session_id,
         )
         can_redo = await self._history.can_redo(
             self._session,
+            table_id=request.table_id,
             user_id=request.user_id,
             session_id=request.session_id,
         )
@@ -267,6 +271,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
         self._require_supported_history_table(request.table_id)
         status = await self._history.get_status(
             self._session,
+            table_id=request.table_id,
             user_id=request.user_id,
             session_id=request.session_id,
         )

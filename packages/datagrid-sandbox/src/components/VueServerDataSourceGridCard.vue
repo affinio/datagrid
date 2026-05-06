@@ -1897,7 +1897,10 @@ const legacyDataSource: DataGridDataSource<ServerDemoRow> = {
 const serverDemoHttpDatasourceEnabled = import.meta.env.VITE_SERVER_DEMO_HTTP_DATA_SOURCE === "true"
 const serverDemoHttpDatasourceBaseUrl = import.meta.env.VITE_SERVER_DEMO_API_BASE_URL?.trim() || undefined
 const serverDemoHttpDatasource = serverDemoHttpDatasourceEnabled
-  ? createServerDemoDatasourceHttpAdapter({ baseUrl: serverDemoHttpDatasourceBaseUrl })
+  ? createServerDemoDatasourceHttpAdapter({
+      baseUrl: serverDemoHttpDatasourceBaseUrl,
+      historyScope: serverDemoHistoryScope,
+    })
   : null
 const httpDatasource = serverDemoHttpDatasource
 
