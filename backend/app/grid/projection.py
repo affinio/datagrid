@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from sqlalchemy import Integer, cast, func, literal, select
+from sqlalchemy import Integer, cast, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiException
@@ -13,6 +14,7 @@ from app.grid.columns import GridColumnDefinition, GridColumnRegistry
 from app.grid.values import coerce_optional_int, normalize_filter_scalar
 
 logger = logging.getLogger(__name__)
+INTEGER_BUCKET_LABEL_PATTERN = re.compile(r"^(?P<start>[+-]?\d+)-(?P<end>[+-]?\d+)$")
 
 
 class GridProjectionService:
@@ -49,7 +51,7 @@ class GridProjectionService:
                 elif len(values) > 1:
                     conditions.append(column.in_(values))
             elif definition.value_type == "integer":
-                conditions.extend(self.build_value_conditions(column, raw_filter))
+                conditions.extend(self.build_integer_conditions(column, raw_filter))
             elif definition.value_type == "string":
                 value = self._extract_filter_value(raw_filter)
                 if value:
@@ -57,9 +59,21 @@ class GridProjectionService:
 
         return conditions
 
+    def build_integer_conditions(self, column_attr: Any, raw_filter: Any) -> list[Any]:
+        if not isinstance(raw_filter, dict):
+            return self._build_integer_scalar_conditions(column_attr, raw_filter)
+
+        if "values" in raw_filter:
+            values = raw_filter["values"]
+            if isinstance(values, (list, tuple, set)):
+                return self._build_integer_set_conditions(column_attr, values)
+            return []
+
+        return self.build_value_conditions(column_attr, raw_filter)
+
     def build_value_conditions(self, column_attr: Any, raw_filter: Any) -> list[Any]:
         if not isinstance(raw_filter, dict):
-            return []
+            return self._build_integer_scalar_conditions(column_attr, raw_filter)
 
         conditions: list[Any] = []
         min_value = raw_filter.get("min")
@@ -78,9 +92,9 @@ class GridProjectionService:
         secondary = raw_filter.get("filterTo")
 
         if filter_type == "equals" and primary is not None:
-            coerced_primary = coerce_optional_int(primary)
-            if coerced_primary is not None:
-                conditions.append(column_attr == coerced_primary)
+            condition = self._build_integer_term_condition(column_attr, primary)
+            if condition is not None:
+                conditions.append(condition)
         elif filter_type == "greaterThan" and primary is not None:
             coerced_primary = coerce_optional_int(primary)
             if coerced_primary is not None:
@@ -105,6 +119,49 @@ class GridProjectionService:
                 conditions.append(column_attr <= coerced_secondary)
 
         return conditions
+
+    def _build_integer_scalar_conditions(self, column_attr: Any, raw_value: Any) -> list[Any]:
+        condition = self._build_integer_term_condition(column_attr, raw_value)
+        return [condition] if condition is not None else []
+
+    def _build_integer_set_conditions(self, column_attr: Any, raw_values: Sequence[Any]) -> list[Any]:
+        conditions = [
+            condition
+            for raw_value in raw_values
+            if (condition := self._build_integer_term_condition(column_attr, raw_value)) is not None
+        ]
+        if not conditions:
+            return []
+        if len(conditions) == 1:
+            return conditions
+        return [or_(*conditions)]
+
+    def _build_integer_term_condition(self, column_attr: Any, raw_value: Any) -> Any | None:
+        normalized = normalize_filter_scalar(raw_value)
+        if normalized is None:
+            return None
+
+        if isinstance(normalized, str):
+            range_match = INTEGER_BUCKET_LABEL_PATTERN.fullmatch(normalized)
+            if range_match is not None:
+                start = int(range_match.group("start"))
+                end = int(range_match.group("end"))
+                if start > end:
+                    raise ApiException(
+                        status_code=400,
+                        code="invalid_filter",
+                        message="Numeric filters must contain integer values",
+                    )
+                return column_attr.between(start, end)
+
+        try:
+            return column_attr == int(normalized)
+        except (TypeError, ValueError) as exc:
+            raise ApiException(
+                status_code=400,
+                code="invalid_filter",
+                message="Numeric filters must contain integer values",
+            ) from exc
 
     def build_order_by(self, sort_model: Sequence[Any]) -> list[Any]:
         order_by: list[Any] = []

@@ -190,6 +190,107 @@ async def test_server_demo_pull_value_min_max_filter(client: AsyncClient) -> Non
     assert all(1000 <= row["value"] <= 2000 for row in body["rows"])
 
 
+async def test_server_demo_pull_value_bucket_label_filter(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "filterModel": {"value": {"values": ["0-999"]}},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1_000
+    assert all(0 <= row["value"] <= 999 for row in body["rows"])
+
+
+async def test_server_demo_pull_value_single_bucket_equals_filter(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "filterModel": {"value": {"type": "equals", "filter": "0-999"}},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1_000
+    assert all(0 <= row["value"] <= 999 for row in body["rows"])
+
+
+async def test_server_demo_pull_value_multi_bucket_filter_uses_or_semantics(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "filterModel": {"value": {"values": ["0-999", "2000-2999"]}},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2_000
+    assert all(
+        0 <= row["value"] <= 999 or 2000 <= row["value"] <= 2999
+        for row in body["rows"]
+    )
+
+
+async def test_server_demo_pull_value_scalar_exact_filter(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 10},
+            "filterModel": {"value": "100"},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert len(body["rows"]) == 1
+    assert body["rows"][0]["value"] == 100
+
+
+async def test_server_demo_pull_invalid_bucket_label_returns_400(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 10},
+            "filterModel": {"value": {"values": ["10-19x"]}},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "invalid_filter",
+        "message": "Numeric filters must contain integer values",
+    }
+
+
+async def test_server_demo_pull_enum_set_filters_remain_unchanged(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "filterModel": {
+                "segment": {"values": ["Core", "SMB"]},
+                "status": {"values": ["Active", "Closed"]},
+                "region": {"values": ["AMER", "EMEA"]},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] > 0
+    assert all(row["segment"] in {"Core", "SMB"} for row in body["rows"])
+    assert all(row["status"] in {"Active", "Closed"} for row in body["rows"])
+    assert all(row["region"] in {"AMER", "EMEA"} for row in body["rows"])
+
+
 async def test_server_demo_pull_value_desc_sort(client: AsyncClient) -> None:
     response = await client.post(
         "/api/server-demo/pull",
