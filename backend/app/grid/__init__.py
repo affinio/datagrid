@@ -4,7 +4,13 @@ from app.grid.columns import GridColumnDefinition
 from app.grid.contracts import GridDataAdapter
 from app.grid.projection import GridProjectionService
 from app.grid.fill import GridFillServiceBase
-from app.grid.invalidation import GridInvalidationReasonMap, GridInvalidationService, GridRangeInvalidation
+from app.grid.invalidation import (
+    GridInvalidation,
+    GridInvalidationReasonMap,
+    GridInvalidationService,
+    GridRangeInvalidation,
+    GridRowsInvalidation,
+)
 from app.grid.history import GridHistoryServiceBase
 from app.grid.mutations import (
     GridCommittedCell,
@@ -33,7 +39,9 @@ __all__ = [
     "GridFillServiceBase",
     "GridInvalidationReasonMap",
     "GridInvalidationService",
+    "GridInvalidation",
     "GridRangeInvalidation",
+    "GridRowsInvalidation",
     "GridHistoryServiceBase",
     "GridCommittedCell",
     "GridFillMutationResult",
