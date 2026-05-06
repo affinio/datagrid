@@ -21,6 +21,11 @@ type DataGridAppServerFillInvalidation =
   | { kind: "range"; range: DataGridCopyRange; reason?: string }
   | { kind: "rows"; rowIds: readonly (string | number)[]; reason?: string }
 
+type DataGridAppServerFillRefreshPayload =
+  | DataGridCopyRange
+  | DataGridAppServerFillInvalidation
+  | null
+
 export interface UseDataGridAppFillOptions {
   mode: Ref<DataGridAppMode>
   viewportRowStart: Ref<number>
@@ -51,7 +56,8 @@ export interface UseDataGridAppFillOptions {
   isCellEditableAt: (rowIndex: number, columnIndex: number) => boolean
   setLastAppliedFillSession: (session: DataGridAppAppliedFillSession | null) => void
   setLastServerFillSession?: (session: { operationId: string; revision?: string | number | null; affectedRange?: DataGridCopyRange | null; behavior: DataGridFillBehavior } | null) => void
-  syncServerFillViewport?: (range?: DataGridCopyRange | null) => void | Promise<void>
+  applyCommittedFillSelection?: (range: DataGridCopyRange) => void
+  syncServerFillViewport?: (payload?: DataGridAppServerFillRefreshPayload) => void | Promise<void>
   syncViewport: () => void
 }
 
@@ -92,21 +98,12 @@ export function useDataGridAppFill(
     if (useServerFill && options.commitServerFill) {
       const committed = await options.commitServerFill({ baseRange, previewRange, behavior })
       if (committed) {
-        const serverFillRefreshRange = committed.invalidation?.kind === "rows"
-          ? null
-          : committed.invalidation?.range ?? committed.affectedRange ?? previewRange
         options.setLastServerFillSession?.({
           operationId: committed.operationId,
           revision: committed.revision,
           affectedRange: committed.affectedRange ?? previewRange,
           behavior,
         })
-        if (options.syncServerFillViewport) {
-          await options.syncServerFillViewport(serverFillRefreshRange)
-        }
-        else {
-          options.syncViewport()
-        }
         return true
       }
       return false
@@ -131,6 +128,7 @@ export function useDataGridAppFill(
           sourceMatrix,
         }),
       })
+      options.applyCommittedFillSelection?.(previewRange)
       options.syncViewport()
       return true
     }

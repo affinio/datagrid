@@ -142,6 +142,14 @@ function createControllerHarness(options: {
     endColumn?: number
     start?: number
     end?: number
+    kind?: "range" | "rows"
+    rowIds?: readonly (string | number)[]
+    range?: {
+      startRow: number
+      endRow: number
+      startColumn: number
+      endColumn: number
+    }
   } | null) => void | Promise<void>
   reportFillPlumbingState?: (layer: string, present: boolean) => void
   resolveFillBoundary?: (
@@ -1895,6 +1903,295 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
+  it("promotes the full dragged range into selection after a successful server fill commit", async () => {
+    const elementFromPointSpy = vi.spyOn(document, "elementFromPoint")
+    const commitFillOperation = vi.fn(async () => ({
+      operationId: "fill-1",
+      revision: "rev-1",
+      affectedRowCount: 6,
+      affectedCellCount: 6,
+      invalidation: {
+        kind: "range" as const,
+        range: {
+          startRow: 0,
+          endRow: 5,
+          startColumn: 0,
+          endColumn: 0,
+        },
+        reason: "server-demo-fill",
+      },
+      warnings: [],
+    }))
+    const refreshServerFillViewport = vi.fn(async () => undefined)
+    const { controller, selectionSnapshot } = createControllerHarness({
+      rowCount: 6,
+      loadedRowCount: 6,
+      columnCount: 1,
+      rowData: [
+        { a: "seed" },
+        { a: "" },
+        { a: "" },
+        { a: "" },
+        { a: "" },
+        { a: "" },
+      ],
+      runtimeRowModelDataSource: { commitFillOperation },
+      refreshServerFillViewport,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    elementFromPointSpy.mockReturnValue(createCell(5, 0))
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 10,
+      clientY: 160,
+      bubbles: true,
+      cancelable: true,
+    }))
+    controller.handleWindowMouseUp()
+    await flushAsync()
+
+    expect(commitFillOperation).toHaveBeenCalledTimes(1)
+    expect(commitFillOperation).toHaveBeenCalledWith(expect.objectContaining({
+      sourceRange: {
+        startRow: 0,
+        endRow: 0,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      targetRange: {
+        startRow: 0,
+        endRow: 5,
+        startColumn: 0,
+        endColumn: 0,
+      },
+      mode: "copy",
+    }))
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 5,
+      startCol: 0,
+      endCol: 0,
+      anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      focus: { rowIndex: 5, colIndex: 0, rowId: "r6" },
+    })
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({ rowIndex: 0, colIndex: 0, rowId: "r1" })
+    expect(refreshServerFillViewport).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "range",
+      range: {
+        startRow: 0,
+        endRow: 5,
+        startColumn: 0,
+        endColumn: 0,
+      },
+    }))
+
+    elementFromPointSpy.mockRestore()
+  })
+
+  it("keeps the source selection when a server fill commit fails", async () => {
+    const elementFromPointSpy = vi.spyOn(document, "elementFromPoint")
+    const commitFillOperation = vi.fn(async () => null)
+    const { controller, selectionSnapshot } = createControllerHarness({
+      rowCount: 6,
+      loadedRowCount: 6,
+      columnCount: 1,
+      runtimeRowModelDataSource: { commitFillOperation },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    elementFromPointSpy.mockReturnValue(createCell(5, 0))
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 10,
+      clientY: 160,
+      bubbles: true,
+      cancelable: true,
+    }))
+    controller.handleWindowMouseUp()
+    await flushAsync()
+
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 0,
+      endCol: 0,
+    })
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({ rowIndex: 0, colIndex: 0, rowId: "r1" })
+
+    elementFromPointSpy.mockRestore()
+  })
+
+  it("cancels an in-flight fill drag with Escape without promoting selection", async () => {
+    const elementFromPointSpy = vi.spyOn(document, "elementFromPoint")
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
+      rowCount: 6,
+      loadedRowCount: 6,
+      columnCount: 1,
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    elementFromPointSpy.mockReturnValue(createCell(5, 0))
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 10,
+      clientY: 160,
+      bubbles: true,
+      cancelable: true,
+    }))
+    controller.handleCellKeydown(new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    }), {
+      rowId: "r1",
+      kind: "data",
+      data: {},
+    } as never, 0, 0)
+    await flushAsync()
+
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(controller.fillPreviewRange.value).toBeNull()
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 0,
+      startCol: 0,
+      endCol: 0,
+    })
+
+    elementFromPointSpy.mockRestore()
+  })
+
+  it("keeps the full filled range selected for local drag-fill commits", async () => {
+    const elementFromPointSpy = vi.spyOn(document, "elementFromPoint")
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
+      rowCount: 6,
+      loadedRowCount: 6,
+      columnCount: 1,
+      rowData: [
+        { a: "seed" },
+        { a: "" },
+        { a: "" },
+        { a: "" },
+        { a: "" },
+        { a: "" },
+      ],
+    })
+
+    applyClipboardEdits.mockReturnValue(5)
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+    elementFromPointSpy.mockReturnValue(createCell(5, 0))
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 10,
+      clientY: 160,
+      bubbles: true,
+      cancelable: true,
+    }))
+    controller.handleWindowMouseUp()
+    await flushAsync()
+
+    expect(applyClipboardEdits).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 5,
+      startColumn: 0,
+      endColumn: 0,
+    }, expect.any(Array), expect.objectContaining({ recordHistoryLabel: "Fill edit" }))
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 5,
+      startCol: 0,
+      endCol: 0,
+    })
+
+    elementFromPointSpy.mockRestore()
+  })
+
   it("suppresses fill-handle interactions when the feature is disabled", async () => {
     const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
       rowCount: 3,
@@ -2576,9 +2873,9 @@ describe("useDataGridAppInteractionController contract", () => {
     await flushAsync()
 
     expect(selectionSnapshot.value?.activeCell).toMatchObject({
-      rowIndex: 1,
-      colIndex: 1,
-      rowId: "r2",
+      rowIndex: 0,
+      colIndex: 0,
+      rowId: "r1",
     })
     expect(controller.fillPreviewRange.value).toBeNull()
   })
@@ -2978,10 +3275,13 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(commitFillOperation).toHaveBeenCalledTimes(1)
     expect(recordServerFillTransaction).not.toHaveBeenCalled()
     expect(refreshServerFillViewport).toHaveBeenCalledWith({
-      startRow: 1,
-      endRow: 2,
-      startColumn: 0,
-      endColumn: 0,
+      kind: "range",
+      range: {
+        startRow: 1,
+        endRow: 2,
+        startColumn: 0,
+        endColumn: 0,
+      },
     })
     expect(reportFillWarning).toHaveBeenCalledWith("server fill committed without operation id; undo/redo disabled")
   })
@@ -3058,8 +3358,20 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(applyClipboardEdits).not.toHaveBeenCalled()
     expect(refreshServerFillViewport).toHaveBeenCalledTimes(1)
     expect(refreshServerFillViewport).toHaveBeenCalledWith({
-      start: 1,
-      end: 2,
+      kind: "range",
+      range: {
+        start: 1,
+        end: 2,
+      },
+      reason: "server-demo-fill",
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 2,
+      startCol: 0,
+      endCol: 0,
+      anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      focus: { rowIndex: 2, colIndex: 0, rowId: "r3" },
     })
     expect(reportFillPlumbingState).toHaveBeenCalledWith("server-fill-committed", true)
     const commitRequest = (commitFillOperation.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0]
@@ -3429,7 +3741,7 @@ describe("useDataGridAppInteractionController contract", () => {
       warnings?: readonly string[]
     } | null>()
     const commitFillOperation = vi.fn(() => commitFill.promise)
-    const { controller, applyEdits, buildFillMatrixFromRange, captureRowsSnapshotForRowIds, syncViewport } = createControllerHarness({
+    const { controller, applyEdits, buildFillMatrixFromRange, captureRowsSnapshotForRowIds, invalidateRange, syncViewport } = createControllerHarness({
       rowCount: 300,
       loadedRowCount: 300,
       columnCount: 1,
@@ -3486,7 +3798,8 @@ describe("useDataGridAppInteractionController contract", () => {
     })
     await expect(applyPromise).resolves.toBe(true)
 
-    expect(syncViewport).toHaveBeenCalled()
+    expect(invalidateRange).toHaveBeenCalledWith({ start: 0, end: 299 })
+    expect(syncViewport).not.toHaveBeenCalled()
     expect(captureRowsSnapshotForRowIds(["r2", "r3"]).rows).toEqual([
       { rowId: "r2", row: { a: "Atlas" } },
       { rowId: "r3", row: { a: "Atlas" } },

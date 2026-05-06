@@ -303,7 +303,9 @@ export interface UseDataGridAppInteractionControllerOptions<
   rangesEqual: (left: DataGridCopyRange | null, right: DataGridCopyRange | null) => boolean
   buildFillMatrixFromRange: (range: DataGridCopyRange) => string[][]
   applyRangeMove?: (baseRange: DataGridCopyRange, targetRange: DataGridCopyRange) => boolean | Promise<boolean>
-  refreshServerFillViewport?: (range?: DataGridCopyRange | null) => void | Promise<void>
+  refreshServerFillViewport?: (
+    payload?: DataGridCopyRange | DataGridAppServerFillInvalidation | null,
+  ) => void | Promise<void>
   syncViewport: () => void
   editingCell: Ref<{ rowId: string | number; columnKey: string } | null>
   startInlineEdit: (
@@ -1251,7 +1253,7 @@ export function useDataGridAppInteractionController<
       }
       const committedOperationId = normalizeServerFillOperationId(result.operationId)
       const invalidationRange = result.invalidation?.kind === "range" ? result.invalidation.range : commitTargetRange
-      const serverFillRefreshRange = result.invalidation?.kind === "rows" ? null : invalidationRange
+      const serverFillRefreshPayload = result.invalidation ?? invalidationRange
       const hasRowInvalidation = result.invalidation?.kind === "rows"
       const normalizedInvalidationRange = normalizeServerFillInvalidationRange(invalidationRange)
       options.reportFillPlumbingDetail?.("server_fill_raw_invalidation", JSON.stringify(invalidationRange ?? null))
@@ -1280,13 +1282,14 @@ export function useDataGridAppInteractionController<
           await Promise.resolve(rowsApi.refresh?.())
           return
         }
-        if (serverFillRefreshRange && normalizedInvalidationRange && typeof invalidateRangeTarget === "function") {
+        if (normalizedInvalidationRange && typeof invalidateRangeTarget === "function") {
           invalidateRangeTarget(normalizedInvalidationRange)
           options.reportFillPlumbingState?.("server_fill_invalidation_applied", true)
           return
         }
         await Promise.resolve(rowsApi.refresh?.())
       }
+      promoteCommittedFillSelection(previewRange)
       if (!committedOperationId) {
         options.reportFillWarning?.("server fill committed without operation id; undo/redo disabled")
         options.reportFillPlumbingState?.("server_fill_operationId", false)
@@ -1294,7 +1297,7 @@ export function useDataGridAppInteractionController<
           await applyServerFillInvalidation()
         }
         else if (options.refreshServerFillViewport) {
-          await Promise.resolve(options.refreshServerFillViewport(serverFillRefreshRange))
+          await Promise.resolve(options.refreshServerFillViewport(serverFillRefreshPayload))
         }
         else {
           await applyServerFillInvalidation()
@@ -1314,7 +1317,7 @@ export function useDataGridAppInteractionController<
       if (hasRowInvalidation || !options.refreshServerFillViewport) {
         await applyServerFillInvalidation()
       } else {
-        await Promise.resolve(options.refreshServerFillViewport(serverFillRefreshRange))
+        await Promise.resolve(options.refreshServerFillViewport(serverFillRefreshPayload))
       }
       return {
         operationId: committedOperationId,
@@ -1351,6 +1354,9 @@ export function useDataGridAppInteractionController<
         revision: session.revision,
         mode: session.behavior,
       })
+    },
+    applyCommittedFillSelection: (range: DataGridCopyRange) => {
+      applySelectionRangeWithActivePosition(range, "start")
     },
     syncServerFillViewport: options.refreshServerFillViewport,
     syncViewport: options.syncViewport,
@@ -1449,6 +1455,7 @@ export function useDataGridAppInteractionController<
             sourceMatrix,
             behavior: resolvedBehavior,
           }), { recordHistory: false })
+          promoteCommittedFillSelection(previewRange)
           lastAppliedFill.value = {
             baseRange: { ...baseRange },
             previewRange: { ...previewRange },
@@ -1880,6 +1887,10 @@ export function useDataGridAppInteractionController<
     }
     options.selectionSnapshot.value = nextSnapshot
     options.runtime.api.selection.setSnapshot(nextSnapshot)
+  }
+
+  const promoteCommittedFillSelection = (range: DataGridCopyRange): void => {
+    applySelectionRangeWithActivePosition(range, "start")
   }
 
   const resolveFillOriginFocusCoord = (): DataGridAppCellCoord | null => {

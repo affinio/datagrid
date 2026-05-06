@@ -108,6 +108,15 @@ interface DataGridAppFillOperationRecord {
   mode: DataGridFillBehavior
 }
 
+type DataGridAppServerFillInvalidation =
+  | { kind: "range"; range: DataGridCopyRange; reason?: string }
+  | { kind: "rows"; rowIds: readonly (string | number)[]; reason?: string }
+
+type DataGridAppServerFillRefreshPayload =
+  | DataGridCopyRange
+  | DataGridAppServerFillInvalidation
+  | null
+
 type DataGridAppServerFillState = "committed" | "undone" | null
 
 type DataGridFillBehavior = "copy" | "series"
@@ -999,10 +1008,16 @@ export function useDataGridTableStageRuntime<
   }
 
   async function refreshVisibleViewportAfterServerFill(
-    invalidationRange?: DataGridCopyRange | { start?: unknown; end?: unknown; startRow?: unknown; endRow?: unknown } | null,
+    payload: DataGridAppServerFillRefreshPayload = null,
   ): Promise<void> {
+    const isServerFillInvalidation = (
+      value: DataGridAppServerFillRefreshPayload | null | undefined,
+    ): value is DataGridAppServerFillInvalidation => {
+      return value != null && typeof value === "object" && "kind" in value
+    }
     const runtimeRowModel = options.runtimeRowModel as unknown as {
       invalidateRange?: (range: { start: number; end: number }) => void
+      invalidateRows?: (rowIds: readonly (string | number)[]) => void
       refresh?: () => Promise<void> | void
       getSnapshot?: () => { revision?: string | number | null } | null
     } | undefined
@@ -1033,22 +1048,31 @@ export function useDataGridTableStageRuntime<
         startRow: viewportRowStart.value,
         endRow: viewportRowEnd.value,
         startColumn: 0,
-        endColumn: Math.max(0, options.visibleColumns.value.length - 1),
+      endColumn: Math.max(0, options.visibleColumns.value.length - 1),
       }
+
+    const normalizedInvalidationRange = payload != null && !isServerFillInvalidation(payload)
+      ? normalizeViewportRangeLike(payload)
+      : isServerFillInvalidation(payload) && payload.kind === "range"
+        ? normalizeViewportRangeLike(payload.range)
+        : null
+    const invalidationRowIds = isServerFillInvalidation(payload) && payload.kind === "rows"
+      ? payload.rowIds
+      : null
 
     options.reportFillPlumbingDetail?.("server_fill_latest_rendered_viewport", formatRenderedBodyViewport(latestRenderedBodyViewport.value))
     options.reportFillPlumbingDetail?.("server_fill_runtime_rendered_viewport", formatRange(runtimeRenderedViewportRange))
     options.reportFillPlumbingDetail?.("server_fill_displayrows_rendered_viewport", formatRange(displayRowsRenderedViewportRange))
     options.reportFillPlumbingDetail?.("server_fill_selected_rendered_viewport", formatRange(selectedRenderedViewportRange))
     options.reportFillPlumbingDetail?.("server_fill_refresh_used_stored_rendered", latestRenderedViewportRange ? "yes" : "no")
-    const normalizedInvalidationRange = normalizeViewportRangeLike(invalidationRange)
-      ?? normalizeViewportRangeLike({
-        startRow: selectedRenderedViewportRange.startRow,
-        endRow: selectedRenderedViewportRange.endRow,
-      })
-    options.reportFillPlumbingDetail?.("server_fill_raw_invalidation", invalidationRange ? JSON.stringify(invalidationRange) : "none")
+    const fallbackInvalidationRange = normalizeViewportRangeLike({
+      startRow: selectedRenderedViewportRange.startRow,
+      endRow: selectedRenderedViewportRange.endRow,
+    })
+    const finalInvalidationRange = normalizedInvalidationRange ?? fallbackInvalidationRange
+    options.reportFillPlumbingDetail?.("server_fill_raw_invalidation", payload ? JSON.stringify(payload) : "none")
     options.reportFillPlumbingDetail?.("server_fill_invalidation_range", normalizedInvalidationRange ? `${normalizedInvalidationRange.start}..${normalizedInvalidationRange.end}` : "none")
-    options.reportFillPlumbingDetail?.("server_fill_normalized_invalidation", normalizedInvalidationRange ? `${normalizedInvalidationRange.start}..${normalizedInvalidationRange.end}` : "none")
+    options.reportFillPlumbingDetail?.("server_fill_normalized_invalidation", finalInvalidationRange ? `${finalInvalidationRange.start}..${finalInvalidationRange.end}` : "none")
     options.reportFillPlumbingDetail?.("server_fill_sync_input_range", formatRange(selectedRenderedViewportRange))
     options.reportFillPlumbingDetail?.("server_fill_runtime_rowModel_invalidate_type", typeof runtimeRowModel?.invalidateRange === "function" ? "function" : typeof runtimeRowModel?.invalidateRange)
 
@@ -1066,13 +1090,16 @@ export function useDataGridTableStageRuntime<
     if (normalizedInvalidationRange && typeof runtimeRowModel?.invalidateRange === "function") {
       runtimeRowModel.invalidateRange(normalizedInvalidationRange)
       invalidationApplied = true
+    } else if (invalidationRowIds && typeof runtimeRowModel?.invalidateRows === "function") {
+      runtimeRowModel.invalidateRows(invalidationRowIds)
+      invalidationApplied = true
     }
     const sourceRow1AfterInvalidate = options.runtime.getBodyRowAtIndex(1)
     options.reportFillPlumbingState?.("server_fill_invalidation_called", invalidationApplied)
     options.reportFillPlumbingDetail?.("server_fill_cache_row1_before_invalidation", sourceRow1BeforeInvalidate ? "yes" : "no")
     options.reportFillPlumbingDetail?.("server_fill_cache_row1_after_invalidation", sourceRow1AfterInvalidate ? "yes" : "no")
     options.reportFillPlumbingState?.("server_fill_invalidation_applied", invalidationApplied)
-    if (typeof rowsApi.refresh === "function") {
+    if (!invalidationApplied && typeof rowsApi.refresh === "function") {
       await rowsApi.refresh()
     }
     if (selectedRenderedViewportRange) {
@@ -1164,10 +1191,15 @@ export function useDataGridTableStageRuntime<
             revision: operation.revision,
             projection,
           })).then(async result => {
-            const invalidationRange = result?.invalidation?.kind === "range" ? result.invalidation.range : operation.affectedRange ?? null
+            const refreshPayload = result?.invalidation ?? operation.affectedRange ?? null
+            const invalidationRange = refreshPayload && !("kind" in refreshPayload)
+              ? refreshPayload
+              : refreshPayload?.kind === "range"
+                ? refreshPayload.range
+                : operation.affectedRange ?? null
             options.reportFillPlumbingDetail?.("server_fill_affected_range", formatRange(invalidationRange))
             options.reportFillPlumbingDetail?.("server_fill_visible_overlap", isVisibleViewportOverlap(invalidationRange) ? "yes" : "no")
-            await refreshVisibleViewportAfterServerFill(invalidationRange)
+            await refreshVisibleViewportAfterServerFill(refreshPayload)
             lastServerFillState.value = direction === "undo" ? "undone" : "committed"
             return operation.operationId
           })
