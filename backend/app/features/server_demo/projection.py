@@ -66,23 +66,22 @@ class ServerDemoProjectionService(GridProjectionService):
         scoped_conditions = [*conditions]
         if scope_condition is not None:
             scoped_conditions.append(scope_condition)
-        if self._max_histogram_source_rows is not None:
-            matching_rows = await self.count_rows(session, conditions)
-            if matching_rows > self._max_histogram_source_rows:
-                raise ApiException(
-                    status_code=400,
-                    code="histogram-source-too-large",
-                    message="Histogram source row count exceeds maximum allowed size",
-                )
-        stmt = (
-            select(column, func.count())
-            .select_from(self._model)
-            .where(*scoped_conditions)
-            .group_by(column)
-            .order_by(column)
+        if not definition.histogram:
+            raise ApiException(
+                status_code=400,
+                code="unsupported_histogram_column",
+                message=f"Histogram is only supported for {self._supported_histogram_columns()}",
+            )
+
+        entries = await self._histogram_entries_for_definition(
+            session,
+            column_id=column_id,
+            definition=definition,
+            column=column,
+            query_conditions=scoped_conditions,
+            matching_row_conditions=conditions,
         )
-        result = await session.execute(stmt)
-        return [(value, count) for value, count in result.all()]
+        return entries
 
     async def histogram(
         self,
@@ -90,21 +89,6 @@ class ServerDemoProjectionService(GridProjectionService):
         column_id: str,
         filter_model: dict[str, Any] | None,
     ) -> ServerDemoHistogramResponse:
-        if column_id == "value":
-            raise ApiException(
-                status_code=400,
-                code="unsupported_histogram_column",
-                message="Value histograms are not implemented yet",
-            )
-
-        definition = self._column_definition(column_id)
-        if definition is None or not definition.histogram:
-            raise ApiException(
-                status_code=400,
-                code="unsupported_histogram_column",
-                message=f"Histogram is only supported for {self._supported_histogram_columns()}",
-            )
-
         entries = await self.histogram_entries(session, column_id, filter_model)
         return ServerDemoHistogramResponse(
             column_id=column_id,

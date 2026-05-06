@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete, insert
 
 from app.core.config import Settings
+from app.features.server_demo.models import GridDemoRow
 from app.features.server_demo.seed import seed_demo_rows
+from app.infrastructure.db.database import AsyncSessionLocal
 from app.main import app
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -25,6 +29,17 @@ async def client() -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as async_client:
         yield async_client
+
+
+def workspace_headers(workspace_id: str | None) -> dict[str, str]:
+    return {"X-Workspace-Id": workspace_id} if workspace_id is not None else {}
+
+
+async def insert_histogram_rows(workspace_id: str, rows: list[dict[str, object]]) -> None:
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            await session.execute(delete(GridDemoRow).where(GridDemoRow.workspace_id == workspace_id))
+            await session.execute(insert(GridDemoRow), rows)
 
 
 async def test_server_demo_health(client: AsyncClient) -> None:
@@ -346,6 +361,119 @@ async def test_server_demo_enum_histograms(client: AsyncClient, column_id: str) 
     assert all(entry["count"] > 0 for entry in body["entries"])
 
 
+async def test_server_demo_value_histogram_returns_bucketed_entries(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/histogram",
+        json={"columnId": "value", "filterModel": None},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["columnId"] == "value"
+    assert len(body["entries"]) == 100
+    assert body["entries"][0] == {"value": "0-999", "count": 1000}
+    assert body["entries"][-1] == {"value": "99000-99999", "count": 1000}
+    assert all(entry["count"] == 1000 for entry in body["entries"])
+
+
+async def test_server_demo_value_histogram_respects_filter_model(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/histogram",
+        json={
+            "columnId": "value",
+            "filterModel": {"value": {"min": 0, "max": 999}},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["columnId"] == "value"
+    assert len(body["entries"]) == 100
+    assert body["entries"][0] == {"value": "0-9", "count": 10}
+    assert body["entries"][-1] == {"value": "990-999", "count": 10}
+    assert sum(entry["count"] for entry in body["entries"]) == 1000
+
+
+async def test_server_demo_value_histogram_returns_no_entries_for_empty_dataset(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/histogram",
+        json={"columnId": "value", "filterModel": None},
+        headers=workspace_headers("empty-histogram-workspace"),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"columnId": "value", "entries": []}
+
+
+async def test_server_demo_value_histogram_skips_nulls(client: AsyncClient) -> None:
+    workspace_id = "null-histogram-workspace"
+    await insert_histogram_rows(
+        workspace_id,
+        [
+            {
+                "id": "null-hist-000001",
+                "workspace_id": workspace_id,
+                "row_index": 1,
+                "name": "Null Histogram 1",
+                "segment": "Core",
+                "status": "Active",
+                "region": "AMER",
+                "value": None,
+                "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            },
+            {
+                "id": "null-hist-000002",
+                "workspace_id": workspace_id,
+                "row_index": 2,
+                "name": "Null Histogram 2",
+                "segment": "Growth",
+                "status": "Paused",
+                "region": "EMEA",
+                "value": None,
+                "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            },
+            {
+                "id": "null-hist-000003",
+                "workspace_id": workspace_id,
+                "row_index": 3,
+                "name": "Null Histogram 3",
+                "segment": "SMB",
+                "status": "Closed",
+                "region": "APAC",
+                "value": 1,
+                "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            },
+            {
+                "id": "null-hist-000004",
+                "workspace_id": workspace_id,
+                "row_index": 4,
+                "name": "Null Histogram 4",
+                "segment": "Enterprise",
+                "status": "Active",
+                "region": "LATAM",
+                "value": 2,
+                "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            },
+        ],
+    )
+
+    response = await client.post(
+        "/api/server-demo/histogram",
+        json={"columnId": "value", "filterModel": None},
+        headers=workspace_headers(workspace_id),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {
+        "columnId": "value",
+        "entries": [
+            {"value": "1-1", "count": 1},
+            {"value": "2-2", "count": 1},
+        ],
+    }
+
+
 async def test_server_demo_invalid_numeric_filter_returns_400(client: AsyncClient) -> None:
     response = await client.post(
         "/api/server-demo/pull",
@@ -362,14 +490,11 @@ async def test_server_demo_invalid_numeric_filter_returns_400(client: AsyncClien
     }
 
 
-async def test_server_demo_value_histogram_returns_400(client: AsyncClient) -> None:
+async def test_server_demo_unsupported_histogram_column_returns_400(client: AsyncClient) -> None:
     response = await client.post(
         "/api/server-demo/histogram",
-        json={"columnId": "value", "filterModel": None},
+        json={"columnId": "name", "filterModel": None},
     )
 
     assert response.status_code == 400
-    assert response.json() == {
-        "code": "unsupported_histogram_column",
-        "message": "Value histograms are not implemented yet",
-    }
+    assert response.json()["code"] == "unsupported_histogram_column"

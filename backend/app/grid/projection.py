@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import Integer, cast, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiException
@@ -153,18 +154,42 @@ class GridProjectionService:
 
         column = getattr(self._model, definition.model_attr)
         conditions = self.build_filter_conditions(filter_model)
+        return await self._histogram_entries_for_definition(
+            session,
+            column_id=column_id,
+            definition=definition,
+            column=column,
+            query_conditions=conditions,
+            matching_row_conditions=conditions,
+        )
+
+    async def _histogram_entries_for_definition(
+        self,
+        session: AsyncSession,
+        *,
+        column_id: str,
+        definition: GridColumnDefinition,
+        column: Any,
+        query_conditions: Sequence[Any],
+        matching_row_conditions: Sequence[Any] | None = None,
+    ) -> list[tuple[Any, int]]:
+        source_conditions = list(matching_row_conditions if matching_row_conditions is not None else query_conditions)
         if self._max_histogram_source_rows is not None:
-            matching_rows = await self.count_rows(session, conditions)
+            matching_rows = await self.count_rows(session, source_conditions)
             if matching_rows > self._max_histogram_source_rows:
                 raise ApiException(
                     status_code=400,
                     code="histogram-source-too-large",
                     message="Histogram source row count exceeds maximum allowed size",
                 )
+
+        if definition.value_type == "integer":
+            return await self._integer_histogram_entries(session, column_id, column, query_conditions)
+
         stmt = (
             select(column, func.count())
             .select_from(self._model)
-            .where(*conditions)
+            .where(*query_conditions)
             .group_by(column)
             .order_by(column)
         )
@@ -178,6 +203,53 @@ class GridProjectionService:
                 self._max_histogram_buckets,
             )
             return entries[: self._max_histogram_buckets]
+        return entries
+
+    async def _integer_histogram_entries(
+        self,
+        session: AsyncSession,
+        column_id: str,
+        column: Any,
+        conditions: Sequence[Any],
+    ) -> list[tuple[Any, int]]:
+        if self._max_histogram_buckets <= 0:
+            return []
+
+        non_null_conditions = [*conditions, column.is_not(None)]
+        aggregate_stmt = (
+            select(func.min(column), func.max(column), func.count(column))
+            .select_from(self._model)
+            .where(*non_null_conditions)
+        )
+        aggregate_result = await session.execute(aggregate_stmt)
+        min_value, max_value, non_null_count = aggregate_result.one()
+
+        if min_value is None or max_value is None or not non_null_count:
+            return []
+
+        bucket_count = min(self._max_histogram_buckets, int(non_null_count))
+        if bucket_count <= 0:
+            return []
+
+        value_range = int(max_value) - int(min_value) + 1
+        bucket_width = max(1, math.ceil(value_range / bucket_count))
+        bucket_index = cast(func.floor((column - literal(int(min_value))) / literal(bucket_width)), Integer)
+        grouped_stmt = (
+            select(bucket_index, func.count())
+            .select_from(self._model)
+            .where(*non_null_conditions)
+            .group_by(bucket_index)
+            .order_by(bucket_index)
+        )
+        result = await session.execute(grouped_stmt)
+
+        entries: list[tuple[Any, int]] = []
+        for raw_bucket_index, count in result.all():
+            bucket_index_value = int(raw_bucket_index)
+            start = int(min_value) + (bucket_index_value * bucket_width)
+            end = min(start + bucket_width - 1, int(max_value))
+            entries.append((f"{start}-{end}", int(count)))
+
         return entries
 
     def _column_definition(self, column_id: str) -> GridColumnDefinition | None:

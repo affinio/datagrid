@@ -62,6 +62,7 @@ SERVER_DEMO_COLUMNS: MutableGridColumnRegistry = {
         editable=True,
         sortable=True,
         filterable=True,
+        histogram=True,
         value_type="integer",
     ),
     "updatedAt": ServerDemoColumnDefinition(
