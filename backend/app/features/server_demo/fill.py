@@ -19,6 +19,10 @@ from app.features.server_demo.models import ServerDemoCellEvent as ServerDemoCel
 from app.features.server_demo.models import ServerDemoOperation as ServerDemoOperationModel
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.projection import ServerDemoProjectionService
+from app.features.server_demo.serialization import (
+    serialize_server_demo_rows,
+    should_include_server_demo_change_feed_rows,
+)
 from app.features.server_demo.schemas import ServerDemoFillBoundaryRequest, ServerDemoFillBoundaryResponse
 from app.features.server_demo.table import SERVER_DEMO_TABLE
 from app.features.server_demo.workspace import workspace_column_condition, workspace_scope_condition
@@ -219,6 +223,7 @@ class ServerDemoFillService(GridFillServiceBase):
         affected_cell_count: int,
         warnings: list[str],
         revision: str,
+        rows: Sequence[Any] | None = None,
     ) -> GridHistoryStatus | None:
         if self._history_service is None:
             return None
@@ -233,6 +238,8 @@ class ServerDemoFillService(GridFillServiceBase):
         if operation_id is not None and affected_indexes:
             fill_columns = [column_id for column_id in getattr(request, "fill_columns", []) if column_id]
             deduped_fill_columns = list(dict.fromkeys(fill_columns))
+            serialized_rows = serialize_server_demo_rows(list(rows) if rows is not None else [])
+            rows_payload = [row.model_dump(mode="json", by_alias=True) for row in serialized_rows] if should_include_server_demo_change_feed_rows(len(serialized_rows)) else None
             session.add(
                 ServerDemoChangeEventModel(
                     revision=int(revision),
@@ -253,6 +260,7 @@ class ServerDemoFillService(GridFillServiceBase):
                             "endColumn": deduped_fill_columns[-1] if deduped_fill_columns else None,
                         },
                     },
+                    rows=rows_payload,
                     created_at=datetime.now(timezone.utc),
                 )
             )

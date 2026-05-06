@@ -273,6 +273,7 @@ class GridFillServiceBase(ABC):
                 affected_cell_count=affected_cell_count,
                 warnings=warnings,
                 revision=revision,
+                rows=list(changed_rows.values()),
             )
 
         return GridFillMutationResult(
@@ -282,6 +283,7 @@ class GridFillServiceBase(ABC):
             affected_cell_count=affected_cell_count,
             warnings=warnings,
             revision=revision,
+            rows=list(changed_rows.values()),
             history_status=history_status,
         )
 
@@ -422,6 +424,7 @@ class GridFillServiceBase(ABC):
         affected_cell_count: int,
         warnings: list[str],
         revision: str,
+        rows: Sequence[Any] | None = None,
     ) -> GridHistoryStatus | None:
         return None
 

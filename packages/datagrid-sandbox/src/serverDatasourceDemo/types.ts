@@ -79,7 +79,7 @@ export interface ServerDemoChangeFeedChange {
   operationId?: string | null
   user_id?: string | null
   session_id?: string | null
-  rows?: readonly ServerDemoDataSourceRowEntry[]
+  rows?: readonly ServerDemoRow[] | readonly ServerDemoDataSourceRowEntry[]
 }
 
 export interface ServerDemoFillChange {
@@ -234,20 +234,24 @@ export type ServerDemoCommitEditsRequest = Parameters<NonNullable<ServerDemoData
 export type ServerDemoCommitEditsResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["commitEdits"]>>> & {
   datasetVersion?: number | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
+  rows?: readonly ServerDemoRow[]
 }
 export type ServerDemoFillOperationRequest = Parameters<NonNullable<ServerDemoDataSource["commitFillOperation"]>>[0]
 export type ServerDemoFillOperationResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["commitFillOperation"]>>> & {
   datasetVersion?: number | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
+  rows?: readonly ServerDemoRow[]
 }
 export type ServerDemoUndoFillRequest = Parameters<NonNullable<ServerDemoDataSource["undoFillOperation"]>>[0]
 export type ServerDemoUndoFillResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["undoFillOperation"]>>> & {
   datasetVersion?: number | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
+  rows?: readonly ServerDemoRow[]
 }
 export type ServerDemoRedoFillResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["redoFillOperation"]>>> & {
   datasetVersion?: number | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
+  rows?: readonly ServerDemoRow[]
 }
 export interface ServerDemoChangeFeedRequest {
   sinceVersion: number

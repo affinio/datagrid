@@ -109,4 +109,5 @@ class ServerDemoChangeEvent(Base):
     session_id: Mapped[str | None] = mapped_column(String, nullable=True)
     change_type: Mapped[str] = mapped_column(Text, nullable=False)
     invalidation: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    rows: Mapped[list[dict[str, object]] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

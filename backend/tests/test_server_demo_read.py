@@ -172,7 +172,7 @@ async def test_server_demo_pull_no_match_returns_stable_revision(client: AsyncCl
 
     assert response.status_code == 200
     body = response.json()
-    assert body["rows"] == []
+    assert body.get("rows", []) == []
     assert body["total"] == 0
     assert body["revision"] == EXPECTED_SERVER_DEMO_REVISION
 

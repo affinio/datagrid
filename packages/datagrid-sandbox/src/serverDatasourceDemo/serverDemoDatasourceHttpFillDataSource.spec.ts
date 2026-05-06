@@ -78,6 +78,7 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
     const fallback = createFallbackDataSource()
     const refreshHistoryStatus = vi.fn()
     const applyInvalidation = vi.fn()
+    const applyRowPatches = vi.fn()
     const httpResolveFillBoundary = vi.fn(async () => ({
       endRowIndex: 5,
       endRowId: "srv-000005",
@@ -118,12 +119,36 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
       operationId: "fill-123",
       revision: "rev-undo",
       invalidation: null,
+      rows: [
+        {
+          id: "srv-000002",
+          index: 2,
+          name: "Account 00002",
+          segment: "Growth",
+          status: "Active",
+          region: "EMEA",
+          value: 194,
+          updatedAt: "2025-01-01T00:00:02Z",
+        },
+      ],
       warnings: [],
     }))
     const httpRedoFillOperation = vi.fn(async () => ({
       operationId: "fill-123",
       revision: "rev-redo",
       invalidation: null,
+      rows: [
+        {
+          id: "srv-000002",
+          index: 2,
+          name: "Account 00002",
+          segment: "Growth",
+          status: "Paused",
+          region: "EMEA",
+          value: 194,
+          updatedAt: "2025-01-01T00:00:03Z",
+        },
+      ],
       warnings: [],
     }))
     const dataSource = createServerDemoDatasourceHttpFillDataSource({
@@ -136,6 +161,7 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
         redoFillOperation: httpRedoFillOperation,
       },
       refreshHistoryStatus,
+      applyRowPatches,
       applyInvalidation,
     })
 
@@ -174,9 +200,38 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
     expect(httpCommitFillOperation).toHaveBeenCalledTimes(1)
     expect(httpUndoFillOperation).toHaveBeenCalledTimes(1)
     expect(httpRedoFillOperation).toHaveBeenCalledTimes(1)
-    expect(applyInvalidation).toHaveBeenCalledTimes(2)
-    expect(applyInvalidation).toHaveBeenNthCalledWith(1, { type: "dataset" })
-    expect(applyInvalidation).toHaveBeenNthCalledWith(2, { type: "dataset" })
+    expect(applyRowPatches).toHaveBeenCalledTimes(2)
+    expect(applyRowPatches).toHaveBeenNthCalledWith(1, [
+      {
+        rowId: "srv-000002",
+        data: {
+          id: "srv-000002",
+          index: 2,
+          name: "Account 00002",
+          segment: "Growth",
+          status: "Active",
+          region: "EMEA",
+          value: 194,
+          updatedAt: "2025-01-01T00:00:02Z",
+        },
+      },
+    ])
+    expect(applyRowPatches).toHaveBeenNthCalledWith(2, [
+      {
+        rowId: "srv-000002",
+        data: {
+          id: "srv-000002",
+          index: 2,
+          name: "Account 00002",
+          segment: "Growth",
+          status: "Paused",
+          region: "EMEA",
+          value: 194,
+          updatedAt: "2025-01-01T00:00:03Z",
+        },
+      },
+    ])
+    expect(applyInvalidation).not.toHaveBeenCalled()
     expect(refreshHistoryStatus).toHaveBeenCalledTimes(2)
     expect(boundary).toMatchObject({ boundaryKind: "cache-boundary", endRowIndex: 5 })
     expect(fillResult).toMatchObject({

@@ -115,6 +115,7 @@ type ServerDemoFillCommitResponse = {
   invalidation?: DataGridDataSourceInvalidation | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
   warnings?: readonly string[]
+  rows?: readonly ServerDemoRow[]
 }
 
 type ServerDemoFillHistoryResponse = {
@@ -130,6 +131,7 @@ type ServerDemoFillHistoryResponse = {
   canRedo?: boolean
   latestUndoOperationId?: string | null
   latestRedoOperationId?: string | null
+  rows?: readonly ServerDemoRow[]
 }
 
 type ServerDemoCommitEditsResponse = {
@@ -154,6 +156,7 @@ type ServerDemoCommitEditsResponse = {
   latestUndoOperationId?: string | null
   latestRedoOperationId?: string | null
   invalidation?: ServerDemoMutationInvalidation | null
+  rows?: readonly ServerDemoRow[]
 }
 
 type ServerDemoHistoryStackRequestBody = ServerDemoHistoryScope
@@ -180,6 +183,7 @@ type ServerDemoHistoryStackResponse = {
   datasetVersion?: number | null
   invalidation?: DataGridDataSourceInvalidation | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
+  rows?: readonly ServerDemoRow[]
 }
 
 type ServerDemoHistoryStatusResponse = {
@@ -220,8 +224,12 @@ type ServerDemoFillBoundaryRequest = Parameters<NonNullable<DataGridDataSource<S
 type ServerDemoFillUndoRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>[0]
 type ServerDemoFillRedoRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["redoFillOperation"]>>[0]
 type ServerDemoFillOperationResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>>
-type ServerDemoFillUndoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>>
-type ServerDemoFillRedoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["redoFillOperation"]>>>
+type ServerDemoFillUndoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>> & {
+  rows?: readonly ServerDemoRow[]
+}
+type ServerDemoFillRedoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["redoFillOperation"]>>> & {
+  rows?: readonly ServerDemoRow[]
+}
 type ServerDemoCommitEditsRequestWithScope = ServerDemoCommitEditsRequest & { scope?: ServerDemoHistoryScope }
 type ServerDemoFillOperationRequestWithScope = ServerDemoFillOperationRequest & { scope?: ServerDemoHistoryScope }
 
@@ -947,7 +955,7 @@ function normalizeDataGridInvalidation(value: unknown): DataGridDataSourceInvali
 }
 
 function normalizeChangeFeedRows(
-  rows: readonly ServerDemoDataSourceRowEntry[] | null | undefined,
+  rows: readonly (ServerDemoRow | ServerDemoDataSourceRowEntry)[] | null | undefined,
 ): readonly DataGridDataSourceRowEntry<ServerDemoRow>[] | null {
   if (!Array.isArray(rows) || rows.length === 0) {
     return null
@@ -957,19 +965,35 @@ function normalizeChangeFeedRows(
     if (!entry || typeof entry !== "object") {
       continue
     }
-    if (typeof entry.index !== "number" || !Number.isFinite(entry.index)) {
+    if ("row" in entry && "rowId" in entry) {
+      const entryRow = entry as ServerDemoDataSourceRowEntry
+      if (typeof entryRow.index !== "number" || !Number.isFinite(entryRow.index)) {
+        continue
+      }
+      if (typeof entryRow.rowId !== "string" && typeof entryRow.rowId !== "number") {
+        continue
+      }
+      normalized.push({
+        index: Math.max(0, Math.trunc(entryRow.index)),
+        rowId: entryRow.rowId,
+        row: entryRow.row,
+        ...(entryRow.kind ? { kind: entryRow.kind } : {}),
+        ...(entryRow.groupMeta ? { groupMeta: entryRow.groupMeta } : {}),
+        ...(entryRow.state ? { state: entryRow.state } : {}),
+      })
       continue
     }
-    if (typeof entry.rowId !== "string" && typeof entry.rowId !== "number") {
+    const rawRow = entry as ServerDemoRow
+    if (typeof rawRow.id !== "string" && typeof rawRow.id !== "number") {
+      continue
+    }
+    if (typeof rawRow.index !== "number" || !Number.isFinite(rawRow.index)) {
       continue
     }
     normalized.push({
-      index: Math.max(0, Math.trunc(entry.index)),
-      rowId: entry.rowId,
-      row: entry.row,
-      ...(entry.kind ? { kind: entry.kind } : {}),
-      ...(entry.groupMeta ? { groupMeta: entry.groupMeta } : {}),
-      ...(entry.state ? { state: entry.state } : {}),
+      index: Math.max(0, Math.trunc(rawRow.index) - 1),
+      rowId: rawRow.id,
+      row: rawRow,
     })
   }
   return normalized.length > 0 ? normalized : null
@@ -1298,6 +1322,7 @@ async function postServerHistoryStackOperation(
     datasetVersion: response.datasetVersion ?? normalizeDatasetVersion(response.revision),
     invalidation: normalizeDataGridInvalidation(response.invalidation),
     serverInvalidation,
+    rows: response.rows ?? [],
   }
 }
 
@@ -1456,7 +1481,7 @@ export function createServerDemoDatasourceHttpAdapter(
 
   function dispatchChangeFeedChange(change: ServerDemoChangeFeedChange): void {
     const rows = normalizeChangeFeedRows(change.rows)
-    if ((change.type === "cell" || change.type === "row") && rows && rows.length > 0) {
+    if (change.type !== "dataset" && rows && rows.length > 0) {
       appliedChangeCount += rows.length
       emitPushEvent({
         type: "upsert",
@@ -1643,6 +1668,7 @@ export function createServerDemoDatasourceHttpAdapter(
         datasetVersion: latestDatasetVersion,
         invalidation: normalizeDataGridInvalidation(response.invalidation),
         serverInvalidation: normalizeServerDemoMutationInvalidation(response.invalidation),
+        rows: response.rows ?? [],
       } as ServerDemoCommitEditsResultWithOperation
     },
 
@@ -1682,6 +1708,7 @@ export function createServerDemoDatasourceHttpAdapter(
         invalidation: normalizeDataGridInvalidation(rawInvalidation),
         serverInvalidation: normalizeServerDemoMutationInvalidation(rawInvalidation),
         warnings: response.warnings ?? [],
+        rows: response.rows ?? [],
       } as ServerDemoFillOperationResult & {
         operationId?: string | null
         affectedRows?: number
@@ -1745,6 +1772,7 @@ export function createServerDemoDatasourceHttpAdapter(
         revision: result.revision,
         invalidation: normalizeDataGridInvalidation(result.invalidation),
         warnings: result.warnings,
+        rows: result.rows ?? [],
       }
     },
 
@@ -1756,6 +1784,7 @@ export function createServerDemoDatasourceHttpAdapter(
         revision: result.revision,
         invalidation: normalizeDataGridInvalidation(result.invalidation),
         warnings: result.warnings,
+        rows: result.rows ?? [],
       }
     },
 

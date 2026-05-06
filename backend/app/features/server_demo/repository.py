@@ -39,6 +39,10 @@ from app.features.server_demo.schemas import (
     ServerDemoRejectedEdit,
     ServerDemoRow as ServerDemoRowSchema,
 )
+from app.features.server_demo.serialization import (
+    serialize_server_demo_rows,
+    should_include_server_demo_change_feed_rows,
+)
 from app.api.errors import ApiException
 from affino_grid_backend.core.consistency import build_boundary_token, canonical_projection_hash
 from affino_grid_backend.core.mutations import GridCommittedCell, GridHistoryStatus, GridRejectedCell
@@ -133,6 +137,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
             current_revision=current_revision,
         )
         result = await self._edits.commit_edits(self._session, request)
+        response_rows = self._change_feed_row_snapshots(result.rows)
         response_payload = {
             "operation_id": result.operation_id,
             "committed": [self._to_committed_edit(item) for item in result.committed],
@@ -147,6 +152,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
                 affected_indexes=result.affected_indexes,
                 committed=result.committed,
             ),
+            "rows": response_rows,
         }
         response_payload.update(self._history_response_fields(result.history_status))
         return ServerDemoCommitEditsResponse(**response_payload)
@@ -174,6 +180,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
             projection_hash=projection_hash,
         )
         result = await self._fill.commit_fill(self._session, request)
+        response_rows = self._change_feed_row_snapshots(result.rows)
         response_payload = {
             "operation_id": result.operation_id,
             "affected_row_count": len(result.affected_row_ids),
@@ -189,6 +196,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
                 fill_columns=request.fill_columns,
             ),
             "warnings": result.warnings,
+            "rows": response_rows,
         }
         response_payload.update(self._history_response_fields(result.history_status))
         return ServerDemoFillCommitResponse(**response_payload)
@@ -205,6 +213,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
 
     async def undo_operation(self, operation_id: str) -> ServerDemoCommitEditsResponse:
         result = await self._history.undo_operation(self._session, operation_id)
+        response_rows = self._change_feed_row_snapshots(result.rows)
         history_status = await self._history.get_status(
             self._session,
             workspace_id=self._workspace_id,
@@ -223,6 +232,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
                 affected_indexes=result.affected_indexes,
                 committed=result.committed,
             ),
+            "rows": response_rows,
         }
         response_payload.update(self._history_response_fields(
             GridHistoryStatus(
@@ -235,6 +245,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
         await self._record_change_event(
             revision=result.revision,
             invalidation=response_payload["invalidation"],
+            rows=response_rows,
             operation_id=result.operation_id,
             user_id=operation.user_id if (operation := await self._load_operation(operation_id)) is not None else None,
             session_id=operation.session_id if operation is not None else None,
@@ -243,6 +254,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
 
     async def redo_operation(self, operation_id: str) -> ServerDemoCommitEditsResponse:
         result = await self._history.redo_operation(self._session, operation_id)
+        response_rows = self._change_feed_row_snapshots(result.rows)
         history_status = await self._history.get_status(
             self._session,
             workspace_id=self._workspace_id,
@@ -261,6 +273,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
                 affected_indexes=result.affected_indexes,
                 committed=result.committed,
             ),
+            "rows": response_rows,
         }
         response_payload.update(self._history_response_fields(
             GridHistoryStatus(
@@ -274,6 +287,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
         await self._record_change_event(
             revision=result.revision,
             invalidation=response_payload["invalidation"],
+            rows=response_rows,
             operation_id=result.operation_id,
             user_id=operation.user_id if operation is not None else None,
             session_id=operation.session_id if operation is not None else None,
@@ -307,6 +321,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
         *,
         action: str,
     ) -> ServerDemoHistoryStackResponse:
+        response_rows = self._change_feed_row_snapshots(result.rows)
         status = await self._history.get_status(
             self._session,
             table_id=request.table_id,
@@ -329,6 +344,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
                 affected_indexes=result.affected_indexes,
                 committed=result.committed,
             ),
+            "rows": response_rows,
         }
         response_payload.update(
             self._history_response_fields(
@@ -343,6 +359,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
         await self._record_change_event(
             revision=result.revision,
             invalidation=response_payload["invalidation"],
+            rows=response_rows,
             operation_id=result.operation_id,
             user_id=request.user_id,
             session_id=request.session_id,
@@ -428,6 +445,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
         *,
         revision: str | None,
         invalidation: ServerDemoMutationInvalidation | None,
+        rows: list[ServerDemoRowSchema] | None,
         operation_id: str | None,
         user_id: str | None,
         session_id: str | None,
@@ -451,6 +469,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
                 session_id=session_id,
                 change_type=str(invalidation_payload.get("type", "dataset")),
                 invalidation=invalidation_payload,
+                rows=[row.model_dump(mode="json", by_alias=True) for row in rows] if rows else None,
                 created_at=self._timestamp_for_change_event(),
             )
         )
@@ -461,6 +480,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
         return ServerDemoChangeFeedChange(
             type=invalidation.type,
             invalidation=invalidation,
+            rows=serialize_server_demo_rows(event.rows or []),
             operation_id=event.operation_id,
             user_id=event.user_id,
             session_id=event.session_id,
@@ -590,6 +610,10 @@ class ServerDemoRepository(ServerGridDataAdapter):
 
     def _dataset_invalidation(self) -> ServerDemoMutationInvalidation:
         return ServerDemoMutationInvalidation(type="dataset")
+
+    def _change_feed_row_snapshots(self, rows: Any | None) -> list[ServerDemoRowSchema]:
+        snapshots = serialize_server_demo_rows(list(rows) if rows is not None else [])
+        return snapshots if should_include_server_demo_change_feed_rows(len(snapshots)) else []
 
     async def _read_current_revision_for_logging(self) -> str:
         revision = await self._revision.get_revision(self._session)

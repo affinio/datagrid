@@ -91,10 +91,24 @@ async def test_change_feed_returns_ordered_changes(client: AsyncClient) -> None:
     ]
     assert body["changes"][0]["type"] == "cell"
     assert body["changes"][0]["invalidation"]["type"] == "cell"
+    assert body["changes"][0]["rows"] == [
+        {
+            "id": "srv-000010",
+            "index": 10,
+            "name": "Change Feed Edit",
+            "segment": body["changes"][0]["rows"][0]["segment"],
+            "status": body["changes"][0]["rows"][0]["status"],
+            "region": body["changes"][0]["rows"][0]["region"],
+            "value": 970,
+            "updatedAt": body["changes"][0]["rows"][0]["updatedAt"],
+        },
+    ]
     assert body["changes"][0]["user_id"] is None
     assert body["changes"][0]["session_id"] == "server-demo-session"
     assert body["changes"][1]["type"] == "range"
     assert body["changes"][1]["invalidation"]["type"] == "range"
+    assert len(body["changes"][1]["rows"]) == 1
+    assert {row["id"] for row in body["changes"][1]["rows"]} == {"srv-000021"}
 
 
 async def test_change_feed_returns_empty_when_since_version_matches_current(client: AsyncClient) -> None:

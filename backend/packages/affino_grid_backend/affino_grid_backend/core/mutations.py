@@ -43,6 +43,7 @@ class GridMutationResult:
     rejected: list[GridRejectedCell]
     affected_indexes: list[int]
     revision: str
+    rows: list[Any]
     history_status: GridHistoryStatus | None = None
 
 
@@ -54,6 +55,7 @@ class GridFillMutationResult:
     affected_cell_count: int
     warnings: list[str]
     revision: str
+    rows: list[Any]
     history_status: GridHistoryStatus | None = None
 
 
@@ -66,3 +68,4 @@ class GridHistoryApplyResult:
     rejected: list[GridRejectedCell]
     affected_indexes: list[int]
     revision: str
+    rows: list[Any]

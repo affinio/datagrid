@@ -20,6 +20,10 @@ from app.features.server_demo.models import ServerDemoOperation as ServerDemoOpe
 from app.features.server_demo.models import GridDemoRow as GridDemoRowModel
 from app.features.server_demo.table import SERVER_DEMO_TABLE
 from app.features.server_demo.workspace import workspace_column_condition, workspace_scope_condition
+from app.features.server_demo.serialization import (
+    serialize_server_demo_rows,
+    should_include_server_demo_change_feed_rows,
+)
 from affino_grid_backend.core.mutations import GridHistoryStatus, PendingGridCellEvent
 from affino_grid_backend.core.revision import GridRevisionService
 from affino_grid_backend.edits import GridEditServiceBase
@@ -168,6 +172,7 @@ class ServerDemoEditService(GridEditServiceBase):
         rejected: list[Any],
         affected_indexes: list[int],
         revision: str,
+        rows: Sequence[Any] | None = None,
     ) -> GridHistoryStatus | None:
         if self._history_service is None:
             return None
@@ -180,6 +185,8 @@ class ServerDemoEditService(GridEditServiceBase):
             session_id=normalize_history_scope_value(getattr(request, "session_id", None)) or None,
         )
         if operation_id is not None and committed:
+            serialized_rows = serialize_server_demo_rows(list(rows) if rows is not None else [])
+            rows_payload = [row.model_dump(mode="json", by_alias=True) for row in serialized_rows] if should_include_server_demo_change_feed_rows(len(serialized_rows)) else None
             session.add(
                 ServerDemoChangeEventModel(
                     revision=int(revision),
@@ -195,6 +202,7 @@ class ServerDemoEditService(GridEditServiceBase):
                         "rows": [],
                         "range": None,
                     },
+                    rows=rows_payload,
                     created_at=datetime.now(timezone.utc),
                 )
             )

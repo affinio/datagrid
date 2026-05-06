@@ -1958,6 +1958,7 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
       applyInvalidation: serverDemoChangeFeedPollingEnabled
         ? undefined
         : invalidation => applyServerDemoMutationInvalidation(rowModel, invalidation),
+      applyRowPatches: updates => rowModel.patchRows?.(updates),
     }),
       async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
         if (serverDatasourceUnavailable.value) {
@@ -2046,9 +2047,10 @@ const dataSource: DataGridDataSource<ServerDemoRow> = serverDemoHttpDatasourceEn
             datasetVersion?: number | null
             serverInvalidation?: Parameters<typeof applyServerDemoMutationInvalidation>[1]
           }
-          if (result.serverInvalidation) {
+          const snapshotsApplied = await applyServerDemoRowSnapshots(result.rows)
+          if (!snapshotsApplied && result.serverInvalidation) {
             applyServerDemoMutationInvalidation(rowModel, result.serverInvalidation)
-          } else {
+          } else if (!snapshotsApplied) {
             await rowModel.refresh("manual")
           }
           const affectedRowCount = new Set(result.committed?.map(entry => entry.rowId) ?? []).size
@@ -2658,6 +2660,19 @@ function applyCommitHistoryDiagnostics(
   return true
 }
 
+async function applyServerDemoRowSnapshots(
+  rows: readonly ServerDemoRow[] | null | undefined,
+): Promise<boolean> {
+  if (!rowModel || typeof rowModel.patchRows !== "function" || !rows || rows.length === 0) {
+    return false
+  }
+  await Promise.resolve(rowModel.patchRows(rows.map(row => ({
+    rowId: row.id,
+    data: row,
+  }))))
+  return true
+}
+
 function applyHistoryStatusDiagnostics(result: {
   canUndo: boolean
   canRedo: boolean
@@ -2704,9 +2719,10 @@ async function runHistoryAction(direction: "undo" | "redo"): Promise<string | nu
         const result = await historyAction({
           ...serverDemoHistoryScope,
         })
-        if (result.serverInvalidation) {
+        const snapshotsApplied = await applyServerDemoRowSnapshots(result.rows)
+        if (!snapshotsApplied && result.serverInvalidation) {
           applyServerDemoMutationInvalidation(rowModel, result.serverInvalidation)
-        } else {
+        } else if (!snapshotsApplied) {
           await rowModel.refresh("manual")
         }
         syncHistoryDiagnostics({

@@ -137,6 +137,7 @@ class GridHistoryServiceBase(ABC):
                 rejected=rejected,
                 affected_indexes=[],
                 revision=revision,
+                rows=[],
             )
 
         changed_rows: dict[str, Any] = {}
@@ -175,6 +176,7 @@ class GridHistoryServiceBase(ABC):
             rejected=rejected,
             affected_indexes=affected_indexes,
             revision=revision,
+            rows=list(changed_rows.values()),
         )
 
     def _require_operation_id(self, operation_id: str) -> str:

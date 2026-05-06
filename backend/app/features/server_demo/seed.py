@@ -50,6 +50,7 @@ async def seed_demo_rows() -> None:
     async with engine.begin() as conn:
         await conn.execute(text("CREATE SEQUENCE IF NOT EXISTS server_demo_change_events_id_seq"))
         await conn.run_sync(lambda sync_conn: ServerDemoChangeEvent.__table__.create(sync_conn, checkfirst=True))
+        await conn.execute(text('ALTER TABLE server_demo_change_events ADD COLUMN IF NOT EXISTS "rows" JSONB'))
     async with AsyncSessionLocal() as session:
         async with session.begin():
             await session.execute(delete(ServerDemoCellEvent))

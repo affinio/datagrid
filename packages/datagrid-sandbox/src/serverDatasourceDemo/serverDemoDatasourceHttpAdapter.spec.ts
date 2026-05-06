@@ -300,23 +300,20 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
   it("polls the change feed and updates the latest dataset version", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       datasetVersion: 2,
-      changes: [
-        {
-          type: "cell",
-          invalidation: {
+        changes: [
+          {
             type: "cell",
-            cells: [{ rowId: "srv-000010", columnId: "name" }],
-            rows: [],
-            range: null,
-          },
-          operationId: "change-1",
-          user_id: null,
-          session_id: "server-demo-session",
-          rows: [
-            {
-              index: 9,
-              rowId: "srv-000010",
-              row: {
+            invalidation: {
+              type: "cell",
+              cells: [{ rowId: "srv-000010", columnId: "name" }],
+              rows: [],
+              range: null,
+            },
+            operationId: "change-1",
+            user_id: null,
+            session_id: "server-demo-session",
+            rows: [
+              {
                 id: "srv-000010",
                 index: 10,
                 name: "Account 00010",
@@ -326,10 +323,9 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
                 value: 910,
                 updatedAt: "2025-01-01T00:00:10Z",
               },
-            },
-          ],
-        },
-      ],
+            ],
+          },
+        ],
     }), {
       status: 200,
       headers: {
@@ -362,18 +358,14 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
           session_id: "server-demo-session",
           rows: [
             {
-              index: 9,
-              rowId: "srv-000010",
-              row: {
-                id: "srv-000010",
-                index: 10,
-                name: "Account 00010",
-                segment: "Growth",
-                status: "Active",
-                region: "EMEA",
-                value: 910,
-                updatedAt: "2025-01-01T00:00:10Z",
-              },
+              id: "srv-000010",
+              index: 10,
+              name: "Account 00010",
+              segment: "Growth",
+              status: "Active",
+              region: "EMEA",
+              value: 910,
+              updatedAt: "2025-01-01T00:00:10Z",
             },
           ],
         },
@@ -432,18 +424,14 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
             },
             rows: [
               {
-                index: 9,
-                rowId: "srv-000010",
-                row: {
-                  id: "srv-000010",
-                  index: 10,
-                  name: "Account 00010",
-                  segment: "Growth",
-                  status: "Active",
-                  region: "EMEA",
-                  value: 910,
-                  updatedAt: "2025-01-01T00:00:10Z",
-                },
+                id: "srv-000010",
+                index: 10,
+                name: "Account 00010",
+                segment: "Growth",
+                status: "Active",
+                region: "EMEA",
+                value: 910,
+                updatedAt: "2025-01-01T00:00:10Z",
               },
             ],
           },
@@ -1620,6 +1608,18 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
         committedRowIds: [],
         rejected: [],
         revision: "rev-history-stack",
+        rows: [
+          {
+            id: "srv-000010",
+            index: 10,
+            name: `${action === "undo" ? "Undo" : "Redo"} Row`,
+            segment: "Growth",
+            status: "Active",
+            region: "EMEA",
+            value: 10,
+            updatedAt: "2025-01-01T00:00:10Z",
+          },
+        ],
         invalidation: {
           kind: "range",
           range: { start: 10, end: 12 },
@@ -1660,6 +1660,18 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       canRedo: false,
       affectedRows: 2,
       affectedCells: 3,
+      rows: [
+        {
+          id: "srv-000010",
+          index: 10,
+          name: "Undo Row",
+          segment: "Growth",
+          status: "Active",
+          region: "EMEA",
+          value: 10,
+          updatedAt: "2025-01-01T00:00:10Z",
+        },
+      ],
     })
     expect(redoResult).toMatchObject({
       operationId: "redo-stack-123",
@@ -1668,6 +1680,18 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       canRedo: true,
       affectedRows: 2,
       affectedCells: 3,
+      rows: [
+        {
+          id: "srv-000010",
+          index: 10,
+          name: "Redo Row",
+          segment: "Growth",
+          status: "Active",
+          region: "EMEA",
+          value: 10,
+          updatedAt: "2025-01-01T00:00:10Z",
+        },
+      ],
     })
   })
 

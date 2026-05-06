@@ -75,7 +75,7 @@ class ServerDemoRow(BaseModel):
 class ServerDemoPullResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    rows: list[ServerDemoRow] = Field(default_factory=list)
+    rows: list[ServerDemoRow] = Field(default_factory=list, exclude_if=lambda value: not value)
     total: int
     revision: str | None = None
     dataset_version: int = Field(alias="datasetVersion")
@@ -204,6 +204,7 @@ class ServerDemoFillCommitResponse(BaseModel):
     latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
     invalidation: ServerDemoMutationInvalidation | None = None
     warnings: list[str] = Field(default_factory=list)
+    rows: list[ServerDemoRow] = Field(default_factory=list, exclude_if=lambda value: not value)
 
 
 class ServerDemoEditItem(BaseModel):
@@ -298,6 +299,7 @@ class ServerDemoChangeFeedChange(BaseModel):
 
     type: Literal["cell", "range", "row", "dataset"]
     invalidation: ServerDemoMutationInvalidation
+    rows: list[ServerDemoRow] = Field(default_factory=list, exclude_if=lambda value: not value)
     operation_id: str | None = Field(default=None, alias="operationId")
     user_id: str | None = None
     session_id: str | None = None
@@ -326,6 +328,7 @@ class ServerDemoCommitEditsResponse(BaseModel):
     latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
     latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
     invalidation: ServerDemoMutationInvalidation | None = None
+    rows: list[ServerDemoRow] = Field(default_factory=list)
 
 
 class ServerDemoHistoryStackRequest(BaseModel):

@@ -139,17 +139,19 @@ class GridEditServiceBase(ABC):
                 rejected=rejected,
                 affected_indexes=affected_indexes,
                 revision=revision,
+                rows=list(changed_rows.values()),
             )
 
-        return GridMutationResult(
-            operation_id=operation_id,
-            committed=committed,
-            committed_row_ids=committed_row_ids,
-            rejected=rejected,
-            affected_indexes=affected_indexes,
-            revision=revision,
-            history_status=history_status,
-        )
+            return GridMutationResult(
+                operation_id=operation_id,
+                committed=committed,
+                committed_row_ids=committed_row_ids,
+                rejected=rejected,
+                affected_indexes=affected_indexes,
+                revision=revision,
+                rows=list(changed_rows.values()),
+                history_status=history_status,
+            )
 
     def normalize_optional_operation_id(self, operation_id: str | None) -> str | None:
         normalized = operation_id.strip() if operation_id else ""
@@ -185,6 +187,7 @@ class GridEditServiceBase(ABC):
         rejected: list[GridRejectedCell],
         affected_indexes: list[int],
         revision: str,
+        rows: Sequence[Any] | None = None,
     ) -> GridHistoryStatus | None:
         return None
 
