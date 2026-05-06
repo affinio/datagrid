@@ -115,10 +115,184 @@ When the user resolves a fill boundary and later commits the fill, the frontend 
 
 If any of those values drift, the commit should be treated as a new operation rather than a continuation of the old one.
 
+## History Scope
+
+Stack-based undo/redo is resolved by:
+
+- workspace_id
+- table_id
+- user_id and/or session_id
+
+At least one of `user_id` or `session_id` is required.
+
+Normal UX should use:
+
+- `POST /api/history/undo`
+- `POST /api/history/redo`
+- `POST /api/history/status`
+
+The frontend should not need to know the latest `operationId` for normal undo/redo.
+
+## Fill Idempotency
+
+A fill commit with the same:
+
+- boundaryToken
+- projectionHash
+- baseRevision
+
+must produce the same result or be rejected.
+
+The backend must not apply the same fill twice if it was already committed.
+
+## Redo Branch Invalidation
+
+When a new operation is committed after one or more undo actions, the redo branch for the same history scope must be discarded.
+
+Example:
+
+A → B → undo B → commit C
+
+Result:
+
+- undo stack: A, C
+- redo stack: empty
+- B must not be redoable
+
+## Undo And Redo As Mutations
+
+Undo and redo operations are state-changing mutations.
+
+They must:
+
+- update persisted row state
+- bump the table `revision`
+- update history state
+- follow the same scope and consistency rules as edit and fill commits
+
+Undo/redo must produce the same observable effects as applying or reverting the original operation.
+
+## Commit Response History State
+
+Mutation responses should return history state when possible:
+
+- operationId
+- canUndo
+- canRedo
+- latestUndoOperationId
+- latestRedoOperationId
+- affectedRows / affectedCells
+
+This avoids an immediate `/history/status` probe after every successful commit.
+Returned history state must correspond to the same scope as the committed operation.
+If history state cannot be determined reliably, the backend should omit it rather than return incorrect values.
+
+## Cell And Range Invalidation
+
+Mutations should describe the smallest affected scope possible:
+
+- cell invalidation
+- range invalidation
+- row invalidation
+- dataset invalidation
+
+Prefer precise invalidation over full refresh.
+
+Invalidation should be:
+
+- minimal (only affected cells/rows/ranges)
+- deterministic
+- reproducible from the operation
+
+Avoid:
+
+- full dataset invalidation unless strictly necessary
+
+## Revision And History Relationship
+
+Each committed operation that changes persisted state must:
+
+- bump the table `revision`
+- be recorded in history with the same effective revision ordering
+
+Practical rule:
+
+- history must reflect the same ordering as revision increments
+- undo/redo operations must not violate revision monotonicity
+- replayed operations should restore state consistent with the revision they represent
+
+## Scope Consistency
+
+All mutation and history operations must use the same scope fields:
+
+- workspace_id
+- table_id
+- user_id and/or session_id
+
+These fields must be:
+
+- persisted with each operation
+- used for history resolution (undo/redo/status)
+- consistent across edit, fill, and history APIs
+
+If scope diverges between:
+
+- operation metadata
+- affected rows
+- history queries
+
+the backend must still be able to resolve and replay the operation safely.
+
+Prefer fallback resolution over hard failure when scope mismatch is detected.
+
+## Dataset Version
+
+`datasetVersion` is the externally visible version token of the table state.
+
+It is typically derived from `revision`.
+
+It must be:
+
+- returned by pull and mutation responses
+- used by the frontend for cache validation
+- monotonic within the same workspace + table scope
+
+Practical rule:
+
+- if the datasetVersion changes, the frontend must assume that some part of the dataset has changed
+- datasetVersion should be included in mutation responses when available
+
+## Deterministic Replay
+
+History operations must be replayable deterministically.
+
+Given:
+
+- the same operation payload
+- the same scope
+- a compatible dataset state
+
+The backend should produce the same resulting state.
+
+If exact replay is not possible due to:
+
+- partial materialization
+- scope divergence
+- missing rows
+
+the backend must:
+
+- attempt a best-effort replay
+- prefer consistency over strict failure
+- avoid partial or corrupted state
+
 ## Current Limitations
 
 - server-side series fill is not implemented yet
-- history is operation-id based, not stack-based
 - full off-viewport materialization may be bounded
-- the workspace scope is header-driven, not auth-driven
+- the workspace scope is still partly demo/env/header driven, not auth-driven
 - the host app must still enforce authorization
+- websocket/live update contract is not implemented yet
+- cell/range invalidation contract is not finalized yet
+- conflict/version handling is not fully wired into all mutation paths yet
+- history replay across partially materialized datasets may rely on fallback resolution
