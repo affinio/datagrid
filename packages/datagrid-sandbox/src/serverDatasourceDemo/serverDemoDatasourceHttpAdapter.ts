@@ -8,7 +8,6 @@ import {
   type DataGridDataSourceInvalidation,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourcePullResult,
-  type DataGridDataSourcePushEvent,
   type DataGridDataSourcePushListener,
   type DataGridFilterSnapshot,
 } from "@affino/datagrid-vue"
@@ -17,20 +16,15 @@ import {
   SERVER_DEMO_REGIONS,
   SERVER_DEMO_SEGMENTS,
   SERVER_DEMO_STATUSES,
-  type ServerDemoChangeFeedChange,
-  type ServerDemoChangeFeedResponse,
   type ServerDemoRow,
-  type ServerDemoChangeFeedRequest,
   type ServerDemoChangeFeedDiagnostics,
+  type ServerDemoChangeFeedResponse,
   type ServerDemoDataSourceRowEntry,
 } from "./types"
 import {
-  createChangeFeedPoller,
-  type ServerChangeEventLike,
+  createServerDatasourceHttpClient,
   normalizeDatasetVersion,
   normalizeDatasourceInvalidation,
-  mapServerChangeEvent,
-  normalizeRowSnapshots,
   type ServerRowSnapshotLike,
 } from "@affino/datagrid-server-client"
 import type { ServerDemoHistoryScope } from "./serverDemoHistoryScope"
@@ -682,45 +676,6 @@ async function postJson<TResponse>(
   }
 }
 
-async function getJson<TResponse>(
-  fetchImpl: typeof fetch,
-  url: string,
-  signal?: AbortSignal,
-): Promise<TResponse> {
-  let response: Response
-  try {
-    response = await fetchImpl(url, {
-      method: "GET",
-      signal,
-    })
-  } catch (caught) {
-    if (signal?.aborted || isFetchAbortLikeError(caught)) {
-      throw toAbortError()
-    }
-    throw caught
-  }
-
-  if (!response.ok) {
-    try {
-      throw await parseErrorResponse(response)
-    } catch (caught) {
-      if (signal?.aborted || isFetchAbortLikeError(caught)) {
-        throw toAbortError()
-      }
-      throw caught
-    }
-  }
-
-  try {
-    return (await response.json()) as TResponse
-  } catch (caught) {
-    if (signal?.aborted || isFetchAbortLikeError(caught)) {
-      throw toAbortError()
-    }
-    throw caught
-  }
-}
-
 function getHistogramResponseKey(entries: readonly DataGridColumnHistogramEntry[]): DataGridColumnHistogram {
   return entries
 }
@@ -1175,7 +1130,7 @@ export interface ServerDemoDatasourceHttpAdapter extends DataGridDataSource<Serv
   undoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse>
   redoHistoryStack(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStackResponse>
   getHistoryStatus(request: ServerDemoHistoryStackRequestBody & { signal?: AbortSignal }): Promise<ServerDemoHistoryStatusResponse>
-  getChangesSinceVersion(request: ServerDemoChangeFeedRequest & { signal?: AbortSignal }): Promise<ServerDemoChangeFeedResponse>
+  getChangesSinceVersion(request: { sinceVersion: number; signal?: AbortSignal }): Promise<ServerDemoChangeFeedResponse>
   latestDatasetVersion: number | null
   lastSeenVersion: number | null
   startChangeFeedPolling(options?: ServerDemoDatasourceHttpAdapterChangeFeedOptions): void
@@ -1189,35 +1144,68 @@ export function createServerDemoDatasourceHttpAdapter(
   options: ServerDemoDatasourceHttpAdapterOptions = {},
 ): ServerDemoDatasourceHttpAdapter {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
-  const listeners = new Set<DataGridDataSourcePushListener<ServerDemoRow>>()
-  const changeFeedDiagnosticsListeners = new Set<(diagnostics: ServerDemoChangeFeedDiagnostics) => void>()
   const historyScope = options.historyScope
+  const httpDatasource = createServerDatasourceHttpClient<ServerDemoRow>({
+      baseUrl: options.baseUrl,
+      fetchImpl,
+      endpoints: {
+        pull: "/api/server-demo/pull",
+        histogram: "/api/server-demo/histogram",
+        commitEdits: "/api/server-demo/edits",
+        resolveFillBoundary: "/api/server-demo/fill-boundary",
+        commitFillOperation: "/api/server-demo/fill/commit",
+        undoOperation: operationId => `/api/server-demo/operations/${encodeURIComponent(operationId)}/undo`,
+        redoOperation: operationId => `/api/server-demo/operations/${encodeURIComponent(operationId)}/redo`,
+        historyStatus: "/api/history/status",
+        changesSinceVersion: sinceVersion => `/api/changes?sinceVersion=${encodeURIComponent(String(sinceVersion))}`,
+      },
+      mapPullRequest: request => ({
+        range: normalizeRange(request.range),
+        sortModel: normalizeSortModel(request),
+        filterModel: flattenFilterModel(request.filterModel),
+      }),
+      mapHistogramRequest: request => ({
+        columnId: request.columnId,
+        filterModel: flattenFilterModel(request.filterModel, request.options.ignoreSelfFilter ? request.columnId : undefined),
+      }),
+      mapPullResponse: response => {
+        const parsed = response as ServerDemoPullResponse
+        return {
+          rows: (parsed.rows ?? []).map(row => ({
+            index: row.index,
+            rowId: row.id,
+            row,
+          })),
+          total: parsed.total,
+          revision: parsed.revision ?? null,
+          datasetVersion: parsed.datasetVersion ?? null,
+        }
+      },
+      isInvalidSinceVersionError: caught => {
+        if (!caught || typeof caught !== "object") {
+          return false
+        }
+        const candidate = caught as { code?: unknown; status?: unknown }
+        return candidate.code === "invalid-since-version" || candidate.status === 400
+      },
+    })
+  
+
+  const changeFeedDiagnosticsListeners = new Set<(diagnostics: ServerDemoChangeFeedDiagnostics) => void>()
   let latestDatasetVersion: number | null = null
   let lastSeenVersion: number | null = null
-  const changeFeedPoller = createChangeFeedPoller<ServerDemoChangeFeedResponse>({
-    getSinceVersion: () => lastSeenVersion,
-    loadSinceVersion: async (sinceVersion: number, signal?: AbortSignal) => {
-      return await loadChangeFeedSinceVersion(sinceVersion, signal)
-    },
-    onResponse: response => {
-      applyChangeFeedResponse(response)
-    },
-    onError: error => {
-      console.warn("Server demo change feed polling failed", error)
-    },
-    onDiagnostics: () => {
-      emitChangeFeedDiagnostics()
-    },
-    isInvalidSinceVersionError,
-    onInvalidSinceVersion: () => {
-      resetChangeFeedCursor()
-    },
-  })
 
   function getChangeFeedDiagnostics(): ServerDemoChangeFeedDiagnostics {
-    const diagnostics = changeFeedPoller.diagnostics()
+    const diagnostics = httpDatasource?.getChangeFeedDiagnostics() ?? {
+      currentDatasetVersion: null,
+      lastSeenVersion: null,
+      polling: false,
+      pending: false,
+      appliedChanges: 0,
+      intervalMs: null,
+    }
     return {
-      currentDatasetVersion: latestDatasetVersion,
+      currentDatasetVersion: latestDatasetVersion ?? diagnostics.currentDatasetVersion,
       lastSeenVersion,
       polling: diagnostics.polling,
       pending: diagnostics.pending,
@@ -1238,111 +1226,30 @@ export function createServerDemoDatasourceHttpAdapter(
     if (normalizedVersion === null) {
       return
     }
-    latestDatasetVersion = normalizedVersion
+    latestDatasetVersion = latestDatasetVersion === null
+      ? normalizedVersion
+      : Math.max(latestDatasetVersion, normalizedVersion)
     if (markSeen) {
       lastSeenVersion = normalizedVersion
     }
     emitChangeFeedDiagnostics()
   }
 
-  function resetChangeFeedCursor(): void {
-    lastSeenVersion = 0
-    emitChangeFeedDiagnostics()
-  }
-
-  function isInvalidSinceVersionError(caught: unknown): boolean {
-    return caught instanceof ServerDemoHttpError && caught.code === "invalid-since-version"
-  }
-
-  function emitPushEvent(event: DataGridDataSourcePushEvent<ServerDemoRow>): void {
-    for (const listener of listeners) {
-      listener(event)
-    }
-  }
-
-  async function loadChangeFeedSinceVersion(
-    sinceVersion: number,
-    signal?: AbortSignal,
-  ): Promise<ServerDemoChangeFeedResponse> {
-    return await getJson<ServerDemoChangeFeedResponse>(
-      fetchImpl,
-      resolveEndpoint(options.baseUrl, `/api/changes?sinceVersion=${encodeURIComponent(String(sinceVersion))}`),
-      signal,
-    )
-  }
-
-  function applyChangeFeedResponse(response: ServerDemoChangeFeedResponse): void {
-    updateDatasetVersion(response.datasetVersion, true)
-    for (const change of response.changes ?? []) {
-      dispatchChangeFeedChange(change)
-    }
-  }
-
-  function dispatchChangeFeedChange(change: ServerDemoChangeFeedChange): void {
-    const mapped = mapServerChangeEvent(
-      {
-        ...change,
-        rows: change.rows as readonly ServerRowSnapshotLike<ServerDemoRow>[] | undefined,
-      } as ServerChangeEventLike<ServerDemoRow>,
-      normalizeDatasourceInvalidation,
-    )
-    changeFeedPoller.incrementAppliedChanges(mapped.appliedCount)
-    if (mapped.kind === "upsert") {
-      emitPushEvent({
-        type: "upsert",
-        rows: mapped.rows,
-        datasetVersion: latestDatasetVersion,
-      })
-      return
-    }
-    emitPushEvent({
-      type: "invalidate",
-      datasetVersion: latestDatasetVersion,
-      invalidation: mapped.invalidation,
+  if (httpDatasource) {
+    httpDatasource.subscribeChangeFeedDiagnostics(diagnostics => {
+      if (diagnostics.currentDatasetVersion !== null) {
+        latestDatasetVersion = latestDatasetVersion === null
+          ? diagnostics.currentDatasetVersion
+          : Math.max(latestDatasetVersion, diagnostics.currentDatasetVersion)
+      }
+      lastSeenVersion = diagnostics.lastSeenVersion
+      emitChangeFeedDiagnostics()
     })
-  }
-
-  function applyRowSnapshots(rows: readonly (ServerDemoRow | ServerDemoDataSourceRowEntry)[]): boolean {
-    const normalizedRows = normalizeRowSnapshots(rows as readonly ServerRowSnapshotLike<ServerDemoRow>[])
-    if (!normalizedRows || normalizedRows.length === 0) {
-      return false
-    }
-    emitPushEvent({
-      type: "upsert",
-      rows: normalizedRows,
-    })
-    return true
-  }
-
-  function startChangeFeedPolling(options: ServerDemoDatasourceHttpAdapterChangeFeedOptions = {}): void {
-    changeFeedPoller.start({ intervalMs: options.intervalMs })
-  }
-
-  function stopChangeFeedPolling(): void {
-    changeFeedPoller.stop()
   }
 
   return {
     async pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<ServerDemoRow>> {
-      const url = resolveEndpoint(options.baseUrl, "/api/server-demo/pull")
-      const startIndex = Math.max(0, Math.trunc(request.range.start))
-      const response = await postJson<ServerDemoPullResponse>(fetchImpl, url, {
-        range: normalizeRange(request.range),
-        sortModel: normalizeSortModel(request),
-        filterModel: flattenFilterModel(request.filterModel),
-      }, request.signal)
-      updateDatasetVersion(response.datasetVersion ?? normalizeDatasetVersion(response.revision), true)
-
-      return {
-        rows: response.rows.map((row, offset) => ({
-          index: startIndex + offset,
-          rowId: row.id,
-          row,
-        })),
-        total: response.total,
-        cursor: response.revision ?? null,
-        datasetVersion: latestDatasetVersion,
-      } as DataGridDataSourcePullResult<ServerDemoRow> & { datasetVersion: number | null }
+      return await httpDatasource.pull(request)
     },
 
     async getColumnHistogram(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram> {
@@ -1505,13 +1412,11 @@ export function createServerDemoDatasourceHttpAdapter(
       return result
     },
 
-    async getChangesSinceVersion(request: ServerDemoChangeFeedRequest & { signal?: AbortSignal }): Promise<ServerDemoChangeFeedResponse> {
-      const response = await loadChangeFeedSinceVersion(request.sinceVersion, request.signal)
-      updateDatasetVersion(response.datasetVersion, true)
-      for (const change of response.changes ?? []) {
-        dispatchChangeFeedChange(change)
+    async getChangesSinceVersion(request: { sinceVersion: number; signal?: AbortSignal }): Promise<ServerDemoChangeFeedResponse> {
+      if (!httpDatasource) {
+        return { datasetVersion: 0, changes: [] }
       }
-      return response
+      return await httpDatasource.getChangesSinceVersion(request) as ServerDemoChangeFeedResponse
     },
 
     async undoFillOperation(request: ServerDemoFillUndoRequest): Promise<ServerDemoFillUndoResult> {
@@ -1539,21 +1444,35 @@ export function createServerDemoDatasourceHttpAdapter(
     },
 
     subscribe(listener: DataGridDataSourcePushListener<ServerDemoRow>): () => void {
-      listeners.add(listener)
-      return () => {
-        listeners.delete(listener)
+      const subscribe = httpDatasource.subscribe
+      if (typeof subscribe !== "function") {
+        return () => {}
       }
+      return subscribe(listener)
     },
-    applyRowSnapshots,
+    applyRowSnapshots(rows: readonly (ServerDemoRow | ServerDemoDataSourceRowEntry)[]): boolean {
+      if (!httpDatasource) {
+        return false
+      }
+      return httpDatasource.applyRowSnapshots(rows as readonly ServerRowSnapshotLike<ServerDemoRow>[])
+    },
     get latestDatasetVersion() {
       return latestDatasetVersion
     },
     get lastSeenVersion() {
       return lastSeenVersion
     },
-    startChangeFeedPolling,
-    stopChangeFeedPolling,
-    getChangeFeedDiagnostics,
+    startChangeFeedPolling(options: ServerDemoDatasourceHttpAdapterChangeFeedOptions = {}): void {
+      httpDatasource?.startChangeFeedPolling({
+        intervalMs: options.intervalMs,
+      })
+    },
+    stopChangeFeedPolling(): void {
+      httpDatasource?.stopChangeFeedPolling()
+    },
+    getChangeFeedDiagnostics(): ServerDemoChangeFeedDiagnostics {
+      return getChangeFeedDiagnostics()
+    },
     subscribeChangeFeedDiagnostics(listener: (diagnostics: ServerDemoChangeFeedDiagnostics) => void): () => void {
       changeFeedDiagnosticsListeners.add(listener)
       listener(getChangeFeedDiagnostics())

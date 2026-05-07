@@ -15,3 +15,7 @@ export {
   normalizeRowSnapshots,
   type ServerRowSnapshotLike,
 } from "./rowSnapshot"
+export {
+  createServerDatasourceHttpClient,
+  type ServerDatasourceHttpClientOptions,
+} from "./client"
