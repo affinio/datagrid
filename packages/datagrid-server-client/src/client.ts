@@ -59,6 +59,21 @@ export interface ServerDatasourceHttpClientOptions<TRow> {
   isInvalidSinceVersionError?: (error: unknown) => boolean
 }
 
+/**
+ * Low-level server datasource transport client.
+ *
+ * This factory covers the read and change-feed side of the server datasource
+ * contract:
+ *
+ * - `pull` for viewport reads
+ * - `getColumnHistogram` for histogram reads when the backend supports it
+ * - `getChangesSinceVersion` / polling for change-feed updates
+ * - row snapshot normalization and push event dispatch
+ *
+ * Write, fill, and history behavior are backend and adapter concerns. This
+ * client can be composed underneath an opinionated adapter, but most users
+ * should start with `@affino/datagrid-server-adapters`.
+ */
 export function createServerDatasourceHttpClient<TRow>(
   options: ServerDatasourceHttpClientOptions<TRow>,
 ): DataGridDataSource<TRow> & {
@@ -225,6 +240,8 @@ export function createServerDatasourceHttpClient<TRow>(
     changeFeedPoller.stop()
   }
 
+  // The low-level client intentionally leaves request shaping to the caller.
+  // Adapter-level packages can map additional domain-specific fields here.
   function mapPullBody(request: DataGridDataSourcePullRequest): unknown {
     if (options.mapPullRequest) {
       return options.mapPullRequest(request)
@@ -233,6 +250,8 @@ export function createServerDatasourceHttpClient<TRow>(
     return body
   }
 
+  // Histogram requests are also read-only transport concerns. Write/fill/history
+  // flows should be implemented by an adapter or host-specific wrapper.
   function mapHistogramBody(request: DataGridDataSourceColumnHistogramRequest): unknown {
     if (options.mapHistogramRequest) {
       return options.mapHistogramRequest(request)
@@ -281,7 +300,7 @@ export function createServerDatasourceHttpClient<TRow>(
     },
 
     invalidate(_invalidation: DataGridDataSourceInvalidation): void {
-      // Source-of-truth invalidations are emitted by the server.
+      // Source-of-truth invalidations are emitted by the server or adapter.
     },
 
     getChangesSinceVersion,

@@ -10,7 +10,9 @@ The fill wrapper lives at:
 
 ## What The Adapter Does
 
-The adapter translates `DataGridDataSource<T>` calls into backend HTTP requests.
+The opinionated adapter translates `DataGridDataSource<T>` calls into backend HTTP requests.
+
+If you only need the lower-level transport and change-feed utilities, use `@affino/datagrid-server-client` directly. Most users should still start with `@affino/datagrid-server-adapters`.
 
 It handles:
 

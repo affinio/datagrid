@@ -10,6 +10,7 @@ import {
   normalizeDatasetVersion,
   normalizeDatasourceInvalidation,
   normalizeRowSnapshots,
+  type ServerDatasourceChangeFeedDiagnostics,
   type ServerRowSnapshotLike,
 } from "@affino/datagrid-server-client"
 
@@ -31,13 +32,24 @@ type AffinoFillUndoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<un
 type AffinoFillRedoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<unknown>["redoFillOperation"]>>>
 type AffinoFillProjection = NonNullable<AffinoFillOperationRequest["projection"]>
 
-type AffinoDatasourceExtras = {
-  undoHistoryStack(): Promise<AffinoHistoryStackResult>
-  redoHistoryStack(): Promise<AffinoHistoryStackResult>
+export interface AffinoDatasourceExtras<TRow> {
+  undoHistoryStack(): Promise<AffinoHistoryStackResult<TRow>>
+  redoHistoryStack(): Promise<AffinoHistoryStackResult<TRow>>
   getHistoryStatus(): Promise<AffinoHistoryStatusResult>
 }
 
-type AffinoHistoryStackResult = {
+export interface AffinoDatasource<TRow> extends DataGridDataSource<TRow>, AffinoDatasourceExtras<TRow> {
+  startChangeFeedPolling(options?: { intervalMs?: number }): void
+  stopChangeFeedPolling(): void
+  getChangeFeedDiagnostics(): ServerDatasourceChangeFeedDiagnostics
+  subscribeChangeFeedDiagnostics(listener: (diagnostics: ServerDatasourceChangeFeedDiagnostics) => void): () => void
+  applyRowSnapshots(rows: readonly ServerRowSnapshotLike<TRow>[] | readonly DataGridDataSourceRowEntry<TRow>[]): boolean
+  getChangesSinceVersion(request: { sinceVersion: number; signal?: AbortSignal }): Promise<unknown>
+  readonly latestDatasetVersion: number | null
+  readonly lastSeenVersion: number | null
+}
+
+export type AffinoHistoryStackResult<TRow> = {
   operationId?: string | null
   action?: "undo" | "redo"
   canUndo?: boolean
@@ -59,12 +71,12 @@ type AffinoHistoryStackResult = {
   datasetVersion?: number | null
   invalidation?: unknown
   warnings?: readonly string[]
-  rows?: readonly ServerRowSnapshotLike<unknown>[]
+  rows?: readonly ServerRowSnapshotLike<TRow>[]
   latestUndoOperationId?: string | null
   latestRedoOperationId?: string | null
 }
 
-type AffinoHistoryStatusResult = {
+export type AffinoHistoryStatusResult = {
   workspace_id?: string | null
   table_id?: string | null
   user_id?: string | null
@@ -402,7 +414,7 @@ function normalizeFillUndoResult(response: unknown): AffinoFillUndoResult & {
   }
 }
 
-function normalizeHistoryStackResult(response: unknown): AffinoHistoryStackResult {
+function normalizeHistoryStackResult<TRow>(response: unknown): AffinoHistoryStackResult<TRow> {
   if (!isRecord(response)) {
     return {}
   }
@@ -456,7 +468,7 @@ function normalizeHistoryStackResult(response: unknown): AffinoHistoryStackResul
     warnings: Array.isArray(response.warnings)
       ? response.warnings.filter((warning): warning is string => typeof warning === "string")
       : undefined,
-    rows: Array.isArray(response.rows) ? response.rows as readonly ServerRowSnapshotLike<unknown>[] : undefined,
+    rows: Array.isArray(response.rows) ? response.rows as readonly ServerRowSnapshotLike<TRow>[] : undefined,
     latestUndoOperationId: typeof response.latestUndoOperationId === "string" ? response.latestUndoOperationId : null,
     latestRedoOperationId: typeof response.latestRedoOperationId === "string" ? response.latestRedoOperationId : null,
   }
@@ -509,7 +521,7 @@ function mapAffinoHistogramResponse(response: unknown): DataGridColumnHistogram 
 
 export function createAffinoDatasource<TRow>(
   options: AffinoDatasourceOptions,
-): DataGridDataSource<TRow> {
+): AffinoDatasource<TRow> {
   const tableId = options.tableId.trim()
   const client = createServerDatasourceHttpClient<TRow>({
     baseUrl: options.baseUrl,
@@ -622,21 +634,21 @@ export function createAffinoDatasource<TRow>(
         warnings: normalized.warnings,
       }
     },
-    async undoHistoryStack(): Promise<AffinoHistoryStackResult> {
+    async undoHistoryStack(): Promise<AffinoHistoryStackResult<TRow>> {
       const response = await postJson<unknown>(
         fetchImpl,
         resolveWriteEndpoint("/api/history/undo"),
         {},
       )
-      return normalizeHistoryStackResult(response)
+      return normalizeHistoryStackResult<TRow>(response)
     },
-    async redoHistoryStack(): Promise<AffinoHistoryStackResult> {
+    async redoHistoryStack(): Promise<AffinoHistoryStackResult<TRow>> {
       const response = await postJson<unknown>(
         fetchImpl,
         resolveWriteEndpoint("/api/history/redo"),
         {},
       )
-      return normalizeHistoryStackResult(response)
+      return normalizeHistoryStackResult<TRow>(response)
     },
     async getHistoryStatus(): Promise<AffinoHistoryStatusResult> {
       const response = await postJson<unknown>(
@@ -661,6 +673,6 @@ export function createAffinoDatasource<TRow>(
           : undefined,
       }
     },
-  } as DataGridDataSource<TRow> & AffinoDatasourceExtras
+  } as AffinoDatasource<TRow>
   return datasource
 }

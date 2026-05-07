@@ -575,6 +575,7 @@ import {
 } from "../serverDatasourceDemo/serverDemoDatasourceHttpFillDataSource"
 import {
   createAffinoDatasource,
+  type AffinoDatasource,
 } from "@affino/datagrid-server-adapters"
 import {
   resolveServerDemoChangeFeedPollingIntervalMs,
@@ -933,44 +934,7 @@ type ServerDemoHistogramRequest = Parameters<NonNullable<DataGridDataSource<Serv
 type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>[0]
 type ServerDemoCommitFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>[0]
 type ServerDemoUndoFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>[0]
-type ServerDemoHttpDatasource = DataGridDataSource<ServerDemoRow> & {
-    subscribeChangeFeedDiagnostics(listener: (diagnostics: ServerDemoChangeFeedDiagnostics) => void): () => void
-    startChangeFeedPolling(options?: { intervalMs?: number }): void
-    stopChangeFeedPolling(): void
-    getChangeFeedDiagnostics(): ServerDemoChangeFeedDiagnostics
-    applyRowSnapshots(rows: readonly ServerDemoRow[]): boolean
-    getChangesSinceVersion(request: { sinceVersion: number; signal?: AbortSignal }): Promise<unknown>
-    undoHistoryStack(): Promise<{
-      operationId?: string | null
-      action?: "undo"
-      canUndo?: boolean
-      canRedo?: boolean
-      affectedRows?: number
-      affectedCells?: number
-      latestUndoOperationId?: string | null
-      latestRedoOperationId?: string | null
-      rows?: readonly ServerDemoRow[]
-      invalidation?: DataGridDataSourceInvalidation | null
-    }>
-    redoHistoryStack(): Promise<{
-      operationId?: string | null
-      action?: "redo"
-      canUndo?: boolean
-      canRedo?: boolean
-      affectedRows?: number
-      affectedCells?: number
-      latestUndoOperationId?: string | null
-      latestRedoOperationId?: string | null
-      rows?: readonly ServerDemoRow[]
-      invalidation?: DataGridDataSourceInvalidation | null
-    }>
-    getHistoryStatus(): Promise<{
-      canUndo?: boolean
-      canRedo?: boolean
-      latestUndoOperationId?: string | null
-      latestRedoOperationId?: string | null
-    }>
-  }
+type ServerDemoHttpDatasource = AffinoDatasource<ServerDemoRow>
 
 function resolveRowId(index: number): string {
   return `srv-${index.toString().padStart(6, "0")}`
@@ -2005,7 +1969,7 @@ const serverDemoHttpDatasource: ServerDemoHttpDatasource | null = serverDemoHttp
   ? createAffinoDatasource<ServerDemoRow>({
       baseUrl: serverDemoHttpDatasourceBaseUrl,
       tableId: "server-demo",
-    }) as ServerDemoHttpDatasource
+    })
   : null
 const httpDatasource = serverDemoHttpDatasource
 let unsubscribeChangeFeedDiagnostics: (() => void) | null = null
@@ -2813,13 +2777,12 @@ function applyCommitHistoryDiagnostics(
 }
 
 async function applyServerDemoRowSnapshots(
-  rows: readonly ServerDemoRow[] | null | undefined,
+  rows: Parameters<AffinoDatasource<ServerDemoRow>["applyRowSnapshots"]>[0] | null | undefined,
 ): Promise<boolean> {
-  const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
-  if (!serverDatasource || !rows || rows.length === 0) {
+  if (!httpDatasource || !rows || rows.length === 0) {
     return false
   }
-  return serverDatasource.applyRowSnapshots(rows)
+  return httpDatasource.applyRowSnapshots(rows)
 }
 
 function applyServerHistoryStatus(status: {
@@ -2843,21 +2806,19 @@ function applyServerHistoryStatus(status: {
 }
 
 async function refreshHistoryStatus(): Promise<void> {
-  const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
-  if (!serverDatasource || typeof serverDatasource.getHistoryStatus !== "function") {
+  if (!httpDatasource || typeof httpDatasource.getHistoryStatus !== "function") {
     return
   }
-  const status = await serverDatasource.getHistoryStatus()
+  const status = await httpDatasource.getHistoryStatus()
   applyServerHistoryStatus(status)
 }
 
 async function runHistoryAction(direction: "undo" | "redo"): Promise<string | null> {
-  const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
-  if (serverDatasource && typeof serverDatasource.undoHistoryStack === "function" && typeof serverDatasource.redoHistoryStack === "function") {
+  if (httpDatasource && typeof httpDatasource.undoHistoryStack === "function" && typeof httpDatasource.redoHistoryStack === "function") {
     try {
       const result = direction === "undo"
-        ? await serverDatasource.undoHistoryStack()
-        : await serverDatasource.redoHistoryStack()
+        ? await httpDatasource.undoHistoryStack()
+        : await httpDatasource.redoHistoryStack()
       const snapshotsApplied = await applyServerDemoRowSnapshots(result.rows)
       if (!snapshotsApplied && result.invalidation) {
         applyServerDemoMutationInvalidation(

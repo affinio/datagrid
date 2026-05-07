@@ -1,6 +1,6 @@
 # Affino DataGrid Server Client
 
-Framework-agnostic client utilities for server-backed DataGrid:
+Framework-agnostic transport utilities for server-backed DataGrid:
 
 - HTTP datasource client factory
 - change feed polling
@@ -10,13 +10,13 @@ Framework-agnostic client utilities for server-backed DataGrid:
 
 ## What It Is
 
-This package contains reusable client-side helpers for talking to a server-backed DataGrid datasource. It sits between a framework adapter and a server contract without depending on Vue, a demo implementation, or a backend runtime.
+This package contains reusable client-side helpers for talking to a server-backed DataGrid datasource. It sits below a framework adapter and above the raw HTTP contract without depending on Vue, a demo implementation, or a backend runtime.
 
 ## What It Is Not
 
 - not a backend package
 - not tied to Vue
-- not tied to the server-demo adapter
+- not the opinionated datasource adapter
 
 ## Installation
 
@@ -50,7 +50,15 @@ Use `normalizeDatasourceInvalidation()` to convert server invalidation payloads 
 
 ### HTTP Client Factory
 
-Use `createServerDatasourceHttpClient()` when you want a reusable `DataGridDataSource`-shaped client with server-backed pull, change-feed polling, row snapshot application, and diagnostics.
+Use `createServerDatasourceHttpClient()` when you want a reusable low-level client for read and change-feed transport:
+
+- viewport `pull`
+- column histogram reads
+- change-feed polling
+- row snapshot application
+- diagnostics
+
+Write, fill, and history operations are backend and adapter-level concerns. If you want the full opinionated integration path, start with `@affino/datagrid-server-adapters`.
 
 ## Public API
 
@@ -114,12 +122,6 @@ const client = createServerDatasourceHttpClient({
   endpoints: {
     pull: "/api/pull",
     histogram: "/api/histogram",
-    commitEdits: "/api/edits",
-    resolveFillBoundary: "/api/fill-boundary",
-    commitFillOperation: "/api/fill/commit",
-    undoOperation: operationId => `/api/operations/${operationId}/undo`,
-    redoOperation: operationId => `/api/operations/${operationId}/redo`,
-    historyStatus: "/api/history/status",
     changesSinceVersion: sinceVersion => `/api/changes?sinceVersion=${sinceVersion}`,
   },
   mapPullResponse: response => ({
@@ -132,6 +134,8 @@ const client = createServerDatasourceHttpClient({
 
 client.startChangeFeedPolling()
 ```
+
+If you need edits, fill, or history, build those in an adapter or host-specific wrapper that composes this client with backend write endpoints.
 
 ## Design Principles
 
@@ -148,4 +152,5 @@ Experimental, pre-1.0.
 
 - Keep demo-specific filter, fill, edit, and history request shaping in the sandbox adapter.
 - Keep HTTP transport helpers internal to the package.
+- Use `@affino/datagrid-server-adapters` for the opinionated application entrypoint.
 - Use `@affino/datagrid-core` for shared datasource contracts and row-model types.
