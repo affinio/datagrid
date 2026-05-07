@@ -1,38 +1,29 @@
 # Backend Template
 
-Copy this into a new backend feature folder and replace the placeholders.
+This is a minimal, copy-paste-safe backend starter for a single table.
 
-The sections below mark:
+Keep it small:
 
-- required methods
-- optional methods
-- project-specific sections
-- do-not-change sections
+- implement `pull` and `histogram` first
+- add edits, fill, history, and change feed only when you actually need them
+- for the full implementation, see the `server_demo` reference in `backend/app/features/server_demo/`
 
 ## `columns.py`
 
 ```py
 from __future__ import annotations
 
-from affino_grid_backend import GridColumnDefinition
+from affino_grid_backend.core.columns import GridColumnDefinition
 
-# PROJECT-SPECIFIC: replace <FeatureName>, <ColumnRegistry>, and enum values.
-<ColumnRegistry> = {
-    "id": GridColumnDefinition(
-        id="id",
-        model_attr="id",
-        readonly=True,
-        sortable=True,
-        filterable=True,
-    ),
-    "index": GridColumnDefinition(
-        id="index",
-        model_attr="row_index",
-        readonly=True,
-        sortable=True,
-        filterable=True,
-    ),
-    # PROJECT-SPECIFIC: define editable and histogram-enabled columns here.
+SERVER_DEMO_COLUMNS = {
+    "id": GridColumnDefinition(id="id", model_attr="id", readonly=True, sortable=True, filterable=True),
+    "index": GridColumnDefinition(id="index", model_attr="row_index", readonly=True, sortable=True, filterable=True),
+    "name": GridColumnDefinition(id="name", model_attr="name", editable=True, sortable=True, filterable=True),
+    "segment": GridColumnDefinition(id="segment", model_attr="segment", sortable=True, filterable=True, histogram=True),
+    "status": GridColumnDefinition(id="status", model_attr="status", sortable=True, filterable=True, histogram=True),
+    "region": GridColumnDefinition(id="region", model_attr="region", sortable=True, filterable=True, histogram=True),
+    "value": GridColumnDefinition(id="value", model_attr="value", sortable=True, filterable=True, histogram=True),
+    "updatedAt": GridColumnDefinition(id="updatedAt", model_attr="updated_at", readonly=True, sortable=True),
 }
 ```
 
@@ -41,106 +32,41 @@ from affino_grid_backend import GridColumnDefinition
 ```py
 from __future__ import annotations
 
-from affino_grid_backend import GridTableDefinition
-from .columns import <ColumnRegistry>
-from .models import <RowModel>
+from affino_grid_backend.core.table import GridTableDefinition
 
-# REQUIRED: keep this definition stable.
-<TableId>_TABLE = GridTableDefinition(
-    table_id="<TableId>",
-    model=<RowModel>,
+from .columns import SERVER_DEMO_COLUMNS
+from .models import GridDemoRow
+
+SERVER_DEMO_TABLE = GridTableDefinition(
+    table_id="server_demo",
+    model=GridDemoRow,
     row_id_attr="id",
     workspace_id_attr="workspace_id",
     row_index_attr="row_index",
     updated_at_attr="updated_at",
-    columns=<ColumnRegistry>,
+    columns=SERVER_DEMO_COLUMNS,
     default_sort_column_id="index",
 )
 ```
 
-## `schemas.py`
+## `workspace.py`
 
 ```py
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
-
-# DO-NOT-CHANGE: field names should stay aligned with the protocol.
+from affino_grid_backend.core.table import GridTableDefinition
 
 
-class <FeatureName>PullRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    range: dict[str, int]
-    sort_model: list[dict[str, Any]] = Field(default_factory=list, alias="sortModel")
-    filter_model: dict[str, Any] | None = Field(default=None, alias="filterModel")
-
-
-class <FeatureName>Row(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    id: str
-    index: int
-    title: str
-    status: str
-    category: str
-    current_price: int | None = Field(alias="currentPrice")
-    updated_at: datetime = Field(alias="updatedAt")
-
-
-class <FeatureName>PullResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    rows: list[<FeatureName>Row] = Field(default_factory=list)
-    total: int
-    revision: str | None = None
-    dataset_version: int = Field(alias="datasetVersion")
-
-
-class <FeatureName>MutationInvalidationCell(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    row_id: str = Field(alias="rowId")
-    column_id: str = Field(alias="columnId")
-
-
-class <FeatureName>MutationInvalidationRange(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    start_row: int = Field(alias="startRow")
-    end_row: int = Field(alias="endRow")
-    start_column: str | None = Field(default=None, alias="startColumn")
-    end_column: str | None = Field(default=None, alias="endColumn")
-
-
-class <FeatureName>MutationInvalidation(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    type: Literal["cell", "range", "row", "dataset"]
-    cells: list[<FeatureName>MutationInvalidationCell] = Field(default_factory=list)
-    rows: list[str] = Field(default_factory=list)
-    range: <FeatureName>MutationInvalidationRange | None = None
-
-
-class <FeatureName>MutationResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    operation_id: str | None = Field(default=None, alias="operationId")
-    revision: str
-    dataset_version: int = Field(alias="datasetVersion")
-    affected_rows: int = Field(alias="affectedRows")
-    affected_cells: int = Field(alias="affectedCells")
-    can_undo: bool = Field(alias="canUndo")
-    can_redo: bool = Field(alias="canRedo")
-    latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
-    latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
-    invalidation: <FeatureName>MutationInvalidation | None = None
+def workspace_scope_condition(table: GridTableDefinition, workspace_id: str | None) -> Any | None:
+    if workspace_id is None or table.workspace_id_attr is None:
+        return None
+    column = getattr(table.model, table.workspace_id_attr)
+    return column == workspace_id
 ```
 
-## `repository.py`
+## `projection.py`
 
 ```py
 from __future__ import annotations
@@ -150,54 +76,233 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from affino_grid_backend import GridInvalidationService, GridRevisionService
-from .models import <RowModel>
-from .projection import <FeatureName>ProjectionService
-from .schemas import <FeatureName>PullRequest, <FeatureName>PullResponse, <FeatureName>Row
-from .table import <TableId>_TABLE
+from app.api.errors import ApiException
+from affino_grid_backend.core.projection import GridProjectionService
+from affino_grid_backend.core.table import GridTableDefinition
+
+from .schemas import ServerDemoHistogramEntry, ServerDemoHistogramResponse
+from .workspace import workspace_scope_condition
 
 
-class <FeatureName>Repository:
+class ServerDemoProjectionService(GridProjectionService):
+    def __init__(
+        self,
+        table: GridTableDefinition,
+        workspace_id: str | None = None,
+        *,
+        max_histogram_buckets: int = 100,
+        max_histogram_source_rows: int | None = None,
+    ):
+        super().__init__(
+            model=table.model,
+            columns=table.columns,
+            default_sort_column_id=table.default_sort_column_id,
+            max_histogram_buckets=max_histogram_buckets,
+            max_histogram_source_rows=max_histogram_source_rows,
+        )
+        self._table = table
+        self._workspace_id = workspace_id
+
+    def build_row_query(self, conditions: list[Any]):
+        scope_condition = workspace_scope_condition(self._table, self._workspace_id)
+        scoped_conditions = [*conditions]
+        if scope_condition is not None:
+            scoped_conditions.append(scope_condition)
+        return super().build_row_query(scoped_conditions)
+
+    async def count_rows(self, session: AsyncSession, conditions: list[Any]) -> int:
+        scope_condition = workspace_scope_condition(self._table, self._workspace_id)
+        scoped_conditions = [*conditions]
+        if scope_condition is not None:
+            scoped_conditions.append(scope_condition)
+        stmt = select(func.count()).select_from(self._model).where(*scoped_conditions)
+        return int(await session.scalar(stmt) or 0)
+
+    async def histogram(
+        self,
+        session: AsyncSession,
+        column_id: str,
+        filter_model: dict[str, Any] | None,
+    ) -> ServerDemoHistogramResponse:
+        definition = self._column_definition(column_id)
+        if definition is None or not definition.histogram:
+            raise ApiException(
+                status_code=400,
+                code="unsupported_histogram_column",
+                message=f"Histogram is only supported for {self._supported_histogram_columns()}",
+            )
+
+        column = getattr(self._model, definition.model_attr)
+        conditions = self.build_filter_conditions(filter_model)
+        scope_condition = workspace_scope_condition(self._table, self._workspace_id)
+        scoped_conditions = [*conditions]
+        if scope_condition is not None:
+            scoped_conditions.append(scope_condition)
+
+        entries = await self._histogram_entries_for_definition(
+            session,
+            column_id=column_id,
+            definition=definition,
+            column=column,
+            query_conditions=scoped_conditions,
+            matching_row_conditions=conditions,
+        )
+        return ServerDemoHistogramResponse(
+            column_id=column_id,
+            entries=[ServerDemoHistogramEntry(value=value, count=count) for value, count in entries],
+        )
+```
+
+## `schemas.py`
+
+```py
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class ServerDemoSortModelItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    col_id: str | None = Field(default=None, alias="colId")
+    key: str | None = None
+    sort: str | None = None
+    direction: str | None = None
+
+
+class ServerDemoPullRange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_row: int = Field(ge=0, alias="startRow")
+    end_row: int = Field(ge=0, alias="endRow")
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.end_row < self.start_row:
+            raise ValueError("endRow must be greater than or equal to startRow")
+
+
+class ServerDemoPullRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    range: ServerDemoPullRange
+    sort_model: list[ServerDemoSortModelItem] = Field(default_factory=list, alias="sortModel")
+    filter_model: dict[str, Any] | None = Field(default=None, alias="filterModel")
+
+
+class ServerDemoRow(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str
+    index: int
+    name: str
+    segment: str
+    status: str
+    region: str
+    value: int | None
+    updated_at: datetime = Field(alias="updatedAt")
+
+
+class ServerDemoPullResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    rows: list[ServerDemoRow] = Field(default_factory=list)
+    total: int
+    revision: str | None = None
+    dataset_version: int = Field(alias="datasetVersion")
+
+
+class ServerDemoHistogramRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    column_id: str = Field(alias="columnId")
+    filter_model: dict[str, Any] | None = Field(default=None, alias="filterModel")
+
+
+class ServerDemoHistogramEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: Any
+    count: int = Field(ge=0)
+
+
+class ServerDemoHistogramResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    column_id: str = Field(alias="columnId")
+    entries: list[ServerDemoHistogramEntry] = Field(default_factory=list)
+```
+
+## `repository.py`
+
+```py
+from __future__ import annotations
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from affino_grid_backend.core.revision import GridRevisionService
+from .projection import ServerDemoProjectionService
+from .models import GridDemoRow
+from .schemas import (
+    ServerDemoHistogramRequest,
+    ServerDemoHistogramResponse,
+    ServerDemoPullRequest,
+    ServerDemoPullResponse,
+    ServerDemoRow,
+)
+from .table import SERVER_DEMO_TABLE
+
+
+class ServerDemoRepository:
     def __init__(self, session: AsyncSession, workspace_id: str | None = None):
         self._session = session
-        self._workspace_id = workspace_id
-        self._projection = <FeatureName>ProjectionService(<TableId>_TABLE, workspace_id=workspace_id)
-        self._revision = GridRevisionService(<TableId>_TABLE, workspace_id=workspace_id)
-        self._edits = <FeatureName>EditService(<TableId>_TABLE.columns, self._revision, workspace_id=workspace_id)
-        self._fill = <FeatureName>FillService(<TableId>_TABLE.columns, self._projection, self._revision, workspace_id=workspace_id)
-        self._history = <FeatureName>HistoryService(<TableId>_TABLE.columns, self._revision, workspace_id=workspace_id)
-        self._invalidation = GridInvalidationService()
+        self._projection = ServerDemoProjectionService(SERVER_DEMO_TABLE, workspace_id=workspace_id)
+        self._revision = GridRevisionService(SERVER_DEMO_TABLE, workspace_id=workspace_id)
 
-    async def pull(self, request: <FeatureName>PullRequest) -> <FeatureName>PullResponse:
-        # REQUIRED: translate filters, sort, and offset/limit to SQLAlchemy.
+    async def pull(self, request: ServerDemoPullRequest) -> ServerDemoPullResponse:
         conditions = self._projection.build_filter_conditions(request.filter_model)
         stmt = self._projection.build_row_query(conditions)
         stmt = stmt.order_by(*self._projection.build_order_by(request.sort_model))
-        stmt = stmt.offset(request.range["startRow"]).limit(request.range["endRow"] - request.range["startRow"])
+        stmt = stmt.offset(request.range.start_row).limit(request.range.end_row - request.range.start_row)
 
         rows = (await self._session.scalars(stmt)).all()
         total = await self._projection.count_rows(self._session, conditions)
         revision = await self._revision.get_revision(self._session)
-        return <FeatureName>PullResponse(rows=[self._to_row(row) for row in rows], total=total, revision=revision)
-
-    def _to_row(self, row: <RowModel>) -> <FeatureName>Row:
-        return <FeatureName>Row(
-            id=<TableId>_TABLE.row_id_value(row),
-            index=<TableId>_TABLE.row_index_value(row),
-            title=row.title,
-            status=row.status,
-            category=row.category,
-            currentPrice=row.current_price,
-            updatedAt=<TableId>_TABLE.updated_at_value(row),
+        return ServerDemoPullResponse(
+            rows=[self._to_row(row) for row in rows],
+            total=total,
+            revision=revision,
+            dataset_version=self._dataset_version(revision),
         )
+
+    async def histogram(self, request: ServerDemoHistogramRequest) -> ServerDemoHistogramResponse:
+        return await self._projection.histogram(self._session, request.column_id, request.filter_model)
+
+    def _to_row(self, row: GridDemoRow) -> ServerDemoRow:
+        return ServerDemoRow(
+            id=row.id,
+            index=row.row_index,
+            name=row.name,
+            segment=row.segment,
+            status=row.status,
+            region=row.region,
+            value=row.value,
+            updatedAt=row.updated_at,
+        )
+
+    @staticmethod
+    def _dataset_version(revision: str | None) -> int:
+        return int(revision or 0)
 ```
 
-The repository should also expose stack history and change-feed methods:
+Optional extensions, when you actually need them:
 
-- `undo_latest_operation`
-- `redo_latest_operation`
-- `history_status`
-- `change_feed`
+- `edits.py` for `POST /edits`
+- `fill.py` for `POST /fill-boundary` and `POST /fill/commit`
+- `history.py` for stack undo/redo and history status
+- `changes_router.py` for `GET /changes?sinceVersion=...`
 
 ## `router.py`
 
@@ -206,70 +311,50 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header
 
-from .repository import <FeatureName>Repository
-from .schemas import <FeatureName>PullRequest, <FeatureName>PullResponse
+from .repository import ServerDemoRepository
+from .schemas import ServerDemoHistogramRequest, ServerDemoHistogramResponse, ServerDemoPullRequest, ServerDemoPullResponse
 from your_app.infrastructure.db import get_db
 
-router = APIRouter(prefix="/<route_prefix>", tags=["<FeatureName>"])
+router = APIRouter(prefix="/server-demo", tags=["server-demo"])
 
 
-def get_<feature_name>_repository(
+def get_server_demo_repository(
     session = Depends(get_db),
     workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
-) -> <FeatureName>Repository:
-    return <FeatureName>Repository(session, workspace_id=workspace_id)
+) -> ServerDemoRepository:
+    return ServerDemoRepository(session, workspace_id=workspace_id)
+
+
+@router.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@router.post("/pull", response_model=ServerDemoPullResponse)
+async def pull(
+    request: ServerDemoPullRequest,
+    repository: ServerDemoRepository = Depends(get_server_demo_repository),
+) -> ServerDemoPullResponse:
+    return await repository.pull(request)
+
+
+@router.post("/histogram", response_model=ServerDemoHistogramResponse)
+async def histogram(
+    request: ServerDemoHistogramRequest,
+    repository: ServerDemoRepository = Depends(get_server_demo_repository),
+) -> ServerDemoHistogramResponse:
+    return await repository.histogram(request)
 ```
 
-Required route handlers:
+This template keeps the backend contract minimal on purpose:
 
-- `GET /health`
 - `POST /pull`
 - `POST /histogram`
-- `POST /edits`
-- `POST /fill-boundary`
-- `POST /fill/commit`
-- `POST /history/undo`
-- `POST /history/redo`
-- `POST /history/status`
-- `POST /operations/{operation_id}/undo`
-- `POST /operations/{operation_id}/redo`
-- `GET /changes?sinceVersion=...`
 
-## `tests`
+Add edits, fill, history, and change-feed routes only when your backend actually supports them.
 
-```py
-from __future__ import annotations
+## Notes
 
-import pytest
+`server_demo` is the canonical reference for full backend behavior, but this template is intentionally smaller so teams can copy it without pulling in extra surface area on day one.
 
-pytestmark = pytest.mark.asyncio(loop_scope="session")
-
-
-async def test_<feature_name>_pull_scoped_to_workspace(client):
-    response = await client.post(
-        "/api/<route_prefix>/pull",
-        json={"range": {"startRow": 0, "endRow": 20}},
-        headers={"X-Workspace-Id": "workspace-a"},
-    )
-    assert response.status_code == 200
-```
-
-Recommended tests:
-
-- pull respects workspace scope
-- edit returns `row-not-found` for a row in another workspace
-- histogram counts only scoped rows
-- fill boundary stays scoped
-- fill commit rejects cross-workspace ids
-- stack undo/redo respects workspace scope
-- history status respects workspace / user / session scope
-- change feed returns the expected changes or dataset fallback
-
-## Do-Not-Change Sections
-
-- Keep `revision` semantics monotonic.
-- Keep request and response field names aligned with the protocol.
-- Keep the workspace header name stable until the host app binds it to auth.
-- Keep unsupported server-side series fill rejected.
-- Keep stack history as the normal undo/redo UX.
-- Keep operation-id replay available only for diagnostics/manual replay.
+For full implementation, see server_demo reference.
