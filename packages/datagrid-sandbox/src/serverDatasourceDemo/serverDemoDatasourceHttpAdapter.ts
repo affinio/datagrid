@@ -25,6 +25,10 @@ import {
   type ServerDemoChangeFeedDiagnostics,
   type ServerDemoDataSourceRowEntry,
 } from "./types"
+import {
+  normalizeDatasetVersion,
+  normalizeDatasourceInvalidation,
+} from "@affino/datagrid-server-client"
 import type { ServerDemoHistoryScope } from "./serverDemoHistoryScope"
 import {
   normalizeServerDemoHistoryState,
@@ -784,44 +788,6 @@ export function normalizeServerDemoMutationInvalidation(value: unknown): ServerD
   return null
 }
 
-function normalizeDataGridInvalidation(value: unknown): DataGridDataSourceInvalidation | null {
-  const invalidation = normalizeServerDemoMutationInvalidation(value)
-  if (!invalidation) {
-    return null
-  }
-  const rawReason = isRecord(value) && typeof value.reason === "string" && value.reason.trim().length > 0
-    ? value.reason.trim()
-    : undefined
-  if (invalidation.type === "dataset") {
-    return { kind: "all", reason: rawReason }
-  }
-  if (invalidation.type === "row") {
-    return {
-      kind: "rows",
-      rowIds: invalidation.rows ?? [],
-      reason: rawReason,
-    }
-  }
-  if (invalidation.type === "cell") {
-    return {
-      kind: "rows",
-      rowIds: [...new Set((invalidation.cells ?? []).map(cell => cell.rowId))],
-      reason: rawReason,
-    }
-  }
-  if (!invalidation.range) {
-    return null
-  }
-  return {
-    kind: "range",
-    range: {
-      start: invalidation.range.startRow,
-      end: invalidation.range.endRow,
-    },
-    reason: rawReason,
-  }
-}
-
 function normalizeChangeFeedRows(
   rows: readonly (ServerDemoRow | ServerDemoDataSourceRowEntry)[] | null | undefined,
 ): readonly DataGridDataSourceRowEntry<ServerDemoRow>[] | null {
@@ -1107,19 +1073,6 @@ function toServerDemoHistoryState(response: {
   }
 }
 
-function normalizeDatasetVersion(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.max(0, Math.trunc(value))
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value)
-    if (Number.isFinite(parsed)) {
-      return Math.max(0, Math.trunc(parsed))
-    }
-  }
-  return null
-}
-
 async function postServerOperation(
   fetchImpl: typeof fetch,
   url: string,
@@ -1134,7 +1087,7 @@ async function postServerOperation(
     rejected: toRejectedRows(response),
     revision: response.revision,
     datasetVersion: response.datasetVersion ?? normalizeDatasetVersion(response.revision),
-    invalidation: normalizeDataGridInvalidation(response.invalidation),
+    invalidation: normalizeDatasourceInvalidation(response.invalidation),
     serverInvalidation,
     canUndo: historyState?.canUndo,
     canRedo: historyState?.canRedo,
@@ -1157,7 +1110,7 @@ async function postServerFillHistoryOperation(
     operationId: response.operationId ?? null,
     revision: response.revision,
     datasetVersion: response.datasetVersion ?? normalizeDatasetVersion(response.revision),
-    invalidation: normalizeDataGridInvalidation(response.invalidation),
+    invalidation: normalizeDatasourceInvalidation(response.invalidation),
     serverInvalidation,
     warnings: (response.rejected ?? []).map(entry => entry.reason ?? "rejected"),
     canUndo: historyState?.canUndo,
@@ -1189,7 +1142,7 @@ async function postServerHistoryStackOperation(
     rejected: response.rejected,
     revision: response.revision,
     datasetVersion: response.datasetVersion ?? normalizeDatasetVersion(response.revision),
-    invalidation: normalizeDataGridInvalidation(response.invalidation),
+    invalidation: normalizeDatasourceInvalidation(response.invalidation),
     serverInvalidation,
     latestUndoOperationId: response.latestUndoOperationId ?? null,
     latestRedoOperationId: response.latestRedoOperationId ?? null,
@@ -1372,7 +1325,7 @@ export function createServerDemoDatasourceHttpAdapter(
       return
     }
 
-    const invalidation = normalizeDataGridInvalidation(change.invalidation)
+    const invalidation = normalizeDatasourceInvalidation(change.invalidation)
     if (!invalidation) {
       appliedChangeCount += 1
       emitPushEvent({
@@ -1564,7 +1517,7 @@ export function createServerDemoDatasourceHttpAdapter(
         affectedRows: response.affectedRows,
         affectedCells: response.affectedCells,
         datasetVersion: latestDatasetVersion,
-        invalidation: normalizeDataGridInvalidation(response.invalidation),
+        invalidation: normalizeDatasourceInvalidation(response.invalidation),
         serverInvalidation: normalizeServerDemoMutationInvalidation(response.invalidation),
         rows: response.rows ?? [],
       } as ServerDemoCommitEditsResultWithOperation
@@ -1603,7 +1556,7 @@ export function createServerDemoDatasourceHttpAdapter(
         canRedo: response.canRedo,
         latestUndoOperationId: response.latestUndoOperationId ?? null,
         latestRedoOperationId: response.latestRedoOperationId ?? null,
-        invalidation: normalizeDataGridInvalidation(rawInvalidation),
+        invalidation: normalizeDatasourceInvalidation(rawInvalidation),
         serverInvalidation: normalizeServerDemoMutationInvalidation(rawInvalidation),
         warnings: response.warnings ?? [],
         rows: response.rows ?? [],
@@ -1668,7 +1621,7 @@ export function createServerDemoDatasourceHttpAdapter(
       return {
         operationId: result.operationId ?? request.operationId,
         revision: result.revision,
-        invalidation: normalizeDataGridInvalidation(result.invalidation),
+        invalidation: normalizeDatasourceInvalidation(result.invalidation),
         warnings: result.warnings,
         rows: result.rows ?? [],
       }
@@ -1680,7 +1633,7 @@ export function createServerDemoDatasourceHttpAdapter(
       return {
         operationId: result.operationId ?? request.operationId,
         revision: result.revision,
-        invalidation: normalizeDataGridInvalidation(result.invalidation),
+        invalidation: normalizeDatasourceInvalidation(result.invalidation),
         warnings: result.warnings,
         rows: result.rows ?? [],
       }

@@ -13,6 +13,7 @@
     "@affino/datagrid-core": "workspace:*",
     "@affino/datagrid-formula-engine": "workspace:*",
     "@affino/datagrid-orchestration": "workspace:*",
+    "@affino/datagrid-server-client": "workspace:*",
     "@affino/datagrid-spreadsheet-vue-app": "workspace:*",
     "@affino/datagrid-vue": "workspace:*",
     "@affino/datagrid-vue-app": "workspace:*",
