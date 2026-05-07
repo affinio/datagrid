@@ -26,6 +26,7 @@ import {
   type ServerDemoDataSourceRowEntry,
 } from "./types"
 import {
+  createChangeFeedPoller,
   normalizeDatasetVersion,
   normalizeDatasourceInvalidation,
 } from "@affino/datagrid-server-client"
@@ -1235,23 +1236,35 @@ export function createServerDemoDatasourceHttpAdapter(
   const historyScope = options.historyScope
   let latestDatasetVersion: number | null = null
   let lastSeenVersion: number | null = null
-  let changeFeedPollingActive = false
-  let changeFeedPollingIntervalMs: number | null = null
-  let changeFeedPollTimer: ReturnType<typeof setInterval> | null = null
-  let changeFeedPollInFlight = false
-  let changeFeedPollGeneration = 0
-  let changeFeedPollAbortController: AbortController | null = null
-  let changeFeedPollRequestedSinceVersion: number | null = null
-  let appliedChangeCount = 0
+  const changeFeedPoller = createChangeFeedPoller<ServerDemoChangeFeedResponse>({
+    getSinceVersion: () => lastSeenVersion,
+    loadSinceVersion: async (sinceVersion: number, signal?: AbortSignal) => {
+      return await loadChangeFeedSinceVersion(sinceVersion, signal)
+    },
+    onResponse: response => {
+      applyChangeFeedResponse(response)
+    },
+    onError: error => {
+      console.warn("Server demo change feed polling failed", error)
+    },
+    onDiagnostics: () => {
+      emitChangeFeedDiagnostics()
+    },
+    isInvalidSinceVersionError,
+    onInvalidSinceVersion: () => {
+      resetChangeFeedCursor()
+    },
+  })
 
   function getChangeFeedDiagnostics(): ServerDemoChangeFeedDiagnostics {
+    const diagnostics = changeFeedPoller.diagnostics()
     return {
       currentDatasetVersion: latestDatasetVersion,
       lastSeenVersion,
-      polling: changeFeedPollingActive,
-      pending: changeFeedPollInFlight,
-      appliedChanges: appliedChangeCount,
-      intervalMs: changeFeedPollingIntervalMs,
+      polling: diagnostics.polling,
+      pending: diagnostics.pending,
+      appliedChanges: diagnostics.appliedChanges,
+      intervalMs: diagnostics.intervalMs,
     }
   }
 
@@ -1300,13 +1313,7 @@ export function createServerDemoDatasourceHttpAdapter(
     )
   }
 
-  function applyChangeFeedResponse(response: ServerDemoChangeFeedResponse, requestSinceVersion: number): void {
-    if (changeFeedPollRequestedSinceVersion !== requestSinceVersion) {
-      return
-    }
-    if (lastSeenVersion !== null && lastSeenVersion !== requestSinceVersion) {
-      return
-    }
+  function applyChangeFeedResponse(response: ServerDemoChangeFeedResponse): void {
     updateDatasetVersion(response.datasetVersion, true)
     for (const change of response.changes ?? []) {
       dispatchChangeFeedChange(change)
@@ -1316,7 +1323,7 @@ export function createServerDemoDatasourceHttpAdapter(
   function dispatchChangeFeedChange(change: ServerDemoChangeFeedChange): void {
     const rows = normalizeChangeFeedRows(change.rows)
     if (change.type !== "dataset" && rows && rows.length > 0) {
-      appliedChangeCount += rows.length
+      changeFeedPoller.incrementAppliedChanges(rows.length)
       emitPushEvent({
         type: "upsert",
         rows,
@@ -1327,7 +1334,7 @@ export function createServerDemoDatasourceHttpAdapter(
 
     const invalidation = normalizeDatasourceInvalidation(change.invalidation)
     if (!invalidation) {
-      appliedChangeCount += 1
+      changeFeedPoller.incrementAppliedChanges()
       emitPushEvent({
         type: "invalidate",
         datasetVersion: latestDatasetVersion,
@@ -1339,44 +1346,12 @@ export function createServerDemoDatasourceHttpAdapter(
       return
     }
 
-    appliedChangeCount += 1
+    changeFeedPoller.incrementAppliedChanges()
     emitPushEvent({
       type: "invalidate",
       datasetVersion: latestDatasetVersion,
       invalidation,
     })
-  }
-
-  async function pollChangeFeed(signal?: AbortSignal): Promise<void> {
-    if (!changeFeedPollingActive || changeFeedPollInFlight) {
-      return
-    }
-    const requestGeneration = changeFeedPollGeneration
-    const sinceVersion = lastSeenVersion ?? 0
-    const controller = new AbortController()
-    changeFeedPollAbortController = controller
-    changeFeedPollRequestedSinceVersion = sinceVersion
-    changeFeedPollInFlight = true
-    emitChangeFeedDiagnostics()
-    try {
-      const response = await loadChangeFeedSinceVersion(sinceVersion, signal ?? controller.signal)
-      if (!changeFeedPollingActive || requestGeneration !== changeFeedPollGeneration) {
-        return
-      }
-      applyChangeFeedResponse(response, sinceVersion)
-    } catch (caught) {
-      if (isInvalidSinceVersionError(caught)) {
-        resetChangeFeedCursor()
-      } else if (!(caught instanceof DOMException && caught.name === "AbortError")) {
-        console.warn("Server demo change feed polling failed", caught)
-      }
-    } finally {
-      if (changeFeedPollAbortController === controller) {
-        changeFeedPollAbortController = null
-      }
-      changeFeedPollInFlight = false
-      emitChangeFeedDiagnostics()
-    }
   }
 
   function applyRowSnapshots(rows: readonly (ServerDemoRow | ServerDemoDataSourceRowEntry)[]): boolean {
@@ -1392,35 +1367,11 @@ export function createServerDemoDatasourceHttpAdapter(
   }
 
   function startChangeFeedPolling(options: ServerDemoDatasourceHttpAdapterChangeFeedOptions = {}): void {
-    const intervalMs = Number.isFinite(options.intervalMs)
-      ? Math.max(250, Math.trunc(options.intervalMs ?? 0))
-      : 500
-    stopChangeFeedPolling()
-    changeFeedPollingActive = true
-    changeFeedPollingIntervalMs = intervalMs
-    changeFeedPollGeneration += 1
-    emitChangeFeedDiagnostics()
-    void pollChangeFeed()
-    changeFeedPollTimer = globalThis.setInterval(() => {
-      void pollChangeFeed()
-    }, intervalMs)
+    changeFeedPoller.start({ intervalMs: options.intervalMs })
   }
 
   function stopChangeFeedPolling(): void {
-    if (changeFeedPollTimer !== null) {
-      clearInterval(changeFeedPollTimer)
-      changeFeedPollTimer = null
-    }
-    changeFeedPollingActive = false
-    changeFeedPollingIntervalMs = null
-    changeFeedPollGeneration += 1
-    if (changeFeedPollAbortController && !changeFeedPollAbortController.signal.aborted) {
-      changeFeedPollAbortController.abort()
-    }
-    changeFeedPollAbortController = null
-    changeFeedPollRequestedSinceVersion = null
-    changeFeedPollInFlight = false
-    emitChangeFeedDiagnostics()
+    changeFeedPoller.stop()
   }
 
   return {
