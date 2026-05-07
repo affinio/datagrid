@@ -1,9 +1,9 @@
 {
-  "name": "@affino/datagrid-server-client",
+  "name": "@affino/datagrid-server-adapters",
   "version": "0.1.0",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
-  "description": "Reusable server datasource client helpers for Affino DataGrid",
+  "description": "Opinionated server datasource adapters for Affino DataGrid",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -24,20 +24,21 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/affinio/affinio.git",
-    "directory": "packages/datagrid-server-client"
+    "directory": "packages/datagrid-server-adapters"
   },
-  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-server-client#readme",
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-server-adapters#readme",
   "license": "MIT",
   "keywords": [
     "datagrid",
     "server",
     "datasource",
-    "client"
+    "adapter"
   ],
   "bugs": {
     "url": "https://github.com/affinio/affinio/issues"
   },
   "dependencies": {
-    "@affino/datagrid-core": "workspace:*"
+    "@affino/datagrid-core": "workspace:*",
+    "@affino/datagrid-server-client": "workspace:*"
   }
 }

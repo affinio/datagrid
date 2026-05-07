@@ -8,6 +8,8 @@
       "@affino/datagrid-core/*": ["../datagrid-core/src/*"],
       "@affino/datagrid-formula-engine": ["../datagrid-formula-engine/src/index.ts"],
       "@affino/datagrid-formula-engine/*": ["../datagrid-formula-engine/src/*"],
+      "@affino/datagrid-server-adapters": ["../datagrid-server-adapters/src/index.ts"],
+      "@affino/datagrid-server-adapters/*": ["../datagrid-server-adapters/src/*"],
       "@affino/datagrid-server-client": ["../datagrid-server-client/src/index.ts"],
       "@affino/datagrid-server-client/*": ["../datagrid-server-client/src/*"],
       "@affino/datagrid-theme": ["../datagrid-theme/src/index.ts"],

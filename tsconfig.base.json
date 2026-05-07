@@ -18,6 +18,8 @@
       "@affino/datagrid-gantt/*": ["./packages/datagrid-gantt/src/*"],
       "@affino/datagrid-orchestration": ["./packages/datagrid-orchestration/src/index.ts"],
       "@affino/datagrid-orchestration/*": ["./packages/datagrid-orchestration/src/*"],
+      "@affino/datagrid-server-adapters": ["./packages/datagrid-server-adapters/src/index.ts"],
+      "@affino/datagrid-server-adapters/*": ["./packages/datagrid-server-adapters/src/*"],
       "@affino/datagrid-theme": ["./packages/datagrid-theme/src/index.ts"],
       "@affino/datagrid-theme/*": ["./packages/datagrid-theme/src/*"],
       "@affino/datagrid-plugins": ["./packages/datagrid-plugins/src/index.ts"],

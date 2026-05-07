@@ -568,21 +568,20 @@ import {
   createFakeServerDatasource,
 } from "../serverDatasourceDemo/fakeServerDatasource"
 import {
-  createServerDemoDatasourceHttpAdapter,
   applyServerDemoMutationInvalidation,
 } from "../serverDatasourceDemo/serverDemoDatasourceHttpAdapter"
 import {
   createServerDemoDatasourceHttpFillDataSource,
 } from "../serverDatasourceDemo/serverDemoDatasourceHttpFillDataSource"
 import {
+  createAffinoDatasource,
+} from "@affino/datagrid-server-adapters"
+import {
   resolveServerDemoChangeFeedPollingIntervalMs,
 } from "../serverDatasourceDemo/serverDemoChangeFeedPolling"
 import {
   normalizeServerDemoHistoryState,
 } from "../serverDatasourceDemo/serverDemoHistoryState"
-import {
-  resolveServerDemoHistoryScopeFromEnv,
-} from "../serverDatasourceDemo/serverDemoHistoryScope"
 import {
   type ServerDemoDatasourceHooks,
   type ServerDemoCommitEditsResult,
@@ -628,7 +627,6 @@ const changeFeedDiagnostics = ref<ServerDemoChangeFeedDiagnostics>({
 })
 const serverDatasourceUnavailableMessage = "Server datasource is unavailable. Check backend and retry."
 const serverDatasourceUnavailable = ref(false)
-const serverDemoHistoryScope = resolveServerDemoHistoryScopeFromEnv()
 const sortModelText = ref("none")
 const filterModelText = ref("none")
 const commitModeText = ref("ok")
@@ -736,7 +734,6 @@ const lastAggregationRequestText = ref("none")
 const aggregateResponseRowsText = ref("0")
 const aggregatePreviewRowsText = ref("none")
 let rowModel: any = null
-let historyStatusRequestGeneration = 0
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
 const statuses = ["Active", "Paused", "Closed"] as const
@@ -935,8 +932,14 @@ type ServerDemoHistogramRequest = Parameters<NonNullable<DataGridDataSource<Serv
 type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitEdits"]>>[0]
 type ServerDemoCommitFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>[0]
 type ServerDemoUndoFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>[0]
-type ServerDemoHttpDatasource = ReturnType<typeof createServerDemoDatasourceHttpAdapter>
-type ServerDemoHistoryStatusResponse = Awaited<ReturnType<NonNullable<ServerDemoHttpDatasource["getHistoryStatus"]>>>
+type ServerDemoHttpDatasource = DataGridDataSource<ServerDemoRow> & {
+  subscribeChangeFeedDiagnostics(listener: (diagnostics: ServerDemoChangeFeedDiagnostics) => void): () => void
+  startChangeFeedPolling(options?: { intervalMs?: number }): void
+  stopChangeFeedPolling(): void
+  getChangeFeedDiagnostics(): ServerDemoChangeFeedDiagnostics
+  applyRowSnapshots(rows: readonly ServerDemoRow[]): boolean
+  getChangesSinceVersion(request: { sinceVersion: number; signal?: AbortSignal }): Promise<unknown>
+}
 
 function resolveRowId(index: number): string {
   return `srv-${index.toString().padStart(6, "0")}`
@@ -1966,12 +1969,12 @@ const legacyDataSource: DataGridDataSource<ServerDemoRow> = {
 }
 
 const serverDemoHttpDatasourceEnabled = import.meta.env.VITE_SERVER_DEMO_HTTP_DATA_SOURCE === "true"
-const serverDemoHttpDatasourceBaseUrl = import.meta.env.VITE_SERVER_DEMO_API_BASE_URL?.trim() || undefined
-const serverDemoHttpDatasource = serverDemoHttpDatasourceEnabled
-  ? createServerDemoDatasourceHttpAdapter({
+const serverDemoHttpDatasourceBaseUrl = import.meta.env.VITE_SERVER_DEMO_API_BASE_URL?.trim()
+const serverDemoHttpDatasource: ServerDemoHttpDatasource | null = serverDemoHttpDatasourceEnabled && serverDemoHttpDatasourceBaseUrl
+  ? createAffinoDatasource<ServerDemoRow>({
       baseUrl: serverDemoHttpDatasourceBaseUrl,
-      historyScope: serverDemoHistoryScope,
-    })
+      tableId: "server-demo",
+    }) as ServerDemoHttpDatasource
   : null
 const httpDatasource = serverDemoHttpDatasource
 let unsubscribeChangeFeedDiagnostics: (() => void) | null = null
@@ -2750,7 +2753,7 @@ function syncHistoryDiagnostics(result: {
 }
 
 function invalidateHistoryStatusRefreshes(): void {
-  historyStatusRequestGeneration += 1
+  // MVP adapter does not surface server-side history status invalidation.
 }
 
 function applyCommitHistoryDiagnostics(
@@ -2785,85 +2788,11 @@ async function applyServerDemoRowSnapshots(
   return serverDatasource.applyRowSnapshots(rows)
 }
 
-function applyHistoryStatusDiagnostics(result: {
-  canUndo: boolean
-  canRedo: boolean
-  latestUndoOperationId: string | null
-  latestRedoOperationId: string | null
-}): void {
-  serverHistoryCanUndo.value = result.canUndo
-  serverHistoryCanRedo.value = result.canRedo
-  serverHistoryLatestUndoOperationId.value = result.latestUndoOperationId
-  serverHistoryLatestRedoOperationId.value = result.latestRedoOperationId
-  serverHistoryLastOperationIdText.value = result.latestUndoOperationId ?? result.latestRedoOperationId ?? "none"
-}
-
 async function refreshHistoryStatus(): Promise<void> {
-  if (!serverDemoHttpDatasourceEnabled) {
-    return
-  }
-  const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
-  const historyStatus = serverDatasource?.getHistoryStatus
-  if (typeof historyStatus !== "function") {
-    return
-  }
-  const requestGeneration = historyStatusRequestGeneration
-  try {
-    const result: ServerDemoHistoryStatusResponse = await historyStatus({
-      ...serverDemoHistoryScope,
-    })
-    if (requestGeneration !== historyStatusRequestGeneration) {
-      return
-    }
-    applyHistoryStatusDiagnostics(result)
-  } catch (caught) {
-    if (caught instanceof Error && caught.name === "AbortError") {
-      return
-    }
-    if (isHttpUnavailableError(caught)) {
-      markHttpDatasourceUnavailable()
-    }
-  }
+  return
 }
 
 async function runHistoryAction(direction: "undo" | "redo"): Promise<string | null> {
-  if (serverDemoHttpDatasourceEnabled) {
-    const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
-    const historyAction = direction === "undo"
-      ? serverDatasource?.undoHistoryStack
-      : serverDatasource?.redoHistoryStack
-    if (typeof historyAction === "function") {
-      const result = await historyAction({
-        ...serverDemoHistoryScope,
-      })
-      invalidateHistoryStatusRefreshes()
-      const snapshotsApplied = await applyServerDemoRowSnapshots(result.rows)
-      if (!snapshotsApplied && result.serverInvalidation) {
-        applyServerDemoMutationInvalidation(rowModel, result.serverInvalidation)
-      } else if (!snapshotsApplied) {
-        await rowModel.refresh("manual")
-      }
-      syncHistoryDiagnostics({
-        operationId: result.operationId ?? null,
-        canUndo: result.canUndo,
-        canRedo: result.canRedo,
-        affectedRows: result.affectedRows,
-        affectedCells: result.affectedCells,
-        latestUndoOperationId: result.latestUndoOperationId ?? null,
-        latestRedoOperationId: result.latestRedoOperationId ?? null,
-        action: result.action,
-      })
-      gridRef.value?.restoreFocus?.()
-      return result.operationId ?? null
-    }
-    syncHistoryDiagnostics({
-      action: `${direction}:none`,
-      latestUndoOperationId: serverHistoryLatestUndoOperationId.value,
-      latestRedoOperationId: serverHistoryLatestRedoOperationId.value,
-    })
-    gridRef.value?.restoreFocus?.()
-    return null
-  }
   const result = await gridRef.value?.history.runHistoryAction(direction) ?? null
   if (result) {
     invalidateHistoryStatusRefreshes()

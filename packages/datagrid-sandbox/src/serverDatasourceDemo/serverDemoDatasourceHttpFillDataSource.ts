@@ -32,19 +32,36 @@ export function createServerDemoDatasourceHttpFillDataSource(
   }
 
   const { httpDatasource, fallbackDataSource } = options
+  const resolveFillBoundary = httpDatasource.resolveFillBoundary
+  const commitFillOperation = httpDatasource.commitFillOperation
+  const undoFillOperation = httpDatasource.undoFillOperation
+  const redoFillOperation = httpDatasource.redoFillOperation
+
+  if (
+    typeof resolveFillBoundary !== "function"
+    && typeof commitFillOperation !== "function"
+    && typeof undoFillOperation !== "function"
+    && typeof redoFillOperation !== "function"
+  ) {
+    return fallbackDataSource
+  }
 
   return {
     ...fallbackDataSource,
     async resolveFillBoundary(request) {
-      const resolveFillBoundary = httpDatasource.resolveFillBoundary
       if (typeof resolveFillBoundary !== "function") {
+        if (typeof fallbackDataSource.resolveFillBoundary === "function") {
+          return await fallbackDataSource.resolveFillBoundary(request)
+        }
         throw new Error("Server demo HTTP adapter does not implement resolveFillBoundary")
       }
       return await resolveFillBoundary(request)
     },
     async commitFillOperation(request) {
-      const commitFillOperation = httpDatasource.commitFillOperation
       if (typeof commitFillOperation !== "function") {
+        if (typeof fallbackDataSource.commitFillOperation === "function") {
+          return await fallbackDataSource.commitFillOperation(request)
+        }
         throw new Error("Server demo HTTP adapter does not implement commitFillOperation")
       }
       const result = await commitFillOperation(request)
@@ -54,8 +71,10 @@ export function createServerDemoDatasourceHttpFillDataSource(
       return result
     },
     async undoFillOperation(request) {
-      const undoFillOperation = httpDatasource.undoFillOperation
       if (typeof undoFillOperation !== "function") {
+        if (typeof fallbackDataSource.undoFillOperation === "function") {
+          return await fallbackDataSource.undoFillOperation(request)
+        }
         throw new Error("Server demo HTTP adapter does not implement undoFillOperation")
       }
       const result = await undoFillOperation(request)
@@ -68,8 +87,10 @@ export function createServerDemoDatasourceHttpFillDataSource(
       return result
     },
     async redoFillOperation(request) {
-      const redoFillOperation = httpDatasource.redoFillOperation
       if (typeof redoFillOperation !== "function") {
+        if (typeof fallbackDataSource.redoFillOperation === "function") {
+          return await fallbackDataSource.redoFillOperation(request)
+        }
         throw new Error("Server demo HTTP adapter does not implement redoFillOperation")
       }
       const result = await redoFillOperation(request)
