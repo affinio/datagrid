@@ -173,6 +173,12 @@ importers:
       '@affino/datagrid-orchestration':
         specifier: workspace:*
         version: link:../datagrid-orchestration
+      '@affino/datagrid-server-adapters':
+        specifier: workspace:*
+        version: link:../datagrid-server-adapters
+      '@affino/datagrid-server-client':
+        specifier: workspace:*
+        version: link:../datagrid-server-client
       '@affino/datagrid-spreadsheet-vue-app':
         specifier: workspace:*
         version: link:../datagrid-spreadsheet-vue-app
@@ -210,6 +216,21 @@ importers:
       vue-tsc:
         specifier: ^3.2.5
         version: 3.2.5(typescript@5.9.3)
+
+  packages/datagrid-server-adapters:
+    dependencies:
+      '@affino/datagrid-core':
+        specifier: workspace:*
+        version: link:../datagrid-core
+      '@affino/datagrid-server-client':
+        specifier: workspace:*
+        version: link:../datagrid-server-client
+
+  packages/datagrid-server-client:
+    dependencies:
+      '@affino/datagrid-core':
+        specifier: workspace:*
+        version: link:../datagrid-core
 
   packages/datagrid-spreadsheet-vue-app:
     dependencies:

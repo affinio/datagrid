@@ -578,6 +578,7 @@ import {
 } from "@affino/datagrid-server-adapters"
 import {
   resolveServerDemoChangeFeedPollingIntervalMs,
+  resolveServerDemoChangeFeedPollingEnabled,
 } from "../serverDatasourceDemo/serverDemoChangeFeedPolling"
 import {
   normalizeServerDemoHistoryState,
@@ -933,13 +934,43 @@ type ServerDemoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<Se
 type ServerDemoCommitFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>[0]
 type ServerDemoUndoFillRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>[0]
 type ServerDemoHttpDatasource = DataGridDataSource<ServerDemoRow> & {
-  subscribeChangeFeedDiagnostics(listener: (diagnostics: ServerDemoChangeFeedDiagnostics) => void): () => void
-  startChangeFeedPolling(options?: { intervalMs?: number }): void
-  stopChangeFeedPolling(): void
-  getChangeFeedDiagnostics(): ServerDemoChangeFeedDiagnostics
-  applyRowSnapshots(rows: readonly ServerDemoRow[]): boolean
-  getChangesSinceVersion(request: { sinceVersion: number; signal?: AbortSignal }): Promise<unknown>
-}
+    subscribeChangeFeedDiagnostics(listener: (diagnostics: ServerDemoChangeFeedDiagnostics) => void): () => void
+    startChangeFeedPolling(options?: { intervalMs?: number }): void
+    stopChangeFeedPolling(): void
+    getChangeFeedDiagnostics(): ServerDemoChangeFeedDiagnostics
+    applyRowSnapshots(rows: readonly ServerDemoRow[]): boolean
+    getChangesSinceVersion(request: { sinceVersion: number; signal?: AbortSignal }): Promise<unknown>
+    undoHistoryStack(): Promise<{
+      operationId?: string | null
+      action?: "undo"
+      canUndo?: boolean
+      canRedo?: boolean
+      affectedRows?: number
+      affectedCells?: number
+      latestUndoOperationId?: string | null
+      latestRedoOperationId?: string | null
+      rows?: readonly ServerDemoRow[]
+      invalidation?: DataGridDataSourceInvalidation | null
+    }>
+    redoHistoryStack(): Promise<{
+      operationId?: string | null
+      action?: "redo"
+      canUndo?: boolean
+      canRedo?: boolean
+      affectedRows?: number
+      affectedCells?: number
+      latestUndoOperationId?: string | null
+      latestRedoOperationId?: string | null
+      rows?: readonly ServerDemoRow[]
+      invalidation?: DataGridDataSourceInvalidation | null
+    }>
+    getHistoryStatus(): Promise<{
+      canUndo?: boolean
+      canRedo?: boolean
+      latestUndoOperationId?: string | null
+      latestRedoOperationId?: string | null
+    }>
+  }
 
 function resolveRowId(index: number): string {
   return `srv-${index.toString().padStart(6, "0")}`
@@ -1983,7 +2014,10 @@ if (httpDatasource) {
     changeFeedDiagnostics.value = diagnosticsState
   })
 }
-const serverDemoChangeFeedPollingEnabled = serverDemoHttpDatasourceEnabled
+const serverDemoChangeFeedPollingEnabled = resolveServerDemoChangeFeedPollingEnabled({
+  httpModeEnabled: serverDemoHttpDatasourceEnabled,
+  envValue: import.meta.env.VITE_SERVER_DEMO_CHANGE_FEED_POLLING_ENABLED,
+})
 const serverDemoChangeFeedPollingIntervalMs = resolveServerDemoChangeFeedPollingIntervalMs(
   import.meta.env.VITE_SERVER_DEMO_CHANGE_FEED_POLL_INTERVAL_MS,
 )
@@ -2788,31 +2822,83 @@ async function applyServerDemoRowSnapshots(
   return serverDatasource.applyRowSnapshots(rows)
 }
 
+function applyServerHistoryStatus(status: {
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
+}): void {
+  if (typeof status.canUndo === "boolean") {
+    serverHistoryCanUndo.value = status.canUndo
+  }
+  if (typeof status.canRedo === "boolean") {
+    serverHistoryCanRedo.value = status.canRedo
+  }
+  if ("latestUndoOperationId" in status) {
+    serverHistoryLatestUndoOperationId.value = status.latestUndoOperationId ?? null
+  }
+  if ("latestRedoOperationId" in status) {
+    serverHistoryLatestRedoOperationId.value = status.latestRedoOperationId ?? null
+  }
+}
+
 async function refreshHistoryStatus(): Promise<void> {
-  return
+  const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
+  if (!serverDatasource || typeof serverDatasource.getHistoryStatus !== "function") {
+    return
+  }
+  const status = await serverDatasource.getHistoryStatus()
+  applyServerHistoryStatus(status)
 }
 
 async function runHistoryAction(direction: "undo" | "redo"): Promise<string | null> {
-  const result = await gridRef.value?.history.runHistoryAction(direction) ?? null
-  if (result) {
-    invalidateHistoryStatusRefreshes()
-    syncHistoryDiagnostics({
-      operationId: result,
-      canUndo: gridRef.value?.history.canUndo() ?? false,
-      canRedo: gridRef.value?.history.canRedo() ?? false,
-      latestUndoOperationId: serverHistoryLatestUndoOperationId.value,
-      latestRedoOperationId: serverHistoryLatestRedoOperationId.value,
-      action: direction,
-    })
-  } else {
-    syncHistoryDiagnostics({
-      action: `${direction}:none`,
-      canUndo: gridRef.value?.history.canUndo() ?? false,
-      canRedo: gridRef.value?.history.canRedo() ?? false,
-      latestUndoOperationId: serverHistoryLatestUndoOperationId.value,
-      latestRedoOperationId: serverHistoryLatestRedoOperationId.value,
-    })
+  const serverDatasource = httpDatasource as ServerDemoHttpDatasource | null
+  if (serverDatasource && typeof serverDatasource.undoHistoryStack === "function" && typeof serverDatasource.redoHistoryStack === "function") {
+    try {
+      const result = direction === "undo"
+        ? await serverDatasource.undoHistoryStack()
+        : await serverDatasource.redoHistoryStack()
+      const snapshotsApplied = await applyServerDemoRowSnapshots(result.rows)
+      if (!snapshotsApplied && result.invalidation) {
+        applyServerDemoMutationInvalidation(
+          rowModel,
+          result.invalidation as unknown as Parameters<typeof applyServerDemoMutationInvalidation>[1],
+        )
+      } else if (!snapshotsApplied) {
+        await rowModel.refresh("manual")
+      }
+      applyServerHistoryStatus({
+        canUndo: result.canUndo,
+        canRedo: result.canRedo,
+        latestUndoOperationId: result.latestUndoOperationId,
+        latestRedoOperationId: result.latestRedoOperationId,
+      })
+      syncHistoryDiagnostics({
+        operationId: result.operationId ?? null,
+        canUndo: result.canUndo,
+        canRedo: result.canRedo,
+        affectedRows: result.affectedRows ?? 0,
+        affectedCells: result.affectedCells ?? 0,
+        latestUndoOperationId: result.latestUndoOperationId ?? null,
+        latestRedoOperationId: result.latestRedoOperationId ?? null,
+        action: direction,
+      })
+      gridRef.value?.restoreFocus?.()
+      return result.operationId ?? null
+    } catch (caught) {
+      error.value = caught instanceof Error ? caught : new Error(String(caught))
+      throw caught
+    }
   }
+  const result = await gridRef.value?.history.runHistoryAction(direction) ?? null
+  syncHistoryDiagnostics({
+    operationId: result ?? null,
+    canUndo: gridRef.value?.history.canUndo() ?? false,
+    canRedo: gridRef.value?.history.canRedo() ?? false,
+    latestUndoOperationId: serverHistoryLatestUndoOperationId.value,
+    latestRedoOperationId: serverHistoryLatestRedoOperationId.value,
+    action: direction,
+  })
   gridRef.value?.restoreFocus?.()
   return result
 }
